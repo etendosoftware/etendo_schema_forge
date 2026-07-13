@@ -434,7 +434,6 @@ export default function CustomerReturnPage({ windowName, recordId, ...props }) {
         recordId={recordId}
         breadcrumb={breadcrumb}
       api={api}
-        documentPreview={{ titlePrefix: 'Return', pdfUrl: null }}
         hideDeleteWhenComplete
         notesField="description"
         customTabs={[{ key: 'related', labelKey: 'relatedDocuments', Component: RelatedDocuments }, { key: 'attachments', labelKey: 'attachments', Component: AttachmentsTab, placement: 'tab', props: { tableName: "C_Order", config: {} } }]}
@@ -442,7 +441,7 @@ export default function CustomerReturnPage({ windowName, recordId, ...props }) {
         requiredHeaderFields={requiredHeaderFields}
         lineConfig={RETURN_ORDER_LINE_CONFIG}
         linesLayout="inlineEditable"
-        sendDocument
+        sendDocument={{"enabled":false}}
         {...props}
       />
       </>
@@ -459,7 +458,7 @@ export default function CustomerReturnPage({ windowName, recordId, ...props }) {
       api={api}
       dateFilterKey="orderDate"
       rowQuickActions={{}}
-      sendDocument
+      sendDocument={{"enabled":false}}
       {...props}
     />
   );

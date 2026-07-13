@@ -24,7 +24,7 @@
       }
     ],
     "sendDocument": {
-      "allowEmail": true
+      "enabled": false
     },
     "relatedDocuments": true,
     "dateFilterKey": "movementDate",

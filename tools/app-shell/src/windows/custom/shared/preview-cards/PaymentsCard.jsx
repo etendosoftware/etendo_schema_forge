@@ -2,7 +2,9 @@ import { useNavigate } from 'react-router-dom';
 import { useUI } from '@/i18n';
 import { formatCalendarDate } from '@/lib/dateOnly';
 
-const PAID_STATUSES = new Set(['RPR', 'RPPC', 'RDNC', 'PPM']);
+// Processed APRM statuses. PWNC ("Withdrawn not Cleared") and RPAE ("Awaiting
+// Execution") are the processed states for payments-out / deferred accounts.
+const PAID_STATUSES = new Set(['RPR', 'RPPC', 'RDNC', 'PPM', 'PWNC', 'RPAE']);
 
 function fmtPayDate(raw) {
   return formatCalendarDate(raw, 'es-ES', { day: 'numeric', month: 'short', year: 'numeric' });
@@ -66,8 +68,10 @@ function resolveMethodKey(name) {
   return 'transfer';
 }
 
-function StateTag({ status, ui }) {
-  const isDeposited = PAID_STATUSES.has(status);
+function StateTag({ status, processed, ui }) {
+  // The backend `processed` flag is the source of truth; the status whitelist
+  // is a fallback for rows that don't carry it.
+  const isDeposited = processed === true || PAID_STATUSES.has(status);
   if (isDeposited) {
     return (
       <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '1px 7px', borderRadius: 5, background: '#E2F7EA', color: '#17663A', fontSize: 11, fontWeight: 500, whiteSpace: 'nowrap' }}>
@@ -153,7 +157,15 @@ export default function PaymentsCard({
     }
     content = (
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '20px 16px', gap: 8 }}>
-        <DirBadge isIn={isIn} size={36} data-testid="DirBadge__c6fe34" />
+        {/* Neutral document icon — the empty state has no direction, so no in/out arrow. */}
+        <div style={{ width: 36, height: 36, borderRadius: 8, background: '#F1F2F4', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#828FA3', flexShrink: 0 }}>
+          <svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+            <polyline points="14 2 14 8 20 8" />
+            <line x1="8" y1="13" x2="16" y2="13" />
+            <line x1="8" y1="17" x2="16" y2="17" />
+          </svg>
+        </div>
         <p style={{ fontSize: 12, color: '#9CA3AF', textAlign: 'center', margin: 0 }}>
           {emptyLabel}
         </p>
@@ -200,7 +212,7 @@ export default function PaymentsCard({
                 <span className="tabular-nums" style={{ font: '600 13px/17px Inter', color: amtColor, whiteSpace: 'nowrap' }}>
                   {amtSign}{fmt(p.amount)} {currency}
                 </span>
-                <StateTag status={p.status || ''} ui={ui} data-testid="StateTag__c6fe34" />
+                <StateTag status={p.status || ''} processed={p.processed} ui={ui} data-testid="StateTag__c6fe34" />
               </div>
             </div>
           );

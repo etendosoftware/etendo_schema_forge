@@ -62,14 +62,14 @@ export function usePaymentBalance({ total, dir = 'in', sources = [] }) {
   const [amount, setAmount] = useState(applied);
   const [amountStr, setAmountStr] = useState(formatPlain(applied));
   const [lines, setLines] = useState(() =>
-    sources.map(s => ({ ...s, sel: false, use: 0 })));
+    sources.map(s => ({ ...s, sel: false, use: 0, useStr: formatPlain(0) })));
   // 'credit' = leave overpayment as customer credit, 'refund' = give change back.
   const [excessMode, setExcessMode] = useState(null);
 
   // Credit/abono sources arrive asynchronously (fetched after mount); re-seed the
   // consumable lines whenever they change so the section appears once data loads.
   useEffect(() => {
-    setLines(sources.map(s => ({ ...s, sel: false, use: 0 })));
+    setLines(sources.map(s => ({ ...s, sel: false, use: 0, useStr: formatPlain(0) })));
   }, [sources]);
 
   const usedCredit = useMemo(
@@ -113,11 +113,11 @@ export function usePaymentBalance({ total, dir = 'in', sources = [] }) {
     let next;
     if (target.sel) {
       nextUse = 0;
-      next = lines.map(l => (l.id === id ? { ...l, sel: false, use: 0 } : l));
+      next = lines.map(l => (l.id === id ? { ...l, sel: false, use: 0, useStr: formatPlain(0) } : l));
     } else {
       const need = round2(Math.max(0, applied - usedByOthers));
       nextUse = round2(Math.min(target.avail, need));
-      next = lines.map(l => (l.id === id ? { ...l, sel: true, use: nextUse } : l));
+      next = lines.map(l => (l.id === id ? { ...l, sel: true, use: nextUse, useStr: formatPlain(nextUse) } : l));
     }
     setLines(next);
 
@@ -132,6 +132,22 @@ export function usePaymentBalance({ total, dir = 'in', sources = [] }) {
       l.id === id
         ? { ...l, use: round2(Math.max(0, Math.min(l.avail, l.use + delta))) }
         : l));
+  }, []);
+
+  // ── direct line-amount editing (typed input, replaces the +/- stepper) ─────
+  // Mirrors onAmountChange/onAmountBlur: keep the raw typed string live while
+  // editing, and only clamp/round/reformat on blur so the cursor doesn't jump
+  // mid-keystroke.
+  const onLineUseChange = useCallback((id, str) => {
+    setLines(prev => prev.map(l => (l.id === id ? { ...l, useStr: str } : l)));
+  }, []);
+
+  const onLineUseBlur = useCallback((id) => {
+    setLines(prev => prev.map(l => {
+      if (l.id !== id) return l;
+      const clamped = round2(Math.max(0, Math.min(l.avail, parsePlain(l.useStr) ?? 0)));
+      return { ...l, use: clamped, useStr: formatPlain(clamped) };
+    }));
   }, []);
 
   // ── equalize ("Igualar") ──────────────────────────────────────────────────
@@ -159,7 +175,7 @@ export function usePaymentBalance({ total, dir = 'in', sources = [] }) {
     // editable amount
     amount, amountStr, onAmountChange, onAmountBlur,
     // credit lines
-    lines, toggleLine, stepLine, consumedSources,
+    lines, toggleLine, stepLine, onLineUseChange, onLineUseBlur, consumedSources,
     // derived totals
     applied, usedCredit, funds, diff,
     isExcess, isPartial, isExact,

@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { toast } from 'sonner';
 import { useUI } from '@/i18n';
 import {
@@ -9,6 +9,7 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog.jsx';
 import AccountCodeField from '@generated/chart-of-accounts/custom/AccountCodeField';
+import { ACCOUNT_TYPE_UI_KEYS } from './accountTypeLabels';
 
 /**
  * NewAccountModal — quick create dialog for a new sub-account.
@@ -30,7 +31,9 @@ import AccountCodeField from '@generated/chart-of-accounts/custom/AccountCodeFie
  *     4-digit summary account in the available parent options.
  *   - Falls back to empty selection if nothing matches.
  *
- * POST body: { searchKey: <8-digit code>, name, accountType: "E" }
+ * POST body: { searchKey: <8-digit code>, name, accountType }
+ *   accountType — required (C_ElementValue.AccountType is mandatory in AD),
+ *   defaults to "E" (Expense), matching the AD column's default value.
  */
 
 const INPUT_CLS =
@@ -64,7 +67,10 @@ function deriveDefaultParentId(currentRecord, parentOptions) {
   return match ? match.id : '';
 }
 
-const EMPTY_FORM = { parentAccountId: '', name: '', searchKey: '' };
+// 'E' (Expense) mirrors the AD column's own default value for C_ElementValue.AccountType.
+const DEFAULT_ACCOUNT_TYPE = 'E';
+
+const EMPTY_FORM = { parentAccountId: '', name: '', searchKey: '', accountType: DEFAULT_ACCOUNT_TYPE };
 
 export default function NewAccountModal({
   isOpen,
@@ -77,17 +83,26 @@ export default function NewAccountModal({
 }) {
   const ui = useUI();
   const [loadedAccounts, setLoadedAccounts] = useState([]);
+  const [accountsFetched, setAccountsFetched] = useState(false);
   const accountRows = allAccounts.length > 0 ? allAccounts : loadedAccounts;
 
+  // Reset the fetch latch on close so a fresh open always retries — otherwise
+  // a transient failure (or stale data) on the first open would permanently
+  // block the parent-selector fetch for the component's whole mounted life.
   useEffect(() => {
-    if (!isOpen || allAccounts.length > 0 || loadedAccounts.length > 0 || !apiBaseUrl) return;
+    if (!isOpen) setAccountsFetched(false);
+  }, [isOpen]);
+
+  useEffect(() => {
+    if (!isOpen || allAccounts.length > 0 || accountsFetched || !apiBaseUrl) return;
     fetch(`${apiBaseUrl}/elementValue?_startRow=0&_endRow=9999`, {
       headers: token ? { Authorization: `Bearer ${token}` } : undefined,
     })
       .then((res) => (res.ok ? res.json() : null))
       .then((data) => setLoadedAccounts(data?.response?.data ?? []))
-      .catch(() => setLoadedAccounts([]));
-  }, [isOpen, allAccounts.length, loadedAccounts.length, apiBaseUrl, token]);
+      .catch(() => setLoadedAccounts([]))
+      .finally(() => setAccountsFetched(true));
+  }, [isOpen, allAccounts.length, accountsFetched, apiBaseUrl, token]);
 
   const virtualParentOptions = useMemo(() => {
     const byCode = new Map();
@@ -126,16 +141,30 @@ export default function NewAccountModal({
     return parent ? String(parent.searchKey) : '';
   }, [form.parentAccountId, parentOptions]);
 
-  // Re-initialise when modal opens or currentRecord changes
+  // Re-initialise once per open/currentRecord cycle. `initDoneRef` resets on
+  // open so a fresh session always recomputes, but once initialization has
+  // run it latches — later parentOptions changes (e.g. a background refetch)
+  // must not reset user-entered name/searchKey mid-edit.
+  const initDoneRef = useRef(false);
   useEffect(() => {
-    if (!isOpen) return;
+    if (isOpen) initDoneRef.current = false;
+  }, [isOpen, currentRecord]);
+
+  useEffect(() => {
+    if (!isOpen || initDoneRef.current) return;
+    // When allAccounts wasn't provided, the self-fetch above populates
+    // parentOptions asynchronously — wait for it to settle so the default
+    // parent/prefix isn't computed against a still-empty option list.
+    const waitingForFetch = allAccounts.length === 0 && !accountsFetched && !!apiBaseUrl;
+    if (waitingForFetch) return;
+
     const defaultParentId = deriveDefaultParentId(currentRecord, parentOptions);
     const defaultParent = parentOptions.find((p) => p.id === defaultParentId);
     const prefix = defaultParent ? String(defaultParent.searchKey) : '';
-    setForm({ parentAccountId: defaultParentId, name: '', searchKey: prefix });
+    setForm({ parentAccountId: defaultParentId, name: '', searchKey: prefix, accountType: DEFAULT_ACCOUNT_TYPE });
     setErrors({});
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isOpen, currentRecord, parentOptions]);
+    initDoneRef.current = true;
+  }, [isOpen, currentRecord, parentOptions, allAccounts.length, accountsFetched, apiBaseUrl]);
 
   // When parent changes, update the code prefix in the searchKey field
   const handleParentChange = useCallback(
@@ -159,6 +188,11 @@ export default function NewAccountModal({
     setErrors((prev) => ({ ...prev, searchKey: undefined }));
   }, []);
 
+  const handleAccountTypeChange = useCallback((e) => {
+    setForm((prev) => ({ ...prev, accountType: e.target.value }));
+    setErrors((prev) => ({ ...prev, accountType: undefined }));
+  }, []);
+
   // Derive the record passed to AccountCodeField
   const accountCodeRecord = useMemo(() => {
     return {
@@ -172,6 +206,7 @@ export default function NewAccountModal({
     if (!form.parentAccountId) next.parentAccountId = ui('required');
     if (!form.name.trim()) next.name = ui('required');
     if (String(form.searchKey).length !== 8) next.searchKey = ui('codeExact8Digits');
+    if (!form.accountType) next.accountType = ui('required');
     setErrors(next);
     return Object.keys(next).length === 0;
   }, [form, ui]);
@@ -184,13 +219,13 @@ export default function NewAccountModal({
       const res = await fetch(`${apiBaseUrl}/elementValue`, {
         method: 'POST',
         headers: {
-          Authorization: `Bearer ${token}`,
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
           searchKey: form.searchKey,
           name: form.name.trim(),
-          accountType: 'E',
+          accountType: form.accountType,
         }),
       });
 
@@ -303,6 +338,32 @@ export default function NewAccountModal({
             {errors.searchKey && (
               <p className={ERROR_CLS} role="alert">
                 {errors.searchKey}
+              </p>
+            )}
+          </div>
+
+          {/* ── Account Type ── */}
+          <div>
+            <label htmlFor="nam-account-type" className={FIELD_LABEL_CLS}>
+              {ui('accountTreeFilterType')}
+              <span className="ml-1 text-red-500 select-none">*</span>
+            </label>
+            <select
+              id="nam-account-type"
+              data-testid="new-account-modal-account-type"
+              className={SELECT_CLS}
+              value={form.accountType}
+              onChange={handleAccountTypeChange}
+            >
+              {Object.entries(ACCOUNT_TYPE_UI_KEYS).map(([code, uiKey]) => (
+                <option key={code} value={code}>
+                  {ui(uiKey)}
+                </option>
+              ))}
+            </select>
+            {errors.accountType && (
+              <p className={ERROR_CLS} role="alert">
+                {errors.accountType}
               </p>
             )}
           </div>

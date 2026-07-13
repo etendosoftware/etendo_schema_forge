@@ -1,7 +1,46 @@
 import { useState, useMemo, useCallback, useEffect } from 'react';
-import { ChevronRight, ChevronDown } from 'lucide-react';
-import { useUI, useLocaleSwitch } from '@/i18n';
+import { ChevronRight, ChevronDown, Lock } from 'lucide-react';
+import { toast } from 'sonner';
+import { useUI } from '@/i18n';
 import NewAccountModal from './NewAccountModal';
+import { ACCOUNT_TYPE_UI_KEYS, accountTypeLabel } from './accountTypeLabels';
+
+// A tree needs its FULL leaf list upfront to know which top-level folders exist —
+// it can't discover them via ListView's incremental "scroll near bottom, load a bit
+// more" pagination (ListView only fetches one BATCH_SIZE page per `data` prop, and
+// does not forward `hasMore`/`loadMore` to the Table it renders). So this component
+// fetches its own complete dataset directly, mirroring the precedent already
+// established by NewAccountModal's parent-selector fetch (see NewAccountModal.jsx).
+// `_endRow=9999` comfortably covers realistic charts of accounts (a live GOClient
+// tenant has 659 leaf accounts across 4 root headings) with generous headroom, and
+// the backend handler (ChartOfAccountsHandler#fetchElementValuesDirectly) derives
+// its page size directly from the requested endRow with no smaller server-side cap.
+const FULL_FETCH_END_ROW = 9999;
+
+// Persists which folder rows are expanded across navigation/reloads. Folder ids are
+// `group-<ancestor-code-path>` (e.g. `group-A|A.A`), derived from stable account codes
+// rather than DB record ids, so they stay valid across sessions.
+const EXPANDED_STORAGE_KEY = 'sf.chartOfAccounts.expandedFolderIds';
+
+function loadPersistedExpanded() {
+  try {
+    const raw = localStorage.getItem(EXPANDED_STORAGE_KEY);
+    if (!raw) return new Set();
+    const ids = JSON.parse(raw);
+    return Array.isArray(ids) ? new Set(ids) : new Set();
+  } catch {
+    return new Set();
+  }
+}
+
+function persistExpanded(expanded) {
+  try {
+    localStorage.setItem(EXPANDED_STORAGE_KEY, JSON.stringify(Array.from(expanded)));
+  } catch {
+    // Storage unavailable (private mode, quota, etc.) — expand/collapse still works
+    // in-memory for this session, it just won't persist across reloads.
+  }
+}
 
 function buildTreeColumns(ui) {
   return [
@@ -26,14 +65,9 @@ function buildTreeColumns(ui) {
       type: 'enum',
       label: ui('accountTreeFilterType'),
       required: true,
-      enumLabels: {
-        A: ui('accountTypeAsset'),
-        E: ui('accountTypeExpense'),
-        L: ui('accountTypeLiability'),
-        M: ui('accountTypeMemo'),
-        O: ui('accountTypeOwnersEquity'),
-        R: ui('accountTypeRevenue'),
-      },
+      enumLabels: Object.fromEntries(
+        Object.entries(ACCOUNT_TYPE_UI_KEYS).map(([code, uiKey]) => [code, ui(uiKey)]),
+      ),
     },
     {
       key: 'active',
@@ -78,39 +112,78 @@ function buildTreeColumns(ui) {
  *
  * The flat list from the NEO API must include fields injected by the
  * chart-of-accounts NeoHandler:
- *   id, searchKey, name, ytdDebit, ytdCredit, ytdBalance,
- *   parentId, depth, hasChildren, summaryLevel
+ *   id, searchKey, name, accountType,
+ *   parentId, depth, hasChildren, summaryLevel, elementLevel,
+ *   ancestors (full root-to-leaf ancestor chain — see buildGroupedTree below),
+ *   parentCode4, parentCode4Name (legacy 4-digit grouping, kept for fallback
+ *   and for NewAccountModal's parent selector)
  *
- * Defaults: levels 0 and 1 expanded, deeper nodes collapsed.
+ * Defaults: every folder is collapsed on first-ever load. Expand/collapse state is
+ * persisted to localStorage (per browser, `EXPANDED_STORAGE_KEY`) so navigating away
+ * and back to this window restores exactly what the user left open.
  *
  * "New Sub-account" is always available. If a row is selected, NewAccountModal
  * auto-populates the parent from that row; otherwise the selector starts empty.
  */
 
-function makeFmtNum(locale) {
-  const fmt = new Intl.NumberFormat(locale.replace('_', '-'), {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-    useGrouping: true,
-  });
-  return (n) => (n == null ? '—' : fmt.format(Number(n)));
-}
-
 /**
- * Groups the flat list of subaccounts by parentCode4, creating virtual group header
- * nodes for each 4-digit parent. All API records are leaves (issummary='N'); the
- * hierarchy comes from parentCode4 / parentCode4Name injected by the NeoHandler.
+ * Builds a genuine N-level nested tree from the flat list of subaccounts, mirroring
+ * Etendo Classic's "Combinación de cuentas" grouped view (e.g. for account `20000000`:
+ * `A` (Heading) → `A.A` (Heading) → `A.A.I` (Heading) → `200` (Account) → `2000`
+ * (Breakdown) → `20000000` (Subaccount)).
  *
- * Returns { tree: groupNodes[] }.
+ * Each leaf's `ancestors` array (injected by the chart-of-accounts NeoHandler, ordered
+ * root-to-leaf) drives the folder path: one virtual folder node per ancestor, keyed by
+ * its position in the path so two leaves sharing a partial ancestor chain (e.g. the same
+ * `A.A.I` heading) reuse the same folder nodes instead of duplicating them.
+ *
+ * Legacy fallback: if a record has no `ancestors` (older API response, or partial
+ * rollout), it falls back to the previous 2-level grouping by its 4-digit `parentCode4`
+ * so the tree still renders something sensible instead of dropping the record.
+ *
+ * Returns { tree: rootNodes[], indexById: Map<id, node> } where indexById only
+ * contains real account nodes (not virtual folder headers).
  */
 function buildGroupedTree(items) {
-  const groupMap = new Map(); // parentCode4 → groupNode
+  const indexById = new Map();
+  const rootChildren = [];
+  const folderIndex = new Map(); // path key → folder node (shared across leaves)
 
   for (const item of items) {
-    const code = item.parentCode4;
-    if (code) {
-      if (!groupMap.has(code)) {
-        groupMap.set(code, {
+    indexById.set(item.id, item);
+
+    const ancestors = Array.isArray(item.ancestors) ? item.ancestors : null;
+
+    if (ancestors && ancestors.length > 0) {
+      let siblings = rootChildren;
+      let pathKey = '';
+      ancestors.forEach((ancestor, idx) => {
+        const segmentKey = String(ancestor?.value ?? `L${idx}`);
+        pathKey = pathKey ? `${pathKey}|${segmentKey}` : segmentKey;
+        let folder = folderIndex.get(pathKey);
+        if (!folder) {
+          folder = {
+            id: `group-${pathKey}`,
+            searchKey: segmentKey,
+            name: ancestor?.name ?? segmentKey,
+            elementLevel: ancestor?.elementLevel ?? null,
+            summaryLevel: 'Y',
+            isVirtual: true,
+            depth: idx,
+            hasChildren: true,
+            children: [],
+          };
+          folderIndex.set(pathKey, folder);
+          siblings.push(folder);
+        }
+        siblings = folder.children;
+      });
+      siblings.push({ ...item, depth: ancestors.length });
+    } else if (item.parentCode4) {
+      const code = item.parentCode4;
+      let folder = folderIndex.get(code);
+      if (!folder) {
+        folder = {
           id: `group-${code}`,
           searchKey: code,
           name: item.parentCode4Name ?? code,
@@ -118,29 +191,25 @@ function buildGroupedTree(items) {
           isVirtual: true,
           depth: 0,
           hasChildren: true,
-          ytdDebit: 0,
-          ytdCredit: 0,
-          ytdBalance: 0,
           children: [],
-        });
+        };
+        folderIndex.set(code, folder);
+        rootChildren.push(folder);
       }
-      const group = groupMap.get(code);
-      group.ytdDebit += Number(item.ytdDebit ?? 0);
-      group.ytdCredit += Number(item.ytdCredit ?? 0);
-      group.ytdBalance += Number(item.ytdBalance ?? 0);
-      group.children.push({ ...item, depth: 1 });
+      folder.children.push({ ...item, depth: 1 });
     }
   }
 
-  // Sort groups by code; sort children within each group by searchKey
-  const tree = [...groupMap.values()].sort((a, b) =>
-    a.searchKey.localeCompare(b.searchKey),
-  );
-  for (const group of tree) {
-    group.children.sort((a, b) => a.searchKey.localeCompare(b.searchKey));
-  }
+  // Sort every level by searchKey, recursively.
+  const sortRecursive = (nodes) => {
+    nodes.sort((a, b) => String(a.searchKey).localeCompare(String(b.searchKey)));
+    for (const node of nodes) {
+      if (node.children?.length) sortRecursive(node.children);
+    }
+  };
+  sortRecursive(rootChildren);
 
-  return { tree };
+  return { tree: rootChildren, indexById };
 }
 
 /**
@@ -160,11 +229,24 @@ function flattenVisible(nodes, expanded) {
   return result;
 }
 
-function AccountTreeRow({ item, isExpanded, isSelected, onToggle, onRowClick, fmtNum }) {
-  const ui = useUI();
+/**
+ * A leaf subaccount whose code ends in "0000" is a protected parent-like placeholder
+ * (e.g. `20000000` under breakdown `2000`) — it is technically `issummary='N'` in the DB
+ * but must render as non-editable, matching the backend's
+ * `ChartOfAccountsHandler.isProtectedParentLikeSubaccount` rule (enforced server-side via
+ * `readOnlyLogic: "@ProtectedParentLikeSubaccount@='Y'"` in decisions.json). Real
+ * subaccounts (e.g. `20000001`) remain fully editable.
+ */
+function isProtectedLeafCode(item) {
+  if (item.isVirtual) return false;
+  if (item.protectedParentLikeSubaccount === 'Y') return true;
+  return typeof item.searchKey === 'string' && item.searchKey.endsWith('0000');
+}
+
+function AccountTreeRow({ item, isExpanded, isSelected, onToggle, onRowClick, ui }) {
   const isSummary = item.summaryLevel === 'Y';
   const indent = (item.depth ?? 0) * 16;
-  const balance = Number(item.ytdBalance ?? 0);
+  const isProtected = isProtectedLeafCode(item);
 
   return (
     <div
@@ -208,26 +290,22 @@ function AccountTreeRow({ item, isExpanded, isSelected, onToggle, onRowClick, fm
       </span>
 
       {/* Account name — fills remaining space */}
-      <span className="flex-1 min-w-0 truncate">{item.name}</span>
-
-      {/* YTD Debit */}
-      <span className="shrink-0 w-28 text-right tabular-nums text-[#3C3C4D]">
-        {fmtNum(item.ytdDebit)}
+      <span className="flex-1 min-w-0 truncate flex items-center gap-1.5">
+        {item.name}
+        {isProtected && (
+          <Lock
+            size={12}
+            className="shrink-0 text-[#9A9AAE]"
+            data-testid={`account-tree-locked-${item.id}`}
+            role="img"
+            aria-label={ui('accountTreeReadOnlyPlaceholder')}
+          />
+        )}
       </span>
 
-      {/* YTD Credit */}
-      <span className="shrink-0 w-28 text-right tabular-nums text-[#3C3C4D]">
-        {fmtNum(item.ytdCredit)}
-      </span>
-
-      {/* Net Balance — red when negative */}
-      <span
-        className={[
-          'shrink-0 w-28 text-right tabular-nums',
-          balance < 0 ? 'text-red-600' : 'text-[#121217]',
-        ].join(' ')}
-      >
-        {fmtNum(item.ytdBalance)}
+      {/* Account type */}
+      <span className="shrink-0 w-40 truncate text-[#3C3C4D]">
+        {accountTypeLabel(ui, item.accountType)}
       </span>
     </div>
   );
@@ -237,11 +315,22 @@ function AccountTreeRow({ item, isExpanded, isSelected, onToggle, onRowClick, fm
  * AccountTreeView — main component.
  *
  * Props it uses:
- *   data          — flat list of account records from NEO (with tree fields)
+ *   data          — flat list of account records from NEO (with tree fields).
+ *                   ListView.jsx only ever hands this one paginated BATCH_SIZE
+ *                   page (`hook.items`), so it is used as the initial/fallback
+ *                   dataset — see the self-fetch note below.
  *   onNavigate    — (item) => void — called when a non-virtual row is clicked (receives the full row object)
  *   onDataMutated — () => void  — called after a new sub-account is saved
- *   token         — JWT for API calls (forwarded to NewAccountModal)
- *   apiBaseUrl    — NEO base URL (forwarded to NewAccountModal)
+ *   token         — JWT for API calls (forwarded to NewAccountModal, used for self-fetch)
+ *   apiBaseUrl    — NEO base URL (forwarded to NewAccountModal, used for self-fetch)
+ *
+ * Self-fetch: when `apiBaseUrl` is provided, the component fetches its own complete
+ * leaf-account dataset (see FULL_FETCH_END_ROW above) on mount and after every save,
+ * and renders that instead of the paginated `data` prop once the fetch resolves. This
+ * is what makes every root-level heading (not just the ones with leaves in ListView's
+ * first page) show up. Until the fetch resolves (or if it fails, or if `apiBaseUrl` is
+ * absent — e.g. direct unit tests that only pass `data`), the component renders `data`
+ * as-is, so plain `data`-driven tests keep working without needing to mock `fetch`.
  *
  * The remaining props mirror what ListView passes to a headerTable component
  * (sorting, filtering, selection, etc.). They are accepted but not acted on
@@ -277,26 +366,65 @@ export default function AccountTreeView({
   ...rest
 }) {
   const ui = useUI();
-  const { locale } = useLocaleSwitch();
-  const fmtNum = useMemo(() => makeFmtNum(locale), [locale]);
   const treeColumns = useMemo(() => buildTreeColumns(ui), [ui]);
 
-  const { tree } = useMemo(() => buildGroupedTree(data), [data]);
+  // Self-fetch: the full leaf-account list, loaded directly (bypassing ListView's
+  // one-page `data` prop) whenever `apiBaseUrl` is available. See the component
+  // docblock above for why the tree needs this instead of incremental pagination.
+  const [fetchedData, setFetchedData] = useState(null);
+  const [isFetchingFull, setIsFetchingFull] = useState(false);
+  const [fetchGeneration, setFetchGeneration] = useState(0);
 
-  const [expanded, setExpanded] = useState(() => new Set());
-
-  // Expand all group headers whenever the tree is first populated (async data load)
   useEffect(() => {
-    if (tree.length > 0) {
-      setExpanded((prev) => {
-        const next = new Set(prev);
-        for (const node of tree) {
-          if (node.isVirtual) next.add(node.id);
+    if (!apiBaseUrl) return undefined;
+
+    let cancelled = false;
+
+    (async () => {
+      setIsFetchingFull(true);
+      try {
+        const res = await fetch(
+          `${apiBaseUrl}/elementValue?_startRow=0&_endRow=${FULL_FETCH_END_ROW}`,
+          { headers: token ? { Authorization: `Bearer ${token}` } : undefined },
+        );
+        if (!res.ok) throw new Error(`Error ${res.status}`);
+        const json = await res.json();
+        const rows = json?.response?.data;
+        if (!cancelled && Array.isArray(rows)) {
+          setFetchedData(rows);
         }
-        return next;
-      });
-    }
-  }, [tree]);
+      } catch {
+        if (!cancelled) {
+          toast.error(ui('accountTreeFetchError'));
+        }
+      } finally {
+        if (!cancelled) setIsFetchingFull(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [apiBaseUrl, token, fetchGeneration]);
+
+  // Refetch the complete dataset after a new sub-account is saved, in addition to
+  // whatever `onDataMutated` triggers on the caller's side (ListView's own
+  // one-page refresh).
+  const refetchFull = useCallback(() => setFetchGeneration((g) => g + 1), []);
+
+  // Until the self-fetch resolves — or when it's not applicable (`apiBaseUrl` absent,
+  // e.g. direct unit tests) — fall back to the `data` prop so behavior is unchanged.
+  const effectiveData = fetchedData ?? data;
+
+  const { tree } = useMemo(() => buildGroupedTree(effectiveData), [effectiveData]);
+
+  const [expanded, setExpanded] = useState(loadPersistedExpanded);
+
+  // Persist expand/collapse state so it survives navigating away and back.
+  useEffect(() => {
+    persistExpanded(expanded);
+  }, [expanded]);
 
   useEffect(() => {
     onColumnsReady?.(treeColumns);
@@ -343,7 +471,8 @@ export default function AccountTreeView({
   const handleSaved = useCallback(() => {
     setIsModalOpen(false);
     onDataMutated?.();
-  }, [onDataMutated]);
+    refetchFull();
+  }, [onDataMutated, refetchFull]);
 
   return (
     <div data-testid="account-tree" role="grid" {...rest}>
@@ -365,6 +494,12 @@ export default function AccountTreeView({
           >
             {ui('collapse')}
           </button>
+          {isFetchingFull && (
+            <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+              <span className="h-3 w-3 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
+              {ui('accountTreeLoadingFull')}
+            </span>
+          )}
         </div>
 
         <button
@@ -376,7 +511,7 @@ export default function AccountTreeView({
         </button>
       </div>
 
-      {data.length === 0 ? (
+      {effectiveData.length === 0 ? (
         <div className="flex items-center justify-center py-16 text-sm text-muted-foreground">
           {ui('accountTreeNoAccounts')}
         </div>
@@ -395,14 +530,8 @@ export default function AccountTreeView({
             <span className="flex-1 min-w-0 text-xs font-medium text-[#6C6C89] uppercase tracking-wide">
               {ui('name')}
             </span>
-            <span className="shrink-0 w-28 text-right text-xs font-medium text-[#6C6C89] uppercase tracking-wide">
-              {ui('accountTreeDebit')}
-            </span>
-            <span className="shrink-0 w-28 text-right text-xs font-medium text-[#6C6C89] uppercase tracking-wide">
-              {ui('accountTreeCredit')}
-            </span>
-            <span className="shrink-0 w-28 text-right text-xs font-medium text-[#6C6C89] uppercase tracking-wide">
-              {ui('accountTreeBalance')}
+            <span className="shrink-0 w-40 text-xs font-medium text-[#6C6C89] uppercase tracking-wide">
+              {ui('accountTreeFilterType')}
             </span>
           </div>
 
@@ -416,7 +545,7 @@ export default function AccountTreeView({
                 isSelected={item.id === selectedId}
                 onToggle={handleToggle}
                 onRowClick={handleRowClick}
-                fmtNum={fmtNum}
+                ui={ui}
                 data-testid="AccountTreeRow__acc34a"
               />
             ))}
@@ -430,7 +559,7 @@ export default function AccountTreeView({
         onClose={() => setIsModalOpen(false)}
         onSaved={handleSaved}
         currentRecord={selectedRecord}
-        allAccounts={data}
+        allAccounts={effectiveData}
         apiBaseUrl={apiBaseUrl}
         token={token}
         data-testid="NewAccountModal__acc34a"

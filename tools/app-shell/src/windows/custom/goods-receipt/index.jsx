@@ -9,11 +9,9 @@ import RelatedDocuments from './RelatedDocuments.jsx';
 import { AttachmentsTab } from '@/components/attachments';
 import BulkDocumentAction, { buildInOutActions } from '@/components/contract-ui/BulkDocumentAction';
 import CloneOrderModal from '@/components/contract-ui/CloneOrderModal';
-import SendDocumentModal from '@/components/contract-ui/SendDocumentModal';
-import { usePreviewAttachment } from '@/windows/custom/shared/usePreviewAttachment.js';
 import { useBulkActionToast } from '@/hooks/useBulkActionToast';
 import { useRowDelete } from '@/hooks/useRowDelete';
-import { useMenuLabel, useUI } from '@/i18n';
+import { useUI } from '@/i18n';
 
 const HEADER_COLUMNS = [
   { key: 'movementDate', column: 'MovementDate', type: 'date', dot: false },
@@ -67,22 +65,12 @@ function GoodsReceiptBulkAction(props) {
 export default function GoodsReceiptWindow(props) {
   useBulkActionToast();
   const ui = useUI();
-  const tMenu = useMenuLabel();
   const navigate = useNavigate();
   const { token, apiBaseUrl, windowName } = props;
   const [searchParams] = useSearchParams();
   const docStatus = searchParams.get('DocStatus') || undefined;
   const [cloneTargets, setCloneTargets] = useState(null);
-  const [emailRow, setEmailRow] = useState(null);
   const [refreshKey, setRefreshKey] = useState(0);
-
-  const emailPreviewAttachment = usePreviewAttachment({
-    documentId: emailRow?.id ?? null,
-    specName: 'goods-receipt',
-    storeCondition: !!emailRow,
-    token,
-    apiBaseUrl,
-  });
 
   const headers = useMemo(() => ({
     Authorization: `Bearer ${token}`,
@@ -123,12 +111,11 @@ export default function GoodsReceiptWindow(props) {
     actions: {
       edit: { show: true },
       duplicate: { show: true },
-      email: { show: true, visibleWhen: "@documentStatus@='CO'" },
+      email: { show: false },
       delete: { show: true },
     },
     onEdit: (row) => navigate(`/${windowName}/${row.id}`),
     onClone: (row) => setCloneTargets([row]),
-    onEmail: (row) => setEmailRow(row),
     onDelete: requestDelete,
   }), [navigate, windowName, requestDelete]);
 
@@ -169,22 +156,6 @@ export default function GoodsReceiptWindow(props) {
         )}
         data-testid="GeneratedApp__bf4f23" />
       {deleteDialog}
-      {emailRow && createPortal(
-        <SendDocumentModal
-          documentType={tMenu('Goods Receipt')}
-          documentNo={emailRow.documentNo}
-          bpName={emailRow['businessPartner$_identifier']}
-          bPartnerId={emailRow.businessPartner}
-          apiBaseUrl={apiBaseUrl}
-          documentId={emailRow.id}
-          windowName="goods-receipt"
-          token={token}
-          pdfBlobUrl={emailPreviewAttachment.storedFile?.objectUrl}
-          pdfBlobLoading={emailPreviewAttachment.isBusy}
-          onClose={() => setEmailRow(null)}
-          data-testid="SendDocumentModal__bf4f23" />,
-        document.body,
-      )}
       {cloneTargets && createPortal(
         <CloneOrderModal
           records={cloneTargets}

@@ -293,6 +293,12 @@
           "windowId": "E66E701CCBA14B8BA480CBDE37C50D7A"
         },
         {
+          "name": "fiscal-calendar",
+          "label": "Fiscal Calendar",
+          "favname": "Fiscal Calendar",
+          "windowId": "117"
+        },
+        {
           "name": "assets",
           "label": "Assets",
           "favname": "Assets",
@@ -391,6 +397,12 @@
           "label": "Tax Category",
           "favname": "Tax Category",
           "windowId": "138"
+        },
+        {
+          "name": "business-partner-category",
+          "label": "Business Partner Category",
+          "favname": "Business Partner Category",
+          "windowId": "192"
         },
         {
           "name": "user",

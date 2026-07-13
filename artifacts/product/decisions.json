@@ -23,7 +23,6 @@
     "whiteFormBackground": true,
     "sidebarClassName": "w-[30%] shrink-0 overflow-y-auto pt-2 pl-0 pr-4 pb-5 border-l border-[#E8EAEF]",
     "attachments": true,
-    "customTabsAfterBottom": true,
     "detailEntity": null,
     "customPanelTabs": [
       { "key": "pricing", "labelKey": "price", "component": "ProductPriceBar" }
@@ -43,7 +42,19 @@
       { "key": "general", "label": "General" },
       { "key": "additionalInfo", "label": "Additional Info", "panel": "ProductAdditionalInfoPanel" }
     ],
-    "secondaryTabs": {}
+    "secondaryTabs": {
+      "accounting": {
+        "tabOrder": 1,
+        "label": "Accounting",
+        "addLineFields": [
+          "fixedAsset",
+          "productExpense",
+          "productRevenue",
+          "productCOGS"
+        ],
+        "requireSavedRecord": true
+      }
+    }
   },
   "entities": {
     "intrastat": { "exclude": true },
@@ -386,7 +397,57 @@
       "exclude": true
     },
     "accounting": {
-      "exclude": true
+      "javaQualifier": "productAccountingHandler",
+      "fields": {
+        "accountingSchema": { "visibility": "system", "addLineFromSibling": true },
+        "fixedAsset": {
+          "visibility": "editable",
+          "grid": true,
+          "seq": 1
+        },
+        "productExpense": {
+          "visibility": "editable",
+          "grid": true,
+          "grow": true,
+          "seq": 2
+        },
+        "productRevenue": {
+          "visibility": "editable",
+          "grid": true,
+          "grow": true,
+          "seq": 3
+        },
+        "productCOGS": {
+          "visibility": "editable",
+          "grid": true,
+          "grow": true,
+          "seq": 4
+        },
+        "pDefExpenseAcct": {
+          "visibility": "discarded"
+        },
+        "productDeferredRevenue": {
+          "visibility": "discarded"
+        },
+        "invoicePriceVariance": {
+          "visibility": "discarded"
+        },
+        "productRevenueReturn": {
+          "visibility": "discarded"
+        },
+        "productCOGSReturn": {
+          "visibility": "discarded"
+        },
+        "purchasePriceVariance": {
+          "visibility": "discarded"
+        },
+        "tradeDiscountReceived": {
+          "visibility": "discarded"
+        },
+        "tradeDiscountGranted": {
+          "visibility": "discarded"
+        }
+      }
     },
     "costingRule": {
       "exclude": true

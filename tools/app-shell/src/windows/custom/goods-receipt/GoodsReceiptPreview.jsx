@@ -1,11 +1,11 @@
-import { useRef, useState, useCallback } from 'react';
+import { useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Edit2, Mail } from 'lucide-react';
+import { Edit2 } from 'lucide-react';
 import { Button } from '@/components/ui/button.jsx';
 import { useUI, useMenuLabel, useLocaleSwitch } from '@/i18n';
 import { formatCalendarDate } from '@/lib/dateOnly';
 import GenericPreviewModal from '../shared/GenericPreviewModal.jsx';
-import { usePreviewSendModal, makeStaticPreviewTabs, ReceiptSendModal } from '../shared/PreviewActionButtons.jsx';
+import { makeStaticPreviewTabs } from '../shared/PreviewActionButtons.jsx';
 import { InfoRow, PercentBar, MovementSummaryCard } from '../shared/preview-cards/SummaryCard.jsx';
 import { STATUS_BADGE, STATUS_KEYS } from '@/components/related-documents/constants.jsx';
 import RelatedDocumentsCard from '../shared/preview-cards/RelatedDocumentsCard.jsx';
@@ -73,10 +73,6 @@ export default function GoodsReceiptPreview({ receipt, token, apiBaseUrl, window
   const navigate = useNavigate();
   const modalRef = useRef(null);
 
-  const [previewFile, setPreviewFile] = useState(null);
-  const sendModal = usePreviewSendModal();
-  const handleFileChange = useCallback((f) => setPreviewFile(f), []);
-
   if (!receipt) return null;
 
   const partnerName = receipt['businessPartner$_identifier'] || '—';
@@ -86,20 +82,8 @@ export default function GoodsReceiptPreview({ receipt, token, apiBaseUrl, window
   const windowLabel = tMenu('Goods Receipt');
   const purchaseOrderId = receipt.salesOrder || null;
 
-  const isCompleted = receipt.documentStatus === 'CO';
-
   const actionButtons = (
     <>
-      {isCompleted && (
-        <Button
-          size="sm"
-          className="gap-1 px-2 py-1 h-8 rounded-lg text-sm font-medium bg-[#121217] hover:bg-[#2a2a30] text-white [&_svg]:size-5"
-          onClick={sendModal.openEmailModal}
-          data-testid="Button__ba7c74">
-          <Mail data-testid="Mail__ba7c74" />
-          {ui('invoicePreviewSend')}
-        </Button>
-      )}
       <Button
         size="sm"
         variant="outline"
@@ -140,32 +124,18 @@ export default function GoodsReceiptPreview({ receipt, token, apiBaseUrl, window
     autoFetch: false,
     token,
     apiBaseUrl,
-    onFileChange: handleFileChange,
   };
 
   return (
-    <>
-      <GenericPreviewModal
-        ref={modalRef}
-        title={`${windowLabel} ${receipt.documentNo}`}
-        subtitle={partnerName !== '—' ? `${ui('invoicePreviewClient')} ${partnerName}` : undefined}
-        attachmentConfig={attachmentConfig}
-        onClose={onClose}
-        onEdit={() => onEdit?.(receipt.id)}
-        tabs={tabs}
-        actionButtons={actionButtons}
-        data-testid="GenericPreviewModal__ba7c74" />
-      <ReceiptSendModal
-        sendModal={sendModal}
-        documentType={windowLabel}
-        receipt={receipt}
-        partnerName={partnerName}
-        apiBaseUrl={apiBaseUrl}
-        token={token}
-        windowName="goods-receipt"
-        pdfBlobUrl={previewFile?.objectUrl}
-        pdfBlobLoading={false}
-        data-testid="ReceiptSendModal__ba7c74" />
-    </>
+    <GenericPreviewModal
+      ref={modalRef}
+      title={`${windowLabel} ${receipt.documentNo}`}
+      subtitle={partnerName !== '—' ? `${ui('invoicePreviewClient')} ${partnerName}` : undefined}
+      attachmentConfig={attachmentConfig}
+      onClose={onClose}
+      onEdit={() => onEdit?.(receipt.id)}
+      tabs={tabs}
+      actionButtons={actionButtons}
+      data-testid="GenericPreviewModal__ba7c74" />
   );
 }

@@ -1,8 +1,8 @@
 {
-  "version": "0.13.0",
+  "version": "0.17.0",
   "generatedAt": "2026-06-26T16:40:04.731Z",
-  "updatedAt": "2026-06-29T12:09:17.663Z",
-  "checksum": "4bd3c5244f490221",
+  "updatedAt": "2026-07-06T13:19:15.572Z",
+  "checksum": "9d2b12aa207b3371",
   "frontendContract": {
     "window": {
       "id": "6CB5B67ED33F47DFA334079D3EA2340E",
@@ -53,6 +53,7 @@
         }
       },
       "salesTheme": true,
+      "documentDateField": "orderDate",
       "labelOverrides": {
         "es_ES": {
           "C_BPartner_ID": "Contacto",
@@ -954,6 +955,7 @@
         }
       },
       "salesTheme": true,
+      "documentDateField": "orderDate",
       "labelOverrides": {
         "es_ES": {
           "C_BPartner_ID": "Contacto",

@@ -15,13 +15,13 @@ import { login } from '../helpers/auth.js';
  * never fetches on mount.
  *
  * It switches to each of the 4 tabs (General · Valores por defecto · Dimensiones ·
- * Documentos), waits for that tab's content to render, runs a light sanity check
- * (no pixel/layout fidelity assertion — a human compares the PNGs to the Figma),
- * and writes a full-page screenshot per tab to e2e/test-results/.
+ * Cuentas generales), waits for that tab's content to render, runs a light sanity
+ * check (no pixel/layout fidelity assertion — a human compares the PNGs to the
+ * Figma), and writes a full-page screenshot per tab to e2e/test-results/.
  *
  * Selectors used are the stable data-testids already emitted by the window:
  *   glc-tab-0..3, glc-save, glc-section-identity, glc-defaults-group-*,
- *   glc-section-dimensions, glc-doc-*.
+ *   glc-section-dimensions, glc-section-suspense.
  */
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -32,7 +32,7 @@ const TABS = [
   { index: 0, file: 'glc-01-general.png',     anchor: (p) => p.getByTestId('glc-section-identity') },
   { index: 1, file: 'glc-02-valores.png',     anchor: (p) => p.locator('[data-testid^="glc-defaults-group-"]').first() },
   { index: 2, file: 'glc-03-dimensiones.png', anchor: (p) => p.getByTestId('glc-section-dimensions') },
-  { index: 3, file: 'glc-04-documentos.png',  anchor: (p) => p.locator('[data-testid^="glc-doc-"]').first() },
+  { index: 3, file: 'glc-04-cuentas-generales.png', anchor: (p) => p.getByTestId('glc-section-suspense') },
 ];
 
 test.describe('General Ledger Configuration — visual capture (mocked)', () => {
@@ -69,8 +69,8 @@ test.describe('General Ledger Configuration — visual capture (mocked)', () => 
  * General Ledger Configuration — behavioral suite (mocked).
  *
  * Builds on the capture seed: drives the real dirty-state → aggregate-save flow,
- * the inverted period toggle, dimension toggles, the unbacked placeholders, and
- * the read-only surfaces. The `Guardar cambios` button is gated on a selected
+ * the inverted period toggle, dimension toggles, and the read-only surfaces. The
+ * `Guardar cambios` button is gated on a selected
  * organization (`useGeneralLedgerConfig` only POSTs when `selectedOrg.id` is set),
  * so we seed `sf_auth_selected_org` in localStorage before React boots and install
  * a window-specific route for the aggregate endpoint after login() (LIFO wins over
@@ -129,14 +129,12 @@ test.describe('General Ledger Configuration — behavioral (mocked)', () => {
     await expect(page.getByTestId('glc-tab-0')).toBeVisible({ timeout: 15_000 });
   });
 
-  test('renders the 4 tabs in order with the documents count badge and a disabled save', async ({ page }) => {
+  test('renders the 4 tabs in order with a disabled save', async ({ page }) => {
     for (let i = 0; i < 4; i++) {
       await expect(page.getByTestId(`glc-tab-${i}`)).toBeVisible();
     }
     // Pristine form → save disabled.
     await expect(page.getByTestId('glc-save')).toBeDisabled();
-    // Documentos badge shows the seed count (8).
-    await expect(page.getByTestId('glc-tab-3')).toContainText('8');
   });
 
   test('navigates across all 4 tabs', async ({ page }) => {
@@ -150,7 +148,7 @@ test.describe('General Ledger Configuration — behavioral (mocked)', () => {
     await expect(page.getByTestId('glc-section-dimensions')).toBeVisible();
 
     await page.getByTestId('glc-tab-3').click();
-    await expect(page.locator('[data-testid^="glc-doc-"]').first()).toBeVisible();
+    await expect(page.getByTestId('glc-section-suspense')).toBeVisible();
   });
 
   test('editing a General field flips dirty state, enables save, and POSTs the dirty payload', async ({ page }) => {
@@ -170,16 +168,11 @@ test.describe('General Ledger Configuration — behavioral (mocked)', () => {
       dimensions: [],
       selectedOrgId: SEED_ORG.id,
     });
-    // Unbacked placeholders never leak into the payload.
-    expect(post.last.general).not.toHaveProperty('conversionType');
-    expect(post.last.general).not.toHaveProperty('costPrecision');
-    expect(post.last.general).not.toHaveProperty('autoReconciliation');
-    expect(post.last.general).not.toHaveProperty('journalNumbering');
   });
 
-  test('inverted period toggle: turning "closed periods" ON maps to automaticPeriodControl=false', async ({ page }) => {
-    const toggle = page.getByTestId('glc-toggle-closed-periods-switch');
-    // Seed automaticPeriodControl=true ⇒ "closed periods" starts OFF.
+  test('allow negative toggle: turning it ON maps to allowNegative=true', async ({ page }) => {
+    const toggle = page.getByTestId('glc-toggle-allow-negative-switch');
+    // Seed allowNegative=false ⇒ toggle starts OFF.
     await expect(toggle).not.toBeChecked();
     await toggle.click();
     await expect(toggle).toBeChecked();
@@ -187,7 +180,7 @@ test.describe('General Ledger Configuration — behavioral (mocked)', () => {
     await page.getByTestId('glc-save').click();
 
     await expect.poll(() => post.last).not.toBeNull();
-    expect(post.last.general).toMatchObject({ automaticPeriodControl: false });
+    expect(post.last.general).toMatchObject({ allowNegative: true });
   });
 
   test('dimensions: toggling an optional row marks dirty and POSTs the dimension change', async ({ page }) => {
@@ -215,17 +208,6 @@ test.describe('General Ledger Configuration — behavioral (mocked)', () => {
     await expect(mandatory).toBeChecked();
   });
 
-  test('the 4 unbacked placeholders render their marker and stay non-persistent', async ({ page }) => {
-    // Two selects on the General tab.
-    await expect(page.getByTestId('glc-field-conversion-type').getByTestId('glc-unbacked-hint')).toBeVisible();
-    await expect(page.getByTestId('glc-field-cost-precision').getByTestId('glc-unbacked-hint')).toBeVisible();
-    // Two toggles in Políticas contables — disabled + marked.
-    await expect(page.getByTestId('glc-toggle-auto-reconciliation').getByTestId('glc-unbacked-hint')).toBeVisible();
-    await expect(page.getByTestId('glc-toggle-journal-numbering').getByTestId('glc-unbacked-hint')).toBeVisible();
-    await expect(page.getByTestId('glc-toggle-auto-reconciliation-switch')).toBeDisabled();
-    await expect(page.getByTestId('glc-toggle-journal-numbering-switch')).toBeDisabled();
-  });
-
   test('read-only: Calendario fiscal and Organización are not editable inputs', async ({ page }) => {
     const org = page.getByTestId('glc-field-organization');
     await expect(org).toBeVisible();
@@ -234,19 +216,5 @@ test.describe('General Ledger Configuration — behavioral (mocked)', () => {
     const calendar = page.getByTestId('glc-field-calendar');
     await expect(calendar).toBeVisible();
     await expect(calendar.getByRole('textbox')).toHaveCount(0);
-  });
-
-  test('Documentos tab is read-only with "Mapeado" chips and no edit controls', async ({ page }) => {
-    await page.getByTestId('glc-tab-3').click();
-    const rows = page.locator('[data-testid^="glc-doc-"]');
-    await expect(rows.first()).toBeVisible();
-    await expect(rows).toHaveCount(8);
-
-    // Every row shows a green "Mapeado" status chip.
-    await expect(page.getByText(/mapeado/i).first()).toBeVisible();
-    // No switches, inputs or comboboxes in the read-only table.
-    const panel = page.getByTestId('DocumentsTab__79cd86');
-    await expect(panel.getByRole('switch')).toHaveCount(0);
-    await expect(panel.getByRole('textbox')).toHaveCount(0);
   });
 });

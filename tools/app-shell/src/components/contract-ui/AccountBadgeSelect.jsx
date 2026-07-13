@@ -31,6 +31,9 @@ export function AccountBadge({ code, className = '' }) {
  * @param {object} props
  * @param {string} [props.label]
  * @param {boolean} [props.required]
+ * @param {import('react').ReactNode} [props.labelHint] — optional node rendered
+ *   right after the label (and required marker), e.g. an info-icon + tooltip.
+ *   Generic on purpose so any caller can attach a caveat to a specific field.
  * @param {string|null} [props.value] — selected option id
  * @param {Array<{id:string,code?:string,name:string}>} props.options
  * @param {(id:string|null)=>void} [props.onChange]
@@ -42,6 +45,7 @@ export function AccountBadge({ code, className = '' }) {
 export function AccountBadgeSelect({
   label,
   required = false,
+  labelHint = null,
   value = null,
   options = [],
   onChange,
@@ -66,9 +70,12 @@ export function AccountBadgeSelect({
   );
 
   const labelRow = label ? (
-    <span className="block text-sm font-medium text-[#121217] mb-1.5">
-      {label}
-      {required && <span className="text-[#D7373F] ml-0.5">*</span>}
+    <span className="flex items-center gap-1 text-sm font-medium text-[#121217] mb-1.5">
+      <span>
+        {label}
+        {required && <span className="text-[#D7373F] ml-0.5">*</span>}
+      </span>
+      {labelHint}
     </span>
   ) : null;
 

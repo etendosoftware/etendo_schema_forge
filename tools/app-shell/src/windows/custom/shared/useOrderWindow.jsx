@@ -7,6 +7,7 @@ import { useBulkActionToast } from '@/hooks/useBulkActionToast';
 import { useRowDelete } from '@/hooks/useRowDelete';
 import { fetchOptionalJson } from './pdfUtils.js';
 import { useSavedPreviewRecord } from './useSavedPreviewRecord.js';
+import { useRowEmailModal } from './useRowEmailModal.jsx';
 import OrderPreview from './OrderPreview.jsx';
 
 export function useOrderWindow({
@@ -23,6 +24,10 @@ export function useOrderWindow({
   ManageDocsLauncher,
   setCloneTargets,
   showReactivate = false,
+  // ETP-4372 — per-window PDF hook + localized document label so the row-hover
+  // envelope opens SendDocumentModal WITH a PDF preview (see useRowEmailModal).
+  usePdf,
+  documentType,
 }) {
   useBulkActionToast();
   const ui = useUI();
@@ -40,6 +45,16 @@ export function useOrderWindow({
   });
 
   const { effectiveRecord, clearSavedRecord } = useSavedPreviewRecord();
+
+  // ETP-4372 — row-hover email envelope with PDF preview. When `usePdf` is not
+  // supplied the modal is omitted and ListView keeps its no-preview fallback.
+  const { onEmail: onRowEmail, emailModalPortal } = useRowEmailModal({
+    usePdf,
+    apiBaseUrl,
+    token,
+    windowName,
+    documentType,
+  });
 
   const renderPreview = useCallback(({ row, onClose, onEdit }) => (
     <OrderPreview
@@ -65,6 +80,7 @@ export function useOrderWindow({
     documentPreview: true,
     onEdit: (row) => navigate(`/${windowName}/${row.id}`),
     onClone: (row) => setCloneTargets([row]),
+    onEmail: onRowEmail,
     onDelete: requestDelete,
     menuActions: ({ row, status }) => {
       const delivery = Number(row?.[deliveryKey] ?? 100);
@@ -124,7 +140,7 @@ export function useOrderWindow({
     onMenuActionExecuted: (action) => {
       if (action.documentAction) setRefreshKey(k => k + 1);
     },
-  }), [navigate, windowName, requestDelete, ui, deliveryKey, manageLabelKeys, confirmLabelKey, setCloneTargets, showReactivate]);
+  }), [navigate, windowName, requestDelete, ui, deliveryKey, manageLabelKeys, confirmLabelKey, setCloneTargets, showReactivate, onRowEmail]);
 
   const confirmPortal = confirmRow && !confirmedDocs ? createPortal(
     <ConfirmModal
@@ -178,5 +194,6 @@ export function useOrderWindow({
     confirmPortal,
     manageLauncher,
     confirmResultPortal,
+    emailModalPortal,
   };
 }

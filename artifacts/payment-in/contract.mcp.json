@@ -1,8 +1,8 @@
 {
-  "version": "0.11.0",
+  "version": "0.10.0",
   "generatedAt": "2026-04-29T19:05:52.312Z",
-  "updatedAt": "2026-06-24T20:46:47.740Z",
-  "contractChecksum": "fefc6202a9a92485",
+  "updatedAt": "2026-07-07T10:16:03.053Z",
+  "contractChecksum": "eee82f93d84a16a0",
   "apiPrediction": {
     "specName": "payment-in",
     "baseUrl": "/sws/neo/payment-in",
@@ -473,10 +473,23 @@
             "required": true,
             "readOnlyLogic": "@IsMultiCurrencyEnabled@!'Y' | @Processed@='Y' | @Status@='RPAE'"
           },
+          "aPRMProcessPayment": {
+            "defaultValue": "P"
+          },
           "status": {
             "readOnly": true,
             "required": true,
             "defaultValue": "RPAP"
+          },
+          "creationDate": {
+            "readOnly": true,
+            "required": true,
+            "defaultValue": "SYSDATE"
+          },
+          "updated": {
+            "readOnly": true,
+            "required": true,
+            "defaultValue": "SYSDATE"
           },
           "etblkpAccountingstatus": {
             "readOnly": true,
@@ -500,11 +513,17 @@
           "dueDate": {
             "readOnly": true
           },
+          "expected": {
+            "readOnly": true
+          },
           "amount": {
             "required": true,
             "defaultValue": "0"
           },
-          "invoicePaymentSchedule": {}
+          "invoicePaymentSchedule": {},
+          "invoiceDocumentNo": {
+            "readOnly": true
+          }
         }
       }
     },
@@ -611,5 +630,5 @@
       "etprReactivatePayment"
     ]
   },
-  "checksum": "57b4be6cfea89acb"
+  "checksum": "93af7e3f562e8f5f"
 }

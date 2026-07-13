@@ -1,0 +1,123 @@
+name: Bump schema_forge_core pin on release
+
+# Fired via repository_dispatch when schema_forge_core publishes a new release
+# (see schema_forge_core .github/workflows/release.yml, "Notify functional
+# repo of new release" step). Opens a PR against the epic branch bumping the
+# lockstep pin (@etendosoftware/app-shell-core, schema-forge-cli,
+# schema-forge-core) via `make bump-core-version`.
+#
+# Can also be triggered manually with a specific version via workflow_dispatch
+# (useful for backfilling a bump that was missed, or testing the workflow).
+
+on:
+  repository_dispatch:
+    types: [core-released]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'schema_forge_core version to bump to (e.g. 0.4.0)'
+        required: true
+
+env:
+  EPIC_BRANCH: epic/ETP-3504
+
+jobs:
+  bump-core-version:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Resolve target version
+        id: version
+        run: |
+          VERSION="${{ github.event.client_payload.version }}"
+          if [ -z "$VERSION" ]; then
+            VERSION="${{ inputs.version }}"
+          fi
+          if [ -z "$VERSION" ]; then
+            echo "::error::No version resolved from client_payload.version or workflow_dispatch input."
+            exit 1
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Bumping schema_forge_core pin to $VERSION"
+
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EPIC_BRANCH }}
+          # A PAT (not GITHUB_TOKEN) is required so the branch pushed below
+          # triggers the repo's own workflows (Tests, Offline Regen Check, ...)
+          # on the PR — pushes made with GITHUB_TOKEN don't trigger workflows.
+          token: ${{ secrets.SF_BUMP_PAT }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          registry-url: https://npm.pkg.github.com
+          scope: '@etendosoftware'
+
+      - name: Configure git identity
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Create bump branch
+        run: git checkout -b "chore/bump-core-${{ steps.version.outputs.version }}"
+
+      - name: Bump schema_forge_core pin
+        run: make bump-core-version VERSION=${{ steps.version.outputs.version }}
+        env:
+          # GITHUB_TOKEN (not SF_BUMP_PAT) reads the @etendosoftware packages
+          # from GitHub Packages: the built-in token has org package-read scope,
+          # while fine-grained PATs are unreliable against the npm registry.
+          # SF_BUMP_PAT is reserved for git checkout/push/PR + the dispatch.
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Check for changes
+        id: diff
+        run: |
+          if [ -z "$(git status --porcelain)" ]; then
+            echo "has_changes=false" >> "$GITHUB_OUTPUT"
+            echo "Already at ${{ steps.version.outputs.version }} — nothing to bump, skipping PR."
+          else
+            echo "has_changes=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Commit bump
+        if: steps.diff.outputs.has_changes == 'true'
+        run: |
+          git add package.json package-lock.json tools/app-shell/package.json tools/app-shell/package-lock.json
+          git commit -m "Epic ETP-3504: Bump schema_forge_core pin to ${{ steps.version.outputs.version }}"
+
+      - name: Push bump branch
+        if: steps.diff.outputs.has_changes == 'true'
+        # --no-verify: `make bump-core-version` runs `npm install`, whose `prepare`
+        # script sets core.hooksPath to .githooks — activating the local dev
+        # pre-push hook (Sonar + full test suite) inside this CI checkout. That
+        # hook requires SONAR_HOST_URL/SONAR_TOKEN in a local .env, which this
+        # bot job intentionally doesn't have. The bump only touches lockstep
+        # pins in package.json/package-lock.json, already validated by the
+        # PR's own CI checks once opened, so skipping the local hook here is safe.
+        run: git push --no-verify -u origin "chore/bump-core-${{ steps.version.outputs.version }}"
+
+      - name: Open PR against the epic branch
+        if: steps.diff.outputs.has_changes == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.SF_BUMP_PAT }}
+        run: |
+          set -euo pipefail
+          existing=$(gh pr list \
+            --base "${{ env.EPIC_BRANCH }}" \
+            --head "chore/bump-core-${{ steps.version.outputs.version }}" \
+            --state open \
+            --json url \
+            --jq '.[0].url // empty')
+
+          if [ -n "$existing" ]; then
+            echo "PR already open: $existing"
+            exit 0
+          fi
+
+          gh pr create \
+            --base "${{ env.EPIC_BRANCH }}" \
+            --head "chore/bump-core-${{ steps.version.outputs.version }}" \
+            --title "Epic ETP-3504: Bump schema_forge_core pin to ${{ steps.version.outputs.version }}" \
+            --body "Automated bump — schema_forge_core released \`${{ steps.version.outputs.version }}\`. Runs \`make bump-core-version\` to realign the lockstep pin (@etendosoftware/app-shell-core, schema-forge-cli, schema-forge-core) in \`package.json\` and \`tools/app-shell/package.json\`."

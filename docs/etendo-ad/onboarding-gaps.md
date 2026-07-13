@@ -9,6 +9,10 @@ These are field-validation findings from creating a new client/org (`TaxesOrg`) 
 | A1 | Accounting | Posting fails — chart of accounts missing | *Initial Organization Setup* / SQL clone | — |
 | A1b | Accounting | Posting account codes are < 8 digits; ETP-4247 feature fails | Onboarding sampledata XML (`C_ELEMENTVALUE.xml`) — pad codes to 8 digits | ETP-4247 |
 | A2 | Accounting | "Account Not Defined" even with ledger present | *Initial Organization Setup* — auto-populate `*_acct` tables | — |
+| A3 | Accounting | Schema not predefined (Allow Negatives/Centrally Maintained=N); only 5 of 8 dimensions enabled (Cost Center/User1/User2 missing) | Onboarding sampledata XML (`C_ACCTSCHEMA.xml`, `C_ACCTSCHEMA_ELEMENT.xml`) — dataset-only, no new service | ETP-4245 |
+| A3b | Accounting | `C_ACCTSCHEMA_DEFAULT` Defaults tab: 6 of 15 accounts NULL (doubtful debt, bad-debt expense/revenue, allowance for doubtful debt, deferred product expense/revenue) | Onboarding sampledata XML (`C_ACCTSCHEMA_DEFAULT.xml`) — dataset-only, no new service | ETP-4245 |
+| A4 | Accounting | `A_Amortization` table (`AD_Table_id 800060`) inactive on `c_acctschema_table` — amortization documents cannot post | Onboarding sampledata XML (`C_ACCTSCHEMA_TABLE.xml`) — dataset-only, no new service | ETP-4452 |
+| A5 | Accounting | `C_Element` tree missing its root `AD_TreeNode` — new top-level posting accounts fail with an `ad_tree_id` NOT NULL violation | Corrective SQL data-fix (`R9b`) — root cause of the underlying duplicate-tree event not yet found | — |
 | B1 | Organization hierarchy | "Lines org does not depend on header org" on same-org invoice | *Set Organization as Ready* — populate `AD_ORG_TREE` | — |
 | C1 | Period control | *Open/Close Period Control* is empty; posting fails (no open periods) | Set `isperiodcontrolallowed` and calendar fields before creating periods | — |
 | C2 | Period control | `c_periodcontrol` rows not created by trigger | Set `isperiodcontrolallowed='Y'` and `ad_inheritedcalendar_id` before creating periods | — |
@@ -128,6 +132,163 @@ WHERE  ad_client_id = :client_id
 
 ---
 
+### A3 — Accounting schema not fully predefined; only 5 of 8 dimensions enabled (ETP-4245)
+
+**Symptom (Confluence Test Plan "Contabilidad | Test Plan", Group 10):**
+- **TC-38** expects the schema ("Esquema GO") to ship with Allow Negatives=Yes and Centrally Maintained=Yes. It shipped with both **`N`**.
+- **TC-40** expects all 8 accounting dimensions present on the schema's Dimensions tab: Organization + Account mandatory, and Project, Bus.Partner, Product, **Cost Center, User1, User2** enabled (non-mandatory). Only **5 of 8** existed — Cost Center (`CC`), User1 (`U1`), User2 (`U2`) were entirely absent from `C_ACCTSCHEMA_ELEMENT.xml`.
+
+**Root cause:** `referencedata/sampledata/GOClient/C_ACCTSCHEMA.xml` shipped `ALLOWNEGATIVE=N` / `ISCENTRALLYMAINTAINED=N`, and `C_ACCTSCHEMA_ELEMENT.xml` only ever carried 5 `<C_ACCTSCHEMA_ELEMENT>` rows (`OO`, `AC`, `PJ`, `BP`, `PR`) for schema `C06B100312FA48159DB36B9A4B461019` — `CC`/`U1`/`U2` were never authored, on any prior gap-remediation pass (A1/A2/B1/B2 never touched this table's row *content*, only its table-level inclusion in `OnboardingDatasetDefinition.INCLUDED_TABLES`, which was already correct). Verified live against GOClient (`localhost:5416/etendogoclean`) both via direct DB query and by reading the shipped XML — the two matched exactly (no drift between dataset and DB).
+
+**Why this is dataset-only (no `Onboarding*Service` needed):** both tables are already in `INCLUDED_TABLES`, and neither `OnboardingAccountingWiringService` nor any other onboarding code references specific `elementtype` values or `c_acctschema` flags — they flow straight from the imported XML with zero code involvement. This mirrors the ETP-4341 "dataset-only provisioning" pattern (payment methods/terms) documented in `onboarding-and-datafixes-map.md` §1. **Decision:** no new Java service; only edit the sampledata XML + bump the CUT.
+
+**Both fronts closed (2026-07-06):**
+
+| Front | Deliverable |
+|---|---|
+| **Corrective** | `cli/src/data-fixes/sql/20260706T120000Z__R10-accounting-schema-dimensions.sql` — flips the flags and inserts the 3 missing `C_ACCTSCHEMA_ELEMENT` rows for existing tenants. Live-validated on GOClient: `WOULD_APPLY` (dry-run) → `APPLIED (4 rows)` (real run) → `SKIPPED_NOT_NEEDED — kept prior success state` (re-run, proving idempotency). |
+| **Preventive** | `C_ACCTSCHEMA.xml` (`ALLOWNEGATIVE`/`ISCENTRALLYMAINTAINED` → `Y`) + `C_ACCTSCHEMA_ELEMENT.xml` (+3 rows: `CC`/`Cost Center`/seqno 60, `U1`/`User 1`/seqno 70, `U2`/`User 2`/seqno 80, all non-mandatory/unbalanced/client-level, new UUIDs via `make uuid`); `ONBOARDING_PROVISIONED_THROUGH` bumped to `2026-07-06T12:00:00Z` in `OnboardingBaselineService.java`. Regression-guarded by two new tests in `OnboardingDatasetNormalizerTest.java` (`testNormalizerIncludesAllEightAccountingDimensions`, `testNormalizerAccountingSchemaIsPredefinedForPosting`). |
+
+**Naming collision note:** a sibling in-flight branch (`feat/bp-category-preventive`, ETP-4402) had already claimed the `R9` label (`20260701T120000Z__R9-bp-category-seed.sql`, not yet merged at the time of this fix) and bumped the same CUT constant to `2026-07-01T12:00:00Z`. This fix uses `R10` and `2026-07-06T12:00:00Z` to avoid an `@id`/CUT collision — **always check `git rev-list --all` across ALL local branches/worktrees for existing `Rn` labels before naming a new fix, not just your own branch's `sql/` directory**, since the shared dev DB may already have sibling-branch fixes applied. Expect (and correctly resolve, keeping the later timestamp) a merge conflict on the single `ONBOARDING_PROVISIONED_THROUGH` line when the two branches converge.
+
+**SQL fix (corrective guard — idempotent):**
+```sql
+-- @check
+SELECT 1
+FROM c_acctschema s
+WHERE s.ad_client_id = :client_id
+  AND (
+    s.allownegative = 'N'
+    OR s.iscentrallymaintained = 'N'
+    OR EXISTS (
+      SELECT 1 FROM (VALUES ('CC'), ('U1'), ('U2')) AS dim(elementtype)
+      WHERE NOT EXISTS (
+        SELECT 1 FROM c_acctschema_element ae
+        WHERE ae.c_acctschema_id = s.c_acctschema_id AND ae.elementtype = dim.elementtype
+      )
+    )
+  )
+LIMIT 1;
+
+-- @apply
+UPDATE c_acctschema
+SET allownegative = 'Y', iscentrallymaintained = 'Y', updated = now(), updatedby = '0'
+WHERE ad_client_id = :client_id AND (allownegative = 'N' OR iscentrallymaintained = 'N');
+
+INSERT INTO c_acctschema_element (c_acctschema_element_id, isactive, created, createdby, updated,
+  ad_org_id, updatedby, c_acctschema_id, elementtype, name, seqno, c_element_id, ad_client_id,
+  ismandatory, isbalanced, org_id, c_elementvalue_id, m_product_id, c_bpartner_id, c_location_id,
+  c_salesregion_id, c_project_id, c_campaign_id, c_activity_id)
+SELECT get_uuid(), 'Y', now(), '0', now(), '0', '0',
+       s.c_acctschema_id, dim.elementtype, dim.name, dim.seqno, null, :client_id, 'N', 'N',
+       null, null, null, null, null, null, null, null, null
+FROM c_acctschema s
+CROSS JOIN (VALUES ('CC','Cost Center',60), ('U1','User 1',70), ('U2','User 2',80))
+  AS dim(elementtype, name, seqno)
+WHERE s.ad_client_id = :client_id
+  AND NOT EXISTS (
+    SELECT 1 FROM c_acctschema_element ae
+    WHERE ae.c_acctschema_id = s.c_acctschema_id AND ae.elementtype = dim.elementtype
+  );
+```
+
+**Verification of the OTHER Group-10 test cases against live GOClient (2026-07-06) — all pre-existing, no fix needed:**
+
+| TC | Result | Detail |
+|---|---|---|
+| **TC-39** (Tables tab) | ⚠️ Gap found (A4, ETP-4452, 2026-07-08) — since fixed | All 11 previously-checked tables (`C_Invoice`→`Invoice`, `FIN_Payment`, `FIN_BankStatement`, `FIN_Finacc_Transaction`, `FIN_Reconciliation`, `GL_Journal`→`FinancialMgmtGLJournal`, `M_InOut`→`MaterialMgmtShipmentInOut`, `M_Inventory`→`MaterialMgmtInventoryCount`, `M_MatchInv`→`ProcurementReceiptInvoiceMatch`, `M_Movement`→`MaterialMgmtInternalMovement`, `M_Production`→`MaterialMgmtProductionTransaction`) are `isactive='Y'` on `c_acctschema_table`. **A 12th table, `A_Amortization`→`FinancialMgmtAmortization` (`AD_Table_id 800060`), was missed by this checklist** — GOClient's live row had been hand-patched to `'Y'` but the bundled dataset still shipped `'N'` (and 3 other PGC-chart tenants were live-`'N'` too). See gap **A4** below. Treat this as "12 required tables" going forward. |
+| **TC-41** (Defaults tab) | ⚠️ Partial — flagged, NOT changed | Customer Receivable=43000 ✓, Vendor Payable=40000 ✓, Bank Asset=57200 ✓ all match. **Tax Credit ("VAT Receivable") = 47200, Tax Due ("VAT Payable") = 47700 — NOT 47000/47500 as stated in the test plan.** These are the standard Spanish PGC codes for ongoing input/output VAT (472 = IVA soportado, 477 = IVA repercutido); 4700/4750 are the period-END settlement accounts ("Hacienda deudora/acreedora por IVA"), a different concept. TC-43's real posted invoice confirms 47700 is the live, correctly-functioning value (see below) — this reads as a test-plan documentation discrepancy, not a system bug. **Deferred — out of scope for ETP-4245** (dimensions + schema-predefinition ask only); flag for product/accounting owner (see "Jorge's list" reference in the remediation plan) before changing any account-default mapping. |
+| **TC-42** (Product category accounts, "Bebidas") | ⚠️ Partial — flagged, NOT changed | Revenue=70000 ✓, Expense=60000 ✓ match. **Asset=35000 (Finished Goods), NOT 30000 (Merchandise) as stated.** This is a per-category business classification choice (is Bebidas manufactured or purchased merchandise?), not an onboarding-provisioning gap — deferred for the same reason as TC-41. |
+| **TC-43** (Posting) | ✅ Already correct | A completed+posted sales invoice with a Bebidas product (`documentno=10000016`) posts with zero "Account Not Defined" errors: debits `43000000` (Clientes), credits `70000000` (Ventas) + `47700000` (IVA repercutido), balanced (27.83 = 23.00 + 4.83). |
+
+See also: `docs/plans/onboarding-gaps-remediation-plan.md` §"Gap A3" for the full investigation notes, and `docs/etendo-ad/tenant-remediation-knowledge.md` for the durable facts extracted from this pass.
+
+### A3b — `C_ACCTSCHEMA_DEFAULT` "Defaults tab" incomplete — Jorge's list (ETP-4245 follow-up, 2026-07-06)
+
+**Symptom:** TC-41 in the A3 pass above only cross-checked 5 of the 15 "Defaults tab" fields and
+deferred the rest pending a fuller reference ("Jorge's list of extra default accounts"). That list
+arrived 2026-07-06 for client "LadyPipa" (used as the visual reference; the actual remediation
+target is GOClient) — 10 Tercero (Third Party) fields + 5 Producto (Product) fields, shown as
+10-digit codes in the classic "Valores por defecto" tab.
+
+**Root cause:** same class of gap as A2/A3 — the per-schema `c_acctschema_default` row is populated
+piecemeal across passes (A1's clone step wired ~9 columns; nothing had touched the other 6).
+
+**FK indirection gotcha (new — not documented before this pass):** `C_ACCTSCHEMA_DEFAULT`'s `*_acct`
+columns are **not** a direct FK to `c_elementvalue`. They point to **`C_VALIDCOMBINATION`** (the
+account + dimension combination row), whose own `account_id` then points to `c_elementvalue`. Every
+populated column in GOClient resolves to a combination with **every optional dimension column NULL**
+(an "unbalanced", dimensionless posting combination), scoped to the tenant's own `c_acctschema_id`.
+Any fix touching these columns must resolve through `c_validcombination`, not `c_elementvalue`
+directly — a raw `c_elementvalue_id` will not satisfy the FK.
+
+**Numeric convention confirmed:** the screenshot's 10-digit codes map to GOClient's real 8-digit
+codes by dropping the trailing 2 zeros — the same convention already established by A1b
+(`R8-account-codes-8digits`). Verified individually for all 15 accounts by resolving each
+`c_validcombination_id` → `c_elementvalue.value` and cross-checking the account name/description
+against the screenshot's Spanish label (not just mechanical truncation).
+
+**Leaf-existence check (R9 precedent applied — no new chart account was needed):** R9
+(`bp-category-seed`) established the pattern that a target account referenced by a data-fix might
+not actually exist as a `c_elementvalue` leaf and would need to be minted first. Applied that check
+here: queried `c_elementvalue` directly (not just `c_validcombination`) for all 15 target codes —
+`SELECT value, name, issummary, isactive FROM c_elementvalue WHERE ad_client_id = '802509E12436405C86BA1FD5B1DF508C' AND value = ANY(ARRAY['43600000','69400000','79400000','49000000','48000000','48500000','43000000','43800000','40000000','40700000','40090000','35000000','60000000','70000000'])`.
+All 14 unique codes (69400000 is shared by two labels) returned a row with `issummary='N'` and
+`isactive='Y'` — every target account, including all 6 previously-NULL ones, already existed as a
+real, active, posting-level leaf in GOClient's chart. **No R9-style `c_elementvalue` mint was
+required**; R11 only had to wire existing `c_validcombination` FKs into `c_acctschema_default`.
+
+**Full mapping (verified live against GOClient `802509E12436405C86BA1FD5B1DF508C`, 2026-07-06):**
+
+| Spanish label (screenshot) | `c_acctschema_default` column | Account value (8-digit) | Account name | State before fix |
+|---|---|---|---|---|
+| Recibos de clientes * | `c_receivable_acct` | `43000000` | Clientes (euros) a corto plazo | ✅ already correct |
+| Prepago del cliente | `c_prepayment_acct` | `43800000` | Anticipos de clientes | ✅ already correct |
+| Cancelaciones * (Write-off) | `writeoff_acct` | `65000000` (was `69400000`) | Pérdidas de créditos comerciales incobrables | ⚠️ **corrected 2026-07-08 by R12** — see override history below |
+| Pasivo del proveedor * | `v_liability_acct` | `40000000` | Proveedores (euros) a corto plazo | ✅ already correct |
+| Pagos por adelantado del proveedor | `v_prepayment_acct` | `40700000` | Anticipos a proveedores | ✅ already correct |
+| Recibos no facturados | `notinvoicedreceipts_acct` | `40090000` | Proveedores facturas pendientes de recibir o de formalizar | ✅ already correct |
+| Cuenta de dudoso cobro | `doubtfuldebt_acct` | `43600000` | Clientes de dudoso cobro a corto plazo | ❌ **was NULL — fixed** |
+| Cuenta de gastos de dudoso cobro | `baddebtexpense_acct` | `69400000` | Pérdidas por deterioro de créditos por operaciones comerciales | ❌ **was NULL — fixed** (same account as write-off) |
+| Cuenta de ingresos de dudoso cobro | `baddebtrevenue_acct` | `79400000` | Reversión del deterioro de créditos por operaciones comerciales | ❌ **was NULL — fixed** |
+| Cuenta de provisión para dudoso cobro | `allowancefordoubtful_acct` | `49000000` | Deterioro de valor de créditos por operaciones comerciales a corto plazo | ❌ **was NULL — fixed** |
+| Inmovilizado del producto * | `p_asset_acct` | `35000000` | Productos terminados A | ✅ already correct |
+| Gastos del producto * | `p_expense_acct` | `60000000` | Compras de mercaderías | ✅ already correct |
+| Ingresos por el producto * | `p_revenue_acct` | `70000000` | Ventas de mercaderías | ✅ already correct |
+| Gasto de producto a periodificar | `p_def_expense_acct` | `48000000` | Gastos anticipados | ❌ **was NULL — fixed** |
+| Ingreso de producto a periodificar | `p_def_revenue_acct` | `48500000` | Ingresos anticipados | ❌ **was NULL — fixed** |
+
+`*` = required field on the classic UI. Source: "Jorge's list", verified 2026-07-06.
+
+**Write-off override history (superseded — final value is `65000000`, ETP-4452/R12, 2026-07-08):**
+on 2026-07-06 the product owner explicitly confirmed the DB's existing value (`69400000`,
+"Pérdidas por deterioro de créditos por operaciones comerciales") was correct and should NOT be
+changed to the screenshot's `65000000` ("Pérdidas de créditos comerciales incobrables"). R11's
+`@check`/`@apply` never referenced `writeoff_acct` for that reason. On 2026-07-07 the product owner
+**reconfirmed, again explicitly, that `65000000` IS the correct value** — reversing the earlier
+decision. The corrective data-fix `cli/src/data-fixes/sql/20260708T090000Z__R12-writeoff-account-override.sql`
+implements this: live-verified on GOClient, acreedortest, acreetest2 and empresa (the 4 tenants on
+the GOClient-style PGC chart) — `writeoff_acct` now resolves to `c_validcombination`
+`CB7E1B51B897403083CDCA20835F6AE9` = account `65000000` on GOClient (each tenant has its own
+combination id for the same account). F&B International Group, QA Testing and TaxesOrg run
+unrelated (US-chart) schemas with no `65000000` account at all — R12's `@check` naturally excludes
+them, no client allowlist needed. Preventive twin: `C_ACCTSCHEMA_DEFAULT.xml`'s `WRITEOFF_ACCT`
+updated to GOClient's own `65000000` combination id; `ONBOARDING_PROVISIONED_THROUGH` bumped to
+`2026-07-08T09:00:00Z`.
+
+**Both fronts closed (2026-07-06):**
+
+| Front | Deliverable |
+|---|---|
+| **Corrective** | `cli/src/data-fixes/sql/20260706T160000Z__R11-acctschema-default-completion.sql` — 6 guarded `UPDATE`s (one per NULL column), each resolving its target account through `c_validcombination` (dimensionless combo) and gated by `col IS NULL AND EXISTS(...)`. Live-validated on GOClient: dry-run → `WOULD_APPLY`; real run → `APPLIED (6 rows)`; re-run → `SKIPPED_NOT_NEEDED — kept prior success state`. |
+| **Preventive** | `referencedata/sampledata/GOClient/C_ACCTSCHEMA_DEFAULT.xml` gains the 6 FK values (table already in `INCLUDED_TABLES` since the A1 pass; no onboarding Java references these specific columns — confirmed by grep). `ONBOARDING_PROVISIONED_THROUGH` bumped to `2026-07-06T16:00:00Z` in `OnboardingBaselineService.java`. Regression-guarded by a new test in `OnboardingDatasetNormalizerTest.java` (`testNormalizerIncludesAcctSchemaDefaultDoubtfulDebtAndDeferredAccounts`), which also asserts the write-off value is unchanged. |
+
+See also: `docs/plans/onboarding-gaps-remediation-plan.md` §"Gap A3b" for the full investigation
+notes, and `docs/etendo-ad/tenant-remediation-knowledge.md` for the durable facts (FK indirection via
+`C_VALIDCOMBINATION`, write-off override) extracted from this pass.
+
+---
+
 ### A2 — Missing accounting mapping tables (`*_acct`)
 
 **Symptom:** posting fails with **"Account Not Defined"** even when the ledger is correctly configured.
@@ -143,6 +304,101 @@ WHERE  ad_client_id = :client_id
 **Where it should be fixed:** the onboarding process — at client creation these tables should be auto-populated from the schema defaults. Note: with these populated, tax accounting is independent per client (supports the system-level taxes approach).
 
 **Cross-link:** this is exactly what the `../proposals/initial-organization-setup-accounting.md` proposal aims to automate. The proposal's wiring step (`applyAccountingPackageWiring`) and package-completeness validation (`validateAccountingPackage`) together ensure these tables are populated before `AD_Org_Ready` is called.
+
+---
+
+### A5 — `C_Element` tree missing its root `AD_TreeNode` (blocks new top-level accounts, 2026-07-08)
+
+**Symptom:** discovered while running R9 (bp-category-seed) against the shared Experimental
+environment — 32 of 68 tenants halted with:
+```
+null value in column "ad_tree_id" of relation "ad_treenode" violates not-null constraint
+```
+
+**Root cause:** confirmed via `pg_get_functiondef('c_elementvalue_trg'::regproc)`. On every
+`INSERT INTO c_elementvalue`, the standard core trigger resolves the tenant's tree/root with:
+```sql
+SELECT e.AD_Tree_ID, n.Node_ID INTO v_xTree_ID, v_xParent_ID
+FROM C_Element e, AD_TreeNode n
+WHERE e.AD_Tree_ID = n.AD_Tree_ID AND n.Parent_ID IS NULL AND e.C_Element_ID = new.C_Element_ID;
+```
+When the tree that `C_Element.AD_Tree_ID` points to has no row with `Parent_ID IS NULL`, this
+`SELECT INTO` matches zero rows, `v_xTree_ID` stays `NULL`, and the trigger's own
+`INSERT INTO AD_TreeNode(...)` fails the `NOT NULL` constraint.
+
+On the 32 affected tenants, a bulk reprovisioning event on **2026-06-30** (visible as a cluster of
+R1–R8 ledger timestamps that day in `ETGO_DATA_FIX_HISTORY`) created a **second** `AD_Tree` row per
+tenant, attached the tenant's real chart of accounts to it (confirmed: 1,790 real nodes on one
+sampled tenant, `emilio22`), and repointed `C_Element.AD_Tree_ID` at the new tree — but never
+inserted its root node (`node_id='0'`, `parent_id IS NULL`, the confirmed convention from both a
+healthy tenant and the orphaned original tree). The original onboarding tree (which does have a
+proper root) was left orphaned and unused. This is a provisioning gap, not a defect in R9 itself —
+R9 is simply the first fix in the chain that happens to `INSERT` a new top-level `C_ElementValue`,
+which is what exposes it. Any future insert of a new top-level posting account (or any other
+`C_Element` hierarchy missing its root) would hit the identical wall.
+
+**Fix:** `cli/src/data-fixes/sql/20260701T115900Z__R9b-restore-element-tree-root.sql` — generic
+across every `C_Element` for the tenant (not scoped to the accounting dimension alone), inserts the
+missing root `AD_TreeNode` row, guarded by `NOT EXISTS`. Deliberately timestamped **one minute
+before R9** so it runs ahead of R9 in the chain — the runner halts a tenant's chain on the first
+`FAILED` fix, so if this sorted after R9 the 32 already-halted tenants would hit R9 again first and
+fail again before ever reaching the repair. **Applied and verified live on Experimental (2026-07-08):**
+targeted apply inserted the missing root node for all 32 affected tenants (0 failures); a full chain
+re-run afterward completed 71/71 tenants with 0 halted.
+
+**Preventive:** root cause of the 2026-06-30 duplicate-tree event itself has not been investigated
+(unclear whether it was a one-off manual/ad-hoc action or a recurring script) — open item.
+
+---
+
+### A4 — `A_Amortization` table inactive on `C_AcctSchema_Table` (ETP-4452, 2026-07-08)
+
+**Symptom:** amortization documents (`A_Amortization`, `AD_Table_id 800060`, "FinancialMgmtAmortization")
+cannot post — the same "table not enabled for posting" failure any of the TC-39 tables would show if
+their `c_acctschema_table.isactive` were `'N'`.
+
+**Root cause:** same class of drift as the A3b write-off override and the R9 BP-category gap — the
+**live** GOClient `C_ACCTSCHEMA_TABLE` row for `AD_Table_id 800060` had been manually corrected to
+`isactive='Y'` at some point, but the bundled onboarding dataset
+(`referencedata/sampledata/GOClient/C_ACCTSCHEMA_TABLE.xml`, same row id
+`DAE3C688574C4919B889DA7EFAD6CC5C`) still shipped `isactive='N'`. Any environment provisioned or
+reset from that dataset (including the shared "Experimental" cloud environment) is born with
+amortization accounting inactive. TC-39 (above) never caught this because `A_Amortization` was
+simply missing from its checklist of tables to verify.
+
+**Live sweep (2026-07-08), `isactive` for `ad_table_id='800060'` per client/schema:**
+
+| Client | Schema | `isactive` (before fix) |
+|---|---|---|
+| GOClient | Esquema GO | `Y` (already hand-corrected live) |
+| F&B International Group | both schemas | `Y` (already correct) |
+| acreedortest | Esquema acreedortest | `N` |
+| acreetest2 | Esquema acreetest2 | `N` |
+| empresa | Esquema empresa | `N` |
+| QA Testing | both schemas | `N` |
+| TaxesOrg | Tax Org Ledger | `N` |
+
+**Initial scope decision — PGC-chart family only (superseded, see below):** acreedortest/acreetest2/empresa
+are the same GOClient-style Spanish PGC chart family established for R9/R11/R12 (each already carries a
+postable, active `65000000` account leaf). QA Testing and TaxesOrg run unrelated chart-of-accounts
+setups with **zero `A_Asset` records** and no `65000000` account at all, so R13 initially left them
+untouched pending a business decision (same reasoning R12 applied to exclude non-PGC-family
+tenants from the write-off fix).
+
+**Follow-up decisions (2026-07-08, same day):** the reporter subsequently confirmed amortization
+accounting should be active for every known tenant regardless of chart family or current asset
+data — for TaxesOrg, explicitly proactive ("in case that organization creates an asset in the
+future"); for QA Testing, because the exclusion was functionally moot ("QA Testing is not used").
+R13 was revised the same day to drop the marker guard entirely — one script, no client-specific
+carve-outs, since a hardcoded per-tenant scope only makes sense for genuine exclusions and none
+remain. **All 9 client/schema rows are now `isactive='Y'`, confirmed live — no exclusions remain.**
+
+**All fronts closed (2026-07-08):**
+
+| Front | Deliverable |
+|---|---|
+| **Corrective — every tenant** | `cli/src/data-fixes/sql/20260708T100000Z__R13-amortization-table-active.sql` — single guarded `UPDATE`, scoped only by `:client_id AND ad_table_id='800060' AND isactive <> 'Y'` (no chart-family marker, no allowlist). Live-validated: acreedortest/acreetest2/empresa/QA Testing (both schemas)/TaxesOrg all `APPLIED`, GOClient/F&B International Group `SKIPPED_NOT_NEEDED` (already correct); full re-run confirms idempotency (`SKIPPED_NOT_NEEDED` across all 7 tenants). |
+| **Preventive** | `referencedata/sampledata/GOClient/C_ACCTSCHEMA_TABLE.xml` — row `DAE3C688574C4919B889DA7EFAD6CC5C`'s `ISACTIVE` flipped from `N` to `Y`. `ONBOARDING_PROVISIONED_THROUGH` bumped to `2026-07-08T10:00:00Z` in `OnboardingBaselineService.java`. QA Testing and TaxesOrg have no dedicated sampledata directory (only `GOClient/` exists) — nothing further to fix preventively for either. |
 
 ---
 

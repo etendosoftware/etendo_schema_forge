@@ -9,6 +9,9 @@
     "facturasParcialmenteAceptadas": {
       "javaQualifier": "mark-subsanation-handler"
     },
+    "facturasInválidas": {
+      "javaQualifier": "correct-invoice-handler"
+    },
     "cabeceraDeEmisor": {
       "fields": {
         "organization": {

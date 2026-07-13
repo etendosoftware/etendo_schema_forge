@@ -19,6 +19,7 @@ vi.mock('@/lib/selectorCatalog.js', () => ({
 }));
 vi.mock('@/lib/statusBadge.js', () => ({
   getStatusDotColor: () => 'bg-gray-400',
+  getStatusTone: () => 'neutral',
   statusLabel: (s) => s,
 }));
 vi.mock('@/lib/resolveIdentifier.js', () => ({ resolveIdentifier: (d, f) => d?.[f] }));

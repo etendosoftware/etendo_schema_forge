@@ -770,6 +770,7 @@ export default function HeaderPage({ windowName, recordId, ...props }) {
         topbarExtra={PurchaseOrderDraftChips}
         draftMode={draftMode}
         requiredHeaderFields={requiredHeaderFields}
+        documentDateField="orderDate"
         labelOverrides={labelOverrides}
         linesLayout="inlineEditable"
         sendDocument

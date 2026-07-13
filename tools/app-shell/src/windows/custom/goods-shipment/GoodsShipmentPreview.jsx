@@ -10,6 +10,7 @@ import SendDocumentModal from '@/components/contract-ui/SendDocumentModal.jsx';
 import { useShipmentPdf } from './useShipmentPdf.js';
 import { STATUS_BADGE, STATUS_KEYS } from '@/components/related-documents/constants.jsx';
 import { InfoRow, CardShell, PercentBar } from '../shared/preview-cards/SummaryCard.jsx';
+import EmailsCard from '../shared/preview-cards/EmailsCard.jsx';
 import RelatedDocumentsCard from '../shared/preview-cards/RelatedDocumentsCard.jsx';
 
 function EmptyPanel({ icon, text }) {
@@ -192,6 +193,7 @@ export default function GoodsShipmentPreview({ shipment, token, apiBaseUrl, wind
             movementDate={movementDate}
             ui={ui}
             data-testid="ShipmentStatsPanel__5d626b" />
+          <EmailsCard onSend={openEmailModal} data-testid="EmailsCard__5d626b" />
           <RelatedDocumentsCard
             documentId={shipment.id}
             token={token}

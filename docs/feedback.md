@@ -175,3 +175,29 @@ merged significant new features. The following need to be documented:
 - `invoiceStatus` field changed from `discarded` → `readOnly` so NEO serves the computed value
 
 Owner: whoever next touches the goods-shipment window.
+
+---
+
+## [2026-07-03] ETP-4438 - Selector Loading Loop and Error Fallback Crash
+
+**Components:**
+- `tools/app-shell/src/components/contract-ui/SelectorInput.jsx`
+- `tools/app-shell/src/hooks/useEntity.js`
+
+**Symptoms:**
+1. Selector dropdowns could remain stuck on `Cargando...` while repeatedly calling the same selector endpoint after parent rerenders.
+2. Failed API responses with non-JSON bodies, such as an HTML 404 page, could crash error extraction with `translate is not defined` instead of surfacing a controlled error message.
+
+**Root causes:**
+- `DetailView` and `EntityForm` can recreate `selectorContext` as a new object on every render even when its values are unchanged. `SelectorInput.fetchPage` depended on that object by reference, so the callback identity changed, the `SelectContent` ref callback was detached and reattached, and its fetch/listener body ran again.
+- `extractErrorMessage()` declared `translate()` inside the `try` block that also awaited `res.json()`. If JSON parsing failed, the fallback outside that block referenced `translate` out of scope.
+
+**Fix:**
+- `SelectorInput` now derives a stable `contextKey` from `selectorContext` content and uses it as the callback/effect dependency, so equivalent selector context values do not re-identify the fetch/ref callback.
+- `extractErrorMessage()` now declares `translate()` before the JSON parse attempt, keeping the generic `Error <status>` fallback available for non-JSON responses.
+
+**Tests updated:**
+- `SelectorInput.vitest.jsx` verifies equivalent `selectorContext` values with new object references do not reattach the selector scroll ref on parent rerenders.
+- `useEntity.helpers.vitest.jsx` verifies non-JSON responses and unrecognized JSON payloads fall back to `Error <status>`.
+
+**Lesson:** For selector context objects created by parent renders, compare by content at callback boundaries. For error handling, keep final fallback helpers outside parsing blocks that can throw.

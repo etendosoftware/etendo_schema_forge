@@ -14,6 +14,12 @@ import {
 import { incrementSurveyCounter } from '@/lib/surveys/survey-state.js';
 import { isInvoiceSpec, isOrderSpec } from '@/lib/surveys/surveys.js';
 import { emitSurveyTrigger } from '@/lib/surveys/survey-engine.js';
+import { isEmailField, getEmailFieldError, getWebsiteFieldError, getPhoneFieldError } from '@/components/contract-ui/recipientEdits.js';
+
+// Re-exported for back-compat: isEmailField lives in recipientEdits.js (the
+// dependency-light email util) so the grid components can reuse it without
+// importing this heavy hook module.
+export { isEmailField };
 
 function buildHeaders(token) {
     let locale = 'es_ES';
@@ -62,28 +68,32 @@ export function pickMessage(node) {
  * Extract a human-readable error message from a NEO Headless error response.
  */
 export async function extractErrorMessage(res, ui) {
+    // Declared outside the try block (and thus outside the `data = await res.json()`
+    // call that can throw for non-JSON bodies, e.g. an HTML error page) so the final
+    // fallback below — `translate('error', 'Error')` — stays in scope even when
+    // res.json() fails.
+    const translate = (key, fallback, params = {}) => {
+        if (typeof ui !== 'function') {
+            let text = fallback;
+            Object.keys(params).forEach((p) => {
+                text = text.replace(`{${p}}`, params[p]);
+            });
+            return text;
+        }
+
+        const translated = ui(key, params);
+        if (!translated || translated === key) {
+            let text = fallback;
+            Object.keys(params).forEach((p) => {
+                text = text.replace(`{${p}}`, params[p]);
+            });
+            return text;
+        }
+        return translated;
+    };
+
     try {
         const data = await res.json();
-
-        const translate = (key, fallback, params = {}) => {
-            if (typeof ui !== 'function') {
-                let text = fallback;
-                Object.keys(params).forEach((p) => {
-                    text = text.replace(`{${p}}`, params[p]);
-                });
-                return text;
-            }
-
-            const translated = ui(key, params);
-            if (!translated || translated === key) {
-                let text = fallback;
-                Object.keys(params).forEach((p) => {
-                    text = text.replace(`{${p}}`, params[p]);
-                });
-                return text;
-            }
-            return translated;
-        };
 
         const decodeHtml = (input) => {
             if (typeof input !== 'string') return '';
@@ -425,6 +435,50 @@ export function getMissingRequiredFields(fields, editing) {
             return v == null || v === '' || (typeof v === 'string' && v.trim() === '');
         })
         .map(f => f.key);
+}
+
+// Returns the keys of visible, editable fields whose non-empty value fails the
+// given format check (getError returns an i18n key, or null when valid/empty/not
+// applicable). Empty values are always valid — these fields are optional.
+// ReadOnly/hidden fields are skipped (mirrors getMissingRequiredFields) so a
+// server-provided malformed value on a locked field can't block the save.
+export function getInvalidFormatFields(fields, editing, getError) {
+    const isReadOnly = getReadOnly(editing);
+    const isVisible = getVisible(editing);
+    return fields
+        .filter(f => !isReadOnly(f) && isVisible(f) && getError(f, editing?.[f.key]) !== null)
+        .map(f => f.key);
+}
+
+// Email/website format collectors — thin, named wrappers over the generic
+// getInvalidFormatFields so each format keeps its own testable entry point.
+export function getInvalidEmailFields(fields, editing) {
+    return getInvalidFormatFields(fields, editing, getEmailFieldError);
+}
+
+export function getInvalidWebsiteFields(fields, editing) {
+    return getInvalidFormatFields(fields, editing, getWebsiteFieldError);
+}
+
+export function getInvalidPhoneFields(fields, editing) {
+    return getInvalidFormatFields(fields, editing, getPhoneFieldError);
+}
+
+// Block the save on a format-invalid field (email, website, …) and surface a
+// toast ONLY — unlike the required-field path, format errors deliberately do NOT
+// set an inline fieldError under the input (the toast is the single signal).
+// Empty stays valid (checked before this is called); the null return blocks save.
+export function reportInvalidFormatField(messageKey, ui, setSaveError, setIsSaving) {
+    const msg = ui(messageKey);
+    setSaveError(msg);
+    toast.error(msg);
+    setIsSaving(false);
+    return null;
+}
+
+// Back-compat wrapper for the email case (kept as a named entry point).
+export function reportInvalidEmailFields(ui, setSaveError, setIsSaving) {
+    return reportInvalidFormatField('sendModalInvalidEmail', ui, setSaveError, setIsSaving);
 }
 
 export function getUrl(isNew, apiBaseUrl, entity, editing) {
@@ -827,6 +881,12 @@ export function useEntity(entity, childEntity, {
     }, [apiBaseUrl, entity, headers]);
 
     const handleSelect = useCallback((row) => {
+        // Reset the per-session changed-keys set when a different record is loaded,
+        // so format validation (email/website/phone) only ever re-checks fields the
+        // user actually edits in THIS record — never legacy values inherited from a
+        // previously-edited record. Safe for payloads: userChangedKeysRef only feeds
+        // buildCreatePayload (new records), not the existing-record PATCH diff.
+        userChangedKeysRef.current = new Set();
         setSelected(row);
         setEditing(row ? { ...row } : null);
         fetchChildren(row?.id);
@@ -871,6 +931,8 @@ export function useEntity(entity, childEntity, {
         userChangedKeysRef.current.add(field);
         setEditing(prev => ({ ...prev, [field]: value }));
         // ETP-3894: clear the field-level error as soon as the user touches the field.
+        // Note: email format errors are toast-only (no inline fieldError is ever set
+        // for them), so there is no email-specific clear branch here.
         setFieldErrors(prev => {
             if (!prev || !prev[field]) return prev;
             const next = { ...prev };
@@ -905,6 +967,26 @@ export function useEntity(entity, childEntity, {
                 return reportMissingRequiredFields(missing, ui, setFieldErrors, setSaveError, setIsSaving);
             }
             setFieldErrors({});
+        }
+        // Format validation (email/website/phone) is scoped to fields the user
+        // actually edited THIS session — never untouched legacy values on an
+        // existing record (which would otherwise block an unrelated edit). On new
+        // records, every entered field is a "changed" key, so new invalid input is
+        // still blocked. Toast-only, empty is valid, and never makes a field required.
+        const changedFormFields = [...formFieldsRef.current.values()]
+            .flat()
+            .filter(f => userChangedKeysRef.current.has(f.key));
+        const invalidEmails = getInvalidEmailFields(changedFormFields, editing);
+        if (invalidEmails.length > 0) {
+            return reportInvalidFormatField('sendModalInvalidEmail', ui, setSaveError, setIsSaving);
+        }
+        const invalidWebsites = getInvalidWebsiteFields(changedFormFields, editing);
+        if (invalidWebsites.length > 0) {
+            return reportInvalidFormatField('websiteInsecureUrl', ui, setSaveError, setIsSaving);
+        }
+        const invalidPhones = getInvalidPhoneFields(changedFormFields, editing);
+        if (invalidPhones.length > 0) {
+            return reportInvalidFormatField('phoneInvalidChars', ui, setSaveError, setIsSaving);
         }
         const url = getUrl(isNew, apiBaseUrl, entity, editing);
         // Use PATCH for existing records (partial update), POST for new
@@ -1100,9 +1182,9 @@ export function useEntity(entity, childEntity, {
                 body: JSON.stringify({ fieldValues }),
             });
             if (res.ok) {
-                const specificKey = `${process.name}Completed`;
+                const specificKey = `${process.columnName ?? process.name}Completed`;
                 const specificMsg = ui(specificKey);
-                const fallbackMsg = process.label ? `${process.label} completed` : 'Process completed';
+                const fallbackMsg = process.label ? `${ui(process.label) || process.label} completed` : 'Process completed';
                 toast.success(specificMsg !== specificKey ? specificMsg : fallbackMsg);
                 window.dispatchEvent(new CustomEvent('neo:processSuccess', {
                     detail: {

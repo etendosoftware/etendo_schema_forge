@@ -24,6 +24,14 @@ async function slow(page) {
   if (SLOW_MS > 0) await page.waitForTimeout(SLOW_MS);
 }
 
+// The onboarding entry point now lands on LOGIN by default; switch to the
+// register form before interacting with the registration fields.
+async function goToRegister(page) {
+  await page.goto('/onboarding');
+  await page.getByTestId('action-switch-to-register').click();
+  await expect(page.locator('#reg-name')).toBeVisible({ timeout: 10_000 });
+}
+
 test.describe('Onboarding — Register new user (integration)', () => {
   test.describe.configure({ timeout: 300_000 });
 
@@ -42,7 +50,7 @@ test.describe('Onboarding — Register new user (integration)', () => {
     // STEP 1: Navigate to onboarding and fill registration form
     // ═══════════════════════════════════════════════════════════════════════
 
-    await page.goto('/onboarding');
+    await goToRegister(page);
     await expect(page.getByRole('heading', { name: /crea tu cuenta gratis/i })).toBeVisible();
 
     await page.locator('#reg-name').fill(userName);
@@ -164,7 +172,7 @@ test.describe('Onboarding — Register new user (integration)', () => {
     const password = `E2e-${suffix}-Pass!99`;
 
     // First registration — should succeed
-    await page.goto('/onboarding');
+    await goToRegister(page);
     await page.locator('#reg-name').fill('Dup User');
     await page.locator('#reg-email').fill(email);
     await page.locator('#reg-password').fill(password);
@@ -177,8 +185,7 @@ test.describe('Onboarding — Register new user (integration)', () => {
     await page.evaluate(() => localStorage.clear());
 
     // Second registration — same email, fresh session
-    await page.goto('/onboarding');
-    await expect(page.locator('#reg-name')).toBeVisible({ timeout: 10_000 });
+    await goToRegister(page);
     await page.locator('#reg-name').fill('Dup User Again');
     await page.locator('#reg-email').fill(email);
     await page.locator('#reg-password').fill(password);
@@ -200,7 +207,7 @@ test.describe('Onboarding — Register new user (integration)', () => {
   // ═════════════════════════════════════════════════════════════════════════
 
   test('cannot submit registration with empty fields', async ({ page }) => {
-    await page.goto('/onboarding');
+    await goToRegister(page);
     await expect(page.getByRole('heading', { name: /crea tu cuenta gratis/i })).toBeVisible();
 
     const submitBtn = page.getByTestId('action-register-submit');
@@ -229,7 +236,7 @@ test.describe('Onboarding — Register new user (integration)', () => {
   // ═════════════════════════════════════════════════════════════════════════
 
   test('does not advance with an invalid email format', async ({ page }) => {
-    await page.goto('/onboarding');
+    await goToRegister(page);
 
     await page.locator('#reg-name').fill('Bad Email User');
     await page.locator('#reg-email').fill('not-an-email');
@@ -251,7 +258,7 @@ test.describe('Onboarding — Register new user (integration)', () => {
 
   test('cannot continue on profile step with empty name', async ({ page }) => {
     const suffix = uniqueSuffix();
-    await page.goto('/onboarding');
+    await goToRegister(page);
 
     await page.locator('#reg-name').fill(`Profile User ${suffix}`);
     await page.locator('#reg-email').fill(`e2e-profile-${suffix}@test-onboarding.com`);
@@ -286,7 +293,7 @@ test.describe('Onboarding — Register new user (integration)', () => {
     const userPassword = `E2e-${suffix}-Pass!99`;
 
     // Register a real user against the backend
-    await page.goto('/onboarding');
+    await goToRegister(page);
     await expect(page.getByRole('heading', { name: /crea tu cuenta gratis/i })).toBeVisible();
 
     await page.locator('#reg-name').fill(userName);

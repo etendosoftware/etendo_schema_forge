@@ -10,6 +10,59 @@
  * contract.json) so swapping the data source is mechanical.
  */
 
+import contract from '@generated/general-ledger-configuration/contract.json';
+
+// Fixed display order for the Defaults tab's account-selector groups. 'other'
+// is the catch-all for any editable field with no curated `section` in
+// decisions.json (currently: disposalGain, disposalLoss — see
+// docs/superpowers/specs/2026-07-07-glc-defaults-ad-driven-grouping-design.md).
+const DEFAULTS_SECTION_ORDER = [
+  'bank', 'diario', 'contacts', 'taxes', 'product', 'assets', 'project', 'warehouse', 'other',
+];
+
+/**
+ * Derives the Defaults tab's grouped field list from the window's generated
+ * contract (`frontendContract.entities['Valores por defecto'].fields` in
+ * `artifacts/general-ledger-configuration/contract.json`). This is what
+ * makes AD_Field.IsActive/IsDisplayed/AD_FieldGroup changes take effect via
+ * `make regen` instead of a hand-edit — see the design doc referenced above.
+ *
+ * @param {Array<{apiKey: string, visibility: string, required?: boolean, label: string, section?: string}>} contractFields
+ * @returns {Array<{section: string, fields: Array<{key: string, required: boolean, fallbackLabel: string}>}>}
+ */
+export function buildDefaultsGroups(contractFields) {
+  const bySection = new Map();
+  for (const field of contractFields) {
+    if (field.visibility !== 'editable') continue;
+    const section = field.section || 'other';
+    if (!bySection.has(section)) bySection.set(section, []);
+    bySection.get(section).push({
+      key: field.apiKey,
+      required: Boolean(field.required),
+      fallbackLabel: field.label,
+    });
+  }
+  return DEFAULTS_SECTION_ORDER
+    .filter((section) => bySection.has(section))
+    .map((section) => ({ section, fields: bySection.get(section) }));
+}
+
+/**
+ * Resolves a Defaults-tab field's label: prefers the curated `glc.acct.<key>`
+ * i18n entry; falls back to the field's raw AD label (from contract.json)
+ * for a field nobody has translated yet, so a brand-new AD field renders
+ * something functional instead of a raw i18n key.
+ *
+ * @param {{genericLabels?: Record<string,string>}|null|undefined} dictionary
+ * @param {string} apiKey
+ * @param {string|undefined} fallbackLabel
+ * @returns {string}
+ */
+export function resolveFieldLabel(dictionary, apiKey, fallbackLabel) {
+  const key = `glc.acct.${apiKey}`;
+  return dictionary?.genericLabels?.[key] ?? fallbackLabel ?? key;
+}
+
 // Account combinations (C_ValidCombination) — code + name, reused by every
 // AccountBadgeSelect in the "Valores por defecto" tab.
 export const ACCOUNT_OPTIONS = [
@@ -76,15 +129,13 @@ export const GAAP_OPTIONS = [
 ];
 
 // ── Seed record: General (C_AcctSchema, single row) ──────────────────────────
-// `automaticPeriodControl` is the RAW AD value (AutoPeriodControl). The "Asientos
-// en periodos cerrados" toggle is bound INVERTED in the UI (see GeneralTab).
 export const GENERAL_SEED = {
   name: 'Contabilidad España — EUR',
   gAAP: 'SA',
   accrual: true, // IsAccrual=true ⇒ Devengo
   description: '',
   currency: 'EUR',
-  automaticPeriodControl: true, // AutoPeriodControl=Y ⇒ posting in closed periods OFF
+  allowNegative: false, // Allownegative=N ⇒ toggle OFF
 };
 
 // Offline fallback for the read-only org-scoped values (fiscal calendar +
@@ -123,9 +174,9 @@ export const DEFAULTS_SEED = {
   taxDue: 'acc-477',
   taxCredit: 'acc-472',
   taxExpense: 'acc-631',
-  // Otras cuentas
   tDueTransAcct: 'acc-4770',
   tCreditTransAcct: 'acc-4720',
+  // Producto
   fixedAsset: 'acc-213',
   productExpense: 'acc-600',
   productDeferredExpense: 'acc-480',
@@ -135,78 +186,34 @@ export const DEFAULTS_SEED = {
   invoicePriceVariance: 'acc-602',
   productRevenueReturn: 'acc-708',
   productCOGSReturn: 'acc-608',
-  warehouseDifferences: 'acc-659',
-  inventoryRevaluation: 'acc-298',
-  workInProgress: 'acc-340',
   depreciation: 'acc-681',
   accumulatedDepreciation: 'acc-281',
   disposalGain: 'acc-771',
   disposalLoss: 'acc-671',
+  // Proyecto
+  projectAsset: null,
+  // Almacén
+  warehouseDifferences: 'acc-659',
+  inventoryRevaluation: 'acc-298',
+  workInProgress: 'acc-340',
+  // Banco
+  bankInterestRevenue: null,
+  bankInterestExpense: null,
+  bankUnidentifiedReceipts: null,
+  unallocatedCash: null,
+  bankSettlementGain: null,
+  bankSettlementLoss: null,
+  cashBookExpense: null,
+  cashBookReceipt: null,
+  paymentSelection: null,
 };
 
-// Field → i18n-label-key + required, grouped by section. Drives the Defaults tab.
-export const DEFAULTS_GROUPS = [
-  {
-    section: 'treasury',
-    fields: [
-      { key: 'bankAsset', required: true },
-      { key: 'bankInTransit', required: true },
-      { key: 'bankExpense', required: false },
-      { key: 'bankRevaluationGain', required: false },
-      { key: 'bankRevaluationLoss', required: false },
-      { key: 'cashBookAsset', required: false },
-      { key: 'cashBookDifferences', required: false },
-      { key: 'cashTransfer', required: false },
-    ],
-  },
-  {
-    section: 'receivablesPayables',
-    fields: [
-      { key: 'customerReceivablesNo', required: true },
-      { key: 'vendorLiability', required: true },
-      { key: 'customerPrepayment', required: false },
-      { key: 'vendorPrepayment', required: false },
-      { key: 'writeoff', required: false },
-      { key: 'writeoffRevenue', required: false },
-      { key: 'nonInvoicedReceipts', required: false },
-      { key: 'doubtfulDebtAccount', required: false },
-      { key: 'badDebtExpenseAccount', required: false },
-      { key: 'badDebtRevenueAccount', required: false },
-      { key: 'allowanceForDoubtfulDebtAccount', required: false },
-    ],
-  },
-  {
-    section: 'taxes',
-    fields: [
-      { key: 'taxDue', required: true },
-      { key: 'taxCredit', required: true },
-      { key: 'taxExpense', required: false },
-    ],
-  },
-  {
-    section: 'other',
-    fields: [
-      { key: 'tDueTransAcct', required: false },
-      { key: 'tCreditTransAcct', required: false },
-      { key: 'fixedAsset', required: false },
-      { key: 'productExpense', required: false },
-      { key: 'productDeferredExpense', required: false },
-      { key: 'productRevenue', required: false },
-      { key: 'productDeferredRevenue', required: false },
-      { key: 'productCOGS', required: false },
-      { key: 'invoicePriceVariance', required: false },
-      { key: 'productRevenueReturn', required: false },
-      { key: 'productCOGSReturn', required: false },
-      { key: 'warehouseDifferences', required: false },
-      { key: 'inventoryRevaluation', required: false },
-      { key: 'workInProgress', required: false },
-      { key: 'depreciation', required: false },
-      { key: 'accumulatedDepreciation', required: false },
-      { key: 'disposalGain', required: false },
-      { key: 'disposalLoss', required: false },
-    ],
-  },
-];
+// DEFAULTS_GROUPS is derived from contract.json, not hand-typed — see
+// buildDefaultsGroups() above and
+// docs/superpowers/specs/2026-07-07-glc-defaults-ad-driven-grouping-design.md.
+export const DEFAULTS_GROUPS = buildDefaultsGroups(
+  contract.frontendContract.entities['Valores por defecto'].fields,
+);
 
 // ── Seed records: Dimensiones (C_AcctSchema_Element, one row per dimension) ───
 // `active` = IsActive toggle; `mandatory` = IsMandatory; `scope` = i18n key for
@@ -220,35 +227,31 @@ export const DIMENSIONS_SEED = [
   { id: 'dim-sr', labelKey: 'glc.dim.salesRegion', active: false, mandatory: false, caption: 'Opcional · Ventas y compras' },
 ];
 
-// ── Seed records: Documentos (C_AcctSchema_Table_DocType, read-only) ─────────
-// `accountId` → ACCOUNT_OPTIONS (badge), or `journalKey` → plain journal label
-// (no code badge). Status is always "Mapeado" in the mock.
-export const DOCUMENTS_SEED = [
-  { id: 'doc-arc', typeKey: 'glc.doc.salesInvoice', accountId: 'acc-700' },
-  { id: 'doc-api', typeKey: 'glc.doc.purchaseInvoice', accountId: 'acc-600' },
-  { id: 'doc-arn', typeKey: 'glc.doc.salesCreditMemo', accountId: 'acc-708' },
-  { id: 'doc-apn', typeKey: 'glc.doc.purchaseCreditMemo', accountId: 'acc-608' },
-  { id: 'doc-arr', typeKey: 'glc.doc.receipt', accountId: 'acc-572' },
-  { id: 'doc-app', typeKey: 'glc.doc.payment', accountId: 'acc-572' },
-  { id: 'doc-glj', typeKey: 'glc.doc.manualJournal', journalKey: 'glc.doc.generalJournal' },
-  { id: 'doc-amz', typeKey: 'glc.doc.depreciation', accountId: 'acc-681' },
-];
-
-export const accountById = (id) => ACCOUNT_OPTIONS.find((a) => a.id === id) ?? null;
+// ── Seed record: Cuentas generales (C_AcctSchema_GL, single row) ─────────────
+export const GENERAL_ACCOUNTS_SEED = {
+  suspenseBalancingUse: false,
+  suspenseBalancing: null,
+  suspenseErrorUse: false,
+  currencyBalancingUse: false,
+  currencyBalancingAcct: null,
+  retainedEarning: null,
+  incomeSummary: null,
+  cFSOrderAccount: null,
+  active: true,
+  createClosing: true,
+};
 
 export const GLC_SEED_PAYLOAD = {
   general: GENERAL_SEED,
   defaults: DEFAULTS_SEED,
   dimensions: DIMENSIONS_SEED,
-  documents: DOCUMENTS_SEED,
   orgInfo: ORG_INFO_SEED,
+  generalAccounts: GENERAL_ACCOUNTS_SEED,
   catalogs: {
     accounts: ACCOUNT_OPTIONS,
     currencies: CURRENCY_OPTIONS,
   },
   meta: {
     source: 'mock',
-    documentsBacked: false,
-    documentsNote: 'Document mappings are not backed in the current dataset.',
   },
 };

@@ -37,8 +37,8 @@ const defaultProps = {
 };
 
 const sampleProducts = [
-  { id: 'p1', label: 'Widget A', uom: 'Each', valuation: 1500, qty: 10 },
-  { id: 'p2', label: 'Gadget B', uom: 'Box', valuation: 0, qty: 5 },
+  { id: 'p1', label: 'Widget A', uom: 'Each', valuation: 1500, qty: 10, cost: 150 },
+  { id: 'p2', label: 'Gadget B', uom: 'Box', valuation: 0, qty: 5, cost: 0 },
 ];
 
 // --- Tests ---
@@ -115,6 +115,23 @@ describe('WarehouseProductsTab', () => {
       render(<WarehouseProductsTab {...defaultProps} />);
       expect(screen.getByText('warehouseStock')).toBeInTheDocument();
     });
+
+    it('renders the cost column header', () => {
+      render(<WarehouseProductsTab {...defaultProps} />);
+      expect(screen.getByText('warehouseCost')).toBeInTheDocument();
+    });
+
+    it('renders column headers in the order: Product, Uom, Stock, Cost, Valuation', () => {
+      render(<WarehouseProductsTab {...defaultProps} />);
+      const headers = screen.getAllByRole('columnheader').map((th) => th.textContent);
+      expect(headers).toEqual([
+        'warehouseProduct',
+        'warehouseUom',
+        'warehouseStock',
+        'warehouseCost',
+        'warehouseValuation',
+      ]);
+    });
   });
 
   describe('populated state — row data', () => {
@@ -150,6 +167,22 @@ describe('WarehouseProductsTab', () => {
       expect(screen.getByText('USD:1500')).toBeInTheDocument();
     });
 
+    it('calls formatCurrency for products with cost > 0', () => {
+      render(<WarehouseProductsTab {...defaultProps} />);
+      expect(formatCurrency).toHaveBeenCalledWith('USD', 150);
+    });
+
+    it('shows — for products with zero/falsy cost', () => {
+      render(<WarehouseProductsTab {...defaultProps} />);
+      // p2 has cost 0, so formatCurrency is NOT called for it
+      expect(formatCurrency).not.toHaveBeenCalledWith('USD', 0);
+    });
+
+    it('renders formatted cost output from formatCurrency', () => {
+      render(<WarehouseProductsTab {...defaultProps} />);
+      expect(screen.getByText('USD:150')).toBeInTheDocument();
+    });
+
     it('renders qty values', () => {
       render(<WarehouseProductsTab {...defaultProps} />);
       expect(screen.getByText('10')).toBeInTheDocument();
@@ -167,11 +200,22 @@ describe('WarehouseProductsTab', () => {
       useWarehouseStock.mockReturnValue({
         loading: false,
         error: null,
+        products: [{ id: 'p1', label: 'Widget', uom: '', valuation: 10, qty: 1, cost: 5 }],
+      });
+      render(<WarehouseProductsTab {...defaultProps} />);
+      // The cell renders '—' for falsy uom (cost is set here so only the uom cell is '—')
+      expect(screen.getByText('—')).toBeInTheDocument();
+    });
+
+    it('renders — for both uom and cost when both are falsy', () => {
+      useWarehouseStock.mockReturnValue({
+        loading: false,
+        error: null,
         products: [{ id: 'p1', label: 'Widget', uom: '', valuation: 10, qty: 1 }],
       });
       render(<WarehouseProductsTab {...defaultProps} />);
-      // The cell renders '—' for falsy uom
-      expect(screen.getByText('—')).toBeInTheDocument();
+      // uom cell and cost cell both fall back to '—'
+      expect(screen.getAllByText('—')).toHaveLength(2);
     });
   });
 
