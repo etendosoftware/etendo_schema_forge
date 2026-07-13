@@ -158,7 +158,7 @@ export default defineConfig(({ mode }) => {
   // the default sibling ../schema_forge_core.
   const CORE_REPO = process.env.SCHEMA_FORGE_CORE || resolve(__dirname, '../../../schema_forge_core');
   const CORE_APP_SHELL_SRC = resolve(CORE_REPO, 'packages/app-shell-core/src');
-  const CORE_GO_SRC = resolve(CORE_REPO, 'packages/etendo-go-core/src');
+  const CORE_ETENDO_GO_SRC = resolve(CORE_REPO, 'packages/etendo-go-core/src');
 
   return {
   base: '/',
@@ -223,24 +223,14 @@ export default defineConfig(({ mode }) => {
       ...(LOCAL_CORE ? [
         { find: /^@etendosoftware\/app-shell-core$/, replacement: resolve(CORE_APP_SHELL_SRC, 'index.js') },
         { find: /^@etendosoftware\/app-shell-core\/(.*)$/, replacement: resolve(CORE_APP_SHELL_SRC, '$1') },
-        // Onboarding/login (LoginStep, AuthShell, AuthField, etc.) lives in
-        // etendo-go-core — mirror the app-shell-core aliasing so login UI work
-        // hot-reloads from the local core checkout too.
-        //
-        // Unlike app-shell-core's `./components/ui/*` wildcard (a true 1:1 path
-        // passthrough), etendo-go-core's package.json `exports` map renames two
-        // subpaths to camelCase filenames (`./onboarding/password-policy` ->
-        // `passwordPolicy.js`, `./onboarding/oauth-return-to` ->
-        // `oauthReturnTo.js`). A single catch-all regex can't reproduce that, so
-        // every subpath is aliased explicitly here, mirroring that exports map
-        // 1:1. Keep both in sync if the package adds/renames an export.
-        { find: /^@etendosoftware\/etendo-go-core$/, replacement: resolve(CORE_GO_SRC, 'index.js') },
-        { find: /^@etendosoftware\/etendo-go-core\/onboarding$/, replacement: resolve(CORE_GO_SRC, 'onboarding/index.js') },
-        { find: /^@etendosoftware\/etendo-go-core\/onboarding\/api$/, replacement: resolve(CORE_GO_SRC, 'onboarding/api.js') },
-        { find: /^@etendosoftware\/etendo-go-core\/onboarding\/sso$/, replacement: resolve(CORE_GO_SRC, 'onboarding/sso.js') },
-        { find: /^@etendosoftware\/etendo-go-core\/onboarding\/state$/, replacement: resolve(CORE_GO_SRC, 'onboarding/state.js') },
-        { find: /^@etendosoftware\/etendo-go-core\/onboarding\/password-policy$/, replacement: resolve(CORE_GO_SRC, 'onboarding/passwordPolicy.js') },
-        { find: /^@etendosoftware\/etendo-go-core\/onboarding\/oauth-return-to$/, replacement: resolve(CORE_GO_SRC, 'onboarding/oauthReturnTo.js') },
+        // etendo-go-core (onboarding / auth screens) from local source — mirrors app-shell-core.
+        // Its exports map two kebab-case subpaths to camelCase files, so those need explicit
+        // aliases before the generic catch-all (which handles onboarding/api|sso|state as-is).
+        { find: /^@etendosoftware\/etendo-go-core$/, replacement: resolve(CORE_ETENDO_GO_SRC, 'index.js') },
+        { find: /^@etendosoftware\/etendo-go-core\/onboarding\/password-policy$/, replacement: resolve(CORE_ETENDO_GO_SRC, 'onboarding/passwordPolicy.js') },
+        { find: /^@etendosoftware\/etendo-go-core\/onboarding\/oauth-return-to$/, replacement: resolve(CORE_ETENDO_GO_SRC, 'onboarding/oauthReturnTo.js') },
+        { find: /^@etendosoftware\/etendo-go-core\/onboarding$/, replacement: resolve(CORE_ETENDO_GO_SRC, 'onboarding/index.js') },
+        { find: /^@etendosoftware\/etendo-go-core\/(.*)$/, replacement: resolve(CORE_ETENDO_GO_SRC, '$1') },
         // Force a single React instance: the linked source would otherwise resolve
         // react/react-dom from schema_forge_core's own node_modules (a separate
         // install tree) → two React copies → "Invalid hook call". Pin both to this
@@ -288,7 +278,9 @@ export default defineConfig(({ mode }) => {
     // instance to begin with. Unconditional (not gated on LOCAL_CORE): it fixes
     // the currency double-instantiation in the DEFAULT published-package path,
     // and also gives LOCAL_CORE the exclude it needs for live HMR.
-    exclude: ['@etendosoftware/app-shell-core'],
+    exclude: LOCAL_CORE
+      ? ['@etendosoftware/app-shell-core', '@etendosoftware/etendo-go-core']
+      : ['@etendosoftware/app-shell-core'],
     // react-day-picker (used by app-shell-core's Calendar) ships ~87 translated
     // per-locale wrapper files, each importing the date-fns/locale barrel. Since
     // it's only reachable through the excluded app-shell-core, Vite never

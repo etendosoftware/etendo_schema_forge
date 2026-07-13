@@ -176,23 +176,32 @@ describe('OnboardingPage', () => {
     vi.restoreAllMocks();
   });
 
+  // Since core 0.3.4 the onboarding flow defaults to the login view; the register
+  // form is only reached by clicking the switch link exposed on the login view.
+  // Register-oriented tests use this helper to land on the register view before
+  // interacting with its fields.
+  const renderAtRegister = () => {
+    const utils = render(<OnboardingPage />);
+    fireEvent.click(screen.getByTestId('action-switch-to-register'));
+    return utils;
+  };
+
   it('renders without crashing', () => {
     const { container } = render(<OnboardingPage />);
     expect(container).toBeTruthy();
   });
 
-  it('shows loading spinner when view is null (initial check)', () => {
-    // No platform token, so it will go to register view immediately,
-    // but briefly passes through null. Since no token, it jumps to register.
+  it('shows the register view after switching from the default login view', () => {
+    // No platform token means the flow lands on the login view (core 0.3.4
+    // default); the register view is reached via the switch link.
     localStorage.removeItem('sf_platform_token');
-    render(<OnboardingPage />);
-    // Should immediately show the register view since no token
+    renderAtRegister();
     expect(screen.getByText('onboardingRegisterTitle')).toBeInTheDocument();
   });
 
-  it('shows register view when no platform token exists', () => {
+  it('shows register view when switching to register', () => {
     localStorage.removeItem('sf_platform_token');
-    render(<OnboardingPage />);
+    renderAtRegister();
     expect(screen.getByText('onboardingRegisterTitle')).toBeInTheDocument();
     expect(screen.getByText('onboardingRegisterSubtitle')).toBeInTheDocument();
   });
@@ -227,7 +236,7 @@ describe('OnboardingPage', () => {
 
   it('renders register form fields', () => {
     localStorage.removeItem('sf_platform_token');
-    render(<OnboardingPage />);
+    renderAtRegister();
     // Form has name, email, password fields
     expect(screen.getByText('onboardingNameLabel')).toBeInTheDocument();
     expect(screen.getByText('onboardingEmailLabel')).toBeInTheDocument();
@@ -236,7 +245,7 @@ describe('OnboardingPage', () => {
 
   it('shows the create account button', () => {
     localStorage.removeItem('sf_platform_token');
-    render(<OnboardingPage />);
+    renderAtRegister();
     expect(screen.getByText('onboardingCreateAccountAction')).toBeInTheDocument();
   });
 
@@ -248,7 +257,7 @@ describe('OnboardingPage', () => {
 
   it('shows switch to login prompt', () => {
     localStorage.removeItem('sf_platform_token');
-    render(<OnboardingPage />);
+    renderAtRegister();
     expect(screen.getByText('onboardingSwitchToLoginPrompt')).toBeInTheDocument();
     expect(screen.getByText('onboardingSwitchToLoginAction')).toBeInTheDocument();
   });
@@ -257,12 +266,7 @@ describe('OnboardingPage', () => {
     localStorage.removeItem('sf_platform_token');
     render(<OnboardingPage />);
 
-    const registerPassword = screen.getByLabelText(/onboardingPasswordLabel/);
-    expect(registerPassword).toHaveAttribute('type', 'password');
-    fireEvent.click(screen.getByLabelText('onboardingShowPassword'));
-    expect(registerPassword).toHaveAttribute('type', 'text');
-
-    fireEvent.click(screen.getByTestId('action-switch-to-login'));
+    // The flow lands on the login view by default (core 0.3.4).
     expect(screen.getByText('onboardingLoginTitle')).toBeInTheDocument();
     const loginPassword = screen.getByLabelText(/onboardingPasswordLabel/);
     expect(loginPassword).toHaveAttribute('type', 'password');
@@ -271,15 +275,24 @@ describe('OnboardingPage', () => {
 
     fireEvent.click(screen.getByTestId('action-switch-to-register'));
     expect(screen.getByText('onboardingRegisterTitle')).toBeInTheDocument();
+    const registerPassword = screen.getByLabelText(/onboardingPasswordLabel/);
+    expect(registerPassword).toHaveAttribute('type', 'password');
+    fireEvent.click(screen.getByLabelText('onboardingShowPassword'));
+    expect(registerPassword).toHaveAttribute('type', 'text');
+
+    fireEvent.click(screen.getByTestId('action-switch-to-login'));
+    expect(screen.getByText('onboardingLoginTitle')).toBeInTheDocument();
   });
 
-  it('returns to register view when the stored platform token is invalid', async () => {
+  it('returns to the login view when the stored platform token is invalid', async () => {
     localStorage.setItem('sf_platform_token', 'stale-platform-token');
     fetchAccount.mockRejectedValue(new Error('expired'));
 
     render(<OnboardingPage />);
 
-    expect(await screen.findByText('onboardingRegisterTitle')).toBeInTheDocument();
+    // A rejected token verification clears the stored token and falls back to
+    // the default login view (core 0.3.4 login-first default).
+    expect(await screen.findByText('onboardingLoginTitle')).toBeInTheDocument();
     expect(localStorage.removeItem).toHaveBeenCalledWith('sf_platform_token');
   });
 
@@ -295,17 +308,20 @@ describe('OnboardingPage', () => {
     expect(consoleError).toHaveBeenCalledWith('Failed to load environments', expect.any(Error));
   });
 
-  it('updates the setup language selector', async () => {
+  it('exposes the inline language selector on the profile step', async () => {
+    // The profile step keeps its inline language selector so the onboarding
+    // language can be chosen independently of the global locale switch.
+    localeSwitchMock.locale = 'es_ES';
     localStorage.setItem('sf_platform_token', 'platform-token');
     fetchAccount.mockResolvedValue({ name: 'Ada Lovelace' });
     fetchEnvironments.mockResolvedValue([]);
 
     render(<OnboardingPage />);
 
-    const languageSelect = await screen.findByLabelText('language');
-    fireEvent.change(languageSelect, { target: { value: 'es_ES' } });
-
-    expect(languageSelect).toBeInTheDocument();
+    // The profile setup step renders under the active locale ...
+    expect(await screen.findByText(/onboardingGreeting/)).toBeInTheDocument();
+    // ... and still exposes an inline language selector.
+    expect(screen.getByLabelText('language')).toBeInTheDocument();
   });
 
   it('tracks registration submission and success without user-entered values', async () => {
@@ -315,7 +331,7 @@ describe('OnboardingPage', () => {
     });
 
     localStorage.removeItem('sf_platform_token');
-    render(<OnboardingPage />);
+    renderAtRegister();
 
     fireEvent.submit(screen.getByTestId('action-register-submit').closest('form'));
 
@@ -349,7 +365,7 @@ describe('OnboardingPage', () => {
     });
 
     localStorage.removeItem('sf_platform_token');
-    render(<OnboardingPage />);
+    renderAtRegister();
 
     fireEvent.submit(screen.getByTestId('action-register-submit').closest('form'));
 
@@ -368,7 +384,7 @@ describe('OnboardingPage', () => {
     });
 
     localStorage.removeItem('sf_platform_token');
-    render(<OnboardingPage />);
+    renderAtRegister();
 
     fireEvent.submit(screen.getByTestId('action-register-submit').closest('form'));
 
@@ -383,7 +399,7 @@ describe('OnboardingPage', () => {
     registerAccount.mockResolvedValue({});
 
     localStorage.removeItem('sf_platform_token');
-    render(<OnboardingPage />);
+    renderAtRegister();
 
     fireEvent.change(screen.getByLabelText(/onboardingNameLabel/), {
       target: { value: 'Secret Register Name' },
@@ -413,7 +429,7 @@ describe('OnboardingPage', () => {
     registerAccount.mockRejectedValue({ code: 'onboardingConnectionError' });
 
     localStorage.removeItem('sf_platform_token');
-    render(<OnboardingPage />);
+    renderAtRegister();
 
     fireEvent.submit(screen.getByTestId('action-register-submit').closest('form'));
 
@@ -459,9 +475,8 @@ describe('OnboardingPage', () => {
     fireEvent.change(await screen.findByLabelText(/onboardingFullNameLabel/), {
       target: { value: 'Private Setup Name' },
     });
-    fireEvent.change(screen.getByLabelText(/onboardingCountryLabel/), {
-      target: { value: 'ES' },
-    });
+    // Core 0.3.4 fixes the country to the configured value (non-editable display),
+    // so it is no longer changed here.
     fireEvent.click(await screen.findByText('onboardingBusinessTypeFreelancer'));
     fireEvent.click(screen.getByText('onboardingContinueAction'));
     fireEvent.change(screen.getByLabelText(/onboardingAddressLabel/), {
@@ -487,10 +502,10 @@ describe('OnboardingPage', () => {
   it('tracks login failures without credentials', async () => {
     loginAccount.mockResolvedValue({});
 
+    // The flow lands on the login view by default (core 0.3.4).
     localStorage.removeItem('sf_platform_token');
     render(<OnboardingPage />);
 
-    fireEvent.click(screen.getByTestId('action-switch-to-login'));
     fireEvent.submit(screen.getByTestId('action-login-submit').closest('form'));
 
     await waitFor(() => {
@@ -519,10 +534,10 @@ describe('OnboardingPage', () => {
       account: { name: 'Secret Login Name', email: 'secret-login@example.com' },
     });
 
+    // The flow lands on the login view by default (core 0.3.4).
     localStorage.removeItem('sf_platform_token');
     render(<OnboardingPage />);
 
-    fireEvent.click(screen.getByTestId('action-switch-to-login'));
     fireEvent.change(screen.getByLabelText(/onboardingEmailLabel/), {
       target: { value: 'secret-login@example.com' },
     });
@@ -553,10 +568,10 @@ describe('OnboardingPage', () => {
       account: { name: 'Ada Lovelace', email: 'ada@example.com' },
     });
 
+    // The flow lands on the login view by default (core 0.3.4).
     localStorage.removeItem('sf_platform_token');
     render(<OnboardingPage />);
 
-    fireEvent.click(screen.getByTestId('action-switch-to-login'));
     fireEvent.submit(screen.getByTestId('action-login-submit').closest('form'));
 
     await waitFor(() => {
@@ -572,7 +587,7 @@ describe('OnboardingPage', () => {
     });
 
     localStorage.removeItem('sf_platform_token');
-    render(<OnboardingPage />);
+    renderAtRegister();
 
     fireEvent.submit(screen.getByTestId('action-register-submit').closest('form'));
 
@@ -612,10 +627,10 @@ describe('OnboardingPage', () => {
   it('tracks login exceptions', async () => {
     loginAccount.mockRejectedValue({ userMessage: 'Readable login failure' });
 
+    // The flow lands on the login view by default (core 0.3.4).
     localStorage.removeItem('sf_platform_token');
     render(<OnboardingPage />);
 
-    fireEvent.click(screen.getByTestId('action-switch-to-login'));
     fireEvent.submit(screen.getByTestId('action-login-submit').closest('form'));
 
     await waitFor(() => {
@@ -633,10 +648,10 @@ describe('OnboardingPage', () => {
   it('submits forgot password requests with neutral success messaging', async () => {
     requestPasswordReset.mockResolvedValue({ success: true });
 
+    // The flow lands on the login view by default (core 0.3.4).
     localStorage.removeItem('sf_platform_token');
     render(<OnboardingPage />);
 
-    fireEvent.click(screen.getByTestId('action-switch-to-login'));
     fireEvent.change(screen.getByLabelText(/onboardingEmailLabel/), {
       target: { value: 'reset@example.com' },
     });
@@ -1248,7 +1263,7 @@ describe('OnboardingPage', () => {
       });
 
       localStorage.removeItem('sf_platform_token');
-      render(<OnboardingPage />);
+      renderAtRegister();
 
       fireEvent.submit(screen.getByTestId('action-register-submit').closest('form'));
 
@@ -1382,10 +1397,10 @@ describe('OnboardingPage', () => {
 
     it('renders a forgot-password failure message', async () => {
       requestPasswordReset.mockRejectedValue({ userMessage: 'Reset request failed' });
+      // The flow lands on the login view by default (core 0.3.4).
       localStorage.removeItem('sf_platform_token');
       render(<OnboardingPage />);
 
-      fireEvent.click(screen.getByTestId('action-switch-to-login'));
       fireEvent.click(screen.getByText('onboardingForgotPasswordAction'));
       fireEvent.submit(screen.getByTestId('action-forgot-password-submit').closest('form'));
 
@@ -1393,10 +1408,10 @@ describe('OnboardingPage', () => {
     });
 
     it('returns to the login view from the forgot-password view', () => {
+      // The flow lands on the login view by default (core 0.3.4).
       localStorage.removeItem('sf_platform_token');
       render(<OnboardingPage />);
 
-      fireEvent.click(screen.getByTestId('action-switch-to-login'));
       fireEvent.click(screen.getByText('onboardingForgotPasswordAction'));
       fireEvent.change(screen.getByLabelText(/onboardingEmailLabel/), {
         target: { value: 'reset@example.com' },
@@ -1505,7 +1520,7 @@ describe('OnboardingPage', () => {
 
     it('disables the create account button while the password is empty', () => {
       localStorage.removeItem('sf_platform_token');
-      render(<OnboardingPage />);
+      renderAtRegister();
       expect(screen.getByTestId('action-register-submit')).toBeDisabled();
       // No requirements list until the user starts typing.
       expect(screen.queryByTestId('register-password-requirements')).not.toBeInTheDocument();
@@ -1513,7 +1528,7 @@ describe('OnboardingPage', () => {
 
     it('shows the checklist and keeps submit disabled for a weak password', () => {
       localStorage.removeItem('sf_platform_token');
-      const { container } = render(<OnboardingPage />);
+      const { container } = renderAtRegister();
       typePassword(container, '123');
       expect(screen.getByTestId('register-password-requirements')).toBeInTheDocument();
       expect(screen.getByTestId('register-password-rule-minLength')).toHaveAttribute('data-met', 'false');
@@ -1523,7 +1538,7 @@ describe('OnboardingPage', () => {
 
     it('marks every rule met and enables submit for a strong password', () => {
       localStorage.removeItem('sf_platform_token');
-      const { container } = render(<OnboardingPage />);
+      const { container } = renderAtRegister();
       typePassword(container, 'Str0ng!Pass');
       ['minLength', 'uppercase', 'lowercase', 'number', 'special'].forEach(rule => {
         expect(screen.getByTestId(`register-password-rule-${rule}`)).toHaveAttribute('data-met', 'true');
