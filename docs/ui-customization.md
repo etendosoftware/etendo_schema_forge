@@ -663,12 +663,37 @@ shape (`SecondaryFormTab`): `data`, `readOnly`, `onChange`, `entity`, `catalogs`
 Don't assume `Panel` and `Form` share a prop contract; they don't.
 
 **Building the fetch URL inside a `Panel`:** `apiBaseUrl` passed down here is already
-`{base}/{specName}` (set once by `WindowLoader.jsx`: `apiBaseUrl={`${apiBaseUrl}/${windowName}`}`)
-and threaded unchanged through `Page` → `DetailView` → `Panel`. Build entity URLs directly off it
-— `${apiBaseUrl}/periodControl?year=${parentId}` — **never** re-prepend the window/spec name
+`{base}/{windowName}` (set once by `WindowLoader.jsx`: `apiBaseUrl={`${apiBaseUrl}/${windowName}`}`,
+where `windowName` is the **route** name, not necessarily a real spec name — see the exception
+below) and threaded unchanged through `Page` → `DetailView` → `Panel`. In the common case (the
+route name IS the backing spec's name), build entity URLs directly off it —
+`${apiBaseUrl}/periodControl?year=${parentId}` — **never** re-prepend the window/spec name
 (`${apiBaseUrl}/{window}/periodControl?...`) or you'll get a doubled path segment. This matches
 the existing `warehouse` convention (`useWarehouseStock.js`: `${apiBaseUrl}/storageBin?...`,
 `${apiBaseUrl}/binContents?...`).
+
+**Exception — a custom window with no backing spec of its own, spanning multiple real specs.**
+`calendar` (ETP-4478) has no `artifacts/calendar/` spec at all — its route name is purely
+cosmetic. `WindowLoader.jsx` still injects `apiBaseUrl={base}/calendar`, but `year` is really
+backed by the `fiscal-calendar` spec, the Periods panel by `open-close-period-control`, and the
+Accounting panel by `end-year-close`. In this shape, the window's `index.jsx` wrapper must strip
+the trailing route segment and substitute the real spec name **per panel** (and for its own
+header page, not just secondary tabs):
+
+```jsx
+function rootApiBase(apiBaseUrl) {
+  return apiBaseUrl.replace(/\/[^/]*$/, ''); // strip the trailing route segment
+}
+function MyPanelForCalendar(props) {
+  return <MyPanel {...props} apiBaseUrl={`${rootApiBase(props.apiBaseUrl)}/the-real-spec-name`} />;
+}
+```
+
+This only applies when the window genuinely has no spec of its own — reach for one merged spec
+first if the entities involved can share a single AD window (see `docs/decisions-reference.md`);
+only fall back to this pattern when they can't (see `docs/generated-custom-windows/calendar.md`
+for the full rationale — a merged multi-window spec silently loses entities in `push-to-neo`,
+tracked as [schema_forge_core#35](https://github.com/etendosoftware/schema_forge_core/issues/35)).
 
 **menuActions-triggered modals are a different mechanism, with their own base URL constant.** A
 `window.menuActions` entry's `component` (see option 5 above) receives `currentRecord` (the full
@@ -682,9 +707,10 @@ file when building URLs in a `menuActions` component.
 list/detail entity — inline custom rendering, aggregation, or an interaction shape the generator
 doesn't produce (expandable rows, a read-only trial-balance-style grid, etc.).
 
-**Real examples:** `warehouse` (`WarehouseTransactionsTable`/`WarehouseProductsTab` as
-`Panel`s reading `parentId`), `calendar` (`PeriodsExpandablePanel`, `AccountingPanel` — both
-`Panel`s scoped by `parentId={yearId}`).
+**Real examples:** `warehouse` (`WarehouseTransactionsTable`/`WarehouseProductsTab` as `Panel`s
+reading `parentId`, single backing spec — the common case); `calendar` (`PeriodsExpandablePanel`,
+`AccountingPanel` — the multi-spec exception above, each panel's `apiBaseUrl` rewritten to a
+different real spec).
 
 ---
 
