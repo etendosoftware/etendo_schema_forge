@@ -17376,6 +17376,8 @@
     "reactivarWarningIn": "This action will undo the reconciliation and accounting of the collection.",
     "reactivarWarningOut": "This action will undo the reconciliation and accounting of the payment.",
     "etprReactivatePaymentCompleted": "Reactivated successfully",
+    "removePayment": "Remove Payment",
+    "eTPRRemovePaymentCompleted": "Payment removed successfully",
     "aPRMProcessPaymentCompleted": "Payment confirmed",
     "reference": "Reference",
     "totalApplied": "Total applied",

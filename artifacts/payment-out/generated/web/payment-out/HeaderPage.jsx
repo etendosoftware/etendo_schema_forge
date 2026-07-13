@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import { ListView, DetailView } from '@/components/contract-ui';
+import { toast } from 'sonner';
 import HeaderTable from '../../../custom/PaymentHeaderTable';
 import HeaderForm from './HeaderForm';
 import PaymentOutBottomPanel from '../../../custom/PaymentOutBottomPanel';
@@ -443,6 +444,9 @@ export default function HeaderPage({ windowName, recordId, ...props }) {
         sidePanel={PaymentDetailSidebar}
         sidePanelStyle={{"order":-1,"borderLeft":"none","borderRight":"1px solid #E8EAEF","padding":0}}
         processConfirmModal={ReactivarConfirmModal}
+        menuActions={({ status }) => [
+          { key: 'removePayment', label: 'Remove Payment', destructive: true, visible: ["PPM","PWNC","RDNC","RPAE","RPAP","RPPC","RPR"].includes(status), labelKey: 'removePayment', columnName: 'eTPRRemovePayment',  }
+        ]}
         statusEnumLabels={{"RPAP":"statusDraft","RPR":"pagoDepositado","RDNC":"pagoDepositado","RPPC":"pagoDepositado","PPM":"pagoDepositado","PWNC":"pagoDepositado"}}
         statusFieldLabel="statusColumnLabel"
         sendDocument
