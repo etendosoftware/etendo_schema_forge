@@ -19,16 +19,16 @@ async function postAction(url, token) {
   return res.json();
 }
 
-export default function PeriodsExpandablePanel({ data, token, apiBaseUrl }) {
+export default function PeriodsExpandablePanel({ parentId, token, apiBaseUrl }) {
   const ui = useUI();
   const [periods, setPeriods] = useState([]);
   const [expandedId, setExpandedId] = useState(null);
   const [documentsByPeriod, setDocumentsByPeriod] = useState({});
 
   useEffect(() => {
-    if (!data?.id) return;
-    fetchJson(`${apiBaseUrl}/calendar/periodControl?year=${data.id}`, token).then(setPeriods);
-  }, [data?.id, apiBaseUrl, token]);
+    if (!parentId) return;
+    fetchJson(`${apiBaseUrl}/periodControl?year=${parentId}`, token).then(setPeriods);
+  }, [parentId, apiBaseUrl, token]);
 
   const toggleExpand = useCallback(async (periodId) => {
     if (expandedId === periodId) {
@@ -37,17 +37,17 @@ export default function PeriodsExpandablePanel({ data, token, apiBaseUrl }) {
     }
     setExpandedId(periodId);
     if (!documentsByPeriod[periodId]) {
-      const docs = await fetchJson(`${apiBaseUrl}/calendar/documents?parentId=${periodId}`, token);
+      const docs = await fetchJson(`${apiBaseUrl}/documents?parentId=${periodId}`, token);
       setDocumentsByPeriod((prev) => ({ ...prev, [periodId]: docs }));
     }
   }, [expandedId, documentsByPeriod, apiBaseUrl, token]);
 
   const openClosePeriod = useCallback((periodId) => {
-    postAction(`${apiBaseUrl}/calendar/periodControl/${periodId}/action/openClose`, token);
+    postAction(`${apiBaseUrl}/periodControl/${periodId}/action/openClose`, token);
   }, [apiBaseUrl, token]);
 
   const openCloseDocument = useCallback((documentId) => {
-    postAction(`${apiBaseUrl}/calendar/documents/${documentId}/action/openClose`, token);
+    postAction(`${apiBaseUrl}/documents/${documentId}/action/openClose`, token);
   }, [apiBaseUrl, token]);
 
   return (

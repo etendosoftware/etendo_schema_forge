@@ -615,6 +615,79 @@ carry `requiredVisual: true` because their obligatoriness depends on the "Tipo d
 
 ---
 
+### 17. `secondaryTabs` — custom Panel/Form tabs beside lines
+
+**What it does:** renders one or more extra tabs next to the header's detail content, backed
+either by a hand-written `Panel` component (freeform content, e.g. a custom fetch-and-render
+subtab) or a generated `Form` component (a plain entity form reused as a secondary tab). This is
+a runtime prop passed to the generated `<Page>` component from a hand-written `windows/custom/
+{window}/index.jsx` wrapper — **not** a `decisions.json` key — so it requires `window.layoutType:
+"custom"` (the pipeline only emits a bare scaffold for `"custom"` layouts; there is no
+declarative `decisions.json` shape for this yet).
+
+```jsx
+// windows/custom/{window}/index.jsx
+import GeneratedPage from '@generated/{window}/generated/web/{window}/{Header}Page';
+import MyPanel from './MyPanel.jsx';
+
+export default function MyWindow(props) {
+  const secondaryTabs = [
+    { key: 'accounting', label: 'Accounting', Panel: MyPanel },
+  ];
+  return <GeneratedPage {...props} secondaryTabs={secondaryTabs} />;
+}
+```
+
+**The `Panel` prop contract (confirmed by reading `DetailView.jsx`'s `SecondaryPanelTab`, not
+assumed):**
+
+```jsx
+<props.st.Panel
+    parentId={props.data?.id}
+    token={props.token}
+    apiBaseUrl={props.apiBaseUrl}
+    onCount={props.onCount}
+/>
+```
+
+Your `Panel` component receives **`parentId`** (the current header record's id, a plain string) —
+**not `data`, not the full header record.** This is easy to get wrong if you copy a prop shape
+from memory instead of checking the real renderer: a component written as `function MyPanel({
+data, token, apiBaseUrl })` will silently receive `data === undefined` forever (no error, no
+warning — the prop is just absent) and never fire its fetch. `onCount` is optional — call it with
+a number if you want the tab label to show a count badge; omitting it just skips the badge.
+
+`Form`-backed secondary tabs (`{ key, Form }` instead of `{ key, Panel }`) use a different prop
+shape (`SecondaryFormTab`): `data`, `readOnly`, `onChange`, `entity`, `catalogs`, `token`,
+`apiBaseUrl`, `selectorContext`, `labelOverrides` — closer to a normal `EntityForm` invocation.
+Don't assume `Panel` and `Form` share a prop contract; they don't.
+
+**Building the fetch URL inside a `Panel`:** `apiBaseUrl` passed down here is already
+`{base}/{specName}` (set once by `WindowLoader.jsx`: `apiBaseUrl={`${apiBaseUrl}/${windowName}`}`)
+and threaded unchanged through `Page` → `DetailView` → `Panel`. Build entity URLs directly off it
+— `${apiBaseUrl}/periodControl?year=${parentId}` — **never** re-prepend the window/spec name
+(`${apiBaseUrl}/{window}/periodControl?...`) or you'll get a doubled path segment. This matches
+the existing `warehouse` convention (`useWarehouseStock.js`: `${apiBaseUrl}/storageBin?...`,
+`${apiBaseUrl}/binContents?...`).
+
+**menuActions-triggered modals are a different mechanism, with their own base URL constant.** A
+`window.menuActions` entry's `component` (see option 5 above) receives `currentRecord` (the full
+record, not just an id) and `apiBaseUrl={api.baseUrl}` — a **hardcoded generated string**
+(`api.baseUrl` inside the generated `Page.jsx`, literally `"/sws/neo/{spec}"`), not the runtime
+`apiBaseUrl` prop threaded from `WindowLoader`. In practice the two end up equal for a
+top-level menu action, but don't assume they're the same variable — verify against the generated
+file when building URLs in a `menuActions` component.
+
+**Use when:** a window needs a subtab whose content doesn't map to a normal generated
+list/detail entity — inline custom rendering, aggregation, or an interaction shape the generator
+doesn't produce (expandable rows, a read-only trial-balance-style grid, etc.).
+
+**Real examples:** `warehouse` (`WarehouseTransactionsTable`/`WarehouseProductsTab` as
+`Panel`s reading `parentId`), `calendar` (`PeriodsExpandablePanel`, `AccountingPanel` — both
+`Panel`s scoped by `parentId={yearId}`).
+
+---
+
 ## Decision tree: which option to use?
 
 ```

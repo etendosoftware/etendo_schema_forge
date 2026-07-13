@@ -1,0 +1,192 @@
+import { test, expect } from '@playwright/test';
+import { login } from '../helpers/auth.js';
+
+/**
+ * Calendar window — smoke (mocked).
+ *
+ * Validates ETP-4478's unified Calendar window: the Finance menu shows only
+ * "Calendar" (Fiscal Calendar / Periods retired), the Accounting + Periods
+ * secondary tabs render on a year detail, expanding a period reveals its
+ * documents, Abrir/Cerrar Periodo hits the mocked action endpoint, and
+ * Cerrar Año stays disabled until every period is Closed/Permanently Closed.
+ *
+ * Mock mode only: installs window-specific routes on top of the generic
+ * /sws/** mock that login() seeds, so it does not need a backend.
+ *
+ * Envelope shapes (confirmed by reading the real handlers, not assumed):
+ * - `calendar/year` list+detail goes through the standard entity CRUD path
+ *   (NeoCrudHandler), which wraps as `{ response: { data: ... } }` — same
+ *   shape as row-quick-actions.mocked.spec.js's reference pattern.
+ * - `calendar/periodControl`, `calendar/documents`, `calendar/accounting`
+ *   are intercepted by custom NeoHandlers (javaQualifier-routed) that return
+ *   a flat `{ data: [...] }` body — confirmed via NeoServlet.writeResponse()
+ *   writing NeoResponse.getBody() directly with no extra envelope, and via
+ *   PeriodsExpandablePanel.jsx/AccountingPanel.jsx's own `body.data` reads.
+ */
+
+const YEAR_ROW = { id: 'year-001', fiscalYear: '2027', description: 'FY2027', 'calendar$_identifier': 'Standard Calendar' };
+
+const PERIOD_OPEN = { id: 'period-001', name: 'Jan-2027', status: 'O', periodNo: 1 };
+const PERIOD_CLOSED = { id: 'period-002', name: 'Feb-2027', status: 'C', periodNo: 2 };
+const DOCUMENT_ROW = { id: 'doc-001', documentCategory: 'API', periodStatus: 'O' };
+const ACCOUNTING_ROW = { id: 'fact-001', account: '20000000', debit: '100.00', credit: '0.00', description: 'Year close' };
+
+async function installYearMock(page) {
+  await page.route('**/sws/neo/calendar/year**', async (route) => {
+    const req = route.request();
+    const url = req.url();
+    if (req.method() === 'GET' && !/\/year\/[^/?]+/.test(url)) {
+      await route.fulfill({
+        status: 200, contentType: 'application/json',
+        body: JSON.stringify({ response: { data: [YEAR_ROW], totalRows: 1 } }),
+      });
+      return;
+    }
+    if (req.method() === 'GET') {
+      await route.fulfill({
+        status: 200, contentType: 'application/json',
+        body: JSON.stringify({ response: { data: [YEAR_ROW] } }),
+      });
+      return;
+    }
+    route.fallback();
+  });
+}
+
+/** Mocks periodControl list + the openClose action endpoint. */
+async function installPeriodControlMock(page, periods) {
+  await page.route('**/sws/neo/calendar/periodControl**', async (route) => {
+    const req = route.request();
+    const url = req.url();
+    if (req.method() === 'GET') {
+      await route.fulfill({
+        status: 200, contentType: 'application/json',
+        body: JSON.stringify({ data: periods }),
+      });
+      return;
+    }
+    if (req.method() === 'POST' && /\/action\/openClose/.test(url)) {
+      await route.fulfill({
+        status: 200, contentType: 'application/json',
+        body: JSON.stringify({ status: 'success', message: 'Period updated' }),
+      });
+      return;
+    }
+    route.fallback();
+  });
+}
+
+async function installDocumentsMock(page) {
+  await page.route('**/sws/neo/calendar/documents**', async (route) => {
+    const req = route.request();
+    if (req.method() === 'GET') {
+      await route.fulfill({
+        status: 200, contentType: 'application/json',
+        body: JSON.stringify({ data: [DOCUMENT_ROW] }),
+      });
+      return;
+    }
+    route.fallback();
+  });
+}
+
+async function installAccountingMock(page) {
+  await page.route('**/sws/neo/calendar/accounting**', async (route) => {
+    await route.fulfill({
+      status: 200, contentType: 'application/json',
+      body: JSON.stringify({ data: [ACCOUNTING_ROW] }),
+    });
+  });
+}
+
+test.describe('Finance menu', () => {
+  test('shows only Calendar, not Fiscal Calendar or Periods', async ({ page }) => {
+    await login(page);
+    await page.goto('/dashboard');
+    await page.getByRole('button', { name: /finanzas|finance/i }).click();
+    const menuText = await page.locator('body').innerText();
+    expect(menuText).toContain('Calendar');
+    expect(menuText).not.toContain('Fiscal Calendar');
+    expect(menuText).not.toContain('Periods');
+  });
+});
+
+test.describe('Calendar — year detail', () => {
+  test.beforeEach(async ({ page }) => {
+    await login(page);
+    await installYearMock(page);
+    await installPeriodControlMock(page, [PERIOD_OPEN, PERIOD_CLOSED]);
+    await installDocumentsMock(page);
+    await installAccountingMock(page);
+    await page.goto('/calendar/year-001');
+    await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
+  });
+
+  test('shows Accounting and Periods secondary tabs', async ({ page }) => {
+    await expect(page.getByTestId('tab-accounting')).toBeVisible();
+    await expect(page.getByTestId('tab-periods')).toBeVisible();
+  });
+
+  test('Periods tab lists periods and Accounting tab lists Fact_Acct rows', async ({ page }) => {
+    await page.getByTestId('tab-periods').click();
+    await expect(page.getByText('Jan-2027')).toBeVisible();
+    await expect(page.getByText('Feb-2027')).toBeVisible();
+
+    await page.getByTestId('tab-accounting').click();
+    await expect(page.getByText('20000000')).toBeVisible();
+  });
+
+  test('expanding a period reveals its documents', async ({ page }) => {
+    await page.getByTestId('tab-periods').click();
+    await expect(page.getByText('Jan-2027')).toBeVisible();
+
+    await expect(page.getByText('API')).not.toBeVisible();
+    await page.getByTestId('period-row-expand-period-001').click();
+    await expect(page.getByText('API')).toBeVisible();
+  });
+
+  test('Abrir/Cerrar Periodo hits the mocked openClose endpoint', async ({ page }) => {
+    await page.getByTestId('tab-periods').click();
+    await expect(page.getByText('Jan-2027')).toBeVisible();
+
+    const requestPromise = page.waitForRequest(
+      (r) => r.url().includes('/sws/neo/calendar/periodControl/period-001/action/openClose')
+        && r.method() === 'POST'
+    );
+    await page.getByTestId('period-openclose-period-001').click();
+    await requestPromise;
+  });
+});
+
+test.describe('Calendar — Cerrar Año guard', () => {
+  test('stays disabled while a period is still open', async ({ page }) => {
+    await login(page);
+    await installYearMock(page);
+    await installPeriodControlMock(page, [PERIOD_OPEN, PERIOD_CLOSED]);
+    await installDocumentsMock(page);
+    await installAccountingMock(page);
+    await page.goto('/calendar/year-001');
+    await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
+
+    await page.getByTestId('action-more').click();
+    await page.getByTestId('menu-action-closeYear').click();
+    await expect(page.getByTestId('close-year-confirm')).toBeDisabled();
+  });
+
+  test('enables once all periods are Closed or Permanently Closed', async ({ page }) => {
+    await login(page);
+    await installYearMock(page);
+    await installPeriodControlMock(page, [
+      { ...PERIOD_CLOSED, id: 'period-003', name: 'Mar-2027' },
+      { ...PERIOD_CLOSED, id: 'period-004', name: 'Apr-2027', status: 'P' },
+    ]);
+    await installDocumentsMock(page);
+    await installAccountingMock(page);
+    await page.goto('/calendar/year-001');
+    await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
+
+    await page.getByTestId('action-more').click();
+    await page.getByTestId('menu-action-closeYear').click();
+    await expect(page.getByTestId('close-year-confirm')).not.toBeDisabled();
+  });
+});

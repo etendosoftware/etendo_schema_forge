@@ -12,7 +12,7 @@ export default function CloseYearConfirmModal({ direction, isOpen, currentRecord
 
   useEffect(() => {
     if (!isOpen || !currentRecord?.id) return;
-    fetch(`${apiBaseUrl}/calendar/periodControl?year=${currentRecord.id}`, {
+    fetch(`${apiBaseUrl}/periodControl?year=${currentRecord.id}`, {
       headers: { Authorization: `Bearer ${token}` },
     })
       .then((res) => res.json())
@@ -26,7 +26,7 @@ export default function CloseYearConfirmModal({ direction, isOpen, currentRecord
     setSubmitting(true);
     try {
       const action = ACTION_BY_DIRECTION[direction];
-      await fetch(`${apiBaseUrl}/calendar/year/${currentRecord.id}/action/${action}`, {
+      await fetch(`${apiBaseUrl}/year/${currentRecord.id}/action/${action}`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({}),

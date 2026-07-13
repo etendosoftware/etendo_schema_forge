@@ -1,18 +1,18 @@
 import { useEffect, useState } from 'react';
 import { useUI } from '@/i18n';
 
-export default function AccountingPanel({ data, token, apiBaseUrl }) {
+export default function AccountingPanel({ parentId, token, apiBaseUrl }) {
   const ui = useUI();
   const [rows, setRows] = useState(null);
 
   useEffect(() => {
-    if (!data?.id) return;
-    fetch(`${apiBaseUrl}/calendar/accounting?year=${data.id}`, {
+    if (!parentId) return;
+    fetch(`${apiBaseUrl}/accounting?year=${parentId}`, {
       headers: { Authorization: `Bearer ${token}` },
     })
       .then((res) => res.json())
       .then((body) => setRows(body.data ?? []));
-  }, [data?.id, apiBaseUrl, token]);
+  }, [parentId, apiBaseUrl, token]);
 
   if (rows === null) return null;
   if (rows.length === 0) {

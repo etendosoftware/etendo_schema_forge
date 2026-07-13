@@ -28,7 +28,7 @@ describe('CloseYearConfirmModal', () => {
     await waitFor(() => expect(screen.getByTestId('close-year-confirm')).not.toBeDisabled());
     fireEvent.click(screen.getByTestId('close-year-confirm'));
     await waitFor(() => expect(global.fetch).toHaveBeenCalledWith(
-      'https://api.test/calendar/year/year1/action/closeYear',
+      'https://api.test/year/year1/action/closeYear',
       expect.objectContaining({ method: 'POST' })
     ));
     await waitFor(() => expect(onSaved).toHaveBeenCalled());

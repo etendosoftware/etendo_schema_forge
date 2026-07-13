@@ -21,7 +21,7 @@ describe('PeriodsExpandablePanel', () => {
   it('fetches document rows only after the period row is expanded', async () => {
     render(
       <PeriodsExpandablePanel
-        data={{ id: 'year1' }}
+        parentId="year1"
         token="tok"
         apiBaseUrl="https://api.test"
         data-testid="PeriodsExpandablePanel__test" />
@@ -41,12 +41,12 @@ describe('PeriodsExpandablePanel', () => {
       return Promise.reject(new Error('unexpected'));
     });
     const postSpy = vi.fn(() => Promise.resolve({ ok: true, json: () => Promise.resolve({}) }));
-    render(<PeriodsExpandablePanel data={{ id: 'year1' }} token="tok" apiBaseUrl="https://api.test" data-testid="p2" />);
+    render(<PeriodsExpandablePanel parentId="year1" token="tok" apiBaseUrl="https://api.test" data-testid="p2" />);
     await waitFor(() => screen.getByText('Jan-2027'));
     global.fetch = postSpy;
     fireEvent.click(screen.getByTestId('period-openclose-p1'));
     await waitFor(() => expect(postSpy).toHaveBeenCalledWith(
-      'https://api.test/calendar/periodControl/p1/action/openClose',
+      'https://api.test/periodControl/p1/action/openClose',
       expect.objectContaining({ method: 'POST' })
     ));
   });
