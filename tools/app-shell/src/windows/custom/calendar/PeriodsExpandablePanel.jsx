@@ -166,11 +166,15 @@ export default function PeriodsExpandablePanel({ parentId, token, apiBaseUrl }) 
     if (kind === 'period') {
       runAction(`period-${id}`, `${apiBaseUrl}/periodControl/${id}/action/openClose`, paramValues, loadPeriods);
     } else {
+      // A document's own status changing can flip its parent period's aggregate status too
+      // (e.g. "All Opened" -> "Mixed" once one document type differs from the rest — the
+      // same N/O/C/P/M rollup semantics as the period's own enumVariants) — so both the
+      // documents list AND the periods list must be refreshed, not just the former.
       runAction(
         `document-${id}`,
         `${apiBaseUrl}/documents/${id}/action/openClose`,
         paramValues,
-        () => loadDocumentsForPeriod(periodId)
+        () => Promise.all([loadDocumentsForPeriod(periodId), loadPeriods()])
       );
     }
   }, [dialogTarget, apiBaseUrl, runAction, loadPeriods, loadDocumentsForPeriod]);

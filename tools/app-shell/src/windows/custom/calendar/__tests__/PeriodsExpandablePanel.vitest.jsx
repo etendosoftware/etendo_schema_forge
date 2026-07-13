@@ -253,8 +253,13 @@ describe('PeriodsExpandablePanel', () => {
     expect(screen.queryByTestId('periods-expandable-panel-loading')).not.toBeInTheDocument();
   });
 
-  it('re-fetches only the affected period\'s documents (not the whole periods list) after a document action succeeds', async () => {
+  it('re-fetches BOTH the affected period\'s documents AND the periods list after a document action succeeds, updating the parent\'s aggregate badge too', async () => {
+    // A document's own status changing can flip its parent period's aggregate rollup too
+    // (e.g. "All Opened" -> "Mixed" once one document type differs from the rest — same
+    // N/O/C/P/M semantics as the period's own enumVariants), so both refetches are required,
+    // not just the documents one.
     const UPDATED_DOC = { ...DOC, periodStatus: 'C', 'periodStatus$_identifier': 'Closed' };
+    const UPDATED_PERIOD = { ...PERIOD, status: 'M', 'status$_identifier': 'Mixed' };
     let periodControlCallCount = 0;
     let documentsCallCount = 0;
     global.fetch = vi.fn((url, opts) => {
@@ -263,7 +268,8 @@ describe('PeriodsExpandablePanel', () => {
       }
       if (url.includes('/periodControl')) {
         periodControlCallCount += 1;
-        return Promise.resolve({ ok: true, json: () => Promise.resolve({ response: { data: [PERIOD] } }) });
+        const data = periodControlCallCount === 1 ? [PERIOD] : [UPDATED_PERIOD];
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ response: { data } }) });
       }
       if (url.includes('/documents')) {
         documentsCallCount += 1;
@@ -277,21 +283,24 @@ describe('PeriodsExpandablePanel', () => {
     fireEvent.click(screen.getByTestId('period-row-expand-p1'));
     await waitFor(() => screen.getByText('AP Credit Memo'));
     expect(documentsCallCount).toBe(1);
-    const periodControlCallsBeforeAction = periodControlCallCount;
+    expect(periodControlCallCount).toBe(1);
 
     fireEvent.click(screen.getByTestId('document-openclose-d1'));
     selectOpenCloseOption('C');
     fireEvent.click(screen.getByTestId('process-param-confirm'));
 
     await waitFor(() => expect(documentsCallCount).toBe(2));
+    await waitFor(() => expect(periodControlCallCount).toBe(2));
     await waitFor(() => {
-      const badge = screen.getByTestId(`document-status-${DOC.id}`).querySelector('[data-testid="tag"]');
-      expect(badge).toHaveTextContent('Closed');
-      expect(badge).toHaveAttribute('data-variant', 'red'); // periodStatus "C" -> red per enumVariants
+      const docBadge = screen.getByTestId(`document-status-${DOC.id}`).querySelector('[data-testid="tag"]');
+      expect(docBadge).toHaveTextContent('Closed');
+      expect(docBadge).toHaveAttribute('data-variant', 'red'); // periodStatus "C" -> red per enumVariants
     });
-    // Scoped refetch: only that period's documents were reloaded, the periods list itself
-    // (data the user didn't touch) was not re-fetched.
-    expect(periodControlCallCount).toBe(periodControlCallsBeforeAction);
+    await waitFor(() => {
+      const periodBadge = screen.getByTestId(`period-status-${PERIOD.id}`).querySelector('[data-testid="tag"]');
+      expect(periodBadge).toHaveTextContent('Mixed');
+      expect(periodBadge).toHaveAttribute('data-variant', 'orange'); // status "M" -> orange per enumVariants
+    });
   });
 
   it('cancelling the dialog does not submit any request', async () => {
