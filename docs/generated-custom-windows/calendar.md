@@ -92,6 +92,33 @@ unchanged — this is a Schema Forge-side consolidation, not an AD data migratio
 - Period metadata fields (`periodNo`, `name`, `startingDate`, `endingDate`, `periodType`) are
   classified `readOnly` — the Periods tab is a status/confirmation view, not a metadata editor.
 
+## Loading, error, and double-submit UX (Periods/Accounting panels)
+`AccountingPanel.jsx` and `PeriodsExpandablePanel.jsx` each track three distinct states for their
+fetched data — never just "empty vs loaded":
+- **Loading** (`rows`/`periods === undefined`, the initial/in-flight state) — a `{ui('loading')}`
+  placeholder (`data-testid="accounting-panel-loading"` / `"periods-expandable-panel-loading"`).
+- **Error** (`=== null`, set in the fetch's `.catch()` on a non-2xx response or network failure) —
+  a destructive-styled message (`ui('accountingLoadError')` / `ui('periodsLoadError')`,
+  `data-testid="accounting-panel-error"` / `"periods-expandable-panel-error"`). A failed fetch is
+  never silently relabeled as "no rows" — conflating the two would hide real outages behind an
+  innocuous-looking empty state.
+- **Loaded** — an array, rendered as the table/list even when empty (`AccountingPanel` shows a
+  distinct `accounting-panel-empty` state for a loaded-but-zero-rows year; `PeriodsExpandablePanel`
+  just renders no rows).
+
+`PeriodsExpandablePanel` applies the same three-state pattern independently to each period's
+expanded document list (`documentsByPeriod[periodId]` / `documentsError[periodId]`, testid
+`period-documents-error-{id}`) — expanding one period's error state does not affect any other
+period's rows.
+
+**Double-submit guard:** every **Abrir/Cerrar Periodo** / **Abrir/Cerrar Documento** button is
+disabled while its own action request is in flight, tracked in a `pendingActions` map keyed by
+`period-{id}` / `document-{id}` (so one period's pending action never disables a sibling's
+button). A failed action surfaces a `toast.error(...)` (message from the response error, falling
+back to `ui('networkError')`) rather than leaving the UI in a silent stuck state; the button
+re-enables in the `finally` block regardless of success or failure. `CloseYearConfirmModal` uses
+the same `submitting` boolean pattern to disable its own confirm button during the request.
+
 ## Field reference
 
 ### year entity (C_Year — header)
@@ -178,6 +205,14 @@ unchanged — this is a Schema Forge-side consolidation, not an AD data migratio
     but its confirm button is disabled.
 12. Close/Permanently-close every period, reopen the kebab menu, confirm **Cerrar Año**'s confirm
     button is now enabled, and confirm it posts to `/calendar/year/{id}/action/closeYear`.
+13. Force the `accounting` request to fail (e.g. block the network request in devtools) and
+    confirm the Accounting tab shows the error message, not a blank panel or a false "no entries".
+14. Force the `periodControl` request to fail and confirm the Periods tab shows its own error
+    message; then restore the network and confirm expanding a period whose `documents` request
+    fails shows that period's own error line without affecting other periods.
+15. Double-click **Abrir/Cerrar Periodo** (or throttle the network to make the click visibly
+    slow) and confirm the button disables immediately and re-enables only after the request
+    settles — a second click during the pending window must not fire a second request.
 
 ## Automated evidence
 - `tools/app-shell/src/menu.json` exposes `calendar` in the Finance group (`windowId: "117"`);
@@ -192,7 +227,10 @@ unchanged — this is a Schema Forge-side consolidation, not an AD data migratio
   the hand-written `index.jsx` which adds `secondaryTabs` for Periods/Accounting.
 - `tools/app-shell/src/windows/custom/calendar/PeriodsExpandablePanel.jsx`,
   `AccountingPanel.jsx`, `CloseYearConfirmModal.jsx` (+ `CloseYearModal.jsx`/
-  `UndoCloseYearModal.jsx` wrappers) — hand-written custom components, each with a Vitest suite.
+  `UndoCloseYearModal.jsx` wrappers) — hand-written custom components, each with a Vitest suite
+  (`__tests__/AccountingPanel.vitest.jsx`, `__tests__/PeriodsExpandablePanel.vitest.jsx`,
+  `__tests__/CloseYearConfirmModal.vitest.jsx`, `__tests__/index.vitest.jsx`) covering the
+  loading/error/empty states and the per-row double-submit guard, not just the happy path.
 - `e2e/tests/flows/calendar.mocked.spec.js` — mocked E2E coverage: Finance menu shows only
   Calendar, Accounting/Periods tabs render, period expand reveals documents, Abrir/Cerrar Periodo
   hits the mocked action endpoint, Cerrar Año stays disabled until all periods are closed.
