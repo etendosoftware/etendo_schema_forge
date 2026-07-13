@@ -513,9 +513,11 @@ Título "Connect with Claude" + los 4 pasos genéricos existentes (`oauthStep1`-
       selector + tabs en `AuthorizePage.jsx` (componente `ConnectionsLanding`), dar de alta las
       claves i18n nuevas en `en_US.json` + `es_ES.json`, y seguir el pipeline normal
       (DEV → REVIEW → QA → DOCS).
-- [ ] **(OPCIONAL, etapa final) Migrar `ConnectionsLanding`/`AuthorizePage.jsx` a
-      `schema_forge_core`.** No decidido si se hace en esta tarea o en una posterior — se deja
-      documentado para no perder el análisis. Justificación: es un flujo genérico igual para todos
+- [x] **(OPCIONAL, etapa final) Migrar `ConnectionsLanding`/`AuthorizePage.jsx` a
+      `schema_forge_core`.** ✅ EN EJECUCIÓN bajo ETP-4394 (2026-07-13): pasos 0–5 completos, solo
+      falta el Paso 6 (release + bump, lo gestiona el usuario). Ver el bloque "🚧 ESTADO DE EJECUCIÓN"
+      en la sección "Procedimiento concreto de migración a core" más abajo. Justificación original: es
+      un flujo genérico igual para todos
       los clientes (no es "per-client config"), por lo que conceptualmente encaja mejor en el
       charter de core ("HOW the tooling works") que en el de funcional ("WHAT to expose, per
       client").
@@ -565,6 +567,44 @@ Título "Connect with Claude" + los 4 pasos genéricos existentes (`oauthStep1`-
 > decida encararla — es el "paso opcional de hardening" de la recomendación de arriba, ya
 > operacionalizado. No ejecutar sin abrir su propia tarea Jira.
 
+> **🚧 ESTADO DE EJECUCIÓN (2026-07-13 — ETP-4394):** la migración a core SE ESTÁ EJECUTANDO en
+> esta tarea. **Pasos 0–5 COMPLETOS y verdes; solo falta el Paso 6 (release + bump), que lo dispara
+> el usuario.** Detalle por paso más abajo (cada uno marcado ✅/⏳). Resumen:
+>
+> - ✅ **Paso 0 — Tabs** en core (`components/ui/tabs.jsx`), test huérfano ahora verde (8/8). Shim en funcional.
+> - ✅ **Paso 1 — CopyButton/CopyBlock** en core, test copiado (6/6). Shim en funcional.
+> - ✅ **Paso 2 — Seam de observability** en core (opción A): `observability/ObservabilityContext.jsx`
+>   con `ObservabilityProvider` + `useObservability()` y **default no-op**. Test 2/2. Export `./observability`.
+> - ✅ **Paso 3 — `mcpClients.js`** en core (`lib/mcpClients.js`, módulo puro), test copiado como
+>   `*.vitest.js` (core lib 21/21). Shim en funcional. Export `./lib/*`.
+> - ✅ **Paso 4 — `AuthorizePage.jsx`** en core (`pages/AuthorizePage.jsx`): imports reapuntados a
+>   rutas relativas de core; telemetría consumida vía `useObservability()` (seam del Paso 2, sin fuga
+>   de `mcpConnectTelemetry` a core — grep limpio); export `./pages/*`. Shim de re-export en funcional
+>   (`runtime-routes.jsx` sin cambios). Host wrap en `App.jsx`: `<ObservabilityProvider value={{ trackMcpConnectTabSelected }}>`
+>   envuelve `<AppShellRuntime>` e inyecta el tracking real de dominio. Test copiado a core (23/23).
+>   El test original de funcional se reescribió como **smoke-test de shim** (2/2, full-mount con
+>   `AuthProvider` + `ObservabilityProvider` reales de core) — decisión del usuario, porque sus mocks
+>   `@/` ya no interceptaban los imports relativos de la página en core (`useAuth` estricto lanzaba).
+> - ✅ **Paso 5 — i18n:** verificado. Todas las claves que la página usa (literales + `oauthConnectTab<Id>`
+>   dinámicos de 8 clientes + 2 sub-tabs) existen en `en_US` y `es_ES` con paridad `oauth*` perfecta.
+>   Los diccionarios se quedan en funcional (core es resolver; el host inyecta vía `LocaleProvider`).
+>   (Nota: hay 24 claves no-`oauth*` solo en `es_ES` — desbalance preexistente del repo, fuera de alcance.)
+> - ⏳ **Paso 6 — Release + bump: PENDIENTE (lo gestiona el usuario).** Publicar core primero, luego
+>   bumpear el pin `@etendosoftware/app-shell-core` (`0.3.5` → nueva) en funcional. Cierra el "peaje"
+>   de todos los shims a la vez.
+>
+> **Verificación:** todo verde bajo `LOCAL_CORE=1` (el perfil de dev). En build default (paquete
+> publicado) los shims de exports NUEVOS (`observability`, `lib/mcpClients`, `pages/AuthorizePage`)
+> recién resuelven tras el Paso 6 — es el peaje conocido, no una regresión.
+>
+> **Excepción del peaje — `mcpClients.test.js`:** el test original de funcional para `mcpClients` es
+> **node:test** (no vitest), y el alias `LOCAL_CORE` es un resolver de vite/vitest → node no lo usa.
+> Ese test resuelve el shim contra el paquete publicado y recién pasa a verde tras el Paso 6. Su
+> lógica está cubierta mientras tanto por la copia en core (`mcpClients.vitest.js`, 21/21).
+>
+> **Jira relacionada:** ETP-4484 (`plataforma`) — migrar la librería de observability completa a core
+> (el sink Mixpanel + catálogo de eventos), creada como follow-up y colgada de la epic ETP-3504.
+
 ### Actualización del análisis previo (lo que cambió respecto a la investigación de arriba)
 
 Dos supuestos de la investigación original quedaron **desactualizados** al implementar:
@@ -594,21 +634,25 @@ Bloqueantes reales que quedan (confirmados contra el árbol de core, 2026-07-08)
 
 ### Orden de ejecución (cada paso es su propio PR en core, en este orden)
 
-**Paso 0 — Migrar `Tabs` a core** (`packages/app-shell-core/src/components/ui/tabs.jsx`).
+**Paso 0 — Migrar `Tabs` a core** ✅ HECHO (2026-07-13) (`packages/app-shell-core/src/components/ui/tabs.jsx`).
 Es hand-built (no Radix), su única dependencia es `cn` de `@/lib/utils` → en core es `./lib/utils`
 o el `utils.js` que ya existe ahí. Ya hay un test huérfano (`tabs.vitest.jsx`) esperando la
 implementación — al migrar el componente ese test empieza a pasar. Dejar en `schema_forge` un shim
 `tools/app-shell/src/components/ui/tabs.jsx` = `export * from '@etendosoftware/app-shell-core/components/ui/tabs.jsx'`
 (mismo patrón que auth/i18n) para no tocar a los otros consumidores locales (`DetailTabs.jsx`).
 
-**Paso 1 — Migrar `CopyButton`/`CopyBlock` a core**
+**Paso 1 — Migrar `CopyButton`/`CopyBlock` a core** ✅ HECHO (2026-07-13)
 (`packages/app-shell-core/src/components/ui/copy-button.jsx`). Depende de `Button`, `cn`, `toast`
 (sonner, ya en core) y `useUI`/`ui('copied')`. Mover el componente + su test
 (`copy-button.vitest.jsx`, ya escrito y verde con el fix de `userEvent.setup({ writeToClipboard:
 false })`). Shim de re-export en `schema_forge` igual que Tabs. La clave i18n `copied` ya la resuelve
 el host.
 
-**Paso 2 — Definir el seam de observability en core** (el bloqueante de fondo).
+**Paso 2 — Definir el seam de observability en core** ✅ HECHO (2026-07-13) — se implementó la
+**opción (A) Inyección por contexto**: `packages/app-shell-core/src/observability/ObservabilityContext.jsx`
+(`ObservabilityProvider` + `useObservability()`, default no-op) + barrel `index.js` + export `./observability`.
+Test `observability-context.vitest.jsx` (2/2). El sink Mixpanel + catálogo de eventos se quedan en
+el host (funcional); solo migró la *invocación*. (Detalle de diseño original abajo.)
 `mcpConnectTelemetry.js` importa `@/lib/observability.js` (que expone `track`) + `observability/events.js`
 (catálogo `OBSERVABILITY_EVENTS` + `buildObservabilityEvent`), y todo eso vive en
 `schema_forge/tools/app-shell/src/lib/observability/` — que core **no puede importar** (invierte la
@@ -625,13 +669,17 @@ dirección de dependencia funcional→core). Dos opciones:
     `SAFE_EVENT_PROPERTY_KEYS`, `payload.js`) se quedan en el host, porque el pipeline Mixpanel es
     del host. Solo migra la *invocación*, no el sink.
 
-**Paso 3 — Migrar `mcpClients.js` a core** (`packages/app-shell-core/src/lib/mcpClients.js`).
+**Paso 3 — Migrar `mcpClients.js` a core** ✅ HECHO (2026-07-13) (`packages/app-shell-core/src/lib/mcpClients.js`).
 Es JS puro sin dependencias de entorno (`deriveServerName`, `buildMcpClients`, helpers de deep link
 con `btoa`/`encodeURIComponent`). Mover el archivo + su test node (`mcpClients.test.js`, 21 casos).
 Shim de re-export en el host. `detectMcpUrl()`/`detectBaseUrl()` **no** se migran acá: son helpers de
 `AuthorizePage` (usan `window.location`), viajan con la página en el Paso 4.
 
-**Paso 4 — Migrar `AuthorizePage.jsx` (`ConnectionsLanding` + `McpInstructions`) a core.**
+**Paso 4 — Migrar `AuthorizePage.jsx` (`ConnectionsLanding` + `McpInstructions`) a core.** ✅ HECHO (2026-07-13).
+Nota de ejecución: el test original de funcional se reescribió como **smoke-test de shim** (full-mount
+con providers reales de core), no se conservó tal cual — sus mocks `@/` dejaron de interceptar los
+imports relativos de la página en core (`useAuth` estricto lanzaba `useAuth must be used within AuthProvider`).
+La cobertura de comportamiento (23 casos) vive ahora en la copia de core.
   - Crear `packages/app-shell-core/src/pages/` (no existe) y mover el archivo.
   - Reapuntar imports internos: `@/auth/...`→`../auth/...`, `@/i18n`→`../i18n`, `@/components/ui/*`→
     `../components/ui/*`, `@/lib/mcpClients.js`→`../lib/mcpClients.js`, y la telemetría al seam del
@@ -651,12 +699,13 @@ Shim de re-export en el host. `detectMcpUrl()`/`detectBaseUrl()` **no** se migra
     autocontenidos y funcionan igual servidos desde core. O sea la página se migra como UNA sola
     unidad — no hay que partir landing y consentimiento.
 
-**Paso 5 — i18n.** No mover el JSON. Verificar que las claves `oauthConnect*` (incluidas las 5
+**Paso 5 — i18n.** ✅ HECHO (2026-07-13) — verificado: paridad `oauth*` perfecta entre `en_US`/`es_ES`
+y todas las claves usadas (literales + `oauthConnectTab<Id>` dinámicos) presentes en ambos. No mover el JSON. Verificar que las claves `oauthConnect*` (incluidas las 5
 nuevas de la tab "Otros": `oauthConnectOtherAutoHeading/ManualHeading/Step1..3`) siguen en los 3
 locales del host y que el `LocaleProvider` las inyecta. Agregar una nota en
 `docs/repo-topology.md`: "las claves de una página que vive en core pueden seguir en el host".
 
-**Paso 6 — Release + bump (el "peaje" de latencia).**
+**Paso 6 — Release + bump (el "peaje" de latencia).** ⏳ PENDIENTE (2026-07-13 — lo gestiona el usuario).
 `publish-private-packages.yml` es `workflow_dispatch` (release manual de core) → `bump-core-on-release.yml`
 abre el PR de bump del pin en `schema_forge` (merge humano) → recién ahí live. Durante desarrollo,
 validar todo el encadenamiento con `LOCAL_CORE=1` / `make dev-local-core` antes de publicar, para no

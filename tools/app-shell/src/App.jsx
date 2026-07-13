@@ -3,6 +3,8 @@ import { createPortal } from 'react-dom';
 import { Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { AppShellRuntime } from '@etendosoftware/app-shell-core/runtime';
+import { ObservabilityProvider } from '@etendosoftware/app-shell-core/observability';
+import { trackMcpConnectTabSelected } from '@/lib/mcpConnectTelemetry.js';
 import AppLayout from './layout/AppLayout.jsx';
 import { buildMenuGroups, buildWindowMap } from './windows/registry.js';
 import { buildRuntimeRoutes } from './runtime-routes.jsx';
@@ -199,21 +201,23 @@ export default function App() {
   const routes = buildRuntimeRoutes({ windowMap, apiBaseUrl: API_BASE_URL });
 
   return (
-    <AppShellRuntime
-      basename={routerBase}
-      menuGroups={menuGroups}
-      routes={routes}
-      layout={AppLayout}
-      auth={{ loginPath: '/login', unauthenticatedFallback: <UnauthenticatedRedirect data-testid="UnauthenticatedRedirect__ecaf3f" /> }}
-      locale={locale}
-      setLocale={setLocale}
-      dictionaries={dictionaries}
-      notFoundElement={<div className="p-8 text-muted-foreground">Loading...</div>}
-      data-testid="AppShellRuntime__ecaf3f">
-      <ObservabilityRouteTracker data-testid="ObservabilityRouteTracker__ecaf3f" />
-      <ServiceWorkerManager data-testid="ServiceWorkerManager__ecaf3f" />
-      <AppStoreKeyWatcher data-testid="AppStoreKeyWatcher__ecaf3f" />
-      <SurveyManager data-testid="SurveyManager__ecaf3f" />
-    </AppShellRuntime>
+    <ObservabilityProvider value={{ trackMcpConnectTabSelected }}>
+      <AppShellRuntime
+        basename={routerBase}
+        menuGroups={menuGroups}
+        routes={routes}
+        layout={AppLayout}
+        auth={{ loginPath: '/login', unauthenticatedFallback: <UnauthenticatedRedirect data-testid="UnauthenticatedRedirect__ecaf3f" /> }}
+        locale={locale}
+        setLocale={setLocale}
+        dictionaries={dictionaries}
+        notFoundElement={<div className="p-8 text-muted-foreground">Loading...</div>}
+        data-testid="AppShellRuntime__ecaf3f">
+        <ObservabilityRouteTracker data-testid="ObservabilityRouteTracker__ecaf3f" />
+        <ServiceWorkerManager data-testid="ServiceWorkerManager__ecaf3f" />
+        <AppStoreKeyWatcher data-testid="AppStoreKeyWatcher__ecaf3f" />
+        <SurveyManager data-testid="SurveyManager__ecaf3f" />
+      </AppShellRuntime>
+    </ObservabilityProvider>
   );
 }
