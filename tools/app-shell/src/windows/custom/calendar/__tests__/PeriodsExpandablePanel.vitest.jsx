@@ -10,8 +10,44 @@ vi.mock('@/components/ui/tag', () => ({
   Tag: ({ label, variant }) => <span data-testid="tag" data-variant={variant}>{label}</span>,
 }));
 
+// PeriodsExpandablePanel renders the real (unmocked) ProcessParamDialog to collect the
+// required openClose choice — but Radix Select cannot run in JSDOM, so its underlying UI
+// primitives are mocked with plain HTML equivalents, exactly like ProcessParamDialog.vitest.jsx
+// does. process-param-* testids/values (not translated label text) drive the interaction below,
+// so these tests don't depend on a LocaleProvider being present.
+vi.mock('@/components/ui/dialog.jsx', () => ({
+  Dialog: ({ children, open }) => (open ? <div data-testid="dialog">{children}</div> : null),
+  DialogContent: ({ children }) => <div>{children}</div>,
+  DialogHeader: ({ children }) => <div>{children}</div>,
+  DialogTitle: ({ children }) => <h2 data-testid="process-param-dialog-title">{children}</h2>,
+  DialogFooter: ({ children }) => <div>{children}</div>,
+}));
+vi.mock('@/components/ui/button', () => ({
+  Button: ({ children, onClick, disabled, ...props }) => (
+    <button onClick={onClick} disabled={disabled} {...props}>{children}</button>
+  ),
+}));
+vi.mock('@/components/ui/label', () => ({
+  Label: ({ children, ...props }) => <label {...props}>{children}</label>,
+}));
+vi.mock('@/components/ui/select', () => ({
+  Select: ({ children, value, onValueChange }) => (
+    <select value={value ?? ''} onChange={(e) => onValueChange?.(e.target.value)} data-testid="select-control">
+      {children}
+    </select>
+  ),
+  SelectTrigger: ({ children, ...props }) => <span {...props}>{children}</span>,
+  SelectValue: () => null,
+  SelectContent: ({ children }) => <>{children}</>,
+  SelectItem: ({ children, value }) => <option value={value}>{children}</option>,
+}));
+
 import { toast } from 'sonner';
 import PeriodsExpandablePanel from '../PeriodsExpandablePanel.jsx';
+
+function selectOpenCloseOption(value) {
+  fireEvent.change(screen.getByTestId('select-control'), { target: { value } });
+}
 
 const PERIOD = { id: 'p1', name: 'Jan-2027', status: 'O', 'status$_identifier': 'All Opened', periodNo: 1 };
 const DOC = {
@@ -105,34 +141,94 @@ describe('PeriodsExpandablePanel', () => {
     expect(global.fetch).not.toHaveBeenCalledWith(expect.stringContaining('/periodControl?year='), expect.anything());
   });
 
-  it('calls the period openClose endpoint when Abrir/Cerrar Periodo is clicked', async () => {
-    global.fetch.mockImplementationOnce((url) => {
-      if (url.includes('/periodControl')) return Promise.resolve({ ok: true, json: () => Promise.resolve({ response: { data: [PERIOD] } }) });
-      return Promise.reject(new Error('unexpected'));
-    });
+  it('opens the ProcessParamDialog (not an immediate POST) when Abrir/Cerrar Periodo is clicked', async () => {
     const postSpy = vi.fn(() => Promise.resolve({ ok: true, json: () => Promise.resolve({}) }));
     render(<PeriodsExpandablePanel parentId="year1" token="tok" apiBaseUrl="https://api.test" data-testid="p2" />);
     await waitFor(() => screen.getByText('Jan-2027'));
     global.fetch = postSpy;
+
     fireEvent.click(screen.getByTestId('period-openclose-p1'));
-    await waitFor(() => expect(postSpy).toHaveBeenCalledWith(
-      'https://api.test/periodControl/p1/action/openClose',
-      expect.objectContaining({ method: 'POST' })
-    ));
+
+    expect(screen.getByTestId('dialog')).toBeInTheDocument();
+    expect(postSpy).not.toHaveBeenCalled();
   });
 
-  it('calls the document openClose endpoint when Abrir/Cerrar Documento is clicked', async () => {
+  it.each([
+    ['O', 'Open'],
+    ['C', 'Closed'],
+    ['P', 'Permanently closed'],
+  ])('submits {"openClose": "%s"} for the period action when "%s" is selected and confirmed', async (value, _label) => {
+    const postSpy = vi.fn(() => Promise.resolve({ ok: true, json: () => Promise.resolve({}) }));
+    render(<PeriodsExpandablePanel parentId="year1" token="tok" apiBaseUrl="https://api.test" data-testid="p2" />);
+    await waitFor(() => screen.getByText('Jan-2027'));
+    global.fetch = postSpy;
+
+    fireEvent.click(screen.getByTestId('period-openclose-p1'));
+    selectOpenCloseOption(value);
+    fireEvent.click(screen.getByTestId('process-param-confirm'));
+
+    await waitFor(() => expect(postSpy).toHaveBeenCalledWith(
+      'https://api.test/periodControl/p1/action/openClose',
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({ fieldValues: { openClose: value } }),
+      })
+    ));
+    // The dialog must close after a successful confirm, not linger on screen.
+    expect(screen.queryByTestId('dialog')).not.toBeInTheDocument();
+  });
+
+  it('opens the ProcessParamDialog (not an immediate POST) when Abrir/Cerrar Documento is clicked', async () => {
     const postSpy = vi.fn(() => Promise.resolve({ ok: true, json: () => Promise.resolve({}) }));
     render(<PeriodsExpandablePanel parentId="year1" token="tok" apiBaseUrl="https://api.test" data-testid="p3" />);
     await waitFor(() => screen.getByText('Jan-2027'));
     fireEvent.click(screen.getByTestId('period-row-expand-p1'));
     await waitFor(() => screen.getByText('AP Credit Memo'));
     global.fetch = postSpy;
+
     fireEvent.click(screen.getByTestId('document-openclose-d1'));
+
+    expect(screen.getByTestId('dialog')).toBeInTheDocument();
+    expect(postSpy).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['O', 'Open'],
+    ['C', 'Closed'],
+    ['P', 'Permanently closed'],
+  ])('submits {"openClose": "%s"} for the document action when "%s" is selected and confirmed', async (value, _label) => {
+    const postSpy = vi.fn(() => Promise.resolve({ ok: true, json: () => Promise.resolve({}) }));
+    render(<PeriodsExpandablePanel parentId="year1" token="tok" apiBaseUrl="https://api.test" data-testid="p3" />);
+    await waitFor(() => screen.getByText('Jan-2027'));
+    fireEvent.click(screen.getByTestId('period-row-expand-p1'));
+    await waitFor(() => screen.getByText('AP Credit Memo'));
+    global.fetch = postSpy;
+
+    fireEvent.click(screen.getByTestId('document-openclose-d1'));
+    selectOpenCloseOption(value);
+    fireEvent.click(screen.getByTestId('process-param-confirm'));
+
     await waitFor(() => expect(postSpy).toHaveBeenCalledWith(
       'https://api.test/documents/d1/action/openClose',
-      expect.objectContaining({ method: 'POST' })
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({ fieldValues: { openClose: value } }),
+      })
     ));
+    expect(screen.queryByTestId('dialog')).not.toBeInTheDocument();
+  });
+
+  it('cancelling the dialog does not submit any request', async () => {
+    const postSpy = vi.fn(() => Promise.resolve({ ok: true, json: () => Promise.resolve({}) }));
+    render(<PeriodsExpandablePanel parentId="year1" token="tok" apiBaseUrl="https://api.test" data-testid="p3b" />);
+    await waitFor(() => screen.getByText('Jan-2027'));
+    global.fetch = postSpy;
+
+    fireEvent.click(screen.getByTestId('period-openclose-p1'));
+    fireEvent.click(screen.getByTestId('process-param-cancel'));
+
+    expect(screen.queryByTestId('dialog')).not.toBeInTheDocument();
+    expect(postSpy).not.toHaveBeenCalled();
   });
 
   it('collapses the period row again on a second click without re-fetching documents', async () => {
@@ -188,6 +284,9 @@ describe('PeriodsExpandablePanel', () => {
     await waitFor(() => screen.getByText('Jan-2027'));
 
     fireEvent.click(screen.getByTestId('period-openclose-p1'));
+    selectOpenCloseOption('C');
+    fireEvent.click(screen.getByTestId('process-param-confirm'));
+
     await waitFor(() => expect(toast.error).toHaveBeenCalled());
     await waitFor(() => expect(screen.getByTestId('period-openclose-p1')).not.toBeDisabled());
   });
@@ -206,13 +305,38 @@ describe('PeriodsExpandablePanel', () => {
 
     const button = screen.getByTestId('period-openclose-p1');
     fireEvent.click(button);
+    selectOpenCloseOption('C');
+    fireEvent.click(screen.getByTestId('process-param-confirm'));
     await waitFor(() => expect(button).toBeDisabled());
 
+    // The dialog already closed on confirm — a disabled native <button> does not dispatch
+    // click handlers at all (jsdom mirrors real browser behavior), so these are no-ops.
     fireEvent.click(button);
     fireEvent.click(button);
     expect(postSpy).toHaveBeenCalledTimes(1);
 
     resolvePost({ ok: true, json: () => Promise.resolve({}) });
     await waitFor(() => expect(button).not.toBeDisabled());
+  });
+
+  it('confirming again while the previous request for the same row is still pending does not open a second dialog', async () => {
+    let resolvePost;
+    const postSpy = vi.fn(() => new Promise((resolve) => { resolvePost = resolve; }));
+    render(<PeriodsExpandablePanel parentId="year1" token="tok" apiBaseUrl="https://api.test" data-testid="p9b" />);
+    await waitFor(() => screen.getByText('Jan-2027'));
+    global.fetch = postSpy;
+
+    fireEvent.click(screen.getByTestId('period-openclose-p1'));
+    selectOpenCloseOption('P');
+    fireEvent.click(screen.getByTestId('process-param-confirm'));
+    await waitFor(() => expect(screen.getByTestId('period-openclose-p1')).toBeDisabled());
+
+    // The trigger button is disabled while pending, so re-clicking it must not reopen the dialog.
+    fireEvent.click(screen.getByTestId('period-openclose-p1'));
+    expect(screen.queryByTestId('dialog')).not.toBeInTheDocument();
+    expect(postSpy).toHaveBeenCalledTimes(1);
+
+    resolvePost({ ok: true, json: () => Promise.resolve({}) });
+    await waitFor(() => expect(screen.getByTestId('period-openclose-p1')).not.toBeDisabled());
   });
 });

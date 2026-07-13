@@ -3,12 +3,38 @@ import { ChevronRight, ChevronDown } from 'lucide-react';
 import { toast } from 'sonner';
 import { useUI } from '@/i18n';
 import { Tag } from '@/components/ui/tag';
+import { ProcessParamDialog } from '@/components/contract-ui/ProcessParamDialog';
 
 // Same color mapping as artifacts/open-close-period-control/decisions.json's
 // periodControl.status / documents.periodStatus enumVariants — kept in sync manually
 // since this is a custom component, not generator-driven output.
 const PERIOD_STATUS_VARIANTS = { O: 'green', N: 'neutral', C: 'neutral', P: 'red', M: 'orange' };
 const DOCUMENT_STATUS_VARIANTS = { O: 'green', N: 'neutral', C: 'red', P: 'red' };
+
+// openClose is not a simple toggle — it's a required 3-state choice (Open/Closed/Permanently
+// closed). The backend (PeriodOpenCloseHandler / PeriodControlDocOpenCloseHandler) rejects a
+// request with no `fieldValues.openClose` (400 "Missing required parameter: openClose").
+// These mirror, key-for-key and option-for-option, the `params` already declared in
+// artifacts/open-close-period-control/decisions.json's `window.processOverrides.openClose` —
+// kept in sync manually since this is a hand-written custom panel, not generator output.
+// `ProcessParamDialog` (the same generic dialog DetailView's process buttons already use) is
+// reused as-is: its prop contract (`open`, `onOpenChange`, `process`, `onConfirm`) has no
+// dependency on DetailView/useEntity internals, so any `{label, params}`-shaped object works.
+const OPEN_CLOSE_PARAMS = [
+  {
+    key: 'openClose',
+    type: 'select',
+    label: 'Action',
+    required: true,
+    options: [
+      { value: 'O', label: 'Open' },
+      { value: 'C', label: 'Closed' },
+      { value: 'P', label: 'Permanently closed' },
+    ],
+  },
+];
+const PERIOD_OPEN_CLOSE_PROCESS = { label: 'Open Close Period', params: OPEN_CLOSE_PARAMS };
+const DOCUMENT_OPEN_CLOSE_PROCESS = { label: 'Open Close Document', params: OPEN_CLOSE_PARAMS };
 
 // periodControl's LIST endpoint goes through NEO's generic DefaultJsonDataService (classic
 // Openbravo datasource), which does NOT support arbitrary `fieldName=value` query params — a
@@ -29,11 +55,13 @@ async function fetchJson(url, token) {
   return body?.response?.data ?? (Array.isArray(body) ? body : []);
 }
 
-async function postAction(url, token) {
+async function postAction(url, token, fieldValues) {
   const res = await fetch(url, {
     method: 'POST',
     headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({}),
+    // Matches useEntity.js's handleProcess body shape exactly — the backend reads the chosen
+    // value via context.getRequestBody().optJSONObject("fieldValues").optString("openClose").
+    body: JSON.stringify({ fieldValues }),
   });
   if (!res.ok) throw new Error(`Action failed: ${res.status}`);
   return res.json();
@@ -51,6 +79,10 @@ export default function PeriodsExpandablePanel({ parentId, token, apiBaseUrl }) 
   // triggering button while its request is in flight, guarding against double-submission
   // on rapid double-click (matching CloseYearConfirmModal's `submitting` pattern).
   const [pendingActions, setPendingActions] = useState({});
+  // Which row's open/close dialog is currently open, if any: { kind: 'period'|'document', id }.
+  // Clicking "Abrir/Cerrar Periodo"/"Abrir/Cerrar Documento" no longer fires the POST directly —
+  // openClose is a required 3-state choice, not a toggle, so the choice must be collected first.
+  const [dialogTarget, setDialogTarget] = useState(null);
 
   useEffect(() => {
     if (!parentId) return;
@@ -77,13 +109,13 @@ export default function PeriodsExpandablePanel({ parentId, token, apiBaseUrl }) 
     }
   }, [expandedId, documentsByPeriod, apiBaseUrl, token]);
 
-  const runAction = useCallback(async (key, url) => {
+  const runAction = useCallback(async (key, url, fieldValues) => {
     setPendingActions((prev) => {
       if (prev[key]) return prev;
       return { ...prev, [key]: true };
     });
     try {
-      await postAction(url, token);
+      await postAction(url, token, fieldValues);
     } catch (err) {
       toast.error(err?.message || ui('networkError'));
     } finally {
@@ -91,13 +123,28 @@ export default function PeriodsExpandablePanel({ parentId, token, apiBaseUrl }) 
     }
   }, [token, ui]);
 
+  // Opens the shared ProcessParamDialog instead of firing the request directly — the actual
+  // POST happens in handleDialogConfirm once the user picks Open/Closed/Permanently closed.
   const openClosePeriod = useCallback((periodId) => {
-    runAction(`period-${periodId}`, `${apiBaseUrl}/periodControl/${periodId}/action/openClose`);
-  }, [apiBaseUrl, runAction]);
+    setDialogTarget({ kind: 'period', id: periodId });
+  }, []);
 
   const openCloseDocument = useCallback((documentId) => {
-    runAction(`document-${documentId}`, `${apiBaseUrl}/documents/${documentId}/action/openClose`);
-  }, [apiBaseUrl, runAction]);
+    setDialogTarget({ kind: 'document', id: documentId });
+  }, []);
+
+  const handleDialogConfirm = useCallback((paramValues) => {
+    if (!dialogTarget) return;
+    const { kind, id } = dialogTarget;
+    setDialogTarget(null);
+    if (kind === 'period') {
+      runAction(`period-${id}`, `${apiBaseUrl}/periodControl/${id}/action/openClose`, paramValues);
+    } else {
+      runAction(`document-${id}`, `${apiBaseUrl}/documents/${id}/action/openClose`, paramValues);
+    }
+  }, [dialogTarget, apiBaseUrl, runAction]);
+
+  const dialogProcess = dialogTarget?.kind === 'document' ? DOCUMENT_OPEN_CLOSE_PROCESS : PERIOD_OPEN_CLOSE_PROCESS;
 
   if (periods === undefined) {
     return <div data-testid="periods-expandable-panel-loading" className="p-4 text-sm text-muted-foreground">{ui('loading')}</div>;
@@ -174,6 +221,12 @@ export default function PeriodsExpandablePanel({ parentId, token, apiBaseUrl }) 
           </div>
         );
       })}
+      <ProcessParamDialog
+        open={!!dialogTarget}
+        onOpenChange={(next) => { if (!next) setDialogTarget(null); }}
+        process={dialogProcess}
+        onConfirm={handleDialogConfirm}
+      />
     </div>
   );
 }
