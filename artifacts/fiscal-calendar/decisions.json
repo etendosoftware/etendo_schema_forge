@@ -24,6 +24,10 @@
         ]
       }
     },
+    "menuActions": [
+      { "key": "closeYear", "labelKey": "closeYearTitle", "component": "CloseYearModal" },
+      { "key": "undoCloseYear", "labelKey": "undoCloseYearTitle", "component": "UndoCloseYearModal" }
+    ],
     "labelOverrides": {
       "es_ES": {
         "Year": "Año fiscal",
@@ -40,6 +44,7 @@
       "exclude": true
     },
     "year": {
+      "javaQualifier": "year-close",
       "fields": {
         "fiscalYear": {
           "grid": true,

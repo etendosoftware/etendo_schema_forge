@@ -178,6 +178,10 @@
     {
       "name": "warehouse",
       "windowId": "139"
+    },
+    {
+      "name": "fiscal-calendar",
+      "windowId": "117"
     }
   ]
 }

@@ -1,13 +1,26 @@
 {
   "version": "0.1.0",
   "generatedAt": "2026-07-07T11:18:10.164Z",
-  "checksum": "06d17f919d6fbbfc",
+  "updatedAt": "2026-07-13T13:32:40.770Z",
+  "checksum": "ddf3b73521346e65",
   "frontendContract": {
     "window": {
       "id": "117",
       "name": "Fiscal Calendar",
       "primaryEntity": "year",
       "category": "finance",
+      "menuActions": [
+        {
+          "key": "closeYear",
+          "labelKey": "closeYearTitle",
+          "component": "CloseYearModal"
+        },
+        {
+          "key": "undoCloseYear",
+          "labelKey": "undoCloseYearTitle",
+          "component": "UndoCloseYearModal"
+        }
+      ],
       "processOverrides": {
         "processNow": {
           "label": "Create Periods",
@@ -125,7 +138,8 @@
               "source": "false"
             }
           }
-        ]
+        ],
+        "javaQualifier": "year-close"
       },
       "period": {
         "tableName": "C_Period",
@@ -320,6 +334,18 @@
       "name": "Fiscal Calendar",
       "primaryEntity": "year",
       "category": "finance",
+      "menuActions": [
+        {
+          "key": "closeYear",
+          "labelKey": "closeYearTitle",
+          "component": "CloseYearModal"
+        },
+        {
+          "key": "undoCloseYear",
+          "labelKey": "undoCloseYearTitle",
+          "component": "UndoCloseYearModal"
+        }
+      ],
       "processOverrides": {
         "processNow": {
           "label": "Create Periods",
@@ -474,7 +500,8 @@
             "visibility": "discarded",
             "required": true
           }
-        ]
+        ],
+        "javaQualifier": "year-close"
       },
       "period": {
         "tableName": "C_Period",

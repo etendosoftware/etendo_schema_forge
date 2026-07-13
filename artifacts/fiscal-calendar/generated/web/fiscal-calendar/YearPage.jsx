@@ -1,10 +1,13 @@
-import { useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { ListView, DetailView } from '@/components/contract-ui';
+import { toast } from 'sonner';
 import YearTable from './YearTable';
 import YearForm from './YearForm';
 import PeriodTable from './PeriodTable';
 import PeriodForm from './PeriodForm';
 import { AttachmentsTab } from '@/components/attachments';
+import CloseYearModal from '@/windows/custom/fiscal-calendar/CloseYearModal';
+import UndoCloseYearModal from '@/windows/custom/fiscal-calendar/UndoCloseYearModal';
 import catalogs from './mockCatalogs';
 
 
@@ -164,6 +167,10 @@ export const api = {
 const labelOverrides = api.labelOverrides;
 // @sf-generated-start component:YearPage
 export default function YearPage({ windowName, recordId, ...props }) {
+  const [showCloseYearMenuModal, setCloseYearMenuModal] = useState(false);
+  const [closeYearMenuContext, setCloseYearMenuContext] = useState(null);
+  const [showUndoCloseYearMenuModal, setUndoCloseYearMenuModal] = useState(false);
+  const [undoCloseYearMenuContext, setUndoCloseYearMenuContext] = useState(null);
   if (recordId) {
     return (
       <>
@@ -186,11 +193,16 @@ export default function YearPage({ windowName, recordId, ...props }) {
         breadcrumb={breadcrumb}
       api={api}
         customTabs={[{ key: 'attachments', labelKey: 'attachments', Component: AttachmentsTab, placement: 'tab', props: { tableName: "C_Year", config: {} } }]}
+        menuActions={({ data, status }) => [
+          { key: 'closeYear', label: 'undefined', labelKey: 'closeYearTitle', onClick: () => { setCloseYearMenuContext(data ?? null); setCloseYearMenuModal(true); }, },
+          { key: 'undoCloseYear', label: 'undefined', labelKey: 'undoCloseYearTitle', onClick: () => { setUndoCloseYearMenuContext(data ?? null); setUndoCloseYearMenuModal(true); }, }
+        ]}
         requiredHeaderFields={requiredHeaderFields}
         labelOverrides={labelOverrides}
         {...props}
       />
-      </>
+      {showCloseYearMenuModal && <CloseYearModal isOpen={showCloseYearMenuModal} token={props.token} apiBaseUrl={api.baseUrl} currentRecord={closeYearMenuContext} onClose={() => setCloseYearMenuModal(false)} onSaved={() => { setCloseYearMenuModal(false); window.location.reload(); }} />}
+      {showUndoCloseYearMenuModal && <UndoCloseYearModal isOpen={showUndoCloseYearMenuModal} token={props.token} apiBaseUrl={api.baseUrl} currentRecord={undoCloseYearMenuContext} onClose={() => setUndoCloseYearMenuModal(false)} onSaved={() => { setUndoCloseYearMenuModal(false); window.location.reload(); }} />}      </>
     );
   }
 
