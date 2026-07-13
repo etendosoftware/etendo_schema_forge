@@ -1,8 +1,8 @@
 {
-  "version": "0.2.0",
+  "version": "0.7.0",
   "generatedAt": "2026-06-28T15:34:57.400Z",
-  "updatedAt": "2026-06-29T11:09:22.825Z",
-  "contractChecksum": "eeb0a498dff1c9f3",
+  "updatedAt": "2026-07-07T19:23:48.530Z",
+  "contractChecksum": "2f98160e6139a75d",
   "apiPrediction": {
     "specName": "general-ledger-configuration",
     "baseUrl": "/sws/neo/general-ledger-configuration",
@@ -29,15 +29,15 @@
         "detailUrl": "/sws/neo/general-ledger-configuration/Dimensiones/{id}",
         "supportedFilters": []
       },
-      "Documentos": {
+      "Cuentas generales": {
         "get": true,
         "getById": true,
         "post": true,
         "put": true,
         "patch": true,
         "delete": true,
-        "listUrl": "/sws/neo/general-ledger-configuration/Documentos",
-        "detailUrl": "/sws/neo/general-ledger-configuration/Documentos/{id}",
+        "listUrl": "/sws/neo/general-ledger-configuration/Cuentas generales",
+        "detailUrl": "/sws/neo/general-ledger-configuration/Cuentas generales/{id}",
         "supportedFilters": []
       },
       "Valores por defecto": {
@@ -150,12 +150,44 @@
         "url": "/sws/neo/general-ledger-configuration/Dimensiones/selectors/activity"
       },
       {
-        "entity": "Documentos",
-        "field": "aDCreatefactTemplateID",
-        "column": "AD_Createfact_Template_ID",
-        "reference": "Createfact_Template",
+        "entity": "Cuentas generales",
+        "field": "suspenseBalancing",
+        "column": "SuspenseBalancing_Acct",
+        "reference": "ValidCombination",
         "inputMode": "selector",
-        "url": "/sws/neo/general-ledger-configuration/Documentos/selectors/aDCreatefactTemplateID"
+        "url": "/sws/neo/general-ledger-configuration/Cuentas generales/selectors/suspenseBalancing"
+      },
+      {
+        "entity": "Cuentas generales",
+        "field": "retainedEarning",
+        "column": "RetainedEarning_Acct",
+        "reference": "ValidCombination",
+        "inputMode": "selector",
+        "url": "/sws/neo/general-ledger-configuration/Cuentas generales/selectors/retainedEarning"
+      },
+      {
+        "entity": "Cuentas generales",
+        "field": "incomeSummary",
+        "column": "IncomeSummary_Acct",
+        "reference": "ValidCombination",
+        "inputMode": "selector",
+        "url": "/sws/neo/general-ledger-configuration/Cuentas generales/selectors/incomeSummary"
+      },
+      {
+        "entity": "Cuentas generales",
+        "field": "currencyBalancingAcct",
+        "column": "CurrencyBalancing_Acct",
+        "reference": "ValidCombination",
+        "inputMode": "selector",
+        "url": "/sws/neo/general-ledger-configuration/Cuentas generales/selectors/currencyBalancingAcct"
+      },
+      {
+        "entity": "Cuentas generales",
+        "field": "cFSOrderAccount",
+        "column": "CFS_Order_Acct",
+        "reference": "ValidCombination",
+        "inputMode": "selector",
+        "url": "/sws/neo/general-ledger-configuration/Cuentas generales/selectors/cFSOrderAccount"
       },
       {
         "entity": "Valores por defecto",
@@ -455,14 +487,6 @@
       },
       {
         "entity": "Valores por defecto",
-        "field": "taxExpense",
-        "column": "T_Expense_Acct",
-        "reference": "ValidCombination",
-        "inputMode": "selector",
-        "url": "/sws/neo/general-ledger-configuration/Valores por defecto/selectors/taxExpense"
-      },
-      {
-        "entity": "Valores por defecto",
         "field": "disposalGain",
         "column": "A_Disposal_Gain",
         "reference": "ValidCombination",
@@ -557,10 +581,13 @@
           "currency": {
             "required": true
           },
+          "allowNegative": {
+            "required": true,
+            "defaultValue": "N"
+          },
           "accrual": {
             "defaultValue": "Y"
-          },
-          "automaticPeriodControl": {}
+          }
         }
       },
       "Dimensiones": {
@@ -603,23 +630,27 @@
           "activity": {}
         }
       },
-      "Documentos": {
+      "Cuentas generales": {
         "fields": {
-          "active": {
-            "readOnly": true,
+          "suspenseBalancingUse": {
+            "required": true
+          },
+          "suspenseBalancing": {},
+          "retainedEarning": {},
+          "suspenseErrorUse": {
+            "required": true
+          },
+          "incomeSummary": {
+            "required": true
+          },
+          "currencyBalancingUse": {
+            "required": true
+          },
+          "currencyBalancingAcct": {},
+          "cFSOrderAccount": {},
+          "createClosing": {
             "required": true,
             "defaultValue": "Y"
-          },
-          "documentCategory": {
-            "readOnly": true,
-            "required": true
-          },
-          "allowNegative": {
-            "readOnly": true,
-            "required": true
-          },
-          "aDCreatefactTemplateID": {
-            "readOnly": true
           }
         }
       },
@@ -702,7 +733,6 @@
           "accumulatedDepreciation": {
             "required": true
           },
-          "taxExpense": {},
           "disposalGain": {},
           "disposalLoss": {}
         }
@@ -720,12 +750,18 @@
       "headerFields": [
         "name",
         "gAAP",
-        "currency"
+        "currency",
+        "allowNegative"
       ],
       "lineFields": [
         "active",
         "balanced",
         "mandatory",
+        "suspenseBalancingUse",
+        "suspenseErrorUse",
+        "incomeSummary",
+        "currencyBalancingUse",
+        "createClosing",
         "customerReceivablesNo",
         "writeoff",
         "vendorLiability",
@@ -769,7 +805,8 @@
         "fields": [
           "name",
           "gAAP",
-          "currency"
+          "currency",
+          "allowNegative"
         ]
       }
     ],
@@ -777,5 +814,5 @@
     "knownLimitations": [],
     "dangerousOperations": []
   },
-  "checksum": "d799677de872d5e9"
+  "checksum": "75fa0961cbd2bb03"
 }

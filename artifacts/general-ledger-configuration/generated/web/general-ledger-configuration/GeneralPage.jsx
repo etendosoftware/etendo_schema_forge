@@ -4,8 +4,6 @@ import GeneralTable from './GeneralTable';
 import GeneralForm from './GeneralForm';
 import DimensionesTable from './DimensionesTable';
 import DimensionesForm from './DimensionesForm';
-import DocumentosTable from './DocumentosTable';
-import DocumentosForm from './DocumentosForm';
 import catalogs from './mockCatalogs';
 
 
@@ -37,7 +35,7 @@ const draftMode = null;
 // @sf-generated-end draftMode:General
 
 // @sf-generated-start requiredHeaderFields:General
-const requiredHeaderFields = ['organization', 'name', 'gAAP', 'currency'];
+const requiredHeaderFields = ['organization', 'name', 'gAAP', 'currency', 'allowNegative'];
 // @sf-generated-end requiredHeaderFields:General
 
 // @sf-generated-start addLineFields:Dimensiones
@@ -92,15 +90,15 @@ export const api = {
       "detailUrl": "/sws/neo/general-ledger-configuration/Dimensiones/{id}",
       "supportedFilters": []
     },
-    "Documentos": {
+    "Cuentas generales": {
       "get": true,
       "getById": true,
       "post": true,
       "put": true,
       "patch": true,
       "delete": true,
-      "listUrl": "/sws/neo/general-ledger-configuration/Documentos",
-      "detailUrl": "/sws/neo/general-ledger-configuration/Documentos/{id}",
+      "listUrl": "/sws/neo/general-ledger-configuration/Cuentas generales",
+      "detailUrl": "/sws/neo/general-ledger-configuration/Cuentas generales/{id}",
       "supportedFilters": []
     },
     "Valores por defecto": {
@@ -213,12 +211,44 @@ export const api = {
       "url": "/sws/neo/general-ledger-configuration/Dimensiones/selectors/activity"
     },
     {
-      "entity": "Documentos",
-      "field": "aDCreatefactTemplateID",
-      "column": "AD_Createfact_Template_ID",
-      "reference": "Createfact_Template",
+      "entity": "Cuentas generales",
+      "field": "suspenseBalancing",
+      "column": "SuspenseBalancing_Acct",
+      "reference": "ValidCombination",
       "inputMode": "selector",
-      "url": "/sws/neo/general-ledger-configuration/Documentos/selectors/aDCreatefactTemplateID"
+      "url": "/sws/neo/general-ledger-configuration/Cuentas generales/selectors/suspenseBalancing"
+    },
+    {
+      "entity": "Cuentas generales",
+      "field": "retainedEarning",
+      "column": "RetainedEarning_Acct",
+      "reference": "ValidCombination",
+      "inputMode": "selector",
+      "url": "/sws/neo/general-ledger-configuration/Cuentas generales/selectors/retainedEarning"
+    },
+    {
+      "entity": "Cuentas generales",
+      "field": "incomeSummary",
+      "column": "IncomeSummary_Acct",
+      "reference": "ValidCombination",
+      "inputMode": "selector",
+      "url": "/sws/neo/general-ledger-configuration/Cuentas generales/selectors/incomeSummary"
+    },
+    {
+      "entity": "Cuentas generales",
+      "field": "currencyBalancingAcct",
+      "column": "CurrencyBalancing_Acct",
+      "reference": "ValidCombination",
+      "inputMode": "selector",
+      "url": "/sws/neo/general-ledger-configuration/Cuentas generales/selectors/currencyBalancingAcct"
+    },
+    {
+      "entity": "Cuentas generales",
+      "field": "cFSOrderAccount",
+      "column": "CFS_Order_Acct",
+      "reference": "ValidCombination",
+      "inputMode": "selector",
+      "url": "/sws/neo/general-ledger-configuration/Cuentas generales/selectors/cFSOrderAccount"
     },
     {
       "entity": "Valores por defecto",
@@ -518,14 +548,6 @@ export const api = {
     },
     {
       "entity": "Valores por defecto",
-      "field": "taxExpense",
-      "column": "T_Expense_Acct",
-      "reference": "ValidCombination",
-      "inputMode": "selector",
-      "url": "/sws/neo/general-ledger-configuration/Valores por defecto/selectors/taxExpense"
-    },
-    {
-      "entity": "Valores por defecto",
       "field": "disposalGain",
       "column": "A_Disposal_Gain",
       "reference": "ValidCombination",
@@ -592,9 +614,6 @@ export default function GeneralPage({ windowName, recordId, ...props }) {
         recordId={recordId}
         breadcrumb={breadcrumb}
       api={api}
-        secondaryTabs={[
-          { key: 'Documentos', label: 'Documents', Table: DocumentosTable, Form: DocumentosForm },
-        ]}
         requiredHeaderFields={requiredHeaderFields}
         {...props}
       />

@@ -82,7 +82,10 @@ function buildPisApiFetch(cfg = {}) {
     methods = [{ id: 'm-1', label: 'Transferencia' }],
     sources = [],
     plan = [{ finPaymentScheduleID: 'sched-1', outstandingAmount: '1000' }],
-    pisAccounts = [{ id: 'ES76 0049 1500 05 2310168863', name: 'Cuenta principal', iban: 'ES76 0049 1500 05 2310168863', default: true }],
+    // ETP-4406: the default supplier IBAN must be a structurally valid IBAN
+    // (ISO 13616 mod-97) — otherwise the new IBAN validation keeps SEPA's
+    // pisReady false and Confirmar disabled, breaking every confirm/polling test.
+    pisAccounts = [{ id: 'ES91 2100 0418 4502 0005 1332', name: 'Cuenta principal', iban: 'ES91 2100 0418 4502 0005 1332', default: true }],
     pisTemplates = [
       { value: 'SEPA', label: 'Single Euro Payments Area (SEPA)' },
       { value: 'DOMESTIC', label: 'DOMESTIC' },
@@ -1215,7 +1218,9 @@ describe('NewPaymentEntryModal', () => {
           expect(body.pis).toBe(true);
           // EUR invoice defaults the template to SEPA and preselects the supplier's IBAN.
           expect(body.pisTemplate).toBe('SEPA');
-          expect(body.pisCreditorIban).toBe('ES76 0049 1500 05 2310168863');
+          // ETP-4406: buildPisPaymentFields now normalizes the IBAN (strips the
+          // display spaces, upper-cases) via normalizeIban before sending it.
+          expect(body.pisCreditorIban).toBe('ES9121000418450200051332');
         });
       });
 
@@ -1292,6 +1297,79 @@ describe('NewPaymentEntryModal', () => {
           expect(body.pisCreditorSortCode).toBe('123456');
           expect(body.pisCreditorAccountNumber).toBe('12345678');
           expect(body.pisCreditorIban).toBeUndefined();
+        });
+      });
+    });
+
+    // ETP-4406: the SEPA "IBAN Destino" is validated with the shared isValidIban
+    // (ISO 13616 mod-97). A structurally invalid IBAN surfaces an inline error and
+    // keeps Confirmar disabled (via pisReady → confirmDisabled); a valid one clears
+    // the error and, with the other required fields satisfied, re-enables Confirmar.
+    describe('IBAN validation (SEPA — ETP-4406)', () => {
+      const VALID_IBAN = 'DE89370400440532013000';
+      const INVALID_IBAN = 'DE00370400440532013000';
+
+      it('shows the inline IBAN error and disables Confirmar when the preselected supplier IBAN is structurally invalid', async () => {
+        mockApiFetch = buildPisApiFetch({
+          pisAccounts: [{ id: INVALID_IBAN, name: 'Cuenta inválida', iban: INVALID_IBAN, default: true }],
+        });
+        renderModal({ dir: 'out', specName: 'purchase-invoice' });
+        await screen.findByTestId('cp-pis-section');
+
+        // The invalid IBAN is the only gate here: amount/date/method/account are all
+        // satisfied by the default catalog + exact balance, so a disabled Confirmar
+        // isolates the IBAN validation (pisReady=false) as the cause.
+        expect(await screen.findByTestId('cp-pis-iban-error')).toBeInTheDocument();
+        expect(screen.getByTestId('cp-pis-iban-error')).toHaveTextContent('financeAccountsNewIbanInvalid');
+        await waitFor(() => expect(screen.getByTestId('cp-confirm')).toBeDisabled());
+      });
+
+      it('shows no IBAN error and enables Confirmar when the preselected supplier IBAN is valid', async () => {
+        mockApiFetch = buildPisApiFetch({
+          pisAccounts: [{ id: VALID_IBAN, name: 'Cuenta válida', iban: VALID_IBAN, default: true }],
+        });
+        renderModal({ dir: 'out', specName: 'purchase-invoice' });
+        await screen.findByTestId('cp-pis-section');
+
+        // A valid IBAN clears the inline error and, with every other required field
+        // satisfied, leaves Confirmar enabled.
+        await waitFor(() => expect(screen.getByTestId('cp-confirm')).not.toBeDisabled());
+        expect(screen.queryByTestId('cp-pis-iban-error')).not.toBeInTheDocument();
+      });
+
+      it('does not POST registerPayment while the IBAN is invalid (Confirmar stays disabled)', async () => {
+        mockApiFetch = buildPisApiFetch({
+          pisAccounts: [{ id: INVALID_IBAN, name: 'Cuenta inválida', iban: INVALID_IBAN, default: true }],
+        });
+        renderModal({ dir: 'out', specName: 'purchase-invoice' });
+        await screen.findByTestId('cp-pis-section');
+
+        await waitFor(() => expect(screen.getByTestId('cp-confirm')).toBeDisabled());
+        // Clicking a disabled button fires no onClick — submit() never runs.
+        fireEvent.click(screen.getByTestId('cp-confirm'));
+
+        const registerCall = mockApiFetch.mock.calls.find(c => c[0].includes('registerPayment'));
+        expect(registerCall).toBeFalsy();
+      });
+
+      it('sends the valid IBAN normalized (no spaces, upper-cased) in the confirm body', async () => {
+        mockApiFetch = buildPisApiFetch({
+          pisAccounts: [{ id: 'de89 3704 0044 0532 0130 00', name: 'Cuenta válida', iban: 'de89 3704 0044 0532 0130 00', default: true }],
+        });
+        renderModal({ dir: 'out', specName: 'purchase-invoice' });
+        await screen.findByTestId('cp-pis-section');
+
+        const confirm = screen.getByTestId('cp-confirm');
+        await waitFor(() => expect(confirm).not.toBeDisabled());
+        fireEvent.click(confirm);
+
+        await waitFor(() => {
+          const call = mockApiFetch.mock.calls.find(c => c[0].includes('registerPayment'));
+          expect(call).toBeTruthy();
+          const body = JSON.parse(call[1].body);
+          expect(body.pisTemplate).toBe('SEPA');
+          // normalizeIban(' de89 3704 ... ') -> 'DE89370400440532013000'.
+          expect(body.pisCreditorIban).toBe(VALID_IBAN);
         });
       });
     });

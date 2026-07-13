@@ -308,9 +308,9 @@ describe('OnboardingPage', () => {
     expect(consoleError).toHaveBeenCalledWith('Failed to load environments', expect.any(Error));
   });
 
-  it('derives the setup language from the active locale without an inline selector', async () => {
-    // Core 0.3.4 removed the inline language selector from the profile step;
-    // the onboarding language now follows the global locale switch instead.
+  it('exposes the inline language selector on the profile step', async () => {
+    // The profile step keeps its inline language selector so the onboarding
+    // language can be chosen independently of the global locale switch.
     localeSwitchMock.locale = 'es_ES';
     localStorage.setItem('sf_platform_token', 'platform-token');
     fetchAccount.mockResolvedValue({ name: 'Ada Lovelace' });
@@ -320,8 +320,8 @@ describe('OnboardingPage', () => {
 
     // The profile setup step renders under the active locale ...
     expect(await screen.findByText(/onboardingGreeting/)).toBeInTheDocument();
-    // ... and no longer exposes an inline language selector.
-    expect(screen.queryByLabelText('language')).not.toBeInTheDocument();
+    // ... and still exposes an inline language selector.
+    expect(screen.getByLabelText('language')).toBeInTheDocument();
   });
 
   it('tracks registration submission and success without user-entered values', async () => {
