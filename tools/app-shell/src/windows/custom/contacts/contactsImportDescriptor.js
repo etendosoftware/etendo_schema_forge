@@ -39,7 +39,12 @@ registerImportDescriptor('contacts', async (row, config) => {
   // operations directly, bypassing useEntity.js entirely, so it must apply the same
   // fallback itself — omitting it hits a raw `null value in column "value" ... violates
   // not-null constraint` from Postgres (reproduced via a real import run).
-  const bpBody = { oBTIKTaxIDKey: DEFAULT_TAX_ID_KEY, ...bpFields, searchKey: bpFields.name };
+  // C_BPartner.Value (searchKey) is AD-constrained to 40 chars — reproduced via a real
+  // import row whose commercial name was 48 chars ("Value too long. Length 48, maximum
+  // allowed 40"). Same fallback, same truncation as useEntity.js's applyContactsRequiredFields
+  // (the manual "Nuevo contacto" flow's equivalent derivation) — Name itself is untouched,
+  // it has more headroom (60).
+  const bpBody = { oBTIKTaxIDKey: DEFAULT_TAX_ID_KEY, ...bpFields, searchKey: String(bpFields.name || '').slice(0, 40) };
   const bpOp = { id: 'bp', spec: config.spec, entity: 'businessPartner', body: bpBody };
   const ops = [bpOp];
 

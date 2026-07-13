@@ -130,4 +130,18 @@ describe('contacts import descriptor', () => {
     const ops = await buildOperations(row, { spec: 'contacts', descriptorName: 'contacts', token: 't' });
     assert.equal(ops[0].body.searchKey, 'Acme Corp');
   });
+
+  it('regression: truncates searchKey (C_BPartner.Value) to 40 chars for a long commercial name, without truncating name itself', async () => {
+    // Reproduced via a real import run: a 48-char commercial name produced
+    // `Value too long. Length 48, maximum allowed 40` from C_BPartner.Value's
+    // AD column constraint. Name itself has more headroom (60), so it must
+    // stay untouched.
+    const longName = 'Guajardo Davila, Lugo Paz y Muro Serna Asociados Legal'; // > 40 chars
+    assert.ok(longName.length > 40);
+    const row = { name: longName, etgoFirstname: 'Lucia', etgoLastname: 'Fernandez', etgoEmail: 'lucia@x.com' };
+    const ops = await buildOperations(row, { spec: 'contacts', descriptorName: 'contacts', token: 't' });
+    assert.equal(ops[0].body.searchKey, longName.slice(0, 40));
+    assert.equal(ops[0].body.searchKey.length, 40);
+    assert.equal(ops[0].body.name, longName);
+  });
 });

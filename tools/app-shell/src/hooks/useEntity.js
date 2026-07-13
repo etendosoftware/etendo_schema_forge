@@ -221,7 +221,7 @@ export function applyContactNameDefaults(payload, source) {
     }
 }
 
-function applyContactsRequiredFields(entity, payload, source = {}) {
+export function applyContactsRequiredFields(entity, payload, source = {}) {
     if (!payload || typeof payload !== 'object') return payload;
 
     if (entity === 'contact' || entity === 'adUser' || entity === 'user') {
@@ -230,7 +230,14 @@ function applyContactsRequiredFields(entity, payload, source = {}) {
 
     if (entity === 'businessPartner' || entity === 'bpartner') {
         if (!payload.name && source.name) payload.name = source.name;
-        if (!payload.searchKey) payload.searchKey = source.searchKey || source.name || payload.name;
+        if (!payload.searchKey) {
+            const fallback = source.searchKey || source.name || payload.name;
+            // C_BPartner.Value (searchKey) is AD-constrained to 40 chars — reproduced via a
+            // real create with a long commercial name ("Value too long. Length 48, maximum
+            // allowed 40"). Name itself has more headroom (60, same as derivePersonName
+            // above), so only this fallback needs truncating.
+            if (fallback) payload.searchKey = String(fallback).slice(0, 40);
+        }
     }
 
     return payload;
