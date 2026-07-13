@@ -9,6 +9,17 @@ without leaving the record. `fiscal-calendar` and `open-close-period-control` ar
 routes (hidden, redirect to `/calendar`) but their underlying AD windows/tabs/processes are
 unchanged — this is a Schema Forge-side consolidation, not an AD data migration.
 
+**Backend shape (important, and different from a first design attempt):** `/calendar` has **no
+NEO spec of its own**. It is backed by **three separate, single-window specs** — `fiscal-calendar`,
+`open-close-period-control`, and a new `end-year-close` — stitched together at the frontend layer.
+An earlier attempt merged all four entities into one `calendar` spec/artifact; that was reverted
+because `schema_forge_core`'s push-to-neo (`populateWindowSpec` in `neo-writer.js`) assumes
+**1 spec = 1 AD window** and silently drops (and then actively re-deletes on every subsequent push)
+any entity whose physical table isn't reachable from that one window. Filed as
+[schema_forge_core#35](https://github.com/etendosoftware/schema_forge_core/issues/35) / Jira
+ETP-4481 (tracking only, not being core-fixed) — the fix here is architectural, not a workaround:
+keep every spec single-window, and let the custom frontend do the aggregation.
+
 ## What this window should allow
 - Browse the list of fiscal years (`fiscalYear`, `description`) for the org's calendar.
 - Create a new fiscal year, selecting the calendar it belongs to.
@@ -35,56 +46,91 @@ unchanged — this is a Schema Forge-side consolidation, not an AD data migratio
   `OpenClosePeriodControlRedirect` (`<Navigate to="/calendar" replace />`) instead of their old
   generated pages.
 - Implementation type: `window.layoutType: "custom"` — a hand-written
-  `tools/app-shell/src/windows/custom/calendar/index.jsx` wraps the generated `YearPage`
-  (primary/header entity is `year`, not a `calendar` entity — the generator names the page after
-  `primaryEntity`) and adds `secondaryTabs` for Periods/Accounting (see
-  `docs/ui-customization.md` §17 for the `Panel` prop contract).
-- Window shape: `year` (header, table `C_Year`) as the only native detail/list entity;
-  `periodControl` (table `C_Period`), `documents` (table `C_Period` via a different tab shape),
-  and `accounting` (table `FinancialMgmtAccountingFactEndYearHQL`, an HQL-backed AD_Table) are all
-  declared as CRUD-routable entities in `decisions.json` purely so their `ETGO_SF_ENTITY` rows
-  exist (required for NEO routing — see Reactive behavior), but none of them render via the
-  generic entity CRUD UI: `periodControl`/`documents` are fetched and rendered by the custom
-  `PeriodsExpandablePanel`, and `accounting` by the custom `AccountingPanel`.
-- `calendar` (table `C_Calendar`) is excluded from the contract entirely
-  (`entities.calendar.exclude: true`).
+  `tools/app-shell/src/windows/custom/calendar/index.jsx` has **no backing artifact of its own**.
+  It directly imports the generated `YearPage` from the **`fiscal-calendar`** spec
+  (`@generated/fiscal-calendar/generated/web/fiscal-calendar/YearPage`) as its header/list, and
+  adds `secondaryTabs` (see `docs/ui-customization.md` §17 for the `Panel` prop contract) whose two
+  panels each call a **different spec entirely**.
+- Window shape — three independent, single-window specs:
+  - **`fiscal-calendar`** (unchanged AD window 117) — `year` (header, table `C_Year`) is the only
+    entity this spec exposes to the UI; its own native `period` entity/tab exists in the contract
+    (carried over from the original ETP-4452 Fiscal Calendar work) but is never rendered — the
+    custom window's Periods tab uses a completely different entity from a different spec instead
+    (see below). `year.calendar` entity (table `C_Calendar`) stays `exclude: true`.
+  - **`open-close-period-control`** (unchanged AD window, `E66E701CCBA14B8BA480CBDE37C50D7A`) —
+    `periodControl` (table `C_Period`) and `documents` (table `C_PeriodControl`) — **entirely
+    untouched by ETP-4478**, same spec, same fields, same Java handlers as before this feature
+    existed.
+  - **`end-year-close`** (new spec, AD window `B5673F73F613496C8BEA22FB55E4E1E4`, "End Year
+    Close") — only the `accounting` entity is kept (its own header tab, `endYearClose`, is
+    `exclude: true`, same pattern as `fiscal-calendar`'s excluded `calendar` entity).
+
+## The apiBaseUrl-rewriting pattern (why one custom window can span 3 NEO specs)
+`WindowLoader.jsx` always injects `apiBaseUrl={rootBase}/calendar` into a window's props — derived
+from the **route** name, not any real spec — and `DetailView`'s `SecondaryPanelTab` threads that
+exact same value, unchanged, into every `secondaryTabs[].Panel`. Since none of the three real
+specs is actually named `calendar`, `tools/app-shell/src/windows/custom/calendar/index.jsx` has to
+rewrite the base URL for every fetch target, including its own header page:
+
+```jsx
+function rootApiBase(apiBaseUrl) {
+  return apiBaseUrl.replace(/\/[^/]*$/, ''); // strip the trailing "/calendar" route segment
+}
+// YearPage (header):        `${rootApiBase(apiBaseUrl)}/fiscal-calendar`
+// PeriodsExpandablePanel:    `${rootApiBase(apiBaseUrl)}/open-close-period-control`
+// AccountingPanel:           `${rootApiBase(apiBaseUrl)}/end-year-close`
+```
+
+`CloseYearConfirmModal.jsx` (see below) needs the identical rewrite for its own independent
+`periodControl` status-check fetch, via its own `periodControlApiBase()` helper — it isn't reached
+through `secondaryTabs`, so it can't just inherit the panel wiring above.
+
+This is a second, distinct extension pattern beyond a plain `secondaryTabs`/`Panel` (which normally
+assumes the Panel talks to the *same* spec the window itself is backed by) — see
+`docs/ui-customization.md` §17 for a cross-reference. Known latent fragility (flagged in review,
+non-blocking): the stripping regex assumes `apiBaseUrl` has no trailing slash; if that assumption
+ever changes, this needs revisiting.
 
 ## Reactive behavior and dependencies
-- **Create Periods** (`year.processNow`, column `Processing`) is bound to classic AD Process `100`
-  (`C_YearPeriods`), a plain DB-procedure process — invoked generically via `CallProcess`, no
-  custom `NeoHandler` needed. `decisions.json → window.processOverrides.processNow` opens a
-  `ProcessParamDialog` with one parameter, `CREATEADJUSTMENT` (Yes/No select).
-- **Abrir/Cerrar Periodo** (`periodControl.openClose`) calls AD Process `167` (`C_Period_Process`)
-  via `PeriodOpenCloseHandler` (`JAVA_QUALIFIER = 'period-openclose'`, unchanged from the retired
-  `open-close-period-control` window — same Java class, same `processId`, only the URL base moved
-  from `/sws/neo/open-close-period-control/...` to `/sws/neo/calendar/...`).
-- **Abrir/Cerrar Documento** (`documents.openClose`) calls AD Process `168`
-  (`C_PeriodControl_Process`) via `PeriodControlDocOpenCloseHandler`
+- **Create Periods** (`year.processNow`, column `Processing`, on `fiscal-calendar`) is bound to
+  classic AD Process `100` (`C_YearPeriods`), a plain DB-procedure process — invoked generically
+  via `CallProcess`, no custom `NeoHandler` needed. `decisions.json → window.processOverrides.processNow`
+  opens a `ProcessParamDialog` with one parameter, `CREATEADJUSTMENT` (Yes/No select).
+- **Abrir/Cerrar Periodo** (`periodControl.openClose`, on `open-close-period-control`) calls AD
+  Process `167` (`C_Period_Process`) via `PeriodOpenCloseHandler`
+  (`JAVA_QUALIFIER = 'period-openclose'`) — the exact same handler and URL base
+  (`/sws/neo/open-close-period-control/...`) this window has always used; nothing about this action
+  changed for ETP-4478.
+- **Abrir/Cerrar Documento** (`documents.openClose`, on `open-close-period-control`) calls AD
+  Process `168` (`C_PeriodControl_Process`) via `PeriodControlDocOpenCloseHandler`
   (`JAVA_QUALIFIER = 'period-control-doc-openclose'`), same carry-over as above.
-- **Cerrar Año** / **Deshacer Cierre de Año** are `window.menuActions` entries
+- **Cerrar Año** / **Deshacer Cierre de Año** are `fiscal-calendar`'s `window.menuActions` entries
   (`closeYear`/`undoCloseYear`), rendered from the kebab menu, each opening
-  `CloseYearConfirmModal.jsx` via a thin per-action wrapper (`CloseYearModal.jsx`/
-  `UndoCloseYearModal.jsx` — required because the generator emits one `import` per
-  `menuActions[].component` with no dedup; pointing two actions at the same component name would
-  produce a duplicate-import syntax error). The modal fetches `periodControl` for the year and
+  `CloseYearConfirmModal.jsx` (in `tools/app-shell/src/windows/custom/fiscal-calendar/`) via a thin
+  per-action wrapper (`CloseYearModal.jsx`/`UndoCloseYearModal.jsx` — required because the
+  generator emits one `import` per `menuActions[].component` with no dedup; pointing two actions at
+  the same component name would produce a duplicate-import syntax error). The modal fetches
+  `periodControl` (from `open-close-period-control`, via its own base-URL rewrite) for the year and
   disables its confirm button until every period is `C` (Closed) or `P` (Permanently Closed).
   - **Server-side, the real button fields are `year.createRegFactAcct`/`year.dropRegFactAcct`**
     (raw AD column names `Create_Reg_Fact_Acct`/`Drop_Reg_Fact_Acct`, labels "Close Year"/"Undo
-    Close Year", `processId` 800036/800038) — not literal fields named `closeYear`/`undoCloseYear`
-    (those are only the `menuActions[].key`/action-URL-segment names; NEO routes any
-    `/action/<name>` on an entity to its `javaQualifier` handler regardless of whether a field
-    with that exact name exists). `YearCloseHandler` (`JAVA_QUALIFIER = 'year-close'`) dispatches
-    on the `closeYear`/`undoCloseYear` action names, re-validates every period is Closed/
-    Permanently Closed server-side (defense in depth — the client-side check must not be trusted
-    alone), then invokes the legacy `CreateRegFactAcct`/`DropRegFactAcct` `ad_actionButton`
-    servlets' `processButton(...)` method directly via reflection — **`CallProcess` does not work
-    for these two processes** (confirmed: `AD_Process.procedurename = NULL` for both; `CallProcess`
-    has no code path for `classname`-based processes at all). See the class javadoc in
+    Close Year", `processId` 800036/800038) — both stay `visibility: discarded` in
+    `fiscal-calendar/decisions.json` (they are NOT rendered as generic process buttons; doing so
+    was tried and rejected during review — see Gap assessment). Field name and menuAction/action-URL
+    name are decoupled: NEO routes any `/action/<name>` on an entity to its `javaQualifier` handler
+    regardless of whether a field with that exact name exists. `YearCloseHandler`
+    (`JAVA_QUALIFIER = 'year-close'`, on `fiscal-calendar`'s `year` entity) dispatches on the
+    `closeYear`/`undoCloseYear` action names, re-validates every period is Closed/Permanently
+    Closed server-side (defense in depth — the client-side check must not be trusted alone), then
+    invokes the legacy `CreateRegFactAcct`/`DropRegFactAcct` `ad_actionButton` servlets'
+    `processButton(...)` method directly via reflection — **`CallProcess` does not work for these
+    two processes** (confirmed: `AD_Process.procedurename = NULL` for both; `CallProcess` has no
+    code path for `classname`-based processes at all). See the class javadoc in
     `YearCloseHandler.java` for the full reflection/`VariablesSecureApp`/`DalConnectionProvider`
     rationale.
-- **Accounting** (`accounting` entity, `JAVA_QUALIFIER = 'year-accounting'`) is served by
-  `YearAccountingHandler`, which queries `FinancialMgmtAccountingFact` directly, scoped by
-  `fa.period.year.id = :yearId` — **not** by re-invoking the stored
+- **Accounting** (`accounting` entity on `end-year-close`, `JAVA_QUALIFIER = 'year-accounting'`) is
+  served by `YearAccountingHandler`, which queries `FinancialMgmtAccountingFact` directly, scoped
+  by `fa.period.year.id = :yearId` — **not** by re-invoking the stored
   `FinancialMgmtAccountingFactEndYearHQL` view text, which has no `year` property on its output at
   all (its `C_Year_Close_V_ID` output column is actually a `PeriodControl` id, not the Year's own
   id) and relies on Etendo's `@additional_filters@` template substitution, which isn't invocable
@@ -121,7 +167,7 @@ the same `submitting` boolean pattern to disable its own confirm button during t
 
 ## Field reference
 
-### year entity (C_Year — header)
+### year entity (`fiscal-calendar` spec — C_Year, header)
 
 | Field | Type | Visibility | Grid | Form | Notes |
 |-------|------|------------|------|------|-------|
@@ -129,10 +175,10 @@ the same `submitting` boolean pattern to disable its own confirm button during t
 | description | string | editable | yes | yes | Optional |
 | calendar | foreignKey | editable | no | yes | Required selector |
 | processNow | button | editable | no | yes | **Create Periods** — AD Process 100 |
-| createRegFactAcct | button | editable | no | yes | **Close Year** — AD Process 800036, triggered only via the `closeYear` menuAction/`CloseYearConfirmModal`, guarded server-side by `YearCloseHandler` |
-| dropRegFactAcct | button | editable | no | yes | **Undo Close Year** — AD Process 800038, same guard/trigger path as above |
+| createRegFactAcct | button | discarded | — | — | Backing field for **Close Year**; triggered only via the `closeYear` menuAction/`CloseYearConfirmModal`, never rendered directly |
+| dropRegFactAcct | button | discarded | — | — | Backing field for **Undo Close Year**; same trigger path as above |
 
-### periodControl entity (C_Period — Periods subtab)
+### periodControl entity (`open-close-period-control` spec — C_Period, Periods subtab)
 
 | Field | Type | Visibility | Grid | Form | Notes |
 |-------|------|------------|------|------|-------|
@@ -146,7 +192,7 @@ the same `submitting` boolean pattern to disable its own confirm button during t
 | periodType | enum | readOnly | no | yes | Standard (S) or Adjustment (A) |
 | openClose | button | editable | no | yes | AD Process 167 via `PeriodOpenCloseHandler` |
 
-### documents entity (C_Period, per-document-type rows)
+### documents entity (`open-close-period-control` spec — C_PeriodControl, per-document-type rows)
 
 | Field | Type | Visibility | Grid | Form | Notes |
 |-------|------|------------|------|------|-------|
@@ -154,7 +200,7 @@ the same `submitting` boolean pattern to disable its own confirm button during t
 | periodStatus | enum | readOnly | yes | yes | Per-document-type badge: N/O/C/P |
 | openClose | button | editable | no | yes | AD Process 168 via `PeriodControlDocOpenCloseHandler` |
 
-### accounting entity (FinancialMgmtAccountingFactEndYearHQL, read-only)
+### accounting entity (`end-year-close` spec — FinancialMgmtAccountingFactEndYearHQL, read-only)
 
 | Field | Type | Visibility | Grid | Form | Notes |
 |-------|------|------------|------|------|-------|
@@ -165,17 +211,15 @@ the same `submitting` boolean pattern to disable its own confirm button during t
 | description | string | readOnly | yes | yes | |
 
 ### Discarded fields (not exposed in UI)
-- `calendar` entity: fully excluded (`exclude: true`).
-- `year` entity: `active`, `organization`, `client`, `id`, `creationDate`, `createdBy`, `updated`, `updatedBy`.
-- `periodControl` entity: `active`, `organization`, `client`, `id`, `creationDate`, `createdBy`, `updated`, `updatedBy`, `processNow`, `closingFactAcctGroupID`, `regularizationFactAcctGroupID`, `divideupFactAcctGroupID`, `openFactAcctGroupID`.
-- `documents` entity: `calendar`, `period`, `periodControl`, `periodAction`, `processNow`, `id`, `active`, `organization`, `client`, `creationDate`, `createdBy`, `updated`, `updatedBy`.
-- `accounting` entity: `generalLedger`, `accountingFact`, `cYearCloseVID`, `active`, `organization`, `client`, `id`, `creationDate`, `createdBy`, `updated`, `updatedBy`.
+- `fiscal-calendar` spec: `calendar` entity fully excluded (`exclude: true`); `year` entity discards `active`, `organization`, `client`, `id`, `creationDate`, `createdBy`, `updated`, `updatedBy`.
+- `open-close-period-control` spec: `periodControl` discards `active`, `organization`, `client`, `id`, `creationDate`, `createdBy`, `updated`, `updatedBy`, `processNow`, `closingFactAcctGroupID`, `regularizationFactAcctGroupID`, `divideupFactAcctGroupID`, `openFactAcctGroupID`; `documents` discards `calendar`, `period`, `periodControl`, `periodAction`, `processNow`, `id`, `active`, `organization`, `client`, `creationDate`, `createdBy`, `updated`, `updatedBy`.
+- `end-year-close` spec: `endYearClose` entity fully excluded (`exclude: true`); `accounting` discards `generalLedger`, `accountingFact`, `cYearCloseVID`, `active`, `organization`, `client`, `id`, `creationDate`, `createdBy`, `updated`, `updatedBy`.
 
 ## Gap assessment
 - `ProcessParamDialog` only renders `type: "select"` parameters — `CREATEADJUSTMENT` is modeled as
   a two-option select (Yes/No), same constraint the original `fiscal-calendar` window had.
 - The `calendar` field on `year` is a plain required selector rather than an auto-derived single
-  default (same as the retired `fiscal-calendar` window).
+  default (same as the retired standalone `fiscal-calendar` window).
 - No free-text search is configured on any entity (`searchableFields: []`, inherited default).
 - `YearCloseHandler`'s reflection into `CreateRegFactAcct`/`DropRegFactAcct`'s private
   `processButton(...)` method is inherently brittle across Etendo core versions — accepted
@@ -184,9 +228,21 @@ the same `submitting` boolean pattern to disable its own confirm button during t
 - `AccountingPanel.jsx` doesn't render the `type` field (entry type C/D/R/O/N) even though it's
   available in the contract — a reasonable future enhancement, not a functional gap for the
   current "review the year's Fact_Acct rows" use case.
-- `window.secondaryTabs`/`Panel` is a load-bearing, previously undocumented extension point —
-  see `docs/ui-customization.md` §17 (added as part of this change, `warehouse` and `calendar` as
-  the two real examples).
+- `window.secondaryTabs`/`Panel` is a load-bearing extension point — see
+  `docs/ui-customization.md` §17 (`warehouse` and `calendar` as the two real examples). The
+  apiBaseUrl-rewriting technique this window adds on top of it (spanning three independent specs
+  from one custom window) is a second, distinct pattern documented in the same section.
+- **`end-year-close` has one accepted, non-blocking pipeline-validator violation (F3)**: it isn't
+  registered in `registry.js`, because nothing ever navigates to it directly (`AccountingPanel.jsx`
+  only calls its API, no route/menu entry exists). This is architecturally identical to the
+  existing `transaction-type` spec's registry exemption, but the `BACKEND_ONLY_ARTIFACTS` set that
+  grants that exemption is hardcoded inside the published `schema_forge_core` package and can't be
+  extended from this repo — tracked alongside GH #35/ETP-4481 as a small follow-up, not blocking.
+- **Why not one merged spec?** Tried first, reverted — see the Intent section and GH #35/ETP-4481.
+  `schema_forge_core`'s push-to-neo assumes 1 spec = 1 AD window; a merged spec silently lost
+  entities sourced from AD windows other than the spec's primary one, and any manual DB patch for
+  them was actively re-deleted on the next push. The three-single-window-specs-plus-custom-frontend
+  shape here is the actual fix, not a workaround pending a future core change.
 
 ## Manual verification
 1. Open `/calendar` from the Finance menu under **Calendar** and confirm the years list loads.
@@ -204,7 +260,8 @@ the same `submitting` boolean pattern to disable its own confirm button during t
 11. Open the kebab menu with at least one period still Open and confirm **Cerrar Año** is present
     but its confirm button is disabled.
 12. Close/Permanently-close every period, reopen the kebab menu, confirm **Cerrar Año**'s confirm
-    button is now enabled, and confirm it posts to `/calendar/year/{id}/action/closeYear`.
+    button is now enabled, and confirm it posts to `/sws/neo/fiscal-calendar/year/{id}/action/closeYear`
+    (note the `fiscal-calendar` spec base, not `/calendar/...`).
 13. Force the `accounting` request to fail (e.g. block the network request in devtools) and
     confirm the Accounting tab shows the error message, not a blank panel or a false "no entries".
 14. Force the `periodControl` request to fail and confirm the Periods tab shows its own error
@@ -213,6 +270,9 @@ the same `submitting` boolean pattern to disable its own confirm button during t
 15. Double-click **Abrir/Cerrar Periodo** (or throttle the network to make the click visibly
     slow) and confirm the button disables immediately and re-enables only after the request
     settles — a second click during the pending window must not fire a second request.
+16. Confirm all three backing specs push cleanly and independently: `sf-push-neo fiscal-calendar`
+    and `sf-push-neo end-year-close` should each succeed with 0 errors; `open-close-period-control`
+    needs no re-push (unchanged by this feature).
 
 ## Automated evidence
 - `tools/app-shell/src/menu.json` exposes `calendar` in the Finance group (`windowId: "117"`);
@@ -220,24 +280,32 @@ the same `submitting` boolean pattern to disable its own confirm button during t
 - `tools/app-shell/src/windows/registry.js`: `calendar` → `./custom/calendar/index.jsx`
   (`customLoaders`); `fiscal-calendar`/`open-close-period-control` →
   `fiscal-calendar-redirect`/`open-close-period-control-redirect` (`windowLoaders`).
-- `artifacts/calendar/contract.json` defines four entities (`year`, `periodControl`, `documents`,
-  `accounting`) with CRUD endpoints, action endpoints for `processNow`/`openClose`/`closeYear`/
-  `undoCloseYear`, and a test manifest.
-- `artifacts/calendar/generated/web/calendar/YearPage.jsx` — generated header page, wrapped by
-  the hand-written `index.jsx` which adds `secondaryTabs` for Periods/Accounting.
-- `tools/app-shell/src/windows/custom/calendar/PeriodsExpandablePanel.jsx`,
-  `AccountingPanel.jsx`, `CloseYearConfirmModal.jsx` (+ `CloseYearModal.jsx`/
-  `UndoCloseYearModal.jsx` wrappers) — hand-written custom components, each with a Vitest suite
-  (`__tests__/AccountingPanel.vitest.jsx`, `__tests__/PeriodsExpandablePanel.vitest.jsx`,
-  `__tests__/CloseYearConfirmModal.vitest.jsx`, `__tests__/index.vitest.jsx`) covering the
-  loading/error/empty states and the per-row double-submit guard, not just the happy path.
-- `e2e/tests/flows/calendar.mocked.spec.js` — mocked E2E coverage: Finance menu shows only
-  Calendar, Accounting/Periods tabs render, period expand reveals documents, Abrir/Cerrar Periodo
-  hits the mocked action endpoint, Cerrar Año stays disabled until all periods are closed.
+- `artifacts/fiscal-calendar/contract.json` — `year` entity, `menuActions` for
+  `closeYear`/`undoCloseYear`, `javaQualifier: "year-close"`.
+- `artifacts/open-close-period-control/contract.json` — `periodControl`/`documents`, unchanged.
+- `artifacts/end-year-close/contract.json` — the new single-entity `accounting` spec.
+- `tools/app-shell/src/windows/custom/calendar/index.jsx` — the aggregating custom window;
+  `AccountingPanel.jsx`, `PeriodsExpandablePanel.jsx` (+ Vitest suites covering loading/error/empty
+  states and the per-row double-submit guard, not just the happy path).
+- `tools/app-shell/src/windows/custom/fiscal-calendar/CloseYearConfirmModal.jsx` (+
+  `CloseYearModal.jsx`/`UndoCloseYearModal.jsx` wrappers and Vitest suite) — moved here from the
+  retired merged spec, since `menuActions[].component` resolution has no cross-spec-name option.
+- `e2e/tests/flows/calendar.mocked.spec.js` — mocked E2E coverage across all three spec URLs:
+  Finance menu shows only Calendar, Accounting/Periods tabs render, period expand reveals
+  documents, Abrir/Cerrar Periodo hits the mocked action endpoint, Cerrar Año stays disabled until
+  all periods are closed.
 - `com.etendoerp.go/src/com/etendoerp/go/schemaforge/YearCloseHandler.java` (`year-close`) and
   `.../handlers/YearAccountingHandler.java` (`year-accounting`), each with a Mockito-only JUnit
-  suite (no `OBBaseTest`/real DB — see each class's test file javadoc for why).
-- `npx sf-validate-pipeline --scope=calendar` reports 0 violations.
+  suite (no `OBBaseTest`/real DB — see each class's test file javadoc for why). Neither class
+  changed during the three-spec rework — only which spec's `ETGO_SF_ENTITY` row carries their
+  `javaQualifier` changed.
+- `npx sf-validate-pipeline --scope=fiscal-calendar` and `--scope=open-close-period-control` both
+  report 0 violations; `--scope=end-year-close` reports 1 accepted, non-blocking F3 (see Gap
+  assessment).
+- `fiscal-calendar` pushed to NEO as spec `ED05C42028074866AE26EFB6685B68E2` (updated, pre-existing
+  spec); `end-year-close` pushed as spec `13C0DD2E83EB40E3B4227662A9E71117` (new). Both with 0
+  errors. `open-close-period-control` was not re-pushed (no changes). `./gradlew export.database`
+  still needs to be run in the Etendo root so this survives a rebuild.
 - i18n: `expandPeriod`, `openClosePeriod`, `openCloseDocument`, `debit`, `credit`,
   `accountingNoEntries`, `closeYearTitle`, `closeYearBody`, `undoCloseYearTitle`,
   `undoCloseYearBody`, `calendarAccountingTab`, `calendarPeriodsTab` added to both
