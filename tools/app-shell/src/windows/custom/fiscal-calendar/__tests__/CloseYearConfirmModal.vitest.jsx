@@ -118,4 +118,25 @@ describe('CloseYearConfirmModal', () => {
 
     resolveAction({ ok: true, json: () => Promise.resolve({}) });
   });
+
+  it('rewrites a host-less apiBaseUrl (e.g. "/fiscal-calendar") to the correct period-control base', async () => {
+    render(
+      <CloseYearConfirmModal direction="close" isOpen currentRecord={{ id: 'year1' }} token="tok" apiBaseUrl="/fiscal-calendar"
+        onClose={() => {}} onSaved={() => {}} data-testid="modal7" />
+    );
+    await waitFor(() => expect(global.fetch).toHaveBeenCalledWith(
+      '/open-close-period-control/periodControl?year=year1',
+      expect.anything()
+    ));
+  });
+
+  it('throws instead of silently misrouting when apiBaseUrl is undefined', () => {
+    // Documents current behavior: apiBaseUrl is always a string when this modal is mounted by
+    // the generated YearPage, so this path is unreachable in practice — but a broken invariant
+    // must surface as a loud failure, not a silently wrong fetch URL.
+    expect(() => render(
+      <CloseYearConfirmModal direction="close" isOpen currentRecord={{ id: 'year1' }} token="tok" apiBaseUrl={undefined}
+        onClose={() => {}} onSaved={() => {}} data-testid="modal8" />
+    )).toThrow();
+  });
 });
