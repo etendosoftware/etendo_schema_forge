@@ -3316,8 +3316,11 @@ export function DetailView({
                   );
                 })}
 
-              {/* Detail entity process buttons — visible when child rows are selected or a single line is clicked */}
-              {!isNew && detailProcesses.length > 0 && (selectedChildRows.length > 0 || selectedLine) && detailProcesses
+              {/* Detail entity process buttons — visible only for the single-line-click case.
+                  The multi-row (selectedChildRows) case is rendered exclusively by the bulk
+                  action bar above the lines table (see isDetailBulkBarVisible) to avoid
+                  rendering these buttons twice. */}
+              {!isNew && detailProcesses.length > 0 && selectedChildRows.length === 0 && selectedLine && detailProcesses
                 .map(p => {
                   const isPrimary = p.style === 'positive';
                   const btnClass = getButtonClass(salesTheme, p, isPrimary);
@@ -3661,7 +3664,9 @@ export function DetailView({
                               <div className="flex-1 min-w-0">
                                 {/* Bulk action bar: delete + detail processes (classic only) */}
                                 {isDetailBulkBarVisible(linesLayout, api, detailEntity, isDocumentReadOnly, selectedChildRows, detailProcesses) && (
-                                  <div className="flex items-center justify-between px-3 py-2 mb-2 rounded-lg bg-muted/60 border border-border/40">
+                                  <div
+                                    data-testid="detail-bulk-action-bar"
+                                    className="sticky top-0 z-10 flex items-center justify-between px-3 py-2 mb-2 rounded-lg bg-muted border border-border/40 shadow-sm">
                                     <span className="text-sm font-medium text-foreground">
                                       {ui('selected', { count: selectedChildRows.length })}
                                     </span>
@@ -3678,6 +3683,7 @@ export function DetailView({
                                             }
                                           }}
                                           className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md border border-primary text-primary hover:bg-primary/10 disabled:opacity-50 transition-colors"
+                                          data-testid="Button__detail-process"
                                         >
                                           {executingDetailProcess ? ui('loading') : (tMenu(p.label) || p.label)}
                                         </button>

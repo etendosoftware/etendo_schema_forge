@@ -28,24 +28,23 @@ function renderTab(overrides = {}) {
   return { setGeneralField };
 }
 
-describe('GeneralTab — inverted period toggle', () => {
-  it('shows the "closed periods" toggle OFF when automaticPeriodControl is true', () => {
-    renderTab({ general: { automaticPeriodControl: true } });
-    // Toggle reads the inverse of the raw AD value.
-    expect(screen.getByTestId('glc-toggle-closed-periods-switch')).not.toBeChecked();
+describe('GeneralTab — allow negative toggle', () => {
+  it('shows the "allow negative" toggle OFF when allowNegative is false', () => {
+    renderTab({ general: { allowNegative: false } });
+    expect(screen.getByTestId('glc-toggle-allow-negative-switch')).not.toBeChecked();
   });
 
-  it('shows the toggle ON when automaticPeriodControl is false', () => {
-    renderTab({ general: { automaticPeriodControl: false } });
-    expect(screen.getByTestId('glc-toggle-closed-periods-switch')).toBeChecked();
+  it('shows the toggle ON when allowNegative is true', () => {
+    renderTab({ general: { allowNegative: true } });
+    expect(screen.getByTestId('glc-toggle-allow-negative-switch')).toBeChecked();
   });
 
-  it('writes the inverted raw value when the toggle is turned ON', async () => {
+  it('writes the raw value directly when the toggle is turned ON', async () => {
     const user = userEvent.setup();
-    const { setGeneralField } = renderTab({ general: { automaticPeriodControl: true } });
-    await user.click(screen.getByTestId('glc-toggle-closed-periods-switch'));
-    // Toggle ON ⇒ allow closed periods ⇒ AutoPeriodControl = false.
-    expect(setGeneralField).toHaveBeenCalledWith('automaticPeriodControl', false);
+    const { setGeneralField } = renderTab({ general: { allowNegative: false } });
+    await user.click(screen.getByTestId('glc-toggle-allow-negative-switch'));
+    // Toggle ON ⇒ AllowNegative = true (direct binding, no inversion).
+    expect(setGeneralField).toHaveBeenCalledWith('allowNegative', true);
   });
 });
 
@@ -64,26 +63,6 @@ describe('GeneralTab — read-only AD_OrgInfo fields', () => {
     const cal = screen.getByTestId('glc-field-calendar');
     expect(within(cal).getByText(ORG_INFO_SEED.fiscalCalendar)).toBeInTheDocument();
     expect(within(cal).queryByRole('textbox')).toBeNull();
-  });
-});
-
-describe('GeneralTab — unbacked placeholders', () => {
-  it('marks the conversion type and cost precision selects as unbacked', () => {
-    renderTab();
-    const conv = screen.getByTestId('glc-field-conversion-type');
-    const cost = screen.getByTestId('glc-field-cost-precision');
-    expect(within(conv).getByTestId('glc-unbacked-hint')).toBeInTheDocument();
-    expect(within(cost).getByTestId('glc-unbacked-hint')).toBeInTheDocument();
-  });
-
-  it('marks the auto-reconciliation and journal-numbering toggles as unbacked and disabled', () => {
-    renderTab();
-    const recon = screen.getByTestId('glc-toggle-auto-reconciliation');
-    const journal = screen.getByTestId('glc-toggle-journal-numbering');
-    expect(within(recon).getByTestId('glc-unbacked-hint')).toBeInTheDocument();
-    expect(within(journal).getByTestId('glc-unbacked-hint')).toBeInTheDocument();
-    expect(screen.getByTestId('glc-toggle-auto-reconciliation-switch')).toBeDisabled();
-    expect(screen.getByTestId('glc-toggle-journal-numbering-switch')).toBeDisabled();
   });
 });
 

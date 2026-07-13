@@ -240,18 +240,22 @@ test.describe('Chart of Accounts — account code lock (ETP-4247)', () => {
     await page.goto('/chart-of-accounts');
     await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
 
+    // The tree is collapsed by default (ETP-4452 follow-up) — virtual group headers
+    // carry the 4-digit parent code ('4300'), NOT the 8-digit summary account code.
+    // Verify the group header is visible under the tree before expanding it.
+    const groupRow = page.getByTestId('account-tree-row-group-4300');
+    await expect(groupRow).toBeVisible({ timeout: 5_000 });
+    await expect(groupRow).toContainText('4300');
+
+    // Expand the group to reveal its leaf children.
+    await page.getByTestId('account-tree-toggle-group-4300').click();
+
     // The tree view renders account rows as data-testid="account-tree-row-<id>".
-    // Leaf accounts (issummary='N') appear as individual rows.
+    // Leaf accounts (issummary='N') appear as individual rows once expanded.
     const leafRow = page.getByTestId('account-tree-row-leaf-001');
     await expect(leafRow).toBeVisible({ timeout: 5_000 });
     await expect(leafRow).toContainText('43000001');
     await expect(leafRow).toContainText('Cliente Pérez S.L.');
-
-    // Virtual group headers carry the 4-digit parent code ('4300'), NOT the 8-digit
-    // summary account code. Verify the group header is visible under the tree.
-    const groupRow = page.getByTestId('account-tree-row-group-4300');
-    await expect(groupRow).toBeVisible({ timeout: 5_000 });
-    await expect(groupRow).toContainText('4300');
 
     // Confirm the leaf code is exactly 8 characters (not truncated or padded)
     expect('43000001'.length).toBe(8);
