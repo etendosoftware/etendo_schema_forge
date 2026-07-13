@@ -1,7 +1,8 @@
-import { forwardRef, useEffect, useState } from 'react';
+import { forwardRef } from 'react';
 import { DataTable } from '@/components/contract-ui';
 import { Tag } from '@/components/ui/tag';
 import { useUI } from '@/i18n';
+import { useYearCloseStatus } from './useYearCloseStatus.js';
 
 // `col.render` (checked first, before any type-based cell renderer — see
 // DataTable.jsx's renderCellValue) receives `(row, { entity, token, apiBaseUrl })`, where
@@ -14,9 +15,10 @@ function rootApiBase(apiBaseUrl) {
   return apiBaseUrl.replace(/\/[^/]*$/, '');
 }
 
-// Reuses the exact same "closed iff the end-year-close accounting endpoint returns at least
-// one row" derivation as YearCloseStatusBadge (the detail header's status pill) — never a
-// second, different derivation — so the list column and the header can never disagree.
+// Reuses `useYearCloseStatus` — the single, canonical "is this year closed" derivation shared
+// with YearCloseStatusBadge (the detail header's status pill) and index.jsx's menuActions
+// override (Cerrar Año/Deshacer Cierre de Año visibility) — never a second, different
+// derivation — so none of the three can ever disagree.
 //
 // Fired once per visible row. A true bulk "which of these year IDs are closed" check would
 // need a new backend (com.etendoerp.go) endpoint — out of scope for this frontend-only fix.
@@ -29,29 +31,7 @@ function YearCloseStatusCell({ yearId, token, apiBaseUrl }) {
   const ui = useUI();
   // `undefined` = loading, `null` = the request failed — both render nothing (an auxiliary
   // column cell showing a wrong/misleading state is worse than briefly showing nothing).
-  const [closed, setClosed] = useState(undefined);
-
-  useEffect(() => {
-    if (!yearId) return;
-    let cancelled = false;
-    setClosed(undefined);
-    fetch(`${apiBaseUrl}/accounting?year=${yearId}`, {
-      headers: { Authorization: `Bearer ${token}` },
-    })
-      .then((res) => {
-        if (!res.ok) throw new Error(`Request failed: ${res.status}`);
-        return res.json();
-      })
-      .then((body) => {
-        if (!cancelled) setClosed((body.data ?? []).length > 0);
-      })
-      .catch(() => {
-        if (!cancelled) setClosed(null);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [yearId, apiBaseUrl, token]);
+  const closed = useYearCloseStatus(yearId, token, apiBaseUrl);
 
   if (closed === undefined || closed === null) return null;
 

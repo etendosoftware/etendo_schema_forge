@@ -33,6 +33,21 @@ vi.mock('../YearTableWithCloseStatus.jsx', () => ({
   default: () => <div data-testid="year-table-with-close-status-stub" />,
 }));
 
+vi.mock('@/windows/custom/fiscal-calendar/CloseYearModal', () => ({
+  default: (props) => {
+    globalThis.__lastCloseYearModalProps = props;
+    return <div data-testid="close-year-modal-stub" />;
+  },
+}));
+
+vi.mock('@/windows/custom/fiscal-calendar/UndoCloseYearModal', () => ({
+  default: (props) => {
+    globalThis.__lastUndoCloseYearModalProps = props;
+    return <div data-testid="undo-close-year-modal-stub" />;
+  },
+}));
+
+import { screen } from '@testing-library/react';
 import CalendarWindow from '../index.jsx';
 import YearTableWithCloseStatus from '../YearTableWithCloseStatus.jsx';
 
@@ -123,6 +138,70 @@ describe('CalendarWindow', () => {
   it('passes YearTableWithCloseStatus as the list Table override (no wrapper needed — the apiBaseUrl rewrite for the status column happens inside its own col.render)', () => {
     render(<CalendarWindow token="tok" apiBaseUrl="https://api.test/calendar" />);
     expect(globalThis.__lastCalendarPageProps.Table).toBe(YearTableWithCloseStatus);
+  });
+
+  it('offers only "Cerrar Año" (not both) while the year is not closed', async () => {
+    global.fetch = vi.fn(() => Promise.resolve({ ok: true, json: () => Promise.resolve({ data: [] }) }));
+    render(<CalendarWindow token="tok" apiBaseUrl="https://api.test/calendar" recordId="year1" />);
+    await vi.waitFor(() => expect(global.fetch).toHaveBeenCalled());
+
+    const actions = globalThis.__lastCalendarPageProps.menuActions({ data: { id: 'year1' } });
+    expect(actions.map((a) => a.key)).toEqual(['closeYear']);
+  });
+
+  it('offers only "Deshacer Cierre de Año" (not both) once the year is closed', async () => {
+    global.fetch = vi.fn(() => Promise.resolve({ ok: true, json: () => Promise.resolve({ data: [{ id: 'f1' }] }) }));
+    render(<CalendarWindow token="tok" apiBaseUrl="https://api.test/calendar" recordId="year1" />);
+
+    // Wait for useYearCloseStatus's async state update to flush and re-render
+    // CalendarWindow with a fresh `menuActionsForCalendar` closing over the resolved value —
+    // waiting only for `fetch` to have been called isn't enough, since the .then()/setState/
+    // re-render chain hasn't necessarily settled yet at that point.
+    await vi.waitFor(() => {
+      const actions = globalThis.__lastCalendarPageProps.menuActions({ data: { id: 'year1' } });
+      expect(actions.map((a) => a.key)).toEqual(['undoCloseYear']);
+    });
+  });
+
+  it('reuses the same end-year-close derivation for menuActions as the badge/column (never re-derived)', () => {
+    render(<CalendarWindow token="tok" apiBaseUrl="https://api.test/calendar" recordId="year1" />);
+    const TopbarRightForCalendar = globalThis.__lastCalendarPageProps.topbarRight;
+    render(<TopbarRightForCalendar recordId="year1" token="tok" apiBaseUrl="https://api.test/calendar" />);
+    // Same apiBaseUrl computation is used for both the badge and the recordId-scoped
+    // menuActions check — confirmed by construction (endYearCloseApiBaseUrl is a single
+    // variable feeding both `useYearCloseStatus` calls in index.jsx).
+    expect(globalThis.__lastYearCloseStatusBadgeProps.apiBaseUrl).toBe('https://api.test/end-year-close');
+  });
+
+  it('clicking "Cerrar Año" opens CloseYearModal with the current record', async () => {
+    global.fetch = vi.fn(() => Promise.resolve({ ok: true, json: () => Promise.resolve({ data: [] }) }));
+    render(<CalendarWindow token="tok" apiBaseUrl="https://api.test/calendar" recordId="year1" />);
+    await vi.waitFor(() => expect(global.fetch).toHaveBeenCalled());
+
+    const actions = globalThis.__lastCalendarPageProps.menuActions({ data: { id: 'year1', fiscalYear: '2026' } });
+    actions.find((a) => a.key === 'closeYear').onClick();
+
+    await vi.waitFor(() => expect(screen.getByTestId('close-year-modal-stub')).toBeInTheDocument());
+    expect(globalThis.__lastCloseYearModalProps.currentRecord).toEqual({ id: 'year1', fiscalYear: '2026' });
+    expect(globalThis.__lastCloseYearModalProps.apiBaseUrl).toBe('https://api.test/fiscal-calendar');
+    expect(screen.queryByTestId('undo-close-year-modal-stub')).not.toBeInTheDocument();
+  });
+
+  it('clicking "Deshacer Cierre de Año" opens UndoCloseYearModal with the current record', async () => {
+    global.fetch = vi.fn(() => Promise.resolve({ ok: true, json: () => Promise.resolve({ data: [{ id: 'f1' }] }) }));
+    render(<CalendarWindow token="tok" apiBaseUrl="https://api.test/calendar" recordId="year1" />);
+
+    let actions;
+    await vi.waitFor(() => {
+      actions = globalThis.__lastCalendarPageProps.menuActions({ data: { id: 'year1', fiscalYear: '2026' } });
+      expect(actions.map((a) => a.key)).toEqual(['undoCloseYear']);
+    });
+    actions.find((a) => a.key === 'undoCloseYear').onClick();
+
+    await vi.waitFor(() => expect(screen.getByTestId('undo-close-year-modal-stub')).toBeInTheDocument());
+    expect(globalThis.__lastUndoCloseYearModalProps.currentRecord).toEqual({ id: 'year1', fiscalYear: '2026' });
+    expect(globalThis.__lastUndoCloseYearModalProps.apiBaseUrl).toBe('https://api.test/fiscal-calendar');
+    expect(screen.queryByTestId('close-year-modal-stub')).not.toBeInTheDocument();
   });
 
   it('throws instead of silently misrouting when apiBaseUrl is undefined', () => {
