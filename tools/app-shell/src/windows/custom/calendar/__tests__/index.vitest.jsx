@@ -29,7 +29,12 @@ vi.mock('../YearCloseStatusBadge.jsx', () => ({
   },
 }));
 
+vi.mock('../YearTableWithCloseStatus.jsx', () => ({
+  default: () => <div data-testid="year-table-with-close-status-stub" />,
+}));
+
 import CalendarWindow from '../index.jsx';
+import YearTableWithCloseStatus from '../YearTableWithCloseStatus.jsx';
 
 describe('CalendarWindow', () => {
   it('passes the expected secondaryTabs to YearPage', () => {
@@ -113,6 +118,11 @@ describe('CalendarWindow', () => {
     render(<TopbarRightForCalendar recordId="year1" token="tok" apiBaseUrl="https://api.test/calendar" />);
 
     expect(globalThis.__lastYearCloseStatusBadgeProps.apiBaseUrl).toBe(globalThis.__lastAccountingPanelProps.apiBaseUrl);
+  });
+
+  it('passes YearTableWithCloseStatus as the list Table override (no wrapper needed — the apiBaseUrl rewrite for the status column happens inside its own col.render)', () => {
+    render(<CalendarWindow token="tok" apiBaseUrl="https://api.test/calendar" />);
+    expect(globalThis.__lastCalendarPageProps.Table).toBe(YearTableWithCloseStatus);
   });
 
   it('throws instead of silently misrouting when apiBaseUrl is undefined', () => {

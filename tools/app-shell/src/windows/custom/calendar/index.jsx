@@ -3,6 +3,7 @@ import YearPage from '@generated/fiscal-calendar/generated/web/fiscal-calendar/Y
 import AccountingPanel from './AccountingPanel.jsx';
 import PeriodsExpandablePanel from './PeriodsExpandablePanel.jsx';
 import YearCloseStatusBadge from './YearCloseStatusBadge.jsx';
+import YearTableWithCloseStatus from './YearTableWithCloseStatus.jsx';
 
 /**
  * The `calendar` custom window has no backing NEO spec of its own (ETP-4478 rework — the
@@ -52,6 +53,7 @@ export default function CalendarWindow(props) {
       apiBaseUrl={yearApiBaseUrl}
       secondaryTabs={secondaryTabs}
       topbarRight={YearCloseStatusBadgeForCalendar}
+      Table={YearTableWithCloseStatus}
       data-testid="CalendarPage__f478"
     />
   );
