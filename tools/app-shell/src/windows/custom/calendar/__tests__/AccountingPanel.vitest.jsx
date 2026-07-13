@@ -24,4 +24,20 @@ describe('AccountingPanel', () => {
     render(<AccountingPanel parentId="year1" token="tok" apiBaseUrl="https://api.test" data-testid="AccountingPanel__empty" />);
     await waitFor(() => expect(screen.getByTestId('accounting-panel-empty')).toBeInTheDocument());
   });
+
+  it('renders nothing while the fetch is still pending (no loading indicator)', () => {
+    global.fetch = vi.fn(() => new Promise(() => {})); // never resolves
+    const { container } = render(
+      <AccountingPanel parentId="year1" token="tok" apiBaseUrl="https://api.test" data-testid="AccountingPanel__pending" />
+    );
+    expect(container.firstChild).toBeNull();
+  });
+
+  it('falls back to the empty state (not an error message) when the server responds with a non-ok status', async () => {
+    // The component does not check res.ok before parsing JSON — an HTTP error with a parseable
+    // body is silently treated the same as "no rows", with no error surfaced to the user.
+    global.fetch = vi.fn(() => Promise.resolve({ ok: false, status: 500, json: () => Promise.resolve({}) }));
+    render(<AccountingPanel parentId="year1" token="tok" apiBaseUrl="https://api.test" data-testid="AccountingPanel__error" />);
+    await waitFor(() => expect(screen.getByTestId('accounting-panel-empty')).toBeInTheDocument());
+  });
 });
