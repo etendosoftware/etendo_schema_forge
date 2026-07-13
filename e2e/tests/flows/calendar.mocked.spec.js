@@ -13,15 +13,26 @@ import { login } from '../helpers/auth.js';
  * Mock mode only: installs window-specific routes on top of the generic
  * /sws/** mock that login() seeds, so it does not need a backend.
  *
+ * Backend topology (ETP-4478 rework — the `calendar` custom window has no
+ * backing NEO spec of its own; it aggregates three separate single-window
+ * specs, since `schema_forge_core`'s populate/push mechanism assumes 1 spec =
+ * 1 AD window — see GH #35 / ETP-4481):
+ * - `fiscal-calendar` — `year` (list/detail) + closeYear/undoCloseYear actions
+ * - `open-close-period-control` — `periodControl`/`documents` (Periods tab)
+ * - `end-year-close` — `accounting` (Accounting tab)
+ * `tools/app-shell/src/windows/custom/calendar/index.jsx` rewrites the
+ * calendar-route `apiBaseUrl` to each of these per panel.
+ *
  * Envelope shapes (confirmed by reading the real handlers, not assumed):
- * - `calendar/year` list+detail goes through the standard entity CRUD path
- *   (NeoCrudHandler), which wraps as `{ response: { data: ... } }` — same
- *   shape as row-quick-actions.mocked.spec.js's reference pattern.
- * - `calendar/periodControl`, `calendar/documents`, `calendar/accounting`
- *   are intercepted by custom NeoHandlers (javaQualifier-routed) that return
- *   a flat `{ data: [...] }` body — confirmed via NeoServlet.writeResponse()
- *   writing NeoResponse.getBody() directly with no extra envelope, and via
- *   PeriodsExpandablePanel.jsx/AccountingPanel.jsx's own `body.data` reads.
+ * - `fiscal-calendar/year` list+detail goes through the standard entity CRUD
+ *   path (NeoCrudHandler), which wraps as `{ response: { data: ... } }` —
+ *   same shape as row-quick-actions.mocked.spec.js's reference pattern.
+ * - `open-close-period-control/periodControl`, `.../documents`,
+ *   `end-year-close/accounting` are intercepted by custom NeoHandlers
+ *   (javaQualifier-routed) that return a flat `{ data: [...] }` body —
+ *   confirmed via NeoServlet.writeResponse() writing NeoResponse.getBody()
+ *   directly with no extra envelope, and via PeriodsExpandablePanel.jsx/
+ *   AccountingPanel.jsx's own `body.data` reads.
  */
 
 const YEAR_ROW = { id: 'year-001', fiscalYear: '2027', description: 'FY2027', 'calendar$_identifier': 'Standard Calendar' };
@@ -32,7 +43,7 @@ const DOCUMENT_ROW = { id: 'doc-001', documentCategory: 'API', periodStatus: 'O'
 const ACCOUNTING_ROW = { id: 'fact-001', account: '20000000', debit: '100.00', credit: '0.00', description: 'Year close' };
 
 async function installYearMock(page) {
-  await page.route('**/sws/neo/calendar/year**', async (route) => {
+  await page.route('**/sws/neo/fiscal-calendar/year**', async (route) => {
     const req = route.request();
     const url = req.url();
     if (req.method() === 'GET' && !/\/year\/[^/?]+/.test(url)) {
@@ -55,7 +66,7 @@ async function installYearMock(page) {
 
 /** Mocks periodControl list + the openClose action endpoint. */
 async function installPeriodControlMock(page, periods) {
-  await page.route('**/sws/neo/calendar/periodControl**', async (route) => {
+  await page.route('**/sws/neo/open-close-period-control/periodControl**', async (route) => {
     const req = route.request();
     const url = req.url();
     if (req.method() === 'GET') {
@@ -77,7 +88,7 @@ async function installPeriodControlMock(page, periods) {
 }
 
 async function installDocumentsMock(page) {
-  await page.route('**/sws/neo/calendar/documents**', async (route) => {
+  await page.route('**/sws/neo/open-close-period-control/documents**', async (route) => {
     const req = route.request();
     if (req.method() === 'GET') {
       await route.fulfill({
@@ -91,7 +102,7 @@ async function installDocumentsMock(page) {
 }
 
 async function installAccountingMock(page) {
-  await page.route('**/sws/neo/calendar/accounting**', async (route) => {
+  await page.route('**/sws/neo/end-year-close/accounting**', async (route) => {
     await route.fulfill({
       status: 200, contentType: 'application/json',
       body: JSON.stringify({ data: [ACCOUNTING_ROW] }),
@@ -150,7 +161,7 @@ test.describe('Calendar — year detail', () => {
     await expect(page.getByText('Jan-2027')).toBeVisible();
 
     const requestPromise = page.waitForRequest(
-      (r) => r.url().includes('/sws/neo/calendar/periodControl/period-001/action/openClose')
+      (r) => r.url().includes('/sws/neo/open-close-period-control/periodControl/period-001/action/openClose')
         && r.method() === 'POST'
     );
     await page.getByTestId('period-openclose-period-001').click();
