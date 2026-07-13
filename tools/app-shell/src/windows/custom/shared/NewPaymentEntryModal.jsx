@@ -21,6 +21,10 @@ const GREEN_BG = '#EEFBF4';
 const RED_FG = '#C5234A';
 const RED_BG = '#FDE2E9';
 const AMBER = '#C28800';
+// Stable reference for "no used sources" (create mode / no credit consumed) — a fresh []
+// literal on every render would change identity each time and loop usePaymentBalance's seed
+// effect (same failure mode as the apiFetch dependency fixed earlier).
+const EMPTY_USED_SOURCES = [];
 const EXCESS_BG = '#F5F7F9';
 const EXCESS_BORDER = '#D1D4DB';
 const EXCESS_FG = '#3F3F50';
@@ -649,6 +653,23 @@ function PaymentModalFooter({
  *   onClose      — close callback (returns to the history popup)
  *   onSaved      — (result, state) callback after save/confirm to refresh the popup
  */
+/** Normalizes a draft's payment date to yyyy-MM-dd (today when absent/invalid). */
+function normalizeDraftDate(raw) {
+  const today = () => new Date().toISOString().slice(0, 10);
+  if (!raw) return today();
+  const m = String(raw).match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (m) return `${m[1]}-${m[2]}-${m[3]}`;
+  const d = new Date(raw);
+  return Number.isNaN(d.getTime()) ? today() : d.toISOString().slice(0, 10);
+}
+
+/** Resolves a payment-method id from its display name (draft rows carry the name). */
+function matchMethodIdByName(methods, name) {
+  if (!name) return '';
+  const hit = methods.find(m => m.name === name);
+  return hit ? hit.id : '';
+}
+
 export default function NewPaymentEntryModal({
   dir = 'in',
   specName,
@@ -659,11 +680,16 @@ export default function NewPaymentEntryModal({
   apiBaseUrl,
   onClose,
   onSaved,
+  // Existing draft being re-opened for editing (from the history popup). When
+  // present the modal runs in edit mode: fields are prefilled from this record
+  // and save/confirm update the SAME payment (its id is sent as `paymentId`).
+  payment = null,
 }) {
   const ui = useUI();
   const base = useMemo(() => (apiBaseUrl || '').replace(/\/[^/]+$/, ''), [apiBaseUrl]);
   const apiFetch = useApiFetch(base);
   const isReceipt = dir === 'in';
+  const isEdit = !!payment?.id;
 
   const currency = invoiceData?.['currency$_identifier'] || '';
   const docNo = invoiceData?.documentNo || '';
@@ -671,7 +697,7 @@ export default function NewPaymentEntryModal({
   const total = Number(outstanding) || 0;
 
   // ── catalogs ────────────────────────────────────────────────────────────────
-  const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [date, setDate] = useState(() => normalizeDraftDate(payment?.paymentDate));
   const [accounts, setAccounts] = useState([]);
   const [accountId, setAccountId] = useState('');
   const [methods, setMethods] = useState([]);
@@ -710,17 +736,23 @@ export default function NewPaymentEntryModal({
   // they successfully authorized.
   const pisReturnedRef = useRef(false);
 
-  const balance = usePaymentBalance({ total, dir, sources });
+  const balance = usePaymentBalance({
+    total, dir, sources, usedSources: payment?.creditSourcesUsed || EMPTY_USED_SOURCES,
+  });
 
   // Fetch accounts, payment methods, credit sources, and (if needed) the schedule.
   useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
-        const post = (action) => apiFetch(`/${specName}/header/${invoiceId}/action/${action}`,
-          { method: 'POST', body: '{}' }).catch(() => null);
+        const post = (action, body = '{}') => apiFetch(`/${specName}/header/${invoiceId}/action/${action}`,
+          { method: 'POST', body }).catch(() => null);
+        // Edit mode: the draft's own consumption must be added back into each source's avail
+        // (and its already-used abono PSDs re-listed) so the modal can re-check them.
+        const creditSourcesBody = isEdit ? JSON.stringify({ editPaymentId: payment.id }) : '{}';
         const [accRes, methRes, srcRes] = await Promise.all([
-          post('invoiceAccounts'), post('invoicePaymentMethods'), post('invoiceCreditSources'),
+          post('invoiceAccounts'), post('invoicePaymentMethods'),
+          post('invoiceCreditSources', creditSourcesBody),
         ]);
         if (cancelled) return;
 
@@ -731,9 +763,18 @@ export default function NewPaymentEntryModal({
         setMethods(methList);
         setSources(mapSources(await readJson(srcRes)));
         bpPreferredAccountIdRef.current = accJson?.bpPreferredAccountId || '';
-        const defaultMethodId = pickDefaultMethodId(accJson, accList, methList);
-        setMethodId(defaultMethodId);
-        setAccountId(pickDefaultAccountId(accList, defaultMethodId, bpPreferredAccountIdRef.current));
+        if (isEdit) {
+          // Edit mode: prefill from the draft instead of picking defaults.
+          setMethodId(matchMethodIdByName(methList, payment.paymentMethod)
+            || pickDefaultMethodId(accJson, accList, methList));
+          setAccountId(payment.accountId
+            || pickDefaultAccountId(accList, '', bpPreferredAccountIdRef.current));
+          balance.onAmountChange(formatPlain(Number(payment.amount) || 0));
+        } else {
+          const defaultMethodId = pickDefaultMethodId(accJson, accList, methList);
+          setMethodId(defaultMethodId);
+          setAccountId(pickDefaultAccountId(accList, defaultMethodId, bpPreferredAccountIdRef.current));
+        }
 
         if (!scheduleIdProp) {
           const sched = await fetchPendingSchedule(apiFetch, specName, invoiceId);
@@ -891,6 +932,8 @@ export default function NewPaymentEntryModal({
         process, // 'draft' | 'confirm'
         creditSources: balance.consumedSources,
         overpaymentAction: overpaymentActionFor(balance),
+        // Edit mode: update this existing draft instead of creating a new one.
+        paymentId: payment?.id || undefined,
       };
       // PIS only ever accompanies the primary "confirm" action — Guardar
       // borrador keeps recording a plain manual payment, byte-for-byte
@@ -962,7 +1005,9 @@ export default function NewPaymentEntryModal({
     onClose?.();
   }, [pisPolling, cancelPisWait, onClose]);
 
-  const title = isReceipt ? ui('cpNewCollection') : ui('cpNewPayment');
+  const title = isEdit
+    ? (isReceipt ? ui('cpEditCollection') : ui('cpEditPayment'))
+    : (isReceipt ? ui('cpNewCollection') : ui('cpNewPayment'));
   const deltaLabel = deltaLabelFor(balance, ui);
 
   // Floppy + check icons for the footer actions (Figma).

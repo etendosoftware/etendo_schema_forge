@@ -130,28 +130,9 @@ describe('InvoicePaymentHistoryModal', () => {
     );
   });
 
-  it('shows the "via PSD2" badge when the payment has viaPis: true', async () => {
+  it('never renders a "via PSD2" badge, regardless of viaPis', async () => {
     useApiFetch.mockReturnValue(makeApiFetch([
       { id: 'p1', documentNo: 'PAY-001', paymentDate: '2026-01-01', amount: '500', status: 'RPR', viaPis: true },
-    ]));
-    render(
-      <InvoicePaymentHistoryModal
-        invoiceId="42"
-        invoiceData={INVOICE_DATA}
-        specName="sales-invoice"
-        apiBaseUrl="http://host/sws/neo/sales-invoice"
-        onClose={vi.fn()}
-      />,
-    );
-    await waitFor(() =>
-      expect(screen.getByTestId('InvoicePaymentHistoryModal__viaPis')).toBeInTheDocument(),
-    );
-    expect(screen.getByText('cpPisViaLabel')).toBeInTheDocument();
-  });
-
-  it('hides the "via PSD2" badge when viaPis is false or absent', async () => {
-    useApiFetch.mockReturnValue(makeApiFetch([
-      { id: 'p1', documentNo: 'PAY-001', paymentDate: '2026-01-01', amount: '500', status: 'RPR', viaPis: false },
       { id: 'p2', documentNo: 'PAY-002', paymentDate: '2026-01-05', amount: '250', status: 'DR' },
     ]));
     render(
