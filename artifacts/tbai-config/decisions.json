@@ -41,10 +41,6 @@
         "validatePreviousInvoice": {
           "visibility": "editable"
         },
-        "tbaiConfigID": {
-          "visibility": "system",
-          "derivation": "fromConfig"
-        },
         "client": {
           "visibility": "system",
           "derivation": "fromParent"
