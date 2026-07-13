@@ -3,8 +3,6 @@ import { ListView, DetailView } from '@/components/contract-ui';
 import { toast } from 'sonner';
 import YearTable from './YearTable';
 import YearForm from './YearForm';
-import PeriodTable from './PeriodTable';
-import PeriodForm from './PeriodForm';
 import { AttachmentsTab } from '@/components/attachments';
 import CloseYearModal from '@/windows/custom/fiscal-calendar/CloseYearModal';
 import UndoCloseYearModal from '@/windows/custom/fiscal-calendar/UndoCloseYearModal';
@@ -39,22 +37,10 @@ const draftMode = null;
 // @sf-generated-end draftMode:year
 
 // @sf-generated-start requiredHeaderFields:year
-const requiredHeaderFields = ['fiscalYear', 'calendar'];
+const requiredHeaderFields = ['fiscalYear'];
 // @sf-generated-end requiredHeaderFields:year
 
-// @sf-generated-start addLineFields:period
-const addLineFields = {
-  entry: [
 
-  ],
-  derived: [
-
-  ],
-  hidden: [
-
-  ],
-};
-// @sf-generated-end addLineFields:period
 
 export const api = {
   "specName": "fiscal-calendar",
@@ -70,29 +56,9 @@ export const api = {
       "listUrl": "/sws/neo/fiscal-calendar/year",
       "detailUrl": "/sws/neo/fiscal-calendar/year/{id}",
       "supportedFilters": []
-    },
-    "period": {
-      "get": true,
-      "getById": true,
-      "post": true,
-      "put": true,
-      "patch": true,
-      "delete": true,
-      "listUrl": "/sws/neo/fiscal-calendar/period",
-      "detailUrl": "/sws/neo/fiscal-calendar/period/{id}",
-      "supportedFilters": []
     }
   },
-  "selectors": [
-    {
-      "entity": "year",
-      "field": "calendar",
-      "column": "C_Calendar_ID",
-      "reference": "Calendar",
-      "inputMode": "selector",
-      "url": "/sws/neo/fiscal-calendar/year/selectors/calendar"
-    }
-  ],
+  "selectors": [],
   "actions": [
     {
       "entity": "year",
@@ -117,22 +83,6 @@ export const api = {
       "url": "/sws/neo/fiscal-calendar/year/{id}/action/dropRegFactAcct",
       "processId": "800038",
       "processType": "classic"
-    },
-    {
-      "entity": "period",
-      "field": "processNow",
-      "column": "Processing",
-      "url": "/sws/neo/fiscal-calendar/period/{id}/action/processNow",
-      "processId": "167",
-      "processType": "classic"
-    },
-    {
-      "entity": "period",
-      "field": "openClose",
-      "column": "OpenClose",
-      "url": "/sws/neo/fiscal-calendar/period/{id}/action/openClose",
-      "processId": "A832A5DA28FB4BB391BDE883E928DFC5",
-      "processType": "obuiapp"
     }
   ],
   "queryParams": {
@@ -176,18 +126,13 @@ export default function YearPage({ windowName, recordId, ...props }) {
       <>
       <DetailView
         entity="year"
-        detailEntity="period"
         Form={YearForm}
-        DetailTable={PeriodTable}
-        DetailForm={PeriodForm}
         summary={summary}
         statusField={statusField}
         extraBadges={extraBadges}
         processes={processes}
-        addLineFields={addLineFields}
         catalogs={catalogs}
         entityLabel="Year"
-        detailLabel="Period"
         windowName={windowName}
         recordId={recordId}
         breadcrumb={breadcrumb}

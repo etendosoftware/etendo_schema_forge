@@ -4,7 +4,7 @@
   "window": {
     "category": "finance",
     "name": "Fiscal Calendar",
-    "detailEntity": "period",
+    "detailEntity": null,
     "hideDetailForm": false,
     "listSortBy": "fiscalYear desc",
     "processOverrides": {
@@ -60,10 +60,7 @@
           "gridOrder": 2
         },
         "calendar": {
-          "grid": false,
-          "form": true,
-          "visibility": "editable",
-          "lookup": true
+          "visibility": "system"
         },
         "processNow": {
           "form": true,
@@ -104,6 +101,7 @@
       }
     },
     "period": {
+      "exclude": true,
       "fields": {
         "periodNo": {
           "grid": true,

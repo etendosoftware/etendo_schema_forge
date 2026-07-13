@@ -1,7 +1,8 @@
 {
-  "version": "0.1.0",
+  "version": "0.3.0",
   "generatedAt": "2026-07-07T11:18:10.164Z",
-  "contractChecksum": "ddf3b73521346e65",
+  "updatedAt": "2026-07-13T18:35:22.869Z",
+  "contractChecksum": "de2c03c526bde48a",
   "apiPrediction": {
     "specName": "fiscal-calendar",
     "baseUrl": "/sws/neo/fiscal-calendar",
@@ -16,29 +17,9 @@
         "listUrl": "/sws/neo/fiscal-calendar/year",
         "detailUrl": "/sws/neo/fiscal-calendar/year/{id}",
         "supportedFilters": []
-      },
-      "period": {
-        "get": true,
-        "getById": true,
-        "post": true,
-        "put": true,
-        "patch": true,
-        "delete": true,
-        "listUrl": "/sws/neo/fiscal-calendar/period",
-        "detailUrl": "/sws/neo/fiscal-calendar/period/{id}",
-        "supportedFilters": []
       }
     },
-    "selectors": [
-      {
-        "entity": "year",
-        "field": "calendar",
-        "column": "C_Calendar_ID",
-        "reference": "Calendar",
-        "inputMode": "selector",
-        "url": "/sws/neo/fiscal-calendar/year/selectors/calendar"
-      }
-    ],
+    "selectors": [],
     "actions": [
       {
         "name": "processNow",
@@ -124,86 +105,6 @@
         ],
         "processId": "800038",
         "processType": "classic"
-      },
-      {
-        "name": "processNow",
-        "actionType": "documentAction",
-        "entity": "period",
-        "column": "Processing",
-        "requiresRecord": true,
-        "method": "POST",
-        "url": "/sws/neo/fiscal-calendar/period/{id}/action/processNow",
-        "parameters": [
-          {
-            "name": "docAction",
-            "type": "string",
-            "required": true,
-            "description": "Document action code (e.g. CO=Complete, VO=Void, RE=Reactivate)"
-          }
-        ],
-        "preconditions": [
-          {
-            "field": "documentStatus",
-            "operator": "in",
-            "values": [
-              "DR",
-              "IP"
-            ],
-            "description": "Document must be in draft or in-progress state"
-          }
-        ],
-        "effects": [
-          "Updates document status",
-          "May trigger workflow transitions"
-        ],
-        "dryRunSupported": true,
-        "edgeCases": [
-          "Document is already completed or closed",
-          "Document has pending lines or missing required fields",
-          "User lacks permission to execute the action"
-        ],
-        "processId": "167",
-        "processType": "classic"
-      },
-      {
-        "name": "openClose",
-        "actionType": "documentAction",
-        "entity": "period",
-        "column": "OpenClose",
-        "requiresRecord": true,
-        "method": "POST",
-        "url": "/sws/neo/fiscal-calendar/period/{id}/action/openClose",
-        "parameters": [
-          {
-            "name": "docAction",
-            "type": "string",
-            "required": true,
-            "description": "Document action code (e.g. CO=Complete, VO=Void, RE=Reactivate)"
-          }
-        ],
-        "preconditions": [
-          {
-            "field": "documentStatus",
-            "operator": "in",
-            "values": [
-              "DR",
-              "IP"
-            ],
-            "description": "Document must be in draft or in-progress state"
-          }
-        ],
-        "effects": [
-          "Updates document status",
-          "May trigger workflow transitions"
-        ],
-        "dryRunSupported": true,
-        "edgeCases": [
-          "Document is already completed or closed",
-          "Document has pending lines or missing required fields",
-          "User lacks permission to execute the action"
-        ],
-        "processId": "A832A5DA28FB4BB391BDE883E928DFC5",
-        "processType": "obuiapp"
       }
     ],
     "queryParams": {
@@ -243,40 +144,6 @@
           "description": {},
           "processNow": {
             "defaultValue": "N"
-          },
-          "calendar": {
-            "required": true
-          }
-        }
-      },
-      "period": {
-        "fields": {
-          "periodNo": {
-            "readOnly": true,
-            "required": true,
-            "readOnlyLogic": "@C_Period_Not_Editable@='Y'"
-          },
-          "name": {
-            "readOnly": true,
-            "required": true
-          },
-          "startingDate": {
-            "readOnly": true,
-            "required": true,
-            "readOnlyLogic": "@C_Period_Not_Editable@='Y'"
-          },
-          "endingDate": {
-            "readOnly": true,
-            "readOnlyLogic": "@C_Period_Not_Editable@='Y'"
-          },
-          "periodType": {
-            "readOnly": true,
-            "required": true,
-            "readOnlyLogic": "@C_Period_Not_Editable@='Y'",
-            "defaultValue": "S"
-          },
-          "status": {
-            "readOnly": true
           }
         }
       }
@@ -291,8 +158,7 @@
     ],
     "minimumCreate": {
       "headerFields": [
-        "fiscalYear",
-        "calendar"
+        "fiscalYear"
       ],
       "recommendedOrder": [
         "createHeader"
@@ -301,9 +167,7 @@
     "selectorContexts": [],
     "actions": [
       "processNow",
-      "createRegFactAcct",
-      "processNow",
-      "openClose"
+      "createRegFactAcct"
     ],
     "workflow": [
       "Create draft header with required fields",
@@ -327,8 +191,7 @@
         "operation": "createHeader",
         "description": "Create a draft header with the minimum required editable fields.",
         "fields": [
-          "fiscalYear",
-          "calendar"
+          "fiscalYear"
         ]
       },
       {
@@ -341,5 +204,5 @@
     "knownLimitations": [],
     "dangerousOperations": []
   },
-  "checksum": "14f5a24f9a1bcc26"
+  "checksum": "6e9f2614bff9da8e"
 }
