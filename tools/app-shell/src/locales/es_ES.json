@@ -16670,6 +16670,8 @@
     "undoCloseYearBody": "Esto revertirá todos los asientos contables creados por el proceso de Cierre de Año.",
     "calendarAccountingTab": "Contabilidad",
     "calendarPeriodsTab": "Períodos",
+    "yearClosedStatus": "Año cerrado",
+    "yearNotClosedStatus": "Año no cerrado",
     "Action": "Acción",
     "All Opened": "Todos abiertos",
     "All Never Opened": "Ninguno abierto",

@@ -2,6 +2,7 @@ import { useUI } from '@/i18n';
 import YearPage from '@generated/fiscal-calendar/generated/web/fiscal-calendar/YearPage';
 import AccountingPanel from './AccountingPanel.jsx';
 import PeriodsExpandablePanel from './PeriodsExpandablePanel.jsx';
+import YearCloseStatusBadge from './YearCloseStatusBadge.jsx';
 
 /**
  * The `calendar` custom window has no backing NEO spec of its own (ETP-4478 rework — the
@@ -30,6 +31,14 @@ function PeriodsExpandablePanelForCalendar(props) {
   return <PeriodsExpandablePanel {...props} apiBaseUrl={`${rootApiBase(props.apiBaseUrl)}/open-close-period-control`} />;
 }
 
+// `topbarRight` (DetailView.jsx's slot for "right side of detail topbar (replaces status
+// badge)") passes { data, recordId, token, apiBaseUrl, api, onProcess, onRefresh } — `apiBaseUrl`
+// here is DetailView's own base (`.../fiscal-calendar`), so it needs the same rewrite as the
+// secondary-tab panels above to reach the `end-year-close` spec's accounting endpoint.
+function YearCloseStatusBadgeForCalendar(props) {
+  return <YearCloseStatusBadge {...props} apiBaseUrl={`${rootApiBase(props.apiBaseUrl)}/end-year-close`} />;
+}
+
 export default function CalendarWindow(props) {
   const ui = useUI();
   const yearApiBaseUrl = `${rootApiBase(props.apiBaseUrl)}/fiscal-calendar`;
@@ -42,6 +51,7 @@ export default function CalendarWindow(props) {
       {...props}
       apiBaseUrl={yearApiBaseUrl}
       secondaryTabs={secondaryTabs}
+      topbarRight={YearCloseStatusBadgeForCalendar}
       data-testid="CalendarPage__f478"
     />
   );

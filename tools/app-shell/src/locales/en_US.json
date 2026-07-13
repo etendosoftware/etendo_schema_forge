@@ -16428,6 +16428,8 @@
     "undoCloseYearBody": "This will revert all accounting entries created by the Close Year process.",
     "calendarAccountingTab": "Accounting",
     "calendarPeriodsTab": "Periods",
+    "yearClosedStatus": "Year closed",
+    "yearNotClosedStatus": "Year not closed",
     "All Opened": "All Opened",
     "All Never Opened": "All Never Opened",
     "All Closed": "All Closed",

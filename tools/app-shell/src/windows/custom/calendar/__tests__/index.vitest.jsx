@@ -22,6 +22,13 @@ vi.mock('../PeriodsExpandablePanel.jsx', () => ({
   },
 }));
 
+vi.mock('../YearCloseStatusBadge.jsx', () => ({
+  default: (props) => {
+    globalThis.__lastYearCloseStatusBadgeProps = props;
+    return <div data-testid="year-close-status-badge-stub" />;
+  },
+}));
+
 import CalendarWindow from '../index.jsx';
 
 describe('CalendarWindow', () => {
@@ -54,6 +61,19 @@ describe('CalendarWindow', () => {
     expect(globalThis.__lastPeriodsPanelProps.parentId).toBe('year1');
   });
 
+  it('passes YearCloseStatusBadgeForCalendar as topbarRight to YearPage', () => {
+    render(<CalendarWindow token="tok" apiBaseUrl="https://api.test/calendar" />);
+    expect(typeof globalThis.__lastCalendarPageProps.topbarRight).toBe('function');
+  });
+
+  it('rewrites the injected apiBaseUrl to end-year-close for the year-close status badge', () => {
+    render(<CalendarWindow token="tok" apiBaseUrl="https://api.test/calendar" />);
+    const TopbarRightForCalendar = globalThis.__lastCalendarPageProps.topbarRight;
+    render(<TopbarRightForCalendar recordId="year1" token="tok" apiBaseUrl="https://api.test/calendar" />);
+    expect(globalThis.__lastYearCloseStatusBadgeProps.apiBaseUrl).toBe('https://api.test/end-year-close');
+    expect(globalThis.__lastYearCloseStatusBadgeProps.recordId).toBe('year1');
+  });
+
   it('sends the header, Accounting tab, and Periods tab to three distinct spec bases', () => {
     render(<CalendarWindow token="tok" apiBaseUrl="https://api.test/calendar" />);
     const AccountingPanelForCalendar = globalThis.__lastCalendarPageProps.secondaryTabs[0].Panel;
@@ -81,6 +101,18 @@ describe('CalendarWindow', () => {
   it('degrades to a bare "/<spec>" path when apiBaseUrl is an empty string', () => {
     render(<CalendarWindow token="tok" apiBaseUrl="" />);
     expect(globalThis.__lastCalendarPageProps.apiBaseUrl).toBe('/fiscal-calendar');
+  });
+
+  it('routes the status badge to the same end-year-close spec as the Accounting tab (never re-derived)', () => {
+    // The status pill and the Contabilidad tab must read from the exact same accounting
+    // endpoint so they can never disagree with each other about whether a year is closed.
+    render(<CalendarWindow token="tok" apiBaseUrl="https://api.test/calendar" />);
+    const AccountingPanelForCalendar = globalThis.__lastCalendarPageProps.secondaryTabs[0].Panel;
+    const TopbarRightForCalendar = globalThis.__lastCalendarPageProps.topbarRight;
+    render(<AccountingPanelForCalendar parentId="year1" token="tok" apiBaseUrl="https://api.test/calendar" />);
+    render(<TopbarRightForCalendar recordId="year1" token="tok" apiBaseUrl="https://api.test/calendar" />);
+
+    expect(globalThis.__lastYearCloseStatusBadgeProps.apiBaseUrl).toBe(globalThis.__lastAccountingPanelProps.apiBaseUrl);
   });
 
   it('throws instead of silently misrouting when apiBaseUrl is undefined', () => {
