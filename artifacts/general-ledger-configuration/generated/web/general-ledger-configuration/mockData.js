@@ -8,8 +8,8 @@ export const General = [
     "description": "Standard order for Q1 delivery",
     "gAAP": "Sample gAAP",
     "currency": "USD",
-    "accrual": "Sample accrual",
-    "automaticPeriodControl": "Sample automaticPeriodControl"
+    "allowNegative": "Sample allowNegative",
+    "accrual": "Sample accrual"
   },
   {
     "id": "mock-General-002",
@@ -18,8 +18,8 @@ export const General = [
     "description": "Rush order - priority shipping required",
     "gAAP": "Sample gAAP",
     "currency": "EUR",
-    "accrual": "Sample accrual",
-    "automaticPeriodControl": "Sample automaticPeriodControl"
+    "allowNegative": "Sample allowNegative",
+    "accrual": "Sample accrual"
   },
   {
     "id": "mock-General-003",
@@ -28,8 +28,8 @@ export const General = [
     "description": "Bulk purchase for warehouse restocking",
     "gAAP": "Sample gAAP",
     "currency": "GBP",
-    "accrual": "Sample accrual",
-    "automaticPeriodControl": "Sample automaticPeriodControl"
+    "allowNegative": "Sample allowNegative",
+    "accrual": "Sample accrual"
   },
   {
     "id": "mock-General-004",
@@ -38,8 +38,8 @@ export const General = [
     "description": "Sample order for client evaluation",
     "gAAP": "Sample gAAP",
     "currency": "USD",
-    "accrual": "Sample accrual",
-    "automaticPeriodControl": "Sample automaticPeriodControl"
+    "allowNegative": "Sample allowNegative",
+    "accrual": "Sample accrual"
   },
   {
     "id": "mock-General-005",
@@ -48,8 +48,8 @@ export const General = [
     "description": "Recurring monthly supply order",
     "gAAP": "Sample gAAP",
     "currency": "EUR",
-    "accrual": "Sample accrual",
-    "automaticPeriodControl": "Sample automaticPeriodControl"
+    "allowNegative": "Sample allowNegative",
+    "accrual": "Sample accrual"
   },
   {
     "id": "mock-General-006",
@@ -58,8 +58,8 @@ export const General = [
     "description": "Special pricing agreement applies",
     "gAAP": "Sample gAAP",
     "currency": "GBP",
-    "accrual": "Sample accrual",
-    "automaticPeriodControl": "Sample automaticPeriodControl"
+    "allowNegative": "Sample allowNegative",
+    "accrual": "Sample accrual"
   },
   {
     "id": "mock-General-007",
@@ -68,8 +68,8 @@ export const General = [
     "description": "Consolidated order from multiple requests",
     "gAAP": "Sample gAAP",
     "currency": "USD",
-    "accrual": "Sample accrual",
-    "automaticPeriodControl": "Sample automaticPeriodControl"
+    "allowNegative": "Sample allowNegative",
+    "accrual": "Sample accrual"
   },
   {
     "id": "mock-General-008",
@@ -78,8 +78,8 @@ export const General = [
     "description": "Trial order for new product line",
     "gAAP": "Sample gAAP",
     "currency": "EUR",
-    "accrual": "Sample accrual",
-    "automaticPeriodControl": "Sample automaticPeriodControl"
+    "allowNegative": "Sample allowNegative",
+    "accrual": "Sample accrual"
   },
   {
     "id": "mock-General-009",
@@ -88,8 +88,8 @@ export const General = [
     "description": "Replacement for damaged goods",
     "gAAP": "Sample gAAP",
     "currency": "GBP",
-    "accrual": "Sample accrual",
-    "automaticPeriodControl": "Sample automaticPeriodControl"
+    "allowNegative": "Sample allowNegative",
+    "accrual": "Sample accrual"
   },
   {
     "id": "mock-General-010",
@@ -98,8 +98,8 @@ export const General = [
     "description": "Pre-season inventory build-up",
     "gAAP": "Sample gAAP",
     "currency": "USD",
-    "accrual": "Sample accrual",
-    "automaticPeriodControl": "Sample automaticPeriodControl"
+    "allowNegative": "Sample allowNegative",
+    "accrual": "Sample accrual"
   },
   {
     "id": "mock-General-011",
@@ -108,8 +108,8 @@ export const General = [
     "description": "Customer-specific configuration",
     "gAAP": "Sample gAAP",
     "currency": "EUR",
-    "accrual": "Sample accrual",
-    "automaticPeriodControl": "Sample automaticPeriodControl"
+    "allowNegative": "Sample allowNegative",
+    "accrual": "Sample accrual"
   },
   {
     "id": "mock-General-012",
@@ -118,8 +118,8 @@ export const General = [
     "description": "Government contract fulfillment",
     "gAAP": "Sample gAAP",
     "currency": "GBP",
-    "accrual": "Sample accrual",
-    "automaticPeriodControl": "Sample automaticPeriodControl"
+    "allowNegative": "Sample allowNegative",
+    "accrual": "Sample accrual"
   }
 ];
 
@@ -366,101 +366,161 @@ export const Dimensiones = [
   }
 ];
 
-export const Documentos = [
+export const Cuentasgenerales = [
   {
-    "id": "mock-Documentos-001",
-    "active": "Sample active",
-    "documentCategory": "Sample documentCategory",
-    "allowNegative": "Sample allowNegative",
-    "aDCreatefactTemplateID": "Sample aDCreatefactTemplateID",
+    "id": "mock-Cuentas generales-001",
+    "suspenseBalancingUse": "Sample suspenseBalancingUse",
+    "suspenseBalancing": "Sample suspenseBalancing",
+    "retainedEarning": "Sample retainedEarning",
+    "suspenseErrorUse": "Sample suspenseErrorUse",
+    "incomeSummary": "Sample incomeSummary",
+    "currencyBalancingUse": "USD",
+    "currencyBalancingAcct": "USD",
+    "cFSOrderAccount": "Sample cFSOrderAccount",
+    "createClosing": "Sample createClosing",
     "GeneralId": "mock-General-001"
   },
   {
-    "id": "mock-Documentos-002",
-    "active": "Sample active",
-    "documentCategory": "Sample documentCategory",
-    "allowNegative": "Sample allowNegative",
-    "aDCreatefactTemplateID": "Sample aDCreatefactTemplateID",
+    "id": "mock-Cuentas generales-002",
+    "suspenseBalancingUse": "Sample suspenseBalancingUse",
+    "suspenseBalancing": "Sample suspenseBalancing",
+    "retainedEarning": "Sample retainedEarning",
+    "suspenseErrorUse": "Sample suspenseErrorUse",
+    "incomeSummary": "Sample incomeSummary",
+    "currencyBalancingUse": "EUR",
+    "currencyBalancingAcct": "EUR",
+    "cFSOrderAccount": "Sample cFSOrderAccount",
+    "createClosing": "Sample createClosing",
     "GeneralId": "mock-General-002"
   },
   {
-    "id": "mock-Documentos-003",
-    "active": "Sample active",
-    "documentCategory": "Sample documentCategory",
-    "allowNegative": "Sample allowNegative",
-    "aDCreatefactTemplateID": "Sample aDCreatefactTemplateID",
+    "id": "mock-Cuentas generales-003",
+    "suspenseBalancingUse": "Sample suspenseBalancingUse",
+    "suspenseBalancing": "Sample suspenseBalancing",
+    "retainedEarning": "Sample retainedEarning",
+    "suspenseErrorUse": "Sample suspenseErrorUse",
+    "incomeSummary": "Sample incomeSummary",
+    "currencyBalancingUse": "GBP",
+    "currencyBalancingAcct": "GBP",
+    "cFSOrderAccount": "Sample cFSOrderAccount",
+    "createClosing": "Sample createClosing",
     "GeneralId": "mock-General-003"
   },
   {
-    "id": "mock-Documentos-004",
-    "active": "Sample active",
-    "documentCategory": "Sample documentCategory",
-    "allowNegative": "Sample allowNegative",
-    "aDCreatefactTemplateID": "Sample aDCreatefactTemplateID",
+    "id": "mock-Cuentas generales-004",
+    "suspenseBalancingUse": "Sample suspenseBalancingUse",
+    "suspenseBalancing": "Sample suspenseBalancing",
+    "retainedEarning": "Sample retainedEarning",
+    "suspenseErrorUse": "Sample suspenseErrorUse",
+    "incomeSummary": "Sample incomeSummary",
+    "currencyBalancingUse": "USD",
+    "currencyBalancingAcct": "USD",
+    "cFSOrderAccount": "Sample cFSOrderAccount",
+    "createClosing": "Sample createClosing",
     "GeneralId": "mock-General-004"
   },
   {
-    "id": "mock-Documentos-005",
-    "active": "Sample active",
-    "documentCategory": "Sample documentCategory",
-    "allowNegative": "Sample allowNegative",
-    "aDCreatefactTemplateID": "Sample aDCreatefactTemplateID",
+    "id": "mock-Cuentas generales-005",
+    "suspenseBalancingUse": "Sample suspenseBalancingUse",
+    "suspenseBalancing": "Sample suspenseBalancing",
+    "retainedEarning": "Sample retainedEarning",
+    "suspenseErrorUse": "Sample suspenseErrorUse",
+    "incomeSummary": "Sample incomeSummary",
+    "currencyBalancingUse": "EUR",
+    "currencyBalancingAcct": "EUR",
+    "cFSOrderAccount": "Sample cFSOrderAccount",
+    "createClosing": "Sample createClosing",
     "GeneralId": "mock-General-005"
   },
   {
-    "id": "mock-Documentos-006",
-    "active": "Sample active",
-    "documentCategory": "Sample documentCategory",
-    "allowNegative": "Sample allowNegative",
-    "aDCreatefactTemplateID": "Sample aDCreatefactTemplateID",
+    "id": "mock-Cuentas generales-006",
+    "suspenseBalancingUse": "Sample suspenseBalancingUse",
+    "suspenseBalancing": "Sample suspenseBalancing",
+    "retainedEarning": "Sample retainedEarning",
+    "suspenseErrorUse": "Sample suspenseErrorUse",
+    "incomeSummary": "Sample incomeSummary",
+    "currencyBalancingUse": "GBP",
+    "currencyBalancingAcct": "GBP",
+    "cFSOrderAccount": "Sample cFSOrderAccount",
+    "createClosing": "Sample createClosing",
     "GeneralId": "mock-General-006"
   },
   {
-    "id": "mock-Documentos-007",
-    "active": "Sample active",
-    "documentCategory": "Sample documentCategory",
-    "allowNegative": "Sample allowNegative",
-    "aDCreatefactTemplateID": "Sample aDCreatefactTemplateID",
+    "id": "mock-Cuentas generales-007",
+    "suspenseBalancingUse": "Sample suspenseBalancingUse",
+    "suspenseBalancing": "Sample suspenseBalancing",
+    "retainedEarning": "Sample retainedEarning",
+    "suspenseErrorUse": "Sample suspenseErrorUse",
+    "incomeSummary": "Sample incomeSummary",
+    "currencyBalancingUse": "USD",
+    "currencyBalancingAcct": "USD",
+    "cFSOrderAccount": "Sample cFSOrderAccount",
+    "createClosing": "Sample createClosing",
     "GeneralId": "mock-General-007"
   },
   {
-    "id": "mock-Documentos-008",
-    "active": "Sample active",
-    "documentCategory": "Sample documentCategory",
-    "allowNegative": "Sample allowNegative",
-    "aDCreatefactTemplateID": "Sample aDCreatefactTemplateID",
+    "id": "mock-Cuentas generales-008",
+    "suspenseBalancingUse": "Sample suspenseBalancingUse",
+    "suspenseBalancing": "Sample suspenseBalancing",
+    "retainedEarning": "Sample retainedEarning",
+    "suspenseErrorUse": "Sample suspenseErrorUse",
+    "incomeSummary": "Sample incomeSummary",
+    "currencyBalancingUse": "EUR",
+    "currencyBalancingAcct": "EUR",
+    "cFSOrderAccount": "Sample cFSOrderAccount",
+    "createClosing": "Sample createClosing",
     "GeneralId": "mock-General-008"
   },
   {
-    "id": "mock-Documentos-009",
-    "active": "Sample active",
-    "documentCategory": "Sample documentCategory",
-    "allowNegative": "Sample allowNegative",
-    "aDCreatefactTemplateID": "Sample aDCreatefactTemplateID",
+    "id": "mock-Cuentas generales-009",
+    "suspenseBalancingUse": "Sample suspenseBalancingUse",
+    "suspenseBalancing": "Sample suspenseBalancing",
+    "retainedEarning": "Sample retainedEarning",
+    "suspenseErrorUse": "Sample suspenseErrorUse",
+    "incomeSummary": "Sample incomeSummary",
+    "currencyBalancingUse": "GBP",
+    "currencyBalancingAcct": "GBP",
+    "cFSOrderAccount": "Sample cFSOrderAccount",
+    "createClosing": "Sample createClosing",
     "GeneralId": "mock-General-009"
   },
   {
-    "id": "mock-Documentos-010",
-    "active": "Sample active",
-    "documentCategory": "Sample documentCategory",
-    "allowNegative": "Sample allowNegative",
-    "aDCreatefactTemplateID": "Sample aDCreatefactTemplateID",
+    "id": "mock-Cuentas generales-010",
+    "suspenseBalancingUse": "Sample suspenseBalancingUse",
+    "suspenseBalancing": "Sample suspenseBalancing",
+    "retainedEarning": "Sample retainedEarning",
+    "suspenseErrorUse": "Sample suspenseErrorUse",
+    "incomeSummary": "Sample incomeSummary",
+    "currencyBalancingUse": "USD",
+    "currencyBalancingAcct": "USD",
+    "cFSOrderAccount": "Sample cFSOrderAccount",
+    "createClosing": "Sample createClosing",
     "GeneralId": "mock-General-010"
   },
   {
-    "id": "mock-Documentos-011",
-    "active": "Sample active",
-    "documentCategory": "Sample documentCategory",
-    "allowNegative": "Sample allowNegative",
-    "aDCreatefactTemplateID": "Sample aDCreatefactTemplateID",
+    "id": "mock-Cuentas generales-011",
+    "suspenseBalancingUse": "Sample suspenseBalancingUse",
+    "suspenseBalancing": "Sample suspenseBalancing",
+    "retainedEarning": "Sample retainedEarning",
+    "suspenseErrorUse": "Sample suspenseErrorUse",
+    "incomeSummary": "Sample incomeSummary",
+    "currencyBalancingUse": "EUR",
+    "currencyBalancingAcct": "EUR",
+    "cFSOrderAccount": "Sample cFSOrderAccount",
+    "createClosing": "Sample createClosing",
     "GeneralId": "mock-General-011"
   },
   {
-    "id": "mock-Documentos-012",
-    "active": "Sample active",
-    "documentCategory": "Sample documentCategory",
-    "allowNegative": "Sample allowNegative",
-    "aDCreatefactTemplateID": "Sample aDCreatefactTemplateID",
+    "id": "mock-Cuentas generales-012",
+    "suspenseBalancingUse": "Sample suspenseBalancingUse",
+    "suspenseBalancing": "Sample suspenseBalancing",
+    "retainedEarning": "Sample retainedEarning",
+    "suspenseErrorUse": "Sample suspenseErrorUse",
+    "incomeSummary": "Sample incomeSummary",
+    "currencyBalancingUse": "GBP",
+    "currencyBalancingAcct": "GBP",
+    "cFSOrderAccount": "Sample cFSOrderAccount",
+    "createClosing": "Sample createClosing",
     "GeneralId": "mock-General-012"
   }
 ];
@@ -505,7 +565,6 @@ export const Valorespordefecto = [
     "cashTransfer": "Sample cashTransfer",
     "depreciation": "Sample depreciation",
     "accumulatedDepreciation": "Sample accumulatedDepreciation",
-    "taxExpense": "VAT 21%",
     "disposalGain": "Sample disposalGain",
     "disposalLoss": "Sample disposalLoss",
     "GeneralId": "mock-General-001"
@@ -549,7 +608,6 @@ export const Valorespordefecto = [
     "cashTransfer": "Sample cashTransfer",
     "depreciation": "Sample depreciation",
     "accumulatedDepreciation": "Sample accumulatedDepreciation",
-    "taxExpense": "VAT 10%",
     "disposalGain": "Sample disposalGain",
     "disposalLoss": "Sample disposalLoss",
     "GeneralId": "mock-General-002"
@@ -593,7 +651,6 @@ export const Valorespordefecto = [
     "cashTransfer": "Sample cashTransfer",
     "depreciation": "Sample depreciation",
     "accumulatedDepreciation": "Sample accumulatedDepreciation",
-    "taxExpense": "VAT 0%",
     "disposalGain": "Sample disposalGain",
     "disposalLoss": "Sample disposalLoss",
     "GeneralId": "mock-General-003"
@@ -637,7 +694,6 @@ export const Valorespordefecto = [
     "cashTransfer": "Sample cashTransfer",
     "depreciation": "Sample depreciation",
     "accumulatedDepreciation": "Sample accumulatedDepreciation",
-    "taxExpense": "Sales Tax 8.5%",
     "disposalGain": "Sample disposalGain",
     "disposalLoss": "Sample disposalLoss",
     "GeneralId": "mock-General-004"
@@ -681,7 +737,6 @@ export const Valorespordefecto = [
     "cashTransfer": "Sample cashTransfer",
     "depreciation": "Sample depreciation",
     "accumulatedDepreciation": "Sample accumulatedDepreciation",
-    "taxExpense": "Exempt",
     "disposalGain": "Sample disposalGain",
     "disposalLoss": "Sample disposalLoss",
     "GeneralId": "mock-General-005"
@@ -725,7 +780,6 @@ export const Valorespordefecto = [
     "cashTransfer": "Sample cashTransfer",
     "depreciation": "Sample depreciation",
     "accumulatedDepreciation": "Sample accumulatedDepreciation",
-    "taxExpense": "Reduced Rate 5%",
     "disposalGain": "Sample disposalGain",
     "disposalLoss": "Sample disposalLoss",
     "GeneralId": "mock-General-006"
@@ -769,7 +823,6 @@ export const Valorespordefecto = [
     "cashTransfer": "Sample cashTransfer",
     "depreciation": "Sample depreciation",
     "accumulatedDepreciation": "Sample accumulatedDepreciation",
-    "taxExpense": "Standard Rate 20%",
     "disposalGain": "Sample disposalGain",
     "disposalLoss": "Sample disposalLoss",
     "GeneralId": "mock-General-007"
@@ -813,7 +866,6 @@ export const Valorespordefecto = [
     "cashTransfer": "Sample cashTransfer",
     "depreciation": "Sample depreciation",
     "accumulatedDepreciation": "Sample accumulatedDepreciation",
-    "taxExpense": "VAT 21%",
     "disposalGain": "Sample disposalGain",
     "disposalLoss": "Sample disposalLoss",
     "GeneralId": "mock-General-008"
@@ -857,7 +909,6 @@ export const Valorespordefecto = [
     "cashTransfer": "Sample cashTransfer",
     "depreciation": "Sample depreciation",
     "accumulatedDepreciation": "Sample accumulatedDepreciation",
-    "taxExpense": "VAT 10%",
     "disposalGain": "Sample disposalGain",
     "disposalLoss": "Sample disposalLoss",
     "GeneralId": "mock-General-009"
@@ -901,7 +952,6 @@ export const Valorespordefecto = [
     "cashTransfer": "Sample cashTransfer",
     "depreciation": "Sample depreciation",
     "accumulatedDepreciation": "Sample accumulatedDepreciation",
-    "taxExpense": "VAT 0%",
     "disposalGain": "Sample disposalGain",
     "disposalLoss": "Sample disposalLoss",
     "GeneralId": "mock-General-010"
@@ -945,7 +995,6 @@ export const Valorespordefecto = [
     "cashTransfer": "Sample cashTransfer",
     "depreciation": "Sample depreciation",
     "accumulatedDepreciation": "Sample accumulatedDepreciation",
-    "taxExpense": "Sales Tax 8.5%",
     "disposalGain": "Sample disposalGain",
     "disposalLoss": "Sample disposalLoss",
     "GeneralId": "mock-General-011"
@@ -989,7 +1038,6 @@ export const Valorespordefecto = [
     "cashTransfer": "Sample cashTransfer",
     "depreciation": "Sample depreciation",
     "accumulatedDepreciation": "Sample accumulatedDepreciation",
-    "taxExpense": "Exempt",
     "disposalGain": "Sample disposalGain",
     "disposalLoss": "Sample disposalLoss",
     "GeneralId": "mock-General-012"

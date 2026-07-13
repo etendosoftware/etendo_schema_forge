@@ -15,7 +15,9 @@ vi.mock('@/auth/useApiFetch.js', () => ({
 }));
 
 import { useGeneralLedgerConfig } from '../useGeneralLedgerConfig.js';
-import { GENERAL_SEED, DEFAULTS_SEED, DIMENSIONS_SEED, GLC_SEED_PAYLOAD } from '../mockCatalogs.js';
+import {
+  GENERAL_SEED, DEFAULTS_SEED, DIMENSIONS_SEED, GENERAL_ACCOUNTS_SEED, GLC_SEED_PAYLOAD,
+} from '../mockCatalogs.js';
 
 function okJson(payload) {
   return { ok: true, json: async () => ({ response: { data: [payload] } }) };
@@ -37,8 +39,17 @@ describe('useGeneralLedgerConfig — seed + dirty diff', () => {
     expect(result.current.general).toEqual(GENERAL_SEED);
     expect(result.current.defaults).toEqual(DEFAULTS_SEED);
     expect(result.current.dimensions).toEqual(DIMENSIONS_SEED);
+    expect(result.current.generalAccounts).toEqual(GENERAL_ACCOUNTS_SEED);
     expect(result.current.isDirty).toBe(false);
     expect(mockApiFetch).not.toHaveBeenCalled();
+  });
+
+  it('tracks a dirty General Accounts field independently', () => {
+    const { result } = renderSeeded();
+    act(() => result.current.setGeneralAccountsField('suspenseBalancingUse', true));
+    expect(result.current.dirty.generalAccounts).toEqual({ suspenseBalancingUse: true });
+    expect(result.current.dirty.general).toEqual({});
+    expect(result.current.isDirty).toBe(true);
   });
 
   it('tracks a dirty General field and exposes only the changed key', () => {
@@ -75,23 +86,24 @@ describe('useGeneralLedgerConfig — seed + dirty diff', () => {
     expect(result.current.isDirty).toBe(false);
   });
 
-  it('round-trips the inverted automaticPeriodControl raw boolean into the dirty payload', () => {
+  it('round-trips the allowNegative raw boolean into the dirty payload', () => {
     const { result } = renderSeeded();
-    // The UI binds the "closed periods" toggle inverted; the hook stores the raw
-    // AD value. Seed is true → allowing closed periods writes false.
-    expect(GENERAL_SEED.automaticPeriodControl).toBe(true);
-    act(() => result.current.setGeneralField('automaticPeriodControl', false));
-    expect(result.current.dirty.general).toEqual({ automaticPeriodControl: false });
+    // The UI binds the "allow negative" toggle directly to the raw AD value.
+    expect(GENERAL_SEED.allowNegative).toBe(false);
+    act(() => result.current.setGeneralField('allowNegative', true));
+    expect(result.current.dirty.general).toEqual({ allowNegative: true });
   });
 
   it('reset() reverts all pending edits', () => {
     const { result } = renderSeeded();
     act(() => result.current.setGeneralField('description', 'edited'));
     act(() => result.current.setDimensionField('dim-pr', 'active', false));
+    act(() => result.current.setGeneralAccountsField('suspenseBalancingUse', true));
     act(() => result.current.reset());
     expect(result.current.isDirty).toBe(false);
     expect(result.current.general).toEqual(GENERAL_SEED);
     expect(result.current.dimensions).toEqual(DIMENSIONS_SEED);
+    expect(result.current.generalAccounts).toEqual(GENERAL_ACCOUNTS_SEED);
   });
 });
 
@@ -139,6 +151,7 @@ describe('useGeneralLedgerConfig — save() payload', () => {
       general: { name: 'Updated name' },
       defaults: {},
       dimensions: [{ id: 'dim-pr', active: false, mandatory: false }],
+      generalAccounts: {},
       selectedOrgId: 'ES',
     });
   });

@@ -89,7 +89,14 @@ jobs:
 
       - name: Push bump branch
         if: steps.diff.outputs.has_changes == 'true'
-        run: git push -u origin "chore/bump-core-${{ steps.version.outputs.version }}"
+        # --no-verify: `make bump-core-version` runs `npm install`, whose `prepare`
+        # script sets core.hooksPath to .githooks — activating the local dev
+        # pre-push hook (Sonar + full test suite) inside this CI checkout. That
+        # hook requires SONAR_HOST_URL/SONAR_TOKEN in a local .env, which this
+        # bot job intentionally doesn't have. The bump only touches lockstep
+        # pins in package.json/package-lock.json, already validated by the
+        # PR's own CI checks once opened, so skipping the local hook here is safe.
+        run: git push --no-verify -u origin "chore/bump-core-${{ steps.version.outputs.version }}"
 
       - name: Open PR against the epic branch
         if: steps.diff.outputs.has_changes == 'true'

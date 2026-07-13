@@ -13,7 +13,7 @@ vi.mock('../../../fiscalModelsUtils.js', async (importOriginal) => {
     formatAmount: (n) => (n == null ? '—' : String(n)),
     formatPeriod: (p) => p,
     computeBoxes303: vi.fn().mockResolvedValue(null),
-    generate303File: vi.fn().mockResolvedValue(false),
+    generate303File: vi.fn().mockResolvedValue({ ok: false }),
     checkModified303: vi.fn(),
   };
 });
@@ -53,7 +53,7 @@ vi.mock('../FmBoxes303.jsx', () => ({
 }));
 vi.mock('../../../FmOverlays.jsx', () => ({
   PresentModal: () => null,
-  FileGenModal: () => null,
+  FileGenModal303: () => null,
   ConfigDrawer: () => null,
   CompareDrawer: () => null,
 }));

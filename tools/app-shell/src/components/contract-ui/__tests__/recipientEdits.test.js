@@ -5,6 +5,14 @@ import {
   isValidEmailAddress,
   normalizeRecipientList,
   buildRecipientEdits,
+  isEmailField,
+  getEmailFieldError,
+  isSecureUrl,
+  isWebsiteField,
+  getWebsiteFieldError,
+  isValidPhone,
+  isPhoneField,
+  getPhoneFieldError,
 } from '../recipientEdits.js';
 
 // ETP-4226 — recipientEdits is the pure diff layer that turns the user-edited
@@ -69,6 +77,233 @@ describe('isValidEmailAddress', () => {
     assert.equal(isValidEmailAddress(''), false);
     assert.equal(isValidEmailAddress(null), false);
     assert.equal(isValidEmailAddress(undefined), false);
+  });
+});
+
+describe('isEmailField', () => {
+  it('matches real email address fields', () => {
+    assert.equal(isEmailField({ key: 'etgoEmail', column: 'EM_Etgo_Email', type: 'string' }), true);
+    assert.equal(isEmailField({ key: 'x', column: 'Email', type: 'string' }), true);
+    assert.equal(isEmailField({ key: 'x', column: 'A_EMail', type: 'string' }), true);
+    assert.equal(isEmailField({ key: 'email', column: 'Email', type: 'string' }), true);
+    assert.equal(isEmailField({ key: 'whatever', type: 'email' }), true);
+  });
+
+  it('excludes SMTP credential fields (username / password) — regression', () => {
+    assert.equal(isEmailField({ key: 'emailUser', column: 'EmailUser', type: 'string' }), false);
+    assert.equal(isEmailField({ key: 'emailUserPW', column: 'EmailUserPW', type: 'string' }), false);
+    assert.equal(isEmailField({ key: 'x', column: 'Email_Password', type: 'string' }), false);
+  });
+
+  it('does not match unrelated fields or non-text types', () => {
+    assert.equal(isEmailField({ key: 'name', column: 'Name', type: 'string' }), false);
+    assert.equal(isEmailField({ key: 'sendEmail', column: 'Send_Email', type: 'checkbox' }), false);
+    assert.equal(isEmailField(null), false);
+  });
+});
+
+describe('getEmailFieldError', () => {
+  const emailField = { key: 'etgoEmail', column: 'EM_Etgo_Email', type: 'text' };
+
+  it('returns null for a non-email field regardless of value', () => {
+    assert.equal(getEmailFieldError({ key: 'name', column: 'Name', type: 'text' }, 'not-an-email'), null);
+  });
+
+  it('returns null for an empty value (email is optional)', () => {
+    assert.equal(getEmailFieldError(emailField, ''), null);
+    assert.equal(getEmailFieldError(emailField, null), null);
+    assert.equal(getEmailFieldError(emailField, undefined), null);
+  });
+
+  it('returns null for a whitespace-only value', () => {
+    assert.equal(getEmailFieldError(emailField, '   '), null);
+  });
+
+  it('returns the error key for a non-empty malformed value', () => {
+    assert.equal(getEmailFieldError(emailField, 'not-an-email'), 'sendModalInvalidEmail');
+  });
+
+  it('returns null for a well-formed value', () => {
+    assert.equal(getEmailFieldError(emailField, 'user@example.com'), null);
+  });
+});
+
+describe('isSecureUrl', () => {
+  it('accepts an https URL with a host', () => {
+    assert.equal(isSecureUrl('https://example.com'), true);
+    assert.equal(isSecureUrl('https://example.com/path?q=1'), true);
+  });
+
+  it('trims surrounding whitespace before checking', () => {
+    assert.equal(isSecureUrl('  https://example.com  '), true);
+  });
+
+  it('rejects a bare https:// with no host', () => {
+    assert.equal(isSecureUrl('https://'), false);
+    assert.equal(isSecureUrl('https:// '), false);
+  });
+
+  it('rejects http:// (insecure)', () => {
+    assert.equal(isSecureUrl('http://example.com'), false);
+  });
+
+  it('rejects a scheme-less value', () => {
+    assert.equal(isSecureUrl('example.com'), false);
+    assert.equal(isSecureUrl('www.example.com'), false);
+  });
+
+  it('rejects empty / null / undefined', () => {
+    assert.equal(isSecureUrl(''), false);
+    assert.equal(isSecureUrl(null), false);
+    assert.equal(isSecureUrl(undefined), false);
+  });
+});
+
+describe('isWebsiteField', () => {
+  it('detects the header etgoWeb field by key/column token', () => {
+    assert.equal(isWebsiteField({ key: 'etgoWeb', column: 'EM_Etgo_Web', type: 'string' }), true);
+  });
+
+  it('detects an explicit type === "url"', () => {
+    assert.equal(isWebsiteField({ key: 'whatever', type: 'url' }), true);
+  });
+
+  it('detects website / homepage / url tokens', () => {
+    assert.equal(isWebsiteField({ key: 'website', type: 'string' }), true);
+    assert.equal(isWebsiteField({ key: 'homePage', type: 'string' }), true);
+    assert.equal(isWebsiteField({ key: 'x', column: 'URL', type: 'string' }), true);
+  });
+
+  it('does NOT match unrelated fields or "web" substrings (regression)', () => {
+    assert.equal(isWebsiteField({ key: 'webhook', column: 'Webhook', type: 'string' }), false);
+    assert.equal(isWebsiteField({ key: 'name', column: 'Name', type: 'string' }), false);
+    assert.equal(isWebsiteField({ key: 'email', column: 'Email', type: 'string' }), false);
+  });
+
+  it('does NOT match a non-text field even if named like a website', () => {
+    assert.equal(isWebsiteField({ key: 'website', column: 'Website', type: 'checkbox' }), false);
+    assert.equal(isWebsiteField({ key: 'website', column: 'Website', type: 'select' }), false);
+  });
+
+  it('returns false for nullish input', () => {
+    assert.equal(isWebsiteField(null), false);
+    assert.equal(isWebsiteField(undefined), false);
+  });
+});
+
+describe('getWebsiteFieldError', () => {
+  const webField = { key: 'etgoWeb', column: 'EM_Etgo_Web', type: 'string' };
+
+  it('returns null for a non-website field regardless of value', () => {
+    assert.equal(getWebsiteFieldError({ key: 'name', column: 'Name', type: 'string' }, 'http://x.com'), null);
+  });
+
+  it('returns null for an empty / whitespace value (optional)', () => {
+    assert.equal(getWebsiteFieldError(webField, ''), null);
+    assert.equal(getWebsiteFieldError(webField, '   '), null);
+    assert.equal(getWebsiteFieldError(webField, null), null);
+    assert.equal(getWebsiteFieldError(webField, undefined), null);
+  });
+
+  it('returns the error key for http:// (insecure)', () => {
+    assert.equal(getWebsiteFieldError(webField, 'http://example.com'), 'websiteInsecureUrl');
+  });
+
+  it('returns the error key for a scheme-less value', () => {
+    assert.equal(getWebsiteFieldError(webField, 'example.com'), 'websiteInsecureUrl');
+  });
+
+  it('returns the error key for a bare https://', () => {
+    assert.equal(getWebsiteFieldError(webField, 'https://'), 'websiteInsecureUrl');
+  });
+
+  it('returns null for a valid https URL with a host', () => {
+    assert.equal(getWebsiteFieldError(webField, 'https://example.com'), null);
+  });
+});
+
+describe('isValidPhone', () => {
+  it('accepts a formatted international number', () => {
+    assert.equal(isValidPhone('+34 (600) 12-34'), true);
+  });
+
+  it('accepts plain digits and dot separators', () => {
+    assert.equal(isValidPhone('600123456'), true);
+    assert.equal(isValidPhone('+34.600.123.456'), true);
+  });
+
+  it('trims surrounding whitespace', () => {
+    assert.equal(isValidPhone('  600 123 456  '), true);
+  });
+
+  it('rejects a value with no digit (separators only)', () => {
+    assert.equal(isValidPhone('+()'), false);
+    assert.equal(isValidPhone('---'), false);
+  });
+
+  it('rejects letters and other characters', () => {
+    assert.equal(isValidPhone('600abc'), false);
+    assert.equal(isValidPhone('foo@bar'), false);
+    assert.equal(isValidPhone('600#123'), false);
+  });
+
+  it('rejects empty / null / undefined', () => {
+    assert.equal(isValidPhone(''), false);
+    assert.equal(isValidPhone('   '), false);
+    assert.equal(isValidPhone(null), false);
+    assert.equal(isValidPhone(undefined), false);
+  });
+});
+
+describe('isPhoneField', () => {
+  it('detects the header etgoPhone field and grid phone/alternativePhone', () => {
+    assert.equal(isPhoneField({ key: 'etgoPhone', column: 'EM_Etgo_Phone', type: 'string' }), true);
+    assert.equal(isPhoneField({ key: 'phone', column: 'Phone', type: 'string' }), true);
+    assert.equal(isPhoneField({ key: 'alternativePhone', column: 'Phone2', type: 'string' }), true);
+  });
+
+  it('does NOT match unrelated fields (regression)', () => {
+    assert.equal(isPhoneField({ key: 'name', column: 'Name', type: 'string' }), false);
+    assert.equal(isPhoneField({ key: 'email', column: 'Email', type: 'string' }), false);
+    assert.equal(isPhoneField({ key: 'fax', column: 'Fax', type: 'string' }), false);
+  });
+
+  it('does NOT match a non-text field even if named like a phone', () => {
+    assert.equal(isPhoneField({ key: 'phone', column: 'Phone', type: 'checkbox' }), false);
+    assert.equal(isPhoneField({ key: 'phone', column: 'Phone', type: 'select' }), false);
+  });
+
+  it('returns false for nullish input', () => {
+    assert.equal(isPhoneField(null), false);
+    assert.equal(isPhoneField(undefined), false);
+  });
+});
+
+describe('getPhoneFieldError', () => {
+  const phoneField = { key: 'etgoPhone', column: 'EM_Etgo_Phone', type: 'string' };
+
+  it('returns null for a non-phone field regardless of value', () => {
+    assert.equal(getPhoneFieldError({ key: 'name', column: 'Name', type: 'string' }, 'abc'), null);
+  });
+
+  it('returns null for an empty / whitespace value (optional)', () => {
+    assert.equal(getPhoneFieldError(phoneField, ''), null);
+    assert.equal(getPhoneFieldError(phoneField, '   '), null);
+    assert.equal(getPhoneFieldError(phoneField, null), null);
+    assert.equal(getPhoneFieldError(phoneField, undefined), null);
+  });
+
+  it('returns the error key for disallowed characters', () => {
+    assert.equal(getPhoneFieldError(phoneField, '600abc'), 'phoneInvalidChars');
+    assert.equal(getPhoneFieldError(phoneField, 'foo@bar'), 'phoneInvalidChars');
+  });
+
+  it('returns the error key when there is no digit', () => {
+    assert.equal(getPhoneFieldError(phoneField, '+()'), 'phoneInvalidChars');
+  });
+
+  it('returns null for a valid phone number', () => {
+    assert.equal(getPhoneFieldError(phoneField, '+34 (600) 12-34'), null);
   });
 });
 

@@ -1,8 +1,8 @@
 {
-  "version": "0.13.0",
+  "version": "0.15.0",
   "generatedAt": "2026-06-11T01:47:08.755Z",
-  "updatedAt": "2026-07-06T17:42:26.507Z",
-  "checksum": "0a57da705218c899",
+  "updatedAt": "2026-07-08T11:37:57.463Z",
+  "checksum": "d0bb4681f9439696",
   "frontendContract": {
     "window": {
       "id": "94EAA455D2644E04AB25D93BE5157B6D",
@@ -1569,7 +1569,8 @@
               "source": "N"
             }
           }
-        ]
+        ],
+        "javaQualifier": "document-posting"
       },
       "importedBankStatements": {
         "tableName": "FIN_BankStatement",
@@ -3023,7 +3024,8 @@
             "visibility": "system",
             "required": true
           }
-        ]
+        ],
+        "javaQualifier": "document-posting"
       },
       "importedBankStatements": {
         "tableName": "FIN_BankStatement",
