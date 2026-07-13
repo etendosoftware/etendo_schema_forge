@@ -164,6 +164,24 @@ describe('NewAccountModal', () => {
     expect(select.querySelectorAll('option').length).toBe(1);
   });
 
+  it('retries the account fetch on the next open after a failed attempt', async () => {
+    globalThis.fetch = vi.fn(() => Promise.resolve({ ok: false }));
+    const { rerender } = render(<NewAccountModal {...baseProps({ allAccounts: [] })} />);
+    await waitFor(() => expect(globalThis.fetch).toHaveBeenCalledTimes(1));
+
+    // Close, then reopen — a real reload/network blip should not permanently
+    // disable the parent-selector fetch for the component's whole mounted life.
+    rerender(<NewAccountModal {...baseProps({ allAccounts: [], isOpen: false })} />);
+    globalThis.fetch = vi.fn(() =>
+      Promise.resolve({ ok: true, json: async () => ({ response: { data: ACCOUNTS } }) }),
+    );
+    rerender(<NewAccountModal {...baseProps({ allAccounts: [], isOpen: true })} />);
+
+    await waitFor(() => expect(globalThis.fetch).toHaveBeenCalledTimes(1));
+    const select = screen.getByTestId('new-account-modal-parent');
+    await waitFor(() => expect(select.querySelectorAll('option').length).toBeGreaterThan(1));
+  });
+
   it('selecting a parent fills the code prefix into the code field', async () => {
     const user = userEvent.setup();
     render(<NewAccountModal {...baseProps()} />);

@@ -6,6 +6,7 @@ import { CreatableSearchSelect } from '@/components/contract-ui/CreatableSearchS
 import { MoneyAmount } from '@/components/ui/money-amount';
 import { useApiFetch } from '@/auth/useApiFetch.js';
 import { useUI } from '@/i18n';
+import { isValidIban, normalizeIban } from '@/lib/validateIban.js';
 import { usePaymentBalance, formatPlain } from './usePaymentBalance.js';
 
 // ─── design tokens (Etendo Design System — cobros/pagos Figma handoff) ────────
@@ -88,9 +89,12 @@ function defaultPisTemplate(currency) {
  * FPS needs sort code + account number, DOMESTIC needs at least one account identifier.
  */
 function pisFieldsComplete(template, f) {
+  // When an IBAN is provided it must be a structurally valid IBAN (ISO 13616 mod-97),
+  // reusing the same check as offline financial-account creation (lib/validateIban.js).
+  const ibanOk = !f.iban || isValidIban(f.iban);
   if (template === PIS_TEMPLATE_FPS) return !!(f.sortCode && f.accountNumber);
-  if (template === PIS_TEMPLATE_DOMESTIC) return !!(f.iban || f.bban || f.accountNumber);
-  return !!f.iban; // SEPA (and any default)
+  if (template === PIS_TEMPLATE_DOMESTIC) return !!(f.iban || f.bban || f.accountNumber) && ibanOk;
+  return !!f.iban && ibanOk; // SEPA (and any default)
 }
 
 /** Builds the PIS-specific fields for the registerPayment body when confirming with a bank transfer. */
@@ -99,7 +103,7 @@ function buildPisPaymentFields(template, creditorValues) {
   return {
     pis: true,
     pisTemplate: template,
-    pisCreditorIban: show.iban ? (creditorValues.iban || undefined) : undefined,
+    pisCreditorIban: show.iban ? (normalizeIban(creditorValues.iban) || undefined) : undefined,
     pisCreditorBban: show.bban ? (creditorValues.bban || undefined) : undefined,
     pisCreditorAccountNumber: show.accountNumber ? (creditorValues.accountNumber || undefined) : undefined,
     pisCreditorSortCode: show.sortCode ? (creditorValues.sortCode || undefined) : undefined,
@@ -472,6 +476,9 @@ function PisTransferSection({
   bban, onBbanChange, accountNumber, onAccountNumberChange, sortCode, onSortCodeChange,
 }) {
   const show = pisTemplateFields(template);
+  // The IBAN comes from a selector (supplier IBANs) but is also hand-typeable via onCreateRequest;
+  // flag a structurally invalid entry so the user sees an inline error and Confirm stays disabled.
+  const ibanInvalid = (iban || '').trim() !== '' && !isValidIban(iban);
   const alertParts = [
     ui('cpPisAlertTransfer', {
       dinero: fmtCur(balance.amount, currency),
@@ -549,6 +556,11 @@ function PisTransferSection({
                 }}
                 data-testid="cp-pis-iban-select" />
               </div>
+              {ibanInvalid && (
+                <p style={{ font: '400 12px/16px Inter', color: RED_FG, marginTop: 4 }} data-testid="cp-pis-iban-error">
+                  {ui('financeAccountsNewIbanInvalid')}
+                </p>
+              )}
             </Field>
           </div>
         )}

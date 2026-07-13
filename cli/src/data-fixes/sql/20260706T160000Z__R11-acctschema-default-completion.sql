@@ -22,13 +22,17 @@
 -- allowancefordoubtful_acct, p_def_expense_acct, p_def_revenue_acct). This fix closes only the 6
 -- NULL ones.
 --
--- WRITE-OFF OVERRIDE (do not "fix" this) -------------------------------------------------------
--- The screenshot shows Cancelaciones/Write-off = 6500000000 (65000000). The product owner
--- EXPLICITLY confirmed the DB's existing value (69400000, "Pérdidas por deterioro de créditos por
--- operaciones comerciales" — the same account used for baddebtexpense_acct) is correct and must NOT
--- be changed to 65000000. Verified live: writeoff_acct already resolves to c_validcombination
--- 997A522BF1124E029E99AB31CF2540F9 = account 69400000. This fix's @check/@apply deliberately never
--- reference writeoff_acct.
+-- WRITE-OFF OVERRIDE (superseded — see R12) ----------------------------------------------------
+-- At the time this fix was written (2026-07-06), the product owner had EXPLICITLY confirmed the
+-- DB's existing value (69400000, "Pérdidas por deterioro de créditos por operaciones comerciales")
+-- was correct and must NOT be changed to the screenshot's 65000000. Verified live at the time:
+-- writeoff_acct resolved to c_validcombination 997A522BF1124E029E99AB31CF2540F9 = account 69400000.
+-- This fix's @check/@apply deliberately never reference writeoff_acct.
+--
+-- SUPERSEDED 2026-07-08: the product owner reconfirmed, again explicitly, that 65000000 IS the
+-- correct value after all — a second decision that reverses the one above. Do NOT "fix" this file
+-- (it is immutable, already applied to real tenant DBs) — the correction lives in a NEW sibling
+-- fix: cli/src/data-fixes/sql/20260708T090000Z__R12-writeoff-account-override.sql.
 --
 -- FK indirection gotcha (new, not previously documented) ------------------------------------------
 -- C_ACCTSCHEMA_DEFAULT's *_acct columns are NOT a direct FK to c_elementvalue — they point to

@@ -37,7 +37,7 @@ describe('ChartOfAccounts new sub-account modal source wiring', () => {
     assert.match(treeSrc, /column:\s*'accountTreeFilterActive'/);
     assert.match(treeSrc, /filterable:\s*false/);
     assert.match(treeSrc, /backendSortKey:\s*'searchKey'/);
-    assert.match(treeSrc, /enumLabels:\s*\{/);
+    assert.match(treeSrc, /enumLabels:\s*Object\.fromEntries\(/);
     assert.match(treeSrc, /badgeLabels:\s*\{/);
   });
 
@@ -80,7 +80,7 @@ describe('ChartOfAccounts new sub-account modal source wiring', () => {
   it('fetches elementValue rows when opened without preloaded accounts', () => {
     assert.match(modalSrc, /const\s+\[loadedAccounts,\s*setLoadedAccounts\]\s*=\s*useState\(\[\]\)/);
     assert.match(modalSrc, /const\s+accountRows\s*=\s*allAccounts\.length\s*>\s*0\s*\?\s*allAccounts\s*:\s*loadedAccounts/);
-    assert.match(modalSrc, /if \(!isOpen \|\| allAccounts\.length > 0 \|\| loadedAccounts\.length > 0 \|\| !apiBaseUrl\) return;/);
+    assert.match(modalSrc, /if \(!isOpen \|\| allAccounts\.length > 0 \|\| accountsFetched \|\| !apiBaseUrl\) return;/);
     assert.match(modalSrc, /fetch\(`\$\{apiBaseUrl\}\/elementValue\?_startRow=0&_endRow=9999`,/);
     assert.match(modalSrc, /setLoadedAccounts\(data\?\.response\?\.data \?\? \[\]\)/);
   });
