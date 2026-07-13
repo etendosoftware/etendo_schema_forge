@@ -10,13 +10,14 @@ Manage the open/close status of fiscal periods for each organization. Controls w
 - Drill into a period's Documents tab to see the per-document-type status breakdown.
 - Use the **Open Close** action button on an individual document-type row to change the status only for that document type.
 - Filter and paginate the period list; no free-text search is currently configured (no searchable fields declared in the contract).
+- Use the **Go to Fiscal Calendar** action in the "more" (kebab) menu to navigate to the [Fiscal Calendar](fiscal-calendar.md) window, where new fiscal years — and their periods — are actually created. This window itself cannot create periods (`hideCreate: true`, by design).
 
 ## Interaction model
 - Route: `/open-close-period-control` for the period list and `/open-close-period-control/:recordId` for the period detail.
 - Visibility: visible from the Finance menu as **Periods** (label `Abrir/Cerrar periodos` in `es_ES`).
 - Implementation type: generated window route loaded from the app-shell window registry.
 - Window shape: master-detail — `periodControl` (header, table `C_Period`) with a `documents` child tab (lines, table `C_PeriodControl`).
-- The **New**, **Print**, and **More menu** toolbar buttons are hidden (`hideCreate`, `hidePrint`, `hideMoreMenu` all set to `true`). Periods are defined in the Fiscal Calendar and provisioned by the onboarding process; they cannot be created or deleted from this window.
+- The **New** and **Print** toolbar buttons are hidden (`hideCreate`, `hidePrint` set to `true`). Periods are defined in the [Fiscal Calendar](fiscal-calendar.md) window and provisioned there via the Create Periods process; they cannot be created or deleted from this window. The "more" menu (`hideMoreMenu`, previously `true`) is now enabled solely to expose the **Go to Fiscal Calendar** navigation action described below.
 
 ## Reactive behavior and dependencies
 - Period status on the header (`status`) is an aggregate read-only enum derived by the backend. Valid values: `N` (All Never Opened), `O` (All Opened), `C` (All Closed), `P` (All Permanently Closed), `M` (Mixed).
@@ -76,6 +77,7 @@ Manage the open/close status of fiscal periods for each organization. Controls w
 8. Click **Open Close** on a document-type row and confirm only that document type's status changes.
 9. Confirm a Permanently Closed period does not allow re-opening (the `Allowed PeriodActions` validation should block it).
 10. Confirm the window is NOT accessible via direct URL navigation if there are no provisioned period control records for the logged-in organization.
+11. Open the "more" (kebab) menu on a period detail and confirm **Go to Fiscal Calendar** appears; confirm clicking it shows a confirmation dialog, and confirming navigates to `/fiscal-calendar`.
 
 ## Automated evidence
 - `tools/app-shell/src/menu.json` exposes `open-close-period-control` in the Finance group with label `Periods`.
@@ -87,3 +89,4 @@ Manage the open/close status of fiscal periods for each organization. Controls w
 - `artifacts/open-close-period-control/generated/web/open-close-period-control/DocumentsTable.jsx` implements the documents child tab list.
 - `artifacts/open-close-period-control/generated/web/open-close-period-control/DocumentsForm.jsx` implements the documents child tab form.
 - NEO Headless spec pushed with ID `EB6BD6D721284B77B299F618A62A1600`, 38 fields total across both entities.
+- `artifacts/open-close-period-control/custom/GoToFiscalCalendarModal.jsx` — new cross-window navigation confirmation dialog wired via `decisions.json → window.menuActions[].component`; imported in the regenerated `PeriodControlPage.jsx` as `'../../../custom/GoToFiscalCalendarModal'`. `window.hideMoreMenu` changed from `true` to `false` to expose it. See [fiscal-calendar.md](fiscal-calendar.md) for the full navigation rationale (new pattern — no generic decisions.json "navigate to window" primitive exists yet).

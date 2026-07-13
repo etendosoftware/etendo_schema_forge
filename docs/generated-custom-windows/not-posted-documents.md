@@ -10,24 +10,28 @@ The window has no backing AD window — it is 100% custom. Data is served by `No
 
 ## Document type accounting support
 
-Not every document type in `ETBLKP_Documents` (`AD_Reference_ID = DE94535164E741AB9B1A560EF3F72854`) can actually be posted in a standard Etendo + APRM installation. The table below is the authoritative reference.
+Not every document type in `ETBLKP_Documents` (`AD_Reference_ID = DE94535164E741AB9B1A560EF3F72854`) can actually be posted in a standard Etendo + APRM installation, and 5 more are excluded globally by product decision. The table below is the authoritative reference.
 
-The **enabled** column reflects the `ENABLED_DOCUMENT_TYPE_CODES` set in `NotPostedDocumentsHandler.java`. Changing that set is the only place you need to edit to add or remove a type from the dropdown.
+The **enabled** column reflects two mechanisms combined, both live in `NotPostedDocumentsHandler.java` — there is no static "enabled list" to edit:
+1. A **dynamic** check: the code's `AD_Table_ID` (from `DOCUMENT_TYPE_CODE_TO_TABLE_ID`) must appear in `SELECT DISTINCT ad_table_id FROM c_acctschema_table WHERE isactive = 'Y'`, evaluated at request time.
+2. A **static** exclusion: the code must NOT be in `APRM_DISABLED_TYPES` — a hardcoded set of codes that are always hidden regardless of the dynamic check.
+
+(A legacy `ENABLED_DOCUMENT_TYPE_CODES` set existed in earlier revisions and has been fully replaced by this dynamic-check + static-exclusion combination — see commits `27caeaf1`, `44b5e179`, `ad210c51`, `4bf31a1e` in `com.etendoerp.go`.)
 
 | Code | Name | AD_Table | AD_Table_ID | In c_acctschema_table? | Posting status | **Enabled** | Reason |
 |------|------|----------|-------------|------------------------|----------------|:-----------:|--------|
 | `A`   | Amortization             | `A_Amortization`          | `800060` | ✅ isactive=Y | ✅ Working (N+Y records) | ✅ | — |
-| `BMP` | Bill of Materials Prod.  | `M_Production`            | `325` | ✅ isactive=Y | ✅ Working | ✅ | — |
+| `BMP` | Bill of Materials Prod.  | `M_Production`            | `325` | ✅ isactive=Y | ✅ Working | ❌ | **Globally excluded (ETP-4452)** — see below |
 | `BS`  | Bank Statements          | `FIN_BankStatement`       | `D4C23A17190649E7B78F55A05AF3438C` | ✅ isactive=Y | ❌ All D (100%) | ❌ | APRM posts via Transaction, not BankStatement |
-| `CA`  | Cost Adjustment          | `M_CostAdjustment`        | `D022B92163074E5E82449C8E0B5AFDF6` | ✅ isactive=Y | ⚠️ 0 documents | ❌ | No documents in this installation; enable when activated |
-| `DD`  | Doubtful Debt            | `FIN_Doubtful_Debt`       | `30721072789F410E9606D2235CB2A226` | ✅ isactive=Y | ⚠️ 0 documents | ❌ | No documents in this installation; enable when activated |
+| `CA`  | Cost Adjustment          | `M_CostAdjustment`        | `D022B92163074E5E82449C8E0B5AFDF6` | ✅ isactive=Y | ⚠️ 0 documents | ❌ | **Globally excluded (ETP-4452)** — see below |
+| `DD`  | Doubtful Debt            | `FIN_Doubtful_Debt`       | `30721072789F410E9606D2235CB2A226` | ✅ isactive=Y | ⚠️ 0 documents | ❌ | **Globally excluded (ETP-4452)** — see below |
 | `GLJ` | G/L Journal              | `GL_Journal`              | `224` | ✅ isactive=Y | ✅ Working (N+Y records) | ✅ | — |
 | `GR`  | Goods Receipt            | `M_InOut`                 | `319` | ✅ isactive=Y | ✅ Working (N+Y records) | ✅ | — |
 | `GS`  | Goods Shipment           | `M_InOut`                 | `319` | ✅ isactive=Y | ✅ Working (N+Y records) | ✅ | — |
 | `IC`  | Internal Consumption     | `M_Internal_Consumption`  | `800168` | ❌ Not present | ❌ N/A | ❌ | No accounting schema entry |
 | `INV` | Inventory                | `M_Inventory`             | `321` | ✅ isactive=Y | ✅ Working (N+Y records) | ✅ | — |
-| `LC`  | Landed Cost              | `M_LandedCost`            | `082F967CDF7245EB9A150941F326C45C` | ✅ isactive=Y | ✅ Working (N records) | ✅ | — |
-| `LCC` | Landed Cost Cost         | `M_LC_Cost`               | `55A984C314FD4C4FB5E7C32DE36BB07B` | ✅ isactive=Y | ✅ Working (N records) | ✅ | — |
+| `LC`  | Landed Cost              | `M_LandedCost`            | `082F967CDF7245EB9A150941F326C45C` | ✅ isactive=Y | ✅ Working (N records) | ❌ | **Globally excluded (ETP-4452)** — see below |
+| `LCC` | Landed Cost Cost         | `M_LC_Cost`               | `55A984C314FD4C4FB5E7C32DE36BB07B` | ✅ isactive=Y | ✅ Working (N records) | ❌ | **Globally excluded (ETP-4452)** — see below |
 | `MI`  | Matched Invoices         | `M_MatchInv`              | `472` | ✅ isactive=Y | ✅ Working (E+i+p+Y) | ✅ | — |
 | `M`   | Movements                | `M_Movement`              | `323` | ✅ isactive=Y | ✅ Working (Y records) | ✅ | — |
 | `PIN` | Payment In               | `FIN_Payment`             | `D1A97202E832470285C9B1EB026D54E2` | ✅ isactive=Y | ❌ 99.9% D | ❌ | APRM: payment accounting via Transaction |
@@ -43,6 +47,14 @@ The **enabled** column reflects the `ENABLED_DOCUMENT_TYPE_CODES` set in `NotPos
 ### Why APRM disables BS, PIN, POT, R
 
 Etendo's Advanced Payables & Receivables Management (APRM) module routes all financial accounting through `FIN_Finacc_Transaction` (code `T`). When a payment, bank statement, or reconciliation document is created via APRM, the system immediately sets `POSTED = 'D'` on those records — signalling that direct bulk-posting is disabled for them. The `FIN_Finacc_Transaction` records are what actually carry the accounting entries.
+
+### Global exclusion of BMP, DD, LC, LCC, CA (ETP-4452)
+
+Unlike the APRM codes above, `BMP` (Bill of Materials Production), `DD` (Doubtful Debt), `LC` (Landed Cost), `LCC` (Landed Cost Cost) and `CA` (Cost Adjustment) are **not** APRM-managed — their backing tables have active `c_acctschema_table` entries and some tenants genuinely post documents against them. They are excluded by an explicit **product decision** (ETP-4452), applied globally for ALL tenants.
+
+**Accepted tradeoff:** this hides legitimate not-posted documents for tenants that have these types actively configured for posting — confirmed cases include QA Testing and F&B International Group. The product owner accepted this tradeoff; it is not a bug and must not be "fixed" by removing the codes from `APRM_DISABLED_TYPES` without a new product decision.
+
+To re-enable any of the 5 (e.g. a future decision to scope the exclusion per-tenant instead of globally), remove its code from `APRM_DISABLED_TYPES` in `NotPostedDocumentsHandler.java`.
 
 Verification queries:
 ```sql
@@ -79,11 +91,11 @@ A document type is shown if and only if:
 2. Add the code → `AD_Table_ID` entry to `DOCUMENT_TYPE_CODE_TO_TABLE_ID` in the handler. That's the only code change needed.
 3. If the code is also new in `AD_Ref_List` (reference `DE94535164E741AB9B1A560EF3F72854`), `NoPostedDocumentDS` must handle that document type in its `searchStrategies` too — that's inside the `bulk.posting` JAR and out of scope here.
 
-**Case B — existing excluded code (DD, CA) has its module activated:**
-Add its `AD_Table_ID` entry to `DOCUMENT_TYPE_CODE_TO_TABLE_ID` if missing. Since DD and CA already have `c_acctschema_table` rows with `isactive = 'Y'`, they will appear automatically — no further change needed.
+**Case B — existing code has its module activated (no `c_acctschema_table` entry yet):**
+Once the module inserts an `isactive = 'Y'` row into `c_acctschema_table` for that table, the code appears automatically (dynamic check) — no code change needed, unless it's also in `APRM_DISABLED_TYPES` (see Case C).
 
-**Case C — APRM type (BS/PIN/POT/R) is re-enabled:**
-Remove its code from `APRM_DISABLED_TYPES`. Also verify that new documents of that type are no longer initialized with `posted = 'D'`.
+**Case C — statically excluded type (BS/PIN/POT/R APRM types, or BMP/DD/LC/LCC/CA global exclusion, ETP-4452) is re-enabled:**
+Remove its code from `APRM_DISABLED_TYPES`. For the APRM codes, also verify that new documents of that type are no longer initialized with `posted = 'D'`. For the ETP-4452 global-exclusion codes, this requires a new product decision overriding the accepted tradeoff — do not remove them unilaterally.
 
 ### How to disable a document type
 
@@ -239,7 +251,7 @@ The `MultiSelect` component (inline in the same file) closes on outside-click vi
 
 ## Manual verification
 
-1. Open `/not-posted-documents` — filter dropdowns populate; document type list has exactly 15 entries (no payments, no bank statements, no reconciliation, no work effort, no internal consumption, no doubtful debt, no cost adjustment).
+1. Open `/not-posted-documents` — filter dropdowns populate; document type list has exactly 12 entries (no payments, no bank statements, no reconciliation, no work effort, no internal consumption, no doubtful debt, no cost adjustment, no bill of materials production, no landed cost, no landed cost cost).
 2. Initial table loads with rows (defaults to N+E+C+i+p statuses — no Apply needed).
 3. Filter by document type → only that type appears.
 4. Filter by accounting status → only selected statuses appear.
@@ -255,6 +267,6 @@ The `MultiSelect` component (inline in the same file) closes on outside-click vi
 - `tools/app-shell/src/windows/registry.js` — `not-posted-documents` in `customLoaders`.
 - `tools/app-shell/src/windows/custom/not-posted-documents/NotPostedDocumentsPage.jsx` — main component.
 - `tools/app-shell/src/windows/custom/not-posted-documents/not-posted-documents.css` — scoped `npd-*` CSS.
-- `modules/com.etendoerp.go/src/com/etendoerp/go/schemaforge/handlers/NotPostedDocumentsHandler.java` — `@Named("not-posted-documents")`; `ENABLED_DOCUMENT_TYPE_CODES` set; `ACCOUNTING_STATUS_KEY_TO_ID` UUID map; `DEFAULT_ACCOUNTING_STATUS_KEYS`; `AccessibleDS` inner subclass.
+- `modules/com.etendoerp.go/src/com/etendoerp/go/schemaforge/handlers/NotPostedDocumentsHandler.java` — `@Named("not-posted-documents")`; dynamic `c_acctschema_table` check + `APRM_DISABLED_TYPES` static exclusion set (includes BS, PIN, POT, R plus the ETP-4452 global exclusions BMP, DD, LC, LCC, CA); `DOCUMENT_TYPE_TO_TABLE_ID` grid-row enrichment map; `ACCOUNTING_STATUS_KEY_TO_ID` UUID map; `DEFAULT_ACCOUNTING_STATUS_KEYS`; `AccessibleDS` inner subclass.
 - `modules/com.etendoerp.go/src-db/database/sourcedata/ETGO_SF_ENTITY.xml` — `isget=Y, ispost=Y`.
 - i18n keys: `notPostedDocuments`, `postSelected`, `postingComplete`, `postingPartial`, `postingFailed`, `filterDocumentType`, `filterAccountingStatus`, `accountingDate` in `en_US.json` / `es_ES.json`.
