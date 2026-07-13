@@ -20,15 +20,21 @@ describe('CloseYearConfirmModal', () => {
         isOpen
         currentRecord={{ id: 'year1' }}
         token="tok"
-        apiBaseUrl="https://api.test"
+        apiBaseUrl="https://api.test/fiscal-calendar"
         onClose={() => {}}
         onSaved={onSaved}
         data-testid="CloseYearConfirmModal__test" />
     );
     await waitFor(() => expect(screen.getByTestId('close-year-confirm')).not.toBeDisabled());
+    // The periodControl status check must hit the open-close-period-control spec (unchanged
+    // by the ETP-4478 rework), not fiscal-calendar — those are two separate specs now.
+    expect(global.fetch).toHaveBeenCalledWith(
+      'https://api.test/open-close-period-control/periodControl?year=year1',
+      expect.anything()
+    );
     fireEvent.click(screen.getByTestId('close-year-confirm'));
     await waitFor(() => expect(global.fetch).toHaveBeenCalledWith(
-      'https://api.test/year/year1/action/closeYear',
+      'https://api.test/fiscal-calendar/year/year1/action/closeYear',
       expect.objectContaining({ method: 'POST' })
     ));
     await waitFor(() => expect(onSaved).toHaveBeenCalled());
@@ -37,7 +43,7 @@ describe('CloseYearConfirmModal', () => {
   it('keeps confirm disabled when a period is still open', async () => {
     global.fetch = vi.fn(() => Promise.resolve({ ok: true, json: () => Promise.resolve({ data: [{ id: 'p1', status: 'O' }] }) }));
     render(
-      <CloseYearConfirmModal direction="close" isOpen currentRecord={{ id: 'year1' }} token="tok" apiBaseUrl="https://api.test"
+      <CloseYearConfirmModal direction="close" isOpen currentRecord={{ id: 'year1' }} token="tok" apiBaseUrl="https://api.test/fiscal-calendar"
         onClose={() => {}} onSaved={() => {}} data-testid="modal2" />
     );
     await waitFor(() => screen.getByTestId('close-year-confirm'));
@@ -54,7 +60,7 @@ describe('CloseYearConfirmModal', () => {
       ] }),
     }));
     render(
-      <CloseYearConfirmModal direction="close" isOpen currentRecord={{ id: 'year1' }} token="tok" apiBaseUrl="https://api.test"
+      <CloseYearConfirmModal direction="close" isOpen currentRecord={{ id: 'year1' }} token="tok" apiBaseUrl="https://api.test/fiscal-calendar"
         onClose={() => {}} onSaved={() => {}} data-testid="modal3" />
     );
     await waitFor(() => screen.getByTestId('close-year-confirm'));
@@ -64,7 +70,7 @@ describe('CloseYearConfirmModal', () => {
   it('keeps confirm disabled when the year has zero periods', async () => {
     global.fetch = vi.fn(() => Promise.resolve({ ok: true, json: () => Promise.resolve({ data: [] }) }));
     render(
-      <CloseYearConfirmModal direction="close" isOpen currentRecord={{ id: 'year1' }} token="tok" apiBaseUrl="https://api.test"
+      <CloseYearConfirmModal direction="close" isOpen currentRecord={{ id: 'year1' }} token="tok" apiBaseUrl="https://api.test/fiscal-calendar"
         onClose={() => {}} onSaved={() => {}} data-testid="modal4" />
     );
     await waitFor(() => screen.getByTestId('close-year-confirm'));
@@ -79,7 +85,7 @@ describe('CloseYearConfirmModal', () => {
         isOpen
         currentRecord={{ id: 'year1' }}
         token="tok"
-        apiBaseUrl="https://api.test"
+        apiBaseUrl="https://api.test/fiscal-calendar"
         onClose={() => {}}
         onSaved={onSaved}
         data-testid="modal5" />
@@ -87,7 +93,7 @@ describe('CloseYearConfirmModal', () => {
     await waitFor(() => expect(screen.getByTestId('close-year-confirm')).not.toBeDisabled());
     fireEvent.click(screen.getByTestId('close-year-confirm'));
     await waitFor(() => expect(global.fetch).toHaveBeenCalledWith(
-      'https://api.test/year/year1/action/undoCloseYear',
+      'https://api.test/fiscal-calendar/year/year1/action/undoCloseYear',
       expect.objectContaining({ method: 'POST' })
     ));
     await waitFor(() => expect(onSaved).toHaveBeenCalled());
@@ -102,7 +108,7 @@ describe('CloseYearConfirmModal', () => {
       return new Promise((resolve) => { resolveAction = resolve; });
     });
     render(
-      <CloseYearConfirmModal direction="close" isOpen currentRecord={{ id: 'year1' }} token="tok" apiBaseUrl="https://api.test"
+      <CloseYearConfirmModal direction="close" isOpen currentRecord={{ id: 'year1' }} token="tok" apiBaseUrl="https://api.test/fiscal-calendar"
         onClose={() => {}} onSaved={() => {}} data-testid="modal6" />
     );
     await waitFor(() => expect(screen.getByTestId('close-year-confirm')).not.toBeDisabled());

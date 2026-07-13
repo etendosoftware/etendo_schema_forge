@@ -5,6 +5,17 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 const CLOSED_STATUSES = new Set(['C', 'P']);
 const ACTION_BY_DIRECTION = { close: 'closeYear', undo: 'undoCloseYear' };
 
+// This modal is rendered by fiscal-calendar's generated YearPage.jsx via the menuActions
+// mechanism, so `apiBaseUrl` arrives as `api.baseUrl` (a hardcoded per-spec constant, e.g.
+// "/sws/neo/fiscal-calendar") — correct for the closeYear/undoCloseYear action below, which
+// really is a fiscal-calendar/year action. But the periodControl status check reads data that
+// still lives on the untouched `open-close-period-control` spec (ETP-4478 rework — periodControl/
+// documents were never merged into fiscal-calendar), so that fetch needs a different base:
+// swap the trailing spec segment for the real one instead of reusing `apiBaseUrl` as-is.
+function periodControlApiBase(apiBaseUrl) {
+  return `${apiBaseUrl.replace(/\/[^/]*$/, '')}/open-close-period-control`;
+}
+
 export default function CloseYearConfirmModal({ direction, isOpen, currentRecord, token, apiBaseUrl, onClose, onSaved }) {
   const ui = useUI();
   const [allClosed, setAllClosed] = useState(false);
@@ -12,7 +23,7 @@ export default function CloseYearConfirmModal({ direction, isOpen, currentRecord
 
   useEffect(() => {
     if (!isOpen || !currentRecord?.id) return;
-    fetch(`${apiBaseUrl}/periodControl?year=${currentRecord.id}`, {
+    fetch(`${periodControlApiBase(apiBaseUrl)}/periodControl?year=${currentRecord.id}`, {
       headers: { Authorization: `Bearer ${token}` },
     })
       .then((res) => res.json())
