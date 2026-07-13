@@ -6,6 +6,7 @@ import { NewMovementWizard } from './NewMovementWizard/index.jsx';
 import { FundsTransferModal } from './FundsTransferModal.jsx';
 import { applyAdvancedFilter } from './movementAdvancedFilter';
 import { getDateBounds } from '@/lib/dateRangeBounds';
+import { parseCalendarDate } from '@/lib/dateOnly';
 
 // ---------------------------------------------------------------------------
 // KPI window suffix (shown in parentheses next to Inflows / Outflows labels)
@@ -38,11 +39,17 @@ function applyFilters(movements, filters) {
   const q = filters.search.trim().toLowerCase();
 
   return movements.filter((m) => {
-    // Date range
+    // Date range — parse as a calendar date (year/month/day in LOCAL time), not
+    // via the naive Date constructor: the backend sends "yyyy-mm-ddT00:00:00Z"
+    // (a civil date, not a real instant), which the naive parser reads as UTC
+    // midnight — in any timezone behind UTC that rolls back to the previous day,
+    // so a single-day range around the movement's own date matched nothing.
     if (from || to) {
-      const d = new Date(m.date);
-      if (from && d < from) return false;
-      if (to && d > to) return false;
+      const d = parseCalendarDate(m.date);
+      if (d) {
+        if (from && d < from) return false;
+        if (to && d > to) return false;
+      }
     }
 
     // Type (BPD / BPW)
@@ -126,9 +133,11 @@ export const MovementsTab = forwardRef(function MovementsTab(
     let outflows = 0;
     for (const m of movements) {
       if (from || to) {
-        const d = new Date(m.date);
-        if (from && d < from) continue;
-        if (to && d > to) continue;
+        const d = parseCalendarDate(m.date);
+        if (d) {
+          if (from && d < from) continue;
+          if (to && d > to) continue;
+        }
       }
       const amt = Number(m.amount) || 0;
       if (amt >= 0) inflows += amt;
