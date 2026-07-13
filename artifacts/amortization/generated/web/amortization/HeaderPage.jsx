@@ -250,7 +250,6 @@ export default function HeaderPage({ windowName, recordId, ...props }) {
       api={api}
         CustomLines={AmortizationLinesTable}
         customLinesLabel="Lines"
-        hideDeleteButton
         hidePrint
         noHeaderBorder
         whiteFormBackground
@@ -299,7 +298,7 @@ export default function HeaderPage({ windowName, recordId, ...props }) {
       hideCreate
       hideLink
       labelOverrides={labelOverrides}
-      rowQuickActions={{"hideDeleteButton":true}}
+      rowQuickActions={{}}
       {...props}
     />
   );
