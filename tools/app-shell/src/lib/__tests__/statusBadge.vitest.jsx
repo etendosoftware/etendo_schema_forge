@@ -72,10 +72,19 @@ describe('statusBadge', () => {
       ['ca', 'success'], ['etgo_ci', 'success'], ['rppc', 'success'], ['ppm', 'success'],
       ['pwnc', 'success'], ['rdnc', 'success'], ['confirmed', 'success'], ['booked', 'success'],
       ['paid', 'success'], ['processed', 'success'], ['yes', 'success'],
-      ['rpae', 'warning'], ['rpr', 'success'], ['ue', 'warning'], ['under evaluation', 'warning'],
+      ['rpae', 'success'], ['rpr', 'success'], ['ue', 'warning'], ['under evaluation', 'warning'],
       ['rpvoid', 'destructive'], ['rpvd', 'destructive'], ['cancelled', 'destructive'], ['void', 'destructive'],
     ])('maps %s to %s', (status, expected) => {
       expect(getStatusTone(status)).toBe(expected);
+    });
+
+    it('classifies RPAE (Awaiting Execution) as success/deposited, matching PAID_STATUSES elsewhere (case-insensitive)', () => {
+      // Regression guard: RPAE is treated as "deposited" (Cobro/Pago depositado)
+      // by DEPOSITED_STATUSES in PaymentHeaderTableBase/PaymentConciliadoBadge
+      // and by PAID_STATUSES in PaymentsCard/InvoicePaymentHistoryModal — the
+      // tone here must agree, or the grid badge contradicts the "depositado" text.
+      expect(getStatusTone('RPAE')).toBe('success');
+      expect(getStatusTone('rpae')).toBe('success');
     });
   });
 
