@@ -20960,6 +20960,7 @@
     "searchDoc": "Buscar documento o contacto...",
     "reactivar": "Reactivar",
     "conciliado": "Conciliado",
+    "paymentGoToTransaction": "Ir a la transacción",
     "reactivarTodosModoss": "Reactivar de todos modos",
     "codeExact8Digits": "El código de cuenta debe tener exactamente 8 dígitos",
     "codeSuffixPlaceholder": "0000",

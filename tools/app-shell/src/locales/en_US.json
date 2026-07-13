@@ -20646,6 +20646,7 @@
     "searchDoc": "Search document or contact...",
     "reactivar": "Reactivate",
     "conciliado": "Reconciled",
+    "paymentGoToTransaction": "Go to transaction",
     "reactivarTodosModoss": "Reactivate anyway",
     "codeExact8Digits": "The account code must be exactly 8 digits",
     "codeSuffixPlaceholder": "0000",

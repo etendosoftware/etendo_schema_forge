@@ -1,3 +1,4 @@
+import { useNavigate } from 'react-router-dom';
 import { useUI } from '@/i18n';
 
 /* eslint-disable react/prop-types */
@@ -17,19 +18,58 @@ const CHECK_ICON = (
   </svg>
 );
 
+const BADGE_STYLE = {
+  display: 'inline-flex', alignItems: 'center', gap: 4,
+  padding: '4px 8px', borderRadius: 360,
+  background: '#EEFBF4', color: '#17663A',
+  fontFamily: 'Inter', fontWeight: 600, fontSize: 14, lineHeight: '20px',
+  whiteSpace: 'nowrap',
+};
+
+// Interactive resets on top of BADGE_STYLE for the clickable (<button>) variant —
+// the static (<span>) variant never carries these.
+const BADGE_BUTTON_STYLE = { ...BADGE_STYLE, border: 'none', cursor: 'pointer' };
+
 export default function PaymentConciliadoBadge({ data }) {
   const ui = useUI();
+  const navigate = useNavigate();
   if (data?.status !== RECONCILED_STATUS) return null;
+
+  // ETP-4479: once the payment is reconciled, navigate to the bank transaction it
+  // was matched against (FIN_Finacc_Transaction.Fin_Payment_ID → this payment).
+  // Both financialTransactionId (injected by ReactivatePaymentHandler.afterHandle)
+  // and account (Fin_Financial_Account_ID, already on the header contract) are
+  // required to build the deep link — fall back to the static, non-clickable pill
+  // when either is missing (e.g. older backend not yet redeployed) rather than
+  // rendering a broken link.
+  const transactionId = data?.financialTransactionId;
+  const accountId = data?.account;
+
+  if (!transactionId || !accountId) {
+    return (
+      <span style={BADGE_STYLE}>
+        {CHECK_ICON}
+        {ui('conciliado')}
+      </span>
+    );
+  }
+
+  const goToTransaction = () => {
+    navigate(`/financial-account/${accountId}?tab=movements&txn=${transactionId}`);
+  };
+
   return (
-    <span style={{
-      display: 'inline-flex', alignItems: 'center', gap: 4,
-      padding: '4px 8px', borderRadius: 360,
-      background: '#EEFBF4', color: '#17663A',
-      fontFamily: 'Inter', fontWeight: 600, fontSize: 14, lineHeight: '20px',
-      whiteSpace: 'nowrap',
-    }}>
+    <button
+      type="button"
+      onClick={goToTransaction}
+      title={ui('paymentGoToTransaction')}
+      aria-label={ui('paymentGoToTransaction')}
+      data-testid="payment-conciliado-go-to-transaction"
+      className="transition-opacity hover:opacity-80 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#17663A]"
+      style={BADGE_BUTTON_STYLE}
+    >
       {CHECK_ICON}
       {ui('conciliado')}
-    </span>
+    </button>
   );
 }
