@@ -126,6 +126,12 @@ function deltaLabelFor(balance, ui) {
   return ui('cpDifference');
 }
 
+/** Modal title: edit vs create, receipt (cobro) vs payment (pago). */
+function modalTitleFor(isEdit, isReceipt, ui) {
+  if (isEdit) return isReceipt ? ui('cpEditCollection') : ui('cpEditPayment');
+  return isReceipt ? ui('cpNewCollection') : ui('cpNewPayment');
+}
+
 /** Over-payment action sent to the backend (only relevant when there is excess). */
 function overpaymentActionFor(balance) {
   if (!balance.isExcess) return undefined;
@@ -1017,9 +1023,7 @@ export default function NewPaymentEntryModal({
     onClose?.();
   }, [pisPolling, cancelPisWait, onClose]);
 
-  const title = isEdit
-    ? (isReceipt ? ui('cpEditCollection') : ui('cpEditPayment'))
-    : (isReceipt ? ui('cpNewCollection') : ui('cpNewPayment'));
+  const title = modalTitleFor(isEdit, isReceipt, ui);
   const deltaLabel = deltaLabelFor(balance, ui);
 
   // Floppy + check icons for the footer actions (Figma).
