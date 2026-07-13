@@ -2,6 +2,13 @@ import { useEffect, useState, useCallback } from 'react';
 import { ChevronRight, ChevronDown } from 'lucide-react';
 import { toast } from 'sonner';
 import { useUI } from '@/i18n';
+import { Tag } from '@/components/ui/tag';
+
+// Same color mapping as artifacts/open-close-period-control/decisions.json's
+// periodControl.status / documents.periodStatus enumVariants — kept in sync manually
+// since this is a custom component, not generator-driven output.
+const PERIOD_STATUS_VARIANTS = { O: 'green', N: 'neutral', C: 'neutral', P: 'red', M: 'orange' };
+const DOCUMENT_STATUS_VARIANTS = { O: 'green', N: 'neutral', C: 'red', P: 'red' };
 
 // periodControl's LIST endpoint goes through NEO's generic DefaultJsonDataService (classic
 // Openbravo datasource), which does NOT support arbitrary `fieldName=value` query params — a
@@ -115,7 +122,12 @@ export default function PeriodsExpandablePanel({ parentId, token, apiBaseUrl }) 
                 {expandedId === period.id ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
               </button>
               <span className="flex-1">{period.name}</span>
-              <span data-testid={`period-status-${period.id}`}>{period.status}</span>
+              <span data-testid={`period-status-${period.id}`}>
+                <Tag
+                  variant={PERIOD_STATUS_VARIANTS[period.status] ?? 'neutral'}
+                  label={period.status$_identifier ?? period.status}
+                />
+              </span>
               <button
                 type="button"
                 data-testid={`period-openclose-${period.id}`}
@@ -139,8 +151,13 @@ export default function PeriodsExpandablePanel({ parentId, token, apiBaseUrl }) 
                   const docPending = !!pendingActions[`document-${doc.id}`];
                   return (
                     <div key={doc.id} className="flex items-center gap-2 py-1.5">
-                      <span className="flex-1">{doc.documentCategory}</span>
-                      <span data-testid={`document-status-${doc.id}`}>{doc.periodStatus}</span>
+                      <span className="flex-1">{doc.documentCategory$_identifier ?? doc.documentCategory}</span>
+                      <span data-testid={`document-status-${doc.id}`}>
+                        <Tag
+                          variant={DOCUMENT_STATUS_VARIANTS[doc.periodStatus] ?? 'neutral'}
+                          label={doc.periodStatus$_identifier ?? doc.periodStatus}
+                        />
+                      </span>
                       <button
                         type="button"
                         data-testid={`document-openclose-${doc.id}`}
