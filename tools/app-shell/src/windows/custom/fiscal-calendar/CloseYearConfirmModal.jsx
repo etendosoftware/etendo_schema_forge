@@ -16,6 +16,14 @@ function periodControlApiBase(apiBaseUrl) {
   return `${apiBaseUrl.replace(/\/[^/]*$/, '')}/open-close-period-control`;
 }
 
+// periodControl's LIST endpoint goes through NEO's generic DefaultJsonDataService (classic
+// Openbravo datasource), which does NOT support arbitrary `fieldName=value` query params — a
+// plain `?year=<id>` is silently ignored and returns ALL periods across every year unfiltered
+// (confirmed live). The classic Openbravo `criteria` JSON-array param is the real mechanism.
+function yearCriteria(yearId) {
+  return `criteria=${encodeURIComponent(JSON.stringify([{ fieldName: 'year', operator: 'equals', value: yearId }]))}`;
+}
+
 export default function CloseYearConfirmModal({ direction, isOpen, currentRecord, token, apiBaseUrl, onClose, onSaved }) {
   const ui = useUI();
   const [allClosed, setAllClosed] = useState(false);
@@ -23,12 +31,15 @@ export default function CloseYearConfirmModal({ direction, isOpen, currentRecord
 
   useEffect(() => {
     if (!isOpen || !currentRecord?.id) return;
-    fetch(`${periodControlApiBase(apiBaseUrl)}/periodControl?year=${currentRecord.id}`, {
+    fetch(`${periodControlApiBase(apiBaseUrl)}/periodControl?${yearCriteria(currentRecord.id)}`, {
       headers: { Authorization: `Bearer ${token}` },
     })
       .then((res) => res.json())
       .then((body) => {
-        const periods = body.data ?? [];
+        // periodControl's LIST wraps rows as { response: { data: [...] } } (classic NEO
+        // DefaultJsonDataService envelope), not a flat { data: [...] } — matches
+        // useEntity.js's exact fallback pattern.
+        const periods = body?.response?.data ?? (Array.isArray(body) ? body : []);
         setAllClosed(periods.length > 0 && periods.every((p) => CLOSED_STATUSES.has(p.status)));
       });
   }, [isOpen, currentRecord?.id, apiBaseUrl, token]);

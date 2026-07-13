@@ -3,11 +3,23 @@ import { ChevronRight, ChevronDown } from 'lucide-react';
 import { toast } from 'sonner';
 import { useUI } from '@/i18n';
 
+// periodControl's LIST endpoint goes through NEO's generic DefaultJsonDataService (classic
+// Openbravo datasource), which does NOT support arbitrary `fieldName=value` query params — a
+// plain `?year=<id>` is silently ignored and returns ALL periods across every year unfiltered
+// (confirmed live). The classic Openbravo `criteria` JSON-array param is the real mechanism.
+function yearCriteria(yearId) {
+  return `criteria=${encodeURIComponent(JSON.stringify([{ fieldName: 'year', operator: 'equals', value: yearId }]))}`;
+}
+
 async function fetchJson(url, token) {
   const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
   if (!res.ok) throw new Error(`Request failed: ${res.status}`);
   const body = await res.json();
-  return body.data ?? [];
+  // periodControl's LIST goes through NEO's generic DefaultJsonDataService (classic Openbravo
+  // datasource), which wraps rows as { response: { data: [...] } } — NOT a flat { data: [...] }.
+  // Match useEntity.js's exact fallback (data?.response?.data ?? (Array.isArray(data) ? data : []))
+  // so a genuinely flat array response (e.g. a future custom handler) still works too.
+  return body?.response?.data ?? (Array.isArray(body) ? body : []);
 }
 
 async function postAction(url, token) {
@@ -36,7 +48,7 @@ export default function PeriodsExpandablePanel({ parentId, token, apiBaseUrl }) 
   useEffect(() => {
     if (!parentId) return;
     setPeriods(undefined);
-    fetchJson(`${apiBaseUrl}/periodControl?year=${parentId}`, token)
+    fetchJson(`${apiBaseUrl}/periodControl?${yearCriteria(parentId)}`, token)
       .then(setPeriods)
       .catch(() => setPeriods(null));
   }, [parentId, apiBaseUrl, token]);

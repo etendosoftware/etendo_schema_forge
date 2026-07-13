@@ -2,10 +2,14 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import CloseYearConfirmModal from '../CloseYearConfirmModal.jsx';
 
+// periodControl's LIST wraps rows as { response: { data: [...] } } — the classic NEO
+// DefaultJsonDataService envelope, not a flat { data: [...] } (confirmed live).
+const expectedYearCriteria = encodeURIComponent(JSON.stringify([{ fieldName: 'year', operator: 'equals', value: 'year1' }]));
+
 beforeEach(() => {
   global.fetch = vi.fn((url) => {
     if (url.includes('/periodControl')) {
-      return Promise.resolve({ ok: true, json: () => Promise.resolve({ data: [{ id: 'p1', status: 'C' }, { id: 'p2', status: 'P' }] }) });
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({ response: { data: [{ id: 'p1', status: 'C' }, { id: 'p2', status: 'P' }] } }) });
     }
     return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
   });
@@ -27,11 +31,14 @@ describe('CloseYearConfirmModal', () => {
     );
     await waitFor(() => expect(screen.getByTestId('close-year-confirm')).not.toBeDisabled());
     // The periodControl status check must hit the open-close-period-control spec (unchanged
-    // by the ETP-4478 rework), not fiscal-calendar — those are two separate specs now.
+    // by the ETP-4478 rework), not fiscal-calendar — those are two separate specs now. It must
+    // also use the classic Openbravo `criteria` param, not `?year=` (silently ignored live by
+    // NEO's generic DefaultJsonDataService — confirmed it returns every period unfiltered).
     expect(global.fetch).toHaveBeenCalledWith(
-      'https://api.test/open-close-period-control/periodControl?year=year1',
+      `https://api.test/open-close-period-control/periodControl?criteria=${expectedYearCriteria}`,
       expect.anything()
     );
+    expect(global.fetch).not.toHaveBeenCalledWith(expect.stringContaining('/periodControl?year='), expect.anything());
     fireEvent.click(screen.getByTestId('close-year-confirm'));
     await waitFor(() => expect(global.fetch).toHaveBeenCalledWith(
       'https://api.test/fiscal-calendar/year/year1/action/closeYear',
@@ -41,7 +48,7 @@ describe('CloseYearConfirmModal', () => {
   });
 
   it('keeps confirm disabled when a period is still open', async () => {
-    global.fetch = vi.fn(() => Promise.resolve({ ok: true, json: () => Promise.resolve({ data: [{ id: 'p1', status: 'O' }] }) }));
+    global.fetch = vi.fn(() => Promise.resolve({ ok: true, json: () => Promise.resolve({ response: { data: [{ id: 'p1', status: 'O' }] } }) }));
     render(
       <CloseYearConfirmModal direction="close" isOpen currentRecord={{ id: 'year1' }} token="tok" apiBaseUrl="https://api.test/fiscal-calendar"
         onClose={() => {}} onSaved={() => {}} data-testid="modal2" />
@@ -53,11 +60,11 @@ describe('CloseYearConfirmModal', () => {
   it('keeps confirm disabled when one period out of a mix is still Never Opened (N)', async () => {
     global.fetch = vi.fn(() => Promise.resolve({
       ok: true,
-      json: () => Promise.resolve({ data: [
+      json: () => Promise.resolve({ response: { data: [
         { id: 'p1', status: 'C' },
         { id: 'p2', status: 'P' },
         { id: 'p3', status: 'N' },
-      ] }),
+      ] } }),
     }));
     render(
       <CloseYearConfirmModal direction="close" isOpen currentRecord={{ id: 'year1' }} token="tok" apiBaseUrl="https://api.test/fiscal-calendar"
@@ -68,7 +75,7 @@ describe('CloseYearConfirmModal', () => {
   });
 
   it('keeps confirm disabled when the year has zero periods', async () => {
-    global.fetch = vi.fn(() => Promise.resolve({ ok: true, json: () => Promise.resolve({ data: [] }) }));
+    global.fetch = vi.fn(() => Promise.resolve({ ok: true, json: () => Promise.resolve({ response: { data: [] } }) }));
     render(
       <CloseYearConfirmModal direction="close" isOpen currentRecord={{ id: 'year1' }} token="tok" apiBaseUrl="https://api.test/fiscal-calendar"
         onClose={() => {}} onSaved={() => {}} data-testid="modal4" />
@@ -103,7 +110,7 @@ describe('CloseYearConfirmModal', () => {
     let resolveAction;
     global.fetch = vi.fn((url) => {
       if (url.includes('/periodControl')) {
-        return Promise.resolve({ ok: true, json: () => Promise.resolve({ data: [{ id: 'p1', status: 'C' }] }) });
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ response: { data: [{ id: 'p1', status: 'C' }] } }) });
       }
       return new Promise((resolve) => { resolveAction = resolve; });
     });
@@ -125,7 +132,7 @@ describe('CloseYearConfirmModal', () => {
         onClose={() => {}} onSaved={() => {}} data-testid="modal7" />
     );
     await waitFor(() => expect(global.fetch).toHaveBeenCalledWith(
-      '/open-close-period-control/periodControl?year=year1',
+      `/open-close-period-control/periodControl?criteria=${expectedYearCriteria}`,
       expect.anything()
     ));
   });

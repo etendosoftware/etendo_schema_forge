@@ -13,10 +13,10 @@ beforeEach(() => {
   toast.error.mockClear();
   global.fetch = vi.fn((url) => {
     if (url.includes('/periodControl')) {
-      return Promise.resolve({ ok: true, json: () => Promise.resolve({ data: [PERIOD] }) });
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({ response: { data: [PERIOD] } }) });
     }
     if (url.includes('/documents')) {
-      return Promise.resolve({ ok: true, json: () => Promise.resolve({ data: [DOC] }) });
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({ response: { data: [DOC] } }) });
     }
     return Promise.reject(new Error('unexpected url ' + url));
   });
@@ -40,9 +40,24 @@ describe('PeriodsExpandablePanel', () => {
     expect(global.fetch).toHaveBeenCalledWith(expect.stringContaining('/documents?parentId=p1'), expect.anything());
   });
 
+  it('scopes the periodControl fetch to the year via the classic Openbravo criteria param, not ?year=', async () => {
+    // periodControl's LIST goes through NEO's generic DefaultJsonDataService, which silently
+    // ignores an arbitrary `?year=<id>` query param (confirmed live — it returned every period
+    // across every year, unfiltered). The real mechanism is the `criteria` JSON-array param.
+    render(<PeriodsExpandablePanel parentId="year1" token="tok" apiBaseUrl="https://api.test" data-testid="p10" />);
+    await waitFor(() => screen.getByText('Jan-2027'));
+
+    const expectedCriteria = encodeURIComponent(JSON.stringify([{ fieldName: 'year', operator: 'equals', value: 'year1' }]));
+    expect(global.fetch).toHaveBeenCalledWith(
+      `https://api.test/periodControl?criteria=${expectedCriteria}`,
+      expect.anything()
+    );
+    expect(global.fetch).not.toHaveBeenCalledWith(expect.stringContaining('/periodControl?year='), expect.anything());
+  });
+
   it('calls the period openClose endpoint when Abrir/Cerrar Periodo is clicked', async () => {
     global.fetch.mockImplementationOnce((url) => {
-      if (url.includes('/periodControl')) return Promise.resolve({ ok: true, json: () => Promise.resolve({ data: [PERIOD] }) });
+      if (url.includes('/periodControl')) return Promise.resolve({ ok: true, json: () => Promise.resolve({ response: { data: [PERIOD] } }) });
       return Promise.reject(new Error('unexpected'));
     });
     const postSpy = vi.fn(() => Promise.resolve({ ok: true, json: () => Promise.resolve({}) }));
@@ -102,7 +117,7 @@ describe('PeriodsExpandablePanel', () => {
 
   it('shows an inline error under the expanded period when the documents fetch fails', async () => {
     global.fetch = vi.fn((url) => {
-      if (url.includes('/periodControl')) return Promise.resolve({ ok: true, json: () => Promise.resolve({ data: [PERIOD] }) });
+      if (url.includes('/periodControl')) return Promise.resolve({ ok: true, json: () => Promise.resolve({ response: { data: [PERIOD] } }) });
       if (url.includes('/documents')) return Promise.resolve({ ok: false, status: 500, json: () => Promise.resolve({}) });
       return Promise.reject(new Error('unexpected'));
     });
@@ -116,7 +131,7 @@ describe('PeriodsExpandablePanel', () => {
   it('shows a toast and re-enables the button when Abrir/Cerrar Periodo fails', async () => {
     global.fetch = vi.fn((url, opts) => {
       if (opts?.method === 'POST') return Promise.resolve({ ok: false, status: 500, json: () => Promise.resolve({}) });
-      if (url.includes('/periodControl')) return Promise.resolve({ ok: true, json: () => Promise.resolve({ data: [PERIOD] }) });
+      if (url.includes('/periodControl')) return Promise.resolve({ ok: true, json: () => Promise.resolve({ response: { data: [PERIOD] } }) });
       return Promise.reject(new Error('unexpected'));
     });
     render(<PeriodsExpandablePanel parentId="year1" token="tok" apiBaseUrl="https://api.test" data-testid="p8" />);
@@ -129,7 +144,7 @@ describe('PeriodsExpandablePanel', () => {
 
   it('disables Abrir/Cerrar Periodo while the request is in flight, guarding against double-submit', async () => {
     global.fetch.mockImplementationOnce((url) => {
-      if (url.includes('/periodControl')) return Promise.resolve({ ok: true, json: () => Promise.resolve({ data: [PERIOD] }) });
+      if (url.includes('/periodControl')) return Promise.resolve({ ok: true, json: () => Promise.resolve({ response: { data: [PERIOD] } }) });
       return Promise.reject(new Error('unexpected'));
     });
     render(<PeriodsExpandablePanel parentId="year1" token="tok" apiBaseUrl="https://api.test" data-testid="p9" />);
