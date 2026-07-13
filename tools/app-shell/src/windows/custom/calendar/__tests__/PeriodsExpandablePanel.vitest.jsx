@@ -218,6 +218,82 @@ describe('PeriodsExpandablePanel', () => {
     expect(screen.queryByTestId('dialog')).not.toBeInTheDocument();
   });
 
+  it('re-fetches the periods list (not a full page reload) after a period action succeeds, updating the status badge', async () => {
+    const UPDATED_PERIOD = { ...PERIOD, status: 'C', 'status$_identifier': 'All Closed' };
+    let periodControlCallCount = 0;
+    global.fetch = vi.fn((url, opts) => {
+      if (opts?.method === 'POST') {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
+      }
+      if (url.includes('/periodControl')) {
+        periodControlCallCount += 1;
+        const data = periodControlCallCount === 1 ? [PERIOD] : [UPDATED_PERIOD];
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ response: { data } }) });
+      }
+      return Promise.reject(new Error('unexpected url ' + url));
+    });
+    render(<PeriodsExpandablePanel parentId="year1" token="tok" apiBaseUrl="https://api.test" data-testid="p14" />);
+    await waitFor(() => screen.getByText('Jan-2027'));
+    expect(periodControlCallCount).toBe(1);
+
+    fireEvent.click(screen.getByTestId('period-openclose-p1'));
+    selectOpenCloseOption('C');
+    fireEvent.click(screen.getByTestId('process-param-confirm'));
+
+    // The periods list is fetched again — never a full page reload (no window.location.reload,
+    // no full-panel loading flash) — and the badge reflects whatever the refetch returns.
+    await waitFor(() => expect(periodControlCallCount).toBe(2));
+    await waitFor(() => {
+      const badge = screen.getByTestId(`period-status-${PERIOD.id}`).querySelector('[data-testid="tag"]');
+      expect(badge).toHaveTextContent('All Closed');
+      expect(badge).toHaveAttribute('data-variant', 'neutral'); // status "C" -> neutral per enumVariants
+    });
+    // The panel itself must never have been torn down for a full reload — it stayed mounted
+    // and showed the (stale, then updated) row the whole time, no top-level loading state again.
+    expect(screen.queryByTestId('periods-expandable-panel-loading')).not.toBeInTheDocument();
+  });
+
+  it('re-fetches only the affected period\'s documents (not the whole periods list) after a document action succeeds', async () => {
+    const UPDATED_DOC = { ...DOC, periodStatus: 'C', 'periodStatus$_identifier': 'Closed' };
+    let periodControlCallCount = 0;
+    let documentsCallCount = 0;
+    global.fetch = vi.fn((url, opts) => {
+      if (opts?.method === 'POST') {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
+      }
+      if (url.includes('/periodControl')) {
+        periodControlCallCount += 1;
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ response: { data: [PERIOD] } }) });
+      }
+      if (url.includes('/documents')) {
+        documentsCallCount += 1;
+        const data = documentsCallCount === 1 ? [DOC] : [UPDATED_DOC];
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ response: { data } }) });
+      }
+      return Promise.reject(new Error('unexpected url ' + url));
+    });
+    render(<PeriodsExpandablePanel parentId="year1" token="tok" apiBaseUrl="https://api.test" data-testid="p15" />);
+    await waitFor(() => screen.getByText('Jan-2027'));
+    fireEvent.click(screen.getByTestId('period-row-expand-p1'));
+    await waitFor(() => screen.getByText('AP Credit Memo'));
+    expect(documentsCallCount).toBe(1);
+    const periodControlCallsBeforeAction = periodControlCallCount;
+
+    fireEvent.click(screen.getByTestId('document-openclose-d1'));
+    selectOpenCloseOption('C');
+    fireEvent.click(screen.getByTestId('process-param-confirm'));
+
+    await waitFor(() => expect(documentsCallCount).toBe(2));
+    await waitFor(() => {
+      const badge = screen.getByTestId(`document-status-${DOC.id}`).querySelector('[data-testid="tag"]');
+      expect(badge).toHaveTextContent('Closed');
+      expect(badge).toHaveAttribute('data-variant', 'red'); // periodStatus "C" -> red per enumVariants
+    });
+    // Scoped refetch: only that period's documents were reloaded, the periods list itself
+    // (data the user didn't touch) was not re-fetched.
+    expect(periodControlCallCount).toBe(periodControlCallsBeforeAction);
+  });
+
   it('cancelling the dialog does not submit any request', async () => {
     const postSpy = vi.fn(() => Promise.resolve({ ok: true, json: () => Promise.resolve({}) }));
     render(<PeriodsExpandablePanel parentId="year1" token="tok" apiBaseUrl="https://api.test" data-testid="p3b" />);
@@ -299,8 +375,14 @@ describe('PeriodsExpandablePanel', () => {
     render(<PeriodsExpandablePanel parentId="year1" token="tok" apiBaseUrl="https://api.test" data-testid="p9" />);
     await waitFor(() => screen.getByText('Jan-2027'));
 
+    // Only the POST is held pending by the test — the post-success periodControl refetch
+    // (a GET) must resolve immediately, or the pending flag (cleared only after that refetch
+    // settles) would hang forever and this test would never see the button re-enable.
     let resolvePost;
-    const postSpy = vi.fn(() => new Promise((resolve) => { resolvePost = resolve; }));
+    const postSpy = vi.fn((url, opts) => {
+      if (opts?.method === 'POST') return new Promise((resolve) => { resolvePost = resolve; });
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({ response: { data: [PERIOD] } }) });
+    });
     global.fetch = postSpy;
 
     const button = screen.getByTestId('period-openclose-p1');
@@ -320,8 +402,13 @@ describe('PeriodsExpandablePanel', () => {
   });
 
   it('confirming again while the previous request for the same row is still pending does not open a second dialog', async () => {
+    // Same as above: only the POST is held pending — the post-success refetch (GET) resolves
+    // immediately so it doesn't block the pending flag from ever clearing.
     let resolvePost;
-    const postSpy = vi.fn(() => new Promise((resolve) => { resolvePost = resolve; }));
+    const postSpy = vi.fn((url, opts) => {
+      if (opts?.method === 'POST') return new Promise((resolve) => { resolvePost = resolve; });
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({ response: { data: [PERIOD] } }) });
+    });
     render(<PeriodsExpandablePanel parentId="year1" token="tok" apiBaseUrl="https://api.test" data-testid="p9b" />);
     await waitFor(() => screen.getByText('Jan-2027'));
     global.fetch = postSpy;

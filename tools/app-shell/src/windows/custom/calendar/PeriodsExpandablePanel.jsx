@@ -84,13 +84,38 @@ export default function PeriodsExpandablePanel({ parentId, token, apiBaseUrl }) 
   // openClose is a required 3-state choice, not a toggle, so the choice must be collected first.
   const [dialogTarget, setDialogTarget] = useState(null);
 
+  // Fetches (or re-fetches) the periods list without touching the loading/error state — used
+  // both by the mount effect (which resets to `undefined` itself first, below) and, silently,
+  // to refresh the aggregate status badge right after a period action succeeds. A stale badge
+  // left showing the pre-action status until a manual F5 was the exact bug being fixed here.
+  const loadPeriods = useCallback(async () => {
+    if (!parentId) return;
+    try {
+      const data = await fetchJson(`${apiBaseUrl}/periodControl?${yearCriteria(parentId)}`, token);
+      setPeriods(data);
+    } catch {
+      setPeriods(null);
+    }
+  }, [parentId, apiBaseUrl, token]);
+
   useEffect(() => {
     if (!parentId) return;
     setPeriods(undefined);
-    fetchJson(`${apiBaseUrl}/periodControl?${yearCriteria(parentId)}`, token)
-      .then(setPeriods)
-      .catch(() => setPeriods(null));
-  }, [parentId, apiBaseUrl, token]);
+    loadPeriods();
+  }, [parentId, apiBaseUrl, token]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Fetches (or re-fetches) one period's documents — used both by toggleExpand (first expand)
+  // and, silently, to refresh a document row's status right after a document action succeeds.
+  // Reused rather than duplicated so "initial load" and "post-action refresh" can never drift.
+  const loadDocumentsForPeriod = useCallback(async (periodId) => {
+    try {
+      const docs = await fetchJson(`${apiBaseUrl}/documents?parentId=${periodId}`, token);
+      setDocumentsByPeriod((prev) => ({ ...prev, [periodId]: docs }));
+      setDocumentsError((prev) => ({ ...prev, [periodId]: false }));
+    } catch {
+      setDocumentsError((prev) => ({ ...prev, [periodId]: true }));
+    }
+  }, [apiBaseUrl, token]);
 
   const toggleExpand = useCallback(async (periodId) => {
     if (expandedId === periodId) {
@@ -99,23 +124,20 @@ export default function PeriodsExpandablePanel({ parentId, token, apiBaseUrl }) 
     }
     setExpandedId(periodId);
     if (!documentsByPeriod[periodId]) {
-      try {
-        const docs = await fetchJson(`${apiBaseUrl}/documents?parentId=${periodId}`, token);
-        setDocumentsByPeriod((prev) => ({ ...prev, [periodId]: docs }));
-        setDocumentsError((prev) => ({ ...prev, [periodId]: false }));
-      } catch {
-        setDocumentsError((prev) => ({ ...prev, [periodId]: true }));
-      }
+      await loadDocumentsForPeriod(periodId);
     }
-  }, [expandedId, documentsByPeriod, apiBaseUrl, token]);
+  }, [expandedId, documentsByPeriod, loadDocumentsForPeriod]);
 
-  const runAction = useCallback(async (key, url, fieldValues) => {
+  const runAction = useCallback(async (key, url, fieldValues, onSuccess) => {
     setPendingActions((prev) => {
       if (prev[key]) return prev;
       return { ...prev, [key]: true };
     });
     try {
       await postAction(url, token, fieldValues);
+      // Targeted refetch of just the affected data (never a full page reload) so the status
+      // badge reflects the new value immediately, instead of staying stale until a manual F5.
+      await onSuccess?.();
     } catch (err) {
       toast.error(err?.message || ui('networkError'));
     } finally {
@@ -129,20 +151,29 @@ export default function PeriodsExpandablePanel({ parentId, token, apiBaseUrl }) 
     setDialogTarget({ kind: 'period', id: periodId });
   }, []);
 
-  const openCloseDocument = useCallback((documentId) => {
-    setDialogTarget({ kind: 'document', id: documentId });
+  // periodId is captured at click time (not read from `expandedId` at confirm time) so the
+  // refresh always targets the period the document actually belongs to, even in the (currently
+  // unreachable, since the dialog overlay blocks background interaction, but not worth relying
+  // on that) case where the expanded row changed while the dialog was open.
+  const openCloseDocument = useCallback((documentId, periodId) => {
+    setDialogTarget({ kind: 'document', id: documentId, periodId });
   }, []);
 
   const handleDialogConfirm = useCallback((paramValues) => {
     if (!dialogTarget) return;
-    const { kind, id } = dialogTarget;
+    const { kind, id, periodId } = dialogTarget;
     setDialogTarget(null);
     if (kind === 'period') {
-      runAction(`period-${id}`, `${apiBaseUrl}/periodControl/${id}/action/openClose`, paramValues);
+      runAction(`period-${id}`, `${apiBaseUrl}/periodControl/${id}/action/openClose`, paramValues, loadPeriods);
     } else {
-      runAction(`document-${id}`, `${apiBaseUrl}/documents/${id}/action/openClose`, paramValues);
+      runAction(
+        `document-${id}`,
+        `${apiBaseUrl}/documents/${id}/action/openClose`,
+        paramValues,
+        () => loadDocumentsForPeriod(periodId)
+      );
     }
-  }, [dialogTarget, apiBaseUrl, runAction]);
+  }, [dialogTarget, apiBaseUrl, runAction, loadPeriods, loadDocumentsForPeriod]);
 
   const dialogProcess = dialogTarget?.kind === 'document' ? DOCUMENT_OPEN_CLOSE_PROCESS : PERIOD_OPEN_CLOSE_PROCESS;
 
@@ -208,7 +239,7 @@ export default function PeriodsExpandablePanel({ parentId, token, apiBaseUrl }) 
                       <button
                         type="button"
                         data-testid={`document-openclose-${doc.id}`}
-                        onClick={() => openCloseDocument(doc.id)}
+                        onClick={() => openCloseDocument(doc.id, period.id)}
                         disabled={docPending}
                       >
                         {ui('openCloseDocument')}
