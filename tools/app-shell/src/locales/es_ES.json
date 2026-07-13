@@ -19631,6 +19631,7 @@
     "fiscal.cert.info.body": "Solicítalo a la FNMT o a tu Diputación Foral. La emisión tarda 5–10 días hábiles.",
     "fiscal.cert.verifying.title": "Verificando certificado…",
     "fiscal.cert.verifying.body": "Comprobando estructura PKCS#12, contraseña, vigencia y almacenando en Etendo.",
+    "fiscal.verifactu.processing.body": "Generando el registro de facturación para su envío a VERI*FACTU",
     "fiscal.cert.nif.warning.title": "La organización no tiene NIF configurado",
     "fiscal.cert.nif.warning.body": "El certificado contiene el NIF {nif}. Si lo confirmas, se establecerá como NIF de la organización y el certificado se almacenará.",
     "fiscal.cert.nif.row.file": "Archivo",

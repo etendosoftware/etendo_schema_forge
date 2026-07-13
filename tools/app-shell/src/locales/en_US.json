@@ -19333,6 +19333,7 @@
     "fiscal.cert.info.body": "Request it from the FNMT or your Foral Tax Authority. Issuance takes 5–10 business days.",
     "fiscal.cert.verifying.title": "Verifying certificate…",
     "fiscal.cert.verifying.body": "Checking PKCS#12 structure, password, validity and storing in Etendo.",
+    "fiscal.verifactu.processing.body": "Generating the billing record for submission to VERI*FACTU",
     "fiscal.cert.nif.warning.title": "The organization has no NIF configured",
     "fiscal.cert.nif.warning.body": "The certificate contains NIF {nif}. If you confirm, it will be set as the organization NIF and the certificate will be stored.",
     "fiscal.cert.nif.row.file": "File",
