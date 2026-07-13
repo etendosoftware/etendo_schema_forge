@@ -166,8 +166,9 @@ Adds actions to the triple-dot menu in the detail view. Visibility can be gated 
 | `documentAction` | string | If set, invokes the standard DocAction endpoint with this value (`"RE"`, `"CO"`, `"VO"`, …) via the shared `useDocumentAction` hook. After success, the record is refreshed and `successMessage` (or a generic label) is shown inline. Errors from the backend are surfaced inline as well. |
 | `successMessage` | string | Text shown in the success banner after a `documentAction` resolves. |
 | `columnName` | string | Fires `hook.handleProcess(columnName)`. Use for AD process buttons that aren't DocAction-based. |
+| `component` | string | Imports a custom component from `windows/custom/{window}/` and opens it as a detail-menu modal. The component receives `currentRecord`, `token`, `apiBaseUrl`, `onClose`, and `onSaved`. |
 
-Handler precedence: `documentAction` > `columnName` > empty placeholder `onClick`. Declare `documentAction` for any DocAction-style action (Reactivate, Void, Close, etc.) — the generator wires the full fetch + error flow automatically.
+Handler precedence: `documentAction` > `columnName` > `action` > `component` > empty placeholder `onClick`. Declare `documentAction` for any DocAction-style action (Reactivate, Void, Close, etc.) — the generator wires the full fetch + error flow automatically.
 
 **The ⋮ button auto-hides when empty.** `DetailView` only renders the "more" button when, for the current record state, there is at least one visible `menuActions` entry **or** a `customComponents.moreMenuContent` is set. If every action is gated out (e.g. all `visibleWhenStatus: "CO"` while the document is in Draft), the button is not shown at all — it never renders as an empty, clickable dropdown.
 
@@ -545,6 +546,37 @@ Both `debitField` and `creditField` must be amount-typed fields on the **lines**
 
 ---
 
+### 16. `requiredVisual` — cosmetic required asterisk (field descriptor prop)
+
+**What it does:** renders the red required asterisk `*` next to a field's label in `EntityForm`
+**without enforcing any validation**. It is OR-ed with `required` in every asterisk render site
+(`labelMarker`, `requiredAsterisk`, `requiredAsteriskIfEditable`, and `PopupSearchField`'s inline
+marker), and — like the `required` asterisk — only shows on editable fields (`!isReadOnly`); it
+never renders on a read-only display. The `required={...}` prop passed down to the underlying
+input/select is untouched by `requiredVisual` — it still depends on `required` only.
+
+**Use when:** a field's obligatoriness is **conditional** on another field's value (e.g. a
+calculation-type toggle that makes different fields mandatory depending on its selection), so a
+real `required: true` would incorrectly block submission when the field isn't actually
+applicable yet, but the user should still see it visually flagged as required once it is
+relevant.
+
+Set directly on the field descriptor object passed to `EntityForm` — **not** a `decisions.json`
+key. It is typically declared inline on the field literals inside a window's hand-authored
+custom panel:
+
+```jsx
+// windows/custom/{window}/{Window}DetailPanel.jsx
+{ key: 'usableLifeYears', column: 'UseLifeYears', type: 'number', requiredVisual: true, /* ... */ }
+```
+
+**Real example:** `assets` — `currency`, `depreciationAmt`, `annualDepreciation`,
+`usableLifeYears`, `usableLifeMonths`, and `depreciationStartDate` in `AssetsDetailPanel.jsx`
+carry `requiredVisual: true` because their obligatoriness depends on the "Tipo de cálculo"
+(`calculateType`) selection.
+
+---
+
 ## Decision tree: which option to use?
 
 ```
@@ -590,8 +622,10 @@ I need to customize the UI of a window
     ├─ Empty state when lines tab is empty → linesEmptyState prop + addLineGuard
     ├─ Gate add-line button on header field → addLineGuard prop
     ├─ Hide ⋮ menu on new/processed records → hideMoreMenu prop (boolean or function)
-    └─ Hover overlay with per-row actions on the list (Edit/Duplicate/Email/kebab/Delete)
-        └─ → window.rowQuickActions (on by default; declare only to disable or override)
+    ├─ Hover overlay with per-row actions on the list (Edit/Duplicate/Email/kebab/Delete)
+    │   └─ → window.rowQuickActions (on by default; declare only to disable or override)
+    └─ Show a required-looking asterisk on a conditionally-required field, without validation
+        └─ → requiredVisual: true on the field descriptor (EntityForm prop, not decisions.json)
 ```
 
 ---

@@ -8,6 +8,10 @@ import BankAccountTable from './BankAccountTable';
 import BankAccountForm from './BankAccountForm';
 import LocationAddressTable from './LocationAddressTable';
 import LocationEditorModal from '@/windows/custom/shared/LocationEditorModal';
+import CustomerAccountingTable from './CustomerAccountingTable';
+import CustomerAccountingForm from './CustomerAccountingForm';
+import VendorAccountingTable from './VendorAccountingTable';
+import VendorAccountingForm from './VendorAccountingForm';
 import ContactsFinancialPanel from '@/windows/custom/contacts/ContactsFinancialPanel';
 import { AttachmentsTab } from '@/components/attachments';
 import ContactTypeToggle from '@/windows/custom/contacts/ContactTypeToggle';
@@ -22,7 +26,7 @@ const summary = [
 
 ];
 
-const statusField = null;
+const statusField = 'oBTIKVIESStatus';
 // @sf-generated-end summary:businessPartner
 
 // @sf-generated-start extraBadges:businessPartner
@@ -388,14 +392,6 @@ export const api = {
     },
     {
       "entity": "customerAccounting",
-      "field": "accountingSchema",
-      "column": "C_AcctSchema_ID",
-      "reference": "AcctSchema",
-      "inputMode": "selector",
-      "url": "/sws/neo/contacts/customerAccounting/selectors/accountingSchema"
-    },
-    {
-      "entity": "customerAccounting",
       "field": "customerReceivablesNo",
       "column": "C_Receivable_Acct",
       "reference": "ValidCombination",
@@ -466,14 +462,6 @@ export const api = {
       "reference": "BP_TaxCategory",
       "inputMode": "search",
       "url": "/sws/neo/contacts/vendorCreditor/selectors/taxCategory"
-    },
-    {
-      "entity": "vendorAccounting",
-      "field": "accountingSchema",
-      "column": "C_AcctSchema_ID",
-      "reference": "AcctSchema",
-      "inputMode": "selector",
-      "url": "/sws/neo/contacts/vendorAccounting/selectors/accountingSchema"
     },
     {
       "entity": "vendorAccounting",
@@ -663,6 +651,7 @@ const labelOverrides = api.labelOverrides;
 export default function BusinessPartnerPage({ windowName, recordId, ...props }) {
   if (recordId) {
     return (
+      <>
       <DetailView
         entity="businessPartner"
         Form={BusinessPartnerForm}
@@ -693,6 +682,14 @@ export default function BusinessPartnerPage({ windowName, recordId, ...props }) 
           { key: 'swiftCode', column: 'SwiftCode', type: 'text', label: 'SWIFT Code' },
           ], derived: [], hidden: [] }, requireSavedRecord: true },
           { key: 'locationAddress', label: 'Location', Table: LocationAddressTable, customAddModal: LocationEditorModal, requireSavedRecord: true },
+          { key: 'customerAccounting', label: 'Customer Accounting', Table: CustomerAccountingTable, Form: CustomerAccountingForm, addLineFields: { entry: [
+          { key: 'customerReceivablesNo', column: 'C_Receivable_Acct', type: 'selector', required: true, label: 'Customer Receivables No.', labels: {"en_US":"Receivables Account","es_ES":"Cuenta a Cobrar"}, reference: 'ValidCombination', inputMode: 'selector' },
+          { key: 'customerPrepayment', column: 'C_Prepayment_Acct', type: 'selector', label: 'Customer Prepayment', labels: {"en_US":"Prepayment Account","es_ES":"Cuenta de Anticipos"}, reference: 'ValidCombination', inputMode: 'selector' },
+          ], derived: [], hidden: [] }, requireSavedRecord: true },
+          { key: 'vendorAccounting', label: 'Vendor Accounting', Table: VendorAccountingTable, Form: VendorAccountingForm, addLineFields: { entry: [
+          { key: 'vendorLiability', column: 'V_Liability_Acct', type: 'selector', required: true, label: 'Vendor Liability', labels: {"en_US":"Liability Account","es_ES":"Cuenta a Pagar"}, reference: 'ValidCombination', inputMode: 'selector' },
+          { key: 'vendorPrepayment', column: 'V_Prepayment_Acct', type: 'selector', label: 'Vendor Prepayment', labels: {"en_US":"Prepayment Account","es_ES":"Cuenta de Anticipos"}, reference: 'ValidCombination', inputMode: 'selector' },
+          ], derived: [], hidden: [] }, requireSavedRecord: true },
         ]}
         primaryTabs={[
           { key: 'general', label: 'General' },
@@ -707,6 +704,7 @@ export default function BusinessPartnerPage({ windowName, recordId, ...props }) 
         linesLayout="inlineEditable"
         {...props}
       />
+      </>
     );
   }
 

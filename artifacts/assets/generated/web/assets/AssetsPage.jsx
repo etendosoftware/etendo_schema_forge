@@ -2,6 +2,8 @@ import { useEffect } from 'react';
 import { ListView, DetailView } from '@/components/contract-ui';
 import AssetsTable from './AssetsTable';
 import AssetsForm from './AssetsForm';
+import AssetAcctTable from './AssetAcctTable';
+import AssetAcctForm from './AssetAcctForm';
 import AssetsDetailPanel from '@/windows/custom/assets/AssetsDetailPanel';
 import { AttachmentsTab } from '@/components/attachments';
 import AssetsAmortizationPanel from '@/windows/custom/assets/AssetsAmortizationPanel';
@@ -274,6 +276,7 @@ const labelOverrides = api.labelOverrides;
 export default function AssetsPage({ windowName, recordId, ...props }) {
   if (recordId) {
     return (
+      <>
       <DetailView
         entity="assets"
         Form={AssetsForm}
@@ -287,6 +290,13 @@ export default function AssetsPage({ windowName, recordId, ...props }) {
         recordId={recordId}
         breadcrumb={breadcrumb}
       api={api}
+        secondaryTabs={[
+          { key: 'assetAcct', label: 'Accounting', Table: AssetAcctTable, Form: AssetAcctForm, addLineFields: { entry: [
+          { key: 'accountingSchema', column: 'C_AcctSchema_ID', type: 'selector', required: true, label: 'General Ledger', reference: 'AcctSchema', inputMode: 'selector' },
+          { key: 'accumulatedDepreciation', column: 'A_Accumdepreciation_Acct', type: 'selector', required: true, label: 'Accumulated Depreciation', reference: 'ValidCombination', inputMode: 'selector' },
+          { key: 'depreciation', column: 'A_Depreciation_Acct', type: 'selector', required: true, label: 'Depreciation', reference: 'ValidCombination', inputMode: 'selector' },
+          ], derived: [], hidden: [] }, requireSavedRecord: true },
+        ]}
         formFooter={AssetsDetailPanel}
         hidePrint
         hideMoreMenu
@@ -296,10 +306,12 @@ export default function AssetsPage({ windowName, recordId, ...props }) {
         whiteFormBackground
         hideFormCard
         sidebarAboveTabsOnly
+        tabsSeparator
         sidebarClassName="w-[30%] shrink-0 border-l border-[#E8EAEF] p-2"
         toolbarPaddingX="px-2"
         toolbarButtonSize="default"
         contentBg="bg-white"
+        formScrollPaddingX="px-2"
         customTabs={[{ key: 'amortizationPlan', labelKey: 'assetsAmortizationPlanTab', Component: AssetsAmortizationPanel, placement: 'tab' }, { key: 'attachments', labelKey: 'attachments', Component: AttachmentsTab, placement: 'tab', props: { tableName: "A_Asset", config: {} } }]}
         detailSortBy="sEQNoAsset asc"
         titleField="name"
@@ -315,6 +327,7 @@ export default function AssetsPage({ windowName, recordId, ...props }) {
           />
         )}
       />
+      </>
     );
   }
 

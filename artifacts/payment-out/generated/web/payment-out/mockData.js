@@ -27,6 +27,8 @@ export const header = [
     "costCenter": "Sample costCenter",
     "stDimension": "Sample stDimension",
     "ndDimension": "Sample ndDimension",
+    "creationDate": "Sample creationDate",
+    "updated": "Sample updated",
     "psd2GenerateBankPayment": "Sample psd2GenerateBankPayment",
     "etblkpAccountingstatus": "DR",
     "etblkpBulkposting": "Sample etblkpBulkposting",
@@ -59,6 +61,8 @@ export const header = [
     "costCenter": "Sample costCenter",
     "stDimension": "Sample stDimension",
     "ndDimension": "Sample ndDimension",
+    "creationDate": "Sample creationDate",
+    "updated": "Sample updated",
     "psd2GenerateBankPayment": "Sample psd2GenerateBankPayment",
     "etblkpAccountingstatus": "CO",
     "etblkpBulkposting": "Sample etblkpBulkposting",
@@ -91,6 +95,8 @@ export const header = [
     "costCenter": "Sample costCenter",
     "stDimension": "Sample stDimension",
     "ndDimension": "Sample ndDimension",
+    "creationDate": "Sample creationDate",
+    "updated": "Sample updated",
     "psd2GenerateBankPayment": "Sample psd2GenerateBankPayment",
     "etblkpAccountingstatus": "VO",
     "etblkpBulkposting": "Sample etblkpBulkposting",
@@ -123,6 +129,8 @@ export const header = [
     "costCenter": "Sample costCenter",
     "stDimension": "Sample stDimension",
     "ndDimension": "Sample ndDimension",
+    "creationDate": "Sample creationDate",
+    "updated": "Sample updated",
     "psd2GenerateBankPayment": "Sample psd2GenerateBankPayment",
     "etblkpAccountingstatus": "IP",
     "etblkpBulkposting": "Sample etblkpBulkposting",
@@ -155,6 +163,8 @@ export const header = [
     "costCenter": "Sample costCenter",
     "stDimension": "Sample stDimension",
     "ndDimension": "Sample ndDimension",
+    "creationDate": "Sample creationDate",
+    "updated": "Sample updated",
     "psd2GenerateBankPayment": "Sample psd2GenerateBankPayment",
     "etblkpAccountingstatus": "DR",
     "etblkpBulkposting": "Sample etblkpBulkposting",
@@ -187,6 +197,8 @@ export const header = [
     "costCenter": "Sample costCenter",
     "stDimension": "Sample stDimension",
     "ndDimension": "Sample ndDimension",
+    "creationDate": "Sample creationDate",
+    "updated": "Sample updated",
     "psd2GenerateBankPayment": "Sample psd2GenerateBankPayment",
     "etblkpAccountingstatus": "CO",
     "etblkpBulkposting": "Sample etblkpBulkposting",
@@ -219,6 +231,8 @@ export const header = [
     "costCenter": "Sample costCenter",
     "stDimension": "Sample stDimension",
     "ndDimension": "Sample ndDimension",
+    "creationDate": "Sample creationDate",
+    "updated": "Sample updated",
     "psd2GenerateBankPayment": "Sample psd2GenerateBankPayment",
     "etblkpAccountingstatus": "VO",
     "etblkpBulkposting": "Sample etblkpBulkposting",
@@ -251,6 +265,8 @@ export const header = [
     "costCenter": "Sample costCenter",
     "stDimension": "Sample stDimension",
     "ndDimension": "Sample ndDimension",
+    "creationDate": "Sample creationDate",
+    "updated": "Sample updated",
     "psd2GenerateBankPayment": "Sample psd2GenerateBankPayment",
     "etblkpAccountingstatus": "IP",
     "etblkpBulkposting": "Sample etblkpBulkposting",
@@ -283,6 +299,8 @@ export const header = [
     "costCenter": "Sample costCenter",
     "stDimension": "Sample stDimension",
     "ndDimension": "Sample ndDimension",
+    "creationDate": "Sample creationDate",
+    "updated": "Sample updated",
     "psd2GenerateBankPayment": "Sample psd2GenerateBankPayment",
     "etblkpAccountingstatus": "DR",
     "etblkpBulkposting": "Sample etblkpBulkposting",
@@ -315,6 +333,8 @@ export const header = [
     "costCenter": "Sample costCenter",
     "stDimension": "Sample stDimension",
     "ndDimension": "Sample ndDimension",
+    "creationDate": "Sample creationDate",
+    "updated": "Sample updated",
     "psd2GenerateBankPayment": "Sample psd2GenerateBankPayment",
     "etblkpAccountingstatus": "CO",
     "etblkpBulkposting": "Sample etblkpBulkposting",
@@ -347,6 +367,8 @@ export const header = [
     "costCenter": "Sample costCenter",
     "stDimension": "Sample stDimension",
     "ndDimension": "Sample ndDimension",
+    "creationDate": "Sample creationDate",
+    "updated": "Sample updated",
     "psd2GenerateBankPayment": "Sample psd2GenerateBankPayment",
     "etblkpAccountingstatus": "VO",
     "etblkpBulkposting": "Sample etblkpBulkposting",
@@ -379,6 +401,8 @@ export const header = [
     "costCenter": "Sample costCenter",
     "stDimension": "Sample stDimension",
     "ndDimension": "Sample ndDimension",
+    "creationDate": "Sample creationDate",
+    "updated": "Sample updated",
     "psd2GenerateBankPayment": "Sample psd2GenerateBankPayment",
     "etblkpAccountingstatus": "IP",
     "etblkpBulkposting": "Sample etblkpBulkposting",
@@ -409,6 +433,7 @@ export const lines = [
     "costCenter": "Sample costCenter",
     "stDimension": "Sample stDimension",
     "ndDimension": "Sample ndDimension",
+    "invoiceDocumentNo": "LI-00001",
     "headerId": "mock-header-001"
   },
   {
@@ -432,6 +457,7 @@ export const lines = [
     "costCenter": "Sample costCenter",
     "stDimension": "Sample stDimension",
     "ndDimension": "Sample ndDimension",
+    "invoiceDocumentNo": "LI-00002",
     "headerId": "mock-header-002"
   },
   {
@@ -455,6 +481,7 @@ export const lines = [
     "costCenter": "Sample costCenter",
     "stDimension": "Sample stDimension",
     "ndDimension": "Sample ndDimension",
+    "invoiceDocumentNo": "LI-00003",
     "headerId": "mock-header-003"
   },
   {
@@ -478,6 +505,7 @@ export const lines = [
     "costCenter": "Sample costCenter",
     "stDimension": "Sample stDimension",
     "ndDimension": "Sample ndDimension",
+    "invoiceDocumentNo": "LI-00004",
     "headerId": "mock-header-004"
   },
   {
@@ -501,6 +529,7 @@ export const lines = [
     "costCenter": "Sample costCenter",
     "stDimension": "Sample stDimension",
     "ndDimension": "Sample ndDimension",
+    "invoiceDocumentNo": "LI-00005",
     "headerId": "mock-header-005"
   },
   {
@@ -524,6 +553,7 @@ export const lines = [
     "costCenter": "Sample costCenter",
     "stDimension": "Sample stDimension",
     "ndDimension": "Sample ndDimension",
+    "invoiceDocumentNo": "LI-00006",
     "headerId": "mock-header-006"
   },
   {
@@ -547,6 +577,7 @@ export const lines = [
     "costCenter": "Sample costCenter",
     "stDimension": "Sample stDimension",
     "ndDimension": "Sample ndDimension",
+    "invoiceDocumentNo": "LI-00007",
     "headerId": "mock-header-007"
   },
   {
@@ -570,6 +601,7 @@ export const lines = [
     "costCenter": "Sample costCenter",
     "stDimension": "Sample stDimension",
     "ndDimension": "Sample ndDimension",
+    "invoiceDocumentNo": "LI-00008",
     "headerId": "mock-header-008"
   },
   {
@@ -593,6 +625,7 @@ export const lines = [
     "costCenter": "Sample costCenter",
     "stDimension": "Sample stDimension",
     "ndDimension": "Sample ndDimension",
+    "invoiceDocumentNo": "LI-00009",
     "headerId": "mock-header-009"
   },
   {
@@ -616,6 +649,7 @@ export const lines = [
     "costCenter": "Sample costCenter",
     "stDimension": "Sample stDimension",
     "ndDimension": "Sample ndDimension",
+    "invoiceDocumentNo": "LI-00010",
     "headerId": "mock-header-010"
   },
   {
@@ -639,6 +673,7 @@ export const lines = [
     "costCenter": "Sample costCenter",
     "stDimension": "Sample stDimension",
     "ndDimension": "Sample ndDimension",
+    "invoiceDocumentNo": "LI-00011",
     "headerId": "mock-header-011"
   },
   {
@@ -662,570 +697,7 @@ export const lines = [
     "costCenter": "Sample costCenter",
     "stDimension": "Sample stDimension",
     "ndDimension": "Sample ndDimension",
-    "headerId": "mock-header-012"
-  }
-];
-
-export const executionHistory = [
-  {
-    "id": "mock-executionHistory-001",
-    "executionDate": "2026-01-15",
-    "paymentRun": "Sample paymentRun",
-    "paymentRunStatus": "DR",
-    "paymentRunMessage": "Sample paymentRunMessage",
-    "sourceOfTheExecution": "Sample sourceOfTheExecution",
-    "paymentExecutionResult": "Sample paymentExecutionResult",
-    "paymentExecutionMessage": "Sample paymentExecutionMessage",
-    "headerId": "mock-header-001"
-  },
-  {
-    "id": "mock-executionHistory-002",
-    "executionDate": "2026-01-16",
-    "paymentRun": "Sample paymentRun",
-    "paymentRunStatus": "CO",
-    "paymentRunMessage": "Sample paymentRunMessage",
-    "sourceOfTheExecution": "Sample sourceOfTheExecution",
-    "paymentExecutionResult": "Sample paymentExecutionResult",
-    "paymentExecutionMessage": "Sample paymentExecutionMessage",
-    "headerId": "mock-header-002"
-  },
-  {
-    "id": "mock-executionHistory-003",
-    "executionDate": "2026-01-17",
-    "paymentRun": "Sample paymentRun",
-    "paymentRunStatus": "VO",
-    "paymentRunMessage": "Sample paymentRunMessage",
-    "sourceOfTheExecution": "Sample sourceOfTheExecution",
-    "paymentExecutionResult": "Sample paymentExecutionResult",
-    "paymentExecutionMessage": "Sample paymentExecutionMessage",
-    "headerId": "mock-header-003"
-  },
-  {
-    "id": "mock-executionHistory-004",
-    "executionDate": "2026-01-18",
-    "paymentRun": "Sample paymentRun",
-    "paymentRunStatus": "IP",
-    "paymentRunMessage": "Sample paymentRunMessage",
-    "sourceOfTheExecution": "Sample sourceOfTheExecution",
-    "paymentExecutionResult": "Sample paymentExecutionResult",
-    "paymentExecutionMessage": "Sample paymentExecutionMessage",
-    "headerId": "mock-header-004"
-  },
-  {
-    "id": "mock-executionHistory-005",
-    "executionDate": "2026-01-19",
-    "paymentRun": "Sample paymentRun",
-    "paymentRunStatus": "DR",
-    "paymentRunMessage": "Sample paymentRunMessage",
-    "sourceOfTheExecution": "Sample sourceOfTheExecution",
-    "paymentExecutionResult": "Sample paymentExecutionResult",
-    "paymentExecutionMessage": "Sample paymentExecutionMessage",
-    "headerId": "mock-header-005"
-  },
-  {
-    "id": "mock-executionHistory-006",
-    "executionDate": "2026-01-20",
-    "paymentRun": "Sample paymentRun",
-    "paymentRunStatus": "CO",
-    "paymentRunMessage": "Sample paymentRunMessage",
-    "sourceOfTheExecution": "Sample sourceOfTheExecution",
-    "paymentExecutionResult": "Sample paymentExecutionResult",
-    "paymentExecutionMessage": "Sample paymentExecutionMessage",
-    "headerId": "mock-header-006"
-  },
-  {
-    "id": "mock-executionHistory-007",
-    "executionDate": "2026-01-21",
-    "paymentRun": "Sample paymentRun",
-    "paymentRunStatus": "VO",
-    "paymentRunMessage": "Sample paymentRunMessage",
-    "sourceOfTheExecution": "Sample sourceOfTheExecution",
-    "paymentExecutionResult": "Sample paymentExecutionResult",
-    "paymentExecutionMessage": "Sample paymentExecutionMessage",
-    "headerId": "mock-header-007"
-  },
-  {
-    "id": "mock-executionHistory-008",
-    "executionDate": "2026-01-22",
-    "paymentRun": "Sample paymentRun",
-    "paymentRunStatus": "IP",
-    "paymentRunMessage": "Sample paymentRunMessage",
-    "sourceOfTheExecution": "Sample sourceOfTheExecution",
-    "paymentExecutionResult": "Sample paymentExecutionResult",
-    "paymentExecutionMessage": "Sample paymentExecutionMessage",
-    "headerId": "mock-header-008"
-  },
-  {
-    "id": "mock-executionHistory-009",
-    "executionDate": "2026-01-23",
-    "paymentRun": "Sample paymentRun",
-    "paymentRunStatus": "DR",
-    "paymentRunMessage": "Sample paymentRunMessage",
-    "sourceOfTheExecution": "Sample sourceOfTheExecution",
-    "paymentExecutionResult": "Sample paymentExecutionResult",
-    "paymentExecutionMessage": "Sample paymentExecutionMessage",
-    "headerId": "mock-header-009"
-  },
-  {
-    "id": "mock-executionHistory-010",
-    "executionDate": "2026-01-24",
-    "paymentRun": "Sample paymentRun",
-    "paymentRunStatus": "CO",
-    "paymentRunMessage": "Sample paymentRunMessage",
-    "sourceOfTheExecution": "Sample sourceOfTheExecution",
-    "paymentExecutionResult": "Sample paymentExecutionResult",
-    "paymentExecutionMessage": "Sample paymentExecutionMessage",
-    "headerId": "mock-header-010"
-  },
-  {
-    "id": "mock-executionHistory-011",
-    "executionDate": "2026-01-25",
-    "paymentRun": "Sample paymentRun",
-    "paymentRunStatus": "VO",
-    "paymentRunMessage": "Sample paymentRunMessage",
-    "sourceOfTheExecution": "Sample sourceOfTheExecution",
-    "paymentExecutionResult": "Sample paymentExecutionResult",
-    "paymentExecutionMessage": "Sample paymentExecutionMessage",
-    "headerId": "mock-header-011"
-  },
-  {
-    "id": "mock-executionHistory-012",
-    "executionDate": "2026-01-26",
-    "paymentRun": "Sample paymentRun",
-    "paymentRunStatus": "IP",
-    "paymentRunMessage": "Sample paymentRunMessage",
-    "sourceOfTheExecution": "Sample sourceOfTheExecution",
-    "paymentExecutionResult": "Sample paymentExecutionResult",
-    "paymentExecutionMessage": "Sample paymentExecutionMessage",
-    "headerId": "mock-header-012"
-  }
-];
-
-export const exchangeRates = [
-  {
-    "id": "mock-exchangeRates-001",
-    "active": "Sample active",
-    "currency": "USD",
-    "toCurrency": "USD",
-    "rate": "Sample rate",
-    "foreignAmount": 38907,
-    "headerId": "mock-header-001"
-  },
-  {
-    "id": "mock-exchangeRates-002",
-    "active": "Sample active",
-    "currency": "EUR",
-    "toCurrency": "EUR",
-    "rate": "Sample rate",
-    "foreignAmount": 9306,
-    "headerId": "mock-header-002"
-  },
-  {
-    "id": "mock-exchangeRates-003",
-    "active": "Sample active",
-    "currency": "GBP",
-    "toCurrency": "GBP",
-    "rate": "Sample rate",
-    "foreignAmount": 11544,
-    "headerId": "mock-header-003"
-  },
-  {
-    "id": "mock-exchangeRates-004",
-    "active": "Sample active",
-    "currency": "USD",
-    "toCurrency": "USD",
-    "rate": "Sample rate",
-    "foreignAmount": 11872,
-    "headerId": "mock-header-004"
-  },
-  {
-    "id": "mock-exchangeRates-005",
-    "active": "Sample active",
-    "currency": "EUR",
-    "toCurrency": "EUR",
-    "rate": "Sample rate",
-    "foreignAmount": 48460,
-    "headerId": "mock-header-005"
-  },
-  {
-    "id": "mock-exchangeRates-006",
-    "active": "Sample active",
-    "currency": "GBP",
-    "toCurrency": "GBP",
-    "rate": "Sample rate",
-    "foreignAmount": 45418,
-    "headerId": "mock-header-006"
-  },
-  {
-    "id": "mock-exchangeRates-007",
-    "active": "Sample active",
-    "currency": "USD",
-    "toCurrency": "USD",
-    "rate": "Sample rate",
-    "foreignAmount": 33840,
-    "headerId": "mock-header-007"
-  },
-  {
-    "id": "mock-exchangeRates-008",
-    "active": "Sample active",
-    "currency": "EUR",
-    "toCurrency": "EUR",
-    "rate": "Sample rate",
-    "foreignAmount": 25716,
-    "headerId": "mock-header-008"
-  },
-  {
-    "id": "mock-exchangeRates-009",
-    "active": "Sample active",
-    "currency": "GBP",
-    "toCurrency": "GBP",
-    "rate": "Sample rate",
-    "foreignAmount": 44780,
-    "headerId": "mock-header-009"
-  },
-  {
-    "id": "mock-exchangeRates-010",
-    "active": "Sample active",
-    "currency": "USD",
-    "toCurrency": "USD",
-    "rate": "Sample rate",
-    "foreignAmount": 12483,
-    "headerId": "mock-header-010"
-  },
-  {
-    "id": "mock-exchangeRates-011",
-    "active": "Sample active",
-    "currency": "EUR",
-    "toCurrency": "EUR",
-    "rate": "Sample rate",
-    "foreignAmount": 46022,
-    "headerId": "mock-header-011"
-  },
-  {
-    "id": "mock-exchangeRates-012",
-    "active": "Sample active",
-    "currency": "GBP",
-    "toCurrency": "GBP",
-    "rate": "Sample rate",
-    "foreignAmount": 38634,
-    "headerId": "mock-header-012"
-  }
-];
-
-export const usedCreditSource = [
-  {
-    "id": "mock-usedCreditSource-001",
-    "creditPaymentUsed": "Sample creditPaymentUsed",
-    "amount": 99.44,
-    "currency": "USD",
-    "headerId": "mock-header-001"
-  },
-  {
-    "id": "mock-usedCreditSource-002",
-    "creditPaymentUsed": "Sample creditPaymentUsed",
-    "amount": 96.94,
-    "currency": "EUR",
-    "headerId": "mock-header-002"
-  },
-  {
-    "id": "mock-usedCreditSource-003",
-    "creditPaymentUsed": "Sample creditPaymentUsed",
-    "amount": 12.48,
-    "currency": "GBP",
-    "headerId": "mock-header-003"
-  },
-  {
-    "id": "mock-usedCreditSource-004",
-    "creditPaymentUsed": "Sample creditPaymentUsed",
-    "amount": 96.31,
-    "currency": "USD",
-    "headerId": "mock-header-004"
-  },
-  {
-    "id": "mock-usedCreditSource-005",
-    "creditPaymentUsed": "Sample creditPaymentUsed",
-    "amount": 31.27,
-    "currency": "EUR",
-    "headerId": "mock-header-005"
-  },
-  {
-    "id": "mock-usedCreditSource-006",
-    "creditPaymentUsed": "Sample creditPaymentUsed",
-    "amount": 76.52,
-    "currency": "GBP",
-    "headerId": "mock-header-006"
-  },
-  {
-    "id": "mock-usedCreditSource-007",
-    "creditPaymentUsed": "Sample creditPaymentUsed",
-    "amount": 2.66,
-    "currency": "USD",
-    "headerId": "mock-header-007"
-  },
-  {
-    "id": "mock-usedCreditSource-008",
-    "creditPaymentUsed": "Sample creditPaymentUsed",
-    "amount": 10.03,
-    "currency": "EUR",
-    "headerId": "mock-header-008"
-  },
-  {
-    "id": "mock-usedCreditSource-009",
-    "creditPaymentUsed": "Sample creditPaymentUsed",
-    "amount": 93.97,
-    "currency": "GBP",
-    "headerId": "mock-header-009"
-  },
-  {
-    "id": "mock-usedCreditSource-010",
-    "creditPaymentUsed": "Sample creditPaymentUsed",
-    "amount": 1.1,
-    "currency": "USD",
-    "headerId": "mock-header-010"
-  },
-  {
-    "id": "mock-usedCreditSource-011",
-    "creditPaymentUsed": "Sample creditPaymentUsed",
-    "amount": 79.99,
-    "currency": "EUR",
-    "headerId": "mock-header-011"
-  },
-  {
-    "id": "mock-usedCreditSource-012",
-    "creditPaymentUsed": "Sample creditPaymentUsed",
-    "amount": 53.61,
-    "currency": "GBP",
-    "headerId": "mock-header-012"
-  }
-];
-
-export const accounting = [
-  {
-    "id": "mock-accounting-001",
-    "accountingSchema": "Sample accountingSchema",
-    "currency": "USD",
-    "period": "Sample period",
-    "accountingDate": "2026-01-15",
-    "account": "Sample account",
-    "debit": 38907,
-    "credit": 38907,
-    "description": "Standard order for Q1 delivery",
-    "businessPartner": "Acme Corp",
-    "product": "Laptop Pro 15",
-    "project": "Sample project",
-    "costcenter": "Sample costcenter",
-    "asset": "Sample asset",
-    "stDimension": "Sample stDimension",
-    "ndDimension": "Sample ndDimension",
-    "headerId": "mock-header-001"
-  },
-  {
-    "id": "mock-accounting-002",
-    "accountingSchema": "Sample accountingSchema",
-    "currency": "EUR",
-    "period": "Sample period",
-    "accountingDate": "2026-01-16",
-    "account": "Sample account",
-    "debit": 9306,
-    "credit": 9306,
-    "description": "Rush order - priority shipping required",
-    "businessPartner": "TechFlow Inc",
-    "product": "USB-C Cable",
-    "project": "Sample project",
-    "costcenter": "Sample costcenter",
-    "asset": "Sample asset",
-    "stDimension": "Sample stDimension",
-    "ndDimension": "Sample ndDimension",
-    "headerId": "mock-header-002"
-  },
-  {
-    "id": "mock-accounting-003",
-    "accountingSchema": "Sample accountingSchema",
-    "currency": "GBP",
-    "period": "Sample period",
-    "accountingDate": "2026-01-17",
-    "account": "Sample account",
-    "debit": 11544,
-    "credit": 11544,
-    "description": "Bulk purchase for warehouse restocking",
-    "businessPartner": "Global Trade Ltd",
-    "product": "Wireless Mouse",
-    "project": "Sample project",
-    "costcenter": "Sample costcenter",
-    "asset": "Sample asset",
-    "stDimension": "Sample stDimension",
-    "ndDimension": "Sample ndDimension",
-    "headerId": "mock-header-003"
-  },
-  {
-    "id": "mock-accounting-004",
-    "accountingSchema": "Sample accountingSchema",
-    "currency": "USD",
-    "period": "Sample period",
-    "accountingDate": "2026-01-18",
-    "account": "Sample account",
-    "debit": 11872,
-    "credit": 11872,
-    "description": "Sample order for client evaluation",
-    "businessPartner": "Summit Industries",
-    "product": "Mechanical Keyboard",
-    "project": "Sample project",
-    "costcenter": "Sample costcenter",
-    "asset": "Sample asset",
-    "stDimension": "Sample stDimension",
-    "ndDimension": "Sample ndDimension",
-    "headerId": "mock-header-004"
-  },
-  {
-    "id": "mock-accounting-005",
-    "accountingSchema": "Sample accountingSchema",
-    "currency": "EUR",
-    "period": "Sample period",
-    "accountingDate": "2026-01-19",
-    "account": "Sample account",
-    "debit": 48460,
-    "credit": 48460,
-    "description": "Recurring monthly supply order",
-    "businessPartner": "Pacific Partners",
-    "product": "Monitor 27\"",
-    "project": "Sample project",
-    "costcenter": "Sample costcenter",
-    "asset": "Sample asset",
-    "stDimension": "Sample stDimension",
-    "ndDimension": "Sample ndDimension",
-    "headerId": "mock-header-005"
-  },
-  {
-    "id": "mock-accounting-006",
-    "accountingSchema": "Sample accountingSchema",
-    "currency": "GBP",
-    "period": "Sample period",
-    "accountingDate": "2026-01-20",
-    "account": "Sample account",
-    "debit": 45418,
-    "credit": 45418,
-    "description": "Special pricing agreement applies",
-    "businessPartner": "Alpine Solutions",
-    "product": "Webcam HD",
-    "project": "Sample project",
-    "costcenter": "Sample costcenter",
-    "asset": "Sample asset",
-    "stDimension": "Sample stDimension",
-    "ndDimension": "Sample ndDimension",
-    "headerId": "mock-header-006"
-  },
-  {
-    "id": "mock-accounting-007",
-    "accountingSchema": "Sample accountingSchema",
-    "currency": "USD",
-    "period": "Sample period",
-    "accountingDate": "2026-01-21",
-    "account": "Sample account",
-    "debit": 33840,
-    "credit": 33840,
-    "description": "Consolidated order from multiple requests",
-    "businessPartner": "Meridian Group",
-    "product": "Headset Pro",
-    "project": "Sample project",
-    "costcenter": "Sample costcenter",
-    "asset": "Sample asset",
-    "stDimension": "Sample stDimension",
-    "ndDimension": "Sample ndDimension",
-    "headerId": "mock-header-007"
-  },
-  {
-    "id": "mock-accounting-008",
-    "accountingSchema": "Sample accountingSchema",
-    "currency": "EUR",
-    "period": "Sample period",
-    "accountingDate": "2026-01-22",
-    "account": "Sample account",
-    "debit": 25716,
-    "credit": 25716,
-    "description": "Trial order for new product line",
-    "businessPartner": "Vertex Systems",
-    "product": "Docking Station",
-    "project": "Sample project",
-    "costcenter": "Sample costcenter",
-    "asset": "Sample asset",
-    "stDimension": "Sample stDimension",
-    "ndDimension": "Sample ndDimension",
-    "headerId": "mock-header-008"
-  },
-  {
-    "id": "mock-accounting-009",
-    "accountingSchema": "Sample accountingSchema",
-    "currency": "GBP",
-    "period": "Sample period",
-    "accountingDate": "2026-01-23",
-    "account": "Sample account",
-    "debit": 44780,
-    "credit": 44780,
-    "description": "Replacement for damaged goods",
-    "businessPartner": "Atlas Manufacturing",
-    "product": "SSD 1TB",
-    "project": "Sample project",
-    "costcenter": "Sample costcenter",
-    "asset": "Sample asset",
-    "stDimension": "Sample stDimension",
-    "ndDimension": "Sample ndDimension",
-    "headerId": "mock-header-009"
-  },
-  {
-    "id": "mock-accounting-010",
-    "accountingSchema": "Sample accountingSchema",
-    "currency": "USD",
-    "period": "Sample period",
-    "accountingDate": "2026-01-24",
-    "account": "Sample account",
-    "debit": 12483,
-    "credit": 12483,
-    "description": "Pre-season inventory build-up",
-    "businessPartner": "Nova Enterprises",
-    "product": "RAM 16GB",
-    "project": "Sample project",
-    "costcenter": "Sample costcenter",
-    "asset": "Sample asset",
-    "stDimension": "Sample stDimension",
-    "ndDimension": "Sample ndDimension",
-    "headerId": "mock-header-010"
-  },
-  {
-    "id": "mock-accounting-011",
-    "accountingSchema": "Sample accountingSchema",
-    "currency": "EUR",
-    "period": "Sample period",
-    "accountingDate": "2026-01-25",
-    "account": "Sample account",
-    "debit": 46022,
-    "credit": 46022,
-    "description": "Customer-specific configuration",
-    "businessPartner": "Pinnacle Services",
-    "product": "Power Supply 750W",
-    "project": "Sample project",
-    "costcenter": "Sample costcenter",
-    "asset": "Sample asset",
-    "stDimension": "Sample stDimension",
-    "ndDimension": "Sample ndDimension",
-    "headerId": "mock-header-011"
-  },
-  {
-    "id": "mock-accounting-012",
-    "accountingSchema": "Sample accountingSchema",
-    "currency": "GBP",
-    "period": "Sample period",
-    "accountingDate": "2026-01-26",
-    "account": "Sample account",
-    "debit": 38634,
-    "credit": 38634,
-    "description": "Government contract fulfillment",
-    "businessPartner": "Horizon Labs",
-    "product": "Network Switch",
-    "project": "Sample project",
-    "costcenter": "Sample costcenter",
-    "asset": "Sample asset",
-    "stDimension": "Sample stDimension",
-    "ndDimension": "Sample ndDimension",
+    "invoiceDocumentNo": "LI-00012",
     "headerId": "mock-header-012"
   }
 ];

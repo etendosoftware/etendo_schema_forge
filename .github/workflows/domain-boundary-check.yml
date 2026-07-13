@@ -1,111 +1,23 @@
 name: Domain Boundary Check
 
+# DISABLED: the schema_forge monorepo was split into separate repos
+# (schema_forge_core + etendo_schema_forge), so the cross-domain boundary check
+# no longer applies here. The job is kept as a no-op that always succeeds so any
+# branch-protection rule requiring the "domain-boundary-check" status still
+# resolves. To re-enable, restore the previous steps from git history.
+
 on:
   pull_request:
-    types: [opened, reopened, synchronize, ready_for_review, labeled, unlabeled, edited]
+    types: [opened, reopened, synchronize, ready_for_review]
   merge_group:
 
 permissions:
   contents: read
-  pull-requests: write
-  issues: write
 
 jobs:
   domain-boundary-check:
     name: domain-boundary-check
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
-
-      - run: npm install
-
-      - name: Resolve PR metadata
-        id: metadata
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const fs = require('fs');
-            const pr = context.payload.pull_request;
-            const mergeGroup = context.payload.merge_group;
-            fs.writeFileSync('pr-body.md', pr?.body || '');
-            core.setOutput('labels', (pr?.labels || []).map((label) => label.name).join(','));
-            core.setOutput(
-              'base',
-              pr?.base?.sha
-                || mergeGroup?.base_sha
-                || mergeGroup?.base_ref
-                || `origin/${context.payload.repository.default_branch}`,
-            );
-            core.setOutput('head', pr?.head?.sha || mergeGroup?.head_sha || context.sha);
-
-      - name: Run domain boundary check
-        id: boundary
-        run: |
-          set +e
-          npx sf-domain-boundary-check \
-            --base "${{ steps.metadata.outputs.base }}" \
-            --head "${{ steps.metadata.outputs.head }}" \
-            --labels "${{ steps.metadata.outputs.labels }}" \
-            --pr-body-file pr-body.md \
-            --output domain-boundary-report.md \
-            --json domain-boundary-report.json
-          STATUS=$?
-          echo "status=$STATUS" >> "$GITHUB_OUTPUT"
-          exit "$STATUS"
-
-      - name: Publish PR comment
-        if: always() && github.event_name == 'pull_request'
-        uses: actions/github-script@v7
-        env:
-          REPORT_PATH: domain-boundary-report.md
-        with:
-          script: |
-            const fs = require('fs');
-            if (!fs.existsSync(process.env.REPORT_PATH)) return;
-
-            const marker = '<!-- domain-boundary-check -->';
-            const issue_number = context.issue.number;
-            const body = fs.readFileSync(process.env.REPORT_PATH, 'utf8');
-            const comments = await github.paginate(github.rest.issues.listComments, {
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number,
-              per_page: 100,
-            });
-
-            const existing = comments.find((comment) =>
-              comment.user?.login === 'github-actions[bot]' && comment.body?.includes(marker)
-            );
-
-            if (existing) {
-              await github.rest.issues.updateComment({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                comment_id: existing.id,
-                body,
-              });
-            } else {
-              await github.rest.issues.createComment({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                issue_number,
-                body,
-              });
-            }
-
-      - name: Upload domain boundary report
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: domain-boundary-report
-          path: |
-            domain-boundary-report.md
-            domain-boundary-report.json
-          if-no-files-found: ignore
+      - name: No-op (check disabled after repo split)
+        run: echo "Domain boundary check is disabled — repos are split at the repo level."

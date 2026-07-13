@@ -18,6 +18,7 @@ const breadcrumb = 'Purchases / Return to Vendor';
 
 // @sf-generated-start summary:header
 const summary = [
+  { key: 'documentNo', column: 'DocumentNo', type: 'string' },
   { key: 'grandTotalAmount', column: 'GrandTotal', type: 'amount' },
   { key: 'summedLineAmount', column: 'TotalLines', type: 'amount' },
   { key: 'currency', column: 'C_Currency_ID', type: 'selector' },
@@ -49,7 +50,7 @@ const draftMode = null;
 // @sf-generated-end draftMode:header
 
 // @sf-generated-start requiredHeaderFields:header
-const requiredHeaderFields = ['documentAction', 'orderDate', 'businessPartner', 'partnerAddress', 'warehouse', 'paymentTerms', 'priceList', 'documentStatus', 'grandTotalAmount', 'summedLineAmount', 'currency', 'delivered'];
+const requiredHeaderFields = ['documentAction', 'documentNo', 'orderDate', 'businessPartner', 'partnerAddress', 'warehouse', 'paymentTerms', 'priceList', 'documentStatus', 'grandTotalAmount', 'summedLineAmount', 'currency', 'delivered'];
 // @sf-generated-end requiredHeaderFields:header
 
 // @sf-generated-start addLineFields:lines
@@ -84,6 +85,7 @@ export const api = {
       "listUrl": "/sws/neo/return-to-vendor/header",
       "detailUrl": "/sws/neo/return-to-vendor/header/{id}",
       "supportedFilters": [
+        "documentNo",
         "businessPartner"
       ]
     },
@@ -675,6 +677,7 @@ export const api = {
 export default function HeaderPage({ windowName, recordId, ...props }) {
   if (recordId) {
     return (
+      <>
       <DetailView
         entity="header"
         detailEntity="lines"
@@ -702,8 +705,10 @@ export default function HeaderPage({ windowName, recordId, ...props }) {
         requiredHeaderFields={requiredHeaderFields}
         lineConfig={RETURN_ORDER_LINE_CONFIG}
         linesLayout="inlineEditable"
+        sendDocument
         {...props}
       />
+      </>
     );
   }
 
@@ -717,6 +722,7 @@ export default function HeaderPage({ windowName, recordId, ...props }) {
       api={api}
       dateFilterKey="orderDate"
       rowQuickActions={{}}
+      sendDocument
       {...props}
     />
   );

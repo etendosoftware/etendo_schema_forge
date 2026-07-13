@@ -1,4 +1,4 @@
-import { useState, useMemo, forwardRef, useImperativeHandle } from 'react';
+import { useState, useEffect, useMemo, forwardRef, useImperativeHandle } from 'react';
 import { createPortal } from 'react-dom';
 import { useUI } from '@/i18n';
 import { LinesBottomSection } from '@/components/contract-ui';
@@ -6,10 +6,16 @@ import RelatedDocuments from './RelatedDocuments';
 import ImportFromSalesOrderModal from './ImportFromSalesOrderModal';
 import ImportFromSalesInvoiceModal from './ImportFromSalesInvoiceModal';
 
-function ShipmentLinesEmptyState({ data, recordId, apiBaseUrl, token, onAddLine, canAddLine, onSave, onRefresh }) {
+function ShipmentLinesEmptyState({ data, recordId, apiBaseUrl, token, onAddLine, canAddLine, onSave, onRefresh, forceOpen, onForceOpenHandled }) {
   const ui = useUI();
   const [showOrderModal, setShowOrderModal] = useState(false);
   const [showInvoiceModal, setShowInvoiceModal] = useState(false);
+
+  useEffect(() => {
+    if (!forceOpen) return;
+    setShowOrderModal(true);
+    onForceOpenHandled?.();
+  }, [forceOpen, onForceOpenHandled]);
 
   const isDraft = data?.documentStatus === 'DR';
   const bpId = data?.businessPartner;
@@ -116,13 +122,12 @@ const ShipmentLineActions = forwardRef(function ShipmentLineActions(
     [token],
   );
 
-  useMemo(() => {
-    if (forceOpen) {
-      if (pendingModal.current === 'invoice') setShowInvoiceModal(true);
-      else setShowOrderModal(true);
-      onForceOpenHandled?.();
-    }
-  }, [forceOpen]);
+  useEffect(() => {
+    if (!forceOpen) return;
+    if (pendingModal.current === 'invoice') setShowInvoiceModal(true);
+    else setShowOrderModal(true);
+    onForceOpenHandled?.();
+  }, [forceOpen, onForceOpenHandled]);
 
   const openOrderModal = async () => {
     pendingModal.current = 'order';

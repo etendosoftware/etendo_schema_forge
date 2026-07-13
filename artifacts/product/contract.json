@@ -1,8 +1,8 @@
 {
-  "version": "0.14.0",
+  "version": "0.18.0",
   "generatedAt": "2026-04-29T18:11:24.842Z",
-  "updatedAt": "2026-06-26T12:27:56.322Z",
-  "checksum": "a34bd38ef101d3ac",
+  "updatedAt": "2026-07-06T17:42:30.156Z",
+  "checksum": "aebf17aa7bc1e6ab",
   "frontendContract": {
     "window": {
       "id": "140",
@@ -10,13 +10,24 @@
       "primaryEntity": "product",
       "category": "inventory",
       "sidebarLayout": true,
-      "customTabsAfterBottom": true,
       "hidePrint": true,
       "hideMoreMenu": true,
       "contentBg": "bg-white",
       "hideLink": true,
       "breadcrumb": "Inventory / Product",
-      "secondaryTabs": {},
+      "secondaryTabs": {
+        "accounting": {
+          "tabOrder": 1,
+          "label": "Accounting",
+          "addLineFields": [
+            "fixedAsset",
+            "productExpense",
+            "productRevenue",
+            "productCOGS"
+          ],
+          "requireSavedRecord": true
+        }
+      },
       "detailEntity": null,
       "headerExtra": {},
       "labelOverrides": {
@@ -248,19 +259,31 @@
             "enumValues": [
               {
                 "value": "E",
-                "name": "Expense type"
+                "name": "Expense type",
+                "labels": {
+                  "es_ES": "Gasto"
+                }
               },
               {
                 "value": "I",
-                "name": "Item"
+                "name": "Item",
+                "labels": {
+                  "es_ES": "Artículo"
+                }
               },
               {
                 "value": "R",
-                "name": "Resource"
+                "name": "Resource",
+                "labels": {
+                  "es_ES": "Recurso"
+                }
               },
               {
                 "value": "S",
-                "name": "Service"
+                "name": "Service",
+                "labels": {
+                  "es_ES": "Servicio"
+                }
               }
             ],
             "defaultValue": "I",
@@ -616,6 +639,85 @@
           }
         ]
       },
+      "accounting": {
+        "tableName": "M_Product_Acct",
+        "tabId": "210",
+        "tabName": "Accounting",
+        "uiPattern": "STD",
+        "fields": [
+          {
+            "name": "fixedAsset",
+            "apiKey": "fixedAsset",
+            "column": "P_Asset_Acct",
+            "label": "Product Asset",
+            "type": "foreignKey",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": false,
+            "grid": true,
+            "form": true,
+            "reference": "ValidCombination",
+            "inputMode": "selector",
+            "seq": 1
+          },
+          {
+            "name": "productExpense",
+            "apiKey": "productExpense",
+            "column": "P_Expense_Acct",
+            "label": "Product Expense",
+            "type": "foreignKey",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": true,
+            "grid": true,
+            "form": true,
+            "sourceRequired": true,
+            "reference": "ValidCombination",
+            "inputMode": "selector",
+            "seq": 2,
+            "grow": true
+          },
+          {
+            "name": "productRevenue",
+            "apiKey": "productRevenue",
+            "column": "P_Revenue_Acct",
+            "label": "Product Revenue",
+            "type": "foreignKey",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": true,
+            "grid": true,
+            "form": true,
+            "sourceRequired": true,
+            "reference": "ValidCombination",
+            "inputMode": "selector",
+            "seq": 3,
+            "grow": true
+          },
+          {
+            "name": "productCOGS",
+            "apiKey": "productCOGS",
+            "column": "P_Cogs_Acct",
+            "label": "Product COGS",
+            "type": "foreignKey",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": false,
+            "grid": true,
+            "form": true,
+            "reference": "ValidCombination",
+            "inputMode": "selector",
+            "seq": 4,
+            "grow": true
+          }
+        ],
+        "searchableFields": [],
+        "computedFields": [],
+        "javaQualifier": "productAccountingHandler",
+        "addLineHiddenFromSibling": [
+          "accountingSchema"
+        ]
+      },
       "billOfMaterials": {
         "tableName": "M_Product_BOM",
         "tabId": "317",
@@ -737,11 +839,17 @@
             "enumValues": [
               {
                 "value": "AVA",
-                "name": "Average"
+                "name": "Average",
+                "labels": {
+                  "es_ES": "Promedio"
+                }
               },
               {
                 "value": "STA",
-                "name": "Standard"
+                "name": "Standard",
+                "labels": {
+                  "es_ES": "Estándar"
+                }
               }
             ]
           },
@@ -1039,43 +1147,73 @@
             "enumValues": [
               {
                 "value": "V+",
-                "name": "Vendor Receipts"
+                "name": "Vendor Receipts",
+                "labels": {
+                  "es_ES": "Albarán proveedor"
+                }
               },
               {
                 "value": "I+",
-                "name": "Inventory In"
+                "name": "Inventory In",
+                "labels": {
+                  "es_ES": "Entrada inventario"
+                }
               },
               {
                 "value": "M-",
-                "name": "Movement From"
+                "name": "Movement From",
+                "labels": {
+                  "es_ES": "Mover desde"
+                }
               },
               {
                 "value": "M+",
-                "name": "Movement To"
+                "name": "Movement To",
+                "labels": {
+                  "es_ES": "Mover a"
+                }
               },
               {
                 "value": "I-",
-                "name": "Inventory Out"
+                "name": "Inventory Out",
+                "labels": {
+                  "es_ES": "Salida inventario"
+                }
               },
               {
                 "value": "P-",
-                "name": "Production -"
+                "name": "Production -",
+                "labels": {
+                  "es_ES": "Producción -"
+                }
               },
               {
                 "value": "P+",
-                "name": "Production +"
+                "name": "Production +",
+                "labels": {
+                  "es_ES": "Producción +"
+                }
               },
               {
                 "value": "C-",
-                "name": "Customer Shipment"
+                "name": "Customer Shipment",
+                "labels": {
+                  "es_ES": "Albarán cliente"
+                }
               },
               {
                 "value": "D-",
-                "name": "Internal Consumption -"
+                "name": "Internal Consumption -",
+                "labels": {
+                  "es_ES": "Consumo Interno -"
+                }
               },
               {
                 "value": "D+",
-                "name": "Internal Consumption +"
+                "name": "Internal Consumption +",
+                "labels": {
+                  "es_ES": "Consumo Interno +"
+                }
               }
             ]
           },
@@ -1241,11 +1379,17 @@
             "enumValues": [
               {
                 "value": "PURCHASE",
-                "name": "Purchase Price List"
+                "name": "Purchase Price List",
+                "labels": {
+                  "es_ES": "Tarifa de ventas"
+                }
               },
               {
                 "value": "SALES",
-                "name": "Sales Price List"
+                "name": "Sales Price List",
+                "labels": {
+                  "es_ES": "Tarifa de ventas"
+                }
               }
             ],
             "defaultValue": "SALES",
@@ -1615,15 +1759,24 @@
             "enumValues": [
               {
                 "value": "P",
-                "name": "Primary"
+                "name": "Primary",
+                "labels": {
+                  "es_ES": "Primaria"
+                }
               },
               {
                 "value": "S",
-                "name": "Secondary"
+                "name": "Secondary",
+                "labels": {
+                  "es_ES": "Secundaria"
+                }
               },
               {
                 "value": "NA",
-                "name": "Not Applicable"
+                "name": "Not Applicable",
+                "labels": {
+                  "es_ES": "No Aplicable"
+                }
               }
             ],
             "defaultValue": "S"
@@ -1647,15 +1800,24 @@
             "enumValues": [
               {
                 "value": "P",
-                "name": "Primary"
+                "name": "Primary",
+                "labels": {
+                  "es_ES": "Primaria"
+                }
               },
               {
                 "value": "S",
-                "name": "Secondary"
+                "name": "Secondary",
+                "labels": {
+                  "es_ES": "Secundaria"
+                }
               },
               {
                 "value": "NA",
-                "name": "Not Applicable"
+                "name": "Not Applicable",
+                "labels": {
+                  "es_ES": "No Aplicable"
+                }
               }
             ],
             "defaultValue": "S"
@@ -1679,15 +1841,24 @@
             "enumValues": [
               {
                 "value": "P",
-                "name": "Primary"
+                "name": "Primary",
+                "labels": {
+                  "es_ES": "Primaria"
+                }
               },
               {
                 "value": "S",
-                "name": "Secondary"
+                "name": "Secondary",
+                "labels": {
+                  "es_ES": "Secundaria"
+                }
               },
               {
                 "value": "NA",
-                "name": "Not Applicable"
+                "name": "Not Applicable",
+                "labels": {
+                  "es_ES": "No Aplicable"
+                }
               }
             ],
             "defaultValue": "S"
@@ -1727,13 +1898,24 @@
       "primaryEntity": "product",
       "category": "inventory",
       "sidebarLayout": true,
-      "customTabsAfterBottom": true,
       "hidePrint": true,
       "hideMoreMenu": true,
       "contentBg": "bg-white",
       "hideLink": true,
       "breadcrumb": "Inventory / Product",
-      "secondaryTabs": {},
+      "secondaryTabs": {
+        "accounting": {
+          "tabOrder": 1,
+          "label": "Accounting",
+          "addLineFields": [
+            "fixedAsset",
+            "productExpense",
+            "productRevenue",
+            "productCOGS"
+          ],
+          "requireSavedRecord": true
+        }
+      },
       "detailEntity": null,
       "headerExtra": {},
       "labelOverrides": {
@@ -3002,6 +3184,190 @@
           }
         ]
       },
+      "accounting": {
+        "tableName": "M_Product_Acct",
+        "tabId": "210",
+        "tabName": "Accounting",
+        "fields": [
+          {
+            "name": "accountingSchema",
+            "apiKey": "accountingSchema",
+            "column": "C_AcctSchema_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "fixedAsset",
+            "apiKey": "fixedAsset",
+            "column": "P_Asset_Acct",
+            "type": "foreignKey",
+            "visibility": "editable",
+            "required": false
+          },
+          {
+            "name": "productExpense",
+            "apiKey": "productExpense",
+            "column": "P_Expense_Acct",
+            "type": "foreignKey",
+            "visibility": "editable",
+            "required": true
+          },
+          {
+            "name": "pDefExpenseAcct",
+            "apiKey": "pDefExpenseAcct",
+            "column": "P_Def_Expense_Acct",
+            "type": "foreignKey",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "productRevenue",
+            "apiKey": "productRevenue",
+            "column": "P_Revenue_Acct",
+            "type": "foreignKey",
+            "visibility": "editable",
+            "required": true
+          },
+          {
+            "name": "productDeferredRevenue",
+            "apiKey": "productDeferredRevenue",
+            "column": "P_Def_Revenue_Acct",
+            "type": "foreignKey",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "productCOGS",
+            "apiKey": "productCOGS",
+            "column": "P_Cogs_Acct",
+            "type": "foreignKey",
+            "visibility": "editable",
+            "required": false
+          },
+          {
+            "name": "invoicePriceVariance",
+            "apiKey": "invoicePriceVariance",
+            "column": "P_InvoicePriceVariance_Acct",
+            "type": "foreignKey",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "productRevenueReturn",
+            "apiKey": "productRevenueReturn",
+            "column": "P_Revenue_Return_Acct",
+            "type": "foreignKey",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "productCOGSReturn",
+            "apiKey": "productCOGSReturn",
+            "column": "P_Cogs_Return_Acct",
+            "type": "foreignKey",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "active",
+            "apiKey": "active",
+            "column": "IsActive",
+            "type": "boolean",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "purchasePriceVariance",
+            "apiKey": "purchasePriceVariance",
+            "column": "P_PurchasePriceVariance_Acct",
+            "type": "foreignKey",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "tradeDiscountReceived",
+            "apiKey": "tradeDiscountReceived",
+            "column": "P_TradeDiscountRec_Acct",
+            "type": "foreignKey",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "tradeDiscountGranted",
+            "apiKey": "tradeDiscountGranted",
+            "column": "P_TradeDiscountGrant_Acct",
+            "type": "foreignKey",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "client",
+            "apiKey": "client",
+            "column": "AD_Client_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "product",
+            "apiKey": "product",
+            "column": "M_Product_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "organization",
+            "apiKey": "organization",
+            "column": "AD_Org_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "id",
+            "apiKey": "id",
+            "column": "M_Product_Acct_ID",
+            "type": "id",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "creationDate",
+            "apiKey": "creationDate",
+            "column": "Created",
+            "type": "dateTime",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "createdBy",
+            "apiKey": "createdBy",
+            "column": "CreatedBy",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "updated",
+            "apiKey": "updated",
+            "column": "Updated",
+            "type": "dateTime",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "updatedBy",
+            "apiKey": "updatedBy",
+            "column": "UpdatedBy",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          }
+        ],
+        "javaQualifier": "productAccountingHandler"
+      },
       "billOfMaterials": {
         "tableName": "M_Product_BOM",
         "tabId": "317",
@@ -4081,6 +4447,14 @@
             "type": "amount",
             "visibility": "system",
             "required": false
+          },
+          {
+            "name": "etgoCost",
+            "apiKey": "etgoCost",
+            "column": "EM_Etgo_Cost",
+            "type": "amount",
+            "visibility": "system",
+            "required": false
           }
         ],
         "javaQualifier": "productStockWarehouseHandler"
@@ -4423,6 +4797,36 @@
       },
       {
         "method": "GET",
+        "path": "/accounting",
+        "entity": "accounting",
+        "supportedFilters": []
+      },
+      {
+        "method": "GET",
+        "path": "/accounting/:id",
+        "entity": "accounting",
+        "supportedFilters": []
+      },
+      {
+        "method": "POST",
+        "path": "/accounting",
+        "entity": "accounting",
+        "supportedFilters": []
+      },
+      {
+        "method": "PUT",
+        "path": "/accounting/:id",
+        "entity": "accounting",
+        "supportedFilters": []
+      },
+      {
+        "method": "DELETE",
+        "path": "/accounting/:id",
+        "entity": "accounting",
+        "supportedFilters": []
+      },
+      {
+        "method": "GET",
         "path": "/billOfMaterials",
         "entity": "billOfMaterials",
         "supportedFilters": []
@@ -4707,6 +5111,17 @@
         "detailUrl": "/sws/neo/product/priceRuleVersion/{id}",
         "supportedFilters": []
       },
+      "accounting": {
+        "get": true,
+        "getById": true,
+        "post": true,
+        "put": true,
+        "patch": true,
+        "delete": true,
+        "listUrl": "/sws/neo/product/accounting",
+        "detailUrl": "/sws/neo/product/accounting/{id}",
+        "supportedFilters": []
+      },
       "billOfMaterials": {
         "get": true,
         "getById": true,
@@ -4868,6 +5283,38 @@
         "reference": "ServicePriceRule",
         "inputMode": "selector",
         "url": "/sws/neo/product/priceRuleVersion/selectors/servicePriceRule"
+      },
+      {
+        "entity": "accounting",
+        "field": "fixedAsset",
+        "column": "P_Asset_Acct",
+        "reference": "ValidCombination",
+        "inputMode": "selector",
+        "url": "/sws/neo/product/accounting/selectors/fixedAsset"
+      },
+      {
+        "entity": "accounting",
+        "field": "productExpense",
+        "column": "P_Expense_Acct",
+        "reference": "ValidCombination",
+        "inputMode": "selector",
+        "url": "/sws/neo/product/accounting/selectors/productExpense"
+      },
+      {
+        "entity": "accounting",
+        "field": "productRevenue",
+        "column": "P_Revenue_Acct",
+        "reference": "ValidCombination",
+        "inputMode": "selector",
+        "url": "/sws/neo/product/accounting/selectors/productRevenue"
+      },
+      {
+        "entity": "accounting",
+        "field": "productCOGS",
+        "column": "P_Cogs_Acct",
+        "reference": "ValidCombination",
+        "inputMode": "selector",
+        "url": "/sws/neo/product/accounting/selectors/productCOGS"
       },
       {
         "entity": "billOfMaterials",
@@ -5156,6 +5603,13 @@
         "field": "manualcostadjustment",
         "runner": "node",
         "description": "Action endpoint for 'manualcostadjustment' in transactions should exist"
+      },
+      {
+        "id": "t-crud-flags-accounting",
+        "category": "crud-flags",
+        "entity": "accounting",
+        "runner": "node",
+        "description": "CRUD flags for 'accounting' should all be booleans"
       },
       {
         "id": "t-crud-flags-alternateUom",
@@ -5521,6 +5975,38 @@
         "field": "totalCost",
         "runner": "node",
         "description": "Display logic for 'totalCost' in transactions should be valid JS"
+      },
+      {
+        "id": "t-field-presence-accounting-fixedAsset",
+        "category": "field-presence",
+        "entity": "accounting",
+        "field": "fixedAsset",
+        "runner": "node",
+        "description": "Field 'fixedAsset' should be present in accounting"
+      },
+      {
+        "id": "t-field-presence-accounting-productCOGS",
+        "category": "field-presence",
+        "entity": "accounting",
+        "field": "productCOGS",
+        "runner": "node",
+        "description": "Field 'productCOGS' should be present in accounting"
+      },
+      {
+        "id": "t-field-presence-accounting-productExpense",
+        "category": "field-presence",
+        "entity": "accounting",
+        "field": "productExpense",
+        "runner": "node",
+        "description": "Field 'productExpense' should be present in accounting"
+      },
+      {
+        "id": "t-field-presence-accounting-productRevenue",
+        "category": "field-presence",
+        "entity": "accounting",
+        "field": "productRevenue",
+        "runner": "node",
+        "description": "Field 'productRevenue' should be present in accounting"
       },
       {
         "id": "t-field-presence-alternateUom-conversionRate",
@@ -6121,6 +6607,38 @@
         "field": "uOM",
         "runner": "node",
         "description": "Field 'uOM' should be present in transactions"
+      },
+      {
+        "id": "t-field-type-accounting-fixedAsset",
+        "category": "field-type",
+        "entity": "accounting",
+        "field": "fixedAsset",
+        "runner": "node",
+        "description": "Field 'fixedAsset' should have type 'string' in accounting"
+      },
+      {
+        "id": "t-field-type-accounting-productCOGS",
+        "category": "field-type",
+        "entity": "accounting",
+        "field": "productCOGS",
+        "runner": "node",
+        "description": "Field 'productCOGS' should have type 'string' in accounting"
+      },
+      {
+        "id": "t-field-type-accounting-productExpense",
+        "category": "field-type",
+        "entity": "accounting",
+        "field": "productExpense",
+        "runner": "node",
+        "description": "Field 'productExpense' should have type 'string' in accounting"
+      },
+      {
+        "id": "t-field-type-accounting-productRevenue",
+        "category": "field-type",
+        "entity": "accounting",
+        "field": "productRevenue",
+        "runner": "node",
+        "description": "Field 'productRevenue' should have type 'string' in accounting"
       },
       {
         "id": "t-field-type-alternateUom-conversionRate",
@@ -7782,6 +8300,38 @@
         "description": "Field 'uPCEAN' should be a supported filter for product"
       },
       {
+        "id": "t-selector-endpoint-accounting-fixedAsset",
+        "category": "selector-endpoint",
+        "entity": "accounting",
+        "field": "fixedAsset",
+        "runner": "node",
+        "description": "Selector endpoint for 'fixedAsset' in accounting should exist"
+      },
+      {
+        "id": "t-selector-endpoint-accounting-productCOGS",
+        "category": "selector-endpoint",
+        "entity": "accounting",
+        "field": "productCOGS",
+        "runner": "node",
+        "description": "Selector endpoint for 'productCOGS' in accounting should exist"
+      },
+      {
+        "id": "t-selector-endpoint-accounting-productExpense",
+        "category": "selector-endpoint",
+        "entity": "accounting",
+        "field": "productExpense",
+        "runner": "node",
+        "description": "Selector endpoint for 'productExpense' in accounting should exist"
+      },
+      {
+        "id": "t-selector-endpoint-accounting-productRevenue",
+        "category": "selector-endpoint",
+        "entity": "accounting",
+        "field": "productRevenue",
+        "runner": "node",
+        "description": "Selector endpoint for 'productRevenue' in accounting should exist"
+      },
+      {
         "id": "t-selector-endpoint-alternateUom-uOM",
         "category": "selector-endpoint",
         "entity": "alternateUom",
@@ -7964,6 +8514,150 @@
         "field": "uOM",
         "runner": "node",
         "description": "Selector endpoint for 'uOM' in transactions should exist"
+      },
+      {
+        "id": "t-system-field-accounting-accountingSchema",
+        "category": "system-field",
+        "entity": "accounting",
+        "field": "accountingSchema",
+        "runner": "node",
+        "description": "System field 'accountingSchema' should exist in backend but not frontend for accounting"
+      },
+      {
+        "id": "t-system-field-accounting-active",
+        "category": "system-field",
+        "entity": "accounting",
+        "field": "active",
+        "runner": "node",
+        "description": "System field 'active' should exist in backend but not frontend for accounting"
+      },
+      {
+        "id": "t-system-field-accounting-client",
+        "category": "system-field",
+        "entity": "accounting",
+        "field": "client",
+        "runner": "node",
+        "description": "System field 'client' should exist in backend but not frontend for accounting"
+      },
+      {
+        "id": "t-system-field-accounting-createdBy",
+        "category": "system-field",
+        "entity": "accounting",
+        "field": "createdBy",
+        "runner": "node",
+        "description": "System field 'createdBy' should exist in backend but not frontend for accounting"
+      },
+      {
+        "id": "t-system-field-accounting-creationDate",
+        "category": "system-field",
+        "entity": "accounting",
+        "field": "creationDate",
+        "runner": "node",
+        "description": "System field 'creationDate' should exist in backend but not frontend for accounting"
+      },
+      {
+        "id": "t-system-field-accounting-id",
+        "category": "system-field",
+        "entity": "accounting",
+        "field": "id",
+        "runner": "node",
+        "description": "System field 'id' should exist in backend but not frontend for accounting"
+      },
+      {
+        "id": "t-system-field-accounting-invoicePriceVariance",
+        "category": "system-field",
+        "entity": "accounting",
+        "field": "invoicePriceVariance",
+        "runner": "node",
+        "description": "System field 'invoicePriceVariance' should exist in backend but not frontend for accounting"
+      },
+      {
+        "id": "t-system-field-accounting-organization",
+        "category": "system-field",
+        "entity": "accounting",
+        "field": "organization",
+        "runner": "node",
+        "description": "System field 'organization' should exist in backend but not frontend for accounting"
+      },
+      {
+        "id": "t-system-field-accounting-pDefExpenseAcct",
+        "category": "system-field",
+        "entity": "accounting",
+        "field": "pDefExpenseAcct",
+        "runner": "node",
+        "description": "System field 'pDefExpenseAcct' should exist in backend but not frontend for accounting"
+      },
+      {
+        "id": "t-system-field-accounting-product",
+        "category": "system-field",
+        "entity": "accounting",
+        "field": "product",
+        "runner": "node",
+        "description": "System field 'product' should exist in backend but not frontend for accounting"
+      },
+      {
+        "id": "t-system-field-accounting-productCOGSReturn",
+        "category": "system-field",
+        "entity": "accounting",
+        "field": "productCOGSReturn",
+        "runner": "node",
+        "description": "System field 'productCOGSReturn' should exist in backend but not frontend for accounting"
+      },
+      {
+        "id": "t-system-field-accounting-productDeferredRevenue",
+        "category": "system-field",
+        "entity": "accounting",
+        "field": "productDeferredRevenue",
+        "runner": "node",
+        "description": "System field 'productDeferredRevenue' should exist in backend but not frontend for accounting"
+      },
+      {
+        "id": "t-system-field-accounting-productRevenueReturn",
+        "category": "system-field",
+        "entity": "accounting",
+        "field": "productRevenueReturn",
+        "runner": "node",
+        "description": "System field 'productRevenueReturn' should exist in backend but not frontend for accounting"
+      },
+      {
+        "id": "t-system-field-accounting-purchasePriceVariance",
+        "category": "system-field",
+        "entity": "accounting",
+        "field": "purchasePriceVariance",
+        "runner": "node",
+        "description": "System field 'purchasePriceVariance' should exist in backend but not frontend for accounting"
+      },
+      {
+        "id": "t-system-field-accounting-tradeDiscountGranted",
+        "category": "system-field",
+        "entity": "accounting",
+        "field": "tradeDiscountGranted",
+        "runner": "node",
+        "description": "System field 'tradeDiscountGranted' should exist in backend but not frontend for accounting"
+      },
+      {
+        "id": "t-system-field-accounting-tradeDiscountReceived",
+        "category": "system-field",
+        "entity": "accounting",
+        "field": "tradeDiscountReceived",
+        "runner": "node",
+        "description": "System field 'tradeDiscountReceived' should exist in backend but not frontend for accounting"
+      },
+      {
+        "id": "t-system-field-accounting-updated",
+        "category": "system-field",
+        "entity": "accounting",
+        "field": "updated",
+        "runner": "node",
+        "description": "System field 'updated' should exist in backend but not frontend for accounting"
+      },
+      {
+        "id": "t-system-field-accounting-updatedBy",
+        "category": "system-field",
+        "entity": "accounting",
+        "field": "updatedBy",
+        "runner": "node",
+        "description": "System field 'updatedBy' should exist in backend but not frontend for accounting"
       },
       {
         "id": "t-system-field-alternateUom-active",
@@ -9430,6 +10124,14 @@
         "description": "System field 'creationDate' should exist in backend but not frontend for stock"
       },
       {
+        "id": "t-system-field-stock-etgoCost",
+        "category": "system-field",
+        "entity": "stock",
+        "field": "etgoCost",
+        "runner": "node",
+        "description": "System field 'etgoCost' should exist in backend but not frontend for stock"
+      },
+      {
         "id": "t-system-field-stock-etgoValuation",
         "category": "system-field",
         "entity": "stock",
@@ -9830,6 +10532,13 @@
         "description": "System field 'updatedBy' should exist in backend but not frontend for transactions"
       },
       {
+        "id": "t-visibility-accounting",
+        "category": "visibility",
+        "entity": "accounting",
+        "runner": "node",
+        "description": "Entity 'accounting' should only expose visible fields in frontend"
+      },
+      {
         "id": "t-visibility-alternateUom",
         "category": "visibility",
         "entity": "alternateUom",
@@ -9908,25 +10617,25 @@
       }
     ],
     "summary": {
-      "total": 623,
+      "total": 656,
       "byCategory": {
         "action-endpoint": 9,
-        "crud-flags": 11,
+        "crud-flags": 12,
         "default-value-type": 26,
         "displaylogic-evaluable": 5,
         "displaylogic-valid": 5,
-        "field-presence": 75,
-        "field-type": 75,
+        "field-presence": 79,
+        "field-type": 79,
         "readonlylogic-evaluable": 2,
         "readonlylogic-valid": 2,
         "rule-declared": 141,
         "searchable-filters": 5,
-        "selector-endpoint": 23,
-        "system-field": 233,
-        "visibility": 11
+        "selector-endpoint": 27,
+        "system-field": 252,
+        "visibility": 12
       },
       "byRunner": {
-        "node": 623,
+        "node": 656,
         "junit": 0
       }
     }

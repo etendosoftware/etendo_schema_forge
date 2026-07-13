@@ -78,6 +78,7 @@ Per-locale field label overrides. When the simplified interface needs to rename 
 | `notesField` | string | `null` | Any entity field name | Field to display as a notes/description panel in the detail view footer (e.g., `"description"`). Rendered as an expandable text input. |
 | `documentPreview` | object | `null` | `{ titlePrefix: string }` | Enables the document preview button in the detail header. `titlePrefix` is shown in the preview drawer title (e.g., `"Order"`, `"Invoice"`). |
 | `breadcrumb` | string | `"{category} / {name}"` | Any string | Overrides the auto-generated breadcrumb path shown in the topbar. Useful when the default category/name combination is too verbose (e.g., `"Product"` instead of `"Reference / Product"`). |
+| `hideCreate` | boolean | `false` | — | Hides the generic Create/New button in the list toolbar. Use this when creation is handled by a window-specific action or custom component. |
 | `hidePrint` | boolean | `false` | — | Hides the print button in the detail view action bar. |
 | `hideMoreMenu` | boolean | `false` | — | Hides the triple-dot "more" menu in the detail view action bar. |
 | `hideStatusFilter` | boolean | `false` | — | Hides the status-filter dropdown ("All statuses") in the list toolbar, even when a `status`-typed column exists. The rest of the filter bar (date filter, Filters) is unaffected. |
@@ -90,6 +91,7 @@ Per-locale field label overrides. When the simplified interface needs to rename 
 | `newActions` | array | `[]` | See below | Additional actions in the split "New" button dropdown in the list view. Each action can optionally open a custom modal component. |
 | `processOverrides` | object | `{}` | See below | Override presentation and behavior of process buttons in the detail view. Keys are process names or column names. See Process Overrides subsection. |
 | `detailSortBy` | string | `null` | Any valid sort expression | Default sort order for the detail entity tab (e.g., `"sEQNoAsset asc"`). Passed directly to DetailView as the `detailSortBy` prop. |
+| `documentDateField` | string | `"orderDate"` | Any header date field name | Names the header field that holds this document's primary date (e.g., `"orderDate"` for orders/quotations, `"invoiceDate"` for invoices). `DetailView` uses it for exchange-rate lookups (currency conversion of new lines and the currency-dropdown validation) and other document-date-dependent logic. Windows without an `orderDate` field (e.g. sales/purchase invoices) MUST declare this explicitly, or those lookups silently no-op. Defaults to `"orderDate"` for backward compatibility with windows that don't declare it. |
 | `statusBar` | object | `null` | See below | Generates a summary status bar above the detail form showing key numeric fields and an optional progress indicator. |
 | `subsetFilters` | array | `null` | See below | Segmented, radio-style filter above the list. One is always active, mutually exclusive, applied before any other filter. Ideal for "which universe am I looking at" selectors (e.g., All / Customers / Vendors). |
 | `quickFilters` | array | `null` | See below | Independent toggle pills above the list. Each can be on/off; multiple can be active simultaneously. Combined with the active subset and column filters using AND. Ideal for "refinements" (e.g., only overdue, only pending delivery). |
@@ -667,6 +669,36 @@ identifier resolution).
 ```
 
 Setting `dependsOn` automatically sets `inputMode` to `"dependent"`.
+
+### Custom Renderer (`customRenderer`)
+
+Swap in a custom React component as the input widget for a single field inside `EntityForm`.
+The component receives `{ value, onChange, record, readOnly }` and is responsible for its
+own internal layout. `onChange` must be called with the new **full** value string (e.g. an
+8-char account code, not just the suffix).
+
+```json
+"searchKey": {
+  "visibility": "editable",
+  "form": true,
+  "customRenderer": "AccountCodeField"
+}
+```
+
+The generator emits an import statement for the named component (resolved by
+`resolveCustomImport`, which checks `artifacts/{window}/custom/` first, then
+`tools/app-shell/src/windows/custom/{window}/`), and adds `customRenderer: AccountCodeField`
+to the field descriptor in the fields array. `EntityForm` renders the component
+instead of the default input when it detects this property.
+
+**Rules:**
+- The component file must exist in `artifacts/{window}/custom/<ComponentName>.jsx` or in
+  the app-shell custom-windows directory.
+- Component must accept `{ value, onChange, record, readOnly }` props.
+- `onChange(newValue)` must always fire with the full field value (no partial writes).
+- If the component needs i18n, use `useUI()` from `@/i18n` and add keys to **both**
+  `en_US.json` and `es_ES.json` under `genericLabels`.
+- This is a form-only feature: the grid column always uses the standard cell renderer.
 
 ### Logic & Behavior
 

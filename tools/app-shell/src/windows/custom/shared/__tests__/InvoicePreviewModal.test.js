@@ -13,9 +13,9 @@ describe('InvoicePreviewModal source', () => {
     assert.doesNotMatch(src, /useFiscalStatus\([^)]*token[^)]*orgId/);
   });
 
-  it('opens InvoicePaymentModal without passing a token prop', () => {
-    const modalBlock = src.match(/<InvoicePaymentModal[\s\S]*?\/>/);
-    assert.ok(modalBlock, 'expected InvoicePaymentModal to be rendered');
+  it('opens NewPaymentEntryModal without passing a token prop', () => {
+    const modalBlock = src.match(/<NewPaymentEntryModal[\s\S]*?\/>/);
+    assert.ok(modalBlock, 'expected NewPaymentEntryModal to be rendered');
     assert.doesNotMatch(modalBlock[0], /token=\{token\}/);
   });
 });

@@ -1,0 +1,129 @@
+{
+  "$schema": "decisions-v2",
+  "version": 2,
+  "window": {
+    "category": "accounting",
+    "name": "General Ledger Configuration",
+    "layoutType": "custom"
+  },
+  "discardPatterns": ["EM_*"],
+  "entities": {
+    "generalLedgerConfiguration": {
+      "name": "General",
+      "javaQualifier": "generalLedgerConfigurationHandler",
+      "fields": {
+        "name": { "visibility": "editable", "required": true, "section": "identity" },
+        "gAAP": { "visibility": "editable", "required": true, "section": "identity" },
+        "organization": { "visibility": "readOnly", "section": "identity" },
+        "accrual": { "visibility": "editable", "section": "identity" },
+        "description": { "visibility": "editable", "section": "identity" },
+
+        "currency": { "visibility": "editable", "required": true, "section": "calendar" },
+
+        "automaticPeriodControl": { "visibility": "editable", "section": "policies" },
+
+        "allowNegative": { "visibility": "system" },
+        "historyDays": { "visibility": "system" },
+        "futureDays": { "visibility": "system" },
+        "assetPositive": { "visibility": "system" },
+        "liabilityPositive": { "visibility": "system" },
+        "equityPositive": { "visibility": "system" },
+        "revenuePositive": { "visibility": "system" },
+        "expensePositive": { "visibility": "system" },
+        "storageBinSeparator": { "visibility": "system" },
+
+        "period": { "visibility": "discarded" },
+        "costingMethod": { "visibility": "discarded" },
+        "useAccountAlias": { "visibility": "discarded" },
+        "useAccountCombinationControl": { "visibility": "discarded" },
+        "postTradeDiscount": { "visibility": "discarded" },
+        "correctTaxForDiscountsCharges": { "visibility": "discarded" },
+        "centralMaintenance": { "visibility": "discarded" }
+      }
+    },
+
+    "defaults": {
+      "name": "Valores por defecto",
+      "fields": {
+        "bankAsset": { "visibility": "editable", "section": "treasury" },
+        "bankInTransit": { "visibility": "editable", "section": "treasury" },
+        "bankExpense": { "visibility": "editable", "section": "treasury" },
+        "bankRevaluationGain": { "visibility": "editable", "section": "treasury" },
+        "bankRevaluationLoss": { "visibility": "editable", "section": "treasury" },
+        "cashBookAsset": { "visibility": "editable", "section": "treasury" },
+        "cashBookDifferences": { "visibility": "editable", "section": "treasury" },
+        "cashTransfer": { "visibility": "editable", "section": "treasury" },
+
+        "customerReceivablesNo": { "visibility": "editable", "section": "receivablesPayables" },
+        "customerPrepayment": { "visibility": "editable", "section": "receivablesPayables" },
+        "vendorLiability": { "visibility": "editable", "section": "receivablesPayables" },
+        "vendorPrepayment": { "visibility": "editable", "section": "receivablesPayables" },
+        "writeoff": { "visibility": "editable", "section": "receivablesPayables" },
+        "writeoffRevenue": { "visibility": "editable", "section": "receivablesPayables" },
+        "nonInvoicedReceipts": { "visibility": "editable", "section": "receivablesPayables" },
+        "doubtfulDebtAccount": { "visibility": "editable", "section": "receivablesPayables" },
+        "badDebtExpenseAccount": { "visibility": "editable", "section": "receivablesPayables" },
+        "badDebtRevenueAccount": { "visibility": "editable", "section": "receivablesPayables" },
+        "allowanceForDoubtfulDebtAccount": { "visibility": "editable", "section": "receivablesPayables" },
+
+        "taxDue": { "visibility": "editable", "section": "taxes" },
+        "taxCredit": { "visibility": "editable", "section": "taxes" },
+        "taxExpense": { "visibility": "editable", "section": "taxes" },
+
+        "tDueTransAcct": { "visibility": "editable", "section": "other" },
+        "tCreditTransAcct": { "visibility": "editable", "section": "other" },
+        "fixedAsset": { "visibility": "editable", "section": "other" },
+        "productExpense": { "visibility": "editable", "section": "other" },
+        "productDeferredExpense": { "visibility": "editable", "section": "other" },
+        "productRevenue": { "visibility": "editable", "section": "other" },
+        "productDeferredRevenue": { "visibility": "editable", "section": "other" },
+        "productCOGS": { "visibility": "editable", "section": "other" },
+        "invoicePriceVariance": { "visibility": "editable", "section": "other" },
+        "productRevenueReturn": { "visibility": "editable", "section": "other" },
+        "productCOGSReturn": { "visibility": "editable", "section": "other" },
+        "warehouseDifferences": { "visibility": "editable", "section": "other" },
+        "inventoryRevaluation": { "visibility": "editable", "section": "other" },
+        "workInProgress": { "visibility": "editable", "section": "other" },
+        "depreciation": { "visibility": "editable", "section": "other" },
+        "accumulatedDepreciation": { "visibility": "editable", "section": "other" },
+        "disposalGain": { "visibility": "editable", "section": "other" },
+        "disposalLoss": { "visibility": "editable", "section": "other" }
+      }
+    },
+
+    "dimension": {
+      "name": "Dimensiones",
+      "fields": {
+        "name": { "visibility": "readOnly", "grid": true, "gridOrder": 1 },
+        "type": { "visibility": "readOnly", "grid": true, "gridOrder": 2 },
+        "active": { "visibility": "editable", "grid": true, "gridOrder": 3 },
+        "mandatory": { "visibility": "editable", "grid": true, "gridOrder": 4 },
+        "balanced": { "visibility": "editable", "grid": true, "gridOrder": 5 },
+        "sequenceNumber": { "visibility": "readOnly" },
+        "trxOrganization": { "visibility": "editable" },
+        "accountingElement": { "visibility": "editable" },
+        "accountElement": { "visibility": "editable" },
+        "product": { "visibility": "editable" },
+        "businessPartner": { "visibility": "editable" },
+        "locationAddress": { "visibility": "editable" },
+        "salesRegion": { "visibility": "editable" },
+        "project": { "visibility": "editable" },
+        "salesCampaign": { "visibility": "editable" },
+        "activity": { "visibility": "editable" }
+      }
+    },
+
+    "documents": {
+      "name": "Documentos",
+      "fields": {
+        "documentCategory": { "visibility": "readOnly", "grid": true, "gridOrder": 1 },
+        "aDCreatefactTemplateID": { "visibility": "readOnly", "grid": true, "gridOrder": 2 },
+        "allowNegative": { "visibility": "readOnly", "grid": true, "gridOrder": 3 },
+        "active": { "visibility": "readOnly", "grid": true, "gridOrder": 4 }
+      }
+    },
+
+    "activeTables": { "exclude": true },
+    "generalAccounts": { "exclude": true }
+  }
+}

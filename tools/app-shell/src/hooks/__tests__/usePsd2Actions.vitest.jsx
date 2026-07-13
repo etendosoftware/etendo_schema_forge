@@ -1,0 +1,435 @@
+import { renderHook, act, waitFor } from '@testing-library/react';
+
+vi.mock('@/auth/AuthContext.jsx', () => ({
+  useAuth: () => ({ token: 'test-token' }),
+}));
+
+vi.mock('../useNeoResource', () => ({
+  getApiBase: () => '',
+}));
+
+import {
+  usePsd2Actions,
+  launchSaltEdgePopup,
+  PSD2_CALLBACK_PATH,
+  PSD2_CONNECTION_KEY,
+} from '../usePsd2Actions';
+
+function okResponse(payload) {
+  return { ok: true, json: async () => ({ response: { data: payload } }) };
+}
+
+describe('usePsd2Actions — constants', () => {
+  it('exposes the SPA callback path and connection storage key', () => {
+    expect(PSD2_CALLBACK_PATH).toBe('/financial-account/psd2-callback');
+    expect(PSD2_CONNECTION_KEY).toBe('psd2:lastConnectionId');
+  });
+});
+
+describe('usePsd2Actions — hook', () => {
+  beforeEach(() => {
+    globalThis.fetch = vi.fn();
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('starts with loading false and no error', () => {
+    const { result } = renderHook(() => usePsd2Actions());
+    expect(result.current.loading).toBe(false);
+    expect(result.current.error).toBeNull();
+  });
+
+  it('connect posts to the bridge and returns the connectUrl', async () => {
+    globalThis.fetch.mockResolvedValue(okResponse({ connectUrl: 'https://saltedge/connect' }));
+
+    const { result } = renderHook(() => usePsd2Actions());
+    let url;
+    await act(async () => {
+      url = await result.current.connect();
+    });
+
+    expect(url).toBe('https://saltedge/connect');
+    const [calledUrl, init] = globalThis.fetch.mock.calls[0];
+    expect(calledUrl).toContain('/sws/neo/financial-account-psd2');
+    expect(calledUrl).toContain('action=connect');
+    expect(init.method).toBe('POST');
+    expect(init.headers.Authorization).toBe('Bearer test-token');
+    expect(JSON.parse(init.body)).toEqual({});
+    expect(result.current.loading).toBe(false);
+    expect(result.current.error).toBeNull();
+  });
+
+  it('connect sends the financialAccountId in the body when provided', async () => {
+    globalThis.fetch.mockResolvedValue(okResponse({ connectUrl: 'https://x' }));
+
+    const { result } = renderHook(() => usePsd2Actions());
+    await act(async () => {
+      await result.current.connect('FA-1');
+    });
+
+    const [, init] = globalThis.fetch.mock.calls[0];
+    expect(JSON.parse(init.body)).toEqual({ financialAccountId: 'FA-1' });
+  });
+
+  it('fetchAccounts normalizes the payload and passes query params', async () => {
+    globalThis.fetch.mockResolvedValue(
+      okResponse({
+        accounts: [{ id: 'acc1' }],
+        providerName: 'BBVA',
+        providerLogoUrl: 'https://logo',
+      }),
+    );
+
+    const { result } = renderHook(() => usePsd2Actions());
+    let data;
+    await act(async () => {
+      data = await result.current.fetchAccounts('conn-1', 'B', 'FA-1');
+    });
+
+    expect(data).toEqual({
+      accounts: [{ id: 'acc1' }],
+      providerName: 'BBVA',
+      providerLogoUrl: 'https://logo',
+    });
+    const [calledUrl, init] = globalThis.fetch.mock.calls[0];
+    expect(init.method).toBe('GET');
+    expect(calledUrl).toContain('action=accounts');
+    expect(calledUrl).toContain('connectionId=conn-1');
+    expect(calledUrl).toContain('type=B');
+    expect(calledUrl).toContain('financialAccountId=FA-1');
+  });
+
+  it('fetchAccounts falls back to empty defaults when fields are missing', async () => {
+    globalThis.fetch.mockResolvedValue(okResponse({}));
+
+    const { result } = renderHook(() => usePsd2Actions());
+    let data;
+    await act(async () => {
+      data = await result.current.fetchAccounts('conn-1');
+    });
+
+    expect(data).toEqual({ accounts: [], providerName: '', providerLogoUrl: '' });
+  });
+
+  it('fetchProviders returns the providers array with a short timeout', async () => {
+    globalThis.fetch.mockResolvedValue(okResponse({ providers: [{ code: 'p1' }] }));
+
+    const { result } = renderHook(() => usePsd2Actions());
+    let providers;
+    await act(async () => {
+      providers = await result.current.fetchProviders('ES', 'bbva');
+    });
+
+    expect(providers).toEqual([{ code: 'p1' }]);
+    const [calledUrl] = globalThis.fetch.mock.calls[0];
+    expect(calledUrl).toContain('action=providers');
+    expect(calledUrl).toContain('country=ES');
+    expect(calledUrl).toContain('q=bbva');
+  });
+
+  it('fetchProviders returns an empty array when the payload has no providers', async () => {
+    globalThis.fetch.mockResolvedValue(okResponse({}));
+
+    const { result } = renderHook(() => usePsd2Actions());
+    let providers;
+    await act(async () => {
+      providers = await result.current.fetchProviders();
+    });
+
+    expect(providers).toEqual([]);
+  });
+
+  it('link posts the payload as the body', async () => {
+    globalThis.fetch.mockResolvedValue(okResponse({ ok: true }));
+
+    const { result } = renderHook(() => usePsd2Actions());
+    await act(async () => {
+      await result.current.link({ financialAccountId: 'FA-1', connectionId: 'c1' });
+    });
+
+    const [calledUrl, init] = globalThis.fetch.mock.calls[0];
+    expect(calledUrl).toContain('action=link');
+    expect(init.method).toBe('POST');
+    expect(JSON.parse(init.body)).toEqual({ financialAccountId: 'FA-1', connectionId: 'c1' });
+  });
+
+  it('createAndLink posts the payload as the body', async () => {
+    globalThis.fetch.mockResolvedValue(okResponse({ id: 'new' }));
+
+    const { result } = renderHook(() => usePsd2Actions());
+    await act(async () => {
+      await result.current.createAndLink({ type: 'B', connectionId: 'c1' });
+    });
+
+    const [calledUrl, init] = globalThis.fetch.mock.calls[0];
+    expect(calledUrl).toContain('action=createAndLink');
+    expect(JSON.parse(init.body)).toEqual({ type: 'B', connectionId: 'c1' });
+  });
+
+  it('reconnect returns the reconnectUrl', async () => {
+    globalThis.fetch.mockResolvedValue(okResponse({ reconnectUrl: 'https://reconnect' }));
+
+    const { result } = renderHook(() => usePsd2Actions());
+    let url;
+    await act(async () => {
+      url = await result.current.reconnect('FA-1');
+    });
+
+    expect(url).toBe('https://reconnect');
+    const [calledUrl, init] = globalThis.fetch.mock.calls[0];
+    expect(calledUrl).toContain('action=reconnect');
+    expect(JSON.parse(init.body)).toEqual({ financialAccountId: 'FA-1' });
+  });
+
+  it('disconnect posts the financialAccountId', async () => {
+    globalThis.fetch.mockResolvedValue(okResponse({ ok: true }));
+
+    const { result } = renderHook(() => usePsd2Actions());
+    await act(async () => {
+      await result.current.disconnect('FA-1');
+    });
+
+    const [calledUrl, init] = globalThis.fetch.mock.calls[0];
+    expect(calledUrl).toContain('action=disconnect');
+    expect(JSON.parse(init.body)).toEqual({ financialAccountId: 'FA-1' });
+  });
+
+  it('sync posts the financialAccountId', async () => {
+    globalThis.fetch.mockResolvedValue(okResponse({ ok: true }));
+
+    const { result } = renderHook(() => usePsd2Actions());
+    await act(async () => {
+      await result.current.sync('FA-1');
+    });
+
+    const [calledUrl] = globalThis.fetch.mock.calls[0];
+    expect(calledUrl).toContain('action=sync');
+  });
+
+  it('saveImportSettings posts to the import-settings action', async () => {
+    globalThis.fetch.mockResolvedValue(okResponse({ ok: true }));
+
+    const { result } = renderHook(() => usePsd2Actions());
+    await act(async () => {
+      await result.current.saveImportSettings({ financialAccountId: 'FA-1', frequency: 'daily' });
+    });
+
+    const [calledUrl, init] = globalThis.fetch.mock.calls[0];
+    expect(calledUrl).toContain('action=import-settings');
+    expect(JSON.parse(init.body)).toEqual({ financialAccountId: 'FA-1', frequency: 'daily' });
+  });
+
+  it('fetchStatus issues a GET with the financialAccountId query', async () => {
+    globalThis.fetch.mockResolvedValue(okResponse({ connected: true }));
+
+    const { result } = renderHook(() => usePsd2Actions());
+    let status;
+    await act(async () => {
+      status = await result.current.fetchStatus('FA-1');
+    });
+
+    expect(status).toEqual({ connected: true });
+    const [calledUrl, init] = globalThis.fetch.mock.calls[0];
+    expect(init.method).toBe('GET');
+    expect(calledUrl).toContain('action=status');
+    expect(calledUrl).toContain('financialAccountId=FA-1');
+  });
+
+  it('returns an empty object when the response has no data payload', async () => {
+    globalThis.fetch.mockResolvedValue({ ok: true, json: async () => ({}) });
+
+    const { result } = renderHook(() => usePsd2Actions());
+    let data;
+    await act(async () => {
+      data = await result.current.sync('FA-1');
+    });
+
+    expect(data).toEqual({});
+  });
+
+  it('surfaces a server error message and status, then sets error state', async () => {
+    globalThis.fetch.mockResolvedValue({
+      ok: false,
+      status: 400,
+      json: async () => ({ error: { message: 'Bank rejected', status: 422 } }),
+    });
+
+    const { result } = renderHook(() => usePsd2Actions());
+    let thrown;
+    await act(async () => {
+      try {
+        await result.current.sync('FA-1');
+      } catch (err) {
+        thrown = err;
+      }
+    });
+
+    expect(thrown).toBeInstanceOf(Error);
+    expect(thrown.message).toBe('Bank rejected');
+    expect(thrown.status).toBe(422);
+    await waitFor(() => expect(result.current.error).toBe(thrown));
+    expect(result.current.loading).toBe(false);
+  });
+
+  it('falls back to an HTTP status message when the error body has no message', async () => {
+    globalThis.fetch.mockResolvedValue({
+      ok: false,
+      status: 503,
+      json: async () => { throw new Error('not json'); },
+    });
+
+    const { result } = renderHook(() => usePsd2Actions());
+    let thrown;
+    await act(async () => {
+      try {
+        await result.current.sync('FA-1');
+      } catch (err) {
+        thrown = err;
+      }
+    });
+
+    expect(thrown.message).toBe('HTTP 503');
+    expect(thrown.status).toBe(503);
+  });
+
+  it('maps an AbortError to a PSD2_TIMEOUT error', async () => {
+    const abortErr = new Error('aborted');
+    abortErr.name = 'AbortError';
+    globalThis.fetch.mockRejectedValue(abortErr);
+
+    const { result } = renderHook(() => usePsd2Actions());
+    let thrown;
+    await act(async () => {
+      try {
+        await result.current.sync('FA-1');
+      } catch (err) {
+        thrown = err;
+      }
+    });
+
+    expect(thrown.message).toBe('PSD2_TIMEOUT');
+    await waitFor(() => expect(result.current.error?.message).toBe('PSD2_TIMEOUT'));
+  });
+
+  it('propagates a generic network error unchanged', async () => {
+    globalThis.fetch.mockRejectedValue(new Error('Network down'));
+
+    const { result } = renderHook(() => usePsd2Actions());
+    let thrown;
+    await act(async () => {
+      try {
+        await result.current.sync('FA-1');
+      } catch (err) {
+        thrown = err;
+      }
+    });
+
+    expect(thrown.message).toBe('Network down');
+  });
+});
+
+describe('launchSaltEdgePopup', () => {
+  let popup;
+  let openSpy;
+
+  beforeEach(() => {
+    popup = { location: { href: '' }, closed: false, close: vi.fn() };
+    openSpy = vi.spyOn(window, 'open').mockReturnValue(popup);
+    Object.defineProperty(window, 'screen', {
+      value: { width: 1000, height: 800 },
+      writable: true,
+      configurable: true,
+    });
+    try { localStorage.clear(); } catch { /* ignore */ }
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('throws POPUP_BLOCKED when window.open returns null', async () => {
+    openSpy.mockReturnValue(null);
+    await expect(launchSaltEdgePopup(async () => 'https://url')).rejects.toThrow('POPUP_BLOCKED');
+  });
+
+  it('closes the popup and rethrows when getConnectUrl fails', async () => {
+    await expect(
+      launchSaltEdgePopup(async () => { throw new Error('resolve failed'); }),
+    ).rejects.toThrow('resolve failed');
+    expect(popup.close).toHaveBeenCalled();
+  });
+
+  it('closes the popup and throws NO_CONNECT_URL when no url resolves', async () => {
+    await expect(launchSaltEdgePopup(async () => '')).rejects.toThrow('NO_CONNECT_URL');
+    expect(popup.close).toHaveBeenCalled();
+  });
+
+  it('navigates the popup and resolves the connection id from a postMessage', async () => {
+    const promise = launchSaltEdgePopup(async () => 'https://connect');
+
+    await waitFor(() => expect(popup.location.href).toBe('https://connect'));
+
+    window.dispatchEvent(
+      new MessageEvent('message', {
+        origin: window.location.origin,
+        data: { type: 'psd2-connected', connectionId: 'CONN-42' },
+      }),
+    );
+
+    await expect(promise).resolves.toBe('CONN-42');
+  });
+
+  it('ignores postMessages from a foreign origin', async () => {
+    vi.useFakeTimers();
+    try {
+      const promise = launchSaltEdgePopup(async () => 'https://connect');
+      await Promise.resolve();
+
+      window.dispatchEvent(
+        new MessageEvent('message', {
+          origin: 'https://evil.example',
+          data: { type: 'psd2-connected', connectionId: 'HACK' },
+        }),
+      );
+
+      popup.closed = true;
+      await vi.advanceTimersByTimeAsync(600);
+
+      await expect(promise).resolves.toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('resolves the stored connection id picked up by the poll timer', async () => {
+    vi.useFakeTimers();
+    try {
+      const promise = launchSaltEdgePopup(async () => 'https://connect');
+      await Promise.resolve();
+
+      localStorage.setItem(PSD2_CONNECTION_KEY, 'STORED-7');
+      await vi.advanceTimersByTimeAsync(600);
+
+      await expect(promise).resolves.toBe('STORED-7');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('resolves null when the popup is closed without finishing', async () => {
+    vi.useFakeTimers();
+    try {
+      const promise = launchSaltEdgePopup(async () => 'https://connect');
+      await Promise.resolve();
+
+      popup.closed = true;
+      await vi.advanceTimersByTimeAsync(600);
+
+      await expect(promise).resolves.toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});

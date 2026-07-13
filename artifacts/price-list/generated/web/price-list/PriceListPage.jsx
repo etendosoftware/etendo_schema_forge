@@ -189,6 +189,7 @@ const labelOverrides = api.labelOverrides;
 export default function PriceListPage({ windowName, recordId, ...props }) {
   if (recordId) {
     return (
+      <>
       <DetailView
         entity="priceList"
         detailEntity="priceListVersion"
@@ -215,6 +216,7 @@ export default function PriceListPage({ windowName, recordId, ...props }) {
         labelOverrides={labelOverrides}
         {...props}
       />
+      </>
     );
   }
 

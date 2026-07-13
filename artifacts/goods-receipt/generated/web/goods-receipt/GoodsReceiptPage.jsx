@@ -422,6 +422,7 @@ export const api = {
 export default function GoodsReceiptPage({ windowName, recordId, ...props }) {
   if (recordId) {
     return (
+      <>
       <DetailView
         entity="goodsReceipt"
         detailEntity="goodsReceiptLine"
@@ -454,9 +455,10 @@ export default function GoodsReceiptPage({ windowName, recordId, ...props }) {
         draftMode={draftMode}
         requiredHeaderFields={requiredHeaderFields}
         linesLayout="inlineEditable"
-        sendDocument
+        sendDocument={{"enabled":false}}
         {...props}
       />
+      </>
     );
   }
 
@@ -471,7 +473,7 @@ export default function GoodsReceiptPage({ windowName, recordId, ...props }) {
       dateFilterKey="movementDate"
       hidePrint
       rowQuickActions={{}}
-      sendDocument
+      sendDocument={{"enabled":false}}
       {...props}
     />
   );

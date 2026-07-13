@@ -15,14 +15,15 @@ const columnsBlock =
 
 const expectedKeysInOrder = [
   'invoiceDate',
+  'transactionDocument',
   'documentNo',
   'eTGODueDate',
   'businessPartner',
   'documentStatus',
+  'posted',
   'grandTotalAmount',
   'outstandingAmount',
   'eTGODeliveryStatus',
-  'transactionDocument',
 ];
 
 describe('Sales InvoiceHeaderTable — columns', () => {
@@ -30,7 +31,7 @@ describe('Sales InvoiceHeaderTable — columns', () => {
     assert.ok(columnsBlock, 'expected `const columns = useMemo(() => [...], [])` block');
   });
 
-  it('renders the nine expected columns in order', () => {
+  it('renders the ten expected columns in order', () => {
     const block = columnsBlock[1];
     const keys = [...block.matchAll(/key:\s*'([^']+)'/g)].map(m => m[1]);
     assert.deepEqual(keys, expectedKeysInOrder);
@@ -43,7 +44,7 @@ describe('Sales InvoiceHeaderTable — columns', () => {
     assert.match(src, /key: 'businessPartner', column: 'C_BPartner_ID'/);
     assert.match(src, /key: 'documentStatus', column: 'DocStatus'/);
     assert.match(src, /key: 'grandTotalAmount', column: 'GrandTotal'/);
-    assert.match(src, /key: 'outstandingAmount', column: 'OutstandingAmt'/);
+    assert.match(src, /key: 'outstandingAmount',[\s\S]{0,30}column: 'OutstandingAmt'/);
     assert.match(src, /key: 'eTGODeliveryStatus', column: 'em_etgo_delivery_status'/);
   });
 
@@ -92,7 +93,7 @@ describe('Sales InvoiceHeaderTable — type filter (ETP-4035 rework)', () => {
   });
 
   it('renders DataTable with FILTERS (no wrapping div with custom toolbar)', () => {
-    assert.match(src, /return <DataTable columns=\{columns\} filters=\{FILTERS\}/,
+    assert.match(src, /<DataTable columns=\{columns\} filters=\{FILTERS\}/,
       'Component must render DataTable directly without a custom filter wrapper');
   });
 });
@@ -127,5 +128,28 @@ describe('Sales InvoiceHeaderTable — fiscal status columns (ETP-4125)', () => 
       'statusMap was part of the removed batch-fetch hook');
     assert.doesNotMatch(src, /fiscalLoading/,
       'fiscalLoading was part of the removed batch-fetch hook');
+  });
+});
+
+// ── ETP-4331: list must refresh after adding a payment from the list badge ────
+// Risk: ListView (the parent) only ever passes `onDataMutated` to this component's
+// slot, never `onRefresh`. Wiring onPaymentAdded to `props.onRefresh` is a silent
+// no-op that leaves the outstanding-amount badge stale until a manual reload.
+
+describe('Sales InvoiceHeaderTable — payment-added refresh wiring (ETP-4331)', () => {
+  it('calls props.onDataMutated when the payment modal reports a new payment', () => {
+    assert.match(
+      src,
+      /onPaymentAdded=\{\(\)\s*=>\s*\{\s*setPaymentRow\(null\);\s*props\.onDataMutated\?\.\(\);\s*\}\}/,
+      'onPaymentAdded must close the modal and call props.onDataMutated (the prop ListView actually passes)',
+    );
+  });
+
+  it('never references the stale props.onRefresh prop', () => {
+    assert.doesNotMatch(
+      src,
+      /props\.onRefresh/,
+      'ListView never passes onRefresh — using it here silently no-ops and leaves the list stale (ETP-4331 bug)',
+    );
   });
 });

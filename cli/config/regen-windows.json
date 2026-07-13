@@ -6,12 +6,26 @@
       "windowId": "800026"
     },
     {
+      "name": "asset-group",
+      "windowId": "252",
+      "menuName": "Asset Group"
+    },
+    {
       "name": "assets",
       "windowId": "800027"
     },
     {
+      "name": "business-partner-category",
+      "windowId": "192",
+      "menuName": "Business Partner Category"
+    },
+    {
       "name": "chart-of-accounts",
       "windowId": "118"
+    },
+    {
+      "name": "general-ledger-configuration",
+      "windowId": "125"
     },
     {
       "name": "contacts",
@@ -133,6 +147,10 @@
     {
       "name": "tax",
       "windowId": "137"
+    },
+    {
+      "name": "tax-category",
+      "windowId": "138"
     },
     {
       "name": "tbai-config",

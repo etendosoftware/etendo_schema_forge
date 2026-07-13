@@ -1,8 +1,8 @@
 {
-  "version": "0.35.0",
+  "version": "0.36.1",
   "generatedAt": "2026-04-29T19:06:30.936Z",
-  "updatedAt": "2026-06-18T19:17:38.311Z",
-  "checksum": "fbcbd6d88ea681b0",
+  "updatedAt": "2026-07-05T23:40:29.876Z",
+  "checksum": "38fd80be39efe26c",
   "frontendContract": {
     "window": {
       "id": "800027",
@@ -34,7 +34,18 @@
           ]
         }
       },
-      "secondaryTabs": {},
+      "secondaryTabs": {
+        "assetAcct": {
+          "tabOrder": 1,
+          "label": "Accounting",
+          "addLineFields": [
+            "accountingSchema",
+            "accumulatedDepreciation",
+            "depreciation"
+          ],
+          "requireSavedRecord": true
+        }
+      },
       "detailEntity": null,
       "statusField": "none",
       "detailSortBy": "sEQNoAsset asc",
@@ -71,7 +82,10 @@
       "compactSidebarPadding": true,
       "whiteFormBackground": true,
       "hideFormCard": true,
+      "sidebarAboveTabsOnly": true,
+      "tabsSeparator": true,
       "sidebarClassName": "w-[30%] shrink-0 border-l border-[#E8EAEF] p-2",
+      "formScrollPaddingX": "px-2",
       "toolbarPaddingX": "px-2",
       "toolbarButtonSize": "default",
       "listbarPaddingX": "px-2",
@@ -83,8 +97,7 @@
           "component": "AssetsAmortizationPanel"
         }
       ],
-      "layoutType": "default",
-      "sidebarAboveTabsOnly": true
+      "layoutType": "default"
     },
     "entities": {
       "assets": {
@@ -102,7 +115,7 @@
             "tsType": "string",
             "visibility": "editable",
             "required": true,
-            "grid": false,
+            "grid": true,
             "form": false,
             "sourceRequired": true
           },
@@ -202,7 +215,10 @@
             "enumValues": [
               {
                 "value": "LI",
-                "name": "Linear"
+                "name": "Linear",
+                "labels": {
+                  "es_ES": "Lineal"
+                }
               }
             ],
             "businessCritical": true,
@@ -227,11 +243,17 @@
             "enumValues": [
               {
                 "value": "PE",
-                "name": "Percentage"
+                "name": "Percentage",
+                "labels": {
+                  "es_ES": "Porcentaje"
+                }
               },
               {
                 "value": "TI",
-                "name": "Time"
+                "name": "Time",
+                "labels": {
+                  "es_ES": "Tiempo"
+                }
               }
             ],
             "businessCritical": true,
@@ -274,11 +296,17 @@
             "enumValues": [
               {
                 "value": "MO",
-                "name": "Monthly"
+                "name": "Monthly",
+                "labels": {
+                  "es_ES": "Mensualmente"
+                }
               },
               {
                 "value": "YE",
-                "name": "Yearly"
+                "name": "Yearly",
+                "labels": {
+                  "es_ES": "Anualmente"
+                }
               }
             ],
             "businessCritical": true,
@@ -358,6 +386,7 @@
             "required": false,
             "grid": true,
             "form": false,
+            "dot": false,
             "displayLogic": {
               "raw": "@IsDepreciated@='Y'",
               "evaluable": true,
@@ -1027,7 +1056,18 @@
           ]
         }
       },
-      "secondaryTabs": {},
+      "secondaryTabs": {
+        "assetAcct": {
+          "tabOrder": 1,
+          "label": "Accounting",
+          "addLineFields": [
+            "accountingSchema",
+            "accumulatedDepreciation",
+            "depreciation"
+          ],
+          "requireSavedRecord": true
+        }
+      },
       "detailEntity": null,
       "statusField": "none",
       "detailSortBy": "sEQNoAsset asc",
@@ -1064,7 +1104,10 @@
       "compactSidebarPadding": true,
       "whiteFormBackground": true,
       "hideFormCard": true,
+      "sidebarAboveTabsOnly": true,
+      "tabsSeparator": true,
       "sidebarClassName": "w-[30%] shrink-0 border-l border-[#E8EAEF] p-2",
+      "formScrollPaddingX": "px-2",
       "toolbarPaddingX": "px-2",
       "toolbarButtonSize": "default",
       "listbarPaddingX": "px-2",
@@ -1075,8 +1118,7 @@
           "labelKey": "assetsAmortizationPlanTab",
           "component": "AssetsAmortizationPanel"
         }
-      ],
-      "sidebarAboveTabsOnly": true
+      ]
     },
     "entities": {
       "assets": {

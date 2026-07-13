@@ -8,9 +8,9 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const src = readFileSync(join(__dirname, '..', 'PurchaseInvoiceTopbar.jsx'), 'utf8');
 
 describe('PurchaseInvoiceTopbar', () => {
-  it('opens InvoicePaymentModal without passing a token prop', () => {
-    const modalBlock = src.match(/<InvoicePaymentModal[\s\S]*?\/>/);
-    assert.ok(modalBlock, 'expected InvoicePaymentModal to be rendered');
+  it('opens InvoicePaymentHistoryModal without passing a token prop', () => {
+    const modalBlock = src.match(/<InvoicePaymentHistoryModal[\s\S]*?\/>/);
+    assert.ok(modalBlock, 'expected InvoicePaymentHistoryModal to be rendered');
     assert.doesNotMatch(modalBlock[0], /token=\{token\}/);
   });
 

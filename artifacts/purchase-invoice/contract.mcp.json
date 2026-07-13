@@ -1,8 +1,8 @@
 {
-  "version": "0.58.0",
+  "version": "0.67.0",
   "generatedAt": "2026-04-30T15:42:46.722Z",
-  "updatedAt": "2026-06-25T19:58:30.549Z",
-  "contractChecksum": "d7fcd27db7204e2f",
+  "updatedAt": "2026-07-01T14:34:29.036Z",
+  "contractChecksum": "ba5b71d06c8590f7",
   "apiPrediction": {
     "specName": "purchase-invoice",
     "baseUrl": "/sws/neo/purchase-invoice",
@@ -1384,6 +1384,7 @@
           },
           "currency": {
             "required": true,
+            "readOnlyLogic": "@Processed@='Y'",
             "defaultValue": "@C_Currency_ID@"
           },
           "paymentComplete": {
@@ -1511,7 +1512,8 @@
           },
           "eTGODeliveryStatus": {
             "readOnly": true
-          }
+          },
+          "eTGOCurrencyRate": {}
         }
       },
       "lines": {
@@ -2123,5 +2125,5 @@
       "tbaiVoidxmlgenerator"
     ]
   },
-  "checksum": "c2000133b0c264fc"
+  "checksum": "a71b18a448662c37"
 }

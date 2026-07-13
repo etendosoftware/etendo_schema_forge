@@ -283,24 +283,24 @@ describe('generate303File', () => {
     vi.restoreAllMocks();
   });
 
-  it('returns false when no token', async () => {
-    expect(await generate303File({ year: 2026, period: 'T1' })).toBe(false);
+  it('returns { ok: false } when no token', async () => {
+    expect((await generate303File({ year: 2026, period: 'T1' })).ok).toBe(false);
   });
 
-  it('returns false when no apiBaseUrl', async () => {
-    expect(await generate303File({ year: 2026, period: 'T1' }, { token: 'tok' })).toBe(false);
+  it('returns { ok: false } when no apiBaseUrl', async () => {
+    expect((await generate303File({ year: 2026, period: 'T1' }, { token: 'tok' })).ok).toBe(false);
   });
 
-  it('returns false on non-ok response', async () => {
-    globalThis.fetch.mockResolvedValue({ ok: false });
+  it('returns { ok: false } on non-ok response', async () => {
+    globalThis.fetch.mockResolvedValue({ ok: false, text: () => Promise.resolve('err') });
     const result = await generate303File(
       { year: 2026, period: 'T1', result: { kind: 'N' } },
       { token: 'tok', apiBaseUrl: 'http://test/neo/spec' },
     );
-    expect(result).toBe(false);
+    expect(result.ok).toBe(false);
   });
 
-  it('returns true and triggers download on success', async () => {
+  it('returns { ok: true } and triggers download on success', async () => {
     const mockBlob = new Blob(['content']);
     globalThis.fetch.mockResolvedValue({ ok: true, blob: () => Promise.resolve(mockBlob) });
     const mockA = { click: vi.fn(), href: '', download: '' };
@@ -308,31 +308,41 @@ describe('generate303File', () => {
     vi.spyOn(document.body, 'appendChild').mockImplementation(() => {});
     vi.spyOn(document.body, 'removeChild').mockImplementation(() => {});
 
+    // tipo=D requires IBAN — pass via identChecks (form state)
     const result = await generate303File(
       { year: 2026, period: 'T1', result: { kind: 'D' } },
-      { token: 'tok', apiBaseUrl: 'http://test/neo/spec' },
+      { token: 'tok', apiBaseUrl: 'http://test/neo/spec', identChecks: { bank_iban: 'ES9121000418450200051332' } },
     );
-    expect(result).toBe(true);
+    expect(result.ok).toBe(true);
     expect(mockA.click).toHaveBeenCalled();
   });
 
-  it('returns false on fetch error', async () => {
+  it('returns { ok: false } on fetch error', async () => {
     globalThis.fetch.mockRejectedValue(new Error('network'));
     const result = await generate303File(
       { year: 2026, period: 'T1' },
       { token: 'tok', apiBaseUrl: 'http://test/neo/spec' },
     );
-    expect(result).toBe(false);
+    expect(result.ok).toBe(false);
   });
 
   it('uses N as default tipo when result.kind is absent', async () => {
-    globalThis.fetch.mockResolvedValue({ ok: false });
+    globalThis.fetch.mockResolvedValue({ ok: false, text: () => Promise.resolve('') });
     await generate303File(
       { year: 2026, period: 'T1' },
       { token: 'tok', apiBaseUrl: 'http://test/neo/spec' },
     );
     const url = globalThis.fetch.mock.calls[0][0];
     expect(url).toContain('tipo=N');
+  });
+
+  it('returns { ok: false, error: iban_required } when tipo=I and no IBAN', async () => {
+    const result = await generate303File(
+      { year: 2026, period: 'T2', result: { kind: 'I' } },
+      { token: 'tok', apiBaseUrl: 'http://test/neo/spec' },
+    );
+    expect(result).toEqual({ ok: false, error: 'iban_required' });
+    expect(globalThis.fetch).not.toHaveBeenCalled();
   });
 });
 

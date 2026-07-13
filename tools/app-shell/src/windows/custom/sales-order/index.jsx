@@ -10,7 +10,9 @@ import CloneOrderModal from '@/components/contract-ui/CloneOrderModal';
 import { CreateContactContext } from '@/components/contract-ui/CreateContactContext.js';
 import { useCreateContactModal } from '@/components/contract-ui/useCreateContactModal.jsx';
 import LinesEmptyState from '@/components/contract-ui/LinesEmptyState.jsx';
+import { useMenuLabel } from '@/i18n';
 import { useOrderWindow } from '../shared/useOrderWindow.jsx';
+import { useOrderPdf } from '../shared/useOrderPdf.js';
 
 const LIST_COLUMNS = [
   { key: 'orderDate', column: 'DateOrdered', type: 'date', label: 'Order Date', dot: false },
@@ -56,6 +58,7 @@ const SO_MANAGE_LABELS = {
 
 export default function SalesOrderWindow({ windowName, recordId, token, apiBaseUrl, ...rest }) {
   const [cloneTargets, setCloneTargets] = useState(null);
+  const tMenu = useMenuLabel();
 
   const { headers, createContactCtxValue, contactPortal } =
     useCreateContactModal({ apiBaseUrl, token, documentType: 'sale' });
@@ -65,6 +68,7 @@ export default function SalesOrderWindow({ windowName, recordId, token, apiBaseU
     renderPreview, rowQuickActions,
     effectiveRecord, clearSavedRecord,
     deleteDialog, confirmPortal, confirmResultPortal, manageLauncher,
+    emailModalPortal,
   } = useOrderWindow({
     windowName, token, apiBaseUrl,
     specName: 'sales-order',
@@ -77,6 +81,8 @@ export default function SalesOrderWindow({ windowName, recordId, token, apiBaseU
     ManageDocsLauncher,
     setCloneTargets,
     showReactivate: true,
+    usePdf: useOrderPdf,
+    documentType: tMenu('Sales Order'),
   });
 
   if (recordId) {
@@ -138,6 +144,7 @@ export default function SalesOrderWindow({ windowName, recordId, token, apiBaseU
       {confirmPortal}
       {manageLauncher}
       {confirmResultPortal}
+      {emailModalPortal}
     </>
   );
 }

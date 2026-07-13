@@ -2,9 +2,8 @@ import { useState, useEffect, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
-import { useUI, useMenuLabel } from '@/i18n';
+import { useUI } from '@/i18n';
 import ConfirmGoodsReceiptModal from './ConfirmGoodsReceiptModal';
-import SendDocumentModal from '@/components/contract-ui/SendDocumentModal';
 import { ConfirmResultModal } from '@/components/contract-ui';
 import { usePreviewAttachment } from '@/windows/custom/shared/usePreviewAttachment.js';
 import PurchaseReturnWizard from './PurchaseReturnWizard';
@@ -15,18 +14,17 @@ import CreateInvoiceConfirmModal from '@/components/contract-ui/CreateInvoiceCon
 
 export default function GoodsReceiptActions({ data, recordId, token, apiBaseUrl }) {
   const ui = useUI();
-  const tMenu = useMenuLabel();
   const navigate = useNavigate();
   const [showConfirm, setShowConfirm] = useState(false);
   const [showInvoiceConfirm, setShowInvoiceConfirm] = useState(false);
   const [showClone, setShowClone] = useState(false);
-  const [showSend, setShowSend] = useState(false);
   const [wizardOpen, setWizardOpen] = useState(false);
   const [returnLines, setReturnLines] = useState([]);
   const [returnedDoc, setReturnedDoc] = useState(null);
   const [isCloneHovered, setIsCloneHovered] = useState(false);
   const [confirmedDocs, setConfirmedDocs] = useState(null);
   const [creatingInvoice, setCreatingInvoice] = useState(false);
+  const resultNavigatedRef = useRef(false);
 
   const isCompleted = data?.documentStatus === 'CO';
   const isFullyInvoiced = (parseFloat(data?.invoiceStatus ?? 0)) >= 100;
@@ -61,12 +59,18 @@ export default function GoodsReceiptActions({ data, recordId, token, apiBaseUrl 
 
   useEffect(() => {
     if (!wizardOpen || !recordId || !base) return;
+    const bpId = data?.businessPartner;
+    if (!bpId) return;
     let cancelled = false;
     (async () => {
       try {
         const res = await fetch(
-          `${base}/goods-receipt/goodsReceiptLine?parentId=${recordId}&_startRow=0&_endRow=200`,
-          { headers },
+          `${base}/return-to-vendor-shipment/returnToVendorShipment/_/action/availableReceiptLines`,
+          {
+            method: 'POST',
+            headers,
+            body: JSON.stringify({ receiptId: recordId, businessPartner: bpId }),
+          },
         );
         if (!res.ok || cancelled) return;
         const json = await res.json();
@@ -74,7 +78,7 @@ export default function GoodsReceiptActions({ data, recordId, token, apiBaseUrl 
       } catch { /* silent */ }
     })();
     return () => { cancelled = true; };
-  }, [wizardOpen, recordId, base, headers]);
+  }, [wizardOpen, recordId, base, headers, data?.businessPartner]);
 
   const handleCreateInvoice = async () => {
     if (creatingInvoice) return;
@@ -193,8 +197,14 @@ export default function GoodsReceiptActions({ data, recordId, token, apiBaseUrl 
           }
           primary={ui('soViewInvoice')}
           currency={data?.['currency$_identifier'] || ''}
-          navigate={navigate}
-          onClose={() => setConfirmedDocs(null)}
+          navigate={(route) => { resultNavigatedRef.current = true; navigate(route); }}
+          onClose={() => {
+            setConfirmedDocs(null);
+            setTimeout(() => {
+              if (!resultNavigatedRef.current) window.location.reload();
+              resultNavigatedRef.current = false;
+            }, 0);
+          }}
         />,
         document.body,
       )}
@@ -204,8 +214,14 @@ export default function GoodsReceiptActions({ data, recordId, token, apiBaseUrl 
           title={ui('purchaseReturnCreatedTitle')}
           docs={[{ type: 'salida', num: returnedDoc.documentNo, route: `/return-to-vendor-shipment/${returnedDoc.id}` }]}
           primary={ui('soViewShipment')}
-          navigate={navigate}
-          onClose={() => setReturnedDoc(null)}
+          navigate={(route) => { resultNavigatedRef.current = true; navigate(route); }}
+          onClose={() => {
+            setReturnedDoc(null);
+            setTimeout(() => {
+              if (!resultNavigatedRef.current) window.location.reload();
+              resultNavigatedRef.current = false;
+            }, 0);
+          }}
         />,
         document.body,
       )}
@@ -226,39 +242,6 @@ export default function GoodsReceiptActions({ data, recordId, token, apiBaseUrl 
             <line x1="12" y1="15" x2="12" y2="3"/>
           </svg>
         </a>
-      )}
-
-      {isCompleted && (
-        <button
-          type="button"
-          onClick={() => setShowSend(true)}
-          title={ui('quickAction.email')}
-          style={sqBtn}
-          onMouseEnter={e => { e.currentTarget.style.background = '#F1F5F9'; }}
-          onMouseLeave={e => { e.currentTarget.style.background = '#FFFFFF'; }}
-        >
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/>
-            <polyline points="22,6 12,13 2,6"/>
-          </svg>
-        </button>
-      )}
-
-      {showSend && createPortal(
-        <SendDocumentModal
-          documentType={tMenu('Goods Receipt')}
-          documentNo={data?.documentNo}
-          bpName={data?.['businessPartner$_identifier']}
-          bPartnerId={data?.businessPartner}
-          apiBaseUrl={apiBaseUrl}
-          documentId={recordId}
-          windowName="goods-receipt"
-          token={token}
-          pdfBlobUrl={previewAttachment.storedFile?.objectUrl}
-          pdfBlobLoading={false}
-          onClose={() => setShowSend(false)}
-        />,
-        document.body,
       )}
 
       <PurchaseReturnWizard
@@ -296,7 +279,8 @@ function ConfirmReceiptInvoicedModal({ data, base, headers, recordId, onConfirme
   const [error, setError] = useState(null);
 
   const invoices = Array.isArray(data?.linkedInvoices) ? data.linkedInvoices : [];
-  const inv = invoices[0] || null;
+  const firstInvoice = invoices[0] || null;
+  const extraCount = invoices.length - 1;
   const docNo = data?.documentNo || '';
   const bpName = data?.['businessPartner$_identifier'] || '';
 
@@ -345,10 +329,9 @@ function ConfirmReceiptInvoicedModal({ data, base, headers, recordId, onConfirme
             {bpName && <><span style={{ color: '#9aa1aa', fontSize: 13 }}>·</span><span style={{ fontSize: 13, color: '#6b7480' }}>{bpName}</span></>}
           </div>
 
-          {/* Invoice card */}
-          {inv && (
+          {/* First invoice card */}
+          {firstInvoice && (
             <div style={{ border: '1px solid #e7e9ec', borderRadius: 11, padding: '13px 14px', display: 'flex', alignItems: 'center', gap: 12 }}>
-              {/* Icon box */}
               <div style={{ width: 38, height: 38, borderRadius: 9, background: '#f3f0ff', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#7c5cff" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
@@ -357,30 +340,36 @@ function ConfirmReceiptInvoicedModal({ data, base, headers, recordId, onConfirme
                   <line x1="16" y1="17" x2="8" y2="17"/>
                 </svg>
               </div>
-              {/* Info */}
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 7, flexWrap: 'wrap' }}>
-                  <span style={{ fontSize: 13, fontWeight: 600, color: '#1f2733' }}>{ui('goodsReceipt.confirmModal.invoiceRef')} {inv.documentNo}</span>
+                  <span style={{ fontSize: 13, fontWeight: 600, color: '#1f2733' }}>{ui('goodsReceipt.confirmModal.invoiceRef')} {firstInvoice.documentNo}</span>
                   <span style={{ fontSize: 11, fontWeight: 500, padding: '3px 9px', borderRadius: 6, background: '#e6f6ec', color: '#1f9d57', whiteSpace: 'nowrap' }}>
-                    {statusLabel[inv.documentStatus] || inv.documentStatus}
+                    {statusLabel[firstInvoice.documentStatus] || firstInvoice.documentStatus}
                   </span>
                 </div>
-                {inv.grandTotalAmount != null && (
+                {firstInvoice.grandTotalAmount != null && (
                   <div style={{ fontSize: 13, color: '#6b7480', marginTop: 2 }}>
-                    {fmtAmount(inv.grandTotalAmount, inv['currency$_identifier'])}
+                    {fmtAmount(firstInvoice.grandTotalAmount, firstInvoice['currency$_identifier'])}
                   </div>
                 )}
               </div>
-              {/* Ver → link */}
               <button
                 type="button"
-                onClick={() => { onClose(); navigate(`/purchase-invoice/${inv.id}`); }}
+                onClick={() => { onClose(); navigate(`/purchase-invoice/${firstInvoice.id}`); }}
                 style={{ all: 'unset', fontSize: 13, fontWeight: 600, color: '#2f73d6', cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0 }}
                 onMouseEnter={e => { e.currentTarget.style.color = '#2a67c2'; }}
                 onMouseLeave={e => { e.currentTarget.style.color = '#2f73d6'; }}
               >
                 {ui('goodsReceipt.confirmModal.viewInvoice')}
               </button>
+            </div>
+          )}
+
+          {/* +N more badge */}
+          {extraCount > 0 && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 14px', background: '#f8f9fb', borderRadius: 9, border: '1px solid #e7e9ec' }}>
+              <span style={{ fontWeight: 700, fontSize: 12, color: '#2f73d6', background: '#eff5fe', borderRadius: 99, padding: '2px 9px', border: '1px solid #cadffb', flexShrink: 0 }}>+{extraCount}</span>
+              <span style={{ fontSize: 13, color: '#6b7480' }}>{ui('goodsReceipt.confirmModal.moreInvoices')}</span>
             </div>
           )}
 

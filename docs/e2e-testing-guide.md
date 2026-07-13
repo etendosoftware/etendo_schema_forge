@@ -24,6 +24,7 @@ npm install -g agent-browser && agent-browser install   # Optional: install agen
 | `make test-e2e-ui` | Interactive Playwright UI |
 | `make test-e2e-report` | View last HTML test report |
 | `make test-e2e-record` | Open recorder — you click, it generates code |
+| `make test-e2e-onboarding-integration` | Run the live onboarding integration spec only (requires a live backend, see below) |
 
 ---
 
@@ -46,6 +47,26 @@ The smoke gets a read JWT through `scripts/neo-token-groupadmin.sh` unless `E2E_
 - goods receipt/shipment partner address from selected business partner.
 
 If this smoke fails because generated field-name selector URLs return `404 Field not found or not included`, track it under [ETP-4058](https://etendoproject.atlassian.net/browse/ETP-4058). That bug is intentionally separate from the integration-test scope: the test detects the runtime/generator contract mismatch, but the fix belongs to the Etendo GO / Schema Forge selector URL compatibility task.
+
+---
+
+## Onboarding Register Integration Smoke
+
+`e2e/tests/flows/onboarding-register.integration.spec.js` registers a real new user against a live Etendo GO backend, completes the profile step, selects the "Autónomo" business type, and verifies provisioning finishes and redirects to the dashboard. It also covers 5 corner cases (duplicate email, empty fields, invalid email format, empty profile name, and a mocked provisioning failure). It is skipped by default because it needs a live backend and performs real user/tenant provisioning — it is **not run by any CI job**; it is manual/on-demand only.
+
+Run it explicitly:
+
+```bash
+make test-e2e-onboarding-integration
+```
+
+This sets `E2E_ONBOARDING_INTEGRATION=1` and runs only that spec file against `BASE_URL` (default `http://localhost:3100`). Override the backend with:
+
+```bash
+BASE_URL=http://localhost:8080/etendo/web/com.etendoerp.go make test-e2e-onboarding-integration
+```
+
+Each run creates a unique user (random suffix), so the test is repeatable without manual cleanup.
 
 ---
 

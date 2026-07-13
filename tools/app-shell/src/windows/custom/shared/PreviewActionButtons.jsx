@@ -15,14 +15,16 @@ export default function PreviewActionButtons({
 }) {
   return (
     <>
-      <Button
-        size="sm"
-        className="gap-1 px-2 py-1 h-8 rounded-lg text-sm font-medium bg-[#121217] hover:bg-[#2a2a30] text-white [&_svg]:size-5"
-        onClick={onEmail}
-        data-testid="Button__9ccdc3">
-        <Mail data-testid="Mail__9ccdc3" />
-        {sendLabel}
-      </Button>
+      {onEmail && (
+        <Button
+          size="sm"
+          className="gap-1 px-2 py-1 h-8 rounded-lg text-sm font-medium bg-[#121217] hover:bg-[#2a2a30] text-white [&_svg]:size-5"
+          onClick={onEmail}
+          data-testid="Button__9ccdc3">
+          <Mail data-testid="Mail__9ccdc3" />
+          {sendLabel}
+        </Button>
+      )}
       <Button
         size="sm"
         variant="outline"

@@ -447,6 +447,7 @@ const labelOverrides = api.labelOverrides;
 export default function HeaderPage({ windowName, recordId, ...props }) {
   if (recordId) {
     return (
+      <>
       <DetailView
         entity="header"
         detailEntity="lines"
@@ -478,6 +479,7 @@ export default function HeaderPage({ windowName, recordId, ...props }) {
         ]}
         draftMode={draftMode}
         requiredHeaderFields={requiredHeaderFields}
+        documentDateField="orderDate"
         salesTheme
         labelOverrides={labelOverrides}
         linesLayout="inlineEditable"
@@ -485,6 +487,7 @@ export default function HeaderPage({ windowName, recordId, ...props }) {
         selectorPriceCurrency="org"
         {...props}
       />
+      </>
     );
   }
 

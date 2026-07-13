@@ -27,9 +27,15 @@ describe('AssetsDetailPanel — props and structure', () => {
     assert.match(src, /from '@\/i18n'/);
   });
 
-  it('registers pre-filled currency for new records via useEffect', () => {
+  it('echoes pre-filled currency for new records via a guarded useEffect (ETP-4333)', () => {
     assert.match(src, /useEffect/);
-    assert.match(src, /onChange\?\.\('currency', d\.currency\)/);
+    // Echo goes through a stable onChange ref, not the unstable prop directly.
+    assert.match(src, /onChangeRef\.current\?\.\('currency', d\.currency\)/);
+    // Guard ref keeps the echo to a single fire per new-record session.
+    assert.match(src, /currencyEchoedRef/);
+    // The unstable `onChange` MUST NOT be in the effect deps — that drove the
+    // effect->onChange->setEditing->new onChange->effect feedback loop.
+    assert.match(src, /\}, \[isNewRecord, d\?\.currency\]\);/);
   });
 });
 

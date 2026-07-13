@@ -4,7 +4,7 @@ import { useNavigate, useSearchParams, useLocation } from 'react-router-dom';
 import { Button } from '@/components/ui/button.jsx';
 import { Badge } from '@/components/ui/badge.jsx';
 import { AddLineButton } from '@/components/ui/add-line-button.jsx';
-import { X, MoreVertical, Check, Save, List, Printer, Mail, Trash2, Loader2, Shield, Lock } from 'lucide-react';
+import { X, MoreVertical, Check, Save, List, Printer, Mail, Trash2, Loader2, Shield, Lock, Undo2 } from 'lucide-react';
 import { AttachmentIcon } from '@/components/attachments/AttachmentIcon';
 import { PricingIcon, WarehouseProductsIcon } from '@/components/ui/custom-icons';
 
@@ -93,7 +93,7 @@ function sidePanelWrapperCls(hasSidePanel, linesLayout) {
   // devtools console is open) and only place it beside the content once there
   // is room (lg+). A rigid side-by-side row would otherwise overlap the
   // header/lines when the panel can't shrink.
-  if (hasSidePanel) return 'flex flex-col lg:flex-row items-start gap-0';
+  if (hasSidePanel) return 'flex flex-col lg:flex-row items-stretch gap-0 min-h-full';
   if (linesLayout === 'inlineEditable') return 'flex flex-col';
   return '';
 }
@@ -165,7 +165,7 @@ function CollapsibleSection({ title, children }) {
  */
 function detailContentPadding(linesLayout, hasSidebar, variant, compact = false, paddingXOverride = null) {
   const isInline = linesLayout === 'inlineEditable';
-  if (hasSidebar) return (isInline || compact) ? 'px-2 pb-2' : 'pl-6 pr-2';
+  if (hasSidebar) return (isInline || compact) ? 'px-2 pb-2' : 'pr-2';
   if (variant === 'panel') return isInline ? 'pr-6' : (paddingXOverride ?? 'px-6');
   return isInline ? '' : (paddingXOverride ?? 'px-6');
 }
@@ -715,8 +715,28 @@ export function SecondaryTableTab(props) {
       {(props.st.addLineFields?.entry?.length > 0 || props.st.customAddModal) && props.hook.editing && (
           // Wrapper measured by the secondary selection bar — its
           // `position: fixed` portal overlays exactly this region.
-          (<div ref={props.secondaryAddLineWrapperRef} className="relative">
-            <span data-inline-add-portal="true">
+          // Mirrors the primary header-lines add-button wrapper (shared
+          // getAddLineWrapperClassName/Style helpers) so both paths get the
+          // same top border, vertical spacing and padding — keeps alignment
+          // consistent across primary and secondary tabs.
+          // Always `relative` (never sticky): the child-tab add-line button
+          // must stay in flow below the table. getAddLineWrapperClassName's
+          // sticky bottom-0 variant is only correct for the tall PRIMARY
+          // header-lines area — applying it here makes the button overlap the
+          // last table row when the scroll container is resized.
+          (<div
+            ref={props.secondaryAddLineWrapperRef}
+            className="relative"
+            // No borderTop: the child table already renders its own bottom
+            // border, so the primary path's top divider would double up here.
+            // noTopPadding: keep the button snug under the table (no vertical
+            // gap above it) while preserving horizontal alignment.
+            style={getAddLineWrapperStyle(props.linesLayout, { withBorder: false, noTopPadding: true })}
+          >
+            {/* alignSelf:flex-start keeps this span from being stretched by
+                the flex-column parent — otherwise data-inline-add-portal would
+                cover the whole bar and the outside-click save would never fire. */}
+            <span data-inline-add-portal="true" style={{ alignSelf: 'flex-start' }}>
               <AddLineButton
                 onClick={props.onAddLineClick}
                 label={props.addLineLabel}
@@ -769,13 +789,31 @@ export function getAddLineWrapperClassName(linesLayout) {
   return linesLayout === 'inlineEditable' ? 'sticky bottom-0 bg-white z-10' : 'relative';
 }
 
-export function getAddLineWrapperStyle(linesLayout) {
+export function getAddLineWrapperStyle(linesLayout, { withBorder = true, noTopPadding = false } = {}) {
+  const inline = linesLayout === 'inlineEditable';
+  const padY = inline ? 8 : 10;
+  const padX = inline ? 8 : 16;
+  // Default keeps the original symmetric padding (numeric 8 for inlineEditable,
+  // '10px 16px' otherwise) so the primary path is byte-for-byte unchanged.
+  // noTopPadding drops ONLY the top so the add-button sits snug under the child
+  // table, while horizontal padding still aligns it with table content.
+  let padding;
+  if (noTopPadding) {
+    padding = `0 ${padX}px ${padY}px`;
+  } else if (inline) {
+    padding = padY;
+  } else {
+    padding = `${padY}px ${padX}px`;
+  }
   return {
     display: 'flex',
     flexDirection: 'column',
     gap: 6,
-    borderTop: '0.5px solid var(--color-border-tertiary, #e5e7eb)',
-    padding: linesLayout === 'inlineEditable' ? 8 : '10px 16px'
+    // The top border separates the lines from the add-button in the primary
+    // header-lines path. Secondary/child tabs already have the table's own
+    // bottom border, so they pass withBorder:false to avoid a double divider.
+    ...(withBorder ? { borderTop: '0.5px solid var(--color-border-tertiary, #e5e7eb)' } : {}),
+    padding
   };
 }
 
@@ -1030,11 +1068,21 @@ function getSaveBtnCls(toolbarButtonSize) {
   return toolbarButtonSize === 'default' ? 'h-10 gap-2' : 'gap-1.5';
 }
 
-function getDraftModeCompleted(draftMode, _headerData, isProcessed) {
+// Normalizes boolean-ish status values (true/'Y' -> 'true', false/'N' -> 'false') so
+// windows whose statusField is a boolean flag (e.g. goods-movements' `processed`) can
+// declare completedStatuses as string literals, matching the precedent in statusBadge.js.
+function normalizeStatusValue(value) {
+  if (value === true || value === 'Y') return 'true';
+  if (value === false || value === 'N') return 'false';
+  return value;
+}
+
+function getDraftModeCompleted(draftMode, _headerData, isProcessed, statusField) {
+  const statusValue = _headerData?.[statusField || 'documentStatus'];
   return Boolean(
       draftMode?.enabled && (
           Array.isArray(draftMode.completedStatuses)
-              ? draftMode.completedStatuses.includes(_headerData?.documentStatus)
+              ? draftMode.completedStatuses.includes(normalizeStatusValue(statusValue))
               : (isProcessed || _headerData?.documentStatus === 'CO')
       )
   );
@@ -1419,12 +1467,12 @@ function renderExistingRecordSaveAction({
   isDocumentReadOnly, blockSaveForBalance,
 }) {
   return (
-    <Button size="default" className={saveBtnCls} data-testid="action-save" disabled={isDocumentReadOnly || hook.isSaving || !isDirty || blockSaveForBalance} title={blockSaveForBalance ? ui('journalUnbalancedSaveBlocked') : undefined} onClick={async () => {
+    <Button variant="outline" size="default" className={`${saveBtnCls} bg-white border-[#D1D4DB] text-[#121217]`} data-testid="action-save" disabled={isDocumentReadOnly || hook.isSaving || !isDirty || blockSaveForBalance} title={blockSaveForBalance ? ui('journalUnbalancedSaveBlocked') : undefined} onClick={async () => {
       if (!(await flushPendingLines())) return;
       const saved = await hook.handleSave(data);
       await handlePostSaveNavigation(saved, { isNew, onAfterCreate, onAfterSave, navigate, windowName, token, apiBaseUrl, hook });
     }}>
-      {hook.isSaving ? <Loader2 className="h-3.5 w-3.5 animate-spin" data-testid="Loader2__fa3275" /> : <Check className="h-3.5 w-3.5" data-testid="Check__fa3275" />}
+      {hook.isSaving ? <Loader2 className="h-3.5 w-3.5 animate-spin" data-testid="Loader2__fa3275" /> : <Save className="h-3.5 w-3.5" color="#64748B" data-testid="Save__fa3275" />}
       {ui('save')}
     </Button>
   );
@@ -1549,6 +1597,30 @@ async function executeDetailProcessImpl(process, paramValues, explicitRows, {
  * In both cases the component receives `{ recordId, data, token, apiBaseUrl, api }`
  * plus any keys declared in the optional `props` object.
  */
+export function hasUnsavedEdits(editing, selected) {
+  if (!editing || !selected) return false;
+  return Object.entries(editing).some(([k, v]) => k !== 'id' && v !== selected[k]);
+}
+
+export function mergeLineEdits(lineEdits, selectedLine) {
+  return lineEdits && selectedLine ? { ...selectedLine, ...lineEdits } : selectedLine;
+}
+
+export function dispatchProcessAction(p, { processConfirmModal, setConfirmProcess, setParamDialogProcess, handleProcess }) {
+  if ((p.style === 'ghost-danger' || p.confirmModal) && processConfirmModal) { setConfirmProcess(p); }
+  else if (p.params?.some(param => !param.hidden)) { setParamDialogProcess(p); }
+  else { handleProcess?.(p); }
+}
+
+function renderProcessConfirmModal(process, Modal, onConfirm, onClose) {
+  if (!process || !Modal) return null;
+  return React.createElement(Modal, { process, onConfirm, onClose });
+}
+
+function resolveStatusPrefix(key, translate) {
+  return key ? translate(key) : undefined;
+}
+
 export function DetailView({
   entity,
   detailEntity,
@@ -1567,6 +1639,11 @@ export function DetailView({
   detailLabel,
   detailTabIndex,
   titleField = 'documentNo',
+  // Name of the header field holding this document's primary date (e.g. "orderDate"
+  // for orders/quotations, "invoiceDate" for invoices). Used for exchange-rate lookups
+  // and other document-date-dependent logic. Defaults to "orderDate" for backward
+  // compatibility with windows that don't declare window.documentDateField.
+  documentDateField = 'orderDate',
   windowName,
   recordId,
   token,
@@ -1640,6 +1717,7 @@ export function DetailView({
   secondaryTabsPaddingY = 'py-2.5',
   secondaryTabsShowHoverLine = false,
   tabsSeparator = false,
+  saveBeforeProcesses = false,
   hideAddLineChevron = false,
   addLineButtonPaddingX = '',
   formScrollPaddingB = 'pb-6',
@@ -1647,6 +1725,7 @@ export function DetailView({
   transformRecord = null,
   lockedAlert = null,
   selectorPriceCurrency = null,
+  processConfirmModal = null,
 }) {
   // DetailView never needs the parent list: on `/new` there is no record to match, and on
   // `/:id` the currentItem shortcut only helps when we arrived from ListView (items already
@@ -1678,15 +1757,20 @@ export function DetailView({
   // — the actions ref-controls the same modal so no functionality is lost.
   const getLineMenuActions = bottomSection?.lineMenuActions ?? null;
   const extraActionsRef = useRef(null);
-  // Static hooks for up to 4 secondary tabs (React rules forbid dynamic hook calls).
+  // Static hooks for up to 5 secondary tabs (React rules forbid dynamic hook calls).
   // Secondary hooks only consume child-level state (children, handleAddChild, handleDeleteChild,
   // handleSelect) — never the parent list. skipListFetch avoids refetching the parent entity
   // list once per hook (which would otherwise cause N+1 identical GETs on mount).
+  // Windows with fewer tabs pass a null entity key to the unused hooks (no-op fetch).
+  // NOTE: the contacts window has 5 secondary tabs (person, bank account, location,
+  // customer accounting, vendor accounting) — the 5th (index 4) needs its own hook or its
+  // rows never fetch. Bump this count in lockstep if a window ever exceeds 5.
   const secondaryHook0 = useEntity(entity, getSecondaryTabEntityKey(secondaryTabs, 0), { token, apiBaseUrl, skipListFetch: true, specName: windowName });
   const secondaryHook1 = useEntity(entity, getSecondaryTabEntityKey(secondaryTabs, 1), { token, apiBaseUrl, skipListFetch: true, specName: windowName });
   const secondaryHook2 = useEntity(entity, getSecondaryTabEntityKey(secondaryTabs, 2), { token, apiBaseUrl, skipListFetch: true, specName: windowName });
   const secondaryHook3 = useEntity(entity, getSecondaryTabEntityKey(secondaryTabs, 3), { token, apiBaseUrl, skipListFetch: true, specName: windowName });
-  const secondaryHooks = [secondaryHook0, secondaryHook1, secondaryHook2, secondaryHook3];
+  const secondaryHook4 = useEntity(entity, getSecondaryTabEntityKey(secondaryTabs, 4), { token, apiBaseUrl, skipListFetch: true, specName: windowName });
+  const secondaryHooks = [secondaryHook0, secondaryHook1, secondaryHook2, secondaryHook3, secondaryHook4];
   const parentRecordId = hook.selected?.id ?? recordId ?? hook.editing?.id ?? null;
   // "From" currency for secondary-tab inline add-rows. The parent document's
   // currency is a read-only column on those tabs (e.g. exchange rates), so the
@@ -1715,13 +1799,15 @@ export function DetailView({
     primaryFetchChildDefaults?.(parentRecordId);
   }, [primaryHandlesDefaults, parentRecordId, primaryFetchChildDefaults]);
 
+  // Ref updated on every render so the callback always reads the latest hook state,
+  // even when called from a setTimeout scheduled before the React re-render committed.
+  const handleFieldBlurRef = useRef(null);
+  handleFieldBlurRef.current = () => {
+    hasUnsavedEdits(hook.editing, hook.selected) && hook.handleSave();
+  };
   const handleFieldBlur = useCallback(() => {
-    if (!hook.editing || !hook.selected) return;
-    const hasChanges = Object.entries(hook.editing).some(
-      ([key, value]) => key !== 'id' && value !== hook.selected[key]
-    );
-    if (hasChanges) hook.handleSave();
-  }, [hook]);
+    handleFieldBlurRef.current?.();
+  }, []);
   // Depend on the single scalar the memo reads from editing/selected, not the whole objects.
   // Keeps original semantics: prefer editing when present (even if priceList is null), else selected.
   const priceListId = (hook.editing || hook.selected)?.priceList ?? null;
@@ -1881,10 +1967,11 @@ export function DetailView({
   // values hide the Save/Confirm pair. This lets windows like sales-quotation keep the
   // pair visible during intermediate processed states (UE) while still hiding it in
   // terminal states (CA, ETGO_CI, CL, VO).
-  const isDraftModeCompleted = getDraftModeCompleted(draftMode, _headerData, isProcessed);
+  const isDraftModeCompleted = getDraftModeCompleted(draftMode, _headerData, isProcessed, statusField);
   const sqBtnSize = getSqBtnSize(toolbarButtonSize);
   const saveBtnCls = getSaveBtnCls(toolbarButtonSize);
   const [showPrint, setShowPrint] = useState(false);
+  const [confirmProcess, setConfirmProcess] = useState(null);
   // showNotes state removed — notes panel is always visible in side-by-side layout
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   // Promise-based confirm for line/child deletions; replaces native window.confirm
@@ -2206,7 +2293,7 @@ export function DetailView({
   useEffect(() => {
     if (recordId === 'new') return;
     const docCurrencyId = hook.selected?.currency;
-    const orderDate = hook.selected?.orderDate;
+    const orderDate = hook.selected?.[documentDateField];
     if (!docCurrencyId || !orderDate || !apiBaseUrl || !token) {
       return;
     }
@@ -2270,7 +2357,7 @@ export function DetailView({
       }
     })();
     return () => { cancelled = true; };
-  }, [recordId, hook.selected?.currency, hook.selected?.eTGOCurrencyRate, hook.selected?.orderDate, apiBaseUrl, token]);
+  }, [recordId, hook.selected?.currency, hook.selected?.eTGOCurrencyRate, hook.selected?.[documentDateField], apiBaseUrl, token, documentDateField]);
   // Guard: fire default callouts only once per new-record session
   const defaultCalloutsTriggeredRef = useRef(false);
   // Cache for tax rates fetched from the selector (keyed by tax ID).
@@ -2341,7 +2428,7 @@ export function DetailView({
     }
     if (handledOpenImportRef.current) return;
     handledOpenImportRef.current = true;
-    setForceOpenImport(true);
+    setForceOpenImport(location.state.openImportModal);
     navigate(location.pathname, { replace: true, state: {} });
   }, [location.state?.openImportModal, isNew, hook.editing, navigate, location.pathname]);
 
@@ -2375,14 +2462,16 @@ export function DetailView({
   }, [isNew, hook, navigate, windowName, addingLine]);
 
   // Save header first (if new → navigate with flag; if existing → save in place), then open import modal.
-  const handleImportClick = useCallback(async () => {
+  // modalType ('order' | 'invoice') is forwarded in navigation state so the destination component
+  // knows which modal to auto-open via the forceOpen mechanism.
+  const handleImportClick = useCallback(async (modalType = 'order') => {
     if (isNew) {
       const saved = await hook.handleSave();
       if (!saved?.id) return false;
       hook.primeSaved?.(saved);
       navigate(`/${windowName}/${saved.id}`, {
         replace: true,
-        state: { openImportModal: true, justSaved: saved },
+        state: { openImportModal: modalType, justSaved: saved },
       });
       return false;
     }
@@ -2553,15 +2642,12 @@ export function DetailView({
     // only applies to lines added AFTER the saved currency change.
   }, [calloutResult]);
 
-  // Wrapped onChange that triggers callout for user-initiated FK changes
-  const handleChangeWithCallout = useCallback((field, value) => {
-    // Capture the previous currency BEFORE hook.handleChange updates state, so we can
-    // revert the dropdown if the rate check fails. The closure preserves the old
-    // hook.editing reference, but capturing explicitly keeps intent clear.
-    const previousCurrency = field === 'currency' ? hook.editing?.currency : null;
-
-    hook.handleChange(field, value);
-
+  // Fire the callout (and related validation) for a user-initiated field change.
+  // Extracted from handleChangeWithCallout so the same logic can be triggered either
+  // synchronously on change (default) or deferred to blur (opt-in: field.calloutOn === 'blur').
+  // `previousCurrency` is the currency value captured BEFORE hook.handleChange ran, used
+  // only by the currency rate-validation path; pass null when not a currency change.
+  const fireCallout = useCallback((field, value, previousCurrency = null) => {
     // Skip companion/auxiliary fields — they don't have callouts
     if (field.includes('$_identifier') || /^[a-zA-Z]+_[A-Z]{2,4}$/.test(field)) return;
 
@@ -2590,7 +2676,7 @@ export function DetailView({
     // Skipped when the new currency equals the org currency (no rate needed) and when
     // there is no previous currency yet (initial set, e.g. defaults).
     if (field === 'currency' && previousCurrency && previousCurrency !== value && apiBaseUrl && token) {
-      const orderDate = hook.selected?.orderDate ?? hook.editing?.orderDate;
+      const orderDate = hook.selected?.[documentDateField] ?? hook.editing?.[documentDateField];
       if (orderDate) {
         const neoBase = apiBaseUrl.replace(/\/[^/]+$/, '');
         (async () => {
@@ -2626,7 +2712,22 @@ export function DetailView({
 
     // Trigger callout — the backend returns empty if no callout is registered
     executeCallout(field, value, hook.editing);
-  }, [hook.handleChange, hook.editing, hook.selected, executeCallout, apiBaseUrl, token, ui]);
+  }, [hook.handleChange, hook.editing, hook.selected, executeCallout, apiBaseUrl, token, ui, documentDateField]);
+
+  // Wrapped onChange that updates local form state and triggers the callout synchronously.
+  // Fields opted into `field.calloutOn === 'blur'` defer their commit to blur via
+  // EntityForm's DeferredInput, which calls this same onChange once on blur — so the
+  // deferral lives entirely in the input component and this handler stays uniform.
+  const handleChangeWithCallout = useCallback((field, value) => {
+    // Capture the previous currency BEFORE hook.handleChange updates state, so we can
+    // revert the dropdown if the rate check fails. The closure preserves the old
+    // hook.editing reference, but capturing explicitly keeps intent clear.
+    const previousCurrency = field === 'currency' ? hook.editing?.currency : null;
+
+    hook.handleChange(field, value);
+
+    fireCallout(field, value, previousCurrency);
+  }, [hook.handleChange, hook.editing, fireCallout]);
 
   // Execute callout for child entity (line-level) fields and apply results via callback.
   // Merges parent header data into formState so callouts have full context (e.g., priceList).
@@ -2903,6 +3004,7 @@ export function DetailView({
     ui, tMenu, onAfterCreate, onAfterSave, token, apiBaseUrl, saveBtnCls,
     isDocumentReadOnly, isProcessed, draftMode, blockSaveForBalance, blockCompleteForBalance,
   };
+  const balanceFooterEditingLine = mergeLineEdits(lineEdits, selectedLine);
 
   return (
     <div className="flex-1 min-h-0 flex flex-col" data-testid="detail-view" data-doc-status={_headerData?.documentStatus}>
@@ -2923,6 +3025,7 @@ export function DetailView({
               <DocumentStatusPill
                 status={data[statusField]}
                 enumLabels={statusEnumLabels}
+                prefix={resolveStatusPrefix(statusFieldLabel, ui)}
                 data-testid="DocumentStatusPill__fa3275" />
             )}
             {extraBadges.map(b => {
@@ -3168,6 +3271,9 @@ export function DetailView({
                 })()}
               {/* Extra action buttons from page */}
               {renderExtraActionButtons(extraActions, data, hook, saveBtnCls)}
+              {/* Save action — rendered before process buttons when saveBeforeProcesses is set (per-window opt-in) */}
+              {saveBeforeProcesses && !hideSaveStatuses.includes(_headerData?.documentStatus) && !isDraftModeCompleted
+                && renderSaveActions(saveActionParams)}
               {/* Process buttons — only shown for existing records, evaluated locally or by server visibility */}
               {!isNew && processes
                 .filter(p => p.displayLogicRaw
@@ -3177,6 +3283,7 @@ export function DetailView({
                 .map(p => {
                   const isPrimary = p.style === 'positive';
                   const btnClass = getButtonClass(salesTheme, p, isPrimary);
+                  const processCtx = { processConfirmModal, setConfirmProcess, setParamDialogProcess, handleProcess: hook.handleProcess };
                   return (
                     <Button
                       key={p.name}
@@ -3191,13 +3298,10 @@ export function DetailView({
                             return;
                           }
                         }
-                        if (p.params?.some(param => !param.hidden)) {
-                          setParamDialogProcess(p);
-                        } else {
-                          hook.handleProcess?.(p);
-                        }
+                        dispatchProcessAction(p, processCtx);
                       }}
                       data-testid="Button__fa3275">
+                      {p.style === 'ghost-danger' && <Undo2 size={16} className="mr-1 text-[#D50B3E]" data-testid="Undo2__fa3275" />}
                       {tMenu(p.label)}
                     </Button>
                   );
@@ -3227,7 +3331,7 @@ export function DetailView({
                   );
                 })}
 
-              {!hideSaveStatuses.includes(_headerData?.documentStatus) && !isDraftModeCompleted
+              {!saveBeforeProcesses && !hideSaveStatuses.includes(_headerData?.documentStatus) && !isDraftModeCompleted
                 && renderSaveActions(saveActionParams)}
             </div>
           </div>
@@ -3252,6 +3356,13 @@ export function DetailView({
             setDetailParamDialogProcess(null);
           }}
           data-testid="ProcessParamDialog__fa3275" />
+
+        {renderProcessConfirmModal(
+          confirmProcess,
+          processConfirmModal,
+          async () => { await hook.handleProcess?.(confirmProcess); setConfirmProcess(null); },
+          () => setConfirmProcess(null),
+        )}
 
         {/* Scrollable content + optional sidebarContent (full-height independent column) */}
         <div className="flex-1 flex overflow-hidden">
@@ -3302,7 +3413,7 @@ export function DetailView({
               const activeTab = primaryTabs.find(t => t.key === activePrimaryTab);
               return activeTab?.Panel ? (
                 <div className={`flex-1 overflow-auto pb-6 min-w-0 ${detailContentPadding(linesLayout, !!(sidePanel || sidebarContent), 'panel', compactSidebarPadding, formScrollPaddingX)}`}>
-                  <activeTab.Panel entity={entity} data={data} token={token} apiBaseUrl={apiBaseUrl} catalogs={catalogs} api={api} editing={hook.editing} onChange={handleChangeWithCallout} />
+                  <activeTab.Panel entity={entity} data={data} token={token} apiBaseUrl={apiBaseUrl} catalogs={catalogs} api={api} editing={hook.editing} onChange={handleChangeWithCallout} onLocalChange={hook.handleChange} />
                 </div>
               ) : null;
             })() : null}
@@ -3446,7 +3557,7 @@ export function DetailView({
                         {/* Form footer: inline content below form, above tabs */}
                         {formFooter && (
                           <div className={embedded ? 'pointer-events-none' : ''}>
-                            {React.createElement(formFooter, { data, entity, onChange: handleChangeWithCallout, catalogs, api, token, apiBaseUrl, editing: hook.editing })}
+                            {React.createElement(formFooter, { data, entity, onChange: handleChangeWithCallout, onLocalChange: hook.handleChange, catalogs, api, token, apiBaseUrl, editing: hook.editing })}
                           </div>
                         )}
                       </>
@@ -3464,7 +3575,10 @@ export function DetailView({
 
                   {/* Tabs: child entities + Others */}
                   {tabs.length > 0 && (
-                    <div className={getLinesTabsSectionClassName(linesLayout)}>
+                    <div
+                      className={getLinesTabsSectionClassName(linesLayout)}
+                      onMouseDown={autoSaveOnBlur && linesLayout === 'inlineEditable' ? () => handleFieldBlurRef.current?.() : undefined}
+                    >
                       <div className={`flex items-center justify-between border-b border-border/50 ${(getInlineEditableShrinkClassName(linesLayout))}`}>
                         <div className="flex items-center gap-0">
                           {tabs.map((tab, idx) => {
@@ -4206,7 +4320,7 @@ export function DetailView({
                           setNotesFocused={setNotesFocused}
                           lines={hook.children}
                           pendingLine={pendingLineValues}
-                          editingLine={lineEdits && selectedLine ? { ...selectedLine, ...lineEdits } : selectedLine}
+                          editingLine={balanceFooterEditingLine}
                           lineConfig={lineConfig}
                           totalDiscountPct={Number(data?.etgoTotalDiscount ?? 0)}
                           onTotalDiscountChange={handleTotalDiscountChange}
@@ -4220,7 +4334,7 @@ export function DetailView({
                           balanceFooter,
                           children: hook.children,
                           pendingLine: pendingLineValues,
-                          editingLine: lineEdits && selectedLine ? { ...selectedLine, ...lineEdits } : selectedLine,
+                          editingLine: balanceFooterEditingLine,
                           lineConfig,
                           formatAmount,
                           currency: data['currency$_identifier'],
@@ -4311,7 +4425,7 @@ export function DetailView({
                 </div>
                 {sidePanel && (
                   <div
-                    className="w-full max-w-full shrink-0 self-stretch border-t lg:border-t-0 lg:w-[280px] lg:border-l border-gray-200 pt-3 lg:pt-0 pl-0 lg:pl-3 pr-0 lg:pr-3"
+                    className="w-full max-w-full shrink-0 self-stretch border-t lg:border-t-0 lg:w-[292px] lg:border-l border-gray-200 pt-3 lg:pt-0 pl-0 lg:pl-3 pr-0 lg:pr-3"
                     style={sidePanelStyle}
                   >
                     {renderSidePanel(sidePanel, data, recordId, token, apiBaseUrl, api, isNew)}
@@ -4461,6 +4575,9 @@ export function DetailView({
               secondaryHooks[idx]?.handleSelect(hook.selected ?? hook.editing);
               setCustomModalState({ key: null, rowId: null });
             }}
+            onParentRefresh={() => {
+              if (parentRecordId) hook.fetchById(parentRecordId);
+            }}
             rowId={customModalState.key === st.key ? customModalState.rowId : null}
             bpId={parentRecordId}
             apiBase={apiBaseUrl}
@@ -4512,6 +4629,14 @@ function applyProductCurrencyConversion(field, result, rowValues, lineConfig, ac
     if (result.standardPrice != null) result.standardPrice = convertedPrice;
     if (result.unitPrice != null) result.unitPrice = convertedPrice;
     if (result.listPrice != null) result.listPrice = convertedPrice;
+    // The earlier 'product' callout pass already latched result.lineNetAmount onto the
+    // UNCONVERTED price (see calculateLineNetAmount / deriveNetFromProductChange). Clear it
+    // here so computeLineGrossAmount's null-guard recomputes it from the converted price
+    // instead of silently skipping the sync (its guard only fires when lineNetAmount is
+    // null/0). Without this, lineNetAmount stays stale while grossAmount/grossField are
+    // correctly forced to the converted value — an inconsistent line that the backend
+    // persists using the stale net, producing a wrong (sometimes negative) tax total.
+    result.lineNetAmount = null;
     computeLineGrossAmount(lineConfig.priceField, convertedPrice, result, {
       ...rowValues,
       ...result,
@@ -4586,6 +4711,9 @@ function populateIdentifierFields(api, result, detailEntity, catalogs) {
 }
 
 function getButtonClass(salesTheme, p, isPrimary) {
+  if (p.style === 'ghost-danger') {
+    return 'bg-white border-[#FBB1C4] text-[#D50B3E] hover:bg-[#FFF0F3]';
+  }
   if (salesTheme) {
     if (p.style === 'destructive') {
       return 'border-amber-300 bg-amber-50 text-amber-700 hover:bg-amber-100';

@@ -6,11 +6,18 @@ import { fileURLToPath } from 'node:url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const repoRoot = join(__dirname, '..', '..', '..', '..');
+const localesDir = join(repoRoot, 'tools', 'app-shell', 'src', 'locales');
 const enRoot = JSON.parse(
-  readFileSync(join(repoRoot, 'packages', 'app-shell-core', 'src', 'locales', 'en_US.json'), 'utf8'),
+  readFileSync(
+    join(localesDir, 'en_US.json'),
+    'utf8',
+  ),
 );
 const esRoot = JSON.parse(
-  readFileSync(join(repoRoot, 'packages', 'app-shell-core', 'src', 'locales', 'es_ES.json'), 'utf8'),
+  readFileSync(
+    join(localesDir, 'es_ES.json'),
+    'utf8',
+  ),
 );
 const en = enRoot.genericLabels;
 const es = esRoot.genericLabels;

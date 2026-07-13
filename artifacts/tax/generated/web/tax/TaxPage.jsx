@@ -2,6 +2,8 @@ import { useEffect } from 'react';
 import { ListView, DetailView } from '@/components/contract-ui';
 import TaxTable from './TaxTable';
 import TaxForm from './TaxForm';
+import AccountingTable from './AccountingTable';
+import AccountingForm from './AccountingForm';
 import { AttachmentsTab } from '@/components/attachments';
 import catalogs from './mockCatalogs';
 
@@ -37,7 +39,20 @@ const draftMode = null;
 const requiredHeaderFields = ['name', 'rate', 'docTaxAmount', 'baseAmount', 'applicableTo', 'validFrom'];
 // @sf-generated-end requiredHeaderFields:tax
 
+// @sf-generated-start addLineFields:accounting
+const addLineFields = {
+  entry: [
+    { key: 'taxDue', column: 'T_Due_Acct', type: 'selector', required: true, label: 'Tax Due', reference: 'ValidCombination', inputMode: 'selector' },
+    { key: 'taxCredit', column: 'T_Credit_Acct', type: 'selector', required: true, label: 'Tax Credit', reference: 'ValidCombination', inputMode: 'selector' },
+  ],
+  derived: [
 
+  ],
+  hidden: [
+    { key: 'accountingSchema', fromSibling: 'accountingSchema' },
+  ],
+};
+// @sf-generated-end addLineFields:accounting
 
 export const api = {
   "specName": "tax-rate",
@@ -55,9 +70,37 @@ export const api = {
       "supportedFilters": [
         "name"
       ]
+    },
+    "accounting": {
+      "get": true,
+      "getById": true,
+      "post": true,
+      "put": true,
+      "patch": true,
+      "delete": true,
+      "listUrl": "/sws/neo/tax-rate/accounting",
+      "detailUrl": "/sws/neo/tax-rate/accounting/{id}",
+      "supportedFilters": []
     }
   },
-  "selectors": [],
+  "selectors": [
+    {
+      "entity": "accounting",
+      "field": "taxDue",
+      "column": "T_Due_Acct",
+      "reference": "ValidCombination",
+      "inputMode": "selector",
+      "url": "/sws/neo/tax-rate/accounting/selectors/taxDue"
+    },
+    {
+      "entity": "accounting",
+      "field": "taxCredit",
+      "column": "T_Credit_Acct",
+      "reference": "ValidCombination",
+      "inputMode": "selector",
+      "url": "/sws/neo/tax-rate/accounting/selectors/taxCredit"
+    }
+  ],
   "actions": [],
   "queryParams": {
     "pagination": {
@@ -101,15 +144,21 @@ const labelOverrides = api.labelOverrides;
 export default function TaxPage({ windowName, recordId, ...props }) {
   if (recordId) {
     return (
+      <>
       <DetailView
         entity="tax"
+        detailEntity="accounting"
         Form={TaxForm}
+        DetailTable={AccountingTable}
+        DetailForm={AccountingForm}
         summary={summary}
         statusField={statusField}
         extraBadges={extraBadges}
         processes={processes}
+        addLineFields={addLineFields}
         catalogs={catalogs}
         entityLabel="Tax"
+        detailLabel="Accounting"
         windowName={windowName}
         recordId={recordId}
         breadcrumb={breadcrumb}
@@ -121,6 +170,7 @@ export default function TaxPage({ windowName, recordId, ...props }) {
         labelOverrides={labelOverrides}
         {...props}
       />
+      </>
     );
   }
 

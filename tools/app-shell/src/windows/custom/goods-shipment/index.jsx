@@ -10,6 +10,9 @@ import GoodsShipmentPage from '@generated/goods-shipment/generated/web/goods-shi
 import GoodsShipmentTable from '@generated/goods-shipment/generated/web/goods-shipment/GoodsShipmentTable';
 import BulkInvoiceFromShipment from '@generated/goods-shipment/custom/BulkInvoiceFromShipment';
 import BulkDocumentAction, { buildInOutActions } from '@/components/contract-ui/BulkDocumentAction';
+import { useMenuLabel } from '@/i18n';
+import { useRowEmailModal } from '../shared/useRowEmailModal.jsx';
+import { useShipmentPdf } from './useShipmentPdf';
 import GoodsShipmentPreview from './GoodsShipmentPreview';
 
 const LABEL_OVERRIDES = {
@@ -22,6 +25,7 @@ const COLUMNS = [
   { key: 'documentNo', column: 'DocumentNo', type: 'string' },
   { key: 'businessPartner', column: 'C_BPartner_ID', type: 'string' },
   { key: 'documentStatus', column: 'DocStatus', type: 'status' },
+  { key: 'posted', column: 'Posted', type: 'boolean', badge: true, badgeLabels: { true: { en_US: 'Posted', es_ES: 'Contabilizado' }, false: { en_US: 'Not posted', es_ES: 'Sin contabilizar' } }, badgeVariants: { true: 'green', false: 'orange' } },
   { key: 'warehouse', column: 'M_Warehouse_ID', type: 'string' },
   { key: 'invoiceStatus', column: 'InvoiceStatus', type: 'percent' },
 ];
@@ -55,12 +59,22 @@ export default function GoodsShipmentWindow({ windowName, recordId, apiBaseUrl, 
 
   const [cloneTargets, setCloneTargets] = useState(null);
   const [refreshKey, setRefreshKey] = useState(0);
+  const tMenu = useMenuLabel();
 
   const { requestDelete, deleteDialog } = useRowDelete({
     apiBaseUrl,
     entity: 'goodsShipment',
     token,
     onSuccess: () => setRefreshKey(k => k + 1),
+  });
+
+  // ETP-4372 — row-hover email envelope opens SendDocumentModal with a PDF preview.
+  const { onEmail: onRowEmail, emailModalPortal } = useRowEmailModal({
+    usePdf: useShipmentPdf,
+    apiBaseUrl,
+    token,
+    windowName,
+    documentType: tMenu('Goods Shipment'),
   });
 
   const { headers, createContactCtxValue, contactPortal } =
@@ -79,8 +93,9 @@ export default function GoodsShipmentWindow({ windowName, recordId, apiBaseUrl, 
     },
     onEdit: (row) => navigate(`/${windowName}/${row.id}`),
     onClone: (row) => setCloneTargets([row]),
+    onEmail: onRowEmail,
     onDelete: requestDelete,
-  }), [navigate, windowName, requestDelete]);
+  }), [navigate, windowName, requestDelete, onRowEmail]);
 
   if (recordId) {
     return (
@@ -94,6 +109,7 @@ export default function GoodsShipmentWindow({ windowName, recordId, apiBaseUrl, 
           processes={[]}
           draftMode={{ enabled: true, label: 'Confirm', style: 'positive', onConfirm: () => window.dispatchEvent(new CustomEvent('goods-shipment:open-confirm-modal')) }}
           hideMoreMenu={({ data }) => data?.documentStatus !== 'CO'}
+          autoSaveOnBlur={true}
           {...rest}
           data-testid="GoodsShipmentPage__9851c7" />
         {contactPortal}
@@ -139,6 +155,7 @@ export default function GoodsShipmentWindow({ windowName, recordId, apiBaseUrl, 
           data-testid="CloneOrderModal__9851c7" />,
         document.body,
       )}
+      {emailModalPortal}
     </>
   );
 }

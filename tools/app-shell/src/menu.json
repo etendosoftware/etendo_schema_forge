@@ -281,6 +281,12 @@
           "windowId": "118"
         },
         {
+          "name": "general-ledger-configuration",
+          "label": "General Ledger Configuration",
+          "favname": "General Ledger Configuration",
+          "windowId": "125"
+        },
+        {
           "name": "open-close-period-control",
           "label": "Periods",
           "favname": "Open/Close Period Control",
@@ -291,6 +297,12 @@
           "label": "Assets",
           "favname": "Assets",
           "windowId": "800027"
+        },
+        {
+          "name": "asset-group",
+          "label": "Asset Category",
+          "favname": "Asset Category",
+          "windowId": "252"
         },
         {
           "name": "amortization",
@@ -373,6 +385,18 @@
           "label": "Tax",
           "favname": "Tax",
           "windowId": "137"
+        },
+        {
+          "name": "tax-category",
+          "label": "Tax Category",
+          "favname": "Tax Category",
+          "windowId": "138"
+        },
+        {
+          "name": "business-partner-category",
+          "label": "Business Partner Category",
+          "favname": "Business Partner Category",
+          "windowId": "192"
         },
         {
           "name": "user",

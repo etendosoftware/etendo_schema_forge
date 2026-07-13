@@ -209,5 +209,200 @@ describe('EditAccountModal', () => {
       await waitFor(() => expect(sync).toHaveBeenCalledWith('acc-9'));
       await waitFor(() => expect(onSaved).toHaveBeenCalled());
     });
+
+    it('shows a warning toast when sync returns WARNING', async () => {
+      const user = userEvent.setup();
+      sync.mockResolvedValue({ status: 'WARNING', message: 'partial' });
+      renderModal({ account: CONNECTED_ACCOUNT });
+      await user.click(await screen.findByTestId('psd2-edit-sync'));
+      await waitFor(() => expect(toastInfo).toHaveBeenCalledWith('partial'));
+    });
+
+    it('shows an error toast when sync returns ERROR', async () => {
+      const user = userEvent.setup();
+      sync.mockResolvedValue({ status: 'ERROR', message: 'boom' });
+      renderModal({ account: CONNECTED_ACCOUNT });
+      await user.click(await screen.findByTestId('psd2-edit-sync'));
+      await waitFor(() => expect(toastError).toHaveBeenCalledWith('boom'));
+    });
+
+    it('maps a PSD2_TIMEOUT sync failure to the timeout label', async () => {
+      const user = userEvent.setup();
+      sync.mockRejectedValue(new Error('PSD2_TIMEOUT'));
+      renderModal({ account: CONNECTED_ACCOUNT });
+      await user.click(await screen.findByTestId('psd2-edit-sync'));
+      await waitFor(() => expect(toastError).toHaveBeenCalledWith('financeAccountsPsd2Timeout'));
+    });
+
+    it('disables Sync now while the connection is not live', async () => {
+      fetchStatus.mockResolvedValue({ connected: false, providerName: 'BBVA' });
+      renderModal({ account: CONNECTED_ACCOUNT });
+      const syncBtn = await screen.findByTestId('psd2-edit-sync');
+      expect(syncBtn).toBeDisabled();
+    });
+
+    it('shows a loading note while the PSD2 status is still loading', async () => {
+      // Never resolve so the panel stays in loading.
+      fetchStatus.mockReturnValue(new Promise(() => {}));
+      renderModal({ account: CONNECTED_ACCOUNT });
+      expect(await screen.findByText('financeAccountsPsd2Loading')).toBeInTheDocument();
+      expect(screen.queryByTestId('psd2-edit-sync')).not.toBeInTheDocument();
+    });
+
+    it('falls back to status(null) when fetchStatus throws', async () => {
+      fetchStatus.mockRejectedValue(new Error('down'));
+      renderModal({ account: CONNECTED_ACCOUNT });
+      // Panel renders (loading resolved) but there is no live connection ⇒ sync disabled.
+      const syncBtn = await screen.findByTestId('psd2-edit-sync');
+      expect(syncBtn).toBeDisabled();
+    });
+
+    it('renders and reconnects from the re-auth banner when consent is expiring', async () => {
+      const user = userEvent.setup();
+      fetchStatus.mockResolvedValue({
+        connected: true,
+        providerName: 'BBVA',
+        consentExpiresAt: '2026-12-31',
+        daysUntilExpires: 5,
+      });
+      renderModal({ account: CONNECTED_ACCOUNT });
+      const banner = await screen.findByTestId('psd2-edit-reauth-banner');
+      expect(banner).toBeInTheDocument();
+      await user.click(screen.getByTestId('psd2-edit-reauth-link'));
+      await waitFor(() => expect(launchSaltEdgePopup).toHaveBeenCalled());
+      await waitFor(() => expect(toastSuccess).toHaveBeenCalledWith('financeAccountsPsd2ReauthDone'));
+    });
+
+    it('shows the expired re-auth banner when consent has lapsed', async () => {
+      fetchStatus.mockResolvedValue({
+        connected: true,
+        providerName: 'BBVA',
+        consentExpiresAt: '2026-01-01',
+        daysUntilExpires: -2,
+      });
+      renderModal({ account: CONNECTED_ACCOUNT });
+      const banner = await screen.findByTestId('psd2-edit-reauth-banner');
+      // The expired message key is used rather than the countdown banner.
+      expect(banner).toHaveTextContent('financeAccountsPsd2ReauthExpired');
+    });
+
+    it('toasts an error when reconnect fails', async () => {
+      const user = userEvent.setup();
+      fetchStatus.mockResolvedValue({
+        connected: true, providerName: 'BBVA', consentExpiresAt: '2026-12-31', daysUntilExpires: 5,
+      });
+      launchSaltEdgePopup.mockRejectedValue(new Error('reauth-failed'));
+      renderModal({ account: CONNECTED_ACCOUNT });
+      await user.click(await screen.findByTestId('psd2-edit-reauth-link'));
+      await waitFor(() => expect(toastError).toHaveBeenCalledWith('reauth-failed'));
+    });
+
+    it('disconnects after confirm and calls onSaved + onClose', async () => {
+      const user = userEvent.setup();
+      const onSaved = vi.fn();
+      const onClose = vi.fn();
+      renderModal({ account: CONNECTED_ACCOUNT, onSaved, onClose });
+      await screen.findByTestId('psd2-edit-sync');
+      // Footer button opens the styled confirm dialog; its action button performs the disconnect.
+      await user.click(screen.getByText('financeAccountsMenuDisconnect'));
+      await user.click(await screen.findByText('financeAccountsPsd2DisconnectAction'));
+      await waitFor(() => expect(disconnect).toHaveBeenCalledWith('acc-9'));
+      await waitFor(() => expect(onSaved).toHaveBeenCalled());
+      expect(onClose).toHaveBeenCalled();
+      expect(toastSuccess).toHaveBeenCalledWith('financeAccountsPsd2DisconnectDone');
+    });
+
+    it('does not disconnect until the confirm dialog action is clicked', async () => {
+      const user = userEvent.setup();
+      renderModal({ account: CONNECTED_ACCOUNT });
+      await screen.findByTestId('psd2-edit-sync');
+      await user.click(screen.getByText('financeAccountsMenuDisconnect'));
+      // The styled confirm dialog is shown; disconnect must not run until its action is confirmed.
+      await screen.findByText('financeAccountsPsd2DisconnectAction');
+      expect(disconnect).not.toHaveBeenCalled();
+    });
+
+    it('toasts an error when disconnect fails', async () => {
+      const user = userEvent.setup();
+      disconnect.mockRejectedValue(new Error('disc-fail'));
+      renderModal({ account: CONNECTED_ACCOUNT });
+      await screen.findByTestId('psd2-edit-sync');
+      await user.click(screen.getByText('financeAccountsMenuDisconnect'));
+      await user.click(await screen.findByText('financeAccountsPsd2DisconnectAction'));
+      await waitFor(() => expect(toastError).toHaveBeenCalledWith('disc-fail'));
+    });
+
+  });
+
+  describe('non-connected editing', () => {
+    it('shows the IBAN validation error after blur on an invalid IBAN', async () => {
+      const user = userEvent.setup();
+      renderModal();
+      const ibanInput = screen.getByTestId('edit-account-iban');
+      await user.clear(ibanInput);
+      await user.type(ibanInput, 'INVALID-IBAN');
+      await user.tab(); // triggers onBlur → ibanTouched
+      await waitFor(() =>
+        expect(screen.getByTestId('edit-account-iban-error')).toHaveTextContent(
+          'financeAccountsNewIbanInvalid',
+        ),
+      );
+    });
+
+    it('disables Save while the name is empty', async () => {
+      const user = userEvent.setup();
+      renderModal();
+      const nameInput = screen.getByTestId('edit-account-name');
+      await user.clear(nameInput);
+      expect(screen.getByTestId('edit-account-save')).toBeDisabled();
+    });
+
+    it('persists a changed reconciliation date tolerance', async () => {
+      const user = userEvent.setup();
+      renderModal();
+      const dateTol = screen.getByTestId('recon-date-tolerance-input');
+      await user.clear(dateTol);
+      await user.type(dateTol, '7');
+      await user.click(screen.getByTestId('edit-account-save'));
+      await waitFor(() => expect(updateAccount).toHaveBeenCalledTimes(1));
+      const [, payload] = updateAccount.mock.calls[0];
+      expect(payload).toMatchObject({ dateTolerance: 7 });
+    });
+
+    it('does not render the reconciliation section for a cash account', () => {
+      renderModal({ account: { id: 'acc-c', name: 'Caja', type: 'C', psd2Connected: false } });
+      expect(screen.queryByTestId('reconciliation-settings-section')).not.toBeInTheDocument();
+    });
+
+    it('opens the archive dialog through the footer Archive button', async () => {
+      const user = userEvent.setup();
+      const onArchive = vi.fn();
+      renderModal({ onArchive });
+      await user.click(screen.getByText('financeAccountsPsd2EditArchive'));
+      expect(onArchive).toHaveBeenCalledWith(BANK_ACCOUNT);
+    });
+
+    it('cancels through the footer Cancel button', async () => {
+      const user = userEvent.setup();
+      const onClose = vi.fn();
+      renderModal({ onClose });
+      await user.click(screen.getByTestId('edit-account-cancel'));
+      expect(onClose).toHaveBeenCalled();
+    });
+  });
+
+  describe('connected read-only IBAN copy', () => {
+    it('copies the IBAN to the clipboard', async () => {
+      const user = userEvent.setup();
+      const writeText = vi.fn().mockResolvedValue(undefined);
+      Object.defineProperty(navigator, 'clipboard', {
+        value: { writeText }, configurable: true, writable: true,
+      });
+      renderModal({ account: CONNECTED_ACCOUNT });
+      await screen.findByTestId('psd2-edit-sync');
+      await user.click(screen.getByLabelText('financeAccountsCopyIban'));
+      await waitFor(() => expect(writeText).toHaveBeenCalledWith('ES9121000418450200051332'));
+      expect(toastSuccess).toHaveBeenCalledWith('financeAccountsPsd2IbanCopied');
+    });
   });
 });

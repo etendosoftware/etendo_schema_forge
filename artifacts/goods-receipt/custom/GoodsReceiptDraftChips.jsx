@@ -5,10 +5,8 @@ import { TONE_STYLES } from '@/components/ui/status-tag-tokens.js';
 export default function GoodsReceiptDraftChips({ data }) {
   const ui = useUI();
 
-  const isCompleted = data?.documentStatus === 'CO';
-  if (!isCompleted) return null;
-
   const invoicedPct = (Number(data?.invoiceStatus) || 0) / 100;
+  if (invoicedPct <= 0) return null;
 
   return <ProgressBadge label={ui('poAllInvoiced')} pct={invoicedPct} />;
 }

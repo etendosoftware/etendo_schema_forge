@@ -177,9 +177,11 @@ for (const spec of SPECS) {
       await ccInput.press('Enter');
       await expect(page.getByTestId(`send-modal-cc-chip-${EXTRA_CC}`)).toBeVisible();
 
-      // Send and wait for the captured request.
-      const sendReq = page.waitForRequest(
-        (r) => r.url().includes(`/email-contracts/${spec}-send/send`) && r.method() === 'POST',
+      // Send and wait for the captured request. Use waitForResponse (not
+      // waitForRequest) so the promise resolves AFTER route.fulfill() completes
+      // and captured.body is guaranteed to be set (matches the sibling test).
+      const sendReq = page.waitForResponse(
+        (r) => r.url().includes(`/email-contracts/${spec}-send/send`) && r.request().method() === 'POST',
       );
       await clickSendButton(page);
       await sendReq;
@@ -209,8 +211,10 @@ for (const spec of SPECS) {
       const captured = await installSendMock(page, spec);
       await openSendModal(page);
 
-      const sendReq = page.waitForRequest(
-        (r) => r.url().includes(`/email-contracts/${spec}-send/send`) && r.method() === 'POST',
+      // Use waitForResponse (not waitForRequest) so the promise resolves AFTER
+      // route.fulfill() completes and captured.body is guaranteed to be set.
+      const sendReq = page.waitForResponse(
+        (r) => r.url().includes(`/email-contracts/${spec}-send/send`) && r.request().method() === 'POST',
       );
       await clickSendButton(page);
       await sendReq;

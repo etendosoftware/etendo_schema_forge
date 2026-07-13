@@ -3,6 +3,7 @@ import {X, Loader2, Search, ChevronDown, Check} from 'lucide-react';
 import {useUI, useLabel} from '@/i18n';
 import {useAuth} from '@/auth/AuthContext.jsx';
 import {toast} from 'sonner';
+import {SquareCheckbox} from './SquareCheckbox';
 
 const EMPTY_FORM = {
     address: '',
@@ -152,6 +153,7 @@ function renderRegionPickerBody(regionsLoading, ui, regionsLoadFailed, filteredR
  *   open            — boolean: controls visibility
  *   onClose         — () => void
  *   onSaved         — () => void: called after successful save; caller re-fetches address state
+ *   onParentRefresh — () => void: called when backend indicates the parent record changed (e.g. tax key auto-updated)
  *   rowId           — string|null: C_BPartner_Location_ID of existing record (null = create)
  *   bpId            — string: parent Business Partner ID (required for create)
  *   apiBase         — string: e.g. "/sws/neo/contacts"
@@ -160,6 +162,7 @@ export default function LocationEditorModal({
                                                 open,
                                                 onClose,
                                                 onSaved,
+                                                onParentRefresh,
                                                 rowId: bplLinkId,
                                                 bpId,
                                                 apiBase: contactsApiBase,
@@ -639,6 +642,21 @@ export default function LocationEditorModal({
     }
 
 
+    function showBackendMessages(messages) {
+        if (!Array.isArray(messages) || messages.length === 0) return;
+        for (const msg of messages) {
+            const type = (msg.type || '').toLowerCase();
+            const title = msg.title || '';
+            const description = msg.text || undefined;
+            if (type === 'success') toast.success(title, {description});
+            else if (type === 'error') toast.error(title, {description});
+            else if (type === 'warning') toast.warning(title, {description});
+            else if (title) toast.info(title, {description});
+        }
+        // Parent record may have changed server-side (e.g. tax key auto-updated)
+        onParentRefresh?.();
+    }
+
     async function handleSave() {
         if (saving || initialLoading) return;
         if (!form.country) {
@@ -670,7 +688,11 @@ export default function LocationEditorModal({
                     headers: postHeaders,
                     body: JSON.stringify(payload),
                 });
-                if (res.ok) onSaved?.();
+                if (res.ok) {
+                    const data = await res.json().catch(() => null);
+                    showBackendMessages(data?.response?.data?.[0]?.messages);
+                    onSaved?.();
+                }
                 return;
             }
 
@@ -693,6 +715,7 @@ export default function LocationEditorModal({
             }
 
             const newRecord = data?.response?.data?.[0] ?? data?.data?.[0] ?? null;
+            showBackendMessages(newRecord?.messages);
             onSaved?.(newRecord?.id ?? null, newRecord?.name ?? name);
         } finally {
             setSaving(false);
@@ -826,14 +849,16 @@ export default function LocationEditorModal({
 
                             {/* Checkboxes */}
                             <div style={{ display: 'flex', gap: 24, paddingTop: 4 }}>
-                                <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 14, color: '#121217', cursor: 'pointer', userSelect: 'none' }}>
-                                    <input type="checkbox" checked={form.shipToAddress} onChange={e => setField('shipToAddress', e.target.checked)} style={{ width: 16, height: 16, accentColor: '#121217' }} />
-                                    {t('IsShipTo') || 'Shipping Address'}
-                                </label>
-                                <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 14, color: '#121217', cursor: 'pointer', userSelect: 'none' }}>
-                                    <input type="checkbox" checked={form.invoiceToAddress} onChange={e => setField('invoiceToAddress', e.target.checked)} style={{ width: 16, height: 16, accentColor: '#121217' }} />
-                                    {t('IsBillTo') || 'Invoicing Address'}
-                                </label>
+                                <SquareCheckbox
+                                    label={t('IsShipTo') || 'Shipping Address'}
+                                    checked={form.shipToAddress}
+                                    onChange={val => setField('shipToAddress', val)}
+                                    data-testid="SquareCheckbox__location-shipping" />
+                                <SquareCheckbox
+                                    label={t('IsBillTo') || 'Invoicing Address'}
+                                    checked={form.invoiceToAddress}
+                                    onChange={val => setField('invoiceToAddress', val)}
+                                    data-testid="SquareCheckbox__location-invoicing" />
                             </div>
 
                         </div>

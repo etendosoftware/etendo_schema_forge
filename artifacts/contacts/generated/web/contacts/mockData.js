@@ -43,7 +43,8 @@ export const businessPartner = [
     "pOPaymentTerms": "Sample pOPaymentTerms",
     "purchasePricelist": "Sample purchasePricelist",
     "vendorBlocking": "Sample vendorBlocking",
-    "eTGOLocation": "Sample eTGOLocation"
+    "eTGOLocation": "Sample eTGOLocation",
+    "oBTIKVIESStatus": "DR"
   },
   {
     "id": "mock-businessPartner-002",
@@ -87,7 +88,8 @@ export const businessPartner = [
     "pOPaymentTerms": "Sample pOPaymentTerms",
     "purchasePricelist": "Sample purchasePricelist",
     "vendorBlocking": "Sample vendorBlocking",
-    "eTGOLocation": "Sample eTGOLocation"
+    "eTGOLocation": "Sample eTGOLocation",
+    "oBTIKVIESStatus": "CO"
   },
   {
     "id": "mock-businessPartner-003",
@@ -131,7 +133,8 @@ export const businessPartner = [
     "pOPaymentTerms": "Sample pOPaymentTerms",
     "purchasePricelist": "Sample purchasePricelist",
     "vendorBlocking": "Sample vendorBlocking",
-    "eTGOLocation": "Sample eTGOLocation"
+    "eTGOLocation": "Sample eTGOLocation",
+    "oBTIKVIESStatus": "VO"
   },
   {
     "id": "mock-businessPartner-004",
@@ -175,7 +178,8 @@ export const businessPartner = [
     "pOPaymentTerms": "Sample pOPaymentTerms",
     "purchasePricelist": "Sample purchasePricelist",
     "vendorBlocking": "Sample vendorBlocking",
-    "eTGOLocation": "Sample eTGOLocation"
+    "eTGOLocation": "Sample eTGOLocation",
+    "oBTIKVIESStatus": "IP"
   },
   {
     "id": "mock-businessPartner-005",
@@ -219,7 +223,8 @@ export const businessPartner = [
     "pOPaymentTerms": "Sample pOPaymentTerms",
     "purchasePricelist": "Sample purchasePricelist",
     "vendorBlocking": "Sample vendorBlocking",
-    "eTGOLocation": "Sample eTGOLocation"
+    "eTGOLocation": "Sample eTGOLocation",
+    "oBTIKVIESStatus": "DR"
   },
   {
     "id": "mock-businessPartner-006",
@@ -263,7 +268,8 @@ export const businessPartner = [
     "pOPaymentTerms": "Sample pOPaymentTerms",
     "purchasePricelist": "Sample purchasePricelist",
     "vendorBlocking": "Sample vendorBlocking",
-    "eTGOLocation": "Sample eTGOLocation"
+    "eTGOLocation": "Sample eTGOLocation",
+    "oBTIKVIESStatus": "CO"
   },
   {
     "id": "mock-businessPartner-007",
@@ -307,7 +313,8 @@ export const businessPartner = [
     "pOPaymentTerms": "Sample pOPaymentTerms",
     "purchasePricelist": "Sample purchasePricelist",
     "vendorBlocking": "Sample vendorBlocking",
-    "eTGOLocation": "Sample eTGOLocation"
+    "eTGOLocation": "Sample eTGOLocation",
+    "oBTIKVIESStatus": "VO"
   },
   {
     "id": "mock-businessPartner-008",
@@ -351,7 +358,8 @@ export const businessPartner = [
     "pOPaymentTerms": "Sample pOPaymentTerms",
     "purchasePricelist": "Sample purchasePricelist",
     "vendorBlocking": "Sample vendorBlocking",
-    "eTGOLocation": "Sample eTGOLocation"
+    "eTGOLocation": "Sample eTGOLocation",
+    "oBTIKVIESStatus": "IP"
   },
   {
     "id": "mock-businessPartner-009",
@@ -395,7 +403,8 @@ export const businessPartner = [
     "pOPaymentTerms": "Sample pOPaymentTerms",
     "purchasePricelist": "Sample purchasePricelist",
     "vendorBlocking": "Sample vendorBlocking",
-    "eTGOLocation": "Sample eTGOLocation"
+    "eTGOLocation": "Sample eTGOLocation",
+    "oBTIKVIESStatus": "DR"
   },
   {
     "id": "mock-businessPartner-010",
@@ -439,7 +448,8 @@ export const businessPartner = [
     "pOPaymentTerms": "Sample pOPaymentTerms",
     "purchasePricelist": "Sample purchasePricelist",
     "vendorBlocking": "Sample vendorBlocking",
-    "eTGOLocation": "Sample eTGOLocation"
+    "eTGOLocation": "Sample eTGOLocation",
+    "oBTIKVIESStatus": "CO"
   },
   {
     "id": "mock-businessPartner-011",
@@ -483,7 +493,8 @@ export const businessPartner = [
     "pOPaymentTerms": "Sample pOPaymentTerms",
     "purchasePricelist": "Sample purchasePricelist",
     "vendorBlocking": "Sample vendorBlocking",
-    "eTGOLocation": "Sample eTGOLocation"
+    "eTGOLocation": "Sample eTGOLocation",
+    "oBTIKVIESStatus": "VO"
   },
   {
     "id": "mock-businessPartner-012",
@@ -527,7 +538,8 @@ export const businessPartner = [
     "pOPaymentTerms": "Sample pOPaymentTerms",
     "purchasePricelist": "Sample purchasePricelist",
     "vendorBlocking": "Sample vendorBlocking",
-    "eTGOLocation": "Sample eTGOLocation"
+    "eTGOLocation": "Sample eTGOLocation",
+    "oBTIKVIESStatus": "IP"
   }
 ];
 
@@ -849,84 +861,72 @@ export const customer = [
 export const customerAccounting = [
   {
     "id": "mock-customerAccounting-001",
-    "accountingSchema": "Sample accountingSchema",
     "customerReceivablesNo": "CU-00001",
     "customerPrepayment": "Acme Corp",
     "businessPartnerId": "mock-businessPartner-001"
   },
   {
     "id": "mock-customerAccounting-002",
-    "accountingSchema": "Sample accountingSchema",
     "customerReceivablesNo": "CU-00002",
     "customerPrepayment": "TechFlow Inc",
     "businessPartnerId": "mock-businessPartner-002"
   },
   {
     "id": "mock-customerAccounting-003",
-    "accountingSchema": "Sample accountingSchema",
     "customerReceivablesNo": "CU-00003",
     "customerPrepayment": "Global Trade Ltd",
     "businessPartnerId": "mock-businessPartner-003"
   },
   {
     "id": "mock-customerAccounting-004",
-    "accountingSchema": "Sample accountingSchema",
     "customerReceivablesNo": "CU-00004",
     "customerPrepayment": "Summit Industries",
     "businessPartnerId": "mock-businessPartner-004"
   },
   {
     "id": "mock-customerAccounting-005",
-    "accountingSchema": "Sample accountingSchema",
     "customerReceivablesNo": "CU-00005",
     "customerPrepayment": "Pacific Partners",
     "businessPartnerId": "mock-businessPartner-005"
   },
   {
     "id": "mock-customerAccounting-006",
-    "accountingSchema": "Sample accountingSchema",
     "customerReceivablesNo": "CU-00006",
     "customerPrepayment": "Alpine Solutions",
     "businessPartnerId": "mock-businessPartner-006"
   },
   {
     "id": "mock-customerAccounting-007",
-    "accountingSchema": "Sample accountingSchema",
     "customerReceivablesNo": "CU-00007",
     "customerPrepayment": "Meridian Group",
     "businessPartnerId": "mock-businessPartner-007"
   },
   {
     "id": "mock-customerAccounting-008",
-    "accountingSchema": "Sample accountingSchema",
     "customerReceivablesNo": "CU-00008",
     "customerPrepayment": "Vertex Systems",
     "businessPartnerId": "mock-businessPartner-008"
   },
   {
     "id": "mock-customerAccounting-009",
-    "accountingSchema": "Sample accountingSchema",
     "customerReceivablesNo": "CU-00009",
     "customerPrepayment": "Atlas Manufacturing",
     "businessPartnerId": "mock-businessPartner-009"
   },
   {
     "id": "mock-customerAccounting-010",
-    "accountingSchema": "Sample accountingSchema",
     "customerReceivablesNo": "CU-00010",
     "customerPrepayment": "Nova Enterprises",
     "businessPartnerId": "mock-businessPartner-010"
   },
   {
     "id": "mock-customerAccounting-011",
-    "accountingSchema": "Sample accountingSchema",
     "customerReceivablesNo": "CU-00011",
     "customerPrepayment": "Pinnacle Services",
     "businessPartnerId": "mock-businessPartner-011"
   },
   {
     "id": "mock-customerAccounting-012",
-    "accountingSchema": "Sample accountingSchema",
     "customerReceivablesNo": "CU-00012",
     "customerPrepayment": "Horizon Labs",
     "businessPartnerId": "mock-businessPartner-012"
@@ -1278,84 +1278,72 @@ export const vendorCreditor = [
 export const vendorAccounting = [
   {
     "id": "mock-vendorAccounting-001",
-    "accountingSchema": "Sample accountingSchema",
     "vendorLiability": "Sample vendorLiability",
     "vendorPrepayment": "Sample vendorPrepayment",
     "businessPartnerId": "mock-businessPartner-001"
   },
   {
     "id": "mock-vendorAccounting-002",
-    "accountingSchema": "Sample accountingSchema",
     "vendorLiability": "Sample vendorLiability",
     "vendorPrepayment": "Sample vendorPrepayment",
     "businessPartnerId": "mock-businessPartner-002"
   },
   {
     "id": "mock-vendorAccounting-003",
-    "accountingSchema": "Sample accountingSchema",
     "vendorLiability": "Sample vendorLiability",
     "vendorPrepayment": "Sample vendorPrepayment",
     "businessPartnerId": "mock-businessPartner-003"
   },
   {
     "id": "mock-vendorAccounting-004",
-    "accountingSchema": "Sample accountingSchema",
     "vendorLiability": "Sample vendorLiability",
     "vendorPrepayment": "Sample vendorPrepayment",
     "businessPartnerId": "mock-businessPartner-004"
   },
   {
     "id": "mock-vendorAccounting-005",
-    "accountingSchema": "Sample accountingSchema",
     "vendorLiability": "Sample vendorLiability",
     "vendorPrepayment": "Sample vendorPrepayment",
     "businessPartnerId": "mock-businessPartner-005"
   },
   {
     "id": "mock-vendorAccounting-006",
-    "accountingSchema": "Sample accountingSchema",
     "vendorLiability": "Sample vendorLiability",
     "vendorPrepayment": "Sample vendorPrepayment",
     "businessPartnerId": "mock-businessPartner-006"
   },
   {
     "id": "mock-vendorAccounting-007",
-    "accountingSchema": "Sample accountingSchema",
     "vendorLiability": "Sample vendorLiability",
     "vendorPrepayment": "Sample vendorPrepayment",
     "businessPartnerId": "mock-businessPartner-007"
   },
   {
     "id": "mock-vendorAccounting-008",
-    "accountingSchema": "Sample accountingSchema",
     "vendorLiability": "Sample vendorLiability",
     "vendorPrepayment": "Sample vendorPrepayment",
     "businessPartnerId": "mock-businessPartner-008"
   },
   {
     "id": "mock-vendorAccounting-009",
-    "accountingSchema": "Sample accountingSchema",
     "vendorLiability": "Sample vendorLiability",
     "vendorPrepayment": "Sample vendorPrepayment",
     "businessPartnerId": "mock-businessPartner-009"
   },
   {
     "id": "mock-vendorAccounting-010",
-    "accountingSchema": "Sample accountingSchema",
     "vendorLiability": "Sample vendorLiability",
     "vendorPrepayment": "Sample vendorPrepayment",
     "businessPartnerId": "mock-businessPartner-010"
   },
   {
     "id": "mock-vendorAccounting-011",
-    "accountingSchema": "Sample accountingSchema",
     "vendorLiability": "Sample vendorLiability",
     "vendorPrepayment": "Sample vendorPrepayment",
     "businessPartnerId": "mock-businessPartner-011"
   },
   {
     "id": "mock-vendorAccounting-012",
-    "accountingSchema": "Sample accountingSchema",
     "vendorLiability": "Sample vendorLiability",
     "vendorPrepayment": "Sample vendorPrepayment",
     "businessPartnerId": "mock-businessPartner-012"

@@ -138,6 +138,40 @@ describe('trackDocumentCreated', () => {
   });
 });
 
+// ── getSessionContext / getWindowName error branches ────────────────────────────
+
+describe('resilience to environment errors', () => {
+  it('trackDocumentCreated omits session context when localStorage.getItem throws', () => {
+    setPathname('/sales-invoice/rec');
+    const getItem = vi.spyOn(window.localStorage, 'getItem').mockImplementation(() => {
+      throw new Error('localStorage blocked');
+    });
+
+    trackDocumentCreated();
+
+    // getSessionContext swallows the error and returns {}, so track still fires
+    // with the base document fields but no account_id/username keys spread in.
+    expect(track).toHaveBeenCalledOnce();
+    const [, props] = track.mock.calls[0];
+    expect(props.document_type).toBe('sales_invoice');
+    expect(props).not.toHaveProperty('account_id');
+    getItem.mockRestore();
+  });
+
+  it('trackTransactionPosted resolves the window to a no-op when extractWindowName throws', () => {
+    // A getter that throws on access simulates extractWindowName blowing up on a
+    // malformed pathname; getWindowName catches it and returns undefined → no map hit.
+    Object.defineProperty(window, 'location', {
+      value: { get pathname() { throw new Error('bad location'); } },
+      writable: true,
+      configurable: true,
+    });
+
+    expect(() => trackTransactionPosted()).not.toThrow();
+    expect(track).not.toHaveBeenCalled();
+  });
+});
+
 // ── trackTransactionPosted ─────────────────────────────────────────────────────
 
 describe('trackTransactionPosted', () => {

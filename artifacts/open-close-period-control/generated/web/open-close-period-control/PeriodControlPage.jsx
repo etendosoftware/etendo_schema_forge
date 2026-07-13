@@ -180,6 +180,7 @@ const labelOverrides = api.labelOverrides;
 export default function PeriodControlPage({ windowName, recordId, ...props }) {
   if (recordId) {
     return (
+      <>
       <DetailView
         entity="periodControl"
         detailEntity="documents"
@@ -206,6 +207,7 @@ export default function PeriodControlPage({ windowName, recordId, ...props }) {
         labelOverrides={labelOverrides}
         {...props}
       />
+      </>
     );
   }
 

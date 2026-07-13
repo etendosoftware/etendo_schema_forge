@@ -367,7 +367,10 @@ check_base_conflicts
 run_step "0" "Running data-testid check" "$REPO_DIR" "tmp/pre-push/data-testid-check.log" "npm run check:data-testid"
 
 # Run Step 1
-run_domain_boundary_check
+# Step 1 (domain boundary check) disabled: repos are now split at the repo
+# level (schema_forge_core vs etendo_schema_forge), so the monorepo
+# cross-domain check no longer applies. Re-enable by uncommenting the call.
+# run_domain_boundary_check
 
 # 2. Run unit tests and SonarQube analysis
 # --fail-on-gate makes run-sonar.sh exit non-zero when the Quality Gate is in

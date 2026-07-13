@@ -3,6 +3,7 @@
   "window": {
     "category": "purchases",
     "name": "Purchase Invoice",
+    "documentDateField": "invoiceDate",
     "sendDocument": {
       "allowEmail": false
     },
@@ -161,7 +162,14 @@
         },
         "currency": {
           "visibility": "editable",
-          "section": "other",
+          "section": "principal",
+          "form": true,
+          "grid": false,
+          "seq": 65,
+          "readOnlyLogic": "@Processed@='Y'"
+        },
+        "eTGOCurrencyRate": {
+          "visibility": "editable",
           "form": false,
           "grid": false
         },
@@ -278,7 +286,7 @@
           "visibility": "readOnly",
           "form": false,
           "grid": true,
-          "gridOrder": 5
+          "gridOrder": 6
         },
         "summedLineAmount": {
           "visibility": "readOnly",
@@ -308,19 +316,20 @@
         "outstandingAmount": {
           "visibility": "readOnly",
           "grid": true,
+          "gridOrder": 7,
           "form": false
         },
         "eTGODueDate": {
           "visibility": "readOnly",
           "grid": true,
-          "gridOrder": 7,
+          "gridOrder": 8,
           "form": false,
           "searchable": true
         },
         "eTGODeliveryStatus": {
           "visibility": "readOnly",
           "grid": true,
-          "gridOrder": 8,
+          "gridOrder": 9,
           "form": false
         },
         "dueAmount": {
@@ -361,6 +370,7 @@
           "visibility": "readOnly",
           "form": false,
           "grid": true,
+          "gridOrder": 5,
           "badge": true,
           "badgeLabels": {
             "true": {

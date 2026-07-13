@@ -1,8 +1,8 @@
 {
-  "version": "0.5.0",
+  "version": "0.8.0",
   "generatedAt": "2026-04-27T19:18:32.198Z",
-  "updatedAt": "2026-05-26T18:57:35.890Z",
-  "contractChecksum": "3026a7617b32b170",
+  "updatedAt": "2026-07-02T11:33:22.008Z",
+  "contractChecksum": "c114734415e59dc4",
   "apiPrediction": {
     "specName": "tax-rate",
     "baseUrl": "/sws/neo/tax-rate",
@@ -19,9 +19,37 @@
         "supportedFilters": [
           "name"
         ]
+      },
+      "accounting": {
+        "get": true,
+        "getById": true,
+        "post": true,
+        "put": true,
+        "patch": true,
+        "delete": true,
+        "listUrl": "/sws/neo/tax-rate/accounting",
+        "detailUrl": "/sws/neo/tax-rate/accounting/{id}",
+        "supportedFilters": []
       }
     },
-    "selectors": [],
+    "selectors": [
+      {
+        "entity": "accounting",
+        "field": "taxDue",
+        "column": "T_Due_Acct",
+        "reference": "ValidCombination",
+        "inputMode": "selector",
+        "url": "/sws/neo/tax-rate/accounting/selectors/taxDue"
+      },
+      {
+        "entity": "accounting",
+        "field": "taxCredit",
+        "column": "T_Credit_Acct",
+        "reference": "ValidCombination",
+        "inputMode": "selector",
+        "url": "/sws/neo/tax-rate/accounting/selectors/taxCredit"
+      }
+    ],
     "actions": [],
     "queryParams": {
       "pagination": {
@@ -84,6 +112,16 @@
             "required": true
           }
         }
+      },
+      "accounting": {
+        "fields": {
+          "taxDue": {
+            "required": true
+          },
+          "taxCredit": {
+            "required": true
+          }
+        }
       }
     },
     "requiredSessionVariables": [],
@@ -103,8 +141,13 @@
         "applicableTo",
         "validFrom"
       ],
+      "lineFields": [
+        "taxDue",
+        "taxCredit"
+      ],
       "recommendedOrder": [
-        "createHeader"
+        "createHeader",
+        "createLines"
       ]
     },
     "selectorContexts": [],
@@ -129,5 +172,5 @@
     "knownLimitations": [],
     "dangerousOperations": []
   },
-  "checksum": "225fb60b612dc792"
+  "checksum": "fff86c983a11fe0a"
 }

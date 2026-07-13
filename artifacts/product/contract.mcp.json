@@ -1,8 +1,8 @@
 {
-  "version": "0.14.0",
+  "version": "0.18.0",
   "generatedAt": "2026-04-29T18:11:24.842Z",
-  "updatedAt": "2026-06-11T11:56:34.940Z",
-  "contractChecksum": "a34bd38ef101d3ac",
+  "updatedAt": "2026-07-01T17:17:00.382Z",
+  "contractChecksum": "aebf17aa7bc1e6ab",
   "apiPrediction": {
     "specName": "product",
     "baseUrl": "/sws/neo/product",
@@ -44,6 +44,17 @@
         "delete": true,
         "listUrl": "/sws/neo/product/priceRuleVersion",
         "detailUrl": "/sws/neo/product/priceRuleVersion/{id}",
+        "supportedFilters": []
+      },
+      "accounting": {
+        "get": true,
+        "getById": true,
+        "post": true,
+        "put": true,
+        "patch": true,
+        "delete": true,
+        "listUrl": "/sws/neo/product/accounting",
+        "detailUrl": "/sws/neo/product/accounting/{id}",
         "supportedFilters": []
       },
       "billOfMaterials": {
@@ -207,6 +218,38 @@
         "reference": "ServicePriceRule",
         "inputMode": "selector",
         "url": "/sws/neo/product/priceRuleVersion/selectors/servicePriceRule"
+      },
+      {
+        "entity": "accounting",
+        "field": "fixedAsset",
+        "column": "P_Asset_Acct",
+        "reference": "ValidCombination",
+        "inputMode": "selector",
+        "url": "/sws/neo/product/accounting/selectors/fixedAsset"
+      },
+      {
+        "entity": "accounting",
+        "field": "productExpense",
+        "column": "P_Expense_Acct",
+        "reference": "ValidCombination",
+        "inputMode": "selector",
+        "url": "/sws/neo/product/accounting/selectors/productExpense"
+      },
+      {
+        "entity": "accounting",
+        "field": "productRevenue",
+        "column": "P_Revenue_Acct",
+        "reference": "ValidCombination",
+        "inputMode": "selector",
+        "url": "/sws/neo/product/accounting/selectors/productRevenue"
+      },
+      {
+        "entity": "accounting",
+        "field": "productCOGS",
+        "column": "P_Cogs_Acct",
+        "reference": "ValidCombination",
+        "inputMode": "selector",
+        "url": "/sws/neo/product/accounting/selectors/productCOGS"
       },
       {
         "entity": "billOfMaterials",
@@ -650,6 +693,18 @@
           }
         }
       },
+      "accounting": {
+        "fields": {
+          "fixedAsset": {},
+          "productExpense": {
+            "required": true
+          },
+          "productRevenue": {
+            "required": true
+          },
+          "productCOGS": {}
+        }
+      },
       "billOfMaterials": {
         "fields": {
           "lineNo": {
@@ -886,6 +941,8 @@
         "cost",
         "active",
         "validFromDate",
+        "productExpense",
+        "productRevenue",
         "lineNo",
         "bOMProduct",
         "bOMQuantity",
@@ -965,6 +1022,8 @@
           "cost",
           "active",
           "validFromDate",
+          "productExpense",
+          "productRevenue",
           "lineNo",
           "bOMProduct",
           "bOMQuantity",
@@ -1000,5 +1059,5 @@
     "knownLimitations": [],
     "dangerousOperations": []
   },
-  "checksum": "9562aacc2480ec2b"
+  "checksum": "70d65f9937af498e"
 }

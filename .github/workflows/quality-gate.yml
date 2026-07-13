@@ -7,12 +7,15 @@ on:
 
 permissions:
   contents: read
+  packages: read
   pull-requests: write
   issues: write
 
 jobs:
   sfqg:
     runs-on: ubuntu-latest
+    env:
+      SF_ROOT: ${{ github.workspace }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -22,8 +25,11 @@ jobs:
         with:
           node-version: 22
           cache: npm
+          registry-url: https://npm.pkg.github.com
 
       - run: npm install
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - uses: actions/cache@v4
         with:
@@ -32,7 +38,7 @@ jobs:
 
       - name: Run quality gate
         run: >-
-          node cli/src/quality-gate.js
+          npx sf-quality-gate
           --pr-affected
           --baseline-ref origin/${{ github.base_ref }}
           --head-ref ${{ github.event.pull_request.head.sha }}

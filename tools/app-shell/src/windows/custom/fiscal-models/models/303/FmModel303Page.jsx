@@ -9,7 +9,7 @@ import {
 import { Tabs, KpiWidget } from '../../FmCommon.jsx';
 import { SourcesTab, IncidentsTab, FilesTab, HistoryTab } from '../../FmTabContent.jsx';
 import FmBoxes303 from './FmBoxes303.jsx';
-import { PresentModal, FileGenModal, ConfigDrawer, CompareDrawer } from '../../FmOverlays.jsx';
+import { PresentModal, FileGenModal303, ConfigDrawer, CompareDrawer } from '../../FmOverlays.jsx';
 import { neoBase } from '@/components/related-documents/helpers.js';
 import { formatAmount, formatPeriod, computeBoxes303, generate303File } from '../../fiscalModelsUtils.js';
 
@@ -19,14 +19,98 @@ const STEPPER_INDEX = {
   skipped: -1,
 };
 
+function toBoxArray(src) {
+  if (Array.isArray(src)) return src;
+  if (src && typeof src === 'object') return Object.entries(src).map(([n, v]) => ({ num: Number(n), value: v }));
+  return [];
+}
+
+function applyOverrides(boxes, overrides) {
+  if (!Object.keys(overrides).length) return toBoxArray(boxes);
+  const arr = toBoxArray(boxes);
+  const result = arr.filter(b => !(b.num in overrides));
+  Object.entries(overrides).forEach(([num, val]) => {
+    if (val != null) result.push({ num: Number(num), value: val });
+  });
+  return result;
+}
+
+function removeBox108FromLive(prev) {
+  if (prev == null) return prev;
+  return recomputeDerivedBoxes(toBoxArray(prev).filter(b => b.num !== 108));
+}
+
+function applyBoxChange(prev, boxNum, value, fallbackBoxes) {
+  const base = prev != null ? toBoxArray(prev) : toBoxArray(fallbackBoxes);
+  const filtered = base.filter(b => b.num !== boxNum);
+  const updated = value != null ? [...filtered, { num: boxNum, value }] : filtered;
+  return recomputeDerivedBoxes(updated);
+}
+
+function parseBoxInput(rawValue) {
+  const numVal = parseFloat(String(rawValue ?? '').replace(',', '.'));
+  return isNaN(numVal) ? null : numVal;
+}
+
+function applyComputeResult(res, manualOverrides, setLiveBoxes, setLiveSummary, setLiveSources) {
+  if (!res) return;
+  setLiveBoxes(recomputeDerivedBoxes(applyOverrides(res.boxes, manualOverrides)));
+  setLiveSummary(res.summary);
+  if (res.sources) setLiveSources(res.sources);
+}
+
+function fetchOrgIdent(token, apiBaseUrl, setOrgIdent) {
+  if (!token || !apiBaseUrl) return;
+  fetch(`${neoBase(apiBaseUrl)}/session`, {
+    headers: { Authorization: `Bearer ${token}` },
+  })
+    .then(r => r.ok ? r.json() : null)
+    .then(data => {
+      const org = data?.organization;
+      if (!org) return;
+      setOrgIdent({ nif: org.taxId ?? '', nombre: org.name ?? '' });
+    })
+    .catch(() => {});
+}
+
+function applyGenerateError(result, t, setGenError) {
+  if (result.error === 'iban_required') {
+    setGenError(t('fm.gen303.error.iban_required') ?? 'Se necesita el IBAN para generar el fichero. Selecciona tipo C o N, o introduce el IBAN.');
+  } else {
+    const msg = result.serverMessage
+      || t('fm.gen303.error.generic')
+      || 'Error al generar el fichero. Por favor, inténtelo de nuevo.';
+    setGenError(msg);
+    console.error('generate303File failed:', result.error, result.serverMessage);
+  }
+}
+
+function recomputeDerivedBoxes(boxArr) {
+  const r2 = v => Math.round(v * 100) / 100;
+  const get = num => { const e = boxArr.find(b => b.num === num); return e != null ? (e.value ?? 0) : 0; };
+  const box65entry = boxArr.find(b => b.num === 65);
+  const box65 = box65entry != null ? (box65entry.value ?? 100) : 100;
+  const box45 = r2([29,31,33,35,37,39,41,42,43,44].reduce((s, n) => s + get(n), 0));
+  const box46 = r2(get(27) - box45);
+  const box64 = r2(box46 + get(58) + get(76));
+  const box66 = r2(box64 * box65 / 100);
+  const box69 = r2(box66 + get(77) - get(78) + get(68) + get(108));
+  const box71 = r2(box69 - get(70) + get(109) - get(112));
+  const derived = { 45: box45, 46: box46, 64: box64, 66: box66, 69: box69, 71: box71 };
+  return [
+    ...boxArr.filter(b => !(b.num in derived)),
+    ...Object.entries(derived).map(([num, value]) => ({ num: Number(num), value })),
+  ];
+}
+
 // ── Tab content components ────────────────────────────────────────
 
 // Casillas tab — left sidebar nav + content area
 const CASILLAS_SECTIONS = [
-  { id: 'identificacion',  titleKey: 'fm.page.identificacion',  sections: ['identificacion'] },
+  { id: 'identificacion',  titleKey: 'fm.page.identificacion',  sections: ['identificacion', 'datos_bancarios'] },
   { id: 'liquidacion',     titleKey: 'fm.page.liquidacion',     sections: ['iva_devengado', 'iva_deducible', 'resultado'] },
   { id: 'info_adicional',  titleKey: 'fm.page.info_adicional',  sections: ['info_adicional'] },
-  { id: 'resultado_final', titleKey: 'fm.page.resultado_final', sections: ['resultado_final'] },
+  { id: 'resultado_final', titleKey: 'fm.page.resultado_final', sections: ['resultado_final', 'sin_actividad', 'rectificativa'] },
 ];
 
 function CasillasTab({ decl, orgIdent, identChecks, onIdentChange, liveBoxes, onBoxChange, t }) {
@@ -138,6 +222,27 @@ function MoreOptionsMenu({ onCompare, onConfig, onGenerate, generating, fileBloc
   );
 }
 
+function getBoxValue(liveBoxes, num) {
+  const e = toBoxArray(liveBoxes).find(b => b.num === num);
+  return e ? (e.value ?? 0) : null;
+}
+
+function buildIncidentVariants(blocking, warning, t) {
+  let tone = null;
+  if (blocking > 0) tone = 'danger';
+  else if (warning > 0) tone = 'warn';
+
+  let iconColor = '#828FA3';
+  if (blocking > 0) iconColor = '#D50B3E';
+  else if (warning > 0) iconColor = '#8A6100';
+
+  let badge = null;
+  if (blocking > 0) badge = t('fm.incidents.severity.block') ?? 'Bloqueante';
+  else if (warning > 0) badge = t('fm.incidents.severity.warn') ?? 'Advertencia';
+
+  return { tone, iconColor, badge };
+}
+
 // ── Main page ─────────────────────────────────────────────────────
 
 export default function FmModel303Page({ decl, onBack, onStatusChange, token, apiBaseUrl }) {
@@ -151,86 +256,49 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, token, ap
   const [showCompare, setShowCompare] = useState(false);
   const [orgIdent, setOrgIdent] = useState({ nif: '', nombre: '' });
   const [identChecks, setIdentChecks] = useState(decl.identification ?? {});
-  const handleIdentChange = (id, value) => setIdentChecks(prev => ({ ...prev, [id]: value }));
+  const handleIdentChange = (id, value) => {
+    setIdentChecks(prev => ({ ...prev, [id]: value }));
+    if (id === 'motivo_rectificacion' && value !== 'D') {
+      setManualOverrides(prev => { const n = { ...prev }; delete n[108]; return n; });
+      setLiveBoxes(removeBox108FromLive);
+    }
+  };
   const [liveBoxes,      setLiveBoxes]      = useState(decl._precomputed?.boxes   ?? null);
   const [manualOverrides, setManualOverrides] = useState({});
 
-  const toBoxArray = (src) => {
-    if (Array.isArray(src)) return src;
-    if (src && typeof src === 'object') return Object.entries(src).map(([n, v]) => ({ num: Number(n), value: v }));
-    return [];
-  };
-
-  function applyOverrides(boxes, overrides) {
-    if (!Object.keys(overrides).length) return boxes;
-    const arr = toBoxArray(boxes);
-    const result = arr.filter(b => !(b.num in overrides));
-    Object.entries(overrides).forEach(([num, val]) => {
-      if (val != null) result.push({ num: Number(num), value: val });
-    });
-    return result;
-  }
-
   function handleBoxChange(boxNum, rawValue) {
-    const numVal = parseFloat(String(rawValue ?? '').replace(',', '.'));
-    const value = isNaN(numVal) ? null : numVal;
+    const value = parseBoxInput(rawValue);
     setManualOverrides(prev => ({ ...prev, [boxNum]: value }));
-    setLiveBoxes(prev => {
-      const base = prev != null ? toBoxArray(prev) : toBoxArray(decl._precomputed?.boxes ?? decl.boxes);
-      const filtered = base.filter(b => b.num !== boxNum);
-      return value != null ? [...filtered, { num: boxNum, value }] : filtered;
-    });
+    setLiveSummary(null);
+    const fallback = decl._precomputed?.boxes ?? decl.boxes;
+    setLiveBoxes(prev => applyBoxChange(prev, boxNum, value, fallback));
   }
 
   const [liveSummary, setLiveSummary] = useState(decl._precomputed?.summary ?? null);
   const [liveSources, setLiveSources] = useState(decl._precomputed?.sources ?? null);
   const [computing,   setComputing]   = useState(false);
   const [generating,  setGenerating]  = useState(false);
+  const [genError,    setGenError]    = useState(null);
 
   async function handleCompute() {
     setComputing(true);
     try {
       const res = await computeBoxes303(decl, { token, apiBaseUrl });
-      if (res) {
-        setLiveBoxes(applyOverrides(res.boxes, manualOverrides));
-        setLiveSummary(res.summary);
-        if (res.sources) setLiveSources(res.sources);
-      }
+      applyComputeResult(res, manualOverrides, setLiveBoxes, setLiveSummary, setLiveSources);
     } finally {
       setComputing(false);
     }
   }
 
-  async function handleGenerate() {
+  async function handleGenerate({ filename } = {}) {
+    setGenError(null);
     setGenerating(true);
-    const result = liveSummary?.result ?? decl.summary?.result ?? 0;
-    let kind = decl.result?.kind;
-    if (!kind) {
-      if (result > 0) kind = 'I';
-      else if (result < 0) kind = 'C';
-      else kind = 'N';
-    }
-    const declForGenerate = { ...decl, result: { ...decl.result, kind } };
-    const ok = await generate303File(declForGenerate, { token, apiBaseUrl });
+    const result = await generate303File(decl, { token, apiBaseUrl, identChecks, manualOverrides, filename });
     setGenerating(false);
-    if (!ok) {
-      console.error('generate303File failed for', decl.year, decl.period);
-    }
+    if (!result.ok) applyGenerateError(result, t, setGenError);
   }
 
-  useEffect(() => {
-    if (!token || !apiBaseUrl) return;
-    fetch(`${neoBase(apiBaseUrl)}/session`, {
-      headers: { Authorization: `Bearer ${token}` },
-    })
-      .then(r => r.ok ? r.json() : null)
-      .then(data => {
-        const org = data?.organization;
-        if (!org) return;
-        setOrgIdent({ nif: org.taxId ?? '', nombre: org.name ?? '' });
-      })
-      .catch(() => {});
-  }, [token, apiBaseUrl]);
+  useEffect(() => { fetchOrgIdent(token, apiBaseUrl, setOrgIdent); }, [token, apiBaseUrl]);
 
   function handleStatusChange(newStatus) {
     setStatus(newStatus);
@@ -246,23 +314,23 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, token, ap
   const incidentCount = blocking + warning;
   const isSubmitted = ['submitted', 'submitted_ext', 'submitted_ack'].includes(status);
   const fileBlocked = blocking > 0;
-  const summary = liveSummary ?? decl.summary ?? {};
+  // Derive KPI card values from liveBoxes so manual overrides (box 42, 43, etc.)
+  // are reflected in the accrued/deductible/result cards without a full recalculate.
+  const kpi27 = getBoxValue(liveBoxes, 27);
+  const kpi45 = getBoxValue(liveBoxes, 45);
+  const kpi46 = getBoxValue(liveBoxes, 46);
+  const liveBoxSummary = (kpi27 !== null || kpi45 !== null || kpi46 !== null)
+    ? { accrued: kpi27, deductible: kpi45, result: kpi46 }
+    : null;
+  const summary = liveSummary ?? liveBoxSummary ?? decl.summary ?? {};
   const resultKind = decl.result?.kind ?? null;
 
   // Derive result sublabel from kind
   const resultSubLabel = resultKind ? (t(`fm.result.${resultKind}`) ?? resultKind) : (t('fm.m303.summary.result_sub') ?? 'Resultado');
 
-  let incidentBadgeTone = null;
-  if (blocking > 0) incidentBadgeTone = 'danger';
-  else if (warning > 0) incidentBadgeTone = 'warn';
 
-  let incidentIconColor = '#828FA3';
-  if (blocking > 0) incidentIconColor = '#D50B3E';
-  else if (warning > 0) incidentIconColor = '#8A6100';
-
-  let incidentBadge = null;
-  if (blocking > 0) incidentBadge = t('fm.incidents.severity.block') ?? 'Bloqueante';
-  else if (warning > 0) incidentBadge = t('fm.incidents.severity.warn') ?? 'Advertencia';
+  const { tone: incidentBadgeTone, iconColor: incidentIconColor, badge: incidentBadge } =
+    buildIncidentVariants(blocking, warning, t);
 
   const tabs = [
     { id: 'boxes',     label: t('fm.tab.boxes') ?? 'Casillas',
@@ -330,7 +398,7 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, token, ap
         <MoreOptionsMenu
           onCompare={() => setShowCompare(true)}
           onConfig={() => setShowConfig(true)}
-          onGenerate={() => setShowFilegen(true)}
+          onGenerate={() => { setGenError(null); setShowFilegen(true); }}
           generating={generating}
           fileBlocked={fileBlocked}
           t={t}
@@ -418,6 +486,24 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, token, ap
           badgeColor="#3F3F50"
           data-testid="KpiWidget__4f6c0d" />
       </div>
+      {/* ── Inline generate error ────────────────────────────────── */}
+      {genError && (
+        <div style={{
+          margin: '4px 20px 0',
+          padding: '8px 14px',
+          background: '#FEF0F4',
+          border: '1px solid #F9B8C8',
+          borderRadius: 8,
+          fontSize: 13,
+          color: '#D50B3E',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 8,
+        }}>
+          <OctagonAlert size={14} data-testid="OctagonAlert__gen_error" />
+          {genError}
+        </div>
+      )}
       {/* ── Tabs bar ─────────────────────────────────────────────── */}
       <div className="fm-tabs-sticky">
         <Tabs
@@ -460,7 +546,7 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, token, ap
               decl={decl}
               t={t}
               fileBlocked={fileBlocked}
-              onGenerate={() => setShowFilegen(true)}
+              onGenerate={() => { setGenError(null); setShowFilegen(true); }}
               genLabel={t('fm.action.gen303') ?? 'Generar fichero 303'}
               data-testid="FilesTab__4f6c0d" />
           )}
@@ -477,11 +563,11 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, token, ap
           data-testid="PresentModal__4f6c0d" />
       )}
       {showFilegen && (
-        <FileGenModal
+        <FileGenModal303
           decl={decl}
           onConfirm={handleGenerate}
           onClose={() => setShowFilegen(false)}
-          data-testid="FileGenModal__4f6c0d" />
+          data-testid="FileGenModal303__4f6c0d" />
       )}
       {showConfig && <ConfigDrawer
         onClose={() => setShowConfig(false)}

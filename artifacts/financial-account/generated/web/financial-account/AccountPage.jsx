@@ -439,6 +439,7 @@ export const api = {
 export default function AccountPage({ windowName, recordId, ...props }) {
   if (recordId) {
     return (
+      <>
       <DetailView
         entity="account"
         detailEntity="transaction"
@@ -461,6 +462,7 @@ export default function AccountPage({ windowName, recordId, ...props }) {
         requiredHeaderFields={requiredHeaderFields}
         {...props}
       />
+      </>
     );
   }
 

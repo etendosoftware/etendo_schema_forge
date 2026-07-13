@@ -91,3 +91,30 @@ All shared component changes are opt-in (guarded by null-checks or prop absence)
 Reverting goods-movements/decisions.json and regenerating restores the window to its
 previous state without affecting any other window. The generator changes are additive
 and backward-compatible.
+
+## Addendum (2026-07-06) — Process button not hiding when processed
+
+**Domain**: `platform-change` only — `DetailView.jsx` bugfix, no window/generator files touched.
+
+`getDraftModeCompleted` always compared `draftMode.completedStatuses` against
+`_headerData.documentStatus`, ignoring the window's configured `statusField`.
+`goods-movements` has no `documentStatus` field (its status lives in the boolean
+`processed` field), so `completedStatuses` never matched and the Process button
+stayed visible after processing. Fixed to resolve the status value via `statusField`
+(falling back to `documentStatus` for backward compatibility) and normalize
+boolean-ish values (`true`/`'Y'`, `false`/`'N'`) before comparing, matching the
+precedent in `statusBadge.js`.
+
+Files: `tools/app-shell/src/components/contract-ui/DetailView.jsx`,
+`tools/app-shell/src/components/contract-ui/__tests__/DetailView.completedStatuses.test.js`,
+`tools/app-shell/src/components/contract-ui/__tests__/DetailView.draftModeStatusField.vitest.jsx`
+(new).
+
+**Tests**: `node --test` on the updated regex suite — 6/6 pass. `vitest run` on the
+new behavioral file + `DetailView.saveButtons.vitest.jsx` — 15/15 pass.
+`node cli/src/validate-pipeline.js --scope=goods-movements` and `--scope=sales-quotation`
+— both 0 violations (confirms no regression on the `documentStatus`-array window).
+
+**Rollback**: single-function change, no config/contract changes; revert the commit
+to restore prior (buggy) behavior — no other window is affected since `statusField`
+is opt-in and defaults to the previous `documentStatus` lookup when unset.

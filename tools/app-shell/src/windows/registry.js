@@ -25,10 +25,12 @@ const windowLoaders = {
   'product': () => import('@/windows/custom/product/index.jsx'),
   'product-category': () => import('@/windows/custom/product-category/index.jsx'),
   'tax': () => import('@generated/tax/generated/web/tax/index.jsx'),
+  'tax-category': () => import('@generated/tax-category/generated/web/tax-category/index.jsx'),
+  'business-partner-category': () => import('@generated/business-partner-category/generated/web/business-partner-category/index.jsx'),
   'user': () => import('@generated/user/generated/web/user/index.jsx'),
   'purchase-order': () => import('@generated/purchase-order/generated/web/purchase-order/index.jsx'),
   'goods-receipt': () => import('@generated/goods-receipt/generated/web/goods-receipt/index.jsx'),
-  'return-to-vendor': () => import('@generated/return-to-vendor/generated/web/return-to-vendor/index.jsx'),
+  'return-to-vendor': () => import('./custom/return-to-vendor/index.jsx'),
   'return-to-vendor-shipment': () => import('@generated/return-to-vendor-shipment/generated/web/return-to-vendor-shipment/index.jsx'),
   'physical-inventory': () => import('@generated/physical-inventory/generated/web/physical-inventory/index.jsx'),
   'goods-movements': () => import('@generated/goods-movements/generated/web/goods-movements/index.jsx'),
@@ -52,6 +54,7 @@ const windowLoaders = {
   'payment-out': () => import('@generated/payment-out/generated/web/payment-out/index.jsx'),
   'chart-of-accounts': () => import('@generated/chart-of-accounts/generated/web/chart-of-accounts/index.jsx'),
   'assets': () => import('@generated/assets/generated/web/assets/index.jsx'),
+  'asset-group': () => import('@generated/asset-group/generated/web/asset-group/index.jsx'),
   'conversion-rates': () => import('@generated/conversion-rates/generated/web/conversion-rates/index.jsx'),
   'conversion-rate-downloader-log': () => import('@generated/conversion-rate-downloader-log/generated/web/conversion-rate-downloader-log/index.jsx'),
   'amortization': () => import('@generated/amortization/generated/web/amortization/index.jsx'),
@@ -158,8 +161,10 @@ const customLoaders = {
   'quick-order-sales': () => import('./quick-order/index.jsx'),
   'quick-order-purchase': () => import('./quick-order/index.jsx'),
   'financial-account': () => import('./custom/financial-account/index.jsx'),
+  'general-ledger-configuration': () => import('./custom/general-ledger-configuration/index.jsx'),
   'return-to-vendor-shipment': () => import('./custom/return-to-vendor-shipment/index.jsx'),
   'not-posted-documents': () => import('./custom/not-posted-documents/index.jsx'),
+  'assets': () => import('./custom/assets/index.jsx'),
 };
 
 /**

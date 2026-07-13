@@ -31,7 +31,9 @@ function InvoiceLinesEmptyState({ data, onAddLine, canAddLine = true, recordId, 
   const pendingModal = useRef('shipment');
   const isDraft = data?.documentStatus === 'DR';
   const bpId = data?.businessPartner;
-  const isReturn = getArSubtype(data) === 'DEV';
+  const arSubtype = getArSubtype(data);
+  const isReturn = arSubtype === 'DEV';
+  const isNc = arSubtype === 'NC';
   const base = useMemo(() => (apiBaseUrl || '').replace(/\/[^/]+$/, ''), [apiBaseUrl]);
   const headers = useMemo(() => ({ Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }), [token]);
 
@@ -64,6 +66,8 @@ function InvoiceLinesEmptyState({ data, onAddLine, canAddLine = true, recordId, 
 
   const emptyHintKey = isReturn
     ? 'addLinesManuallyOrImportFromReturn'
+    : isNc
+    ? 'addLinesManually'
     : 'addLinesManuallyOrImportFromShipmentOrOrder';
 
   const importSvg = (
@@ -99,7 +103,7 @@ function InvoiceLinesEmptyState({ data, onAddLine, canAddLine = true, recordId, 
               {ui('importFromReturnShipment')}
             </button>
           )}
-          {bpId && !isReturn && (
+          {bpId && !isReturn && !isNc && (
             <>
               <button type="button" onClick={handleImportClick} style={ghostBtn}>
                 {importSvg}
@@ -156,7 +160,9 @@ const InvoiceLineActions = forwardRef(function InvoiceLineActions(
   const pendingModal = useRef('shipment');
   const isDraft = data?.documentStatus === 'DR';
   const bpId = data?.businessPartner;
-  const isReturn = getArSubtype(data) === 'DEV';
+  const arSubtype = getArSubtype(data);
+  const isReturn = arSubtype === 'DEV';
+  const isNc = arSubtype === 'NC';
   const base = useMemo(() => (apiBaseUrl || '').replace(/\/[^/]+$/, ''), [apiBaseUrl]);
   const headers = useMemo(() => ({ Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }), [token]);
 
@@ -193,7 +199,7 @@ const InvoiceLineActions = forwardRef(function InvoiceLineActions(
     openImportReturnModal: openReturnModal,
   }), [onSave]);
 
-  if (!isDraft || !bpId) {
+  if (!isDraft || !bpId || isNc) {
     return null;
   }
 
@@ -268,8 +274,10 @@ InvoiceBottomPanel.detailExtraActions = InvoiceLineActions;
 InvoiceBottomPanel.lineMenuActions = function lineMenuActions({ data, importRef }) {
   const isDraft = data?.documentStatus === 'DR';
   const bpId = data?.businessPartner;
-  const isReturn = getArSubtype(data) === 'DEV';
-  if (!isDraft || !bpId) return [];
+  const arSubtype = getArSubtype(data);
+  const isReturn = arSubtype === 'DEV';
+  const isNc = arSubtype === 'NC';
+  if (!isDraft || !bpId || isNc) return [];
   if (isReturn) {
     return [
       {

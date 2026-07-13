@@ -270,7 +270,8 @@ rm -rf .scannerwork
 if [[ "$RUN_COVERAGE" == "true" ]]; then
   echo "==> Running unit tests with coverage..."
   # Require Node 22+: vitest coverage uses the threads pool which relies on Node 22 ESM
-  # worker behaviour. nvm use 22 keeps us on the right version if nvm is present.
+  # worker behaviour (jsdom 29 uses ESM-only @exodus/bytes). nvm use 22 keeps us on the
+  # right version if nvm is present.
   if [ -s "${NVM_DIR:-$HOME/.nvm}/nvm.sh" ]; then
     # shellcheck source=/dev/null
     source "${NVM_DIR:-$HOME/.nvm}/nvm.sh"

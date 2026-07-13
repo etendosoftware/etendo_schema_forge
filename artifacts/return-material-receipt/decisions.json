@@ -3,6 +3,9 @@
   "window": {
     "category": "sales",
     "name": "Return Material Receipt",
+    "sendDocument": {
+      "enabled": false
+    },
     "relatedDocuments": true,
     "notesField": "description",
     "dateFilterKey": "movementDate",
@@ -50,12 +53,16 @@
         }
       ],
       "fields": {
+        "etblkpAccountingstatus": {
+          "visibility": "discarded"
+        },
         "movementDate": {
           "grid": true,
           "gridOrder": 1,
           "searchable": true,
           "inputMode": "date",
           "readOnlyLogic": null,
+          "dot": false,
           "section": "principal",
           "seq": 3
         },
@@ -74,7 +81,7 @@
           "searchable": true,
           "reference": "BusinessPartner",
           "inputMode": "search",
-          "readOnlyLogic": null,
+          "readOnlyLogic": "@Processed@='Y'",
           "section": "principal",
           "seq": 1
         },
@@ -204,7 +211,11 @@
           "visibility": "discarded"
         },
         "invoiceStatus": {
-          "visibility": "discarded"
+          "visibility": "readOnly",
+          "grid": true,
+          "gridOrder": 7,
+          "form": false,
+          "columnType": "percent"
         },
         "isnettingshipment": {
           "visibility": "discarded"

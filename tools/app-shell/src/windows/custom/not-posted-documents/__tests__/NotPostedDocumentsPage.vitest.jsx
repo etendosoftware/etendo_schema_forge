@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { render, screen, waitFor, fireEvent, act } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent, act, within } from '@testing-library/react';
 import { toast } from 'sonner';
 
 import NotPostedDocumentsPage from '../NotPostedDocumentsPage.jsx';
@@ -36,20 +36,14 @@ function mkFetch(rows = []) {
       return Promise.resolve({
         ok: true,
         json: async () => ({
-          response: {
-            data: [
-              {
-                documentTypes: [{ value: 'SI', label: 'Sales Invoice' }],
-                accountingStatuses: [],
-              },
-            ],
-          },
+          documentTypes: [{ value: 'SI', label: 'Sales Invoice' }],
+          accountingStatuses: [],
         }),
       });
     }
     return Promise.resolve({
       ok: true,
-      json: async () => ({ response: { data: rows } }),
+      json: async () => ({ rows, total: rows.length }),
     });
   });
 }
@@ -64,6 +58,86 @@ describe('NotPostedDocumentsPage', () => {
     render(<NotPostedDocumentsPage token={TOKEN} apiBaseUrl={BASE_URL} />);
     await waitFor(() => expect(screen.getByTestId('npd-filter-document-type')).toBeInTheDocument());
     expect(screen.getByTestId('npd-filter-apply')).toBeInTheDocument();
+  });
+
+  // Regression: MultiSelect used to drop unknown props, so data-testid never
+  // reached the DOM and the accounting-status filter was unqueryable in tests
+  // (and by any consumer relying on it).
+  it('renders the accounting status MultiSelect with its data-testid and supports toggling an option', async () => {
+    globalThis.fetch = vi.fn((url) => {
+      if (url.includes('_mode=filter-options')) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({
+            documentTypes: [],
+            accountingStatuses: [{ value: 'N', label: 'Unposted' }],
+          }),
+        });
+      }
+      return Promise.resolve({ ok: true, json: async () => ({ rows: [], total: 0 }) });
+    });
+
+    render(<NotPostedDocumentsPage token={TOKEN} apiBaseUrl={BASE_URL} />);
+
+    const multiSelect = await waitFor(() => screen.getByTestId('npd-filter-accounting-status'));
+    expect(multiSelect).toBeInTheDocument();
+
+    const trigger = within(multiSelect).getByRole('button');
+    fireEvent.click(trigger);
+    const optionCheckbox = within(multiSelect).getByRole('checkbox');
+    fireEvent.click(optionCheckbox);
+
+    expect(trigger).toHaveTextContent('Unposted');
+
+    // Toggling the same option again must deselect it (Set delete branch)
+    fireEvent.click(optionCheckbox);
+    expect(trigger).toHaveTextContent('—');
+  });
+
+  it('closes the accounting status dropdown when clicking outside of it', async () => {
+    globalThis.fetch = vi.fn((url) => {
+      if (url.includes('_mode=filter-options')) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({
+            documentTypes: [],
+            accountingStatuses: [{ value: 'N', label: 'Unposted' }],
+          }),
+        });
+      }
+      return Promise.resolve({ ok: true, json: async () => ({ rows: [], total: 0 }) });
+    });
+
+    render(<NotPostedDocumentsPage token={TOKEN} apiBaseUrl={BASE_URL} />);
+
+    const multiSelect = await waitFor(() => screen.getByTestId('npd-filter-accounting-status'));
+    fireEvent.click(within(multiSelect).getByRole('button'));
+    expect(within(multiSelect).getByRole('checkbox')).toBeInTheDocument();
+
+    fireEvent.mouseDown(document.body);
+
+    expect(within(multiSelect).queryByRole('checkbox')).not.toBeInTheDocument();
+  });
+
+  it('shows an ellipsis and disables the row post button while a post is in flight', async () => {
+    globalThis.fetch = mkFetch(ROWS);
+    render(<NotPostedDocumentsPage token={TOKEN} apiBaseUrl={BASE_URL} />);
+    await waitFor(() => screen.getByTestId('npd-post-row-doc-1'));
+
+    let resolvePost;
+    globalThis.fetch.mockImplementationOnce(
+      () => new Promise((resolve) => { resolvePost = resolve; }),
+    );
+
+    const postButton = screen.getByTestId('npd-post-row-doc-1');
+    fireEvent.click(postButton);
+
+    await waitFor(() => expect(postButton).toHaveTextContent('…'));
+    expect(postButton).toBeDisabled();
+
+    await act(async () => {
+      resolvePost({ ok: true, json: async () => ({ success: true, message: 'Document posted' }) });
+    });
   });
 
   it('shows empty state when no rows returned', async () => {
@@ -121,7 +195,7 @@ describe('NotPostedDocumentsPage', () => {
     await waitFor(() => screen.getByTestId('npd-post-row-doc-1'));
 
     globalThis.fetch.mockImplementationOnce(() =>
-      Promise.resolve({ ok: true, json: async () => ({ response: { data: [{ success: true }] } }) }),
+      Promise.resolve({ ok: true, json: async () => ({ success: true, message: 'Document posted' }) }),
     );
 
     await act(async () => {
@@ -194,7 +268,7 @@ describe('NotPostedDocumentsPage', () => {
             res({ ok: true, json: async () => ({}) });
         });
       }
-      return Promise.resolve({ ok: true, json: async () => ({ response: { data: [] } }) });
+      return Promise.resolve({ ok: true, json: async () => ({ rows: [], total: 0 }) });
     });
 
     const { unmount } = render(<NotPostedDocumentsPage token={TOKEN} apiBaseUrl={BASE_URL} />);
@@ -227,7 +301,7 @@ describe('NotPostedDocumentsPage', () => {
     globalThis.fetch.mockImplementationOnce(() =>
       Promise.resolve({
         ok: true,
-        json: async () => ({ response: { data: [{ ok: 2, total: 2 }] } }),
+        json: async () => ({ ok: 2, total: 2, success: true }),
       }),
     );
 
@@ -251,7 +325,7 @@ describe('NotPostedDocumentsPage', () => {
     globalThis.fetch.mockImplementationOnce(() =>
       Promise.resolve({
         ok: true,
-        json: async () => ({ response: { data: [{ ok: 1, total: 2 }] } }),
+        json: async () => ({ ok: 1, total: 2, success: false }),
       }),
     );
 
@@ -273,7 +347,7 @@ describe('NotPostedDocumentsPage', () => {
     globalThis.fetch.mockImplementationOnce(() =>
       Promise.resolve({
         ok: true,
-        json: async () => ({ response: { data: [{ ok: 0, total: 1 }] } }),
+        json: async () => ({ ok: 0, total: 1, success: false }),
       }),
     );
 
@@ -352,7 +426,7 @@ describe('NotPostedDocumentsPage', () => {
       }
       return Promise.resolve({
         ok: true,
-        json: async () => ({ response: { data: [] } }),
+        json: async () => ({ rows: [], total: 0 }),
       });
     });
 
@@ -372,9 +446,7 @@ describe('NotPostedDocumentsPage', () => {
     globalThis.fetch.mockImplementationOnce(() =>
       Promise.resolve({
         ok: true,
-        json: async () => ({
-          response: { data: [{ success: false, message: 'Accounting period closed' }] },
-        }),
+        json: async () => ({ success: false, message: 'Accounting period closed' }),
       }),
     );
 
@@ -383,6 +455,28 @@ describe('NotPostedDocumentsPage', () => {
     });
 
     expect(toast.error).toHaveBeenCalledWith('Accounting period closed');
+  });
+
+  // ── postRow: ambiguous/unparseable body must not be treated as success ─────
+  it('shows error toast when postRow gets a 200 with an unparseable body (e.g. proxy error page)', async () => {
+    globalThis.fetch = mkFetch(ROWS);
+    render(<NotPostedDocumentsPage token={TOKEN} apiBaseUrl={BASE_URL} />);
+    await waitFor(() => screen.getByTestId('npd-post-row-doc-1'));
+
+    globalThis.fetch.mockImplementationOnce(() =>
+      Promise.resolve({
+        ok: true,
+        statusText: 'OK',
+        json: async () => { throw new SyntaxError('Unexpected token <'); },
+      }),
+    );
+
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('npd-post-row-doc-1'));
+    });
+
+    expect(toast.error).toHaveBeenCalled();
+    expect(toast.success).not.toHaveBeenCalled();
   });
 
   // ── postRow: network error ────────────────────────────────────────────────

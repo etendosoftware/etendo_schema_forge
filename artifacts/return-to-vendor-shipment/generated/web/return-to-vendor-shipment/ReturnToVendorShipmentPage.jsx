@@ -17,9 +17,8 @@ const breadcrumb = 'Purchases / Return to Vendor Shipment';
 // @sf-generated-start summary:returnToVendorShipment
 const summary = [
   { key: 'documentNo', column: 'DocumentNo', type: 'string' },
-  { key: 'sourceReceiptDocNo', column: 'sourceReceiptDocNo', type: 'string' },
-  { key: 'etblkpAccountingstatus', column: 'EM_Etblkp_Accountingstatus', type: 'status' },
   { key: 'etblkpBulkposting', column: 'EM_Etblkp_Bulkposting', type: 'string' },
+  { key: 'sourceReceiptDocNo', column: 'sourceReceiptDocNo', type: 'string' },
 ];
 
 const statusField = 'documentStatus';
@@ -43,7 +42,7 @@ const draftMode = null;
 // @sf-generated-end draftMode:returnToVendorShipment
 
 // @sf-generated-start requiredHeaderFields:returnToVendorShipment
-const requiredHeaderFields = ['documentNo', 'businessPartner', 'partnerAddress', 'movementDate', 'warehouse', 'etblkpAccountingstatus', 'etblkpBulkposting'];
+const requiredHeaderFields = ['documentNo', 'businessPartner', 'partnerAddress', 'movementDate', 'warehouse', 'etblkpBulkposting'];
 // @sf-generated-end requiredHeaderFields:returnToVendorShipment
 
 // @sf-generated-start addLineFields:returnToVendorShipmentLine
@@ -193,6 +192,14 @@ export const api = {
     },
     {
       "entity": "returnToVendorShipment",
+      "field": "etblkpBulkposting",
+      "column": "EM_Etblkp_Bulkposting",
+      "url": "/sws/neo/return-to-vendor-shipment/returnToVendorShipment/{id}/action/etblkpBulkposting",
+      "processId": "57496FB9CF9E4E8F847224017941570E",
+      "processType": "obuiapp"
+    },
+    {
+      "entity": "returnToVendorShipment",
       "field": "receiveMaterials",
       "column": "RM_Receipt_PickEdit",
       "url": "/sws/neo/return-to-vendor-shipment/returnToVendorShipment/{id}/action/receiveMaterials",
@@ -222,14 +229,6 @@ export const api = {
       "url": "/sws/neo/return-to-vendor-shipment/returnToVendorShipment/{id}/action/processGoodsJava",
       "processId": "49DEE812BF0545269781FCEBF2235924",
       "processType": "classic"
-    },
-    {
-      "entity": "returnToVendorShipment",
-      "field": "etblkpBulkposting",
-      "column": "EM_Etblkp_Bulkposting",
-      "url": "/sws/neo/return-to-vendor-shipment/returnToVendorShipment/{id}/action/etblkpBulkposting",
-      "processId": "57496FB9CF9E4E8F847224017941570E",
-      "processType": "obuiapp"
     },
     {
       "entity": "returnToVendorShipmentLine",
@@ -284,6 +283,7 @@ const labelOverrides = api.labelOverrides;
 export default function ReturnToVendorShipmentPage({ windowName, recordId, ...props }) {
   if (recordId) {
     return (
+      <>
       <DetailView
         entity="returnToVendorShipment"
         detailEntity="returnToVendorShipmentLine"
@@ -311,9 +311,10 @@ export default function ReturnToVendorShipmentPage({ windowName, recordId, ...pr
         requiredHeaderFields={requiredHeaderFields}
         labelOverrides={labelOverrides}
         linesLayout="inlineEditable"
-        sendDocument
+        sendDocument={{"enabled":false}}
         {...props}
       />
+      </>
     );
   }
 
@@ -328,7 +329,7 @@ export default function ReturnToVendorShipmentPage({ windowName, recordId, ...pr
       dateFilterKey="movementDate"
       labelOverrides={labelOverrides}
       rowQuickActions={{}}
-      sendDocument
+      sendDocument={{"enabled":false}}
       {...props}
     />
   );

@@ -1,8 +1,9 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useUI, useMenuLabel } from '@/i18n';
-import InvoicePaymentModal from '@/windows/custom/shared/InvoicePaymentModal.jsx';
+import InvoicePaymentHistoryModal from '@/windows/custom/shared/InvoicePaymentHistoryModal.jsx';
 import SendDocumentModal, { SendDocumentButton } from '@/components/contract-ui/SendDocumentModal';
 import SendToSifButton from './SendToSifButton';
+import { useInvoicePdf } from '@/windows/custom/shared/useInvoicePdf.js';
 import { getArSubtype } from './invoiceSubtype';
 
 function fmt(val, curr) {
@@ -66,6 +67,13 @@ export default function InvoiceTopbarExtra({ data, recordId, token, apiBaseUrl, 
     Authorization: `Bearer ${token}`,
     'Content-Type': 'application/json',
   }), [token]);
+
+  // ETP-4372 — source the same client-rendered PDF the InvoicePreview panel uses
+  // so the form-view topbar Send modal shows the document instead of the
+  // "PDF not configured" fallback. Hook is called unconditionally at top level
+  // (before the early returns below) to respect the rules of hooks. Keyed on the
+  // same id the modal passes as documentId (data?.id).
+  const { pdfUrl, loading: pdfLoading } = useInvoicePdf(data?.id ?? null, apiBaseUrl, token);
 
   const currency = data?.['currency$_identifier'] || '';
   const grandTotal = data?.grandTotalAmount ?? 0;
@@ -214,6 +222,8 @@ export default function InvoiceTopbarExtra({ data, recordId, token, apiBaseUrl, 
             documentId={data?.id}
             windowName="sales-invoice"
             token={token}
+            pdfBlobUrl={pdfUrl}
+            pdfBlobLoading={pdfLoading}
             onClose={() => setShowSendModal(false)}
           />
         )}
@@ -272,6 +282,7 @@ export default function InvoiceTopbarExtra({ data, recordId, token, apiBaseUrl, 
     return (
       <button
         type="button"
+        data-testid="payment-status-badge"
         onClick={() => setShowPaymentsModal(true)}
         className="inline-flex items-center gap-1.5 text-[13px] font-medium hover:opacity-80 cursor-pointer h-9"
         style={{
@@ -293,6 +304,7 @@ export default function InvoiceTopbarExtra({ data, recordId, token, apiBaseUrl, 
       {/* Badge pill — sole entry point to payments modal */}
       <button
         type="button"
+        data-testid="payment-status-badge"
         onClick={() => setShowPaymentsModal(true)}
         className="inline-flex items-center gap-1.5 text-[13px] font-medium hover:opacity-80 cursor-pointer h-9"
         style={{
@@ -319,11 +331,10 @@ export default function InvoiceTopbarExtra({ data, recordId, token, apiBaseUrl, 
 
       {/* View payments modal — installment breakdown */}
       {showPaymentsModal && (
-        <InvoicePaymentModal
+        <InvoicePaymentHistoryModal
           invoiceId={recordId}
           invoiceData={data}
           specName="sales-invoice"
-          token={token}
           apiBaseUrl={apiBaseUrl}
           onClose={() => setShowPaymentsModal(false)}
           onPaymentAdded={fetchInstallments}
@@ -341,6 +352,8 @@ export default function InvoiceTopbarExtra({ data, recordId, token, apiBaseUrl, 
           documentId={data?.id}
           windowName="sales-invoice"
           token={token}
+          pdfBlobUrl={pdfUrl}
+          pdfBlobLoading={pdfLoading}
           onClose={() => setShowSendModal(false)}
         />
       )}
