@@ -1,16 +1,19 @@
-import { useUI } from '@/i18n';
+import { useUI, useLocale } from '@/i18n';
 import { AccountBadgeSelect } from '@/components/contract-ui';
 import SectionShell from './SectionShell.jsx';
-import { ACCOUNT_OPTIONS, DEFAULTS_GROUPS } from './mockCatalogs.js';
+import { ACCOUNT_OPTIONS, DEFAULTS_GROUPS, resolveFieldLabel } from './mockCatalogs.js';
 
 /**
- * Valores por defecto tab — 4 labeled groups (Tesorería y banco · Clientes y
- * proveedores · Impuestos · Otras cuentas) of AccountBadgeSelect controls. The
- * "Otras cuentas" group is the approved 4th group exposing the product/warehouse/
- * asset/project *_Acct defaults not shown in the Figma mock.
+ * Valores por defecto tab — labeled groups of AccountBadgeSelect controls,
+ * driven by `DEFAULTS_GROUPS`, which is DERIVED from `contract.json` (see
+ * `buildDefaultsGroups` in `mockCatalogs.js`) rather than hand-typed. A field
+ * with no curated `glc.acct.<key>` translation falls back to its raw AD
+ * label via `resolveFieldLabel`. See
+ * docs/superpowers/specs/2026-07-07-glc-defaults-ad-driven-grouping-design.md.
  */
 export default function DefaultsTab({ defaults, accountOptions = ACCOUNT_OPTIONS, setDefaultField, errors = {} }) {
   const ui = useUI();
+  const dictionary = useLocale();
 
   return (
     <div className="px-1">
@@ -26,7 +29,7 @@ export default function DefaultsTab({ defaults, accountOptions = ACCOUNT_OPTIONS
             {group.fields.map((f) => (
               <AccountBadgeSelect
                 key={f.key}
-                label={ui(`glc.acct.${f.key}`)}
+                label={resolveFieldLabel(dictionary, f.key, f.fallbackLabel)}
                 required={f.required}
                 value={defaults[f.key]}
                 options={accountOptions}
