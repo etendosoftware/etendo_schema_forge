@@ -444,6 +444,18 @@
           "visibility": "editable",
           "form": false
         },
+        "etvfacDateIssue": {
+          "visibility": "discarded"
+        },
+        "etvfacHash": {
+          "visibility": "discarded"
+        },
+        "etvfacQRURL": {
+          "visibility": "discarded"
+        },
+        "etvfacIssueDescription": {
+          "visibility": "discarded"
+        },
         "aeatsiiEjercicio": {
           "visibility": "readOnly",
           "form": false
@@ -704,7 +716,12 @@
       "exclude": true
     },
     "siiData": {
-      "exclude": true
+      "exclude": true,
+      "fields": {
+        "cdigoCSV": {
+          "visibility": "discarded"
+        }
+      }
     },
     "ticketbai": {
       "exclude": true

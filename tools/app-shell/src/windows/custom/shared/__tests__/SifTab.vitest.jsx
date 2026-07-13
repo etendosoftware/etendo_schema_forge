@@ -368,13 +368,24 @@ describe('SifTab', () => {
       expect(screen.getByText('sifDataTabs.panel.verifactu.title')).toBeInTheDocument();
     });
 
-    it('renders 5 read-only Verifactu fields', () => {
+    // ETP-4390 regression: RF Generation Date / CSV / Hash / QR URL / Detalle
+    // incidencia were removed from the Verifactu panel — they were never in the
+    // API contract (always rendered as empty em-dash placeholders) and the user
+    // explicitly doesn't need them. decisions.json now marks them "discarded" so
+    // a pipeline regen can't silently resurrect them; this test guards the JSX
+    // side against the same regression via a careless manual edit.
+    it('does not render the 5 removed read-only Verifactu fields (ETP-4390)', () => {
       render(<SifTab {...makeProps()} />);
-      expect(screen.getByTestId('input-sif-vfDate')).toBeInTheDocument();
-      expect(screen.getByTestId('input-sif-vfCsv')).toBeInTheDocument();
-      expect(screen.getByTestId('input-sif-vfHash')).toBeInTheDocument();
-      expect(screen.getByTestId('input-sif-vfQr')).toBeInTheDocument();
-      expect(screen.getByTestId('input-sif-vfIssue')).toBeInTheDocument();
+      expect(screen.queryByTestId('input-sif-vfDate')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('input-sif-vfCsv')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('input-sif-vfHash')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('input-sif-vfQr')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('input-sif-vfIssue')).not.toBeInTheDocument();
+      expect(screen.queryByText('sifDataTabs.field.rfGenerationDate')).not.toBeInTheDocument();
+      expect(screen.queryByText('sifDataTabs.field.csv')).not.toBeInTheDocument();
+      expect(screen.queryByText('sifDataTabs.field.hash')).not.toBeInTheDocument();
+      expect(screen.queryByText('sifDataTabs.field.qrUrl')).not.toBeInTheDocument();
+      expect(screen.queryByText('sifDataTabs.field.issueDetail')).not.toBeInTheDocument();
     });
 
     it('shows VerifactuBadge as not-sent when etvfacSentToVerifac is falsy', () => {
@@ -839,11 +850,17 @@ describe('SifTab', () => {
       expect(screen.getByText('sifDataTabs.sectionTitle')).toBeInTheDocument();
     });
 
+    // ETP-4390: the field this test originally exercised (sif-vfDate /
+    // etvfacDateIssue) was removed from the Verifactu panel. The em-dash
+    // placeholder behavior it targets lives in the shared ReadOnlyValue helper
+    // and is still exercised in production by the SII panel's read-only fields
+    // (e.g. sif-siiYear), so repoint the test there instead of dropping the
+    // coverage.
     it('ReadOnlyValue shows em-dash placeholder when value is null/undefined', () => {
-      mockFiscalConfig('verifactu');
-      render(<SifTab {...makeProps({ data: { etvfacDateIssue: undefined } })} />);
-      const dateInput = screen.getByTestId('input-sif-vfDate');
-      expect(dateInput).toHaveValue('—');
+      mockFiscalConfig('sii');
+      render(<SifTab {...makeProps({ data: { documentStatus: 'DR', aeatsiiEjercicio: undefined } })} />);
+      const yearInput = screen.getByTestId('input-sif-siiYear');
+      expect(yearInput).toHaveValue('—');
     });
   });
 });

@@ -497,36 +497,6 @@ export default function SifTab({ recordId, data, token, apiBaseUrl, onChange }) 
                 </Select>
               </Field>
             )}
-            <ReadOnlyField
-              id="sif-vfDate"
-              labelKey="sifDataTabs.field.rfGenerationDate"
-              value={data?.etvfacDateIssue}
-              ui={ui}
-              data-testid="ReadOnlyField__b99c8b" />
-            <ReadOnlyField
-              id="sif-vfCsv"
-              labelKey="sifDataTabs.field.csv"
-              value={data?.cdigoCSV}
-              ui={ui}
-              data-testid="ReadOnlyField__b99c8b" />
-            <ReadOnlyField
-              id="sif-vfHash"
-              labelKey="sifDataTabs.field.hash"
-              value={data?.etvfacHash}
-              ui={ui}
-              data-testid="ReadOnlyField__b99c8b" />
-            <ReadOnlyField
-              id="sif-vfQr"
-              labelKey="sifDataTabs.field.qrUrl"
-              value={data?.etvfacQRURL}
-              ui={ui}
-              data-testid="ReadOnlyField__b99c8b" />
-            <ReadOnlyField
-              id="sif-vfIssue"
-              labelKey="sifDataTabs.field.issueDetail"
-              value={data?.etvfacIssueDescription}
-              ui={ui}
-              data-testid="ReadOnlyField__b99c8b" />
           </Panel>
         )}
       </div>
