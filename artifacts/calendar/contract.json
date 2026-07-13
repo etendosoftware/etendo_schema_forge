@@ -1,8 +1,8 @@
 {
   "version": "0.1.0",
   "generatedAt": "2026-07-12T21:19:57.559Z",
-  "updatedAt": "2026-07-12T23:56:27.903Z",
-  "checksum": "abe14d13865b541d",
+  "updatedAt": "2026-07-13T00:50:01.276Z",
+  "checksum": "d4ae38587d388ebe",
   "frontendContract": {
     "window": {
       "id": "117",
@@ -146,30 +146,6 @@
               "source": "false"
             },
             "defaultValue": "N"
-          },
-          {
-            "name": "createRegFactAcct",
-            "apiKey": "createRegFactAcct",
-            "column": "Create_Reg_Fact_Acct",
-            "label": "Close Year",
-            "type": "button",
-            "tsType": "string",
-            "visibility": "editable",
-            "required": false,
-            "grid": false,
-            "form": true
-          },
-          {
-            "name": "dropRegFactAcct",
-            "apiKey": "dropRegFactAcct",
-            "column": "Drop_Reg_Fact_Acct",
-            "label": "Undo Close Year",
-            "type": "button",
-            "tsType": "string",
-            "visibility": "editable",
-            "required": false,
-            "grid": false,
-            "form": true
           },
           {
             "name": "calendar",
@@ -1126,7 +1102,7 @@
             "apiKey": "createRegFactAcct",
             "column": "Create_Reg_Fact_Acct",
             "type": "button",
-            "visibility": "editable",
+            "visibility": "discarded",
             "required": false
           },
           {
@@ -1134,7 +1110,7 @@
             "apiKey": "dropRegFactAcct",
             "column": "Drop_Reg_Fact_Acct",
             "type": "button",
-            "visibility": "editable",
+            "visibility": "discarded",
             "required": false
           },
           {
@@ -2139,8 +2115,6 @@
           "processNow": {
             "defaultValue": "N"
           },
-          "createRegFactAcct": {},
-          "dropRegFactAcct": {},
           "calendar": {
             "required": true
           }
@@ -2572,28 +2546,12 @@
         "description": "Field 'calendar' should be present in year"
       },
       {
-        "id": "t-field-presence-year-createRegFactAcct",
-        "category": "field-presence",
-        "entity": "year",
-        "field": "createRegFactAcct",
-        "runner": "node",
-        "description": "Field 'createRegFactAcct' should be present in year"
-      },
-      {
         "id": "t-field-presence-year-description",
         "category": "field-presence",
         "entity": "year",
         "field": "description",
         "runner": "node",
         "description": "Field 'description' should be present in year"
-      },
-      {
-        "id": "t-field-presence-year-dropRegFactAcct",
-        "category": "field-presence",
-        "entity": "year",
-        "field": "dropRegFactAcct",
-        "runner": "node",
-        "description": "Field 'dropRegFactAcct' should be present in year"
       },
       {
         "id": "t-field-presence-year-fiscalYear",
@@ -2756,28 +2714,12 @@
         "description": "Field 'calendar' should have type 'string' in year"
       },
       {
-        "id": "t-field-type-year-createRegFactAcct",
-        "category": "field-type",
-        "entity": "year",
-        "field": "createRegFactAcct",
-        "runner": "node",
-        "description": "Field 'createRegFactAcct' should have type 'string' in year"
-      },
-      {
         "id": "t-field-type-year-description",
         "category": "field-type",
         "entity": "year",
         "field": "description",
         "runner": "node",
         "description": "Field 'description' should have type 'string' in year"
-      },
-      {
-        "id": "t-field-type-year-dropRegFactAcct",
-        "category": "field-type",
-        "entity": "year",
-        "field": "dropRegFactAcct",
-        "runner": "node",
-        "description": "Field 'dropRegFactAcct' should have type 'string' in year"
       },
       {
         "id": "t-field-type-year-fiscalYear",
@@ -3309,12 +3251,28 @@
         "description": "System field 'createdBy' should exist in backend but not frontend for year"
       },
       {
+        "id": "t-system-field-year-createRegFactAcct",
+        "category": "system-field",
+        "entity": "year",
+        "field": "createRegFactAcct",
+        "runner": "node",
+        "description": "System field 'createRegFactAcct' should exist in backend but not frontend for year"
+      },
+      {
         "id": "t-system-field-year-creationDate",
         "category": "system-field",
         "entity": "year",
         "field": "creationDate",
         "runner": "node",
         "description": "System field 'creationDate' should exist in backend but not frontend for year"
+      },
+      {
+        "id": "t-system-field-year-dropRegFactAcct",
+        "category": "system-field",
+        "entity": "year",
+        "field": "dropRegFactAcct",
+        "runner": "node",
+        "description": "System field 'dropRegFactAcct' should exist in backend but not frontend for year"
       },
       {
         "id": "t-system-field-year-id",
@@ -3378,22 +3336,22 @@
       }
     ],
     "summary": {
-      "total": 137,
+      "total": 135,
       "byCategory": {
         "action-endpoint": 7,
         "crud-flags": 4,
         "default-value-type": 5,
-        "field-presence": 23,
-        "field-type": 23,
+        "field-presence": 21,
+        "field-type": 21,
         "readonlylogic-evaluable": 4,
         "readonlylogic-valid": 4,
         "rule-declared": 15,
         "selector-endpoint": 3,
-        "system-field": 45,
+        "system-field": 47,
         "visibility": 4
       },
       "byRunner": {
-        "node": 137,
+        "node": 135,
         "junit": 0
       }
     }

@@ -30,8 +30,6 @@ const extraBadges = [
 // @sf-generated-start processes:year
 const processes = [
   { name: 'processNow', label: 'Create Periods', style: 'positive', params: [{"key":"CREATEADJUSTMENT","type":"select","label":"Create Adjustment Period","required":false,"options":[{"value":"N","label":"No"},{"value":"Y","label":"Yes"}]}] },
-  { name: 'createRegFactAcct', label: 'Close Year', style: 'positive' },
-  { name: 'dropRegFactAcct', label: 'Undo Close Year', style: 'positive' },
 ];
 // @sf-generated-end processes:year
 

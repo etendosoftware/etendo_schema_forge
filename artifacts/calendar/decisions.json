@@ -99,16 +99,10 @@
           "processType": "classic"
         },
         "createRegFactAcct": {
-          "form": true,
-          "visibility": "editable",
-          "processId": "800036",
-          "processType": "classic"
+          "visibility": "discarded"
         },
         "dropRegFactAcct": {
-          "form": true,
-          "visibility": "editable",
-          "processId": "800038",
-          "processType": "classic"
+          "visibility": "discarded"
         },
         "active": {
           "visibility": "discarded"
