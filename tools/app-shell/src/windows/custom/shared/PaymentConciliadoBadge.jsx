@@ -1,4 +1,5 @@
 import { useNavigate } from 'react-router-dom';
+import { ExternalLink } from 'lucide-react';
 import { useUI } from '@/i18n';
 
 /* eslint-disable react/prop-types */
@@ -70,6 +71,7 @@ export default function PaymentConciliadoBadge({ data }) {
     >
       {CHECK_ICON}
       {ui('conciliado')}
+      <ExternalLink size={13} strokeWidth={2.5} aria-hidden="true" />
     </button>
   );
 }
