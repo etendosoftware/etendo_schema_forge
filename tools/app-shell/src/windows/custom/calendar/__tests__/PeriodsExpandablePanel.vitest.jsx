@@ -1,11 +1,16 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+
+vi.mock('sonner', () => ({ toast: { error: vi.fn(), success: vi.fn() } }));
+
+import { toast } from 'sonner';
 import PeriodsExpandablePanel from '../PeriodsExpandablePanel.jsx';
 
 const PERIOD = { id: 'p1', name: 'Jan-2027', status: 'O', periodNo: 1 };
 const DOC = { id: 'd1', documentCategory: 'API', periodStatus: 'O' };
 
 beforeEach(() => {
+  toast.error.mockClear();
   global.fetch = vi.fn((url) => {
     if (url.includes('/periodControl')) {
       return Promise.resolve({ ok: true, json: () => Promise.resolve({ data: [PERIOD] }) });
@@ -81,11 +86,68 @@ describe('PeriodsExpandablePanel', () => {
     await waitFor(() => screen.getByText('API'));
     expect(global.fetch.mock.calls.length).toBe(fetchCallsAfterExpand);
   });
-});
 
-// NOTE (Sentinel/QA, ETP-4478): a non-ok response from the `periodControl` or `documents`
-// fetch is NOT handled anywhere in this component — `fetchJson` throws and neither `useEffect`
-// call nor `toggleExpand` attaches a `.catch`, so a failed request surfaces as a real, uncaught
-// `Unhandled Rejection` at runtime (verified interactively; not committed as a spec here because
-// it would leave the suite exiting non-zero on an intentionally-uncaught rejection). See the QA
-// report for BUG-1/BUG-2 (no error handling / no double-submit guard on the open/close actions).
+  it('shows a loading indicator while periodControl is still pending', () => {
+    global.fetch = vi.fn(() => new Promise(() => {})); // never resolves
+    render(<PeriodsExpandablePanel parentId="year1" token="tok" apiBaseUrl="https://api.test" data-testid="p5" />);
+    expect(screen.getByTestId('periods-expandable-panel-loading')).toBeInTheDocument();
+  });
+
+  it('shows an error state (not stuck loading, not the panel) when periodControl fails', async () => {
+    global.fetch = vi.fn(() => Promise.resolve({ ok: false, status: 500, json: () => Promise.resolve({}) }));
+    render(<PeriodsExpandablePanel parentId="year1" token="tok" apiBaseUrl="https://api.test" data-testid="p6" />);
+    await waitFor(() => expect(screen.getByTestId('periods-expandable-panel-error')).toBeInTheDocument());
+    expect(screen.queryByTestId('periods-expandable-panel')).not.toBeInTheDocument();
+  });
+
+  it('shows an inline error under the expanded period when the documents fetch fails', async () => {
+    global.fetch = vi.fn((url) => {
+      if (url.includes('/periodControl')) return Promise.resolve({ ok: true, json: () => Promise.resolve({ data: [PERIOD] }) });
+      if (url.includes('/documents')) return Promise.resolve({ ok: false, status: 500, json: () => Promise.resolve({}) });
+      return Promise.reject(new Error('unexpected'));
+    });
+    render(<PeriodsExpandablePanel parentId="year1" token="tok" apiBaseUrl="https://api.test" data-testid="p7" />);
+    await waitFor(() => screen.getByText('Jan-2027'));
+
+    fireEvent.click(screen.getByTestId('period-row-expand-p1'));
+    await waitFor(() => expect(screen.getByTestId('period-documents-error-p1')).toBeInTheDocument());
+  });
+
+  it('shows a toast and re-enables the button when Abrir/Cerrar Periodo fails', async () => {
+    global.fetch = vi.fn((url, opts) => {
+      if (opts?.method === 'POST') return Promise.resolve({ ok: false, status: 500, json: () => Promise.resolve({}) });
+      if (url.includes('/periodControl')) return Promise.resolve({ ok: true, json: () => Promise.resolve({ data: [PERIOD] }) });
+      return Promise.reject(new Error('unexpected'));
+    });
+    render(<PeriodsExpandablePanel parentId="year1" token="tok" apiBaseUrl="https://api.test" data-testid="p8" />);
+    await waitFor(() => screen.getByText('Jan-2027'));
+
+    fireEvent.click(screen.getByTestId('period-openclose-p1'));
+    await waitFor(() => expect(toast.error).toHaveBeenCalled());
+    await waitFor(() => expect(screen.getByTestId('period-openclose-p1')).not.toBeDisabled());
+  });
+
+  it('disables Abrir/Cerrar Periodo while the request is in flight, guarding against double-submit', async () => {
+    global.fetch.mockImplementationOnce((url) => {
+      if (url.includes('/periodControl')) return Promise.resolve({ ok: true, json: () => Promise.resolve({ data: [PERIOD] }) });
+      return Promise.reject(new Error('unexpected'));
+    });
+    render(<PeriodsExpandablePanel parentId="year1" token="tok" apiBaseUrl="https://api.test" data-testid="p9" />);
+    await waitFor(() => screen.getByText('Jan-2027'));
+
+    let resolvePost;
+    const postSpy = vi.fn(() => new Promise((resolve) => { resolvePost = resolve; }));
+    global.fetch = postSpy;
+
+    const button = screen.getByTestId('period-openclose-p1');
+    fireEvent.click(button);
+    await waitFor(() => expect(button).toBeDisabled());
+
+    fireEvent.click(button);
+    fireEvent.click(button);
+    expect(postSpy).toHaveBeenCalledTimes(1);
+
+    resolvePost({ ok: true, json: () => Promise.resolve({}) });
+    await waitFor(() => expect(button).not.toBeDisabled());
+  });
+});

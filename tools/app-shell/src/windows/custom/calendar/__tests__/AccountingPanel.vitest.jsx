@@ -25,19 +25,24 @@ describe('AccountingPanel', () => {
     await waitFor(() => expect(screen.getByTestId('accounting-panel-empty')).toBeInTheDocument());
   });
 
-  it('renders nothing while the fetch is still pending (no loading indicator)', () => {
+  it('shows a loading indicator while the fetch is still pending', () => {
     global.fetch = vi.fn(() => new Promise(() => {})); // never resolves
-    const { container } = render(
+    render(
       <AccountingPanel parentId="year1" token="tok" apiBaseUrl="https://api.test" data-testid="AccountingPanel__pending" />
     );
-    expect(container.firstChild).toBeNull();
+    expect(screen.getByTestId('accounting-panel-loading')).toBeInTheDocument();
   });
 
-  it('falls back to the empty state (not an error message) when the server responds with a non-ok status', async () => {
-    // The component does not check res.ok before parsing JSON — an HTTP error with a parseable
-    // body is silently treated the same as "no rows", with no error surfaced to the user.
+  it('shows a distinct error state (not the empty state) when the server responds with a non-ok status', async () => {
     global.fetch = vi.fn(() => Promise.resolve({ ok: false, status: 500, json: () => Promise.resolve({}) }));
     render(<AccountingPanel parentId="year1" token="tok" apiBaseUrl="https://api.test" data-testid="AccountingPanel__error" />);
-    await waitFor(() => expect(screen.getByTestId('accounting-panel-empty')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByTestId('accounting-panel-error')).toBeInTheDocument());
+    expect(screen.queryByTestId('accounting-panel-empty')).not.toBeInTheDocument();
+  });
+
+  it('shows the error state (not stuck loading) on a hard network failure', async () => {
+    global.fetch = vi.fn(() => Promise.reject(new Error('network down')));
+    render(<AccountingPanel parentId="year1" token="tok" apiBaseUrl="https://api.test" data-testid="AccountingPanel__network" />);
+    await waitFor(() => expect(screen.getByTestId('accounting-panel-error')).toBeInTheDocument());
   });
 });
