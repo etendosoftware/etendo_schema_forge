@@ -2,7 +2,7 @@
  * Integration test for InlineLinesPanel — renders the component in jsdom
  * with minimal mocks. No server, no DB, no browser needed.
  */
-import { render, screen, within, act } from '@testing-library/react';
+import { render, screen, within, act, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import InlineLinesPanel from '../InlineLinesPanel.jsx';
 import React, { createRef } from 'react';
@@ -387,6 +387,78 @@ describe('InlineLinesPanel', () => {
     const rowAfter = screen.getByTestId('line-row-L1');
     // In read mode, product renders as a span, not an input
     expect(within(rowAfter).queryAllByRole('textbox').length).toBe(0);
+  });
+
+  // ---------- ETP-4422: outside-click autosave must fire on the FIRST click ----------
+  //
+  // Regression coverage for the "autosave needs 2 clicks" bug. Root cause: Radix's
+  // SelectTrigger calls preventDefault() on its own pointerdown handler, which per the
+  // Pointer Events spec suppresses the browser's compatibility `mousedown` for that
+  // interaction. A `mousedown` outside-click listener therefore never runs on the first
+  // click on a trigger. Fix: listen for `pointerdown` in the CAPTURE phase on `document`,
+  // which fires before any bubble-phase handler on the clicked element (Radix's included)
+  // gets a chance to steal focus or call preventDefault() — so the row's pristine,
+  // still-focused input is available to blur (and hence autosave) synchronously.
+
+  it('autosaves the pending edit on the FIRST outside pointerdown, even when the ' +
+    'target cancels it and steals focus (simulates Radix SelectTrigger)', async () => {
+    const onUpdateRow = vi.fn().mockResolvedValue();
+    renderPanel({ onUpdateRow });
+    const row = screen.getByTestId('line-row-L1');
+    await act(async () => {
+      await userEvent.hover(row);
+    });
+    const actions = within(row).getByTestId('line-actions');
+    const editBtn = within(actions).getAllByRole('button')[0];
+    await act(async () => {
+      await userEvent.click(editBtn);
+    });
+
+    // Mid-edit: focus the row's input and change its value WITHOUT blurring yet —
+    // this is the pending edit whose autosave PATCH must not need a second click.
+    const productInput = within(row).getByTestId('field-product');
+    act(() => {
+      productInput.focus();
+    });
+    fireEvent.change(productInput, { target: { value: 'Changed Widget' } });
+    expect(document.activeElement).toBe(productInput);
+
+    // Simulate a Radix-style trigger rendered OUTSIDE the row: its own bubble-phase
+    // pointerdown handler calls preventDefault() AND steals focus to a decoy element —
+    // exactly what Radix's internal focus management does. If our fix used a plain
+    // bubble-phase (or `mousedown`) listener, it would observe `document.activeElement`
+    // AFTER this handler already ran (i.e. already stolen), so it would never find the
+    // row's input inside `editingRowEl` and would skip the blur — reproducing the bug.
+    const outsideTrigger = document.createElement('button');
+    document.body.appendChild(outsideTrigger);
+    const decoy = document.createElement('input');
+    document.body.appendChild(decoy);
+    outsideTrigger.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      decoy.focus();
+    });
+
+    await act(async () => {
+      outsideTrigger.dispatchEvent(
+        new PointerEvent('pointerdown', { bubbles: true, cancelable: true }),
+      );
+      // Flush the deferred setTimeout(0) that commits setEditingRowId(null).
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    // The autosave PATCH must have fired from the explicit blur() — on the first click.
+    expect(onUpdateRow).toHaveBeenCalledWith(
+      ROWS[0],
+      'product',
+      'Changed Widget',
+      expect.objectContaining({}),
+    );
+    // Row must have exited edit mode.
+    const rowAfter = screen.getByTestId('line-row-L1');
+    expect(within(rowAfter).queryAllByRole('textbox').length).toBe(0);
+
+    document.body.removeChild(outsideTrigger);
+    document.body.removeChild(decoy);
   });
 
   // ---------- NEW: additional coverage for uncovered InlineLinesPanel branches ----------
@@ -1258,6 +1330,151 @@ describe('InlineLinesPanel', () => {
       const rows = [{ id: 'L1', storageBin: 'LOC-AG', 'storageBin$_identifier': 'Aisle G', newStorageBin: '', 'newStorageBin$_identifier': '' }];
       const combo = await enterEditAndGetCombo(cols, rows, 'newStorageBin');
       expect(combo).toHaveAttribute('data-exclude-id', '');
+    });
+  });
+
+  describe('email-format validation on inline cell edit', () => {
+    const EMAIL_COLUMNS = [
+      { key: 'name', label: 'Name', type: 'string', column: 'Name' },
+      { key: 'email', label: 'Email', type: 'string', column: 'Email' },
+    ];
+    const EMAIL_ROWS = [{ id: 'C1', name: 'Jane', email: 'jane@example.com' }];
+
+    async function enterEmailEdit(onUpdateRow) {
+      render(
+        <InlineLinesPanel
+          columns={EMAIL_COLUMNS}
+          data={EMAIL_ROWS}
+          entity="contact"
+          token="test"
+          apiBaseUrl="/api"
+          selectorContext={{}}
+          onSelectionChange={vi.fn()}
+          onUpdateRow={onUpdateRow}
+          onDeleteRow={vi.fn().mockResolvedValue()}
+        />,
+      );
+      const row = screen.getByTestId('line-row-C1');
+      await act(async () => { await userEvent.hover(row); });
+      const actions = within(row).getByTestId('line-actions');
+      const editBtn = within(actions).getAllByRole('button')[0];
+      await act(async () => { await userEvent.click(editBtn); });
+      return row;
+    }
+
+    it('blocks the PATCH and toasts for a non-empty malformed email', async () => {
+      const onUpdateRow = vi.fn().mockResolvedValue();
+      const row = await enterEmailEdit(onUpdateRow);
+      const emailInput = within(row).getByTestId('field-email');
+      await act(async () => {
+        await userEvent.clear(emailInput);
+        await userEvent.type(emailInput, 'not-an-email');
+        emailInput.blur();
+      });
+      const { toast } = await import('sonner');
+      expect(toast.error).toHaveBeenCalledWith('sendModalInvalidEmail');
+      expect(onUpdateRow).not.toHaveBeenCalled();
+    });
+
+    it('commits a corrected valid email (clears the error, PATCHes)', async () => {
+      const onUpdateRow = vi.fn().mockResolvedValue();
+      const row = await enterEmailEdit(onUpdateRow);
+      const emailInput = within(row).getByTestId('field-email');
+      await act(async () => {
+        await userEvent.clear(emailInput);
+        await userEvent.type(emailInput, 'new@example.com');
+        emailInput.blur();
+      });
+      expect(onUpdateRow).toHaveBeenCalledWith(
+        EMAIL_ROWS[0], 'email', 'new@example.com', expect.objectContaining({ column: 'Email' }),
+      );
+    });
+
+    it('does not email-validate a non-email column (regression)', async () => {
+      const onUpdateRow = vi.fn().mockResolvedValue();
+      const row = await enterEmailEdit(onUpdateRow);
+      const nameInput = within(row).getByTestId('field-name');
+      await act(async () => {
+        await userEvent.clear(nameInput);
+        await userEvent.type(nameInput, 'not-an-email');
+        nameInput.blur();
+      });
+      // The non-email 'name' column commits normally — no invalid-email block.
+      expect(onUpdateRow).toHaveBeenCalledWith(
+        EMAIL_ROWS[0], 'name', 'not-an-email', expect.objectContaining({ column: 'Name' }),
+      );
+    });
+  });
+
+  describe('phone-format validation on inline cell edit', () => {
+    const PHONE_COLUMNS = [
+      { key: 'name', label: 'Name', type: 'string', column: 'Name' },
+      { key: 'phone', label: 'Phone', type: 'string', column: 'Phone' },
+    ];
+    const PHONE_ROWS = [{ id: 'C1', name: 'Jane', phone: '+34 600 123 456' }];
+
+    async function enterPhoneEdit(onUpdateRow) {
+      render(
+        <InlineLinesPanel
+          columns={PHONE_COLUMNS}
+          data={PHONE_ROWS}
+          entity="contact"
+          token="test"
+          apiBaseUrl="/api"
+          selectorContext={{}}
+          onSelectionChange={vi.fn()}
+          onUpdateRow={onUpdateRow}
+          onDeleteRow={vi.fn().mockResolvedValue()}
+        />,
+      );
+      const row = screen.getByTestId('line-row-C1');
+      await act(async () => { await userEvent.hover(row); });
+      const actions = within(row).getByTestId('line-actions');
+      const editBtn = within(actions).getAllByRole('button')[0];
+      await act(async () => { await userEvent.click(editBtn); });
+      return row;
+    }
+
+    it('blocks the PATCH and toasts for an invalid phone', async () => {
+      const onUpdateRow = vi.fn().mockResolvedValue();
+      const row = await enterPhoneEdit(onUpdateRow);
+      const phoneInput = within(row).getByTestId('field-phone');
+      await act(async () => {
+        await userEvent.clear(phoneInput);
+        await userEvent.type(phoneInput, '600abc');
+        phoneInput.blur();
+      });
+      const { toast } = await import('sonner');
+      expect(toast.error).toHaveBeenCalledWith('phoneInvalidChars');
+      expect(onUpdateRow).not.toHaveBeenCalled();
+    });
+
+    it('commits a corrected valid phone (PATCHes)', async () => {
+      const onUpdateRow = vi.fn().mockResolvedValue();
+      const row = await enterPhoneEdit(onUpdateRow);
+      const phoneInput = within(row).getByTestId('field-phone');
+      await act(async () => {
+        await userEvent.clear(phoneInput);
+        await userEvent.type(phoneInput, '600 111 222');
+        phoneInput.blur();
+      });
+      expect(onUpdateRow).toHaveBeenCalledWith(
+        PHONE_ROWS[0], 'phone', '600 111 222', expect.objectContaining({ column: 'Phone' }),
+      );
+    });
+
+    it('does not phone-validate a non-phone column (regression)', async () => {
+      const onUpdateRow = vi.fn().mockResolvedValue();
+      const row = await enterPhoneEdit(onUpdateRow);
+      const nameInput = within(row).getByTestId('field-name');
+      await act(async () => {
+        await userEvent.clear(nameInput);
+        await userEvent.type(nameInput, 'abc def');
+        nameInput.blur();
+      });
+      expect(onUpdateRow).toHaveBeenCalledWith(
+        PHONE_ROWS[0], 'name', 'abc def', expect.objectContaining({ column: 'Name' }),
+      );
     });
   });
 });

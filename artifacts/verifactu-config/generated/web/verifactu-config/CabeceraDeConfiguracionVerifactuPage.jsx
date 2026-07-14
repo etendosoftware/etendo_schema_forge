@@ -14,7 +14,6 @@ const summary = [
   { key: 'systemStartat', column: 'System_Startat', type: 'string' },
   { key: 'systemStopat', column: 'System_Stopat', type: 'string' },
   { key: 'incidentReport', column: 'Incident_Report', type: 'string' },
-  { key: 'inVfactuSystem', column: 'IN_Vfactu_System', type: 'string' },
 ];
 
 const statusField = null;

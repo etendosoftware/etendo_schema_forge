@@ -281,6 +281,12 @@
           "windowId": "E66E701CCBA14B8BA480CBDE37C50D7A"
         },
         {
+          "name": "fiscal-calendar",
+          "label": "Fiscal Calendar",
+          "favname": "Fiscal Calendar",
+          "windowId": "117"
+        },
+        {
           "name": "assets",
           "label": "Assets",
           "favname": "Assets",

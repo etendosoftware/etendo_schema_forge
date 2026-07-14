@@ -76,9 +76,14 @@ describe('VerifactuSection — rendering', () => {
 });
 
 describe('VerifactuSection — locked state', () => {
-  it('shows the locked badge when isReady=Y', () => {
+  it('renders a disabled read-only tax type input when isReady=Y', () => {
     render(<VerifactuSection {...PROPS} record={{ ...BASE_RECORD, isReady: 'Y' }} />);
-    expect(screen.getByText('fiscal.verifactu.locked.badge')).toBeInTheDocument();
+    expect(screen.getByTestId('Input__e30816')).toBeDisabled();
+  });
+
+  it('disables the QR switch when isReady=Y', () => {
+    render(<VerifactuSection {...PROPS} record={{ ...BASE_RECORD, isReady: 'Y' }} />);
+    expect(screen.getByRole('checkbox')).toBeDisabled();
   });
 
   it('hides the save button when locked', () => {
@@ -86,8 +91,10 @@ describe('VerifactuSection — locked state', () => {
     expect(screen.queryByText('fiscal.save')).not.toBeInTheDocument();
   });
 
-  it('does not show badge when not locked', () => {
-    render(<VerifactuSection {...PROPS} record={{ ...BASE_RECORD, isReady: 'N' }} />);
+  it('never renders a locked badge, regardless of lock state (badge was removed)', () => {
+    const { rerender } = render(<VerifactuSection {...PROPS} record={{ ...BASE_RECORD, isReady: 'Y' }} />);
+    expect(screen.queryByText('fiscal.verifactu.locked.badge')).not.toBeInTheDocument();
+    rerender(<VerifactuSection {...PROPS} record={{ ...BASE_RECORD, isReady: 'N' }} />);
     expect(screen.queryByText('fiscal.verifactu.locked.badge')).not.toBeInTheDocument();
   });
 });

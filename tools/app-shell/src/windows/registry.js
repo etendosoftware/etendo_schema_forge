@@ -58,6 +58,7 @@ const windowLoaders = {
   'amortization': () => import('@generated/amortization/generated/web/amortization/index.jsx'),
   'simple-g-l-journal': () => import('@generated/simple-g-l-journal/generated/web/simple-g-l-journal/index.jsx'),
   'open-close-period-control': () => import('@generated/open-close-period-control/generated/web/open-close-period-control/index.jsx'),
+  'fiscal-calendar': () => import('@generated/fiscal-calendar/generated/web/fiscal-calendar/index.jsx'),
 };
 
 /**

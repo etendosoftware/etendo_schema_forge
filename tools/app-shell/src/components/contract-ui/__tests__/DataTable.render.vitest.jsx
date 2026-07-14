@@ -28,6 +28,7 @@ vi.mock('@/lib/selectorCatalog.js', () => ({
 }));
 vi.mock('@/lib/statusBadge.js', () => ({
   getStatusDotColor: (raw) => `dot-${raw ?? 'none'}`,
+  getStatusTone: () => 'neutral',
   statusLabel: (raw) => `lbl-${raw}`,
 }));
 vi.mock('@/components/ui/status-tag', () => ({

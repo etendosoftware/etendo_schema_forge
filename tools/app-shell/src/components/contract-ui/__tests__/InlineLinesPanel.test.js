@@ -174,4 +174,24 @@ describe('InlineLinesPanel', () => {
     assert.match(src, /NUMERIC_TYPES\.has\(col\.type\) \? 'flex-end' : 'flex-start'/);
     assert.match(src, /NUMERIC_TYPES\.has\(col\.type\) \? 'right' : 'left'/);
   });
+
+  // ETP-4422 (follow-up): the outside-click handler MUST listen for `pointerdown` in
+  // the capture phase, not `mousedown`. Radix's SelectTrigger calls preventDefault()
+  // on its own (bubble-phase) pointerdown handler, which per the Pointer Events spec
+  // suppresses the browser's compatibility `mousedown` for that interaction — so a
+  // `mousedown` listener never fires on the FIRST click on a trigger, and a bubble-phase
+  // (non-capture) listener would observe activeElement only after Radix's own handler
+  // already ran. This guard prevents a future refactor from silently reintroducing the
+  // "autosave needs 2 clicks" bug.
+  it('registers the outside-click handler as a capture-phase pointerdown listener', () => {
+    assert.match(
+      src,
+      /document\.addEventListener\('pointerdown', handler, \{ capture: true \}\)/,
+    );
+    assert.match(
+      src,
+      /document\.removeEventListener\('pointerdown', handler, \{ capture: true \}\)/,
+    );
+    assert.doesNotMatch(src, /document\.addEventListener\('mousedown', handler\)/);
+  });
 });

@@ -1,4 +1,4 @@
-import { render, screen, waitFor, act } from '@testing-library/react';
+import { render, screen, waitFor, act, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 // --- Mocks ----------------------------------------------------------------
@@ -24,12 +24,34 @@ vi.mock('@/lib/selectorCatalog.js', () => ({
   },
 }));
 
-vi.mock('lucide-react', () => ({
-  Loader2: (props) => <span {...props} data-testid="loader" />,
-  Minus: (props) => <span {...props} data-testid="minus-icon" />,
-  Plus: (props) => <span {...props} data-testid="plus-icon" />,
-  Trash2: (props) => <span {...props} data-testid="trash-icon" />,
-}));
+// The render tree pulls in the shared Dialog (via InlineCreateModal) which imports
+// the `X` icon, plus ChevronDown/Loader2 (via CreatableSearchSelect). Return a stub
+// for ANY icon name so every icon in the tree resolves. A few well-known icons keep
+// the stable test-ids the existing assertions rely on.
+vi.mock('lucide-react', () => {
+  const named = {
+    Loader2: (props) => <span {...props} data-testid="loader" />,
+    Minus: (props) => <span {...props} data-testid="minus-icon" />,
+    Plus: (props) => <span {...props} data-testid="plus-icon" />,
+    Trash2: (props) => <span {...props} data-testid="trash-icon" />,
+  };
+  const isReserved = (prop) =>
+    typeof prop !== 'string' || prop === 'then' || prop === '__esModule';
+  return new Proxy(named, {
+    // Vitest's mocker throws on `prop in module` for unknown exports, so claim
+    // every (non-reserved) icon name exists and synthesize a stub in `get`.
+    has(target, prop) {
+      if (Reflect.has(target, prop)) return true;
+      return !isReserved(prop);
+    },
+    get(target, prop) {
+      if (Reflect.has(target, prop)) return Reflect.get(target, prop);
+      // Guard interop/thenable probes so the mocked module is not treated as a promise.
+      if (isReserved(prop)) return undefined;
+      return (props) => <span {...props} data-testid={`icon-${prop}`} />;
+    },
+  });
+});
 
 vi.mock('sonner', () => ({
   toast: { success: vi.fn(), error: vi.fn(), info: vi.fn() },
@@ -49,6 +71,9 @@ const PURCHASE_PLV_ID = 'plv-purchase-1';
 /**
  * Build a fetch dispatcher that routes calls by URL + method.
  * Keys in `routes` are 'METHOD <url-substring>'. URL match is includes().
+ * NOTE: keys are evaluated in insertion order — register more specific
+ * patterns (e.g. 'POST /price-list/priceList') BEFORE looser ones
+ * (e.g. 'POST /price') so the specific route wins.
  */
 function buildFetch(routes, callLog = []) {
   return vi.fn((url, init = {}) => {
@@ -135,6 +160,19 @@ function renderBar(overrides = {}) {
   return render(<ProductPriceBar {...defaults} {...overrides} />);
 }
 
+/**
+ * Reveal the CreatableSearchSelect and open its dropdown.
+ * Clicking the "+ add tariff" link sets adding=true (renders the selector);
+ * focusing the text input opens the dropdown (options + create action).
+ */
+async function openTariffSelect(user) {
+  await waitFor(() => expect(screen.getByTestId('price-add-tariff')).toBeInTheDocument());
+  await user.click(screen.getByTestId('price-add-tariff'));
+  const input = await screen.findByTestId('field-priceListVersion');
+  await user.click(input);
+  return input;
+}
+
 // --- Tests ----------------------------------------------------------------
 
 describe('ProductPriceBar', () => {
@@ -154,13 +192,11 @@ describe('ProductPriceBar', () => {
   it('renders sales section title and toggle buttons by default', async () => {
     renderBar();
 
-    // Toggle buttons for both sections should always be visible.
     await waitFor(() => {
       expect(screen.getByTestId('price-tab-sales')).toBeInTheDocument();
     });
     expect(screen.getByTestId('price-tab-purchase')).toBeInTheDocument();
 
-    // The active section heading must say the sales key.
     expect(screen.getByRole('heading', { level: 3 })).toHaveTextContent('priceSalesListsTitle');
   });
 
@@ -170,7 +206,6 @@ describe('ProductPriceBar', () => {
   it('shows save-first message when data has no id', () => {
     renderBar({ data: {} });
     expect(screen.getByText('saveProductFirstPricing')).toBeInTheDocument();
-    // Toggle must NOT be rendered.
     expect(screen.queryByTestId('price-tab-sales')).not.toBeInTheDocument();
   });
 
@@ -207,7 +242,6 @@ describe('ProductPriceBar', () => {
 
     await waitFor(() => expect(screen.getByTestId('price-tab-sales')).toBeInTheDocument());
 
-    // Go to purchase then back.
     await user.click(screen.getByTestId('price-tab-purchase'));
     await user.click(screen.getByTestId('price-tab-sales'));
 
@@ -225,7 +259,6 @@ describe('ProductPriceBar', () => {
     renderBar();
 
     await screen.findByDisplayValue('Sales List v1');
-    // Count badge shows 1.
     expect(screen.getByText('1')).toBeInTheDocument();
   });
 
@@ -236,10 +269,8 @@ describe('ProductPriceBar', () => {
 
     renderBar();
 
-    // Wait for a row to appear then check spinbutton values.
     await screen.findByDisplayValue('Sales List v1');
     const spinbuttons = screen.getAllByRole('spinbutton');
-    // First is standardPrice (23), second is listPrice (25).
     expect(spinbuttons[0]).toHaveValue(23);
     expect(spinbuttons[1]).toHaveValue(25);
   });
@@ -278,7 +309,6 @@ describe('ProductPriceBar', () => {
     await screen.findByDisplayValue('Sales List v1');
 
     const spinbuttons = screen.getAllByRole('spinbutton');
-    // Clear existing value and type a new one.
     await user.clear(spinbuttons[0]);
     await user.type(spinbuttons[0], '99');
     await user.tab(); // blur
@@ -340,11 +370,9 @@ describe('ProductPriceBar', () => {
 
     await screen.findByDisplayValue('Sales List v1');
     const spinbuttons = screen.getAllByRole('spinbutton');
-    // Focus and blur without changing the value.
     await user.click(spinbuttons[0]);
     await user.tab();
 
-    // Give any potential async a beat.
     await new Promise((r) => setTimeout(r, 50));
 
     const patches = calls.filter((c) => c.method === 'PATCH');
@@ -375,18 +403,27 @@ describe('ProductPriceBar', () => {
       expect(deletes).toHaveLength(1);
     });
 
-    // After DELETE, a re-fetch (GET) should have fired.
     await waitFor(() => {
       const gets = calls.filter((c) => c.method === 'GET' && c.url.includes('/price?parentId='));
-      // Initial fetch + post-delete re-fetch = 2.
       expect(gets.length).toBeGreaterThanOrEqual(2);
     });
   });
 
+  it('delete button has correct data-testid per row id', async () => {
+    global.fetch = buildFetch({
+      'GET /price?parentId=': { response: { data: [salesRow({ id: 'my-price-row' })] } },
+    });
+
+    renderBar();
+
+    await screen.findByTestId('price-delete-my-price-row');
+    expect(screen.getByTestId('price-delete-my-price-row')).toBeInTheDocument();
+  });
+
   // -----------------------------------------------------------------------
-  // 7. Add new tariff — combobox filtered to active section, selecting fires POST
+  // 7. Add tariff — CreatableSearchSelect filtered to the active section
   // -----------------------------------------------------------------------
-  it('"Add new tariff" reveals combobox with only sales options when in sales section', async () => {
+  it('"Add new tariff" reveals selector with only sales options when in sales section', async () => {
     global.fetch = buildFetch({
       'GET /price?parentId=': { response: { data: [] } },
     });
@@ -394,16 +431,12 @@ describe('ProductPriceBar', () => {
     const user = userEvent.setup();
     renderBar({ catalogs: catalogsWithPlv(), api: apiWithPriceSelector() });
 
-    await waitFor(() => expect(screen.getByTestId('price-add-tariff')).toBeInTheDocument());
-    await user.click(screen.getByTestId('price-add-tariff'));
+    await openTariffSelect(user);
 
-    const select = await screen.findByRole('combobox');
-    const optionValues = Array.from(select.querySelectorAll('option'))
-      .map((o) => o.value)
-      .filter(Boolean); // skip placeholder
-
-    expect(optionValues).toContain(SALES_PLV_ID);
-    expect(optionValues).not.toContain(PURCHASE_PLV_ID);
+    await screen.findByTestId(`option-priceListVersion-${SALES_PLV_ID}`);
+    expect(
+      screen.queryByTestId(`option-priceListVersion-${PURCHASE_PLV_ID}`),
+    ).not.toBeInTheDocument();
   });
 
   it('"Add new tariff" in purchase section shows only purchase options', async () => {
@@ -417,19 +450,15 @@ describe('ProductPriceBar', () => {
     await waitFor(() => expect(screen.getByTestId('price-tab-purchase')).toBeInTheDocument());
     await user.click(screen.getByTestId('price-tab-purchase'));
 
-    await waitFor(() => expect(screen.getByTestId('price-add-tariff')).toBeInTheDocument());
-    await user.click(screen.getByTestId('price-add-tariff'));
+    await openTariffSelect(user);
 
-    const select = await screen.findByRole('combobox');
-    const optionValues = Array.from(select.querySelectorAll('option'))
-      .map((o) => o.value)
-      .filter(Boolean);
-
-    expect(optionValues).toContain(PURCHASE_PLV_ID);
-    expect(optionValues).not.toContain(SALES_PLV_ID);
+    await screen.findByTestId(`option-priceListVersion-${PURCHASE_PLV_ID}`);
+    expect(
+      screen.queryByTestId(`option-priceListVersion-${SALES_PLV_ID}`),
+    ).not.toBeInTheDocument();
   });
 
-  it('selecting an option from the combobox fires POST with correct priceListVersion', async () => {
+  it('selecting an existing option fires POST /price with correct priceListVersion', async () => {
     const calls = [];
     global.fetch = buildFetch(
       {
@@ -442,26 +471,185 @@ describe('ProductPriceBar', () => {
     const user = userEvent.setup();
     renderBar({ catalogs: catalogsWithPlv(), api: apiWithPriceSelector() });
 
-    await waitFor(() => expect(screen.getByTestId('price-add-tariff')).toBeInTheDocument());
-    await user.click(screen.getByTestId('price-add-tariff'));
+    await openTariffSelect(user);
 
-    const select = await screen.findByRole('combobox');
-    await user.selectOptions(select, SALES_PLV_ID);
+    const option = await screen.findByTestId(`option-priceListVersion-${SALES_PLV_ID}`);
+    await user.click(option);
 
     await waitFor(() => {
       const posts = calls.filter((c) => c.method === 'POST' && c.url.endsWith('/price'));
       expect(posts).toHaveLength(1);
     });
 
-    const post = calls.find((c) => c.method === 'POST');
+    const post = calls.find((c) => c.method === 'POST' && c.url.endsWith('/price'));
     const body = JSON.parse(post.body);
     expect(body.priceListVersion).toBe(SALES_PLV_ID);
     expect(body.standardPrice).toBe('0');
     expect(body.listPrice).toBe('0');
+    expect(body.priceLimit).toBe('0');
   });
 
   // -----------------------------------------------------------------------
-  // 8. onCountChange called with row count
+  // 8. Inline create-tariff flow
+  // -----------------------------------------------------------------------
+  it('clicking the create action opens the inline-create modal', async () => {
+    const user = userEvent.setup();
+    renderBar({ catalogs: catalogsWithPlv(), api: apiWithPriceSelector() });
+
+    await openTariffSelect(user);
+
+    const createAction = await screen.findByTestId('action-create-priceListVersion');
+    await user.click(createAction);
+
+    await screen.findByTestId('inline-create-modal');
+    expect(screen.getByTestId('inline-create-name')).toBeInTheDocument();
+  });
+
+  it('creating a tariff in the sales section POSTs a sales price list then links it via POST /price', async () => {
+    const calls = [];
+    global.fetch = buildFetch(
+      {
+        'GET /price?parentId=': { response: { data: [] } },
+        'POST /price-list/priceList': {
+          response: { data: [{ id: 'PL1', priceListVersion: 'PLV1' }] },
+        },
+        'POST /price': { response: { data: [] } },
+      },
+      calls,
+    );
+
+    const user = userEvent.setup();
+    renderBar({ catalogs: catalogsWithPlv(), api: apiWithPriceSelector() });
+
+    await openTariffSelect(user);
+
+    await user.click(await screen.findByTestId('action-create-priceListVersion'));
+    await screen.findByTestId('inline-create-modal');
+
+    await user.type(screen.getByTestId('inline-create-name'), 'My Tariff');
+    await user.click(screen.getByTestId('inline-create-submit'));
+
+    // 1. Price-list create POST with the correct spec-swapped URL + body.
+    await waitFor(() => {
+      const creates = calls.filter(
+        (c) => c.method === 'POST' && c.url.includes('/price-list/priceList'),
+      );
+      expect(creates).toHaveLength(1);
+    });
+
+    const create = calls.find(
+      (c) => c.method === 'POST' && c.url.includes('/price-list/priceList'),
+    );
+    // apiBaseUrl '/api/product' → spec segment swapped to '/api/price-list/priceList'.
+    expect(create.url).toBe('/api/price-list/priceList');
+    const createBody = JSON.parse(create.body);
+    expect(createBody.name).toBe('My Tariff');
+    expect(createBody.salesPriceList).toBe(true);
+    expect(createBody.costBasedPriceList).toBe(false);
+    expect(createBody.priceIncludesTax).toBe(false);
+    expect(createBody.default).toBe(false);
+    // Currency is injected by the backend from the org — never sent.
+    expect(createBody).not.toHaveProperty('currency');
+
+    // 2. Follow-up POST /price links the auto-created version to the product.
+    await waitFor(() => {
+      const adds = calls.filter((c) => c.method === 'POST' && c.url.endsWith('/price'));
+      expect(adds.length).toBeGreaterThanOrEqual(1);
+    });
+    const add = calls.find((c) => c.method === 'POST' && c.url.endsWith('/price'));
+    const addBody = JSON.parse(add.body);
+    expect(addBody.priceListVersion).toBe('PLV1');
+
+    // 3. refreshPrices re-fetches the list (initial + post-add).
+    await waitFor(() => {
+      const gets = calls.filter((c) => c.method === 'GET' && c.url.includes('/price?parentId='));
+      expect(gets.length).toBeGreaterThanOrEqual(2);
+    });
+  });
+
+  it('creating a tariff in the purchase section POSTs a purchase price list (salesPriceList=false)', async () => {
+    const calls = [];
+    global.fetch = buildFetch(
+      {
+        'GET /price?parentId=': { response: { data: [] } },
+        'POST /price-list/priceList': {
+          response: { data: [{ id: 'PL2', priceListVersion: 'PLV2' }] },
+        },
+        'POST /price': { response: { data: [] } },
+      },
+      calls,
+    );
+
+    const user = userEvent.setup();
+    renderBar({ catalogs: catalogsWithPlv(), api: apiWithPriceSelector() });
+
+    await waitFor(() => expect(screen.getByTestId('price-tab-purchase')).toBeInTheDocument());
+    await user.click(screen.getByTestId('price-tab-purchase'));
+
+    await openTariffSelect(user);
+
+    await user.click(await screen.findByTestId('action-create-priceListVersion'));
+    await screen.findByTestId('inline-create-modal');
+
+    await user.type(screen.getByTestId('inline-create-name'), 'Compra 2026');
+    await user.click(screen.getByTestId('inline-create-submit'));
+
+    await waitFor(() => {
+      const creates = calls.filter(
+        (c) => c.method === 'POST' && c.url.includes('/price-list/priceList'),
+      );
+      expect(creates).toHaveLength(1);
+    });
+
+    const create = calls.find(
+      (c) => c.method === 'POST' && c.url.includes('/price-list/priceList'),
+    );
+    const createBody = JSON.parse(create.body);
+    expect(createBody.salesPriceList).toBe(false);
+    expect(createBody).not.toHaveProperty('currency');
+
+    const add = calls.find((c) => c.method === 'POST' && c.url.endsWith('/price'));
+    expect(JSON.parse(add.body).priceListVersion).toBe('PLV2');
+  });
+
+  it('a failed price-list create surfaces an error and keeps the modal open without POSTing /price', async () => {
+    const calls = [];
+    global.fetch = buildFetch(
+      {
+        'GET /price?parentId=': { response: { data: [] } },
+        'POST /price-list/priceList': {
+          ok: false,
+          status: 400,
+          body: { error: { message: 'Nombre duplicado' } },
+        },
+        'POST /price': { response: { data: [] } },
+      },
+      calls,
+    );
+
+    const user = userEvent.setup();
+    renderBar({ catalogs: catalogsWithPlv(), api: apiWithPriceSelector() });
+
+    await openTariffSelect(user);
+
+    await user.click(await screen.findByTestId('action-create-priceListVersion'));
+    await screen.findByTestId('inline-create-modal');
+
+    await user.type(screen.getByTestId('inline-create-name'), 'Dup');
+    await user.click(screen.getByTestId('inline-create-submit'));
+
+    // Error surfaces inside the still-open modal.
+    await screen.findByText('Nombre duplicado');
+    expect(screen.getByTestId('inline-create-modal')).toBeInTheDocument();
+
+    // The create failed → no product price row was added.
+    await new Promise((r) => setTimeout(r, 50));
+    const adds = calls.filter((c) => c.method === 'POST' && c.url.endsWith('/price'));
+    expect(adds).toHaveLength(0);
+  });
+
+  // -----------------------------------------------------------------------
+  // 9. onCountChange called with row count
   // -----------------------------------------------------------------------
   it('calls onCountChange with the total row count after fetch', async () => {
     global.fetch = buildFetch({
@@ -538,7 +726,6 @@ describe('ProductPriceBar', () => {
     await waitFor(() => expect(screen.getByTestId('price-add-tariff')).toBeInTheDocument());
     await user.click(screen.getByTestId('price-add-tariff'));
 
-    // Wait a tick for any potential lazy fetch.
     await new Promise((r) => setTimeout(r, 30));
 
     const selectorCalls = calls.filter((c) => c.url.includes('/price/selectors/'));
@@ -561,7 +748,6 @@ describe('ProductPriceBar', () => {
 
     renderBar();
 
-    // Loader should be visible while fetch is pending.
     expect(screen.getByTestId('loader')).toBeInTheDocument();
 
     await act(async () => { resolveFetch(); await pendingFetch; });
@@ -585,26 +771,154 @@ describe('ProductPriceBar', () => {
     renderBar();
 
     await screen.findByDisplayValue('Sales List v1');
-    // Sales section has 1 row.
     expect(screen.getByText('1')).toBeInTheDocument();
 
-    // Switch to purchase — it also has 1 row.
     await user.click(screen.getByTestId('price-tab-purchase'));
     await screen.findByDisplayValue('Purchase List v1');
     expect(screen.getByText('1')).toBeInTheDocument();
   });
 
   // -----------------------------------------------------------------------
-  // Delete button test-id format
+  // Add-tariff row — full row (selector + unit/list steppers + cancel)
   // -----------------------------------------------------------------------
-  it('delete button has correct data-testid per row id', async () => {
+  it('the add-tariff row renders the two price steppers, the selector and a cancel button', async () => {
     global.fetch = buildFetch({
-      'GET /price?parentId=': { response: { data: [salesRow({ id: 'my-price-row' })] } },
+      'GET /price?parentId=': { response: { data: [] } },
     });
 
-    renderBar();
+    const user = userEvent.setup();
+    renderBar({ catalogs: catalogsWithPlv(), api: apiWithPriceSelector() });
 
-    await screen.findByTestId('price-delete-my-price-row');
-    expect(screen.getByTestId('price-delete-my-price-row')).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByTestId('price-add-tariff')).toBeInTheDocument());
+    await user.click(screen.getByTestId('price-add-tariff'));
+
+    const row = await screen.findByTestId('price-add-tariff-row');
+    // Name selector + unit-price stepper + list-price stepper + cancel button.
+    expect(within(row).getByTestId('field-priceListVersion')).toBeInTheDocument();
+    expect(within(row).getAllByRole('spinbutton')).toHaveLength(2);
+    expect(within(row).getByTestId('price-add-cancel')).toBeInTheDocument();
+  });
+
+  it('clicking the cancel button exits add mode and fires no POST /price', async () => {
+    const calls = [];
+    global.fetch = buildFetch(
+      {
+        'GET /price?parentId=': { response: { data: [] } },
+        'POST /price': { response: { data: [] } },
+      },
+      calls,
+    );
+
+    const user = userEvent.setup();
+    renderBar({ catalogs: catalogsWithPlv(), api: apiWithPriceSelector() });
+
+    await waitFor(() => expect(screen.getByTestId('price-add-tariff')).toBeInTheDocument());
+    await user.click(screen.getByTestId('price-add-tariff'));
+
+    await screen.findByTestId('price-add-tariff-row');
+    await user.click(screen.getByTestId('price-add-cancel'));
+
+    // The add row is gone and the "+ add tariff" link is back.
+    await waitFor(() => {
+      expect(screen.queryByTestId('price-add-tariff-row')).not.toBeInTheDocument();
+    });
+    expect(screen.getByTestId('price-add-tariff')).toBeInTheDocument();
+
+    // Cancelling never persists anything.
+    const posts = calls.filter((c) => c.method === 'POST' && c.url.endsWith('/price'));
+    expect(posts).toHaveLength(0);
+  });
+
+  it('prices entered in the add row are sent on selecting an existing option', async () => {
+    const calls = [];
+    global.fetch = buildFetch(
+      {
+        'GET /price?parentId=': { response: { data: [] } },
+        'POST /price': { response: { data: [] } },
+      },
+      calls,
+    );
+
+    const user = userEvent.setup();
+    renderBar({ catalogs: catalogsWithPlv(), api: apiWithPriceSelector() });
+
+    await waitFor(() => expect(screen.getByTestId('price-add-tariff')).toBeInTheDocument());
+    await user.click(screen.getByTestId('price-add-tariff'));
+
+    // No saved rows in this section, so the only steppers are the add-row drafts:
+    // [0] = unit price, [1] = list price. Each commits on blur.
+    const spinbuttons = screen.getAllByRole('spinbutton');
+    await user.clear(spinbuttons[0]);
+    await user.type(spinbuttons[0], '15');
+    await user.tab();
+    await user.clear(spinbuttons[1]);
+    await user.type(spinbuttons[1], '20');
+    await user.tab();
+
+    // Re-open the dropdown and pick an existing tariff.
+    await user.click(screen.getByTestId('field-priceListVersion'));
+    const option = await screen.findByTestId(`option-priceListVersion-${SALES_PLV_ID}`);
+    await user.click(option);
+
+    await waitFor(() => {
+      const posts = calls.filter((c) => c.method === 'POST' && c.url.endsWith('/price'));
+      expect(posts).toHaveLength(1);
+    });
+
+    const post = calls.find((c) => c.method === 'POST' && c.url.endsWith('/price'));
+    const body = JSON.parse(post.body);
+    expect(body.priceListVersion).toBe(SALES_PLV_ID);
+    expect(body.standardPrice).toBe('15');
+    expect(body.listPrice).toBe('20');
+    // priceLimit = list || unit → the entered list price.
+    expect(body.priceLimit).toBe('20');
+  });
+
+  it('prices entered in the add row are sent on creating a new tariff', async () => {
+    const calls = [];
+    global.fetch = buildFetch(
+      {
+        'GET /price?parentId=': { response: { data: [] } },
+        'POST /price-list/priceList': {
+          response: { data: [{ id: 'PL1', priceListVersion: 'PLV1' }] },
+        },
+        'POST /price': { response: { data: [] } },
+      },
+      calls,
+    );
+
+    const user = userEvent.setup();
+    renderBar({ catalogs: catalogsWithPlv(), api: apiWithPriceSelector() });
+
+    await waitFor(() => expect(screen.getByTestId('price-add-tariff')).toBeInTheDocument());
+    await user.click(screen.getByTestId('price-add-tariff'));
+
+    const spinbuttons = screen.getAllByRole('spinbutton');
+    await user.clear(spinbuttons[0]);
+    await user.type(spinbuttons[0], '15');
+    await user.tab();
+    await user.clear(spinbuttons[1]);
+    await user.type(spinbuttons[1], '20');
+    await user.tab();
+
+    // Re-open the dropdown and create a tariff via the inline modal.
+    await user.click(screen.getByTestId('field-priceListVersion'));
+    await user.click(await screen.findByTestId('action-create-priceListVersion'));
+    await screen.findByTestId('inline-create-modal');
+
+    await user.type(screen.getByTestId('inline-create-name'), 'My Tariff');
+    await user.click(screen.getByTestId('inline-create-submit'));
+
+    await waitFor(() => {
+      const adds = calls.filter((c) => c.method === 'POST' && c.url.endsWith('/price'));
+      expect(adds).toHaveLength(1);
+    });
+
+    const add = calls.find((c) => c.method === 'POST' && c.url.endsWith('/price'));
+    const body = JSON.parse(add.body);
+    expect(body.priceListVersion).toBe('PLV1');
+    expect(body.standardPrice).toBe('15');
+    expect(body.listPrice).toBe('20');
+    expect(body.priceLimit).toBe('20');
   });
 });

@@ -67,6 +67,7 @@ This folder is the entry point for documentation that describes how generated an
 | [transaction-type.md](transaction-type.md) | Backend-only user-definable lookup behind the match-rule "Tipo de transacción" field — no menu/route; created inline from the selector (W spec + `TransactionTypeHandler`) |
 | [chart-of-accounts.md](chart-of-accounts.md) | Generated chart-of-accounts maintenance window |
 | [open-close-period-control.md](open-close-period-control.md) | Generated open/close period control window for fiscal period status management |
+| [fiscal-calendar.md](fiscal-calendar.md) | Generated Fiscal Calendar window (Years + read-only Periods) — the only place to create a new fiscal year and generate its periods via the classic Create Periods process; Periods links here via a "more" menu action |
 | [assets.md](assets.md) | Generated assets flow with custom setup, sidebar, and amortization surfaces |
 | [asset-group.md](asset-group.md) | Generated asset-category master/detail flow — header with conditional depreciation-policy fields (`displayLogicJs`), inline-editable accounting accounts subtab |
 | [amortization.md](amortization.md) | Generated amortization master/detail flow (MVP read+draft, sidebar metrics, linked assets) |

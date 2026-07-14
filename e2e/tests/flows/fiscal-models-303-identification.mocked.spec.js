@@ -69,10 +69,10 @@ async function goToDeclaration(page, { year, period }) {
   // Open the "Nueva declaración" modal
   await page.getByText('+ Nueva declaración').click();
 
-  // The modal: first select = model (303/349), second select = year, input = period
+  // The modal: first select = model (303/349), second select = year, third select = period
   const modal = page.locator('.fm-present-modal');
   await modal.locator('select').nth(1).selectOption(String(year));
-  await modal.locator('input').fill(period);
+  await modal.locator('select').nth(2).selectOption(period);
   await modal.getByRole('button', { name: /Crear/i }).click();
 
   // Click the new row to open the declaration detail
@@ -149,12 +149,18 @@ test.describe('FM 303 — datos_bancarios section visibility', () => {
     await goToIdentificacion(page);
   });
 
-  test('datos_bancarios is hidden when tipo_declaracion is Ingreso (I)', async ({ page }) => {
+  test('datos_bancarios is visible for Ingreso (I) with Domiciliación title', async ({ page }) => {
     const select = page.locator('.fm-aeat-ident-inline-field__select--compact').first();
     await select.selectOption('I');
-    // When datos_bancarios is hidden, no IBAN field is rendered
+    // I shows datos_bancarios with Domiciliación title (IBAN required, no SWIFT)
     await expect(
-      page.locator('.fm-aeat-ident-inline-field').filter({ hasText: /IBAN/ })
+      page.locator('.fm-aeat-section').filter({ hasText: /domiciliaci/i }).last()
+    ).toBeVisible();
+    await expect(
+      page.locator('.fm-aeat-ident-inline-field').filter({ hasText: /IBAN/i })
+    ).toBeVisible();
+    await expect(
+      page.locator('.fm-aeat-ident-inline-field').filter({ hasText: /SWIFT|BIC/i })
     ).not.toBeVisible();
   });
 
@@ -189,14 +195,14 @@ test.describe('FM 303 — datos_bancarios section visibility', () => {
     ).not.toBeVisible();
   });
 
-  test('section disappears again when switching back to Ingreso', async ({ page }) => {
+  test('section disappears when switching to Sin Resultado (N)', async ({ page }) => {
     const select = page.locator('.fm-aeat-ident-inline-field__select--compact').first();
     await select.selectOption('D');
     await expect(
       page.locator('.fm-aeat-section').filter({ hasText: /devoluci/i }).last()
     ).toBeVisible();
-    await select.selectOption('I');
-    // IBAN field disappears when switching back
+    await select.selectOption('N');
+    // N is not in the datos_bancarios visible set — IBAN field disappears
     await expect(
       page.locator('.fm-aeat-ident-inline-field').filter({ hasText: /IBAN/i })
     ).not.toBeVisible();

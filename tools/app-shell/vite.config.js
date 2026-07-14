@@ -158,6 +158,7 @@ export default defineConfig(({ mode }) => {
   // the default sibling ../schema_forge_core.
   const CORE_REPO = process.env.SCHEMA_FORGE_CORE || resolve(__dirname, '../../../schema_forge_core');
   const CORE_APP_SHELL_SRC = resolve(CORE_REPO, 'packages/app-shell-core/src');
+  const CORE_ETENDO_GO_SRC = resolve(CORE_REPO, 'packages/etendo-go-core/src');
 
   return {
   base: '/',
@@ -222,6 +223,14 @@ export default defineConfig(({ mode }) => {
       ...(LOCAL_CORE ? [
         { find: /^@etendosoftware\/app-shell-core$/, replacement: resolve(CORE_APP_SHELL_SRC, 'index.js') },
         { find: /^@etendosoftware\/app-shell-core\/(.*)$/, replacement: resolve(CORE_APP_SHELL_SRC, '$1') },
+        // etendo-go-core (onboarding / auth screens) from local source — mirrors app-shell-core.
+        // Its exports map two kebab-case subpaths to camelCase files, so those need explicit
+        // aliases before the generic catch-all (which handles onboarding/api|sso|state as-is).
+        { find: /^@etendosoftware\/etendo-go-core$/, replacement: resolve(CORE_ETENDO_GO_SRC, 'index.js') },
+        { find: /^@etendosoftware\/etendo-go-core\/onboarding\/password-policy$/, replacement: resolve(CORE_ETENDO_GO_SRC, 'onboarding/passwordPolicy.js') },
+        { find: /^@etendosoftware\/etendo-go-core\/onboarding\/oauth-return-to$/, replacement: resolve(CORE_ETENDO_GO_SRC, 'onboarding/oauthReturnTo.js') },
+        { find: /^@etendosoftware\/etendo-go-core\/onboarding$/, replacement: resolve(CORE_ETENDO_GO_SRC, 'onboarding/index.js') },
+        { find: /^@etendosoftware\/etendo-go-core\/(.*)$/, replacement: resolve(CORE_ETENDO_GO_SRC, '$1') },
         // Force a single React instance: the linked source would otherwise resolve
         // react/react-dom from schema_forge_core's own node_modules (a separate
         // install tree) → two React copies → "Invalid hook call". Pin both to this
@@ -269,7 +278,9 @@ export default defineConfig(({ mode }) => {
     // instance to begin with. Unconditional (not gated on LOCAL_CORE): it fixes
     // the currency double-instantiation in the DEFAULT published-package path,
     // and also gives LOCAL_CORE the exclude it needs for live HMR.
-    exclude: ['@etendosoftware/app-shell-core'],
+    exclude: LOCAL_CORE
+      ? ['@etendosoftware/app-shell-core', '@etendosoftware/etendo-go-core']
+      : ['@etendosoftware/app-shell-core'],
     // react-day-picker (used by app-shell-core's Calendar) ships ~87 translated
     // per-locale wrapper files, each importing the date-fns/locale barrel. Since
     // it's only reachable through the excluded app-shell-core, Vite never

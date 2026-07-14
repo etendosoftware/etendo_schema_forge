@@ -117,6 +117,9 @@ test.describe('Onboarding — Full registration flow', () => {
     await installMocks(page);
     await page.goto('/onboarding');
 
+    // Onboarding now defaults to the login view; switch to the register view.
+    await page.getByTestId('action-switch-to-register').click();
+
     // ═══════════════════════════════════════════════════════════════════════
     // PART 1: Register page — verify all elements are present
     // ═══════════════════════════════════════════════════════════════════════
@@ -247,6 +250,10 @@ test.describe('Onboarding — Login & password recovery flow', () => {
     await installMocks(page, { registerBehavior: 'fail', loginBehavior: 'first-fails' });
     await page.goto('/onboarding');
 
+    // Onboarding now defaults to the login view; switch to register first to
+    // exercise the duplicate-email path before returning to login.
+    await page.getByTestId('action-switch-to-register').click();
+
     // ═══════════════════════════════════════════════════════════════════════
     // PART 1: Duplicate email error on register
     // ═══════════════════════════════════════════════════════════════════════
@@ -355,12 +362,17 @@ test.describe('Onboarding — Login & password recovery flow', () => {
     // PART 6: Verify we can navigate back to register from login
     // ═══════════════════════════════════════════════════════════════════════
 
-    // Navigate fresh to verify register ↔ login navigation
+    // Navigate fresh to verify register ↔ login navigation. The default view
+    // is now login, so the login email field is visible immediately.
     await page.goto('/onboarding');
-    await page.getByTestId('action-switch-to-login').click();
     await expect(page.locator('#login-email')).toBeVisible({ timeout: 5_000 });
 
+    // login → register
     await page.getByTestId('action-switch-to-register').click();
     await expect(page.getByRole('heading', { name: /crea tu cuenta gratis/i })).toBeVisible({ timeout: 5_000 });
+
+    // register → login
+    await page.getByTestId('action-switch-to-login').click();
+    await expect(page.locator('#login-email')).toBeVisible({ timeout: 5_000 });
   });
 });

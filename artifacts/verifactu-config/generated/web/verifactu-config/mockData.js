@@ -9,8 +9,7 @@ export const cabeceraDeConfiguracionVerifactu = [
     "systemStartat": "Sample systemStartat",
     "systemStopat": "Sample systemStopat",
     "incidentReport": "Sample incidentReport",
-    "isReady": "Sample isReady",
-    "inVfactuSystem": "Sample inVfactuSystem"
+    "isReady": "Sample isReady"
   },
   {
     "id": "mock-cabeceraDeConfiguraciónVerifactu-002",
@@ -20,8 +19,7 @@ export const cabeceraDeConfiguracionVerifactu = [
     "systemStartat": "Sample systemStartat",
     "systemStopat": "Sample systemStopat",
     "incidentReport": "Sample incidentReport",
-    "isReady": "Sample isReady",
-    "inVfactuSystem": "Sample inVfactuSystem"
+    "isReady": "Sample isReady"
   },
   {
     "id": "mock-cabeceraDeConfiguraciónVerifactu-003",
@@ -31,8 +29,7 @@ export const cabeceraDeConfiguracionVerifactu = [
     "systemStartat": "Sample systemStartat",
     "systemStopat": "Sample systemStopat",
     "incidentReport": "Sample incidentReport",
-    "isReady": "Sample isReady",
-    "inVfactuSystem": "Sample inVfactuSystem"
+    "isReady": "Sample isReady"
   },
   {
     "id": "mock-cabeceraDeConfiguraciónVerifactu-004",
@@ -42,8 +39,7 @@ export const cabeceraDeConfiguracionVerifactu = [
     "systemStartat": "Sample systemStartat",
     "systemStopat": "Sample systemStopat",
     "incidentReport": "Sample incidentReport",
-    "isReady": "Sample isReady",
-    "inVfactuSystem": "Sample inVfactuSystem"
+    "isReady": "Sample isReady"
   },
   {
     "id": "mock-cabeceraDeConfiguraciónVerifactu-005",
@@ -53,8 +49,7 @@ export const cabeceraDeConfiguracionVerifactu = [
     "systemStartat": "Sample systemStartat",
     "systemStopat": "Sample systemStopat",
     "incidentReport": "Sample incidentReport",
-    "isReady": "Sample isReady",
-    "inVfactuSystem": "Sample inVfactuSystem"
+    "isReady": "Sample isReady"
   },
   {
     "id": "mock-cabeceraDeConfiguraciónVerifactu-006",
@@ -64,8 +59,7 @@ export const cabeceraDeConfiguracionVerifactu = [
     "systemStartat": "Sample systemStartat",
     "systemStopat": "Sample systemStopat",
     "incidentReport": "Sample incidentReport",
-    "isReady": "Sample isReady",
-    "inVfactuSystem": "Sample inVfactuSystem"
+    "isReady": "Sample isReady"
   },
   {
     "id": "mock-cabeceraDeConfiguraciónVerifactu-007",
@@ -75,8 +69,7 @@ export const cabeceraDeConfiguracionVerifactu = [
     "systemStartat": "Sample systemStartat",
     "systemStopat": "Sample systemStopat",
     "incidentReport": "Sample incidentReport",
-    "isReady": "Sample isReady",
-    "inVfactuSystem": "Sample inVfactuSystem"
+    "isReady": "Sample isReady"
   },
   {
     "id": "mock-cabeceraDeConfiguraciónVerifactu-008",
@@ -86,8 +79,7 @@ export const cabeceraDeConfiguracionVerifactu = [
     "systemStartat": "Sample systemStartat",
     "systemStopat": "Sample systemStopat",
     "incidentReport": "Sample incidentReport",
-    "isReady": "Sample isReady",
-    "inVfactuSystem": "Sample inVfactuSystem"
+    "isReady": "Sample isReady"
   },
   {
     "id": "mock-cabeceraDeConfiguraciónVerifactu-009",
@@ -97,8 +89,7 @@ export const cabeceraDeConfiguracionVerifactu = [
     "systemStartat": "Sample systemStartat",
     "systemStopat": "Sample systemStopat",
     "incidentReport": "Sample incidentReport",
-    "isReady": "Sample isReady",
-    "inVfactuSystem": "Sample inVfactuSystem"
+    "isReady": "Sample isReady"
   },
   {
     "id": "mock-cabeceraDeConfiguraciónVerifactu-010",
@@ -108,8 +99,7 @@ export const cabeceraDeConfiguracionVerifactu = [
     "systemStartat": "Sample systemStartat",
     "systemStopat": "Sample systemStopat",
     "incidentReport": "Sample incidentReport",
-    "isReady": "Sample isReady",
-    "inVfactuSystem": "Sample inVfactuSystem"
+    "isReady": "Sample isReady"
   },
   {
     "id": "mock-cabeceraDeConfiguraciónVerifactu-011",
@@ -119,8 +109,7 @@ export const cabeceraDeConfiguracionVerifactu = [
     "systemStartat": "Sample systemStartat",
     "systemStopat": "Sample systemStopat",
     "incidentReport": "Sample incidentReport",
-    "isReady": "Sample isReady",
-    "inVfactuSystem": "Sample inVfactuSystem"
+    "isReady": "Sample isReady"
   },
   {
     "id": "mock-cabeceraDeConfiguraciónVerifactu-012",
@@ -130,7 +119,6 @@ export const cabeceraDeConfiguracionVerifactu = [
     "systemStartat": "Sample systemStartat",
     "systemStopat": "Sample systemStopat",
     "incidentReport": "Sample incidentReport",
-    "isReady": "Sample isReady",
-    "inVfactuSystem": "Sample inVfactuSystem"
+    "isReady": "Sample isReady"
   }
 ];

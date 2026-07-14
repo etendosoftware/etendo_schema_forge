@@ -715,8 +715,28 @@ export function SecondaryTableTab(props) {
       {(props.st.addLineFields?.entry?.length > 0 || props.st.customAddModal) && props.hook.editing && (
           // Wrapper measured by the secondary selection bar — its
           // `position: fixed` portal overlays exactly this region.
-          (<div ref={props.secondaryAddLineWrapperRef} className="relative">
-            <span data-inline-add-portal="true">
+          // Mirrors the primary header-lines add-button wrapper (shared
+          // getAddLineWrapperClassName/Style helpers) so both paths get the
+          // same top border, vertical spacing and padding — keeps alignment
+          // consistent across primary and secondary tabs.
+          // Always `relative` (never sticky): the child-tab add-line button
+          // must stay in flow below the table. getAddLineWrapperClassName's
+          // sticky bottom-0 variant is only correct for the tall PRIMARY
+          // header-lines area — applying it here makes the button overlap the
+          // last table row when the scroll container is resized.
+          (<div
+            ref={props.secondaryAddLineWrapperRef}
+            className="relative"
+            // No borderTop: the child table already renders its own bottom
+            // border, so the primary path's top divider would double up here.
+            // noTopPadding: keep the button snug under the table (no vertical
+            // gap above it) while preserving horizontal alignment.
+            style={getAddLineWrapperStyle(props.linesLayout, { withBorder: false, noTopPadding: true })}
+          >
+            {/* alignSelf:flex-start keeps this span from being stretched by
+                the flex-column parent — otherwise data-inline-add-portal would
+                cover the whole bar and the outside-click save would never fire. */}
+            <span data-inline-add-portal="true" style={{ alignSelf: 'flex-start' }}>
               <AddLineButton
                 onClick={props.onAddLineClick}
                 label={props.addLineLabel}
@@ -769,13 +789,31 @@ export function getAddLineWrapperClassName(linesLayout) {
   return linesLayout === 'inlineEditable' ? 'sticky bottom-0 bg-white z-10' : 'relative';
 }
 
-export function getAddLineWrapperStyle(linesLayout) {
+export function getAddLineWrapperStyle(linesLayout, { withBorder = true, noTopPadding = false } = {}) {
+  const inline = linesLayout === 'inlineEditable';
+  const padY = inline ? 8 : 10;
+  const padX = inline ? 8 : 16;
+  // Default keeps the original symmetric padding (numeric 8 for inlineEditable,
+  // '10px 16px' otherwise) so the primary path is byte-for-byte unchanged.
+  // noTopPadding drops ONLY the top so the add-button sits snug under the child
+  // table, while horizontal padding still aligns it with table content.
+  let padding;
+  if (noTopPadding) {
+    padding = `0 ${padX}px ${padY}px`;
+  } else if (inline) {
+    padding = padY;
+  } else {
+    padding = `${padY}px ${padX}px`;
+  }
   return {
     display: 'flex',
     flexDirection: 'column',
     gap: 6,
-    borderTop: '0.5px solid var(--color-border-tertiary, #e5e7eb)',
-    padding: linesLayout === 'inlineEditable' ? 8 : '10px 16px'
+    // The top border separates the lines from the add-button in the primary
+    // header-lines path. Secondary/child tabs already have the table's own
+    // bottom border, so they pass withBorder:false to avoid a double divider.
+    ...(withBorder ? { borderTop: '0.5px solid var(--color-border-tertiary, #e5e7eb)' } : {}),
+    padding
   };
 }
 
@@ -1216,7 +1254,8 @@ export function getTabsBarClassName(tabsBarPaddingX, tabsBarRightDivider) {
   return `flex items-center gap-1 ${tabsBarPaddingX} py-2 shrink-0${tabsBarRightDivider ? ' relative' : ''}`;
 }
 
-export function isDeleteButtonVisible(isNew, recordId, data, statusField, hideDeleteWhenComplete, isProcessed) {
+export function isDeleteButtonVisible(isNew, recordId, data, statusField, hideDeleteWhenComplete, isProcessed, hideDeleteButton = false) {
+  if (hideDeleteButton) return false;
   return !isNew && recordId && isDeleteVisibleForRecord({
     record: data,
     statusField,
@@ -1332,7 +1371,7 @@ export function computeBalanceGate({ balanceFooter, children, pendingLineValues,
 function renderDraftModeSaveActions({
   hook, isDirty, flushPendingLines, data, isNew, navigate, windowName,
   ui, onAfterCreate, onAfterSave, token, apiBaseUrl, saveBtnCls,
-  draftMode, blockSaveForBalance, blockCompleteForBalance,
+  draftMode, blockSaveForBalance, blockCompleteForBalance, setShowProcessingModal,
 }) {
   return (
     <>
@@ -1350,17 +1389,23 @@ function renderDraftModeSaveActions({
       <Button size="default" className={saveBtnCls} data-testid="action-save" disabled={hook.isSaving || blockCompleteForBalance || (draftMode.disableWhenEmpty === true && !hook.childrenLoading && hook.children.length === 0)} title={blockCompleteForBalance ? ui('journalUnbalancedCompleteBlocked') : undefined} onClick={async () => {
         if (!(await flushPendingLines())) return;
         if (typeof draftMode.onConfirm === 'function') { draftMode.onConfirm(); return; }
-        const saved = await hook.handleSaveAndProcess(draftMode);
-        if (saved) {
-          if (isNew && onAfterCreate) await onAfterCreate(saved, { token, apiBaseUrl });
-          if (onAfterSave) {
-            navigate(`/${windowName}`, { replace: true, state: { savedRecord: saved, justSaved: saved } });
-          } else if (saved.id && isNew) {
-            hook.primeSaved?.(saved);
-            navigate(`/${windowName}/${saved.id}`, { replace: true, state: { justSaved: saved } });
-          } else if (saved.id) {
-            hook.fetchById?.(saved.id);
+        const showProcessing = Boolean(draftMode.processingModal);
+        if (showProcessing) setShowProcessingModal(true);
+        try {
+          const saved = await hook.handleSaveAndProcess(draftMode);
+          if (saved) {
+            if (isNew && onAfterCreate) await onAfterCreate(saved, { token, apiBaseUrl });
+            if (onAfterSave) {
+              navigate(`/${windowName}`, { replace: true, state: { savedRecord: saved, justSaved: saved } });
+            } else if (saved.id && isNew) {
+              hook.primeSaved?.(saved);
+              navigate(`/${windowName}/${saved.id}`, { replace: true, state: { justSaved: saved } });
+            } else if (saved.id) {
+              hook.fetchById?.(saved.id);
+            }
           }
+        } finally {
+          if (showProcessing) setShowProcessingModal(false);
         }
       }}>
         {hook.isSaving ? <Loader2 className="h-3.5 w-3.5 animate-spin" data-testid="Loader2__fa3275" /> : <Check className="h-3.5 w-3.5" data-testid="Check__fa3275" />}
@@ -1556,8 +1601,14 @@ async function executeDetailProcessImpl(process, paramValues, explicitRows, {
  *   The component always mounts but receives `isActive` so it can lazy-load data
  *   the first time it becomes visible.
  *
- * In both cases the component receives `{ recordId, data, token, apiBaseUrl, api }`
+ * In both cases the component receives `{ recordId, data, token, apiBaseUrl, api, onChange }`
  * plus any keys declared in the optional `props` object.
+ *
+ * `onChange(field, value)` is `hook.handleChange` — it writes straight into the shared
+ * `editing` state (the same state the header form uses), so any edit made by a custom
+ * tab is picked up automatically by the next header save (no per-field persistence
+ * needed, no separate save button required). This prop is additive/optional — custom
+ * tabs that don't use it are unaffected.
  */
 export function hasUnsavedEdits(editing, selected) {
   if (!editing || !selected) return false;
@@ -1572,6 +1623,13 @@ export function dispatchProcessAction(p, { processConfirmModal, setConfirmProces
   if ((p.style === 'ghost-danger' || p.confirmModal) && processConfirmModal) { setConfirmProcess(p); }
   else if (p.params?.some(param => !param.hidden)) { setParamDialogProcess(p); }
   else { handleProcess?.(p); }
+}
+
+export function resolveProcessLabel(p, data) {
+  if (p.labelToggle && data?.[p.labelToggle.field] === p.labelToggle.equals) {
+    return p.labelToggle.label;
+  }
+  return p.label;
 }
 
 function renderProcessConfirmModal(process, Modal, onConfirm, onClose) {
@@ -1623,6 +1681,7 @@ export function DetailView({
   menuActions = [],
   customMenuContent = null,
   hideDeleteWhenComplete = false,
+  hideDeleteButton = false,
   customTabsAfterBottom = false,
   hidePrint = false,
   hideSaveStatuses = [],
@@ -1936,6 +1995,9 @@ export function DetailView({
   const [confirmProcess, setConfirmProcess] = useState(null);
   // showNotes state removed — notes panel is always visible in side-by-side layout
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  // Non-dismissible loading modal shown while a draftMode confirm action with
+  // draftMode.processingModal is in flight (e.g. Verifactu's ~8s GenerateRF).
+  const [showProcessingModal, setShowProcessingModal] = useState(false);
   // Promise-based confirm for line/child deletions; replaces native window.confirm
   // so the dialog matches the styled "Eliminar registro" modal used elsewhere.
   const [pendingDeleteConfirm, setPendingDeleteConfirm] = useState(null);
@@ -2919,6 +2981,7 @@ export function DetailView({
           api={api}
           isActive={isActive}
           onCountChange={updateCustomTabCount}
+          onChange={hook.handleChange}
           {...(ct.props || {})}
           data-testid="TabComponent__fa3275" />
       </div>
@@ -2965,6 +3028,7 @@ export function DetailView({
     hook, isDirty, flushPendingLines, data, isNew, navigate, windowName,
     ui, tMenu, onAfterCreate, onAfterSave, token, apiBaseUrl, saveBtnCls,
     isDocumentReadOnly, isProcessed, draftMode, blockSaveForBalance, blockCompleteForBalance,
+    setShowProcessingModal,
   };
   const balanceFooterEditingLine = mergeLineEdits(lineEdits, selectedLine);
 
@@ -3081,8 +3145,8 @@ export function DetailView({
                   <Printer className="h-4 w-4" data-testid="Printer__fa3275" />
                 </button>
               )}
-              {/* Delete record — hidden when hideDeleteWhenComplete and status matches or record is processed */}
-              {isDeleteButtonVisible(isNew, recordId, data, statusField, hideDeleteWhenComplete, isProcessed) && (
+              {/* Delete record — hidden unconditionally when hideDeleteButton is set, otherwise when hideDeleteWhenComplete and status matches or record is processed */}
+              {isDeleteButtonVisible(isNew, recordId, data, statusField, hideDeleteWhenComplete, isProcessed, hideDeleteButton) && (
                 <button
                   onClick={() => setShowDeleteConfirm(true)}
                   className={`${sqBtnSize} flex items-center justify-center rounded-lg border border-red-200 text-red-500 hover:bg-red-50 hover:text-red-600 transition-colors`}
@@ -3264,13 +3328,16 @@ export function DetailView({
                       }}
                       data-testid="Button__fa3275">
                       {p.style === 'ghost-danger' && <Undo2 size={16} className="mr-1 text-[#D50B3E]" data-testid="Undo2__fa3275" />}
-                      {tMenu(p.label)}
+                      {tMenu(resolveProcessLabel(p, data))}
                     </Button>
                   );
                 })}
 
-              {/* Detail entity process buttons — visible when child rows are selected or a single line is clicked */}
-              {!isNew && detailProcesses.length > 0 && (selectedChildRows.length > 0 || selectedLine) && detailProcesses
+              {/* Detail entity process buttons — visible only for the single-line-click case.
+                  The multi-row (selectedChildRows) case is rendered exclusively by the bulk
+                  action bar above the lines table (see isDetailBulkBarVisible) to avoid
+                  rendering these buttons twice. */}
+              {!isNew && detailProcesses.length > 0 && selectedChildRows.length === 0 && selectedLine && detailProcesses
                 .map(p => {
                   const isPrimary = p.style === 'positive';
                   const btnClass = getButtonClass(salesTheme, p, isPrimary);
@@ -3614,7 +3681,9 @@ export function DetailView({
                               <div className="flex-1 min-w-0">
                                 {/* Bulk action bar: delete + detail processes (classic only) */}
                                 {isDetailBulkBarVisible(linesLayout, api, detailEntity, isDocumentReadOnly, selectedChildRows, detailProcesses) && (
-                                  <div className="flex items-center justify-between px-3 py-2 mb-2 rounded-lg bg-muted/60 border border-border/40">
+                                  <div
+                                    data-testid="detail-bulk-action-bar"
+                                    className="sticky top-0 z-10 flex items-center justify-between px-3 py-2 mb-2 rounded-lg bg-muted border border-border/40 shadow-sm">
                                     <span className="text-sm font-medium text-foreground">
                                       {ui('selected', { count: selectedChildRows.length })}
                                     </span>
@@ -3631,6 +3700,7 @@ export function DetailView({
                                             }
                                           }}
                                           className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md border border-primary text-primary hover:bg-primary/10 disabled:opacity-50 transition-colors"
+                                          data-testid="Button__detail-process"
                                         >
                                           {executingDetailProcess ? ui('loading') : (tMenu(p.label) || p.label)}
                                         </button>
@@ -4523,6 +4593,24 @@ export function DetailView({
               {ui('delete')}
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      <Dialog
+        open={showProcessingModal && Boolean(draftMode?.processingModal)}
+        onOpenChange={() => {}}
+        data-testid="Dialog__verifactu-processing">
+        <DialogContent
+          className="max-w-sm [&>button]:hidden"
+          onEscapeKeyDown={(e) => e.preventDefault()}
+          onPointerDownOutside={(e) => e.preventDefault()}
+          onInteractOutside={(e) => e.preventDefault()}
+          data-testid="DialogContent__verifactu-processing">
+          <div className="py-6 text-center">
+            <Loader2 className="h-8 w-8 animate-spin mx-auto text-primary" data-testid="Loader2__verifactu-processing" />
+            <p className="text-sm font-medium mt-4">
+              {ui(draftMode?.processingModal?.body) || draftMode?.processingModal?.body}
+            </p>
+          </div>
         </DialogContent>
       </Dialog>
       {secondaryTabs.map((st, idx) => {
