@@ -1,5 +1,22 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { render as rtlRender, screen, fireEvent, waitFor } from '@testing-library/react';
+import { LocaleProvider } from '@/i18n';
+import enUS from '../../../../locales/en_US.json';
+import esES from '../../../../locales/es_ES.json';
+
+// Labels now render via ui()/tMenu() (dictionary.genericLabels) instead of server
+// $_identifier strings (see PeriodsExpandablePanel.jsx's own comment for why) — so these
+// tests need a real LocaleProvider + real locale JSON, same convention as *.i18n.vitest.jsx
+// elsewhere in this repo, rather than a mocked identity `ui()` that would hide a missing/
+// misspelled key. `render()` here transparently wraps every existing call site in this file
+// (no per-test-file changes needed) at `currentTestLocale`, which defaults to 'en_US' so all
+// of this file's pre-existing English fixture text keeps matching unchanged; the dedicated
+// locale-propagation describe block below switches it to 'es_ES' for its own tests.
+const DICTIONARIES = { en_US: enUS, es_ES: esES };
+let currentTestLocale = 'en_US';
+function render(ui) {
+  return rtlRender(<LocaleProvider locale={currentTestLocale} dictionaries={DICTIONARIES}>{ui}</LocaleProvider>);
+}
 
 // useBulkActionToast (used by the new bulk open/close feature) also calls toast.warning for
 // partial-failure results, in addition to the error/success this file already mocked.
@@ -52,26 +69,24 @@ function selectOpenCloseOption(value) {
 }
 
 const PERIOD = { id: 'p1', name: 'Jan-2027', status: 'O', 'status$_identifier': 'All Opened', periodNo: 1 };
+// documentCategory codes below are the REAL codes for the asserted English text (per
+// DOCUMENT_CATEGORY_LABEL_KEYS, generated from the actual DB data) — labels now render via
+// ui(DOCUMENT_CATEGORY_LABEL_KEYS[code]) rather than the $_identifier fields (still present on
+// some fixtures below only for historical/no-op reasons; the component no longer reads them).
 const DOC = {
   id: 'd1',
-  documentCategory: 'API',
-  'documentCategory$_identifier': 'AP Credit Memo',
+  documentCategory: 'APC', // -> "AP Credit Memo"
   periodStatus: 'O',
-  'periodStatus$_identifier': 'Open',
 };
 const DOC2 = {
   id: 'd2',
-  documentCategory: 'ARI',
-  'documentCategory$_identifier': 'AR Invoice',
+  documentCategory: 'ARI', // -> "AR Invoice"
   periodStatus: 'O',
-  'periodStatus$_identifier': 'Open',
 };
 const DOC3 = {
   id: 'd3',
-  documentCategory: 'MMS',
-  'documentCategory$_identifier': 'Material Receipt',
+  documentCategory: 'MMR', // -> "Material Receipt"
   periodStatus: 'O',
-  'periodStatus$_identifier': 'Open',
 };
 
 beforeEach(() => {
@@ -861,5 +876,163 @@ describe('PeriodsExpandablePanel — sticky expanded period row + bulk action ba
     await waitFor(() => screen.getByTestId('period-documents-p2'));
     expect(stickyWrapperFor('p2').className).toMatch(/sticky/);
     expect(stickyWrapperFor('p1').className).not.toMatch(/sticky/);
+  });
+});
+
+describe('PeriodsExpandablePanel — Accept-Language header + real localization fix', () => {
+  // Investigated BOTH hypotheses live, not assumed:
+  //
+  // 1. This panel's raw fetch()/postAction sent no Accept-Language header at all, unlike
+  //    useEntity.js's buildHeaders(). Fixed that (see below) — NeoAuthenticator.java does read
+  //    the header and call OBContext.setLanguage(...) for the request. BUT live verification
+  //    (real login, real network capture) showed the header WAS sent as es_ES while
+  //    periodControl/documents still returned English $_identifier values — so this header
+  //    alone is NOT sufficient for this classic-datasource-backed path. The logged-in test
+  //    user's own ad_user.default_ad_language (en_US in this DB) is the more likely actual
+  //    authority for that datasource's identifier resolution.
+  // 2. So the real fix is client-side enumLabels — PERIOD_STATUS_LABEL_KEYS /
+  //    DOCUMENT_STATUS_LABEL_KEYS / DOCUMENT_CATEGORY_LABEL_KEYS in PeriodsExpandablePanel.jsx
+  //    — resolved via ui()/tMenu(), exactly like DataTable.cellRenderers.jsx's renderEnumCell()
+  //    does everywhere else in the app. All three dictionaries were generated directly from
+  //    the real AD_Ref_List/AD_Ref_List_Trl data already captured in
+  //    artifacts/open-close-period-control/schema-raw.json — not hand-guessed.
+  //
+  // The header is still sent (harmless, correct for other things like AD_Message
+  // translations) — these tests still confirm it, plus confirm the REAL fix: Spanish labels
+  // render correctly regardless of what (or whether) $_identifier says.
+  const PERIOD_ES = { id: 'p1', name: 'Ene-2027', status: 'M' }; // no $_identifier on purpose
+  const DOC_ES = { id: 'd1', documentCategory: 'MMS', periodStatus: 'C' }; // ditto
+
+  beforeEach(() => {
+    currentTestLocale = 'es_ES';
+  });
+
+  afterEach(() => {
+    localStorage.removeItem('schema-forge-locale');
+    currentTestLocale = 'en_US';
+  });
+
+  it('sends Accept-Language on the periodControl fetch, matching the stored UI locale', async () => {
+    localStorage.setItem('schema-forge-locale', 'es_ES');
+    const fetchSpy = vi.fn(() => Promise.resolve({ ok: true, json: () => Promise.resolve({ response: { data: [PERIOD_ES] } }) }));
+    global.fetch = fetchSpy;
+
+    render(<PeriodsExpandablePanel parentId="year1" token="tok" apiBaseUrl="https://api.test" />);
+    await waitFor(() => screen.getByText('Ene-2027'));
+
+    expect(fetchSpy).toHaveBeenCalledWith(
+      expect.stringContaining('/periodControl'),
+      expect.objectContaining({ headers: expect.objectContaining({ 'Accept-Language': 'es_ES' }) })
+    );
+  });
+
+  it('sends Accept-Language on the documents fetch too', async () => {
+    localStorage.setItem('schema-forge-locale', 'es_ES');
+    const fetchSpy = vi.fn((url) => {
+      if (url.includes('/periodControl')) return Promise.resolve({ ok: true, json: () => Promise.resolve({ response: { data: [PERIOD_ES] } }) });
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({ response: { data: [DOC_ES] } }) });
+    });
+    global.fetch = fetchSpy;
+
+    render(<PeriodsExpandablePanel parentId="year1" token="tok" apiBaseUrl="https://api.test" />);
+    await waitFor(() => screen.getByText('Ene-2027'));
+    fireEvent.click(screen.getByTestId('period-row-expand-p1'));
+    await waitFor(() => screen.getByText('Entrega material'));
+
+    expect(fetchSpy).toHaveBeenCalledWith(
+      expect.stringContaining('/documents'),
+      expect.objectContaining({ headers: expect.objectContaining({ 'Accept-Language': 'es_ES' }) })
+    );
+  });
+
+  it('sends Accept-Language on the openClose POST action too, not just the GET fetches', async () => {
+    localStorage.setItem('schema-forge-locale', 'es_ES');
+    const postSpy = vi.fn((url, opts) => {
+      if (opts?.method === 'POST') return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
+      if (url.includes('/periodControl')) return Promise.resolve({ ok: true, json: () => Promise.resolve({ response: { data: [PERIOD_ES] } }) });
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({ response: { data: [] } }) });
+    });
+    global.fetch = postSpy;
+    render(<PeriodsExpandablePanel parentId="year1" token="tok" apiBaseUrl="https://api.test" />);
+    await waitFor(() => screen.getByText('Ene-2027'));
+
+    fireEvent.click(screen.getByTestId('period-openclose-p1'));
+    selectOpenCloseOption('C');
+    fireEvent.click(screen.getByTestId('process-param-confirm'));
+
+    await waitFor(() => expect(postSpy).toHaveBeenCalledWith(
+      expect.stringContaining('/action/openClose'),
+      expect.objectContaining({
+        method: 'POST',
+        headers: expect.objectContaining({ 'Accept-Language': 'es_ES' }),
+      })
+    ));
+  });
+
+  it('falls back to es_ES when no locale is stored yet', async () => {
+    const fetchSpy = vi.fn(() => Promise.resolve({ ok: true, json: () => Promise.resolve({ response: { data: [] } }) }));
+    global.fetch = fetchSpy;
+
+    render(<PeriodsExpandablePanel parentId="year1" token="tok" apiBaseUrl="https://api.test" />);
+    await waitFor(() => expect(fetchSpy).toHaveBeenCalled());
+
+    expect(fetchSpy).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ headers: expect.objectContaining({ 'Accept-Language': 'es_ES' }) })
+    );
+  });
+
+  it('renders real Spanish labels for period status, document status, and document category when the locale is es_ES — even with no $_identifier field at all', async () => {
+    global.fetch = vi.fn((url) => {
+      if (url.includes('/periodControl')) return Promise.resolve({ ok: true, json: () => Promise.resolve({ response: { data: [PERIOD_ES] } }) });
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({ response: { data: [DOC_ES] } }) });
+    });
+
+    render(<PeriodsExpandablePanel parentId="year1" token="tok" apiBaseUrl="https://api.test" />);
+    await waitFor(() => screen.getByText('Ene-2027'));
+
+    const periodBadge = screen.getByTestId(`period-status-${PERIOD_ES.id}`).querySelector('[data-testid="tag"]');
+    expect(periodBadge).toHaveTextContent('Mixto');
+    expect(screen.queryByText('Mixed')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByTestId('period-row-expand-p1'));
+    await waitFor(() => screen.getByText('Entrega material'));
+    expect(screen.queryByText('MMS')).not.toBeInTheDocument();
+
+    const docBadge = screen.getByTestId(`document-status-${DOC_ES.id}`).querySelector('[data-testid="tag"]');
+    expect(docBadge).toHaveTextContent('Cerrado');
+    expect(screen.queryByText('Closed')).not.toBeInTheDocument();
+  });
+
+  it('renders the equivalent English labels under en_US, from the same code-keyed dictionaries', async () => {
+    currentTestLocale = 'en_US';
+    global.fetch = vi.fn((url) => {
+      if (url.includes('/periodControl')) return Promise.resolve({ ok: true, json: () => Promise.resolve({ response: { data: [PERIOD_ES] } }) });
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({ response: { data: [DOC_ES] } }) });
+    });
+
+    render(<PeriodsExpandablePanel parentId="year1" token="tok" apiBaseUrl="https://api.test" />);
+    await waitFor(() => screen.getByText('Ene-2027'));
+
+    const periodBadge = screen.getByTestId(`period-status-${PERIOD_ES.id}`).querySelector('[data-testid="tag"]');
+    expect(periodBadge).toHaveTextContent('Mixed');
+
+    fireEvent.click(screen.getByTestId('period-row-expand-p1'));
+    await waitFor(() => screen.getByText('Material Delivery'));
+    const docBadge = screen.getByTestId(`document-status-${DOC_ES.id}`).querySelector('[data-testid="tag"]');
+    expect(docBadge).toHaveTextContent('Closed');
+  });
+
+  it('falls back to the raw code if it is somehow not in the dictionary (e.g. a future/unknown code)', async () => {
+    global.fetch = vi.fn((url) => {
+      if (url.includes('/periodControl')) return Promise.resolve({ ok: true, json: () => Promise.resolve({ response: { data: [{ id: 'p1', name: 'Ene-2027', status: 'ZZZ' }] } }) });
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({ response: { data: [] } }) });
+    });
+
+    render(<PeriodsExpandablePanel parentId="year1" token="tok" apiBaseUrl="https://api.test" />);
+    await waitFor(() => screen.getByText('Ene-2027'));
+
+    const periodBadge = screen.getByTestId('period-status-p1').querySelector('[data-testid="tag"]');
+    expect(periodBadge).toHaveTextContent('ZZZ');
   });
 });

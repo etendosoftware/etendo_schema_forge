@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback, useMemo } from 'react';
 import { ChevronRight, ChevronDown } from 'lucide-react';
 import { toast } from 'sonner';
-import { useUI } from '@/i18n';
+import { useUI, getStoredLocale } from '@/i18n';
 import { Tag } from '@/components/ui/tag';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Button } from '@/components/ui/button';
@@ -47,8 +47,100 @@ function yearCriteria(yearId) {
   return `criteria=${encodeURIComponent(JSON.stringify([{ fieldName: 'year', operator: 'equals', value: yearId }]))}`;
 }
 
+// This panel's raw fetch()/postAction calls sent no Accept-Language header at all, unlike
+// useEntity.js's buildHeaders() (used by the rest of the app) — added here for parity and
+// because NeoAuthenticator.java's applyRequestLanguage() does read it and call
+// OBContext.getOBContext().setLanguage(...) for the request. BUT this was verified live (not
+// assumed) to NOT actually be sufficient on its own: with the header correctly sent as es_ES
+// (confirmed via captured network requests), periodControl/documents — served through NEO's
+// generic DefaultJsonDataService (classic Openbravo datasource) — still returned English
+// $_identifier values. The logged-in test user's own ad_user.default_ad_language is en_US in
+// this DB, which is the more likely actual authority for that datasource's identifier
+// resolution, not the per-request OBContext language. So $_identifier can't be relied on for
+// localization here — see PERIOD_STATUS_LABEL_KEYS / DOCUMENT_STATUS_LABEL_KEYS /
+// DOCUMENT_CATEGORY_LABEL_KEYS below for the actual fix (client-side enumLabels, same
+// convention DataTable.cellRenderers.jsx's renderEnumCell already uses everywhere else). The
+// header is still sent since it's correct for other things (e.g. AD_Message translations) and
+// doesn't hurt. `getStoredLocale()` (from @/i18n, app-shell-core's useLocaleState.js) is the
+// canonical "read the active locale outside of React" helper already published for exactly
+// this use case — reused here instead of duplicating useEntity.js's own localStorage read.
+function buildLocaleHeaders(token) {
+  return {
+    Authorization: `Bearer ${token}`,
+    'Accept-Language': getStoredLocale(),
+  };
+}
+
+// The actual fix for the untranslated labels: client-side enumLabels dictionaries resolved via
+// ui()/tMenu (dictionary.genericLabels), exactly like DataTable.cellRenderers.jsx's
+// renderEnumCell() does for every other enum/status column in the app — NOT server
+// $_identifier strings (see the note above for why those can't be trusted here). All three
+// dictionaries below were generated directly from the real AD_Ref_List/AD_Ref_List_Trl values
+// already captured in artifacts/open-close-period-control/schema-raw.json (enumValues[].name /
+// enumValues[].labels.es_ES) — copied from the DB's own real translations, not hand-guessed —
+// so DOCUMENT_CATEGORY_LABEL_KEYS' 41 codes are accurate despite being a large, tedious set to
+// hand-translate from scratch.
+const PERIOD_STATUS_LABEL_KEYS = {
+  N: 'calendarPeriodStatusAllNeverOpened',
+  O: 'calendarPeriodStatusAllOpened',
+  C: 'calendarPeriodStatusAllClosed',
+  P: 'calendarPeriodStatusAllPermanentlyClosed',
+  M: 'calendarPeriodStatusMixed',
+};
+const DOCUMENT_STATUS_LABEL_KEYS = {
+  N: 'calendarDocStatusNeverOpened',
+  O: 'calendarDocStatusOpen',
+  C: 'calendarDocStatusClosed',
+  P: 'calendarDocStatusPermanentlyClosed',
+};
+const DOCUMENT_CATEGORY_LABEL_KEYS = {
+  '---': 'calendarDocCategoryNew',
+  APC: 'calendarDocCategoryApCreditMemo',
+  API: 'calendarDocCategoryApInvoice',
+  APP: 'calendarDocCategoryApPayment',
+  APPP: 'calendarDocCategoryApPaymentProposal',
+  ARC: 'calendarDocCategoryArCreditMemo',
+  ARI: 'calendarDocCategoryArInvoice',
+  ARF: 'calendarDocCategoryArProFormaInvoice',
+  ARR: 'calendarDocCategoryArReceipt',
+  ARRP: 'calendarDocCategoryArReceivableProposal',
+  ARI_RM: 'calendarDocCategoryArReturnMaterialInvoice',
+  AMZ: 'calendarDocCategoryAmortization',
+  CMB: 'calendarDocCategoryBankStatement',
+  BSF: 'calendarDocCategoryBankStatementFile',
+  CMC: 'calendarDocCategoryCashJournal',
+  CAD: 'calendarDocCategoryCostAdjustment',
+  DPM: 'calendarDocCategoryDebtPaymentManagement',
+  DDB: 'calendarDocCategoryDoubtfulDebt',
+  FAT: 'calendarDocCategoryFinancialAccountTransaction',
+  GLD: 'calendarDocCategoryGlDocument',
+  GLJ: 'calendarDocCategoryGlJournal',
+  IAU: 'calendarDocCategoryInventoryAmountUpdate',
+  LDC: 'calendarDocCategoryLandedCost',
+  LCC: 'calendarDocCategoryLandedCostCost',
+  OBCVAT_MS: 'calendarDocCategoryManualCashVatSettlement',
+  MXI: 'calendarDocCategoryMatchInvoice',
+  MXP: 'calendarDocCategoryMatchPo',
+  MMS: 'calendarDocCategoryMaterialDelivery',
+  MIC: 'calendarDocCategoryMaterialInternalConsumption',
+  MMM: 'calendarDocCategoryMaterialMovement',
+  MMI: 'calendarDocCategoryMaterialPhysicalInventory',
+  MMP: 'calendarDocCategoryMaterialProduction',
+  MMR: 'calendarDocCategoryMaterialReceipt',
+  CMA: 'calendarDocCategoryPaymentAllocation',
+  PPR: 'calendarDocCategoryPaymentProposal',
+  PJI: 'calendarDocCategoryProjectIssue',
+  POO: 'calendarDocCategoryPurchaseOrder',
+  POR: 'calendarDocCategoryPurchaseRequisition',
+  REC: 'calendarDocCategoryReconciliation',
+  SOO: 'calendarDocCategorySalesOrder',
+  STT: 'calendarDocCategorySettlement',
+  STM: 'calendarDocCategorySettlementManual',
+  WRE: 'calendarDocCategoryWorkRequirement',
+};
+
 async function fetchJson(url, token) {
-  const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+  const res = await fetch(url, { headers: buildLocaleHeaders(token) });
   if (!res.ok) throw new Error(`Request failed: ${res.status}`);
   const body = await res.json();
   // periodControl's LIST goes through NEO's generic DefaultJsonDataService (classic Openbravo
@@ -61,7 +153,7 @@ async function fetchJson(url, token) {
 async function postAction(url, token, fieldValues) {
   const res = await fetch(url, {
     method: 'POST',
-    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+    headers: { ...buildLocaleHeaders(token), 'Content-Type': 'application/json' },
     // Matches useEntity.js's handleProcess body shape exactly — the backend reads the chosen
     // value via context.getRequestBody().optJSONObject("fieldValues").optString("openClose").
     body: JSON.stringify({ fieldValues }),
@@ -287,7 +379,7 @@ export default function PeriodsExpandablePanel({ parentId, token, apiBaseUrl }) 
                 <span data-testid={`period-status-${period.id}`}>
                   <Tag
                     variant={PERIOD_STATUS_VARIANTS[period.status] ?? 'neutral'}
-                    label={period.status$_identifier ?? period.status}
+                    label={ui(PERIOD_STATUS_LABEL_KEYS[period.status] ?? period.status)}
                   />
                 </span>
                 <button
@@ -338,11 +430,11 @@ export default function PeriodsExpandablePanel({ parentId, token, apiBaseUrl }) 
                         onChange={() => toggleDocSelection(doc.id)}
                         data-testid={`document-select-${doc.id}`}
                       />
-                      <span className="flex-1">{doc.documentCategory$_identifier ?? doc.documentCategory}</span>
+                      <span className="flex-1">{ui(DOCUMENT_CATEGORY_LABEL_KEYS[doc.documentCategory] ?? doc.documentCategory)}</span>
                       <span data-testid={`document-status-${doc.id}`}>
                         <Tag
                           variant={DOCUMENT_STATUS_VARIANTS[doc.periodStatus] ?? 'neutral'}
-                          label={doc.periodStatus$_identifier ?? doc.periodStatus}
+                          label={ui(DOCUMENT_STATUS_LABEL_KEYS[doc.periodStatus] ?? doc.periodStatus)}
                         />
                       </span>
                       <button
