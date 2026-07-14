@@ -43,14 +43,34 @@ const ONE_LINE = {
 };
 
 async function installConfirmMocks(page, state) {
-  // Header GET
+  // Header GET/PATCH.
+  // ETP-4468 — Confirm now calls handleSave() (PATCH) before running the
+  // confirm/convert steps. Without an explicit PATCH echo here, the request
+  // fell through to the generic `**/sws/**` catch-all in auth.js, which
+  // replies with a synthetic `{ id: 'e2e-record-id', ... }` (no NEO envelope,
+  // wrong id). useEntity's refetchAfterSave then refetched by that fake id,
+  // got back an empty record via the catch-all's GET fallback, and that
+  // garbage overwrote `editing`/`selected` — losing `documentStatus` and
+  // flipping `isDraft` to false, which unmounts ConfirmModal mid-flow.
   await page.route(`**/sws/neo/purchase-order/header/${ORDER_ID}`, async (route) => {
-    if (route.request().method() !== 'GET') return route.continue();
-    await route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      body: JSON.stringify({ response: { data: [DRAFT_HEADER] } }),
-    });
+    const method = route.request().method();
+    if (method === 'GET') {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ response: { data: [DRAFT_HEADER] } }),
+      });
+      return;
+    }
+    if (method === 'PATCH' || method === 'PUT') {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ response: { data: [{ ...DRAFT_HEADER }] } }),
+      });
+      return;
+    }
+    await route.continue();
   });
 
   // Lines GET
@@ -197,7 +217,13 @@ test.describe('Purchase Order — Confirm Modal idempotency (mocked)', () => {
 
     await clickConfirm(page);
 
-    await expect(page.getByText(/Pedido.*confirmado|Order.*confirmed/i)).toBeVisible({ timeout: 5000 });
+    // Match the exact confirmed-result title ("Pedido de compra confirmado" /
+    // "Purchase order confirmed"), NOT a loose `.*` pattern — the still-open
+    // ConfirmModal's own static content (title "Confirmar pedido #X" + the
+    // "Una vez confirmado..." warning banner) concatenates to a false match
+    // for /Pedido.*confirmado/i, resolving toBeVisible() before the retry's
+    // createPurchaseInvoice request actually completes.
+    await expect(page.getByText(/Pedido de compra confirmado|Purchase order confirmed/i)).toBeVisible({ timeout: 5000 });
 
     expect(state.calls.documentAction).toBe(1);
     expect(state.calls.createGoodsReceipt).toBe(1);
@@ -233,7 +259,9 @@ test.describe('Purchase Order — Confirm Modal idempotency (mocked)', () => {
     // Retry — receipt mock now succeeds, invoice is locked and skipped by the !invoiceResult guard
     await clickConfirm(page);
 
-    await expect(page.getByText(/Pedido.*confirmado|Order.*confirmed/i)).toBeVisible({ timeout: 5000 });
+    // See the exact-phrase note above — avoid the `.*` false match against the
+    // still-open ConfirmModal's own title + warning banner text.
+    await expect(page.getByText(/Pedido de compra confirmado|Purchase order confirmed/i)).toBeVisible({ timeout: 5000 });
 
     expect(state.calls.documentAction).toBe(1);
     expect(state.calls.createGoodsReceipt).toBe(2);
