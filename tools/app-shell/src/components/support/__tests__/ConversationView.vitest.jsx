@@ -13,6 +13,13 @@ vi.mock('@/auth/AuthContext.jsx', () => ({
   useAuth: () => mockUseAuth(),
 }));
 
+// Attachments without an `id` never trigger a fetch, so this stub is only
+// exercised by tests that explicitly pass an attachment with an id.
+const mockApiFetch = vi.fn();
+vi.mock('@/auth/useApiFetch', () => ({
+  useApiFetch: () => mockApiFetch,
+}));
+
 import { ConversationView } from '../ConversationView.jsx';
 
 function baseProps(overrides = {}) {
@@ -183,11 +190,10 @@ describe('ConversationView', () => {
     expect(screen.getByText('factura.pdf')).toBeInTheDocument();
   });
 
-  it('renders an audio attachment as "Audio" without a play control when no local audio URL is available', () => {
-    const messages = [{ id: 'm1', sender: 'ai', text: 'Nota de voz', attachments: [{ name: 'nota.webm' }] }];
+  it('renders a plain filename for an attachment with no id or mimeType (legacy/optimistic echo)', () => {
+    const messages = [{ id: 'm1', sender: 'ai', text: 'Aquí tenés', attachments: [{ name: 'nota.webm' }] }];
     render(<ConversationView {...baseProps({ messages })} />);
-    expect(screen.getByText('Audio')).toBeInTheDocument();
-    expect(screen.queryByTitle('supportPlayAudio')).not.toBeInTheDocument();
+    expect(screen.getByText('nota.webm')).toBeInTheDocument();
   });
 
   it('shows a day divider before the first timestamped message and whenever the day changes', () => {
@@ -288,54 +294,6 @@ describe('ConversationView', () => {
     expect(onDismissRating).toHaveBeenCalledTimes(1);
   });
 
-  describe('voice recording', () => {
-    beforeEach(() => {
-      global.navigator.mediaDevices = {
-        getUserMedia: vi.fn().mockResolvedValue({ getTracks: () => [{ stop: vi.fn() }] }),
-      };
-      global.URL.createObjectURL = vi.fn(() => 'blob:mock-url');
-
-      class FakeMediaRecorder {
-        constructor() {
-          this.state = 'recording';
-          this.mimeType = 'audio/webm';
-        }
-        start() {}
-        stop() {
-          this.state = 'inactive';
-          this.onstop?.();
-        }
-      }
-      global.MediaRecorder = FakeMediaRecorder;
-    });
-
-    it('starts and stops recording, adding the captured audio as a pending file', async () => {
-      const user = userEvent.setup();
-      const onAddFile = vi.fn();
-      render(<ConversationView {...baseProps({ onAddFile })} />);
-      await user.click(screen.getByLabelText('supportStartRecording'));
-      expect(await screen.findByLabelText('supportStopRecording')).toBeInTheDocument();
-      await user.click(screen.getByLabelText('supportStopRecording'));
-      expect(onAddFile).toHaveBeenCalledTimes(1);
-      expect(onAddFile.mock.calls[0][0]).toBeInstanceOf(File);
-    });
-
-    it('sends the recording immediately when clicking send while recording', async () => {
-      const user = userEvent.setup();
-      const onSend = vi.fn();
-      render(<ConversationView {...baseProps({ onSend })} />);
-      await user.click(screen.getByLabelText('supportStartRecording'));
-      await screen.findByLabelText('supportStopRecording');
-      await user.type(screen.getByPlaceholderText('supportTypeMessage'), 'Nota');
-      await user.click(screen.getByLabelText('send'));
-      expect(onSend).toHaveBeenCalledTimes(1);
-      const [text, files] = onSend.mock.calls[0];
-      expect(text).toBe('Nota');
-      expect(files).toHaveLength(1);
-      expect(files[0]).toBeInstanceOf(File);
-    });
-  });
-
   describe('additional coverage', () => {
     afterEach(() => {
       delete window.AudioContext;
@@ -417,45 +375,6 @@ describe('ConversationView', () => {
       expect(closeSpy).toHaveBeenCalled();
     });
 
-    it('toggles playback of a locally recorded audio bubble on repeated clicks', async () => {
-      const user = userEvent.setup();
-      const nowSpy = vi.spyOn(Date, 'now').mockReturnValue(1700000000000);
-      global.navigator.mediaDevices = {
-        getUserMedia: vi.fn().mockResolvedValue({ getTracks: () => [{ stop: vi.fn() }] }),
-      };
-      global.URL.createObjectURL = vi.fn(() => 'blob:mock-url');
-      class FakeMediaRecorder {
-        constructor() { this.state = 'recording'; this.mimeType = 'audio/webm'; }
-        start() {}
-        stop() { this.state = 'inactive'; this.onstop?.(); }
-      }
-      global.MediaRecorder = FakeMediaRecorder;
-
-      const onAddFile = vi.fn();
-      const messages = [{ id: 'm1', sender: 'ai', text: 'Nota', attachments: [{ name: 'audio-1700000000000.webm' }] }];
-      render(<ConversationView {...baseProps({ onAddFile, messages })} />);
-      await user.click(screen.getByLabelText('supportStartRecording'));
-      await screen.findByLabelText('supportStopRecording');
-      await user.click(screen.getByLabelText('supportStopRecording'));
-      expect(onAddFile).toHaveBeenCalledTimes(1);
-
-      const playButton = await screen.findByTitle('supportPlayAudio');
-      await user.click(playButton);
-      expect(screen.getByTitle('supportStopAudio')).toBeInTheDocument();
-      await user.click(screen.getByTitle('supportStopAudio'));
-      expect(screen.getByTitle('supportPlayAudio')).toBeInTheDocument();
-      nowSpy.mockRestore();
-    });
-
-    it('plays a pending audio attachment from the composer', async () => {
-      const user = userEvent.setup();
-      global.URL.createObjectURL = vi.fn(() => 'blob:mock-url');
-      const file = new File(['x'], 'nota.webm', { type: 'audio/webm' });
-      render(<ConversationView {...baseProps({ pendingFiles: [file] })} />);
-      await user.click(screen.getByTitle('supportPlayAudio'));
-      expect(global.URL.createObjectURL).toHaveBeenCalledWith(file);
-    });
-
     it('shows a "new messages" divider once earlier messages are marked as seen', () => {
       const initialMessages = [
         { id: 'm1', sender: 'user', text: 'Hola' },
@@ -468,25 +387,6 @@ describe('ConversationView', () => {
       const withNewMessage = [...initialMessages, { id: 'm3', sender: 'bot', text: 'Nuevo mensaje' }];
       rerender(<ConversationView {...baseProps({ isLoadingMessages: false, messages: withNewMessage })} />);
       expect(screen.getByText('supportNewDivider')).toBeInTheDocument();
-    });
-
-    it('stops an in-progress recording when the component unmounts', async () => {
-      const user = userEvent.setup();
-      global.navigator.mediaDevices = {
-        getUserMedia: vi.fn().mockResolvedValue({ getTracks: () => [{ stop: vi.fn() }] }),
-      };
-      const stop = vi.fn();
-      class FakeMediaRecorder {
-        constructor() { this.state = 'recording'; this.mimeType = 'audio/webm'; }
-        start() {}
-        stop = stop;
-      }
-      global.MediaRecorder = FakeMediaRecorder;
-      const { unmount } = render(<ConversationView {...baseProps()} />);
-      await user.click(screen.getByLabelText('supportStartRecording'));
-      await screen.findByLabelText('supportStopRecording');
-      unmount();
-      expect(stop).toHaveBeenCalled();
     });
 
     it('shows the drop overlay only while dragging and hides it on drag-leave', () => {
@@ -549,17 +449,6 @@ describe('ConversationView', () => {
       const conversation = { id: 'c1', status: 'closed' };
       render(<ConversationView {...baseProps({ conversation })} />);
       expect(screen.queryByLabelText('moreOptions')).not.toBeInTheDocument();
-    });
-
-    it('silently ignores a denied microphone permission when starting to record', async () => {
-      const user = userEvent.setup();
-      global.navigator.mediaDevices = {
-        getUserMedia: vi.fn().mockRejectedValue(new Error('denied')),
-      };
-      render(<ConversationView {...baseProps()} />);
-      await user.click(screen.getByLabelText('supportStartRecording'));
-      await act(async () => { await Promise.resolve(); await Promise.resolve(); });
-      expect(screen.queryByLabelText('supportStopRecording')).not.toBeInTheDocument();
     });
 
     it('shows an empty first-name greeting when there is no authenticated username', () => {

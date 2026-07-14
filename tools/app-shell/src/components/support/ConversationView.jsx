@@ -1,11 +1,39 @@
 import * as React from 'react';
+import { toast } from 'sonner';
 import {
   ChevronRight, MoreVertical, X, Plus, ArrowUp, Paperclip,
-  Users, CheckCircle, Smile, Mic, Maximize2, Minimize2,
+  Users, CheckCircle, Smile, Maximize2, Minimize2,
 } from 'lucide-react';
 import { useUI, useLocaleSwitch } from '@/i18n';
 import { ValerIATile } from './ValerIATile.jsx';
 import { useAuth } from '@/auth/AuthContext.jsx';
+import { useApiFetch } from '@/auth/useApiFetch';
+
+// Attachments accepted on every input path (file picker AND drag-and-drop):
+// images (any subtype) plus a fixed set of common document formats.
+// Keep this in sync with the file input's `accept` attribute below.
+const ALLOWED_DOC_EXTENSIONS = ['pdf', 'csv', 'txt', 'xlsx', 'docx'];
+const ALLOWED_DOC_MIME_TYPES = new Set([
+  'application/pdf',
+  'text/csv',
+  'application/csv',
+  'text/plain',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', // .xlsx
+  'application/vnd.ms-excel',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document', // .docx
+  'application/msword',
+]);
+
+// Real validation for files coming from the picker or drag-and-drop — the
+// input's `accept` attribute is only a UI hint and does not block either path.
+function isAllowedAttachmentFile(file) {
+  if (file.type) {
+    if (file.type.startsWith('image/')) return true;
+    if (ALLOWED_DOC_MIME_TYPES.has(file.type)) return true;
+  }
+  const ext = (file.name || '').split('.').pop()?.toLowerCase();
+  return !!ext && ALLOWED_DOC_EXTENSIONS.includes(ext);
+}
 
 const EMOJIS = [
   '😀','😃','😄','😁','😆','😅','🤣','😂','🙂','🙃','😉','😊','😇','🥰','😍','🤩',
@@ -98,7 +126,7 @@ function renderBold(txt) {
   );
 }
 
-function Bubble({ message, onQuickReply, audioMap = {} }) {
+function Bubble({ message, onQuickReply }) {
   const ui = useUI();
   const role = message.sender;
   const isHumanAgent = role === 'agent' || role === 'human';
@@ -107,28 +135,6 @@ function Bubble({ message, onQuickReply, audioMap = {} }) {
     : '';
   const fullTs = ts ? `${ui('supportToday')} · ${ts}` : undefined;
   const bubbleRole = role === 'user' ? 'user' : 'bot';
-
-  const [playingName, setPlayingName] = React.useState(null);
-  const audioRef = React.useRef(null);
-
-  React.useEffect(() => () => { audioRef.current?.pause(); }, []);
-
-  const toggleAudio = (name) => {
-    const url = audioMap[name];
-    if (!url) return;
-    if (playingName === name) {
-      audioRef.current?.pause();
-      audioRef.current = null;
-      setPlayingName(null);
-      return;
-    }
-    if (audioRef.current) { audioRef.current.pause(); audioRef.current = null; }
-    const audio = new Audio(url);
-    audioRef.current = audio;
-    setPlayingName(name);
-    audio.play();
-    audio.onended = () => { setPlayingName(null); audioRef.current = null; };
-  };
 
   return (
     <div className={`sc-msg ${bubbleRole}`} data-time={fullTs}>
@@ -148,25 +154,13 @@ function Bubble({ message, onQuickReply, audioMap = {} }) {
             {renderText(message.text)}
             {message.attachments?.length > 0 && (
               <div className="sc-att-list">
-                {message.attachments.map((a) => {
-                  const name = a.filename || a.name || '';
-                  const isAudio = name.match(/\.(webm|ogg|mp3|wav|m4a)$/i) || audioMap[name];
-                  return (
-                    <div key={name} className="sc-att">
-                      {isAudio ? <Mic size={14} data-testid="Mic__50ab90" /> : <Paperclip size={14} data-testid="Paperclip__50ab90" />}
-                      <span className="sc-a-name">{isAudio ? 'Audio' : name}</span>
-                      {isAudio && audioMap[name] && (
-                        <button
-                          className="sc-audio-play"
-                          onClick={() => toggleAudio(name)}
-                          title={playingName === name ? ui('supportStopAudio') : ui('supportPlayAudio')}
-                        >
-                          {playingName === name ? '■' : '▶'}
-                        </button>
-                      )}
-                    </div>
-                  );
-                })}
+                {message.attachments.map((a) => (
+                  <AttachmentItem
+                    key={a.id || a.filename || a.name}
+                    attachment={a}
+                    ui={ui}
+                    data-testid="AttachmentItem__50ab90" />
+                ))}
               </div>
             )}
             {message.quickReplies?.length > 0 && (
@@ -183,38 +177,114 @@ function Bubble({ message, onQuickReply, audioMap = {} }) {
   );
 }
 
-function PendingAttachmentChip({ file, onRemove, ui }) {
-  const isAudio = file.type?.startsWith('audio/');
+// Renders one inbound attachment on a message bubble:
+// - image/*   → authenticated fetch → blob URL → <img> thumbnail
+// - allowed non-image (pdf/csv/txt/xlsx/docx) → authenticated fetch → download link
+// - anything else with a known mimeType (e.g. a video a human agent attached
+//   directly in Jira) → neutral "unsupported" fallback, no fetch attempted
+// - no id/mimeType (legacy or still-optimistic local echo) → plain filename
+function AttachmentItem({ attachment, ui }) {
+  const apiFetch = useApiFetch();
+  const [blobUrl, setBlobUrl] = React.useState(null);
+  const [status, setStatus] = React.useState('idle'); // idle | loading | ready | error
+  const name = attachment.filename || attachment.name || '';
+  const mimeType = attachment.mimeType || '';
+  const isImage = mimeType.startsWith('image/');
+  const isAllowedOther = ALLOWED_DOC_MIME_TYPES.has(mimeType);
+  const canFetch = Boolean(attachment.id) && (isImage || isAllowedOther);
+  const isUnsupported = Boolean(mimeType) && !isImage && !isAllowedOther;
+
+  React.useEffect(() => {
+    if (!canFetch) return undefined;
+    let currentUrl = null;
+    let cancelled = false;
+    setStatus('loading');
+    apiFetch(`/sws/support/attachments/${attachment.id}`)
+      .then((res) => {
+        if (!res.ok) throw new Error('Failed to fetch attachment');
+        return res.blob();
+      })
+      .then((blob) => {
+        if (cancelled) return;
+        currentUrl = URL.createObjectURL(blob);
+        setBlobUrl(currentUrl);
+        setStatus('ready');
+      })
+      .catch(() => { if (!cancelled) setStatus('error'); });
+    return () => {
+      cancelled = true;
+      if (currentUrl) URL.revokeObjectURL(currentUrl);
+    };
+  }, [canFetch, attachment.id, apiFetch]);
+
+  if (isUnsupported) {
+    return (
+      <div className="sc-att sc-att-unsupported">
+        <Paperclip size={14} data-testid="Paperclip__50ab90" />
+        <span className="sc-a-name">{ui('supportAttachmentUnsupported')}</span>
+      </div>
+    );
+  }
+
+  if (isImage) {
+    if (status === 'ready' && blobUrl) {
+      return (
+        <a href={blobUrl} target="_blank" rel="noopener noreferrer" className="sc-att-img-link">
+          <img src={blobUrl} alt={name} className="sc-att-img" />
+        </a>
+      );
+    }
+    return (
+      <div className="sc-att">
+        <Paperclip size={14} data-testid="Paperclip__50ab90" />
+        <span className="sc-a-name">{name}</span>
+      </div>
+    );
+  }
+
+  if (canFetch) {
+    const handleDownload = () => {
+      if (!blobUrl) return;
+      const a = document.createElement('a');
+      a.href = blobUrl;
+      a.download = name;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+    };
+    return (
+      <div className="sc-att">
+        <Paperclip size={14} data-testid="Paperclip__50ab90" />
+        <button
+          type="button"
+          className="sc-a-name sc-att-download"
+          disabled={status !== 'ready'}
+          onClick={handleDownload}
+        >
+          {name}
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="sc-att">
+      <Paperclip size={14} data-testid="Paperclip__50ab90" />
+      <span className="sc-a-name">{name}</span>
+    </div>
+  );
+}
+
+function PendingAttachmentChip({ file, onRemove }) {
   return (
     <div className="sc-att-chip">
       <div className="sc-a-thumb">
-        {isAudio ? <Mic size={12} data-testid="Mic__50ab90" /> : <Paperclip size={12} data-testid="Paperclip__50ab90" />}
+        <Paperclip size={12} data-testid="Paperclip__50ab90" />
       </div>
-      {isAudio ? (
-        <>
-          <span>Audio</span>
-          <button
-            className="sc-audio-play"
-            title={ui('supportPlayAudio')}
-            onClick={() => {
-              const url = URL.createObjectURL(file);
-              const audio = new Audio(url);
-              audio.play();
-              audio.onended = () => URL.revokeObjectURL(url);
-            }}
-          >▶</button>
-          <span style={{ color: 'var(--sc-fg-3)', fontSize: 11 }}>
-            · {(file.size / 1024).toFixed(0)} KB
-          </span>
-        </>
-      ) : (
-        <>
-          <span className="sc-a-name">{file.name}</span>
-          <span style={{ color: 'var(--sc-fg-3)', fontSize: 11 }}>
-            · {(file.size / 1024).toFixed(0)} KB
-          </span>
-        </>
-      )}
+      <span className="sc-a-name">{file.name}</span>
+      <span style={{ color: 'var(--sc-fg-3)', fontSize: 11 }}>
+        · {(file.size / 1024).toFixed(0)} KB
+      </span>
       <span className="sc-x" onClick={onRemove}>
         <X size={12} data-testid="X__50ab90" />
       </span>
@@ -271,7 +341,7 @@ function CSATCard({ onSubmit, onDismiss }) {
   );
 }
 
-function ConversationMessageItem({ message, index, messages, seenCount, dateLocale, onQuickReply, audioMap, ui }) {
+function ConversationMessageItem({ message, index, messages, seenCount, dateLocale, onQuickReply, ui }) {
   if (message.handover) {
     return (
       <div className="sc-handover">
@@ -302,7 +372,6 @@ function ConversationMessageItem({ message, index, messages, seenCount, dateLoca
       <Bubble
         message={message}
         onQuickReply={onQuickReply}
-        audioMap={audioMap}
         data-testid="Bubble__50ab90" />
     </>
   );
@@ -409,26 +478,12 @@ export function ConversationView({
   const [isDragging, setIsDragging] = React.useState(false);
   const [menuOpen, setMenuOpen] = React.useState(false);
   const [showEmoji, setShowEmoji] = React.useState(false);
-  const [recording, setRecording] = React.useState(false);
-  const [recSeconds, setRecSeconds] = React.useState(0);
 
   const dragCounterRef = React.useRef(0);
   const fileRef = React.useRef(null);
   const threadRef = React.useRef(null);
   const menuRef = React.useRef(null);
   const emojiRef = React.useRef(null);
-  const mediaRecorderRef = React.useRef(null);
-  const chunksRef = React.useRef([]);
-  const recTimerRef = React.useRef(null);
-  // Maps audio filename → object URL so bubbles can play locally recorded audio
-  const audioMapRef = React.useRef({});
-  // Flag: stop recording and send immediately when the user clicks ↑ while recording
-  const pendingSendRef = React.useRef(false);
-  // Refs to avoid stale closures inside MediaRecorder.onstop
-  const draftRef = React.useRef(draft);
-  const pendingFilesRef = React.useRef(pendingFiles);
-  React.useEffect(() => { draftRef.current = draft; }, [draft]);
-  React.useEffect(() => { pendingFilesRef.current = pendingFiles; }, [pendingFiles]);
 
   // Tracks the message count at the moment the conversation was opened,
   // so we can render a "Nuevos" divider before messages that arrived after.
@@ -482,16 +537,6 @@ export function ConversationView({
     wasLoadingRef.current = isLoadingMessages;
   }, [isLoadingMessages]);
 
-  // ── Cleanup recording on unmount ───────────────────────────────────────────
-  React.useEffect(() => {
-    return () => {
-      clearInterval(recTimerRef.current);
-      if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
-        mediaRecorderRef.current.stop();
-      }
-    };
-  }, []);
-
   // ── Scroll ─────────────────────────────────────────────────────────────────
   React.useEffect(() => {
     threadRef.current?.scrollTo({ top: 1e6, behavior: 'smooth' });
@@ -517,60 +562,8 @@ export function ConversationView({
   const isHuman  = conversation?.assigneeKind === 'human';
   const assigneeName = conversation?.assigneeName || 'ValerIA';
 
-  // ── Recording ──────────────────────────────────────────────────────────────
-  const startRecording = async () => {
-    setShowEmoji(false);
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const mr = new MediaRecorder(stream);
-      chunksRef.current = [];
-      mr.ondataavailable = (e) => { if (e.data.size > 0) chunksRef.current.push(e.data); };
-      mr.onstop = () => {
-        const blob = new Blob(chunksRef.current, { type: mr.mimeType });
-        const ext = mr.mimeType?.includes('ogg') ? 'ogg' : 'webm';
-        const filename = `audio-${Date.now()}.${ext}`;
-        const file = new File([blob], filename, { type: blob.type });
-        audioMapRef.current[filename] = URL.createObjectURL(blob);
-        stream.getTracks().forEach((t) => t.stop());
-        if (pendingSendRef.current) {
-          pendingSendRef.current = false;
-          playSendSound();
-          onSend(draftRef.current.trim(), [...pendingFilesRef.current, file]);
-          setDraft('');
-          if (onInputChange) onInputChange('');
-        } else {
-          onAddFile(file);
-        }
-      };
-      mr.start();
-      mediaRecorderRef.current = mr;
-      setRecording(true);
-      setRecSeconds(0);
-      recTimerRef.current = setInterval(() => setRecSeconds((s) => s + 1), 1000);
-    } catch {
-      // microphone permission denied or not supported — silently skip
-    }
-  };
-
-  const stopRecording = () => {
-    clearInterval(recTimerRef.current);
-    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
-      mediaRecorderRef.current.stop();
-    }
-    setRecording(false);
-    setRecSeconds(0);
-  };
-
-  const formatRecTime = (s) => `${Math.floor(s / 60)}:${(s % 60).toString().padStart(2, '0')}`;
-
   // ── Send ───────────────────────────────────────────────────────────────────
   const send = () => {
-    if (recording) {
-      // Stop recording and send — onstop will fire the actual onSend call
-      pendingSendRef.current = true;
-      stopRecording();
-      return;
-    }
     const text = draft.trim();
     if (!text && pendingFiles.length === 0) return;
     playSendSound();
@@ -586,8 +579,20 @@ export function ConversationView({
     }
   };
 
+  // Adds a file only if it matches the allowed set (images or documents);
+  // otherwise surfaces a visible, translated error instead of silently
+  // dropping it. `accept` on the file input is only a UI hint, so this is
+  // the real enforcement point — shared with the drag-and-drop path below.
+  const addFileIfAllowed = (file) => {
+    if (!isAllowedAttachmentFile(file)) {
+      toast.error(ui('supportUnsupportedFileType', { name: file.name }));
+      return;
+    }
+    onAddFile(file);
+  };
+
   const handleFile = (e) => {
-    Array.from(e.target.files || []).forEach((f) => onAddFile(f));
+    Array.from(e.target.files || []).forEach(addFileIfAllowed);
     e.target.value = '';
   };
 
@@ -607,7 +612,7 @@ export function ConversationView({
     dragCounterRef.current = 0;
     setIsDragging(false);
     if (isClosed) return;
-    Array.from(e.dataTransfer.files || []).forEach((f) => onAddFile(f));
+    Array.from(e.dataTransfer.files || []).forEach(addFileIfAllowed);
   };
 
   // ── Render ─────────────────────────────────────────────────────────────────
@@ -678,7 +683,6 @@ export function ConversationView({
                 seenCount={seenCountRef.current}
                 dateLocale={dateLocale}
                 onQuickReply={(q) => setDraft(q)}
-                audioMap={audioMapRef.current}
                 ui={ui}
                 data-testid="ConversationMessageItem__50ab90" />
             </React.Fragment>
@@ -734,7 +738,6 @@ export function ConversationView({
                 key={`${f.name}-${f.size}-${f.lastModified}`}
                 file={f}
                 onRemove={() => onRemoveFile(i)}
-                ui={ui}
                 data-testid="PendingAttachmentChip__50ab90" />
             ))}
           </div>
@@ -785,21 +788,9 @@ export function ConversationView({
             }}
           />
 
-          {/* Mic / recording indicator */}
-          {recording && (
-            <span className="sc-rec-timer">{formatRecTime(recSeconds)}</span>
-          )}
-          <button
-            className={`sc-clip sc-mic-btn${recording ? ' recording' : ''}`}
-            onClick={recording ? stopRecording : startRecording}
-            aria-label={recording ? ui('supportStopRecording') : ui('supportStartRecording')}
-          >
-            <Mic size={16} data-testid="Mic__50ab90" />
-          </button>
-
           <button
             className="sc-send"
-            disabled={!recording && !draft.trim() && pendingFiles.length === 0}
+            disabled={!draft.trim() && pendingFiles.length === 0}
             onClick={send}
             aria-label={ui('send')}
           >

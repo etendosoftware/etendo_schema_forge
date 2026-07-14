@@ -1064,6 +1064,26 @@
 .sc-att .sc-a-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .sc-att .sc-a-size { color: var(--sc-fg-3); font-size: 11px; }
 .sc-att svg { width: 14px; height: 14px; flex-shrink: 0; }
+.sc-att-download {
+  background: none;
+  border: 0;
+  padding: 0;
+  margin: 0;
+  color: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+}
+.sc-att-download:disabled { cursor: default; opacity: .6; text-decoration: none; }
+.sc-att-img-link { display: inline-block; margin-top: 8px; }
+.sc-att-img {
+  display: block;
+  max-width: 200px;
+  max-height: 160px;
+  border-radius: 10px;
+  object-fit: cover;
+}
 
 /* ---- Expanded panel -------------------------------------------------------- */
 .sc-panel.expanded {
@@ -1129,36 +1149,3 @@
 }
 .sc-emoji-btn:hover { background: var(--sc-bg-subtle); }
 .sc-clip.active { background: var(--sc-bg-subtle); color: var(--sc-fg-1); }
-
-/* ---- Mic / recording ------------------------------------------------------- */
-.sc-mic-btn { transition: color .15s; }
-.sc-mic-btn.recording {
-  color: #e53935;
-  animation: sc-mic-pulse 1s ease-in-out infinite;
-}
-@keyframes sc-mic-pulse {
-  0%, 100% { opacity: 1; }
-  50%       { opacity: 0.45; }
-}
-.sc-rec-timer {
-  font: 600 12px/1 'Inter', sans-serif;
-  color: #e53935;
-  min-width: 32px;
-  text-align: center;
-  flex-shrink: 0;
-}
-
-/* ---- Audio chip play button ------------------------------------------------ */
-.sc-audio-play {
-  border: none;
-  background: rgba(255,255,255,.15);
-  border-radius: 4px;
-  cursor: pointer;
-  padding: 2px 6px;
-  color: inherit;
-  font-size: 12px;
-  line-height: 1;
-  opacity: 0.85;
-  flex-shrink: 0;
-}
-.sc-audio-play:hover { opacity: 1; background: rgba(255,255,255,.25); }

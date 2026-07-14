@@ -36,8 +36,11 @@ function readAsBase64(file) {
 async function serializeFile(file) {
   const mimeType = file.type || 'application/octet-stream';
   if (isTextFile(file)) {
-    const text = await readAsText(file);
-    return { name: file.name, mimeType, text };
+    // Text files carry both the readable `text` (for the AI) and the base64
+    // `data` (so the backend can also upload the original file to Jira as a
+    // real, downloadable attachment — today only `text` reaches the AI).
+    const [text, data] = await Promise.all([readAsText(file), readAsBase64(file)]);
+    return { name: file.name, mimeType, text, data };
   }
   // Images and PDFs go as base64 — GPT-4o handles both via vision/file API
   const data = await readAsBase64(file);
