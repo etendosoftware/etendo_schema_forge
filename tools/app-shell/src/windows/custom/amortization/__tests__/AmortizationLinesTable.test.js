@@ -97,20 +97,35 @@ describe('AmortizationLinesTable — inline editing', () => {
 });
 
 describe('AmortizationLinesTable — dimensions', () => {
-  it('defines DIMENSION_FIELDS with 8 entries', () => {
+  it('defines DIMENSION_FIELDS with exactly 3 entries: project, costcenter, eTADASBpartner', () => {
     assert.match(src, /DIMENSION_FIELDS/);
+    // The three kept dimensions with their AD columns.
+    assert.match(src, /'project'/);
+    assert.match(src, /C_Project_ID/);
     assert.match(src, /'costcenter'/);
+    assert.match(src, /C_Costcenter_ID/);
     assert.match(src, /'eTADASBpartner'/);
-    assert.match(src, /'stDimension'/);
-    assert.match(src, /'ndDimension'/);
-    assert.match(src, /'eTADASSalesRegion'/);
-    assert.match(src, /'eTADASActivity'/);
-    assert.match(src, /'eTADASSalesCampaign'/);
+    assert.match(src, /EM_Etadas_C_Bpartner_ID/);
+
+    // Assert the array literal holds exactly 3 object entries.
+    const block = src.match(/const DIMENSION_FIELDS = \[(.*?)\];/s);
+    assert.ok(block, 'DIMENSION_FIELDS array literal not found');
+    const entries = block[1].match(/\{\s*key:/g) ?? [];
+    assert.equal(entries.length, 3, `expected 3 DIMENSION_FIELDS entries, found ${entries.length}`);
+
+    // The 5 trimmed dimensions must no longer be present.
+    assert.doesNotMatch(src, /'stDimension'/);
+    assert.doesNotMatch(src, /'ndDimension'/);
+    assert.doesNotMatch(src, /'eTADASSalesRegion'/);
+    assert.doesNotMatch(src, /'eTADASActivity'/);
+    assert.doesNotMatch(src, /'eTADASSalesCampaign'/);
   });
 
-  it('hides project field via hidden: true (has displayLogic @ACCT_DIMENSION_DISPLAY@)', () => {
-    assert.match(src, /hidden: true/);
-    assert.match(src, /VISIBLE_DIMENSION_FIELDS.*filter.*hidden/);
+  it('renders the project dimension (no hidden: true on any dimension entry)', () => {
+    // Project was intentionally unhidden so it renders in the panel.
+    const block = src.match(/const DIMENSION_FIELDS = \[(.*?)\];/s);
+    assert.ok(block, 'DIMENSION_FIELDS array literal not found');
+    assert.doesNotMatch(block[1], /hidden:\s*true/);
   });
 
   it('renders DimSummary with Label:Value badges (no n/TOTAL_DIMS counter)', () => {

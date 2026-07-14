@@ -8,12 +8,7 @@ const columns = [
   { key: 'amortizationAmount', column: 'Amortizationamt', type: 'amount', label: 'Amortization Amount', required: true, noTrailing: true },
   { key: 'project', column: 'C_Project_ID', type: 'selector', label: 'Project', lookup: true },
   { key: 'costcenter', column: 'C_Costcenter_ID', type: 'selector', label: 'Cost Center', lookup: true },
-  { key: 'stDimension', column: 'User1_ID', type: 'selector', label: '1st Dimension', lookup: true },
-  { key: 'ndDimension', column: 'User2_ID', type: 'selector', label: '2nd Dimension', lookup: true },
   { key: 'eTADASBpartner', column: 'EM_Etadas_C_Bpartner_ID', type: 'selector', label: 'Business Partner', lookup: true },
-  { key: 'eTADASSalesRegion', column: 'EM_Etadas_Salesregion_ID', type: 'selector', label: 'Sales Region', lookup: true },
-  { key: 'eTADASActivity', column: 'EM_Etadas_C_Activity_ID', type: 'selector', label: 'Activity', lookup: true },
-  { key: 'eTADASSalesCampaign', column: 'EM_Etadas_Campaign_ID', type: 'selector', label: 'Sales Campaign', lookup: true },
 ];
 // @sf-generated-end columns:lines
 

@@ -48,7 +48,7 @@ async function installFiscalProfileMocks(page, profile) {
     });
   });
 
-  await page.route('**/sws/neo/verifactu-config/cabeceraDeConfiguraciónVerifactu?**', async (route) => {
+  await page.route('**/sws/neo/verifactu-config/**', async (route) => {
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
@@ -289,5 +289,140 @@ test.describe('SIF buttons follow fiscal config in invoice detail views', () => 
 
     await sifDialog.getByRole('button', { name: t('close') }).click();
     await expect(page.getByRole('button', { name: t('sendToSif') })).toHaveCount(0);
+  });
+});
+
+// ── ETP-4390: Verifactu fields on the SIF tab (sales-invoice, draft) ─────────
+//
+// Adds coverage for the 6 new Verifactu-only fields on SifTab.jsx and the
+// OperationDateField bug fix (previously only editable from the SII panel,
+// now shared by both SII and Verifactu). See tools/app-shell/src/windows/
+// custom/shared/SifTab.jsx and useSifFieldPatcher.js for the implementation.
+
+function installSalesInvoicePatchCapture(page, invoiceId, patchBodies) {
+  return page.route(`**/sws/neo/sales-invoice/header/${invoiceId}`, async (route) => {
+    if (route.request().method() !== 'PATCH') return route.fallback();
+    let body = {};
+    try { body = route.request().postDataJSON(); } catch { /* ignore malformed body */ }
+    patchBodies.push(body);
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ response: { data: [{}] } }),
+    });
+  });
+}
+
+test.describe('SifTab — Verifactu fields on sales invoice (ETP-4390)', () => {
+  test.beforeEach(async ({ page }) => {
+    await seedSelectedOrg(page);
+    await login(page);
+  });
+
+  // ETP-4463: SifTab no longer persists fields itself — edits made in the tab
+  // (invoice type, corrective type, operation date, etc.) write into the same
+  // shared `editing` state as the header form via the `onChange` prop DetailView
+  // passes down. There is no more per-field PATCH-on-blur/select — persistence
+  // happens only when the header "Guardar" (data-testid="action-save-draft") or
+  // "Confirmar" (data-testid="action-save") button is clicked, and that ONE PATCH
+  // carries every pending edit (SIF fields included) together with the rest of
+  // the header payload. These tests assert the field values land in that single
+  // PATCH, rather than intercepting a PATCH fired per field on blur/select.
+  test('editing the invoice type to a rectifying value reveals the corrective type field, and the Guardar PATCH includes both SIF field changes', async ({ page }) => {
+    await installFiscalProfileMocks(page, 'verifactu');
+
+    const invoice = {
+      id: 'SI_VF_1',
+      documentNo: 'SI-VF-001',
+      documentStatus: 'DR',
+      grandTotalAmount: 200,
+      outstandingAmount: 200,
+      businessPartner: 'BP_1',
+      'businessPartner$_identifier': 'QA Customer',
+      'currency$_identifier': 'EUR',
+    };
+    await installInvoiceDetailMocks(page, 'sales-invoice', invoice);
+
+    const patchBodies = [];
+    await installSalesInvoicePatchCapture(page, invoice.id, patchBodies);
+
+    await navigateTo(page, `sales-invoice/${invoice.id}`);
+    await expect(page.getByTestId('detail-view')).toBeVisible();
+
+    await page.getByTestId('tab-custom:sif').click();
+    await expect(page.getByText(t('sifDataTabs.panel.verifactu.subtitle'))).toBeVisible({ timeout: 8_000 });
+
+    // Corrective invoice type field is not shown before an invType is selected.
+    await expect(page.getByText(t('sifDataTabs.field.correctiveInvoiceType'))).toHaveCount(0);
+
+    // Open the "Tipo de Factura" select and choose a rectifying value (R2).
+    await page.locator('#sif-vfInvType').click();
+    await page.getByRole('option', { name: /R2/ }).click();
+
+    // The corrective invoice type field becomes visible immediately — driven by
+    // the shared editing state (onChange updates it, data reflects it on the very
+    // next render), with no save round-trip involved.
+    await expect(page.getByText(t('sifDataTabs.field.correctiveInvoiceType'))).toBeVisible({ timeout: 4_000 });
+    await expect(page.locator('#sif-vfReverseType')).toBeVisible();
+
+    // The corrective invoice type select is itself selectable.
+    await page.locator('#sif-vfReverseType').click();
+    await page.getByRole('option', { name: /Por Diferencias|By difference/i }).click();
+
+    // No PATCH has fired yet from any of the above — SifTab no longer persists
+    // per-field.
+    expect(patchBodies).toHaveLength(0);
+
+    // Clicking "Guardar" (draft save) fires the ONE header PATCH, and it carries
+    // both pending SIF field edits made above.
+    await page.getByTestId('action-save-draft').click();
+
+    await expect.poll(() => patchBodies).toHaveLength(1);
+    expect(patchBodies[0]).toMatchObject({ etvfacInvType: 'R2', etvfacReverseinvtype: 'I' });
+  });
+
+  test('etsgDateOperation is editable from the Verifactu tab (regression: previously only editable from SII) and its edit lands in the Guardar PATCH', async ({ page }) => {
+    await installFiscalProfileMocks(page, 'verifactu');
+
+    const invoice = {
+      id: 'SI_VF_2',
+      documentNo: 'SI-VF-002',
+      documentStatus: 'DR',
+      grandTotalAmount: 300,
+      outstandingAmount: 300,
+      businessPartner: 'BP_1',
+      'businessPartner$_identifier': 'QA Customer',
+      'currency$_identifier': 'EUR',
+      etsgDateOperation: '2026-01-01',
+    };
+    await installInvoiceDetailMocks(page, 'sales-invoice', invoice);
+
+    const patchBodies = [];
+    await installSalesInvoicePatchCapture(page, invoice.id, patchBodies);
+
+    await navigateTo(page, `sales-invoice/${invoice.id}`);
+    await expect(page.getByTestId('detail-view')).toBeVisible();
+
+    await page.getByTestId('tab-custom:sif').click();
+    await expect(page.getByText(t('sifDataTabs.panel.verifactu.subtitle'))).toBeVisible({ timeout: 8_000 });
+
+    const dateInput = page.locator('#sif-etsgDateOperation');
+    await expect(dateInput).toBeVisible();
+    await expect(dateInput).toBeEnabled();
+
+    // Type a new date (es_ES locale: day-first, 8 digits auto-masked to dd/mm/yyyy)
+    // and blur — DateField commits via its own onChange, no separate save button
+    // inside the tab itself.
+    await dateInput.click();
+    await dateInput.fill('');
+    await dateInput.pressSequentially('15032026');
+    await dateInput.blur();
+
+    expect(patchBodies).toHaveLength(0);
+
+    await page.getByTestId('action-save-draft').click();
+
+    await expect.poll(() => patchBodies).toHaveLength(1);
+    expect(patchBodies[0]).toMatchObject({ etsgDateOperation: '2026-03-15' });
   });
 });

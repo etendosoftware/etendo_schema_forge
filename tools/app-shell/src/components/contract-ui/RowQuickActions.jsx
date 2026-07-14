@@ -56,6 +56,7 @@ export default function RowQuickActions({
   // (threaded through DataTable's `rowQuickActions.hideDeleteButton`). Unlike
   // `hideDeleteWhenComplete`, this does not depend on record status: when true, the
   // Delete icon never renders for any row in this window, mirroring DetailView's toolbar.
+  // Defaults to false → identical to pre-feature behavior when unset.
   hideDeleteButton = false,
   statusField = null,
   // Handlers (host-controlled to keep this component decoupled from routing/modals)
@@ -147,6 +148,7 @@ export default function RowQuickActions({
     record: row,
     statusField,
     hideDeleteWhenComplete,
+    hideDeleteButton,
   });
 
   const stop = (e) => { e.stopPropagation(); };
