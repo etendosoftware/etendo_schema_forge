@@ -3,7 +3,11 @@ import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { DateField } from '@/components/ui/date-field';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { useSifFieldPatcher } from '@/windows/custom/shared/useSifFieldPatcher.js';
+import {
+  useSifFieldPatcher,
+  VERIFACTU_INV_TYPE_OPTIONS,
+  VERIFACTU_REVERSE_TYPE_OPTIONS,
+} from '@/windows/custom/shared/useSifFieldPatcher.js';
 
 function Field({ label, htmlFor, children }) {
   return (
@@ -178,7 +182,54 @@ function ReadOnlyField({ id, labelKey, value, ui }) {
   );
 }
 
-export default function SifTab({ recordId, data, token, apiBaseUrl }) {
+// Shared by the SII and Verifactu panels: Classic's displayLogic for this field is
+// `@etvfac_has_configuration@='Y' | @TBAI_ExistTBAIConfig@=1 | @AEATSII_AcogidaSII@='Y'`,
+// i.e. it must render whenever ANY fiscal regime is configured, not just SII.
+//
+// ETP-4463: writes go straight into the shared `editing` state via `onChange`
+// on every keystroke/commit — there's no separate per-field save anymore, so
+// we no longer depend on DateField's `onBlur` firing (or firing with a fresh
+// value) at all. The batch header save picks this up like any other field.
+function OperationDateField({ ui, getDateVal, onChange, disabled }) {
+  return (
+    <Field
+      label={ui('sifDataTabs.field.operationDate')}
+      htmlFor="sif-etsgDateOperation"
+      data-testid="Field__b99c8b">
+      <DateField
+        id="sif-etsgDateOperation"
+        value={getDateVal('etsgDateOperation')}
+        onChange={iso => onChange?.('etsgDateOperation', iso)}
+        disabled={disabled}
+        data-testid="DateField__b99c8b" />
+    </Field>
+  );
+}
+
+// Classic displayLogic: `@etvfac_has_configuration@='Y' & @EM_Etvfac_Inv_Type@!'R5' & @EM_Etvfac_Inv_Type@!'F2'`
+function shouldShowSimplifiedArt7273(invType) {
+  return invType !== 'R5' && invType !== 'F2';
+}
+
+// Classic displayLogic: `@etvfac_has_configuration@='Y' & (@EM_Etvfac_Inv_Type@='R5' | @EM_Etvfac_Inv_Type@='F2')`
+// Mutually exclusive with shouldShowSimplifiedArt7273 by design.
+function shouldShowNoRecipientIdArt61d(invType) {
+  return invType === 'R5' || invType === 'F2';
+}
+
+// Classic displayLogic (verbatim, operator-precedence quirk intentional — `&` binds tighter than `|`
+// in the raw AD string with no parens): `@etvfac_has_configuration@='Y' & @EM_Etvfac_Inv_Type@='R1'
+// | @EM_Etvfac_Inv_Type@='R2' | @EM_Etvfac_Inv_Type@='R3' | @EM_Etvfac_Inv_Type@='R4' | @EM_Etvfac_Inv_Type@='R5'`
+// Only R1 is gated by showVerifactu/config; R2–R5 show regardless. Mirrors Classic exactly.
+function shouldShowReverseInvType(showVerifactu, invType) {
+  return (showVerifactu && invType === 'R1')
+    || invType === 'R2'
+    || invType === 'R3'
+    || invType === 'R4'
+    || invType === 'R5';
+}
+
+export default function SifTab({ recordId, data, token, apiBaseUrl, onChange }) {
   const {
     ui,
     siiTypeField,
@@ -189,17 +240,16 @@ export default function SifTab({ recordId, data, token, apiBaseUrl }) {
     showVerifactu,
     dateReadOnly,
     siiFieldReadOnly,
-    savingField,
     getVal,
     getDateVal,
-    setVal,
-    patchField,
-    handleBlur,
-    handleCheckboxChange,
-  } = useSifFieldPatcher({ data, recordId, token, apiBaseUrl });
+  } = useSifFieldPatcher({ data, recordId, token, apiBaseUrl, onChange });
 
   const defaultTab = resolveDefaultTab(showSii, showTbai);
   const [activeTab, setActiveTab] = useState(defaultTab);
+  // Read live (possibly unsaved) pending value so dependent Verifactu fields react
+  // immediately as the user picks a Tipo de Factura — `data` already reflects the
+  // pending edit (shared `editing` state) as soon as onChange fires.
+  const vfInvType = getVal('etvfacInvType');
 
   if (!showSii && !showTbai && !showVerifactu) {
     return (
@@ -249,29 +299,20 @@ export default function SifTab({ recordId, data, token, apiBaseUrl }) {
             badge={<SiiStatusBadge estado={data?.aeatsiiEstado} ui={ui} data-testid="SiiStatusBadge__b99c8b" />}
             ui={ui}
             data-testid="Panel__b99c8b">
-            <Field
-              label={ui('sifDataTabs.field.operationDate')}
-              htmlFor="sif-etsgDateOperation"
-              data-testid="Field__b99c8b">
-              <DateField
-                id="sif-etsgDateOperation"
-                value={getDateVal('etsgDateOperation')}
-                onChange={iso => setVal('etsgDateOperation', iso)}
-                onBlur={() => handleBlur('etsgDateOperation', getDateVal('etsgDateOperation'))}
-                disabled={dateReadOnly || savingField === 'etsgDateOperation'}
-                data-testid="DateField__b99c8b" />
-            </Field>
+            <OperationDateField
+              ui={ui}
+              getDateVal={getDateVal}
+              onChange={onChange}
+              disabled={dateReadOnly}
+              data-testid="OperationDateField__b99c8b" />
             <Field
               label={ui('sifDataTabs.field.invoiceType')}
               htmlFor="sif-siiType"
               data-testid="Field__b99c8b">
               <Select
                 value={getVal(siiTypeField) || undefined}
-                onValueChange={val => {
-                  setVal(siiTypeField, val);
-                  patchField(siiTypeField, val);
-                }}
-                disabled={siiFieldReadOnly || savingField === siiTypeField}
+                onValueChange={val => onChange?.(siiTypeField, val)}
+                disabled={siiFieldReadOnly}
                 data-testid="Select__b99c8b">
                 <SelectTrigger id="sif-siiType" data-testid="SelectTrigger__b99c8b">
                   <SelectValue placeholder="—" data-testid="SelectValue__b99c8b" />
@@ -297,9 +338,8 @@ export default function SifTab({ recordId, data, token, apiBaseUrl }) {
                 id="sif-siiDesc"
                 type="text"
                 value={getVal('aeatsiiDescripcionSii')}
-                onChange={e => setVal('aeatsiiDescripcionSii', e.target.value)}
-                onBlur={e => handleBlur('aeatsiiDescripcionSii', e.target.value)}
-                disabled={siiFieldReadOnly || savingField === 'aeatsiiDescripcionSii'}
+                onChange={e => onChange?.('aeatsiiDescripcionSii', e.target.value)}
+                disabled={siiFieldReadOnly}
                 data-testid="Input__b99c8b" />
             </Field>
             <ReadOnlyField
@@ -315,8 +355,8 @@ export default function SifTab({ recordId, data, token, apiBaseUrl }) {
               <CheckboxField
                 id="sif-auth"
                 checked={Boolean(getVal('aeatsiiIsauthorization'))}
-                disabled={siiFieldReadOnly || savingField === 'aeatsiiIsauthorization'}
-                onToggle={val => handleCheckboxChange('aeatsiiIsauthorization', val)}
+                disabled={siiFieldReadOnly}
+                onToggle={val => onChange?.('aeatsiiIsauthorization', val)}
                 data-testid="CheckboxField__b99c8b" />
             </Field>
             <ReadOnlyField
@@ -373,36 +413,90 @@ export default function SifTab({ recordId, data, token, apiBaseUrl }) {
               data-testid="VerifactuBadge__b99c8b" />}
             ui={ui}
             data-testid="Panel__b99c8b">
-            <ReadOnlyField
-              id="sif-vfDate"
-              labelKey="sifDataTabs.field.rfGenerationDate"
-              value={data?.etvfacDateIssue}
+            <OperationDateField
               ui={ui}
-              data-testid="ReadOnlyField__b99c8b" />
-            <ReadOnlyField
-              id="sif-vfCsv"
-              labelKey="sifDataTabs.field.csv"
-              value={data?.cdigoCSV}
-              ui={ui}
-              data-testid="ReadOnlyField__b99c8b" />
-            <ReadOnlyField
-              id="sif-vfHash"
-              labelKey="sifDataTabs.field.hash"
-              value={data?.etvfacHash}
-              ui={ui}
-              data-testid="ReadOnlyField__b99c8b" />
-            <ReadOnlyField
-              id="sif-vfQr"
-              labelKey="sifDataTabs.field.qrUrl"
-              value={data?.etvfacQRURL}
-              ui={ui}
-              data-testid="ReadOnlyField__b99c8b" />
-            <ReadOnlyField
-              id="sif-vfIssue"
-              labelKey="sifDataTabs.field.issueDetail"
-              value={data?.etvfacIssueDescription}
-              ui={ui}
-              data-testid="ReadOnlyField__b99c8b" />
+              getDateVal={getDateVal}
+              onChange={onChange}
+              disabled={dateReadOnly}
+              data-testid="OperationDateField__b99c8b" />
+            <Field
+              label={ui('sifDataTabs.field.vfInvoiceType')}
+              htmlFor="sif-vfInvType"
+              data-testid="Field__b99c8b">
+              <Select
+                value={getVal('etvfacInvType') || undefined}
+                onValueChange={val => onChange?.('etvfacInvType', val)}
+                disabled={dateReadOnly}
+                data-testid="Select__b99c8b">
+                <SelectTrigger id="sif-vfInvType" data-testid="SelectTrigger__b99c8b">
+                  <SelectValue placeholder="—" data-testid="SelectValue__b99c8b" />
+                </SelectTrigger>
+                <SelectContent data-testid="SelectContent__b99c8b">
+                  {VERIFACTU_INV_TYPE_OPTIONS.map(o => (
+                    <SelectItem key={o.value} value={o.value} data-testid="SelectItem__b99c8b">{o.value} — {ui(o.labelKey)}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </Field>
+            <Field
+              label={ui('sifDataTabs.field.vfOperationDescription')}
+              htmlFor="sif-vfDesc"
+              data-testid="Field__b99c8b">
+              <Input
+                id="sif-vfDesc"
+                type="text"
+                value={getVal('etvfacVerifacDesc')}
+                onChange={e => onChange?.('etvfacVerifacDesc', e.target.value)}
+                disabled={dateReadOnly}
+                data-testid="Input__b99c8b" />
+            </Field>
+            {shouldShowSimplifiedArt7273(vfInvType) && (
+              <Field
+                label={ui('sifDataTabs.field.simplifiedInvoiceArt7273')}
+                htmlFor="sif-vfSimp7273"
+                data-testid="Field__b99c8b">
+                <CheckboxField
+                  id="sif-vfSimp7273"
+                  checked={Boolean(getVal('etvfacSimpinvart7273'))}
+                  disabled={dateReadOnly}
+                  onToggle={val => onChange?.('etvfacSimpinvart7273', val)}
+                  data-testid="CheckboxField__b99c8b" />
+              </Field>
+            )}
+            {shouldShowNoRecipientIdArt61d(vfInvType) && (
+              <Field
+                label={ui('sifDataTabs.field.noRecipientIdArt61d')}
+                htmlFor="sif-vfNoId61d"
+                data-testid="Field__b99c8b">
+                <CheckboxField
+                  id="sif-vfNoId61d"
+                  checked={Boolean(getVal('etvfacInvNoIDArt61d'))}
+                  disabled={dateReadOnly}
+                  onToggle={val => onChange?.('etvfacInvNoIDArt61d', val)}
+                  data-testid="CheckboxField__b99c8b" />
+              </Field>
+            )}
+            {shouldShowReverseInvType(showVerifactu, vfInvType) && (
+              <Field
+                label={ui('sifDataTabs.field.correctiveInvoiceType')}
+                htmlFor="sif-vfReverseType"
+                data-testid="Field__b99c8b">
+                <Select
+                  value={getVal('etvfacReverseinvtype') || undefined}
+                  onValueChange={val => onChange?.('etvfacReverseinvtype', val)}
+                  disabled={dateReadOnly}
+                  data-testid="Select__b99c8b">
+                  <SelectTrigger id="sif-vfReverseType" data-testid="SelectTrigger__b99c8b">
+                    <SelectValue placeholder="—" data-testid="SelectValue__b99c8b" />
+                  </SelectTrigger>
+                  <SelectContent data-testid="SelectContent__b99c8b">
+                    {VERIFACTU_REVERSE_TYPE_OPTIONS.map(o => (
+                      <SelectItem key={o.value} value={o.value} data-testid="SelectItem__b99c8b">{o.value} — {ui(o.labelKey)}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </Field>
+            )}
           </Panel>
         )}
       </div>
