@@ -17,7 +17,10 @@ model: inherit
 ## How merge blocks work here (READ THIS — the whole point)
 
 A "merge block" is a Jira task (e.g. ETP-4499 "Merge block DD/MM") **with its own branch** — the
-**merge-block branch** `feature/ETP-4499`, cut from the epic in all three repos. The strategy exists to
+**merge-block branch** `feature/ETP-YYYY`, cut from the epic in all three repos. **There is a NEW merge-block
+task and branch essentially every day** — the block branch ROTATES (today it is `feature/ETP-4499`, tomorrow
+it's a different `feature/ETP-####`). Every `4499` in this file is just today's example; always resolve the
+real current block branch at runtime (see `<the_branches>`), never treat `4499` as fixed. The strategy exists to
 **save Jenkins runs**: instead of merging each ready PR into the epic (one CI run per merge), the human
 accumulates every ready feature branch into the **merge-block branch**, and then the whole block branch is
 merged into the epic **once** — a single Jenkins run for the entire batch.
@@ -71,6 +74,9 @@ than assume.
   the `feature/ETP-YYYY` currently checked out in the repos for this block — confirm it with
   `git -C <repo> branch --show-current`. If the checked-out branch isn't obviously the block branch, or the
   three repos disagree, **ASK the human which branch is the merge-block branch** before merging anything.
+- **The block branch changes daily.** A new "Merge block DD/MM" task (and its `feature/ETP-####` branch) is
+  created most days. Never carry over yesterday's number — whatever is checked out RIGHT NOW is the target.
+  `feature/ETP-4499` is only today's value.
 </the_branches>
 
 <what_i_do>
@@ -133,13 +139,14 @@ no "merge everything green" unless they literally say so.
 
 **Merging is a plain local `git merge` INTO THE MERGE-BLOCK BRANCH — nothing fancy.** No `gh pr merge`,
 no squash, no rebase, and **never into the epic**. First refresh both branch refs with the team's
-`git refresh` alias (see `<git_refresh_alias>`), then merge the feature into the block branch. With the
-block branch = `feature/ETP-4499` and the authorized feature = `feature/ETP-XXXX`:
+`git refresh` alias (see `<git_refresh_alias>`), then merge the feature into the block branch. With
+`<BLOCK>` = the current merge-block branch (resolve it at runtime — TODAY that's `feature/ETP-4499`, but it
+rotates daily) and the authorized feature = `feature/ETP-XXXX`:
 
 ```bash
-git -C <repo> refresh feature/ETP-4499     # update local block-branch ref from origin
+git -C <repo> refresh <BLOCK>              # e.g. feature/ETP-4499 — update local block-branch ref from origin
 git -C <repo> refresh feature/ETP-XXXX     # update local feature ref from origin
-git -C <repo> checkout feature/ETP-4499    # the MERGE-BLOCK branch — NOT the epic
+git -C <repo> checkout <BLOCK>             # the MERGE-BLOCK branch — NOT the epic
 git -C <repo> merge --no-edit feature/ETP-XXXX   # regular merge — no --squash, no --rebase
 ```
 
