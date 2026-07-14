@@ -208,8 +208,10 @@ test.describe('Onboarding — Full registration flow', () => {
     await page.locator('#fiscalIdValue').fill('B12345678');
     await expect(startBtn).toBeEnabled();
 
-    // Address shows "(opcional)" — fiscal id is also optional now, so scope to the first match.
-    await expect(page.getByText(/opcional/i).first()).toBeVisible();
+    // Address label carries the "(opcional)" tag. Fiscal id also renders "opcional"
+    // now (core 0.3.8), so scope to the address field's SetupField label
+    // (<label for="address">…(opcional)</label>) instead of a bare text match.
+    await expect(page.locator('label[for="address"]')).toContainText(/opcional/i);
 
     // Sector dropdown visible
     await expect(page.locator('#sector')).toBeVisible();
