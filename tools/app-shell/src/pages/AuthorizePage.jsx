@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useAuth } from '@/auth/AuthContext.jsx';
+import { useLogout } from '@/auth/useLogout.js';
 import { createApiFetch } from '@/auth/api.js';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -28,7 +29,8 @@ const SCOPE_LABELS = {
 };
 
 export default function AuthorizePage() {
-  const { token, username, logout } = useAuth();
+  const { token, username } = useAuth();
+  const logout = useLogout();
   const [searchParams] = useSearchParams();
   const [status, setStatus] = useState('idle'); // idle | authorizing | success | error
   const [errorMessage, setErrorMessage] = useState('');
