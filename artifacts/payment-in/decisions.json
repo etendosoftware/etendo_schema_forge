@@ -26,16 +26,6 @@
     "hideDeleteWhenComplete": true,
     "customTabsAfterBottom": true,
     "summaryFields": [],
-    "menuActions": [
-      {
-        "key": "removePayment",
-        "label": "Remove Payment",
-        "labelKey": "removePayment",
-        "destructive": true,
-        "columnName": "eTPRRemovePayment",
-        "visibleWhenStatus": ["PPM", "PWNC", "RDNC", "RPAE", "RPAP", "RPPC", "RPR"]
-      }
-    ],
     "processOverrides": {
       "aPRMProcessPayment": {
         "label": "processConfirm",

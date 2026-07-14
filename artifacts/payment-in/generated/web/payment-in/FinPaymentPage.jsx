@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react';
 import { ListView, DetailView } from '@/components/contract-ui';
-import { toast } from 'sonner';
 import FinPaymentTable from '../../../custom/PaymentHeaderTable';
 import FinPaymentForm from './FinPaymentForm';
 import RelatedDocuments from '../../../custom/RelatedDocuments';
@@ -275,9 +274,6 @@ export default function FinPaymentPage({ windowName, recordId, ...props }) {
         sidePanel={PaymentDetailSidebar}
         sidePanelStyle={{"order":-1,"borderLeft":"none","borderRight":"1px solid #E8EAEF","padding":0}}
         processConfirmModal={ReactivarConfirmModal}
-        menuActions={({ status }) => [
-          { key: 'removePayment', label: 'Remove Payment', destructive: true, visible: ["PPM","PWNC","RDNC","RPAE","RPAP","RPPC","RPR"].includes(status), labelKey: 'removePayment', columnName: 'eTPRRemovePayment',  }
-        ]}
         statusEnumLabels={{"RPAP":"statusDraft","RPR":"cobroDepositado","RDNC":"cobroDepositado","RPPC":"cobroDepositado","PPM":"cobroDepositado","PWNC":"cobroDepositado"}}
         statusFieldLabel="statusColumnLabel"
         sendDocument

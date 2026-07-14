@@ -1,8 +1,8 @@
 {
   "version": "0.10.0",
   "generatedAt": "2026-04-29T19:05:52.312Z",
-  "updatedAt": "2026-07-13T16:19:55.048Z",
-  "checksum": "f2e08ae99065ee68",
+  "updatedAt": "2026-07-14T12:35:21.921Z",
+  "checksum": "eee82f93d84a16a0",
   "frontendContract": {
     "window": {
       "id": "E547CE89D4C04429B6340FFA44E70716",
@@ -36,24 +36,6 @@
           "padding": 0
         }
       },
-      "menuActions": [
-        {
-          "key": "removePayment",
-          "label": "Remove Payment",
-          "labelKey": "removePayment",
-          "destructive": true,
-          "columnName": "eTPRRemovePayment",
-          "visibleWhenStatus": [
-            "PPM",
-            "PWNC",
-            "RDNC",
-            "RPAE",
-            "RPAP",
-            "RPPC",
-            "RPR"
-          ]
-        }
-      ],
       "processOverrides": {
         "aPRMProcessPayment": {
           "label": "processConfirm",
@@ -891,24 +873,6 @@
           "padding": 0
         }
       },
-      "menuActions": [
-        {
-          "key": "removePayment",
-          "label": "Remove Payment",
-          "labelKey": "removePayment",
-          "destructive": true,
-          "columnName": "eTPRRemovePayment",
-          "visibleWhenStatus": [
-            "PPM",
-            "PWNC",
-            "RDNC",
-            "RPAE",
-            "RPAP",
-            "RPPC",
-            "RPR"
-          ]
-        }
-      ],
       "processOverrides": {
         "aPRMProcessPayment": {
           "label": "processConfirm",
