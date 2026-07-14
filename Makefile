@@ -1,4 +1,4 @@
-.PHONY: test test-all-coverage test-ci test-ci-coverage test-e2e test-e2e-headless test-e2e-debug test-e2e-ui test-e2e-report test-e2e-record test-e2e-onboarding-integration generate regen dev dev-mock build install bump-core-version install-e2e deploy clean help dev-local-core report-serve report-serve-detach report-stop report-preview validate-pipeline method-budget window-leak-budget quality-gate domain-boundary-check sonar sonar-coverage menu-cache uuid xml-regeneration-check dump-delta regen-check regen-check-help regen-check-clean regen-help data-fixes data-fixes-help switch-to-es ensure-locale project-status
+.PHONY: test test-all-coverage test-ci test-ci-coverage test-e2e test-e2e-headless test-e2e-debug test-e2e-ui test-e2e-report test-e2e-record test-e2e-onboarding-integration generate regen dev dev-mock build install bump-core-version install-e2e deploy clean help dev-local-core report-serve report-serve-detach report-stop report-preview validate-pipeline method-budget window-leak-budget quality-gate domain-boundary-check sonar sonar-coverage menu-cache uuid merge-block-check xml-regeneration-check dump-delta regen-check regen-check-help regen-check-clean regen-help data-fixes data-fixes-help switch-to-es ensure-locale project-status
 
 export SF_ROOT := $(CURDIR)
 
@@ -369,6 +369,10 @@ menu-cache: ## Refresh the AD menu cache from the database
 
 uuid: ## Generate a new Etendo-format UUID (32 uppercase hex chars, no hyphens)
 	@uuidgen | tr -d '-' | tr '[:lower:]' '[:upper:]'
+
+merge-block-check: ## Merge-block pre-flight: PR checks across the 3 repos + copy-paste merge cmds (TASK="ETP-XXXX [ETP-YYYY ...]")
+	@if [ -z "$(TASK)" ]; then echo "Usage: make merge-block-check TASK=ETP-4442"; exit 1; fi
+	@./scripts/merge-block-check.sh $(TASK)
 
 install: ## Install all workspace dependencies and activate git hooks
 	npm install
