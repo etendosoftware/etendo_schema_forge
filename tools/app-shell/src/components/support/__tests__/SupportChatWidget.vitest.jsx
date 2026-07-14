@@ -33,6 +33,9 @@ vi.mock('../ConversationView.jsx', () => ({
 vi.mock('../TicketList.jsx', () => ({
   TicketList: (props) => (
     <div data-testid="ticket-list">
+      {(props.conversations || []).map((c) => (
+        <div key={c.id} data-testid={`ticket-${c.id}`}>{c.subject}</div>
+      ))}
       <button onClick={() => props.onSelect('c1')}>ticket-select</button>
       <button onClick={() => props.onStartChat()}>ticket-start</button>
     </div>
@@ -419,6 +422,87 @@ describe('SupportChatWidget', () => {
         const row = (await screen.findByText('Envíos')).closest('[role="button"]');
         fireEvent.keyDown(row, { key: 'Enter' });
         expect(screen.getByText('Página X')).toBeInTheDocument();
+      });
+    });
+
+    describe('Mensajes tab search', () => {
+      const CONV_INVOICE = {
+        id: 'c1',
+        subject: 'Problema con factura',
+        lastMessage: 'no puedo descargarla',
+        status: 'open',
+      };
+      const CONV_GENERAL = {
+        id: 'c2',
+        subject: 'Consulta general',
+        lastMessage: 'Hola, tengo una duda',
+        status: 'open',
+      };
+
+      it('shows the search input only when there are conversations to search', () => {
+        mockChat({ isOpen: true, activeTab: 'mensajes', conversations: [] });
+        const { rerender } = render(<SupportChatWidget />);
+        expect(screen.queryByPlaceholderText('supportSearchPlaceholder')).not.toBeInTheDocument();
+
+        mockChat({ isOpen: true, activeTab: 'mensajes', conversations: [CONV_INVOICE] });
+        rerender(<SupportChatWidget />);
+        expect(screen.getByPlaceholderText('supportSearchPlaceholder')).toBeInTheDocument();
+      });
+
+      it('filters the list down to conversations whose subject matches the query', async () => {
+        const user = userEvent.setup();
+        mockChat({ isOpen: true, activeTab: 'mensajes', conversations: [CONV_INVOICE, CONV_GENERAL] });
+        render(<SupportChatWidget />);
+        await user.type(screen.getByPlaceholderText('supportSearchPlaceholder'), 'factura');
+        expect(screen.getByTestId('ticket-c1')).toBeInTheDocument();
+        expect(screen.queryByTestId('ticket-c2')).not.toBeInTheDocument();
+      });
+
+      it('surfaces a conversation matched only by its last-message preview', async () => {
+        const user = userEvent.setup();
+        mockChat({ isOpen: true, activeTab: 'mensajes', conversations: [CONV_INVOICE, CONV_GENERAL] });
+        render(<SupportChatWidget />);
+        await user.type(screen.getByPlaceholderText('supportSearchPlaceholder'), 'duda');
+        expect(screen.getByTestId('ticket-c2')).toBeInTheDocument();
+        expect(screen.queryByTestId('ticket-c1')).not.toBeInTheDocument();
+      });
+
+      it('matches the query case-insensitively', async () => {
+        const user = userEvent.setup();
+        mockChat({ isOpen: true, activeTab: 'mensajes', conversations: [CONV_INVOICE, CONV_GENERAL] });
+        render(<SupportChatWidget />);
+        await user.type(screen.getByPlaceholderText('supportSearchPlaceholder'), 'FACTURA');
+        expect(screen.getByTestId('ticket-c1')).toBeInTheDocument();
+        expect(screen.queryByTestId('ticket-c2')).not.toBeInTheDocument();
+      });
+
+      it('shows the distinct no-results message when the query matches nothing but conversations exist', async () => {
+        const user = userEvent.setup();
+        mockChat({ isOpen: true, activeTab: 'mensajes', conversations: [CONV_INVOICE, CONV_GENERAL] });
+        render(<SupportChatWidget />);
+        await user.type(screen.getByPlaceholderText('supportSearchPlaceholder'), 'zzz-no-match');
+        expect(screen.getByText('supportNoSearchResults')).toBeInTheDocument();
+        expect(screen.queryByTestId('ticket-list')).not.toBeInTheDocument();
+      });
+
+      it('restores the full list when the search input is cleared', async () => {
+        const user = userEvent.setup();
+        mockChat({ isOpen: true, activeTab: 'mensajes', conversations: [CONV_INVOICE, CONV_GENERAL] });
+        render(<SupportChatWidget />);
+        const input = screen.getByPlaceholderText('supportSearchPlaceholder');
+        await user.type(input, 'factura');
+        expect(screen.queryByTestId('ticket-c2')).not.toBeInTheDocument();
+        await user.clear(input);
+        expect(screen.getByTestId('ticket-c1')).toBeInTheDocument();
+        expect(screen.getByTestId('ticket-c2')).toBeInTheDocument();
+      });
+
+      it('leaves the zero-conversations empty state unaffected by the search feature (regression)', () => {
+        mockChat({ isOpen: true, activeTab: 'mensajes', conversations: [] });
+        render(<SupportChatWidget />);
+        expect(screen.queryByPlaceholderText('supportSearchPlaceholder')).not.toBeInTheDocument();
+        expect(screen.queryByText('supportNoSearchResults')).not.toBeInTheDocument();
+        expect(screen.getByTestId('ticket-list')).toBeInTheDocument();
       });
     });
   });
