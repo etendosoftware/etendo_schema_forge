@@ -8,5 +8,5 @@ import CloseYearConfirmModal from './CloseYearConfirmModal.jsx';
  * See CloseYearConfirmModal.jsx for the shared close/undo year confirm UI.
  */
 export default function UndoCloseYearModal(props) {
-  return <CloseYearConfirmModal direction="undo" {...props} />;
+  return <CloseYearConfirmModal direction="undo" {...props} data-testid="CloseYearConfirmModal__b8b2d0" />;
 }

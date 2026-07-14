@@ -38,9 +38,12 @@ function YearCloseStatusCell({ yearId, token, apiBaseUrl }) {
   // Reuses the exact same i18n keys as YearCloseStatusBadge (the detail header's pill) —
   // "yearClosedStatus"/"yearNotClosedStatus" — so the two never drift into different wording.
   return closed ? (
-    <Tag variant="green" label={ui('yearClosedStatus')} />
+    <Tag variant="green" label={ui('yearClosedStatus')} data-testid="Tag__413aee" />
   ) : (
-    <Tag variant="neutral" label={ui('yearNotClosedStatus')} />
+    <Tag
+      variant="neutral"
+      label={ui('yearNotClosedStatus')}
+      data-testid="Tag__413aee" />
   );
 }
 
@@ -64,7 +67,7 @@ const columns = [
         yearId={row.id}
         token={token}
         apiBaseUrl={`${rootApiBase(apiBaseUrl)}/end-year-close`}
-      />
+        data-testid="YearCloseStatusCell__413aee" />
     ),
   },
 ];
@@ -72,7 +75,14 @@ const columns = [
 const filters = [];
 
 const YearTableWithCloseStatus = forwardRef(function YearTableWithCloseStatus(props, ref) {
-  return <DataTable ref={ref} columns={columns} filters={filters} {...props} />;
+  return (
+    <DataTable
+      ref={ref}
+      columns={columns}
+      filters={filters}
+      {...props}
+      data-testid="DataTable__413aee" />
+  );
 });
 
 export default YearTableWithCloseStatus;

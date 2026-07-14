@@ -29,11 +29,21 @@ function rootApiBase(apiBaseUrl) {
 }
 
 function AccountingPanelForCalendar(props) {
-  return <AccountingPanel {...props} apiBaseUrl={`${rootApiBase(props.apiBaseUrl)}/end-year-close`} />;
+  return (
+    <AccountingPanel
+      {...props}
+      apiBaseUrl={`${rootApiBase(props.apiBaseUrl)}/end-year-close`}
+      data-testid="AccountingPanel__5e732c" />
+  );
 }
 
 function PeriodsExpandablePanelForCalendar(props) {
-  return <PeriodsExpandablePanel {...props} apiBaseUrl={`${rootApiBase(props.apiBaseUrl)}/open-close-period-control`} />;
+  return (
+    <PeriodsExpandablePanel
+      {...props}
+      apiBaseUrl={`${rootApiBase(props.apiBaseUrl)}/open-close-period-control`}
+      data-testid="PeriodsExpandablePanel__5e732c" />
+  );
 }
 
 // `topbarRight` (DetailView.jsx's slot for "right side of detail topbar (replaces status
@@ -41,7 +51,12 @@ function PeriodsExpandablePanelForCalendar(props) {
 // here is DetailView's own base (`.../fiscal-calendar`), so it needs the same rewrite as the
 // secondary-tab panels above to reach the `end-year-close` spec's accounting endpoint.
 function YearCloseStatusBadgeForCalendar(props) {
-  return <YearCloseStatusBadge {...props} apiBaseUrl={`${rootApiBase(props.apiBaseUrl)}/end-year-close`} />;
+  return (
+    <YearCloseStatusBadge
+      {...props}
+      apiBaseUrl={`${rootApiBase(props.apiBaseUrl)}/end-year-close`}
+      data-testid="YearCloseStatusBadge__5e732c" />
+  );
 }
 
 export default function CalendarWindow(props) {
@@ -98,7 +113,7 @@ export default function CalendarWindow(props) {
           currentRecord={closeYearTarget}
           onClose={() => setCloseYearTarget(null)}
           onSaved={() => { setCloseYearTarget(null); window.location.reload(); }}
-        />
+          data-testid="CloseYearModal__5e732c" />
       )}
       {undoCloseYearTarget && (
         <UndoCloseYearModal
@@ -108,7 +123,7 @@ export default function CalendarWindow(props) {
           currentRecord={undoCloseYearTarget}
           onClose={() => setUndoCloseYearTarget(null)}
           onSaved={() => { setUndoCloseYearTarget(null); window.location.reload(); }}
-        />
+          data-testid="UndoCloseYearModal__5e732c" />
       )}
     </>
   );

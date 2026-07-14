@@ -26,9 +26,12 @@ export default function YearCloseStatusBadge({ data, recordId, token, apiBaseUrl
   return (
     <span data-testid="year-close-status">
       {closed ? (
-        <Tag variant="green" label={ui('yearClosedStatus')} />
+        <Tag variant="green" label={ui('yearClosedStatus')} data-testid="Tag__e5ebd4" />
       ) : (
-        <Tag variant="neutral" label={ui('yearNotClosedStatus')} />
+        <Tag
+          variant="neutral"
+          label={ui('yearNotClosedStatus')}
+          data-testid="Tag__e5ebd4" />
       )}
     </span>
   );

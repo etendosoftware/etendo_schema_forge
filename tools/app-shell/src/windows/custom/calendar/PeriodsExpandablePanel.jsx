@@ -373,14 +373,14 @@ export default function PeriodsExpandablePanel({ parentId, token, apiBaseUrl }) 
                   onClick={() => toggleExpand(period.id)}
                   aria-label={ui('expandPeriod')}
                 >
-                  {isExpanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+                  {isExpanded ? <ChevronDown size={16} data-testid="ChevronDown__711967" /> : <ChevronRight size={16} data-testid="ChevronRight__711967" />}
                 </button>
                 <span className="flex-1">{period.name}</span>
                 <span data-testid={`period-status-${period.id}`}>
                   <Tag
                     variant={PERIOD_STATUS_VARIANTS[period.status] ?? 'neutral'}
                     label={ui(PERIOD_STATUS_LABEL_KEYS[period.status] ?? period.status)}
-                  />
+                    data-testid="Tag__711967" />
                 </span>
                 <button
                   type="button"
@@ -435,7 +435,7 @@ export default function PeriodsExpandablePanel({ parentId, token, apiBaseUrl }) 
                         <Tag
                           variant={DOCUMENT_STATUS_VARIANTS[doc.periodStatus] ?? 'neutral'}
                           label={ui(DOCUMENT_STATUS_LABEL_KEYS[doc.periodStatus] ?? doc.periodStatus)}
-                        />
+                          data-testid="Tag__711967" />
                       </span>
                       <button
                         type="button"
@@ -458,7 +458,7 @@ export default function PeriodsExpandablePanel({ parentId, token, apiBaseUrl }) 
         onOpenChange={(next) => { if (!next) setDialogTarget(null); }}
         process={dialogProcess}
         onConfirm={handleDialogConfirm}
-      />
+        data-testid="ProcessParamDialog__711967" />
     </div>
   );
 }
