@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useMemo } from 'react';
 import { ChevronRight, ChevronDown } from 'lucide-react';
 import { toast } from 'sonner';
 import { useUI } from '@/i18n';
@@ -238,6 +238,21 @@ export default function PeriodsExpandablePanel({ parentId, token, apiBaseUrl }) 
     ? DOCUMENT_OPEN_CLOSE_PROCESS
     : PERIOD_OPEN_CLOSE_PROCESS;
 
+  // Pins the expanded period (plus its document list / bulk-action bar, which live in the same
+  // DOM subtree — reordering the array carries them along with no separate logic needed) to the
+  // top of the rendered list, so scrolling or other periods never push it out of view. A stable
+  // partition — expanded entry first, everything else keeping its exact existing relative
+  // order — not a new sort: `periodControl`'s LIST fetch above has no explicit `_sortBy`/sort
+  // param today, so introducing one here would risk silently changing the non-expanded periods'
+  // order instead of merely reordering around the pinned one. Only one period can ever be
+  // expanded at a time (`expandedId`), so at most one entry ever moves.
+  const orderedPeriods = useMemo(() => {
+    if (!Array.isArray(periods) || !expandedId) return periods;
+    const expanded = periods.find((p) => p.id === expandedId);
+    if (!expanded) return periods;
+    return [expanded, ...periods.filter((p) => p.id !== expandedId)];
+  }, [periods, expandedId]);
+
   if (periods === undefined) {
     return <div data-testid="periods-expandable-panel-loading" className="p-4 text-sm text-muted-foreground">{ui('loading')}</div>;
   }
@@ -247,7 +262,7 @@ export default function PeriodsExpandablePanel({ parentId, token, apiBaseUrl }) 
 
   return (
     <div data-testid="periods-expandable-panel">
-      {periods.map((period) => {
+      {orderedPeriods.map((period) => {
         const periodPending = !!pendingActions[`period-${period.id}`];
         return (
           <div key={period.id} className="border-b">

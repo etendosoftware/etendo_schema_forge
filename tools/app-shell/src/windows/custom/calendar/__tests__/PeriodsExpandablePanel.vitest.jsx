@@ -699,3 +699,96 @@ describe('PeriodsExpandablePanel — bulk document selection and open/close', ()
     expect(screen.queryByTestId('document-bulk-bar-p1')).not.toBeInTheDocument();
   });
 });
+
+describe('PeriodsExpandablePanel — pinning the expanded period to the top', () => {
+  const P1 = { id: 'p1', name: 'Jan-2027', status: 'O', 'status$_identifier': 'All Opened' };
+  const P2 = { id: 'p2', name: 'Feb-2027', status: 'O', 'status$_identifier': 'All Opened' };
+  const P3 = { id: 'p3', name: 'Mar-2027', status: 'O', 'status$_identifier': 'All Opened' };
+
+  function renderedPeriodOrder(container) {
+    return Array.from(container.querySelectorAll('[data-testid^="period-row-expand-"]'))
+      .map((el) => el.getAttribute('data-testid').replace('period-row-expand-', ''));
+  }
+
+  beforeEach(() => {
+    global.fetch = vi.fn((url) => {
+      if (url.includes('/periodControl')) {
+        // Backend returns them in this order today (no explicit sort applied by this panel's
+        // own fetch) — the reordering logic must preserve this relative order for every period
+        // that is NOT the pinned one.
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ response: { data: [P1, P2, P3] } }) });
+      }
+      if (url.includes('/documents')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ response: { data: [] } }) });
+      }
+      return Promise.reject(new Error('unexpected url ' + url));
+    });
+  });
+
+  it('renders periods in their original (unpinned) order when nothing is expanded', async () => {
+    const { container } = render(<PeriodsExpandablePanel parentId="year1" token="tok" apiBaseUrl="https://api.test" />);
+    await waitFor(() => screen.getByText('Feb-2027'));
+    expect(renderedPeriodOrder(container)).toEqual(['p1', 'p2', 'p3']);
+  });
+
+  it('moves a non-first period to the top of the list once it is expanded', async () => {
+    const { container } = render(<PeriodsExpandablePanel parentId="year1" token="tok" apiBaseUrl="https://api.test" />);
+    await waitFor(() => screen.getByText('Feb-2027'));
+
+    fireEvent.click(screen.getByTestId('period-row-expand-p3'));
+    await waitFor(() => screen.getByTestId('period-documents-p3'));
+
+    expect(renderedPeriodOrder(container)).toEqual(['p3', 'p1', 'p2']);
+  });
+
+  it('carries the expanded document list and its own DOM subtree along with the reorder (no separate logic needed)', async () => {
+    global.fetch = vi.fn((url) => {
+      if (url.includes('/periodControl')) return Promise.resolve({ ok: true, json: () => Promise.resolve({ response: { data: [P1, P2, P3] } }) });
+      if (url.includes('/documents')) return Promise.resolve({ ok: true, json: () => Promise.resolve({ response: { data: [DOC] } }) });
+      return Promise.reject(new Error('unexpected url ' + url));
+    });
+    const { container } = render(<PeriodsExpandablePanel parentId="year1" token="tok" apiBaseUrl="https://api.test" />);
+    await waitFor(() => screen.getByText('Feb-2027'));
+
+    fireEvent.click(screen.getByTestId('period-row-expand-p2'));
+    await waitFor(() => screen.getByText('AP Credit Memo'));
+
+    expect(renderedPeriodOrder(container)).toEqual(['p2', 'p1', 'p3']);
+    // p2's own expanded documents subtree (and, if selected, its bulk bar) is still nested
+    // directly inside p2's own row container — the FIRST rendered period row/group, once
+    // reordered — confirming reordering the array alone is sufficient, no separate wiring
+    // needed to keep the row and its expanded content together.
+    const firstPeriodGroup = container.querySelector('[data-testid="periods-expandable-panel"] > div');
+    expect(firstPeriodGroup.querySelector('[data-testid="period-documents-p2"]')).toBeInTheDocument();
+  });
+
+  it('moves the pin to a newly expanded period, returning the previous one to its normal sorted position', async () => {
+    const { container } = render(<PeriodsExpandablePanel parentId="year1" token="tok" apiBaseUrl="https://api.test" />);
+    await waitFor(() => screen.getByText('Feb-2027'));
+
+    fireEvent.click(screen.getByTestId('period-row-expand-p3'));
+    await waitFor(() => screen.getByTestId('period-documents-p3'));
+    expect(renderedPeriodOrder(container)).toEqual(['p3', 'p1', 'p2']);
+
+    // Expanding a different period moves the pin — only one period is ever "active"/expanded
+    // at a time (the existing single-`expandedId` behavior), so p3 automatically loses its
+    // expanded state and returns to its original relative position.
+    fireEvent.click(screen.getByTestId('period-row-expand-p1'));
+    await waitFor(() => screen.getByTestId('period-documents-p1'));
+    expect(renderedPeriodOrder(container)).toEqual(['p1', 'p2', 'p3']);
+    expect(screen.queryByTestId('period-documents-p3')).not.toBeInTheDocument();
+  });
+
+  it('returns to the original order once the pinned period is collapsed', async () => {
+    const { container } = render(<PeriodsExpandablePanel parentId="year1" token="tok" apiBaseUrl="https://api.test" />);
+    await waitFor(() => screen.getByText('Feb-2027'));
+
+    fireEvent.click(screen.getByTestId('period-row-expand-p2'));
+    await waitFor(() => screen.getByTestId('period-documents-p2'));
+    expect(renderedPeriodOrder(container)).toEqual(['p2', 'p1', 'p3']);
+
+    fireEvent.click(screen.getByTestId('period-row-expand-p2'));
+    await waitFor(() => expect(screen.queryByTestId('period-documents-p2')).not.toBeInTheDocument());
+    expect(renderedPeriodOrder(container)).toEqual(['p1', 'p2', 'p3']);
+  });
+});
