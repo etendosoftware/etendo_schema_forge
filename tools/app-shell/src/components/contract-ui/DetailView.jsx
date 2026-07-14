@@ -3814,6 +3814,19 @@ export function DetailView({
                                     catalogs,
                                     onFieldChange: handleLineFieldChange,
                                     onValuesChange: setPendingLineValues,
+                                    // Convert the price-list price synchronously, at selection time,
+                                    // instead of letting the raw (org base currency) amount render
+                                    // first and get overwritten once the callout's currency-converted
+                                    // value lands — that gap is what caused the price to visibly
+                                    // flash from e.g. 12 (EUR) to 13.92 (USD).
+                                    convertOptimisticPrice: (rawPrice) => {
+                                      const conversion = activeCurrencyConversionRef.current;
+                                      if (!conversion) return rawPrice;
+                                      const { rate } = conversion;
+                                      const n = parseFloat(String(rawPrice ?? 0));
+                                      if (!(n > 0) || rate === 1) return rawPrice;
+                                      return parseFloat((n * rate).toFixed(2));
+                                    },
                                   }}
                                   data-testid="DetailTable__fa3275" />
 

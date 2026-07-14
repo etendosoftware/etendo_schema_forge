@@ -451,7 +451,7 @@ function renderInputCell({
 // make buildEmpty's effect re-run, wiping in-progress input. Share one frozen ref.
 const EMPTY_SEED = {};
 
-const InlineAddRow = forwardRef(function InlineAddRow({ columns, fields, onAdd, onCancel, data, catalogs, onFieldChange, onValuesChange, selectable, hasDeleteColumn, hasCloneColumn, hoverRowActions, hoverRowHasDelete, hasQuickActionsColumn, token, apiBaseUrl, entity, selectorContext, seedValues = EMPTY_SEED, resolvedDefaults = EMPTY_SEED, ilpHasNoAmountCol = false, ilpTrailing = false, labelOverrides }, ref) {
+const InlineAddRow = forwardRef(function InlineAddRow({ columns, fields, onAdd, onCancel, data, catalogs, onFieldChange, onValuesChange, selectable, hasDeleteColumn, hasCloneColumn, hoverRowActions, hoverRowHasDelete, hasQuickActionsColumn, token, apiBaseUrl, entity, selectorContext, seedValues = EMPTY_SEED, resolvedDefaults = EMPTY_SEED, ilpHasNoAmountCol = false, ilpTrailing = false, labelOverrides, convertOptimisticPrice }, ref) {
   const t = useLabel(labelOverrides);
   const ui = useUI();
   const { locale } = useLocaleSwitch();
@@ -736,7 +736,7 @@ const InlineAddRow = forwardRef(function InlineAddRow({ columns, fields, onAdd, 
     // Also fire top-level display fields from selectedItem (mirrors EntityForm behavior).
     // Skips structural/object fields; fires e.g. product_uOM = "Unit" for identifier resolution.
     if (selectedItem && typeof selectedItem === 'object') {
-      updateSnapshotWithSelectedItem(selectedItem, snapshot, handleChange, touchedFieldsRef, key);
+      updateSnapshotWithSelectedItem(selectedItem, snapshot, handleChange, touchedFieldsRef, key, convertOptimisticPrice);
     }
     // Notify parent for callout execution — pass computed snapshot (not stale React state).
     // applyUpdates updates valuesRef synchronously so submitLine always reads the latest
@@ -756,7 +756,7 @@ const InlineAddRow = forwardRef(function InlineAddRow({ columns, fields, onAdd, 
         pendingCalloutsRef.current = pendingCalloutsRef.current.filter(p => p !== calloutPromise);
       });
     }
-  }, [handleChange, onFieldChange, values, fieldMap]);
+  }, [handleChange, onFieldChange, values, fieldMap, convertOptimisticPrice]);
 
   const handleKeyDown = (e) => {
     if (e.key === 'Enter') {
@@ -948,7 +948,7 @@ function formatDerivedCellValue(identVal, rawVal, isTwoDecimalDerived) {
   return displayVal;
 }
 
-function updateSnapshotWithSelectedItem(selectedItem, snapshot, handleChange, touchedFieldsRef, key) {
+function updateSnapshotWithSelectedItem(selectedItem, snapshot, handleChange, touchedFieldsRef, key, convertOptimisticPrice) {
   for (const [topField, topVal] of Object.entries(selectedItem)) {
     if (topField === 'id' || topField === '_aux' || topField === 'label'
       || topField === 'name' || topField === 'searchKey'
@@ -959,19 +959,22 @@ function updateSnapshotWithSelectedItem(selectedItem, snapshot, handleChange, to
     // Mark the target field as touched so the callout does not overwrite it (some callouts
     // look up the price themselves and may return a different value from another price list).
     if (topField === 'standardPrice' && topVal != null) {
+      // Apply the header's currency conversion (if any) up front so the price never
+      // renders in the org base currency for a beat before the callout corrects it.
+      const priceVal = convertOptimisticPrice ? convertOptimisticPrice(topVal) : topVal;
       const isGross = selectedItem?.isTaxIncluded !== false;
       if (isGross) {
-        snapshot['grossUnitPrice'] = topVal;
-        handleChange('grossUnitPrice', topVal);
-        snapshot['grossListPrice'] = topVal;
-        handleChange('grossListPrice', topVal);
+        snapshot['grossUnitPrice'] = priceVal;
+        handleChange('grossUnitPrice', priceVal);
+        snapshot['grossListPrice'] = priceVal;
+        handleChange('grossListPrice', priceVal);
         touchedFieldsRef.current.add('grossUnitPrice');
         touchedFieldsRef.current.add('grossListPrice');
       } else {
-        snapshot['unitPrice'] = topVal;
-        handleChange('unitPrice', topVal);
-        snapshot['listPrice'] = topVal;
-        handleChange('listPrice', topVal);
+        snapshot['unitPrice'] = priceVal;
+        handleChange('unitPrice', priceVal);
+        snapshot['listPrice'] = priceVal;
+        handleChange('listPrice', priceVal);
         touchedFieldsRef.current.add('unitPrice');
         touchedFieldsRef.current.add('listPrice');
       }
@@ -1927,6 +1930,7 @@ export function DataTable({
                 onValuesChange={addRow.onValuesChange}
                 seedValues={addRow.seedValues}
                 resolvedDefaults={addRow.resolvedDefaults}
+                convertOptimisticPrice={addRow.convertOptimisticPrice}
                 selectable={selectable}
                 hasDeleteColumn={!hoverRowActions && legacyDeleteEnabled}
                 hasCloneColumn={!hoverRowActions && !!onCloneRow && !quickActionsEnabled}
