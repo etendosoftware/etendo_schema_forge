@@ -94,16 +94,18 @@ describe('DetailView — isDeleteButtonVisible with hideDeleteButton (window.hid
   });
 
   it('DetailView.jsx short-circuits isDeleteButtonVisible before the status-based logic', () => {
+    // isDeleteButtonVisible takes an options object (ETP-4479 added `deleteAction`);
+    // hideDeleteButton still wins first, before any status/deleteAction logic.
     assert.match(
       detailViewSrc,
-      /export function isDeleteButtonVisible\([^)]*hideDeleteButton\s*=\s*false\)\s*\{\s*if\s*\(hideDeleteButton\)\s*return\s*false;/,
+      /export function isDeleteButtonVisible\(\{[\s\S]*?hideDeleteButton\s*=\s*false,[\s\S]*?\}\)\s*\{[\s\S]*?if\s*\(hideDeleteButton\)\s*return\s*false;/,
     );
   });
 
   it('DetailView.jsx forwards hideDeleteButton into isDeleteButtonVisible at the render call site', () => {
     assert.match(
       detailViewSrc,
-      /isDeleteButtonVisible\(isNew, recordId, data, statusField, hideDeleteWhenComplete, isProcessed, hideDeleteButton\)/,
+      /isDeleteButtonVisible\(\{[\s\S]*?hideDeleteButton,[\s\S]*?\}\)/,
     );
   });
 });
