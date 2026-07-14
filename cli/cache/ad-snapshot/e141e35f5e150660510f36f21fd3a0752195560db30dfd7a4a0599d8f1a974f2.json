@@ -89386,7 +89386,7 @@
       ]
     },
     "4bc12fadc3f4675f289d036b6b78cded78314e733c80834fa999e947d67ec251": {
-      "checksum": "f93bdc46fbbf5722e8a308af051ec876af7601e445b39c495d03c5e755364b09",
+      "checksum": "5f9488ad304d7c44fbbb1a927bce709d95e97d4f6448c0cc5e84b5ab6be76673",
       "params": [
         "183"
       ],
@@ -104856,7 +104856,7 @@
           "hqlwhereclause": null,
           "isdisplayed": "Y",
           "ismandatory": "N",
-          "isreadonly": "N",
+          "isreadonly": "Y",
           "isshowninstatusbar": "N",
           "isupdateable": "Y",
           "orderbyclause": null,
@@ -104936,7 +104936,7 @@
           "hqlwhereclause": null,
           "isdisplayed": "Y",
           "ismandatory": "N",
-          "isreadonly": "N",
+          "isreadonly": "Y",
           "isshowninstatusbar": "N",
           "isupdateable": "Y",
           "orderbyclause": null,
