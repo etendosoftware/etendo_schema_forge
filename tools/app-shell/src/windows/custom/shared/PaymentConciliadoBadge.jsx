@@ -71,7 +71,11 @@ export default function PaymentConciliadoBadge({ data }) {
     >
       {CHECK_ICON}
       {ui('conciliado')}
-      <ExternalLink size={13} strokeWidth={2.5} aria-hidden="true" />
+      <ExternalLink
+        size={13}
+        strokeWidth={2.5}
+        aria-hidden="true"
+        data-testid="ExternalLink__670c2d" />
     </button>
   );
 }
