@@ -6,6 +6,10 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 
 const TOLERANCE = 0.001;
 const STEP = 100;
+// Stable reference for the "no usedSources" default — a fresh [] literal on every render (e.g.
+// `payment?.creditSourcesUsed || []`) would change identity each time and re-trigger the seed
+// effect below in a loop.
+const EMPTY_USED_SOURCES = [];
 
 /** Rounds to 2 decimals, avoiding binary float drift. */
 export function round2(n) {
@@ -42,6 +46,27 @@ export function parsePlain(str) {
   return Number.isNaN(n) ? null : n;
 }
 
+/** Finds the usedSources entry (if any) matching a credit/abono source by its kind + id. */
+function findUsedSource(usedSources, s) {
+  return usedSources.find(u => (
+    (s.kind === 'credit' && u.kind === 'credit' && u.paymentId === s.paymentId)
+    || (s.kind === 'abono' && u.kind === 'abono' && u.psdId === s.psdId)
+  ));
+}
+
+/**
+ * Builds the consumable credit lines, re-checking (and pre-filling the used amount of) any
+ * source the payment being edited already consumes — so re-opening a draft restores its
+ * previous credit selection instead of always starting unchecked.
+ */
+function seedLines(sources, usedSources) {
+  return sources.map(s => {
+    const used = findUsedSource(usedSources, s);
+    const use = used ? round2(Math.min(Number(used.use) || 0, s.avail)) : 0;
+    return { ...s, sel: !!used, use, useStr: formatPlain(use) };
+  });
+}
+
 /**
  * usePaymentBalance — encapsulates the cuadre (balancing) logic of the
  * "Nuevo cobro/pago" modal, isolated from the DOM so it can be unit-tested.
@@ -51,26 +76,29 @@ export function parsePlain(str) {
  * @param {'in'|'out'} params.dir    'in' = cobro (receipt), 'out' = pago (payment)
  * @param {Array}    params.sources  consumable credit/abono sources:
  *                                   { id, kind:'credit'|'abono', doc, date, note, avail, psdId?, paymentId? }
+ * @param {Array}    params.usedSources  (edit mode only) sources the draft already consumes:
+ *                                   { kind:'credit'|'abono', paymentId?, psdId?, use }
  *
  * Returns the editable amount (number + es-ES string), the credit lines with
  * selection/usage, the derived totals, and the mutators the modal wires to the UI.
  */
-export function usePaymentBalance({ total, dir = 'in', sources = [] }) {
+export function usePaymentBalance({ total, dir = 'in', sources = [], usedSources = EMPTY_USED_SOURCES }) {
   const applied = round2(total);
   const isReceipt = dir === 'in';
 
   const [amount, setAmount] = useState(applied);
   const [amountStr, setAmountStr] = useState(formatPlain(applied));
-  const [lines, setLines] = useState(() =>
-    sources.map(s => ({ ...s, sel: false, use: 0, useStr: formatPlain(0) })));
+  const [lines, setLines] = useState(() => seedLines(sources, usedSources));
   // 'credit' = leave overpayment as customer credit, 'refund' = give change back.
   const [excessMode, setExcessMode] = useState(null);
 
   // Credit/abono sources arrive asynchronously (fetched after mount); re-seed the
   // consumable lines whenever they change so the section appears once data loads.
+  // usedSources (only present in edit mode) re-checks the lines the draft already
+  // consumed, restoring the selection/amount it had when it was last saved.
   useEffect(() => {
-    setLines(sources.map(s => ({ ...s, sel: false, use: 0, useStr: formatPlain(0) })));
-  }, [sources]);
+    setLines(seedLines(sources, usedSources));
+  }, [sources, usedSources]);
 
   const usedCredit = useMemo(
     () => round2(lines.reduce((acc, l) => acc + (l.sel ? l.use : 0), 0)),
