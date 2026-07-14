@@ -334,11 +334,16 @@ Hides the delete button when the document is not in Draft status.
 
 ---
 
-### 9b. `window.hideDeleteButton` — unconditional delete button hide
+### 9b. `window.hideDeleteButton` — unconditional delete button opt-out
 
-Removes the Delete (trash) button entirely — in both the detail toolbar and the
-list-row hover quick actions — regardless of record state or document status.
-Use it for windows where deletion from the UI must never be offered.
+Unconditionally hides the Delete button/icon in **both** the detail view toolbar
+and the list-row hover quick actions, for every record regardless of status.
+Distinct from `hideDeleteWhenComplete` (conditional — only hides once the
+document leaves Draft) and from `hideDelete` (which only disables the CRUD
+delete capability declared in `contract.json`/the API, without touching the
+UI affordance). Use `hideDeleteButton` when Delete should never be reachable
+from the UI, e.g. master-data windows where records are provisioned/retired
+outside the app.
 
 ```json
 "window": {
@@ -348,11 +353,12 @@ Use it for windows where deletion from the UI must never be offered.
 
 Defaults to `false`; when unset, delete visibility is exactly as before. This is a
 stronger, state-independent form of `hideDeleteWhenComplete`: if you set
-`hideDeleteButton`, `hideDeleteWhenComplete` becomes redundant. It is also distinct
-from `hideDelete`, which only disables the delete CRUD capability in the contract
-(API level) and does **not** affect the button. The gate lives in the shared utility
-`tools/app-shell/src/utils/recordActions.js`, so both `DetailView` and
-`RowQuickActions` stay in lockstep.
+`hideDeleteButton`, `hideDeleteWhenComplete` becomes redundant. The gate lives in
+the shared utility `tools/app-shell/src/utils/recordActions.js`, so both `DetailView`
+and `RowQuickActions` stay in lockstep.
+
+**Real examples:** `tax` (ETP-4464 — paired with `hideDelete: true` for
+defense-in-depth: the API capability is disabled AND the UI icon is hidden).
 
 ---
 

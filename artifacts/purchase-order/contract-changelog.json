@@ -1541,5 +1541,15 @@
     ],
     "author": "pipeline",
     "date": "2026-07-06"
+  },
+  {
+    "from": "0.35.0",
+    "to": "0.36.0",
+    "level": "additive",
+    "reasons": [
+      "Field \"warehouse\" property \"inputMode\" changed from \"selector\" to \"search\" in frontend (additive)"
+    ],
+    "author": "pipeline",
+    "date": "2026-07-14"
   }
 ]
