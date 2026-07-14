@@ -106069,7 +106069,7 @@
       ]
     },
     "4bc12fadc3f4675f289d036b6b78cded78314e733c80834fa999e947d67ec251": {
-      "checksum": "b61556516d233ccfe5fa073e4a45c7b855fda455802d186fc618e4fc68a877e9",
+      "checksum": "47ea7f185c9c9d0a19f6db12d8d8302a1333c686f145d11db3e7f7d1bd239e73",
       "params": [
         "183"
       ],
@@ -124852,7 +124852,7 @@
           "isidentifier": "N",
           "iskey": "N",
           "ismandatory": "N",
-          "isreadonly": "N",
+          "isreadonly": "Y",
           "isselectioncolumn": "N",
           "isshowninstatusbar": "N",
           "istranslated": "N",
@@ -124994,7 +124994,7 @@
           "isidentifier": "N",
           "iskey": "N",
           "ismandatory": "N",
-          "isreadonly": "N",
+          "isreadonly": "Y",
           "isselectioncolumn": "N",
           "isshowninstatusbar": "N",
           "istranslated": "N",
