@@ -86,6 +86,7 @@ Per-locale field label overrides. When the simplified interface needs to rename 
 | `contentBg` | string | `"bg-white"` | Any Tailwind bg class | Background color of the main content card in the detail view (e.g., `"bg-slate-50"` for a light gray tone). |
 | `formCardPadding` | string | `null` | Any Tailwind padding class | Override the Tailwind padding class applied to the form card div in the detail view. When `null`, `DetailView` falls back to `p-6`. Use `"px-2 pb-2"` for tighter (8px horizontal) padding, for example on windows with dense form layouts. |
 | `hideDeleteWhenComplete` | boolean | `false` | — | Hides the delete button in the detail view when the document status is not Draft. Prevents accidental deletion of completed/processed records. |
+| `hideDeleteButton` | boolean | `false` | — | **Unconditionally** hides the Delete (trash) button in BOTH the detail toolbar and the list-row hover quick actions, in every record state. Use for windows where records must never be deleted from the UI regardless of status. Distinct from `hideDelete` (which only disables the delete CRUD capability in the contract, not the button). When `false`/absent, delete visibility is unchanged. If set, `hideDeleteWhenComplete` becomes redundant (the button is always hidden). |
 | `customComponents` | object | `null` | See below | Override generated components with custom ones from `artifacts/{window}/custom/`. The generator emits the correct imports and props automatically. |
 | `menuActions` | array | `[]` | See below | Additional actions in the detail view's "more" menu (triple dot). Each action can have visibility conditions based on document status. |
 | `newActions` | array | `[]` | See below | Additional actions in the split "New" button dropdown in the list view. Each action can optionally open a custom modal component. |
@@ -471,8 +472,24 @@ Each override entry supports the following properties:
 | `requiresLines` | boolean | If `true`, the button is disabled until at least one line exists. |
 | `requiresFieldMax` | array | Validation rules checked before firing the action. Each entry: `{ field, max, conditionalOnField?, conditionalValue?, errorKey }`. |
 | `params` | array | Parameter definitions for a pre-process dialog. When at least one non-hidden param is present, clicking the button opens `ProcessParamDialog` first; the collected values are passed to `handleProcess` as `paramValues`. Each entry: `{ key, type, label, required?, hidden?, options? }`. Supported `type`: `"select"` (renders a dropdown using `options: [{ value, label }]`). The first option is pre-selected. See [Process Parameter Dialog](#process-parameter-dialog-params) below. |
+| `labelToggle` | object | Optional. Switches the button caption based on a record field value. Shape: `{ field, equals, label }`. When the current record's `field` value strictly equals `equals`, the button shows `label`; otherwise it shows the default `label` property. Both captions are translated via `useMenuLabel`. Purely opt-in — omitting it leaves the button behavior byte-identical. Mirrors Etendo Classic buttons backed by a list reference (e.g. Assets ref 800042: N→Create Amortization, Y→Recalculate Amortization keyed on `processed`). |
 
 When `style` is not specified, the generator defaults to `"destructive"` for processes whose names contain destructive keywords (e.g., `void`, `cancel`, `reverse`) and `"positive"` for all others.
+
+**Example — dynamic caption with `labelToggle`:**
+
+```json
+"processOverrides": {
+  "processAsset": {
+    "add": true,
+    "label": "Create Amortization",
+    "style": "positive",
+    "labelToggle": { "field": "processed", "equals": "Y", "label": "Recalculate Amortization" }
+  }
+}
+```
+
+The button reads "Create Amortization" while `processed !== 'Y'` and flips to "Recalculate Amortization" once `processed === 'Y'`.
 
 #### Process Parameter Dialog (`params`)
 

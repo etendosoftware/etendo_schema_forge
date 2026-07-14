@@ -1,8 +1,6 @@
-import { useState, useMemo } from 'react';
-import { toast } from 'sonner';
+import { useEffect, useRef } from 'react';
 import { useUI } from '@/i18n';
 import { useAuth } from '@/auth/AuthContext.jsx';
-import { useApiFetch } from '@/auth/useApiFetch.js';
 import { useFiscalConfig } from '@/windows/custom/fiscal-config/useFiscalConfig.js';
 import { normalizeDateInputValue } from '@/windows/custom/fiscal-config/fiscalConfig.utils.js';
 import { getInvoiceFiscalTargets } from '@/windows/custom/shared/fiscalTargets.js';
@@ -21,13 +19,42 @@ export const PURCHASE_CLAVE_TIPO_FC_OPTIONS = [
   { value: 'F1', labelKey: 'sifDataTabs.option.invoice' },
 ];
 
-export function useSifFieldPatcher({ data, recordId, apiBaseUrl }) {
+export const VERIFACTU_INV_TYPE_OPTIONS = [
+  { value: 'F1', labelKey: 'sifDataTabs.option.vfF1' },
+  { value: 'F2', labelKey: 'sifDataTabs.option.vfF2' },
+  { value: 'F3', labelKey: 'sifDataTabs.option.vfF3' },
+  { value: 'R1', labelKey: 'sifDataTabs.option.vfR1' },
+  { value: 'R2', labelKey: 'sifDataTabs.option.vfR2' },
+  { value: 'R3', labelKey: 'sifDataTabs.option.vfR3' },
+  { value: 'R4', labelKey: 'sifDataTabs.option.vfR4' },
+  { value: 'R5', labelKey: 'sifDataTabs.option.vfR5' },
+];
+
+export const VERIFACTU_REVERSE_TYPE_OPTIONS = [
+  { value: 'I', labelKey: 'sifDataTabs.option.vfReverseByDifference' },
+  { value: 'S', labelKey: 'sifDataTabs.option.vfReverseBySubstitution' },
+];
+
+// ETP-4463: SIF fields no longer persist themselves via a per-field PATCH on
+// blur/change. Instead they write into the shared `editing` state that
+// DetailView already maintains for the header form — via the `onChange`
+// prop DetailView passes down to every `placement: 'tab'` custom tab (which
+// is `hook.handleChange` under the hood). `data` (also passed down) already
+// reflects those pending edits, since DetailView derives it from
+// `hook.editing || currentItem`. This means:
+//   - No local `siiForm` shadow state is needed: `getVal`/`getDateVal` can
+//     read `data` directly, since it's already "live" (pending-edit-aware).
+//   - No `savingField`/per-field spinner: the batch save (header "Guardar" /
+//     "Confirmar") persists everything together, including SIF fields.
+//   - No per-field error handling: failures surface through the same save
+//     error path the header form already uses.
+// This also makes DateField's onBlur-timing bugs (fixed separately in
+// schema_forge_core) irrelevant here — SIF fields only ever need `onChange`.
+export function useSifFieldPatcher({ data, recordId, apiBaseUrl, onChange }) {
   const ui = useUI();
   const { selectedOrg } = useAuth();
   const orgId = selectedOrg?.id ?? null;
-  const base = useMemo(() => (apiBaseUrl || '').replace(/\/[^/]+$/, ''), [apiBaseUrl]);
   const specName = apiBaseUrl?.split('/').filter(Boolean).pop() || 'sales-invoice';
-  const apiFetch = useApiFetch(base);
 
   const { profile } = useFiscalConfig(orgId, apiBaseUrl);
   const { showSii, showTbai, showVerifactu } = getInvoiceFiscalTargets(specName, profile);
@@ -43,49 +70,33 @@ export function useSifFieldPatcher({ data, recordId, apiBaseUrl }) {
   const dateReadOnly = !isDraft;
   const siiFieldReadOnly = isSentToSii;
 
-  const [siiForm, setSiiForm] = useState({});
-  const [savingField, setSavingField] = useState(null);
+  const vfInvTypeDefaultedRef = useRef(null);
 
   function getVal(key) {
-    return key in siiForm ? siiForm[key] : (data?.[key] ?? '');
+    return data?.[key] ?? '';
   }
 
   function getDateVal(key) {
-    return key in siiForm ? siiForm[key] : normalizeDateInputValue(data?.[key] ?? '');
+    return normalizeDateInputValue(data?.[key] ?? '');
   }
 
-  function setVal(key, value) {
-    setSiiForm(prev => ({ ...prev, [key]: value }));
-  }
-
-  async function patchField(fieldKey, value) {
-    setSavingField(fieldKey);
-    try {
-      const res = await apiFetch(`/${specName}/header/${recordId}`, {
-        method: 'PATCH',
-        body: JSON.stringify({ [fieldKey]: value }),
-      });
-      if (!res.ok) {
-        const json = await res.json().catch(() => null);
-        throw new Error(json?.response?.message || json?.message || `HTTP ${res.status}`);
-      }
-    } catch (err) {
-      toast.error(err.message || ui('sifDataTabs.errorSavingField'));
-      setSiiForm(prev => ({ ...prev, [fieldKey]: data?.[fieldKey] ?? '' }));
-    } finally {
-      setSavingField(null);
-    }
-  }
-
-  function handleBlur(fieldKey, value) {
-    if (String(value) === String(data?.[fieldKey] ?? '')) return;
-    patchField(fieldKey, value);
-  }
-
-  function handleCheckboxChange(fieldKey, checked) {
-    setVal(fieldKey, checked);
-    patchField(fieldKey, checked);
-  }
+  // ETP-4390: Classic defaults etvfacInvType ("Tipo de Factura") to 'F1' at the AD
+  // column level (DefaultValue: F1). Invoices created before this column existed
+  // have it stored as NULL, and InitialValidator.java's `etvfacInvType == null`
+  // check blocks completion unless the user happens to touch the Select. Showing
+  // F1 only client-side (via a visual fallback) is not enough to satisfy that
+  // backend check, so the default must be actively written into the pending edit
+  // state the first time the Verifactu panel is shown for a draft record with no
+  // existing value. Scoped to this single field only — see task notes for why the
+  // other new fields don't need this treatment.
+  useEffect(() => {
+    if (!showVerifactu || !isDraft || !recordId) return;
+    if (vfInvTypeDefaultedRef.current === recordId) return;
+    if (data?.etvfacInvType) return; // already has a value — never clobber
+    vfInvTypeDefaultedRef.current = recordId;
+    onChange?.('etvfacInvType', 'F1');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showVerifactu, isDraft, recordId, data?.etvfacInvType, onChange]);
 
   return {
     ui,
@@ -101,12 +112,7 @@ export function useSifFieldPatcher({ data, recordId, apiBaseUrl }) {
     isSentToSii,
     dateReadOnly,
     siiFieldReadOnly,
-    savingField,
     getVal,
     getDateVal,
-    setVal,
-    patchField,
-    handleBlur,
-    handleCheckboxChange,
   };
 }

@@ -52,6 +52,10 @@ export default function RowQuickActions({
   // row kebab can mirror the detail kebab's per-state visibility logic.
   menuActions = [],
   hideDeleteWhenComplete = false,
+  // Unconditional per-window delete opt-out (decisions.json → window.hideDeleteButton).
+  // When true, the row-hover Delete is ALWAYS hidden, matching the DetailView toolbar.
+  // Defaults to false → identical to pre-feature behavior when unset.
+  hideDeleteButton = false,
   statusField = null,
   // Handlers (host-controlled to keep this component decoupled from routing/modals)
   onEdit,
@@ -140,6 +144,7 @@ export default function RowQuickActions({
     record: row,
     statusField,
     hideDeleteWhenComplete,
+    hideDeleteButton,
   });
 
   const stop = (e) => { e.stopPropagation(); };
