@@ -59,7 +59,7 @@ RESET='\033[0m'
 fetch_repo() {
   local repo="$1" key="$2" out="$3"
   gh pr list --repo "$repo" --head "feature/${key}" --state open \
-    --json number,title,url,baseRefName,headRefName,isDraft,mergeable,mergeStateStatus,reviewDecision,statusCheckRollup \
+    --json number,title,url,baseRefName,headRefName,isDraft,mergeable,mergeStateStatus,reviewDecision,statusCheckRollup,reviewRequests,latestReviews \
     2>/dev/null > "$out" || echo '[]' > "$out"
 }
 
@@ -81,6 +81,7 @@ for KEY in "$@"; do
 
   FAIL_DETAIL=""
   PEND_DETAIL=""
+  APPROVE_DETAIL=""
   MERGE_CMDS=""
   i=0
   for REPO in "${REPOS[@]}"; do
@@ -156,6 +157,23 @@ for KEY in "$@"; do
       PEND_DETAIL="${PEND_DETAIL}  ${SHORT} ${PR}: ${PNAMES}\n"
     fi
 
+    # Missing approvals — only when the review gate is NOT satisfied.
+    # reviewDecision == APPROVED means branch protection's required approvals are
+    # met; outstanding review requests beyond that are optional noise, so skip.
+    if [[ "$REVIEW" != "APPROVED" ]]; then
+      REQ_REVIEWERS=$(jq -r '[.[0].reviewRequests[]? | (.login // .name // .slug // "reviewer")] | join(", ")' "$F")
+      APPROVED_BY=$(jq -r '[.[0].latestReviews[]? | select(.state == "APPROVED") | .author.login] | join(", ")' "$F")
+      if [[ "$REVIEW" == "CHANGES_REQUESTED" ]]; then
+        MISSING="CHANGES_REQUESTED"
+      elif [[ -n "$REQ_REVIEWERS" ]]; then
+        MISSING="pending from: ${REQ_REVIEWERS}"
+      else
+        MISSING="no approval yet (${REVIEW})"
+      fi
+      [[ -n "$APPROVED_BY" ]] && MISSING="${MISSING} — approved by: ${APPROVED_BY}"
+      APPROVE_DETAIL="${APPROVE_DETAIL}  ${SHORT} ${PR}: ${MISSING}\n"
+    fi
+
     # Copy-paste merge command into the current block branch (per repo).
     HEAD_REF=$(jq -r '.[0].headRefName' "$F")
     if [[ "$CI_C" == "$GREEN" && "$REV_C" == "$GREEN" && "$MRG_C" == "$GREEN" ]]; then
@@ -175,6 +193,11 @@ for KEY in "$@"; do
   if [[ -n "$PEND_DETAIL" ]]; then
     printf "\n${YELLOW}${BOLD}Pending checks:${RESET}\n"
     printf "${YELLOW}%b${RESET}" "$PEND_DETAIL"
+  fi
+
+  if [[ -n "$APPROVE_DETAIL" ]]; then
+    printf "\n${YELLOW}${BOLD}Missing approvals:${RESET}\n"
+    printf "${YELLOW}%b${RESET}" "$APPROVE_DETAIL"
   fi
 
   if [[ -n "$MERGE_CMDS" ]]; then
