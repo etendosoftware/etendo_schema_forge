@@ -96,6 +96,26 @@ describe('RowQuickActions', () => {
     expect(screen.getByTestId('row-quick-action-delete')).toBeTruthy();
   });
 
+  it('hides Delete unconditionally when hideDeleteButton is true (draft row)', () => {
+    setup({ row: DRAFT_ROW, hideDeleteButton: true, statusField: 'documentStatus' });
+    expect(screen.queryByTestId('row-quick-action-delete')).toBeNull();
+  });
+
+  it('hides Delete via hideDeleteButton even with hideDeleteWhenComplete off', () => {
+    setup({
+      row: COMPLETED_ROW,
+      hideDeleteWhenComplete: false,
+      hideDeleteButton: true,
+      statusField: 'documentStatus',
+    });
+    expect(screen.queryByTestId('row-quick-action-delete')).toBeNull();
+  });
+
+  it('renders Delete when hideDeleteButton is absent (default false)', () => {
+    setup({ row: DRAFT_ROW, statusField: 'documentStatus' });
+    expect(screen.getByTestId('row-quick-action-delete')).toBeTruthy();
+  });
+
   it('shows kebab when menuActions are provided and filters invisible ones', async () => {
     const user = userEvent.setup();
     const menuActions = [
