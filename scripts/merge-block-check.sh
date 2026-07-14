@@ -80,6 +80,7 @@ for KEY in "$@"; do
   wait
 
   FAIL_DETAIL=""
+  PEND_DETAIL=""
   MERGE_CMDS=""
   i=0
   for REPO in "${REPOS[@]}"; do
@@ -147,6 +148,14 @@ for KEY in "$@"; do
       FAIL_DETAIL="${FAIL_DETAIL}  ${SHORT} ${PR}: ${NAMES}\n"
     fi
 
+    # Collect pending check names for the detail block.
+    if [[ "$PEND" -gt 0 ]]; then
+      PNAMES=$(jq -r '[.[0].statusCheckRollup[]? |
+        select(((.status // "") | test("QUEUED|IN_PROGRESS|PENDING|WAITING")) or ((.conclusion // "") == "")) |
+        (.name // .context // "check")] | join(", ")' "$F")
+      PEND_DETAIL="${PEND_DETAIL}  ${SHORT} ${PR}: ${PNAMES}\n"
+    fi
+
     # Copy-paste merge command into the current block branch (per repo).
     HEAD_REF=$(jq -r '.[0].headRefName' "$F")
     if [[ "$CI_C" == "$GREEN" && "$REV_C" == "$GREEN" && "$MRG_C" == "$GREEN" ]]; then
@@ -161,6 +170,11 @@ for KEY in "$@"; do
   if [[ -n "$FAIL_DETAIL" ]]; then
     printf "\n${RED}${BOLD}Failing checks:${RESET}\n"
     printf "${RED}%b${RESET}" "$FAIL_DETAIL"
+  fi
+
+  if [[ -n "$PEND_DETAIL" ]]; then
+    printf "\n${YELLOW}${BOLD}Pending checks:${RESET}\n"
+    printf "${YELLOW}%b${RESET}" "$PEND_DETAIL"
   fi
 
   if [[ -n "$MERGE_CMDS" ]]; then
