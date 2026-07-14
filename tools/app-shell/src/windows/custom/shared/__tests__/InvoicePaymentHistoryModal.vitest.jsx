@@ -53,6 +53,26 @@ function makeApiFetch(payments = []) {
   });
 }
 
+/**
+ * Builds an apiFetch mock that distinguishes the three endpoints the modal
+ * hits (invoicePayments, paymentPlan, deletePayment) so delete-draft flows
+ * can be exercised end to end without racing on a single shared counter.
+ */
+function makeDeleteFlowFetch({ initialPayments, refreshedPayments, deleteResult }) {
+  let invoicePaymentsCalls = 0;
+  return vi.fn((url) => {
+    if (url.includes('/paymentPlan')) {
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({ response: { data: [] } }) });
+    }
+    if (url.includes('action/deletePayment')) {
+      return Promise.resolve(deleteResult);
+    }
+    const data = invoicePaymentsCalls === 0 ? initialPayments : (refreshedPayments ?? initialPayments);
+    invoicePaymentsCalls += 1;
+    return Promise.resolve({ ok: true, json: () => Promise.resolve({ response: { data } }) });
+  });
+}
+
 describe('InvoicePaymentHistoryModal', () => {
   let mockFetch;
 
@@ -325,6 +345,28 @@ describe('InvoicePaymentHistoryModal', () => {
     expect(onClose).toHaveBeenCalledOnce();
   });
 
+  it('shows an em-dash for a payment row whose paymentDate does not match the YYYY-MM-DD format and is unparseable (fmtDate fallback branches)', async () => {
+    useApiFetch.mockReturnValue(makeApiFetch([
+      { id: 'p1', documentNo: 'PAY-001', paymentDate: 'not-a-date', amount: '500', status: 'RPR' },
+    ]));
+    render(
+      <InvoicePaymentHistoryModal
+        invoiceId="42"
+        invoiceData={INVOICE_DATA}
+        specName="sales-invoice"
+        apiBaseUrl="http://host/sws/neo/sales-invoice"
+        onClose={vi.fn()}
+      />,
+    );
+    let row;
+    await waitFor(() => {
+      row = screen.getByTestId('InvoicePaymentHistoryModal__row');
+      expect(row).toBeInTheDocument();
+    });
+    const dateCell = row.children[1];
+    expect(dateCell).toHaveTextContent('—');
+  });
+
   it('shows an em-dash for a payment row with no paymentDate', async () => {
     useApiFetch.mockReturnValue(makeApiFetch([
       { id: 'p1', documentNo: 'PAY-001', amount: '500', status: 'RPR' },
@@ -580,5 +622,298 @@ describe('InvoicePaymentHistoryModal', () => {
     // The history modal itself must remain open — its onClose was not invoked.
     expect(onClose).not.toHaveBeenCalled();
     expect(screen.getByTestId('InvoicePaymentHistoryModal__panel')).toBeInTheDocument();
+  });
+
+  it('opens the edit modal (not navigate) when clicking a draft/non-processed row', async () => {
+    const onClose = vi.fn();
+    useApiFetch.mockReturnValue(makeApiFetch([
+      { id: 'p1', documentNo: 'PAY-001', paymentDate: '2026-01-01', amount: '100', status: 'DR' },
+    ]));
+    render(
+      <InvoicePaymentHistoryModal
+        invoiceId="42"
+        invoiceData={INVOICE_DATA}
+        specName="sales-invoice"
+        apiBaseUrl="http://host/sws/neo/sales-invoice"
+        onClose={onClose}
+      />,
+    );
+    await waitFor(() =>
+      expect(screen.getByTestId('InvoicePaymentHistoryModal__row')).toBeInTheDocument(),
+    );
+    fireEvent.click(screen.getByTestId('InvoicePaymentHistoryModal__row'));
+    expect(screen.getByTestId('new-payment-entry-modal')).toBeInTheDocument();
+    expect(onClose).not.toHaveBeenCalled();
+    expect(mockNavigate).not.toHaveBeenCalled();
+  });
+
+  it('renders the delete-confirm message with a numeric (non-string) payment.amount (fmtAmount numeric branch)', async () => {
+    useApiFetch.mockReturnValue(makeApiFetch([
+      { id: 'p1', documentNo: 'PAY-001', paymentDate: '2026-01-01', amount: 500, status: 'DR' },
+    ]));
+    render(
+      <InvoicePaymentHistoryModal
+        invoiceId="42"
+        invoiceData={INVOICE_DATA}
+        specName="sales-invoice"
+        apiBaseUrl="http://host/sws/neo/sales-invoice"
+        onClose={vi.fn()}
+      />,
+    );
+    await waitFor(() =>
+      expect(screen.getByTestId('InvoicePaymentHistoryModal__delete-btn')).toBeInTheDocument(),
+    );
+    fireEvent.click(screen.getByTestId('InvoicePaymentHistoryModal__delete-btn'));
+    expect(screen.getByText('cpDeleteDraftConfirm')).toBeInTheDocument();
+  });
+
+  it('renders the purchase-invoice delete-confirm title and falls back to payment.id/status when documentNo/status/amount are missing', async () => {
+    useApiFetch.mockReturnValue(makeApiFetch([
+      // No documentNo, no status, no amount — exercises the id/status/amount fallbacks
+      // in the row and in the delete-confirm dialog for a purchase (non-sales) flow.
+      { id: 'p-no-doc', paymentDate: '2026-01-01' },
+    ]));
+    render(
+      <InvoicePaymentHistoryModal
+        invoiceId="42"
+        invoiceData={{ ...INVOICE_DATA, 'currency$_identifier': undefined }}
+        specName="purchase-invoice"
+        apiBaseUrl="http://host/sws/neo/purchase-invoice"
+        onClose={vi.fn()}
+      />,
+    );
+    await waitFor(() =>
+      expect(screen.getByTestId('InvoicePaymentHistoryModal__delete-btn')).toBeInTheDocument(),
+    );
+    expect(screen.getByText('p-no-doc')).toBeInTheDocument();
+    fireEvent.click(screen.getByTestId('InvoicePaymentHistoryModal__delete-btn'));
+    expect(screen.getByText('cpDeleteDraftConfirm')).toBeInTheDocument();
+  });
+
+  it('falls back to defaults when invoiceData lacks currency, grandTotalAmount, documentNo, and outstandingAmount', async () => {
+    render(
+      <InvoicePaymentHistoryModal
+        invoiceId="42"
+        invoiceData={{ documentStatus: 'CO' }}
+        specName="sales-invoice"
+        apiBaseUrl="http://host/sws/neo/sales-invoice"
+        onClose={vi.fn()}
+      />,
+    );
+    await waitFor(() =>
+      expect(screen.getByTestId('InvoicePaymentHistoryModal__empty')).toBeInTheDocument(),
+    );
+    // No docNo badge renders when documentNo is missing.
+    expect(screen.queryByText('INV-001')).toBeNull();
+  });
+
+  it('handles a rejecting res.json() when confirming a delete (falls back to the generic failure message)', async () => {
+    const draftPayments = [
+      { id: 'p1', documentNo: 'PAY-001', paymentDate: '2026-01-01', amount: '100', status: 'DR' },
+    ];
+    const fetchMock = makeDeleteFlowFetch({
+      initialPayments: draftPayments,
+      deleteResult: { ok: false, json: () => Promise.reject(new Error('bad json')) },
+    });
+    useApiFetch.mockReturnValue(fetchMock);
+    render(
+      <InvoicePaymentHistoryModal
+        invoiceId="42"
+        invoiceData={INVOICE_DATA}
+        specName="sales-invoice"
+        apiBaseUrl="http://host/sws/neo/sales-invoice"
+        onClose={vi.fn()}
+      />,
+    );
+    await waitFor(() =>
+      expect(screen.getByTestId('InvoicePaymentHistoryModal__delete-btn')).toBeInTheDocument(),
+    );
+    fireEvent.click(screen.getByTestId('InvoicePaymentHistoryModal__delete-btn'));
+    fireEvent.click(screen.getByTestId('InvoicePaymentHistoryModal__delete-confirm-btn'));
+    await waitFor(() =>
+      expect(screen.getByText('cpDeleteDraftFailed')).toBeInTheDocument(),
+    );
+    expect(screen.getByTestId('InvoicePaymentHistoryModal__delete-confirm-panel')).toBeInTheDocument();
+  });
+
+  it('renders the delete-confirm message without crashing when payment.amount is a string (fmtAmount string branch)', async () => {
+    useApiFetch.mockReturnValue(makeApiFetch([
+      { id: 'p1', documentNo: 'PAY-001', paymentDate: '2026-01-01', amount: '499.99', status: 'DR' },
+    ]));
+    render(
+      <InvoicePaymentHistoryModal
+        invoiceId="42"
+        invoiceData={INVOICE_DATA}
+        specName="sales-invoice"
+        apiBaseUrl="http://host/sws/neo/sales-invoice"
+        onClose={vi.fn()}
+      />,
+    );
+    await waitFor(() =>
+      expect(screen.getByTestId('InvoicePaymentHistoryModal__delete-btn')).toBeInTheDocument(),
+    );
+    fireEvent.click(screen.getByTestId('InvoicePaymentHistoryModal__delete-btn'));
+    // The mocked ui() returns the key literally; reaching this assertion without
+    // throwing proves fmtAmount(payment.amount, currency) handled the string amount.
+    expect(screen.getByText('cpDeleteDraftConfirm')).toBeInTheDocument();
+    expect(screen.getByTestId('InvoicePaymentHistoryModal__delete-confirm-panel')).toBeInTheDocument();
+  });
+
+  it('cancels the delete-draft confirmation without calling the delete backend', async () => {
+    const draftPayments = [
+      { id: 'p1', documentNo: 'PAY-001', paymentDate: '2026-01-01', amount: '100', status: 'DR' },
+    ];
+    const fetchMock = makeDeleteFlowFetch({
+      initialPayments: draftPayments,
+      deleteResult: { ok: true, json: () => Promise.resolve({ response: {} }) },
+    });
+    useApiFetch.mockReturnValue(fetchMock);
+    render(
+      <InvoicePaymentHistoryModal
+        invoiceId="42"
+        invoiceData={INVOICE_DATA}
+        specName="sales-invoice"
+        apiBaseUrl="http://host/sws/neo/sales-invoice"
+        onClose={vi.fn()}
+      />,
+    );
+    await waitFor(() =>
+      expect(screen.getByTestId('InvoicePaymentHistoryModal__delete-btn')).toBeInTheDocument(),
+    );
+    fireEvent.click(screen.getByTestId('InvoicePaymentHistoryModal__delete-btn'));
+    expect(screen.getByTestId('InvoicePaymentHistoryModal__delete-confirm-panel')).toBeInTheDocument();
+    fireEvent.click(screen.getByTestId('InvoicePaymentHistoryModal__delete-cancel-btn'));
+    expect(screen.queryByTestId('InvoicePaymentHistoryModal__delete-confirm-panel')).toBeNull();
+    expect(fetchMock).not.toHaveBeenCalledWith(
+      expect.stringContaining('action/deletePayment'),
+      expect.anything(),
+    );
+  });
+
+  it('confirms delete-draft, calls the deletePayment action, and refreshes the list', async () => {
+    const draftPayments = [
+      { id: 'p1', documentNo: 'PAY-001', paymentDate: '2026-01-01', amount: '100', status: 'DR' },
+    ];
+    const fetchMock = makeDeleteFlowFetch({
+      initialPayments: draftPayments,
+      refreshedPayments: [],
+      deleteResult: { ok: true, json: () => Promise.resolve({ response: {} }) },
+    });
+    useApiFetch.mockReturnValue(fetchMock);
+    render(
+      <InvoicePaymentHistoryModal
+        invoiceId="42"
+        invoiceData={INVOICE_DATA}
+        specName="sales-invoice"
+        apiBaseUrl="http://host/sws/neo/sales-invoice"
+        onClose={vi.fn()}
+      />,
+    );
+    await waitFor(() =>
+      expect(screen.getByTestId('InvoicePaymentHistoryModal__delete-btn')).toBeInTheDocument(),
+    );
+    fireEvent.click(screen.getByTestId('InvoicePaymentHistoryModal__delete-btn'));
+    fireEvent.click(screen.getByTestId('InvoicePaymentHistoryModal__delete-confirm-btn'));
+    await waitFor(() =>
+      expect(screen.queryByTestId('InvoicePaymentHistoryModal__delete-confirm-panel')).toBeNull(),
+    );
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/sales-invoice/header/42/action/deletePayment',
+      expect.objectContaining({ method: 'POST', body: JSON.stringify({ paymentId: 'p1' }) }),
+    );
+    // fetchData() ran again after a successful delete — the list refreshes to empty.
+    await waitFor(() =>
+      expect(screen.getByTestId('InvoicePaymentHistoryModal__empty')).toBeInTheDocument(),
+    );
+  });
+
+  it('shows a delete error message and keeps the confirmation dialog open on failure', async () => {
+    const draftPayments = [
+      { id: 'p1', documentNo: 'PAY-001', paymentDate: '2026-01-01', amount: '100', status: 'DR' },
+    ];
+    const fetchMock = makeDeleteFlowFetch({
+      initialPayments: draftPayments,
+      deleteResult: {
+        ok: false,
+        json: () => Promise.resolve({ response: { error: { message: 'No se pudo eliminar' } } }),
+      },
+    });
+    useApiFetch.mockReturnValue(fetchMock);
+    render(
+      <InvoicePaymentHistoryModal
+        invoiceId="42"
+        invoiceData={INVOICE_DATA}
+        specName="sales-invoice"
+        apiBaseUrl="http://host/sws/neo/sales-invoice"
+        onClose={vi.fn()}
+      />,
+    );
+    await waitFor(() =>
+      expect(screen.getByTestId('InvoicePaymentHistoryModal__delete-btn')).toBeInTheDocument(),
+    );
+    fireEvent.click(screen.getByTestId('InvoicePaymentHistoryModal__delete-btn'));
+    fireEvent.click(screen.getByTestId('InvoicePaymentHistoryModal__delete-confirm-btn'));
+    await waitFor(() =>
+      expect(screen.getByText('No se pudo eliminar')).toBeInTheDocument(),
+    );
+    // The dialog stays open on failure so the user can retry or cancel.
+    expect(screen.getByTestId('InvoicePaymentHistoryModal__delete-confirm-panel')).toBeInTheDocument();
+    fireEvent.click(screen.getByTestId('InvoicePaymentHistoryModal__delete-cancel-btn'));
+    expect(screen.queryByTestId('InvoicePaymentHistoryModal__delete-confirm-panel')).toBeNull();
+  });
+
+  it('disables the confirm/cancel buttons and shows a loading label while deleting', async () => {
+    const draftPayments = [
+      { id: 'p1', documentNo: 'PAY-001', paymentDate: '2026-01-01', amount: '100', status: 'DR' },
+    ];
+    let resolveDelete;
+    const deletePromise = new Promise((resolve) => { resolveDelete = resolve; });
+    let invoicePaymentsCalls = 0;
+    const fetchMock = vi.fn((url) => {
+      if (url.includes('/paymentPlan')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ response: { data: [] } }) });
+      }
+      if (url.includes('action/deletePayment')) {
+        return deletePromise;
+      }
+      const data = invoicePaymentsCalls === 0 ? draftPayments : [];
+      invoicePaymentsCalls += 1;
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({ response: { data } }) });
+    });
+    useApiFetch.mockReturnValue(fetchMock);
+    render(
+      <InvoicePaymentHistoryModal
+        invoiceId="42"
+        invoiceData={INVOICE_DATA}
+        specName="sales-invoice"
+        apiBaseUrl="http://host/sws/neo/sales-invoice"
+        onClose={vi.fn()}
+      />,
+    );
+    await waitFor(() =>
+      expect(screen.getByTestId('InvoicePaymentHistoryModal__delete-btn')).toBeInTheDocument(),
+    );
+    fireEvent.click(screen.getByTestId('InvoicePaymentHistoryModal__delete-btn'));
+    fireEvent.click(screen.getByTestId('InvoicePaymentHistoryModal__delete-confirm-btn'));
+
+    // While the delete request is in flight, both buttons are disabled and the
+    // confirm button shows the loading label instead of "cpDeleteDraft".
+    const confirmBtn = screen.getByTestId('InvoicePaymentHistoryModal__delete-confirm-btn');
+    const cancelBtn = screen.getByTestId('InvoicePaymentHistoryModal__delete-cancel-btn');
+    await waitFor(() => expect(confirmBtn).toBeDisabled());
+    expect(cancelBtn).toBeDisabled();
+    expect(confirmBtn).toHaveTextContent('loading');
+
+    // Clicking the backdrop while deleting is in flight must be a no-op — the
+    // `if (isDeleting) return;` guard in handleDeleteCancel keeps the dialog open
+    // (unlike the cancel button, the backdrop itself carries no `disabled` state).
+    fireEvent.click(screen.getByTestId('InvoicePaymentHistoryModal__delete-confirm-backdrop'));
+    expect(screen.getByTestId('InvoicePaymentHistoryModal__delete-confirm-panel')).toBeInTheDocument();
+
+    // Resolve the pending request and let the dialog close.
+    resolveDelete({ ok: true, json: () => Promise.resolve({ response: {} }) });
+    await waitFor(() =>
+      expect(screen.queryByTestId('InvoicePaymentHistoryModal__delete-confirm-panel')).toBeNull(),
+    );
   });
 });
