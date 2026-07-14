@@ -19637,6 +19637,7 @@
     "fiscal.cert.info.body": "Solicítalo a la FNMT o a tu Diputación Foral. La emisión tarda 5–10 días hábiles.",
     "fiscal.cert.verifying.title": "Verificando certificado…",
     "fiscal.cert.verifying.body": "Comprobando estructura PKCS#12, contraseña, vigencia y almacenando en Etendo.",
+    "fiscal.verifactu.processing.body": "Generando el registro de facturación para su envío a VERI*FACTU",
     "fiscal.cert.nif.warning.title": "La organización no tiene NIF configurado",
     "fiscal.cert.nif.warning.body": "El certificado contiene el NIF {nif}. Si lo confirmas, se establecerá como NIF de la organización y el certificado se almacenará.",
     "fiscal.cert.nif.row.file": "Archivo",
@@ -20154,6 +20155,16 @@
     "sifDataTabs.option.accountingDocument": "Documento contable",
     "sifDataTabs.option.customsComplementarySettlement": "Aduanas - liquidación complementaria",
     "sifDataTabs.option.importDua": "Importación (DUA)",
+    "sifDataTabs.option.vfF1": "F1 - Factura (art. 6, 7.2 y 7.3 del RD 1619/2012)",
+    "sifDataTabs.option.vfF2": "F2 - Factura Simplificada/sin identificación destinatario",
+    "sifDataTabs.option.vfF3": "F3 - Factura emitida en sustitución de simplificadas",
+    "sifDataTabs.option.vfR1": "R1 - Factura Rectificativa (Art 80.1, 80.2 y 80.6)",
+    "sifDataTabs.option.vfR2": "R2 - Factura Rectificativa (Art. 80.3)",
+    "sifDataTabs.option.vfR3": "R3 - Factura Rectificativa (Art. 80.4)",
+    "sifDataTabs.option.vfR4": "R4 - Factura Rectificativa (Resto)",
+    "sifDataTabs.option.vfR5": "R5 - Factura Rectificativa en facturas simplificadas",
+    "sifDataTabs.option.vfReverseByDifference": "Por Diferencias",
+    "sifDataTabs.option.vfReverseBySubstitution": "Por Sustitución",
     "sifDataTabs.field.operationDate": "Fecha operación",
     "sifDataTabs.field.invoiceType": "Tipo factura",
     "sifDataTabs.field.masterDescription": "Descripción maestra",
@@ -20165,6 +20176,11 @@
     "sifDataTabs.field.chainSequence": "Secuencia encadenamiento",
     "sifDataTabs.field.invoiceSeries": "Serie factura",
     "sifDataTabs.field.invoiceSequence": "Secuencia factura",
+    "sifDataTabs.field.vfInvoiceType": "Tipo de Factura",
+    "sifDataTabs.field.vfOperationDescription": "Descripción Operación",
+    "sifDataTabs.field.simplifiedInvoiceArt7273": "Factura Simplificada Art 7.2 y 7.3",
+    "sifDataTabs.field.noRecipientIdArt61d": "Sin ID Destinatario Art61d",
+    "sifDataTabs.field.correctiveInvoiceType": "Tipo de Factura Rectificativa",
     "sifDataTabs.field.rfGenerationDate": "Fecha generación RF",
     "sifDataTabs.field.csv": "CSV",
     "sifDataTabs.field.hash": "Hash",
@@ -22377,6 +22393,9 @@
     },
     "Create Amortization": {
       "label": "Crear amortización"
+    },
+    "Recalculate Amortization": {
+      "label": "Recalcular amortización"
     },
     "Depreciation Setup": {
       "label": "Configuración de depreciación"

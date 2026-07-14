@@ -35,7 +35,8 @@
         "EM_Etadas_Salesregion_ID": "Región de ventas",
         "EM_Etadas_C_Activity_ID": "Actividad",
         "EM_Etadas_Campaign_ID": "Campaña",
-        "EM_Etgo_Amortization_Status": "Estado de amortización"
+        "EM_Etgo_Amortization_Status": "Estado de amortización",
+        "M_Product_ID": "Producto"
       },
       "en_US": {
         "C_Project_ID": "Project",
@@ -46,7 +47,8 @@
         "EM_Etadas_Salesregion_ID": "Sales Region",
         "EM_Etadas_C_Activity_ID": "Activity",
         "EM_Etadas_Campaign_ID": "Sales Campaign",
-        "EM_Etgo_Amortization_Status": "Amortization Status"
+        "EM_Etgo_Amortization_Status": "Amortization Status",
+        "M_Product_ID": "Product"
       }
     },
     "sidebarLayout": true,
@@ -56,6 +58,7 @@
       "processAsset": {
         "add": true,
         "label": "Create Amortization",
+        "labelToggle": { "field": "processed", "equals": "Y", "label": "Recalculate Amortization" },
         "style": "positive",
         "displayLogicRaw": "@Depreciate@='Y' AND @etgoAmortizationStatus@!='100'",
         "requiresFieldMax": [
@@ -120,8 +123,8 @@
           "reason": "Internal sequential number \u2014 not relevant for users in simplified UI"
         },
         "product": {
-          "visibility": "discarded",
-          "reason": "Not included in this iteration per UX feedback"
+          "visibility": "editable",
+          "form": false
         },
         "summaryLevel": {
           "visibility": "discarded",
@@ -257,24 +260,24 @@
           "form": false
         },
         "eTADASUser1": {
-          "visibility": "editable",
-          "form": false
+          "visibility": "discarded",
+          "reason": "Accounting dimension — out of scope for simplified Assets UI"
         },
         "eTADASUser2": {
-          "visibility": "editable",
-          "form": false
+          "visibility": "discarded",
+          "reason": "Accounting dimension — out of scope for simplified Assets UI"
         },
         "eTADASSalesRegion": {
-          "visibility": "editable",
-          "form": false
+          "visibility": "discarded",
+          "reason": "Accounting dimension — out of scope for simplified Assets UI"
         },
         "eTADASActivity": {
-          "visibility": "editable",
-          "form": false
+          "visibility": "discarded",
+          "reason": "Accounting dimension — out of scope for simplified Assets UI"
         },
         "eTADASSalesCampaign": {
-          "visibility": "editable",
-          "form": false
+          "visibility": "discarded",
+          "reason": "Accounting dimension — out of scope for simplified Assets UI"
         },
         "currency": {
           "form": false,
