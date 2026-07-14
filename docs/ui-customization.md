@@ -174,6 +174,22 @@ Handler precedence: `documentAction` > `columnName` > `action` > `component` > e
 
 **Real examples:** `goods-shipment` (cancel), `payment-in` (reverse via `columnName`), `sales-invoice` (duplicate, cancel), `sales-order` (reactivate via `documentAction: "RE"`).
 
+#### Dynamic process-button captions — `processOverrides.<proc>.labelToggle`
+
+A process button caption can switch based on a record field value. Add an optional `labelToggle: { field, equals, label }` to any `processOverrides` entry. When the current record's `field` strictly equals `equals`, the toolbar button shows `label`; otherwise it shows the entry's default `label`. Both go through `useMenuLabel`, so translations resolve automatically. It is fully opt-in: buttons without `labelToggle` render exactly as before.
+
+```json
+"processOverrides": {
+  "processAsset": {
+    "add": true,
+    "label": "Create Amortization",
+    "labelToggle": { "field": "processed", "equals": "Y", "label": "Recalculate Amortization" }
+  }
+}
+```
+
+This mirrors Etendo Classic list-reference buttons (e.g. Assets ref 800042 toggling on `A_Asset.Processed`). Full property table: `docs/decisions-reference.md → Process Overrides`.
+
 ---
 
 ### 6. `window.layoutType` — alternative page layouts
@@ -315,6 +331,28 @@ Hides the delete button when the document is not in Draft status.
 ```
 
 **Real examples:** `goods-shipment`, `payment-in`, `sales-invoice`.
+
+---
+
+### 9b. `window.hideDeleteButton` — unconditional delete button hide
+
+Removes the Delete (trash) button entirely — in both the detail toolbar and the
+list-row hover quick actions — regardless of record state or document status.
+Use it for windows where deletion from the UI must never be offered.
+
+```json
+"window": {
+  "hideDeleteButton": true
+}
+```
+
+Defaults to `false`; when unset, delete visibility is exactly as before. This is a
+stronger, state-independent form of `hideDeleteWhenComplete`: if you set
+`hideDeleteButton`, `hideDeleteWhenComplete` becomes redundant. It is also distinct
+from `hideDelete`, which only disables the delete CRUD capability in the contract
+(API level) and does **not** affect the button. The gate lives in the shared utility
+`tools/app-shell/src/utils/recordActions.js`, so both `DetailView` and
+`RowQuickActions` stay in lockstep.
 
 ---
 

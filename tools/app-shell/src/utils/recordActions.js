@@ -26,9 +26,14 @@ export const DELETABLE_DOC_STATUSES = ['DR', 'RPAP', 'N'];
  * @param {object}  opts.record                 The row / form record.
  * @param {?string} opts.statusField            Field name carrying the document status (e.g. 'documentStatus').
  * @param {boolean} opts.hideDeleteWhenComplete When false, Delete is always visible.
+ * @param {boolean} opts.hideDeleteButton       When true, Delete is ALWAYS hidden, regardless of
+ *                                              record state or status. Unconditional per-window
+ *                                              opt-out (decisions.json → window.hideDeleteButton).
+ *                                              Defaults to false → zero behavior change when unset.
  * @returns {boolean}
  */
-export function isDeleteVisibleForRecord({ record, statusField, hideDeleteWhenComplete }) {
+export function isDeleteVisibleForRecord({ record, statusField, hideDeleteWhenComplete, hideDeleteButton = false }) {
+  if (hideDeleteButton) return false;
   if (!hideDeleteWhenComplete) return true;
   if (!statusField) return true;
   const status = record?.[statusField];

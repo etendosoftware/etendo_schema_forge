@@ -163,8 +163,7 @@ export default function AssetsDetailPanel({ data, token, apiBaseUrl, catalogs, a
     'depreciate','everyMonthIs30Days','depreciationType','calculateType','annualDepreciation',
     'amortize','usableLifeYears','usableLifeMonths',
     'purchaseDate','cancellationDate','depreciationStartDate','depreciationEndDate',
-    'project','eTADASCostCenter','businessPartner','eTADASUser1','eTADASUser2',
-    'eTADASSalesRegion','eTADASActivity','eTADASSalesCampaign',
+    'project','eTADASCostCenter','businessPartner','product',
   ].map(k => [k, true])), visibility: {} } : { readOnly: {}, visibility: {} };
 
   const group1Fields = [
@@ -214,11 +213,7 @@ export default function AssetsDetailPanel({ data, token, apiBaseUrl, catalogs, a
     { key: 'project', column: 'C_Project_ID', type: 'selector', section: 'principal', reference: 'Project', inputMode: 'selector' },
     { key: 'eTADASCostCenter', column: 'EM_Etadas_Costcenter_ID', type: 'selector', section: 'principal', reference: 'Costcenter', inputMode: 'selector' },
     { key: 'businessPartner', column: 'C_BPartner_ID', type: 'selector', section: 'principal', reference: 'BPartner', inputMode: 'selector' },
-    { key: 'eTADASUser1', column: 'EM_Etadas_User1_ID', type: 'selector', section: 'principal', reference: 'User1', inputMode: 'selector' },
-    { key: 'eTADASUser2', column: 'EM_Etadas_User2_ID', type: 'selector', section: 'principal', reference: 'User2', inputMode: 'selector' },
-    { key: 'eTADASSalesRegion', column: 'EM_Etadas_Salesregion_ID', type: 'selector', section: 'principal', reference: 'SalesRegion', inputMode: 'selector' },
-    { key: 'eTADASActivity', column: 'EM_Etadas_C_Activity_ID', type: 'selector', section: 'principal', reference: 'Activity', inputMode: 'selector' },
-    { key: 'eTADASSalesCampaign', column: 'EM_Etadas_Campaign_ID', type: 'selector', section: 'principal', reference: 'Campaign', inputMode: 'selector' },
+    { key: 'product', column: 'M_Product_ID', type: 'selector', section: 'principal', reference: 'Product', inputMode: 'selector' },
   ];
 
   const dateFields = [

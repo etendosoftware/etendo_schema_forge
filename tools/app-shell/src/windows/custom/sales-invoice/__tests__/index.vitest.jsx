@@ -35,6 +35,19 @@ vi.mock('@/hooks/useBulkActionToast', () => ({
   useBulkActionToast: vi.fn(),
 }));
 
+// index.jsx reads selectedOrg from useAuth() to resolve the org's fiscal
+// profile (Verifactu processing-modal wiring). Mirrors the convention used
+// by PurchaseInvoiceHeaderTable.vitest.jsx / PurchaseInvoiceTopbar.vitest.jsx
+// for the same @/auth/AuthContext.jsx + useFiscalConfig.js pair.
+vi.mock('@/auth/AuthContext.jsx', () => ({
+  useAuth: () => ({ selectedOrg: { id: 'org-1' }, logout: vi.fn() }),
+}));
+
+let fiscalProfile = null;
+vi.mock('@/windows/custom/fiscal-config/useFiscalConfig.js', () => ({
+  useFiscalConfig: vi.fn(() => ({ profile: fiscalProfile })),
+}));
+
 let rowDeleteConfig;
 const requestDeleteSpy = vi.fn();
 vi.mock('@/hooks/useRowDelete', () => ({
@@ -170,6 +183,7 @@ describe('SalesInvoiceWindow — render smoke tests', () => {
     lastListViewProps = null;
     lastHeaderPageProps = null;
     rowDeleteConfig = null;
+    fiscalProfile = null;
   });
 
   it('renders the list view (ListView) when no recordId is present', () => {
@@ -196,6 +210,17 @@ describe('SalesInvoiceWindow — render smoke tests', () => {
       refetchAfterSave: true,
     });
     expect(lastHeaderPageProps.draftMode).toMatchObject({ enabled: true, processValue: 'CO' });
+    // No Verifactu profile configured for the org -> no processing modal.
+    expect(lastHeaderPageProps.draftMode.processingModal).toBeNull();
+  });
+
+  it('enables the Verifactu processing modal on draftMode when the org profile is verifactu', () => {
+    fiscalProfile = 'verifactu';
+    render(<SalesInvoiceWindow windowName="sales-invoice" recordId="inv-1" apiBaseUrl="/api" token="tkn" />);
+
+    expect(lastHeaderPageProps.draftMode.processingModal).toMatchObject({
+      body: 'fiscal.verifactu.processing.body',
+    });
   });
 
   it('navigates to the edit route when a row quick action edit is triggered', () => {
