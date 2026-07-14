@@ -605,6 +605,37 @@ Título "Connect with Claude" + los 4 pasos genéricos existentes (`oauthStep1`-
 > **Jira relacionada:** ETP-4484 (`plataforma`) — migrar la librería de observability completa a core
 > (el sink Mixpanel + catálogo de eventos), creada como follow-up y colgada de la epic ETP-3504.
 
+### 🎯 Estado actual (2026-07-14) — validar el Paso 6 con una preview version
+
+**Dónde estamos:** Pasos 0–5 completos y verdes bajo `LOCAL_CORE=1`. El único pendiente es el Paso 6
+(release `latest` + bump del pin), pero **antes de gastar un release real** queremos confirmar que la
+migración de `AuthorizePage` resuelve bien **por el camino de paquete publicado** (no `LOCAL_CORE`) —
+que es justo lo que `LOCAL_CORE` NO valida (exports del `package.json`, shims resolviendo contra el
+registro, el `mcpClients.test.js` que es `node:test` y no usa el alias de vitest).
+
+**Cómo:** usar el [sistema de preview versions](./2026-07-14-preview-package-publishing.md) recién
+implementado — publica un `alpha` descartable sin tocar `latest`. Procedimiento concreto:
+
+1. **Publicar la preview.** Pushear `feature/ETP-4394` de `schema_forge_core` (commit `31822cdcd` ya
+   hecho, sin push) → dispara `publish-preview.yml` automáticamente. Anotar la versión que publica:
+   `0.3.7-preview.feature-ETP-4394.<ts>.<sha>` (los 6 paquetes, bajo `alpha`).
+2. **Pinear la preview en funcional.** En `schema_forge/tools/app-shell/package.json`, reemplazar
+   temporalmente el pin `@etendosoftware/app-shell-core` (hoy `0.3.6`) por esa versión exacta de
+   preview. `npm install` para bajarla del registro.
+3. **Correr por camino de paquete publicado** (SIN `LOCAL_CORE`): `make dev` y recorrer el checklist
+   post-migración de abajo — con foco en los exports NUEVOS que hoy son "el peaje" (`observability`,
+   `lib/mcpClients`, `pages/AuthorizePage`) y en `mcpClients.test.js` (`node:test`), que solo resuelve
+   contra el paquete publicado.
+4. **Interpretar el resultado.** Si todo verde por este camino → el Paso 6 real (release `latest` +
+   bump) va a funcionar; se procede a disparar el release definitivo con confianza. Si algo falla, se
+   corrige en core y se re-publica otra preview (D5a autopurga la anterior) — sin haber quemado ningún
+   `latest`.
+5. **Revertir el pin.** Terminada la validación, volver el pin a su valor real (no dejar el `-preview.`
+   commiteado en funcional). El release real del Paso 6 traerá la versión `latest` definitiva.
+
+**Bloqueos posibles (ver plan de preview):** si el borrado D5a da 403, falta un PAT con
+`delete:packages` — no bloquea la validación (la publicación sí ocurre; solo no se autolimpia).
+
 ### Actualización del análisis previo (lo que cambió respecto a la investigación de arriba)
 
 Dos supuestos de la investigación original quedaron **desactualizados** al implementar:
@@ -710,6 +741,12 @@ locales del host y que el `LocaleProvider` las inyecta. Agregar una nota en
 abre el PR de bump del pin en `schema_forge` (merge humano) → recién ahí live. Durante desarrollo,
 validar todo el encadenamiento con `LOCAL_CORE=1` / `make dev-local-core` antes de publicar, para no
 gastar ciclos de release en errores de imports.
+
+> **Mecanismo para abaratar este peaje → [Sistema de "preview versions"](./2026-07-14-preview-package-publishing.md).**
+> Para validar el camino de **paquete publicado** (no `LOCAL_CORE`) sin gastar un release `latest`,
+> se implementó un sistema de previews descartables (dist-tag `alpha`, auto en cada push a
+> `feature/**`). Nació de este Paso 6. **Estado: implementado** en `schema_forge_core@feature/ETP-4394`
+> (commit `31822cdcd`), pendiente de validación end-to-end.
 
 ### Estrategia de shims (clave para hacerlo incremental y sin big-bang)
 
