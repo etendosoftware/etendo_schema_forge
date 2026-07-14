@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { login } from '../helpers/auth.js';
+import { installHeaderConfirmMock } from '../helpers/confirmMocks.js';
 
 /**
  * Sales Order — Confirm Modal Idempotency (mocked).
@@ -57,35 +58,13 @@ const ONE_LINE = {
  * and counts how many times each endpoint was hit.
  */
 async function installConfirmMocks(page, state) {
-  // Header GET/PATCH — return our deterministic draft header.
-  // ETP-4468 — Confirm now calls handleSave() (PATCH) before running the
-  // confirm/convert steps. Without an explicit PATCH echo here, the request
-  // fell through to the generic `**/sws/**` catch-all in auth.js, which
-  // replies with a synthetic `{ id: 'e2e-record-id', ... }` (no NEO envelope,
-  // wrong id). useEntity's refetchAfterSave then refetched by that fake id,
-  // got back an empty record via the catch-all's GET fallback, and that
-  // garbage overwrote `editing`/`selected` — losing `documentStatus` and
-  // flipping `isDraft` to false, which unmounts ConfirmModal
-  // (`{isDraft && showConfirm && ...}` in OrderCreateInvoice.jsx) mid-flow.
-  await page.route(`**/sws/neo/sales-order/header/${ORDER_ID}`, async (route) => {
-    const method = route.request().method();
-    if (method === 'GET') {
-      await route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({ response: { data: [DRAFT_HEADER] } }),
-      });
-      return;
-    }
-    if (method === 'PATCH' || method === 'PUT') {
-      await route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({ response: { data: [{ ...DRAFT_HEADER }] } }),
-      });
-      return;
-    }
-    await route.continue();
+  // Header GET/PATCH — shared helper (see confirmMocks.js for the ETP-4468
+  // rationale on why the PATCH/PUT echo is required to keep ConfirmModal
+  // mounted through the save-before-confirm step).
+  await installHeaderConfirmMock(page, {
+    spec: 'sales-order',
+    recordId: ORDER_ID,
+    record: DRAFT_HEADER,
   });
 
   // Lines GET — return a single line so the modal computes a non-empty count
