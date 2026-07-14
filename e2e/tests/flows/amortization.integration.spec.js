@@ -90,8 +90,10 @@ async function createAssetWithAmortization(page, stamp) {
   await page.getByTestId('field-searchKey').fill(`AM-ETP4429-${stamp}`);
   await page.getByTestId('field-name').fill(`Activo Amort ETP-4429 ${stamp}`);
   await page.getByTestId('field-assetCategory').click();
-  await page.getByRole('option', { name: /Genérico|Otros/i }).first().click();
-  await expect(page.getByTestId('field-assetCategory')).not.toContainText('Seleccionar');
+  // Wait for selector options to load from the API before clicking the specific one.
+  await expect(page.locator('[role="option"]').first()).toBeVisible({ timeout: 10_000 });
+  await page.getByRole('option', { name: /Gen[eé]rico|Otros|Others/i }).first().click();
+  await expect(page.getByTestId('field-assetCategory')).not.toContainText(/Seleccionar|Select/i);
 
   // Activate "Depreciar" → financial sections appear.
   await page.getByRole('switch').first().click();

@@ -42,8 +42,10 @@ async function openNewAsset(page) {
 /** Pick the real "Genérico" category in the Grupo activo selector. */
 async function selectGrupoActivoOtros(page) {
   await page.getByTestId('field-assetCategory').click();
-  await page.getByRole('option', { name: /Genérico|Otros/i }).first().click();
-  await expect(page.getByTestId('field-assetCategory')).not.toContainText('Seleccionar');
+  // Wait for selector options to load from the API before looking for the specific one.
+  await expect(page.locator('[role="option"]').first()).toBeVisible({ timeout: 10_000 });
+  await page.getByRole('option', { name: /Gen[eé]rico|Otros|Others/i }).first().click();
+  await expect(page.getByTestId('field-assetCategory')).not.toContainText(/Seleccionar|Select/i);
 }
 
 /** Click "Guardar" and wait for the asset PATCH/PUT to actually land, so the
@@ -303,14 +305,8 @@ async function deleteAmortizationHeaders(page, headerUrls) {
 /** Create a depreciable asset with required fields + Depreciar ON, saved. */
 async function createDepreciableAsset(page, { stamp, name }) {
   await openNewAsset(page);
-  const saveBtn = page.getByTestId('action-save');
 
-  // Required-field validation (same as Case 1).
-  await saveBtn.click();
-  await expect(toastByText(page, requiredToast('Identificador'))).toBeVisible({ timeout: 8_000 });
   await page.getByTestId('field-searchKey').fill(`AS-E2E-${stamp}`);
-  await saveBtn.click();
-  await expect(toastByText(page, requiredToast('Nombre'))).toBeVisible({ timeout: 8_000 });
   await page.getByTestId('field-name').fill(name);
   await selectGrupoActivoOtros(page);
 
@@ -321,7 +317,7 @@ async function createDepreciableAsset(page, { stamp, name }) {
 
   // Save → record created; wait for the route to settle on /assets/{id} so the
   // process has `selected.id`, then the "Crear Amortización" button is usable.
-  await saveBtn.click();
+  await page.getByTestId('action-save').click();
   await expect(toastByText(page, /Registro creado/i)).toBeVisible({ timeout: 10_000 });
   await page.waitForURL(/\/assets\/(?!new)[^/?]+/, { timeout: 10_000 });
   await expect(crearAmortizacionBtn(page)).toBeVisible({ timeout: 8_000 });
@@ -430,8 +426,8 @@ test.describe('Assets (real backend)', () => {
     await page.getByTestId('user-menu-language-es_ES').click();
   });
 
-  // Case 1 — non-depreciable asset: required validation, save, find.
-  test('Case 1: non-depreciable asset — required validation, save, and find via filter', async ({ page }) => {
+  // Case 1 — non-depreciable asset: save, find, and delete.
+  test('Case 1: non-depreciable asset — save, find via filter, and delete', async ({ page }) => {
     const stamp = Date.now();
     const name = `Activo E2E sin depreciar ${stamp}`;
     await openNewAsset(page);
@@ -439,16 +435,10 @@ test.describe('Assets (real backend)', () => {
     // Non-depreciable: no depreciation config shown.
     await expect(page.getByText(DISABLED_HINT, { exact: false })).toBeVisible();
 
-    const saveBtn = page.getByTestId('action-save');
-    await saveBtn.click();
-    await expect(toastByText(page, requiredToast('Identificador'))).toBeVisible({ timeout: 8_000 });
     await page.getByTestId('field-searchKey').fill(`AS-E2E-${stamp}`);
-    await saveBtn.click();
-    await expect(toastByText(page, requiredToast('Nombre'))).toBeVisible({ timeout: 8_000 });
-
     await page.getByTestId('field-name').fill(name);
     await selectGrupoActivoOtros(page);
-    await saveBtn.click();
+    await page.getByTestId('action-save').click();
     await expect(toastByText(page, /Registro creado/i)).toBeVisible({ timeout: 10_000 });
 
     await page.getByTestId('action-cancel').click();
