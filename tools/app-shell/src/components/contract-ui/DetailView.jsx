@@ -1254,12 +1254,37 @@ export function getTabsBarClassName(tabsBarPaddingX, tabsBarRightDivider) {
   return `flex items-center gap-1 ${tabsBarPaddingX} py-2 shrink-0${tabsBarRightDivider ? ' relative' : ''}`;
 }
 
-// `hideDeleteWhenComplete` is a conditional gate (hides Delete once the document reaches a
-// terminal/processed status). `hideDeleteButton` is an unconditional override from
-// decisions.json → window.hideDeleteButton — it hides Delete regardless of status, so it is
-// checked first and short-circuits before the status-based logic runs.
-export function isDeleteButtonVisible(isNew, recordId, data, statusField, hideDeleteWhenComplete, isProcessed, hideDeleteButton = false) {
+// ETP-4479 — windows where a plain header DELETE fails once the record has
+// ever been referenced (FK constraints); the NEO action reactivates and
+// removes it server-side instead. Hardcoded here (not decisions.json-driven)
+// because the decisions.json -> generator wiring for this is not published
+// in schema_forge_core; do not add a decisions.json field for this without
+// first confirming the generator support ships.
+const WINDOW_DELETE_ACTIONS = {
+  'payment-in': 'eTPRRemovePayment',
+  'payment-out': 'eTPRRemovePayment',
+};
+
+export function isDeleteButtonVisible({
+  isNew,
+  recordId,
+  data,
+  statusField,
+  hideDeleteWhenComplete,
+  isProcessed,
+  deleteAction,
+  hideDeleteButton = false,
+}) {
+  // hideDeleteButton is an explicit, unconditional "never show delete here"
+  // signal (e.g. Amortization) — it wins over everything else, including the
+  // deleteAction lifecycle bypass below.
   if (hideDeleteButton) return false;
+  // ETP-4479 — a deleteAction-backed delete is safe at any lifecycle stage
+  // (the action reactivates server-side before removing), so it ignores
+  // hideDeleteWhenComplete/isProcessed and only hides for the voided status.
+  if (deleteAction) {
+    return !isNew && recordId && data?.[statusField] !== 'RPVOID';
+  }
   return !isNew && recordId && isDeleteVisibleForRecord({
     record: data,
     statusField,
@@ -1685,8 +1710,19 @@ export function DetailView({
   menuActions = [],
   customMenuContent = null,
   hideDeleteWhenComplete = false,
-  // Unconditional Delete-button opt-out from decisions.json → window.hideDeleteButton.
+  // Unconditional "never show header delete" signal (e.g. Amortization) —
+  // wins over deleteAction and the normal lifecycle rules. See
+  // isDeleteButtonVisible above.
   hideDeleteButton = false,
+  // ETP-4479 — when set, the delete (Trash2) button invokes this NEO action
+  // name via `neoAction.execute(recordId, deleteAction)` instead of a raw
+  // DELETE, and is visible for any status except 'RPVOID'. Used by windows
+  // (e.g. payment-in/out) where a plain header DELETE fails once the record
+  // has ever been referenced (FK constraints) — the action safely reactivates
+  // and removes it server-side. Overrides hideDeleteWhenComplete entirely
+  // when set; when null (default), behavior is unchanged for every window.
+  // hideDeleteButton (above) still wins over this when both are set.
+  deleteAction = null,
   customTabsAfterBottom = false,
   hidePrint = false,
   hideSaveStatuses = [],
@@ -1889,6 +1925,9 @@ export function DetailView({
   const { calloutResult, calloutLoading, executeCallout } = useCallout(entity, { token, apiBaseUrl });
   const docAction = useDocumentAction({ apiBaseUrl, entity, token });
   const neoAction = useNeoAction({ specName: windowName, entityName: entity, apiBaseUrl, token });
+  // ETP-4479 — fall back to the per-window default when the caller didn't
+  // explicitly pass `deleteAction` (see WINDOW_DELETE_ACTIONS above).
+  const effectiveDeleteAction = deleteAction ?? WINDOW_DELETE_ACTIONS[windowName] ?? null;
   const navigate = useNavigate();
   const location = useLocation();
   const [searchParams] = useSearchParams();
@@ -3151,8 +3190,17 @@ export function DetailView({
                   <Printer className="h-4 w-4" data-testid="Printer__fa3275" />
                 </button>
               )}
-              {/* Delete record — hidden unconditionally when hideDeleteButton is set, otherwise when hideDeleteWhenComplete and status matches or record is processed */}
-              {isDeleteButtonVisible(isNew, recordId, data, statusField, hideDeleteWhenComplete, isProcessed, hideDeleteButton) && (
+              {/* Delete record — hidden unconditionally when hideDeleteButton is set; otherwise shown for a deleteAction-backed delete at any lifecycle stage (except RPVOID), or when hideDeleteWhenComplete/isProcessed rules allow it */}
+              {isDeleteButtonVisible({
+                isNew,
+                recordId,
+                data,
+                statusField,
+                hideDeleteWhenComplete,
+                isProcessed,
+                deleteAction: effectiveDeleteAction,
+                hideDeleteButton,
+              }) && (
                 <button
                   onClick={() => setShowDeleteConfirm(true)}
                   className={`${sqBtnSize} flex items-center justify-center rounded-lg border border-red-200 text-red-500 hover:bg-red-50 hover:text-red-600 transition-colors`}
@@ -4507,6 +4555,28 @@ export function DetailView({
               data-testid="action-delete-confirm"
               onClick={async () => {
                 setShowDeleteConfirm(false);
+                // ETP-4479 — deleteAction-backed windows go through the same
+                // `neoAction.execute(recordId, actionName)` mechanism the
+                // detail-view "more" menu already uses for NEO actions
+                // (see runNeoMenuAction above), mirroring the URL convention
+                // PaymentHeaderTableBase's row-level delete relies on
+                // (POST {apiBaseUrl}/{entity}/{id}/action/{actionName}).
+                if (effectiveDeleteAction) {
+                  const currentId = data?.id || recordId;
+                  const result = await neoAction.execute(currentId, effectiveDeleteAction);
+                  if (result.success) {
+                    // Reuse the per-action i18n key convention (`${action}Completed`,
+                    // e.g. eTPRRemovePaymentCompleted) when translated; otherwise
+                    // fall back to the generic delete-success message.
+                    const key = `${effectiveDeleteAction}Completed`;
+                    const msg = ui(key);
+                    toast.success(msg !== key ? msg : ui('recordDeleted'));
+                    navigate(`/${windowName}`);
+                  } else {
+                    toast.error(result.message || ui('actionFailed'));
+                  }
+                  return;
+                }
                 await hook.handleDelete();
                 navigate(`/${windowName}`);
               }}
