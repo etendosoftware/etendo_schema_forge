@@ -17,9 +17,9 @@ Records are typically created from the **Assets** window via the **Create Amorti
   - Press **Confirmar** to open a confirmation modal showing the current total, line count, and a lock warning, then confirm the document.
 - Once **processed** (`processed='Y'`):
   - All header and line fields become read-only.
-  - The **Delete** action is hidden.
   - A **Reactivar** option appears in the three-dot menu to unprocess the document.
 - Attach files via the **Adjuntos** tab.
+- The document-level **Delete** action (list row trash icon and detail toolbar) is hidden unconditionally, in both draft and processed status (`window.hideDeleteButton: true`) — this is stricter than the previous processed-only behavior. Deleting individual **lines** while in draft is unaffected and still available.
 
 ## Interaction model
 
@@ -31,6 +31,7 @@ Records are typically created from the **Assets** window via the **Create Amorti
 - Lines layout: `inlineEditable` — existing rows use InlineLinesPanel (flex), new rows use a DataTable add-row form. Hovering a row reveals pencil/trash icons in a dedicated 160px action slot (not a trailing-column swap, because `amortizationAmount` has `noTrailing: true`).
 - Confirm button: black primary button on the far right, disabled when no lines exist. Opens `AmortizationConfirmModal` rather than executing directly.
 - List toolbar: Print and Link buttons are hidden (`hidePrint: true`, `hideLink: true`). Only the status dropdown, funnel, and "New amortization" button are shown.
+- Delete action fully suppressed: `hideDeleteButton: true` hides the delete (red trash) icon in the list grid rows and in the detail toolbar, regardless of the document's processed state. This is stronger than `hideDeleteWhenComplete` (which only hides delete once the document is processed).
 
 ## Reactive behavior and dependencies
 

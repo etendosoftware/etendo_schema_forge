@@ -1,8 +1,8 @@
 {
   "version": "0.35.0",
   "generatedAt": "2026-05-22T16:00:10.872Z",
-  "updatedAt": "2026-07-06T17:42:24.219Z",
-  "checksum": "1abcd348ef6168f7",
+  "updatedAt": "2026-07-13T19:23:01.730Z",
+  "checksum": "90437c4ebfb4091d",
   "frontendContract": {
     "window": {
       "id": "800026",
@@ -11,6 +11,7 @@
       "category": "finance",
       "hideDeleteWhenComplete": true,
       "hidePrint": true,
+      "hideDeleteButton": true,
       "hideLink": true,
       "breadcrumb": "Finance / Amortization",
       "menuActions": [
@@ -780,6 +781,7 @@
       "category": "finance",
       "hideDeleteWhenComplete": true,
       "hidePrint": true,
+      "hideDeleteButton": true,
       "hideLink": true,
       "breadcrumb": "Finance / Amortization",
       "menuActions": [

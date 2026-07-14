@@ -8,6 +8,7 @@ export const priceList = [
     "description": "Standard order for Q1 delivery",
     "salesPriceList": "Sample salesPriceList",
     "costBasedPriceList": "Sample costBasedPriceList",
+    "active": "Sample active",
     "priceIncludesTax": "VAT 21%",
     "default": "Sample default"
   },
@@ -18,6 +19,7 @@ export const priceList = [
     "description": "Rush order - priority shipping required",
     "salesPriceList": "Sample salesPriceList",
     "costBasedPriceList": "Sample costBasedPriceList",
+    "active": "Sample active",
     "priceIncludesTax": "VAT 10%",
     "default": "Sample default"
   },
@@ -28,6 +30,7 @@ export const priceList = [
     "description": "Bulk purchase for warehouse restocking",
     "salesPriceList": "Sample salesPriceList",
     "costBasedPriceList": "Sample costBasedPriceList",
+    "active": "Sample active",
     "priceIncludesTax": "VAT 0%",
     "default": "Sample default"
   },
@@ -38,6 +41,7 @@ export const priceList = [
     "description": "Sample order for client evaluation",
     "salesPriceList": "Sample salesPriceList",
     "costBasedPriceList": "Sample costBasedPriceList",
+    "active": "Sample active",
     "priceIncludesTax": "Sales Tax 8.5%",
     "default": "Sample default"
   },
@@ -48,6 +52,7 @@ export const priceList = [
     "description": "Recurring monthly supply order",
     "salesPriceList": "Sample salesPriceList",
     "costBasedPriceList": "Sample costBasedPriceList",
+    "active": "Sample active",
     "priceIncludesTax": "Exempt",
     "default": "Sample default"
   },
@@ -58,6 +63,7 @@ export const priceList = [
     "description": "Special pricing agreement applies",
     "salesPriceList": "Sample salesPriceList",
     "costBasedPriceList": "Sample costBasedPriceList",
+    "active": "Sample active",
     "priceIncludesTax": "Reduced Rate 5%",
     "default": "Sample default"
   },
@@ -68,6 +74,7 @@ export const priceList = [
     "description": "Consolidated order from multiple requests",
     "salesPriceList": "Sample salesPriceList",
     "costBasedPriceList": "Sample costBasedPriceList",
+    "active": "Sample active",
     "priceIncludesTax": "Standard Rate 20%",
     "default": "Sample default"
   },
@@ -78,6 +85,7 @@ export const priceList = [
     "description": "Trial order for new product line",
     "salesPriceList": "Sample salesPriceList",
     "costBasedPriceList": "Sample costBasedPriceList",
+    "active": "Sample active",
     "priceIncludesTax": "VAT 21%",
     "default": "Sample default"
   },
@@ -88,6 +96,7 @@ export const priceList = [
     "description": "Replacement for damaged goods",
     "salesPriceList": "Sample salesPriceList",
     "costBasedPriceList": "Sample costBasedPriceList",
+    "active": "Sample active",
     "priceIncludesTax": "VAT 10%",
     "default": "Sample default"
   },
@@ -98,6 +107,7 @@ export const priceList = [
     "description": "Pre-season inventory build-up",
     "salesPriceList": "Sample salesPriceList",
     "costBasedPriceList": "Sample costBasedPriceList",
+    "active": "Sample active",
     "priceIncludesTax": "VAT 0%",
     "default": "Sample default"
   },
@@ -108,6 +118,7 @@ export const priceList = [
     "description": "Customer-specific configuration",
     "salesPriceList": "Sample salesPriceList",
     "costBasedPriceList": "Sample costBasedPriceList",
+    "active": "Sample active",
     "priceIncludesTax": "Sales Tax 8.5%",
     "default": "Sample default"
   },
@@ -118,6 +129,7 @@ export const priceList = [
     "description": "Government contract fulfillment",
     "salesPriceList": "Sample salesPriceList",
     "costBasedPriceList": "Sample costBasedPriceList",
+    "active": "Sample active",
     "priceIncludesTax": "Exempt",
     "default": "Sample default"
   }

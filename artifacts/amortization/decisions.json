@@ -8,6 +8,7 @@
     "linesLayout": "inlineEditable",
     "statusField": "processed",
     "hideDeleteWhenComplete": true,
+    "hideDeleteButton": true,
     "hidePrint": true,
     "hideLink": true,
     "toolbarButtonSize": "default",

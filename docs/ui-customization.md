@@ -318,6 +318,28 @@ Hides the delete button when the document is not in Draft status.
 
 ---
 
+### 9b. `window.hideDeleteButton` — unconditional delete button opt-out
+
+Unconditionally hides the Delete button/icon in **both** the detail view toolbar
+and the list-row hover quick actions, for every record regardless of status.
+Distinct from `hideDeleteWhenComplete` (conditional — only hides once the
+document leaves Draft) and from `hideDelete` (which only disables the CRUD
+delete capability declared in `contract.json`/the API, without touching the
+UI affordance). Use `hideDeleteButton` when Delete should never be reachable
+from the UI, e.g. master-data windows where records are provisioned/retired
+outside the app.
+
+```json
+"window": {
+  "hideDeleteButton": true
+}
+```
+
+**Real examples:** `tax` (ETP-4464 — paired with `hideDelete: true` for
+defense-in-depth: the API capability is disabled AND the UI icon is hidden).
+
+---
+
 ### 10. `window.dateFilterKey` — date range filter column
 
 Declares which list column the date range shortcut in the list toolbar targets.

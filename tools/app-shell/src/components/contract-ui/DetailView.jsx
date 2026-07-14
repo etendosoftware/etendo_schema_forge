@@ -1254,7 +1254,12 @@ export function getTabsBarClassName(tabsBarPaddingX, tabsBarRightDivider) {
   return `flex items-center gap-1 ${tabsBarPaddingX} py-2 shrink-0${tabsBarRightDivider ? ' relative' : ''}`;
 }
 
-export function isDeleteButtonVisible(isNew, recordId, data, statusField, hideDeleteWhenComplete, isProcessed) {
+// `hideDeleteWhenComplete` is a conditional gate (hides Delete once the document reaches a
+// terminal/processed status). `hideDeleteButton` is an unconditional override from
+// decisions.json → window.hideDeleteButton — it hides Delete regardless of status, so it is
+// checked first and short-circuits before the status-based logic runs.
+export function isDeleteButtonVisible(isNew, recordId, data, statusField, hideDeleteWhenComplete, isProcessed, hideDeleteButton = false) {
+  if (hideDeleteButton) return false;
   return !isNew && recordId && isDeleteVisibleForRecord({
     record: data,
     statusField,
@@ -1661,6 +1666,8 @@ export function DetailView({
   menuActions = [],
   customMenuContent = null,
   hideDeleteWhenComplete = false,
+  // Unconditional Delete-button opt-out from decisions.json → window.hideDeleteButton.
+  hideDeleteButton = false,
   customTabsAfterBottom = false,
   hidePrint = false,
   hideSaveStatuses = [],
@@ -3120,7 +3127,7 @@ export function DetailView({
                 </button>
               )}
               {/* Delete record — hidden when hideDeleteWhenComplete and status matches or record is processed */}
-              {isDeleteButtonVisible(isNew, recordId, data, statusField, hideDeleteWhenComplete, isProcessed) && (
+              {isDeleteButtonVisible(isNew, recordId, data, statusField, hideDeleteWhenComplete, isProcessed, hideDeleteButton) && (
                 <button
                   onClick={() => setShowDeleteConfirm(true)}
                   className={`${sqBtnSize} flex items-center justify-center rounded-lg border border-red-200 text-red-500 hover:bg-red-50 hover:text-red-600 transition-colors`}

@@ -1505,6 +1505,7 @@ function TableDataRow({
             sendDocument={rowQuickActions.sendDocument}
             menuActions={rowQuickActions.menuActions}
             hideDeleteWhenComplete={rowQuickActions.hideDeleteWhenComplete}
+            hideDeleteButton={rowQuickActions.hideDeleteButton}
             statusField={rowQuickActions.statusField}
             onEdit={rowQuickActions.onEdit}
             onClone={rowQuickActions.onClone}
@@ -1651,6 +1652,7 @@ export function DataTable({
    *     documentPreview?: boolean | object, // truthy ⇒ show Email button
    *     statusField?: string,
    *     hideDeleteWhenComplete?: boolean,
+   *     hideDeleteButton?: boolean,          // unconditional Delete opt-out (window.hideDeleteButton)
    *     onMenuActionExecuted?: (action, result) => void,
    *     // Per-action overrides from decisions.json → window.rowQuickActions.actions.
    *     // Keyed by canonical name ('edit', 'duplicate', 'email', 'delete') or processKey.
