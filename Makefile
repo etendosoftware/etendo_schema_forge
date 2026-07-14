@@ -1,4 +1,4 @@
-.PHONY: test test-all-coverage test-ci test-ci-coverage test-e2e test-e2e-headless test-e2e-debug test-e2e-ui test-e2e-report test-e2e-record test-e2e-onboarding-integration generate regen dev dev-mock build install bump-core-version install-e2e deploy clean help dev-local-core report-serve report-serve-detach report-stop report-preview validate-pipeline method-budget window-leak-budget quality-gate domain-boundary-check sonar sonar-coverage menu-cache uuid xml-regeneration-check dump-delta regen-check regen-check-help regen-check-clean regen-help data-fixes data-fixes-help switch-to-es ensure-locale project-status
+.PHONY: test test-all-coverage test-ci test-ci-coverage test-e2e test-e2e-headless test-e2e-debug test-e2e-ui test-e2e-report test-e2e-record test-e2e-onboarding-integration generate regen dev dev-mock build install bump-core-version install-e2e deploy clean help dev-local-core report-serve report-serve-detach report-stop report-preview validate-pipeline method-budget window-leak-budget quality-gate domain-boundary-check sonar sonar-coverage menu-cache uuid xml-regeneration-check dump-delta regen-check regen-check-help regen-check-clean regen-help data-fixes data-fixes-help data-fixes-remote db-tunnel db-tunnel-down db-tunnel-status db-psql db-tunnel-help switch-to-es ensure-locale project-status
 
 export SF_ROOT := $(CURDIR)
 
@@ -341,6 +341,86 @@ data-fixes-help: ## Show usage and examples for `make data-fixes`
 	@echo "  - fix_id = the .sql filename without .sql (e.g. 20260611T143000Z__R3-periodcontrol)."
 	@echo "  - Authoring rules + skeleton: cli/src/data-fixes/sql/README.md."
 	@echo "  - Exit code is non-zero if any tenant's chain halted on a FAILED fix."
+
+# --- Remote DB tunnel (SSH → RDS in a private VPC) ---
+#
+# Supply connection details inline (SSH_HOST, DB_HOST, DB_USER, DB_PASSWORD, ...)
+# or save a profile at ~/.config/schema-forge/remote/<name>.env and pass PROFILE=.
+# Flags always win over a profile. Run `make db-tunnel-help` for the full guide.
+
+PROFILE     ?=
+SSH_HOST    ?=
+DB_HOST     ?=
+DB_PORT     ?=
+DB_NAME     ?=
+DB_USER     ?=
+DB_PASSWORD ?=
+LOCAL_PORT  ?=
+
+# Assemble scripts/db-tunnel.sh connection flags from whatever vars are set.
+TUNNEL_FLAGS = $(if $(PROFILE),--profile $(PROFILE)) $(if $(SSH_HOST),--ssh-host $(SSH_HOST)) $(if $(DB_HOST),--db-host $(DB_HOST)) $(if $(DB_PORT),--db-port $(DB_PORT)) $(if $(DB_NAME),--db-name $(DB_NAME)) $(if $(DB_USER),--db-user $(DB_USER)) $(if $(DB_PASSWORD),--db-password '$(DB_PASSWORD)') $(if $(LOCAL_PORT),--local-port $(LOCAL_PORT))
+
+db-tunnel: ## Open a persistent SSH tunnel to a remote DB (connection vars or PROFILE=)
+	@scripts/db-tunnel.sh $(strip $(TUNNEL_FLAGS)) up
+
+db-tunnel-down: ## Close the remote DB tunnel
+	@scripts/db-tunnel.sh $(strip $(TUNNEL_FLAGS)) down
+
+db-tunnel-status: ## Report whether the remote DB tunnel is up
+	@scripts/db-tunnel.sh $(strip $(TUNNEL_FLAGS)) status
+
+db-psql: ## Interactive psql to a remote DB through the tunnel (SQL='...' or ARGS='...' optional)
+	@scripts/db-tunnel.sh $(strip $(TUNNEL_FLAGS)) psql $(if $(SQL),-- -c "$(SQL)") $(ARGS)
+
+data-fixes-remote: ## Run the tenant data-fixes runner against a REMOTE DB via the tunnel (same vars as data-fixes; no flags = interactive TUI)
+	@if [ "$(HELP)" = "1" ]; then $(MAKE) -s db-tunnel-help; exit 0; fi; \
+	DF_ARGS=""; \
+	if [ "$(LIST_CLIENTS)" = "1" ]; then DF_ARGS="$$DF_ARGS --list-clients"; fi; \
+	if [ "$(MARK_FIXED)" = "1" ]; then DF_ARGS="$$DF_ARGS --mark-fixed"; fi; \
+	if [ "$(DRY_RUN)" = "1" ]; then DF_ARGS="$$DF_ARGS --dry-run"; fi; \
+	if [ -n "$(CLIENT)" ]; then DF_ARGS="$$DF_ARGS --client $(CLIENT)"; fi; \
+	if [ -n "$(FIX)" ]; then DF_ARGS="$$DF_ARGS --fix $(FIX)"; fi; \
+	if [ -n "$(REASON)" ]; then DF_ARGS="$$DF_ARGS --reason \"$(REASON)\""; fi; \
+	scripts/db-tunnel.sh $(strip $(TUNNEL_FLAGS)) run -- \
+		sh -c "node cli/src/data-fixes/run.js $$DF_ARGS"
+
+db-tunnel-help: ## Show usage and examples for the remote DB tunnel targets
+	@echo "Remote DB tunnel — reach an RDS in a private VPC through an SSH bastion."
+	@echo ""
+	@echo "Connection (inline flags win over a saved PROFILE):"
+	@echo "  SSH_HOST=<alias|host>   Bastion to tunnel through (e.g. etendo-go-staging)"
+	@echo "  DB_HOST=<rds-endpoint>  Remote DB host as seen FROM the bastion"
+	@echo "  DB_PORT=<port>          Remote DB port                       (default 5432)"
+	@echo "  DB_NAME=<db>            Database name                        (default etendo)"
+	@echo "  DB_USER=<user>          DB user"
+	@echo "  DB_PASSWORD=<pass>      DB password  (quote it; escape \$$ as \$$\$$ in make)"
+	@echo "  LOCAL_PORT=<port>       Local forwarded port                 (default 15432)"
+	@echo "  PROFILE=<name>          Load ~/.config/schema-forge/remote/<name>.env instead"
+	@echo ""
+	@echo "Targets:"
+	@echo "  make db-tunnel          Open a persistent tunnel + print connection info"
+	@echo "  make db-tunnel-status   Is the tunnel up?"
+	@echo "  make db-tunnel-down     Close the tunnel"
+	@echo "  make db-psql            Interactive psql through the tunnel"
+	@echo "  make db-psql SQL='...'  Run one SQL statement and exit"
+	@echo "  make data-fixes-remote  Run the data-fixes runner against the remote DB,"
+	@echo "                          non-interactively (accepts every make data-fixes"
+	@echo "                          var: DRY_RUN, CLIENT, FIX, LIST_CLIENTS, ...)"
+	@echo ""
+	@echo "Interactive: run 'make data-fixes' and choose 'Remote (through an SSH tunnel)'."
+	@echo "The wizard lets you pick/create a profile, opens the tunnel, and TESTS the"
+	@echo "connection before doing anything — then closes the tunnel on exit."
+	@echo ""
+	@echo "Examples:"
+	@echo "  make db-psql SSH_HOST=etendo-go-staging DB_HOST=my.rds.amazonaws.com \\"
+	@echo "       DB_USER=postgres DB_PASSWORD='secret' SQL='SELECT count(*) FROM c_invoice;'"
+	@echo "  make data-fixes-remote PROFILE=staging DRY_RUN=1"
+	@echo "  make data-fixes-remote PROFILE=staging CLIENT=<id>"
+	@echo ""
+	@echo "Save a profile once (kept OUTSIDE the repo, never committed):"
+	@echo "  mkdir -p ~/.config/schema-forge/remote"
+	@echo "  printf 'SSH_HOST=etendo-go-staging\\nDB_HOST=my.rds.amazonaws.com\\nDB_USER=postgres\\nDB_PASSWORD=secret\\nDB_NAME=etendo\\n' \\"
+	@echo "       > ~/.config/schema-forge/remote/staging.env && chmod 600 ~/.config/schema-forge/remote/staging.env"
 
 sync-regen-check-workflow: ## Regenerate the mirror Offline Regen Check workflow in com.etendoerp.go
 	./scripts/sync-offline-regen-check.sh
