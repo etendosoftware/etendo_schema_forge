@@ -1886,6 +1886,22 @@
         }
       ]
     },
+    "62e7d6689c11ba27fdc238450bbc940c71cc4a579d87d3669861331f4f00b615": {
+      "checksum": "530a4fd6044828df2f6797ab9cc3d0bf4c20adf49dbf0795bf2cd63b8a70068d",
+      "params": [
+        "B5673F73F613496C8BEA22FB55E4E1E4"
+      ],
+      "rows": [
+        {
+          "classname": null,
+          "column_name": "Processed",
+          "mechanism": "classic_process",
+          "name": "Year Close",
+          "obuiapp_process_id": null,
+          "process_id": "EFDBF909811544DAAE4E876AA781E5DC"
+        }
+      ]
+    },
     "675461360c94bf1fe8bbe3121d5b8aeec6025503b503da010fa3adf22f7c1e92": {
       "checksum": "4a6fe9d8e0e3926287cb87dd16a77616cfe7151d07b98e92bc24dfd2bcb82b64",
       "params": [
@@ -2130,6 +2146,70 @@
           "name": "Print orders process",
           "obuiapp_process_id": null,
           "process_id": "1000500002"
+        }
+      ]
+    },
+    "81933096771953c6cf094e465f86e91738157acf5f9d32e9a078c92c5281ca5e": {
+      "checksum": "08b90bfa84147372a4f74f0ce4d53e1f58b83df25763e04008abb08b7f437650",
+      "params": [
+        "117"
+      ],
+      "rows": [
+        {
+          "classname": "ad_actionButton/CreateRegFactAcct.html",
+          "column_name": "Create_Reg_Fact_Acct",
+          "mechanism": "classic_process",
+          "name": "Close Year",
+          "obuiapp_process_id": null,
+          "process_id": "800036"
+        },
+        {
+          "classname": null,
+          "column_name": "Processing",
+          "mechanism": "classic_process",
+          "name": "Create Periods",
+          "obuiapp_process_id": null,
+          "process_id": "100"
+        },
+        {
+          "classname": null,
+          "column_name": "Processing",
+          "mechanism": "classic_process",
+          "name": "Open/Close",
+          "obuiapp_process_id": null,
+          "process_id": "168"
+        },
+        {
+          "classname": null,
+          "column_name": "Processing",
+          "mechanism": "classic_process",
+          "name": "Open/Close All",
+          "obuiapp_process_id": null,
+          "process_id": "167"
+        },
+        {
+          "classname": "ad_actionButton/DropRegFactAcct.html",
+          "column_name": "Drop_Reg_Fact_Acct",
+          "mechanism": "classic_process",
+          "name": "Undo Close Year",
+          "obuiapp_process_id": null,
+          "process_id": "800038"
+        },
+        {
+          "classname": "OB.OpenClose.openClose",
+          "column_name": "OpenClose",
+          "mechanism": "obuiapp_process",
+          "name": "Open Close Periods",
+          "obuiapp_process_id": "A832A5DA28FB4BB391BDE883E928DFC5",
+          "process_id": null
+        },
+        {
+          "classname": "OB.OpenClose.openClose",
+          "column_name": "OpenClose",
+          "mechanism": "obuiapp_process",
+          "name": "Open Close Periods",
+          "obuiapp_process_id": "A832A5DA28FB4BB391BDE883E928DFC5",
+          "process_id": null
         }
       ]
     },

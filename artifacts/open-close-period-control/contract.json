@@ -1,8 +1,8 @@
 {
   "version": "0.5.0",
   "generatedAt": "2026-06-25T12:12:33.694Z",
-  "updatedAt": "2026-07-07T12:43:22.544Z",
-  "checksum": "a68b9a0c35c35073",
+  "updatedAt": "2026-07-13T17:53:25.346Z",
+  "checksum": "923291e899591b19",
   "frontendContract": {
     "window": {
       "id": "E66E701CCBA14B8BA480CBDE37C50D7A",
@@ -13,13 +13,6 @@
       "hideCreate": true,
       "hideDetailForm": true,
       "hideDelete": true,
-      "menuActions": [
-        {
-          "key": "goToFiscalCalendar",
-          "labelKey": "goToFiscalCalendar",
-          "component": "GoToFiscalCalendarModal"
-        }
-      ],
       "processOverrides": {
         "openClose": {
           "label": "Open Close Period",
@@ -50,9 +43,6 @@
       },
       "detailEntity": "documents",
       "listSortBy": "periodNo asc",
-      "listKpiCards": {
-        "customComponent": "GoToFiscalCalendarButton"
-      },
       "labelOverrides": {
         "es_ES": {
           "Name": "Período",
@@ -778,13 +768,6 @@
       "hideCreate": true,
       "hideDetailForm": true,
       "hideDelete": true,
-      "menuActions": [
-        {
-          "key": "goToFiscalCalendar",
-          "labelKey": "goToFiscalCalendar",
-          "component": "GoToFiscalCalendarModal"
-        }
-      ],
       "processOverrides": {
         "openClose": {
           "label": "Open Close Period",
@@ -815,9 +798,6 @@
       },
       "detailEntity": "documents",
       "listSortBy": "periodNo asc",
-      "listKpiCards": {
-        "customComponent": "GoToFiscalCalendarButton"
-      },
       "labelOverrides": {
         "es_ES": {
           "Name": "Período",
