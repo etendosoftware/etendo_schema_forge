@@ -59,18 +59,20 @@ describe('useSifFieldPatcher (shared hook backing SifDataTabs and SifTab)', () =
     assert.match(hookSrc, /PURCHASE_CLAVE_TIPO_FC_OPTIONS/);
   });
 
-  it('uses useApiFetch instead of manual Authorization header', () => {
-    assert.match(hookSrc, /useApiFetch/);
+  it('no longer performs its own PATCH requests (ETP-4463: writes go through the shared onChange callback)', () => {
+    assert.doesNotMatch(hookSrc, /useApiFetch/);
+    assert.doesNotMatch(hookSrc, /method:\s*['"]PATCH['"]/);
     assert.doesNotMatch(hookSrc, /Authorization.*Bearer/);
+    assert.match(hookSrc, /onChange/);
   });
 
-  it('calls PATCH on the current spec header endpoint', () => {
-    assert.match(hookSrc, /method: 'PATCH'/);
-    assert.match(hookSrc, /specName/);
-    assert.match(hookSrc, /header/);
+  it('reads field values directly from the pending-edit-aware data prop instead of local form state', () => {
+    assert.match(hookSrc, /function getVal\(key\)/);
+    assert.match(hookSrc, /data\?\.\[key\]/);
   });
 
-  it('shows a toast error on PATCH failure', () => {
-    assert.match(hookSrc, /toast\.error/);
+  it('has no per-field error handling of its own (failures surface through the header save error path)', () => {
+    assert.doesNotMatch(hookSrc, /toast\.error/);
+    assert.doesNotMatch(hookSrc, /useState\(.*[Ss]aving/);
   });
 });

@@ -110,16 +110,18 @@ describe('AssetsDetailPanel — field definitions', () => {
     assert.match(src, /readOnlyLogic/);
   });
 
-  it('defines the 8 accounting dimension fields with their DB columns', () => {
+  it('defines the 4 kept accounting dimension fields with their DB columns', () => {
     assert.match(src, /dimensionFields/);
     assert.match(src, /'C_Project_ID'/);
     assert.match(src, /'EM_Etadas_Costcenter_ID'/);
     assert.match(src, /'C_BPartner_ID'/);
-    assert.match(src, /'EM_Etadas_User1_ID'/);
-    assert.match(src, /'EM_Etadas_User2_ID'/);
-    assert.match(src, /'EM_Etadas_Salesregion_ID'/);
-    assert.match(src, /'EM_Etadas_C_Activity_ID'/);
-    assert.match(src, /'EM_Etadas_Campaign_ID'/);
+    assert.match(src, /'M_Product_ID'/);
+    // The 5 out-of-scope dimensions were removed from the panel.
+    assert.doesNotMatch(src, /'EM_Etadas_User1_ID'/);
+    assert.doesNotMatch(src, /'EM_Etadas_User2_ID'/);
+    assert.doesNotMatch(src, /'EM_Etadas_Salesregion_ID'/);
+    assert.doesNotMatch(src, /'EM_Etadas_C_Activity_ID'/);
+    assert.doesNotMatch(src, /'EM_Etadas_Campaign_ID'/);
   });
 });
 
@@ -138,10 +140,11 @@ describe('AssetsDetailPanel — accounting dimensions section', () => {
     assert.match(src, /depreciate && \([\s\S]*?assetsGroupDimensionsTitle/);
   });
 
-  it('includes the dimension keys in the read-only field set', () => {
+  it('includes the kept dimension keys in the read-only field set', () => {
     assert.match(src, /'eTADASCostCenter'/);
     assert.match(src, /'businessPartner'/);
-    assert.match(src, /'eTADASSalesCampaign'/);
+    assert.match(src, /'product'/);
+    assert.doesNotMatch(src, /'eTADASSalesCampaign'/);
   });
 });
 

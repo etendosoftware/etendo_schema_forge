@@ -21680,6 +21680,9 @@
     "Create Amortization": {
       "label": "Crear amortización"
     },
+    "Recalculate Amortization": {
+      "label": "Recalcular amortización"
+    },
     "Depreciation Setup": {
       "label": "Configuración de depreciación"
     },
