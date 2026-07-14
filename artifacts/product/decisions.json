@@ -68,7 +68,7 @@
         { "target": "description", "aliases": ["descripcion", "descripción"] },
         { "target": "uOM", "aliases": ["unidad de medida", "uom"], "matchEntity": "UOM" },
         { "target": "productCategory", "aliases": ["categoria", "categoría"], "matchEntity": "ProductCategory" },
-        { "target": "taxCategory", "aliases": ["categoria impositiva", "categoría impositiva", "impuesto"], "matchEntity": "TaxCategory" }
+        { "target": "taxCategory", "aliases": ["categoria impositiva", "categoría impositiva", "impuesto"], "matchEntity": "FinancialMgmtTaxCategory" }
       ]
     }
   },

@@ -1,8 +1,8 @@
 {
   "version": "0.17.0",
   "generatedAt": "2026-07-07T21:53:26.027Z",
-  "updatedAt": "2026-07-08T00:41:28.654Z",
-  "checksum": "50b93c9d8f17590b",
+  "updatedAt": "2026-07-14T12:19:49.651Z",
+  "checksum": "bf6e48d15f64d02a",
   "frontendContract": {
     "window": {
       "id": "140",
@@ -151,7 +151,7 @@
               "categoría impositiva",
               "impuesto"
             ],
-            "matchEntity": "TaxCategory",
+            "matchEntity": "FinancialMgmtTaxCategory",
             "label": "Tax Category",
             "required": true,
             "type": "foreignKey",
@@ -2127,7 +2127,7 @@
               "categoría impositiva",
               "impuesto"
             ],
-            "matchEntity": "TaxCategory",
+            "matchEntity": "FinancialMgmtTaxCategory",
             "label": "Tax Category",
             "required": true,
             "type": "foreignKey",
