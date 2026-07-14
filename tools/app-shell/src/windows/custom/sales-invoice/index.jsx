@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import { ListView } from '@/components/contract-ui';
 import { useUI, useMenuLabel } from '@/i18n';
+import { useAuth } from '@/auth/AuthContext.jsx';
 import BulkDocumentAction from '@/components/contract-ui/BulkDocumentAction';
 import { useBulkActionToast } from '@/hooks/useBulkActionToast';
 import { useRowDelete } from '@/hooks/useRowDelete';
@@ -17,6 +18,8 @@ import { CreateContactContext } from '@/components/contract-ui/CreateContactCont
 import { useCreateContactModal } from '@/components/contract-ui/useCreateContactModal.jsx';
 import { useInvoicePdf } from '../shared/useInvoicePdf.js';
 import { getInvoiceDraftMode, buildInvoiceRowQuickActions, useClearSavedRecord } from '../shared/useInvoiceWindow.js';
+import { useFiscalConfig } from '@/windows/custom/fiscal-config/useFiscalConfig.js';
+import { getInvoiceFiscalTargets } from '@/windows/custom/shared/fiscalTargets.js';
 
 /* eslint-disable react/prop-types */
 
@@ -96,6 +99,10 @@ export default function SalesInvoiceWindow(props) {
   const [searchParams] = useSearchParams();
   const ui = useUI();
   const tMenu = useMenuLabel();
+  const { selectedOrg } = useAuth();
+  const orgId = selectedOrg?.id ?? null;
+  const { profile } = useFiscalConfig(orgId, apiBaseUrl);
+  const { showVerifactu } = getInvoiceFiscalTargets('sales-invoice', profile);
   const [savedRecord, setSavedRecord] = useState(null);
   const [cloneTargets, setCloneTargets] = useState(null);
   const [emailRow, setEmailRow] = useState(null);
@@ -121,7 +128,7 @@ export default function SalesInvoiceWindow(props) {
   const effectiveRecord = savedRecord ?? location.state?.savedRecord ?? null;
 
   const clearSavedRecord = useClearSavedRecord(setSavedRecord, location, navigate);
-  const draftModeOverride = getInvoiceDraftMode(ui);
+  const draftModeOverride = getInvoiceDraftMode(ui, { showVerifactuProcessingModal: showVerifactu });
 
   if (recordId) {
     return (

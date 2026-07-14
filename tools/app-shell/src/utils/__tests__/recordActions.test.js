@@ -110,6 +110,82 @@ describe('isDeleteVisibleForRecord', () => {
   it('exposes the deletable status whitelist', () => {
     assert.deepEqual(DELETABLE_DOC_STATUSES, ['DR', 'RPAP', 'N']);
   });
+
+  describe('hideDeleteButton (unconditional hide)', () => {
+    it('returns false for a draft record when hideDeleteButton is true', () => {
+      assert.equal(
+        isDeleteVisibleForRecord({
+          record: { documentStatus: 'DR' },
+          statusField: 'documentStatus',
+          hideDeleteWhenComplete: false,
+          hideDeleteButton: true,
+        }),
+        false,
+      );
+    });
+
+    it('returns false regardless of status or hideDeleteWhenComplete', () => {
+      for (const status of ['DR', 'RPAP', 'N', 'CO', 'VO', null, '']) {
+        for (const hideDeleteWhenComplete of [true, false]) {
+          assert.equal(
+            isDeleteVisibleForRecord({
+              record: { documentStatus: status },
+              statusField: 'documentStatus',
+              hideDeleteWhenComplete,
+              hideDeleteButton: true,
+            }),
+            false,
+            `expected hidden for status=${status} hideDeleteWhenComplete=${hideDeleteWhenComplete}`,
+          );
+        }
+      }
+    });
+
+    it('returns false even with no statusField configured', () => {
+      assert.equal(
+        isDeleteVisibleForRecord({
+          record: { documentStatus: 'DR' },
+          statusField: null,
+          hideDeleteWhenComplete: false,
+          hideDeleteButton: true,
+        }),
+        false,
+      );
+    });
+
+    it('defaults to false (absent flag) → visibility unchanged vs. legacy behavior', () => {
+      // Draft record, no gate → visible, exactly as before the flag existed.
+      assert.equal(
+        isDeleteVisibleForRecord({
+          record: { documentStatus: 'DR' },
+          statusField: 'documentStatus',
+          hideDeleteWhenComplete: true,
+        }),
+        true,
+      );
+    });
+
+    it('explicit hideDeleteButton: false behaves identically to omitting it', () => {
+      assert.equal(
+        isDeleteVisibleForRecord({
+          record: { documentStatus: 'CO' },
+          statusField: 'documentStatus',
+          hideDeleteWhenComplete: true,
+          hideDeleteButton: false,
+        }),
+        false, // hidden because completed, not because of the button flag
+      );
+      assert.equal(
+        isDeleteVisibleForRecord({
+          record: { documentStatus: 'DR' },
+          statusField: 'documentStatus',
+          hideDeleteWhenComplete: true,
+          hideDeleteButton: false,
+        }),
+        true,
+      );
+    });
+  });
 });
 
 describe('evalRowVisibleWhen', () => {
