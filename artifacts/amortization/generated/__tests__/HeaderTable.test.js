@@ -51,7 +51,39 @@ describe('Amortization HeaderPage — post menuAction', () => {
     assert.match(pageSrc, /data\?\.posted/);
   });
 
-  it('does not declare an independent unpost action (uses reactivate instead)', () => {
-    assert.doesNotMatch(pageSrc, /neoAction:\s*'unpost'/);
+  it('declares an independent unpost action gated on posted (Option A)', () => {
+    // Option A adds a standalone Unpost (Descontabilizar) menu action.
+    assert.match(pageSrc, /neoAction:\s*'unpost'/);
+    // The unpost entry must be visible only when the document is posted.
+    const unpostLine = pageSrc
+      .split('\n')
+      .find((l) => l.includes("key: 'unpost'"));
+    assert.ok(unpostLine, "Expected a menuAction with key: 'unpost'");
+    assert.match(unpostLine, /neoAction:\s*'unpost'/);
+    assert.match(unpostLine, /data\?\.posted === 'Y'\s*\|\|\s*data\?\.posted === true/);
+    // Unpost is NOT gated on processed — it only depends on posted.
+    assert.doesNotMatch(unpostLine, /data\?\.processed/);
+  });
+
+  it('reactivate no longer carries preUnpost and is gated on !posted && processed', () => {
+    const reactivateLine = pageSrc
+      .split('\n')
+      .find((l) => l.includes("key: 'reactivate'"));
+    assert.ok(reactivateLine, "Expected a menuAction with key: 'reactivate'");
+    // Option A removed the preUnpost coupling from reactivate.
+    assert.doesNotMatch(reactivateLine, /preUnpost/);
+    // reactivate visible only when not posted and already processed.
+    assert.match(reactivateLine, /!\(data\?\.posted === 'Y'\s*\|\|\s*data\?\.posted === true\)/);
+    assert.match(reactivateLine, /data\?\.processed === 'Y'\s*\|\|\s*data\?\.processed === true/);
+  });
+
+  it('post action is gated on !posted && processed', () => {
+    const postLine = pageSrc
+      .split('\n')
+      .find((l) => l.includes("key: 'post'"));
+    assert.ok(postLine, "Expected a menuAction with key: 'post'");
+    assert.match(postLine, /neoAction:\s*'post'/);
+    assert.match(postLine, /!\(data\?\.posted === 'Y'\s*\|\|\s*data\?\.posted === true\)/);
+    assert.match(postLine, /data\?\.processed === 'Y'\s*\|\|\s*data\?\.processed === true/);
   });
 });
