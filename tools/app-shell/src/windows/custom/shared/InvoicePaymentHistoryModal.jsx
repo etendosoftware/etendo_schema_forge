@@ -152,6 +152,181 @@ function getCountLabel(isSales, count, ui) {
   return count === 1 ? ui('pagoRegistrado') : ui('pagosRegistrados');
 }
 
+function getOutstandingAmount({ isCreditInstrument, installments, fallbackOutstanding }) {
+  const installmentTotal = installments.reduce((sum, installment) => {
+    const rawAmount = Number(installment.outstandingAmount ?? 0);
+    return sum + (isCreditInstrument ? rawAmount : Math.max(0, rawAmount));
+  }, 0);
+
+  if (installments.length === 0) {
+    return parseFloat(fallbackOutstanding ?? 0);
+  }
+
+  return isCreditInstrument ? Math.abs(installmentTotal) : installmentTotal;
+}
+
+function getRowAmountMeta({ isCreditInstrument, payment, isSales }) {
+  const isConsumption = isCreditInstrument && payment.appliedToInvoice != null;
+  if (isConsumption) {
+    return {
+      rowValue: Math.abs(Number(payment.appliedToInvoice)),
+      amountSign: '− ',
+      amountColor: '#C5234A',
+      amountClassName: 'text-[#C5234A]',
+    };
+  }
+
+  if (isSales) {
+    return {
+      rowValue: payment.amount,
+      amountSign: '+ ',
+      amountColor: '#17663A',
+      amountClassName: 'text-[#17663A]',
+    };
+  }
+
+  return {
+    rowValue: payment.amount,
+    amountSign: '− ',
+    amountColor: '#C5234A',
+    amountClassName: 'text-[#C5234A]',
+  };
+}
+
+function getOutstandingClassName(isCreditInstrument, outstandingAmt) {
+  if (isCreditInstrument) {
+    return 'text-[#6D28D9]';
+  }
+  return outstandingAmt > 0 ? 'text-[#C28800]' : 'text-[#17663A]';
+}
+
+function PaymentHistoryBody({
+  loading,
+  payments,
+  grid,
+  headerCellStyle,
+  ui,
+  isSales,
+  handleRowClick,
+  handleDeleteClick,
+  isCreditInstrument,
+  currency,
+}) {
+  if (loading) {
+    return (
+      <div data-testid="InvoicePaymentHistoryModal__skeleton">
+        <div style={{ display: 'grid', gridTemplateColumns: grid, gap: 12, padding: '8px 24px', borderBottom: '1px solid #E8EAEF' }}>
+          <div style={headerCellStyle}>{ui('documentNo')}</div>
+          <div style={headerCellStyle}>{ui('date')}</div>
+          <div style={headerCellStyle}>{ui('paymentMethodCol')}</div>
+          <div style={headerCellStyle}>{ui('statusLabel')}</div>
+          <div style={{ ...headerCellStyle, textAlign: 'right' }}>{ui('amount')}</div>
+          <div />
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column' }}>
+          {[0, 1, 2].map((i) => (
+            <div
+              key={i}
+              style={{ display: 'grid', gridTemplateColumns: grid, gap: 12, padding: '11px 24px', borderBottom: '1px solid #F1F2F4', alignItems: 'center', opacity: 1 - i * 0.2 }}
+            >
+              <Skeleton className="h-4 w-20" data-testid="Skeleton__b82d4f" />
+              <Skeleton className="h-4 w-16" data-testid="Skeleton__b82d4f" />
+              <Skeleton className="h-6 w-28 rounded-full" data-testid="Skeleton__b82d4f" />
+              <Skeleton className="h-6 w-24 rounded-full" data-testid="Skeleton__b82d4f" />
+              <Skeleton className="h-4 w-16 ml-auto" data-testid="Skeleton__b82d4f" />
+              <div />
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  if (payments.length === 0) {
+    return (
+      <div
+        style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '36px 20px', gap: 10 }}
+        data-testid="InvoicePaymentHistoryModal__empty"
+      >
+        <div style={{ width: 48, height: 48, borderRadius: 8, background: '#F1F2F4', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#828FA3', flexShrink: 0 }}>
+          <svg width={24} height={24} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+            <polyline points="14 2 14 8 20 8" />
+            <line x1="8" y1="13" x2="16" y2="13" />
+            <line x1="8" y1="17" x2="16" y2="17" />
+          </svg>
+        </div>
+        <p style={{ fontSize: 13, color: '#6B7280', textAlign: 'center', margin: 0 }}>
+          {isSales ? ui('noCobroYet') : ui('noPagoYet')}
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <div style={{ display: 'grid', gridTemplateColumns: grid, gap: 12, padding: '8px 24px', borderBottom: '1px solid #E8EAEF' }}>
+        <div style={headerCellStyle}>{ui('documentNo')}</div>
+        <div style={headerCellStyle}>{ui('date')}</div>
+        <div style={headerCellStyle}>{ui('paymentMethodCol')}</div>
+        <div style={headerCellStyle}>{ui('statusLabel')}</div>
+        <div style={{ ...headerCellStyle, textAlign: 'right' }}>{ui('amount')}</div>
+        <div />
+      </div>
+      <div style={{ display: 'flex', flexDirection: 'column' }} data-testid="InvoicePaymentHistoryModal__list">
+        {payments.map((payment) => {
+          const methodRaw = payment['paymentMethod$_identifier'] || payment.paymentMethod || '';
+          const methodKey = methodRaw.toLowerCase().replace(/transferencia|transfer/,'transfer').replace(/tarjeta|card/,'card').replace(/efectivo|cash/,'cash').replace(/domiciliaci[oó]n|direct/,'direct');
+          const { rowValue, amountSign, amountColor, amountClassName } = getRowAmountMeta({
+            isCreditInstrument,
+            payment,
+            isSales,
+          });
+
+          return (
+            <div
+              key={payment.id}
+              onClick={() => handleRowClick(payment)}
+              className="hover-row"
+              style={{ display: 'grid', gridTemplateColumns: grid, gap: 12, padding: '11px 24px', borderBottom: '1px solid #F1F2F4', alignItems: 'center', cursor: 'pointer' }}
+              data-testid="InvoicePaymentHistoryModal__row"
+            >
+              <div style={{ fontSize: 14, fontWeight: 600, color: '#121217', fontFamily: 'JetBrains Mono, monospace', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {payment.documentNo || payment.id}
+              </div>
+              <div className="tabular-nums" style={{ fontSize: 14, color: '#121217' }}>
+                {fmtDate(payment.paymentDate)}
+              </div>
+              <div style={{ minWidth: 0, display: 'flex', alignItems: 'center' }}>
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, maxWidth: '100%', padding: '2px 8px', borderRadius: 360, background: '#F5F7F9', color: '#3F3F50', fontSize: 12, lineHeight: '16px' }}>
+                  <MethodIcon method={methodKey} data-testid="MethodIcon__b82d4f" />
+                  <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{methodRaw || '—'}</span>
+                </span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center' }}>
+                <PaymentStateTag
+                  status={payment.status || ''}
+                  processed={payment.processed}
+                  isSales={isSales}
+                  ui={ui}
+                  data-testid="PaymentStateTag__b82d4f" />
+              </div>
+              <div className="tabular-nums" style={{ textAlign: 'right', fontSize: 14, fontWeight: 600, color: amountColor, whiteSpace: 'nowrap' }}>
+                {amountSign}<MoneyAmount value={rowValue} currency={currency} tone="neutral" className={amountClassName} data-testid="MoneyAmount__cp-history-row" />
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                {!isProcessed(payment) && (
+                  <DeleteDraftButton onClick={(e) => handleDeleteClick(e, payment)} ui={ui} data-testid="DeleteDraftButton__b82d4f" />
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 /**
  * InvoicePaymentHistoryModal — intermediate popup opened from the "Pendiente de pago" badge
  * in the invoice list (Step 1 of the two-step payment flow).
@@ -212,13 +387,11 @@ export default function InvoicePaymentHistoryModal({
   // loaded, since `invoiceData.outstandingAmount` is a snapshot from when the modal
   // opened and never updates after a payment is registered in this same session.
   const [installments, setInstallments] = useState([]);
-  const outstandingAmt = isCreditInstrument
-    ? Math.abs(installments.length > 0
-        ? installments.reduce((s, i) => s + Number(i.outstandingAmount ?? 0), 0)
-        : parseFloat(invoiceData?.outstandingAmount ?? 0))
-    : (installments.length > 0
-        ? installments.reduce((s, i) => s + Math.max(0, Number(i.outstandingAmount ?? 0)), 0)
-        : parseFloat(invoiceData?.outstandingAmount ?? 0));
+  const outstandingAmt = getOutstandingAmount({
+    isCreditInstrument,
+    installments,
+    fallbackOutstanding: invoiceData?.outstandingAmount,
+  });
   const [loading, setLoading] = useState(true);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   // The draft being edited (null = "add new"); drives the modal's edit mode.
@@ -310,126 +483,6 @@ export default function InvoicePaymentHistoryModal({
   const GRID = '1fr 110px 170px 150px 110px 28px';
   const HCELL = { fontSize: 12, lineHeight: '16px', fontWeight: 600, color: '#121217', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' };
 
-  let historyBody;
-  if (loading) {
-    historyBody = (
-      <div data-testid="InvoicePaymentHistoryModal__skeleton">
-        {/* Column headers (static labels — no need to skeleton them) */}
-        <div style={{ display: 'grid', gridTemplateColumns: GRID, gap: 12, padding: '8px 24px', borderBottom: '1px solid #E8EAEF' }}>
-          <div style={HCELL}>{ui('documentNo')}</div>
-          <div style={HCELL}>{ui('date')}</div>
-          <div style={HCELL}>{ui('paymentMethodCol')}</div>
-          <div style={HCELL}>{ui('statusLabel')}</div>
-          <div style={{ ...HCELL, textAlign: 'right' }}>{ui('amount')}</div>
-          <div />
-        </div>
-        {/* Ghost rows matching the real row's shape/columns */}
-        <div style={{ display: 'flex', flexDirection: 'column' }}>
-          {[0, 1, 2].map((i) => (
-            <div
-              key={i}
-              style={{ display: 'grid', gridTemplateColumns: GRID, gap: 12, padding: '11px 24px', borderBottom: '1px solid #F1F2F4', alignItems: 'center', opacity: 1 - i * 0.2 }}
-            >
-              <Skeleton className="h-4 w-20" data-testid="Skeleton__b82d4f" />
-              <Skeleton className="h-4 w-16" data-testid="Skeleton__b82d4f" />
-              <Skeleton className="h-6 w-28 rounded-full" data-testid="Skeleton__b82d4f" />
-              <Skeleton className="h-6 w-24 rounded-full" data-testid="Skeleton__b82d4f" />
-              <Skeleton className="h-4 w-16 ml-auto" data-testid="Skeleton__b82d4f" />
-              <div />
-            </div>
-          ))}
-        </div>
-      </div>
-    );
-  } else if (payments.length === 0) {
-    historyBody = (
-      <div
-        style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '36px 20px', gap: 10 }}
-        data-testid="InvoicePaymentHistoryModal__empty"
-      >
-        {/* Neutral document icon — the empty state has no direction, so no in/out arrow. */}
-        <div style={{ width: 48, height: 48, borderRadius: 8, background: '#F1F2F4', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#828FA3', flexShrink: 0 }}>
-          <svg width={24} height={24} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-            <polyline points="14 2 14 8 20 8" />
-            <line x1="8" y1="13" x2="16" y2="13" />
-            <line x1="8" y1="17" x2="16" y2="17" />
-          </svg>
-        </div>
-        <p style={{ fontSize: 13, color: '#6B7280', textAlign: 'center', margin: 0 }}>
-          {isSales ? ui('noCobroYet') : ui('noPagoYet')}
-        </p>
-      </div>
-    );
-  } else {
-    historyBody = (
-      <div>
-        {/* Column headers */}
-        <div style={{ display: 'grid', gridTemplateColumns: GRID, gap: 12, padding: '8px 24px', borderBottom: '1px solid #E8EAEF' }}>
-          <div style={HCELL}>{ui('documentNo')}</div>
-          <div style={HCELL}>{ui('date')}</div>
-          <div style={HCELL}>{ui('paymentMethodCol')}</div>
-          <div style={HCELL}>{ui('statusLabel')}</div>
-          <div style={{ ...HCELL, textAlign: 'right' }}>{ui('amount')}</div>
-          <div />
-        </div>
-        {/* Rows */}
-        <div style={{ display: 'flex', flexDirection: 'column' }} data-testid="InvoicePaymentHistoryModal__list">
-          {payments.map((p) => {
-            const methodRaw = p['paymentMethod$_identifier'] || p.paymentMethod || '';
-            const methodKey = methodRaw.toLowerCase().replace(/transferencia|transfer/,'transfer').replace(/tarjeta|card/,'card').replace(/efectivo|cash/,'cash').replace(/domiciliaci[oó]n|direct/,'direct');
-            // On a credit note's history each row is a payment that CONSUMED the note:
-            // show how much of the note it used (appliedToInvoice, negative), not the
-            // payment's own total — a €38.40 payment that drew €10 from the note reads
-            // "− 10,00 €" here. Older backends without the field fall back to p.amount.
-            const isConsumption = isCreditInstrument && p.appliedToInvoice != null;
-            const rowValue = isConsumption ? Math.abs(Number(p.appliedToInvoice)) : p.amount;
-            const amtSign = isConsumption ? '− ' : (isSales ? '+ ' : '− ');
-            const amtColor = isConsumption ? '#C5234A' : (isSales ? '#17663A' : '#C5234A');
-            return (
-              <div
-                key={p.id}
-                onClick={() => handleRowClick(p)}
-                className="hover-row"
-                style={{ display: 'grid', gridTemplateColumns: GRID, gap: 12, padding: '11px 24px', borderBottom: '1px solid #F1F2F4', alignItems: 'center', cursor: 'pointer' }}
-                data-testid="InvoicePaymentHistoryModal__row"
-              >
-                <div style={{ fontSize: 14, fontWeight: 600, color: '#121217', fontFamily: 'JetBrains Mono, monospace', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                  {p.documentNo || p.id}
-                </div>
-                <div className="tabular-nums" style={{ fontSize: 14, color: '#121217' }}>
-                  {fmtDate(p.paymentDate)}
-                </div>
-                <div style={{ minWidth: 0, display: 'flex', alignItems: 'center' }}>
-                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, maxWidth: '100%', padding: '2px 8px', borderRadius: 360, background: '#F5F7F9', color: '#3F3F50', fontSize: 12, lineHeight: '16px' }}>
-                    <MethodIcon method={methodKey} data-testid="MethodIcon__b82d4f" />
-                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{methodRaw || '—'}</span>
-                  </span>
-                </div>
-                <div style={{ display: 'flex', alignItems: 'center' }}>
-                  <PaymentStateTag
-                    status={p.status || ''}
-                    processed={p.processed}
-                    isSales={isSales}
-                    ui={ui}
-                    data-testid="PaymentStateTag__b82d4f" />
-                </div>
-                <div className="tabular-nums" style={{ textAlign: 'right', fontSize: 14, fontWeight: 600, color: amtColor, whiteSpace: 'nowrap' }}>
-                  {amtSign}<MoneyAmount value={rowValue} currency={currency} tone="neutral" className={isConsumption || !isSales ? 'text-[#C5234A]' : 'text-[#17663A]'} data-testid="MoneyAmount__cp-history-row" />
-                </div>
-                <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-                  {!isProcessed(p) && (
-                    <DeleteDraftButton onClick={(e) => handleDeleteClick(e, p)} ui={ui} data-testid="DeleteDraftButton__b82d4f" />
-                  )}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/30"
@@ -484,9 +537,7 @@ export default function InvoicePaymentHistoryModal({
                   value={outstandingAmt}
                   currency={currency}
                   tone="neutral"
-                  className={isCreditInstrument
-                    ? 'text-[#6D28D9]'
-                    : (outstandingAmt > 0 ? 'text-[#C28800]' : 'text-[#17663A]')}
+                  className={getOutstandingClassName(isCreditInstrument, outstandingAmt)}
                   data-testid="MoneyAmount__cp-history-pending" />
               </div>
             </div>
@@ -495,7 +546,18 @@ export default function InvoicePaymentHistoryModal({
 
         {/* Payment history table */}
         <div className="flex-1 overflow-y-auto">
-          {historyBody}
+          <PaymentHistoryBody
+            loading={loading}
+            payments={payments}
+            grid={GRID}
+            headerCellStyle={HCELL}
+            ui={ui}
+            isSales={isSales}
+            handleRowClick={handleRowClick}
+            handleDeleteClick={handleDeleteClick}
+            isCreditInstrument={isCreditInstrument}
+            currency={currency}
+            data-testid="PaymentHistoryBody__b82d4f" />
         </div>
 
         {/* Footer */}
