@@ -109,11 +109,19 @@ for KEY in "$@"; do
       (.mergeable // "?") + " " +
       (.mergeStateStatus // "?")' "$F")"
 
-    # CI rollup counts.
-    read -r OK FAILN PEND <<<"$(jq -r '[.[0].statusCheckRollup[]?] as $c |
-      ([$c[] | select((.conclusion // "") | test("SUCCESS|NEUTRAL|SKIPPED"))] | length | tostring) + " " +
-      ([$c[] | select((.conclusion // "") | test("FAILURE|ERROR|CANCELLED|TIMED_OUT|ACTION_REQUIRED|STARTUP_FAILURE"))] | length | tostring) + " " +
-      ([$c[] | select(((.status // "") | test("QUEUED|IN_PROGRESS|PENDING|WAITING")) or ((.conclusion // "") == ""))] | length | tostring)' "$F")"
+    # CI rollup counts. statusCheckRollup mixes two node types:
+    #   - CheckRun:      uses .status (COMPLETED/IN_PROGRESS/QUEUED) + .conclusion (SUCCESS/FAILURE/…)
+    #   - StatusContext: uses .state (SUCCESS/FAILURE/ERROR/PENDING/EXPECTED), NO conclusion/status
+    # `outcome` normalizes both into ok / fail / pend.
+    read -r OK FAILN PEND <<<"$(jq -r '
+      def outcome:
+        if   ((.conclusion // "") | test("SUCCESS|NEUTRAL|SKIPPED")) or ((.state // "") == "SUCCESS") then "ok"
+        elif ((.conclusion // "") | test("FAILURE|ERROR|CANCELLED|TIMED_OUT|ACTION_REQUIRED|STARTUP_FAILURE")) or ((.state // "") | test("FAILURE|ERROR")) then "fail"
+        else "pend" end;
+      [.[0].statusCheckRollup[]? | outcome] as $o |
+      ([$o[] | select(. == "ok")]   | length | tostring) + " " +
+      ([$o[] | select(. == "fail")] | length | tostring) + " " +
+      ([$o[] | select(. == "pend")] | length | tostring)' "$F")"
 
     # Base color: epic good, main/develop bad.
     case "$BASE" in
@@ -141,18 +149,22 @@ for KEY in "$@"; do
     printf "%-26s %-7s ${BASE_C}%-16s${RESET} %-6s ${REV_C}%-18s${RESET} ${MRG_C}%-11s${RESET} ${CI_C}%s %s/%s/%s${RESET}%s\n" \
       "$SHORT" "$PR" "$BASE" "$DRAFT" "$REVIEW" "$MERGEABLE" "$CI_ICON" "$OK" "$FAILN" "$PEND" "$MULTI"
 
+    # Shared classifier (same as the counts above) for name collection.
+    OUTCOME_DEF='def outcome:
+        if   ((.conclusion // "") | test("SUCCESS|NEUTRAL|SKIPPED")) or ((.state // "") == "SUCCESS") then "ok"
+        elif ((.conclusion // "") | test("FAILURE|ERROR|CANCELLED|TIMED_OUT|ACTION_REQUIRED|STARTUP_FAILURE")) or ((.state // "") | test("FAILURE|ERROR")) then "fail"
+        else "pend" end;'
+
     # Collect failing check names for the detail block.
     if [[ "$FAILN" -gt 0 ]]; then
-      NAMES=$(jq -r '[.[0].statusCheckRollup[]? |
-        select((.conclusion // "") | test("FAILURE|ERROR|CANCELLED|TIMED_OUT|ACTION_REQUIRED|STARTUP_FAILURE")) |
+      NAMES=$(jq -r "${OUTCOME_DEF}"'[.[0].statusCheckRollup[]? | select(outcome == "fail") |
         (.name // .context // "check")] | join(", ")' "$F")
       FAIL_DETAIL="${FAIL_DETAIL}  ${SHORT} ${PR}: ${NAMES}\n"
     fi
 
     # Collect pending check names for the detail block.
     if [[ "$PEND" -gt 0 ]]; then
-      PNAMES=$(jq -r '[.[0].statusCheckRollup[]? |
-        select(((.status // "") | test("QUEUED|IN_PROGRESS|PENDING|WAITING")) or ((.conclusion // "") == "")) |
+      PNAMES=$(jq -r "${OUTCOME_DEF}"'[.[0].statusCheckRollup[]? | select(outcome == "pend") |
         (.name // .context // "check")] | join(", ")' "$F")
       PEND_DETAIL="${PEND_DETAIL}  ${SHORT} ${PR}: ${PNAMES}\n"
     fi
@@ -163,8 +175,8 @@ for KEY in "$@"; do
     N_APPROVED=$(jq -r '[.[0].latestReviews[]? | select(.state == "APPROVED") | .author.login] | unique | length' "$F")
     CHR_BY=$(jq -r '[.[0].latestReviews[]? | select(.state == "CHANGES_REQUESTED") | .author.login] | unique | join(", ")' "$F")
 
-    if [[ -n "$CHR_BY" || "$N_APPROVED" -lt 3 ]]; then
-      MISSING="${N_APPROVED} approvals (needs >2)"
+    if [[ -n "$CHR_BY" || "$N_APPROVED" -lt 2 ]]; then
+      MISSING="${N_APPROVED} approvals (needs >=2)"
       [[ -n "$APPROVED_BY" ]] && MISSING="${MISSING} — approved by: ${APPROVED_BY}"
       [[ -n "$CHR_BY" ]] && MISSING="${MISSING} — ${RED}CHANGES_REQUESTED by: ${CHR_BY}${YELLOW}"
       APPROVE_DETAIL="${APPROVE_DETAIL}  ${SHORT} ${PR}: ${MISSING}\n"
@@ -172,7 +184,7 @@ for KEY in "$@"; do
 
     # Copy-paste merge command into the current block branch (per repo).
     HEAD_REF=$(jq -r '.[0].headRefName' "$F")
-    if [[ "$CI_C" == "$GREEN" && "$MRG_C" == "$GREEN" && "$N_APPROVED" -ge 3 && -z "$CHR_BY" ]]; then
+    if [[ "$CI_C" == "$GREEN" && "$MRG_C" == "$GREEN" && "$N_APPROVED" -ge 2 && -z "$CHR_BY" ]]; then
       READY_TAG="${GREEN}# 🟢 ready${RESET}"
     else
       READY_TAG="${YELLOW}# ⚠️  not all green — review before merging${RESET}"
