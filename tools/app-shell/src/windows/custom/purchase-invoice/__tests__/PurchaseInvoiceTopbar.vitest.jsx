@@ -122,24 +122,39 @@ describe('PurchaseInvoiceTopbar', () => {
     expect(screen.queryByTestId('send-to-sif-btn')).toBeNull();
   });
 
-  it('shows credit badge for AP CreditMemo doc type', () => {
+  it('shows the remaining "saldo a favor" badge for AP CreditMemo doc type', () => {
     render(
       <PurchaseInvoiceTopbar
         {...defaultProps}
         data={{ ...BASE_DATA, 'transactionDocument$_identifier': 'AP CreditMemo' }}
       />,
     );
-    expect(screen.getByText('creditApplied')).toBeInTheDocument();
+    expect(screen.getByText('cpFavorBadge')).toBeInTheDocument();
   });
 
-  it('shows credit badge for Nota de Crédito doc type', () => {
+  it('shows the remaining "saldo a favor" badge for Nota de Crédito doc type', () => {
     render(
       <PurchaseInvoiceTopbar
         {...defaultProps}
         data={{ ...BASE_DATA, 'transactionDocument$_identifier': 'Nota de Crédito' }}
       />,
     );
-    expect(screen.getByText('creditApplied')).toBeInTheDocument();
+    expect(screen.getByText('cpFavorBadge')).toBeInTheDocument();
+  });
+
+  it('shows the fully-applied badge when a credit note has no remaining balance', () => {
+    render(
+      <PurchaseInvoiceTopbar
+        {...defaultProps}
+        data={{
+          ...BASE_DATA,
+          'transactionDocument$_identifier': 'AP CreditMemo',
+          outstandingAmount: 0,
+        }}
+      />,
+    );
+    expect(screen.getByText('cpCreditFullyApplied')).toBeInTheDocument();
+    expect(screen.queryByText('cpFavorBadge')).toBeNull();
   });
 
   it('shows paid badge when paymentComplete is true', () => {
@@ -206,15 +221,16 @@ describe('PurchaseInvoiceTopbar', () => {
     expect(screen.getByTestId('payment-history-modal')).toBeInTheDocument();
   });
 
-  it('clicking credit badge does not open payment modal', () => {
+  it('clicking the credit-note badge opens the payment history modal (like the grid)', () => {
     render(
       <PurchaseInvoiceTopbar
         {...defaultProps}
         data={{ ...BASE_DATA, 'transactionDocument$_identifier': 'AP CreditMemo' }}
       />,
     );
-    fireEvent.click(screen.getByText('creditApplied'));
     expect(screen.queryByTestId('payment-history-modal')).toBeNull();
+    fireEvent.click(screen.getByText('cpFavorBadge'));
+    expect(screen.getByTestId('payment-history-modal')).toBeInTheDocument();
   });
 
   it('closing payment modal calls onRefresh', () => {

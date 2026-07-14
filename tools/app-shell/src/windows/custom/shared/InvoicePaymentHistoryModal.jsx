@@ -201,14 +201,24 @@ export default function InvoicePaymentHistoryModal({
   const docNo = invoiceData?.documentNo || '';
   const isCompleted = invoiceData?.documentStatus === 'CO';
 
+  // Credit instruments (credit notes / returns) carry negative totals end to end. Their
+  // history lists the payments that CONSUMED the note (showing how much each one used),
+  // the pending widget becomes the remaining "saldo a favor", and no new payment can be
+  // registered against them.
+  const isCreditInstrument = grandTotal < 0;
+
   const [payments, setPayments] = useState([]);
   // Payment plan installments — the source of truth for the outstanding amount once
   // loaded, since `invoiceData.outstandingAmount` is a snapshot from when the modal
   // opened and never updates after a payment is registered in this same session.
   const [installments, setInstallments] = useState([]);
-  const outstandingAmt = installments.length > 0
-    ? installments.reduce((s, i) => s + Math.max(0, Number(i.outstandingAmount ?? 0)), 0)
-    : parseFloat(invoiceData?.outstandingAmount ?? 0);
+  const outstandingAmt = isCreditInstrument
+    ? Math.abs(installments.length > 0
+        ? installments.reduce((s, i) => s + Number(i.outstandingAmount ?? 0), 0)
+        : parseFloat(invoiceData?.outstandingAmount ?? 0))
+    : (installments.length > 0
+        ? installments.reduce((s, i) => s + Math.max(0, Number(i.outstandingAmount ?? 0)), 0)
+        : parseFloat(invoiceData?.outstandingAmount ?? 0));
   const [loading, setLoading] = useState(true);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   // The draft being edited (null = "add new"); drives the modal's edit mode.
@@ -290,7 +300,8 @@ export default function InvoicePaymentHistoryModal({
 
   const title = isSales ? ui('invoiceReceipts') : ui('invoicePaymentsTitle');
   const partyLabel = isSales ? ui('customer') : ui('vendor');
-  const canAddPayment = outstandingAmt > 0 && isCompleted;
+  // A credit note's remaining balance is consumed FROM other payments, never paid into.
+  const canAddPayment = !isCreditInstrument && outstandingAmt > 0 && isCompleted;
 
   // Table layout: Nº documento · Fecha · Método · Estado · Importe (right) · trash (draft-only).
   // 760px modal − 48px side padding − 60px column gaps (5 gaps) = 652px to distribute.
@@ -367,7 +378,14 @@ export default function InvoicePaymentHistoryModal({
           {payments.map((p) => {
             const methodRaw = p['paymentMethod$_identifier'] || p.paymentMethod || '';
             const methodKey = methodRaw.toLowerCase().replace(/transferencia|transfer/,'transfer').replace(/tarjeta|card/,'card').replace(/efectivo|cash/,'cash').replace(/domiciliaci[oó]n|direct/,'direct');
-            const amtSign = isSales ? '+ ' : '− ';
+            // On a credit note's history each row is a payment that CONSUMED the note:
+            // show how much of the note it used (appliedToInvoice, negative), not the
+            // payment's own total — a €38.40 payment that drew €10 from the note reads
+            // "− 10,00 €" here. Older backends without the field fall back to p.amount.
+            const isConsumption = isCreditInstrument && p.appliedToInvoice != null;
+            const rowValue = isConsumption ? Math.abs(Number(p.appliedToInvoice)) : p.amount;
+            const amtSign = isConsumption ? '− ' : (isSales ? '+ ' : '− ');
+            const amtColor = isConsumption ? '#C5234A' : (isSales ? '#17663A' : '#C5234A');
             return (
               <div
                 key={p.id}
@@ -396,8 +414,8 @@ export default function InvoicePaymentHistoryModal({
                     ui={ui}
                     data-testid="PaymentStateTag__b82d4f" />
                 </div>
-                <div className="tabular-nums" style={{ textAlign: 'right', fontSize: 14, fontWeight: 600, color: isSales ? '#17663A' : '#C5234A', whiteSpace: 'nowrap' }}>
-                  {amtSign}<MoneyAmount value={p.amount} currency={currency} tone="neutral" className={isSales ? 'text-[#17663A]' : 'text-[#C5234A]'} data-testid="MoneyAmount__cp-history-row" />
+                <div className="tabular-nums" style={{ textAlign: 'right', fontSize: 14, fontWeight: 600, color: amtColor, whiteSpace: 'nowrap' }}>
+                  {amtSign}<MoneyAmount value={rowValue} currency={currency} tone="neutral" className={isConsumption || !isSales ? 'text-[#C5234A]' : 'text-[#17663A]'} data-testid="MoneyAmount__cp-history-row" />
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
                   {!isProcessed(p) && (
@@ -458,13 +476,17 @@ export default function InvoicePaymentHistoryModal({
               </div>
             </div>
             <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontSize: 12, lineHeight: '16px', color: '#3F3F50' }}>{ui('saldoPendiente')}</div>
+              <div style={{ fontSize: 12, lineHeight: '16px', color: '#3F3F50' }}>
+                {isCreditInstrument ? ui('cpFavorBadge') : ui('saldoPendiente')}
+              </div>
               <div className="tabular-nums" style={{ fontSize: 16, lineHeight: '24px', fontWeight: 500 }}>
                 <MoneyAmount
                   value={outstandingAmt}
                   currency={currency}
                   tone="neutral"
-                  className={outstandingAmt > 0 ? 'text-[#C28800]' : 'text-[#17663A]'}
+                  className={isCreditInstrument
+                    ? 'text-[#6D28D9]'
+                    : (outstandingAmt > 0 ? 'text-[#C28800]' : 'text-[#17663A]')}
                   data-testid="MoneyAmount__cp-history-pending" />
               </div>
             </div>

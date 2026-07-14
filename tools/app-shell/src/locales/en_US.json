@@ -17432,6 +17432,7 @@
     "cpFavorGroupHint": "credit notes and refunds",
     "cpCreditBadge": "Credit",
     "cpFavorBadge": "Credit balance",
+    "cpCreditFullyApplied": "Applied",
     "cpUnused": "Unused",
     "cpAvailShort": "avail.",
     "cpTotalInvoice": "Invoice total",
