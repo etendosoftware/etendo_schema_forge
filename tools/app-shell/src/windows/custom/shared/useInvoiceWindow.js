@@ -1,12 +1,21 @@
 import { useCallback } from 'react';
 
-export function getInvoiceDraftMode(ui) {
+export function getInvoiceDraftMode(ui, options = {}) {
+  const { showVerifactuProcessingModal = false } = options;
   return {
     enabled: true,
     processField: 'documentAction',
     processValue: 'CO',
     label: ui('confirm'),
     disableWhenEmpty: true,
+    // Opt-in loading modal for the ~8s synchronous GenerateRF (hash + AEAT
+    // submission) that runs on Confirm when Verifactu is active for the org.
+    // Absent/null when the caller doesn't pass showVerifactuProcessingModal,
+    // so any other consumer of getInvoiceDraftMode (e.g. purchase-invoice,
+    // which never has Verifactu) is unaffected.
+    processingModal: showVerifactuProcessingModal
+      ? { body: ui('fiscal.verifactu.processing.body') }
+      : null,
   };
 }
 

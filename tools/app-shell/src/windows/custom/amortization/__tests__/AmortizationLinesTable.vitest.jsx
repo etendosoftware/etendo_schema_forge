@@ -158,6 +158,41 @@ describe('AmortizationLinesTable — dimension summary', () => {
   });
 });
 
+// The "+ Add dimensions" trigger visibility across the 4 draft/processed states.
+describe('AmortizationLinesTable — add-dimensions trigger visibility', () => {
+  // Case 1: draft + no dimensions → show the "+ Add dimensions" trigger.
+  it('case 1: draft + no dimensions shows the "+ Add dimensions" trigger', async () => {
+    global.fetch = mockFetchReturning([LINE_EMPTY]);
+    renderInRouter(<AmortizationLinesTable {...BASE_PROPS} data={{ id: 'amort-1', processed: 'N' }} />);
+    await waitFor(() => expect(screen.getByText('Mobiliario')).toBeInTheDocument());
+    expect(screen.getAllByText('amortizationDimensionsEmpty').length).toBeGreaterThan(0);
+  });
+
+  // Case 2: draft + has a dimension → show the editable chip/badge (not the trigger).
+  it('case 2: draft + has a dimension shows the chip and not the empty trigger', async () => {
+    global.fetch = mockFetchReturning([LINE_FILLED]);
+    renderInRouter(<AmortizationLinesTable {...BASE_PROPS} data={{ id: 'amort-1', processed: 'N' }} />);
+    await waitFor(() => expect(screen.getByText('Juan Perez')).toBeInTheDocument());
+    expect(screen.queryByText('amortizationDimensionsEmpty')).not.toBeInTheDocument();
+  });
+
+  // Case 3 (NEW): processed + no dimensions → hide the "+ Add dimensions" trigger entirely.
+  it('case 3: processed + no dimensions hides the "+ Add dimensions" trigger entirely', async () => {
+    global.fetch = mockFetchReturning([LINE_EMPTY]);
+    renderInRouter(<AmortizationLinesTable {...BASE_PROPS} data={{ id: 'amort-1', processed: 'Y' }} editing={false} />);
+    await waitFor(() => expect(screen.getByText('Mobiliario')).toBeInTheDocument());
+    expect(screen.queryByText('amortizationDimensionsEmpty')).not.toBeInTheDocument();
+  });
+
+  // Case 4: processed + has a dimension → show the chip read-only.
+  it('case 4: processed + has a dimension shows the chip read-only', async () => {
+    global.fetch = mockFetchReturning([LINE_FILLED]);
+    renderInRouter(<AmortizationLinesTable {...BASE_PROPS} data={{ id: 'amort-1', processed: 'Y' }} editing={false} />);
+    await waitFor(() => expect(screen.getByText('Juan Perez')).toBeInTheDocument());
+    expect(screen.queryByText('amortizationDimensionsEmpty')).not.toBeInTheDocument();
+  });
+});
+
 describe('AmortizationLinesTable — dimension expand', () => {
   it('expands the dimensions panel when the row is clicked', async () => {
     renderInRouter(<AmortizationLinesTable {...BASE_PROPS} />);
@@ -172,6 +207,31 @@ describe('AmortizationLinesTable — dimension expand', () => {
     // GOOrg now appears in both the dimension summary badge AND the expanded panel's
     // read-only Organization field — use getAllByText to handle multiple occurrences.
     expect(screen.getAllByText('GOOrg').length).toBeGreaterThanOrEqual(1);
+  });
+});
+
+describe('AmortizationLinesTable — dimension set', () => {
+  it('renders ONLY the kept dimensions (Project, Cost Center, Contact) and none of the discarded ones', async () => {
+    renderInRouter(<AmortizationLinesTable {...BASE_PROPS} />);
+    await waitFor(() => expect(screen.getByText('AS_Module')).toBeInTheDocument());
+
+    // Expand the dimensions panel for the editable line.
+    fireEvent.click(screen.getByText('AS_Module'));
+
+    // Kept, visible dimensions render as selector stubs.
+    await waitFor(() => expect(screen.getByTestId('selector-project')).toBeInTheDocument());
+    expect(screen.getByTestId('selector-costcenter')).toBeInTheDocument();
+    expect(screen.getByTestId('selector-eTADASBpartner')).toBeInTheDocument();
+
+    // Product must NOT appear in amortization dimensions.
+    expect(screen.queryByTestId('selector-product')).not.toBeInTheDocument();
+
+    // Discarded dimensions (matching decisions.json line-entity visibility) must NOT render.
+    expect(screen.queryByTestId('selector-stDimension')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('selector-ndDimension')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('selector-eTADASSalesRegion')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('selector-eTADASActivity')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('selector-eTADASSalesCampaign')).not.toBeInTheDocument();
   });
 });
 
