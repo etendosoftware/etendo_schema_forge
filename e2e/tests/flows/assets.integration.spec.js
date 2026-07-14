@@ -281,18 +281,22 @@ async function captureAmortizationHeaderUrls(page, periods) {
   return urls;
 }
 
-/** Test cleanup: delete the amortization headers created by the asset's plan.
- *  Deleting the asset removes its lines but NOT the headers — real usage keeps
- *  empty headers (correct behavior), so the test removes them to stay atomic.
- *  Headers must be in "Borrador" (the delete button hides when processed). */
+/** Test cleanup: delete the amortization headers created by the asset's plan via
+ *  the API. Deleting the asset removes its lines but NOT the headers — real usage
+ *  keeps empty headers (correct behavior), so the test removes them to stay atomic.
+ *  ETP-4429: the UI intentionally has no delete button on amortization documents,
+ *  so cleanup is performed via a direct DELETE request instead of UI interaction. */
 async function deleteAmortizationHeaders(page, headerUrls) {
   for (const url of headerUrls) {
-    await gotoDeepLink(page, url);
-    await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
-    await page.getByTestId('action-delete').click();
-    await page.getByTestId('action-delete-confirm').click();
-    await expect(page.locator('[data-sonner-toast][data-front="true"]'))
-      .toContainText(/Registro eliminado/i, { timeout: 10_000 });
+    const id = url.split('/amortization/')[1]?.split(/[?#]/)[0];
+    if (!id) continue;
+    await page.evaluate(async (headerId) => {
+      try {
+        await fetch(`/sws/neo/amortization/header/${headerId}`, { method: 'DELETE' });
+      } catch (e) {
+        console.warn('Amortization header cleanup failed:', e.message);
+      }
+    }, id);
   }
 }
 

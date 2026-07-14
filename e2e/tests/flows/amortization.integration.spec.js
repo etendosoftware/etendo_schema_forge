@@ -4,18 +4,17 @@ import { login } from '../helpers/auth.js';
 /**
  * Amortization window — Test Plan "Activos y Amortizaciones" (REAL BACKEND).
  *
- * Manually-built amortization flow: create two non-depreciable assets, then in
- * the Amortization window create a document, validate required fields, add a line
- * per asset (asset + 50% + 1000), confirm, verify each asset's plan line shows
- * 50% / 1000 / "Confirmado", and clean everything up (reactivate → delete the
- * amortization → delete the assets).
+ * ETP-4429: Amortization documents are created EXCLUSIVELY via "Crear Amortización"
+ * from the Assets window. There is NO manual create button in the Amortization list
+ * and NO delete action on amortization documents in any state.
  *
  * Requires: Etendo up (dev proxy → ETENDO_URL), E2E_USE_MOCK=0, E2E_PASSWORD set,
  * an existing asset category named "Genérico".
  */
 
 const toastByText = (page, re) => page.locator('[data-sonner-toast]').filter({ hasText: re });
-const frontToast = (page) => page.locator('[data-sonner-toast][data-front="true"]');
+// "Crear Amortización" process button (label resolves via i18n).
+const crearAmortizacionBtn = (page) => page.getByRole('button', { name: /Crear Amortización|Create Amortization/i });
 
 /** Full-reload navigation to a deep SPA link, tolerating the boot-time redirect
  *  that aborts the first navigation (net::ERR_ABORTED). */
@@ -23,24 +22,6 @@ async function gotoDeepLink(page, url) {
   await expect(async () => {
     await page.goto(url, { waitUntil: 'commit' });
   }).toPass({ timeout: 30_000 });
-}
-
-/** Create a non-depreciable asset (required fields only, Depreciar OFF). Returns
- *  the asset's detail URL. */
-async function createNonDepreciableAsset(page, { searchKey, name }) {
-  await page.goto('/assets');
-  await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {});
-  await page.getByTestId('action-new').click();
-  await expect(page.getByTestId('detail-view')).toBeVisible();
-  await page.getByTestId('field-searchKey').fill(searchKey);
-  await page.getByTestId('field-name').fill(name);
-  await page.getByTestId('field-assetCategory').click();
-  await page.getByRole('option', { name: 'Genérico', exact: true }).click();
-  await expect(page.getByTestId('field-assetCategory')).toContainText('Genérico');
-  await page.getByTestId('action-save').click();
-  await expect(toastByText(page, /Registro creado/i)).toBeVisible({ timeout: 10_000 });
-  await page.waitForURL(/\/assets\/(?!new)[^/?]+/, { timeout: 10_000 });
-  return page.url();
 }
 
 /** Fill a DateField (es locale: 8 digits "01012026" → "01/01/2026"). */
@@ -52,115 +33,108 @@ async function fillDateField(page, testId, digits) {
   await field.blur();
 }
 
-/** Open the inline add-line row, pick the asset, set the percentage + amount, save
- *  (click outside the row). */
-async function addAmortizationLine(page, assetName, pct, amount) {
-  await page.getByTestId('action-add-line').click();
-  const row = page.getByTestId('inline-add-row');
-  await expect(row).toBeVisible({ timeout: 5_000 });
-  await row.locator('button[role="combobox"]').first().click();
-  await page.getByRole('option', { name: assetName, exact: true }).click();
-  const nums = row.locator('input[type="number"]');
-  await nums.nth(0).fill(String(pct));
-  await nums.nth(1).fill(String(amount));
-  // "Enter o clic fuera para guardar" — click outside the row (the document name)
-  // and wait for the line POST to land.
+/** Click "Guardar" and wait for the asset PATCH/PUT to actually land, so the
+ *  next "Crear Amortización" runs against the persisted record (no save race). */
+async function saveAsset(page) {
+  const saveBtn = page.getByTestId('action-save');
+  if (await saveBtn.isDisabled().catch(() => false)) return;
   const saved = page.waitForResponse(
-    (r) => /\/amortization\/lines\b/.test(r.url()) && r.request().method() === 'POST',
-    { timeout: 10_000 },
+    (r) => /\/sws\/neo\/assets\/assets\/[^/?]+/.test(r.url())
+      && ['PUT', 'PATCH', 'POST'].includes(r.request().method()),
+    { timeout: 12_000 },
   ).catch(() => null);
-  await page.getByTestId('field-name').click();
+  await saveBtn.click();
   await saved;
-  await expect(page.getByTestId('inline-add-row')).toHaveCount(0, { timeout: 8_000 });
 }
 
-/** On the asset detail, the Plan de amortización tab shows a "Confirmado" line
- *  whose percentage and amount match what was entered in the amortization line. */
-async function verifyAssetPlanLineConfirmed(page, assetUrl, pct, amount) {
-  await gotoDeepLink(page, assetUrl);
-  await expect(page.getByTestId('detail-view')).toBeVisible({ timeout: 10_000 });
-  await page.getByRole('button', { name: /Plan de amortización/ }).click();
-  const row = page.locator('table tr').filter({ hasText: 'Confirmado' }).first();
-  await expect(row).toBeVisible({ timeout: 10_000 });
-  // The plan line percentage must equal the percentage entered in the amortization
-  // line (rendered with 2 decimals, e.g. 50 → "50.00%").
-  await expect(row).toContainText(`${Number(pct).toFixed(2)}%`);
-  // ...and the amount (thousands separator may be "." or ",").
-  await expect(row).toContainText(new RegExp(String(amount).replace(/\B(?=(\d{3})+(?!\d))/g, '[.,]')));
+/** Set a field's value and retry until the form is actually dirty (save enabled).
+ *  A save triggers a refetch GET that resets `editing`; if it lands after a fill,
+ *  the fill is lost. Retrying the fill until the save button enables absorbs that
+ *  race deterministically. */
+async function setFieldUntilDirty(page, testId, value) {
+  const field = page.getByTestId(testId);
+  await expect(async () => {
+    await field.fill('');
+    await field.fill(value);
+    await field.blur();
+    await expect(page.getByTestId('action-save')).toBeEnabled({ timeout: 1_000 });
+  }).toPass({ timeout: 12_000 });
 }
 
-/** Full manual-amortization flow at the given percentage/amount: create two
- *  non-depreciable assets, build + validate the amortization header, add a line
- *  per asset, confirm, verify each asset's plan line matches, then clean up. */
-async function runManualAmortizationFlow(page, { pct, amount }) {
-  const stamp = Date.now();
-  const name1 = `Activo Amort E2E 1 ${stamp}`;
-  const name2 = `Activo Amort E2E 2 ${stamp}`;
-  const asset1Url = await createNonDepreciableAsset(page, { searchKey: `AM-${stamp}-1`, name: name1 });
-  const asset2Url = await createNonDepreciableAsset(page, { searchKey: `AM-${stamp}-2`, name: name2 });
-  // One amortization line per asset: the percentage + amount entered here are the
-  // values each asset's plan line must later match.
-  const lines = [
-    { name: name1, url: asset1Url, pct, amount },
-    { name: name2, url: asset2Url, pct, amount },
-  ];
+/** Persist current edits, then run "Crear Amortización" and expect a toast. */
+async function saveThenProcess(page, expectRe) {
+  await saveAsset(page);
+  await crearAmortizacionBtn(page).click();
+  await expect(page.locator('[data-sonner-toast][data-front="true"]'))
+    .toContainText(expectRe, { timeout: 12_000 });
+}
 
-  // New amortization → clear name + accounting date → Guardar → required error.
-  await page.goto('/amortization');
+/**
+ * Create a minimal depreciable asset (percentage mode, 50% annual) via the Assets
+ * window and trigger "Crear Amortización". Navigates to the first period header
+ * via the Plan de amortización tab.
+ *
+ * Modeled on `setupDepreciableWithAmortization` from assets.integration.spec.js
+ * (percentage mode path only, no verify steps).
+ *
+ * @param {import('@playwright/test').Page} page
+ * @param {number|string} stamp  Unique timestamp used to name the asset.
+ * @returns {{ assetUrl: string, amortizationUrl: string }}
+ */
+async function createAssetWithAmortization(page, stamp) {
+  await page.goto('/assets');
   await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {});
   await page.getByTestId('action-new').click();
   await expect(page.getByTestId('detail-view')).toBeVisible();
-  await page.getByTestId('field-name').fill('');
-  await fillDateField(page, 'field-accountingDate', '');
-  await page.getByTestId('action-save-draft').click();
-  await expect(frontToast(page)).toContainText(/Completá todos los campos requeridos/i, { timeout: 10_000 });
 
-  // Fill the name only → still missing the accounting date.
-  await page.getByTestId('field-name').fill(`Amort E2E ${stamp}`);
-  await page.getByTestId('action-save-draft').click();
-  await expect(frontToast(page)).toContainText(/Completá todos los campos requeridos/i, { timeout: 10_000 });
+  await page.getByTestId('field-searchKey').fill(`AM-ETP4429-${stamp}`);
+  await page.getByTestId('field-name').fill(`Activo Amort ETP-4429 ${stamp}`);
+  await page.getByTestId('field-assetCategory').click();
+  await page.getByRole('option', { name: /Genérico|Otros/i }).first().click();
+  await expect(page.getByTestId('field-assetCategory')).not.toContainText('Seleccionar');
 
-  // Fill the accounting date 01/01/2026 → now it saves.
-  await fillDateField(page, 'field-accountingDate', '01012026');
-  await page.getByTestId('action-save-draft').click();
-  await expect(frontToast(page)).toContainText(/Registro creado/i, { timeout: 10_000 });
-  await page.waitForURL(/\/amortization\/(?!new)[^/?]+/, { timeout: 10_000 });
+  // Activate "Depreciar" → financial sections appear.
+  await page.getByRole('switch').first().click();
+  await expect(page.getByText('Información financiera')).toBeVisible({ timeout: 5_000 });
+
+  // Save → record created; wait for the route to settle on /assets/{id}.
+  await page.getByTestId('action-save').click();
+  await expect(toastByText(page, /Registro creado/i)).toBeVisible({ timeout: 10_000 });
+  await page.waitForURL(/\/assets\/(?!new)[^/?]+/, { timeout: 10_000 });
+  const assetUrl = page.url();
+
+  // Step 5: crearAmortizacion → expects missing start-date error.
+  await crearAmortizacionBtn(page).click();
+  await expect(toastByText(page, /fecha de inicio es obligatorio/i)).toBeVisible({ timeout: 10_000 });
+
+  // Step 6: fill start date.
+  await fillDateField(page, 'field-depreciationStartDate', '01012026');
+
+  // Step 7: save + crearAmortizacion → expects missing amount error.
+  await saveThenProcess(page, /Valor a amortizar no puede estar vac/i);
+
+  // Step 8: fill Valor a amortizar.
+  await setFieldUntilDirty(page, 'field-depreciationAmt', '2000');
+
+  // Step 9: save + crearAmortizacion → expects missing annual depreciation error.
+  await saveThenProcess(page, /Amortización Anual no puede estar vac/i);
+
+  // Step 10: fill % Amortización anual (50% — percentage mode default).
+  await page.getByTestId('field-annualDepreciation').fill('50');
+
+  // Step 11: save + crearAmortizacion → expects success.
+  await saveAsset(page);
+  await crearAmortizacionBtn(page).click();
+  await expect(page.locator('[data-sonner-toast][data-front="true"]'))
+    .toContainText(/Amortización creada/i, { timeout: 20_000 });
+
+  // Step 12: open Plan de amortización tab, click the 2026 period button.
+  await page.getByRole('button', { name: /Plan de amortización/ }).click();
+  await page.getByRole('button', { name: '2026', exact: true }).click();
+  await page.waitForURL(/\/amortization\//, { timeout: 10_000 });
   const amortizationUrl = page.url();
 
-  // Add one line per asset (asset + percentage + amount).
-  for (const l of lines) await addAmortizationLine(page, l.name, l.pct, l.amount);
-
-  // Confirm the amortization → "Procesado".
-  await page.getByTestId('action-save').click(); // "Confirmar" → opens the modal
-  const modalConfirm = page.getByRole('button', { name: 'Confirmar amortización', exact: true });
-  await expect(modalConfirm).toBeEnabled({ timeout: 10_000 });
-  await expect(async () => {
-    await modalConfirm.dispatchEvent('click');
-    await expect(modalConfirm).toHaveCount(0, { timeout: 3_000 });
-  }).toPass({ timeout: 20_000 });
-  await expect(page.getByText('Procesado').first()).toBeVisible({ timeout: 15_000 });
-
-  // Each asset's plan line is "Confirmado" and its percentage + amount match what
-  // was entered in the amortization line.
-  for (const l of lines) await verifyAssetPlanLineConfirmed(page, l.url, l.pct, l.amount);
-
-  // Cleanup: reactivate → delete the amortization → delete both assets.
-  await gotoDeepLink(page, amortizationUrl);
-  await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
-  await page.getByTestId('action-more').click();
-  await page.getByRole('button', { name: /reactivar|reactivate/i }).click();
-  await expect(page.getByText('Borrador').first()).toBeVisible({ timeout: 10_000 });
-  await page.getByTestId('action-delete').click();
-  await page.getByTestId('action-delete-confirm').click();
-  await expect(frontToast(page)).toContainText(/Registro eliminado/i, { timeout: 10_000 });
-
-  for (const url of [asset1Url, asset2Url]) {
-    await gotoDeepLink(page, url);
-    await expect(page.getByTestId('detail-view')).toBeVisible({ timeout: 10_000 });
-    await page.getByTestId('action-delete').click();
-    await page.getByTestId('action-delete-confirm').click();
-    await expect(frontToast(page)).toContainText(/Registro eliminado/i, { timeout: 10_000 });
-  }
+  return { assetUrl, amortizationUrl };
 }
 
 test.describe('Amortization (real backend)', () => {
@@ -171,11 +145,44 @@ test.describe('Amortization (real backend)', () => {
     await page.getByTestId('user-menu-language-es_ES').click();
   });
 
-  test('manual amortization at 50%: required validation, confirm, verify, cleanup', async ({ page }) => {
-    await runManualAmortizationFlow(page, { pct: 50, amount: 1000 });
+  test('amortization list: no create button (ETP-4429)', async ({ page }) => {
+    await page.goto('/amortization');
+    await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {});
+    await expect(page.getByTestId('list-view')).toBeVisible({ timeout: 10_000 });
+    // ETP-4429: amortizations are only created via Assets — the create button must
+    // be absent from the list.
+    await expect(page.getByTestId('action-new')).toHaveCount(0);
   });
 
-  test('manual amortization at 100%: both assets fully amortized, confirm, verify, cleanup', async ({ page }) => {
-    await runManualAmortizationFlow(page, { pct: 100, amount: 1000 });
+  test('amortization document: no delete button — documents created via Assets (ETP-4429)', async ({ page }) => {
+    const stamp = Date.now();
+    const { assetUrl, amortizationUrl } = await createAssetWithAmortization(page, stamp);
+
+    // Navigate to the amortization header and assert no delete button is present.
+    await gotoDeepLink(page, amortizationUrl);
+    await expect(page.getByTestId('detail-view')).toBeVisible({ timeout: 10_000 });
+    // ETP-4429: amortization documents have no delete action in any state.
+    await expect(page.getByTestId('action-delete')).toHaveCount(0);
+
+    // Cleanup: delete the asset via UI (removes its amortization lines).
+    await gotoDeepLink(page, assetUrl);
+    await expect(page.getByTestId('detail-view')).toBeVisible({ timeout: 10_000 });
+    await page.getByTestId('action-delete').click();
+    await page.getByTestId('action-delete-confirm').click();
+    await expect(page.locator('[data-sonner-toast][data-front="true"]'))
+      .toContainText(/Registro eliminado/i, { timeout: 10_000 });
+
+    // Cleanup: remove the now-empty amortization header via API since the UI
+    // intentionally provides no delete button (ETP-4429).
+    const headerId = amortizationUrl.split('/amortization/')[1]?.split(/[?#]/)[0];
+    if (headerId) {
+      await page.evaluate(async (id) => {
+        try {
+          await fetch(`/sws/neo/amortization/header/${id}`, { method: 'DELETE' });
+        } catch (e) {
+          console.warn('Amortization header cleanup failed:', e.message);
+        }
+      }, headerId);
+    }
   });
 });
