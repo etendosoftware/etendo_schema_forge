@@ -1382,6 +1382,26 @@ describe('DetailView helper functions', () => {
     it('returns truthy when hideDeleteWhenComplete is false regardless of isProcessed', () => {
       expect(isDeleteButtonVisible(false, '123', {}, null, false, true)).toBeTruthy();
     });
+
+    describe('hideDeleteButton (unconditional hide)', () => {
+      it('returns falsy for a draft record that would otherwise be visible', () => {
+        // hideDeleteButton = 7th arg true
+        expect(isDeleteButtonVisible(false, '123', { documentStatus: 'DR' }, 'documentStatus', false, false, true)).toBeFalsy();
+      });
+
+      it('returns falsy regardless of status / hideDeleteWhenComplete / isProcessed', () => {
+        expect(isDeleteButtonVisible(false, '123', { documentStatus: 'DR' }, 'documentStatus', true, false, true)).toBeFalsy();
+        expect(isDeleteButtonVisible(false, '123', { documentStatus: 'CO' }, 'documentStatus', false, true, true)).toBeFalsy();
+      });
+
+      it('defaults to false (7th arg omitted) → behavior unchanged', () => {
+        expect(isDeleteButtonVisible(false, '123', { documentStatus: 'DR' }, 'documentStatus', true, false)).toBeTruthy();
+      });
+
+      it('explicit hideDeleteButton false is identical to omitting it', () => {
+        expect(isDeleteButtonVisible(false, '123', { documentStatus: 'DR' }, 'documentStatus', true, false, false)).toBeTruthy();
+      });
+    });
   });
 
   describe('shouldShowLinesEmptyState (each false condition individually)', () => {

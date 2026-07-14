@@ -231,19 +231,40 @@ test.describe('Amortization — inline lines panel', () => {
 });
 
 // ---------------------------------------------------------------------------
-// Test 6 — Draft fields are editable
+// Test 6 — Draft editability contract (ETP-4429)
 // ---------------------------------------------------------------------------
 
 test.describe('Amortization — draft editability', () => {
-  test('field-name is not disabled in draft state', async ({ page }) => {
+  // ETP-4429: the header fields name, accountingDate, startingDate and currency
+  // are now `visibility: readOnly` unconditionally in decisions.json, so the
+  // generator emits `readOnly: true` on each (see generated HeaderForm.jsx).
+  // EntityForm renders those as `disabled` Inputs in ALL states, including
+  // draft. Only `description` remains editable in draft (its only lock is
+  // `readOnlyLogic: record.processed === 'Y'`, which is false while processed='N').
+  test('header fields are read-only in draft except Description', async ({ page }) => {
     await login(page);
     await installMocks(page, { headers: [HEADER_DRAFT], lines: [LINE_001] });
     await page.goto(`/amortization/${HEADER_DRAFT.id}`);
     await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
 
-    const nameField = page.getByTestId('field-name');
-    await expect(nameField).toBeVisible();
-    await expect(nameField).not.toBeDisabled();
+    // Unconditionally read-only text/date header fields → EntityForm renders a
+    // disabled <Input>/<textarea> carrying the field-{key} testid directly.
+    for (const key of ['name', 'accountingDate', 'startingDate']) {
+      const field = page.getByTestId(`field-${key}`);
+      await expect(field, `field-${key} should be visible`).toBeVisible();
+      await expect(field, `field-${key} should be disabled (read-only)`).toBeDisabled();
+    }
+
+    // Currency is a read-only FK selector: renderReadOnlyFk puts the field-currency
+    // testid on the wrapper <div> (not disable-able) and nests the disabled <input>.
+    const currencyField = page.getByTestId('field-currency');
+    await expect(currencyField).toBeVisible();
+    await expect(currencyField.locator('input')).toBeDisabled();
+
+    // Description is the only editable header field in draft state.
+    const descriptionField = page.getByTestId('field-description');
+    await expect(descriptionField).toBeVisible();
+    await expect(descriptionField).not.toBeDisabled();
   });
 });
 
