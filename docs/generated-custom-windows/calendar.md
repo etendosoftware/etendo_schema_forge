@@ -22,7 +22,13 @@ keep every spec single-window, and let the custom frontend do the aggregation.
 
 ## What this window should allow
 - Browse the list of fiscal years (`fiscalYear`, `description`) for the org's calendar.
-- Create a new fiscal year, selecting the calendar it belongs to.
+- Create a new fiscal year. `calendar` is a hidden `system`-visibility field
+  (`decisions.json` → `entities.year.fields.calendar`), auto-derived server-side via
+  `NeoDefaultsService.tryInjectFirstFromLookup` (the org's first active calendar) —
+  there is no calendar selector in the UI. If an organization has zero active
+  calendars this will fail with a DB constraint error, since the field can't be
+  filled in manually; onboarding is expected to guarantee at least one calendar
+  per organization.
 - Trigger **Create Periods** on a year to generate its 12 standard periods (Jan–Dec) plus an
   optional adjustment period.
 - On a year's detail, switch between two secondary tabs:

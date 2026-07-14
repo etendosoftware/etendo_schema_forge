@@ -27,34 +27,52 @@ function yearCriteria(yearId) {
 export default function CloseYearConfirmModal({ direction, isOpen, currentRecord, token, apiBaseUrl, onClose, onSaved }) {
   const ui = useUI();
   const [allClosed, setAllClosed] = useState(false);
+  const [precheckError, setPrecheckError] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState(false);
 
   useEffect(() => {
     if (!isOpen || !currentRecord?.id) return;
+    setPrecheckError(false);
     fetch(`${periodControlApiBase(apiBaseUrl)}/periodControl?${yearCriteria(currentRecord.id)}`, {
       headers: { Authorization: `Bearer ${token}` },
     })
-      .then((res) => res.json())
+      .then((res) => {
+        if (!res.ok) throw new Error(`Request failed: ${res.status}`);
+        return res.json();
+      })
       .then((body) => {
         // periodControl's LIST wraps rows as { response: { data: [...] } } (classic NEO
         // DefaultJsonDataService envelope), not a flat { data: [...] } — matches
         // useEntity.js's exact fallback pattern.
         const periods = body?.response?.data ?? (Array.isArray(body) ? body : []);
         setAllClosed(periods.length > 0 && periods.every((p) => CLOSED_STATUSES.has(p.status)));
+      })
+      .catch(() => {
+        // Fail safe: an unreachable status check must never leave the confirm button
+        // looking enabled — keep it disabled and surface the error instead.
+        setAllClosed(false);
+        setPrecheckError(true);
       });
   }, [isOpen, currentRecord?.id, apiBaseUrl, token]);
 
   const handleConfirm = async () => {
     setSubmitting(true);
+    setSubmitError(false);
     try {
       const action = ACTION_BY_DIRECTION[direction];
-      await fetch(`${apiBaseUrl}/year/${currentRecord.id}/action/${action}`, {
+      const res = await fetch(`${apiBaseUrl}/year/${currentRecord.id}/action/${action}`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({}),
       });
+      if (!res.ok) throw new Error(`Request failed: ${res.status}`);
       onSaved?.();
       onClose?.();
+    } catch {
+      // A failed close/undo-close must never look like a success — keep the modal
+      // open and show an error instead of calling onSaved/onClose.
+      setSubmitError(true);
     } finally {
       setSubmitting(false);
     }
@@ -70,6 +88,12 @@ export default function CloseYearConfirmModal({ direction, isOpen, currentRecord
           <DialogTitle data-testid="DialogTitle__closeyear">{ui(titleKey)}</DialogTitle>
         </DialogHeader>
         <p className="text-sm" data-testid="close-year-body">{ui(bodyKey)}</p>
+        {precheckError && (
+          <p className="text-sm text-destructive" data-testid="close-year-precheck-error">{ui('genericError')}</p>
+        )}
+        {submitError && (
+          <p className="text-sm text-destructive" data-testid="close-year-submit-error">{ui('genericError')}</p>
+        )}
         <DialogFooter className="gap-2 pt-2" data-testid="DialogFooter__closeyear">
           <button type="button" data-testid="close-year-cancel" onClick={onClose}>{ui('cancel')}</button>
           <button

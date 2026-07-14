@@ -137,6 +137,36 @@ describe('CloseYearConfirmModal', () => {
     ));
   });
 
+  it('keeps confirm disabled and shows an error when the periodControl precheck fails', async () => {
+    global.fetch = vi.fn(() => Promise.resolve({ ok: false, status: 500, json: () => Promise.resolve({}) }));
+    render(
+      <CloseYearConfirmModal direction="close" isOpen currentRecord={{ id: 'year1' }} token="tok" apiBaseUrl="https://api.test/fiscal-calendar"
+        onClose={() => {}} onSaved={() => {}} data-testid="modal9" />
+    );
+    await waitFor(() => screen.getByTestId('close-year-precheck-error'));
+    expect(screen.getByTestId('close-year-confirm')).toBeDisabled();
+  });
+
+  it('shows an error and does not call onSaved/onClose when the close action POST fails', async () => {
+    global.fetch = vi.fn((url) => {
+      if (url.includes('/periodControl')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ response: { data: [{ id: 'p1', status: 'C' }] } }) });
+      }
+      return Promise.resolve({ ok: false, status: 500, json: () => Promise.resolve({}) });
+    });
+    const onSaved = vi.fn();
+    const onClose = vi.fn();
+    render(
+      <CloseYearConfirmModal direction="close" isOpen currentRecord={{ id: 'year1' }} token="tok" apiBaseUrl="https://api.test/fiscal-calendar"
+        onClose={onClose} onSaved={onSaved} data-testid="modal10" />
+    );
+    await waitFor(() => expect(screen.getByTestId('close-year-confirm')).not.toBeDisabled());
+    fireEvent.click(screen.getByTestId('close-year-confirm'));
+    await waitFor(() => screen.getByTestId('close-year-submit-error'));
+    expect(onSaved).not.toHaveBeenCalled();
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
   it('throws instead of silently misrouting when apiBaseUrl is undefined', () => {
     // Documents current behavior: apiBaseUrl is always a string when this modal is mounted by
     // the generated YearPage, so this path is unreachable in practice — but a broken invariant
