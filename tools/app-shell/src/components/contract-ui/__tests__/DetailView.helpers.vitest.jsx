@@ -1385,21 +1385,25 @@ describe('DetailView helper functions', () => {
 
     describe('hideDeleteButton (unconditional hide)', () => {
       it('returns falsy for a draft record that would otherwise be visible', () => {
-        // hideDeleteButton = 7th arg true
-        expect(isDeleteButtonVisible(false, '123', { documentStatus: 'DR' }, 'documentStatus', false, false, true)).toBeFalsy();
+        // hideDeleteButton = 8th arg true (7th arg is deleteAction, unset here)
+        expect(isDeleteButtonVisible(false, '123', { documentStatus: 'DR' }, 'documentStatus', false, false, undefined, true)).toBeFalsy();
       });
 
       it('returns falsy regardless of status / hideDeleteWhenComplete / isProcessed', () => {
-        expect(isDeleteButtonVisible(false, '123', { documentStatus: 'DR' }, 'documentStatus', true, false, true)).toBeFalsy();
-        expect(isDeleteButtonVisible(false, '123', { documentStatus: 'CO' }, 'documentStatus', false, true, true)).toBeFalsy();
+        expect(isDeleteButtonVisible(false, '123', { documentStatus: 'DR' }, 'documentStatus', true, false, undefined, true)).toBeFalsy();
+        expect(isDeleteButtonVisible(false, '123', { documentStatus: 'CO' }, 'documentStatus', false, true, undefined, true)).toBeFalsy();
       });
 
-      it('defaults to false (7th arg omitted) → behavior unchanged', () => {
+      it('defaults to false (8th arg omitted) → behavior unchanged', () => {
         expect(isDeleteButtonVisible(false, '123', { documentStatus: 'DR' }, 'documentStatus', true, false)).toBeTruthy();
       });
 
       it('explicit hideDeleteButton false is identical to omitting it', () => {
-        expect(isDeleteButtonVisible(false, '123', { documentStatus: 'DR' }, 'documentStatus', true, false, false)).toBeTruthy();
+        expect(isDeleteButtonVisible(false, '123', { documentStatus: 'DR' }, 'documentStatus', true, false, undefined, false)).toBeTruthy();
+      });
+
+      it('wins over a truthy deleteAction (both set together)', () => {
+        expect(isDeleteButtonVisible(false, '123', { documentStatus: 'DR' }, 'documentStatus', false, false, 'eTPRRemovePayment', true)).toBeFalsy();
       });
     });
   });
