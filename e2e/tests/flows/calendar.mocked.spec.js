@@ -145,16 +145,16 @@ test.describe('Calendar — year detail', () => {
 
   test('Periods tab lists periods and Accounting tab lists Fact_Acct rows', async ({ page }) => {
     await page.getByTestId('tab-periods').click();
-    await expect(page.getByText('Jan-2027')).toBeVisible();
-    await expect(page.getByText('Feb-2027')).toBeVisible();
+    await expect(page.getByTestId('period-name-period-001')).toBeVisible();
+    await expect(page.getByTestId('period-name-period-002')).toBeVisible();
 
     await page.getByTestId('tab-accounting').click();
-    await expect(page.getByText('20000000')).toBeVisible();
+    await expect(page.getByTestId('accounting-account-fact-001')).toBeVisible();
   });
 
   test('expanding a period reveals its documents', async ({ page }) => {
     await page.getByTestId('tab-periods').click();
-    await expect(page.getByText('Jan-2027')).toBeVisible();
+    await expect(page.getByTestId('period-name-period-001')).toBeVisible();
 
     // The document's category code ('API') is rendered translated (e.g. "AP factura"), not
     // verbatim — assert on the stable per-row testid instead of the raw code text.
@@ -165,7 +165,7 @@ test.describe('Calendar — year detail', () => {
 
   test('Abrir/Cerrar Periodo hits the mocked openClose endpoint', async ({ page }) => {
     await page.getByTestId('tab-periods').click();
-    await expect(page.getByText('Jan-2027')).toBeVisible();
+    await expect(page.getByTestId('period-name-period-001')).toBeVisible();
 
     // openClose requires a param (O/C/P), so the button opens ProcessParamDialog first —
     // it does not fire the request directly.

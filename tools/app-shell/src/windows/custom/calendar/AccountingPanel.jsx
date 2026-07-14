@@ -45,8 +45,8 @@ export default function AccountingPanel({ parentId, token, apiBaseUrl }) {
       </thead>
       <tbody>
         {rows.map((row) => (
-          <tr key={row.id}>
-            <td className="p-2">{row.account}</td>
+          <tr key={row.id} data-testid={`accounting-row-${row.id}`}>
+            <td className="p-2" data-testid={`accounting-account-${row.id}`}>{row.account}</td>
             <td className="p-2 text-right">{row.debit}</td>
             <td className="p-2 text-right">{row.credit}</td>
             <td className="p-2">{row.description}</td>

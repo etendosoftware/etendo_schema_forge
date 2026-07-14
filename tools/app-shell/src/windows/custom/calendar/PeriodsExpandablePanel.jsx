@@ -375,7 +375,7 @@ export default function PeriodsExpandablePanel({ parentId, token, apiBaseUrl }) 
                 >
                   {isExpanded ? <ChevronDown size={16} data-testid="ChevronDown__711967" /> : <ChevronRight size={16} data-testid="ChevronRight__711967" />}
                 </button>
-                <span className="flex-1">{period.name}</span>
+                <span className="flex-1" data-testid={`period-name-${period.id}`}>{period.name}</span>
                 <span data-testid={`period-status-${period.id}`}>
                   <Tag
                     variant={PERIOD_STATUS_VARIANTS[period.status] ?? 'neutral'}
