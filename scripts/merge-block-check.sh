@@ -155,7 +155,7 @@ for KEY in "$@"; do
       READY_TAG="${YELLOW}# ⚠️  not all green — review before merging${RESET}"
     fi
     MERGE_CMDS="${MERGE_CMDS}  ${DIM}# ${SHORT}${RESET}  ${READY_TAG}\n"
-    MERGE_CMDS="${MERGE_CMDS}  git -C ${REPO_PATH} refresh ${HEAD_REF} && git -C ${REPO_PATH} merge --no-edit ${HEAD_REF}\n"
+    MERGE_CMDS="${MERGE_CMDS}  git refresh ${HEAD_REF} && git merge --no-edit ${HEAD_REF}\n"
   done
 
   if [[ -n "$FAIL_DETAIL" ]]; then
