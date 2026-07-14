@@ -16658,6 +16658,7 @@
     "expandPeriod": "Expandir período",
     "openClosePeriod": "Abrir/Cerrar Periodo",
     "openCloseDocument": "Abrir/Cerrar Documento",
+    "bulkOpenCloseDocuments": "Abrir/Cerrar Documentos seleccionados",
     "debit": "Débito",
     "credit": "Crédito",
     "accountingNoEntries": "No hay asientos contables para este año",

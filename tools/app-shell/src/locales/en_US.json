@@ -16416,6 +16416,7 @@
     "expandPeriod": "Expand period",
     "openClosePeriod": "Open/Close Period",
     "openCloseDocument": "Open/Close Document",
+    "bulkOpenCloseDocuments": "Open/Close selected documents",
     "debit": "Debit",
     "credit": "Credit",
     "accountingNoEntries": "No accounting entries for this year",

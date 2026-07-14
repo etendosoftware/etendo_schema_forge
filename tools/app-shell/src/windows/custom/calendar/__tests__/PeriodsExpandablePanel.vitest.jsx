@@ -1,7 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 
-vi.mock('sonner', () => ({ toast: { error: vi.fn(), success: vi.fn() } }));
+// useBulkActionToast (used by the new bulk open/close feature) also calls toast.warning for
+// partial-failure results, in addition to the error/success this file already mocked.
+vi.mock('sonner', () => ({ toast: { error: vi.fn(), success: vi.fn(), warning: vi.fn() } }));
 
 // Real Tag renders a plain <span> with no data-testid passthrough (it only reads
 // variant/label/children/className) — mock it the same way DataTable.cellRenderers.vitest.jsx
@@ -54,6 +56,20 @@ const DOC = {
   id: 'd1',
   documentCategory: 'API',
   'documentCategory$_identifier': 'AP Credit Memo',
+  periodStatus: 'O',
+  'periodStatus$_identifier': 'Open',
+};
+const DOC2 = {
+  id: 'd2',
+  documentCategory: 'ARI',
+  'documentCategory$_identifier': 'AR Invoice',
+  periodStatus: 'O',
+  'periodStatus$_identifier': 'Open',
+};
+const DOC3 = {
+  id: 'd3',
+  documentCategory: 'MMS',
+  'documentCategory$_identifier': 'Material Receipt',
   periodStatus: 'O',
   'periodStatus$_identifier': 'Open',
 };
@@ -434,5 +450,252 @@ describe('PeriodsExpandablePanel', () => {
 
     resolvePost({ ok: true, json: () => Promise.resolve({}) });
     await waitFor(() => expect(screen.getByTestId('period-openclose-p1')).not.toBeDisabled());
+  });
+});
+
+describe('PeriodsExpandablePanel — bulk document selection and open/close', () => {
+  beforeEach(() => {
+    toast.error.mockClear();
+    toast.success.mockClear();
+    toast.warning.mockClear();
+    sessionStorage.clear();
+    global.fetch = vi.fn((url) => {
+      if (url.includes('/periodControl')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ response: { data: [PERIOD] } }) });
+      }
+      if (url.includes('/documents')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ response: { data: [DOC, DOC2, DOC3] } }) });
+      }
+      return Promise.reject(new Error('unexpected url ' + url));
+    });
+  });
+
+  async function renderExpanded(testId) {
+    render(<PeriodsExpandablePanel parentId="year1" token="tok" apiBaseUrl="https://api.test" data-testid={testId} />);
+    await waitFor(() => screen.getByText('Jan-2027'));
+    fireEvent.click(screen.getByTestId('period-row-expand-p1'));
+    await waitFor(() => screen.getByText('AP Credit Memo'));
+  }
+
+  it('shows no bulk action bar until at least one document row is selected', async () => {
+    await renderExpanded('b1');
+    expect(screen.queryByTestId('document-bulk-bar-p1')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByTestId('document-select-d1'));
+    expect(screen.getByTestId('document-bulk-bar-p1')).toBeInTheDocument();
+    // The count suffix on the bulk button is a raw JSX literal (not routed through ui()), so
+    // it's a reliable assertion target regardless of whether a LocaleProvider is present —
+    // unlike `document-selection-count`, whose text comes entirely from ui('selected'), which
+    // falls back to the untranslated key (no {count} substitution) without a real dictionary.
+    expect(screen.getByTestId('document-bulk-openclose-p1')).toHaveTextContent('(1)');
+  });
+
+  it('tracks multiple selected rows and shows the correct count', async () => {
+    await renderExpanded('b2');
+    fireEvent.click(screen.getByTestId('document-select-d1'));
+    fireEvent.click(screen.getByTestId('document-select-d2'));
+    fireEvent.click(screen.getByTestId('document-select-d3'));
+
+    expect(screen.getByTestId('document-bulk-openclose-p1')).toHaveTextContent('(3)');
+
+    // Unselecting one drops the count back down, not to zero.
+    fireEvent.click(screen.getByTestId('document-select-d2'));
+    expect(screen.getByTestId('document-bulk-openclose-p1')).toHaveTextContent('(2)');
+  });
+
+  it('clears the selection when the period is collapsed or a different period is expanded', async () => {
+    await renderExpanded('b3');
+    fireEvent.click(screen.getByTestId('document-select-d1'));
+    expect(screen.getByTestId('document-bulk-bar-p1')).toBeInTheDocument();
+
+    // Collapse.
+    fireEvent.click(screen.getByTestId('period-row-expand-p1'));
+    // Re-expand — selection must not have survived.
+    fireEvent.click(screen.getByTestId('period-row-expand-p1'));
+    await waitFor(() => screen.getByText('AP Credit Memo'));
+    expect(screen.queryByTestId('document-bulk-bar-p1')).not.toBeInTheDocument();
+  });
+
+  it('opens the shared ProcessParamDialog (not an immediate POST) when the bulk button is clicked', async () => {
+    const postSpy = vi.fn(() => Promise.resolve({ ok: true, json: () => Promise.resolve({}) }));
+    await renderExpanded('b4');
+    fireEvent.click(screen.getByTestId('document-select-d1'));
+    fireEvent.click(screen.getByTestId('document-select-d2'));
+    global.fetch = postSpy;
+
+    fireEvent.click(screen.getByTestId('document-bulk-openclose-p1'));
+
+    expect(screen.getByTestId('dialog')).toBeInTheDocument();
+    expect(postSpy).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['O', 'Open'],
+    ['C', 'Closed'],
+    ['P', 'Permanently closed'],
+  ])('fires one POST per selected document with {"openClose": "%s"} when "%s" is confirmed', async (value, _label) => {
+    const postCalls = [];
+    const postSpy = vi.fn((url, opts) => {
+      // Only capture POSTs — the bulk action's post-success refresh (loadDocumentsForPeriod +
+      // loadPeriods, both GETs) reuses this same mocked fetch too.
+      if (opts?.method === 'POST') postCalls.push({ url, body: opts.body });
+      if (url.includes('/documents')) return Promise.resolve({ ok: true, json: () => Promise.resolve({ response: { data: [DOC, DOC2, DOC3] } }) });
+      if (url.includes('/periodControl')) return Promise.resolve({ ok: true, json: () => Promise.resolve({ response: { data: [PERIOD] } }) });
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
+    });
+    await renderExpanded('b5');
+    fireEvent.click(screen.getByTestId('document-select-d1'));
+    fireEvent.click(screen.getByTestId('document-select-d2'));
+    global.fetch = postSpy;
+
+    fireEvent.click(screen.getByTestId('document-bulk-openclose-p1'));
+    selectOpenCloseOption(value);
+    fireEvent.click(screen.getByTestId('process-param-confirm'));
+
+    await waitFor(() => expect(postCalls.length).toBe(2));
+    const expectedBody = JSON.stringify({ fieldValues: { openClose: value } });
+    expect(postCalls.map((c) => c.url).sort()).toEqual([
+      'https://api.test/documents/d1/action/openClose',
+      'https://api.test/documents/d2/action/openClose',
+    ]);
+    expect(postCalls.every((c) => c.body === expectedBody)).toBe(true);
+  });
+
+  it('shows a success toast and clears the selection when all selected documents succeed', async () => {
+    const postSpy = vi.fn(() => Promise.resolve({ ok: true, json: () => Promise.resolve({}) }));
+    await renderExpanded('b6');
+    fireEvent.click(screen.getByTestId('document-select-d1'));
+    fireEvent.click(screen.getByTestId('document-select-d2'));
+    global.fetch = postSpy;
+
+    fireEvent.click(screen.getByTestId('document-bulk-openclose-p1'));
+    selectOpenCloseOption('C');
+    fireEvent.click(screen.getByTestId('process-param-confirm'));
+
+    await waitFor(() => expect(toast.success).toHaveBeenCalled());
+    expect(screen.queryByTestId('document-bulk-bar-p1')).not.toBeInTheDocument();
+  });
+
+  it('surfaces partial failure (one of three fails) via a warning toast, not silently', async () => {
+    const postSpy = vi.fn((url) => {
+      if (url.includes('/d2/')) return Promise.resolve({ ok: false, status: 500, json: () => Promise.resolve({}) });
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
+    });
+    await renderExpanded('b7');
+    fireEvent.click(screen.getByTestId('document-select-d1'));
+    fireEvent.click(screen.getByTestId('document-select-d2'));
+    fireEvent.click(screen.getByTestId('document-select-d3'));
+    global.fetch = postSpy;
+
+    fireEvent.click(screen.getByTestId('document-bulk-openclose-p1'));
+    selectOpenCloseOption('C');
+    fireEvent.click(screen.getByTestId('process-param-confirm'));
+
+    // 2 succeeded, 1 failed -> a WARNING toast (partial failure), not success or plain error.
+    await waitFor(() => expect(toast.warning).toHaveBeenCalled());
+    expect(toast.success).not.toHaveBeenCalled();
+  });
+
+  it('shows an error toast (not success) when every selected document fails', async () => {
+    const postSpy = vi.fn(() => Promise.resolve({ ok: false, status: 500, json: () => Promise.resolve({}) }));
+    await renderExpanded('b8');
+    fireEvent.click(screen.getByTestId('document-select-d1'));
+    fireEvent.click(screen.getByTestId('document-select-d2'));
+    global.fetch = postSpy;
+
+    fireEvent.click(screen.getByTestId('document-bulk-openclose-p1'));
+    selectOpenCloseOption('C');
+    fireEvent.click(screen.getByTestId('process-param-confirm'));
+
+    await waitFor(() => expect(toast.error).toHaveBeenCalled());
+    expect(toast.success).not.toHaveBeenCalled();
+    expect(toast.warning).not.toHaveBeenCalled();
+  });
+
+  it('refreshes BOTH the documents list and the periods list after the bulk action completes', async () => {
+    const UPDATED_DOCS = [
+      { ...DOC, periodStatus: 'C', 'periodStatus$_identifier': 'Closed' },
+      { ...DOC2, periodStatus: 'C', 'periodStatus$_identifier': 'Closed' },
+      DOC3,
+    ];
+    const UPDATED_PERIOD = { ...PERIOD, status: 'M', 'status$_identifier': 'Mixed' };
+    let periodControlCallCount = 0;
+    let documentsCallCount = 0;
+    global.fetch = vi.fn((url, opts) => {
+      if (opts?.method === 'POST') return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
+      if (url.includes('/periodControl')) {
+        periodControlCallCount += 1;
+        const data = periodControlCallCount === 1 ? [PERIOD] : [UPDATED_PERIOD];
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ response: { data } }) });
+      }
+      if (url.includes('/documents')) {
+        documentsCallCount += 1;
+        const data = documentsCallCount === 1 ? [DOC, DOC2, DOC3] : UPDATED_DOCS;
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ response: { data } }) });
+      }
+      return Promise.reject(new Error('unexpected url ' + url));
+    });
+
+    await renderExpanded('b9');
+    expect(documentsCallCount).toBe(1);
+    expect(periodControlCallCount).toBe(1);
+
+    fireEvent.click(screen.getByTestId('document-select-d1'));
+    fireEvent.click(screen.getByTestId('document-select-d2'));
+    fireEvent.click(screen.getByTestId('document-bulk-openclose-p1'));
+    selectOpenCloseOption('C');
+    fireEvent.click(screen.getByTestId('process-param-confirm'));
+
+    await waitFor(() => expect(documentsCallCount).toBe(2));
+    await waitFor(() => expect(periodControlCallCount).toBe(2));
+    await waitFor(() => {
+      const periodBadge = screen.getByTestId(`period-status-${PERIOD.id}`).querySelector('[data-testid="tag"]');
+      expect(periodBadge).toHaveTextContent('Mixed');
+    });
+  });
+
+  it('disables the bulk button while the batch is in flight, guarding against double-submit', async () => {
+    // Two selected documents means Promise.allSettled fires TWO POSTs — each needs its own
+    // resolver, or resolving only one leaves the other (and the whole allSettled) pending
+    // forever, which would hang this test (the same pitfall as the single-action tests above).
+    const resolvers = [];
+    const postSpy = vi.fn((url, opts) => {
+      if (opts?.method === 'POST') return new Promise((resolve) => { resolvers.push(resolve); });
+      if (url.includes('/documents')) return Promise.resolve({ ok: true, json: () => Promise.resolve({ response: { data: [DOC, DOC2, DOC3] } }) });
+      if (url.includes('/periodControl')) return Promise.resolve({ ok: true, json: () => Promise.resolve({ response: { data: [PERIOD] } }) });
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
+    });
+    await renderExpanded('b10');
+    fireEvent.click(screen.getByTestId('document-select-d1'));
+    fireEvent.click(screen.getByTestId('document-select-d2'));
+    global.fetch = postSpy;
+
+    fireEvent.click(screen.getByTestId('document-bulk-openclose-p1'));
+    selectOpenCloseOption('C');
+    fireEvent.click(screen.getByTestId('process-param-confirm'));
+
+    await waitFor(() => expect(screen.getByTestId('document-bulk-openclose-p1')).toBeDisabled());
+    expect(resolvers.length).toBe(2);
+
+    resolvers.forEach((resolve) => resolve({ ok: true, json: () => Promise.resolve({}) }));
+    await waitFor(() => expect(screen.queryByTestId('document-bulk-openclose-p1')).not.toBeInTheDocument());
+  });
+
+  it('does not disturb the existing single-row "Abrir/Cerrar Documento" action', async () => {
+    const postSpy = vi.fn(() => Promise.resolve({ ok: true, json: () => Promise.resolve({}) }));
+    await renderExpanded('b11');
+    global.fetch = postSpy;
+
+    fireEvent.click(screen.getByTestId('document-openclose-d1'));
+    selectOpenCloseOption('O');
+    fireEvent.click(screen.getByTestId('process-param-confirm'));
+
+    await waitFor(() => expect(postSpy).toHaveBeenCalledWith(
+      'https://api.test/documents/d1/action/openClose',
+      expect.objectContaining({ body: JSON.stringify({ fieldValues: { openClose: 'O' } }) })
+    ));
+    // Selecting via checkbox is fully independent — a single-row action must not have touched
+    // (or required) any selection state.
+    expect(screen.queryByTestId('document-bulk-bar-p1')).not.toBeInTheDocument();
   });
 });

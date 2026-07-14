@@ -3,7 +3,10 @@ import { ChevronRight, ChevronDown } from 'lucide-react';
 import { toast } from 'sonner';
 import { useUI } from '@/i18n';
 import { Tag } from '@/components/ui/tag';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Button } from '@/components/ui/button';
 import { ProcessParamDialog } from '@/components/contract-ui/ProcessParamDialog';
+import { useBulkActionToast } from '@/hooks/useBulkActionToast.js';
 
 // Same color mapping as artifacts/open-close-period-control/decisions.json's
 // periodControl.status / documents.periodStatus enumVariants — kept in sync manually
@@ -79,10 +82,16 @@ export default function PeriodsExpandablePanel({ parentId, token, apiBaseUrl }) 
   // triggering button while its request is in flight, guarding against double-submission
   // on rapid double-click (matching CloseYearConfirmModal's `submitting` pattern).
   const [pendingActions, setPendingActions] = useState({});
-  // Which row's open/close dialog is currently open, if any: { kind: 'period'|'document', id }.
-  // Clicking "Abrir/Cerrar Periodo"/"Abrir/Cerrar Documento" no longer fires the POST directly —
-  // openClose is a required 3-state choice, not a toggle, so the choice must be collected first.
+  // Which row's open/close dialog is currently open, if any: { kind: 'period'|'document'|
+  // 'bulk-documents', id?, ids?, periodId }. Clicking "Abrir/Cerrar Periodo"/"Abrir/Cerrar
+  // Documento" no longer fires the POST directly — openClose is a required 3-state choice,
+  // not a toggle, so the choice must be collected first.
   const [dialogTarget, setDialogTarget] = useState(null);
+  // Selected document ids within the currently expanded period only — a Set, not keyed by
+  // period, since only one period can be expanded (and therefore have selectable rows) at a
+  // time; cleared whenever the expanded period changes (see toggleExpand).
+  const [selectedDocIds, setSelectedDocIds] = useState(() => new Set());
+  const { showResult: showBulkResult } = useBulkActionToast();
 
   // Fetches (or re-fetches) the periods list without touching the loading/error state — used
   // both by the mount effect (which resets to `undefined` itself first, below) and, silently,
@@ -118,6 +127,9 @@ export default function PeriodsExpandablePanel({ parentId, token, apiBaseUrl }) 
   }, [apiBaseUrl, token]);
 
   const toggleExpand = useCallback(async (periodId) => {
+    // Selection only ever applies to the currently expanded period's rows — collapsing or
+    // switching to a different period must never leave a stale, invisible selection behind.
+    setSelectedDocIds(new Set());
     if (expandedId === periodId) {
       setExpandedId(null);
       return;
@@ -127,6 +139,15 @@ export default function PeriodsExpandablePanel({ parentId, token, apiBaseUrl }) 
       await loadDocumentsForPeriod(periodId);
     }
   }, [expandedId, documentsByPeriod, loadDocumentsForPeriod]);
+
+  const toggleDocSelection = useCallback((documentId) => {
+    setSelectedDocIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(documentId)) next.delete(documentId);
+      else next.add(documentId);
+      return next;
+    });
+  }, []);
 
   const runAction = useCallback(async (key, url, fieldValues, onSuccess) => {
     setPendingActions((prev) => {
@@ -159,12 +180,46 @@ export default function PeriodsExpandablePanel({ parentId, token, apiBaseUrl }) 
     setDialogTarget({ kind: 'document', id: documentId, periodId });
   }, []);
 
+  const openCloseSelectedDocuments = useCallback((periodId) => {
+    setDialogTarget({ kind: 'bulk-documents', ids: Array.from(selectedDocIds), periodId });
+  }, [selectedDocIds]);
+
+  // Fires one POST per selected document (NEO's openClose action is per-record — there is no
+  // batched backend endpoint) via Promise.allSettled, exactly like BulkDocumentAction.jsx's own
+  // fan-out technique, but targeting our own endpoint/body shape (BulkDocumentAction is hard-
+  // coded to POST {apiBaseUrl}/{entity}/{id}/action/documentAction with { docAction } — the
+  // classic DocAction shape, not openClose's { fieldValues: { openClose } } — so it isn't
+  // reusable as-is here; see PeriodsExpandablePanel's own postAction). Reuses
+  // useBulkActionToast's `showResult` for the ok/failed summary toast instead of
+  // BulkDocumentAction's sessionStorage-plus-window.location.reload() pattern, since staying on
+  // the same page (no reload) is the exact anti-pattern already fixed for the single-row case.
+  const runBulkDocumentAction = useCallback(async (ids, periodId, fieldValues) => {
+    const key = `bulk-${periodId}`;
+    setPendingActions((prev) => (prev[key] ? prev : { ...prev, [key]: true }));
+    try {
+      const outcomes = await Promise.allSettled(
+        ids.map((id) => postAction(`${apiBaseUrl}/documents/${id}/action/openClose`, token, fieldValues))
+      );
+      const failed = outcomes.filter((o) => o.status === 'rejected');
+      const ok = ids.length - failed.length;
+      showBulkResult({ ok, failed });
+      setSelectedDocIds(new Set());
+      // Same lesson as the single-document fix: both the documents list AND the period's own
+      // aggregate status must be refreshed, not just the former.
+      await Promise.all([loadDocumentsForPeriod(periodId), loadPeriods()]);
+    } finally {
+      setPendingActions((prev) => ({ ...prev, [key]: false }));
+    }
+  }, [apiBaseUrl, token, showBulkResult, loadDocumentsForPeriod, loadPeriods]);
+
   const handleDialogConfirm = useCallback((paramValues) => {
     if (!dialogTarget) return;
-    const { kind, id, periodId } = dialogTarget;
+    const { kind, id, ids, periodId } = dialogTarget;
     setDialogTarget(null);
     if (kind === 'period') {
       runAction(`period-${id}`, `${apiBaseUrl}/periodControl/${id}/action/openClose`, paramValues, loadPeriods);
+    } else if (kind === 'bulk-documents') {
+      runBulkDocumentAction(ids, periodId, paramValues);
     } else {
       // A document's own status changing can flip its parent period's aggregate status too
       // (e.g. "All Opened" -> "Mixed" once one document type differs from the rest — the
@@ -177,9 +232,11 @@ export default function PeriodsExpandablePanel({ parentId, token, apiBaseUrl }) 
         () => Promise.all([loadDocumentsForPeriod(periodId), loadPeriods()])
       );
     }
-  }, [dialogTarget, apiBaseUrl, runAction, loadPeriods, loadDocumentsForPeriod]);
+  }, [dialogTarget, apiBaseUrl, runAction, runBulkDocumentAction, loadPeriods, loadDocumentsForPeriod]);
 
-  const dialogProcess = dialogTarget?.kind === 'document' ? DOCUMENT_OPEN_CLOSE_PROCESS : PERIOD_OPEN_CLOSE_PROCESS;
+  const dialogProcess = (dialogTarget?.kind === 'document' || dialogTarget?.kind === 'bulk-documents')
+    ? DOCUMENT_OPEN_CLOSE_PROCESS
+    : PERIOD_OPEN_CLOSE_PROCESS;
 
   if (periods === undefined) {
     return <div data-testid="periods-expandable-panel-loading" className="p-4 text-sm text-muted-foreground">{ui('loading')}</div>;
@@ -229,10 +286,34 @@ export default function PeriodsExpandablePanel({ parentId, token, apiBaseUrl }) 
                     {ui('documentsLoadError')}
                   </div>
                 )}
+                {selectedDocIds.size > 0 && (
+                  <div
+                    className="flex items-center justify-between gap-2 py-1.5"
+                    data-testid={`document-bulk-bar-${period.id}`}
+                  >
+                    <span role="status" className="text-sm font-semibold" data-testid="document-selection-count">
+                      {ui('selected').replace('{count}', String(selectedDocIds.size))}
+                    </span>
+                    <Button
+                      size="sm"
+                      className="gap-1.5"
+                      data-testid={`document-bulk-openclose-${period.id}`}
+                      onClick={() => openCloseSelectedDocuments(period.id)}
+                      disabled={!!pendingActions[`bulk-${period.id}`]}
+                    >
+                      {ui('bulkOpenCloseDocuments')} ({selectedDocIds.size})
+                    </Button>
+                  </div>
+                )}
                 {(documentsByPeriod[period.id] || []).map((doc) => {
                   const docPending = !!pendingActions[`document-${doc.id}`];
                   return (
                     <div key={doc.id} className="flex items-center gap-2 py-1.5">
+                      <Checkbox
+                        checked={selectedDocIds.has(doc.id)}
+                        onChange={() => toggleDocSelection(doc.id)}
+                        data-testid={`document-select-${doc.id}`}
+                      />
                       <span className="flex-1">{doc.documentCategory$_identifier ?? doc.documentCategory}</span>
                       <span data-testid={`document-status-${doc.id}`}>
                         <Tag
