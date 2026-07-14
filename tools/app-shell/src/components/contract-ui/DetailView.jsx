@@ -1265,7 +1265,16 @@ const WINDOW_DELETE_ACTIONS = {
   'payment-out': 'eTPRRemovePayment',
 };
 
-export function isDeleteButtonVisible(isNew, recordId, data, statusField, hideDeleteWhenComplete, isProcessed, deleteAction, hideDeleteButton = false) {
+export function isDeleteButtonVisible({
+  isNew,
+  recordId,
+  data,
+  statusField,
+  hideDeleteWhenComplete,
+  isProcessed,
+  deleteAction,
+  hideDeleteButton = false,
+}) {
   // hideDeleteButton is an explicit, unconditional "never show delete here"
   // signal (e.g. Amortization) — it wins over everything else, including the
   // deleteAction lifecycle bypass below.
@@ -3181,7 +3190,16 @@ export function DetailView({
                 </button>
               )}
               {/* Delete record — hidden unconditionally when hideDeleteButton is set; otherwise shown for a deleteAction-backed delete at any lifecycle stage (except RPVOID), or when hideDeleteWhenComplete/isProcessed rules allow it */}
-              {isDeleteButtonVisible(isNew, recordId, data, statusField, hideDeleteWhenComplete, isProcessed, effectiveDeleteAction, hideDeleteButton) && (
+              {isDeleteButtonVisible({
+                isNew,
+                recordId,
+                data,
+                statusField,
+                hideDeleteWhenComplete,
+                isProcessed,
+                deleteAction: effectiveDeleteAction,
+                hideDeleteButton,
+              }) && (
                 <button
                   onClick={() => setShowDeleteConfirm(true)}
                   className={`${sqBtnSize} flex items-center justify-center rounded-lg border border-red-200 text-red-500 hover:bg-red-50 hover:text-red-600 transition-colors`}
