@@ -3093,6 +3093,7 @@ export function DetailView({
                     api={api}
                     onProcess={hook.handleProcess}
                     onRefresh={() => hook.fetchById?.(data?.id || recordId)}
+                    onSave={() => hook.handleSave({ silent: true })}
                     data-testid="TopbarRightComponent__fa3275" />
                 );
               })()}

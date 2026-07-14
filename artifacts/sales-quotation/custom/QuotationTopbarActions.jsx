@@ -31,7 +31,7 @@ const btnCloneStyle = {
   boxShadow: '0px 1px 2px 0px #1212170D',
 };
 
-export default function QuotationTopbarActions({ data, recordId, token, apiBaseUrl }) {
+export default function QuotationTopbarActions({ data, recordId, token, apiBaseUrl, onSave }) {
   const navigate = useNavigate();
   const ui = useUI();
   const tMenu = useMenuLabel();
@@ -119,6 +119,7 @@ export default function QuotationTopbarActions({ data, recordId, token, apiBaseU
           data={data}
           token={token}
           apiBaseUrl={apiBaseUrl}
+          onSave={onSave}
           onClose={() => setShowConfirm(false)}
         />,
         document.body,
