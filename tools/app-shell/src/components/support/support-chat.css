@@ -342,6 +342,32 @@
 .sc-inicio-search-result span { flex: 1; }
 
 /* ---- MENSAJES tab ------------------------------------------------------- */
+.sc-msg-search {
+  padding: 8px 18px 6px;
+  position: sticky;
+  top: 0;
+  background: #fff;
+  z-index: 2;
+}
+.sc-msg-search-inner {
+  background: var(--sc-bg-chrome);
+  border-radius: 10px;
+  padding: 0 14px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--sc-fg-3);
+}
+.sc-msg-search-inner input {
+  flex: 1;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  font: 400 13px/1 'Inter', sans-serif;
+  color: var(--sc-fg-1);
+}
+.sc-msg-search-inner input::placeholder { color: var(--sc-fg-3); }
 .sc-ticket-list { padding: 6px 0; }
 .sc-ticket-row {
   display: flex;

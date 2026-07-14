@@ -235,6 +235,22 @@ function AyudaTab({ onClose }) {
 // ---- MENSAJES tab wrapper -------------------------------------------------
 function MensajesTab({ conversations, activeConversationId, isLoading, onSelect, onStartChat, onClose, unreadCount }) {
   const ui = useUI();
+  const [searchQuery, setSearchQuery] = React.useState('');
+
+  const filteredConversations = React.useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return conversations;
+    return conversations.filter((conv) => {
+      const subject = (conv.subject || ui('supportDefaultSubject')).toLowerCase();
+      const preview = (conv.lastMessage || conv.preview || '').toLowerCase();
+      return subject.includes(q) || preview.includes(q);
+    });
+  }, [conversations, searchQuery, ui]);
+
+  const hasNoSearchResults = searchQuery.trim().length > 0
+    && conversations.length > 0
+    && filteredConversations.length === 0;
+
   return (
     <>
       <div className="sc-head" style={{ paddingBottom: 12 }}>
@@ -245,13 +261,35 @@ function MensajesTab({ conversations, activeConversationId, isLoading, onSelect,
           <button className="sc-head-icn" onClick={onClose} aria-label={ui('close')}><X size={16} data-testid="X__4d85ab" /></button>
         </div>
       </div>
-      <TicketList
-        conversations={conversations}
-        activeConversationId={activeConversationId}
-        isLoading={isLoading}
-        onSelect={onSelect}
-        onStartChat={onStartChat}
-        data-testid="TicketList__4d85ab" />
+      {conversations.length > 0 && (
+        <div className="sc-msg-search">
+          <div className="sc-msg-search-inner">
+            <Search size={16} data-testid="Search__4d85ab" />
+            <input
+              placeholder={ui('supportSearchPlaceholder')}
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+            />
+          </div>
+        </div>
+      )}
+      {hasNoSearchResults ? (
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+          <div style={{ padding: '48px 24px', textAlign: 'center', color: 'var(--sc-fg-3)' }}>
+            <div style={{ fontSize: 13, lineHeight: '18px' }}>
+              {ui('supportNoSearchResults')}
+            </div>
+          </div>
+        </div>
+      ) : (
+        <TicketList
+          conversations={filteredConversations}
+          activeConversationId={activeConversationId}
+          isLoading={isLoading}
+          onSelect={onSelect}
+          onStartChat={onStartChat}
+          data-testid="TicketList__4d85ab" />
+      )}
     </>
   );
 }

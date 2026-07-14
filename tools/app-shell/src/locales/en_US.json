@@ -17075,6 +17075,8 @@
     "supportStatusOpen": "Open",
     "supportStatusClosed": "Closed",
     "supportNoConversations": "No conversations yet. Start one by clicking the + button.",
+    "supportSearchPlaceholder": "Search conversations…",
+    "supportNoSearchResults": "No conversations match your search.",
     "supportLoading": "Loading...",
     "supportClosedConversation": "This conversation has been closed.",
     "supportRateExperience": "How was your experience?",

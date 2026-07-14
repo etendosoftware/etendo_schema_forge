@@ -17321,6 +17321,8 @@
     "supportStatusOpen": "Abierto",
     "supportStatusClosed": "Cerrado",
     "supportNoConversations": "No hay conversaciones aún. Comienza una haciendo clic en el botón +.",
+    "supportSearchPlaceholder": "Buscar conversaciones…",
+    "supportNoSearchResults": "Ninguna conversación coincide con tu búsqueda.",
     "supportLoading": "Cargando...",
     "supportClosedConversation": "Esta conversación ha sido cerrada.",
     "supportRateExperience": "¿Cómo fue tu experiencia?",
