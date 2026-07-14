@@ -7720,6 +7720,13 @@
         }
       ]
     },
+    "62e7d6689c11ba27fdc238450bbc940c71cc4a579d87d3669861331f4f00b615": {
+      "checksum": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "params": [
+        "B5673F73F613496C8BEA22FB55E4E1E4"
+      ],
+      "rows": []
+    },
     "675461360c94bf1fe8bbe3121d5b8aeec6025503b503da010fa3adf22f7c1e92": {
       "checksum": "471c11c0c3138276a0b62294d8fef52c3e47ec55f4ffcf1be93dcde5c324dc80",
       "params": [
@@ -8540,6 +8547,46 @@
           "displaylogicgrid": null,
           "name": "2nd Dimension",
           "readonlylogic": "@Posted@='Y'"
+        }
+      ]
+    },
+    "81933096771953c6cf094e465f86e91738157acf5f9d32e9a078c92c5281ca5e": {
+      "checksum": "ea314959162320b5e79903aad446a42cdbed220ab3535adcd923ad391cd39f3f",
+      "params": [
+        "117"
+      ],
+      "rows": [
+        {
+          "columnname": "EndDate",
+          "displaylogic": null,
+          "displaylogic_server": null,
+          "displaylogicgrid": null,
+          "name": "Ending Date",
+          "readonlylogic": "@C_Period_Not_Editable@='Y'"
+        },
+        {
+          "columnname": "PeriodNo",
+          "displaylogic": null,
+          "displaylogic_server": null,
+          "displaylogicgrid": null,
+          "name": "Period No.",
+          "readonlylogic": "@C_Period_Not_Editable@='Y'"
+        },
+        {
+          "columnname": "PeriodType",
+          "displaylogic": null,
+          "displaylogic_server": null,
+          "displaylogicgrid": null,
+          "name": "Period Type",
+          "readonlylogic": "@C_Period_Not_Editable@='Y'"
+        },
+        {
+          "columnname": "StartDate",
+          "displaylogic": null,
+          "displaylogic_server": null,
+          "displaylogicgrid": null,
+          "name": "Starting Date",
+          "readonlylogic": "@C_Period_Not_Editable@='Y'"
         }
       ]
     },
