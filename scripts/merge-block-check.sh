@@ -157,26 +157,22 @@ for KEY in "$@"; do
       PEND_DETAIL="${PEND_DETAIL}  ${SHORT} ${PR}: ${PNAMES}\n"
     fi
 
-    # Missing approvals — only when the review gate is NOT satisfied.
-    # reviewDecision == APPROVED means branch protection's required approvals are
-    # met; outstanding review requests beyond that are optional noise, so skip.
-    if [[ "$REVIEW" != "APPROVED" ]]; then
-      REQ_REVIEWERS=$(jq -r '[.[0].reviewRequests[]? | (.login // .name // .slug // "reviewer")] | join(", ")' "$F")
-      APPROVED_BY=$(jq -r '[.[0].latestReviews[]? | select(.state == "APPROVED") | .author.login] | join(", ")' "$F")
-      if [[ "$REVIEW" == "CHANGES_REQUESTED" ]]; then
-        MISSING="CHANGES_REQUESTED"
-      elif [[ -n "$REQ_REVIEWERS" ]]; then
-        MISSING="pending from: ${REQ_REVIEWERS}"
-      else
-        MISSING="no approval yet (${REVIEW})"
-      fi
+    # Approval gate: needs MORE THAN 2 approvals (>=3), and no CHANGES_REQUESTED.
+    # Count distinct approvers and requesters from the latest review per author.
+    APPROVED_BY=$(jq -r '[.[0].latestReviews[]? | select(.state == "APPROVED") | .author.login] | unique | join(", ")' "$F")
+    N_APPROVED=$(jq -r '[.[0].latestReviews[]? | select(.state == "APPROVED") | .author.login] | unique | length' "$F")
+    CHR_BY=$(jq -r '[.[0].latestReviews[]? | select(.state == "CHANGES_REQUESTED") | .author.login] | unique | join(", ")' "$F")
+
+    if [[ -n "$CHR_BY" || "$N_APPROVED" -lt 3 ]]; then
+      MISSING="${N_APPROVED} approvals (needs >2)"
       [[ -n "$APPROVED_BY" ]] && MISSING="${MISSING} — approved by: ${APPROVED_BY}"
+      [[ -n "$CHR_BY" ]] && MISSING="${MISSING} — ${RED}CHANGES_REQUESTED by: ${CHR_BY}${YELLOW}"
       APPROVE_DETAIL="${APPROVE_DETAIL}  ${SHORT} ${PR}: ${MISSING}\n"
     fi
 
     # Copy-paste merge command into the current block branch (per repo).
     HEAD_REF=$(jq -r '.[0].headRefName' "$F")
-    if [[ "$CI_C" == "$GREEN" && "$REV_C" == "$GREEN" && "$MRG_C" == "$GREEN" ]]; then
+    if [[ "$CI_C" == "$GREEN" && "$MRG_C" == "$GREEN" && "$N_APPROVED" -ge 3 && -z "$CHR_BY" ]]; then
       READY_TAG="${GREEN}# 🟢 ready${RESET}"
     else
       READY_TAG="${YELLOW}# ⚠️  not all green — review before merging${RESET}"
