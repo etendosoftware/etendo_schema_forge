@@ -792,3 +792,74 @@ describe('PeriodsExpandablePanel — pinning the expanded period to the top', ()
     expect(renderedPeriodOrder(container)).toEqual(['p1', 'p2', 'p3']);
   });
 });
+
+describe('PeriodsExpandablePanel — sticky expanded period row + bulk action bar', () => {
+  // jsdom cannot actually evaluate `position: sticky` against a scroll container (no real
+  // layout engine) — asserting the className is applied to the right element in the right
+  // state is the meaningful thing to test here; the actual "does it visually stay pinned
+  // while scrolling" behavior was verified live in a real browser instead (see commit message).
+  const P1 = { id: 'p1', name: 'Jan-2027', status: 'O', 'status$_identifier': 'All Opened' };
+  const P2 = { id: 'p2', name: 'Feb-2027', status: 'O', 'status$_identifier': 'All Opened' };
+
+  beforeEach(() => {
+    global.fetch = vi.fn((url) => {
+      if (url.includes('/periodControl')) return Promise.resolve({ ok: true, json: () => Promise.resolve({ response: { data: [P1, P2] } }) });
+      if (url.includes('/documents')) return Promise.resolve({ ok: true, json: () => Promise.resolve({ response: { data: [DOC, DOC2] } }) });
+      return Promise.reject(new Error('unexpected url ' + url));
+    });
+  });
+
+  function stickyWrapperFor(periodId) {
+    return screen.getByTestId(`period-row-expand-${periodId}`)
+      .closest('div').parentElement; // button -> row div -> sticky wrapper div
+  }
+
+  it('does not apply sticky positioning to a collapsed period row', async () => {
+    render(<PeriodsExpandablePanel parentId="year1" token="tok" apiBaseUrl="https://api.test" />);
+    await waitFor(() => screen.getByText('Feb-2027'));
+
+    expect(stickyWrapperFor('p1').className).not.toMatch(/sticky/);
+    expect(stickyWrapperFor('p2').className).not.toMatch(/sticky/);
+  });
+
+  it('applies sticky top-0 to the expanded period row + bulk bar unit, and to that one only', async () => {
+    render(<PeriodsExpandablePanel parentId="year1" token="tok" apiBaseUrl="https://api.test" />);
+    await waitFor(() => screen.getByText('Feb-2027'));
+
+    fireEvent.click(screen.getByTestId('period-row-expand-p2'));
+    await waitFor(() => screen.getByTestId('period-documents-p2'));
+
+    const p2Wrapper = stickyWrapperFor('p2');
+    expect(p2Wrapper.className).toMatch(/\bsticky\b/);
+    expect(p2Wrapper.className).toMatch(/\btop-0\b/);
+    // The collapsed period must never also be sticky — only one pinned unit at a time.
+    expect(stickyWrapperFor('p1').className).not.toMatch(/sticky/);
+  });
+
+  it('keeps the bulk action bar inside the same sticky wrapper as the period row once documents are selected', async () => {
+    render(<PeriodsExpandablePanel parentId="year1" token="tok" apiBaseUrl="https://api.test" />);
+    await waitFor(() => screen.getByText('Feb-2027'));
+
+    fireEvent.click(screen.getByTestId('period-row-expand-p1'));
+    await waitFor(() => screen.getByText('AP Credit Memo'));
+    fireEvent.click(screen.getByTestId('document-select-d1'));
+
+    const p1Wrapper = stickyWrapperFor('p1');
+    expect(p1Wrapper.className).toMatch(/\bsticky\b/);
+    expect(p1Wrapper.querySelector('[data-testid="document-bulk-bar-p1"]')).toBeInTheDocument();
+  });
+
+  it('moves the sticky unit to the newly expanded period, and the previous one is no longer sticky', async () => {
+    render(<PeriodsExpandablePanel parentId="year1" token="tok" apiBaseUrl="https://api.test" />);
+    await waitFor(() => screen.getByText('Feb-2027'));
+
+    fireEvent.click(screen.getByTestId('period-row-expand-p1'));
+    await waitFor(() => screen.getByTestId('period-documents-p1'));
+    expect(stickyWrapperFor('p1').className).toMatch(/sticky/);
+
+    fireEvent.click(screen.getByTestId('period-row-expand-p2'));
+    await waitFor(() => screen.getByTestId('period-documents-p2'));
+    expect(stickyWrapperFor('p2').className).toMatch(/sticky/);
+    expect(stickyWrapperFor('p1').className).not.toMatch(/sticky/);
+  });
+});

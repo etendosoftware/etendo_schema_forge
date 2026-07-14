@@ -264,34 +264,62 @@ export default function PeriodsExpandablePanel({ parentId, token, apiBaseUrl }) 
     <div data-testid="periods-expandable-panel">
       {orderedPeriods.map((period) => {
         const periodPending = !!pendingActions[`period-${period.id}`];
+        const isExpanded = expandedId === period.id;
         return (
           <div key={period.id} className="border-b">
-            <div className="flex items-center gap-2 py-2 px-3">
-              <button
-                type="button"
-                data-testid={`period-row-expand-${period.id}`}
-                onClick={() => toggleExpand(period.id)}
-                aria-label={ui('expandPeriod')}
-              >
-                {expandedId === period.id ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
-              </button>
-              <span className="flex-1">{period.name}</span>
-              <span data-testid={`period-status-${period.id}`}>
-                <Tag
-                  variant={PERIOD_STATUS_VARIANTS[period.status] ?? 'neutral'}
-                  label={period.status$_identifier ?? period.status}
-                />
-              </span>
-              <button
-                type="button"
-                data-testid={`period-openclose-${period.id}`}
-                onClick={() => openClosePeriod(period.id)}
-                disabled={periodPending}
-              >
-                {ui('openClosePeriod')}
-              </button>
+            {/* This wrapper (row + bulk bar, when visible) is the sticky unit — kept together
+                so they scroll-pin as one block. It only needs `sticky` while THIS period is
+                expanded (only the expanded/pinned period, always rendered first per the
+                array-reordering fix above, has a long document list worth pinning against —
+                collapsed rows never need it and must never compete for the same top-0 slot).
+                `bg-white` prevents the scrolling document rows from showing through underneath. */}
+            <div className={isExpanded ? 'sticky top-0 z-10 bg-white' : undefined}>
+              <div className="flex items-center gap-2 py-2 px-3">
+                <button
+                  type="button"
+                  data-testid={`period-row-expand-${period.id}`}
+                  onClick={() => toggleExpand(period.id)}
+                  aria-label={ui('expandPeriod')}
+                >
+                  {isExpanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+                </button>
+                <span className="flex-1">{period.name}</span>
+                <span data-testid={`period-status-${period.id}`}>
+                  <Tag
+                    variant={PERIOD_STATUS_VARIANTS[period.status] ?? 'neutral'}
+                    label={period.status$_identifier ?? period.status}
+                  />
+                </span>
+                <button
+                  type="button"
+                  data-testid={`period-openclose-${period.id}`}
+                  onClick={() => openClosePeriod(period.id)}
+                  disabled={periodPending}
+                >
+                  {ui('openClosePeriod')}
+                </button>
+              </div>
+              {isExpanded && selectedDocIds.size > 0 && (
+                <div
+                  className="flex items-center justify-between gap-2 py-1.5 px-3"
+                  data-testid={`document-bulk-bar-${period.id}`}
+                >
+                  <span role="status" className="text-sm font-semibold" data-testid="document-selection-count">
+                    {ui('selected').replace('{count}', String(selectedDocIds.size))}
+                  </span>
+                  <Button
+                    size="sm"
+                    className="gap-1.5"
+                    data-testid={`document-bulk-openclose-${period.id}`}
+                    onClick={() => openCloseSelectedDocuments(period.id)}
+                    disabled={!!pendingActions[`bulk-${period.id}`]}
+                  >
+                    {ui('bulkOpenCloseDocuments')} ({selectedDocIds.size})
+                  </Button>
+                </div>
+              )}
             </div>
-            {expandedId === period.id && (
+            {isExpanded && (
               <div className="pl-8" data-testid={`period-documents-${period.id}`}>
                 {documentsError[period.id] && (
                   <div
@@ -299,25 +327,6 @@ export default function PeriodsExpandablePanel({ parentId, token, apiBaseUrl }) 
                     className="text-sm text-destructive py-1.5"
                   >
                     {ui('documentsLoadError')}
-                  </div>
-                )}
-                {selectedDocIds.size > 0 && (
-                  <div
-                    className="flex items-center justify-between gap-2 py-1.5"
-                    data-testid={`document-bulk-bar-${period.id}`}
-                  >
-                    <span role="status" className="text-sm font-semibold" data-testid="document-selection-count">
-                      {ui('selected').replace('{count}', String(selectedDocIds.size))}
-                    </span>
-                    <Button
-                      size="sm"
-                      className="gap-1.5"
-                      data-testid={`document-bulk-openclose-${period.id}`}
-                      onClick={() => openCloseSelectedDocuments(period.id)}
-                      disabled={!!pendingActions[`bulk-${period.id}`]}
-                    >
-                      {ui('bulkOpenCloseDocuments')} ({selectedDocIds.size})
-                    </Button>
                   </div>
                 )}
                 {(documentsByPeriod[period.id] || []).map((doc) => {
