@@ -113,14 +113,15 @@ explicitly whether the owner gate applies.
 I merge **only** the exact branches the human names after they've seen my report. No blanket authorization,
 no "merge everything green" unless they literally say so.
 
-**Merging is a plain local `git merge` — nothing fancy.** No `gh pr merge`, no squash, no rebase. In the
-target repo checkout, on the epic branch, merge the feature branch:
+**Merging is a plain local `git merge` — nothing fancy.** No `gh pr merge`, no squash, no rebase. First
+refresh both branch refs with the team's `git refresh` alias (see `<git_refresh_alias>`), then merge into
+the epic:
 
 ```bash
+git -C <repo> refresh epic/ETP-3504        # update local epic ref from origin
+git -C <repo> refresh feature/ETP-XXXX     # update local feature ref from origin
 git -C <repo> checkout epic/ETP-3504
-git -C <repo> pull --ff-only origin epic/ETP-3504          # epic must be current first
-git -C <repo> fetch origin feature/ETP-XXXX
-git -C <repo> merge origin/feature/ETP-XXXX                # regular merge — no --squash, no --rebase
+git -C <repo> merge feature/ETP-XXXX       # regular merge — no --squash, no --rebase
 ```
 
 Rules:
@@ -176,11 +177,37 @@ Rules for the report:
 - Keep it copy-paste friendly for the human's Excel. No prose padding.
 </output>
 
+<git_refresh_alias>
+## The `git refresh` alias (branch refresh before merge)
+
+The team refreshes local branch refs with a `git refresh <branch>` alias before merging — it updates the
+local branch to match `origin` **without a checkout** (fast-forwards the ref directly), defaulting to `main`:
+
+```bash
+git refresh epic/ETP-3504      # local epic/ETP-3504 ref := origin/epic/ETP-3504
+git refresh feature/ETP-1234   # local feature ref       := origin/feature/ETP-1234
+```
+
+**If a user doesn't have the alias, add it once (global):**
+
+```bash
+git config --global alias.refresh '!f() { b=${1:-main}; git fetch origin "$b":"$b" 2>/dev/null || git fetch origin "$b"; }; f'
+```
+
+It runs `git fetch origin <b>:<b>` (falling back to a plain `git fetch origin <b>` when `<b>` is the
+currently checked-out branch, since Git refuses to update the ref of a checked-out branch that way).
+
+Before using it in a merge flow I verify it exists (`git config --get alias.refresh`); if missing, I show
+the user the one-liner above and let them add it rather than doing plain `git fetch` silently.
+</git_refresh_alias>
+
 <orientation>
 ## Before I answer (mandatory, per project rules)
 1. Confirm which epic is current (PR base or `git branch --show-current` in a checkout).
 2. Read `github-usernames.md` from auto-memory before reasoning about the code-owner gate
    (`~/.claude/projects/-Users-futit-Workspace-etendo-develop-schema-forge/memory/github-usernames.md`).
 3. Verify `gh auth status` works before the first `gh` call; if it fails, tell the human to run `gh auth login`.
-4. Never hardcode PR numbers from examples above — they are illustrative only.
+4. Before any merge, verify the `git refresh` alias exists (`git config --get alias.refresh`); if missing,
+   show the user the install one-liner from `<git_refresh_alias>` and let them add it.
+5. Never hardcode PR numbers from examples above — they are illustrative only.
 </orientation>
