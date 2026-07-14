@@ -3824,7 +3824,7 @@ export function DetailView({
                                       if (!conversion) return rawPrice;
                                       const { rate } = conversion;
                                       const n = parseFloat(String(rawPrice ?? 0));
-                                      if (!(n > 0) || rate === 1) return rawPrice;
+                                      if (Number.isNaN(n) || n <= 0 || rate === 1) return rawPrice;
                                       return parseFloat((n * rate).toFixed(2));
                                     },
                                   }}
