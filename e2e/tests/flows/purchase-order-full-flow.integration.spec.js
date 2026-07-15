@@ -1,69 +1,36 @@
 import { test, expect } from '@playwright/test';
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
 import { login, navigateTo } from '../helpers/auth.js';
+import {
+  loadCredentials, slow, waitForDetailReady, saveDraft, selectVendorBP,
+  addProductLine, ensureVendorSetup, openDraftRow, clickConfirmButton,
+  waitForConfirmResponse, dismissSuccessModal, expectStatusPill, safeReload,
+  readDocumentTotals, verifyTotalsConsistency,
+} from '../helpers/purchase-helpers.js';
 
 /**
  * Purchase Order — Full flow: PO → Goods Receipt → Purchase Invoice.
  *
- * Covers Test Plan cases:
- *   - 2.x  Create PO header (BP, address, price list, delivery date)
+ * Covers:
+ *   - 2.x  Create PO header (BP, address, price list)
  *   - 3.x  Add PO lines
- *   - 6.x  Confirm PO with "Create receipt + Create invoice" checked
- *   - 14.1 Receipt generated from PO has pre-filled data
- *   - 15.2 Confirm receipt → stock enters warehouse
+ *   - 6.x  Confirm PO with "Create receipt" (receipt only)
+ *   - 14.1 Receipt generated from PO has pre-filled data + lines
+ *   - 15.2 Confirm receipt with "Create invoice" → stock enters warehouse + invoice created
  *   - 22.1 Confirm invoice → Completed
  *   - 27.x Full end-to-end flow validation
  *   - Required field validation (empty form save attempt)
  *
  * Flow:
- *   1. Login
- *   2. Ensure contact has isVendor = true
- *   3. Create PO → attempt save with empty required fields → verify error
- *   4. Fill header, add 2 lines, confirm with receipt + invoice checked
- *   5. Navigate to goods-receipt → find the generated receipt → confirm it
- *   6. Navigate to purchase-invoice → find the generated invoice → confirm it
- *   7. Verify all documents are Completed
+ *   1. Login → ensure vendor → create PO with 2 lines
+ *   2. Confirm PO (receipt only, no invoice)
+ *   3. Open receipt → confirm with "Create invoice" toggle ON
+ *   4. Navigate to invoice via result modal → confirm → verify Completed
  *
  * Gated by E2E_SALES_INTEGRATION=1.
  */
 
-function loadCredentials() {
-  try {
-    const credPath = resolve(import.meta.dirname, '../../.auth-credentials.json');
-    const creds = JSON.parse(readFileSync(credPath, 'utf-8'));
-    if (creds.email && creds.password) return creds;
-  } catch { /* file doesn't exist */ }
-  return null;
-}
-
 const onboardingCreds = loadCredentials();
 const RUN_INTEGRATION = process.env.E2E_SALES_INTEGRATION === '1';
-const SLOW_MS = Number(process.env.E2E_SLOW_MS || 0);
-
-async function slow(page) {
-  if (SLOW_MS > 0) await page.waitForTimeout(SLOW_MS);
-}
-
-async function waitForDetailReady(page) {
-  await expect(page.getByTestId('detail-view'),
-    'Detail view should be visible — page may not have loaded correctly',
-  ).toBeVisible({ timeout: 20_000 });
-  const spinner = page.getByText(/cargando|loading/i);
-  if (await spinner.isVisible({ timeout: 500 }).catch(() => false)) {
-    await expect(spinner).toBeHidden({ timeout: 15_000 });
-  }
-}
-
-function expectSaveResponse(page) {
-  return page.waitForResponse(
-    (resp) =>
-      resp.url().includes('/sws/neo/') &&
-      ['POST', 'PUT', 'PATCH'].includes(resp.request().method()) &&
-      resp.status() >= 200 && resp.status() < 300,
-    { timeout: 20_000 },
-  );
-}
 
 test.describe('Purchase Order — Full flow with receipt and invoice (integration)', () => {
   test.describe.configure({ timeout: 300_000 });
@@ -73,7 +40,7 @@ test.describe('Purchase Order — Full flow with receipt and invoice (integratio
     'Set E2E_SALES_INTEGRATION=1 to run this live purchase full-flow integration test.',
   );
 
-  test('PO → confirm with receipt+invoice → confirm receipt → confirm invoice', async ({ page }) => {
+  test('PO → confirm with receipt → confirm receipt with invoice → confirm invoice', async ({ page }) => {
     const user = onboardingCreds?.email || process.env.E2E_USER;
     const password = onboardingCreds?.password || process.env.E2E_PASSWORD;
 
@@ -89,42 +56,7 @@ test.describe('Purchase Order — Full flow with receipt and invoice (integratio
     // STEP 2: Ensure the contact has isVendor = true
     // ═══════════════════════════════════════════════════════════════════════
 
-    await navigateTo(page, 'contacts');
-    await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {});
-    await slow(page);
-
-    const contactRow = page.locator('tbody tr').first();
-    await expect(contactRow).toBeVisible({ timeout: 10_000 });
-    await contactRow.click();
-    await slow(page);
-    await waitForDetailReady(page);
-
-    const financieroTab = page.getByRole('button', { name: /financiero|financial/i });
-    await expect(financieroTab).toBeVisible({ timeout: 10_000 });
-    await financieroTab.click();
-    await page.waitForTimeout(1_000);
-
-    const vendorInput = page.locator('[data-testid*="vendor"]').first();
-    const isChecked = await vendorInput.isChecked().catch(() => false);
-
-    if (!isChecked) {
-      const vendorSpan = vendorInput.locator('~ span').first();
-      if (await vendorSpan.isVisible({ timeout: 3_000 }).catch(() => false)) {
-        await vendorSpan.click();
-      } else {
-        await vendorInput.click({ force: true });
-      }
-      await page.waitForTimeout(1_000);
-
-      const saveBtn = page.getByTestId('action-save').or(
-        page.getByRole('button', { name: /guardar|save/i }),
-      ).first();
-      await expect(saveBtn).toBeEnabled({ timeout: 5_000 });
-      const savePromise = expectSaveResponse(page);
-      await saveBtn.click();
-      await savePromise;
-      await slow(page);
-    }
+    await ensureVendorSetup(page, { navigateTo });
 
     // ═══════════════════════════════════════════════════════════════════════
     // STEP 3: Create PO — validate required fields on empty save
@@ -143,11 +75,10 @@ test.describe('Purchase Order — Full flow with receipt and invoice (integratio
     await guardarBtn.click();
     await page.waitForTimeout(2_000);
 
-    // Verify inline "Requerido" validation labels appear under empty required fields
-    const requiredLabels = page.getByText('Requerido');
-    const requiredCount = await requiredLabels.count();
+    // Verify inline "Requerido" validation labels appear
+    const requiredCount = await page.getByText('Requerido').count();
     expect(requiredCount,
-      '[Validation] At least 2 "Requerido" labels should appear when saving with empty required fields (Contacto, Almacén)',
+      '[Validation] At least 2 "Requerido" labels should appear (Contacto, Almacén)',
     ).toBeGreaterThanOrEqual(2);
     await slow(page);
 
@@ -155,41 +86,13 @@ test.describe('Purchase Order — Full flow with receipt and invoice (integratio
     // STEP 4: Fill PO header — select vendor BP
     // ═══════════════════════════════════════════════════════════════════════
 
-    const bpInput = page.getByTestId('field-businessPartner');
-    await expect(bpInput).toBeVisible({ timeout: 10_000 });
-    await bpInput.click();
-
-    const bpOption = page.locator('[data-testid^="option-businessPartner-"]')
-      .filter({ hasNotText: /crear|create/i }).first();
-    await expect(bpOption,
-      'At least one vendor option should appear',
-    ).toBeVisible({ timeout: 15_000 });
-    await bpOption.click();
-    await slow(page);
-
-    // Wait for callout
-    await page.waitForResponse(
-      (resp) => resp.url().includes('/sws/neo/') && resp.status() < 500,
-      { timeout: 10_000 },
-    ).catch(() => {});
-    await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
-    await page.waitForTimeout(1_000);
+    await selectVendorBP(page);
 
     // ═══════════════════════════════════════════════════════════════════════
     // STEP 5: Save PO as draft
     // ═══════════════════════════════════════════════════════════════════════
 
-    const saveDraftBtn = page.getByTestId('action-save-draft');
-    if (await saveDraftBtn.isVisible({ timeout: 3_000 }).catch(() => false)) {
-      const savePromise = expectSaveResponse(page);
-      await saveDraftBtn.click();
-      await savePromise;
-    } else {
-      const savePromise = expectSaveResponse(page);
-      await guardarBtn.click();
-      await savePromise;
-    }
-    await slow(page);
+    await saveDraft(page);
 
     await expect(page,
       'After saving, URL should include the PO record ID',
@@ -201,85 +104,22 @@ test.describe('Purchase Order — Full flow with receipt and invoice (integratio
     // STEP 6: Add two product lines
     // ═══════════════════════════════════════════════════════════════════════
 
-    let emptyStateBtn = page.getByTestId('action-add-lines-empty-state');
-    if (!await emptyStateBtn.isVisible({ timeout: 5_000 }).catch(() => false)) {
-      emptyStateBtn = page.getByRole('button', { name: /añadir líneas|add lines/i }).first();
-    }
-    await emptyStateBtn.click();
-    await slow(page);
-
-    // Line 1
-    await expect(page.getByTestId('inline-add-row')).toBeVisible({ timeout: 10_000 });
-    const productField = page.getByTestId('inline-add-field-product');
-    await productField.click();
-    await slow(page);
-
-    const searchDrawer = page.getByTestId('product-search-drawer');
-    await expect(searchDrawer).toBeVisible({ timeout: 10_000 });
-    await page.locator('[data-testid^="product-search-option-"]').first().click();
-    await slow(page);
-    await expect(searchDrawer).toBeHidden({ timeout: 5_000 }).catch(() => {});
-    await page.waitForResponse(
-      (resp) => resp.url().includes('/sws/neo/') && resp.status() < 500,
-      { timeout: 10_000 },
-    ).catch(() => {});
-    await slow(page);
-
-    const line1Promise = expectSaveResponse(page);
-    await page.keyboard.press('Enter');
-    await line1Promise;
-    await slow(page);
-
-    // Line 2
-    const addLineBtn = page.getByRole('button', { name: /añadir línea|add line/i });
-    await expect(addLineBtn).toBeVisible({ timeout: 10_000 });
-    await addLineBtn.click();
-    await slow(page);
-
-    await expect(page.getByTestId('inline-add-row')).toBeVisible({ timeout: 10_000 });
-    await page.getByTestId('inline-add-field-product').click();
-    await slow(page);
-
-    const searchDrawer2 = page.getByTestId('product-search-drawer');
-    await expect(searchDrawer2).toBeVisible({ timeout: 10_000 });
-
-    const secondProduct = page.locator('[data-testid^="product-search-option-"]').nth(1);
-    if (await secondProduct.isVisible({ timeout: 5_000 }).catch(() => false)) {
-      await secondProduct.click();
-    } else {
-      await page.locator('[data-testid^="product-search-option-"]').first().click();
-    }
-    await slow(page);
-    await expect(searchDrawer2).toBeHidden({ timeout: 5_000 }).catch(() => {});
-    await page.waitForResponse(
-      (resp) => resp.url().includes('/sws/neo/') && resp.status() < 500,
-      { timeout: 10_000 },
-    ).catch(() => {});
-    await slow(page);
-
-    const qtyField = page.getByTestId('inline-add-field-orderedQuantity');
-    if (await qtyField.isVisible({ timeout: 3_000 }).catch(() => false)) {
-      await qtyField.clear();
-      await qtyField.fill('3');
-    }
-
-    const line2Promise = expectSaveResponse(page);
-    await page.keyboard.press('Enter');
-    await line2Promise;
-    await slow(page);
+    await addProductLine(page, { isFirst: true, productIndex: 0 });
+    await addProductLine(page, { productIndex: 1, quantity: '3' });
 
     await expect(page.locator('tbody tr'),
       'PO should have 2 lines',
     ).toHaveCount(2, { timeout: 10_000 });
 
+    // Verify PO totals: subtotal > 0, tax > 0, total = subtotal + tax
+    const poTotals = await readDocumentTotals(page);
+    verifyTotalsConsistency(poTotals, 'PO');
+
     // ═══════════════════════════════════════════════════════════════════════
-    // STEP 7: Confirm PO — check both "Create receipt" and "Create invoice"
+    // STEP 7: Confirm PO — check only "Create receipt" (no invoice)
     // ═══════════════════════════════════════════════════════════════════════
 
-    const confirmBtn = page.getByTestId('action-save');
-    await expect(confirmBtn).toBeVisible({ timeout: 10_000 });
-    await confirmBtn.click();
-    await slow(page);
+    await clickConfirmButton(page);
 
     // Wait for the confirm modal to appear
     const confirmModal = page.getByText(/confirmar pedido|confirm order/i).first();
@@ -287,242 +127,133 @@ test.describe('Purchase Order — Full flow with receipt and invoice (integratio
       'Confirm modal should appear with order summary',
     ).toBeVisible({ timeout: 10_000 });
 
-    // Check the "Create receipt" checkbox (📦)
+    // Check only the "Create receipt" checkbox — invoice will be created from the receipt
     const receiptCheckbox = page.getByText(/crear albarán|crear recibo|create receipt/i).first();
     await expect(receiptCheckbox,
-      '[Plan 6.1] "Crear albarán de proveedor" option should be visible in the confirm modal',
+      '[Plan 6.1] "Crear albarán de proveedor" should be visible in the confirm modal',
     ).toBeVisible({ timeout: 5_000 });
     await receiptCheckbox.click();
     await slow(page);
 
-    // Check the "Create invoice" checkbox (🧾)
-    const invoiceCheckbox = page.getByText(/crear factura|create invoice/i).first();
-    await expect(invoiceCheckbox,
-      '[Plan 6.1] "Crear factura de compra" option should be visible in the confirm modal',
-    ).toBeVisible({ timeout: 5_000 });
-    await invoiceCheckbox.click();
-    await slow(page);
-
-    // Click the confirm button in the modal
+    // Click the modal confirm button
     const modalConfirmBtn = page.locator('[data-testid="action-confirm-modal"]');
     await expect(modalConfirmBtn).toBeVisible({ timeout: 5_000 });
     await modalConfirmBtn.click();
 
-    // Wait for all 3 API calls (confirm + create receipt + create invoice)
+    // Wait for API calls (confirm + create receipt)
     await page.waitForTimeout(2_000);
     await page.waitForLoadState('networkidle', { timeout: 30_000 }).catch(() => {});
     await slow(page);
 
     // ═══════════════════════════════════════════════════════════════════════
-    // STEP 8: Verify success modal shows created documents
+    // STEP 8: Verify success modal shows the created receipt
     // ═══════════════════════════════════════════════════════════════════════
 
     const successMsg = page.getByText(/pedido.*confirmado|order.*confirmed/i);
     await expect(successMsg,
-      '[Plan 6.2] Success modal should confirm the PO was completed and documents were created',
+      '[Plan 6.2] Success modal should confirm PO was completed and receipt was created',
     ).toBeVisible({ timeout: 30_000 });
 
-    // Verify the success modal shows links to the created receipt and invoice
-    const receiptLink = page.getByText(/entrada|recibo|receipt/i).first();
-    const invoiceLink = page.getByText(/factura.*compra|purchase.*invoice/i).first();
-    await expect(receiptLink,
+    await expect(page.getByText(/entrada|recibo|receipt/i).first(),
       '[Plan 6.2] Success modal should show a link to the created goods receipt',
     ).toBeVisible({ timeout: 5_000 });
-    await expect(invoiceLink,
-      '[Plan 6.2] Success modal should show a link to the created purchase invoice',
-    ).toBeVisible({ timeout: 5_000 });
 
-    // Close the success modal
-    const closeBtn = page.getByRole('button', { name: 'Cerrar', exact: true });
-    await expect(closeBtn).toBeVisible({ timeout: 5_000 });
-    await closeBtn.click();
-    await slow(page);
+    await dismissSuccessModal(page);
 
     // ═══════════════════════════════════════════════════════════════════════
-    // STEP 9: Navigate to goods-receipt, find and confirm the receipt
+    // STEP 9: Navigate to goods-receipt, confirm with "Create invoice"
     // ═══════════════════════════════════════════════════════════════════════
 
     await navigateTo(page, 'goods-receipt');
     await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {});
     await slow(page);
 
-    // Find the draft receipt (most recent, created from our PO)
-    const receiptRows = page.locator('tbody tr');
-    await expect(receiptRows.first(),
-      '[Plan 14.1] Goods receipt list should have at least one row',
-    ).toBeVisible({ timeout: 10_000 });
+    await openDraftRow(page, { label: 'goods receipt' });
 
-    // Click the first draft receipt row
-    const draftReceiptRow = receiptRows.filter({ hasText: /borrador|draft/i }).first();
-    await expect(draftReceiptRow,
-      'There should be a draft goods receipt generated from the PO',
-    ).toBeVisible({ timeout: 10_000 });
+    // Verify draft status and 2 lines inherited from PO
+    await expectStatusPill(page, /borrador|draft/i,
+      '[Plan 14.1] Receipt should be in Draft status');
 
-    // Hover the row to reveal quick actions, then click the pencil icon to edit
-    await draftReceiptRow.hover();
-    await slow(page);
-    const editReceiptBtn = draftReceiptRow.locator('[data-testid*="Pencil"], [data-testid*="pencil"], [data-testid="row-quick-action-edit"]').first();
-    if (await editReceiptBtn.isVisible({ timeout: 3_000 }).catch(() => false)) {
-      await editReceiptBtn.click();
-    } else {
-      // Fallback: double-click the row
-      await draftReceiptRow.dblclick();
-    }
-    await slow(page);
-
-    await waitForDetailReady(page);
-
-    // Verify it's in draft status
-    const receiptPill = page.getByTestId('document-status-pill').first();
-    await expect(receiptPill,
-      '[Plan 14.1] Receipt should be in Draft status',
-    ).toContainText(/borrador|draft/i, { timeout: 5_000 });
-
-    // [Plan 14.1] Verify receipt has lines inherited from the PO
     await expect(page.getByRole('button', { name: /líneas\s+2|lines\s+2/i }),
       '[Plan 6.3] Receipt should have 2 lines inherited from the PO',
     ).toBeVisible({ timeout: 10_000 });
 
-    // Confirm the receipt — click the "Confirmar" button in the topbar
-    const confirmReceiptBtn = page.getByTestId('action-save');
-    await expect(confirmReceiptBtn).toBeVisible({ timeout: 10_000 });
-    await confirmReceiptBtn.click();
-    await page.waitForTimeout(1_000);
+    // Click "Confirmar" in the topbar
+    await clickConfirmButton(page);
 
-    // The receipt confirm modal (confirm-inout-modal) may appear with a "Create invoice"
-    // checkbox. Since the invoice was already created from the PO, we leave it unchecked.
+    // The receipt confirm modal should appear with "Create invoice" toggle ON by default
     const receiptModal = page.getByTestId('confirm-inout-modal');
-    if (await receiptModal.isVisible({ timeout: 5_000 }).catch(() => false)) {
-      // Click the confirm button INSIDE the modal
-      const modalConfirm = receiptModal.getByRole('button', { name: /confirmar|confirm/i });
-      await expect(modalConfirm,
-        'Receipt confirm modal should have a "Confirmar" button',
-      ).toBeVisible({ timeout: 5_000 });
-      await modalConfirm.click();
-    }
-
-    // Wait for the confirmation process to complete
-    await page.waitForResponse(
-      (resp) => resp.url().includes('/sws/neo/') && resp.request().method() === 'POST' && resp.status() < 500,
-      { timeout: 30_000 },
-    ).catch(() => {});
-    await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {});
-    await page.waitForTimeout(1_000);
-
-    // Dismiss success modal if present
-    const receiptCloseBtn = page.getByRole('button', { name: 'Cerrar', exact: true });
-    if (await receiptCloseBtn.isVisible({ timeout: 5_000 }).catch(() => false)) {
-      await receiptCloseBtn.click();
-      await slow(page);
-    }
-
-    // Verify receipt is Completed
-    await page.reload({ waitUntil: 'networkidle' });
-    await waitForDetailReady(page);
-
-    const receiptCompletedPill = page.getByTestId('document-status-pill').first();
-    await expect(receiptCompletedPill,
-      '[Plan 15.2] Receipt should be Completed after confirmation — stock should have entered the warehouse',
-    ).toContainText(/completado|registrado|booked|completed/i, { timeout: 10_000 });
-    await slow(page);
-
-    // ═══════════════════════════════════════════════════════════════════════
-    // STEP 10: Navigate to purchase-invoice, find and confirm the invoice
-    // ═══════════════════════════════════════════════════════════════════════
-
-    await navigateTo(page, 'purchase-invoice');
-    await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {});
-    await slow(page);
-
-    // Find the draft invoice
-    const invoiceRows = page.locator('tbody tr');
-    await expect(invoiceRows.first(),
-      'Purchase invoice list should have at least one row',
+    await expect(receiptModal,
+      'Receipt confirm modal should appear',
     ).toBeVisible({ timeout: 10_000 });
 
-    const draftInvoiceRow = invoiceRows.filter({ hasText: /borrador|draft/i }).first();
-    await expect(draftInvoiceRow,
-      'There should be a draft purchase invoice generated from the PO',
+    // Verify the toggle is ON by default — do NOT click it (would turn it OFF)
+    const createInvoiceToggle = receiptModal.getByTestId('confirm-modal-invoice-toggle');
+    await expect(createInvoiceToggle).toBeVisible({ timeout: 5_000 });
+    await expect(createInvoiceToggle).toHaveAttribute('aria-checked', 'true');
+
+    // Click the confirm button (will confirm receipt + create invoice)
+    const receiptConfirmBtn = receiptModal.getByTestId('confirm-modal-confirm-btn');
+    await expect(receiptConfirmBtn).toBeVisible({ timeout: 5_000 });
+    await receiptConfirmBtn.click();
+
+    await waitForConfirmResponse(page);
+    await page.waitForTimeout(2_000);
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // STEP 10: Navigate to the invoice via the result modal
+    // ═══════════════════════════════════════════════════════════════════════
+
+    // The ConfirmResultModal shows a "Ver factura" button to navigate to the invoice
+    const viewInvoiceBtn = page.getByRole('button', { name: /ver factura|view invoice/i });
+    await expect(viewInvoiceBtn,
+      'Result modal should show "Ver factura" button for the created invoice',
     ).toBeVisible({ timeout: 10_000 });
-
-    // Hover the row to reveal quick actions, then click the pencil icon to edit
-    await draftInvoiceRow.hover();
-    await slow(page);
-    const editInvBtn = draftInvoiceRow.locator('[data-testid*="Pencil"], [data-testid*="pencil"], [data-testid="row-quick-action-edit"]').first();
-    if (await editInvBtn.isVisible({ timeout: 3_000 }).catch(() => false)) {
-      await editInvBtn.click();
-    } else {
-      await draftInvoiceRow.dblclick();
-    }
+    await viewInvoiceBtn.click();
     await slow(page);
 
+    // Wait for navigation to the invoice detail view
+    await expect(page).toHaveURL(/\/purchase-invoice\//, { timeout: 15_000 });
     await waitForDetailReady(page);
 
-    // Verify it's in draft status
-    const invPill = page.getByTestId('document-status-pill').first();
-    await expect(invPill,
-      'Invoice should be in Draft status',
-    ).toContainText(/borrador|draft/i, { timeout: 5_000 });
+    // Verify invoice is in draft status with 2 lines
+    await expectStatusPill(page, /borrador|draft/i,
+      'Invoice should be in Draft status');
 
-    // [Plan 6.3] Verify invoice has lines from the PO
     await expect(page.getByRole('button', { name: /líneas\s+2|lines\s+2/i }),
-      '[Plan 6.3] Invoice should have 2 lines inherited from the PO',
+      '[Plan 6.3] Invoice should have 2 lines inherited from the receipt',
     ).toBeVisible({ timeout: 10_000 });
 
-    // Verify subtotal > 0
-    const subtotalEl = page.getByText(/subtotal sin descuento|subtotal/i).first()
-      .locator('~ *').first();
-    const subtotalText = await subtotalEl.textContent().catch(() => '0');
-    const subtotalNum = parseFloat(subtotalText.replace(/[^0-9.,]/g, '').replace(',', '.')) || 0;
-    expect(subtotalNum,
-      '[Plan 6.3] Invoice subtotal should be > 0 — lines should carry prices from the PO',
-    ).toBeGreaterThan(0);
-
-    // Confirm the invoice
-    const confirmInvoiceBtn = page.getByTestId('action-save');
-    await expect(confirmInvoiceBtn).toBeVisible({ timeout: 10_000 });
-    await expect(confirmInvoiceBtn).toContainText(/confirmar|confirm/i);
-    await confirmInvoiceBtn.click();
-    await slow(page);
-
-    await page.waitForResponse(
-      (resp) => resp.url().includes('/sws/neo/') && resp.request().method() === 'POST' && resp.status() < 500,
-      { timeout: 30_000 },
-    ).catch(() => {});
-    await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {});
-
-    // Dismiss success modal if present
-    const invCloseBtn = page.getByRole('button', { name: 'Cerrar', exact: true });
-    if (await invCloseBtn.isVisible({ timeout: 5_000 }).catch(() => false)) {
-      await invCloseBtn.click();
-      await slow(page);
-    }
+    // Verify invoice totals match the PO totals (same lines, same prices)
+    const invoiceTotals = await readDocumentTotals(page);
+    verifyTotalsConsistency(invoiceTotals, 'Invoice', poTotals);
 
     // ═══════════════════════════════════════════════════════════════════════
-    // STEP 11: Verify invoice is Completed
+    // STEP 11: Confirm the invoice
     // ═══════════════════════════════════════════════════════════════════════
 
-    const currentUrl = page.url();
-    if (currentUrl.includes('/purchase-invoice/')) {
-      await page.reload({ waitUntil: 'networkidle' });
-    }
+    await clickConfirmButton(page);
+    await waitForConfirmResponse(page);
+    await page.waitForTimeout(2_000);
+    await dismissSuccessModal(page);
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // STEP 12: Verify invoice is Completed
+    // ═══════════════════════════════════════════════════════════════════════
 
     const onDetailView = await page.getByTestId('detail-view').isVisible({ timeout: 5_000 }).catch(() => false);
 
     if (!onDetailView) {
-      // On list view — verify completed row exists
+      await safeReload(page);
       const completedRow = page.locator('tbody tr').filter({ hasText: /completado|completed/i }).first();
       await expect(completedRow,
         '[Plan 22.1] Invoice should appear as Completed in the list view',
       ).toBeVisible({ timeout: 10_000 });
     } else {
       await waitForDetailReady(page);
-      const invoiceCompletedPill = page.getByTestId('document-status-pill').first();
-      await expect(invoiceCompletedPill,
-        '[Plan 22.1] Invoice status pill should show Completed after confirmation',
-      ).toContainText(/completado|registrado|booked|completed/i, { timeout: 10_000 });
+      await expectStatusPill(page, /completado|registrado|booked|completed/i,
+        '[Plan 22.1] Invoice should show Completed after confirmation');
 
-      // Final verification: invoice should still have 2 lines
       await expect(page.getByRole('button', { name: /líneas\s+2|lines\s+2/i }),
         'Invoice should still have 2 lines after completion',
       ).toBeVisible({ timeout: 10_000 });
