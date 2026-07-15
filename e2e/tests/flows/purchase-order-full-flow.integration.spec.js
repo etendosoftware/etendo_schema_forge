@@ -4,7 +4,7 @@ import {
   loadCredentials, slow, waitForDetailReady, saveDraft, selectVendorBP,
   addProductLine, ensureVendorSetup, openDraftRow, clickConfirmButton,
   waitForConfirmResponse, dismissSuccessModal, expectStatusPill, safeReload,
-  readDocumentTotals, verifyTotalsConsistency,
+  readDocumentTotals, verifyTotalsConsistency, parseAmount,
 } from '../helpers/purchase-helpers.js';
 
 /**
@@ -25,6 +25,7 @@ import {
  *   2. Confirm PO (receipt only, no invoice)
  *   3. Open receipt → confirm with "Create invoice" toggle ON
  *   4. Navigate to invoice via result modal → confirm → verify Completed
+ *   5. Add payment → confirm → verify "Depositado" status
  *
  * Gated by E2E_SALES_INTEGRATION=1.
  */
@@ -40,7 +41,7 @@ test.describe('Purchase Order — Full flow with receipt and invoice (integratio
     'Set E2E_SALES_INTEGRATION=1 to run this live purchase full-flow integration test.',
   );
 
-  test('PO → confirm with receipt → confirm receipt with invoice → confirm invoice', async ({ page }) => {
+  test('PO → receipt → invoice → payment (full purchasing cycle)', async ({ page }) => {
     const user = onboardingCreds?.email || process.env.E2E_USER;
     const password = onboardingCreds?.password || process.env.E2E_PASSWORD;
 
@@ -249,6 +250,17 @@ test.describe('Purchase Order — Full flow with receipt and invoice (integratio
       await expect(completedRow,
         '[Plan 22.1] Invoice should appear as Completed in the list view',
       ).toBeVisible({ timeout: 10_000 });
+      // Navigate into the detail view for the payment step — use hover + pencil edit
+      await completedRow.hover();
+      await slow(page);
+      const editBtn = completedRow.locator('[data-testid*="Pencil"], [data-testid*="pencil"], [data-testid="row-quick-action-edit"]').first();
+      if (await editBtn.isVisible({ timeout: 3_000 }).catch(() => false)) {
+        await editBtn.click();
+      } else {
+        await completedRow.dblclick();
+      }
+      await slow(page);
+      await waitForDetailReady(page);
     } else {
       await waitForDetailReady(page);
       await expectStatusPill(page, /completado|registrado|booked|completed/i,
@@ -257,6 +269,91 @@ test.describe('Purchase Order — Full flow with receipt and invoice (integratio
       await expect(page.getByRole('button', { name: /líneas\s+2|lines\s+2/i }),
         'Invoice should still have 2 lines after completion',
       ).toBeVisible({ timeout: 10_000 });
+    }
+    await slow(page);
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // STEP 13: Add payment to the invoice
+    // ═══════════════════════════════════════════════════════════════════════
+
+    // Click the "Pendiente" badge in the topbar to open the payment history modal
+    const paymentBadge = page.getByTestId('payment-status-badge');
+    await expect(paymentBadge,
+      'Payment status badge should be visible on a completed invoice',
+    ).toBeVisible({ timeout: 10_000 });
+    await paymentBadge.click();
+    await slow(page);
+
+    // In the payment history modal, click "Añadir pago"
+    const addPaymentBtn = page.getByRole('button', { name: /añadir pago|add payment/i }).first();
+    await expect(addPaymentBtn,
+      '"Añadir pago" button should be visible in the payment history modal',
+    ).toBeVisible({ timeout: 10_000 });
+    await addPaymentBtn.click();
+    await page.waitForTimeout(2_000);
+    await slow(page);
+
+    // The new payment modal should open with pre-filled amount, method and account
+    const paymentModal = page.getByTestId('cp-new-payment-modal');
+    await expect(paymentModal,
+      'New payment modal should open',
+    ).toBeVisible({ timeout: 10_000 });
+
+    // Verify the amount is pre-filled (should match the invoice outstanding)
+    const amountInput = page.getByTestId('cp-amount-input');
+    await expect(amountInput).toBeVisible({ timeout: 5_000 });
+    const amountValue = await amountInput.inputValue().catch(() => '0');
+    expect(parseAmount(amountValue),
+      'Payment amount should be pre-filled with the invoice outstanding amount (> 0)',
+    ).toBeGreaterThan(0);
+
+    // Verify "Diferencia" is 0 — full payment covers the invoice
+    const deltaAmount = page.getByTestId('MoneyAmount__cp-delta');
+    if (await deltaAmount.isVisible({ timeout: 3_000 }).catch(() => false)) {
+      const deltaText = await deltaAmount.textContent().catch(() => '');
+      expect(parseAmount(deltaText),
+        'Payment difference should be 0 (full payment)',
+      ).toBe(0);
+    }
+
+    // Click "Confirmar" to process the payment
+    const confirmPaymentBtn = page.getByTestId('cp-confirm');
+    await expect(confirmPaymentBtn,
+      'Payment confirm button should be visible and enabled',
+    ).toBeVisible({ timeout: 5_000 });
+    await confirmPaymentBtn.click();
+
+    // Wait for payment processing to complete
+    await waitForConfirmResponse(page);
+    await page.waitForTimeout(3_000);
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // STEP 14: Verify payment is registered and shows "Depositado"
+    // ═══════════════════════════════════════════════════════════════════════
+
+    // After confirming, we return to the payment history modal
+    // Verify the payment row shows "Pago depositado" status
+    await expect(page.getByText(/pago depositado|depositado|deposited/i).first(),
+      'Payment should show "Depositado" status after confirmation',
+    ).toBeVisible({ timeout: 15_000 });
+
+    // Verify "Saldo pendiente" is 0 (fully paid)
+    await expect(page.getByText(/0[,.]00/i).first(),
+      'Outstanding balance should be 0 after full payment',
+    ).toBeVisible({ timeout: 5_000 });
+
+    // Close the payment history modal — click the backdrop or the modal's own close button
+    const modalBackdrop = page.getByTestId('InvoicePaymentHistoryModal__backdrop');
+    if (await modalBackdrop.isVisible({ timeout: 3_000 }).catch(() => false)) {
+      // Click the backdrop edge (outside the modal content) to close
+      await modalBackdrop.click({ position: { x: 10, y: 10 } });
+      await slow(page);
+    }
+
+    // Verify the topbar badge changed to "Pagada" (fully paid)
+    const paidBadge = page.getByTestId('payment-status-badge');
+    if (await paidBadge.isVisible({ timeout: 5_000 }).catch(() => false)) {
+      await expect(paidBadge).toContainText(/pagad[oa]|paid/i, { timeout: 5_000 });
     }
 
     await slow(page);

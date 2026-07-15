@@ -307,10 +307,10 @@ export function parseAmount(text) {
  * @returns {{ subtotal: number, tax: number, total: number }}
  */
 export async function readDocumentTotals(page) {
-  // Scroll the total row into view — the totals panel may be below the fold
+  // Wait for the totals panel to render and scroll it into view
   const totalRow = page.getByTestId('totals-row-total-value');
-  await totalRow.scrollIntoViewIfNeeded();
   await expect(totalRow, 'Total row should be visible in the totals panel').toBeVisible({ timeout: 10_000 });
+  await totalRow.scrollIntoViewIfNeeded().catch(() => {});
 
   // Wait for totals to compute from the latest lines
   await page.waitForTimeout(1_000);
