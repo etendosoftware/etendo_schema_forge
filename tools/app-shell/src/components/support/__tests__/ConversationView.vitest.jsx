@@ -1,5 +1,14 @@
 import { render, screen, fireEvent, act } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { toast } from 'sonner';
+
+vi.mock('sonner', () => ({
+  toast: {
+    success: vi.fn(),
+    error: vi.fn(),
+    info: vi.fn(),
+  },
+}));
 
 vi.mock('@/i18n', () => ({
   useUI: () => (key, params) => (params ? `${key} ${JSON.stringify(params)}` : key),
@@ -455,6 +464,117 @@ describe('ConversationView', () => {
       mockUseAuth.mockReturnValueOnce({ username: '' });
       render(<ConversationView {...baseProps({ conversation: null })} />);
       expect(screen.getByText(/supportWelcomeBubble1/)).toBeInTheDocument();
+    });
+  });
+
+  describe('attachment type validation', () => {
+    beforeEach(() => {
+      toast.error.mockClear();
+    });
+
+    it('adds an allowed document selected via the hidden file input', () => {
+      const onAddFile = vi.fn();
+      const { container } = render(<ConversationView {...baseProps({ onAddFile })} />);
+      const input = container.querySelector('input[type="file"]');
+      const file = new File(['%PDF-1.4'], 'invoice.pdf', { type: 'application/pdf' });
+      fireEvent.change(input, { target: { files: [file] } });
+      expect(onAddFile).toHaveBeenCalledWith(file);
+      expect(toast.error).not.toHaveBeenCalled();
+    });
+
+    it('adds an allowed image selected via the hidden file input', () => {
+      const onAddFile = vi.fn();
+      const { container } = render(<ConversationView {...baseProps({ onAddFile })} />);
+      const input = container.querySelector('input[type="file"]');
+      const file = new File(['\x89PNG'], 'photo.png', { type: 'image/png' });
+      fireEvent.change(input, { target: { files: [file] } });
+      expect(onAddFile).toHaveBeenCalledWith(file);
+    });
+
+    it('rejects a disallowed audio file selected via the hidden file input and shows the unsupported-type error', () => {
+      const onAddFile = vi.fn();
+      const { container } = render(<ConversationView {...baseProps({ onAddFile })} />);
+      const input = container.querySelector('input[type="file"]');
+      const file = new File(['fake-audio'], 'nota.mp3', { type: 'audio/mpeg' });
+      fireEvent.change(input, { target: { files: [file] } });
+      expect(onAddFile).not.toHaveBeenCalled();
+      expect(toast.error).toHaveBeenCalledWith('supportUnsupportedFileType {"name":"nota.mp3"}');
+    });
+
+    it('rejects a disallowed video file dropped onto the conversation (drag-and-drop bypassed validation before this fix)', () => {
+      const onAddFile = vi.fn();
+      const { container } = render(<ConversationView {...baseProps({ onAddFile })} />);
+      const wrap = container.querySelector('.sc-conv-wrap');
+      const file = new File(['fake-video'], 'clip.mp4', { type: 'video/mp4' });
+      fireEvent.drop(wrap, { dataTransfer: { files: [file] } });
+      expect(onAddFile).not.toHaveBeenCalled();
+      expect(toast.error).toHaveBeenCalledWith('supportUnsupportedFileType {"name":"clip.mp4"}');
+    });
+
+    it('accepts an allowed document dropped onto the conversation', () => {
+      const onAddFile = vi.fn();
+      const { container } = render(<ConversationView {...baseProps({ onAddFile })} />);
+      const wrap = container.querySelector('.sc-conv-wrap');
+      const file = new File(['col1,col2'], 'data.csv', { type: 'text/csv' });
+      fireEvent.drop(wrap, { dataTransfer: { files: [file] } });
+      expect(onAddFile).toHaveBeenCalledWith(file);
+      expect(toast.error).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('inbound attachment rendering (AttachmentItem)', () => {
+    const realCreateObjectURL = global.URL.createObjectURL;
+    const realRevokeObjectURL = global.URL.revokeObjectURL;
+
+    beforeEach(() => {
+      mockApiFetch.mockReset();
+      global.URL.createObjectURL = vi.fn(() => 'blob:mock-url');
+      global.URL.revokeObjectURL = vi.fn();
+    });
+
+    afterEach(() => {
+      global.URL.createObjectURL = realCreateObjectURL;
+      global.URL.revokeObjectURL = realRevokeObjectURL;
+    });
+
+    it('renders an image attachment as a thumbnail via authenticated fetch', async () => {
+      mockApiFetch.mockResolvedValueOnce({ ok: true, blob: async () => new Blob(['img']) });
+      const messages = [{
+        id: 'm1',
+        sender: 'ai',
+        text: 'Mirá esto',
+        attachments: [{ id: 'att-1', filename: 'foto.png', mimeType: 'image/png' }],
+      }];
+      render(<ConversationView {...baseProps({ messages })} />);
+      expect(mockApiFetch).toHaveBeenCalledWith('/sws/support/attachments/att-1');
+      const img = await screen.findByAltText('foto.png');
+      expect(img).toHaveAttribute('src', 'blob:mock-url');
+    });
+
+    it('renders a document attachment (pdf) as a download control, not an image', async () => {
+      mockApiFetch.mockResolvedValueOnce({ ok: true, blob: async () => new Blob(['pdf']) });
+      const messages = [{
+        id: 'm1',
+        sender: 'ai',
+        text: 'Aquí el archivo',
+        attachments: [{ id: 'att-2', filename: 'reporte.pdf', mimeType: 'application/pdf' }],
+      }];
+      render(<ConversationView {...baseProps({ messages })} />);
+      const downloadBtn = await screen.findByRole('button', { name: 'reporte.pdf' });
+      expect(downloadBtn.tagName).toBe('BUTTON');
+      expect(screen.queryByAltText('reporte.pdf')).not.toBeInTheDocument();
+    });
+
+    it('renders the neutral unsupported fallback for a mimetype outside the allowed set, without fetching it', () => {
+      const messages = [{
+        id: 'm1',
+        sender: 'human',
+        text: 'Adjunto desde Jira',
+        attachments: [{ id: 'att-3', filename: 'clip.mp4', mimeType: 'video/mp4' }],
+      }];
+      render(<ConversationView {...baseProps({ messages })} />);
+      expect(screen.getByText('supportAttachmentUnsupported')).toBeInTheDocument();
+      expect(mockApiFetch).not.toHaveBeenCalled();
     });
   });
 });

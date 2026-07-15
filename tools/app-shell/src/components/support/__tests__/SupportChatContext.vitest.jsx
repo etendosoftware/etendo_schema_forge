@@ -455,6 +455,25 @@ describe('SupportChatContext', () => {
       expect(typeof body.attachments[1].data).toBe('string');
     });
 
+    it('serializes a text file with BOTH `text` and `data` so the backend can also upload it to Jira', async () => {
+      vi.useRealTimers();
+      const { result } = await renderSupportChat();
+      mockApiFetch.mockResolvedValueOnce(jsonResponse({
+        conversation: { id: 'c10', subject: 'Con csv' },
+        messages: [],
+      }));
+      const csvFile = new File(['a,b,c'], 'datos.csv', { type: 'text/csv' });
+      await act(async () => {
+        await result.current.actions.startConversation('Con un csv', [csvFile]);
+      });
+      const [, options] = mockApiFetch.mock.calls[mockApiFetch.mock.calls.length - 1];
+      const body = JSON.parse(options.body);
+      expect(body.attachments[0]).toMatchObject({ name: 'datos.csv', mimeType: 'text/csv' });
+      expect(body.attachments[0].text).toBe('a,b,c');
+      expect(typeof body.attachments[0].data).toBe('string');
+      expect(body.attachments[0].data.length).toBeGreaterThan(0);
+    });
+
     it('detects text attachments via file extension and generic text/ mime types', async () => {
       vi.useRealTimers();
       const { result } = await renderSupportChat();
