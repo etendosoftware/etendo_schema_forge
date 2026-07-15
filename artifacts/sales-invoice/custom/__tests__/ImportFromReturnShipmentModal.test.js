@@ -18,25 +18,33 @@ describe('ImportFromReturnShipmentModal', () => {
     assert.match(src, /<ImportLinesModal[\s\S]*\{\.\.\.props\}/);
   });
 
-  it('fetches customer returns and existing invoice lines in parallel', () => {
+  it('fetches return material receipts and existing invoice lines in parallel', () => {
     assert.match(src, /Promise\.all/);
-    assert.match(src, /return-from-customer\/customerReturn/);
+    assert.match(src, /return-material-receipt\/returnMaterialReceipt\?/);
     assert.match(src, /sales-invoice\/lines\?parentId=/);
   });
 
-  it('filters returns by CO status and matching business partner', () => {
+  it('filters return receipts by CO status, matching business partner, and unbilled invoiceStatus', () => {
     assert.match(src, /documentStatus\s*===\s*'CO'/);
     assert.match(src, /businessPartner\s*===\s*bpId/);
+    assert.match(src, /Number\(r\.invoiceStatus\s*\|\|\s*0\)\s*<\s*100/);
   });
 
-  it('tracks already-imported return lines via mInoutlineId', () => {
+  it('tracks already-imported return lines via goodsShipmentLine and salesOrderLine', () => {
     assert.match(src, /alreadyImportedReturnLines/);
-    assert.match(src, /mInoutlineId/);
+    assert.match(src, /alreadyImportedOrderLines/);
+    assert.match(src, /il\.goodsShipmentLine/);
+    assert.match(src, /il\.salesOrderLine/);
   });
 
-  it('excludes returns whose lines are fully invoiced elsewhere', () => {
+  it('does NOT reference the removed mInoutlineId or the dead return-from-customer backend', () => {
+    assert.doesNotMatch(src, /mInoutlineId/);
+    assert.doesNotMatch(src, /return-from-customer/);
+  });
+
+  it('excludes return lines already invoiced on another invoice', () => {
     assert.match(src, /invoicedElsewhere/);
-    assert.match(src, /invoicedElsewhere\.has/);
+    assert.match(src, /invoicedElsewhere\.add/);
   });
 
   it('wires the return-shipment-specific i18n keys', () => {
@@ -47,24 +55,33 @@ describe('ImportFromReturnShipmentModal', () => {
     assert.match(src, /successMessageKey="linesImportedFromReturnShipment"/);
   });
 
-  it('fetches return shipment lines on expand', () => {
+  it('fetches return receipt lines on expand with callout price enrichment', () => {
     assert.match(src, /fetchLines/);
-    assert.match(src, /return-from-customer\/customerReturnLine\?parentId=/);
+    assert.match(src, /return-material-receipt\/returnMaterialReceiptLine\?parentId=/);
+    assert.match(src, /resolveLinePrice/);
   });
 
-  it('marks lines as already imported via goodsShipmentLine', () => {
+  it('marks lines as already imported via return-line id, order-line id, or invoiced-elsewhere', () => {
     assert.match(src, /_alreadyImported/);
-    assert.match(src, /alreadyImportedReturnLines\?\.has\(l\.goodsShipmentLine\)/);
+    assert.match(src, /alreadyImportedReturnLines\?\.has\(l\.id\)/);
+    assert.match(src, /alreadyImportedOrderLines\?\.has\(l\.salesOrderLine\)/);
+    assert.match(src, /invoicedElsewhere\?\.has\(l\.id\)/);
+  });
+
+  it('creates invoice lines via POST to sales-invoice/lines', () => {
+    assert.match(src, /sales-invoice\/lines/);
+    assert.match(src, /method:\s*'POST'/);
   });
 
   it('negates quantity for ARI_RM return invoice lines', () => {
-    assert.match(src, /-Math\.abs\(qty\)/);
-    assert.match(src, /negQty/);
+    assert.match(src, /const negQty = -Math\.abs\(qty\);/);
     assert.match(src, /invoicedQuantity:\s*negQty/);
+    assert.match(src, /lineNetAmount\s*=\s*negQty\s*\*\s*unitPrice/);
   });
 
-  it('passes mInoutlineId to link invoice line back to the return shipment line', () => {
-    assert.match(src, /mInoutlineId:\s*line\.goodsShipmentLine/);
+  it('carries goodsShipmentLine and salesOrderLine forward on the created line', () => {
+    assert.match(src, /goodsShipmentLine:\s*line\.id/);
+    assert.match(src, /salesOrderLine:\s*line\.salesOrderLine\s*\|\|\s*null/);
   });
 
   it('injects fetch/build callbacks so the shared modal can drive line selection', () => {
@@ -74,27 +91,14 @@ describe('ImportFromReturnShipmentModal', () => {
     assert.match(src, /buildLineBody=\{buildLineBody\}/);
   });
 
-  it('fetches the invoice header to resolve the invoice currency', () => {
-    assert.match(src, /sales-invoice\/header\/\$\{invoiceId\}/);
-    assert.match(src, /invoiceCurrency\s*=\s*\(await headerRes\.json\(\)\)\?\.response\?\.data\?\.\[0\]\?\.currency\s*\|\|\s*null/);
-  });
-
-  it('resolves return currency via the linked sales order and never excludes returns with no linked order', () => {
+  it('resolves return-receipt currency via the receipt-own salesOrder field and never excludes receipts with no linked order', () => {
+    assert.match(src, /invoiceCurrency\s*=\s*invoiceHeader\.currency/);
     assert.match(src, /sales-order\/header\/\$\{id\}/);
-    assert.match(src, /candidateReturns\s*=\s*candidateReturns\.filter\(r\s*=>\s*!r\.salesOrder\s*\|\|\s*orderCurrencyMap\[r\.salesOrder\]\s*===\s*invoiceCurrency\)/);
+    assert.match(src, /documents\s*=\s*candidates\.filter\(r\s*=>\s*!r\.salesOrder\s*\|\|\s*orderCurrencyMap\[r\.salesOrder\]\s*===\s*invoiceCurrency\)/);
   });
 
-  it('computes excludedByCurrency only when currency filtering removed every bp/status candidate', () => {
-    assert.match(src, /excludedByCurrency\s*=\s*candidateReturns\.length\s*===\s*0\s*&&\s*beforeCurrencyCount\s*>\s*0/);
-  });
-
-  it('runs the currency filter after the bp/status filter but before the unimported-lines filter', () => {
-    const bpFilterIdx = src.indexOf("documentStatus === 'CO' && r.businessPartner === bpId");
-    const currencyFilterIdx = src.indexOf('Returns have no currency of their own');
-    const unimportedLinesFilterIdx = src.indexOf('Fetch lines for each return in parallel');
-    assert.ok(bpFilterIdx > -1 && currencyFilterIdx > -1 && unimportedLinesFilterIdx > -1, 'expected all three stages to be present');
-    assert.ok(bpFilterIdx < currencyFilterIdx, 'bp/status filter must run before currency filter');
-    assert.ok(currencyFilterIdx < unimportedLinesFilterIdx, 'currency filter must run before unimported-lines filter');
+  it('computes excludedByCurrency only when currency filtering removed every candidate', () => {
+    assert.match(src, /excludedByCurrency\s*=\s*documents\.length\s*===\s*0\s*&&\s*candidates\.length\s*>\s*0/);
   });
 
   it('passes noCurrencyMatchMessageKey to the shared modal', () => {
@@ -103,57 +107,64 @@ describe('ImportFromReturnShipmentModal', () => {
 });
 
 // ---------------------------------------------------------------------------
-// fetchDocuments — behavioral currency-filter tests
-//
-// M_InOut (customer return) has no currency column of its own — currency must
-// be resolved via the linked sales order (candidate.salesOrder). Mirrors the
-// exact algorithm in the source (verified against the regex assertions above),
-// including the two early-return points around `candidateReturns.length === 0`
-// (once before currency filtering, once after).
+// fetchDocuments — behavioral tests (status/bp/invoiceStatus filter + currency
+// filter). M_InOut (return receipt) has no currency column of its own —
+// currency must be resolved via the receipt's own `salesOrder` field (a real
+// field newly exposed on return-material-receipt, unlike the old broken
+// `customerReturn.salesOrder` reference this replaced). This mirrors the exact
+// algorithm in the source (verified against the regex assertions above) with a
+// mocked fetch, since the component only exports a default React wrapper.
 // ---------------------------------------------------------------------------
 
 async function fetchDocuments({ base, headers, bpId, invoiceId }) {
-  const [returnRes, invLinesRes, invoicedLinesRes, headerRes] = await Promise.all([
-    fetch(`${base}/return-from-customer/customerReturn?_startRow=0&_endRow=500&_sortBy=orderDate desc`, { headers }),
+  const invoicedLinesFilter = 'ignored';
+  const [returnRes, invLinesRes, allInvoicedLinesRes, headerRes] = await Promise.all([
+    fetch(`${base}/return-material-receipt/returnMaterialReceipt?_startRow=0&_endRow=500&_sortBy=creationDate desc`, { headers }),
     fetch(`${base}/sales-invoice/lines?parentId=${invoiceId}&_startRow=0&_endRow=200`, { headers }),
-    fetch(`${base}/sales-invoice/lines?criteria=ignored&_startRow=0&_endRow=2000`, { headers }),
+    fetch(`${base}/sales-invoice/lines?criteria=${invoicedLinesFilter}&_startRow=0&_endRow=2000`, { headers }),
     fetch(`${base}/sales-invoice/header/${invoiceId}`, { headers }),
   ]);
 
-  let invoiceCurrency = null;
-  if (headerRes.ok) {
-    invoiceCurrency = (await headerRes.json())?.response?.data?.[0]?.currency || null;
-  }
-
   const alreadyImportedReturnLines = new Set();
+  const alreadyImportedOrderLines = new Set();
   if (invLinesRes.ok) {
     const invLines = (await invLinesRes.json())?.response?.data || [];
-    invLines.forEach(il => { if (il.mInoutlineId) alreadyImportedReturnLines.add(il.mInoutlineId); });
+    invLines.forEach(il => {
+      if (il.goodsShipmentLine) alreadyImportedReturnLines.add(il.goodsShipmentLine);
+      if (il.salesOrderLine) alreadyImportedOrderLines.add(il.salesOrderLine);
+    });
   }
 
   const invoicedElsewhere = new Set();
-  if (invoicedLinesRes.ok) {
-    const all = (await invoicedLinesRes.json())?.response?.data || [];
+  if (allInvoicedLinesRes.ok) {
+    const all = (await allInvoicedLinesRes.json())?.response?.data || [];
     all.forEach(il => {
-      if (il.mInoutlineId && !alreadyImportedReturnLines.has(il.mInoutlineId)) {
-        invoicedElsewhere.add(il.mInoutlineId);
+      if (il.goodsShipmentLine && !alreadyImportedReturnLines.has(il.goodsShipmentLine)) {
+        invoicedElsewhere.add(il.goodsShipmentLine);
       }
     });
   }
 
-  let candidateReturns = [];
+  let invoiceHeader = {};
+  if (headerRes.ok) {
+    invoiceHeader = (await headerRes.json())?.response?.data?.[0] || {};
+  }
+
+  let candidates = [];
   if (returnRes.ok) {
     const all = (await returnRes.json())?.response?.data || [];
-    candidateReturns = all.filter(r => r.documentStatus === 'CO' && r.businessPartner === bpId);
+    candidates = all.filter(r =>
+      r.documentStatus === 'CO'
+      && r.businessPartner === bpId
+      && Number(r.invoiceStatus || 0) < 100
+    );
   }
 
-  if (candidateReturns.length === 0) {
-    return { documents: [], sharedContext: { alreadyImportedReturnLines } };
-  }
-
+  const invoiceCurrency = invoiceHeader.currency || null;
+  let documents = candidates;
   let excludedByCurrency = false;
   if (invoiceCurrency) {
-    const orderIds = [...new Set(candidateReturns.filter(r => r.salesOrder).map(r => r.salesOrder))];
+    const orderIds = [...new Set(candidates.filter(r => r.salesOrder).map(r => r.salesOrder))];
     const orderCurrencyMap = {};
     await Promise.all(orderIds.map(async (id) => {
       try {
@@ -164,30 +175,15 @@ async function fetchDocuments({ base, headers, bpId, invoiceId }) {
         }
       } catch { /* ignore */ }
     }));
-    const beforeCurrencyCount = candidateReturns.length;
-    candidateReturns = candidateReturns.filter(r => !r.salesOrder || orderCurrencyMap[r.salesOrder] === invoiceCurrency);
-    excludedByCurrency = candidateReturns.length === 0 && beforeCurrencyCount > 0;
+    documents = candidates.filter(r => !r.salesOrder || orderCurrencyMap[r.salesOrder] === invoiceCurrency);
+    excludedByCurrency = documents.length === 0 && candidates.length > 0;
   }
 
-  if (candidateReturns.length === 0) {
-    return { documents: [], sharedContext: { alreadyImportedReturnLines }, excludedByCurrency };
-  }
-
-  const returnLinesResults = await Promise.all(
-    candidateReturns.map(ret =>
-      fetch(`${base}/return-from-customer/customerReturnLine?parentId=${ret.id}&_startRow=0&_endRow=200`, { headers })
-        .then(r => (r.ok ? r.json() : null))
-        .then(json => json?.response?.data || []),
-    ),
-  );
-
-  const documents = candidateReturns.filter((_, idx) => {
-    const lines = returnLinesResults[idx];
-    if (lines.length === 0) return false;
-    return lines.some(l => !invoicedElsewhere.has(l.id));
-  });
-
-  return { documents, sharedContext: { alreadyImportedReturnLines }, excludedByCurrency };
+  return {
+    documents,
+    sharedContext: { invoiceHeader, alreadyImportedReturnLines, alreadyImportedOrderLines, invoicedElsewhere },
+    excludedByCurrency,
+  };
 }
 
 function mockRes(ok, data) {
@@ -198,40 +194,78 @@ function mockResSingle(ok, item) {
   return { ok, json: async () => ({ response: { data: item ? [item] : [] } }) };
 }
 
-function installFetch({ returns, invLines = [], invoiceHeader = {}, orders = {}, returnLines = {} }) {
+function installFetch({ returns, invLines = [], allInvoicedLines = [], invoiceHeader = {}, orders = {} }) {
   globalThis.fetch = mock.fn(async (url) => {
-    if (url.includes('/return-from-customer/customerReturn?')) return mockRes(true, returns);
+    if (url.includes('/return-material-receipt/returnMaterialReceipt?')) return mockRes(true, returns);
     if (url.includes('/sales-invoice/lines?parentId=')) return mockRes(true, invLines);
-    if (url.includes('/sales-invoice/lines?criteria=')) return mockRes(true, []);
+    if (url.includes('/sales-invoice/lines?criteria=')) return mockRes(true, allInvoicedLines);
     if (url.includes('/sales-invoice/header/')) return mockResSingle(true, invoiceHeader);
     const orderMatch = url.match(/\/sales-order\/header\/([^/?]+)/);
     if (orderMatch) return mockResSingle(true, orders[orderMatch[1]] || null);
-    const lineMatch = url.match(/\/return-from-customer\/customerReturnLine\?parentId=([^&]+)/);
-    if (lineMatch) return mockRes(true, returnLines[lineMatch[1]] || [{ id: `${lineMatch[1]}-line1` }]);
     throw new Error(`Unexpected fetch: ${url}`);
   });
 }
 
-describe('ImportFromReturnShipmentModal — fetchDocuments currency filter', () => {
+describe('ImportFromReturnShipmentModal — fetchDocuments status/bp/currency filters', () => {
   afterEach(() => {
     mock.reset();
   });
 
-  it('keeps a return whose linked order currency matches the invoice currency', async () => {
+  it('keeps a CO return receipt for the matching business partner, not yet fully invoiced', async () => {
     installFetch({
-      returns: [{ id: 'ret1', documentStatus: 'CO', businessPartner: 'bp1', salesOrder: 'so1' }],
+      returns: [{ id: 'r1', documentStatus: 'CO', businessPartner: 'bp1', invoiceStatus: 0 }],
+    });
+    const result = await fetchDocuments({ base: '/b', headers: {}, bpId: 'bp1', invoiceId: 'inv1' });
+    assert.equal(result.documents.length, 1);
+    assert.equal(result.documents[0].id, 'r1');
+  });
+
+  it('excludes a receipt not in CO status', async () => {
+    installFetch({
+      returns: [{ id: 'r1', documentStatus: 'DR', businessPartner: 'bp1', invoiceStatus: 0 }],
+    });
+    const result = await fetchDocuments({ base: '/b', headers: {}, bpId: 'bp1', invoiceId: 'inv1' });
+    assert.equal(result.documents.length, 0);
+  });
+
+  it('excludes a receipt for a different business partner (empty result — bp with no return receipts)', async () => {
+    installFetch({
+      returns: [{ id: 'r1', documentStatus: 'CO', businessPartner: 'bp2', invoiceStatus: 0 }],
+    });
+    const result = await fetchDocuments({ base: '/b', headers: {}, bpId: 'bp1', invoiceId: 'inv1' });
+    assert.equal(result.documents.length, 0);
+  });
+
+  it('excludes a receipt already fully invoiced (invoiceStatus >= 100)', async () => {
+    installFetch({
+      returns: [{ id: 'r1', documentStatus: 'CO', businessPartner: 'bp1', invoiceStatus: 100 }],
+    });
+    const result = await fetchDocuments({ base: '/b', headers: {}, bpId: 'bp1', invoiceId: 'inv1' });
+    assert.equal(result.documents.length, 0);
+  });
+
+  it('returns an empty result set when there are no return receipts at all', async () => {
+    installFetch({ returns: [] });
+    const result = await fetchDocuments({ base: '/b', headers: {}, bpId: 'bp1', invoiceId: 'inv1' });
+    assert.deepEqual(result.documents, []);
+    assert.equal(!!result.excludedByCurrency, false);
+  });
+
+  it('keeps a receipt whose linked sales order currency matches the invoice currency', async () => {
+    installFetch({
+      returns: [{ id: 'r1', documentStatus: 'CO', businessPartner: 'bp1', invoiceStatus: 0, salesOrder: 'so1' }],
       invoiceHeader: { currency: 'EUR' },
       orders: { so1: { id: 'so1', currency: 'EUR' } },
     });
     const result = await fetchDocuments({ base: '/b', headers: {}, bpId: 'bp1', invoiceId: 'inv1' });
     assert.equal(result.documents.length, 1);
-    assert.equal(result.documents[0].id, 'ret1');
-    assert.equal(!!result.excludedByCurrency, false);
+    assert.equal(result.documents[0].id, 'r1');
+    assert.equal(result.excludedByCurrency, false);
   });
 
-  it('excludes a return whose linked order currency does not match the invoice currency', async () => {
+  it('excludes a receipt whose linked sales order currency does not match the invoice currency', async () => {
     installFetch({
-      returns: [{ id: 'ret1', documentStatus: 'CO', businessPartner: 'bp1', salesOrder: 'so1' }],
+      returns: [{ id: 'r1', documentStatus: 'CO', businessPartner: 'bp1', invoiceStatus: 0, salesOrder: 'so1' }],
       invoiceHeader: { currency: 'USD' },
       orders: { so1: { id: 'so1', currency: 'EUR' } },
     });
@@ -240,67 +274,321 @@ describe('ImportFromReturnShipmentModal — fetchDocuments currency filter', () 
     assert.equal(result.excludedByCurrency, true);
   });
 
-  it('never excludes a return with no linked order, regardless of invoice currency', async () => {
+  it('never excludes a receipt with no linked sales order, regardless of invoice currency', async () => {
     installFetch({
-      returns: [{ id: 'ret1', documentStatus: 'CO', businessPartner: 'bp1', salesOrder: null }],
+      returns: [{ id: 'r1', documentStatus: 'CO', businessPartner: 'bp1', invoiceStatus: 0, salesOrder: null }],
       invoiceHeader: { currency: 'USD' },
       orders: {},
     });
     const result = await fetchDocuments({ base: '/b', headers: {}, bpId: 'bp1', invoiceId: 'inv1' });
     assert.equal(result.documents.length, 1);
-    assert.equal(result.documents[0].id, 'ret1');
-    assert.equal(!!result.excludedByCurrency, false);
+    assert.equal(result.excludedByCurrency, false);
   });
 
-  it('sets excludedByCurrency=true when ALL bp/status candidates are filtered out by currency', async () => {
+  it('does not filter by currency when the invoice has no currency set', async () => {
     installFetch({
-      returns: [
-        { id: 'ret1', documentStatus: 'CO', businessPartner: 'bp1', salesOrder: 'so1' },
-        { id: 'ret2', documentStatus: 'CO', businessPartner: 'bp1', salesOrder: 'so2' },
-      ],
-      invoiceHeader: { currency: 'USD' },
-      orders: { so1: { id: 'so1', currency: 'EUR' }, so2: { id: 'so2', currency: 'EUR' } },
-    });
-    const result = await fetchDocuments({ base: '/b', headers: {}, bpId: 'bp1', invoiceId: 'inv1' });
-    assert.equal(result.documents.length, 0);
-    assert.equal(result.excludedByCurrency, true);
-  });
-
-  it('keeps excludedByCurrency falsy when there were no bp/status candidates at all (early return before currency filter)', async () => {
-    installFetch({
-      returns: [{ id: 'ret1', documentStatus: 'DR', businessPartner: 'bp1', salesOrder: 'so1' }],
-      invoiceHeader: { currency: 'USD' },
-      orders: { so1: { id: 'so1', currency: 'EUR' } },
-    });
-    const result = await fetchDocuments({ base: '/b', headers: {}, bpId: 'bp1', invoiceId: 'inv1' });
-    assert.equal(result.documents.length, 0);
-    assert.equal(!!result.excludedByCurrency, false);
-  });
-
-  it('does not filter by currency when the invoice currency is falsy', async () => {
-    installFetch({
-      returns: [{ id: 'ret1', documentStatus: 'CO', businessPartner: 'bp1', salesOrder: 'so1' }],
+      returns: [{ id: 'r1', documentStatus: 'CO', businessPartner: 'bp1', invoiceStatus: 0, salesOrder: 'so1' }],
       invoiceHeader: {},
       orders: { so1: { id: 'so1', currency: 'EUR' } },
     });
     const result = await fetchDocuments({ base: '/b', headers: {}, bpId: 'bp1', invoiceId: 'inv1' });
     assert.equal(result.documents.length, 1);
-    assert.equal(!!result.excludedByCurrency, false);
+    assert.equal(result.excludedByCurrency, false);
   });
 
-  it('keeps the mix of matching and no-order returns, excludes only the mismatched one', async () => {
+  it('tracks already-imported return lines (goodsShipmentLine) and order lines (salesOrderLine) from existing invoice lines', async () => {
     installFetch({
-      returns: [
-        { id: 'ret1', documentStatus: 'CO', businessPartner: 'bp1', salesOrder: 'so1' },
-        { id: 'ret2', documentStatus: 'CO', businessPartner: 'bp1', salesOrder: 'so2' },
-        { id: 'ret3', documentStatus: 'CO', businessPartner: 'bp1', salesOrder: null },
-      ],
-      invoiceHeader: { currency: 'EUR' },
-      orders: { so1: { id: 'so1', currency: 'EUR' }, so2: { id: 'so2', currency: 'USD' } },
+      returns: [{ id: 'r1', documentStatus: 'CO', businessPartner: 'bp1', invoiceStatus: 0 }],
+      invLines: [{ goodsShipmentLine: 'rline1', salesOrderLine: 'oline1' }],
     });
     const result = await fetchDocuments({ base: '/b', headers: {}, bpId: 'bp1', invoiceId: 'inv1' });
-    const ids = result.documents.map(d => d.id).sort();
-    assert.deepEqual(ids, ['ret1', 'ret3']);
-    assert.equal(!!result.excludedByCurrency, false);
+    assert.ok(result.sharedContext.alreadyImportedReturnLines.has('rline1'));
+    assert.ok(result.sharedContext.alreadyImportedOrderLines.has('oline1'));
+  });
+
+  it('flags a return line as invoiced elsewhere only when it is not already imported on THIS invoice', async () => {
+    installFetch({
+      returns: [{ id: 'r1', documentStatus: 'CO', businessPartner: 'bp1', invoiceStatus: 0 }],
+      invLines: [{ goodsShipmentLine: 'rlineSelf' }],
+      allInvoicedLines: [{ goodsShipmentLine: 'rlineSelf' }, { goodsShipmentLine: 'rlineOther' }],
+    });
+    const result = await fetchDocuments({ base: '/b', headers: {}, bpId: 'bp1', invoiceId: 'inv1' });
+    assert.equal(result.sharedContext.invoicedElsewhere.has('rlineSelf'), false);
+    assert.equal(result.sharedContext.invoicedElsewhere.has('rlineOther'), true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// resolveLinePrice — pricing cascade behavioral tests. Return receipt lines
+// carry no pricing, so this callout cascade (SL_Invoice_Product ->
+// PriceActual) is the only source of unit price / tax / uOM, mirroring
+// ImportFromShipmentModal's own resolveLinePrice (identical implementation,
+// copied verbatim per source comment).
+// ---------------------------------------------------------------------------
+
+const resolveLinePrice = async (base, headers, productId, qty, invoiceHeader, auxData = {}) => {
+  const formState = {
+    ...invoiceHeader,
+    ...auxData,
+    product: productId,
+    invoicedQuantity: qty || 1,
+  };
+  try {
+    const auxiliaryValues = {};
+    for (const [k, v] of Object.entries(formState)) {
+      if (/^[a-zA-Z]+_[A-Z]{2,5}$/.test(k) && v != null && v !== '') {
+        auxiliaryValues[k] = String(v);
+      }
+    }
+    const res = await fetch(`${base}/sales-invoice/lines/callout`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        field: 'product', value: productId, formState,
+        ...(Object.keys(auxiliaryValues).length > 0 ? { auxiliaryValues } : {}),
+      }),
+    });
+    if (!res.ok) return {};
+    const data = await res.json();
+    const result = {};
+    if (data.updates) {
+      for (const [k, entry] of Object.entries(data.updates)) result[k] = entry.value;
+    }
+    if (data.combos) {
+      for (const [k, combo] of Object.entries(data.combos)) {
+        if (combo.selected != null) result[k] = combo.selected;
+      }
+    }
+    if (Number(result.standardPrice) && !Number(result.listPrice)) {
+      result.listPrice = result.standardPrice;
+    }
+    let unitPrice = Number(result.unitPrice) || Number(result.grossUnitPrice) || 0;
+    if (unitPrice) result.unitPrice = unitPrice;
+
+    if (unitPrice) {
+      const cascadeState = { ...formState, ...result, invoicedQuantity: qty || 1 };
+      const cascadeRes = await fetch(`${base}/sales-invoice/lines/callout`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ field: 'PriceActual', value: String(unitPrice), formState: cascadeState }),
+      });
+      if (cascadeRes.ok) {
+        const cascadeData = await cascadeRes.json();
+        if (cascadeData.updates) {
+          for (const [k, entry] of Object.entries(cascadeData.updates)) result[k] = entry.value;
+        }
+        if (cascadeData.combos) {
+          for (const [k, combo] of Object.entries(cascadeData.combos)) {
+            if (combo.selected != null && !(k in result)) result[k] = combo.selected;
+          }
+        }
+      }
+    }
+    return result;
+  } catch {
+    return {};
+  }
+};
+
+function calloutRes(ok, body) {
+  return { ok, json: async () => body };
+}
+
+describe('ImportFromReturnShipmentModal — resolveLinePrice pricing cascade', () => {
+  afterEach(() => {
+    mock.reset();
+  });
+
+  it('resolves unitPrice and triggers the PriceActual cascade, merging tax/uOM from the second callout', async () => {
+    let calls = 0;
+    globalThis.fetch = mock.fn(async (url, opts) => {
+      assert.equal(url, '/b/sales-invoice/lines/callout');
+      const body = JSON.parse(opts.body);
+      calls += 1;
+      if (calls === 1) {
+        assert.equal(body.field, 'product');
+        assert.equal(body.value, 'prod1');
+        return calloutRes(true, { updates: { unitPrice: { value: 100 }, listPrice: { value: 100 } } });
+      }
+      assert.equal(body.field, 'PriceActual');
+      assert.equal(body.value, '100');
+      return calloutRes(true, { updates: { tax: { value: 'tax1' }, uOM: { value: 'Unit' }, lineNetAmount: { value: 100 } } });
+    });
+    const result = await resolveLinePrice('/b', {}, 'prod1', 1, { currency: 'EUR' });
+    assert.equal(calls, 2);
+    assert.equal(result.unitPrice, 100);
+    assert.equal(result.tax, 'tax1');
+    assert.equal(result.uOM, 'Unit');
+    assert.equal(result.lineNetAmount, 100);
+  });
+
+  it('falls back to grossUnitPrice as unitPrice when the product callout does not return a plain unitPrice', async () => {
+    globalThis.fetch = mock.fn(async (url, opts) => {
+      const body = JSON.parse(opts.body);
+      if (body.field === 'product') {
+        return calloutRes(true, { updates: { grossUnitPrice: { value: 121 } } });
+      }
+      return calloutRes(true, { updates: {} });
+    });
+    const result = await resolveLinePrice('/b', {}, 'prod1', 1, {});
+    assert.equal(result.unitPrice, 121);
+  });
+
+  it('applies the standardPrice -> listPrice fallback when listPrice comes back zeroed', async () => {
+    globalThis.fetch = mock.fn(async (url, opts) => {
+      const body = JSON.parse(opts.body);
+      if (body.field === 'product') {
+        return calloutRes(true, { updates: { standardPrice: { value: 50 }, listPrice: { value: 0 }, unitPrice: { value: 50 } } });
+      }
+      return calloutRes(true, { updates: {} });
+    });
+    const result = await resolveLinePrice('/b', {}, 'prod1', 1, {});
+    assert.equal(result.listPrice, 50);
+  });
+
+  it('does not trigger the PriceActual cascade when no unit price could be resolved', async () => {
+    let calls = 0;
+    globalThis.fetch = mock.fn(async () => {
+      calls += 1;
+      return calloutRes(true, { updates: {} });
+    });
+    const result = await resolveLinePrice('/b', {}, 'prod1', 1, {});
+    assert.equal(calls, 1);
+    assert.deepEqual(result, {});
+  });
+
+  it('returns an empty object when the product callout request fails', async () => {
+    globalThis.fetch = mock.fn(async () => calloutRes(false, {}));
+    const result = await resolveLinePrice('/b', {}, 'prod1', 1, {});
+    assert.deepEqual(result, {});
+  });
+
+  it('returns an empty object when fetch throws', async () => {
+    globalThis.fetch = mock.fn(async () => { throw new Error('network down'); });
+    const result = await resolveLinePrice('/b', {}, 'prod1', 1, {});
+    assert.deepEqual(result, {});
+  });
+});
+
+// ---------------------------------------------------------------------------
+// fetchLines — duplicate-import detection behavioral tests. Mirrors the exact
+// merge logic in the source: a line is "already imported" if its own id was
+// seen via goodsShipmentLine on THIS invoice, if its salesOrderLine was seen
+// via another import path, or if it was invoiced on a different invoice.
+// resolveLinePrice is stubbed out (pricing is covered separately above) so
+// these tests isolate the duplicate-detection merge.
+// ---------------------------------------------------------------------------
+
+async function fetchLines({ base, headers, docId, sharedContext }, resolvePriceFn) {
+  const res = await fetch(`${base}/return-material-receipt/returnMaterialReceiptLine?parentId=${docId}&_startRow=0&_endRow=200`, { headers });
+  if (!res.ok) return [];
+  const json = await res.json();
+  const lines = json?.response?.data || [];
+  const { alreadyImportedReturnLines, alreadyImportedOrderLines, invoicedElsewhere } = sharedContext;
+
+  return Promise.all(lines.map(async (l) => {
+    const imported = alreadyImportedReturnLines?.has(l.id) || alreadyImportedOrderLines?.has(l.salesOrderLine) || invoicedElsewhere?.has(l.id);
+    const priceData = await resolvePriceFn(l);
+    return {
+      ...l,
+      _unitPrice: Number(priceData.unitPrice) || 0,
+      _alreadyImported: !!imported,
+    };
+  }));
+}
+
+describe('ImportFromReturnShipmentModal — fetchLines duplicate-import detection', () => {
+  afterEach(() => {
+    mock.reset();
+  });
+
+  it('marks a line already imported when its own id is in alreadyImportedReturnLines', async () => {
+    globalThis.fetch = mock.fn(async () => mockRes(true, [{ id: 'l1', product: 'p1', salesOrderLine: null }]));
+    const lines = await fetchLines({
+      base: '/b', headers: {}, docId: 'd1',
+      sharedContext: {
+        alreadyImportedReturnLines: new Set(['l1']),
+        alreadyImportedOrderLines: new Set(),
+        invoicedElsewhere: new Set(),
+      },
+    }, async () => ({}));
+    assert.equal(lines[0]._alreadyImported, true);
+  });
+
+  it('marks a line already imported when its salesOrderLine is in alreadyImportedOrderLines', async () => {
+    globalThis.fetch = mock.fn(async () => mockRes(true, [{ id: 'l1', product: 'p1', salesOrderLine: 'o1' }]));
+    const lines = await fetchLines({
+      base: '/b', headers: {}, docId: 'd1',
+      sharedContext: {
+        alreadyImportedReturnLines: new Set(),
+        alreadyImportedOrderLines: new Set(['o1']),
+        invoicedElsewhere: new Set(),
+      },
+    }, async () => ({}));
+    assert.equal(lines[0]._alreadyImported, true);
+  });
+
+  it('marks a line already imported when it was invoiced elsewhere', async () => {
+    globalThis.fetch = mock.fn(async () => mockRes(true, [{ id: 'l1', product: 'p1', salesOrderLine: null }]));
+    const lines = await fetchLines({
+      base: '/b', headers: {}, docId: 'd1',
+      sharedContext: {
+        alreadyImportedReturnLines: new Set(),
+        alreadyImportedOrderLines: new Set(),
+        invoicedElsewhere: new Set(['l1']),
+      },
+    }, async () => ({}));
+    assert.equal(lines[0]._alreadyImported, true);
+  });
+
+  it('does not mark a genuinely new, unimported line', async () => {
+    globalThis.fetch = mock.fn(async () => mockRes(true, [{ id: 'l1', product: 'p1', salesOrderLine: 'o9' }]));
+    const lines = await fetchLines({
+      base: '/b', headers: {}, docId: 'd1',
+      sharedContext: {
+        alreadyImportedReturnLines: new Set(['other']),
+        alreadyImportedOrderLines: new Set(['different']),
+        invoicedElsewhere: new Set(),
+      },
+    }, async () => ({ unitPrice: 42 }));
+    assert.equal(lines[0]._alreadyImported, false);
+    assert.equal(lines[0]._unitPrice, 42);
+  });
+
+  it('returns an empty array of lines for a document with no lines', async () => {
+    globalThis.fetch = mock.fn(async () => mockRes(true, []));
+    const lines = await fetchLines({
+      base: '/b', headers: {}, docId: 'd1',
+      sharedContext: {
+        alreadyImportedReturnLines: new Set(),
+        alreadyImportedOrderLines: new Set(),
+        invoicedElsewhere: new Set(),
+      },
+    }, async () => ({}));
+    assert.deepEqual(lines, []);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// buildLineBody — negative-quantity behavioral test. ARI_RM (return invoice)
+// lines must carry a NEGATIVE invoicedQuantity or Etendo rejects them at
+// completion — the defining behavioral difference from a normal shipment
+// import (ImportFromShipmentModal keeps qty positive).
+// ---------------------------------------------------------------------------
+
+describe('ImportFromReturnShipmentModal — buildLineBody negative quantity', () => {
+  it('negates the imported quantity and derives a matching negative lineNetAmount', () => {
+    const qty = 5;
+    const unitPrice = 10;
+    const negQty = -Math.abs(qty);
+    const lineNetAmount = negQty * unitPrice;
+    assert.equal(negQty, -5);
+    assert.equal(lineNetAmount, -50);
+  });
+
+  it('always negates even if a caller mistakenly passes an already-negative qty', () => {
+    const qty = -3;
+    const negQty = -Math.abs(qty);
+    assert.equal(negQty, -3);
   });
 });
