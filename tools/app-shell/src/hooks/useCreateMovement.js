@@ -63,6 +63,22 @@ export function useCreateMovement() {
 }
 
 /**
+ * Hook for editing an existing DRAFT FIN_Finacc_Transaction.
+ *
+ * POST /sws/neo/financial-account-transactions?action=update
+ * body: { id, trxType, transactionDate, accountingDate, depositAmount,
+ *         paymentAmount, currencyId, description?, glItemId?, bpartnerId?,
+ *         projectId?, costcenterId?, productId?, process? }
+ *
+ * `process: true` edits AND processes (Borrador → Procesado) in one call.
+ * Returns `{ updateMovement, updating, error }`.
+ */
+export function useUpdateMovement() {
+  const { run, busy, error } = usePostAction('update');
+  return { updateMovement: run, updating: busy, error };
+}
+
+/**
  * Hook for registering a payment (replicating Classic "Add Payment").
  *
  * POST /sws/neo/financial-account-transactions?action=create-payment
@@ -98,4 +114,45 @@ export function useCreatePayment() {
 export function useFundsTransfer() {
   const { run, busy, error } = usePostAction('transfer');
   return { transfer: run, transferring: busy, error };
+}
+
+/**
+ * Hook for confirming a Draft transaction (Borrador → Procesado).
+ *
+ * POST /sws/neo/financial-account-transactions?action=process
+ * body: { id }
+ *
+ * Returns `{ processMovement, processing, error }`.
+ */
+export function useProcessMovement() {
+  const { run, busy, error } = usePostAction('process');
+  return { processMovement: run, processing: busy, error };
+}
+
+/**
+ * Hook for reactivating a Processed transaction (Procesado → Borrador). Undoes
+ * posting and reconciliation in reverse order (Payment Removal).
+ *
+ * POST /sws/neo/financial-account-transactions?action=reactivate
+ * body: { id }
+ *
+ * Returns `{ reactivateMovement, reactivating, error }`.
+ */
+export function useReactivateMovement() {
+  const { run, busy, error } = usePostAction('reactivate');
+  return { reactivateMovement: run, reactivating: busy, error };
+}
+
+/**
+ * Hook for deleting a transaction. A Draft is removed directly; a Processed one
+ * is reactivated and removed via Payment Removal (the backend decides by state).
+ *
+ * POST /sws/neo/financial-account-transactions?action=delete
+ * body: { id }
+ *
+ * Returns `{ deleteMovement, deleting, error }`.
+ */
+export function useDeleteMovement() {
+  const { run, busy, error } = usePostAction('delete');
+  return { deleteMovement: run, deleting: busy, error };
 }

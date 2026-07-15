@@ -84,6 +84,7 @@ export function AccountsTable({
   onArchive,
   onPsd2Action,
   onTransfer,
+  onNewMovement,
   onRetry,
 }) {
   const ui = useUI();
@@ -115,6 +116,7 @@ export function AccountsTable({
         onArchive={onArchive}
         onPsd2Action={onPsd2Action}
         onTransfer={onTransfer}
+        onNewMovement={onNewMovement}
         data-testid="AccountRow__db8970" />
     ));
   };
