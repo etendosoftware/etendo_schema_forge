@@ -29,7 +29,11 @@ const LOCKSTEP_PACKAGES = [
 const MANIFESTS = ['package.json', 'tools/app-shell/package.json'];
 
 const version = process.argv[2];
-if (!version || !/^\d+\.\d+\.\d+(-[\w.]+)?$/.test(version)) {
+// Accept plain releases (0.3.1) and prereleases, incl. preview builds whose
+// prerelease carries the sanitized branch id (e.g.
+// 0.3.9-preview.feature-ETP-4394.<ts>.<sha>). SemVer prerelease identifiers are
+// [0-9A-Za-z-] dot-separated, so the class must include '-'.
+if (!version || !/^\d+\.\d+\.\d+(-[\w.-]+)?$/.test(version)) {
   console.error('Usage: node scripts/bump-core-version.mjs <version>  (e.g. 0.3.1)');
   process.exit(1);
 }
