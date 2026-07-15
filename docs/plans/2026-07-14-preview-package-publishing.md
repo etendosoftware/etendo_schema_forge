@@ -28,14 +28,14 @@
 > 4. **Probar cleanup D5b** manualmente sin esperar un release: `workflow_dispatch` de
 >    `cleanup-preview-packages.yml` con `dry_run: true` → ver qué borraría.
 >
-> ### Archivos entregados (commit `31822cdcd`, repo `schema_forge_core`)
+> ### Archivos entregados (commit `31822cdcd` + follow-up D8, repo `schema_forge_core`)
 >
 > | Archivo | Qué es |
 > |---|---|
 > | `scripts/preview-version.mjs` | Resuelve la versión preview lockstep; reusa `writeVersionEverywhere`/`resolveNextVersion` de `release-version.mjs` (no divergen). Exporta `sanitizeBranchId`, `buildPreviewVersion`. `main()` guardado para invocación directa (no corre al importarse). |
 > | `scripts/cleanup-preview-packages.mjs` | Borrado en 2 modos: `same-branch` (D5a) y `stale-feature` (D5b, 7d hardcoded). Fail-soft (exit 0). Guard duro: solo toca nombres con `-preview.`. |
 > | `scripts/release-version.mjs` | Refactor **behavior-preserving**: extrae funciones compartidas + guarda `main()`. Verificado: `version=0.3.7 / tag=0.3.7` igual que antes. |
-> | `.github/workflows/publish-preview.yml` | `on: push: feature/** + workflow_dispatch`. Tests → resolve preview → publish `alpha` (6 pkgs) → D5a. **No** notifica al repo funcional (D7). |
+> | `.github/workflows/publish-preview.yml` | `on: push: feature/** + workflow_dispatch`. Tests → resolve preview → publish `alpha` (6 pkgs) → D5a → **commit status + comentario sticky en el PR** (D8, ambos fail-soft). **No** notifica al repo funcional (D7). |
 > | `.github/workflows/cleanup-preview-packages.yml` | Reusable (`workflow_call` + `workflow_dispatch` con `dry_run`). Modo `stale-feature`, 7d. |
 > | `.github/workflows/release.yml` | Solo job aditivo `cleanup-previews` (`needs: release`) — el release real quedó intacto. |
 
@@ -114,6 +114,19 @@ emite **únicamente** `schema_forge_core/.github/workflows/release.yml:119-126` 
 repo of new release", solo en push a `main`). Por lo tanto, basta con que el workflow de preview
 **no** incluya ningún paso de notificación / `repository_dispatch` — al no emitir `core-released`, el
 chore de bump nunca se dispara. El pin del preview se cambia **a mano** (decisión de pin exacto).
+
+### D8 — Superficie: la versión publicada, "visible fácil" en el commit y el PR
+El pin es manual (D7), así que el paso lento es **saber qué versión salió** sin abrir el run. El
+workflow lo expone por dos vías, ambas **fail-soft** (`continue-on-error`, nunca bloquean el publish):
+
+1. **Commit status** (`preview-package`) sobre el SHA publicado, con `description = "alpha: <version>"`
+   y `target_url` al run. Aparece como check ✅ en el commit **y** en la lista de checks del PR — se
+   ve la versión sin abrir el run. Requiere `permissions: statuses: write`.
+2. **Comentario sticky** en el PR abierto de la rama (si existe): busca el PR por `--head`, y hace
+   *upsert* de un único comentario (marcado con `<!-- preview-packages-bot -->`) — nunca spammea, se
+   actualiza en cada push. Incluye la versión y el snippet exacto del pin
+   (`"@etendosoftware/app-shell-core": "<version>"`). Si no hay PR abierto, se saltea en silencio.
+   Requiere `permissions: pull-requests: write`.
 
 ### D4 — Trigger: automático en cada push a una rama `feature/**` de core
 El preview se publica **solo, en cada push** a una rama `feature/**` del repo `schema_forge_core`
