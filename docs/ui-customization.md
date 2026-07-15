@@ -334,11 +334,16 @@ Hides the delete button when the document is not in Draft status.
 
 ---
 
-### 9b. `window.hideDeleteButton` — unconditional delete button hide
+### 9b. `window.hideDeleteButton` — unconditional delete button opt-out
 
-Removes the Delete (trash) button entirely — in both the detail toolbar and the
-list-row hover quick actions — regardless of record state or document status.
-Use it for windows where deletion from the UI must never be offered.
+Unconditionally hides the Delete button/icon in **both** the detail view toolbar
+and the list-row hover quick actions, for every record regardless of status.
+Distinct from `hideDeleteWhenComplete` (conditional — only hides once the
+document leaves Draft) and from `hideDelete` (which only disables the CRUD
+delete capability declared in `contract.json`/the API, without touching the
+UI affordance). Use `hideDeleteButton` when Delete should never be reachable
+from the UI, e.g. master-data windows where records are provisioned/retired
+outside the app.
 
 ```json
 "window": {
@@ -348,11 +353,12 @@ Use it for windows where deletion from the UI must never be offered.
 
 Defaults to `false`; when unset, delete visibility is exactly as before. This is a
 stronger, state-independent form of `hideDeleteWhenComplete`: if you set
-`hideDeleteButton`, `hideDeleteWhenComplete` becomes redundant. It is also distinct
-from `hideDelete`, which only disables the delete CRUD capability in the contract
-(API level) and does **not** affect the button. The gate lives in the shared utility
-`tools/app-shell/src/utils/recordActions.js`, so both `DetailView` and
-`RowQuickActions` stay in lockstep.
+`hideDeleteButton`, `hideDeleteWhenComplete` becomes redundant. The gate lives in
+the shared utility `tools/app-shell/src/utils/recordActions.js`, so both `DetailView`
+and `RowQuickActions` stay in lockstep.
+
+**Real examples:** `tax` (ETP-4464 — paired with `hideDelete: true` for
+defense-in-depth: the API capability is disabled AND the UI icon is hidden).
 
 ---
 
@@ -612,6 +618,105 @@ custom panel:
 `usableLifeYears`, `usableLifeMonths`, and `depreciationStartDate` in `AssetsDetailPanel.jsx`
 carry `requiredVisual: true` because their obligatoriness depends on the "Tipo de cálculo"
 (`calculateType`) selection.
+
+---
+
+### 17. `secondaryTabs` — custom Panel/Form tabs beside lines
+
+**What it does:** renders one or more extra tabs next to the header's detail content, backed
+either by a hand-written `Panel` component (freeform content, e.g. a custom fetch-and-render
+subtab) or a generated `Form` component (a plain entity form reused as a secondary tab). This is
+a runtime prop passed to the generated `<Page>` component from a hand-written `windows/custom/
+{window}/index.jsx` wrapper — **not** a `decisions.json` key — so it requires `window.layoutType:
+"custom"` (the pipeline only emits a bare scaffold for `"custom"` layouts; there is no
+declarative `decisions.json` shape for this yet).
+
+```jsx
+// windows/custom/{window}/index.jsx
+import GeneratedPage from '@generated/{window}/generated/web/{window}/{Header}Page';
+import MyPanel from './MyPanel.jsx';
+
+export default function MyWindow(props) {
+  const secondaryTabs = [
+    { key: 'accounting', label: 'Accounting', Panel: MyPanel },
+  ];
+  return <GeneratedPage {...props} secondaryTabs={secondaryTabs} />;
+}
+```
+
+**The `Panel` prop contract (confirmed by reading `DetailView.jsx`'s `SecondaryPanelTab`, not
+assumed):**
+
+```jsx
+<props.st.Panel
+    parentId={props.data?.id}
+    token={props.token}
+    apiBaseUrl={props.apiBaseUrl}
+    onCount={props.onCount}
+/>
+```
+
+Your `Panel` component receives **`parentId`** (the current header record's id, a plain string) —
+**not `data`, not the full header record.** This is easy to get wrong if you copy a prop shape
+from memory instead of checking the real renderer: a component written as `function MyPanel({
+data, token, apiBaseUrl })` will silently receive `data === undefined` forever (no error, no
+warning — the prop is just absent) and never fire its fetch. `onCount` is optional — call it with
+a number if you want the tab label to show a count badge; omitting it just skips the badge.
+
+`Form`-backed secondary tabs (`{ key, Form }` instead of `{ key, Panel }`) use a different prop
+shape (`SecondaryFormTab`): `data`, `readOnly`, `onChange`, `entity`, `catalogs`, `token`,
+`apiBaseUrl`, `selectorContext`, `labelOverrides` — closer to a normal `EntityForm` invocation.
+Don't assume `Panel` and `Form` share a prop contract; they don't.
+
+**Building the fetch URL inside a `Panel`:** `apiBaseUrl` passed down here is already
+`{base}/{windowName}` (set once by `WindowLoader.jsx`: `apiBaseUrl={`${apiBaseUrl}/${windowName}`}`,
+where `windowName` is the **route** name, not necessarily a real spec name — see the exception
+below) and threaded unchanged through `Page` → `DetailView` → `Panel`. In the common case (the
+route name IS the backing spec's name), build entity URLs directly off it —
+`${apiBaseUrl}/periodControl?year=${parentId}` — **never** re-prepend the window/spec name
+(`${apiBaseUrl}/{window}/periodControl?...`) or you'll get a doubled path segment. This matches
+the existing `warehouse` convention (`useWarehouseStock.js`: `${apiBaseUrl}/storageBin?...`,
+`${apiBaseUrl}/binContents?...`).
+
+**Exception — a custom window with no backing spec of its own, spanning multiple real specs.**
+`calendar` (ETP-4478) has no `artifacts/calendar/` spec at all — its route name is purely
+cosmetic. `WindowLoader.jsx` still injects `apiBaseUrl={base}/calendar`, but `year` is really
+backed by the `fiscal-calendar` spec, the Periods panel by `open-close-period-control`, and the
+Accounting panel by `end-year-close`. In this shape, the window's `index.jsx` wrapper must strip
+the trailing route segment and substitute the real spec name **per panel** (and for its own
+header page, not just secondary tabs):
+
+```jsx
+function rootApiBase(apiBaseUrl) {
+  return apiBaseUrl.replace(/\/[^/]*$/, ''); // strip the trailing route segment
+}
+function MyPanelForCalendar(props) {
+  return <MyPanel {...props} apiBaseUrl={`${rootApiBase(props.apiBaseUrl)}/the-real-spec-name`} />;
+}
+```
+
+This only applies when the window genuinely has no spec of its own — reach for one merged spec
+first if the entities involved can share a single AD window (see `docs/decisions-reference.md`);
+only fall back to this pattern when they can't (see `docs/generated-custom-windows/calendar.md`
+for the full rationale — a merged multi-window spec silently loses entities in `push-to-neo`,
+tracked as [schema_forge_core#35](https://github.com/etendosoftware/schema_forge_core/issues/35)).
+
+**menuActions-triggered modals are a different mechanism, with their own base URL constant.** A
+`window.menuActions` entry's `component` (see option 5 above) receives `currentRecord` (the full
+record, not just an id) and `apiBaseUrl={api.baseUrl}` — a **hardcoded generated string**
+(`api.baseUrl` inside the generated `Page.jsx`, literally `"/sws/neo/{spec}"`), not the runtime
+`apiBaseUrl` prop threaded from `WindowLoader`. In practice the two end up equal for a
+top-level menu action, but don't assume they're the same variable — verify against the generated
+file when building URLs in a `menuActions` component.
+
+**Use when:** a window needs a subtab whose content doesn't map to a normal generated
+list/detail entity — inline custom rendering, aggregation, or an interaction shape the generator
+doesn't produce (expandable rows, a read-only trial-balance-style grid, etc.).
+
+**Real examples:** `warehouse` (`WarehouseTransactionsTable`/`WarehouseProductsTab` as `Panel`s
+reading `parentId`, single backing spec — the common case); `calendar` (`PeriodsExpandablePanel`,
+`AccountingPanel` — the multi-spec exception above, each panel's `apiBaseUrl` rewritten to a
+different real spec).
 
 ---
 

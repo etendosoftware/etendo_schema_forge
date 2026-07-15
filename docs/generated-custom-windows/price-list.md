@@ -8,6 +8,7 @@ On `origin/develop`, the generated contract was expanded to model `priceListVers
 ## What this window should allow
 - Create, review, and update price-list headers.
 - Identify whether a price list is sales-oriented, tax-inclusive, cost-based, and default.
+- Toggle whether the price-list header is active. The `Activo` (AD column `IsActive`) checkbox is shown in the header detail form only (not as a list column) — classified as `editable` with `form: true, grid: false` in `decisions.json`.
 - Open an existing price list and inspect the product prices associated with it.
 - Add a product to the selected price list and define its `Unit Price` and `List Price`.
 - Select an existing product-price row, edit the two visible price fields from the side panel, and delete the row when it is no longer needed.
