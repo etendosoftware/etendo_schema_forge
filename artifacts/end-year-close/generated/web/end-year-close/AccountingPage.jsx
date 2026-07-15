@@ -2,8 +2,6 @@ import { useEffect } from 'react';
 import { ListView, DetailView } from '@/components/contract-ui';
 import AccountingTable from './AccountingTable';
 import AccountingForm from './AccountingForm';
-import AccountingTable from './AccountingTable';
-import AccountingForm from './AccountingForm';
 import { AttachmentsTab } from '@/components/attachments';
 import catalogs from './mockCatalogs';
 
@@ -99,9 +97,6 @@ export default function AccountingPage({ windowName, recordId, ...props }) {
         recordId={recordId}
         breadcrumb={breadcrumb}
       api={api}
-        secondaryTabs={[
-          { key: 'accounting', label: 'Accounting', Table: AccountingTable, Form: AccountingForm },
-        ]}
         customTabs={[{ key: 'attachments', labelKey: 'attachments', Component: AttachmentsTab, placement: 'tab', props: { tableName: "FinancialMgmtAccountingFactEndYearHQL", config: {} } }]}
         {...props}
       />
