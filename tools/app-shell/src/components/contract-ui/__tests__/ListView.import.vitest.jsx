@@ -1,6 +1,16 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 
+// scroll-pane (app-shell-core) observes size via ResizeObserver, which jsdom
+// does not implement.
+beforeAll(() => {
+  globalThis.ResizeObserver = class {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  };
+});
+
 // Mock react-router-dom
 vi.mock('react-router-dom', () => ({
   useNavigate: () => vi.fn(),

@@ -3,6 +3,16 @@ import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { splitFilterParts, ListView } from '../ListView.jsx';
 
+// scroll-pane (app-shell-core) observes size via ResizeObserver, which jsdom
+// does not implement.
+beforeAll(() => {
+  globalThis.ResizeObserver = class {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  };
+});
+
 const mockHook = {
   items: [],
   loading: false,
