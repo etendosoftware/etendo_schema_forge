@@ -223,9 +223,9 @@
 
 ## ETP-4508 — GOClient reference-role seed (2026-07-15)
 
-- **2026-07-15 — A one-off reference-client seed is OUT OF SCOPE for `cli/src/data-fixes/`.** ETP-4508 needed 5 fixed `AD_Role` records on GOClient (Administrator/Finance/Sales/Purchasing/Inventory) — new reference master data for a single hardcoded client, not a provisioning-gap remediation across the fleet, and with no matching preventive onboarding front (that's deferred to ETP-4515/4516, not yet designed). Routing it through the data-fixes ledger would have forced a premature preventive-front decision and misrepresented a one-off as fleet-wide. **Apply:** followed the `cli/sql/neo-constraints.sql` precedent instead — a plain, idempotent, manually-invoked `.sql` file in `cli/sql/`, outside the ledger/runner. Full reasoning: `docs/etendo-ad/roles-users-reference.md`. **Boundary rule going forward:** data-fixes is for closing a gap on the EXISTING tenant fleet (the two-fronts model); a one-off seed of new reference data for GOClient specifically (with replication to other tenants explicitly deferred to a separate task) belongs in `cli/sql/` instead.
-- **2026-07-15 — `AD_ROLE_TRG` fires on INSERT of a brand-new non-manual role too, not just UPDATE of an existing one.** The existing ETP-4397 note above only documented the DELETE-then-rebuild danger for touching an *existing* role. Confirmed today: inserting 5 fresh `ad_role` rows (`ismanual='N'`) auto-populated `AD_Window_Access`/`AD_Process_Access` for every active window/process matching each role's `userlevel`, with `isreadwrite='Y'` (full) by default — 243-265 window rows and 303-306 process rows per role (also 85 `AD_Form_Access` rows total, missed on first pass — the trigger's `ELSE` branch deletes/rebuilds Window+Process+Form access together, all three must be checked). Verified this is standard (not a bug from my insert) by comparing against the pre-existing core `GOClient Admin` (266/306/17 rows) / `GOuser` (245/303/17 rows) roles, which show the identical pattern. **SUPERSEDED same day, see below — `ismanual='N'` was the wrong call for this task; kept for history.** **Apply (still valid in general):** any role seeded as non-manual gets this trigger-populated blanket grant automatically, never starts from "nothing" — account for all 3 access tables (Window/Process/Form), not just the two most obvious ones.
-- **2026-07-15 — CORRECTION: the 5 ETP-4508 roles must be `ismanual='Y'` (manual), not `'N'`.** Coordinator caught this before merge: ETP-4509 curates each role's `AD_Window_Access` **by hand** (the 3-tier full/read-only/none model), so the roles must be manual — `ad_role_trg()`'s function body has an explicit early-exit (`ELSIF (new.IsManual = 'Y') THEN RETURN NEW`) that skips the whole delete/rebuild block for manual roles, so a manual role never gets ANY auto-derived access, giving ETP-4509 a genuinely empty table to build on instead of a blanket grant to narrow down. **Fix applied:** `UPDATE ad_role SET ismanual='Y' ...` for the 5 role IDs, PLUS explicit `DELETE FROM ad_window_access/ad_process_access/ad_form_access WHERE ad_role_id IN (...)` — the `UPDATE` alone does NOT clean up rows the trigger already inserted while non-manual, because `ad_role_trg()`'s `UPDATE` branch only re-runs the delete/rebuild when `userlevel` changes or when flipping `ismanual` `'Y'→'N'` (the *opposite* direction of this fix); `'N'→'Y'` is a no-op for existing access rows. Verified post-fix: all 5 roles `ismanual='Y'` with 0 window/process/form access rows; `GOClient Admin`/`GOuser` untouched. `cli/sql/goclient-seed-roles.sql` updated to insert `ismanual='Y'` directly so a fresh install never needs this correction. **Apply:** when seeding a role meant for hand-curated access (as opposed to Etendo's automatic userlevel-based derivation), `ismanual='Y'` is a hard requirement, not a style choice — decide this BEFORE the first insert, since fixing it after requires cleaning up 3 access tables, not just flipping one column.
+- **2026-07-15 — A one-off reference-client seed is OUT OF SCOPE for `cli/src/data-fixes/`.** ETP-4508 needed 4 fixed `AD_Role` records on GOClient (Finance/Sales/Purchasing/Inventory) — new reference master data for a single hardcoded client, not a provisioning-gap remediation across the fleet, and with no matching preventive onboarding front (that's deferred to ETP-4515/4516, not yet designed). ("Administrator" is not a 5th seeded role — it resolves to the tenant's existing client-admin role; see `docs/etendo-ad/roles-users-reference.md` § Administrator resolution.) Routing it through the data-fixes ledger would have forced a premature preventive-front decision and misrepresented a one-off as fleet-wide. **Apply:** followed the `cli/sql/neo-constraints.sql` precedent instead — a plain, idempotent, manually-invoked `.sql` file in `cli/sql/`, outside the ledger/runner. Full reasoning: `docs/etendo-ad/roles-users-reference.md`. **Boundary rule going forward:** data-fixes is for closing a gap on the EXISTING tenant fleet (the two-fronts model); a one-off seed of new reference data for GOClient specifically (with replication to other tenants explicitly deferred to a separate task) belongs in `cli/sql/` instead.
+- **2026-07-15 — `AD_ROLE_TRG` fires on INSERT of a brand-new non-manual role too, not just UPDATE of an existing one.** The existing ETP-4397 note above only documented the DELETE-then-rebuild danger for touching an *existing* role. Confirmed today: inserting 5 fresh `ad_role` rows (`ismanual='N'`) auto-populated `AD_Window_Access`/`AD_Process_Access` for every active window/process matching each role's `userlevel`, with `isreadwrite='Y'` (full) by default — 243-265 window rows and 303-306 process rows per role (also 85 `AD_Form_Access` rows total, missed on first pass — the trigger's `ELSE` branch deletes/rebuilds Window+Process+Form access together, all three must be checked). Verified this is standard (not a bug from my insert) by comparing against the pre-existing core `GOClient Admin` (266/306/17 rows) / `GOuser` (245/303/17 rows) roles, which show the identical pattern. **SUPERSEDED same day, see below — `ismanual='N'` was the wrong call for this task; kept for history.** **Apply (still valid in general):** any role seeded as non-manual gets this trigger-populated blanket grant automatically, never starts from "nothing" — account for all 3 access tables (Window/Process/Form), not just the two most obvious ones. (Note: "5 fresh `ad_role` rows" reflects this entry's own moment — the ad-hoc "Administrator" role among those 5 was later removed entirely, not just renamed/adjusted; see `docs/etendo-ad/roles-users-reference.md` § Administrator resolution.)
+- **2026-07-15 — CORRECTION: the 5 ETP-4508 roles must be `ismanual='Y'` (manual), not `'N'`.** Coordinator caught this before merge: ETP-4509 curates each role's `AD_Window_Access` **by hand** (the 3-tier full/read-only/none model), so the roles must be manual — `ad_role_trg()`'s function body has an explicit early-exit (`ELSIF (new.IsManual = 'Y') THEN RETURN NEW`) that skips the whole delete/rebuild block for manual roles, so a manual role never gets ANY auto-derived access, giving ETP-4509 a genuinely empty table to build on instead of a blanket grant to narrow down. **Fix applied:** `UPDATE ad_role SET ismanual='Y' ...` for the 5 role IDs, PLUS explicit `DELETE FROM ad_window_access/ad_process_access/ad_form_access WHERE ad_role_id IN (...)` — the `UPDATE` alone does NOT clean up rows the trigger already inserted while non-manual, because `ad_role_trg()`'s `UPDATE` branch only re-runs the delete/rebuild when `userlevel` changes or when flipping `ismanual` `'Y'→'N'` (the *opposite* direction of this fix); `'N'→'Y'` is a no-op for existing access rows. Verified post-fix: all 5 roles `ismanual='Y'` with 0 window/process/form access rows; `GOClient Admin`/`GOuser` untouched. `cli/sql/goclient-seed-roles.sql` updated to insert `ismanual='Y'` directly so a fresh install never needs this correction. **Apply:** when seeding a role meant for hand-curated access (as opposed to Etendo's automatic userlevel-based derivation), `ismanual='Y'` is a hard requirement, not a style choice — decide this BEFORE the first insert, since fixing it after requires cleaning up 3 access tables, not just flipping one column. (As above: "the 5 ETP-4508 roles" reflects the count at this point in time only — the ad-hoc "Administrator" role was later removed entirely; see `docs/etendo-ad/roles-users-reference.md` § Administrator resolution for the current, correct count.)
 
 ## ETP-4245 — Accounting schema predefinition + 6 dimensions (2026-07-06)
 
@@ -250,3 +250,91 @@
 - **2026-07-14 — Standard System org types (`ad_orgtype`, `ad_client_id='0'`):** `'0'`=Organization (all flags N), `'1'`=Legal with accounting (islegalentity=Y, isacctlegalentity=Y), `'2'`=Generic (all N), `'3'`=Legal without accounting (islegalentity=Y only). Only `'1'` (and any businessunit type) passes the period-control gate. **Apply:** resolve the target type dynamically as the System row with `islegalentity='Y' AND isacctlegalentity='Y'` — do NOT hardcode `'1'`.
 - **2026-07-14 — Org-type provisioning gap (20 staging tenants) — corrective folded INTO R3 as block `C1-pre`.** Symptom: ~20 tenants halt on R3 with `@OrgTypeDoesNotAllowPeriodControl@`. Root cause: each has exactly ONE operative org of type "Organization" (`'0'`) instead of "Legal with accounting" — correct topology, wrong org type. They already have `c_acctschema` + `ad_org_acctschema` link; the ONLY delta needed is `UPDATE ad_org SET ad_orgtype_id=<legal-with-accounting>`. Verified end-to-end on a still-broken tenant: `test` (`473007453A724AAA913B791564E35422`) went Organization/PC=N → Legal with accounting/PC=Y with 516 period controls and R3 APPLIED (532 rows); earlier on the hand-flipped `E9C9219410794AD49897BBEE89E173FE` the full R4→R13 chain proceeded (0 halted). **Delivery decision — in-place edit of R3, NOT a separate migration.** The promotion `UPDATE` was added as block `C1-pre` inside R3's `@apply`, immediately before the C1 period-control `UPDATE`, so promotion + fiscal block + period control commit or roll back together in R3's single transaction. It targets the same `:org_id` R3 wires, resolves the target org type dynamically (System row with `islegalentity='Y' AND isacctlegalentity='Y'` — never hardcodes `'1'`), and is **guarded to fire only when the current type does not allow period control** → idempotent no-op for the 41 healthy tenants (which never re-run R3 anyway, their watermark is past it). A separate pre-R3 migration (`R2x`, dated 2026-06-15 < R3's 2026-06-16) was prototyped first, then discarded: editing R3 in place was chosen because for every tenant that already recorded R3 APPLIED the added statement is a semantic no-op (no divergence from what was recorded), and checksum enforcement is currently deferred. The only tenants whose R3 outcome changes are those where R3 had FAILED (never truly applied) and now succeeds. **Multi-org tenants are untouched** — R3's `:org_id` is the single operative org, and all 20 affected tenants are single-org, so multi-org tenants (e.g. staging "QA Testing") are never promoted.
 - **2026-07-14 — R3 `:org_id` vs `@check` mismatch (note, not fixed).** `applyFix` in `run.js` resolves `:org_id` as the OLDEST operative org (`ORDER BY created LIMIT 1`), but R3's `@check` matches ANY operative org lacking period control. For single-org tenants they coincide (all 20 failing tenants are single-org, unaffected). For multi-org tenants R3 could match `@check` on a non-oldest org yet wire only the oldest — a latent bug to address if/when multi-org period-control remediation is needed.
+
+## ETP-4509 — Etendo Go window-access model + spec→window mapping (2026-07-15)
+
+- **`ETGO_SF_SPEC` carries `ad_window_id` directly** — no join through
+  `ETGO_SF_ENTITY`/`AD_TAB` needed for the common case. Confirmed 100%
+  reliable (zero mismatches) for all 47/49 active `spec_type='W'` specs whose
+  `ad_window_id` is non-NULL, cross-checked against every child
+  `ETGO_SF_ENTITY.ad_tab_id → AD_TAB.ad_window_id`. The 2 window-type specs
+  with NULL `ad_window_id` (`dashboard`, `not-posted-documents`) are
+  synthetic cross-entity aggregates by design, not a mapping gap.
+- **`ETGO_SF_SPEC.spec_type` values are `'W'` (window, 49 active) and `'R'`
+  (report/aggregate view, 8 active) — NOT the literal strings `'window'`/
+  `'report'`.** A query filtering `spec_type = 'window'` silently returns 0
+  rows; use `'W'`/`'R'`. Every `spec_type='R'` spec has `ad_window_id = NULL`
+  ALWAYS, by category, not by omission — these are Go-only computed views
+  (`bank-reconciliation`, `tax-report`, `inventory-stock-report`, etc.) with
+  no backing AD window in core or in Go. **Apply:** before granting
+  `AD_Window_Access` for a Go-exposed feature named in a business
+  requirement, first confirm its spec is `spec_type='W'` — if it's `'R'`,
+  no window-access row can ever represent it; that gap needs a different
+  mechanism (e.g. hiding/showing the feature client-side, or a dedicated
+  permission concept), not `AD_Window_Access`.
+- **`AD_Window_Access`/`AD_Process_Access` have only ONE access flag,
+  `isreadwrite` (Y/N) — no separate `allowview`/`allowinsert`/`allowdelete`
+  CRUD columns.** (Those granular flags exist on `AD_Table_Access`, a
+  different table, not on window/process access.) A 3-tier
+  none/read-only/full model must therefore be represented as: no row = none,
+  `isreadwrite='N'` = read-only, `isreadwrite='Y'` = full. Corrects an
+  assumption in the ETP-4509 task brief that assumed granular CRUD flags on
+  `AD_Window_Access` itself.
+- **Etendo's Business Partner window is unified across customer/vendor/
+  contact roles.** There is no separate AD window per BP "flavor" — one
+  window (`contacts` Go spec, `AD_Window_ID 123`, core "Business Partner"/
+  "Terceros") serves them all, differentiated by BP-level flags
+  (`iscustomer`/`isvendor`), not by window. **Apply:** when a design table
+  lists "Customers"/"Vendors"/"Contacts" as separate access-table rows for
+  different roles, expect them to collapse to the SAME `AD_Window_ID` —
+  granting access to multiple roles for that one window is correct, it is
+  not a sign of a resolution error.
+- **Business-term → window resolution: search the Go-exposed spec catalog
+  (`ETGO_SF_SPEC` + `AD_WINDOW_TRL`), not the full core `AD_MENU` tree.**
+  Searching `AD_MENU`/`AD_MENU_TRL` for a Spanish business term (e.g.
+  "Facturas de venta") returns dozens of noisy matches across unrelated
+  reports/processes that happen to contain the same words, because the
+  core AD menu is far bigger than what Etendo Go actually exposes. Since a
+  Go role can only ever reach the ~49 Go-exposed windows, that is the
+  correct (and much smaller, much less ambiguous) search universe for this
+  kind of mapping task.
+- **Window → document-action-process mapping: `AD_Field` (button) →
+  `AD_Column.ad_process_id` → `AD_Tab` → `AD_Window`.** A window's
+  Complete/Void/Process/Reconcile/etc. buttons are `AD_Field` rows whose
+  underlying `AD_Column` carries a non-NULL `ad_process_id`. This join
+  reliably reproduces the exact universe of processes a non-manual role's
+  automatic grant would cover for that window — verified 100% match (every
+  button process found for 19 target windows was already granted to both
+  GOClient Admin and GOuser). **Apply:** don't join `AD_Process.AD_TABLE_ID`
+  to `AD_Window`/`AD_Tab.AD_TABLE_ID` instead — that over-grants (returns
+  every process touching the same table from unrelated windows/reports,
+  not just the ones actually wired as buttons on the window in question).
+- **Classic document actions (Complete/Void/Close/Reactivate) are NOT
+  separate `AD_Process` rows.** Etendo implements them as ONE generic
+  "Process X" button per document type (`Process Order` id `104`,
+  `Process Invoice` id `111`, `Process Shipment` id `109`, `Process
+  Inventory Count` id `107`, etc.) that opens a dialog offering all the
+  lifecycle actions as options. Granting that single process is sufficient
+  — there is no separate "Complete" or "Void" `AD_Process` to grant.
+- **The same conceptual button ("Copy Lines", "Explode") is often a
+  DIFFERENT `AD_Process_ID` per document type.** E.g. Sales Order's "Copy
+  Lines" is process `211`; Sales Invoice's "Copy Lines" is process `210` —
+  same name, different implementation/ID. **Apply:** when building a role's
+  `AD_Process_Access` set across multiple windows, dedup by `AD_Process_ID`,
+  never by process name.
+- **`AD_Process_Access` has no per-window scoping column at all** — a grant
+  is global to the role, not tied to a specific window (matching how the
+  automatic non-manual-role grant also works). So if a role has two windows
+  that happen to share the exact same process (same ID), only ONE
+  `AD_Process_Access` row is needed for that (role, process) pair, not one
+  per window.
+- **ETP-4509 read-only-tier decision: zero `AD_Process_Access` grants for
+  any read-only-tier window.** Checked all button processes on the 4
+  read-only windows in that task (sales-invoice, purchase-invoice, product,
+  physical-inventory) — every single one was a state-changing action
+  (Process/Copy/Generate/Update/Create); none were print/export/view-type.
+  Etendo's grid/form Print/Export are generic toolbar actions, not gated by
+  `AD_Process_Access`, so there was no safe candidate to grant that would
+  preserve read-only intent. **Apply:** before assuming "some process access
+  makes sense even read-only," actually enumerate the window's button
+  processes first — the answer may legitimately be zero.

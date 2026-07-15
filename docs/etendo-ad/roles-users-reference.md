@@ -45,16 +45,21 @@ decision outside this task's scope.
 **Correction (2026-07-15): a prior run of this task mistakenly created a new,
 freshly-generated `AD_Role` named "Administrator"
 (`451EED23EC0A44679F15C6789A4EB980`) on GOClient.** This was wrong and has
-been reverted (the role had zero dependents in any FK column with
-`ON DELETE NO ACTION` — `AD_User_Roles`, `AD_Window_Access`,
-`AD_Process_Access`, `AD_Form_Access`, `AD_Role_Inheritance`,
-`AD_Role_OrgAccess` all showed 0 rows; the only rows referencing it were in 3
-OB UI framework tables — `obkmo_widget_class_access`,
-`obuiapp_process_access`, `obuiapp_view_role_access` — all via
-`ON DELETE CASCADE` FKs and present in identical counts on every role, i.e.
-framework bootstrap noise, not real assignment; they were cascade-deleted
-along with the role). It was deleted from the live GOClient DB and the
-`INSERT` block removed from `cli/sql/goclient-seed-roles.sql`.
+been reverted. Before deletion, every FK column referencing `ad_role_id`
+across the schema was checked for dependent rows: the role had zero
+dependents in any FK column with `ON DELETE NO ACTION` — `AD_User_Roles`,
+`AD_Window_Access`, `AD_Process_Access`, `AD_Form_Access`,
+`AD_Role_Inheritance`, `AD_Role_OrgAccess` all showed 0 rows. The only
+non-zero counts were in 3 OB UI framework tables via `ON DELETE CASCADE`
+FKs — `obkmo_widget_class_access` (27 rows), `obuiapp_process_access`
+(138), `obuiapp_view_role_access` (1) — present in the exact same counts on
+every one of the 5 roles that existed at the time, confirming these are
+framework-bootstrap rows populated on role creation regardless of
+`ismanual`, not evidence of real usage. The role was deleted
+(`DELETE FROM ad_role WHERE ad_role_id = '451EED23EC0A44679F15C6789A4EB980'`,
+cascading the 3 framework tables' rows along with it) from the live GOClient
+DB, and the `INSERT` block removed from `cli/sql/goclient-seed-roles.sql`
+— the script now seeds 4 roles.
 
 **"Administrator" is the tenant's pre-existing client-admin role, not a new
 record.** Core Etendo's `InitialClientSetup` (the standard create-client
@@ -158,6 +163,11 @@ the XML wins (it's what ships).
 ## Open question 2 — does GOClient already have an Administrator-equivalent role?
 
 **Yes — and it IS reused (as of the 2026-07-15 correction), not duplicated.**
+See § "Administrator resolution" above for the full rationale: why a
+brand-new "Administrator" role was briefly (and mistakenly) created, why it
+was reverted, and why the tenant's admin role is always resolved by the
+`is_client_admin='Y'` predicate rather than by name or a fixed ID.
+
 GOClient already had 2 roles before this task, auto-created by core Etendo's
 `InitialClientSetup` (the standard "create-client" wizard invoked by
 `EtendoGoJwtServlet.createClient` for every new tenant, GOClient included):
@@ -166,32 +176,6 @@ GOClient already had 2 roles before this task, auto-created by core Etendo's
 |---|---|---|---|
 | GOClient Admin | `9B8D736190724807AB256DC95F20EC5E` | ` CO` | `Y` |
 | GOuser | `6A0A8D73D8284C6088DF36BDCC569161` | `  O` | `N` |
-
-**Superseded decision (originally 2026-06-XX, corrected 2026-07-15):** the
-first draft of this task created a brand-new "Administrator" `AD_Role`
-alongside `GOClient Admin`, reasoning that the 5-role model needed an
-identical, stable literal name across tenants. **This was wrong** — it is
-resolved by *predicate*, not by *name or ID*:
-
-1. **Name is not portable, but that's not a problem — resolve by
-   `is_client_admin='Y'` instead of by name.** `InitialClientSetup` names the
-   admin role `"<ClientName> Admin"` (e.g. "GOClient Admin", "Acme Corp
-   Admin"). ETP-4509/4515/4516 must never hardcode the literal "Administrator"
-   string against `AD_Role.name` — they resolve the tenant's admin role via
-   `WHERE ad_client_id = :client_id AND is_client_admin = 'Y'`, which is
-   already stable and portable across every tenant without needing a fixed
-   name or ID. See the "Administrator resolution" section above.
-2. **Same semantics, no coupling risk.** `GOClient Admin` already carries
-   exactly the semantics the design doc wants for "Administrator" — Client+Org
-   level, `is_client_admin='Y'`, non-manual (blanket auto-granted access kept
-   in sync forever by `AD_ROLE_TRG`). Reusing it via the `is_client_admin`
-   predicate (the same mechanism `EtendoGoJwtDalHelper.findClientAdminUserRole`
-   already uses) introduces no coupling beyond what already exists — no
-   renaming, no touching the live role at all.
-3. **No ID collision, and now no duplicate role either.** The freshly-created
-   "Administrator" role (`451EED23EC0A44679F15C6789A4EB980`) was deleted
-   after confirming it had zero real dependents (see "Administrator
-   resolution" above) — GOClient does not carry a redundant admin role.
 
 **Net effect:** GOClient has **6 roles**: the 2 core bootstrap roles
 (`GOClient Admin`, `GOuser`, untouched) + the **4** new GO operational roles
@@ -357,24 +341,13 @@ flipping `ismanual` from `'Y'` to `'N'` (the opposite direction); going
 required. `cli/sql/goclient-seed-roles.sql` was updated to use `ismanual='Y'`
 in all `INSERT`s so a fresh install seeds correctly the first time.
 
-**Correction record (2026-07-15, part 2 — Administrator role removal):** a
-further review found that the seeded "Administrator" `AD_Role`
-(`451EED23EC0A44679F15C6789A4EB980`) should never have been created as a new
-record — see the "Administrator resolution" section near the top of this doc
-for the full rationale. Before deletion, every FK column referencing
-`ad_role_id` across the schema was checked for dependent rows:
-`AD_User_Roles`, `AD_Window_Access`, `AD_Process_Access`, `AD_Form_Access`,
-`AD_Role_Inheritance`, `AD_Role_OrgAccess`, and all other `ON DELETE NO
-ACTION` FKs to `ad_role` showed **0** rows for this role. The only non-zero
-counts were in 3 OB UI framework tables via `ON DELETE CASCADE` FKs —
-`obkmo_widget_class_access` (27), `obuiapp_process_access` (138),
-`obuiapp_view_role_access` (1) — present in the **exact same counts on every
-one of the 5 roles**, confirming they are framework-bootstrap rows populated
-on role creation regardless of `ismanual`, not evidence of real usage. The
-role was deleted (`DELETE FROM ad_role WHERE ad_role_id =
-'451EED23EC0A44679F15C6789A4EB980'`), cascading the 3 framework tables'
-rows along with it. `cli/sql/goclient-seed-roles.sql` was updated to remove
-the Administrator `INSERT` block entirely — the script now seeds 4 roles.
+**Correction record (2026-07-15, part 2 — Administrator role removal):** the
+seeded "Administrator" `AD_Role` (`451EED23EC0A44679F15C6789A4EB980`) should
+never have been created as a new record. See § "Administrator resolution"
+near the top of this doc for the full rationale, the FK-dependency
+verification, and the exact statement used to delete it —
+`cli/sql/goclient-seed-roles.sql` was updated to remove the Administrator
+`INSERT` block entirely, and the script now seeds 4 roles.
 
 **Correction record (2026-07-15, part 3 — delivery mechanism + minor field
 gap):** transcribing the live DB rows into `AD_ROLE.xml` (see "Open question
@@ -441,3 +414,464 @@ now carries all 6 roles, and `AD_ROLE_ORGACCESS.xml` now carries all 11 rows
 (3 pre-existing + 8 new — 2 per new role), both in ascending-alphanumeric-ID
 order (validated well-formed XML, sort order confirmed programmatically for
 both files).
+
+---
+
+# ETP-4509 — Window access mapping (3-tier, GOClient)
+
+**Scope:** map each of the 4 operational roles to `AD_Window_Access` rows for
+their designated windows (full/read-only), per the business-term table in
+the Jira ticket / phase-1 handoff. Depends on ETP-4508 (roles + org access,
+above) being correct.
+
+## Highest-risk item — ETGO_SF_ENTITY/ETGO_SF_SPEC → AD_Window_ID reliability
+
+**RESOLVED, confirmed reliable for real AD windows.** `ETGO_SF_SPEC` (the
+top-level Etendo Go spec table) has its own **direct** `ad_window_id` column
+— no join through `ETGO_SF_ENTITY`/`AD_TAB` is even needed for the common
+case. Verified live on GOClient across all 49 active `spec_type='W'`
+("window") specs:
+
+- **47/49** have a non-NULL `ad_window_id` that is byte-for-byte consistent
+  with every one of their child `ETGO_SF_ENTITY.ad_tab_id → AD_TAB.ad_window_id`
+  values — **zero mismatches, zero specs spanning more than one AD window**
+  (checked via a full outer join across all active entities/tabs). For these,
+  `ETGO_SF_SPEC.ad_window_id` is a fully reliable, direct FK — use it, no
+  cross-checking needed.
+- **2/49 have `ad_window_id = NULL` by design, not by gap:** `dashboard` (a
+  synthetic aggregate view assembled from several unrelated KPI/trend/task
+  sub-entities — its own child entities like `kpis`/`trends`/`pending-tasks`
+  also have `ad_tab_id = NULL`, confirming they are computed panels with no
+  backing AD_Tab at all) and `not-posted-documents` (a cross-window
+  aggregate report, same shape). Neither corresponds to a single AD window —
+  there is nothing to grant `AD_Window_Access` *to* for these two.
+- **`spec_type='R'` specs (8 active) have `ad_window_id = NULL` for ALL of
+  them, always** — these are Etendo Go's own custom aggregate/report views
+  (`aging-receivable`, `bank-reconciliation`, `bank-statements`,
+  `financial-account-psd2`, `financial-account-transactions`,
+  `financial-accounts-page`, `inventory-stock-report`, `tax-report`). They
+  are a **different spec category** from `spec_type='W'`, not a subset that
+  happens to be missing data. **None of them can ever get an
+  `AD_Window_Access` row** — there is no AD window (Go-exposed or core) that
+  backs them; they're purely computed views assembled by NEO Headless from
+  other entities' data.
+- A handful of individual `ETGO_SF_ENTITY` rows *within* an otherwise
+  window-backed spec have `ad_tab_id = NULL` (e.g. `contacts`' `bp-stats`/
+  `bp-trend` sub-entities) — same pattern as above: synthetic stat/trend
+  panels bolted onto a real window, not evidence the window itself is
+  unmapped.
+
+**Net verdict:** the mapping mechanism itself (`ETGO_SF_SPEC.ad_window_id`)
+is **100% reliable wherever it is populated** (47/49 window specs, zero
+drift/mismatch found). The 2 exceptions among window-type specs, and all 8
+report-type specs, are **correctly** unmapped — they are not real AD
+windows and were never going to be. This is a materially different (better)
+answer than "some specs have missing/unreliable IDs" — the mechanism doesn't
+have gaps, a small category of specs is simply out of its domain.
+
+**Practical consequence for this task:** `bank-reconciliation` (the Go spec
+behind "Conciliación bancaria" in the business-term table, see below) falls
+in the second bullet above — it is a `spec_type='R'` view with no
+`AD_Window_ID`, so **it cannot receive an `AD_Window_Access` row at all**,
+regardless of role or tier. This is the significant, concrete instance of
+"unreliable mapping" the ticket asked to surface.
+
+## Business-term → AD_Window_ID resolution table
+
+Resolved by cross-referencing the Spanish business terms in the Jira table
+against the 49 active `spec_type='W'` specs' `AD_WINDOW_TRL` (`es_ES`) names
+— **not** by searching the full core `AD_MENU` tree, which returns dozens of
+noisy, non-Go-exposed matches for generic terms (verified and discarded as
+an approach; e.g. searching AD_MENU for "Facturas de venta" surfaces a
+payment-plan report, not the actual Sales Invoice window). Only the 49
+Go-exposed specs are actually reachable by an Etendo Go role, so that's the
+correct search universe.
+
+| Business term (role, tier) | Spec (kebab) | `AD_Window_ID` | Confidence |
+|---|---|---|---|
+| Plan contable (Finance, full) | chart-of-accounts | `118` | High — exact concept match ("Árbol de cuentas"/Account Tree) |
+| Asientos (Finance, full) | simple-g-l-journal | `B917E8A7B0864ACEA9D941E3B7494E53` | High — only Go-exposed journal-entry window (core's "Asientos manuales"/G-L Journal, window `132`, is NOT Go-exposed) |
+| Bancos (Finance, full) | financial-account | `94EAA455D2644E04AB25D93BE5157B6D` | High — only Go-exposed banking window; core's `AD_Bank` window (`158`, "Banco-Sucursal") is NOT Go-exposed |
+| Pagos (Finance, full) | payment-out | `6F8F913FA60F4CBD93DC1D3AA696E76E` | High |
+| Cobros (Finance, full) | payment-in | `E547CE89D4C04429B6340FFA44E70716` | High — exact ES name match ("Cobros") |
+| Impuestos (Finance, full) | tax **and** tax-category | `137` and `138` | **Ambiguous** — both are legitimate Go-exposed "tax config" windows (Tax Rate / Tax Category); no single window is uniquely "Impuestos". Resolved by granting **both** rather than guessing one (low over-grant risk, both are within Finance's own domain) |
+| Contabilidad (Finance, full) | — | **none** | **Unresolved, not seeded.** No single Go-exposed window matches this generic label once Plan contable/Asientos are already separately accounted for; the closest candidate (`general-ledger-configuration`, "Esquema contable") is a distinct concept (accounting-schema setup, not general "accounting"). Flagged for product clarification rather than guessed. |
+| Conciliación bancaria (Finance, full) | bank-reconciliation | **none — impossible** | **Unresolved, not seeded — see the highest-risk finding above.** `spec_type='R'`, no `AD_Window_ID` exists at all, in Go or in core AD. |
+| Facturas de venta (Finance RO; Sales, full) | sales-invoice | `167` | High |
+| Facturas de compra (Finance RO; Purchasing, full) | purchase-invoice | `183` | High |
+| Pedidos de venta (Sales, full) | sales-order | `143` | High |
+| Presupuestos (Sales, full) | sales-quotation | `6CB5B67ED33F47DFA334079D3EA2340E` | High |
+| Clientes (Sales, full) | contacts | `123` | High, but see finding below |
+| Contactos (Sales, full) | contacts | `123` | High, but see finding below — **same window as Clientes** |
+| Tarifas (Sales, full) | price-list | `146` | High |
+| Productos (Sales RO; Purchasing full; Inventory full) | product | `140` | High |
+| Pedidos de compra (Purchasing, full) | purchase-order | `181` | High |
+| Proveedores (Purchasing, full) | contacts | `123` | High, but see finding below — **same window as Clientes/Contactos** |
+| Inventario (Purchasing, RO) | physical-inventory | `168` | Moderate — see "Stock vs Inventario" finding below |
+| Almacenes (Inventory, full) | warehouse | `139` | High |
+| Movimientos de inventario (Inventory, full) | goods-movements | `170` | Moderate-high — ES name is "Movimiento entre almacenes" (warehouse-to-warehouse transfer), the closest Go-exposed match |
+| Stock (Inventory, full) | physical-inventory | `168` | Moderate — see finding below |
+| Entradas de mercancía (Inventory, full) | goods-receipt | `184` | High — semantic match (incoming goods from vendor) |
+| Salidas de mercancía (Inventory, full) | goods-shipment | `169` | High — semantic match (outgoing goods to customer) |
+
+**Finding — "Clientes"/"Contactos"/"Proveedores" all collapse to the SAME
+window.** Etendo's Business Partner model is unified: there is no separate
+AD window for customers vs. vendors vs. generic contacts — one window
+(`contacts` spec, `AD_Window_ID 123`, "Business Partner"/"Terceros") serves
+all three business-facing concepts, differentiated by BP flags
+(`iscustomer`/`isvendor`), not by window. So the design table's 3 separate
+line items (Sales' "Clientes", Sales' "Contactos", Purchasing's
+"Proveedores") produce only **one** distinct `AD_Window_Access` row per role
+(Sales gets one row for window `123`; Purchasing gets its own separate row
+for the same window `123`) — not three. This is expected Etendo behavior,
+not a mapping defect.
+
+**Finding — "Stock" (Inventory) and "Inventario" (Purchasing RO) both
+resolve to the same window, `physical-inventory` (168), because no
+Go-exposed window is literally titled either term.** The only inventory-
+quantity window in the Go-exposed catalog is `physical-inventory`
+("Inventario físico"/Physical Inventory) — there is no separate Go-exposed
+"Stock" window (core has several stock-related windows/reports, e.g. "Stock
+Reservation", none Go-exposed). Both business terms were resolved to the
+same `AD_Window_ID`, flagged here as a judgment call rather than a certain
+match.
+
+## Correction to the ETP-4509 task brief — no CRUD-flag columns on AD_Window_Access
+
+The task brief assumed `AD_Window_Access` exposes granular flags (e.g.
+`allowview`/full CRUD flags) to represent the 3-tier model. **This table has
+no such columns in this Etendo version** — confirmed via
+`information_schema.columns`: `ad_window_access` has exactly one access flag,
+`isreadwrite` (`Y`/`N`), plus the standard audit/active columns (`inherited_from`
+and a module-added `em_smfmu_mobileview` are also present but irrelevant
+here). This actually matches (and was already anticipated by) the note in
+the ETP-4508 section above ("`ad_window_access`/`ad_process_access` have a
+single `isreadwrite` (Y/N) flag ... matching the handoff doc's 3-tier
+model"). Final representation used:
+
+- **No row** → NONE (role cannot open the window)
+- **Row, `isreadwrite='N'`** → READ-ONLY
+- **Row, `isreadwrite='Y'`** → FULL
+
+`AD_ORG_ID` is always `'0'`, matching the existing GOClient Admin /
+`CreateRoleStep` convention (role-level access, not org-scoped).
+`AD_PROCESS_ACCESS` has the identical shape (`isreadwrite` only).
+
+## AD_Process_Access — judged OUT OF SCOPE for this pass
+
+**Decision: do not seed `AD_Process_Access` in ETP-4509.** Reasoning:
+
+1. The Jira acceptance criteria for ETP-4509 explicitly scope this task to
+   `AD_Window_Access` rows only; the business-term table is entirely
+   window-based (no process/report is named anywhere in it).
+2. Determining "the processes associated with each window" is not a
+   well-defined, bounded set — Etendo windows carry an open-ended list of
+   toolbar/document actions (Complete, Void, Close, Reactivate, print/export
+   processes, etc.), and picking which of those each role should run per
+   tier is a separate product decision this ticket does not make.
+3. Unlike the window table, there is no equivalent "process access" tier
+   table anywhere in the design doc or Jira to drive a mechanical mapping —
+   inventing one here would be scope creep, not resolution of ambiguity.
+
+**However, this is very likely a real functional gap worth flagging
+explicitly, not just a scoping technicality.** Because the 4 roles are
+`ismanual='Y'` (mandatory, see the ETP-4508 section above), core's
+`AD_ROLE_TRG` trigger — which auto-grants blanket `AD_Process_Access` for
+non-manual roles — never touches them. Confirmed live: all 4 roles show
+**zero** `AD_Process_Access` rows even after this task's `AD_Window_Access`
+seeding. In practice this means a Finance/Sales/Purchasing/Inventory user
+**cannot run any document action** (e.g. "Complete" a Sales Order,
+"Process" a payment, generate a report) even on a window they have FULL
+`AD_Window_Access` to — only CRUD-via-grid would work. **Recommend this be
+picked up explicitly as a near-term follow-up** (either a new Jira task or
+folded into ETP-4510's UI-enforcement phase), since without it the 4
+operational roles are functionally read-mostly regardless of their
+`AD_Window_Access` tier.
+
+## Delivery — `AD_WINDOW_ACCESS.xml`
+
+Same convention as ETP-4508: `cli/sql/goclient-seed-window-access.sql` is a
+**local dev-seeding convenience script only**; the authoritative, tracked
+artifact is
+`{etendo_root}/modules/com.etendoerp.go/referencedata/sampledata/GOClient/AD_WINDOW_ACCESS.xml`
+(newly created — did not exist before this task), transcribed from the live
+DB rows after running the script, in ascending-alphanumeric-ID order,
+identical field layout to the pre-existing `F_B_International_Group`/
+`QA_Testing` clients' own `AD_WINDOW_ACCESS.xml` templates (`AD_WINDOW_ACCESS_ID`,
+`AD_WINDOW_ID`, `AD_ROLE_ID`, `AD_CLIENT_ID`, `AD_ORG_ID`, `ISACTIVE`,
+`CREATED`, `CREATEDBY`, `UPDATED`, `UPDATEDBY`, `ISREADWRITE`).
+No `AD_PROCESS_ACCESS.xml` was created (out of scope, see above).
+
+## Verification (live GOClient DB, 2026-07-15)
+
+```sql
+SELECT r.name AS role_name, w.name AS window_name_en, wt.name AS window_name_es,
+       wa.ad_window_id, wa.isreadwrite
+FROM ad_window_access wa
+JOIN ad_role r ON r.ad_role_id = wa.ad_role_id
+LEFT JOIN ad_window w ON w.ad_window_id = wa.ad_window_id
+LEFT JOIN ad_window_trl wt ON wt.ad_window_id = wa.ad_window_id AND wt.ad_language='es_ES'
+WHERE r.ad_client_id = '802509E12436405C86BA1FD5B1DF508C'
+  AND r.name IN ('Finance','Sales','Purchasing','Inventory')
+ORDER BY r.name, wa.isreadwrite DESC, w.name;
+```
+
+```
+=== Finance (9 rows) ===
+  [FULL] 118                                 Account Tree / Árbol de cuentas
+  [FULL] 94EAA455D2644E04AB25D93BE5157B6D    Financial Account / Cuenta financiera
+  [FULL] E547CE89D4C04429B6340FFA44E70716    Payment In / Cobros
+  [FULL] 6F8F913FA60F4CBD93DC1D3AA696E76E    Payment Out / Pago
+  [FULL] B917E8A7B0864ACEA9D941E3B7494E53    Simple G/L Journal / Asientos Manuales Simplificados
+  [FULL] 138                                 Tax Category / Categoría de Impuesto
+  [FULL] 137                                 Tax Rate / Rango impuesto
+  [RO  ] 183                                 Purchase Invoice / Factura (Proveedor)
+  [RO  ] 167                                 Sales Invoice / Factura (Cliente)
+
+=== Sales (6 rows) ===
+  [FULL] 123                                 Business Partner / Terceros
+  [FULL] 146                                 Price List / Tarifa
+  [FULL] 167                                 Sales Invoice / Factura (Cliente)
+  [FULL] 143                                 Sales Order / Pedido de venta
+  [FULL] 6CB5B67ED33F47DFA334079D3EA2340E    Sales Quotation / Presupuesto de ventas
+  [RO  ] 140                                 Product / Producto
+
+=== Purchasing (5 rows) ===
+  [FULL] 123                                 Business Partner / Terceros
+  [FULL] 140                                 Product / Producto
+  [FULL] 183                                 Purchase Invoice / Factura (Proveedor)
+  [FULL] 181                                 Purchase Order / Pedido de compra
+  [RO  ] 168                                 Physical Inventory / Inventario físico
+
+=== Inventory (6 rows) ===
+  [FULL] 170                                 Goods Movements / Movimiento entre almacenes
+  [FULL] 184                                 Goods Receipt / Albarán (Proveedor)
+  [FULL] 169                                 Goods Shipment / Albarán (Cliente)
+  [FULL] 168                                 Physical Inventory / Inventario físico
+  [FULL] 140                                 Product / Producto
+  [FULL] 139                                 Warehouse and Storage Bins / Almacén y huecos
+```
+
+Total: 26 `AD_Window_Access` rows across the 4 roles (Finance 9, Sales 6,
+Purchasing 5, Inventory 6). Re-running
+`cli/sql/goclient-seed-window-access.sql` a second time confirmed
+idempotency (all 26 `INSERT`s report `0` rows on re-run, guarded by
+`WHERE NOT EXISTS (... ad_role_id, ad_window_id ...)`).
+
+**Open items carried forward:** "Contabilidad" and "Conciliación bancaria" for
+Finance remain unresolved (documented above, not seeded) — **accepted as a
+known limitation by the team (Jira comment on ETP-4509, 2026-07-15); no
+further action planned.** `AD_Process_Access` was initially deferred as
+out-of-scope but was **expanded into this same task** — see the section
+below.
+
+---
+
+# ETP-4509 (expansion) — AD_Process_Access (document-action processes)
+
+**Team decision (2026-07-15):** the AD_Process_Access gap flagged above is
+real and was pulled into this task rather than deferred — with `ismanual='Y'`
+(mandatory) the 4 roles get **zero** automatic process access from
+`AD_ROLE_TRG`, so without this, a user could open a FULL-access window and
+edit its grid, but could not run Complete/Void/Process/Reconcile/etc. on it.
+
+## AD_Process_Access schema/semantics
+
+Confirmed identical shape to `AD_Window_Access`: `information_schema.columns`
+shows exactly one access flag, `isreadwrite` (Y/N), plus the standard
+audit/active columns and `inherited_from` — **no granular
+view/insert/update/delete tier**. So process access is purely
+existence-based per role: a row (with `isreadwrite='Y'`, matching every
+existing grant on GOClient) means the role can run that process; no row
+means it can't. There is **no per-window scoping column on
+`AD_Process_Access` at all** — a grant is global to the role, not tied to a
+specific window, matching how the automatic non-manual grant also works
+(`AD_ROLE_TRG` grants a role access to a *process*, independent of which
+window(s) happen to expose it as a button). This matters mechanically: if a
+role has two FULL windows that share a process (e.g. "Explode" appears as a
+button on both Sales Order and Purchase Order, but as two *different*
+`AD_Process_ID`s — see below), only one row per **(role, process)** pair is
+needed/possible, not one per (role, process, window).
+
+## Window → process mapping approach
+
+**Mechanism: `AD_Field` (button reference) → `AD_Column.ad_process_id` →
+`AD_Tab` → `AD_Window`.** In Etendo, a document-action/utility button on a
+window (Complete, Process, Reconcile, Copy Lines, etc.) is implemented as an
+`AD_Field` placed on one of the window's tabs, whose underlying `AD_Column`
+carries a non-NULL `ad_process_id` (the process the button launches). This
+is a **real, reliable, DB-native mechanism** — it's the exact same mechanism
+`AD_ROLE_TRG` itself uses conceptually (every process reachable from a
+window's own button fields), so it was validated directly against the two
+existing non-manual roles:
+
+```sql
+SELECT DISTINCT c.ad_process_id, p.name, p.isreport,
+  (SELECT count(*) FROM ad_process_access pa
+   WHERE pa.ad_process_id = c.ad_process_id
+     AND pa.ad_role_id IN ('9B8D736190724807AB256DC95F20EC5E','6A0A8D73D8284C6088DF36BDCC569161')
+  ) AS granted_to_admin_guser
+FROM ad_field f
+JOIN ad_column c ON c.ad_column_id = f.ad_column_id
+JOIN ad_process p ON p.ad_process_id = c.ad_process_id
+JOIN ad_tab t ON t.ad_tab_id = f.ad_tab_id
+WHERE f.isactive='Y' AND t.ad_window_id = :window_id AND p.isactive='Y';
+```
+
+**Result: 100% match.** Every button-linked process found for every one of
+the 19 distinct target windows was already granted to **both** GOClient
+Admin and GOuser (`2/2`), confirming the mechanism captures exactly the same
+universe of processes the automatic grant would produce — no guessing
+required, this is a mechanical, DB-verifiable rule: *"a role's process
+access = the union of button-linked processes across the role's FULL-tier
+windows."*
+
+**No `AD_Table_ID`-based join was needed/used** — `AD_Process` does carry an
+`AD_Table_ID` column in some Etendo versions, but the button-field join above
+is strictly more precise (it only returns processes actually wired as a
+button on that specific window's tabs, not every process that merely
+operates on the same underlying table, which would over-grant reports and
+unrelated utility processes tied to the same table from other windows).
+
+**Classic document actions (Complete/Void/Close/Reactivate) are NOT separate
+`AD_Process` rows** — Etendo implements them via a single generic
+"Process X" button per document type (e.g. `Process Order` id `104` for
+Sales/Purchase Order, `Process Invoice` id `111` for Sales/Purchase Invoice,
+`Process Shipment` id `109` for Goods Receipt/Shipment, `Process Inventory
+Count` id `107` for Physical Inventory), which opens a dialog offering
+Complete/Void/Close/Reactivate as options. Granting that one process is
+therefore sufficient to unlock the whole document-action lifecycle for that
+document type — there is nothing further named "Complete" or "Void" to grant
+separately.
+
+**Finding — the SAME conceptual action (Copy Lines, Explode) is often a
+DIFFERENT `AD_Process_ID` per document type.** E.g. `Copy Lines` on Sales
+Order is process `211`, but on Sales Invoice it's process `210` — same name,
+different ID, because each document type implements its own copy-lines
+logic. **Apply:** dedup by `AD_Process_ID`, never by process name, when
+building a role's process-access set (two windows both showing "Copy Lines"
+still need two distinct grants if the underlying process differs).
+
+## Read-only-tier decision: zero process access granted
+
+For the 4 windows carrying READ-ONLY tier somewhere in the design
+(`sales-invoice`/`purchase-invoice` for Finance, `product` for Sales,
+`physical-inventory` for Purchasing), the button-linked processes found were
+inspected individually for a plausible "safe, view-only" candidate
+(Print/Export-style actions the coordinator suggested might be reasonable
+even read-only):
+
+| RO window | Button processes found | Any view-only candidate? |
+|---|---|---|
+| sales-invoice (Finance RO) | APRM Process Invoice, Calculate Promotions, Change Debt Payment, Copy Lines, Explode, Generate Receipt from Invoice, Process Invoice, Update Payment Plan | No — all state-changing |
+| purchase-invoice (Finance RO) | APRM Process Invoice, Change Debt Payment, Copy Lines, Explode, Generate Receipt from Invoice, Process Invoice, Update Payment Plan | No — all state-changing |
+| product (Sales RO) | Create Variants, Verify BOM | No — both create/modify master data |
+| physical-inventory (Purchasing RO) | Create Inventory Count List, Process Inventory Count, Update Quantity | No — all state-changing |
+
+**Decision: grant ZERO `AD_Process_Access` rows for any role/window pair at
+the READ-ONLY tier.** None of the processes wired as buttons on these 4
+windows are print/export/view-type actions — Etendo's grid/form-level
+Print/Export are generic toolbar actions available independent of
+`AD_Process_Access` (they are not gated by a specific process grant the way
+document actions are), so there was no candidate to grant that would
+preserve "read-only" in spirit. Every available button is a genuine
+state-changing document action (Process/Copy/Generate/Update/Create), so
+granting any of them would silently upgrade the read-only tier to
+effectively-full for that window. This reasoning is recorded here rather
+than mechanically re-applied per window, since it turned out to be a clean
+"no" in all 4 cases — there was no ambiguous middle case requiring a
+per-window judgment call.
+
+## Final per-role process sets (deduped by `AD_Process_ID`, FULL-tier windows only)
+
+- **Finance (14 processes)** — from `simple-g-l-journal` (Add Payment From
+  Journal ×2) + `financial-account` (Bank Statement Process/Force, Import
+  Statement, Reconcile ×2, Reconciliation Details/Process Force/Summary,
+  Transaction Process) + `payment-out`/`payment-in` (Execute Payment, Payment
+  Process, Reverse Payment — same 3 process IDs shared by both windows).
+  `chart-of-accounts`, `tax`, `tax-category` have **zero** button processes
+  (pure master-data windows, nothing to grant).
+- **Sales (16 processes)** — from `sales-order` (Calculate Promotions, Change
+  Debt Payment, Copy Lines[211], Copy Product Template, Explode[order-type],
+  Process Order) + `sales-invoice` (APRM Process Invoice, Copy Lines[210],
+  Explode[invoice-type], Generate Receipt from Invoice, Process Invoice,
+  Update Payment Plan) + `sales-quotation` (adds Create Order) + `contacts`
+  (Create Invoice (Volume Discount)) + `price-list` (Create Price List,
+  Create Price List Version).
+- **Purchasing (13 processes)** — from `purchase-order` + `purchase-invoice`
+  (same process families as Sales' order/invoice, but Purchasing-specific
+  process IDs where they differ) + `contacts` (Create Invoice (Volume
+  Discount)) + `product` (Create Variants, Verify BOM).
+- **Inventory (13 processes)** — from `product` (Create Variants, Verify
+  BOM) + `goods-movements` (Move a Storage Bin, Process Movements) +
+  `physical-inventory` (Create Inventory Count List, Process Inventory
+  Count, Update Quantity) + `goods-receipt`/`goods-shipment` (Calculate
+  Freight Amount, Explode[receipt-type], Process Shipment, Process Shipment
+  Java, Update Attributes from Shipment; Generate Invoice from Receipt only
+  on `goods-receipt`). `warehouse` has **zero** button processes.
+
+Total: **56** `AD_Process_Access` rows (Finance 14, Sales 16, Purchasing 13,
+Inventory 13).
+
+## Delivery — `AD_PROCESS_ACCESS.xml`
+
+Same convention as `AD_WINDOW_ACCESS.xml`: `cli/sql/goclient-seed-process-access.sql`
+is a **local dev-seeding convenience script only** (built by a driver script
+that also executed the same statements against the live DB, so file and DB
+state match exactly); the authoritative, tracked artifact is
+`{etendo_root}/modules/com.etendoerp.go/referencedata/sampledata/GOClient/AD_PROCESS_ACCESS.xml`
+(newly created — did not exist before this task), transcribed from the live
+DB rows, ascending-alphanumeric-ID order, identical field layout to the
+pre-existing `F_B_International_Group`/`QA_Testing` clients'
+`AD_PROCESS_ACCESS.xml` templates (`AD_PROCESS_ACCESS_ID`, `AD_PROCESS_ID`,
+`AD_ROLE_ID`, `AD_CLIENT_ID`, `AD_ORG_ID`, `ISACTIVE`, `CREATED`,
+`CREATEDBY`, `UPDATED`, `UPDATEDBY`, `ISREADWRITE`). Every `AD_ROLE_ID`
+written was cross-checked byte-for-byte against the live `AD_ROLE.xml`
+entries before use (same 4 IDs already verified for `AD_WINDOW_ACCESS.xml`
+above).
+
+## Verification (live GOClient DB, 2026-07-15)
+
+```sql
+SELECT r.name, count(*) FROM ad_process_access pa
+JOIN ad_role r ON r.ad_role_id = pa.ad_role_id
+WHERE r.ad_client_id = '802509E12436405C86BA1FD5B1DF508C'
+  AND r.name IN ('Finance','Sales','Purchasing','Inventory')
+GROUP BY r.name ORDER BY r.name;
+```
+
+```
+    name    | count
+------------+-------
+ Finance    |    14
+ Inventory  |    13
+ Purchasing |    13
+ Sales      |    16
+```
+
+**Sanity check — every granted process is a subset of GOClient
+Admin/GOuser's own automatic grants (zero over-grants):**
+
+```sql
+SELECT r.name, p.name, pa.ad_process_id
+FROM ad_process_access pa
+JOIN ad_role r ON r.ad_role_id = pa.ad_role_id
+JOIN ad_process p ON p.ad_process_id = pa.ad_process_id
+WHERE r.ad_client_id = '802509E12436405C86BA1FD5B1DF508C'
+  AND r.name IN ('Finance','Sales','Purchasing','Inventory')
+  AND NOT EXISTS (
+    SELECT 1 FROM ad_process_access pa2
+    WHERE pa2.ad_process_id = pa.ad_process_id
+      AND pa2.ad_role_id IN ('9B8D736190724807AB256DC95F20EC5E','6A0A8D73D8284C6088DF36BDCC569161')
+  );
+-- 0 rows
+```
+
+Re-running `cli/sql/goclient-seed-process-access.sql` a second time confirmed
+idempotency: all 56 `INSERT`s reported `0` rows on re-run.
+
+**Open items carried forward:** "Contabilidad" and "Conciliación bancaria"
+for Finance remain unresolved — accepted as a known limitation (Jira
+comment, no further action). No AD_Process_Access-specific open items
+remain; Phase 2 (ETP-4510+) UI enforcement should treat "no row" as "hide
+the action" for both windows and processes, consistently.
