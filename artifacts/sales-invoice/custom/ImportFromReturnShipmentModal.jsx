@@ -38,11 +38,14 @@ import ImportLinesModal from '@/components/contract-ui/ImportLinesModal';
  * fetchLines then derives remainingQty = movementQuantity - alreadyInvoiced
  * and only marks a line as _alreadyImported once remainingQty hits 0. The
  * separate salesOrderLine-based duplicate check (a different join, catching
- * invoices raised against the same order line through an unrelated route)
- * stays boolean/conservative: its "already invoiced" quantity lives in a
- * different unit universe (original sale qty vs. returned qty) and can't be
- * safely netted against movementQuantity, so any match there still fully
- * blocks the line rather than attempting a fragile reconciliation.
+ * a DIFFERENT return-receipt line already invoiced against the same order
+ * line — e.g. an order whose return was split across two separate return
+ * receipts) is built the same cross-invoice way — current invoice's lines
+ * plus every other invoice's — but stays boolean/conservative for blocking
+ * purposes: its "already invoiced" quantity lives in a different unit
+ * universe (original sale qty vs. returned qty) and can't be safely netted
+ * against movementQuantity, so any recorded match there still fully blocks
+ * the line rather than attempting a fragile reconciliation.
  */
 
 const resolveLinePrice = async (base, headers, productId, qty, invoiceHeader, auxData = {}) => {
@@ -162,6 +165,7 @@ const fetchDocuments = async ({ base, headers, bpId, invoiceId }) => {
       if (il.id && currentInvoiceLineIds.has(il.id)) return;
       const qty = Math.abs(Number(il.invoicedQuantity) || 0);
       if (il.goodsShipmentLine) addQty(invoicedQtyByGoodsShipmentLine, il.goodsShipmentLine, qty);
+      if (il.salesOrderLine) addQty(invoicedQtyByOrderLine, il.salesOrderLine, qty);
     });
   }
 
@@ -254,10 +258,11 @@ const fetchLines = async ({ base, headers, docId, sharedContext }) => {
     const alreadyInvoicedQty = invoicedQtyByGoodsShipmentLine?.get(l.id) || 0;
     const remainingQty = Math.max(0, movementQty - alreadyInvoicedQty);
 
-    // Secondary duplicate-detection path: the same underlying sales-order-line was
-    // already invoiced through a different route (not via this return-receipt line).
-    // That invoiced quantity lives in a different unit universe (original sale qty,
-    // not returned qty) than movementQty/remainingQty above, so it can't be netted
+    // Secondary duplicate-detection path: catches the same underlying sales-order-line
+    // already invoiced through a DIFFERENT return-receipt line (not via this one) —
+    // cross-invoice, same current-plus-elsewhere merge as invoicedQtyByGoodsShipmentLine
+    // above. That invoiced quantity lives in a different unit universe (original sale
+    // qty, not returned qty) than movementQty/remainingQty above, so it can't be netted
     // against them without risking an incorrect (over-permissive) remaining amount.
     // Kept conservative: any recorded quantity against the same salesOrderLine fully
     // blocks the line, same as the original boolean behavior.
