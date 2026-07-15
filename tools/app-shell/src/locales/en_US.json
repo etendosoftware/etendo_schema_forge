@@ -17838,6 +17838,7 @@
     "financeAccountTransferFx": "Currency conversion",
     "financeAccountTransferRate": "Conversion rate",
     "financeAccountTransferRatePlaceholder": "1.00",
+    "financeAccountTransferReceiveAmount": "Destination account will receive",
     "financeAccountTransferBankFee": "Apply bank fee",
     "financeAccountTransferBankFeeFrom": "Fee · source",
     "financeAccountTransferBankFeeTo": "Fee · destination",
