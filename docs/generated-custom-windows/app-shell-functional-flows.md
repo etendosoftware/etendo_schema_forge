@@ -152,7 +152,7 @@ Any authenticated route can also be opened with `?embedded=1`; in that mode the 
   - Failed authorization shows an inline error state.
   - Action buttons are disabled while authorization is in progress.
 - **Automated evidence:**
-  - `tools/app-shell/test/AuthorizePage.test.js` verifies route parameter parsing, default scopes, PKCE gating, consent-vs-landing branching, POST target and headers, redirect handling, deny handling, supported scopes, and disabled-button behavior.
+  - `AuthorizePage` now lives in `@etendosoftware/app-shell-core`; its source-reading coverage (route parameter parsing, default scopes, PKCE gating, consent-vs-landing branching, POST target and headers, redirect handling, deny handling, supported scopes) moved to `packages/app-shell-core/test/AuthorizePage.source.test.js` in the `schema_forge_core` repo. In this repo the one-line shim is covered by `tools/app-shell/src/pages/__tests__/AuthorizePage.vitest.jsx`.
 - **Manual verification path:**
   1. Open `/authorize` with no query string and confirm the connection landing screen appears.
   2. Open `/authorize?client_id=test-client&redirect_uri=https://example.test/cb&code_challenge=abc&response_type=code&state=xyz` while authenticated.
