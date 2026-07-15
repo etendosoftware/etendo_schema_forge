@@ -1,8 +1,8 @@
 {
-  "version": "0.55.0",
+  "version": "0.56.0",
   "generatedAt": "2026-04-30T15:42:46.582Z",
-  "updatedAt": "2026-07-14T17:20:33.951Z",
-  "checksum": "417179bf688d4847",
+  "updatedAt": "2026-07-15T13:21:37.153Z",
+  "checksum": "ce52ffa31fc41ef0",
   "frontendContract": {
     "window": {
       "id": "167",
