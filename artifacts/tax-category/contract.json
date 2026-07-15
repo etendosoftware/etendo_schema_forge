@@ -1,8 +1,8 @@
 {
   "version": "0.2.0",
   "generatedAt": "2026-06-26T17:01:05.650Z",
-  "updatedAt": "2026-07-15T12:06:00.415Z",
-  "checksum": "ec22292f8ffd9ff0",
+  "updatedAt": "2026-07-14T00:34:34.923Z",
+  "checksum": "4df6744186c56276",
   "frontendContract": {
     "window": {
       "id": "138",
@@ -13,6 +13,7 @@
       "hideCreate": true,
       "hideMoreMenu": true,
       "hideDelete": true,
+      "hideDeleteButton": true,
       "detailEntity": null,
       "layoutType": "default"
     },
@@ -300,6 +301,7 @@
       "hideCreate": true,
       "hideMoreMenu": true,
       "hideDelete": true,
+      "hideDeleteButton": true,
       "detailEntity": null
     },
     "entities": {

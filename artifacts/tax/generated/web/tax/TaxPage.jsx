@@ -161,6 +161,7 @@ export default function TaxPage({ windowName, recordId, ...props }) {
         recordId={recordId}
         breadcrumb={breadcrumb}
       api={api}
+        hideDeleteButton
         hidePrint
         hideMoreMenu
         customTabs={[{ key: 'attachments', labelKey: 'attachments', Component: AttachmentsTab, placement: 'tab', props: { tableName: "C_Tax", config: {} } }]}
@@ -184,7 +185,7 @@ export default function TaxPage({ windowName, recordId, ...props }) {
       hideCreate
       hideMoreMenu
       labelOverrides={labelOverrides}
-      rowQuickActions={{}}
+      rowQuickActions={{"hideDeleteButton":true}}
       {...props}
     />
   );

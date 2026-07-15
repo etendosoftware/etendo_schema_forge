@@ -2,7 +2,7 @@
   "version": "0.2.0",
   "generatedAt": "2026-06-26T17:01:05.650Z",
   "updatedAt": "2026-07-14T00:34:34.923Z",
-  "contractChecksum": "ec22292f8ffd9ff0",
+  "contractChecksum": "4df6744186c56276",
   "apiPrediction": {
     "specName": "tax-category",
     "baseUrl": "/sws/neo/tax-category",

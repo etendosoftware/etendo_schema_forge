@@ -1,8 +1,8 @@
 {
   "version": "0.10.0",
   "generatedAt": "2026-04-27T19:18:32.198Z",
-  "updatedAt": "2026-07-15T12:06:00.300Z",
-  "checksum": "6d663427f230df52",
+  "updatedAt": "2026-07-14T00:53:56.456Z",
+  "checksum": "19b4f4c69a742a77",
   "frontendContract": {
     "window": {
       "id": "137",
@@ -13,6 +13,7 @@
       "hideCreate": true,
       "hideMoreMenu": true,
       "hideDelete": true,
+      "hideDeleteButton": true,
       "breadcrumb": "Settings / Tax",
       "detailEntity": "accounting",
       "labelOverrides": {
@@ -330,6 +331,7 @@
       "hideCreate": true,
       "hideMoreMenu": true,
       "hideDelete": true,
+      "hideDeleteButton": true,
       "breadcrumb": "Settings / Tax",
       "detailEntity": "accounting",
       "labelOverrides": {
