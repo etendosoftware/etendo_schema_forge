@@ -793,7 +793,7 @@ describe('OnboardingPage', () => {
     expect(screen.getByText('onboardingPreparingTitle')).toBeInTheDocument();
   });
 
-  it('shows the company-data description while the dataset step runs', async () => {
+  it('shows the rotating status line and the dataset milestone while the dataset step runs', async () => {
     localStorage.setItem('sf_platform_token', 'platform-token');
     fetchAccount.mockResolvedValue({ name: 'Ada Lovelace' });
     fetchEnvironments.mockResolvedValue([]);
@@ -807,9 +807,17 @@ describe('OnboardingPage', () => {
     fireEvent.click(await screen.findByText('onboardingContinueAction'));
     fireEvent.click(screen.getByText('onboardingStartAction'));
 
+    // Since core 0.3.9 (ETP-4446) the loading screen no longer pins the
+    // per-step description: while running, the status line rotates through the
+    // generic "working" phrases (starting at the activating one) over the
+    // dashboard backdrop. The dataset step still drives the real 65% milestone.
     await waitFor(() => {
-      expect(screen.getByText('onboardingPreparingDataDescription')).toBeInTheDocument();
+      expect(screen.getByText('onboardingPreparingActivatingDescription')).toBeInTheDocument();
+      expect(screen.getByText('65%')).toBeInTheDocument();
     });
+    expect(screen.getByTestId('OnboardingDashboardBackdrop__ETP4446')).toBeInTheDocument();
+    // The old fixed per-step text is no longer rendered statically.
+    expect(screen.queryByText('onboardingPreparingDataDescription')).not.toBeInTheDocument();
   });
 
   it('keeps the progress bar monotonic when an untracked step runs after a tracked one', async () => {
@@ -828,11 +836,18 @@ describe('OnboardingPage', () => {
     fireEvent.click(await screen.findByText('onboardingContinueAction'));
     fireEvent.click(screen.getByText('onboardingStartAction'));
 
-    // Tracked step: client → 35%.
+    // Reads the "NN%" counter next to the progress bar. Since core 0.3.9
+    // (ETP-4446) the displayed value trickles forward between real milestones,
+    // so exact equality on the percentage is no longer stable.
+    const readPercent = () => Number(screen.getByText(/^\d+%$/).textContent.replace('%', ''));
+
+    // Tracked step: client → milestone 35%. The status line shows the rotating
+    // "working" phrase (starting at the activating one), not the per-step text.
     await waitFor(() => {
       expect(screen.getByText('onboardingPreparingActivatingDescription')).toBeInTheDocument();
-      expect(screen.getByText('35%')).toBeInTheDocument();
+      expect(readPercent()).toBeGreaterThanOrEqual(35);
     });
+    const percentAfterClient = readPercent();
 
     // Client finishes; an untracked backend step (accounting) starts running.
     act(() => {
@@ -840,11 +855,15 @@ describe('OnboardingPage', () => {
       emit({ type: 'progress', step: 'accounting', status: 'running' });
     });
 
-    // Generic "configuring" description shows, but the bar holds at 35% (monotonic, never drops).
+    // The untracked step's raw milestone (15%) never wins: the bar holds at or
+    // above the client milestone (monotonic, never drops) and stays below the
+    // next real milestone (dataset, 65%) thanks to the trickle soft cap. The
+    // rotating status line keeps showing while running.
     await waitFor(() => {
-      expect(screen.getByText('onboardingPreparingConfiguringDescription')).toBeInTheDocument();
-      expect(screen.getByText('35%')).toBeInTheDocument();
+      expect(screen.getByText('onboardingPreparingActivatingDescription')).toBeInTheDocument();
+      expect(readPercent()).toBeGreaterThanOrEqual(percentAfterClient);
     });
+    expect(readPercent()).toBeLessThan(65);
   });
 
   it('tracks onboarding run failures', async () => {
@@ -1507,7 +1526,14 @@ describe('OnboardingPage', () => {
       await act(async () => {
         emit({ type: 'progress', step: 'finalize', status: 'running' });
       });
-      expect(screen.getByText('onboardingPreparingFinishingDescription')).toBeInTheDocument();
+      // Since core 0.3.9 (ETP-4446) the finalize milestone drives the bar to
+      // 92%, but the status line shows a rotating "working" phrase instead of
+      // the fixed finishing text — that key is deliberately excluded from the
+      // rotation so the screen never claims near-completion early.
+      expect(screen.getByText('onboardingPreparingTitle')).toBeInTheDocument();
+      expect(screen.getByText('92%')).toBeInTheDocument();
+      expect(screen.getByText('onboardingPreparingActivatingDescription')).toBeInTheDocument();
+      expect(screen.queryByText('onboardingPreparingFinishingDescription')).not.toBeInTheDocument();
     });
   });
 
