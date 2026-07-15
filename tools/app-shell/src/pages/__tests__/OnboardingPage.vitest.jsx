@@ -308,19 +308,19 @@ describe('OnboardingPage', () => {
     expect(consoleError).toHaveBeenCalledWith('Failed to load environments', expect.any(Error));
   });
 
-  it('exposes the inline language selector on the profile step', async () => {
-    // The profile step keeps its inline language selector so the onboarding
-    // language can be chosen independently of the global locale switch.
+  it('exposes the inline language selector on the login step', async () => {
+    // Core 0.3.9 preview scoped the inline language selector to the login
+    // step only (company/env-select/profile/register steps no longer render
+    // it), so the onboarding language can still be chosen there, independently
+    // of the global locale switch.
     localeSwitchMock.locale = 'es_ES';
-    localStorage.setItem('sf_platform_token', 'platform-token');
-    fetchAccount.mockResolvedValue({ name: 'Ada Lovelace' });
-    fetchEnvironments.mockResolvedValue([]);
+    localStorage.removeItem('sf_platform_token');
 
     render(<OnboardingPage />);
 
-    // The profile setup step renders under the active locale ...
-    expect(await screen.findByText(/onboardingGreeting/)).toBeInTheDocument();
-    // ... and still exposes an inline language selector.
+    // The default (no-token) view is the login step ...
+    expect(await screen.findByText('onboardingLoginTitle')).toBeInTheDocument();
+    // ... and it exposes an inline language selector.
     expect(screen.getByLabelText('language')).toBeInTheDocument();
   });
 
