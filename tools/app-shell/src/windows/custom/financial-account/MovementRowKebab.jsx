@@ -25,6 +25,23 @@ const UNPOST_URL = (id) =>
   `${getApiBase()}/sws/neo/financial-account/transaction/${encodeURIComponent(id)}/action/unpost`;
 
 /**
+ * Shared POST-with-token request used by both the post and unpost actions.
+ * Returns { success, message } so callers decide how to surface the result.
+ */
+async function callTransactionAction(url, token) {
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+    body: '{}',
+  });
+  const body = await res.json().catch(() => null);
+  const nested = body?.response?.data?.[0];
+  const message = nested?.message ?? body?.response?.message ?? body?.message;
+  const success = res.ok && (nested?.success ?? body?.success ?? true);
+  return { success, message };
+}
+
+/**
  * Per-row kebab menu for a movement row.
  * Only visible on row hover (parent row must have `group` class).
  *
@@ -42,15 +59,7 @@ export function MovementRowKebab({ movement, onReload }) {
     if (posting || isPosted) return;
     setPosting(true);
     try {
-      const res = await fetch(POST_URL(movement.id), {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-        body: '{}',
-      });
-      const body = await res.json().catch(() => null);
-      const nested = body?.response?.data?.[0];
-      const message = nested?.message ?? body?.response?.message ?? body?.message;
-      const success = res.ok && (nested?.success ?? body?.success ?? true);
+      const { success, message } = await callTransactionAction(POST_URL(movement.id), token);
       if (success) {
         toast.success(ui('documentPosted'));
         onReload?.();
@@ -68,15 +77,7 @@ export function MovementRowKebab({ movement, onReload }) {
     if (unposting || !isPosted) return;
     setUnposting(true);
     try {
-      const res = await fetch(UNPOST_URL(movement.id), {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-        body: '{}',
-      });
-      const body = await res.json().catch(() => null);
-      const nested = body?.response?.data?.[0];
-      const message = nested?.message ?? body?.response?.message ?? body?.message;
-      const success = res.ok && (nested?.success ?? body?.success ?? true);
+      const { success, message } = await callTransactionAction(UNPOST_URL(movement.id), token);
       if (success) {
         toast.success(ui('documentUnposted'));
         onReload?.();
