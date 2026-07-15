@@ -9,6 +9,7 @@ const fields = [
   { key: 'costBasedPriceList', column: 'Costbased', type: 'checkbox', label: 'Price list based on cost', required: true, section: 'principal' },
   { key: 'priceIncludesTax', column: 'IsTaxIncluded', type: 'checkbox', label: 'Price includes Tax', required: true, section: 'principal' },
   { key: 'default', column: 'IsDefault', type: 'checkbox', label: 'Default', required: true, section: 'principal' },
+  { key: 'active', column: 'IsActive', type: 'checkbox', label: 'Active', required: true, section: 'principal' },
 ];
 // @sf-generated-end fields:priceList
 

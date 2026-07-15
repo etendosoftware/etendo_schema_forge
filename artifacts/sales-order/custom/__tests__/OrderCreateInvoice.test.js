@@ -237,4 +237,40 @@ describe('OrderCreateInvoice', () => {
       assert.doesNotMatch(src, /primary=\{ui\('(soViewInvoice|poViewInvoice|soViewShipment|poViewReceipt|sqViewOrder)'\)\}/);
     });
   });
+
+  // ETP-4468: "Confirmar" must not discard an unsaved header edit — force-save
+  // first, and the in-memory data prop must win over the stale server fetch.
+  describe('force-save before confirm (ETP-4468)', () => {
+    it('accepts an onSave prop on the default-exported component', () => {
+      assert.match(src, /export default function OrderCreateInvoice\(\{[^}]*onSave[^}]*\}\)/);
+    });
+
+    it('threads onSave down to the internal ConfirmModal usage', () => {
+      assert.match(src, /<ConfirmModal[\s\S]*?onSave=\{onSave\}[\s\S]*?\/>/);
+    });
+
+    it('ConfirmModal accepts an onSave prop', () => {
+      assert.match(src, /export function ConfirmModal\(\{[^}]*onSave[^}]*\}\)/);
+    });
+
+    it('in-memory data wins over the stale freshData fetch', () => {
+      assert.match(src, /const d\s*=\s*data \|\| freshData \|\| \{\}/);
+      assert.doesNotMatch(src, /const d\s*=\s*freshData \|\| data \|\| \{\}/);
+    });
+
+    it('calls onSave before the documentAction POST and aborts on failure', () => {
+      assert.match(
+        src,
+        /if\s*\(onSave\)\s*\{\s*const saved\s*=\s*await onSave\(\);\s*if\s*\(!saved\?\.id\)\s*\{[\s\S]*?setError\([\s\S]*?setLoading\(false\);\s*return;\s*\}\s*\}/,
+      );
+      // The onSave guard runs before Step 1's documentAction POST
+      const saveGuardIdx = src.indexOf('if (onSave) {');
+      const step1Idx = src.indexOf('action/documentAction');
+      assert.ok(saveGuardIdx >= 0 && step1Idx >= 0 && saveGuardIdx < step1Idx);
+    });
+
+    it('shows the dedicated soSaveBeforeConfirmError message on save-guard failure (not the generic soErrorOccurred)', () => {
+      assert.match(src, /if\s*\(!saved\?\.id\)\s*\{\s*setError\(ui\('soSaveBeforeConfirmError'\)\);/);
+    });
+  });
 });

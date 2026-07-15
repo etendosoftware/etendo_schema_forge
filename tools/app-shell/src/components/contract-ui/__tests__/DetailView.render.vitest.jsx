@@ -1304,15 +1304,15 @@ describe('DetailView exported helpers', () => {
 
   describe('isDeleteButtonVisible', () => {
     it('returns truthy for existing non-completed record', () => {
-      expect(helpers.isDeleteButtonVisible(false, '123', { documentStatus: 'DR' }, 'documentStatus', false, false)).toBeTruthy();
+      expect(helpers.isDeleteButtonVisible({ isNew: false, recordId: '123', data: { documentStatus: 'DR' }, statusField: 'documentStatus', hideDeleteWhenComplete: false, isProcessed: false })).toBeTruthy();
     });
 
     it('returns falsy for new record', () => {
-      expect(helpers.isDeleteButtonVisible(true, 'new', {}, 'documentStatus', false, false)).toBeFalsy();
+      expect(helpers.isDeleteButtonVisible({ isNew: true, recordId: 'new', data: {}, statusField: 'documentStatus', hideDeleteWhenComplete: false, isProcessed: false })).toBeFalsy();
     });
 
     it('returns falsy when hideDeleteWhenComplete and isProcessed', () => {
-      expect(helpers.isDeleteButtonVisible(false, '123', { documentStatus: 'CO' }, 'documentStatus', true, true)).toBeFalsy();
+      expect(helpers.isDeleteButtonVisible({ isNew: false, recordId: '123', data: { documentStatus: 'CO' }, statusField: 'documentStatus', hideDeleteWhenComplete: true, isProcessed: true })).toBeFalsy();
     });
   });
 

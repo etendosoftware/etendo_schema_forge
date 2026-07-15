@@ -18011,6 +18011,182 @@
         }
       ]
     },
+    "62e7d6689c11ba27fdc238450bbc940c71cc4a579d87d3669861331f4f00b615": {
+      "checksum": "633bf9a7cd57a1ee8db4fcb9d712b16732e28a53260562f8c1125ad9d253b3fb",
+      "params": [
+        "B5673F73F613496C8BEA22FB55E4E1E4"
+      ],
+      "rows": [
+        {
+          "ad_column_id": "96D06E95BC0A44BBA5657F37BCA29350",
+          "ad_table_id": "1CC5C039577C4F348CDF82DD0E6F3A7D",
+          "columnname": "C_Year_Close_V_ID",
+          "position": "1"
+        },
+        {
+          "ad_column_id": "E84C83BCB3684013B453245957B9097C",
+          "ad_table_id": "1CC5C039577C4F348CDF82DD0E6F3A7D",
+          "columnname": "AD_Client_ID",
+          "position": "2"
+        },
+        {
+          "ad_column_id": "0D04A11B9A9D404A98CE7715F0A8C151",
+          "ad_table_id": "1CC5C039577C4F348CDF82DD0E6F3A7D",
+          "columnname": "AD_Org_ID",
+          "position": "3"
+        },
+        {
+          "ad_column_id": "FB662C6ACEF14CBCA8902903A1F7E754",
+          "ad_table_id": "1CC5C039577C4F348CDF82DD0E6F3A7D",
+          "columnname": "Created",
+          "position": "4"
+        },
+        {
+          "ad_column_id": "59308E52846C4653BAA7961CBC0CBD6B",
+          "ad_table_id": "1CC5C039577C4F348CDF82DD0E6F3A7D",
+          "columnname": "Createdby",
+          "position": "5"
+        },
+        {
+          "ad_column_id": "E3F87678D9C244A18390D871FD96394F",
+          "ad_table_id": "1CC5C039577C4F348CDF82DD0E6F3A7D",
+          "columnname": "Updated",
+          "position": "6"
+        },
+        {
+          "ad_column_id": "42FD5A0809DE4C8A9A1EED054DB0C0F6",
+          "ad_table_id": "1CC5C039577C4F348CDF82DD0E6F3A7D",
+          "columnname": "Updatedby",
+          "position": "7"
+        },
+        {
+          "ad_column_id": "D4E94BC2B82A40C28FE4BED4B2F0D70E",
+          "ad_table_id": "1CC5C039577C4F348CDF82DD0E6F3A7D",
+          "columnname": "Isactive",
+          "position": "8"
+        },
+        {
+          "ad_column_id": "C1EF361208A245E3B9BBBBCBCD9C6926",
+          "ad_table_id": "1CC5C039577C4F348CDF82DD0E6F3A7D",
+          "columnname": "C_Calendar_ID",
+          "position": "9"
+        },
+        {
+          "ad_column_id": "C674B13C5D9146D2A835EF715E268574",
+          "ad_table_id": "1CC5C039577C4F348CDF82DD0E6F3A7D",
+          "columnname": "C_Year_ID",
+          "position": "10"
+        },
+        {
+          "ad_column_id": "FE3B49651DF047698C5BF42F8E93A2AE",
+          "ad_table_id": "1CC5C039577C4F348CDF82DD0E6F3A7D",
+          "columnname": "Status",
+          "position": "11"
+        },
+        {
+          "ad_column_id": "B38A9579503D44E98CB551A06A690B84",
+          "ad_table_id": "1CC5C039577C4F348CDF82DD0E6F3A7D",
+          "columnname": "Processed",
+          "position": "12"
+        },
+        {
+          "ad_column_id": "CE112BF11D964F928C901B75B9CF0F15",
+          "ad_table_id": "A45FDE07216C40FBA472E7B91F7273E4",
+          "columnname": "Account_ID",
+          "position": null
+        },
+        {
+          "ad_column_id": "D054694342F74CFAB478E1546624693A",
+          "ad_table_id": "A45FDE07216C40FBA472E7B91F7273E4",
+          "columnname": "AD_Client_ID",
+          "position": null
+        },
+        {
+          "ad_column_id": "B91F5937E49F48E79AA0849ADC7194BE",
+          "ad_table_id": "A45FDE07216C40FBA472E7B91F7273E4",
+          "columnname": "AD_Org_ID",
+          "position": null
+        },
+        {
+          "ad_column_id": "BD9BF13F089349248385F4FD46B0017C",
+          "ad_table_id": "A45FDE07216C40FBA472E7B91F7273E4",
+          "columnname": "C_Acctschema_ID",
+          "position": null
+        },
+        {
+          "ad_column_id": "1EDEE59E636940CD9E0C3C481FD61150",
+          "ad_table_id": "A45FDE07216C40FBA472E7B91F7273E4",
+          "columnname": "Created",
+          "position": null
+        },
+        {
+          "ad_column_id": "D8FFDE38CE30450EB326A5B9DC173D60",
+          "ad_table_id": "A45FDE07216C40FBA472E7B91F7273E4",
+          "columnname": "Createdby",
+          "position": null
+        },
+        {
+          "ad_column_id": "8CBA5F00D89D4464B4BE152DB36D6F01",
+          "ad_table_id": "A45FDE07216C40FBA472E7B91F7273E4",
+          "columnname": "Credit",
+          "position": null
+        },
+        {
+          "ad_column_id": "7A8005A730744BCF8F971DF27700D4DF",
+          "ad_table_id": "A45FDE07216C40FBA472E7B91F7273E4",
+          "columnname": "C_Year_Close_V_ID",
+          "position": null
+        },
+        {
+          "ad_column_id": "BB311C14EF904E6FA84C6366882ED5F4",
+          "ad_table_id": "A45FDE07216C40FBA472E7B91F7273E4",
+          "columnname": "Debit",
+          "position": null
+        },
+        {
+          "ad_column_id": "F90318F52F954FB9B32DE2D3E4B9EB7F",
+          "ad_table_id": "A45FDE07216C40FBA472E7B91F7273E4",
+          "columnname": "description",
+          "position": null
+        },
+        {
+          "ad_column_id": "73039F493FE145DC8431583994DD7F2A",
+          "ad_table_id": "A45FDE07216C40FBA472E7B91F7273E4",
+          "columnname": "Fact_Acct_End_Year_V_ID",
+          "position": null
+        },
+        {
+          "ad_column_id": "1AAEC396524C4C748B696DFADCCCE89C",
+          "ad_table_id": "A45FDE07216C40FBA472E7B91F7273E4",
+          "columnname": "Fact_Acct_ID",
+          "position": null
+        },
+        {
+          "ad_column_id": "D87C17F7C677434CA852744307AC52C2",
+          "ad_table_id": "A45FDE07216C40FBA472E7B91F7273E4",
+          "columnname": "Factaccttype",
+          "position": null
+        },
+        {
+          "ad_column_id": "2FA0EEF00D5A480BB720B771257878E2",
+          "ad_table_id": "A45FDE07216C40FBA472E7B91F7273E4",
+          "columnname": "Isactive",
+          "position": null
+        },
+        {
+          "ad_column_id": "DA4D6E57B5D84014B13848CC1E0B5BD1",
+          "ad_table_id": "A45FDE07216C40FBA472E7B91F7273E4",
+          "columnname": "Updated",
+          "position": null
+        },
+        {
+          "ad_column_id": "1E2928DFEE3F4034B388C0A71AE8385F",
+          "ad_table_id": "A45FDE07216C40FBA472E7B91F7273E4",
+          "columnname": "Updatedby",
+          "position": null
+        }
+      ]
+    },
     "675461360c94bf1fe8bbe3121d5b8aeec6025503b503da010fa3adf22f7c1e92": {
       "checksum": "7a5cc1834f81a4d3232eb3e3d44d88a787b88ce2019de31e09ffae413922aea8",
       "params": [
@@ -20511,6 +20687,290 @@
           "ad_column_id": "7E55E529C694721EE040007F01002C65",
           "ad_table_id": "E42DDB42FF0B4F82B1CF3C711B3F0DC0",
           "columnname": "C_Order_ID",
+          "position": "14"
+        }
+      ]
+    },
+    "81933096771953c6cf094e465f86e91738157acf5f9d32e9a078c92c5281ca5e": {
+      "checksum": "e577ced972aa9d0c7a0dcdcd4916c3e9f4d5f1f547e4c8db354113bf28a4c552",
+      "params": [
+        "117"
+      ],
+      "rows": [
+        {
+          "ad_column_id": "445",
+          "ad_table_id": "139",
+          "columnname": "C_Calendar_ID",
+          "position": "1"
+        },
+        {
+          "ad_column_id": "771",
+          "ad_table_id": "139",
+          "columnname": "AD_Client_ID",
+          "position": "2"
+        },
+        {
+          "ad_column_id": "772",
+          "ad_table_id": "139",
+          "columnname": "AD_Org_ID",
+          "position": "3"
+        },
+        {
+          "ad_column_id": "773",
+          "ad_table_id": "139",
+          "columnname": "IsActive",
+          "position": "4"
+        },
+        {
+          "ad_column_id": "774",
+          "ad_table_id": "139",
+          "columnname": "Created",
+          "position": "5"
+        },
+        {
+          "ad_column_id": "775",
+          "ad_table_id": "139",
+          "columnname": "CreatedBy",
+          "position": "6"
+        },
+        {
+          "ad_column_id": "776",
+          "ad_table_id": "139",
+          "columnname": "Updated",
+          "position": "7"
+        },
+        {
+          "ad_column_id": "777",
+          "ad_table_id": "139",
+          "columnname": "UpdatedBy",
+          "position": "8"
+        },
+        {
+          "ad_column_id": "447",
+          "ad_table_id": "139",
+          "columnname": "Name",
+          "position": "9"
+        },
+        {
+          "ad_column_id": "448",
+          "ad_table_id": "139",
+          "columnname": "Description",
+          "position": "10"
+        },
+        {
+          "ad_column_id": "09BF2A8FA78E48D793797130A02037FE",
+          "ad_table_id": "139",
+          "columnname": "EM_Intr_Isintrastat",
+          "position": "11"
+        },
+        {
+          "ad_column_id": "837",
+          "ad_table_id": "145",
+          "columnname": "C_Period_ID",
+          "position": "1"
+        },
+        {
+          "ad_column_id": "838",
+          "ad_table_id": "145",
+          "columnname": "AD_Client_ID",
+          "position": "2"
+        },
+        {
+          "ad_column_id": "839",
+          "ad_table_id": "145",
+          "columnname": "AD_Org_ID",
+          "position": "3"
+        },
+        {
+          "ad_column_id": "840",
+          "ad_table_id": "145",
+          "columnname": "IsActive",
+          "position": "4"
+        },
+        {
+          "ad_column_id": "841",
+          "ad_table_id": "145",
+          "columnname": "Created",
+          "position": "5"
+        },
+        {
+          "ad_column_id": "842",
+          "ad_table_id": "145",
+          "columnname": "CreatedBy",
+          "position": "6"
+        },
+        {
+          "ad_column_id": "843",
+          "ad_table_id": "145",
+          "columnname": "Updated",
+          "position": "7"
+        },
+        {
+          "ad_column_id": "844",
+          "ad_table_id": "145",
+          "columnname": "UpdatedBy",
+          "position": "8"
+        },
+        {
+          "ad_column_id": "482",
+          "ad_table_id": "145",
+          "columnname": "Name",
+          "position": "9"
+        },
+        {
+          "ad_column_id": "845",
+          "ad_table_id": "145",
+          "columnname": "PeriodNo",
+          "position": "10"
+        },
+        {
+          "ad_column_id": "846",
+          "ad_table_id": "145",
+          "columnname": "C_Year_ID",
+          "position": "11"
+        },
+        {
+          "ad_column_id": "484",
+          "ad_table_id": "145",
+          "columnname": "StartDate",
+          "position": "12"
+        },
+        {
+          "ad_column_id": "5943",
+          "ad_table_id": "145",
+          "columnname": "EndDate",
+          "position": "13"
+        },
+        {
+          "ad_column_id": "847",
+          "ad_table_id": "145",
+          "columnname": "PeriodType",
+          "position": "14"
+        },
+        {
+          "ad_column_id": "5944",
+          "ad_table_id": "145",
+          "columnname": "Processing",
+          "position": "15"
+        },
+        {
+          "ad_column_id": "5854D61EEF913B11E040007F01002D1D",
+          "ad_table_id": "145",
+          "columnname": "Close_Fact_Acct_Group_ID",
+          "position": "16"
+        },
+        {
+          "ad_column_id": "5854D61EEF923B11E040007F01002D1D",
+          "ad_table_id": "145",
+          "columnname": "Reg_Fact_Acct_Group_ID",
+          "position": "17"
+        },
+        {
+          "ad_column_id": "5854D61EEF933B11E040007F01002D1D",
+          "ad_table_id": "145",
+          "columnname": "Divideup_Fact_Acct_Group_ID",
+          "position": "18"
+        },
+        {
+          "ad_column_id": "8200738EF14611DDB9650016D4EE9DB3",
+          "ad_table_id": "145",
+          "columnname": "Open_Fact_Acct_Group_ID",
+          "position": "19"
+        },
+        {
+          "ad_column_id": "7270DE4F7AAA41E89E5F133AF78F2163",
+          "ad_table_id": "145",
+          "columnname": "OpenClose",
+          "position": "20"
+        },
+        {
+          "ad_column_id": "6C095E9D39CD4A31BC29FB37853B9044",
+          "ad_table_id": "145",
+          "columnname": "Status",
+          "position": null
+        },
+        {
+          "ad_column_id": "1031",
+          "ad_table_id": "177",
+          "columnname": "C_Year_ID",
+          "position": "1"
+        },
+        {
+          "ad_column_id": "1032",
+          "ad_table_id": "177",
+          "columnname": "AD_Client_ID",
+          "position": "2"
+        },
+        {
+          "ad_column_id": "1033",
+          "ad_table_id": "177",
+          "columnname": "AD_Org_ID",
+          "position": "3"
+        },
+        {
+          "ad_column_id": "1034",
+          "ad_table_id": "177",
+          "columnname": "IsActive",
+          "position": "4"
+        },
+        {
+          "ad_column_id": "1036",
+          "ad_table_id": "177",
+          "columnname": "Created",
+          "position": "5"
+        },
+        {
+          "ad_column_id": "1035",
+          "ad_table_id": "177",
+          "columnname": "CreatedBy",
+          "position": "6"
+        },
+        {
+          "ad_column_id": "1040",
+          "ad_table_id": "177",
+          "columnname": "Updated",
+          "position": "7"
+        },
+        {
+          "ad_column_id": "1037",
+          "ad_table_id": "177",
+          "columnname": "UpdatedBy",
+          "position": "8"
+        },
+        {
+          "ad_column_id": "1038",
+          "ad_table_id": "177",
+          "columnname": "Year",
+          "position": "9"
+        },
+        {
+          "ad_column_id": "1041",
+          "ad_table_id": "177",
+          "columnname": "Description",
+          "position": "10"
+        },
+        {
+          "ad_column_id": "1042",
+          "ad_table_id": "177",
+          "columnname": "C_Calendar_ID",
+          "position": "11"
+        },
+        {
+          "ad_column_id": "2410",
+          "ad_table_id": "177",
+          "columnname": "Processing",
+          "position": "12"
+        },
+        {
+          "ad_column_id": "800522",
+          "ad_table_id": "177",
+          "columnname": "Create_Reg_Fact_Acct",
+          "position": "13"
+        },
+        {
+          "ad_column_id": "800523",
+          "ad_table_id": "177",
+          "columnname": "Drop_Reg_Fact_Acct",
           "position": "14"
         }
       ]
