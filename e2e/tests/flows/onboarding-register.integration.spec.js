@@ -98,15 +98,18 @@ test.describe('Onboarding — Register new user (integration)', () => {
     await slow(page);
 
     // ═══════════════════════════════════════════════════════════════════════
-    // STEP 6: Company step — fill company name, NIF, and click "Empezar"
+    // STEP 6: Company step — fill company name and click "Empezar"
+    // (core 0.3.8 / ETP-4445): freelancers/autónomos invoice under their
+    // personal tax id, so CompanyStep hides the company Tax ID field for them.
     // ═══════════════════════════════════════════════════════════════════════
 
     await expect(page.locator('#clientName')).toBeVisible({ timeout: 10_000 });
 
     await page.locator('#clientName').fill(`Empresa E2E ${suffix}`);
     await slow(page);
-    await page.locator('#fiscalIdValue').fill('12345678Z');
-    await slow(page);
+    // No #fiscalIdValue fill: the Autónomo (freelancer) business type selected
+    // in STEP 4 hides the Tax ID field; the fiscal id is optional and does not
+    // gate the company step (isCompanyStepValid only requires clientName).
 
     // Start capturing console logs and network before clicking "Empezar"
     const consoleLogs = [];
@@ -312,7 +315,8 @@ test.describe('Onboarding — Register new user (integration)', () => {
     // Fill company step
     await expect(page.locator('#clientName')).toBeVisible({ timeout: 10_000 });
     await page.locator('#clientName').fill(`Empresa ProvFail ${suffix}`);
-    await page.locator('#fiscalIdValue').fill('12345678Z');
+    // No #fiscalIdValue fill: the Autónomo (freelancer) flow hides the Tax ID
+    // field (core 0.3.8 / ETP-4445); the fiscal id is optional.
 
     // Intercept ONLY the onboarding POST to simulate a provisioning failure.
     // The user was registered with real backend — this tests error handling

@@ -1,13 +1,10 @@
-import { useState, useEffect } from 'react';
+import { useEffect } from 'react';
 import { ListView, DetailView } from '@/components/contract-ui';
-import { toast } from 'sonner';
 import PeriodControlTable from './PeriodControlTable';
 import PeriodControlForm from './PeriodControlForm';
 import DocumentsTable from './DocumentsTable';
 import DocumentsForm from './DocumentsForm';
-import GoToFiscalCalendarButton from '../../../custom/GoToFiscalCalendarButton';
 import { AttachmentsTab } from '@/components/attachments';
-import GoToFiscalCalendarModal from '../../../custom/GoToFiscalCalendarModal';
 import catalogs from './mockCatalogs';
 
 
@@ -181,8 +178,6 @@ export const api = {
 const labelOverrides = api.labelOverrides;
 // @sf-generated-start component:PeriodControlPage
 export default function PeriodControlPage({ windowName, recordId, ...props }) {
-  const [showGoToFiscalCalendarMenuModal, setGoToFiscalCalendarMenuModal] = useState(false);
-  const [goToFiscalCalendarMenuContext, setGoToFiscalCalendarMenuContext] = useState(null);
   if (recordId) {
     return (
       <>
@@ -206,15 +201,12 @@ export default function PeriodControlPage({ windowName, recordId, ...props }) {
       api={api}
         hidePrint
         customTabs={[{ key: 'attachments', labelKey: 'attachments', Component: AttachmentsTab, placement: 'tab', props: { tableName: "C_Period", config: {} } }]}
-        menuActions={({ data, status }) => [
-          { key: 'goToFiscalCalendar', label: 'undefined', labelKey: 'goToFiscalCalendar', onClick: () => { setGoToFiscalCalendarMenuContext(data ?? null); setGoToFiscalCalendarMenuModal(true); }, }
-        ]}
         requiredHeaderFields={requiredHeaderFields}
         statusEnumLabels={{"O":"All Opened","N":"All Never Opened","C":"All Closed","P":"All Permanently Closed","M":"Mixed"}}
         labelOverrides={labelOverrides}
         {...props}
       />
-      {showGoToFiscalCalendarMenuModal && <GoToFiscalCalendarModal isOpen={showGoToFiscalCalendarMenuModal} token={props.token} apiBaseUrl={api.baseUrl} currentRecord={goToFiscalCalendarMenuContext} onClose={() => setGoToFiscalCalendarMenuModal(false)} onSaved={() => { setGoToFiscalCalendarMenuModal(false); window.location.reload(); }} />}      </>
+      </>
     );
   }
 
@@ -226,7 +218,6 @@ export default function PeriodControlPage({ windowName, recordId, ...props }) {
       windowName={windowName}
       breadcrumb={breadcrumb}
       api={api}
-      headerContent={(p) => <GoToFiscalCalendarButton {...p} />}
       hidePrint
       hideCreate
       labelOverrides={labelOverrides}

@@ -64,7 +64,7 @@ export const api = {
       "post": true,
       "put": true,
       "patch": true,
-      "delete": true,
+      "delete": false,
       "listUrl": "/sws/neo/tax-rate/tax",
       "detailUrl": "/sws/neo/tax-rate/tax/{id}",
       "supportedFilters": [
@@ -77,7 +77,7 @@ export const api = {
       "post": true,
       "put": true,
       "patch": true,
-      "delete": true,
+      "delete": false,
       "listUrl": "/sws/neo/tax-rate/accounting",
       "detailUrl": "/sws/neo/tax-rate/accounting/{id}",
       "supportedFilters": []
@@ -124,7 +124,6 @@ export const api = {
       "Rate": "Índice",
       "SOPOType": "Tipo venta/compra",
       "ValidFrom": "Válido desde",
-      "IsActive": "Activo",
       "Description": "Descripción"
     },
     "en_US": {
@@ -132,7 +131,6 @@ export const api = {
       "Rate": "Rate",
       "SOPOType": "Sales/Purchase Type",
       "ValidFrom": "Valid From",
-      "IsActive": "Active",
       "Description": "Description"
     }
   }
@@ -183,6 +181,7 @@ export default function TaxPage({ windowName, recordId, ...props }) {
       breadcrumb={breadcrumb}
       api={api}
       hidePrint
+      hideCreate
       hideMoreMenu
       labelOverrides={labelOverrides}
       rowQuickActions={{}}

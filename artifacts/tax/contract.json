@@ -1,8 +1,8 @@
 {
-  "version": "0.8.0",
+  "version": "0.10.0",
   "generatedAt": "2026-04-27T19:18:32.198Z",
-  "updatedAt": "2026-07-02T11:33:22.008Z",
-  "checksum": "c114734415e59dc4",
+  "updatedAt": "2026-07-15T12:06:00.300Z",
+  "checksum": "6d663427f230df52",
   "frontendContract": {
     "window": {
       "id": "137",
@@ -10,7 +10,9 @@
       "primaryEntity": "tax",
       "category": "settings",
       "hidePrint": true,
+      "hideCreate": true,
       "hideMoreMenu": true,
+      "hideDelete": true,
       "breadcrumb": "Settings / Tax",
       "detailEntity": "accounting",
       "labelOverrides": {
@@ -19,7 +21,6 @@
           "Rate": "Índice",
           "SOPOType": "Tipo venta/compra",
           "ValidFrom": "Válido desde",
-          "IsActive": "Activo",
           "Description": "Descripción"
         },
         "en_US": {
@@ -27,7 +28,6 @@
           "Rate": "Rate",
           "SOPOType": "Sales/Purchase Type",
           "ValidFrom": "Valid From",
-          "IsActive": "Active",
           "Description": "Description"
         }
       },
@@ -327,7 +327,9 @@
       "primaryEntity": "tax",
       "category": "settings",
       "hidePrint": true,
+      "hideCreate": true,
       "hideMoreMenu": true,
+      "hideDelete": true,
       "breadcrumb": "Settings / Tax",
       "detailEntity": "accounting",
       "labelOverrides": {
@@ -336,7 +338,6 @@
           "Rate": "Índice",
           "SOPOType": "Tipo venta/compra",
           "ValidFrom": "Válido desde",
-          "IsActive": "Activo",
           "Description": "Descripción"
         },
         "en_US": {
@@ -344,7 +345,6 @@
           "Rate": "Rate",
           "SOPOType": "Sales/Purchase Type",
           "ValidFrom": "Valid From",
-          "IsActive": "Active",
           "Description": "Description"
         }
       }
@@ -1050,7 +1050,7 @@
         "post": true,
         "put": true,
         "patch": true,
-        "delete": true,
+        "delete": false,
         "listUrl": "/sws/neo/tax-rate/tax",
         "detailUrl": "/sws/neo/tax-rate/tax/{id}",
         "supportedFilters": [
@@ -1063,7 +1063,7 @@
         "post": true,
         "put": true,
         "patch": true,
-        "delete": true,
+        "delete": false,
         "listUrl": "/sws/neo/tax-rate/accounting",
         "detailUrl": "/sws/neo/tax-rate/accounting/{id}",
         "supportedFilters": []
@@ -1110,7 +1110,6 @@
         "Rate": "Índice",
         "SOPOType": "Tipo venta/compra",
         "ValidFrom": "Válido desde",
-        "IsActive": "Activo",
         "Description": "Descripción"
       },
       "en_US": {
@@ -1118,7 +1117,6 @@
         "Rate": "Rate",
         "SOPOType": "Sales/Purchase Type",
         "ValidFrom": "Valid From",
-        "IsActive": "Active",
         "Description": "Description"
       }
     }

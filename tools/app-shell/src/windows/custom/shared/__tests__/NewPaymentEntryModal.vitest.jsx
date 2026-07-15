@@ -163,6 +163,74 @@ describe('NewPaymentEntryModal', () => {
     });
   });
 
+  // Edit mode (re-opening an existing draft via the `payment` prop) — covers
+  // modalTitleFor's isEdit branches, the isEdit prefill block, normalizeDraftDate,
+  // and matchMethodIdByName, none of which run under the default (create) mode
+  // exercised by every other test in this file.
+  describe('edit mode (payment prop present)', () => {
+    it('shows the edit-collection title and prefills method/account/amount/date from the draft', async () => {
+      mockApiFetch = buildApiFetch();
+      renderModal({
+        dir: 'in',
+        payment: { id: 'pay-edit-1', paymentDate: '2024-05-10', paymentMethod: 'Transfer', accountId: 'acc-1', amount: 500 },
+      });
+
+      expect(screen.getByText('cpEditCollection')).toBeInTheDocument();
+      expect(screen.queryByText('cpNewCollection')).not.toBeInTheDocument();
+
+      // normalizeDraftDate matches the 'YYYY-MM-DD' prefix regex and returns it as-is.
+      await waitFor(() => expect(screen.getByTestId('date-field')).toHaveValue('2024-05-10'));
+      // matchMethodIdByName finds 'Transfer' in the method catalog by name.
+      expect(await screen.findByTestId('field-paymentMethod-chip')).toHaveTextContent('Transfer');
+      // payment.accountId is used directly (no default-account heuristic needed).
+      expect(screen.getByTestId('field-account-chip')).toHaveTextContent('Main Account');
+      // balance.onAmountChange(formatPlain(payment.amount)) prefills the cash amount.
+      await waitFor(() => expect(screen.getByTestId('cp-amount-input')).toHaveValue('500,00'));
+    });
+
+    it('shows the edit-payment title for dir "out"', () => {
+      mockApiFetch = buildApiFetch();
+      renderModal({
+        dir: 'out',
+        payment: { id: 'pay-edit-2', paymentDate: '2024-05-10', paymentMethod: 'Transfer', accountId: 'acc-1', amount: 500 },
+      });
+      expect(screen.getByText('cpEditPayment')).toBeInTheDocument();
+      expect(screen.queryByText('cpNewPayment')).not.toBeInTheDocument();
+    });
+
+    it('falls back to today when the draft date does not match the yyyy-MM-dd prefix and is unparseable', async () => {
+      mockApiFetch = buildApiFetch();
+      renderModal({
+        payment: { id: 'pay-edit-3', paymentDate: 'not-a-real-date', paymentMethod: 'Transfer', accountId: 'acc-1', amount: 10 },
+      });
+      const today = new Date().toISOString().slice(0, 10);
+      expect(screen.getByTestId('date-field')).toHaveValue(today);
+    });
+
+    it('parses a non-yyyy-MM-dd but valid date string via the Date fallback branch', async () => {
+      mockApiFetch = buildApiFetch();
+      renderModal({
+        payment: { id: 'pay-edit-4', paymentDate: '03/05/2024', paymentMethod: 'Transfer', accountId: 'acc-1', amount: 10 },
+      });
+      // The regex requires a leading 'YYYY-MM-DD'; a slash-formatted date falls through to
+      // `new Date(raw)`, which parses successfully here, so the fallback returns a real
+      // (not "today") normalized date instead of degrading to today() — asserted loosely
+      // to stay independent of the test runner's local timezone.
+      const value = screen.getByTestId('date-field').value;
+      expect(value).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    });
+
+    it('falls back to the default-method heuristic when the draft has no paymentMethod (matchMethodIdByName "!name" branch)', async () => {
+      mockApiFetch = buildApiFetch();
+      renderModal({
+        payment: { id: 'pay-edit-5', paymentDate: '2024-05-10', accountId: 'acc-1', amount: 10 },
+      });
+      // matchMethodIdByName(methods, undefined) short-circuits to '' -> pickDefaultMethodId
+      // resolves the account's defaultPaymentMethod name ("Transfer") instead.
+      expect(await screen.findByTestId('field-paymentMethod-chip')).toHaveTextContent('Transfer');
+    });
+  });
+
   describe('amount field', () => {
     it('prefills the amount input with the outstanding total (es-ES)', () => {
       renderModal({ outstanding: 6420 });
@@ -294,6 +362,23 @@ describe('NewPaymentEntryModal', () => {
       fireEvent.blur(input);
       // 220 would exceed avail (120) — clamps down to 120 on blur.
       await waitFor(() => expect(input).toHaveValue('120,00'));
+    });
+
+    it('does not toggle the row off when clicking inside the "use" amount container (stopPropagation)', async () => {
+      mockApiFetch = buildApiFetch({
+        sources: [{ id: 's1', kind: 'credit', doc: 'AB-1', date: '2024-01-01', avail: 500 }],
+      });
+      renderModal({ outstanding: 50 });
+      const row = await screen.findByTestId('cp-credit-row-s1');
+      fireEvent.click(row);
+      const input = await within(row).findByTestId('cp-credit-use-s1');
+
+      // The "use" input's wrapper stops propagation on click so that interacting with the
+      // amount field never bubbles up to the row's own onClick (which toggles selection off).
+      fireEvent.click(input);
+
+      expect(screen.getByTestId('cp-credit-use-s1')).toBeInTheDocument();
+      expect(screen.queryByText('cpUnused')).not.toBeInTheDocument();
     });
   });
 
@@ -1185,6 +1270,28 @@ describe('NewPaymentEntryModal', () => {
       });
     });
 
+    describe('PIS catalog fetch resilience', () => {
+      it('degrades gracefully (no crash, no preselected IBAN) when pisSupplierAccounts rejects', async () => {
+        // Each per-action POST inside the PIS accounts effect is individually wrapped in
+        // `.catch(() => null)`, so a single rejected request must not blow up Promise.all
+        // or crash the section — it should just leave that catalog empty.
+        const base = buildPisApiFetch();
+        mockApiFetch = vi.fn(async (path, opts) => {
+          if (path.includes('pisSupplierAccounts')) return Promise.reject(new Error('network error'));
+          return base(path, opts);
+        });
+        renderModal({ dir: 'out', specName: 'purchase-invoice' });
+
+        expect(await screen.findByTestId('cp-pis-section')).toBeInTheDocument();
+        await waitFor(() => expect(
+          mockApiFetch.mock.calls.some(c => c[0].includes('pisSupplierAccounts')),
+        ).toBe(true));
+        // No supplier accounts resolved -> no default IBAN was preselected, so the
+        // selector shows its plain (unselected) input rather than a value chip.
+        expect(screen.queryByTestId('field-pisIban-chip')).not.toBeInTheDocument();
+      });
+    });
+
     describe('confirm request body', () => {
       it('sends pis:true only on Confirmar when the block is active, leaving Guardar (draft) unchanged', async () => {
         mockApiFetch = buildPisApiFetch();
@@ -1240,6 +1347,46 @@ describe('NewPaymentEntryModal', () => {
           const body = JSON.parse(call[1].body);
           expect(body).not.toHaveProperty('pis');
         });
+      });
+    });
+
+    describe('PIS alert — used-credit clause', () => {
+      it('appends the cpPisAlertCredit clause when a credit/saldo-a-favor line is applied alongside a PIS transfer', async () => {
+        mockApiFetch = buildPisApiFetch({
+          sources: [{ id: 's1', kind: 'credit', doc: 'AB-1', date: '2024-01-01', avail: 200 }],
+        });
+        renderModal({ dir: 'out', specName: 'purchase-invoice' });
+        await screen.findByTestId('cp-pis-section');
+
+        // Selecting the line auto-applies it, raising balance.usedCredit above 0.
+        const row = await screen.findByTestId('cp-credit-row-s1');
+        fireEvent.click(row);
+
+        await waitFor(() => expect(screen.getByText(/cpPisAlertCredit/)).toBeInTheDocument());
+      });
+    });
+
+    describe('PIS iban — hand-typed creation (onCreateRequest)', () => {
+      it('creates a hand-typed IBAN when the user types a value with no matching supplier option', async () => {
+        mockApiFetch = buildPisApiFetch();
+        renderModal({ dir: 'out', specName: 'purchase-invoice' });
+        await screen.findByTestId('cp-pis-section');
+
+        // Open the IBAN selector (pre-filled with the default supplier account) and type a
+        // value that isn't one of the fetched options.
+        fireEvent.click(screen.getByTestId('field-pisIban-chip'));
+        const ibanInput = await screen.findByTestId('field-pisIban');
+        fireEvent.focus(ibanInput);
+        fireEvent.change(ibanInput, { target: { value: 'DE89370400440532013000' } });
+        await waitFor(() => expect(screen.getByTestId('options-pisIban')).toBeInTheDocument());
+
+        // The pinned "create" action (its onMouseDown fires before blur) invokes
+        // onCreateRequest(query, onCreated), which trims the typed value and — since it's
+        // non-empty — calls onCreated(typed, typed), setting pisIban to the typed IBAN.
+        fireEvent.mouseDown(screen.getByTestId('action-create-pisIban'));
+
+        await waitFor(() => expect(screen.getByTestId('field-pisIban-chip'))
+          .toHaveTextContent('DE89370400440532013000'));
       });
     });
 
@@ -1424,6 +1571,34 @@ describe('NewPaymentEntryModal', () => {
         fireEvent.click(confirm);
         expect(await screen.findByTestId('cp-pis-waiting')).toBeInTheDocument();
 
+        await waitFor(() => expect(screen.getByText('cpPisFailedError')).toBeInTheDocument(),
+          { timeout: 4500 });
+        expect(screen.queryByTestId('cp-pis-waiting')).not.toBeInTheDocument();
+        expect(props.onSaved).not.toHaveBeenCalled();
+      }, 8000);
+
+      it('treats a rejected pisPaymentStatus poll as "failed" (network-error catch branch) and surfaces the inline error', async () => {
+        // Unlike the "terminal non-executed status" test above (which resolves the poll with
+        // a JSON body carrying status:"failed"), this rejects the apiFetch call outright —
+        // exercising the poll's own `catch { setPisPolling(... status: 'failed' ...) }` branch
+        // instead of its success path.
+        const base = buildPisApiFetch({
+          register: { response: { data: { id: 'pay-1', pisPaymentUrl: 'https://saltedge.example/widget/abc', pisPaymentId: 'pis-1' } } },
+        });
+        mockApiFetch = vi.fn(async (path, opts) => {
+          if (path.includes('pisPaymentStatus')) return Promise.reject(new Error('network blip'));
+          return base(path, opts);
+        });
+        const { props } = renderModal({ dir: 'out', specName: 'purchase-invoice' });
+        await screen.findByTestId('cp-pis-section');
+
+        const confirm = screen.getByTestId('cp-confirm');
+        await waitFor(() => expect(confirm).not.toBeDisabled());
+        fireEvent.click(confirm);
+        expect(await screen.findByTestId('cp-pis-waiting')).toBeInTheDocument();
+
+        // First poll tick rejects -> status becomes 'failed', a terminal, non-executed status
+        // that immediately surfaces the inline error and stops polling.
         await waitFor(() => expect(screen.getByText('cpPisFailedError')).toBeInTheDocument(),
           { timeout: 4500 });
         expect(screen.queryByTestId('cp-pis-waiting')).not.toBeInTheDocument();

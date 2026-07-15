@@ -6,7 +6,7 @@ Define reusable tax-rate records that describe the percentage to apply, whether 
 On `origin/develop`, the merged tax regeneration keeps this as a simple standalone maintenance window, but the list now has clearer visual semantics: the rate is rendered as a colored percentage tag (green for positive rates, neutral/gray for zero, red for negative rates such as withholdings) and the sales/purchase scope is rendered as colored tags instead of raw database codes.
 
 ## What this window should allow
-Users should be able to create, review, and update tax definitions by setting a tax name, a rate, an applicability scope, an effective date, and the base semantics used later by transactional documents.
+Users should be able to review and update tax definitions by setting a tax name, a rate, an applicability scope, an effective date, and the base semantics used later by transactional documents. Creating a new tax rate record from the list view is disabled (`window.hideCreate: true`) — new tax rates are provisioned outside this window.
 
 From the current generated form and decisions, the visible window allows a user to:
 - name the tax rate record
@@ -25,7 +25,7 @@ The list also lets users scan existing definitions quickly by showing the rate a
 - **Implementation type:** generated window loaded through `tools/app-shell/src/windows/registry.js`.
 - **Window shape:** `tax` is the header entity; `accounting` (`C_Tax_Acct`) is the detail (child) entity, rendered with the standard `linesLayout: "classic"` add-line grid — one row per accounting schema, with Tax Due and Tax Credit as editable selector columns.
 - No declared process endpoints in the generated index.
-- **Screen chrome:** the generated detail view hides print and the generic More menu.
+- **Screen chrome:** the generated detail view hides print and the generic More menu. The list toolbar hides the generic Create/New button (`window.hideCreate: true`).
 - An **Attachments** tab is available in the detail tab strip, allowing files to be attached to the current record.
 
 ## Reactive behavior and dependencies
@@ -33,7 +33,7 @@ The visible dependencies are limited to selector semantics and list rendering:
 - `Applicable To` changes the intended business scope of the tax record between `Both`, `Sales Tax`, and `Purchase Tax`.
 - `Doc Tax Amount` changes whether tax is conceptually based on document-level or line-level amounts.
 - `Base Amount` changes which monetary base downstream calculations should use.
-- The merged decisions intentionally keep `Description` discarded and `Active` hidden from the visible form, so the current user-facing form is limited to the six main fields above.
+- The merged decisions intentionally keep `Description` discarded, and the `Active` (`IsActive`) checkbox is left unclassified so it falls to the extractor default (`visibility: "system"`, hidden), so the current user-facing form is limited to the visible fields above.
 
 No dependent selector behavior, automatic defaulting between these fields, status-driven actions, or visible total/discount/tax recalculation logic is shown in the current window code beyond the Accounting tab described below. Any other downstream reaction happens outside this definition screen.
 
@@ -52,7 +52,7 @@ No dependent selector behavior, automatic defaulting between these fields, statu
 1. Open `/tax` from the `System` menu and confirm the list view loads.
 2. Confirm the list renders the rate as a colored percentage tag (`+N %` green for positive rates, `0 %` neutral/gray for zero, `-N %` red for negative/withholding rates) and `Applicable To` as `Sales` / `Purchase` tags.
 3. For a tax whose applicability is `Both`, confirm the list shows both tags together instead of a raw code.
-4. Open `/tax/<recordId>` and confirm the form exposes `Name`, `Rate`, `Applicable To`, `Valid From`, `Doc Tax Amount`, and `Base Amount`.
+4. Open `/tax/<recordId>` and confirm the form exposes `Name`, `Rate`, `Applicable To`, `Valid From`, `Doc Tax Amount`, and `Base Amount`. Confirm `Active` is NOT shown.
 5. Confirm `Applicable To` offers `Both`, `Sales Tax`, and `Purchase Tax`.
 6. Confirm `Doc Tax Amount` offers `Document Amount` and `Line Amount`.
 7. Confirm `Base Amount` offers `Line Net Amount`, `Line Net Amount + Tax`, `Tax Amount`, `Alternative Base Amount`, and `Alternative Base + Tax`.
@@ -93,6 +93,23 @@ Regenerated on 2026-05-12 as part of the feature/ETP-3908 epic merge. No functio
 
 - **ETP-4103 — Generator fix (labelOverrides deduplication)**: `const labelOverrides` in the generated page now references `api.labelOverrides` instead of re-embedding the full object. No functional change — field labels and selectors behave identically.
 
+## `Active` field exposure reverted — ETP-4464
+
+An earlier iteration briefly exposed the `active` (`IsActive`) checkbox in the principal section (by renaming the previously misspelled `isActive` decision key to `active` and classifying it `editable`/`form: true`). This was **reverted by functional decision** — the `Active` field is not shown in the Tax window.
+
+- The `active` entry was removed entirely from `artifacts/tax/decisions.json → entities.tax.fields`. With no classification, the field falls to the extractor default (`visibility: "system"`) and stays hidden from the form.
+- Regenerated via `make regen ONLY=tax SKIP_EXTRACT=1`; `TaxForm.jsx` no longer emits any `active`/`IsActive` field and `contract.json` no longer exposes it in the form.
+- `./node_modules/.bin/sf-validate-pipeline --scope=tax` reports 0 violations.
+- Note (kept for history): do not re-add the field under the key `isActive` — that spelling is a silent no-op because `resolve-curated.js` matches on the raw field name `active`.
+
+## List-view delete disabled at the API level — ETP-4464 (known UI gap)
+
+`window.hideDelete: true` was added to `artifacts/tax/decisions.json` (same precedent as `open-close-period-control`) to remove the ability to delete a `tax` or `accounting` record. Regenerated via `make regen ONLY=tax SKIP_EXTRACT=1`; `node cli/src/validate-pipeline.js --scope=tax` (via `make validate-pipeline`) reports 0 violations for this window.
+
+- Confirmed effect: `contract.json` and the generated `TaxPage.jsx` now expose `api.crud.tax.delete: false` and `api.crud.accounting.delete: false` — the backend-facing capability declaration is correctly disabled for both entities.
+- **Known gap, not fixed here:** `tools/app-shell/src/components/contract-ui/ListView.jsx` / `RowQuickActions.jsx` do not read `api.crud[entity].delete` (or a `hideDelete` prop) when deciding whether to render the row-level delete (trash) icon in the **list/grid view** — that gate (`isDeleteVisibleForRecord`, in `utils/recordActions.js`) only consults `hideDeleteWhenComplete` + `statusField`, neither of which `TaxPage.jsx` passes. The same is true for `open-close-period-control`, which sets `hideDelete: true` but whose generated `PeriodControlPage.jsx` also passes `rowQuickActions={{}}` with no `hideDeleteWhenComplete`/`statusField`. `DetailView.jsx`'s child-lines table, by contrast, already gates its own delete affordances on `crud?.[entity]?.delete`.
+- **Net result:** the list-view trash icon is still visually present for `tax` after this change. Removing it requires a Schema Forge Developer to wire `api.crud[entity].delete` (or thread `hideDelete` through as `hideDeleteWhenComplete`-equivalent) into `ListView.jsx`/`RowQuickActions.jsx`'s `showDelete` gate — a generic-component fix, not a per-window `decisions.json` change. Filed for follow-up; `hideDelete: true` was kept in `decisions.json` since it is the correct declarative intent and already disables the delete capability at the API/contract level (defense in depth) even though the UI icon fix is still pending.
+
 ## Accounting tab onboarded — ETP-4402
 
 The `accounting` entity (`C_Tax_Acct`, tab `333`) was un-excluded and classified, closing the same accounting-schema-defaulting gap already fixed for `product`, `product-category`, `assets`, `contacts`, and `business-partner-category` in this ticket.
@@ -103,3 +120,17 @@ The `accounting` entity (`C_Tax_Acct`, tab `333`) was un-excluded and classified
 - `taxExpense`, `taxLiability`, and `taxReceivables` were already discarded by the raw extractor's default classification (not displayed in AD by default); `taxDueTransitory` and `taxCreditTransitory` were explicitly discarded here — both are Cash-VAT-only transitory accounts, out of scope for the simplified UI.
 - `javaQualifier: "taxAccountingHandler"` registers `TaxAccountingHandler` (`com.etendoerp.go`), a `NeoHandler` that auto-fills `accountingSchema` with the client's default active `AcctSchema` on POST when the field is absent from the request body — mirrors `ProductCategoryAccountingHandler` exactly.
 - Regenerated via `make regen ONLY=tax`; `node cli/src/validate-pipeline.js --scope=tax` reports 0 violations.
+
+## List-view delete icon now hidden — ETP-4464 follow-up (closes the gap from the section above)
+
+The known gap documented above ("List-view delete disabled at the API level") is now closed by a new generic decisions.json slot: `window.hideDeleteButton`. Unlike `window.hideDelete` (which only disables the CRUD delete capability in `contract.json`/the API), `hideDeleteButton` unconditionally hides the Delete button/icon in **both** the detail toolbar (`DetailView.jsx`) and the list-row hover actions (`RowQuickActions.jsx`, via `DataTable`'s `rowQuickActions.hideDeleteButton`), for every record regardless of status.
+
+- Generator support for `hideDeleteButton` shipped in `@etendosoftware/schema-forge-cli@0.3.6` (already installed — no core bump needed for this change).
+- Added `"hideDeleteButton": true` to `artifacts/tax/decisions.json → window` (alongside the pre-existing `hideDelete: true`).
+- Wired the receiving side in this repo (`tools/app-shell/src/components/contract-ui/`):
+  - `RowQuickActions.jsx` — new `hideDeleteButton` prop (default `false`); `showDelete` is now `!hideDeleteButton && isDeleteVisibleForRecord(...)`, short-circuiting before the status-based gate.
+  - `DataTable.jsx` — forwards `hideDeleteButton={rowQuickActions.hideDeleteButton}` to `RowQuickActions`.
+  - `DetailView.jsx` — new `hideDeleteButton` prop (default `false`); `isDeleteButtonVisible(...)` now takes it as a trailing argument and returns `false` immediately when set, ahead of the existing `hideDeleteWhenComplete`/`isProcessed` logic.
+- Regenerated via `make regen ONLY=tax SKIP_EXTRACT=1`. `artifacts/tax/generated/web/tax/TaxPage.jsx` now emits `hideDeleteButton` as a literal prop on `DetailView` and `rowQuickActions={{"hideDeleteButton":true}}` on the list `DataTable` — the trash icon no longer renders in either the detail toolbar or the list-row hover actions.
+- `./node_modules/.bin/sf-validate-pipeline --scope=tax` reports 0 violations.
+- Regression tests added in `tools/app-shell/src/components/contract-ui/__tests__/hideDeleteButton.test.js` (13 cases covering `isDeleteButtonVisible` and `RowQuickActions`' `showDelete`, both behavioral and source-lock-step assertions); full `contract-ui` + `utils/recordActions` suite (498 tests) passes.

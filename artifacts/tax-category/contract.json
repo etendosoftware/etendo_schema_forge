@@ -1,8 +1,8 @@
 {
   "version": "0.2.0",
   "generatedAt": "2026-06-26T17:01:05.650Z",
-  "updatedAt": "2026-06-29T15:37:58.697Z",
-  "checksum": "5672b79e18d4062d",
+  "updatedAt": "2026-07-15T12:06:00.415Z",
+  "checksum": "ec22292f8ffd9ff0",
   "frontendContract": {
     "window": {
       "id": "138",
@@ -10,7 +10,9 @@
       "primaryEntity": "taxCategory",
       "category": "configuration",
       "hidePrint": true,
+      "hideCreate": true,
       "hideMoreMenu": true,
+      "hideDelete": true,
       "detailEntity": null,
       "layoutType": "default"
     },
@@ -295,7 +297,9 @@
       "primaryEntity": "taxCategory",
       "category": "configuration",
       "hidePrint": true,
+      "hideCreate": true,
       "hideMoreMenu": true,
+      "hideDelete": true,
       "detailEntity": null
     },
     "entities": {
@@ -481,7 +485,7 @@
         "post": true,
         "put": true,
         "patch": true,
-        "delete": true,
+        "delete": false,
         "listUrl": "/sws/neo/tax-category/taxCategory",
         "detailUrl": "/sws/neo/tax-category/taxCategory/{id}",
         "supportedFilters": [

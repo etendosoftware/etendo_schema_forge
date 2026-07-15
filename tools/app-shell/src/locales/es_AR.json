@@ -13832,7 +13832,7 @@
       "label": "Mapeo de dimensiones"
     },
     "Fiscal Calendar": {
-      "label": "Calendario anual y periodos"
+      "label": "Calendario"
     },
     "Account Tree": {
       "label": "Árbol de cuentas"
@@ -18187,9 +18187,9 @@
     "yoyUp": "↑ {pct}% vs año anterior",
     "yoyDown": "↓ {pct}% vs año anterior",
     "quickActionsTitle": "ACCESOS RÁPIDOS",
-    "quickAccessSalesOrders": "Pedidos de venta",
-    "quickAccessSalesInvoices": "Facturas de venta",
-    "quickAccessContacts": "Contactos",
+    "quickAccessSalesOrders": "Nuevo pedido de venta",
+    "quickAccessSalesInvoices": "Nueva factura de venta",
+    "quickAccessContacts": "Nuevo contacto",
     "topClientsTitle": "CLIENTES DESTACADOS",
     "topClientsEmptyTitle": "Aún no hay clientes destacados",
     "topClientsEmptySubtitle": "Cuando tengas más actividad, verás aquí tus clientes más importantes",
@@ -18577,27 +18577,33 @@
     "onboardingAuthFeatureNoCard": "Sin tarjeta de crédito",
     "onboardingAuthFeatureTrial": "Prueba gratuita",
     "onboardingAuthFeatureInstantAccess": "Acceso inmediato",
-    "onboardingMarketingTitle": "Gestiona tu negocio con Copilot",
-    "onboardingMarketingDescription": "Factura, registra gastos y obtén reportes en segundos con una interfaz simple y guiada.",
+    "onboardingMarketingTitle": "Gestiona tu negocio con ayuda de Copilot",
+    "onboardingMarketingDescription": "Factura, registra gastos y obtén reportes en segundos, con una interfaz simple y guiada.",
     "onboardingSwitchToLoginPrompt": "¿Ya tienes una cuenta?",
     "onboardingSwitchToLoginAction": "Iniciar sesión",
     "onboardingSwitchToRegisterPrompt": "¿Aún no tienes una cuenta?",
     "onboardingSwitchToRegisterAction": "Crear cuenta",
     "onboardingRegisterTitle": "Crea tu cuenta gratis",
     "onboardingRegisterSubtitle": "Empieza en menos de 1 minuto",
-    "onboardingLoginTitle": "Inicia sesión en tu cuenta",
-    "onboardingLoginSubtitle": "Continúa donde lo dejaste",
+    "onboardingLoginTitle": "Iniciar sesión",
+    "onboardingLoginSubtitle": "Accede a tu cuenta para continuar",
     "onboardingForgotPasswordAction": "¿Olvidaste tu contraseña?",
-    "onboardingForgotPasswordTitle": "Restablecer contraseña",
-    "onboardingForgotPasswordSubtitle": "Ingresá tu email y enviaremos instrucciones si la cuenta existe.",
+    "onboardingForgotPasswordTitle": "Recuperar contraseña",
+    "onboardingForgotPasswordSubtitle": "Introduce tu correo electrónico y te enviaremos un enlace para restablecer tu contraseña.",
     "onboardingRememberPasswordPrompt": "¿Recordaste tu contraseña?",
     "onboardingBackToLoginAction": "Volver a iniciar sesión",
-    "onboardingSendResetEmailAction": "Enviar email de restablecimiento",
+    "onboardingSendResetEmailAction": "Enviar enlace",
     "onboardingSendingResetEmail": "Enviando email...",
-    "onboardingResetEmailSent": "Si la cuenta existe, las instrucciones llegarán en breve.",
-    "onboardingResetPasswordTitle": "Elegí una nueva contraseña",
-    "onboardingResetPasswordSubtitle": "Usá el enlace antes de que expire.",
-    "onboardingResetPasswordSuccess": "Tu contraseña fue actualizada. Iniciá sesión con la nueva contraseña.",
+    "onboardingResetEmailSentTitle": "Revisa tu correo",
+    "onboardingResetEmailSentSubtitle": "Si existe una cuenta asociada a este email, enviamos un enlace a: {email}",
+    "onboardingResetLinkValidity": "El enlace es válido por {duration}.",
+    "onboardingResetLinkDuration": "15 minutos",
+    "onboardingResendPrompt": "¿No lo recibiste?",
+    "onboardingResendLinkAction": "Reenviar enlace",
+    "onboardingResetPasswordTitle": "Crear nueva contraseña",
+    "onboardingResetPasswordSubtitle": "La contraseña debe tener al menos 8 caracteres.",
+    "onboardingResetPasswordSuccessTitle": "Contraseña actualizada",
+    "onboardingResetPasswordSuccess": "Tu contraseña se actualizó correctamente.",
     "onboardingNewPasswordLabel": "Nueva contraseña",
     "onboardingConfirmPasswordLabel": "Confirmar contraseña",
     "onboardingCredentialsMustMatch": "Las contraseñas deben coincidir.",
@@ -21093,7 +21099,7 @@
       "label": "Mapeo de dimensiones"
     },
     "Fiscal Calendar": {
-      "label": "Calendario anual y periodos"
+      "label": "Calendario"
     },
     "Account Tree": {
       "label": "Árbol de cuentas"
@@ -21679,6 +21685,9 @@
     },
     "Create Amortization": {
       "label": "Crear amortización"
+    },
+    "Recalculate Amortization": {
+      "label": "Recalcular amortización"
     },
     "Depreciation Setup": {
       "label": "Configuración de depreciación"

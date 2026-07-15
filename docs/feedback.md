@@ -201,3 +201,22 @@ Owner: whoever next touches the goods-shipment window.
 - `useEntity.helpers.vitest.jsx` verifies non-JSON responses and unrecognized JSON payloads fall back to `Error <status>`.
 
 **Lesson:** For selector context objects created by parent renders, compare by content at callback boundaries. For error handling, keep final fallback helpers outside parsing blocks that can throw.
+
+---
+
+## Callout-Filled Warehouse Shows Raw ID on Purchase Order (but not Sales Order)
+
+**Component:** `artifacts/purchase-order/decisions.json` — header `warehouse` field config (NOT a shared-component bug)
+
+**Symptom:** On a new Purchase Order, selecting the Contact (vendor) fires a callout that auto-fills Warehouse. The field showed the raw ID (`1FF18B06...`) instead of the name (`Almacen GO`). Opening the dropdown loaded the options and fixed the display; picking a value manually always worked. Sales Order has the identical warehouse selector and did NOT have the bug.
+
+**Root cause (comparative):** The two windows rendered warehouse with different widgets. `sales-order/decisions.json` declares `warehouse: { inputMode: "search" }` -> generated field `type: "search"` -> rendered by `SearchInput` (`EntityForm.jsx`), which resolves the label on-demand via the selector `?id=` endpoint when a value arrives without its `$_identifier` (exactly the callout case). `purchase-order/decisions.json` had no `inputMode`, so it defaulted to `type: "selector"` -> rendered by `SelectorInput` (Radix dropdown), which defers its option fetch until the user opens the dropdown, so the callout-set ID had no resolved label and showed raw. Because the working window (sales-order) never used `SelectorInput` at all, the cause was the per-window field config, not the shared component.
+
+**Fix:** Added `"inputMode": "search"` to the `warehouse` header field in `artifacts/purchase-order/decisions.json` (aligning it with sales-order) and regenerated. Warehouse now renders as `SearchInput` and shows the name of the callout-filled value immediately.
+
+**Rejected approach:** An earlier attempt added an on-demand `?id=` fetch to the shared `SelectorInput` component. It was reverted: the working window did not exercise that code path, so the real difference was the field config, and touching a component shared by many windows was unwarranted for a per-window config gap.
+
+**Tests updated:**
+- `SearchInput-chip.vitest.jsx` verifies a `search` FK field whose value has no `$_identifier` resolves the label on-demand via the selector endpoint and shows the record name.
+
+**Lesson:** When one window works and a sibling does not for the same field, compare the per-window `decisions.json` (and the generated field `type`/`inputMode`) BEFORE touching shared components. FK fields that get auto-filled by a callout should use `inputMode: "search"` so the label resolves on-demand, or the value must arrive with its `$_identifier`.

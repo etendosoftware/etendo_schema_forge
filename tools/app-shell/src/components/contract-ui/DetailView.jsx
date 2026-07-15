@@ -1254,7 +1254,37 @@ export function getTabsBarClassName(tabsBarPaddingX, tabsBarRightDivider) {
   return `flex items-center gap-1 ${tabsBarPaddingX} py-2 shrink-0${tabsBarRightDivider ? ' relative' : ''}`;
 }
 
-export function isDeleteButtonVisible(isNew, recordId, data, statusField, hideDeleteWhenComplete, isProcessed) {
+// ETP-4479 — windows where a plain header DELETE fails once the record has
+// ever been referenced (FK constraints); the NEO action reactivates and
+// removes it server-side instead. Hardcoded here (not decisions.json-driven)
+// because the decisions.json -> generator wiring for this is not published
+// in schema_forge_core; do not add a decisions.json field for this without
+// first confirming the generator support ships.
+const WINDOW_DELETE_ACTIONS = {
+  'payment-in': 'eTPRRemovePayment',
+  'payment-out': 'eTPRRemovePayment',
+};
+
+export function isDeleteButtonVisible({
+  isNew,
+  recordId,
+  data,
+  statusField,
+  hideDeleteWhenComplete,
+  isProcessed,
+  deleteAction,
+  hideDeleteButton = false,
+}) {
+  // hideDeleteButton is an explicit, unconditional "never show delete here"
+  // signal (e.g. Amortization) — it wins over everything else, including the
+  // deleteAction lifecycle bypass below.
+  if (hideDeleteButton) return false;
+  // ETP-4479 — a deleteAction-backed delete is safe at any lifecycle stage
+  // (the action reactivates server-side before removing), so it ignores
+  // hideDeleteWhenComplete/isProcessed and only hides for the voided status.
+  if (deleteAction) {
+    return !isNew && recordId && data?.[statusField] !== 'RPVOID';
+  }
   return !isNew && recordId && isDeleteVisibleForRecord({
     record: data,
     statusField,
@@ -1370,7 +1400,7 @@ export function computeBalanceGate({ balanceFooter, children, pendingLineValues,
 function renderDraftModeSaveActions({
   hook, isDirty, flushPendingLines, data, isNew, navigate, windowName,
   ui, onAfterCreate, onAfterSave, token, apiBaseUrl, saveBtnCls,
-  draftMode, blockSaveForBalance, blockCompleteForBalance,
+  draftMode, blockSaveForBalance, blockCompleteForBalance, setShowProcessingModal,
 }) {
   return (
     <>
@@ -1388,17 +1418,23 @@ function renderDraftModeSaveActions({
       <Button size="default" className={saveBtnCls} data-testid="action-save" disabled={hook.isSaving || blockCompleteForBalance || (draftMode.disableWhenEmpty === true && !hook.childrenLoading && hook.children.length === 0)} title={blockCompleteForBalance ? ui('journalUnbalancedCompleteBlocked') : undefined} onClick={async () => {
         if (!(await flushPendingLines())) return;
         if (typeof draftMode.onConfirm === 'function') { draftMode.onConfirm(); return; }
-        const saved = await hook.handleSaveAndProcess(draftMode);
-        if (saved) {
-          if (isNew && onAfterCreate) await onAfterCreate(saved, { token, apiBaseUrl });
-          if (onAfterSave) {
-            navigate(`/${windowName}`, { replace: true, state: { savedRecord: saved, justSaved: saved } });
-          } else if (saved.id && isNew) {
-            hook.primeSaved?.(saved);
-            navigate(`/${windowName}/${saved.id}`, { replace: true, state: { justSaved: saved } });
-          } else if (saved.id) {
-            hook.fetchById?.(saved.id);
+        const showProcessing = Boolean(draftMode.processingModal);
+        if (showProcessing) setShowProcessingModal(true);
+        try {
+          const saved = await hook.handleSaveAndProcess(draftMode);
+          if (saved) {
+            if (isNew && onAfterCreate) await onAfterCreate(saved, { token, apiBaseUrl });
+            if (onAfterSave) {
+              navigate(`/${windowName}`, { replace: true, state: { savedRecord: saved, justSaved: saved } });
+            } else if (saved.id && isNew) {
+              hook.primeSaved?.(saved);
+              navigate(`/${windowName}/${saved.id}`, { replace: true, state: { justSaved: saved } });
+            } else if (saved.id) {
+              hook.fetchById?.(saved.id);
+            }
           }
+        } finally {
+          if (showProcessing) setShowProcessingModal(false);
         }
       }}>
         {hook.isSaving ? <Loader2 className="h-3.5 w-3.5 animate-spin" data-testid="Loader2__fa3275" /> : <Check className="h-3.5 w-3.5" data-testid="Check__fa3275" />}
@@ -1594,8 +1630,14 @@ async function executeDetailProcessImpl(process, paramValues, explicitRows, {
  *   The component always mounts but receives `isActive` so it can lazy-load data
  *   the first time it becomes visible.
  *
- * In both cases the component receives `{ recordId, data, token, apiBaseUrl, api }`
+ * In both cases the component receives `{ recordId, data, token, apiBaseUrl, api, onChange }`
  * plus any keys declared in the optional `props` object.
+ *
+ * `onChange(field, value)` is `hook.handleChange` — it writes straight into the shared
+ * `editing` state (the same state the header form uses), so any edit made by a custom
+ * tab is picked up automatically by the next header save (no per-field persistence
+ * needed, no separate save button required). This prop is additive/optional — custom
+ * tabs that don't use it are unaffected.
  */
 export function hasUnsavedEdits(editing, selected) {
   if (!editing || !selected) return false;
@@ -1610,6 +1652,13 @@ export function dispatchProcessAction(p, { processConfirmModal, setConfirmProces
   if ((p.style === 'ghost-danger' || p.confirmModal) && processConfirmModal) { setConfirmProcess(p); }
   else if (p.params?.some(param => !param.hidden)) { setParamDialogProcess(p); }
   else { handleProcess?.(p); }
+}
+
+export function resolveProcessLabel(p, data) {
+  if (p.labelToggle && data?.[p.labelToggle.field] === p.labelToggle.equals) {
+    return p.labelToggle.label;
+  }
+  return p.label;
 }
 
 function renderProcessConfirmModal(process, Modal, onConfirm, onClose) {
@@ -1661,6 +1710,19 @@ export function DetailView({
   menuActions = [],
   customMenuContent = null,
   hideDeleteWhenComplete = false,
+  // Unconditional "never show header delete" signal (e.g. Amortization) —
+  // wins over deleteAction and the normal lifecycle rules. See
+  // isDeleteButtonVisible above.
+  hideDeleteButton = false,
+  // ETP-4479 — when set, the delete (Trash2) button invokes this NEO action
+  // name via `neoAction.execute(recordId, deleteAction)` instead of a raw
+  // DELETE, and is visible for any status except 'RPVOID'. Used by windows
+  // (e.g. payment-in/out) where a plain header DELETE fails once the record
+  // has ever been referenced (FK constraints) — the action safely reactivates
+  // and removes it server-side. Overrides hideDeleteWhenComplete entirely
+  // when set; when null (default), behavior is unchanged for every window.
+  // hideDeleteButton (above) still wins over this when both are set.
+  deleteAction = null,
   customTabsAfterBottom = false,
   hidePrint = false,
   hideSaveStatuses = [],
@@ -1863,6 +1925,9 @@ export function DetailView({
   const { calloutResult, calloutLoading, executeCallout } = useCallout(entity, { token, apiBaseUrl });
   const docAction = useDocumentAction({ apiBaseUrl, entity, token });
   const neoAction = useNeoAction({ specName: windowName, entityName: entity, apiBaseUrl, token });
+  // ETP-4479 — fall back to the per-window default when the caller didn't
+  // explicitly pass `deleteAction` (see WINDOW_DELETE_ACTIONS above).
+  const effectiveDeleteAction = deleteAction ?? WINDOW_DELETE_ACTIONS[windowName] ?? null;
   const navigate = useNavigate();
   const location = useLocation();
   const [searchParams] = useSearchParams();
@@ -1974,6 +2039,9 @@ export function DetailView({
   const [confirmProcess, setConfirmProcess] = useState(null);
   // showNotes state removed — notes panel is always visible in side-by-side layout
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  // Non-dismissible loading modal shown while a draftMode confirm action with
+  // draftMode.processingModal is in flight (e.g. Verifactu's ~8s GenerateRF).
+  const [showProcessingModal, setShowProcessingModal] = useState(false);
   // Promise-based confirm for line/child deletions; replaces native window.confirm
   // so the dialog matches the styled "Eliminar registro" modal used elsewhere.
   const [pendingDeleteConfirm, setPendingDeleteConfirm] = useState(null);
@@ -2957,6 +3025,7 @@ export function DetailView({
           api={api}
           isActive={isActive}
           onCountChange={updateCustomTabCount}
+          onChange={hook.handleChange}
           {...(ct.props || {})}
           data-testid="TabComponent__fa3275" />
       </div>
@@ -3003,6 +3072,7 @@ export function DetailView({
     hook, isDirty, flushPendingLines, data, isNew, navigate, windowName,
     ui, tMenu, onAfterCreate, onAfterSave, token, apiBaseUrl, saveBtnCls,
     isDocumentReadOnly, isProcessed, draftMode, blockSaveForBalance, blockCompleteForBalance,
+    setShowProcessingModal,
   };
   const balanceFooterEditingLine = mergeLineEdits(lineEdits, selectedLine);
 
@@ -3093,6 +3163,7 @@ export function DetailView({
                     api={api}
                     onProcess={hook.handleProcess}
                     onRefresh={() => hook.fetchById?.(data?.id || recordId)}
+                    onSave={() => hook.handleSave({ silent: true })}
                     data-testid="TopbarRightComponent__fa3275" />
                 );
               })()}
@@ -3119,8 +3190,17 @@ export function DetailView({
                   <Printer className="h-4 w-4" data-testid="Printer__fa3275" />
                 </button>
               )}
-              {/* Delete record — hidden when hideDeleteWhenComplete and status matches or record is processed */}
-              {isDeleteButtonVisible(isNew, recordId, data, statusField, hideDeleteWhenComplete, isProcessed) && (
+              {/* Delete record — hidden unconditionally when hideDeleteButton is set; otherwise shown for a deleteAction-backed delete at any lifecycle stage (except RPVOID), or when hideDeleteWhenComplete/isProcessed rules allow it */}
+              {isDeleteButtonVisible({
+                isNew,
+                recordId,
+                data,
+                statusField,
+                hideDeleteWhenComplete,
+                isProcessed,
+                deleteAction: effectiveDeleteAction,
+                hideDeleteButton,
+              }) && (
                 <button
                   onClick={() => setShowDeleteConfirm(true)}
                   className={`${sqBtnSize} flex items-center justify-center rounded-lg border border-red-200 text-red-500 hover:bg-red-50 hover:text-red-600 transition-colors`}
@@ -3302,7 +3382,7 @@ export function DetailView({
                       }}
                       data-testid="Button__fa3275">
                       {p.style === 'ghost-danger' && <Undo2 size={16} className="mr-1 text-[#D50B3E]" data-testid="Undo2__fa3275" />}
-                      {tMenu(p.label)}
+                      {tMenu(resolveProcessLabel(p, data))}
                     </Button>
                   );
                 })}
@@ -4475,6 +4555,28 @@ export function DetailView({
               data-testid="action-delete-confirm"
               onClick={async () => {
                 setShowDeleteConfirm(false);
+                // ETP-4479 — deleteAction-backed windows go through the same
+                // `neoAction.execute(recordId, actionName)` mechanism the
+                // detail-view "more" menu already uses for NEO actions
+                // (see runNeoMenuAction above), mirroring the URL convention
+                // PaymentHeaderTableBase's row-level delete relies on
+                // (POST {apiBaseUrl}/{entity}/{id}/action/{actionName}).
+                if (effectiveDeleteAction) {
+                  const currentId = data?.id || recordId;
+                  const result = await neoAction.execute(currentId, effectiveDeleteAction);
+                  if (result.success) {
+                    // Reuse the per-action i18n key convention (`${action}Completed`,
+                    // e.g. eTPRRemovePaymentCompleted) when translated; otherwise
+                    // fall back to the generic delete-success message.
+                    const key = `${effectiveDeleteAction}Completed`;
+                    const msg = ui(key);
+                    toast.success(msg !== key ? msg : ui('recordDeleted'));
+                    navigate(`/${windowName}`);
+                  } else {
+                    toast.error(result.message || ui('actionFailed'));
+                  }
+                  return;
+                }
                 await hook.handleDelete();
                 navigate(`/${windowName}`);
               }}
@@ -4567,6 +4669,24 @@ export function DetailView({
               {ui('delete')}
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      <Dialog
+        open={showProcessingModal && Boolean(draftMode?.processingModal)}
+        onOpenChange={() => {}}
+        data-testid="Dialog__verifactu-processing">
+        <DialogContent
+          className="max-w-sm [&>button]:hidden"
+          onEscapeKeyDown={(e) => e.preventDefault()}
+          onPointerDownOutside={(e) => e.preventDefault()}
+          onInteractOutside={(e) => e.preventDefault()}
+          data-testid="DialogContent__verifactu-processing">
+          <div className="py-6 text-center">
+            <Loader2 className="h-8 w-8 animate-spin mx-auto text-primary" data-testid="Loader2__verifactu-processing" />
+            <p className="text-sm font-medium mt-4">
+              {ui(draftMode?.processingModal?.body) || draftMode?.processingModal?.body}
+            </p>
+          </div>
         </DialogContent>
       </Dialog>
       {secondaryTabs.map((st, idx) => {

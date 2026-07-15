@@ -62,7 +62,7 @@ The Assets window should let a finance user register fixed assets, define how ea
 4. Switch calculation type between percentage-based and time-based setups and confirm the window swaps the expected inputs:
    - percentage path shows **Annual Depreciation %** (label: `assetsAnnualDepreciationLabel`)
    - time path shows **Amortize** and usable-life inputs
-4a. With **Depreciate** enabled, scroll to the last section and confirm the **Dimensiones contables** group appears **after Dates**, showing 8 selectors in a 4-column grid: Project, Cost Center, Business Partner, 1st Dimension, 2nd Dimension, Sales Region, Activity, Sales Campaign. Open a selector (e.g. Cost Center) and confirm it returns options. Select a value, save and reopen the asset — the value persists. Disable **Depreciate** and confirm the dimensions section disappears.
+4a. With **Depreciate** enabled, scroll to the last section and confirm the **Dimensiones contables** group appears **after Dates**, showing 4 selectors in a 4-column grid: **Project**, **Cost Center**, **Business Partner** (Contacto), and **Product**. Open a selector (e.g. Cost Center or Product) and confirm it returns options. Select a value, save and reopen the asset — the value persists. Disable **Depreciate** and confirm the dimensions section disappears.
 5. Save an asset with depreciation enabled and confirm the **Create Amortization** action is available.
 6. Trigger **Create Amortization** against a live backend and confirm the amortization plan tab refreshes and shows ordered schedule rows. Confirm that line status badges read "Pendiente" (not "Planificado") and "Confirmado" (not "Procesado").
 7. Review the right sidebar and confirm it shows four cards in order: Valor actual → Valor residual → Depreciación planificada → Depreciado %. Confirm that "Progreso de depreciación" is absent. Confirm that the sidebar ends above the tabs row — tabs (Plan de amortización, Adjuntos) span the full width below the form area.
@@ -156,8 +156,8 @@ Changes landed in `feature/ETP-4103`. Covers visual polish, full-form restructur
 - Group 2 (Financial Info): currency, assetValue, residualAssetValue, depreciationAmt, previouslyDepreciatedAmt — moved **inside** Group 3 (Depreciation Config). It only appears when `depreciate=true`. When depreciation is disabled, only the ToggleCard and a disabled hint text are shown.
 - Group 3 (Depreciation Config): ToggleCards + conditional depreciation fields. Financial Info (Group 2) is nested here, visible only when `depreciate=true`. The `ToggleCard` switch now renders the shared `PillToggle` component (`@/components/PillToggle`) instead of an inline `<button role="switch">` — same size/colors/behavior (disabled while not editing), deduped with the match-rule footer and grid toggles. No behavior change.
 - Group 4 (Dates): still visible only when `depreciate=true`.
-- Group 5 (Accounting dimensions): **last section**, visible only when `depreciate=true`. Title key `assetsGroupDimensionsTitle` ("Dimensiones contables" / "Accounting dimensions"). Renders 8 dimension selectors in a 4-column grid (`cols={4}`) via `EntityForm`: Project (C_Project_ID), Cost Center (EM_Etadas_Costcenter_ID), Business Partner (C_BPartner_ID), 1st Dimension (EM_Etadas_User1_ID), 2nd Dimension (EM_Etadas_User2_ID), Sales Region (EM_Etadas_Salesregion_ID), Activity (EM_Etadas_C_Activity_ID), Sales Campaign (EM_Etadas_Campaign_ID). Placed after Dates because it is optional. The grid wrapper forces white backgrounds on selectors (`[&_button[role=combobox]]:!bg-white [&_input]:!bg-white`).
-- All header fields set to `form: false` in `decisions.json` — the standard `EntityForm` renders nothing. `hideFormCard: true` hides the now-empty card. The 8 dimension fields are set to `visibility: editable, form: false` in `decisions.json` so they are registered in the NEO spec (`ETGO_SF_FIELD`) — required for the `/assets/selectors/<column>` endpoints to return options — without being rendered by the standard form. `project` was previously `discarded` and is now re-enabled.
+- Group 5 (Accounting dimensions): **last section**, visible only when `depreciate=true`. Title key `assetsGroupDimensionsTitle` ("Dimensiones contables" / "Accounting dimensions"). Renders the dimension selectors in a 4-column grid (`cols={4}`) via `EntityForm`, placed after Dates because it is optional. The grid wrapper forces white backgrounds on selectors (`[&_button[role=combobox]]:!bg-white [&_input]:!bg-white`). _(Superseded by ETP-4429: the selector set is now Project, Cost Center, Business Partner, and Product — see the ETP-4429 section below.)_
+- All header fields set to `form: false` in `decisions.json` — the standard `EntityForm` renders nothing. `hideFormCard: true` hides the now-empty card. The dimension fields are set to `visibility: editable, form: false` in `decisions.json` so they are registered in the NEO spec (`ETGO_SF_FIELD`) — required for the `/assets/selectors/<column>` endpoints to return options — without being rendered by the standard form. `project` was previously `discarded` and is now re-enabled.
 - Dimension labels resolved via `window.labelOverrides` (es_ES + en_US) in `decisions.json`, mapping each dimension column (e.g. `EM_Etadas_Costcenter_ID` → "Centro de coste" / "Cost Center"); `EntityForm` resolves them through `t(column)` against `api.labelOverrides`.
 - `AssetsAmortizationPanel` moved from `formFooter` to a secondary tab — declared via `window.customPanelTabs` in `decisions.json`; appears as the first secondary tab "Plan de amortización" (before Attachments); reports line count via `onCountChange` for the tab badge.
 - `hideFormCard` prop added to `DetailView.jsx` (default `false`) — when `true`, adds a `hidden` class to the form card wrapper; safe for all other windows because the default is `false`.
@@ -463,3 +463,22 @@ fetched lines, formatted with `formatCurrency(orgCurrency, ...)`. This is a hand
   normal `text-foreground` color.
 
 - **File changed:** `tools/app-shell/src/windows/custom/assets/AssetsAmortizationPanel.jsx`
+
+## ETP-4429 — Product added to accounting dimensions, dimension set trimmed
+
+This iteration adjusts the **Accounting dimensions** group (Group 5) in the Depreciation Setup form. Changes are declared in `artifacts/assets/decisions.json` and rendered by `AssetsDetailPanel.jsx`.
+
+### Product added to the dimensions panel
+
+- A **Product** selector (column `M_Product_ID`, `reference: 'Product'`) is added to the `dimensionFields` array in `AssetsDetailPanel.jsx` and now loads and selects product data correctly through the `/assets/selectors/M_Product_ID` endpoint.
+- In `decisions.json`, the `product` field is classified `visibility: "editable", form: false` so it is registered in the NEO spec (`ETGO_SF_FIELD`) — powering the selector endpoint — without being rendered by the standard form. `labelOverrides` maps `M_Product_ID` → "Producto" (es_ES) / "Product" (en_US).
+
+### Dimension set trimmed to four
+
+- The Accounting dimensions group now shows exactly four selectors, in this order: **Project** (`C_Project_ID`), **Cost Center** (`EM_Etadas_Costcenter_ID`), **Business Partner** / Contacto (`C_BPartner_ID`), and **Product** (`M_Product_ID`).
+- The previously-shown dimensions — **1st Dimension** (`eTADASUser1`), **2nd Dimension** (`eTADASUser2`), **Sales Region** (`eTADASSalesRegion`), **Activity** (`eTADASActivity`), and **Sales Campaign** (`eTADASSalesCampaign`) — are `visibility: "discarded"` in `decisions.json` and no longer appear.
+
+### Manual verification (ETP-4429)
+
+1. Open an asset with **Depreciate** enabled and scroll to **Dimensiones contables**. Confirm exactly four selectors are shown: Project, Cost Center, Business Partner, Product — no 1st/2nd Dimension, Sales Region, Activity, or Sales Campaign.
+2. Open the **Product** selector and confirm it returns product options. Select a product, save, and reopen the asset — confirm the product value persists.

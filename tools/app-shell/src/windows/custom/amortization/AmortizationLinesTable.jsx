@@ -17,14 +17,9 @@ const CORE_FIELDS = [
 ];
 
 const DIMENSION_FIELDS = [
-  { key: 'project', column: 'C_Project_ID', type: 'selector', reference: 'Project', inputMode: 'selector', readOnlyLogic: (r) => r['posted'] === 'Y', hidden: true },
+  { key: 'project', column: 'C_Project_ID', type: 'selector', reference: 'Project', inputMode: 'selector', readOnlyLogic: (r) => r['posted'] === 'Y' },
   { key: 'costcenter', column: 'C_Costcenter_ID', type: 'selector', reference: 'Costcenter', inputMode: 'selector', readOnlyLogic: (r) => r['posted'] === 'Y' },
   { key: 'eTADASBpartner', column: 'EM_Etadas_C_Bpartner_ID', type: 'selector', reference: 'BPartner', inputMode: 'selector', readOnlyLogic: (r) => r['posted'] === 'Y' },
-  { key: 'stDimension', column: 'User1_ID', type: 'selector', reference: 'User1', inputMode: 'selector', readOnlyLogic: (r) => r['posted'] === 'Y' },
-  { key: 'ndDimension', column: 'User2_ID', type: 'selector', reference: 'User2', inputMode: 'selector', readOnlyLogic: (r) => r['posted'] === 'Y' },
-  { key: 'eTADASSalesRegion', column: 'EM_Etadas_Salesregion_ID', type: 'selector', reference: 'SalesRegion', inputMode: 'selector', readOnlyLogic: (r) => r['posted'] === 'Y' },
-  { key: 'eTADASActivity', column: 'EM_Etadas_C_Activity_ID', type: 'selector', reference: 'Activity', inputMode: 'selector', readOnlyLogic: (r) => r['posted'] === 'Y' },
-  { key: 'eTADASSalesCampaign', column: 'EM_Etadas_Campaign_ID', type: 'selector', reference: 'Campaign', inputMode: 'selector', readOnlyLogic: (r) => r['posted'] === 'Y' },
 ];
 
 const VISIBLE_DIMENSION_FIELDS = DIMENSION_FIELDS.filter(f => !f.hidden);
@@ -93,7 +88,7 @@ function DimBadge({ label, value }) {
   );
 }
 
-function DimSummary({ line, onClick, labelOverrides }) {
+function DimSummary({ line, onClick, processed, labelOverrides }) {
   const ui = useUI();
   const t = useLabel(labelOverrides);
   const org = line['organization$_identifier'];
@@ -107,6 +102,9 @@ function DimSummary({ line, onClick, labelOverrides }) {
   filled.forEach(d => badges.push({ label: t(d.column), value: d.value }));
 
   if (badges.length === 0) {
+    // Processed + no dimensions: the "+ Add dimensions" trigger would only reveal
+    // disabled fields, so hide it entirely. Editable docs still show the affordance.
+    if (processed) return null;
     return (
       <button
         onClick={onClick}
@@ -383,19 +381,20 @@ export default function AmortizationLinesTable({
         {/* header — matches inlineEditable: sticky top-0 z-20 bg-white */}
         <thead className="sticky top-0 z-20 bg-white">
           <tr className="border-b border-border/40">
-            <th className="h-10 w-10 px-2 align-middle" />
-            <th className="h-10 w-10 px-2 align-middle">
-              <div className="flex items-center justify-center">
-                <Checkbox
-                  checked={allSelected}
-                  indeterminate={someSelected}
-                  onChange={toggleAll}
-                  disabled={isReadOnly}
-                  aria-label={ui('selectAll')}
-                  data-testid="Checkbox__fecdcf" />
-              </div>
+            <th className="h-10 w-10 p-2 align-middle" />
+            <th className="h-10 w-10 px-3 pr-0 align-middle">
+              <Checkbox
+                checked={allSelected}
+                indeterminate={someSelected}
+                onChange={toggleAll}
+                disabled={isReadOnly}
+                aria-label={ui('selectAll')}
+                data-testid="Checkbox__fecdcf" />
             </th>
-            <th className="h-10 w-64 px-3 text-left align-middle text-xs leading-4 font-semibold text-text-primary tracking-normal">
+            {/* Flexible column (no fixed width) — mirrors financial-account's
+                data columns so it absorbs the table's surplus width, keeping the
+                leading chevron/checkbox cells at their content width (~52px). */}
+            <th className="h-10 px-3 text-left align-middle text-xs leading-4 font-semibold text-text-primary tracking-normal">
               {t('A_Asset_ID')}
             </th>
             <th className="h-10 w-36 px-3 text-right align-middle text-xs leading-4 font-semibold text-text-primary tracking-normal">
@@ -437,31 +436,30 @@ export default function AmortizationLinesTable({
                       className={`relative transition-colors h-12 group/row border-b border-border/30 cursor-pointer ${isSelected ? 'bg-primary/5' : 'hover:bg-muted/50'}`}
                       onClick={() => !isEditing && setExpandedId(isExpanded ? null : line.id)}
                     >
-                      {/* expand toggle — circular icon button */}
-                      <td className="px-2 text-center align-middle">
+                      {/* expand toggle — circular icon button (matches financial-account MovementsTable) */}
+                      <td className="w-10 p-2 align-middle">
                         <button
                           type="button"
                           onClick={(e) => { e.stopPropagation(); if (!isEditing) setExpandedId(isExpanded ? null : line.id); }}
-                          className="inline-flex h-6 w-6 items-center justify-center rounded-full border border-[#D1D4DB] bg-white shadow-[0px_1px_2px_rgba(18,18,23,0.05)] transition-colors hover:bg-[#F5F7F9]"
+                          className="flex h-7 w-7 items-center justify-center rounded-full border border-[#D1D4DB] bg-white text-[#6C6C89] transition-transform hover:bg-[#F5F7F9] hover:text-[#121217]"
+                          style={{ transform: isExpanded ? 'rotate(180deg)' : undefined }}
                           aria-label={ui(isExpanded ? 'collapse' : 'expand')}
                           aria-expanded={isExpanded}
                         >
                           <ChevronDown
-                            className={`h-5 w-5 text-[#828FA3] transition-transform duration-150 ${isExpanded ? 'rotate-180' : ''}`}
+                            className="h-4 w-4"
                             data-testid="ChevronDown__fecdcf" />
                         </button>
                       </td>
 
                       {/* select row */}
-                      <td className="px-2 align-middle" onClick={e => e.stopPropagation()}>
-                        <div className="flex items-center justify-center">
-                          <Checkbox
-                            checked={isSelected}
-                            onChange={() => !isReadOnly && toggleRow(line.id)}
-                            disabled={isReadOnly}
-                            aria-label={ui('selectRow')}
-                            data-testid="Checkbox__fecdcf" />
-                        </div>
+                      <td className="px-3 pr-0 align-middle" onClick={e => e.stopPropagation()}>
+                        <Checkbox
+                          checked={isSelected}
+                          onChange={() => !isReadOnly && toggleRow(line.id)}
+                          disabled={isReadOnly}
+                          aria-label={ui('selectRow')}
+                          data-testid="Checkbox__fecdcf" />
                       </td>
 
                       {/* asset */}
@@ -531,6 +529,7 @@ export default function AmortizationLinesTable({
                         <DimSummary
                           line={line}
                           onClick={() => setExpandedId(isExpanded ? null : line.id)}
+                          processed={processed}
                           labelOverrides={api?.labelOverrides}
                           data-testid="DimSummary__fecdcf" />
                       </td>
@@ -590,8 +589,8 @@ export default function AmortizationLinesTable({
               {/* ── inline add-line draft row (Sales Order InlineAddRow pattern) ── */}
               {addingLine && (
                 <tr ref={addRowRef} data-testid="inline-add-row" className="bg-blue-50/50 border-t-2 border-primary/20">
-                  <td className="px-2" aria-hidden="true" />
-                  <td className="px-2" aria-hidden="true" />
+                  <td className="w-10 p-2 align-middle" aria-hidden="true" />
+                  <td className="px-3 pr-0" aria-hidden="true" />
                   <td className="py-1 px-2 align-middle">
                     <SelectorInput
                       entityName="lines"

@@ -338,6 +338,82 @@ describe('usePaymentBalance', () => {
     });
   });
 
+  describe('onLineUseChange / onLineUseBlur (typed line amount)', () => {
+    it('onLineUseChange updates only useStr, leaving use unclamped until blur', () => {
+      const { result } = setup({ total: 1000, dir: 'in', sources: [CREDIT] });
+      act(() => result.current.onLineUseChange('c1', '150'));
+      const line = result.current.lines.find(l => l.id === 'c1');
+      expect(line.useStr).toBe('150');
+      expect(line.use).toBe(0); // untouched until blur
+    });
+
+    it('onLineUseBlur parses, clamps to avail, and reformats useStr', () => {
+      const { result } = setup({ total: 1000, dir: 'in', sources: [CREDIT] }); // avail 200
+      act(() => result.current.onLineUseChange('c1', '9999'));
+      act(() => result.current.onLineUseBlur('c1'));
+      const line = result.current.lines.find(l => l.id === 'c1');
+      expect(line.use).toBe(200); // clamped to avail
+      expect(line.useStr).toBe('200,00');
+    });
+
+    it('onLineUseBlur treats a blank typed value as 0', () => {
+      const { result } = setup({ total: 1000, dir: 'in', sources: [CREDIT] });
+      act(() => result.current.onLineUseChange('c1', ''));
+      act(() => result.current.onLineUseBlur('c1'));
+      const line = result.current.lines.find(l => l.id === 'c1');
+      expect(line.use).toBe(0);
+      expect(line.useStr).toBe('0,00');
+    });
+
+    it('onLineUseBlur on one line leaves a sibling line untouched', () => {
+      const { result } = setup({ total: 1000, dir: 'in', sources: [CREDIT, ABONO] });
+      act(() => result.current.toggleLine('a1')); // a1 use 500
+      act(() => result.current.onLineUseChange('c1', '150'));
+      act(() => result.current.onLineUseBlur('c1'));
+      const c = result.current.lines.find(l => l.id === 'c1');
+      const a = result.current.lines.find(l => l.id === 'a1');
+      expect(c.use).toBe(150);
+      expect(a.use).toBe(500); // untouched by the map's false arm
+      expect(a.sel).toBe(true);
+    });
+  });
+
+  describe('usedSources prefill (edit mode)', () => {
+    // Re-opening a draft passes `usedSources` (the credits/abonos the payment
+    // already consumes) so `findUsedSource` can preselect the matching line.
+    it('preselects a credit line matching usedSources by paymentId', () => {
+      const { result } = setup({
+        total: 1000, dir: 'in', sources: [CREDIT],
+        usedSources: [{ kind: 'credit', paymentId: 'p1', use: 150 }],
+      });
+      const line = result.current.lines.find(l => l.id === 'c1');
+      expect(line.sel).toBe(true);
+      expect(line.use).toBe(150);
+      expect(line.useStr).toBe('150,00');
+    });
+
+    it('preselects an abono line matching usedSources by psdId', () => {
+      const { result } = setup({
+        total: 1000, dir: 'in', sources: [ABONO],
+        usedSources: [{ kind: 'abono', psdId: 's1', use: 300 }],
+      });
+      const line = result.current.lines.find(l => l.id === 'a1');
+      expect(line.sel).toBe(true);
+      expect(line.use).toBe(300);
+      expect(line.useStr).toBe('300,00');
+      expect(result.current.usedCredit).toBe(300);
+    });
+
+    it('does not preselect a line when usedSources kind/id do not match any source', () => {
+      const { result } = setup({
+        total: 1000, dir: 'in', sources: [CREDIT, ABONO],
+        usedSources: [{ kind: 'abono', psdId: 'does-not-exist', use: 100 }],
+      });
+      expect(result.current.lines.every(l => l.sel === false)).toBe(true);
+      expect(result.current.usedCredit).toBe(0);
+    });
+  });
+
   it('exposes the STEP constant', () => {
     const { result } = setup({ total: 1000, dir: 'in', sources: [] });
     expect(result.current.STEP).toBe(100);

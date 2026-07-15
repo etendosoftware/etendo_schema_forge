@@ -2807,6 +2807,59 @@
         }
       ]
     },
+    "2d2df7674092658833db9f84036666e408ae740dae9ad74499a5e98e8ef2e3e8": {
+      "checksum": "51addabccb8466441e2e04efc9d2507f6aa9713590abd3cdf9a65b35cebec099",
+      "params": [
+        [
+          "CBFE484519794465B6BED250F7FB26AF",
+          "DBCF65339D0F4403822A8A7928533D6B"
+        ]
+      ],
+      "rows": [
+        {
+          "ad_reference_id": "DBCF65339D0F4403822A8A7928533D6B",
+          "name": "Closing Entry",
+          "name_es": "Asiento de cierre",
+          "value": "C"
+        },
+        {
+          "ad_reference_id": "DBCF65339D0F4403822A8A7928533D6B",
+          "name": "Divide Up",
+          "name_es": "Reparto de reservas",
+          "value": "D"
+        },
+        {
+          "ad_reference_id": "DBCF65339D0F4403822A8A7928533D6B",
+          "name": "Income Statement",
+          "name_es": "Entrada de regularización",
+          "value": "R"
+        },
+        {
+          "ad_reference_id": "DBCF65339D0F4403822A8A7928533D6B",
+          "name": "Opening Entry",
+          "name_es": "Asiento de apertura",
+          "value": "O"
+        },
+        {
+          "ad_reference_id": "DBCF65339D0F4403822A8A7928533D6B",
+          "name": "Regular Entry",
+          "name_es": "Asiento normal",
+          "value": "N"
+        },
+        {
+          "ad_reference_id": "CBFE484519794465B6BED250F7FB26AF",
+          "name": "Year Closed",
+          "name_es": "Año cerrado",
+          "value": "C"
+        },
+        {
+          "ad_reference_id": "CBFE484519794465B6BED250F7FB26AF",
+          "name": "Year Not Closed",
+          "name_es": "Año sin cerrar",
+          "value": "O"
+        }
+      ]
+    },
     "31cdd367c4f332dcf5bc263e8bc275d2e6f3b31220f299b95278c74016e8d66f": {
       "checksum": "9c4f7990b5f9491d73df4988e9da0e45900b1421e5cc69d114b56474897908ea",
       "params": [
@@ -8256,6 +8309,59 @@
           "name": "VAT",
           "name_es": "IVA",
           "value": "VAT"
+        }
+      ]
+    },
+    "a5a4e7ede94fc476d62df55563fffd12e01cbb0dc9af964eb9bd981eaacec7c1": {
+      "checksum": "3405f280c130b18ea250725480d18a7f9d173f0d13b8662db2fa2be3394c10a9",
+      "params": [
+        [
+          "115",
+          "F6A9745024274BD48686CAC8A063AA3E"
+        ]
+      ],
+      "rows": [
+        {
+          "ad_reference_id": "115",
+          "name": "Adjustment Period",
+          "name_es": "Cambio periodo",
+          "value": "A"
+        },
+        {
+          "ad_reference_id": "F6A9745024274BD48686CAC8A063AA3E",
+          "name": "All Closed",
+          "name_es": "Todos cerrados",
+          "value": "C"
+        },
+        {
+          "ad_reference_id": "F6A9745024274BD48686CAC8A063AA3E",
+          "name": "All Never Opened",
+          "name_es": "Ningún periodo abierto.",
+          "value": "N"
+        },
+        {
+          "ad_reference_id": "F6A9745024274BD48686CAC8A063AA3E",
+          "name": "All Opened",
+          "name_es": "Todos abiertos",
+          "value": "O"
+        },
+        {
+          "ad_reference_id": "F6A9745024274BD48686CAC8A063AA3E",
+          "name": "All Permanently Closed",
+          "name_es": "Todos permanentemente cerrados",
+          "value": "P"
+        },
+        {
+          "ad_reference_id": "F6A9745024274BD48686CAC8A063AA3E",
+          "name": "Mixed",
+          "name_es": "Mixto",
+          "value": "M"
+        },
+        {
+          "ad_reference_id": "115",
+          "name": "Standard Calendar Period",
+          "name_es": "Calendario Periodo estándar",
+          "value": "S"
         }
       ]
     },

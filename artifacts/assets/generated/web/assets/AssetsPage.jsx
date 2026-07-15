@@ -107,6 +107,14 @@ export const api = {
     },
     {
       "entity": "assets",
+      "field": "product",
+      "column": "M_Product_ID",
+      "reference": "Product",
+      "inputMode": "search",
+      "url": "/sws/neo/assets/assets/selectors/product"
+    },
+    {
+      "entity": "assets",
       "field": "project",
       "column": "C_Project_ID",
       "reference": "Project",
@@ -123,51 +131,11 @@ export const api = {
     },
     {
       "entity": "assets",
-      "field": "eTADASActivity",
-      "column": "EM_Etadas_C_Activity_ID",
-      "reference": "Activity",
-      "inputMode": "selector",
-      "url": "/sws/neo/assets/assets/selectors/eTADASActivity"
-    },
-    {
-      "entity": "assets",
       "field": "eTADASCostCenter",
       "column": "EM_Etadas_Costcenter_ID",
       "reference": "Costcenter",
       "inputMode": "selector",
       "url": "/sws/neo/assets/assets/selectors/eTADASCostCenter"
-    },
-    {
-      "entity": "assets",
-      "field": "eTADASSalesCampaign",
-      "column": "EM_Etadas_Campaign_ID",
-      "reference": "Campaign",
-      "inputMode": "selector",
-      "url": "/sws/neo/assets/assets/selectors/eTADASSalesCampaign"
-    },
-    {
-      "entity": "assets",
-      "field": "eTADASSalesRegion",
-      "column": "EM_Etadas_Salesregion_ID",
-      "reference": "SalesRegion",
-      "inputMode": "selector",
-      "url": "/sws/neo/assets/assets/selectors/eTADASSalesRegion"
-    },
-    {
-      "entity": "assets",
-      "field": "eTADASUser1",
-      "column": "EM_Etadas_User1_ID",
-      "reference": "User1",
-      "inputMode": "selector",
-      "url": "/sws/neo/assets/assets/selectors/eTADASUser1"
-    },
-    {
-      "entity": "assets",
-      "field": "eTADASUser2",
-      "column": "EM_Etadas_User2_ID",
-      "reference": "User2",
-      "inputMode": "selector",
-      "url": "/sws/neo/assets/assets/selectors/eTADASUser2"
     },
     {
       "entity": "amortizationLine",
@@ -254,7 +222,8 @@ export const api = {
       "EM_Etadas_Salesregion_ID": "Región de ventas",
       "EM_Etadas_C_Activity_ID": "Actividad",
       "EM_Etadas_Campaign_ID": "Campaña",
-      "EM_Etgo_Amortization_Status": "Estado de amortización"
+      "EM_Etgo_Amortization_Status": "Estado de amortización",
+      "M_Product_ID": "Producto"
     },
     "en_US": {
       "C_Project_ID": "Project",
@@ -265,7 +234,8 @@ export const api = {
       "EM_Etadas_Salesregion_ID": "Sales Region",
       "EM_Etadas_C_Activity_ID": "Activity",
       "EM_Etadas_Campaign_ID": "Sales Campaign",
-      "EM_Etgo_Amortization_Status": "Amortization Status"
+      "EM_Etgo_Amortization_Status": "Amortization Status",
+      "M_Product_ID": "Product"
     }
   }
 };

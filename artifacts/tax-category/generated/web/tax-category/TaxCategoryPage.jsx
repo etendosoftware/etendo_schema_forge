@@ -49,7 +49,7 @@ export const api = {
       "post": true,
       "put": true,
       "patch": true,
-      "delete": true,
+      "delete": false,
       "listUrl": "/sws/neo/tax-category/taxCategory",
       "detailUrl": "/sws/neo/tax-category/taxCategory/{id}",
       "supportedFilters": [
@@ -114,6 +114,7 @@ export default function TaxCategoryPage({ windowName, recordId, ...props }) {
       breadcrumb={breadcrumb}
       api={api}
       hidePrint
+      hideCreate
       hideMoreMenu
       rowQuickActions={{}}
       {...props}
