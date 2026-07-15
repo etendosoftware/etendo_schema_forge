@@ -16,12 +16,9 @@ const ALLOWED_DOC_EXTENSIONS = ['pdf', 'csv', 'txt', 'xlsx', 'docx'];
 const ALLOWED_DOC_MIME_TYPES = new Set([
   'application/pdf',
   'text/csv',
-  'application/csv',
   'text/plain',
   'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', // .xlsx
-  'application/vnd.ms-excel',
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document', // .docx
-  'application/msword',
 ]);
 
 // Real validation for files coming from the picker or drag-and-drop — the
