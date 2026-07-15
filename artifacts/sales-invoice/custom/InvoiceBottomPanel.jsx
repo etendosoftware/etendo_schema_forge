@@ -39,8 +39,11 @@ function InvoiceLinesEmptyState({ data, onAddLine, canAddLine = true, recordId, 
 
   useEffect(() => {
     if (forceOpen) {
-      if (pendingModal.current === 'order') { setShowImportOrderModal(true); }
-      else if (pendingModal.current === 'return') { setShowImportReturnModal(true); }
+      // forceOpen carries the modal type across the save-navigate remount of a
+      // NEW record (pendingModal is reset on remount, so it can't be trusted then).
+      const type = ['shipment', 'order', 'return'].includes(forceOpen) ? forceOpen : pendingModal.current;
+      if (type === 'order') { setShowImportOrderModal(true); }
+      else if (type === 'return') { setShowImportReturnModal(true); }
       else { setShowImportModal(true); }
       onForceOpenHandled?.();
     }
@@ -48,19 +51,19 @@ function InvoiceLinesEmptyState({ data, onAddLine, canAddLine = true, recordId, 
 
   const handleImportClick = async () => {
     pendingModal.current = 'shipment';
-    if (onSave) { const ok = await onSave(); if (!ok) return; }
+    if (onSave) { const ok = await onSave('shipment'); if (!ok) return; }
     setShowImportModal(true);
   };
 
   const handleImportOrderClick = async () => {
     pendingModal.current = 'order';
-    if (onSave) { const ok = await onSave(); if (!ok) return; }
+    if (onSave) { const ok = await onSave('order'); if (!ok) return; }
     setShowImportOrderModal(true);
   };
 
   const handleImportReturnClick = async () => {
     pendingModal.current = 'return';
-    if (onSave) { const ok = await onSave(); if (!ok) return; }
+    if (onSave) { const ok = await onSave('return'); if (!ok) return; }
     setShowImportReturnModal(true);
   };
 
@@ -168,8 +171,11 @@ const InvoiceLineActions = forwardRef(function InvoiceLineActions(
 
   useEffect(() => {
     if (forceOpen) {
-      if (pendingModal.current === 'order') { setShowImportOrderModal(true); }
-      else if (pendingModal.current === 'return') { setShowImportReturnModal(true); }
+      // forceOpen carries the modal type across the save-navigate remount of a
+      // NEW record (pendingModal is reset on remount, so it can't be trusted then).
+      const type = ['shipment', 'order', 'return'].includes(forceOpen) ? forceOpen : pendingModal.current;
+      if (type === 'order') { setShowImportOrderModal(true); }
+      else if (type === 'return') { setShowImportReturnModal(true); }
       else { setShowImportModal(true); }
       onForceOpenHandled?.();
     }
@@ -177,19 +183,19 @@ const InvoiceLineActions = forwardRef(function InvoiceLineActions(
 
   const openModal = async () => {
     pendingModal.current = 'shipment';
-    if (onSave) { const ok = await onSave(); if (!ok) return; }
+    if (onSave) { const ok = await onSave('shipment'); if (!ok) return; }
     setShowImportModal(true);
   };
 
   const openOrderModal = async () => {
     pendingModal.current = 'order';
-    if (onSave) { const ok = await onSave(); if (!ok) return; }
+    if (onSave) { const ok = await onSave('order'); if (!ok) return; }
     setShowImportOrderModal(true);
   };
 
   const openReturnModal = async () => {
     pendingModal.current = 'return';
-    if (onSave) { const ok = await onSave(); if (!ok) return; }
+    if (onSave) { const ok = await onSave('return'); if (!ok) return; }
     setShowImportReturnModal(true);
   };
 
