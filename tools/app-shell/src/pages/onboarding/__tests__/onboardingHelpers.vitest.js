@@ -286,6 +286,10 @@ describe('onboarding state helpers', () => {
     expect(isProfileStepValid({ fullName: 'QA User', countryCode: 'ES' })).toBe(true);
     expect(isProfileStepValid({ fullName: ' ', countryCode: 'ES' })).toBe(false);
     expect(isCompanyStepValid({ clientName: 'QA Company', fiscalIdValue: 'B12345678' })).toBe(true);
-    expect(isCompanyStepValid({ clientName: 'QA Company', fiscalIdValue: ' ' })).toBe(false);
+    // Tax ID is optional — an empty fiscalId must NOT block the step.
+    expect(isCompanyStepValid({ clientName: 'QA Company', fiscalIdValue: ' ' })).toBe(true);
+    expect(isCompanyStepValid({ clientName: 'QA Company' })).toBe(true);
+    // Company name is still required.
+    expect(isCompanyStepValid({ clientName: ' ', fiscalIdValue: 'B12345678' })).toBe(false);
   });
 });

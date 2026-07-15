@@ -178,6 +178,15 @@
     {
       "name": "warehouse",
       "windowId": "139"
+    },
+    {
+      "name": "fiscal-calendar",
+      "windowId": "117"
+    },
+    {
+      "name": "end-year-close",
+      "windowId": "B5673F73F613496C8BEA22FB55E4E1E4",
+      "menuName": "End Year Close"
     }
   ]
 }

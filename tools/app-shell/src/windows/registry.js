@@ -59,8 +59,8 @@ const windowLoaders = {
   'conversion-rate-downloader-log': () => import('@generated/conversion-rate-downloader-log/generated/web/conversion-rate-downloader-log/index.jsx'),
   'amortization': () => import('@generated/amortization/generated/web/amortization/index.jsx'),
   'simple-g-l-journal': () => import('@generated/simple-g-l-journal/generated/web/simple-g-l-journal/index.jsx'),
-  'open-close-period-control': () => import('@generated/open-close-period-control/generated/web/open-close-period-control/index.jsx'),
-  'fiscal-calendar': () => import('@generated/fiscal-calendar/generated/web/fiscal-calendar/index.jsx'),
+  'open-close-period-control': () => import('@/windows/custom/open-close-period-control-redirect/index.jsx'),
+  'fiscal-calendar': () => import('@/windows/custom/fiscal-calendar-redirect/index.jsx'),
 };
 
 /**
@@ -144,6 +144,7 @@ export const apiOnlyWindows = new Set([
  */
 const customLoaders = {
   // Auto-registered by pipeline when layoutType: "custom"
+  'calendar': () => import('./custom/calendar/index.jsx'),
   'fiscal-config': () => import('./custom/fiscal-config/index.jsx'),
   'fiscal-monitor': () => import('./custom/fiscal-monitor/index.jsx'),
   'fiscal-models': () => import('./custom/fiscal-models/index.jsx'),

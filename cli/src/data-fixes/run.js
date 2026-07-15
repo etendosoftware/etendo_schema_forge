@@ -36,6 +36,7 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { createDbPool, closePool } from '../db.js';
 import { parseFix, parseFixTimestamp, inlineParams, inlineClientName, inlineFreshUuids } from './parse-fix.js';
+import { startExecutionLog } from './lib/exec-log.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -393,11 +394,15 @@ async function cmdFullRun(pool, catalog, { client, dryRun }) {
   console.log('\n=== Phase 1 — apply ===');
   const tenants = await resolveTenants(pool, client);
   let halted = 0;
+  const haltedClients = [];
   for (const clientId of tenants) {
-    if (await applyChain(pool, catalog, clientId, names, { dryRun })) halted++;
+    if (await applyChain(pool, catalog, clientId, names, { dryRun })) {
+      halted++;
+      haltedClients.push(clientId);
+    }
   }
   console.log(`\nDone. ${tenants.length} tenant(s) processed, ${halted} halted.`);
-  return halted;
+  return { processed: tenants.length, halted, haltedClients, names };
 }
 
 /**
@@ -481,15 +486,26 @@ export async function runMain({ dbConfig, argv } = {}) {
       await cmdListClients(pool, catalog);
     } else {
       const catalog = await loadCatalog();
-      if (args.dryRun) console.log('(dry-run: no writes will be committed)\n');
+      const connection = dbConfig
+        ? `${dbConfig.user}@${dbConfig.host}:${dbConfig.port}/${dbConfig.database}`
+        : '(gradle.properties / env)';
+      const log = startExecutionLog({ argv: argv ?? process.argv.slice(2), connection });
+      try {
+        if (args.dryRun) console.log('(dry-run: no writes will be committed)\n');
 
-      if (args.fix) {
-        const failed = await cmdTargetedFix(pool, catalog, { client: args.client, fix: args.fix, dryRun: args.dryRun });
-        exitCode = toExitCode(failed);
-      } else {
-        if (catalog.length === 0) console.log('No .sql fixes in catalog (cli/src/data-fixes/sql/).');
-        const halted = await cmdFullRun(pool, catalog, { client: args.client, dryRun: args.dryRun });
-        exitCode = toExitCode(halted);
+        if (args.fix) {
+          const failed = await cmdTargetedFix(pool, catalog, { client: args.client, fix: args.fix, dryRun: args.dryRun });
+          exitCode = toExitCode(failed);
+          log.end(`SUMMARY: targeted fix ${args.fix} — ${failed ? 'FAILED' : 'ok'}.`);
+        } else {
+          if (catalog.length === 0) console.log('No .sql fixes in catalog (cli/src/data-fixes/sql/).');
+          const { processed, halted, haltedClients, names } = await cmdFullRun(pool, catalog, { client: args.client, dryRun: args.dryRun });
+          exitCode = toExitCode(halted);
+          log.end(buildRunSummary({ processed, halted, haltedClients, names }));
+        }
+      } finally {
+        log.end();
+        console.log(`\nExecution log: ${log.file}`);
       }
     }
   } finally {
@@ -497,6 +513,18 @@ export async function runMain({ dbConfig, argv } = {}) {
   }
 
   return exitCode;
+}
+
+/** Build the halted-tenants summary footer appended to the execution log. */
+function buildRunSummary({ processed, halted, haltedClients, names }) {
+  const lines = [`SUMMARY: ${processed} tenant(s) processed, ${halted} halted.`];
+  if (halted > 0) {
+    lines.push('Halted tenants (chain stopped on a FAILED fix — see transcript above):');
+    for (const clientId of haltedClients) {
+      lines.push(`  - ${tenantLabel(names, clientId)}`);
+    }
+  }
+  return lines.join('\n');
 }
 
 // Only run the CLI when executed directly as a script — importing this module

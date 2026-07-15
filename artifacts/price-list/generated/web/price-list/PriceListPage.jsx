@@ -42,7 +42,7 @@ const draftMode = null;
 // @sf-generated-end draftMode:priceList
 
 // @sf-generated-start requiredHeaderFields:priceList
-const requiredHeaderFields = ['name', 'currency', 'salesPriceList', 'costBasedPriceList', 'priceIncludesTax', 'default'];
+const requiredHeaderFields = ['name', 'currency', 'salesPriceList', 'costBasedPriceList', 'active', 'priceIncludesTax', 'default'];
 // @sf-generated-end requiredHeaderFields:priceList
 
 // @sf-generated-start addLineFields:priceListVersion
@@ -178,7 +178,8 @@ export const api = {
       "C_Currency_ID": "Moneda",
       "Costbased": "Basado en coste",
       "IsTaxIncluded": "Precio incluye impuesto",
-      "IsDefault": "Por defecto"
+      "IsDefault": "Por defecto",
+      "IsActive": "Activo"
     }
   }
 };
