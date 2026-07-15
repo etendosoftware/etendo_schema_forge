@@ -274,8 +274,8 @@ The Reconciliation surface gained the automatic matching engine (backend `MatchR
 
 The Movimientos row kebab (`MovementRowKebab.jsx`) mirrors the existing Post action with an **Unpost** item for already-posted rows, reusing the same `document-posting` `NeoHandler` (`javaQualifier: "document-posting"` on the `transaction` entity, `artifacts/financial-account/decisions.json`) — no backend or decisions.json change was required, just the generic `action/unpost` dispatch already supported by that handler.
 
-- **Post** (`!isPosted`) → `POST …financial-account-detail/transaction/{id}/action/post`.
-- **Unpost** (`isPosted`) → `POST …financial-account-detail/transaction/{id}/action/unpost`. Same loading-state / success-toast (`documentUnposted`) / error-toast pattern as Post.
+- **Post** (`!isPosted`) → `POST …financial-account/transaction/{id}/action/post`.
+- **Unpost** (`isPosted`) → `POST …financial-account/transaction/{id}/action/unpost`. Same loading-state / success-toast (`documentUnposted`) / error-toast pattern as Post.
 - Not gated on reconciliation state: the `transaction` entity's `reconciliation` field is `visibility: system` with no `apiKey` in `contract.json`, so no reconciled/unreconciled flag reaches the movement row — there is nothing to key a disabled state on. `Unreconcile` remains unconditionally disabled (unrelated to this action).
 
 ## i18n keys — movement Post/Unpost
