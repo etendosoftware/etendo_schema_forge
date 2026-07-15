@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { MoreVertical, ExternalLink, GitMerge, BookOpen } from 'lucide-react';
+import { MoreVertical, ExternalLink, GitMerge, BookOpen, BookX } from 'lucide-react';
 import { toast } from 'sonner';
 import { useUI } from '@/i18n';
 import { useAuth } from '@/auth/AuthContext.jsx';
@@ -21,6 +21,9 @@ import {
 const POST_URL = (id) =>
   `${getApiBase()}/sws/neo/financial-account-detail/transaction/${encodeURIComponent(id)}/action/post`;
 
+const UNPOST_URL = (id) =>
+  `${getApiBase()}/sws/neo/financial-account-detail/transaction/${encodeURIComponent(id)}/action/unpost`;
+
 /**
  * Per-row kebab menu for a movement row.
  * Only visible on row hover (parent row must have `group` class).
@@ -31,6 +34,7 @@ export function MovementRowKebab({ movement, onReload }) {
   const ui = useUI();
   const { token } = useAuth();
   const [posting, setPosting] = useState(false);
+  const [unposting, setUnposting] = useState(false);
 
   const isPosted = movement.posted === 'Y';
 
@@ -57,6 +61,32 @@ export function MovementRowKebab({ movement, onReload }) {
       toast.error(ui('financeAccountMovementsRowPostError'));
     } finally {
       setPosting(false);
+    }
+  }
+
+  async function handleUnpost() {
+    if (unposting || !isPosted) return;
+    setUnposting(true);
+    try {
+      const res = await fetch(UNPOST_URL(movement.id), {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: '{}',
+      });
+      const body = await res.json().catch(() => null);
+      const nested = body?.response?.data?.[0];
+      const message = nested?.message ?? body?.response?.message ?? body?.message;
+      const success = res.ok && (nested?.success ?? body?.success ?? true);
+      if (success) {
+        toast.success(ui('documentUnposted'));
+        onReload?.();
+      } else {
+        toast.error(message || ui('financeAccountMovementsRowUnpostError'));
+      }
+    } catch {
+      toast.error(ui('financeAccountMovementsRowUnpostError'));
+    } finally {
+      setUnposting(false);
     }
   }
 
@@ -113,6 +143,22 @@ export function MovementRowKebab({ movement, onReload }) {
               <BookOpen className="h-5 w-5 text-[#828FA3]" data-testid="BookOpen__64eff3" />
               <span className="text-sm font-normal leading-6 text-[#121217]">
                 {posting ? ui('financeAccountMovementsRowPosting') : ui('financeAccountMovementsRowPost')}
+              </span>
+            </DropdownMenuItem>
+          )}
+
+          {/* Unpost — enabled when already posted. No reconciliation-state field is
+              exposed on the row (see artifacts/financial-account/contract.json —
+              `reconciliation` is a system field with no apiKey), so it cannot be
+              gated on reconciliation status here. */}
+          {isPosted && (
+            <DropdownMenuItem
+              onClick={handleUnpost}
+              disabled={unposting}
+              data-testid="DropdownMenuItem__64eff3">
+              <BookX className="h-5 w-5 text-[#828FA3]" data-testid="BookX__64eff3" />
+              <span className="text-sm font-normal leading-6 text-[#121217]">
+                {unposting ? ui('financeAccountMovementsRowUnposting') : ui('financeAccountMovementsRowUnpost')}
               </span>
             </DropdownMenuItem>
           )}

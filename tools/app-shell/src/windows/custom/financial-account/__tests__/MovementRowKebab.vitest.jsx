@@ -23,6 +23,7 @@ vi.mock('lucide-react', () => ({
   ExternalLink: () => null,
   GitMerge: () => null,
   BookOpen: () => null,
+  BookX: () => null,
 }));
 
 // Radix dropdown — passthrough wrappers so menu items render immediately.

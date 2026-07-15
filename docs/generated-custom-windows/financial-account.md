@@ -237,7 +237,7 @@ Display the full detail of a financial account: a summary strip with KPIs, and t
 - **Expandable "more info" panel**: the leading circular chevron (or a click anywhere on the row) toggles an inline panel showing a **fixed set of three accounting dimensions — Proyecto, Centro de costes, Producto** (`DISPLAYED_DIMENSIONS = ['project', 'costcenter', 'product']` in `MovementsTable.jsx`). This is intentionally independent of the chart-of-accounts `enabledDimensions`: Organización and the other dimensions are never shown, and the business partner is excluded (it already has its own Contacto column). Each of the three fields renders read-only as label + value (empty when the transaction has no value), in a responsive grid. The header row and panel form one elevated card (shadow at the bottom only, no seam line — the header row sits at `z-20` over the panel's `z-10` to hide the shadow bleed).
 - Locale-aware date format in the Date column (es_ES → `dd/MM/yyyy`, en_US → `M/d/yyyy`).
 - Individual row checkbox + select-all (indeterminate when partial).
-- Row hover: subtle shadow elevation + kebab appears (Unreconcile / Post disabled with tooltip).
+- Row hover: subtle shadow elevation + kebab appears (Ver detalle · Unreconcile disabled with tooltip · Post shown when not posted · **Unpost shown when already posted**, ETP-4505).
 - Back arrow in the toolbar runs `navigate(-1)`.
 - The action bar's primary button is **`Transferir fondos`** (ETP-4272), which replaced the dormant `+ Nuevo movimiento` button — see "Funds transfer (T11)" below.
 
@@ -270,12 +270,28 @@ The Reconciliation surface gained the automatic matching engine (backend `MatchR
 - i18n keys: `financeReconcile*` in `packages/app-shell-core/src/locales/{en_US,es_ES}.json`.
 - Hooks: `tools/app-shell/src/hooks/useReconciliation.js` — `usePendingStatementLines`, `useCandidateOperations`, `useReconcileGroup` (all over `useNeoResource` / the shared auth+fetch pattern). The reconcile POST surfaces the backend `{ error: { message } }` text on the thrown Error so it shows in the error toast.
 
+### Movement Post / Unpost (ETP-4505)
+
+The Movimientos row kebab (`MovementRowKebab.jsx`) mirrors the existing Post action with an **Unpost** item for already-posted rows, reusing the same `document-posting` `NeoHandler` (`javaQualifier: "document-posting"` on the `transaction` entity, `artifacts/financial-account/decisions.json`) — no backend or decisions.json change was required, just the generic `action/unpost` dispatch already supported by that handler.
+
+- **Post** (`!isPosted`) → `POST …financial-account-detail/transaction/{id}/action/post`.
+- **Unpost** (`isPosted`) → `POST …financial-account-detail/transaction/{id}/action/unpost`. Same loading-state / success-toast (`documentUnposted`) / error-toast pattern as Post.
+- Not gated on reconciliation state: the `transaction` entity's `reconciliation` field is `visibility: system` with no `apiKey` in `contract.json`, so no reconciled/unreconciled flag reaches the movement row — there is nothing to key a disabled state on. `Unreconcile` remains unconditionally disabled (unrelated to this action).
+
+## i18n keys — movement Post/Unpost
+
+| Key prefix | Where |
+|---|---|
+| `financeAccountMovementsRowPost*` | Post item label / loading label / error toast |
+| `financeAccountMovementsRowUnpost*` | Unpost item label / loading label / error toast |
+| `documentPosted` / `documentUnposted` | Shared success toasts (also used elsewhere for document posting) |
+
 ## Not implemented yet
 
 - `+ Nuevo movimiento` — no longer surfaced; ETP-4272 repurposed its toolbar slot for `Transferir fondos`. The New-movement wizard (`NewMovementWizard`) stays wired but dormant (no trigger) for a future version.
 - `Reactivar` is implemented for reconciled lines created from the ETGO reconciliation flow; it undoes the reconciliation and restores split 1:N groups back to a single pending line. Non-ETGO / Classic-only edge cases still rely on the runtime guards described above.
 - `Transferir` / `Nuevo documento` real actions — render but show a "próximamente" toast.
-- Unreconcile / Post row actions — visible but disabled, with tooltip.
+- Unreconcile row action — visible but disabled, with tooltip. (Post/Unpost are implemented — see ETP-4505 below.)
 - Real bank logos (Santander, BBVA, etc.) — uses the generic `AccountLogoAvatar` for all accounts.
 - Server-side filtering for movements and statements — filters are applied client-side.
 
@@ -302,7 +318,7 @@ index.jsx                          — receives { recordId }, sets page meta, mo
         DimensionsPanel (inline)   — expandable read-only grid of the 3 fixed dimensions (Proyecto / Centro de costes / Producto)
         MovementStatusBadge.jsx    — 2 status chips: Conciliado (green) / Sin conciliar (neutral)
         PostingStatusDot.jsx       — derived posting status (RPPC → posted/green, else → orange)
-        MovementRowKebab.jsx       — on-hover kebab (Unreconcile/Post disabled)
+        MovementRowKebab.jsx       — on-hover kebab (Ver detalle · Unreconcile disabled · Post when !posted · Unpost when posted, ETP-4505)
     ReconciliacionTab.jsx          — placeholder (T6)
     ImportedStatementsTab.jsx      — orchestrates list ↔ lines state machine
       StatementsToolbar.jsx        — back ←, date range, status filter, "Filtro por condicionales" (AdvancedFilterBuilder, same as movements), search, import split-button (▾ → "+ Nuevo extracto")
