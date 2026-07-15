@@ -15,7 +15,7 @@ describe('NewPaymentEntryModal (step 2 — Nuevo cobro/pago)', () => {
 
   it('drives the cuadre via the usePaymentBalance hook', () => {
     assert.match(src, /import \{ usePaymentBalance, formatPlain \} from '\.\/usePaymentBalance\.js'/);
-    assert.match(src, /usePaymentBalance\(\{\s*total,\s*dir,\s*sources\s*\}\)/s);
+    assert.match(src, /usePaymentBalance\(\{\s*total,\s*dir,\s*sources,\s*usedSources:/s);
   });
 
   it('renders the new-collection / new-payment title by direction', () => {

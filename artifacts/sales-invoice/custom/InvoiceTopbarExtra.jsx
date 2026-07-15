@@ -231,19 +231,59 @@ export default function InvoiceTopbarExtra({ data, recordId, token, apiBaseUrl, 
     );
   }
 
-  // Credit instruments (NC / DEV) — no payment lifecycle, just show applied amount
+  // Credit instruments (NC / DEV) — mirror the grid's "Pendiente de pago" cell: green
+  // "Aplicada" once the note is fully consumed, else a purple "Saldo a favor · remaining"
+  // badge that opens the same payment history modal the grid opens (listing the payments
+  // that consumed the note).
   const arSubtype = getArSubtype(data);
   const isCreditInstrument = arSubtype === 'NC' || arSubtype === 'DEV';
   if (isCompleted && isCreditInstrument) {
-    const amount = Math.abs(typeof grandTotal === 'string' ? parseFloat(grandTotal) : (grandTotal ?? 0));
+    // Credit notes carry negative amounts end to end — installments (when loaded) are the
+    // fresh source, data.outstandingAmount the fallback snapshot; either way the remaining
+    // unused balance is the absolute value.
+    const outstandingAbs = Math.abs(installments.length > 0
+      ? installments.reduce((s, i) => s + (parseFloat(i.outstandingAmount) || 0), 0)
+      : parseFloat(data?.outstandingAmount ?? 0));
+    if (installmentsLoading) {
+      return (
+        <span className="inline-flex items-center gap-1.5 text-[13px] text-muted-foreground" style={{ padding: '4px 12px' }}>
+          {ui('loading')}
+        </span>
+      );
+    }
+    if (outstandingAbs < 0.001) {
+      return (
+        <span
+          className="inline-flex items-center gap-1.5 text-[13px] font-medium h-9"
+          style={{ padding: '0 12px', borderRadius: '8px', backgroundColor: '#E2F7EA', color: '#17663A' }}
+        >
+          {ui('cpCreditFullyApplied')}
+        </span>
+      );
+    }
     return (
-      <span
-        className="inline-flex items-center gap-1.5 text-[13px] font-medium h-9"
-        style={{ padding: '0 12px', borderRadius: '8px', backgroundColor: '#eff6ff', color: '#1e40af' }}
-      >
-        <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: '#3b82f6' }} />
-        {ui('creditApplied')} · {fmt(amount, currency)}
-      </span>
+      <>
+        <button
+          type="button"
+          data-testid="payment-status-badge"
+          onClick={() => setShowPaymentsModal(true)}
+          className="inline-flex items-center gap-1.5 text-[13px] font-semibold hover:opacity-80 cursor-pointer h-9"
+          style={{ padding: '0 12px', borderRadius: '8px', backgroundColor: '#F5F3FF', border: '1px solid #DDD6FE', color: '#6D28D9', fontVariantNumeric: 'tabular-nums' }}
+        >
+          <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: '#7C3AED' }} />
+          {ui('cpFavorBadge')} · {fmt(outstandingAbs, currency)}
+        </button>
+        {showPaymentsModal && (
+          <InvoicePaymentHistoryModal
+            invoiceId={recordId}
+            invoiceData={data}
+            specName="sales-invoice"
+            apiBaseUrl={apiBaseUrl}
+            onClose={() => setShowPaymentsModal(false)}
+            onPaymentAdded={fetchInstallments}
+          />
+        )}
+      </>
     );
   }
 

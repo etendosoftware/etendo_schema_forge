@@ -32,6 +32,7 @@ Agent definitions live in `.claude/agents/` — each agent wrote their own file 
 | qa.md | Sentinel | QA | Methodical |
 | documentarian.md | Sage | DOCS | Comprehensive |
 | tenant-fixer.md | Remedy | TENANT REMEDIATION — closes Etendo GO provisioning gaps on both fronts (preventive onboarding fixes for new tenants + corrective data-fixes for existing ones) | Diagnostic |
+| merge-block-helper.md | Blockie | MERGE BLOCK PRE-FLIGHT — given a dev task (ETP-XXXX), checks its `feature/ETP-XXXX` branch + PR across the 3 repos, verifies CI/review/mergeability/target/code-owner gate, reports a traffic-light readiness table. Merges (plain local `git merge`) ONLY the branches the human explicitly authorizes, and always **into the current merge-block branch, NEVER the epic** (the block hits the epic once later → one Jenkins run); never touches the PRs, never pushes | Diagnostic |
 
 When spawning agents, use `subagent_type="general-purpose"` and include the agent identity/role in the prompt.
 Pass `name="developer-1"` (or 2/3/4) to address each slot independently via `SendMessage`.
@@ -53,6 +54,8 @@ Include the agent's name, role, and key rules in the prompt passed to the subage
 | "Add a new custom component slot for sidebars" | **Schema Forge Developer** | New extension point in generator + docs |
 | "Build a generic component for document preview" | **Schema Forge Developer** | New shared UI component in `tools/app-shell/` |
 | "Create the feature branch and PR" | **Clerk** | Workflow operations |
+| "Check ETP-4321 for the merge block" / "is it ready to merge?" | **Blockie** | Pre-flight PR verification across the 3 repos for a merge block |
+| "Merge the ones I told you into my block branch" | **Blockie** | Human-authorized local `git merge` into the current merge-block branch (never the epic) |
 | "Remediate accounting/period/org-tree gaps for an existing client" | **Remedy** | Corrective data-fix (`cli/src/data-fixes/`) scoped by `ad_client_id` |
 | "Fix the onboarding so new clients get a chart of accounts" | **Remedy** | Preventive onboarding-gap fix (root cause) |
 | "Write a tenant data-fix / migration SQL" | **Remedy** | Owns the data-fixes framework + SQL-first criterion |
