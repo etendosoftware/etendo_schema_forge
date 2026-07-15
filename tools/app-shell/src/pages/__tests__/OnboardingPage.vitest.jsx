@@ -661,7 +661,7 @@ describe('OnboardingPage', () => {
     await waitFor(() => {
       expect(requestPasswordReset).toHaveBeenCalledWith(expect.any(Function), '', 'reset@example.com');
     });
-    expect(screen.getAllByText('onboardingResetEmailSent').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('onboardingResetEmailSentTitle').length).toBeGreaterThan(0);
   });
 
   it('renders reset password from the reset token URL and handles success', async () => {
@@ -1416,7 +1416,7 @@ describe('OnboardingPage', () => {
       fireEvent.change(screen.getByLabelText(/onboardingEmailLabel/), {
         target: { value: 'reset@example.com' },
       });
-      fireEvent.click(screen.getByTestId('action-forgot-back-to-login'));
+      fireEvent.click(screen.getByTestId('action-forgot-password-back-to-login'));
 
       expect(screen.getByText('onboardingLoginTitle')).toBeInTheDocument();
     });
@@ -1437,7 +1437,7 @@ describe('OnboardingPage', () => {
       expect(confirmPasswordReset).not.toHaveBeenCalled();
     });
 
-    it('toggles reset password visibility and returns to login from the reset view', () => {
+    it('toggles reset password visibility on the reset view', () => {
       window.history.replaceState(null, '', '/onboarding?resetToken=reset-token');
       render(<OnboardingPage />);
 
@@ -1445,9 +1445,9 @@ describe('OnboardingPage', () => {
       expect(newPassword).toHaveAttribute('type', 'password');
       fireEvent.click(screen.getByLabelText('onboardingShowPassword'));
       expect(newPassword).toHaveAttribute('type', 'text');
-
-      fireEvent.click(screen.getByTestId('action-reset-back-to-login'));
-      expect(screen.getByText('onboardingLoginTitle')).toBeInTheDocument();
+      // core >= 0.3.7 (ETP-4442 Figma redesign) removed the back-to-login button
+      // from the reset form; the only return to login is the reset-success screen
+      // (covered by the next test).
     });
 
     it('returns to login from the reset success screen', async () => {
@@ -1465,7 +1465,7 @@ describe('OnboardingPage', () => {
 
       // After success the form is replaced by the standalone success button.
       await screen.findByText('onboardingResetPasswordSuccess');
-      const buttons = screen.getAllByText('onboardingBackToLoginAction');
+      const buttons = screen.getAllByText('onboardingLoginAction');
       fireEvent.click(buttons[buttons.length - 1]);
       expect(screen.getByText('onboardingLoginTitle')).toBeInTheDocument();
     });

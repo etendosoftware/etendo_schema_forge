@@ -31,6 +31,23 @@
 --   leaves the tenant's old unwired block dangling -- exactly as R1 leaves the
 --   orphan account-element tree. Idempotency therefore comes SOLELY from @check
 --   (the org has no period control), never from per-row guards.
+--
+-- AMENDMENT (2026-07-14) -- org-type promotion folded into @apply (see "C1-pre"):
+--   Some tenants onboarded before the org type was provisioned correctly carry a
+--   single operative org of type "Organization", which the core trigger
+--   ad_org_trg rejects for period control (@OrgTypeDoesNotAllowPeriodControl@),
+--   aborting C1. A guarded promotion of the operative org to "Legal with
+--   accounting" now runs immediately before the C1 UPDATE, inside this same
+--   transaction, so promotion + fiscal block + period control commit or roll back
+--   together. The promotion is an idempotent NO-OP for orgs already of a
+--   period-control-allowing type (its guard matches only non-allowing types), so
+--   it does not disturb tenants where R3 already applied -- and those tenants
+--   never re-run R3 anyway (their watermark is past it). This edit is safe despite
+--   the "applied migrations are immutable" rule because (a) for every tenant where
+--   R3 already succeeded the added statement would have been a no-op, so there is
+--   no semantic divergence from what was recorded APPLIED, and (b) checksum
+--   enforcement is currently deferred. The only tenants whose R3 outcome changes
+--   are those where R3 FAILED (never truly applied) and now succeeds.
 
 -- @check
 -- Needs the fix when an operative org has NO period control rows at all (C2),
@@ -600,6 +617,39 @@ INSERT INTO c_periodcontrol (c_periodcontrol_id, ad_client_id, ad_org_id, isacti
   ('@uuid_FEF036A369A04F1C932B98E399F03CBC@', :client_id, :org_id, 'Y', now(), '0', now(), '0', '@uuid_56712500CAA1426FACD435FDA6739AAC@', 'FAT', 'O', 'N', null, 'C'),
   ('@uuid_FF59E3C4C9FA4BD8B85298100C48ABD8@', :client_id, :org_id, 'Y', now(), '0', now(), '0', '@uuid_36888070E1384777AA4A817B0B4FD63A@', 'OBCVAT_MS', 'O', 'N', null, 'C'),
   ('@uuid_FFB91E87F55144FE84097C2F294EAA20@', :client_id, :org_id, 'Y', now(), '0', now(), '0', '@uuid_F96381EAFE724C0199DDCFE886827A03@', 'MMS', 'N', 'N', null, 'O');
+
+-- ===========================================================================
+-- C1-pre. Promote the operative org's TYPE to "Legal with accounting" when its
+--     current type does not allow period control, so the C1 UPDATE below passes
+--     the core trigger ad_org_trg. That trigger raises
+--     @OrgTypeDoesNotAllowPeriodControl@ when isperiodcontrolallowed is set to 'Y'
+--     on an org whose ad_orgtype lacks (ISBUSINESSUNIT='Y' OR (ISLEGALENTITY='Y'
+--     AND ISACCTLEGALENTITY='Y')). Tenants onboarded before the org type was
+--     provisioned correctly carry a single operative org of type "Organization"
+--     (all three flags 'N') and therefore fail C1. Such tenants already have a
+--     C_ACCTSCHEMA and an AD_ORG_ACCTSCHEMA link -- the org TYPE flag set is the
+--     only missing piece -- so promoting the type is the complete, minimal delta.
+--     Target org type is resolved dynamically (never hardcoded): the System-owned
+--     row with ISLEGALENTITY='Y' AND ISACCTLEGALENTITY='Y'.
+--     IDEMPOTENT NO-OP for the many tenants whose org is already a legal entity:
+--     the guard fires only when the org's current type does NOT allow period
+--     control, so a healthy org is left untouched. Same :org_id the C1 UPDATE
+--     below wires, so the org we promote is exactly the org we enable.
+UPDATE ad_org o SET
+  ad_orgtype_id = (SELECT ot2.ad_orgtype_id
+                     FROM ad_orgtype ot2
+                    WHERE ot2.ad_client_id = '0'
+                      AND ot2.islegalentity = 'Y'
+                      AND ot2.isacctlegalentity = 'Y'
+                    ORDER BY ot2.ad_orgtype_id
+                    LIMIT 1),
+  updated = now(), updatedby = '0'
+WHERE o.ad_client_id = :client_id
+  AND o.ad_org_id = :org_id
+  AND o.ad_orgtype_id IN (SELECT ot.ad_orgtype_id
+                            FROM ad_orgtype ot
+                           WHERE ot.isbusinessunit = 'N'
+                             AND NOT (ot.islegalentity = 'Y' AND ot.isacctlegalentity = 'Y'));
 
 -- ===========================================================================
 -- C1. Wire the operative org to the FRESH calendar and enable period control,

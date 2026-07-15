@@ -1,8 +1,8 @@
 {
-  "version": "0.3.0",
+  "version": "0.4.0",
   "generatedAt": "2026-04-29T18:12:11.134Z",
-  "updatedAt": "2026-05-26T18:48:56.951Z",
-  "contractChecksum": "63eaa5de5087a0a2",
+  "updatedAt": "2026-07-14T00:44:18.756Z",
+  "contractChecksum": "81b69c716ad2e15c",
   "apiPrediction": {
     "specName": "price-list",
     "baseUrl": "/sws/neo/price-list",
@@ -147,7 +147,8 @@
         "C_Currency_ID": "Moneda",
         "Costbased": "Basado en coste",
         "IsTaxIncluded": "Precio incluye impuesto",
-        "IsDefault": "Por defecto"
+        "IsDefault": "Por defecto",
+        "IsActive": "Activo"
       }
     }
   },
@@ -168,6 +169,9 @@
           "costBasedPriceList": {
             "required": true,
             "defaultValue": "N"
+          },
+          "active": {
+            "required": true
           },
           "priceIncludesTax": {
             "required": true
@@ -231,6 +235,7 @@
         "currency",
         "salesPriceList",
         "costBasedPriceList",
+        "active",
         "priceIncludesTax",
         "default"
       ],
@@ -269,6 +274,7 @@
           "currency",
           "salesPriceList",
           "costBasedPriceList",
+          "active",
           "priceIncludesTax",
           "default"
         ]
@@ -278,5 +284,5 @@
     "knownLimitations": [],
     "dangerousOperations": []
   },
-  "checksum": "df8c1dffaa563ba8"
+  "checksum": "c9e9dc805e191cc0"
 }

@@ -275,16 +275,24 @@
           "windowId": "125"
         },
         {
-          "name": "open-close-period-control",
-          "label": "Periods",
-          "favname": "Open/Close Period Control",
-          "windowId": "E66E701CCBA14B8BA480CBDE37C50D7A"
+          "name": "calendar",
+          "label": "Calendar",
+          "favname": "Calendar",
+          "windowId": "117"
         },
         {
           "name": "fiscal-calendar",
           "label": "Fiscal Calendar",
           "favname": "Fiscal Calendar",
+          "hidden": true,
           "windowId": "117"
+        },
+        {
+          "name": "open-close-period-control",
+          "label": "Periods",
+          "favname": "Open/Close Period Control",
+          "hidden": true,
+          "windowId": "E66E701CCBA14B8BA480CBDE37C50D7A"
         },
         {
           "name": "assets",

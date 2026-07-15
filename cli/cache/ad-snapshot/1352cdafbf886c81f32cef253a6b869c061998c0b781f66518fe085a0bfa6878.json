@@ -1324,6 +1324,13 @@
         }
       ]
     },
+    "62e7d6689c11ba27fdc238450bbc940c71cc4a579d87d3669861331f4f00b615": {
+      "checksum": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "params": [
+        "B5673F73F613496C8BEA22FB55E4E1E4"
+      ],
+      "rows": []
+    },
     "675461360c94bf1fe8bbe3121d5b8aeec6025503b503da010fa3adf22f7c1e92": {
       "checksum": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
       "params": [
@@ -1537,6 +1544,56 @@
           "code": "EXISTS (SELECT 1 FROM FIN_FinAcc_PaymentMethod fapm WHERE FIN_PaymentMethod.FIN_PaymentMethod_ID=fapm.FIN_PaymentMethod_ID\nAND fapm.Payin_Allow = (SELECT CASE WHEN '@IsSOTrx@'='Y' THEN 'Y' ELSE fapm.Payin_Allow END FROM DUAL)\nAND fapm.Payout_Allow = (SELECT CASE WHEN '@IsSOTrx@'='N' THEN 'Y' ELSE fapm.Payout_Allow END FROM DUAL))",
           "columnname": "FIN_Paymentmethod_ID",
           "name": "FIN_PaymentMethodsWithAccountIsSOTrxControl"
+        }
+      ]
+    },
+    "81933096771953c6cf094e465f86e91738157acf5f9d32e9a078c92c5281ca5e": {
+      "checksum": "82a2b20a90cf31193c3ec0c5bbb00137ad33c6fe69ff97236b981500fc7cb2fe",
+      "params": [
+        "117"
+      ],
+      "rows": [
+        {
+          "ad_val_rule_id": "103",
+          "code": "AD_Client.AD_Client_ID in (@#User_Client@)",
+          "columnname": "AD_Client_ID",
+          "name": "AD_Client Security validation"
+        },
+        {
+          "ad_val_rule_id": "103",
+          "code": "AD_Client.AD_Client_ID in (@#User_Client@)",
+          "columnname": "AD_Client_ID",
+          "name": "AD_Client Security validation"
+        },
+        {
+          "ad_val_rule_id": "103",
+          "code": "AD_Client.AD_Client_ID in (@#User_Client@)",
+          "columnname": "AD_Client_ID",
+          "name": "AD_Client Security validation"
+        },
+        {
+          "ad_val_rule_id": "103",
+          "code": "AD_Client.AD_Client_ID in (@#User_Client@)",
+          "columnname": "AD_Client_ID",
+          "name": "AD_Client Security validation"
+        },
+        {
+          "ad_val_rule_id": "104",
+          "code": "(@AD_Client_ID@='0' AND AD_Org.AD_Org_ID='0') OR (@AD_Client_ID@!='0' AND ((AD_Org.AD_Client_ID IN (@#User_Client@) AND AD_Org.AD_Org_ID IN (@#User_Org@)) OR AD_Org.AD_Org_ID='0' AND AD_Org.IsSummary='N'))",
+          "columnname": "AD_Org_ID",
+          "name": "AD_Org Security validation"
+        },
+        {
+          "ad_val_rule_id": "CA6741A18A214FE9A50FDFC398662235",
+          "code": "Value<>'N'",
+          "columnname": "OpenClose",
+          "name": "Allowed PeriodActions"
+        },
+        {
+          "ad_val_rule_id": "CA6741A18A214FE9A50FDFC398662235",
+          "code": "Value<>'N'",
+          "columnname": "OpenClose",
+          "name": "Allowed PeriodActions"
         }
       ]
     },

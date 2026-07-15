@@ -49,7 +49,7 @@ export const api = {
       "post": true,
       "put": true,
       "patch": true,
-      "delete": true,
+      "delete": false,
       "listUrl": "/sws/neo/tax-category/taxCategory",
       "detailUrl": "/sws/neo/tax-category/taxCategory/{id}",
       "supportedFilters": [
@@ -95,6 +95,7 @@ export default function TaxCategoryPage({ windowName, recordId, ...props }) {
         recordId={recordId}
         breadcrumb={breadcrumb}
       api={api}
+        hideDeleteButton
         hidePrint
         hideMoreMenu
         customTabs={[{ key: 'attachments', labelKey: 'attachments', Component: AttachmentsTab, placement: 'tab', props: { tableName: "C_TaxCategory", config: {} } }]}
@@ -114,8 +115,9 @@ export default function TaxCategoryPage({ windowName, recordId, ...props }) {
       breadcrumb={breadcrumb}
       api={api}
       hidePrint
+      hideCreate
       hideMoreMenu
-      rowQuickActions={{}}
+      rowQuickActions={{"hideDeleteButton":true}}
       {...props}
     />
   );
