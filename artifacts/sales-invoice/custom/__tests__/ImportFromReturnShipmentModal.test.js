@@ -151,6 +151,7 @@ async function fetchDocuments({ base, headers, bpId, invoiceId }) {
       if (il.id && currentInvoiceLineIds.has(il.id)) return;
       const qty = Math.abs(Number(il.invoicedQuantity) || 0);
       if (il.goodsShipmentLine) addQty(invoicedQtyByGoodsShipmentLine, il.goodsShipmentLine, qty);
+      if (il.salesOrderLine) addQty(invoicedQtyByOrderLine, il.salesOrderLine, qty);
     });
   }
 
@@ -203,8 +204,9 @@ function mockResSingle(ok, item) {
   return { ok, json: async () => ({ response: { data: item ? [item] : [] } }) };
 }
 
-function installFetch({ returns, invLines = [], allInvoicedLines = [], invoiceHeader = {}, orders = {} }) {
+function installFetch({ returns, invLines = [], allInvoicedLines = [], invoiceHeader = {}, orders = {}, returnLines = null }) {
   globalThis.fetch = mock.fn(async (url) => {
+    if (url.includes('/return-material-receipt/returnMaterialReceiptLine?parentId=')) return mockRes(true, returnLines || []);
     if (url.includes('/return-material-receipt/returnMaterialReceipt?')) return mockRes(true, returns);
     if (url.includes('/sales-invoice/lines?parentId=')) return mockRes(true, invLines);
     if (url.includes('/sales-invoice/lines?criteria=')) return mockRes(true, allInvoicedLines);
@@ -342,6 +344,38 @@ describe('ImportFromReturnShipmentModal — fetchDocuments status/bp/currency fi
     });
     const result = await fetchDocuments({ base: '/b', headers: {}, bpId: 'bp1', invoiceId: 'inv1' });
     assert.equal(result.sharedContext.invoicedQtyByGoodsShipmentLine.get('rline1'), 5);
+  });
+
+  it('populates invoicedQtyByOrderLine from a DIFFERENT return-receipt line invoiced on a DIFFERENT invoice, found only via the "elsewhere" query (ETP-4459 cross-invoice fix)', async () => {
+    // rlineA (a different return-receipt line than the one under test) was invoiced
+    // against oline1 on some other invoice. The current invoice has no lines yet
+    // referencing oline1 — this entry can ONLY come from allInvoicedLinesRes, not
+    // invLinesRes, proving the cross-invoice merge into invoicedQtyByOrderLine works.
+    installFetch({
+      returns: [{ id: 'r1', documentStatus: 'CO', businessPartner: 'bp1', invoiceStatus: 0 }],
+      invLines: [],
+      allInvoicedLines: [
+        { id: 'ilOtherInvoice', goodsShipmentLine: 'rlineA', salesOrderLine: 'oline1', invoicedQuantity: -4 },
+      ],
+    });
+    const result = await fetchDocuments({ base: '/b', headers: {}, bpId: 'bp1', invoiceId: 'inv1' });
+    assert.equal(result.sharedContext.invoicedQtyByOrderLine.get('oline1'), 4);
+  });
+
+  it('de-dupes an invoice-line id counted on both queries for invoicedQtyByOrderLine too (boolean-map consumer makes double-count unobservable downstream, but the map itself must still be correct)', async () => {
+    installFetch({
+      returns: [{ id: 'r1', documentStatus: 'CO', businessPartner: 'bp1', invoiceStatus: 0 }],
+      invLines: [{ id: 'ilSelf', salesOrderLine: 'oline1', invoicedQuantity: -5 }],
+      allInvoicedLines: [
+        { id: 'ilSelf', salesOrderLine: 'oline1', invoicedQuantity: -5 },
+      ],
+    });
+    const result = await fetchDocuments({ base: '/b', headers: {}, bpId: 'bp1', invoiceId: 'inv1' });
+    // Without the currentInvoiceLineIds guard this would be 10 (double-counted).
+    // orderLineBlocked only checks truthiness, so 5 vs 10 wouldn't change _alreadyImported —
+    // but the map value itself must still be correct, since a future consumer (or a
+    // debugging session) could reasonably read the raw quantity.
+    assert.equal(result.sharedContext.invoicedQtyByOrderLine.get('oline1'), 5);
   });
 });
 
@@ -619,6 +653,70 @@ describe('ImportFromReturnShipmentModal — fetchLines partial-quantity remainin
       sharedContext: { invoicedQtyByGoodsShipmentLine: new Map(), invoicedQtyByOrderLine: new Map() },
     }, async () => ({}));
     assert.deepEqual(lines, []);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// fetchDocuments -> fetchLines — end-to-end cross-invoice orderLine dupe-check
+// (ETP-4459). A return split across two separate M_InOut return receipts, each
+// half invoiced from a DIFFERENT sales invoice, both point at the same
+// underlying C_OrderLine (salesOrderLine). Previously this was only caught if
+// the OTHER invoice's line happened to also be visible through invLinesRes
+// (the current-invoice-only query); allInvoicedLinesRes is the query that
+// actually finds it, cross-invoice. This wires fetchDocuments' real
+// sharedContext output straight into fetchLines to prove the full path, not
+// just the intermediate map.
+// ---------------------------------------------------------------------------
+
+describe('ImportFromReturnShipmentModal — end-to-end cross-invoice orderLine dupe-check (ETP-4459)', () => {
+  afterEach(() => {
+    mock.reset();
+  });
+
+  it('blocks a return-receipt line (_alreadyImported: true) whose salesOrderLine was already invoiced via a DIFFERENT return-receipt line on a DIFFERENT invoice, discovered only through allInvoicedLinesRes', async () => {
+    // rlineA/oline1 was invoiced on some OTHER invoice (ilOtherInvoice) — never
+    // appears on the current invoice's own lines (invLines is empty). The line
+    // under test here is rlineB, a DIFFERENT return-receipt line sharing the same
+    // salesOrderLine (oline1). The salesOrderLine path is boolean/conservative:
+    // any recorded qty against the same order line fully blocks, so we assert
+    // _alreadyImported and _maxQty:0 — not a partial remaining-qty number.
+    installFetch({
+      returns: [{ id: 'r1', documentStatus: 'CO', businessPartner: 'bp1', invoiceStatus: 0 }],
+      invLines: [],
+      allInvoicedLines: [
+        { id: 'ilOtherInvoice', goodsShipmentLine: 'rlineA', salesOrderLine: 'oline1', invoicedQuantity: -4 },
+      ],
+      returnLines: [{ id: 'rlineB', product: 'p1', movementQuantity: 6, salesOrderLine: 'oline1' }],
+    });
+
+    const docsResult = await fetchDocuments({ base: '/b', headers: {}, bpId: 'bp1', invoiceId: 'inv1' });
+    assert.equal(docsResult.sharedContext.invoicedQtyByOrderLine.get('oline1'), 4);
+
+    const lines = await fetchLines({
+      base: '/b', headers: {}, docId: 'r1', sharedContext: docsResult.sharedContext,
+    }, async () => ({}));
+
+    assert.equal(lines[0]._alreadyImported, true);
+    assert.equal(lines[0]._maxQty, 0);
+  });
+
+  it('does not block an unrelated return-receipt line whose salesOrderLine was never invoiced elsewhere', async () => {
+    installFetch({
+      returns: [{ id: 'r1', documentStatus: 'CO', businessPartner: 'bp1', invoiceStatus: 0 }],
+      invLines: [],
+      allInvoicedLines: [
+        { id: 'ilOtherInvoice', goodsShipmentLine: 'rlineA', salesOrderLine: 'oline1', invoicedQuantity: -4 },
+      ],
+      returnLines: [{ id: 'rlineC', product: 'p1', movementQuantity: 6, salesOrderLine: 'olineUnrelated' }],
+    });
+
+    const docsResult = await fetchDocuments({ base: '/b', headers: {}, bpId: 'bp1', invoiceId: 'inv1' });
+    const lines = await fetchLines({
+      base: '/b', headers: {}, docId: 'r1', sharedContext: docsResult.sharedContext,
+    }, async () => ({}));
+
+    assert.equal(lines[0]._alreadyImported, false);
+    assert.equal(lines[0]._maxQty, 6);
   });
 });
 
