@@ -1,8 +1,8 @@
 {
-  "version": "0.18.1",
+  "version": "0.18.2",
   "generatedAt": "2026-07-06T16:17:20.249Z",
-  "updatedAt": "2026-07-15T11:08:53.486Z",
-  "checksum": "7ac2822be66a333a",
+  "updatedAt": "2026-07-15T11:49:46.034Z",
+  "checksum": "85e274bb911dd436",
   "frontendContract": {
     "window": {
       "id": "123271B9AD60469BAE8A924841456B63",
@@ -1410,7 +1410,7 @@
             "apiKey": "canceledInoutLine",
             "column": "Canceled_Inoutline_ID",
             "type": "foreignKey",
-            "visibility": "system",
+            "visibility": "discarded",
             "required": false
           },
           {

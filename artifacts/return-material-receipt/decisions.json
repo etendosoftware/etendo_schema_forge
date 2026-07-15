@@ -407,7 +407,7 @@
           "visibility": "discarded"
         },
         "canceledInoutLine": {
-          "visibility": "system"
+          "visibility": "discarded"
         },
         "managePrereservation": {
           "visibility": "discarded"
