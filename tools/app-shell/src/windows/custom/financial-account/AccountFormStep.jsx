@@ -177,6 +177,7 @@ export function AccountFormStep({
             formData={{}}
             resolvedLabel={ui('financeAccountsNewFieldCurrency')}
             staticOptions={currencyOptions}
+            data-testid="CreatableSearchSelect__5e0d1d"
           />
         </div>
       </div>
