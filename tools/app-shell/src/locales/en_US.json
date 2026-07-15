@@ -18793,6 +18793,7 @@
     "onboardingInvalidCredentials": "Invalid credentials.",
     "onboardingEnvironmentLoginFailed": "Environment login failed.",
     "onboardingGenericError": "Something went wrong during onboarding.",
+    "onboardingRetry": "Retry",
     "onboardingInvalidSession": "Your session is no longer valid.",
     "onboardingLoadEnvironmentsFailed": "Could not load environments.",
     "onboardingStreamUnavailable": "Onboarding progress is not available right now.",
