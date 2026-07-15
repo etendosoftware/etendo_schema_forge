@@ -1,7 +1,8 @@
 {
-  "version": "0.18.0",
+  "version": "0.18.1",
   "generatedAt": "2026-07-06T16:17:20.249Z",
-  "checksum": "5a9f480f8a98cfc4",
+  "updatedAt": "2026-07-15T11:08:53.486Z",
+  "checksum": "7ac2822be66a333a",
   "frontendContract": {
     "window": {
       "id": "123271B9AD60469BAE8A924841456B63",
@@ -737,7 +738,7 @@
             "apiKey": "salesOrder",
             "column": "C_Order_ID",
             "type": "foreignKey",
-            "visibility": "discarded",
+            "visibility": "system",
             "required": false
           },
           {
@@ -1409,7 +1410,7 @@
             "apiKey": "canceledInoutLine",
             "column": "Canceled_Inoutline_ID",
             "type": "foreignKey",
-            "visibility": "discarded",
+            "visibility": "system",
             "required": false
           },
           {
