@@ -304,4 +304,71 @@ describe('MovementRowKebab — Unpost action', () => {
       expect(screen.queryByText('financeAccountMovementsRowUnposting')).not.toBeInTheDocument()
     );
   });
+
+  // 8. No onReload provided — success path must not throw
+  it('does not throw when onReload is not provided and the unpost succeeds', async () => {
+    globalThis.fetch.mockResolvedValue({
+      ok: true,
+      json: async () => ({ response: { data: [{ success: true }] } }),
+    });
+
+    const user = userEvent.setup();
+    render(<MovementRowKebab movement={POSTED} />);
+
+    await user.click(screen.getByText('financeAccountMovementsRowUnpost'));
+
+    await waitFor(() => expect(toastSuccess).toHaveBeenCalledOnce());
+    expect(toastSuccess).toHaveBeenCalledWith('documentUnposted');
+  });
+
+  // 9. Rapid re-click while a request is already in flight must not fire a second request
+  it('only sends one fetch call when clicked twice in rapid succession', async () => {
+    let resolveFetch;
+    globalThis.fetch.mockReturnValue(
+      new Promise((resolve) => {
+        resolveFetch = resolve;
+      })
+    );
+
+    const user = userEvent.setup();
+    renderKebab(POSTED);
+
+    const item = screen.getByText('financeAccountMovementsRowUnpost').closest('[role="menuitem"]');
+    await user.click(item);
+    // Second click while the item should already be disabled/in-flight.
+    await user.click(screen.getByText('financeAccountMovementsRowUnposting').closest('[role="menuitem"]'));
+
+    expect(globalThis.fetch).toHaveBeenCalledOnce();
+
+    resolveFetch({ ok: true, json: async () => ({}) });
+    await waitFor(() =>
+      expect(screen.queryByText('financeAccountMovementsRowUnposting')).not.toBeInTheDocument()
+    );
+  });
+
+  // 10. res.ok true but the body cannot be parsed as JSON (e.g. empty response) —
+  // matches the pre-existing Post behavior: treated as success.
+  it('treats an ok response with an unparsable body as success', async () => {
+    globalThis.fetch.mockResolvedValue({
+      ok: true,
+      json: async () => {
+        throw new Error('Unexpected end of JSON input');
+      },
+    });
+
+    const user = userEvent.setup();
+    const { onReload } = renderKebab(POSTED);
+    await user.click(screen.getByText('financeAccountMovementsRowUnpost'));
+
+    await waitFor(() => expect(toastSuccess).toHaveBeenCalledOnce());
+    expect(toastSuccess).toHaveBeenCalledWith('documentUnposted');
+    expect(onReload).toHaveBeenCalledOnce();
+    expect(toastError).not.toHaveBeenCalled();
+  });
+
+  // 11. movement.posted is undefined (neither 'Y' nor 'N') — Unpost item must stay hidden
+  it('does not render the Unpost item when movement.posted is undefined', () => {
+    renderKebab({ id: 'mov-3' });
+    expect(screen.queryByText('financeAccountMovementsRowUnpost')).not.toBeInTheDocument();
+  });
 });
