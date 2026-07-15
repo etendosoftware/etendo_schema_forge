@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { login } from '../helpers/auth.js';
+import { installHeaderConfirmMock } from '../helpers/confirmMocks.js';
 
 /**
  * Sales Order — Confirm Modal Idempotency (mocked).
@@ -57,14 +58,13 @@ const ONE_LINE = {
  * and counts how many times each endpoint was hit.
  */
 async function installConfirmMocks(page, state) {
-  // Header GET — return our deterministic draft header
-  await page.route(`**/sws/neo/sales-order/header/${ORDER_ID}`, async (route) => {
-    if (route.request().method() !== 'GET') return route.continue();
-    await route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      body: JSON.stringify({ response: { data: [DRAFT_HEADER] } }),
-    });
+  // Header GET/PATCH — shared helper (see confirmMocks.js for the ETP-4468
+  // rationale on why the PATCH/PUT echo is required to keep ConfirmModal
+  // mounted through the save-before-confirm step).
+  await installHeaderConfirmMock(page, {
+    spec: 'sales-order',
+    recordId: ORDER_ID,
+    record: DRAFT_HEADER,
   });
 
   // Lines GET — return a single line so the modal computes a non-empty count

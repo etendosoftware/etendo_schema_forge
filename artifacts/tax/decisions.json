@@ -8,13 +8,15 @@
     "breadcrumb": "Settings / Tax",
     "hidePrint": true,
     "hideMoreMenu": true,
+    "hideCreate": true,
+    "hideDelete": true,
+    "hideDeleteButton": true,
     "labelOverrides": {
       "es_ES": {
         "Name": "Nombre",
         "Rate": "Índice",
         "SOPOType": "Tipo venta/compra",
         "ValidFrom": "Válido desde",
-        "IsActive": "Activo",
         "Description": "Descripción"
       },
       "en_US": {
@@ -22,7 +24,6 @@
         "Rate": "Rate",
         "SOPOType": "Sales/Purchase Type",
         "ValidFrom": "Valid From",
-        "IsActive": "Active",
         "Description": "Description"
       }
     }
@@ -99,11 +100,6 @@
           "form": true,
           "section": "principal",
           "seq": 4
-        },
-        "isActive": {
-          "grid": false,
-          "form": false,
-          "visibility": "system"
         },
         "docTaxAmount": {
           "grid": false,

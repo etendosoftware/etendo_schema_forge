@@ -1166,6 +1166,13 @@
       ],
       "rows": []
     },
+    "62e7d6689c11ba27fdc238450bbc940c71cc4a579d87d3669861331f4f00b615": {
+      "checksum": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "params": [
+        "B5673F73F613496C8BEA22FB55E4E1E4"
+      ],
+      "rows": []
+    },
     "675461360c94bf1fe8bbe3121d5b8aeec6025503b503da010fa3adf22f7c1e92": {
       "checksum": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
       "params": [
@@ -1249,6 +1256,21 @@
           "name": "Parent_AD_Org",
           "tab_name": "Lines",
           "validation_code": "@SQL= SELECT AD_ORG_ID\nFROM C_ORDER\nWHERE C_ORDER_ID = @C_ORDER_ID@"
+        }
+      ]
+    },
+    "81933096771953c6cf094e465f86e91738157acf5f9d32e9a078c92c5281ca5e": {
+      "checksum": "5ca7ef048f63629db7cecd3fd5ffc515ecdbb5ad0bf34d6978c76f096a44068f",
+      "params": [
+        "117"
+      ],
+      "rows": [
+        {
+          "ad_auxiliarinput_id": "8C349CE3994D44C2832E2B7E719ABD63",
+          "ad_tab_id": "130",
+          "name": "C_Period_Not_Editable",
+          "tab_name": "Period",
+          "validation_code": "@SQL=SELECT 'Y'\n      FROM DUAL\n      WHERE EXISTS (SELECT C_PERIODCONTROL_ID\n                    FROM C_PERIODCONTROL\n                    WHERE C_PERIOD_ID =@C_PERIOD_ID@\n                    AND PERIODSTATUS <> 'N')"
         }
       ]
     },

@@ -33,7 +33,7 @@ function Spinner() {
 
 // ── Main component ─────────────────────────────────────────────────────────────
 
-export default function OrderCreateInvoice({ data, recordId, token, apiBaseUrl, onRefresh }) {
+export default function OrderCreateInvoice({ data, recordId, token, apiBaseUrl, onRefresh, onSave }) {
   const navigate = useNavigate();
   const ui = useUI();
   const tMenu = useMenuLabel();
@@ -216,6 +216,7 @@ export default function OrderCreateInvoice({ data, recordId, token, apiBaseUrl, 
           data={data}
           apiBaseUrl={apiBaseUrl}
           headers={headers}
+          onSave={onSave}
           onClose={() => setShowConfirm(false)}
           onConfirmed={(docs) => { setShowConfirm(false); setConfirmedDocs(docs); }}
           data-testid="ConfirmModal__18d1f0" />,
@@ -257,7 +258,7 @@ export default function OrderCreateInvoice({ data, recordId, token, apiBaseUrl, 
 
 // ── ConfirmModal ───────────────────────────────────────────────────────────────
 
-export function ConfirmModal({ orderId, data, apiBaseUrl, headers, onClose, onConfirmed }) {
+export function ConfirmModal({ orderId, data, apiBaseUrl, headers, onClose, onConfirmed, onSave }) {
   const ui       = useUI();
   const [createShipment,  setCreateShipment]  = useState(false);
   const [createInvoice,   setCreateInvoice]   = useState(false);
@@ -292,7 +293,12 @@ export function ConfirmModal({ orderId, data, apiBaseUrl, headers, onClose, onCo
     return () => { cancelled = true; };
   }, [orderId, apiBaseUrl, headers]);
 
-  const d              = freshData || data || {};
+  // ETP-4468 — the in-memory `data` prop (which already reflects any unsaved
+  // header edit the user made before clicking Confirm) must win over the
+  // server-fetched `freshData` (stale because nothing was saved yet). The
+  // fresh fetch is only a fallback for the very first render before `data`
+  // arrives, or if `data` is genuinely empty.
+  const d              = data || freshData || {};
   const documentNo     = d.documentNo || '';
   const bpName         = d['businessPartner$_identifier'] || '';
   // Apply etgoTotalDiscount client-side only while the order is still in DR — at
@@ -318,6 +324,19 @@ export function ConfirmModal({ orderId, data, apiBaseUrl, headers, onClose, onCo
     if (loading) return;
     setLoading(true);
     setError(null);
+
+    // ETP-4468 — force-save any unsaved header edit before confirming. Without
+    // this, an edit made right before clicking Confirm (without hitting Save
+    // first) would be silently discarded — the order gets confirmed with the
+    // OLD header values. Abort the whole confirm flow if the save fails.
+    if (onSave) {
+      const saved = await onSave();
+      if (!saved?.id) {
+        setError(ui('soSaveBeforeConfirmError'));
+        setLoading(false);
+        return;
+      }
+    }
 
     // Step 1: Confirm the order — must succeed before anything else.
     // If this fails the order is still in DR, so the rest of the flow makes no sense.
