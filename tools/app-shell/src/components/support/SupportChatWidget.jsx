@@ -392,6 +392,7 @@ export function SupportChatWidget() {
         onReopenConversation={handleReopenConversation}
         isExpanded={isExpanded}
         onToggleExpand={() => setIsExpanded((v) => !v)}
+        getLocalImageUrl={actions.getLocalImageUrl}
         data-testid="ConversationView__4d85ab" />
     );
   } else if (activeTab === 'inicio') {

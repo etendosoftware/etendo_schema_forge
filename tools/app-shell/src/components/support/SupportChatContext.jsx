@@ -52,6 +52,14 @@ async function serializeFiles(files) {
   return Promise.all(files.map(serializeFile));
 }
 
+// Maximum number of local image preview blob URLs kept alive at once. The
+// browser never gives us the raw bytes back for an outgoing attachment once
+// it round-trips through the server (only `{filename, mimeType}` survives),
+// so this cache is the ONLY way to keep showing a thumbnail for an image the
+// user just sent. Capped + FIFO-evicted so a long chat session with many
+// image sends can't leak blob URLs indefinitely.
+const MAX_LOCAL_IMAGE_URLS = 20;
+
 // Fire-and-forget telemetry: a failed track() call should never block the UI.
 function trackSupportEvent(eventDefinition, properties = {}) {
   const event = buildObservabilityEvent(eventDefinition, properties);
@@ -153,6 +161,43 @@ export function SupportChatProvider({ children }) {
   const apiFetchRef = React.useRef(apiFetch);
   React.useEffect(() => { apiFetchRef.current = apiFetch; }, [apiFetch]);
 
+  // filename -> local blob URL, insertion-ordered (Map preserves insertion
+  // order) so the oldest entry is always the first one evicted. Lives on a
+  // ref (not component state) so it survives the optimistic-message → real
+  // server message swap without triggering re-renders of its own.
+  const localImageUrlsRef = React.useRef(new Map());
+
+  const cacheLocalImageUrl = React.useCallback((file) => {
+    if (!file || !file.type || !file.type.startsWith('image/')) return;
+    const cache = localImageUrlsRef.current;
+    const previous = cache.get(file.name);
+    if (previous) {
+      URL.revokeObjectURL(previous);
+      cache.delete(file.name);
+    }
+    cache.set(file.name, URL.createObjectURL(file));
+    while (cache.size > MAX_LOCAL_IMAGE_URLS) {
+      const oldestKey = cache.keys().next().value;
+      URL.revokeObjectURL(cache.get(oldestKey));
+      cache.delete(oldestKey);
+    }
+  }, []);
+
+  const getLocalImageUrl = React.useCallback((filename) => {
+    if (!filename) return null;
+    return localImageUrlsRef.current.get(filename) || null;
+  }, []);
+
+  // Revoke every cached blob URL when the provider unmounts (app teardown) —
+  // this cache's lifetime spans the whole widget session, not a single
+  // AttachmentItem instance, so it must clean up at its own level.
+  React.useEffect(() => {
+    return () => {
+      localImageUrlsRef.current.forEach((url) => URL.revokeObjectURL(url));
+      localImageUrlsRef.current.clear();
+    };
+  }, []);
+
   const loadConversations = React.useCallback(async () => {
     dispatch({ type: 'SET_LOADING_CONVERSATIONS' });
     try {
@@ -179,7 +224,7 @@ export function SupportChatProvider({ children }) {
   }, [apiFetch]);
 
   const startConversation = React.useCallback(async (text, files) => {
-    const attachmentMeta = (files || []).map(f => ({ name: f.name, size: f.size }));
+    const attachmentMeta = (files || []).map(f => ({ name: f.name, size: f.size, mimeType: f.type || undefined }));
     const optimistic = {
       id: `tmp-${Date.now()}`,
       sender: 'user',
@@ -212,7 +257,7 @@ export function SupportChatProvider({ children }) {
 
   const sendMessage = React.useCallback(async (conversationId, text, files) => {
     if (!text.trim() && (!files || files.length === 0)) return;
-    const attachmentMeta = (files || []).map(f => ({ name: f.name, size: f.size }));
+    const attachmentMeta = (files || []).map(f => ({ name: f.name, size: f.size, mimeType: f.type || undefined }));
     const optimistic = {
       id: `tmp-${Date.now()}`,
       sender: 'user',
@@ -328,8 +373,12 @@ export function SupportChatProvider({ children }) {
   }, []);
 
   const addPendingFile = React.useCallback((file) => {
+    // Cache the local preview at pick-time — before the file ever reaches the
+    // server — so it can keep being shown after the optimistic message is
+    // replaced by the server's response (which has no raw bytes to fetch).
+    cacheLocalImageUrl(file);
     dispatch({ type: 'ADD_PENDING_FILE', file });
-  }, []);
+  }, [cacheLocalImageUrl]);
 
   const removePendingFile = React.useCallback((index) => {
     dispatch({ type: 'REMOVE_PENDING_FILE', index });
@@ -415,12 +464,14 @@ export function SupportChatProvider({ children }) {
       setInput,
       addPendingFile,
       removePendingFile,
+      getLocalImageUrl,
     },
   }), [
     state, unreadCount, openChat, closeChat, setTab,
     loadConversations, loadMessages, startConversation, sendMessage,
     closeConversation, reopenConversation,
     submitRating, dismissRating, selectConversation, setInput, addPendingFile, removePendingFile,
+    getLocalImageUrl,
   ]);
 
   return (

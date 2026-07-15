@@ -123,7 +123,7 @@ function renderBold(txt) {
   );
 }
 
-function Bubble({ message, onQuickReply }) {
+function Bubble({ message, onQuickReply, getLocalImageUrl }) {
   const ui = useUI();
   const role = message.sender;
   const isHumanAgent = role === 'agent' || role === 'human';
@@ -156,6 +156,7 @@ function Bubble({ message, onQuickReply }) {
                     key={a.id || a.filename || a.name}
                     attachment={a}
                     ui={ui}
+                    getLocalImageUrl={getLocalImageUrl}
                     data-testid="AttachmentItem__50ab90" />
                 ))}
               </div>
@@ -174,13 +175,16 @@ function Bubble({ message, onQuickReply }) {
   );
 }
 
-// Renders one inbound attachment on a message bubble:
-// - image/*   → authenticated fetch → blob URL → <img> thumbnail
+// Renders one attachment on a message bubble:
+// - own outgoing image (no `id` — the server never stores the raw bytes for
+//   attachments the user sends, only `{filename, mimeType}`) → local blob URL
+//   cached at pick-time by SupportChatContext, matched by filename. No fetch.
+// - inbound image/*   → authenticated fetch → blob URL → <img> thumbnail
 // - allowed non-image (pdf/csv/txt/xlsx/docx) → authenticated fetch → download link
 // - anything else with a known mimeType (e.g. a video a human agent attached
 //   directly in Jira) → neutral "unsupported" fallback, no fetch attempted
-// - no id/mimeType (legacy or still-optimistic local echo) → plain filename
-function AttachmentItem({ attachment, ui }) {
+// - no id/mimeType and no matching local preview (legacy attachment) → plain filename
+function AttachmentItem({ attachment, ui, getLocalImageUrl }) {
   const apiFetch = useApiFetch();
   const [blobUrl, setBlobUrl] = React.useState(null);
   const [status, setStatus] = React.useState('idle'); // idle | loading | ready | error
@@ -190,6 +194,7 @@ function AttachmentItem({ attachment, ui }) {
   const isAllowedOther = ALLOWED_DOC_MIME_TYPES.has(mimeType);
   const canFetch = Boolean(attachment.id) && (isImage || isAllowedOther);
   const isUnsupported = Boolean(mimeType) && !isImage && !isAllowedOther;
+  const localImageUrl = isImage && !attachment.id ? getLocalImageUrl?.(name) : null;
 
   React.useEffect(() => {
     if (!canFetch) return undefined;
@@ -224,10 +229,11 @@ function AttachmentItem({ attachment, ui }) {
   }
 
   if (isImage) {
-    if (status === 'ready' && blobUrl) {
+    const readyUrl = localImageUrl || (status === 'ready' ? blobUrl : null);
+    if (readyUrl) {
       return (
-        <a href={blobUrl} target="_blank" rel="noopener noreferrer" className="sc-att-img-link">
-          <img src={blobUrl} alt={name} className="sc-att-img" />
+        <a href={readyUrl} target="_blank" rel="noopener noreferrer" className="sc-att-img-link">
+          <img src={readyUrl} alt={name} className="sc-att-img" />
         </a>
       );
     }
@@ -338,7 +344,7 @@ function CSATCard({ onSubmit, onDismiss }) {
   );
 }
 
-function ConversationMessageItem({ message, index, messages, seenCount, dateLocale, onQuickReply, ui }) {
+function ConversationMessageItem({ message, index, messages, seenCount, dateLocale, onQuickReply, ui, getLocalImageUrl }) {
   if (message.handover) {
     return (
       <div className="sc-handover">
@@ -369,6 +375,7 @@ function ConversationMessageItem({ message, index, messages, seenCount, dateLoca
       <Bubble
         message={message}
         onQuickReply={onQuickReply}
+        getLocalImageUrl={getLocalImageUrl}
         data-testid="Bubble__50ab90" />
     </>
   );
@@ -464,6 +471,7 @@ export function ConversationView({
   onReopenConversation,
   isExpanded,
   onToggleExpand,
+  getLocalImageUrl,
 }) {
   const ui = useUI();
   const { locale } = useLocaleSwitch();
@@ -681,6 +689,7 @@ export function ConversationView({
                 dateLocale={dateLocale}
                 onQuickReply={(q) => setDraft(q)}
                 ui={ui}
+                getLocalImageUrl={getLocalImageUrl}
                 data-testid="ConversationMessageItem__50ab90" />
             </React.Fragment>
           ))
