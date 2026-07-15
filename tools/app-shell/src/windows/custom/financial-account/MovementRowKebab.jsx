@@ -19,10 +19,10 @@ import {
 } from '@/components/ui/tooltip';
 
 const POST_URL = (id) =>
-  `${getApiBase()}/sws/neo/financial-account-detail/transaction/${encodeURIComponent(id)}/action/post`;
+  `${getApiBase()}/sws/neo/financial-account/transaction/${encodeURIComponent(id)}/action/post`;
 
 const UNPOST_URL = (id) =>
-  `${getApiBase()}/sws/neo/financial-account-detail/transaction/${encodeURIComponent(id)}/action/unpost`;
+  `${getApiBase()}/sws/neo/financial-account/transaction/${encodeURIComponent(id)}/action/unpost`;
 
 /**
  * Per-row kebab menu for a movement row.

@@ -106,7 +106,7 @@ describe('MovementRowKebab — Post action', () => {
 
     expect(globalThis.fetch).toHaveBeenCalledOnce();
     const [url, init] = globalThis.fetch.mock.calls[0];
-    expect(url).toContain('/sws/neo/financial-account-detail/transaction/mov-1/action/post');
+    expect(url).toContain('/sws/neo/financial-account/transaction/mov-1/action/post');
     expect(init.method).toBe('POST');
     expect(init.headers.Authorization).toBe('Bearer test-token');
   });
@@ -225,7 +225,7 @@ describe('MovementRowKebab — Unpost action', () => {
 
     expect(globalThis.fetch).toHaveBeenCalledOnce();
     const [url, init] = globalThis.fetch.mock.calls[0];
-    expect(url).toContain('/sws/neo/financial-account-detail/transaction/mov-2/action/unpost');
+    expect(url).toContain('/sws/neo/financial-account/transaction/mov-2/action/unpost');
     expect(init.method).toBe('POST');
     expect(init.headers.Authorization).toBe('Bearer test-token');
   });
