@@ -97,14 +97,14 @@ async function installQuotationMocks(page, state) {
       return;
     }
 
-    if ((entity === 'quotation' || entity === 'header') && req.method() === 'GET') {
-      const detailMap = {
-        [ORIGINAL_ID]: ORIGINAL_QUOTE,
-        [CLONE_ID]: CLONED_QUOTE,
-        [UE_ID]: UE_QUOTE,
-        [DELETE_ID]: DELETE_QUOTE,
-      };
+    const detailMap = {
+      [ORIGINAL_ID]: ORIGINAL_QUOTE,
+      [CLONE_ID]: CLONED_QUOTE,
+      [UE_ID]: UE_QUOTE,
+      [DELETE_ID]: DELETE_QUOTE,
+    };
 
+    if ((entity === 'quotation' || entity === 'header') && req.method() === 'GET') {
       if (idOrSubpath && detailMap[idOrSubpath]) {
         await route.fulfill({
           status: 200,
@@ -122,6 +122,31 @@ async function installQuotationMocks(page, state) {
         });
         return;
       }
+    }
+
+    // ETP-4468 — QuotationConfirmModal now calls onSave() (handleSave, a PATCH
+    // to `${apiBaseUrl}/quotation/${id}`) before converting the quotation.
+    // Without an explicit PATCH echo here, the request fell through to the
+    // generic `**/sws/**` catch-all in auth.js, which replies with a
+    // synthetic `{ id: 'e2e-record-id', ... }` (wrong id, no NEO envelope).
+    // useEntity's refetchAfterSave then refetched by that fake id — a URL
+    // this route also matches (`sales-quotation/quotation/e2e-record-id`),
+    // but not present in detailMap, so it fell through to `route.fallback()`
+    // and got an empty record from the catch-all, overwriting the header
+    // state and losing `documentStatus` (UE) before the invoice-creation
+    // step ran. Echo back the real record (matched by id) to keep the
+    // refetch consistent, exactly like a real backend would.
+    if (
+      entity === 'quotation'
+      && (req.method() === 'PATCH' || req.method() === 'PUT')
+      && idOrSubpath && detailMap[idOrSubpath]
+    ) {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ response: { data: [{ ...detailMap[idOrSubpath] }] } }),
+      });
+      return;
     }
 
     if (entity === 'quotation' && req.method() === 'POST' && action === 'cloneRecord' && idOrSubpath === ORIGINAL_ID) {

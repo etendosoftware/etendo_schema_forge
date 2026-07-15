@@ -127,9 +127,16 @@ describe('onboardingState', () => {
     assert.equal(isProfileStepValid({ fullName: 'QA User', countryCode: '' }), false);
   });
 
-  it('isCompanyStepValid requires company name and fiscal id', () => {
+  it('isCompanyStepValid requires company name; fiscal id is optional', () => {
+    // Company name present → valid, regardless of the fiscal id.
     assert.equal(isCompanyStepValid({ clientName: 'QA Company', fiscalIdValue: 'B12345678' }), true);
+    // fiscalIdValue is optional (not sent to provisioning), so it must not gate
+    // the step — blank or omitted fiscal id is still valid (core >= 0.3.7).
+    assert.equal(isCompanyStepValid({ clientName: 'QA Company', fiscalIdValue: ' ' }), true);
+    assert.equal(isCompanyStepValid({ clientName: 'QA Company' }), true);
+    // Company name missing/blank → invalid, whether or not a fiscal id is given.
     assert.equal(isCompanyStepValid({ clientName: ' ', fiscalIdValue: 'B12345678' }), false);
-    assert.equal(isCompanyStepValid({ clientName: 'QA Company', fiscalIdValue: ' ' }), false);
+    assert.equal(isCompanyStepValid({ clientName: '' }), false);
+    assert.equal(isCompanyStepValid({}), false);
   });
 });

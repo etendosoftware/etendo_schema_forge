@@ -22,6 +22,7 @@ Records are typically created from the **Assets** window via the **Create Amorti
   - A **Reactivar** option appears in the three-dot menu to unprocess the document.
 - The header **Delete** (trash) button is hidden in all states via `window.hideDeleteButton` (see `docs/decisions-reference.md` / `docs/ui-customization.md` for the flag mechanics).
 - Attach files via the **Adjuntos** tab.
+- The document-level **Delete** action (list row trash icon and detail toolbar) is hidden unconditionally, in both draft and processed status (`window.hideDeleteButton: true`) — this is stricter than the previous processed-only behavior. Deleting individual **lines** while in draft is unaffected and still available.
 
 ## Interaction model
 
@@ -33,6 +34,7 @@ Records are typically created from the **Assets** window via the **Create Amorti
 - Lines layout: `inlineEditable` — existing rows use InlineLinesPanel (flex), new rows use a DataTable add-row form. Hovering a row reveals pencil/trash icons in a dedicated 160px action slot (not a trailing-column swap, because `amortizationAmount` has `noTrailing: true`).
 - Confirm button: black primary button on the far right, disabled when no lines exist. Opens `AmortizationConfirmModal` rather than executing directly.
 - List toolbar: Print, Link, and the create button are hidden (`hidePrint: true`, `hideLink: true`, `hideCreate: true`). Only the status dropdown and funnel are shown — there is no "New amortization" button.
+- Delete action fully suppressed: `hideDeleteButton: true` hides the delete (red trash) icon in the list grid rows and in the detail toolbar, regardless of the document's processed state. This is stronger than `hideDeleteWhenComplete` (which only hides delete once the document is processed). Deleting individual **lines** while in draft is unaffected and still available.
 - No footer summary bar: `window.summaryFields: []` removes the bottom summary strip. The header form already surfaces those fields, so the footer strip is redundant.
 
 ## Reactive behavior and dependencies
