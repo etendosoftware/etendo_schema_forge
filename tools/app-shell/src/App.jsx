@@ -201,7 +201,9 @@ export default function App() {
   const routes = buildRuntimeRoutes({ windowMap, apiBaseUrl: API_BASE_URL });
 
   return (
-    <ObservabilityProvider value={{ trackMcpConnectTabSelected }}>
+    <ObservabilityProvider
+      value={{ trackMcpConnectTabSelected }}
+      data-testid="ObservabilityProvider__ecaf3f">
       <AppShellRuntime
         basename={routerBase}
         menuGroups={menuGroups}
