@@ -30,11 +30,13 @@ describe('ImportFromReturnShipmentModal', () => {
     assert.match(src, /Number\(r\.invoiceStatus\s*\|\|\s*0\)\s*<\s*100/);
   });
 
-  it('tracks already-imported return lines via goodsShipmentLine and salesOrderLine', () => {
-    assert.match(src, /alreadyImportedReturnLines/);
-    assert.match(src, /alreadyImportedOrderLines/);
+  it('tracks invoiced quantities (not just presence) per goodsShipmentLine and salesOrderLine', () => {
+    assert.match(src, /invoicedQtyByGoodsShipmentLine/);
+    assert.match(src, /invoicedQtyByOrderLine/);
+    assert.match(src, /addQty/);
     assert.match(src, /il\.goodsShipmentLine/);
     assert.match(src, /il\.salesOrderLine/);
+    assert.match(src, /Math\.abs\(Number\(il\.invoicedQuantity\)\s*\|\|\s*0\)/);
   });
 
   it('does NOT reference the removed mInoutlineId or the dead return-from-customer backend', () => {
@@ -42,9 +44,9 @@ describe('ImportFromReturnShipmentModal', () => {
     assert.doesNotMatch(src, /return-from-customer/);
   });
 
-  it('excludes return lines already invoiced on another invoice', () => {
-    assert.match(src, /invoicedElsewhere/);
-    assert.match(src, /invoicedElsewhere\.add/);
+  it('de-dupes an invoice line already counted for the current invoice when scanning invoiced-elsewhere', () => {
+    assert.match(src, /currentInvoiceLineIds/);
+    assert.match(src, /currentInvoiceLineIds\.has\(il\.id\)/);
   });
 
   it('wires the return-shipment-specific i18n keys', () => {
@@ -61,11 +63,11 @@ describe('ImportFromReturnShipmentModal', () => {
     assert.match(src, /resolveLinePrice/);
   });
 
-  it('marks lines as already imported via return-line id, order-line id, or invoiced-elsewhere', () => {
+  it('marks lines already imported only once remaining qty hits zero, or when order-line blocked (ETP-4459 partial import)', () => {
     assert.match(src, /_alreadyImported/);
-    assert.match(src, /alreadyImportedReturnLines\?\.has\(l\.id\)/);
-    assert.match(src, /alreadyImportedOrderLines\?\.has\(l\.salesOrderLine\)/);
-    assert.match(src, /invoicedElsewhere\?\.has\(l\.id\)/);
+    assert.match(src, /remainingQty\s*=\s*Math\.max\(0,\s*movementQty\s*-\s*alreadyInvoicedQty\)/);
+    assert.match(src, /_alreadyImported:\s*orderLineBlocked\s*\|\|\s*remainingQty\s*<=\s*0/);
+    assert.match(src, /_maxQty:\s*orderLineBlocked\s*\?\s*0\s*:\s*remainingQty/);
   });
 
   it('creates invoice lines via POST to sales-invoice/lines', () => {
@@ -125,23 +127,30 @@ async function fetchDocuments({ base, headers, bpId, invoiceId }) {
     fetch(`${base}/sales-invoice/header/${invoiceId}`, { headers }),
   ]);
 
-  const alreadyImportedReturnLines = new Set();
-  const alreadyImportedOrderLines = new Set();
+  const invoicedQtyByGoodsShipmentLine = new Map();
+  const invoicedQtyByOrderLine = new Map();
+  const addQty = (map, key, qty) => {
+    if (!key || !qty) return;
+    map.set(key, (map.get(key) || 0) + qty);
+  };
+
+  const currentInvoiceLineIds = new Set();
   if (invLinesRes.ok) {
     const invLines = (await invLinesRes.json())?.response?.data || [];
     invLines.forEach(il => {
-      if (il.goodsShipmentLine) alreadyImportedReturnLines.add(il.goodsShipmentLine);
-      if (il.salesOrderLine) alreadyImportedOrderLines.add(il.salesOrderLine);
+      if (il.id) currentInvoiceLineIds.add(il.id);
+      const qty = Math.abs(Number(il.invoicedQuantity) || 0);
+      if (il.goodsShipmentLine) addQty(invoicedQtyByGoodsShipmentLine, il.goodsShipmentLine, qty);
+      if (il.salesOrderLine) addQty(invoicedQtyByOrderLine, il.salesOrderLine, qty);
     });
   }
 
-  const invoicedElsewhere = new Set();
   if (allInvoicedLinesRes.ok) {
     const all = (await allInvoicedLinesRes.json())?.response?.data || [];
     all.forEach(il => {
-      if (il.goodsShipmentLine && !alreadyImportedReturnLines.has(il.goodsShipmentLine)) {
-        invoicedElsewhere.add(il.goodsShipmentLine);
-      }
+      if (il.id && currentInvoiceLineIds.has(il.id)) return;
+      const qty = Math.abs(Number(il.invoicedQuantity) || 0);
+      if (il.goodsShipmentLine) addQty(invoicedQtyByGoodsShipmentLine, il.goodsShipmentLine, qty);
     });
   }
 
@@ -181,7 +190,7 @@ async function fetchDocuments({ base, headers, bpId, invoiceId }) {
 
   return {
     documents,
-    sharedContext: { invoiceHeader, alreadyImportedReturnLines, alreadyImportedOrderLines, invoicedElsewhere },
+    sharedContext: { invoiceHeader, invoicedQtyByGoodsShipmentLine, invoicedQtyByOrderLine },
     excludedByCurrency,
   };
 }
@@ -296,25 +305,43 @@ describe('ImportFromReturnShipmentModal — fetchDocuments status/bp/currency fi
     assert.equal(result.excludedByCurrency, false);
   });
 
-  it('tracks already-imported return lines (goodsShipmentLine) and order lines (salesOrderLine) from existing invoice lines', async () => {
+  it('sums invoiced quantities (as absolute values) per goodsShipmentLine and salesOrderLine from existing invoice lines', async () => {
+    // Invoice lines store a NEGATIVE invoicedQuantity for ARI_RM lines — the map must hold abs().
     installFetch({
       returns: [{ id: 'r1', documentStatus: 'CO', businessPartner: 'bp1', invoiceStatus: 0 }],
-      invLines: [{ goodsShipmentLine: 'rline1', salesOrderLine: 'oline1' }],
+      invLines: [{ id: 'il1', goodsShipmentLine: 'rline1', salesOrderLine: 'oline1', invoicedQuantity: -5 }],
     });
     const result = await fetchDocuments({ base: '/b', headers: {}, bpId: 'bp1', invoiceId: 'inv1' });
-    assert.ok(result.sharedContext.alreadyImportedReturnLines.has('rline1'));
-    assert.ok(result.sharedContext.alreadyImportedOrderLines.has('oline1'));
+    assert.equal(result.sharedContext.invoicedQtyByGoodsShipmentLine.get('rline1'), 5);
+    assert.equal(result.sharedContext.invoicedQtyByOrderLine.get('oline1'), 5);
   });
 
-  it('flags a return line as invoiced elsewhere only when it is not already imported on THIS invoice', async () => {
+  it('de-dupes an invoice-line id counted on both the current-invoice query and the global "elsewhere" query (would double-count without the currentInvoiceLineIds guard)', async () => {
     installFetch({
       returns: [{ id: 'r1', documentStatus: 'CO', businessPartner: 'bp1', invoiceStatus: 0 }],
-      invLines: [{ goodsShipmentLine: 'rlineSelf' }],
-      allInvoicedLines: [{ goodsShipmentLine: 'rlineSelf' }, { goodsShipmentLine: 'rlineOther' }],
+      invLines: [{ id: 'ilSelf', goodsShipmentLine: 'rlineSelf', invoicedQuantity: -5 }],
+      allInvoicedLines: [
+        { id: 'ilSelf', goodsShipmentLine: 'rlineSelf', invoicedQuantity: -5 },
+        { id: 'ilOther', goodsShipmentLine: 'rlineOther', invoicedQuantity: -3 },
+      ],
     });
     const result = await fetchDocuments({ base: '/b', headers: {}, bpId: 'bp1', invoiceId: 'inv1' });
-    assert.equal(result.sharedContext.invoicedElsewhere.has('rlineSelf'), false);
-    assert.equal(result.sharedContext.invoicedElsewhere.has('rlineOther'), true);
+    // Same underlying invoice line (ilSelf) appears in both queries — must count once (5), not twice (10).
+    assert.equal(result.sharedContext.invoicedQtyByGoodsShipmentLine.get('rlineSelf'), 5);
+    assert.equal(result.sharedContext.invoicedQtyByGoodsShipmentLine.get('rlineOther'), 3);
+  });
+
+  it('sums invoiced quantity split across two different invoices for the same return-receipt line (3 elsewhere + 2 on current = 5 total)', async () => {
+    installFetch({
+      returns: [{ id: 'r1', documentStatus: 'CO', businessPartner: 'bp1', invoiceStatus: 0 }],
+      invLines: [{ id: 'ilCurrent', goodsShipmentLine: 'rline1', invoicedQuantity: -2 }],
+      allInvoicedLines: [
+        { id: 'ilCurrent', goodsShipmentLine: 'rline1', invoicedQuantity: -2 },
+        { id: 'ilElsewhere', goodsShipmentLine: 'rline1', invoicedQuantity: -3 },
+      ],
+    });
+    const result = await fetchDocuments({ base: '/b', headers: {}, bpId: 'bp1', invoiceId: 'inv1' });
+    assert.equal(result.sharedContext.invoicedQtyByGoodsShipmentLine.get('rline1'), 5);
   });
 });
 
@@ -471,12 +498,13 @@ describe('ImportFromReturnShipmentModal — resolveLinePrice pricing cascade', (
 });
 
 // ---------------------------------------------------------------------------
-// fetchLines — duplicate-import detection behavioral tests. Mirrors the exact
-// merge logic in the source: a line is "already imported" if its own id was
-// seen via goodsShipmentLine on THIS invoice, if its salesOrderLine was seen
-// via another import path, or if it was invoiced on a different invoice.
-// resolveLinePrice is stubbed out (pricing is covered separately above) so
-// these tests isolate the duplicate-detection merge.
+// fetchLines — partial-quantity remaining-import behavioral tests (ETP-4459).
+// Mirrors the exact merge logic in the source: remainingQty = movementQty -
+// alreadyInvoicedQty (clamped at 0); a line is "already imported" only once
+// remainingQty hits 0, OR when the conservative salesOrderLine path blocks it
+// outright regardless of the quantity math. resolveLinePrice is stubbed out
+// (pricing is covered separately above) so these tests isolate the
+// duplicate/remaining-quantity detection merge.
 // ---------------------------------------------------------------------------
 
 async function fetchLines({ base, headers, docId, sharedContext }, resolvePriceFn) {
@@ -484,73 +512,102 @@ async function fetchLines({ base, headers, docId, sharedContext }, resolvePriceF
   if (!res.ok) return [];
   const json = await res.json();
   const lines = json?.response?.data || [];
-  const { alreadyImportedReturnLines, alreadyImportedOrderLines, invoicedElsewhere } = sharedContext;
+  const { invoicedQtyByGoodsShipmentLine, invoicedQtyByOrderLine } = sharedContext;
 
   return Promise.all(lines.map(async (l) => {
-    const imported = alreadyImportedReturnLines?.has(l.id) || alreadyImportedOrderLines?.has(l.salesOrderLine) || invoicedElsewhere?.has(l.id);
+    const movementQty = Number(l.movementQuantity) || 0;
+    const alreadyInvoicedQty = invoicedQtyByGoodsShipmentLine?.get(l.id) || 0;
+    const remainingQty = Math.max(0, movementQty - alreadyInvoicedQty);
+    const orderLineBlocked = !!(l.salesOrderLine && invoicedQtyByOrderLine?.get(l.salesOrderLine));
     const priceData = await resolvePriceFn(l);
     return {
       ...l,
+      _maxQty: orderLineBlocked ? 0 : remainingQty,
       _unitPrice: Number(priceData.unitPrice) || 0,
-      _alreadyImported: !!imported,
+      _alreadyImported: orderLineBlocked || remainingQty <= 0,
     };
   }));
 }
 
-describe('ImportFromReturnShipmentModal — fetchLines duplicate-import detection', () => {
+describe('ImportFromReturnShipmentModal — fetchLines partial-quantity remaining import (ETP-4459)', () => {
   afterEach(() => {
     mock.reset();
   });
 
-  it('marks a line already imported when its own id is in alreadyImportedReturnLines', async () => {
-    globalThis.fetch = mock.fn(async () => mockRes(true, [{ id: 'l1', product: 'p1', salesOrderLine: null }]));
+  it('offers the full movementQuantity when nothing has been invoiced yet (baseline)', async () => {
+    globalThis.fetch = mock.fn(async () => mockRes(true, [{ id: 'l1', product: 'p1', movementQuantity: 10, salesOrderLine: null }]));
+    const lines = await fetchLines({
+      base: '/b', headers: {}, docId: 'd1',
+      sharedContext: { invoicedQtyByGoodsShipmentLine: new Map(), invoicedQtyByOrderLine: new Map() },
+    }, async () => ({}));
+    assert.equal(lines[0]._maxQty, 10);
+    assert.equal(lines[0]._alreadyImported, false);
+  });
+
+  it('offers the remaining 5 units and _alreadyImported=false when 5 of 10 units were already invoiced (the reported bug)', async () => {
+    globalThis.fetch = mock.fn(async () => mockRes(true, [{ id: 'l1', product: 'p1', movementQuantity: 10, salesOrderLine: null }]));
     const lines = await fetchLines({
       base: '/b', headers: {}, docId: 'd1',
       sharedContext: {
-        alreadyImportedReturnLines: new Set(['l1']),
-        alreadyImportedOrderLines: new Set(),
-        invoicedElsewhere: new Set(),
+        invoicedQtyByGoodsShipmentLine: new Map([['l1', 5]]),
+        invoicedQtyByOrderLine: new Map(),
       },
     }, async () => ({}));
+    assert.equal(lines[0]._maxQty, 5);
+    assert.equal(lines[0]._alreadyImported, false);
+  });
+
+  it('fully blocks the line (maxQty 0, alreadyImported true) once invoiced qty reaches movementQuantity', async () => {
+    globalThis.fetch = mock.fn(async () => mockRes(true, [{ id: 'l1', product: 'p1', movementQuantity: 10, salesOrderLine: null }]));
+    const lines = await fetchLines({
+      base: '/b', headers: {}, docId: 'd1',
+      sharedContext: {
+        invoicedQtyByGoodsShipmentLine: new Map([['l1', 10]]),
+        invoicedQtyByOrderLine: new Map(),
+      },
+    }, async () => ({}));
+    assert.equal(lines[0]._maxQty, 0);
     assert.equal(lines[0]._alreadyImported, true);
   });
 
-  it('marks a line already imported when its salesOrderLine is in alreadyImportedOrderLines', async () => {
-    globalThis.fetch = mock.fn(async () => mockRes(true, [{ id: 'l1', product: 'p1', salesOrderLine: 'o1' }]));
+  it('clamps remaining qty at 0 (never negative) when invoiced qty somehow exceeds movementQuantity', async () => {
+    globalThis.fetch = mock.fn(async () => mockRes(true, [{ id: 'l1', product: 'p1', movementQuantity: 10, salesOrderLine: null }]));
     const lines = await fetchLines({
       base: '/b', headers: {}, docId: 'd1',
       sharedContext: {
-        alreadyImportedReturnLines: new Set(),
-        alreadyImportedOrderLines: new Set(['o1']),
-        invoicedElsewhere: new Set(),
+        invoicedQtyByGoodsShipmentLine: new Map([['l1', 15]]),
+        invoicedQtyByOrderLine: new Map(),
       },
     }, async () => ({}));
+    assert.equal(lines[0]._maxQty, 0);
     assert.equal(lines[0]._alreadyImported, true);
   });
 
-  it('marks a line already imported when it was invoiced elsewhere', async () => {
-    globalThis.fetch = mock.fn(async () => mockRes(true, [{ id: 'l1', product: 'p1', salesOrderLine: null }]));
+  it('fully blocks via the conservative salesOrderLine path regardless of the remaining-quantity math (unchanged, by design)', async () => {
+    globalThis.fetch = mock.fn(async () => mockRes(true, [{ id: 'l1', product: 'p1', movementQuantity: 10, salesOrderLine: 'o1' }]));
     const lines = await fetchLines({
       base: '/b', headers: {}, docId: 'd1',
       sharedContext: {
-        alreadyImportedReturnLines: new Set(),
-        alreadyImportedOrderLines: new Set(),
-        invoicedElsewhere: new Set(['l1']),
+        // Nothing invoiced via the return-line path itself...
+        invoicedQtyByGoodsShipmentLine: new Map(),
+        // ...but the underlying sales-order-line was invoiced through another route.
+        invoicedQtyByOrderLine: new Map([['o1', 1]]),
       },
     }, async () => ({}));
+    assert.equal(lines[0]._maxQty, 0);
     assert.equal(lines[0]._alreadyImported, true);
   });
 
-  it('does not mark a genuinely new, unimported line', async () => {
-    globalThis.fetch = mock.fn(async () => mockRes(true, [{ id: 'l1', product: 'p1', salesOrderLine: 'o9' }]));
+  it('does not mark a genuinely new, unimported line and still carries through resolved pricing', async () => {
+    globalThis.fetch = mock.fn(async () => mockRes(true, [{ id: 'l1', product: 'p1', movementQuantity: 7, salesOrderLine: 'o9' }]));
     const lines = await fetchLines({
       base: '/b', headers: {}, docId: 'd1',
       sharedContext: {
-        alreadyImportedReturnLines: new Set(['other']),
-        alreadyImportedOrderLines: new Set(['different']),
-        invoicedElsewhere: new Set(),
+        invoicedQtyByGoodsShipmentLine: new Map([['other', 5]]),
+        invoicedQtyByOrderLine: new Map([['different', 3]]),
       },
     }, async () => ({ unitPrice: 42 }));
+    assert.equal(lines[0]._maxQty, 7);
     assert.equal(lines[0]._alreadyImported, false);
     assert.equal(lines[0]._unitPrice, 42);
   });
@@ -559,11 +616,7 @@ describe('ImportFromReturnShipmentModal — fetchLines duplicate-import detectio
     globalThis.fetch = mock.fn(async () => mockRes(true, []));
     const lines = await fetchLines({
       base: '/b', headers: {}, docId: 'd1',
-      sharedContext: {
-        alreadyImportedReturnLines: new Set(),
-        alreadyImportedOrderLines: new Set(),
-        invoicedElsewhere: new Set(),
-      },
+      sharedContext: { invoicedQtyByGoodsShipmentLine: new Map(), invoicedQtyByOrderLine: new Map() },
     }, async () => ({}));
     assert.deepEqual(lines, []);
   });
