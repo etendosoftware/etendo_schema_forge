@@ -184,3 +184,124 @@ describe('MovementRowKebab — Post action', () => {
     );
   });
 });
+
+describe('MovementRowKebab — Unpost action', () => {
+  beforeEach(() => {
+    toastSuccess.mockClear();
+    toastError.mockClear();
+    globalThis.fetch = vi.fn();
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  // 1. Unpost item absent when not posted
+  it('does not render the Unpost item when posted !== "Y"', () => {
+    renderKebab(NOT_POSTED);
+    expect(screen.queryByText('financeAccountMovementsRowUnpost')).not.toBeInTheDocument();
+  });
+
+  // 2. Unpost item present and enabled when posted
+  it('renders the Unpost item when posted === "Y"', () => {
+    renderKebab(POSTED);
+    const unpostItem = screen.getByText('financeAccountMovementsRowUnpost');
+    expect(unpostItem).toBeInTheDocument();
+    // The wrapping button must not be aria-disabled
+    const btn = unpostItem.closest('[role="menuitem"]');
+    expect(btn).not.toHaveAttribute('aria-disabled', 'true');
+  });
+
+  // 3. Clicking Unpost calls fetch with correct URL and method
+  it('calls fetch with POST to the correct unpost URL when clicked', async () => {
+    globalThis.fetch.mockResolvedValue({
+      ok: true,
+      json: async () => ({ response: { data: [] } }),
+    });
+
+    const user = userEvent.setup();
+    renderKebab(POSTED);
+    await user.click(screen.getByText('financeAccountMovementsRowUnpost'));
+
+    expect(globalThis.fetch).toHaveBeenCalledOnce();
+    const [url, init] = globalThis.fetch.mock.calls[0];
+    expect(url).toContain('/sws/neo/financial-account-detail/transaction/mov-2/action/unpost');
+    expect(init.method).toBe('POST');
+    expect(init.headers.Authorization).toBe('Bearer test-token');
+  });
+
+  // 4. On success → toast.success (reused documentUnposted key) + onReload
+  it('calls toast.success and onReload on a successful fetch', async () => {
+    globalThis.fetch.mockResolvedValue({
+      ok: true,
+      json: async () => ({ response: { data: [{ success: true }] } }),
+    });
+
+    const user = userEvent.setup();
+    const { onReload } = renderKebab(POSTED);
+    await user.click(screen.getByText('financeAccountMovementsRowUnpost'));
+
+    await waitFor(() => expect(toastSuccess).toHaveBeenCalledOnce());
+    expect(toastSuccess).toHaveBeenCalledWith('documentUnposted');
+    expect(onReload).toHaveBeenCalledOnce();
+    expect(toastError).not.toHaveBeenCalled();
+  });
+
+  // 5. On failed fetch (ok: false) → toast.error, onReload NOT called
+  it('calls toast.error and does not call onReload when fetch returns ok: false', async () => {
+    globalThis.fetch.mockResolvedValue({
+      ok: false,
+      json: async () => ({ message: 'Server error' }),
+    });
+
+    const user = userEvent.setup();
+    const { onReload } = renderKebab(POSTED);
+    await user.click(screen.getByText('financeAccountMovementsRowUnpost'));
+
+    await waitFor(() => expect(toastError).toHaveBeenCalledOnce());
+    expect(onReload).not.toHaveBeenCalled();
+    expect(toastSuccess).not.toHaveBeenCalled();
+  });
+
+  // 6. On network error (fetch throws) → toast.error
+  it('calls toast.error when fetch throws a network error', async () => {
+    globalThis.fetch.mockRejectedValue(new Error('Network failure'));
+
+    const user = userEvent.setup();
+    const { onReload } = renderKebab(POSTED);
+    await user.click(screen.getByText('financeAccountMovementsRowUnpost'));
+
+    await waitFor(() => expect(toastError).toHaveBeenCalledOnce());
+    expect(onReload).not.toHaveBeenCalled();
+  });
+
+  // 7. While fetching → Unpost item is disabled (aria-disabled)
+  it('disables the Unpost item while the fetch is in flight', async () => {
+    let resolveFetch;
+    globalThis.fetch.mockReturnValue(
+      new Promise((resolve) => {
+        resolveFetch = resolve;
+      })
+    );
+
+    const user = userEvent.setup();
+    renderKebab(POSTED);
+    await user.click(screen.getByText('financeAccountMovementsRowUnpost'));
+
+    // While in-flight the label changes to the "unposting" key
+    await waitFor(() =>
+      expect(screen.getByText('financeAccountMovementsRowUnposting')).toBeInTheDocument()
+    );
+
+    const unpostingBtn = screen
+      .getByText('financeAccountMovementsRowUnposting')
+      .closest('[role="menuitem"]');
+    expect(unpostingBtn).toHaveAttribute('aria-disabled', 'true');
+
+    // Clean up — resolve the hanging promise
+    resolveFetch({ ok: true, json: async () => ({}) });
+    await waitFor(() =>
+      expect(screen.queryByText('financeAccountMovementsRowUnposting')).not.toBeInTheDocument()
+    );
+  });
+});
