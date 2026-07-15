@@ -29,6 +29,20 @@ import ImportLinesModal from '@/components/contract-ui/ImportLinesModal';
  * normal shipments, since a return receipt line and a regular shipment line
  * both live in M_InOutLine; their IDs never collide, so a single column
  * safely tracks both origins.
+ *
+ * ETP-4459 (partial import): detection is quantity-aware, not presence-only.
+ * A return-receipt line can be split across multiple invoices (e.g. 10
+ * returned, 5 invoiced so far), so fetchDocuments sums abs(invoicedQuantity)
+ * per goodsShipmentLine — combining the current invoice's own lines with any
+ * invoiced from other invoices — into invoicedQtyByGoodsShipmentLine.
+ * fetchLines then derives remainingQty = movementQuantity - alreadyInvoiced
+ * and only marks a line as _alreadyImported once remainingQty hits 0. The
+ * separate salesOrderLine-based duplicate check (a different join, catching
+ * invoices raised against the same order line through an unrelated route)
+ * stays boolean/conservative: its "already invoiced" quantity lives in a
+ * different unit universe (original sale qty vs. returned qty) and can't be
+ * safely netted against movementQuantity, so any match there still fully
+ * blocks the line rather than attempting a fragile reconciliation.
  */
 
 const resolveLinePrice = async (base, headers, productId, qty, invoiceHeader, auxData = {}) => {
@@ -112,24 +126,42 @@ const fetchDocuments = async ({ base, headers, bpId, invoiceId }) => {
     fetch(`${base}/sales-invoice/header/${invoiceId}`, { headers }),
   ]);
 
-  const alreadyImportedReturnLines = new Set();
-  const alreadyImportedOrderLines = new Set();
+  // Quantity-aware tracking (ETP-4459): a return-receipt line can be partially
+  // imported (e.g. 10 returned, 5 invoiced so far → 5 still importable), so we
+  // sum how much has already been invoiced per goodsShipmentLine instead of just
+  // flagging presence. Invoice lines store a NEGATIVE invoicedQuantity for ARI_RM
+  // (see buildLineBody below) — always compare/accumulate absolute values.
+  const invoicedQtyByGoodsShipmentLine = new Map();
+  // Secondary, coarser join (see fetchLines): total invoiced qty against the
+  // underlying sales-order-line, regardless of return-receipt path.
+  const invoicedQtyByOrderLine = new Map();
+  const addQty = (map, key, qty) => {
+    if (!key || !qty) return;
+    map.set(key, (map.get(key) || 0) + qty);
+  };
+
+  // Lines already on THIS invoice (relevant when re-editing a draft invoice).
+  const currentInvoiceLineIds = new Set();
   if (invLinesRes.ok) {
     const invLines = (await invLinesRes.json())?.response?.data || [];
     invLines.forEach(il => {
-      if (il.goodsShipmentLine) alreadyImportedReturnLines.add(il.goodsShipmentLine);
-      if (il.salesOrderLine) alreadyImportedOrderLines.add(il.salesOrderLine);
+      if (il.id) currentInvoiceLineIds.add(il.id);
+      const qty = Math.abs(Number(il.invoicedQuantity) || 0);
+      if (il.goodsShipmentLine) addQty(invoicedQtyByGoodsShipmentLine, il.goodsShipmentLine, qty);
+      if (il.salesOrderLine) addQty(invoicedQtyByOrderLine, il.salesOrderLine, qty);
     });
   }
 
-  // Return receipt lines already used in other invoices — prevents double-invoicing the same line.
-  const invoicedElsewhere = new Set();
+  // Return receipt lines already invoiced from OTHER invoices — prevents
+  // double-invoicing the same line. This query is unscoped by invoice, so it
+  // re-returns the current invoice's own lines too; skip records whose id was
+  // already summed above so the same underlying invoice line isn't counted twice.
   if (allInvoicedLinesRes.ok) {
     const all = (await allInvoicedLinesRes.json())?.response?.data || [];
     all.forEach(il => {
-      if (il.goodsShipmentLine && !alreadyImportedReturnLines.has(il.goodsShipmentLine)) {
-        invoicedElsewhere.add(il.goodsShipmentLine);
-      }
+      if (il.id && currentInvoiceLineIds.has(il.id)) return;
+      const qty = Math.abs(Number(il.invoicedQuantity) || 0);
+      if (il.goodsShipmentLine) addQty(invoicedQtyByGoodsShipmentLine, il.goodsShipmentLine, qty);
     });
   }
 
@@ -190,7 +222,7 @@ const fetchDocuments = async ({ base, headers, bpId, invoiceId }) => {
 
   return {
     documents,
-    sharedContext: { invoiceHeader, productAuxMap, alreadyImportedReturnLines, alreadyImportedOrderLines, invoicedElsewhere },
+    sharedContext: { invoiceHeader, productAuxMap, invoicedQtyByGoodsShipmentLine, invoicedQtyByOrderLine },
     excludedByCurrency,
   };
 };
@@ -200,7 +232,7 @@ const fetchLines = async ({ base, headers, docId, sharedContext }) => {
   if (!res.ok) return [];
   const json = await res.json();
   const lines = json?.response?.data || [];
-  const { invoiceHeader, productAuxMap, alreadyImportedReturnLines, alreadyImportedOrderLines, invoicedElsewhere } = sharedContext;
+  const { invoiceHeader, productAuxMap, invoicedQtyByGoodsShipmentLine, invoicedQtyByOrderLine } = sharedContext;
 
   // Batch-fetch the referenced sales order lines to carry their discount into the
   // invoice. M_InOutLine has no Discount column — the value lives on C_OrderLine.
@@ -218,18 +250,30 @@ const fetchLines = async ({ base, headers, docId, sharedContext }) => {
   }));
 
   return Promise.all(lines.map(async (l) => {
-    const imported = alreadyImportedReturnLines?.has(l.id) || alreadyImportedOrderLines?.has(l.salesOrderLine) || invoicedElsewhere?.has(l.id);
-    const qty = Number(l.movementQuantity) || 1;
+    const movementQty = Number(l.movementQuantity) || 0;
+    const alreadyInvoicedQty = invoicedQtyByGoodsShipmentLine?.get(l.id) || 0;
+    const remainingQty = Math.max(0, movementQty - alreadyInvoicedQty);
+
+    // Secondary duplicate-detection path: the same underlying sales-order-line was
+    // already invoiced through a different route (not via this return-receipt line).
+    // That invoiced quantity lives in a different unit universe (original sale qty,
+    // not returned qty) than movementQty/remainingQty above, so it can't be netted
+    // against them without risking an incorrect (over-permissive) remaining amount.
+    // Kept conservative: any recorded quantity against the same salesOrderLine fully
+    // blocks the line, same as the original boolean behavior.
+    const orderLineBlocked = !!(l.salesOrderLine && invoicedQtyByOrderLine?.get(l.salesOrderLine));
+
+    const qty = movementQty || 1;
     const priceData = l.product ? await resolveLinePrice(base, headers, l.product, qty, invoiceHeader, productAuxMap[l.product] || {}) : {};
     return {
       ...l,
       _productName: l['product$_identifier'] || l.id,
-      _maxQty: Number(l.movementQuantity) || 0,
+      _maxQty: orderLineBlocked ? 0 : remainingQty,
       _unitPrice: Number(priceData.unitPrice) || Number(priceData.grossUnitPrice) || 0,
       _lineNetAmount: Number(priceData.lineNetAmount ?? 0),
       _tax: priceData.tax || null,
       _uOM: priceData.uOM || l.uOM || null,
-      _alreadyImported: !!imported,
+      _alreadyImported: orderLineBlocked || remainingQty <= 0,
       _orderDiscount: orderDiscounts[l.salesOrderLine] || 0,
     };
   }));
