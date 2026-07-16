@@ -34,6 +34,8 @@ The header form shows **exactly 6 editable fields**, in this order: Accounting D
 | `period` | C_Period_ID | editable | `seq: 20`. Accounting period. |
 | `description` | Description | editable | `seq: 30` — placed after the dates. Required; the only header field also shown in the journal list grid + searchable. |
 | `documentDate` | DateDoc | system | **Hidden.** Unified into Accounting Date — not on the form and not sent; the backend resolves `DateDoc` from its AD default (`to_date(@HeaderDateAcct@)`). |
+
+**ETP-4531 note (independent accounting date):** `GL_Journal.DateDoc` and `GL_Journal.DateAcct` both carry `AD_Column.AD_Callout_ID = org.openbravo.erpCommon.ad_callouts.SL_Journal_Period`, whose `execute()` unconditionally copies `DateDoc → DateAcct` when `DateDoc` is the field that changed. Today this is **dormant, not absent**: it never fires because `documentDate` stays hidden (`visibility: system`), so no interactive edit can trigger it, and the create-time cascade is a no-op since both dates already default to `@#Date@`. This window's "single date" design (`documentDate` hidden) is precisely what keeps it compliant with the independent-accounting-date requirement — **do not expose `documentDate` as an editable field without first adding a `GlJournalHeaderHandler#afterCallout` guard** (mirroring the `blockCalloutCurrencyUpdate`/ETP-4029 pattern used elsewhere) that strips a callout-driven `accountingDate` update whenever the trigger field isn't `accountingDate` itself.
 | `currency` | C_Currency_ID | editable | Journal currency. |
 | `opening` | IsOpening | editable | Marks an opening-balance journal. |
 | `multigeneralLedger` | Multi_Gl | editable | Multi-ledger flag. |

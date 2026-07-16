@@ -1,8 +1,8 @@
 {
-  "version": "0.67.0",
+  "version": "0.68.0",
   "generatedAt": "2026-04-30T15:42:46.722Z",
-  "updatedAt": "2026-07-06T13:19:15.454Z",
-  "checksum": "ba5b71d06c8590f7",
+  "updatedAt": "2026-07-16T14:25:57.063Z",
+  "checksum": "8bdcb5d32ea314da",
   "frontendContract": {
     "window": {
       "id": "183",
@@ -312,14 +312,15 @@
             "visibility": "editable",
             "required": true,
             "grid": false,
-            "form": false,
+            "form": true,
             "sourceRequired": true,
             "derivation": {
               "type": "computed",
               "source": "@#Date@"
             },
             "defaultValue": "@#Date@",
-            "section": "other",
+            "section": "principal",
+            "seq": 35,
             "callout": {
               "className": "org.openbravo.erpCommon.ad_callouts.SE_Invoice_TaxDate"
             },

@@ -1,8 +1,8 @@
 {
-  "version": "0.26.0",
+  "version": "0.27.0",
   "generatedAt": "2026-04-29T19:04:55.657Z",
-  "updatedAt": "2026-06-24T20:46:47.428Z",
-  "contractChecksum": "a4ad279aa4b7c4db",
+  "updatedAt": "2026-07-16T14:25:56.712Z",
+  "contractChecksum": "86cdc8b109c3df1e",
   "apiPrediction": {
     "specName": "goods-shipment",
     "baseUrl": "/sws/neo/goods-shipment",
@@ -434,6 +434,11 @@
             "required": true,
             "defaultValue": "DR"
           },
+          "accountingDate": {
+            "required": true,
+            "readOnlyLogic": "@Posted@='Y'",
+            "defaultValue": "@#Date@"
+          },
           "posted": {
             "readOnly": true,
             "required": true,
@@ -497,7 +502,8 @@
         "warehouse",
         "businessPartner",
         "partnerAddress",
-        "movementDate"
+        "movementDate",
+        "accountingDate"
       ],
       "lineFields": [
         "product",
@@ -557,7 +563,8 @@
           "warehouse",
           "businessPartner",
           "partnerAddress",
-          "movementDate"
+          "movementDate",
+          "accountingDate"
         ]
       },
       {
@@ -578,5 +585,5 @@
     "knownLimitations": [],
     "dangerousOperations": []
   },
-  "checksum": "126b26c4d7f9c2ba"
+  "checksum": "0510f6c509e21972"
 }

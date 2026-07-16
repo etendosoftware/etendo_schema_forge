@@ -1,8 +1,8 @@
 {
-  "version": "0.54.0",
+  "version": "0.55.0",
   "generatedAt": "2026-04-30T15:42:46.582Z",
-  "updatedAt": "2026-07-07T14:43:09.715Z",
-  "contractChecksum": "a42dd981e45dff7c",
+  "updatedAt": "2026-07-16T14:24:49.272Z",
+  "contractChecksum": "39bda1ddcecbfd76",
   "apiPrediction": {
     "specName": "sales-invoice",
     "baseUrl": "/sws/neo/sales-invoice",
@@ -1005,6 +1005,11 @@
             "required": true,
             "readOnlyLogic": "@Processed@='Y'"
           },
+          "accountingDate": {
+            "required": true,
+            "readOnlyLogic": "@Posted@='Y'",
+            "defaultValue": "@#Date@"
+          },
           "etsgDateOperation": {
             "readOnlyLogic": "@processed@='Y'",
             "defaultValue": "@DateInvoiced@"
@@ -1225,6 +1230,7 @@
         "paymentMethod",
         "currency",
         "priceList",
+        "accountingDate",
         "etvfacSimpinvart7273",
         "etvfacInvNoIDArt61d",
         "aeatsiiIsauthorization",
@@ -1360,6 +1366,7 @@
           "paymentMethod",
           "currency",
           "priceList",
+          "accountingDate",
           "etvfacSimpinvart7273",
           "etvfacInvNoIDArt61d",
           "aeatsiiIsauthorization",
@@ -1390,5 +1397,5 @@
       "tbaiVoidxmlgenerator"
     ]
   },
-  "checksum": "80f8a379fa0f5a46"
+  "checksum": "b510c65aac65134c"
 }

@@ -1,8 +1,8 @@
 {
-  "version": "0.26.0",
+  "version": "0.27.0",
   "generatedAt": "2026-04-29T19:04:55.657Z",
-  "updatedAt": "2026-07-06T17:42:27.381Z",
-  "checksum": "a4ad279aa4b7c4db",
+  "updatedAt": "2026-07-16T14:25:56.712Z",
+  "checksum": "86cdc8b109c3df1e",
   "frontendContract": {
     "window": {
       "id": "169",
@@ -304,6 +304,31 @@
             "defaultValue": "DR"
           },
           {
+            "name": "accountingDate",
+            "apiKey": "accountingDate",
+            "column": "DateAcct",
+            "label": "Accounting Date",
+            "type": "date",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": true,
+            "grid": false,
+            "form": true,
+            "sourceRequired": true,
+            "derivation": {
+              "type": "computed",
+              "source": "@#Date@"
+            },
+            "defaultValue": "@#Date@",
+            "section": "principal",
+            "seq": 35,
+            "readOnlyLogic": {
+              "raw": "@Posted@='Y'",
+              "evaluable": true,
+              "js": "record['posted'] === true"
+            }
+          },
+          {
             "name": "posted",
             "apiKey": "posted",
             "column": "Posted",
@@ -409,129 +434,75 @@
             "enumValues": [
               {
                 "value": "NC",
-                "name": "Cost Not Calculated",
-                "labels": {
-                  "es_ES": "Coste No Calculado"
-                }
+                "name": "Cost Not Calculated"
               },
               {
                 "value": "d",
-                "name": "Disabled For Background",
-                "labels": {
-                  "es_ES": "Deshabilitado Para Background"
-                }
+                "name": "Disabled For Background"
               },
               {
                 "value": "D",
-                "name": "Document Disabled",
-                "labels": {
-                  "es_ES": "Documento Deshabilitado"
-                }
+                "name": "Document Disabled"
               },
               {
                 "value": "L",
-                "name": "Document Locked",
-                "labels": {
-                  "es_ES": "Documento Bloqueado"
-                }
+                "name": "Document Locked"
               },
               {
                 "value": "E",
-                "name": "Error",
-                "labels": {
-                  "es_ES": "Error"
-                }
+                "name": "Error"
               },
               {
                 "value": "C",
-                "name": "Error, No cost",
-                "labels": {
-                  "es_ES": "Error, No hay coste"
-                }
+                "name": "Error, No cost"
               },
               {
                 "value": "i",
-                "name": "Invalid Account",
-                "labels": {
-                  "es_ES": "Cuenta No Válida"
-                }
+                "name": "Invalid Account"
               },
               {
                 "value": "AD",
-                "name": "No Accounting Date",
-                "labels": {
-                  "es_ES": "Sin Fecha Contable"
-                }
+                "name": "No Accounting Date"
               },
               {
                 "value": "DT",
-                "name": "No Document Type",
-                "labels": {
-                  "es_ES": "Sin tipo de Documento"
-                }
+                "name": "No Document Type"
               },
               {
                 "value": "NO",
-                "name": "No Related PO",
-                "labels": {
-                  "es_ES": "Sin PO Relacionada"
-                }
+                "name": "No Related PO"
               },
               {
                 "value": "b",
-                "name": "Not Balanced",
-                "labels": {
-                  "es_ES": "No Balanceado"
-                }
+                "name": "Not Balanced"
               },
               {
                 "value": "c",
-                "name": "Not Convertible (no rate)",
-                "labels": {
-                  "es_ES": "No Convertible (no hay rango)"
-                }
+                "name": "Not Convertible (no rate)"
               },
               {
                 "value": "l",
-                "name": "Pending Refresh",
-                "labels": {
-                  "es_ES": "Pendiente de Actualización"
-                }
+                "name": "Pending Refresh"
               },
               {
                 "value": "p",
-                "name": "Period Closed",
-                "labels": {
-                  "es_ES": "Periodo Cerrado"
-                }
+                "name": "Period Closed"
               },
               {
                 "value": "y",
-                "name": "Post Prepared",
-                "labels": {
-                  "es_ES": "Contabilidad Preparada"
-                }
+                "name": "Post Prepared"
               },
               {
                 "value": "Y",
-                "name": "Posted",
-                "labels": {
-                  "es_ES": "Contabilizado"
-                }
+                "name": "Posted"
               },
               {
                 "value": "T",
-                "name": "Table Disabled",
-                "labels": {
-                  "es_ES": "Tabla Deshabilitada"
-                }
+                "name": "Table Disabled"
               },
               {
                 "value": "N",
-                "name": "Unposted",
-                "labels": {
-                  "es_ES": "No Contabilizado"
-                }
+                "name": "Unposted"
               }
             ],
             "defaultValue": "N"
@@ -588,6 +559,13 @@
             "derivation": {
               "type": "computed",
               "source": "DR"
+            }
+          },
+          {
+            "name": "accountingDate",
+            "derivation": {
+              "type": "computed",
+              "source": "@#Date@"
             }
           },
           {
@@ -901,7 +879,7 @@
             "apiKey": "accountingDate",
             "column": "DateAcct",
             "type": "date",
-            "visibility": "system",
+            "visibility": "editable",
             "required": true
           },
           {
@@ -2028,6 +2006,14 @@
         "description": "CRUD flags for 'goodsShipmentLine' should all be booleans"
       },
       {
+        "id": "t-default-value-type-goodsShipment-accountingDate",
+        "category": "default-value-type",
+        "entity": "goodsShipment",
+        "field": "accountingDate",
+        "runner": "node",
+        "description": "Default value for 'accountingDate' in goodsShipment should be a string"
+      },
+      {
         "id": "t-default-value-type-goodsShipment-documentStatus",
         "category": "default-value-type",
         "entity": "goodsShipment",
@@ -2130,6 +2116,14 @@
         "field": "orderQuantity",
         "runner": "node",
         "description": "Display logic for 'orderQuantity' in goodsShipmentLine should be valid JS"
+      },
+      {
+        "id": "t-field-presence-goodsShipment-accountingDate",
+        "category": "field-presence",
+        "entity": "goodsShipment",
+        "field": "accountingDate",
+        "runner": "node",
+        "description": "Field 'accountingDate' should be present in goodsShipment"
       },
       {
         "id": "t-field-presence-goodsShipment-businessPartner",
@@ -2268,6 +2262,14 @@
         "description": "Field 'product' should be present in goodsShipmentLine"
       },
       {
+        "id": "t-field-type-goodsShipment-accountingDate",
+        "category": "field-type",
+        "entity": "goodsShipment",
+        "field": "accountingDate",
+        "runner": "node",
+        "description": "Field 'accountingDate' should have type 'string' in goodsShipment"
+      },
+      {
         "id": "t-field-type-goodsShipment-businessPartner",
         "category": "field-type",
         "entity": "goodsShipment",
@@ -2404,6 +2406,14 @@
         "description": "Field 'product' should have type 'string' in goodsShipmentLine"
       },
       {
+        "id": "t-readonlylogic-evaluable-goodsShipment-accountingDate",
+        "category": "readonlylogic-evaluable",
+        "entity": "goodsShipment",
+        "field": "accountingDate",
+        "runner": "node",
+        "description": "Read-only logic for 'accountingDate' in goodsShipment should have evaluable flag"
+      },
+      {
         "id": "t-readonlylogic-evaluable-goodsShipment-businessPartner",
         "category": "readonlylogic-evaluable",
         "entity": "goodsShipment",
@@ -2466,6 +2476,14 @@
         "field": "product",
         "runner": "node",
         "description": "Read-only logic for 'product' in goodsShipmentLine should have evaluable flag"
+      },
+      {
+        "id": "t-readonlylogic-valid-goodsShipment-accountingDate",
+        "category": "readonlylogic-valid",
+        "entity": "goodsShipment",
+        "field": "accountingDate",
+        "runner": "node",
+        "description": "Read-only logic for 'accountingDate' in goodsShipment should be valid JS"
       },
       {
         "id": "t-readonlylogic-valid-goodsShipment-businessPartner",
@@ -2546,11 +2564,25 @@
         "description": "Rule 'Product_AutoFill_UOM' (callout) should be declared"
       },
       {
+        "id": "t-rule-declared-READONLY-Posted-AccountingDate",
+        "category": "rule-declared",
+        "rule": "READONLY_Posted_AccountingDate",
+        "runner": "node",
+        "description": "Rule 'READONLY_Posted_AccountingDate' (readOnlyLogic) should be declared"
+      },
+      {
         "id": "t-rule-declared-ReadOnly-When-Processed",
         "category": "rule-declared",
         "rule": "ReadOnly_When_Processed",
         "runner": "node",
         "description": "Rule 'ReadOnly_When_Processed' (displayLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-SL-InOut-AccountingDate",
+        "category": "rule-declared",
+        "rule": "SL_InOut_AccountingDate",
+        "runner": "node",
+        "description": "Rule 'SL_InOut_AccountingDate' (callout) should be declared"
       },
       {
         "id": "t-searchable-filters-goodsShipment-businessPartner",
@@ -2631,14 +2663,6 @@
         "field": "product",
         "runner": "node",
         "description": "Selector endpoint for 'product' in goodsShipmentLine should exist"
-      },
-      {
-        "id": "t-system-field-goodsShipment-accountingDate",
-        "category": "system-field",
-        "entity": "goodsShipment",
-        "field": "accountingDate",
-        "runner": "node",
-        "description": "System field 'accountingDate' should exist in backend but not frontend for goodsShipment"
       },
       {
         "id": "t-system-field-goodsShipment-active",
@@ -3352,25 +3376,25 @@
       }
     ],
     "summary": {
-      "total": 180,
+      "total": 186,
       "byCategory": {
         "action-endpoint": 12,
         "crud-flags": 2,
-        "default-value-type": 7,
+        "default-value-type": 8,
         "displaylogic-evaluable": 3,
         "displaylogic-valid": 3,
-        "field-presence": 17,
-        "field-type": 17,
-        "readonlylogic-evaluable": 8,
-        "readonlylogic-valid": 8,
-        "rule-declared": 3,
+        "field-presence": 18,
+        "field-type": 18,
+        "readonlylogic-evaluable": 9,
+        "readonlylogic-valid": 9,
+        "rule-declared": 5,
         "searchable-filters": 6,
         "selector-endpoint": 4,
-        "system-field": 88,
+        "system-field": 87,
         "visibility": 2
       },
       "byRunner": {
-        "node": 180,
+        "node": 186,
         "junit": 0
       }
     }
