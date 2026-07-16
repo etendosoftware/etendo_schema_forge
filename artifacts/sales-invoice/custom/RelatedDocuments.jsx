@@ -52,12 +52,15 @@ export default function RelatedDocuments({ recordId, data, token, apiBaseUrl }) 
 
     // Linked shipments/returns are resolved server-side (SalesInvoiceHeaderHandler#
     // enrichLinkedShipments) from each invoice line's own `goodsShipmentLine` (M_InOutLine_ID),
-    // covering BOTH normal deliveries and customer returns — `movementType` on each entry tells
-    // which. This must be read unconditionally, never derived from `salesOrder`: a DEV (return)
-    // invoice's `salesOrder`, when set, still points at the ORIGINAL sales order, whose own
-    // shipments are outgoing deliveries, not the return that generated this invoice. Deriving
-    // the chip from an order-scoped shipment lookup (as this file used to) is what produced the
-    // wrong "Envío" chip/link for return invoices (ETP-4534).
+    // covering BOTH normal deliveries and customer returns — `isReturn` (from a C_DocType join,
+    // not `movementType`) on each entry tells which. `M_InOut.MovementType` is NOT usable as a
+    // return discriminator: per the DB trigger M_INOUT_TRG_PROV.xml it only ever takes 'C-' for
+    // every sales-side movement (shipments AND returns alike) or 'V+' for purchase-side, never
+    // branching on C_DocType.IsReturn (ETP-4534). This must be read unconditionally, never
+    // derived from `salesOrder`: a DEV (return) invoice's `salesOrder`, when set, still points at
+    // the ORIGINAL sales order, whose own shipments are outgoing deliveries, not the return that
+    // generated this invoice. Deriving the chip from an order-scoped shipment lookup (as this
+    // file used to) is what produced the wrong "Envío" chip/link for return invoices (ETP-4534).
     const linked = Array.isArray(data.linkedShipments) ? data.linkedShipments : [];
     setShipments(linked);
 
@@ -85,7 +88,7 @@ export default function RelatedDocuments({ recordId, data, token, apiBaseUrl }) 
   }
 
   for (const s of shipments) {
-    const isReturn = s.movementType === 'C+';
+    const isReturn = s.isReturn === true;
     chips.push(
       <DocChip
         key={`ship-${s.id}`}

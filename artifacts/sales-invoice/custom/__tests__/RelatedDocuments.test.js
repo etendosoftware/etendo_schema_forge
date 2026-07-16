@@ -37,8 +37,13 @@ describe('sales-invoice RelatedDocuments', () => {
       assert.doesNotMatch(src, /getArSubtype/);
     });
 
-    it('classifies each linked shipment via movementType === "C+"', () => {
-      assert.match(src, /const isReturn = s\.movementType === 'C\+'/);
+    it('classifies each linked shipment via the server-provided isReturn flag, not movementType', () => {
+      // movementType only ever takes 'C-' (all sales-side docs, shipments AND returns
+      // alike) or 'V+' (purchase side) — see M_INOUT_TRG_PROV.xml. It can never
+      // discriminate a return. isReturn comes from a C_DocType join server-side
+      // (SalesInvoiceHeaderHandler#enrichLinkedShipments).
+      assert.match(src, /const isReturn = s\.isReturn === true/);
+      assert.doesNotMatch(src, /s\.movementType === 'C\+'/);
     });
 
     it('renders the chip type from isReturn via the shared docChipProps registry', () => {
@@ -72,13 +77,19 @@ describe('sales-invoice RelatedDocuments', () => {
 });
 
 // ---------------------------------------------------------------------------
-// Behavioral: movementType → chip type → route/label mapping.
+// Behavioral: isReturn → chip type → route/label mapping.
 //
 // Mirrors the exact classification expression from the source
-// (`s.movementType === 'C+' ? 'return-material-receipt' : 'shipment'`,
+// (`s.isReturn === true ? 'return-material-receipt' : 'shipment'`,
 // verified above via regex) and resolves the result through the REAL shared
 // registry text (docChipTypes.jsx) + the REAL es_ES locale, so a drift in
 // either the routePrefix or the translated label would break this test.
+//
+// isReturn is populated server-side (SalesInvoiceHeaderHandler#
+// enrichLinkedShipments) from a C_DocType.IsReturn join — NOT from
+// M_InOut.MovementType, which per M_INOUT_TRG_PROV.xml only ever takes 'C-'
+// (all sales-side docs, shipments AND returns alike) or 'V+' (purchase side)
+// and can never discriminate a return (ETP-4534).
 // ---------------------------------------------------------------------------
 
 function extractChipTypeConfig(registrySrc, type) {
@@ -99,13 +110,13 @@ function extractLocaleLabel(localeSrc, key) {
 }
 
 function classify(shipment) {
-  const isReturn = shipment.movementType === 'C+';
+  const isReturn = shipment.isReturn === true;
   return isReturn ? 'return-material-receipt' : 'shipment';
 }
 
-describe('sales-invoice RelatedDocuments — movementType classification (behavioral)', () => {
-  it('classifies a C+ linked shipment as a return, routed to /return-material-receipt/{id} and labeled "Devolución"', () => {
-    const type = classify({ id: 'ship-1', movementType: 'C+' });
+describe('sales-invoice RelatedDocuments — isReturn classification (behavioral)', () => {
+  it('classifies a linked shipment with isReturn=true as a return, routed to /return-material-receipt/{id} and labeled "Devolución"', () => {
+    const type = classify({ id: 'ship-1', isReturn: true, movementType: 'C-' });
     assert.equal(type, 'return-material-receipt');
 
     const cfg = extractChipTypeConfig(docChipTypesSrc, 'return-material-receipt');
@@ -116,8 +127,8 @@ describe('sales-invoice RelatedDocuments — movementType classification (behavi
     assert.match(label, /^Devolución/);
   });
 
-  it('classifies a non-C+ linked shipment (e.g. C-) as a normal shipment, routed to /goods-shipment/{id} and labeled "Envío"', () => {
-    const type = classify({ id: 'ship-2', movementType: 'C-' });
+  it('classifies a linked shipment with isReturn=false as a normal shipment, routed to /goods-shipment/{id} and labeled "Envío", even though movementType is the same "C-" as a return', () => {
+    const type = classify({ id: 'ship-2', isReturn: false, movementType: 'C-' });
     assert.equal(type, 'shipment');
 
     const cfg = extractChipTypeConfig(docChipTypesSrc, 'shipment');
@@ -128,7 +139,7 @@ describe('sales-invoice RelatedDocuments — movementType classification (behavi
     assert.match(label, /^Envío/);
   });
 
-  it('classifies a shipment with a missing/undefined movementType as a normal shipment (safe default)', () => {
+  it('classifies a shipment with a missing/undefined isReturn as a normal shipment (safe default)', () => {
     assert.equal(classify({ id: 'ship-3' }), 'shipment');
   });
 
@@ -140,9 +151,9 @@ describe('sales-invoice RelatedDocuments — movementType classification (behavi
 
   it('classifies a mixed batch independently per entry', () => {
     const shipments = [
-      { id: 'a', movementType: 'C+' },
-      { id: 'b', movementType: 'C-' },
-      { id: 'c', movementType: 'C+' },
+      { id: 'a', isReturn: true },
+      { id: 'b', isReturn: false },
+      { id: 'c', isReturn: true },
     ];
     const types = shipments.map(classify);
     assert.deepEqual(types, ['return-material-receipt', 'shipment', 'return-material-receipt']);
