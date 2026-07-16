@@ -1,8 +1,8 @@
 {
   "version": "0.68.0",
   "generatedAt": "2026-04-30T15:42:46.722Z",
-  "updatedAt": "2026-07-16T14:25:57.063Z",
-  "checksum": "8bdcb5d32ea314da",
+  "updatedAt": "2026-07-16T22:09:15.422Z",
+  "checksum": "ab33f60bb0b26f42",
   "frontendContract": {
     "window": {
       "id": "183",
@@ -13809,6 +13809,13 @@
         "description": "Rule 'OperativeQuantity_To_BaseQuantity' (undefined) should be declared"
       },
       {
+        "id": "t-rule-declared-READONLY-Posted-AccountingDate",
+        "category": "rule-declared",
+        "rule": "READONLY_Posted_AccountingDate",
+        "runner": "node",
+        "description": "Rule 'READONLY_Posted_AccountingDate' (readOnlyLogic) should be declared"
+      },
+      {
         "id": "t-rule-declared-READONLY-Processed-Header",
         "category": "rule-declared",
         "rule": "READONLY_Processed_Header",
@@ -13849,6 +13856,13 @@
         "rule": "SE_Invoice_BPartnerLocation",
         "runner": "node",
         "description": "Rule 'SE_Invoice_BPartnerLocation' (undefined) should be declared"
+      },
+      {
+        "id": "t-rule-declared-SE-Invoice-TaxDate",
+        "category": "rule-declared",
+        "rule": "SE_Invoice_TaxDate",
+        "runner": "node",
+        "description": "Rule 'SE_Invoice_TaxDate' (callout) should be declared"
       },
       {
         "id": "t-rule-declared-SL-Invoice-Amt",
@@ -16995,7 +17009,7 @@
       }
     ],
     "summary": {
-      "total": 940,
+      "total": 942,
       "byCategory": {
         "action-endpoint": 26,
         "crud-flags": 12,
@@ -17006,14 +17020,14 @@
         "field-type": 149,
         "readonlylogic-evaluable": 64,
         "readonlylogic-valid": 64,
-        "rule-declared": 21,
+        "rule-declared": 23,
         "searchable-filters": 6,
         "selector-endpoint": 50,
         "system-field": 315,
         "visibility": 12
       },
       "byRunner": {
-        "node": 940,
+        "node": 942,
         "junit": 0
       }
     }

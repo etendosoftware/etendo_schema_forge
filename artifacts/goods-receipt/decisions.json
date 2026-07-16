@@ -120,7 +120,8 @@
           "grid": false,
           "section": "principal",
           "seq": 35,
-          "readOnlyLogic": "@Posted@='Y'"
+          "readOnlyLogic": "@Posted@='Y'",
+          "_note": "ETP-4531: deliberately @Posted@ rather than this window's dominant @Processed@='Y' pattern. Posted='Y' means the entry is already in the GL ledger; Processed='Y' alone would also lock the date during a failed-posting-attempt state, where the user may still need to correct it before retrying the post."
         },
         "salesOrder": {
           "visibility": "editable",
@@ -326,8 +327,8 @@
     "SL_InOut_AccountingDate": {
       "entity": "goodsReceipt",
       "decision": "Replace",
-      "description": "ETP-4531: verified LIVE (not classic-UI-only) — M_InOut.MovementDate carries AD_Column.AD_Callout_ID = org.openbravo.erpCommon.ad_callouts.SL_InOut_AccountingDate, which auto-fills dateAcct from movementDate. com.etendoerp.go's NeoCalloutService executes this same callout server-side (create-time cascade and interactive per-field callout), so it fires in the GO SPA too. accountingDate is now an independent editable field (own default @#Date@, locked once Posted=Y); the auto-fill side effect must be neutralized in com.etendoerp.go via a GoodsReceiptHeaderHandler#afterCallout override (currently the NeoHandler default no-op) that strips a callout-driven 'accountingDate' update when the trigger field is not 'accountingDate' itself (same pattern as the existing blockCalloutCurrencyUpdate/ETP-4029 guard in AbstractInvoiceHeaderHandler). Backend change tracked separately — not yet implemented.",
-      "impactIfOmitted": "Without the backend guard, editing movementDate still silently overwrites accountingDate server-side, violating the independent-accounting-date requirement even though accountingDate is now user-visible and editable."
+      "description": "ETP-4531: verified LIVE (not classic-UI-only) — M_InOut.MovementDate carries AD_Column.AD_Callout_ID = org.openbravo.erpCommon.ad_callouts.SL_InOut_AccountingDate, which auto-fills dateAcct from movementDate. com.etendoerp.go's NeoCalloutService executes this same callout server-side (create-time cascade and interactive per-field callout), so it fires in the GO SPA too. accountingDate is now an independent editable field (own default @#Date@, locked once Posted=Y). The auto-fill side effect is neutralized in com.etendoerp.go on every path: GoodsReceiptHeaderHandler#afterCallout (new override; the NeoHandler default was a no-op) strips a callout-driven 'accountingDate' update when the trigger field is not 'accountingDate' itself (mirrors the existing blockCalloutCurrencyUpdate/ETP-4029 guard in AbstractInvoiceHeaderHandler), and NeoDefaultsCascadeHelper#processCalloutForField applies the same strip generically to the GET /defaults (new-record bootstrap) and POST create cascades, which the afterCallout hook alone does not reach.",
+      "impactIfOmitted": "Without the backend guard, editing movementDate would silently overwrite accountingDate server-side (at record creation, on new-record defaults resolution, and on interactive edit of an existing record), violating the independent-accounting-date requirement even though accountingDate is user-visible and editable."
     },
     "SE_InOut_Organization": {
       "entity": "goodsReceipt",
