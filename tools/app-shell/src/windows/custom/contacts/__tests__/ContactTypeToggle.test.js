@@ -67,12 +67,24 @@ describe('ContactTypeToggle', () => {
 
   it('re-syncs name via onChange while auto-owned on switch to company', () => {
     assert.match(src, /onChange/);
-    assert.match(src, /newType === 'company' && onChange/);
+    assert.match(src, /if \(onChange\)/);
+    assert.match(src, /if \(newType === 'company'\)/);
     assert.match(src, /const lastAutoFilledNameRef = useRef\(null\)/);
     assert.match(src, /const ownedByAuto = currentName === '' \|\| currentName === lastAutoFilledNameRef\.current/);
     assert.match(src, /if \(ownedByAuto && fullName && fullName !== currentName\)/);
     assert.match(src, /onChange\('name', fullName\)/);
     assert.match(src, /lastAutoFilledNameRef\.current = null/);
+  });
+
+  it('clears person fields (first/last name) when switching to company', () => {
+    assert.match(src, /if \(firstName\) onChange\('etgoFirstname', ''\)/);
+    assert.match(src, /if \(lastName\) onChange\('etgoLastname', ''\)/);
+  });
+
+  it('clears the legal name (Razón Social) when switching to person', () => {
+    assert.match(src, /else if \(newType === 'person'\)/);
+    assert.match(src, /if \(\(data\?\.name \|\| ''\)\.trim\(\) !== ''\) onChange\('name', ''\)/);
+    assert.match(src, /onChange\('name', ''\)/);
   });
 
   it('renders Person and Company buttons', () => {
