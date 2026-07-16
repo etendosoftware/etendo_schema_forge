@@ -55,6 +55,34 @@ export default function ContactTypeToggle({ data, recordId, token, apiBaseUrl, o
 
   if (!data) return null;
 
+  // Switching to company: keep the legal name (Razón Social) in sync with the
+  // typed first/last name — as long as the current value is still the one WE
+  // auto-generated (or is blank). Once the user edits it by hand, or the record
+  // carries a persisted value we never generated, it is user-owned and must never
+  // be overwritten. A company has no personal first/last name, so those fields
+  // are also cleared (they are hidden in company mode anyway).
+  function syncFieldsToCompany() {
+    const firstName = (data?.etgoFirstname || '').trim();
+    const lastName = (data?.etgoLastname || '').trim();
+    const currentName = (data?.name || '').trim();
+    const fullName = `${firstName} ${lastName}`.trim().replace(/\s{2,}/g, ' ');
+    const ownedByAuto = currentName === '' || currentName === lastAutoFilledNameRef.current;
+    if (ownedByAuto && fullName && fullName !== currentName) {
+      onChange('name', fullName);
+      lastAutoFilledNameRef.current = fullName;
+    }
+    if (firstName) onChange('etgoFirstname', '');
+    if (lastName) onChange('etgoLastname', '');
+  }
+
+  // Switching to person: the backend rebuilds Name from first/last on save, so
+  // the Razón Social is not user-owned data — clear it to avoid carrying a stale
+  // company name. Reset the auto-fill tracker: the field is now blank.
+  function clearNameForPerson() {
+    if ((data?.name || '').trim() !== '') onChange('name', '');
+    lastAutoFilledNameRef.current = null;
+  }
+
   function handleSelect(newType) {
     userSelectedRef.current = true;
     setSelected(newType);
@@ -62,32 +90,8 @@ export default function ContactTypeToggle({ data, recordId, token, apiBaseUrl, o
     // Sync the person/company fields on every toggle. Writes into local editing
     // state only; persistence happens on explicit Save.
     if (onChange) {
-      if (newType === 'company') {
-        // Keep the legal name (Razón Social) in sync with the typed first/last
-        // name — as long as the current value is still the one WE auto-generated
-        // (or is blank). Once the user edits it by hand, or the record carries a
-        // persisted value we never generated, it is user-owned and must never be
-        // overwritten again.
-        const firstName = (data?.etgoFirstname || '').trim();
-        const lastName = (data?.etgoLastname || '').trim();
-        const currentName = (data?.name || '').trim();
-        const fullName = `${firstName} ${lastName}`.trim().replace(/\s{2,}/g, ' ');
-        const ownedByAuto = currentName === '' || currentName === lastAutoFilledNameRef.current;
-        if (ownedByAuto && fullName && fullName !== currentName) {
-          onChange('name', fullName);
-          lastAutoFilledNameRef.current = fullName;
-        }
-        // A company has no personal first/last name — clear the person fields so
-        // stale data does not persist (they are hidden in company mode anyway).
-        if (firstName) onChange('etgoFirstname', '');
-        if (lastName) onChange('etgoLastname', '');
-      } else if (newType === 'person') {
-        // In person mode the backend rebuilds Name from first/last on save, so
-        // the Razón Social is not user-owned data — clear it to avoid carrying a
-        // stale company name. Reset the auto-fill tracker: the field is now blank.
-        if ((data?.name || '').trim() !== '') onChange('name', '');
-        lastAutoFilledNameRef.current = null;
-      }
+      if (newType === 'company') syncFieldsToCompany();
+      else if (newType === 'person') clearNameForPerson();
     }
 
     if (recordId && token && apiBaseUrl) {
