@@ -12,13 +12,14 @@ import { useApiFetch } from '@/auth/useApiFetch';
 // Attachments accepted on every input path (file picker AND drag-and-drop):
 // images (any subtype) plus a fixed set of common document formats.
 // Keep this in sync with the file input's `accept` attribute below.
-const ALLOWED_DOC_EXTENSIONS = ['pdf', 'csv', 'txt', 'xlsx', 'docx'];
+const ALLOWED_DOC_EXTENSIONS = ['pdf', 'csv', 'txt', 'xlsx', 'docx', 'md'];
 const ALLOWED_DOC_MIME_TYPES = new Set([
   'application/pdf',
   'text/csv',
   'text/plain',
   'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', // .xlsx
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document', // .docx
+  'text/markdown',
 ]);
 
 // Real validation for files coming from the picker or drag-and-drop — the
@@ -758,7 +759,7 @@ export function ConversationView({
             type="file"
             multiple
             style={{ display: 'none' }}
-            accept="image/*,.pdf,.csv,.txt,.xlsx,.docx"
+            accept="image/*,.pdf,.csv,.txt,.xlsx,.docx,.md"
             onChange={handleFile}
           />
 
