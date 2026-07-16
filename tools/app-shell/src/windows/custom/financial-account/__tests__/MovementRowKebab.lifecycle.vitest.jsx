@@ -39,6 +39,7 @@ vi.mock('lucide-react', () => ({
   ExternalLink: () => null,
   GitMerge: () => null,
   BookOpen: () => null,
+  BookX: () => null,
   CheckCircle2: () => null,
   RotateCcw: () => null,
   Trash2: () => null,
@@ -120,14 +121,16 @@ describe('MovementRowKebab — lifecycle visibility matrix', () => {
     expect(screen.queryByTestId('movement-row-process')).not.toBeInTheDocument();
   });
 
-  it('renders no kebab at all for a payment-linked, processed & posted movement (no actions)', () => {
+  it('payment-linked, posted movement exposes only Unpost (no G/L lifecycle actions)', () => {
     renderKebab(PAYMENT_LINKED);
+    // All G/L-only actions are hidden — this movement is managed from the Payments module.
     expect(screen.queryByTestId('movement-row-edit')).not.toBeInTheDocument();
     expect(screen.queryByTestId('movement-row-process')).not.toBeInTheDocument();
     expect(screen.queryByTestId('movement-row-reactivate')).not.toBeInTheDocument();
     expect(screen.queryByTestId('movement-row-delete')).not.toBeInTheDocument();
-    // No empty menu: with nothing to offer, the trigger itself is not rendered.
-    expect(screen.queryByTestId(`movement-row-menu-${PAYMENT_LINKED.id}`)).not.toBeInTheDocument();
+    // But because it is posted, Unpost (descontabilizar) keeps the kebab alive (ETP-4505 merge).
+    expect(screen.getByTestId(`movement-row-menu-${PAYMENT_LINKED.id}`)).toBeInTheDocument();
+    expect(screen.getByTestId('movement-row-unpost')).toBeInTheDocument();
   });
 });
 
