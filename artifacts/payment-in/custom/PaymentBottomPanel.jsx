@@ -151,7 +151,7 @@ function LineasSection({ data, token, apiBaseUrl, ui }) {
             const applied = parseFloat(row.amount) || 0;
             const importe = parseFloat(row.expected) || 0;
             const pendiente = Math.max(0, importe - applied);
-            const invoiceNo = row.invoiceDocumentNo || row['documentNo$_identifier'] || fmtDate(row.dueDate) || `${ui('invoice')} ${i + 1}`;
+            const invoiceNo = row.invoiceDocumentNo || row['documentNo$_identifier'] || fmtDate(row.dueDate) || '-';
             const dueLabel = row.invoiceDocumentNo ? fmtDate(row.dueDate) : null;
             return (
               <div key={row.id || i}>

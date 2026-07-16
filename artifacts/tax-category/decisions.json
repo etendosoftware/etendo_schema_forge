@@ -7,7 +7,10 @@
     "name": "Tax Category",
     "detailEntity": null,
     "hidePrint": true,
-    "hideMoreMenu": true
+    "hideMoreMenu": true,
+    "hideCreate": true,
+    "hideDelete": true,
+    "hideDeleteButton": true
   },
   "entities": {
     "taxCategory": {
