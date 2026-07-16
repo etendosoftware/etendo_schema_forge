@@ -18088,6 +18088,7 @@
     "financeAccountTransferFx": "Conversión de divisa",
     "financeAccountTransferRate": "Tasa de conversión",
     "financeAccountTransferRatePlaceholder": "1,00",
+    "financeAccountTransferReceiveAmount": "La cuenta destino recibirá",
     "financeAccountTransferBankFee": "Aplicar comisión bancaria",
     "financeAccountTransferBankFeeFrom": "Comisión · origen",
     "financeAccountTransferBankFeeTo": "Comisión · destino",
