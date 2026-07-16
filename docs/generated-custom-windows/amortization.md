@@ -19,7 +19,7 @@ Records are typically created from the **Assets** window via the **Create Amorti
   - Press **Confirmar** to open a confirmation modal showing the current total, line count, and a lock warning, then confirm the document.
 - Once **processed** (`processed='Y'`):
   - The remaining editable field (Description) and all line fields become read-only.
-  - A **Reactivar** option appears in the three-dot menu to unprocess the document.
+  - A **Reactivar** option appears in the three-dot menu to unprocess the document, including when it is posted. When posted, the action first unposts the document and then reactivates it; when not posted, it only reactivates. There is no separate **Descontabilizar** action in Etendo Go.
 - The header **Delete** (trash) button is hidden in all states via `window.hideDeleteButton` (see `docs/decisions-reference.md` / `docs/ui-customization.md` for the flag mechanics).
 - Attach files via the **Adjuntos** tab.
 - The document-level **Delete** action (list row trash icon and detail toolbar) is hidden unconditionally, in both draft and processed status (`window.hideDeleteButton: true`) — this is stricter than the previous processed-only behavior. Deleting individual **lines** while in draft is unaffected and still available.
@@ -42,7 +42,7 @@ Records are typically created from the **Assets** window via the **Create Amorti
 - **Header field locking**: Name, Accounting Date, Starting Date, and Currency are classified `readOnly` in `decisions.json`, so they are locked in every state (not just once processed). Description stays editable in draft and locks when the document is processed. The header **Delete** button is hidden in all states via `window.hideDeleteButton`.
 - **Line lock**: all line fields carry `readOnlyLogic: @Processed@='Y'` and become read-only once the document is processed.
 - **Confirmar button**: wired via `draftMode.processField: "Processed"`. Only visible while draft; disabled when no lines; opens the confirm modal. The modal fetches the record and line count independently, calculates the total from line amounts (not from the stored header field), shows a warning, and submits `POST /action/Processed`. On success, the detail view refetches the header.
-- **Reactivar menu action**: appears in the three-dot menu only when `processed='Y'`. Calls `/action/Processed` again, which the backend interprets as an unprocess request. After success, the page reloads.
+- **Reactivar menu action**: appears in the three-dot menu only when `processed='Y'`, regardless of the accounting `posted` value. It uses `preUnpost: true`, so posted records first call `/action/unpost` and then `/action/Processed`; unposted records skip the unpost step and only call `/action/Processed`. After success, the page reloads. The independent **Descontabilizar** menu action is intentionally not exposed for amortizations.
 - **Status pill**: `statusField: "processed"` in `decisions.json` causes DetailView to render a `DocumentStatusPill` next to the Cancel button. Values: `'Y'` → "✓ Procesado" (green/success), `'N'` → "Borrador" (neutral/grey). Tone mapping lives in `tools/app-shell/src/lib/statusBadge.js` (`getStatusTone`).
 - **Lines total footer**: computed from visible lines (`lines.reduce()`) so it updates immediately on any mutation — no server round-trip needed. `TOTALAMORTIZATION` on the header is kept in sync by `ETGO_A_AMORTLINE_TOTAL_TRG` (AFTER trigger on `A_AMORTIZATIONLINE`) and is the authoritative value shown in the list view column.
 - **New record currency default**: the `currency` field defaults to the org's functional currency via `defaultExpr: "@$C_Currency_ID@"` in decisions.json. Currency is classified `readOnly`, so it is displayed but never editable from this window.
@@ -103,7 +103,7 @@ Records are typically created from the **Assets** window via the **Create Amorti
   - `statusField: "processed"` — drives the `DocumentStatusPill` in the toolbar (green for 'Y', grey for 'N').
   - `asset.grow: true` and `amortizationPercentage.grow: true` for balanced column distribution.
   - `draftMode: { processField: "Processed", label: "confirm", confirmModal: "AmortizationConfirmModal", disableWhenEmpty: true }`.
-  - `menuActions: [{ key: "reactivate", visibleWhenFieldTrue: "processed", columnName: "Processed" }]`.
+  - `menuActions: [{ key: "reactivate", visibleWhenFieldTrue: "processed", preUnpost: true, columnName: "Processed" }]`; there is no standalone `unpost` action for amortizations.
   - `hideDeleteButton: true`, `hideCreate: true`, `summaryFields: []`, `hidePrint: true`, `hideLink: true`.
   - `currency.defaultExpr: "@$C_Currency_ID@"`; `currency.visibility: "readOnly"`.
   - Header fields `name`, `accountingDate`, `startingDate`, `currency`: `visibility: "readOnly"`. Only `description` stays editable.
@@ -247,3 +247,9 @@ This iteration tightens the Amortization window to a read-focused, assets-driven
 3. Confirm there is no "Others" tab and no Accounting Status field anywhere in the header.
 4. Expand a line — confirm the dimension panel shows exactly Organisation (read-only) + Project, Cost Center, Contact. Confirm no Product selector is present.
 5. On a processed document, confirm an empty-dimension line shows no "+ Añadir dimensiones" trigger, while a line with dimensions still displays its value chips.
+
+## ETP-4538 — Reactivate replaces Unpost on posted amortizations
+
+- The three-dot menu no longer exposes the independent **Descontabilizar** (`unpost`) action for amortization documents.
+- **Reactivar** is visible whenever the document is processed (`processed='Y'`), including records whose accounting status is posted (`posted='Y'`). For posted records, `preUnpost: true` makes the UI call the existing unpost endpoint before triggering the `Processed` action; for unposted records, only the `Processed` action runs. This matches the Etendo Go document lifecycle rule: reactivation is the single user action and accounting reversal is part of that flow.
+- Role-based access restrictions for **Reactivar** are deferred until the role permissions model exists.
