@@ -309,6 +309,7 @@ export default function ReturnToVendorShipmentPage({ windowName, recordId, ...pr
         bottomSection={ReturnToVendorShipmentBottomPanel}
         topbarRight={ConfirmWithCreditButton}
         requiredHeaderFields={requiredHeaderFields}
+        addLineGuard={(_, children) => children.length < 0}
         labelOverrides={labelOverrides}
         linesLayout="inlineEditable"
         sendDocument={{"enabled":false}}

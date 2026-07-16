@@ -12,6 +12,7 @@
     "linesLayout": "inlineEditable",
     "noHeaderBorder": true,
     "hideDeleteWhenComplete": true,
+    "maxDetailLines": 0,
     "customComponents": {
       "bottomSection": "ReturnMaterialReceiptBottomPanel",
       "topbarRight": "ConfirmWithCreditButton"
