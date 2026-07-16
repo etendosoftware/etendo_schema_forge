@@ -5,16 +5,19 @@ import ImportLinesModal from '@/components/contract-ui/ImportLinesModal';
  * Available only for Factura de Devolución (DEV subtype) — enforced at the call site.
  *
  * Return lines already carry price and UOM, so no callout cascade is needed.
- * Already-imported detection uses the mInoutlineId field on invoice lines, which
- * stores the source M_InOut line ID regardless of whether it came from a standard
- * shipment or a customer return.
+ * Already-imported detection uses the goodsShipmentLine field on invoice lines
+ * (M_InOutLine_ID), which stores the source M_InOut line ID regardless of whether
+ * it came from a standard shipment or a customer return — same field ImportFromShipmentModal
+ * uses. This is also the field the backend enrichment (SalesInvoiceHeaderHandler) reads to
+ * resolve linkedShipments / sourceReturnReceipt / sourceInvoice for the Related Documents panel,
+ * so it must stay in sync with the current API contract.
  */
 
 const fetchDocuments = async ({ base, headers, bpId, invoiceId }) => {
   // Fetch in parallel: completed returns, current invoice lines, and all invoice lines
-  // that came from a return shipment (mInoutlineId set) to detect already-invoiced returns.
+  // that came from a return shipment (goodsShipmentLine set) to detect already-invoiced returns.
   const invoicedLinesFilter = encodeURIComponent(
-    JSON.stringify([{ fieldName: 'mInoutlineId', operator: 'notNull' }]),
+    JSON.stringify([{ fieldName: 'goodsShipmentLine', operator: 'notNull' }]),
   );
   const [returnRes, invLinesRes, invoicedLinesRes, headerRes] = await Promise.all([
     fetch(
@@ -39,7 +42,7 @@ const fetchDocuments = async ({ base, headers, bpId, invoiceId }) => {
   if (invLinesRes.ok) {
     const invLines = (await invLinesRes.json())?.response?.data || [];
     invLines.forEach(il => {
-      if (il.mInoutlineId) alreadyImportedReturnLines.add(il.mInoutlineId);
+      if (il.goodsShipmentLine) alreadyImportedReturnLines.add(il.goodsShipmentLine);
     });
   }
 
@@ -49,8 +52,8 @@ const fetchDocuments = async ({ base, headers, bpId, invoiceId }) => {
   if (invoicedLinesRes.ok) {
     const all = (await invoicedLinesRes.json())?.response?.data || [];
     all.forEach(il => {
-      if (il.mInoutlineId && !alreadyImportedReturnLines.has(il.mInoutlineId)) {
-        invoicedElsewhere.add(il.mInoutlineId);
+      if (il.goodsShipmentLine && !alreadyImportedReturnLines.has(il.goodsShipmentLine)) {
+        invoicedElsewhere.add(il.goodsShipmentLine);
       }
     });
   }
@@ -128,7 +131,10 @@ const fetchLines = async ({ base, headers, docId, sharedContext }) => {
     _maxQty: Number(l.orderedQuantity) || 0,
     _unitPrice: Number(l.unitPrice) || 0,
     _lineNetAmount: Number(l.lineNetAmount) || 0,
-    _alreadyImported: alreadyImportedReturnLines?.has(l.goodsShipmentLine) || false,
+    // l is a customerReturnLine (C_OrderLine) record — its own M_InOutLine_ID field is
+    // named `mInoutlineId` there (distinct from the sales-invoice line's `goodsShipmentLine`
+    // field used elsewhere in this file; the two entities were never renamed in sync).
+    _alreadyImported: alreadyImportedReturnLines?.has(l.mInoutlineId) || false,
   }));
 };
 
@@ -151,7 +157,12 @@ const buildLineBody = ({ line, qty, invoiceId, lineNo }) => {
     tax: line.tax || null,
     uOM: line.uOM || null,
     lineNo,
-    mInoutlineId: line.goodsShipmentLine || null,
+    // Write the new invoice line's own `goodsShipmentLine` (C_InvoiceLine.M_InOutLine_ID) from
+    // the source return line's `mInoutlineId` (C_OrderLine.M_InOutLine_ID) — the physical
+    // M_InOutLine created when this return order line was received. This is what the backend
+    // enrichment (SalesInvoiceHeaderHandler#enrichLinkedShipments / #enrichSourceInvoice) reads
+    // to resolve the Related Documents panel back to the originating Return Material Receipt.
+    goodsShipmentLine: line.mInoutlineId || null,
   };
 };
 
