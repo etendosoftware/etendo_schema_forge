@@ -65,11 +65,14 @@ describe('ContactTypeToggle', () => {
     assert.match(src, /etgoIsperson: newType === 'person'/);
   });
 
-  it('pre-fills name via onChange only when blank on switch to company', () => {
+  it('re-syncs name via onChange while auto-owned on switch to company', () => {
     assert.match(src, /onChange/);
     assert.match(src, /newType === 'company' && onChange/);
-    assert.match(src, /if \(!currentName && \(firstName \|\| lastName\)\)/);
+    assert.match(src, /const lastAutoFilledNameRef = useRef\(null\)/);
+    assert.match(src, /const ownedByAuto = currentName === '' \|\| currentName === lastAutoFilledNameRef\.current/);
+    assert.match(src, /if \(ownedByAuto && fullName && fullName !== currentName\)/);
     assert.match(src, /onChange\('name', fullName\)/);
+    assert.match(src, /lastAutoFilledNameRef\.current = null/);
   });
 
   it('renders Person and Company buttons', () => {
