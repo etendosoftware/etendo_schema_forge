@@ -113,9 +113,13 @@ export default defineConfig({
         ],
       },
     },
-    // threads pool: workers run as ESM workers, so @exodus/bytes (pure ESM) is importable natively —
-    // no --experimental-require-module needed. Much faster than forks (one thread vs one process per file).
-    pool: 'threads',
+    // @exodus/bytes ≥1.14 ships pure ESM; html-encoding-sniffer (jsdom dep) does require() on it.
+    // Node 22 flag lets CJS require() synchronous ESM so the coverage forks pool can load jsdom.
+    // NOTE: reverted from `pool: 'threads'` (ETP-4357) — threads workers intermittently fail to
+    // start when jsdom's css-tree ESM build does a named import of source-map-js (CJS), a worker
+    // startup race. The forks pool + this flag is the stable equivalent (same jsdom/@exodus/bytes
+    // support), so correctness wins over the threads speedup here.
+    execArgv: ['--experimental-require-module'],
     coverage: {
       provider: 'v8',
       reporter: ['text', 'lcov', 'json-summary'],
