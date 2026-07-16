@@ -603,28 +603,34 @@ export function SecondaryPanelTab(props) {
   </div>;
 }
 
+function secondaryTabEmptyState({ ui, onAddLineClick, addLineLabel }) {
+  return (
+    <div style={{ margin: '24px 16px', padding: '32px 24px', background: 'var(--color-background-secondary)', borderRadius: 'var(--border-radius-lg)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }} data-testid="secondary-tab-empty-state">
+      <div style={{ width: 40, height: 40, borderRadius: 'var(--border-radius-md)', background: 'var(--color-background-tertiary)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 12 }}>
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+          <polyline points="14 2 14 8 20 8" />
+          <line x1="8" y1="13" x2="16" y2="13" />
+          <line x1="8" y1="17" x2="13" y2="17" />
+        </svg>
+      </div>
+      <span style={{ fontSize: 14, fontWeight: 500, color: 'var(--color-text-primary)', marginBottom: 4 }}>{ui('noRecordsYet')}</span>
+      <span style={{ fontSize: 13, color: 'var(--color-text-secondary)', marginBottom: 20 }}>{ui('createNewRecord')}</span>
+      <button type="button" onClick={onAddLineClick} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, borderRadius: 8, padding: '6px 14px', fontSize: 13, fontWeight: 500, background: '#18181b', color: '#fff', border: 'none', cursor: 'pointer' }}>
+        + {addLineLabel}
+      </button>
+    </div>
+  );
+}
+
 export function SecondaryTableTab(props) {
   const secondaryChildren = props.secondaryHooks[props.stIdx]?.children ?? [];
   const isAddingThis = props.addingSecondaryLine?.[props.st.key] ?? false;
   const hasAddFields = (props.st.addLineFields?.entry?.length ?? 0) > 0;
-  if (secondaryChildren.length === 0 && !isAddingThis && props.hook.editing && hasAddFields && !props.st.customAddModal) {
-    return (
-      <div style={{ margin: '24px 16px', padding: '32px 24px', background: 'var(--color-background-secondary)', borderRadius: 'var(--border-radius-lg)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }} data-testid="secondary-tab-empty-state">
-        <div style={{ width: 40, height: 40, borderRadius: 'var(--border-radius-md)', background: 'var(--color-background-tertiary)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 12 }}>
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-            <polyline points="14 2 14 8 20 8" />
-            <line x1="8" y1="13" x2="16" y2="13" />
-            <line x1="8" y1="17" x2="13" y2="17" />
-          </svg>
-        </div>
-        <span style={{ fontSize: 14, fontWeight: 500, color: 'var(--color-text-primary)', marginBottom: 4 }}>{props.ui('noRecordsYet')}</span>
-        <span style={{ fontSize: 13, color: 'var(--color-text-secondary)', marginBottom: 20 }}>{props.ui('createNewRecord')}</span>
-        <button type="button" onClick={props.onAddLineClick} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, borderRadius: 8, padding: '6px 14px', fontSize: 13, fontWeight: 500, background: '#18181b', color: '#fff', border: 'none', cursor: 'pointer' }}>
-          + {props.addLineLabel}
-        </button>
-      </div>
-    );
+  const showEmptyState = secondaryChildren.length === 0 && !isAddingThis
+    && props.hook.editing && hasAddFields && !props.st.customAddModal;
+  if (showEmptyState) {
+    return secondaryTabEmptyState({ ui: props.ui, onAddLineClick: props.onAddLineClick, addLineLabel: props.addLineLabel });
   }
   return (
     <>
@@ -3031,6 +3037,44 @@ export function DetailView({
 
   const isCustomTabActive = tabCustomTabs.some(ct => tabs[activeTab]?.key === customTabKey(ct));
 
+  // extraBadges rendering — split by type to keep each path simple.
+  // statusPill: a DocumentStatusPill from i18n keys. One-sided badges (only a
+  // trueKey declared) hide on the false value — the generator emits the missing
+  // side as the literal string 'undefined', which must never reach the screen.
+  const renderStatusPillBadge = (b) => {
+    const val = data[b.key];
+    if (val == null) return null;
+    const isTrue = val === true || val === 'Y' || val === 'true';
+    const labelKey = isTrue ? b.trueKey : b.falseKey;
+    if (!labelKey || labelKey === 'undefined') return null;
+    return (
+      <DocumentStatusPill
+        key={b.key}
+        status={isTrue ? 'Y' : 'N'}
+        label={ui(labelKey)}
+        tone={isTrue ? 'success' : 'warning'}
+        data-testid={`DocumentStatusPill__${b.key}`} />
+    );
+  };
+  const renderLegacyBadge = (b) => {
+    const when = b.when !== undefined ? b.when : true;
+    const show = when ? !!data[b.key] : !data[b.key];
+    if (!show) return null;
+    if (b.hideWhenStatus?.includes(data[statusField])) return null;
+    const cls = b.style === 'warning'
+      ? 'ml-1 border-amber-300 bg-amber-50 text-amber-700'
+      : 'ml-1 bg-blue-600 hover:bg-blue-700 border-transparent text-white';
+    return (
+      <Badge
+        key={`${b.key}-${when}`}
+        variant={b.style === 'warning' ? 'outline' : 'default'}
+        className={cls}
+        data-testid="Badge__fa3275">
+        {b.label}
+      </Badge>
+    );
+  };
+
   const renderCustomTabPanels = (resolveIsActive) => tabCustomTabs.map((ct, idx) => {
     const TabComponent = ct.Component;
     const isActive = resolveIsActive(ct, idx);
@@ -3163,47 +3207,9 @@ export function DetailView({
                 prefix={resolveStatusPrefix(statusFieldLabel, ui)}
                 data-testid="DocumentStatusPill__fa3275" />
             )}
-            {extraBadges.map(b => {
-              // type: 'statusPill' — renders as DocumentStatusPill, always visible,
-              // labels resolved from i18n keys trueKey / falseKey.
-              if (b.type === 'statusPill') {
-                const val = data[b.key];
-                if (val == null) return null;
-                const isTrue = val === true || val === 'Y' || val === 'true';
-                // A one-sided badge (only trueKey declared) hides on the false
-                // value — the generator emits the missing side as the literal
-                // string 'undefined', which must never reach the screen
-                const labelKey = isTrue ? b.trueKey : b.falseKey;
-                if (!labelKey || labelKey === 'undefined') return null;
-                const label = ui(labelKey);
-                const tone = isTrue ? 'success' : 'warning';
-                return (
-                  <DocumentStatusPill
-                    key={b.key}
-                    status={isTrue ? 'Y' : 'N'}
-                    label={label}
-                    tone={tone}
-                    data-testid={`DocumentStatusPill__${b.key}`} />
-                );
-              }
-              const when = b.when !== undefined ? b.when : true;
-              const show = when ? !!data[b.key] : !data[b.key];
-              if (!show) return null;
-              if (b.hideWhenStatus?.includes(data[statusField])) return null;
-              const cls = b.style === 'warning'
-                ? 'ml-1 border-amber-300 bg-amber-50 text-amber-700'
-                : 'ml-1 bg-blue-600 hover:bg-blue-700 border-transparent text-white';
-              const variant = b.style === 'warning' ? 'outline' : 'default';
-              return (
-                <Badge
-                  key={`${b.key}-${when}`}
-                  variant={variant}
-                  className={cls}
-                  data-testid="Badge__fa3275">
-                  {b.label}
-                </Badge>
-              );
-            })}
+            {extraBadges.map(b => b.type === 'statusPill'
+              ? renderStatusPillBadge(b)
+              : renderLegacyBadge(b))}
             {topbarExtra && (() => {
               const TopbarExtraComponent = topbarExtra;
               return (

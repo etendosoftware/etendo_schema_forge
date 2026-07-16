@@ -148,6 +148,38 @@ function InvoicePickerModal({ apiBaseUrl, token, currentId, onSelect, onClose })
   };
   const fmtAmt = (v) => v != null ? Number(v).toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—';
 
+  const invoiceRow = (inv) => (
+    <div
+      key={inv.id}
+      onClick={() => { onSelect(inv.id, inv.documentNo || inv._identifier || inv.id); onClose(); }}
+      style={{ display: 'flex', alignItems: 'center', padding: '10px 16px', cursor: 'pointer', borderBottom: '0.5px solid #F3F4F6' }}
+      onMouseEnter={e => { e.currentTarget.style.background = '#F9FAFB'; }}
+      onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}
+    >
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
+          <span style={{ fontSize: 13, fontWeight: 600, color: '#111827' }}>{inv.documentNo || inv._identifier}</span>
+          <span style={{ fontSize: 12, color: '#6B7280' }}>{fmtDate(inv.invoiceDate)}</span>
+        </div>
+        {inv['businessPartner$_identifier'] && (
+          <div style={{ fontSize: 12, color: '#6B7280', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+            {inv['businessPartner$_identifier']}
+          </div>
+        )}
+      </div>
+      <span style={{ fontSize: 12, color: '#9ca3af', fontVariantNumeric: 'tabular-nums' }}>{fmtAmt(inv.grandTotalAmount ?? inv.grandTotalAmt)}</span>
+    </div>
+  );
+
+  let listBody;
+  if (loading) {
+    listBody = <p style={{ fontSize: 13, color: '#9ca3af', padding: '24px 0', textAlign: 'center' }}>{ui('loading')}</p>;
+  } else if (filtered.length === 0) {
+    listBody = <p style={{ fontSize: 13, color: '#9ca3af', padding: '24px 0', textAlign: 'center' }}>{ui('rectNoInvoices')}</p>;
+  } else {
+    listBody = filtered.map(invoiceRow);
+  }
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30" onClick={onClose}>
       <div
@@ -166,32 +198,7 @@ function InvoicePickerModal({ apiBaseUrl, token, currentId, onSelect, onClose })
           />
         </div>
         <div style={{ flex: 1, overflowY: 'auto', padding: '8px 0' }}>
-          {loading ? (
-            <p style={{ fontSize: 13, color: '#9ca3af', padding: '24px 0', textAlign: 'center' }}>{ui('loading')}</p>
-          ) : filtered.length === 0 ? (
-            <p style={{ fontSize: 13, color: '#9ca3af', padding: '24px 0', textAlign: 'center' }}>{ui('rectNoInvoices')}</p>
-          ) : filtered.map(inv => (
-            <div
-              key={inv.id}
-              onClick={() => { onSelect(inv.id, inv.documentNo || inv._identifier || inv.id); onClose(); }}
-              style={{ display: 'flex', alignItems: 'center', padding: '10px 16px', cursor: 'pointer', borderBottom: '0.5px solid #F3F4F6' }}
-              onMouseEnter={e => { e.currentTarget.style.background = '#F9FAFB'; }}
-              onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}
-            >
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
-                  <span style={{ fontSize: 13, fontWeight: 600, color: '#111827' }}>{inv.documentNo || inv._identifier}</span>
-                  <span style={{ fontSize: 12, color: '#6B7280' }}>{fmtDate(inv.invoiceDate)}</span>
-                </div>
-                {inv['businessPartner$_identifier'] && (
-                  <div style={{ fontSize: 12, color: '#6B7280', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                    {inv['businessPartner$_identifier']}
-                  </div>
-                )}
-              </div>
-              <span style={{ fontSize: 12, color: '#9ca3af', fontVariantNumeric: 'tabular-nums' }}>{fmtAmt(inv.grandTotalAmount ?? inv.grandTotalAmt)}</span>
-            </div>
-          ))}
+          {listBody}
           {hiddenCount > 0 && (
             <p style={{ fontSize: 12, color: '#9ca3af', padding: '8px 16px 4px', textAlign: 'center' }}>
               +{hiddenCount} {ui('rectMoreInvoicesHint')}
@@ -253,6 +260,26 @@ function YearPickerSelect({ apiBaseUrl, token, value, displayValue, onChange, re
   );
 }
 
+// ── AmountInput ──────────────────────────────────────────────────────────────
+// Read-only EUR amount display (349 base amounts are DB-trigger computed).
+function AmountInput({ label, value }) {
+  return (
+    <div className="space-y-1.5">
+      <label className="text-sm font-medium text-foreground block">{label}</label>
+      <div className="flex items-center h-10 rounded-lg border border-[#D1D4DB] bg-[#F9FAFB] overflow-hidden">
+        <span className="px-3 text-sm text-muted-foreground border-r border-[#D1D4DB] flex items-center h-full">EUR</span>
+        <input
+          type="text"
+          value={value}
+          disabled
+          readOnly
+          className="flex-1 px-3 text-sm text-right tabular-nums bg-transparent focus:outline-none cursor-not-allowed opacity-70"
+          data-testid="AmountInput__4395d6" />
+      </div>
+    </div>
+  );
+}
+
 // ── AeatGrid ─────────────────────────────────────────────────────────────────
 // Renders the 4 AEAT-349 conditional fields in a 4-column grid.
 function AeatGrid({ data, onChange, onFieldSave, apiBaseUrl, token, catalogs, readOnly, labelOverrides }) {
@@ -260,25 +287,7 @@ function AeatGrid({ data, onChange, onFieldSave, apiBaseUrl, token, catalogs, re
   const ui = useUI();
   const { locale } = useLocaleSwitch();
   const periodOptions = useMemo(() => buildPeriodOptions(ui, locale), [ui, locale]);
-
-  function AmountInput({ fieldKey, label }) {
-    const displayVal = data?.[fieldKey] != null ? Number(data[fieldKey]).toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '';
-    return (
-      <div className="space-y-1.5">
-        <label className="text-sm font-medium text-foreground block">{label}</label>
-        <div className="flex items-center h-10 rounded-lg border border-[#D1D4DB] bg-[#F9FAFB] overflow-hidden">
-          <span className="px-3 text-sm text-muted-foreground border-r border-[#D1D4DB] flex items-center h-full">EUR</span>
-          <input
-            type="text"
-            value={displayVal}
-            disabled
-            readOnly
-            className="flex-1 px-3 text-sm text-right tabular-nums bg-transparent focus:outline-none cursor-not-allowed opacity-70"
-          />
-        </div>
-      </div>
-    );
-  }
+  const fmtEur = v => v != null ? Number(v).toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '';
 
   return (
     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16 }}>
@@ -322,13 +331,13 @@ function AeatGrid({ data, onChange, onFieldSave, apiBaseUrl, token, catalogs, re
       </div>
       {/* Base 349 Productos — read-only, DB-trigger computed */}
       <AmountInput
-        fieldKey="aEAT349BPBaseAmount"
         label={ui('rectBaseProducts')}
+        value={fmtEur(data?.aEAT349BPBaseAmount)}
         data-testid="AmountInput__4395d6" />
       {/* Base 349 Servicios — read-only, DB-trigger computed */}
       <AmountInput
-        fieldKey="aEAT349BPBaseAmountS"
         label={ui('rectBaseServices')}
+        value={fmtEur(data?.aEAT349BPBaseAmountS)}
         data-testid="AmountInput__4395d6" />
     </div>
   );
@@ -363,6 +372,73 @@ function ExpandedForm({
   ].filter(Boolean);
   const invoiceDisplay = invoiceDisplayParts.join(' · ');
 
+  // Picker used by both the draft row and an existing (editable) row. The draft
+  // row does not persist immediately; the existing row PATCHes on select.
+  const picker = (persistOnSelect) => pickerOpen && (
+    <InvoicePickerModal
+      apiBaseUrl={apiBaseUrl}
+      token={token}
+      currentId={recordId}
+      onSelect={(id, label) => {
+        onChange('reversedInvoice', id);
+        onChange('reversedInvoice$_identifier', label);
+        if (persistOnSelect) onFieldSave?.('reversedInvoice', id);
+      }}
+      onClose={() => setPickerOpen(false)}
+      data-testid="InvoicePickerModal__4395d6" />
+  );
+
+  // readOnly → static text; draft → picker trigger; existing → text + search icon
+  let invoiceField;
+  if (readOnly) {
+    invoiceField = (
+      <div className="flex items-center gap-2">
+        <div className="flex h-10 flex-1 items-center rounded-lg border border-[#D1D4DB] bg-white px-3 text-sm text-foreground">
+          {invoiceDisplay || '—'}
+        </div>
+      </div>
+    );
+  } else if (isDraft) {
+    invoiceField = (
+      <>
+        <button
+          type="button"
+          onClick={() => setPickerOpen(true)}
+          className="flex h-10 w-full items-center justify-between gap-2 rounded-lg border border-[#D1D4DB] bg-white px-3 text-sm hover:bg-[#F9FAFB] transition-colors focus:outline-none focus:ring-2 focus:ring-primary/30"
+        >
+          <span className={`truncate ${lineData?.reversedInvoice ? 'text-foreground' : 'text-muted-foreground'}`}>
+            {lineData?.['reversedInvoice$_identifier'] || 'Seleccionar...'}
+          </span>
+          <Search className="h-4 w-4 text-muted-foreground shrink-0" data-testid="Search__4395d6" />
+        </button>
+        {picker(false)}
+      </>
+    );
+  } else {
+    invoiceField = (
+      <>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setPickerOpen(true)}
+            className="flex h-10 flex-1 items-center rounded-lg border border-[#D1D4DB] bg-white px-3 text-sm text-foreground truncate text-left hover:bg-[#F9FAFB] transition-colors focus:outline-none focus:ring-2 focus:ring-primary/30"
+          >
+            {invoiceDisplay || invoiceIdentifier || '—'}
+          </button>
+          <button
+            type="button"
+            onClick={() => setPickerOpen(true)}
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-[#D1D4DB] bg-white text-muted-foreground hover:text-foreground transition-colors"
+            aria-label={ui('rectSearchAria')}
+          >
+            <Search className="h-4 w-4" data-testid="Search__4395d6" />
+          </button>
+        </div>
+        {picker(true)}
+      </>
+    );
+  }
+
   return (
     <div className="px-6 py-4 space-y-4 bg-white border-t border-border/30">
       {/* Factura original — compact field + search icon, per UX spec */}
@@ -371,75 +447,7 @@ function ExpandedForm({
           {t('Reversed_C_Invoice_ID') ?? 'Factura original'}
           <span className="text-red-500 ml-0.5">*</span>
         </label>
-        {readOnly ? (
-          <div className="flex items-center gap-2">
-            <div className="flex h-10 flex-1 items-center rounded-lg border border-[#D1D4DB] bg-white px-3 text-sm text-foreground">
-              {invoiceDisplay || '—'}
-            </div>
-          </div>
-        ) : isDraft ? (
-          // Draft row: open modal to pick the invoice
-          (<>
-            <button
-              type="button"
-              onClick={() => setPickerOpen(true)}
-              className="flex h-10 w-full items-center justify-between gap-2 rounded-lg border border-[#D1D4DB] bg-white px-3 text-sm hover:bg-[#F9FAFB] transition-colors focus:outline-none focus:ring-2 focus:ring-primary/30"
-            >
-              <span className={`truncate ${lineData?.reversedInvoice ? 'text-foreground' : 'text-muted-foreground'}`}>
-                {lineData?.['reversedInvoice$_identifier'] || 'Seleccionar...'}
-              </span>
-              <Search
-                className="h-4 w-4 text-muted-foreground shrink-0"
-                data-testid="Search__4395d6" />
-            </button>
-            {pickerOpen && (
-              <InvoicePickerModal
-                apiBaseUrl={apiBaseUrl}
-                token={token}
-                currentId={recordId}
-                onSelect={(id, label) => {
-                  onChange('reversedInvoice', id);
-                  onChange('reversedInvoice$_identifier', label);
-                }}
-                onClose={() => setPickerOpen(false)}
-                data-testid="InvoicePickerModal__4395d6" />
-            )}
-          </>)
-        ) : (
-          // Existing row: formatted text + search icon — both open the picker to replace the invoice
-          (<>
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={() => setPickerOpen(true)}
-                className="flex h-10 flex-1 items-center rounded-lg border border-[#D1D4DB] bg-white px-3 text-sm text-foreground truncate text-left hover:bg-[#F9FAFB] transition-colors focus:outline-none focus:ring-2 focus:ring-primary/30"
-              >
-                {invoiceDisplay || invoiceIdentifier || '—'}
-              </button>
-              <button
-                type="button"
-                onClick={() => setPickerOpen(true)}
-                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-[#D1D4DB] bg-white text-muted-foreground hover:text-foreground transition-colors"
-                aria-label={ui('rectSearchAria')}
-              >
-                <Search className="h-4 w-4" data-testid="Search__4395d6" />
-              </button>
-            </div>
-            {pickerOpen && (
-              <InvoicePickerModal
-                apiBaseUrl={apiBaseUrl}
-                token={token}
-                currentId={recordId}
-                onSelect={(id, label) => {
-                  onChange('reversedInvoice', id);
-                  onChange('reversedInvoice$_identifier', label);
-                  onFieldSave?.('reversedInvoice', id);
-                }}
-                onClose={() => setPickerOpen(false)}
-                data-testid="InvoicePickerModal__4395d6" />
-            )}
-          </>)
-        )}
+        {invoiceField}
       </div>
       {/* Gray panel: Correctiva del 349 checkbox + conditional AEAT fields, per UX spec */}
       <div className="rounded-lg bg-[#F8F9FA] px-4 py-3 space-y-4">
@@ -538,7 +546,6 @@ export default function ReversedInvoicesPanel({
   restoreDraft,
 }) {
   const ui = useUI();
-  const t = useLabel(api?.labelOverrides);
 
   const [lines, setLines] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -714,7 +721,9 @@ export default function ReversedInvoicesPanel({
         }
         parentId = savedHeader.id;
       }
-      const { 'reversedInvoice$_identifier': _ident, ...payload } = newLine;
+      // Strip the display-only identifier before POSTing the payload
+      const payload = { ...newLine };
+      delete payload['reversedInvoice$_identifier'];
       const res = await fetch(`${apiBaseUrl}/reversedInvoices`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },

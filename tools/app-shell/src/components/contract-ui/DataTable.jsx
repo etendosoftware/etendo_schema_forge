@@ -288,6 +288,14 @@ function isLookupSearchField(field) {
   return field.type === 'search' && field.lookup;
 }
 
+// Conditional visibility: a field with `displayIf` is hidden while its
+// controlling sibling field is falsy (not 'Y'/true/'true').
+function isColumnHidden(field, values) {
+  if (!field?.displayIf) return false;
+  const ctrlVal = values[field.displayIf];
+  return !(ctrlVal === true || ctrlVal === 'Y' || ctrlVal === 'true');
+}
+
 function isStaticSelectField(field) {
   return field.type === 'select' && field.options?.length;
 }
@@ -788,10 +796,8 @@ const InlineAddRow = forwardRef(function InlineAddRow({ columns, fields, onAdd, 
         const field = fieldMap[col.key];
         const fieldLabel = getFieldLabel(field, t, col, locale);
         // Conditional visibility: hide fields whose controlling sibling is falsy.
-        if (field?.displayIf) {
-          const ctrlVal = values[field.displayIf];
-          const visible = ctrlVal === true || ctrlVal === 'Y' || ctrlVal === 'true';
-          if (!visible) return <TableCell key={col.key} aria-hidden="true" data-testid={`inline-add-cell-${col.key}`} />;
+        if (isColumnHidden(field, values)) {
+          return <TableCell key={col.key} aria-hidden="true" data-testid={`inline-add-cell-${col.key}`} />;
         }
         if (!field) {
           // Show callout-derived values if available, otherwise dash.
