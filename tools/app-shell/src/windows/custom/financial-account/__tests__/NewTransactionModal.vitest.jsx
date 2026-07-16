@@ -33,6 +33,7 @@ vi.mock('@/hooks/useMovementLookups', () => ({
 vi.mock('lucide-react', () => ({
   X: () => null,
   Check: () => null,
+  Save: () => null,
   ArrowDown: () => null,
   ArrowUp: () => null,
   BarChart3: () => null,
@@ -71,6 +72,12 @@ vi.mock('@/components/forms/fields', () => ({
         data-testid={`${testId}-pick`}
         onClick={() => onChange({ id: `${testId}-id`, name: `${testId}-name` })}>
         pick
+      </button>
+      <button
+        type="button"
+        data-testid={`${testId}-pick2`}
+        onClick={() => onChange({ id: `${testId}-id-2`, name: `${testId}-name-2` })}>
+        pick2
       </button>
       <button type="button" data-testid={`${testId}-clear`} onClick={() => onChange(null)}>clear</button>
     </div>
@@ -161,6 +168,40 @@ describe('NewTransactionModal — rendering & validity', () => {
   });
 });
 
+describe('NewTransactionModal — GL item auto-description', () => {
+  beforeEach(() => {
+    createMovement.mockReset().mockResolvedValue({ id: 'mov-1' });
+    creatingFlag = false;
+  });
+
+  it('auto-fills an empty description from the picked GL item', async () => {
+    const user = userEvent.setup();
+    renderModal();
+    await user.click(screen.getByTestId('tx-glitem-pick'));
+    expect(screen.getByTestId('tx-description'))
+      .toHaveValue('financeAccountTxNewGlDescPrefix: tx-glitem-name');
+  });
+
+  it('does not overwrite a description the user already typed', async () => {
+    const user = userEvent.setup();
+    renderModal();
+    await user.type(screen.getByTestId('tx-description'), 'My note');
+    await user.click(screen.getByTestId('tx-glitem-pick'));
+    expect(screen.getByTestId('tx-description')).toHaveValue('My note');
+  });
+
+  it('keeps the auto-description in sync when switching between concepts', async () => {
+    const user = userEvent.setup();
+    renderModal();
+    await user.click(screen.getByTestId('tx-glitem-pick'));
+    expect(screen.getByTestId('tx-description'))
+      .toHaveValue('financeAccountTxNewGlDescPrefix: tx-glitem-name');
+    await user.click(screen.getByTestId('tx-glitem-pick2'));
+    expect(screen.getByTestId('tx-description'))
+      .toHaveValue('financeAccountTxNewGlDescPrefix: tx-glitem-name-2');
+  });
+});
+
 describe('NewTransactionModal — direction → amount mapping', () => {
   beforeEach(() => {
     createMovement.mockReset();
@@ -235,9 +276,10 @@ describe('NewTransactionModal — createMovement payload', () => {
     const user = userEvent.setup();
     renderModal({ dimensions: ['project', 'costcenter', 'product'] });
 
+    // Type the description BEFORE picking the GL item, so the auto-fill does not replace it.
+    await user.type(screen.getByTestId('tx-description'), 'Bank fee');
     await user.click(screen.getByTestId('tx-glitem-pick'));
     await user.type(screen.getByTestId('tx-amount'), '250');
-    await user.type(screen.getByTestId('tx-description'), 'Bank fee');
     await user.click(screen.getByTestId('tx-contact-pick'));
     await user.click(screen.getByTestId('tx-dim-project-pick'));
     await user.click(screen.getByTestId('tx-dim-costcenter-pick'));
@@ -395,5 +437,17 @@ describe('NewTransactionModal — edit mode', () => {
       process: false,
     });
     expect(toastSuccess).toHaveBeenCalledWith('financeAccountTxEditSuccess');
+  });
+
+  it('locks amount + type and hides Confirmar when editing a Processed movement', () => {
+    renderModal({ movement: { ...EDIT_MOVEMENT, processed: true }, dimensions: ['project'] });
+    // Amount/type are read-only on a processed movement (Classic parity).
+    expect(screen.getByTestId('tx-dir-in')).toBeDisabled();
+    expect(screen.getByTestId('tx-dir-out')).toBeDisabled();
+    // Confirmar is gone (already processed); only Guardar remains.
+    expect(screen.queryByTestId('tx-new-confirm')).not.toBeInTheDocument();
+    expect(screen.getByTestId('tx-new-save')).toBeInTheDocument();
+    // The G/L item is still editable.
+    expect(screen.getByTestId('tx-glitem-pick')).toBeInTheDocument();
   });
 });

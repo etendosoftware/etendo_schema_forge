@@ -112,12 +112,22 @@ describe('MovementRowKebab — lifecycle visibility matrix', () => {
     expect(screen.queryByTestId('movement-row-process')).not.toBeInTheDocument();
   });
 
-  it('payment-linked movement hides all lifecycle actions', () => {
+  it('processed but NOT posted still shows Editar (partial edit) + Reactivar', () => {
+    renderKebab({ id: 'gl-pnp', posted: 'N', processed: true });
+    expect(screen.getByTestId('movement-row-edit')).toBeInTheDocument();
+    expect(screen.getByTestId('movement-row-reactivate')).toBeInTheDocument();
+    // Confirmar (Draft → Processed) is gone — it's already processed.
+    expect(screen.queryByTestId('movement-row-process')).not.toBeInTheDocument();
+  });
+
+  it('renders no kebab at all for a payment-linked, processed & posted movement (no actions)', () => {
     renderKebab(PAYMENT_LINKED);
     expect(screen.queryByTestId('movement-row-edit')).not.toBeInTheDocument();
     expect(screen.queryByTestId('movement-row-process')).not.toBeInTheDocument();
     expect(screen.queryByTestId('movement-row-reactivate')).not.toBeInTheDocument();
     expect(screen.queryByTestId('movement-row-delete')).not.toBeInTheDocument();
+    // No empty menu: with nothing to offer, the trigger itself is not rendered.
+    expect(screen.queryByTestId(`movement-row-menu-${PAYMENT_LINKED.id}`)).not.toBeInTheDocument();
   });
 });
 
@@ -143,23 +153,53 @@ describe('MovementRowKebab — lifecycle actions', () => {
     expect(processMovement).not.toHaveBeenCalled();
   });
 
-  it('Reactivar calls reactivateMovement with { id }, then toast.success + onReload', async () => {
+  it('Reactivar opens the confirm dialog, then calls reactivateMovement on accept', async () => {
     const user = userEvent.setup();
     const { onReload } = renderKebab(GL_PROCESSED);
     await user.click(screen.getByTestId('movement-row-reactivate'));
 
+    // A confirmation dialog is shown before running the destructive action.
+    expect(screen.getByTestId('movement-confirm-modal')).toBeInTheDocument();
+    expect(reactivateMovement).not.toHaveBeenCalled();
+
+    await user.click(screen.getByTestId('movement-confirm-accept'));
     await waitFor(() => expect(reactivateMovement).toHaveBeenCalledWith({ id: 'gl-proc' }));
     expect(toastSuccess).toHaveBeenCalledWith('financeAccountTxRowReactivateSuccess');
     expect(onReload).toHaveBeenCalledOnce();
   });
 
-  it('Eliminar calls deleteMovement with { id }, then toast.success + onReload', async () => {
+  it('Eliminar on a Draft removes it directly (no confirm dialog)', async () => {
     const user = userEvent.setup();
     const { onReload } = renderKebab(GL_DRAFT);
     await user.click(screen.getByTestId('movement-row-delete'));
 
+    expect(screen.queryByTestId('movement-confirm-modal')).not.toBeInTheDocument();
     await waitFor(() => expect(deleteMovement).toHaveBeenCalledWith({ id: 'gl-draft' }));
     expect(toastSuccess).toHaveBeenCalledWith('financeAccountTxRowDeleteSuccess');
+    expect(onReload).toHaveBeenCalledOnce();
+  });
+
+  it('Eliminar on a Processed & posted movement confirms first, then calls deleteMovement', async () => {
+    const user = userEvent.setup();
+    // Posted (contabilizado) → there is something to undo → confirm.
+    const { onReload } = renderKebab({ id: 'gl-proc2', posted: 'Y', processed: true });
+    await user.click(screen.getByTestId('movement-row-delete'));
+
+    expect(screen.getByTestId('movement-confirm-modal')).toBeInTheDocument();
+    expect(deleteMovement).not.toHaveBeenCalled();
+
+    await user.click(screen.getByTestId('movement-confirm-accept'));
+    await waitFor(() => expect(deleteMovement).toHaveBeenCalledWith({ id: 'gl-proc2' }));
+    expect(onReload).toHaveBeenCalledOnce();
+  });
+
+  it('Reactivar a merely-Processed (not posted/reconciled) movement runs directly, no dialog', async () => {
+    const user = userEvent.setup();
+    const { onReload } = renderKebab({ id: 'gl-proc3', posted: 'N', processed: true });
+    await user.click(screen.getByTestId('movement-row-reactivate'));
+
+    expect(screen.queryByTestId('movement-confirm-modal')).not.toBeInTheDocument();
+    await waitFor(() => expect(reactivateMovement).toHaveBeenCalledWith({ id: 'gl-proc3' }));
     expect(onReload).toHaveBeenCalledOnce();
   });
 

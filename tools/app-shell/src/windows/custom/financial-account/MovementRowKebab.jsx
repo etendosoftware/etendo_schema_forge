@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { MoreVertical, BookOpen, CheckCircle2, RotateCcw, Trash2, Pencil } from 'lucide-react';
 import { toast } from 'sonner';
 import { useUI } from '@/i18n';
@@ -9,6 +10,7 @@ import {
   DropdownMenuItem,
   DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu';
+import MovementConfirmModal from './MovementConfirmModal';
 
 /**
  * Per-row kebab menu for a movement row.
@@ -26,16 +28,33 @@ export function MovementRowKebab({ movement, onReload, onEdit }) {
   const { reactivateMovement, reactivating } = useReactivateMovement();
   const { deleteMovement, deleting } = useDeleteMovement();
   const { postMovement, posting } = usePostMovement();
+  // Destructive-action confirmation ('reactivate' | 'delete' | null).
+  const [confirm, setConfirm] = useState(null);
 
   const isPosted = movement.posted === 'Y';
   const isProcessed = Boolean(movement.processed);
-  const isGlTransaction = !movement.paymentId;
-  const canEdit = isGlTransaction && !isProcessed;
+  const isReconciled = movement.paymentStatus === 'RPPC';
+  const isPaymentLinked = Boolean(movement.paymentId);
+  const isGlTransaction = !isPaymentLinked;
+  // Editable while not posted (contabilizado): Draft → full edit, Processed → partial edit
+  // (the modal locks amount/type). Posted → must reactivate first, so no edit.
+  const canEdit = isGlTransaction && !isPosted;
   const canProcess = isGlTransaction && !isProcessed;
   const canReactivate = isGlTransaction && isProcessed;
   const canDelete = isGlTransaction;
   // Contabilizar only makes sense once the movement is Processed (and not yet posted).
   const canPost = isProcessed && !isPosted;
+  // The destructive-action confirmation only matters when there is something to undo — i.e. the
+  // movement is posted (contabilizado) and/or reconciled. A merely-Processed movement reactivates
+  // or deletes directly, without the dialog.
+  const needsConfirm = isPosted || isReconciled;
+
+  // Payment/collection-linked movements are managed from the Payments module (navigate to the
+  // document from the row's Payment column). When there is nothing to offer here, don't render
+  // an empty kebab.
+  if (!canEdit && !canProcess && !canReactivate && !canDelete && !canPost) {
+    return null;
+  }
   const busy = posting || processing || reactivating || deleting;
 
   async function runLifecycle(fn, successKey, errorKey) {
@@ -49,7 +68,18 @@ export function MovementRowKebab({ movement, onReload, onEdit }) {
     }
   }
 
+  // Runs the action confirmed in the dialog, then closes it.
+  async function runConfirmed() {
+    if (confirm === 'delete') {
+      await runLifecycle(deleteMovement, 'financeAccountTxRowDeleteSuccess', 'financeAccountTxRowDeleteError');
+    } else {
+      await runLifecycle(reactivateMovement, 'financeAccountTxRowReactivateSuccess', 'financeAccountTxRowReactivateError');
+    }
+    setConfirm(null);
+  }
+
   return (
+    <>
     <DropdownMenu data-testid="DropdownMenu__64eff3">
       <DropdownMenuTrigger asChild data-testid="DropdownMenuTrigger__64eff3">
           <button
@@ -104,10 +134,12 @@ export function MovementRowKebab({ movement, onReload, onEdit }) {
             </DropdownMenuItem>
           )}
 
-          {/* Reactivate — Processed → Draft (G/L transactions only) */}
+          {/* Reactivate — Processed → Draft (G/L only); confirms first only when posted/reconciled */}
           {canReactivate && (
             <DropdownMenuItem
-              onClick={() => runLifecycle(reactivateMovement, 'financeAccountTxRowReactivateSuccess', 'financeAccountTxRowReactivateError')}
+              onClick={() => (needsConfirm
+                ? setConfirm('reactivate')
+                : runLifecycle(reactivateMovement, 'financeAccountTxRowReactivateSuccess', 'financeAccountTxRowReactivateError'))}
               disabled={busy}
               data-testid="movement-row-reactivate">
               <RotateCcw className="h-5 w-5 text-[#828FA3]" data-testid="RotateCcw__64eff3" />
@@ -117,12 +149,14 @@ export function MovementRowKebab({ movement, onReload, onEdit }) {
             </DropdownMenuItem>
           )}
 
-          {/* Delete — Draft directly, Processed via Payment Removal (G/L transactions only) */}
+          {/* Delete — Draft removed directly; Processed confirms first (Payment Removal) */}
           {canDelete && (
             <>
               <DropdownMenuSeparator data-testid="DropdownMenuSeparator__64eff3" />
               <DropdownMenuItem
-                onClick={() => runLifecycle(deleteMovement, 'financeAccountTxRowDeleteSuccess', 'financeAccountTxRowDeleteError')}
+                onClick={() => (needsConfirm
+                  ? setConfirm('delete')
+                  : runLifecycle(deleteMovement, 'financeAccountTxRowDeleteSuccess', 'financeAccountTxRowDeleteError'))}
                 disabled={busy}
                 data-testid="movement-row-delete">
                 <Trash2 className="h-5 w-5 text-[#D50B3E]" data-testid="Trash2__64eff3" />
@@ -134,5 +168,15 @@ export function MovementRowKebab({ movement, onReload, onEdit }) {
           )}
         </DropdownMenuContent>
       </DropdownMenu>
+      {confirm && (
+        <MovementConfirmModal
+          action={confirm}
+          reconciled={isReconciled}
+          posted={isPosted}
+          onConfirm={runConfirmed}
+          onClose={() => setConfirm(null)}
+          data-testid="MovementConfirmModal__64eff3" />
+      )}
+    </>
   );
 }

@@ -11,7 +11,7 @@
 // via the `dimensions` prop, the account's headerDimensions).
 import { useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
-import { X, Check, ArrowDown, ArrowUp, BarChart3 } from 'lucide-react';
+import { X, Check, Save, ArrowDown, ArrowUp, BarChart3 } from 'lucide-react';
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { useUI } from '@/i18n';
 import { useCreateMovement, useUpdateMovement } from '@/hooks/useCreateMovement';
@@ -35,23 +35,26 @@ const OPTIONAL_DIMS = [
 ];
 
 // ── Segmented Entrada/Salida control ──────────────────────────────────────────
-function DirectionToggle({ value, onChange }) {
+function DirectionToggle({ value, onChange, disabled }) {
   const ui = useUI();
   const options = [
     { id: 'in', label: ui('financeAccountTxNewTypeIn'), Icon: ArrowDown, active: 'bg-[#17663A]' },
     { id: 'out', label: ui('financeAccountTxNewTypeOut'), Icon: ArrowUp, active: 'bg-[#C5234A]' },
   ];
   return (
-    <div className="inline-flex h-[42px] w-full gap-[3px] rounded-[9px] bg-[#F7F7F8] p-[3px]">
+    <div className={`inline-flex h-[42px] w-full gap-[3px] rounded-[9px] bg-[#F7F7F8] p-[3px] ${disabled ? 'opacity-60' : ''}`}>
       {options.map((o) => {
         const on = value === o.id;
         return (
           <button
             key={o.id}
             type="button"
-            onClick={() => onChange(o.id)}
+            disabled={disabled}
+            onClick={() => !disabled && onChange(o.id)}
             data-testid={`tx-dir-${o.id}`}
             className={`inline-flex flex-1 items-center justify-center gap-[7px] rounded-[7px] text-[13px] ${
+              disabled ? 'cursor-not-allowed' : ''
+            } ${
               on ? `${o.active} font-bold text-white` : 'font-medium text-[#3F3F50]'
             }`}
           >
@@ -112,6 +115,9 @@ export function NewTransactionModal({ open, accountId, accountName = '', account
   const { createMovement, creating } = useCreateMovement();
   const { updateMovement, updating } = useUpdateMovement();
   const [form, setForm] = useState(initialForm);
+  // Last description we auto-generated from the G/L item. While the description still equals
+  // this (or is empty), switching G/L item keeps it in sync; once the user edits it, it stops.
+  const [autoDesc, setAutoDesc] = useState('');
   const set = (patch) => setForm((f) => ({ ...f, ...patch }));
   const isEdit = Boolean(movement);
   const busy = creating || updating;
@@ -119,7 +125,10 @@ export function NewTransactionModal({ open, accountId, accountName = '', account
   // Seed the form each time the modal opens: from the edited movement, or blank
   // for a new one.
   useEffect(() => {
-    if (open) setForm(movement ? formFromMovement(movement) : initialForm());
+    if (!open) return;
+    const seeded = movement ? formFromMovement(movement) : initialForm();
+    setForm(seeded);
+    setAutoDesc(seeded.description || '');
   }, [open, movement]);
 
   // Which optional dimensions to render: those enabled in the chart of accounts.
@@ -129,10 +138,23 @@ export function NewTransactionModal({ open, accountId, accountName = '', account
   );
 
   const iso = accountCurrency?.iso || 'EUR';
+  // Editing an already-Processed movement: amount and direction are locked (Classic parity); only
+  // G/L item, dimensions, description and dates can change. Confirmar is hidden (already processed).
+  const lockAmountType = isEdit && Boolean(movement.processed);
   const amountValue = parseEur(form.amount);
   const valid = Boolean(form.date) && Boolean(form.dir) && Boolean(form.gl?.id) && amountValue > 0;
 
   const setDim = (key, v) => set({ dims: { ...form.dims, [key]: v } });
+  // Mirrors Etendo Classic: picking a G/L item fills the description with
+  // "Conceptos Contables: {name}" (es) / "GL Item: {name}" (en). It keeps updating as the user
+  // switches between concepts, but never overwrites a description the user typed themselves.
+  const handleGlChange = (row) => {
+    const nextAuto = row ? `${ui('financeAccountTxNewGlDescPrefix')}: ${row.name}` : '';
+    const current = form.description || '';
+    const description = (current === '' || current === autoDesc) ? nextAuto : current;
+    setAutoDesc(nextAuto);
+    set({ gl: row, description });
+  };
   // On blur, normalize the typed amount to the European 2-decimal format ("20" → "20,00").
   const formatAmount = () => {
     const raw = (form.amount || '').trim();
@@ -180,7 +202,7 @@ export function NewTransactionModal({ open, accountId, accountName = '', account
   return (
     <Dialog open={open} onOpenChange={(v) => { if (!v) onClose(); }} data-testid="Dialog__tx">
       <DialogContent
-        className="flex w-[680px] max-w-[96vw] max-h-[90vh] flex-col gap-0 overflow-hidden rounded-2xl border border-[#E8E8ED] bg-white p-0 [&>button]:hidden"
+        className="flex w-[820px] max-w-[96vw] max-h-[90vh] flex-col gap-0 overflow-hidden rounded-2xl border border-[#E8E8ED] bg-white p-0 [&>button]:hidden"
         data-testid="tx-new-modal">
         {/* Header */}
         <div className="flex shrink-0 items-start justify-between border-b border-[#E8E8ED] px-6 pb-4 pt-[18px]">
@@ -215,7 +237,7 @@ export function NewTransactionModal({ open, accountId, accountName = '', account
               name="tx-date"
               data-testid="tx-date" />
             <Field label={ui('financeAccountTxNewType')} required data-testid="tx-type-field">
-              <DirectionToggle value={form.dir} onChange={(dir) => set({ dir })} data-testid="tx-dir" />
+              <DirectionToggle value={form.dir} onChange={(dir) => set({ dir })} disabled={lockAmountType} data-testid="tx-dir" />
             </Field>
           </div>
 
@@ -223,7 +245,7 @@ export function NewTransactionModal({ open, accountId, accountName = '', account
             <Field label={ui('financeAccountTxNewGlItem')} required data-testid="tx-glitem-field">
               <ChipSelect
                 value={form.gl}
-                onChange={(row) => set({ gl: row })}
+                onChange={handleGlChange}
                 useLookup={useGLItemLookup}
                 placeholder={ui('financeAccountTxNewGlItemPlaceholder')}
                 testId="tx-glitem" />
@@ -231,6 +253,7 @@ export function NewTransactionModal({ open, accountId, accountName = '', account
             <AmountInput
               label={ui('financeAccountTxNewAmount')}
               required
+              readOnly={lockAmountType}
               value={form.amount}
               placeholder="0,00"
               onChange={(e) => set({ amount: e.target.value })}
@@ -255,7 +278,7 @@ export function NewTransactionModal({ open, accountId, accountName = '', account
               <span className="text-sm font-semibold leading-[19px] text-[#121217]">{ui('financeAccountTxNewDimensionsTitle')}</span>
               <span className="text-xs leading-4 text-[#8A8AA3]">{ui('financeAccountTxNewDimensionsOptional')}</span>
             </div>
-            <div className="grid grid-cols-2 gap-x-4 gap-y-3.5">
+            <div className="grid grid-cols-3 gap-x-4 gap-y-3.5">
               <Field label={ui('financeAccountTxNewDimContact')} data-testid="tx-contact-field">
                 <ChipSelect
                   value={form.contact}
@@ -289,17 +312,20 @@ export function NewTransactionModal({ open, accountId, accountName = '', account
             disabled={!valid || busy}
             onClick={() => handleSave(false)}
             data-testid="tx-new-save">
+            <Save className="h-[14px] w-[14px]" data-testid="Save__tx" />
             {busy ? ui('financeAccountTxNewSaving') : ui('financeAccountTxNewSave')}
           </button>
-          <button
-            type="button"
-            className={BTN_PRIMARY}
-            disabled={!valid || busy}
-            onClick={() => handleSave(true)}
-            data-testid="tx-new-confirm">
-            <Check className="h-[14px] w-[14px]" data-testid="Check__tx" />
-            {busy ? ui('financeAccountTxNewSaving') : ui('financeAccountTxNewConfirm')}
-          </button>
+          {!lockAmountType && (
+            <button
+              type="button"
+              className={BTN_PRIMARY}
+              disabled={!valid || busy}
+              onClick={() => handleSave(true)}
+              data-testid="tx-new-confirm">
+              <Check className="h-[14px] w-[14px]" data-testid="Check__tx" />
+              {busy ? ui('financeAccountTxNewSaving') : ui('financeAccountTxNewConfirm')}
+            </button>
+          )}
         </div>
       </DialogContent>
     </Dialog>
