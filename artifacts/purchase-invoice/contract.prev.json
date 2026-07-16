@@ -1,8 +1,8 @@
 {
-  "version": "0.67.0",
+  "version": "0.70.0",
   "generatedAt": "2026-04-30T15:42:46.722Z",
-  "updatedAt": "2026-07-06T13:19:15.454Z",
-  "checksum": "ba5b71d06c8590f7",
+  "updatedAt": "2026-07-14T14:04:01.432Z",
+  "checksum": "474961683f834e87",
   "frontendContract": {
     "window": {
       "id": "183",
@@ -93,6 +93,13 @@
           "component": "SifTab",
           "importFrom": "@/windows/custom/shared/SifTab.jsx",
           "placement": "tab"
+        },
+        {
+          "key": "reversedInvoices",
+          "labelKey": "rectificationsTab",
+          "component": "ReversedInvoicesPanel",
+          "importFrom": "@/windows/custom/sales-invoice/ReversedInvoicesPanel.jsx",
+          "placement": "tab"
         }
       ],
       "sendDocument": {
@@ -106,6 +113,10 @@
           "trueKey": "postedStatus",
           "falseKey": "notPostedStatus",
           "_note": "Accounting status pill — visible to financial+admin roles only (permissions enforcement pending)"
+        },
+        {
+          "field": "hasRectifications",
+          "trueKey": "rectificativeLabel"
         }
       ]
     },
@@ -3682,6 +3693,219 @@
         ],
         "javaQualifier": "paymentDetailsHandler"
       },
+      "reversedInvoices": {
+        "tableName": "C_Invoice_Reverse",
+        "tabId": "3ED38B380CD849B38F0AC1B52F992C34",
+        "tabName": "Reversed Invoices",
+        "uiPattern": "STD",
+        "fields": [
+          {
+            "name": "reversedInvoice",
+            "apiKey": "reversedInvoice",
+            "column": "Reversed_C_Invoice_ID",
+            "label": "Reversed Invoice",
+            "type": "foreignKey",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": true,
+            "grid": true,
+            "form": true,
+            "sourceRequired": true,
+            "reference": "Invoice",
+            "inputMode": "search",
+            "lookup": true,
+            "gridOrder": 1,
+            "callout": {
+              "className": "com.etendoerp.verifactu.ad_callouts.PaymentWarning"
+            },
+            "readOnlyLogic": {
+              "raw": "@Processed@='Y' & @DocStatus@!='VO'",
+              "evaluable": true,
+              "js": "record['processed'] === true && record['documentStatus'] !== 'VO'"
+            }
+          },
+          {
+            "name": "aEAT349IsCorrective",
+            "apiKey": "aEAT349IsCorrective",
+            "column": "EM_AEAT349_IsCorrective",
+            "label": "Correctiva del 349",
+            "type": "boolean",
+            "tsType": "boolean",
+            "visibility": "editable",
+            "required": false,
+            "grid": true,
+            "form": true,
+            "gridOrder": 5,
+            "readOnlyLogic": {
+              "raw": "@Processed@='Y' & @DocStatus@!='VO'",
+              "evaluable": true,
+              "js": "record['processed'] === true && record['documentStatus'] !== 'VO'"
+            }
+          },
+          {
+            "name": "aEAT349CYear",
+            "apiKey": "aEAT349CYear",
+            "column": "EM_AEAT349_C_Year_ID",
+            "label": "Año",
+            "type": "foreignKey",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": false,
+            "grid": true,
+            "form": true,
+            "reference": "Year",
+            "inputMode": "search",
+            "gridOrder": 10,
+            "displayLogic": {
+              "raw": "@aEAT349IsCorrective@='Y'",
+              "evaluable": true
+            },
+            "readOnlyLogic": {
+              "raw": "@Processed@='Y' & @DocStatus@!='VO'",
+              "evaluable": true,
+              "js": "record['processed'] === true && record['documentStatus'] !== 'VO'"
+            }
+          },
+          {
+            "name": "aEAT349Period",
+            "apiKey": "aEAT349Period",
+            "column": "EM_AEAT349_Period",
+            "label": "Periodo",
+            "type": "enum",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": false,
+            "grid": true,
+            "form": true,
+            "enumValues": [
+              {
+                "value": "0A",
+                "name": "0A - Anual"
+              },
+              {
+                "value": "1T",
+                "name": "1T - Primer Trimestre"
+              },
+              {
+                "value": "2T",
+                "name": "2T - Segundo Trimestre"
+              },
+              {
+                "value": "3T",
+                "name": "3T - Tercer Trimestre"
+              },
+              {
+                "value": "4T",
+                "name": "4T - Cuarto Trimestre"
+              },
+              {
+                "value": "01",
+                "name": "01 - Enero"
+              },
+              {
+                "value": "02",
+                "name": "02 - Febrero"
+              },
+              {
+                "value": "03",
+                "name": "03 - Marzo"
+              },
+              {
+                "value": "04",
+                "name": "04 - Abril"
+              },
+              {
+                "value": "05",
+                "name": "05 - Mayo"
+              },
+              {
+                "value": "06",
+                "name": "06 - Junio"
+              },
+              {
+                "value": "07",
+                "name": "07 - Julio"
+              },
+              {
+                "value": "08",
+                "name": "08 - Agosto"
+              },
+              {
+                "value": "09",
+                "name": "09 - Septiembre"
+              },
+              {
+                "value": "10",
+                "name": "10 - Octubre"
+              },
+              {
+                "value": "11",
+                "name": "11 - Noviembre"
+              },
+              {
+                "value": "12",
+                "name": "12 - Diciembre"
+              }
+            ],
+            "gridOrder": 20,
+            "displayLogic": {
+              "raw": "@aEAT349IsCorrective@='Y'",
+              "evaluable": true
+            },
+            "readOnlyLogic": {
+              "raw": "@Processed@='Y' & @DocStatus@!='VO'",
+              "evaluable": true,
+              "js": "record['processed'] === true && record['documentStatus'] !== 'VO'"
+            }
+          },
+          {
+            "name": "aEAT349BPBaseAmount",
+            "apiKey": "aEAT349BPBaseAmount",
+            "column": "EM_AEAT349_BP_BaseAmount",
+            "label": "Base Imponible del 349 Productos",
+            "type": "amount",
+            "tsType": "number",
+            "visibility": "editable",
+            "required": false,
+            "grid": true,
+            "form": true,
+            "gridOrder": 30,
+            "displayLogic": {
+              "raw": "@aEAT349IsCorrective@='Y'",
+              "evaluable": true
+            },
+            "readOnlyLogic": {
+              "raw": "@Processed@='Y' & @DocStatus@!='VO'",
+              "evaluable": true,
+              "js": "record['processed'] === true && record['documentStatus'] !== 'VO'"
+            }
+          },
+          {
+            "name": "aEAT349BPBaseAmountS",
+            "apiKey": "aEAT349BPBaseAmountS",
+            "column": "EM_AEAT349_BP_BaseAmount_S",
+            "label": "Base Imponible del 349 Servicios",
+            "type": "amount",
+            "tsType": "number",
+            "visibility": "editable",
+            "required": false,
+            "grid": true,
+            "form": true,
+            "gridOrder": 40,
+            "displayLogic": {
+              "raw": "@aEAT349IsCorrective@='Y'",
+              "evaluable": true
+            },
+            "readOnlyLogic": {
+              "raw": "@Processed@='Y' & @DocStatus@!='VO'",
+              "evaluable": true,
+              "js": "record['processed'] === true && record['documentStatus'] !== 'VO'"
+            }
+          }
+        ],
+        "searchableFields": [],
+        "computedFields": []
+      },
       "exchangeRates": {
         "tableName": "C_Conversion_Rate_Document",
         "tabId": "FF808181308EA4230130901AB2C60090",
@@ -4458,6 +4682,13 @@
           "component": "SifTab",
           "importFrom": "@/windows/custom/shared/SifTab.jsx",
           "placement": "tab"
+        },
+        {
+          "key": "reversedInvoices",
+          "labelKey": "rectificationsTab",
+          "component": "ReversedInvoicesPanel",
+          "importFrom": "@/windows/custom/sales-invoice/ReversedInvoicesPanel.jsx",
+          "placement": "tab"
         }
       ],
       "sendDocument": {
@@ -4470,6 +4701,10 @@
           "trueKey": "postedStatus",
           "falseKey": "notPostedStatus",
           "_note": "Accounting status pill — visible to financial+admin roles only (permissions enforcement pending)"
+        },
+        {
+          "field": "hasRectifications",
+          "trueKey": "rectificativeLabel"
         }
       ]
     },
@@ -7469,6 +7704,141 @@
         ],
         "javaQualifier": "paymentDetailsHandler"
       },
+      "reversedInvoices": {
+        "tableName": "C_Invoice_Reverse",
+        "tabId": "3ED38B380CD849B38F0AC1B52F992C34",
+        "tabName": "Reversed Invoices",
+        "fields": [
+          {
+            "name": "reversedInvoice",
+            "apiKey": "reversedInvoice",
+            "column": "Reversed_C_Invoice_ID",
+            "type": "foreignKey",
+            "visibility": "editable",
+            "required": true
+          },
+          {
+            "name": "aEAT349IsCorrective",
+            "apiKey": "aEAT349IsCorrective",
+            "column": "EM_AEAT349_IsCorrective",
+            "type": "boolean",
+            "visibility": "editable",
+            "required": false
+          },
+          {
+            "name": "aEAT349CYear",
+            "apiKey": "aEAT349CYear",
+            "column": "EM_AEAT349_C_Year_ID",
+            "type": "foreignKey",
+            "visibility": "editable",
+            "required": false
+          },
+          {
+            "name": "aEAT349Period",
+            "apiKey": "aEAT349Period",
+            "column": "EM_AEAT349_Period",
+            "type": "enum",
+            "visibility": "editable",
+            "required": false
+          },
+          {
+            "name": "aEAT349BPBaseAmount",
+            "apiKey": "aEAT349BPBaseAmount",
+            "column": "EM_AEAT349_BP_BaseAmount",
+            "type": "amount",
+            "visibility": "editable",
+            "required": false
+          },
+          {
+            "name": "aEAT349CBpartner",
+            "apiKey": "aEAT349CBpartner",
+            "column": "EM_AEAT349_C_Bpartner_ID",
+            "type": "foreignKey",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "aEAT349BPBaseAmountS",
+            "apiKey": "aEAT349BPBaseAmountS",
+            "column": "EM_AEAT349_BP_BaseAmount_S",
+            "type": "amount",
+            "visibility": "editable",
+            "required": false
+          },
+          {
+            "name": "client",
+            "apiKey": "client",
+            "column": "AD_Client_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "organization",
+            "apiKey": "organization",
+            "column": "AD_Org_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "invoice",
+            "apiKey": "invoice",
+            "column": "C_Invoice_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "id",
+            "apiKey": "id",
+            "column": "C_Invoice_Reverse_ID",
+            "type": "id",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "active",
+            "apiKey": "active",
+            "column": "Isactive",
+            "type": "boolean",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "creationDate",
+            "apiKey": "creationDate",
+            "column": "Created",
+            "type": "dateTime",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "createdBy",
+            "apiKey": "createdBy",
+            "column": "Createdby",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "updated",
+            "apiKey": "updated",
+            "column": "Updated",
+            "type": "dateTime",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "updatedBy",
+            "apiKey": "updatedBy",
+            "column": "Updatedby",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          }
+        ]
+      },
       "exchangeRates": {
         "tableName": "C_Conversion_Rate_Document",
         "tabId": "FF808181308EA4230130901AB2C60090",
@@ -8526,6 +8896,36 @@
       },
       {
         "method": "GET",
+        "path": "/reversedInvoices",
+        "entity": "reversedInvoices",
+        "supportedFilters": []
+      },
+      {
+        "method": "GET",
+        "path": "/reversedInvoices/:id",
+        "entity": "reversedInvoices",
+        "supportedFilters": []
+      },
+      {
+        "method": "POST",
+        "path": "/reversedInvoices",
+        "entity": "reversedInvoices",
+        "supportedFilters": []
+      },
+      {
+        "method": "PUT",
+        "path": "/reversedInvoices/:id",
+        "entity": "reversedInvoices",
+        "supportedFilters": []
+      },
+      {
+        "method": "DELETE",
+        "path": "/reversedInvoices/:id",
+        "entity": "reversedInvoices",
+        "supportedFilters": []
+      },
+      {
+        "method": "GET",
         "path": "/exchangeRates",
         "entity": "exchangeRates",
         "supportedFilters": []
@@ -8744,6 +9144,17 @@
         "delete": true,
         "listUrl": "/sws/neo/purchase-invoice/paymentDetails",
         "detailUrl": "/sws/neo/purchase-invoice/paymentDetails/{id}",
+        "supportedFilters": []
+      },
+      "reversedInvoices": {
+        "get": true,
+        "getById": true,
+        "post": true,
+        "put": true,
+        "patch": true,
+        "delete": true,
+        "listUrl": "/sws/neo/purchase-invoice/reversedInvoices",
+        "detailUrl": "/sws/neo/purchase-invoice/reversedInvoices/{id}",
         "supportedFilters": []
       },
       "exchangeRates": {
@@ -9140,6 +9551,22 @@
         "reference": "Payment",
         "inputMode": "selector",
         "url": "/sws/neo/purchase-invoice/paymentDetails/selectors/finPaymentID"
+      },
+      {
+        "entity": "reversedInvoices",
+        "field": "reversedInvoice",
+        "column": "Reversed_C_Invoice_ID",
+        "reference": "Invoice",
+        "inputMode": "search",
+        "url": "/sws/neo/purchase-invoice/reversedInvoices/selectors/reversedInvoice"
+      },
+      {
+        "entity": "reversedInvoices",
+        "field": "aEAT349CYear",
+        "column": "EM_AEAT349_C_Year_ID",
+        "reference": "Year",
+        "inputMode": "search",
+        "url": "/sws/neo/purchase-invoice/reversedInvoices/selectors/aEAT349CYear"
       },
       {
         "entity": "exchangeRates",
@@ -9796,6 +10223,13 @@
         "description": "CRUD flags for 'paymentPlan' should all be booleans"
       },
       {
+        "id": "t-crud-flags-reversedInvoices",
+        "category": "crud-flags",
+        "entity": "reversedInvoices",
+        "runner": "node",
+        "description": "CRUD flags for 'reversedInvoices' should all be booleans"
+      },
+      {
         "id": "t-crud-flags-siiData",
         "category": "crud-flags",
         "entity": "siiData",
@@ -10250,6 +10684,38 @@
         "description": "Display logic for 'invoicePaid' in paymentDetails should have evaluable flag"
       },
       {
+        "id": "t-displaylogic-evaluable-reversedInvoices-aEAT349BPBaseAmount",
+        "category": "displaylogic-evaluable",
+        "entity": "reversedInvoices",
+        "field": "aEAT349BPBaseAmount",
+        "runner": "node",
+        "description": "Display logic for 'aEAT349BPBaseAmount' in reversedInvoices should have evaluable flag"
+      },
+      {
+        "id": "t-displaylogic-evaluable-reversedInvoices-aEAT349BPBaseAmountS",
+        "category": "displaylogic-evaluable",
+        "entity": "reversedInvoices",
+        "field": "aEAT349BPBaseAmountS",
+        "runner": "node",
+        "description": "Display logic for 'aEAT349BPBaseAmountS' in reversedInvoices should have evaluable flag"
+      },
+      {
+        "id": "t-displaylogic-evaluable-reversedInvoices-aEAT349CYear",
+        "category": "displaylogic-evaluable",
+        "entity": "reversedInvoices",
+        "field": "aEAT349CYear",
+        "runner": "node",
+        "description": "Display logic for 'aEAT349CYear' in reversedInvoices should have evaluable flag"
+      },
+      {
+        "id": "t-displaylogic-evaluable-reversedInvoices-aEAT349Period",
+        "category": "displaylogic-evaluable",
+        "entity": "reversedInvoices",
+        "field": "aEAT349Period",
+        "runner": "node",
+        "description": "Display logic for 'aEAT349Period' in reversedInvoices should have evaluable flag"
+      },
+      {
         "id": "t-displaylogic-valid-header-aeatsiiClaveTipoFc",
         "category": "displaylogic-valid",
         "entity": "header",
@@ -10384,6 +10850,38 @@
         "field": "invoicePaid",
         "runner": "node",
         "description": "Display logic for 'invoicePaid' in paymentDetails should be valid JS"
+      },
+      {
+        "id": "t-displaylogic-valid-reversedInvoices-aEAT349BPBaseAmount",
+        "category": "displaylogic-valid",
+        "entity": "reversedInvoices",
+        "field": "aEAT349BPBaseAmount",
+        "runner": "node",
+        "description": "Display logic for 'aEAT349BPBaseAmount' in reversedInvoices should be valid JS"
+      },
+      {
+        "id": "t-displaylogic-valid-reversedInvoices-aEAT349BPBaseAmountS",
+        "category": "displaylogic-valid",
+        "entity": "reversedInvoices",
+        "field": "aEAT349BPBaseAmountS",
+        "runner": "node",
+        "description": "Display logic for 'aEAT349BPBaseAmountS' in reversedInvoices should be valid JS"
+      },
+      {
+        "id": "t-displaylogic-valid-reversedInvoices-aEAT349CYear",
+        "category": "displaylogic-valid",
+        "entity": "reversedInvoices",
+        "field": "aEAT349CYear",
+        "runner": "node",
+        "description": "Display logic for 'aEAT349CYear' in reversedInvoices should be valid JS"
+      },
+      {
+        "id": "t-displaylogic-valid-reversedInvoices-aEAT349Period",
+        "category": "displaylogic-valid",
+        "entity": "reversedInvoices",
+        "field": "aEAT349Period",
+        "runner": "node",
+        "description": "Display logic for 'aEAT349Period' in reversedInvoices should be valid JS"
       },
       {
         "id": "t-field-presence-accounting-account",
@@ -11480,6 +11978,54 @@
         "field": "paymentMethod",
         "runner": "node",
         "description": "Field 'paymentMethod' should be present in paymentPlan"
+      },
+      {
+        "id": "t-field-presence-reversedInvoices-aEAT349BPBaseAmount",
+        "category": "field-presence",
+        "entity": "reversedInvoices",
+        "field": "aEAT349BPBaseAmount",
+        "runner": "node",
+        "description": "Field 'aEAT349BPBaseAmount' should be present in reversedInvoices"
+      },
+      {
+        "id": "t-field-presence-reversedInvoices-aEAT349BPBaseAmountS",
+        "category": "field-presence",
+        "entity": "reversedInvoices",
+        "field": "aEAT349BPBaseAmountS",
+        "runner": "node",
+        "description": "Field 'aEAT349BPBaseAmountS' should be present in reversedInvoices"
+      },
+      {
+        "id": "t-field-presence-reversedInvoices-aEAT349CYear",
+        "category": "field-presence",
+        "entity": "reversedInvoices",
+        "field": "aEAT349CYear",
+        "runner": "node",
+        "description": "Field 'aEAT349CYear' should be present in reversedInvoices"
+      },
+      {
+        "id": "t-field-presence-reversedInvoices-aEAT349IsCorrective",
+        "category": "field-presence",
+        "entity": "reversedInvoices",
+        "field": "aEAT349IsCorrective",
+        "runner": "node",
+        "description": "Field 'aEAT349IsCorrective' should be present in reversedInvoices"
+      },
+      {
+        "id": "t-field-presence-reversedInvoices-aEAT349Period",
+        "category": "field-presence",
+        "entity": "reversedInvoices",
+        "field": "aEAT349Period",
+        "runner": "node",
+        "description": "Field 'aEAT349Period' should be present in reversedInvoices"
+      },
+      {
+        "id": "t-field-presence-reversedInvoices-reversedInvoice",
+        "category": "field-presence",
+        "entity": "reversedInvoices",
+        "field": "reversedInvoice",
+        "runner": "node",
+        "description": "Field 'reversedInvoice' should be present in reversedInvoices"
       },
       {
         "id": "t-field-presence-siiData-cdigoCSV",
@@ -12674,6 +13220,54 @@
         "description": "Field 'paymentMethod' should have type 'string' in paymentPlan"
       },
       {
+        "id": "t-field-type-reversedInvoices-aEAT349BPBaseAmount",
+        "category": "field-type",
+        "entity": "reversedInvoices",
+        "field": "aEAT349BPBaseAmount",
+        "runner": "node",
+        "description": "Field 'aEAT349BPBaseAmount' should have type 'number' in reversedInvoices"
+      },
+      {
+        "id": "t-field-type-reversedInvoices-aEAT349BPBaseAmountS",
+        "category": "field-type",
+        "entity": "reversedInvoices",
+        "field": "aEAT349BPBaseAmountS",
+        "runner": "node",
+        "description": "Field 'aEAT349BPBaseAmountS' should have type 'number' in reversedInvoices"
+      },
+      {
+        "id": "t-field-type-reversedInvoices-aEAT349CYear",
+        "category": "field-type",
+        "entity": "reversedInvoices",
+        "field": "aEAT349CYear",
+        "runner": "node",
+        "description": "Field 'aEAT349CYear' should have type 'string' in reversedInvoices"
+      },
+      {
+        "id": "t-field-type-reversedInvoices-aEAT349IsCorrective",
+        "category": "field-type",
+        "entity": "reversedInvoices",
+        "field": "aEAT349IsCorrective",
+        "runner": "node",
+        "description": "Field 'aEAT349IsCorrective' should have type 'boolean' in reversedInvoices"
+      },
+      {
+        "id": "t-field-type-reversedInvoices-aEAT349Period",
+        "category": "field-type",
+        "entity": "reversedInvoices",
+        "field": "aEAT349Period",
+        "runner": "node",
+        "description": "Field 'aEAT349Period' should have type 'string' in reversedInvoices"
+      },
+      {
+        "id": "t-field-type-reversedInvoices-reversedInvoice",
+        "category": "field-type",
+        "entity": "reversedInvoices",
+        "field": "reversedInvoice",
+        "runner": "node",
+        "description": "Field 'reversedInvoice' should have type 'string' in reversedInvoices"
+      },
+      {
         "id": "t-field-type-siiData-cdigoCSV",
         "category": "field-type",
         "entity": "siiData",
@@ -13258,6 +13852,54 @@
         "description": "Read-only logic for 'unitPrice' in lines should have evaluable flag"
       },
       {
+        "id": "t-readonlylogic-evaluable-reversedInvoices-aEAT349BPBaseAmount",
+        "category": "readonlylogic-evaluable",
+        "entity": "reversedInvoices",
+        "field": "aEAT349BPBaseAmount",
+        "runner": "node",
+        "description": "Read-only logic for 'aEAT349BPBaseAmount' in reversedInvoices should have evaluable flag"
+      },
+      {
+        "id": "t-readonlylogic-evaluable-reversedInvoices-aEAT349BPBaseAmountS",
+        "category": "readonlylogic-evaluable",
+        "entity": "reversedInvoices",
+        "field": "aEAT349BPBaseAmountS",
+        "runner": "node",
+        "description": "Read-only logic for 'aEAT349BPBaseAmountS' in reversedInvoices should have evaluable flag"
+      },
+      {
+        "id": "t-readonlylogic-evaluable-reversedInvoices-aEAT349CYear",
+        "category": "readonlylogic-evaluable",
+        "entity": "reversedInvoices",
+        "field": "aEAT349CYear",
+        "runner": "node",
+        "description": "Read-only logic for 'aEAT349CYear' in reversedInvoices should have evaluable flag"
+      },
+      {
+        "id": "t-readonlylogic-evaluable-reversedInvoices-aEAT349IsCorrective",
+        "category": "readonlylogic-evaluable",
+        "entity": "reversedInvoices",
+        "field": "aEAT349IsCorrective",
+        "runner": "node",
+        "description": "Read-only logic for 'aEAT349IsCorrective' in reversedInvoices should have evaluable flag"
+      },
+      {
+        "id": "t-readonlylogic-evaluable-reversedInvoices-aEAT349Period",
+        "category": "readonlylogic-evaluable",
+        "entity": "reversedInvoices",
+        "field": "aEAT349Period",
+        "runner": "node",
+        "description": "Read-only logic for 'aEAT349Period' in reversedInvoices should have evaluable flag"
+      },
+      {
+        "id": "t-readonlylogic-evaluable-reversedInvoices-reversedInvoice",
+        "category": "readonlylogic-evaluable",
+        "entity": "reversedInvoices",
+        "field": "reversedInvoice",
+        "runner": "node",
+        "description": "Read-only logic for 'reversedInvoice' in reversedInvoices should have evaluable flag"
+      },
+      {
         "id": "t-readonlylogic-evaluable-tax-tax",
         "category": "readonlylogic-evaluable",
         "entity": "tax",
@@ -13768,6 +14410,54 @@
         "field": "unitPrice",
         "runner": "node",
         "description": "Read-only logic for 'unitPrice' in lines should be valid JS"
+      },
+      {
+        "id": "t-readonlylogic-valid-reversedInvoices-aEAT349BPBaseAmount",
+        "category": "readonlylogic-valid",
+        "entity": "reversedInvoices",
+        "field": "aEAT349BPBaseAmount",
+        "runner": "node",
+        "description": "Read-only logic for 'aEAT349BPBaseAmount' in reversedInvoices should be valid JS"
+      },
+      {
+        "id": "t-readonlylogic-valid-reversedInvoices-aEAT349BPBaseAmountS",
+        "category": "readonlylogic-valid",
+        "entity": "reversedInvoices",
+        "field": "aEAT349BPBaseAmountS",
+        "runner": "node",
+        "description": "Read-only logic for 'aEAT349BPBaseAmountS' in reversedInvoices should be valid JS"
+      },
+      {
+        "id": "t-readonlylogic-valid-reversedInvoices-aEAT349CYear",
+        "category": "readonlylogic-valid",
+        "entity": "reversedInvoices",
+        "field": "aEAT349CYear",
+        "runner": "node",
+        "description": "Read-only logic for 'aEAT349CYear' in reversedInvoices should be valid JS"
+      },
+      {
+        "id": "t-readonlylogic-valid-reversedInvoices-aEAT349IsCorrective",
+        "category": "readonlylogic-valid",
+        "entity": "reversedInvoices",
+        "field": "aEAT349IsCorrective",
+        "runner": "node",
+        "description": "Read-only logic for 'aEAT349IsCorrective' in reversedInvoices should be valid JS"
+      },
+      {
+        "id": "t-readonlylogic-valid-reversedInvoices-aEAT349Period",
+        "category": "readonlylogic-valid",
+        "entity": "reversedInvoices",
+        "field": "aEAT349Period",
+        "runner": "node",
+        "description": "Read-only logic for 'aEAT349Period' in reversedInvoices should be valid JS"
+      },
+      {
+        "id": "t-readonlylogic-valid-reversedInvoices-reversedInvoice",
+        "category": "readonlylogic-valid",
+        "entity": "reversedInvoices",
+        "field": "reversedInvoice",
+        "runner": "node",
+        "description": "Read-only logic for 'reversedInvoice' in reversedInvoices should be valid JS"
       },
       {
         "id": "t-readonlylogic-valid-tax-tax",
@@ -14371,6 +15061,22 @@
         "field": "paymentMethod",
         "runner": "node",
         "description": "Selector endpoint for 'paymentMethod' in paymentPlan should exist"
+      },
+      {
+        "id": "t-selector-endpoint-reversedInvoices-aEAT349CYear",
+        "category": "selector-endpoint",
+        "entity": "reversedInvoices",
+        "field": "aEAT349CYear",
+        "runner": "node",
+        "description": "Selector endpoint for 'aEAT349CYear' in reversedInvoices should exist"
+      },
+      {
+        "id": "t-selector-endpoint-reversedInvoices-reversedInvoice",
+        "category": "selector-endpoint",
+        "entity": "reversedInvoices",
+        "field": "reversedInvoice",
+        "runner": "node",
+        "description": "Selector endpoint for 'reversedInvoice' in reversedInvoices should exist"
       },
       {
         "id": "t-selector-endpoint-siiData-conexinSII",
@@ -16733,6 +17439,86 @@
         "description": "System field 'updatePaymentPlan' should exist in backend but not frontend for paymentPlan"
       },
       {
+        "id": "t-system-field-reversedInvoices-active",
+        "category": "system-field",
+        "entity": "reversedInvoices",
+        "field": "active",
+        "runner": "node",
+        "description": "System field 'active' should exist in backend but not frontend for reversedInvoices"
+      },
+      {
+        "id": "t-system-field-reversedInvoices-aEAT349CBpartner",
+        "category": "system-field",
+        "entity": "reversedInvoices",
+        "field": "aEAT349CBpartner",
+        "runner": "node",
+        "description": "System field 'aEAT349CBpartner' should exist in backend but not frontend for reversedInvoices"
+      },
+      {
+        "id": "t-system-field-reversedInvoices-client",
+        "category": "system-field",
+        "entity": "reversedInvoices",
+        "field": "client",
+        "runner": "node",
+        "description": "System field 'client' should exist in backend but not frontend for reversedInvoices"
+      },
+      {
+        "id": "t-system-field-reversedInvoices-createdBy",
+        "category": "system-field",
+        "entity": "reversedInvoices",
+        "field": "createdBy",
+        "runner": "node",
+        "description": "System field 'createdBy' should exist in backend but not frontend for reversedInvoices"
+      },
+      {
+        "id": "t-system-field-reversedInvoices-creationDate",
+        "category": "system-field",
+        "entity": "reversedInvoices",
+        "field": "creationDate",
+        "runner": "node",
+        "description": "System field 'creationDate' should exist in backend but not frontend for reversedInvoices"
+      },
+      {
+        "id": "t-system-field-reversedInvoices-id",
+        "category": "system-field",
+        "entity": "reversedInvoices",
+        "field": "id",
+        "runner": "node",
+        "description": "System field 'id' should exist in backend but not frontend for reversedInvoices"
+      },
+      {
+        "id": "t-system-field-reversedInvoices-invoice",
+        "category": "system-field",
+        "entity": "reversedInvoices",
+        "field": "invoice",
+        "runner": "node",
+        "description": "System field 'invoice' should exist in backend but not frontend for reversedInvoices"
+      },
+      {
+        "id": "t-system-field-reversedInvoices-organization",
+        "category": "system-field",
+        "entity": "reversedInvoices",
+        "field": "organization",
+        "runner": "node",
+        "description": "System field 'organization' should exist in backend but not frontend for reversedInvoices"
+      },
+      {
+        "id": "t-system-field-reversedInvoices-updated",
+        "category": "system-field",
+        "entity": "reversedInvoices",
+        "field": "updated",
+        "runner": "node",
+        "description": "System field 'updated' should exist in backend but not frontend for reversedInvoices"
+      },
+      {
+        "id": "t-system-field-reversedInvoices-updatedBy",
+        "category": "system-field",
+        "entity": "reversedInvoices",
+        "field": "updatedBy",
+        "runner": "node",
+        "description": "System field 'updatedBy' should exist in backend but not frontend for reversedInvoices"
+      },
+      {
         "id": "t-system-field-siiData-active",
         "category": "system-field",
         "entity": "siiData",
@@ -16979,6 +17765,13 @@
         "description": "Entity 'paymentPlan' should only expose visible fields in frontend"
       },
       {
+        "id": "t-visibility-reversedInvoices",
+        "category": "visibility",
+        "entity": "reversedInvoices",
+        "runner": "node",
+        "description": "Entity 'reversedInvoices' should only expose visible fields in frontend"
+      },
+      {
         "id": "t-visibility-siiData",
         "category": "visibility",
         "entity": "siiData",
@@ -16994,25 +17787,25 @@
       }
     ],
     "summary": {
-      "total": 940,
+      "total": 986,
       "byCategory": {
         "action-endpoint": 26,
-        "crud-flags": 12,
+        "crud-flags": 13,
         "default-value-type": 38,
-        "displaylogic-evaluable": 17,
-        "displaylogic-valid": 17,
-        "field-presence": 149,
-        "field-type": 149,
-        "readonlylogic-evaluable": 64,
-        "readonlylogic-valid": 64,
+        "displaylogic-evaluable": 21,
+        "displaylogic-valid": 21,
+        "field-presence": 155,
+        "field-type": 155,
+        "readonlylogic-evaluable": 70,
+        "readonlylogic-valid": 70,
         "rule-declared": 21,
         "searchable-filters": 6,
-        "selector-endpoint": 50,
-        "system-field": 315,
-        "visibility": 12
+        "selector-endpoint": 52,
+        "system-field": 325,
+        "visibility": 13
       },
       "byRunner": {
-        "node": 940,
+        "node": 986,
         "junit": 0
       }
     }

@@ -897,6 +897,129 @@ export const paymentPlan = [
   }
 ];
 
+export const reversedInvoices = [
+  {
+    "id": "mock-reversedInvoices-001",
+    "reversedInvoice": "Sample reversedInvoice",
+    "aEAT349IsCorrective": "Sample aEAT349IsCorrective",
+    "aEAT349CYear": "Sample aEAT349CYear",
+    "aEAT349Period": "Sample aEAT349Period",
+    "aEAT349BPBaseAmount": 38907,
+    "aEAT349BPBaseAmountS": 38907,
+    "headerId": "mock-header-001"
+  },
+  {
+    "id": "mock-reversedInvoices-002",
+    "reversedInvoice": "Sample reversedInvoice",
+    "aEAT349IsCorrective": "Sample aEAT349IsCorrective",
+    "aEAT349CYear": "Sample aEAT349CYear",
+    "aEAT349Period": "Sample aEAT349Period",
+    "aEAT349BPBaseAmount": 9306,
+    "aEAT349BPBaseAmountS": 9306,
+    "headerId": "mock-header-002"
+  },
+  {
+    "id": "mock-reversedInvoices-003",
+    "reversedInvoice": "Sample reversedInvoice",
+    "aEAT349IsCorrective": "Sample aEAT349IsCorrective",
+    "aEAT349CYear": "Sample aEAT349CYear",
+    "aEAT349Period": "Sample aEAT349Period",
+    "aEAT349BPBaseAmount": 11544,
+    "aEAT349BPBaseAmountS": 11544,
+    "headerId": "mock-header-003"
+  },
+  {
+    "id": "mock-reversedInvoices-004",
+    "reversedInvoice": "Sample reversedInvoice",
+    "aEAT349IsCorrective": "Sample aEAT349IsCorrective",
+    "aEAT349CYear": "Sample aEAT349CYear",
+    "aEAT349Period": "Sample aEAT349Period",
+    "aEAT349BPBaseAmount": 11872,
+    "aEAT349BPBaseAmountS": 11872,
+    "headerId": "mock-header-004"
+  },
+  {
+    "id": "mock-reversedInvoices-005",
+    "reversedInvoice": "Sample reversedInvoice",
+    "aEAT349IsCorrective": "Sample aEAT349IsCorrective",
+    "aEAT349CYear": "Sample aEAT349CYear",
+    "aEAT349Period": "Sample aEAT349Period",
+    "aEAT349BPBaseAmount": 48460,
+    "aEAT349BPBaseAmountS": 48460,
+    "headerId": "mock-header-005"
+  },
+  {
+    "id": "mock-reversedInvoices-006",
+    "reversedInvoice": "Sample reversedInvoice",
+    "aEAT349IsCorrective": "Sample aEAT349IsCorrective",
+    "aEAT349CYear": "Sample aEAT349CYear",
+    "aEAT349Period": "Sample aEAT349Period",
+    "aEAT349BPBaseAmount": 45418,
+    "aEAT349BPBaseAmountS": 45418,
+    "headerId": "mock-header-006"
+  },
+  {
+    "id": "mock-reversedInvoices-007",
+    "reversedInvoice": "Sample reversedInvoice",
+    "aEAT349IsCorrective": "Sample aEAT349IsCorrective",
+    "aEAT349CYear": "Sample aEAT349CYear",
+    "aEAT349Period": "Sample aEAT349Period",
+    "aEAT349BPBaseAmount": 33840,
+    "aEAT349BPBaseAmountS": 33840,
+    "headerId": "mock-header-007"
+  },
+  {
+    "id": "mock-reversedInvoices-008",
+    "reversedInvoice": "Sample reversedInvoice",
+    "aEAT349IsCorrective": "Sample aEAT349IsCorrective",
+    "aEAT349CYear": "Sample aEAT349CYear",
+    "aEAT349Period": "Sample aEAT349Period",
+    "aEAT349BPBaseAmount": 25716,
+    "aEAT349BPBaseAmountS": 25716,
+    "headerId": "mock-header-008"
+  },
+  {
+    "id": "mock-reversedInvoices-009",
+    "reversedInvoice": "Sample reversedInvoice",
+    "aEAT349IsCorrective": "Sample aEAT349IsCorrective",
+    "aEAT349CYear": "Sample aEAT349CYear",
+    "aEAT349Period": "Sample aEAT349Period",
+    "aEAT349BPBaseAmount": 44780,
+    "aEAT349BPBaseAmountS": 44780,
+    "headerId": "mock-header-009"
+  },
+  {
+    "id": "mock-reversedInvoices-010",
+    "reversedInvoice": "Sample reversedInvoice",
+    "aEAT349IsCorrective": "Sample aEAT349IsCorrective",
+    "aEAT349CYear": "Sample aEAT349CYear",
+    "aEAT349Period": "Sample aEAT349Period",
+    "aEAT349BPBaseAmount": 12483,
+    "aEAT349BPBaseAmountS": 12483,
+    "headerId": "mock-header-010"
+  },
+  {
+    "id": "mock-reversedInvoices-011",
+    "reversedInvoice": "Sample reversedInvoice",
+    "aEAT349IsCorrective": "Sample aEAT349IsCorrective",
+    "aEAT349CYear": "Sample aEAT349CYear",
+    "aEAT349Period": "Sample aEAT349Period",
+    "aEAT349BPBaseAmount": 46022,
+    "aEAT349BPBaseAmountS": 46022,
+    "headerId": "mock-header-011"
+  },
+  {
+    "id": "mock-reversedInvoices-012",
+    "reversedInvoice": "Sample reversedInvoice",
+    "aEAT349IsCorrective": "Sample aEAT349IsCorrective",
+    "aEAT349CYear": "Sample aEAT349CYear",
+    "aEAT349Period": "Sample aEAT349Period",
+    "aEAT349BPBaseAmount": 38634,
+    "aEAT349BPBaseAmountS": 38634,
+    "headerId": "mock-header-012"
+  }
+];
+
 export const exchangeRates = [
   {
     "id": "mock-exchangeRates-001",
