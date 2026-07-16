@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useMemo } from 'react';
 import { ArrowLeft, ArrowLeftRight, ChevronDown, Plus } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useUI } from '@/i18n';
@@ -6,6 +6,7 @@ import { AdvancedFilterButton } from '@/components/contract-ui/AdvancedFilterBut
 import { DateRangeFilter } from './DateRangeFilter';
 import { TypeFilter } from './TypeFilter';
 import { buildMovementFilterColumns } from '../movementAdvancedFilter';
+import { useSplitButtonDropdown } from '../useSplitButtonDropdown';
 
 /**
  * Split-button: primary "Nuevo movimiento" action plus a ▾ trigger that opens a
@@ -13,20 +14,7 @@ import { buildMovementFilterColumns } from '../movementAdvancedFilter';
  * SplitImport. Closes on outside click / Escape.
  */
 function MovementsSplitButton({ ui, onNewMovement, onTransfer }) {
-  const [open, setOpen] = useState(false);
-  const ref = useRef(null);
-
-  useEffect(() => {
-    if (!open) return undefined;
-    const onDoc = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
-    const onKey = (e) => { if (e.key === 'Escape') setOpen(false); };
-    document.addEventListener('mousedown', onDoc);
-    document.addEventListener('keydown', onKey);
-    return () => {
-      document.removeEventListener('mousedown', onDoc);
-      document.removeEventListener('keydown', onKey);
-    };
-  }, [open]);
+  const { open, setOpen, ref } = useSplitButtonDropdown();
 
   return (
     <div ref={ref} className="relative flex items-stretch">

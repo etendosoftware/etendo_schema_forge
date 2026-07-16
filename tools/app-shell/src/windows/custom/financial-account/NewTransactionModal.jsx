@@ -26,12 +26,20 @@ const BTN_SECONDARY =
 const BTN_GHOST =
   'inline-flex h-9 items-center gap-2 rounded-lg px-[18px] text-sm font-semibold text-[#3F3F50] hover:bg-[#F5F7F9]';
 
+// Per-dimension lookup hooks. Defined at module scope (function declarations are
+// hoisted) so each is a valid custom hook — a dimension's `useLookup` can then be
+// passed straight to ChipSelect instead of wrapping useDimensionLookup in an inline
+// callback (which would violate the rules of hooks).
+function useCostcenterLookup(query) { return useDimensionLookup(query, 'costcenter'); }
+function useProjectLookup(query) { return useDimensionLookup(query, 'project'); }
+function useProductLookup(query) { return useDimensionLookup(query, 'product'); }
+
 // Conditional accounting dimensions (besides Contacto, which is always shown).
-// key → { labelKey, placeholderKey }. Order follows the design handoff.
+// Order follows the design handoff. Each carries its own lookup hook.
 const OPTIONAL_DIMS = [
-  { key: 'costcenter', labelKey: 'financeAccountTxNewDimCostcenter', placeholderKey: 'financeAccountTxNewDimCostcenterPlaceholder' },
-  { key: 'project', labelKey: 'financeAccountTxNewDimProject', placeholderKey: 'financeAccountTxNewDimProjectPlaceholder' },
-  { key: 'product', labelKey: 'financeAccountTxNewDimProduct', placeholderKey: 'financeAccountTxNewDimProductPlaceholder' },
+  { key: 'costcenter', labelKey: 'financeAccountTxNewDimCostcenter', placeholderKey: 'financeAccountTxNewDimCostcenterPlaceholder', useLookup: useCostcenterLookup },
+  { key: 'project', labelKey: 'financeAccountTxNewDimProject', placeholderKey: 'financeAccountTxNewDimProjectPlaceholder', useLookup: useProjectLookup },
+  { key: 'product', labelKey: 'financeAccountTxNewDimProduct', placeholderKey: 'financeAccountTxNewDimProductPlaceholder', useLookup: useProductLookup },
 ];
 
 // ── Segmented Entrada/Salida control ──────────────────────────────────────────
@@ -70,11 +78,11 @@ function DirectionToggle({ value, onChange, disabled }) {
 const initialForm = () => ({
   date: todayISO(),
   dir: 'out',
-  gl: null, // { id, name }
+  gl: null, // selected G/L item object, or null when none is chosen
   amount: '',
   description: '',
-  contact: null, // { id, name }
-  dims: {}, // { costcenter, project, product } → { id, name }
+  contact: null, // selected business partner object, or null
+  dims: {}, // per-dimension selection keyed by costcenter / project / product
 });
 
 // Builds the edit-mode form from a movement row (which carries FK ids + display
@@ -186,9 +194,8 @@ export function NewTransactionModal({ open, accountId, accountName = '', account
       } else {
         await createMovement({ FIN_Financial_Account_ID: accountId, ...base });
       }
-      const successKey = process
-        ? 'financeAccountTxConfirmSuccess'
-        : (isEdit ? 'financeAccountTxEditSuccess' : 'financeAccountTxNewSuccess');
+      const editOrNewKey = isEdit ? 'financeAccountTxEditSuccess' : 'financeAccountTxNewSuccess';
+      const successKey = process ? 'financeAccountTxConfirmSuccess' : editOrNewKey;
       toast.success(ui(successKey));
       onSuccess?.();
       onClose();
@@ -294,7 +301,7 @@ export function NewTransactionModal({ open, accountId, accountName = '', account
                   <ChipSelect
                     value={form.dims[d.key] || null}
                     onChange={(row) => setDim(d.key, row)}
-                    useLookup={(q) => useDimensionLookup(q, d.key)}
+                    useLookup={d.useLookup}
                     placeholder={ui(d.placeholderKey)}
                     testId={`tx-dim-${d.key}`}
                     data-testid="ChipSelect__9a0423" />

@@ -43,9 +43,12 @@ export default function MovementConfirmModal({ action, reconciled, posted, onCon
   if (reconciled) items.push([ui('reactivarItem1Title'), ui('reactivarItem1Desc')]);
   if (posted) items.push([ui('reactivarItem3Title'), ui('reactivarItem3Desc')]);
 
+  const reactivateTitleKey = reconciled
+    ? 'financeAccountTxConfirmReactivateTitleReconciled'
+    : 'financeAccountTxConfirmReactivateTitle';
   const title = isDelete
     ? ui('financeAccountTxConfirmDeleteTitle')
-    : ui(reconciled ? 'financeAccountTxConfirmReactivateTitleReconciled' : 'financeAccountTxConfirmReactivateTitle');
+    : ui(reactivateTitleKey);
   const sub = ui(isDelete ? 'financeAccountTxConfirmDeleteSub' : 'financeAccountTxConfirmReactivateSub');
   const confirmLabel = ui(isDelete ? 'financeAccountTxConfirmDeleteBtn' : 'financeAccountTxConfirmReactivateBtn');
 
