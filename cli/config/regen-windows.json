@@ -6,6 +6,14 @@
       "windowId": "800026"
     },
     {
+      "name": "conversion-rates",
+      "windowId": "116"
+    },
+    {
+      "name": "conversion-rate-downloader-log",
+      "windowId": "6FEBA130CDE24CC09041FFA6117ADFA9"
+    },
+    {
       "name": "asset-group",
       "windowId": "252",
       "menuName": "Asset Group"

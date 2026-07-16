@@ -2026,7 +2026,11 @@ export function DetailView({
     } : null
   ), [_headerData, windowName, _detailTabTitle, hook.editing, _isFormEditing]);
   useRegisterWindowContext(_windowContextInfo);
-  const isDocumentReadOnly = getDocumentReadOnly(lockWhenProcessed, _headerData);
+  // Window-level read-only (GO view-only windows, e.g. Conversion Rates): forces the
+  // whole detail read-only, reusing every isDocumentReadOnly gate (save, delete,
+  // add-line, inline edits). Also passed to the header <Form> so its fields render RO.
+  const windowReadOnly = api?.window?.readOnly === true;
+  const isDocumentReadOnly = getDocumentReadOnly(lockWhenProcessed, _headerData) || windowReadOnly;
   const isProcessed = _headerData?.processed === true || _headerData?.processed === 'Y';
   // When draftMode declares an explicit completedStatuses array, only those documentStatus
   // values hide the Save/Confirm pair. This lets windows like sales-quotation keep the
@@ -3199,7 +3203,10 @@ export function DetailView({
                 hideDeleteWhenComplete,
                 isProcessed,
                 deleteAction: effectiveDeleteAction,
-                hideDeleteButton,
+                // View-only window (window.readOnly): never show the toolbar Delete.
+                // Reuses the existing unconditional opt-out so no other window's
+                // processed-document delete behavior changes.
+                hideDeleteButton: hideDeleteButton || windowReadOnly,
               }) && (
                 <button
                   onClick={() => setShowDeleteConfirm(true)}
@@ -3598,6 +3605,7 @@ export function DetailView({
                               catalogs={catalogs}
                               layout="horizontal"
                               section="principal"
+                              readOnly={windowReadOnly}
                               displayLogic={{ readOnly: displayLogic?.readOnly ?? {}, visibility: {} }}
                               api={api}
                               token={token}
@@ -3621,6 +3629,7 @@ export function DetailView({
                                   catalogs={catalogs}
                                   layout="horizontal"
                                   section="collapsed"
+                                  readOnly={windowReadOnly}
                                   excludeFields={notesField ? [notesField] : []}
                                   displayLogic={displayLogic}
                                   api={api}
