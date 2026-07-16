@@ -98,7 +98,6 @@ export default function ContactsWindow(props) {
            {...props}
            Form={ContactsBusinessPartnerForm}
            subsetFilters={SUBSET_FILTERS}
-           autoSaveOnBlur={true}
            enableSecondaryRowDelete={true}
            tabsBarAfter={ContactsPeriodButton}
            headerContent={renderContactsHeaderSummary}
