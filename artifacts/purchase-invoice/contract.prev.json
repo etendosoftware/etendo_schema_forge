@@ -1,8 +1,8 @@
 {
   "version": "0.70.0",
   "generatedAt": "2026-04-30T15:42:46.722Z",
-  "updatedAt": "2026-07-14T14:04:01.432Z",
-  "checksum": "474961683f834e87",
+  "updatedAt": "2026-07-16T11:29:00.031Z",
+  "checksum": "75fba21f63dc1387",
   "frontendContract": {
     "window": {
       "id": "183",
@@ -113,10 +113,6 @@
           "trueKey": "postedStatus",
           "falseKey": "notPostedStatus",
           "_note": "Accounting status pill — visible to financial+admin roles only (permissions enforcement pending)"
-        },
-        {
-          "field": "hasRectifications",
-          "trueKey": "rectificativeLabel"
         }
       ]
     },
@@ -4701,10 +4697,6 @@
           "trueKey": "postedStatus",
           "falseKey": "notPostedStatus",
           "_note": "Accounting status pill — visible to financial+admin roles only (permissions enforcement pending)"
-        },
-        {
-          "field": "hasRectifications",
-          "trueKey": "rectificativeLabel"
         }
       ]
     },

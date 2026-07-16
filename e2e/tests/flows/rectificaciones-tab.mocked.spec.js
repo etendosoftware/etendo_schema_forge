@@ -300,6 +300,16 @@ async function installNewInvoiceMocks(page, capture) {
     const req = route.request();
     const url = req.url();
     if (req.method() === 'POST') {
+      // Only the bare …/header endpoint is a header CREATE. Sub-path POSTs
+      // (e.g. …/header/callout, fired debounced when the new-invoice defaults
+      // load) must NOT be mistaken for a header save — answer them with an
+      // empty callout body instead of counting them.
+      if (/\/header\/[^/?]+/.test(url)) {
+        await route.fulfill({
+          status: 200, contentType: 'application/json', body: JSON.stringify({}),
+        });
+        return;
+      }
       capture.headerPosts += 1;
       await route.fulfill({
         status: 200, contentType: 'application/json',
