@@ -52,9 +52,9 @@ describe('ImportFromReturnShipmentModal', () => {
     assert.match(src, /return-from-customer\/customerReturnLine\?parentId=/);
   });
 
-  it('marks lines as already imported via goodsShipmentLine', () => {
+  it('marks lines as already imported via mInoutlineId (the return line side)', () => {
     assert.match(src, /_alreadyImported/);
-    assert.match(src, /alreadyImportedReturnLines\?\.has\(l\.goodsShipmentLine\)/);
+    assert.match(src, /alreadyImportedReturnLines\?\.has\(l\.mInoutlineId\)/);
   });
 
   it('negates quantity for ARI_RM return invoice lines', () => {
@@ -63,8 +63,8 @@ describe('ImportFromReturnShipmentModal', () => {
     assert.match(src, /invoicedQuantity:\s*negQty/);
   });
 
-  it('passes mInoutlineId to link invoice line back to the return shipment line', () => {
-    assert.match(src, /mInoutlineId:\s*line\.goodsShipmentLine/);
+  it('passes goodsShipmentLine to link invoice line back to the return shipment line', () => {
+    assert.match(src, /goodsShipmentLine:\s*line\.mInoutlineId/);
   });
 
   it('injects fetch/build callbacks so the shared modal can drive line selection', () => {
@@ -128,15 +128,15 @@ async function fetchDocuments({ base, headers, bpId, invoiceId }) {
   const alreadyImportedReturnLines = new Set();
   if (invLinesRes.ok) {
     const invLines = (await invLinesRes.json())?.response?.data || [];
-    invLines.forEach(il => { if (il.mInoutlineId) alreadyImportedReturnLines.add(il.mInoutlineId); });
+    invLines.forEach(il => { if (il.goodsShipmentLine) alreadyImportedReturnLines.add(il.goodsShipmentLine); });
   }
 
   const invoicedElsewhere = new Set();
   if (invoicedLinesRes.ok) {
     const all = (await invoicedLinesRes.json())?.response?.data || [];
     all.forEach(il => {
-      if (il.mInoutlineId && !alreadyImportedReturnLines.has(il.mInoutlineId)) {
-        invoicedElsewhere.add(il.mInoutlineId);
+      if (il.goodsShipmentLine && !alreadyImportedReturnLines.has(il.goodsShipmentLine)) {
+        invoicedElsewhere.add(il.goodsShipmentLine);
       }
     });
   }
