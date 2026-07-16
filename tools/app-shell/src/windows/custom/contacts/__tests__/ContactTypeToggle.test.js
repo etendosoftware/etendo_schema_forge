@@ -8,11 +8,11 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const src = readFileSync(join(__dirname, '..', 'ContactTypeToggle.jsx'), 'utf8');
 
 describe('ContactTypeToggle', () => {
-  it('accepts data, recordId, token, apiBaseUrl props', () => {
-    assert.match(src, /data/);
-    assert.match(src, /recordId/);
-    assert.match(src, /token/);
-    assert.match(src, /apiBaseUrl/);
+  it('accepts data and onChange props only', () => {
+    assert.match(src, /export default function ContactTypeToggle\(\{ data, onChange \}\)/);
+    assert.doesNotMatch(src, /recordId/);
+    assert.doesNotMatch(src, /\btoken\b/);
+    assert.doesNotMatch(src, /apiBaseUrl/);
   });
 
   it('returns null when data is falsy', () => {
@@ -22,11 +22,6 @@ describe('ContactTypeToggle', () => {
   it('reads useContactsType from ContactsContext', () => {
     assert.match(src, /useContactsType/);
     assert.match(src, /from '\.\/ContactsContext'/);
-  });
-
-  it('uses selectedRef to avoid stale closure in PATCH calls', () => {
-    assert.match(src, /selectedRef/);
-    assert.match(src, /selectedRef\.current = selected/);
   });
 
   it('uses userSelectedRef to track explicit user interaction', () => {
@@ -45,30 +40,25 @@ describe('ContactTypeToggle', () => {
     assert.match(src, /data\.etgoIsperson === 'Y'/);
   });
 
-  it('skips DB re-init and fires post-save PATCH when new record gets its ID', () => {
+  it('skips DB re-init on the post-save new-record transition', () => {
     assert.match(src, /!prevDataId && userSelectedRef\.current/);
   });
 
-  it('fires PATCH to businessPartner endpoint using camelCase etgoIsperson key', () => {
-    assert.match(src, /\/businessPartner\/\$\{recordId\}/);
-    assert.match(src, /etgoIsperson/);
-    assert.doesNotMatch(src, /EM_Etgo_Isperson/);
-  });
-
-  it('uses PATCH method for persistence calls', () => {
-    assert.match(src, /method: 'PATCH'/);
-  });
-
-  it('handleSelect sets userSelectedRef and fires PATCH for existing records', () => {
+  it('does not fire any fetch/PATCH from handleSelect — persistence is via onChange only', () => {
     assert.match(src, /function handleSelect/);
-    assert.match(src, /userSelectedRef\.current = true/);
-    assert.match(src, /etgoIsperson: newType === 'person'/);
+    assert.doesNotMatch(src, /fetch\(/);
+    assert.doesNotMatch(src, /method: 'PATCH'/);
+    assert.doesNotMatch(src, /\/businessPartner\/\$\{recordId\}/);
+  });
+
+  it('handleSelect writes etgoIsperson into the editing state via onChange', () => {
+    assert.match(src, /onChange\('etgoIsperson', newType === 'person'\)/);
   });
 
   it('re-syncs name via onChange while auto-owned on switch to company', () => {
     assert.match(src, /onChange/);
     assert.match(src, /if \(onChange\)/);
-    assert.match(src, /if \(newType === 'company'\)/);
+    assert.match(src, /if \(newType === 'company'\) syncFieldsToCompany\(\)/);
     assert.match(src, /const lastAutoFilledNameRef = useRef\(null\)/);
     assert.match(src, /const ownedByAuto = currentName === '' \|\| currentName === lastAutoFilledNameRef\.current/);
     assert.match(src, /if \(ownedByAuto && fullName && fullName !== currentName\)/);
@@ -82,7 +72,7 @@ describe('ContactTypeToggle', () => {
   });
 
   it('clears the legal name (Razón Social) when switching to person', () => {
-    assert.match(src, /else if \(newType === 'person'\)/);
+    assert.match(src, /else clearNameForPerson\(\)/);
     assert.match(src, /if \(\(data\?\.name \|\| ''\)\.trim\(\) !== ''\) onChange\('name', ''\)/);
     assert.match(src, /onChange\('name', ''\)/);
   });

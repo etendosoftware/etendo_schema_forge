@@ -46,111 +46,33 @@ describe('ContactTypeToggle', () => {
 
   it('calls setPersonType when person button is clicked', async () => {
     const user = userEvent.setup();
-    render(
-      <ContactTypeToggle
-        data={{ id: '1' }}
-        recordId="rec-1"
-        token="test-token"
-        apiBaseUrl="/api"
-      />
-    );
+    render(<ContactTypeToggle data={{ id: '1' }} />);
     await user.click(screen.getByText('Person'));
     expect(mockSetPersonType).toHaveBeenCalledWith('person');
   });
 
   it('calls setPersonType when company button is clicked', async () => {
     const user = userEvent.setup();
-    render(
-      <ContactTypeToggle
-        data={{ id: '1' }}
-        recordId="rec-1"
-        token="test-token"
-        apiBaseUrl="/api"
-      />
-    );
+    render(<ContactTypeToggle data={{ id: '1' }} />);
     await user.click(screen.getByText('company'));
     expect(mockSetPersonType).toHaveBeenCalledWith('company');
   });
 
-  it('sends PATCH request when clicking a toggle with full credentials', async () => {
+  it('writes etgoIsperson=true to editing state when selecting Person, without a fetch', async () => {
     const user = userEvent.setup();
-    render(
-      <ContactTypeToggle
-        data={{ id: '1' }}
-        recordId="rec-1"
-        token="test-token"
-        apiBaseUrl="/api"
-      />
-    );
+    const onChange = vi.fn();
+    render(<ContactTypeToggle data={{ id: '1' }} onChange={onChange} />);
     await user.click(screen.getByText('Person'));
-    expect(globalThis.fetch).toHaveBeenCalledWith(
-      '/api/businessPartner/rec-1',
-      expect.objectContaining({
-        method: 'PATCH',
-        headers: expect.objectContaining({
-          Authorization: 'Bearer test-token',
-          'Content-Type': 'application/json',
-        }),
-        body: JSON.stringify({ etgoIsperson: true }),
-      }),
-    );
+    expect(onChange).toHaveBeenCalledWith('etgoIsperson', true);
+    expect(globalThis.fetch).not.toHaveBeenCalled();
   });
 
-  it('sends etgoIsperson=false when selecting company', async () => {
+  it('writes etgoIsperson=false to editing state when selecting Company, without a fetch', async () => {
     const user = userEvent.setup();
-    render(
-      <ContactTypeToggle
-        data={{ id: '1' }}
-        recordId="rec-1"
-        token="test-token"
-        apiBaseUrl="/api"
-      />
-    );
+    const onChange = vi.fn();
+    render(<ContactTypeToggle data={{ id: '1' }} onChange={onChange} />);
     await user.click(screen.getByText('company'));
-    expect(globalThis.fetch).toHaveBeenCalledWith(
-      '/api/businessPartner/rec-1',
-      expect.objectContaining({
-        body: JSON.stringify({ etgoIsperson: false }),
-      }),
-    );
-  });
-
-  it('does not send PATCH when recordId is missing', async () => {
-    const user = userEvent.setup();
-    render(
-      <ContactTypeToggle
-        data={{ id: '1' }}
-        token="test-token"
-        apiBaseUrl="/api"
-      />
-    );
-    await user.click(screen.getByText('Person'));
-    expect(globalThis.fetch).not.toHaveBeenCalled();
-  });
-
-  it('does not send PATCH when token is missing', async () => {
-    const user = userEvent.setup();
-    render(
-      <ContactTypeToggle
-        data={{ id: '1' }}
-        recordId="rec-1"
-        apiBaseUrl="/api"
-      />
-    );
-    await user.click(screen.getByText('Person'));
-    expect(globalThis.fetch).not.toHaveBeenCalled();
-  });
-
-  it('does not send PATCH when apiBaseUrl is missing', async () => {
-    const user = userEvent.setup();
-    render(
-      <ContactTypeToggle
-        data={{ id: '1' }}
-        recordId="rec-1"
-        token="test-token"
-      />
-    );
-    await user.click(screen.getByText('Person'));
+    expect(onChange).toHaveBeenCalledWith('etgoIsperson', false);
     expect(globalThis.fetch).not.toHaveBeenCalled();
   });
 
@@ -167,22 +89,6 @@ describe('ContactTypeToggle', () => {
   it('sets personType to company when data.etgoIsperson is false on mount', () => {
     render(<ContactTypeToggle data={{ id: '1', etgoIsperson: false }} />);
     expect(mockSetPersonType).toHaveBeenCalledWith('company');
-  });
-
-  it('handles fetch failure gracefully (does not throw)', async () => {
-    globalThis.fetch.mockRejectedValue(new Error('Network error'));
-    const user = userEvent.setup();
-    render(
-      <ContactTypeToggle
-        data={{ id: '1' }}
-        recordId="rec-1"
-        token="test-token"
-        apiBaseUrl="/api"
-      />
-    );
-    // Should not throw
-    await user.click(screen.getByText('Person'));
-    expect(globalThis.fetch).toHaveBeenCalled();
   });
 
   describe('name pre-fill on Person→Company switch', () => {

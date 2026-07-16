@@ -77,7 +77,8 @@ async function installContactsMock(page) {
       });
     }
 
-    // PATCH from the toggle (etgoIsperson persistence) → acknowledge.
+    // Unified explicit Save (etgoIsperson now travels in the same request as
+    // name/etgoFirstname/etgoLastname, via the editing state) → acknowledge.
     if (['PATCH', 'POST', 'PUT'].includes(req.method())) {
       return route.fulfill({
         status: 200,
