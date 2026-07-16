@@ -37,6 +37,7 @@ User  -->  OnboardingPage.jsx  -->  POST /sws/go/onboarding  (new environment)
 **Key files:**
 - `src/auth/api.js` -- `createApiFetch()` with auto-401 handling, `buildHeaders()`
 - `src/auth/AuthContext.jsx` -- React context providing `token`, `username`, `isAuthenticated`, `logout()`
+- `src/auth/useLogout.js` -- `useLogout()` hook: the single logout choke point (clears session-scoped UI state, then calls the core `logout()`). See [Logout Choke Point](#logout-choke-point-uselogout).
 - `src/pages/OnboardingPage.jsx` -- Onboarding and environment login UI
 - `src/pages/onboarding/onboardingApi.js` -- API helpers for platform login, environment login, and onboarding stream
 - `src/pages/onboarding/onboardingSso.js` -- Provider-agnostic SSO frontend adapter; Google Identity Services is the first provider implementation
@@ -61,6 +62,43 @@ When deployed under Etendo (e.g., `/etendo_sf/web/app-shell/`), the base URL is 
 | `localStorage` | `sf_auth_token`, `sf_auth_user`, `sf_auth_rolelist`, `sf_auth_selected_role`, `sf_auth_selected_org`, `sf_platform_token` | Persistent across sessions | XSS can read it (see Security Considerations) |
 
 On mount, `AuthContext` reads the Etendo auth token from localStorage to restore the protected session. On logout, it clears both the Etendo session keys and the onboarding platform token (`sf_platform_token`) so the user returns to a fully signed-out state.
+
+### Session-Scoped UI State
+
+Not all persisted client state lives in `localStorage`. UI preferences that should reset when the browser session ends are stored in `sessionStorage` instead, so they survive in-app navigation but not a browser close or a fresh login.
+
+| Storage | What | Lifetime | Reset on logout |
+|---------|------|----------|-----------------|
+| `sessionStorage` | `dashboard_date_range` — the Dashboard period filter (`lastYear` default; valid values `lastYear`, `last90d`, `last30d`, `mtd`, `ytd`) | Until the browser tab/session closes | Yes — cleared by `clearStoredDateRange()` |
+
+`src/components/dashboard/DashboardDateRangeContext.jsx` owns this value:
+- `readStoredRange()` falls back to the `lastYear` default when nothing valid is stored, so a new session always opens the Dashboard at "Último año".
+- `clearStoredDateRange()` removes the `sessionStorage` key **and** the legacy `localStorage` key (the value lived in `localStorage` before the session-scoping migration), so no orphaned range survives a logout on an already-upgraded browser.
+
+### Logout Choke Point (`useLogout`)
+
+**Convention: every logout path MUST call `useLogout()` from `src/auth/useLogout.js` — never `useAuth().logout` directly.**
+
+`useLogout()` is the single choke point for signing out. It clears session-scoped UI state and then delegates to the core `AuthContext` `logout()`:
+
+```js
+// src/auth/useLogout.js
+export function useLogout() {
+  const { logout } = useAuth();
+  return useCallback(() => {
+    clearStoredDateRange(); // reset session-scoped UI state
+    logout();               // clears auth tokens + platform token
+  }, [logout]);
+}
+```
+
+Centralizing here eliminates the "forgot to clear on this path" class of bug: without it, a user who logs out and logs back in (or a different user on a shared browser) would inherit the previous session's Dashboard period filter. Callers currently wired through this hook:
+
+- `src/components/UserAvatarButton.jsx` — the user-menu "Log out" action.
+- `src/hooks/useEntity.js` — automatic logout on an HTTP 401 response.
+- `src/pages/OAuth2ClientsPage.jsx`, `src/pages/AuthorizePage.jsx` — post-password-change and OAuth2 authorization exit paths.
+
+**When you add any new session-scoped UI state**, clear it inside its own `clearStored*()` export and call that export from `useLogout()`, so the choke point stays the complete list of "things that reset on logout." When you add a new logout entry point, route it through `useLogout()` rather than `useAuth().logout`.
 
 ### Auth Guard
 
@@ -142,7 +180,7 @@ Etendo stores active sessions in the `AD_Session` table:
 | **Login** | New `AD_Session` row created; token returned to client |
 | **API request** | Token validated against `AD_Session`; session must be active |
 | **Timeout** | Etendo marks session as inactive after configurable idle period |
-| **Logout** | Client calls logout endpoint; `Session_Active` set to `N`; client clears localStorage |
+| **Logout** | Client calls logout endpoint; `Session_Active` set to `N`; `useLogout()` clears session-scoped UI state (Dashboard period filter) then clears localStorage auth/platform tokens — see [Logout Choke Point](#logout-choke-point-uselogout) |
 | **Admin kill** | Admin marks session as inactive in Etendo Classic UI |
 | **Multiple sessions** | Etendo allows multiple concurrent sessions per user (different browsers/devices) |
 
