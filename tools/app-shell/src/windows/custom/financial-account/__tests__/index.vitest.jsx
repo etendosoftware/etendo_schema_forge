@@ -94,6 +94,20 @@ vi.mock('../ArchiveAccountDialog.jsx', () => ({
     <div data-testid="archive-account-dialog-stub" data-open={String(open)} />
   ),
 }));
+// ETP-4530: index.jsx now runs usePsd2ConnectFlow (→ usePsd2Actions → useAuth) itself so the Edit
+// modal's "Connect to PSD2" button works from this entry point too. Stubbed here for the same
+// isolation reason as the two mocks above.
+vi.mock('../Psd2ConnectFlowUI.jsx', () => ({
+  Psd2ConnectFlowUI: ({ flow }) => (
+    <div data-testid="psd2-connect-flow-ui-stub" data-connecting={String(!!flow?.connecting)} />
+  ),
+}));
+vi.mock('@/hooks/usePsd2ConnectFlow', () => ({
+  usePsd2ConnectFlow: () => ({
+    startConnect: vi.fn(), startCreate: vi.fn(), connecting: false,
+    selection: null, confirmSelection: vi.fn(), cancelSelection: vi.fn(),
+  }),
+}));
 
 import FinancialAccountWindow from '../index.jsx';
 

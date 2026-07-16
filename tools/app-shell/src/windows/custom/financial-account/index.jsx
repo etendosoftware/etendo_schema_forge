@@ -15,6 +15,8 @@ import { ReconciliationTab } from './ReconciliationTab';
 import { ImportedStatementsTab } from './ImportedStatementsTab';
 import { EditAccountModal } from './EditAccountModal.jsx';
 import { ArchiveAccountDialog } from './ArchiveAccountDialog.jsx';
+import { Psd2ConnectFlowUI } from './Psd2ConnectFlowUI.jsx';
+import { usePsd2ConnectFlow } from '@/hooks/usePsd2ConnectFlow';
 import { AutoMatchSuggestionModal } from '@/components/contract-ui/AutoMatchSuggestionModal';
 import { useAutoMatch } from '@/hooks/useReconciliation';
 import { SyncStatusInline } from '@/components/financial-accounts/SyncStatusInline';
@@ -125,6 +127,9 @@ export default function FinancialAccountWindow({ recordId }) {
     setSearchParams({}, { replace: true });
   }, [searchParams, setSearchParams]);
   const { account, reload: reloadAccount } = useFinancialAccount(recordId);
+  // ETP-4530: powers the Edit modal's "Connect to PSD2" button from this entry point too — same
+  // flow/UI as the Cuentas list (FinancialAccountsPage.jsx), just reloading the account instead.
+  const psd2Flow = usePsd2ConnectFlow({ onDone: reloadAccount });
   const { groups: autoMatchGroups, kpis: autoMatchKpis, reload: reloadAutoMatch } = useAutoMatch(
     autoMatchOpen ? recordId : null,
   );
@@ -328,6 +333,7 @@ export default function FinancialAccountWindow({ recordId }) {
         onClose={() => setEditOpen(false)}
         onSaved={reloadAccount}
         onArchive={(acc) => { setEditOpen(false); setArchiveTarget(acc); }}
+        onConnect={(acc) => { setEditOpen(false); psd2Flow.startConnect(acc); }}
         data-testid="EditAccountModal__f7dbb3" />
       <ArchiveAccountDialog
         open={!!archiveTarget}
@@ -335,6 +341,7 @@ export default function FinancialAccountWindow({ recordId }) {
         onClose={() => setArchiveTarget(null)}
         onArchived={() => { setArchiveTarget(null); navigate('/finance/accounts'); }}
         data-testid="ArchiveAccountDialog__f7dbb3" />
+      <Psd2ConnectFlowUI flow={psd2Flow} data-testid="Psd2ConnectFlowUI__f7dbb3" />
     </TooltipProvider>
   );
 }

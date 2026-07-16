@@ -223,6 +223,13 @@ export function CreatableSearchSelect({
   // The initial `useState(staticOptions ?? [])` above only covers the first render, so without this
   // effect a caller that loads its options after the component mounts would see an empty dropdown
   // forever (ETP-4530). Callers passing a stable array (e.g. a module-level constant) are unaffected.
+  // CAVEAT for future callers: a caller that combines `onCreateRequest`'s local-push `onCreated`
+  // callback (which is expected to append the newly created item straight into `options`, see
+  // `CreateAction`/`onCreate` below) with a non-memoized `staticOptions` array (a new array literal
+  // on every render) would have that locally-created option silently clobbered on the next
+  // re-render, since this effect always overwrites `options` from `staticOptions`. Memoize
+  // `staticOptions` (e.g. `useMemo`/module-level constant/state) if you also pass `onCreateRequest`.
+  // No current consumer combines the two, so this is a caveat, not an active bug.
   useEffect(() => {
     if (staticOptions) {
       setOptions(staticOptions);
