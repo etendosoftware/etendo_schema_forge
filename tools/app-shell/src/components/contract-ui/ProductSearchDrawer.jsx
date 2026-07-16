@@ -2,7 +2,6 @@ import { useState, useEffect } from 'react';
 import { Check } from 'lucide-react';
 import { formatCurrency } from '@/lib/formatCurrency.js';
 import { useCurrency } from '@/hooks/useCurrency.jsx';
-import { useUI } from '@/i18n';
 import ProductDrawerShell from './ProductDrawerShell.jsx';
 import { ProductAvatar, resolveImageId } from './productSelectorDrawerShared.jsx';
 
@@ -43,7 +42,6 @@ const getImage = (item) => item.imageUrl || item.imageurl || null;
  * results list.
  */
 function useDefaultVariant(ctx) {
-  const ui = useUI();
   const sessionCurrency = useCurrency();
   const [selectedId, setSelectedId] = useState(null);
 

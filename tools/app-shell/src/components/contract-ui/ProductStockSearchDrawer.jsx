@@ -1,6 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
 import { Check, ChevronRight, ChevronDown, Warehouse } from 'lucide-react';
-import { useUI } from '@/i18n';
 import ProductDrawerShell from './ProductDrawerShell.jsx';
 import { ProductAvatar, formatQty, resolveImageId } from './productSelectorDrawerShared.jsx';
 
@@ -31,6 +30,15 @@ const FETCH_CONFIG = { transform: filterProductStockRows };
 
 const rowKey = (row) => `${row.id}::${row._aux?._LOC || ''}`;
 
+const ROW_BASE_CLASSNAME =
+  'w-full text-left flex items-center gap-2 px-3 py-2 rounded-lg border transition-colors';
+
+function getRowClassName(isSelected, isActive) {
+  if (isSelected) return `${ROW_BASE_CLASSNAME} border-primary bg-primary/10 text-foreground`;
+  if (isActive) return `${ROW_BASE_CLASSNAME} border-border bg-muted text-foreground`;
+  return `${ROW_BASE_CLASSNAME} border-border bg-muted/40 hover:bg-muted text-foreground`;
+}
+
 /**
  * Stock variant: groups results by product, lets the user filter by warehouse, and expands each
  * product to show its per-locator stock rows (warehouse name only — every warehouse has exactly
@@ -40,7 +48,6 @@ const rowKey = (row) => `${row.id}::${row._aux?._LOC || ''}`;
  * storageBin, warehouse) via the field's `onSelectMappings` in decisions.json.
  */
 function useStockVariant(ctx) {
-  const ui = useUI();
   const [selectedKey, setSelectedKey] = useState(null);
   const [expandedProducts, setExpandedProducts] = useState(new Set());
   const [warehouseFilter, setWarehouseFilter] = useState(null);
@@ -238,13 +245,7 @@ function useStockVariant(ctx) {
                       type="button"
                       data-testid={`product-stock-option-${row.id}`}
                       onClick={() => handleSelect(row)}
-                      className={`w-full text-left flex items-center gap-2 px-3 py-2 rounded-lg border transition-colors ${
-                        isSelected
-                          ? 'border-primary bg-primary/10 text-foreground'
-                          : isActive
-                          ? 'border-border bg-muted text-foreground'
-                          : 'border-border bg-muted/40 hover:bg-muted text-foreground'
-                      }`}
+                      className={getRowClassName(isSelected, isActive)}
                     >
                       <span className="flex-1 text-sm truncate">{warehouseName}</span>
                       {qty != null && (
