@@ -97,8 +97,11 @@ describe('AmortizationLinesTable — inline editing', () => {
 });
 
 describe('AmortizationLinesTable — dimensions', () => {
-  it('defines DIMENSION_FIELDS with exactly 3 entries: project, costcenter, eTADASBpartner', () => {
-    assert.match(src, /DIMENSION_FIELDS/);
+  it('defines DIMENSION_FIELD_CANDIDATES with exactly 3 entries: project, costcenter, eTADASBpartner', () => {
+    // ETP-4529 — renamed from DIMENSION_FIELDS to DIMENSION_FIELD_CANDIDATES: these are
+    // candidates only, final visibility is resolved per render by
+    // useAccountingDimensionFields (see the test below), not rendered unconditionally.
+    assert.match(src, /DIMENSION_FIELD_CANDIDATES/);
     // The three kept dimensions with their AD columns.
     assert.match(src, /'project'/);
     assert.match(src, /C_Project_ID/);
@@ -108,10 +111,10 @@ describe('AmortizationLinesTable — dimensions', () => {
     assert.match(src, /EM_Etadas_C_Bpartner_ID/);
 
     // Assert the array literal holds exactly 3 object entries.
-    const block = src.match(/const DIMENSION_FIELDS = \[(.*?)\];/s);
-    assert.ok(block, 'DIMENSION_FIELDS array literal not found');
+    const block = src.match(/const DIMENSION_FIELD_CANDIDATES = \[(.*?)\];/s);
+    assert.ok(block, 'DIMENSION_FIELD_CANDIDATES array literal not found');
     const entries = block[1].match(/\{\s*key:/g) ?? [];
-    assert.equal(entries.length, 3, `expected 3 DIMENSION_FIELDS entries, found ${entries.length}`);
+    assert.equal(entries.length, 3, `expected 3 DIMENSION_FIELD_CANDIDATES entries, found ${entries.length}`);
 
     // The 5 trimmed dimensions must no longer be present.
     assert.doesNotMatch(src, /'stDimension'/);
@@ -121,11 +124,22 @@ describe('AmortizationLinesTable — dimensions', () => {
     assert.doesNotMatch(src, /'eTADASSalesCampaign'/);
   });
 
-  it('renders the project dimension (no hidden: true on any dimension entry)', () => {
-    // Project was intentionally unhidden so it renders in the panel.
-    const block = src.match(/const DIMENSION_FIELDS = \[(.*?)\];/s);
-    assert.ok(block, 'DIMENSION_FIELDS array literal not found');
+  it('renders the project dimension (no hidden: true on any candidate entry)', () => {
+    // Project was intentionally unhidden so it can render in the panel (final
+    // visibility is still gated by the evaluate-display evaluator at runtime).
+    const block = src.match(/const DIMENSION_FIELD_CANDIDATES = \[(.*?)\];/s);
+    assert.ok(block, 'DIMENSION_FIELD_CANDIDATES array literal not found');
     assert.doesNotMatch(block[1], /hidden:\s*true/);
+  });
+
+  it('resolves final dimension visibility via the shared evaluate-display hook (ETP-4529)', () => {
+    // Candidates are no longer rendered unconditionally — useAccountingDimensionFields
+    // (wrapping the same evaluate-display evaluator DetailView uses) decides the final
+    // visible set per the client's accounting-dimension configuration, and the result
+    // is threaded into both DimSummary (badges) and DimensionGrid (expand panel).
+    assert.match(src, /from '@\/hooks\/useAccountingDimensionFields'/);
+    assert.match(src, /useAccountingDimensionFields\('lines', data, DIMENSION_FIELD_CANDIDATES, \{ token, apiBaseUrl \}\)/);
+    assert.match(src, /fields=\{dimensionFields\}/);
   });
 
   it('renders DimSummary with Label:Value badges (no n/TOTAL_DIMS counter)', () => {

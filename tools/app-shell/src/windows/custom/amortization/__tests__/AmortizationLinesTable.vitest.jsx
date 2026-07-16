@@ -46,6 +46,17 @@ vi.mock('@/components/ui/checkbox', () => ({
   ),
 }));
 
+// ETP-4529 — dimensionFields is now resolved via useAccountingDimensionFields, a thin
+// wrapper around useDisplayLogic (the same evaluate-display evaluator DetailView uses —
+// see DetailView.*.vitest.jsx for the established `vi.mock('@/hooks/useDisplayLogic', ...)`
+// convention this reuses). Defaulting to `{ visibility: {} }` reproduces the evaluator's
+// fail-open behavior (a field the server never mentions stays visible), so all the
+// pre-existing "kept dimensions render" assertions below keep passing unchanged.
+vi.mock('@/hooks/useDisplayLogic', () => ({
+  useDisplayLogic: vi.fn(() => ({ readOnly: {}, visibility: {} })),
+}));
+
+import { useDisplayLogic } from '@/hooks/useDisplayLogic';
 import AmortizationLinesTable from '../AmortizationLinesTable.jsx';
 
 const LINE_FILLED = {
@@ -109,6 +120,7 @@ const renderInRouter = (ui, options) =>
 
 beforeEach(() => {
   global.fetch = mockFetchReturning([LINE_FILLED, LINE_EMPTY]);
+  useDisplayLogic.mockReturnValue({ readOnly: {}, visibility: {} });
 });
 
 afterEach(() => {
@@ -232,6 +244,41 @@ describe('AmortizationLinesTable — dimension set', () => {
     expect(screen.queryByTestId('selector-eTADASSalesRegion')).not.toBeInTheDocument();
     expect(screen.queryByTestId('selector-eTADASActivity')).not.toBeInTheDocument();
     expect(screen.queryByTestId('selector-eTADASSalesCampaign')).not.toBeInTheDocument();
+  });
+});
+
+describe('AmortizationLinesTable — config-driven dimension visibility (ETP-4529)', () => {
+  // NEW behavior under test: before ETP-4529 the 3 dimension candidates always
+  // rendered unconditionally (DIMENSION_FIELDS). Now useAccountingDimensionFields
+  // calls the same evaluate-display evaluator DetailView uses, and a candidate the
+  // server explicitly marks visibility:false is filtered out of BOTH the expand
+  // panel (DimensionGrid) and the collapsed row summary (DimSummary).
+  it('hides a dimension the evaluator marks not visible, in both the expand panel and the row summary', async () => {
+    useDisplayLogic.mockReturnValue({ readOnly: {}, visibility: { project: false } });
+
+    renderInRouter(<AmortizationLinesTable {...BASE_PROPS} />);
+    await waitFor(() => expect(screen.getByText('AS_Module')).toBeInTheDocument());
+
+    // Expand the dimensions panel for the editable line.
+    fireEvent.click(screen.getByText('AS_Module'));
+
+    // Project is hidden; the other two config-gated dimensions remain visible.
+    await waitFor(() => expect(screen.getByTestId('selector-costcenter')).toBeInTheDocument());
+    expect(screen.getByTestId('selector-eTADASBpartner')).toBeInTheDocument();
+    expect(screen.queryByTestId('selector-project')).not.toBeInTheDocument();
+  });
+
+  it('shows a dimension the evaluator marks visible (same result as the fail-open default)', async () => {
+    useDisplayLogic.mockReturnValue({ readOnly: {}, visibility: { project: true } });
+
+    renderInRouter(<AmortizationLinesTable {...BASE_PROPS} />);
+    await waitFor(() => expect(screen.getByText('AS_Module')).toBeInTheDocument());
+
+    fireEvent.click(screen.getByText('AS_Module'));
+
+    await waitFor(() => expect(screen.getByTestId('selector-project')).toBeInTheDocument());
+    expect(screen.getByTestId('selector-costcenter')).toBeInTheDocument();
+    expect(screen.getByTestId('selector-eTADASBpartner')).toBeInTheDocument();
   });
 });
 

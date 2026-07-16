@@ -110,18 +110,30 @@ describe('AssetsDetailPanel — field definitions', () => {
     assert.match(src, /readOnlyLogic/);
   });
 
-  it('defines the 4 kept accounting dimension fields with their DB columns', () => {
-    assert.match(src, /dimensionFields/);
+  it('defines only Project as a dimension field candidate (ETP-4529)', () => {
+    // ETP-4529 — per the accounting-dimension matrix, only Proyecto is "Por config"
+    // for Activo (Amortizaciones); the other 3 dimensions kept in v1 (Contacto,
+    // Producto, Centro de costo) are "Nunca" and were dropped as candidates entirely.
+    assert.match(src, /dimensionFieldCandidates/);
     assert.match(src, /'C_Project_ID'/);
-    assert.match(src, /'EM_Etadas_Costcenter_ID'/);
-    assert.match(src, /'C_BPartner_ID'/);
-    assert.match(src, /'M_Product_ID'/);
+    // The 3 previously-kept-but-now-"Nunca" dimensions are no longer candidates.
+    assert.doesNotMatch(src, /'EM_Etadas_Costcenter_ID'/);
+    assert.doesNotMatch(src, /'C_BPartner_ID'/);
+    assert.doesNotMatch(src, /'M_Product_ID'/);
     // The 5 out-of-scope dimensions were removed from the panel.
     assert.doesNotMatch(src, /'EM_Etadas_User1_ID'/);
     assert.doesNotMatch(src, /'EM_Etadas_User2_ID'/);
     assert.doesNotMatch(src, /'EM_Etadas_Salesregion_ID'/);
     assert.doesNotMatch(src, /'EM_Etadas_C_Activity_ID'/);
     assert.doesNotMatch(src, /'EM_Etadas_Campaign_ID'/);
+  });
+
+  it('resolves final dimension visibility via the shared evaluate-display hook (ETP-4529)', () => {
+    // Candidates are no longer rendered unconditionally — useAccountingDimensionFields
+    // (wrapping the same evaluate-display evaluator DetailView uses) decides the final
+    // visible set per the client's accounting-dimension configuration.
+    assert.match(src, /from '@\/hooks\/useAccountingDimensionFields'/);
+    assert.match(src, /useAccountingDimensionFields\('assets', d, dimensionFieldCandidates, \{ token, apiBaseUrl \}\)/);
   });
 });
 
