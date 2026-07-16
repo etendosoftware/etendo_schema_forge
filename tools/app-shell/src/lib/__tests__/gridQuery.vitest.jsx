@@ -1,3 +1,15 @@
+/**
+ * Functional gridQuery suite — re-angled through the shim.
+ *
+ * gridQuery moved to schema_forge_core; `../gridQuery.js` is now the functional
+ * shim (`export * from '@etendosoftware/app-shell-core/lib/gridQuery.js'`). Under
+ * LOCAL_CORE the vitest alias resolves it to the moved core source, so these
+ * pure-function assertions exercise the real implementation across the package
+ * boundary. gridQuery has no i18n, so no LocaleProvider wrap is needed.
+ *
+ * Run against local core source:
+ *   LOCAL_CORE=1 npx vitest run src/lib/__tests__/gridQuery.vitest.jsx
+ */
 import {
   getDisplayText,
   parseUserFilter,

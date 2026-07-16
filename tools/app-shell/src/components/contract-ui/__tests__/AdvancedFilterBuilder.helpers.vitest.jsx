@@ -1,43 +1,49 @@
 /**
- * Tests for AdvancedFilterBuilder — constants, logic, and render behavior.
+ * Functional behavioral suite for AdvancedFilterBuilder — re-angled through the
+ * shim after the component moved to schema_forge_core.
+ *
+ * The component reads i18n through core's own `../../i18n/index.js`, so the old
+ * `vi.mock('@/i18n', …)` identity stub no longer intercepts it. Instead we wrap
+ * the tree in the real core `LocaleProvider` (imported through the `@/i18n` shim,
+ * which resolves to the same core context the component consumes) fed the real
+ * functional `es_ES` dictionary, and assert the real translated strings. The
+ * remaining assertions are structural/behavioral (row counts via the hardcoded
+ * `Remove condition` aria-label, disabled states, callback payloads) and are
+ * label-independent.
+ *
+ * Run against local core source:
+ *   LOCAL_CORE=1 npx vitest run \
+ *     src/components/contract-ui/__tests__/AdvancedFilterBuilder.helpers.vitest.jsx
  */
-
-// ---------------------------------------------------------------------------
-// Mocks — must be declared before imports
-// ---------------------------------------------------------------------------
-
-vi.mock('@/i18n', () => ({
-  useUI: () => (key, params) => {
-    if (params) return `${key}(${JSON.stringify(params)})`;
-    return key;
-  },
-  useLabel: () => (col) => col ?? null,
-  useLocale: () => ({ genericLabels: {}, statuses: {} }),
-  useLocaleSwitch: () => ({ locale: 'en_US', setLocale: vi.fn() }),
-}));
-
-vi.mock('@/hooks/useDistinctValues.js', () => ({
-  useDistinctValues: () => ({
-    values: [],
-    loading: false,
-    loadingMore: false,
-    hasMore: false,
-    search: '',
-    setSearch: vi.fn(),
-    loadMore: vi.fn(),
-  }),
-}));
-
-vi.mock('./DistinctValuesList.jsx', () => ({
-  DistinctValuesList: (props) => <div data-testid="distinct-values-list" />,
-}));
-
-import { render, screen, within } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { AdvancedFilterBuilder } from '../AdvancedFilterBuilder.jsx';
+
+import { LocaleProvider } from '@/i18n';
+import { AuthProvider } from '@/auth/AuthContext.jsx';
+import esES from '@/locales/es_ES.json';
+import { AdvancedFilterBuilder } from '@/components/contract-ui/AdvancedFilterBuilder.jsx';
+
+const dictionaries = { es_ES: esES };
+
+// AuthProvider is required because the enum/identifier value pickers call
+// useDistinctValues → useAuth (the hook runs unconditionally even when its
+// fetch is disabled). Both providers are the real core modules, reached through
+// the @/i18n and @/auth shims, so they share the exact context the component
+// consumes under LOCAL_CORE.
+function renderES(ui) {
+  return render(
+    <AuthProvider>
+      <LocaleProvider locale="es_ES" dictionaries={dictionaries}>
+        {ui}
+      </LocaleProvider>
+    </AuthProvider>,
+  );
+}
 
 // ---------------------------------------------------------------------------
-// Constants verification (kept from original — no exports needed)
+// Operator catalog — self-contained contract documentation (no i18n / shim).
+// Mirrors OPERATORS_BY_MODE / TEXTUAL_IDENT_OPS inside the component; the
+// exhaustive rendered-option coverage lives in core's colocated tests.
 // ---------------------------------------------------------------------------
 
 const OPERATORS_BY_MODE = {
@@ -51,28 +57,19 @@ const OPERATORS_BY_MODE = {
 
 const TEXTUAL_IDENT_OPS = new Set(['iContains', 'iNotContains', 'iStartsWith', 'iEquals', 'iNotEqual']);
 
-describe('AdvancedFilterBuilder logic', () => {
+describe('AdvancedFilterBuilder operator catalog', () => {
   describe('OPERATORS_BY_MODE', () => {
-    it('text mode has 7 operators', () => {
+    it('text mode has 7 operators including starts-with', () => {
       expect(OPERATORS_BY_MODE.text).toHaveLength(7);
       expect(OPERATORS_BY_MODE.text).toContain('iContains');
       expect(OPERATORS_BY_MODE.text).toContain('isNull');
-    });
-
-    it('text mode offers the starts-with operator', () => {
       expect(OPERATORS_BY_MODE.text).toContain('iStartsWith');
     });
 
-    it('identifier mode has 7 operators', () => {
+    it('identifier mode has 7 operators including starts-with', () => {
       expect(OPERATORS_BY_MODE.identifier).toHaveLength(7);
-    });
-
-    it('identifier mode includes both contains and equals', () => {
       expect(OPERATORS_BY_MODE.identifier).toContain('iContains');
       expect(OPERATORS_BY_MODE.identifier).toContain('equals');
-    });
-
-    it('identifier mode offers the starts-with operator', () => {
       expect(OPERATORS_BY_MODE.identifier).toContain('iStartsWith');
     });
 
@@ -122,10 +119,10 @@ describe('AdvancedFilterBuilder logic', () => {
 });
 
 // ---------------------------------------------------------------------------
-// Render tests
+// Render / behavior — through the shim + real Spanish dictionary
 // ---------------------------------------------------------------------------
 
-describe('AdvancedFilterBuilder — render', () => {
+describe('AdvancedFilterBuilder — render (functional shim + real i18n)', () => {
   const columns = [
     { key: 'name', type: 'string', label: 'Name' },
     { key: 'amount', type: 'amount', label: 'Amount' },
@@ -134,58 +131,52 @@ describe('AdvancedFilterBuilder — render', () => {
     { key: 'orderDate', type: 'date', label: 'Date' },
   ];
 
-  const defaultProps = {
+  const baseProps = () => ({
     columns,
     rows: [],
     value: null,
     onApply: vi.fn(),
     onClear: vi.fn(),
     onClose: vi.fn(),
-  };
-
-  beforeEach(() => {
-    vi.clearAllMocks();
   });
 
-  it('renders without crashing', () => {
-    render(<AdvancedFilterBuilder {...defaultProps} />);
-    // The title should be rendered via ui('advancedFilterTitle')
-    expect(screen.getByText('advancedFilterTitle')).toBeInTheDocument();
+  const remove = () => screen.getAllByRole('button', { name: /remove condition/i });
+  const applyBtn = () => screen.getByText('Aplicar').closest('button');
+  const clearBtn = () => screen.getByText('Limpiar').closest('button');
+
+  it('renders the chrome in real Spanish (proves shim + real dictionary)', () => {
+    renderES(<AdvancedFilterBuilder {...baseProps()} />);
+    expect(screen.getByText('Filtro por condicionales')).toBeInTheDocument();
+    expect(screen.getByText('Añadir condición')).toBeInTheDocument();
+    expect(screen.getByText('Aplicar')).toBeInTheDocument();
+    expect(screen.getByText('Limpiar')).toBeInTheDocument();
+    expect(screen.getByText('Donde')).toBeInTheDocument();
+    expect(screen.getByText('Guardar filtro')).toBeInTheDocument();
   });
 
-  it('renders add-condition button', () => {
-    render(<AdvancedFilterBuilder {...defaultProps} />);
-    expect(screen.getByText('advancedFilterAddCondition')).toBeInTheDocument();
+  it('renders a single remove-condition button by default', () => {
+    renderES(<AdvancedFilterBuilder {...baseProps()} />);
+    expect(remove()).toHaveLength(1);
   });
 
-  it('renders apply and clear buttons', () => {
-    render(<AdvancedFilterBuilder {...defaultProps} />);
-    expect(screen.getByText('advancedFilterApply')).toBeInTheDocument();
-    expect(screen.getByText('advancedFilterClear')).toBeInTheDocument();
-  });
-
-  it('renders "Where" connector for first row', () => {
-    render(<AdvancedFilterBuilder {...defaultProps} />);
-    expect(screen.getByText('advancedFilterWhere')).toBeInTheDocument();
-  });
-
-  it('renders remove-condition button', () => {
-    render(<AdvancedFilterBuilder {...defaultProps} />);
-    const removeBtn = screen.getByRole('button', { name: /remove condition/i });
-    expect(removeBtn).toBeInTheDocument();
-  });
-
-  it('adds a condition row when add button is clicked', async () => {
+  it('adds condition rows when the add button is clicked', async () => {
     const user = userEvent.setup();
-    render(<AdvancedFilterBuilder {...defaultProps} />);
-    const addBtn = screen.getByText('advancedFilterAddCondition');
-    await user.click(addBtn);
-    // Should now have 2 remove buttons (one per row)
-    const removeBtns = screen.getAllByRole('button', { name: /remove condition/i });
-    expect(removeBtns).toHaveLength(2);
+    renderES(<AdvancedFilterBuilder {...baseProps()} />);
+    await user.click(screen.getByText('Añadir condición'));
+    expect(remove()).toHaveLength(2);
   });
 
-  it('renders with initial value conditions', () => {
+  it('adds multiple rows in sequence', async () => {
+    const user = userEvent.setup();
+    renderES(<AdvancedFilterBuilder {...baseProps()} />);
+    const add = screen.getByText('Añadir condición');
+    await user.click(add);
+    await user.click(add);
+    await user.click(add);
+    expect(remove()).toHaveLength(4);
+  });
+
+  it('renders one remove button per initial value condition', () => {
     const value = {
       rowOperator: 'and',
       conditions: [
@@ -193,171 +184,11 @@ describe('AdvancedFilterBuilder — render', () => {
         { field: 'amount', operator: 'greaterThan', value: '100' },
       ],
     };
-    render(<AdvancedFilterBuilder {...defaultProps} value={value} />);
-    // Two condition rows means two remove buttons
-    const removeBtns = screen.getAllByRole('button', { name: /remove condition/i });
-    expect(removeBtns).toHaveLength(2);
+    renderES(<AdvancedFilterBuilder {...baseProps()} value={value} />);
+    expect(remove()).toHaveLength(2);
   });
 
-  it('renders save placeholder when presets are not enabled', () => {
-    render(<AdvancedFilterBuilder {...defaultProps} />);
-    expect(screen.getByText('advancedFilterSave')).toBeInTheDocument();
-  });
-
-  it('renders presets dropdown when presets are provided', () => {
-    render(
-      <AdvancedFilterBuilder
-        {...defaultProps}
-        presets={{ 'My Filter': {} }}
-        onApplyPreset={vi.fn()}
-        onSavePreset={vi.fn()}
-        onDeletePreset={vi.fn()}
-      />,
-    );
-    expect(screen.getByText('filterPresetsButton')).toBeInTheDocument();
-  });
-
-  it('disables apply when conditions are incomplete', () => {
-    render(<AdvancedFilterBuilder {...defaultProps} />);
-    // Default state: one empty row — apply should be disabled
-    const applyBtn = screen.getByText('advancedFilterApply');
-    expect(applyBtn.closest('button')).toBeDisabled();
-  });
-
-  it('disables clear when no conditions are started and no applied filter', () => {
-    render(<AdvancedFilterBuilder {...defaultProps} value={null} />);
-    const clearBtn = screen.getByText('advancedFilterClear').closest('button');
-    expect(clearBtn).toBeDisabled();
-  });
-
-  it('enables clear when there is an applied filter', () => {
-    const value = {
-      rowOperator: 'and',
-      conditions: [{ field: 'name', operator: 'iContains', value: 'test' }],
-    };
-    render(<AdvancedFilterBuilder {...defaultProps} value={value} />);
-    const clearBtn = screen.getByText('advancedFilterClear').closest('button');
-    expect(clearBtn).not.toBeDisabled();
-  });
-
-  it('calls onClear when clear button is clicked with applied filter', async () => {
-    const user = userEvent.setup();
-    const value = {
-      rowOperator: 'and',
-      conditions: [{ field: 'name', operator: 'iContains', value: 'test' }],
-    };
-    const onClear = vi.fn();
-    render(<AdvancedFilterBuilder {...defaultProps} value={value} onClear={onClear} />);
-    await user.click(screen.getByText('advancedFilterClear'));
-    expect(onClear).toHaveBeenCalled();
-  });
-
-  it('removes a condition row when remove button is clicked', async () => {
-    const user = userEvent.setup();
-    render(<AdvancedFilterBuilder {...defaultProps} />);
-    // Add a second row
-    await user.click(screen.getByText('advancedFilterAddCondition'));
-    let removeBtns = screen.getAllByRole('button', { name: /remove condition/i });
-    expect(removeBtns).toHaveLength(2);
-    // Remove the first row
-    await user.click(removeBtns[0]);
-    removeBtns = screen.getAllByRole('button', { name: /remove condition/i });
-    // Should reset to one empty row (minimum)
-    expect(removeBtns).toHaveLength(1);
-  });
-
-  it('renders with empty columns gracefully', () => {
-    render(<AdvancedFilterBuilder {...defaultProps} columns={[]} />);
-    expect(screen.getByText('advancedFilterTitle')).toBeInTheDocument();
-  });
-
-  it('filters out non-filterable columns', () => {
-    const cols = [
-      { key: 'name', type: 'string', label: 'Name' },
-      { key: 'sys', type: 'system', label: 'System' },
-      { key: 'disc', type: 'discarded', label: 'Discarded' },
-      { key: 'nofilt', type: 'string', label: 'NoFilter', filterable: false },
-    ];
-    render(<AdvancedFilterBuilder {...defaultProps} columns={cols} />);
-    // Only 'name' should be available (system, discarded, filterable=false excluded)
-    // We can't easily check select options without opening the dropdown, but the component should render
-    expect(screen.getByText('advancedFilterTitle')).toBeInTheDocument();
-  });
-
-  it('calls onApply when Apply is clicked with complete conditions', async () => {
-    const user = userEvent.setup();
-    const onApply = vi.fn();
-    const onClose = vi.fn();
-    const value = {
-      rowOperator: 'and',
-      conditions: [{ field: 'name', operator: 'iContains', value: 'test' }],
-    };
-    render(<AdvancedFilterBuilder {...defaultProps} value={value} onApply={onApply} onClose={onClose} />);
-    const applyBtn = screen.getByText('advancedFilterApply').closest('button');
-    expect(applyBtn).not.toBeDisabled();
-    await user.click(applyBtn);
-    expect(onApply).toHaveBeenCalledTimes(1);
-    const calledWith = onApply.mock.calls[0][0];
-    expect(calledWith.rowOperator).toBe('and');
-    expect(calledWith.conditions).toHaveLength(1);
-    expect(calledWith.conditions[0].field).toBe('name');
-  });
-
-  it('calls onClose after apply', async () => {
-    const user = userEvent.setup();
-    const onApply = vi.fn();
-    const onClose = vi.fn();
-    const value = {
-      rowOperator: 'and',
-      conditions: [{ field: 'name', operator: 'iContains', value: 'test' }],
-    };
-    render(<AdvancedFilterBuilder {...defaultProps} value={value} onApply={onApply} onClose={onClose} />);
-    await user.click(screen.getByText('advancedFilterApply'));
-    expect(onClose).toHaveBeenCalledTimes(1);
-  });
-
-  it('does not call onApply when conditions are incomplete', async () => {
-    const user = userEvent.setup();
-    const onApply = vi.fn();
-    render(<AdvancedFilterBuilder {...defaultProps} onApply={onApply} />);
-    const applyBtn = screen.getByText('advancedFilterApply').closest('button');
-    expect(applyBtn).toBeDisabled();
-    // Try clicking anyway (disabled button)
-    await user.click(applyBtn);
-    expect(onApply).not.toHaveBeenCalled();
-  });
-
-  it('clears conditions and calls onClear when clear is clicked', async () => {
-    const user = userEvent.setup();
-    const onClear = vi.fn();
-    const value = {
-      rowOperator: 'and',
-      conditions: [
-        { field: 'name', operator: 'iContains', value: 'test' },
-        { field: 'amount', operator: 'greaterThan', value: '50' },
-      ],
-    };
-    render(<AdvancedFilterBuilder {...defaultProps} value={value} onClear={onClear} />);
-    // Two conditions
-    expect(screen.getAllByRole('button', { name: /remove condition/i })).toHaveLength(2);
-    await user.click(screen.getByText('advancedFilterClear'));
-    expect(onClear).toHaveBeenCalledTimes(1);
-    // After clear, should reset to one empty row
-    expect(screen.getAllByRole('button', { name: /remove condition/i })).toHaveLength(1);
-  });
-
-  it('adds multiple rows in sequence', async () => {
-    const user = userEvent.setup();
-    render(<AdvancedFilterBuilder {...defaultProps} />);
-    const addBtn = screen.getByText('advancedFilterAddCondition');
-    await user.click(addBtn);
-    await user.click(addBtn);
-    await user.click(addBtn);
-    const removeBtns = screen.getAllByRole('button', { name: /remove condition/i });
-    expect(removeBtns).toHaveLength(4);
-  });
-
-  it('removes middle row and keeps others', async () => {
+  it('removes the middle row and keeps the others', async () => {
     const user = userEvent.setup();
     const value = {
       rowOperator: 'and',
@@ -367,202 +198,99 @@ describe('AdvancedFilterBuilder — render', () => {
         { field: 'status', operator: 'equals', value: 'DR' },
       ],
     };
-    render(<AdvancedFilterBuilder {...defaultProps} value={value} />);
-    let removeBtns = screen.getAllByRole('button', { name: /remove condition/i });
-    expect(removeBtns).toHaveLength(3);
-    // Remove the middle row
-    await user.click(removeBtns[1]);
-    removeBtns = screen.getAllByRole('button', { name: /remove condition/i });
-    expect(removeBtns).toHaveLength(2);
+    renderES(<AdvancedFilterBuilder {...baseProps()} value={value} />);
+    expect(remove()).toHaveLength(3);
+    await user.click(remove()[1]);
+    expect(remove()).toHaveLength(2);
   });
 
-  it('renders with hasActiveFilter prop', () => {
-    render(<AdvancedFilterBuilder {...defaultProps} hasActiveFilter={true} />);
-    expect(screen.getByText('advancedFilterTitle')).toBeInTheDocument();
-  });
-
-  it('handles value with or rowOperator', () => {
-    const value = {
-      rowOperator: 'or',
-      conditions: [
-        { field: 'name', operator: 'iContains', value: 'a' },
-        { field: 'name', operator: 'iContains', value: 'b' },
-      ],
-    };
-    render(<AdvancedFilterBuilder {...defaultProps} value={value} />);
-    expect(screen.getAllByRole('button', { name: /remove condition/i })).toHaveLength(2);
-  });
-
-  it('handles value with nullish operator (isNull)', () => {
-    const value = {
-      rowOperator: 'and',
-      conditions: [{ field: 'name', operator: 'isNull', value: null }],
-    };
-    render(<AdvancedFilterBuilder {...defaultProps} value={value} />);
-    // isNull requires no value — apply should be enabled
-    const applyBtn = screen.getByText('advancedFilterApply').closest('button');
-    expect(applyBtn).not.toBeDisabled();
-  });
-
-  it('handles value with between operator', () => {
-    const value = {
-      rowOperator: 'and',
-      conditions: [{ field: 'amount', operator: 'between', value: ['10', '20'] }],
-    };
-    render(<AdvancedFilterBuilder {...defaultProps} value={value} />);
-    const applyBtn = screen.getByText('advancedFilterApply').closest('button');
-    expect(applyBtn).not.toBeDisabled();
-  });
-
-  it('disables apply when between has incomplete value', () => {
-    const value = {
-      rowOperator: 'and',
-      conditions: [{ field: 'amount', operator: 'between', value: ['10', ''] }],
-    };
-    render(<AdvancedFilterBuilder {...defaultProps} value={value} />);
-    const applyBtn = screen.getByText('advancedFilterApply').closest('button');
-    expect(applyBtn).toBeDisabled();
-  });
-
-  it('renders presets with delete buttons when onDeletePreset provided', () => {
-    render(
-      <AdvancedFilterBuilder
-        {...defaultProps}
-        presets={{ 'Filter A': {}, 'Filter B': {} }}
-        onApplyPreset={vi.fn()}
-        onSavePreset={vi.fn()}
-        onDeletePreset={vi.fn()}
-      />,
-    );
-    expect(screen.getByText('filterPresetsButton')).toBeInTheDocument();
-  });
-
-  it('renders labelOverrides without crashing', () => {
-    render(
-      <AdvancedFilterBuilder
-        {...defaultProps}
-        labelOverrides={{ name: 'Custom Name Label' }}
-      />,
-    );
-    expect(screen.getByText('advancedFilterTitle')).toBeInTheDocument();
-  });
-
-  it('enables apply when date field has equals operator with value', () => {
-    const value = {
-      rowOperator: 'and',
-      conditions: [{ field: 'orderDate', operator: 'equals', value: '2024-01-15' }],
-    };
-    render(<AdvancedFilterBuilder {...defaultProps} value={value} />);
-    const applyBtn = screen.getByText('advancedFilterApply').closest('button');
-    expect(applyBtn).not.toBeDisabled();
-  });
-
-  it('enables apply when date field has between operator with both values', () => {
-    const value = {
-      rowOperator: 'and',
-      conditions: [{ field: 'orderDate', operator: 'between', value: ['2024-01-01', '2024-12-31'] }],
-    };
-    render(<AdvancedFilterBuilder {...defaultProps} value={value} />);
-    const applyBtn = screen.getByText('advancedFilterApply').closest('button');
-    expect(applyBtn).not.toBeDisabled();
-  });
-
-  it('disables apply when date between has only first value', () => {
-    const value = {
-      rowOperator: 'and',
-      conditions: [{ field: 'orderDate', operator: 'between', value: ['2024-01-01', ''] }],
-    };
-    render(<AdvancedFilterBuilder {...defaultProps} value={value} />);
-    const applyBtn = screen.getByText('advancedFilterApply').closest('button');
-    expect(applyBtn).toBeDisabled();
-  });
-
-  it('enables apply when numeric field has between with both values', () => {
-    const value = {
-      rowOperator: 'and',
-      conditions: [{ field: 'amount', operator: 'between', value: ['100', '500'] }],
-    };
-    render(<AdvancedFilterBuilder {...defaultProps} value={value} />);
-    const applyBtn = screen.getByText('advancedFilterApply').closest('button');
-    expect(applyBtn).not.toBeDisabled();
-  });
-
-  it('disables apply when numeric between has only second value', () => {
-    const value = {
-      rowOperator: 'and',
-      conditions: [{ field: 'amount', operator: 'between', value: ['', '500'] }],
-    };
-    render(<AdvancedFilterBuilder {...defaultProps} value={value} />);
-    const applyBtn = screen.getByText('advancedFilterApply').closest('button');
-    expect(applyBtn).toBeDisabled();
-  });
-
-  it('disables apply when numeric between has null values', () => {
-    const value = {
-      rowOperator: 'and',
-      conditions: [{ field: 'amount', operator: 'between', value: [null, null] }],
-    };
-    render(<AdvancedFilterBuilder {...defaultProps} value={value} />);
-    const applyBtn = screen.getByText('advancedFilterApply').closest('button');
-    expect(applyBtn).toBeDisabled();
-  });
-
-  it('enables apply when isNotNull operator is used without value', () => {
-    const value = {
-      rowOperator: 'and',
-      conditions: [{ field: 'name', operator: 'isNotNull', value: null }],
-    };
-    render(<AdvancedFilterBuilder {...defaultProps} value={value} />);
-    const applyBtn = screen.getByText('advancedFilterApply').closest('button');
-    expect(applyBtn).not.toBeDisabled();
-  });
-
-  it('handles multiple conditions where some use nullish ops', () => {
-    const value = {
-      rowOperator: 'and',
-      conditions: [
-        { field: 'name', operator: 'isNull', value: null },
-        { field: 'amount', operator: 'greaterThan', value: '100' },
-      ],
-    };
-    render(<AdvancedFilterBuilder {...defaultProps} value={value} />);
-    const applyBtn = screen.getByText('advancedFilterApply').closest('button');
-    expect(applyBtn).not.toBeDisabled();
-  });
-
-  it('disables apply when any condition in multi-row is incomplete', () => {
-    const value = {
-      rowOperator: 'and',
-      conditions: [
-        { field: 'name', operator: 'iContains', value: 'test' },
-        { field: 'amount', operator: '', value: '' },
-      ],
-    };
-    render(<AdvancedFilterBuilder {...defaultProps} value={value} />);
-    const applyBtn = screen.getByText('advancedFilterApply').closest('button');
-    expect(applyBtn).toBeDisabled();
-  });
-
-  it('renders presets dropdown and shows preset names', async () => {
+  it('resets to a single empty row after removing the last extra row', async () => {
     const user = userEvent.setup();
-    render(
+    renderES(<AdvancedFilterBuilder {...baseProps()} />);
+    await user.click(screen.getByText('Añadir condición'));
+    expect(remove()).toHaveLength(2);
+    await user.click(remove()[0]);
+    expect(remove()).toHaveLength(1);
+  });
+
+  it('shows the presets dropdown label when presets are enabled', () => {
+    renderES(
       <AdvancedFilterBuilder
-        {...defaultProps}
-        presets={{ 'Daily Report': {}, 'Weekly Summary': {} }}
+        {...baseProps()}
+        presets={{ 'My Filter': {} }}
         onApplyPreset={vi.fn()}
         onSavePreset={vi.fn()}
         onDeletePreset={vi.fn()}
       />,
     );
-    // Presets button should be visible
-    const presetsBtn = screen.getByText('filterPresetsButton');
-    expect(presetsBtn).toBeInTheDocument();
+    expect(screen.getByText('Mis filtros')).toBeInTheDocument();
   });
 
-  it('calls onApply with correct data for multiple conditions', async () => {
+  it('disables Apply when conditions are incomplete', () => {
+    renderES(<AdvancedFilterBuilder {...baseProps()} />);
+    expect(applyBtn()).toBeDisabled();
+  });
+
+  it('disables Clear when nothing is started and no filter is applied', () => {
+    renderES(<AdvancedFilterBuilder {...baseProps()} value={null} />);
+    expect(clearBtn()).toBeDisabled();
+  });
+
+  it('enables Clear when there is an applied filter', () => {
+    const value = {
+      rowOperator: 'and',
+      conditions: [{ field: 'name', operator: 'iContains', value: 'test' }],
+    };
+    renderES(<AdvancedFilterBuilder {...baseProps()} value={value} />);
+    expect(clearBtn()).not.toBeDisabled();
+  });
+
+  it('calls onClear when Clear is clicked with an applied filter', async () => {
+    const user = userEvent.setup();
+    const onClear = vi.fn();
+    const value = {
+      rowOperator: 'and',
+      conditions: [{ field: 'name', operator: 'iContains', value: 'test' }],
+    };
+    renderES(<AdvancedFilterBuilder {...baseProps()} value={value} onClear={onClear} />);
+    await user.click(screen.getByText('Limpiar'));
+    expect(onClear).toHaveBeenCalledTimes(1);
+    expect(remove()).toHaveLength(1);
+  });
+
+  it('calls onApply + onClose with complete conditions', async () => {
     const user = userEvent.setup();
     const onApply = vi.fn();
     const onClose = vi.fn();
+    const value = {
+      rowOperator: 'and',
+      conditions: [{ field: 'name', operator: 'iContains', value: 'test' }],
+    };
+    renderES(
+      <AdvancedFilterBuilder {...baseProps()} value={value} onApply={onApply} onClose={onClose} />,
+    );
+    expect(applyBtn()).not.toBeDisabled();
+    await user.click(applyBtn());
+    expect(onApply).toHaveBeenCalledTimes(1);
+    expect(onClose).toHaveBeenCalledTimes(1);
+    const calledWith = onApply.mock.calls[0][0];
+    expect(calledWith.rowOperator).toBe('and');
+    expect(calledWith.conditions).toHaveLength(1);
+    expect(calledWith.conditions[0].field).toBe('name');
+  });
+
+  it('does not call onApply when conditions are incomplete', async () => {
+    const user = userEvent.setup();
+    const onApply = vi.fn();
+    renderES(<AdvancedFilterBuilder {...baseProps()} onApply={onApply} />);
+    expect(applyBtn()).toBeDisabled();
+    await user.click(applyBtn());
+    expect(onApply).not.toHaveBeenCalled();
+  });
+
+  it('calls onApply with the correct payload for multiple conditions', async () => {
+    const user = userEvent.setup();
+    const onApply = vi.fn();
     const value = {
       rowOperator: 'or',
       conditions: [
@@ -570,8 +298,8 @@ describe('AdvancedFilterBuilder — render', () => {
         { field: 'amount', operator: 'greaterThan', value: '50' },
       ],
     };
-    render(<AdvancedFilterBuilder {...defaultProps} value={value} onApply={onApply} onClose={onClose} />);
-    await user.click(screen.getByText('advancedFilterApply'));
+    renderES(<AdvancedFilterBuilder {...baseProps()} value={value} onApply={onApply} />);
+    await user.click(screen.getByText('Aplicar'));
     expect(onApply).toHaveBeenCalledTimes(1);
     const calledWith = onApply.mock.calls[0][0];
     expect(calledWith.rowOperator).toBe('or');
@@ -580,29 +308,125 @@ describe('AdvancedFilterBuilder — render', () => {
     expect(calledWith.conditions[1].value).toBe('50');
   });
 
-  it('clears resets to one empty row even with multiple applied conditions', async () => {
-    const user = userEvent.setup();
+  it('renders with empty columns gracefully', () => {
+    renderES(<AdvancedFilterBuilder {...baseProps()} columns={[]} />);
+    expect(screen.getByText('Filtro por condicionales')).toBeInTheDocument();
+  });
+
+  it('renders with labelOverrides without crashing', () => {
+    renderES(
+      <AdvancedFilterBuilder {...baseProps()} labelOverrides={{ name: 'Custom Name Label' }} />,
+    );
+    expect(screen.getByText('Filtro por condicionales')).toBeInTheDocument();
+  });
+
+  // --- Row completeness rules --------------------------------------------
+
+  it('enables Apply for a nullish operator (isNull) with no value', () => {
+    const value = {
+      rowOperator: 'and',
+      conditions: [{ field: 'name', operator: 'isNull', value: null }],
+    };
+    renderES(<AdvancedFilterBuilder {...baseProps()} value={value} />);
+    expect(applyBtn()).not.toBeDisabled();
+  });
+
+  it('enables Apply for isNotNull with no value', () => {
+    const value = {
+      rowOperator: 'and',
+      conditions: [{ field: 'name', operator: 'isNotNull', value: null }],
+    };
+    renderES(<AdvancedFilterBuilder {...baseProps()} value={value} />);
+    expect(applyBtn()).not.toBeDisabled();
+  });
+
+  it('enables Apply when numeric between has both bounds', () => {
+    const value = {
+      rowOperator: 'and',
+      conditions: [{ field: 'amount', operator: 'between', value: ['100', '500'] }],
+    };
+    renderES(<AdvancedFilterBuilder {...baseProps()} value={value} />);
+    expect(applyBtn()).not.toBeDisabled();
+  });
+
+  it('disables Apply when numeric between has only one bound', () => {
+    const value = {
+      rowOperator: 'and',
+      conditions: [{ field: 'amount', operator: 'between', value: ['', '500'] }],
+    };
+    renderES(<AdvancedFilterBuilder {...baseProps()} value={value} />);
+    expect(applyBtn()).toBeDisabled();
+  });
+
+  it('disables Apply when between has null bounds', () => {
+    const value = {
+      rowOperator: 'and',
+      conditions: [{ field: 'amount', operator: 'between', value: [null, null] }],
+    };
+    renderES(<AdvancedFilterBuilder {...baseProps()} value={value} />);
+    expect(applyBtn()).toBeDisabled();
+  });
+
+  it('enables Apply for a date equals condition with a value', () => {
+    const value = {
+      rowOperator: 'and',
+      conditions: [{ field: 'orderDate', operator: 'equals', value: '2024-01-15' }],
+    };
+    renderES(<AdvancedFilterBuilder {...baseProps()} value={value} />);
+    expect(applyBtn()).not.toBeDisabled();
+  });
+
+  it('enables Apply for a date between condition with both bounds', () => {
+    const value = {
+      rowOperator: 'and',
+      conditions: [{ field: 'orderDate', operator: 'between', value: ['2024-01-01', '2024-12-31'] }],
+    };
+    renderES(<AdvancedFilterBuilder {...baseProps()} value={value} />);
+    expect(applyBtn()).not.toBeDisabled();
+  });
+
+  it('disables Apply when date between has only the first bound', () => {
+    const value = {
+      rowOperator: 'and',
+      conditions: [{ field: 'orderDate', operator: 'between', value: ['2024-01-01', ''] }],
+    };
+    renderES(<AdvancedFilterBuilder {...baseProps()} value={value} />);
+    expect(applyBtn()).toBeDisabled();
+  });
+
+  it('enables Apply when a nullish and a complete condition are mixed', () => {
     const value = {
       rowOperator: 'and',
       conditions: [
-        { field: 'name', operator: 'iContains', value: 'a' },
-        { field: 'amount', operator: 'greaterThan', value: '10' },
-        { field: 'status', operator: 'equals', value: 'DR' },
+        { field: 'name', operator: 'isNull', value: null },
+        { field: 'amount', operator: 'greaterThan', value: '100' },
       ],
     };
-    const onClear = vi.fn();
-    render(<AdvancedFilterBuilder {...defaultProps} value={value} onClear={onClear} />);
-    expect(screen.getAllByRole('button', { name: /remove condition/i })).toHaveLength(3);
-    await user.click(screen.getByText('advancedFilterClear'));
-    expect(onClear).toHaveBeenCalledTimes(1);
-    expect(screen.getAllByRole('button', { name: /remove condition/i })).toHaveLength(1);
+    renderES(<AdvancedFilterBuilder {...baseProps()} value={value} />);
+    expect(applyBtn()).not.toBeDisabled();
   });
 
-  it('shows "And" connector for second row instead of "Where"', async () => {
-    const user = userEvent.setup();
-    render(<AdvancedFilterBuilder {...defaultProps} />);
-    await user.click(screen.getByText('advancedFilterAddCondition'));
-    // First row shows "Where", second row shows a select with and/or
-    expect(screen.getByText('advancedFilterWhere')).toBeInTheDocument();
+  it('disables Apply when any condition in a multi-row set is incomplete', () => {
+    const value = {
+      rowOperator: 'and',
+      conditions: [
+        { field: 'name', operator: 'iContains', value: 'test' },
+        { field: 'amount', operator: '', value: '' },
+      ],
+    };
+    renderES(<AdvancedFilterBuilder {...baseProps()} value={value} />);
+    expect(applyBtn()).toBeDisabled();
+  });
+
+  it('handles the or rowOperator', () => {
+    const value = {
+      rowOperator: 'or',
+      conditions: [
+        { field: 'name', operator: 'iContains', value: 'a' },
+        { field: 'name', operator: 'iContains', value: 'b' },
+      ],
+    };
+    renderES(<AdvancedFilterBuilder {...baseProps()} value={value} />);
+    expect(remove()).toHaveLength(2);
   });
 });
