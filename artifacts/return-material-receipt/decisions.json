@@ -102,7 +102,7 @@
           "defaultExpr": "@#M_Warehouse_ID@"
         },
         "salesOrder": {
-          "visibility": "discarded"
+          "visibility": "system"
         },
         "partnerAddress": {
           "reference": "BusinessPartnerLocation",
