@@ -251,43 +251,54 @@ This iteration tightens the Amortization window to a read-focused, assets-driven
 ## Accounting dimension visibility per section — ETP-4529
 
 The ETP-4529 matrix asks for `Amortización | Líneas`: Contacto=**Por config**,
-Producto=**Nunca**, Proyecto=**Por config**, Centro de costo=**Por config**. No `decisions.json`
-change was made in this window as part of ETP-4529 — see the findings below (both were already
-either correct or blocked by gaps outside `decisions.json`'s reach).
+Producto=**Nunca**, Proyecto=**Por config**, Centro de costo=**Por config**.
 
-**Correction to a premise used while scoping ETP-4529:** the ticket's confirmed scope decisions
-cite this window's `lines.project` as the reference example of a *working, correctly-wired*
-`@ACCT_DIMENSION_DISPLAY@` field. That is only half true. `contract.json` for `lines.project` is
-indeed correct (`displayLogic.raw: "@ACCT_DIMENSION_DISPLAY@"`, `evaluable: false`,
-`reason: "server-macro"`), but the amortization lines grid does not render fields via the generic
-generated `LinesForm.jsx`/`EntityForm` path at all — it uses a fully custom component,
+**Correction to a premise used while scoping ETP-4529 (now resolved):** the ticket's
+confirmed scope decisions originally cited this window's `lines.project` as the reference
+example of a *working, correctly-wired* `@ACCT_DIMENSION_DISPLAY@` field. That was only half
+true. `contract.json` for `lines.project` is correct
+(`displayLogic.raw: "@ACCT_DIMENSION_DISPLAY@"`, `evaluable: false`, `reason: "server-macro"`),
+but the amortization lines grid never rendered fields via the generic generated
+`LinesForm.jsx`/`EntityForm` path — it uses a fully custom component,
 `tools/app-shell/src/windows/custom/amortization/AmortizationLinesTable.jsx`, whose
-`DIMENSION_FIELDS` array (`project`, `costcenter`, `eTADASBpartner`, lines 19–23) is
-**hardcoded with no `displayLogic`/`hidden` property at all** and is filtered only by
-`f => !f.hidden` (line 25) — since none of the three ever set `hidden`, **all three render
-unconditionally**, all the time, regardless of the client's accounting-dimension configuration.
-This matches the "Manual verification" item 4 above ("dimension panel shows exactly
-Organisation + Project, Cost Center, Contact") — a deliberate ETP-4429 decision, but one that
-means **none** of these three fields is actually "config-gated" today, `project` included.
+`DIMENSION_FIELDS` array (`project`, `costcenter`, `eTADASBpartner`) was **hardcoded with no
+`displayLogic`/`hidden` property at all**, so all three rendered unconditionally regardless of
+the client's accounting-dimension configuration — matching the "Manual verification" item 4
+above (a deliberate ETP-4429 decision), but meaning none of the three was actually
+config-gated, `project` included.
 
-Per-field state:
-- `project` (Proyecto): raw AD `displayLogic` = `@ACCT_DIMENSION_DISPLAY@` (correctly config-driven
-  at the AD level) — but rendered unconditionally by `AmortizationLinesTable.jsx`, so the gating
-  never takes effect in the running app. Fixing this requires editing the custom component to
-  resolve real dimension visibility (see the shared runtime-gap write-up in `sales-invoice.md`) —
-  real frontend work, not a `decisions.json` change.
-- `costcenter` (Centro de costo): raw AD `displayLogic` for this column on the amortization-line
-  tab is **empty** (`None`) — the AD_Field was never wired to `@ACCT_DIMENSION_DISPLAY@` at the
-  Application Dictionary level, unlike `project`. Implementing "Por config" here needs an AD
-  change (adding the display-logic expression to the `AD_Field` record for this column), which is
-  out of `decisions.json`'s scope regardless of the custom-component issue above.
-- `eTADASBpartner` (Contacto — the module-added `EM_Etadas_C_Bpartner_ID` column,
-  `fieldGroup: "Dimensions"`): same AD-level gap as `costcenter` — raw `displayLogic` is empty.
+**Reworked (follow-up pass) — now uses the same shared, config-aware hook as
+`assets.md`.** Per explicit product direction, the fix generalizes this panel's own visual
+shape into a reusable mechanism rather than special-casing it:
 
-**Net effect:** all three dimension fields currently show unconditionally on every amortization
-line, with no accounting-dimension gating whatsoever. Bringing this window in line with the
-ETP-4529 matrix needs (1) an AD Application Dictionary fix for `costcenter`/`eTADASBpartner`'s
-`DisplayLogic`, (2) discarding `product` from consideration (already true — there is no product
-dimension field on this tab), and (3) reworking `AmortizationLinesTable.jsx` to actually consult
-resolved dimension visibility instead of rendering the three fields unconditionally. None of this
-was implemented in this pass — flagged for the coordinator.
+- `DIMENSION_FIELDS` was renamed `DIMENSION_FIELD_CANDIDATES` (still all three: `project`,
+  `costcenter`, `eTADASBpartner` — all three are "Por config" per the matrix, unlike `assets`
+  where three of four are "Nunca").
+- `AmortizationLinesTable` now calls
+  `useAccountingDimensionFields('lines', data, DIMENSION_FIELD_CANDIDATES, { token, apiBaseUrl })`
+  once per mount (not per row — dimension-macro visibility is config-driven, not
+  line-specific, so one evaluate-display call against the amortization header record is
+  shared by every row's `DimSummary` badge list and `DimensionGrid` expand-panel).
+- `DimSummary` now takes the resolved `fields` list as a prop instead of closing over a
+  module-level constant, so hidden dimensions drop out of both the badge summary and the
+  expand-panel consistently.
+- **`project`**: raw AD `displayLogic` = `@ACCT_DIMENSION_DISPLAY@` — now genuinely
+  config-gated for the first time in this window's history.
+- **`costcenter` / `eTADASBpartner`**: raw AD `displayLogic` on the amortization-line tab is
+  still **empty** for both (`AD_Field.DisplayLogic` was never wired to
+  `@ACCT_DIMENSION_DISPLAY@` at the Application Dictionary level) — a separate, already-tracked
+  gap explicitly **deferred** per product direction (to be fixed by a different, already-existing
+  ticket that populates the AD_Field and regenerates the contract). Per that direction, this hook
+  is wired to *read* whatever `displayLogic.raw` the AD eventually provides rather than hardcoding
+  a value — it fails open (stays visible) for both today, exactly like
+  `NeoDisplayLogicHelper.evaluateExpression()`'s own fail-open behavior server-side. Once the AD
+  change lands and the contract is regenerated, both fields start being correctly gated with
+  **zero further changes** needed in `AmortizationLinesTable.jsx` or the hook.
+- **`product`**: no product dimension field exists on the amortization-line tab — matrix's
+  "Nunca" is already trivially satisfied.
+
+**Test debt (delegated, not fixed here):** `AmortizationLinesTable.test.js`'s
+"defines DIMENSION_FIELDS with exactly 3 entries..." and "renders the project dimension (no
+hidden: true on any dimension entry)" both assert the old `DIMENSION_FIELDS` constant name and
+now fail on the rename to `DIMENSION_FIELD_CANDIDATES` — expected, given the intentional
+rename. Needs a Tester pass to update these two assertions.

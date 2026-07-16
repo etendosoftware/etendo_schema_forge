@@ -8,7 +8,6 @@ export const assets = [
     "assetCategory": "Sample assetCategory",
     "description": "Standard order for Q1 delivery",
     "currency": "USD",
-    "product": "Laptop Pro 15",
     "depreciate": "Sample depreciate",
     "depreciationType": "Sample depreciationType",
     "calculateType": "Sample calculateType",
@@ -30,8 +29,6 @@ export const assets = [
     "depreciatedPlan": 38907,
     "project": "Sample project",
     "processAsset": "Sample processAsset",
-    "businessPartner": "Acme Corp",
-    "eTADASCostCenter": "Sample eTADASCostCenter",
     "etgoAmortizationStatus": "DR"
   },
   {
@@ -41,7 +38,6 @@ export const assets = [
     "assetCategory": "Sample assetCategory",
     "description": "Rush order - priority shipping required",
     "currency": "EUR",
-    "product": "USB-C Cable",
     "depreciate": "Sample depreciate",
     "depreciationType": "Sample depreciationType",
     "calculateType": "Sample calculateType",
@@ -63,8 +59,6 @@ export const assets = [
     "depreciatedPlan": 9306,
     "project": "Sample project",
     "processAsset": "Sample processAsset",
-    "businessPartner": "TechFlow Inc",
-    "eTADASCostCenter": "Sample eTADASCostCenter",
     "etgoAmortizationStatus": "CO"
   },
   {
@@ -74,7 +68,6 @@ export const assets = [
     "assetCategory": "Sample assetCategory",
     "description": "Bulk purchase for warehouse restocking",
     "currency": "GBP",
-    "product": "Wireless Mouse",
     "depreciate": "Sample depreciate",
     "depreciationType": "Sample depreciationType",
     "calculateType": "Sample calculateType",
@@ -96,8 +89,6 @@ export const assets = [
     "depreciatedPlan": 11544,
     "project": "Sample project",
     "processAsset": "Sample processAsset",
-    "businessPartner": "Global Trade Ltd",
-    "eTADASCostCenter": "Sample eTADASCostCenter",
     "etgoAmortizationStatus": "VO"
   },
   {
@@ -107,7 +98,6 @@ export const assets = [
     "assetCategory": "Sample assetCategory",
     "description": "Sample order for client evaluation",
     "currency": "USD",
-    "product": "Mechanical Keyboard",
     "depreciate": "Sample depreciate",
     "depreciationType": "Sample depreciationType",
     "calculateType": "Sample calculateType",
@@ -129,8 +119,6 @@ export const assets = [
     "depreciatedPlan": 11872,
     "project": "Sample project",
     "processAsset": "Sample processAsset",
-    "businessPartner": "Summit Industries",
-    "eTADASCostCenter": "Sample eTADASCostCenter",
     "etgoAmortizationStatus": "IP"
   },
   {
@@ -140,7 +128,6 @@ export const assets = [
     "assetCategory": "Sample assetCategory",
     "description": "Recurring monthly supply order",
     "currency": "EUR",
-    "product": "Monitor 27\"",
     "depreciate": "Sample depreciate",
     "depreciationType": "Sample depreciationType",
     "calculateType": "Sample calculateType",
@@ -162,8 +149,6 @@ export const assets = [
     "depreciatedPlan": 48460,
     "project": "Sample project",
     "processAsset": "Sample processAsset",
-    "businessPartner": "Pacific Partners",
-    "eTADASCostCenter": "Sample eTADASCostCenter",
     "etgoAmortizationStatus": "DR"
   },
   {
@@ -173,7 +158,6 @@ export const assets = [
     "assetCategory": "Sample assetCategory",
     "description": "Special pricing agreement applies",
     "currency": "GBP",
-    "product": "Webcam HD",
     "depreciate": "Sample depreciate",
     "depreciationType": "Sample depreciationType",
     "calculateType": "Sample calculateType",
@@ -195,8 +179,6 @@ export const assets = [
     "depreciatedPlan": 45418,
     "project": "Sample project",
     "processAsset": "Sample processAsset",
-    "businessPartner": "Alpine Solutions",
-    "eTADASCostCenter": "Sample eTADASCostCenter",
     "etgoAmortizationStatus": "CO"
   },
   {
@@ -206,7 +188,6 @@ export const assets = [
     "assetCategory": "Sample assetCategory",
     "description": "Consolidated order from multiple requests",
     "currency": "USD",
-    "product": "Headset Pro",
     "depreciate": "Sample depreciate",
     "depreciationType": "Sample depreciationType",
     "calculateType": "Sample calculateType",
@@ -228,8 +209,6 @@ export const assets = [
     "depreciatedPlan": 33840,
     "project": "Sample project",
     "processAsset": "Sample processAsset",
-    "businessPartner": "Meridian Group",
-    "eTADASCostCenter": "Sample eTADASCostCenter",
     "etgoAmortizationStatus": "VO"
   },
   {
@@ -239,7 +218,6 @@ export const assets = [
     "assetCategory": "Sample assetCategory",
     "description": "Trial order for new product line",
     "currency": "EUR",
-    "product": "Docking Station",
     "depreciate": "Sample depreciate",
     "depreciationType": "Sample depreciationType",
     "calculateType": "Sample calculateType",
@@ -261,8 +239,6 @@ export const assets = [
     "depreciatedPlan": 25716,
     "project": "Sample project",
     "processAsset": "Sample processAsset",
-    "businessPartner": "Vertex Systems",
-    "eTADASCostCenter": "Sample eTADASCostCenter",
     "etgoAmortizationStatus": "IP"
   },
   {
@@ -272,7 +248,6 @@ export const assets = [
     "assetCategory": "Sample assetCategory",
     "description": "Replacement for damaged goods",
     "currency": "GBP",
-    "product": "SSD 1TB",
     "depreciate": "Sample depreciate",
     "depreciationType": "Sample depreciationType",
     "calculateType": "Sample calculateType",
@@ -294,8 +269,6 @@ export const assets = [
     "depreciatedPlan": 44780,
     "project": "Sample project",
     "processAsset": "Sample processAsset",
-    "businessPartner": "Atlas Manufacturing",
-    "eTADASCostCenter": "Sample eTADASCostCenter",
     "etgoAmortizationStatus": "DR"
   },
   {
@@ -305,7 +278,6 @@ export const assets = [
     "assetCategory": "Sample assetCategory",
     "description": "Pre-season inventory build-up",
     "currency": "USD",
-    "product": "RAM 16GB",
     "depreciate": "Sample depreciate",
     "depreciationType": "Sample depreciationType",
     "calculateType": "Sample calculateType",
@@ -327,8 +299,6 @@ export const assets = [
     "depreciatedPlan": 12483,
     "project": "Sample project",
     "processAsset": "Sample processAsset",
-    "businessPartner": "Nova Enterprises",
-    "eTADASCostCenter": "Sample eTADASCostCenter",
     "etgoAmortizationStatus": "CO"
   },
   {
@@ -338,7 +308,6 @@ export const assets = [
     "assetCategory": "Sample assetCategory",
     "description": "Customer-specific configuration",
     "currency": "EUR",
-    "product": "Power Supply 750W",
     "depreciate": "Sample depreciate",
     "depreciationType": "Sample depreciationType",
     "calculateType": "Sample calculateType",
@@ -360,8 +329,6 @@ export const assets = [
     "depreciatedPlan": 46022,
     "project": "Sample project",
     "processAsset": "Sample processAsset",
-    "businessPartner": "Pinnacle Services",
-    "eTADASCostCenter": "Sample eTADASCostCenter",
     "etgoAmortizationStatus": "VO"
   },
   {
@@ -371,7 +338,6 @@ export const assets = [
     "assetCategory": "Sample assetCategory",
     "description": "Government contract fulfillment",
     "currency": "GBP",
-    "product": "Network Switch",
     "depreciate": "Sample depreciate",
     "depreciationType": "Sample depreciationType",
     "calculateType": "Sample calculateType",
@@ -393,8 +359,6 @@ export const assets = [
     "depreciatedPlan": 38634,
     "project": "Sample project",
     "processAsset": "Sample processAsset",
-    "businessPartner": "Horizon Labs",
-    "eTADASCostCenter": "Sample eTADASCostCenter",
     "etgoAmortizationStatus": "IP"
   }
 ];

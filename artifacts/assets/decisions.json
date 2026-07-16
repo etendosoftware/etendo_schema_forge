@@ -123,8 +123,8 @@
           "reason": "Internal sequential number \u2014 not relevant for users in simplified UI"
         },
         "product": {
-          "visibility": "editable",
-          "form": false
+          "visibility": "discarded",
+          "reason": "ETP-4529 — Producto is 'Nunca' for Activo (Amortizaciones) per the accounting-dimension matrix."
         },
         "summaryLevel": {
           "visibility": "discarded",
@@ -253,12 +253,12 @@
           "reason": "ETP-4529 — accounting dimension, config-gated (raw AD: @$Element_PJ@='Y' & @IsDepreciated@='Y')."
         },
         "eTADASCostCenter": {
-          "visibility": "editable",
-          "form": false
+          "visibility": "discarded",
+          "reason": "ETP-4529 — Centro de costo is 'Nunca' for Activo (Amortizaciones) per the accounting-dimension matrix."
         },
         "businessPartner": {
-          "visibility": "editable",
-          "form": false
+          "visibility": "discarded",
+          "reason": "ETP-4529 — Contacto is 'Nunca' for Activo (Amortizaciones) per the accounting-dimension matrix."
         },
         "eTADASUser1": {
           "visibility": "discarded",

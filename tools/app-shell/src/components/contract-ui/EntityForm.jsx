@@ -913,15 +913,21 @@ export function EntityForm({ entity, fields = [], data, onChange, catalogs, layo
   }
 
   // Apply visibility from evaluate-display (hide fields where visibility === false).
-  // Only honor the evaluate-display result if the field itself declares a displayLogic
-  // in its contract definition. Fields without displayLogic have a static visibility
-  // decision that evaluate-display must not override (prevents AD displayLogic bugs
-  // from incorrectly hiding fields like businessPartner).
+  // Only honor the evaluate-display result if the field declares server-side gating —
+  // either a truthy `displayLogic` value OR `visibilitySource === 'server'` (the marker
+  // generate-frontend.js emits for non-evaluable raw AD expressions, e.g. server macros
+  // like @ACCT_DIMENSION_DISPLAY@ — those fields carry NO `displayLogic` property at all,
+  // only `visible: null, visibilitySource: 'server', displayLogicReason: '...'`, per
+  // buildDisplayLogicPart() in generate-frontend.js). Fields with neither marker have a
+  // static visibility decision that evaluate-display must not override (prevents AD
+  // displayLogic bugs from incorrectly hiding fields like businessPartner).
   // Fields with a function-based displayLogic are handled entirely client-side (second
   // filter below) and must NOT be removed here — the server result is irrelevant for them.
   if (displayLogic?.visibility && Object.keys(displayLogic.visibility).length > 0) {
     displayFields = displayFields.filter(f =>
-      typeof f.displayLogic === 'function' || !f.displayLogic || displayLogic.visibility[f.key] !== false
+      typeof f.displayLogic === 'function'
+        || (!f.displayLogic && f.visibilitySource !== 'server')
+        || displayLogic.visibility[f.key] !== false
     );
   }
 

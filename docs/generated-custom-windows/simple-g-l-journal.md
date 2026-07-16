@@ -121,8 +121,12 @@ schema:
   these were never actually tied to Open Items at the AD level; the shared override was a
   copy-paste that didn't match. Removed for all three; they are now purely config-gated.
 
-**Known runtime gap (shared across windows, see `sales-invoice.md` for the full write-up):**
-`@ACCT_DIMENSION_DISPLAY@` is only evaluated at runtime for the header entity, and only in
-`other`/`collapsed` form sections — there is no equivalent evaluation for the lines entity yet, so
-the four `lines.*` dimension fields carry correct contract metadata but render unconditionally
-until a lines-scoped `evaluate-display` call exists.
+**Runtime evaluator — fixed (ETP-4529 follow-up), fully effective for this window.** Three
+generic bugs (the `EntityForm.jsx` visibility filter never actually consulting the
+evaluate-display result, the `principal` section hardcoding empty visibility, and no
+lines-scoped `useDisplayLogic` call existing at all) were found and fixed — full write-up in
+`sales-invoice.md`. Both `header.*` and `lines.*` dimension fields are now genuinely
+config-gated at runtime. Unlike the inlineEditable windows (sales-invoice, purchase-invoice,
+goods-shipment, goods-receipt, physical-inventory, goods-movements), this window uses the
+classic `linesLayout`, so `LinesForm.jsx`'s sidebar always mounts and the lines-scoped evaluator
+fix is fully effective here — no residual UI-surface limitation.

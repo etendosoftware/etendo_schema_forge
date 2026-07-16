@@ -107,35 +107,11 @@ export const api = {
     },
     {
       "entity": "assets",
-      "field": "product",
-      "column": "M_Product_ID",
-      "reference": "Product",
-      "inputMode": "search",
-      "url": "/sws/neo/assets/assets/selectors/product"
-    },
-    {
-      "entity": "assets",
       "field": "project",
       "column": "C_Project_ID",
       "reference": "Project",
       "inputMode": "search",
       "url": "/sws/neo/assets/assets/selectors/project"
-    },
-    {
-      "entity": "assets",
-      "field": "businessPartner",
-      "column": "C_BPartner_ID",
-      "reference": "BPartner",
-      "inputMode": "search",
-      "url": "/sws/neo/assets/assets/selectors/businessPartner"
-    },
-    {
-      "entity": "assets",
-      "field": "eTADASCostCenter",
-      "column": "EM_Etadas_Costcenter_ID",
-      "reference": "Costcenter",
-      "inputMode": "selector",
-      "url": "/sws/neo/assets/assets/selectors/eTADASCostCenter"
     },
     {
       "entity": "amortizationLine",

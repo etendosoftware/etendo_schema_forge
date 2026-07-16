@@ -340,14 +340,52 @@ matrix:
 | `costcenter` | **Por config** — raw AD `@ACCT_DIMENSION_DISPLAY@` passthrough (`section: "other"`) | **Por config** — same passthrough |
 
 "Por config" means the field's visibility is resolved server-side at runtime via
-`POST /sws/neo/sales-invoice/header/evaluate-display`, which expands
+`POST /sws/neo/sales-invoice/{entity}/evaluate-display`, which expands
 `@ACCT_DIMENSION_DISPLAY@` through `DimensionDisplayUtility.computeAccountingDimensionDisplayLogic()`
-against the client's `AD_Client` per-dimension configuration
-(`Project_Acctdim_Header`, etc.). **Known gap:** this evaluate-display call is only wired for
-the **header** entity in `DetailView.jsx` (`useDisplayLogic(entity, hook.editing, ...)`), and even
-then only for the `other`/`collapsed` form sections — the `principal` section explicitly passes
-an empty `visibility: {}` object. There is currently no equivalent call scoped to the `lines`
-entity, so the `project`/`costcenter` **line** fields carry the correct `displayLogic` metadata in
-`contract.json` but nothing evaluates it at runtime yet — they render unconditionally until a
-lines-scoped evaluate-display call is added to the shared line-editing components. See the
-ETP-4529 delivery notes for the full write-up.
+against the client's `AD_Client` per-dimension configuration (`Project_Acctdim_Header`, etc.).
+
+### Runtime evaluator — fixed (ETP-4529 follow-up)
+
+Three bugs made this mechanism a near-total no-op at runtime, found and fixed in this
+same ticket (generic fixes — they apply to every window, not only the ones in the
+ETP-4529 matrix):
+
+1. **`EntityForm.jsx`'s visibility filter never actually consulted the evaluate-display
+   result.** `generate-frontend.js` emits non-evaluable ("Por config") fields with
+   `visible: null, visibilitySource: 'server', displayLogicReason: '...'` — but **no**
+   `displayLogic` property. `EntityForm.jsx`'s filter read `!f.displayLogic` as "this field
+   has a static visibility decision, never override it" — true for every server-macro
+   field, since none of them ever carry a `displayLogic` property. The filter's OR-chain
+   short-circuited before ever reaching the real `visibility[key] !== false` check, so
+   **no field was ever hidden by evaluate-display, on any window, ever** — this was the
+   root cause, more fundamental than the two gaps below. Fixed: the filter now also checks
+   `f.visibilitySource === 'server'` before falling back to "always visible".
+2. **The `principal` form section hardcoded `visibility: {}`** in `DetailView.jsx`'s `Form`
+   call (~line 3609), discarding whatever `useDisplayLogic` actually resolved. Fixed: it
+   now passes the real `displayLogic` object through, same as the `other`/`collapsed`
+   sections.
+3. **No `useDisplayLogic` call existed for the lines/detail entity at all.** Added a second
+   hook call, `lineDisplayLogic = useDisplayLogic(detailEntity, hook.editing, ...)`, and
+   wired its `visibility` map into the `DetailForm` (generated `LinesForm.jsx`) call as
+   `displayLogic={{ readOnly: {}, visibility: lineDisplayLogic.visibility }}` (`readOnly`
+   stays `{}` there deliberately — each line field's own `readOnlyLogic` already handles
+   per-row read-only state against the correct record; only `visibility` needed a source).
+   Dimension-macro visibility doesn't depend on which specific line record is open, so one
+   evaluate-display call (scoped to the lines entity, using the header record as a
+   representative context) correctly covers every row.
+
+**Residual, orthogonal limitation — NOT fixed here, pre-existing platform constraint:**
+this window uses `window.linesLayout = "inlineEditable"`. For inlineEditable windows,
+`DetailForm`/`LinesForm.jsx` is never rendered at all
+(`shouldShowDetailFormSidebar` returns `false` whenever `linesLayout === 'inlineEditable'`),
+and `grid: false` line fields (which `project`/`costcenter` are, being form-only) never
+appear as inline table columns either. So even with the evaluator fixed, **the "Por
+config" line-level fields on this window have no UI surface to render on at all** — this
+is a pre-existing constraint (form-only fields were already unreachable on inlineEditable
+windows before ETP-4529; dimension fields are simply the first fields on this window to hit
+it) and a separate, larger feature (e.g. an expandable per-row detail section for
+`InlineLinesPanel`) than this ticket's scope. Affects: `sales-invoice`, `purchase-invoice`,
+`goods-shipment`, `goods-receipt`, `physical-inventory`, `goods-movements` (all
+inlineEditable). Windows using the classic `linesLayout` (`simple-g-l-journal`) are fully
+fixed by the evaluator changes above — their line dimension fields render through
+`LinesForm.jsx`'s sidebar and are now correctly config-gated.

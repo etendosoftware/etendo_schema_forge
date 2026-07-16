@@ -430,8 +430,13 @@ in `decisions.json`, which both hid the fields unconditionally AND silenced thei
 `@Posted@='Y'` read-only rule. Both are now restored: the fields render (gated by the
 accounting-dimension macro) and are correctly locked once the invoice is posted.
 
-**Known runtime gap (shared across windows, see `sales-invoice.md` for the full write-up):**
-`@ACCT_DIMENSION_DISPLAY@` is only evaluated at runtime for the **header** entity, and only in
-`other`/`collapsed` form sections. There is no equivalent evaluation for the **lines** entity yet,
-so `lines.project`/`lines.costcenter` carry correct contract metadata but render unconditionally
-until a lines-scoped `evaluate-display` call is added to the shared line-editing components.
+**Runtime evaluator — fixed (ETP-4529 follow-up), with one residual, orthogonal limitation.**
+Three generic bugs (the `EntityForm.jsx` visibility filter never actually consulting the
+evaluate-display result, the `principal` section hardcoding empty visibility, and no
+lines-scoped `useDisplayLogic` call existing at all) were found and fixed — full write-up in
+`sales-invoice.md`. `header.project`/`header.costcenter` are now genuinely config-gated at
+runtime. `lines.project`/`lines.costcenter` carry correct contract metadata and are now
+correctly evaluated too, but this window uses `window.linesLayout = "inlineEditable"`, under
+which `LinesForm.jsx` (the sidebar that would render them) never mounts at all — a pre-existing,
+unrelated platform limitation (not fixed by this ticket) that leaves these two line fields with
+no UI surface to render on, evaluator fix notwithstanding. See `sales-invoice.md` for detail.

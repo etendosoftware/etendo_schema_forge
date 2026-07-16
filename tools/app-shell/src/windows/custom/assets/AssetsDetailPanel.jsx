@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react';
 import { EntityForm } from '@/components/contract-ui';
 import { PillToggle } from '@/components/PillToggle';
 import { useUI } from '@/i18n';
+import { useAccountingDimensionFields } from '@/hooks/useAccountingDimensionFields';
 
 function GroupHead({ title, description }) {
   return (
@@ -209,12 +210,18 @@ export default function AssetsDetailPanel({ data, token, apiBaseUrl, catalogs, a
     return { readOnly, visibility };
   }
 
-  const dimensionFields = [
+  // ETP-4529 — per the accounting-dimension matrix, only Proyecto is "Por config"
+  // (config-gated) for Activo (Amortizaciones); Contacto, Producto, and Centro de
+  // costo are "Nunca" (never applicable) and are intentionally NOT candidates here
+  // at all — see decisions.json (businessPartner/product/eTADASCostCenter are
+  // discarded) and docs/generated-custom-windows/assets.md.
+  const dimensionFieldCandidates = [
     { key: 'project', column: 'C_Project_ID', type: 'selector', section: 'principal', reference: 'Project', inputMode: 'selector' },
-    { key: 'eTADASCostCenter', column: 'EM_Etadas_Costcenter_ID', type: 'selector', section: 'principal', reference: 'Costcenter', inputMode: 'selector' },
-    { key: 'businessPartner', column: 'C_BPartner_ID', type: 'selector', section: 'principal', reference: 'BPartner', inputMode: 'selector' },
-    { key: 'product', column: 'M_Product_ID', type: 'selector', section: 'principal', reference: 'Product', inputMode: 'selector' },
   ];
+  // Config-driven visibility via the shared evaluate-display evaluator (was: always
+  // shown whenever depreciate === true, regardless of the client's accounting-
+  // dimension configuration).
+  const dimensionFields = useAccountingDimensionFields('assets', d, dimensionFieldCandidates, { token, apiBaseUrl });
 
   const dateFields = [
     { key: 'purchaseDate', column: 'Datepurchased', type: 'date', label: ui('assetsPurchaseDateLabel'), section: 'principal' },
@@ -292,13 +299,15 @@ export default function AssetsDetailPanel({ data, token, apiBaseUrl, catalogs, a
           displayLogic={readOnlyAll}
           data-testid="EntityForm__8e32ca" />
       )}
-      {/* Group 5 — Accounting dimensions (optional, last section) */}
-      {depreciate && (
+      {/* Group 5 — Accounting dimensions (optional, last section). Hidden entirely
+          when the config-driven dimensionFields list resolves to empty (e.g. Project
+          disabled for this client's accounting-dimension configuration). */}
+      {depreciate && dimensionFields.length > 0 && (
         <GroupDivider
           title={ui('assetsGroupDimensionsTitle')}
           data-testid="GroupDivider__8e32ca" />
       )}
-      {depreciate && (
+      {depreciate && dimensionFields.length > 0 && (
         <div className="[&_button[role=combobox]]:!bg-white [&_input]:!bg-white">
           <EntityForm
             fields={dimensionFields}

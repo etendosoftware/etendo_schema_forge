@@ -556,8 +556,13 @@ Centro de costo=**Por config**.
 is consistent with "Por config" (still config-gated) and preserves an existing, unrelated
 UX-sequencing rule (don't show the field before a transaction type is picked).
 
-This window's `transaction` entity renders through the generic generated form path, so the same
-shared runtime gap applies here as elsewhere: `useDisplayLogic` is only wired for the
-`header`-equivalent entity — verify against a live/dev environment whether `transaction` counts as
-that "header" entity for this window's `DetailView` usage before relying on the config gating in
-production.
+**Correction:** `transaction` is not the header-equivalent entity here — the generated
+`AccountPage.jsx` wires `DetailView` with `entity="account"` and `detailEntity="transaction"`,
+i.e. `transaction` is the **lines/detail** entity relative to `account`. That means the
+ETP-4529 follow-up fix that adds a lines-scoped `useDisplayLogic(detailEntity, ...)` call (see
+`sales-invoice.md`) is exactly what covers `transaction`, not the header-scoped one. This window
+has no `window.linesLayout` override (defaults to classic), so `LinesForm.jsx`'s sidebar should
+mount normally and the fix should be fully effective — unlike the inlineEditable windows. This
+window also uses `window.layoutType: "custom"`, so verify against a live/dev environment that
+the generated `AccountPage.jsx`/`DetailView` flow (rather than a custom wrapper bypassing it) is
+actually what renders the transaction detail before relying on the config gating in production.

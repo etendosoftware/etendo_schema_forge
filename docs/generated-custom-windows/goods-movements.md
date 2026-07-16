@@ -101,6 +101,11 @@ matrix supersedes that prior decision — both fields are now config-gated inste
 this reversal for REVIEW: confirm the "simplified movements" rationale is no longer wanted before
 this ships past QA.
 
-**Known runtime gap (shared across windows, see `sales-invoice.md` for the full write-up):**
-`@ACCT_DIMENSION_DISPLAY@` is only evaluated at runtime for the header entity, and only in
-`other`/`collapsed` form sections.
+**Runtime evaluator — fixed (ETP-4529 follow-up).** Three generic bugs (the `EntityForm.jsx`
+visibility filter never actually consulting the evaluate-display result, the `principal` section
+hardcoding empty visibility, and no lines-scoped `useDisplayLogic` call existing at all) were
+found and fixed — full write-up in `sales-invoice.md`. `header.project`/`header.costCenter` are
+now genuinely config-gated at runtime. This window has no dimension fields on the lines tab at
+all, so the lines-scoped part of the fix and the inlineEditable line-rendering limitation
+described in `sales-invoice.md` don't apply here — the header fix is the whole story for this
+window.

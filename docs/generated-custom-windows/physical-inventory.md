@@ -92,6 +92,11 @@ Physical Inventory should let a warehouse user create an inventory count session
 | `project` | **Por config** — raw AD `@ACCT_DIMENSION_DISPLAY@` passthrough (`section: "other"`, previously `form: false`) | **N/A** — `M_InventoryLine` has no `project` column; the matrix's "Por config" cell cannot be implemented via `decisions.json` (would require an AD Application Dictionary change to expose the column on this tab) |
 | `costCenter` | **Por config** — same fix as `project` (previously discarded) | **N/A** — same AD-level limitation as `project` |
 
-**Known runtime gap (shared across windows, see `sales-invoice.md` for the full write-up):**
-`@ACCT_DIMENSION_DISPLAY@` is only evaluated at runtime for the header entity, and only in
-`other`/`collapsed` form sections.
+**Runtime evaluator — fixed (ETP-4529 follow-up).** Three generic bugs (the `EntityForm.jsx`
+visibility filter never actually consulting the evaluate-display result, the `principal` section
+hardcoding empty visibility, and no lines-scoped `useDisplayLogic` call existing at all) were
+found and fixed — full write-up in `sales-invoice.md`. `header.project`/`header.costCenter` are
+now genuinely config-gated at runtime. This window has no dimension fields on the lines tab at
+all, so the lines-scoped part of the fix and the inlineEditable line-rendering limitation
+described in `sales-invoice.md` don't apply here — the header fix is the whole story for this
+window.

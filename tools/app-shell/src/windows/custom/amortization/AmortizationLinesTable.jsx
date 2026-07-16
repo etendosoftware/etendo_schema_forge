@@ -3,6 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { ChevronDown, Plus, Loader2, Pencil, Trash2 } from 'lucide-react';
 import { useUI, useLabel } from '@/i18n';
 import { useCurrency } from '@/hooks/useCurrency';
+import { useAccountingDimensionFields } from '@/hooks/useAccountingDimensionFields';
 import { formatCurrency } from '@/lib/formatCurrency';
 import SelectorInput from '@/components/contract-ui/SelectorInput';
 import { AddLineButton } from '@/components/ui/add-line-button';
@@ -16,16 +17,23 @@ const CORE_FIELDS = [
   { key: 'amortizationAmount', column: 'Amortizationamt', type: 'number', required: true, readOnlyLogic: (r) => r['processed'] === 'Y' },
 ];
 
-const DIMENSION_FIELDS = [
+// ETP-4529 — all three are "Por config" (config-gated) per the accounting-dimension
+// matrix for Amortización líneas. Candidates only: actual visibility is resolved per
+// render by useAccountingDimensionFields (see the `dimensionFields` computation inside
+// AmortizationLinesTable below), which calls the same evaluate-display evaluator
+// DetailView uses for generated windows, instead of rendering all three unconditionally
+// as before. costcenter/eTADASBpartner currently have no raw AD_Field.DisplayLogic at
+// all (a separate, already-tracked gap — see amortization.md); the hook fails open for
+// them (stays visible) until that AD-level change lands, at which point this starts
+// respecting it automatically.
+const DIMENSION_FIELD_CANDIDATES = [
   { key: 'project', column: 'C_Project_ID', type: 'selector', reference: 'Project', inputMode: 'selector', readOnlyLogic: (r) => r['posted'] === 'Y' },
   { key: 'costcenter', column: 'C_Costcenter_ID', type: 'selector', reference: 'Costcenter', inputMode: 'selector', readOnlyLogic: (r) => r['posted'] === 'Y' },
   { key: 'eTADASBpartner', column: 'EM_Etadas_C_Bpartner_ID', type: 'selector', reference: 'BPartner', inputMode: 'selector', readOnlyLogic: (r) => r['posted'] === 'Y' },
 ];
 
-const VISIBLE_DIMENSION_FIELDS = DIMENSION_FIELDS.filter(f => !f.hidden);
-
 // ── DimensionGrid ────────────────────────────────────────────────────
-// Renders DIMENSION_FIELDS directly via SelectorInput so we can control
+// Renders the resolved dimension fields directly via SelectorInput so we can control
 // the placeholder (empty resolvedLabel → "Seleccionar..." / "Select...").
 function DimensionGrid({ fields, data, onChange, onFieldSave, apiBaseUrl, token, catalogs, readOnly, isCompleted, labelOverrides }) {
   const t = useLabel(labelOverrides);
@@ -88,11 +96,11 @@ function DimBadge({ label, value }) {
   );
 }
 
-function DimSummary({ line, onClick, processed, labelOverrides }) {
+function DimSummary({ line, onClick, processed, labelOverrides, fields }) {
   const ui = useUI();
   const t = useLabel(labelOverrides);
   const org = line['organization$_identifier'];
-  const filled = VISIBLE_DIMENSION_FIELDS
+  const filled = fields
     .map(f => ({ column: f.column, value: getIdentifier(line, f.key) }))
     .filter(d => d.value);
 
@@ -170,6 +178,12 @@ export default function AmortizationLinesTable({
   const addLineWrapperRef = useRef(null);
   const addRowRef = useRef(null);
   const recordId = recordIdProp ?? data?.id;
+
+  // ETP-4529 — config-driven dimension visibility (was: DIMENSION_FIELDS always shown).
+  // One evaluate-display call per mount/header-change, shared by every line row —
+  // dimension-macro visibility depends on the client's accounting-dimension
+  // configuration, not on any individual line's field values.
+  const dimensionFields = useAccountingDimensionFields('lines', data, DIMENSION_FIELD_CANDIDATES, { token, apiBaseUrl });
 
   // ── multi-select (Sales Order / Contacts pattern) ──
   const { allSelected, someSelected } = useMemo(() => {
@@ -531,6 +545,7 @@ export default function AmortizationLinesTable({
                           onClick={() => setExpandedId(isExpanded ? null : line.id)}
                           processed={processed}
                           labelOverrides={api?.labelOverrides}
+                          fields={dimensionFields}
                           data-testid="DimSummary__fecdcf" />
                       </td>
 
@@ -568,7 +583,7 @@ export default function AmortizationLinesTable({
                             </div>
                           )}
                           <DimensionGrid
-                            fields={DIMENSION_FIELDS}
+                            fields={dimensionFields}
                             data={lineData}
                             onChange={(k, v) => handleChange(line.id, k, v)}
                             onFieldSave={(k, v) => saveField(line.id, line, k, v)}

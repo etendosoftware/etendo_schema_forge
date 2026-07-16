@@ -488,33 +488,44 @@ This iteration adjusts the **Accounting dimensions** group (Group 5) in the Depr
 The ETP-4529 matrix asks for `Activo (Amortizaciones) | Cabecera`: Contacto=**Nunca**,
 Producto=**Nunca**, Proyecto=**Por config**, Centro de costo=**Nunca**.
 
-**Finding — this window bypasses `decisions.json` for its dimension section entirely.** The
-"Dimensiones contables" group (see the ETP-4429 section below) is rendered by
-`tools/app-shell/src/windows/custom/assets/AssetsDetailPanel.jsx` via a **hardcoded**
-`dimensionFields` array (`project`, `eTADASCostCenter`, `businessPartner`, `product`, lines
-~212–216) rendered unconditionally whenever `depreciate === true` — it does not read the
-generated contract's `displayLogic`/`visibility` at all. Editing `decisions.json` for this
-window's `assets` entity has **no effect** on what actually renders in this section.
+**Reworked (follow-up to the initial ETP-4529 pass) — the panel is now config-driven.**
+The "Dimensiones contables" group (see the ETP-4429 section below) used to render a
+**hardcoded** `dimensionFields` array (`project`, `eTADASCostCenter`, `businessPartner`,
+`product`) unconditionally whenever `depreciate === true`, ignoring the generated
+contract's `displayLogic`/`visibility` entirely — a recent, deliberate ETP-4429 decision
+("Product added to accounting dimensions, dimension set trimmed") that directly conflicted
+with this matrix. Resolved by reversing ETP-4429's "always show all 4" behavior in favor of
+the matrix, using the ETP-4429 panel's own visual shape as the template for a shared,
+reusable mechanism (per explicit product direction):
 
-What was changed in `decisions.json` (for metadata correctness / future-proofing only, per the
-Window Change Integrity Protocol — never edit generated output, edit the source of truth):
-- `project`: `form: false` → `visibility: "editable"` with a `reason` note. The raw AD display
-  logic is `@$Element_PJ@='Y' & @IsDepreciated@='Y'` (config-gated via the Project dimension
-  element flag, ANDed with the existing "only when depreciated" business rule) — this now passes
-  through correctly in `contract.json`, matching the ticket's "Por config" intent for `project`.
-- `businessPartner`, `product`: left untouched (`visibility: "editable", "form": false`), which
-  already matches "Nunca" in effect (never rendered via the generated contract path).
-- `eTADASCostCenter` (Centro de costo): left untouched, same "Nunca"-equivalent state.
+- `AssetsDetailPanel.jsx`'s dimension field list is now `dimensionFieldCandidates = [project]`
+  only — `businessPartner`, `product`, `eTADASCostCenter` were removed as candidates
+  entirely (Nunca; matches `decisions.json`, where all three are now `visibility: "discarded"`
+  with an ETP-4529 reason).
+- The candidate list is filtered through the new shared hook
+  `tools/app-shell/src/hooks/useAccountingDimensionFields.js`, which calls the same
+  `useDisplayLogic('assets', data, { token, apiBaseUrl })` evaluator DetailView uses for
+  generated windows (`POST /sws/neo/assets/assets/evaluate-display` →
+  `NeoDisplayLogicHelper` → `DynamicExpressionParser` →
+  `DimensionDisplayUtility.computeAccountingDimensionDisplayLogic()`), instead of a static
+  array. `project`'s raw AD display logic (`@$Element_PJ@='Y' & @IsDepreciated@='Y'`) is
+  resolved server-side against the client's real accounting-dimension configuration.
+- The "Dimensiones contables" heading and grid are now both gated on
+  `depreciate && dimensionFields.length > 0` — the whole section disappears cleanly when
+  `project` resolves to not-visible (e.g. Project dimension disabled for that client),
+  instead of showing an empty-looking grid.
+- **Net effect:** when the client's config happens to enable the Project dimension, this
+  panel looks exactly like it did before (single "Project" selector shown, same 4-column
+  grid styling) — but it now actually responds to the client's dimension configuration
+  instead of being permanently hardcoded, and it no longer shows Contacto/Producto/Centro
+  de costo at all (per the matrix).
 
-**Conflict requiring a product decision:** `AssetsDetailPanel.jsx`'s hardcoded 4-selector set
-(Project, Cost Center, Business Partner, Product, always shown together when depreciated) was a
-recent, deliberate decision from ETP-4429 ("Product added to accounting dimensions, dimension set
-trimmed" — see below). The ETP-4529 matrix wants only `project` visible (config-gated) and the
-other three (`businessPartner`, `product`, `eTADASCostCenter`) never shown for this window. These
-two decisions directly conflict. Implementing the matrix here requires editing
-`AssetsDetailPanel.jsx` to (a) drop `businessPartner`/`product`/`eTADASCostCenter` from the
-rendered set, and (b) resolve `project`'s visibility from the real accounting-dimension
-configuration instead of always showing it whenever `depreciate === true` — real frontend
-development work, not decisions.json classification, and one that reverses a recent, intentional,
-documented UX decision. **Not implemented in this pass — flagged for the coordinator/product
-owner to confirm before any component change is made.**
+This is the reference pattern used by the same shared hook in `amortization.md`'s
+`AmortizationLinesTable.jsx` rework.
+
+**Test debt (delegated, not fixed here):** `AssetsDetailPanel.vitest.jsx`'s
+"renders the accounting dimensions form with only the 4 kept dimension fields" and
+`AssetsDetailPanel.test.js`'s "defines the 4 kept accounting dimension fields with their DB
+columns" both assert the pre-ETP-4529 4-field behavior and now fail — expected, given the
+intentional behavior change. Needs a Tester pass to update these two assertions to the new
+1-field (`project`-only), config-driven expectation.

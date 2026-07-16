@@ -1,8 +1,8 @@
 {
-  "version": "0.39.0",
+  "version": "0.40.0",
   "generatedAt": "2026-04-29T19:06:30.936Z",
-  "updatedAt": "2026-07-07T17:24:10.630Z",
-  "contractChecksum": "24923f03b0bfeb5f",
+  "updatedAt": "2026-07-16T16:52:56.437Z",
+  "contractChecksum": "f881f17971a1c435",
   "apiPrediction": {
     "specName": "assets",
     "baseUrl": "/sws/neo/assets",
@@ -65,35 +65,11 @@
       },
       {
         "entity": "assets",
-        "field": "product",
-        "column": "M_Product_ID",
-        "reference": "Product",
-        "inputMode": "search",
-        "url": "/sws/neo/assets/assets/selectors/product"
-      },
-      {
-        "entity": "assets",
         "field": "project",
         "column": "C_Project_ID",
         "reference": "Project",
         "inputMode": "search",
         "url": "/sws/neo/assets/assets/selectors/project"
-      },
-      {
-        "entity": "assets",
-        "field": "businessPartner",
-        "column": "C_BPartner_ID",
-        "reference": "BPartner",
-        "inputMode": "search",
-        "url": "/sws/neo/assets/assets/selectors/businessPartner"
-      },
-      {
-        "entity": "assets",
-        "field": "eTADASCostCenter",
-        "column": "EM_Etadas_Costcenter_ID",
-        "reference": "Costcenter",
-        "inputMode": "selector",
-        "url": "/sws/neo/assets/assets/selectors/eTADASCostCenter"
       },
       {
         "entity": "amortizationLine",
@@ -243,7 +219,6 @@
             "readOnlyLogic": "@existAmortizationLines@ = 'Y'",
             "defaultValue": "@C_Currency_ID@"
           },
-          "product": {},
           "depreciate": {
             "required": true
           },
@@ -290,8 +265,6 @@
             "required": true,
             "defaultValue": "N"
           },
-          "businessPartner": {},
-          "eTADASCostCenter": {},
           "etgoAmortizationStatus": {
             "readOnly": true,
             "defaultValue": "0"
@@ -409,5 +382,5 @@
     "knownLimitations": [],
     "dangerousOperations": []
   },
-  "checksum": "3424c48a3fc9a1ec"
+  "checksum": "724bb42c526f082c"
 }

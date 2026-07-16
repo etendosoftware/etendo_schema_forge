@@ -1922,6 +1922,14 @@ export function DetailView({
   }, [entity, detailEntity, parentRecordId, secondaryTabKeysStr, priceListId, api, hook.selected, hook.editing, sessionCurrencyCode, selectorPriceCurrency]);
   const { catalogs, catalogsLoaded } = useCatalogs(api, token, apiBaseUrl, staticCatalogs);
   const displayLogic = useDisplayLogic(entity, hook.editing, { token, apiBaseUrl });
+  // ETP-4529 — mirror the header evaluate-display call for the lines/detail entity.
+  // There is no single "current line record" to evaluate against (many rows share one
+  // entity), and dimension-macro visibility (@ACCT_DIMENSION_DISPLAY@ and friends) is
+  // config-driven, not record-driven, so reusing the header record as the fieldValues
+  // payload is a safe, representative context (it also satisfies useDisplayLogic's
+  // "skip when !values.id" guard once the header record is saved). Only `visibility` is
+  // consumed downstream — `readOnly` stays per-line via each field's own readOnlyLogic.
+  const lineDisplayLogic = useDisplayLogic(detailEntity, hook.editing, { token, apiBaseUrl });
   const { calloutResult, calloutLoading, executeCallout } = useCallout(entity, { token, apiBaseUrl });
   const docAction = useDocumentAction({ apiBaseUrl, entity, token });
   const neoAction = useNeoAction({ specName: windowName, entityName: entity, apiBaseUrl, token });
@@ -3598,7 +3606,7 @@ export function DetailView({
                               catalogs={catalogs}
                               layout="horizontal"
                               section="principal"
-                              displayLogic={{ readOnly: displayLogic?.readOnly ?? {}, visibility: {} }}
+                              displayLogic={displayLogic}
                               api={api}
                               token={token}
                               apiBaseUrl={apiBaseUrl}
@@ -4088,6 +4096,10 @@ export function DetailView({
                                     apiBaseUrl={apiBaseUrl}
                                     selectorContext={selectorContextByEntity[detailEntity]}
                                     labelOverrides={labelOverrides}
+                                    // ETP-4529 — only `visibility` is forwarded; `readOnly` stays {} so
+                                    // each field's own readOnlyLogic (evaluated against the actual line,
+                                    // not the header) keeps controlling per-row read-only state.
+                                    displayLogic={{ readOnly: {}, visibility: lineDisplayLogic?.visibility ?? {} }}
                                     data-testid="DetailForm__fa3275" />
                                   {shouldShowLineActionButtons(hook, lineEdits, selectedLine) && (
                                     <div className="flex gap-2 mt-4">

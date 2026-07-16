@@ -85,6 +85,12 @@ Use this window to register and complete outbound customer shipments. The functi
 | `project` | **Por config** — raw AD `@ACCT_DIMENSION_DISPLAY@` passthrough (`section: "other"`, previously discarded) | **Por config** — same passthrough (previously discarded) |
 | `costcenter` | **Por config** — raw AD `@ACCT_DIMENSION_DISPLAY@` passthrough (`section: "other"`, previously discarded) | **Por config** — same passthrough (previously discarded) |
 
-**Known runtime gap (shared across windows, see `sales-invoice.md` for the full write-up):**
-`@ACCT_DIMENSION_DISPLAY@` is only evaluated at runtime for the header entity, and only in
-`other`/`collapsed` form sections — there is no equivalent evaluation for the lines entity yet.
+**Runtime evaluator — fixed (ETP-4529 follow-up), with one residual, orthogonal limitation.**
+Three generic bugs (the `EntityForm.jsx` visibility filter never actually consulting the
+evaluate-display result, the `principal` section hardcoding empty visibility, and no
+lines-scoped `useDisplayLogic` call existing at all) were found and fixed — full write-up in
+`sales-invoice.md`. `header.project`/`header.costcenter` are now genuinely config-gated at
+runtime. `lines.project`/`lines.costcenter` are now correctly evaluated too, but this window
+uses `window.linesLayout = "inlineEditable"`, under which `LinesForm.jsx` never mounts at all —
+a pre-existing, unrelated platform limitation (not fixed by this ticket) that leaves these two
+line fields with no UI surface to render on. See `sales-invoice.md` for detail.
