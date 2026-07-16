@@ -227,3 +227,169 @@ test.describe('Purchase Invoice — ETP-4404 Rectificaciones tab parity (mocked)
   });
 
 });
+
+// ---------------------------------------------------------------------------
+// Save-header-first flow (new sales credit memo)
+// ---------------------------------------------------------------------------
+
+const NEW_SAVED_ID = 'E5F60718293A4B5C6D7E8F90A1B2C3D4';
+
+/**
+ * A picker candidate served by GET /sales-invoice/header on the /new route.
+ * The InvoicePickerModal only lists documentStatus === 'CO' rows.
+ */
+const PICKER_CANDIDATE = {
+  id: 'inv-orig-9', documentNo: '10000090', invoiceDate: '2026-05-01',
+  documentStatus: 'CO', 'businessPartner$_identifier': 'Cliente Rectificado S.L.',
+  grandTotalAmount: 250.0,
+};
+
+/**
+ * Every required, editable header field pre-filled so the client-side guard
+ * (getMissingRequiredFields in useEntity) passes and the header POST actually
+ * fires on Guardar — without the user having to touch the header form. Keys and
+ * $_identifier companions mirror artifacts/sales-invoice/.../HeaderForm.jsx.
+ */
+function newInvoiceDefaults() {
+  return {
+    transactionDocument: 'td-arc-001', 'transactionDocument$_identifier': 'AR CreditMemo',
+    documentNo: 'NC-NEW-1',
+    invoiceDate: '2026-07-16',
+    businessPartner: 'bp-tab-001', 'businessPartner$_identifier': 'Cliente Rectificado S.L.',
+    partnerAddress: 'addr-tab-001', 'partnerAddress$_identifier': 'Calle Tab 1',
+    paymentMethod: 'pm-001', 'paymentMethod$_identifier': 'Transferencia',
+    paymentTerms: 'pt-001', 'paymentTerms$_identifier': '30 días',
+    currency: 'eur-001', 'currency$_identifier': 'EUR',
+    priceList: 'pl-001', 'priceList$_identifier': 'Tarifa ventas',
+    documentStatus: 'DR', 'documentStatus$_identifier': 'Borrador',
+  };
+}
+
+/**
+ * Mocks for the /sales-invoice/new route + save-header-first:
+ *   - GET  /header/defaults → a ready-to-save new invoice (passes the required-field guard)
+ *   - GET  /header (list)   → picker candidates (only CO rows are listed by the modal)
+ *   - POST /header          → returns the saved record with NEW_SAVED_ID (counted)
+ *   - GET  /header/{id}     → the saved invoice (post-navigation remount)
+ *   - GET/POST /reversedInvoices → empty list / created row (captures the POST body)
+ *
+ * Installed AFTER login() so these beat its /sws/** catch-all (LIFO).
+ */
+async function installNewInvoiceMocks(page, capture) {
+  const saved = baseInvoice({
+    id: NEW_SAVED_ID, documentNo: 'NC-NEW-1', isRectificative: true, ...newInvoiceDefaults(),
+  });
+
+  await page.route('**/sws/neo/sales-invoice/header/defaults**', async (route) => {
+    await route.fulfill({
+      status: 200, contentType: 'application/json',
+      body: JSON.stringify({ defaults: newInvoiceDefaults() }),
+    });
+  });
+
+  await page.route(`**/sws/neo/sales-invoice/header/${NEW_SAVED_ID}**`, async (route) => {
+    if (route.request().method() !== 'GET') return route.fallback();
+    await route.fulfill({
+      status: 200, contentType: 'application/json',
+      body: JSON.stringify({ response: { data: [saved] } }),
+    });
+  });
+
+  // Header POST (create) → saved record; GET list → picker candidates.
+  await page.route('**/sws/neo/sales-invoice/header**', async (route) => {
+    const req = route.request();
+    const url = req.url();
+    if (req.method() === 'POST') {
+      capture.headerPosts += 1;
+      await route.fulfill({
+        status: 200, contentType: 'application/json',
+        body: JSON.stringify({ response: { data: [saved] } }),
+      });
+      return;
+    }
+    if (req.method() === 'GET' && !/\/header\/[^/?]+/.test(url)) {
+      await route.fulfill({
+        status: 200, contentType: 'application/json',
+        body: JSON.stringify({ response: { data: [PICKER_CANDIDATE], totalRows: 1 } }),
+      });
+      return;
+    }
+    return route.fallback();
+  });
+
+  for (const entity of ['lines', 'paymentPlan']) {
+    await page.route(`**/sws/neo/sales-invoice/${entity}**`, async (route) => {
+      if (route.request().method() !== 'GET') return route.fallback();
+      await route.fulfill({
+        status: 200, contentType: 'application/json',
+        body: JSON.stringify({ response: { data: [], totalRows: 0 } }),
+      });
+    });
+  }
+
+  await page.route('**/sws/neo/sales-invoice/reversedInvoices**', async (route) => {
+    const req = route.request();
+    if (req.method() === 'POST') {
+      capture.reversedPosts.push(JSON.parse(req.postData() || '{}'));
+      await route.fulfill({
+        status: 200, contentType: 'application/json',
+        body: JSON.stringify({ response: { data: [{ id: 'new-rev-line' }] } }),
+      });
+      return;
+    }
+    if (req.method() !== 'GET') return route.fallback();
+    await route.fulfill({
+      status: 200, contentType: 'application/json',
+      body: JSON.stringify({ response: { data: [], totalRows: 0 } }),
+    });
+  });
+
+  await page.route('**/sws/neo/sales-invoice/evaluate-display**', async (route) => {
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({}) });
+  });
+}
+
+test.describe('Sales Invoice — ETP-4404 save-header-first from /new (mocked)', () => {
+
+  test('add on a new invoice opens the form without navigating; Guardar saves the header then POSTs the line with the saved id', async ({ page }) => {
+    const capture = { headerPosts: 0, reversedPosts: [] };
+    await login(page);
+    await installNewInvoiceMocks(page, capture);
+
+    await page.goto('/sales-invoice/new');
+    await page.waitForLoadState('domcontentloaded');
+
+    // The Rectificaciones tab is available on the new-record form.
+    const tab = page.getByTestId(TAB_TESTID);
+    await expect(tab).toBeVisible({ timeout: 8_000 });
+    await tab.click();
+
+    const panel = page.getByTestId('reversed-invoices-panel');
+    await expect(panel).toBeVisible();
+
+    // Clicking add opens the draft form WITHOUT saving the header or leaving /new.
+    await panel.getByTestId('btn__addFirstRectificacion').click();
+    await expect(panel.getByTestId('btn__saveNewLine')).toBeVisible();
+    expect(page.url()).toContain('/sales-invoice/new');
+    expect(capture.headerPosts).toBe(0);
+
+    // Pick the original invoice through the picker modal ("Seleccionar..." is a
+    // literal placeholder in the component, not an i18n key).
+    await panel.getByText('Seleccionar...').click();
+    await page.getByPlaceholder('Buscar factura...').waitFor({ state: 'visible' });
+    await page.getByText('10000090').click();
+
+    // Guardar: persists the header first (1 POST), POSTs the line against the
+    // fresh id, then navigates to /sales-invoice/{savedId}.
+    await panel.getByTestId('btn__saveNewLine').click();
+
+    await page.waitForURL(`**/sales-invoice/${NEW_SAVED_ID}`, { timeout: 8_000 });
+    expect(capture.headerPosts).toBe(1);
+    expect(capture.reversedPosts.length).toBe(1);
+    expect(capture.reversedPosts[0]).toMatchObject({
+      invoice: NEW_SAVED_ID,
+      reversedInvoice: 'inv-orig-9',
+    });
+  });
+
+});
