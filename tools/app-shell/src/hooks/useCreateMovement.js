@@ -156,3 +156,16 @@ export function useDeleteMovement() {
   const { run, busy, error } = usePostAction('delete');
   return { deleteMovement: run, deleting: busy, error };
 }
+
+/**
+ * Hook for posting a transaction's accounting (contabilizar).
+ *
+ * POST /sws/neo/financial-account-transactions?action=post
+ * body: { id }
+ *
+ * Runs the Etendo accounting engine server-side. Returns `{ postMovement, posting, error }`.
+ */
+export function usePostMovement() {
+  const { run, busy, error } = usePostAction('post');
+  return { postMovement: run, posting: busy, error };
+}

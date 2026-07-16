@@ -60,8 +60,9 @@ import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MovementRowKebab } from '../MovementRowKebab.jsx';
 
-const NOT_POSTED = { id: 'mov-1', posted: 'N' };
-const POSTED = { id: 'mov-2', posted: 'Y' };
+// Post (contabilizar) only shows for a Processed, not-yet-posted movement.
+const NOT_POSTED = { id: 'mov-1', posted: 'N', processed: true };
+const POSTED = { id: 'mov-2', posted: 'Y', processed: true };
 
 function renderKebab(movement, overrides = {}) {
   const onReload = vi.fn();
@@ -83,6 +84,12 @@ describe('MovementRowKebab — Post action', () => {
   // 1. Post item absent when already posted
   it('does not render the Post item when posted === "Y"', () => {
     renderKebab(POSTED);
+    expect(screen.queryByText('financeAccountMovementsRowPost')).not.toBeInTheDocument();
+  });
+
+  // 1b. Post item absent when the movement is not yet processed
+  it('does not render the Post item when the movement is not processed', () => {
+    renderKebab({ id: 'mov-x', posted: 'N', processed: false });
     expect(screen.queryByText('financeAccountMovementsRowPost')).not.toBeInTheDocument();
   });
 
@@ -109,9 +116,10 @@ describe('MovementRowKebab — Post action', () => {
 
     expect(globalThis.fetch).toHaveBeenCalledOnce();
     const [url, init] = globalThis.fetch.mock.calls[0];
-    expect(url).toContain('/sws/neo/financial-account-detail/transaction/mov-1/action/post');
+    expect(url).toContain('/sws/neo/financial-account-transactions?action=post');
     expect(init.method).toBe('POST');
     expect(init.headers.Authorization).toBe('Bearer test-token');
+    expect(JSON.parse(init.body)).toEqual({ id: 'mov-1' });
   });
 
   // 4. On success → toast.success + onReload
@@ -135,7 +143,9 @@ describe('MovementRowKebab — Post action', () => {
   it('calls toast.error and does not call onReload when fetch returns ok: false', async () => {
     globalThis.fetch.mockResolvedValue({
       ok: false,
+      status: 422,
       json: async () => ({ message: 'Server error' }),
+      text: async () => 'Server error',
     });
 
     const user = userEvent.setup();

@@ -26,10 +26,12 @@ vi.mock('@/hooks/useNeoResource', () => ({
 const processMovement = vi.fn();
 const reactivateMovement = vi.fn();
 const deleteMovement = vi.fn();
+const postMovement = vi.fn();
 vi.mock('@/hooks/useCreateMovement', () => ({
   useProcessMovement: () => ({ processMovement, processing: false }),
   useReactivateMovement: () => ({ reactivateMovement, reactivating: false }),
   useDeleteMovement: () => ({ deleteMovement, deleting: false }),
+  usePostMovement: () => ({ postMovement, posting: false }),
 }));
 
 vi.mock('lucide-react', () => ({

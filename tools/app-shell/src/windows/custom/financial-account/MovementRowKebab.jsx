@@ -1,10 +1,7 @@
-import { useState } from 'react';
-import { MoreVertical, GitMerge, BookOpen, CheckCircle2, RotateCcw, Trash2, Pencil } from 'lucide-react';
+import { MoreVertical, BookOpen, CheckCircle2, RotateCcw, Trash2, Pencil } from 'lucide-react';
 import { toast } from 'sonner';
 import { useUI } from '@/i18n';
-import { useAuth } from '@/auth/AuthContext.jsx';
-import { getApiBase } from '@/hooks/useNeoResource';
-import { useProcessMovement, useReactivateMovement, useDeleteMovement } from '@/hooks/useCreateMovement';
+import { useProcessMovement, useReactivateMovement, useDeleteMovement, usePostMovement } from '@/hooks/useCreateMovement';
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -12,15 +9,6 @@ import {
   DropdownMenuItem,
   DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu';
-import {
-  Tooltip,
-  TooltipTrigger,
-  TooltipContent,
-  TooltipProvider,
-} from '@/components/ui/tooltip';
-
-const POST_URL = (id) =>
-  `${getApiBase()}/sws/neo/financial-account-detail/transaction/${encodeURIComponent(id)}/action/post`;
 
 /**
  * Per-row kebab menu for a movement row.
@@ -34,11 +22,10 @@ const POST_URL = (id) =>
  */
 export function MovementRowKebab({ movement, onReload, onEdit }) {
   const ui = useUI();
-  const { token } = useAuth();
-  const [posting, setPosting] = useState(false);
   const { processMovement, processing } = useProcessMovement();
   const { reactivateMovement, reactivating } = useReactivateMovement();
   const { deleteMovement, deleting } = useDeleteMovement();
+  const { postMovement, posting } = usePostMovement();
 
   const isPosted = movement.posted === 'Y';
   const isProcessed = Boolean(movement.processed);
@@ -47,33 +34,9 @@ export function MovementRowKebab({ movement, onReload, onEdit }) {
   const canProcess = isGlTransaction && !isProcessed;
   const canReactivate = isGlTransaction && isProcessed;
   const canDelete = isGlTransaction;
+  // Contabilizar only makes sense once the movement is Processed (and not yet posted).
+  const canPost = isProcessed && !isPosted;
   const busy = posting || processing || reactivating || deleting;
-
-  async function handlePost() {
-    if (posting || isPosted) return;
-    setPosting(true);
-    try {
-      const res = await fetch(POST_URL(movement.id), {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-        body: '{}',
-      });
-      const body = await res.json().catch(() => null);
-      const nested = body?.response?.data?.[0];
-      const message = nested?.message ?? body?.response?.message ?? body?.message;
-      const success = res.ok && (nested?.success ?? body?.success ?? true);
-      if (success) {
-        toast.success(ui('documentPosted'));
-        onReload?.();
-      } else {
-        toast.error(message || ui('financeAccountMovementsRowPostError'));
-      }
-    } catch {
-      toast.error(ui('financeAccountMovementsRowPostError'));
-    } finally {
-      setPosting(false);
-    }
-  }
 
   async function runLifecycle(fn, successKey, errorKey) {
     if (busy) return;
@@ -87,9 +50,8 @@ export function MovementRowKebab({ movement, onReload, onEdit }) {
   }
 
   return (
-    <TooltipProvider data-testid="TooltipProvider__64eff3">
-      <DropdownMenu data-testid="DropdownMenu__64eff3">
-        <DropdownMenuTrigger asChild data-testid="DropdownMenuTrigger__64eff3">
+    <DropdownMenu data-testid="DropdownMenu__64eff3">
+      <DropdownMenuTrigger asChild data-testid="DropdownMenuTrigger__64eff3">
           <button
             type="button"
             aria-label={ui('financeAccountMovementsRowActions')}
@@ -129,27 +91,12 @@ export function MovementRowKebab({ movement, onReload, onEdit }) {
             </DropdownMenuItem>
           )}
 
-          {/* Unreconcile — disabled with tooltip */}
-          <Tooltip data-testid="Tooltip__64eff3">
-            <TooltipTrigger asChild data-testid="TooltipTrigger__64eff3">
-              <span>
-                <DropdownMenuItem disabled data-testid="DropdownMenuItem__64eff3">
-                  <GitMerge className="h-5 w-5 text-[#828FA3]" data-testid="GitMerge__64eff3" />
-                  <span className="text-sm font-normal leading-6 text-[#121217]">
-                    {ui('financeAccountMovementsRowUnreconcile')}
-                  </span>
-                </DropdownMenuItem>
-              </span>
-            </TooltipTrigger>
-            <TooltipContent data-testid="TooltipContent__64eff3">{ui('financeAccountMovementsRowUnreconcileTooltip')}</TooltipContent>
-          </Tooltip>
-
-          {/* Post — enabled when not yet posted */}
-          {!isPosted && (
+          {/* Post — contabilizar; only for Processed, not-yet-posted movements */}
+          {canPost && (
             <DropdownMenuItem
-              onClick={handlePost}
+              onClick={() => runLifecycle(postMovement, 'documentPosted', 'financeAccountMovementsRowPostError')}
               disabled={busy}
-              data-testid="DropdownMenuItem__64eff3">
+              data-testid="movement-row-post">
               <BookOpen className="h-5 w-5 text-[#828FA3]" data-testid="BookOpen__64eff3" />
               <span className="text-sm font-normal leading-6 text-[#121217]">
                 {posting ? ui('financeAccountMovementsRowPosting') : ui('financeAccountMovementsRowPost')}
@@ -187,6 +134,5 @@ export function MovementRowKebab({ movement, onReload, onEdit }) {
           )}
         </DropdownMenuContent>
       </DropdownMenu>
-    </TooltipProvider>
   );
 }
