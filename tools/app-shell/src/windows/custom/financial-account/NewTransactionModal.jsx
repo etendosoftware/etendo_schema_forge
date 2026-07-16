@@ -248,7 +248,8 @@ export function NewTransactionModal({ open, accountId, accountName = '', account
                 onChange={handleGlChange}
                 useLookup={useGLItemLookup}
                 placeholder={ui('financeAccountTxNewGlItemPlaceholder')}
-                testId="tx-glitem" />
+                testId="tx-glitem"
+                data-testid="ChipSelect__9a0423" />
             </Field>
             <AmountInput
               label={ui('financeAccountTxNewAmount')}
@@ -285,7 +286,8 @@ export function NewTransactionModal({ open, accountId, accountName = '', account
                   onChange={(row) => set({ contact: row })}
                   useLookup={useBPartnerLookup}
                   placeholder={ui('financeAccountTxNewDimContactPlaceholder')}
-                  testId="tx-contact" />
+                  testId="tx-contact"
+                  data-testid="ChipSelect__9a0423" />
               </Field>
               {visibleDims.map((d) => (
                 <Field key={d.key} label={ui(d.labelKey)} data-testid={`tx-dim-${d.key}-field`}>
@@ -294,7 +296,8 @@ export function NewTransactionModal({ open, accountId, accountName = '', account
                     onChange={(row) => setDim(d.key, row)}
                     useLookup={(q) => useDimensionLookup(q, d.key)}
                     placeholder={ui(d.placeholderKey)}
-                    testId={`tx-dim-${d.key}`} />
+                    testId={`tx-dim-${d.key}`}
+                    data-testid="ChipSelect__9a0423" />
                 </Field>
               ))}
             </div>

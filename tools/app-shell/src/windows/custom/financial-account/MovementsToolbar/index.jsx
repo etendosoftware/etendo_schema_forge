@@ -145,7 +145,11 @@ export function MovementsToolbar({
       </div>
       {/* Split button: primary "Nuevo movimiento" (opens the GL-item modal) +
           a ▾ menu with "Transferir fondos". */}
-      <MovementsSplitButton ui={ui} onNewMovement={onNewMovement} onTransfer={onTransfer} />
+      <MovementsSplitButton
+        ui={ui}
+        onNewMovement={onNewMovement}
+        onTransfer={onTransfer}
+        data-testid="MovementsSplitButton__f863ac" />
     </div>
   );
 }
