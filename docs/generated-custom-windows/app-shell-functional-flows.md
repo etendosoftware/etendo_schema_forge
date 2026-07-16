@@ -316,3 +316,24 @@ The `date` field in `AddPaymentModal` / `InvoicePaymentModal` now carries a red 
 - `tools/app-shell/src/hooks/useEntity.js` — `handleSaveAndProcess` passes `{ silent: true }` to `handleSave` to suppress the intermediate save toast
 - `tools/app-shell/src/hooks/useCallout.js` — `sanitizeCalloutMessage` strips HTML and redundant prefixes before passing text to Sonner
 - `tools/app-shell/src/windows/custom/shared/InvoicePaymentModal.jsx` — `invalidField` state, date/amount/account validation, disabled confirm button
+
+## Dashboard period filter — session-scoped, resets on new session — ETP-4492
+
+The Dashboard period filter (the range selector: "Último año", "Últimos 90 días", "Últimos 30 días", "Mes en curso", "Año en curso") is scoped to the browser session rather than persisted indefinitely.
+
+**Behavior:**
+- The selected range persists across module navigation **within the same session** (it is stored in `sessionStorage` under `dashboard_date_range`).
+- It resets to the default **"Último año" (`lastYear`)** whenever a **new session** starts — a browser/tab close-and-reopen, or a logout followed by re-login.
+- Logout explicitly clears the stored range through the `useLogout()` choke point (`clearStoredDateRange()`), so a subsequent login — including a different user on a shared browser — never inherits the previous session's filter. This applies to every logout path: the user-menu "Log out", the post-password-change flow, and the automatic 401 auto-logout.
+
+**Manual verification path:**
+1. Open `/dashboard`, change the period filter to e.g. "Mes en curso".
+2. Navigate to another module and back to `/dashboard` — confirm the filter is still "Mes en curso" (persists within the session).
+3. Log out and log back in — confirm the filter is back to "Último año".
+4. Alternatively, close the browser tab and reopen the app — confirm the filter is "Último año".
+
+**Source files**
+- `tools/app-shell/src/components/dashboard/DashboardDateRangeContext.jsx` — `sessionStorage`-backed range, `lastYear` default, `clearStoredDateRange()` export (also purges the legacy `localStorage` key).
+- `tools/app-shell/src/auth/useLogout.js` — the single logout choke point that calls `clearStoredDateRange()` before the core `logout()`.
+
+Full auth/session design and the "route every logout through `useLogout()`" convention: [`../architecture/07-auth-and-security.md`](../architecture/07-auth-and-security.md#logout-choke-point-uselogout).

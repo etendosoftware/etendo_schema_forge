@@ -2,7 +2,6 @@ import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { resolveBackendSort, buildBackendFilter } from '@/lib/gridQuery.js';
 import { translateBackendError } from '@/lib/backendErrors.js';
 import { toast } from 'sonner';
-import { useAuth } from '@/auth/AuthContext.jsx';
 import { useUI } from '@/i18n';
 import { trackDocumentCreated, trackTransactionPosted } from '@/lib/observability/health-events.js';
 import {
@@ -13,6 +12,7 @@ import {
 } from '@/lib/productUsageTelemetry.js';
 import { incrementSurveyCounter } from '@/lib/surveys/survey-state.js';
 import { isInvoiceSpec, isOrderSpec } from '@/lib/surveys/surveys.js';
+import { useLogout } from '@/auth/useLogout.js';
 import { emitSurveyTrigger } from '@/lib/surveys/survey-engine.js';
 import { isEmailField, getEmailFieldError, getWebsiteFieldError, getPhoneFieldError } from '@/components/contract-ui/recipientEdits.js';
 
@@ -654,7 +654,7 @@ export function useEntity(entity, childEntity, {
     initialSortColumn = 'creationDate',
     initialSortDirection = 'desc',
 }) {
-    const { logout } = useAuth();
+    const logout = useLogout();
     const ui = useUI();
     const [items, setItems] = useState([]);
     const [selected, setSelected] = useState(null);
