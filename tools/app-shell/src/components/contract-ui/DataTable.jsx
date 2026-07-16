@@ -38,6 +38,7 @@ function growColumnWidth(basisPx, fixedTotalPx, growCount) {
 }
 import { SelectorInput } from './SelectorInput.jsx';
 import { InlineSearchCombo } from './InlineSearchCombo.jsx';
+import { PillToggle } from '@/components/PillToggle';
 import RowQuickActions from './RowQuickActions.jsx';
 import { trackSearchResultSelected } from '@/lib/productUsageTelemetry.js';
 import { LOOKUP_DRAWERS } from './lookupDrawers.js';
@@ -786,6 +787,12 @@ const InlineAddRow = forwardRef(function InlineAddRow({ columns, fields, onAdd, 
       {columns.map(col => {
         const field = fieldMap[col.key];
         const fieldLabel = getFieldLabel(field, t, col, locale);
+        // Conditional visibility: hide fields whose controlling sibling is falsy.
+        if (field?.displayIf) {
+          const ctrlVal = values[field.displayIf];
+          const visible = ctrlVal === true || ctrlVal === 'Y' || ctrlVal === 'true';
+          if (!visible) return <TableCell key={col.key} aria-hidden="true" data-testid={`inline-add-cell-${col.key}`} />;
+        }
         if (!field) {
           // Show callout-derived values if available, otherwise dash.
           // Prefer $_identifier (human-readable) over raw ID for FK fields.
@@ -905,6 +912,22 @@ const InlineAddRow = forwardRef(function InlineAddRow({ columns, fields, onAdd, 
             handleChange, handleFieldChange, handleKeyDown, isFirst, firstInputRef,
             fieldLabel, selectorContext, token,
           });
+        }
+
+        // Checkbox/toggle fields render as PillToggle (same as EntityForm's renderToggleField)
+        if (field.type === 'checkbox' || field.type === 'boolean') {
+          const checked = values[field.key] === true || values[field.key] === 'Y' || values[field.key] === 'true';
+          return (
+            <TableCell key={col.key} data-testid={`inline-add-cell-${col.key}`} className="py-1 px-2">
+              <PillToggle
+                checked={checked}
+                onCheckedChange={(next) => {
+                  touchedFieldsRef.current.add(field.key);
+                  handleFieldChange(field.key, next);
+                }}
+                data-testid={`inline-add-field-${field.key}`} />
+            </TableCell>
+          );
         }
 
         return renderInputCell({
@@ -1697,6 +1720,11 @@ export function DataTable({
   const [savingToggles, setSavingToggles] = useState({});
   const [deletingRows, setDeletingRows] = useState({});
 
+  // Track add-row live values so displayIf-controlled columns can auto-hide
+  // their headers when neither any saved row nor the add-row activates them.
+  const [addRowValues, setAddRowValues] = useState({});
+  useEffect(() => { if (!addRow?.active) setAddRowValues({}); }, [addRow?.active]);
+
   useEffect(() => {
     setOptimisticToggles({});
     setSavingToggles({});
@@ -1722,10 +1750,33 @@ export function DataTable({
     return rowFilter ? searched.filter(rowFilter) : searched;
   }, [data, filters, searchQuery, onFilterChange, rowFilter]);
 
-  const visibleColumns = useMemo(
-    () => hiddenColumns.length > 0 ? columns.filter(col => !hiddenColumns.includes(col.key)) : columns,
-    [columns, hiddenColumns]
-  );
+  // Build a map of { columnKey → controllerKey } from addLineFields displayIf entries.
+  // addRow.fields is the entry array directly (set by DetailView as addLineFields.entry).
+  const displayIfControllers = useMemo(() => {
+    const map = {};
+    for (const f of (addRow?.fields ?? [])) {
+      if (f.displayIf) map[f.key] = f.displayIf;
+    }
+    return map;
+  }, [addRow?.fields]);
+
+  const visibleColumns = useMemo(() => {
+    // Start from explicit hiddenColumns prop
+    let base = hiddenColumns.length > 0 ? columns.filter(col => !hiddenColumns.includes(col.key)) : columns;
+    // Auto-hide columns whose controlling field (displayIf) is inactive in ALL
+    // saved rows AND in the current add-row values.
+    if (Object.keys(displayIfControllers).length > 0) {
+      const isTruthy = (v) => v === true || v === 'Y' || v === 'true';
+      base = base.filter(col => {
+        const ctrl = displayIfControllers[col.key];
+        if (!ctrl) return true;
+        const anyDataRow = (data ?? []).some(row => isTruthy(row[ctrl]));
+        const addRowActive = isTruthy(addRowValues[ctrl]);
+        return anyDataRow || addRowActive;
+      });
+    }
+    return base;
+  }, [columns, hiddenColumns, displayIfControllers, data, addRowValues]);
 
   const amountColumns = useMemo(
     () => visibleColumns.filter(col => col.type === 'amount'),
@@ -1925,7 +1976,7 @@ export function DataTable({
                 data={data}
                 catalogs={addRow.catalogs}
                 onFieldChange={addRow.onFieldChange}
-                onValuesChange={addRow.onValuesChange}
+                onValuesChange={(vals) => { setAddRowValues(vals ?? {}); addRow.onValuesChange?.(vals); }}
                 seedValues={addRow.seedValues}
                 resolvedDefaults={addRow.resolvedDefaults}
                 selectable={selectable}

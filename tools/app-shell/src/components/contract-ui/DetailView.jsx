@@ -604,6 +604,28 @@ export function SecondaryPanelTab(props) {
 }
 
 export function SecondaryTableTab(props) {
+  const secondaryChildren = props.secondaryHooks[props.stIdx]?.children ?? [];
+  const isAddingThis = props.addingSecondaryLine?.[props.st.key] ?? false;
+  const hasAddFields = (props.st.addLineFields?.entry?.length ?? 0) > 0;
+  if (secondaryChildren.length === 0 && !isAddingThis && props.hook.editing && hasAddFields && !props.st.customAddModal) {
+    return (
+      <div style={{ margin: '24px 16px', padding: '32px 24px', background: 'var(--color-background-secondary)', borderRadius: 'var(--border-radius-lg)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }} data-testid="secondary-tab-empty-state">
+        <div style={{ width: 40, height: 40, borderRadius: 'var(--border-radius-md)', background: 'var(--color-background-tertiary)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 12 }}>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+            <polyline points="14 2 14 8 20 8" />
+            <line x1="8" y1="13" x2="16" y2="13" />
+            <line x1="8" y1="17" x2="13" y2="17" />
+          </svg>
+        </div>
+        <span style={{ fontSize: 14, fontWeight: 500, color: 'var(--color-text-primary)', marginBottom: 4 }}>{props.ui('noRecordsYet')}</span>
+        <span style={{ fontSize: 13, color: 'var(--color-text-secondary)', marginBottom: 20 }}>{props.ui('createNewRecord')}</span>
+        <button type="button" onClick={props.onAddLineClick} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, borderRadius: 8, padding: '6px 14px', fontSize: 13, fontWeight: 500, background: '#18181b', color: '#fff', border: 'none', cursor: 'pointer' }}>
+          + {props.addLineLabel}
+        </button>
+      </div>
+    );
+  }
   return (
     <>
       <div className="flex items-start gap-4">
@@ -1115,7 +1137,8 @@ function buildInitialTabs(p) {
   p.secondaryTabs.forEach((st, i) => {
     const secondaryChildCount = !st.isFormTab ? (p.secondaryHooks[i]?.children?.length ?? null) : null;
     const childCount = st.Panel ? (p.panelCounts[st.key] ?? null) : secondaryChildCount;
-    tabs.push({ key: st.key, label: st.label, count: childCount });
+    const label = (st.labelKey && p.ui(st.labelKey)) || st.label;
+    tabs.push({ key: st.key, label, count: childCount });
   });
   if (p.DetailTable) {
     insertLinesTab(p.detailLabel, p.detailEntity, p.hook, p.detailTabIndex, tabs);
@@ -2970,6 +2993,10 @@ export function DetailView({
   const footerCustomTabs = customTabs.filter(ct => (ct?.placement ?? 'footer') === 'footer');
   const tabCustomTabs = customTabs.filter(ct => ct?.placement === 'tab');
   const [customTabCounts, setCustomTabCounts] = useState({});
+  // Custom-tab add form to auto-open after a save-header-first navigation,
+  // optionally restoring an in-progress draft (+ error) across the remount
+  const [pendingCustomTabAdd, setPendingCustomTabAdd] = useState(null);
+  const [pendingCustomTabRestore, setPendingCustomTabRestore] = useState(null);
   const [customLinesCount, setCustomLinesCount] = useState(null);
   const [activeCustomBelowTab, setActiveCustomBelowTab] = useState(0);
   // Reuse the secondaryTabs/lines/others activeTab state for custom tabs by prefixing
@@ -3011,6 +3038,35 @@ export function DetailView({
       if (prev[ct.key] === count) return prev;
       return { ...prev, [ct.key]: count };
     });
+    // Save-header-first support for custom tabs (child rows need a persisted
+    // parent FK). The tab decides WHEN: onSaveHeader({ navigateAfter: false })
+    // just persists and returns the saved record (the tab keeps its in-progress
+    // form and posts the child row itself), then calls onGoToSavedRecord to land
+    // on the saved record with this tab re-opened. The default (navigateAfter
+    // true) mirrors handleAddLineClick: save, navigate, re-open the add form.
+    const saveHeaderForCustomTab = async ({ navigateAfter = true } = {}) => {
+      const saved = await hook.handleSave();
+      if (!saved?.id) return null;
+      hook.primeSaved?.(saved);
+      if (navigateAfter) {
+        navigate(`/${windowName}/${saved.id}`, {
+          replace: true,
+          state: { openSecondaryTab: customTabKey(ct), openCustomTabAdd: ct.key, justSaved: saved },
+        });
+      }
+      return saved;
+    };
+    const goToSavedRecord = (saved, { reopenAdd = false, draft = null, error = null } = {}) => {
+      if (!saved?.id) return;
+      navigate(`/${windowName}/${saved.id}`, {
+        replace: true,
+        state: {
+          openSecondaryTab: customTabKey(ct),
+          ...(reopenAdd ? { openCustomTabAdd: ct.key, customTabRestore: { draft, error } } : {}),
+          justSaved: saved,
+        },
+      });
+    };
     return (
       <div
         key={customTabKey(ct)}
@@ -3024,6 +3080,11 @@ export function DetailView({
           apiBaseUrl={apiBaseUrl}
           api={api}
           isActive={isActive}
+          isNew={isNew}
+          onSaveHeader={isNew ? saveHeaderForCustomTab : undefined}
+          onGoToSavedRecord={isNew ? goToSavedRecord : undefined}
+          autoOpenAdd={pendingCustomTabAdd === ct.key}
+          restoreDraft={pendingCustomTabAdd === ct.key ? pendingCustomTabRestore : null}
           onCountChange={updateCustomTabCount}
           onChange={hook.handleChange}
           {...(ct.props || {})}
@@ -3053,8 +3114,12 @@ export function DetailView({
         setSelectedSecondaryLine(null);
       }
     }
+    if (location.state?.openCustomTabAdd) {
+      setPendingCustomTabAdd(location.state.openCustomTabAdd);
+      setPendingCustomTabRestore(location.state.customTabRestore ?? null);
+    }
     navigate(location.pathname, { replace: true, state: {} });
-  }, [location.state?.openSecondaryTab, location.state?.openAddSecondaryLine, isNew, hook.editing, navigate, location.pathname, tabs, secondaryTabs]);
+  }, [location.state?.openSecondaryTab, location.state?.openAddSecondaryLine, location.state?.openCustomTabAdd, isNew, hook.editing, navigate, location.pathname, tabs, secondaryTabs]);
 
   // Only black out the whole window when we actually don't have the record yet.
   // A list refresh (hook.loading for the side list) or any unrelated background
@@ -3105,7 +3170,12 @@ export function DetailView({
                 const val = data[b.key];
                 if (val == null) return null;
                 const isTrue = val === true || val === 'Y' || val === 'true';
-                const label = isTrue ? ui(b.trueKey) : ui(b.falseKey);
+                // A one-sided badge (only trueKey declared) hides on the false
+                // value — the generator emits the missing side as the literal
+                // string 'undefined', which must never reach the screen
+                const labelKey = isTrue ? b.trueKey : b.falseKey;
+                if (!labelKey || labelKey === 'undefined') return null;
+                const label = ui(labelKey);
                 const tone = isTrue ? 'success' : 'warning';
                 return (
                   <DocumentStatusPill
@@ -4289,8 +4359,8 @@ export function DetailView({
                                 secondarySelectedRows={secondarySelectedRows}
                                 setSecondarySelectedRows={setSecondarySelectedRows}
                                 setCustomModalState={setCustomModalState}
-                                detailPanelTitle={ui('entityDetail', {label: tMenu(st.label)})}
-                                addLineLabel={ui('addEntity', {label: tMenu(st.label)})}
+                                detailPanelTitle={ui('entityDetail', {label: (st.labelKey && ui(st.labelKey)) || tMenu(st.label)})}
+                                addLineLabel={ui('addEntity', {label: (st.labelKey && ui(st.labelKey)) || tMenu(st.label)})}
                                 selectedLabel={ui('selected', {count: (secondarySelectedRows[st.key] ?? []).length})}
                                 loadingLabel={ui('loading')}
                                 saveLabel={ui('save')}
