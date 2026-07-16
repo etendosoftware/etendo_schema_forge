@@ -34,6 +34,20 @@ vi.mock('@/hooks/usePsd2Actions', () => ({
   launchSaltEdgePopup: (...a) => launchSaltEdgePopup(...a),
 }));
 
+// ETP-4530: Tab Contabilidad — mocked so existing suites (which don't exercise this tab) don't
+// need a real AuthProvider/network round-trip just to mount the modal.
+const fetchAccountingConfiguration = vi.fn().mockResolvedValue({
+  id: null,
+  fINAssetAcct: null,
+  fINTransitoryAcct: null,
+  ledgerConfigured: true,
+  catalogs: { accounts: [] },
+});
+const saveAccountingConfiguration = vi.fn();
+vi.mock('@/hooks/useFinancialAccountAccounting.js', () => ({
+  useFinancialAccountAccounting: () => ({ fetchAccountingConfiguration, saveAccountingConfiguration }),
+}));
+
 import { EditAccountModal } from '../EditAccountModal.jsx';
 
 const BANK_ACCOUNT = {

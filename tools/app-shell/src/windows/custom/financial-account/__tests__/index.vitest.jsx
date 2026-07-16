@@ -81,6 +81,20 @@ vi.mock('../ImportedStatementsTab.jsx', () => ({
   }),
 }));
 
+// ETP-4530: Editar entry point — stubbed like the other child components above so this suite
+// stays isolated from EditAccountModal's own dependencies (i18n locale switch, account mutations,
+// PSD2 actions, accounting configuration). EditAccountModal has its own dedicated test suite.
+vi.mock('../EditAccountModal.jsx', () => ({
+  EditAccountModal: ({ open, account }) => (
+    <div data-testid="edit-account-modal-stub" data-open={String(open)} data-account={account?.name ?? ''} />
+  ),
+}));
+vi.mock('../ArchiveAccountDialog.jsx', () => ({
+  ArchiveAccountDialog: ({ open }) => (
+    <div data-testid="archive-account-dialog-stub" data-open={String(open)} />
+  ),
+}));
+
 import FinancialAccountWindow from '../index.jsx';
 
 function setHooks({ account = { id: 'acc-1', name: 'BBVA', pendingCount: 4 }, movements = [], totals = { balance: 0, inflows: 0, outflows: 0, currency: 'EUR' }, loading = false, statements = [] } = {}) {

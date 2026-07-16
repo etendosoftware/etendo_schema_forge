@@ -218,6 +218,17 @@ export function CreatableSearchSelect({
     }
   }, [displayValue]);
 
+  // Re-sync local options whenever the caller passes a NEW staticOptions array — e.g. a catalog
+  // fetched asynchronously after mount (starts as `[]`, then populated once the request resolves).
+  // The initial `useState(staticOptions ?? [])` above only covers the first render, so without this
+  // effect a caller that loads its options after the component mounts would see an empty dropdown
+  // forever (ETP-4530). Callers passing a stable array (e.g. a module-level constant) are unaffected.
+  useEffect(() => {
+    if (staticOptions) {
+      setOptions(staticOptions);
+    }
+  }, [staticOptions]);
+
   // Fetch options whenever the parent value changes or after a forced refresh (refreshKey)
   useEffect(() => {
     if (staticOptions) return;
