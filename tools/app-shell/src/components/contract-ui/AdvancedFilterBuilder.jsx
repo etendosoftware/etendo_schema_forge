@@ -39,8 +39,8 @@ import { DistinctValuesList } from './DistinctValuesList.jsx';
  */
 
 const OPERATORS_BY_MODE = {
-  text:         ['iContains', 'iNotContains', 'iEquals', 'iNotEqual', 'isNull', 'isNotNull'],
-  identifier:   ['iContains', 'iNotContains', 'equals', 'notEqual', 'isNull', 'isNotNull'],
+  text:         ['iContains', 'iNotContains', 'iStartsWith', 'iEquals', 'iNotEqual', 'isNull', 'isNotNull'],
+  identifier:   ['iContains', 'iNotContains', 'iStartsWith', 'equals', 'notEqual', 'isNull', 'isNotNull'],
   enumLabel:    ['equals', 'notEqual', 'inSet', 'isNull', 'isNotNull'],
   booleanLabel: ['equals'],
   numeric:      ['equals', 'notEqual', 'greaterThan', 'greaterOrEqual', 'lessThan', 'lessOrEqual', 'between', 'isNull', 'isNotNull'],
@@ -48,11 +48,12 @@ const OPERATORS_BY_MODE = {
 };
 
 // Text-style ops: user types free text (backend filters on `$_identifier`).
-const TEXTUAL_IDENT_OPS = new Set(['iContains', 'iNotContains', 'iEquals', 'iNotEqual']);
+const TEXTUAL_IDENT_OPS = new Set(['iContains', 'iNotContains', 'iStartsWith', 'iEquals', 'iNotEqual']);
 
 const OP_LABEL_KEY = {
   iContains: 'opContains',
   iNotContains: 'opNotContains',
+  iStartsWith: 'opStartsWith',
   iEquals: 'opIs',
   iNotEqual: 'opIsNot',
   equals: 'opIs',

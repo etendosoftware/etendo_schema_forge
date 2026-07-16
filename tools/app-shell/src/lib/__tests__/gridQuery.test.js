@@ -1154,6 +1154,29 @@ describe('buildAdvancedFilterCriteria — identifier column ops', () => {
     ]);
   });
 
+  it('uses $_identifier for iStartsWith on selector column', () => {
+    const filter = {
+      rowOperator: 'and',
+      conditions: [{ field: 'businessPartner', operator: 'iStartsWith', value: 'Acm' }],
+    };
+    const result = buildAdvancedFilterCriteria(filter, columns);
+    assert.deepEqual(result, [
+      { fieldName: 'businessPartner$_identifier', operator: 'iStartsWith', value: 'Acm' },
+    ]);
+  });
+
+  it('uses the plain key for iStartsWith on a text column', () => {
+    const textColumns = [{ key: 'name', type: 'string' }];
+    const filter = {
+      rowOperator: 'and',
+      conditions: [{ field: 'name', operator: 'iStartsWith', value: 'Acm' }],
+    };
+    const result = buildAdvancedFilterCriteria(filter, textColumns);
+    assert.deepEqual(result, [
+      { fieldName: 'name', operator: 'iStartsWith', value: 'Acm' },
+    ]);
+  });
+
   it('uses $_identifier for iEquals on selector column', () => {
     const filter = {
       rowOperator: 'and',
@@ -1277,6 +1300,14 @@ describe('getFilteredKey', () => {
 
   it('returns $_identifier for identifier mode with iNotContains', () => {
     assert.equal(getFilteredKey({ key: 'bp' }, 'identifier', 'iNotContains'), 'bp$_identifier');
+  });
+
+  it('returns $_identifier for identifier mode with iStartsWith', () => {
+    assert.equal(getFilteredKey({ key: 'bp' }, 'identifier', 'iStartsWith'), 'bp$_identifier');
+  });
+
+  it('returns raw key for iStartsWith in text mode', () => {
+    assert.equal(getFilteredKey({ key: 'name' }, 'text', 'iStartsWith'), 'name');
   });
 
   it('returns $_identifier for identifier mode with iEquals', () => {

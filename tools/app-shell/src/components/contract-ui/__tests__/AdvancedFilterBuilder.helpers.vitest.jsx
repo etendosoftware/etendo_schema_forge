@@ -41,27 +41,39 @@ import { AdvancedFilterBuilder } from '../AdvancedFilterBuilder.jsx';
 // ---------------------------------------------------------------------------
 
 const OPERATORS_BY_MODE = {
-  text:         ['iContains', 'iNotContains', 'iEquals', 'iNotEqual', 'isNull', 'isNotNull'],
-  identifier:   ['iContains', 'iNotContains', 'equals', 'notEqual', 'isNull', 'isNotNull'],
+  text:         ['iContains', 'iNotContains', 'iStartsWith', 'iEquals', 'iNotEqual', 'isNull', 'isNotNull'],
+  identifier:   ['iContains', 'iNotContains', 'iStartsWith', 'equals', 'notEqual', 'isNull', 'isNotNull'],
   enumLabel:    ['equals', 'notEqual', 'inSet', 'isNull', 'isNotNull'],
   booleanLabel: ['equals'],
   numeric:      ['equals', 'notEqual', 'greaterThan', 'greaterOrEqual', 'lessThan', 'lessOrEqual', 'between', 'isNull', 'isNotNull'],
   date:         ['equals', 'lessThan', 'greaterThan', 'between', 'isNull', 'isNotNull'],
 };
 
-const TEXTUAL_IDENT_OPS = new Set(['iContains', 'iNotContains', 'iEquals', 'iNotEqual']);
+const TEXTUAL_IDENT_OPS = new Set(['iContains', 'iNotContains', 'iStartsWith', 'iEquals', 'iNotEqual']);
 
 describe('AdvancedFilterBuilder logic', () => {
   describe('OPERATORS_BY_MODE', () => {
-    it('text mode has 6 operators', () => {
-      expect(OPERATORS_BY_MODE.text).toHaveLength(6);
+    it('text mode has 7 operators', () => {
+      expect(OPERATORS_BY_MODE.text).toHaveLength(7);
       expect(OPERATORS_BY_MODE.text).toContain('iContains');
       expect(OPERATORS_BY_MODE.text).toContain('isNull');
+    });
+
+    it('text mode offers the starts-with operator', () => {
+      expect(OPERATORS_BY_MODE.text).toContain('iStartsWith');
+    });
+
+    it('identifier mode has 7 operators', () => {
+      expect(OPERATORS_BY_MODE.identifier).toHaveLength(7);
     });
 
     it('identifier mode includes both contains and equals', () => {
       expect(OPERATORS_BY_MODE.identifier).toContain('iContains');
       expect(OPERATORS_BY_MODE.identifier).toContain('equals');
+    });
+
+    it('identifier mode offers the starts-with operator', () => {
+      expect(OPERATORS_BY_MODE.identifier).toContain('iStartsWith');
     });
 
     it('enumLabel has inSet for multi-select', () => {
@@ -94,9 +106,10 @@ describe('AdvancedFilterBuilder logic', () => {
   });
 
   describe('TEXTUAL_IDENT_OPS', () => {
-    it('contains the 4 textual identifier operators', () => {
+    it('contains the 5 textual identifier operators', () => {
       expect(TEXTUAL_IDENT_OPS.has('iContains')).toBe(true);
       expect(TEXTUAL_IDENT_OPS.has('iNotContains')).toBe(true);
+      expect(TEXTUAL_IDENT_OPS.has('iStartsWith')).toBe(true);
       expect(TEXTUAL_IDENT_OPS.has('iEquals')).toBe(true);
       expect(TEXTUAL_IDENT_OPS.has('iNotEqual')).toBe(true);
     });

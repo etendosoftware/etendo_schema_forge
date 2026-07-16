@@ -465,6 +465,32 @@ describe('buildAdvancedFilterCriteria', () => {
     ]);
   });
 
+  it('uses identifier field for iStartsWith on selector columns', () => {
+    const filter = {
+      rowOperator: 'and',
+      conditions: [
+        { field: 'bp', operator: 'iStartsWith', value: 'acm' },
+      ],
+    };
+    const result = buildAdvancedFilterCriteria(filter, columns);
+    expect(result).toEqual([
+      { fieldName: 'bp$_identifier', operator: 'iStartsWith', value: 'acm' },
+    ]);
+  });
+
+  it('uses the plain key for iStartsWith on text columns', () => {
+    const filter = {
+      rowOperator: 'and',
+      conditions: [
+        { field: 'name', operator: 'iStartsWith', value: 'acm' },
+      ],
+    };
+    const result = buildAdvancedFilterCriteria(filter, columns);
+    expect(result).toEqual([
+      { fieldName: 'name', operator: 'iStartsWith', value: 'acm' },
+    ]);
+  });
+
   it('uses raw key for discrete ops on selector columns', () => {
     const filter = {
       rowOperator: 'and',
@@ -711,6 +737,7 @@ describe('getFilteredKey', () => {
     const col = { key: 'bp' };
     expect(getFilteredKey(col, 'identifier', 'iContains')).toBe('bp$_identifier');
     expect(getFilteredKey(col, 'identifier', 'iNotContains')).toBe('bp$_identifier');
+    expect(getFilteredKey(col, 'identifier', 'iStartsWith')).toBe('bp$_identifier');
     expect(getFilteredKey(col, 'identifier', 'iEquals')).toBe('bp$_identifier');
     expect(getFilteredKey(col, 'identifier', 'iNotEqual')).toBe('bp$_identifier');
   });
@@ -725,6 +752,7 @@ describe('getFilteredKey', () => {
   it('returns raw key for non-identifier modes', () => {
     const col = { key: 'name' };
     expect(getFilteredKey(col, 'text', 'iContains')).toBe('name');
+    expect(getFilteredKey(col, 'text', 'iStartsWith')).toBe('name');
     expect(getFilteredKey(col, 'numeric', 'equals')).toBe('name');
     expect(getFilteredKey(col, 'date', 'greaterThan')).toBe('name');
   });

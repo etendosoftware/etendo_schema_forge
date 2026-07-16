@@ -17,6 +17,7 @@ vi.mock('@/lib/gridQuery', () => ({
     if (col.type === 'number' || col.type === 'amount') return 'numeric';
     if (col.type === 'status') return 'enumLabel';
     if (col.type === 'boolean') return 'booleanLabel';
+    if (col.type === 'selector') return 'identifier';
     return 'text';
   },
   getDisplayText: () => '',
@@ -58,6 +59,20 @@ vi.mock('../DistinctValuesList.jsx', () => ({
 }));
 
 import { AdvancedFilterBuilder } from '../AdvancedFilterBuilder.jsx';
+
+// Radix Select needs a few pointer/scroll DOM APIs jsdom does not implement so
+// the operator dropdown can open and options can be selected.
+beforeAll(() => {
+  Element.prototype.scrollIntoView = vi.fn();
+  Element.prototype.hasPointerCapture = vi.fn(() => false);
+  Element.prototype.setPointerCapture = vi.fn();
+  Element.prototype.releasePointerCapture = vi.fn();
+  globalThis.ResizeObserver = class {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  };
+});
 
 const COLUMNS = [
   { key: 'name', label: 'Name', type: 'text', column: 'Name' },
@@ -383,6 +398,60 @@ describe('AdvancedFilterBuilder', () => {
     };
     render(<AdvancedFilterBuilder columns={COLUMNS} value={value} />);
     expect(screen.getAllByLabelText('Remove condition')).toHaveLength(1);
+  });
+
+  // ================================================================
+  // ETP-4532 — "starts with" (iStartsWith) operator
+  // ================================================================
+
+  describe('iStartsWith operator (ETP-4532)', () => {
+    // Seed a single row with the field already picked so the operator select is
+    // enabled (it is `disabled={!col}` until a field is chosen).
+    const seededValue = (field) => ({
+      rowOperator: 'and',
+      conditions: [{ field, operator: '', value: '' }],
+    });
+
+    it('offers the starts-with option for a text column', async () => {
+      const user = userEvent.setup();
+      render(<AdvancedFilterBuilder columns={COLUMNS} value={seededValue('name')} />);
+      // Open the operator dropdown (its placeholder is advancedFilterSelectOp).
+      await user.click(screen.getByText('advancedFilterSelectOp').closest('button'));
+      // ui() returns the key, so the option label is the i18n key 'opStartsWith'.
+      expect(await screen.findByRole('option', { name: 'opStartsWith' })).toBeInTheDocument();
+    });
+
+    it('offers the starts-with option for an identifier column', async () => {
+      const user = userEvent.setup();
+      const cols = [{ key: 'bp', label: 'Partner', type: 'selector', column: 'C_BPartner_ID' }];
+      render(<AdvancedFilterBuilder columns={cols} value={seededValue('bp')} />);
+      await user.click(screen.getByText('advancedFilterSelectOp').closest('button'));
+      expect(await screen.findByRole('option', { name: 'opStartsWith' })).toBeInTheDocument();
+    });
+
+    it('emits a condition with operator iStartsWith after selecting it, typing a value, and applying', async () => {
+      const user = userEvent.setup();
+      const onApply = vi.fn();
+      render(
+        <AdvancedFilterBuilder columns={COLUMNS} value={seededValue('name')} onApply={onApply} />,
+      );
+      // Select the "starts with" operator.
+      await user.click(screen.getByText('advancedFilterSelectOp').closest('button'));
+      await user.click(await screen.findByRole('option', { name: 'opStartsWith' }));
+      // The value input now appears (iStartsWith is not a nullish op).
+      const input = screen.getByRole('textbox');
+      await user.type(input, 'foo');
+      // Apply.
+      await user.click(screen.getByText('advancedFilterApply'));
+      expect(onApply).toHaveBeenCalledTimes(1);
+      const applied = onApply.mock.calls[0][0];
+      expect(applied.conditions).toHaveLength(1);
+      expect(applied.conditions[0]).toMatchObject({
+        field: 'name',
+        operator: 'iStartsWith',
+        value: 'foo',
+      });
+    });
   });
 
   // ================================================================

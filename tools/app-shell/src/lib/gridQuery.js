@@ -445,7 +445,7 @@ export function buildAdvancedFilterCriteria(advancedFilter, columns) {
   return items;
 }
 
-const TEXTUAL_IDENTIFIER_OPS = new Set(['iContains', 'iNotContains', 'iEquals', 'iNotEqual']);
+const TEXTUAL_IDENTIFIER_OPS = new Set(['iContains', 'iNotContains', 'iStartsWith', 'iEquals', 'iNotEqual']);
 
 function buildRowCriteria(col, row) {
   if (typeof col.buildCriteria === 'function') return col.buildCriteria(row) ?? null;
