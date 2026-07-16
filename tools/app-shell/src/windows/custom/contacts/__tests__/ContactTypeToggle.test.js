@@ -65,6 +65,13 @@ describe('ContactTypeToggle', () => {
     assert.match(src, /etgoIsperson: newType === 'person'/);
   });
 
+  it('pre-fills name via onChange only when blank on switch to company', () => {
+    assert.match(src, /onChange/);
+    assert.match(src, /newType === 'company' && onChange/);
+    assert.match(src, /if \(!currentName && \(firstName \|\| lastName\)\)/);
+    assert.match(src, /onChange\('name', fullName\)/);
+  });
+
   it('renders Person and Company buttons', () => {
     assert.match(src, /ui\('Person'\)/);
     assert.match(src, /ui\('company'\)/);

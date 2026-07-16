@@ -3143,6 +3143,7 @@ export function DetailView({
                   token={token}
                   apiBaseUrl={apiBaseUrl}
                   api={api}
+                  onChange={hook.handleChange}
                   onProcess={hook.handleProcess}
                   onRefresh={() => hook.fetchById?.(data?.id || recordId)}
                   data-testid="TopbarExtraComponent__fa3275" />

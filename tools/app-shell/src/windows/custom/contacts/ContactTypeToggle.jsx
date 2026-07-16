@@ -4,7 +4,7 @@ import { useContactsType } from './ContactsContext';
 
 /* eslint-disable react/prop-types */
 
-export default function ContactTypeToggle({ data, recordId, token, apiBaseUrl }) {
+export default function ContactTypeToggle({ data, recordId, token, apiBaseUrl, onChange }) {
   const ui = useUI();
   const { personType: selected, setPersonType: setSelected } = useContactsType();
 
@@ -15,10 +15,25 @@ export default function ContactTypeToggle({ data, recordId, token, apiBaseUrl })
   const userSelectedRef = useRef(false);
   const prevDataIdRef = useRef(data?.id ?? null);
 
+  // Stores the exact string we last auto-wrote to `name` (null = we've written
+  // nothing). Used to detect whether the current Razón Social is still "owned by
+  // us" (safe to re-sync) or has been edited by the user / carries a persisted
+  // value we never generated (must never be overwritten).
+  const lastAutoFilledNameRef = useRef(null);
+
   useEffect(() => {
     if (!data?.id) return;
     const prevDataId = prevDataIdRef.current;
     prevDataIdRef.current = data.id;
+
+    // Switching to a DIFFERENT existing record — start the auto-fill heuristic
+    // fresh so a value we wrote for the previous contact does not leak into the
+    // ownership check for this one. Guarded by `prevDataId && prevDataId !== data.id`
+    // so the "new record was just saved" path (prevDataId === null) below does
+    // NOT wipe a value we just wrote for the record being saved.
+    if (prevDataId && prevDataId !== data.id) {
+      lastAutoFilledNameRef.current = null;
+    }
 
     if (!prevDataId && userSelectedRef.current) {
       // New record was just saved — persist the user's toggle choice
@@ -43,6 +58,25 @@ export default function ContactTypeToggle({ data, recordId, token, apiBaseUrl })
   function handleSelect(newType) {
     userSelectedRef.current = true;
     setSelected(newType);
+
+    // When switching to company mode, keep the legal name (Razón Social) in sync
+    // with the typed first/last name — as long as the current value is still the
+    // one WE auto-generated (or is blank). Once the user edits it by hand, or the
+    // record carries a persisted value we never generated, it is user-owned and
+    // must never be overwritten again.
+    // Writes into local editing state only; persistence happens on explicit Save.
+    if (newType === 'company' && onChange) {
+      const firstName = (data?.etgoFirstname || '').trim();
+      const lastName = (data?.etgoLastname || '').trim();
+      const currentName = (data?.name || '').trim();
+      const fullName = `${firstName} ${lastName}`.trim().replace(/\s{2,}/g, ' ');
+      const ownedByAuto = currentName === '' || currentName === lastAutoFilledNameRef.current;
+      if (ownedByAuto && fullName && fullName !== currentName) {
+        onChange('name', fullName);
+        lastAutoFilledNameRef.current = fullName;
+      }
+    }
+
     if (recordId && token && apiBaseUrl) {
       fetch(`${apiBaseUrl}/businessPartner/${recordId}`, {
         method: 'PATCH',
