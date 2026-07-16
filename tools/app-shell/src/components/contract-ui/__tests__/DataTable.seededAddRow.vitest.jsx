@@ -43,7 +43,7 @@ vi.mock('@/lib/applyCalloutUpdates.js', () => ({
 vi.mock('../ProductSearchDrawer.jsx', () => ({
   default: () => null,
 }));
-vi.mock('../InternalConsumptionProductSearchDrawer.jsx', () => ({
+vi.mock('../ProductStockSearchDrawer.jsx', () => ({
   default: () => null,
 }));
 vi.mock('../SelectorInput.jsx', () => ({
