@@ -186,7 +186,20 @@ needed. Confirm the keys it uses already exist in both locale files; if not, tha
 separate functional change.
 
 ### 8. Plan the tests (COPY to core + RE-ANGLE in functional)
-Given component **X** in functional with tests **Y** that test its code, the rule is:
+**First enumerate tests for EVERY file in the move-set, not just the target.** Each
+closure member (the hook, the sub-component, the lib) may have its **own** separate test
+file — miss one and it silently keeps `vi.mock('@/…')`-ing a path that no longer crosses
+the shim, throwing at run time (real failure seen on ETP-4532: the moved
+`useDistinctValues` hook had its own `useDistinctValues.vitest.jsx` that was overlooked;
+its `vi.mock('@/auth/*')` stopped intercepting the hook's internal `useAuth` once the
+hook lived in the package → `useAuth must be used within AuthProvider` on push). Build the
+list up front:
+```bash
+for f in <each moved file basename-without-ext>; do
+  grep -rln "$f" tools/app-shell/src --include="*.vitest.jsx" --include="*.test.js"
+done | sort -u
+```
+Then, for each component/hook **X** with tests **Y** that test its code:
 
 1. **Copy Y → Z in core.** Z is the real **unit test**, colocated with the moved
    source in core (`packages/app-shell-core/src/**/__tests__/`), testing the code
@@ -218,18 +231,26 @@ Z (copied to core), which Y is re-angled, and which guards stay untouched.
 > real `LocaleProvider` + real dictionary (and assert translated strings) or drop the
 > now-inert i18n mock. Say so; don't silently weaken the assertion.
 
-#### Core test-runner realities (VERIFIED — do not assume core == functional)
-Core's vitest is configured very differently from functional's. Check these before
-copying, or the Z tests silently don't run / fail on DOM bleed:
-- **Discovery pattern:** core `vitest.config.js` uses `include: ['src/**/*.test.jsx']`
-  — it does **NOT** match `*.vitest.jsx`. Rename copied vitest files to `*.test.jsx`
-  (keep a `.vitest.` infix only to disambiguate from a sibling node:test `*.test.js`).
-  (Core has ~15 legacy `*.vitest.jsx` that are effectively dead — don't mimic them.)
-- **No `globals`, no `setupFiles`:** functional has both; core has neither. Each copied
-  file needs explicit `import { describe, it, expect, vi, afterEach } from 'vitest'`,
-  an explicit `import '@testing-library/jest-dom/vitest'`, and — the subtle one — an
-  explicit `afterEach(cleanup)` (without it RTL never auto-cleans → "Found multiple
-  elements" DOM bleed across tests).
+#### Core test-runner realities (VERIFIED — always re-read core `vitest.config.js` first)
+Core's vitest config CHANGES over time — do not trust a remembered snapshot; open
+`packages/app-shell-core/vitest.config.js` at the start of every migration. As of the
+last verified run it was:
+```js
+test: { environment: 'jsdom', globals: true, setupFiles: ['./src/test/setup.js'],
+        include: ['src/**/*.test.jsx', 'src/**/*.vitest.{js,jsx}'] }
+```
+- **Discovery pattern:** it NOW matches **both** `*.test.jsx` **and** `*.vitest.{js,jsx}`
+  — so a copied `*.vitest.jsx` is discovered without renaming. Prefer `*.test.jsx` for a
+  new colocated unit test anyway (matches the `AdvancedFilterBuilder.test.jsx` core
+  convention), but renaming is no longer strictly required. (Verify the `include` still
+  lists both — an older core only had `*.test.jsx`.)
+- **`globals` + `setupFiles` ARE set:** core has `globals: true` and a `setupFiles`
+  (jsdom + jest-dom + `afterEach(cleanup)` live there). Explicit
+  `import { describe, it, expect, vi, afterEach } from 'vitest'` and an explicit
+  `afterEach(cleanup)` in the copied file are therefore **harmless but not required** —
+  keep them for robustness/parity with existing core tests, but their absence won't
+  break discovery or cause DOM bleed the way it would with a bare config. (An older core
+  had neither — hence keeping the explicit imports is the safe default.)
 - **Gate vs non-gate:** core's `npm test` (the command the publish-preview gate runs)
   is `node --test <fixed globs>`, **not** vitest, and its globs don't include
   `contract-ui`/`lib`. So `.test.jsx`/vitest files are **non-gating** by default (run
