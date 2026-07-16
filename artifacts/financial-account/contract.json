@@ -1,8 +1,8 @@
 {
-  "version": "0.17.0",
+  "version": "0.18.0",
   "generatedAt": "2026-06-11T01:47:08.755Z",
-  "updatedAt": "2026-07-16T14:28:23.251Z",
-  "checksum": "e7c30fd6f7853cf9",
+  "updatedAt": "2026-07-16T22:27:38.123Z",
+  "checksum": "2feb25a65faa059d",
   "frontendContract": {
     "window": {
       "id": "94EAA455D2644E04AB25D93BE5157B6D",
@@ -1060,6 +1060,11 @@
             "reference": "BPartner",
             "inputMode": "search",
             "gridOrder": 3,
+            "displayLogic": {
+              "raw": "@Trxtype@!''",
+              "evaluable": true,
+              "js": "record['transactionType'] !== ''"
+            },
             "readOnlyLogic": {
               "raw": "@Posted@='Y' | @Fin_Payment_ID@!''",
               "evaluable": true,
@@ -4434,6 +4439,14 @@
         "description": "Display logic for 'activity' in transaction should have evaluable flag"
       },
       {
+        "id": "t-displaylogic-evaluable-transaction-businessPartner",
+        "category": "displaylogic-evaluable",
+        "entity": "transaction",
+        "field": "businessPartner",
+        "runner": "node",
+        "description": "Display logic for 'businessPartner' in transaction should have evaluable flag"
+      },
+      {
         "id": "t-displaylogic-evaluable-transaction-costCenter",
         "category": "displaylogic-evaluable",
         "entity": "transaction",
@@ -4768,6 +4781,14 @@
         "field": "activity",
         "runner": "node",
         "description": "Display logic for 'activity' in transaction should be valid JS"
+      },
+      {
+        "id": "t-displaylogic-valid-transaction-businessPartner",
+        "category": "displaylogic-valid",
+        "entity": "transaction",
+        "field": "businessPartner",
+        "runner": "node",
+        "description": "Display logic for 'businessPartner' in transaction should be valid JS"
       },
       {
         "id": "t-displaylogic-valid-transaction-costCenter",
@@ -8934,13 +8955,13 @@
       }
     ],
     "summary": {
-      "total": 669,
+      "total": 671,
       "byCategory": {
         "action-endpoint": 21,
         "crud-flags": 4,
         "default-value-type": 28,
-        "displaylogic-evaluable": 42,
-        "displaylogic-valid": 42,
+        "displaylogic-evaluable": 43,
+        "displaylogic-valid": 43,
         "field-presence": 72,
         "field-type": 72,
         "readonlylogic-evaluable": 29,
@@ -8951,7 +8972,7 @@
         "visibility": 4
       },
       "byRunner": {
-        "node": 669,
+        "node": 671,
         "junit": 0
       }
     }

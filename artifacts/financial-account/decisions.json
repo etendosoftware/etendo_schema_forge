@@ -48,7 +48,7 @@
       "fields": {
         "transactionDate": { "visibility": "readOnly", "grid": true, "gridOrder": 1 },
         "documentNo": { "visibility": "readOnly", "grid": true, "gridOrder": 2 },
-        "businessPartner": { "visibility": "readOnly", "grid": true, "gridOrder": 3, "displayLogic": null, "reason": "ETP-4529 — Contacto is always shown for financial-account transactions (overrides @ACCT_DIMENSION_DISPLAY@)." },
+        "businessPartner": { "visibility": "readOnly", "grid": true, "gridOrder": 3, "displayLogic": "@Trxtype@!''", "displayLogicJs": "record['transactionType'] !== ''", "reason": "ETP-4529 — Contacto is always shown regardless of the accounting-dimension config (strips @ACCT_DIMENSION_DISPLAY@ from the raw '@ACCT_DIMENSION_DISPLAY@ & @Trxtype@!\\'\\'' expression), but the unrelated Trxtype condition is preserved as client-evaluable JS: Trxtype (Transaction Type — BP Deposit/Withdrawal/Bank fee) is mandatory with a default, so this only hides the field for the instant before a type is set on a brand-new record." },
         "description": { "visibility": "readOnly", "grid": true, "gridOrder": 4 },
         "status": { "visibility": "readOnly", "grid": true, "gridOrder": 5 },
         "transactionType": { "visibility": "readOnly", "grid": true, "gridOrder": 6 },
