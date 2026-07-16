@@ -87,7 +87,7 @@ function InfoTooltip({ text }) {
         tabIndex={-1}
         aria-label={ui('rectMoreInfo')}
       >
-        <Info className="h-3.5 w-3.5" />
+        <Info className="h-3.5 w-3.5" data-testid="Info__4395d6" />
       </button>
       {visible && (
         <div className="absolute left-6 top-0 z-50 w-72 rounded-lg bg-gray-800 px-3 py-2 text-xs text-white shadow-lg">
@@ -299,9 +299,8 @@ function AeatGrid({ data, onChange, onFieldSave, apiBaseUrl, token, catalogs, re
             onChange('aEAT349CYear$_identifier', lbl ?? '');
             onFieldSave?.('aEAT349CYear', val);
           }}
-        />
+          data-testid="YearPickerSelect__4395d6" />
       </div>
-
       {/* Periodo */}
       <div className="space-y-1.5">
         <label className="text-sm font-medium text-foreground block">
@@ -321,12 +320,16 @@ function AeatGrid({ data, onChange, onFieldSave, apiBaseUrl, token, catalogs, re
           {periodOptions.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
         </select>
       </div>
-
       {/* Base 349 Productos — read-only, DB-trigger computed */}
-      <AmountInput fieldKey="aEAT349BPBaseAmount" label={ui('rectBaseProducts')} />
-
+      <AmountInput
+        fieldKey="aEAT349BPBaseAmount"
+        label={ui('rectBaseProducts')}
+        data-testid="AmountInput__4395d6" />
       {/* Base 349 Servicios — read-only, DB-trigger computed */}
-      <AmountInput fieldKey="aEAT349BPBaseAmountS" label={ui('rectBaseServices')} />
+      <AmountInput
+        fieldKey="aEAT349BPBaseAmountS"
+        label={ui('rectBaseServices')}
+        data-testid="AmountInput__4395d6" />
     </div>
   );
 }
@@ -376,7 +379,7 @@ function ExpandedForm({
           </div>
         ) : isDraft ? (
           // Draft row: open modal to pick the invoice
-          <>
+          (<>
             <button
               type="button"
               onClick={() => setPickerOpen(true)}
@@ -385,7 +388,9 @@ function ExpandedForm({
               <span className={`truncate ${lineData?.reversedInvoice ? 'text-foreground' : 'text-muted-foreground'}`}>
                 {lineData?.['reversedInvoice$_identifier'] || 'Seleccionar...'}
               </span>
-              <Search className="h-4 w-4 text-muted-foreground shrink-0" />
+              <Search
+                className="h-4 w-4 text-muted-foreground shrink-0"
+                data-testid="Search__4395d6" />
             </button>
             {pickerOpen && (
               <InvoicePickerModal
@@ -397,12 +402,12 @@ function ExpandedForm({
                   onChange('reversedInvoice$_identifier', label);
                 }}
                 onClose={() => setPickerOpen(false)}
-              />
+                data-testid="InvoicePickerModal__4395d6" />
             )}
-          </>
+          </>)
         ) : (
           // Existing row: formatted text + search icon — both open the picker to replace the invoice
-          <>
+          (<>
             <div className="flex items-center gap-2">
               <button
                 type="button"
@@ -417,7 +422,7 @@ function ExpandedForm({
                 className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-[#D1D4DB] bg-white text-muted-foreground hover:text-foreground transition-colors"
                 aria-label={ui('rectSearchAria')}
               >
-                <Search className="h-4 w-4" />
+                <Search className="h-4 w-4" data-testid="Search__4395d6" />
               </button>
             </div>
             {pickerOpen && (
@@ -431,12 +436,11 @@ function ExpandedForm({
                   onFieldSave?.('reversedInvoice', id);
                 }}
                 onClose={() => setPickerOpen(false)}
-              />
+                data-testid="InvoicePickerModal__4395d6" />
             )}
-          </>
+          </>)
         )}
       </div>
-
       {/* Gray panel: Correctiva del 349 checkbox + conditional AEAT fields, per UX spec */}
       <div className="rounded-lg bg-[#F8F9FA] px-4 py-3 space-y-4">
         <div className="flex items-start gap-3">
@@ -469,7 +473,7 @@ function ExpandedForm({
             <span className="text-sm font-medium text-foreground">
               {t('EM_AEAT349_IsCorrective') ?? 'Correctiva del 349'}
             </span>
-            <InfoTooltip text={TOOLTIP_TEXT} />
+            <InfoTooltip text={TOOLTIP_TEXT} data-testid="InfoTooltip__4395d6" />
           </div>
         </div>
 
@@ -484,10 +488,9 @@ function ExpandedForm({
             catalogs={catalogs}
             readOnly={readOnly}
             labelOverrides={labelOverrides}
-          />
+            data-testid="AeatGrid__4395d6" />
         )}
       </div>
-
       {/* Draft-only: error + save / cancel buttons */}
       {isDraft && error && (
         <p className="text-sm text-red-600" data-testid="text__saveError">{error}</p>
@@ -501,7 +504,7 @@ function ExpandedForm({
             className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             data-testid="btn__saveNewLine"
           >
-            {saving && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+            {saving && <Loader2 className="h-3.5 w-3.5 animate-spin" data-testid="Loader2__4395d6" />}
             {ui('save')}
           </button>
           <button
@@ -759,7 +762,6 @@ export default function ReversedInvoicesPanel({
 
   return (
     <div className="flex-1 min-w-0" data-testid="reversed-invoices-panel">
-
       {/* ── table ── */}
       {(lines.length > 0 || loading || addingLine) && (
         <table className="w-full">
@@ -780,7 +782,9 @@ export default function ReversedInvoicesPanel({
             {loading && (
               <tr>
                 <td colSpan={7} className="py-10 text-center text-sm text-muted-foreground">
-                  <Loader2 className="h-4 w-4 animate-spin inline mr-1.5" />
+                  <Loader2
+                    className="h-4 w-4 animate-spin inline mr-1.5"
+                    data-testid="Loader2__4395d6" />
                   {ui('loading')}
                 </td>
               </tr>
@@ -814,7 +818,9 @@ export default function ReversedInvoicesPanel({
                         className="inline-flex h-6 w-6 items-center justify-center rounded-full border border-[#D1D4DB] bg-white hover:bg-[#F5F7F9] transition-colors"
                         aria-label={isExpanded ? ui('rectCollapse') : ui('rectExpand')}
                       >
-                        <ChevronDown className={`h-4 w-4 text-[#828FA3] transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
+                        <ChevronDown
+                          className={`h-4 w-4 text-[#828FA3] transition-transform ${isExpanded ? 'rotate-180' : ''}`}
+                          data-testid="ChevronDown__4395d6" />
                       </button>
                     </td>
                     {/* Factura original */}
@@ -830,7 +836,7 @@ export default function ReversedInvoicesPanel({
                     </td>
                     {/* Modelo 349 */}
                     <td className="px-3 align-middle">
-                      <CorrectivaBadge corrective={corrective} />
+                      <CorrectivaBadge corrective={corrective} data-testid="CorrectivaBadge__4395d6" />
                     </td>
                     {/* Total */}
                     <td className="px-3 align-middle text-right">
@@ -848,13 +854,12 @@ export default function ReversedInvoicesPanel({
                           data-testid="btn__deleteLine"
                         >
                           {deleting === line.id
-                            ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                            : <Trash2 className="h-3.5 w-3.5" />}
+                            ? <Loader2 className="h-3.5 w-3.5 animate-spin" data-testid="Loader2__4395d6" />
+                            : <Trash2 className="h-3.5 w-3.5" data-testid="Trash2__4395d6" />}
                         </button>
                       )}
                     </td>
                   </tr>
-
                   {/* expanded form */}
                   {isExpanded && (
                     <tr>
@@ -871,7 +876,7 @@ export default function ReversedInvoicesPanel({
                           labelOverrides={api?.labelOverrides}
                           bpId={data?.businessPartner}
                           recordId={recordId}
-                        />
+                          data-testid="ExpandedForm__4395d6" />
                       </td>
                     </tr>
                   )}
@@ -900,7 +905,7 @@ export default function ReversedInvoicesPanel({
                       onCancel={() => { setAddingLine(false); setNewLine({}); setSaveError(null); }}
                       saving={saving}
                       error={saveError}
-                    />
+                      data-testid="ExpandedForm__4395d6" />
                   </div>
                 </td>
               </tr>
@@ -908,7 +913,6 @@ export default function ReversedInvoicesPanel({
           </tbody>
         </table>
       )}
-
       {/* ── add link (text style, when rows exist) ── */}
       {!isReadOnly && (recordId || (isNew && onSaveHeader)) && !addingLine && lines.length > 0 && !loading && (
         <button
@@ -917,16 +921,18 @@ export default function ReversedInvoicesPanel({
           className="flex items-center gap-1.5 mt-1 px-3 py-2 text-sm text-primary underline-offset-2 hover:underline transition-colors"
           data-testid="btn__addReversedInvoice"
         >
-          <Plus className="h-4 w-4" />
+          <Plus className="h-4 w-4" data-testid="Plus__4395d6" />
           {ui('rectAddInvoice')}
         </button>
       )}
-
       {/* ── empty state ── */}
       {showEmptyState && (
         <div className="flex flex-col items-center justify-center py-16 gap-3">
           <div className="w-10 h-10 rounded-xl bg-[#F5F7F9] flex items-center justify-center">
-            <FileText className="h-5 w-5 text-[#9ca3af]" strokeWidth={1.5} />
+            <FileText
+              className="h-5 w-5 text-[#9ca3af]"
+              strokeWidth={1.5}
+              data-testid="FileText__4395d6" />
           </div>
           <p className="text-sm font-medium text-foreground">{ui('rectEmptyTitle')}</p>
           {!isReadOnly && (recordId || (isNew && onSaveHeader)) && (
@@ -936,7 +942,7 @@ export default function ReversedInvoicesPanel({
               className="mt-1 inline-flex items-center gap-1.5 rounded-lg bg-foreground px-4 py-2 text-sm font-medium text-background hover:bg-foreground/90 transition-colors"
               data-testid="btn__addFirstRectificacion"
             >
-              <Plus className="h-4 w-4" />
+              <Plus className="h-4 w-4" data-testid="Plus__4395d6" />
               {ui('rectAddInvoice')}
             </button>
           )}
