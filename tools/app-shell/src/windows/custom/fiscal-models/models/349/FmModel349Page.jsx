@@ -217,11 +217,13 @@ export default function FmModel349Page({ decl, onBack, onStatusChange, token, ap
   const [selected,     setSelected]     = useState(new Set());
   const [liveOperators, setLiveOperators] = useState(decl._precomputed?.operators ?? null);
   const [liveInvoices,  setLiveInvoices]  = useState(decl._precomputed?.invoices  ?? null);
+  const [liveRectifications, setLiveRectifications] = useState(decl._precomputed?.rectifications ?? null);
   const [viesBannerDismissed, setViesBannerDismissed] = useState(false);
 
   React.useEffect(() => {
     if (decl._precomputed?.operators) setLiveOperators(decl._precomputed.operators);
     if (decl._precomputed?.invoices)  setLiveInvoices(decl._precomputed.invoices);
+    if (decl._precomputed?.rectifications) setLiveRectifications(decl._precomputed.rectifications);
   }, [decl._precomputed]);
   const [invoiceNifFilter, setInvoiceNifFilter] = useState(null);
   const [computing,    setComputing]    = useState(false);
@@ -243,7 +245,8 @@ export default function FmModel349Page({ decl, onBack, onStatusChange, token, ap
   const fileBlocked  = blocking > 0;
   const viesPending  = operators.filter(o => o.vies === 'pending').length;
   const totalBase    = operators.reduce((s,o) => s + (parseFloat(o.base) || 0), 0);
-  const rectifications = decl.rectifications ?? 1;
+  const rectifRows     = liveRectifications ?? decl.rectifications ?? [];
+  const rectifications = Array.isArray(rectifRows) ? rectifRows.length : 0;
 
   function handleStatusChange(newStatus) {
     setStatus(newStatus);
@@ -256,6 +259,7 @@ export default function FmModel349Page({ decl, onBack, onStatusChange, token, ap
       const res = await compute349Operators(decl, { token, apiBaseUrl });
       if (res?.operators) setLiveOperators(res.operators);
       if (res?.invoices)  setLiveInvoices(res.invoices);
+      if (res?.rectifications) setLiveRectifications(res.rectifications);
     } finally {
       setComputing(false);
     }
@@ -310,7 +314,7 @@ export default function FmModel349Page({ decl, onBack, onStatusChange, token, ap
 
   const TABS = [
     { id:'operators', label: t('fm.m349.tab.operators'), badge: operators.length,        icon: <Users size={16} strokeWidth={1.75} data-testid="Users__346dd5" /> },
-    { id:'rectif',    label: t('fm.m349.tab.rectif'),    badge: rectifications,          icon: <FileEdit size={16} strokeWidth={1.75} data-testid="FileEdit__346dd5" /> },
+    { id:'rectif',    label: t('fm.m349.tab.rectif'),    badge: rectifications || null,  icon: <FileEdit size={16} strokeWidth={1.75} data-testid="FileEdit__346dd5" /> },
     { id:'invoices',  label: t('fm.m349.tab.invoices'),  badge: liveInvoices?.length ?? null, icon: <ReceiptText size={16} strokeWidth={1.75} data-testid="ReceiptText__346dd5" /> },
     { id:'incidents', label: t('fm.m349.tab.incidents'), badge: blocking || null,        icon: <TriangleAlert size={16} strokeWidth={1.75} data-testid="TriangleAlert__346dd5" /> },
     { id:'files',     label: t('fm.m349.tab.files'),     badge: null,                   icon: <Folder size={16} strokeWidth={1.75} data-testid="Folder__346dd5" /> },
@@ -579,14 +583,50 @@ export default function FmModel349Page({ decl, onBack, onStatusChange, token, ap
         )}
 
         {activeTab === 'rectif' && (
-          <div style={{ padding: '60px 0', textAlign: 'center' }}>
-            <div style={{ fontWeight: 700, fontSize: 15, color: '#0f172a', marginBottom: 6 }}>
-              {t('fm.m349.tab.rectif') ?? 'Rectificaciones'}
+          rectifRows.length === 0 ? (
+            <div style={{ padding: '60px 0', textAlign: 'center' }}>
+              <div style={{ fontWeight: 700, fontSize: 15, color: '#0f172a', marginBottom: 6 }}>
+                {t('fm.m349.tab.rectif') ?? 'Rectificaciones'}
+              </div>
+              <div style={{ fontSize: 13, color: '#9ca3af' }}>
+                {t('fm.m349.rectif.empty')}
+              </div>
             </div>
-            <div style={{ fontSize: 13, color: '#9ca3af' }}>
-              {t('fm.m349.coming_soon') ?? 'Contenido disponible próximamente'}
+          ) : (
+            <div className="fm-table-wrap" style={{ marginTop: 8 }}>
+              <table className="fm-table">
+                <thead>
+                  <tr>
+                    <th style={{ paddingLeft: 20 }}>{t('fm.col.date')}</th>
+                    <th>{t('fm.m349.rectif.col.invoice')}</th>
+                    <th>{t('fm.col.type')}</th>
+                    <th>{t('fm.m349.col.operator')}</th>
+                    <th>{t('fm.m349.rectif.col.original')}</th>
+                    <th>{t('fm.m349.rectif.col.declared_period')}</th>
+                    <th style={{ textAlign: 'right' }}>{t('fm.m349.rectif.col.base_products')}</th>
+                    <th style={{ textAlign: 'right' }}>{t('fm.m349.rectif.col.base_services')}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {rectifRows.map((r, idx) => (
+                    <tr key={`${r.ref}-${r.originalRef}-${idx}`}>
+                      <td style={{ paddingLeft: 20, fontWeight: 600 }}>{r.date || '—'}</td>
+                      <td>{r.ref}</td>
+                      <td>{r.type}</td>
+                      <td>
+                        <div>{r.party}</div>
+                        {r.nifIva && <div style={{ fontSize: 12, color: 'var(--fm-fg-3)' }}>{r.nifIva}</div>}
+                      </td>
+                      <td>{r.originalRef || '—'}</td>
+                      <td>{r.declaredYear ? `${r.declaredYear} / ${r.declaredPeriod || '—'}` : '—'}</td>
+                      <td style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontWeight: 600 }}>{formatAmount(r.baseProducts)}</td>
+                      <td style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontWeight: 600 }}>{formatAmount(r.baseServices)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
-          </div>
+          )
         )}
 
       </div>
