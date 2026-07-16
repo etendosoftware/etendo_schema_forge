@@ -129,15 +129,15 @@
           "searchable": true
         },
         "project": {
-          "form": false,
-          "readOnlyLogic": null,
-          "displayLogic": null
+          "visibility": "editable",
+          "section": "other",
+          "reason": "ETP-4529 — accounting dimension, config-gated (@ACCT_DIMENSION_DISPLAY@)."
         },
         "costcenter": {
+          "visibility": "editable",
+          "section": "other",
           "reference": "CostCenter",
-          "form": false,
-          "readOnlyLogic": null,
-          "displayLogic": null
+          "reason": "ETP-4529 — accounting dimension, config-gated (@ACCT_DIMENSION_DISPLAY@)."
         },
         "asset": {
           "form": false,
@@ -264,21 +264,19 @@
           "displayLogic": null
         },
         "businessPartner": {
-          "reference": "BusinessPartner",
-          "form": false,
-          "readOnlyLogic": null,
-          "displayLogic": null
+          "visibility": "discarded",
+          "reason": "ETP-4529 — never applicable as a dimension on Albarán compra lines."
         },
         "project": {
-          "form": false,
-          "readOnlyLogic": null,
-          "displayLogic": null
+          "visibility": "editable",
+          "grid": false,
+          "reason": "ETP-4529 — accounting dimension, config-gated (@ACCT_DIMENSION_DISPLAY@)."
         },
         "costcenter": {
+          "visibility": "editable",
+          "grid": false,
           "reference": "CostCenter",
-          "form": false,
-          "readOnlyLogic": null,
-          "displayLogic": null
+          "reason": "ETP-4529 — accounting dimension, config-gated (@ACCT_DIMENSION_DISPLAY@)."
         },
         "asset": {
           "form": false,

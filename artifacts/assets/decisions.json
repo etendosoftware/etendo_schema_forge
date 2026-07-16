@@ -249,7 +249,8 @@
         },
         "project": {
           "visibility": "editable",
-          "form": false
+          "section": "other",
+          "reason": "ETP-4529 — accounting dimension, config-gated (raw AD: @$Element_PJ@='Y' & @IsDepreciated@='Y')."
         },
         "eTADASCostCenter": {
           "visibility": "editable",

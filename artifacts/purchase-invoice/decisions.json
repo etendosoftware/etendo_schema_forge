@@ -245,16 +245,15 @@
           "readOnlyLogic": null
         },
         "project": {
+          "visibility": "editable",
           "section": "other",
-          "form": false,
-          "readOnlyLogic": null,
-          "displayLogic": null
+          "reason": "ETP-4529 — accounting dimension, config-gated (@ACCT_DIMENSION_DISPLAY@)."
         },
         "costcenter": {
-          "visibility": "discarded",
+          "visibility": "editable",
+          "section": "other",
           "reference": "CostCenter",
-          "readOnlyLogic": null,
-          "displayLogic": null
+          "reason": "ETP-4529 — accounting dimension, config-gated (@ACCT_DIMENSION_DISPLAY@)."
         },
         "asset": {
           "visibility": "discarded",
@@ -636,15 +635,15 @@
           "inputMode": "selector"
         },
         "project": {
-          "form": false,
-          "readOnlyLogic": null,
-          "displayLogic": null
+          "visibility": "editable",
+          "grid": false,
+          "reason": "ETP-4529 — accounting dimension, config-gated (@ACCT_DIMENSION_DISPLAY@)."
         },
         "costcenter": {
-          "form": false,
+          "visibility": "editable",
+          "grid": false,
           "reference": "CostCenter",
-          "readOnlyLogic": null,
-          "displayLogic": null
+          "reason": "ETP-4529 — accounting dimension, config-gated (@ACCT_DIMENSION_DISPLAY@)."
         },
         "asset": {
           "form": false,

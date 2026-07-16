@@ -538,3 +538,26 @@ The window stays **custom** (`layoutType: "custom"`, bespoke React structure), b
 - **Row kebab visible on hover only** — appears via CSS `opacity-0 group-hover:opacity-100`. Figma shows it always-visible.
 - **Posting status sub-label** is derived provisionally from `paymentStatus` (RPPC → "Contabilizado" / green dot, else → "Sin contabilizar" / orange dot). Will be replaced by the real `ETBR_PostStatus` field once it exists.
 - **Bank logo** is the generic `AccountLogoAvatar` (icon by account type). Real brand logos (Santander/BBVA/etc.) are a future enhancement.
+
+## Accounting dimension visibility per section — ETP-4529
+
+The matrix's `Transacciones Cuentas Financieras` row (no header/lines split — a single
+`transaction` entity): Contacto=**Siempre**, Producto=**Nunca**, Proyecto=**Por config**,
+Centro de costo=**Por config**.
+
+| Field | State |
+| --- | --- |
+| `businessPartner` (Contacto) | **Siempre** — added `"displayLogic": null` override. Raw AD `displayLogic` is the compound `@ACCT_DIMENSION_DISPLAY@ & @Trxtype@!''`; per ETP-4529 scope decision #2 ("Siempre"/"Nunca" override the macro, never combine with it), the whole expression is now bypassed, including the `@Trxtype@!''` sequencing condition. **Side effect to flag for REVIEW:** the field will now render even before a transaction type is chosen, which is a small UX change beyond pure accounting-dimension scope. |
+| `product` | **Nunca** — already `visibility: "discarded"`, no change needed |
+| `project` | **Por config** — already correct: no override, raw `@ACCT_DIMENSION_DISPLAY@ & @Trxtype@!''` passes through as-is |
+| `costCenter` | **Por config** — same as `project`, already correct |
+
+`project`/`costCenter` retain the `@Trxtype@!''` condition ANDed with the dimension macro — this
+is consistent with "Por config" (still config-gated) and preserves an existing, unrelated
+UX-sequencing rule (don't show the field before a transaction type is picked).
+
+This window's `transaction` entity renders through the generic generated form path, so the same
+shared runtime gap applies here as elsewhere: `useDisplayLogic` is only wired for the
+`header`-equivalent entity — verify against a live/dev environment whether `transaction` counts as
+that "header" entity for this window's `DetailView` usage before relying on the config gating in
+production.

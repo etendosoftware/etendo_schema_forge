@@ -1,8 +1,8 @@
 {
-  "version": "0.15.1",
+  "version": "0.16.0",
   "generatedAt": "2026-04-29T19:05:48.778Z",
-  "updatedAt": "2026-06-25T19:58:28.564Z",
-  "contractChecksum": "e31470929f91fada",
+  "updatedAt": "2026-07-16T14:28:23.380Z",
+  "contractChecksum": "2636c42087489237",
   "apiPrediction": {
     "specName": "goods-movements",
     "baseUrl": "/sws/neo/goods-movements",
@@ -36,6 +36,22 @@
       }
     },
     "selectors": [
+      {
+        "entity": "movement",
+        "field": "project",
+        "column": "C_Project_ID",
+        "reference": "Project",
+        "inputMode": "search",
+        "url": "/sws/neo/goods-movements/movement/selectors/project"
+      },
+      {
+        "entity": "movement",
+        "field": "costCenter",
+        "column": "C_Costcenter_ID",
+        "reference": "Costcenter",
+        "inputMode": "selector",
+        "url": "/sws/neo/goods-movements/movement/selectors/costCenter"
+      },
       {
         "entity": "movementLine",
         "field": "product",
@@ -257,6 +273,12 @@
             "defaultValue": "@#Date@"
           },
           "description": {},
+          "project": {
+            "readOnlyLogic": "@Posted@='Y'"
+          },
+          "costCenter": {
+            "readOnlyLogic": "@Posted@='Y'"
+          },
           "documentNo": {
             "readOnly": true,
             "readOnlyLogic": "@Processed@='Y'"
@@ -379,5 +401,5 @@
     "knownLimitations": [],
     "dangerousOperations": []
   },
-  "checksum": "50695d76e23dde0c"
+  "checksum": "edf53d60c7ce24bd"
 }

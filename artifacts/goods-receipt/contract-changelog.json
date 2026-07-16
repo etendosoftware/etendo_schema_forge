@@ -938,5 +938,26 @@
     ],
     "author": "pipeline",
     "date": "2026-06-29"
+  },
+  {
+    "from": "0.20.0",
+    "to": "0.21.0",
+    "level": "breaking",
+    "reasons": [
+      "Field \"project\" property \"form\" changed from \"false\" to \"true\" in frontend (patch)",
+      "Field \"project\" property \"section\" changed from \"undefined\" to \"other\" in frontend (additive)",
+      "Field \"project\" property \"displayLogic\" changed from \"undefined\" to \"[object Object]\" in frontend (additive)",
+      "Field \"costcenter\" property \"form\" changed from \"false\" to \"true\" in frontend (patch)",
+      "Field \"costcenter\" property \"section\" changed from \"undefined\" to \"other\" in frontend (additive)",
+      "Field \"costcenter\" property \"displayLogic\" changed from \"undefined\" to \"[object Object]\" in frontend (additive)",
+      "Field \"businessPartner\" removed from entity \"goodsReceiptLine\" in frontend",
+      "Field \"project\" property \"form\" changed from \"false\" to \"true\" in frontend (patch)",
+      "Field \"project\" property \"displayLogic\" changed from \"undefined\" to \"[object Object]\" in frontend (additive)",
+      "Field \"costcenter\" property \"form\" changed from \"false\" to \"true\" in frontend (patch)",
+      "Field \"costcenter\" property \"displayLogic\" changed from \"undefined\" to \"[object Object]\" in frontend (additive)",
+      "Field \"businessPartner\" property \"visibility\" changed from \"editable\" to \"discarded\" in backend (patch)"
+    ],
+    "author": "pipeline",
+    "date": "2026-07-16"
   }
 ]

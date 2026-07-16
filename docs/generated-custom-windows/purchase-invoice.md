@@ -414,3 +414,24 @@ query in the GO module (`PisPaymentService.hasLinkedPisPayment`), not a new PSD2
 
 Scope v1: purchase invoices only, EUR (SEPA) / GBP (FPS). Out of scope: receipts, batch/multi-invoice
 PIS, other currencies, scheduled payments.
+
+## Accounting dimension visibility per section — ETP-4529
+
+| Field | Header | Lines |
+| --- | --- | --- |
+| `businessPartner` | **Siempre** — `displayLogic: null` override | **Nunca** — discarded |
+| `product` | *(no such field on the header)* | **Siempre** — no dimension gating |
+| `project` | **Por config** — raw AD `@ACCT_DIMENSION_DISPLAY@` passthrough (`section: "other"`) | **Por config** — same passthrough |
+| `costcenter` | **Por config** — raw AD `@ACCT_DIMENSION_DISPLAY@` passthrough (`section: "other"`) | **Por config** — same passthrough |
+
+**Fixed a pre-existing gap:** `header.project`, `header.costcenter`, `lines.project`, and
+`lines.costcenter` previously carried `"form": false, "readOnlyLogic": null, "displayLogic": null`
+in `decisions.json`, which both hid the fields unconditionally AND silenced their raw
+`@Posted@='Y'` read-only rule. Both are now restored: the fields render (gated by the
+accounting-dimension macro) and are correctly locked once the invoice is posted.
+
+**Known runtime gap (shared across windows, see `sales-invoice.md` for the full write-up):**
+`@ACCT_DIMENSION_DISPLAY@` is only evaluated at runtime for the **header** entity, and only in
+`other`/`collapsed` form sections. There is no equivalent evaluation for the **lines** entity yet,
+so `lines.project`/`lines.costcenter` carry correct contract metadata but render unconditionally
+until a lines-scoped `evaluate-display` call is added to the shared line-editing components.

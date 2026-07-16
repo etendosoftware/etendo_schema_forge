@@ -1,8 +1,8 @@
 {
-  "version": "0.38.0",
+  "version": "0.39.0",
   "generatedAt": "2026-04-29T19:06:30.936Z",
-  "updatedAt": "2026-07-08T11:39:25.357Z",
-  "checksum": "1a08a830501023e7",
+  "updatedAt": "2026-07-16T14:28:23.063Z",
+  "checksum": "24923f03b0bfeb5f",
   "frontendContract": {
     "window": {
       "id": "800027",
@@ -634,9 +634,10 @@
             "visibility": "editable",
             "required": false,
             "grid": false,
-            "form": false,
+            "form": true,
             "reference": "Project",
             "inputMode": "search",
+            "section": "other",
             "displayLogic": {
               "raw": "@$Element_PJ@='Y' & @IsDepreciated@='Y'",
               "evaluable": false,

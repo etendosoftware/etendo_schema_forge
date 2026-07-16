@@ -358,10 +358,14 @@
           "visibility": "system"
         },
         "project": {
-          "visibility": "discarded"
+          "visibility": "editable",
+          "section": "other",
+          "reason": "ETP-4529 — accounting dimension, config-gated (@ACCT_DIMENSION_DISPLAY@)."
         },
         "costcenter": {
-          "visibility": "discarded"
+          "visibility": "editable",
+          "section": "other",
+          "reason": "ETP-4529 — accounting dimension, config-gated (@ACCT_DIMENSION_DISPLAY@)."
         },
         "salesCampaign": {
           "visibility": "discarded"
@@ -628,10 +632,14 @@
           "visibility": "discarded"
         },
         "project": {
-          "visibility": "discarded"
+          "visibility": "editable",
+          "grid": false,
+          "reason": "ETP-4529 — accounting dimension, config-gated (@ACCT_DIMENSION_DISPLAY@)."
         },
         "costcenter": {
-          "visibility": "discarded"
+          "visibility": "editable",
+          "grid": false,
+          "reason": "ETP-4529 — accounting dimension, config-gated (@ACCT_DIMENSION_DISPLAY@)."
         },
         "asset": {
           "visibility": "discarded"

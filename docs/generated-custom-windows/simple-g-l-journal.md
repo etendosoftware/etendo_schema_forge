@@ -93,3 +93,36 @@ This window declares `window.balanceFooter = { "debitField": "foreignCurrencyDeb
 5. Confirm no Post/Complete action is offered and no posting status field is shown (posting deferred; `Posted` is hidden).
 6. Open a line in the side panel, tick **Open Items**, and confirm the five dimension fields (Business Partner, Product, Project, Cost Center, Asset) appear; untick it and confirm they hide again.
 7. Confirm the window appears in the Finance menu as **Manual Journals** (es: **Asientos Manuales**).
+
+## Accounting dimension visibility per section — ETP-4529
+
+The ETP-4529 matrix asks for all four dimensions (Contacto, Producto, Proyecto, Centro de costo) to
+be **Por config** on both Cabecera and Líneas — the only window in the matrix with a uniform
+"Por config" row.
+
+**Header — design reversal, flagged for REVIEW:** `businessPartner`, `product`, `project`, and
+`costCenter` were previously all `visibility: "discarded"` with the reason "Header accounting
+dimension — not part of the simplified 7-field header form" (a deliberate prior scope decision).
+ETP-4529 supersedes this: all four are now `visibility: "editable", section: "other"` with no
+`displayLogic` override, so the raw AD `@ACCT_DIMENSION_DISPLAY@` passes through and each field is
+shown only when the client's accounting-dimension configuration enables it for GL Journal
+headers. **This reverses the "simplified 7-field header" decision — confirm this is intended
+before it ships past QA.**
+
+**Lines — latent bug fixed:** all four dimension fields previously shared the identical override
+`"displayLogic": "@Open_Items@='Y'"` (visible only when the line's Open Items checkbox is ticked),
+copied across all four regardless of each field's actual raw AD display logic. Checking the raw
+schema:
+- `businessPartner`: raw AD `displayLogic` is `@Open_Items@='Y' | @ACCT_DIMENSION_DISPLAY@` (an OR
+  of the Open-Items rule and the dimension macro) — the override was accidentally discarding the
+  macro branch. Removed the override so the real compound expression passes through: the field now
+  shows on Open-Items lines **or** when config-enabled (strict superset of the old behavior).
+- `product`, `project`, `costCenter`: raw AD `displayLogic` is plain `@ACCT_DIMENSION_DISPLAY@` —
+  these were never actually tied to Open Items at the AD level; the shared override was a
+  copy-paste that didn't match. Removed for all three; they are now purely config-gated.
+
+**Known runtime gap (shared across windows, see `sales-invoice.md` for the full write-up):**
+`@ACCT_DIMENSION_DISPLAY@` is only evaluated at runtime for the header entity, and only in
+`other`/`collapsed` form sections — there is no equivalent evaluation for the lines entity yet, so
+the four `lines.*` dimension fields carry correct contract metadata but render unconditionally
+until a lines-scoped `evaluate-display` call exists.

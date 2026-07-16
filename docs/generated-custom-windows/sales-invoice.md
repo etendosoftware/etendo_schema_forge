@@ -325,3 +325,29 @@ affected and required no change.
 
 Regression coverage:
 `tools/app-shell/src/windows/custom/shared/__tests__/useFiscalStatus.vitest.jsx`.
+
+## Accounting dimension visibility per section — ETP-4529
+
+Per-entity, per-section visibility for the four accounting dimensions (Contacto/`businessPartner`,
+Producto/`product`, Proyecto/`project`, Centro de costo/`costcenter`) now follows the ETP-4529
+matrix:
+
+| Field | Header | Lines |
+| --- | --- | --- |
+| `businessPartner` | **Siempre** — `displayLogic: null` override, always shown regardless of the client's accounting-dimension configuration | **Nunca** — discarded |
+| `product` | *(no such field on the header)* | **Siempre** — no dimension gating (raw AD display logic is an unrelated `@Financial_Invoice_Line@` rule, already bypassed) |
+| `project` | **Por config** — raw AD `@ACCT_DIMENSION_DISPLAY@` passthrough (`section: "other"`) | **Por config** — same passthrough |
+| `costcenter` | **Por config** — raw AD `@ACCT_DIMENSION_DISPLAY@` passthrough (`section: "other"`) | **Por config** — same passthrough |
+
+"Por config" means the field's visibility is resolved server-side at runtime via
+`POST /sws/neo/sales-invoice/header/evaluate-display`, which expands
+`@ACCT_DIMENSION_DISPLAY@` through `DimensionDisplayUtility.computeAccountingDimensionDisplayLogic()`
+against the client's `AD_Client` per-dimension configuration
+(`Project_Acctdim_Header`, etc.). **Known gap:** this evaluate-display call is only wired for
+the **header** entity in `DetailView.jsx` (`useDisplayLogic(entity, hook.editing, ...)`), and even
+then only for the `other`/`collapsed` form sections — the `principal` section explicitly passes
+an empty `visibility: {}` object. There is currently no equivalent call scoped to the `lines`
+entity, so the `project`/`costcenter` **line** fields carry the correct `displayLogic` metadata in
+`contract.json` but nothing evaluates it at runtime yet — they render unconditionally until a
+lines-scoped evaluate-display call is added to the shared line-editing components. See the
+ETP-4529 delivery notes for the full write-up.

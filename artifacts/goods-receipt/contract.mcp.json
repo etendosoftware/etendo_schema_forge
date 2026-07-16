@@ -1,8 +1,8 @@
 {
-  "version": "0.20.0",
+  "version": "0.21.0",
   "generatedAt": "2026-04-29T19:05:20.719Z",
-  "updatedAt": "2026-06-24T20:46:47.331Z",
-  "contractChecksum": "87374b090a474b72",
+  "updatedAt": "2026-07-16T14:28:23.517Z",
+  "contractChecksum": "94231dbd47ddb118",
   "apiPrediction": {
     "specName": "goods-receipt",
     "baseUrl": "/sws/neo/goods-receipt",
@@ -192,14 +192,6 @@
         "reference": "OrderLine",
         "inputMode": "search",
         "url": "/sws/neo/goods-receipt/goodsReceiptLine/selectors/salesOrderLine"
-      },
-      {
-        "entity": "goodsReceiptLine",
-        "field": "businessPartner",
-        "column": "C_Bpartner_ID",
-        "reference": "BusinessPartner",
-        "inputMode": "search",
-        "url": "/sws/neo/goods-receipt/goodsReceiptLine/selectors/businessPartner"
       },
       {
         "entity": "goodsReceiptLine",
@@ -675,9 +667,6 @@
             "readOnly": true,
             "readOnlyLogic": "@Processed@='Y'"
           },
-          "businessPartner": {
-            "readOnlyLogic": "@Posted@='Y'"
-          },
           "project": {
             "readOnlyLogic": "@Posted@='Y'"
           },
@@ -848,5 +837,5 @@
     "knownLimitations": [],
     "dangerousOperations": []
   },
-  "checksum": "fc78652a77337d78"
+  "checksum": "0fa316837eff9892"
 }

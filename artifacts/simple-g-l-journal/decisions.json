@@ -92,20 +92,24 @@
           "reason": "Kept (cheap boolean) per spec — multi-ledger flag."
         },
         "businessPartner": {
-          "visibility": "discarded",
-          "reason": "Header accounting dimension — not part of the simplified 7-field header form."
+          "visibility": "editable",
+          "section": "other",
+          "reason": "ETP-4529 — accounting dimension, config-gated (@ACCT_DIMENSION_DISPLAY@). Supersedes the prior 'not part of the simplified 7-field header form' discard."
         },
         "product": {
-          "visibility": "discarded",
-          "reason": "Header accounting dimension — not part of the simplified 7-field header form."
+          "visibility": "editable",
+          "section": "other",
+          "reason": "ETP-4529 — accounting dimension, config-gated (@ACCT_DIMENSION_DISPLAY@). Supersedes the prior 'not part of the simplified 7-field header form' discard."
         },
         "project": {
-          "visibility": "discarded",
-          "reason": "Header accounting dimension — not part of the simplified 7-field header form."
+          "visibility": "editable",
+          "section": "other",
+          "reason": "ETP-4529 — accounting dimension, config-gated (@ACCT_DIMENSION_DISPLAY@). Supersedes the prior 'not part of the simplified 7-field header form' discard."
         },
         "costCenter": {
-          "visibility": "discarded",
-          "reason": "Header accounting dimension — not part of the simplified 7-field header form."
+          "visibility": "editable",
+          "section": "other",
+          "reason": "ETP-4529 — accounting dimension, config-gated (@ACCT_DIMENSION_DISPLAY@). Supersedes the prior 'not part of the simplified 7-field header form' discard."
         },
         "asset": {
           "visibility": "discarded",
@@ -234,23 +238,17 @@
         "businessPartner": {
           "visibility": "editable",
           "grid": false,
-          "displayLogic": "@Open_Items@='Y'",
-          "displayLogicJs": "record['openItems'] === true",
-          "reason": "Open-Items dimension — form-only, shown only when the line's Open Items checkbox is ticked."
+          "reason": "ETP-4529 — raw AD passthrough (@Open_Items@='Y' | @ACCT_DIMENSION_DISPLAY@): keeps the Open-Items rule AND adds accounting-dimension config gating."
         },
         "product": {
           "visibility": "editable",
           "grid": false,
-          "displayLogic": "@Open_Items@='Y'",
-          "displayLogicJs": "record['openItems'] === true",
-          "reason": "Open-Items dimension — form-only, shown only when the line's Open Items checkbox is ticked."
+          "reason": "ETP-4529 — accounting dimension, config-gated (@ACCT_DIMENSION_DISPLAY@). Supersedes the prior Open-Items-only override, which didn't match this field's raw AD display logic."
         },
         "project": {
           "visibility": "editable",
           "grid": false,
-          "displayLogic": "@Open_Items@='Y'",
-          "displayLogicJs": "record['openItems'] === true",
-          "reason": "Open-Items dimension — form-only, shown only when the line's Open Items checkbox is ticked."
+          "reason": "ETP-4529 — accounting dimension, config-gated (@ACCT_DIMENSION_DISPLAY@). Supersedes the prior Open-Items-only override, which didn't match this field's raw AD display logic."
         },
         "activity": {
           "visibility": "discarded",
@@ -282,9 +280,7 @@
         "costCenter": {
           "visibility": "editable",
           "grid": false,
-          "displayLogic": "@Open_Items@='Y'",
-          "displayLogicJs": "record['openItems'] === true",
-          "reason": "Open-Items dimension — form-only, shown only when the line's Open Items checkbox is ticked."
+          "reason": "ETP-4529 — accounting dimension, config-gated (@ACCT_DIMENSION_DISPLAY@). Supersedes the prior Open-Items-only override, which didn't match this field's raw AD display logic."
         },
         "debit": {
           "visibility": "system",

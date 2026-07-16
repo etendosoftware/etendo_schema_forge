@@ -106,3 +106,26 @@ No current evidence shows:
 - The generated `GoodsReceiptPage.jsx` includes `AttachmentsTab` in its `customTabs` prop, wired to the `M_InOut` AD table.
 - **ETP-3995 — Related Documents tab i18n**: The generated page file now uses `labelKey: 'relatedDocuments'` in the `customTabs` prop instead of a hardcoded `label: 'Related Documents'` string, so the tab title renders via the active UI language (e.g. "Documentos relacionados" in Spanish) regardless of the browser locale.
 - **ETP-4032 — Receipt invoice preview modal**: `GoodsReceiptPreview.jsx` now exposes a "Create Invoice" action for completed receipts. `GoodsReceiptTopbar.jsx` shows an invoice-status pill. `ConfirmResultModal` was extracted to `tools/app-shell/src/components/contract-ui/` and is now shared across goods-receipt, goods-shipment, purchase-order, and sales-order.
+
+## Accounting dimension visibility per section — ETP-4529
+
+This window had the known `DISPLAY_Dimensions_WhenEnabled` gap referenced in ETP-4529: the rule
+catalog declared "Accounting dimensions shown only when accounting dimension display is enabled"
+(decision: Keep) but every dimension field actually carried `"form": false"` plus explicit
+`"readOnlyLogic": null, "displayLogic": null"` overrides — hidden unconditionally, with the raw AD
+display logic AND read-only logic both silenced. Fixed as part of ETP-4529:
+
+| Field | Header | Lines |
+| --- | --- | --- |
+| `businessPartner` (Contacto) | **Nunca** — the header's `businessPartner` is the receipt's core Vendor field (raw AD display logic is `None`, not a dimension), unaffected | **Nunca** — now explicit `visibility: "discarded"` (previously `form: false` with nulled logic; same effect, now unambiguous) |
+| `product` | *(no such field on the header)* | **Siempre** — core line field, no dimension gating |
+| `project` | **Por config** — raw AD `@ACCT_DIMENSION_DISPLAY@` now passes through (`section: "other"`, `form: false`/nulled logic removed) | **Por config** — same fix (`grid: false`, `form: false`/nulled logic removed) |
+| `costcenter` | **Por config** — same fix as `project` | **Por config** — same fix as `project` |
+
+The `readOnlyLogic: null` overrides removed alongside `displayLogic: null` were also silencing the
+raw `@Posted@='Y'` rule — these dimension fields are now correctly locked once the receipt is
+posted, in addition to being visible again.
+
+**Known runtime gap (shared across windows, see `sales-invoice.md` for the full write-up):**
+`@ACCT_DIMENSION_DISPLAY@` is only evaluated at runtime for the header entity, and only in
+`other`/`collapsed` form sections — there is no equivalent evaluation for the lines entity yet.

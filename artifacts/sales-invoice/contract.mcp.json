@@ -1,8 +1,8 @@
 {
-  "version": "0.54.0",
+  "version": "0.55.0",
   "generatedAt": "2026-04-30T15:42:46.582Z",
-  "updatedAt": "2026-07-07T14:43:09.715Z",
-  "contractChecksum": "a42dd981e45dff7c",
+  "updatedAt": "2026-07-16T14:28:24.099Z",
+  "contractChecksum": "30db1c770a217bb7",
   "apiPrediction": {
     "specName": "sales-invoice",
     "baseUrl": "/sws/neo/sales-invoice",
@@ -144,6 +144,35 @@
       },
       {
         "entity": "header",
+        "field": "project",
+        "column": "C_Project_ID",
+        "reference": "Project",
+        "inputMode": "search",
+        "url": "/sws/neo/sales-invoice/header/selectors/project",
+        "context": {
+          "required": [
+            {
+              "param": "IsSOTrx",
+              "source": "windowCategory"
+            },
+            {
+              "param": "C_BPartner_ID",
+              "source": "field",
+              "field": "businessPartner"
+            }
+          ]
+        }
+      },
+      {
+        "entity": "header",
+        "field": "costcenter",
+        "column": "C_Costcenter_ID",
+        "reference": "Costcenter",
+        "inputMode": "selector",
+        "url": "/sws/neo/sales-invoice/header/selectors/costcenter"
+      },
+      {
+        "entity": "header",
         "field": "aeatsiiDescription",
         "column": "EM_Aeatsii_Description_ID",
         "reference": "aeatsii_description",
@@ -208,6 +237,22 @@
             }
           ]
         }
+      },
+      {
+        "entity": "lines",
+        "field": "project",
+        "column": "C_Project_ID",
+        "reference": "Project",
+        "inputMode": "search",
+        "url": "/sws/neo/sales-invoice/lines/selectors/project"
+      },
+      {
+        "entity": "lines",
+        "field": "costcenter",
+        "column": "C_Costcenter_ID",
+        "reference": "Costcenter",
+        "inputMode": "selector",
+        "url": "/sws/neo/sales-invoice/lines/selectors/costcenter"
       },
       {
         "entity": "paymentPlan",
@@ -1005,6 +1050,12 @@
             "required": true,
             "readOnlyLogic": "@Processed@='Y'"
           },
+          "project": {
+            "readOnlyLogic": "@Posted@='Y'"
+          },
+          "costcenter": {
+            "readOnlyLogic": "@Posted@='Y'"
+          },
           "etsgDateOperation": {
             "readOnlyLogic": "@processed@='Y'",
             "defaultValue": "@DateInvoiced@"
@@ -1133,6 +1184,12 @@
           "grossAmount": {
             "readOnly": true,
             "defaultValue": "0"
+          },
+          "project": {
+            "readOnlyLogic": "@Posted@='Y'"
+          },
+          "costcenter": {
+            "readOnlyLogic": "@Posted@='Y'"
           }
         }
       },
@@ -1283,6 +1340,23 @@
       },
       {
         "entity": "header",
+        "field": "project",
+        "context": {
+          "required": [
+            {
+              "param": "IsSOTrx",
+              "source": "windowCategory"
+            },
+            {
+              "param": "C_BPartner_ID",
+              "source": "field",
+              "field": "businessPartner"
+            }
+          ]
+        }
+      },
+      {
+        "entity": "header",
         "field": "transactionDocument",
         "context": {
           "required": [
@@ -1390,5 +1464,5 @@
       "tbaiVoidxmlgenerator"
     ]
   },
-  "checksum": "80f8a379fa0f5a46"
+  "checksum": "fe28a2d71f7dec4e"
 }

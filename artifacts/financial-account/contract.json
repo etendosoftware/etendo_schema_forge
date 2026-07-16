@@ -1,8 +1,8 @@
 {
-  "version": "0.15.0",
+  "version": "0.17.0",
   "generatedAt": "2026-06-11T01:47:08.755Z",
-  "updatedAt": "2026-07-08T11:37:57.463Z",
-  "checksum": "d0bb4681f9439696",
+  "updatedAt": "2026-07-16T14:28:23.251Z",
+  "checksum": "e7c30fd6f7853cf9",
   "frontendContract": {
     "window": {
       "id": "94EAA455D2644E04AB25D93BE5157B6D",
@@ -78,10 +78,7 @@
               },
               {
                 "value": "CA",
-                "name": "Card",
-                "labels": {
-                  "es_ES": "Card"
-                }
+                "name": "Card"
               },
               {
                 "value": "C",
@@ -442,31 +439,19 @@
             "enumValues": [
               {
                 "value": "1BE",
-                "name": "New statement each run",
-                "labels": {
-                  "es_ES": "One per run"
-                }
+                "name": "New statement each run"
               },
               {
                 "value": "1BD",
-                "name": "Within 1 day",
-                "labels": {
-                  "es_ES": "One per day"
-                }
+                "name": "Within 1 day"
               },
               {
                 "value": "1BW",
-                "name": "Within 7 days",
-                "labels": {
-                  "es_ES": "One per week"
-                }
+                "name": "Within 7 days"
               },
               {
                 "value": "1BM",
-                "name": "Within 30 days",
-                "labels": {
-                  "es_ES": "One per month"
-                }
+                "name": "Within 30 days"
               }
             ],
             "defaultValue": "1BD",
@@ -557,17 +542,11 @@
             "enumValues": [
               {
                 "value": "CO",
-                "name": "Active",
-                "labels": {
-                  "es_ES": "Active"
-                }
+                "name": "Active"
               },
               {
                 "value": "DC",
-                "name": "Inactive",
-                "labels": {
-                  "es_ES": "Inactive"
-                }
+                "name": "Inactive"
               }
             ],
             "defaultValue": "DC",
@@ -1081,12 +1060,6 @@
             "reference": "BPartner",
             "inputMode": "search",
             "gridOrder": 3,
-            "displayLogic": {
-              "raw": "@ACCT_DIMENSION_DISPLAY@ & @Trxtype@!''",
-              "evaluable": false,
-              "reason": "server-macro",
-              "js": null
-            },
             "readOnlyLogic": {
               "raw": "@Posted@='Y' | @Fin_Payment_ID@!''",
               "evaluable": true,
@@ -1287,129 +1260,75 @@
             "enumValues": [
               {
                 "value": "NC",
-                "name": "Cost Not Calculated",
-                "labels": {
-                  "es_ES": "Coste No Calculado"
-                }
+                "name": "Cost Not Calculated"
               },
               {
                 "value": "d",
-                "name": "Disabled For Background",
-                "labels": {
-                  "es_ES": "Deshabilitado Para Background"
-                }
+                "name": "Disabled For Background"
               },
               {
                 "value": "D",
-                "name": "Document Disabled",
-                "labels": {
-                  "es_ES": "Documento Deshabilitado"
-                }
+                "name": "Document Disabled"
               },
               {
                 "value": "L",
-                "name": "Document Locked",
-                "labels": {
-                  "es_ES": "Documento Bloqueado"
-                }
+                "name": "Document Locked"
               },
               {
                 "value": "E",
-                "name": "Error",
-                "labels": {
-                  "es_ES": "Error"
-                }
+                "name": "Error"
               },
               {
                 "value": "C",
-                "name": "Error, No cost",
-                "labels": {
-                  "es_ES": "Error, No hay coste"
-                }
+                "name": "Error, No cost"
               },
               {
                 "value": "i",
-                "name": "Invalid Account",
-                "labels": {
-                  "es_ES": "Cuenta No Válida"
-                }
+                "name": "Invalid Account"
               },
               {
                 "value": "AD",
-                "name": "No Accounting Date",
-                "labels": {
-                  "es_ES": "Sin Fecha Contable"
-                }
+                "name": "No Accounting Date"
               },
               {
                 "value": "DT",
-                "name": "No Document Type",
-                "labels": {
-                  "es_ES": "Sin tipo de Documento"
-                }
+                "name": "No Document Type"
               },
               {
                 "value": "NO",
-                "name": "No Related PO",
-                "labels": {
-                  "es_ES": "Sin PO Relacionada"
-                }
+                "name": "No Related PO"
               },
               {
                 "value": "b",
-                "name": "Not Balanced",
-                "labels": {
-                  "es_ES": "No Balanceado"
-                }
+                "name": "Not Balanced"
               },
               {
                 "value": "c",
-                "name": "Not Convertible (no rate)",
-                "labels": {
-                  "es_ES": "No Convertible (no hay rango)"
-                }
+                "name": "Not Convertible (no rate)"
               },
               {
                 "value": "l",
-                "name": "Pending Refresh",
-                "labels": {
-                  "es_ES": "Pendiente de Actualización"
-                }
+                "name": "Pending Refresh"
               },
               {
                 "value": "p",
-                "name": "Period Closed",
-                "labels": {
-                  "es_ES": "Periodo Cerrado"
-                }
+                "name": "Period Closed"
               },
               {
                 "value": "y",
-                "name": "Post Prepared",
-                "labels": {
-                  "es_ES": "Contabilidad Preparada"
-                }
+                "name": "Post Prepared"
               },
               {
                 "value": "Y",
-                "name": "Posted",
-                "labels": {
-                  "es_ES": "Contabilizado"
-                }
+                "name": "Posted"
               },
               {
                 "value": "T",
-                "name": "Table Disabled",
-                "labels": {
-                  "es_ES": "Tabla Deshabilitada"
-                }
+                "name": "Table Disabled"
               },
               {
                 "value": "N",
-                "name": "Unposted",
-                "labels": {
-                  "es_ES": "No Contabilizado"
-                }
+                "name": "Unposted"
               }
             ],
             "defaultValue": "N"
@@ -1743,129 +1662,75 @@
             "enumValues": [
               {
                 "value": "NC",
-                "name": "Cost Not Calculated",
-                "labels": {
-                  "es_ES": "Coste No Calculado"
-                }
+                "name": "Cost Not Calculated"
               },
               {
                 "value": "d",
-                "name": "Disabled For Background",
-                "labels": {
-                  "es_ES": "Deshabilitado Para Background"
-                }
+                "name": "Disabled For Background"
               },
               {
                 "value": "D",
-                "name": "Document Disabled",
-                "labels": {
-                  "es_ES": "Documento Deshabilitado"
-                }
+                "name": "Document Disabled"
               },
               {
                 "value": "L",
-                "name": "Document Locked",
-                "labels": {
-                  "es_ES": "Documento Bloqueado"
-                }
+                "name": "Document Locked"
               },
               {
                 "value": "E",
-                "name": "Error",
-                "labels": {
-                  "es_ES": "Error"
-                }
+                "name": "Error"
               },
               {
                 "value": "C",
-                "name": "Error, No cost",
-                "labels": {
-                  "es_ES": "Error, No hay coste"
-                }
+                "name": "Error, No cost"
               },
               {
                 "value": "i",
-                "name": "Invalid Account",
-                "labels": {
-                  "es_ES": "Cuenta No Válida"
-                }
+                "name": "Invalid Account"
               },
               {
                 "value": "AD",
-                "name": "No Accounting Date",
-                "labels": {
-                  "es_ES": "Sin Fecha Contable"
-                }
+                "name": "No Accounting Date"
               },
               {
                 "value": "DT",
-                "name": "No Document Type",
-                "labels": {
-                  "es_ES": "Sin tipo de Documento"
-                }
+                "name": "No Document Type"
               },
               {
                 "value": "NO",
-                "name": "No Related PO",
-                "labels": {
-                  "es_ES": "Sin PO Relacionada"
-                }
+                "name": "No Related PO"
               },
               {
                 "value": "b",
-                "name": "Not Balanced",
-                "labels": {
-                  "es_ES": "No Balanceado"
-                }
+                "name": "Not Balanced"
               },
               {
                 "value": "c",
-                "name": "Not Convertible (no rate)",
-                "labels": {
-                  "es_ES": "No Convertible (no hay rango)"
-                }
+                "name": "Not Convertible (no rate)"
               },
               {
                 "value": "l",
-                "name": "Pending Refresh",
-                "labels": {
-                  "es_ES": "Pendiente de Actualización"
-                }
+                "name": "Pending Refresh"
               },
               {
                 "value": "p",
-                "name": "Period Closed",
-                "labels": {
-                  "es_ES": "Periodo Cerrado"
-                }
+                "name": "Period Closed"
               },
               {
                 "value": "y",
-                "name": "Post Prepared",
-                "labels": {
-                  "es_ES": "Contabilidad Preparada"
-                }
+                "name": "Post Prepared"
               },
               {
                 "value": "Y",
-                "name": "Posted",
-                "labels": {
-                  "es_ES": "Contabilizado"
-                }
+                "name": "Posted"
               },
               {
                 "value": "T",
-                "name": "Table Disabled",
-                "labels": {
-                  "es_ES": "Tabla Deshabilitada"
-                }
+                "name": "Table Disabled"
               },
               {
                 "value": "N",
-                "name": "Unposted",
-                "labels": {
-                  "es_ES": "No Contabilizado"
-                }
+                "name": "Unposted"
               }
             ],
             "defaultValue": "N"
@@ -4569,14 +4434,6 @@
         "description": "Display logic for 'activity' in transaction should have evaluable flag"
       },
       {
-        "id": "t-displaylogic-evaluable-transaction-businessPartner",
-        "category": "displaylogic-evaluable",
-        "entity": "transaction",
-        "field": "businessPartner",
-        "runner": "node",
-        "description": "Display logic for 'businessPartner' in transaction should have evaluable flag"
-      },
-      {
         "id": "t-displaylogic-evaluable-transaction-costCenter",
         "category": "displaylogic-evaluable",
         "entity": "transaction",
@@ -4911,14 +4768,6 @@
         "field": "activity",
         "runner": "node",
         "description": "Display logic for 'activity' in transaction should be valid JS"
-      },
-      {
-        "id": "t-displaylogic-valid-transaction-businessPartner",
-        "category": "displaylogic-valid",
-        "entity": "transaction",
-        "field": "businessPartner",
-        "runner": "node",
-        "description": "Display logic for 'businessPartner' in transaction should be valid JS"
       },
       {
         "id": "t-displaylogic-valid-transaction-costCenter",
@@ -9085,13 +8934,13 @@
       }
     ],
     "summary": {
-      "total": 671,
+      "total": 669,
       "byCategory": {
         "action-endpoint": 21,
         "crud-flags": 4,
         "default-value-type": 28,
-        "displaylogic-evaluable": 43,
-        "displaylogic-valid": 43,
+        "displaylogic-evaluable": 42,
+        "displaylogic-valid": 42,
         "field-presence": 72,
         "field-type": 72,
         "readonlylogic-evaluable": 29,
@@ -9102,7 +8951,7 @@
         "visibility": 4
       },
       "byRunner": {
-        "node": 671,
+        "node": 669,
         "junit": 0
       }
     }

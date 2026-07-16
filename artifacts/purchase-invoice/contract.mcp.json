@@ -1,8 +1,8 @@
 {
-  "version": "0.67.0",
+  "version": "0.68.0",
   "generatedAt": "2026-04-30T15:42:46.722Z",
-  "updatedAt": "2026-07-01T14:34:29.036Z",
-  "contractChecksum": "ba5b71d06c8590f7",
+  "updatedAt": "2026-07-16T14:28:23.933Z",
+  "contractChecksum": "e9742b37f249cbef",
   "apiPrediction": {
     "specName": "purchase-invoice",
     "baseUrl": "/sws/neo/purchase-invoice",
@@ -298,6 +298,14 @@
             }
           ]
         }
+      },
+      {
+        "entity": "header",
+        "field": "costcenter",
+        "column": "C_Costcenter_ID",
+        "reference": "CostCenter",
+        "inputMode": "selector",
+        "url": "/sws/neo/purchase-invoice/header/selectors/costcenter"
       },
       {
         "entity": "header",
@@ -1425,6 +1433,9 @@
           "project": {
             "readOnlyLogic": "@Posted@='Y'"
           },
+          "costcenter": {
+            "readOnlyLogic": "@Posted@='Y'"
+          },
           "prepaymentAmount": {
             "readOnly": true,
             "required": true,
@@ -2125,5 +2136,5 @@
       "tbaiVoidxmlgenerator"
     ]
   },
-  "checksum": "a71b18a448662c37"
+  "checksum": "777c789d94c46e0e"
 }

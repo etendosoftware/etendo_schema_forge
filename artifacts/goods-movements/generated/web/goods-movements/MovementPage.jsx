@@ -103,6 +103,22 @@ export const api = {
   },
   "selectors": [
     {
+      "entity": "movement",
+      "field": "project",
+      "column": "C_Project_ID",
+      "reference": "Project",
+      "inputMode": "search",
+      "url": "/sws/neo/goods-movements/movement/selectors/project"
+    },
+    {
+      "entity": "movement",
+      "field": "costCenter",
+      "column": "C_Costcenter_ID",
+      "reference": "Costcenter",
+      "inputMode": "selector",
+      "url": "/sws/neo/goods-movements/movement/selectors/costCenter"
+    },
+    {
       "entity": "movementLine",
       "field": "product",
       "column": "M_Product_ID",

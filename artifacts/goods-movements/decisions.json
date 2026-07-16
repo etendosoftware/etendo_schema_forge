@@ -139,12 +139,14 @@
           "visibility": "system"
         },
         "project": {
-          "visibility": "discarded",
-          "reason": "Accounting dimension — not relevant for simplified inventory movements"
+          "visibility": "editable",
+          "section": "other",
+          "reason": "ETP-4529 — accounting dimension, config-gated (@ACCT_DIMENSION_DISPLAY@). Supersedes the prior 'not relevant for simplified inventory movements' discard."
         },
         "costCenter": {
-          "visibility": "discarded",
-          "reason": "Accounting dimension — not relevant for simplified inventory movements"
+          "visibility": "editable",
+          "section": "other",
+          "reason": "ETP-4529 — accounting dimension, config-gated (@ACCT_DIMENSION_DISPLAY@). Supersedes the prior 'not relevant for simplified inventory movements' discard."
         },
         "asset": {
           "visibility": "discarded",

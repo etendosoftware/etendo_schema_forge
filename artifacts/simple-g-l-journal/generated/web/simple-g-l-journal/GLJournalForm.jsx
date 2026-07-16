@@ -8,6 +8,10 @@ const fields = [
   { key: 'currency', column: 'C_Currency_ID', type: 'selector', label: 'Currency', required: true, section: 'principal', reference: 'Currency', inputMode: 'selector', defaultValue: '@C_Currency_ID@', readOnlyLogic: (record) => record['processed'] === true },
   { key: 'opening', column: 'IsOpening', type: 'checkbox', label: 'Opening', required: true, section: 'other', readOnlyLogic: (record) => record['processed'] === true },
   { key: 'multigeneralLedger', column: 'Multi_Gl', type: 'checkbox', label: 'Multi-General Ledger', required: true, section: 'other', readOnlyLogic: (record) => record['processed'] === true },
+  { key: 'businessPartner', column: 'C_Bpartner_ID', type: 'search', label: 'Business Partner', section: 'other', reference: 'BPartner', inputMode: 'search', visible: null, visibilitySource: 'server', displayLogicReason: 'server-macro', readOnlyLogic: (record) => record['posted'] === true },
+  { key: 'product', column: 'M_Product_ID', type: 'search', label: 'Product', section: 'other', reference: 'Product', inputMode: 'search', visible: null, visibilitySource: 'server', displayLogicReason: 'server-macro', readOnlyLogic: (record) => record['posted'] === true },
+  { key: 'project', column: 'C_Project_ID', type: 'selector', label: 'Project', section: 'other', reference: 'Project', inputMode: 'selector', visible: null, visibilitySource: 'server', displayLogicReason: 'server-macro', readOnlyLogic: (record) => record['posted'] === true },
+  { key: 'costCenter', column: 'C_Costcenter_ID', type: 'selector', label: 'Cost Center', section: 'other', reference: 'Costcenter', inputMode: 'selector', visible: null, visibilitySource: 'server', displayLogicReason: 'server-macro', readOnlyLogic: (record) => record['posted'] === true },
 ];
 // @sf-generated-end fields:gLJournal
 

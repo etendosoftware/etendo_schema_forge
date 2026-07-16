@@ -85,3 +85,22 @@ Goods Movements should let an inventory user register a stock transfer from one 
 - `artifacts/goods-movements/contract.json` and `decisions.json` provide supporting evidence for the required-lines processing rule, processed-state read-only logic, omitted classic callouts, and omitted `moveBetweenLocators` / `posted` actions.
 - Unit tests for the detail-view shared components: `__tests__/lookupDrawers.vitest.jsx` (registry mapping), `__tests__/GoodsMovementsProductSearchDrawer.vitest.jsx` (drawer render and behavior), `__tests__/DataTable.excludeValueOf.vitest.jsx` (destination-bin exclusion), `__tests__/InlineLinesPanel.test.js` (lookup drawer resolution in inline edit), and `__tests__/DetailView.extractedHelpers.vitest.js` (DocumentStatusPill wrapping).
 - No dedicated window-level E2E test exists for Goods Movements; shared route and generated-window loading evidence is documented in `docs/generated-custom-windows/app-shell-functional-flows.md`.
+
+## Accounting dimension visibility per section — ETP-4529
+
+| Field | Header | Lines |
+| --- | --- | --- |
+| `businessPartner` (Contacto) | **Nunca** — no such field on the header | **Nunca** — no such field on the lines tab |
+| `product` | *(no such field on the header)* | **Siempre** — core line field, no dimension gating |
+| `project` | **Por config** — raw AD `@ACCT_DIMENSION_DISPLAY@` passthrough (`section: "other"`) | **Nunca** — no such field on the lines tab (`M_MovementLine` has no `project` column) |
+| `costCenter` | **Por config** — same fix as `project` | **Nunca** — same as `project` |
+
+**Design note:** `header.project`/`header.costCenter` were previously deliberately discarded with
+the reason "Accounting dimension — not relevant for simplified inventory movements". ETP-4529's
+matrix supersedes that prior decision — both fields are now config-gated instead of hidden. Flagging
+this reversal for REVIEW: confirm the "simplified movements" rationale is no longer wanted before
+this ships past QA.
+
+**Known runtime gap (shared across windows, see `sales-invoice.md` for the full write-up):**
+`@ACCT_DIMENSION_DISPLAY@` is only evaluated at runtime for the header entity, and only in
+`other`/`collapsed` form sections.

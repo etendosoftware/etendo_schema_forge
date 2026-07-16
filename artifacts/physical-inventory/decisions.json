@@ -111,7 +111,9 @@
           ]
         },
         "project": {
-          "form": false
+          "visibility": "editable",
+          "section": "other",
+          "reason": "ETP-4529 — accounting dimension, config-gated (@ACCT_DIMENSION_DISPLAY@)."
         },
         "processNow": {
           "visibility": "system"
@@ -126,7 +128,9 @@
           "visibility": "discarded"
         },
         "costCenter": {
-          "visibility": "discarded"
+          "visibility": "editable",
+          "section": "other",
+          "reason": "ETP-4529 — accounting dimension, config-gated (@ACCT_DIMENSION_DISPLAY@)."
         },
         "posted": {
           "visibility": "readOnly",

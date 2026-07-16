@@ -482,3 +482,39 @@ This iteration adjusts the **Accounting dimensions** group (Group 5) in the Depr
 
 1. Open an asset with **Depreciate** enabled and scroll to **Dimensiones contables**. Confirm exactly four selectors are shown: Project, Cost Center, Business Partner, Product — no 1st/2nd Dimension, Sales Region, Activity, or Sales Campaign.
 2. Open the **Product** selector and confirm it returns product options. Select a product, save, and reopen the asset — confirm the product value persists.
+
+## Accounting dimension visibility per section — ETP-4529
+
+The ETP-4529 matrix asks for `Activo (Amortizaciones) | Cabecera`: Contacto=**Nunca**,
+Producto=**Nunca**, Proyecto=**Por config**, Centro de costo=**Nunca**.
+
+**Finding — this window bypasses `decisions.json` for its dimension section entirely.** The
+"Dimensiones contables" group (see the ETP-4429 section below) is rendered by
+`tools/app-shell/src/windows/custom/assets/AssetsDetailPanel.jsx` via a **hardcoded**
+`dimensionFields` array (`project`, `eTADASCostCenter`, `businessPartner`, `product`, lines
+~212–216) rendered unconditionally whenever `depreciate === true` — it does not read the
+generated contract's `displayLogic`/`visibility` at all. Editing `decisions.json` for this
+window's `assets` entity has **no effect** on what actually renders in this section.
+
+What was changed in `decisions.json` (for metadata correctness / future-proofing only, per the
+Window Change Integrity Protocol — never edit generated output, edit the source of truth):
+- `project`: `form: false` → `visibility: "editable"` with a `reason` note. The raw AD display
+  logic is `@$Element_PJ@='Y' & @IsDepreciated@='Y'` (config-gated via the Project dimension
+  element flag, ANDed with the existing "only when depreciated" business rule) — this now passes
+  through correctly in `contract.json`, matching the ticket's "Por config" intent for `project`.
+- `businessPartner`, `product`: left untouched (`visibility: "editable", "form": false`), which
+  already matches "Nunca" in effect (never rendered via the generated contract path).
+- `eTADASCostCenter` (Centro de costo): left untouched, same "Nunca"-equivalent state.
+
+**Conflict requiring a product decision:** `AssetsDetailPanel.jsx`'s hardcoded 4-selector set
+(Project, Cost Center, Business Partner, Product, always shown together when depreciated) was a
+recent, deliberate decision from ETP-4429 ("Product added to accounting dimensions, dimension set
+trimmed" — see below). The ETP-4529 matrix wants only `project` visible (config-gated) and the
+other three (`businessPartner`, `product`, `eTADASCostCenter`) never shown for this window. These
+two decisions directly conflict. Implementing the matrix here requires editing
+`AssetsDetailPanel.jsx` to (a) drop `businessPartner`/`product`/`eTADASCostCenter` from the
+rendered set, and (b) resolve `project`'s visibility from the real accounting-dimension
+configuration instead of always showing it whenever `depreciate === true` — real frontend
+development work, not decisions.json classification, and one that reverses a recent, intentional,
+documented UX decision. **Not implemented in this pass — flagged for the coordinator/product
+owner to confirm before any component change is made.**

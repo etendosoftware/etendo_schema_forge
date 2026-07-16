@@ -48,7 +48,7 @@
       "fields": {
         "transactionDate": { "visibility": "readOnly", "grid": true, "gridOrder": 1 },
         "documentNo": { "visibility": "readOnly", "grid": true, "gridOrder": 2 },
-        "businessPartner": { "visibility": "readOnly", "grid": true, "gridOrder": 3 },
+        "businessPartner": { "visibility": "readOnly", "grid": true, "gridOrder": 3, "displayLogic": null, "reason": "ETP-4529 — Contacto is always shown for financial-account transactions (overrides @ACCT_DIMENSION_DISPLAY@)." },
         "description": { "visibility": "readOnly", "grid": true, "gridOrder": 4 },
         "status": { "visibility": "readOnly", "grid": true, "gridOrder": 5 },
         "transactionType": { "visibility": "readOnly", "grid": true, "gridOrder": 6 },
