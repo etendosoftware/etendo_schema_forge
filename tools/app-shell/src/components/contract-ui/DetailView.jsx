@@ -623,6 +623,124 @@ function secondaryTabEmptyState({ ui, onAddLineClick, addLineLabel }) {
   );
 }
 
+function secondaryDetailSidebar(props) {
+  if (!(props.st.Form && !props.st.Panel && (props.selectedSecondaryLine?._tabKey === props.st.key || props.closingSecondaryLine))) {
+    return null;
+  }
+  return (
+    <div
+        className={`w-[48rem] shrink-0 border-l border-border pl-4 self-stretch overflow-hidden ${props.closingSecondaryLine ? "sidebar-slide-out" : "sidebar-slide-in"}`}>
+      <div className="flex items-center justify-between mb-3">
+        <span className="text-sm font-medium text-foreground">{props.detailPanelTitle}</span>
+        <button
+            onClick={props.onCloseDetailPanel}
+            className="h-6 w-6 flex items-center justify-center rounded text-muted-foreground hover:text-foreground transition-colors"
+        >
+          <X className="h-3.5 w-3.5" data-testid="X__fa3275" />
+        </button>
+      </div>
+      <props.st.Form
+          data={props.secondaryLineEdits ?? props.selectedSecondaryLine}
+          readOnly={!props.hook.editing}
+          onChange={props.onChange}
+          entity={props.st.key}
+          catalogs={props.catalogs}
+          token={props.token}
+          apiBaseUrl={props.apiBaseUrl}
+          selectorContext={props.selectorContextByEntity[props.st.key]}
+          excludeFields={props.st.key === "contact" ? ["active"] : []}
+          labelOverrides={props.labelOverrides}
+      />
+      {props.hook.editing && (props.secondaryLineEdits || props.selectedSecondaryLine?.id) && (
+          <div className="flex gap-2 mt-4">
+            {props.secondaryLineEdits && (
+                <>
+                  <button
+                      disabled={props.savingLine}
+                      onClick={props.onSaveLine}
+                      className="inline-flex items-center gap-1 px-3 py-1.5 text-sm font-medium rounded-md bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+                  >
+                    {props.savingLine ? props.loadingLabel : props.saveLabel}
+                  </button>
+                  <button
+                      onClick={props.onDiscardLine}
+                      className="inline-flex items-center gap-1 px-3 py-1.5 text-sm font-medium rounded-md border hover:bg-accent"
+                  >
+                    {props.discardLabel}
+                  </button>
+                </>
+            )}
+            {(props.crud?.[props.st.key]?.delete ?? true) && props.selectedSecondaryLine?.id && (
+                <button
+                    disabled={props.savingLine}
+                    onClick={props.onDeleteLine}
+                    className="inline-flex items-center gap-1 px-3 py-1.5 text-sm font-medium rounded-md border border-destructive text-destructive hover:bg-destructive/10 disabled:opacity-50 ml-auto"
+                >
+                  <Trash2 className="h-4 w-4" data-testid="Trash2__fa3275" />
+                  {props.deleteLabel}
+                </button>
+            )}
+          </div>
+      )}
+    </div>
+  );
+}
+
+function secondaryAddLineBar(props) {
+  if (!((props.st.addLineFields?.entry?.length > 0 || props.st.customAddModal) && props.hook.editing)) {
+    return null;
+  }
+  return (
+    // Wrapper measured by the secondary selection bar — its
+    // `position: fixed` portal overlays exactly this region.
+    // Mirrors the primary header-lines add-button wrapper (shared
+    // getAddLineWrapperClassName/Style helpers) so both paths get the
+    // same top border, vertical spacing and padding — keeps alignment
+    // consistent across primary and secondary tabs.
+    // Always `relative` (never sticky): the child-tab add-line button
+    // must stay in flow below the table. getAddLineWrapperClassName's
+    // sticky bottom-0 variant is only correct for the tall PRIMARY
+    // header-lines area — applying it here makes the button overlap the
+    // last table row when the scroll container is resized.
+    <div
+      ref={props.secondaryAddLineWrapperRef}
+      className="relative"
+      // No borderTop: the child table already renders its own bottom
+      // border, so the primary path's top divider would double up here.
+      // noTopPadding: keep the button snug under the table (no vertical
+      // gap above it) while preserving horizontal alignment.
+      style={getAddLineWrapperStyle(props.linesLayout, { withBorder: false, noTopPadding: true })}
+    >
+      {/* alignSelf:flex-start keeps this span from being stretched by
+          the flex-column parent — otherwise data-inline-add-portal would
+          cover the whole bar and the outside-click save would never fire. */}
+      <span data-inline-add-portal="true" style={{ alignSelf: 'flex-start' }}>
+        <AddLineButton
+          onClick={props.onAddLineClick}
+          label={props.addLineLabel}
+          hideChevron={props.hideChevron}
+          data-testid="AddLineButton__fa3275" />
+      </span>
+      {props.linesLayout === "inlineEditable" && (props.crud?.[props.st.key]?.delete ?? true) && (
+          <LinesSelectionBar
+            visible={props.secondaryBarVisible[props.st.key] ?? false}
+            closing={props.secondaryBarClosing[props.st.key] ?? false}
+            barRect={props.secondaryBarRects[props.st.key]}
+            count={(props.secondarySelectedRows[props.st.key] ?? []).length}
+            selectedLabel={props.selectedLabel}
+            totalLabel={null}
+            deleting={props.secondaryDeleting[props.st.key] ?? false}
+            deleteTitle={props.deleteLabel}
+            closeTitle={props.closeTitle}
+            compact
+            onDelete={props.onDelete}
+            onClose={props.onClose}
+            data-testid="LinesSelectionBar__fa3275" />
+      )}
+    </div>
+  );
+}
+
 export function SecondaryTableTab(props) {
   const secondaryChildren = props.secondaryHooks[props.stIdx]?.children ?? [];
   const isAddingThis = props.addingSecondaryLine?.[props.st.key] ?? false;
@@ -682,113 +800,9 @@ export function SecondaryTableTab(props) {
               } : undefined}
           />
         </div>
-        {props.st.Form && !props.st.Panel && (props.selectedSecondaryLine?._tabKey === props.st.key || props.closingSecondaryLine) && (
-            <div
-                className={`w-[48rem] shrink-0 border-l border-border pl-4 self-stretch overflow-hidden ${props.closingSecondaryLine ? "sidebar-slide-out" : "sidebar-slide-in"}`}>
-              <div className="flex items-center justify-between mb-3">
-                <span className="text-sm font-medium text-foreground">{props.detailPanelTitle}</span>
-                <button
-                    onClick={props.onCloseDetailPanel}
-                    className="h-6 w-6 flex items-center justify-center rounded text-muted-foreground hover:text-foreground transition-colors"
-                >
-                  <X className="h-3.5 w-3.5" data-testid="X__fa3275" />
-                </button>
-              </div>
-              <props.st.Form
-                  data={props.secondaryLineEdits ?? props.selectedSecondaryLine}
-                  readOnly={!props.hook.editing}
-                  onChange={props.onChange}
-                  entity={props.st.key}
-                  catalogs={props.catalogs}
-                  token={props.token}
-                  apiBaseUrl={props.apiBaseUrl}
-                  selectorContext={props.selectorContextByEntity[props.st.key]}
-                  excludeFields={props.st.key === "contact" ? ["active"] : []}
-                  labelOverrides={props.labelOverrides}
-              />
-              {props.hook.editing && (props.secondaryLineEdits || props.selectedSecondaryLine?.id) && (
-                  <div className="flex gap-2 mt-4">
-                    {props.secondaryLineEdits && (
-                        <>
-                          <button
-                              disabled={props.savingLine}
-                              onClick={props.onSaveLine}
-                              className="inline-flex items-center gap-1 px-3 py-1.5 text-sm font-medium rounded-md bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
-                          >
-                            {props.savingLine ? props.loadingLabel : props.saveLabel}
-                          </button>
-                          <button
-                              onClick={props.onDiscardLine}
-                              className="inline-flex items-center gap-1 px-3 py-1.5 text-sm font-medium rounded-md border hover:bg-accent"
-                          >
-                            {props.discardLabel}
-                          </button>
-                        </>
-                    )}
-                    {(props.crud?.[props.st.key]?.delete ?? true) && props.selectedSecondaryLine?.id && (
-                        <button
-                            disabled={props.savingLine}
-                            onClick={props.onDeleteLine}
-                            className="inline-flex items-center gap-1 px-3 py-1.5 text-sm font-medium rounded-md border border-destructive text-destructive hover:bg-destructive/10 disabled:opacity-50 ml-auto"
-                        >
-                          <Trash2 className="h-4 w-4" data-testid="Trash2__fa3275" />
-                          {props.deleteLabel}
-                        </button>
-                    )}
-                  </div>
-              )}
-            </div>
-        )}
+        {secondaryDetailSidebar(props)}
       </div>
-      {(props.st.addLineFields?.entry?.length > 0 || props.st.customAddModal) && props.hook.editing && (
-          // Wrapper measured by the secondary selection bar — its
-          // `position: fixed` portal overlays exactly this region.
-          // Mirrors the primary header-lines add-button wrapper (shared
-          // getAddLineWrapperClassName/Style helpers) so both paths get the
-          // same top border, vertical spacing and padding — keeps alignment
-          // consistent across primary and secondary tabs.
-          // Always `relative` (never sticky): the child-tab add-line button
-          // must stay in flow below the table. getAddLineWrapperClassName's
-          // sticky bottom-0 variant is only correct for the tall PRIMARY
-          // header-lines area — applying it here makes the button overlap the
-          // last table row when the scroll container is resized.
-          (<div
-            ref={props.secondaryAddLineWrapperRef}
-            className="relative"
-            // No borderTop: the child table already renders its own bottom
-            // border, so the primary path's top divider would double up here.
-            // noTopPadding: keep the button snug under the table (no vertical
-            // gap above it) while preserving horizontal alignment.
-            style={getAddLineWrapperStyle(props.linesLayout, { withBorder: false, noTopPadding: true })}
-          >
-            {/* alignSelf:flex-start keeps this span from being stretched by
-                the flex-column parent — otherwise data-inline-add-portal would
-                cover the whole bar and the outside-click save would never fire. */}
-            <span data-inline-add-portal="true" style={{ alignSelf: 'flex-start' }}>
-              <AddLineButton
-                onClick={props.onAddLineClick}
-                label={props.addLineLabel}
-                hideChevron={props.hideChevron}
-                data-testid="AddLineButton__fa3275" />
-            </span>
-            {props.linesLayout === "inlineEditable" && (props.crud?.[props.st.key]?.delete ?? true) && (
-                <LinesSelectionBar
-                  visible={props.secondaryBarVisible[props.st.key] ?? false}
-                  closing={props.secondaryBarClosing[props.st.key] ?? false}
-                  barRect={props.secondaryBarRects[props.st.key]}
-                  count={(props.secondarySelectedRows[props.st.key] ?? []).length}
-                  selectedLabel={props.selectedLabel}
-                  totalLabel={null}
-                  deleting={props.secondaryDeleting[props.st.key] ?? false}
-                  deleteTitle={props.deleteLabel}
-                  closeTitle={props.closeTitle}
-                  compact
-                  onDelete={props.onDelete}
-                  onClose={props.onClose}
-                  data-testid="LinesSelectionBar__fa3275" />
-            )}
-          </div>)
-      )}
+      {secondaryAddLineBar(props)}
     </>
   );
 }

@@ -288,6 +288,12 @@ function isLookupSearchField(field) {
   return field.type === 'search' && field.lookup;
 }
 
+// Human-readable label for a picked lookup item, trying the common shapes in
+// priority order (label > name > _identifier).
+function resolveLookupItemLabel(item) {
+  return item.label || item.name || item._identifier;
+}
+
 // Conditional visibility: a field with `displayIf` is hidden while its
 // controlling sibling field is falsy (not 'Y'/true/'true').
 function isColumnHidden(field, values) {
@@ -450,6 +456,151 @@ function renderInputCell({
       />
     </TableCell>
   );
+}
+
+// Renders the derived (contract-computed, non-editable) cell shown when a column
+// has no matching editable field — a read-only display of the callout result.
+function renderDerivedAddCell(col, values) {
+  const rawVal = values[col.key];
+  const identVal = values[col.key + '$_identifier'];
+  const isNumericDerived = NUMERIC_FIELD_TYPES.has(col.type);
+  const isTwoDecimalDerived = col.type === 'amount' || col.type === 'price';
+  const displayVal = formatDerivedCellValue(identVal, rawVal, isTwoDecimalDerived);
+  return (
+    <TableCell key={col.key} data-testid={`inline-add-cell-${col.key}`} className={`text-muted-foreground text-sm${getNumericCellAlignClass(isNumericDerived)}`}>
+      {displayOrDash(displayVal)}
+    </TableCell>
+  );
+}
+
+// Renders the interactive control for an editable inline-add field, dispatching
+// on its type (lookup, search, static select, selector, boolean, or plain input).
+function renderInlineAddFieldControl(col, field, isFirst, fieldLabel, {
+  values, firstInputRef, selectorContext, token, apiBaseUrl, entity, catalogs,
+  handleChange, handleFieldChange, handleKeyDown, touchedFieldsRef, invalidFields,
+}) {
+  if (isLookupSearchField(field)) {
+    const selectorUrl = buildSelectorUrl(apiBaseUrl, entity, field);
+    const displayLabel = values[field.key + '$_identifier'] || '';
+    const drawerKey = field.lookupDrawer || 'default';
+    const lookupTitle = field.lookupTitle || fieldLabel;
+    return (
+      <TableCell key={col.key} data-testid={`inline-add-cell-${col.key}`} className="py-1 px-2">
+        <LookupField
+          value={displayLabel}
+          fieldKey={field.key}
+          placeholder={fieldLabel}
+          selectorUrl={selectorUrl}
+          selectorContext={selectorContext}
+          token={token}
+          inputRef={isFirst ? firstInputRef : undefined}
+          isInvalid={invalidFields.has(field.key)}
+          onSelect={(item) => {
+            touchedFieldsRef.current.add(field.key);
+            handleChange(field.key + '$_identifier', resolveLookupItemLabel(item));
+            handleFieldChange(field.key, item.id, item);
+            applyOnSelectMappings(field, item, handleChange);
+          }}
+          onKeyDown={handleKeyDown}
+          title={lookupTitle}
+          drawerKey={drawerKey}
+          data-testid="LookupField__eb5261" />
+      </TableCell>
+    );
+  }
+  if (field.type === 'search') {
+    const options = getCatalogOptions(catalogs, entity, field);
+    const selectorUrl = buildSelectorUrl(apiBaseUrl, entity, field);
+    const excludeId = field.excludeValueOf ? (values[field.excludeValueOf] ?? null) : null;
+    return (
+      <TableCell key={col.key} data-testid={`inline-add-cell-${col.key}`} className="py-1 px-2">
+        <InlineSearchCombo
+          field={field}
+          value={values[field.key] ?? ''}
+          displayLabel={values[field.key + '$_identifier'] || ''}
+          options={options}
+          excludeId={excludeId}
+          inputRef={isFirst ? firstInputRef : undefined}
+          placeholder={fieldLabel}
+          onChange={(id, label, selectedItem) => {
+            touchedFieldsRef.current.add(field.key);
+            handleChange(field.key + '$_identifier', label);
+            handleFieldChange(field.key, id, selectedItem);
+          }}
+          onKeyDown={handleKeyDown}
+          selectorUrl={selectorUrl}
+          selectorContext={selectorContext}
+          token={token}
+          data-testid="InlineSearchCombo__eb5261" />
+      </TableCell>
+    );
+  }
+  if (isStaticSelectField(field)) {
+    return (
+      <TableCell key={col.key} data-testid={`inline-add-cell-${col.key}`} className="py-1 px-2">
+        <Select
+          value={values[field.key] || undefined}
+          onValueChange={(val) => handleFieldChange(field.key, val === '__empty__' ? '' : val)}
+          required={field.required}
+          data-testid="Select__eb5261">
+          <SelectTrigger
+            ref={isFirst ? firstInputRef : undefined}
+            data-testid={`inline-add-field-${field.key}`}
+            onKeyDown={(e) => { if (e.key === 'Escape') handleKeyDown(e); }}
+            className="w-full h-8 text-sm bg-white focus:ring-2 focus:ring-primary"
+          >
+            <SelectValue placeholder={field.label ?? field.key} data-testid="SelectValue__eb5261" />
+          </SelectTrigger>
+          <SelectContent data-testid="SelectContent__eb5261">
+            {!field.required && <SelectItem value="__empty__" data-testid="SelectItem__eb5261">&nbsp;</SelectItem>}
+            {field.options.map(opt => (
+              <SelectItem key={opt.value} value={opt.value} data-testid="SelectItem__eb5261">{opt.label}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </TableCell>
+    );
+  }
+  if (field.type === 'selector') {
+    return renderSelectorCell({
+      catalogs, entity, field, apiBaseUrl, col, values, touchedFieldsRef,
+      handleChange, handleFieldChange, handleKeyDown, isFirst, firstInputRef,
+      fieldLabel, selectorContext, token,
+    });
+  }
+  if (field.type === 'checkbox' || field.type === 'boolean') {
+    const checked = values[field.key] === true || values[field.key] === 'Y' || values[field.key] === 'true';
+    return (
+      <TableCell key={col.key} data-testid={`inline-add-cell-${col.key}`} className="py-1 px-2">
+        <PillToggle
+          checked={checked}
+          onCheckedChange={(next) => {
+            touchedFieldsRef.current.add(field.key);
+            handleFieldChange(field.key, next);
+          }}
+          data-testid={`inline-add-field-${field.key}`} />
+      </TableCell>
+    );
+  }
+  return renderInputCell({
+    field, col, values, invalidFields, isFirst, firstInputRef,
+    handleFieldChange, handleKeyDown, fieldLabel,
+  });
+}
+
+function renderInlineAddCell(col, ctx) {
+  const { fieldMap, values, t, locale, firstInputCtx } = ctx;
+  const field = fieldMap[col.key];
+  const fieldLabel = getFieldLabel(field, t, col, locale);
+  if (isColumnHidden(field, values)) {
+    return <TableCell key={col.key} aria-hidden="true" data-testid={`inline-add-cell-${col.key}`} />;
+  }
+  if (!field) {
+    return renderDerivedAddCell(col, values);
+  }
+  const isFirst = !firstInputCtx.assigned;
+  if (isFirst) firstInputCtx.assigned = true;
+  return renderInlineAddFieldControl(col, field, isFirst, fieldLabel, ctx);
 }
 
 /**
@@ -777,7 +928,9 @@ const InlineAddRow = forwardRef(function InlineAddRow({ columns, fields, onAdd, 
     }
   };
 
-  let firstInputAssigned = false;
+  // Mutable flag shared into renderInlineAddCell so only the FIRST rendered input
+  // gets the autofocus ref. An object (not a bare boolean) so the callee can flip it.
+  const firstInputCtx = { assigned: false };
 
   return (
     <TableRow ref={rowRef} data-testid="inline-add-row" className="bg-blue-50/50 border-t-2 border-primary/20">
@@ -792,155 +945,12 @@ const InlineAddRow = forwardRef(function InlineAddRow({ columns, fields, onAdd, 
           </div>
         </TableCell>
       )}
-      {columns.map(col => {
-        const field = fieldMap[col.key];
-        const fieldLabel = getFieldLabel(field, t, col, locale);
-        // Conditional visibility: hide fields whose controlling sibling is falsy.
-        if (isColumnHidden(field, values)) {
-          return <TableCell key={col.key} aria-hidden="true" data-testid={`inline-add-cell-${col.key}`} />;
-        }
-        if (!field) {
-          // Show callout-derived values if available, otherwise dash.
-          // Prefer $_identifier (human-readable) over raw ID for FK fields.
-          const rawVal = values[col.key];
-          const identVal = values[col.key + '$_identifier'];
-          const isNumericDerived = NUMERIC_FIELD_TYPES.has(col.type);
-          const isTwoDecimalDerived = col.type === 'amount' || col.type === 'price';
-          let displayVal = formatDerivedCellValue(identVal, rawVal, isTwoDecimalDerived);
-          return (
-            <TableCell key={col.key} data-testid={`inline-add-cell-${col.key}`} className={`text-muted-foreground text-sm${(getNumericCellAlignClass(isNumericDerived))}`}>
-              {displayOrDash(displayVal)}
-            </TableCell>
-          );
-        }
-        const isFirst = !firstInputAssigned;
-        if (isFirst) firstInputAssigned = true;
-
-        // Lookup fields: click to open search modal (no inline combo)
-        if (isLookupSearchField(field)) {
-          const selectorUrl = buildSelectorUrl(apiBaseUrl, entity, field);
-          const displayLabel = values[field.key + '$_identifier'] || '';
-          const drawerKey = field.lookupDrawer || 'default';
-          const lookupTitle = field.lookupTitle || fieldLabel;
-          return (
-            <TableCell key={col.key} data-testid={`inline-add-cell-${col.key}`} className="py-1 px-2">
-              <LookupField
-                value={displayLabel}
-                fieldKey={field.key}
-                placeholder={fieldLabel}
-                selectorUrl={selectorUrl}
-                selectorContext={selectorContext}
-                token={token}
-                inputRef={isFirst ? firstInputRef : undefined}
-                isInvalid={invalidFields.has(field.key)}
-                onSelect={(item) => {
-                  touchedFieldsRef.current.add(field.key);
-                  handleChange(field.key + '$_identifier', item.label || item.name || item._identifier);
-                  handleFieldChange(field.key, item.id, item);
-                  // Declarative auto-fill from the contract — see field.onSelectMappings.
-                  applyOnSelectMappings(field, item, handleChange);
-                }}
-                onKeyDown={handleKeyDown}
-                title={lookupTitle}
-                drawerKey={drawerKey}
-                data-testid="LookupField__eb5261" />
-            </TableCell>
-          );
-        }
-
-        // Search fields render as compact combobox (text input + filtered dropdown)
-        if (field.type === 'search') {
-          const options = getCatalogOptions(catalogs, entity, field);
-          const selectorUrl = buildSelectorUrl(apiBaseUrl, entity, field);
-          // Declarative exclusion: drop the live value of a sibling field from this
-          // selector (e.g. To Currency must differ from the document/From Currency).
-          const excludeId = field.excludeValueOf ? (values[field.excludeValueOf] ?? null) : null;
-          return (
-            <TableCell key={col.key} data-testid={`inline-add-cell-${col.key}`} className="py-1 px-2">
-              <InlineSearchCombo
-                field={field}
-                value={values[field.key] ?? ''}
-                displayLabel={values[field.key + '$_identifier'] || ''}
-                options={options}
-                excludeId={excludeId}
-                inputRef={isFirst ? firstInputRef : undefined}
-                placeholder={fieldLabel}
-                onChange={(id, label, selectedItem) => {
-                  touchedFieldsRef.current.add(field.key);
-                  handleChange(field.key + '$_identifier', label);
-                  handleFieldChange(field.key, id, selectedItem);
-                }}
-                onKeyDown={handleKeyDown}
-                selectorUrl={selectorUrl}
-                selectorContext={selectorContext}
-                token={token}
-                data-testid="InlineSearchCombo__eb5261" />
-            </TableCell>
-          );
-        }
-
-        // Select fields with inline static options array
-        if (isStaticSelectField(field)) {
-          return (
-            <TableCell key={col.key} data-testid={`inline-add-cell-${col.key}`} className="py-1 px-2">
-              <Select
-                value={values[field.key] || undefined}
-                onValueChange={(val) => handleFieldChange(field.key, val === '__empty__' ? '' : val)}
-                required={field.required}
-                data-testid="Select__eb5261">
-                <SelectTrigger
-                  ref={isFirst ? firstInputRef : undefined}
-                  data-testid={`inline-add-field-${field.key}`}
-                  onKeyDown={(e) => { if (e.key === 'Escape') handleKeyDown(e); }}
-                  className="w-full h-8 text-sm bg-white focus:ring-2 focus:ring-primary"
-                >
-                  <SelectValue placeholder={field.label ?? field.key} data-testid="SelectValue__eb5261" />
-                </SelectTrigger>
-                <SelectContent data-testid="SelectContent__eb5261">
-                  {!field.required && <SelectItem value="__empty__" data-testid="SelectItem__eb5261">&nbsp;</SelectItem>}
-                  {field.options.map(opt => (
-                    <SelectItem key={opt.value} value={opt.value} data-testid="SelectItem__eb5261">{opt.label}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </TableCell>
-          );
-        }
-
-        // Selector fields render as native <select> dropdowns (few options).
-        // When catalog options are not pre-loaded, render the shared SelectorInput
-        // (Radix-based dropdown that lazy-loads from the selector URL). It does NOT
-        // accept free-text typing — the user has to pick from the list, matching the
-        // form-mode UX. Mirrors the InlineAddRow behavior for the line tax field.
-        if (field.type === 'selector') {
-          return renderSelectorCell({
-            catalogs, entity, field, apiBaseUrl, col, values, touchedFieldsRef,
-            handleChange, handleFieldChange, handleKeyDown, isFirst, firstInputRef,
-            fieldLabel, selectorContext, token,
-          });
-        }
-
-        // Checkbox/toggle fields render as PillToggle (same as EntityForm's renderToggleField)
-        if (field.type === 'checkbox' || field.type === 'boolean') {
-          const checked = values[field.key] === true || values[field.key] === 'Y' || values[field.key] === 'true';
-          return (
-            <TableCell key={col.key} data-testid={`inline-add-cell-${col.key}`} className="py-1 px-2">
-              <PillToggle
-                checked={checked}
-                onCheckedChange={(next) => {
-                  touchedFieldsRef.current.add(field.key);
-                  handleFieldChange(field.key, next);
-                }}
-                data-testid={`inline-add-field-${field.key}`} />
-            </TableCell>
-          );
-        }
-
-        return renderInputCell({
-          field, col, values, invalidFields, isFirst, firstInputRef,
-          handleFieldChange, handleKeyDown, fieldLabel,
-        });
-      })}
+      {columns.map(col => renderInlineAddCell(col, {
+        fieldMap, values, t, locale, firstInputCtx, firstInputRef,
+        selectorContext, token, apiBaseUrl, entity, catalogs,
+        handleChange, handleFieldChange, handleKeyDown,
+        touchedFieldsRef, invalidFields,
+      }))}
       {/* Skip action cells in inlineEditable add-row mode — actions belong to
           InlineLinesPanel's 160px slot, not to separate columns here. */}
       {!ilpTrailing && (hoverRowActions ? (
