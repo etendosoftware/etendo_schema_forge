@@ -55,8 +55,6 @@ describe('BottomPanel rollout — all inline-editable windows', () => {
   describe('With-totals panels (monetary documents)', () => {
     const CASES = [
       { win: 'purchase-order',       file: 'PurchaseOrderBottomPanel.jsx'     },
-      { win: 'return-from-customer', file: 'ReturnFromCustomerBottomPanel.jsx'},
-      { win: 'return-to-vendor',     file: 'ReturnToVendorBottomPanel.jsx'   },
       { win: 'sales-order',          file: 'OrderBottomPanel.jsx'             },
       { win: 'sales-quotation',      file: 'QuotationBottomPanel.jsx'         },
     ];

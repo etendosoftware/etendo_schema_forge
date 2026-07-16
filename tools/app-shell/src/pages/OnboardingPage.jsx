@@ -2,6 +2,7 @@ import React from 'react';
 import { OnboardingFlow, coreSteps } from '@etendosoftware/etendo-go-core/onboarding';
 import { useUI } from '@etendosoftware/app-shell-core/i18n';
 import { checkSalesInvoiceReadiness } from './onboarding/onboardingReadiness.js';
+import { OnboardingDashboardBackdrop } from './onboarding/OnboardingDashboardBackdrop.jsx';
 import { track } from '../lib/observability.js';
 import { buildObservabilityEvent } from '../lib/observability/events.js';
 import { trackSessionStarted } from '../lib/observability/health-events.js';
@@ -12,6 +13,7 @@ export default function OnboardingPage() {
 
   const ES_CONFIG = {
     apiBase: '',
+    background: <OnboardingDashboardBackdrop data-testid="OnboardingDashboardBackdrop__79cf84" />,
     brandLabel: ui('onboardingBrandName'),
     localeCodes: ['es_ES', 'en_US'],
     countryCodes: ['ES'],

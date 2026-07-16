@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useAuth } from '@/auth/AuthContext.jsx';
+import { useLogout } from '@/auth/useLogout.js';
 import { createApiFetch } from '@/auth/api.js';
 import { listClients, deleteClient, regenerateSecret, revokeTokens } from '@/lib/oauth2Api.js';
 import OAuth2ClientDialog, { SecretRevealDialog, ConfirmDialog } from '@/components/OAuth2ClientDialog.jsx';
@@ -26,7 +27,8 @@ function detectBaseUrl() {
 }
 
 export default function OAuth2ClientsPage() {
-  const { token, logout } = useAuth();
+  const { token } = useAuth();
+  const logout = useLogout();
   const ui = useUI();
   const [clients, setClients] = useState([]);
   const [loading, setLoading] = useState(true);
