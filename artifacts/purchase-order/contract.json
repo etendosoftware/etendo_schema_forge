@@ -1,8 +1,8 @@
 {
-  "version": "0.35.0",
+  "version": "0.37.0",
   "generatedAt": "2026-04-30T15:42:46.497Z",
-  "updatedAt": "2026-07-06T13:19:15.501Z",
-  "checksum": "903dc41f7fc5d4bd",
+  "updatedAt": "2026-07-14T01:05:39.068Z",
+  "checksum": "0fbe017944ec853e",
   "frontendContract": {
     "window": {
       "id": "181",
@@ -249,7 +249,7 @@
             "form": true,
             "sourceRequired": true,
             "reference": "Warehouse",
-            "inputMode": "selector",
+            "inputMode": "search",
             "seq": 60,
             "readOnlyLogic": {
               "raw": "@Processed@='Y'",
@@ -4730,7 +4730,7 @@
         "field": "warehouse",
         "column": "M_Warehouse_ID",
         "reference": "Warehouse",
-        "inputMode": "selector",
+        "inputMode": "search",
         "url": "/sws/neo/purchase-order/header/selectors/warehouse"
       },
       {

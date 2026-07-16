@@ -30,7 +30,6 @@ const windowLoaders = {
   'user': () => import('@generated/user/generated/web/user/index.jsx'),
   'purchase-order': () => import('@generated/purchase-order/generated/web/purchase-order/index.jsx'),
   'goods-receipt': () => import('@generated/goods-receipt/generated/web/goods-receipt/index.jsx'),
-  'return-to-vendor': () => import('./custom/return-to-vendor/index.jsx'),
   'return-to-vendor-shipment': () => import('@generated/return-to-vendor-shipment/generated/web/return-to-vendor-shipment/index.jsx'),
   'physical-inventory': () => import('@generated/physical-inventory/generated/web/physical-inventory/index.jsx'),
   'goods-movements': () => import('@generated/goods-movements/generated/web/goods-movements/index.jsx'),
@@ -38,7 +37,6 @@ const windowLoaders = {
   'warehouse-storage-bins': () => import('@generated/warehouse-storage-bins/generated/web/warehouse-storage-bins/index.jsx'),
   'sales-quotation': () => import('@generated/sales-quotation/generated/web/sales-quotation/index.jsx'),
   'goods-shipment': () => import('@/windows/custom/goods-shipment/index.jsx'),
-  'return-from-customer': () => import('@generated/return-from-customer/generated/web/return-from-customer/index.jsx'),
   'return-material-receipt': () => import('@/windows/custom/return-material-receipt/index.jsx'),
   'sales-invoice': () => import('@generated/sales-invoice/generated/web/sales-invoice/index.jsx'),
   'deal': () => import('@generated/deal/generated/web/deal/index.jsx'),
@@ -59,8 +57,8 @@ const windowLoaders = {
   'conversion-rate-downloader-log': () => import('@generated/conversion-rate-downloader-log/generated/web/conversion-rate-downloader-log/index.jsx'),
   'amortization': () => import('@generated/amortization/generated/web/amortization/index.jsx'),
   'simple-g-l-journal': () => import('@generated/simple-g-l-journal/generated/web/simple-g-l-journal/index.jsx'),
-  'open-close-period-control': () => import('@generated/open-close-period-control/generated/web/open-close-period-control/index.jsx'),
-  'fiscal-calendar': () => import('@generated/fiscal-calendar/generated/web/fiscal-calendar/index.jsx'),
+  'open-close-period-control': () => import('@/windows/custom/open-close-period-control-redirect/index.jsx'),
+  'fiscal-calendar': () => import('@/windows/custom/fiscal-calendar-redirect/index.jsx'),
 };
 
 /**
@@ -144,6 +142,7 @@ export const apiOnlyWindows = new Set([
  */
 const customLoaders = {
   // Auto-registered by pipeline when layoutType: "custom"
+  'calendar': () => import('./custom/calendar/index.jsx'),
   'fiscal-config': () => import('./custom/fiscal-config/index.jsx'),
   'fiscal-monitor': () => import('./custom/fiscal-monitor/index.jsx'),
   'fiscal-models': () => import('./custom/fiscal-models/index.jsx'),

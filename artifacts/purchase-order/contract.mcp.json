@@ -1,8 +1,8 @@
 {
-  "version": "0.35.0",
+  "version": "0.37.0",
   "generatedAt": "2026-04-30T15:42:46.497Z",
-  "updatedAt": "2026-07-14T19:42:18.293Z",
-  "contractChecksum": "5a92d09d6f9eba2d",
+  "updatedAt": "2026-07-14T01:05:39.068Z",
+  "contractChecksum": "0fbe017944ec853e",
   "apiPrediction": {
     "specName": "purchase-order",
     "baseUrl": "/sws/neo/purchase-order",
@@ -115,7 +115,7 @@
         "field": "warehouse",
         "column": "M_Warehouse_ID",
         "reference": "Warehouse",
-        "inputMode": "selector",
+        "inputMode": "search",
         "url": "/sws/neo/purchase-order/header/selectors/warehouse"
       },
       {
@@ -1308,9 +1308,9 @@
             "readOnlyLogic": "@Posted@='Y'"
           },
           "currency": {
-            "readOnly": true,
             "required": true,
-            "defaultValue": "@C_Currency_ID@"
+            "defaultValue": "@C_Currency_ID@",
+            "readOnly": true
           }
         }
       },
@@ -1659,5 +1659,5 @@
       "confirmcancelandreplace"
     ]
   },
-  "checksum": "e466eaec41c235c0"
+  "checksum": "22a0a614e6b084ac"
 }

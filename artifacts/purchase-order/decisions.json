@@ -121,7 +121,8 @@
         },
         "warehouse": {
           "grid": false,
-          "seq": 60
+          "seq": 60,
+          "inputMode": "search"
         },
         "scheduledDeliveryDate": {
           "section": "principal",

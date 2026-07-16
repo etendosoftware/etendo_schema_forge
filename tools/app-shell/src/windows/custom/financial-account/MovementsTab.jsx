@@ -6,6 +6,7 @@ import { NewMovementWizard } from './NewMovementWizard/index.jsx';
 import { FundsTransferModal } from './FundsTransferModal.jsx';
 import { applyAdvancedFilter } from './movementAdvancedFilter';
 import { getDateBounds } from '@/lib/dateRangeBounds';
+import { parseCalendarDate } from '@/lib/dateOnly';
 
 // ---------------------------------------------------------------------------
 // KPI window suffix (shown in parentheses next to Inflows / Outflows labels)
@@ -33,30 +34,35 @@ function kpiWindowSuffix(dateRange) {
 // amount moved to the advanced "by conditions" filter (applyAdvancedFilter).
 // ---------------------------------------------------------------------------
 
+// Date range check shared by applyFilters and dateScopedTotals — parses as a
+// calendar date (year/month/day in LOCAL time), not via the naive Date
+// constructor: the backend sends "yyyy-mm-ddT00:00:00Z" (a civil date, not a
+// real instant), which the naive parser reads as UTC midnight — in any
+// timezone behind UTC that rolls back to the previous day, so a single-day
+// range around the movement's own date matched nothing.
+function isOutsideDateRange(dateStr, from, to) {
+  if (!from && !to) return false;
+  const d = parseCalendarDate(dateStr);
+  if (!d) return false;
+  return (from && d < from) || (to && d > to);
+}
+
+function matchesSearch(m, q) {
+  if (!q) return true;
+  const haystack = [m.documentNo, m.contact, m.description]
+    .map((s) => (s ?? '').toLowerCase())
+    .join(' ');
+  return haystack.includes(q);
+}
+
 function applyFilters(movements, filters) {
   const { from, to } = getDateBounds(filters.dateRange);
   const q = filters.search.trim().toLowerCase();
 
   return movements.filter((m) => {
-    // Date range
-    if (from || to) {
-      const d = new Date(m.date);
-      if (from && d < from) return false;
-      if (to && d > to) return false;
-    }
-
-    // Type (BPD / BPW)
+    if (isOutsideDateRange(m.date, from, to)) return false;
     if (filters.type && m.trxType !== filters.type) return false;
-
-    // Full-text search on document, contact, description
-    if (q) {
-      const haystack = [m.documentNo, m.contact, m.description]
-        .map((s) => (s ?? '').toLowerCase())
-        .join(' ');
-      if (!haystack.includes(q)) return false;
-    }
-
-    return true;
+    return matchesSearch(m, q);
   });
 }
 
@@ -125,11 +131,7 @@ export const MovementsTab = forwardRef(function MovementsTab(
     let inflows = 0;
     let outflows = 0;
     for (const m of movements) {
-      if (from || to) {
-        const d = new Date(m.date);
-        if (from && d < from) continue;
-        if (to && d > to) continue;
-      }
+      if (isOutsideDateRange(m.date, from, to)) continue;
       const amt = Number(m.amount) || 0;
       if (amt >= 0) inflows += amt;
       else outflows += amt;

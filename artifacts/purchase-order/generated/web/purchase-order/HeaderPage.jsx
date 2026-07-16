@@ -187,7 +187,7 @@ export const api = {
       "field": "warehouse",
       "column": "M_Warehouse_ID",
       "reference": "Warehouse",
-      "inputMode": "selector",
+      "inputMode": "search",
       "url": "/sws/neo/purchase-order/header/selectors/warehouse"
     },
     {
