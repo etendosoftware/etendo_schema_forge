@@ -16668,6 +16668,7 @@
     "clear": "Clear",
     "clearSort": "Clear sort",
     "refresh": "Refresh",
+    "import": "Import",
     "forceAppRefresh": "Force app refresh",
     "newPayment": "New payment",
     "paymentRecordedLocally": "Payment recorded locally — it will sync when the endpoint is available",

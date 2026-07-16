@@ -20,6 +20,7 @@
     "@etendosoftware/app-shell-core": "0.3.10-preview.feature-ETP-4447.20260715172022.8f0e2db",
     "@etendosoftware/schema-forge-cli": "0.3.10-preview.feature-ETP-4447.20260715172022.8f0e2db",
     "@etendosoftware/schema-forge-core": "0.3.10-preview.feature-ETP-4447.20260715172022.8f0e2db",
+    "@faker-js/faker": "^10.5.0",
     "esbuild": "^0.28.0",
     "handlebars": "^4.7.9",
     "jscodeshift": "^17.3.0",

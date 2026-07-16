@@ -797,6 +797,8 @@ export function ListView({
                     size="sm"
                     className="gap-1.5 text-muted-foreground font-normal h-9 px-3 rounded-lg bg-white"
                     onClick={() => setShowImportDialog(true)}
+                    aria-label={ui('import')}
+                    title={ui('import')}
                     data-testid="ListView__importButton"
                   >
                     <Upload className="h-3.5 w-3.5" data-testid="Upload__ListViewImport" />

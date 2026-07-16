@@ -16910,6 +16910,7 @@
     "clear": "Limpiar",
     "clearSort": "Quitar orden",
     "refresh": "Actualizar",
+    "import": "Importar",
     "forceAppRefresh": "Forzar actualización de la app",
     "newPayment": "Nuevo pago",
     "paymentRecordedLocally": "Pago registrado localmente — se sincronizará cuando el endpoint esté disponible",

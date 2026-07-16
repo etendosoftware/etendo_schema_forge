@@ -121,7 +121,7 @@ describe('contacts import descriptor', () => {
     // artifacts/contacts/contract.json that searchKey has `required: true, form: false`
     // (hidden from every BusinessPartner create form, this one included) and against the
     // AD_Column config that there is no server-side default or sequence for it — the
-    // manual "Nuevo contacto" flow only succeeds because useEntity.js's own createRecord
+    // manual "New contact" flow only succeeds because useEntity.js's own createRecord
     // path applies this exact fallback before calling
     // POST /sws/neo/contacts/businessPartner. This composite descriptor builds /batch
     // operations directly, bypassing useEntity.js entirely, so it must replicate the

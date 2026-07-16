@@ -10,7 +10,8 @@ registerFkResolver('contacts-country', async (value, { token, simSearchFn = simS
 async function defaultFetchRegionCountryId(regionId, token, apiBaseUrl) {
   if (!regionId || !token) return null;
   const contactsBase = apiBaseUrl ? apiBaseUrl.replace(/\/[^/]+$/, '/contacts') : '/sws/neo/contacts';
-  const url = `${contactsBase}/region?_neoWhere=id='${regionId}'&limit=1`;
+  const where = `id='${String(regionId).replace(/'/g, "''")}'`;
+  const url = `${contactsBase}/region?_neoWhere=${encodeURIComponent(where)}&limit=1`;
   try {
     const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
     if (!res.ok) return null;
@@ -34,10 +35,9 @@ async function defaultFetchRegionCountryId(regionId, token, apiBaseUrl) {
 registerFkResolver('contacts-region', async (value, { token, countryId, apiBaseUrl, simSearchFn = simSearch, fetchRegionCountryId = defaultFetchRegionCountryId }) => {
   const [result] = await simSearchFn({ token, entityName: 'Region', items: [value], qtyResults: 10 });
   const candidates = result?.candidates ?? [];
-  const scoped = [];
-  for (const candidate of candidates) {
-    const candidateCountryId = await fetchRegionCountryId(candidate.id, token, apiBaseUrl);
-    if (candidateCountryId === countryId) scoped.push(candidate);
-  }
+  const candidateCountryIds = await Promise.all(
+    candidates.map((candidate) => fetchRegionCountryId(candidate.id, token, apiBaseUrl)),
+  );
+  const scoped = candidates.filter((_, i) => candidateCountryIds[i] === countryId);
   return classifyCandidates(scoped);
 });

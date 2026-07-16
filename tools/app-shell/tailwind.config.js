@@ -10,6 +10,7 @@ import { resolve } from 'node:path';
 const LOCAL_CORE = process.env.LOCAL_CORE === '1';
 const CORE_REPO = process.env.SCHEMA_FORGE_CORE || resolve(import.meta.dirname, '../../../schema_forge_core');
 const CORE_APP_SHELL_SRC_GLOB = resolve(CORE_REPO, 'packages/app-shell-core/src/**/*.{js,jsx}');
+const CORE_ETENDO_GO_SRC_GLOB = resolve(CORE_REPO, 'packages/etendo-go-core/src/**/*.{js,jsx}');
 
 /** @type {import('tailwindcss').Config} */
 export default {
@@ -32,7 +33,7 @@ export default {
     // LOCAL_CORE only — scan the live sibling source in addition to (not
     // instead of) the published copy above, so classes work under both dev
     // profiles without needing a publish/reinstall cycle.
-    ...(LOCAL_CORE ? [CORE_APP_SHELL_SRC_GLOB] : []),
+    ...(LOCAL_CORE ? [CORE_APP_SHELL_SRC_GLOB, CORE_ETENDO_GO_SRC_GLOB] : []),
   ],
   theme: {
   	extend: {

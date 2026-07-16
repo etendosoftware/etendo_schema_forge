@@ -32,7 +32,7 @@ registerImportDescriptor('contacts', async (row, config) => {
   // C_BPartner.Value (DAL property `searchKey`) is `required: true` but `form: false` —
   // hidden from every BusinessPartner create form, this one included (verified against
   // artifacts/contacts/contract.json). There is no server-side default for it (confirmed:
-  // AD_Column has no defaultvalue and isusedsequence='N') — the manual "Nuevo contacto"
+  // AD_Column has no defaultvalue and isusedsequence='N') — the manual "New contact"
   // flow only succeeds because useEntity.js's own createRecord path falls back to
   // `payload.searchKey || source.name || payload.name` before ever calling
   // POST /sws/neo/contacts/businessPartner. This composite descriptor builds /batch
@@ -42,7 +42,7 @@ registerImportDescriptor('contacts', async (row, config) => {
   // C_BPartner.Value (searchKey) is AD-constrained to 40 chars — reproduced via a real
   // import row whose commercial name was 48 chars ("Value too long. Length 48, maximum
   // allowed 40"). Same fallback, same truncation as useEntity.js's applyContactsRequiredFields
-  // (the manual "Nuevo contacto" flow's equivalent derivation) — Name itself is untouched,
+  // (the manual "New contact" flow's equivalent derivation) — Name itself is untouched,
   // it has more headroom (60).
   const bpBody = { oBTIKTaxIDKey: DEFAULT_TAX_ID_KEY, ...bpFields, searchKey: String(bpFields.name || '').slice(0, 40) };
   const bpOp = { id: 'bp', spec: config.spec, entity: 'businessPartner', body: bpBody };

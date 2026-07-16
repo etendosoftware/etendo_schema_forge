@@ -76,7 +76,8 @@ describe('contacts-region resolver', () => {
     assert.equal(result.id, 'R-1');
     assert.equal(fetchMock.mock.calls.length, 1);
     const [url, init] = fetchMock.mock.calls[0];
-    assert.match(url, /_neoWhere=id='R-1'/);
+    // The where clause is URL-encoded before being embedded in the query string.
+    assert.match(url, /_neoWhere=id%3D'R-1'/);
     assert.equal(init.headers.Authorization, 'Bearer my-token');
   });
 });
