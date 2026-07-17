@@ -4,10 +4,10 @@ import { useSifFieldPatcher } from '@/windows/custom/shared/useSifFieldPatcher.j
 const inputCls = 'w-full text-xs bg-card border rounded px-2 py-0.5 text-foreground focus:outline-none focus:ring-1 focus:ring-primary/30 disabled:opacity-50 border-border/40';
 
 const SII_STATUS = {
-  CO: { key: 'sifDataTabs.status.sii.correct', cls: 'bg-green-50 text-green-700 border-green-200' },
-  AE: { key: 'sifDataTabs.status.sii.acceptedWithErrors', cls: 'bg-yellow-50 text-yellow-700 border-yellow-200' },
-  IN: { key: 'sifDataTabs.status.sii.incorrect', cls: 'bg-red-50 text-red-700 border-red-200' },
-  EE: { key: 'sifDataTabs.status.sii.sendError', cls: 'bg-red-50 text-red-700 border-red-200' },
+  CO: { key: 'sifDataTabs.status.sii.correct', cls: 'bg-status-success text-status-success-foreground border-status-success-border' },
+  AE: { key: 'sifDataTabs.status.sii.acceptedWithErrors', cls: 'bg-status-warning text-status-warning-foreground border-status-warning-border' },
+  IN: { key: 'sifDataTabs.status.sii.incorrect', cls: 'bg-destructive text-destructive border-destructive' },
+  EE: { key: 'sifDataTabs.status.sii.sendError', cls: 'bg-destructive text-destructive border-destructive' },
   PE: { key: 'sifDataTabs.status.sii.pending', cls: 'bg-muted text-muted-foreground border-border-subtle' },
   AN: { key: 'sifDataTabs.status.sii.cancelled', cls: 'bg-muted text-muted-foreground border-border-subtle' },
   BA: { key: 'sifDataTabs.status.sii.dropped', cls: 'bg-muted text-muted-foreground border-border-subtle' },
@@ -15,10 +15,10 @@ const SII_STATUS = {
 };
 
 const VERIFACTU_STATUS = {
-  AC: { key: 'sifDataTabs.status.verifactu.accepted', cls: 'bg-green-50 text-green-700 border-green-200' },
-  AE: { key: 'sifDataTabs.status.verifactu.acceptedWithErrors', cls: 'bg-yellow-50 text-yellow-700 border-yellow-200' },
-  IN: { key: 'sifDataTabs.status.verifactu.invalid', cls: 'bg-red-50 text-red-700 border-red-200' },
-  ER: { key: 'sifDataTabs.status.verifactu.rejected', cls: 'bg-red-50 text-red-700 border-red-200' },
+  AC: { key: 'sifDataTabs.status.verifactu.accepted', cls: 'bg-status-success text-status-success-foreground border-status-success-border' },
+  AE: { key: 'sifDataTabs.status.verifactu.acceptedWithErrors', cls: 'bg-status-warning text-status-warning-foreground border-status-warning-border' },
+  IN: { key: 'sifDataTabs.status.verifactu.invalid', cls: 'bg-destructive text-destructive border-destructive' },
+  ER: { key: 'sifDataTabs.status.verifactu.rejected', cls: 'bg-destructive text-destructive border-destructive' },
   PE: { key: 'sifDataTabs.status.verifactu.pending', cls: 'bg-muted text-muted-foreground border-border-subtle' },
 };
 
@@ -56,7 +56,7 @@ function TbaiBadge({ issent, ui }) {
   const sent = issent === true || issent === 'Y';
   return (
     <span className={`inline-flex items-center text-[11px] font-medium px-2 py-0.5 rounded border ${
-      sent ? 'bg-green-50 text-green-700 border-green-200' : 'bg-muted text-muted-foreground border-border-subtle'
+      sent ? 'bg-status-success text-status-success-foreground border-status-success-border' : 'bg-muted text-muted-foreground border-border-subtle'
     }`}>
       {ui(sent ? 'sifDataTabs.status.tbai.sent' : 'sifDataTabs.status.tbai.notSent')}
     </span>

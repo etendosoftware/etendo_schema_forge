@@ -66,8 +66,8 @@ export default function PdfViewer({ url }) {
       <div
         className="absolute top-2 right-2 z-10 flex items-stretch bg-card rounded-lg overflow-hidden"
         style={{
-          border: '1px solid #D1D4DB',
-          boxShadow: '0px 1px 2px rgba(18, 18, 23, 0.05)',
+          border: '1px solid hsl(var(--border-control))',
+          boxShadow: '0px 1px 2px hsl(var(--foreground) / 0.05)',
         }}
       >
         <button
@@ -77,9 +77,9 @@ export default function PdfViewer({ url }) {
           className="w-12 h-[38px] flex items-center justify-center hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
           aria-label={ui('pdfViewerZoomIn')}
         >
-          <ZoomIn size={20} style={{ color: '#828FA3' }} data-testid="ZoomIn__fca188" />
+          <ZoomIn size={20} style={{ color: 'hsl(var(--text-disabled))' }} data-testid="ZoomIn__fca188" />
         </button>
-        <div style={{ width: 1, backgroundColor: '#E8EAEF' }} />
+        <div style={{ width: 1, backgroundColor: 'hsl(var(--border-subtle))' }} />
         <button
           type="button"
           onClick={toggleFitMode}
@@ -88,10 +88,10 @@ export default function PdfViewer({ url }) {
         >
           <Maximize2
             size={20}
-            style={{ color: fitMode === 'page' ? '#121217' : '#828FA3' }}
+            style={{ color: fitMode === 'page' ? 'hsl(var(--foreground))' : 'hsl(var(--text-disabled))' }}
             data-testid="Maximize2__fca188" />
         </button>
-        <div style={{ width: 1, backgroundColor: '#E8EAEF' }} />
+        <div style={{ width: 1, backgroundColor: 'hsl(var(--border-subtle))' }} />
         <button
           type="button"
           onClick={zoomOut}
@@ -99,7 +99,7 @@ export default function PdfViewer({ url }) {
           className="w-12 h-[38px] flex items-center justify-center hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
           aria-label={ui('pdfViewerZoomOut')}
         >
-          <ZoomOut size={20} style={{ color: '#828FA3' }} data-testid="ZoomOut__fca188" />
+          <ZoomOut size={20} style={{ color: 'hsl(var(--text-disabled))' }} data-testid="ZoomOut__fca188" />
         </button>
       </div>
       {/* PDF scroll container */}
@@ -117,7 +117,7 @@ export default function PdfViewer({ url }) {
             )}
             error={(
               <div className="flex flex-col items-center justify-center gap-3 px-6 py-12 text-center">
-                <AlertCircle className="h-8 w-8 text-amber-400" data-testid="AlertCircle__fca188" />
+                <AlertCircle className="h-8 w-8 text-status-warning-foreground" data-testid="AlertCircle__fca188" />
                 <p className="text-sm text-muted-foreground">{ui('invoicePdfError')}</p>
                 {loadError && <p className="text-xs text-muted-foreground/60">{loadError}</p>}
               </div>

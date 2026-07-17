@@ -45,7 +45,7 @@ function CheckboxField({ id, checked, disabled, onToggle }) {
         disabled={disabled}
         onClick={() => !disabled && onToggle(!checked)}
         className={[
-          'h-5 w-5 shrink-0 rounded-sm border border-[#D1D4DB] shadow-[0px_1px_2px_rgba(18,18,23,0.05)]',
+          'h-5 w-5 shrink-0 rounded-sm border border-[hsl(var(--border-control))] shadow-[0px_1px_2px_hsl(var(--foreground) / 0.05)]',
           'flex items-center justify-center transition-colors',
           'focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring',
           'disabled:cursor-not-allowed disabled:opacity-50',
@@ -63,10 +63,10 @@ function CheckboxField({ id, checked, disabled, onToggle }) {
 }
 
 const PILL_CLS = {
-  pending: 'bg-yellow-50 text-yellow-800',
-  success: 'bg-green-50 text-green-700',
-  neutral: 'bg-[#F5F7F9] text-foreground',
-  danger: 'bg-red-50 text-red-700',
+  pending: 'bg-status-warning text-status-warning-foreground',
+  success: 'bg-status-success text-status-success-foreground',
+  neutral: 'bg-[hsl(var(--muted))] text-foreground',
+  danger: 'bg-destructive text-destructive',
 };
 
 const SII_STATUS = {

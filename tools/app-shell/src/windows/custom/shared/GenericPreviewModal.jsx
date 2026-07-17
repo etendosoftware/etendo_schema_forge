@@ -91,20 +91,20 @@ function ManagedLeftPanel({ cfg, leftPanel }) {
             <a
               href={objectUrl}
               download={fileName}
-              className="w-8 h-8 flex items-center justify-center bg-card border border-[#D1D4DB] shadow-sm rounded-lg hover:bg-muted transition-colors"
+              className="w-8 h-8 flex items-center justify-center bg-card border border-[hsl(var(--border-control))] shadow-sm rounded-lg hover:bg-muted transition-colors"
               title={`${ui('downloadPdf')} — ${fileName}`}
               aria-label={ui('downloadPdf')}
             >
-              <Download size={16} className="text-[#828FA3]" data-testid="Download__152ff6" />
+              <Download size={16} className="text-[hsl(var(--text-disabled))]" data-testid="Download__152ff6" />
             </a>
             <button
               type="button"
               onClick={() => attachment.deleteFile().catch(() => {})}
-              className="w-8 h-8 flex items-center justify-center bg-card border border-[#D1D4DB] shadow-sm rounded-lg hover:bg-muted transition-colors"
+              className="w-8 h-8 flex items-center justify-center bg-card border border-[hsl(var(--border-control))] shadow-sm rounded-lg hover:bg-muted transition-colors"
               title={`${ui('deleteDocument')} — ${fileName}`}
               aria-label={ui('deleteDocument')}
             >
-              <Trash2 size={16} className="text-[#828FA3]" data-testid="Trash2__152ff6" />
+              <Trash2 size={16} className="text-[hsl(var(--text-disabled))]" data-testid="Trash2__152ff6" />
             </button>
           </div>
         )}
@@ -271,7 +271,7 @@ const GenericPreviewModal = forwardRef(function GenericPreviewModal({
           {resolvedLeftPanel != null && (
             <div
               className="flex-1 min-w-0 flex flex-col min-h-0 px-7 pt-6 rounded-l-xl"
-              style={{ backgroundColor: '#E8EAEF' }}
+              style={{ backgroundColor: 'hsl(var(--border-subtle))' }}
             >
               {resolvedLeftPanel}
             </div>
@@ -308,13 +308,13 @@ const GenericPreviewModal = forwardRef(function GenericPreviewModal({
               <div className="px-3 pt-3 pb-2 shrink-0">
                 <div
                   className="flex items-center gap-1 p-1 rounded-xl"
-                  style={{ backgroundColor: '#F5F7F9' }}
+                  style={{ backgroundColor: 'hsl(var(--muted))' }}
                 >
                   {tabs.map((tab) => (
                     <button
                       key={tab.key}
                       onClick={() => setActiveTab(tab.key)}
-                      className={`flex-1 h-8 px-2 py-1 text-sm font-medium rounded-lg transition-colors text-[#121217] ${
+                      className={`flex-1 h-8 px-2 py-1 text-sm font-medium rounded-lg transition-colors text-[hsl(var(--foreground))] ${
                         activeTab === tab.key ? 'bg-card shadow-sm' : 'hover:bg-card/50'
                       }`}
                     >
