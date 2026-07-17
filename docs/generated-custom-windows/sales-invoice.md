@@ -417,9 +417,59 @@ dimension fields render through `LinesForm.jsx`'s sidebar and were already corre
 config-gated before this ticket.
 
 The generic `hiddenColumns` mechanism on `InlineLinesPanel`/`DetailView` is not
-window-specific — it applies to every window that uses the primary inline lines grid, so any
-other line field whose `evaluate-display` result resolves to `visibility: false` will now
-also be hidden as a column, not just `project`/`costcenter`.
+window-specific — it applies to every window that uses the primary inline lines grid.
+
+### Regression — product/listPrice/grossAmount vanished from the Lines grid (ETP-4530)
+
+The paragraph above ("any other line field ... will now also be hidden as a column") was an
+acknowledged risk when ETP-4543 shipped, and it materialized for real: live manual testing on
+this window found `product`, `listPrice` (List Price), and `grossAmount` (Line Gross Amount)
+missing entirely from the Lines grid for a saved line, alongside the expected
+`project`/`costcenter` gating.
+
+**Root cause:** `lineDisplayLogic = useDisplayLogic(detailEntity, hook.editing, ...)`
+evaluates the lines tab's `evaluate-display` against the HEADER record snapshot as a
+"representative" line — valid ONLY for `@ACCT_DIMENSION_DISPLAY@`, since its expansion
+(`DimensionDisplayUtility.computeAccountingDimensionDisplayLogic()`) depends solely on the
+client's dimension config, never on record field values. `NeoDisplayLogicHandler`
+(`com.etendoerp.go`), however, evaluates **every** active `AD_Field.displaylogic` on the tab,
+not just the dimension macro. On the Sales Invoice Lines tab, three real AD fields carry
+genuine, record-dependent `displayLogic` (confirmed via direct DB query against
+`ad_field`/`ad_column`):
+
+| Field | Raw `AD_Field.displaylogic` | Dependency |
+| --- | --- | --- |
+| Product (`M_Product_ID`) | `@Financial_Invoice_Line@='N'` | a sibling per-line field (`Financial_Invoice_Line`) |
+| List Price (`PriceList`) | `@GROSSPRICE@='N'` | `GROSSPRICE`, an `AD_AuxiliaryInput` (`SELECT istaxincluded FROM m_pricelist WHERE m_pricelist_id = @M_PRICELIST_ID@`) |
+| Line Gross Amount (`Line_Gross_Amount`) | `@GROSSPRICE@='Y'` | same `GROSSPRICE` auxiliary input |
+
+Neither the sibling field nor the auxiliary-input SQL result exists in the header-record
+snapshot sent as `fieldValues`. `NeoDisplayLogicHandler.buildEvalContext()` only special-cases
+`$Element_*` dimension preferences — it never executes `AD_AuxiliaryInput` SQL and never
+carries per-line field values. `DynamicExpressionParser` compiles both references to plain
+property/context lookups (`OB.Utilities.getValue(currentValues, 'financialInvoiceLine')` and
+`context.GROSSPRICE`), which resolve to `undefined` against missing keys — a property access
+on a defined object, not a `ReferenceError`, so it never hits the evaluator's `catch` block
+(whose fail-open default is "visible"). The `'N'`/`'Y'` string comparison against `undefined`
+just silently evaluates to `false`, indistinguishable at the JSON level from a legitimate
+"hide this column" signal. `decisions.json` had in fact explicitly nullified `product`'s and
+`grossAmount`'s `displayLogic` (`"displayLogic": null`, per the ETP-4529 "Siempre" decision in
+the matrix above) — but that override only affects `contract.json`/generated JS; the NEO
+evaluate-display endpoint reads `AD_Field.displaylogic` straight from the database and has no
+notion of Schema Forge's contract-level override.
+
+**Fix:** `lineHiddenColumns` (`DetailView.jsx`) now only trusts the visibility map for the
+field keys the representative-header-record trick was actually built for —
+`project`/`costcenter`/`businessPartner` (`DIMENSION_MACRO_KEYS`, a module-level allowlist next
+to `DetailView.jsx`'s existing `WINDOW_DELETE_ACTIONS` constant) — instead of blindly hiding
+every key resolving to `false`. Any other field's spurious `false` from this evaluator's known
+representative-context limitation is now ignored, matching the fail-open design already in
+place for absent/`true` keys. Generic, not window-specific: applies to every window that
+consumes `lineHiddenColumns` (the same four `inlineEditable` windows above), and regression
+coverage was added directly against the reported symptom (visibility map with
+`product/listPrice/grossAmount/project/costcenter` all `false` — asserts only the dimension
+keys get hidden) in
+`tools/app-shell/src/components/contract-ui/__tests__/DetailView.lineHiddenColumns.vitest.jsx`.
 
 ### Header section placement fix (ETP-4529 follow-up)
 

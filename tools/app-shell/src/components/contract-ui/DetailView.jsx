@@ -1269,6 +1269,15 @@ const WINDOW_DELETE_ACTIONS = {
   'payment-out': 'eTPRRemovePayment',
 };
 
+// ETP-4530 — field keys for which `lineHiddenColumns` (below) is allowed to trust the
+// lines-entity `evaluate-display` visibility map, computed against a REPRESENTATIVE
+// (header) record rather than the actual line row. Valid only for
+// `@ACCT_DIMENSION_DISPLAY@`-gated accounting dimensions, whose expansion
+// (`DimensionDisplayUtility.computeAccountingDimensionDisplayLogic()`) depends solely on
+// the client's dimension config, never on record field values — see the `lineHiddenColumns`
+// comment for the full incident writeup (product/listPrice/grossAmount regression).
+const DIMENSION_MACRO_KEYS = new Set(['project', 'costcenter', 'businessPartner']);
+
 export function isDeleteButtonVisible({
   isNew,
   recordId,
@@ -1945,9 +1954,29 @@ export function DetailView({
   // DataTable), derived from lineDisplayLogic.visibility. Fail-open: a key that is absent
   // from the map, or explicitly `true`, is NOT hidden — only an explicit `false` (e.g. the
   // config-gated @ACCT_DIMENSION_DISPLAY@ toggle for project/costcenter) hides the column.
+  //
+  // ETP-4530 regression fix — this evaluate-display call is scoped to `detailEntity` but
+  // evaluated against `hook.editing` (the HEADER record snapshot), not any specific line
+  // row (see the comment on `lineDisplayLogic` above: "one evaluate-display call... using
+  // the header record as a representative context"). That trick is only valid for
+  // `@ACCT_DIMENSION_DISPLAY@` — a config-only macro expanded server-side independent of
+  // any record's field values. NeoDisplayLogicHandler (com.etendoerp.go), however,
+  // evaluates EVERY active AD_Field's raw displayLogic for the lines tab, not just the
+  // dimension ones. Real AD fields with genuine per-row/aux-input-dependent displayLogic —
+  // e.g. sales-invoice's Product (`@Financial_Invoice_Line@='N'`, a sibling per-line field)
+  // and List Price / Line Gross Amount (`@GROSSPRICE@='Y'|'N'`, an SQL auxiliary input) —
+  // reference tokens the header snapshot never carries, which silently resolve to
+  // `undefined` and make the comparison evaluate `false`. That `false` looked identical
+  // to a legitimate "hide this column" signal, so it blast-radiused into hiding
+  // product/listPrice/grossAmount for every line, even though decisions.json explicitly
+  // marks product/grossAmount `displayLogic: null` ("Siempre") in this window's contract.
+  // Restrict this map to the field keys the representative-context trick was actually
+  // built for (see docs/generated-custom-windows/sales-invoice.md, ETP-4529 matrix) — any
+  // other key's `false` is untrustworthy noise from this evaluator's known limitation,
+  // not a real hide decision.
   const lineHiddenColumns = useMemo(
     () => Object.entries(lineDisplayLogic?.visibility ?? {})
-      .filter(([, visible]) => visible === false)
+      .filter(([key, visible]) => visible === false && DIMENSION_MACRO_KEYS.has(key))
       .map(([key]) => key),
     [lineDisplayLogic?.visibility]
   );

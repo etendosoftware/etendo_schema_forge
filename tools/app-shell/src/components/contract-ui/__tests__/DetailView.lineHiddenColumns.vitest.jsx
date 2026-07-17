@@ -255,4 +255,48 @@ describe('DetailView — lineHiddenColumns forwarded to the line grid (ETP-4543)
     );
     expect(detailTableProps.current.hiddenColumns).not.toContain('description');
   });
+
+  // ETP-4530 regression — live manual testing on sales-invoice found product, listPrice,
+  // and grossAmount vanishing from the Lines grid after ETP-4529/4543 landed. Root cause:
+  // the lines-entity evaluate-display call (`lineDisplayLogic` above) is evaluated against
+  // the HEADER record snapshot, which is only a valid stand-in for the
+  // `@ACCT_DIMENSION_DISPLAY@` macro (config-only, record-independent). Sales Invoice's
+  // real AD_Field displayLogic for Product (`@Financial_Invoice_Line@='N'`, a sibling
+  // per-line field) and List Price / Line Gross Amount (`@GROSSPRICE@='N'|'Y'`, an SQL
+  // auxiliary input) reference tokens the header snapshot never carries, so
+  // NeoDisplayLogicHandler (com.etendoerp.go) silently resolves them to `false` — a
+  // spurious "hide" signal indistinguishable, at the JSON level, from a real one. The fix
+  // restricts `lineHiddenColumns` to the known dimension-macro keys
+  // (project/costcenter/businessPartner) this representative-context trick was actually
+  // built for, so any other field's evaluator noise can never blast-radius into hiding
+  // real grid columns.
+  it('does NOT hide product/listPrice/grossAmount even when the evaluator spuriously resolves them false (ETP-4530)', () => {
+    displayLogicByEntity.current[DETAIL_ENTITY] = {
+      readOnly: {},
+      visibility: {
+        product: false,
+        listPrice: false,
+        grossAmount: false,
+        project: false,
+        costcenter: false,
+      },
+    };
+    render(<DetailView {...BASE_PROPS} />);
+
+    expect(detailTableProps.current.hiddenColumns).not.toContain('product');
+    expect(detailTableProps.current.hiddenColumns).not.toContain('listPrice');
+    expect(detailTableProps.current.hiddenColumns).not.toContain('grossAmount');
+    // The legitimate dimension keys must still be hidden — this is not a blanket
+    // "never trust the map" regression, only a scoped allowlist.
+    expect(detailTableProps.current.hiddenColumns).toEqual(
+      expect.arrayContaining(['project', 'costcenter']),
+    );
+  });
+
+  it('hides businessPartner when the lines-entity evaluator resolves visibility.businessPartner=false', () => {
+    displayLogicByEntity.current[DETAIL_ENTITY] = { readOnly: {}, visibility: { businessPartner: false } };
+    render(<DetailView {...BASE_PROPS} />);
+
+    expect(detailTableProps.current.hiddenColumns).toContain('businessPartner');
+  });
 });
