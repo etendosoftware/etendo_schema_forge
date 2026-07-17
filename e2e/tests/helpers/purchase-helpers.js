@@ -114,16 +114,21 @@ export async function ensureVendorSetup(page, { navigateTo }) {
   await financieroTab.click();
   await page.waitForTimeout(1_000);
 
-  const vendorInput = page.locator('[data-testid*="vendor"]').first();
+  // The "Proveedor" checkbox is rendered by SquareCheckbox (windows/custom/shared/SquareCheckbox.jsx):
+  // a visible <span> box + label text, followed by a visually-hidden (`sr-only`) native
+  // <input type="checkbox">, all wrapped in a single <label>. The testid lives on the hidden
+  // input, so it must be located with an exact `getByTestId` (not a `[data-testid*="vendor"]`
+  // substring match, which is ambiguous — it can also match the conditionally-rendered
+  // "BlockingToggle__…-vendor" once the vendor section expands). Because the input itself is
+  // not visible, click the wrapping <label> instead — that's the native, hit-testable way a
+  // browser toggles a checkbox nested inside a label, and avoids relying on `force: true`
+  // clicks against a clipped 1px element.
+  const vendorInput = page.getByTestId('SquareCheckbox__7f0756-vendor');
   const isChecked = await vendorInput.isChecked().catch(() => false);
 
   if (!isChecked) {
-    const vendorSpan = vendorInput.locator('~ span').first();
-    if (await vendorSpan.isVisible({ timeout: 3_000 }).catch(() => false)) {
-      await vendorSpan.click();
-    } else {
-      await vendorInput.click({ force: true });
-    }
+    const vendorLabel = vendorInput.locator('xpath=ancestor::label[1]');
+    await vendorLabel.click();
     await page.waitForTimeout(1_000);
 
     const saveBtn = page.getByTestId('action-save').or(

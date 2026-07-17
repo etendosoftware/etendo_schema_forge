@@ -126,8 +126,14 @@ test.describe('Purchase Order → Invoice — Happy path (integration)', () => {
 
     await clickConfirmButton(page);
 
-    // Click the confirm button inside the modal (don't check invoice/receipt options)
-    const modalConfirmBtn = page.getByRole('button', { name: /confirmar|confirm/i }).last();
+    // Click the confirm button inside the modal (don't check invoice/receipt options).
+    // The modal's own "Confirmar pedido" (soConfirmActionOnly) label and the background
+    // toolbar's "Confirmar" (action-save / draftMode label, poConfirmBtn) buttons both match
+    // a loose /confirmar|confirm/i regex, so `.last()` is ambiguous and can resolve to the
+    // background button, which sits under the modal overlay and blocks the click. Match the
+    // modal's exact label instead — it defaults to the "confirm only" selection (soConfirmActionOnly),
+    // no invoice/receipt option checked, matching this test's intent.
+    const modalConfirmBtn = page.getByRole('button', { name: /^confirmar pedido$|^confirm order$/i });
     await expect(modalConfirmBtn).toBeVisible({ timeout: 10_000 });
     await modalConfirmBtn.click();
     await slow(page);
