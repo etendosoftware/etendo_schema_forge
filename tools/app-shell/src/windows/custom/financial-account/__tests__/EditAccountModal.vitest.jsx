@@ -68,6 +68,14 @@ const CONNECTED_ACCOUNT = {
   psd2Connected: true,
 };
 
+// TabsTrigger (components/ui/tabs.jsx) does not spread extra props onto its <button>, so the
+// `data-testid="edit-account-tab-general/accounting"` set in EditAccountModal.jsx never reaches
+// the DOM. Locate the tab by its (mocked, key-as-text) i18n label instead, same pattern already
+// used above for footer buttons (e.g. `screen.getByText('financeAccountsMenuDisconnect')`).
+function getTab(labelKey) {
+  return screen.getByText(labelKey).closest('[role="tab"]');
+}
+
 function renderModal(props = {}) {
   return render(
     <EditAccountModal
@@ -107,6 +115,17 @@ describe('EditAccountModal', () => {
     sync.mockResolvedValue({ status: 'OK', message: 'done' });
     saveImportSettings.mockResolvedValue({});
     disconnect.mockResolvedValue({});
+    // Reset the accounting-config fetch/save back to the neutral default before every test so
+    // a `mockResolvedValueOnce` queued by one test can never leak into the next one.
+    fetchAccountingConfiguration.mockReset();
+    fetchAccountingConfiguration.mockResolvedValue({
+      id: null,
+      fINAssetAcct: null,
+      fINTransitoryAcct: null,
+      ledgerConfigured: true,
+      catalogs: { accounts: [] },
+    });
+    saveAccountingConfiguration.mockReset();
   });
 
   it('returns null (renders nothing) when no account is given', () => {
@@ -417,6 +436,182 @@ describe('EditAccountModal', () => {
       await user.click(screen.getByLabelText('financeAccountsCopyIban'));
       await waitFor(() => expect(writeText).toHaveBeenCalledWith('ES9121000418450200051332'));
       expect(toastSuccess).toHaveBeenCalledWith('financeAccountsPsd2IbanCopied');
+    });
+  });
+
+  // ── ETP-4530: currencyEditable truth table ────────────────────────────────
+  // currencyEditable = !psd2Connected && !hasTransactions — a stricter, independent
+  // condition from the IBAN/connection lock (an offline account can accumulate movements
+  // without ever connecting to PSD2, and must lock its currency once real history exists).
+  describe('currencyEditable truth table (ETP-4530)', () => {
+    it.each([
+      { psd2Connected: false, hasTransactions: false, editable: true },
+      { psd2Connected: false, hasTransactions: true, editable: false },
+      { psd2Connected: true, hasTransactions: false, editable: false },
+      { psd2Connected: true, hasTransactions: true, editable: false },
+    ])(
+      'currency is $editable when psd2Connected=$psd2Connected hasTransactions=$hasTransactions',
+      async ({ psd2Connected, hasTransactions, editable }) => {
+        const account = {
+          id: `acc-truth-${psd2Connected}-${hasTransactions}`,
+          name: 'Truth Table Account',
+          type: 'B',
+          iban: 'ES9121000418450200051332',
+          currencyId: '102',
+          currencyIso: 'EUR',
+          psd2Connected,
+          hasTransactions,
+        };
+        renderModal({ account });
+
+        if (editable) {
+          expect(await screen.findByTestId('edit-account-currency')).toBeInTheDocument();
+        } else {
+          await waitFor(() =>
+            expect(screen.queryByTestId('edit-account-currency')).not.toBeInTheDocument(),
+          );
+          // Locked currency still renders as a read-only field showing the account's ISO code.
+          expect(screen.getByText('EUR')).toBeInTheDocument();
+        }
+      },
+    );
+  });
+
+  // ── ETP-4530: assetAcctMissing gating ─────────────────────────────────────
+  // assetAcctMissing = dirty && !assetAcct — required-field validation that only activates
+  // once the user has actually touched (made dirty) the Contabilidad tab, so an unrelated
+  // edit (name, PSD2, reconciliation) on an account that never configured accounting is not
+  // silently blocked by a mandatory field belonging to a tab the user never opened.
+  describe('assetAcctMissing gating (ETP-4530)', () => {
+    it('does not block Save for an unrelated change when Cuenta bancaria was never touched', async () => {
+      const user = userEvent.setup();
+      // Default mock already resolves fINAssetAcct: null — the account never configured
+      // accounting, and the Contabilidad tab is never opened in this test.
+      renderModal();
+
+      const nameInput = screen.getByTestId('edit-account-name');
+      await user.clear(nameInput);
+      await user.type(nameInput, 'BBVA Renamed');
+
+      expect(screen.getByTestId('edit-account-save')).not.toBeDisabled();
+    });
+
+    it('blocks Save once Cuenta bancaria is cleared after visiting the Contabilidad tab', async () => {
+      const user = userEvent.setup();
+      fetchAccountingConfiguration.mockResolvedValueOnce({
+        id: 'row-1',
+        fINAssetAcct: 'AST1',
+        'fINAssetAcct$_identifier': 'Bank Asset 1',
+        fINTransitoryAcct: null,
+        ledgerConfigured: true,
+        catalogs: { accounts: [{ id: 'AST1', name: 'Bank Asset 1' }] },
+      });
+      renderModal();
+
+      await user.click(getTab('financeAccountsEditTabAccounting'));
+      await screen.findByTestId('accounting-configuration-section');
+      expect(screen.getByTestId('field-fINAssetAcct-chip')).toBeInTheDocument();
+
+      // Clear the required selection via the chip's X (clear) control.
+      await user.click(screen.getByLabelText('clear'));
+
+      await waitFor(() =>
+        expect(screen.getByTestId('edit-account-asset-acct-error')).toBeInTheDocument(),
+      );
+      expect(screen.getByTestId('edit-account-save')).toBeDisabled();
+    });
+  });
+
+  // ── ETP-4530: tab default / reset behavior ────────────────────────────────
+  describe('tab default/reset behavior (ETP-4530)', () => {
+    it('opens on the General tab by default', () => {
+      renderModal();
+      expect(getTab('financeAccountsEditTabGeneral')).toHaveAttribute('aria-selected', 'true');
+      expect(getTab('financeAccountsEditTabAccounting')).toHaveAttribute('aria-selected', 'false');
+    });
+
+    it('resets to the General tab whenever the modal (re)opens for a different account', async () => {
+      const user = userEvent.setup();
+      const { rerender } = render(
+        <EditAccountModal
+          open
+          account={BANK_ACCOUNT}
+          onClose={vi.fn()}
+          onSaved={vi.fn()}
+          onArchive={vi.fn()}
+          onConnect={vi.fn()}
+        />,
+      );
+
+      await user.click(getTab('financeAccountsEditTabAccounting'));
+      expect(getTab('financeAccountsEditTabAccounting')).toHaveAttribute('aria-selected', 'true');
+
+      const OTHER_ACCOUNT = { ...BANK_ACCOUNT, id: 'acc-other', name: 'Other Bank' };
+      rerender(
+        <EditAccountModal
+          open
+          account={OTHER_ACCOUNT}
+          onClose={vi.fn()}
+          onSaved={vi.fn()}
+          onArchive={vi.fn()}
+          onConnect={vi.fn()}
+        />,
+      );
+
+      expect(getTab('financeAccountsEditTabGeneral')).toHaveAttribute('aria-selected', 'true');
+      expect(getTab('financeAccountsEditTabAccounting')).toHaveAttribute('aria-selected', 'false');
+    });
+  });
+
+  // ── ETP-4530 / BUG-1 regression ───────────────────────────────────────────
+  // The Cuenta bancaria requirement is validated on the Contabilidad tab, but Save is
+  // disabled regardless of the active tab. Before this fix the reason was invisible while
+  // looking at General; a summary line now surfaces it there (and only there, to avoid a
+  // duplicate message with the field-level error on the Contabilidad tab itself).
+  describe('BUG-1 regression — accounting error summary across tabs (ETP-4530)', () => {
+    it('shows the summary on General, hides it on Contabilidad, and clears once filled in', async () => {
+      const user = userEvent.setup();
+      fetchAccountingConfiguration.mockResolvedValueOnce({
+        id: 'row-1',
+        fINAssetAcct: 'AST1',
+        'fINAssetAcct$_identifier': 'Bank Asset 1',
+        fINTransitoryAcct: null,
+        ledgerConfigured: true,
+        catalogs: {
+          accounts: [
+            { id: 'AST1', name: 'Bank Asset 1' },
+            { id: 'AST2', name: 'Bank Asset 2' },
+          ],
+        },
+      });
+      renderModal();
+
+      await user.click(getTab('financeAccountsEditTabAccounting'));
+      await screen.findByTestId('accounting-configuration-section');
+
+      // Clear the required field — assetAcctMissing becomes true.
+      await user.click(screen.getByLabelText('clear'));
+      await waitFor(() =>
+        expect(screen.getByTestId('edit-account-asset-acct-error')).toBeInTheDocument(),
+      );
+      // (b) No duplicate summary line while still on the Contabilidad tab itself.
+      expect(screen.queryByTestId('edit-account-accounting-error-summary')).not.toBeInTheDocument();
+
+      // (a) Switching to General surfaces the summary line instead.
+      await user.click(getTab('financeAccountsEditTabGeneral'));
+      expect(screen.getByTestId('edit-account-accounting-error-summary')).toHaveTextContent(
+        'financeAccountsAccountingBankAssetRequiredSummary',
+      );
+
+      // (c) Filling the field back in makes the summary disappear.
+      await user.click(getTab('financeAccountsEditTabAccounting'));
+      await user.click(screen.getByTestId('field-fINAssetAcct'));
+      await user.click(await screen.findByTestId('option-fINAssetAcct-AST2'));
+
+      await user.click(getTab('financeAccountsEditTabGeneral'));
+      await waitFor(() =>
+        expect(screen.queryByTestId('edit-account-accounting-error-summary')).not.toBeInTheDocument(),
+      );
     });
   });
 });
