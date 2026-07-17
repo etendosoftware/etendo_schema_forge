@@ -19350,6 +19350,7 @@
     "typeAtLeast2Characters": "Escribe al menos 2 caracteres",
     "setLocation": "Establecer ubicación",
     "locationSelectorTitle": "Ubicación",
+    "locationFieldPlaceholder": "Agregar o editar ubicación...",
     "addressLine1": "Primera línea",
     "addressLine2": "Segunda línea",
     "postalCodeLabel": "Código postal",
