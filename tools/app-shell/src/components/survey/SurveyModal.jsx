@@ -210,6 +210,32 @@ function ChipGroup({ options, value, onChange }) {
   );
 }
 
+// ─── Canned-response row (CSAT Q2) ───────────────────────────────────────────
+// Click a phrase to prefill the free-text field below — same "click to fill, then keep
+// editing" pattern as ConversationView's support-chat quick replies (onQuickReply sets the
+// draft text, doesn't lock it). Fulfills ETP-4352's "predefined answers, still editable" ask.
+function CannedResponseRow({ options, onPick }) {
+  return (
+    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 10 }}>
+      {options.map(o => (
+        <button
+          key={o}
+          type="button"
+          onClick={() => onPick(o)}
+          style={{
+            padding: '6px 12px', borderRadius: 999,
+            border: `1px solid ${T.border2}`,
+            background: '#fff', color: T.fg2,
+            font: font(12, 500), cursor: 'pointer',
+          }}
+        >
+          {o}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 // ─── Ghost button (skip) ─────────────────────────────────────────────────────
 function GhostBtn({ children, onClick }) {
   return (
@@ -382,6 +408,15 @@ function CSATSurveyContent({ survey, phase, setPhase, score, setScore, feedback,
           {ui(survey.q2TitleKey)}
         </div>
         <div style={{ font: font(13, 400, 18), color: T.fg3, marginBottom: 14 }}>{ui('surveyQ2Optional')}</div>
+        <CannedResponseRow
+          options={[
+            ui('surveyCsatCanned1'),
+            ui('surveyCsatCanned2'),
+            ui('surveyCsatCanned3'),
+            ui('surveyCsatCanned4'),
+          ]}
+          onPick={setFeedback}
+          data-testid="CannedResponseRow__91aeca" />
         <textarea
           value={feedback}
           onChange={e => setFeedback(e.target.value)}
@@ -429,7 +464,7 @@ function CSATSurveyContent({ survey, phase, setPhase, score, setScore, feedback,
 }
 
 // ─── Main SurveyModal ─────────────────────────────────────────────────────────
-export function SurveyModal({ survey, open, onRespond, onDismiss, onClose }) {
+export function SurveyModal({ survey, open, onScoreSelected, onRespond, onDismiss, onClose }) {
   const ui = useUI();
   const [score, setScore] = useState(null);
   const [phase, setPhase] = useState('initial');
@@ -448,6 +483,11 @@ export function SurveyModal({ survey, open, onRespond, onDismiss, onClose }) {
   if (!open || !survey) return null;
 
   const isNps = survey.type === 'nps';
+
+  function handleScoreSelect(n) {
+    setScore(n);
+    onScoreSelected?.(n);
+  }
 
   function handleClose() {
     if (phase !== 'thanks') onDismiss();
@@ -506,7 +546,7 @@ export function SurveyModal({ survey, open, onRespond, onDismiss, onClose }) {
               phase={phase}
               setPhase={handleSetPhase}
               score={score}
-              setScore={setScore}
+              setScore={handleScoreSelect}
               feedback={feedback}
               setFeedback={setFeedback}
               tags={tags}
@@ -520,7 +560,7 @@ export function SurveyModal({ survey, open, onRespond, onDismiss, onClose }) {
               phase={phase}
               setPhase={handleSetPhase}
               score={score}
-              setScore={setScore}
+              setScore={handleScoreSelect}
               feedback={feedback}
               setFeedback={setFeedback}
               onDismiss={onDismiss}

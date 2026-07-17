@@ -512,6 +512,19 @@ export const OBSERVABILITY_EVENTS = Object.freeze({
       OBSERVABILITY_PROPERTY_KEYS.USER_ID,
     ],
   }),
+  // Fired the moment the user picks a score/star, independent of whether they ever press
+  // submit — captures intent even if the survey is dismissed mid-flow (ETP-4352 "Requerimientos
+  // Adicionales": the selected vote must be recorded even without a final submit).
+  SURVEY_SCORE_SELECTED: defineEvent('survey_score_selected', {
+    channels: [OBSERVABILITY_CHANNELS.MIXPANEL],
+    properties: [
+      OBSERVABILITY_PROPERTY_KEYS.ACCOUNT_ID,
+      OBSERVABILITY_PROPERTY_KEYS.SCORE,
+      OBSERVABILITY_PROPERTY_KEYS.SOURCE,
+      OBSERVABILITY_PROPERTY_KEYS.TYPE,
+      OBSERVABILITY_PROPERTY_KEYS.USER_ID,
+    ],
+  }),
   MCP_CONNECT_TAB_SELECTED: defineEvent('mcp_connect_tab_selected', {
     channels: [OBSERVABILITY_CHANNELS.MIXPANEL],
     properties: [

@@ -70,6 +70,16 @@ export function useSurveyEngine() {
     };
   }, [checkAndShowSurvey]);
 
+  const handleScoreSelected = useCallback((score) => {
+    if (!activeSurvey) return;
+    trackSurveyEvent(OBSERVABILITY_EVENTS.SURVEY_SCORE_SELECTED, {
+      type: activeSurvey.type,
+      source: activeSurvey.id,
+      score,
+      ...userProps,
+    });
+  }, [activeSurvey, userProps]);
+
   const handleRespond = useCallback((score, feedback, tags) => {
     if (!activeSurvey) return;
     markSurveyResponded(activeSurvey.id);
@@ -98,5 +108,5 @@ export function useSurveyEngine() {
     setActiveSurvey(null);
   }, [activeSurvey, userProps]);
 
-  return { activeSurvey, handleRespond, handleClose, handleDismiss };
+  return { activeSurvey, handleScoreSelected, handleRespond, handleClose, handleDismiss };
 }

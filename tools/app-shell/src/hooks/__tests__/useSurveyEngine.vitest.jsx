@@ -29,6 +29,7 @@ const observabilityEventsMocks = vi.hoisted(() => ({
   buildObservabilityEvent: vi.fn(),
   OBSERVABILITY_EVENTS: {
     SURVEY_SHOWN: { name: 'survey_shown' },
+    SURVEY_SCORE_SELECTED: { name: 'survey_score_selected' },
     SURVEY_RESPONDED: { name: 'survey_responded' },
     SURVEY_DISMISSED: { name: 'survey_dismissed' },
   },
@@ -387,6 +388,69 @@ describe('useSurveyEngine', () => {
 
       expect(selectNextSurvey).toHaveBeenCalledWith(
         expect.objectContaining({ isAdmin: false }),
+      );
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // handleScoreSelected
+  // -------------------------------------------------------------------------
+
+  describe('handleScoreSelected', () => {
+    it('tracks survey_score_selected with the score, without calling markSurveyResponded', () => {
+      const survey = makeSurvey();
+      useAuth.mockReturnValue(makeAuth({ isAuthenticated: true, username: 'alice' }));
+      selectNextSurvey.mockReturnValue(survey);
+
+      const { result } = renderHook(() => useSurveyEngine());
+      act(() => { vi.advanceTimersByTime(2500); });
+
+      act(() => {
+        result.current.handleScoreSelected(7);
+      });
+
+      expect(buildObservabilityEvent).toHaveBeenCalledWith(
+        OBSERVABILITY_EVENTS.SURVEY_SCORE_SELECTED,
+        expect.objectContaining({ type: survey.type, source: survey.id, score: 7 }),
+      );
+      expect(markSurveyResponded).not.toHaveBeenCalled();
+    });
+
+    it('fires again on a subsequent score change without requiring submit', () => {
+      const survey = makeSurvey();
+      useAuth.mockReturnValue(makeAuth({ isAuthenticated: true, username: 'alice' }));
+      selectNextSurvey.mockReturnValue(survey);
+
+      const { result } = renderHook(() => useSurveyEngine());
+      act(() => { vi.advanceTimersByTime(2500); });
+
+      act(() => {
+        result.current.handleScoreSelected(3);
+        result.current.handleScoreSelected(9);
+      });
+
+      const scoreCalls = buildObservabilityEvent.mock.calls.filter(
+        ([eventDef]) => eventDef === OBSERVABILITY_EVENTS.SURVEY_SCORE_SELECTED,
+      );
+      expect(scoreCalls).toHaveLength(2);
+      expect(scoreCalls[0][1]).toEqual(expect.objectContaining({ score: 3 }));
+      expect(scoreCalls[1][1]).toEqual(expect.objectContaining({ score: 9 }));
+    });
+
+    it('does nothing when activeSurvey is null', () => {
+      useAuth.mockReturnValue(makeAuth({ isAuthenticated: true, username: 'alice' }));
+      selectNextSurvey.mockReturnValue(null);
+
+      const { result } = renderHook(() => useSurveyEngine());
+      act(() => { vi.advanceTimersByTime(2500); });
+
+      act(() => {
+        result.current.handleScoreSelected(5);
+      });
+
+      expect(buildObservabilityEvent).not.toHaveBeenCalledWith(
+        OBSERVABILITY_EVENTS.SURVEY_SCORE_SELECTED,
+        expect.anything(),
       );
     });
   });

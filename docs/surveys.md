@@ -67,19 +67,36 @@ The `SURVEYS` array in `surveys.js` is evaluated in order. The first survey that
 
 ---
 
+## CSAT Predefined Responses
+
+When a CSAT survey's score is <= 3, `SurveyModal` shows a `CannedResponseRow` above the free-text
+textarea — four generic dissatisfaction phrases (`surveyCsatCanned1..4` locale keys, shared by both
+`csat_invoicing` and `csat_order`, not per-survey copy). Clicking one calls `setFeedback(phrase)`,
+prefilling the textarea; the text remains fully editable afterward — same "click to fill, keep
+editing" pattern as `ConversationView`'s support-chat quick replies. This is presentation-only: no
+new state, no Mixpanel event of its own (a canned pick still surfaces via the `feedback` property on
+`survey_responded` once submitted).
+
+---
+
 ## Anti-Fatigue Rules
 
 `selectNextSurvey` applies these guards in order before any per-survey eligibility check:
 
-| Rule | Value | Implementation |
+| Rule | Default | Implementation |
 |------|-------|---------------|
 | Global cooldown | 30 days after any survey was shown | `isGlobalCooldownActive` in `survey-engine.js` |
 | Monthly cap | Max 2 surveys per calendar month | `isMonthlyLimitReached` — key format `"YYYY-MM"` |
 | Dismiss cooldown (per survey) | 21 days after a survey was dismissed | `isDismissedCooldownActive` in `survey-engine.js` |
+| NPS min tenure | Skip NPS if first login was < 60 days ago | `npsIsEligible` in `surveys.js` |
 | NPS inactivity guard | Skip NPS if user has not logged in for > 14 days | `npsIsEligible` in `surveys.js` |
-| Re-respond cooldown (per survey) | 90 days after last response | Inside each `csatIs*Eligible` / `npsIsEligible` function |
+| CSAT document minimum | Skip CSAT invoicing/order until >= 5 documents confirmed | `csatDocumentIsEligible` in `surveys.js` |
+| CSAT document gap | Re-eligible after 30 more documents since last response | `csatDocumentIsEligible` in `surveys.js` |
+| Re-respond cooldown (per survey) | 90 days after last response | Inside `csatDocumentIsEligible` / `npsIsEligible` |
 
 The global cooldown and monthly cap are checked first. If either fails, no survey is evaluated further. The dismiss cooldown is checked per survey in the loop, so one dismissed survey does not block others that have not been dismissed recently.
+
+All defaults above are read from `getSurveyConfig()` in `survey-config.js` and are overridable at build time via `VITE_SURVEY_*` env vars — see [Configuration](#configuration-vite_survey_) below. This is an internal ops knob for the Etendo GO team, not a customer-facing setting.
 
 ---
 
@@ -264,7 +281,22 @@ The survey remains in the `SURVEYS` array (so its `id` and locale keys are not o
 
 ## Mixpanel Events
 
-Three events are emitted via `track()` (from `tools/app-shell/src/lib/observability.js`). All three go to Mixpanel. `survey_shown` and `survey_responded` are also sent to the NPS channel.
+Four events are emitted via `track()` (from `tools/app-shell/src/lib/observability.js`), all sent to Mixpanel. `survey_shown` and `survey_responded` are also sent to the NPS channel.
+
+### `survey_score_selected`
+
+Fired by `useSurveyEngine.handleScoreSelected` the moment the user picks a score/star, independent
+of whether they ever press submit — captures intent even if the survey is dismissed mid-flow. Fires
+on every score change, not just the first (a later `survey_responded` on actual submit is expected,
+minor overlap by design).
+
+| Property | Value |
+|---|---|
+| `type` | Survey type: `'nps'` or `'csat'` |
+| `source` | Survey id |
+| `score` | Numeric score selected by the user |
+| `userId` | Authenticated username |
+| `accountId` | Selected organization id (if available) |
 
 ### `survey_shown`
 
@@ -303,3 +335,62 @@ Fired by `useSurveyEngine.handleDismiss` when the user clicks the close button o
 | `accountId` | Selected organization id (if available) |
 
 **Note:** Clicking the backdrop or close button **after** the thank-you screen has appeared does not fire `survey_dismissed` — `SurveyModal.handleClose` routes through `onDismiss` only when `phase !== 'thanks'`.
+
+---
+
+## Configuration (`VITE_SURVEY_*`)
+
+All anti-fatigue tunables are read once through `getSurveyConfig()` in `survey-config.js`, which
+resolves each value from a `VITE_SURVEY_*` build-time env var, falling back to a hardcoded default
+when the var is unset, empty, or not a positive number (`resolvePositiveInt`). This mirrors the
+existing `VITE_RUM_SESSION_SAMPLE_RATE` pattern in `rum.js` (see `docs/ops/app-shell-observability.md`).
+
+**This is an internal ops knob for the Etendo GO team — not a customer-facing setting.** There is no
+UI, no AD window, no per-org override, and no database table involved. Changing a value requires
+editing the env var for the target environment and triggering a rebuild + redeploy of `app-shell`;
+it does not take effect at runtime.
+
+| Env var | Default | Resolves to |
+|---|---|---|
+| `VITE_SURVEY_GLOBAL_COOLDOWN_DAYS` | `30` | `globalCooldownMs` — global cooldown after any survey shown |
+| `VITE_SURVEY_DISMISSED_COOLDOWN_DAYS` | `21` | `dismissedCooldownMs` — cooldown after a survey is dismissed |
+| `VITE_SURVEY_MAX_PER_MONTH` | `2` | `maxPerMonth` — max surveys shown per calendar month |
+| `VITE_SURVEY_NPS_MIN_AGE_DAYS` | `60` | `npsMinAgeMs` — minimum account age before NPS is eligible |
+| `VITE_SURVEY_NPS_INACTIVITY_DAYS` | `14` | `npsInactivityMs` — skip NPS if the user has been inactive longer than this |
+| `VITE_SURVEY_RESPONSE_COOLDOWN_DAYS` | `90` | `responseCooldownMs` — re-eligibility window after a response, shared by NPS and both CSAT surveys |
+| `VITE_SURVEY_CSAT_MIN_DOCS` | `5` | `csatMinDocs` — minimum confirmed documents before CSAT invoicing/order is eligible |
+| `VITE_SURVEY_CSAT_DOC_GAP` | `30` | `csatDocGap` — additional documents required before CSAT is eligible again |
+
+All values are whole days (converted to milliseconds internally) except `maxPerMonth`, `csatMinDocs`,
+and `csatDocGap`, which are plain counts. Invalid values (non-numeric, zero, negative) fall back to
+the default rather than disabling the guard.
+
+---
+
+## GDPR / Data Privacy Note (ETP-4352)
+
+Findings from the ETP-4352 "Requerimientos Adicionales" review of what the survey events send to
+Mixpanel today. Scope: `survey_shown`, `survey_score_selected`, `survey_responded`, `survey_dismissed`.
+
+**Identifiers (`userId`, `accountId`):** these are internal opaque identifiers (username, org id),
+not directly identifying values like name or email on their own. Under GDPR this is **pseudonymous
+data** — it still counts as personal data (Mixpanel or anyone with access to the source system could
+re-identify the user), but pseudonymization is a recognized and accepted risk-reduction measure, not
+a reason to block on further anonymization work. No code change is proposed here.
+
+**Recommendation:** confirm a Data Processing Agreement (DPA) is in place with Mixpanel covering EU
+data — standard practice for any SaaS analytics vendor processing EU personal data, and Etendo GO
+already uses the `api-eu.mixpanel.com` host (see `docs/ops/app-shell-observability.md`) for EU data
+residency. This is an ops/legal follow-up, not a code fix.
+
+**The actual gap:** the CSAT free-text `feedback` field (sent by `survey_responded`) is
+**unconstrained user input**. A user can type anything into it, including their own name, email, or
+other PII, and it is forwarded to Mixpanel verbatim today — this predates ETP-4352 and is unaffected
+by the canned-response feature (picking a canned phrase just prefills the same editable field).
+
+**Recommendation for the free-text risk:** do not implement speculative scrubbing (e.g. regex-based
+email/PII stripping) without a product/compliance decision — pattern-based scrubbing is unreliable
+(false negatives on PII, false positives mangling legitimate feedback) and the right mitigation
+depends on Etendo GO's actual compliance posture (DPA terms, data retention policy, whether Mixpanel
+is told to treat the field as sensitive). Flagging this explicitly for whoever owns compliance
+sign-off is the deliverable of this note — this repo proceeds as-is for Phase 1.

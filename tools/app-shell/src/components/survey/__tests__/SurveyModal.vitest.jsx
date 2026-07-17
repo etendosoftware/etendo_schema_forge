@@ -29,6 +29,7 @@ const csatSurvey = {
 };
 
 function setup(props = {}) {
+  const onScoreSelected = vi.fn();
   const onRespond = vi.fn();
   const onDismiss = vi.fn();
   const onClose = vi.fn();
@@ -36,13 +37,14 @@ function setup(props = {}) {
     <SurveyModal
       survey={npsSurvey}
       open
+      onScoreSelected={onScoreSelected}
       onRespond={onRespond}
       onDismiss={onDismiss}
       onClose={onClose}
       {...props}
     />
   );
-  return { ...utils, onRespond, onDismiss, onClose };
+  return { ...utils, onScoreSelected, onRespond, onDismiss, onClose };
 }
 
 describe('SurveyModal — visibility', () => {
@@ -168,6 +170,27 @@ describe('SurveyModal — NPS flow', () => {
     expect(onDismiss).toHaveBeenCalledTimes(1);
     expect(onRespond).not.toHaveBeenCalled();
   });
+
+  it('calls onScoreSelected with the picked score immediately, without submitting', async () => {
+    const user = userEvent.setup();
+    const { onScoreSelected, onRespond } = setup();
+
+    await user.click(screen.getByTestId('SurveyModal__nps-9'));
+
+    expect(onScoreSelected).toHaveBeenCalledWith(9);
+    expect(onRespond).not.toHaveBeenCalled();
+  });
+
+  it('calls onScoreSelected again when the user changes their pick before submitting', async () => {
+    const user = userEvent.setup();
+    const { onScoreSelected } = setup();
+
+    await user.click(screen.getByTestId('SurveyModal__nps-3'));
+    await user.click(screen.getByTestId('SurveyModal__nps-9'));
+
+    expect(onScoreSelected).toHaveBeenNthCalledWith(1, 3);
+    expect(onScoreSelected).toHaveBeenNthCalledWith(2, 9);
+  });
 });
 
 describe('SurveyModal — CSAT flow', () => {
@@ -243,6 +266,44 @@ describe('SurveyModal — CSAT flow', () => {
 
     expect(onDismiss).toHaveBeenCalledTimes(1);
     expect(onRespond).not.toHaveBeenCalled();
+  });
+
+  it('calls onScoreSelected with the picked star immediately, without submitting', async () => {
+    const user = userEvent.setup();
+    const { onScoreSelected, onRespond } = setup({ survey: csatSurvey });
+
+    await user.click(screen.getByTestId('SurveyModal__star-2'));
+
+    expect(onScoreSelected).toHaveBeenCalledWith(2);
+    expect(onRespond).not.toHaveBeenCalled();
+  });
+
+  it('shows canned-response buttons in the followup phase and clicking one prefills the editable textarea', async () => {
+    const user = userEvent.setup();
+    setup({ survey: csatSurvey });
+
+    await user.click(screen.getByTestId('SurveyModal__star-2'));
+    await user.click(screen.getByText('surveySubmit').closest('button'));
+
+    const textarea = screen.getByPlaceholderText('surveyInvoicingQ2Placeholder');
+    expect(textarea).toHaveValue('');
+
+    await user.click(screen.getByText('surveyCsatCanned1'));
+    expect(textarea).toHaveValue('surveyCsatCanned1');
+
+    // Still editable after picking a canned response.
+    await user.type(textarea, ' but faster');
+    expect(textarea).toHaveValue('surveyCsatCanned1 but faster');
+  });
+
+  it('does not show canned-response buttons for a score > 3 (straight to thanks)', async () => {
+    const user = userEvent.setup();
+    setup({ survey: csatSurvey });
+
+    await user.click(screen.getByTestId('SurveyModal__star-5'));
+    await user.click(screen.getByText('surveySubmit').closest('button'));
+
+    expect(screen.queryByText('surveyCsatCanned1')).not.toBeInTheDocument();
   });
 });
 
