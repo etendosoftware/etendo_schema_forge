@@ -60,7 +60,7 @@ export default function PaymentActivityToggle({ data, recordId, token, apiBaseUr
           style={{
             position: 'fixed',
             inset: 0,
-            backgroundColor: 'rgba(0,0,0,0.15)',
+            backgroundColor: 'hsl(var(--foreground) / 0.15)',
             zIndex: 50,
             transition: 'opacity 200ms ease',
           }}
@@ -76,9 +76,9 @@ export default function PaymentActivityToggle({ data, recordId, token, apiBaseUr
           bottom: 0,
           width: 400,
           maxWidth: '90vw',
-          backgroundColor: '#f9fafb',
-          borderLeft: '1px solid #e5e7eb',
-          boxShadow: open ? '-4px 0 24px rgba(0,0,0,0.08)' : 'none',
+          backgroundColor: 'hsl(var(--card))',
+          borderLeft: '1px solid hsl(var(--card))',
+          boxShadow: open ? '-4px 0 24px hsl(var(--foreground) / 0.08)' : 'none',
           transform: open ? 'translateX(0)' : 'translateX(100%)',
           transition: 'transform 250ms ease',
           zIndex: 50,
@@ -110,7 +110,7 @@ export default function PaymentActivityToggle({ data, recordId, token, apiBaseUr
               borderRadius: 6,
               border: 'none',
               backgroundColor: 'transparent',
-              color: '#6b7280',
+              color: 'hsl(var(--muted))',
               cursor: 'pointer',
               fontSize: 16,
             }}

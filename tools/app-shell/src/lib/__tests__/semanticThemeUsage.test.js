@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { join, relative } from 'node:path';
 
 const SOURCE_ROOT = fileURLToPath(new URL('../..', import.meta.url));
+const ARTIFACTS_ROOT = fileURLToPath(new URL('../../../../../artifacts', import.meta.url));
 
 // These files intentionally encode data, a document contract, or a developer-only
 // diagnostic palette. All application UI must use semantic theme roles instead.
@@ -27,7 +28,7 @@ const COLOR_LITERAL_EXCEPTIONS = new Map([
   ['windows/custom/shared/pdfUtils.js', 'PDF document contract'],
 ]);
 
-const COLOR_LITERAL = /#[0-9a-f]{3,8}\b|\brgba?\(\s*\d|\bhsl\(\s*\d|\b(?:bg|text|border|ring|outline|fill|stroke)-(?:white|black|slate|gray|zinc|neutral|stone|red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose)(?:-[0-9]{2,3})?\b/gi;
+const COLOR_LITERAL = /#[0-9a-f]{3,8}\b|\brgba?\(\s*\d|\bhsl\(\s*\d|['"](?:white|black)['"]|\b(?:bg|text|border|ring|outline|fill|stroke)-(?:white|black|slate|gray|zinc|neutral|stone|red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose)(?:-[0-9]{2,3})?\b/gi;
 
 function sourceFiles(directory) {
   return readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
@@ -38,11 +39,27 @@ function sourceFiles(directory) {
   });
 }
 
+function artifactCustomFiles() {
+  return readdirSync(ARTIFACTS_ROOT, { withFileTypes: true }).flatMap((entry) => {
+    if (!entry.isDirectory()) return [];
+    const customDirectory = join(ARTIFACTS_ROOT, entry.name, 'custom');
+    try {
+      return sourceFiles(customDirectory);
+    } catch {
+      return [];
+    }
+  });
+}
+
 describe('semantic theme usage', () => {
   it('does not allow palette literals in application UI outside documented exceptions', () => {
-    const offenders = sourceFiles(SOURCE_ROOT).flatMap((filePath) => {
-      const sourcePath = relative(SOURCE_ROOT, filePath);
-      if (COLOR_LITERAL_EXCEPTIONS.has(sourcePath)) return [];
+    const sources = [
+      ...sourceFiles(SOURCE_ROOT).map((filePath) => ({ filePath, sourcePath: relative(SOURCE_ROOT, filePath) })),
+      ...artifactCustomFiles().map((filePath) => ({ filePath, sourcePath: `artifacts/${relative(ARTIFACTS_ROOT, filePath)}` })),
+    ];
+    const offenders = sources.flatMap(({ filePath, sourcePath }) => {
+      const appSourcePath = sourcePath.replace(/^artifacts\//, '');
+      if (COLOR_LITERAL_EXCEPTIONS.has(appSourcePath)) return [];
       const matches = readFileSync(filePath, 'utf8').match(COLOR_LITERAL);
       return matches ? [`${sourcePath}: ${matches.join(', ')}`] : [];
     });

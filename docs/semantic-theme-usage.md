@@ -18,7 +18,8 @@ visuals (charts and deterministic avatars), externally branded assets, and
 print/PDF output, where a theme role would change the data or the document
 contract.
 
-`semanticThemeUsage.test.js` enforces this rule for application source. Its
+`semanticThemeUsage.test.js` enforces this rule for application source and the
+live `artifacts/*/custom` components resolved by the `@generated` alias. Its
 explicit exception list is limited to chart series and category identities,
 developer debug panels, and print/PDF or document-preview contracts. Adding an
 exception requires documenting why a semantic role would alter the represented

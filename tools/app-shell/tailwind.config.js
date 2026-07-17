@@ -19,6 +19,9 @@ export default {
   content: [
     './index.html',
     './src/**/*.{js,jsx}',
+    // Custom artifact components are live frontend sources resolved through the
+    // @generated alias. Scan them so their semantic utilities are retained.
+    '../../artifacts/**/custom/**/*.{js,jsx}',
     '../../artifacts/**/generated/**/*.{js,jsx}',
     // UI components live in the installed @etendosoftware/app-shell-core package
     // and carry classes like `bg-popover` that exist nowhere in this app's own

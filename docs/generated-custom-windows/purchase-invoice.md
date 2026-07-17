@@ -414,3 +414,11 @@ query in the GO module (`PisPaymentService.hasLinkedPisPayment`), not a new PSD2
 
 Scope v1: purchase invoices only, EUR (SEPA) / GBP (FPS). Out of scope: receipts, batch/multi-invoice
 PIS, other currencies, scheduled payments.
+
+## Theme roles
+
+The window's live artifact custom components use the shared semantic theme.
+Structural surfaces and controls consume background, card, foreground, muted, and
+border roles; operational feedback uses success, warning, information, neutral,
+and destructive roles. No local palette is used, so the active application theme
+controls the appearance.

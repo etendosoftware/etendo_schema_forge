@@ -325,3 +325,11 @@ affected and required no change.
 
 Regression coverage:
 `tools/app-shell/src/windows/custom/shared/__tests__/useFiscalStatus.vitest.jsx`.
+
+## Theme roles
+
+The window's live artifact custom components use the shared semantic theme.
+Structural surfaces and controls consume background, card, foreground, muted, and
+border roles; operational feedback uses success, warning, information, neutral,
+and destructive roles. No local palette is used, so the active application theme
+controls the appearance.
