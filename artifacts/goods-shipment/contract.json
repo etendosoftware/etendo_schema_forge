@@ -1,8 +1,8 @@
 {
-  "version": "0.27.0",
+  "version": "0.28.0",
   "generatedAt": "2026-04-29T19:04:55.657Z",
-  "updatedAt": "2026-07-16T14:25:56.712Z",
-  "checksum": "86cdc8b109c3df1e",
+  "updatedAt": "2026-07-17T18:04:55.460Z",
+  "checksum": "b1c3e3e308260bec",
   "frontendContract": {
     "window": {
       "id": "169",
@@ -304,31 +304,6 @@
             "defaultValue": "DR"
           },
           {
-            "name": "accountingDate",
-            "apiKey": "accountingDate",
-            "column": "DateAcct",
-            "label": "Accounting Date",
-            "type": "date",
-            "tsType": "string",
-            "visibility": "editable",
-            "required": true,
-            "grid": false,
-            "form": true,
-            "sourceRequired": true,
-            "derivation": {
-              "type": "computed",
-              "source": "@#Date@"
-            },
-            "defaultValue": "@#Date@",
-            "section": "principal",
-            "seq": 35,
-            "readOnlyLogic": {
-              "raw": "@Posted@='Y'",
-              "evaluable": true,
-              "js": "record['posted'] === true"
-            }
-          },
-          {
             "name": "posted",
             "apiKey": "posted",
             "column": "Posted",
@@ -559,13 +534,6 @@
             "derivation": {
               "type": "computed",
               "source": "DR"
-            }
-          },
-          {
-            "name": "accountingDate",
-            "derivation": {
-              "type": "computed",
-              "source": "@#Date@"
             }
           },
           {
@@ -879,7 +847,7 @@
             "apiKey": "accountingDate",
             "column": "DateAcct",
             "type": "date",
-            "visibility": "editable",
+            "visibility": "system",
             "required": true
           },
           {
@@ -2006,14 +1974,6 @@
         "description": "CRUD flags for 'goodsShipmentLine' should all be booleans"
       },
       {
-        "id": "t-default-value-type-goodsShipment-accountingDate",
-        "category": "default-value-type",
-        "entity": "goodsShipment",
-        "field": "accountingDate",
-        "runner": "node",
-        "description": "Default value for 'accountingDate' in goodsShipment should be a string"
-      },
-      {
         "id": "t-default-value-type-goodsShipment-documentStatus",
         "category": "default-value-type",
         "entity": "goodsShipment",
@@ -2116,14 +2076,6 @@
         "field": "orderQuantity",
         "runner": "node",
         "description": "Display logic for 'orderQuantity' in goodsShipmentLine should be valid JS"
-      },
-      {
-        "id": "t-field-presence-goodsShipment-accountingDate",
-        "category": "field-presence",
-        "entity": "goodsShipment",
-        "field": "accountingDate",
-        "runner": "node",
-        "description": "Field 'accountingDate' should be present in goodsShipment"
       },
       {
         "id": "t-field-presence-goodsShipment-businessPartner",
@@ -2262,14 +2214,6 @@
         "description": "Field 'product' should be present in goodsShipmentLine"
       },
       {
-        "id": "t-field-type-goodsShipment-accountingDate",
-        "category": "field-type",
-        "entity": "goodsShipment",
-        "field": "accountingDate",
-        "runner": "node",
-        "description": "Field 'accountingDate' should have type 'string' in goodsShipment"
-      },
-      {
         "id": "t-field-type-goodsShipment-businessPartner",
         "category": "field-type",
         "entity": "goodsShipment",
@@ -2406,14 +2350,6 @@
         "description": "Field 'product' should have type 'string' in goodsShipmentLine"
       },
       {
-        "id": "t-readonlylogic-evaluable-goodsShipment-accountingDate",
-        "category": "readonlylogic-evaluable",
-        "entity": "goodsShipment",
-        "field": "accountingDate",
-        "runner": "node",
-        "description": "Read-only logic for 'accountingDate' in goodsShipment should have evaluable flag"
-      },
-      {
         "id": "t-readonlylogic-evaluable-goodsShipment-businessPartner",
         "category": "readonlylogic-evaluable",
         "entity": "goodsShipment",
@@ -2476,14 +2412,6 @@
         "field": "product",
         "runner": "node",
         "description": "Read-only logic for 'product' in goodsShipmentLine should have evaluable flag"
-      },
-      {
-        "id": "t-readonlylogic-valid-goodsShipment-accountingDate",
-        "category": "readonlylogic-valid",
-        "entity": "goodsShipment",
-        "field": "accountingDate",
-        "runner": "node",
-        "description": "Read-only logic for 'accountingDate' in goodsShipment should be valid JS"
       },
       {
         "id": "t-readonlylogic-valid-goodsShipment-businessPartner",
@@ -2663,6 +2591,14 @@
         "field": "product",
         "runner": "node",
         "description": "Selector endpoint for 'product' in goodsShipmentLine should exist"
+      },
+      {
+        "id": "t-system-field-goodsShipment-accountingDate",
+        "category": "system-field",
+        "entity": "goodsShipment",
+        "field": "accountingDate",
+        "runner": "node",
+        "description": "System field 'accountingDate' should exist in backend but not frontend for goodsShipment"
       },
       {
         "id": "t-system-field-goodsShipment-active",
@@ -3376,25 +3312,25 @@
       }
     ],
     "summary": {
-      "total": 186,
+      "total": 182,
       "byCategory": {
         "action-endpoint": 12,
         "crud-flags": 2,
-        "default-value-type": 8,
+        "default-value-type": 7,
         "displaylogic-evaluable": 3,
         "displaylogic-valid": 3,
-        "field-presence": 18,
-        "field-type": 18,
-        "readonlylogic-evaluable": 9,
-        "readonlylogic-valid": 9,
+        "field-presence": 17,
+        "field-type": 17,
+        "readonlylogic-evaluable": 8,
+        "readonlylogic-valid": 8,
         "rule-declared": 5,
         "searchable-filters": 6,
         "selector-endpoint": 4,
-        "system-field": 87,
+        "system-field": 88,
         "visibility": 2
       },
       "byRunner": {
-        "node": 186,
+        "node": 182,
         "junit": 0
       }
     }

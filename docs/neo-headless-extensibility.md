@@ -409,11 +409,22 @@ that helper family (PK/audit-column skips, `AD_Reference_ID` literals). Guarding
 and skipping `processCalloutForField` leaves the GET `/defaults` and POST create paths silently
 unprotected — cover all three entry points for any field-independence guard of this shape.
 
-Real implementations: `AbstractInvoiceHeaderHandler#blockCalloutCurrencyUpdate` (ETP-4029, currency);
+Real implementations: `AbstractInvoiceHeaderHandler#blockCalloutCurrencyUpdate` (ETP-4029, currency).
+
+**⚠️ Superseded (2026-07-17):** the `accountingDate` implementation of this pattern —
 `AbstractInvoiceHeaderHandler#afterCallout` (shared by `SalesInvoiceHeaderHandler` and
 `PurchaseInvoiceHeaderHandler`), `GoodsReceiptHeaderHandler#afterCallout`,
-`GoodsShipmentHeaderHandler#afterCallout`, and `NeoDefaultsCascadeHelper#processCalloutForField`
-(ETP-4531, `accountingDate`).
+`GoodsShipmentHeaderHandler#afterCallout`, and the `accountingDate` call into
+`NeoDefaultsCascadeHelper#processCalloutForField` — is being removed. ETP-4531 was redefined from
+"keep document date and accounting date independent" to "unify them: show a single visible date,
+write it to both columns internally." The native classic-AD callout cascade
+(`SE_Invoice_AccountingDate` / `SL_InOut_AccountingDate`) is now intentionally left unguarded so it
+flows through on save. See `docs/feedback.md` ("[2026-07-17] ETP-4531 — Scope redefinition...") and
+the frontend-side change (`accountingDate` → `visibility: system` in
+`sales-invoice`/`purchase-invoice`/`goods-shipment`/`goods-receipt`/`purchase-order`'s
+`decisions.json`, in `etendo_schema_forge`). The generic `blockCalloutFieldUpdate` helper and its
+three-entry-point coverage requirement above remain valid guidance for the next field-independence
+guard (e.g., currency, ETP-4029) — only the `accountingDate` application of it is obsolete.
 
 ### Pre-hook: Intercept Completion to Preserve Classic Hooks/Extension Points
 

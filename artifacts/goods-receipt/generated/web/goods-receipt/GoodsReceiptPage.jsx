@@ -46,7 +46,7 @@ const draftMode = {
 // @sf-generated-end draftMode:goodsReceipt
 
 // @sf-generated-start requiredHeaderFields:goodsReceipt
-const requiredHeaderFields = ['warehouse', 'businessPartner', 'movementDate', 'accountingDate'];
+const requiredHeaderFields = ['warehouse', 'businessPartner', 'movementDate'];
 // @sf-generated-end requiredHeaderFields:goodsReceipt
 
 // @sf-generated-start addLineFields:goodsReceiptLine

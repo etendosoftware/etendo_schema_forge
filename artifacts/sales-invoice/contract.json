@@ -1,8 +1,8 @@
 {
-  "version": "0.56.0",
+  "version": "0.58.0",
   "generatedAt": "2026-04-30T15:42:46.582Z",
-  "updatedAt": "2026-07-15T13:21:37.153Z",
-  "checksum": "ce52ffa31fc41ef0",
+  "updatedAt": "2026-07-17T18:04:56.323Z",
+  "checksum": "4ffdedc7fb1ac2da",
   "frontendContract": {
     "window": {
       "id": "167",
@@ -7307,11 +7307,25 @@
         "description": "Rule 'Product_AutoFill_Price' (callout) should be declared"
       },
       {
+        "id": "t-rule-declared-READONLY-Posted-AccountingDate",
+        "category": "rule-declared",
+        "rule": "READONLY_Posted_AccountingDate",
+        "runner": "node",
+        "description": "Rule 'READONLY_Posted_AccountingDate' (readOnlyLogic) should be declared"
+      },
+      {
         "id": "t-rule-declared-ReadOnly-When-Processed",
         "category": "rule-declared",
         "rule": "ReadOnly_When_Processed",
         "runner": "node",
         "description": "Rule 'ReadOnly_When_Processed' (displayLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-SE-Invoice-TaxDate",
+        "category": "rule-declared",
+        "rule": "SE_Invoice_TaxDate",
+        "runner": "node",
+        "description": "Rule 'SE_Invoice_TaxDate' (callout) should be declared"
       },
       {
         "id": "t-searchable-filters-header-businessPartner",
@@ -9143,7 +9157,7 @@
       }
     ],
     "summary": {
-      "total": 533,
+      "total": 535,
       "byCategory": {
         "action-endpoint": 26,
         "crud-flags": 4,
@@ -9154,14 +9168,14 @@
         "field-type": 63,
         "readonlylogic-evaluable": 35,
         "readonlylogic-valid": 35,
-        "rule-declared": 8,
+        "rule-declared": 10,
         "searchable-filters": 6,
         "selector-endpoint": 16,
         "system-field": 203,
         "visibility": 4
       },
       "byRunner": {
-        "node": 533,
+        "node": 535,
         "junit": 0
       }
     }

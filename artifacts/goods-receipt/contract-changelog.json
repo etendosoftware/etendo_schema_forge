@@ -950,5 +950,16 @@
     ],
     "author": "pipeline",
     "date": "2026-07-16"
+  },
+  {
+    "from": "0.21.0",
+    "to": "0.22.0",
+    "level": "breaking",
+    "reasons": [
+      "Field \"accountingDate\" removed from entity \"goodsReceipt\" in frontend",
+      "Field \"accountingDate\" property \"visibility\" changed from \"editable\" to \"system\" in backend (patch)"
+    ],
+    "author": "pipeline",
+    "date": "2026-07-17"
   }
 ]

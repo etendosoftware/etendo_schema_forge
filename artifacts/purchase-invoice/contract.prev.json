@@ -1,8 +1,8 @@
 {
-  "version": "0.69.0",
+  "version": "0.70.0",
   "generatedAt": "2026-04-30T15:42:46.722Z",
-  "updatedAt": "2026-07-15T13:21:36.841Z",
-  "checksum": "7f8b974a9ffd9dbc",
+  "updatedAt": "2026-07-17T15:01:23.648Z",
+  "checksum": "b981c85eca99f916",
   "frontendContract": {
     "window": {
       "id": "183",
@@ -312,14 +312,15 @@
             "visibility": "editable",
             "required": true,
             "grid": false,
-            "form": false,
+            "form": true,
             "sourceRequired": true,
             "derivation": {
               "type": "computed",
               "source": "@#Date@"
             },
             "defaultValue": "@#Date@",
-            "section": "other",
+            "section": "principal",
+            "seq": 35,
             "callout": {
               "className": "org.openbravo.erpCommon.ad_callouts.SE_Invoice_TaxDate"
             },
@@ -13780,6 +13781,13 @@
         "description": "Rule 'OperativeQuantity_To_BaseQuantity' (undefined) should be declared"
       },
       {
+        "id": "t-rule-declared-READONLY-Posted-AccountingDate",
+        "category": "rule-declared",
+        "rule": "READONLY_Posted_AccountingDate",
+        "runner": "node",
+        "description": "Rule 'READONLY_Posted_AccountingDate' (readOnlyLogic) should be declared"
+      },
+      {
         "id": "t-rule-declared-READONLY-Processed-Header",
         "category": "rule-declared",
         "rule": "READONLY_Processed_Header",
@@ -13820,6 +13828,13 @@
         "rule": "SE_Invoice_BPartnerLocation",
         "runner": "node",
         "description": "Rule 'SE_Invoice_BPartnerLocation' (undefined) should be declared"
+      },
+      {
+        "id": "t-rule-declared-SE-Invoice-TaxDate",
+        "category": "rule-declared",
+        "rule": "SE_Invoice_TaxDate",
+        "runner": "node",
+        "description": "Rule 'SE_Invoice_TaxDate' (callout) should be declared"
       },
       {
         "id": "t-rule-declared-SL-Invoice-Amt",
@@ -16974,7 +16989,7 @@
       }
     ],
     "summary": {
-      "total": 939,
+      "total": 941,
       "byCategory": {
         "action-endpoint": 26,
         "crud-flags": 12,
@@ -16985,14 +17000,14 @@
         "field-type": 148,
         "readonlylogic-evaluable": 64,
         "readonlylogic-valid": 64,
-        "rule-declared": 21,
+        "rule-declared": 23,
         "searchable-filters": 6,
         "selector-endpoint": 50,
         "system-field": 316,
         "visibility": 12
       },
       "byRunner": {
-        "node": 939,
+        "node": 941,
         "junit": 0
       }
     }

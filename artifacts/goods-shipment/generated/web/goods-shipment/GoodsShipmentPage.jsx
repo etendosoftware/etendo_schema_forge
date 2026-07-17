@@ -45,7 +45,7 @@ const draftMode = null;
 // @sf-generated-end draftMode:goodsShipment
 
 // @sf-generated-start requiredHeaderFields:goodsShipment
-const requiredHeaderFields = ['documentNo', 'warehouse', 'businessPartner', 'partnerAddress', 'movementDate', 'accountingDate', 'etblkpAccountingstatus', 'etblkpBulkposting'];
+const requiredHeaderFields = ['documentNo', 'warehouse', 'businessPartner', 'partnerAddress', 'movementDate', 'etblkpAccountingstatus', 'etblkpBulkposting'];
 // @sf-generated-end requiredHeaderFields:goodsShipment
 
 // @sf-generated-start addLineFields:goodsShipmentLine

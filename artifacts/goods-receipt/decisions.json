@@ -115,13 +115,8 @@
           "readOnlyLogic": "@Processed@='Y'"
         },
         "accountingDate": {
-          "visibility": "editable",
-          "form": true,
-          "grid": false,
-          "section": "principal",
-          "seq": 35,
-          "readOnlyLogic": "@Posted@='Y'",
-          "_note": "ETP-4531: deliberately @Posted@ rather than this window's dominant @Processed@='Y' pattern. Posted='Y' means the entry is already in the GL ledger; Processed='Y' alone would also lock the date during a failed-posting-attempt state, where the user may still need to correct it before retrying the post."
+          "visibility": "system",
+          "_note": "ETP-4531 (redefined 2026-07-17): accounting date is now hidden and unified with the document date internally; the Java-side guard that used to block this cascade has been removed so the native document-date→accounting-date coupling flows through untouched."
         },
         "salesOrder": {
           "visibility": "editable",

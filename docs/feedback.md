@@ -240,3 +240,24 @@ Owner: whoever next touches the goods-shipment window.
 - `SearchInput-chip.vitest.jsx` verifies a `search` FK field whose value has no `$_identifier` resolves the label on-demand via the selector endpoint and shows the record name.
 
 **Lesson:** When one window works and a sibling does not for the same field, compare the per-window `decisions.json` (and the generated field `type`/`inputMode`) BEFORE touching shared components. FK fields that get auto-filled by a callout should use `inputMode: "search"` so the label resolves on-demand, or the value must arrive with its `$_identifier`.
+
+---
+
+## [2026-07-17] ETP-4531 — Scope redefinition: unify document/accounting date instead of keeping them independent
+
+**Note:** this is not a bug entry — it records a **scope reversal** on the same ticket, so a future reader who finds the earlier `blockCalloutFieldUpdate`/"independent accounting date" work (see `docs/neo-headless-extensibility.md` Common Pattern entry, commit `40e086041`, and the per-window notes previously in `docs/generated-custom-windows/{sales-invoice,purchase-invoice,goods-shipment,goods-receipt}.md`) does not mistake it for the current behavior.
+
+**Original scope (obsolete):** `sales-invoice`, `purchase-invoice`, `goods-shipment`, `goods-receipt` kept `documentDate` and `accountingDate` as two independent, user-editable header fields. A Java-side guard (`NeoHandlerUtils.blockCalloutFieldUpdate`, generalizing the `blockCalloutCurrencyUpdate`/ETP-4029 precedent) stripped the classic AD callout cascade (`SE_Invoice_AccountingDate` / `SL_InOut_AccountingDate`) that would otherwise auto-fill `accountingDate` from the document date, so the user could set each date separately. `accountingDate` was `visibility: editable`, visible, with its own `readOnlyLogic: "@Posted@='Y'"`.
+
+**Redefinition (2026-07-17, per updated Jira description on ETP-4531):** the requirement flipped to the opposite — each postable document must show exactly ONE visible date field; on save, that value is written internally to both the document-date and accounting-date columns; the user never sees or edits accounting date independently. Newly in scope: `sales-order` and `purchase-order` (never touched by the original work).
+
+**What changed (frontend/config side, this pass):**
+- `accountingDate` switched from `visibility: editable` (+ `readOnlyLogic`) to `visibility: system` in all four invoice/shipment/receipt windows' `decisions.json`, fully removing it from `frontendContract.entities.*.fields` and from every generated form/grid.
+- `purchase-order`'s `accountingDate` switched from `visibility: readOnly` + `form: false` to `visibility: system` — the prior config already suppressed rendering but still left the field listed (inert) in the frontend contract; `system` matches `sales-order`'s already-compliant shape (raw AD visibility `system`, no override) and the other four windows.
+- `sales-order` needed no change — confirmed already compliant (raw AD visibility is `system`, no decisions.json override, absent from `contract.json`'s frontend fields, absent from generated JSX).
+- `amortization`'s `accountingDate` is an explicit, confirmed exception (see Jira comment on ETP-4531, 2026-07-17): it is a distinct concept from `startingDate` (the amortization schedule start), already not independently editable, and was left functionally unchanged (annotation-only `_note` added).
+- `financial-account`'s `transaction.dateAcct` was already `visibility: system` with `transaction.transactionDate` as the sole visible date — already compliant, no change.
+
+**Java-side counterpart (separate change, tracked by a companion task, not this repo):** the `blockCalloutFieldUpdate` guard in `com.etendoerp.go` that stripped the cascade is being removed, so the native classic-AD `documentDate → accountingDate` callout cascade is now intentionally allowed to flow through unmodified on save.
+
+**Lesson:** when a ticket's scope reverses mid-implementation, don't just overwrite the old work silently — leave a dated trail (here + the affected window docs) explaining that the earlier "independence" behavior was intentional, correct-at-the-time, and has been superseded by an explicit redefinition, not reverted because it was wrong. Also: `visibility: readOnly` + `form: false` and `visibility: system` can look functionally equivalent in the rendered UI (both fully suppressed from form and grid), but only `system` fully excludes the field from `frontendContract.entities.*.fields` — prefer `system` for "never shown, never independently editable" fields over the readOnly+form:false combination, to avoid two different-looking representations of the same "fully hidden" intent across sibling windows.
