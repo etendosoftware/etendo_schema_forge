@@ -4,6 +4,15 @@
 
 This window should let a buyer prepare a supplier order, maintain its commercial header and line details, confirm it, and then follow the downstream procurement flow through receipts, purchase invoices, and payments.
 
+## Theme roles
+
+Purchase-order actions, confirmation dialogs, document-result feedback and
+selection controls consume the shared semantic theme. Structural surfaces use
+the active foreground, card and border roles; receipt/invoice outcomes use
+success, warning, information and destructive roles. The window does not
+declare a local palette, so appearance remains consistent when the app theme
+changes.
+
 The current evidence shows a purchase-order-specific experience rather than a generic generated order screen: the list is narrowed to purchasing signals, the detail page keeps the generated master-child layout, and the top bar adds procurement actions and follow-up status cues.
 
 ## What this window should allow
