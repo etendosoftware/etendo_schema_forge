@@ -297,8 +297,11 @@ shape into a reusable mechanism rather than special-casing it:
 - **`product`**: no product dimension field exists on the amortization-line tab — matrix's
   "Nunca" is already trivially satisfied.
 
-**Test debt (delegated, not fixed here):** `AmortizationLinesTable.test.js`'s
-"defines DIMENSION_FIELDS with exactly 3 entries..." and "renders the project dimension (no
-hidden: true on any dimension entry)" both assert the old `DIMENSION_FIELDS` constant name and
-now fail on the rename to `DIMENSION_FIELD_CANDIDATES` — expected, given the intentional
-rename. Needs a Tester pass to update these two assertions.
+**Tests updated (Tester pass complete).** `AmortizationLinesTable.test.js`'s two assertions
+were renamed to "defines DIMENSION_FIELD_CANDIDATES with exactly 3 entries..." and "renders
+the project dimension (no hidden: true on any candidate entry)", updated for the
+`DIMENSION_FIELD_CANDIDATES` rename, plus a new assertion covering the
+`useAccountingDimensionFields('lines', data, DIMENSION_FIELD_CANDIDATES, ...)` wiring.
+`AmortizationLinesTable.vitest.jsx` gained coverage for the config-driven filtering
+(a candidate dropping out of both `DimSummary` and the expand panel when the evaluator
+returns `visibility[key] === false`). All suites pass.

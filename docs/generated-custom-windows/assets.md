@@ -523,9 +523,10 @@ reusable mechanism (per explicit product direction):
 This is the reference pattern used by the same shared hook in `amortization.md`'s
 `AmortizationLinesTable.jsx` rework.
 
-**Test debt (delegated, not fixed here):** `AssetsDetailPanel.vitest.jsx`'s
-"renders the accounting dimensions form with only the 4 kept dimension fields" and
-`AssetsDetailPanel.test.js`'s "defines the 4 kept accounting dimension fields with their DB
-columns" both assert the pre-ETP-4529 4-field behavior and now fail — expected, given the
-intentional behavior change. Needs a Tester pass to update these two assertions to the new
-1-field (`project`-only), config-driven expectation.
+**Tests updated (Tester pass complete).** `AssetsDetailPanel.test.js`'s field-definition
+assertion now reads "defines only Project as a dimension field candidate (ETP-4529)" (checks
+`dimensionFieldCandidates` and asserts the 3 dropped dimensions are absent) plus a new
+assertion covering the `useAccountingDimensionFields` wiring. `AssetsDetailPanel.vitest.jsx`
+gained coverage for the config-driven filtering (dimension hidden when the evaluator returns
+`visibility.project === false`, section gated on `dimensionFields.length > 0`). All suites
+pass against the 1-field (`project`-only), config-driven behavior.

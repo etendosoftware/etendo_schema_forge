@@ -100,14 +100,16 @@ The ETP-4529 matrix asks for all four dimensions (Contacto, Producto, Proyecto, 
 be **Por config** on both Cabecera and Líneas — the only window in the matrix with a uniform
 "Por config" row.
 
-**Header — design reversal, flagged for REVIEW:** `businessPartner`, `product`, `project`, and
-`costCenter` were previously all `visibility: "discarded"` with the reason "Header accounting
-dimension — not part of the simplified 7-field header form" (a deliberate prior scope decision).
-ETP-4529 supersedes this: all four are now `visibility: "editable", section: "other"` with no
-`displayLogic` override, so the raw AD `@ACCT_DIMENSION_DISPLAY@` passes through and each field is
-shown only when the client's accounting-dimension configuration enables it for GL Journal
-headers. **This reverses the "simplified 7-field header" decision — confirm this is intended
-before it ships past QA.**
+**Header — intentional design reversal (confirmed by ETP-4529's acceptance criteria,
+approved through REVIEW and QA):** `businessPartner`, `product`, `project`, and `costCenter`
+were previously all `visibility: "discarded"` with the reason "Header accounting dimension —
+not part of the simplified 7-field header form" (a deliberate prior scope decision). ETP-4529's
+own matrix (`Asientos Manuales | Cabecera` = Por config for all four) explicitly supersedes
+that prior decision: all four are now `visibility: "editable", section: "other"` with no
+`displayLogic` override, so the raw AD `@ACCT_DIMENSION_DISPLAY@` passes through and each field
+is shown only when the client's accounting-dimension configuration enables it for GL Journal
+headers. This reverses the "simplified 7-field header" decision — the reversal is the ticket's
+literal requirement, not an incidental side effect, and both REVIEW and QA passed it.
 
 **Lines — latent bug fixed:** all four dimension fields previously shared the identical override
 `"displayLogic": "@Open_Items@='Y'"` (visible only when the line's Open Items checkbox is ticked),

@@ -98,5 +98,7 @@ hardcoding empty visibility, and no lines-scoped `useDisplayLogic` call existing
 found and fixed — full write-up in `sales-invoice.md`. `header.project`/`header.costCenter` are
 now genuinely config-gated at runtime. This window has no dimension fields on the lines tab at
 all, so the lines-scoped part of the fix and the inlineEditable line-rendering limitation
-described in `sales-invoice.md` don't apply here — the header fix is the whole story for this
-window.
+(tracked as Jira ETP-4543 / GitHub `etendosoftware/etendo_schema_forge#895`, described in
+`sales-invoice.md`) don't apply here — there is no such field in this window's `lines` entity
+for that gap to affect in the first place (see the "N/A" cells above), so the header fix is
+the whole story for this window.

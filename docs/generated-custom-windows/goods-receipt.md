@@ -134,4 +134,6 @@ lines-scoped `useDisplayLogic` call existing at all) were found and fixed — fu
 runtime. `lines.project`/`lines.costcenter` are now correctly evaluated too, but this window
 uses `window.linesLayout = "inlineEditable"`, under which `LinesForm.jsx` never mounts at all —
 a pre-existing, unrelated platform limitation (not fixed by this ticket) that leaves these two
-line fields with no UI surface to render on. See `sales-invoice.md` for detail.
+line fields with no UI surface to render on. Tracked as Jira ETP-4543 / GitHub
+`etendosoftware/etendo_schema_forge#895`. See `sales-invoice.md` for detail (including the
+verified list of which windows actually hit this gap).

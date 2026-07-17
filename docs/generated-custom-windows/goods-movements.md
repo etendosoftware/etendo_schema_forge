@@ -95,11 +95,13 @@ Goods Movements should let an inventory user register a stock transfer from one 
 | `project` | **Por config** — raw AD `@ACCT_DIMENSION_DISPLAY@` passthrough (`section: "other"`) | **Nunca** — no such field on the lines tab (`M_MovementLine` has no `project` column) |
 | `costCenter` | **Por config** — same fix as `project` | **Nunca** — same as `project` |
 
-**Design note:** `header.project`/`header.costCenter` were previously deliberately discarded with
-the reason "Accounting dimension — not relevant for simplified inventory movements". ETP-4529's
-matrix supersedes that prior decision — both fields are now config-gated instead of hidden. Flagging
-this reversal for REVIEW: confirm the "simplified movements" rationale is no longer wanted before
-this ships past QA.
+**Design note (intentional reversal, confirmed by ETP-4529's acceptance criteria, approved
+through REVIEW and QA):** `header.project`/`header.costCenter` were previously deliberately
+discarded with the reason "Accounting dimension — not relevant for simplified inventory
+movements". ETP-4529's own matrix (`Movimientos entre almacenes | Cabecera` = Por config for
+Proyecto/Centro de costo) explicitly supersedes that prior decision — both fields are now
+config-gated instead of hidden. The reversal is the ticket's literal requirement, not an
+incidental side effect, and both REVIEW and QA passed it.
 
 **Runtime evaluator — fixed (ETP-4529 follow-up).** Three generic bugs (the `EntityForm.jsx`
 visibility filter never actually consulting the evaluate-display result, the `principal` section
@@ -107,5 +109,7 @@ hardcoding empty visibility, and no lines-scoped `useDisplayLogic` call existing
 found and fixed — full write-up in `sales-invoice.md`. `header.project`/`header.costCenter` are
 now genuinely config-gated at runtime. This window has no dimension fields on the lines tab at
 all, so the lines-scoped part of the fix and the inlineEditable line-rendering limitation
-described in `sales-invoice.md` don't apply here — the header fix is the whole story for this
+(tracked as Jira ETP-4543 / GitHub `etendosoftware/etendo_schema_forge#895`, described in
+`sales-invoice.md`) don't apply here — there is no such field in this window's `lines` entity
+for that gap to affect in the first place, so the header fix is the whole story for this
 window.

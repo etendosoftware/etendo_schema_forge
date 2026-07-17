@@ -374,9 +374,11 @@ ETP-4529 matrix):
    evaluate-display call (scoped to the lines entity, using the header record as a
    representative context) correctly covers every row.
 
-**Residual, orthogonal limitation — NOT fixed here, pre-existing platform constraint:**
-this window uses `window.linesLayout = "inlineEditable"`. For inlineEditable windows,
-`DetailForm`/`LinesForm.jsx` is never rendered at all
+**Residual, orthogonal limitation — NOT fixed here, pre-existing platform constraint. Tracked
+as Jira ETP-4543 / GitHub `etendosoftware/etendo_schema_forge#895` ("Non-grid line fields
+invisible under inlineEditable line layout"), filed while implementing ETP-4529 and explicitly
+out of scope for it:** this window uses `window.linesLayout = "inlineEditable"`. For
+inlineEditable windows, `DetailForm`/`LinesForm.jsx` is never rendered at all
 (`shouldShowDetailFormSidebar` returns `false` whenever `linesLayout === 'inlineEditable'`),
 and `grid: false` line fields (which `project`/`costcenter` are, being form-only) never
 appear as inline table columns either. So even with the evaluator fixed, **the "Por
@@ -384,8 +386,15 @@ config" line-level fields on this window have no UI surface to render on at all*
 is a pre-existing constraint (form-only fields were already unreachable on inlineEditable
 windows before ETP-4529; dimension fields are simply the first fields on this window to hit
 it) and a separate, larger feature (e.g. an expandable per-row detail section for
-`InlineLinesPanel`) than this ticket's scope. Affects: `sales-invoice`, `purchase-invoice`,
-`goods-shipment`, `goods-receipt`, `physical-inventory`, `goods-movements` (all
-inlineEditable). Windows using the classic `linesLayout` (`simple-g-l-journal`) are fully
-fixed by the evaluator changes above — their line dimension fields render through
-`LinesForm.jsx`'s sidebar and are now correctly config-gated.
+`InlineLinesPanel`) than this ticket's scope. **Affects (verified against the final
+`decisions.json` for each window — only windows that actually carry `lines.project`/
+`lines.costcenter` as real, non-discarded fields hit this gap):** `sales-invoice`,
+`purchase-invoice`, `goods-shipment`, `goods-receipt` — all four `inlineEditable` with
+config-gated line dimension fields. `physical-inventory` and `goods-movements` also use
+`linesLayout: "inlineEditable"` but do **not** hit this bug: neither `M_InventoryLine` nor
+`M_MovementLine` has a `project`/`costCenter` column at all, so there is no such field in
+their `lines` entity for ETP-4543 to affect (see each window's own doc — "N/A"/"Nunca" for
+the reason the AD schema itself has no column, not because of the rendering-surface gap).
+Windows using the classic `linesLayout` (`simple-g-l-journal`) are fully fixed by the
+evaluator changes above — their line dimension fields render through `LinesForm.jsx`'s
+sidebar and are now correctly config-gated.
