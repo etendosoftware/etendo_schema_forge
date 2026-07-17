@@ -220,3 +220,29 @@ Owner: whoever next touches the goods-shipment window.
 - `SearchInput-chip.vitest.jsx` verifies a `search` FK field whose value has no `$_identifier` resolves the label on-demand via the selector endpoint and shows the record name.
 
 **Lesson:** When one window works and a sibling does not for the same field, compare the per-window `decisions.json` (and the generated field `type`/`inputMode`) BEFORE touching shared components. FK fields that get auto-filled by a callout should use `inputMode: "search"` so the label resolves on-demand, or the value must arrive with its `$_identifier`.
+
+---
+
+## ETP-4543: Non-Grid Line Fields Invisible Under inlineEditable Line Layout
+
+**Components:**
+- `tools/app-shell/src/components/contract-ui/InlineLinesPanel.jsx`
+- `tools/app-shell/src/components/contract-ui/DetailView.jsx`
+- `tools/app-shell/src/windows/custom/shared/InvoiceLinesTable.jsx`
+
+**Affected windows:** sales-invoice, purchase-invoice, goods-shipment, goods-receipt (all four `inlineEditable`-layout windows that actually carry `lines.project`/`lines.costcenter` as real fields; `physical-inventory` and `goods-movements` use the same layout but their underlying AD tables — `M_InventoryLine`/`M_MovementLine` — have no `project`/`costCenter` column at all, so they were never affected).
+
+**Symptom:** A line field with `form: true` but not promoted to an inline grid column (`grid: false`) had no rendering surface at all when the entity's `linesLayout` was `"inlineEditable"`. `DetailView.jsx` only mounts the secondary detail form (`DetailForm`/`LinesForm.jsx`) when `linesLayout !== 'inlineEditable'`; for inline-editable windows that mount is unconditionally skipped, and `InlineLinesPanel` only ever rendered fields already promoted to grid columns. Discovered while implementing ETP-4529 for the config-gated `project`/`costcenter` accounting-dimension fields: even after the ETP-4529 evaluator fix correctly resolved their visibility, the fields still never appeared anywhere in the UI.
+
+**Root cause:** Architectural gap, not a one-line bug — `InlineLinesPanel` had no concept of an "off-grid" field, and `DetailView`'s primary `<DetailTable>` call hardcoded `hiddenColumns={[]}`, discarding the live visibility map (`lineDisplayLogic.visibility`) that had already been computed and was correctly threaded into the secondary `DetailForm`'s `displayLogic` prop.
+
+**Fix (scoped to making the two dimension fields visible-when-enabled, not the larger "expandable per-row detail" feature originally floated):**
+1. `InlineLinesPanel.jsx` gained a `hiddenColumns = []` prop, filtering the same way `DataTable.jsx` already did: `columns.filter(c => !c.hidden && !hiddenColumns.includes(c.key))`.
+2. `DetailView.jsx`'s primary `<DetailTable>` call now passes a memoized `lineHiddenColumns` — every key from `lineDisplayLogic.visibility` whose value is exactly `false` — instead of the hardcoded `[]`.
+3. For `sales-invoice`/`purchase-invoice`, `project`/`costcenter` were added as hardcoded columns to `InvoiceLinesTable.jsx` (this component ignores `decisions.json`'s `grid` flag entirely — its column list ships independent of the contract). For `goods-shipment`/`goods-receipt`, whose line tables are pipeline-generated, `lines.project.grid`/`lines.costcenter.grid` were flipped `false → true` in `decisions.json` and the windows were regenerated (`make regen`).
+
+**Rejected approach:** An expandable per-row detail surface inside `InlineLinesPanel` (mirroring what `DetailForm` does for non-inline layouts) — a much larger feature. Deferred; the grid-column + dynamic-`hiddenColumns` approach fully covers the two dimension fields without it.
+
+**Blast radius note:** `hiddenColumns` is generic, not scoped to these two fields or five windows — any window whose lines entity has a field key that `evaluate-display` resolves to `visibility: false` will now have that column hidden dynamically, wherever `DetailView`'s primary lines grid is used. `InlineLinesPanel`'s new prop defaults to `[]`, so every caller that does not pass it (the vast majority of generated `<Window>LineTable.jsx` files) behaves identically to before.
+
+**Lesson:** A hardcoded `hiddenColumns={[]}` (or any prop wired to a static empty value) silently discards a hook result computed one line above it — check for this pattern whenever a "correctly computed but seemingly ignored" value is reported. When a shared component's column list is fully hardcoded in a hand-written custom component (`InvoiceLinesTable.jsx`), decisions.json's `grid` flag has no effect on it at all — verify which mechanism actually drives a given window's columns before assuming a `decisions.json` change is required.

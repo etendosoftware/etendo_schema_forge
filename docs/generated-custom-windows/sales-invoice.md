@@ -374,27 +374,49 @@ ETP-4529 matrix):
    evaluate-display call (scoped to the lines entity, using the header record as a
    representative context) correctly covers every row.
 
-**Residual, orthogonal limitation — NOT fixed here, pre-existing platform constraint. Tracked
-as Jira ETP-4543 / GitHub `etendosoftware/etendo_schema_forge#895` ("Non-grid line fields
-invisible under inlineEditable line layout"), filed while implementing ETP-4529 and explicitly
-out of scope for it:** this window uses `window.linesLayout = "inlineEditable"`. For
+### Non-grid line fields under inlineEditable — resolved (ETP-4543)
+
+Filed while implementing ETP-4529 and explicitly left out of scope for it (Jira ETP-4543 /
+GitHub `etendosoftware/etendo_schema_forge#895`, "Non-grid line fields invisible under
+inlineEditable line layout"): this window uses `window.linesLayout = "inlineEditable"`. For
 inlineEditable windows, `DetailForm`/`LinesForm.jsx` is never rendered at all
 (`shouldShowDetailFormSidebar` returns `false` whenever `linesLayout === 'inlineEditable'`),
-and `grid: false` line fields (which `project`/`costcenter` are, being form-only) never
-appear as inline table columns either. So even with the evaluator fixed, **the "Por
-config" line-level fields on this window have no UI surface to render on at all** — this
-is a pre-existing constraint (form-only fields were already unreachable on inlineEditable
-windows before ETP-4529; dimension fields are simply the first fields on this window to hit
-it) and a separate, larger feature (e.g. an expandable per-row detail section for
-`InlineLinesPanel`) than this ticket's scope. **Affects (verified against the final
-`decisions.json` for each window — only windows that actually carry `lines.project`/
-`lines.costcenter` as real, non-discarded fields hit this gap):** `sales-invoice`,
-`purchase-invoice`, `goods-shipment`, `goods-receipt` — all four `inlineEditable` with
-config-gated line dimension fields. `physical-inventory` and `goods-movements` also use
-`linesLayout: "inlineEditable"` but do **not** hit this bug: neither `M_InventoryLine` nor
-`M_MovementLine` has a `project`/`costCenter` column at all, so there is no such field in
-their `lines` entity for ETP-4543 to affect (see each window's own doc — "N/A"/"Nunca" for
-the reason the AD schema itself has no column, not because of the rendering-surface gap).
-Windows using the classic `linesLayout` (`simple-g-l-journal`) are fully fixed by the
-evaluator changes above — their line dimension fields render through `LinesForm.jsx`'s
-sidebar and are now correctly config-gated.
+so a `grid: false` line field (which `project`/`costcenter` were, being form-only) had no
+inline-table column and no sidebar to render in either — a total rendering-surface gap,
+independent of whether the ETP-4529 evaluator fix said the field should be visible.
+
+**Fix:** rather than build the larger "expandable per-row detail" feature the original
+investigation floated, `project`/`costcenter` are now declared as regular grid columns
+(`InvoiceLinesTable.jsx`, the hand-written line table shared by `sales-invoice` and
+`purchase-invoice`, hardcodes them — this component does not read `decisions.json`'s `grid`
+flag, so no decisions change was needed here) and dynamic visibility was wired through two
+generic components so the "Por config" toggle still governs whether the columns actually show:
+
+1. `InlineLinesPanel.jsx` gained a `hiddenColumns = []` prop, filtered the same way
+   `DataTable.jsx` already did (`columns.filter(c => !c.hidden && !hiddenColumns.includes(c.key))`).
+2. `DetailView.jsx`'s primary `<DetailTable>` call — previously hardcoded to
+   `hiddenColumns={[]}` — now passes a memoized list of every key whose
+   `lineDisplayLogic.visibility[key]` resolves to exactly `false` (the same live map
+   already threaded into the secondary `DetailForm`'s `displayLogic` prop).
+
+Net effect: with the client's Proyecto/Centro de costo dimension toggles OFF, `project`/
+`costcenter` do not render as columns in this window's line grid; with them ON, both columns
+appear and behave like any other inline-editable selector column. **Applies to:**
+`sales-invoice`, `purchase-invoice`, `goods-shipment`, `goods-receipt` — the four
+`inlineEditable` windows that actually carry `lines.project`/`lines.costcenter` as real,
+non-discarded fields (verified against each window's `decisions.json`). For `goods-shipment`/
+`goods-receipt` the columns are pipeline-generated (`decisions.json`'s `lines.project.grid`/
+`lines.costcenter.grid` flipped `false → true`, then `make regen`), since their line tables
+are fully generated rather than hand-written. `physical-inventory` and `goods-movements` also
+use `linesLayout: "inlineEditable"` but were never affected by this gap in the first place:
+neither `M_InventoryLine` nor `M_MovementLine` has a `project`/`costCenter` column at all (no
+such field exists in their `lines` entity — see each window's own doc, "N/A"/"Nunca"), so
+there was nothing to make visible. Windows using the classic `linesLayout`
+(`simple-g-l-journal`) were already fully covered by the evaluator fix above — their line
+dimension fields render through `LinesForm.jsx`'s sidebar and were already correctly
+config-gated before this ticket.
+
+The generic `hiddenColumns` mechanism on `InlineLinesPanel`/`DetailView` is not
+window-specific — it applies to every window that uses the primary inline lines grid, so any
+other line field whose `evaluate-display` result resolves to `visibility: false` will now
+also be hidden as a column, not just `project`/`costcenter`.

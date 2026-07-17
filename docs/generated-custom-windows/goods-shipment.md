@@ -85,14 +85,23 @@ Use this window to register and complete outbound customer shipments. The functi
 | `project` | **Por config** — raw AD `@ACCT_DIMENSION_DISPLAY@` passthrough (`section: "other"`, previously discarded) | **Por config** — same passthrough (previously discarded) |
 | `costcenter` | **Por config** — raw AD `@ACCT_DIMENSION_DISPLAY@` passthrough (`section: "other"`, previously discarded) | **Por config** — same passthrough (previously discarded) |
 
-**Runtime evaluator — fixed (ETP-4529 follow-up), with one residual, orthogonal limitation.**
+**Runtime evaluator — fixed (ETP-4529 follow-up).**
 Three generic bugs (the `EntityForm.jsx` visibility filter never actually consulting the
 evaluate-display result, the `principal` section hardcoding empty visibility, and no
 lines-scoped `useDisplayLogic` call existing at all) were found and fixed — full write-up in
 `sales-invoice.md`. `header.project`/`header.costcenter` are now genuinely config-gated at
-runtime. `lines.project`/`lines.costcenter` are now correctly evaluated too, but this window
-uses `window.linesLayout = "inlineEditable"`, under which `LinesForm.jsx` never mounts at all —
-a pre-existing, unrelated platform limitation (not fixed by this ticket) that leaves these two
-line fields with no UI surface to render on. Tracked as Jira ETP-4543 / GitHub
-`etendosoftware/etendo_schema_forge#895`. See `sales-invoice.md` for detail (including the
-verified list of which windows actually hit this gap).
+runtime.
+
+**Non-grid line fields under inlineEditable — resolved (ETP-4543).** `lines.project`/
+`lines.costcenter` are correctly evaluated, but this window uses
+`window.linesLayout = "inlineEditable"`, under which `LinesForm.jsx` never mounts at all — so
+the two fields had no UI surface to render on (Jira ETP-4543 / GitHub
+`etendosoftware/etendo_schema_forge#895`). Fixed by flipping `lines.project.grid` and
+`lines.costcenter.grid` from `false` to `true` in `decisions.json` (this window's line table,
+`GoodsShipmentLineTable.jsx`, is pipeline-generated, so the pipeline-generated
+`@sf-generated-start columns` block now includes both fields once `grid: true`) and wiring
+dynamic column visibility through `InlineLinesPanel.jsx`'s new `hiddenColumns` prop and
+`DetailView.jsx`'s memoized `lineHiddenColumns`. With the client's Proyecto/Centro de costo
+dimension toggles OFF, the columns do not render as grid columns; with them ON, they do. See
+`sales-invoice.md` for the full write-up (including the verified list of which windows
+actually hit this gap).

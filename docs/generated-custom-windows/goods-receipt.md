@@ -119,21 +119,30 @@ display logic AND read-only logic both silenced. Fixed as part of ETP-4529:
 | --- | --- | --- |
 | `businessPartner` (Contacto) | **Nunca** — the header's `businessPartner` is the receipt's core Vendor field (raw AD display logic is `None`, not a dimension), unaffected | **Nunca** — now explicit `visibility: "discarded"` (previously `form: false` with nulled logic; same effect, now unambiguous) |
 | `product` | *(no such field on the header)* | **Siempre** — core line field, no dimension gating |
-| `project` | **Por config** — raw AD `@ACCT_DIMENSION_DISPLAY@` now passes through (`section: "other"`, `form: false`/nulled logic removed) | **Por config** — same fix (`grid: false`, `form: false`/nulled logic removed) |
+| `project` | **Por config** — raw AD `@ACCT_DIMENSION_DISPLAY@` now passes through (`section: "other"`, `form: false`/nulled logic removed) | **Por config** — same fix (`grid: true` as of ETP-4543, `form: false`/nulled logic removed) |
 | `costcenter` | **Por config** — same fix as `project` | **Por config** — same fix as `project` |
 
 The `readOnlyLogic: null` overrides removed alongside `displayLogic: null` were also silencing the
 raw `@Posted@='Y'` rule — these dimension fields are now correctly locked once the receipt is
 posted, in addition to being visible again.
 
-**Runtime evaluator — fixed (ETP-4529 follow-up), with one residual, orthogonal limitation.**
+**Runtime evaluator — fixed (ETP-4529 follow-up).**
 Three generic bugs (the `EntityForm.jsx` visibility filter never actually consulting the
 evaluate-display result, the `principal` section hardcoding empty visibility, and no
 lines-scoped `useDisplayLogic` call existing at all) were found and fixed — full write-up in
 `sales-invoice.md`. `header.project`/`header.costcenter` are now genuinely config-gated at
-runtime. `lines.project`/`lines.costcenter` are now correctly evaluated too, but this window
-uses `window.linesLayout = "inlineEditable"`, under which `LinesForm.jsx` never mounts at all —
-a pre-existing, unrelated platform limitation (not fixed by this ticket) that leaves these two
-line fields with no UI surface to render on. Tracked as Jira ETP-4543 / GitHub
-`etendosoftware/etendo_schema_forge#895`. See `sales-invoice.md` for detail (including the
-verified list of which windows actually hit this gap).
+runtime.
+
+**Non-grid line fields under inlineEditable — resolved (ETP-4543).** `lines.project`/
+`lines.costcenter` are correctly evaluated, but this window uses
+`window.linesLayout = "inlineEditable"`, under which `LinesForm.jsx` never mounts at all — so
+the two fields had no UI surface to render on (Jira ETP-4543 / GitHub
+`etendosoftware/etendo_schema_forge#895`). Fixed by flipping `lines.project.grid` and
+`lines.costcenter.grid` from `false` to `true` in `decisions.json` (this window's line table,
+`GoodsReceiptLineTable.jsx`, is pipeline-generated, so the pipeline-generated
+`@sf-generated-start columns` block now includes both fields once `grid: true`) and wiring
+dynamic column visibility through `InlineLinesPanel.jsx`'s new `hiddenColumns` prop and
+`DetailView.jsx`'s memoized `lineHiddenColumns`. With the client's Proyecto/Centro de costo
+dimension toggles OFF, the columns do not render as grid columns; with them ON, they do. See
+`sales-invoice.md` for the full write-up (including the verified list of which windows
+actually hit this gap).

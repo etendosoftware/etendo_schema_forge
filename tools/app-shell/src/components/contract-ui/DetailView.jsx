@@ -1930,6 +1930,16 @@ export function DetailView({
   // "skip when !values.id" guard once the header record is saved). Only `visibility` is
   // consumed downstream — `readOnly` stays per-line via each field's own readOnlyLogic.
   const lineDisplayLogic = useDisplayLogic(detailEntity, hook.editing, { token, apiBaseUrl });
+  // ETP-4543 — dynamic column visibility for the primary lines grid (InlineLinesPanel /
+  // DataTable), derived from lineDisplayLogic.visibility. Fail-open: a key that is absent
+  // from the map, or explicitly `true`, is NOT hidden — only an explicit `false` (e.g. the
+  // config-gated @ACCT_DIMENSION_DISPLAY@ toggle for project/costcenter) hides the column.
+  const lineHiddenColumns = useMemo(
+    () => Object.entries(lineDisplayLogic?.visibility ?? {})
+      .filter(([, visible]) => visible === false)
+      .map(([key]) => key),
+    [lineDisplayLogic?.visibility]
+  );
   const { calloutResult, calloutLoading, executeCallout } = useCallout(entity, { token, apiBaseUrl });
   const docAction = useDocumentAction({ apiBaseUrl, entity, token });
   const neoAction = useNeoAction({ specName: windowName, entityName: entity, apiBaseUrl, token });
@@ -3825,7 +3835,7 @@ export function DetailView({
                                   onSelectionChange={setSelectedChildRows}
                                   showFooterTotals={showDetailFooterTotals ?? !summary.some(f => f.type === 'amount')}
                                   selectorContext={selectorContextByEntity[detailEntity]}
-                                  hiddenColumns={[]}
+                                  hiddenColumns={lineHiddenColumns}
                                   onUpdateRow={buildInlineRowUpdateHandler({ linesLayout, isDocumentReadOnly, api, detailEntity, apiBaseUrl, hook, handleLineFieldChange, prepareLineForPost, token, extractErrorMessage, ui })}
                                   onDeleteRow={buildDeleteRowHandler({ api, detailEntity, isDocumentReadOnly, confirmDelete, apiBaseUrl, token, hook, selectedLine, setSelectedLine, ui, extractErrorMessage })}
                                   addRow={{

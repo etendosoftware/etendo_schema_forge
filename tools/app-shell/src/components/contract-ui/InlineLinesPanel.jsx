@@ -345,6 +345,11 @@ const InlineLinesPanel = forwardRef(function InlineLinesPanel({
   onSelectionChange,
   onUpdateRow,
   onDeleteRow,
+  // Dynamic column visibility (e.g. displayLogic-driven, config-gated dimensions).
+  // Mirrors DataTable's `hiddenColumns` prop exactly — a list of column keys to
+  // exclude on top of any static `col.hidden` flag. Defaults to [] so every
+  // existing caller that doesn't pass it behaves identically to before.
+  hiddenColumns = [],
   // Optional: when provided, the pencil action calls this instead of toggling
   // the inline edit mode — used by tabs whose rows open a popup modal for
   // editing (e.g. Dirección with `customAddModal`).
@@ -430,10 +435,11 @@ const InlineLinesPanel = forwardRef(function InlineLinesPanel({
   // discarded, silently re-saving it. commitField checks this ref and bails.
   const cancelingEditRef = useRef(false);
 
-  // Visible columns: respect col.hidden flag if set (mirrors DataTable behavior).
+  // Visible columns: respect col.hidden flag (static) and hiddenColumns (dynamic,
+  // e.g. displayLogic-driven) — mirrors DataTable's hiddenColumns filter exactly.
   const visibleColumns = useMemo(
-    () => (columns || []).filter(c => !c.hidden),
-    [columns]
+    () => (columns || []).filter(c => !c.hidden && !hiddenColumns.includes(c.key)),
+    [columns, hiddenColumns]
   );
   // The last "amount" column is the one that disappears on hover to make room
   // for the action strip — its 160px width matches the strip so the swap is

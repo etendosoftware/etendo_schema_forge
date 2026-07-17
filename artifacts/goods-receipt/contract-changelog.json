@@ -959,5 +959,16 @@
     ],
     "author": "pipeline",
     "date": "2026-07-16"
+  },
+  {
+    "from": "0.21.0",
+    "to": "0.21.1",
+    "level": "patch",
+    "reasons": [
+      "Field \"project\" property \"grid\" changed from \"false\" to \"true\" in frontend (patch)",
+      "Field \"costcenter\" property \"grid\" changed from \"false\" to \"true\" in frontend (patch)"
+    ],
+    "author": "pipeline",
+    "date": "2026-07-17"
   }
 ]

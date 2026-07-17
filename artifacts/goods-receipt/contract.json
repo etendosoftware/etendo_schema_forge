@@ -1,8 +1,8 @@
 {
-  "version": "0.21.0",
+  "version": "0.21.1",
   "generatedAt": "2026-04-29T19:05:20.719Z",
-  "updatedAt": "2026-07-16T14:28:23.517Z",
-  "checksum": "94231dbd47ddb118",
+  "updatedAt": "2026-07-17T12:56:49.505Z",
+  "checksum": "3d3ab5f2a68657eb",
   "frontendContract": {
     "window": {
       "id": "184",
@@ -849,7 +849,7 @@
             "tsType": "string",
             "visibility": "editable",
             "required": false,
-            "grid": false,
+            "grid": true,
             "form": true,
             "reference": "Project",
             "inputMode": "search",
@@ -874,7 +874,7 @@
             "tsType": "string",
             "visibility": "editable",
             "required": false,
-            "grid": false,
+            "grid": true,
             "form": true,
             "reference": "CostCenter",
             "inputMode": "selector",

@@ -1,8 +1,8 @@
 {
-  "version": "0.20.0",
+  "version": "0.21.0",
   "generatedAt": "2026-04-29T19:05:20.719Z",
-  "updatedAt": "2026-06-30T19:43:46.096Z",
-  "checksum": "87374b090a474b72",
+  "updatedAt": "2026-07-16T14:28:23.517Z",
+  "checksum": "94231dbd47ddb118",
   "frontendContract": {
     "window": {
       "id": "184",
@@ -406,9 +406,10 @@
             "visibility": "editable",
             "required": false,
             "grid": false,
-            "form": false,
+            "form": true,
             "reference": "Project",
             "inputMode": "search",
+            "section": "other",
             "validationRule": {
               "code": "C_Project.projectstatus in ('OP', 'OR') and (C_Project.c_bpartner_id=@C_BPartner_ID@ or '@IsSOTrx@'='N') or C_Project.c_project_id = @c_project_id@",
               "contextParams": [],
@@ -417,6 +418,12 @@
                 "IsSOTrx",
                 "c_project_id"
               ]
+            },
+            "displayLogic": {
+              "raw": "@ACCT_DIMENSION_DISPLAY@",
+              "evaluable": false,
+              "reason": "server-macro",
+              "js": null
             },
             "readOnlyLogic": {
               "raw": "@Posted@='Y'",
@@ -434,9 +441,16 @@
             "visibility": "editable",
             "required": false,
             "grid": false,
-            "form": false,
+            "form": true,
             "reference": "CostCenter",
             "inputMode": "selector",
+            "section": "other",
+            "displayLogic": {
+              "raw": "@ACCT_DIMENSION_DISPLAY@",
+              "evaluable": false,
+              "reason": "server-macro",
+              "js": null
+            },
             "readOnlyLogic": {
               "raw": "@Posted@='Y'",
               "evaluable": true,
@@ -827,25 +841,6 @@
             }
           },
           {
-            "name": "businessPartner",
-            "apiKey": "businessPartner",
-            "column": "C_Bpartner_ID",
-            "label": "Business Partner",
-            "type": "foreignKey",
-            "tsType": "string",
-            "visibility": "editable",
-            "required": false,
-            "grid": false,
-            "form": false,
-            "reference": "BusinessPartner",
-            "inputMode": "search",
-            "readOnlyLogic": {
-              "raw": "@Posted@='Y'",
-              "evaluable": true,
-              "js": "record['posted'] === true"
-            }
-          },
-          {
             "name": "project",
             "apiKey": "project",
             "column": "C_Project_ID",
@@ -855,9 +850,15 @@
             "visibility": "editable",
             "required": false,
             "grid": false,
-            "form": false,
+            "form": true,
             "reference": "Project",
             "inputMode": "search",
+            "displayLogic": {
+              "raw": "@ACCT_DIMENSION_DISPLAY@",
+              "evaluable": false,
+              "reason": "server-macro",
+              "js": null
+            },
             "readOnlyLogic": {
               "raw": "@Posted@='Y'",
               "evaluable": true,
@@ -874,9 +875,15 @@
             "visibility": "editable",
             "required": false,
             "grid": false,
-            "form": false,
+            "form": true,
             "reference": "CostCenter",
             "inputMode": "selector",
+            "displayLogic": {
+              "raw": "@ACCT_DIMENSION_DISPLAY@",
+              "evaluable": false,
+              "reason": "server-macro",
+              "js": null
+            },
             "readOnlyLogic": {
               "raw": "@Posted@='Y'",
               "evaluable": true,
@@ -1750,7 +1757,7 @@
             "apiKey": "businessPartner",
             "column": "C_Bpartner_ID",
             "type": "foreignKey",
-            "visibility": "editable",
+            "visibility": "discarded",
             "required": false
           },
           {
@@ -2163,14 +2170,6 @@
       },
       {
         "entity": "goodsReceiptLine",
-        "field": "businessPartner",
-        "column": "C_Bpartner_ID",
-        "reference": "BusinessPartner",
-        "inputMode": "search",
-        "url": "/sws/neo/goods-receipt/goodsReceiptLine/selectors/businessPartner"
-      },
-      {
-        "entity": "goodsReceiptLine",
         "field": "project",
         "column": "C_Project_ID",
         "reference": "Project",
@@ -2500,12 +2499,36 @@
         "description": "Default value for 'storageBin' in goodsReceiptLine should be a string"
       },
       {
+        "id": "t-displaylogic-evaluable-goodsReceipt-costcenter",
+        "category": "displaylogic-evaluable",
+        "entity": "goodsReceipt",
+        "field": "costcenter",
+        "runner": "node",
+        "description": "Display logic for 'costcenter' in goodsReceipt should have evaluable flag"
+      },
+      {
         "id": "t-displaylogic-evaluable-goodsReceipt-posted",
         "category": "displaylogic-evaluable",
         "entity": "goodsReceipt",
         "field": "posted",
         "runner": "node",
         "description": "Display logic for 'posted' in goodsReceipt should have evaluable flag"
+      },
+      {
+        "id": "t-displaylogic-evaluable-goodsReceipt-project",
+        "category": "displaylogic-evaluable",
+        "entity": "goodsReceipt",
+        "field": "project",
+        "runner": "node",
+        "description": "Display logic for 'project' in goodsReceipt should have evaluable flag"
+      },
+      {
+        "id": "t-displaylogic-evaluable-goodsReceiptLine-costcenter",
+        "category": "displaylogic-evaluable",
+        "entity": "goodsReceiptLine",
+        "field": "costcenter",
+        "runner": "node",
+        "description": "Display logic for 'costcenter' in goodsReceiptLine should have evaluable flag"
       },
       {
         "id": "t-displaylogic-evaluable-goodsReceiptLine-orderQuantity",
@@ -2516,6 +2539,22 @@
         "description": "Display logic for 'orderQuantity' in goodsReceiptLine should have evaluable flag"
       },
       {
+        "id": "t-displaylogic-evaluable-goodsReceiptLine-project",
+        "category": "displaylogic-evaluable",
+        "entity": "goodsReceiptLine",
+        "field": "project",
+        "runner": "node",
+        "description": "Display logic for 'project' in goodsReceiptLine should have evaluable flag"
+      },
+      {
+        "id": "t-displaylogic-valid-goodsReceipt-costcenter",
+        "category": "displaylogic-valid",
+        "entity": "goodsReceipt",
+        "field": "costcenter",
+        "runner": "node",
+        "description": "Display logic for 'costcenter' in goodsReceipt should be valid JS"
+      },
+      {
         "id": "t-displaylogic-valid-goodsReceipt-posted",
         "category": "displaylogic-valid",
         "entity": "goodsReceipt",
@@ -2524,12 +2563,36 @@
         "description": "Display logic for 'posted' in goodsReceipt should be valid JS"
       },
       {
+        "id": "t-displaylogic-valid-goodsReceipt-project",
+        "category": "displaylogic-valid",
+        "entity": "goodsReceipt",
+        "field": "project",
+        "runner": "node",
+        "description": "Display logic for 'project' in goodsReceipt should be valid JS"
+      },
+      {
+        "id": "t-displaylogic-valid-goodsReceiptLine-costcenter",
+        "category": "displaylogic-valid",
+        "entity": "goodsReceiptLine",
+        "field": "costcenter",
+        "runner": "node",
+        "description": "Display logic for 'costcenter' in goodsReceiptLine should be valid JS"
+      },
+      {
         "id": "t-displaylogic-valid-goodsReceiptLine-orderQuantity",
         "category": "displaylogic-valid",
         "entity": "goodsReceiptLine",
         "field": "orderQuantity",
         "runner": "node",
         "description": "Display logic for 'orderQuantity' in goodsReceiptLine should be valid JS"
+      },
+      {
+        "id": "t-displaylogic-valid-goodsReceiptLine-project",
+        "category": "displaylogic-valid",
+        "entity": "goodsReceiptLine",
+        "field": "project",
+        "runner": "node",
+        "description": "Display logic for 'project' in goodsReceiptLine should be valid JS"
       },
       {
         "id": "t-field-presence-goodsReceipt-accountingDate",
@@ -2690,14 +2753,6 @@
         "field": "attributeSetValue",
         "runner": "node",
         "description": "Field 'attributeSetValue' should be present in goodsReceiptLine"
-      },
-      {
-        "id": "t-field-presence-goodsReceiptLine-businessPartner",
-        "category": "field-presence",
-        "entity": "goodsReceiptLine",
-        "field": "businessPartner",
-        "runner": "node",
-        "description": "Field 'businessPartner' should be present in goodsReceiptLine"
       },
       {
         "id": "t-field-presence-goodsReceiptLine-costcenter",
@@ -2980,14 +3035,6 @@
         "description": "Field 'attributeSetValue' should have type 'string' in goodsReceiptLine"
       },
       {
-        "id": "t-field-type-goodsReceiptLine-businessPartner",
-        "category": "field-type",
-        "entity": "goodsReceiptLine",
-        "field": "businessPartner",
-        "runner": "node",
-        "description": "Field 'businessPartner' should have type 'string' in goodsReceiptLine"
-      },
-      {
         "id": "t-field-type-goodsReceiptLine-costcenter",
         "category": "field-type",
         "entity": "goodsReceiptLine",
@@ -3228,14 +3275,6 @@
         "description": "Read-only logic for 'attributeSetValue' in goodsReceiptLine should have evaluable flag"
       },
       {
-        "id": "t-readonlylogic-evaluable-goodsReceiptLine-businessPartner",
-        "category": "readonlylogic-evaluable",
-        "entity": "goodsReceiptLine",
-        "field": "businessPartner",
-        "runner": "node",
-        "description": "Read-only logic for 'businessPartner' in goodsReceiptLine should have evaluable flag"
-      },
-      {
         "id": "t-readonlylogic-evaluable-goodsReceiptLine-costcenter",
         "category": "readonlylogic-evaluable",
         "entity": "goodsReceiptLine",
@@ -3450,14 +3489,6 @@
         "field": "attributeSetValue",
         "runner": "node",
         "description": "Read-only logic for 'attributeSetValue' in goodsReceiptLine should be valid JS"
-      },
-      {
-        "id": "t-readonlylogic-valid-goodsReceiptLine-businessPartner",
-        "category": "readonlylogic-valid",
-        "entity": "goodsReceiptLine",
-        "field": "businessPartner",
-        "runner": "node",
-        "description": "Read-only logic for 'businessPartner' in goodsReceiptLine should be valid JS"
       },
       {
         "id": "t-readonlylogic-valid-goodsReceiptLine-costcenter",
@@ -3940,14 +3971,6 @@
         "field": "asset",
         "runner": "node",
         "description": "Selector endpoint for 'asset' in goodsReceiptLine should exist"
-      },
-      {
-        "id": "t-selector-endpoint-goodsReceiptLine-businessPartner",
-        "category": "selector-endpoint",
-        "entity": "goodsReceiptLine",
-        "field": "businessPartner",
-        "runner": "node",
-        "description": "Selector endpoint for 'businessPartner' in goodsReceiptLine should exist"
       },
       {
         "id": "t-selector-endpoint-goodsReceiptLine-costcenter",
@@ -4454,6 +4477,14 @@
         "description": "System field 'bOMParentID' should exist in backend but not frontend for goodsReceiptLine"
       },
       {
+        "id": "t-system-field-goodsReceiptLine-businessPartner",
+        "category": "system-field",
+        "entity": "goodsReceiptLine",
+        "field": "businessPartner",
+        "runner": "node",
+        "description": "System field 'businessPartner' should exist in backend but not frontend for goodsReceiptLine"
+      },
+      {
         "id": "t-system-field-goodsReceiptLine-canceledInoutLine",
         "category": "system-field",
         "entity": "goodsReceiptLine",
@@ -4589,25 +4620,25 @@
       }
     ],
     "summary": {
-      "total": 288,
+      "total": 292,
       "byCategory": {
         "action-endpoint": 12,
         "crud-flags": 2,
         "default-value-type": 8,
-        "displaylogic-evaluable": 2,
-        "displaylogic-valid": 2,
-        "field-presence": 36,
-        "field-type": 36,
-        "readonlylogic-evaluable": 28,
-        "readonlylogic-valid": 28,
+        "displaylogic-evaluable": 6,
+        "displaylogic-valid": 6,
+        "field-presence": 35,
+        "field-type": 35,
+        "readonlylogic-evaluable": 27,
+        "readonlylogic-valid": 27,
         "rule-declared": 38,
         "searchable-filters": 5,
-        "selector-endpoint": 20,
-        "system-field": 69,
+        "selector-endpoint": 19,
+        "system-field": 70,
         "visibility": 2
       },
       "byRunner": {
-        "node": 288,
+        "node": 292,
         "junit": 0
       }
     }

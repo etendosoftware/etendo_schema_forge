@@ -269,14 +269,14 @@
         },
         "project": {
           "visibility": "editable",
-          "grid": false,
-          "reason": "ETP-4529 — accounting dimension, config-gated (@ACCT_DIMENSION_DISPLAY@)."
+          "grid": true,
+          "reason": "ETP-4543 — promoted to grid column (config-gated via @ACCT_DIMENSION_DISPLAY@, hidden dynamically at runtime by displayLogic, not by this flag)."
         },
         "costcenter": {
           "visibility": "editable",
-          "grid": false,
+          "grid": true,
           "reference": "CostCenter",
-          "reason": "ETP-4529 — accounting dimension, config-gated (@ACCT_DIMENSION_DISPLAY@)."
+          "reason": "ETP-4543 — promoted to grid column (config-gated via @ACCT_DIMENSION_DISPLAY@, hidden dynamically at runtime by displayLogic, not by this flag)."
         },
         "asset": {
           "form": false,

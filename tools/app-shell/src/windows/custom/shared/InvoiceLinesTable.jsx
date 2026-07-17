@@ -16,6 +16,13 @@ const InvoiceLinesTable = forwardRef(function InvoiceLinesTable({ data, productR
     { key: 'listPrice', column: 'PriceList', type: 'amount', label: t('PriceList'), required: true },
     { key: 'etgoDiscount', column: 'EM_Etgo_Discount', type: 'number', label: t('EM_Etgo_Discount') },
     { key: 'tax', column: 'C_Tax_ID', type: 'selector', label: t('C_Tax_ID'), ...(taxRequired ? { required: true } : {}) },
+    // ETP-4543 — config-gated accounting dimensions (@ACCT_DIMENSION_DISPLAY@).
+    // Always declared as columns; actual visibility is enforced dynamically by
+    // DetailView's `hiddenColumns` (derived from displayLogic.visibility), which
+    // InlineLinesPanel/DataTable both honor. Not driven by decisions.json's `grid`
+    // flag — this table's column list is fully hardcoded, independent of contract.json.
+    { key: 'project', column: 'C_Project_ID', type: 'selector', label: t('C_Project_ID'), lookup: true },
+    { key: 'costcenter', column: 'C_Costcenter_ID', type: 'selector', label: t('C_Costcenter_ID') },
     { key: 'grossAmount', column: 'Line_Gross_Amount', type: 'amount', label: t('Line_Gross_Amount') },
   ]), [productRequired, t, taxRequired]);
 

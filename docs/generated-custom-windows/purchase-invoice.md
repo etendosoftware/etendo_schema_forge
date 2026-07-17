@@ -430,15 +430,21 @@ in `decisions.json`, which both hid the fields unconditionally AND silenced thei
 `@Posted@='Y'` read-only rule. Both are now restored: the fields render (gated by the
 accounting-dimension macro) and are correctly locked once the invoice is posted.
 
-**Runtime evaluator — fixed (ETP-4529 follow-up), with one residual, orthogonal limitation.**
+**Runtime evaluator — fixed (ETP-4529 follow-up).**
 Three generic bugs (the `EntityForm.jsx` visibility filter never actually consulting the
 evaluate-display result, the `principal` section hardcoding empty visibility, and no
 lines-scoped `useDisplayLogic` call existing at all) were found and fixed — full write-up in
 `sales-invoice.md`. `header.project`/`header.costcenter` are now genuinely config-gated at
-runtime. `lines.project`/`lines.costcenter` carry correct contract metadata and are now
-correctly evaluated too, but this window uses `window.linesLayout = "inlineEditable"`, under
-which `LinesForm.jsx` (the sidebar that would render them) never mounts at all — a pre-existing,
-unrelated platform limitation (not fixed by this ticket) that leaves these two line fields with
-no UI surface to render on, evaluator fix notwithstanding. Tracked as Jira ETP-4543 / GitHub
-`etendosoftware/etendo_schema_forge#895`. See `sales-invoice.md` for detail (including the
-verified list of which windows actually hit this gap).
+runtime.
+
+**Non-grid line fields under inlineEditable — resolved (ETP-4543).** `lines.project`/
+`lines.costcenter` carry correct contract metadata and are correctly evaluated, but this
+window uses `window.linesLayout = "inlineEditable"`, under which `LinesForm.jsx` (the sidebar
+that would otherwise render them) never mounts — so the two fields had no UI surface at all,
+evaluator fix notwithstanding (Jira ETP-4543 / GitHub `etendosoftware/etendo_schema_forge#895`).
+Fixed by adding `project`/`costcenter` as columns to `InvoiceLinesTable.jsx` (the shared,
+hand-written line table used by both `sales-invoice` and `purchase-invoice`) and wiring
+dynamic column visibility through `InlineLinesPanel.jsx`'s new `hiddenColumns` prop and
+`DetailView.jsx`'s memoized `lineHiddenColumns`. With the client's Proyecto/Centro de costo
+dimension toggles OFF, the columns do not render; with them ON, they do. See `sales-invoice.md`
+for the full write-up (including the verified list of which windows actually hit this gap).
