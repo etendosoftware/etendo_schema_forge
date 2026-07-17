@@ -1,7 +1,8 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { neoBase } from '@/components/related-documents/helpers.js';
 import { useApiFetch } from '@/auth/useApiFetch.js';
 import { getInvoiceFiscalTargets } from './fiscalTargets.js';
+import { useInvoiceUpdatedListener } from './useInvoiceUpdatedListener.js';
 
 const SII_SPEC  = 'sii-monitor';
 const TBAI_SPEC = 'tbai-facturas-enviadas';
@@ -58,9 +59,28 @@ async function fetchVerifactuStatus(apiFetch, orgId, invoiceId) {
   return null;
 }
 
+/**
+ * Fetches the SII / TBAI / Verifactu sending status for an invoice from the
+ * dedicated monitor specs (`sii-monitor`, `tbai-facturas-enviadas`,
+ * `monitor-verifactu`) — separate from the `tbaiSyncEstado` field the header
+ * GET response injects for the list column.
+ *
+ * Because the fetch is keyed by `invoiceId` (which never changes for the same
+ * invoice), a successful "Enviar a SIF" action would previously leave this
+ * hook showing its pre-send snapshot (loading:false, tbai:null → "Pendiente")
+ * for the rest of the preview session, even though the record on the server
+ * already has a real status. `refetchInvoice()` in `useInvoicePreview.js`
+ * dispatches `${specName}:invoice-updated` after a successful send (the same
+ * event `SalesInvoiceTopbar`/`PurchaseInvoiceTopbar` already listen to via
+ * `useInvoiceUpdatedListener`), so this hook re-runs the fetch on that same
+ * event instead of introducing a second refresh mechanism.
+ */
 export function useFiscalStatus(invoiceId, specName, profile, apiBaseUrl, orgId) {
   const [state, setState] = useState({ sii: null, tbai: null, verifactu: null, loading: true });
+  const [refreshTick, setRefreshTick] = useState(0);
   const apiFetch = useApiFetch(neoBase(apiBaseUrl));
+
+  useInvoiceUpdatedListener(specName, invoiceId, useCallback(() => setRefreshTick((t) => t + 1), []));
 
   useEffect(() => {
     if (!invoiceId || !apiBaseUrl || !apiFetch) {
@@ -82,7 +102,7 @@ export function useFiscalStatus(invoiceId, specName, profile, apiBaseUrl, orgId)
     ])
       .then(([sii, tbai, verifactu]) => setState({ sii, tbai, verifactu, loading: false }))
       .catch(() => setState({ sii: null, tbai: null, verifactu: null, loading: false }));
-  }, [invoiceId, specName, profile, apiBaseUrl, apiFetch, orgId]);
+  }, [invoiceId, specName, profile, apiBaseUrl, apiFetch, orgId, refreshTick]);
 
   return state;
 }

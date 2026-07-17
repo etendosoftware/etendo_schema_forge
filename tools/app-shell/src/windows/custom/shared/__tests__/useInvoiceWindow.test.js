@@ -28,6 +28,23 @@ describe('useInvoiceWindow', () => {
     it('resolves the label via the ui() translator', () => {
       assert.equal(getInvoiceDraftMode(fakeUi).label, '__confirm__');
     });
+
+    describe('processingModal (Verifactu ~8s GenerateRF loading modal)', () => {
+      it('returns a processingModal with the i18n-resolved body when showVerifactuProcessingModal is true', () => {
+        const draftMode = getInvoiceDraftMode(fakeUi, { showVerifactuProcessingModal: true });
+        assert.deepEqual(draftMode.processingModal, { body: '__fiscal.verifactu.processing.body__' });
+      });
+
+      it('returns processingModal: null when showVerifactuProcessingModal is explicitly false', () => {
+        const draftMode = getInvoiceDraftMode(fakeUi, { showVerifactuProcessingModal: false });
+        assert.equal(draftMode.processingModal, null);
+      });
+
+      it('returns processingModal: null when called with no options arg (existing purchase-invoice call shape)', () => {
+        const draftMode = getInvoiceDraftMode(fakeUi);
+        assert.equal(draftMode.processingModal, null);
+      });
+    });
   });
 
   describe('buildInvoiceRowQuickActions', () => {

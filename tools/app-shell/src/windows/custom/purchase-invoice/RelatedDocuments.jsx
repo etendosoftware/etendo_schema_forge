@@ -115,7 +115,7 @@ export default function RelatedDocuments({ recordId, data, token, apiBaseUrl }) 
     chips.push(
       <DocChip
         key={`receipt-${r.id}`}
-        {...docChipProps({ type: 'receipt', doc: r, ui, navigate })}
+        {...docChipProps({ type: r.isReturn ? 'return-to-vendor' : 'receipt', doc: r, ui, navigate })}
         data-testid="DocChip__bb79ed" />
     );
   }

@@ -2,14 +2,17 @@ import { useUI } from '@/i18n';
 import { cn } from '@/lib/utils';
 
 /**
- * Small dot + label indicating whether a movement has been posted.
- * RPPC → posted (green dot), everything else → not posted (orange dot).
+ * Small dot + label indicating whether a movement has been posted to
+ * accounting. Reads the `posted` field ('Y'/'N', as returned by the backend
+ * FinancialAccountTransactionsHandler and updated by the /action/post
+ * endpoint) — NOT `paymentStatus` (a reconciliation-related search key like
+ * RPPC), which never changes when a document is posted.
  *
- * @param {{ paymentStatus: string; className?: string }} props
+ * @param {{ posted?: string; className?: string }} props
  */
-export function PostingStatusDot({ paymentStatus, className }) {
+export function PostingStatusDot({ posted, className }) {
   const ui = useUI();
-  const isPosted = paymentStatus === 'RPPC';
+  const isPosted = posted === 'Y';
 
   return (
     <span className={cn('inline-flex items-center gap-1 text-xs leading-4 text-[#121217]', className)}>

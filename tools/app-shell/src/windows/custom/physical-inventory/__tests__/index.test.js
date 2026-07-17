@@ -32,16 +32,28 @@ describe('PhysicalInventoryWindow custom wrapper', () => {
     assert.match(src, /key:\s*'movementDate'/);
     assert.match(src, /key:\s*'name'/);
     assert.match(src, /key:\s*'warehouse'/);
-    assert.match(src, /key:\s*'inventoryType'/);
     assert.match(src, /key:\s*'processed'/);
+    // inventoryType column was removed in the ETP-4270 redesign.
+    assert.doesNotMatch(src, /key:\s*'inventoryType'/);
   });
 
-  it('inventoryType column uses enum type with labels', () => {
-    assert.match(src, /type:\s*'enum'/);
+  it('processed status column carries draft/processed enum labels', () => {
+    assert.match(src, /key:\s*'processed'/);
+    assert.match(src, /type:\s*'status'/);
     assert.match(src, /enumLabels/);
-    assert.match(src, /'C':\s*'Closing Inventory'/);
-    assert.match(src, /'N':\s*'Normal'/);
-    assert.match(src, /'O':\s*'Opening Inventory'/);
+    assert.match(src, /'true':\s*'statusProcessed'/);
+    assert.match(src, /'false':\s*'statusDraft'/);
+  });
+
+  it('warehouse column uses a custom render', () => {
+    assert.match(src, /key:\s*'warehouse'/);
+    assert.match(src, /type:\s*'custom'/);
+    assert.match(src, /render:\s*\(row\)\s*=>/);
+  });
+
+  it('passes Sort and Refresh icon components to GeneratedApp', () => {
+    assert.match(src, /SortIconComponent=\{SortIcon\}/);
+    assert.match(src, /RefreshIconComponent=\{RefreshIcon\}/);
   });
 
   it('hideMenuActions hides menu when no id', () => {

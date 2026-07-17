@@ -1,8 +1,8 @@
 {
-  "version": "0.7.0",
+  "version": "0.12.0",
   "generatedAt": "2026-04-29T18:11:46.137Z",
-  "updatedAt": "2026-06-25T19:58:29.654Z",
-  "checksum": "a77ebc90875e7211",
+  "updatedAt": "2026-07-14T12:35:22.170Z",
+  "checksum": "3aa39031bae66f77",
   "frontendContract": {
     "window": {
       "id": "6F8F913FA60F4CBD93DC1D3AA696E76E",
@@ -10,13 +10,72 @@
       "primaryEntity": "header",
       "category": "finance",
       "notesField": "description",
-      "relatedDocuments": true,
+      "hideDeleteWhenComplete": true,
+      "customTabsAfterBottom": true,
+      "hidePrint": true,
+      "hideCreate": true,
+      "hideSaveStatuses": [
+        "RDNC",
+        "RPPC",
+        "RPR",
+        "RPVOID",
+        "PWNC"
+      ],
       "customComponents": {
-        "bottomSection": "PaymentOutBottomPanel"
+        "headerTable": "PaymentHeaderTable",
+        "sidePanel": "PaymentDetailSidebar",
+        "bottomSection": "PaymentOutBottomPanel",
+        "processConfirmModal": "ReactivarConfirmModal",
+        "topbarExtra": "PaymentConciliadoBadge",
+        "sidePanelStyle": {
+          "order": -1,
+          "borderLeft": "none",
+          "borderRight": "1px solid #E8EAEF",
+          "padding": 0
+        }
       },
+      "processOverrides": {
+        "aPRMProcessPayment": {
+          "label": "processConfirm",
+          "displayLogicRaw": "@status@ = 'RPAP'",
+          "confirmModal": true
+        },
+        "aPRMAddScheduledpayments": {
+          "exclude": true
+        },
+        "aprmExecutepayment": {
+          "exclude": true
+        },
+        "aPRMReversePayment": {
+          "exclude": true
+        },
+        "aPRMReconcilePayment": {
+          "exclude": true
+        },
+        "etprReactivatePayment": {
+          "add": true,
+          "columnName": "etprReactivatePayment",
+          "label": "processReactivate",
+          "style": "ghost-danger",
+          "displayLogicRaw": "@status@ != 'RPAP'"
+        }
+      },
+      "detailEntity": null,
+      "summaryFields": [],
       "dateFilterKey": "paymentDate",
-      "layoutType": "default",
-      "linesLayout": "inlineEditable"
+      "statusEnumLabels": {
+        "RPAP": "statusDraft",
+        "RPR": "pagoDepositado",
+        "RDNC": "pagoDepositado",
+        "RPPC": "pagoDepositado",
+        "PPM": "pagoDepositado",
+        "PWNC": "pagoDepositado"
+      },
+      "statusFieldLabel": "statusColumnLabel",
+      "toolbarBorderBottom": true,
+      "hideFormCard": true,
+      "attachments": false,
+      "layoutType": "default"
     },
     "entities": {
       "header": {
@@ -69,7 +128,7 @@
             "visibility": "readOnly",
             "required": true,
             "grid": true,
-            "form": true,
+            "form": false,
             "sourceRequired": true,
             "derivation": {
               "type": "sequence",
@@ -93,7 +152,7 @@
             "visibility": "editable",
             "required": false,
             "grid": false,
-            "form": true,
+            "form": false,
             "section": "collapsed",
             "seq": 70
           },
@@ -107,7 +166,7 @@
             "visibility": "editable",
             "required": false,
             "grid": true,
-            "form": true,
+            "form": false,
             "derivation": {
               "type": "computed",
               "source": "@#Date@"
@@ -134,7 +193,7 @@
             "visibility": "editable",
             "required": false,
             "grid": true,
-            "form": true,
+            "form": false,
             "reference": "BusinessPartner",
             "inputMode": "search",
             "section": "principal",
@@ -164,7 +223,7 @@
             "visibility": "editable",
             "required": false,
             "grid": false,
-            "form": true,
+            "form": false,
             "section": "collapsed",
             "seq": 80
           },
@@ -178,7 +237,7 @@
             "visibility": "editable",
             "required": true,
             "grid": false,
-            "form": true,
+            "form": false,
             "sourceRequired": true,
             "reference": "PaymentMethod",
             "inputMode": "selector",
@@ -210,7 +269,7 @@
             "visibility": "editable",
             "required": true,
             "grid": false,
-            "form": true,
+            "form": false,
             "sourceRequired": true,
             "reference": "FinancialAccount",
             "inputMode": "selector",
@@ -243,7 +302,7 @@
             "visibility": "editable",
             "required": true,
             "grid": false,
-            "form": true,
+            "form": false,
             "sourceRequired": true,
             "reference": "Currency",
             "inputMode": "selector",
@@ -457,35 +516,59 @@
             "enumValues": [
               {
                 "value": "RPAP",
-                "name": "Awaiting Payment"
+                "name": "Awaiting Payment",
+                "labels": {
+                  "es_ES": "A Pagar"
+                }
               },
               {
                 "value": "RPAE",
-                "name": "Awaiting Execution"
+                "name": "Awaiting Execution",
+                "labels": {
+                  "es_ES": "A Ejecutar"
+                }
               },
               {
                 "value": "RPVOID",
-                "name": "Void"
+                "name": "Void",
+                "labels": {
+                  "es_ES": "Anulado"
+                }
               },
               {
                 "value": "PPM",
-                "name": "Payment Made"
+                "name": "Payment Made",
+                "labels": {
+                  "es_ES": "Pagado"
+                }
               },
               {
                 "value": "RPR",
-                "name": "Payment Received"
+                "name": "Payment Received",
+                "labels": {
+                  "es_ES": "Cobrado"
+                }
               },
               {
                 "value": "RDNC",
-                "name": "Deposited not Cleared"
+                "name": "Deposited not Cleared",
+                "labels": {
+                  "es_ES": "Cobro depositado"
+                }
               },
               {
                 "value": "PWNC",
-                "name": "Withdrawn not Cleared"
+                "name": "Withdrawn not Cleared",
+                "labels": {
+                  "es_ES": "Pago reintegrado"
+                }
               },
               {
                 "value": "RPPC",
-                "name": "Payment Cleared"
+                "name": "Payment Cleared",
+                "labels": {
+                  "es_ES": "Conciliado"
+                }
               }
             ],
             "defaultValue": "RPAP",
@@ -659,6 +742,42 @@
             }
           },
           {
+            "name": "creationDate",
+            "apiKey": "creationDate",
+            "column": "Created",
+            "label": "Created",
+            "type": "dateTime",
+            "tsType": "string",
+            "visibility": "readOnly",
+            "required": true,
+            "grid": false,
+            "form": false,
+            "sourceRequired": true,
+            "derivation": {
+              "type": "fromConfig",
+              "source": "new Date()"
+            },
+            "defaultValue": "SYSDATE"
+          },
+          {
+            "name": "updated",
+            "apiKey": "updated",
+            "column": "Updated",
+            "label": "Updated",
+            "type": "dateTime",
+            "tsType": "string",
+            "visibility": "readOnly",
+            "required": true,
+            "grid": false,
+            "form": false,
+            "sourceRequired": true,
+            "derivation": {
+              "type": "fromConfig",
+              "source": "new Date()"
+            },
+            "defaultValue": "SYSDATE"
+          },
+          {
             "name": "psd2GenerateBankPayment",
             "apiKey": "psd2GenerateBankPayment",
             "column": "EM_Psd2_Generate_Bank_Payment",
@@ -668,7 +787,7 @@
             "visibility": "editable",
             "required": false,
             "grid": false,
-            "form": true,
+            "form": false,
             "displayLogic": {
               "raw": "@PSD2_HasPayments@=0 & @PSD2_ClientHasApiKey@=1 & @Status@='PPM'  & @PSD2_HasFinTransaction@=0 & @PSD2_FAIsBank@=1 & @PSD2_PMIsBankTransfer@=1",
               "evaluable": true
@@ -684,7 +803,7 @@
             "visibility": "readOnly",
             "required": true,
             "grid": false,
-            "form": true,
+            "form": false,
             "sourceRequired": true,
             "derivation": {
               "type": "computed",
@@ -693,75 +812,129 @@
             "enumValues": [
               {
                 "value": "NC",
-                "name": "Cost Not Calculated"
+                "name": "Cost Not Calculated",
+                "labels": {
+                  "es_ES": "Coste No Calculado"
+                }
               },
               {
                 "value": "d",
-                "name": "Disabled For Background"
+                "name": "Disabled For Background",
+                "labels": {
+                  "es_ES": "Deshabilitado Para Background"
+                }
               },
               {
                 "value": "D",
-                "name": "Document Disabled"
+                "name": "Document Disabled",
+                "labels": {
+                  "es_ES": "Documento Deshabilitado"
+                }
               },
               {
                 "value": "L",
-                "name": "Document Locked"
+                "name": "Document Locked",
+                "labels": {
+                  "es_ES": "Documento Bloqueado"
+                }
               },
               {
                 "value": "E",
-                "name": "Error"
+                "name": "Error",
+                "labels": {
+                  "es_ES": "Error"
+                }
               },
               {
                 "value": "C",
-                "name": "Error, No cost"
+                "name": "Error, No cost",
+                "labels": {
+                  "es_ES": "Error, No hay coste"
+                }
               },
               {
                 "value": "i",
-                "name": "Invalid Account"
+                "name": "Invalid Account",
+                "labels": {
+                  "es_ES": "Cuenta No Válida"
+                }
               },
               {
                 "value": "AD",
-                "name": "No Accounting Date"
+                "name": "No Accounting Date",
+                "labels": {
+                  "es_ES": "Sin Fecha Contable"
+                }
               },
               {
                 "value": "DT",
-                "name": "No Document Type"
+                "name": "No Document Type",
+                "labels": {
+                  "es_ES": "Sin tipo de Documento"
+                }
               },
               {
                 "value": "NO",
-                "name": "No Related PO"
+                "name": "No Related PO",
+                "labels": {
+                  "es_ES": "Sin PO Relacionada"
+                }
               },
               {
                 "value": "b",
-                "name": "Not Balanced"
+                "name": "Not Balanced",
+                "labels": {
+                  "es_ES": "No Balanceado"
+                }
               },
               {
                 "value": "c",
-                "name": "Not Convertible (no rate)"
+                "name": "Not Convertible (no rate)",
+                "labels": {
+                  "es_ES": "No Convertible (no hay rango)"
+                }
               },
               {
                 "value": "l",
-                "name": "Pending Refresh"
+                "name": "Pending Refresh",
+                "labels": {
+                  "es_ES": "Pendiente de Actualización"
+                }
               },
               {
                 "value": "p",
-                "name": "Period Closed"
+                "name": "Period Closed",
+                "labels": {
+                  "es_ES": "Periodo Cerrado"
+                }
               },
               {
                 "value": "y",
-                "name": "Post Prepared"
+                "name": "Post Prepared",
+                "labels": {
+                  "es_ES": "Contabilidad Preparada"
+                }
               },
               {
                 "value": "Y",
-                "name": "Posted"
+                "name": "Posted",
+                "labels": {
+                  "es_ES": "Contabilizado"
+                }
               },
               {
                 "value": "T",
-                "name": "Table Disabled"
+                "name": "Table Disabled",
+                "labels": {
+                  "es_ES": "Tabla Deshabilitada"
+                }
               },
               {
                 "value": "N",
-                "name": "Unposted"
+                "name": "Unposted",
+                "labels": {
+                  "es_ES": "No Contabilizado"
+                }
               }
             ],
             "defaultValue": "N"
@@ -776,7 +949,7 @@
             "visibility": "readOnly",
             "required": true,
             "grid": false,
-            "form": true,
+            "form": false,
             "sourceRequired": true,
             "derivation": {
               "type": "computed",
@@ -800,7 +973,7 @@
             "visibility": "editable",
             "required": true,
             "grid": false,
-            "form": true,
+            "form": false,
             "sourceRequired": true,
             "derivation": {
               "type": "computed",
@@ -822,7 +995,7 @@
             "visibility": "editable",
             "required": false,
             "grid": false,
-            "form": true,
+            "form": false,
             "displayLogic": {
               "raw": "@Processed@='Y' & @Status@!'RPVOID'",
               "evaluable": true
@@ -908,6 +1081,20 @@
             }
           },
           {
+            "name": "creationDate",
+            "derivation": {
+              "type": "fromConfig",
+              "source": "new Date()"
+            }
+          },
+          {
+            "name": "updated",
+            "derivation": {
+              "type": "fromConfig",
+              "source": "new Date()"
+            }
+          },
+          {
             "name": "etblkpAccountingstatus",
             "derivation": {
               "type": "computed",
@@ -928,7 +1115,8 @@
               "source": "N"
             }
           }
-        ]
+        ],
+        "javaQualifier": "payment-reactivate"
       },
       "lines": {
         "tableName": "FIN_Payment_ScheduleDetail",
@@ -1289,6 +1477,20 @@
               "reason": "server-macro",
               "js": null
             }
+          },
+          {
+            "name": "invoiceDocumentNo",
+            "apiKey": "invoiceDocumentNo",
+            "column": "invoiceDocumentNo",
+            "label": "Invoice",
+            "type": "string",
+            "tsType": "string",
+            "visibility": "readOnly",
+            "required": false,
+            "grid": true,
+            "form": false,
+            "section": "other",
+            "gridOrder": 1
           }
         ],
         "searchableFields": [],
@@ -1321,592 +1523,8 @@
               "source": "N"
             }
           }
-        ]
-      },
-      "executionHistory": {
-        "tableName": "FIN_Payment_Exec_History_V",
-        "tabId": "719D6C8507CA4B27886C0D8A7859B543",
-        "tabName": "Execution History",
-        "uiPattern": "STD",
-        "fields": [
-          {
-            "name": "executionDate",
-            "apiKey": "executionDate",
-            "column": "Executiondate",
-            "label": "Execution Date",
-            "type": "date",
-            "tsType": "string",
-            "visibility": "readOnly",
-            "required": false,
-            "grid": true,
-            "form": true
-          },
-          {
-            "name": "paymentRun",
-            "apiKey": "paymentRun",
-            "column": "FIN_Payment_Run_ID",
-            "label": "Payment Run",
-            "type": "foreignKey",
-            "tsType": "string",
-            "visibility": "readOnly",
-            "required": false,
-            "grid": false,
-            "form": true,
-            "reference": "Payment_Run",
-            "inputMode": "search"
-          },
-          {
-            "name": "paymentRunStatus",
-            "apiKey": "paymentRunStatus",
-            "column": "Prun_Status",
-            "label": "Payment Out Run Status",
-            "type": "enum",
-            "tsType": "string",
-            "visibility": "readOnly",
-            "required": false,
-            "grid": true,
-            "form": true,
-            "enumValues": [
-              {
-                "value": "E",
-                "name": "Executed"
-              },
-              {
-                "value": "PE",
-                "name": "Partially Executed"
-              },
-              {
-                "value": "P",
-                "name": "Pending"
-              }
-            ]
-          },
-          {
-            "name": "paymentRunMessage",
-            "apiKey": "paymentRunMessage",
-            "column": "Prun_Message",
-            "label": "Payment Out Run Message",
-            "type": "text",
-            "tsType": "string",
-            "visibility": "readOnly",
-            "required": false,
-            "grid": false,
-            "form": true
-          },
-          {
-            "name": "sourceOfTheExecution",
-            "apiKey": "sourceOfTheExecution",
-            "column": "Prun_Source",
-            "label": "Source of the Execution",
-            "type": "enum",
-            "tsType": "string",
-            "visibility": "readOnly",
-            "required": false,
-            "grid": false,
-            "form": true,
-            "enumValues": [
-              {
-                "value": "AIP",
-                "name": "Automatically from Invoice Process"
-              },
-              {
-                "value": "APP",
-                "name": "Automatically from Payment Process"
-              },
-              {
-                "value": "MF",
-                "name": "Execute Payments Form"
-              },
-              {
-                "value": "OTHER",
-                "name": "Other Source"
-              },
-              {
-                "value": "PPW",
-                "name": "Payment Proposal Window"
-              },
-              {
-                "value": "PW",
-                "name": "Payments Window"
-              }
-            ]
-          },
-          {
-            "name": "paymentExecutionResult",
-            "apiKey": "paymentExecutionResult",
-            "column": "Paymentexec_Result",
-            "label": "Payment Out Execution Result",
-            "type": "enum",
-            "tsType": "string",
-            "visibility": "readOnly",
-            "required": false,
-            "grid": true,
-            "form": true,
-            "enumValues": [
-              {
-                "value": "E",
-                "name": "Error"
-              },
-              {
-                "value": "P",
-                "name": "Pending"
-              },
-              {
-                "value": "S",
-                "name": "Successful"
-              }
-            ]
-          },
-          {
-            "name": "paymentExecutionMessage",
-            "apiKey": "paymentExecutionMessage",
-            "column": "Paymentexec_Message",
-            "label": "Payment Out Execution Message",
-            "type": "text",
-            "tsType": "string",
-            "visibility": "readOnly",
-            "required": false,
-            "grid": true,
-            "form": true
-          }
         ],
-        "searchableFields": [],
-        "computedFields": []
-      },
-      "exchangeRates": {
-        "tableName": "C_Conversion_Rate_Document",
-        "tabId": "FF808181309036230130905C67210034",
-        "tabName": "Exchange rates",
-        "uiPattern": "STD",
-        "fields": [
-          {
-            "name": "active",
-            "apiKey": "active",
-            "column": "Isactive",
-            "label": "Active",
-            "type": "boolean",
-            "tsType": "boolean",
-            "visibility": "editable",
-            "required": true,
-            "grid": false,
-            "form": true,
-            "sourceRequired": true,
-            "derivation": {
-              "type": "computed",
-              "source": "Y"
-            },
-            "defaultValue": "Y",
-            "readOnlyLogic": {
-              "raw": "@HASREVERSEDINVOICESO@='Y' | @HASREVERSEDINVOICEPO@='Y' | @Posted@='Y'",
-              "evaluable": true,
-              "js": "record['hASREVERSEDINVOICESO'] === 'Y' || record['hASREVERSEDINVOICEPO'] === 'Y' || record['posted'] === 'Y'"
-            }
-          },
-          {
-            "name": "currency",
-            "apiKey": "currency",
-            "column": "C_Currency_ID",
-            "label": "Currency",
-            "type": "foreignKey",
-            "tsType": "string",
-            "visibility": "readOnly",
-            "required": true,
-            "grid": true,
-            "form": true,
-            "sourceRequired": true,
-            "reference": "Currency",
-            "inputMode": "selector",
-            "validationRule": {
-              "code": "C_Currency.C_Currency_id = \nCASE WHEN @C_Invoice_ID@ is not null THEN (SELECT C_Currency_ID FROM C_Invoice WHERE C_Invoice_ID = COALESCE(@C_Invoice_ID@,'---'))\nWHEN @APRM_Finacc_Transaction_V_ID@ is not null THEN (SELECT c_currency_id FROM aprm_finacc_transaction_v WHERE aprm_finacc_transaction_v_id = COALESCE(@APRM_Finacc_Transaction_V_ID@, '---')) \nWHEN @FIN_Finacc_Transaction_ID@ is not null THEN (SELECT c_currency_id FROM fin_finacc_transaction WHERE fin_finacc_transaction_id = COALESCE(@FIN_Finacc_Transaction_ID@, '---'))\nWHEN @GL_Journal_ID@ is not null THEN (SELECT c_currency_id FROM gl_journal WHERE gl_journal_id = COALESCE(@GL_Journal_ID@, '---'))\nELSE (SELECT C_Currency_ID FROM FIN_Payment WHERE FIN_Payment_ID = COALESCE(@FIN_Payment_ID@, '---')) END",
-              "contextParams": [],
-              "cascadeParams": [
-                "C_Invoice_ID",
-                "APRM_Finacc_Transaction_V_ID",
-                "FIN_Finacc_Transaction_ID",
-                "GL_Journal_ID",
-                "FIN_Payment_ID"
-              ]
-            },
-            "readOnlyLogic": {
-              "raw": "@HASREVERSEDINVOICESO@='Y' | @HASREVERSEDINVOICEPO@='Y' | @Posted@='Y'",
-              "evaluable": true,
-              "js": "record['hASREVERSEDINVOICESO'] === 'Y' || record['hASREVERSEDINVOICEPO'] === 'Y' || record['posted'] === 'Y'"
-            }
-          },
-          {
-            "name": "toCurrency",
-            "apiKey": "toCurrency",
-            "column": "C_Currency_Id_To",
-            "label": "To Currency",
-            "type": "foreignKey",
-            "tsType": "string",
-            "visibility": "editable",
-            "required": true,
-            "grid": true,
-            "form": true,
-            "sourceRequired": true,
-            "reference": "Currency",
-            "inputMode": "search",
-            "validationRule": {
-              "code": "C_Currency.C_Currency_id in (SELECT C_Currency_ID FROM C_Acctschema)",
-              "contextParams": [],
-              "cascadeParams": []
-            },
-            "readOnlyLogic": {
-              "raw": "@HASREVERSEDINVOICESO@='Y' | @HASREVERSEDINVOICEPO@='Y' | @Posted@='Y'",
-              "evaluable": true,
-              "js": "record['hASREVERSEDINVOICESO'] === 'Y' || record['hASREVERSEDINVOICEPO'] === 'Y' || record['posted'] === 'Y'"
-            }
-          },
-          {
-            "name": "rate",
-            "apiKey": "rate",
-            "column": "Rate",
-            "label": "Rate",
-            "type": "string",
-            "tsType": "string",
-            "visibility": "editable",
-            "required": false,
-            "grid": true,
-            "form": true,
-            "callout": {
-              "className": "org.openbravo.erpCommon.ad_callouts.SE_CalculateExchangeRate"
-            },
-            "readOnlyLogic": {
-              "raw": "@HASREVERSEDINVOICESO@='Y' | @HASREVERSEDINVOICEPO@='Y' | @Posted@='Y'",
-              "evaluable": true,
-              "js": "record['hASREVERSEDINVOICESO'] === 'Y' || record['hASREVERSEDINVOICEPO'] === 'Y' || record['posted'] === 'Y'"
-            }
-          },
-          {
-            "name": "foreignAmount",
-            "apiKey": "foreignAmount",
-            "column": "Foreign_Amount",
-            "label": "Foreign  Amount",
-            "type": "amount",
-            "tsType": "number",
-            "visibility": "editable",
-            "required": true,
-            "grid": true,
-            "form": true,
-            "sourceRequired": true,
-            "derivation": {
-              "type": "computed",
-              "source": "0"
-            },
-            "defaultValue": "0",
-            "callout": {
-              "className": "org.openbravo.erpCommon.ad_callouts.SE_CalculateExchangeRate"
-            },
-            "readOnlyLogic": {
-              "raw": "@HASREVERSEDINVOICESO@='Y' | @HASREVERSEDINVOICEPO@='Y' | @Posted@='Y'",
-              "evaluable": true,
-              "js": "record['hASREVERSEDINVOICESO'] === 'Y' || record['hASREVERSEDINVOICEPO'] === 'Y' || record['posted'] === 'Y'"
-            }
-          }
-        ],
-        "searchableFields": [],
-        "computedFields": [
-          {
-            "name": "active",
-            "derivation": {
-              "type": "computed",
-              "source": "Y"
-            }
-          },
-          {
-            "name": "foreignAmount",
-            "derivation": {
-              "type": "computed",
-              "source": "0"
-            }
-          }
-        ]
-      },
-      "usedCreditSource": {
-        "tableName": "FIN_Payment_Credit",
-        "tabId": "FF80818132AFC4050132AFC7F94A000A",
-        "tabName": "Used Credit Source",
-        "uiPattern": "STD",
-        "fields": [
-          {
-            "name": "creditPaymentUsed",
-            "apiKey": "creditPaymentUsed",
-            "column": "FIN_Payment_Id_Used",
-            "label": "Credit Payment Used",
-            "type": "foreignKey",
-            "tsType": "string",
-            "visibility": "editable",
-            "required": true,
-            "grid": true,
-            "form": true,
-            "sourceRequired": true,
-            "reference": "Payment",
-            "inputMode": "search"
-          },
-          {
-            "name": "amount",
-            "apiKey": "amount",
-            "column": "Amount",
-            "label": "Amount",
-            "type": "decimal",
-            "tsType": "number",
-            "visibility": "editable",
-            "required": true,
-            "grid": true,
-            "form": true,
-            "sourceRequired": true,
-            "derivation": {
-              "type": "computed",
-              "source": "0"
-            },
-            "defaultValue": "0"
-          },
-          {
-            "name": "currency",
-            "apiKey": "currency",
-            "column": "C_Currency_ID",
-            "label": "Currency",
-            "type": "foreignKey",
-            "tsType": "string",
-            "visibility": "editable",
-            "required": true,
-            "grid": true,
-            "form": true,
-            "sourceRequired": true,
-            "reference": "Currency",
-            "inputMode": "selector"
-          }
-        ],
-        "searchableFields": [],
-        "computedFields": [
-          {
-            "name": "amount",
-            "derivation": {
-              "type": "computed",
-              "source": "0"
-            }
-          }
-        ]
-      },
-      "accounting": {
-        "tableName": "Fact_Acct",
-        "tabId": "38A56E62067242B39D3815E434D5BC48",
-        "tabName": "Accounting",
-        "uiPattern": "STD",
-        "fields": [
-          {
-            "name": "accountingSchema",
-            "apiKey": "accountingSchema",
-            "column": "C_AcctSchema_ID",
-            "label": "General Ledger",
-            "type": "foreignKey",
-            "tsType": "string",
-            "visibility": "readOnly",
-            "required": true,
-            "grid": false,
-            "form": true,
-            "sourceRequired": true,
-            "reference": "AcctSchema",
-            "inputMode": "selector"
-          },
-          {
-            "name": "currency",
-            "apiKey": "currency",
-            "column": "C_Currency_ID",
-            "label": "Currency",
-            "type": "foreignKey",
-            "tsType": "string",
-            "visibility": "readOnly",
-            "required": true,
-            "grid": false,
-            "form": true,
-            "sourceRequired": true,
-            "reference": "Currency",
-            "inputMode": "selector"
-          },
-          {
-            "name": "period",
-            "apiKey": "period",
-            "column": "C_Period_ID",
-            "label": "Period",
-            "type": "foreignKey",
-            "tsType": "string",
-            "visibility": "readOnly",
-            "required": true,
-            "grid": true,
-            "form": true,
-            "sourceRequired": true,
-            "reference": "Period",
-            "inputMode": "selector"
-          },
-          {
-            "name": "accountingDate",
-            "apiKey": "accountingDate",
-            "column": "DateAcct",
-            "label": "Accounting Date",
-            "type": "date",
-            "tsType": "string",
-            "visibility": "readOnly",
-            "required": true,
-            "grid": true,
-            "form": true,
-            "sourceRequired": true
-          },
-          {
-            "name": "account",
-            "apiKey": "account",
-            "column": "Account_ID",
-            "label": "Account",
-            "type": "foreignKey",
-            "tsType": "string",
-            "visibility": "readOnly",
-            "required": true,
-            "grid": true,
-            "form": true,
-            "sourceRequired": true,
-            "reference": "ElementValue",
-            "inputMode": "search"
-          },
-          {
-            "name": "debit",
-            "apiKey": "debit",
-            "column": "AmtAcctDr",
-            "label": "Debit",
-            "type": "amount",
-            "tsType": "number",
-            "visibility": "readOnly",
-            "required": true,
-            "grid": true,
-            "form": true,
-            "sourceRequired": true
-          },
-          {
-            "name": "credit",
-            "apiKey": "credit",
-            "column": "AmtAcctCr",
-            "label": "Credit",
-            "type": "amount",
-            "tsType": "number",
-            "visibility": "readOnly",
-            "required": true,
-            "grid": true,
-            "form": true,
-            "sourceRequired": true
-          },
-          {
-            "name": "description",
-            "apiKey": "description",
-            "column": "Description",
-            "label": "Description",
-            "type": "string",
-            "tsType": "string",
-            "visibility": "readOnly",
-            "required": false,
-            "grid": false,
-            "form": true
-          },
-          {
-            "name": "businessPartner",
-            "apiKey": "businessPartner",
-            "column": "C_BPartner_ID",
-            "label": "Business Partner",
-            "type": "foreignKey",
-            "tsType": "string",
-            "visibility": "readOnly",
-            "required": false,
-            "grid": false,
-            "form": true,
-            "reference": "BPartner",
-            "inputMode": "search"
-          },
-          {
-            "name": "product",
-            "apiKey": "product",
-            "column": "M_Product_ID",
-            "label": "Product",
-            "type": "foreignKey",
-            "tsType": "string",
-            "visibility": "readOnly",
-            "required": false,
-            "grid": false,
-            "form": true,
-            "reference": "Product",
-            "inputMode": "search"
-          },
-          {
-            "name": "project",
-            "apiKey": "project",
-            "column": "C_Project_ID",
-            "label": "Project",
-            "type": "foreignKey",
-            "tsType": "string",
-            "visibility": "readOnly",
-            "required": false,
-            "grid": false,
-            "form": true,
-            "reference": "Project",
-            "inputMode": "selector"
-          },
-          {
-            "name": "costcenter",
-            "apiKey": "costcenter",
-            "column": "C_Costcenter_ID",
-            "label": "Cost Center",
-            "type": "foreignKey",
-            "tsType": "string",
-            "visibility": "readOnly",
-            "required": false,
-            "grid": false,
-            "form": true,
-            "reference": "Costcenter",
-            "inputMode": "selector"
-          },
-          {
-            "name": "asset",
-            "apiKey": "asset",
-            "column": "A_Asset_ID",
-            "label": "Asset",
-            "type": "foreignKey",
-            "tsType": "string",
-            "visibility": "readOnly",
-            "required": false,
-            "grid": false,
-            "form": true,
-            "reference": "Asset",
-            "inputMode": "selector"
-          },
-          {
-            "name": "stDimension",
-            "apiKey": "stDimension",
-            "column": "User1_ID",
-            "label": "1st Dimension",
-            "type": "foreignKey",
-            "tsType": "string",
-            "visibility": "readOnly",
-            "required": false,
-            "grid": false,
-            "form": true,
-            "reference": "User1",
-            "inputMode": "selector"
-          },
-          {
-            "name": "ndDimension",
-            "apiKey": "ndDimension",
-            "column": "User2_ID",
-            "label": "2nd Dimension",
-            "type": "foreignKey",
-            "tsType": "string",
-            "visibility": "readOnly",
-            "required": false,
-            "grid": false,
-            "form": true,
-            "reference": "User2",
-            "inputMode": "selector"
-          }
-        ],
-        "searchableFields": [],
-        "computedFields": []
+        "javaQualifier": "paymentScheduleDetailHandler"
       },
       "bankPayments": {
         "tableName": "PSD2_pis_payment",
@@ -1933,35 +1551,59 @@
             "enumValues": [
               {
                 "value": "authorized",
-                "name": "AUTHORIZED"
+                "name": "AUTHORIZED",
+                "labels": {
+                  "es_ES": "AUTHORIZED"
+                }
               },
               {
                 "value": "authorizing",
-                "name": "AUTHORIZING"
+                "name": "AUTHORIZING",
+                "labels": {
+                  "es_ES": "AUTHORIZING"
+                }
               },
               {
                 "value": "executed",
-                "name": "EXECUTED"
+                "name": "EXECUTED",
+                "labels": {
+                  "es_ES": "EXECUTED"
+                }
               },
               {
                 "value": "failed",
-                "name": "FAILED"
+                "name": "FAILED",
+                "labels": {
+                  "es_ES": "FAILED"
+                }
               },
               {
                 "value": "initiated",
-                "name": "INITIATED"
+                "name": "INITIATED",
+                "labels": {
+                  "es_ES": "INITIATED"
+                }
               },
               {
                 "value": "initiated_info_required",
-                "name": "INITIATED INFO REQUIRED"
+                "name": "INITIATED INFO REQUIRED",
+                "labels": {
+                  "es_ES": "INITIATED INFO REQUIRED"
+                }
               },
               {
                 "value": "requested",
-                "name": "REQUESTED"
+                "name": "REQUESTED",
+                "labels": {
+                  "es_ES": "REQUESTED"
+                }
               },
               {
                 "value": "settled",
-                "name": "SETTLED"
+                "name": "SETTLED",
+                "labels": {
+                  "es_ES": "SETTLED"
+                }
               }
             ],
             "defaultValue": "requested"
@@ -2126,12 +1768,71 @@
       "primaryEntity": "header",
       "category": "finance",
       "notesField": "description",
-      "relatedDocuments": true,
+      "hideDeleteWhenComplete": true,
+      "customTabsAfterBottom": true,
+      "hidePrint": true,
+      "hideCreate": true,
+      "hideSaveStatuses": [
+        "RDNC",
+        "RPPC",
+        "RPR",
+        "RPVOID",
+        "PWNC"
+      ],
       "customComponents": {
-        "bottomSection": "PaymentOutBottomPanel"
+        "headerTable": "PaymentHeaderTable",
+        "sidePanel": "PaymentDetailSidebar",
+        "bottomSection": "PaymentOutBottomPanel",
+        "processConfirmModal": "ReactivarConfirmModal",
+        "topbarExtra": "PaymentConciliadoBadge",
+        "sidePanelStyle": {
+          "order": -1,
+          "borderLeft": "none",
+          "borderRight": "1px solid #E8EAEF",
+          "padding": 0
+        }
       },
+      "processOverrides": {
+        "aPRMProcessPayment": {
+          "label": "processConfirm",
+          "displayLogicRaw": "@status@ = 'RPAP'",
+          "confirmModal": true
+        },
+        "aPRMAddScheduledpayments": {
+          "exclude": true
+        },
+        "aprmExecutepayment": {
+          "exclude": true
+        },
+        "aPRMReversePayment": {
+          "exclude": true
+        },
+        "aPRMReconcilePayment": {
+          "exclude": true
+        },
+        "etprReactivatePayment": {
+          "add": true,
+          "columnName": "etprReactivatePayment",
+          "label": "processReactivate",
+          "style": "ghost-danger",
+          "displayLogicRaw": "@status@ != 'RPAP'"
+        }
+      },
+      "detailEntity": null,
+      "summaryFields": [],
       "dateFilterKey": "paymentDate",
-      "linesLayout": "inlineEditable"
+      "statusEnumLabels": {
+        "RPAP": "statusDraft",
+        "RPR": "pagoDepositado",
+        "RDNC": "pagoDepositado",
+        "RPPC": "pagoDepositado",
+        "PPM": "pagoDepositado",
+        "PWNC": "pagoDepositado"
+      },
+      "statusFieldLabel": "statusColumnLabel",
+      "toolbarBorderBottom": true,
+      "hideFormCard": true,
+      "attachments": false
     },
     "entities": {
       "header": {
@@ -2412,14 +2113,6 @@
             "required": true
           },
           {
-            "name": "payment",
-            "apiKey": "payment",
-            "column": "Fin_Payment_ID",
-            "type": "id",
-            "visibility": "system",
-            "required": true
-          },
-          {
             "name": "processNow",
             "apiKey": "processNow",
             "column": "Processing",
@@ -2440,7 +2133,7 @@
             "apiKey": "creationDate",
             "column": "Created",
             "type": "dateTime",
-            "visibility": "system",
+            "visibility": "readOnly",
             "required": true
           },
           {
@@ -2480,7 +2173,7 @@
             "apiKey": "updated",
             "column": "Updated",
             "type": "dateTime",
-            "visibility": "system",
+            "visibility": "readOnly",
             "required": true
           },
           {
@@ -2530,8 +2223,17 @@
             "type": "button",
             "visibility": "editable",
             "required": false
+          },
+          {
+            "name": "id",
+            "apiKey": "id",
+            "column": "Fin_Payment_ID",
+            "type": "id",
+            "visibility": "system",
+            "required": true
           }
-        ]
+        ],
+        "javaQualifier": "payment-reactivate"
       },
       "lines": {
         "tableName": "FIN_Payment_ScheduleDetail",
@@ -2739,14 +2441,6 @@
             "required": false
           },
           {
-            "name": "fINPaymentScheduledetailID",
-            "apiKey": "fINPaymentScheduledetailID",
-            "column": "FIN_Payment_Scheduledetail_ID",
-            "type": "id",
-            "visibility": "system",
-            "required": true
-          },
-          {
             "name": "client",
             "apiKey": "client",
             "column": "AD_Client_ID",
@@ -2809,812 +2503,25 @@
             "type": "foreignKey",
             "visibility": "system",
             "required": true
-          }
-        ]
-      },
-      "executionHistory": {
-        "tableName": "FIN_Payment_Exec_History_V",
-        "tabId": "719D6C8507CA4B27886C0D8A7859B543",
-        "tabName": "Execution History",
-        "fields": [
-          {
-            "name": "executionDate",
-            "apiKey": "executionDate",
-            "column": "Executiondate",
-            "type": "date",
-            "visibility": "readOnly",
-            "required": false
-          },
-          {
-            "name": "paymentRun",
-            "apiKey": "paymentRun",
-            "column": "FIN_Payment_Run_ID",
-            "type": "foreignKey",
-            "visibility": "readOnly",
-            "required": false
-          },
-          {
-            "name": "paymentRunStatus",
-            "apiKey": "paymentRunStatus",
-            "column": "Prun_Status",
-            "type": "enum",
-            "visibility": "readOnly",
-            "required": false
-          },
-          {
-            "name": "paymentRunMessage",
-            "apiKey": "paymentRunMessage",
-            "column": "Prun_Message",
-            "type": "text",
-            "visibility": "readOnly",
-            "required": false
-          },
-          {
-            "name": "sourceOfTheExecution",
-            "apiKey": "sourceOfTheExecution",
-            "column": "Prun_Source",
-            "type": "enum",
-            "visibility": "readOnly",
-            "required": false
-          },
-          {
-            "name": "paymentExecutionResult",
-            "apiKey": "paymentExecutionResult",
-            "column": "Paymentexec_Result",
-            "type": "enum",
-            "visibility": "readOnly",
-            "required": false
-          },
-          {
-            "name": "paymentExecutionMessage",
-            "apiKey": "paymentExecutionMessage",
-            "column": "Paymentexec_Message",
-            "type": "text",
-            "visibility": "readOnly",
-            "required": false
-          },
-          {
-            "name": "active",
-            "apiKey": "active",
-            "column": "Isactive",
-            "type": "boolean",
-            "visibility": "system",
-            "required": false
           },
           {
             "name": "id",
             "apiKey": "id",
-            "column": "FIN_Payment_Exec_History_V_ID",
+            "column": "FIN_Payment_Scheduledetail_ID",
             "type": "id",
             "visibility": "system",
-            "required": false
+            "required": true
           },
           {
-            "name": "payment",
-            "apiKey": "payment",
-            "column": "FIN_Payment_ID",
-            "type": "foreignKey",
-            "visibility": "system",
-            "required": false
-          },
-          {
-            "name": "client",
-            "apiKey": "client",
-            "column": "AD_Client_ID",
-            "type": "foreignKey",
-            "visibility": "system",
-            "required": false
-          },
-          {
-            "name": "organization",
-            "apiKey": "organization",
-            "column": "AD_Org_ID",
-            "type": "foreignKey",
-            "visibility": "system",
-            "required": false
-          },
-          {
-            "name": "creationDate",
-            "apiKey": "creationDate",
-            "column": "Created",
-            "type": "dateTime",
-            "visibility": "system",
-            "required": false
-          },
-          {
-            "name": "createdBy",
-            "apiKey": "createdBy",
-            "column": "Createdby",
-            "type": "foreignKey",
-            "visibility": "system",
-            "required": false
-          },
-          {
-            "name": "updated",
-            "apiKey": "updated",
-            "column": "Updated",
-            "type": "dateTime",
-            "visibility": "system",
-            "required": false
-          },
-          {
-            "name": "updatedBy",
-            "apiKey": "updatedBy",
-            "column": "Updatedby",
-            "type": "foreignKey",
-            "visibility": "system",
+            "name": "invoiceDocumentNo",
+            "apiKey": "invoiceDocumentNo",
+            "column": "invoiceDocumentNo",
+            "type": "string",
+            "visibility": "readOnly",
             "required": false
           }
-        ]
-      },
-      "exchangeRates": {
-        "tableName": "C_Conversion_Rate_Document",
-        "tabId": "FF808181309036230130905C67210034",
-        "tabName": "Exchange rates",
-        "fields": [
-          {
-            "name": "organization",
-            "apiKey": "organization",
-            "column": "AD_Org_ID",
-            "type": "foreignKey",
-            "visibility": "system",
-            "required": true
-          },
-          {
-            "name": "active",
-            "apiKey": "active",
-            "column": "Isactive",
-            "type": "boolean",
-            "visibility": "editable",
-            "required": true
-          },
-          {
-            "name": "currency",
-            "apiKey": "currency",
-            "column": "C_Currency_ID",
-            "type": "foreignKey",
-            "visibility": "readOnly",
-            "required": true
-          },
-          {
-            "name": "toCurrency",
-            "apiKey": "toCurrency",
-            "column": "C_Currency_Id_To",
-            "type": "foreignKey",
-            "visibility": "editable",
-            "required": true
-          },
-          {
-            "name": "invoice",
-            "apiKey": "invoice",
-            "column": "C_Invoice_ID",
-            "type": "foreignKey",
-            "visibility": "system",
-            "required": false
-          },
-          {
-            "name": "payment",
-            "apiKey": "payment",
-            "column": "FIN_Payment_ID",
-            "type": "foreignKey",
-            "visibility": "system",
-            "required": false
-          },
-          {
-            "name": "financialAccountTransaction",
-            "apiKey": "financialAccountTransaction",
-            "column": "aprm_finacc_transaction_v_id",
-            "type": "foreignKey",
-            "visibility": "system",
-            "required": false
-          },
-          {
-            "name": "rate",
-            "apiKey": "rate",
-            "column": "Rate",
-            "type": "string",
-            "visibility": "editable",
-            "required": false
-          },
-          {
-            "name": "foreignAmount",
-            "apiKey": "foreignAmount",
-            "column": "Foreign_Amount",
-            "type": "amount",
-            "visibility": "editable",
-            "required": true
-          },
-          {
-            "name": "id",
-            "apiKey": "id",
-            "column": "C_Conversion_Rate_Document_ID",
-            "type": "id",
-            "visibility": "system",
-            "required": true
-          },
-          {
-            "name": "client",
-            "apiKey": "client",
-            "column": "AD_Client_ID",
-            "type": "foreignKey",
-            "visibility": "system",
-            "required": true
-          },
-          {
-            "name": "creationDate",
-            "apiKey": "creationDate",
-            "column": "Created",
-            "type": "dateTime",
-            "visibility": "system",
-            "required": true
-          },
-          {
-            "name": "createdBy",
-            "apiKey": "createdBy",
-            "column": "Createdby",
-            "type": "foreignKey",
-            "visibility": "system",
-            "required": true
-          },
-          {
-            "name": "fINFinancialAccountTransaction",
-            "apiKey": "fINFinancialAccountTransaction",
-            "column": "FIN_Finacc_Transaction_ID",
-            "type": "foreignKey",
-            "visibility": "system",
-            "required": false
-          },
-          {
-            "name": "journalEntry",
-            "apiKey": "journalEntry",
-            "column": "GL_Journal_ID",
-            "type": "foreignKey",
-            "visibility": "system",
-            "required": false
-          },
-          {
-            "name": "updated",
-            "apiKey": "updated",
-            "column": "Updated",
-            "type": "dateTime",
-            "visibility": "system",
-            "required": true
-          },
-          {
-            "name": "updatedBy",
-            "apiKey": "updatedBy",
-            "column": "Updatedby",
-            "type": "foreignKey",
-            "visibility": "system",
-            "required": true
-          }
-        ]
-      },
-      "usedCreditSource": {
-        "tableName": "FIN_Payment_Credit",
-        "tabId": "FF80818132AFC4050132AFC7F94A000A",
-        "tabName": "Used Credit Source",
-        "fields": [
-          {
-            "name": "organization",
-            "apiKey": "organization",
-            "column": "AD_Org_ID",
-            "type": "foreignKey",
-            "visibility": "system",
-            "required": true
-          },
-          {
-            "name": "active",
-            "apiKey": "active",
-            "column": "Isactive",
-            "type": "boolean",
-            "visibility": "system",
-            "required": false
-          },
-          {
-            "name": "creditPaymentUsed",
-            "apiKey": "creditPaymentUsed",
-            "column": "FIN_Payment_Id_Used",
-            "type": "foreignKey",
-            "visibility": "editable",
-            "required": true
-          },
-          {
-            "name": "payment",
-            "apiKey": "payment",
-            "column": "FIN_Payment_ID",
-            "type": "foreignKey",
-            "visibility": "system",
-            "required": true
-          },
-          {
-            "name": "amount",
-            "apiKey": "amount",
-            "column": "Amount",
-            "type": "decimal",
-            "visibility": "editable",
-            "required": true
-          },
-          {
-            "name": "currency",
-            "apiKey": "currency",
-            "column": "C_Currency_ID",
-            "type": "foreignKey",
-            "visibility": "editable",
-            "required": true
-          },
-          {
-            "name": "id",
-            "apiKey": "id",
-            "column": "FIN_Payment_Credit_ID",
-            "type": "id",
-            "visibility": "system",
-            "required": true
-          },
-          {
-            "name": "client",
-            "apiKey": "client",
-            "column": "AD_Client_ID",
-            "type": "foreignKey",
-            "visibility": "system",
-            "required": true
-          },
-          {
-            "name": "creationDate",
-            "apiKey": "creationDate",
-            "column": "Created",
-            "type": "dateTime",
-            "visibility": "system",
-            "required": true
-          },
-          {
-            "name": "createdBy",
-            "apiKey": "createdBy",
-            "column": "Createdby",
-            "type": "foreignKey",
-            "visibility": "system",
-            "required": true
-          },
-          {
-            "name": "updated",
-            "apiKey": "updated",
-            "column": "Updated",
-            "type": "dateTime",
-            "visibility": "system",
-            "required": true
-          },
-          {
-            "name": "updatedBy",
-            "apiKey": "updatedBy",
-            "column": "Updatedby",
-            "type": "foreignKey",
-            "visibility": "system",
-            "required": true
-          }
-        ]
-      },
-      "accounting": {
-        "tableName": "Fact_Acct",
-        "tabId": "38A56E62067242B39D3815E434D5BC48",
-        "tabName": "Accounting",
-        "fields": [
-          {
-            "name": "client",
-            "apiKey": "client",
-            "column": "AD_Client_ID",
-            "type": "foreignKey",
-            "visibility": "system",
-            "required": true
-          },
-          {
-            "name": "organization",
-            "apiKey": "organization",
-            "column": "AD_Org_ID",
-            "type": "foreignKey",
-            "visibility": "system",
-            "required": true
-          },
-          {
-            "name": "active",
-            "apiKey": "active",
-            "column": "IsActive",
-            "type": "boolean",
-            "visibility": "system",
-            "required": true
-          },
-          {
-            "name": "recordID",
-            "apiKey": "recordID",
-            "column": "Record_ID",
-            "type": "text",
-            "visibility": "system",
-            "required": true
-          },
-          {
-            "name": "accountingSchema",
-            "apiKey": "accountingSchema",
-            "column": "C_AcctSchema_ID",
-            "type": "foreignKey",
-            "visibility": "readOnly",
-            "required": true
-          },
-          {
-            "name": "currency",
-            "apiKey": "currency",
-            "column": "C_Currency_ID",
-            "type": "foreignKey",
-            "visibility": "readOnly",
-            "required": true
-          },
-          {
-            "name": "period",
-            "apiKey": "period",
-            "column": "C_Period_ID",
-            "type": "foreignKey",
-            "visibility": "readOnly",
-            "required": true
-          },
-          {
-            "name": "accountingDate",
-            "apiKey": "accountingDate",
-            "column": "DateAcct",
-            "type": "date",
-            "visibility": "readOnly",
-            "required": true
-          },
-          {
-            "name": "account",
-            "apiKey": "account",
-            "column": "Account_ID",
-            "type": "foreignKey",
-            "visibility": "readOnly",
-            "required": true
-          },
-          {
-            "name": "sequenceNumber",
-            "apiKey": "sequenceNumber",
-            "column": "SeqNo",
-            "type": "integer",
-            "visibility": "system",
-            "required": true
-          },
-          {
-            "name": "value",
-            "apiKey": "value",
-            "column": "AcctValue",
-            "type": "string",
-            "visibility": "system",
-            "required": false
-          },
-          {
-            "name": "accountingEntryDescription",
-            "apiKey": "accountingEntryDescription",
-            "column": "AcctDescription",
-            "type": "string",
-            "visibility": "system",
-            "required": false
-          },
-          {
-            "name": "debit",
-            "apiKey": "debit",
-            "column": "AmtAcctDr",
-            "type": "amount",
-            "visibility": "readOnly",
-            "required": true
-          },
-          {
-            "name": "credit",
-            "apiKey": "credit",
-            "column": "AmtAcctCr",
-            "type": "amount",
-            "visibility": "readOnly",
-            "required": true
-          },
-          {
-            "name": "description",
-            "apiKey": "description",
-            "column": "Description",
-            "type": "string",
-            "visibility": "readOnly",
-            "required": false
-          },
-          {
-            "name": "businessPartner",
-            "apiKey": "businessPartner",
-            "column": "C_BPartner_ID",
-            "type": "foreignKey",
-            "visibility": "readOnly",
-            "required": false
-          },
-          {
-            "name": "product",
-            "apiKey": "product",
-            "column": "M_Product_ID",
-            "type": "foreignKey",
-            "visibility": "readOnly",
-            "required": false
-          },
-          {
-            "name": "project",
-            "apiKey": "project",
-            "column": "C_Project_ID",
-            "type": "foreignKey",
-            "visibility": "readOnly",
-            "required": false
-          },
-          {
-            "name": "costcenter",
-            "apiKey": "costcenter",
-            "column": "C_Costcenter_ID",
-            "type": "foreignKey",
-            "visibility": "readOnly",
-            "required": false
-          },
-          {
-            "name": "asset",
-            "apiKey": "asset",
-            "column": "A_Asset_ID",
-            "type": "foreignKey",
-            "visibility": "readOnly",
-            "required": false
-          },
-          {
-            "name": "stDimension",
-            "apiKey": "stDimension",
-            "column": "User1_ID",
-            "type": "foreignKey",
-            "visibility": "readOnly",
-            "required": false
-          },
-          {
-            "name": "ndDimension",
-            "apiKey": "ndDimension",
-            "column": "User2_ID",
-            "type": "foreignKey",
-            "visibility": "readOnly",
-            "required": false
-          },
-          {
-            "name": "tax",
-            "apiKey": "tax",
-            "column": "C_Tax_ID",
-            "type": "foreignKey",
-            "visibility": "system",
-            "required": false
-          },
-          {
-            "name": "recordID2",
-            "apiKey": "recordID2",
-            "column": "Record_ID2",
-            "type": "string",
-            "visibility": "system",
-            "required": false
-          },
-          {
-            "name": "lineID",
-            "apiKey": "lineID",
-            "column": "Line_ID",
-            "type": "id",
-            "visibility": "system",
-            "required": false
-          },
-          {
-            "name": "quantity",
-            "apiKey": "quantity",
-            "column": "Qty",
-            "type": "quantity",
-            "visibility": "system",
-            "required": false
-          },
-          {
-            "name": "documentCategory",
-            "apiKey": "documentCategory",
-            "column": "DocBaseType",
-            "type": "string",
-            "visibility": "system",
-            "required": false
-          },
-          {
-            "name": "withholding",
-            "apiKey": "withholding",
-            "column": "C_Withholding_ID",
-            "type": "foreignKey",
-            "visibility": "system",
-            "required": false
-          },
-          {
-            "name": "activity",
-            "apiKey": "activity",
-            "column": "C_Activity_ID",
-            "type": "foreignKey",
-            "visibility": "system",
-            "required": false
-          },
-          {
-            "name": "id",
-            "apiKey": "id",
-            "column": "Fact_Acct_ID",
-            "type": "id",
-            "visibility": "system",
-            "required": true
-          },
-          {
-            "name": "gLCategory",
-            "apiKey": "gLCategory",
-            "column": "GL_Category_ID",
-            "type": "foreignKey",
-            "visibility": "system",
-            "required": true
-          },
-          {
-            "name": "table",
-            "apiKey": "table",
-            "column": "AD_Table_ID",
-            "type": "foreignKey",
-            "visibility": "system",
-            "required": true
-          },
-          {
-            "name": "type",
-            "apiKey": "type",
-            "column": "FactAcctType",
-            "type": "enum",
-            "visibility": "system",
-            "required": false
-          },
-          {
-            "name": "locationToAddress",
-            "apiKey": "locationToAddress",
-            "column": "C_LocTo_ID",
-            "type": "foreignKey",
-            "visibility": "system",
-            "required": false
-          },
-          {
-            "name": "groupID",
-            "apiKey": "groupID",
-            "column": "Fact_Acct_Group_ID",
-            "type": "string",
-            "visibility": "system",
-            "required": true
-          },
-          {
-            "name": "foreignCurrencyCredit",
-            "apiKey": "foreignCurrencyCredit",
-            "column": "AmtSourceCr",
-            "type": "amount",
-            "visibility": "system",
-            "required": true
-          },
-          {
-            "name": "salesRegion",
-            "apiKey": "salesRegion",
-            "column": "C_SalesRegion_ID",
-            "type": "foreignKey",
-            "visibility": "system",
-            "required": false
-          },
-          {
-            "name": "documentType",
-            "apiKey": "documentType",
-            "column": "C_Doctype_ID",
-            "type": "foreignKey",
-            "visibility": "system",
-            "required": false
-          },
-          {
-            "name": "transactionDate",
-            "apiKey": "transactionDate",
-            "column": "DateTrx",
-            "type": "date",
-            "visibility": "system",
-            "required": true
-          },
-          {
-            "name": "uOM",
-            "apiKey": "uOM",
-            "column": "C_UOM_ID",
-            "type": "foreignKey",
-            "visibility": "system",
-            "required": false
-          },
-          {
-            "name": "postingType",
-            "apiKey": "postingType",
-            "column": "PostingType",
-            "type": "enum",
-            "visibility": "system",
-            "required": true
-          },
-          {
-            "name": "storageBin",
-            "apiKey": "storageBin",
-            "column": "M_Locator_ID",
-            "type": "foreignKey",
-            "visibility": "system",
-            "required": false
-          },
-          {
-            "name": "foreignCurrencyDebit",
-            "apiKey": "foreignCurrencyDebit",
-            "column": "AmtSourceDr",
-            "type": "amount",
-            "visibility": "system",
-            "required": true
-          },
-          {
-            "name": "locationFromAddress",
-            "apiKey": "locationFromAddress",
-            "column": "C_LocFrom_ID",
-            "type": "foreignKey",
-            "visibility": "system",
-            "required": false
-          },
-          {
-            "name": "trxOrganization",
-            "apiKey": "trxOrganization",
-            "column": "AD_OrgTrx_ID",
-            "type": "foreignKey",
-            "visibility": "system",
-            "required": false
-          },
-          {
-            "name": "salesCampaign",
-            "apiKey": "salesCampaign",
-            "column": "C_Campaign_ID",
-            "type": "foreignKey",
-            "visibility": "system",
-            "required": false
-          },
-          {
-            "name": "creationDate",
-            "apiKey": "creationDate",
-            "column": "Created",
-            "type": "dateTime",
-            "visibility": "system",
-            "required": true
-          },
-          {
-            "name": "createdBy",
-            "apiKey": "createdBy",
-            "column": "CreatedBy",
-            "type": "foreignKey",
-            "visibility": "system",
-            "required": true
-          },
-          {
-            "name": "dateBalanced",
-            "apiKey": "dateBalanced",
-            "column": "Datebalanced",
-            "type": "date",
-            "visibility": "system",
-            "required": false
-          },
-          {
-            "name": "modify",
-            "apiKey": "modify",
-            "column": "Ismodify",
-            "type": "boolean",
-            "visibility": "system",
-            "required": true
-          },
-          {
-            "name": "updated",
-            "apiKey": "updated",
-            "column": "Updated",
-            "type": "dateTime",
-            "visibility": "system",
-            "required": true
-          },
-          {
-            "name": "updatedBy",
-            "apiKey": "updatedBy",
-            "column": "UpdatedBy",
-            "type": "foreignKey",
-            "visibility": "system",
-            "required": true
-          }
-        ]
+        ],
+        "javaQualifier": "paymentScheduleDetailHandler"
       },
       "bankPayments": {
         "tableName": "PSD2_pis_payment",
@@ -3886,14 +2793,6 @@
             "required": true
           },
           {
-            "name": "psd2PisPayment",
-            "apiKey": "psd2PisPayment",
-            "column": "Psd2_Pis_Payment_ID",
-            "type": "id",
-            "visibility": "system",
-            "required": true
-          },
-          {
             "name": "creationDate",
             "apiKey": "creationDate",
             "column": "Created",
@@ -3930,6 +2829,14 @@
             "apiKey": "updatedBy",
             "column": "Updatedby",
             "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "id",
+            "apiKey": "id",
+            "column": "Psd2_Pis_Payment_ID",
+            "type": "id",
             "visibility": "system",
             "required": true
           }
@@ -4005,126 +2912,6 @@
       },
       {
         "method": "GET",
-        "path": "/executionHistory",
-        "entity": "executionHistory",
-        "supportedFilters": []
-      },
-      {
-        "method": "GET",
-        "path": "/executionHistory/:id",
-        "entity": "executionHistory",
-        "supportedFilters": []
-      },
-      {
-        "method": "POST",
-        "path": "/executionHistory",
-        "entity": "executionHistory",
-        "supportedFilters": []
-      },
-      {
-        "method": "PUT",
-        "path": "/executionHistory/:id",
-        "entity": "executionHistory",
-        "supportedFilters": []
-      },
-      {
-        "method": "DELETE",
-        "path": "/executionHistory/:id",
-        "entity": "executionHistory",
-        "supportedFilters": []
-      },
-      {
-        "method": "GET",
-        "path": "/exchangeRates",
-        "entity": "exchangeRates",
-        "supportedFilters": []
-      },
-      {
-        "method": "GET",
-        "path": "/exchangeRates/:id",
-        "entity": "exchangeRates",
-        "supportedFilters": []
-      },
-      {
-        "method": "POST",
-        "path": "/exchangeRates",
-        "entity": "exchangeRates",
-        "supportedFilters": []
-      },
-      {
-        "method": "PUT",
-        "path": "/exchangeRates/:id",
-        "entity": "exchangeRates",
-        "supportedFilters": []
-      },
-      {
-        "method": "DELETE",
-        "path": "/exchangeRates/:id",
-        "entity": "exchangeRates",
-        "supportedFilters": []
-      },
-      {
-        "method": "GET",
-        "path": "/usedCreditSource",
-        "entity": "usedCreditSource",
-        "supportedFilters": []
-      },
-      {
-        "method": "GET",
-        "path": "/usedCreditSource/:id",
-        "entity": "usedCreditSource",
-        "supportedFilters": []
-      },
-      {
-        "method": "POST",
-        "path": "/usedCreditSource",
-        "entity": "usedCreditSource",
-        "supportedFilters": []
-      },
-      {
-        "method": "PUT",
-        "path": "/usedCreditSource/:id",
-        "entity": "usedCreditSource",
-        "supportedFilters": []
-      },
-      {
-        "method": "DELETE",
-        "path": "/usedCreditSource/:id",
-        "entity": "usedCreditSource",
-        "supportedFilters": []
-      },
-      {
-        "method": "GET",
-        "path": "/accounting",
-        "entity": "accounting",
-        "supportedFilters": []
-      },
-      {
-        "method": "GET",
-        "path": "/accounting/:id",
-        "entity": "accounting",
-        "supportedFilters": []
-      },
-      {
-        "method": "POST",
-        "path": "/accounting",
-        "entity": "accounting",
-        "supportedFilters": []
-      },
-      {
-        "method": "PUT",
-        "path": "/accounting/:id",
-        "entity": "accounting",
-        "supportedFilters": []
-      },
-      {
-        "method": "DELETE",
-        "path": "/accounting/:id",
-        "entity": "accounting",
-        "supportedFilters": []
-      },
-      {
-        "method": "GET",
         "path": "/bankPayments",
         "entity": "bankPayments",
         "supportedFilters": []
@@ -4154,7 +2941,18 @@
         "supportedFilters": []
       }
     ],
-    "processEndpoints": []
+    "processEndpoints": [
+      {
+        "name": "Payment Process",
+        "method": "POST",
+        "path": "/header/:id/action/aPRMProcessPayment",
+        "entity": "header",
+        "columnName": "aPRMProcessPayment",
+        "params": [],
+        "preconditions": [],
+        "steps": 0
+      }
+    ]
   },
   "apiPrediction": {
     "specName": "payment-out",
@@ -4186,50 +2984,6 @@
         "delete": true,
         "listUrl": "/sws/neo/payment-out/lines",
         "detailUrl": "/sws/neo/payment-out/lines/{id}",
-        "supportedFilters": []
-      },
-      "executionHistory": {
-        "get": true,
-        "getById": true,
-        "post": true,
-        "put": true,
-        "patch": true,
-        "delete": true,
-        "listUrl": "/sws/neo/payment-out/executionHistory",
-        "detailUrl": "/sws/neo/payment-out/executionHistory/{id}",
-        "supportedFilters": []
-      },
-      "exchangeRates": {
-        "get": true,
-        "getById": true,
-        "post": true,
-        "put": true,
-        "patch": true,
-        "delete": true,
-        "listUrl": "/sws/neo/payment-out/exchangeRates",
-        "detailUrl": "/sws/neo/payment-out/exchangeRates/{id}",
-        "supportedFilters": []
-      },
-      "usedCreditSource": {
-        "get": true,
-        "getById": true,
-        "post": true,
-        "put": true,
-        "patch": true,
-        "delete": true,
-        "listUrl": "/sws/neo/payment-out/usedCreditSource",
-        "detailUrl": "/sws/neo/payment-out/usedCreditSource/{id}",
-        "supportedFilters": []
-      },
-      "accounting": {
-        "get": true,
-        "getById": true,
-        "post": true,
-        "put": true,
-        "patch": true,
-        "delete": true,
-        "listUrl": "/sws/neo/payment-out/accounting",
-        "detailUrl": "/sws/neo/payment-out/accounting/{id}",
         "supportedFilters": []
       },
       "bankPayments": {
@@ -4438,134 +3192,6 @@
         "reference": "UserDimension2",
         "inputMode": "selector",
         "url": "/sws/neo/payment-out/lines/selectors/ndDimension"
-      },
-      {
-        "entity": "executionHistory",
-        "field": "paymentRun",
-        "column": "FIN_Payment_Run_ID",
-        "reference": "Payment_Run",
-        "inputMode": "search",
-        "url": "/sws/neo/payment-out/executionHistory/selectors/paymentRun"
-      },
-      {
-        "entity": "exchangeRates",
-        "field": "currency",
-        "column": "C_Currency_ID",
-        "reference": "Currency",
-        "inputMode": "selector",
-        "url": "/sws/neo/payment-out/exchangeRates/selectors/currency"
-      },
-      {
-        "entity": "exchangeRates",
-        "field": "toCurrency",
-        "column": "C_Currency_Id_To",
-        "reference": "Currency",
-        "inputMode": "search",
-        "url": "/sws/neo/payment-out/exchangeRates/selectors/toCurrency"
-      },
-      {
-        "entity": "usedCreditSource",
-        "field": "creditPaymentUsed",
-        "column": "FIN_Payment_Id_Used",
-        "reference": "Payment",
-        "inputMode": "search",
-        "url": "/sws/neo/payment-out/usedCreditSource/selectors/creditPaymentUsed"
-      },
-      {
-        "entity": "usedCreditSource",
-        "field": "currency",
-        "column": "C_Currency_ID",
-        "reference": "Currency",
-        "inputMode": "selector",
-        "url": "/sws/neo/payment-out/usedCreditSource/selectors/currency"
-      },
-      {
-        "entity": "accounting",
-        "field": "accountingSchema",
-        "column": "C_AcctSchema_ID",
-        "reference": "AcctSchema",
-        "inputMode": "selector",
-        "url": "/sws/neo/payment-out/accounting/selectors/accountingSchema"
-      },
-      {
-        "entity": "accounting",
-        "field": "currency",
-        "column": "C_Currency_ID",
-        "reference": "Currency",
-        "inputMode": "selector",
-        "url": "/sws/neo/payment-out/accounting/selectors/currency"
-      },
-      {
-        "entity": "accounting",
-        "field": "period",
-        "column": "C_Period_ID",
-        "reference": "Period",
-        "inputMode": "selector",
-        "url": "/sws/neo/payment-out/accounting/selectors/period"
-      },
-      {
-        "entity": "accounting",
-        "field": "account",
-        "column": "Account_ID",
-        "reference": "ElementValue",
-        "inputMode": "search",
-        "url": "/sws/neo/payment-out/accounting/selectors/account"
-      },
-      {
-        "entity": "accounting",
-        "field": "businessPartner",
-        "column": "C_BPartner_ID",
-        "reference": "BPartner",
-        "inputMode": "search",
-        "url": "/sws/neo/payment-out/accounting/selectors/businessPartner"
-      },
-      {
-        "entity": "accounting",
-        "field": "product",
-        "column": "M_Product_ID",
-        "reference": "Product",
-        "inputMode": "search",
-        "url": "/sws/neo/payment-out/accounting/selectors/product"
-      },
-      {
-        "entity": "accounting",
-        "field": "project",
-        "column": "C_Project_ID",
-        "reference": "Project",
-        "inputMode": "selector",
-        "url": "/sws/neo/payment-out/accounting/selectors/project"
-      },
-      {
-        "entity": "accounting",
-        "field": "costcenter",
-        "column": "C_Costcenter_ID",
-        "reference": "Costcenter",
-        "inputMode": "selector",
-        "url": "/sws/neo/payment-out/accounting/selectors/costcenter"
-      },
-      {
-        "entity": "accounting",
-        "field": "asset",
-        "column": "A_Asset_ID",
-        "reference": "Asset",
-        "inputMode": "selector",
-        "url": "/sws/neo/payment-out/accounting/selectors/asset"
-      },
-      {
-        "entity": "accounting",
-        "field": "stDimension",
-        "column": "User1_ID",
-        "reference": "User1",
-        "inputMode": "selector",
-        "url": "/sws/neo/payment-out/accounting/selectors/stDimension"
-      },
-      {
-        "entity": "accounting",
-        "field": "ndDimension",
-        "column": "User2_ID",
-        "reference": "User2",
-        "inputMode": "selector",
-        "url": "/sws/neo/payment-out/accounting/selectors/ndDimension"
       },
       {
         "entity": "bankPayments",
@@ -4794,32 +3420,11 @@
         "description": "Action endpoint for 'psd2GenerateBankPayment' in header should exist"
       },
       {
-        "id": "t-crud-flags-accounting",
-        "category": "crud-flags",
-        "entity": "accounting",
-        "runner": "node",
-        "description": "CRUD flags for 'accounting' should all be booleans"
-      },
-      {
         "id": "t-crud-flags-bankPayments",
         "category": "crud-flags",
         "entity": "bankPayments",
         "runner": "node",
         "description": "CRUD flags for 'bankPayments' should all be booleans"
-      },
-      {
-        "id": "t-crud-flags-exchangeRates",
-        "category": "crud-flags",
-        "entity": "exchangeRates",
-        "runner": "node",
-        "description": "CRUD flags for 'exchangeRates' should all be booleans"
-      },
-      {
-        "id": "t-crud-flags-executionHistory",
-        "category": "crud-flags",
-        "entity": "executionHistory",
-        "runner": "node",
-        "description": "CRUD flags for 'executionHistory' should all be booleans"
       },
       {
         "id": "t-crud-flags-header",
@@ -4834,13 +3439,6 @@
         "entity": "lines",
         "runner": "node",
         "description": "CRUD flags for 'lines' should all be booleans"
-      },
-      {
-        "id": "t-crud-flags-usedCreditSource",
-        "category": "crud-flags",
-        "entity": "usedCreditSource",
-        "runner": "node",
-        "description": "CRUD flags for 'usedCreditSource' should all be booleans"
       },
       {
         "id": "t-default-value-type-bankPayments-amount",
@@ -4859,22 +3457,6 @@
         "description": "Default value for 'status' in bankPayments should be a string"
       },
       {
-        "id": "t-default-value-type-exchangeRates-active",
-        "category": "default-value-type",
-        "entity": "exchangeRates",
-        "field": "active",
-        "runner": "node",
-        "description": "Default value for 'active' in exchangeRates should be a string"
-      },
-      {
-        "id": "t-default-value-type-exchangeRates-foreignAmount",
-        "category": "default-value-type",
-        "entity": "exchangeRates",
-        "field": "foreignAmount",
-        "runner": "node",
-        "description": "Default value for 'foreignAmount' in exchangeRates should be a string"
-      },
-      {
         "id": "t-default-value-type-header-amount",
         "category": "default-value-type",
         "entity": "header",
@@ -4889,6 +3471,14 @@
         "field": "aPRMProcessPayment",
         "runner": "node",
         "description": "Default value for 'aPRMProcessPayment' in header should be a string"
+      },
+      {
+        "id": "t-default-value-type-header-creationDate",
+        "category": "default-value-type",
+        "entity": "header",
+        "field": "creationDate",
+        "runner": "node",
+        "description": "Default value for 'creationDate' in header should be a string"
       },
       {
         "id": "t-default-value-type-header-documentType",
@@ -4955,6 +3545,14 @@
         "description": "Default value for 'status' in header should be a string"
       },
       {
+        "id": "t-default-value-type-header-updated",
+        "category": "default-value-type",
+        "entity": "header",
+        "field": "updated",
+        "runner": "node",
+        "description": "Default value for 'updated' in header should be a string"
+      },
+      {
         "id": "t-default-value-type-header-usedCredit",
         "category": "default-value-type",
         "entity": "header",
@@ -4985,14 +3583,6 @@
         "field": "canceled",
         "runner": "node",
         "description": "Default value for 'canceled' in lines should be a string"
-      },
-      {
-        "id": "t-default-value-type-usedCreditSource-amount",
-        "category": "default-value-type",
-        "entity": "usedCreditSource",
-        "field": "amount",
-        "runner": "node",
-        "description": "Default value for 'amount' in usedCreditSource should be a string"
       },
       {
         "id": "t-displaylogic-evaluable-header-aPRMAddScheduledpayments",
@@ -5411,126 +4001,6 @@
         "description": "Display logic for 'stDimension' in lines should be valid JS"
       },
       {
-        "id": "t-field-presence-accounting-account",
-        "category": "field-presence",
-        "entity": "accounting",
-        "field": "account",
-        "runner": "node",
-        "description": "Field 'account' should be present in accounting"
-      },
-      {
-        "id": "t-field-presence-accounting-accountingDate",
-        "category": "field-presence",
-        "entity": "accounting",
-        "field": "accountingDate",
-        "runner": "node",
-        "description": "Field 'accountingDate' should be present in accounting"
-      },
-      {
-        "id": "t-field-presence-accounting-accountingSchema",
-        "category": "field-presence",
-        "entity": "accounting",
-        "field": "accountingSchema",
-        "runner": "node",
-        "description": "Field 'accountingSchema' should be present in accounting"
-      },
-      {
-        "id": "t-field-presence-accounting-asset",
-        "category": "field-presence",
-        "entity": "accounting",
-        "field": "asset",
-        "runner": "node",
-        "description": "Field 'asset' should be present in accounting"
-      },
-      {
-        "id": "t-field-presence-accounting-businessPartner",
-        "category": "field-presence",
-        "entity": "accounting",
-        "field": "businessPartner",
-        "runner": "node",
-        "description": "Field 'businessPartner' should be present in accounting"
-      },
-      {
-        "id": "t-field-presence-accounting-costcenter",
-        "category": "field-presence",
-        "entity": "accounting",
-        "field": "costcenter",
-        "runner": "node",
-        "description": "Field 'costcenter' should be present in accounting"
-      },
-      {
-        "id": "t-field-presence-accounting-credit",
-        "category": "field-presence",
-        "entity": "accounting",
-        "field": "credit",
-        "runner": "node",
-        "description": "Field 'credit' should be present in accounting"
-      },
-      {
-        "id": "t-field-presence-accounting-currency",
-        "category": "field-presence",
-        "entity": "accounting",
-        "field": "currency",
-        "runner": "node",
-        "description": "Field 'currency' should be present in accounting"
-      },
-      {
-        "id": "t-field-presence-accounting-debit",
-        "category": "field-presence",
-        "entity": "accounting",
-        "field": "debit",
-        "runner": "node",
-        "description": "Field 'debit' should be present in accounting"
-      },
-      {
-        "id": "t-field-presence-accounting-description",
-        "category": "field-presence",
-        "entity": "accounting",
-        "field": "description",
-        "runner": "node",
-        "description": "Field 'description' should be present in accounting"
-      },
-      {
-        "id": "t-field-presence-accounting-ndDimension",
-        "category": "field-presence",
-        "entity": "accounting",
-        "field": "ndDimension",
-        "runner": "node",
-        "description": "Field 'ndDimension' should be present in accounting"
-      },
-      {
-        "id": "t-field-presence-accounting-period",
-        "category": "field-presence",
-        "entity": "accounting",
-        "field": "period",
-        "runner": "node",
-        "description": "Field 'period' should be present in accounting"
-      },
-      {
-        "id": "t-field-presence-accounting-product",
-        "category": "field-presence",
-        "entity": "accounting",
-        "field": "product",
-        "runner": "node",
-        "description": "Field 'product' should be present in accounting"
-      },
-      {
-        "id": "t-field-presence-accounting-project",
-        "category": "field-presence",
-        "entity": "accounting",
-        "field": "project",
-        "runner": "node",
-        "description": "Field 'project' should be present in accounting"
-      },
-      {
-        "id": "t-field-presence-accounting-stDimension",
-        "category": "field-presence",
-        "entity": "accounting",
-        "field": "stDimension",
-        "runner": "node",
-        "description": "Field 'stDimension' should be present in accounting"
-      },
-      {
         "id": "t-field-presence-bankPayments-amount",
         "category": "field-presence",
         "entity": "bankPayments",
@@ -5619,102 +4089,6 @@
         "description": "Field 'status' should be present in bankPayments"
       },
       {
-        "id": "t-field-presence-exchangeRates-active",
-        "category": "field-presence",
-        "entity": "exchangeRates",
-        "field": "active",
-        "runner": "node",
-        "description": "Field 'active' should be present in exchangeRates"
-      },
-      {
-        "id": "t-field-presence-exchangeRates-currency",
-        "category": "field-presence",
-        "entity": "exchangeRates",
-        "field": "currency",
-        "runner": "node",
-        "description": "Field 'currency' should be present in exchangeRates"
-      },
-      {
-        "id": "t-field-presence-exchangeRates-foreignAmount",
-        "category": "field-presence",
-        "entity": "exchangeRates",
-        "field": "foreignAmount",
-        "runner": "node",
-        "description": "Field 'foreignAmount' should be present in exchangeRates"
-      },
-      {
-        "id": "t-field-presence-exchangeRates-rate",
-        "category": "field-presence",
-        "entity": "exchangeRates",
-        "field": "rate",
-        "runner": "node",
-        "description": "Field 'rate' should be present in exchangeRates"
-      },
-      {
-        "id": "t-field-presence-exchangeRates-toCurrency",
-        "category": "field-presence",
-        "entity": "exchangeRates",
-        "field": "toCurrency",
-        "runner": "node",
-        "description": "Field 'toCurrency' should be present in exchangeRates"
-      },
-      {
-        "id": "t-field-presence-executionHistory-executionDate",
-        "category": "field-presence",
-        "entity": "executionHistory",
-        "field": "executionDate",
-        "runner": "node",
-        "description": "Field 'executionDate' should be present in executionHistory"
-      },
-      {
-        "id": "t-field-presence-executionHistory-paymentExecutionMessage",
-        "category": "field-presence",
-        "entity": "executionHistory",
-        "field": "paymentExecutionMessage",
-        "runner": "node",
-        "description": "Field 'paymentExecutionMessage' should be present in executionHistory"
-      },
-      {
-        "id": "t-field-presence-executionHistory-paymentExecutionResult",
-        "category": "field-presence",
-        "entity": "executionHistory",
-        "field": "paymentExecutionResult",
-        "runner": "node",
-        "description": "Field 'paymentExecutionResult' should be present in executionHistory"
-      },
-      {
-        "id": "t-field-presence-executionHistory-paymentRun",
-        "category": "field-presence",
-        "entity": "executionHistory",
-        "field": "paymentRun",
-        "runner": "node",
-        "description": "Field 'paymentRun' should be present in executionHistory"
-      },
-      {
-        "id": "t-field-presence-executionHistory-paymentRunMessage",
-        "category": "field-presence",
-        "entity": "executionHistory",
-        "field": "paymentRunMessage",
-        "runner": "node",
-        "description": "Field 'paymentRunMessage' should be present in executionHistory"
-      },
-      {
-        "id": "t-field-presence-executionHistory-paymentRunStatus",
-        "category": "field-presence",
-        "entity": "executionHistory",
-        "field": "paymentRunStatus",
-        "runner": "node",
-        "description": "Field 'paymentRunStatus' should be present in executionHistory"
-      },
-      {
-        "id": "t-field-presence-executionHistory-sourceOfTheExecution",
-        "category": "field-presence",
-        "entity": "executionHistory",
-        "field": "sourceOfTheExecution",
-        "runner": "node",
-        "description": "Field 'sourceOfTheExecution' should be present in executionHistory"
-      },
-      {
         "id": "t-field-presence-header-account",
         "category": "field-presence",
         "entity": "header",
@@ -5769,6 +4143,14 @@
         "field": "costCenter",
         "runner": "node",
         "description": "Field 'costCenter' should be present in header"
+      },
+      {
+        "id": "t-field-presence-header-creationDate",
+        "category": "field-presence",
+        "entity": "header",
+        "field": "creationDate",
+        "runner": "node",
+        "description": "Field 'creationDate' should be present in header"
       },
       {
         "id": "t-field-presence-header-currency",
@@ -5931,6 +4313,14 @@
         "description": "Field 'stDimension' should be present in header"
       },
       {
+        "id": "t-field-presence-header-updated",
+        "category": "field-presence",
+        "entity": "header",
+        "field": "updated",
+        "runner": "node",
+        "description": "Field 'updated' should be present in header"
+      },
+      {
         "id": "t-field-presence-header-usedCredit",
         "category": "field-presence",
         "entity": "header",
@@ -6019,6 +4409,14 @@
         "description": "Field 'invoiceAmount' should be present in lines"
       },
       {
+        "id": "t-field-presence-lines-invoiceDocumentNo",
+        "category": "field-presence",
+        "entity": "lines",
+        "field": "invoiceDocumentNo",
+        "runner": "node",
+        "description": "Field 'invoiceDocumentNo' should be present in lines"
+      },
+      {
         "id": "t-field-presence-lines-invoiceNo",
         "category": "field-presence",
         "entity": "lines",
@@ -6097,150 +4495,6 @@
         "field": "stDimension",
         "runner": "node",
         "description": "Field 'stDimension' should be present in lines"
-      },
-      {
-        "id": "t-field-presence-usedCreditSource-amount",
-        "category": "field-presence",
-        "entity": "usedCreditSource",
-        "field": "amount",
-        "runner": "node",
-        "description": "Field 'amount' should be present in usedCreditSource"
-      },
-      {
-        "id": "t-field-presence-usedCreditSource-creditPaymentUsed",
-        "category": "field-presence",
-        "entity": "usedCreditSource",
-        "field": "creditPaymentUsed",
-        "runner": "node",
-        "description": "Field 'creditPaymentUsed' should be present in usedCreditSource"
-      },
-      {
-        "id": "t-field-presence-usedCreditSource-currency",
-        "category": "field-presence",
-        "entity": "usedCreditSource",
-        "field": "currency",
-        "runner": "node",
-        "description": "Field 'currency' should be present in usedCreditSource"
-      },
-      {
-        "id": "t-field-type-accounting-account",
-        "category": "field-type",
-        "entity": "accounting",
-        "field": "account",
-        "runner": "node",
-        "description": "Field 'account' should have type 'string' in accounting"
-      },
-      {
-        "id": "t-field-type-accounting-accountingDate",
-        "category": "field-type",
-        "entity": "accounting",
-        "field": "accountingDate",
-        "runner": "node",
-        "description": "Field 'accountingDate' should have type 'string' in accounting"
-      },
-      {
-        "id": "t-field-type-accounting-accountingSchema",
-        "category": "field-type",
-        "entity": "accounting",
-        "field": "accountingSchema",
-        "runner": "node",
-        "description": "Field 'accountingSchema' should have type 'string' in accounting"
-      },
-      {
-        "id": "t-field-type-accounting-asset",
-        "category": "field-type",
-        "entity": "accounting",
-        "field": "asset",
-        "runner": "node",
-        "description": "Field 'asset' should have type 'string' in accounting"
-      },
-      {
-        "id": "t-field-type-accounting-businessPartner",
-        "category": "field-type",
-        "entity": "accounting",
-        "field": "businessPartner",
-        "runner": "node",
-        "description": "Field 'businessPartner' should have type 'string' in accounting"
-      },
-      {
-        "id": "t-field-type-accounting-costcenter",
-        "category": "field-type",
-        "entity": "accounting",
-        "field": "costcenter",
-        "runner": "node",
-        "description": "Field 'costcenter' should have type 'string' in accounting"
-      },
-      {
-        "id": "t-field-type-accounting-credit",
-        "category": "field-type",
-        "entity": "accounting",
-        "field": "credit",
-        "runner": "node",
-        "description": "Field 'credit' should have type 'number' in accounting"
-      },
-      {
-        "id": "t-field-type-accounting-currency",
-        "category": "field-type",
-        "entity": "accounting",
-        "field": "currency",
-        "runner": "node",
-        "description": "Field 'currency' should have type 'string' in accounting"
-      },
-      {
-        "id": "t-field-type-accounting-debit",
-        "category": "field-type",
-        "entity": "accounting",
-        "field": "debit",
-        "runner": "node",
-        "description": "Field 'debit' should have type 'number' in accounting"
-      },
-      {
-        "id": "t-field-type-accounting-description",
-        "category": "field-type",
-        "entity": "accounting",
-        "field": "description",
-        "runner": "node",
-        "description": "Field 'description' should have type 'string' in accounting"
-      },
-      {
-        "id": "t-field-type-accounting-ndDimension",
-        "category": "field-type",
-        "entity": "accounting",
-        "field": "ndDimension",
-        "runner": "node",
-        "description": "Field 'ndDimension' should have type 'string' in accounting"
-      },
-      {
-        "id": "t-field-type-accounting-period",
-        "category": "field-type",
-        "entity": "accounting",
-        "field": "period",
-        "runner": "node",
-        "description": "Field 'period' should have type 'string' in accounting"
-      },
-      {
-        "id": "t-field-type-accounting-product",
-        "category": "field-type",
-        "entity": "accounting",
-        "field": "product",
-        "runner": "node",
-        "description": "Field 'product' should have type 'string' in accounting"
-      },
-      {
-        "id": "t-field-type-accounting-project",
-        "category": "field-type",
-        "entity": "accounting",
-        "field": "project",
-        "runner": "node",
-        "description": "Field 'project' should have type 'string' in accounting"
-      },
-      {
-        "id": "t-field-type-accounting-stDimension",
-        "category": "field-type",
-        "entity": "accounting",
-        "field": "stDimension",
-        "runner": "node",
-        "description": "Field 'stDimension' should have type 'string' in accounting"
       },
       {
         "id": "t-field-type-bankPayments-amount",
@@ -6331,102 +4585,6 @@
         "description": "Field 'status' should have type 'string' in bankPayments"
       },
       {
-        "id": "t-field-type-exchangeRates-active",
-        "category": "field-type",
-        "entity": "exchangeRates",
-        "field": "active",
-        "runner": "node",
-        "description": "Field 'active' should have type 'boolean' in exchangeRates"
-      },
-      {
-        "id": "t-field-type-exchangeRates-currency",
-        "category": "field-type",
-        "entity": "exchangeRates",
-        "field": "currency",
-        "runner": "node",
-        "description": "Field 'currency' should have type 'string' in exchangeRates"
-      },
-      {
-        "id": "t-field-type-exchangeRates-foreignAmount",
-        "category": "field-type",
-        "entity": "exchangeRates",
-        "field": "foreignAmount",
-        "runner": "node",
-        "description": "Field 'foreignAmount' should have type 'number' in exchangeRates"
-      },
-      {
-        "id": "t-field-type-exchangeRates-rate",
-        "category": "field-type",
-        "entity": "exchangeRates",
-        "field": "rate",
-        "runner": "node",
-        "description": "Field 'rate' should have type 'string' in exchangeRates"
-      },
-      {
-        "id": "t-field-type-exchangeRates-toCurrency",
-        "category": "field-type",
-        "entity": "exchangeRates",
-        "field": "toCurrency",
-        "runner": "node",
-        "description": "Field 'toCurrency' should have type 'string' in exchangeRates"
-      },
-      {
-        "id": "t-field-type-executionHistory-executionDate",
-        "category": "field-type",
-        "entity": "executionHistory",
-        "field": "executionDate",
-        "runner": "node",
-        "description": "Field 'executionDate' should have type 'string' in executionHistory"
-      },
-      {
-        "id": "t-field-type-executionHistory-paymentExecutionMessage",
-        "category": "field-type",
-        "entity": "executionHistory",
-        "field": "paymentExecutionMessage",
-        "runner": "node",
-        "description": "Field 'paymentExecutionMessage' should have type 'string' in executionHistory"
-      },
-      {
-        "id": "t-field-type-executionHistory-paymentExecutionResult",
-        "category": "field-type",
-        "entity": "executionHistory",
-        "field": "paymentExecutionResult",
-        "runner": "node",
-        "description": "Field 'paymentExecutionResult' should have type 'string' in executionHistory"
-      },
-      {
-        "id": "t-field-type-executionHistory-paymentRun",
-        "category": "field-type",
-        "entity": "executionHistory",
-        "field": "paymentRun",
-        "runner": "node",
-        "description": "Field 'paymentRun' should have type 'string' in executionHistory"
-      },
-      {
-        "id": "t-field-type-executionHistory-paymentRunMessage",
-        "category": "field-type",
-        "entity": "executionHistory",
-        "field": "paymentRunMessage",
-        "runner": "node",
-        "description": "Field 'paymentRunMessage' should have type 'string' in executionHistory"
-      },
-      {
-        "id": "t-field-type-executionHistory-paymentRunStatus",
-        "category": "field-type",
-        "entity": "executionHistory",
-        "field": "paymentRunStatus",
-        "runner": "node",
-        "description": "Field 'paymentRunStatus' should have type 'string' in executionHistory"
-      },
-      {
-        "id": "t-field-type-executionHistory-sourceOfTheExecution",
-        "category": "field-type",
-        "entity": "executionHistory",
-        "field": "sourceOfTheExecution",
-        "runner": "node",
-        "description": "Field 'sourceOfTheExecution' should have type 'string' in executionHistory"
-      },
-      {
         "id": "t-field-type-header-account",
         "category": "field-type",
         "entity": "header",
@@ -6481,6 +4639,14 @@
         "field": "costCenter",
         "runner": "node",
         "description": "Field 'costCenter' should have type 'string' in header"
+      },
+      {
+        "id": "t-field-type-header-creationDate",
+        "category": "field-type",
+        "entity": "header",
+        "field": "creationDate",
+        "runner": "node",
+        "description": "Field 'creationDate' should have type 'string' in header"
       },
       {
         "id": "t-field-type-header-currency",
@@ -6643,6 +4809,14 @@
         "description": "Field 'stDimension' should have type 'string' in header"
       },
       {
+        "id": "t-field-type-header-updated",
+        "category": "field-type",
+        "entity": "header",
+        "field": "updated",
+        "runner": "node",
+        "description": "Field 'updated' should have type 'string' in header"
+      },
+      {
         "id": "t-field-type-header-usedCredit",
         "category": "field-type",
         "entity": "header",
@@ -6731,6 +4905,14 @@
         "description": "Field 'invoiceAmount' should have type 'number' in lines"
       },
       {
+        "id": "t-field-type-lines-invoiceDocumentNo",
+        "category": "field-type",
+        "entity": "lines",
+        "field": "invoiceDocumentNo",
+        "runner": "node",
+        "description": "Field 'invoiceDocumentNo' should have type 'string' in lines"
+      },
+      {
         "id": "t-field-type-lines-invoiceNo",
         "category": "field-type",
         "entity": "lines",
@@ -6811,68 +4993,20 @@
         "description": "Field 'stDimension' should have type 'string' in lines"
       },
       {
-        "id": "t-field-type-usedCreditSource-amount",
-        "category": "field-type",
-        "entity": "usedCreditSource",
-        "field": "amount",
-        "runner": "node",
-        "description": "Field 'amount' should have type 'number' in usedCreditSource"
+        "id": "t-process-failure-Payment-Process",
+        "category": "process-failure",
+        "process": "Payment Process",
+        "entity": "header",
+        "runner": "junit",
+        "description": "Process 'Payment Process' should fail when preconditions are not met"
       },
       {
-        "id": "t-field-type-usedCreditSource-creditPaymentUsed",
-        "category": "field-type",
-        "entity": "usedCreditSource",
-        "field": "creditPaymentUsed",
-        "runner": "node",
-        "description": "Field 'creditPaymentUsed' should have type 'string' in usedCreditSource"
-      },
-      {
-        "id": "t-field-type-usedCreditSource-currency",
-        "category": "field-type",
-        "entity": "usedCreditSource",
-        "field": "currency",
-        "runner": "node",
-        "description": "Field 'currency' should have type 'string' in usedCreditSource"
-      },
-      {
-        "id": "t-readonlylogic-evaluable-exchangeRates-active",
-        "category": "readonlylogic-evaluable",
-        "entity": "exchangeRates",
-        "field": "active",
-        "runner": "node",
-        "description": "Read-only logic for 'active' in exchangeRates should have evaluable flag"
-      },
-      {
-        "id": "t-readonlylogic-evaluable-exchangeRates-currency",
-        "category": "readonlylogic-evaluable",
-        "entity": "exchangeRates",
-        "field": "currency",
-        "runner": "node",
-        "description": "Read-only logic for 'currency' in exchangeRates should have evaluable flag"
-      },
-      {
-        "id": "t-readonlylogic-evaluable-exchangeRates-foreignAmount",
-        "category": "readonlylogic-evaluable",
-        "entity": "exchangeRates",
-        "field": "foreignAmount",
-        "runner": "node",
-        "description": "Read-only logic for 'foreignAmount' in exchangeRates should have evaluable flag"
-      },
-      {
-        "id": "t-readonlylogic-evaluable-exchangeRates-rate",
-        "category": "readonlylogic-evaluable",
-        "entity": "exchangeRates",
-        "field": "rate",
-        "runner": "node",
-        "description": "Read-only logic for 'rate' in exchangeRates should have evaluable flag"
-      },
-      {
-        "id": "t-readonlylogic-evaluable-exchangeRates-toCurrency",
-        "category": "readonlylogic-evaluable",
-        "entity": "exchangeRates",
-        "field": "toCurrency",
-        "runner": "node",
-        "description": "Read-only logic for 'toCurrency' in exchangeRates should have evaluable flag"
+        "id": "t-process-happy-Payment-Process",
+        "category": "process-happy",
+        "process": "Payment Process",
+        "entity": "header",
+        "runner": "junit",
+        "description": "Process 'Payment Process' should complete successfully with valid preconditions"
       },
       {
         "id": "t-readonlylogic-evaluable-header-account",
@@ -7001,46 +5135,6 @@
         "field": "orderNo",
         "runner": "node",
         "description": "Read-only logic for 'orderNo' in lines should have evaluable flag"
-      },
-      {
-        "id": "t-readonlylogic-valid-exchangeRates-active",
-        "category": "readonlylogic-valid",
-        "entity": "exchangeRates",
-        "field": "active",
-        "runner": "node",
-        "description": "Read-only logic for 'active' in exchangeRates should be valid JS"
-      },
-      {
-        "id": "t-readonlylogic-valid-exchangeRates-currency",
-        "category": "readonlylogic-valid",
-        "entity": "exchangeRates",
-        "field": "currency",
-        "runner": "node",
-        "description": "Read-only logic for 'currency' in exchangeRates should be valid JS"
-      },
-      {
-        "id": "t-readonlylogic-valid-exchangeRates-foreignAmount",
-        "category": "readonlylogic-valid",
-        "entity": "exchangeRates",
-        "field": "foreignAmount",
-        "runner": "node",
-        "description": "Read-only logic for 'foreignAmount' in exchangeRates should be valid JS"
-      },
-      {
-        "id": "t-readonlylogic-valid-exchangeRates-rate",
-        "category": "readonlylogic-valid",
-        "entity": "exchangeRates",
-        "field": "rate",
-        "runner": "node",
-        "description": "Read-only logic for 'rate' in exchangeRates should be valid JS"
-      },
-      {
-        "id": "t-readonlylogic-valid-exchangeRates-toCurrency",
-        "category": "readonlylogic-valid",
-        "entity": "exchangeRates",
-        "field": "toCurrency",
-        "runner": "node",
-        "description": "Read-only logic for 'toCurrency' in exchangeRates should be valid JS"
       },
       {
         "id": "t-readonlylogic-valid-header-account",
@@ -7946,94 +6040,6 @@
         "description": "Field 'status' should be a supported filter for header"
       },
       {
-        "id": "t-selector-endpoint-accounting-account",
-        "category": "selector-endpoint",
-        "entity": "accounting",
-        "field": "account",
-        "runner": "node",
-        "description": "Selector endpoint for 'account' in accounting should exist"
-      },
-      {
-        "id": "t-selector-endpoint-accounting-accountingSchema",
-        "category": "selector-endpoint",
-        "entity": "accounting",
-        "field": "accountingSchema",
-        "runner": "node",
-        "description": "Selector endpoint for 'accountingSchema' in accounting should exist"
-      },
-      {
-        "id": "t-selector-endpoint-accounting-asset",
-        "category": "selector-endpoint",
-        "entity": "accounting",
-        "field": "asset",
-        "runner": "node",
-        "description": "Selector endpoint for 'asset' in accounting should exist"
-      },
-      {
-        "id": "t-selector-endpoint-accounting-businessPartner",
-        "category": "selector-endpoint",
-        "entity": "accounting",
-        "field": "businessPartner",
-        "runner": "node",
-        "description": "Selector endpoint for 'businessPartner' in accounting should exist"
-      },
-      {
-        "id": "t-selector-endpoint-accounting-costcenter",
-        "category": "selector-endpoint",
-        "entity": "accounting",
-        "field": "costcenter",
-        "runner": "node",
-        "description": "Selector endpoint for 'costcenter' in accounting should exist"
-      },
-      {
-        "id": "t-selector-endpoint-accounting-currency",
-        "category": "selector-endpoint",
-        "entity": "accounting",
-        "field": "currency",
-        "runner": "node",
-        "description": "Selector endpoint for 'currency' in accounting should exist"
-      },
-      {
-        "id": "t-selector-endpoint-accounting-ndDimension",
-        "category": "selector-endpoint",
-        "entity": "accounting",
-        "field": "ndDimension",
-        "runner": "node",
-        "description": "Selector endpoint for 'ndDimension' in accounting should exist"
-      },
-      {
-        "id": "t-selector-endpoint-accounting-period",
-        "category": "selector-endpoint",
-        "entity": "accounting",
-        "field": "period",
-        "runner": "node",
-        "description": "Selector endpoint for 'period' in accounting should exist"
-      },
-      {
-        "id": "t-selector-endpoint-accounting-product",
-        "category": "selector-endpoint",
-        "entity": "accounting",
-        "field": "product",
-        "runner": "node",
-        "description": "Selector endpoint for 'product' in accounting should exist"
-      },
-      {
-        "id": "t-selector-endpoint-accounting-project",
-        "category": "selector-endpoint",
-        "entity": "accounting",
-        "field": "project",
-        "runner": "node",
-        "description": "Selector endpoint for 'project' in accounting should exist"
-      },
-      {
-        "id": "t-selector-endpoint-accounting-stDimension",
-        "category": "selector-endpoint",
-        "entity": "accounting",
-        "field": "stDimension",
-        "runner": "node",
-        "description": "Selector endpoint for 'stDimension' in accounting should exist"
-      },
-      {
         "id": "t-selector-endpoint-bankPayments-currency",
         "category": "selector-endpoint",
         "entity": "bankPayments",
@@ -8048,30 +6054,6 @@
         "field": "financialAccount",
         "runner": "node",
         "description": "Selector endpoint for 'financialAccount' in bankPayments should exist"
-      },
-      {
-        "id": "t-selector-endpoint-exchangeRates-currency",
-        "category": "selector-endpoint",
-        "entity": "exchangeRates",
-        "field": "currency",
-        "runner": "node",
-        "description": "Selector endpoint for 'currency' in exchangeRates should exist"
-      },
-      {
-        "id": "t-selector-endpoint-exchangeRates-toCurrency",
-        "category": "selector-endpoint",
-        "entity": "exchangeRates",
-        "field": "toCurrency",
-        "runner": "node",
-        "description": "Selector endpoint for 'toCurrency' in exchangeRates should exist"
-      },
-      {
-        "id": "t-selector-endpoint-executionHistory-paymentRun",
-        "category": "selector-endpoint",
-        "entity": "executionHistory",
-        "field": "paymentRun",
-        "runner": "node",
-        "description": "Selector endpoint for 'paymentRun' in executionHistory should exist"
       },
       {
         "id": "t-selector-endpoint-header-account",
@@ -8250,318 +6232,6 @@
         "description": "Selector endpoint for 'stDimension' in lines should exist"
       },
       {
-        "id": "t-selector-endpoint-usedCreditSource-creditPaymentUsed",
-        "category": "selector-endpoint",
-        "entity": "usedCreditSource",
-        "field": "creditPaymentUsed",
-        "runner": "node",
-        "description": "Selector endpoint for 'creditPaymentUsed' in usedCreditSource should exist"
-      },
-      {
-        "id": "t-selector-endpoint-usedCreditSource-currency",
-        "category": "selector-endpoint",
-        "entity": "usedCreditSource",
-        "field": "currency",
-        "runner": "node",
-        "description": "Selector endpoint for 'currency' in usedCreditSource should exist"
-      },
-      {
-        "id": "t-system-field-accounting-accountingEntryDescription",
-        "category": "system-field",
-        "entity": "accounting",
-        "field": "accountingEntryDescription",
-        "runner": "node",
-        "description": "System field 'accountingEntryDescription' should exist in backend but not frontend for accounting"
-      },
-      {
-        "id": "t-system-field-accounting-active",
-        "category": "system-field",
-        "entity": "accounting",
-        "field": "active",
-        "runner": "node",
-        "description": "System field 'active' should exist in backend but not frontend for accounting"
-      },
-      {
-        "id": "t-system-field-accounting-activity",
-        "category": "system-field",
-        "entity": "accounting",
-        "field": "activity",
-        "runner": "node",
-        "description": "System field 'activity' should exist in backend but not frontend for accounting"
-      },
-      {
-        "id": "t-system-field-accounting-client",
-        "category": "system-field",
-        "entity": "accounting",
-        "field": "client",
-        "runner": "node",
-        "description": "System field 'client' should exist in backend but not frontend for accounting"
-      },
-      {
-        "id": "t-system-field-accounting-createdBy",
-        "category": "system-field",
-        "entity": "accounting",
-        "field": "createdBy",
-        "runner": "node",
-        "description": "System field 'createdBy' should exist in backend but not frontend for accounting"
-      },
-      {
-        "id": "t-system-field-accounting-creationDate",
-        "category": "system-field",
-        "entity": "accounting",
-        "field": "creationDate",
-        "runner": "node",
-        "description": "System field 'creationDate' should exist in backend but not frontend for accounting"
-      },
-      {
-        "id": "t-system-field-accounting-dateBalanced",
-        "category": "system-field",
-        "entity": "accounting",
-        "field": "dateBalanced",
-        "runner": "node",
-        "description": "System field 'dateBalanced' should exist in backend but not frontend for accounting"
-      },
-      {
-        "id": "t-system-field-accounting-documentCategory",
-        "category": "system-field",
-        "entity": "accounting",
-        "field": "documentCategory",
-        "runner": "node",
-        "description": "System field 'documentCategory' should exist in backend but not frontend for accounting"
-      },
-      {
-        "id": "t-system-field-accounting-documentType",
-        "category": "system-field",
-        "entity": "accounting",
-        "field": "documentType",
-        "runner": "node",
-        "description": "System field 'documentType' should exist in backend but not frontend for accounting"
-      },
-      {
-        "id": "t-system-field-accounting-foreignCurrencyCredit",
-        "category": "system-field",
-        "entity": "accounting",
-        "field": "foreignCurrencyCredit",
-        "runner": "node",
-        "description": "System field 'foreignCurrencyCredit' should exist in backend but not frontend for accounting"
-      },
-      {
-        "id": "t-system-field-accounting-foreignCurrencyDebit",
-        "category": "system-field",
-        "entity": "accounting",
-        "field": "foreignCurrencyDebit",
-        "runner": "node",
-        "description": "System field 'foreignCurrencyDebit' should exist in backend but not frontend for accounting"
-      },
-      {
-        "id": "t-system-field-accounting-gLCategory",
-        "category": "system-field",
-        "entity": "accounting",
-        "field": "gLCategory",
-        "runner": "node",
-        "description": "System field 'gLCategory' should exist in backend but not frontend for accounting"
-      },
-      {
-        "id": "t-system-field-accounting-groupID",
-        "category": "system-field",
-        "entity": "accounting",
-        "field": "groupID",
-        "runner": "node",
-        "description": "System field 'groupID' should exist in backend but not frontend for accounting"
-      },
-      {
-        "id": "t-system-field-accounting-id",
-        "category": "system-field",
-        "entity": "accounting",
-        "field": "id",
-        "runner": "node",
-        "description": "System field 'id' should exist in backend but not frontend for accounting"
-      },
-      {
-        "id": "t-system-field-accounting-lineID",
-        "category": "system-field",
-        "entity": "accounting",
-        "field": "lineID",
-        "runner": "node",
-        "description": "System field 'lineID' should exist in backend but not frontend for accounting"
-      },
-      {
-        "id": "t-system-field-accounting-locationFromAddress",
-        "category": "system-field",
-        "entity": "accounting",
-        "field": "locationFromAddress",
-        "runner": "node",
-        "description": "System field 'locationFromAddress' should exist in backend but not frontend for accounting"
-      },
-      {
-        "id": "t-system-field-accounting-locationToAddress",
-        "category": "system-field",
-        "entity": "accounting",
-        "field": "locationToAddress",
-        "runner": "node",
-        "description": "System field 'locationToAddress' should exist in backend but not frontend for accounting"
-      },
-      {
-        "id": "t-system-field-accounting-modify",
-        "category": "system-field",
-        "entity": "accounting",
-        "field": "modify",
-        "runner": "node",
-        "description": "System field 'modify' should exist in backend but not frontend for accounting"
-      },
-      {
-        "id": "t-system-field-accounting-organization",
-        "category": "system-field",
-        "entity": "accounting",
-        "field": "organization",
-        "runner": "node",
-        "description": "System field 'organization' should exist in backend but not frontend for accounting"
-      },
-      {
-        "id": "t-system-field-accounting-postingType",
-        "category": "system-field",
-        "entity": "accounting",
-        "field": "postingType",
-        "runner": "node",
-        "description": "System field 'postingType' should exist in backend but not frontend for accounting"
-      },
-      {
-        "id": "t-system-field-accounting-quantity",
-        "category": "system-field",
-        "entity": "accounting",
-        "field": "quantity",
-        "runner": "node",
-        "description": "System field 'quantity' should exist in backend but not frontend for accounting"
-      },
-      {
-        "id": "t-system-field-accounting-recordID",
-        "category": "system-field",
-        "entity": "accounting",
-        "field": "recordID",
-        "runner": "node",
-        "description": "System field 'recordID' should exist in backend but not frontend for accounting"
-      },
-      {
-        "id": "t-system-field-accounting-recordID2",
-        "category": "system-field",
-        "entity": "accounting",
-        "field": "recordID2",
-        "runner": "node",
-        "description": "System field 'recordID2' should exist in backend but not frontend for accounting"
-      },
-      {
-        "id": "t-system-field-accounting-salesCampaign",
-        "category": "system-field",
-        "entity": "accounting",
-        "field": "salesCampaign",
-        "runner": "node",
-        "description": "System field 'salesCampaign' should exist in backend but not frontend for accounting"
-      },
-      {
-        "id": "t-system-field-accounting-salesRegion",
-        "category": "system-field",
-        "entity": "accounting",
-        "field": "salesRegion",
-        "runner": "node",
-        "description": "System field 'salesRegion' should exist in backend but not frontend for accounting"
-      },
-      {
-        "id": "t-system-field-accounting-sequenceNumber",
-        "category": "system-field",
-        "entity": "accounting",
-        "field": "sequenceNumber",
-        "runner": "node",
-        "description": "System field 'sequenceNumber' should exist in backend but not frontend for accounting"
-      },
-      {
-        "id": "t-system-field-accounting-storageBin",
-        "category": "system-field",
-        "entity": "accounting",
-        "field": "storageBin",
-        "runner": "node",
-        "description": "System field 'storageBin' should exist in backend but not frontend for accounting"
-      },
-      {
-        "id": "t-system-field-accounting-table",
-        "category": "system-field",
-        "entity": "accounting",
-        "field": "table",
-        "runner": "node",
-        "description": "System field 'table' should exist in backend but not frontend for accounting"
-      },
-      {
-        "id": "t-system-field-accounting-tax",
-        "category": "system-field",
-        "entity": "accounting",
-        "field": "tax",
-        "runner": "node",
-        "description": "System field 'tax' should exist in backend but not frontend for accounting"
-      },
-      {
-        "id": "t-system-field-accounting-transactionDate",
-        "category": "system-field",
-        "entity": "accounting",
-        "field": "transactionDate",
-        "runner": "node",
-        "description": "System field 'transactionDate' should exist in backend but not frontend for accounting"
-      },
-      {
-        "id": "t-system-field-accounting-trxOrganization",
-        "category": "system-field",
-        "entity": "accounting",
-        "field": "trxOrganization",
-        "runner": "node",
-        "description": "System field 'trxOrganization' should exist in backend but not frontend for accounting"
-      },
-      {
-        "id": "t-system-field-accounting-type",
-        "category": "system-field",
-        "entity": "accounting",
-        "field": "type",
-        "runner": "node",
-        "description": "System field 'type' should exist in backend but not frontend for accounting"
-      },
-      {
-        "id": "t-system-field-accounting-uOM",
-        "category": "system-field",
-        "entity": "accounting",
-        "field": "uOM",
-        "runner": "node",
-        "description": "System field 'uOM' should exist in backend but not frontend for accounting"
-      },
-      {
-        "id": "t-system-field-accounting-updated",
-        "category": "system-field",
-        "entity": "accounting",
-        "field": "updated",
-        "runner": "node",
-        "description": "System field 'updated' should exist in backend but not frontend for accounting"
-      },
-      {
-        "id": "t-system-field-accounting-updatedBy",
-        "category": "system-field",
-        "entity": "accounting",
-        "field": "updatedBy",
-        "runner": "node",
-        "description": "System field 'updatedBy' should exist in backend but not frontend for accounting"
-      },
-      {
-        "id": "t-system-field-accounting-value",
-        "category": "system-field",
-        "entity": "accounting",
-        "field": "value",
-        "runner": "node",
-        "description": "System field 'value' should exist in backend but not frontend for accounting"
-      },
-      {
-        "id": "t-system-field-accounting-withholding",
-        "category": "system-field",
-        "entity": "accounting",
-        "field": "withholding",
-        "runner": "node",
-        "description": "System field 'withholding' should exist in backend but not frontend for accounting"
-      },
-      {
         "id": "t-system-field-bankPayments-active",
         "category": "system-field",
         "entity": "bankPayments",
@@ -8650,6 +6320,14 @@
         "description": "System field 'exchangeRate' should exist in backend but not frontend for bankPayments"
       },
       {
+        "id": "t-system-field-bankPayments-id",
+        "category": "system-field",
+        "entity": "bankPayments",
+        "field": "id",
+        "runner": "node",
+        "description": "System field 'id' should exist in backend but not frontend for bankPayments"
+      },
+      {
         "id": "t-system-field-bankPayments-lastCallbackAt",
         "category": "system-field",
         "entity": "bankPayments",
@@ -8730,14 +6408,6 @@
         "description": "System field 'paymentUrl' should exist in backend but not frontend for bankPayments"
       },
       {
-        "id": "t-system-field-bankPayments-psd2PisPayment",
-        "category": "system-field",
-        "entity": "bankPayments",
-        "field": "psd2PisPayment",
-        "runner": "node",
-        "description": "System field 'psd2PisPayment' should exist in backend but not frontend for bankPayments"
-      },
-      {
         "id": "t-system-field-bankPayments-returnToUrl",
         "category": "system-field",
         "entity": "bankPayments",
@@ -8784,174 +6454,6 @@
         "field": "updatedBy",
         "runner": "node",
         "description": "System field 'updatedBy' should exist in backend but not frontend for bankPayments"
-      },
-      {
-        "id": "t-system-field-exchangeRates-client",
-        "category": "system-field",
-        "entity": "exchangeRates",
-        "field": "client",
-        "runner": "node",
-        "description": "System field 'client' should exist in backend but not frontend for exchangeRates"
-      },
-      {
-        "id": "t-system-field-exchangeRates-createdBy",
-        "category": "system-field",
-        "entity": "exchangeRates",
-        "field": "createdBy",
-        "runner": "node",
-        "description": "System field 'createdBy' should exist in backend but not frontend for exchangeRates"
-      },
-      {
-        "id": "t-system-field-exchangeRates-creationDate",
-        "category": "system-field",
-        "entity": "exchangeRates",
-        "field": "creationDate",
-        "runner": "node",
-        "description": "System field 'creationDate' should exist in backend but not frontend for exchangeRates"
-      },
-      {
-        "id": "t-system-field-exchangeRates-financialAccountTransaction",
-        "category": "system-field",
-        "entity": "exchangeRates",
-        "field": "financialAccountTransaction",
-        "runner": "node",
-        "description": "System field 'financialAccountTransaction' should exist in backend but not frontend for exchangeRates"
-      },
-      {
-        "id": "t-system-field-exchangeRates-fINFinancialAccountTransaction",
-        "category": "system-field",
-        "entity": "exchangeRates",
-        "field": "fINFinancialAccountTransaction",
-        "runner": "node",
-        "description": "System field 'fINFinancialAccountTransaction' should exist in backend but not frontend for exchangeRates"
-      },
-      {
-        "id": "t-system-field-exchangeRates-id",
-        "category": "system-field",
-        "entity": "exchangeRates",
-        "field": "id",
-        "runner": "node",
-        "description": "System field 'id' should exist in backend but not frontend for exchangeRates"
-      },
-      {
-        "id": "t-system-field-exchangeRates-invoice",
-        "category": "system-field",
-        "entity": "exchangeRates",
-        "field": "invoice",
-        "runner": "node",
-        "description": "System field 'invoice' should exist in backend but not frontend for exchangeRates"
-      },
-      {
-        "id": "t-system-field-exchangeRates-journalEntry",
-        "category": "system-field",
-        "entity": "exchangeRates",
-        "field": "journalEntry",
-        "runner": "node",
-        "description": "System field 'journalEntry' should exist in backend but not frontend for exchangeRates"
-      },
-      {
-        "id": "t-system-field-exchangeRates-organization",
-        "category": "system-field",
-        "entity": "exchangeRates",
-        "field": "organization",
-        "runner": "node",
-        "description": "System field 'organization' should exist in backend but not frontend for exchangeRates"
-      },
-      {
-        "id": "t-system-field-exchangeRates-payment",
-        "category": "system-field",
-        "entity": "exchangeRates",
-        "field": "payment",
-        "runner": "node",
-        "description": "System field 'payment' should exist in backend but not frontend for exchangeRates"
-      },
-      {
-        "id": "t-system-field-exchangeRates-updated",
-        "category": "system-field",
-        "entity": "exchangeRates",
-        "field": "updated",
-        "runner": "node",
-        "description": "System field 'updated' should exist in backend but not frontend for exchangeRates"
-      },
-      {
-        "id": "t-system-field-exchangeRates-updatedBy",
-        "category": "system-field",
-        "entity": "exchangeRates",
-        "field": "updatedBy",
-        "runner": "node",
-        "description": "System field 'updatedBy' should exist in backend but not frontend for exchangeRates"
-      },
-      {
-        "id": "t-system-field-executionHistory-active",
-        "category": "system-field",
-        "entity": "executionHistory",
-        "field": "active",
-        "runner": "node",
-        "description": "System field 'active' should exist in backend but not frontend for executionHistory"
-      },
-      {
-        "id": "t-system-field-executionHistory-client",
-        "category": "system-field",
-        "entity": "executionHistory",
-        "field": "client",
-        "runner": "node",
-        "description": "System field 'client' should exist in backend but not frontend for executionHistory"
-      },
-      {
-        "id": "t-system-field-executionHistory-createdBy",
-        "category": "system-field",
-        "entity": "executionHistory",
-        "field": "createdBy",
-        "runner": "node",
-        "description": "System field 'createdBy' should exist in backend but not frontend for executionHistory"
-      },
-      {
-        "id": "t-system-field-executionHistory-creationDate",
-        "category": "system-field",
-        "entity": "executionHistory",
-        "field": "creationDate",
-        "runner": "node",
-        "description": "System field 'creationDate' should exist in backend but not frontend for executionHistory"
-      },
-      {
-        "id": "t-system-field-executionHistory-id",
-        "category": "system-field",
-        "entity": "executionHistory",
-        "field": "id",
-        "runner": "node",
-        "description": "System field 'id' should exist in backend but not frontend for executionHistory"
-      },
-      {
-        "id": "t-system-field-executionHistory-organization",
-        "category": "system-field",
-        "entity": "executionHistory",
-        "field": "organization",
-        "runner": "node",
-        "description": "System field 'organization' should exist in backend but not frontend for executionHistory"
-      },
-      {
-        "id": "t-system-field-executionHistory-payment",
-        "category": "system-field",
-        "entity": "executionHistory",
-        "field": "payment",
-        "runner": "node",
-        "description": "System field 'payment' should exist in backend but not frontend for executionHistory"
-      },
-      {
-        "id": "t-system-field-executionHistory-updated",
-        "category": "system-field",
-        "entity": "executionHistory",
-        "field": "updated",
-        "runner": "node",
-        "description": "System field 'updated' should exist in backend but not frontend for executionHistory"
-      },
-      {
-        "id": "t-system-field-executionHistory-updatedBy",
-        "category": "system-field",
-        "entity": "executionHistory",
-        "field": "updatedBy",
-        "runner": "node",
-        "description": "System field 'updatedBy' should exist in backend but not frontend for executionHistory"
       },
       {
         "id": "t-system-field-header-active",
@@ -9034,12 +6536,12 @@
         "description": "System field 'createdByAlgorithm' should exist in backend but not frontend for header"
       },
       {
-        "id": "t-system-field-header-creationDate",
+        "id": "t-system-field-header-id",
         "category": "system-field",
         "entity": "header",
-        "field": "creationDate",
+        "field": "id",
         "runner": "node",
-        "description": "System field 'creationDate' should exist in backend but not frontend for header"
+        "description": "System field 'id' should exist in backend but not frontend for header"
       },
       {
         "id": "t-system-field-header-organization",
@@ -9048,14 +6550,6 @@
         "field": "organization",
         "runner": "node",
         "description": "System field 'organization' should exist in backend but not frontend for header"
-      },
-      {
-        "id": "t-system-field-header-payment",
-        "category": "system-field",
-        "entity": "header",
-        "field": "payment",
-        "runner": "node",
-        "description": "System field 'payment' should exist in backend but not frontend for header"
       },
       {
         "id": "t-system-field-header-posted",
@@ -9096,14 +6590,6 @@
         "field": "salesCampaign",
         "runner": "node",
         "description": "System field 'salesCampaign' should exist in backend but not frontend for header"
-      },
-      {
-        "id": "t-system-field-header-updated",
-        "category": "system-field",
-        "entity": "header",
-        "field": "updated",
-        "runner": "node",
-        "description": "System field 'updated' should exist in backend but not frontend for header"
       },
       {
         "id": "t-system-field-header-updatedBy",
@@ -9178,12 +6664,12 @@
         "description": "System field 'etvfacPaymentZero' should exist in backend but not frontend for lines"
       },
       {
-        "id": "t-system-field-lines-fINPaymentScheduledetailID",
+        "id": "t-system-field-lines-id",
         "category": "system-field",
         "entity": "lines",
-        "field": "fINPaymentScheduledetailID",
+        "field": "id",
         "runner": "node",
-        "description": "System field 'fINPaymentScheduledetailID' should exist in backend but not frontend for lines"
+        "description": "System field 'id' should exist in backend but not frontend for lines"
       },
       {
         "id": "t-system-field-lines-invoicePaid",
@@ -9234,104 +6720,11 @@
         "description": "System field 'writeoffAmount' should exist in backend but not frontend for lines"
       },
       {
-        "id": "t-system-field-usedCreditSource-active",
-        "category": "system-field",
-        "entity": "usedCreditSource",
-        "field": "active",
-        "runner": "node",
-        "description": "System field 'active' should exist in backend but not frontend for usedCreditSource"
-      },
-      {
-        "id": "t-system-field-usedCreditSource-client",
-        "category": "system-field",
-        "entity": "usedCreditSource",
-        "field": "client",
-        "runner": "node",
-        "description": "System field 'client' should exist in backend but not frontend for usedCreditSource"
-      },
-      {
-        "id": "t-system-field-usedCreditSource-createdBy",
-        "category": "system-field",
-        "entity": "usedCreditSource",
-        "field": "createdBy",
-        "runner": "node",
-        "description": "System field 'createdBy' should exist in backend but not frontend for usedCreditSource"
-      },
-      {
-        "id": "t-system-field-usedCreditSource-creationDate",
-        "category": "system-field",
-        "entity": "usedCreditSource",
-        "field": "creationDate",
-        "runner": "node",
-        "description": "System field 'creationDate' should exist in backend but not frontend for usedCreditSource"
-      },
-      {
-        "id": "t-system-field-usedCreditSource-id",
-        "category": "system-field",
-        "entity": "usedCreditSource",
-        "field": "id",
-        "runner": "node",
-        "description": "System field 'id' should exist in backend but not frontend for usedCreditSource"
-      },
-      {
-        "id": "t-system-field-usedCreditSource-organization",
-        "category": "system-field",
-        "entity": "usedCreditSource",
-        "field": "organization",
-        "runner": "node",
-        "description": "System field 'organization' should exist in backend but not frontend for usedCreditSource"
-      },
-      {
-        "id": "t-system-field-usedCreditSource-payment",
-        "category": "system-field",
-        "entity": "usedCreditSource",
-        "field": "payment",
-        "runner": "node",
-        "description": "System field 'payment' should exist in backend but not frontend for usedCreditSource"
-      },
-      {
-        "id": "t-system-field-usedCreditSource-updated",
-        "category": "system-field",
-        "entity": "usedCreditSource",
-        "field": "updated",
-        "runner": "node",
-        "description": "System field 'updated' should exist in backend but not frontend for usedCreditSource"
-      },
-      {
-        "id": "t-system-field-usedCreditSource-updatedBy",
-        "category": "system-field",
-        "entity": "usedCreditSource",
-        "field": "updatedBy",
-        "runner": "node",
-        "description": "System field 'updatedBy' should exist in backend but not frontend for usedCreditSource"
-      },
-      {
-        "id": "t-visibility-accounting",
-        "category": "visibility",
-        "entity": "accounting",
-        "runner": "node",
-        "description": "Entity 'accounting' should only expose visible fields in frontend"
-      },
-      {
         "id": "t-visibility-bankPayments",
         "category": "visibility",
         "entity": "bankPayments",
         "runner": "node",
         "description": "Entity 'bankPayments' should only expose visible fields in frontend"
-      },
-      {
-        "id": "t-visibility-exchangeRates",
-        "category": "visibility",
-        "entity": "exchangeRates",
-        "runner": "node",
-        "description": "Entity 'exchangeRates' should only expose visible fields in frontend"
-      },
-      {
-        "id": "t-visibility-executionHistory",
-        "category": "visibility",
-        "entity": "executionHistory",
-        "runner": "node",
-        "description": "Entity 'executionHistory' should only expose visible fields in frontend"
       },
       {
         "id": "t-visibility-header",
@@ -9346,36 +6739,31 @@
         "entity": "lines",
         "runner": "node",
         "description": "Entity 'lines' should only expose visible fields in frontend"
-      },
-      {
-        "id": "t-visibility-usedCreditSource",
-        "category": "visibility",
-        "entity": "usedCreditSource",
-        "runner": "node",
-        "description": "Entity 'usedCreditSource' should only expose visible fields in frontend"
       }
     ],
     "summary": {
-      "total": 597,
+      "total": 441,
       "byCategory": {
         "action-endpoint": 12,
-        "crud-flags": 7,
-        "default-value-type": 19,
+        "crud-flags": 3,
+        "default-value-type": 18,
         "displaylogic-evaluable": 26,
         "displaylogic-valid": 26,
-        "field-presence": 89,
-        "field-type": 89,
-        "readonlylogic-evaluable": 21,
-        "readonlylogic-valid": 21,
+        "field-presence": 62,
+        "field-type": 62,
+        "process-failure": 1,
+        "process-happy": 1,
+        "readonlylogic-evaluable": 16,
+        "readonlylogic-valid": 16,
         "rule-declared": 105,
         "searchable-filters": 5,
-        "selector-endpoint": 40,
-        "system-field": 130,
-        "visibility": 7
+        "selector-endpoint": 24,
+        "system-field": 61,
+        "visibility": 3
       },
       "byRunner": {
-        "node": 597,
-        "junit": 0
+        "node": 439,
+        "junit": 2
       }
     }
   }

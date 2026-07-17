@@ -269,10 +269,35 @@ rm -rf .scannerwork
 # ── Step 0.5: Run coverage if requested ────────────────────────────────────
 if [[ "$RUN_COVERAGE" == "true" ]]; then
   echo "==> Running unit tests with coverage..."
+  # Require Node 22+: vitest coverage uses the threads pool which relies on Node 22 ESM
+  # worker behaviour (jsdom 29 uses ESM-only @exodus/bytes). nvm use 22 keeps us on the
+  # right version if nvm is present.
+  if [ -s "${NVM_DIR:-$HOME/.nvm}/nvm.sh" ]; then
+    # shellcheck source=/dev/null
+    source "${NVM_DIR:-$HOME/.nvm}/nvm.sh"
+    nvm use 22 --silent 2>/dev/null || true
+  fi
+  NODE_MAJOR=$(node -e "process.stdout.write(process.versions.node.split('.')[0])" 2>/dev/null || echo "0")
+  if [[ "$NODE_MAJOR" -lt 22 ]]; then
+    echo "ERROR: coverage requires Node.js >= 22 (found $(node --version 2>/dev/null || echo '?'))."
+    echo "Install or activate Node 22 before running coverage."
+    exit 1
+  fi
   make test-all-coverage
 fi
 
 # ── Step 1: Run scanner ────────────────────────────────────────────
+echo "==> Running sonar-scanner..."
+# Resolve sonar-scanner: prefer global install, fall back to NVM node_modules.
+if ! command -v sonar-scanner &>/dev/null; then
+  NVM_ROOT="${NVM_DIR:-$HOME/.nvm}"
+  for _dir in "$NVM_ROOT"/versions/node/*/lib/node_modules/sonar-scanner/bin; do
+    if [ -x "$_dir/sonar-scanner" ]; then
+      export PATH="$_dir:$PATH"
+      break
+    fi
+  done
+fi
 # In PR-validation mode (--base-ref) analyze in PULL REQUEST mode so the server
 # computes "new code = diff vs base" exactly like CI's PR gate. This is ephemeral
 # (SonarQube auto-purges PR analyses) and never writes to the main branch — a

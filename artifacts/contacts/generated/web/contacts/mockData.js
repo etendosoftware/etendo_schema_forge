@@ -10,9 +10,11 @@ export const businessPartner = [
     "etgoLastname": "Sample etgoLastname",
     "oBTIKTaxIDKey": "VAT 21%",
     "taxID": "VAT 21%",
+    "oBTIKVIESStatus": "DR",
     "etgoWeb": "Sample etgoWeb",
     "etgoEmail": "Sample etgoEmail",
     "etgoPhone": "Sample etgoPhone",
+    "etgoIsperson": "Sample etgoIsperson",
     "businessPartnerCategory": "Acme Corp",
     "name2": "Sample name2",
     "description": "Standard order for Q1 delivery",
@@ -28,12 +30,12 @@ export const businessPartner = [
     "creditLimit": 38907,
     "bPCurrencyID": "USD",
     "isCustomerConsent": "Acme Corp",
-    "etgoIsperson": "Sample etgoIsperson",
     "operator": "Sample operator",
     "creditUsed": 38907,
     "paymentTerms": "Sample paymentTerms",
     "salaryCategory": "Sample salaryCategory",
     "customerBlocking": "Acme Corp",
+    "eTGOLocation": "Sample eTGOLocation",
     "account": "Sample account",
     "paymentMethod": "Sample paymentMethod",
     "isSalesRepresentative": "Sample isSalesRepresentative",
@@ -42,8 +44,7 @@ export const businessPartner = [
     "pOPaymentMethod": "Sample pOPaymentMethod",
     "pOPaymentTerms": "Sample pOPaymentTerms",
     "purchasePricelist": "Sample purchasePricelist",
-    "vendorBlocking": "Sample vendorBlocking",
-    "eTGOLocation": "Sample eTGOLocation"
+    "vendorBlocking": "Sample vendorBlocking"
   },
   {
     "id": "mock-businessPartner-002",
@@ -54,9 +55,11 @@ export const businessPartner = [
     "etgoLastname": "Sample etgoLastname",
     "oBTIKTaxIDKey": "VAT 10%",
     "taxID": "VAT 10%",
+    "oBTIKVIESStatus": "CO",
     "etgoWeb": "Sample etgoWeb",
     "etgoEmail": "Sample etgoEmail",
     "etgoPhone": "Sample etgoPhone",
+    "etgoIsperson": "Sample etgoIsperson",
     "businessPartnerCategory": "TechFlow Inc",
     "name2": "Sample name2",
     "description": "Rush order - priority shipping required",
@@ -72,12 +75,12 @@ export const businessPartner = [
     "creditLimit": 9306,
     "bPCurrencyID": "EUR",
     "isCustomerConsent": "TechFlow Inc",
-    "etgoIsperson": "Sample etgoIsperson",
     "operator": "Sample operator",
     "creditUsed": 9306,
     "paymentTerms": "Sample paymentTerms",
     "salaryCategory": "Sample salaryCategory",
     "customerBlocking": "TechFlow Inc",
+    "eTGOLocation": "Sample eTGOLocation",
     "account": "Sample account",
     "paymentMethod": "Sample paymentMethod",
     "isSalesRepresentative": "Sample isSalesRepresentative",
@@ -86,8 +89,7 @@ export const businessPartner = [
     "pOPaymentMethod": "Sample pOPaymentMethod",
     "pOPaymentTerms": "Sample pOPaymentTerms",
     "purchasePricelist": "Sample purchasePricelist",
-    "vendorBlocking": "Sample vendorBlocking",
-    "eTGOLocation": "Sample eTGOLocation"
+    "vendorBlocking": "Sample vendorBlocking"
   },
   {
     "id": "mock-businessPartner-003",
@@ -98,9 +100,11 @@ export const businessPartner = [
     "etgoLastname": "Sample etgoLastname",
     "oBTIKTaxIDKey": "VAT 0%",
     "taxID": "VAT 0%",
+    "oBTIKVIESStatus": "VO",
     "etgoWeb": "Sample etgoWeb",
     "etgoEmail": "Sample etgoEmail",
     "etgoPhone": "Sample etgoPhone",
+    "etgoIsperson": "Sample etgoIsperson",
     "businessPartnerCategory": "Global Trade Ltd",
     "name2": "Sample name2",
     "description": "Bulk purchase for warehouse restocking",
@@ -116,12 +120,12 @@ export const businessPartner = [
     "creditLimit": 11544,
     "bPCurrencyID": "GBP",
     "isCustomerConsent": "Global Trade Ltd",
-    "etgoIsperson": "Sample etgoIsperson",
     "operator": "Sample operator",
     "creditUsed": 11544,
     "paymentTerms": "Sample paymentTerms",
     "salaryCategory": "Sample salaryCategory",
     "customerBlocking": "Global Trade Ltd",
+    "eTGOLocation": "Sample eTGOLocation",
     "account": "Sample account",
     "paymentMethod": "Sample paymentMethod",
     "isSalesRepresentative": "Sample isSalesRepresentative",
@@ -130,8 +134,7 @@ export const businessPartner = [
     "pOPaymentMethod": "Sample pOPaymentMethod",
     "pOPaymentTerms": "Sample pOPaymentTerms",
     "purchasePricelist": "Sample purchasePricelist",
-    "vendorBlocking": "Sample vendorBlocking",
-    "eTGOLocation": "Sample eTGOLocation"
+    "vendorBlocking": "Sample vendorBlocking"
   },
   {
     "id": "mock-businessPartner-004",
@@ -142,9 +145,11 @@ export const businessPartner = [
     "etgoLastname": "Sample etgoLastname",
     "oBTIKTaxIDKey": "Sales Tax 8.5%",
     "taxID": "Sales Tax 8.5%",
+    "oBTIKVIESStatus": "IP",
     "etgoWeb": "Sample etgoWeb",
     "etgoEmail": "Sample etgoEmail",
     "etgoPhone": "Sample etgoPhone",
+    "etgoIsperson": "Sample etgoIsperson",
     "businessPartnerCategory": "Summit Industries",
     "name2": "Sample name2",
     "description": "Sample order for client evaluation",
@@ -160,12 +165,12 @@ export const businessPartner = [
     "creditLimit": 11872,
     "bPCurrencyID": "USD",
     "isCustomerConsent": "Summit Industries",
-    "etgoIsperson": "Sample etgoIsperson",
     "operator": "Sample operator",
     "creditUsed": 11872,
     "paymentTerms": "Sample paymentTerms",
     "salaryCategory": "Sample salaryCategory",
     "customerBlocking": "Summit Industries",
+    "eTGOLocation": "Sample eTGOLocation",
     "account": "Sample account",
     "paymentMethod": "Sample paymentMethod",
     "isSalesRepresentative": "Sample isSalesRepresentative",
@@ -174,8 +179,7 @@ export const businessPartner = [
     "pOPaymentMethod": "Sample pOPaymentMethod",
     "pOPaymentTerms": "Sample pOPaymentTerms",
     "purchasePricelist": "Sample purchasePricelist",
-    "vendorBlocking": "Sample vendorBlocking",
-    "eTGOLocation": "Sample eTGOLocation"
+    "vendorBlocking": "Sample vendorBlocking"
   },
   {
     "id": "mock-businessPartner-005",
@@ -186,9 +190,11 @@ export const businessPartner = [
     "etgoLastname": "Sample etgoLastname",
     "oBTIKTaxIDKey": "Exempt",
     "taxID": "Exempt",
+    "oBTIKVIESStatus": "DR",
     "etgoWeb": "Sample etgoWeb",
     "etgoEmail": "Sample etgoEmail",
     "etgoPhone": "Sample etgoPhone",
+    "etgoIsperson": "Sample etgoIsperson",
     "businessPartnerCategory": "Pacific Partners",
     "name2": "Sample name2",
     "description": "Recurring monthly supply order",
@@ -204,12 +210,12 @@ export const businessPartner = [
     "creditLimit": 48460,
     "bPCurrencyID": "EUR",
     "isCustomerConsent": "Pacific Partners",
-    "etgoIsperson": "Sample etgoIsperson",
     "operator": "Sample operator",
     "creditUsed": 48460,
     "paymentTerms": "Sample paymentTerms",
     "salaryCategory": "Sample salaryCategory",
     "customerBlocking": "Pacific Partners",
+    "eTGOLocation": "Sample eTGOLocation",
     "account": "Sample account",
     "paymentMethod": "Sample paymentMethod",
     "isSalesRepresentative": "Sample isSalesRepresentative",
@@ -218,8 +224,7 @@ export const businessPartner = [
     "pOPaymentMethod": "Sample pOPaymentMethod",
     "pOPaymentTerms": "Sample pOPaymentTerms",
     "purchasePricelist": "Sample purchasePricelist",
-    "vendorBlocking": "Sample vendorBlocking",
-    "eTGOLocation": "Sample eTGOLocation"
+    "vendorBlocking": "Sample vendorBlocking"
   },
   {
     "id": "mock-businessPartner-006",
@@ -230,9 +235,11 @@ export const businessPartner = [
     "etgoLastname": "Sample etgoLastname",
     "oBTIKTaxIDKey": "Reduced Rate 5%",
     "taxID": "Reduced Rate 5%",
+    "oBTIKVIESStatus": "CO",
     "etgoWeb": "Sample etgoWeb",
     "etgoEmail": "Sample etgoEmail",
     "etgoPhone": "Sample etgoPhone",
+    "etgoIsperson": "Sample etgoIsperson",
     "businessPartnerCategory": "Alpine Solutions",
     "name2": "Sample name2",
     "description": "Special pricing agreement applies",
@@ -248,12 +255,12 @@ export const businessPartner = [
     "creditLimit": 45418,
     "bPCurrencyID": "GBP",
     "isCustomerConsent": "Alpine Solutions",
-    "etgoIsperson": "Sample etgoIsperson",
     "operator": "Sample operator",
     "creditUsed": 45418,
     "paymentTerms": "Sample paymentTerms",
     "salaryCategory": "Sample salaryCategory",
     "customerBlocking": "Alpine Solutions",
+    "eTGOLocation": "Sample eTGOLocation",
     "account": "Sample account",
     "paymentMethod": "Sample paymentMethod",
     "isSalesRepresentative": "Sample isSalesRepresentative",
@@ -262,8 +269,7 @@ export const businessPartner = [
     "pOPaymentMethod": "Sample pOPaymentMethod",
     "pOPaymentTerms": "Sample pOPaymentTerms",
     "purchasePricelist": "Sample purchasePricelist",
-    "vendorBlocking": "Sample vendorBlocking",
-    "eTGOLocation": "Sample eTGOLocation"
+    "vendorBlocking": "Sample vendorBlocking"
   },
   {
     "id": "mock-businessPartner-007",
@@ -274,9 +280,11 @@ export const businessPartner = [
     "etgoLastname": "Sample etgoLastname",
     "oBTIKTaxIDKey": "Standard Rate 20%",
     "taxID": "Standard Rate 20%",
+    "oBTIKVIESStatus": "VO",
     "etgoWeb": "Sample etgoWeb",
     "etgoEmail": "Sample etgoEmail",
     "etgoPhone": "Sample etgoPhone",
+    "etgoIsperson": "Sample etgoIsperson",
     "businessPartnerCategory": "Meridian Group",
     "name2": "Sample name2",
     "description": "Consolidated order from multiple requests",
@@ -292,12 +300,12 @@ export const businessPartner = [
     "creditLimit": 33840,
     "bPCurrencyID": "USD",
     "isCustomerConsent": "Meridian Group",
-    "etgoIsperson": "Sample etgoIsperson",
     "operator": "Sample operator",
     "creditUsed": 33840,
     "paymentTerms": "Sample paymentTerms",
     "salaryCategory": "Sample salaryCategory",
     "customerBlocking": "Meridian Group",
+    "eTGOLocation": "Sample eTGOLocation",
     "account": "Sample account",
     "paymentMethod": "Sample paymentMethod",
     "isSalesRepresentative": "Sample isSalesRepresentative",
@@ -306,8 +314,7 @@ export const businessPartner = [
     "pOPaymentMethod": "Sample pOPaymentMethod",
     "pOPaymentTerms": "Sample pOPaymentTerms",
     "purchasePricelist": "Sample purchasePricelist",
-    "vendorBlocking": "Sample vendorBlocking",
-    "eTGOLocation": "Sample eTGOLocation"
+    "vendorBlocking": "Sample vendorBlocking"
   },
   {
     "id": "mock-businessPartner-008",
@@ -318,9 +325,11 @@ export const businessPartner = [
     "etgoLastname": "Sample etgoLastname",
     "oBTIKTaxIDKey": "VAT 21%",
     "taxID": "VAT 21%",
+    "oBTIKVIESStatus": "IP",
     "etgoWeb": "Sample etgoWeb",
     "etgoEmail": "Sample etgoEmail",
     "etgoPhone": "Sample etgoPhone",
+    "etgoIsperson": "Sample etgoIsperson",
     "businessPartnerCategory": "Vertex Systems",
     "name2": "Sample name2",
     "description": "Trial order for new product line",
@@ -336,12 +345,12 @@ export const businessPartner = [
     "creditLimit": 25716,
     "bPCurrencyID": "EUR",
     "isCustomerConsent": "Vertex Systems",
-    "etgoIsperson": "Sample etgoIsperson",
     "operator": "Sample operator",
     "creditUsed": 25716,
     "paymentTerms": "Sample paymentTerms",
     "salaryCategory": "Sample salaryCategory",
     "customerBlocking": "Vertex Systems",
+    "eTGOLocation": "Sample eTGOLocation",
     "account": "Sample account",
     "paymentMethod": "Sample paymentMethod",
     "isSalesRepresentative": "Sample isSalesRepresentative",
@@ -350,8 +359,7 @@ export const businessPartner = [
     "pOPaymentMethod": "Sample pOPaymentMethod",
     "pOPaymentTerms": "Sample pOPaymentTerms",
     "purchasePricelist": "Sample purchasePricelist",
-    "vendorBlocking": "Sample vendorBlocking",
-    "eTGOLocation": "Sample eTGOLocation"
+    "vendorBlocking": "Sample vendorBlocking"
   },
   {
     "id": "mock-businessPartner-009",
@@ -362,9 +370,11 @@ export const businessPartner = [
     "etgoLastname": "Sample etgoLastname",
     "oBTIKTaxIDKey": "VAT 10%",
     "taxID": "VAT 10%",
+    "oBTIKVIESStatus": "DR",
     "etgoWeb": "Sample etgoWeb",
     "etgoEmail": "Sample etgoEmail",
     "etgoPhone": "Sample etgoPhone",
+    "etgoIsperson": "Sample etgoIsperson",
     "businessPartnerCategory": "Atlas Manufacturing",
     "name2": "Sample name2",
     "description": "Replacement for damaged goods",
@@ -380,12 +390,12 @@ export const businessPartner = [
     "creditLimit": 44780,
     "bPCurrencyID": "GBP",
     "isCustomerConsent": "Atlas Manufacturing",
-    "etgoIsperson": "Sample etgoIsperson",
     "operator": "Sample operator",
     "creditUsed": 44780,
     "paymentTerms": "Sample paymentTerms",
     "salaryCategory": "Sample salaryCategory",
     "customerBlocking": "Atlas Manufacturing",
+    "eTGOLocation": "Sample eTGOLocation",
     "account": "Sample account",
     "paymentMethod": "Sample paymentMethod",
     "isSalesRepresentative": "Sample isSalesRepresentative",
@@ -394,8 +404,7 @@ export const businessPartner = [
     "pOPaymentMethod": "Sample pOPaymentMethod",
     "pOPaymentTerms": "Sample pOPaymentTerms",
     "purchasePricelist": "Sample purchasePricelist",
-    "vendorBlocking": "Sample vendorBlocking",
-    "eTGOLocation": "Sample eTGOLocation"
+    "vendorBlocking": "Sample vendorBlocking"
   },
   {
     "id": "mock-businessPartner-010",
@@ -406,9 +415,11 @@ export const businessPartner = [
     "etgoLastname": "Sample etgoLastname",
     "oBTIKTaxIDKey": "VAT 0%",
     "taxID": "VAT 0%",
+    "oBTIKVIESStatus": "CO",
     "etgoWeb": "Sample etgoWeb",
     "etgoEmail": "Sample etgoEmail",
     "etgoPhone": "Sample etgoPhone",
+    "etgoIsperson": "Sample etgoIsperson",
     "businessPartnerCategory": "Nova Enterprises",
     "name2": "Sample name2",
     "description": "Pre-season inventory build-up",
@@ -424,12 +435,12 @@ export const businessPartner = [
     "creditLimit": 12483,
     "bPCurrencyID": "USD",
     "isCustomerConsent": "Nova Enterprises",
-    "etgoIsperson": "Sample etgoIsperson",
     "operator": "Sample operator",
     "creditUsed": 12483,
     "paymentTerms": "Sample paymentTerms",
     "salaryCategory": "Sample salaryCategory",
     "customerBlocking": "Nova Enterprises",
+    "eTGOLocation": "Sample eTGOLocation",
     "account": "Sample account",
     "paymentMethod": "Sample paymentMethod",
     "isSalesRepresentative": "Sample isSalesRepresentative",
@@ -438,8 +449,7 @@ export const businessPartner = [
     "pOPaymentMethod": "Sample pOPaymentMethod",
     "pOPaymentTerms": "Sample pOPaymentTerms",
     "purchasePricelist": "Sample purchasePricelist",
-    "vendorBlocking": "Sample vendorBlocking",
-    "eTGOLocation": "Sample eTGOLocation"
+    "vendorBlocking": "Sample vendorBlocking"
   },
   {
     "id": "mock-businessPartner-011",
@@ -450,9 +460,11 @@ export const businessPartner = [
     "etgoLastname": "Sample etgoLastname",
     "oBTIKTaxIDKey": "Sales Tax 8.5%",
     "taxID": "Sales Tax 8.5%",
+    "oBTIKVIESStatus": "VO",
     "etgoWeb": "Sample etgoWeb",
     "etgoEmail": "Sample etgoEmail",
     "etgoPhone": "Sample etgoPhone",
+    "etgoIsperson": "Sample etgoIsperson",
     "businessPartnerCategory": "Pinnacle Services",
     "name2": "Sample name2",
     "description": "Customer-specific configuration",
@@ -468,12 +480,12 @@ export const businessPartner = [
     "creditLimit": 46022,
     "bPCurrencyID": "EUR",
     "isCustomerConsent": "Pinnacle Services",
-    "etgoIsperson": "Sample etgoIsperson",
     "operator": "Sample operator",
     "creditUsed": 46022,
     "paymentTerms": "Sample paymentTerms",
     "salaryCategory": "Sample salaryCategory",
     "customerBlocking": "Pinnacle Services",
+    "eTGOLocation": "Sample eTGOLocation",
     "account": "Sample account",
     "paymentMethod": "Sample paymentMethod",
     "isSalesRepresentative": "Sample isSalesRepresentative",
@@ -482,8 +494,7 @@ export const businessPartner = [
     "pOPaymentMethod": "Sample pOPaymentMethod",
     "pOPaymentTerms": "Sample pOPaymentTerms",
     "purchasePricelist": "Sample purchasePricelist",
-    "vendorBlocking": "Sample vendorBlocking",
-    "eTGOLocation": "Sample eTGOLocation"
+    "vendorBlocking": "Sample vendorBlocking"
   },
   {
     "id": "mock-businessPartner-012",
@@ -494,9 +505,11 @@ export const businessPartner = [
     "etgoLastname": "Sample etgoLastname",
     "oBTIKTaxIDKey": "Exempt",
     "taxID": "Exempt",
+    "oBTIKVIESStatus": "IP",
     "etgoWeb": "Sample etgoWeb",
     "etgoEmail": "Sample etgoEmail",
     "etgoPhone": "Sample etgoPhone",
+    "etgoIsperson": "Sample etgoIsperson",
     "businessPartnerCategory": "Horizon Labs",
     "name2": "Sample name2",
     "description": "Government contract fulfillment",
@@ -512,12 +525,12 @@ export const businessPartner = [
     "creditLimit": 38634,
     "bPCurrencyID": "GBP",
     "isCustomerConsent": "Horizon Labs",
-    "etgoIsperson": "Sample etgoIsperson",
     "operator": "Sample operator",
     "creditUsed": 38634,
     "paymentTerms": "Sample paymentTerms",
     "salaryCategory": "Sample salaryCategory",
     "customerBlocking": "Horizon Labs",
+    "eTGOLocation": "Sample eTGOLocation",
     "account": "Sample account",
     "paymentMethod": "Sample paymentMethod",
     "isSalesRepresentative": "Sample isSalesRepresentative",
@@ -526,8 +539,7 @@ export const businessPartner = [
     "pOPaymentMethod": "Sample pOPaymentMethod",
     "pOPaymentTerms": "Sample pOPaymentTerms",
     "purchasePricelist": "Sample purchasePricelist",
-    "vendorBlocking": "Sample vendorBlocking",
-    "eTGOLocation": "Sample eTGOLocation"
+    "vendorBlocking": "Sample vendorBlocking"
   }
 ];
 
@@ -849,84 +861,72 @@ export const customer = [
 export const customerAccounting = [
   {
     "id": "mock-customerAccounting-001",
-    "accountingSchema": "Sample accountingSchema",
     "customerReceivablesNo": "CU-00001",
     "customerPrepayment": "Acme Corp",
     "businessPartnerId": "mock-businessPartner-001"
   },
   {
     "id": "mock-customerAccounting-002",
-    "accountingSchema": "Sample accountingSchema",
     "customerReceivablesNo": "CU-00002",
     "customerPrepayment": "TechFlow Inc",
     "businessPartnerId": "mock-businessPartner-002"
   },
   {
     "id": "mock-customerAccounting-003",
-    "accountingSchema": "Sample accountingSchema",
     "customerReceivablesNo": "CU-00003",
     "customerPrepayment": "Global Trade Ltd",
     "businessPartnerId": "mock-businessPartner-003"
   },
   {
     "id": "mock-customerAccounting-004",
-    "accountingSchema": "Sample accountingSchema",
     "customerReceivablesNo": "CU-00004",
     "customerPrepayment": "Summit Industries",
     "businessPartnerId": "mock-businessPartner-004"
   },
   {
     "id": "mock-customerAccounting-005",
-    "accountingSchema": "Sample accountingSchema",
     "customerReceivablesNo": "CU-00005",
     "customerPrepayment": "Pacific Partners",
     "businessPartnerId": "mock-businessPartner-005"
   },
   {
     "id": "mock-customerAccounting-006",
-    "accountingSchema": "Sample accountingSchema",
     "customerReceivablesNo": "CU-00006",
     "customerPrepayment": "Alpine Solutions",
     "businessPartnerId": "mock-businessPartner-006"
   },
   {
     "id": "mock-customerAccounting-007",
-    "accountingSchema": "Sample accountingSchema",
     "customerReceivablesNo": "CU-00007",
     "customerPrepayment": "Meridian Group",
     "businessPartnerId": "mock-businessPartner-007"
   },
   {
     "id": "mock-customerAccounting-008",
-    "accountingSchema": "Sample accountingSchema",
     "customerReceivablesNo": "CU-00008",
     "customerPrepayment": "Vertex Systems",
     "businessPartnerId": "mock-businessPartner-008"
   },
   {
     "id": "mock-customerAccounting-009",
-    "accountingSchema": "Sample accountingSchema",
     "customerReceivablesNo": "CU-00009",
     "customerPrepayment": "Atlas Manufacturing",
     "businessPartnerId": "mock-businessPartner-009"
   },
   {
     "id": "mock-customerAccounting-010",
-    "accountingSchema": "Sample accountingSchema",
     "customerReceivablesNo": "CU-00010",
     "customerPrepayment": "Nova Enterprises",
     "businessPartnerId": "mock-businessPartner-010"
   },
   {
     "id": "mock-customerAccounting-011",
-    "accountingSchema": "Sample accountingSchema",
     "customerReceivablesNo": "CU-00011",
     "customerPrepayment": "Pinnacle Services",
     "businessPartnerId": "mock-businessPartner-011"
   },
   {
     "id": "mock-customerAccounting-012",
-    "accountingSchema": "Sample accountingSchema",
     "customerReceivablesNo": "CU-00012",
     "customerPrepayment": "Horizon Labs",
     "businessPartnerId": "mock-businessPartner-012"
@@ -1278,84 +1278,72 @@ export const vendorCreditor = [
 export const vendorAccounting = [
   {
     "id": "mock-vendorAccounting-001",
-    "accountingSchema": "Sample accountingSchema",
     "vendorLiability": "Sample vendorLiability",
     "vendorPrepayment": "Sample vendorPrepayment",
     "businessPartnerId": "mock-businessPartner-001"
   },
   {
     "id": "mock-vendorAccounting-002",
-    "accountingSchema": "Sample accountingSchema",
     "vendorLiability": "Sample vendorLiability",
     "vendorPrepayment": "Sample vendorPrepayment",
     "businessPartnerId": "mock-businessPartner-002"
   },
   {
     "id": "mock-vendorAccounting-003",
-    "accountingSchema": "Sample accountingSchema",
     "vendorLiability": "Sample vendorLiability",
     "vendorPrepayment": "Sample vendorPrepayment",
     "businessPartnerId": "mock-businessPartner-003"
   },
   {
     "id": "mock-vendorAccounting-004",
-    "accountingSchema": "Sample accountingSchema",
     "vendorLiability": "Sample vendorLiability",
     "vendorPrepayment": "Sample vendorPrepayment",
     "businessPartnerId": "mock-businessPartner-004"
   },
   {
     "id": "mock-vendorAccounting-005",
-    "accountingSchema": "Sample accountingSchema",
     "vendorLiability": "Sample vendorLiability",
     "vendorPrepayment": "Sample vendorPrepayment",
     "businessPartnerId": "mock-businessPartner-005"
   },
   {
     "id": "mock-vendorAccounting-006",
-    "accountingSchema": "Sample accountingSchema",
     "vendorLiability": "Sample vendorLiability",
     "vendorPrepayment": "Sample vendorPrepayment",
     "businessPartnerId": "mock-businessPartner-006"
   },
   {
     "id": "mock-vendorAccounting-007",
-    "accountingSchema": "Sample accountingSchema",
     "vendorLiability": "Sample vendorLiability",
     "vendorPrepayment": "Sample vendorPrepayment",
     "businessPartnerId": "mock-businessPartner-007"
   },
   {
     "id": "mock-vendorAccounting-008",
-    "accountingSchema": "Sample accountingSchema",
     "vendorLiability": "Sample vendorLiability",
     "vendorPrepayment": "Sample vendorPrepayment",
     "businessPartnerId": "mock-businessPartner-008"
   },
   {
     "id": "mock-vendorAccounting-009",
-    "accountingSchema": "Sample accountingSchema",
     "vendorLiability": "Sample vendorLiability",
     "vendorPrepayment": "Sample vendorPrepayment",
     "businessPartnerId": "mock-businessPartner-009"
   },
   {
     "id": "mock-vendorAccounting-010",
-    "accountingSchema": "Sample accountingSchema",
     "vendorLiability": "Sample vendorLiability",
     "vendorPrepayment": "Sample vendorPrepayment",
     "businessPartnerId": "mock-businessPartner-010"
   },
   {
     "id": "mock-vendorAccounting-011",
-    "accountingSchema": "Sample accountingSchema",
     "vendorLiability": "Sample vendorLiability",
     "vendorPrepayment": "Sample vendorPrepayment",
     "businessPartnerId": "mock-businessPartner-011"
   },
   {
     "id": "mock-vendorAccounting-012",
-    "accountingSchema": "Sample accountingSchema",
     "vendorLiability": "Sample vendorLiability",
     "vendorPrepayment": "Sample vendorPrepayment",
     "businessPartnerId": "mock-businessPartner-012"

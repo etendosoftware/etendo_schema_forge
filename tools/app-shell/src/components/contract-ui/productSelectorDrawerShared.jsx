@@ -1,7 +1,8 @@
 /**
  * Shared primitives for product-selector drawers (GoodsMovements + InternalConsumption +
  * ProductSearchDrawer).
- * Exports: COLORS, getColor, Avatar, formatQty, useProductSelectorFetch.
+ * Exports: COLORS, getColor, Avatar, ProductAvatar, formatQty, resolveImageId,
+ * useProductImages, useProductSelectorFetch.
  */
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { buildUrlWithParams } from '@/lib/buildUrlWithParams.js';
@@ -39,6 +40,99 @@ export function formatQty(raw) {
   const n = parseFloat(raw);
   if (isNaN(n)) return null;
   return n % 1 === 0 ? n.toLocaleString() : n.toLocaleString(undefined, { maximumFractionDigits: 2 });
+}
+
+/**
+ * Product avatar shared by every product-selector variant. Fetches and displays the product
+ * image when available, falling back to an initials badge (shared COLORS palette) when there
+ * is no image or while it is still loading. `sizeClass` lets each variant control the badge
+ * size (flat rows use w-11 h-11, grouped headers use w-9 h-9) without duplicating the logic.
+ */
+export function ProductAvatar({ name, id, imageUrl, imageId, neoBaseUrl, token, sizeClass = 'w-11 h-11' }) {
+  const [src, setSrc] = useState(imageUrl || null);
+  const objectUrlRef = useRef(null);
+
+  useEffect(() => {
+    if (src || !imageId || !neoBaseUrl || !token) return;
+    let cancelled = false;
+    fetch(`${neoBaseUrl}/image/${imageId}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then(r => r.ok ? r.blob() : null)
+      .then(blob => {
+        if (blob && !cancelled) {
+          const url = URL.createObjectURL(blob);
+          objectUrlRef.current = url;
+          setSrc(url);
+        }
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [imageId, neoBaseUrl, token, src]);
+
+  // Revoke object URL only on unmount.
+  useEffect(() => {
+    return () => { if (objectUrlRef.current) URL.revokeObjectURL(objectUrlRef.current); };
+  }, []);
+
+  if (src) {
+    return <img src={src} alt={name} className={`${sizeClass} rounded-lg object-cover shrink-0`} />;
+  }
+  const initial = (name || '?')[0].toUpperCase();
+  return (
+    <div className={`${sizeClass} rounded-lg flex items-center justify-center text-sm font-semibold shrink-0 ${getColor(id)}`}>
+      {initial}
+    </div>
+  );
+}
+
+/**
+ * Resolves the image id for a selector row: prefer the row's own `image`, then fall back to
+ * the bulk imageMap keyed by searchKey or id (populated by useProductImages).
+ */
+export function resolveImageId(row, imageMap = {}) {
+  return row.image || imageMap[row.searchKey] || imageMap[row.id] || null;
+}
+
+/**
+ * Bulk-loads product images once per drawer open, keyed by searchKey and id, so rows can render
+ * their image without a per-row lookup request. The image entity URL is auto-derived from the
+ * selector URL (…/product/product); no caller passes it explicitly.
+ *
+ * Returns { imageMap, neoBaseUrl } — neoBaseUrl is reused by ProductAvatar for the per-image
+ * blob fetch fallback.
+ */
+export function useProductImages({ open, selectorUrl, token }) {
+  const [imageMap, setImageMap] = useState({});
+  const neoBaseUrl = selectorUrl ? selectorUrl.replace(/\/[^/]+\/[^/]+\/selectors\/.*$/, '') : '';
+  const imageUrl = neoBaseUrl ? `${neoBaseUrl}/product/product` : null;
+
+  useEffect(() => {
+    if (!open) return undefined;
+    setImageMap({});
+    if (!imageUrl || !token) return undefined;
+    let cancelled = false;
+    fetch(`${imageUrl}?_startRow=0&_endRow=500`, {
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+    })
+      .then(r => r.ok ? r.json() : null)
+      .then(data => {
+        if (cancelled) return;
+        const rows = data?.response?.data || [];
+        const map = {};
+        for (const row of rows) {
+          if (row.image) {
+            if (row.searchKey) map[row.searchKey] = row.image;
+            if (row.id) map[row.id] = row.image;
+          }
+        }
+        setImageMap(map);
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [open, imageUrl, token]);
+
+  return { imageMap, neoBaseUrl };
 }
 
 /**

@@ -117,6 +117,9 @@ test.describe('Onboarding — Full registration flow', () => {
     await installMocks(page);
     await page.goto('/onboarding');
 
+    // Onboarding now defaults to the login view; switch to the register view.
+    await page.getByTestId('action-switch-to-register').click();
+
     // ═══════════════════════════════════════════════════════════════════════
     // PART 1: Register page — verify all elements are present
     // ═══════════════════════════════════════════════════════════════════════
@@ -126,7 +129,6 @@ test.describe('Onboarding — Full registration flow', () => {
     await expect(page.locator('#reg-email')).toBeVisible();
     await expect(page.locator('#reg-password')).toBeVisible();
     await expect(page.getByTestId('action-register-submit')).toBeVisible();
-    await expect(page.locator('#onboarding-language')).toBeVisible();
     await expect(page.getByTestId('action-switch-to-login')).toBeVisible();
 
     // ═══════════════════════════════════════════════════════════════════════
@@ -193,20 +195,22 @@ test.describe('Onboarding — Full registration flow', () => {
     await expect(page.getByText(/datos para empezar a facturar/i)).toBeVisible({ timeout: 5_000 });
     await expect(page.getByText(/casi listo/i)).toBeVisible();
 
-    // Start button disabled (no company name or fiscal ID)
+    // Start button disabled (no company name — the only required field)
     const startBtn = page.getByRole('button', { name: /empezar|start/i });
     await expect(startBtn).toBeDisabled();
 
-    // Fill company name only — still disabled
+    // Fill company name — enabled (fiscal id is optional and does not gate the step)
     await page.locator('#clientName').fill('Mi Empresa E2E');
-    await expect(startBtn).toBeDisabled();
+    await expect(startBtn).toBeEnabled();
 
-    // Fill fiscal ID — enabled
+    // Fill fiscal ID (optional) — stays enabled
     await page.locator('#fiscalIdValue').fill('B12345678');
     await expect(startBtn).toBeEnabled();
 
-    // Address shows "(opcional)"
-    await expect(page.getByText(/opcional/i)).toBeVisible();
+    // Address label carries the "(opcional)" tag. Fiscal id also renders "opcional"
+    // now (core 0.3.8), so scope to the address field's SetupField label
+    // (<label for="address">…(opcional)</label>) instead of a bare text match.
+    await expect(page.locator('label[for="address"]')).toContainText(/opcional/i);
 
     // Sector dropdown visible
     await expect(page.locator('#sector')).toBeVisible();
@@ -246,6 +250,10 @@ test.describe('Onboarding — Login & password recovery flow', () => {
   test('duplicate email → login view → wrong credentials → password toggle → forgot password → successful login', async ({ page }) => {
     await installMocks(page, { registerBehavior: 'fail', loginBehavior: 'first-fails' });
     await page.goto('/onboarding');
+
+    // Onboarding now defaults to the login view; switch to register first to
+    // exercise the duplicate-email path before returning to login.
+    await page.getByTestId('action-switch-to-register').click();
 
     // ═══════════════════════════════════════════════════════════════════════
     // PART 1: Duplicate email error on register
@@ -317,12 +325,13 @@ test.describe('Onboarding — Login & password recovery flow', () => {
     await forgotEmail.fill('qa@test.com');
     await page.getByTestId('action-forgot-password-submit').click();
 
-    // Success message
-    const successBox = page.locator('.border-emerald-200');
-    await expect(successBox).toBeVisible({ timeout: 5_000 });
+    // Success message — new redesigned "reset email sent" screen (no more
+    // .border-emerald-200 box); assert on the stable back-to-login testid.
+    const backToLoginBtn = page.getByTestId('action-forgot-password-back-to-login');
+    await expect(backToLoginBtn).toBeVisible({ timeout: 5_000 });
 
     // Back to login
-    await page.getByTestId('action-forgot-back-to-login').click();
+    await backToLoginBtn.click();
     await expect(page.locator('#login-email')).toBeVisible({ timeout: 5_000 });
 
     // ═══════════════════════════════════════════════════════════════════════
@@ -355,12 +364,17 @@ test.describe('Onboarding — Login & password recovery flow', () => {
     // PART 6: Verify we can navigate back to register from login
     // ═══════════════════════════════════════════════════════════════════════
 
-    // Navigate fresh to verify register ↔ login navigation
+    // Navigate fresh to verify register ↔ login navigation. The default view
+    // is now login, so the login email field is visible immediately.
     await page.goto('/onboarding');
-    await page.getByTestId('action-switch-to-login').click();
     await expect(page.locator('#login-email')).toBeVisible({ timeout: 5_000 });
 
+    // login → register
     await page.getByTestId('action-switch-to-register').click();
     await expect(page.getByRole('heading', { name: /crea tu cuenta gratis/i })).toBeVisible({ timeout: 5_000 });
+
+    // register → login
+    await page.getByTestId('action-switch-to-login').click();
+    await expect(page.locator('#login-email')).toBeVisible({ timeout: 5_000 });
   });
 });

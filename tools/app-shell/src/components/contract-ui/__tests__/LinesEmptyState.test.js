@@ -80,4 +80,19 @@ describe('LinesEmptyState', () => {
   it('renders primaryButton without wrapper when secondaryAction is absent', () => {
     assert.match(src, /:\s*primaryButton/);
   });
+
+  describe('import-only mode (canAddLine=false, ETP-4462)', () => {
+    it('resolves primaryButton to null when canAddLine is false', () => {
+      assert.match(src, /const primaryButton = canAddLine \? \(/);
+      assert.match(src, /\)\s*:\s*null;/);
+    });
+
+    it('tags the primary button with its data-testid', () => {
+      assert.match(src, /data-testid="action-add-lines-empty-state"/);
+    });
+
+    it('renders secondaryAction outside the canAddLine gate (survives import-only mode)', () => {
+      assert.match(src, /\{primaryButton\}\s*\{secondaryAction\}/s);
+    });
+  });
 });

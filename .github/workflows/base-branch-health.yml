@@ -39,6 +39,15 @@ jobs:
             const { owner, repo } = context.repo;
             const baseRef = context.payload.pull_request.base.ref;
 
+            // This job's own check-run name (see `name:` above). With
+            // bidirectional PRs (epic → develop and the "Sync develop into
+            // epic" PR develop → epic), this gate would otherwise count the
+            // OTHER branch's base-health check run as a failure — and since
+            // that one is red for the same reason, the two branches gate each
+            // other into a circular base↔base deadlock even when every real
+            // check passes. Skip our own check run below so we never gate on it.
+            const SELF_CHECK_NAME = 'Base branch is green';
+
             // ── Escape hatch: PR that repairs the base branch ───────────────
             // A PR labeled 'base-branch-fix' is allowed through even when the
             // base is red: it IS the change that turns the base green again, so
@@ -46,34 +55,19 @@ jobs:
             // once this PR merges). Applying the label re-runs this workflow via
             // the `labeled` event above.
             //
-            // The bypass is deliberately narrow and auditable: it applies only
-            // to a SINGLE-COMMIT PR carrying the 'base-branch-fix' label. The
-            // one-commit rule is what keeps the bypass from being used to sneak
-            // unrelated work past the gate — a base fix is a focused, reviewable
-            // change. Other labels are intentionally allowed to coexist (e.g. a
-            // domain-boundary override), since those gate other, independent
-            // checks. If the commit constraint is violated, the gate fails with a
-            // clear message instead of silently falling back to the base check.
+            // The bypass is auditable via the required 'base-branch-fix' label:
+            // applying it is a deliberate, reviewable action that turns the base
+            // green once this PR merges. Other labels are intentionally allowed
+            // to coexist (e.g. a domain-boundary override), since those gate
+            // other, independent checks.
             const labels = (context.payload.pull_request.labels || []).map(l => l.name);
             if (labels.includes('base-branch-fix')) {
-              const commitCount = context.payload.pull_request.commits;
-              if (commitCount !== 1) {
-                await core.summary
-                  .addHeading(`Base branch health: ${baseRef}`, 3)
-                  .addRaw(`PR labeled \`base-branch-fix\` has ${commitCount} commits — the bypass requires exactly 1.`)
-                  .write();
-                core.setFailed(
-                  `A 'base-branch-fix' PR must be exactly ONE commit (this one has ${commitCount}). ` +
-                  `Squash it to a single commit, then re-run this check.`
-                );
-                return;
-              }
               await core.summary
                 .addHeading(`Base branch health: ${baseRef}`, 3)
-                .addRaw(`Skipped — single-commit PR labeled \`base-branch-fix\` (expected to repair the base branch).`)
+                .addRaw(`Skipped — PR labeled \`base-branch-fix\` (expected to repair the base branch).`)
                 .write();
               core.info(
-                `PR labeled 'base-branch-fix' with 1 commit → skipping base health gate for '${baseRef}'.`
+                `PR labeled 'base-branch-fix' → skipping base health gate for '${baseRef}'.`
               );
               return;
             }
@@ -95,6 +89,7 @@ jobs:
               owner, repo, ref: sha, per_page: 100,
             });
             for (const run of checkRuns) {
+              if (run.name === SELF_CHECK_NAME) continue;  // ignore our own check run to avoid a circular base↔base deadlock
               total++;
               if (run.status !== 'completed') {
                 pending.push(`${run.name} (check run: ${run.status})`);

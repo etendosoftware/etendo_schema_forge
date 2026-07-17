@@ -2,6 +2,8 @@ import { useEffect } from 'react';
 import { ListView, DetailView } from '@/components/contract-ui';
 import TaxTable from './TaxTable';
 import TaxForm from './TaxForm';
+import AccountingTable from './AccountingTable';
+import AccountingForm from './AccountingForm';
 import { AttachmentsTab } from '@/components/attachments';
 import catalogs from './mockCatalogs';
 
@@ -37,7 +39,20 @@ const draftMode = null;
 const requiredHeaderFields = ['name', 'rate', 'docTaxAmount', 'baseAmount', 'applicableTo', 'validFrom'];
 // @sf-generated-end requiredHeaderFields:tax
 
+// @sf-generated-start addLineFields:accounting
+const addLineFields = {
+  entry: [
+    { key: 'taxDue', column: 'T_Due_Acct', type: 'selector', required: true, label: 'Tax Due', reference: 'ValidCombination', inputMode: 'selector' },
+    { key: 'taxCredit', column: 'T_Credit_Acct', type: 'selector', required: true, label: 'Tax Credit', reference: 'ValidCombination', inputMode: 'selector' },
+  ],
+  derived: [
 
+  ],
+  hidden: [
+    { key: 'accountingSchema', fromSibling: 'accountingSchema' },
+  ],
+};
+// @sf-generated-end addLineFields:accounting
 
 export const api = {
   "specName": "tax-rate",
@@ -49,15 +64,43 @@ export const api = {
       "post": true,
       "put": true,
       "patch": true,
-      "delete": true,
+      "delete": false,
       "listUrl": "/sws/neo/tax-rate/tax",
       "detailUrl": "/sws/neo/tax-rate/tax/{id}",
       "supportedFilters": [
         "name"
       ]
+    },
+    "accounting": {
+      "get": true,
+      "getById": true,
+      "post": true,
+      "put": true,
+      "patch": true,
+      "delete": false,
+      "listUrl": "/sws/neo/tax-rate/accounting",
+      "detailUrl": "/sws/neo/tax-rate/accounting/{id}",
+      "supportedFilters": []
     }
   },
-  "selectors": [],
+  "selectors": [
+    {
+      "entity": "accounting",
+      "field": "taxDue",
+      "column": "T_Due_Acct",
+      "reference": "ValidCombination",
+      "inputMode": "selector",
+      "url": "/sws/neo/tax-rate/accounting/selectors/taxDue"
+    },
+    {
+      "entity": "accounting",
+      "field": "taxCredit",
+      "column": "T_Credit_Acct",
+      "reference": "ValidCombination",
+      "inputMode": "selector",
+      "url": "/sws/neo/tax-rate/accounting/selectors/taxCredit"
+    }
+  ],
   "actions": [],
   "queryParams": {
     "pagination": {
@@ -81,7 +124,6 @@ export const api = {
       "Rate": "Índice",
       "SOPOType": "Tipo venta/compra",
       "ValidFrom": "Válido desde",
-      "IsActive": "Activo",
       "Description": "Descripción"
     },
     "en_US": {
@@ -89,7 +131,6 @@ export const api = {
       "Rate": "Rate",
       "SOPOType": "Sales/Purchase Type",
       "ValidFrom": "Valid From",
-      "IsActive": "Active",
       "Description": "Description"
     }
   }
@@ -101,19 +142,26 @@ const labelOverrides = api.labelOverrides;
 export default function TaxPage({ windowName, recordId, ...props }) {
   if (recordId) {
     return (
+      <>
       <DetailView
         entity="tax"
+        detailEntity="accounting"
         Form={TaxForm}
+        DetailTable={AccountingTable}
+        DetailForm={AccountingForm}
         summary={summary}
         statusField={statusField}
         extraBadges={extraBadges}
         processes={processes}
+        addLineFields={addLineFields}
         catalogs={catalogs}
         entityLabel="Tax"
+        detailLabel="Accounting"
         windowName={windowName}
         recordId={recordId}
         breadcrumb={breadcrumb}
       api={api}
+        hideDeleteButton
         hidePrint
         hideMoreMenu
         customTabs={[{ key: 'attachments', labelKey: 'attachments', Component: AttachmentsTab, placement: 'tab', props: { tableName: "C_Tax", config: {} } }]}
@@ -121,6 +169,7 @@ export default function TaxPage({ windowName, recordId, ...props }) {
         labelOverrides={labelOverrides}
         {...props}
       />
+      </>
     );
   }
 
@@ -133,9 +182,10 @@ export default function TaxPage({ windowName, recordId, ...props }) {
       breadcrumb={breadcrumb}
       api={api}
       hidePrint
+      hideCreate
       hideMoreMenu
       labelOverrides={labelOverrides}
-      rowQuickActions={{}}
+      rowQuickActions={{"hideDeleteButton":true}}
       {...props}
     />
   );

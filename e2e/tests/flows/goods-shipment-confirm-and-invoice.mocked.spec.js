@@ -308,8 +308,13 @@ test.describe('Goods Shipment — Crear Factura button gating and invoice creati
     ).toHaveCount(1);
 
     // 12. Close the result modal via "Cerrar" button (soClose)
-    //     exact: true to avoid matching "Cerrar Copilot" button
-    await page.getByRole('button', { name: 'Cerrar', exact: true }).click();
+    //     exact: true to avoid matching "Cerrar Copilot" button.
+    //     ETP-4299: ConfirmWithCreditButtonBase.onClose fires window.location.reload()
+    //     via setTimeout(0). waitForNavigation absorbs that reload before page.goto below.
+    await Promise.all([
+      page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 10_000 }).catch(() => {}),
+      page.getByRole('button', { name: 'Cerrar', exact: true }).click(),
+    ]);
 
     // 13. Now register a route for a fully-invoiced shipment (invoiceStatus: 100)
     const fullShipment = makeShipment({

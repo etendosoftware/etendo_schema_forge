@@ -1,8 +1,8 @@
 {
-  "version": "0.2.0",
+  "version": "0.4.0",
   "generatedAt": "2026-04-29T18:12:11.134Z",
-  "updatedAt": "2026-05-20T11:45:15.272Z",
-  "checksum": "b0c07294925ffebf",
+  "updatedAt": "2026-07-14T00:44:18.756Z",
+  "checksum": "81b69c716ad2e15c",
   "frontendContract": {
     "window": {
       "id": "146",
@@ -17,7 +17,8 @@
           "C_Currency_ID": "Moneda",
           "Costbased": "Basado en coste",
           "IsTaxIncluded": "Precio incluye impuesto",
-          "IsDefault": "Por defecto"
+          "IsDefault": "Por defecto",
+          "IsActive": "Activo"
         }
       },
       "layoutType": "default"
@@ -137,6 +138,28 @@
             }
           },
           {
+            "name": "active",
+            "apiKey": "active",
+            "column": "IsActive",
+            "label": "Active",
+            "type": "boolean",
+            "tsType": "boolean",
+            "visibility": "editable",
+            "required": true,
+            "grid": false,
+            "form": true,
+            "sourceRequired": true,
+            "derivation": {
+              "type": "computed",
+              "source": "true"
+            },
+            "section": "principal",
+            "seq": 8,
+            "callout": {
+              "className": "org.openbravo.erpCommon.ad_callouts.SE_Pricelist_Active"
+            }
+          },
+          {
             "name": "priceIncludesTax",
             "apiKey": "priceIncludesTax",
             "column": "IsTaxIncluded",
@@ -183,6 +206,13 @@
             "derivation": {
               "type": "computed",
               "source": "N"
+            }
+          },
+          {
+            "name": "active",
+            "derivation": {
+              "type": "computed",
+              "source": "true"
             }
           }
         ],
@@ -396,7 +426,10 @@
             "enumValues": [
               {
                 "value": "S",
-                "name": "Standard"
+                "name": "Standard",
+                "labels": {
+                  "es_ES": "Estándar"
+                }
               }
             ],
             "defaultValue": "S",
@@ -440,7 +473,8 @@
           "C_Currency_ID": "Moneda",
           "Costbased": "Basado en coste",
           "IsTaxIncluded": "Precio incluye impuesto",
-          "IsDefault": "Por defecto"
+          "IsDefault": "Por defecto",
+          "IsActive": "Activo"
         }
       }
     },
@@ -511,7 +545,7 @@
             "apiKey": "active",
             "column": "IsActive",
             "type": "boolean",
-            "visibility": "discarded",
+            "visibility": "editable",
             "required": true
           },
           {
@@ -1063,7 +1097,8 @@
         "C_Currency_ID": "Moneda",
         "Costbased": "Basado en coste",
         "IsTaxIncluded": "Precio incluye impuesto",
-        "IsDefault": "Por defecto"
+        "IsDefault": "Por defecto",
+        "IsActive": "Activo"
       }
     }
   },
@@ -1193,6 +1228,14 @@
         "field": "cost",
         "runner": "node",
         "description": "Display logic for 'cost' in productPrice should be valid JS"
+      },
+      {
+        "id": "t-field-presence-priceList-active",
+        "category": "field-presence",
+        "entity": "priceList",
+        "field": "active",
+        "runner": "node",
+        "description": "Field 'active' should be present in priceList"
       },
       {
         "id": "t-field-presence-priceList-costBasedPriceList",
@@ -1337,6 +1380,14 @@
         "field": "standardPrice",
         "runner": "node",
         "description": "Field 'standardPrice' should be present in productPrice"
+      },
+      {
+        "id": "t-field-type-priceList-active",
+        "category": "field-type",
+        "entity": "priceList",
+        "field": "active",
+        "runner": "node",
+        "description": "Field 'active' should have type 'boolean' in priceList"
       },
       {
         "id": "t-field-type-priceList-costBasedPriceList",
@@ -1600,14 +1651,6 @@
         "description": "Selector endpoint for 'product' in productPrice should exist"
       },
       {
-        "id": "t-system-field-priceList-active",
-        "category": "system-field",
-        "entity": "priceList",
-        "field": "active",
-        "runner": "node",
-        "description": "System field 'active' should exist in backend but not frontend for priceList"
-      },
-      {
         "id": "t-system-field-priceList-basePricelist",
         "category": "system-field",
         "entity": "priceList",
@@ -1862,23 +1905,23 @@
       }
     ],
     "summary": {
-      "total": 101,
+      "total": 102,
       "byCategory": {
         "action-endpoint": 2,
         "crud-flags": 3,
         "default-value-type": 5,
         "displaylogic-evaluable": 3,
         "displaylogic-valid": 3,
-        "field-presence": 18,
-        "field-type": 18,
+        "field-presence": 19,
+        "field-type": 19,
         "rule-declared": 11,
         "searchable-filters": 1,
         "selector-endpoint": 4,
-        "system-field": 30,
+        "system-field": 29,
         "visibility": 3
       },
       "byRunner": {
-        "node": 101,
+        "node": 102,
         "junit": 0
       }
     }

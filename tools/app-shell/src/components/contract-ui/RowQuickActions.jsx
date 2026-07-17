@@ -52,6 +52,12 @@ export default function RowQuickActions({
   // row kebab can mirror the detail kebab's per-state visibility logic.
   menuActions = [],
   hideDeleteWhenComplete = false,
+  // Unconditional Delete-button opt-out — set from decisions.json → window.hideDeleteButton
+  // (threaded through DataTable's `rowQuickActions.hideDeleteButton`). Unlike
+  // `hideDeleteWhenComplete`, this does not depend on record status: when true, the
+  // Delete icon never renders for any row in this window, mirroring DetailView's toolbar.
+  // Defaults to false → identical to pre-feature behavior when unset.
+  hideDeleteButton = false,
   statusField = null,
   // Handlers (host-controlled to keep this component decoupled from routing/modals)
   onEdit,
@@ -136,10 +142,13 @@ export default function RowQuickActions({
   }, [showMenu]);
 
   // Same gate as DetailView's edit toolbar — centralized in utils/recordActions.js.
-  const showDelete = isDeleteVisibleForRecord({
+  // `hideDeleteButton` short-circuits before the status-based gate: it's an
+  // unconditional opt-out, not a conditional one.
+  const showDelete = !hideDeleteButton && isDeleteVisibleForRecord({
     record: row,
     statusField,
     hideDeleteWhenComplete,
+    hideDeleteButton,
   });
 
   const stop = (e) => { e.stopPropagation(); };

@@ -241,6 +241,7 @@ export const api = {
 export default function UserPage({ windowName, recordId, ...props }) {
   if (recordId) {
     return (
+      <>
       <DetailView
         entity="user"
         detailEntity="userRoles"
@@ -263,6 +264,7 @@ export default function UserPage({ windowName, recordId, ...props }) {
         requiredHeaderFields={requiredHeaderFields}
         {...props}
       />
+      </>
     );
   }
 

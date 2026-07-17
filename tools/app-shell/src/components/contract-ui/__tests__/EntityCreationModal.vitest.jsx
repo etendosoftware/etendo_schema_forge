@@ -299,4 +299,43 @@ describe('EntityCreationModal — renderFieldInput field types', () => {
     const telInput = container.querySelector('input[type="tel"]');
     expect(telInput).toBeTruthy();
   });
+
+  // ETP-4321 regression guard: INPUT_CLS/SELECT_CLS must carry the important
+  // height token `!h-9` (FIELD_HEIGHT_IMPORTANT). The bug fix replaced
+  // `!${FIELD_HEIGHT}` (never seen by Tailwind's JIT scanner) with the literal
+  // FIELD_HEIGHT_IMPORTANT token, so the rendered class must contain `!h-9`.
+  it('text input className uses the !h-9 important height token (INPUT_CLS exercises FIELD_HEIGHT_IMPORTANT)', () => {
+    const props = {
+      ...BASE_PROPS,
+      headerFields: [
+        { id: 'note', labelKey: 'noteLabel', type: 'text' },
+      ],
+      requiredFields: [],
+    };
+    const { container } = render(<EntityCreationModal {...props} />);
+    const textInput = container.querySelector('input[type="text"]');
+    expect(textInput).toBeTruthy();
+    expect(textInput.className).toContain('!h-9');
+  });
+
+  it('select field className uses the !h-9 important height token (SELECT_CLS + SELECT_STYLE)', () => {
+    const props = {
+      ...BASE_PROPS,
+      headerFields: [
+        {
+          id: 'status',
+          labelKey: 'statusLabel',
+          type: 'select',
+          options: [{ id: 'active', label: 'Active' }],
+        },
+      ],
+      requiredFields: [],
+    };
+    const { container } = render(<EntityCreationModal {...props} />);
+    const selectEl = container.querySelector('select');
+    expect(selectEl).toBeTruthy();
+    expect(selectEl.className).toContain('!h-9');
+    // SELECT_STYLE keeps fontSize only (height now comes from the token).
+    expect(selectEl.style.fontSize).toBe('14px');
+  });
 });

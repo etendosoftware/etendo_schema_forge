@@ -15,6 +15,9 @@ const src = readFileSync(join(__dirname, '..', 'DetailView.jsx'), 'utf8');
  *  2. Define a `handleFieldBlur` callback that checks for unsaved changes
  *     before calling `hook.handleSave()`.
  *  3. Pass `onFieldBlur` to both Form instances (principal and collapsed sections).
+ *  4. Fire `handleFieldBlur` on mouseDown in the lines section for inlineEditable
+ *     windows — this saves the header even when only selector/search fields were
+ *     changed (they don't fire onBlur, so field-level triggers miss them).
  */
 describe('DetailView — autoSaveOnBlur (ETP-3660 regression)', () => {
   it('declares autoSaveOnBlur prop with a false default', () => {
@@ -37,5 +40,12 @@ describe('DetailView — autoSaveOnBlur (ETP-3660 regression)', () => {
       /onFieldBlur=\{autoSaveOnBlur\s*\?\s*handleFieldBlur\s*:\s*undefined\}/g,
     );
     assert.ok(matches && matches.length >= 2, 'onFieldBlur must appear on both Form instances');
+  });
+
+  it('fires handleFieldBlur on mouseDown in lines section for inlineEditable', () => {
+    assert.match(
+      src,
+      /onMouseDown=\{autoSaveOnBlur\s*&&\s*linesLayout\s*===\s*['"]inlineEditable['"]\s*\?\s*\(\)\s*=>\s*handleFieldBlurRef\.current\?\.\(\)\s*:\s*undefined\}/,
+    );
   });
 });

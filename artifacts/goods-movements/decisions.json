@@ -136,7 +136,7 @@
           "gridOrder": 3
         },
         "processNow": {
-          "visibility": "discarded"
+          "visibility": "system"
         },
         "project": {
           "visibility": "discarded",
@@ -179,13 +179,13 @@
           "grid": true,
           "searchable": true,
           "lookup": true,
-          "lookupDrawer": "goods-movements-product",
+          "lookupDrawer": "product-stock",
           "lookupTitle": "Product",
           "onSelectMappings": [
             {
               "from": "_aux._LOC",
               "to": "storageBin",
-              "labelFrom": ["storageBin", "storageBin$_identifier", "warehouse"]
+              "labelFrom": ["warehouse", "warehouse$_identifier", "storageBin"]
             }
           ],
           "readOnlyLogic": null,

@@ -28,6 +28,7 @@ vi.mock('@/lib/selectorCatalog.js', () => ({
 }));
 vi.mock('@/lib/statusBadge.js', () => ({
   getStatusDotColor: (raw) => `dot-${raw ?? 'none'}`,
+  getStatusTone: () => 'neutral',
   statusLabel: (raw) => `lbl-${raw}`,
 }));
 vi.mock('@/components/ui/status-tag', () => ({
@@ -55,7 +56,7 @@ vi.mock('@/lib/linesColumnWidth.js', () => ({
 vi.mock('../ProductSearchDrawer.jsx', () => ({
   default: () => null,
 }));
-vi.mock('../InternalConsumptionProductSearchDrawer.jsx', () => ({
+vi.mock('../ProductStockSearchDrawer.jsx', () => ({
   default: () => null,
 }));
 vi.mock('../SelectorInput.jsx', () => ({

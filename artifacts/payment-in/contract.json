@@ -1,46 +1,46 @@
 {
-  "version": "0.5.0",
+  "version": "0.10.0",
   "generatedAt": "2026-04-29T19:05:52.312Z",
-  "updatedAt": "2026-06-24T20:46:47.740Z",
-  "checksum": "a228dd7831d60882",
+  "updatedAt": "2026-07-14T12:35:21.921Z",
+  "checksum": "eee82f93d84a16a0",
   "frontendContract": {
     "window": {
       "id": "E547CE89D4C04429B6340FFA44E70716",
       "name": "Payment In",
       "primaryEntity": "finPayment",
       "category": "finance",
-      "documentPreview": {
-        "titlePrefix": "Payment"
-      },
       "notesField": "description",
       "relatedDocuments": true,
       "hideDeleteWhenComplete": true,
       "customTabsAfterBottom": true,
-      "customComponents": {
-        "bottomSection": "PaymentBottomPanel",
-        "topbarRight": "PaymentActivityToggle",
-        "newRecordComponent": "NewPaymentModal"
-      },
-      "menuActions": [
-        {
-          "key": "reverse",
-          "label": "Reverse Payment",
-          "destructive": true,
-          "visibleWhenStatus": [
-            "RPPC",
-            "RPR",
-            "RDNC"
-          ],
-          "columnName": "aPRMReversePayment"
-        }
+      "hidePrint": true,
+      "hideCreate": true,
+      "hideSaveStatuses": [
+        "RDNC",
+        "RPPC",
+        "RPR",
+        "RPVOID",
+        "PWNC"
       ],
+      "customComponents": {
+        "headerTable": "PaymentHeaderTable",
+        "sidePanel": "PaymentDetailSidebar",
+        "bottomSection": "PaymentBottomPanel",
+        "newRecordComponent": "NewPaymentModal",
+        "processConfirmModal": "ReactivarConfirmModal",
+        "topbarExtra": "PaymentConciliadoBadge",
+        "sidePanelStyle": {
+          "order": -1,
+          "borderLeft": "none",
+          "borderRight": "1px solid #E8EAEF",
+          "padding": 0
+        }
+      },
       "processOverrides": {
         "aPRMProcessPayment": {
-          "add": true,
-          "label": "Process Payment",
-          "style": "positive",
-          "columnName": "aPRMProcessPayment",
-          "displayLogicRaw": "@status@='RPAP'"
+          "label": "processConfirm",
+          "displayLogicRaw": "@status@ = 'RPAP'",
+          "confirmModal": true
         },
         "aPRMAddScheduledpayments": {
           "exclude": true
@@ -53,13 +53,31 @@
         },
         "aPRMReconcilePayment": {
           "exclude": true
+        },
+        "etprReactivatePayment": {
+          "add": true,
+          "columnName": "etprReactivatePayment",
+          "label": "processReactivate",
+          "style": "ghost-danger",
+          "displayLogicRaw": "@status@ != 'RPAP'"
         }
       },
       "detailEntity": null,
       "summaryFields": [],
-      "salesTheme": true,
+      "salesTheme": false,
       "dateFilterKey": "paymentDate",
-      "attachments": true,
+      "statusEnumLabels": {
+        "RPAP": "statusDraft",
+        "RPR": "cobroDepositado",
+        "RDNC": "cobroDepositado",
+        "RPPC": "cobroDepositado",
+        "PPM": "cobroDepositado",
+        "PWNC": "cobroDepositado"
+      },
+      "statusFieldLabel": "statusColumnLabel",
+      "toolbarBorderBottom": true,
+      "hideFormCard": true,
+      "attachments": false,
       "layoutType": "default"
     },
     "entities": {
@@ -299,6 +317,27 @@
             }
           },
           {
+            "name": "aPRMProcessPayment",
+            "apiKey": "aPRMProcessPayment",
+            "column": "EM_APRM_Process_Payment",
+            "label": "Payment Process",
+            "type": "button",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": false,
+            "grid": false,
+            "form": false,
+            "derivation": {
+              "type": "computed",
+              "source": "P"
+            },
+            "defaultValue": "P",
+            "displayLogic": {
+              "raw": "@Processed@='Y' & @Status@!'RPVOID' & @FIN_Rev_Payment_ID@ = ''",
+              "evaluable": true
+            }
+          },
+          {
             "name": "status",
             "apiKey": "status",
             "column": "Status",
@@ -317,35 +356,59 @@
             "enumValues": [
               {
                 "value": "RPAP",
-                "name": "Awaiting Payment"
+                "name": "Awaiting Payment",
+                "labels": {
+                  "es_ES": "A Pagar"
+                }
               },
               {
                 "value": "RPAE",
-                "name": "Awaiting Execution"
+                "name": "Awaiting Execution",
+                "labels": {
+                  "es_ES": "A Ejecutar"
+                }
               },
               {
                 "value": "RPVOID",
-                "name": "Void"
+                "name": "Void",
+                "labels": {
+                  "es_ES": "Anulado"
+                }
               },
               {
                 "value": "PPM",
-                "name": "Payment Made"
+                "name": "Payment Made",
+                "labels": {
+                  "es_ES": "Pagado"
+                }
               },
               {
                 "value": "RPR",
-                "name": "Payment Received"
+                "name": "Payment Received",
+                "labels": {
+                  "es_ES": "Cobrado"
+                }
               },
               {
                 "value": "RDNC",
-                "name": "Deposited not Cleared"
+                "name": "Deposited not Cleared",
+                "labels": {
+                  "es_ES": "Cobro depositado"
+                }
               },
               {
                 "value": "PWNC",
-                "name": "Withdrawn not Cleared"
+                "name": "Withdrawn not Cleared",
+                "labels": {
+                  "es_ES": "Pago reintegrado"
+                }
               },
               {
                 "value": "RPPC",
-                "name": "Payment Cleared"
+                "name": "Payment Cleared",
+                "labels": {
+                  "es_ES": "Conciliado"
+                }
               }
             ],
             "defaultValue": "RPAP",
@@ -358,6 +421,42 @@
             }
           },
           {
+            "name": "creationDate",
+            "apiKey": "creationDate",
+            "column": "Created",
+            "label": "Created",
+            "type": "dateTime",
+            "tsType": "string",
+            "visibility": "readOnly",
+            "required": true,
+            "grid": false,
+            "form": false,
+            "sourceRequired": true,
+            "derivation": {
+              "type": "fromConfig",
+              "source": "new Date()"
+            },
+            "defaultValue": "SYSDATE"
+          },
+          {
+            "name": "updated",
+            "apiKey": "updated",
+            "column": "Updated",
+            "label": "Updated",
+            "type": "dateTime",
+            "tsType": "string",
+            "visibility": "readOnly",
+            "required": true,
+            "grid": false,
+            "form": false,
+            "sourceRequired": true,
+            "derivation": {
+              "type": "fromConfig",
+              "source": "new Date()"
+            },
+            "defaultValue": "SYSDATE"
+          },
+          {
             "name": "etblkpAccountingstatus",
             "apiKey": "etblkpAccountingstatus",
             "column": "EM_Etblkp_Accountingstatus",
@@ -367,7 +466,7 @@
             "visibility": "readOnly",
             "required": true,
             "grid": false,
-            "form": true,
+            "form": false,
             "sourceRequired": true,
             "derivation": {
               "type": "computed",
@@ -376,75 +475,129 @@
             "enumValues": [
               {
                 "value": "NC",
-                "name": "Cost Not Calculated"
+                "name": "Cost Not Calculated",
+                "labels": {
+                  "es_ES": "Coste No Calculado"
+                }
               },
               {
                 "value": "d",
-                "name": "Disabled For Background"
+                "name": "Disabled For Background",
+                "labels": {
+                  "es_ES": "Deshabilitado Para Background"
+                }
               },
               {
                 "value": "D",
-                "name": "Document Disabled"
+                "name": "Document Disabled",
+                "labels": {
+                  "es_ES": "Documento Deshabilitado"
+                }
               },
               {
                 "value": "L",
-                "name": "Document Locked"
+                "name": "Document Locked",
+                "labels": {
+                  "es_ES": "Documento Bloqueado"
+                }
               },
               {
                 "value": "E",
-                "name": "Error"
+                "name": "Error",
+                "labels": {
+                  "es_ES": "Error"
+                }
               },
               {
                 "value": "C",
-                "name": "Error, No cost"
+                "name": "Error, No cost",
+                "labels": {
+                  "es_ES": "Error, No hay coste"
+                }
               },
               {
                 "value": "i",
-                "name": "Invalid Account"
+                "name": "Invalid Account",
+                "labels": {
+                  "es_ES": "Cuenta No Válida"
+                }
               },
               {
                 "value": "AD",
-                "name": "No Accounting Date"
+                "name": "No Accounting Date",
+                "labels": {
+                  "es_ES": "Sin Fecha Contable"
+                }
               },
               {
                 "value": "DT",
-                "name": "No Document Type"
+                "name": "No Document Type",
+                "labels": {
+                  "es_ES": "Sin tipo de Documento"
+                }
               },
               {
                 "value": "NO",
-                "name": "No Related PO"
+                "name": "No Related PO",
+                "labels": {
+                  "es_ES": "Sin PO Relacionada"
+                }
               },
               {
                 "value": "b",
-                "name": "Not Balanced"
+                "name": "Not Balanced",
+                "labels": {
+                  "es_ES": "No Balanceado"
+                }
               },
               {
                 "value": "c",
-                "name": "Not Convertible (no rate)"
+                "name": "Not Convertible (no rate)",
+                "labels": {
+                  "es_ES": "No Convertible (no hay rango)"
+                }
               },
               {
                 "value": "l",
-                "name": "Pending Refresh"
+                "name": "Pending Refresh",
+                "labels": {
+                  "es_ES": "Pendiente de Actualización"
+                }
               },
               {
                 "value": "p",
-                "name": "Period Closed"
+                "name": "Period Closed",
+                "labels": {
+                  "es_ES": "Periodo Cerrado"
+                }
               },
               {
                 "value": "y",
-                "name": "Post Prepared"
+                "name": "Post Prepared",
+                "labels": {
+                  "es_ES": "Contabilidad Preparada"
+                }
               },
               {
                 "value": "Y",
-                "name": "Posted"
+                "name": "Posted",
+                "labels": {
+                  "es_ES": "Contabilizado"
+                }
               },
               {
                 "value": "T",
-                "name": "Table Disabled"
+                "name": "Table Disabled",
+                "labels": {
+                  "es_ES": "Tabla Deshabilitada"
+                }
               },
               {
                 "value": "N",
-                "name": "Unposted"
+                "name": "Unposted",
+                "labels": {
+                  "es_ES": "No Contabilizado"
+                }
               }
             ],
             "defaultValue": "N"
@@ -459,7 +612,7 @@
             "visibility": "readOnly",
             "required": true,
             "grid": false,
-            "form": true,
+            "form": false,
             "sourceRequired": true,
             "derivation": {
               "type": "computed",
@@ -483,7 +636,7 @@
             "visibility": "editable",
             "required": true,
             "grid": false,
-            "form": true,
+            "form": false,
             "sourceRequired": true,
             "derivation": {
               "type": "computed",
@@ -505,7 +658,7 @@
             "visibility": "editable",
             "required": false,
             "grid": false,
-            "form": true,
+            "form": false,
             "displayLogic": {
               "raw": "@Processed@='Y' & @Status@!'RPVOID'",
               "evaluable": true
@@ -540,10 +693,31 @@
             }
           },
           {
+            "name": "aPRMProcessPayment",
+            "derivation": {
+              "type": "computed",
+              "source": "P"
+            }
+          },
+          {
             "name": "status",
             "derivation": {
               "type": "computed",
               "source": "RPAP"
+            }
+          },
+          {
+            "name": "creationDate",
+            "derivation": {
+              "type": "fromConfig",
+              "source": "new Date()"
+            }
+          },
+          {
+            "name": "updated",
+            "derivation": {
+              "type": "fromConfig",
+              "source": "new Date()"
             }
           },
           {
@@ -568,6 +742,7 @@
             }
           }
         ],
+        "javaQualifier": "payment-reactivate",
         "formCols": 3
       },
       "finPaymentScheduleDetail": {
@@ -587,6 +762,18 @@
             "required": false,
             "grid": true,
             "form": true
+          },
+          {
+            "name": "expected",
+            "apiKey": "expected",
+            "column": "ExpectedAmount",
+            "label": "Expected Amount",
+            "type": "amount",
+            "tsType": "number",
+            "visibility": "readOnly",
+            "required": false,
+            "grid": false,
+            "form": false
           },
           {
             "name": "amount",
@@ -615,7 +802,7 @@
             "tsType": "string",
             "visibility": "editable",
             "required": false,
-            "grid": true,
+            "grid": false,
             "form": true,
             "reference": "Payment_Schedule",
             "inputMode": "search",
@@ -623,6 +810,20 @@
               "raw": "@FIN_Payment_Schedule_Invoice@!''",
               "evaluable": true
             }
+          },
+          {
+            "name": "invoiceDocumentNo",
+            "apiKey": "invoiceDocumentNo",
+            "column": "invoiceDocumentNo",
+            "label": "Invoice",
+            "type": "string",
+            "tsType": "string",
+            "visibility": "readOnly",
+            "required": false,
+            "grid": true,
+            "form": false,
+            "section": "other",
+            "gridOrder": 1
           }
         ],
         "searchableFields": [],
@@ -634,7 +835,8 @@
               "source": "0"
             }
           }
-        ]
+        ],
+        "javaQualifier": "paymentScheduleDetailHandler"
       }
     }
   },
@@ -644,38 +846,38 @@
       "name": "Payment In",
       "primaryEntity": "finPayment",
       "category": "finance",
-      "documentPreview": {
-        "titlePrefix": "Payment"
-      },
       "notesField": "description",
       "relatedDocuments": true,
       "hideDeleteWhenComplete": true,
       "customTabsAfterBottom": true,
-      "customComponents": {
-        "bottomSection": "PaymentBottomPanel",
-        "topbarRight": "PaymentActivityToggle",
-        "newRecordComponent": "NewPaymentModal"
-      },
-      "menuActions": [
-        {
-          "key": "reverse",
-          "label": "Reverse Payment",
-          "destructive": true,
-          "visibleWhenStatus": [
-            "RPPC",
-            "RPR",
-            "RDNC"
-          ],
-          "columnName": "aPRMReversePayment"
-        }
+      "hidePrint": true,
+      "hideCreate": true,
+      "hideSaveStatuses": [
+        "RDNC",
+        "RPPC",
+        "RPR",
+        "RPVOID",
+        "PWNC"
       ],
+      "customComponents": {
+        "headerTable": "PaymentHeaderTable",
+        "sidePanel": "PaymentDetailSidebar",
+        "bottomSection": "PaymentBottomPanel",
+        "newRecordComponent": "NewPaymentModal",
+        "processConfirmModal": "ReactivarConfirmModal",
+        "topbarExtra": "PaymentConciliadoBadge",
+        "sidePanelStyle": {
+          "order": -1,
+          "borderLeft": "none",
+          "borderRight": "1px solid #E8EAEF",
+          "padding": 0
+        }
+      },
       "processOverrides": {
         "aPRMProcessPayment": {
-          "add": true,
-          "label": "Process Payment",
-          "style": "positive",
-          "columnName": "aPRMProcessPayment",
-          "displayLogicRaw": "@status@='RPAP'"
+          "label": "processConfirm",
+          "displayLogicRaw": "@status@ = 'RPAP'",
+          "confirmModal": true
         },
         "aPRMAddScheduledpayments": {
           "exclude": true
@@ -688,13 +890,31 @@
         },
         "aPRMReconcilePayment": {
           "exclude": true
+        },
+        "etprReactivatePayment": {
+          "add": true,
+          "columnName": "etprReactivatePayment",
+          "label": "processReactivate",
+          "style": "ghost-danger",
+          "displayLogicRaw": "@status@ != 'RPAP'"
         }
       },
       "detailEntity": null,
       "summaryFields": [],
-      "salesTheme": true,
+      "salesTheme": false,
       "dateFilterKey": "paymentDate",
-      "attachments": true
+      "statusEnumLabels": {
+        "RPAP": "statusDraft",
+        "RPR": "cobroDepositado",
+        "RDNC": "cobroDepositado",
+        "RPPC": "cobroDepositado",
+        "PPM": "cobroDepositado",
+        "PWNC": "cobroDepositado"
+      },
+      "statusFieldLabel": "statusColumnLabel",
+      "toolbarBorderBottom": true,
+      "hideFormCard": true,
+      "attachments": false
     },
     "entities": {
       "finPayment": {
@@ -827,7 +1047,7 @@
             "apiKey": "aPRMProcessPayment",
             "column": "EM_APRM_Process_Payment",
             "type": "button",
-            "visibility": "discarded",
+            "visibility": "editable",
             "required": false
           },
           {
@@ -943,14 +1163,6 @@
             "required": false
           },
           {
-            "name": "payment",
-            "apiKey": "payment",
-            "column": "Fin_Payment_ID",
-            "type": "id",
-            "visibility": "system",
-            "required": true
-          },
-          {
             "name": "aPRMReconcilePayment",
             "apiKey": "aPRMReconcilePayment",
             "column": "EM_APRM_Reconcile_Payment",
@@ -1003,7 +1215,7 @@
             "apiKey": "creationDate",
             "column": "Created",
             "type": "dateTime",
-            "visibility": "system",
+            "visibility": "readOnly",
             "required": true
           },
           {
@@ -1043,7 +1255,7 @@
             "apiKey": "updated",
             "column": "Updated",
             "type": "dateTime",
-            "visibility": "system",
+            "visibility": "readOnly",
             "required": true
           },
           {
@@ -1093,8 +1305,17 @@
             "type": "button",
             "visibility": "editable",
             "required": false
+          },
+          {
+            "name": "id",
+            "apiKey": "id",
+            "column": "Fin_Payment_ID",
+            "type": "id",
+            "visibility": "system",
+            "required": true
           }
-        ]
+        ],
+        "javaQualifier": "payment-reactivate"
       },
       "finPaymentScheduleDetail": {
         "tableName": "FIN_Payment_ScheduleDetail",
@@ -1130,7 +1351,7 @@
             "apiKey": "expected",
             "column": "ExpectedAmount",
             "type": "amount",
-            "visibility": "discarded",
+            "visibility": "readOnly",
             "required": false
           },
           {
@@ -1310,14 +1531,6 @@
             "required": true
           },
           {
-            "name": "fINPaymentScheduledetailID",
-            "apiKey": "fINPaymentScheduledetailID",
-            "column": "FIN_Payment_Scheduledetail_ID",
-            "type": "id",
-            "visibility": "system",
-            "required": true
-          },
-          {
             "name": "creationDate",
             "apiKey": "creationDate",
             "column": "Created",
@@ -1372,8 +1585,25 @@
             "type": "foreignKey",
             "visibility": "system",
             "required": true
+          },
+          {
+            "name": "id",
+            "apiKey": "id",
+            "column": "FIN_Payment_Scheduledetail_ID",
+            "type": "id",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "invoiceDocumentNo",
+            "apiKey": "invoiceDocumentNo",
+            "column": "invoiceDocumentNo",
+            "type": "string",
+            "visibility": "readOnly",
+            "required": false
           }
-        ]
+        ],
+        "javaQualifier": "paymentScheduleDetailHandler"
       }
     },
     "endpoints": [
@@ -1442,7 +1672,18 @@
         "supportedFilters": []
       }
     ],
-    "processEndpoints": []
+    "processEndpoints": [
+      {
+        "name": "Payment Process",
+        "method": "POST",
+        "path": "/finPayment/:id/action/aPRMProcessPayment",
+        "entity": "finPayment",
+        "columnName": "aPRMProcessPayment",
+        "params": [],
+        "preconditions": [],
+        "steps": 0
+      }
+    ]
   },
   "apiPrediction": {
     "specName": "payment-in",
@@ -1751,6 +1992,22 @@
         "description": "Default value for 'amount' in finPayment should be a string"
       },
       {
+        "id": "t-default-value-type-finPayment-aPRMProcessPayment",
+        "category": "default-value-type",
+        "entity": "finPayment",
+        "field": "aPRMProcessPayment",
+        "runner": "node",
+        "description": "Default value for 'aPRMProcessPayment' in finPayment should be a string"
+      },
+      {
+        "id": "t-default-value-type-finPayment-creationDate",
+        "category": "default-value-type",
+        "entity": "finPayment",
+        "field": "creationDate",
+        "runner": "node",
+        "description": "Default value for 'creationDate' in finPayment should be a string"
+      },
+      {
         "id": "t-default-value-type-finPayment-etblkpAccountingstatus",
         "category": "default-value-type",
         "entity": "finPayment",
@@ -1791,12 +2048,28 @@
         "description": "Default value for 'status' in finPayment should be a string"
       },
       {
+        "id": "t-default-value-type-finPayment-updated",
+        "category": "default-value-type",
+        "entity": "finPayment",
+        "field": "updated",
+        "runner": "node",
+        "description": "Default value for 'updated' in finPayment should be a string"
+      },
+      {
         "id": "t-default-value-type-finPaymentScheduleDetail-amount",
         "category": "default-value-type",
         "entity": "finPaymentScheduleDetail",
         "field": "amount",
         "runner": "node",
         "description": "Default value for 'amount' in finPaymentScheduleDetail should be a string"
+      },
+      {
+        "id": "t-displaylogic-evaluable-finPayment-aPRMProcessPayment",
+        "category": "displaylogic-evaluable",
+        "entity": "finPayment",
+        "field": "aPRMProcessPayment",
+        "runner": "node",
+        "description": "Display logic for 'aPRMProcessPayment' in finPayment should have evaluable flag"
       },
       {
         "id": "t-displaylogic-evaluable-finPayment-businessPartner",
@@ -1837,6 +2110,14 @@
         "field": "invoicePaymentSchedule",
         "runner": "node",
         "description": "Display logic for 'invoicePaymentSchedule' in finPaymentScheduleDetail should have evaluable flag"
+      },
+      {
+        "id": "t-displaylogic-valid-finPayment-aPRMProcessPayment",
+        "category": "displaylogic-valid",
+        "entity": "finPayment",
+        "field": "aPRMProcessPayment",
+        "runner": "node",
+        "description": "Display logic for 'aPRMProcessPayment' in finPayment should be valid JS"
       },
       {
         "id": "t-displaylogic-valid-finPayment-businessPartner",
@@ -1895,12 +2176,28 @@
         "description": "Field 'amount' should be present in finPayment"
       },
       {
+        "id": "t-field-presence-finPayment-aPRMProcessPayment",
+        "category": "field-presence",
+        "entity": "finPayment",
+        "field": "aPRMProcessPayment",
+        "runner": "node",
+        "description": "Field 'aPRMProcessPayment' should be present in finPayment"
+      },
+      {
         "id": "t-field-presence-finPayment-businessPartner",
         "category": "field-presence",
         "entity": "finPayment",
         "field": "businessPartner",
         "runner": "node",
         "description": "Field 'businessPartner' should be present in finPayment"
+      },
+      {
+        "id": "t-field-presence-finPayment-creationDate",
+        "category": "field-presence",
+        "entity": "finPayment",
+        "field": "creationDate",
+        "runner": "node",
+        "description": "Field 'creationDate' should be present in finPayment"
       },
       {
         "id": "t-field-presence-finPayment-currency",
@@ -1991,6 +2288,14 @@
         "description": "Field 'status' should be present in finPayment"
       },
       {
+        "id": "t-field-presence-finPayment-updated",
+        "category": "field-presence",
+        "entity": "finPayment",
+        "field": "updated",
+        "runner": "node",
+        "description": "Field 'updated' should be present in finPayment"
+      },
+      {
         "id": "t-field-presence-finPaymentScheduleDetail-amount",
         "category": "field-presence",
         "entity": "finPaymentScheduleDetail",
@@ -2005,6 +2310,22 @@
         "field": "dueDate",
         "runner": "node",
         "description": "Field 'dueDate' should be present in finPaymentScheduleDetail"
+      },
+      {
+        "id": "t-field-presence-finPaymentScheduleDetail-expected",
+        "category": "field-presence",
+        "entity": "finPaymentScheduleDetail",
+        "field": "expected",
+        "runner": "node",
+        "description": "Field 'expected' should be present in finPaymentScheduleDetail"
+      },
+      {
+        "id": "t-field-presence-finPaymentScheduleDetail-invoiceDocumentNo",
+        "category": "field-presence",
+        "entity": "finPaymentScheduleDetail",
+        "field": "invoiceDocumentNo",
+        "runner": "node",
+        "description": "Field 'invoiceDocumentNo' should be present in finPaymentScheduleDetail"
       },
       {
         "id": "t-field-presence-finPaymentScheduleDetail-invoicePaymentSchedule",
@@ -2031,12 +2352,28 @@
         "description": "Field 'amount' should have type 'number' in finPayment"
       },
       {
+        "id": "t-field-type-finPayment-aPRMProcessPayment",
+        "category": "field-type",
+        "entity": "finPayment",
+        "field": "aPRMProcessPayment",
+        "runner": "node",
+        "description": "Field 'aPRMProcessPayment' should have type 'string' in finPayment"
+      },
+      {
         "id": "t-field-type-finPayment-businessPartner",
         "category": "field-type",
         "entity": "finPayment",
         "field": "businessPartner",
         "runner": "node",
         "description": "Field 'businessPartner' should have type 'string' in finPayment"
+      },
+      {
+        "id": "t-field-type-finPayment-creationDate",
+        "category": "field-type",
+        "entity": "finPayment",
+        "field": "creationDate",
+        "runner": "node",
+        "description": "Field 'creationDate' should have type 'string' in finPayment"
       },
       {
         "id": "t-field-type-finPayment-currency",
@@ -2127,6 +2464,14 @@
         "description": "Field 'status' should have type 'string' in finPayment"
       },
       {
+        "id": "t-field-type-finPayment-updated",
+        "category": "field-type",
+        "entity": "finPayment",
+        "field": "updated",
+        "runner": "node",
+        "description": "Field 'updated' should have type 'string' in finPayment"
+      },
+      {
         "id": "t-field-type-finPaymentScheduleDetail-amount",
         "category": "field-type",
         "entity": "finPaymentScheduleDetail",
@@ -2143,12 +2488,44 @@
         "description": "Field 'dueDate' should have type 'string' in finPaymentScheduleDetail"
       },
       {
+        "id": "t-field-type-finPaymentScheduleDetail-expected",
+        "category": "field-type",
+        "entity": "finPaymentScheduleDetail",
+        "field": "expected",
+        "runner": "node",
+        "description": "Field 'expected' should have type 'number' in finPaymentScheduleDetail"
+      },
+      {
+        "id": "t-field-type-finPaymentScheduleDetail-invoiceDocumentNo",
+        "category": "field-type",
+        "entity": "finPaymentScheduleDetail",
+        "field": "invoiceDocumentNo",
+        "runner": "node",
+        "description": "Field 'invoiceDocumentNo' should have type 'string' in finPaymentScheduleDetail"
+      },
+      {
         "id": "t-field-type-finPaymentScheduleDetail-invoicePaymentSchedule",
         "category": "field-type",
         "entity": "finPaymentScheduleDetail",
         "field": "invoicePaymentSchedule",
         "runner": "node",
         "description": "Field 'invoicePaymentSchedule' should have type 'string' in finPaymentScheduleDetail"
+      },
+      {
+        "id": "t-process-failure-Payment-Process",
+        "category": "process-failure",
+        "process": "Payment Process",
+        "entity": "finPayment",
+        "runner": "junit",
+        "description": "Process 'Payment Process' should fail when preconditions are not met"
+      },
+      {
+        "id": "t-process-happy-Payment-Process",
+        "category": "process-happy",
+        "process": "Payment Process",
+        "entity": "finPayment",
+        "runner": "junit",
+        "description": "Process 'Payment Process' should complete successfully with valid preconditions"
       },
       {
         "id": "t-readonlylogic-evaluable-finPayment-account",
@@ -2558,14 +2935,6 @@
         "description": "System field 'aprmExecutepayment' should exist in backend but not frontend for finPayment"
       },
       {
-        "id": "t-system-field-finPayment-aPRMProcessPayment",
-        "category": "system-field",
-        "entity": "finPayment",
-        "field": "aPRMProcessPayment",
-        "runner": "node",
-        "description": "System field 'aPRMProcessPayment' should exist in backend but not frontend for finPayment"
-      },
-      {
         "id": "t-system-field-finPayment-aPRMReconcilePayment",
         "category": "system-field",
         "entity": "finPayment",
@@ -2614,14 +2983,6 @@
         "description": "System field 'createdByAlgorithm' should exist in backend but not frontend for finPayment"
       },
       {
-        "id": "t-system-field-finPayment-creationDate",
-        "category": "system-field",
-        "entity": "finPayment",
-        "field": "creationDate",
-        "runner": "node",
-        "description": "System field 'creationDate' should exist in backend but not frontend for finPayment"
-      },
-      {
         "id": "t-system-field-finPayment-documentType",
         "category": "system-field",
         "entity": "finPayment",
@@ -2654,6 +3015,14 @@
         "description": "System field 'generatedCredit' should exist in backend but not frontend for finPayment"
       },
       {
+        "id": "t-system-field-finPayment-id",
+        "category": "system-field",
+        "entity": "finPayment",
+        "field": "id",
+        "runner": "node",
+        "description": "System field 'id' should exist in backend but not frontend for finPayment"
+      },
+      {
         "id": "t-system-field-finPayment-ndDimension",
         "category": "system-field",
         "entity": "finPayment",
@@ -2668,14 +3037,6 @@
         "field": "organization",
         "runner": "node",
         "description": "System field 'organization' should exist in backend but not frontend for finPayment"
-      },
-      {
-        "id": "t-system-field-finPayment-payment",
-        "category": "system-field",
-        "entity": "finPayment",
-        "field": "payment",
-        "runner": "node",
-        "description": "System field 'payment' should exist in backend but not frontend for finPayment"
       },
       {
         "id": "t-system-field-finPayment-posted",
@@ -2748,14 +3109,6 @@
         "field": "stDimension",
         "runner": "node",
         "description": "System field 'stDimension' should exist in backend but not frontend for finPayment"
-      },
-      {
-        "id": "t-system-field-finPayment-updated",
-        "category": "system-field",
-        "entity": "finPayment",
-        "field": "updated",
-        "runner": "node",
-        "description": "System field 'updated' should exist in backend but not frontend for finPayment"
       },
       {
         "id": "t-system-field-finPayment-updatedBy",
@@ -2894,28 +3247,20 @@
         "description": "System field 'etvfacPaymentZero' should exist in backend but not frontend for finPaymentScheduleDetail"
       },
       {
-        "id": "t-system-field-finPaymentScheduleDetail-expected",
-        "category": "system-field",
-        "entity": "finPaymentScheduleDetail",
-        "field": "expected",
-        "runner": "node",
-        "description": "System field 'expected' should exist in backend but not frontend for finPaymentScheduleDetail"
-      },
-      {
-        "id": "t-system-field-finPaymentScheduleDetail-fINPaymentScheduledetailID",
-        "category": "system-field",
-        "entity": "finPaymentScheduleDetail",
-        "field": "fINPaymentScheduledetailID",
-        "runner": "node",
-        "description": "System field 'fINPaymentScheduledetailID' should exist in backend but not frontend for finPaymentScheduleDetail"
-      },
-      {
         "id": "t-system-field-finPaymentScheduleDetail-gLItem",
         "category": "system-field",
         "entity": "finPaymentScheduleDetail",
         "field": "gLItem",
         "runner": "node",
         "description": "System field 'gLItem' should exist in backend but not frontend for finPaymentScheduleDetail"
+      },
+      {
+        "id": "t-system-field-finPaymentScheduleDetail-id",
+        "category": "system-field",
+        "entity": "finPaymentScheduleDetail",
+        "field": "id",
+        "runner": "node",
+        "description": "System field 'id' should exist in backend but not frontend for finPaymentScheduleDetail"
       },
       {
         "id": "t-system-field-finPaymentScheduleDetail-invoiceAmount",
@@ -3045,26 +3390,28 @@
       }
     ],
     "summary": {
-      "total": 179,
+      "total": 192,
       "byCategory": {
         "action-endpoint": 11,
         "crud-flags": 2,
-        "default-value-type": 7,
-        "displaylogic-evaluable": 5,
-        "displaylogic-valid": 5,
-        "field-presence": 17,
-        "field-type": 17,
+        "default-value-type": 10,
+        "displaylogic-evaluable": 6,
+        "displaylogic-valid": 6,
+        "field-presence": 22,
+        "field-type": 22,
+        "process-failure": 1,
+        "process-happy": 1,
         "readonlylogic-evaluable": 7,
         "readonlylogic-valid": 7,
         "rule-declared": 25,
         "searchable-filters": 3,
         "selector-endpoint": 5,
-        "system-field": 66,
+        "system-field": 62,
         "visibility": 2
       },
       "byRunner": {
-        "node": 179,
-        "junit": 0
+        "node": 190,
+        "junit": 2
       }
     }
   }

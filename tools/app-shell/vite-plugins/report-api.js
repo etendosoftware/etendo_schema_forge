@@ -213,7 +213,7 @@ async function fetchReportData(reportId, { limit, authToken, params = {} } = {})
     if (!existsSync(jrxmlPath)) {
       throw new Error(`JRXML not found: ${jrxmlPath}`);
     }
-    const extractorPath = resolve(ROOT, 'cli/src/extract-from-jasper.js');
+    const extractorPath = resolve(ROOT, 'node_modules/@etendosoftware/schema-forge-cli/src/extract-from-jasper.js');
     const { parseJrxml } = await import(/* @vite-ignore */ extractorPath);
     const parsed = parseJrxml(readFileSync(jrxmlPath, 'utf8'));
     sql = parsed.query;

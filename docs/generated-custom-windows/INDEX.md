@@ -32,7 +32,6 @@ This folder is the entry point for documentation that describes how generated an
 | [sales-order.md](sales-order.md) | Custom sales-order flow with fulfillment/invoicing actions and related documents |
 | [goods-shipment.md](goods-shipment.md) | Custom shipment flow with invoice/return actions and bulk invoicing cues |
 | [sales-invoice.md](sales-invoice.md) | Custom sales-invoice flow with payment-plan and related-document behavior |
-| [return-from-customer.md](return-from-customer.md) | Generated return-from-customer flow linked to shipment lines |
 | [return-material-receipt.md](return-material-receipt.md) | Generated return-material-receipt flow linked back to sales orders |
 
 ## Purchases
@@ -42,7 +41,6 @@ This folder is the entry point for documentation that describes how generated an
 | [purchase-order.md](purchase-order.md) | Custom purchase-order flow |
 | [goods-receipt.md](goods-receipt.md) | Custom goods-receipt flow |
 | [purchase-invoice.md](purchase-invoice.md) | Custom purchase-invoice flow |
-| [return-to-vendor.md](return-to-vendor.md) | Generated vendor-return flow |
 | [return-to-vendor-shipment.md](return-to-vendor-shipment.md) | Generated return-to-vendor-shipment flow |
 
 ## Inventory
@@ -53,7 +51,7 @@ This folder is the entry point for documentation that describes how generated an
 | [product-category.md](product-category.md) | Generated product-category master/detail flow |
 | [physical-inventory.md](physical-inventory.md) | Generated physical-inventory flow with custom count-list actions |
 | [goods-movements.md](goods-movements.md) | Generated goods-movements flow for stock transfers |
-| [internal-consumption.md](internal-consumption.md) | Generated internal-consumption flow with custom process action |
+| [internal-consumption.md](internal-consumption.md) | Generated internal-consumption flow: draftMode Complete + kebab Void, trimmed list view |
 | [warehouse.md](warehouse.md) | Custom warehouse flow with products/transactions tabs |
 | [warehouse-storage-bins.md](warehouse-storage-bins.md) | Hidden route-only warehouse storage-bin master/detail window |
 
@@ -68,11 +66,14 @@ This folder is the entry point for documentation that describes how generated an
 | [match-rule.md](match-rule.md) | Bank Reconciliation matching-rules catalog ("Reglas de matcheo") — first `list-modal` window (grid + create/edit modal, no detail) on generic W CRUD + validation hook |
 | [transaction-type.md](transaction-type.md) | Backend-only user-definable lookup behind the match-rule "Tipo de transacción" field — no menu/route; created inline from the selector (W spec + `TransactionTypeHandler`) |
 | [chart-of-accounts.md](chart-of-accounts.md) | Generated chart-of-accounts maintenance window |
+| [calendar.md](calendar.md) | Custom unified Calendar window (ETP-4478) — merges the retired Fiscal Calendar + Periods windows into one: Create Periods, Periods/Accounting secondary tabs with inline period→document expand, and Close Year/Undo Close Year via a server-guarded legacy-servlet reflection handler. No spec of its own — aggregates `fiscal-calendar`, `open-close-period-control` (unchanged), and a new backend-only `end-year-close` spec (same no-menu/no-route shape as `transaction-type.md`) |
 | [assets.md](assets.md) | Generated assets flow with custom setup, sidebar, and amortization surfaces |
+| [asset-group.md](asset-group.md) | Generated asset-category master/detail flow — header with conditional depreciation-policy fields (`displayLogicJs`), inline-editable accounting accounts subtab |
 | [amortization.md](amortization.md) | Generated amortization master/detail flow (MVP read+draft, sidebar metrics, linked assets) |
 | [simple-g-l-journal.md](simple-g-l-journal.md) | Generated manual-journal (Asientos Manuales) master/detail flow with a debit/credit balance footer that blocks save until Σ debit = Σ credit (posting deferred) |
 | [recurring-invoice.md](recurring-invoice.md) | Hidden route-only recurring-invoice template window |
 | [conversion-rates.md](conversion-rates.md) | General currency conversion-rate catalog; auto-downloaded rates lock as Synced and feed the invoice completion guard |
+| [general-ledger-configuration.md](general-ledger-configuration.md) | Custom 4-tab accounting schema setup window aligned to the Figma-first ETP-4246 scope |
 
 ## Projects
 
@@ -97,6 +98,8 @@ This folder is the entry point for documentation that describes how generated an
 | [price-list.md](price-list.md) | Custom price-list flow with product-price workspace |
 | [payment-term.md](payment-term.md) | Generated payment-term maintenance window |
 | [tax.md](tax.md) | Generated tax-rate maintenance window |
+| [tax-category.md](tax-category.md) | Generated tax-category catalog window (groups tax rates; ETP-4249) |
+| [business-partner-category.md](business-partner-category.md) | Generated business-partner-category master/detail flow (accounting tab pending `businessPartnerCategoryAccountingHandler`; ETP-4402) |
 | [user.md](user.md) | Generated user window with roles child surface and defaults dependencies |
 | [fiscal-config.md](fiscal-config.md) | Custom fiscal configuration window — onboarding wizard (SII/TBAI/Verifactu) and ongoing config maintenance |
 | [fiscal-models.md](fiscal-models.md) | Custom fiscal models window — declaration list and per-model detail pages (303, 349) with auto-compute and file generation |

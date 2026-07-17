@@ -8,6 +8,10 @@ import BankAccountTable from './BankAccountTable';
 import BankAccountForm from './BankAccountForm';
 import LocationAddressTable from './LocationAddressTable';
 import LocationEditorModal from '@/windows/custom/shared/LocationEditorModal';
+import CustomerAccountingTable from './CustomerAccountingTable';
+import CustomerAccountingForm from './CustomerAccountingForm';
+import VendorAccountingTable from './VendorAccountingTable';
+import VendorAccountingForm from './VendorAccountingForm';
 import ContactsFinancialPanel from '@/windows/custom/contacts/ContactsFinancialPanel';
 import { AttachmentsTab } from '@/components/attachments';
 import ContactTypeToggle from '@/windows/custom/contacts/ContactTypeToggle';
@@ -22,7 +26,7 @@ const summary = [
 
 ];
 
-const statusField = null;
+const statusField = 'oBTIKVIESStatus';
 // @sf-generated-end summary:businessPartner
 
 // @sf-generated-start extraBadges:businessPartner
@@ -388,14 +392,6 @@ export const api = {
     },
     {
       "entity": "customerAccounting",
-      "field": "accountingSchema",
-      "column": "C_AcctSchema_ID",
-      "reference": "AcctSchema",
-      "inputMode": "selector",
-      "url": "/sws/neo/contacts/customerAccounting/selectors/accountingSchema"
-    },
-    {
-      "entity": "customerAccounting",
       "field": "customerReceivablesNo",
       "column": "C_Receivable_Acct",
       "reference": "ValidCombination",
@@ -466,14 +462,6 @@ export const api = {
       "reference": "BP_TaxCategory",
       "inputMode": "search",
       "url": "/sws/neo/contacts/vendorCreditor/selectors/taxCategory"
-    },
-    {
-      "entity": "vendorAccounting",
-      "field": "accountingSchema",
-      "column": "C_AcctSchema_ID",
-      "reference": "AcctSchema",
-      "inputMode": "selector",
-      "url": "/sws/neo/contacts/vendorAccounting/selectors/accountingSchema"
     },
     {
       "entity": "vendorAccounting",
@@ -663,6 +651,7 @@ const labelOverrides = api.labelOverrides;
 export default function BusinessPartnerPage({ windowName, recordId, ...props }) {
   if (recordId) {
     return (
+      <>
       <DetailView
         entity="businessPartner"
         Form={BusinessPartnerForm}
@@ -693,6 +682,14 @@ export default function BusinessPartnerPage({ windowName, recordId, ...props }) 
           { key: 'swiftCode', column: 'SwiftCode', type: 'text', label: 'SWIFT Code' },
           ], derived: [], hidden: [] }, requireSavedRecord: true },
           { key: 'locationAddress', label: 'Location', Table: LocationAddressTable, customAddModal: LocationEditorModal, requireSavedRecord: true },
+          { key: 'customerAccounting', label: 'Customer Accounting', Table: CustomerAccountingTable, Form: CustomerAccountingForm, addLineFields: { entry: [
+          { key: 'customerReceivablesNo', column: 'C_Receivable_Acct', type: 'selector', required: true, label: 'Customer Receivables No.', labels: {"en_US":"Receivables Account","es_ES":"Cuenta a Cobrar"}, reference: 'ValidCombination', inputMode: 'selector' },
+          { key: 'customerPrepayment', column: 'C_Prepayment_Acct', type: 'selector', label: 'Customer Prepayment', labels: {"en_US":"Prepayment Account","es_ES":"Cuenta de Anticipos"}, reference: 'ValidCombination', inputMode: 'selector' },
+          ], derived: [], hidden: [] }, requireSavedRecord: true },
+          { key: 'vendorAccounting', label: 'Vendor Accounting', Table: VendorAccountingTable, Form: VendorAccountingForm, addLineFields: { entry: [
+          { key: 'vendorLiability', column: 'V_Liability_Acct', type: 'selector', required: true, label: 'Vendor Liability', labels: {"en_US":"Liability Account","es_ES":"Cuenta a Pagar"}, reference: 'ValidCombination', inputMode: 'selector' },
+          { key: 'vendorPrepayment', column: 'V_Prepayment_Acct', type: 'selector', label: 'Vendor Prepayment', labels: {"en_US":"Prepayment Account","es_ES":"Cuenta de Anticipos"}, reference: 'ValidCombination', inputMode: 'selector' },
+          ], derived: [], hidden: [] }, requireSavedRecord: true },
         ]}
         primaryTabs={[
           { key: 'general', label: 'General' },
@@ -707,6 +704,7 @@ export default function BusinessPartnerPage({ windowName, recordId, ...props }) 
         linesLayout="inlineEditable"
         {...props}
       />
+      </>
     );
   }
 
@@ -725,6 +723,7 @@ export default function BusinessPartnerPage({ windowName, recordId, ...props }) 
       hideMoreMenu
       labelOverrides={labelOverrides}
       rowQuickActions={{}}
+      import={{"enabled":true,"spec":"contacts","entity":"businessPartner","formats":["csv","txt"],"limit":{"maxRows":5000,"concurrency":4},"dedupe":{"scope":"file","key":["etgoEmail"]},"descriptor":"contacts","fields":[{"target":"name","aliases":["nombre comercial","razon social"],"label":"Commercial Name","required":true,"type":"string"},{"target":"etgoFirstname","aliases":["nombre"],"label":"First Name (Company)","required":true,"type":"string"},{"target":"etgoLastname","aliases":["apellido","apellidos"],"label":"Last Name (Company)","required":true,"type":"string"},{"target":"etgoEmail","aliases":["email","correo","e-mail"],"isEmail":true,"label":"Email (Company)","required":false,"type":"string"},{"target":"etgoPhone","aliases":["telefono","teléfono"],"label":"Phone (Company)","required":false,"type":"string"},{"target":"email","aliases":["email de contacto"],"isEmail":true,"label":"Email (Contact)","required":false,"type":"string"},{"target":"firstName","aliases":["nombre de contacto"],"label":"First Name (Contact)","required":false,"type":"string"},{"target":"lastName","aliases":["apellido de contacto"],"label":"Last Name (Contact)","required":false,"type":"string"},{"target":"phone","aliases":["telefono de contacto"],"label":"Phone (Contact)","required":false,"type":"string"},{"target":"position","aliases":["cargo"],"label":"Position","required":false,"type":"string"},{"required":false,"type":"string","target":"address","aliases":["direccion","dirección"],"label":"Address"},{"required":false,"type":"string","target":"city","aliases":["ciudad"],"label":"City"},{"required":false,"type":"string","target":"postal","aliases":["codigo postal","código postal","cp"],"label":"Postal Code"},{"target":"country","aliases":["pais","país"],"label":"Country","matchEntity":"Country","required":false,"type":"foreignKey","reference":"Country"},{"required":false,"type":"string","target":"region","aliases":["provincia","region","región"],"label":"Region"}]}}
       {...props}
     />
   );

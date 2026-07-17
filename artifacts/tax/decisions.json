@@ -4,17 +4,19 @@
   "window": {
     "category": "settings",
     "name": "Tax Rate",
-    "detailEntity": null,
+    "detailEntity": "accounting",
     "breadcrumb": "Settings / Tax",
     "hidePrint": true,
     "hideMoreMenu": true,
+    "hideCreate": true,
+    "hideDelete": true,
+    "hideDeleteButton": true,
     "labelOverrides": {
       "es_ES": {
         "Name": "Nombre",
         "Rate": "Índice",
         "SOPOType": "Tipo venta/compra",
         "ValidFrom": "Válido desde",
-        "IsActive": "Activo",
         "Description": "Descripción"
       },
       "en_US": {
@@ -22,7 +24,6 @@
         "Rate": "Rate",
         "SOPOType": "Sales/Purchase Type",
         "ValidFrom": "Valid From",
-        "IsActive": "Active",
         "Description": "Description"
       }
     }
@@ -30,7 +31,47 @@
   "entities": {
     "taxZone": { "exclude": true },
     "translation": { "exclude": true },
-    "accounting": { "exclude": true },
+    "accounting": {
+      "javaQualifier": "taxAccountingHandler",
+      "fields": {
+        "accountingSchema": {
+          "visibility": "system",
+          "addLineFromSibling": true
+        },
+        "taxDue": {
+          "visibility": "editable",
+          "grid": true,
+          "grow": true,
+          "seq": 1
+        },
+        "taxCredit": {
+          "visibility": "editable",
+          "grid": true,
+          "grow": true,
+          "seq": 2
+        },
+        "taxExpense": {
+          "visibility": "discarded",
+          "reason": "Only used for non-recoverable tax scenarios — not in scope for simplified UI"
+        },
+        "taxLiability": {
+          "visibility": "discarded",
+          "reason": "Advanced deferred-tax scenario — not in scope for simplified UI"
+        },
+        "taxReceivables": {
+          "visibility": "discarded",
+          "reason": "Advanced deferred-tax scenario — not in scope for simplified UI"
+        },
+        "taxDueTransitory": {
+          "visibility": "discarded",
+          "reason": "Cash VAT transitory account — advanced accounting scheme, not in scope for simplified UI"
+        },
+        "taxCreditTransitory": {
+          "visibility": "discarded",
+          "reason": "Cash VAT transitory account — advanced accounting scheme, not in scope for simplified UI"
+        }
+      }
+    },
     "taxParameter": { "exclude": true },
     "tax": {
       "fields": {
@@ -59,11 +100,6 @@
           "form": true,
           "section": "principal",
           "seq": 4
-        },
-        "isActive": {
-          "grid": false,
-          "form": false,
-          "visibility": "system"
         },
         "docTaxAmount": {
           "grid": false,

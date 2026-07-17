@@ -431,6 +431,7 @@ export const binContents = [
     "quantityOrderInDraftTransactions": 402,
     "referencedInventory": "Sample referencedInventory",
     "etgoValuation": 38907,
+    "etgoCost": 38907,
     "warehouseId": "mock-warehouse-001"
   },
   {
@@ -446,6 +447,7 @@ export const binContents = [
     "quantityOrderInDraftTransactions": 54,
     "referencedInventory": "Sample referencedInventory",
     "etgoValuation": 9306,
+    "etgoCost": 9306,
     "warehouseId": "mock-warehouse-002"
   },
   {
@@ -461,6 +463,7 @@ export const binContents = [
     "quantityOrderInDraftTransactions": 150,
     "referencedInventory": "Sample referencedInventory",
     "etgoValuation": 11544,
+    "etgoCost": 11544,
     "warehouseId": "mock-warehouse-003"
   },
   {
@@ -476,6 +479,7 @@ export const binContents = [
     "quantityOrderInDraftTransactions": 97,
     "referencedInventory": "Sample referencedInventory",
     "etgoValuation": 11872,
+    "etgoCost": 11872,
     "warehouseId": "mock-warehouse-004"
   },
   {
@@ -491,6 +495,7 @@ export const binContents = [
     "quantityOrderInDraftTransactions": 311,
     "referencedInventory": "Sample referencedInventory",
     "etgoValuation": 48460,
+    "etgoCost": 48460,
     "warehouseId": "mock-warehouse-005"
   },
   {
@@ -506,6 +511,7 @@ export const binContents = [
     "quantityOrderInDraftTransactions": 451,
     "referencedInventory": "Sample referencedInventory",
     "etgoValuation": 45418,
+    "etgoCost": 45418,
     "warehouseId": "mock-warehouse-006"
   },
   {
@@ -521,6 +527,7 @@ export const binContents = [
     "quantityOrderInDraftTransactions": 496,
     "referencedInventory": "Sample referencedInventory",
     "etgoValuation": 33840,
+    "etgoCost": 33840,
     "warehouseId": "mock-warehouse-007"
   },
   {
@@ -536,6 +543,7 @@ export const binContents = [
     "quantityOrderInDraftTransactions": 284,
     "referencedInventory": "Sample referencedInventory",
     "etgoValuation": 25716,
+    "etgoCost": 25716,
     "warehouseId": "mock-warehouse-008"
   },
   {
@@ -551,6 +559,7 @@ export const binContents = [
     "quantityOrderInDraftTransactions": 225,
     "referencedInventory": "Sample referencedInventory",
     "etgoValuation": 44780,
+    "etgoCost": 44780,
     "warehouseId": "mock-warehouse-009"
   },
   {
@@ -566,6 +575,7 @@ export const binContents = [
     "quantityOrderInDraftTransactions": 479,
     "referencedInventory": "Sample referencedInventory",
     "etgoValuation": 12483,
+    "etgoCost": 12483,
     "warehouseId": "mock-warehouse-010"
   },
   {
@@ -581,6 +591,7 @@ export const binContents = [
     "quantityOrderInDraftTransactions": 123,
     "referencedInventory": "Sample referencedInventory",
     "etgoValuation": 46022,
+    "etgoCost": 46022,
     "warehouseId": "mock-warehouse-011"
   },
   {
@@ -596,6 +607,7 @@ export const binContents = [
     "quantityOrderInDraftTransactions": 337,
     "referencedInventory": "Sample referencedInventory",
     "etgoValuation": 38634,
+    "etgoCost": 38634,
     "warehouseId": "mock-warehouse-012"
   }
 ];

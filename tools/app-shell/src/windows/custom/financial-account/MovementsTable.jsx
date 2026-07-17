@@ -118,7 +118,7 @@ const MOVEMENT_CELL_RENDERERS = {
       <TableCell data-testid="TableCell__ae5a16">
         <div className="flex flex-col gap-0.5">
           <span className="text-sm leading-5 text-[#121217]">{ctx.getTrxTypeLabel(m)}</span>
-          <PostingStatusDot paymentStatus={m.paymentStatus} data-testid="PostingStatusDot__ae5a16" />
+          <PostingStatusDot posted={m.posted} data-testid="PostingStatusDot__ae5a16" />
         </div>
       </TableCell>
     ),
@@ -253,7 +253,7 @@ function DimensionsPanel({ movement, ui }) {
  *   onSelectionChange: (id: string) => void;
  * }} props
  */
-export function MovementsTable({ movements, loading, enabledDimensions = [], selectedIds, onSelectionChange, highlightTxnId = null }) {
+export function MovementsTable({ movements, loading, enabledDimensions = [], selectedIds, onSelectionChange, highlightTxnId = null, onReload }) {
   const ui = useUI();
   const navigate = useNavigate();
   const { locale: appLocale } = useLocaleSwitch();
@@ -359,7 +359,7 @@ export function MovementsTable({ movements, loading, enabledDimensions = [], sel
           {/* Kebab — visible on row hover */}
           <TableCell onClick={(e) => e.stopPropagation()} data-testid="TableCell__ae5a16">
             <div className="opacity-0 transition-opacity group-hover:opacity-100">
-              <MovementRowKebab movement={movement} data-testid="MovementRowKebab__ae5a16" />
+              <MovementRowKebab movement={movement} onReload={onReload} data-testid="MovementRowKebab__ae5a16" />
             </div>
           </TableCell>
         </TableRow>

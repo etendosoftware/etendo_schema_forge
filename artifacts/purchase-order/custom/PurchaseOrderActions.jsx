@@ -4,6 +4,10 @@ import { useNavigate } from 'react-router-dom';
 import { useUI, useMenuLabel } from '@/i18n';
 import SendDocumentModal, { SendDocumentButton } from '@/components/contract-ui/SendDocumentModal';
 import { ConfirmResultModal } from '@/components/contract-ui';
+import { incrementSurveyCounter } from '@/lib/surveys/survey-state.js';
+import { emitSurveyTrigger } from '@/lib/surveys/survey-engine.js';
+import { usePurchaseOrderPdf } from '@/windows/custom/shared/usePurchaseOrderPdf.js';
+import { trackTransactionPosted, trackDocumentCreated } from '@/lib/observability/health-events.js';
 
 export { ConfirmResultModal as PoConfirmResultModal };
 
@@ -31,7 +35,7 @@ function Spinner() {
 
 // ── Main component ─────────────────────────────────────────────────────────────
 
-export default function PurchaseOrderActions({ data, recordId, token, apiBaseUrl, onProcess, onRefresh }) {
+export default function PurchaseOrderActions({ data, recordId, token, apiBaseUrl, onProcess, onRefresh, onSave }) {
   const navigate = useNavigate();
   const ui = useUI();
   const tMenu = useMenuLabel();
@@ -54,6 +58,11 @@ export default function PurchaseOrderActions({ data, recordId, token, apiBaseUrl
     Authorization: `Bearer ${token}`,
     'Content-Type': 'application/json',
   }), [token]);
+
+  // ETP-4372 — source the same client-rendered PDF the OrderPreview panel uses
+  // so the form-view topbar Send modal shows the document instead of the
+  // "PDF not configured" fallback. Hook is called unconditionally (rules of hooks).
+  const { pdfUrl, loading: pdfLoading } = usePurchaseOrderPdf(recordId, apiBaseUrl, token);
 
   // draftMode confirm button (DetailView) dispatches this event to open the confirm modal
   useEffect(() => {
@@ -108,15 +117,15 @@ export default function PurchaseOrderActions({ data, recordId, token, apiBaseUrl
           ].filter(Boolean)}
           currency={data?.['currency$_identifier'] || ''}
           navigate={navigate}
-          onClose={() => { setConfirmedDocs(null); setConfirmedTitle(null); onRefresh?.(); }}
-        />,
+          onClose={() => { setConfirmedDocs(null); setConfirmedTitle(null); emitSurveyTrigger(); onRefresh?.(); }}
+          data-testid="ConfirmResultModal__8b5323" />,
         document.body,
       )
     : null;
 
   const cloneButton = (
     <button type="button" onClick={() => setShowClone(true)} style={{...btnCloneStyle, background: isCloneHovered ? '#F1F5F9' : '#FFFFFF'}} title={ui('cloneOrderBtn')} onMouseEnter={() => setIsCloneHovered(true)} onMouseLeave={() => setIsCloneHovered(false)}>
-      <CopyIcon />
+      <CopyIcon data-testid="CopyIcon__8b5323" />
     </button>
   );
 
@@ -128,7 +137,7 @@ export default function PurchaseOrderActions({ data, recordId, token, apiBaseUrl
       headers={headers}
       onClose={() => setShowClone(false)}
       onCloned={(newId) => navigate(`/purchase-order/${newId}`)}
-    />,
+      data-testid="CloneModal__8b5323" />,
     document.body,
   ) : null;
 
@@ -182,7 +191,9 @@ export default function PurchaseOrderActions({ data, recordId, token, apiBaseUrl
         </button>
       )}
       {cloneButton}
-      {(isDraft || isCompleted) && <SendDocumentButton onClick={() => setShowSend(true)} />}
+      {(isDraft || isCompleted) && <SendDocumentButton
+        onClick={() => setShowSend(true)}
+        data-testid="SendDocumentButton__8b5323" />}
       {clonePortal}
       {isDraft && showConfirm && createPortal(
         <ConfirmModal
@@ -190,9 +201,10 @@ export default function PurchaseOrderActions({ data, recordId, token, apiBaseUrl
           data={data}
           apiBaseUrl={apiBaseUrl}
           headers={headers}
+          onSave={onSave}
           onClose={() => setShowConfirm(false)}
           onConfirmed={(docs) => { setShowConfirm(false); setConfirmedDocs(docs); }}
-        />,
+          data-testid="ConfirmModal__8b5323" />,
         document.body,
       )}
       {isCompleted && showActions && createPortal(
@@ -205,7 +217,7 @@ export default function PurchaseOrderActions({ data, recordId, token, apiBaseUrl
           derived={derived}
           onClose={() => setShowActions(false)}
           onCreated={(docs) => { setShowActions(false); setConfirmedTitle(ui('soDocsCreatedTitle')); setConfirmedDocs(docs); }}
-        />,
+          data-testid="CreateDocsModal__8b5323" />,
         document.body,
       )}
       {(isDraft || isCompleted) && showSend && createPortal(
@@ -218,8 +230,10 @@ export default function PurchaseOrderActions({ data, recordId, token, apiBaseUrl
           documentId={recordId}
           windowName="purchase-order"
           token={token}
+          pdfBlobUrl={pdfUrl}
+          pdfBlobLoading={pdfLoading}
           onClose={() => setShowSend(false)}
-        />,
+          data-testid="SendDocumentModal__8b5323" />,
         document.body,
       )}
       {confirmedPanel}
@@ -229,7 +243,7 @@ export default function PurchaseOrderActions({ data, recordId, token, apiBaseUrl
 
 // ── ConfirmModal ───────────────────────────────────────────────────────────────
 
-export function ConfirmModal({ orderId, data, apiBaseUrl, headers, onClose, onConfirmed }) {
+export function ConfirmModal({ orderId, data, apiBaseUrl, headers, onClose, onConfirmed, onSave }) {
   const ui      = useUI();
   const [createReceipt,  setCreateReceipt]  = useState(false);
   const [createInvoice,  setCreateInvoice]  = useState(false);
@@ -267,7 +281,12 @@ export function ConfirmModal({ orderId, data, apiBaseUrl, headers, onClose, onCo
     return () => { cancelled = true; };
   }, [orderId, orderUrl, apiBaseUrl, headers]);
 
-  const d              = freshData || data || {};
+  // ETP-4468 — the in-memory `data` prop (which already reflects any unsaved
+  // header edit the user made before clicking Confirm) must win over the
+  // server-fetched `freshData` (stale because nothing was saved yet). The
+  // fresh fetch is only a fallback for the very first render before `data`
+  // arrives, or if `data` is genuinely empty.
+  const d              = data || freshData || {};
   const documentNo     = d.documentNo || '';
   const bpName         = d['businessPartner$_identifier'] || '';
   // Apply etgoTotalDiscount client-side only while the order is still in DR — at
@@ -293,6 +312,19 @@ export function ConfirmModal({ orderId, data, apiBaseUrl, headers, onClose, onCo
     setLoading(true);
     setError(null);
 
+    // ETP-4468 — force-save any unsaved header edit before confirming. Without
+    // this, an edit made right before clicking Confirm (without hitting Save
+    // first) would be silently discarded — the order gets confirmed with the
+    // OLD header values. Abort the whole confirm flow if the save fails.
+    if (onSave) {
+      const saved = await onSave();
+      if (!saved?.id) {
+        setError(ui('poSaveBeforeConfirmError'));
+        setLoading(false);
+        return;
+      }
+    }
+
     // Step 1: Confirm the order — must succeed before anything else.
     // If this fails the order is still in DR, so the rest of the flow makes no sense.
     if (!orderConfirmed) {
@@ -307,6 +339,8 @@ export function ConfirmModal({ orderId, data, apiBaseUrl, headers, onClose, onCo
           throw new Error(rawMsg.includes('@OrderWithoutLines@') ? ui('soNoLinesError') : rawMsg);
         }
         setOrderConfirmed(true);
+        incrementSurveyCounter('order');
+        trackTransactionPosted();
         window.dispatchEvent(new CustomEvent('purchase-order:document-created'));
       } catch (e) {
         setError(e.message || ui('poErrorOccurred'));
@@ -338,6 +372,7 @@ export function ConfirmModal({ orderId, data, apiBaseUrl, headers, onClose, onCo
           amount:     docObj?.grandTotalAmount ?? null,
         };
         setReceiptResult(currentReceipt);
+        trackDocumentCreated('goods-receipt');
       } catch (e) {
         errors.push(e.message || ui('poErrorOccurred'));
       }
@@ -361,6 +396,7 @@ export function ConfirmModal({ orderId, data, apiBaseUrl, headers, onClose, onCo
           amount:     docObj?.grandTotalAmount ?? null,
         };
         setInvoiceResult(currentInvoice);
+        trackDocumentCreated('purchase-invoice');
       } catch (e) {
         errors.push(e.message || ui('poErrorOccurred'));
       }
@@ -459,7 +495,7 @@ export function ConfirmModal({ orderId, data, apiBaseUrl, headers, onClose, onCo
             title={ui('poCreateReceiptTitle')}
             subtitle={receiptResult ? ui('soAlreadyCreated') : ui('poCreateReceiptCheckDesc')}
             disabled={Boolean(receiptResult)}
-          />
+            data-testid="PoCheckboxCard__8b5323" />
           <PoCheckboxCard
             checked={createInvoice || Boolean(invoiceResult)}
             onChange={() => !invoiceResult && setCreateInvoice(v => !v)}
@@ -467,7 +503,7 @@ export function ConfirmModal({ orderId, data, apiBaseUrl, headers, onClose, onCo
             title={ui('soCreateInvoiceTitle')}
             subtitle={invoiceResult ? ui('soAlreadyCreated') : ui('poCreateInvoiceCheckDesc')}
             disabled={Boolean(invoiceResult)}
-          />
+            data-testid="PoCheckboxCard__8b5323" />
         </div>
 
         {error && (
@@ -484,7 +520,7 @@ export function ConfirmModal({ orderId, data, apiBaseUrl, headers, onClose, onCo
           <button type="button" onClick={handleConfirm} disabled={loading}
             data-testid="action-confirm-modal"
             style={{ ...btnPrimaryStyle, opacity: loading ? 0.6 : 1, cursor: loading ? 'not-allowed' : 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-            {loading && <Spinner />}
+            {loading && <Spinner data-testid="Spinner__8b5323" />}
             {loading ? ui('poProcessing') : primaryLabel}
           </button>
         </div>
@@ -585,6 +621,7 @@ export function CreateDocsModal({ orderId, data, base, headers, currency, derive
         const doc = (await res.json())?.response?.data;
         const docObj = Array.isArray(doc) ? doc[0] : doc;
         result.receipt = { id: docObj?.id ?? null, documentNo: docObj?.documentNo ?? '', amount: docObj?.grandTotalAmount ?? null };
+        trackDocumentCreated('goods-receipt');
       }
 
       if (createInvoice) {
@@ -597,6 +634,7 @@ export function CreateDocsModal({ orderId, data, base, headers, currency, derive
         const doc = (await res.json())?.response?.data;
         const docObj = Array.isArray(doc) ? doc[0] : doc;
         result.invoice = { id: docObj?.id ?? null, documentNo: docObj?.documentNo ?? '', amount: docObj?.grandTotalAmount ?? null };
+        trackDocumentCreated('purchase-invoice');
       }
 
       window.dispatchEvent(new CustomEvent('purchase-order:document-created'));
@@ -647,7 +685,7 @@ export function CreateDocsModal({ orderId, data, base, headers, currency, derive
               icon="📦"
               title={ui('poCreateReceiptTitle')}
               subtitle={receiptSubtitle}
-            />
+              data-testid="PoCheckboxCard__8b5323" />
           )}
           {needsInvoice && (
             <PoCheckboxCard
@@ -656,7 +694,7 @@ export function CreateDocsModal({ orderId, data, base, headers, currency, derive
               icon="🧾"
               title={ui('soCreateInvoiceTitle')}
               subtitle={invoiceSubtitle}
-            />
+              data-testid="PoCheckboxCard__8b5323" />
           )}
         </div>
 
@@ -672,7 +710,7 @@ export function CreateDocsModal({ orderId, data, base, headers, currency, derive
           </button>
           <button type="button" onClick={handleCreate} disabled={loading || !canCreate}
             style={{ ...btnPrimaryStyle, opacity: (loading || !canCreate) ? 0.6 : 1, cursor: (loading || !canCreate) ? 'not-allowed' : 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-            {loading && <Spinner />}
+            {loading && <Spinner data-testid="Spinner__8b5323" />}
             {loading ? ui('poProcessing') : ui('soCreateDocsBtn')}
           </button>
         </div>
@@ -797,7 +835,7 @@ function CloneModal({ orderId, data, apiBaseUrl, headers, onClose, onCloned }) {
             </button>
             <button type="button" onClick={handleClone} disabled={loading}
               style={{ ...btnPrimaryStyle, opacity: loading ? 0.6 : 1, cursor: loading ? 'not-allowed' : 'pointer' }}>
-              {loading && <Spinner />}
+              {loading && <Spinner data-testid="Spinner__8b5323" />}
               {loading ? ui('poProcessing') : ui('cloneOrderAction')}
             </button>
           </div>
@@ -897,7 +935,7 @@ export function ManageDocsLauncher({ orderId, data, apiBaseUrl, token, onClose, 
         display: 'flex', alignItems: 'center', justifyContent: 'center',
       }}>
         <div style={{ background: '#fff', padding: '16px 24px', borderRadius: 8, display: 'flex', alignItems: 'center', gap: 8 }}>
-          <Spinner /><span style={{ fontSize: 13 }}>{ui('loading')}</span>
+          <Spinner data-testid="Spinner__8b5323" /><span style={{ fontSize: 13 }}>{ui('loading')}</span>
         </div>
       </div>,
       document.body,
@@ -948,7 +986,7 @@ export function ManageDocsLauncher({ orderId, data, apiBaseUrl, token, onClose, 
       derived={derived}
       onClose={onClose}
       onCreated={onCreated}
-    />,
+      data-testid="CreateDocsModal__8b5323" />,
     document.body,
   );
 }

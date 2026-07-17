@@ -563,18 +563,18 @@ describe('DetailView helper functions', () => {
   });
 
   describe('isDeleteButtonVisible', () => {
-    // Signature: (isNew, recordId, data, statusField, hideDeleteWhenComplete, isProcessed)
+    // Signature: ({ isNew, recordId, data, statusField, hideDeleteWhenComplete, isProcessed, deleteAction, hideDeleteButton })
     it('false for new records', () => {
-      expect(isDeleteButtonVisible(true, 'new', {}, null, false, false)).toBeFalsy();
+      expect(isDeleteButtonVisible({ isNew: true, recordId: 'new', data: {}, statusField: null, hideDeleteWhenComplete: false, isProcessed: false })).toBeFalsy();
     });
 
     it('truthy for existing draft record', () => {
-      expect(isDeleteButtonVisible(false, '123', { documentStatus: 'DR' }, 'documentStatus', true, false)).toBeTruthy();
+      expect(isDeleteButtonVisible({ isNew: false, recordId: '123', data: { documentStatus: 'DR' }, statusField: 'documentStatus', hideDeleteWhenComplete: true, isProcessed: false })).toBeTruthy();
     });
 
     it('falsy for completed record with hideDeleteWhenComplete', () => {
       // isDeleteVisibleForRecord returns false for CO + hideDeleteWhenComplete
-      expect(isDeleteButtonVisible(false, '123', { documentStatus: 'CO' }, 'documentStatus', true, true)).toBeFalsy();
+      expect(isDeleteButtonVisible({ isNew: false, recordId: '123', data: { documentStatus: 'CO' }, statusField: 'documentStatus', hideDeleteWhenComplete: true, isProcessed: true })).toBeFalsy();
     });
   });
 
@@ -1368,19 +1368,43 @@ describe('DetailView helper functions', () => {
 
   describe('isDeleteButtonVisible (extended branches)', () => {
     it('returns falsy when recordId is falsy (empty string)', () => {
-      expect(isDeleteButtonVisible(false, '', {}, null, false, false)).toBeFalsy();
+      expect(isDeleteButtonVisible({ isNew: false, recordId: '', data: {}, statusField: null, hideDeleteWhenComplete: false, isProcessed: false })).toBeFalsy();
     });
 
     it('returns truthy when hideDeleteWhenComplete is true but status is DR (not completed)', () => {
-      expect(isDeleteButtonVisible(false, '123', { documentStatus: 'DR' }, 'documentStatus', true, false)).toBeTruthy();
+      expect(isDeleteButtonVisible({ isNew: false, recordId: '123', data: { documentStatus: 'DR' }, statusField: 'documentStatus', hideDeleteWhenComplete: true, isProcessed: false })).toBeTruthy();
     });
 
     it('returns falsy when isProcessed is true and hideDeleteWhenComplete is true', () => {
-      expect(isDeleteButtonVisible(false, '123', {}, null, true, true)).toBeFalsy();
+      expect(isDeleteButtonVisible({ isNew: false, recordId: '123', data: {}, statusField: null, hideDeleteWhenComplete: true, isProcessed: true })).toBeFalsy();
     });
 
     it('returns truthy when hideDeleteWhenComplete is false regardless of isProcessed', () => {
-      expect(isDeleteButtonVisible(false, '123', {}, null, false, true)).toBeTruthy();
+      expect(isDeleteButtonVisible({ isNew: false, recordId: '123', data: {}, statusField: null, hideDeleteWhenComplete: false, isProcessed: true })).toBeTruthy();
+    });
+
+    describe('hideDeleteButton (unconditional hide)', () => {
+      it('returns falsy for a draft record that would otherwise be visible', () => {
+        // hideDeleteButton = true, deleteAction unset here
+        expect(isDeleteButtonVisible({ isNew: false, recordId: '123', data: { documentStatus: 'DR' }, statusField: 'documentStatus', hideDeleteWhenComplete: false, isProcessed: false, deleteAction: undefined, hideDeleteButton: true })).toBeFalsy();
+      });
+
+      it('returns falsy regardless of status / hideDeleteWhenComplete / isProcessed', () => {
+        expect(isDeleteButtonVisible({ isNew: false, recordId: '123', data: { documentStatus: 'DR' }, statusField: 'documentStatus', hideDeleteWhenComplete: true, isProcessed: false, deleteAction: undefined, hideDeleteButton: true })).toBeFalsy();
+        expect(isDeleteButtonVisible({ isNew: false, recordId: '123', data: { documentStatus: 'CO' }, statusField: 'documentStatus', hideDeleteWhenComplete: false, isProcessed: true, deleteAction: undefined, hideDeleteButton: true })).toBeFalsy();
+      });
+
+      it('defaults to false (hideDeleteButton omitted) → behavior unchanged', () => {
+        expect(isDeleteButtonVisible({ isNew: false, recordId: '123', data: { documentStatus: 'DR' }, statusField: 'documentStatus', hideDeleteWhenComplete: true, isProcessed: false })).toBeTruthy();
+      });
+
+      it('explicit hideDeleteButton false is identical to omitting it', () => {
+        expect(isDeleteButtonVisible({ isNew: false, recordId: '123', data: { documentStatus: 'DR' }, statusField: 'documentStatus', hideDeleteWhenComplete: true, isProcessed: false, deleteAction: undefined, hideDeleteButton: false })).toBeTruthy();
+      });
+
+      it('wins over a truthy deleteAction (both set together)', () => {
+        expect(isDeleteButtonVisible({ isNew: false, recordId: '123', data: { documentStatus: 'DR' }, statusField: 'documentStatus', hideDeleteWhenComplete: false, isProcessed: false, deleteAction: 'eTPRRemovePayment', hideDeleteButton: true })).toBeFalsy();
+      });
     });
   });
 

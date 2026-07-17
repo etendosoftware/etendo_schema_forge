@@ -1,0 +1,87 @@
+{
+  "version": "0.1.0",
+  "generatedAt": "2026-07-13T13:35:37.405Z",
+  "contractChecksum": "954af1f27c4f1b49",
+  "apiPrediction": {
+    "specName": "end-year-close",
+    "baseUrl": "/sws/neo/end-year-close",
+    "crud": {
+      "accounting": {
+        "get": true,
+        "getById": true,
+        "post": true,
+        "put": true,
+        "patch": true,
+        "delete": true,
+        "listUrl": "/sws/neo/end-year-close/accounting",
+        "detailUrl": "/sws/neo/end-year-close/accounting/{id}",
+        "supportedFilters": []
+      }
+    },
+    "selectors": [],
+    "actions": [],
+    "queryParams": {
+      "pagination": {
+        "startRow": "_startRow",
+        "endRow": "_endRow",
+        "default": "0-100"
+      },
+      "sorting": {
+        "param": "_sortBy",
+        "example": "_sortBy=creationDate desc"
+      },
+      "filtering": "Use field name as query param: ?fieldName=value",
+      "parentFilter": "parentId={id} for child entities"
+    },
+    "window": {
+      "category": "finance"
+    }
+  },
+  "formState": {
+    "entities": {
+      "accounting": {
+        "fields": {
+          "type": {
+            "readOnly": true
+          },
+          "account": {
+            "readOnly": true
+          },
+          "debit": {
+            "readOnly": true
+          },
+          "credit": {
+            "readOnly": true
+          },
+          "description": {
+            "readOnly": true
+          }
+        }
+      }
+    },
+    "requiredSessionVariables": [],
+    "evaluationMode": "runtime"
+  },
+  "agentProfile": {
+    "purpose": "Manage end year close financial records.",
+    "whenToUse": [
+      "Use for end year close management."
+    ],
+    "minimumCreate": {},
+    "selectorContexts": [],
+    "actions": [],
+    "workflow": [
+      "Create a new record",
+      "Update as needed"
+    ],
+    "edgeCases": [],
+    "examples": [],
+    "warnings": [
+      "This spec appears read-only from generated form metadata",
+      "Transactional spec has no generated lifecycle action metadata"
+    ],
+    "knownLimitations": [],
+    "dangerousOperations": []
+  },
+  "checksum": "b76b50e932b47b99"
+}

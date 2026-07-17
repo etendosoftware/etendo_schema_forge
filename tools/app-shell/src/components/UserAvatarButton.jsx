@@ -11,6 +11,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu.jsx';
 import { ChangePasswordDialog } from './ChangePasswordDialog.jsx';
+import { useLogout } from '@/auth/useLogout.js';
 
 const PLATFORM_TOKEN_KEY = 'sf_platform_token';
 const PLATFORM_AUTH_METHOD_KEY = 'sf_platform_auth_method';
@@ -26,7 +27,8 @@ const LOCALES = [
  * - expanded=true: full row with user icon + username + chevron (for sidebar footer).
  */
 export function UserAvatarButton({ expanded = false }) {
-  const { username, selectedRole, selectedOrg, logout } = useAuth();
+  const { username, selectedRole, selectedOrg } = useAuth();
+  const logout = useLogout();
   const ui = useUI();
   const { locale, setLocale } = useLocaleSwitch();
   const [changePasswordOpen, setChangePasswordOpen] = useState(false);

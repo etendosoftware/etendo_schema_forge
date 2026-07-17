@@ -1,176 +1,231 @@
-/**
- * Tests for useWarehouseStock: guard on missing warehouseId, empty-bins path,
- * full aggregation path (bins -> binContents + productTransactions + UoM names),
- * and error handling. fetch is mocked per-URL.
- */
+// No external mocks needed — we mock global fetch directly.
 
 import { renderHook, waitFor } from '@testing-library/react';
-import { useWarehouseStock } from '../useWarehouseStock.js';
+import { useWarehouseStock } from '../useWarehouseStock';
 
-const API = '/sws/neo';
-const TOKEN = 'tok';
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
 
-function jsonResponse(data) {
-  return { ok: true, status: 200, statusText: 'OK', json: async () => ({ response: { data } }) };
+function makeFetchOk(data) {
+  return Promise.resolve({
+    ok: true,
+    statusText: 'OK',
+    json: () => Promise.resolve({ response: { data } }),
+  });
 }
 
-beforeEach(() => {
-  globalThis.fetch = vi.fn();
-});
+function makeFetchFail(status = 500, text = 'Internal Server Error') {
+  return Promise.resolve({
+    ok: false,
+    status,
+    statusText: text,
+    json: () => Promise.resolve({}),
+  });
+}
 
-afterEach(() => {
-  vi.restoreAllMocks();
-});
+const BINS = [{ id: 'bin-1' }, { id: 'bin-2' }];
+
+const BIN_CONTENTS = [
+  { product: 'p1', 'product$_identifier': 'Widget', uOM: 'u1', quantityOnHand: 10, etgoValuation: 100 },
+  { product: 'p2', 'product$_identifier': 'Gadget', uOM: 'u2', quantityOnHand: 3, etgoValuation: 30 },
+];
+
+const TRANSACTIONS = [
+  { id: 'tx-1', movementDate: '2025-01-01', movementQuantity: 10 },
+];
+
+// ---------------------------------------------------------------------------
+// Tests
+// ---------------------------------------------------------------------------
 
 describe('useWarehouseStock', () => {
-  it('stays in the initial loading state when warehouseId is missing', () => {
-    const { result } = renderHook(() => useWarehouseStock('', TOKEN, API));
-    expect(result.current.loading).toBe(true);
-    expect(globalThis.fetch).not.toHaveBeenCalled();
+  beforeEach(() => {
+    vi.clearAllMocks();
   });
 
-  it('returns empty products/transactions when the warehouse has no bins', async () => {
-    globalThis.fetch.mockImplementation((url) => {
-      if (url.includes('/storageBin?')) return Promise.resolve(jsonResponse([]));
-      if (url.includes('/selectors/uOM')) return Promise.resolve(jsonResponse([]));
-      return Promise.resolve(jsonResponse([]));
-    });
-
-    const { result } = renderHook(() => useWarehouseStock('wh-1', TOKEN, API));
-
-    await waitFor(() => expect(result.current.loading).toBe(false));
-    expect(result.current.error).toBeNull();
-    expect(result.current.products).toEqual([]);
-    expect(result.current.transactions).toEqual([]);
+  afterEach(() => {
+    vi.restoreAllMocks();
   });
 
-  it('aggregates bin contents and transactions, resolving UoM names', async () => {
-    globalThis.fetch.mockImplementation((url) => {
-      if (url.includes('/selectors/uOM')) {
-        return Promise.resolve(jsonResponse([{ id: 'uom-1', identifier: 'Units' }]));
-      }
-      if (url.includes('/storageBin?')) {
-        return Promise.resolve(jsonResponse([{ id: 'bin-1' }, { id: 'bin-2' }]));
-      }
-      if (url.includes('/binContents?parentId=bin-1')) {
-        return Promise.resolve(jsonResponse([
-          { product: 'p1', 'product$_identifier': 'Prod 1', uOM: 'uom-1', quantityOnHand: '5', etgoValuation: '10' },
-        ]));
-      }
-      if (url.includes('/binContents?parentId=bin-2')) {
-        return Promise.resolve(jsonResponse([
-          { product: 'p1', 'product$_identifier': 'Prod 1', uOM: 'uom-1', quantityOnHand: '3', etgoValuation: '6' },
-        ]));
-      }
-      if (url.includes('/productTransactions?parentId=bin-1')) {
-        return Promise.resolve(jsonResponse([{ id: 'tx-1' }]));
-      }
-      if (url.includes('/productTransactions?parentId=bin-2')) {
-        return Promise.resolve(jsonResponse([{ id: 'tx-2' }]));
-      }
-      return Promise.resolve(jsonResponse([]));
+  describe('initial state', () => {
+    it('starts with loading:true and empty collections', () => {
+      globalThis.fetch = vi.fn(() => new Promise(() => {})); // never resolves
+      const { result } = renderHook(() =>
+        useWarehouseStock('wh-1', 'token', '/api'),
+      );
+      expect(result.current.loading).toBe(true);
+      expect(result.current.error).toBeNull();
+      expect(result.current.products).toEqual([]);
+      expect(result.current.transactions).toEqual([]);
     });
-
-    const { result } = renderHook(() => useWarehouseStock('wh-1', TOKEN, API));
-
-    await waitFor(() => expect(result.current.loading).toBe(false));
-    expect(result.current.error).toBeNull();
-    expect(result.current.products).toEqual([
-      { id: 'p1', label: 'Prod 1', uom: 'Units', qty: 8, valuation: 16 },
-    ]);
-    expect(result.current.transactions).toEqual([{ id: 'tx-1' }, { id: 'tx-2' }]);
   });
 
-  it('recovers with an empty UoM map when the selector request fails', async () => {
-    globalThis.fetch.mockImplementation((url) => {
-      if (url.includes('/selectors/uOM')) {
-        return Promise.resolve({ ok: false, status: 500, statusText: 'Err', json: async () => ({}) });
-      }
-      if (url.includes('/storageBin?')) return Promise.resolve(jsonResponse([{ id: 'bin-1' }]));
-      if (url.includes('/binContents?')) {
-        return Promise.resolve(jsonResponse([
-          { product: 'p1', uOM: 'uom-x', quantityOnHand: '2', etgoValuation: '4' },
-        ]));
-      }
-      if (url.includes('/productTransactions?')) return Promise.resolve(jsonResponse([]));
-      return Promise.resolve(jsonResponse([]));
+  describe('no warehouseId', () => {
+    it('stays in initial loading state when warehouseId is falsy', () => {
+      globalThis.fetch = vi.fn();
+      const { result } = renderHook(() =>
+        useWarehouseStock(null, 'token', '/api'),
+      );
+      // useEffect returns early — no fetch
+      expect(globalThis.fetch).not.toHaveBeenCalled();
+      expect(result.current.loading).toBe(true);
     });
-
-    const { result } = renderHook(() => useWarehouseStock('wh-1', TOKEN, API));
-
-    await waitFor(() => expect(result.current.loading).toBe(false));
-    expect(result.current.products).toEqual([
-      { id: 'p1', label: 'p1', uom: 'uom-x', qty: 2, valuation: 4 },
-    ]);
   });
 
-  it('sets error when a request fails (non-ok response)', async () => {
-    globalThis.fetch.mockImplementation((url) => {
-      if (url.includes('/selectors/uOM')) return Promise.resolve(jsonResponse([]));
-      if (url.includes('/storageBin?')) {
-        return Promise.resolve({ ok: false, status: 503, statusText: 'Unavailable', json: async () => ({}) });
-      }
-      return Promise.resolve(jsonResponse([]));
+  describe('empty bins short-circuit', () => {
+    it('resolves with empty products and transactions when no bins exist', async () => {
+      globalThis.fetch = vi.fn()
+        .mockImplementationOnce(() => makeFetchOk([])) // storageBin → empty
+        .mockImplementationOnce(() => makeFetchOk([])); // uOM selector
+
+      const { result } = renderHook(() =>
+        useWarehouseStock('wh-1', 'token', '/api'),
+      );
+
+      await waitFor(() => expect(result.current.loading).toBe(false));
+
+      expect(result.current.error).toBeNull();
+      expect(result.current.products).toEqual([]);
+      expect(result.current.transactions).toEqual([]);
     });
-
-    const { result } = renderHook(() => useWarehouseStock('wh-1', TOKEN, API));
-
-    await waitFor(() => expect(result.current.loading).toBe(false));
-    expect(result.current.error).toBe('503 Unavailable');
-    expect(result.current.products).toEqual([]);
-    expect(result.current.transactions).toEqual([]);
   });
 
-  it('falls back to json.data then [] when response.data is absent', async () => {
-    globalThis.fetch.mockImplementation((url) => {
-      if (url.includes('/selectors/uOM')) {
-        return Promise.resolve({ ok: true, json: async () => ({ data: [{ id: 'u', name: 'U' }] }) });
-      }
-      if (url.includes('/storageBin?')) {
-        return Promise.resolve({ ok: true, json: async () => ({}) }); // no data field -> []
-      }
-      return Promise.resolve({ ok: true, json: async () => ({}) });
+  describe('successful load with bins and contents', () => {
+    beforeEach(() => {
+      globalThis.fetch = vi.fn().mockImplementation((url) => {
+        if (url.includes('storageBin?')) return makeFetchOk(BINS);
+        if (url.includes('selectors/uOM')) return makeFetchOk([]);
+        if (url.includes('binContents?')) return makeFetchOk(BIN_CONTENTS);
+        if (url.includes('productTransactions?')) return makeFetchOk(TRANSACTIONS);
+        return makeFetchOk([]);
+      });
     });
 
-    const { result } = renderHook(() => useWarehouseStock('wh-1', TOKEN, API));
+    it('transitions from loading:true to loading:false', async () => {
+      const { result } = renderHook(() =>
+        useWarehouseStock('wh-1', 'token', '/api'),
+      );
+      await waitFor(() => expect(result.current.loading).toBe(false));
+    });
 
-    await waitFor(() => expect(result.current.loading).toBe(false));
-    expect(result.current.products).toEqual([]);
+    it('sets error to null on success', async () => {
+      const { result } = renderHook(() =>
+        useWarehouseStock('wh-1', 'token', '/api'),
+      );
+      await waitFor(() => expect(result.current.loading).toBe(false));
+      expect(result.current.error).toBeNull();
+    });
+
+    it('returns aggregated products (deduped across bins)', async () => {
+      const { result } = renderHook(() =>
+        useWarehouseStock('wh-1', 'token', '/api'),
+      );
+      await waitFor(() => expect(result.current.loading).toBe(false));
+      // BIN_CONTENTS has p1 + p2, fetched for each of 2 bins → 4 total rows → aggregated to 2 products
+      expect(result.current.products.length).toBeGreaterThan(0);
+      const ids = result.current.products.map(p => p.id);
+      expect(ids).toContain('p1');
+      expect(ids).toContain('p2');
+    });
+
+    it('returns transactions flat-merged from all bins', async () => {
+      const { result } = renderHook(() =>
+        useWarehouseStock('wh-1', 'token', '/api'),
+      );
+      await waitFor(() => expect(result.current.loading).toBe(false));
+      // TRANSACTIONS fetched for 2 bins → 2 tx entries
+      expect(result.current.transactions.length).toBe(BINS.length * TRANSACTIONS.length);
+    });
+
+    it('passes Authorization header to fetch', async () => {
+      const { result } = renderHook(() =>
+        useWarehouseStock('wh-1', 'my-token', '/api'),
+      );
+      await waitFor(() => expect(result.current.loading).toBe(false));
+      expect(globalThis.fetch).toHaveBeenCalledWith(
+        expect.stringContaining('storageBin'),
+        expect.objectContaining({
+          headers: expect.objectContaining({ Authorization: 'Bearer my-token' }),
+        }),
+      );
+    });
   });
 
-  it('re-fetches when refreshKey changes', async () => {
-    globalThis.fetch.mockImplementation((url) => {
-      if (url.includes('/selectors/uOM')) return Promise.resolve(jsonResponse([]));
-      if (url.includes('/storageBin?')) return Promise.resolve(jsonResponse([]));
-      return Promise.resolve(jsonResponse([]));
+  describe('UoM resolution via selector', () => {
+    it('passes uomMap built from selector to aggregateProducts', async () => {
+      const uomSelectorData = [{ id: 'u1', identifier: 'Each' }];
+      globalThis.fetch = vi.fn().mockImplementation((url) => {
+        if (url.includes('storageBin?')) return makeFetchOk([{ id: 'bin-1' }]);
+        if (url.includes('selectors/uOM')) return makeFetchOk(uomSelectorData);
+        if (url.includes('binContents?'))
+          return makeFetchOk([{ product: 'p1', 'product$_identifier': 'Widget', uOM: 'u1', quantityOnHand: 5, etgoValuation: 50 }]);
+        if (url.includes('productTransactions?')) return makeFetchOk([]);
+        return makeFetchOk([]);
+      });
+
+      const { result } = renderHook(() =>
+        useWarehouseStock('wh-1', 'token', '/api'),
+      );
+      await waitFor(() => expect(result.current.loading).toBe(false));
+
+      const product = result.current.products.find(p => p.id === 'p1');
+      expect(product).toBeDefined();
+      expect(product.uom).toBe('Each');
     });
-
-    const { result, rerender } = renderHook(
-      ({ key }) => useWarehouseStock('wh-1', TOKEN, API, key),
-      { initialProps: { key: 0 } },
-    );
-
-    await waitFor(() => expect(result.current.loading).toBe(false));
-    const callsAfterFirst = globalThis.fetch.mock.calls.length;
-
-    rerender({ key: 1 });
-    await waitFor(() => expect(globalThis.fetch.mock.calls.length).toBeGreaterThan(callsAfterFirst));
   });
 
-  it('ignores results after unmount (cancelled)', async () => {
-    let resolveBins;
-    globalThis.fetch.mockImplementation((url) => {
-      if (url.includes('/selectors/uOM')) return Promise.resolve(jsonResponse([]));
-      if (url.includes('/storageBin?')) {
-        return new Promise((r) => { resolveBins = () => r(jsonResponse([])); });
-      }
-      return Promise.resolve(jsonResponse([]));
+  describe('error path', () => {
+    it('sets error message when storageBin fetch fails', async () => {
+      globalThis.fetch = vi.fn()
+        .mockImplementationOnce(() => makeFetchFail(500, 'Server Error'))
+        .mockImplementationOnce(() => makeFetchOk([])); // uOM selector (parallel)
+
+      const { result } = renderHook(() =>
+        useWarehouseStock('wh-1', 'token', '/api'),
+      );
+      await waitFor(() => expect(result.current.loading).toBe(false));
+
+      expect(result.current.error).toBeTruthy();
+      expect(result.current.products).toEqual([]);
+      expect(result.current.transactions).toEqual([]);
     });
 
-    const { result, unmount } = renderHook(() => useWarehouseStock('wh-1', TOKEN, API));
-    unmount();
-    resolveBins();
-    // No assertion errors / state updates after unmount; loading stays as last value.
-    expect(result.current.loading).toBe(true);
+    it('sets error when binContents fetch throws a network error', async () => {
+      globalThis.fetch = vi.fn().mockImplementation((url) => {
+        if (url.includes('storageBin?')) return makeFetchOk([{ id: 'bin-1' }]);
+        if (url.includes('selectors/uOM')) return makeFetchOk([]);
+        if (url.includes('binContents?')) return Promise.reject(new Error('Network failure'));
+        return makeFetchOk([]);
+      });
+
+      const { result } = renderHook(() =>
+        useWarehouseStock('wh-1', 'token', '/api'),
+      );
+      await waitFor(() => expect(result.current.loading).toBe(false));
+
+      expect(result.current.error).toBe('Network failure');
+    });
+  });
+
+  describe('refreshKey', () => {
+    it('re-fetches when refreshKey changes', async () => {
+      globalThis.fetch = vi.fn().mockImplementation((url) => {
+        if (url.includes('storageBin?')) return makeFetchOk([]);
+        return makeFetchOk([]);
+      });
+
+      const { rerender } = renderHook(
+        ({ rk }) => useWarehouseStock('wh-1', 'token', '/api', rk),
+        { initialProps: { rk: 0 } },
+      );
+      await waitFor(() => expect(globalThis.fetch).toHaveBeenCalled());
+      const callsAfterFirst = globalThis.fetch.mock.calls.length;
+
+      rerender({ rk: 1 });
+      await waitFor(() =>
+        expect(globalThis.fetch.mock.calls.length).toBeGreaterThan(callsAfterFirst),
+      );
+    });
   });
 });

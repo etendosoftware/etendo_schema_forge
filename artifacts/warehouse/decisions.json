@@ -77,7 +77,13 @@
     },
     "binContents": {
       "name": "binContents",
+      "javaQualifier": "binContentsHandler",
       "fields": {
+        "etgoCost": {
+          "grid": true,
+          "form": false,
+          "visibility": "readOnly"
+        },
         "etgoValuation": {
           "grid": true,
           "form": false,

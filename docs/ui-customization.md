@@ -166,10 +166,29 @@ Adds actions to the triple-dot menu in the detail view. Visibility can be gated 
 | `documentAction` | string | If set, invokes the standard DocAction endpoint with this value (`"RE"`, `"CO"`, `"VO"`, …) via the shared `useDocumentAction` hook. After success, the record is refreshed and `successMessage` (or a generic label) is shown inline. Errors from the backend are surfaced inline as well. |
 | `successMessage` | string | Text shown in the success banner after a `documentAction` resolves. |
 | `columnName` | string | Fires `hook.handleProcess(columnName)`. Use for AD process buttons that aren't DocAction-based. |
+| `component` | string | Imports a custom component from `windows/custom/{window}/` and opens it as a detail-menu modal. The component receives `currentRecord`, `token`, `apiBaseUrl`, `onClose`, and `onSaved`. |
 
-Handler precedence: `documentAction` > `columnName` > empty placeholder `onClick`. Declare `documentAction` for any DocAction-style action (Reactivate, Void, Close, etc.) — the generator wires the full fetch + error flow automatically.
+Handler precedence: `documentAction` > `columnName` > `action` > `component` > empty placeholder `onClick`. Declare `documentAction` for any DocAction-style action (Reactivate, Void, Close, etc.) — the generator wires the full fetch + error flow automatically.
+
+**The ⋮ button auto-hides when empty.** `DetailView` only renders the "more" button when, for the current record state, there is at least one visible `menuActions` entry **or** a `customComponents.moreMenuContent` is set. If every action is gated out (e.g. all `visibleWhenStatus: "CO"` while the document is in Draft), the button is not shown at all — it never renders as an empty, clickable dropdown.
 
 **Real examples:** `goods-shipment` (cancel), `payment-in` (reverse via `columnName`), `sales-invoice` (duplicate, cancel), `sales-order` (reactivate via `documentAction: "RE"`).
+
+#### Dynamic process-button captions — `processOverrides.<proc>.labelToggle`
+
+A process button caption can switch based on a record field value. Add an optional `labelToggle: { field, equals, label }` to any `processOverrides` entry. When the current record's `field` strictly equals `equals`, the toolbar button shows `label`; otherwise it shows the entry's default `label`. Both go through `useMenuLabel`, so translations resolve automatically. It is fully opt-in: buttons without `labelToggle` render exactly as before.
+
+```json
+"processOverrides": {
+  "processAsset": {
+    "add": true,
+    "label": "Create Amortization",
+    "labelToggle": { "field": "processed", "equals": "Y", "label": "Recalculate Amortization" }
+  }
+}
+```
+
+This mirrors Etendo Classic list-reference buttons (e.g. Assets ref 800042 toggling on `A_Asset.Processed`). Full property table: `docs/decisions-reference.md → Process Overrides`.
 
 ---
 
@@ -315,6 +334,34 @@ Hides the delete button when the document is not in Draft status.
 
 ---
 
+### 9b. `window.hideDeleteButton` — unconditional delete button opt-out
+
+Unconditionally hides the Delete button/icon in **both** the detail view toolbar
+and the list-row hover quick actions, for every record regardless of status.
+Distinct from `hideDeleteWhenComplete` (conditional — only hides once the
+document leaves Draft) and from `hideDelete` (which only disables the CRUD
+delete capability declared in `contract.json`/the API, without touching the
+UI affordance). Use `hideDeleteButton` when Delete should never be reachable
+from the UI, e.g. master-data windows where records are provisioned/retired
+outside the app.
+
+```json
+"window": {
+  "hideDeleteButton": true
+}
+```
+
+Defaults to `false`; when unset, delete visibility is exactly as before. This is a
+stronger, state-independent form of `hideDeleteWhenComplete`: if you set
+`hideDeleteButton`, `hideDeleteWhenComplete` becomes redundant. The gate lives in
+the shared utility `tools/app-shell/src/utils/recordActions.js`, so both `DetailView`
+and `RowQuickActions` stay in lockstep.
+
+**Real examples:** `tax` (ETP-4464 — paired with `hideDelete: true` for
+defense-in-depth: the API capability is disabled AND the UI icon is hidden).
+
+---
+
 ### 10. `window.dateFilterKey` — date range filter column
 
 Declares which list column the date range shortcut in the list toolbar targets.
@@ -368,9 +415,73 @@ The generic `LinesEmptyState` component lives at `tools/app-shell/src/components
 
 `addLineGuard` receives current form data and must return `true` to enable adding lines. It gates both the button inside the empty state (`canAddLine` prop) and the `+ Add Line` button in the lines table header. Without a guard, adding is always allowed.
 
+**`window.maxDetailLines` — cap the line count (decisions-driven; `0` = import-only lines):**
+
+```json
+// decisions.json
+"window": {
+  "maxDetailLines": 0
+}
+```
+
+Unlike `addLineGuard` (a JSX prop on the custom wrapper), `maxDetailLines` is a `decisions.json` option, so it survives pipeline re-runs. The generator translates it into a count-based guard on the generated page:
+
+```jsx
+// emitted in artifacts/{window}/generated/web/{window}/*Page.jsx
+addLineGuard={(_, children) => children.length < 0}   // maxDetailLines: 0 — always false
+```
+
+- **`N > 0`** caps the detail entity at `N` lines: the add-line affordances disappear once the child count reaches `N`.
+- **`0`** disables manual line creation entirely — the **import-only lines pattern**. `canAddLines` resolves to `false` unconditionally, so `DetailView`:
+  - passes `canAddLine={false}` to the lines empty state — the shared `LinesEmptyState` hides its primary `+ Add Lines` button and keeps `secondaryAction` (typically an import button), which becomes the only way to create lines;
+  - never renders the add-line area below the lines table (`canShowAddLineArea` requires `canAddLines`), which also hides the inline `detailExtraActions` trigger and the add-line kebab fed by `lineMenuActions`, since both live inside that area — `DetailView` itself renders no line-creation control once lines exist (see the panel-rendered pattern below to keep import available).
+
+**Keeping import available once lines exist (window-scoped, panel-rendered pattern):** because the suppressed add-line area is also where `detailExtraActions` renders, a window that must allow importing MORE lines into a draft that already has lines re-renders its import trigger from its own `customComponents.bottomSection` panel — the bottom section always renders below the lines area and receives `lines`, `data`, `recordId`, `token`, and `apiBaseUrl` from `DetailView`:
+
+```jsx
+export default function MyBottomPanel(props) {
+  const hasLines = Array.isArray(props.lines) && props.lines.length > 0;
+  const showImportTrigger = hasLines && props.data?.documentStatus === 'DR' && props.data?.businessPartner;
+  return (
+    <>
+      {showImportTrigger && (
+        <MyImportTrigger
+          data={props.data}
+          recordId={props.recordId}
+          token={props.token}
+          apiBaseUrl={props.apiBaseUrl}
+          onRefresh={() => window.location.reload()}
+        />
+      )}
+      <LinesBottomSection {...props} />
+    </>
+  );
+}
+```
+
+Gate the trigger on `lines.length > 0` (with no lines, the empty state already shows its own import button) plus the trigger's own visibility conditions (draft status + business partner above), so completed documents don't render an empty strip. **Known limitations** of this path: `DetailView`'s `bottomSection` contract passes no refresh callback and no save-header hook (`onSave`), so the trigger cannot save a dirty header before importing and must refresh via `window.location.reload()` after a successful import.
+
+**Custom empty states MUST forward `canAddLine`.** A Pattern B empty state that omits the prop silently falls back to the shared component's default (`canAddLine = true`) and re-enables the manual button:
+
+```jsx
+function MyLinesEmptyState({ data, onAddLine, canAddLine = true, ...rest }) {
+  return (
+    <LinesEmptyState
+      data={data}
+      onAddLine={onAddLine}
+      canAddLine={canAddLine}   // ← forward, never hardcode
+      description={canAddLine ? ui('addLinesManuallyOrImportFromShipment') : ui('linesImportOnlyFromShipment')}
+      secondaryAction={importButton}
+    />
+  );
+}
+```
+
 **Real examples:**
 - `linesEmptyState` (Pattern B): `purchase-invoice` (`PurchaseInvoiceBottomPanel.linesEmptyState`)
 - `linesEmptyState` (Pattern A) + `addLineGuard`: `sales-order`, `purchase-order`, `sales-quotation`
+- `maxDetailLines: 1`: `business-partner-category`, `product-category` (accounting tab capped at one row per accounting schema)
+- `maxDetailLines: 0` (import-only lines, ETP-4462): `return-material-receipt` (lines imported from the source shipment) and `return-to-vendor-shipment` (lines imported from the source goods receipt) — both bottom panels (`artifacts/{window}/custom/*BottomPanel.jsx`) forward `canAddLine`, swap the empty-state description to the import-only keys `linesImportOnlyFromShipment` / `linesImportOnlyFromReceipt` (defined in `en_US`, `es_ES`, and `es_AR`), and re-render their import trigger (`ReturnReceiptLineActions` / `ReturnToVendorLineActions`) above `LinesBottomSection` via the panel-rendered pattern so importing stays available on drafts that already have lines
 
 ---
 
@@ -543,6 +654,136 @@ Both `debitField` and `creditField` must be amount-typed fields on the **lines**
 
 ---
 
+### 16. `requiredVisual` — cosmetic required asterisk (field descriptor prop)
+
+**What it does:** renders the red required asterisk `*` next to a field's label in `EntityForm`
+**without enforcing any validation**. It is OR-ed with `required` in every asterisk render site
+(`labelMarker`, `requiredAsterisk`, `requiredAsteriskIfEditable`, and `PopupSearchField`'s inline
+marker), and — like the `required` asterisk — only shows on editable fields (`!isReadOnly`); it
+never renders on a read-only display. The `required={...}` prop passed down to the underlying
+input/select is untouched by `requiredVisual` — it still depends on `required` only.
+
+**Use when:** a field's obligatoriness is **conditional** on another field's value (e.g. a
+calculation-type toggle that makes different fields mandatory depending on its selection), so a
+real `required: true` would incorrectly block submission when the field isn't actually
+applicable yet, but the user should still see it visually flagged as required once it is
+relevant.
+
+Set directly on the field descriptor object passed to `EntityForm` — **not** a `decisions.json`
+key. It is typically declared inline on the field literals inside a window's hand-authored
+custom panel:
+
+```jsx
+// windows/custom/{window}/{Window}DetailPanel.jsx
+{ key: 'usableLifeYears', column: 'UseLifeYears', type: 'number', requiredVisual: true, /* ... */ }
+```
+
+**Real example:** `assets` — `currency`, `depreciationAmt`, `annualDepreciation`,
+`usableLifeYears`, `usableLifeMonths`, and `depreciationStartDate` in `AssetsDetailPanel.jsx`
+carry `requiredVisual: true` because their obligatoriness depends on the "Tipo de cálculo"
+(`calculateType`) selection.
+
+---
+
+### 17. `secondaryTabs` — custom Panel/Form tabs beside lines
+
+**What it does:** renders one or more extra tabs next to the header's detail content, backed
+either by a hand-written `Panel` component (freeform content, e.g. a custom fetch-and-render
+subtab) or a generated `Form` component (a plain entity form reused as a secondary tab). This is
+a runtime prop passed to the generated `<Page>` component from a hand-written `windows/custom/
+{window}/index.jsx` wrapper — **not** a `decisions.json` key — so it requires `window.layoutType:
+"custom"` (the pipeline only emits a bare scaffold for `"custom"` layouts; there is no
+declarative `decisions.json` shape for this yet).
+
+```jsx
+// windows/custom/{window}/index.jsx
+import GeneratedPage from '@generated/{window}/generated/web/{window}/{Header}Page';
+import MyPanel from './MyPanel.jsx';
+
+export default function MyWindow(props) {
+  const secondaryTabs = [
+    { key: 'accounting', label: 'Accounting', Panel: MyPanel },
+  ];
+  return <GeneratedPage {...props} secondaryTabs={secondaryTabs} />;
+}
+```
+
+**The `Panel` prop contract (confirmed by reading `DetailView.jsx`'s `SecondaryPanelTab`, not
+assumed):**
+
+```jsx
+<props.st.Panel
+    parentId={props.data?.id}
+    token={props.token}
+    apiBaseUrl={props.apiBaseUrl}
+    onCount={props.onCount}
+/>
+```
+
+Your `Panel` component receives **`parentId`** (the current header record's id, a plain string) —
+**not `data`, not the full header record.** This is easy to get wrong if you copy a prop shape
+from memory instead of checking the real renderer: a component written as `function MyPanel({
+data, token, apiBaseUrl })` will silently receive `data === undefined` forever (no error, no
+warning — the prop is just absent) and never fire its fetch. `onCount` is optional — call it with
+a number if you want the tab label to show a count badge; omitting it just skips the badge.
+
+`Form`-backed secondary tabs (`{ key, Form }` instead of `{ key, Panel }`) use a different prop
+shape (`SecondaryFormTab`): `data`, `readOnly`, `onChange`, `entity`, `catalogs`, `token`,
+`apiBaseUrl`, `selectorContext`, `labelOverrides` — closer to a normal `EntityForm` invocation.
+Don't assume `Panel` and `Form` share a prop contract; they don't.
+
+**Building the fetch URL inside a `Panel`:** `apiBaseUrl` passed down here is already
+`{base}/{windowName}` (set once by `WindowLoader.jsx`: `apiBaseUrl={`${apiBaseUrl}/${windowName}`}`,
+where `windowName` is the **route** name, not necessarily a real spec name — see the exception
+below) and threaded unchanged through `Page` → `DetailView` → `Panel`. In the common case (the
+route name IS the backing spec's name), build entity URLs directly off it —
+`${apiBaseUrl}/periodControl?year=${parentId}` — **never** re-prepend the window/spec name
+(`${apiBaseUrl}/{window}/periodControl?...`) or you'll get a doubled path segment. This matches
+the existing `warehouse` convention (`useWarehouseStock.js`: `${apiBaseUrl}/storageBin?...`,
+`${apiBaseUrl}/binContents?...`).
+
+**Exception — a custom window with no backing spec of its own, spanning multiple real specs.**
+`calendar` (ETP-4478) has no `artifacts/calendar/` spec at all — its route name is purely
+cosmetic. `WindowLoader.jsx` still injects `apiBaseUrl={base}/calendar`, but `year` is really
+backed by the `fiscal-calendar` spec, the Periods panel by `open-close-period-control`, and the
+Accounting panel by `end-year-close`. In this shape, the window's `index.jsx` wrapper must strip
+the trailing route segment and substitute the real spec name **per panel** (and for its own
+header page, not just secondary tabs):
+
+```jsx
+function rootApiBase(apiBaseUrl) {
+  return apiBaseUrl.replace(/\/[^/]*$/, ''); // strip the trailing route segment
+}
+function MyPanelForCalendar(props) {
+  return <MyPanel {...props} apiBaseUrl={`${rootApiBase(props.apiBaseUrl)}/the-real-spec-name`} />;
+}
+```
+
+This only applies when the window genuinely has no spec of its own — reach for one merged spec
+first if the entities involved can share a single AD window (see `docs/decisions-reference.md`);
+only fall back to this pattern when they can't (see `docs/generated-custom-windows/calendar.md`
+for the full rationale — a merged multi-window spec silently loses entities in `push-to-neo`,
+tracked as [schema_forge_core#35](https://github.com/etendosoftware/schema_forge_core/issues/35)).
+
+**menuActions-triggered modals are a different mechanism, with their own base URL constant.** A
+`window.menuActions` entry's `component` (see option 5 above) receives `currentRecord` (the full
+record, not just an id) and `apiBaseUrl={api.baseUrl}` — a **hardcoded generated string**
+(`api.baseUrl` inside the generated `Page.jsx`, literally `"/sws/neo/{spec}"`), not the runtime
+`apiBaseUrl` prop threaded from `WindowLoader`. In practice the two end up equal for a
+top-level menu action, but don't assume they're the same variable — verify against the generated
+file when building URLs in a `menuActions` component.
+
+**Use when:** a window needs a subtab whose content doesn't map to a normal generated
+list/detail entity — inline custom rendering, aggregation, or an interaction shape the generator
+doesn't produce (expandable rows, a read-only trial-balance-style grid, etc.).
+
+**Real examples:** `warehouse` (`WarehouseTransactionsTable`/`WarehouseProductsTab` as `Panel`s
+reading `parentId`, single backing spec — the common case); `calendar` (`PeriodsExpandablePanel`,
+`AccountingPanel` — the multi-spec exception above, each panel's `apiBaseUrl` rewritten to a
+different real spec).
+
+---
+
 ## Decision tree: which option to use?
 
 ```
@@ -587,9 +828,12 @@ I need to customize the UI of a window
     ├─ → window.attachments (auto-on; set to false to opt out, object to tune limits)
     ├─ Empty state when lines tab is empty → linesEmptyState prop + addLineGuard
     ├─ Gate add-line button on header field → addLineGuard prop
+    ├─ Cap line count / disable manual line creation (import-only lines) → window.maxDetailLines (0 = import-only)
     ├─ Hide ⋮ menu on new/processed records → hideMoreMenu prop (boolean or function)
-    └─ Hover overlay with per-row actions on the list (Edit/Duplicate/Email/kebab/Delete)
-        └─ → window.rowQuickActions (on by default; declare only to disable or override)
+    ├─ Hover overlay with per-row actions on the list (Edit/Duplicate/Email/kebab/Delete)
+    │   └─ → window.rowQuickActions (on by default; declare only to disable or override)
+    └─ Show a required-looking asterisk on a conditionally-required field, without validation
+        └─ → requiredVisual: true on the field descriptor (EntityForm prop, not decisions.json)
 ```
 
 ---

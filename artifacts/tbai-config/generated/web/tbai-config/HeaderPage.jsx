@@ -78,6 +78,7 @@ export const api = {
 export default function HeaderPage({ windowName, recordId, ...props }) {
   if (recordId) {
     return (
+      <>
       <DetailView
         entity="header"
         Form={HeaderForm}
@@ -94,6 +95,7 @@ export default function HeaderPage({ windowName, recordId, ...props }) {
         requiredHeaderFields={requiredHeaderFields}
         {...props}
       />
+      </>
     );
   }
 

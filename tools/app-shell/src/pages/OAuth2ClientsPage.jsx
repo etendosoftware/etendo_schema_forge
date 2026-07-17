@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useAuth } from '@/auth/AuthContext.jsx';
+import { useLogout } from '@/auth/useLogout.js';
 import { createApiFetch } from '@/auth/api.js';
 import { listClients, deleteClient, regenerateSecret, revokeTokens } from '@/lib/oauth2Api.js';
 import OAuth2ClientDialog, { SecretRevealDialog, ConfirmDialog } from '@/components/OAuth2ClientDialog.jsx';
@@ -26,7 +27,8 @@ function detectBaseUrl() {
 }
 
 export default function OAuth2ClientsPage() {
-  const { token, logout } = useAuth();
+  const { token } = useAuth();
+  const logout = useLogout();
   const ui = useUI();
   const [clients, setClients] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -193,12 +195,18 @@ export default function OAuth2ClientsPage() {
       </div>
       <Card data-testid="Card__82406d">
         <CardContent className="p-0" data-testid="CardContent__82406d">
-          {loading ? (
+          {(() => {
+            if (loading) {
+              return (
             <div className="flex items-center justify-center py-12 text-muted-foreground">
               <RefreshCw className="h-5 w-5 animate-spin mr-2" data-testid="RefreshCw__82406d" />
               {ui("loadingClients")}
             </div>
-          ) : clients.length === 0 ? (
+              );
+            }
+
+            if (clients.length === 0) {
+              return (
             <div className="flex flex-col items-center justify-center py-16 text-center">
               <Shield
                 className="h-12 w-12 text-muted-foreground/40 mb-4"
@@ -212,7 +220,10 @@ export default function OAuth2ClientsPage() {
                 {ui("oauthClientCreateFirst")}
               </Button>
             </div>
-          ) : (
+              );
+            }
+
+            return (
             <Table data-testid="Table__82406d">
               <TableHeader data-testid="TableHeader__82406d">
                 <TableRow data-testid="TableRow__82406d">
@@ -311,7 +322,8 @@ export default function OAuth2ClientsPage() {
                 ))}
               </TableBody>
             </Table>
-          )}
+              );
+          })()}
         </CardContent>
       </Card>
       {/* Create/Edit dialog */}

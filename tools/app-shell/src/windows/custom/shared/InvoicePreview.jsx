@@ -3,7 +3,7 @@ import { Edit2, FileText, Loader2, AlertCircle, Mail, Download, Wallet, MoreVert
 import { Button } from '@/components/ui/button.jsx';
 import { useMenuLabel, useUI } from '@/i18n';
 import { getLatestInstallmentDueDate } from '@/lib/invoiceDueDate';
-import InvoicePaymentModal from './InvoicePaymentModal.jsx';
+import NewPaymentEntryModal from './NewPaymentEntryModal.jsx';
 import PdfViewer from './PdfViewer.jsx';
 import SendDocumentModal from '@/components/contract-ui/SendDocumentModal.jsx';
 import GenericPreviewModal from './GenericPreviewModal.jsx';
@@ -17,6 +17,15 @@ import PaymentsCard from './preview-cards/PaymentsCard.jsx';
 import EmailsCard from './preview-cards/EmailsCard.jsx';
 import RelatedDocumentsCard from './preview-cards/RelatedDocumentsCard.jsx';
 import { fetchByCriteria, fetchById } from '@/components/related-documents';
+import { useDocumentCurrency } from './useDocumentCurrency.js';
+import { useCurrencyPrecision } from '@/hooks/useCurrencyPrecision.js';
+
+function isCreditNote(invoice) {
+  if (!invoice) return false;
+  if (invoice.arInvoiceSubtype) return invoice.arInvoiceSubtype === 'NC' || invoice.arInvoiceSubtype === 'DEV';
+  const ident = (invoice['transactionDocument$_identifier'] || invoice['cDocTypeTargetId$_identifier'] || '').toLowerCase();
+  return ident.includes('credit') || ident.includes('memo') || ident.includes('crédito') || ident.includes('return') || ident.includes('devoluci');
+}
 
 /**
  * InvoicePreview — wires useInvoicePreview data into GenericPreviewModal.
@@ -95,7 +104,7 @@ function InvoiceActionButtons({ triggerEdit, onEmail, canSendToSif, onOpenSif, c
 
 // ── General tab content ───────────────────────────────────────────────────────
 
-function InvoiceGeneralTab({ invoice, partnerName, badgeProps, statusLabel, installments, payments, loadingPayments, totalOutstanding, canAddPayment, isFullyPaid, specName, apiBaseUrl, token, orgId, profile, onAddPayment, onSend }) {
+function InvoiceGeneralTab({ invoice, partnerName, badgeProps, statusLabel, installments, payments, loadingPayments, totalOutstanding, canAddPayment, isFullyPaid, isCreditNote: isNC, specName, apiBaseUrl, token, orgId, profile, onAddPayment, onSend, orgCurrencyCode, exchangeRate, orgGrandTotal, ratePrecision }) {
   const ui = useUI();
   const fiscalTargets = getInvoiceFiscalTargets(specName, profile);
   const { sii: siiStatus, tbai: tbaiStatus, verifactu: vfStatus, loading: fiscalLoading } = useFiscalStatus(
@@ -124,6 +133,10 @@ function InvoiceGeneralTab({ invoice, partnerName, badgeProps, statusLabel, inst
         dueDate={latestDueDate ?? null}
         statusCode={invoice?.documentStatus}
         statusLabel={statusLabel}
+        orgCurrencyCode={orgCurrencyCode}
+        exchangeRate={exchangeRate}
+        orgGrandTotal={orgGrandTotal}
+        ratePrecision={ratePrecision}
         data-testid="SummaryCard__cf88e6">
         {fiscalTargets.showSii && (
           <InfoRow
@@ -159,8 +172,10 @@ function InvoiceGeneralTab({ invoice, partnerName, badgeProps, statusLabel, inst
         totalOutstanding={totalOutstanding}
         canAddPayment={canAddPayment}
         isFullyPaid={isFullyPaid}
+        isCreditNote={isNC}
         loading={loadingPayments}
         onAddPayment={onAddPayment}
+        specName={specName}
         data-testid="PaymentsCard__cf88e6" />
       {specName !== 'purchase-invoice' && <EmailsCard onSend={onSend} data-testid="EmailsCard__cf88e6" />}
       <RelatedDocumentsCard
@@ -189,6 +204,30 @@ export default function InvoicePreview({ invoice, token, apiBaseUrl, windowName,
   const tMenu = useMenuLabel();
   const modalRef = useRef(null);
   const p = useInvoicePreview({ invoice, token, apiBaseUrl, specName, onInvoiceUpdated });
+  const ratePrecision = useCurrencyPrecision();
+
+  // Dual-currency: fetch exchange rate when doc currency differs from org currency.
+  // When the invoice has a per-document custom rate (eTGOCurrencyRate = org→doc multiplyRate,
+  // e.g. 1.20 means 1 EUR = 1.20 USD), use it directly instead of the system C_Conversion_Rate.
+  // This mirrors the pattern already used by OrderPreview.jsx / QuotationPreview.jsx.
+  const { orgCurrencyCode, isSameCurrency, exchangeRate: systemExchangeRate } = useDocumentCurrency({
+    docCurrencyCode: p.displayInvoice?.['currency$_identifier'],
+    orderDate: p.displayInvoice?.invoiceDate,
+    apiBaseUrl,
+    token,
+  });
+  const etgoRate = (!isSameCurrency && p.displayInvoice?.eTGOCurrencyRate)
+    ? parseFloat(p.displayInvoice.eTGOCurrencyRate)
+    : null;
+  // eTGOCurrencyRate = org→doc multiplyRate (e.g. 1.20 = "1 EUR = 1.20 USD").
+  // Use it directly as exchangeRate so (1.20) is displayed, not the inverse (0.8333).
+  // orgGrandTotal = docTotal / eTGOCurrencyRate converts doc→org correctly.
+  const exchangeRate = (etgoRate && etgoRate !== 0 && etgoRate !== 1)
+    ? etgoRate
+    : systemExchangeRate;
+  const orgGrandTotal = (!isSameCurrency && exchangeRate && p.displayInvoice?.grandTotalAmount != null)
+    ? Number(p.displayInvoice.grandTotalAmount) / exchangeRate
+    : null;
 
   if (!invoice) return null;
 
@@ -252,6 +291,7 @@ export default function InvoicePreview({ invoice, token, apiBaseUrl, windowName,
           canAddPayment={p.canAddPayment}
           isDraft={p.isDraft}
           isFullyPaid={p.isFullyPaid}
+          isCreditNote={isCreditNote(p.displayInvoice)}
           specName={specName}
           apiBaseUrl={apiBaseUrl}
           token={token}
@@ -259,6 +299,10 @@ export default function InvoicePreview({ invoice, token, apiBaseUrl, windowName,
           profile={p.profile}
           onAddPayment={() => p.setShowPaymentModal(true)}
           onSend={p.openEmailModal}
+          orgCurrencyCode={orgCurrencyCode}
+          exchangeRate={exchangeRate}
+          orgGrandTotal={orgGrandTotal}
+          ratePrecision={ratePrecision}
           data-testid="InvoiceGeneralTab__cf88e6" />
       ),
     },
@@ -312,16 +356,16 @@ export default function InvoicePreview({ invoice, token, apiBaseUrl, windowName,
         actionButtons={actionButtons}
         data-testid="GenericPreviewModal__cf88e6" />
       {p.showPaymentModal && (
-        <InvoicePaymentModal
+        <NewPaymentEntryModal
+          dir={specName === 'sales-invoice' ? 'in' : 'out'}
+          specName={specName}
           invoiceId={p.displayInvoice?.id}
           invoiceData={p.displayInvoice}
-          specName={specName}
+          outstanding={p.totalOutstanding}
           apiBaseUrl={apiBaseUrl}
-          onClose={() => {
-            p.setShowPaymentModal(false);
-            p.fetchPayments();
-          }}
-          data-testid="InvoicePaymentModal__cf88e6" />
+          onClose={() => p.setShowPaymentModal(false)}
+          onSaved={() => { p.setShowPaymentModal(false); p.fetchPayments(); }}
+          data-testid="NewPaymentEntryModal__cf88e6" />
       )}
       {p.showSifModal && (
         <SifSendingModal

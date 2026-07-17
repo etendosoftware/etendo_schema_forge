@@ -1,8 +1,8 @@
 {
-  "version": "0.35.0",
+  "version": "0.38.0",
   "generatedAt": "2026-04-29T19:06:30.936Z",
-  "updatedAt": "2026-06-18T19:17:38.311Z",
-  "checksum": "fbcbd6d88ea681b0",
+  "updatedAt": "2026-07-08T11:39:25.357Z",
+  "checksum": "1a08a830501023e7",
   "frontendContract": {
     "window": {
       "id": "800027",
@@ -21,6 +21,11 @@
         "processAsset": {
           "add": true,
           "label": "Create Amortization",
+          "labelToggle": {
+            "field": "processed",
+            "equals": "Y",
+            "label": "Recalculate Amortization"
+          },
           "style": "positive",
           "displayLogicRaw": "@Depreciate@='Y' AND @etgoAmortizationStatus@!='100'",
           "requiresFieldMax": [
@@ -34,7 +39,18 @@
           ]
         }
       },
-      "secondaryTabs": {},
+      "secondaryTabs": {
+        "assetAcct": {
+          "tabOrder": 1,
+          "label": "Accounting",
+          "addLineFields": [
+            "accountingSchema",
+            "accumulatedDepreciation",
+            "depreciation"
+          ],
+          "requireSavedRecord": true
+        }
+      },
       "detailEntity": null,
       "statusField": "none",
       "detailSortBy": "sEQNoAsset asc",
@@ -51,7 +67,8 @@
           "EM_Etadas_Salesregion_ID": "Región de ventas",
           "EM_Etadas_C_Activity_ID": "Actividad",
           "EM_Etadas_Campaign_ID": "Campaña",
-          "EM_Etgo_Amortization_Status": "Estado de amortización"
+          "EM_Etgo_Amortization_Status": "Estado de amortización",
+          "M_Product_ID": "Producto"
         },
         "en_US": {
           "C_Project_ID": "Project",
@@ -62,7 +79,8 @@
           "EM_Etadas_Salesregion_ID": "Sales Region",
           "EM_Etadas_C_Activity_ID": "Activity",
           "EM_Etadas_Campaign_ID": "Sales Campaign",
-          "EM_Etgo_Amortization_Status": "Amortization Status"
+          "EM_Etgo_Amortization_Status": "Amortization Status",
+          "M_Product_ID": "Product"
         }
       },
       "disableProcessedLock": true,
@@ -71,7 +89,10 @@
       "compactSidebarPadding": true,
       "whiteFormBackground": true,
       "hideFormCard": true,
+      "sidebarAboveTabsOnly": true,
+      "tabsSeparator": true,
       "sidebarClassName": "w-[30%] shrink-0 border-l border-[#E8EAEF] p-2",
+      "formScrollPaddingX": "px-2",
       "toolbarPaddingX": "px-2",
       "toolbarButtonSize": "default",
       "listbarPaddingX": "px-2",
@@ -83,8 +104,7 @@
           "component": "AssetsAmortizationPanel"
         }
       ],
-      "layoutType": "default",
-      "sidebarAboveTabsOnly": true
+      "layoutType": "default"
     },
     "entities": {
       "assets": {
@@ -102,7 +122,7 @@
             "tsType": "string",
             "visibility": "editable",
             "required": true,
-            "grid": false,
+            "grid": true,
             "form": false,
             "sourceRequired": true
           },
@@ -175,6 +195,23 @@
             }
           },
           {
+            "name": "product",
+            "apiKey": "product",
+            "column": "M_Product_ID",
+            "label": "Product",
+            "type": "foreignKey",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": false,
+            "grid": false,
+            "form": false,
+            "reference": "Product",
+            "inputMode": "search",
+            "callout": {
+              "className": "org.openbravo.erpCommon.ad_callouts.SL_Asset_Product"
+            }
+          },
+          {
             "name": "depreciate",
             "apiKey": "depreciate",
             "column": "IsDepreciated",
@@ -202,7 +239,10 @@
             "enumValues": [
               {
                 "value": "LI",
-                "name": "Linear"
+                "name": "Linear",
+                "labels": {
+                  "es_ES": "Lineal"
+                }
               }
             ],
             "businessCritical": true,
@@ -227,11 +267,17 @@
             "enumValues": [
               {
                 "value": "PE",
-                "name": "Percentage"
+                "name": "Percentage",
+                "labels": {
+                  "es_ES": "Porcentaje"
+                }
               },
               {
                 "value": "TI",
-                "name": "Time"
+                "name": "Time",
+                "labels": {
+                  "es_ES": "Tiempo"
+                }
               }
             ],
             "businessCritical": true,
@@ -274,11 +320,17 @@
             "enumValues": [
               {
                 "value": "MO",
-                "name": "Monthly"
+                "name": "Monthly",
+                "labels": {
+                  "es_ES": "Mensualmente"
+                }
               },
               {
                 "value": "YE",
-                "name": "Yearly"
+                "name": "Yearly",
+                "labels": {
+                  "es_ES": "Anualmente"
+                }
               }
             ],
             "businessCritical": true,
@@ -358,6 +410,7 @@
             "required": false,
             "grid": true,
             "form": false,
+            "dot": false,
             "displayLogic": {
               "raw": "@IsDepreciated@='Y'",
               "evaluable": true,
@@ -632,26 +685,6 @@
             }
           },
           {
-            "name": "eTADASActivity",
-            "apiKey": "eTADASActivity",
-            "column": "EM_Etadas_C_Activity_ID",
-            "label": "Activity",
-            "type": "foreignKey",
-            "tsType": "string",
-            "visibility": "editable",
-            "required": false,
-            "grid": false,
-            "form": false,
-            "reference": "Activity",
-            "inputMode": "selector",
-            "displayLogic": {
-              "raw": "@$Element_PJ@='Y' & @IsDepreciated@='Y'",
-              "evaluable": false,
-              "reason": "accounting-dimension",
-              "js": null
-            }
-          },
-          {
             "name": "eTADASCostCenter",
             "apiKey": "eTADASCostCenter",
             "column": "EM_Etadas_Costcenter_ID",
@@ -663,86 +696,6 @@
             "grid": false,
             "form": false,
             "reference": "Costcenter",
-            "inputMode": "selector",
-            "displayLogic": {
-              "raw": "@$Element_PJ@='Y' & @IsDepreciated@='Y'",
-              "evaluable": false,
-              "reason": "accounting-dimension",
-              "js": null
-            }
-          },
-          {
-            "name": "eTADASSalesCampaign",
-            "apiKey": "eTADASSalesCampaign",
-            "column": "EM_Etadas_Campaign_ID",
-            "label": "Sales Campaign",
-            "type": "foreignKey",
-            "tsType": "string",
-            "visibility": "editable",
-            "required": false,
-            "grid": false,
-            "form": false,
-            "reference": "Campaign",
-            "inputMode": "selector",
-            "displayLogic": {
-              "raw": "@$Element_PJ@='Y' & @IsDepreciated@='Y'",
-              "evaluable": false,
-              "reason": "accounting-dimension",
-              "js": null
-            }
-          },
-          {
-            "name": "eTADASSalesRegion",
-            "apiKey": "eTADASSalesRegion",
-            "column": "EM_Etadas_Salesregion_ID",
-            "label": "Sales Region",
-            "type": "foreignKey",
-            "tsType": "string",
-            "visibility": "editable",
-            "required": false,
-            "grid": false,
-            "form": false,
-            "reference": "SalesRegion",
-            "inputMode": "selector",
-            "displayLogic": {
-              "raw": "@$Element_PJ@='Y' & @IsDepreciated@='Y'",
-              "evaluable": false,
-              "reason": "accounting-dimension",
-              "js": null
-            }
-          },
-          {
-            "name": "eTADASUser1",
-            "apiKey": "eTADASUser1",
-            "column": "EM_Etadas_User1_ID",
-            "label": "1st Dimension",
-            "type": "foreignKey",
-            "tsType": "string",
-            "visibility": "editable",
-            "required": false,
-            "grid": false,
-            "form": false,
-            "reference": "User1",
-            "inputMode": "selector",
-            "displayLogic": {
-              "raw": "@$Element_PJ@='Y' & @IsDepreciated@='Y'",
-              "evaluable": false,
-              "reason": "accounting-dimension",
-              "js": null
-            }
-          },
-          {
-            "name": "eTADASUser2",
-            "apiKey": "eTADASUser2",
-            "column": "EM_Etadas_User2_ID",
-            "label": "2nd Dimension",
-            "type": "foreignKey",
-            "tsType": "string",
-            "visibility": "editable",
-            "required": false,
-            "grid": false,
-            "form": false,
-            "reference": "User2",
             "inputMode": "selector",
             "displayLogic": {
               "raw": "@$Element_PJ@='Y' & @IsDepreciated@='Y'",
@@ -1014,6 +967,11 @@
         "processAsset": {
           "add": true,
           "label": "Create Amortization",
+          "labelToggle": {
+            "field": "processed",
+            "equals": "Y",
+            "label": "Recalculate Amortization"
+          },
           "style": "positive",
           "displayLogicRaw": "@Depreciate@='Y' AND @etgoAmortizationStatus@!='100'",
           "requiresFieldMax": [
@@ -1027,7 +985,18 @@
           ]
         }
       },
-      "secondaryTabs": {},
+      "secondaryTabs": {
+        "assetAcct": {
+          "tabOrder": 1,
+          "label": "Accounting",
+          "addLineFields": [
+            "accountingSchema",
+            "accumulatedDepreciation",
+            "depreciation"
+          ],
+          "requireSavedRecord": true
+        }
+      },
       "detailEntity": null,
       "statusField": "none",
       "detailSortBy": "sEQNoAsset asc",
@@ -1044,7 +1013,8 @@
           "EM_Etadas_Salesregion_ID": "Región de ventas",
           "EM_Etadas_C_Activity_ID": "Actividad",
           "EM_Etadas_Campaign_ID": "Campaña",
-          "EM_Etgo_Amortization_Status": "Estado de amortización"
+          "EM_Etgo_Amortization_Status": "Estado de amortización",
+          "M_Product_ID": "Producto"
         },
         "en_US": {
           "C_Project_ID": "Project",
@@ -1055,7 +1025,8 @@
           "EM_Etadas_Salesregion_ID": "Sales Region",
           "EM_Etadas_C_Activity_ID": "Activity",
           "EM_Etadas_Campaign_ID": "Sales Campaign",
-          "EM_Etgo_Amortization_Status": "Amortization Status"
+          "EM_Etgo_Amortization_Status": "Amortization Status",
+          "M_Product_ID": "Product"
         }
       },
       "disableProcessedLock": true,
@@ -1064,7 +1035,10 @@
       "compactSidebarPadding": true,
       "whiteFormBackground": true,
       "hideFormCard": true,
+      "sidebarAboveTabsOnly": true,
+      "tabsSeparator": true,
       "sidebarClassName": "w-[30%] shrink-0 border-l border-[#E8EAEF] p-2",
+      "formScrollPaddingX": "px-2",
       "toolbarPaddingX": "px-2",
       "toolbarButtonSize": "default",
       "listbarPaddingX": "px-2",
@@ -1075,8 +1049,7 @@
           "labelKey": "assetsAmortizationPlanTab",
           "component": "AssetsAmortizationPanel"
         }
-      ],
-      "sidebarAboveTabsOnly": true
+      ]
     },
     "entities": {
       "assets": {
@@ -1146,7 +1119,7 @@
             "apiKey": "product",
             "column": "M_Product_ID",
             "type": "foreignKey",
-            "visibility": "discarded",
+            "visibility": "editable",
             "required": false
           },
           {
@@ -1597,7 +1570,7 @@
             "apiKey": "eTADASActivity",
             "column": "EM_Etadas_C_Activity_ID",
             "type": "foreignKey",
-            "visibility": "editable",
+            "visibility": "discarded",
             "required": false
           },
           {
@@ -1613,7 +1586,7 @@
             "apiKey": "eTADASSalesCampaign",
             "column": "EM_Etadas_Campaign_ID",
             "type": "foreignKey",
-            "visibility": "editable",
+            "visibility": "discarded",
             "required": false
           },
           {
@@ -1621,7 +1594,7 @@
             "apiKey": "eTADASSalesRegion",
             "column": "EM_Etadas_Salesregion_ID",
             "type": "foreignKey",
-            "visibility": "editable",
+            "visibility": "discarded",
             "required": false
           },
           {
@@ -1629,7 +1602,7 @@
             "apiKey": "eTADASUser1",
             "column": "EM_Etadas_User1_ID",
             "type": "foreignKey",
-            "visibility": "editable",
+            "visibility": "discarded",
             "required": false
           },
           {
@@ -1637,7 +1610,7 @@
             "apiKey": "eTADASUser2",
             "column": "EM_Etadas_User2_ID",
             "type": "foreignKey",
-            "visibility": "editable",
+            "visibility": "discarded",
             "required": false
           },
           {
@@ -2123,6 +2096,14 @@
       },
       {
         "entity": "assets",
+        "field": "product",
+        "column": "M_Product_ID",
+        "reference": "Product",
+        "inputMode": "search",
+        "url": "/sws/neo/assets/assets/selectors/product"
+      },
+      {
+        "entity": "assets",
         "field": "project",
         "column": "C_Project_ID",
         "reference": "Project",
@@ -2139,51 +2120,11 @@
       },
       {
         "entity": "assets",
-        "field": "eTADASActivity",
-        "column": "EM_Etadas_C_Activity_ID",
-        "reference": "Activity",
-        "inputMode": "selector",
-        "url": "/sws/neo/assets/assets/selectors/eTADASActivity"
-      },
-      {
-        "entity": "assets",
         "field": "eTADASCostCenter",
         "column": "EM_Etadas_Costcenter_ID",
         "reference": "Costcenter",
         "inputMode": "selector",
         "url": "/sws/neo/assets/assets/selectors/eTADASCostCenter"
-      },
-      {
-        "entity": "assets",
-        "field": "eTADASSalesCampaign",
-        "column": "EM_Etadas_Campaign_ID",
-        "reference": "Campaign",
-        "inputMode": "selector",
-        "url": "/sws/neo/assets/assets/selectors/eTADASSalesCampaign"
-      },
-      {
-        "entity": "assets",
-        "field": "eTADASSalesRegion",
-        "column": "EM_Etadas_Salesregion_ID",
-        "reference": "SalesRegion",
-        "inputMode": "selector",
-        "url": "/sws/neo/assets/assets/selectors/eTADASSalesRegion"
-      },
-      {
-        "entity": "assets",
-        "field": "eTADASUser1",
-        "column": "EM_Etadas_User1_ID",
-        "reference": "User1",
-        "inputMode": "selector",
-        "url": "/sws/neo/assets/assets/selectors/eTADASUser1"
-      },
-      {
-        "entity": "assets",
-        "field": "eTADASUser2",
-        "column": "EM_Etadas_User2_ID",
-        "reference": "User2",
-        "inputMode": "selector",
-        "url": "/sws/neo/assets/assets/selectors/eTADASUser2"
       },
       {
         "entity": "amortizationLine",
@@ -2270,7 +2211,8 @@
         "EM_Etadas_Salesregion_ID": "Región de ventas",
         "EM_Etadas_C_Activity_ID": "Actividad",
         "EM_Etadas_Campaign_ID": "Campaña",
-        "EM_Etgo_Amortization_Status": "Estado de amortización"
+        "EM_Etgo_Amortization_Status": "Estado de amortización",
+        "M_Product_ID": "Producto"
       },
       "en_US": {
         "C_Project_ID": "Project",
@@ -2281,7 +2223,8 @@
         "EM_Etadas_Salesregion_ID": "Sales Region",
         "EM_Etadas_C_Activity_ID": "Activity",
         "EM_Etadas_Campaign_ID": "Sales Campaign",
-        "EM_Etgo_Amortization_Status": "Amortization Status"
+        "EM_Etgo_Amortization_Status": "Amortization Status",
+        "M_Product_ID": "Product"
       }
     }
   },
@@ -2493,52 +2436,12 @@
         "description": "Display logic for 'depreciationType' in assets should have evaluable flag"
       },
       {
-        "id": "t-displaylogic-evaluable-assets-eTADASActivity",
-        "category": "displaylogic-evaluable",
-        "entity": "assets",
-        "field": "eTADASActivity",
-        "runner": "node",
-        "description": "Display logic for 'eTADASActivity' in assets should have evaluable flag"
-      },
-      {
         "id": "t-displaylogic-evaluable-assets-eTADASCostCenter",
         "category": "displaylogic-evaluable",
         "entity": "assets",
         "field": "eTADASCostCenter",
         "runner": "node",
         "description": "Display logic for 'eTADASCostCenter' in assets should have evaluable flag"
-      },
-      {
-        "id": "t-displaylogic-evaluable-assets-eTADASSalesCampaign",
-        "category": "displaylogic-evaluable",
-        "entity": "assets",
-        "field": "eTADASSalesCampaign",
-        "runner": "node",
-        "description": "Display logic for 'eTADASSalesCampaign' in assets should have evaluable flag"
-      },
-      {
-        "id": "t-displaylogic-evaluable-assets-eTADASSalesRegion",
-        "category": "displaylogic-evaluable",
-        "entity": "assets",
-        "field": "eTADASSalesRegion",
-        "runner": "node",
-        "description": "Display logic for 'eTADASSalesRegion' in assets should have evaluable flag"
-      },
-      {
-        "id": "t-displaylogic-evaluable-assets-eTADASUser1",
-        "category": "displaylogic-evaluable",
-        "entity": "assets",
-        "field": "eTADASUser1",
-        "runner": "node",
-        "description": "Display logic for 'eTADASUser1' in assets should have evaluable flag"
-      },
-      {
-        "id": "t-displaylogic-evaluable-assets-eTADASUser2",
-        "category": "displaylogic-evaluable",
-        "entity": "assets",
-        "field": "eTADASUser2",
-        "runner": "node",
-        "description": "Display logic for 'eTADASUser2' in assets should have evaluable flag"
       },
       {
         "id": "t-displaylogic-evaluable-assets-everyMonthIs30Days",
@@ -2709,52 +2612,12 @@
         "description": "Display logic for 'depreciationType' in assets should be valid JS"
       },
       {
-        "id": "t-displaylogic-valid-assets-eTADASActivity",
-        "category": "displaylogic-valid",
-        "entity": "assets",
-        "field": "eTADASActivity",
-        "runner": "node",
-        "description": "Display logic for 'eTADASActivity' in assets should be valid JS"
-      },
-      {
         "id": "t-displaylogic-valid-assets-eTADASCostCenter",
         "category": "displaylogic-valid",
         "entity": "assets",
         "field": "eTADASCostCenter",
         "runner": "node",
         "description": "Display logic for 'eTADASCostCenter' in assets should be valid JS"
-      },
-      {
-        "id": "t-displaylogic-valid-assets-eTADASSalesCampaign",
-        "category": "displaylogic-valid",
-        "entity": "assets",
-        "field": "eTADASSalesCampaign",
-        "runner": "node",
-        "description": "Display logic for 'eTADASSalesCampaign' in assets should be valid JS"
-      },
-      {
-        "id": "t-displaylogic-valid-assets-eTADASSalesRegion",
-        "category": "displaylogic-valid",
-        "entity": "assets",
-        "field": "eTADASSalesRegion",
-        "runner": "node",
-        "description": "Display logic for 'eTADASSalesRegion' in assets should be valid JS"
-      },
-      {
-        "id": "t-displaylogic-valid-assets-eTADASUser1",
-        "category": "displaylogic-valid",
-        "entity": "assets",
-        "field": "eTADASUser1",
-        "runner": "node",
-        "description": "Display logic for 'eTADASUser1' in assets should be valid JS"
-      },
-      {
-        "id": "t-displaylogic-valid-assets-eTADASUser2",
-        "category": "displaylogic-valid",
-        "entity": "assets",
-        "field": "eTADASUser2",
-        "runner": "node",
-        "description": "Display logic for 'eTADASUser2' in assets should be valid JS"
       },
       {
         "id": "t-displaylogic-valid-assets-everyMonthIs30Days",
@@ -3021,52 +2884,12 @@
         "description": "Field 'description' should be present in assets"
       },
       {
-        "id": "t-field-presence-assets-eTADASActivity",
-        "category": "field-presence",
-        "entity": "assets",
-        "field": "eTADASActivity",
-        "runner": "node",
-        "description": "Field 'eTADASActivity' should be present in assets"
-      },
-      {
         "id": "t-field-presence-assets-eTADASCostCenter",
         "category": "field-presence",
         "entity": "assets",
         "field": "eTADASCostCenter",
         "runner": "node",
         "description": "Field 'eTADASCostCenter' should be present in assets"
-      },
-      {
-        "id": "t-field-presence-assets-eTADASSalesCampaign",
-        "category": "field-presence",
-        "entity": "assets",
-        "field": "eTADASSalesCampaign",
-        "runner": "node",
-        "description": "Field 'eTADASSalesCampaign' should be present in assets"
-      },
-      {
-        "id": "t-field-presence-assets-eTADASSalesRegion",
-        "category": "field-presence",
-        "entity": "assets",
-        "field": "eTADASSalesRegion",
-        "runner": "node",
-        "description": "Field 'eTADASSalesRegion' should be present in assets"
-      },
-      {
-        "id": "t-field-presence-assets-eTADASUser1",
-        "category": "field-presence",
-        "entity": "assets",
-        "field": "eTADASUser1",
-        "runner": "node",
-        "description": "Field 'eTADASUser1' should be present in assets"
-      },
-      {
-        "id": "t-field-presence-assets-eTADASUser2",
-        "category": "field-presence",
-        "entity": "assets",
-        "field": "eTADASUser2",
-        "runner": "node",
-        "description": "Field 'eTADASUser2' should be present in assets"
       },
       {
         "id": "t-field-presence-assets-etgoAmortizationStatus",
@@ -3115,6 +2938,14 @@
         "field": "processed",
         "runner": "node",
         "description": "Field 'processed' should be present in assets"
+      },
+      {
+        "id": "t-field-presence-assets-product",
+        "category": "field-presence",
+        "entity": "assets",
+        "field": "product",
+        "runner": "node",
+        "description": "Field 'product' should be present in assets"
       },
       {
         "id": "t-field-presence-assets-project",
@@ -3357,52 +3188,12 @@
         "description": "Field 'description' should have type 'string' in assets"
       },
       {
-        "id": "t-field-type-assets-eTADASActivity",
-        "category": "field-type",
-        "entity": "assets",
-        "field": "eTADASActivity",
-        "runner": "node",
-        "description": "Field 'eTADASActivity' should have type 'string' in assets"
-      },
-      {
         "id": "t-field-type-assets-eTADASCostCenter",
         "category": "field-type",
         "entity": "assets",
         "field": "eTADASCostCenter",
         "runner": "node",
         "description": "Field 'eTADASCostCenter' should have type 'string' in assets"
-      },
-      {
-        "id": "t-field-type-assets-eTADASSalesCampaign",
-        "category": "field-type",
-        "entity": "assets",
-        "field": "eTADASSalesCampaign",
-        "runner": "node",
-        "description": "Field 'eTADASSalesCampaign' should have type 'string' in assets"
-      },
-      {
-        "id": "t-field-type-assets-eTADASSalesRegion",
-        "category": "field-type",
-        "entity": "assets",
-        "field": "eTADASSalesRegion",
-        "runner": "node",
-        "description": "Field 'eTADASSalesRegion' should have type 'string' in assets"
-      },
-      {
-        "id": "t-field-type-assets-eTADASUser1",
-        "category": "field-type",
-        "entity": "assets",
-        "field": "eTADASUser1",
-        "runner": "node",
-        "description": "Field 'eTADASUser1' should have type 'string' in assets"
-      },
-      {
-        "id": "t-field-type-assets-eTADASUser2",
-        "category": "field-type",
-        "entity": "assets",
-        "field": "eTADASUser2",
-        "runner": "node",
-        "description": "Field 'eTADASUser2' should have type 'string' in assets"
       },
       {
         "id": "t-field-type-assets-etgoAmortizationStatus",
@@ -3451,6 +3242,14 @@
         "field": "processed",
         "runner": "node",
         "description": "Field 'processed' should have type 'string' in assets"
+      },
+      {
+        "id": "t-field-type-assets-product",
+        "category": "field-type",
+        "entity": "assets",
+        "field": "product",
+        "runner": "node",
+        "description": "Field 'product' should have type 'string' in assets"
       },
       {
         "id": "t-field-type-assets-project",
@@ -3752,14 +3551,6 @@
         "description": "Selector endpoint for 'currency' in assets should exist"
       },
       {
-        "id": "t-selector-endpoint-assets-eTADASActivity",
-        "category": "selector-endpoint",
-        "entity": "assets",
-        "field": "eTADASActivity",
-        "runner": "node",
-        "description": "Selector endpoint for 'eTADASActivity' in assets should exist"
-      },
-      {
         "id": "t-selector-endpoint-assets-eTADASCostCenter",
         "category": "selector-endpoint",
         "entity": "assets",
@@ -3768,36 +3559,12 @@
         "description": "Selector endpoint for 'eTADASCostCenter' in assets should exist"
       },
       {
-        "id": "t-selector-endpoint-assets-eTADASSalesCampaign",
+        "id": "t-selector-endpoint-assets-product",
         "category": "selector-endpoint",
         "entity": "assets",
-        "field": "eTADASSalesCampaign",
+        "field": "product",
         "runner": "node",
-        "description": "Selector endpoint for 'eTADASSalesCampaign' in assets should exist"
-      },
-      {
-        "id": "t-selector-endpoint-assets-eTADASSalesRegion",
-        "category": "selector-endpoint",
-        "entity": "assets",
-        "field": "eTADASSalesRegion",
-        "runner": "node",
-        "description": "Selector endpoint for 'eTADASSalesRegion' in assets should exist"
-      },
-      {
-        "id": "t-selector-endpoint-assets-eTADASUser1",
-        "category": "selector-endpoint",
-        "entity": "assets",
-        "field": "eTADASUser1",
-        "runner": "node",
-        "description": "Selector endpoint for 'eTADASUser1' in assets should exist"
-      },
-      {
-        "id": "t-selector-endpoint-assets-eTADASUser2",
-        "category": "selector-endpoint",
-        "entity": "assets",
-        "field": "eTADASUser2",
-        "runner": "node",
-        "description": "Selector endpoint for 'eTADASUser2' in assets should exist"
+        "description": "Selector endpoint for 'product' in assets should exist"
       },
       {
         "id": "t-selector-endpoint-assets-project",
@@ -4120,6 +3887,46 @@
         "description": "System field 'documentNo' should exist in backend but not frontend for assets"
       },
       {
+        "id": "t-system-field-assets-eTADASActivity",
+        "category": "system-field",
+        "entity": "assets",
+        "field": "eTADASActivity",
+        "runner": "node",
+        "description": "System field 'eTADASActivity' should exist in backend but not frontend for assets"
+      },
+      {
+        "id": "t-system-field-assets-eTADASSalesCampaign",
+        "category": "system-field",
+        "entity": "assets",
+        "field": "eTADASSalesCampaign",
+        "runner": "node",
+        "description": "System field 'eTADASSalesCampaign' should exist in backend but not frontend for assets"
+      },
+      {
+        "id": "t-system-field-assets-eTADASSalesRegion",
+        "category": "system-field",
+        "entity": "assets",
+        "field": "eTADASSalesRegion",
+        "runner": "node",
+        "description": "System field 'eTADASSalesRegion' should exist in backend but not frontend for assets"
+      },
+      {
+        "id": "t-system-field-assets-eTADASUser1",
+        "category": "system-field",
+        "entity": "assets",
+        "field": "eTADASUser1",
+        "runner": "node",
+        "description": "System field 'eTADASUser1' should exist in backend but not frontend for assets"
+      },
+      {
+        "id": "t-system-field-assets-eTADASUser2",
+        "category": "system-field",
+        "entity": "assets",
+        "field": "eTADASUser2",
+        "runner": "node",
+        "description": "System field 'eTADASUser2' should exist in backend but not frontend for assets"
+      },
+      {
         "id": "t-system-field-assets-expirationDate",
         "category": "system-field",
         "entity": "assets",
@@ -4222,14 +4029,6 @@
         "field": "partnerAddress",
         "runner": "node",
         "description": "System field 'partnerAddress' should exist in backend but not frontend for assets"
-      },
-      {
-        "id": "t-system-field-assets-product",
-        "category": "system-field",
-        "entity": "assets",
-        "field": "product",
-        "runner": "node",
-        "description": "System field 'product' should exist in backend but not frontend for assets"
       },
       {
         "id": "t-system-field-assets-profit",
@@ -4342,25 +4141,25 @@
       }
     ],
     "summary": {
-      "total": 259,
+      "total": 241,
       "byCategory": {
         "action-endpoint": 2,
         "crud-flags": 3,
         "default-value-type": 9,
-        "displaylogic-evaluable": 27,
-        "displaylogic-valid": 27,
-        "field-presence": 42,
-        "field-type": 42,
+        "displaylogic-evaluable": 22,
+        "displaylogic-valid": 22,
+        "field-presence": 38,
+        "field-type": 38,
         "readonlylogic-evaluable": 4,
         "readonlylogic-valid": 4,
         "rule-declared": 13,
         "searchable-filters": 4,
-        "selector-endpoint": 15,
-        "system-field": 64,
+        "selector-endpoint": 11,
+        "system-field": 68,
         "visibility": 3
       },
       "byRunner": {
-        "node": 259,
+        "node": 241,
         "junit": 0
       }
     }

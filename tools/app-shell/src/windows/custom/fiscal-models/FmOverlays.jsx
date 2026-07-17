@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useUI } from '@/i18n';
+import { SUPPORTED_YEARS } from './models/303/fm303Layouts';
 import { neoBase } from '@/components/related-documents/helpers.js';
 import { Star, Play, ArrowUpRight, Info, OctagonAlert, TriangleAlert, X, Check } from 'lucide-react';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -210,11 +211,63 @@ export function FileGenModal({ decl, onConfirm, onClose }) {
   );
 }
 
+
+export function FileGenModal303({ decl, defaultFilename, onConfirm, onClose }) {
+  const ui = useUI();
+  const t = ui;
+  const [filename, setFilename] = React.useState(defaultFilename ?? `303_${decl?.period}_${decl?.year}.txt`);
+  const inputSt = {
+    width: '100%', fontSize: 14, padding: '8px 12px',
+    border: '1px solid #D1D4DB', borderRadius: 8, height: 40,
+    boxSizing: 'border-box', color: '#121217', outline: 'none', background: '#fff',
+  };
+  return (
+    <div className="fm-modal-overlay" role="dialog" aria-modal="true" onClick={onClose}>
+      <div className="fm-config-modal" style={{ maxWidth: 480 }} onClick={e => e.stopPropagation()}>
+        <div className="fm-config-modal__header">
+          <div className="fm-config-modal__titles">
+            <div className="fm-config-modal__title">{t('fm.filegen303.title') ?? 'Generar fichero 303'}</div>
+            <div className="fm-config-modal__sub">
+              {t('fm.filegen.desc') ?? 'Generar el fichero .303 para'} <strong>{decl?.model} {decl?.year} {decl?.period}</strong>
+            </div>
+          </div>
+          <button className="fm-config-modal__close" onClick={onClose} aria-label={t('fm.action.close')}>✕</button>
+        </div>
+        <div className="fm-config-modal__body" style={{ minHeight: 'auto', padding: '16px 20px' }}>
+          <div style={{ fontSize: 14, color: '#121217', fontWeight: 400, marginBottom: 6 }}>
+            {t('fm.filegen.filename') ?? 'Nombre del fichero'}
+          </div>
+          <input
+            style={inputSt}
+            value={filename}
+            onChange={e => setFilename(e.target.value)}
+            placeholder={`303_${decl?.period}_${decl?.year}.txt`}
+          />
+        </div>
+        <div className="fm-config-modal__footer">
+          <button className="fm-btn fm-btn--cancel-pill" onClick={onClose}>
+            {t('fm.action.cancel')}
+          </button>
+          <button
+            className="fm-btn fm-btn--save-pill fm-btn--save-pill--active"
+            onClick={() => { onConfirm?.({ filename: filename.trim() || undefined }); onClose(); }}
+          >
+            {t('fm.filegen.generate') ?? 'Generar'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function NewDeclModal({ onConfirm, onClose }) {
   const ui = useUI();
   const t = ui;
+  const QUARTERLY_PERIODS = ['T1', 'T2', 'T3', 'T4'];
+  const MONTHLY_PERIODS   = ['01', '02', '03', '04', '05', '06', '07', '08', '09', '10', '11', '12'];
   const [model, setModel] = useState('303');
-  const [year, setYear] = useState(new Date().getFullYear());
+  const _cy = new Date().getFullYear();
+  const [year, setYear] = useState(SUPPORTED_YEARS.includes(_cy) ? _cy : SUPPORTED_YEARS[SUPPORTED_YEARS.length - 1]);
   const [period, setPeriod] = useState('T1');
   return (
     <div className="fm-modal-overlay" role="dialog" aria-modal="true">
@@ -223,29 +276,33 @@ export function NewDeclModal({ onConfirm, onClose }) {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 16 }}>
           <label style={{ fontSize: 12, color: '#374151' }}>
             {t('fm.new_decl.model')}
-            <select value={model} onChange={e => setModel(e.target.value)} style={{ marginLeft: 8, fontSize: 12 }}>
+            <select value={model} onChange={e => { setModel(e.target.value); setPeriod('T1'); }} style={{ marginLeft: 8, fontSize: 12 }}>
               <option value="303">303</option>
               <option value="349">349</option>
             </select>
           </label>
           <label style={{ fontSize: 12, color: '#374151' }}>
             {t('fm.new_decl.year')}
-            <input
-              type="number"
+            <select
               value={year}
               onChange={e => setYear(Number(e.target.value))}
-              min={2020}
-              max={2099}
-              style={{ marginLeft: 8, fontSize: 12, width: 70 }}
-            />
+              style={{ marginLeft: 8, fontSize: 12 }}
+            >
+              {SUPPORTED_YEARS.map(y => (
+                <option key={y} value={y}>{y}</option>
+              ))}
+            </select>
           </label>
           <label style={{ fontSize: 12, color: '#374151' }}>
             {t('fm.new_decl.period')}
-            <input
-              value={period}
-              onChange={e => setPeriod(e.target.value)}
-              style={{ marginLeft: 8, fontSize: 12, width: 60 }}
-            />
+            <select value={period} onChange={e => setPeriod(e.target.value)} style={{ marginLeft: 8, fontSize: 12 }}>
+              <optgroup label={t('fm.new_decl.period_quarterly') ?? 'Trimestral'}>
+                {QUARTERLY_PERIODS.map(p => <option key={p} value={p}>{p}</option>)}
+              </optgroup>
+              <optgroup label={t('fm.new_decl.period_monthly') ?? 'Mensual'}>
+                {MONTHLY_PERIODS.map(p => <option key={p} value={p}>{p}</option>)}
+              </optgroup>
+            </select>
           </label>
         </div>
         <div className="fm-present-modal__actions">
@@ -393,6 +450,7 @@ export function ConfigDrawer({ model, onClose, token, apiBaseUrl }) {
   const [form, setForm] = useState({ nif: '', name: '', phone: '', address: '', postal: '', city: '', province: '', conceptCondition: 'condición', amountTolerance: '0%' });
   const [redeme, setRedeme] = useState(true);
   const [recc, setRecc] = useState(false);
+  const [iban, setIban] = useState('');
   const [isDirty, setIsDirty] = useState(false);
 
   useEffect(() => {
@@ -572,7 +630,13 @@ export function ConfigDrawer({ model, onClose, token, apiBaseUrl }) {
                 <CfgField
                   label={t('fm.config.m303.iban') ?? 'IBAN Domiciliación'}
                   data-testid="CfgField__cda0bb">
-                  <input type="text" placeholder="ES00 0000 0000 0000 0000 0000" style={{ ...INPUT_ST, fontFamily: 'monospace' }} />
+                  <input
+                    type="text"
+                    value={iban}
+                    onChange={e => { setIban(e.target.value); setIsDirty(true); }}
+                    placeholder="ES00 0000 0000 0000 0000 0000"
+                    style={{ ...INPUT_ST, fontFamily: 'monospace' }}
+                  />
                 </CfgField>
               </div>
             </>

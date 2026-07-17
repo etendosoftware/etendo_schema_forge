@@ -88,6 +88,13 @@ export function LookupPicker({ value, onSelect, onClear, placeholder, useLookup,
       {showDropdown ? createPortal(
         <div
           data-lookup-dropdown=""
+          // Radix Dialog locks page scroll (react-remove-scroll), which also
+          // swallows wheel events on this body-portalled list. Scroll it
+          // manually so the wheel works inside the dropdown.
+          onWheel={(e) => {
+            e.stopPropagation();
+            e.currentTarget.scrollTop += e.deltaY;
+          }}
           style={{
             position: 'fixed',
             left: pos.left,
@@ -96,6 +103,7 @@ export function LookupPicker({ value, onSelect, onClear, placeholder, useLookup,
             bottom: pos.bottom,
             zIndex: 9999,
             pointerEvents: 'auto',
+            overscrollBehavior: 'contain',
           }}
           className="max-h-56 overflow-auto rounded-lg border border-[#D1D4DB] bg-white shadow-lg"
         >

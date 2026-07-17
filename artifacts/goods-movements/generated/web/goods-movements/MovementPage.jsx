@@ -54,7 +54,7 @@ const requiredHeaderFields = ['name', 'movementDate'];
 const addLineFields = {
   entry: [
     { key: 'lineNo', column: 'Line', type: 'number', required: true, label: 'Line No.', defaultValue: '@SQL=SELECT COALESCE(MAX(Line),0)+10 AS DefaultValue FROM M_MovementLine WHERE M_Movement_ID=@M_Movement_ID@' },
-    { key: 'product', column: 'M_Product_ID', type: 'search', required: true, lookup: true, label: 'Product', reference: 'Product', inputMode: 'search', lookupDrawer: 'goods-movements-product', lookupTitle: 'Product', onSelectMappings: [{"from":"_aux._LOC","to":"storageBin","labelFrom":["storageBin","storageBin$_identifier","warehouse"]}] },
+    { key: 'product', column: 'M_Product_ID', type: 'search', required: true, lookup: true, label: 'Product', reference: 'Product', inputMode: 'search', lookupDrawer: 'product-stock', lookupTitle: 'Product', onSelectMappings: [{"from":"_aux._LOC","to":"storageBin","labelFrom":["warehouse","warehouse$_identifier","storageBin"]}] },
     { key: 'description', column: 'Description', type: 'textarea', label: 'Description' },
     { key: 'movementQuantity', column: 'MovementQty', type: 'number', required: true, label: 'Movement Quantity', defaultValue: 1 },
     { key: 'storageBin', column: 'M_Locator_ID', type: 'selector', required: true, label: 'Storage Bin', reference: 'Locator', inputMode: 'selector' },
@@ -205,6 +205,7 @@ const labelOverrides = api.labelOverrides;
 export default function MovementPage({ windowName, recordId, ...props }) {
   if (recordId) {
     return (
+      <>
       <DetailView
         entity="movement"
         detailEntity="movementLine"
@@ -241,6 +242,7 @@ export default function MovementPage({ windowName, recordId, ...props }) {
         sendDocument={{"enabled":false}}
         {...props}
       />
+      </>
     );
   }
 

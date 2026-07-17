@@ -1,9 +1,0 @@
-{
-  "accounting": "Removing this field will prevent accounting entries from being generated for this document.",
-  "inventory": "Removing this field will prevent inventory movements and stock reservations.",
-  "costing": "Removing this field will break cost calculations for products in this transaction.",
-  "audit": "This field is required for audit trail compliance. Removing it may violate regulatory requirements.",
-  "tax": "Removing this field will prevent tax calculations. Documents may not be legally valid.",
-  "integration": "This field is used by external integrations. Removing it will break data exchange.",
-  "internal": "This is an internal system field required for Etendo platform operations."
-}

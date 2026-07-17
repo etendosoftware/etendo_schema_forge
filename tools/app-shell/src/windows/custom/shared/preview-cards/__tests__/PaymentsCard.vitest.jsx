@@ -1,3 +1,8 @@
+const mockNavigate = vi.fn();
+vi.mock('react-router-dom', () => ({
+  useNavigate: () => mockNavigate,
+}));
+
 vi.mock('@/i18n', () => ({
   useUI: () => (key) => key,
   useMenuLabel: () => (key) => key,
@@ -29,8 +34,8 @@ describe('PaymentsCard', () => {
   });
 
   it('shows no-payments message when payments empty and no outstanding', () => {
-    render(<PaymentsCard payments={[]} totalOutstanding={0} />);
-    expect(screen.getByText('previewCardNoPaymentsRecorded')).toBeInTheDocument();
+    render(<PaymentsCard payments={[]} totalOutstanding={0} specName="purchase-invoice" />);
+    expect(screen.getByText('noPagoYet')).toBeInTheDocument();
   });
 
   it('shows add-payment button when canAddPayment=true', () => {
@@ -50,36 +55,156 @@ describe('PaymentsCard', () => {
     expect(screen.queryByText('previewCardAddPayment')).toBeNull();
   });
 
-  it('renders payment rows with accountName label', () => {
-    const payments = [{ id: '1', amount: 200, paymentDate: '2026-01-01', accountName: 'Main Account' }];
-    render(<PaymentsCard payments={payments} currencyCode="EUR" />);
-    expect(screen.getByText('Main Account')).toBeInTheDocument();
-    expect(screen.getByText('EUR 200')).toBeInTheDocument();
+  it('renders payment rows with documentNo', () => {
+    const payments = [{ id: '1', amount: 200, paymentDate: '2026-01-01', documentNo: 'INV-200' }];
+    render(<PaymentsCard payments={payments} currencyCode="EUR" specName="purchase-invoice" />);
+    expect(screen.getByText('INV-200')).toBeInTheDocument();
     expect(screen.getByText('1 Jan 2026')).toBeInTheDocument();
   });
 
-  it('renders payment rows using documentNo fallback when accountName absent', () => {
-    const payments = [{ id: '2', amount: 50, paymentDate: '2026-02-01', documentNo: '12345' }];
-    render(<PaymentsCard payments={payments} currencyCode="USD" />);
-    expect(screen.getByText('#12345')).toBeInTheDocument();
+  it('renders payment rows using id fallback when documentNo absent', () => {
+    const payments = [{ id: 'pay-42', amount: 50, paymentDate: '2026-02-01' }];
+    render(<PaymentsCard payments={payments} currencyCode="USD" specName="purchase-invoice" />);
+    expect(screen.getByText('pay-42')).toBeInTheDocument();
   });
 
-  it('renders "—" when neither accountName nor documentNo present', () => {
-    const payments = [{ id: '3', amount: 10, paymentDate: '2026-03-01' }];
-    render(<PaymentsCard payments={payments} />);
-    expect(screen.getByText('—')).toBeInTheDocument();
+  it('formats amounts > 999 with thousand dots', () => {
+    const payments = [{ id: '1', amount: 1500, paymentDate: '2026-01-01', documentNo: 'INV-1500' }];
+    render(<PaymentsCard payments={payments} currencyCode="EUR" specName="purchase-invoice" />);
+    expect(screen.getByText(/1\.500,00/)).toBeInTheDocument();
   });
 
   it('shows outstanding row when totalOutstanding > 0', () => {
-    const payments = [{ id: '1', amount: 100, paymentDate: '2026-01-01', accountName: 'Acct' }];
-    render(<PaymentsCard payments={payments} currencyCode="EUR" totalOutstanding={50} />);
+    const payments = [{ id: '1', amount: 100, paymentDate: '2026-01-01', documentNo: 'INV-1' }];
+    render(<PaymentsCard payments={payments} currencyCode="EUR" totalOutstanding={50} specName="purchase-invoice" />);
     expect(screen.getByText('invoicePendingPayment')).toBeInTheDocument();
-    expect(screen.getByText('EUR 50')).toBeInTheDocument();
+    expect(screen.getByText('50,00 EUR')).toBeInTheDocument();
   });
 
   it('does not show outstanding row when totalOutstanding is 0', () => {
-    const payments = [{ id: '1', amount: 100, paymentDate: '2026-01-01', accountName: 'Acct' }];
-    render(<PaymentsCard payments={payments} currencyCode="EUR" totalOutstanding={0} />);
+    const payments = [{ id: '1', amount: 100, paymentDate: '2026-01-01', documentNo: 'INV-1' }];
+    render(<PaymentsCard payments={payments} currencyCode="EUR" totalOutstanding={0} specName="purchase-invoice" />);
     expect(screen.queryByText('invoicePendingPayment')).toBeNull();
+  });
+
+  describe('resolveMethodKey via rendered method icon', () => {
+    // Icons are inline SVGs (no data-testid); card uses a <rect>, cash uses a
+    // <rect> + <circle>, direct uses only <path>, transfer uses only <path>.
+    // We disambiguate card vs cash by presence of a <circle>.
+    function renderRowIcon(methodLabel) {
+      const payments = [{ id: '1', amount: 10, paymentDate: '2026-01-01', documentNo: 'DOC-1', 'paymentMethod$_identifier': methodLabel }];
+      return render(<PaymentsCard payments={payments} currencyCode="EUR" specName="purchase-invoice" />);
+    }
+
+    it('resolves "tarjeta" to the card icon (rect, no circle)', () => {
+      const { container } = renderRowIcon('Tarjeta de crédito');
+      const row = screen.getByTestId('PaymentsCard__row-0');
+      const rect = row.querySelector('rect');
+      expect(rect).toBeInTheDocument();
+      expect(row.querySelector('circle')).toBeNull();
+    });
+
+    it('resolves "card" to the card icon', () => {
+      renderRowIcon('Card payment');
+      const row = screen.getByTestId('PaymentsCard__row-0');
+      expect(row.querySelector('rect')).toBeInTheDocument();
+      expect(row.querySelector('circle')).toBeNull();
+    });
+
+    it('resolves "efectivo" to the cash icon (rect + circle)', () => {
+      renderRowIcon('Efectivo');
+      const row = screen.getByTestId('PaymentsCard__row-0');
+      expect(row.querySelector('rect')).toBeInTheDocument();
+      expect(row.querySelector('circle')).toBeInTheDocument();
+    });
+
+    it('resolves "cash" to the cash icon', () => {
+      renderRowIcon('Cash');
+      const row = screen.getByTestId('PaymentsCard__row-0');
+      expect(row.querySelector('rect')).toBeInTheDocument();
+      expect(row.querySelector('circle')).toBeInTheDocument();
+    });
+
+    it('resolves "domiciliación" to the direct-debit icon (path only, no rect/circle)', () => {
+      renderRowIcon('Domiciliación bancaria');
+      const row = screen.getByTestId('PaymentsCard__row-0');
+      expect(row.querySelector('rect')).toBeNull();
+      expect(row.querySelector('circle')).toBeNull();
+      expect(row.querySelector('path')).toBeInTheDocument();
+    });
+
+    it('resolves "direct" to the direct-debit icon', () => {
+      renderRowIcon('Direct debit');
+      const row = screen.getByTestId('PaymentsCard__row-0');
+      expect(row.querySelector('rect')).toBeNull();
+      expect(row.querySelector('circle')).toBeNull();
+      expect(row.querySelector('path')).toBeInTheDocument();
+    });
+  });
+
+  describe('titleRight priority', () => {
+    it('shows the creditBalance badge when isCreditNote=true, even if canAddPayment and isFullyPaid are also true', () => {
+      render(
+        <PaymentsCard
+          isCreditNote
+          canAddPayment
+          isFullyPaid
+          payments={[]}
+          totalOutstanding={0}
+        />,
+      );
+      expect(screen.getByText('creditBalance')).toBeInTheDocument();
+      expect(screen.queryByText('previewCardAddPayment')).toBeNull();
+      expect(screen.queryByText('cobrada')).toBeNull();
+      expect(screen.queryByText('pagada')).toBeNull();
+    });
+  });
+
+  describe('empty-state labels', () => {
+    it('shows noApplicationsRegistered when isCreditNote=true and there are no payments', () => {
+      render(<PaymentsCard isCreditNote payments={[]} totalOutstanding={0} />);
+      expect(screen.getByText('noApplicationsRegistered')).toBeInTheDocument();
+    });
+
+    it('shows noCobroYet when isCreditNote=false and specName is sales-invoice', () => {
+      render(<PaymentsCard payments={[]} totalOutstanding={0} specName="sales-invoice" />);
+      expect(screen.getByText('noCobroYet')).toBeInTheDocument();
+    });
+  });
+
+  describe('StateTag deposited/draft', () => {
+    it('shows statusDeposited when the payment is processed', () => {
+      const payments = [{ id: '1', amount: 10, paymentDate: '2026-01-01', documentNo: 'DOC-1', processed: true }];
+      render(<PaymentsCard payments={payments} currencyCode="EUR" specName="purchase-invoice" />);
+      expect(screen.getByText('statusDeposited')).toBeInTheDocument();
+    });
+
+    it('shows statusDeposited when the status is in the paid-statuses whitelist', () => {
+      const payments = [{ id: '1', amount: 10, paymentDate: '2026-01-01', documentNo: 'DOC-1', status: 'RPR' }];
+      render(<PaymentsCard payments={payments} currencyCode="EUR" specName="purchase-invoice" />);
+      expect(screen.getByText('statusDeposited')).toBeInTheDocument();
+    });
+
+    it('shows statusDraft when the payment is neither processed nor in the whitelist', () => {
+      const payments = [{ id: '1', amount: 10, paymentDate: '2026-01-01', documentNo: 'DOC-1', status: 'DR' }];
+      render(<PaymentsCard payments={payments} currencyCode="EUR" specName="purchase-invoice" />);
+      expect(screen.getByText('statusDraft')).toBeInTheDocument();
+    });
+  });
+
+  describe('row click navigation', () => {
+    it('navigates to /payment-in/{id} when specName is sales-invoice', () => {
+      const payments = [{ id: 'pay-9', amount: 10, paymentDate: '2026-01-01', documentNo: 'DOC-9' }];
+      render(<PaymentsCard payments={payments} currencyCode="EUR" specName="sales-invoice" />);
+      fireEvent.click(screen.getByTestId('PaymentsCard__row-0'));
+      expect(mockNavigate).toHaveBeenCalledWith('/payment-in/pay-9');
+    });
+
+    it('navigates to /payment-out/{id} when specName is not sales-invoice', () => {
+      const payments = [{ id: 'pay-8', amount: 10, paymentDate: '2026-01-01', documentNo: 'DOC-8' }];
+      render(<PaymentsCard payments={payments} currencyCode="EUR" specName="purchase-invoice" />);
+      fireEvent.click(screen.getByTestId('PaymentsCard__row-0'));
+      expect(mockNavigate).toHaveBeenCalledWith('/payment-out/pay-8');
+    });
   });
 });

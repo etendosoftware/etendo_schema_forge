@@ -152,6 +152,8 @@ import {
   parseBackendErrorMessage,
   getAddLineMenuActions,
   buildLineRowClickHandler,
+  mergeLineEdits,
+  hasUnsavedEdits,
 } from '../DetailView.jsx';
 
 describe('mergeSelectorContextFields', () => {
@@ -897,27 +899,27 @@ describe('getTabsBarClassName', () => {
 
 describe('isDeleteButtonVisible', () => {
   it('is falsy when the record is new (isNew short-circuits)', () => {
-    expect(isDeleteButtonVisible(true, 'rec-1', { documentStatus: 'DR' }, 'documentStatus', true, false)).toBeFalsy();
+    expect(isDeleteButtonVisible({ isNew: true, recordId: 'rec-1', data: { documentStatus: 'DR' }, statusField: 'documentStatus', hideDeleteWhenComplete: true, isProcessed: false })).toBeFalsy();
   });
 
   it('is falsy when recordId is missing', () => {
-    expect(isDeleteButtonVisible(false, undefined, { documentStatus: 'DR' }, 'documentStatus', true, false)).toBeFalsy();
+    expect(isDeleteButtonVisible({ isNew: false, recordId: undefined, data: { documentStatus: 'DR' }, statusField: 'documentStatus', hideDeleteWhenComplete: true, isProcessed: false })).toBeFalsy();
   });
 
   it('is truthy on the happy path (draft record, not processed)', () => {
-    expect(isDeleteButtonVisible(false, 'rec-1', { documentStatus: 'DR' }, 'documentStatus', true, false)).toBeTruthy();
+    expect(isDeleteButtonVisible({ isNew: false, recordId: 'rec-1', data: { documentStatus: 'DR' }, statusField: 'documentStatus', hideDeleteWhenComplete: true, isProcessed: false })).toBeTruthy();
   });
 
   it('is falsy when the record is completed under hideDeleteWhenComplete', () => {
-    expect(isDeleteButtonVisible(false, 'rec-1', { documentStatus: 'CO' }, 'documentStatus', true, false)).toBeFalsy();
+    expect(isDeleteButtonVisible({ isNew: false, recordId: 'rec-1', data: { documentStatus: 'CO' }, statusField: 'documentStatus', hideDeleteWhenComplete: true, isProcessed: false })).toBeFalsy();
   });
 
   it('is falsy when hideDeleteWhenComplete and the record is processed', () => {
-    expect(isDeleteButtonVisible(false, 'rec-1', { documentStatus: 'DR' }, 'documentStatus', true, true)).toBeFalsy();
+    expect(isDeleteButtonVisible({ isNew: false, recordId: 'rec-1', data: { documentStatus: 'DR' }, statusField: 'documentStatus', hideDeleteWhenComplete: true, isProcessed: true })).toBeFalsy();
   });
 
   it('is truthy when hideDeleteWhenComplete is false regardless of status', () => {
-    expect(isDeleteButtonVisible(false, 'rec-1', { documentStatus: 'CO' }, 'documentStatus', false, true)).toBeTruthy();
+    expect(isDeleteButtonVisible({ isNew: false, recordId: 'rec-1', data: { documentStatus: 'CO' }, statusField: 'documentStatus', hideDeleteWhenComplete: false, isProcessed: true })).toBeTruthy();
   });
 });
 
@@ -1300,6 +1302,25 @@ describe('resolveCanAddLines', () => {
     expect(resolveCanAddLines(null, {}, [])).toBe(true);
     expect(resolveCanAddLines(null, {}, undefined)).toBe(true);
   });
+
+  // Import-only lines pattern (ETP-4462): windows with maxDetailLines = 0 in
+  // decisions.json get an always-false generated guard, so adding lines is
+  // never allowed regardless of header completeness or existing children.
+  it('returns false for the generated maxDetailLines:0 guard regardless of children', () => {
+    const importOnlyGuard = (_, children) => children.length < 0;
+    expect(resolveCanAddLines(importOnlyGuard, { businessPartner: 'bp' }, null, [])).toBe(false);
+    expect(resolveCanAddLines(importOnlyGuard, { businessPartner: 'bp' }, null, [{}, {}])).toBe(false);
+  });
+
+  it('defaults children to an empty array when the caller omits them (guard still runs)', () => {
+    const importOnlyGuard = (_, children) => children.length < 0;
+    expect(resolveCanAddLines(importOnlyGuard, {}, null)).toBe(false);
+  });
+
+  it('ignores requiredHeaderFields when a guard is provided (guard wins)', () => {
+    const importOnlyGuard = (_, children) => children.length < 0;
+    expect(resolveCanAddLines(importOnlyGuard, { bp: 'x', wh: 'y' }, ['bp', 'wh'], [])).toBe(false);
+  });
 });
 
 describe('getDocumentIds', () => {
@@ -1420,5 +1441,133 @@ describe('buildLineRowClickHandler', () => {
     const arg = setSelectedLine.mock.calls[0][0];
     expect(arg).toEqual(expect.objectContaining({ id: 'l1' }));
     expect(arg).not.toBe(row);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// mergeLineEdits
+// ---------------------------------------------------------------------------
+
+describe('mergeLineEdits', () => {
+  it('returns selectedLine unchanged when lineEdits is null', () => {
+    const line = { id: 'L1', qty: 3 };
+    expect(mergeLineEdits(null, line)).toBe(line);
+  });
+
+  it('returns selectedLine unchanged when lineEdits is undefined', () => {
+    const line = { id: 'L1', qty: 3 };
+    expect(mergeLineEdits(undefined, line)).toBe(line);
+  });
+
+  it('returns selectedLine unchanged when selectedLine is null', () => {
+    expect(mergeLineEdits({ qty: 5 }, null)).toBeNull();
+  });
+
+  it('returns selectedLine unchanged when selectedLine is undefined', () => {
+    expect(mergeLineEdits({ qty: 5 }, undefined)).toBeUndefined();
+  });
+
+  it('returns null when both lineEdits and selectedLine are null', () => {
+    expect(mergeLineEdits(null, null)).toBeNull();
+  });
+
+  it('merges lineEdits over selectedLine when both are present', () => {
+    const line = { id: 'L1', qty: 3, price: 10 };
+    const edits = { qty: 7 };
+    const result = mergeLineEdits(edits, line);
+    expect(result).toEqual({ id: 'L1', qty: 7, price: 10 });
+  });
+
+  it('does not mutate the original selectedLine', () => {
+    const line = { id: 'L1', qty: 3 };
+    const edits = { qty: 9 };
+    mergeLineEdits(edits, line);
+    expect(line.qty).toBe(3);
+  });
+
+  it('lineEdits keys override all matching selectedLine keys', () => {
+    const line = { id: 'L1', qty: 1, price: 5, product: 'P-old' };
+    const edits = { qty: 2, price: 8, product: 'P-new' };
+    const result = mergeLineEdits(edits, line);
+    expect(result).toEqual({ id: 'L1', qty: 2, price: 8, product: 'P-new' });
+  });
+
+  it('adds new keys from lineEdits not present in selectedLine', () => {
+    const line = { id: 'L1', qty: 1 };
+    const edits = { description: 'extra' };
+    const result = mergeLineEdits(edits, line);
+    expect(result.description).toBe('extra');
+    expect(result.qty).toBe(1);
+  });
+
+  it('merges with an empty lineEdits object (no-op overlay)', () => {
+    const line = { id: 'L1', qty: 3 };
+    const result = mergeLineEdits({}, line);
+    expect(result).toEqual({ id: 'L1', qty: 3 });
+    expect(result).not.toBe(line);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// hasUnsavedEdits
+// ---------------------------------------------------------------------------
+
+describe('hasUnsavedEdits', () => {
+  it('returns false when editing is null', () => {
+    expect(hasUnsavedEdits(null, { id: 'L1', qty: 3 })).toBe(false);
+  });
+
+  it('returns false when editing is undefined', () => {
+    expect(hasUnsavedEdits(undefined, { id: 'L1', qty: 3 })).toBe(false);
+  });
+
+  it('returns false when selected is null', () => {
+    expect(hasUnsavedEdits({ qty: 3 }, null)).toBe(false);
+  });
+
+  it('returns false when selected is undefined', () => {
+    expect(hasUnsavedEdits({ qty: 3 }, undefined)).toBe(false);
+  });
+
+  it('returns false when both editing and selected are null', () => {
+    expect(hasUnsavedEdits(null, null)).toBe(false);
+  });
+
+  it('returns false when editing has only an id key (id is excluded from comparison)', () => {
+    expect(hasUnsavedEdits({ id: 'L1' }, { id: 'L1', qty: 3 })).toBe(false);
+  });
+
+  it('returns false when every non-id editing value matches selected', () => {
+    const editing = { id: 'L1', qty: 3, price: 10 };
+    const selected = { id: 'L1', qty: 3, price: 10 };
+    expect(hasUnsavedEdits(editing, selected)).toBe(false);
+  });
+
+  it('returns true when a non-id editing value differs from selected', () => {
+    const editing = { id: 'L1', qty: 5 };
+    const selected = { id: 'L1', qty: 3 };
+    expect(hasUnsavedEdits(editing, selected)).toBe(true);
+  });
+
+  it('returns true when editing has a key absent in selected (undefined !== value)', () => {
+    const editing = { id: 'L1', description: 'new text' };
+    const selected = { id: 'L1' };
+    expect(hasUnsavedEdits(editing, selected)).toBe(true);
+  });
+
+  it('returns true when a field changed from a truthy to a falsy value', () => {
+    const editing = { id: 'L1', qty: 0 };
+    const selected = { id: 'L1', qty: 3 };
+    expect(hasUnsavedEdits(editing, selected)).toBe(true);
+  });
+
+  it('returns false when editing is an empty object (no keys to compare)', () => {
+    expect(hasUnsavedEdits({}, { id: 'L1', qty: 3 })).toBe(false);
+  });
+
+  it('ignores the id field even when they differ', () => {
+    const editing = { id: 'NEW-ID', qty: 3 };
+    const selected = { id: 'L1', qty: 3 };
+    expect(hasUnsavedEdits(editing, selected)).toBe(false);
   });
 });

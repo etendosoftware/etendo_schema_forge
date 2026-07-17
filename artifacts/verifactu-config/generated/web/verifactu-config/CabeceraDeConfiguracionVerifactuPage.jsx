@@ -14,7 +14,6 @@ const summary = [
   { key: 'systemStartat', column: 'System_Startat', type: 'string' },
   { key: 'systemStopat', column: 'System_Stopat', type: 'string' },
   { key: 'incidentReport', column: 'Incident_Report', type: 'string' },
-  { key: 'inVfactuSystem', column: 'IN_Vfactu_System', type: 'string' },
 ];
 
 const statusField = null;
@@ -92,6 +91,7 @@ export const api = {
 export default function CabeceraDeConfiguracionVerifactuPage({ windowName, recordId, ...props }) {
   if (recordId) {
     return (
+      <>
       <DetailView
         entity="cabeceraDeConfiguraciónVerifactu"
         Form={CabeceraDeConfiguracionVerifactuForm}
@@ -108,6 +108,7 @@ export default function CabeceraDeConfiguracionVerifactuPage({ windowName, recor
         requiredHeaderFields={requiredHeaderFields}
         {...props}
       />
+      </>
     );
   }
 

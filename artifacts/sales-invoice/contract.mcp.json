@@ -1,8 +1,8 @@
 {
-  "version": "0.35.0",
+  "version": "0.56.0",
   "generatedAt": "2026-04-30T15:42:46.582Z",
-  "updatedAt": "2026-06-25T19:58:31.409Z",
-  "contractChecksum": "d741bfffa992820d",
+  "updatedAt": "2026-07-14T17:20:33.951Z",
+  "contractChecksum": "ce52ffa31fc41ef0",
   "apiPrediction": {
     "specName": "sales-invoice",
     "baseUrl": "/sws/neo/sales-invoice",
@@ -68,27 +68,6 @@
         "reference": "Org",
         "inputMode": "selector",
         "url": "/sws/neo/sales-invoice/header/selectors/adOrgId"
-      },
-      {
-        "entity": "header",
-        "field": "cDocTypeTargetId",
-        "column": "C_DocTypeTarget_ID",
-        "reference": "DocumentType",
-        "inputMode": "selector",
-        "url": "/sws/neo/sales-invoice/header/selectors/cDocTypeTargetId",
-        "context": {
-          "required": [
-            {
-              "param": "IsSOTrx",
-              "source": "windowCategory"
-            },
-            {
-              "param": "AD_Org_ID",
-              "source": "field",
-              "field": "adOrgId"
-            }
-          ]
-        }
       },
       {
         "entity": "header",
@@ -178,6 +157,27 @@
         "reference": "aeatsii_cause_exemption",
         "inputMode": "selector",
         "url": "/sws/neo/sales-invoice/header/selectors/aeatsiiCauseExemption"
+      },
+      {
+        "entity": "header",
+        "field": "transactionDocument",
+        "column": "C_DocTypeTarget_ID",
+        "reference": "DocumentType",
+        "inputMode": "selector",
+        "url": "/sws/neo/sales-invoice/header/selectors/transactionDocument",
+        "context": {
+          "required": [
+            {
+              "param": "IsSOTrx",
+              "source": "windowCategory"
+            },
+            {
+              "param": "AD_Org_ID",
+              "source": "field",
+              "field": "adOrgId"
+            }
+          ]
+        }
       },
       {
         "entity": "lines",
@@ -941,10 +941,6 @@
             "readOnlyLogic": "@Processed@='Y'",
             "defaultValue": "@#AD_Org_ID@"
           },
-          "cDocTypeTargetId": {
-            "required": true,
-            "readOnlyLogic": "@Processed@='Y'"
-          },
           "documentNo": {
             "readOnly": true,
             "required": true,
@@ -986,8 +982,8 @@
             "required": true
           },
           "currency": {
-            "readOnly": true,
             "required": true,
+            "readOnlyLogic": "@Processed@='Y'",
             "defaultValue": "@C_Currency_ID@"
           },
           "paymentComplete": {
@@ -1017,17 +1013,25 @@
             "readOnly": true,
             "readOnlyLogic": "@processed@='Y'"
           },
-          "tbaiSequence": {
-            "readOnly": true
+          "etvfacInvType": {
+            "readOnlyLogic": "@processed@='Y'",
+            "defaultValue": "F1"
           },
-          "tbaiInvoicenum": {
-            "readOnly": true
+          "etvfacVerifacDesc": {
+            "readOnlyLogic": "@processed@='Y'"
           },
-          "tbaiInvoiceseq": {
-            "readOnly": true
+          "etvfacReverseinvtype": {
+            "readOnlyLogic": "@processed@='Y'"
           },
-          "tbaiIssent": {
-            "readOnly": true
+          "etvfacSimpinvart7273": {
+            "required": true,
+            "readOnlyLogic": "@processed@='Y'",
+            "defaultValue": "N"
+          },
+          "etvfacInvNoIDArt61d": {
+            "required": true,
+            "readOnlyLogic": "@processed@='Y'",
+            "defaultValue": "N"
           },
           "aeatsiiIssent": {
             "readOnly": true,
@@ -1075,7 +1079,12 @@
           },
           "eTGODeliveryStatus": {
             "readOnly": true
-          }
+          },
+          "transactionDocument": {
+            "required": true,
+            "readOnlyLogic": "@Processed@='Y'"
+          },
+          "eTGOCurrencyRate": {}
         }
       },
       "lines": {
@@ -1160,10 +1169,6 @@
           "totalDebtAmount": {
             "readOnly": true,
             "defaultValue": "0"
-          },
-          "finPaymentScheduleID": {
-            "readOnly": true,
-            "required": true
           }
         }
       },
@@ -1201,14 +1206,17 @@
     ],
     "minimumCreate": {
       "headerFields": [
-        "cDocTypeTargetId",
         "invoiceDate",
         "businessPartner",
         "partnerAddress",
         "paymentTerms",
         "paymentMethod",
+        "currency",
         "priceList",
-        "aeatsiiIsauthorization"
+        "etvfacSimpinvart7273",
+        "etvfacInvNoIDArt61d",
+        "aeatsiiIsauthorization",
+        "transactionDocument"
       ],
       "lineFields": [
         "invoicedQuantity",
@@ -1224,23 +1232,6 @@
       ]
     },
     "selectorContexts": [
-      {
-        "entity": "header",
-        "field": "cDocTypeTargetId",
-        "context": {
-          "required": [
-            {
-              "param": "IsSOTrx",
-              "source": "windowCategory"
-            },
-            {
-              "param": "AD_Org_ID",
-              "source": "field",
-              "field": "adOrgId"
-            }
-          ]
-        }
-      },
       {
         "entity": "header",
         "field": "partnerAddress",
@@ -1274,6 +1265,23 @@
             {
               "param": "isSOTrx",
               "source": "windowCategory"
+            }
+          ]
+        }
+      },
+      {
+        "entity": "header",
+        "field": "transactionDocument",
+        "context": {
+          "required": [
+            {
+              "param": "IsSOTrx",
+              "source": "windowCategory"
+            },
+            {
+              "param": "AD_Org_ID",
+              "source": "field",
+              "field": "adOrgId"
             }
           ]
         }
@@ -1333,14 +1341,17 @@
         "operation": "createHeader",
         "description": "Create a draft header with the minimum required editable fields.",
         "fields": [
-          "cDocTypeTargetId",
           "invoiceDate",
           "businessPartner",
           "partnerAddress",
           "paymentTerms",
           "paymentMethod",
+          "currency",
           "priceList",
-          "aeatsiiIsauthorization"
+          "etvfacSimpinvart7273",
+          "etvfacInvNoIDArt61d",
+          "aeatsiiIsauthorization",
+          "transactionDocument"
         ]
       },
       {
@@ -1367,5 +1378,5 @@
       "tbaiVoidxmlgenerator"
     ]
   },
-  "checksum": "74f348cd7aa147cf"
+  "checksum": "0218b231e4638ca5"
 }

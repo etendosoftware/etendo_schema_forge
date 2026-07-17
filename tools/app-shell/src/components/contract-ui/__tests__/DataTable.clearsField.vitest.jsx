@@ -21,6 +21,7 @@ vi.mock('@/lib/statusBadge.js', () => ({
   getStatusDotColor: () => 'bg-gray-400',
   getStatusGridPillClass: () => '',
   getStatusPillClass: () => '',
+  getStatusTone: () => 'neutral',
   statusLabel: (raw) => raw,
 }));
 
@@ -52,7 +53,7 @@ vi.mock('../ProductSearchDrawer.jsx', () => ({
   default: () => null,
 }));
 
-vi.mock('../InternalConsumptionProductSearchDrawer.jsx', () => ({
+vi.mock('../ProductStockSearchDrawer.jsx', () => ({
   default: () => null,
 }));
 

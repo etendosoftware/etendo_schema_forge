@@ -5,6 +5,7 @@
 | File | Description |
 |------|-------------|
 | [architecture-overview.md](architecture-overview.md) | System architecture: Schema Forge (tooling) + Etendo Go (runtime), data flow, component inventory |
+| [repo-topology.md](repo-topology.md) | The 3-repo split, the two dev profiles (functional-only vs core), published-package default vs `LOCAL_CORE` local-source mode (React + CLI), GitHub Packages auth |
 | [transactional-email-framework.md](transactional-email-framework.md) | Transactional email framework: contract-driven execution, security boundary, lifecycle, edge cases, and agent checklist |
 | [email-contracts.md](email-contracts.md) | Email contracts guide: descriptor schema, request/response contract, recipient policies, versioning, and initial contract sketches |
 | [document-email-contract-implementation.md](document-email-contract-implementation.md) | Agent/developer tutorial for defining document-send email contracts and wiring frontend/backend behavior |
@@ -82,10 +83,11 @@ General findings about how the Etendo Application Dictionary works. Not window-s
 
 | File | Description |
 |------|-------------|
+| [surveys.md](surveys.md) | **In-app survey system (NPS/CSAT)**: architecture, survey types, anti-fatigue rules, localStorage schema, how to add a new survey or emit a trigger from a window |
 | [developer-tools.md](developer-tools.md) | CLI tools used by the team: RTK (token optimization) and GWS (Google Workspace CLI) |
 | [claude-md-best-practices.md](claude-md-best-practices.md) | Best practices for writing effective CLAUDE.md files (research compilation) |
 | [self-documentation-policy.md](self-documentation-policy.md) | Self-documentation policy: triggers, checklists, and phase responsibilities for keeping docs in sync with code |
-| [feedback.md](feedback.md) | Known bug patterns and root-cause lessons: double-discount on line PATCH, callout price suppression for invoices, add-line row field key alignment, ETP-4007 discount display fixes (etgoDiscount field name, listPrice vs unitPrice, grossAmount vs lineNetAmount, taxAmount formula, missing PDF discount breakdown rows) |
+| [feedback.md](feedback.md) | Known bug patterns and root-cause lessons: double-discount on line PATCH, callout price suppression for invoices, add-line row field key alignment, ETP-4007 discount display fixes (etgoDiscount field name, listPrice vs unitPrice, grossAmount vs lineNetAmount, taxAmount formula, missing PDF discount breakdown rows), ETP-4277 empty numeric field saved as backend default (DataTable/InlineLinesPanel defaultValue substitution) |
 
 ## Operations
 

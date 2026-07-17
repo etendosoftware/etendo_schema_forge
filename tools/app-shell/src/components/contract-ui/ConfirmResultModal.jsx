@@ -17,12 +17,12 @@ const fmtAmount = (v, cur) => {
 
 // ── Doc card ──────────────────────────────────────────────────────────────────
 
-function DocCard({ doc, currency, ui, navigate, onClose }) {
+function DocCard({ doc, currency, ui, navigate, onClose, onNavigate }) {
   const [hovered, setHovered] = useState(false);
   const cfg = TYPE_CONFIG[doc.type] || TYPE_CONFIG.facturaCompra;
   const { Icon } = cfg;
 
-  const handleActivate = () => { onClose(); navigate(doc.route); };
+  const handleActivate = () => { (onNavigate ?? onClose)(); navigate(doc.route); };
 
   return (
     <div
@@ -69,7 +69,7 @@ function DocCard({ doc, currency, ui, navigate, onClose }) {
 
 // ── Main export ───────────────────────────────────────────────────────────────
 
-export function ConfirmResultModal({ title, docs = [], primary, navigate, currency = '', onClose }) {
+export function ConfirmResultModal({ title, docs = [], primary, navigate, currency = '', onClose, onNavigate }) {
   const ui = useUI();
 
   // Single-doc action label: use the explicit `primary` override if given,
@@ -113,6 +113,7 @@ export function ConfirmResultModal({ title, docs = [], primary, navigate, curren
                 ui={ui}
                 navigate={navigate}
                 onClose={onClose}
+                onNavigate={onNavigate}
                 data-testid="DocCard__a46cc0" />
             ))}
           </div>
@@ -133,7 +134,7 @@ export function ConfirmResultModal({ title, docs = [], primary, navigate, curren
           {singleDoc && primaryLabel && (
             <button
               type="button"
-              onClick={() => { onClose(); navigate(singleDoc.route); }}
+              onClick={() => { (onNavigate ?? onClose)(); navigate(singleDoc.route); }}
               style={{ fontSize: 13, fontWeight: 600, padding: '8px 16px', borderRadius: 8, border: 'none', background: '#2f73d6', color: '#fff', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6 }}
               onMouseEnter={e => { e.currentTarget.style.background = '#2a67c2'; }}
               onMouseLeave={e => { e.currentTarget.style.background = '#2f73d6'; }}

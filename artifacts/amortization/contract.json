@@ -1,16 +1,17 @@
 {
-  "version": "0.28.0",
-  "generatedAt": "2026-05-22T16:00:10.872Z",
-  "updatedAt": "2026-06-24T20:46:46.891Z",
-  "checksum": "ab49193b73a1aff1",
+  "version": "0.36.0",
+  "generatedAt": "2026-07-14T13:57:24.059Z",
+  "updatedAt": "2026-07-16T15:04:16.418Z",
+  "checksum": "6fa3fb426053dcc9",
   "frontendContract": {
     "window": {
       "id": "800026",
       "name": "Amortization",
       "primaryEntity": "header",
       "category": "finance",
-      "hideDeleteWhenComplete": true,
       "hidePrint": true,
+      "hideCreate": true,
+      "hideDeleteButton": true,
       "hideLink": true,
       "breadcrumb": "Finance / Amortization",
       "menuActions": [
@@ -19,8 +20,8 @@
           "label": "Reactivate",
           "labelKey": "reactivate",
           "visibleWhenFieldTrue": "processed",
-          "columnName": "Processed",
-          "preUnpost": true
+          "preUnpost": true,
+          "columnName": "Processed"
         },
         {
           "key": "post",
@@ -38,6 +39,7 @@
         }
       },
       "statusField": "processed",
+      "summaryFields": [],
       "labelOverrides": {
         "es_ES": {
           "Name": "Nombre",
@@ -113,11 +115,12 @@
             "label": "Name",
             "type": "string",
             "tsType": "string",
-            "visibility": "editable",
+            "visibility": "readOnly",
             "required": true,
             "grid": true,
             "form": true,
             "sourceRequired": true,
+            "section": "principal",
             "seq": 10,
             "readOnlyLogic": {
               "raw": "@Processed@='Y'",
@@ -151,11 +154,12 @@
             "label": "Accounting Date",
             "type": "date",
             "tsType": "string",
-            "visibility": "editable",
+            "visibility": "readOnly",
             "required": true,
             "grid": true,
             "form": true,
             "sourceRequired": true,
+            "section": "principal",
             "seq": 20,
             "dot": false,
             "readOnlyLogic": {
@@ -171,10 +175,11 @@
             "label": "Starting Date",
             "type": "date",
             "tsType": "string",
-            "visibility": "editable",
+            "visibility": "readOnly",
             "required": false,
             "grid": true,
             "form": true,
+            "section": "principal",
             "seq": 30,
             "dot": false,
             "readOnlyLogic": {
@@ -210,7 +215,7 @@
             "label": "Currency",
             "type": "foreignKey",
             "tsType": "string",
-            "visibility": "editable",
+            "visibility": "readOnly",
             "required": true,
             "grid": false,
             "form": true,
@@ -294,122 +299,6 @@
               "reason": "session-preference",
               "js": null
             }
-          },
-          {
-            "name": "etblkpAccountingstatus",
-            "apiKey": "etblkpAccountingstatus",
-            "column": "EM_Etblkp_Accountingstatus",
-            "label": "Accounting Status",
-            "type": "enum",
-            "tsType": "string",
-            "visibility": "readOnly",
-            "required": true,
-            "grid": false,
-            "form": true,
-            "sourceRequired": true,
-            "derivation": {
-              "type": "computed",
-              "source": "N"
-            },
-            "enumValues": [
-              {
-                "value": "NC",
-                "name": "Cost Not Calculated"
-              },
-              {
-                "value": "d",
-                "name": "Disabled For Background"
-              },
-              {
-                "value": "D",
-                "name": "Document Disabled"
-              },
-              {
-                "value": "L",
-                "name": "Document Locked"
-              },
-              {
-                "value": "E",
-                "name": "Error"
-              },
-              {
-                "value": "C",
-                "name": "Error, No cost"
-              },
-              {
-                "value": "i",
-                "name": "Invalid Account"
-              },
-              {
-                "value": "AD",
-                "name": "No Accounting Date"
-              },
-              {
-                "value": "DT",
-                "name": "No Document Type"
-              },
-              {
-                "value": "NO",
-                "name": "No Related PO"
-              },
-              {
-                "value": "b",
-                "name": "Not Balanced"
-              },
-              {
-                "value": "c",
-                "name": "Not Convertible (no rate)"
-              },
-              {
-                "value": "l",
-                "name": "Pending Refresh"
-              },
-              {
-                "value": "p",
-                "name": "Period Closed"
-              },
-              {
-                "value": "y",
-                "name": "Post Prepared"
-              },
-              {
-                "value": "Y",
-                "name": "Posted"
-              },
-              {
-                "value": "T",
-                "name": "Table Disabled"
-              },
-              {
-                "value": "N",
-                "name": "Unposted"
-              }
-            ],
-            "defaultValue": "N"
-          },
-          {
-            "name": "etblkpBulkposting",
-            "apiKey": "etblkpBulkposting",
-            "column": "EM_Etblkp_Bulkposting",
-            "label": "Bulk Posting",
-            "type": "button",
-            "tsType": "string",
-            "visibility": "readOnly",
-            "required": true,
-            "grid": false,
-            "form": true,
-            "sourceRequired": true,
-            "derivation": {
-              "type": "computed",
-              "source": "N"
-            },
-            "defaultValue": "N",
-            "displayLogic": {
-              "raw": "@Processed@='Y' & @#ShowAcct@='Y'",
-              "evaluable": false,
-              "reason": "session-preference",
-              "js": null
-            }
           }
         ],
         "searchableFields": [
@@ -430,20 +319,6 @@
             "derivation": {
               "type": "computed",
               "source": "'N'"
-            }
-          },
-          {
-            "name": "etblkpAccountingstatus",
-            "derivation": {
-              "type": "computed",
-              "source": "N"
-            }
-          },
-          {
-            "name": "etblkpBulkposting",
-            "derivation": {
-              "type": "computed",
-              "source": "N"
             }
           }
         ],
@@ -587,69 +462,6 @@
             }
           },
           {
-            "name": "stDimension",
-            "apiKey": "stDimension",
-            "column": "User1_ID",
-            "label": "1st Dimension",
-            "type": "foreignKey",
-            "tsType": "string",
-            "visibility": "editable",
-            "required": false,
-            "grid": true,
-            "form": true,
-            "reference": "User1",
-            "inputMode": "selector",
-            "lookup": true,
-            "gridOrder": 6,
-            "readOnlyLogic": {
-              "raw": "@Posted@='Y'",
-              "evaluable": true,
-              "js": "record['posted'] === true"
-            }
-          },
-          {
-            "name": "ndDimension",
-            "apiKey": "ndDimension",
-            "column": "User2_ID",
-            "label": "2nd Dimension",
-            "type": "foreignKey",
-            "tsType": "string",
-            "visibility": "editable",
-            "required": false,
-            "grid": true,
-            "form": true,
-            "reference": "User2",
-            "inputMode": "selector",
-            "lookup": true,
-            "gridOrder": 7,
-            "readOnlyLogic": {
-              "raw": "@Posted@='Y'",
-              "evaluable": true,
-              "js": "record['posted'] === true"
-            }
-          },
-          {
-            "name": "eTADASActivity",
-            "apiKey": "eTADASActivity",
-            "column": "EM_Etadas_C_Activity_ID",
-            "label": "Activity",
-            "type": "foreignKey",
-            "tsType": "string",
-            "visibility": "editable",
-            "required": false,
-            "grid": true,
-            "form": true,
-            "reference": "Activity",
-            "inputMode": "selector",
-            "lookup": true,
-            "gridOrder": 10,
-            "readOnlyLogic": {
-              "raw": "@Posted@='Y'",
-              "evaluable": true,
-              "js": "record['posted'] === true"
-            }
-          },
-          {
             "name": "eTADASBpartner",
             "apiKey": "eTADASBpartner",
             "column": "EM_Etadas_C_Bpartner_ID",
@@ -669,48 +481,6 @@
               "evaluable": true,
               "js": "record['posted'] === true"
             }
-          },
-          {
-            "name": "eTADASSalesCampaign",
-            "apiKey": "eTADASSalesCampaign",
-            "column": "EM_Etadas_Campaign_ID",
-            "label": "Sales Campaign",
-            "type": "foreignKey",
-            "tsType": "string",
-            "visibility": "editable",
-            "required": false,
-            "grid": true,
-            "form": true,
-            "reference": "Campaign",
-            "inputMode": "selector",
-            "lookup": true,
-            "gridOrder": 11,
-            "readOnlyLogic": {
-              "raw": "@Posted@='Y'",
-              "evaluable": true,
-              "js": "record['posted'] === true"
-            }
-          },
-          {
-            "name": "eTADASSalesRegion",
-            "apiKey": "eTADASSalesRegion",
-            "column": "EM_Etadas_Salesregion_ID",
-            "label": "Sales Region",
-            "type": "foreignKey",
-            "tsType": "string",
-            "visibility": "editable",
-            "required": false,
-            "grid": true,
-            "form": true,
-            "reference": "SalesRegion",
-            "inputMode": "selector",
-            "lookup": true,
-            "gridOrder": 9,
-            "readOnlyLogic": {
-              "raw": "@Posted@='Y'",
-              "evaluable": true,
-              "js": "record['posted'] === true"
-            }
           }
         ],
         "searchableFields": [],
@@ -724,8 +494,9 @@
       "name": "Amortization",
       "primaryEntity": "header",
       "category": "finance",
-      "hideDeleteWhenComplete": true,
       "hidePrint": true,
+      "hideCreate": true,
+      "hideDeleteButton": true,
       "hideLink": true,
       "breadcrumb": "Finance / Amortization",
       "menuActions": [
@@ -734,8 +505,8 @@
           "label": "Reactivate",
           "labelKey": "reactivate",
           "visibleWhenFieldTrue": "processed",
-          "columnName": "Processed",
-          "preUnpost": true
+          "preUnpost": true,
+          "columnName": "Processed"
         },
         {
           "key": "post",
@@ -753,6 +524,7 @@
         }
       },
       "statusField": "processed",
+      "summaryFields": [],
       "labelOverrides": {
         "es_ES": {
           "Name": "Nombre",
@@ -832,7 +604,7 @@
             "apiKey": "name",
             "column": "Name",
             "type": "string",
-            "visibility": "editable",
+            "visibility": "readOnly",
             "required": true
           },
           {
@@ -848,7 +620,7 @@
             "apiKey": "accountingDate",
             "column": "DateAcct",
             "type": "date",
-            "visibility": "editable",
+            "visibility": "readOnly",
             "required": true
           },
           {
@@ -856,7 +628,7 @@
             "apiKey": "startingDate",
             "column": "StartDate",
             "type": "date",
-            "visibility": "editable",
+            "visibility": "readOnly",
             "required": false
           },
           {
@@ -872,7 +644,7 @@
             "apiKey": "currency",
             "column": "C_Currency_ID",
             "type": "foreignKey",
-            "visibility": "editable",
+            "visibility": "readOnly",
             "required": true
           },
           {
@@ -940,6 +712,22 @@
             "required": false
           },
           {
+            "name": "etblkpBulkposting",
+            "apiKey": "etblkpBulkposting",
+            "column": "EM_Etblkp_Bulkposting",
+            "type": "button",
+            "visibility": "discarded",
+            "required": true
+          },
+          {
+            "name": "etblkpAccountingstatus",
+            "apiKey": "etblkpAccountingstatus",
+            "column": "EM_Etblkp_Accountingstatus",
+            "type": "enum",
+            "visibility": "discarded",
+            "required": true
+          },
+          {
             "name": "id",
             "apiKey": "id",
             "column": "A_Amortization_ID",
@@ -1001,22 +789,6 @@
             "column": "Updatedby",
             "type": "foreignKey",
             "visibility": "system",
-            "required": true
-          },
-          {
-            "name": "etblkpAccountingstatus",
-            "apiKey": "etblkpAccountingstatus",
-            "column": "EM_Etblkp_Accountingstatus",
-            "type": "enum",
-            "visibility": "readOnly",
-            "required": true
-          },
-          {
-            "name": "etblkpBulkposting",
-            "apiKey": "etblkpBulkposting",
-            "column": "EM_Etblkp_Bulkposting",
-            "type": "button",
-            "visibility": "readOnly",
             "required": true
           }
         ],
@@ -1100,11 +872,19 @@
             "required": false
           },
           {
+            "name": "eTADASBpartner",
+            "apiKey": "eTADASBpartner",
+            "column": "EM_Etadas_C_Bpartner_ID",
+            "type": "foreignKey",
+            "visibility": "editable",
+            "required": false
+          },
+          {
             "name": "stDimension",
             "apiKey": "stDimension",
             "column": "User1_ID",
             "type": "foreignKey",
-            "visibility": "editable",
+            "visibility": "discarded",
             "required": false
           },
           {
@@ -1112,7 +892,31 @@
             "apiKey": "ndDimension",
             "column": "User2_ID",
             "type": "foreignKey",
-            "visibility": "editable",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "eTADASSalesRegion",
+            "apiKey": "eTADASSalesRegion",
+            "column": "EM_Etadas_Salesregion_ID",
+            "type": "foreignKey",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "eTADASActivity",
+            "apiKey": "eTADASActivity",
+            "column": "EM_Etadas_C_Activity_ID",
+            "type": "foreignKey",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "eTADASSalesCampaign",
+            "apiKey": "eTADASSalesCampaign",
+            "column": "EM_Etadas_Campaign_ID",
+            "type": "foreignKey",
+            "visibility": "discarded",
             "required": false
           },
           {
@@ -1178,38 +982,6 @@
             "type": "foreignKey",
             "visibility": "system",
             "required": true
-          },
-          {
-            "name": "eTADASActivity",
-            "apiKey": "eTADASActivity",
-            "column": "EM_Etadas_C_Activity_ID",
-            "type": "foreignKey",
-            "visibility": "editable",
-            "required": false
-          },
-          {
-            "name": "eTADASBpartner",
-            "apiKey": "eTADASBpartner",
-            "column": "EM_Etadas_C_Bpartner_ID",
-            "type": "foreignKey",
-            "visibility": "editable",
-            "required": false
-          },
-          {
-            "name": "eTADASSalesCampaign",
-            "apiKey": "eTADASSalesCampaign",
-            "column": "EM_Etadas_Campaign_ID",
-            "type": "foreignKey",
-            "visibility": "editable",
-            "required": false
-          },
-          {
-            "name": "eTADASSalesRegion",
-            "apiKey": "eTADASSalesRegion",
-            "column": "EM_Etadas_Salesregion_ID",
-            "type": "foreignKey",
-            "visibility": "editable",
-            "required": false
           }
         ]
       }
@@ -1356,51 +1128,11 @@
       },
       {
         "entity": "lines",
-        "field": "stDimension",
-        "column": "User1_ID",
-        "reference": "User1",
-        "inputMode": "selector",
-        "url": "/sws/neo/amortization/lines/selectors/stDimension"
-      },
-      {
-        "entity": "lines",
-        "field": "ndDimension",
-        "column": "User2_ID",
-        "reference": "User2",
-        "inputMode": "selector",
-        "url": "/sws/neo/amortization/lines/selectors/ndDimension"
-      },
-      {
-        "entity": "lines",
-        "field": "eTADASActivity",
-        "column": "EM_Etadas_C_Activity_ID",
-        "reference": "Activity",
-        "inputMode": "selector",
-        "url": "/sws/neo/amortization/lines/selectors/eTADASActivity"
-      },
-      {
-        "entity": "lines",
         "field": "eTADASBpartner",
         "column": "EM_Etadas_C_Bpartner_ID",
         "reference": "BPartner",
         "inputMode": "selector",
         "url": "/sws/neo/amortization/lines/selectors/eTADASBpartner"
-      },
-      {
-        "entity": "lines",
-        "field": "eTADASSalesCampaign",
-        "column": "EM_Etadas_Campaign_ID",
-        "reference": "Campaign",
-        "inputMode": "selector",
-        "url": "/sws/neo/amortization/lines/selectors/eTADASSalesCampaign"
-      },
-      {
-        "entity": "lines",
-        "field": "eTADASSalesRegion",
-        "column": "EM_Etadas_Salesregion_ID",
-        "reference": "SalesRegion",
-        "inputMode": "selector",
-        "url": "/sws/neo/amortization/lines/selectors/eTADASSalesRegion"
       }
     ],
     "actions": [
@@ -1513,22 +1245,6 @@
         "description": "CRUD flags for 'lines' should all be booleans"
       },
       {
-        "id": "t-default-value-type-header-etblkpAccountingstatus",
-        "category": "default-value-type",
-        "entity": "header",
-        "field": "etblkpAccountingstatus",
-        "runner": "node",
-        "description": "Default value for 'etblkpAccountingstatus' in header should be a string"
-      },
-      {
-        "id": "t-default-value-type-header-etblkpBulkposting",
-        "category": "default-value-type",
-        "entity": "header",
-        "field": "etblkpBulkposting",
-        "runner": "node",
-        "description": "Default value for 'etblkpBulkposting' in header should be a string"
-      },
-      {
         "id": "t-default-value-type-header-posted",
         "category": "default-value-type",
         "entity": "header",
@@ -1545,14 +1261,6 @@
         "description": "Default value for 'processed' in header should be a string"
       },
       {
-        "id": "t-displaylogic-evaluable-header-etblkpBulkposting",
-        "category": "displaylogic-evaluable",
-        "entity": "header",
-        "field": "etblkpBulkposting",
-        "runner": "node",
-        "description": "Display logic for 'etblkpBulkposting' in header should have evaluable flag"
-      },
-      {
         "id": "t-displaylogic-evaluable-header-posted",
         "category": "displaylogic-evaluable",
         "entity": "header",
@@ -1567,14 +1275,6 @@
         "field": "project",
         "runner": "node",
         "description": "Display logic for 'project' in lines should have evaluable flag"
-      },
-      {
-        "id": "t-displaylogic-valid-header-etblkpBulkposting",
-        "category": "displaylogic-valid",
-        "entity": "header",
-        "field": "etblkpBulkposting",
-        "runner": "node",
-        "description": "Display logic for 'etblkpBulkposting' in header should be valid JS"
       },
       {
         "id": "t-displaylogic-valid-header-posted",
@@ -1615,22 +1315,6 @@
         "field": "description",
         "runner": "node",
         "description": "Field 'description' should be present in header"
-      },
-      {
-        "id": "t-field-presence-header-etblkpAccountingstatus",
-        "category": "field-presence",
-        "entity": "header",
-        "field": "etblkpAccountingstatus",
-        "runner": "node",
-        "description": "Field 'etblkpAccountingstatus' should be present in header"
-      },
-      {
-        "id": "t-field-presence-header-etblkpBulkposting",
-        "category": "field-presence",
-        "entity": "header",
-        "field": "etblkpBulkposting",
-        "runner": "node",
-        "description": "Field 'etblkpBulkposting' should be present in header"
       },
       {
         "id": "t-field-presence-header-name",
@@ -1713,14 +1397,6 @@
         "description": "Field 'currency' should be present in lines"
       },
       {
-        "id": "t-field-presence-lines-eTADASActivity",
-        "category": "field-presence",
-        "entity": "lines",
-        "field": "eTADASActivity",
-        "runner": "node",
-        "description": "Field 'eTADASActivity' should be present in lines"
-      },
-      {
         "id": "t-field-presence-lines-eTADASBpartner",
         "category": "field-presence",
         "entity": "lines",
@@ -1729,44 +1405,12 @@
         "description": "Field 'eTADASBpartner' should be present in lines"
       },
       {
-        "id": "t-field-presence-lines-eTADASSalesCampaign",
-        "category": "field-presence",
-        "entity": "lines",
-        "field": "eTADASSalesCampaign",
-        "runner": "node",
-        "description": "Field 'eTADASSalesCampaign' should be present in lines"
-      },
-      {
-        "id": "t-field-presence-lines-eTADASSalesRegion",
-        "category": "field-presence",
-        "entity": "lines",
-        "field": "eTADASSalesRegion",
-        "runner": "node",
-        "description": "Field 'eTADASSalesRegion' should be present in lines"
-      },
-      {
-        "id": "t-field-presence-lines-ndDimension",
-        "category": "field-presence",
-        "entity": "lines",
-        "field": "ndDimension",
-        "runner": "node",
-        "description": "Field 'ndDimension' should be present in lines"
-      },
-      {
         "id": "t-field-presence-lines-project",
         "category": "field-presence",
         "entity": "lines",
         "field": "project",
         "runner": "node",
         "description": "Field 'project' should be present in lines"
-      },
-      {
-        "id": "t-field-presence-lines-stDimension",
-        "category": "field-presence",
-        "entity": "lines",
-        "field": "stDimension",
-        "runner": "node",
-        "description": "Field 'stDimension' should be present in lines"
       },
       {
         "id": "t-field-type-header-accountingDate",
@@ -1791,22 +1435,6 @@
         "field": "description",
         "runner": "node",
         "description": "Field 'description' should have type 'string' in header"
-      },
-      {
-        "id": "t-field-type-header-etblkpAccountingstatus",
-        "category": "field-type",
-        "entity": "header",
-        "field": "etblkpAccountingstatus",
-        "runner": "node",
-        "description": "Field 'etblkpAccountingstatus' should have type 'string' in header"
-      },
-      {
-        "id": "t-field-type-header-etblkpBulkposting",
-        "category": "field-type",
-        "entity": "header",
-        "field": "etblkpBulkposting",
-        "runner": "node",
-        "description": "Field 'etblkpBulkposting' should have type 'string' in header"
       },
       {
         "id": "t-field-type-header-name",
@@ -1889,14 +1517,6 @@
         "description": "Field 'currency' should have type 'string' in lines"
       },
       {
-        "id": "t-field-type-lines-eTADASActivity",
-        "category": "field-type",
-        "entity": "lines",
-        "field": "eTADASActivity",
-        "runner": "node",
-        "description": "Field 'eTADASActivity' should have type 'string' in lines"
-      },
-      {
         "id": "t-field-type-lines-eTADASBpartner",
         "category": "field-type",
         "entity": "lines",
@@ -1905,44 +1525,12 @@
         "description": "Field 'eTADASBpartner' should have type 'string' in lines"
       },
       {
-        "id": "t-field-type-lines-eTADASSalesCampaign",
-        "category": "field-type",
-        "entity": "lines",
-        "field": "eTADASSalesCampaign",
-        "runner": "node",
-        "description": "Field 'eTADASSalesCampaign' should have type 'string' in lines"
-      },
-      {
-        "id": "t-field-type-lines-eTADASSalesRegion",
-        "category": "field-type",
-        "entity": "lines",
-        "field": "eTADASSalesRegion",
-        "runner": "node",
-        "description": "Field 'eTADASSalesRegion' should have type 'string' in lines"
-      },
-      {
-        "id": "t-field-type-lines-ndDimension",
-        "category": "field-type",
-        "entity": "lines",
-        "field": "ndDimension",
-        "runner": "node",
-        "description": "Field 'ndDimension' should have type 'string' in lines"
-      },
-      {
         "id": "t-field-type-lines-project",
         "category": "field-type",
         "entity": "lines",
         "field": "project",
         "runner": "node",
         "description": "Field 'project' should have type 'string' in lines"
-      },
-      {
-        "id": "t-field-type-lines-stDimension",
-        "category": "field-type",
-        "entity": "lines",
-        "field": "stDimension",
-        "runner": "node",
-        "description": "Field 'stDimension' should have type 'string' in lines"
       },
       {
         "id": "t-readonlylogic-evaluable-header-accountingDate",
@@ -2033,14 +1621,6 @@
         "description": "Read-only logic for 'currency' in lines should have evaluable flag"
       },
       {
-        "id": "t-readonlylogic-evaluable-lines-eTADASActivity",
-        "category": "readonlylogic-evaluable",
-        "entity": "lines",
-        "field": "eTADASActivity",
-        "runner": "node",
-        "description": "Read-only logic for 'eTADASActivity' in lines should have evaluable flag"
-      },
-      {
         "id": "t-readonlylogic-evaluable-lines-eTADASBpartner",
         "category": "readonlylogic-evaluable",
         "entity": "lines",
@@ -2049,44 +1629,12 @@
         "description": "Read-only logic for 'eTADASBpartner' in lines should have evaluable flag"
       },
       {
-        "id": "t-readonlylogic-evaluable-lines-eTADASSalesCampaign",
-        "category": "readonlylogic-evaluable",
-        "entity": "lines",
-        "field": "eTADASSalesCampaign",
-        "runner": "node",
-        "description": "Read-only logic for 'eTADASSalesCampaign' in lines should have evaluable flag"
-      },
-      {
-        "id": "t-readonlylogic-evaluable-lines-eTADASSalesRegion",
-        "category": "readonlylogic-evaluable",
-        "entity": "lines",
-        "field": "eTADASSalesRegion",
-        "runner": "node",
-        "description": "Read-only logic for 'eTADASSalesRegion' in lines should have evaluable flag"
-      },
-      {
-        "id": "t-readonlylogic-evaluable-lines-ndDimension",
-        "category": "readonlylogic-evaluable",
-        "entity": "lines",
-        "field": "ndDimension",
-        "runner": "node",
-        "description": "Read-only logic for 'ndDimension' in lines should have evaluable flag"
-      },
-      {
         "id": "t-readonlylogic-evaluable-lines-project",
         "category": "readonlylogic-evaluable",
         "entity": "lines",
         "field": "project",
         "runner": "node",
         "description": "Read-only logic for 'project' in lines should have evaluable flag"
-      },
-      {
-        "id": "t-readonlylogic-evaluable-lines-stDimension",
-        "category": "readonlylogic-evaluable",
-        "entity": "lines",
-        "field": "stDimension",
-        "runner": "node",
-        "description": "Read-only logic for 'stDimension' in lines should have evaluable flag"
       },
       {
         "id": "t-readonlylogic-valid-header-accountingDate",
@@ -2177,14 +1725,6 @@
         "description": "Read-only logic for 'currency' in lines should be valid JS"
       },
       {
-        "id": "t-readonlylogic-valid-lines-eTADASActivity",
-        "category": "readonlylogic-valid",
-        "entity": "lines",
-        "field": "eTADASActivity",
-        "runner": "node",
-        "description": "Read-only logic for 'eTADASActivity' in lines should be valid JS"
-      },
-      {
         "id": "t-readonlylogic-valid-lines-eTADASBpartner",
         "category": "readonlylogic-valid",
         "entity": "lines",
@@ -2193,44 +1733,12 @@
         "description": "Read-only logic for 'eTADASBpartner' in lines should be valid JS"
       },
       {
-        "id": "t-readonlylogic-valid-lines-eTADASSalesCampaign",
-        "category": "readonlylogic-valid",
-        "entity": "lines",
-        "field": "eTADASSalesCampaign",
-        "runner": "node",
-        "description": "Read-only logic for 'eTADASSalesCampaign' in lines should be valid JS"
-      },
-      {
-        "id": "t-readonlylogic-valid-lines-eTADASSalesRegion",
-        "category": "readonlylogic-valid",
-        "entity": "lines",
-        "field": "eTADASSalesRegion",
-        "runner": "node",
-        "description": "Read-only logic for 'eTADASSalesRegion' in lines should be valid JS"
-      },
-      {
-        "id": "t-readonlylogic-valid-lines-ndDimension",
-        "category": "readonlylogic-valid",
-        "entity": "lines",
-        "field": "ndDimension",
-        "runner": "node",
-        "description": "Read-only logic for 'ndDimension' in lines should be valid JS"
-      },
-      {
         "id": "t-readonlylogic-valid-lines-project",
         "category": "readonlylogic-valid",
         "entity": "lines",
         "field": "project",
         "runner": "node",
         "description": "Read-only logic for 'project' in lines should be valid JS"
-      },
-      {
-        "id": "t-readonlylogic-valid-lines-stDimension",
-        "category": "readonlylogic-valid",
-        "entity": "lines",
-        "field": "stDimension",
-        "runner": "node",
-        "description": "Read-only logic for 'stDimension' in lines should be valid JS"
       },
       {
         "id": "t-rule-declared-A-Amortization-AD-Client-ID-readOnlyLogic",
@@ -2730,14 +2238,6 @@
         "description": "Selector endpoint for 'currency' in lines should exist"
       },
       {
-        "id": "t-selector-endpoint-lines-eTADASActivity",
-        "category": "selector-endpoint",
-        "entity": "lines",
-        "field": "eTADASActivity",
-        "runner": "node",
-        "description": "Selector endpoint for 'eTADASActivity' in lines should exist"
-      },
-      {
         "id": "t-selector-endpoint-lines-eTADASBpartner",
         "category": "selector-endpoint",
         "entity": "lines",
@@ -2746,44 +2246,12 @@
         "description": "Selector endpoint for 'eTADASBpartner' in lines should exist"
       },
       {
-        "id": "t-selector-endpoint-lines-eTADASSalesCampaign",
-        "category": "selector-endpoint",
-        "entity": "lines",
-        "field": "eTADASSalesCampaign",
-        "runner": "node",
-        "description": "Selector endpoint for 'eTADASSalesCampaign' in lines should exist"
-      },
-      {
-        "id": "t-selector-endpoint-lines-eTADASSalesRegion",
-        "category": "selector-endpoint",
-        "entity": "lines",
-        "field": "eTADASSalesRegion",
-        "runner": "node",
-        "description": "Selector endpoint for 'eTADASSalesRegion' in lines should exist"
-      },
-      {
-        "id": "t-selector-endpoint-lines-ndDimension",
-        "category": "selector-endpoint",
-        "entity": "lines",
-        "field": "ndDimension",
-        "runner": "node",
-        "description": "Selector endpoint for 'ndDimension' in lines should exist"
-      },
-      {
         "id": "t-selector-endpoint-lines-project",
         "category": "selector-endpoint",
         "entity": "lines",
         "field": "project",
         "runner": "node",
         "description": "Selector endpoint for 'project' in lines should exist"
-      },
-      {
-        "id": "t-selector-endpoint-lines-stDimension",
-        "category": "selector-endpoint",
-        "entity": "lines",
-        "field": "stDimension",
-        "runner": "node",
-        "description": "Selector endpoint for 'stDimension' in lines should exist"
       },
       {
         "id": "t-system-field-header-active",
@@ -2832,6 +2300,22 @@
         "field": "endingDate",
         "runner": "node",
         "description": "System field 'endingDate' should exist in backend but not frontend for header"
+      },
+      {
+        "id": "t-system-field-header-etblkpAccountingstatus",
+        "category": "system-field",
+        "entity": "header",
+        "field": "etblkpAccountingstatus",
+        "runner": "node",
+        "description": "System field 'etblkpAccountingstatus' should exist in backend but not frontend for header"
+      },
+      {
+        "id": "t-system-field-header-etblkpBulkposting",
+        "category": "system-field",
+        "entity": "header",
+        "field": "etblkpBulkposting",
+        "runner": "node",
+        "description": "System field 'etblkpBulkposting' should exist in backend but not frontend for header"
       },
       {
         "id": "t-system-field-header-id",
@@ -2946,6 +2430,30 @@
         "description": "System field 'creationDate' should exist in backend but not frontend for lines"
       },
       {
+        "id": "t-system-field-lines-eTADASActivity",
+        "category": "system-field",
+        "entity": "lines",
+        "field": "eTADASActivity",
+        "runner": "node",
+        "description": "System field 'eTADASActivity' should exist in backend but not frontend for lines"
+      },
+      {
+        "id": "t-system-field-lines-eTADASSalesCampaign",
+        "category": "system-field",
+        "entity": "lines",
+        "field": "eTADASSalesCampaign",
+        "runner": "node",
+        "description": "System field 'eTADASSalesCampaign' should exist in backend but not frontend for lines"
+      },
+      {
+        "id": "t-system-field-lines-eTADASSalesRegion",
+        "category": "system-field",
+        "entity": "lines",
+        "field": "eTADASSalesRegion",
+        "runner": "node",
+        "description": "System field 'eTADASSalesRegion' should exist in backend but not frontend for lines"
+      },
+      {
         "id": "t-system-field-lines-id",
         "category": "system-field",
         "entity": "lines",
@@ -2962,6 +2470,14 @@
         "description": "System field 'lineNo' should exist in backend but not frontend for lines"
       },
       {
+        "id": "t-system-field-lines-ndDimension",
+        "category": "system-field",
+        "entity": "lines",
+        "field": "ndDimension",
+        "runner": "node",
+        "description": "System field 'ndDimension' should exist in backend but not frontend for lines"
+      },
+      {
         "id": "t-system-field-lines-organization",
         "category": "system-field",
         "entity": "lines",
@@ -2976,6 +2492,14 @@
         "field": "sEQNoAsset",
         "runner": "node",
         "description": "System field 'sEQNoAsset' should exist in backend but not frontend for lines"
+      },
+      {
+        "id": "t-system-field-lines-stDimension",
+        "category": "system-field",
+        "entity": "lines",
+        "field": "stDimension",
+        "runner": "node",
+        "description": "System field 'stDimension' should exist in backend but not frontend for lines"
       },
       {
         "id": "t-system-field-lines-updated",
@@ -3009,25 +2533,25 @@
       }
     ],
     "summary": {
-      "total": 199,
+      "total": 173,
       "byCategory": {
         "action-endpoint": 2,
         "crud-flags": 2,
-        "default-value-type": 4,
-        "displaylogic-evaluable": 3,
-        "displaylogic-valid": 3,
-        "field-presence": 22,
-        "field-type": 22,
-        "readonlylogic-evaluable": 18,
-        "readonlylogic-valid": 18,
+        "default-value-type": 2,
+        "displaylogic-evaluable": 2,
+        "displaylogic-valid": 2,
+        "field-presence": 15,
+        "field-type": 15,
+        "readonlylogic-evaluable": 13,
+        "readonlylogic-valid": 13,
         "rule-declared": 63,
         "searchable-filters": 3,
-        "selector-endpoint": 11,
-        "system-field": 26,
+        "selector-endpoint": 6,
+        "system-field": 33,
         "visibility": 2
       },
       "byRunner": {
-        "node": 199,
+        "node": 173,
         "junit": 0
       }
     }

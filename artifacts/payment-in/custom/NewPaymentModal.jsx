@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { DateField } from '@/components/ui/date-field';
 import { useUI } from '@/i18n';
+import { trackDocumentCreated } from '@/lib/observability/health-events.js';
 
 function fmtDate(raw) {
   if (!raw) return '-';
@@ -159,6 +160,7 @@ export default function NewPaymentModal({ token, apiBaseUrl, windowName, onClose
       if (!res.ok) throw new Error(resJson?.response?.message || resJson?.message || `Failed (${res.status})`);
       const paymentId = resJson?.response?.data?.id;
       if (paymentId) {
+        trackDocumentCreated('payment-in');
         navigate(`/${windowName}/${paymentId}`);
       } else {
         handleClose();

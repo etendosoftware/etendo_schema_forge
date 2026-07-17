@@ -40,7 +40,6 @@ export const header = [
     "aeatsiiEjercicio": 90,
     "aeatsiiPeriodo": 90,
     "aeatsiiIsauthorization": "Sample aeatsiiIsauthorization",
-    "tbaiIssent": "Sample tbaiIssent",
     "processed": "Sample processed",
     "aeatsiiCauseExemption": "Sample aeatsiiCauseExemption",
     "etvfacDateIssue": "Sample etvfacDateIssue",
@@ -51,7 +50,8 @@ export const header = [
     "etvfacSentToVerifac": "Sample etvfacSentToVerifac",
     "etgoTotalDiscount": 99.44,
     "eTGODueDate": "2026-01-15",
-    "eTGODeliveryStatus": "DR"
+    "eTGODeliveryStatus": "DR",
+    "eTGOCurrencyRate": "USD"
   },
   {
     "id": "mock-header-002",
@@ -92,7 +92,6 @@ export const header = [
     "aeatsiiEjercicio": 93,
     "aeatsiiPeriodo": 93,
     "aeatsiiIsauthorization": "Sample aeatsiiIsauthorization",
-    "tbaiIssent": "Sample tbaiIssent",
     "processed": "Sample processed",
     "aeatsiiCauseExemption": "Sample aeatsiiCauseExemption",
     "etvfacDateIssue": "Sample etvfacDateIssue",
@@ -103,7 +102,8 @@ export const header = [
     "etvfacSentToVerifac": "Sample etvfacSentToVerifac",
     "etgoTotalDiscount": 96.94,
     "eTGODueDate": "2026-01-16",
-    "eTGODeliveryStatus": "CO"
+    "eTGODeliveryStatus": "CO",
+    "eTGOCurrencyRate": "EUR"
   },
   {
     "id": "mock-header-003",
@@ -144,7 +144,6 @@ export const header = [
     "aeatsiiEjercicio": 8,
     "aeatsiiPeriodo": 8,
     "aeatsiiIsauthorization": "Sample aeatsiiIsauthorization",
-    "tbaiIssent": "Sample tbaiIssent",
     "processed": "Sample processed",
     "aeatsiiCauseExemption": "Sample aeatsiiCauseExemption",
     "etvfacDateIssue": "Sample etvfacDateIssue",
@@ -155,7 +154,8 @@ export const header = [
     "etvfacSentToVerifac": "Sample etvfacSentToVerifac",
     "etgoTotalDiscount": 12.48,
     "eTGODueDate": "2026-01-17",
-    "eTGODeliveryStatus": "VO"
+    "eTGODeliveryStatus": "VO",
+    "eTGOCurrencyRate": "GBP"
   },
   {
     "id": "mock-header-004",
@@ -196,7 +196,6 @@ export const header = [
     "aeatsiiEjercicio": 91,
     "aeatsiiPeriodo": 91,
     "aeatsiiIsauthorization": "Sample aeatsiiIsauthorization",
-    "tbaiIssent": "Sample tbaiIssent",
     "processed": "Sample processed",
     "aeatsiiCauseExemption": "Sample aeatsiiCauseExemption",
     "etvfacDateIssue": "Sample etvfacDateIssue",
@@ -207,7 +206,8 @@ export const header = [
     "etvfacSentToVerifac": "Sample etvfacSentToVerifac",
     "etgoTotalDiscount": 96.31,
     "eTGODueDate": "2026-01-18",
-    "eTGODeliveryStatus": "IP"
+    "eTGODeliveryStatus": "IP",
+    "eTGOCurrencyRate": "USD"
   },
   {
     "id": "mock-header-005",
@@ -248,7 +248,6 @@ export const header = [
     "aeatsiiEjercicio": 72,
     "aeatsiiPeriodo": 72,
     "aeatsiiIsauthorization": "Sample aeatsiiIsauthorization",
-    "tbaiIssent": "Sample tbaiIssent",
     "processed": "Sample processed",
     "aeatsiiCauseExemption": "Sample aeatsiiCauseExemption",
     "etvfacDateIssue": "Sample etvfacDateIssue",
@@ -259,7 +258,8 @@ export const header = [
     "etvfacSentToVerifac": "Sample etvfacSentToVerifac",
     "etgoTotalDiscount": 31.27,
     "eTGODueDate": "2026-01-19",
-    "eTGODeliveryStatus": "DR"
+    "eTGODeliveryStatus": "DR",
+    "eTGOCurrencyRate": "EUR"
   },
   {
     "id": "mock-header-006",
@@ -300,7 +300,6 @@ export const header = [
     "aeatsiiEjercicio": 78,
     "aeatsiiPeriodo": 78,
     "aeatsiiIsauthorization": "Sample aeatsiiIsauthorization",
-    "tbaiIssent": "Sample tbaiIssent",
     "processed": "Sample processed",
     "aeatsiiCauseExemption": "Sample aeatsiiCauseExemption",
     "etvfacDateIssue": "Sample etvfacDateIssue",
@@ -311,7 +310,8 @@ export const header = [
     "etvfacSentToVerifac": "Sample etvfacSentToVerifac",
     "etgoTotalDiscount": 76.52,
     "eTGODueDate": "2026-01-20",
-    "eTGODeliveryStatus": "CO"
+    "eTGODeliveryStatus": "CO",
+    "eTGOCurrencyRate": "GBP"
   },
   {
     "id": "mock-header-007",
@@ -352,7 +352,6 @@ export const header = [
     "aeatsiiEjercicio": 31,
     "aeatsiiPeriodo": 31,
     "aeatsiiIsauthorization": "Sample aeatsiiIsauthorization",
-    "tbaiIssent": "Sample tbaiIssent",
     "processed": "Sample processed",
     "aeatsiiCauseExemption": "Sample aeatsiiCauseExemption",
     "etvfacDateIssue": "Sample etvfacDateIssue",
@@ -363,7 +362,8 @@ export const header = [
     "etvfacSentToVerifac": "Sample etvfacSentToVerifac",
     "etgoTotalDiscount": 2.66,
     "eTGODueDate": "2026-01-21",
-    "eTGODeliveryStatus": "VO"
+    "eTGODeliveryStatus": "VO",
+    "eTGOCurrencyRate": "USD"
   },
   {
     "id": "mock-header-008",
@@ -404,7 +404,6 @@ export const header = [
     "aeatsiiEjercicio": 97,
     "aeatsiiPeriodo": 97,
     "aeatsiiIsauthorization": "Sample aeatsiiIsauthorization",
-    "tbaiIssent": "Sample tbaiIssent",
     "processed": "Sample processed",
     "aeatsiiCauseExemption": "Sample aeatsiiCauseExemption",
     "etvfacDateIssue": "Sample etvfacDateIssue",
@@ -415,7 +414,8 @@ export const header = [
     "etvfacSentToVerifac": "Sample etvfacSentToVerifac",
     "etgoTotalDiscount": 10.03,
     "eTGODueDate": "2026-01-22",
-    "eTGODeliveryStatus": "IP"
+    "eTGODeliveryStatus": "IP",
+    "eTGOCurrencyRate": "EUR"
   },
   {
     "id": "mock-header-009",
@@ -456,7 +456,6 @@ export const header = [
     "aeatsiiEjercicio": 70,
     "aeatsiiPeriodo": 70,
     "aeatsiiIsauthorization": "Sample aeatsiiIsauthorization",
-    "tbaiIssent": "Sample tbaiIssent",
     "processed": "Sample processed",
     "aeatsiiCauseExemption": "Sample aeatsiiCauseExemption",
     "etvfacDateIssue": "Sample etvfacDateIssue",
@@ -467,7 +466,8 @@ export const header = [
     "etvfacSentToVerifac": "Sample etvfacSentToVerifac",
     "etgoTotalDiscount": 93.97,
     "eTGODueDate": "2026-01-23",
-    "eTGODeliveryStatus": "DR"
+    "eTGODeliveryStatus": "DR",
+    "eTGOCurrencyRate": "GBP"
   },
   {
     "id": "mock-header-010",
@@ -508,7 +508,6 @@ export const header = [
     "aeatsiiEjercicio": 77,
     "aeatsiiPeriodo": 77,
     "aeatsiiIsauthorization": "Sample aeatsiiIsauthorization",
-    "tbaiIssent": "Sample tbaiIssent",
     "processed": "Sample processed",
     "aeatsiiCauseExemption": "Sample aeatsiiCauseExemption",
     "etvfacDateIssue": "Sample etvfacDateIssue",
@@ -519,7 +518,8 @@ export const header = [
     "etvfacSentToVerifac": "Sample etvfacSentToVerifac",
     "etgoTotalDiscount": 1.1,
     "eTGODueDate": "2026-01-24",
-    "eTGODeliveryStatus": "CO"
+    "eTGODeliveryStatus": "CO",
+    "eTGOCurrencyRate": "USD"
   },
   {
     "id": "mock-header-011",
@@ -560,7 +560,6 @@ export const header = [
     "aeatsiiEjercicio": 32,
     "aeatsiiPeriodo": 32,
     "aeatsiiIsauthorization": "Sample aeatsiiIsauthorization",
-    "tbaiIssent": "Sample tbaiIssent",
     "processed": "Sample processed",
     "aeatsiiCauseExemption": "Sample aeatsiiCauseExemption",
     "etvfacDateIssue": "Sample etvfacDateIssue",
@@ -571,7 +570,8 @@ export const header = [
     "etvfacSentToVerifac": "Sample etvfacSentToVerifac",
     "etgoTotalDiscount": 79.99,
     "eTGODueDate": "2026-01-25",
-    "eTGODeliveryStatus": "VO"
+    "eTGODeliveryStatus": "VO",
+    "eTGOCurrencyRate": "EUR"
   },
   {
     "id": "mock-header-012",
@@ -612,7 +612,6 @@ export const header = [
     "aeatsiiEjercicio": 26,
     "aeatsiiPeriodo": 26,
     "aeatsiiIsauthorization": "Sample aeatsiiIsauthorization",
-    "tbaiIssent": "Sample tbaiIssent",
     "processed": "Sample processed",
     "aeatsiiCauseExemption": "Sample aeatsiiCauseExemption",
     "etvfacDateIssue": "Sample etvfacDateIssue",
@@ -623,7 +622,8 @@ export const header = [
     "etvfacSentToVerifac": "Sample etvfacSentToVerifac",
     "etgoTotalDiscount": 53.61,
     "eTGODueDate": "2026-01-26",
-    "eTGODeliveryStatus": "IP"
+    "eTGODeliveryStatus": "IP",
+    "eTGOCurrencyRate": "GBP"
   }
 ];
 

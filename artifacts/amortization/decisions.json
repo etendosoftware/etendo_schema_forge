@@ -7,7 +7,9 @@
     "titleField": "name",
     "linesLayout": "inlineEditable",
     "statusField": "processed",
-    "hideDeleteWhenComplete": true,
+    "hideDeleteButton": true,
+    "hideCreate": true,
+    "summaryFields": [],
     "hidePrint": true,
     "hideLink": true,
     "toolbarButtonSize": "default",
@@ -32,8 +34,8 @@
         "label": "Reactivate",
         "labelKey": "reactivate",
         "visibleWhenFieldTrue": "processed",
-        "columnName": "Processed",
-        "preUnpost": true
+        "preUnpost": true,
+        "columnName": "Processed"
       },
       {
         "key": "post",
@@ -106,9 +108,11 @@
       "javaQualifier": "amortizationHeaderHandler",
       "fields": {
         "name": {
+          "visibility": "readOnly",
           "grid": true,
           "searchable": true,
-          "seq": 10
+          "seq": 10,
+          "section": "principal"
         },
         "description": {
           "form": true,
@@ -117,17 +121,21 @@
           "section": "principal"
         },
         "accountingDate": {
+          "visibility": "readOnly",
           "grid": true,
           "searchable": true,
           "seq": 20,
           "dot": false,
-          "defaultExpr": "@#Date@"
+          "defaultExpr": "@#Date@",
+          "section": "principal"
         },
         "startingDate": {
+          "visibility": "readOnly",
           "grid": true,
           "searchable": true,
           "seq": 30,
-          "dot": false
+          "dot": false,
+          "section": "principal"
         },
         "totalAmortization": {
           "visibility": "readOnly",
@@ -138,6 +146,7 @@
           "summable": true
         },
         "currency": {
+          "visibility": "readOnly",
           "grid": false,
           "form": true,
           "seq": 35,
@@ -163,6 +172,14 @@
               "name": "statusProcessed"
             }
           ]
+        },
+        "etblkpAccountingstatus": {
+          "visibility": "discarded",
+          "reason": "Accounting Status — removes the empty 'Others' tab; out of MVP scope"
+        },
+        "etblkpBulkposting": {
+          "visibility": "discarded",
+          "reason": "Bulk Posting accounting process — button already excluded via processOverrides; discard removes the stale label from the SummaryBar and requiredHeaderFields"
         },
         "project": {
           "visibility": "discarded",
@@ -254,18 +271,12 @@
           "lookup": true
         },
         "stDimension": {
-          "visibility": "editable",
-          "grid": true,
-          "gridOrder": 6,
-          "form": true,
-          "lookup": true
+          "visibility": "discarded",
+          "reason": "Accounting dimension — out of MVP scope"
         },
         "ndDimension": {
-          "visibility": "editable",
-          "grid": true,
-          "gridOrder": 7,
-          "form": true,
-          "lookup": true
+          "visibility": "discarded",
+          "reason": "Accounting dimension — out of MVP scope"
         },
         "eTADASBpartner": {
           "visibility": "editable",
@@ -275,25 +286,16 @@
           "lookup": true
         },
         "eTADASSalesRegion": {
-          "visibility": "editable",
-          "grid": true,
-          "gridOrder": 9,
-          "form": true,
-          "lookup": true
+          "visibility": "discarded",
+          "reason": "Accounting dimension — out of MVP scope"
         },
         "eTADASActivity": {
-          "visibility": "editable",
-          "grid": true,
-          "gridOrder": 10,
-          "form": true,
-          "lookup": true
+          "visibility": "discarded",
+          "reason": "Accounting dimension — out of MVP scope"
         },
         "eTADASSalesCampaign": {
-          "visibility": "editable",
-          "grid": true,
-          "gridOrder": 11,
-          "form": true,
-          "lookup": true
+          "visibility": "discarded",
+          "reason": "Accounting dimension — out of MVP scope"
         }
       }
     },

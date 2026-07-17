@@ -309,4 +309,95 @@ describe('ProductResolverPopup', () => {
     expect(screen.queryByText('ocrProductQty')).toBeNull();
     expect(screen.queryByText('ocrProductUnit')).toBeNull();
   });
+
+  it('shows create-product validation and defaults warning when defaults fail', async () => {
+    const user = userEvent.setup();
+    const unmatched = [{ idx: 0, description: 'Widget A' }];
+
+    globalThis.fetch.mockImplementation((url) => {
+      if (String(url).endsWith('/product/defaults')) {
+        return Promise.resolve({ ok: false, json: async () => ({}) });
+      }
+      return Promise.resolve({ ok: true, json: async () => ({ items: [] }) });
+    });
+
+    render(<ProductResolverPopup {...defaultProps} unmatched={unmatched} />);
+    await user.click(screen.getByText('ocrProductSkip'));
+    await waitFor(() => expect(screen.getByText('ocrProductCreateNew')).toBeInTheDocument());
+    await user.click(screen.getByText('ocrProductCreateNew'));
+
+    expect(await screen.findByText('ocrProductCreateTitle')).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByText('ocrProductCreateDefaultsFailed')).toBeInTheDocument());
+
+    await user.click(screen.getByText('ocrProductCreate'));
+    expect(screen.getByText('ocrProductCreateUomRequired')).toBeInTheDocument();
+  });
+
+  it('creates a new product from OCR data and selects it for submit', async () => {
+    const user = userEvent.setup();
+    const onSubmit = vi.fn();
+    const unmatched = [{ idx: 0, description: 'Widget A' }];
+
+    globalThis.fetch.mockImplementation((url, options = {}) => {
+      const href = String(url);
+      if (href.endsWith('/product/defaults')) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({ defaults: { id: 'default-id', searchKey: 'SERVER-SK', productType: 'I' } }),
+        });
+      }
+      if (href.includes('/selectors/C_UOM_ID')) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({ items: [{ id: 'uom-1', name: 'Unit' }] }),
+        });
+      }
+      if (href.includes('/selectors/C_TaxCategory_ID')) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({ response: { data: [{ id: 'tax-1', _identifier: 'VAT 21' }] } }),
+        });
+      }
+      if (href.endsWith('/product') && options.method === 'POST') {
+        return Promise.resolve({
+          ok: true,
+          text: async () => JSON.stringify({ response: { data: [{ id: 'prod-new', name: 'Widget A' }] } }),
+        });
+      }
+      return Promise.resolve({ ok: true, json: async () => ({ items: [] }) });
+    });
+
+    render(<ProductResolverPopup {...defaultProps} unmatched={unmatched} onSubmit={onSubmit} />);
+    await user.click(screen.getByText('ocrProductSkip'));
+    await waitFor(() => expect(screen.getByText('ocrProductCreateNew')).toBeInTheDocument());
+    await user.click(screen.getByText('ocrProductCreateNew'));
+
+    expect(await screen.findByText('ocrProductCreateTitle')).toBeInTheDocument();
+    expect(screen.getAllByDisplayValue('Widget A').length).toBeGreaterThan(0);
+    await waitFor(() => expect(screen.getByDisplayValue('WidgetA')).toBeInTheDocument());
+
+    await user.click(screen.getAllByText('ocrProductCreateSelect')[0]);
+    await waitFor(() => expect(screen.getByText('Unit')).toBeInTheDocument());
+    await user.click(screen.getByText('Unit'));
+
+    await user.click(screen.getAllByText('ocrProductCreateSelect')[0]);
+    await waitFor(() => expect(screen.getByText('VAT 21')).toBeInTheDocument());
+    await user.click(screen.getByText('VAT 21'));
+
+    await user.click(screen.getByText('ocrProductCreate'));
+
+    await waitFor(() => expect(screen.queryByText('ocrProductCreateTitle')).not.toBeInTheDocument());
+    await user.click(screen.getByText('continue'));
+    expect(onSubmit).toHaveBeenCalledWith({ 0: 'prod-new' });
+
+    const postCall = globalThis.fetch.mock.calls.find(([url, options]) => String(url).endsWith('/product') && options?.method === 'POST');
+    expect(JSON.parse(postCall[1].body)).toMatchObject({
+      name: 'Widget A',
+      searchKey: 'WidgetA',
+      productType: 'I',
+      uOM: 'uom-1',
+      taxCategory: 'tax-1',
+    });
+    expect(JSON.parse(postCall[1].body)).not.toHaveProperty('id');
+  });
 });

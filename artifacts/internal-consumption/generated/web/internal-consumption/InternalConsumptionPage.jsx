@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import { ListView, DetailView } from '@/components/contract-ui';
+import { SortIcon, RefreshIcon } from '@/components/ui/custom-icons';
 import InternalConsumptionTable from './InternalConsumptionTable';
 import InternalConsumptionForm from './InternalConsumptionForm';
 import InternalConsumptionLineTable from './InternalConsumptionLineTable';
@@ -34,7 +35,15 @@ const processes = [
 // @sf-generated-end processes:internalConsumption
 
 // @sf-generated-start draftMode:internalConsumption
-const draftMode = null;
+const draftMode = {
+  "enabled": true,
+  "processField": "processNow",
+  "processValue": "CO",
+  "label": "internalConsumptionProcess",
+  "extraParams": {
+    "action": "CO"
+  }
+};
 // @sf-generated-end draftMode:internalConsumption
 
 // @sf-generated-start requiredHeaderFields:internalConsumption
@@ -45,7 +54,7 @@ const requiredHeaderFields = ['movementDate', 'name'];
 const addLineFields = {
   entry: [
     { key: 'lineNo', column: 'Line', type: 'number', label: 'Line No.', defaultValue: '@SQL=SELECT COALESCE(MAX(LINE),0)+10 AS DefaultValue FROM M_INTERNAL_CONSUMPTIONLINE WHERE M_INTERNAL_CONSUMPTION_ID=@M_INTERNAL_CONSUMPTION_ID@' },
-    { key: 'product', column: 'M_Product_ID', type: 'search', required: true, lookup: true, label: 'Product', reference: 'Product', inputMode: 'search', lookupDrawer: 'internal-consumption-product', lookupTitle: 'Product + Warehouse', onSelectMappings: [{"from":"_aux._LOC","to":"storageBin","labelFrom":["warehouse","warehouse$_identifier","storageBin"]}] },
+    { key: 'product', column: 'M_Product_ID', type: 'search', required: true, lookup: true, label: 'Product', reference: 'Product', inputMode: 'search', lookupDrawer: 'product-stock', lookupTitle: 'Product + Warehouse', onSelectMappings: [{"from":"_aux._LOC","to":"storageBin","labelFrom":["warehouse","warehouse$_identifier","storageBin"]}] },
     { key: 'movementQuantity', column: 'MovementQty', type: 'number', required: true, label: 'Movement Quantity', defaultValue: 0 },
     { key: 'storageBin', column: 'M_Locator_ID', type: 'search', required: true, label: 'Warehouse', reference: 'Locator', inputMode: 'search', displayFromCatalog: true },
   ],
@@ -161,6 +170,7 @@ export const api = {
 export default function InternalConsumptionPage({ windowName, recordId, ...props }) {
   if (recordId) {
     return (
+      <>
       <DetailView
         entity="internalConsumption"
         detailEntity="internalConsumptionLine"
@@ -179,13 +189,17 @@ export default function InternalConsumptionPage({ windowName, recordId, ...props
         recordId={recordId}
         breadcrumb={breadcrumb}
       api={api}
+        hidePrint
+        noHeaderBorder
         customTabs={[{ key: 'attachments', labelKey: 'attachments', Component: AttachmentsTab, placement: 'tab', props: { tableName: "M_Internal_Consumption", config: {} } }]}
         bottomSection={InternalConsumptionBottomPanel}
         customMenuContent={InternalConsumptionActions}
+        draftMode={draftMode}
         requiredHeaderFields={requiredHeaderFields}
         linesLayout="inlineEditable"
         {...props}
       />
+      </>
     );
   }
 
@@ -197,7 +211,12 @@ export default function InternalConsumptionPage({ windowName, recordId, ...props
       windowName={windowName}
       breadcrumb={breadcrumb}
       api={api}
+      listViewOptions={{"hideStatusFilter":true}}
       dateFilterKey="movementDate"
+      hidePrint
+      hideLink
+      SortIconComponent={SortIcon}
+      RefreshIconComponent={RefreshIcon}
       rowQuickActions={{}}
       {...props}
     />

@@ -64,7 +64,7 @@ async function installMocks(page, { rows = ROWS } = {}) {
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
-        body: JSON.stringify({ response: { data: [FILTER_OPTIONS] } }),
+        body: JSON.stringify(FILTER_OPTIONS),
       });
       return;
     }
@@ -74,9 +74,7 @@ async function installMocks(page, { rows = ROWS } = {}) {
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
-        body: JSON.stringify({
-          response: { data: [{ ok: 2, total: 2, success: true, results: [] }] },
-        }),
+        body: JSON.stringify({ ok: 2, total: 2, success: true, results: [] }),
       });
       return;
     }
@@ -86,9 +84,7 @@ async function installMocks(page, { rows = ROWS } = {}) {
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
-        body: JSON.stringify({
-          response: { data: [{ success: true, message: 'Posted' }] },
-        }),
+        body: JSON.stringify({ success: true, message: 'Posted' }),
       });
       return;
     }
@@ -98,7 +94,7 @@ async function installMocks(page, { rows = ROWS } = {}) {
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
-        body: JSON.stringify({ response: { data: rows } }),
+        body: JSON.stringify({ rows: rows, total: rows.length }),
       });
       return;
     }

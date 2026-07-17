@@ -2,6 +2,8 @@ import { useEffect } from 'react';
 import { ListView, DetailView } from '@/components/contract-ui';
 import ProductTable from './ProductTable';
 import ProductForm from './ProductForm';
+import AccountingTable from './AccountingTable';
+import AccountingForm from './AccountingForm';
 import ProductAdditionalInfoPanel from '@/windows/custom/product/ProductAdditionalInfoPanel';
 import { AttachmentsTab } from '@/components/attachments';
 import ProductPriceBar from '@/windows/custom/product/ProductPriceBar';
@@ -83,6 +85,17 @@ export const api = {
       "delete": true,
       "listUrl": "/sws/neo/product/priceRuleVersion",
       "detailUrl": "/sws/neo/product/priceRuleVersion/{id}",
+      "supportedFilters": []
+    },
+    "accounting": {
+      "get": true,
+      "getById": true,
+      "post": true,
+      "put": true,
+      "patch": true,
+      "delete": true,
+      "listUrl": "/sws/neo/product/accounting",
+      "detailUrl": "/sws/neo/product/accounting/{id}",
       "supportedFilters": []
     },
     "billOfMaterials": {
@@ -246,6 +259,38 @@ export const api = {
       "reference": "ServicePriceRule",
       "inputMode": "selector",
       "url": "/sws/neo/product/priceRuleVersion/selectors/servicePriceRule"
+    },
+    {
+      "entity": "accounting",
+      "field": "fixedAsset",
+      "column": "P_Asset_Acct",
+      "reference": "ValidCombination",
+      "inputMode": "selector",
+      "url": "/sws/neo/product/accounting/selectors/fixedAsset"
+    },
+    {
+      "entity": "accounting",
+      "field": "productExpense",
+      "column": "P_Expense_Acct",
+      "reference": "ValidCombination",
+      "inputMode": "selector",
+      "url": "/sws/neo/product/accounting/selectors/productExpense"
+    },
+    {
+      "entity": "accounting",
+      "field": "productRevenue",
+      "column": "P_Revenue_Acct",
+      "reference": "ValidCombination",
+      "inputMode": "selector",
+      "url": "/sws/neo/product/accounting/selectors/productRevenue"
+    },
+    {
+      "entity": "accounting",
+      "field": "productCOGS",
+      "column": "P_Cogs_Acct",
+      "reference": "ValidCombination",
+      "inputMode": "selector",
+      "url": "/sws/neo/product/accounting/selectors/productCOGS"
     },
     {
       "entity": "billOfMaterials",
@@ -468,6 +513,7 @@ const labelOverrides = api.labelOverrides;
 export default function ProductPage({ windowName, recordId, ...props }) {
   if (recordId) {
     return (
+      <>
       <DetailView
         entity="product"
         Form={ProductForm}
@@ -481,11 +527,18 @@ export default function ProductPage({ windowName, recordId, ...props }) {
         recordId={recordId}
         breadcrumb={breadcrumb}
       api={api}
+        secondaryTabs={[
+          { key: 'accounting', label: 'Accounting', Table: AccountingTable, Form: AccountingForm, addLineFields: { entry: [
+          { key: 'fixedAsset', column: 'P_Asset_Acct', type: 'selector', label: 'Product Asset', reference: 'ValidCombination', inputMode: 'selector' },
+          { key: 'productExpense', column: 'P_Expense_Acct', type: 'selector', required: true, label: 'Product Expense', reference: 'ValidCombination', inputMode: 'selector' },
+          { key: 'productRevenue', column: 'P_Revenue_Acct', type: 'selector', required: true, label: 'Product Revenue', reference: 'ValidCombination', inputMode: 'selector' },
+          { key: 'productCOGS', column: 'P_Cogs_Acct', type: 'selector', label: 'Product COGS', reference: 'ValidCombination', inputMode: 'selector' },
+          ], derived: [], hidden: [] }, requireSavedRecord: true },
+        ]}
         primaryTabs={[
           { key: 'general', label: 'General' },
           { key: 'additionalInfo', label: 'Additional Info', Panel: ProductAdditionalInfoPanel },
         ]}
-        customTabsAfterBottom
         hidePrint
         hideMoreMenu
         noHeaderBorder
@@ -512,6 +565,7 @@ export default function ProductPage({ windowName, recordId, ...props }) {
           />
         )}
       />
+      </>
     );
   }
 
@@ -531,6 +585,7 @@ export default function ProductPage({ windowName, recordId, ...props }) {
       hideLink
       labelOverrides={labelOverrides}
       rowQuickActions={{}}
+      import={{"enabled":true,"spec":"product","entity":"product","formats":["csv","txt"],"limit":{"maxRows":5000,"concurrency":4},"dedupe":{"scope":"file","key":["searchKey"]},"fields":[{"target":"searchKey","aliases":["codigo","código","sku"],"label":"Search Key","required":true,"type":"string"},{"target":"name","aliases":["nombre"],"label":"Name","required":true,"type":"string"},{"target":"description","aliases":["descripcion","descripción"],"label":"Description","required":false,"type":"textarea"},{"target":"uOM","aliases":["unidad de medida","uom"],"matchEntity":"UOM","label":"UOM","required":true,"type":"foreignKey","reference":"UOM"},{"target":"productCategory","aliases":["categoria","categoría"],"matchEntity":"ProductCategory","label":"Product Category","required":true,"type":"foreignKey","reference":"ProductCategory"},{"target":"taxCategory","aliases":["categoria impositiva","categoría impositiva","impuesto"],"matchEntity":"FinancialMgmtTaxCategory","label":"Tax Category","required":true,"type":"foreignKey","reference":"TaxCategory"}]}}
       {...props}
     />
   );

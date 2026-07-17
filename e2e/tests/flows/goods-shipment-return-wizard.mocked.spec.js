@@ -128,14 +128,13 @@ test.describe('Goods Shipment — Return Wizard step 2 quality (no credit note, 
     await login(page);
     await installGoodsShipmentMock(page, [shipment]);
 
-    // 2. Override the lines endpoint to return actual shipment lines.
+    // 2. Mock the action endpoint the wizard uses to fetch available return lines.
+    //    ETP-4299 changed the fetch from GET goodsShipmentLine to POST availableShipmentLines.
     //    Registered AFTER installGoodsShipmentMock → takes LIFO priority.
-    //    The wizard opens when wizardOpen becomes true and fetches these lines
-    //    at: ${base}/goods-shipment/goodsShipmentLine?parentId=${recordId}&...
     await page.route(
-      (url) => url.href.includes('/sws/neo/goods-shipment/goodsShipmentLine'),
+      (url) => url.href.includes('/sws/neo/return-material-receipt/returnMaterialReceipt/_/action/availableShipmentLines'),
       async (route) => {
-        if (route.request().method() === 'GET') {
+        if (route.request().method() === 'POST') {
           await route.fulfill({
             status: 200,
             contentType: 'application/json',

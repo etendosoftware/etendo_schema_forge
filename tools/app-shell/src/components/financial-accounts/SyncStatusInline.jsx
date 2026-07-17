@@ -12,7 +12,7 @@ import { ACCOUNT_TYPE } from './tokens';
  * - Default state (no PSD2 data, as in T1 before ETP-4097) renders the
  *   underlined "Conectar PSD2" CTA per Figma — inert in T1.
  */
-export function SyncStatusInline({ account }) {
+export function SyncStatusInline({ account, onConnect }) {
   const ui = useUI();
 
   if (!account || account.type === ACCOUNT_TYPE.CASH) {
@@ -38,8 +38,13 @@ export function SyncStatusInline({ account }) {
   }
 
   return (
-    <span className="text-sm font-medium leading-6 text-[#121217] underline underline-offset-2">
+    <button
+      type="button"
+      onClick={(e) => { e.stopPropagation(); onConnect?.(); }}
+      data-testid={`account-sync-connect-${account.id}`}
+      className="w-fit text-sm font-medium leading-6 text-[#121217] underline underline-offset-2"
+    >
       {ui('financeAccountsConnectPsd2')}
-    </span>
+    </button>
   );
 }

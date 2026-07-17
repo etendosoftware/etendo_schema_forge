@@ -1,449 +1,1095 @@
 {
-  "version": "0.1.0",
+  "version": "0.6.0",
   "generatedAt": "2026-03-09T10:00:00.000Z",
-  "checksum": "b2c3d4e5f6g7h8i9",
+  "updatedAt": "2026-06-27T02:25:26.268Z",
+  "checksum": "4c677836ec6f4c52",
   "frontendContract": {
     "window": {
-      "id": "COA",
+      "id": "118",
       "name": "Chart of Accounts",
-      "primaryEntity": "account",
-      "category": "accounting"
+      "primaryEntity": "elementValue",
+      "category": "accounting",
+      "hideCreate": true,
+      "customComponents": {
+        "headerTable": "AccountTreeView"
+      },
+      "menuActions": [
+        {
+          "key": "newSubAccount",
+          "label": "New Sub-account",
+          "labelKey": "newSubAccount",
+          "component": "NewAccountModal"
+        }
+      ],
+      "titleField": "searchKey",
+      "layoutType": "default"
     },
     "entities": {
-      "account": {
+      "elementValue": {
+        "tableName": "C_ElementValue",
+        "tabId": "132",
+        "tabName": "Element Value",
+        "uiPattern": "STD",
         "fields": [
           {
-            "name": "code",
-            "column": "Code",
+            "name": "searchKey",
+            "apiKey": "searchKey",
+            "column": "Value",
+            "label": "Search Key",
             "type": "string",
             "tsType": "string",
             "visibility": "editable",
             "required": true,
             "grid": true,
-            "form": true
+            "form": true,
+            "sourceRequired": true,
+            "customRenderer": "AccountCodeField",
+            "readOnlyLogic": {
+              "raw": "@ProtectedParentLikeSubaccount@='Y'",
+              "evaluable": true,
+              "js": "record['protectedParentLikeSubaccount'] === 'Y'"
+            }
           },
           {
             "name": "name",
+            "apiKey": "name",
             "column": "Name",
+            "label": "Name",
             "type": "string",
             "tsType": "string",
             "visibility": "editable",
             "required": true,
             "grid": true,
-            "form": true
+            "form": true,
+            "sourceRequired": true,
+            "readOnlyLogic": {
+              "raw": "@ProtectedParentLikeSubaccount@='Y'",
+              "evaluable": true,
+              "js": "record['protectedParentLikeSubaccount'] === 'Y'"
+            }
           },
           {
-            "name": "accountType",
-            "column": "AccountType",
+            "name": "description",
+            "apiKey": "description",
+            "column": "Description",
+            "label": "Description",
             "type": "string",
-            "tsType": "string",
-            "visibility": "editable",
-            "required": true,
-            "grid": true,
-            "form": true
-          },
-          {
-            "name": "parentAccount",
-            "column": "Parent_ID",
-            "type": "foreignKey",
             "tsType": "string",
             "visibility": "editable",
             "required": false,
+            "grid": false,
+            "form": true,
+            "readOnlyLogic": {
+              "raw": "@ProtectedParentLikeSubaccount@='Y'",
+              "evaluable": true,
+              "js": "record['protectedParentLikeSubaccount'] === 'Y'"
+            }
+          },
+          {
+            "name": "accountType",
+            "apiKey": "accountType",
+            "column": "AccountType",
+            "label": "Account Type",
+            "type": "enum",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": true,
             "grid": true,
             "form": true,
-            "reference": "Account",
-            "inputMode": "search"
+            "sourceRequired": true,
+            "derivation": {
+              "type": "computed",
+              "source": "E"
+            },
+            "enumValues": [
+              {
+                "value": "A",
+                "name": "Asset",
+                "labels": {
+                  "es_ES": "Activo"
+                }
+              },
+              {
+                "value": "E",
+                "name": "Expense",
+                "labels": {
+                  "es_ES": "Gasto"
+                }
+              },
+              {
+                "value": "L",
+                "name": "Liability",
+                "labels": {
+                  "es_ES": "Pasivo"
+                }
+              },
+              {
+                "value": "M",
+                "name": "Memo",
+                "labels": {
+                  "es_ES": "Memorandum"
+                }
+              },
+              {
+                "value": "O",
+                "name": "Owner's Equity",
+                "labels": {
+                  "es_ES": "Sindicato propietarios"
+                }
+              },
+              {
+                "value": "R",
+                "name": "Revenue",
+                "labels": {
+                  "es_ES": "Ingreso"
+                }
+              }
+            ],
+            "defaultValue": "E",
+            "callout": {
+              "className": "org.openbravo.erpCommon.ad_callouts.SE_ElementValue_AccountSign"
+            },
+            "displayLogic": {
+              "raw": "@ElementType@='A'",
+              "evaluable": true
+            },
+            "readOnlyLogic": {
+              "raw": "@ProtectedParentLikeSubaccount@='Y'",
+              "evaluable": true,
+              "js": "record['protectedParentLikeSubaccount'] === 'Y'"
+            }
           },
           {
-            "name": "debit",
-            "column": "Debit",
-            "type": "amount",
-            "tsType": "number",
-            "visibility": "readOnly",
-            "required": true,
-            "grid": true,
-            "form": false
-          },
-          {
-            "name": "credit",
-            "column": "Credit",
-            "type": "amount",
-            "tsType": "number",
-            "visibility": "readOnly",
-            "required": true,
-            "grid": true,
-            "form": false
-          },
-          {
-            "name": "balance",
-            "column": "Balance",
-            "type": "amount",
-            "tsType": "number",
-            "visibility": "readOnly",
-            "required": true,
-            "grid": true,
-            "form": false
-          },
-          {
-            "name": "isActive",
+            "name": "active",
+            "apiKey": "active",
             "column": "IsActive",
+            "label": "Active",
             "type": "boolean",
             "tsType": "boolean",
             "visibility": "readOnly",
             "required": true,
             "grid": true,
-            "form": true
+            "form": true,
+            "sourceRequired": true,
+            "derivation": {
+              "type": "computed",
+              "source": "true"
+            },
+            "defaultValue": "Y"
           }
         ],
-        "searchableFields": [
-          "code",
-          "name",
-          "accountType"
+        "searchableFields": [],
+        "computedFields": [
+          {
+            "name": "accountType",
+            "derivation": {
+              "type": "computed",
+              "source": "E"
+            }
+          },
+          {
+            "name": "active",
+            "derivation": {
+              "type": "computed",
+              "source": "true"
+            }
+          }
         ],
-        "computedFields": []
+        "javaQualifier": "chart-of-accounts"
       }
     }
   },
   "backendContract": {
     "window": {
-      "id": "COA",
+      "id": "118",
       "name": "Chart of Accounts",
-      "primaryEntity": "account",
-      "category": "accounting"
+      "primaryEntity": "elementValue",
+      "category": "accounting",
+      "hideCreate": true,
+      "customComponents": {
+        "headerTable": "AccountTreeView"
+      },
+      "menuActions": [
+        {
+          "key": "newSubAccount",
+          "label": "New Sub-account",
+          "labelKey": "newSubAccount",
+          "component": "NewAccountModal"
+        }
+      ],
+      "titleField": "searchKey"
     },
     "entities": {
-      "account": {
+      "elementValue": {
+        "tableName": "C_ElementValue",
+        "tabId": "132",
+        "tabName": "Element Value",
         "fields": [
           {
-            "name": "code",
-            "column": "Code",
+            "name": "searchKey",
+            "apiKey": "searchKey",
+            "column": "Value",
             "type": "string",
             "visibility": "editable",
             "required": true
           },
           {
             "name": "name",
+            "apiKey": "name",
             "column": "Name",
             "type": "string",
             "visibility": "editable",
             "required": true
           },
           {
-            "name": "accountType",
-            "column": "AccountType",
-            "type": "string",
-            "visibility": "editable",
+            "name": "accountSign",
+            "apiKey": "accountSign",
+            "column": "AccountSign",
+            "type": "enum",
+            "visibility": "discarded",
             "required": true
           },
           {
-            "name": "parentAccount",
-            "column": "Parent_ID",
-            "type": "foreignKey",
+            "name": "description",
+            "apiKey": "description",
+            "column": "Description",
+            "type": "string",
             "visibility": "editable",
             "required": false
           },
           {
-            "name": "debit",
-            "column": "Debit",
-            "type": "amount",
-            "visibility": "readOnly",
+            "name": "elementLevel",
+            "apiKey": "elementLevel",
+            "column": "ElementLevel",
+            "type": "enum",
+            "visibility": "discarded",
             "required": true
           },
           {
-            "name": "credit",
-            "column": "Credit",
-            "type": "amount",
-            "visibility": "readOnly",
+            "name": "accountType",
+            "apiKey": "accountType",
+            "column": "AccountType",
+            "type": "enum",
+            "visibility": "editable",
             "required": true
           },
           {
-            "name": "balance",
-            "column": "Balance",
-            "type": "amount",
-            "visibility": "readOnly",
+            "name": "accountType2",
+            "apiKey": "accountType2",
+            "column": "AccountType",
+            "type": "enum",
+            "visibility": "discarded",
             "required": true
           },
           {
-            "name": "isActive",
+            "name": "showValueCondition",
+            "apiKey": "showValueCondition",
+            "column": "ShowValueCond",
+            "type": "enum",
+            "visibility": "discarded",
+            "required": true
+          },
+          {
+            "name": "summaryLevel",
+            "apiKey": "summaryLevel",
+            "column": "IsSummary",
+            "type": "boolean",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "elementShown",
+            "apiKey": "elementShown",
+            "column": "ShowElement",
+            "type": "boolean",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "titleNode",
+            "apiKey": "titleNode",
+            "column": "Isalwaysshown",
+            "type": "boolean",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "active",
+            "apiKey": "active",
             "column": "IsActive",
             "type": "boolean",
             "visibility": "readOnly",
             "required": true
           },
           {
-            "name": "adClientId",
-            "column": "AD_Client_ID",
-            "type": "id",
-            "visibility": "system",
-            "required": true
+            "name": "bankAccount",
+            "apiKey": "bankAccount",
+            "column": "C_BankAccount_ID",
+            "type": "foreignKey",
+            "visibility": "discarded",
+            "required": false
           },
           {
-            "name": "adOrgId",
+            "name": "foreignCurrencyAccount",
+            "apiKey": "foreignCurrencyAccount",
+            "column": "IsForeignCurrency",
+            "type": "boolean",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "currency",
+            "apiKey": "currency",
+            "column": "C_Currency_ID",
+            "type": "foreignKey",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "isBankAccount",
+            "apiKey": "isBankAccount",
+            "column": "IsBankAccount",
+            "type": "boolean",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "postActual",
+            "apiKey": "postActual",
+            "column": "PostActual",
+            "type": "boolean",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "postBudget",
+            "apiKey": "postBudget",
+            "column": "PostBudget",
+            "type": "boolean",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "postStatistical",
+            "apiKey": "postStatistical",
+            "column": "PostStatistical",
+            "type": "boolean",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "documentControlled",
+            "apiKey": "documentControlled",
+            "column": "IsDocControlled",
+            "type": "boolean",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "organization",
+            "apiKey": "organization",
             "column": "AD_Org_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "id",
+            "apiKey": "id",
+            "column": "C_ElementValue_ID",
             "type": "id",
             "visibility": "system",
             "required": true
           },
           {
-            "name": "created",
+            "name": "client",
+            "apiKey": "client",
+            "column": "AD_Client_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "accountingElement",
+            "apiKey": "accountingElement",
+            "column": "C_Element_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "validFromDate",
+            "apiKey": "validFromDate",
+            "column": "ValidFrom",
+            "type": "date",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "validToDate",
+            "apiKey": "validToDate",
+            "column": "ValidTo",
+            "type": "date",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "postEncumbrance",
+            "apiKey": "postEncumbrance",
+            "column": "PostEncumbrance",
+            "type": "boolean",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "creationDate",
+            "apiKey": "creationDate",
             "column": "Created",
-            "type": "datetime",
+            "type": "dateTime",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "createdBy",
+            "apiKey": "createdBy",
+            "column": "CreatedBy",
+            "type": "foreignKey",
             "visibility": "system",
             "required": true
           },
           {
             "name": "updated",
+            "apiKey": "updated",
             "column": "Updated",
-            "type": "datetime",
+            "type": "dateTime",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "updatedBy",
+            "apiKey": "updatedBy",
+            "column": "UpdatedBy",
+            "type": "foreignKey",
             "visibility": "system",
             "required": true
           }
-        ]
+        ],
+        "javaQualifier": "chart-of-accounts"
       }
     },
     "endpoints": [
       {
         "method": "GET",
-        "path": "/account",
-        "entity": "account",
-        "supportedFilters": [
-          "code",
-          "name",
-          "accountType"
-        ]
+        "path": "/elementValue",
+        "entity": "elementValue",
+        "supportedFilters": []
       },
       {
         "method": "GET",
-        "path": "/account/:id",
-        "entity": "account",
+        "path": "/elementValue/:id",
+        "entity": "elementValue",
         "supportedFilters": []
       },
       {
         "method": "POST",
-        "path": "/account",
-        "entity": "account",
+        "path": "/elementValue",
+        "entity": "elementValue",
         "supportedFilters": []
       },
       {
         "method": "PUT",
-        "path": "/account/:id",
-        "entity": "account",
+        "path": "/elementValue/:id",
+        "entity": "elementValue",
         "supportedFilters": []
       },
       {
         "method": "DELETE",
-        "path": "/account/:id",
-        "entity": "account",
+        "path": "/elementValue/:id",
+        "entity": "elementValue",
         "supportedFilters": []
       }
     ],
     "processEndpoints": []
   },
+  "apiPrediction": {
+    "specName": "chart-of-accounts",
+    "baseUrl": "/sws/neo/chart-of-accounts",
+    "crud": {
+      "elementValue": {
+        "get": true,
+        "getById": true,
+        "post": true,
+        "put": true,
+        "patch": true,
+        "delete": true,
+        "listUrl": "/sws/neo/chart-of-accounts/elementValue",
+        "detailUrl": "/sws/neo/chart-of-accounts/elementValue/{id}",
+        "supportedFilters": []
+      }
+    },
+    "selectors": [],
+    "actions": [],
+    "queryParams": {
+      "pagination": {
+        "startRow": "_startRow",
+        "endRow": "_endRow",
+        "default": "0-100"
+      },
+      "sorting": {
+        "param": "_sortBy",
+        "example": "_sortBy=creationDate desc"
+      },
+      "filtering": "Use field name as query param: ?fieldName=value",
+      "parentFilter": "parentId={id} for child entities"
+    },
+    "window": {
+      "category": "accounting"
+    }
+  },
   "testManifest": {
     "tests": [
       {
-        "id": "t-1",
-        "category": "field-presence",
-        "entity": "account",
-        "field": "code",
+        "id": "t-crud-flags-elementValue",
+        "category": "crud-flags",
+        "entity": "elementValue",
         "runner": "node",
-        "description": "Field 'code' should be present in account"
+        "description": "CRUD flags for 'elementValue' should all be booleans"
       },
       {
-        "id": "t-2",
-        "category": "field-presence",
-        "entity": "account",
-        "field": "name",
-        "runner": "node",
-        "description": "Field 'name' should be present in account"
-      },
-      {
-        "id": "t-3",
-        "category": "field-presence",
-        "entity": "account",
+        "id": "t-default-value-type-elementValue-accountType",
+        "category": "default-value-type",
+        "entity": "elementValue",
         "field": "accountType",
         "runner": "node",
-        "description": "Field 'accountType' should be present in account"
+        "description": "Default value for 'accountType' in elementValue should be a string"
       },
       {
-        "id": "t-4",
-        "category": "field-presence",
-        "entity": "account",
-        "field": "parentAccount",
+        "id": "t-default-value-type-elementValue-active",
+        "category": "default-value-type",
+        "entity": "elementValue",
+        "field": "active",
         "runner": "node",
-        "description": "Field 'parentAccount' should be present in account"
+        "description": "Default value for 'active' in elementValue should be a string"
       },
       {
-        "id": "t-5",
-        "category": "field-presence",
-        "entity": "account",
-        "field": "debit",
-        "runner": "node",
-        "description": "Field 'debit' should be present in account"
-      },
-      {
-        "id": "t-6",
-        "category": "field-presence",
-        "entity": "account",
-        "field": "credit",
-        "runner": "node",
-        "description": "Field 'credit' should be present in account"
-      },
-      {
-        "id": "t-7",
-        "category": "field-presence",
-        "entity": "account",
-        "field": "balance",
-        "runner": "node",
-        "description": "Field 'balance' should be present in account"
-      },
-      {
-        "id": "t-8",
-        "category": "field-presence",
-        "entity": "account",
-        "field": "isActive",
-        "runner": "node",
-        "description": "Field 'isActive' should be present in account"
-      },
-      {
-        "id": "t-9",
-        "category": "field-type",
-        "entity": "account",
-        "field": "code",
-        "runner": "node",
-        "description": "Field 'code' should have type 'string' in account"
-      },
-      {
-        "id": "t-10",
-        "category": "field-type",
-        "entity": "account",
-        "field": "name",
-        "runner": "node",
-        "description": "Field 'name' should have type 'string' in account"
-      },
-      {
-        "id": "t-11",
-        "category": "field-type",
-        "entity": "account",
+        "id": "t-displaylogic-evaluable-elementValue-accountType",
+        "category": "displaylogic-evaluable",
+        "entity": "elementValue",
         "field": "accountType",
         "runner": "node",
-        "description": "Field 'accountType' should have type 'string' in account"
+        "description": "Display logic for 'accountType' in elementValue should have evaluable flag"
       },
       {
-        "id": "t-12",
-        "category": "field-type",
-        "entity": "account",
-        "field": "parentAccount",
-        "runner": "node",
-        "description": "Field 'parentAccount' should have type 'foreignKey' in account"
-      },
-      {
-        "id": "t-13",
-        "category": "field-type",
-        "entity": "account",
-        "field": "debit",
-        "runner": "node",
-        "description": "Field 'debit' should have type 'amount' in account"
-      },
-      {
-        "id": "t-14",
-        "category": "field-type",
-        "entity": "account",
-        "field": "credit",
-        "runner": "node",
-        "description": "Field 'credit' should have type 'amount' in account"
-      },
-      {
-        "id": "t-15",
-        "category": "field-type",
-        "entity": "account",
-        "field": "balance",
-        "runner": "node",
-        "description": "Field 'balance' should have type 'amount' in account"
-      },
-      {
-        "id": "t-16",
-        "category": "field-type",
-        "entity": "account",
-        "field": "isActive",
-        "runner": "node",
-        "description": "Field 'isActive' should have type 'boolean' in account"
-      },
-      {
-        "id": "t-17",
-        "category": "searchable-filters",
-        "entity": "account",
-        "field": "code",
-        "runner": "node",
-        "description": "Field 'code' should be a supported filter for account"
-      },
-      {
-        "id": "t-18",
-        "category": "searchable-filters",
-        "entity": "account",
-        "field": "name",
-        "runner": "node",
-        "description": "Field 'name' should be a supported filter for account"
-      },
-      {
-        "id": "t-19",
-        "category": "searchable-filters",
-        "entity": "account",
+        "id": "t-displaylogic-valid-elementValue-accountType",
+        "category": "displaylogic-valid",
+        "entity": "elementValue",
         "field": "accountType",
         "runner": "node",
-        "description": "Field 'accountType' should be a supported filter for account"
+        "description": "Display logic for 'accountType' in elementValue should be valid JS"
       },
       {
-        "id": "t-20",
-        "category": "visibility",
-        "entity": "account",
+        "id": "t-field-presence-elementValue-accountType",
+        "category": "field-presence",
+        "entity": "elementValue",
+        "field": "accountType",
         "runner": "node",
-        "description": "Entity 'account' should only expose visible fields in frontend"
+        "description": "Field 'accountType' should be present in elementValue"
       },
       {
-        "id": "t-21",
-        "category": "system-field",
-        "entity": "account",
-        "field": "adClientId",
+        "id": "t-field-presence-elementValue-active",
+        "category": "field-presence",
+        "entity": "elementValue",
+        "field": "active",
         "runner": "node",
-        "description": "System field 'adClientId' should exist in backend but not frontend for account"
+        "description": "Field 'active' should be present in elementValue"
       },
       {
-        "id": "t-22",
-        "category": "system-field",
-        "entity": "account",
-        "field": "adOrgId",
+        "id": "t-field-presence-elementValue-description",
+        "category": "field-presence",
+        "entity": "elementValue",
+        "field": "description",
         "runner": "node",
-        "description": "System field 'adOrgId' should exist in backend but not frontend for account"
+        "description": "Field 'description' should be present in elementValue"
       },
       {
-        "id": "t-23",
-        "category": "system-field",
-        "entity": "account",
-        "field": "created",
+        "id": "t-field-presence-elementValue-name",
+        "category": "field-presence",
+        "entity": "elementValue",
+        "field": "name",
         "runner": "node",
-        "description": "System field 'created' should exist in backend but not frontend for account"
+        "description": "Field 'name' should be present in elementValue"
       },
       {
-        "id": "t-24",
+        "id": "t-field-presence-elementValue-searchKey",
+        "category": "field-presence",
+        "entity": "elementValue",
+        "field": "searchKey",
+        "runner": "node",
+        "description": "Field 'searchKey' should be present in elementValue"
+      },
+      {
+        "id": "t-field-type-elementValue-accountType",
+        "category": "field-type",
+        "entity": "elementValue",
+        "field": "accountType",
+        "runner": "node",
+        "description": "Field 'accountType' should have type 'string' in elementValue"
+      },
+      {
+        "id": "t-field-type-elementValue-active",
+        "category": "field-type",
+        "entity": "elementValue",
+        "field": "active",
+        "runner": "node",
+        "description": "Field 'active' should have type 'boolean' in elementValue"
+      },
+      {
+        "id": "t-field-type-elementValue-description",
+        "category": "field-type",
+        "entity": "elementValue",
+        "field": "description",
+        "runner": "node",
+        "description": "Field 'description' should have type 'string' in elementValue"
+      },
+      {
+        "id": "t-field-type-elementValue-name",
+        "category": "field-type",
+        "entity": "elementValue",
+        "field": "name",
+        "runner": "node",
+        "description": "Field 'name' should have type 'string' in elementValue"
+      },
+      {
+        "id": "t-field-type-elementValue-searchKey",
+        "category": "field-type",
+        "entity": "elementValue",
+        "field": "searchKey",
+        "runner": "node",
+        "description": "Field 'searchKey' should have type 'string' in elementValue"
+      },
+      {
+        "id": "t-readonlylogic-evaluable-elementValue-accountType",
+        "category": "readonlylogic-evaluable",
+        "entity": "elementValue",
+        "field": "accountType",
+        "runner": "node",
+        "description": "Read-only logic for 'accountType' in elementValue should have evaluable flag"
+      },
+      {
+        "id": "t-readonlylogic-evaluable-elementValue-description",
+        "category": "readonlylogic-evaluable",
+        "entity": "elementValue",
+        "field": "description",
+        "runner": "node",
+        "description": "Read-only logic for 'description' in elementValue should have evaluable flag"
+      },
+      {
+        "id": "t-readonlylogic-evaluable-elementValue-name",
+        "category": "readonlylogic-evaluable",
+        "entity": "elementValue",
+        "field": "name",
+        "runner": "node",
+        "description": "Read-only logic for 'name' in elementValue should have evaluable flag"
+      },
+      {
+        "id": "t-readonlylogic-evaluable-elementValue-searchKey",
+        "category": "readonlylogic-evaluable",
+        "entity": "elementValue",
+        "field": "searchKey",
+        "runner": "node",
+        "description": "Read-only logic for 'searchKey' in elementValue should have evaluable flag"
+      },
+      {
+        "id": "t-readonlylogic-valid-elementValue-accountType",
+        "category": "readonlylogic-valid",
+        "entity": "elementValue",
+        "field": "accountType",
+        "runner": "node",
+        "description": "Read-only logic for 'accountType' in elementValue should be valid JS"
+      },
+      {
+        "id": "t-readonlylogic-valid-elementValue-description",
+        "category": "readonlylogic-valid",
+        "entity": "elementValue",
+        "field": "description",
+        "runner": "node",
+        "description": "Read-only logic for 'description' in elementValue should be valid JS"
+      },
+      {
+        "id": "t-readonlylogic-valid-elementValue-name",
+        "category": "readonlylogic-valid",
+        "entity": "elementValue",
+        "field": "name",
+        "runner": "node",
+        "description": "Read-only logic for 'name' in elementValue should be valid JS"
+      },
+      {
+        "id": "t-readonlylogic-valid-elementValue-searchKey",
+        "category": "readonlylogic-valid",
+        "entity": "elementValue",
+        "field": "searchKey",
+        "runner": "node",
+        "description": "Read-only logic for 'searchKey' in elementValue should be valid JS"
+      },
+      {
+        "id": "t-rule-declared-AD-Tree-Element-Value",
+        "category": "rule-declared",
+        "rule": "AD_Tree Element Value",
+        "runner": "node",
+        "description": "Rule 'AD_Tree Element Value' (validation) should be declared"
+      },
+      {
+        "id": "t-rule-declared-AD-TreeClientValidation",
+        "category": "rule-declared",
+        "rule": "AD_TreeClientValidation",
+        "runner": "node",
+        "description": "Rule 'AD_TreeClientValidation' (validation) should be declared"
+      },
+      {
+        "id": "t-rule-declared-C-Element-ID",
+        "category": "rule-declared",
+        "rule": "C_Element_ID",
+        "runner": "node",
+        "description": "Rule 'C_Element_ID' (validation) should be declared"
+      },
+      {
+        "id": "t-rule-declared-C-ElementValue-AccountSign-readOnlyLogic",
+        "category": "rule-declared",
+        "rule": "C_ElementValue-AccountSign-readOnlyLogic",
+        "runner": "node",
+        "description": "Rule 'C_ElementValue-AccountSign-readOnlyLogic' (readOnlyLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-chart-of-accounts-Element-IsBalancing-displayLogic",
+        "category": "rule-declared",
+        "rule": "chart-of-accounts-Element-IsBalancing-displayLogic",
+        "runner": "node",
+        "description": "Rule 'chart-of-accounts-Element-IsBalancing-displayLogic' (displayLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-chart-of-accounts-Element-Value-AccountSign-displayLogic",
+        "category": "rule-declared",
+        "rule": "chart-of-accounts-Element Value-AccountSign-displayLogic",
+        "runner": "node",
+        "description": "Rule 'chart-of-accounts-Element Value-AccountSign-displayLogic' (displayLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-chart-of-accounts-Element-Value-AccountType-displayLogic",
+        "category": "rule-declared",
+        "rule": "chart-of-accounts-Element Value-AccountType-displayLogic",
+        "runner": "node",
+        "description": "Rule 'chart-of-accounts-Element Value-AccountType-displayLogic' (displayLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-chart-of-accounts-Element-Value-C-BankAccount-ID-displayLogic",
+        "category": "rule-declared",
+        "rule": "chart-of-accounts-Element Value-C_BankAccount_ID-displayLogic",
+        "runner": "node",
+        "description": "Rule 'chart-of-accounts-Element Value-C_BankAccount_ID-displayLogic' (displayLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-chart-of-accounts-Element-Value-C-Currency-ID-displayLogic",
+        "category": "rule-declared",
+        "rule": "chart-of-accounts-Element Value-C_Currency_ID-displayLogic",
+        "runner": "node",
+        "description": "Rule 'chart-of-accounts-Element Value-C_Currency_ID-displayLogic' (displayLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-chart-of-accounts-Element-Value-IsBankAccount-displayLogic",
+        "category": "rule-declared",
+        "rule": "chart-of-accounts-Element Value-IsBankAccount-displayLogic",
+        "runner": "node",
+        "description": "Rule 'chart-of-accounts-Element Value-IsBankAccount-displayLogic' (displayLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-chart-of-accounts-Element-Value-IsDocControlled-displayLogic",
+        "category": "rule-declared",
+        "rule": "chart-of-accounts-Element Value-IsDocControlled-displayLogic",
+        "runner": "node",
+        "description": "Rule 'chart-of-accounts-Element Value-IsDocControlled-displayLogic' (displayLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-chart-of-accounts-Element-Value-IsForeignCurrency-displayLogic",
+        "category": "rule-declared",
+        "rule": "chart-of-accounts-Element Value-IsForeignCurrency-displayLogic",
+        "runner": "node",
+        "description": "Rule 'chart-of-accounts-Element Value-IsForeignCurrency-displayLogic' (displayLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-chart-of-accounts-Element-Value-PostActual-displayLogic",
+        "category": "rule-declared",
+        "rule": "chart-of-accounts-Element Value-PostActual-displayLogic",
+        "runner": "node",
+        "description": "Rule 'chart-of-accounts-Element Value-PostActual-displayLogic' (displayLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-chart-of-accounts-Element-Value-PostBudget-displayLogic",
+        "category": "rule-declared",
+        "rule": "chart-of-accounts-Element Value-PostBudget-displayLogic",
+        "runner": "node",
+        "description": "Rule 'chart-of-accounts-Element Value-PostBudget-displayLogic' (displayLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-chart-of-accounts-Element-Value-PostEncumbrance-displayLogic",
+        "category": "rule-declared",
+        "rule": "chart-of-accounts-Element Value-PostEncumbrance-displayLogic",
+        "runner": "node",
+        "description": "Rule 'chart-of-accounts-Element Value-PostEncumbrance-displayLogic' (displayLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-chart-of-accounts-Element-Value-PostStatistical-displayLogic",
+        "category": "rule-declared",
+        "rule": "chart-of-accounts-Element Value-PostStatistical-displayLogic",
+        "runner": "node",
+        "description": "Rule 'chart-of-accounts-Element Value-PostStatistical-displayLogic' (displayLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-chart-of-accounts-Element-Value-ShowValueCond-displayLogic",
+        "category": "rule-declared",
+        "rule": "chart-of-accounts-Element Value-ShowValueCond-displayLogic",
+        "runner": "node",
+        "description": "Rule 'chart-of-accounts-Element Value-ShowValueCond-displayLogic' (displayLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-SE-ElementValue-AccountSign-AccountType",
+        "category": "rule-declared",
+        "rule": "SE_ElementValue_AccountSign_AccountType",
+        "runner": "node",
+        "description": "Rule 'SE_ElementValue_AccountSign_AccountType' (callout) should be declared"
+      },
+      {
+        "id": "t-system-field-elementValue-accountingElement",
         "category": "system-field",
-        "entity": "account",
+        "entity": "elementValue",
+        "field": "accountingElement",
+        "runner": "node",
+        "description": "System field 'accountingElement' should exist in backend but not frontend for elementValue"
+      },
+      {
+        "id": "t-system-field-elementValue-accountSign",
+        "category": "system-field",
+        "entity": "elementValue",
+        "field": "accountSign",
+        "runner": "node",
+        "description": "System field 'accountSign' should exist in backend but not frontend for elementValue"
+      },
+      {
+        "id": "t-system-field-elementValue-accountType2",
+        "category": "system-field",
+        "entity": "elementValue",
+        "field": "accountType2",
+        "runner": "node",
+        "description": "System field 'accountType2' should exist in backend but not frontend for elementValue"
+      },
+      {
+        "id": "t-system-field-elementValue-bankAccount",
+        "category": "system-field",
+        "entity": "elementValue",
+        "field": "bankAccount",
+        "runner": "node",
+        "description": "System field 'bankAccount' should exist in backend but not frontend for elementValue"
+      },
+      {
+        "id": "t-system-field-elementValue-client",
+        "category": "system-field",
+        "entity": "elementValue",
+        "field": "client",
+        "runner": "node",
+        "description": "System field 'client' should exist in backend but not frontend for elementValue"
+      },
+      {
+        "id": "t-system-field-elementValue-createdBy",
+        "category": "system-field",
+        "entity": "elementValue",
+        "field": "createdBy",
+        "runner": "node",
+        "description": "System field 'createdBy' should exist in backend but not frontend for elementValue"
+      },
+      {
+        "id": "t-system-field-elementValue-creationDate",
+        "category": "system-field",
+        "entity": "elementValue",
+        "field": "creationDate",
+        "runner": "node",
+        "description": "System field 'creationDate' should exist in backend but not frontend for elementValue"
+      },
+      {
+        "id": "t-system-field-elementValue-currency",
+        "category": "system-field",
+        "entity": "elementValue",
+        "field": "currency",
+        "runner": "node",
+        "description": "System field 'currency' should exist in backend but not frontend for elementValue"
+      },
+      {
+        "id": "t-system-field-elementValue-documentControlled",
+        "category": "system-field",
+        "entity": "elementValue",
+        "field": "documentControlled",
+        "runner": "node",
+        "description": "System field 'documentControlled' should exist in backend but not frontend for elementValue"
+      },
+      {
+        "id": "t-system-field-elementValue-elementLevel",
+        "category": "system-field",
+        "entity": "elementValue",
+        "field": "elementLevel",
+        "runner": "node",
+        "description": "System field 'elementLevel' should exist in backend but not frontend for elementValue"
+      },
+      {
+        "id": "t-system-field-elementValue-elementShown",
+        "category": "system-field",
+        "entity": "elementValue",
+        "field": "elementShown",
+        "runner": "node",
+        "description": "System field 'elementShown' should exist in backend but not frontend for elementValue"
+      },
+      {
+        "id": "t-system-field-elementValue-foreignCurrencyAccount",
+        "category": "system-field",
+        "entity": "elementValue",
+        "field": "foreignCurrencyAccount",
+        "runner": "node",
+        "description": "System field 'foreignCurrencyAccount' should exist in backend but not frontend for elementValue"
+      },
+      {
+        "id": "t-system-field-elementValue-id",
+        "category": "system-field",
+        "entity": "elementValue",
+        "field": "id",
+        "runner": "node",
+        "description": "System field 'id' should exist in backend but not frontend for elementValue"
+      },
+      {
+        "id": "t-system-field-elementValue-isBankAccount",
+        "category": "system-field",
+        "entity": "elementValue",
+        "field": "isBankAccount",
+        "runner": "node",
+        "description": "System field 'isBankAccount' should exist in backend but not frontend for elementValue"
+      },
+      {
+        "id": "t-system-field-elementValue-organization",
+        "category": "system-field",
+        "entity": "elementValue",
+        "field": "organization",
+        "runner": "node",
+        "description": "System field 'organization' should exist in backend but not frontend for elementValue"
+      },
+      {
+        "id": "t-system-field-elementValue-postActual",
+        "category": "system-field",
+        "entity": "elementValue",
+        "field": "postActual",
+        "runner": "node",
+        "description": "System field 'postActual' should exist in backend but not frontend for elementValue"
+      },
+      {
+        "id": "t-system-field-elementValue-postBudget",
+        "category": "system-field",
+        "entity": "elementValue",
+        "field": "postBudget",
+        "runner": "node",
+        "description": "System field 'postBudget' should exist in backend but not frontend for elementValue"
+      },
+      {
+        "id": "t-system-field-elementValue-postEncumbrance",
+        "category": "system-field",
+        "entity": "elementValue",
+        "field": "postEncumbrance",
+        "runner": "node",
+        "description": "System field 'postEncumbrance' should exist in backend but not frontend for elementValue"
+      },
+      {
+        "id": "t-system-field-elementValue-postStatistical",
+        "category": "system-field",
+        "entity": "elementValue",
+        "field": "postStatistical",
+        "runner": "node",
+        "description": "System field 'postStatistical' should exist in backend but not frontend for elementValue"
+      },
+      {
+        "id": "t-system-field-elementValue-showValueCondition",
+        "category": "system-field",
+        "entity": "elementValue",
+        "field": "showValueCondition",
+        "runner": "node",
+        "description": "System field 'showValueCondition' should exist in backend but not frontend for elementValue"
+      },
+      {
+        "id": "t-system-field-elementValue-summaryLevel",
+        "category": "system-field",
+        "entity": "elementValue",
+        "field": "summaryLevel",
+        "runner": "node",
+        "description": "System field 'summaryLevel' should exist in backend but not frontend for elementValue"
+      },
+      {
+        "id": "t-system-field-elementValue-titleNode",
+        "category": "system-field",
+        "entity": "elementValue",
+        "field": "titleNode",
+        "runner": "node",
+        "description": "System field 'titleNode' should exist in backend but not frontend for elementValue"
+      },
+      {
+        "id": "t-system-field-elementValue-updated",
+        "category": "system-field",
+        "entity": "elementValue",
         "field": "updated",
         "runner": "node",
-        "description": "System field 'updated' should exist in backend but not frontend for account"
+        "description": "System field 'updated' should exist in backend but not frontend for elementValue"
+      },
+      {
+        "id": "t-system-field-elementValue-updatedBy",
+        "category": "system-field",
+        "entity": "elementValue",
+        "field": "updatedBy",
+        "runner": "node",
+        "description": "System field 'updatedBy' should exist in backend but not frontend for elementValue"
+      },
+      {
+        "id": "t-system-field-elementValue-validFromDate",
+        "category": "system-field",
+        "entity": "elementValue",
+        "field": "validFromDate",
+        "runner": "node",
+        "description": "System field 'validFromDate' should exist in backend but not frontend for elementValue"
+      },
+      {
+        "id": "t-system-field-elementValue-validToDate",
+        "category": "system-field",
+        "entity": "elementValue",
+        "field": "validToDate",
+        "runner": "node",
+        "description": "System field 'validToDate' should exist in backend but not frontend for elementValue"
+      },
+      {
+        "id": "t-visibility-elementValue",
+        "category": "visibility",
+        "entity": "elementValue",
+        "runner": "node",
+        "description": "Entity 'elementValue' should only expose visible fields in frontend"
       }
     ],
     "summary": {
-      "total": 24,
+      "total": 68,
       "byCategory": {
-        "field-presence": 8,
-        "field-type": 8,
-        "searchable-filters": 3,
-        "visibility": 1,
-        "system-field": 4
+        "crud-flags": 1,
+        "default-value-type": 2,
+        "displaylogic-evaluable": 1,
+        "displaylogic-valid": 1,
+        "field-presence": 5,
+        "field-type": 5,
+        "readonlylogic-evaluable": 4,
+        "readonlylogic-valid": 4,
+        "rule-declared": 18,
+        "system-field": 26,
+        "visibility": 1
       },
       "byRunner": {
-        "node": 24,
+        "node": 68,
         "junit": 0
       }
     }

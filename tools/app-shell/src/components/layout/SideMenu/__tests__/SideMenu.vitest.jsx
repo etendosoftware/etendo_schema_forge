@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 // Mock react-router-dom
@@ -19,17 +19,23 @@ vi.mock('@/i18n', () => ({
   useLocaleSwitch: () => ({ locale: 'en_US', setLocale: vi.fn() }),
 }));
 
-// Mock auth context
+// Mock auth context — wrapped in a vi.fn() so individual tests can override
+// the return value (e.g. no selected org) via mockReturnValueOnce.
+const mockUseAuth = vi.fn(() => ({ selectedOrg: { name: 'Test Org' }, user: { name: 'User' }, logout: vi.fn() }));
 vi.mock('@/auth/AuthContext.jsx', () => ({
-  useAuth: () => ({ selectedOrg: { name: 'Test Org' }, user: { name: 'User' }, logout: vi.fn() }),
+  useAuth: () => mockUseAuth(),
 }));
 
-// Mock favorites context
+// Mock favorites context — same rationale: overridable per test.
+const mockUseFavorites = vi.fn(() => ({ favorites: [] }));
 vi.mock('@/components/layout/FavoritesContext', () => ({
-  useFavorites: () => ({ favorites: [] }),
+  useFavorites: () => mockUseFavorites(),
 }));
 
-// Mock menu.json
+// Mock menu.json — includes a couple of extra entries (a "Favorites" group and
+// a group with no `items`, plus a second "Home" item addressed by `path`) so
+// the favNameMap-building loop in SideMenu exercises its `continue`, its
+// `g.items || []` fallback, and the `item.path || item.name` branch.
 vi.mock('@/menu.json', () => ({
   default: {
     menu: [
@@ -37,7 +43,20 @@ vi.mock('@/menu.json', () => ({
         group: 'Home',
         icon: 'Home',
         section: 'General',
-        items: [{ name: 'dashboard', label: 'Home', favname: 'Home' }],
+        items: [
+          { name: 'dashboard', label: 'Home', favname: 'Home' },
+          { path: 'reports', label: 'Reports' },
+        ],
+      },
+      {
+        group: 'Favorites',
+        icon: 'Star',
+        section: 'General',
+        items: [{ name: 'ignored-fav', label: 'Ignored' }],
+      },
+      {
+        group: 'NoItems',
+        icon: 'Package',
       },
     ],
   },
@@ -217,5 +236,193 @@ describe('SideMenu', () => {
     // Home group has exactly 1 item, rendered as direct NavLink
     const homeLink = screen.getByText('Home');
     expect(homeLink).toBeInTheDocument();
+  });
+
+  describe('additional coverage', () => {
+    afterEach(() => {
+      vi.useRealTimers();
+      // SideMenu's location-tracking effect always calls setOpenGroups with a
+      // fresh object on mount, forcing a second render (and a second call to
+      // useAuth()/useFavorites()) even when nothing actually changed — so a
+      // single mockReturnValueOnce override gets consumed before we can
+      // observe it. Use a persistent override instead and restore the
+      // baseline here so it doesn't leak into other tests.
+      mockUseAuth.mockReturnValue({ selectedOrg: { name: 'Test Org' }, user: { name: 'User' }, logout: vi.fn() });
+      mockUseFavorites.mockReturnValue({ favorites: [] });
+      delete import.meta.env.VITE_SHOW_ARTIFACTS;
+    });
+
+    // A group whose currentPath ('dashboard') matches one of two items, so the
+    // group itself is both "active" (findActiveGroup) and non-direct (2 visible
+    // items) — this is the only combination that exercises the
+    // active-and-expanded / active-and-collapsed header style branches.
+    const ACTIVE_MULTI_GROUP = [
+      {
+        group: 'Home',
+        icon: 'Home',
+        section: 'General',
+        items: [
+          { name: 'dashboard', label: 'Panel principal' },
+          { name: 'dashboard-extra', label: 'Extra' },
+        ],
+      },
+    ];
+
+    const QUERY_ITEM_GROUP = [
+      {
+        group: 'Reports',
+        icon: 'Eye',
+        section: 'General',
+        items: [
+          { name: 'report-viewer-sales', label: 'Sales Report', path: 'report-viewer?category=sales' },
+          { name: 'report-viewer-other', label: 'Other Report', path: 'report-viewer?category=other' },
+        ],
+      },
+    ];
+
+    const COLLAPSED_DIRECT_GROUPS = [
+      { group: 'Home', icon: 'Home', section: 'General', items: [{ name: 'dashboard', label: 'Home' }] },
+      { group: 'Settings', icon: 'Settings', section: 'General', items: [{ name: 'settings', label: 'Settings' }] },
+    ];
+
+    it('a collapsed group popover cancels a scheduled close when re-entered before the timeout fires', () => {
+      vi.useFakeTimers();
+      render(<SideMenu {...defaultProps} expanded={false} />);
+      const trigger = screen.getByLabelText('Sales');
+      fireEvent.mouseEnter(trigger);
+      fireEvent.mouseLeave(trigger);
+      // Re-entering before the 120ms close timer elapses should cancel it.
+      fireEvent.mouseEnter(trigger);
+      vi.advanceTimersByTime(200);
+      expect(trigger).toBeInTheDocument();
+      fireEvent.mouseLeave(trigger);
+      vi.advanceTimersByTime(200);
+    });
+
+    it('a collapsed active group popover highlights only the active sub-item', () => {
+      render(<SideMenu {...defaultProps} menuGroups={ACTIVE_MULTI_GROUP} expanded={false} />);
+      const trigger = screen.getByLabelText('Home');
+      fireEvent.mouseEnter(trigger);
+      const activeLink = screen.getByTestId('menu-item-dashboard');
+      const inactiveLink = screen.getByTestId('menu-item-dashboard-extra');
+      expect(activeLink.className).toMatch(/bg-accent-highlight/);
+      expect(inactiveLink.className).not.toMatch(/bg-accent-highlight/);
+      fireEvent.mouseLeave(trigger);
+    });
+
+    it('matches query-string item paths against the full current URL', async () => {
+      const user = userEvent.setup();
+      render(<SideMenu {...defaultProps} menuGroups={QUERY_ITEM_GROUP} />);
+      await user.click(screen.getByText('Reports'));
+      // The mocked location is /dashboard with an empty search string, so
+      // neither query-string item matches — both fall through the
+      // `target.includes('?')` branch as inactive.
+      expect(screen.getByTestId('menu-item-report-viewer-sales').className).not.toMatch(/bg-accent-highlight/);
+      expect(screen.getByTestId('menu-item-report-viewer-other').className).not.toMatch(/bg-accent-highlight/);
+    });
+
+    it('applies the active-and-open header style, then the active-and-collapsed style once toggled closed', async () => {
+      const user = userEvent.setup();
+      render(<SideMenu {...defaultProps} menuGroups={ACTIVE_MULTI_GROUP} />);
+      // Home is the active group and starts open — its sub-item is visible.
+      expect(screen.getByTestId('menu-item-dashboard-extra')).toBeInTheDocument();
+      await user.click(screen.getByText('Home'));
+      // Toggled closed while still the active group.
+      expect(screen.queryByTestId('menu-item-dashboard-extra')).not.toBeInTheDocument();
+    });
+
+    it('highlights only the active direct-link icon in collapsed mode', () => {
+      render(<SideMenu {...defaultProps} menuGroups={COLLAPSED_DIRECT_GROUPS} expanded={false} />);
+      const activeLink = screen.getByTestId('menu-item-dashboard');
+      const inactiveLink = screen.getByTestId('menu-item-settings');
+      expect(activeLink.className).toMatch(/bg-accent-highlight/);
+      expect(inactiveLink.className).not.toMatch(/bg-accent-highlight/);
+    });
+
+    it('shows the empty-favorites hint when the Favorites group is expanded with no favorites', async () => {
+      const user = userEvent.setup();
+      render(<SideMenu {...defaultProps} />);
+      await user.click(screen.getByText('Favorites'));
+      expect(screen.getByText('noFavoritesYet')).toBeInTheDocument();
+    });
+
+    it('shows only the first favorites and reveals the rest via "and N more", using per-locale labels', async () => {
+      const user = userEvent.setup();
+      mockUseFavorites.mockReturnValue({
+        favorites: [
+          { name: 'fav1', label: 'Favorite One' },
+          { name: 'fav2', label: 'Favorite Two' },
+          { name: 'fav3', label: 'Favorite Three', labels: { en_US: 'Fav Three EN' } },
+          { name: 'fav4', label: 'Favorite Four' },
+        ],
+      });
+      render(<SideMenu {...defaultProps} />);
+      await user.click(screen.getByText('Favorites'));
+      expect(screen.getByText('Favorite One')).toBeInTheDocument();
+      expect(screen.getByText('Favorite Two')).toBeInTheDocument();
+      expect(screen.queryByText('Fav Three EN')).not.toBeInTheDocument();
+      await user.click(screen.getByText(/andNMore/));
+      expect(screen.getByText('Fav Three EN')).toBeInTheDocument();
+      expect(screen.getByText('Favorite Four')).toBeInTheDocument();
+    });
+
+    it('does not treat a Favorites entry as the active group even if its path matches the current route', () => {
+      mockUseFavorites.mockReturnValue({ favorites: [{ name: 'dashboard', label: 'Duplicado' }] });
+      render(<SideMenu {...defaultProps} />);
+      // "Home" (the real, non-Favorites group) stays the sole match for /dashboard.
+      expect(screen.getAllByText('Home')).toHaveLength(1);
+    });
+
+    it('shows an unread badge next to Help & Support in expanded mode', () => {
+      render(<SideMenu {...defaultProps} unreadCount={5} />);
+      expect(screen.getByText('5')).toBeInTheDocument();
+    });
+
+    it('shows a capped unread badge next to Help & Support in collapsed mode', () => {
+      render(<SideMenu {...defaultProps} expanded={false} unreadCount={12} />);
+      expect(screen.getByText('9+')).toBeInTheDocument();
+    });
+
+    it('calls the provided onHelpClick handler instead of opening the built-in dialog', async () => {
+      const user = userEvent.setup();
+      const onHelpClick = vi.fn();
+      render(<SideMenu {...defaultProps} onHelpClick={onHelpClick} />);
+      await user.click(screen.getByText('helpAndSupport'));
+      expect(onHelpClick).toHaveBeenCalledTimes(1);
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    });
+
+    it('opens and closes the built-in help dialog when no onHelpClick handler is provided', async () => {
+      const user = userEvent.setup();
+      render(<SideMenu {...defaultProps} />);
+      await user.click(screen.getByText('helpAndSupport'));
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
+      expect(screen.getByText('helpComingSoon')).toBeInTheDocument();
+      await user.click(screen.getByText('close'));
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    });
+
+    it('renders the Artifacts link in expanded mode when the feature flag is enabled', () => {
+      // import.meta.env is a real, mutable object under Vite/Vitest, so this
+      // toggles the same flag SideMenu reads at render time (reset in afterEach).
+      import.meta.env.VITE_SHOW_ARTIFACTS = 'true';
+      render(<SideMenu {...defaultProps} />);
+      const link = screen.getByTestId('NavLink__247c75');
+      expect(link).toHaveAttribute('href', '/artifacts');
+      expect(screen.getByText('Artifacts')).toBeInTheDocument();
+    });
+
+    it('renders the Artifacts link as an icon-only tooltip trigger in collapsed mode', () => {
+      import.meta.env.VITE_SHOW_ARTIFACTS = 'true';
+      render(<SideMenu {...defaultProps} expanded={false} />);
+      const link = screen.getByTestId('NavLink__247c75');
+      expect(link).toHaveAttribute('href', '/artifacts');
+    });
+
+    it('falls back to the generic "yourCompany" label when there is no selected org', () => {
+      mockUseAuth.mockReturnValue({ selectedOrg: null, user: { name: 'User' }, logout: vi.fn() });
+      render(<SideMenu {...defaultProps} />);
+      expect(screen.getAllByText('yourCompany').length).toBeGreaterThanOrEqual(1);
+    });
   });
 });

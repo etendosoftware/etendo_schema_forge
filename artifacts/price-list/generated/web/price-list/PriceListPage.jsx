@@ -31,12 +31,18 @@ const processes = [
 ];
 // @sf-generated-end processes:priceList
 
+// @sf-generated-start detailProcesses:priceListVersion
+const detailProcesses = [
+  { name: 'create', label: 'Create Price List', style: 'positive' },
+];
+// @sf-generated-end detailProcesses:priceListVersion
+
 // @sf-generated-start draftMode:priceList
 const draftMode = null;
 // @sf-generated-end draftMode:priceList
 
 // @sf-generated-start requiredHeaderFields:priceList
-const requiredHeaderFields = ['name', 'currency', 'salesPriceList', 'costBasedPriceList', 'priceIncludesTax', 'default'];
+const requiredHeaderFields = ['name', 'currency', 'salesPriceList', 'costBasedPriceList', 'active', 'priceIncludesTax', 'default'];
 // @sf-generated-end requiredHeaderFields:priceList
 
 // @sf-generated-start addLineFields:priceListVersion
@@ -172,7 +178,8 @@ export const api = {
       "C_Currency_ID": "Moneda",
       "Costbased": "Basado en coste",
       "IsTaxIncluded": "Precio incluye impuesto",
-      "IsDefault": "Por defecto"
+      "IsDefault": "Por defecto",
+      "IsActive": "Activo"
     }
   }
 };
@@ -183,6 +190,7 @@ const labelOverrides = api.labelOverrides;
 export default function PriceListPage({ windowName, recordId, ...props }) {
   if (recordId) {
     return (
+      <>
       <DetailView
         entity="priceList"
         detailEntity="priceListVersion"
@@ -193,6 +201,7 @@ export default function PriceListPage({ windowName, recordId, ...props }) {
         statusField={statusField}
         extraBadges={extraBadges}
         processes={processes}
+        detailProcesses={detailProcesses}
         addLineFields={addLineFields}
         catalogs={catalogs}
         entityLabel="Price List"
@@ -208,6 +217,7 @@ export default function PriceListPage({ windowName, recordId, ...props }) {
         labelOverrides={labelOverrides}
         {...props}
       />
+      </>
     );
   }
 

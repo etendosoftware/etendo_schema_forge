@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import CloneOrderModal from '@/components/contract-ui/CloneOrderModal';
 import SendToSifButton from '../shared/SendToSifButton.jsx';
-import InvoicePaymentModal from '../shared/InvoicePaymentModal.jsx';
+import InvoicePaymentHistoryModal from '@/windows/custom/shared/InvoicePaymentHistoryModal.jsx';
 import CloneButton from '../shared/CloneButton.jsx';
 import { useUI } from '@/i18n';
 import { formatCurrency } from '@/lib/formatCurrency';
@@ -35,7 +35,7 @@ export default function PurchaseInvoiceTopbar({ data, recordId, token, apiBaseUr
   const isCreditType = docType === 'Nota de Crédito' || docType === 'AP CreditMemo';
 
   const handleBadgeClick = () => {
-    if (isCompleted && !isCreditType) setShowPaymentModal(true);
+    if (isCompleted) setShowPaymentModal(true);
   };
 
   const handleModalClose = () => {
@@ -81,15 +81,31 @@ export default function PurchaseInvoiceTopbar({ data, recordId, token, apiBaseUr
       )}
       {isCompleted && (() => {
         if (isCreditType) {
+          // Mirror the grid's "Pendiente de pago" cell for credit notes: green "Aplicada"
+          // once fully consumed, else a purple clickable "Saldo a favor · remaining" badge
+          // that opens the same history modal (listing the payments that consumed the note).
+          const outstandingAbs = Math.abs(parseFloat(outstanding) || 0);
+          if (outstandingAbs < 0.001) {
+            return (
+              <span
+                className="inline-flex items-center gap-1.5 text-[13px] font-medium"
+                style={{ padding: '4px 12px', borderRadius: '6px', backgroundColor: '#d1fae5', color: '#065f46' }}
+              >
+                {ui('cpCreditFullyApplied')}
+              </span>
+            );
+          }
           return (
             <span
               className="inline-flex items-center gap-1.5 text-[13px] font-medium"
-              style={{ padding: '4px 12px', borderRadius: '6px', backgroundColor: '#ede9fe', color: '#4c1d95' }}
+              style={{ padding: '4px 12px', borderRadius: '6px', backgroundColor: '#ede9fe', color: '#4c1d95', cursor: 'pointer' }}
+              data-testid="payment-status-badge"
+              onClick={handleBadgeClick}
             >
               <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: '#7c3aed' }} />
-              {ui('creditApplied')}
+              {ui('cpFavorBadge')}
               <span style={{ opacity: 0.4 }}>&middot;</span>
-              <span className="font-semibold tabular-nums">{formatCurrency(currency || 'USD', Math.abs(grandTotal))}</span>
+              <span className="font-semibold tabular-nums">{formatCurrency(currency || 'USD', outstandingAbs)}</span>
             </span>
           );
         }
@@ -98,7 +114,8 @@ export default function PurchaseInvoiceTopbar({ data, recordId, token, apiBaseUr
             <span
               className="inline-flex items-center gap-1.5 text-[13px] font-medium"
               style={{ padding: '4px 12px', borderRadius: '6px', backgroundColor: '#d1fae5', color: '#065f46', cursor: 'pointer' }}
-              onClick={handleBadgeClick}
+              data-testid="payment-status-badge"
+            onClick={handleBadgeClick}
             >
               <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: '#10b981' }} />
               {ui('statusPaid')}
@@ -111,6 +128,7 @@ export default function PurchaseInvoiceTopbar({ data, recordId, token, apiBaseUr
           <span
             className="inline-flex items-center gap-1.5 text-[13px] font-medium"
             style={{ padding: '4px 12px', borderRadius: '6px', backgroundColor: '#fef3c7', color: '#78350f', cursor: 'pointer' }}
+            data-testid="payment-status-badge"
             onClick={handleBadgeClick}
           >
             <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: '#f59e0b' }} />
@@ -120,15 +138,15 @@ export default function PurchaseInvoiceTopbar({ data, recordId, token, apiBaseUr
           </span>
         );
       })()}
-
       {showPaymentModal && (
-        <InvoicePaymentModal
+        <InvoicePaymentHistoryModal
           invoiceId={data.id}
           invoiceData={data}
           specName="purchase-invoice"
           apiBaseUrl={apiBaseUrl}
           onClose={handleModalClose}
-          data-testid="InvoicePaymentModal__8addd1" />
+          onPaymentAdded={handleModalClose}
+          data-testid="InvoicePaymentHistoryModal__8addd1" />
       )}
     </>
   );

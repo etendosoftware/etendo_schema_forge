@@ -48,7 +48,7 @@ const draftMode = {
 // @sf-generated-end draftMode:header
 
 // @sf-generated-start requiredHeaderFields:header
-const requiredHeaderFields = ['transactionDocument', 'invoiceDate', 'businessPartner', 'partnerAddress', 'priceList', 'paymentTerms', 'paymentMethod'];
+const requiredHeaderFields = ['transactionDocument', 'invoiceDate', 'businessPartner', 'partnerAddress', 'priceList', 'paymentTerms', 'paymentMethod', 'currency'];
 // @sf-generated-end requiredHeaderFields:header
 
 // @sf-generated-start addLineFields:lines
@@ -58,7 +58,7 @@ const addLineFields = {
     { key: 'description', column: 'Description', type: 'textarea', label: 'Description' },
     { key: 'invoicedQuantity', column: 'QtyInvoiced', type: 'number', required: true, label: 'Invoiced Quantity', defaultValue: 1, min: 0 },
     { key: 'listPrice', column: 'PriceList', type: 'number', required: true, label: 'List Price', min: 0 },
-    { key: 'etgoDiscount', column: 'EM_Etgo_Discount', type: 'number', label: 'Discount %', defaultValue: 0, min: 0 },
+    { key: 'etgoDiscount', column: 'EM_Etgo_Discount', type: 'number', label: 'Discount %', defaultValue: 0, min: 0, max: 100 },
     { key: 'tax', column: 'C_Tax_ID', type: 'selector', label: 'Tax', reference: 'Tax', inputMode: 'selector', forceCalloutFields: ["lineNetAmount"] },
   ],
   derived: [
@@ -945,6 +945,7 @@ const labelOverrides = api.labelOverrides;
 export default function HeaderPage({ windowName, recordId, ...props }) {
   if (recordId) {
     return (
+      <>
       <DetailView
         entity="header"
         detailEntity="lines"
@@ -981,12 +982,14 @@ export default function HeaderPage({ windowName, recordId, ...props }) {
         ]}
         draftMode={draftMode}
         requiredHeaderFields={requiredHeaderFields}
+        documentDateField="invoiceDate"
         labelOverrides={labelOverrides}
         lineConfig={INVOICE_LINE_CONFIG}
         linesLayout="inlineEditable"
         sendDocument={{"enabled":true,"allowEmail":false}}
         {...props}
       />
+      </>
     );
   }
 

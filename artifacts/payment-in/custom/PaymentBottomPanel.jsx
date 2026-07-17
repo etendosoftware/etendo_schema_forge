@@ -1,334 +1,195 @@
-import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { useUI } from '@/i18n';
-import { StatusTag } from '@/components/ui/status-tag';
+import PaymentDraftBanner from './PaymentDraftBanner';
 
-function fmtAmount(amount, currencyId) {
-  const n = typeof amount === 'string' ? Number.parseFloat(amount) : (amount ?? 0);
-  try { return new Intl.NumberFormat(undefined, { style: 'currency', currency: currencyId || 'EUR', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n); }
-  catch { return n.toFixed(2); }
+/* eslint-disable react/prop-types */
+
+function fmtAmt(val) {
+  const n = typeof val === 'string' ? parseFloat(val) : (val ?? 0);
+  const abs = Math.abs(n).toFixed(2).split('.');
+  abs[0] = abs[0].replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+  return (n < 0 ? '-' : '') + abs[0] + ',' + abs[1] + ' €';
 }
 
 function fmtDate(raw) {
   if (!raw) return '';
-  try {
-    // Parse as local date to avoid UTC timezone shift (e.g. "2026-04-06" → Apr 5 in UTC-n)
-    const str = String(raw);
-    const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(str);
-    const d = match ? new Date(+match[1], +match[2] - 1, +match[3]) : new Date(raw);
-    return Number.isNaN(d.getTime()) ? '' : d.toLocaleDateString(undefined, { day: '2-digit', month: '2-digit', year: 'numeric' });
-  } catch { return ''; }
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(raw));
+  return m ? `${m[3]}/${m[2]}/${m[1]}` : String(raw);
 }
 
-function fmtInvoiceDate(raw) {
-  if (!raw) return '';
-  const d = new Date(raw);
-  return Number.isNaN(d.getTime()) ? '' : d.toLocaleDateString(undefined, { day: '2-digit', month: 'short', year: 'numeric' });
+const CalendarIcon = () => (
+  <svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="#6C6C89" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+    <rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/>
+  </svg>
+);
+
+const TransferIcon = () => (
+  <svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="#6C6C89" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+    <path d="M3 7h18M3 7l4-4M3 7l4 4M21 17H3M21 17l-4-4M21 17l-4 4"/>
+  </svg>
+);
+
+function resolveMethodKey(name) {
+  const s = (name || '').toLowerCase();
+  if (s.includes('transferencia') || s.includes('transfer')) return 'transfer';
+  if (s.includes('tarjeta') || s.includes('card')) return 'card';
+  if (s.includes('efectivo') || s.includes('cash')) return 'cash';
+  if (s.includes('domiciliac') || s.includes('direct')) return 'direct';
+  return 'transfer';
 }
 
-const STATUS_MAP = {
-  RPPC: { labelKey: 'statusCleared' },
-  RPR:  { labelKey: 'statusReceived' },
-  RPAP: { labelKey: 'statusAwaiting' },
-  RDNC: { labelKey: 'statusDeposited' },
-  DR:   { labelKey: 'statusDraft' },
-  RPVD: { labelKey: 'statusVoided' },
+const METHOD_ICONS = {
+  transfer: <TransferIcon />,
+  card: (
+    <svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="#6C6C89" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+      <rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20"/>
+    </svg>
+  ),
+  cash: (
+    <svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="#6C6C89" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+      <rect x="2" y="6" width="20" height="12" rx="2"/><circle cx="12" cy="12" r="2.5"/>
+    </svg>
+  ),
+  direct: (
+    <svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="#6C6C89" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+      <path d="M4 4v16M4 8h12a3 3 0 0 1 0 6H4M14 14l4 4M14 14l4-4"/>
+    </svg>
+  ),
 };
 
-function fmtActivityDate(raw) {
-  if (!raw) return '';
-  try {
-    const str = String(raw);
-    const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(str);
-    const d = m ? new Date(+m[1], +m[2] - 1, +m[3]) : new Date(raw);
-    return Number.isNaN(d.getTime()) ? '' : d.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
-  } catch { return ''; }
+function FieldItem({ label, children, icon }) {
+  return (
+    <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 0 }}>
+      <span style={{ font: '400 12px/16px Inter', color: '#555B6D' }}>{label}</span>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 2, marginTop: 0 }}>
+        {icon && <span style={{ display: 'flex', alignItems: 'center' }}>{icon}</span>}
+        <span style={{ font: '600 16px/24px Inter', color: '#121217', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          {children || <span style={{ color: '#A9AEBC' }}>—</span>}
+        </span>
+      </div>
+    </div>
+  );
 }
 
-function isTechnicalDescription(value) {
-  if (!value || typeof value !== 'string') return true;
-  const trimmed = value.trim();
-  if (!trimmed) return true;
-  return /^(Invoice No\.|Order No\.|Factura|Pedido|Payment)/i.test(trimmed);
+function DatosSection({ data, ui }) {
+  const methodRaw = data?.['paymentMethod$_identifier'] || '';
+  const methodKey = resolveMethodKey(methodRaw);
+  return (
+    <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'flex-start', padding: '8px 20px 12px', gap: 44 }}>
+      <div style={{ width: 148, flexShrink: 0 }}>
+        <div style={{ font: '600 14px/20px Inter', color: '#121217' }}>{ui('paymentInDataTitle')}</div>
+        <div style={{ font: '400 12px/16px Inter', color: '#282833', marginTop: 4 }}>{ui('paymentInDataSub')}</div>
+      </div>
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 20 }}>
+        <div style={{ display: 'flex', flexDirection: 'row', gap: 20 }}>
+          <FieldItem label={ui('docNo')}>{data?.documentNo}</FieldItem>
+          <FieldItem label={ui('Customer')}>{data?.['businessPartner$_identifier']}</FieldItem>
+          <FieldItem label={ui('date')} icon={<CalendarIcon />}>{fmtDate(data?.paymentDate)}</FieldItem>
+          <FieldItem label={ui('method')} icon={METHOD_ICONS[methodKey]}>{methodRaw}</FieldItem>
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'row', gap: 20 }}>
+          <FieldItem label={ui('depositTo')}>{data?.['account$_identifier']}</FieldItem>
+          <FieldItem label={ui('assetsCurrencyLabel')}>{data?.['currency$_identifier'] || 'EUR'}</FieldItem>
+          <FieldItem label={ui('reference')}>{data?.referenceNo}</FieldItem>
+          <div style={{ flex: 1 }} />
+        </div>
+      </div>
+    </div>
+  );
 }
 
-export default function PaymentBottomPanel({
-  recordId, data, token, apiBaseUrl, api,
-  summary, notesField, onFieldChange, notesFocused, setNotesFocused,
-}) {
-  const [remaining, setRemaining] = useState(0);
-  const [linkedInvoices, setLinkedInvoices] = useState([]);
-  const ui = useUI();
+const DET_COLS = '1.8fr 1fr 1fr 1fr';
 
-  const base = useMemo(() => (apiBaseUrl || '').replace(/\/[^/]+$/, ''), [apiBaseUrl]);
-  const hdrs = useMemo(() => ({ Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }), [token]);
+function LineasSection({ data, token, apiBaseUrl, ui }) {
+  const [lines, setLines] = useState(null);
 
   useEffect(() => {
-    if (!data?.id || !token || !base) return;
+    if (!data?.id || !token || !apiBaseUrl) return;
+    const base = (apiBaseUrl || '').replace(/\/[^/]+$/, '');
+    const headers = { Authorization: `Bearer ${token}` };
     let cancelled = false;
     (async () => {
       try {
-        const res = await fetch(`${base}/payment-in/finPaymentScheduleDetail?parentId=${data.id}&_startRow=0&_endRow=100`, { headers: hdrs });
-        if (!res.ok || cancelled) return;
-        const details = (await res.json())?.response?.data || [];
-        const applied = details.filter(d => d.invoicePaymentSchedule).reduce((sum, d) => sum + (Number.parseFloat(d.amount) || 0), 0);
-        if (!cancelled) setRemaining(Math.max(0, (Number.parseFloat(data.amount) || 0) - applied));
-        const scheduleIds = [...new Set(details.map(d => d.invoicePaymentSchedule).filter(Boolean))];
-        const invoices = [];
-        await Promise.all(scheduleIds.map(async (schedId) => {
-          try {
-            const r = await fetch(`${base}/sales-invoice/paymentPlan/${schedId}`, { headers: hdrs });
-            if (!r.ok) return;
-            const row = (await r.json())?.response?.data?.[0];
-            if (row?.invoice && !invoices.some(i => i.id === row.invoice)) {
-              const outstanding = Number.parseFloat(row.outstandingAmount) || 0;
-              invoices.push({
-                id: row.invoice,
-                identifier: row['invoice$_identifier'] || '',
-                amount: row.amount,
-                isPaid: outstanding <= 0,
-              });
-            }
-          } catch { /* silent */ }
-        }));
-        if (!cancelled) setLinkedInvoices(invoices);
-      } catch { /* silent */ }
+        const res = await fetch(`${base}/payment-in/finPaymentScheduleDetail?parentId=${data.id}&_startRow=0&_endRow=200`, { headers });
+        if (!res.ok || cancelled) { if (!cancelled) setLines([]); return; }
+        const rows = (await res.json())?.response?.data || [];
+        if (!cancelled) setLines(rows);
+      } catch { if (!cancelled) setLines([]); }
     })();
     return () => { cancelled = true; };
-  }, [data?.id, data?.amount, token, base, hdrs]);
+  }, [data?.id, token, apiBaseUrl]);
 
-  const currency = data?.['currency$_identifier'] || 'EUR';
-  const bpName = data?.['businessPartner$_identifier'] || '';
-  const paymentDate = fmtDate(data?.paymentDate);
-  const paymentMethod = data?.['paymentMethod$_identifier'] || '';
-  const financialAccount = data?.['account$_identifier'] || data?.['finFinancialAccount$_identifier'] || '';
-  const status = data?.status;
-  const statusInfo = STATUS_MAP[status] || STATUS_MAP.DR;
-
-  // Activity timeline
-  const [persistedNotes, setPersistedNotes] = useState([]);
-  const [noteText, setNoteText] = useState('');
-  const [saving, setSaving] = useState(false);
-  const descriptionRef = useRef(data?.description || '');
-
-  useEffect(() => { descriptionRef.current = data?.description || ''; }, [data?.description]);
-
-  useEffect(() => {
-    if (!data?.description) { setPersistedNotes([]); return; }
-    const lines = data.description.split('\n').filter(l => l.trim());
-    const notes = [];
-    for (let idx = 0; idx < lines.length; idx++) {
-      const line = lines[idx];
-      const pipeIdx = line.indexOf('|');
-      if (pipeIdx > 0 && pipeIdx < 30) {
-        const maybeDateStr = line.slice(0, pipeIdx);
-        const parsed = new Date(maybeDateStr);
-        if (!Number.isNaN(parsed.getTime())) {
-          notes.push({ key: `note-${idx}`, text: line.slice(pipeIdx + 1), date: fmtActivityDate(maybeDateStr), sortDate: parsed, isNote: true });
-        }
-      }
-    }
-    setPersistedNotes(notes);
-  }, [data?.description]);
-
-  const saveNote = useCallback(async (text) => {
-    if (!recordId || !token || !base) return false;
-    const timestamp = new Date().toISOString();
-    const newLine = `${timestamp}|${text}`;
-    const updatedDesc = descriptionRef.current ? `${descriptionRef.current}\n${newLine}` : newLine;
-    try {
-      const res = await fetch(`${base}/payment-in/finPayment/${recordId}`, { method: 'PATCH', headers: hdrs, body: JSON.stringify({ description: updatedDesc }) });
-      if (!res.ok) return false;
-      descriptionRef.current = updatedDesc;
-      return true;
-    } catch { return false; }
-  }, [recordId, token, base, hdrs]);
-
-  const handleAddNote = async () => {
-    const text = noteText.trim();
-    if (!text || saving) return;
-    setSaving(true);
-    if (await saveNote(text)) {
-      setPersistedNotes(prev => [...prev, { key: `note-${Date.now()}`, text, date: fmtActivityDate(new Date().toISOString()), sortDate: new Date(), isNote: true }]);
-      setNoteText('');
-    }
-    setSaving(false);
-  };
-
-  const activityEvents = useMemo(() => {
-    const events = [];
-    const sysDate = fmtActivityDate(data?.paymentDate || data?.creationDate);
-    const sysSortDate = new Date(data?.paymentDate || data?.creationDate || 0);
-    if (data?.paymentDate || data?.creationDate) {
-      events.push({ key: 'created', text: ui('paymentCreated'), date: sysDate, sortDate: sysSortDate, isNote: false });
-    }
-    for (const inv of linkedInvoices) {
-      const docNo = (inv.identifier || '').split(' - ')[0] || '';
-      events.push({ key: `inv-${inv.id}`, text: ui('linkedToInvoice', { number: docNo }), date: sysDate, sortDate: sysSortDate, isNote: false });
-    }
-    const st = data?.status;
-    if (st && st !== 'DR') {
-      events.push({ key: 'status', text: ui('statusChangedTo', { status: ui(STATUS_MAP[st]?.labelKey || st) }), date: sysDate, sortDate: sysSortDate, isNote: false });
-    }
-    events.sort((a, b) => a.sortDate - b.sortDate);
-    return [...events, ...persistedNotes];
-  }, [data, linkedInvoices, persistedNotes]);
-
-  const navigateToInvoice = (invoiceId) => {
-    const bp = window.location.pathname.replace(/\/payment-in\/.*$/, '');
-    window.location.href = `${bp}/sales-invoice/${invoiceId}`;
-  };
-
-  const documentNo = data?.documentNo || '';
-  const fields = [
-    { label: ui('customer'), value: bpName },
-    { label: ui('paymentDate'), value: paymentDate },
-    { label: ui('method'), value: paymentMethod },
-    { label: ui('depositTo'), value: financialAccount, isAccount: true },
-  ];
+  const thStyle = { font: '600 12px/16px Inter', color: '#121217' };
+  const thRStyle = { ...thStyle, textAlign: 'right' };
+  const noLines = !data?.id || (lines !== null && lines.length === 0);
+  const totalImporte = (lines || []).reduce((s, r) => s + (parseFloat(r.expected) || 0), 0);
+  const totalApplied = (lines || []).reduce((s, r) => s + (parseFloat(r.amount) || 0), 0);
+  const totalPendiente = (lines || []).reduce((s, r) => s + Math.max(0, (parseFloat(r.expected) || 0) - (parseFloat(r.amount) || 0)), 0);
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 0 }}>
-
-      {/* Hero */}
-      <div style={{ backgroundColor: '#F5F5F5', borderRadius: 10, padding: '14px 16px' }}>
-        {/* Doc No pretitle + Amount + badge */}
-        <div style={{ paddingBottom: 14, borderBottom: '0.5px solid #E5E7EB', marginBottom: 0 }}>
-          {documentNo && <div style={{ fontSize: 13, fontWeight: 500, color: '#6B7280', marginBottom: 2 }}>#{documentNo}</div>}
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <span style={{ fontSize: 32, fontWeight: 500, color: '#111827', lineHeight: 1 }}>{fmtAmount(data?.amount, currency)}</span>
-            <StatusTag status={status} label={ui(statusInfo.labelKey)} />
-          </div>
-          <div style={{ fontSize: 13, color: '#6B7280', marginTop: 4 }}>
-            {[currency, paymentMethod].filter(Boolean).join(' \u00b7 ')}
-          </div>
-        </div>
-
-        {/* Detail grid — 4 columns */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', backgroundColor: '#fff', borderRadius: 8, border: '0.5px solid #d1d5db', overflow: 'hidden', marginTop: 14 }}>
-          {fields.map((f, i) => (
-            <div key={f.label} style={{ padding: '14px 18px', borderLeft: i > 0 ? '0.5px solid #d1d5db' : 'none' }}>
-              <div style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#6B7280', marginBottom: 4 }}>{f.label}</div>
-              <div style={{ fontSize: 15, fontWeight: 500, color: f.isAccount ? '#2563eb' : '#111827', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: 4 }}>
-                {f.isAccount && f.value && (
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#2563eb" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
-                    <rect x="1" y="4" width="22" height="16" rx="2" ry="2" /><line x1="1" y1="10" x2="23" y2="10" />
-                  </svg>
-                )}
-                {f.value || '\u2014'}
-              </div>
-            </div>
-          ))}
-        </div>
+    <div style={{ display: 'flex', flexDirection: 'column', padding: '8px 20px 12px', gap: 16 }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+        <div style={{ font: '600 14px/20px Inter', color: '#121217' }}>{ui('paymentInLinesTitle')}</div>
+        <div style={{ font: '400 12px/16px Inter', color: '#282833' }}>{ui('paymentInLinesSub')}</div>
       </div>
 
-      {/* Unallocated credit */}
-      {remaining > 0 && (
-        <div style={{ backgroundColor: '#FFFBEB', borderLeft: '3px solid #F59E0B', borderRadius: '0 6px 6px 0', padding: '10px 14px' }}>
-          <span style={{ fontSize: 13, color: '#92400e' }}><strong>{fmtAmount(remaining, currency)}</strong> {ui('unallocatedCredit')}</span>
-        </div>
-      )}
+      {lines === null ? (
+        <div style={{ font: '400 13px/18px Inter', color: '#828FA3' }}>{ui('loading')}</div>
+      ) : noLines ? (
+        <div style={{ font: '400 13px/18px Inter', color: '#828FA3' }}>{ui('paymentInNoLines')}</div>
+      ) : (
+        <div style={{ border: '1px solid #E8EAEF', borderRadius: 8, overflow: 'hidden', boxShadow: '0px 1px 2px rgba(18,18,23,0.05)' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: DET_COLS, alignItems: 'center', height: 40 }}>
+            <div style={{ padding: '0 12px', ...thStyle }}>{ui('invoice')}</div>
+            <div style={{ padding: '0 12px', ...thRStyle }}>{ui('amount')}</div>
+            <div style={{ padding: '0 12px', ...thRStyle }}>{ui('applied')}</div>
+            <div style={{ padding: '0 12px', ...thRStyle }}>{ui('pending')}</div>
+          </div>
+          <div style={{ borderTop: '1px solid #E8EAEF' }} />
 
-      {/* Invoice cards */}
-      {linkedInvoices.length > 0 && (
-        <div>
-          <span style={{ display: 'block', fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#9ca3af', marginBottom: 6 }}>{ui('invoice')}</span>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-            {linkedInvoices.map(inv => {
-              const parts = (inv.identifier || '').split(' - ');
-              const docNo = parts[0] || '';
-              const dateStr = fmtInvoiceDate(parts[1]);
-              const subtitle = [bpName, dateStr].filter(Boolean).join(' · ');
-              const badgeColor = inv.isPaid
-                ? { bg: '#d1fae5', color: '#065f46', dot: '#059669', label: ui('paid') }
-                : { bg: '#fef3c7', color: '#92400e', dot: '#d97706', label: ui('pending') };
-              return (
-                <button
-                  key={inv.id}
-                  type="button"
-                  onClick={() => navigateToInvoice(inv.id)}
-                  style={{ display: 'flex', alignItems: 'center', gap: 12, backgroundColor: '#F9FAFB', border: '0.5px solid #E5E7EB', borderRadius: 10, padding: '12px 14px', cursor: 'pointer', textAlign: 'left', width: '100%' }}
-                >
-                  <div style={{ width: 34, height: 34, borderRadius: 8, backgroundColor: '#dbeafe', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#2563eb" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" /><polyline points="14 2 14 8 20 8" /><line x1="16" y1="13" x2="8" y2="13" /><line x1="16" y1="17" x2="8" y2="17" />
-                    </svg>
+          {lines.map((row, i) => {
+            const applied = parseFloat(row.amount) || 0;
+            const importe = parseFloat(row.expected) || 0;
+            const pendiente = Math.max(0, importe - applied);
+            const invoiceNo = row.invoiceDocumentNo || row['documentNo$_identifier'] || fmtDate(row.dueDate) || '-';
+            const dueLabel = row.invoiceDocumentNo ? fmtDate(row.dueDate) : null;
+            return (
+              <div key={row.id || i}>
+                <div style={{ display: 'grid', gridTemplateColumns: DET_COLS, alignItems: 'center', height: 56, background: '#FFFFFF' }}>
+                  <div style={{ padding: '0 12px', display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 2, minWidth: 0 }}>
+                    <div style={{ font: '600 14px/20px Inter', color: '#121217', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{invoiceNo}</div>
+                    {dueLabel && <div style={{ font: '500 12px/16px Inter', color: '#6C6C89' }}>{dueLabel}</div>}
                   </div>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: 13, fontWeight: 500, color: '#2563eb' }}>{ui('invoiceDoc', { number: docNo })}</div>
-                    {subtitle && <div style={{ fontSize: 12, color: '#6B7280', marginTop: 1 }}>{subtitle}</div>}
-                  </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
-                    {inv.amount && <span style={{ fontSize: 13, fontWeight: 500, color: '#111827', fontVariantNumeric: 'tabular-nums' }}>{fmtAmount(inv.amount, currency)}</span>}
-                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '2px 8px', borderRadius: 9999, backgroundColor: badgeColor.bg, color: badgeColor.color, fontSize: 11, fontWeight: 500 }}>
-                      <span style={{ width: 6, height: 6, borderRadius: '50%', backgroundColor: badgeColor.dot }} />
-                      {badgeColor.label}
-                    </span>
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#d1d5db" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6" /></svg>
-                  </div>
-                </button>
-              );
-            })}
+                  <div style={{ padding: '0 12px', textAlign: 'right', font: '400 14px/20px Inter', color: '#121217', fontVariantNumeric: 'tabular-nums' }}>{importe > 0 ? fmtAmt(importe) : '—'}</div>
+                  <div style={{ padding: '0 12px', textAlign: 'right', font: '600 14px/20px Inter', color: '#17663A', fontVariantNumeric: 'tabular-nums' }}>{fmtAmt(applied)}</div>
+                  <div style={{ padding: '0 12px', textAlign: 'right', font: '400 14px/20px Inter', color: '#121217', fontVariantNumeric: 'tabular-nums' }}>{fmtAmt(pendiente)}</div>
+                </div>
+                {i < lines.length - 1 && <div style={{ borderTop: '1px solid #E8EAEF' }} />}
+              </div>
+            );
+          })}
+
+          <div style={{ borderTop: '1px solid #E8EAEF' }} />
+          <div style={{ display: 'grid', gridTemplateColumns: DET_COLS, alignItems: 'center', height: 40 }}>
+            <div style={{ padding: '0 12px', font: '600 12px/16px Inter', color: '#121217' }}>{ui('totalApplied')}</div>
+            <div style={{ padding: '0 12px', textAlign: 'right', font: '400 14px/20px Inter', color: '#121217', fontVariantNumeric: 'tabular-nums' }}>{fmtAmt(totalImporte)}</div>
+            <div style={{ padding: '0 12px', textAlign: 'right', font: '600 14px/20px Inter', color: '#17663A', fontVariantNumeric: 'tabular-nums' }}>{fmtAmt(totalApplied)}</div>
+            <div style={{ padding: '0 12px', textAlign: 'right', font: '400 14px/20px Inter', color: '#121217', fontVariantNumeric: 'tabular-nums' }}>{fmtAmt(totalPendiente)}</div>
           </div>
         </div>
       )}
+    </div>
+  );
+}
 
-      {/* Activity card */}
-      <div style={{ border: '0.5px solid #d1d5db', borderRadius: 10, overflow: 'hidden' }}>
-        {/* Card header */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '9px 14px', background: '#F8F9FA', borderBottom: '0.5px solid #d1d5db' }}>
-          <span style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#9ca3af' }}>{ui('activity')}</span>
-          {activityEvents.length > 0 && (
-            <span style={{ fontSize: 10, fontWeight: 500, backgroundColor: '#e5e7eb', color: '#6B7280', padding: '1px 6px', borderRadius: 9999 }}>{activityEvents.length}</span>
-          )}
-        </div>
-
-        {/* Timeline */}
-        {activityEvents.length > 0 && (
-          <div style={{ position: 'relative', padding: '14px 14px 14px 28px' }}>
-            <div style={{ position: 'absolute', left: 12, top: 20, bottom: 14, width: 1.5, backgroundColor: '#e5e7eb' }} />
-            {activityEvents.map((ev, i) => (
-              <div key={ev.key} style={{ position: 'relative', paddingBottom: i < activityEvents.length - 1 ? 16 : 0 }}>
-                <span style={{ position: 'absolute', left: -20 + 1, top: 3, width: 8, height: 8, borderRadius: '50%', backgroundColor: ev.isNote ? '#EF9F27' : '#9ca3af' }} />
-                {ev.isNote ? (
-                  <div>
-                    <div style={{ fontSize: 11, color: '#6B7280', marginBottom: 3 }}>{ev.userName || ui('you')} &middot; {ev.date}</div>
-                    <div style={{ backgroundColor: '#F5F5F5', borderRadius: 8, padding: '8px 12px', maxWidth: '85%' }}>
-                      <div style={{ fontSize: 13, color: '#111827' }}>{ev.text}</div>
-                    </div>
-                  </div>
-                ) : (
-                  <div>
-                    <div style={{ fontSize: 13, color: '#374151' }}>{ev.text}</div>
-                    <div style={{ fontSize: 11, color: '#9ca3af', marginTop: 1 }}>{ev.date}</div>
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
-        )}
-
-        {/* Card footer — Add note */}
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center', padding: '10px 14px', borderTop: '0.5px solid #d1d5db', background: '#fff' }}>
-          <input
-            type="text"
-            value={noteText}
-            onChange={(e) => setNoteText(e.target.value)}
-            onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleAddNote(); } }}
-            placeholder={ui('addNote')}
-            disabled={saving}
-            style={{ flex: 1, fontSize: 13, padding: '7px 10px', border: '0.5px solid #d1d5db', borderRadius: 6, outline: 'none', color: '#374151', backgroundColor: '#fff', boxSizing: 'border-box' }}
-          />
-          <button
-            type="button"
-            onClick={handleAddNote}
-            disabled={!noteText.trim() || saving}
-            style={{ fontSize: 13, fontWeight: 500, padding: '7px 14px', borderRadius: 6, border: 'none', backgroundColor: noteText.trim() ? '#18181b' : '#e5e7eb', color: noteText.trim() ? '#fff' : '#9ca3af', cursor: noteText.trim() && !saving ? 'pointer' : 'default', flexShrink: 0 }}
-          >
-            {saving ? '...' : ui('add')}
-          </button>
-        </div>
-      </div>
-
+export default function PaymentBottomPanel({ data, token, apiBaseUrl }) {
+  const ui = useUI();
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+      <PaymentDraftBanner data={data} />
+      <DatosSection data={data} ui={ui} />
+      <div style={{ margin: '0 20px', borderTop: '1px solid #E8EAEF' }} />
+      <LineasSection data={data} token={token} apiBaseUrl={apiBaseUrl} ui={ui} />
     </div>
   );
 }

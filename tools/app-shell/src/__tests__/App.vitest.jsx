@@ -13,6 +13,27 @@ vi.mock('sonner', () => ({
   Toaster: () => null,
 }));
 
+// The real AppShellRuntime wraps everything in a <BrowserRouter>; the mock must
+// provide an equivalent Router context so App's children (ServiceWorkerManager,
+// AppStoreKeyWatcher, ObservabilityRouteTracker) can call useLocation/useNavigate.
+vi.mock('@etendosoftware/app-shell-core/runtime', async () => {
+  const { MemoryRouter } = await import('react-router-dom');
+  return {
+    AppShellRuntime: ({ children, layout: Layout, menuGroups }) => (
+      <MemoryRouter>
+        <div data-testid="app-shell-runtime">
+          {children}
+          {Layout && <Layout menuGroups={menuGroups} />}
+        </div>
+      </MemoryRouter>
+    ),
+  };
+});
+
+vi.mock('../runtime-routes.jsx', () => ({
+  buildRuntimeRoutes: () => [],
+}));
+
 vi.mock('../auth/AuthContext.jsx', () => ({
   AuthProvider: ({ children }) => <div data-testid="auth-provider">{children}</div>,
   useAuth: () => ({ isAuthenticated: true, token: 'test-token', logout: vi.fn() }),
@@ -160,13 +181,14 @@ import App from '../App.jsx';
 describe('App', () => {
   it('renders without crashing', () => {
     render(<App />);
-    // The auth provider mock should be in the tree
-    expect(screen.getByTestId('auth-provider')).toBeInTheDocument();
+    // App now delegates composition to AppShellRuntime
+    expect(screen.getByTestId('app-shell-runtime')).toBeInTheDocument();
   });
 
-  it('renders the app layout for authenticated users', () => {
+  it('passes AppLayout as the runtime layout (not the default ShellLayout)', () => {
     render(<App />);
-    // With isAuthenticated=true and menuGroups populated, AppLayout should render
+    // The runtime mock renders the `layout` prop it receives; App must pass
+    // its own AppLayout so SideMenu/Favorites/CommandPalette/Copilot chrome survives.
     expect(screen.getByTestId('app-layout')).toBeInTheDocument();
   });
 });

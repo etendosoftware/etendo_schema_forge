@@ -4,12 +4,31 @@
 # Skipped automatically when no relevant files are staged (fast path).
 set -e
 
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+REPO_DIR="$(cd -- "$SCRIPT_DIR/.." && pwd)"
+export SF_ROOT="$REPO_DIR"
+
 # Fast-path: only run when staged files touch artifacts or pipeline code.
-if ! git diff --cached --name-only | grep -qE '^(artifacts/|tools/app-shell/src/windows/registry\.js|cli/src/(generate|resolve|push|validate)-)'; then
+# (The generator/resolver/validator code itself now lives in the separate
+# schema_forge_core repo — this hook can't watch changes to code it no
+# longer contains, so that alternation was dropped.)
+if ! git diff --cached --name-only | grep -qE '^(artifacts/|tools/app-shell/src/windows/registry\.js)'; then
   exit 0
 fi
 
-node cli/src/validate-pipeline.js --staged
+# Mirrors the Makefile's SF variable: LOCAL_CORE=1 runs the pipeline validator
+# from the sibling schema_forge_core source instead of the published
+# @etendosoftware/schema-forge-cli package. Without this, a developer working
+# against a LOCAL_CORE-only generator fix (not yet published) gets blocked
+# committing correct output because the published validator doesn't know
+# about the fix yet.
+if [ "$LOCAL_CORE" = "1" ]; then
+  SF_BIN="$REPO_DIR/cli/sf-local"
+else
+  SF_BIN="npx"
+fi
+
+cd "$REPO_DIR" && "$SF_BIN" sf-validate-pipeline --staged
 EXIT_CODE=$?
 
 if [ $EXIT_CODE -ne 0 ]; then

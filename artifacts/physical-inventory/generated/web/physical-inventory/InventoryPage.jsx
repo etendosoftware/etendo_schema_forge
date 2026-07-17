@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import { ListView, DetailView } from '@/components/contract-ui';
+import { toast } from 'sonner';
 import InventoryTable from './InventoryTable';
 import InventoryForm from './InventoryForm';
 import InventoryLineTable from './InventoryLineTable';
@@ -15,7 +16,7 @@ const breadcrumb = 'Inventory / Physical Inventory';
 
 // @sf-generated-start summary:inventory
 const summary = [
-  { key: 'inventoryType', column: 'Inventory_Type', type: 'enum' },
+
 ];
 
 const statusField = 'processed';
@@ -23,23 +24,28 @@ const statusField = 'processed';
 
 // @sf-generated-start extraBadges:inventory
 const extraBadges = [
-
+  { key: 'posted', type: 'statusPill', trueKey: 'postedStatus', falseKey: 'notPostedStatus' },
 ];
 // @sf-generated-end extraBadges:inventory
 
 // @sf-generated-start processes:inventory
 const processes = [
-  { name: 'processNow', label: 'Process Inventory Count', style: 'positive',
-    displayLogicRaw: "@Processed@='N'", requiresLines: true },
+
 ];
 // @sf-generated-end processes:inventory
 
 // @sf-generated-start draftMode:inventory
-const draftMode = null;
+const draftMode = {
+  "enabled": true,
+  "processField": "processNow",
+  "processValue": "Y",
+  "label": "confirm",
+  "disableWhenEmpty": true
+};
 // @sf-generated-end draftMode:inventory
 
 // @sf-generated-start requiredHeaderFields:inventory
-const requiredHeaderFields = ['movementDate', 'name', 'warehouse', 'inventoryType'];
+const requiredHeaderFields = ['movementDate', 'name', 'warehouse'];
 // @sf-generated-end requiredHeaderFields:inventory
 
 // @sf-generated-start addLineFields:inventoryLine
@@ -74,8 +80,7 @@ export const api = {
       "detailUrl": "/sws/neo/physical-inventory/inventory/{id}",
       "supportedFilters": [
         "movementDate",
-        "warehouse",
-        "inventoryType"
+        "warehouse"
       ]
     },
     "inventoryLine": {
@@ -168,12 +173,6 @@ export const api = {
     },
     {
       "entity": "inventory",
-      "field": "posted",
-      "column": "Posted",
-      "url": "/sws/neo/physical-inventory/inventory/{id}/action/posted"
-    },
-    {
-      "entity": "inventory",
       "field": "etblkpBulkposting",
       "column": "EM_Etblkp_Bulkposting",
       "url": "/sws/neo/physical-inventory/inventory/{id}/action/etblkpBulkposting",
@@ -196,13 +195,24 @@ export const api = {
   },
   "window": {
     "category": "inventory"
+  },
+  "labelOverrides": {
+    "en_US": {
+      "Processed": "Status"
+    },
+    "es_ES": {
+      "Processed": "Estado"
+    }
   }
 };
 
+
+const labelOverrides = api.labelOverrides;
 // @sf-generated-start component:InventoryPage
 export default function InventoryPage({ windowName, recordId, ...props }) {
   if (recordId) {
     return (
+      <>
       <DetailView
         entity="inventory"
         detailEntity="inventoryLine"
@@ -221,13 +231,23 @@ export default function InventoryPage({ windowName, recordId, ...props }) {
         recordId={recordId}
         breadcrumb={breadcrumb}
       api={api}
+        hidePrint
+        noHeaderBorder
         customTabs={[{ key: 'attachments', labelKey: 'attachments', Component: AttachmentsTab, placement: 'tab', props: { tableName: "M_Inventory", config: {} } }]}
         bottomSection={PhysicalInventoryBottomPanel}
         customMenuContent={InventoryMenuContent}
+        menuActions={({ data, status }) => [
+          { key: 'post', label: 'Post', visible: !(data?.posted === 'Y' || data?.posted === true) && (data?.processed === 'Y' || data?.processed === true), labelKey: 'post', successKey: 'documentPosted', neoAction: 'post',  }
+        ]}
+        draftMode={draftMode}
         requiredHeaderFields={requiredHeaderFields}
+        statusEnumLabels={{"true":"statusProcessed","false":"statusDraft"}}
+        lockedAlert={{"title":"goodsMovementsLockedTitle","message":"goodsMovementsLockedMessage","actionLabel":"goodsMovementsLockedAction","navigateTo":"/physical-inventory/new"}}
+        labelOverrides={labelOverrides}
         linesLayout="inlineEditable"
         {...props}
       />
+      </>
     );
   }
 
@@ -239,7 +259,11 @@ export default function InventoryPage({ windowName, recordId, ...props }) {
       windowName={windowName}
       breadcrumb={breadcrumb}
       api={api}
+      listViewOptions={{"hideStatusFilter":true}}
       dateFilterKey="movementDate"
+      hidePrint
+      hideLink
+      labelOverrides={labelOverrides}
       rowQuickActions={{}}
       {...props}
     />

@@ -62,7 +62,7 @@ The Assets window should let a finance user register fixed assets, define how ea
 4. Switch calculation type between percentage-based and time-based setups and confirm the window swaps the expected inputs:
    - percentage path shows **Annual Depreciation %** (label: `assetsAnnualDepreciationLabel`)
    - time path shows **Amortize** and usable-life inputs
-4a. With **Depreciate** enabled, scroll to the last section and confirm the **Dimensiones contables** group appears **after Dates**, showing 8 selectors in a 4-column grid: Project, Cost Center, Business Partner, 1st Dimension, 2nd Dimension, Sales Region, Activity, Sales Campaign. Open a selector (e.g. Cost Center) and confirm it returns options. Select a value, save and reopen the asset — the value persists. Disable **Depreciate** and confirm the dimensions section disappears.
+4a. With **Depreciate** enabled, scroll to the last section and confirm the **Dimensiones contables** group appears **after Dates**, showing 4 selectors in a 4-column grid: **Project**, **Cost Center**, **Business Partner** (Contacto), and **Product**. Open a selector (e.g. Cost Center or Product) and confirm it returns options. Select a value, save and reopen the asset — the value persists. Disable **Depreciate** and confirm the dimensions section disappears.
 5. Save an asset with depreciation enabled and confirm the **Create Amortization** action is available.
 6. Trigger **Create Amortization** against a live backend and confirm the amortization plan tab refreshes and shows ordered schedule rows. Confirm that line status badges read "Pendiente" (not "Planificado") and "Confirmado" (not "Procesado").
 7. Review the right sidebar and confirm it shows four cards in order: Valor actual → Valor residual → Depreciación planificada → Depreciado %. Confirm that "Progreso de depreciación" is absent. Confirm that the sidebar ends above the tabs row — tabs (Plan de amortización, Adjuntos) span the full width below the form area.
@@ -94,9 +94,44 @@ The Assets window should let a finance user register fixed assets, define how ea
 - `tools/app-shell/src/windows/custom/assets/AssetsAmortizationPanel.jsx` fetches amortization lines by `parentId`, refreshes on `neo:processSuccess`, and renders a table of scheduled lines. Navigation to the Amortization document is scoped to the **Período** cell only — a `PeriodLink` component renders the period identifier as an underlined link with an `ArrowUpRight` icon; clicking elsewhere on the row does nothing. No footer total is shown (the information is already in the "Depreciación planificada" sidebar card).
 - `tools/app-shell/src/windows/custom/assets/AssetsSidebar.jsx` reads `data.etgoAmortizationStatus` (the DB-backed percentage) directly — no frontend math. The `depreciatedPlan` variable is kept only for the "Planned Depreciation" monetary card.
 - `artifacts/assets/decisions.json` discards `fullyDepreciated` (ISFULLYDEPRECIATED is no longer maintained) and adds `etgoAmortizationStatus` with `cellType: "depreciationProgress"`, `columnType: "number"`, and `filterable: true`. The `statusField: "none"` setting disables the auto-detected status field to prevent the "All statuses" toolbar button from appearing. `labelOverrides` includes `EM_Etgo_Amortization_Status` → `"Estado de amortización"` (es_ES) so the grid column header is translated via `useLabel(labelOverrides)` in `DataTable`.
-- `renderDepreciationProgress` in `cli/src/generate-frontend.js` reads `row.etgoAmortizationStatus` directly instead of computing `depreciatedValue / depreciationAmt` on the frontend.
-- No assets-specific browser or component test file was found in `tools/app-shell/test` or `tools/app-shell/src/**/__tests__`, so the automated evidence is structural/code-backed rather than end-to-end behavioral proof.
+- `renderDepreciationProgress` in `cli/src/generate-frontend.js` reads `row.etgoAmortizationStatus` directly instead of computing `depreciatedValue / depreciationAmt` on the frontend. It returns `null` (empty cell) only when `pct == null`; assets with a status of `0` render a 0 % bar rather than a blank cell.
+- `tools/app-shell/src/windows/custom/assets/__tests__/AssetsTable.test.js` covers the `renderDepreciationProgress` helper, including the case where `pct === 0` (bar rendered at 0% instead of hidden).
 - The generated `AssetsPage.jsx` includes `AttachmentsTab` in its `customTabs` prop, wired to the `A_Asset` AD table.
+
+## ETP-4333 — DeferredInput amount fields and currency-echo freeze fix
+
+### DeferredInput for the three amount fields
+
+`assetValue`, `residualAssetValue`, and `depreciationAmt` now use `calloutOn: 'blur'` in `AssetsDetailPanel.jsx`. `EntityForm` renders these fields via `DeferredInput`: typing only updates a local buffer inside the input; the commit fires on blur, not per keystroke. This prevents the async `SL_Assets` callout from racing against partially-typed values (the "Asset Value 4000 keeps Residual at -2000" race bug).
+
+When the user blurs one of these fields, the commit does **not** fire the async `/assets/callout`. Instead, `AssetsDetailPanel.handleAmountChange` calls the exported `computeAssetAmounts()` function, which replicates the `SL_Assets` Java callout arithmetic locally and synchronously:
+
+- `assetValue` changed: if `depreciationAmt ≠ 0` then `residualAssetValue = assetValue − depreciationAmt`; then `depreciationAmt = assetValue − residualAssetValue`.
+- `residualAssetValue` changed: `depreciationAmt = assetValue − residualAssetValue`.
+- `depreciationAmt` changed: `residualAssetValue = assetValue − depreciationAmt`.
+
+All three fields are written together via `onLocalChange` (which calls `handleChange` without triggering a callout), so the sidebar "Current Value" and sibling inputs update immediately and consistently. All results are rounded to 2 decimal places via `round2()` (avoids JS float drift).
+
+**Source of truth:** `org.openbravo.erpCommon.ad_callouts.SL_Assets#execute` (lines 43–63 in Etendo Classic). If that Java arithmetic ever changes, `computeAssetAmounts` in `AssetsDetailPanel.jsx` **must** be updated in sync — they are not automatically linked.
+
+### Currency-echo freeze fix
+
+`AssetsDetailPanel` contains a `useEffect` that echoes the backend-provided default currency (`@C_Currency_ID@`) into the form change handler exactly once per new-record session. Without a guard, this creates a passive-effect feedback loop:
+
+> `onChange` fires → `setEditing` updates identity → new `onChange` reference is created → effect re-runs because `onChange` was in its deps → repeat
+
+Because this cycles through React's passive-effect phase (one commit per frame), it never trips the synchronous "Maximum update depth" guard — it silently starves the render queue and freezes route transitions (Cancel and sidebar navigation stop unmounting the detail view).
+
+The fix uses two `useRef` guards:
+- `currencyEchoedRef` — set to `true` after the first echo; reset to `false` when the record gains an `id` (saved, no longer a new record).
+- `onChangeRef` — stores the latest `onChange` so it can be called inside the effect without being listed in the dependency array.
+
+The effect only re-runs when `isNewRecord` or `d.currency` changes, not when `onChange` identity rotates.
+
+### Tests
+
+- `tools/app-shell/src/windows/custom/assets/__tests__/AssetsDetailPanel.test.js` — unit tests for `computeAssetAmounts` covering all three field paths and the `round2` rounding.
+- `tools/app-shell/src/windows/custom/assets/__tests__/AssetsDetailPanelCurrencyEcho.vitest.jsx` — regression test for the currency-echo freeze fix: verifies the effect fires exactly once per new-record session and does not loop.
 
 ## ETP-4103 changes
 
@@ -121,8 +156,8 @@ Changes landed in `feature/ETP-4103`. Covers visual polish, full-form restructur
 - Group 2 (Financial Info): currency, assetValue, residualAssetValue, depreciationAmt, previouslyDepreciatedAmt — moved **inside** Group 3 (Depreciation Config). It only appears when `depreciate=true`. When depreciation is disabled, only the ToggleCard and a disabled hint text are shown.
 - Group 3 (Depreciation Config): ToggleCards + conditional depreciation fields. Financial Info (Group 2) is nested here, visible only when `depreciate=true`. The `ToggleCard` switch now renders the shared `PillToggle` component (`@/components/PillToggle`) instead of an inline `<button role="switch">` — same size/colors/behavior (disabled while not editing), deduped with the match-rule footer and grid toggles. No behavior change.
 - Group 4 (Dates): still visible only when `depreciate=true`.
-- Group 5 (Accounting dimensions): **last section**, visible only when `depreciate=true`. Title key `assetsGroupDimensionsTitle` ("Dimensiones contables" / "Accounting dimensions"). Renders 8 dimension selectors in a 4-column grid (`cols={4}`) via `EntityForm`: Project (C_Project_ID), Cost Center (EM_Etadas_Costcenter_ID), Business Partner (C_BPartner_ID), 1st Dimension (EM_Etadas_User1_ID), 2nd Dimension (EM_Etadas_User2_ID), Sales Region (EM_Etadas_Salesregion_ID), Activity (EM_Etadas_C_Activity_ID), Sales Campaign (EM_Etadas_Campaign_ID). Placed after Dates because it is optional. The grid wrapper forces white backgrounds on selectors (`[&_button[role=combobox]]:!bg-white [&_input]:!bg-white`).
-- All header fields set to `form: false` in `decisions.json` — the standard `EntityForm` renders nothing. `hideFormCard: true` hides the now-empty card. The 8 dimension fields are set to `visibility: editable, form: false` in `decisions.json` so they are registered in the NEO spec (`ETGO_SF_FIELD`) — required for the `/assets/selectors/<column>` endpoints to return options — without being rendered by the standard form. `project` was previously `discarded` and is now re-enabled.
+- Group 5 (Accounting dimensions): **last section**, visible only when `depreciate=true`. Title key `assetsGroupDimensionsTitle` ("Dimensiones contables" / "Accounting dimensions"). Renders the dimension selectors in a 4-column grid (`cols={4}`) via `EntityForm`, placed after Dates because it is optional. The grid wrapper forces white backgrounds on selectors (`[&_button[role=combobox]]:!bg-white [&_input]:!bg-white`). _(Superseded by ETP-4429: the selector set is now Project, Cost Center, Business Partner, and Product — see the ETP-4429 section below.)_
+- All header fields set to `form: false` in `decisions.json` — the standard `EntityForm` renders nothing. `hideFormCard: true` hides the now-empty card. The dimension fields are set to `visibility: editable, form: false` in `decisions.json` so they are registered in the NEO spec (`ETGO_SF_FIELD`) — required for the `/assets/selectors/<column>` endpoints to return options — without being rendered by the standard form. `project` was previously `discarded` and is now re-enabled.
 - Dimension labels resolved via `window.labelOverrides` (es_ES + en_US) in `decisions.json`, mapping each dimension column (e.g. `EM_Etadas_Costcenter_ID` → "Centro de coste" / "Cost Center"); `EntityForm` resolves them through `t(column)` against `api.labelOverrides`.
 - `AssetsAmortizationPanel` moved from `formFooter` to a secondary tab — declared via `window.customPanelTabs` in `decisions.json`; appears as the first secondary tab "Plan de amortización" (before Attachments); reports line count via `onCountChange` for the tab badge.
 - `hideFormCard` prop added to `DetailView.jsx` (default `false`) — when `true`, adds a `hidden` class to the form card wrapper; safe for all other windows because the default is `false`.
@@ -210,3 +245,240 @@ Regenerated on 2026-05-12 as part of the feature/ETP-3908 epic merge. No functio
 - `depreciationEndDate` is intentionally excluded — it is auto-computed by
   `AssetsHandler` from `depreciationStartDate + usableLifeMonths` and should not be
   requested from the user.
+
+## ETP-4402 — Fix orphaned Accounting tab (feature/assets-accounting)
+
+### What was wrong
+
+The `assetAcct` entity (AD_Tab 800190, table `A_Asset_Acct`, holding the general ledger
+schema plus the accumulated-depreciation and depreciation account combinations) was fully
+generated at the data layer — `contract.json` defined its fields, selector endpoints, and
+validations, and `artifacts/assets/generated/web/assets/AssetAcctTable.jsx` /
+`AssetAcctForm.jsx` existed and compiled cleanly — but `window.secondaryTabs` in
+`decisions.json` was an empty object (`{}`). Nothing in `decisions.json` referenced the
+`assetAcct` entity as a tab, so `generate-frontend.js` never imported `AssetAcctTable` /
+`AssetAcctForm` into `AssetsPage.jsx`, and the Accounting child surface never rendered in
+the running app. It looked "already done" from the artifacts alone (fields classified,
+components generated, contract tests passing), but the tab itself was unreachable —
+generated-but-unmounted. Live screenshots confirmed only **Plan de amortizacion**
+(the unrelated `amortizationLine`/`AssetsAmortizationPanel` surface, wired via
+`customPanelTabs`) appeared in the tab strip; there was no Accounting tab at all.
+
+### The fix
+
+Added an entry to `window.secondaryTabs` in `decisions.json`:
+
+```json
+"secondaryTabs": {
+  "assetAcct": {
+    "tabOrder": 1,
+    "label": "Accounting",
+    "addLineFields": ["accountingSchema", "accumulatedDepreciation", "depreciation"],
+    "requireSavedRecord": true
+  }
+}
+```
+
+No `customTable`/`customForm` override was needed — omitting them makes the generator
+default to the exact `AssetAcctTable`/`AssetAcctForm` naming that was already generated
+from the `assetAcct` entity, the same convention used by `contacts`' `secondaryTabs.contact`
+and `secondaryTabs.bankAccount`. `secondaryTabs` is the correct mechanism here (full generic
+grid + add-line form for a child entity), as opposed to `customPanelTabs` (used by
+`amortizationPlan`), which mounts an arbitrary hand-written component with no grid/form
+scaffolding — unnecessary since the generic Table/Form pair already existed and needed no
+custom rendering logic.
+
+Field visibility inside `assetAcct` was verified against the AD and left unchanged:
+`accountingSchema` (`C_AcctSchema_ID`) is `isupdateable = 'N'` at the AD level and correctly
+classified `readOnly` after creation; `accumulatedDepreciation` and `depreciation` are
+`isupdateable = 'Y'` and correctly classified `editable`. All three are exposed as selectors
+in the add-line mini-form so a new accounting mapping row can be created with all three
+values set once, then the accounting schema locks.
+
+No new i18n keys were required — `label: "Accounting"` resolves through `tMenu()` against
+the existing `menus.Accounting` / `tabs.Accounting` entries already present in both
+`en_US.json` and `es_ES.json` ("Accounting" / "Contabilidad").
+
+### Automated evidence (post-fix)
+
+- `artifacts/assets/generated/web/assets/AssetsPage.jsx` now imports `AssetAcctTable` and
+  `AssetAcctForm` from `'./AssetAcctTable'` / `'./AssetAcctForm'` and lists them in
+  `secondaryTabs={[{ key: 'assetAcct', label: 'Accounting', Table: AssetAcctTable, Form: AssetAcctForm, ... }]}`,
+  alongside the pre-existing `customTabs` entries for `amortizationPlan` and `attachments`.
+- `node cli/src/validate-pipeline.js --scope=assets` reports 0 violations.
+
+## ETP-4334 — Visual & toolbar refinements (feature/ETP-4334)
+
+Window-scoped polish plus two cross-cutting changes. Items flagged **(global)** affect
+all windows; everything else is scoped to Assets via `decisions.json` or a custom component.
+
+### Window-scoped changes
+
+- `decisions.json` — `purchaseDate` now has `"dot": false`, removing the red status dot
+  from the grid cell (same treatment already applied to `depreciationStartDate`). The dot
+  was meaningless for this date column.
+- `decisions.json` — `"tabsSeparator": true` added. Draws a full-width `border-b` between
+  the form/sidebar region and the secondary tabs (Amortization Plan / Attachments),
+  spanning across the sidebar column too. Only takes effect together with the existing
+  `sidebarAboveTabsOnly` + sidebar content (both already present). See the generator note below.
+- `decisions.json` — `"formScrollPaddingX": "px-2"` added. The detail content container
+  (form + sidebar + tabs) now uses 8 px horizontal padding instead of the `px-6` (24 px)
+  default. `formScrollPaddingX` was already a generator passthrough; Assets simply did not
+  set it before.
+- `tools/app-shell/src/windows/custom/assets/index.jsx` — **new** custom wrapper (mirrors
+  the generated `index.jsx`) that passes `saveBeforeProcesses` to `AssetsPage`. This renders
+  the **Save** button before the process buttons (e.g. **Create Amortization**) in the
+  toolbar, so the order becomes `[delete] [Save] [Create Amortization]`. The flag is kept out
+  of the global generator vocabulary on purpose — it is an Assets-only toolbar preference.
+- `tools/app-shell/src/windows/registry.js` — `assets` entry added to `customLoaders` so the
+  route resolves to the custom wrapper above (overrides the generated `windowLoaders` entry;
+  `customLoaders` wins). `registry.js` is hand-maintained / pipeline-appended, so the override
+  survives regeneration.
+- `tools/app-shell/src/windows/custom/assets/AssetsDetailPanel.jsx` — the Depreciation Config
+  grid is now always `grid grid-cols-2 gap-4` (was `grid-cols-1 max-w-sm` when depreciation
+  was off). The **Depreciate** ToggleCard previously resized when toggled because the grid
+  switched column templates; it now keeps a constant width in both states, and the
+  **Every month is 30 days** card simply appears in the second column when depreciation is enabled.
+
+### Cross-cutting changes
+
+- `cli/src/generate-frontend.js` + `cli/src/resolve-curated.js` — `tabsSeparator` wired as a
+  first-class `decisions.json` window prop (passthrough + `fragmentIf` emission, mirroring
+  `sidebarAboveTabsOnly`). Additive: defaults to `false`, so no other window's generated
+  output changes. Consumed by `DetailView.jsx` (the full-width border only renders when
+  `sidebarAboveTabsOnly && sidebarContent && tabsSeparator`).
+- **(global)** `tools/app-shell/src/components/contract-ui/DetailView.jsx`
+  (`renderExistingRecordSaveAction`) — the existing-record **Save** button now uses the
+  `Save` (floppy) icon with the light/outline style (`variant="outline"`,
+  `bg-white border-[#D1D4DB] text-[#121217]`, icon color `#64748B`) instead of the `Check`
+  icon on the dark primary button. This affects **all non-draft windows** and aligns the
+  existing-record Save with the new-record Save (which already used the floppy icon) and the
+  draft-mode "Save Draft" button.
+- `tools/app-shell/src/components/contract-ui/DetailView.jsx` — new `saveBeforeProcesses`
+  prop (default `false`). When set, `renderSaveActions` is rendered before the process-button
+  block instead of after it. Default-off, so no behavioral change for any other window.
+
+## ETP-4335 — Amortization status bar fix, plan tab row selection, and Search Key list column (feature/ETP-4335)
+
+### Amortization status bar — 0% renders instead of blank
+
+`renderDepreciationProgress` in `cli/src/generate-frontend.js` (line 327 template) previously
+returned `null` when `pct === 0`, leaving the grid cell empty for assets with no amortization
+progress yet. The guard was tightened to `pct == null`, so the function only hides the cell
+when the status field is genuinely absent. Assets with a DB-backed `etgoAmortizationStatus`
+of `0` now show a 0 % progress bar.
+
+- **File changed:** `cli/src/generate-frontend.js` — `renderDepreciationProgress` template
+- **Generated output updated:** `artifacts/assets/generated/web/assets/AssetsTable.jsx`
+- **Test added:** `tools/app-shell/src/windows/custom/assets/__tests__/AssetsTable.test.js` —
+  new case "renders bar at 0% instead of hiding it when pct is 0"
+
+The `AssetsSidebar.jsx` "Depreciado %" card is unaffected — it reads the same
+`etgoAmortizationStatus` field but delegates rendering to `ProgressCard`, which already
+handled zero correctly.
+
+### Amortization Plan tab — row selection and bulk delete
+
+`AssetsAmortizationPanel.jsx` now supports full row selection on the "Plan de amortización"
+tab, using the same `LinesSelectionBar` portal pattern as Sales Order and Physical Inventory.
+
+**Select-all checkbox** — first column header contains a `Checkbox` with three states:
+unchecked (nothing selected), checked (all rows selected), and indeterminate (some rows
+selected). Driven by `allSelected` / `someSelected` flags derived from the `selectedRows` Set
+and the current `lines` array length.
+
+**Per-row checkbox** — each row has a `Checkbox` in the first column. Clicking toggles the
+row's id in `selectedRows`.
+
+**`LinesSelectionBar` floating bar** — rendered via portal (position tracked by a
+`ResizeObserver` on a `barAnchorRef` div inside the table container). Appears when
+`selectedRows.size > 0`, with a 250 ms exit animation when selection drops to zero. Displays
+selection count, a **Delete** button, and a **Close** button.
+
+**Bulk delete** — `handleDeleteSelected` fires `Promise.allSettled` with parallel `DELETE
+/amortizationLine/{id}` requests for every selected row id. On completion, selection is
+cleared and `fetchLines()` is called to refresh the table. The `LinesSelectionBar` shows a
+loading spinner (`deleting` flag) while requests are in flight.
+
+**Automatic selection clear** — a `useEffect` on `[lines]` calls `setSelectedRows(new Set())`
+whenever the lines array is replaced (e.g. after "Create Amortization" triggers a
+`neo:processSuccess` refresh). This prevents stale ids from persisting across plan
+regenerations.
+
+- **File changed:** `tools/app-shell/src/windows/custom/assets/AssetsAmortizationPanel.jsx`
+
+### Search Key — first column in the assets list view
+
+`searchKey` already had `"searchable": true` and `"form": false` in `decisions.json`. Adding
+`"grid": true` registers it as a visible list column. Because the `columns` array in the
+generator output preserves the field order from `decisions.json`, and `searchKey` is the first
+field declared under `entities.assets.fields`, it becomes the first entry in the generated
+`columns` array.
+
+- **File changed:** `artifacts/assets/decisions.json` — `searchKey` field gains `"grid": true`
+- **Generated output updated:** `artifacts/assets/generated/web/assets/AssetsTable.jsx` —
+  `searchKey` is now the first column in the `columns` array, appearing as **Search Key** in
+  the list/grid view
+
+## ETP-4336 — Cosmetic required asterisk on conditionally-required fields
+
+`AssetsDetailPanel.jsx` sets `requiredVisual: true` on 6 field literals so their labels show
+the red `*` while editing, even though the fields are not declared `required: true`:
+
+- `currency` ("Moneda")
+- `depreciationAmt` ("Valor a amortizar" — column `Amortizationvalueamt`)
+- `annualDepreciation` ("% Amortización anual")
+- `usableLifeYears` ("Vida útil - Años")
+- `usableLifeMonths` ("Vida útil - Meses")
+- `depreciationStartDate` ("Fecha inicio")
+
+This is purely cosmetic — `EntityForm` does not enforce validation from `requiredVisual`, only
+from `required`. It exists because these fields' real obligatoriness is **conditional** on
+"Tipo de cálculo" (`calculateType`, Time vs. Percentage): e.g. `usableLifeYears` is only
+mandatory when calculation type is "Time" and the schedule is yearly, so a real
+`required: true` would incorrectly block submission when the field is hidden or not yet
+applicable. `assetValue` ("Valor del activo") does **not** carry the flag. The asterisk only
+renders while editing — the panel marks these fields read-only in view mode, and `EntityForm`
+gates the marker on `!isReadOnly`.
+
+`requiredVisual` is a reusable `EntityForm` field-descriptor prop, not a `decisions.json`
+option — see `docs/ui-customization.md` for the generic reference.
+
+## ETP-4336 — Amortization Plan total footer
+
+`AssetsAmortizationPanel.jsx` now renders a `<tfoot>` row under the plan lines table showing
+the accumulated total of the **Amount** column — the sum of `amortizationAmount` across all
+fetched lines, formatted with `formatCurrency(orgCurrency, ...)`. This is a hand-authored
+`<table>` (not the generic `DataTable`), so the footer is implemented directly in the panel.
+
+- The total cell is left-aligned, matching the rest of the Amount column in this panel —
+  numbers here are left-aligned by design, unlike right-aligned amount columns elsewhere.
+- The footer only renders when there is at least one plan line (`lines.length > 0`); the
+  empty-state and loading branches show no table at all.
+- **Alert color rule:** the total renders in `text-red-500` when it does **not** match the
+  asset's "amount to amortize" — `data.depreciationAmt` (column `Amortizationvalueamt`, the
+  "Valor a amortizar" field). Both values are rounded to 2 decimals before comparison, with a
+  `0.005` tolerance for float drift (`amortizationTotalMismatch` in the component). When
+  `depreciationAmt` is `null`/`undefined`, the alert is never forced — the total renders in the
+  normal `text-foreground` color.
+
+- **File changed:** `tools/app-shell/src/windows/custom/assets/AssetsAmortizationPanel.jsx`
+
+## ETP-4429 — Product added to accounting dimensions, dimension set trimmed
+
+This iteration adjusts the **Accounting dimensions** group (Group 5) in the Depreciation Setup form. Changes are declared in `artifacts/assets/decisions.json` and rendered by `AssetsDetailPanel.jsx`.
+
+### Product added to the dimensions panel
+
+- A **Product** selector (column `M_Product_ID`, `reference: 'Product'`) is added to the `dimensionFields` array in `AssetsDetailPanel.jsx` and now loads and selects product data correctly through the `/assets/selectors/M_Product_ID` endpoint.
+- In `decisions.json`, the `product` field is classified `visibility: "editable", form: false` so it is registered in the NEO spec (`ETGO_SF_FIELD`) — powering the selector endpoint — without being rendered by the standard form. `labelOverrides` maps `M_Product_ID` → "Producto" (es_ES) / "Product" (en_US).
+
+### Dimension set trimmed to four
+
+- The Accounting dimensions group now shows exactly four selectors, in this order: **Project** (`C_Project_ID`), **Cost Center** (`EM_Etadas_Costcenter_ID`), **Business Partner** / Contacto (`C_BPartner_ID`), and **Product** (`M_Product_ID`).
+- The previously-shown dimensions — **1st Dimension** (`eTADASUser1`), **2nd Dimension** (`eTADASUser2`), **Sales Region** (`eTADASSalesRegion`), **Activity** (`eTADASActivity`), and **Sales Campaign** (`eTADASSalesCampaign`) — are `visibility: "discarded"` in `decisions.json` and no longer appear.
+
+### Manual verification (ETP-4429)
+
+1. Open an asset with **Depreciate** enabled and scroll to **Dimensiones contables**. Confirm exactly four selectors are shown: Project, Cost Center, Business Partner, Product — no 1st/2nd Dimension, Sales Region, Activity, or Sales Campaign.
+2. Open the **Product** selector and confirm it returns product options. Select a product, save, and reopen the asset — confirm the product value persists.

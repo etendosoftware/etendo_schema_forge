@@ -23,6 +23,15 @@ const SRC_DIR = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
 // Monorepo root (schema_forge/) — workspace packages live under it, e.g.
 // tools/app-shell/src and packages/app-shell-core/src.
 const REPO_ROOT_URL = pathToFileURL(resolve(SRC_DIR, '..', '..', '..') + '/').href;
+// @etendosoftware/app-shell-core is Vite-authored library code published to
+// npm (formerly local workspace code under this repo, moved out as part of
+// the Schema Forge repo split — ETP-4346). It uses the same Vite-only
+// constructs (import.meta.env, import.meta.glob) as workspace sources, so it
+// needs the same esbuild transform even though it now lives under
+// node_modules. Every other node_modules package is left on the default loader.
+const APP_SHELL_CORE_URL = pathToFileURL(
+  resolve(SRC_DIR, '..', '..', '..', 'node_modules', '@etendosoftware', 'app-shell-core') + '/'
+).href;
 
 registerHooks({
   resolve(specifier, context, nextResolve) {
@@ -37,9 +46,11 @@ registerHooks({
   },
   load(url, context, nextLoad) {
     // Transpile workspace JSX, and any workspace JS that uses Vite-only
-    // constructs (import.meta.env). node_modules are left to the default loader.
+    // constructs (import.meta.env). node_modules are left to the default
+    // loader, EXCEPT @etendosoftware/app-shell-core (see comment above).
     const isWorkspace = url.startsWith(REPO_ROOT_URL) && !url.includes('/node_modules/');
-    if (url.endsWith('.jsx') || (isWorkspace && url.endsWith('.js'))) {
+    const isAppShellCore = url.startsWith(APP_SHELL_CORE_URL);
+    if (url.endsWith('.jsx') || ((isWorkspace || isAppShellCore) && url.endsWith('.js'))) {
       const source = readFileSync(fileURLToPath(url), 'utf8');
       const { code } = transformSync(source, {
         loader: url.endsWith('.jsx') ? 'jsx' : 'js',
@@ -103,6 +114,7 @@ const {
   pickMessage,
   pickMessageFromObject,
   applyContactNameDefaults,
+  applyContactsRequiredFields,
   parseCriteriaInto,
   normalizeDefaultValue,
   shouldSkipPayloadField,
@@ -262,6 +274,68 @@ describe('applyContactNameDefaults', () => {
     assert.equal(payload.name.length, 60);
     assert.equal(payload.username, expected.slice(0, 60));
     assert.equal(payload.username.length, 60);
+  });
+});
+
+describe('applyContactsRequiredFields', () => {
+  it('applies contact name defaults for a "contact" entity', () => {
+    const payload = { firstName: 'John', lastName: 'Doe' };
+    applyContactsRequiredFields('contact', payload, {});
+    assert.equal(payload.name, 'John Doe');
+  });
+
+  it('falls back businessPartner.name to source.name when payload lacks it', () => {
+    const payload = {};
+    applyContactsRequiredFields('businessPartner', payload, { name: 'Acme Corp' });
+    assert.equal(payload.name, 'Acme Corp');
+  });
+
+  it('defaults businessPartner.searchKey from source.name when absent', () => {
+    const payload = {};
+    applyContactsRequiredFields('businessPartner', payload, { name: 'Acme Corp' });
+    assert.equal(payload.searchKey, 'Acme Corp');
+  });
+
+  it('does NOT overwrite an existing searchKey', () => {
+    const payload = { searchKey: 'EXISTING' };
+    applyContactsRequiredFields('businessPartner', payload, { name: 'Acme Corp' });
+    assert.equal(payload.searchKey, 'EXISTING');
+  });
+
+  it('regression: truncates a long derived searchKey to 40 chars (C_BPartner.Value AD column limit)', () => {
+    // Reproduced via a real create with a 48-char commercial name:
+    // "Value too long. Length 48, maximum allowed 40".
+    const longName = 'a'.repeat(48);
+    const payload = {};
+    applyContactsRequiredFields('businessPartner', payload, { name: longName });
+    assert.equal(payload.searchKey, longName.slice(0, 40));
+    assert.equal(payload.searchKey.length, 40);
+  });
+
+  it('regression: does not truncate payload.name itself (only searchKey), Name has more headroom (60)', () => {
+    const longName = 'b'.repeat(48);
+    const payload = {};
+    applyContactsRequiredFields('businessPartner', payload, { name: longName });
+    assert.equal(payload.name, longName);
+    assert.equal(payload.name.length, 48);
+  });
+
+  it('truncates the source.searchKey fallback too (not just source.name)', () => {
+    const longSearchKey = 'c'.repeat(45);
+    const payload = {};
+    applyContactsRequiredFields('businessPartner', payload, { searchKey: longSearchKey, name: 'Short Name' });
+    assert.equal(payload.searchKey, longSearchKey.slice(0, 40));
+    assert.equal(payload.searchKey.length, 40);
+  });
+
+  it('leaves payload untouched for entities that are not contact/businessPartner', () => {
+    const payload = { name: 'Product X' };
+    const result = applyContactsRequiredFields('product', payload, {});
+    assert.deepEqual(result, { name: 'Product X' });
+  });
+
+  it('returns payload unchanged for non-object input', () => {
+    assert.equal(applyContactsRequiredFields('businessPartner', null, {}), null);
   });
 });
 

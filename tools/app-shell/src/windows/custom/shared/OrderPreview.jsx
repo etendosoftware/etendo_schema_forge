@@ -39,7 +39,7 @@ async function fetchPaymentsIn(orderId, token, apiBaseUrl) {
 
 // ── General tab content ───────────────────────────────────────────────────────
 
-function OrderGeneralTab({ order, specName, token, apiBaseUrl, orgCurrencyCode, exchangeRate, orgGrandTotal, ratePrecision }) {
+function OrderGeneralTab({ order, specName, token, apiBaseUrl, orgCurrencyCode, exchangeRate, orgGrandTotal, ratePrecision, onSend }) {
   const ui = useUI();
   const isSalesOrder = specName === 'sales-order';
 
@@ -70,7 +70,7 @@ function OrderGeneralTab({ order, specName, token, apiBaseUrl, orgCurrencyCode, 
         orgGrandTotal={orgGrandTotal}
         ratePrecision={ratePrecision}
         data-testid="SummaryCard__90f59a" />
-      <EmailsCard onSend={undefined} data-testid="EmailsCard__90f59a" />
+      <EmailsCard onSend={onSend} data-testid="EmailsCard__90f59a" />
       {isSalesOrder && (
         <RelatedDocumentsCard
           documentId={order.id}
@@ -149,6 +149,17 @@ export default function OrderPreview({ order, token, apiBaseUrl, windowName, spe
     ? { storeCondition: true, sourceBlob: pdfBlob, autoFetch: true, documentId: order.id, specName, token, apiBaseUrl }
     : { storeCondition: false, documentId: order.id, specName, token, apiBaseUrl };
 
+  // ── Email modal helpers ─────────────────────────────────────────────────────
+
+  const openEmailModal = () => {
+    setSendModalClosing(false);
+    setShowSendModal(true);
+  };
+  const closeEmailModal = () => {
+    setSendModalClosing(true);
+    setTimeout(() => { setShowSendModal(false); setSendModalClosing(false); }, 300);
+  };
+
   // ── Tabs ────────────────────────────────────────────────────────────────────
 
   const tabs = [
@@ -164,6 +175,7 @@ export default function OrderPreview({ order, token, apiBaseUrl, windowName, spe
         exchangeRate={exchangeRate}
         orgGrandTotal={orgGrandTotal}
         ratePrecision={ratePrecision}
+        onSend={openEmailModal}
         data-testid="OrderGeneralTab__90f59a" />,
     },
     {
@@ -183,17 +195,6 @@ export default function OrderPreview({ order, token, apiBaseUrl, windowName, spe
         data-testid="PreviewEmptyPanel__90f59a" />,
     },
   ];
-
-  // ── Email modal helpers ─────────────────────────────────────────────────────
-
-  const openEmailModal = () => {
-    setSendModalClosing(false);
-    setShowSendModal(true);
-  };
-  const closeEmailModal = () => {
-    setSendModalClosing(true);
-    setTimeout(() => { setShowSendModal(false); setSendModalClosing(false); }, 300);
-  };
 
   const handleDownloadPdf = () => {
     if (!pdfBlob) return;

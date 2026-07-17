@@ -3,6 +3,7 @@
   "window": {
     "category": "sales",
     "name": "Sales Quotation",
+    "documentDateField": "orderDate",
     "selectorPriceCurrency": "org",
     "salesTheme": true,
     "notesField": "description",
@@ -338,7 +339,8 @@
           "inputMode": "number",
           "order": 5,
           "gridOrder": 5,
-          "min": 0
+          "min": 0,
+          "max": 100
         },
         "lineNetAmount": {
           "grid": false,

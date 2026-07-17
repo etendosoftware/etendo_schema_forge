@@ -1,11 +1,24 @@
-.PHONY: test test-all-coverage test-ci test-ci-coverage test-frontend test-e2e test-e2e-headless test-e2e-debug test-e2e-ui test-e2e-report test-e2e-record generate regen dev dev-with-shell dev-mock build install install-e2e deploy clean help report-serve report-serve-detach report-stop report-preview validate-pipeline quality-gate domain-boundary-check sonar sonar-coverage sonar-file-coverage menu-cache uuid test-xml-regeneration-check test-python xml-regeneration-check dump-delta regen-check regen-check-help regen-check-clean regen-help data-fixes data-fixes-help
+.PHONY: test test-all-coverage test-ci test-ci-coverage test-frontend test-e2e test-e2e-headless test-e2e-debug test-e2e-ui test-e2e-report test-e2e-record test-e2e-onboarding-integration email-stress-limits email-stress-limits-report email-stress-help generate regen dev dev-local-core dev-mock build install bump-core-version install-e2e deploy clean help report-serve report-serve-detach report-stop report-preview validate-pipeline method-budget window-leak-budget quality-gate domain-boundary-check sonar sonar-coverage menu-cache uuid merge-block-check xml-regeneration-check dump-delta regen-check regen-check-help regen-check-clean regen-help data-fixes data-fixes-help data-fixes-remote db-tunnel db-tunnel-down db-tunnel-status db-psql db-tunnel-help switch-to-es ensure-locale project-status
+
+export SF_ROOT := $(CURDIR)
+
+# --- CLI source resolution -------------------------------------------------
+# By default the pipeline runs the PUBLISHED CLI (@etendosoftware/schema-forge-cli)
+# via `npx`. Set LOCAL_CORE=1 to run the CLI from the sibling schema_forge_core
+# SOURCE instead (for developers who also work on the core tooling). Requires
+# schema_forge_core cloned as a sibling AND its deps installed (`npm install`
+# there). Unset LOCAL_CORE (servers, CI, functional-only devs) keeps the exact
+# published behaviour. See docs/repo-topology.md.
+ifeq ($(LOCAL_CORE),1)
+SF := ./cli/sf-local
+else
+SF := npx
+endif
 
 # --- Testing ---
 
-test: ## Run all unit tests (CLI + app-shell + artifacts + vitest)
-	cd cli && node --test 'test/*.test.js'
-	npm test --workspace=packages/schema-forge-core
-	npm test --workspace=packages/app-shell-core
+test: ## Run all unit tests (CLI data-fixes + app-shell + artifacts + vitest)
+	node --test 'cli/test/*.test.js'
 	node --test 'tools/app-shell/src/**/__tests__/*.test.js'
 	node --test 'tools/app-shell/test/*.test.js'
 	node --test 'artifacts/**/__tests__/*.test.js'
@@ -13,18 +26,36 @@ test: ## Run all unit tests (CLI + app-shell + artifacts + vitest)
 
 test-all-coverage: ## Run ALL unit tests (Node + Vitest) with coverage reports
 	@mkdir -p coverage
-	@echo "=== CLI tests ==="
-	node --test --experimental-test-coverage --test-reporter=lcov --test-reporter-destination=coverage/cli-lcov.info 'cli/test/*.test.js'
-	@echo "=== App-shell Node tests ==="
-	node --test --experimental-test-coverage --test-reporter=lcov --test-reporter-destination=coverage/appshell-lcov.info 'tools/app-shell/src/**/__tests__/*.test.js'
-	@echo "=== App-shell extra tests ==="
-	node --test --experimental-test-coverage --test-reporter=lcov --test-reporter-destination=coverage/appshell-test-lcov.info 'tools/app-shell/test/*.test.js'
-	@echo "=== Artifact custom tests ==="
-	node --test --experimental-test-coverage --test-reporter=lcov --test-reporter-destination=coverage/artifacts-lcov.info 'artifacts/**/__tests__/*.test.js'
+	@echo "=== Node tests (4 groups in parallel) ==="
+	@node --test --experimental-test-coverage \
+		--test-reporter=spec --test-reporter-destination=stdout \
+		--test-reporter=lcov --test-reporter-destination=coverage/cli-lcov.info \
+		$(shell find cli/test -name '*.test.js') > coverage/cli.log 2>&1 & pid1=$$!; \
+	node --test --experimental-test-coverage \
+		--test-reporter=spec --test-reporter-destination=stdout \
+		--test-reporter=lcov --test-reporter-destination=coverage/appshell-lcov.info \
+		$(shell find tools/app-shell/src -path '*/__tests__/*.test.js' ! -name 'useEntity-helpers.test.js') > coverage/appshell.log 2>&1 & pid2=$$!; \
+	node --test --experimental-test-coverage \
+		--test-reporter=spec --test-reporter-destination=stdout \
+		--test-reporter=lcov --test-reporter-destination=coverage/appshell-test-lcov.info \
+		$(shell find tools/app-shell/test -name '*.test.js') > coverage/appshell-test.log 2>&1 & pid3=$$!; \
+	node --test --experimental-test-coverage \
+		--test-reporter=spec --test-reporter-destination=stdout \
+		--test-reporter=lcov --test-reporter-destination=coverage/artifacts-lcov.info \
+		$(shell find artifacts -path '*/__tests__/*.test.js') > coverage/artifacts.log 2>&1 & pid4=$$!; \
+	wait $$pid1; e1=$$?; \
+	wait $$pid2; e2=$$?; \
+	wait $$pid3; e3=$$?; \
+	wait $$pid4; e4=$$?; \
+	[ $$e1 -eq 0 ] || { echo "CLI tests FAILED:"; tail -30 coverage/cli.log; exit 1; }; \
+	[ $$e2 -eq 0 ] || { echo "App-shell Node tests FAILED:"; tail -30 coverage/appshell.log; exit 1; }; \
+	[ $$e3 -eq 0 ] || { echo "App-shell extra tests FAILED:"; tail -30 coverage/appshell-test.log; exit 1; }; \
+	[ $$e4 -eq 0 ] || { echo "Artifact tests FAILED:"; tail -30 coverage/artifacts.log; exit 1; }; \
+	echo "=== Node tests: all passed ==="
 	@echo "=== Vitest (React components) ==="
-	cd tools/app-shell && npx vitest run --coverage && sed 's|^SF:src/|SF:tools/app-shell/src/|' coverage/vitest/lcov.info > ../../coverage/vitest-lcov.info
+	cd tools/app-shell && npx vitest run --coverage --coverage.reporter=lcov && sed 's|^SF:src/|SF:tools/app-shell/src/|' coverage/vitest/lcov.info > ../../coverage/vitest-lcov.info
 	@echo "=== Merging LCOV reports ==="
-	npx lcov-result-merger 'coverage/*-lcov.info' coverage/merged-lcov.info
+	node scripts/merge-lcov.js 'coverage/*-lcov.info' coverage/merged-lcov.info
 	@echo ""
 	@echo "Coverage reports saved in coverage/"
 	@echo "  Individual: cli-lcov.info, appshell-lcov.info, appshell-test-lcov.info, artifacts-lcov.info, vitest-lcov.info"
@@ -36,11 +67,6 @@ test-ci: ## Run all unit tests and write JUnit XML reports (CI mode)
 	  --test-reporter=spec --test-reporter-destination=stdout \
 	  --test-reporter=junit --test-reporter-destination=test-results/cli.xml \
 	  'cli/test/*.test.js'
-	node --test \
-	  --test-reporter=spec --test-reporter-destination=stdout \
-	  --test-reporter=junit --test-reporter-destination=test-results/schema-forge-core.xml \
-	  'packages/schema-forge-core/test/*.test.js'
-	npm test --workspace=packages/app-shell-core
 	node --test \
 	  --test-reporter=spec --test-reporter-destination=stdout \
 	  --test-reporter=junit --test-reporter-destination=test-results/appshell-node.xml \
@@ -72,22 +98,84 @@ test-ci-coverage: ## Run all unit tests with JUnit XML reports + LCOV coverage (
 	  --test-reporter=junit --test-reporter-destination=test-results/artifacts.xml \
 	  --test-reporter=lcov --test-reporter-destination=coverage/artifacts-lcov.info \
 	  'artifacts/**/__tests__/*.test.js'
-	cd tools/app-shell && npx vitest run --coverage \
+	cd tools/app-shell && npx vitest run --coverage --coverage.reporter=lcov \
 	  --reporter=junit \
 	  --outputFile=../../test-results/vitest.xml \
 	  && cp coverage/vitest/lcov.info ../../coverage/vitest-lcov.info
 	@echo "=== Merging LCOV reports ==="
-	npx lcov-result-merger 'coverage/*-lcov.info' coverage/merged-lcov.info
+	node scripts/merge-lcov.js 'coverage/*-lcov.info' coverage/merged-lcov.info
 
 validate-pipeline: ## Validate pipeline completeness across all artifacts
-	node cli/src/validate-pipeline.js --format=text
+	$(SF) sf-validate-pipeline --format=text
+
+method-budget: ## Ratchet guard: fail only if a tracked class grew past its method baseline
+	$(SF) sf-method-budget
+
+window-leak-budget: ## Ratchet guard: fail only if window-specific literals in contract-ui grew (use --list to enumerate)
+	$(SF) sf-window-leak-budget
 
 test-frontend: ## Run only frontend generator tests
 	cd cli && node --test 'test/generate-frontend.test.js'
 
+SCENARIO ?= double-send
+WINDOW_NAME ?= sales-order
+BASE_URL ?= http://127.0.0.1:8080/etendo_sf2
+WORKER_STEPS ?= 1,2,5,10,20,50
+RESET_SAFETY ?= 1
+DOC_ID ?=
+DOC_IDS ?=
+TOKEN ?=
+DB_GRADLE_PROPERTIES ?=
+EMAIL_STRESS_REPORT ?= docs/reports/email-stress-limit-report-$(shell date +%Y-%m-%d-%H%M%S).html
+
+email-stress-limits: ## Probe email contract limits. Usage: make email-stress-limits TOKEN=... DOC_ID=... [WORKER_STEPS=1,2,5,10,20]
+	@if [ -z "$(TOKEN)" ]; then \
+	  echo "Usage: make email-stress-limits TOKEN=<jwt> DOC_ID=<id> [SCENARIO=double-send|concurrent-load] [WORKER_STEPS=1,2,5,10,20]"; \
+	  exit 1; \
+	fi; \
+	if [ "$(SCENARIO)" = "double-send" ] && [ -z "$(DOC_ID)" ]; then \
+	  echo "DOC_ID is required for SCENARIO=double-send"; \
+	  exit 1; \
+	fi; \
+	if [ "$(SCENARIO)" = "concurrent-load" ] && [ -z "$(DOC_IDS)" ]; then \
+	  echo "DOC_IDS is recommended for SCENARIO=concurrent-load; synthetic IDs will not work against a real backend."; \
+	fi; \
+	EXTRA_ARGS=""; \
+	if [ -n "$(DB_GRADLE_PROPERTIES)" ]; then EXTRA_ARGS="$$EXTRA_ARGS --db-gradle-properties $(DB_GRADLE_PROPERTIES)"; fi; \
+	STRESS_RESET_SAFETY="$(RESET_SAFETY)" \
+	ETENDO_TOKEN="$(TOKEN)" \
+	ETENDO_BASE_URL="$(BASE_URL)" \
+	STRESS_WINDOW="$(WINDOW_NAME)" \
+	STRESS_WORKER_STEPS="$(WORKER_STEPS)" \
+	STRESS_DOC_ID="$(DOC_ID)" \
+	STRESS_DOC_IDS="$(DOC_IDS)" \
+	node cli/test/stress/limits.js --scenario "$(SCENARIO)" $$EXTRA_ARGS
+
+email-stress-limits-report: ## Probe email limits and generate a Jest/JUnit-style HTML report
+	@STRESS_HTML_REPORT="$(EMAIL_STRESS_REPORT)" \
+	$(MAKE) email-stress-limits; \
+	status=$$?; \
+	echo "Email stress HTML report: $(EMAIL_STRESS_REPORT)"; \
+	exit $$status
+
+email-stress-help: ## Show email stress limit probe variables
+	@echo "Usage:"
+	@echo "  make email-stress-limits TOKEN=<jwt> DOC_ID=<id>"
+	@echo "  make email-stress-limits SCENARIO=concurrent-load TOKEN=<jwt> DOC_IDS=id1,id2,id3 WORKER_STEPS=5,10,25"
+	@echo ""
+	@echo "Variables:"
+	@echo "  SCENARIO=double-send|concurrent-load   Default: double-send"
+	@echo "  WINDOW_NAME=<spec>                     Default: sales-order"
+	@echo "  BASE_URL=<etendo-root>                 Default: http://127.0.0.1:8080/etendo_sf2"
+	@echo "  WORKER_STEPS=1,2,5,10,20,50            Worker ramp to execute"
+	@echo "  RESET_SAFETY=1                         Clear target record throttle + matching audits before each step"
+	@echo "  DOC_ID=<id>                            Required for double-send"
+	@echo "  DOC_IDS=id1,id2,...                    Recommended for concurrent-load"
+	@echo "  DB_GRADLE_PROPERTIES=<path>            Optional DB config source for RESET_SAFETY"
+	@echo "  EMAIL_STRESS_REPORT=<path>             HTML report path for email-stress-limits-report"
 
 quality-gate: ## Run Schema Forge quality gate for PR-affected windows
-	node cli/src/quality-gate.js --pr-affected --baseline-ref origin/main --format md
+	$(SF) sf-quality-gate --pr-affected --baseline-ref origin/main --format md
 
 domain-boundary-check: ## Check changed files against monorepo intent/domain boundaries (BASE=<ref>, HEAD=<ref>)
 	@if [ -z "$(BASE)" ]; then \
@@ -99,7 +187,7 @@ domain-boundary-check: ## Check changed files against monorepo intent/domain bou
 	ARGS="--base $(BASE) --head $$HEAD_REF"; \
 	if [ -n "$(LABELS)" ]; then ARGS="$$ARGS --labels $(LABELS)"; fi; \
 	if [ -n "$(PR_BODY_FILE)" ]; then ARGS="$$ARGS --pr-body-file $(PR_BODY_FILE)"; fi; \
-	npx sf-domain-boundary-check $$ARGS
+	$(SF) sf-domain-boundary-check $$ARGS
 # --- E2E Testing (Playwright) ---
 
 # Parallel workers for E2E runs. Override to go faster: `make test-e2e-headless WORKERS=8`.
@@ -124,29 +212,36 @@ test-e2e-report: ## Show last E2E test report in browser
 test-e2e-record: ## Record a test flow (opens browser, generates code)
 	cd e2e && npx playwright codegen --save-storage=auth.json http://localhost:3100 --output=recordings/recorded-flow.spec.js
 
+test-e2e-onboarding-integration: ## Run the live onboarding integration spec (requires a running backend at BASE_URL, default :3100)
+	cd e2e && E2E_ONBOARDING_INTEGRATION=1 npx playwright test tests/flows/onboarding-register.integration.spec.js
+
 install-e2e: ## Install E2E dependencies + browsers
 	cd e2e && npm install && npx playwright install chromium
 
 # --- Code Generation ---
 
 generate: ## Generate frontend from Sales Order contract
-	node cli/src/generate-frontend.js artifacts/sales-order/contract.json
+	$(SF) sf-generate-frontend artifacts/sales-order/contract.json
 
 PUSH_TO_NEO ?= 0
 SKIP_EXTRACT ?= 0
 CACHE_DB ?= 0
 FROM_CACHE ?= 0
 ONLY ?=
+SF_CACHE_PATH ?= cli/cache/ad-snapshot
 
 regen: ## Re-run full pipeline for all active windows (HELP=1 or `make regen-help` for options)
 	@if [ "$(HELP)" = "1" ]; then $(MAKE) -s regen-help; exit 0; fi; \
 	REGEN_ARGS=""; \
+	CACHE_ENV="SF_CACHE_PATH=$(SF_CACHE_PATH)"; \
 	if [ "$(PUSH_TO_NEO)" = "1" ]; then REGEN_ARGS="$$REGEN_ARGS --push-to-neo"; fi; \
 	if [ "$(SKIP_EXTRACT)" = "1" ]; then REGEN_ARGS="$$REGEN_ARGS --skip-extract"; fi; \
-	if [ "$(CACHE_DB)" = "1" ]; then REGEN_ARGS="$$REGEN_ARGS --write-cache"; fi; \
-	if [ "$(FROM_CACHE)" = "1" ]; then REGEN_ARGS="$$REGEN_ARGS --from-cache"; fi; \
+	if [ "$(CACHE_DB)" = "1" ]; then REGEN_ARGS="$$REGEN_ARGS --write-cache"; \
+		if [ -z "$(ONLY)" ]; then CACHE_ENV="$$CACHE_ENV SF_CACHE_SWEEP=1"; fi; \
+	fi; \
+	if [ "$(FROM_CACHE)" = "1" ]; then CACHE_ENV="$$CACHE_ENV SF_CACHE_MODE=read"; fi; \
 	if [ -n "$(ONLY)" ]; then REGEN_ARGS="$$REGEN_ARGS --only $(ONLY)"; fi; \
-	node cli/src/regen-all.js $$REGEN_ARGS
+	env $$CACHE_ENV $(SF) sf-regen-all $$REGEN_ARGS
 
 regen-help: ## Show usage and examples for `make regen`
 	@echo "Usage: make regen [VAR=value ...]"
@@ -155,8 +250,8 @@ regen-help: ## Show usage and examples for `make regen`
 	@echo "  ONLY=<spec>[,<spec>...]   Run only the given window spec(s) (kebab-case, matches artifacts/<spec>/)"
 	@echo "  PUSH_TO_NEO=1             Push the resulting config to NEO Headless after regenerating"
 	@echo "  SKIP_EXTRACT=1            Skip the DB extraction step (reuse existing schema-raw.json)"
-	@echo "  CACHE_DB=1                Run against DB and refresh cli/cache/ad-snapshot.json (commit the diff)"
-	@echo "  FROM_CACHE=1              Run extractors offline using cli/cache/ad-snapshot.json (no DB needed)"
+	@echo "  CACHE_DB=1                Run against DB and refresh $(SF_CACHE_PATH) (commit the diff)"
+	@echo "  FROM_CACHE=1              Run extractors offline using $(SF_CACHE_PATH) (no DB needed)"
 	@echo ""
 	@echo "Examples:"
 	@echo "  make regen                                # all active windows"
@@ -169,8 +264,11 @@ regen-help: ## Show usage and examples for `make regen`
 	@echo ""
 	@echo "Notes:"
 	@echo "  - Window specs are the directory names under artifacts/ (kebab-case)."
-	@echo "  - For a single window, you can also run: node cli/src/resolve-curated.js --window <spec> --write"
+	@echo "  - For a single window, you can also run: $(SF) sf-resolve-curated --window <spec> --write"
 	@echo "  - CACHE_DB and FROM_CACHE are mutually exclusive."
+	@echo "  - The AD cache is one file per query under $(SF_CACHE_PATH)/<key>.json."
+	@echo "  - A full 'make regen CACHE_DB=1' (no ONLY=) also prunes orphan cache files (SF_CACHE_SWEEP=1);"
+	@echo "    scoped 'CACHE_DB=1 ONLY=<spec>' never sweeps, so it only refreshes that window's queries."
 
 # --- Push-to-NEO Delta Dump ---
 
@@ -185,9 +283,9 @@ dump-delta: ## Dump the writes push-to-neo WOULD make for ONLY=<spec> (no DB wri
 	DELTA_ARGS=""; \
 	if [ -n "$(PREV_XML_DIR)" ]; then DELTA_ARGS="$$DELTA_ARGS --prev-xml-dir $(PREV_XML_DIR)"; fi; \
 	CACHE_ENV=""; \
-	if [ "$(FROM_CACHE)" = "1" ]; then CACHE_ENV="SF_CACHE_MODE=read"; fi; \
-	if [ "$(CACHE_DB)" = "1" ]; then CACHE_ENV="SF_CACHE_MODE=write"; fi; \
-	env $$CACHE_ENV node cli/src/push-to-neo.js $(ONLY) --dump-delta artifacts/$(ONLY)/neo-delta.json $$DELTA_ARGS
+	if [ "$(FROM_CACHE)" = "1" ]; then CACHE_ENV="SF_CACHE_MODE=read SF_CACHE_PATH=$(SF_CACHE_PATH)"; fi; \
+	if [ "$(CACHE_DB)" = "1" ]; then CACHE_ENV="SF_CACHE_MODE=write SF_CACHE_PATH=$(SF_CACHE_PATH)"; fi; \
+	env $$CACHE_ENV $(SF) sf-push-neo $(ONLY) --dump-delta artifacts/$(ONLY)/neo-delta.json $$DELTA_ARGS
 
 # --- Offline Regeneration Check (Slice 3) ---
 #
@@ -215,8 +313,9 @@ process.stdout.write(r.windows.filter(w=>{\
 	fi; \
 	REGEN_ARGS="--only $$SPECS --skip-extract"; \
 	if [ "$(CACHE_DB)" = "1" ]; then REGEN_ARGS="--only $$SPECS --write-cache"; fi; \
-	if [ "$(FROM_CACHE)" = "1" ]; then REGEN_ARGS="--only $$SPECS --from-cache"; fi; \
-	node cli/src/regen-all.js $$REGEN_ARGS || exit $$?; \
+	CACHE_ENV=""; \
+	if [ "$(FROM_CACHE)" = "1" ]; then REGEN_ARGS="--only $$SPECS"; CACHE_ENV="SF_CACHE_MODE=read SF_CACHE_PATH=$(SF_CACHE_PATH)"; fi; \
+	env $$CACHE_ENV $(SF) sf-regen-all $$REGEN_ARGS || exit $$?; \
 	FAIL=0; TOTAL_OK=0; TOTAL_FAIL=0; \
 	for spec in $$(echo "$$SPECS" | tr ',' ' '); do \
 	  OUTDIR="$(REGEN_CHECK_OUT_ROOT)/$$spec"; \
@@ -224,19 +323,19 @@ process.stdout.write(r.windows.filter(w=>{\
 	  echo ""; \
 	  echo "=== regen-check: $$spec ==="; \
 	  CACHE_ENV=""; \
-	  if [ "$(FROM_CACHE)" = "1" ]; then CACHE_ENV="SF_CACHE_MODE=read"; fi; \
-	  if [ "$(CACHE_DB)" = "1" ]; then CACHE_ENV="SF_CACHE_MODE=write"; fi; \
-	  env $$CACHE_ENV node cli/src/push-to-neo.js $$spec \
+	  if [ "$(FROM_CACHE)" = "1" ]; then CACHE_ENV="SF_CACHE_MODE=read SF_CACHE_PATH=$(SF_CACHE_PATH)"; fi; \
+	  if [ "$(CACHE_DB)" = "1" ]; then CACHE_ENV="SF_CACHE_MODE=write SF_CACHE_PATH=$(SF_CACHE_PATH)"; fi; \
+	  env $$CACHE_ENV $(SF) sf-push-neo $$spec \
 	    --dump-delta "$$OUTDIR/neo-delta.json" \
 	    --prev-xml-dir "$(REGEN_CHECK_PREV_XML_DIR)" || { FAIL=1; TOTAL_FAIL=$$((TOTAL_FAIL+1)); continue; }; \
-	  node cli/src/xml-apply-delta.js \
+	  $(SF) sf-xml-apply-delta \
 	    --prev-xml-dir "$(REGEN_CHECK_PREV_XML_DIR)" \
 	    --delta "$$OUTDIR/neo-delta.json" \
 	    --out-dir "$$OUTDIR/predicted/sourcedata" || { FAIL=1; TOTAL_FAIL=$$((TOTAL_FAIL+1)); continue; }; \
 	  cp "$(REGEN_CHECK_PREV_XML_DIR)/ETGO_SF_SPEC.xml"   "$$OUTDIR/prev/sourcedata/"; \
 	  cp "$(REGEN_CHECK_PREV_XML_DIR)/ETGO_SF_ENTITY.xml" "$$OUTDIR/prev/sourcedata/"; \
 	  cp "$(REGEN_CHECK_PREV_XML_DIR)/ETGO_SF_FIELD.xml"  "$$OUTDIR/prev/sourcedata/"; \
-	  if node cli/src/xml-regeneration-check.js "$$OUTDIR/prev" "$$OUTDIR/predicted" --include-dir sourcedata; then \
+	  if $(SF) sf-xml-regeneration-check "$$OUTDIR/prev" "$$OUTDIR/predicted" --include-dir sourcedata; then \
 	    echo "  result: OK"; TOTAL_OK=$$((TOTAL_OK+1)); \
 	  else \
 	    echo "  result: DRIFT (see $$OUTDIR/)"; FAIL=1; TOTAL_FAIL=$$((TOTAL_FAIL+1)); \
@@ -253,7 +352,7 @@ regen-check-help: ## Show usage and examples for `make regen-check`
 	@echo ""
 	@echo "Variables:"
 	@echo "  ONLY=<spec>[,<spec>...]      Comma-separated window specs (kebab-case)"
-	@echo "  FROM_CACHE=1                 Run the full check offline from cli/cache/ad-snapshot.json"
+	@echo "  FROM_CACHE=1                 Run the full check offline from $(SF_CACHE_PATH)"
 	@echo "  CACHE_DB=1                   Refresh cache from DB during the regen step (writes snapshot)"
 	@echo "  REGEN_CHECK_PREV_XML_DIR     Path to committed ETGO_SF_*.xml directory"
 	@echo "                               (default: ../modules/com.etendoerp.go/src-db/database/sourcedata)"
@@ -268,7 +367,7 @@ regen-check-help: ## Show usage and examples for `make regen-check`
 	@echo "  - Windows only (specType=W). Process/report specs are NOT supported yet."
 	@echo "  - Exit code 0 = no drift, non-zero = drift or pipeline error."
 	@echo "  - Outputs are under tmp/regen-check/<spec>/ (gitignored)."
-	@echo "  - To refresh the AD cache when AD changes: make regen ONLY=<spec> CACHE_DB=1, then commit cli/cache/ad-snapshot.json."
+	@echo "  - To refresh the AD cache when AD changes: make regen ONLY=<spec> CACHE_DB=1, then commit $(SF_CACHE_PATH)."
 
 regen-check-clean: ## Remove tmp/regen-check/ outputs
 	rm -rf $(REGEN_CHECK_OUT_ROOT)
@@ -321,35 +420,130 @@ data-fixes-help: ## Show usage and examples for `make data-fixes`
 	@echo "  - Authoring rules + skeleton: cli/src/data-fixes/sql/README.md."
 	@echo "  - Exit code is non-zero if any tenant's chain halted on a FAILED fix."
 
+# --- Remote DB tunnel (SSH → RDS in a private VPC) ---
+#
+# Supply connection details inline (SSH_HOST, DB_HOST, DB_USER, DB_PASSWORD, ...)
+# or save a profile at ~/.config/schema-forge/remote/<name>.env and pass PROFILE=.
+# Flags always win over a profile. Run `make db-tunnel-help` for the full guide.
+
+PROFILE     ?=
+SSH_HOST    ?=
+DB_HOST     ?=
+DB_PORT     ?=
+DB_NAME     ?=
+DB_USER     ?=
+DB_PASSWORD ?=
+LOCAL_PORT  ?=
+
+# Assemble scripts/db-tunnel.sh connection flags from whatever vars are set.
+TUNNEL_FLAGS = $(if $(PROFILE),--profile $(PROFILE)) $(if $(SSH_HOST),--ssh-host $(SSH_HOST)) $(if $(DB_HOST),--db-host $(DB_HOST)) $(if $(DB_PORT),--db-port $(DB_PORT)) $(if $(DB_NAME),--db-name $(DB_NAME)) $(if $(DB_USER),--db-user $(DB_USER)) $(if $(DB_PASSWORD),--db-password '$(DB_PASSWORD)') $(if $(LOCAL_PORT),--local-port $(LOCAL_PORT))
+
+db-tunnel: ## Open a persistent SSH tunnel to a remote DB (connection vars or PROFILE=)
+	@scripts/db-tunnel.sh $(strip $(TUNNEL_FLAGS)) up
+
+db-tunnel-down: ## Close the remote DB tunnel
+	@scripts/db-tunnel.sh $(strip $(TUNNEL_FLAGS)) down
+
+db-tunnel-status: ## Report whether the remote DB tunnel is up
+	@scripts/db-tunnel.sh $(strip $(TUNNEL_FLAGS)) status
+
+db-psql: ## Interactive psql to a remote DB through the tunnel (SQL='...' or ARGS='...' optional)
+	@scripts/db-tunnel.sh $(strip $(TUNNEL_FLAGS)) psql $(if $(SQL),-- -c "$(SQL)") $(ARGS)
+
+data-fixes-remote: ## Run the tenant data-fixes runner against a REMOTE DB via the tunnel (same vars as data-fixes; no flags = interactive TUI)
+	@if [ "$(HELP)" = "1" ]; then $(MAKE) -s db-tunnel-help; exit 0; fi; \
+	DF_ARGS=""; \
+	if [ "$(LIST_CLIENTS)" = "1" ]; then DF_ARGS="$$DF_ARGS --list-clients"; fi; \
+	if [ "$(MARK_FIXED)" = "1" ]; then DF_ARGS="$$DF_ARGS --mark-fixed"; fi; \
+	if [ "$(DRY_RUN)" = "1" ]; then DF_ARGS="$$DF_ARGS --dry-run"; fi; \
+	if [ -n "$(CLIENT)" ]; then DF_ARGS="$$DF_ARGS --client $(CLIENT)"; fi; \
+	if [ -n "$(FIX)" ]; then DF_ARGS="$$DF_ARGS --fix $(FIX)"; fi; \
+	if [ -n "$(REASON)" ]; then DF_ARGS="$$DF_ARGS --reason \"$(REASON)\""; fi; \
+	scripts/db-tunnel.sh $(strip $(TUNNEL_FLAGS)) run -- \
+		sh -c "node cli/src/data-fixes/run.js $$DF_ARGS"
+
+db-tunnel-help: ## Show usage and examples for the remote DB tunnel targets
+	@echo "Remote DB tunnel — reach an RDS in a private VPC through an SSH bastion."
+	@echo ""
+	@echo "Connection (inline flags win over a saved PROFILE):"
+	@echo "  SSH_HOST=<alias|host>   Bastion to tunnel through (e.g. etendo-go-staging)"
+	@echo "  DB_HOST=<rds-endpoint>  Remote DB host as seen FROM the bastion"
+	@echo "  DB_PORT=<port>          Remote DB port                       (default 5432)"
+	@echo "  DB_NAME=<db>            Database name                        (default etendo)"
+	@echo "  DB_USER=<user>          DB user"
+	@echo "  DB_PASSWORD=<pass>      DB password  (quote it; escape \$$ as \$$\$$ in make)"
+	@echo "  LOCAL_PORT=<port>       Local forwarded port                 (default 15432)"
+	@echo "  PROFILE=<name>          Load ~/.config/schema-forge/remote/<name>.env instead"
+	@echo ""
+	@echo "Targets:"
+	@echo "  make db-tunnel          Open a persistent tunnel + print connection info"
+	@echo "  make db-tunnel-status   Is the tunnel up?"
+	@echo "  make db-tunnel-down     Close the tunnel"
+	@echo "  make db-psql            Interactive psql through the tunnel"
+	@echo "  make db-psql SQL='...'  Run one SQL statement and exit"
+	@echo "  make data-fixes-remote  Run the data-fixes runner against the remote DB,"
+	@echo "                          non-interactively (accepts every make data-fixes"
+	@echo "                          var: DRY_RUN, CLIENT, FIX, LIST_CLIENTS, ...)"
+	@echo ""
+	@echo "Interactive: run 'make data-fixes' and choose 'Remote (through an SSH tunnel)'."
+	@echo "The wizard lets you pick/create a profile, opens the tunnel, and TESTS the"
+	@echo "connection before doing anything — then closes the tunnel on exit."
+	@echo ""
+	@echo "Examples:"
+	@echo "  make db-psql SSH_HOST=etendo-go-staging DB_HOST=my.rds.amazonaws.com \\"
+	@echo "       DB_USER=postgres DB_PASSWORD='secret' SQL='SELECT count(*) FROM c_invoice;'"
+	@echo "  make data-fixes-remote PROFILE=staging DRY_RUN=1"
+	@echo "  make data-fixes-remote PROFILE=staging CLIENT=<id>"
+	@echo ""
+	@echo "Save a profile once (kept OUTSIDE the repo, never committed):"
+	@echo "  mkdir -p ~/.config/schema-forge/remote"
+	@echo "  printf 'SSH_HOST=etendo-go-staging\\nDB_HOST=my.rds.amazonaws.com\\nDB_USER=postgres\\nDB_PASSWORD=secret\\nDB_NAME=etendo\\n' \\"
+	@echo "       > ~/.config/schema-forge/remote/staging.env && chmod 600 ~/.config/schema-forge/remote/staging.env"
+
 sync-regen-check-workflow: ## Regenerate the mirror Offline Regen Check workflow in com.etendoerp.go
 	./scripts/sync-offline-regen-check.sh
 
 # --- Dev Server ---
 
-dev: ## Start app-shell dev server (http://localhost:3100)
+dev: ensure-locale ## Start app-shell dev server
 	cd tools/app-shell && npm run dev
 
-dev-with-shell: ## Start app-shell + spike-hello-app together (shell 3100, UI 5173, API 4100)
-	cd tools/spike-hello-app && npm run dev:with-shell
+dev-local-core: ensure-locale ## Start dev server resolving @etendosoftware/app-shell-core from local ../schema_forge_core source (hot-reload; requires it cloned as sibling)
+	@test -d ../schema_forge_core/packages/app-shell-core/src || { echo "ERROR: ../schema_forge_core/packages/app-shell-core/src not found."; echo "Clone schema_forge_core as a sibling of this repo, or use 'make dev' to run against the published package."; exit 1; }
+	@echo ">> LOCAL_CORE dev mode: app-shell-core resolves to ../schema_forge_core (published package bypassed)"
+	cd tools/app-shell && LOCAL_CORE=1 npm run dev
 
-dev-mock: ## Start app-shell dev server with mock data (http://localhost:3100) — required for E2E tests
+dev-mock: ensure-locale ## Start app-shell dev server with mock data — required for E2E tests
 	cd tools/app-shell && npm run dev:mock
 
 build: ## Build app-shell for production
 	cd tools/app-shell && npm run build
-	node cli/src/generate-reports-manifest.js
+	$(SF) sf-generate-reports-manifest
 
 # --- Setup ---
 
 menu-cache: ## Refresh the AD menu cache from the database
-	node cli/src/menu-cache.js refresh
+	$(SF) sf-menu-cache refresh
 
 uuid: ## Generate a new Etendo-format UUID (32 uppercase hex chars, no hyphens)
 	@uuidgen | tr -d '-' | tr '[:lower:]' '[:upper:]'
 
+merge-block-check: ## Merge-block pre-flight: PR checks across the 3 repos + copy-paste merge cmds (TASK="ETP-XXXX [ETP-YYYY ...]")
+	@if [ -z "$(TASK)" ]; then echo "Usage: make merge-block-check TASK=ETP-4442"; exit 1; fi
+	@./scripts/merge-block-check.sh $(TASK)
+
 install: ## Install all workspace dependencies and activate git hooks
 	npm install
 	git config core.hooksPath .githooks
+
+bump-core-version: ## Bump the schema_forge_core lockstep pin in all package.json + refresh lockfiles (VERSION=x.y.z)
+	@if [ -z "$(VERSION)" ]; then echo "Usage: make bump-core-version VERSION=0.3.1"; exit 1; fi
+	node scripts/bump-core-version.mjs $(VERSION)
+	@echo "=== npm install (root workspace — installs + hoists app-shell deps) ==="
+	npm install
+	@echo "=== refresh tools/app-shell standalone lockfile (lock only, no nested node_modules) ==="
+	npm install --prefix tools/app-shell --legacy-peer-deps --package-lock-only
+	@echo "Done. Review the package.json + package-lock.json diffs before committing."
 
 # --- Deploy ---
 
@@ -392,7 +586,7 @@ report-stop: ## Stop jsreport Docker container
 	cd $(JSREPORT_COMPOSE_DIR) && docker compose -f com.etendoerp.go.yml down
 
 report-preview: ## Preview Business Partner listing report
-	node cli/src/report-preview.js --artifact business-partner --report listing
+	$(SF) sf-report-preview --artifact business-partner --report listing
 
 # --- Static Analysis (SonarQube) ---
 
@@ -401,21 +595,12 @@ sonar: ## Run SonarQube analysis on Schema Forge JS/JSX code
 
 sonar-coverage: ## Run all tests with coverage then SonarQube analysis
 	@mkdir -p coverage
-	node --test --experimental-test-coverage --test-reporter=lcov --test-reporter-destination=coverage/cli-lcov.info 'cli/test/*.test.js'
 	node --test --experimental-test-coverage --test-reporter=lcov --test-reporter-destination=coverage/appshell-lcov.info 'tools/app-shell/src/**/__tests__/*.test.js'
 	node --test --experimental-test-coverage --test-reporter=lcov --test-reporter-destination=coverage/appshell-test-lcov.info 'tools/app-shell/test/*.test.js'
 	cd tools/app-shell && npx vitest run --coverage && sed 's|^SF:src/|SF:tools/app-shell/src/|' coverage/vitest/lcov.info > ../../coverage/vitest-lcov.info
 	sonar-scanner -Dproject.settings=sonar-project.properties
 
-sonar-file-coverage: ## Show uncovered lines for specific files (SF or com.etendoerp.go). Usage: make sonar-file-coverage FILES="a.js b.java" [NEW_ONLY=1] [BRANCH=x] [PR=123]
-	@./cli/sonar-coverage.sh $(if $(NEW_ONLY),--new-only) $(if $(BRANCH),--branch $(BRANCH)) $(if $(PR),--pull-request $(PR)) $(FILES)
-
 # --- XML Regeneration Check ---
-
-test-xml-regeneration-check: ## Run XML regeneration check tests
-	node --test cli/test/xml-regeneration-check.test.js
-
-test-python: test-xml-regeneration-check ## Backward-compatible alias for the former Python tests
 
 ORIGINAL_DB_DIR ?=
 EXPORTED_DB_DIR ?=
@@ -425,7 +610,31 @@ xml-regeneration-check: ## Compare original module XML vs export.database output
 		echo "Usage: make xml-regeneration-check ORIGINAL_DB_DIR=<path> EXPORTED_DB_DIR=<path>"; \
 		exit 1; \
 	fi
-	node cli/src/xml-regeneration-check.js "$(ORIGINAL_DB_DIR)" "$(EXPORTED_DB_DIR)"
+	$(SF) sf-xml-regeneration-check "$(ORIGINAL_DB_DIR)" "$(EXPORTED_DB_DIR)"
+
+# --- Project Context Switching ---
+# Active locale is tracked in .active-locale (gitignored). Default: es.
+# Usage: make switch-to-es
+
+switch-to-es: ## Switch active locale to Spain (ES)
+	@cp tools/app-shell/.env.es tools/app-shell/.env.local
+	@echo es > .active-locale
+	@echo "Active locale: ES (Spain) — com.etendoerp.go"
+
+ensure-locale: ## Bootstrap ES locale if .active-locale does not exist (called automatically)
+	@if [ ! -f .active-locale ]; then \
+		if [ -f tools/app-shell/.env.es ]; then \
+			$(MAKE) switch-to-es --no-print-directory; \
+		else \
+			echo "default" > .active-locale; \
+			echo "Active locale: default (tools/app-shell/.env) — .env.es not present, skipping switch-to-es"; \
+		fi; \
+	fi
+
+project-status: ## Show active locale and module ID
+	@echo "Active locale : es"; \
+	echo "Module        : com.etendoerp.go (Spain)"; \
+	grep -s SF_MODULE_ID tools/app-shell/.env.local || echo "  .env.local missing — run: make switch-to-es"
 
 # --- Cleanup ---
 
@@ -439,7 +648,7 @@ help: ## Show this help
 	echo "\033[1mSchema Forge — Available targets\033[0m"; \
 	echo ""; \
 	awk '/^# ---/{gsub(/^# --- | ---$$/,"");printf "\033[1;33m%s\033[0m\n",$$0;next} \
-	     /^[a-zA-Z][a-zA-Z0-9_-]*:.*## /{n=index($$0,": ## ");if(n>0){printf "  \033[36m%-22s\033[0m %s\n",substr($$0,1,n-1),substr($$0,n+5)}}' Makefile; \
+	     /^[a-zA-Z][a-zA-Z0-9_-]*:.*## /{c=index($$0,":");h=index($$0,"## ");if(c>0&&h>0){printf "  \033[36m%-22s\033[0m %s\n",substr($$0,1,c-1),substr($$0,h+3)}}' Makefile; \
 	echo ""
 
 .DEFAULT_GOAL := help

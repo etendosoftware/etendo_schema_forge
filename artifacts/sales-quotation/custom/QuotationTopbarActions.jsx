@@ -6,6 +6,7 @@ import CloneOrderModal from '@/components/contract-ui/CloneOrderModal';
 import QuotationConfirmModal from './QuotationConfirmModal';
 import SendToEvaluationModal from './SendToEvaluationModal';
 import RejectQuotationModal from './RejectQuotationModal';
+import { useQuotationPdf } from '@/windows/custom/shared/useQuotationPdf.js';
 import { useUI, useMenuLabel } from '@/i18n';
 
 function CopyIcon() {
@@ -30,7 +31,7 @@ const btnCloneStyle = {
   boxShadow: '0px 1px 2px 0px #1212170D',
 };
 
-export default function QuotationTopbarActions({ data, recordId, token, apiBaseUrl }) {
+export default function QuotationTopbarActions({ data, recordId, token, apiBaseUrl, onSave }) {
   const navigate = useNavigate();
   const ui = useUI();
   const tMenu = useMenuLabel();
@@ -47,6 +48,11 @@ export default function QuotationTopbarActions({ data, recordId, token, apiBaseU
   }), [token]);
 
   const status = data?.documentStatus;
+
+  // ETP-4372 — source the same client-rendered PDF the QuotationPreview panel
+  // uses, so the form-view topbar Send modal shows the document instead of the
+  // "PDF not configured" fallback. Hook is called unconditionally (rules of hooks).
+  const { pdfUrl, loading: pdfLoading } = useQuotationPdf(recordId, apiBaseUrl, token);
 
   // The framework's draftMode renders a "Confirmar" primary button after Save.
   // The wrapper at tools/app-shell/src/windows/custom/sales-quotation/index.jsx
@@ -113,6 +119,7 @@ export default function QuotationTopbarActions({ data, recordId, token, apiBaseU
           data={data}
           token={token}
           apiBaseUrl={apiBaseUrl}
+          onSave={onSave}
           onClose={() => setShowConfirm(false)}
         />,
         document.body,
@@ -128,6 +135,8 @@ export default function QuotationTopbarActions({ data, recordId, token, apiBaseU
           documentId={recordId}
           windowName="sales-quotation"
           token={token}
+          pdfBlobUrl={pdfUrl}
+          pdfBlobLoading={pdfLoading}
           onClose={() => setShowSend(false)}
         />,
         document.body,

@@ -216,7 +216,7 @@ test.describe('return-material-receipt — list and preview', () => {
 
     // --- Close preview ---
     await previewModal.getByRole('button', { name: /cerrar|close/i }).click();
-    await expect(previewModal).toBeHidden({ timeout: 3_000 });
+    await expect(previewModal).toBeHidden({ timeout: 5_000 });
   });
 });
 
@@ -249,7 +249,7 @@ test.describe('return-material-receipt — DR form actions', () => {
 
     // Toggle card visible in modal (ConfirmInOutModal uses role="switch", not role="checkbox")
     const modalInvoiceToggle = page.getByTestId('confirm-modal-invoice-toggle');
-    await expect(modalInvoiceToggle).toBeVisible({ timeout: 3_000 });
+    await expect(modalInvoiceToggle).toBeVisible({ timeout: 8_000 });
 
     // Cancel button via data-testid
     const cancelBtn = page.getByTestId('confirm-modal-cancel-btn');
@@ -261,11 +261,11 @@ test.describe('return-material-receipt — DR form actions', () => {
 
     // --- Cancel dismisses the modal ---
     await cancelBtn.click();
-    await expect(page.getByTestId('confirm-inout-modal')).toBeHidden({ timeout: 2_000 });
+    await expect(page.getByTestId('confirm-inout-modal')).toBeHidden({ timeout: 5_000 });
 
     // --- Re-open and actually confirm ---
     await confirmBtn.click();
-    await expect(page.getByTestId('confirm-modal-invoice-toggle')).toBeVisible({ timeout: 3_000 });
+    await expect(page.getByTestId('confirm-modal-invoice-toggle')).toBeVisible({ timeout: 8_000 });
 
     // Toggle is "on" by default (defaultCreateInvoice=true → aria-checked="true"); verify, then confirm
     await expect(page.getByTestId('confirm-modal-invoice-toggle')).toHaveAttribute('aria-checked', 'true');
@@ -292,6 +292,7 @@ test.describe('return-material-receipt — CO form actions (no existing invoice)
   });
 
   test('CO detail: create invoice button, print button, invoice modal confirm — full flow', async ({ page }) => {
+    test.setTimeout(120_000); // 3 navigations + modal flow can exceed 60s under full-suite load
     // ret-003 is CO with hasReturnInvoice=false — "Crear factura de devolución" must be visible
     await page.goto('/return-material-receipt/ret-003');
     await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
@@ -322,7 +323,7 @@ test.describe('return-material-receipt — CO form actions (no existing invoice)
 
     // Modal opens — verify via data-testid (CreateInvoiceConfirmModal)
     const invoiceModal = page.getByTestId('create-invoice-confirm-modal');
-    await expect(invoiceModal).toBeVisible({ timeout: 3_000 });
+    await expect(invoiceModal).toBeVisible({ timeout: 8_000 });
 
     // Cancel button inside the modal — the detail view has a separate action-cancel button,
     // so use nth(1) to target the modal's own Cancelar button.

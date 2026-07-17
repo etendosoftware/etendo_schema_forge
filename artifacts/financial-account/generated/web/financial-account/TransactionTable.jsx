@@ -10,6 +10,7 @@ const columns = [
   { key: 'status', column: 'Status', type: 'status', label: 'Status', enumLabels: { 'RPAP': 'Awaiting Payment', 'RPAE': 'Awaiting Execution', 'RPVOID': 'Void', 'PPM': 'Payment Made', 'RPR': 'Payment Received', 'RDNC': 'Deposited not Cleared', 'PWNC': 'Withdrawn not Cleared', 'RPPC': 'Payment Cleared' }, required: true },
   { key: 'transactionType', column: 'Trxtype', type: 'enum', label: 'Transaction Type', enumLabels: { 'BPD': 'BP Deposit', 'BPW': 'BP Withdrawal', 'BF': 'Bank fee' }, required: true },
   { key: 'gLItem', column: 'C_Glitem_ID', type: 'selector', label: 'G/L Item' },
+  { key: 'posted', column: 'Posted', type: 'boolean', label: 'Posted', badge: true, badgeLabels: {"true":{"en_US":"Posted","es_ES":"Contabilizado"},"false":{"en_US":"Not posted","es_ES":"Sin contabilizar"}}, badgeVariants: {"true":"green","false":"orange"}, required: true },
 ];
 // @sf-generated-end columns:transaction
 

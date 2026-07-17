@@ -1,13 +1,16 @@
 import { useState, useMemo, useCallback } from 'react';
 import { useUI } from '@/i18n';
 import { MODAL_STYLES } from './modal-styles.js';
+import { LABEL_GAP, FIELD_HEIGHT_IMPORTANT } from '@/components/ui/formDensity';
 
 const INPUT_BASE =
   'w-full rounded-md border border-input bg-white px-3 focus:ring-2 focus:ring-primary focus:outline-none';
-const INPUT_CLS = `${INPUT_BASE} !h-[40px] !text-[14px]`;
+const INPUT_CLS = `${INPUT_BASE} ${FIELD_HEIGHT_IMPORTANT} !text-[14px]`;
 const SELECT_CLS =
-  'w-full !h-[40px] rounded-md border border-input bg-white px-3 !text-[14px] focus:ring-2 focus:ring-primary focus:outline-none cursor-pointer';
-const SELECT_STYLE = { height: '40px', minHeight: '40px', fontSize: '14px' };
+  `w-full ${FIELD_HEIGHT_IMPORTANT} rounded-md border border-input bg-white px-3 !text-[14px] focus:ring-2 focus:ring-primary focus:outline-none cursor-pointer`;
+// ETP-4321: height now comes from the FIELD_HEIGHT class (36px). Keep fontSize
+// only — the inline height/minHeight would otherwise override the token.
+const SELECT_STYLE = { fontSize: '14px' };
 
 export function DynamicSelect({
   value,
@@ -182,7 +185,7 @@ function RepeatableSection({ section, rows, onAdd, onUpdate, onRemove, ui }) {
                   <input
                     key={f.id}
                     type={f.type === 'email' ? 'email' : f.type === 'tel' ? 'tel' : 'text'}
-                    style={{ height: '40px', fontSize: '14px' }}
+                    style={{ fontSize: '14px' }}
                     className={`${INPUT_CLS} w-full`}
                     value={row[f.id] ?? ''}
                     placeholder={ui(f.labelKey)}
@@ -347,7 +350,7 @@ function CollapsibleFieldSection({ section, form, onChange, opts, ui }) {
       {expanded && (
         <div className="grid grid-cols-4 gap-3">
           {allFields.map(f => (
-            <div key={f.id} className={`space-y-1.5${f.fullWidth ? ' col-span-4' : ''}`}>
+            <div key={f.id} className={`${LABEL_GAP}${f.fullWidth ? ' col-span-4' : ''}`}>
               <label style={MODAL_STYLES.fieldLabel}>{ui(f.labelKey)}</label>
               {renderFieldInput(f, { form, onChange, opts, ui })}
             </div>

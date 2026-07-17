@@ -31,6 +31,7 @@ import {
   DropdownMenuItem,
 } from '@/components/ui/dropdown-menu.jsx';
 import { useUI } from '@/i18n';
+import { trackDocumentCreated } from '@/lib/observability/health-events.js';
 
 const STORAGE_KEY = 'bulkActionResult';
 const COMPLETED = 'CO';
@@ -109,6 +110,7 @@ async function runBulkPurchaseOrderAction({ rows, action, apiBaseUrl, token, ui 
         const err = await res.json().catch(() => null);
         throw new Error(err?.error?.message || err?.response?.message || `Error (${res.status})`);
       }
+      trackDocumentCreated(isInvoice ? 'purchase-invoice' : 'goods-receipt');
       return row;
     }),
   );

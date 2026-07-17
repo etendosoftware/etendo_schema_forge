@@ -3,6 +3,7 @@
  * Mounts the full component with minimal props to cover the main render paths,
  * branching logic, and lifecycle hooks.
  */
+import { useEffect } from 'react';
 import { render, screen, waitFor, act } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
@@ -554,6 +555,84 @@ describe('DetailView render integration', () => {
   it('renders with customTabsAfterBottom={true}', () => {
     const { container } = renderDetailView({ customTabsAfterBottom: true });
     expect(container).toBeTruthy();
+  });
+
+  // ── customTabVisibility / onVisibilityChange (ETP-4401 follow-up) ─────────────
+  // Mirrors the existing customTabCounts/onCountChange mechanism: a 'tab' placement
+  // custom component may call onVisibilityChange(false) to remove its own tab entry
+  // from the tab bar. Every other consumer of customTabs must keep behaving exactly
+  // as before (tab always shown) since it never calls the callback.
+
+  describe('customTabVisibility / onVisibilityChange', () => {
+    it('keeps showing the tab for a custom component that never calls onVisibilityChange (regression guard)', () => {
+      const CustomComp = () => <div data-testid="custom-tab-comp-silent">Silent</div>;
+      const customTabs = [
+        { key: 'silent', label: 'Silent Tab', Component: CustomComp, placement: 'tab' },
+      ];
+      renderDetailView({ customTabs });
+      expect(screen.getByTestId('tab-custom:silent')).toBeInTheDocument();
+      expect(screen.getByText('Silent Tab')).toBeInTheDocument();
+    });
+
+    it('removes the tab from the tab bar when the custom component calls onVisibilityChange(false)', async () => {
+      const HidingComp = ({ onVisibilityChange }) => {
+        useEffect(() => {
+          onVisibilityChange?.(false);
+        }, [onVisibilityChange]);
+        return <div data-testid="custom-tab-comp-hidden">Hidden</div>;
+      };
+      const customTabs = [
+        { key: 'hides', label: 'Hides Itself', Component: HidingComp, placement: 'tab' },
+      ];
+      renderDetailView({ customTabs });
+      await waitFor(() => {
+        expect(screen.queryByTestId('tab-custom:hides')).not.toBeInTheDocument();
+      });
+      expect(screen.queryByText('Hides Itself')).not.toBeInTheDocument();
+    });
+
+    // FIXED (ETP-4401 follow-up): `activeTab` is a plain numeric index into the `tabs` array
+    // (DetailView.jsx ~line 1976), and `buildInitialTabs` excludes hidden custom tabs from
+    // that array on every render. DetailView now tracks the active tab by its stable `key`
+    // (not the index, which shifts/goes out of range when entries are removed) and redirects
+    // `activeTab` to the first tab whenever the previously active key disappears. This test
+    // pins the CORRECT outcome: if the custom tab that is ACTIVE hides itself
+    // (onVisibilityChange(false)), some other valid tab (the first one, "alpha") is promoted
+    // to active and its panel is shown — no orphaned/blank pane.
+    it('redirects to the first tab and shows its panel when the currently active custom tab hides itself', async () => {
+      const AlphaComp = () => <div data-testid="alpha-content">Alpha content</div>;
+      const BetaComp = ({ onVisibilityChange }) => (
+        <div data-testid="beta-content">
+          Beta content
+          <button data-testid="beta-hide-btn" onClick={() => onVisibilityChange?.(false)}>hide</button>
+        </div>
+      );
+      const customTabs = [
+        { key: 'alpha', label: 'Alpha', Component: AlphaComp, placement: 'tab' },
+        { key: 'beta', label: 'Beta', Component: BetaComp, placement: 'tab' },
+      ];
+      renderDetailView({ customTabs, DetailTable: null, CustomLines: null });
+
+      const classTokens = (el) => el.className.split(' ');
+
+      // Activate "beta" (the second custom tab).
+      await userEvent.click(screen.getByTestId('tab-custom:beta'));
+      expect(classTokens(screen.getByTestId('tab-custom:beta'))).toContain('text-foreground');
+      expect(classTokens(screen.getByTestId('tab-custom:alpha'))).not.toContain('text-foreground');
+
+      // Beta hides itself while it is the active tab (e.g. reacting to a data change).
+      await userEvent.click(screen.getByTestId('beta-hide-btn'));
+      await waitFor(() => {
+        expect(screen.queryByTestId('tab-custom:beta')).not.toBeInTheDocument();
+      });
+
+      // Fixed behavior: "alpha" is promoted to active and its panel is shown — the tab
+      // strip is never left with no active tab and no visible content.
+      await waitFor(() => {
+        expect(classTokens(screen.getByTestId('tab-custom:alpha'))).toContain('text-foreground');
+      });
+      expect(screen.getByTestId('alpha-content').parentElement).not.toHaveStyle({ display: 'none' });
+    });
   });
 
   it('renders with enableSecondaryRowDelete', () => {
@@ -1304,15 +1383,15 @@ describe('DetailView exported helpers', () => {
 
   describe('isDeleteButtonVisible', () => {
     it('returns truthy for existing non-completed record', () => {
-      expect(helpers.isDeleteButtonVisible(false, '123', { documentStatus: 'DR' }, 'documentStatus', false, false)).toBeTruthy();
+      expect(helpers.isDeleteButtonVisible({ isNew: false, recordId: '123', data: { documentStatus: 'DR' }, statusField: 'documentStatus', hideDeleteWhenComplete: false, isProcessed: false })).toBeTruthy();
     });
 
     it('returns falsy for new record', () => {
-      expect(helpers.isDeleteButtonVisible(true, 'new', {}, 'documentStatus', false, false)).toBeFalsy();
+      expect(helpers.isDeleteButtonVisible({ isNew: true, recordId: 'new', data: {}, statusField: 'documentStatus', hideDeleteWhenComplete: false, isProcessed: false })).toBeFalsy();
     });
 
     it('returns falsy when hideDeleteWhenComplete and isProcessed', () => {
-      expect(helpers.isDeleteButtonVisible(false, '123', { documentStatus: 'CO' }, 'documentStatus', true, true)).toBeFalsy();
+      expect(helpers.isDeleteButtonVisible({ isNew: false, recordId: '123', data: { documentStatus: 'CO' }, statusField: 'documentStatus', hideDeleteWhenComplete: true, isProcessed: true })).toBeFalsy();
     });
   });
 

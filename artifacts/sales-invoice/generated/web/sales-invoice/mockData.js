@@ -4,7 +4,6 @@ export const header = [
   {
     "id": "mock-header-001",
     "adOrgId": "Sample adOrgId",
-    "cDocTypeTargetId": "Sample cDocTypeTargetId",
     "documentNo": "HE-00001",
     "invoiceDate": "2026-01-15",
     "businessPartner": "Acme Corp",
@@ -22,10 +21,11 @@ export const header = [
     "priceList": "Sample priceList",
     "etsgDateOperation": "2026-01-15",
     "etvfacInvoiceStatus": "DR",
-    "tbaiSequence": 90,
-    "tbaiInvoicenum": "Sample tbaiInvoicenum",
-    "tbaiInvoiceseq": "Sample tbaiInvoiceseq",
-    "tbaiIssent": "Sample tbaiIssent",
+    "etvfacInvType": "Sample etvfacInvType",
+    "etvfacVerifacDesc": "Sample etvfacVerifacDesc",
+    "etvfacReverseinvtype": "Sample etvfacReverseinvtype",
+    "etvfacSimpinvart7273": "Sample etvfacSimpinvart7273",
+    "etvfacInvNoIDArt61d": "Sample etvfacInvNoIDArt61d",
     "aeatsiiIssent": "Sample aeatsiiIssent",
     "aeatsiiClaveTipo": "Sample aeatsiiClaveTipo",
     "aeatsiiDescription": "Sample aeatsiiDescription",
@@ -38,12 +38,13 @@ export const header = [
     "processed": "Sample processed",
     "etgoTotalDiscount": 99.44,
     "eTGODueDate": "2026-01-15",
-    "eTGODeliveryStatus": "DR"
+    "eTGODeliveryStatus": "DR",
+    "transactionDocument": "Sample transactionDocument",
+    "eTGOCurrencyRate": "USD"
   },
   {
     "id": "mock-header-002",
     "adOrgId": "Sample adOrgId",
-    "cDocTypeTargetId": "Sample cDocTypeTargetId",
     "documentNo": "HE-00002",
     "invoiceDate": "2026-01-16",
     "businessPartner": "TechFlow Inc",
@@ -61,10 +62,11 @@ export const header = [
     "priceList": "Sample priceList",
     "etsgDateOperation": "2026-01-16",
     "etvfacInvoiceStatus": "CO",
-    "tbaiSequence": 93,
-    "tbaiInvoicenum": "Sample tbaiInvoicenum",
-    "tbaiInvoiceseq": "Sample tbaiInvoiceseq",
-    "tbaiIssent": "Sample tbaiIssent",
+    "etvfacInvType": "Sample etvfacInvType",
+    "etvfacVerifacDesc": "Sample etvfacVerifacDesc",
+    "etvfacReverseinvtype": "Sample etvfacReverseinvtype",
+    "etvfacSimpinvart7273": "Sample etvfacSimpinvart7273",
+    "etvfacInvNoIDArt61d": "Sample etvfacInvNoIDArt61d",
     "aeatsiiIssent": "Sample aeatsiiIssent",
     "aeatsiiClaveTipo": "Sample aeatsiiClaveTipo",
     "aeatsiiDescription": "Sample aeatsiiDescription",
@@ -77,12 +79,13 @@ export const header = [
     "processed": "Sample processed",
     "etgoTotalDiscount": 96.94,
     "eTGODueDate": "2026-01-16",
-    "eTGODeliveryStatus": "CO"
+    "eTGODeliveryStatus": "CO",
+    "transactionDocument": "Sample transactionDocument",
+    "eTGOCurrencyRate": "EUR"
   },
   {
     "id": "mock-header-003",
     "adOrgId": "Sample adOrgId",
-    "cDocTypeTargetId": "Sample cDocTypeTargetId",
     "documentNo": "HE-00003",
     "invoiceDate": "2026-01-17",
     "businessPartner": "Global Trade Ltd",
@@ -100,10 +103,11 @@ export const header = [
     "priceList": "Sample priceList",
     "etsgDateOperation": "2026-01-17",
     "etvfacInvoiceStatus": "VO",
-    "tbaiSequence": 8,
-    "tbaiInvoicenum": "Sample tbaiInvoicenum",
-    "tbaiInvoiceseq": "Sample tbaiInvoiceseq",
-    "tbaiIssent": "Sample tbaiIssent",
+    "etvfacInvType": "Sample etvfacInvType",
+    "etvfacVerifacDesc": "Sample etvfacVerifacDesc",
+    "etvfacReverseinvtype": "Sample etvfacReverseinvtype",
+    "etvfacSimpinvart7273": "Sample etvfacSimpinvart7273",
+    "etvfacInvNoIDArt61d": "Sample etvfacInvNoIDArt61d",
     "aeatsiiIssent": "Sample aeatsiiIssent",
     "aeatsiiClaveTipo": "Sample aeatsiiClaveTipo",
     "aeatsiiDescription": "Sample aeatsiiDescription",
@@ -116,12 +120,13 @@ export const header = [
     "processed": "Sample processed",
     "etgoTotalDiscount": 12.48,
     "eTGODueDate": "2026-01-17",
-    "eTGODeliveryStatus": "VO"
+    "eTGODeliveryStatus": "VO",
+    "transactionDocument": "Sample transactionDocument",
+    "eTGOCurrencyRate": "GBP"
   },
   {
     "id": "mock-header-004",
     "adOrgId": "Sample adOrgId",
-    "cDocTypeTargetId": "Sample cDocTypeTargetId",
     "documentNo": "HE-00004",
     "invoiceDate": "2026-01-18",
     "businessPartner": "Summit Industries",
@@ -139,10 +144,11 @@ export const header = [
     "priceList": "Sample priceList",
     "etsgDateOperation": "2026-01-18",
     "etvfacInvoiceStatus": "IP",
-    "tbaiSequence": 91,
-    "tbaiInvoicenum": "Sample tbaiInvoicenum",
-    "tbaiInvoiceseq": "Sample tbaiInvoiceseq",
-    "tbaiIssent": "Sample tbaiIssent",
+    "etvfacInvType": "Sample etvfacInvType",
+    "etvfacVerifacDesc": "Sample etvfacVerifacDesc",
+    "etvfacReverseinvtype": "Sample etvfacReverseinvtype",
+    "etvfacSimpinvart7273": "Sample etvfacSimpinvart7273",
+    "etvfacInvNoIDArt61d": "Sample etvfacInvNoIDArt61d",
     "aeatsiiIssent": "Sample aeatsiiIssent",
     "aeatsiiClaveTipo": "Sample aeatsiiClaveTipo",
     "aeatsiiDescription": "Sample aeatsiiDescription",
@@ -155,12 +161,13 @@ export const header = [
     "processed": "Sample processed",
     "etgoTotalDiscount": 96.31,
     "eTGODueDate": "2026-01-18",
-    "eTGODeliveryStatus": "IP"
+    "eTGODeliveryStatus": "IP",
+    "transactionDocument": "Sample transactionDocument",
+    "eTGOCurrencyRate": "USD"
   },
   {
     "id": "mock-header-005",
     "adOrgId": "Sample adOrgId",
-    "cDocTypeTargetId": "Sample cDocTypeTargetId",
     "documentNo": "HE-00005",
     "invoiceDate": "2026-01-19",
     "businessPartner": "Pacific Partners",
@@ -178,10 +185,11 @@ export const header = [
     "priceList": "Sample priceList",
     "etsgDateOperation": "2026-01-19",
     "etvfacInvoiceStatus": "DR",
-    "tbaiSequence": 72,
-    "tbaiInvoicenum": "Sample tbaiInvoicenum",
-    "tbaiInvoiceseq": "Sample tbaiInvoiceseq",
-    "tbaiIssent": "Sample tbaiIssent",
+    "etvfacInvType": "Sample etvfacInvType",
+    "etvfacVerifacDesc": "Sample etvfacVerifacDesc",
+    "etvfacReverseinvtype": "Sample etvfacReverseinvtype",
+    "etvfacSimpinvart7273": "Sample etvfacSimpinvart7273",
+    "etvfacInvNoIDArt61d": "Sample etvfacInvNoIDArt61d",
     "aeatsiiIssent": "Sample aeatsiiIssent",
     "aeatsiiClaveTipo": "Sample aeatsiiClaveTipo",
     "aeatsiiDescription": "Sample aeatsiiDescription",
@@ -194,12 +202,13 @@ export const header = [
     "processed": "Sample processed",
     "etgoTotalDiscount": 31.27,
     "eTGODueDate": "2026-01-19",
-    "eTGODeliveryStatus": "DR"
+    "eTGODeliveryStatus": "DR",
+    "transactionDocument": "Sample transactionDocument",
+    "eTGOCurrencyRate": "EUR"
   },
   {
     "id": "mock-header-006",
     "adOrgId": "Sample adOrgId",
-    "cDocTypeTargetId": "Sample cDocTypeTargetId",
     "documentNo": "HE-00006",
     "invoiceDate": "2026-01-20",
     "businessPartner": "Alpine Solutions",
@@ -217,10 +226,11 @@ export const header = [
     "priceList": "Sample priceList",
     "etsgDateOperation": "2026-01-20",
     "etvfacInvoiceStatus": "CO",
-    "tbaiSequence": 78,
-    "tbaiInvoicenum": "Sample tbaiInvoicenum",
-    "tbaiInvoiceseq": "Sample tbaiInvoiceseq",
-    "tbaiIssent": "Sample tbaiIssent",
+    "etvfacInvType": "Sample etvfacInvType",
+    "etvfacVerifacDesc": "Sample etvfacVerifacDesc",
+    "etvfacReverseinvtype": "Sample etvfacReverseinvtype",
+    "etvfacSimpinvart7273": "Sample etvfacSimpinvart7273",
+    "etvfacInvNoIDArt61d": "Sample etvfacInvNoIDArt61d",
     "aeatsiiIssent": "Sample aeatsiiIssent",
     "aeatsiiClaveTipo": "Sample aeatsiiClaveTipo",
     "aeatsiiDescription": "Sample aeatsiiDescription",
@@ -233,12 +243,13 @@ export const header = [
     "processed": "Sample processed",
     "etgoTotalDiscount": 76.52,
     "eTGODueDate": "2026-01-20",
-    "eTGODeliveryStatus": "CO"
+    "eTGODeliveryStatus": "CO",
+    "transactionDocument": "Sample transactionDocument",
+    "eTGOCurrencyRate": "GBP"
   },
   {
     "id": "mock-header-007",
     "adOrgId": "Sample adOrgId",
-    "cDocTypeTargetId": "Sample cDocTypeTargetId",
     "documentNo": "HE-00007",
     "invoiceDate": "2026-01-21",
     "businessPartner": "Meridian Group",
@@ -256,10 +267,11 @@ export const header = [
     "priceList": "Sample priceList",
     "etsgDateOperation": "2026-01-21",
     "etvfacInvoiceStatus": "VO",
-    "tbaiSequence": 31,
-    "tbaiInvoicenum": "Sample tbaiInvoicenum",
-    "tbaiInvoiceseq": "Sample tbaiInvoiceseq",
-    "tbaiIssent": "Sample tbaiIssent",
+    "etvfacInvType": "Sample etvfacInvType",
+    "etvfacVerifacDesc": "Sample etvfacVerifacDesc",
+    "etvfacReverseinvtype": "Sample etvfacReverseinvtype",
+    "etvfacSimpinvart7273": "Sample etvfacSimpinvart7273",
+    "etvfacInvNoIDArt61d": "Sample etvfacInvNoIDArt61d",
     "aeatsiiIssent": "Sample aeatsiiIssent",
     "aeatsiiClaveTipo": "Sample aeatsiiClaveTipo",
     "aeatsiiDescription": "Sample aeatsiiDescription",
@@ -272,12 +284,13 @@ export const header = [
     "processed": "Sample processed",
     "etgoTotalDiscount": 2.66,
     "eTGODueDate": "2026-01-21",
-    "eTGODeliveryStatus": "VO"
+    "eTGODeliveryStatus": "VO",
+    "transactionDocument": "Sample transactionDocument",
+    "eTGOCurrencyRate": "USD"
   },
   {
     "id": "mock-header-008",
     "adOrgId": "Sample adOrgId",
-    "cDocTypeTargetId": "Sample cDocTypeTargetId",
     "documentNo": "HE-00008",
     "invoiceDate": "2026-01-22",
     "businessPartner": "Vertex Systems",
@@ -295,10 +308,11 @@ export const header = [
     "priceList": "Sample priceList",
     "etsgDateOperation": "2026-01-22",
     "etvfacInvoiceStatus": "IP",
-    "tbaiSequence": 97,
-    "tbaiInvoicenum": "Sample tbaiInvoicenum",
-    "tbaiInvoiceseq": "Sample tbaiInvoiceseq",
-    "tbaiIssent": "Sample tbaiIssent",
+    "etvfacInvType": "Sample etvfacInvType",
+    "etvfacVerifacDesc": "Sample etvfacVerifacDesc",
+    "etvfacReverseinvtype": "Sample etvfacReverseinvtype",
+    "etvfacSimpinvart7273": "Sample etvfacSimpinvart7273",
+    "etvfacInvNoIDArt61d": "Sample etvfacInvNoIDArt61d",
     "aeatsiiIssent": "Sample aeatsiiIssent",
     "aeatsiiClaveTipo": "Sample aeatsiiClaveTipo",
     "aeatsiiDescription": "Sample aeatsiiDescription",
@@ -311,12 +325,13 @@ export const header = [
     "processed": "Sample processed",
     "etgoTotalDiscount": 10.03,
     "eTGODueDate": "2026-01-22",
-    "eTGODeliveryStatus": "IP"
+    "eTGODeliveryStatus": "IP",
+    "transactionDocument": "Sample transactionDocument",
+    "eTGOCurrencyRate": "EUR"
   },
   {
     "id": "mock-header-009",
     "adOrgId": "Sample adOrgId",
-    "cDocTypeTargetId": "Sample cDocTypeTargetId",
     "documentNo": "HE-00009",
     "invoiceDate": "2026-01-23",
     "businessPartner": "Atlas Manufacturing",
@@ -334,10 +349,11 @@ export const header = [
     "priceList": "Sample priceList",
     "etsgDateOperation": "2026-01-23",
     "etvfacInvoiceStatus": "DR",
-    "tbaiSequence": 70,
-    "tbaiInvoicenum": "Sample tbaiInvoicenum",
-    "tbaiInvoiceseq": "Sample tbaiInvoiceseq",
-    "tbaiIssent": "Sample tbaiIssent",
+    "etvfacInvType": "Sample etvfacInvType",
+    "etvfacVerifacDesc": "Sample etvfacVerifacDesc",
+    "etvfacReverseinvtype": "Sample etvfacReverseinvtype",
+    "etvfacSimpinvart7273": "Sample etvfacSimpinvart7273",
+    "etvfacInvNoIDArt61d": "Sample etvfacInvNoIDArt61d",
     "aeatsiiIssent": "Sample aeatsiiIssent",
     "aeatsiiClaveTipo": "Sample aeatsiiClaveTipo",
     "aeatsiiDescription": "Sample aeatsiiDescription",
@@ -350,12 +366,13 @@ export const header = [
     "processed": "Sample processed",
     "etgoTotalDiscount": 93.97,
     "eTGODueDate": "2026-01-23",
-    "eTGODeliveryStatus": "DR"
+    "eTGODeliveryStatus": "DR",
+    "transactionDocument": "Sample transactionDocument",
+    "eTGOCurrencyRate": "GBP"
   },
   {
     "id": "mock-header-010",
     "adOrgId": "Sample adOrgId",
-    "cDocTypeTargetId": "Sample cDocTypeTargetId",
     "documentNo": "HE-00010",
     "invoiceDate": "2026-01-24",
     "businessPartner": "Nova Enterprises",
@@ -373,10 +390,11 @@ export const header = [
     "priceList": "Sample priceList",
     "etsgDateOperation": "2026-01-24",
     "etvfacInvoiceStatus": "CO",
-    "tbaiSequence": 77,
-    "tbaiInvoicenum": "Sample tbaiInvoicenum",
-    "tbaiInvoiceseq": "Sample tbaiInvoiceseq",
-    "tbaiIssent": "Sample tbaiIssent",
+    "etvfacInvType": "Sample etvfacInvType",
+    "etvfacVerifacDesc": "Sample etvfacVerifacDesc",
+    "etvfacReverseinvtype": "Sample etvfacReverseinvtype",
+    "etvfacSimpinvart7273": "Sample etvfacSimpinvart7273",
+    "etvfacInvNoIDArt61d": "Sample etvfacInvNoIDArt61d",
     "aeatsiiIssent": "Sample aeatsiiIssent",
     "aeatsiiClaveTipo": "Sample aeatsiiClaveTipo",
     "aeatsiiDescription": "Sample aeatsiiDescription",
@@ -389,12 +407,13 @@ export const header = [
     "processed": "Sample processed",
     "etgoTotalDiscount": 1.1,
     "eTGODueDate": "2026-01-24",
-    "eTGODeliveryStatus": "CO"
+    "eTGODeliveryStatus": "CO",
+    "transactionDocument": "Sample transactionDocument",
+    "eTGOCurrencyRate": "USD"
   },
   {
     "id": "mock-header-011",
     "adOrgId": "Sample adOrgId",
-    "cDocTypeTargetId": "Sample cDocTypeTargetId",
     "documentNo": "HE-00011",
     "invoiceDate": "2026-01-25",
     "businessPartner": "Pinnacle Services",
@@ -412,10 +431,11 @@ export const header = [
     "priceList": "Sample priceList",
     "etsgDateOperation": "2026-01-25",
     "etvfacInvoiceStatus": "VO",
-    "tbaiSequence": 32,
-    "tbaiInvoicenum": "Sample tbaiInvoicenum",
-    "tbaiInvoiceseq": "Sample tbaiInvoiceseq",
-    "tbaiIssent": "Sample tbaiIssent",
+    "etvfacInvType": "Sample etvfacInvType",
+    "etvfacVerifacDesc": "Sample etvfacVerifacDesc",
+    "etvfacReverseinvtype": "Sample etvfacReverseinvtype",
+    "etvfacSimpinvart7273": "Sample etvfacSimpinvart7273",
+    "etvfacInvNoIDArt61d": "Sample etvfacInvNoIDArt61d",
     "aeatsiiIssent": "Sample aeatsiiIssent",
     "aeatsiiClaveTipo": "Sample aeatsiiClaveTipo",
     "aeatsiiDescription": "Sample aeatsiiDescription",
@@ -428,12 +448,13 @@ export const header = [
     "processed": "Sample processed",
     "etgoTotalDiscount": 79.99,
     "eTGODueDate": "2026-01-25",
-    "eTGODeliveryStatus": "VO"
+    "eTGODeliveryStatus": "VO",
+    "transactionDocument": "Sample transactionDocument",
+    "eTGOCurrencyRate": "EUR"
   },
   {
     "id": "mock-header-012",
     "adOrgId": "Sample adOrgId",
-    "cDocTypeTargetId": "Sample cDocTypeTargetId",
     "documentNo": "HE-00012",
     "invoiceDate": "2026-01-26",
     "businessPartner": "Horizon Labs",
@@ -451,10 +472,11 @@ export const header = [
     "priceList": "Sample priceList",
     "etsgDateOperation": "2026-01-26",
     "etvfacInvoiceStatus": "IP",
-    "tbaiSequence": 26,
-    "tbaiInvoicenum": "Sample tbaiInvoicenum",
-    "tbaiInvoiceseq": "Sample tbaiInvoiceseq",
-    "tbaiIssent": "Sample tbaiIssent",
+    "etvfacInvType": "Sample etvfacInvType",
+    "etvfacVerifacDesc": "Sample etvfacVerifacDesc",
+    "etvfacReverseinvtype": "Sample etvfacReverseinvtype",
+    "etvfacSimpinvart7273": "Sample etvfacSimpinvart7273",
+    "etvfacInvNoIDArt61d": "Sample etvfacInvNoIDArt61d",
     "aeatsiiIssent": "Sample aeatsiiIssent",
     "aeatsiiClaveTipo": "Sample aeatsiiClaveTipo",
     "aeatsiiDescription": "Sample aeatsiiDescription",
@@ -467,7 +489,9 @@ export const header = [
     "processed": "Sample processed",
     "etgoTotalDiscount": 53.61,
     "eTGODueDate": "2026-01-26",
-    "eTGODeliveryStatus": "IP"
+    "eTGODeliveryStatus": "IP",
+    "transactionDocument": "Sample transactionDocument",
+    "eTGOCurrencyRate": "GBP"
   }
 ];
 
@@ -645,7 +669,6 @@ export const paymentPlan = [
     "numberOfPayments": 90,
     "description": "Standard order for Q1 delivery",
     "totalDebtAmount": 38907,
-    "finPaymentScheduleID": "Sample finPaymentScheduleID",
     "headerId": "mock-header-001"
   },
   {
@@ -662,7 +685,6 @@ export const paymentPlan = [
     "numberOfPayments": 93,
     "description": "Rush order - priority shipping required",
     "totalDebtAmount": 9306,
-    "finPaymentScheduleID": "Sample finPaymentScheduleID",
     "headerId": "mock-header-002"
   },
   {
@@ -679,7 +701,6 @@ export const paymentPlan = [
     "numberOfPayments": 8,
     "description": "Bulk purchase for warehouse restocking",
     "totalDebtAmount": 11544,
-    "finPaymentScheduleID": "Sample finPaymentScheduleID",
     "headerId": "mock-header-003"
   },
   {
@@ -696,7 +717,6 @@ export const paymentPlan = [
     "numberOfPayments": 91,
     "description": "Sample order for client evaluation",
     "totalDebtAmount": 11872,
-    "finPaymentScheduleID": "Sample finPaymentScheduleID",
     "headerId": "mock-header-004"
   },
   {
@@ -713,7 +733,6 @@ export const paymentPlan = [
     "numberOfPayments": 72,
     "description": "Recurring monthly supply order",
     "totalDebtAmount": 48460,
-    "finPaymentScheduleID": "Sample finPaymentScheduleID",
     "headerId": "mock-header-005"
   },
   {
@@ -730,7 +749,6 @@ export const paymentPlan = [
     "numberOfPayments": 78,
     "description": "Special pricing agreement applies",
     "totalDebtAmount": 45418,
-    "finPaymentScheduleID": "Sample finPaymentScheduleID",
     "headerId": "mock-header-006"
   },
   {
@@ -747,7 +765,6 @@ export const paymentPlan = [
     "numberOfPayments": 31,
     "description": "Consolidated order from multiple requests",
     "totalDebtAmount": 33840,
-    "finPaymentScheduleID": "Sample finPaymentScheduleID",
     "headerId": "mock-header-007"
   },
   {
@@ -764,7 +781,6 @@ export const paymentPlan = [
     "numberOfPayments": 97,
     "description": "Trial order for new product line",
     "totalDebtAmount": 25716,
-    "finPaymentScheduleID": "Sample finPaymentScheduleID",
     "headerId": "mock-header-008"
   },
   {
@@ -781,7 +797,6 @@ export const paymentPlan = [
     "numberOfPayments": 70,
     "description": "Replacement for damaged goods",
     "totalDebtAmount": 44780,
-    "finPaymentScheduleID": "Sample finPaymentScheduleID",
     "headerId": "mock-header-009"
   },
   {
@@ -798,7 +813,6 @@ export const paymentPlan = [
     "numberOfPayments": 77,
     "description": "Pre-season inventory build-up",
     "totalDebtAmount": 12483,
-    "finPaymentScheduleID": "Sample finPaymentScheduleID",
     "headerId": "mock-header-010"
   },
   {
@@ -815,7 +829,6 @@ export const paymentPlan = [
     "numberOfPayments": 32,
     "description": "Customer-specific configuration",
     "totalDebtAmount": 46022,
-    "finPaymentScheduleID": "Sample finPaymentScheduleID",
     "headerId": "mock-header-011"
   },
   {
@@ -832,7 +845,6 @@ export const paymentPlan = [
     "numberOfPayments": 26,
     "description": "Government contract fulfillment",
     "totalDebtAmount": 38634,
-    "finPaymentScheduleID": "Sample finPaymentScheduleID",
     "headerId": "mock-header-012"
   }
 ];

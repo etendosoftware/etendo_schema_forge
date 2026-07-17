@@ -3,6 +3,7 @@
   "window": {
     "category": "sales",
     "name": "Sales Order",
+    "documentDateField": "orderDate",
     "selectorPriceCurrency": "org",
     "salesTheme": true,
     "notesField": "description",
@@ -126,11 +127,12 @@
             "field": "businessPartner",
             "filterKey": "C_BPartner_ID"
           },
-          "section": "principal"
+          "section": "principal",
+          "seq": 4
         },
         "priceList": {
           "section": "principal",
-          "order": 11
+          "seq": 6
         },
         "paymentMethod": {
           "reference": "PaymentMethod",
@@ -140,8 +142,7 @@
           "section": "principal"
         },
         "warehouse": {
-          "inputMode": "search",
-          "form": false
+          "inputMode": "search"
         },
         "salesRepresentative": {
           "visibility": "system"
@@ -263,7 +264,7 @@
           "grid": false,
           "form": true,
           "section": "principal",
-          "order": 10,
+          "seq": 5,
           "readOnlyLogic": "@Processed@='Y'",
           "derivation": null
         },
@@ -384,7 +385,8 @@
           "section": "principal",
           "order": 5,
           "gridOrder": 5,
-          "min": 0
+          "min": 0,
+          "max": 100
         },
         "warehouseRule": {
           "visibility": "discarded"

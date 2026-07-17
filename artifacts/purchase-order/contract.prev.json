@@ -1,8 +1,8 @@
 {
-  "version": "0.26.0",
+  "version": "0.36.0",
   "generatedAt": "2026-04-30T15:42:46.497Z",
-  "updatedAt": "2026-06-25T19:58:30.715Z",
-  "checksum": "d7f66bd2464b8525",
+  "updatedAt": "2026-07-14T01:05:39.068Z",
+  "checksum": "0fbe017944ec853e",
   "frontendContract": {
     "window": {
       "id": "181",
@@ -25,6 +25,7 @@
       },
       "menuActions": [],
       "secondaryTabs": {},
+      "documentDateField": "orderDate",
       "labelOverrides": {
         "es_ES": {
           "C_BPartner_ID": "Contacto",
@@ -67,6 +68,7 @@
             "reference": "BusinessPartner",
             "inputMode": "search",
             "section": "principal",
+            "seq": 10,
             "gridOrder": 3,
             "callout": {
               "className": "org.openbravo.erpCommon.ad_callouts.SE_Order_BPartner"
@@ -94,6 +96,7 @@
               "source": "documentType.sequence"
             },
             "section": "principal",
+            "seq": 20,
             "gridOrder": 2,
             "readOnlyLogic": {
               "raw": "@Processed@='Y' | @DocStatus@='TMP'",
@@ -119,6 +122,7 @@
             },
             "defaultValue": "@#Date@",
             "section": "principal",
+            "seq": 30,
             "gridOrder": 1,
             "callout": {
               "className": "org.openbravo.erpCommon.ad_callouts.SL_Order_UpdateLinesDate"
@@ -148,6 +152,7 @@
               "filterKey": "C_BPartner_ID"
             },
             "section": "principal",
+            "seq": 40,
             "validationRule": {
               "code": "C_BPartner_Location.C_BPartner_ID=@C_BPartner_ID@ AND C_BPartner_Location.IsShipTo='Y' AND C_BPartner_Location.IsActive='Y'",
               "contextParams": [],
@@ -182,6 +187,7 @@
             },
             "defaultValue": "@#Date@",
             "section": "principal",
+            "seq": 50,
             "callout": {
               "className": "org.openbravo.erpCommon.ad_callouts.SL_Order_UpdateLinesDate"
             },
@@ -240,10 +246,11 @@
             "visibility": "editable",
             "required": true,
             "grid": false,
-            "form": false,
+            "form": true,
             "sourceRequired": true,
             "reference": "Warehouse",
-            "inputMode": "selector",
+            "inputMode": "search",
+            "seq": 60,
             "readOnlyLogic": {
               "raw": "@Processed@='Y'",
               "evaluable": true,
@@ -264,6 +271,7 @@
             "reference": "PaymentMethod",
             "inputMode": "selector",
             "section": "principal",
+            "seq": 70,
             "validationRule": {
               "code": "EXISTS (SELECT 1 FROM FIN_FinAcc_PaymentMethod fapm WHERE FIN_PaymentMethod.FIN_PaymentMethod_ID=fapm.FIN_PaymentMethod_ID\nAND fapm.Payin_Allow = (SELECT CASE WHEN '@IsSOTrx@'='Y' THEN 'Y' ELSE fapm.Payin_Allow END FROM DUAL)\nAND fapm.Payout_Allow = (SELECT CASE WHEN '@IsSOTrx@'='N' THEN 'Y' ELSE fapm.Payout_Allow END FROM DUAL))",
               "contextParams": [],
@@ -292,6 +300,7 @@
             "reference": "PaymentTerm",
             "inputMode": "selector",
             "section": "principal",
+            "seq": 80,
             "readOnlyLogic": {
               "raw": "@Processed@='Y'",
               "evaluable": true,
@@ -313,6 +322,7 @@
             "reference": "PriceList",
             "inputMode": "selector",
             "section": "principal",
+            "seq": 100,
             "validationRule": {
               "code": "M_PriceList.issopricelist = @isSOTrx@",
               "contextParams": [],
@@ -348,71 +358,122 @@
             "enumValues": [
               {
                 "value": "AE",
-                "name": "Automatic Evaluation"
+                "name": "Automatic Evaluation",
+                "labels": {
+                  "es_ES": "Evaluación Automática"
+                }
               },
               {
                 "value": "CO",
-                "name": "Booked"
+                "name": "Booked",
+                "labels": {
+                  "es_ES": "Registrado"
+                }
               },
               {
                 "value": "CL",
-                "name": "Closed"
+                "name": "Closed",
+                "labels": {
+                  "es_ES": "Cerrado"
+                }
               },
               {
                 "value": "ETGO_CI",
-                "name": "Closed - Invoice Created"
+                "name": "Closed - Invoice Created",
+                "labels": {
+                  "es_ES": "Closed - Invoice Created"
+                }
               },
               {
                 "value": "CA",
-                "name": "Closed - Order Created"
+                "name": "Closed - Order Created",
+                "labels": {
+                  "es_ES": "Cerrado - Pedido creado"
+                }
               },
               {
                 "value": "CJ",
-                "name": "Closed - Rejected"
+                "name": "Closed - Rejected",
+                "labels": {
+                  "es_ES": "Cerrado - Rechazado"
+                }
               },
               {
                 "value": "DR",
-                "name": "Draft"
+                "name": "Draft",
+                "labels": {
+                  "es_ES": "Borrador"
+                }
               },
               {
                 "value": "ME",
-                "name": "Manual Evaluation"
+                "name": "Manual Evaluation",
+                "labels": {
+                  "es_ES": "Evaluación Manual"
+                }
               },
               {
                 "value": "NA",
-                "name": "Not Accepted"
+                "name": "Not Accepted",
+                "labels": {
+                  "es_ES": "No aprobado"
+                }
               },
               {
                 "value": "NC",
-                "name": "Not Confirmed"
+                "name": "Not Confirmed",
+                "labels": {
+                  "es_ES": "No Confirmado"
+                }
               },
               {
                 "value": "WP",
-                "name": "Not Paid"
+                "name": "Not Paid",
+                "labels": {
+                  "es_ES": "Pendiente de Pago"
+                }
               },
               {
                 "value": "RE",
-                "name": "Re-Opened"
+                "name": "Re-Opened",
+                "labels": {
+                  "es_ES": "Reabierto"
+                }
               },
               {
                 "value": "TMP",
-                "name": "Temporal"
+                "name": "Temporal",
+                "labels": {
+                  "es_ES": "Temporal"
+                }
               },
               {
                 "value": "UE",
-                "name": "Under Evaluation"
+                "name": "Under Evaluation",
+                "labels": {
+                  "es_ES": "Bajo evaluación"
+                }
               },
               {
                 "value": "IP",
-                "name": "Under Way"
+                "name": "Under Way",
+                "labels": {
+                  "es_ES": "En curso"
+                }
               },
               {
                 "value": "??",
-                "name": "Unknown"
+                "name": "Unknown",
+                "labels": {
+                  "es_ES": "Desconocido"
+                }
               },
               {
                 "value": "VO",
-                "name": "Voided"
+                "name": "Voided",
+                "labels": {
+                  "es_ES": "Anulado"
+                }
               }
             ],
             "defaultValue": "DR",
@@ -463,6 +524,7 @@
             "inputMode": "selector",
             "defaultValue": "@C_Currency_ID@",
             "section": "principal",
+            "seq": 90,
             "readOnlyLogic": {
               "raw": "@Processed@='Y'",
               "evaluable": true,
@@ -642,15 +704,24 @@
             "enumValues": [
               {
                 "value": "D",
-                "name": "Delivery"
+                "name": "Delivery",
+                "labels": {
+                  "es_ES": "Entrega"
+                }
               },
               {
                 "value": "P",
-                "name": "Pickup"
+                "name": "Pickup",
+                "labels": {
+                  "es_ES": "Recogida"
+                }
               },
               {
                 "value": "S",
-                "name": "Shipper"
+                "name": "Shipper",
+                "labels": {
+                  "es_ES": "Transportista"
+                }
               }
             ],
             "defaultValue": "P",
@@ -693,15 +764,24 @@
             "enumValues": [
               {
                 "value": "3",
-                "name": "High"
+                "name": "High",
+                "labels": {
+                  "es_ES": "Alta"
+                }
               },
               {
                 "value": "7",
-                "name": "Low"
+                "name": "Low",
+                "labels": {
+                  "es_ES": "Baja"
+                }
               },
               {
                 "value": "5",
-                "name": "Medium"
+                "name": "Medium",
+                "labels": {
+                  "es_ES": "Media"
+                }
               }
             ],
             "defaultValue": "5",
@@ -969,19 +1049,31 @@
             "enumValues": [
               {
                 "value": "R",
-                "name": "After Receipt"
+                "name": "After Receipt",
+                "labels": {
+                  "es_ES": "Después de cobrado"
+                }
               },
               {
                 "value": "A",
-                "name": "Availability"
+                "name": "Availability",
+                "labels": {
+                  "es_ES": "Si hay disponible"
+                }
               },
               {
                 "value": "L",
-                "name": "Complete Line"
+                "name": "Complete Line",
+                "labels": {
+                  "es_ES": "Línea completa"
+                }
               },
               {
                 "value": "O",
-                "name": "Complete Order"
+                "name": "Complete Order",
+                "labels": {
+                  "es_ES": "Pedido completo"
+                }
               }
             ],
             "defaultValue": "A",
@@ -1234,6 +1326,7 @@
             "section": "principal",
             "gridOrder": 5,
             "min": 0,
+            "max": 100,
             "callout": {
               "className": "org.openbravo.erpCommon.ad_callouts.SL_Order_Amt"
             },
@@ -2238,35 +2331,59 @@
             "enumValues": [
               {
                 "value": "RPAP",
-                "name": "Awaiting Payment"
+                "name": "Awaiting Payment",
+                "labels": {
+                  "es_ES": "A Pagar"
+                }
               },
               {
                 "value": "RPAE",
-                "name": "Awaiting Execution"
+                "name": "Awaiting Execution",
+                "labels": {
+                  "es_ES": "A Ejecutar"
+                }
               },
               {
                 "value": "RPVOID",
-                "name": "Void"
+                "name": "Void",
+                "labels": {
+                  "es_ES": "Anulado"
+                }
               },
               {
                 "value": "PPM",
-                "name": "Payment Made"
+                "name": "Payment Made",
+                "labels": {
+                  "es_ES": "Pagado"
+                }
               },
               {
                 "value": "RPR",
-                "name": "Payment Received"
+                "name": "Payment Received",
+                "labels": {
+                  "es_ES": "Cobrado"
+                }
               },
               {
                 "value": "RDNC",
-                "name": "Deposited not Cleared"
+                "name": "Deposited not Cleared",
+                "labels": {
+                  "es_ES": "Cobro depositado"
+                }
               },
               {
                 "value": "PWNC",
-                "name": "Withdrawn not Cleared"
+                "name": "Withdrawn not Cleared",
+                "labels": {
+                  "es_ES": "Pago reintegrado"
+                }
               },
               {
                 "value": "RPPC",
-                "name": "Payment Cleared"
+                "name": "Payment Cleared",
+                "labels": {
+                  "es_ES": "Conciliado"
+                }
               }
             ]
           }
@@ -2298,6 +2415,7 @@
       },
       "menuActions": [],
       "secondaryTabs": {},
+      "documentDateField": "orderDate",
       "labelOverrides": {
         "es_ES": {
           "C_BPartner_ID": "Contacto",
@@ -3812,14 +3930,6 @@
             "required": true
           },
           {
-            "name": "cOrderlinetaxID",
-            "apiKey": "cOrderlinetaxID",
-            "column": "C_Orderlinetax_ID",
-            "type": "id",
-            "visibility": "system",
-            "required": true
-          },
-          {
             "name": "salesOrderLine",
             "apiKey": "salesOrderLine",
             "column": "C_Orderline_ID",
@@ -3872,6 +3982,14 @@
             "apiKey": "updatedBy",
             "column": "Updatedby",
             "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "id",
+            "apiKey": "id",
+            "column": "C_Orderlinetax_ID",
+            "type": "id",
             "visibility": "system",
             "required": true
           }
@@ -4170,14 +4288,6 @@
             "required": true
           },
           {
-            "name": "finPaymentDetailVID",
-            "apiKey": "finPaymentDetailVID",
-            "column": "Fin_Payment_Detail_V_ID",
-            "type": "id",
-            "visibility": "system",
-            "required": true
-          },
-          {
             "name": "invoiceAmount",
             "apiKey": "invoiceAmount",
             "column": "Invoicedamt",
@@ -4334,6 +4444,14 @@
             "apiKey": "updatedBy",
             "column": "Updatedby",
             "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "id",
+            "apiKey": "id",
+            "column": "Fin_Payment_Detail_V_ID",
+            "type": "id",
             "visibility": "system",
             "required": true
           }
@@ -4612,7 +4730,7 @@
         "field": "warehouse",
         "column": "M_Warehouse_ID",
         "reference": "Warehouse",
-        "inputMode": "selector",
+        "inputMode": "search",
         "url": "/sws/neo/purchase-order/header/selectors/warehouse"
       },
       {
@@ -10675,14 +10793,6 @@
         "description": "System field 'client' should exist in backend but not frontend for lineTax"
       },
       {
-        "id": "t-system-field-lineTax-cOrderlinetaxID",
-        "category": "system-field",
-        "entity": "lineTax",
-        "field": "cOrderlinetaxID",
-        "runner": "node",
-        "description": "System field 'cOrderlinetaxID' should exist in backend but not frontend for lineTax"
-      },
-      {
         "id": "t-system-field-lineTax-createdBy",
         "category": "system-field",
         "entity": "lineTax",
@@ -10697,6 +10807,14 @@
         "field": "creationDate",
         "runner": "node",
         "description": "System field 'creationDate' should exist in backend but not frontend for lineTax"
+      },
+      {
+        "id": "t-system-field-lineTax-id",
+        "category": "system-field",
+        "entity": "lineTax",
+        "field": "id",
+        "runner": "node",
+        "description": "System field 'id' should exist in backend but not frontend for lineTax"
       },
       {
         "id": "t-system-field-lineTax-organization",
@@ -10827,20 +10945,20 @@
         "description": "System field 'finaccCurrencyID' should exist in backend but not frontend for paymentDetails"
       },
       {
-        "id": "t-system-field-paymentDetails-finPaymentDetailVID",
-        "category": "system-field",
-        "entity": "paymentDetails",
-        "field": "finPaymentDetailVID",
-        "runner": "node",
-        "description": "System field 'finPaymentDetailVID' should exist in backend but not frontend for paymentDetails"
-      },
-      {
         "id": "t-system-field-paymentDetails-glitemname",
         "category": "system-field",
         "entity": "paymentDetails",
         "field": "glitemname",
         "runner": "node",
         "description": "System field 'glitemname' should exist in backend but not frontend for paymentDetails"
+      },
+      {
+        "id": "t-system-field-paymentDetails-id",
+        "category": "system-field",
+        "entity": "paymentDetails",
+        "field": "id",
+        "runner": "node",
+        "description": "System field 'id' should exist in backend but not frontend for paymentDetails"
       },
       {
         "id": "t-system-field-paymentDetails-invoiceAmount",

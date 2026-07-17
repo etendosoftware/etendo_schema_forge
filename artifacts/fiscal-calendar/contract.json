@@ -1,0 +1,711 @@
+{
+  "version": "0.3.0",
+  "generatedAt": "2026-07-07T11:18:10.164Z",
+  "updatedAt": "2026-07-13T18:35:22.869Z",
+  "checksum": "de2c03c526bde48a",
+  "frontendContract": {
+    "window": {
+      "id": "117",
+      "name": "Fiscal Calendar",
+      "primaryEntity": "year",
+      "category": "finance",
+      "menuActions": [
+        {
+          "key": "closeYear",
+          "labelKey": "closeYearTitle",
+          "component": "CloseYearModal"
+        },
+        {
+          "key": "undoCloseYear",
+          "labelKey": "undoCloseYearTitle",
+          "component": "UndoCloseYearModal"
+        }
+      ],
+      "processOverrides": {
+        "processNow": {
+          "label": "Create Periods",
+          "params": [
+            {
+              "key": "CREATEADJUSTMENT",
+              "type": "select",
+              "label": "Create Adjustment Period",
+              "required": false,
+              "options": [
+                {
+                  "value": "N",
+                  "label": "No"
+                },
+                {
+                  "value": "Y",
+                  "label": "Yes"
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "detailEntity": null,
+      "listSortBy": "fiscalYear desc",
+      "labelOverrides": {
+        "es_ES": {
+          "Year": "Año fiscal",
+          "PeriodNo": "N.º período",
+          "StartDate": "Fecha inicio",
+          "EndDate": "Fecha fin",
+          "PeriodType": "Tipo",
+          "Status": "Estado"
+        }
+      },
+      "layoutType": "default"
+    },
+    "entities": {
+      "year": {
+        "tableName": "C_Year",
+        "tabId": "129",
+        "tabName": "Year",
+        "uiPattern": "STD",
+        "fields": [
+          {
+            "name": "fiscalYear",
+            "apiKey": "fiscalYear",
+            "column": "Year",
+            "label": "Fiscal Year",
+            "type": "string",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": true,
+            "grid": true,
+            "form": true,
+            "sourceRequired": true,
+            "gridOrder": 1,
+            "callout": {
+              "className": "org.openbravo.erpCommon.ad_callouts.SL_Year_Validation"
+            }
+          },
+          {
+            "name": "description",
+            "apiKey": "description",
+            "column": "Description",
+            "label": "Description",
+            "type": "string",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": false,
+            "grid": true,
+            "form": true,
+            "gridOrder": 2
+          },
+          {
+            "name": "processNow",
+            "apiKey": "processNow",
+            "column": "Processing",
+            "label": "Create Periods",
+            "type": "button",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": false,
+            "grid": false,
+            "form": true,
+            "derivation": {
+              "type": "computed",
+              "source": "false"
+            },
+            "defaultValue": "N"
+          }
+        ],
+        "searchableFields": [],
+        "computedFields": [
+          {
+            "name": "processNow",
+            "derivation": {
+              "type": "computed",
+              "source": "false"
+            }
+          }
+        ],
+        "javaQualifier": "year-close"
+      }
+    }
+  },
+  "backendContract": {
+    "window": {
+      "id": "117",
+      "name": "Fiscal Calendar",
+      "primaryEntity": "year",
+      "category": "finance",
+      "menuActions": [
+        {
+          "key": "closeYear",
+          "labelKey": "closeYearTitle",
+          "component": "CloseYearModal"
+        },
+        {
+          "key": "undoCloseYear",
+          "labelKey": "undoCloseYearTitle",
+          "component": "UndoCloseYearModal"
+        }
+      ],
+      "processOverrides": {
+        "processNow": {
+          "label": "Create Periods",
+          "params": [
+            {
+              "key": "CREATEADJUSTMENT",
+              "type": "select",
+              "label": "Create Adjustment Period",
+              "required": false,
+              "options": [
+                {
+                  "value": "N",
+                  "label": "No"
+                },
+                {
+                  "value": "Y",
+                  "label": "Yes"
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "detailEntity": null,
+      "listSortBy": "fiscalYear desc",
+      "labelOverrides": {
+        "es_ES": {
+          "Year": "Año fiscal",
+          "PeriodNo": "N.º período",
+          "StartDate": "Fecha inicio",
+          "EndDate": "Fecha fin",
+          "PeriodType": "Tipo",
+          "Status": "Estado"
+        }
+      }
+    },
+    "entities": {
+      "year": {
+        "tableName": "C_Year",
+        "tabId": "129",
+        "tabName": "Year",
+        "fields": [
+          {
+            "name": "id",
+            "apiKey": "id",
+            "column": "C_Year_ID",
+            "type": "id",
+            "visibility": "discarded",
+            "required": true
+          },
+          {
+            "name": "fiscalYear",
+            "apiKey": "fiscalYear",
+            "column": "Year",
+            "type": "string",
+            "visibility": "editable",
+            "required": true
+          },
+          {
+            "name": "description",
+            "apiKey": "description",
+            "column": "Description",
+            "type": "string",
+            "visibility": "editable",
+            "required": false
+          },
+          {
+            "name": "active",
+            "apiKey": "active",
+            "column": "IsActive",
+            "type": "boolean",
+            "visibility": "discarded",
+            "required": true
+          },
+          {
+            "name": "processNow",
+            "apiKey": "processNow",
+            "column": "Processing",
+            "type": "button",
+            "visibility": "editable",
+            "required": false
+          },
+          {
+            "name": "createRegFactAcct",
+            "apiKey": "createRegFactAcct",
+            "column": "Create_Reg_Fact_Acct",
+            "type": "button",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "dropRegFactAcct",
+            "apiKey": "dropRegFactAcct",
+            "column": "Drop_Reg_Fact_Acct",
+            "type": "button",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "organization",
+            "apiKey": "organization",
+            "column": "AD_Org_ID",
+            "type": "foreignKey",
+            "visibility": "discarded",
+            "required": true
+          },
+          {
+            "name": "client",
+            "apiKey": "client",
+            "column": "AD_Client_ID",
+            "type": "foreignKey",
+            "visibility": "discarded",
+            "required": true
+          },
+          {
+            "name": "calendar",
+            "apiKey": "calendar",
+            "column": "C_Calendar_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "creationDate",
+            "apiKey": "creationDate",
+            "column": "Created",
+            "type": "dateTime",
+            "visibility": "discarded",
+            "required": true
+          },
+          {
+            "name": "createdBy",
+            "apiKey": "createdBy",
+            "column": "CreatedBy",
+            "type": "foreignKey",
+            "visibility": "discarded",
+            "required": true
+          },
+          {
+            "name": "updated",
+            "apiKey": "updated",
+            "column": "Updated",
+            "type": "dateTime",
+            "visibility": "discarded",
+            "required": true
+          },
+          {
+            "name": "updatedBy",
+            "apiKey": "updatedBy",
+            "column": "UpdatedBy",
+            "type": "foreignKey",
+            "visibility": "discarded",
+            "required": true
+          }
+        ],
+        "javaQualifier": "year-close"
+      }
+    },
+    "endpoints": [
+      {
+        "method": "GET",
+        "path": "/year",
+        "entity": "year",
+        "supportedFilters": []
+      },
+      {
+        "method": "GET",
+        "path": "/year/:id",
+        "entity": "year",
+        "supportedFilters": []
+      },
+      {
+        "method": "POST",
+        "path": "/year",
+        "entity": "year",
+        "supportedFilters": []
+      },
+      {
+        "method": "PUT",
+        "path": "/year/:id",
+        "entity": "year",
+        "supportedFilters": []
+      },
+      {
+        "method": "DELETE",
+        "path": "/year/:id",
+        "entity": "year",
+        "supportedFilters": []
+      }
+    ],
+    "processEndpoints": []
+  },
+  "apiPrediction": {
+    "specName": "fiscal-calendar",
+    "baseUrl": "/sws/neo/fiscal-calendar",
+    "crud": {
+      "year": {
+        "get": true,
+        "getById": true,
+        "post": true,
+        "put": true,
+        "patch": true,
+        "delete": true,
+        "listUrl": "/sws/neo/fiscal-calendar/year",
+        "detailUrl": "/sws/neo/fiscal-calendar/year/{id}",
+        "supportedFilters": []
+      }
+    },
+    "selectors": [],
+    "actions": [
+      {
+        "entity": "year",
+        "field": "processNow",
+        "column": "Processing",
+        "url": "/sws/neo/fiscal-calendar/year/{id}/action/processNow",
+        "processId": "100",
+        "processType": "classic"
+      },
+      {
+        "entity": "year",
+        "field": "createRegFactAcct",
+        "column": "Create_Reg_Fact_Acct",
+        "url": "/sws/neo/fiscal-calendar/year/{id}/action/createRegFactAcct",
+        "processId": "800036",
+        "processType": "classic"
+      },
+      {
+        "entity": "year",
+        "field": "dropRegFactAcct",
+        "column": "Drop_Reg_Fact_Acct",
+        "url": "/sws/neo/fiscal-calendar/year/{id}/action/dropRegFactAcct",
+        "processId": "800038",
+        "processType": "classic"
+      }
+    ],
+    "queryParams": {
+      "pagination": {
+        "startRow": "_startRow",
+        "endRow": "_endRow",
+        "default": "0-100"
+      },
+      "sorting": {
+        "param": "_sortBy",
+        "example": "_sortBy=creationDate desc"
+      },
+      "filtering": "Use field name as query param: ?fieldName=value",
+      "parentFilter": "parentId={id} for child entities"
+    },
+    "window": {
+      "category": "finance"
+    },
+    "labelOverrides": {
+      "es_ES": {
+        "Year": "Año fiscal",
+        "PeriodNo": "N.º período",
+        "StartDate": "Fecha inicio",
+        "EndDate": "Fecha fin",
+        "PeriodType": "Tipo",
+        "Status": "Estado"
+      }
+    }
+  },
+  "testManifest": {
+    "tests": [
+      {
+        "id": "t-action-endpoint-year-createRegFactAcct",
+        "category": "action-endpoint",
+        "entity": "year",
+        "field": "createRegFactAcct",
+        "runner": "node",
+        "description": "Action endpoint for 'createRegFactAcct' in year should exist"
+      },
+      {
+        "id": "t-action-endpoint-year-dropRegFactAcct",
+        "category": "action-endpoint",
+        "entity": "year",
+        "field": "dropRegFactAcct",
+        "runner": "node",
+        "description": "Action endpoint for 'dropRegFactAcct' in year should exist"
+      },
+      {
+        "id": "t-action-endpoint-year-processNow",
+        "category": "action-endpoint",
+        "entity": "year",
+        "field": "processNow",
+        "runner": "node",
+        "description": "Action endpoint for 'processNow' in year should exist"
+      },
+      {
+        "id": "t-crud-flags-year",
+        "category": "crud-flags",
+        "entity": "year",
+        "runner": "node",
+        "description": "CRUD flags for 'year' should all be booleans"
+      },
+      {
+        "id": "t-default-value-type-year-processNow",
+        "category": "default-value-type",
+        "entity": "year",
+        "field": "processNow",
+        "runner": "node",
+        "description": "Default value for 'processNow' in year should be a string"
+      },
+      {
+        "id": "t-field-presence-year-description",
+        "category": "field-presence",
+        "entity": "year",
+        "field": "description",
+        "runner": "node",
+        "description": "Field 'description' should be present in year"
+      },
+      {
+        "id": "t-field-presence-year-fiscalYear",
+        "category": "field-presence",
+        "entity": "year",
+        "field": "fiscalYear",
+        "runner": "node",
+        "description": "Field 'fiscalYear' should be present in year"
+      },
+      {
+        "id": "t-field-presence-year-processNow",
+        "category": "field-presence",
+        "entity": "year",
+        "field": "processNow",
+        "runner": "node",
+        "description": "Field 'processNow' should be present in year"
+      },
+      {
+        "id": "t-field-type-year-description",
+        "category": "field-type",
+        "entity": "year",
+        "field": "description",
+        "runner": "node",
+        "description": "Field 'description' should have type 'string' in year"
+      },
+      {
+        "id": "t-field-type-year-fiscalYear",
+        "category": "field-type",
+        "entity": "year",
+        "field": "fiscalYear",
+        "runner": "node",
+        "description": "Field 'fiscalYear' should have type 'string' in year"
+      },
+      {
+        "id": "t-field-type-year-processNow",
+        "category": "field-type",
+        "entity": "year",
+        "field": "processNow",
+        "runner": "node",
+        "description": "Field 'processNow' should have type 'string' in year"
+      },
+      {
+        "id": "t-rule-declared-AD-Client-Security-validation",
+        "category": "rule-declared",
+        "rule": "AD_Client Security validation",
+        "runner": "node",
+        "description": "Rule 'AD_Client Security validation' (validation) should be declared"
+      },
+      {
+        "id": "t-rule-declared-AD-Org-Security-validation",
+        "category": "rule-declared",
+        "rule": "AD_Org Security validation",
+        "runner": "node",
+        "description": "Rule 'AD_Org Security validation' (validation) should be declared"
+      },
+      {
+        "id": "t-rule-declared-Allowed-PeriodActions",
+        "category": "rule-declared",
+        "rule": "Allowed PeriodActions",
+        "runner": "node",
+        "description": "Rule 'Allowed PeriodActions' (validation) should be declared"
+      },
+      {
+        "id": "t-rule-declared-C-Period-EndDate-readOnlyLogic",
+        "category": "rule-declared",
+        "rule": "C_Period-EndDate-readOnlyLogic",
+        "runner": "node",
+        "description": "Rule 'C_Period-EndDate-readOnlyLogic' (readOnlyLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-C-Period-PeriodNo-readOnlyLogic",
+        "category": "rule-declared",
+        "rule": "C_Period-PeriodNo-readOnlyLogic",
+        "runner": "node",
+        "description": "Rule 'C_Period-PeriodNo-readOnlyLogic' (readOnlyLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-C-Period-PeriodType-readOnlyLogic",
+        "category": "rule-declared",
+        "rule": "C_Period-PeriodType-readOnlyLogic",
+        "runner": "node",
+        "description": "Rule 'C_Period-PeriodType-readOnlyLogic' (readOnlyLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-C-Period-StartDate-readOnlyLogic",
+        "category": "rule-declared",
+        "rule": "C_Period-StartDate-readOnlyLogic",
+        "runner": "node",
+        "description": "Rule 'C_Period-StartDate-readOnlyLogic' (readOnlyLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-Close-Year",
+        "category": "rule-declared",
+        "rule": "Close Year",
+        "runner": "node",
+        "description": "Rule 'Close Year' (process) should be declared"
+      },
+      {
+        "id": "t-rule-declared-Create-Periods",
+        "category": "rule-declared",
+        "rule": "Create Periods",
+        "runner": "node",
+        "description": "Rule 'Create Periods' (process) should be declared"
+      },
+      {
+        "id": "t-rule-declared-Open-Close",
+        "category": "rule-declared",
+        "rule": "Open/Close",
+        "runner": "node",
+        "description": "Rule 'Open/Close' (process) should be declared"
+      },
+      {
+        "id": "t-rule-declared-Open-Close-All",
+        "category": "rule-declared",
+        "rule": "Open/Close All",
+        "runner": "node",
+        "description": "Rule 'Open/Close All' (process) should be declared"
+      },
+      {
+        "id": "t-rule-declared-Open-Close-Periods",
+        "category": "rule-declared",
+        "rule": "Open Close Periods",
+        "runner": "node",
+        "description": "Rule 'Open Close Periods' (process) should be declared"
+      },
+      {
+        "id": "t-rule-declared-SL-Year-Validation-Year",
+        "category": "rule-declared",
+        "rule": "SL_Year_Validation_Year",
+        "runner": "node",
+        "description": "Rule 'SL_Year_Validation_Year' (callout) should be declared"
+      },
+      {
+        "id": "t-rule-declared-Undo-Close-Year",
+        "category": "rule-declared",
+        "rule": "Undo Close Year",
+        "runner": "node",
+        "description": "Rule 'Undo Close Year' (process) should be declared"
+      },
+      {
+        "id": "t-system-field-year-active",
+        "category": "system-field",
+        "entity": "year",
+        "field": "active",
+        "runner": "node",
+        "description": "System field 'active' should exist in backend but not frontend for year"
+      },
+      {
+        "id": "t-system-field-year-calendar",
+        "category": "system-field",
+        "entity": "year",
+        "field": "calendar",
+        "runner": "node",
+        "description": "System field 'calendar' should exist in backend but not frontend for year"
+      },
+      {
+        "id": "t-system-field-year-client",
+        "category": "system-field",
+        "entity": "year",
+        "field": "client",
+        "runner": "node",
+        "description": "System field 'client' should exist in backend but not frontend for year"
+      },
+      {
+        "id": "t-system-field-year-createdBy",
+        "category": "system-field",
+        "entity": "year",
+        "field": "createdBy",
+        "runner": "node",
+        "description": "System field 'createdBy' should exist in backend but not frontend for year"
+      },
+      {
+        "id": "t-system-field-year-createRegFactAcct",
+        "category": "system-field",
+        "entity": "year",
+        "field": "createRegFactAcct",
+        "runner": "node",
+        "description": "System field 'createRegFactAcct' should exist in backend but not frontend for year"
+      },
+      {
+        "id": "t-system-field-year-creationDate",
+        "category": "system-field",
+        "entity": "year",
+        "field": "creationDate",
+        "runner": "node",
+        "description": "System field 'creationDate' should exist in backend but not frontend for year"
+      },
+      {
+        "id": "t-system-field-year-dropRegFactAcct",
+        "category": "system-field",
+        "entity": "year",
+        "field": "dropRegFactAcct",
+        "runner": "node",
+        "description": "System field 'dropRegFactAcct' should exist in backend but not frontend for year"
+      },
+      {
+        "id": "t-system-field-year-id",
+        "category": "system-field",
+        "entity": "year",
+        "field": "id",
+        "runner": "node",
+        "description": "System field 'id' should exist in backend but not frontend for year"
+      },
+      {
+        "id": "t-system-field-year-organization",
+        "category": "system-field",
+        "entity": "year",
+        "field": "organization",
+        "runner": "node",
+        "description": "System field 'organization' should exist in backend but not frontend for year"
+      },
+      {
+        "id": "t-system-field-year-updated",
+        "category": "system-field",
+        "entity": "year",
+        "field": "updated",
+        "runner": "node",
+        "description": "System field 'updated' should exist in backend but not frontend for year"
+      },
+      {
+        "id": "t-system-field-year-updatedBy",
+        "category": "system-field",
+        "entity": "year",
+        "field": "updatedBy",
+        "runner": "node",
+        "description": "System field 'updatedBy' should exist in backend but not frontend for year"
+      },
+      {
+        "id": "t-visibility-year",
+        "category": "visibility",
+        "entity": "year",
+        "runner": "node",
+        "description": "Entity 'year' should only expose visible fields in frontend"
+      }
+    ],
+    "summary": {
+      "total": 37,
+      "byCategory": {
+        "action-endpoint": 3,
+        "crud-flags": 1,
+        "default-value-type": 1,
+        "field-presence": 3,
+        "field-type": 3,
+        "rule-declared": 14,
+        "system-field": 11,
+        "visibility": 1
+      },
+      "byRunner": {
+        "node": 37,
+        "junit": 0
+      }
+    }
+  }
+}

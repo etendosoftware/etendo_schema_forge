@@ -1,10 +1,7 @@
 import { render, screen } from '@testing-library/react';
 
 vi.mock('@/i18n', () => ({
-  useUI: () => (key, params = {}) => {
-    if (key === 'financeAccountsPendingAccountsRow') {
-      return `${params.count} cuentas`;
-    }
+  useUI: () => (key) => {
     const map = {
       financeAccountsBalanceTitle: 'Saldo',
       financeAccountsBalanceInfo: 'Info',
@@ -12,8 +9,8 @@ vi.mock('@/i18n', () => ({
       financeAccountsBalanceByCurrency: 'Por moneda',
       financeAccountsBalanceEmpty: 'Sin saldos',
       financeAccountsPendingTitle: 'Pendientes',
-      financeAccountsPendingSuggestions: 'Sugerencias',
-      financeAccountsPendingByRule: 'Por regla',
+      // Label no longer includes the count — the count shows as the right-side value.
+      financeAccountsPendingAccountsRow: 'Cuentas con pendientes',
     };
     return map[key] ?? key;
   },
@@ -43,12 +40,15 @@ describe('AccountsSidebar', () => {
     expect(screen.getByTestId('balance-by-currency-USD')).toBeInTheDocument();
   });
 
-  it('renders the three pending counters', () => {
+  it('renders the pending-accounts row with its label and count value', () => {
     render(<AccountsSidebar summary={baseSummary} loading={false} />);
     const card = screen.getByTestId('pending-reconcile-card');
-    expect(card).toHaveTextContent('3 cuentas');
-    expect(card).toHaveTextContent('Sugerencias');
-    expect(card).toHaveTextContent('Por regla');
+    // Label no longer carries the count; the count appears as the right-side value.
+    expect(card).toHaveTextContent('Cuentas con pendientes');
+    expect(card).toHaveTextContent('3');
+    // The removed "Sugerencias listas" / "Por regla" indicators are gone.
+    expect(card).not.toHaveTextContent('Sugerencias');
+    expect(card).not.toHaveTextContent('Por regla');
   });
 
   it('shows an em-dash placeholder while loading is true', () => {

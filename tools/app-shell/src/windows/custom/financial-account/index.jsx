@@ -15,6 +15,7 @@ import { ReconciliationTab } from './ReconciliationTab';
 import { ImportedStatementsTab } from './ImportedStatementsTab';
 import { AutoMatchSuggestionModal } from '@/components/contract-ui/AutoMatchSuggestionModal';
 import { useAutoMatch } from '@/hooks/useReconciliation';
+import { SyncStatusInline } from '@/components/financial-accounts/SyncStatusInline';
 
 const STATEMENTS_API_PATH = '/sws/neo/bank-statements';
 const TRANSACTIONS_API_PATH = '/sws/neo/financial-account-transactions';
@@ -212,9 +213,10 @@ export default function FinancialAccountWindow({ recordId }) {
   useSetPageMeta(
     {
       title: accountName,
+      titleExtra: account ? <SyncStatusInline account={account} data-testid="SyncStatusInline__f7dbb3" /> : null,
       breadcrumb: `${ui('financeMenuLabel')} / ${ui('financeAccountsPageTitle')} / ${accountName}`,
     },
-    [accountName],
+    [accountName, account?.type, account?.psd2Connected, account?.psd2Pending],
   );
 
   return (

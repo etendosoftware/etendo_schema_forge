@@ -19,10 +19,20 @@
 | Role | Name | `ad_client_id` |
 |---|---|---|
 | Template (full config) | **GOClient** | `802509E12436405C86BA1FD5B1DF508C` |
-| New tenant via GO onboarding (has all gaps) | **Gapp** | `DE75F54AE0DA45729F78BCF2EE3C62D6` |
-| Gapp org | `Gapp` | `764471746F6A4293A1C18567148415E1` |
+| ~~New tenant via GO onboarding (has all gaps)~~ **STALE — no longer exists (confirmed 2026-07-06 by QA)** | ~~**Gapp**~~ | ~~`DE75F54AE0DA45729F78BCF2EE3C62D6`~~ |
+| ~~Gapp org~~ | ~~`Gapp`~~ | ~~`764471746F6A4293A1C18567148415E1`~~ |
+| **Current substitute — pre-fix legacy tenant** | **`acreedortest`** | `D94AED60C3E0494AAFD44B8A05BB5CFC` |
 
 > The research notes use `TaxesClient`/`TaxesOrg` — same role as Gapp here.
+>
+> **2026-07-06 (QA/Sentinel):** `Gapp` no longer exists in this DB. All references to Gapp in the
+> Gap A1 section below describe work that genuinely happened against it while it existed and are
+> left as historical record — do not rewrite them. For any NEW verification that needs a live,
+> not-yet-remediated legacy tenant (e.g. proving a corrective fix on a *second* tenant beyond
+> GOClient), use **`acreedortest`** (`D94AED60C3E0494AAFD44B8A05BB5CFC`) instead — confirmed to have
+> the same pre-fix shape (missing `CC`/`U1`/`U2`, `allownegative='N'`, `iscentrallymaintained='N'`,
+> `c_acctschema_default` gaps) and confirmed via `--dry-run` to report `WOULD_APPLY` for both R10 and
+> R11 (see Gap A3/A3b below).
 
 ---
 
@@ -229,11 +239,271 @@ separate concern the research notes flag, not covered by either A2 front here.
 
 ---
 
+## Gap A3 — Accounting schema not fully predefined; only 5/8 dimensions (ETP-4245) — BOTH FRONTS DONE, QA-APPROVED, PRE-CLOSE GATES OPEN
+
+### Ticket ask (ETP-4245, §3.1/§3.3)
+Ship the accounting schema fully predefined out-of-the-box (EUR, allow-negatives, centralized;
+Dimensions/Tables-to-post/General-accounting/Defaults tabs all predefined) and enable 6 accounting
+dimensions (Cost Center, Project, Product, Third Party, User1, User2) for all document types by
+default, so the user only ever decides *visibility*, never *activation*.
+
+### Verified DB state (2026-07-06, GOClient `802509E12436405C86BA1FD5B1DF508C`, `localhost:5416/etendogoclean`)
+
+Cross-checked against the Confluence Test Plan "Contabilidad | Test Plan", Group 10 (TC-38…TC-43),
+by direct query — not by assuming the ETP-4215 plan's earlier "DONE" claims still hold (they held,
+except for this specific gap, which no prior pass had touched):
+
+| TC | Claim | DB reality (2026-07-06, before this fix) | Verdict |
+|---|---|---|---|
+| TC-38 | Currency=EUR, Allow Negatives=Yes, Centrally Maintained=Yes, active | `c_currency_id='102'` (=EUR, confirmed via `c_currency.iso_code`), `isactive='Y'`, but **`allownegative='N'`, `iscentrallymaintained='N'`** | ❌ **Real gap — fixed** |
+| TC-39 | 11 named tables active on the Tables tab | All 11 confirmed `isactive='Y'` on `c_acctschema_table` (joined `ad_table.name`: Invoice, FIN_Payment, FIN_BankStatement, FIN_Finacc_Transaction, FIN_Reconciliation, FinancialMgmtGLJournal, MaterialMgmtShipmentInOut, MaterialMgmtInventoryCount, ProcurementReceiptInvoiceMatch, MaterialMgmtInternalMovement, MaterialMgmtProductionTransaction) | ✅ Already correct — no fix |
+| TC-40 | 8 dimensions: OO+AC mandatory, PJ/BP/PR/CC/U1/U2 optional enabled | Only 5 rows existed in `c_acctschema_element` (`OO`,`AC`,`PJ`,`BP`,`PR`) — **`CC`/`U1`/`U2` entirely absent**, confirmed both in the live DB and in the shipped `C_ACCTSCHEMA_ELEMENT.xml` (identical — no drift) | ❌ **Real gap — fixed** |
+| TC-41 | Customer Receivable=43000, Vendor Payable=40000, Bank Asset=57200, VAT Receivable=47000, VAT Payable=47500 | `c_receivable_acct`→43000000 ✓, `v_liability_acct`→40000000 ✓, `b_asset_acct`→57200000 ✓; but `t_credit_acct` ("Tax Credit", the reclaimable-VAT account) → **47200000**, `t_due_acct` ("Tax Due", the payable-VAT account) → **47700000** — not 47000/47500 | ⚠️ Discrepancy — **deferred, see below** |
+| TC-42 | Bebidas category: Revenue=70000, Expense/COGS=60000, Asset=30000 | `p_revenue_acct`→70000000 ✓, `p_expense_acct`→60000000 ✓ (note: `p_cogs_acct`→99900000 is a different column, not what the TC means); `p_asset_acct`→**35000000** (Finished Goods), not 30000000 (Merchandise) | ⚠️ Discrepancy — **deferred, see below** |
+| TC-43 | Completed Bebidas sales invoice posts, zero "Account Not Defined", debits 43000/credits 70000 | Found real completed+posted invoice (`documentno=10000016`, `docstatus='CO'`, `posted='Y'`) with `fact_acct` rows: debit `43000000` 27.83, credit `70000000` 23.00 + `47700000` 4.83 (balanced, zero errors) | ✅ Already correct — no fix, and confirms 47700 (not 47500) is the live, working Tax Due account |
+
+**TC-41/TC-42 discrepancy — deliberately NOT fixed.** Both are specific account-code choices
+(which GL account represents "VAT Receivable"/"VAT Payable"; whether Bebidas is merchandise or
+finished goods), not an onboarding-*provisioning* gap — the fields ARE populated and DO work (TC-43
+proves it end-to-end with zero posting errors). Re-mapping them would be a business/chart-of-accounts
+content decision outside a tenant-remediation pass, and risks breaking the already-working TC-43
+flow if done without accounting sign-off. This is exactly the class of item flagged in the original
+task as "Jorge's list of extra default accounts" — assumed deferred/out of scope unless referenced
+elsewhere; no such reference was found. Flagged here for the accounting/product owner to confirm
+whether 47000/47500/30000 are truly required or whether the test plan itself needs correcting to
+match the standard Spanish PGC codes (472/477) already in use.
+
+### Decision: dataset-only fix, no new `Onboarding*Service`
+Both `C_ACCTSCHEMA` and `C_ACCTSCHEMA_ELEMENT` were already in `OnboardingDatasetDefinition.INCLUDED_TABLES`
+(from the A1 pass), and neither `OnboardingAccountingWiringService` nor any other onboarding class
+references specific `elementtype` values or the `allownegative`/`iscentrallymaintained` flags — grepped
+the whole module to confirm zero hits. So editing the shipped XML is sufficient for new tenants with
+**zero Java changes**, mirroring the ETP-4341 "dataset-only provisioning" precedent (payment methods/terms).
+This was reasoned explicitly rather than assumed, per the gap-closing workflow's requirement to decide
+whether a CUT bump needs new preventive code or is a pure content change.
+
+### Both fronts closed (2026-07-06)
+
+| Front | Deliverable |
+|---|---|
+| **Corrective** | `cli/src/data-fixes/sql/20260706T120000Z__R10-accounting-schema-dimensions.sql` — `@check` fires if the schema has `allownegative='N'` OR `iscentrallymaintained='N'` OR is missing any of CC/U1/U2; `@apply` = one guarded `UPDATE c_acctschema` + one guarded `INSERT ... SELECT ... CROSS JOIN (VALUES ...)` for the 3 new elements (fresh `get_uuid()` PKs, no id-map token needed — no other row in the body references them). **Live-validated on GOClient**: dry-run → `WOULD_APPLY`; real run → `APPLIED (4 rows)`; re-run → `SKIPPED_NOT_NEEDED — kept prior success state` (no-downgrade guard proven). |
+| **Preventive** | `referencedata/sampledata/GOClient/C_ACCTSCHEMA.xml` (`ALLOWNEGATIVE`/`ISCENTRALLYMAINTAINED` → `Y`) + `C_ACCTSCHEMA_ELEMENT.xml` (+3 records: `CC`/"Cost Center"/seqno 60, `U1`/"User 1"/seqno 70, `U2`/"User 2"/seqno 80 — all `ISMANDATORY=N`, `ISBALANCED=N`, `AD_ORG_ID=0`, new UUIDs via `make uuid`). `ONBOARDING_PROVISIONED_THROUGH` bumped to `2026-07-06T12:00:00Z` in `OnboardingBaselineService.java`. Confirmed `CC`/`U1`/`U2` are valid `ad_ref_list` values (`ad_reference_id='181'`) already installed — no new reference needed. |
+| **Tests** | Corrective: live dry-run/apply/re-run cycle above (project convention — no DB-fixture unit-test infra exists for `.sql` content; every prior `Rn` fix was validated the same way). Preventive: two new JUnit tests in `OnboardingDatasetNormalizerTest.java` — `testNormalizerIncludesAllEightAccountingDimensions` (asserts all 8 element UUIDs + the 3 new `elementtype` values appear in the normalized dataset XML, with the pre-existing 5 asserted too as a regression guard) and `testNormalizerAccountingSchemaIsPredefinedForPosting` (asserts `<allownegative>Y</allownegative>` / `<iscentrallymaintained>Y</iscentrallymaintained>`). **Not executed in this session** — the module worktree (`modules/com.etendoerp.go/.worktrees/feat-etp-4245-dimensions`) is a separate directory from the Etendo root's `modules/com.etendoerp.go` that Gradle resolves, so a `./gradlew test` from Etendo root would test the wrong checkout; the tag-format assumption (`<allownegative>Y</allownegative>`, lowerCamelCase-no-CDATA) is anchored on an existing, presumably-passing test in the same file (`assertTrue(xml.contains("<adLanguage>es_ES</adLanguage>"))`). **Recommend running `./gradlew -p modules/com.etendoerp.go test --tests "*OnboardingDatasetNormalizerTest*"` against this branch before merge.** |
+
+### Naming-collision note (process learning)
+A sibling in-flight branch, `feat/bp-category-preventive` (ETP-4402, not yet merged at the time of
+this fix), had already claimed the `R9` label (`20260701T120000Z__R9-bp-category-seed.sql`, already
+`APPLIED` on the shared dev DB for GOClient) and bumped `ONBOARDING_PROVISIONED_THROUGH` to
+`2026-07-01T12:00:00Z` in its own copy of `OnboardingBaselineService.java`. This was **not visible**
+in either the `feat/etp-4245-dimensions` branch's `cli/src/data-fixes/sql/` directory or the main
+checkout's — only `git rev-list --all | xargs git ls-tree` across all local branches surfaced it,
+after the live `ETGO_DATA_FIX_HISTORY` ledger showed an `R9` row that didn't correspond to any file
+in this branch. **Rule going forward: before naming a new `Rn` fix, check `git rev-list --all` /
+`git branch -a` for the label AND cross-reference the live ledger — the shared dev DB routinely has
+fixes from sibling unmerged branches applied to it.** This fix uses `R10` / `2026-07-06T12:00:00Z`
+to avoid the collision; the two branches will conflict on the single `ONBOARDING_PROVISIONED_THROUGH`
+line when merged — resolve to the later timestamp (this one) so neither cutoff is lost.
+
+---
+
+## Gap A3b — `C_ACCTSCHEMA_DEFAULT` Defaults tab completion — Jorge's list (ETP-4245 follow-up, 2026-07-06) — BOTH FRONTS DONE, QA-APPROVED, PRE-CLOSE GATES OPEN (see A3's checklist — shared)
+
+### Trigger
+The A3 pass above (TC-41) only cross-checked 5 of the 15 "Defaults tab" fields and explicitly
+deferred the rest pending a fuller reference from the product owner ("Jorge's list of extra default
+accounts"). That list arrived 2026-07-06, listing 10 Tercero (Third Party) + 5 Producto (Product)
+fields for client "LadyPipa" (visual reference; GOClient is the actual remediation target), shown as
+10-digit codes in the classic "Valores por defecto" tab.
+
+### Column resolution (verified against live DB, not guessed)
+Introspected `information_schema.columns` for `c_acctschema_default` and cross-referenced each
+Spanish screenshot label against the matching `ad_column`/`ad_element` English name (joined via
+`ad_table.tablename='C_AcctSchema_Default'`). All 15 labels resolved with high confidence (name
+semantics matched exactly, e.g. "Cuenta de dudoso cobro" → `DoubtfulDebt_Acct` → "Doubtful Debt
+Account") — no ambiguous or unmapped labels.
+
+### FK indirection (new finding, not previously documented)
+`C_ACCTSCHEMA_DEFAULT.*_acct` columns are FKs to **`C_VALIDCOMBINATION`**, not directly to
+`c_elementvalue` — `c_validcombination.account_id` is the actual link to the account. Discovered
+because a first attempt to query `c_elementvalue` by the stored FK ids returned zero rows; pivoting
+the join through `c_validcombination` resolved every column. All 9 already-populated columns in
+GOClient point to a combination with every optional dimension (`m_product_id`, `c_bpartner_id`,
+`c_project_id`, `c_campaign_id`, `c_activity_id`, `ad_orgtrx_id`, `c_locfrom_id`, `c_locto_id`,
+`c_salesregion_id`, `user1_id`, `user2_id`) `NULL` — the "plain", dimensionless posting combination
+for that account, scoped to the tenant's own `c_acctschema_id`.
+
+### Verified DB state (2026-07-06, GOClient `802509E12436405C86BA1FD5B1DF508C`)
+
+| Column | Resolved account (8-digit) | Account name | State before fix |
+|---|---|---|---|
+| `c_receivable_acct` | `43000000` | Clientes (euros) a corto plazo | already correct |
+| `c_prepayment_acct` | `43800000` | Anticipos de clientes | already correct |
+| `writeoff_acct` | `65000000` (was `69400000`) | Pérdidas de créditos comerciales incobrables | ⚠️ **corrected 2026-07-08 by R12 — override reversed, see below** |
+| `v_liability_acct` | `40000000` | Proveedores (euros) a corto plazo | already correct |
+| `v_prepayment_acct` | `40700000` | Anticipos a proveedores | already correct |
+| `notinvoicedreceipts_acct` | `40090000` | Proveedores facturas pendientes de recibir o de formalizar | already correct |
+| `doubtfuldebt_acct` | `43600000` | Clientes de dudoso cobro a corto plazo | **NULL — fixed** |
+| `baddebtexpense_acct` | `69400000` | Pérdidas por deterioro de créditos por operaciones comerciales | **NULL — fixed** |
+| `baddebtrevenue_acct` | `79400000` | Reversión del deterioro de créditos por operaciones comerciales | **NULL — fixed** |
+| `allowancefordoubtful_acct` | `49000000` | Deterioro de valor de créditos por operaciones comerciales a corto plazo | **NULL — fixed** |
+| `p_asset_acct` | `35000000` | Productos terminados A | already correct |
+| `p_expense_acct` | `60000000` | Compras de mercaderías | already correct |
+| `p_revenue_acct` | `70000000` | Ventas de mercaderías | already correct |
+| `p_def_expense_acct` | `48000000` | Gastos anticipados | **NULL — fixed** |
+| `p_def_revenue_acct` | `48500000` | Ingresos anticipados | **NULL — fixed** |
+
+9 of 15 were already correct (the A1 clone pass had wired them); 6 were `NULL`. All 6 target
+accounts already had a pre-existing dimensionless `C_VALIDCOMBINATION` row for GOClient's schema —
+no new `c_validcombination` rows needed to be created.
+
+### Write-off override — reversed decision (ETP-4452/R12, 2026-07-08)
+At the time R11 was written (2026-07-06), the product owner had **explicitly overridden** a
+reference screenshot showing Cancelaciones/Write-off = `65000000` ("Pérdidas de créditos comerciales
+incobrables", Spanish PGC account 665): they confirmed the DB's existing value (`69400000`, PGC
+account 694, "Pérdidas por deterioro de créditos por operaciones comerciales") was correct and must
+not be changed. R11's `@check`/`@apply` therefore never referenced `writeoff_acct`.
+
+On 2026-07-07 the product owner **reconfirmed, again explicitly, that `65000000` IS the correct
+value** — reversing the 2026-07-06 decision. `cli/src/data-fixes/sql/20260708T090000Z__R12-writeoff-account-override.sql`
+implements the correction: `writeoff_acct` now resolves to `65000000` on GOClient (combination
+`CB7E1B51B897403083CDCA20835F6AE9`) and on the 3 other GOClient-style PGC tenants (acreedortest,
+acreetest2, empresa — verified live, each has its own pre-existing dimensionless combination for
+65000000, so no new `C_VALIDCOMBINATION` insert was needed anywhere). F&B International Group, QA
+Testing and TaxesOrg run unrelated US-chart schemas with no `65000000` account — R12's `@check`
+naturally excludes them, no client allowlist required. Preventive twin:
+`referencedata/sampledata/GOClient/C_ACCTSCHEMA_DEFAULT.xml`'s `WRITEOFF_ACCT` repointed to
+GOClient's own 65000000 combination id; `ONBOARDING_PROVISIONED_THROUGH` bumped to
+`2026-07-08T09:00:00Z`.
+
+### Decision: dataset-only fix, no new `Onboarding*Service`
+`C_ACCTSCHEMA_DEFAULT` has been in `OnboardingDatasetDefinition.INCLUDED_TABLES` since the A1 pass,
+and no onboarding Java class references these specific columns (grepped the module). Same reasoning
+as A3: dataset-only edit is sufficient.
+
+### Both fronts closed (2026-07-06)
+
+| Front | Deliverable |
+|---|---|
+| **Corrective** | `cli/src/data-fixes/sql/20260706T160000Z__R11-acctschema-default-completion.sql` — one guarded `UPDATE` per NULL column, each resolving its target through `c_validcombination` and gated by `col IS NULL AND EXISTS(resolvable combination)` (so a tenant whose chart never gets one of these 6 accounts does not loop forever). **Live-validated on GOClient**: dry-run → `WOULD_APPLY`; real run → `APPLIED (6 rows)`; re-run → `SKIPPED_NOT_NEEDED — kept prior success state`. |
+| **Preventive** | `referencedata/sampledata/GOClient/C_ACCTSCHEMA_DEFAULT.xml` gains the 6 FK values (`DOUBTFULDEBT_ACCT`, `BADDEBTEXPENSE_ACCT`, `BADDEBTREVENUE_ACCT`, `ALLOWANCEFORDOUBTFUL_ACCT`, `P_DEF_EXPENSE_ACCT`, `P_DEF_REVENUE_ACCT`); `WRITEOFF_ACCT` untouched at the time. `ONBOARDING_PROVISIONED_THROUGH` bumped to `2026-07-06T16:00:00Z` in `OnboardingBaselineService.java`. **`WRITEOFF_ACCT` was later corrected by R12 (ETP-4452, 2026-07-08) — see below.** |
+| **Tests** | Corrective: live dry-run/apply/re-run cycle above (same project convention as every prior `Rn` fix). Preventive: one new JUnit test in `OnboardingDatasetNormalizerTest.java` — `testNormalizerIncludesAcctSchemaDefaultDoubtfulDebtAndDeferredAccounts` (asserts all 6 new `c_validcombination_id` values appear in the normalized dataset XML). **Not executed in this session** — same worktree/Gradle limitation as the R10 pass (see its note above); recommend `./gradlew -p modules/com.etendoerp.go test --tests "*OnboardingDatasetNormalizerTest*"` against this branch before merge. |
+
+### R12 follow-up: write-off override reversed (ETP-4452, 2026-07-08)
+
+| Front | Deliverable |
+|---|---|
+| **Corrective** | `cli/src/data-fixes/sql/20260708T090000Z__R12-writeoff-account-override.sql` — single guarded `UPDATE`, self-scoping via `@check` (fires only when `writeoff_acct` doesn't already resolve to 65000000 AND a resolvable dimensionless combination for 65000000 exists on the tenant's schema — naturally excludes non-PGC-chart tenants, no client allowlist needed). **Live-validated**: dry-run → `WOULD_APPLY` for GOClient/acreedortest/acreetest2/empresa, `SKIPPED_NOT_NEEDED` for F&B/QA/TaxesOrg; real run → `APPLIED (1 row)` each; re-run → `SKIPPED_NOT_NEEDED — kept prior success state`. |
+| **Preventive** | `referencedata/sampledata/GOClient/C_ACCTSCHEMA_DEFAULT.xml`'s `WRITEOFF_ACCT` repointed from GOClient's 69400000 combination id to its own 65000000 combination id (`CB7E1B51B897403083CDCA20835F6AE9`). `ONBOARDING_PROVISIONED_THROUGH` bumped to `2026-07-08T09:00:00Z` in `OnboardingBaselineService.java`. |
+| **Tests** | Corrective: live dry-run/apply/re-run cycle above. Preventive: `OnboardingDatasetNormalizerTest.testNormalizerWriteOffAccountIsAccount65000000` added (asserts the new combination id appears in the normalized dataset XML); the old regression-guard assertion in `testNormalizerIncludesAcctSchemaDefaultDoubtfulDebtAndDeferredAccounts` (which asserted 69400000 stayed unchanged) was removed. **Not executed in this session** — same worktree/Gradle limitation noted above; recommend `./gradlew -p modules/com.etendoerp.go test --tests "*OnboardingDatasetNormalizerTest*"` before merge. |
+
+### QA sign-off (Sentinel, 2026-07-06) — APPROVE, 6/6 test cases re-verified live
+
+QA independently re-verified against live GOClient — re-ran the raw SQL for each test case rather
+than trusting the dev's prior reports:
+
+| TC | Result |
+|---|---|
+| TC-38 | ✅ PASS — `allownegative='Y'`, `iscentrallymaintained='Y'` |
+| TC-39 | ✅ PASS — 11 tables active (pre-existing, unaffected by this fix) |
+| TC-40 | ✅ PASS — all 8 dimensions present (`CC`/`U1`/`U2` now exist alongside the original 5) |
+| TC-41 | ✅ PASS — the 5 pre-existing Defaults-tab accounts confirmed correct, plus all 6 R11-fixed accounts confirmed populated and resolving through `c_validcombination` |
+| TC-42 | ✅ PASS — Bebidas category accounts confirmed (revenue/expense match; asset classification remains a deferred business-classification item, not a defect) |
+| TC-43 | ✅ PASS — the completed+posted invoice still balances with zero "Account Not Defined" errors after R10/R11 |
+
+**Corrective front (R10 + R11) — idempotency re-verified independently:** `--dry-run` plus the
+`ETGO_DATA_FIX_HISTORY` ledger confirm both fixes hold `APPLIED` state on GOClient and correctly
+report `SKIPPED_NOT_NEEDED` on re-run (the no-downgrade guard, proven a second time by QA).
+
+**`Gapp` no longer exists in this DB.** QA found `Gapp` (`DE75F54AE0DA45729F78BCF2EE3C62D6`) — used
+throughout Gap A1 above as *the* reference legacy tenant — has been removed from the current
+environment. This does not invalidate the A1 work performed against it while it existed (left as-is
+in that section); it only means Gapp can no longer be used to prove a corrective fix on a *second*
+tenant going forward. QA located a live substitute with the exact pre-fix shape: **`acreedortest`**
+(`D94AED60C3E0494AAFD44B8A05BB5CFC`) — `--dry-run` confirms `WOULD_APPLY` for both R10 and R11
+there. The "Reference tenants" table at the top of this doc has been updated accordingly.
+
+**Could NOT complete this session (as of the QA pass) — genuine open items, not code defects:**
+1. **Corrective — no live (non-dry-run) write on a second tenant.** QA could not execute the actual
+   R10/R11 `@apply` against `acreedortest` — blocked by session permissions, since that tenant was
+   discovered via query rather than pre-authorized for a live write. Needs explicit user
+   authorization naming `acreedortest` (or another legacy tenant) before this can be closed.
+   **RESOLVED 2026-07-06** — run live by the coordinator against `acreedortest`
+   (`D94AED60C3E0494AAFD44B8A05BB5CFC`) with full command-level evidence: see gate **(d)** in the
+   checklist below.
+2. **Preventive — `OnboardingDatasetNormalizerTest` still never executed for real.** Two different
+   Gradle worktree-remapping approaches were tried this pass (the dev's original attempt, and a
+   separate attempt by QA via a Gradle init script) — both blocked by real structural issues in how
+   `tasks.gradle` resolves paths across worktrees (see the existing note in
+   `docs/etendo-ad/tenant-remediation-knowledge.md` §"ETP-4245", confirmed independently a second
+   time). Not a defect in the tests or the code under test — a worktree/Gradle wiring gap.
+   **RESOLVED 2026-07-06** — the underlying rebuild/redeploy cleared the worktree/Gradle blocker;
+   user confirmed the suite was run for real and green: see gate **(b)** in the checklist below.
+3. **Preventive — no genuine live onboarding run possible right now.** The currently-deployed Tomcat
+   WAR still serves the **stale, pre-fix 5-dimension dataset** (confirmed live) — so even a fresh
+   onboarding attempt against the current deployment would prove nothing about this change. A
+   rebuild + redeploy must happen first.
+   **RESOLVED 2026-07-06** — rebuild + redeploy done (gate **(a)**), then a genuinely new test
+   tenant was onboarded and confirmed correct with zero manual configuration (gate **(c)**); see
+   the checklist below.
+
+No bugs were found in the code under test. Every gap QA found (Gapp's removal, the stale WAR, the
+worktree/Gradle path issue) is environment/fixture staleness, not a defect introduced by this fix.
+
+### Before closing ETP-4245 — mandatory gates (checklist)
+
+**Ship state (2026-07-06): all four gates closed.** Code-complete, QA-approved, and every
+post-merge gate below is now satisfied. Gates (a)–(c) are recorded as the user's direct
+attestation — no agent independently re-verified the rebuild logs, the raw JUnit output, or the
+new-tenant onboarding artifacts; that distinction is preserved below rather than blurred. Gate (d)
+was proven live this session by the coordinator, with full command-level evidence.
+
+- [x] **(a) Rebuild + redeploy `com.etendoerp.go`** with this branch's changes included.
+      **User-attested, done ("a - done ok").** Not independently re-verified by an agent — no
+      rebuild/redeploy logs or artifacts were inspected.
+- [x] **(b) Run `OnboardingDatasetNormalizerTest` for real** (the two new A3 tests +
+      the one new A3b test) and confirm all green, e.g.:
+      `./gradlew -p modules/com.etendoerp.go test --tests "*OnboardingDatasetNormalizerTest*"`
+      run against a worktree/checkout Gradle can actually resolve (see open item 2 above).
+      **User-attested, done ("b - done ok")** — the suite was run for real once gate (a)'s
+      rebuild cleared the prior worktree/Gradle path-resolution blocker. No agent saw the raw
+      JUnit output; recorded as user attestation, not independent verification.
+- [x] **(c) Onboard one genuinely new test tenant** end-to-end and confirm TC-38, TC-40, TC-41,
+      TC-42, and TC-43 all pass with **zero manual configuration** — the only way to prove the
+      preventive front fires on a fresh tenant, since the currently-deployed WAR still serves the
+      stale dataset (open item 3 above).
+      **User-attested, done** — user confirmed: "new tenant already have the default
+      non-mandatory accounts, also the dimensions -> ok." Specifically confirms the TC-40 scope
+      (all 8 accounting dimensions present) and the TC-41/TC-41b scope (the 6 R11-completed
+      default accounts present) came through on the new tenant with no manual configuration. Not
+      independently re-verified by an agent.
+- [x] **(d) Get explicit authorization to run the R10/R11 corrective fixes live (non-dry-run)
+      against `acreedortest`** (`D94AED60C3E0494AAFD44B8A05BB5CFC`) or another legacy tenant,
+      proving the corrective front end-to-end on a **second** tenant, not just GOClient.
+      **Agent-verified live, run by the coordinator this session** against `acreedortest`
+      (`D94AED60C3E0494AAFD44B8A05BB5CFC`):
+      - `20260706T120000Z__R10-accounting-schema-dimensions`: `--dry-run` →
+        `WOULD_APPLY — @check matched (1 row(s))`; real apply → `APPLIED (4 rows)`; re-run
+        (idempotency check) → `SKIPPED_NOT_NEEDED — kept prior success state`.
+      - `20260706T160000Z__R11-acctschema-default-completion`: `--dry-run` →
+        `WOULD_APPLY — @check matched (1 row(s))`; real apply → `APPLIED (6 rows)`; re-run
+        (idempotency check) → `SKIPPED_NOT_NEEDED — kept prior success state`.
+      - Command shape used: `node cli/src/data-fixes/run.js --fix <fixId> --client
+        D94AED60C3E0494AAFD44B8A05BB5CFC [--dry-run]`.
+      - This closes QA's previously-open item about `acreedortest` only ever getting a dry-run,
+        proving the corrective front end-to-end on a second tenant.
+
+**All four gates (a)–(d) are complete.** ETP-4245 can be considered fully closed on the
+verification front described in this checklist.
+
+---
+
 ## Remaining gaps (queued — same two-front structure)
 
 | Gap | Area | Preventive front | Corrective front |
 |---|---|---|---|
 | A2 | `*_acct` tables (bp_group, product_category, bp_customer/vendor, product, **tax**) | ✅ `OnboardingAccountingWiringService.provisionEntityPostingAccounts` (post-import; 5 stmts mirror R1 step 11, `TAX_ACCT_SQL` reads system taxes `ad_client_id='0'`) — entity-creation hook for post-onboarding entities still open | ✅ `*_acct` in `R1-chart-of-accounts.sql` step 11; **`c_tax_acct` owned by standalone `R7-tax-accounts`** (2026-06-17) which joins the tenant's real schema(s) + system tax catalog, covering both no-schema (post-R1) and has-schema tenants. Dry-run validated 653 rows on SantiCorp |
+| A3 | Schema not predefined (allow negatives/centrally maintained=N); only 5/8 dimensions enabled — ETP-4245 | ✅ Dataset-only — `C_ACCTSCHEMA.xml` flags → `Y`/`Y`, `C_ACCTSCHEMA_ELEMENT.xml` +3 rows (CC/U1/U2); no new service needed | ✅ `R10-accounting-schema-dimensions.sql` — flags + 3 elements, `NOT EXISTS`-guarded; live-validated APPLIED/SKIPPED on GOClient — **QA-approved 2026-07-06 (6/6 TCs re-verified live); all 4 post-merge gates closed 2026-07-06, see "Before closing ETP-4245" checklist above** |
+| A3b | `C_ACCTSCHEMA_DEFAULT` Defaults tab: 6 of 15 accounts NULL — ETP-4245 follow-up ("Jorge's list") | ✅ Dataset-only — `C_ACCTSCHEMA_DEFAULT.xml` gains 6 FK values; no new service needed | ✅ `R11-acctschema-default-completion.sql` — 6 guarded `UPDATE`s via `c_validcombination`; live-validated APPLIED/SKIPPED on GOClient — **QA-approved 2026-07-06, same gates closed as A3 (shared checklist)** |
 | B1 | `AD_ORG_TREE` empty | ✅ `OnboardingMarkOrgReadyService.provisionOrgTree` — defensive idempotent insert of the 2 rows on the DAL session connection after `AD_Org_Ready` (its own tree INSERT runs on a separate connection that can't see the just-flushed org → tree stayed empty) | ✅ `R1-chart-of-accounts.sql` step 12 (2 rows, `NOT EXISTS` guarded) |
 | C1 | period-control flags on `ad_org` | ✅ `OnboardingPeriodControlService` (`wirePeriodControl` step, after `wireAccounting`) | ✅ `UPDATE ad_org` in `R3-periodcontrol.sql` |
 | C2 | `c_periodcontrol` missing (**516** = 43 docbasetypes × 12 periods) | ✅ `C_PERIODCONTROL` added to `INCLUDED_TABLES` (auto-packaged via `prepareOnboardingSampledata`) | ✅ 516-row backfill in `R3-periodcontrol.sql` |

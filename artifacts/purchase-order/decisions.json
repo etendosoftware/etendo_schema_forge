@@ -3,6 +3,7 @@
   "window": {
     "category": "purchases",
     "name": "Purchase Order",
+    "documentDateField": "orderDate",
     "selectorPriceCurrency": "org",
     "notesField": "description",
     "relatedDocuments": true,
@@ -70,7 +71,7 @@
           "searchable": true,
           "form": true,
           "section": "principal",
-          "order": 2
+          "seq": 20
         },
         "documentStatus": {
           "grid": true,
@@ -83,7 +84,7 @@
           "grid": false,
           "form": true,
           "section": "principal",
-          "order": 10,
+          "seq": 90,
           "readOnlyLogic": "@Processed@='Y'",
           "derivation": null
         },
@@ -93,7 +94,7 @@
           "searchable": true,
           "section": "principal",
           "form": true,
-          "order": 3
+          "seq": 30
         },
         "businessPartner": {
           "grid": true,
@@ -103,14 +104,14 @@
           "section": "principal",
           "displayLogic": null,
           "form": true,
-          "order": 1,
+          "seq": 10,
           "selectorFilter": "isVendor=Y"
         },
         "partnerAddress": {
           "visibility": "editable",
           "form": true,
           "section": "principal",
-          "order": 4,
+          "seq": 40,
           "reference": "BusinessPartnerLocation",
           "inputMode": "dependent",
           "dependsOn": {
@@ -120,27 +121,30 @@
         },
         "warehouse": {
           "grid": false,
-          "form": false
+          "seq": 60,
+          "inputMode": "search"
         },
         "scheduledDeliveryDate": {
           "section": "principal",
           "form": true,
-          "order": 5
+          "seq": 50
         },
         "paymentMethod": {
           "reference": "PaymentMethod",
           "form": true,
-          "section": "principal"
+          "section": "principal",
+          "seq": 70
         },
         "paymentTerms": {
           "form": true,
-          "section": "principal"
+          "section": "principal",
+          "seq": 80
         },
         "priceList": {
           "grid": false,
           "section": "principal",
           "form": true,
-          "order": 11
+          "seq": 100
         },
         "invoiceAddress": {
           "reference": "BusinessPartnerLocation",
@@ -426,7 +430,8 @@
           "order": 5,
           "gridOrder": 5,
           "readOnlyLogic": null,
-          "min": 0
+          "min": 0,
+          "max": 100
         },
         "taxableAmount": {
           "form": false,
