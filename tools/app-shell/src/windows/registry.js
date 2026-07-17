@@ -59,6 +59,7 @@ const windowLoaders = {
   'simple-g-l-journal': () => import('@generated/simple-g-l-journal/generated/web/simple-g-l-journal/index.jsx'),
   'open-close-period-control': () => import('@/windows/custom/open-close-period-control-redirect/index.jsx'),
   'fiscal-calendar': () => import('@/windows/custom/fiscal-calendar-redirect/index.jsx'),
+  'end-year-close': () => import('@generated/end-year-close/generated/web/end-year-close/index.jsx'),
 };
 
 /**

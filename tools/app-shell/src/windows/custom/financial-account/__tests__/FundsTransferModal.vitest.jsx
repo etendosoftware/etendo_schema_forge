@@ -1,4 +1,4 @@
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 
 // i18n → identity so assertions can match on the key.
 vi.mock('@/i18n', () => ({ useUI: () => (key) => key }));
@@ -31,6 +31,7 @@ vi.mock('@/components/ui/dialog', () => ({
   DialogContent: ({ children, onOpenAutoFocus, ...p }) => <div {...p}>{children}</div>,
 }));
 
+import { formatCurrency } from '@/lib/formatCurrency.js';
 import { FundsTransferModal } from '../FundsTransferModal.jsx';
 
 const SRC = { id: 'SRC', name: 'BBVA', iban: 'ES91', currencyIso: 'EUR', currentBalance: 1000, active: true };
@@ -131,6 +132,142 @@ describe('FundsTransferModal', () => {
     selectDest('USD');
     expect(screen.getByTestId('transfer-fx-block')).toBeInTheDocument();
     expect(screen.getByTestId('transfer-rate')).toBeInTheDocument();
+  });
+
+  it('no longer renders the removed "Conversión de divisa" (financeAccountTransferFx) label', () => {
+    renderModal();
+    selectDest('USD');
+    expect(screen.getByTestId('transfer-fx-block')).toBeInTheDocument();
+    // i18n is mocked as identity ((key) => key), so the removed key would surface verbatim.
+    expect(screen.queryByText('financeAccountTransferFx')).not.toBeInTheDocument();
+  });
+
+  it('still shows the source/destination currency badges inline with the rate input', () => {
+    renderModal();
+    selectDest('USD');
+    const fxBlock = screen.getByTestId('transfer-fx-block');
+    // CurrencyBadge renders the ISO as its text content (no dedicated role/testid reaches the DOM).
+    expect(within(fxBlock).getByText('EUR')).toBeInTheDocument();
+    expect(within(fxBlock).getByText('USD')).toBeInTheDocument();
+    expect(within(fxBlock).getByTestId('transfer-rate')).toBeInTheDocument();
+  });
+
+  it('shows the em-dash placeholder in the receive-amount preview until amount and rate are both valid', () => {
+    renderModal();
+    selectDest('USD');
+    const box = screen.getByTestId('transfer-receive-amount');
+    expect(box).toHaveTextContent('—');
+
+    fireEvent.change(screen.getByTestId('transfer-amount'), { target: { value: '100' } });
+    expect(box).toHaveTextContent('—'); // rate still empty
+
+    fireEvent.change(screen.getByTestId('transfer-rate'), { target: { value: '0' } });
+    expect(box).toHaveTextContent('—'); // rate present but not > 0
+  });
+
+  it('shows the computed, currency-formatted receive amount once amount and rate are valid', () => {
+    renderModal();
+    selectDest('USD');
+    fireEvent.change(screen.getByTestId('transfer-amount'), { target: { value: '100' } });
+    fireEvent.change(screen.getByTestId('transfer-rate'), { target: { value: '1.1' } });
+    const box = screen.getByTestId('transfer-receive-amount');
+    expect(box).toHaveTextContent(formatCurrency('USD', 110));
+  });
+
+  it('updates the receive-amount preview reactively when the rate changes afterwards', () => {
+    renderModal();
+    selectDest('USD');
+    fireEvent.change(screen.getByTestId('transfer-amount'), { target: { value: '100' } });
+    fireEvent.change(screen.getByTestId('transfer-rate'), { target: { value: '1.1' } });
+    const box = screen.getByTestId('transfer-receive-amount');
+    expect(box).toHaveTextContent(formatCurrency('USD', 110));
+
+    fireEvent.change(screen.getByTestId('transfer-rate'), { target: { value: '1.2' } });
+    expect(box).toHaveTextContent(formatCurrency('USD', 120));
+  });
+
+  it('does not render the receive-amount preview for a same-currency transfer', () => {
+    renderModal();
+    selectDest('DST');
+    expect(screen.queryByTestId('transfer-fx-block')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('transfer-receive-amount')).not.toBeInTheDocument();
+  });
+
+  it('wires the i18n label + formatted value as both title and aria-label on the receive-amount preview', () => {
+    renderModal();
+    selectDest('USD');
+    const box = screen.getByTestId('transfer-receive-amount');
+    // Before amount/rate are valid, receiveAmount is null → formatCurrency renders '—'.
+    const expectedLabel = `financeAccountTransferReceiveAmount: ${formatCurrency('USD', null)}`;
+    expect(box).toHaveAttribute('title', expectedLabel);
+    expect(box).toHaveAttribute('aria-label', expectedLabel);
+  });
+
+  it('keeps the full untruncated value in title/aria-label even for the truncated receive box', () => {
+    renderModal();
+    selectDest('USD');
+    fireEvent.change(screen.getByTestId('transfer-amount'), { target: { value: '100' } });
+    fireEvent.change(screen.getByTestId('transfer-rate'), { target: { value: '1.1' } });
+    const box = screen.getByTestId('transfer-receive-amount');
+    const expectedLabel = `financeAccountTransferReceiveAmount: ${formatCurrency('USD', 110)}`;
+    expect(box).toHaveAttribute('title', expectedLabel);
+    expect(box).toHaveAttribute('aria-label', expectedLabel);
+  });
+
+  it('shares the row equally with the rate input (flex-1) and still clips overflow instead of growing the modal', () => {
+    renderModal();
+    selectDest('USD');
+    const box = screen.getByTestId('transfer-receive-amount');
+    expect(box.className).toContain('min-w-0');
+    expect(box.className).toContain('flex-1');
+    expect(box.className).toContain('overflow-hidden');
+    // 50/50 sizing regression guard: the rate input beside it must carry the same
+    // flex-basis classes so the row stays evenly split instead of one side dominating.
+    const rateInput = screen.getByTestId('transfer-rate');
+    expect(rateInput.className).toContain('min-w-0');
+    expect(rateInput.className).toContain('flex-1');
+  });
+
+  it('does not crash and still exposes the full value via title for an extremely large amount', () => {
+    renderModal();
+    selectDest('USD');
+    fireEvent.change(screen.getByTestId('transfer-amount'), {
+      target: { value: '50000000000000000000000000' },
+    });
+    fireEvent.change(screen.getByTestId('transfer-rate'), { target: { value: '1.1' } });
+
+    const box = screen.getByTestId('transfer-receive-amount');
+    expect(box).toBeInTheDocument();
+
+    const hugeReceiveAmount = 50000000000000000000000000 * 1.1;
+    const expectedLabel = `financeAccountTransferReceiveAmount: ${formatCurrency('USD', hugeReceiveAmount)}`;
+    expect(box).toHaveAttribute('title', expectedLabel);
+    expect(box).toHaveAttribute('aria-label', expectedLabel);
+    // The box itself must still carry the min-w-0/overflow-hidden classes that clip the
+    // visible text — the huge value must not be allowed to expand the box (and modal) width,
+    // even though its allotted width is now an equal flex-1 share instead of a small fixed chip.
+    expect(box.className).toContain('min-w-0');
+    expect(box.className).toContain('overflow-hidden');
+  });
+
+  it('the modal body wrapper has min-w-0 so it cannot force the dialog wider than its own max-width (grid-item overflow guard)', () => {
+    // Regression guard for a real, reproduced-in-browser bug: DialogContent renders as
+    // `display: grid` (Radix primitive), which makes its direct child — this body wrapper —
+    // a grid item. Grid items default to `min-width: auto`, meaning they refuse to shrink
+    // below their content's min-content width. A long value deep inside (e.g. the
+    // receive-amount preview with a huge typed amount, covered above) can then inflate this
+    // whole wrapper past the dialog's own `max-w-[600px]`, and only the dialog's rightmost
+    // sliver gets visually clipped — cropping every row uniformly ("Disponible" → "Dispon...",
+    // "GBP" → "GB", "Transferir" → "Transfe", etc.), even though the inner box already had its
+    // own overflow-hidden/truncate guard. jsdom does not compute real CSS box layout, so this
+    // cannot reproduce the visual overflow itself — it asserts the structural guard (`min-w-0`
+    // on this wrapper) that prevents it. Do not remove this class from the wrapper.
+    renderModal();
+    const modal = screen.getByTestId('funds-transfer-modal');
+    const bodyWrapper = modal.children[1];
+    // Sanity check we grabbed the body wrapper (not the header or footer) before asserting on it.
+    expect(within(bodyWrapper).getByTestId('transfer-amount')).toBeInTheDocument();
+    expect(bodyWrapper.className).toContain('min-w-0');
   });
 
   it('allows a transfer above the source balance (Classic permits overdrawing)', () => {
