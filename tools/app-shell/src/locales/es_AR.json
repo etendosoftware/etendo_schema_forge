@@ -17690,6 +17690,7 @@
     "financeAccountTxNewGlDescPrefix": "Conceptos Contables",
     "financeAccountTxNewGlItemPlaceholder": "Seleccioná una cuenta contable…",
     "financeAccountTxNewAmount": "Importe",
+    "financeAccountTxNewAmountPlaceholder": "0,00",
     "financeAccountTxNewDescription": "Descripción",
     "financeAccountTxNewDescriptionPlaceholder": "Concepto o nota (opcional)…",
     "financeAccountTxNewDimensionsTitle": "Dimensiones contables",

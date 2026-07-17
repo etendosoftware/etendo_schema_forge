@@ -17847,6 +17847,7 @@
     "financeAccountTxNewGlDescPrefix": "GL Item",
     "financeAccountTxNewGlItemPlaceholder": "Select an account…",
     "financeAccountTxNewAmount": "Amount",
+    "financeAccountTxNewAmountPlaceholder": "0.00",
     "financeAccountTxNewDescription": "Description",
     "financeAccountTxNewDescriptionPlaceholder": "Note or concept (optional)…",
     "financeAccountTxNewDimensionsTitle": "Accounting dimensions",

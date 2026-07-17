@@ -202,7 +202,7 @@ test.describe('Financial Account — Nuevo movimiento (mocked)', () => {
     await save.click();
 
     // Success toast (es_ES) and the create POST carried the mapped payload.
-    await expect(page.getByText('Transacción creada')).toBeVisible();
+    await expect(page.getByText('Movimiento creado')).toBeVisible();
     await expect(modal).toHaveCount(0);
 
     expect(createBody).toMatchObject({
@@ -235,7 +235,7 @@ test.describe('Financial Account — Nuevo movimiento (mocked)', () => {
     await page.getByTestId('field-number-tx-amount').fill('75');
 
     await page.getByTestId('tx-new-save').click();
-    await expect(page.getByText('Transacción creada')).toBeVisible();
+    await expect(page.getByText('Movimiento creado')).toBeVisible();
 
     expect(createBody).toMatchObject({
       trxType: 'BPD',
@@ -278,7 +278,7 @@ test.describe('Financial Account — Nuevo movimiento (mocked)', () => {
     await confirm.click();
 
     // Success toast (es_ES) + the process POST carried the movement id.
-    await expect(page.getByText('Transacción confirmada')).toBeVisible();
+    await expect(page.getByText('Movimiento procesado')).toBeVisible();
     expect(processBody).toMatchObject({ id: 'mov-draft' });
   });
 });

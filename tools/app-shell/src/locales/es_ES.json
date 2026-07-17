@@ -18097,6 +18097,7 @@
     "financeAccountTxNewGlDescPrefix": "Conceptos Contables",
     "financeAccountTxNewGlItemPlaceholder": "Selecciona una cuenta contable…",
     "financeAccountTxNewAmount": "Importe",
+    "financeAccountTxNewAmountPlaceholder": "0,00",
     "financeAccountTxNewDescription": "Descripción",
     "financeAccountTxNewDescriptionPlaceholder": "Concepto o nota (opcional)…",
     "financeAccountTxNewDimensionsTitle": "Dimensiones contables",

@@ -263,7 +263,7 @@ export function NewTransactionModal({ open, accountId, accountName = '', account
               required
               readOnly={lockAmountType}
               value={form.amount}
-              placeholder="0,00"
+              placeholder={ui('financeAccountTxNewAmountPlaceholder')}
               onChange={(e) => set({ amount: e.target.value })}
               onBlur={formatAmount}
               name="tx-amount"
