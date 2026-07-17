@@ -17040,6 +17040,7 @@
     "search": "Search",
     "opContains": "Contains",
     "opNotContains": "Does not contain",
+    "opStartsWith": "Starts with",
     "opIs": "Is",
     "opIsNot": "Is not",
     "opGreaterThan": "Greater than",

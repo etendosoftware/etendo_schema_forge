@@ -17282,6 +17282,7 @@
     "search": "Buscar",
     "opContains": "Contiene",
     "opNotContains": "No contiene",
+    "opStartsWith": "Empieza por",
     "opIs": "Es",
     "opIsNot": "No es",
     "opGreaterThan": "Mayor que",
