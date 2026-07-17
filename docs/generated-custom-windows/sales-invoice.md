@@ -420,3 +420,28 @@ The generic `hiddenColumns` mechanism on `InlineLinesPanel`/`DetailView` is not
 window-specific — it applies to every window that uses the primary inline lines grid, so any
 other line field whose `evaluate-display` result resolves to `visibility: false` will now
 also be hidden as a column, not just `project`/`costcenter`.
+
+### Header section placement fix (ETP-4529 follow-up)
+
+`header.project`/`header.costcenter` had `"section": "other"` (the secondary/collapsed area)
+instead of `"section": "principal"` (the main visible form) — this made them appear as
+missing blank space rather than as visible fields, even after the runtime-evaluator and
+`hiddenColumns` fixes above made their config-gated visibility resolve correctly. Fixed by
+changing `section` to `"principal"` in `decisions.json` and regenerating; confirmed in
+`contract.json` (`section: "principal"`) and in the generated `HeaderForm.jsx`.
+
+### Plain grid columns superseded by the "Dimensiones contables" expand panel (ETP-4529)
+
+The `project`/`costcenter` plain grid columns added by ETP-4543 (just above) were a stopgap.
+After reviewing the live app, the user asked for the same expand-row "Dimensiones contables"
+UX Amortización already has instead of two permanently-visible columns — a plain column reads
+as a field the client always has, even with no accounting-dimension config at all.
+`InvoiceLinesTable.jsx` now declares one `type: 'dimensionsPanel'` column instead (see
+`docs/ui-customization.md` §14b for the column shape), driven by the exact same `hiddenColumns`
+this fix introduced (filtering `DIMENSION_FIELD_CANDIDATES_BASE` down to visible fields instead
+of hiding a whole plain column). Full write-up, including a **wiring gap discovered while doing
+this**: `InvoiceLinesTable.jsx` is not currently reachable from the running sales-invoice
+window at all (`HeaderPage.jsx` renders the plain generated `LinesTable.jsx` via
+`DetailTable={LinesTable}`, not `InvoiceLinesTable.jsx` via `CustomLines` — neither window's
+`decisions.json` sets `window.customLinesComponent`) — see `docs/feedback.md`'s ETP-4543
+supersession note.

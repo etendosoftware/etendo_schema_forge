@@ -130,14 +130,14 @@
         },
         "project": {
           "visibility": "editable",
-          "section": "other",
-          "reason": "ETP-4529 — accounting dimension, config-gated (@ACCT_DIMENSION_DISPLAY@)."
+          "section": "principal",
+          "reason": "ETP-4529 — accounting dimension, config-gated (@ACCT_DIMENSION_DISPLAY@). Moved from \"other\" to \"principal\" — the config-gated header dimension fields were rendering in the secondary/collapsed area instead of the main visible form."
         },
         "costcenter": {
           "visibility": "editable",
-          "section": "other",
+          "section": "principal",
           "reference": "CostCenter",
-          "reason": "ETP-4529 — accounting dimension, config-gated (@ACCT_DIMENSION_DISPLAY@)."
+          "reason": "ETP-4529 — accounting dimension, config-gated (@ACCT_DIMENSION_DISPLAY@). Moved from \"other\" to \"principal\", same rationale as header.project above."
         },
         "asset": {
           "form": false,
@@ -269,14 +269,14 @@
         },
         "project": {
           "visibility": "editable",
-          "grid": true,
-          "reason": "ETP-4543 — promoted to grid column (config-gated via @ACCT_DIMENSION_DISPLAY@, hidden dynamically at runtime by displayLogic, not by this flag)."
+          "grid": false,
+          "reason": "ETP-4529 — reverted ETP-4543's plain grid column. The user asked for the same expand-row \"Dimensiones contables\" UX Amortización already has instead of an always-rendered column; that replacement needs a lines-grid custom-override mechanism this pipeline-generated window doesn't have yet (only `customLinesComponent`'s fully self-fetching CustomLines contract exists, which is a much heavier rebuild — see docs/generated-custom-windows/goods-receipt.md). Escalated to the coordinator; grid stays false until resolved."
         },
         "costcenter": {
           "visibility": "editable",
-          "grid": true,
+          "grid": false,
           "reference": "CostCenter",
-          "reason": "ETP-4543 — promoted to grid column (config-gated via @ACCT_DIMENSION_DISPLAY@, hidden dynamically at runtime by displayLogic, not by this flag)."
+          "reason": "ETP-4529 — reverted ETP-4543's plain grid column, same rationale as lines.project above."
         },
         "asset": {
           "form": false,

@@ -146,3 +146,17 @@ dynamic column visibility through `InlineLinesPanel.jsx`'s new `hiddenColumns` p
 dimension toggles OFF, the columns do not render as grid columns; with them ON, they do. See
 `sales-invoice.md` for the full write-up (including the verified list of which windows
 actually hit this gap).
+
+### Header section fix, and the plain grid columns above were reverted (ETP-4529 follow-up)
+
+`header.project`/`header.costcenter` moved from `"section": "other"` to `"section": "principal"`
+so they render in the main visible form area — same fix as `sales-invoice.md`.
+
+Separately: the `lines.project.grid`/`lines.costcenter.grid` flags flipped `false → true` just
+above (ETP-4543) were **flipped back to `false`**, for the same reason as `goods-shipment.md`:
+the user asked for the expand-row "Dimensiones contables" UX instead of plain columns (see
+`docs/ui-customization.md` §14b), but this window's `GoodsReceiptLineTable.jsx` is fully
+pipeline-generated with no override mechanism that fits the new `dimensionsPanel` column type
+— only the heavier, fully self-fetching `customLinesComponent`/`CustomLines` contract exists.
+Back to pre-ETP-4543 state pending a coordinator decision — see `docs/feedback.md`'s ETP-4543
+supersession note.

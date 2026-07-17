@@ -448,3 +448,13 @@ dynamic column visibility through `InlineLinesPanel.jsx`'s new `hiddenColumns` p
 `DetailView.jsx`'s memoized `lineHiddenColumns`. With the client's Proyecto/Centro de costo
 dimension toggles OFF, the columns do not render; with them ON, they do. See `sales-invoice.md`
 for the full write-up (including the verified list of which windows actually hit this gap).
+
+### Header section placement fix + expand-panel supersession (ETP-4529 follow-up)
+
+`header.project`/`header.costcenter` moved from `"section": "other"` to `"section": "principal"`
+so they render in the main visible form area instead of the secondary/collapsed one — same fix
+as `sales-invoice.md`. Separately, the plain `project`/`costcenter` grid columns added above
+were superseded by a single `type: 'dimensionsPanel'` column on `InvoiceLinesTable.jsx` (the
+same shared component both windows use) — full write-up, including a wiring gap discovered
+while doing this (`InvoiceLinesTable.jsx` is not currently reachable from either window's
+running app), in `sales-invoice.md` and `docs/feedback.md`'s ETP-4543 supersession note.

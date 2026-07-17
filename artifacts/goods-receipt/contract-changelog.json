@@ -970,5 +970,27 @@
     ],
     "author": "pipeline",
     "date": "2026-07-17"
+  },
+  {
+    "from": "0.21.1",
+    "to": "0.21.2",
+    "level": "patch",
+    "reasons": [
+      "Field \"project\" property \"grid\" changed from \"true\" to \"false\" in frontend (patch)",
+      "Field \"costcenter\" property \"grid\" changed from \"true\" to \"false\" in frontend (patch)"
+    ],
+    "author": "pipeline",
+    "date": "2026-07-17"
+  },
+  {
+    "from": "0.21.2",
+    "to": "0.22.0",
+    "level": "additive",
+    "reasons": [
+      "Field \"project\" property \"section\" changed from \"other\" to \"principal\" in frontend (additive)",
+      "Field \"costcenter\" property \"section\" changed from \"other\" to \"principal\" in frontend (additive)"
+    ],
+    "author": "pipeline",
+    "date": "2026-07-17"
   }
 ]

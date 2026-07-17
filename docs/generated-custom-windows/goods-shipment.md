@@ -105,3 +105,21 @@ dynamic column visibility through `InlineLinesPanel.jsx`'s new `hiddenColumns` p
 dimension toggles OFF, the columns do not render as grid columns; with them ON, they do. See
 `sales-invoice.md` for the full write-up (including the verified list of which windows
 actually hit this gap).
+
+### Header section fix, and the plain grid columns above were reverted (ETP-4529 follow-up)
+
+`header.project`/`header.costcenter` moved from `"section": "other"` to `"section": "principal"`
+so they render in the main visible form area — same fix as `sales-invoice.md`.
+
+Separately: the `lines.project.grid`/`lines.costcenter.grid` flags flipped `false → true` just
+above (ETP-4543) were **flipped back to `false`**. The user asked for the same expand-row
+"Dimensiones contables" UX Amortización has instead of plain always-rendered columns (see
+`docs/ui-customization.md` §14b for the new `dimensionsPanel` `InlineLinesPanel` column type),
+but this window's `GoodsShipmentLineTable.jsx` is fully pipeline-generated with no override
+mechanism that fits that column type — the only existing lines-tab override point,
+`window.customLinesComponent`/`CustomLines`, replaces the entire lines tab with a fully
+self-fetching component (own fetch, own add/delete — matching `AmortizationLinesTable.jsx`'s
+contract), not a drop-in for the `columns`-array contract this generated table uses. This
+window is back to its pre-ETP-4543 state (no project/costcenter on the lines grid) pending a
+coordinator decision on how to add that override point — see `docs/feedback.md`'s ETP-4543
+supersession note for the full reasoning.
