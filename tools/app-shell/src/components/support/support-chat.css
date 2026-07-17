@@ -732,8 +732,27 @@
 }
 .sc-bubble p { margin: 0; color: inherit; font: inherit; }
 .sc-bubble p + p { margin-top: 8px; }
+.sc-bubble ul, .sc-bubble ol { margin: 8px 0 0; padding-left: 20px; color: inherit; font: inherit; }
+.sc-bubble li + li { margin-top: 4px; }
+.sc-bubble ul + p, .sc-bubble ol + p, .sc-bubble p + ul, .sc-bubble p + ol { margin-top: 8px; }
+.sc-bubble code {
+  background: rgba(0, 0, 0, .06);
+  border-radius: 4px;
+  padding: 1px 5px;
+  font: 12px/1.4 'SF Mono', 'Menlo', monospace;
+}
+.sc-msg.user .sc-bubble code { background: rgba(255, 255, 255, .18); }
 .sc-bubble strong { font-weight: 600; color: var(--sc-fg-1); }
 .sc-msg.user .sc-bubble strong { color: #fff; }
+.sc-bubble a {
+  color: var(--sc-purple-700);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  font-weight: 500;
+}
+.sc-bubble a:hover { color: var(--sc-purple-500); }
+.sc-msg.user .sc-bubble a { color: #fff; text-decoration-color: rgba(255, 255, 255, .6); }
+.sc-msg.user .sc-bubble a:hover { text-decoration-color: #fff; }
 
 /* Timestamp tooltip on hover */
 .sc-msg::after {

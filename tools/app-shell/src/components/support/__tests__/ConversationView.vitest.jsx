@@ -145,6 +145,15 @@ describe('ConversationView', () => {
     expect(screen.queryByText('supportRateExperience')).not.toBeInTheDocument();
   });
 
+  it('hides the rated thank-you banner once a rated conversation is reopened (status back to open)', () => {
+    // `rated` stays true forever once a CSAT score was submitted, but the banner should
+    // only show while the conversation is actually closed — otherwise it lingers on top
+    // of an active, reopened conversation.
+    const conversation = { id: 'c1', status: 'open', rated: true };
+    render(<ConversationView {...baseProps({ conversation })} />);
+    expect(screen.queryByText('supportRatingThanks')).not.toBeInTheDocument();
+  });
+
   it('hides the survey once it has been dismissed', () => {
     const conversation = { id: 'c1', status: 'closed', rated: false, csatDismissed: true };
     render(<ConversationView {...baseProps({ conversation })} />);
@@ -322,6 +331,97 @@ describe('ConversationView', () => {
       expect(strong).toHaveTextContent('importante');
     });
 
+    describe('markdown-ish block/inline rendering', () => {
+      it('renders a # heading as a bold paragraph', () => {
+        const messages = [{ id: 'm1', sender: 'ai', text: '# Título principal' }];
+        const { container } = render(<ConversationView {...baseProps({ messages })} />);
+        const strong = container.querySelector('.sc-bubble p strong');
+        expect(strong).toHaveTextContent('Título principal');
+      });
+
+      it('renders a bullet list (- item) as <ul><li>', () => {
+        const messages = [{ id: 'm1', sender: 'ai', text: '- Uno\n- Dos\n- Tres' }];
+        const { container } = render(<ConversationView {...baseProps({ messages })} />);
+        const items = container.querySelectorAll('.sc-bubble ul li');
+        expect(items).toHaveLength(3);
+        expect(items[0]).toHaveTextContent('Uno');
+        expect(items[2]).toHaveTextContent('Tres');
+      });
+
+      it('renders a bullet list using * markers the same as -', () => {
+        const messages = [{ id: 'm1', sender: 'ai', text: '* Alfa\n* Beta' }];
+        const { container } = render(<ConversationView {...baseProps({ messages })} />);
+        const items = container.querySelectorAll('.sc-bubble ul li');
+        expect(items).toHaveLength(2);
+      });
+
+      it('renders an ordered list (1. item) as <ol><li>', () => {
+        const messages = [{ id: 'm1', sender: 'ai', text: '1. Primero\n2. Segundo' }];
+        const { container } = render(<ConversationView {...baseProps({ messages })} />);
+        const list = container.querySelector('.sc-bubble ol');
+        expect(list).toBeInTheDocument();
+        const items = list.querySelectorAll('li');
+        expect(items).toHaveLength(2);
+        expect(items[0]).toHaveTextContent('Primero');
+        expect(items[1]).toHaveTextContent('Segundo');
+      });
+
+      it('renders a plain paragraph with <br/> between continuation lines', () => {
+        const messages = [{ id: 'm1', sender: 'ai', text: 'Línea uno\nLínea dos' }];
+        const { container } = render(<ConversationView {...baseProps({ messages })} />);
+        const p = container.querySelector('.sc-bubble p');
+        expect(p.querySelectorAll('br')).toHaveLength(1);
+        expect(p).toHaveTextContent('Línea unoLínea dos');
+      });
+
+      it('renders *italic* segments as <em>', () => {
+        const messages = [{ id: 'm1', sender: 'ai', text: 'Esto es *importante* de verdad' }];
+        const { container } = render(<ConversationView {...baseProps({ messages })} />);
+        const em = container.querySelector('.sc-bubble em');
+        expect(em).toHaveTextContent('importante');
+        expect(container.querySelector('.sc-bubble strong')).not.toBeInTheDocument();
+      });
+
+      it('does not misparse **bold** as two *italic* runs', () => {
+        const messages = [{ id: 'm1', sender: 'ai', text: 'Esto es **muy importante** che' }];
+        const { container } = render(<ConversationView {...baseProps({ messages })} />);
+        const strong = container.querySelectorAll('.sc-bubble strong');
+        expect(strong).toHaveLength(1);
+        expect(strong[0]).toHaveTextContent('muy importante');
+        expect(container.querySelector('.sc-bubble em')).not.toBeInTheDocument();
+      });
+
+      it('renders `code` segments as <code>', () => {
+        const messages = [{ id: 'm1', sender: 'ai', text: 'Ejecutá `npm install` primero' }];
+        const { container } = render(<ConversationView {...baseProps({ messages })} />);
+        const code = container.querySelector('.sc-bubble code');
+        expect(code).toHaveTextContent('npm install');
+      });
+
+      it('renders a markdown [label](https://...) link as a clickable, safe <a>', () => {
+        const messages = [{ id: 'm1', sender: 'ai', text: 'Mirá [la doc](https://docs.example.com/guia)' }];
+        const { container } = render(<ConversationView {...baseProps({ messages })} />);
+        const link = container.querySelector('.sc-bubble a');
+        expect(link).toHaveTextContent('la doc');
+        expect(link).toHaveAttribute('href', 'https://docs.example.com/guia');
+        expect(link).toHaveAttribute('target', '_blank');
+        expect(link).toHaveAttribute('rel', 'noopener noreferrer');
+      });
+
+      it('does NOT turn a javascript: URL into a clickable link (XSS guard)', () => {
+        const messages = [{ id: 'm1', sender: 'ai', text: 'Click [acá](javascript:alert(1))' }];
+        const { container } = render(<ConversationView {...baseProps({ messages })} />);
+        expect(container.querySelector('.sc-bubble a')).not.toBeInTheDocument();
+        expect(screen.getByText(/\[acá\]\(javascript:alert\(1\)\)/)).toBeInTheDocument();
+      });
+
+      it('does NOT turn a data: URL into a clickable link (XSS guard)', () => {
+        const messages = [{ id: 'm1', sender: 'ai', text: 'Ver [imagen](data:text/html,<script>alert(1)</script>)' }];
+        const { container } = render(<ConversationView {...baseProps({ messages })} />);
+        expect(container.querySelector('.sc-bubble a')).not.toBeInTheDocument();
+      });
+    });
+
     it('splits a message with a blank line into separate paragraphs', () => {
       const messages = [{ id: 'm1', sender: 'ai', text: 'Primer párrafo\n\nSegundo párrafo' }];
       const { container } = render(<ConversationView {...baseProps({ messages })} />);
@@ -458,6 +558,25 @@ describe('ConversationView', () => {
       const conversation = { id: 'c1', status: 'closed' };
       render(<ConversationView {...baseProps({ conversation })} />);
       expect(screen.queryByLabelText('moreOptions')).not.toBeInTheDocument();
+    });
+
+    it('re-triggers auto-scroll when the conversation transitions to closed (revealing the CSAT card below the last message)', () => {
+      // The messages array doesn't change when a conversation is closed (no new message is
+      // appended), so `conversation?.status` has to be its own dependency for the
+      // scroll-to-bottom effect to fire and reveal the CSAT/reopen card below the thread.
+      const scrollToSpy = vi.fn();
+      const realScrollTo = Element.prototype.scrollTo;
+      Element.prototype.scrollTo = scrollToSpy;
+      try {
+        const messages = [{ id: 'm1', sender: 'user', text: 'Hola' }];
+        const conversation = { id: 'c1', status: 'open', rated: false };
+        const { rerender } = render(<ConversationView {...baseProps({ conversation, messages })} />);
+        scrollToSpy.mockClear();
+        rerender(<ConversationView {...baseProps({ conversation: { ...conversation, status: 'closed' }, messages })} />);
+        expect(scrollToSpy).toHaveBeenCalledWith({ top: 1e6, behavior: 'smooth' });
+      } finally {
+        Element.prototype.scrollTo = realScrollTo;
+      }
     });
 
     it('shows an empty first-name greeting when there is no authenticated username', () => {

@@ -8,6 +8,7 @@ import { useUI, useLocaleSwitch } from '@/i18n';
 import { ValerIATile } from './ValerIATile.jsx';
 import { useAuth } from '@/auth/AuthContext.jsx';
 import { useApiFetch } from '@/auth/useApiFetch';
+import { playSendSound, playReceiveSound } from './chatSounds.js';
 
 // Attachments accepted on every input path (file picker AND drag-and-drop):
 // images (any subtype) plus a fixed set of common document formats.
@@ -46,82 +47,133 @@ const EMOJIS = [
   '💰','💎','🎁','📚','📝','✉️','🔔',
 ];
 
-function playSendSound() {
-  try {
-    const ctx = new (window.AudioContext || window.webkitAudioContext)();
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-    osc.connect(gain);
-    gain.connect(ctx.destination);
-    osc.type = 'sine';
-    // Short descending "pop" — outgoing feel
-    osc.frequency.setValueAtTime(1100, ctx.currentTime);
-    osc.frequency.exponentialRampToValueAtTime(550, ctx.currentTime + 0.09);
-    gain.gain.setValueAtTime(0.14, ctx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.11);
-    osc.start(ctx.currentTime);
-    osc.stop(ctx.currentTime + 0.11);
-    osc.onended = () => ctx.close();
-  } catch { /* ignore if AudioContext not supported */ }
+// `\S.*` (not `.+`) after the whitespace run keeps the two quantifiers on disjoint
+// character sets, so there's only one way to split a match — avoids the superlinear
+// backtracking Sonar flags for adjacent overlapping quantifiers (javascript:S5852).
+const HEADING_RE = /^(#{1,3})\s+(\S.*)$/;
+const BULLET_RE = /^[-*]\s+(\S.*)$/;
+const ORDERED_RE = /^\d+\.\s+(\S.*)$/;
+
+// Consumes consecutive lines matching `re` (a bullet or ordered list marker) starting at
+// `startIndex`, returning the rendered <ul>/<ol> node and the index of the first line past
+// the list. Keyed by item text (not position) — list items are one-off parsed strings with no
+// natural id, but content is stable within a single render and avoids an array-index key.
+function consumeList(lines, startIndex, re, TagName) {
+  let i = startIndex;
+  const items = [];
+  while (i < lines.length && re.test(lines[i].trim())) {
+    items.push(lines[i].trim().match(re)[1]);
+    i++;
+  }
+  const node = (
+    <TagName key={`list-${startIndex}`}>
+      {items.map((item) => <li key={item}>{renderInline(item)}</li>)}
+    </TagName>
+  );
+  return { node, nextIndex: i };
 }
 
-function playReceiveSound() {
-  try {
-    const ctx = new (window.AudioContext || window.webkitAudioContext)();
-    // Warm glass-bell: two partials that decay naturally
-    const bell = (freq, start, vol) => {
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-      osc.connect(gain);
-      gain.connect(ctx.destination);
-      osc.type = 'triangle';
-      osc.frequency.setValueAtTime(freq, start);
-      gain.gain.setValueAtTime(vol, start);
-      gain.gain.exponentialRampToValueAtTime(0.001, start + 0.55);
-      osc.start(start);
-      osc.stop(start + 0.55);
-    };
-    bell(784, ctx.currentTime, 0.14);        // G5 — fundamental
-    bell(1047, ctx.currentTime + 0.07, 0.09); // C6 — upper partial
-    setTimeout(() => ctx.close(), 700);
-  } catch { /* ignore if AudioContext not supported */ }
+// Consumes consecutive non-blank, non-special lines starting at `startIndex` into a single
+// paragraph (joined with <br/>), returning the rendered node and the next unconsumed index.
+function consumeParagraph(lines, startIndex) {
+  let i = startIndex;
+  const paraLines = [];
+  while (i < lines.length && lines[i].trim() !== ''
+      && !HEADING_RE.test(lines[i].trim())
+      && !BULLET_RE.test(lines[i].trim())
+      && !ORDERED_RE.test(lines[i].trim())) {
+    paraLines.push(lines[i]);
+    i++;
+  }
+  const node = (
+    <p key={`para-${startIndex}`}>
+      {paraLines.map((l, j) => (
+        <React.Fragment key={l}>
+          {j > 0 && <br />}
+          {renderInline(l)}
+        </React.Fragment>
+      ))}
+    </p>
+  );
+  return { node, nextIndex: i };
 }
 
+// Block-level parser: headings, bullet/ordered lists, paragraphs — the same subset
+// _md_to_adf_content (jira_client.py) already parses for the Jira side. The AI's markdown
+// style isn't fully consistent between turns (sometimes **bold** + numbered lists, sometimes
+// # headings + *italic*), so the chat bubble needs to understand the same range Jira does,
+// or some replies show raw '#'/'*' characters instead of formatted text.
 function renderText(txt) {
   if (!txt) return null;
   const lines = txt.split('\n');
-  const out = [];
-  let para = [];
-  const flush = () => {
-    if (para.length) {
-      out.push(
-        <p key={out.length}>
-          {para.map((l, j) => (
-            <React.Fragment key={l}>
-              {j > 0 && <br />}
-              {renderBold(l)}
-            </React.Fragment>
-          ))}
-        </p>
-      );
-      para = [];
+  const blocks = [];
+  let i = 0;
+  while (i < lines.length) {
+    const trimmed = lines[i].trim();
+    if (trimmed === '') { i++; continue; }
+
+    const heading = trimmed.match(HEADING_RE);
+    if (heading) {
+      blocks.push(<p key={`h-${i}`}><strong>{renderInline(heading[2])}</strong></p>);
+      i++;
+      continue;
     }
-  };
-  for (const line of lines) {
-    if (line.trim() === '') { flush(); }
-    else { para.push(line); }
+
+    if (BULLET_RE.test(trimmed)) {
+      const { node, nextIndex } = consumeList(lines, i, BULLET_RE, 'ul');
+      blocks.push(node);
+      i = nextIndex;
+      continue;
+    }
+
+    if (ORDERED_RE.test(trimmed)) {
+      const { node, nextIndex } = consumeList(lines, i, ORDERED_RE, 'ol');
+      blocks.push(node);
+      i = nextIndex;
+      continue;
+    }
+
+    const { node, nextIndex } = consumeParagraph(lines, i);
+    blocks.push(node);
+    i = nextIndex;
   }
-  flush();
-  return out;
+  return blocks;
 }
 
-function renderBold(txt) {
-  const parts = txt.split(/\*\*([^*]+)\*\*/g);
-  return parts.map((p, i) =>
-    i % 2 === 1
-      ? <strong key={p}>{p}</strong>
-      : <React.Fragment key={p}>{p}</React.Fragment>
-  );
+// Matches **bold**, *italic*, `code`, and markdown links [label](url) — links restricted to
+// http(s) URLs only, so a crafted `javascript:`/`data:` href in a reply (AI-generated or
+// relayed from a Jira comment) can never end up as a clickable link. **bold** is tried before
+// *italic* so a bold span isn't misread as italic-star + literal star. Every span is length-capped
+// (no plain `+`) — chat text is never a legitimate multi-KB bold/code run, and the cap bounds the
+// worst-case backtracking cost of the two star-prefixed alternatives to a constant, regardless of
+// message length (javascript:S5852).
+const INLINE_PATTERN =
+  /\*\*([^*\n]{1,500})\*\*|\*([^*\n]{1,500})\*|`([^`\n]{1,500})`|\[([^\]\n]{1,200})\]\((https?:\/\/[^\s)]{1,2000})\)/g;
+
+function renderInline(txt) {
+  const nodes = [];
+  let lastIndex = 0;
+  let match;
+  INLINE_PATTERN.lastIndex = 0;
+  while ((match = INLINE_PATTERN.exec(txt)) !== null) {
+    if (match.index > lastIndex) nodes.push(txt.slice(lastIndex, match.index));
+    if (match[1] !== undefined) {
+      nodes.push(<strong key={nodes.length}>{match[1]}</strong>);
+    } else if (match[2] !== undefined) {
+      nodes.push(<em key={nodes.length}>{match[2]}</em>);
+    } else if (match[3] !== undefined) {
+      nodes.push(<code key={nodes.length}>{match[3]}</code>);
+    } else {
+      nodes.push(
+        <a key={nodes.length} href={match[5]} target="_blank" rel="noopener noreferrer">
+          {match[4]}
+        </a>
+      );
+    }
+    lastIndex = INLINE_PATTERN.lastIndex;
+  }
+  if (lastIndex < txt.length) nodes.push(txt.slice(lastIndex));
+  return nodes;
 }
 
 function Bubble({ message, onQuickReply, getLocalImageUrl }) {
@@ -544,9 +596,12 @@ export function ConversationView({
   }, [isLoadingMessages]);
 
   // ── Scroll ─────────────────────────────────────────────────────────────────
+  // Also re-scroll when the conversation's status changes: closing it reveals the CSAT
+  // card/reopen prompt below the last message without adding any new message of its own, so
+  // messages.length alone wouldn't trigger this.
   React.useEffect(() => {
     threadRef.current?.scrollTo({ top: 1e6, behavior: 'smooth' });
-  }, [messages.length, messages[messages.length - 1]?.text]);
+  }, [messages.length, messages[messages.length - 1]?.text, conversation?.status]);
 
   // ── Sync external input to local draft on conversation change ──────────────
   React.useEffect(() => {
@@ -719,7 +774,7 @@ export function ConversationView({
             data-testid="CSATCard__50ab90" />
         )}
 
-        {isRated && (
+        {isClosed && isRated && (
           <div className="sc-csat-thanks">
             <CheckCircle data-testid="CheckCircle__50ab90" />
             {ui('supportRatingThanks')}
