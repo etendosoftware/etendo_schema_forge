@@ -1,4 +1,5 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 
 const localStorageMock = (() => {
   let store = {};
@@ -463,6 +464,27 @@ describe('OnboardingPage', () => {
       type: 'profile',
       windowName: 'onboarding',
     });
+  });
+
+  it('keeps the logout action keyboard-accessible in a narrow environment view without account data', async () => {
+    localStorage.setItem('sf_platform_token', 'platform-token');
+    fetchAccount.mockResolvedValue({});
+    fetchEnvironments.mockResolvedValue([{ id: 'demo', name: 'Demo environment' }]);
+    loginEnvironment.mockResolvedValue({});
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 320 });
+
+    render(<OnboardingPage />);
+
+    const logout = await screen.findByRole('button', { name: 'logout' });
+    expect(logout).toBeVisible();
+    expect(logout).toHaveAttribute('type', 'button');
+    expect(logout.closest('header').firstElementChild).toHaveClass('min-w-0');
+
+    logout.focus();
+    await userEvent.keyboard('{Enter}');
+
+    expect(await screen.findByTestId('action-login-submit')).toBeVisible();
+    expect(localStorage.getItem('sf_platform_token')).toBeNull();
   });
 
   it('tracks setup step back and keeps company-form edits out of tracking payloads', async () => {
