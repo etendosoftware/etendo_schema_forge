@@ -168,6 +168,77 @@ describe('InlineLinesPanel', () => {
     expect(screen.queryByTestId('column-header-secret')).toBeNull();
   });
 
+  // --- ETP-4543: dynamic `hiddenColumns` prop (displayLogic-driven visibility) ---
+  //
+  // Mirrors DataTable's `hiddenColumns` filter: a list of column keys to
+  // exclude on top of the static `col.hidden` flag. Used by DetailView to
+  // hide config-gated accounting-dimension columns (project/costcenter)
+  // when the @ACCT_DIMENSION_DISPLAY@ toggle resolves to hidden.
+
+  it('does not render a column header whose key is listed in hiddenColumns', () => {
+    const cols = [
+      ...COLUMNS,
+      { key: 'costcenter', label: 'Cost Center', type: 'selector', column: 'C_Costcenter_ID' },
+    ];
+    renderPanel({ columns: cols, hiddenColumns: ['costcenter'] });
+    expect(screen.queryByTestId('column-header-costcenter')).toBeNull();
+  });
+
+  it('does not render body cells for a column listed in hiddenColumns', () => {
+    const cols = [
+      { key: 'product', label: 'Product', type: 'string', column: 'M_Product_ID' },
+      { key: 'costcenter', label: 'Cost Center', type: 'selector', column: 'C_Costcenter_ID' },
+    ];
+    const rows = [{ id: 'HC1', product: 'P1', costcenter: 'CC1', 'costcenter$_identifier': 'HQ' }];
+    renderPanel({ columns: cols, data: rows, hiddenColumns: ['costcenter'] });
+    expect(screen.queryByText('HQ')).toBeNull();
+  });
+
+  it('still renders columns that are NOT listed in hiddenColumns', () => {
+    const cols = [
+      ...COLUMNS,
+      { key: 'project', label: 'Project', type: 'selector', column: 'C_Project_ID' },
+      { key: 'costcenter', label: 'Cost Center', type: 'selector', column: 'C_Costcenter_ID' },
+    ];
+    renderPanel({ columns: cols, hiddenColumns: ['costcenter'] });
+    // project is NOT in hiddenColumns — stays visible.
+    expect(screen.getByTestId('column-header-project')).toBeInTheDocument();
+    // Pre-existing columns are unaffected.
+    expect(screen.getByTestId('column-header-product')).toBeInTheDocument();
+    // costcenter IS in hiddenColumns — hidden.
+    expect(screen.queryByTestId('column-header-costcenter')).toBeNull();
+  });
+
+  it('defaults hiddenColumns to [] — omitting the prop behaves identically to before this change', () => {
+    // No `hiddenColumns` prop passed at all (not even an empty array) —
+    // every existing caller that predates ETP-4543 must render unaffected.
+    renderPanel();
+    expect(screen.getByTestId('column-header-product')).toBeInTheDocument();
+    expect(screen.getByTestId('column-header-quantity')).toBeInTheDocument();
+    expect(screen.getByTestId('column-header-unitPrice')).toBeInTheDocument();
+    expect(screen.getByTestId('line-row-L1')).toBeInTheDocument();
+    expect(screen.getByTestId('line-row-L2')).toBeInTheDocument();
+  });
+
+  it('passing an explicit empty hiddenColumns=[] behaves identically to omitting it', () => {
+    renderPanel({ hiddenColumns: [] });
+    expect(screen.getByTestId('column-header-product')).toBeInTheDocument();
+    expect(screen.getByTestId('column-header-quantity')).toBeInTheDocument();
+    expect(screen.getByTestId('column-header-unitPrice')).toBeInTheDocument();
+  });
+
+  it('combines static col.hidden AND dynamic hiddenColumns filtering', () => {
+    const cols = [
+      ...COLUMNS,
+      { key: 'secret', label: 'Secret', type: 'string', hidden: true },
+      { key: 'costcenter', label: 'Cost Center', type: 'selector', column: 'C_Costcenter_ID' },
+    ];
+    renderPanel({ columns: cols, hiddenColumns: ['costcenter'] });
+    expect(screen.queryByTestId('column-header-secret')).toBeNull();
+    expect(screen.queryByTestId('column-header-costcenter')).toBeNull();
+    expect(screen.getByTestId('column-header-product')).toBeInTheDocument();
+  });
+
   it('exposes imperative ref with flushPendingEdits and clearSelection', () => {
     const { ref } = renderPanel();
     expect(typeof ref.current.flushPendingEdits).toBe('function');

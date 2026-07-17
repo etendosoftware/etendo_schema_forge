@@ -39,4 +39,21 @@ describe('InvoiceLinesTable', () => {
     assert.match(src, /linesLayout === 'inlineEditable'/);
     assert.match(src, /!props\.addRow\?\.active/);
   });
+
+  // ETP-4543 — config-gated accounting-dimension columns (project/costcenter).
+  // Declared unconditionally here; actual visibility is enforced dynamically
+  // by DetailView's hiddenColumns (derived from lineDisplayLogic.visibility),
+  // which both InlineLinesPanel and DataTable honor.
+  it('defines a project column with type selector and lookup enabled', () => {
+    assert.match(src, /key: 'project'/);
+    assert.match(src, /column: 'C_Project_ID'/);
+    assert.match(src, /key: 'project'[^}]*type: 'selector'/s);
+    assert.match(src, /key: 'project'[^}]*lookup: true/s);
+  });
+
+  it('defines a costcenter column with type selector', () => {
+    assert.match(src, /key: 'costcenter'/);
+    assert.match(src, /column: 'C_Costcenter_ID'/);
+    assert.match(src, /key: 'costcenter'[^}]*type: 'selector'/s);
+  });
 });
