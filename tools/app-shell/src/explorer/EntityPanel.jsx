@@ -2,11 +2,11 @@ import { cn } from '@/lib/utils';
 import { useSpecDetail } from './useDiscovery';
 
 const METHOD_COLORS = {
-  GET: 'bg-green-600/20 text-green-400',
-  POST: 'bg-blue-600/20 text-blue-400',
-  PUT: 'bg-amber-600/20 text-amber-400',
-  PATCH: 'bg-orange-600/20 text-orange-400',
-  DELETE: 'bg-red-600/20 text-red-400',
+  GET: 'bg-status-success/20 text-status-success-foreground',
+  POST: 'bg-status-info/20 text-status-info-foreground',
+  PUT: 'bg-status-warning/20 text-status-warning-foreground',
+  PATCH: 'bg-status-warning/20 text-status-warning-foreground',
+  DELETE: 'bg-destructive/20 text-destructive',
 };
 
 export default function EntityPanel({ specName, selectedEntity, onSelectEntity }) {
@@ -16,7 +16,7 @@ export default function EntityPanel({ specName, selectedEntity, onSelectEntity }
     return <div className="p-4 text-sm text-inverse-muted">Select a spec</div>;
   }
   if (loading) return <div className="p-4 text-sm text-inverse-muted">Loading...</div>;
-  if (error) return <div className="p-4 text-sm text-red-400">{error}</div>;
+  if (error) return <div className="p-4 text-sm text-destructive">{error}</div>;
   if (!spec) return null;
 
   const entities = spec.entities || [];

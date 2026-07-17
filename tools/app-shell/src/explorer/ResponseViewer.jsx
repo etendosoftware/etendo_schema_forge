@@ -12,9 +12,9 @@ export default function ResponseViewer({ response }) {
   const { status, statusText, elapsed, body } = response;
 
   const statusColor =
-    status >= 200 && status < 300 ? 'text-green-400' :
-    status >= 400 && status < 500 ? 'text-amber-400' :
-    status >= 500 ? 'text-red-400' :
+    status >= 200 && status < 300 ? 'text-status-success-foreground' :
+    status >= 400 && status < 500 ? 'text-status-warning-foreground' :
+    status >= 500 ? 'text-destructive' :
     'text-inverse-muted';
 
   const formatted = typeof body === 'object' ? JSON.stringify(body, null, 2) : String(body);

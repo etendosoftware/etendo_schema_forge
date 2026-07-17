@@ -2,11 +2,11 @@ import { useState, useEffect } from 'react';
 import { useNeoFetch } from './useDiscovery';
 
 const METHOD_COLORS = {
-  GET: 'bg-green-600 hover:bg-green-700',
-  POST: 'bg-blue-600 hover:bg-blue-700',
-  PUT: 'bg-amber-600 hover:bg-amber-700',
-  PATCH: 'bg-orange-600 hover:bg-orange-700',
-  DELETE: 'bg-red-600 hover:bg-red-700',
+  GET: 'bg-status-success hover:bg-status-success',
+  POST: 'bg-status-info hover:bg-status-info',
+  PUT: 'bg-status-warning hover:bg-status-warning',
+  PATCH: 'bg-status-warning hover:bg-status-warning',
+  DELETE: 'bg-destructive hover:bg-destructive',
 };
 
 export default function RequestBuilder({ specName, entity, onResponse }) {
@@ -103,7 +103,7 @@ export default function RequestBuilder({ specName, entity, onResponse }) {
       <div>
         <div className="flex items-center justify-between mb-1">
           <span className="text-xs text-inverse-muted font-medium">Query Params</span>
-          <button onClick={addParam} className="text-xs text-blue-400 hover:text-blue-300">+ Add</button>
+          <button onClick={addParam} className="text-xs text-status-info-foreground hover:text-status-info-foreground">+ Add</button>
         </div>
         {params.map((p, i) => (
           <div key={i} className="flex gap-2 mb-1">
@@ -119,7 +119,7 @@ export default function RequestBuilder({ specName, entity, onResponse }) {
               placeholder="value"
               className="flex-1 bg-inverse-muted text-inverse-foreground border border-inverse-border rounded px-2 py-1 text-xs font-mono focus:outline-none"
             />
-            <button onClick={() => removeParam(i)} className="text-xs text-inverse-muted hover:text-red-400">x</button>
+            <button onClick={() => removeParam(i)} className="text-xs text-inverse-muted hover:text-destructive">x</button>
           </div>
         ))}
       </div>

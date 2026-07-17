@@ -3,11 +3,11 @@ import { cn } from '@/lib/utils';
 import { upsertEntity, upsertField, populateSpec } from './useDiscovery';
 
 const METHOD_COLORS = {
-  GET: 'bg-green-600/20 text-green-400 border-green-600/40',
-  POST: 'bg-blue-600/20 text-blue-400 border-blue-600/40',
-  PUT: 'bg-amber-600/20 text-amber-400 border-amber-600/40',
-  PATCH: 'bg-orange-600/20 text-orange-400 border-orange-600/40',
-  DELETE: 'bg-red-600/20 text-red-400 border-red-600/40',
+  GET: 'bg-status-success/20 text-status-success-foreground border-status-success-border/40',
+  POST: 'bg-status-info/20 text-status-info-foreground border-status-info-border/40',
+  PUT: 'bg-status-warning/20 text-status-warning-foreground border-status-warning-border/40',
+  PATCH: 'bg-status-warning/20 text-status-warning-foreground border-status-warning-border/40',
+  DELETE: 'bg-destructive/20 text-destructive border-destructive/40',
 };
 
 const METHOD_FLAGS = [
@@ -147,7 +147,7 @@ export default function SpecManager({ spec, onRefresh }) {
       {message && (
         <div className={cn(
           'px-4 py-2 text-xs',
-          message.isError ? 'bg-red-900/30 text-red-400' : 'bg-green-900/30 text-green-400'
+          message.isError ? 'bg-destructive/30 text-destructive' : 'bg-status-success/30 text-status-success-foreground'
         )}>
           {message.text}
         </div>
@@ -209,7 +209,7 @@ export default function SpecManager({ spec, onRefresh }) {
                     <button
                       onClick={() => handleSaveQualifier(entity)}
                       disabled={saving === entity.id + 'qualifier'}
-                      className="text-[10px] text-green-400 hover:text-green-300"
+                      className="text-[10px] text-status-success-foreground hover:text-status-success-foreground"
                     >
                       {saving === entity.id + 'qualifier' ? '...' : '✓'}
                     </button>
@@ -226,7 +226,7 @@ export default function SpecManager({ spec, onRefresh }) {
                     className={cn(
                       'px-2 py-0.5 rounded border text-[10px] font-mono transition-all',
                       entity.javaQualifier
-                        ? 'bg-cyan-600/20 text-cyan-400 border-cyan-600/40'
+                        ? 'bg-status-info/20 text-status-info-foreground border-status-info-border/40'
                         : 'bg-inverse text-inverse-muted border-inverse-border opacity-50 hover:opacity-80'
                     )}
                     title="Set CDI Java qualifier for custom NeoHandler override"
@@ -254,7 +254,7 @@ export default function SpecManager({ spec, onRefresh }) {
                     disabled={saving === field.id + 'included'}
                     className={cn(
                       'w-8 text-center text-xs',
-                      field.included ? 'text-green-400' : 'text-inverse-muted'
+                      field.included ? 'text-status-success-foreground' : 'text-inverse-muted'
                     )}
                   >
                     {saving === field.id + 'included' ? '·' : field.included ? '✓' : '✗'}
@@ -264,7 +264,7 @@ export default function SpecManager({ spec, onRefresh }) {
                     disabled={saving === field.id + 'readOnly'}
                     className={cn(
                       'w-8 text-center text-xs',
-                      field.readOnly ? 'text-amber-400' : 'text-inverse-muted'
+                      field.readOnly ? 'text-status-warning-foreground' : 'text-inverse-muted'
                     )}
                   >
                     {saving === field.id + 'readOnly' ? '·' : field.readOnly ? 'RO' : '—'}
@@ -274,9 +274,9 @@ export default function SpecManager({ spec, onRefresh }) {
                     field.included ? 'text-inverse-foreground' : 'text-inverse-muted line-through'
                   )}>
                     {field.name}
-                    {field.required && <span className="text-red-400 ml-1">*</span>}
+                    {field.required && <span className="text-destructive ml-1">*</span>}
                     {field.hasSelector && (
-                      <span className="text-blue-400/60 ml-1 text-[10px]">[{field.selectorType}]</span>
+                      <span className="text-status-info-foreground/60 ml-1 text-[10px]">[{field.selectorType}]</span>
                     )}
                   </span>
                   <span className="w-20 text-right text-[10px] text-inverse-muted">{field.columnType}</span>

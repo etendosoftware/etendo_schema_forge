@@ -5,7 +5,7 @@ export default function SpecList({ selected, onSelect, useAdmin = false }) {
   const { specs, loading, error } = useSpecs({ useAdmin });
 
   if (loading) return <div className="p-4 text-sm text-inverse-muted">Loading specs...</div>;
-  if (error) return <div className="p-4 text-sm text-red-400">Error: {error}</div>;
+  if (error) return <div className="p-4 text-sm text-destructive">Error: {error}</div>;
 
   const windowSpecs = specs.filter(s => s.type === 'W');
   const processSpecs = specs.filter(s => s.type === 'P');
@@ -24,7 +24,7 @@ export default function SpecList({ selected, onSelect, useAdmin = false }) {
               className={cn(
                 'w-full text-left px-3 py-2 text-sm transition-colors flex items-center justify-between',
                 selected === s.name
-                  ? 'bg-blue-600/15 text-blue-400 border-l-2 focus:border-focus-ring'
+                  ? 'bg-status-info/15 text-status-info-foreground border-l-2 focus:border-focus-ring'
                   : 'text-inverse-foreground hover:bg-inverse-muted border-l-2 border-transparent'
               )}
             >

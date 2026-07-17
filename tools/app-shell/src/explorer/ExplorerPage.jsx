@@ -53,7 +53,7 @@ export default function ExplorerPage() {
               onClick={() => setMode('test')}
               className={cn(
                 'flex-1 px-2 py-1 rounded text-[10px] font-medium transition-colors',
-                mode === 'test' ? 'bg-green-600/20 text-green-400' : 'text-inverse-muted hover:text-inverse-foreground'
+                mode === 'test' ? 'bg-status-success/20 text-status-success-foreground' : 'text-inverse-muted hover:text-inverse-foreground'
               )}
             >
               Test
@@ -62,7 +62,7 @@ export default function ExplorerPage() {
               onClick={() => setMode('manage')}
               className={cn(
                 'flex-1 px-2 py-1 rounded text-[10px] font-medium transition-colors',
-                mode === 'manage' ? 'bg-blue-600/20 text-blue-400' : 'text-inverse-muted hover:text-inverse-foreground'
+                mode === 'manage' ? 'bg-status-info/20 text-status-info-foreground' : 'text-inverse-muted hover:text-inverse-foreground'
               )}
             >
               Manage
