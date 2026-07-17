@@ -73,16 +73,16 @@ async function createAndFetchRecord({ specName, entityName, body, apiFetch, syst
 // ── Badge color by regime ─────────────────────────────────────────────────────
 
 const REGIME_BADGE = {
-  sii_foral: { bg: '#F0FAFF', text: '#0075AD' },
-  tbai:      { bg: '#FFF2EE', text: '#B82E00' },
-  siiver:    { bg: '#FEECFB', text: '#A5088C' },
+  sii_foral: { bg: 'var(--status-info-bg)', text: 'var(--status-info-fg)' },
+  tbai:      { bg: 'var(--status-warning-bg)', text: 'var(--status-warning-fg)' },
+  siiver:    { bg: 'var(--status-info-bg)', text: 'var(--status-info-fg)' },
 };
 
 const SYSTEM_BADGE = {
-  SII:        { bg: '#F0FAFF', text: '#0075AD' },
-  TBAI:       { bg: '#FFF2EE', text: '#B82E00' },
-  'SII+TBAI': { bg: '#FFF2EE', text: '#B82E00' },
-  VERIFACTU:  { bg: '#FEECFB', text: '#A5088C' },
+  SII:        { bg: 'var(--status-info-bg)', text: 'var(--status-info-fg)' },
+  TBAI:       { bg: 'var(--status-warning-bg)', text: 'var(--status-warning-fg)' },
+  'SII+TBAI': { bg: 'var(--status-warning-bg)', text: 'var(--status-warning-fg)' },
+  VERIFACTU:  { bg: 'var(--status-info-bg)', text: 'var(--status-info-fg)' },
 };
 const SYSTEM_BADGE_LABEL = { SII: 'SII', TBAI: 'TicketBAI', 'SII+TBAI': 'SII + TicketBAI', VERIFACTU: 'VERI*FACTU' };
 
@@ -114,10 +114,10 @@ function PageHead({ selectedOrg, orgList, onSelectOrg, onGoToManual, actions, ui
   return (
     <div
       className="flex-shrink-0 flex items-center justify-between"
-      style={{ height: 56, padding: '0 20px', borderBottom: '1px solid #E8EAEF' }}
+      style={{ height: 56, padding: '0 20px', borderBottom: '1px solid hsl(var(--border-subtle))' }}
     >
       <div className="flex items-center" style={{ gap: 8 }}>
-        <span className="text-sm font-medium" style={{ color: '#121217' }}>
+        <span className="text-sm font-medium" style={{ color: 'hsl(var(--foreground))' }}>
           {ui('fiscal.onboarding.org.label')}
         </span>
         <OrgDropdown
@@ -131,7 +131,7 @@ function PageHead({ selectedOrg, orgList, onSelectOrg, onGoToManual, actions, ui
           type="button"
           onClick={onGoToManual}
           className="text-sm"
-          style={{ color: '#121217' }}
+          style={{ color: 'hsl(var(--foreground))' }}
         >
           {ui('fiscal.onboarding.territory.prefer.manual.q')}{' '}
           <span className="font-medium underline">
@@ -170,12 +170,12 @@ function TerrCard({ territory, selected, onPick }) {
       type="button"
       onClick={() => onPick(territory.id)}
       className={`relative flex flex-col text-left transition-all cursor-pointer rounded-xl
-        ${selected ? 'border-2 border-[#121217]' : 'border border-[#E8EAEF] hover:bg-muted/40'}`}
+        ${selected ? 'border-2 border-foreground' : 'border border-border-subtle hover:bg-muted/40'}`}
       style={{
         minHeight: 80, padding: 16, gap: 12,
         boxShadow: selected
-          ? '0 4px 16px rgba(18,18,23,0.14), 0 1px 3px rgba(18,18,23,0.08)'
-          : '0 1px 2px rgba(18,18,23,0.05)',
+          ? '0 4px 16px hsl(var(--foreground) / 0.14), 0 1px 3px hsl(var(--foreground) / 0.08)'
+          : '0 1px 2px hsl(var(--foreground) / 0.05)',
       }}
     >
       {/* Radio circle — ring + inner dot style (◉) when selected */}
@@ -184,16 +184,16 @@ function TerrCard({ territory, selected, onPick }) {
         style={{
           width: 15, height: 15, right: 8, top: 9,
           borderRadius: '50%',
-          border: selected ? '1.5px solid #121217' : '1.5px solid #D1D4DB',
+          border: selected ? '1.5px solid hsl(var(--foreground))' : '1.5px solid hsl(var(--border-control))',
           background: selected
-            ? 'radial-gradient(circle at center, #121217 40%, #FFFFFF 40%)'
-            : '#FFFFFF',
-          boxShadow: '0 1px 2px rgba(18,18,23,0.05)',
+            ? 'radial-gradient(circle at center, hsl(var(--foreground)) 40%, hsl(var(--card)) 40%)'
+            : 'hsl(var(--card))',
+          boxShadow: '0 1px 2px hsl(var(--foreground) / 0.05)',
         }}
       />
       {/* Title + badge */}
       <div className="flex items-center min-w-0" style={{ gap: 4, paddingRight: 20 }}>
-        <span className="text-sm font-medium truncate" style={{ color: '#121217' }}>{territory.name}</span>
+        <span className="text-sm font-medium truncate" style={{ color: 'hsl(var(--foreground))' }}>{territory.name}</span>
         {territory.system && (
           <span style={badgeStyle} className="text-[10px] font-medium px-2 py-0.5 rounded-full flex-shrink-0 leading-none">
             {territory.system}
@@ -202,7 +202,7 @@ function TerrCard({ territory, selected, onPick }) {
       </div>
       {/* Description */}
       {territory.example && (
-        <div className="text-sm leading-6" style={{ color: '#555B6D' }}>
+        <div className="text-sm leading-6" style={{ color: 'hsl(var(--muted-foreground))' }}>
           {territory.example}
         </div>
       )}
@@ -245,7 +245,7 @@ function ScreenLayout({ toolbar, subBar, children, actions, padContent = true })
       {actions && (
         <div
           className="flex-shrink-0 flex items-center"
-          style={{ height: 56, padding: '0 20px', borderTop: '1px solid #E8EAEF', gap: 8 }}
+          style={{ height: 56, padding: '0 20px', borderTop: '1px solid hsl(var(--border-subtle))', gap: 8 }}
         >
           {actions}
         </div>
@@ -288,7 +288,7 @@ function SkippedScreen({ orgName, selectedOrg, orgList, onSelectOrg, ui, onGoHom
       data-testid="ScreenLayout__e9ef3f">
       <div className="flex flex-col items-center text-center py-8">
         <span className="w-12 h-12 rounded-full bg-muted flex items-center justify-center text-2xl mb-4">⏭</span>
-        <h2 className="font-semibold mb-1" style={{ fontSize: 18, color: '#121217' }}>{ui('fiscal.onboarding.skipped.title')}</h2>
+        <h2 className="font-semibold mb-1" style={{ fontSize: 18, color: 'hsl(var(--foreground))' }}>{ui('fiscal.onboarding.skipped.title')}</h2>
         <p className="text-sm text-muted-foreground max-w-xs">{ui('fiscal.skip.hint')}</p>
       </div>
       <div className="rounded-[10px] border border-border bg-muted/20 p-4 text-sm text-muted-foreground">
@@ -331,17 +331,17 @@ function AppliedScreen({ orgId, orgName, selectedOrg, orgList, onSelectOrg, syst
           </>
         }
         data-testid="ScreenLayout__e9ef3f">
-        <h2 className="font-semibold mb-1" style={{ fontSize: 18, color: '#121217' }}>{ui('fiscal.onboarding.applied.title')}</h2>
+        <h2 className="font-semibold mb-1" style={{ fontSize: 18, color: 'hsl(var(--foreground))' }}>{ui('fiscal.onboarding.applied.title')}</h2>
         <p className="text-sm text-muted-foreground mb-6">
           {ui('fiscal.onboarding.applied.subtitle', { system: sys?.name })}
         </p>
 
         <div className="rounded-xl border border-border overflow-hidden">
-          <div className="bg-green-50 border-b border-green-200 px-5 py-4 flex items-center gap-3.5">
-            <span className="w-9 h-9 rounded-full bg-green-100 text-green-700 flex items-center justify-center flex-shrink-0 text-xl">✓</span>
+          <div className="bg-status-success border-b border-status-success-border px-5 py-4 flex items-center gap-3.5">
+            <span className="w-9 h-9 rounded-full bg-status-success text-status-success-foreground flex items-center justify-center flex-shrink-0 text-xl">✓</span>
             <div>
-              <div className="font-bold text-green-800">{ui('fiscal.onboarding.applied.configured', { system: sys?.name })}</div>
-              <div className="text-sm text-green-700/80 mt-0.5">{ui('fiscal.onboarding.applied.body')}</div>
+              <div className="font-bold text-status-success-foreground">{ui('fiscal.onboarding.applied.configured', { system: sys?.name })}</div>
+              <div className="text-sm text-status-success-foreground/80 mt-0.5">{ui('fiscal.onboarding.applied.body')}</div>
             </div>
           </div>
           <div className="divide-y divide-border px-5 py-2">
@@ -377,7 +377,7 @@ function AppliedScreen({ orgId, orgName, selectedOrg, orgList, onSelectOrg, syst
             )}
             <Row
               k={ui('fiscal.onboarding.applied.row.env')}
-              v={<span className="text-amber-700">{ui('fiscal.onboarding.applied.env.sandbox')}</span>}
+              v={<span className="text-status-warning-foreground">{ui('fiscal.onboarding.applied.env.sandbox')}</span>}
               data-testid="Row__e9ef3f" />
             <Row
               k={ui('fiscal.onboarding.applied.row.activated')}
@@ -542,8 +542,8 @@ function ConfirmScreen({ resolvedSystem, selectedTerritory, alsoNational, volume
             data-testid="Button__e9ef3f">
             <ArrowLeft size={15} data-testid="ArrowLeft__e9ef3f" /> {ui('fiscal.onboarding.back').replace('←', '').trim()}
           </Button>
-          <p className="text-xs flex-1" style={{ color: '#555B6D' }}>{ui('fiscal.skip.hint')}</p>
-          <button type="button" onClick={() => goTo('skipped')} className="text-sm" style={{ color: '#121217' }}>
+          <p className="text-xs flex-1" style={{ color: 'hsl(var(--muted-foreground))' }}>{ui('fiscal.skip.hint')}</p>
+          <button type="button" onClick={() => goTo('skipped')} className="text-sm" style={{ color: 'hsl(var(--foreground))' }}>
             {ui('fiscal.onboarding.skip')}
           </button>
           <Button
@@ -559,8 +559,8 @@ function ConfirmScreen({ resolvedSystem, selectedTerritory, alsoNational, volume
       data-testid="ScreenLayout__e9ef3f">
       <div className="flex items-start justify-between gap-4 mb-5">
         <div>
-          <h2 className="font-semibold mb-1" style={{ fontSize: 18, color: '#121217' }}>{ui('fiscal.onboarding.confirm.title')}</h2>
-          <p style={{ fontSize: 12, color: '#282833' }}>
+          <h2 className="font-semibold mb-1" style={{ fontSize: 18, color: 'hsl(var(--foreground))' }}>{ui('fiscal.onboarding.confirm.title')}</h2>
+          <p style={{ fontSize: 12, color: 'hsl(var(--foreground))' }}>
             {ui('fiscal.onboarding.confirm.subtitle.pre')}<strong>{ui('fiscal.onboarding.confirm.subtitle.bold')}</strong>
           </p>
         </div>
@@ -576,10 +576,10 @@ function ConfirmScreen({ resolvedSystem, selectedTerritory, alsoNational, volume
             data-testid="InfoCard__e9ef3f" />
         ))}
       </div>
-      <div className="rounded-xl p-4 flex gap-3 text-sm" style={{ background: '#F0FAFF', color: '#0075AD' }}>
+      <div className="rounded-xl p-4 flex gap-3 text-sm" style={{ background: 'var(--status-info-bg)', color: 'var(--status-info-fg)' }}>
         <span
           className="flex-shrink-0 flex items-center justify-center text-white font-bold"
-          style={{ width: 20, height: 20, borderRadius: '50%', background: '#00ACFF', fontSize: 12, marginTop: 1 }}
+          style={{ width: 20, height: 20, borderRadius: '50%', background: 'var(--status-info-fg)', fontSize: 12, marginTop: 1 }}
         >i</span>
         <p>
           {ui('fiscal.onboarding.confirm.next.title')}{' '}
@@ -597,28 +597,28 @@ function NationalOptionCard({ label, desc, extra, selected, onPick }) {
       type="button"
       onClick={onPick}
       className={`relative flex flex-col text-left cursor-pointer rounded-xl transition-all w-full
-        ${selected ? 'border-2 border-[#121217]' : 'border border-[#E8EAEF] hover:bg-muted/40'}`}
+        ${selected ? 'border-2 border-foreground' : 'border border-border-subtle hover:bg-muted/40'}`}
       style={{
         minHeight: 80, padding: 16, gap: 12,
         boxShadow: selected
-          ? '0 4px 16px rgba(18,18,23,0.14), 0 1px 3px rgba(18,18,23,0.08)'
-          : '0 1px 2px rgba(18,18,23,0.05)',
+          ? '0 4px 16px hsl(var(--foreground) / 0.14), 0 1px 3px hsl(var(--foreground) / 0.08)'
+          : '0 1px 2px hsl(var(--foreground) / 0.05)',
       }}
     >
       <span
         className="absolute"
         style={{
           width: 15, height: 15, right: 8, top: 9, borderRadius: '50%',
-          border: selected ? '1.5px solid #121217' : '1.5px solid #D1D4DB',
+          border: selected ? '1.5px solid hsl(var(--foreground))' : '1.5px solid hsl(var(--border-control))',
           background: selected
-            ? 'radial-gradient(circle at center, #121217 40%, #FFFFFF 40%)'
-            : '#FFFFFF',
+            ? 'radial-gradient(circle at center, hsl(var(--foreground)) 40%, hsl(var(--card)) 40%)'
+            : 'hsl(var(--card))',
         }}
       />
-      <span style={{ fontSize: 14, fontWeight: 600, color: '#121217', paddingRight: 20, lineHeight: '20px' }}>{label}</span>
-      <span style={{ fontSize: 14, color: '#555B6D', lineHeight: '20px' }}>{desc}</span>
-      <div style={{ height: 1, background: '#E8EAEF', borderRadius: 1 }} />
-      <span style={{ fontSize: 12, color: '#9CA3AF', lineHeight: '18px' }}>{extra}</span>
+      <span style={{ fontSize: 14, fontWeight: 600, color: 'hsl(var(--foreground))', paddingRight: 20, lineHeight: '20px' }}>{label}</span>
+      <span style={{ fontSize: 14, color: 'hsl(var(--muted-foreground))', lineHeight: '20px' }}>{desc}</span>
+      <div style={{ height: 1, background: 'hsl(var(--border-subtle))', borderRadius: 1 }} />
+      <span style={{ fontSize: 12, color: 'hsl(var(--text-disabled))', lineHeight: '18px' }}>{extra}</span>
     </button>
   );
 }
@@ -629,22 +629,22 @@ function SelectableCard({ selected, onPick, children }) {
       type="button"
       onClick={onPick}
       className={`relative flex flex-col text-left cursor-pointer rounded-xl transition-all w-full
-        ${selected ? 'border-2 border-[#121217]' : 'border border-[#E8EAEF] hover:bg-muted/40'}`}
+        ${selected ? 'border-2 border-foreground' : 'border border-border-subtle hover:bg-muted/40'}`}
       style={{
         minHeight: 80, padding: 16, gap: 12,
         boxShadow: selected
-          ? '0 4px 16px rgba(18,18,23,0.14), 0 1px 3px rgba(18,18,23,0.08)'
-          : '0 1px 2px rgba(18,18,23,0.05)',
+          ? '0 4px 16px hsl(var(--foreground) / 0.14), 0 1px 3px hsl(var(--foreground) / 0.08)'
+          : '0 1px 2px hsl(var(--foreground) / 0.05)',
       }}
     >
       <span
         className="absolute flex-shrink-0"
         style={{
           width: 15, height: 15, right: 8, top: 9, borderRadius: '50%',
-          border: selected ? '1.5px solid #121217' : '1.5px solid #D1D4DB',
+          border: selected ? '1.5px solid hsl(var(--foreground))' : '1.5px solid hsl(var(--border-control))',
           background: selected
-            ? 'radial-gradient(circle at center, #121217 40%, #FFFFFF 40%)'
-            : '#FFFFFF',
+            ? 'radial-gradient(circle at center, hsl(var(--foreground)) 40%, hsl(var(--card)) 40%)'
+            : 'hsl(var(--card))',
         }}
       />
       {children}
@@ -655,18 +655,18 @@ function SelectableCard({ selected, onPick, children }) {
 function ObligationCard({ label, paragraphs, note, info, selected, onPick }) {
   return (
     <SelectableCard selected={selected} onPick={onPick} data-testid="SelectableCard__e9ef3f">
-      <span className="text-sm font-semibold pr-5" style={{ color: '#121217' }}>{label}</span>
+      <span className="text-sm font-semibold pr-5" style={{ color: 'hsl(var(--foreground))' }}>{label}</span>
       <div className="flex flex-col gap-2">
         {paragraphs.map((p) => (
-          <span key={p} className="text-sm leading-5" style={{ color: '#555B6D' }}>{p}</span>
+          <span key={p} className="text-sm leading-5" style={{ color: 'hsl(var(--muted-foreground))' }}>{p}</span>
         ))}
       </div>
-      {note && <span className="text-sm font-medium" style={{ color: '#121217' }}>{note}</span>}
+      {note && <span className="text-sm font-medium" style={{ color: 'hsl(var(--foreground))' }}>{note}</span>}
       {info && (
-        <div className="rounded-lg px-3 py-2.5 flex gap-2 text-xs" style={{ background: '#F0FAFF', color: '#0075AD' }}>
+        <div className="rounded-lg px-3 py-2.5 flex gap-2 text-xs" style={{ background: 'var(--status-info-bg)', color: 'var(--status-info-fg)' }}>
           <span
             className="flex-shrink-0 flex items-center justify-center text-white font-bold"
-            style={{ width: 16, height: 16, borderRadius: '50%', background: '#00ACFF', fontSize: 10, marginTop: 1 }}
+            style={{ width: 16, height: 16, borderRadius: '50%', background: 'var(--status-info-fg)', fontSize: 10, marginTop: 1 }}
           >i</span>
           <span>{info}</span>
         </div>
@@ -678,14 +678,14 @@ function ObligationCard({ label, paragraphs, note, info, selected, onPick }) {
 function BulletOptionCard({ label, bullets, selected, onPick }) {
   return (
     <SelectableCard selected={selected} onPick={onPick} data-testid="SelectableCard__e9ef3f">
-      <span className="text-sm font-semibold pr-5" style={{ color: '#121217' }}>{label}</span>
+      <span className="text-sm font-semibold pr-5" style={{ color: 'hsl(var(--foreground))' }}>{label}</span>
       <ul className="flex flex-col gap-1.5">
         {bullets.map((b) => (
-          <li key={b} className="flex gap-2 text-sm leading-5" style={{ color: '#555B6D' }}>
+          <li key={b} className="flex gap-2 text-sm leading-5" style={{ color: 'hsl(var(--muted-foreground))' }}>
             <Check
               size={14}
               strokeWidth={2.5}
-              className="flex-shrink-0 mt-0.5 text-green-500"
+              className="flex-shrink-0 mt-0.5 text-status-success-foreground"
               data-testid="Check__e9ef3f" />
             <span>{b}</span>
           </li>
@@ -698,17 +698,17 @@ function BulletOptionCard({ label, bullets, selected, onPick }) {
 function OptionCard({ label, desc, selected, onPick }) {
   return (
     <SelectableCard selected={selected} onPick={onPick} data-testid="SelectableCard__e9ef3f">
-      <span className="text-sm font-semibold pr-5" style={{ color: '#121217' }}>{label}</span>
-      {desc && <span className="text-sm leading-5" style={{ color: '#555B6D' }}>{desc}</span>}
+      <span className="text-sm font-semibold pr-5" style={{ color: 'hsl(var(--foreground))' }}>{label}</span>
+      {desc && <span className="text-sm leading-5" style={{ color: 'hsl(var(--muted-foreground))' }}>{desc}</span>}
     </SelectableCard>
   );
 }
 
 function InfoCard({ label, value, onEdit }) {
   return (
-    <div className="relative rounded-xl border border-[#E8EAEF] p-4" style={{ background: '#F5F7F9', boxShadow: '0 1px 2px rgba(18,18,23,0.05)' }}>
-      <p style={{ fontSize: 12, color: '#555B6D', marginBottom: 2 }}>{label}</p>
-      <p className="font-semibold" style={{ fontSize: 14, color: '#121217' }}>{value}</p>
+    <div className="relative rounded-xl border border-border-subtle p-4" style={{ background: 'hsl(var(--muted))', boxShadow: '0 1px 2px hsl(var(--foreground) / 0.05)' }}>
+      <p style={{ fontSize: 12, color: 'hsl(var(--muted-foreground))', marginBottom: 2 }}>{label}</p>
+      <p className="font-semibold" style={{ fontSize: 14, color: 'hsl(var(--foreground))' }}>{value}</p>
       {onEdit && (
         <button
           type="button"
@@ -733,27 +733,27 @@ function ManualTerrCard({ territory, selected, onPick }) {
       type="button"
       onClick={() => onPick(territory.id)}
       className={`relative flex flex-col text-left transition-all cursor-pointer rounded-xl
-        ${selected ? 'border-2 border-[#121217]' : 'border border-[#E8EAEF] hover:bg-muted/40'}`}
+        ${selected ? 'border-2 border-foreground' : 'border border-border-subtle hover:bg-muted/40'}`}
       style={{
         minHeight: 80, padding: 16, gap: 12,
         boxShadow: selected
-          ? '0 4px 16px rgba(18,18,23,0.14), 0 1px 3px rgba(18,18,23,0.08)'
-          : '0 1px 2px rgba(18,18,23,0.05)',
+          ? '0 4px 16px hsl(var(--foreground) / 0.14), 0 1px 3px hsl(var(--foreground) / 0.08)'
+          : '0 1px 2px hsl(var(--foreground) / 0.05)',
       }}
     >
       <span
         className="absolute flex-shrink-0"
         style={{
           width: 15, height: 15, right: 8, top: 9, borderRadius: '50%',
-          border: selected ? '1.5px solid #121217' : '1.5px solid #D1D4DB',
+          border: selected ? '1.5px solid hsl(var(--foreground))' : '1.5px solid hsl(var(--border-control))',
           background: selected
-            ? 'radial-gradient(circle at center, #121217 40%, #FFFFFF 40%)'
-            : '#FFFFFF',
-          boxShadow: '0 1px 2px rgba(18,18,23,0.05)',
+            ? 'radial-gradient(circle at center, hsl(var(--foreground)) 40%, hsl(var(--card)) 40%)'
+            : 'hsl(var(--card))',
+          boxShadow: '0 1px 2px hsl(var(--foreground) / 0.05)',
         }}
       />
       <div className="flex items-center min-w-0" style={{ gap: 4, paddingRight: 20 }}>
-        <span className="text-sm font-medium truncate" style={{ color: '#121217' }}>{territory.name}</span>
+        <span className="text-sm font-medium truncate" style={{ color: 'hsl(var(--foreground))' }}>{territory.name}</span>
         {territory.system && (
           <span style={badgeStyle} className="text-[10px] font-medium px-2 py-0.5 rounded-full flex-shrink-0 leading-none">
             {territory.system}
@@ -761,7 +761,7 @@ function ManualTerrCard({ territory, selected, onPick }) {
         )}
       </div>
       {territory.example && (
-        <div className="text-sm leading-6" style={{ color: '#555B6D' }}>{territory.example}</div>
+        <div className="text-sm leading-6" style={{ color: 'hsl(var(--muted-foreground))' }}>{territory.example}</div>
       )}
     </button>
   );
@@ -794,14 +794,14 @@ function ManualScreen({ selectedTerritory, manualSystem, orgName, selectedOrg, o
         </>
       }
       data-testid="ScreenLayout__e9ef3f">
-      <h2 className="font-semibold leading-8 mb-1" style={{ color: '#121217', fontSize: 18 }}>{ui('fiscal.onboarding.manual.title')}</h2>
-      <p className="leading-4 mb-6" style={{ color: '#282833', fontSize: 12 }}>
+      <h2 className="font-semibold leading-8 mb-1" style={{ color: 'hsl(var(--foreground))', fontSize: 18 }}>{ui('fiscal.onboarding.manual.title')}</h2>
+      <p className="leading-4 mb-6" style={{ color: 'hsl(var(--foreground))', fontSize: 12 }}>
         {ui('fiscal.onboarding.manual.subtitle')}
       </p>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
         {/* Territorio */}
         <div className="grid" style={{ gridTemplateColumns: '148px 1fr', gap: 20 }}>
-          <div className="text-sm font-semibold pt-1" style={{ color: '#121217' }}>
+          <div className="text-sm font-semibold pt-1" style={{ color: 'hsl(var(--foreground))' }}>
             {ui('fiscal.onboarding.manual.territory.header')}
           </div>
           <div className="grid grid-cols-3" style={{ gap: 20 }}>
@@ -816,16 +816,16 @@ function ManualScreen({ selectedTerritory, manualSystem, orgName, selectedOrg, o
           </div>
         </div>
 
-        <div style={{ height: 1, background: '#E8EAEF' }} />
+        <div style={{ height: 1, background: 'hsl(var(--border-subtle))' }} />
 
         {/* Sistema fiscal */}
         <div className="grid" style={{ gridTemplateColumns: '148px 1fr', gap: 20 }}>
-          <div className="text-sm font-semibold pt-1" style={{ color: '#121217' }}>
+          <div className="text-sm font-semibold pt-1" style={{ color: 'hsl(var(--foreground))' }}>
             {ui('fiscal.onboarding.manual.system.header')}
           </div>
           <div>
             {!selectedTerritory ? (
-              <div className="rounded-xl border border-border bg-muted/20 p-4 text-sm" style={{ color: '#555B6D' }}>
+              <div className="rounded-xl border border-border bg-muted/20 p-4 text-sm" style={{ color: 'hsl(var(--muted-foreground))' }}>
                 {ui('fiscal.onboarding.manual.system.placeholder')}
               </div>
             ) : (
@@ -839,27 +839,27 @@ function ManualScreen({ selectedTerritory, manualSystem, orgName, selectedOrg, o
                       type="button"
                       onClick={() => onSetManualSystem(sys.id)}
                       className={`relative flex flex-col text-left transition-all cursor-pointer rounded-xl
-                        ${isSelected ? 'border-2 border-[#121217]' : 'border border-[#E8EAEF] hover:bg-muted/40'}`}
+                        ${isSelected ? 'border-2 border-foreground' : 'border border-border-subtle hover:bg-muted/40'}`}
                       style={{
                         minHeight: 80, padding: 16, gap: 12,
                         boxShadow: isSelected
-                          ? '0 4px 16px rgba(18,18,23,0.14), 0 1px 3px rgba(18,18,23,0.08)'
-                          : '0 1px 2px rgba(18,18,23,0.05)',
+                          ? '0 4px 16px hsl(var(--foreground) / 0.14), 0 1px 3px hsl(var(--foreground) / 0.08)'
+                          : '0 1px 2px hsl(var(--foreground) / 0.05)',
                       }}
                     >
                       <span
                         className="absolute flex-shrink-0"
                         style={{
                           width: 15, height: 15, right: 8, top: 9, borderRadius: '50%',
-                          border: isSelected ? '1.5px solid #121217' : '1.5px solid #D1D4DB',
+                          border: isSelected ? '1.5px solid hsl(var(--foreground))' : '1.5px solid hsl(var(--border-control))',
                           background: isSelected
-                            ? 'radial-gradient(circle at center, #121217 40%, #FFFFFF 40%)'
-                            : '#FFFFFF',
-                          boxShadow: '0 1px 2px rgba(18,18,23,0.05)',
+                            ? 'radial-gradient(circle at center, hsl(var(--foreground)) 40%, hsl(var(--card)) 40%)'
+                            : 'hsl(var(--card))',
+                          boxShadow: '0 1px 2px hsl(var(--foreground) / 0.05)',
                         }}
                       />
-                      <span className="text-sm font-medium truncate pr-5" style={{ color: '#121217' }}>{sys.name}</span>
-                      <span className="text-sm leading-6" style={{ color: '#555B6D' }}>{sys.long}</span>
+                      <span className="text-sm font-medium truncate pr-5" style={{ color: 'hsl(var(--foreground))' }}>{sys.name}</span>
+                      <span className="text-sm leading-6" style={{ color: 'hsl(var(--muted-foreground))' }}>{sys.long}</span>
                     </button>
                   );
                 })}
@@ -894,8 +894,8 @@ function SubquestionScreen({ t, orgName, selectedOrg, orgList, onSelectOrg, onGo
             data-testid="Button__e9ef3f">
             <ArrowLeft size={15} data-testid="ArrowLeft__e9ef3f" /> {ui('fiscal.onboarding.back').replace('←', '').trim()}
           </Button>
-          <p className="text-xs flex-1" style={{ color: '#555B6D' }}>{ui('fiscal.skip.hint')}</p>
-          <button type="button" onClick={() => goTo('skipped')} className="text-sm" style={{ color: '#121217' }}>
+          <p className="text-xs flex-1" style={{ color: 'hsl(var(--muted-foreground))' }}>{ui('fiscal.skip.hint')}</p>
+          <button type="button" onClick={() => goTo('skipped')} className="text-sm" style={{ color: 'hsl(var(--foreground))' }}>
             {ui('fiscal.onboarding.skip')}
           </button>
           <Button
@@ -912,8 +912,8 @@ function SubquestionScreen({ t, orgName, selectedOrg, orgList, onSelectOrg, onGo
         <>
           <div className="flex items-start justify-between gap-4 mb-5">
             <div>
-              <h2 className="font-semibold mb-1" style={{ fontSize: 18, color: '#121217' }}>{ui('fiscal.onboarding.subq.also.title')}</h2>
-              <p style={{ fontSize: 12, color: '#282833' }}>{ui('fiscal.onboarding.subq.also.subtitle')}</p>
+              <h2 className="font-semibold mb-1" style={{ fontSize: 18, color: 'hsl(var(--foreground))' }}>{ui('fiscal.onboarding.subq.also.title')}</h2>
+              <p style={{ fontSize: 12, color: 'hsl(var(--foreground))' }}>{ui('fiscal.onboarding.subq.also.subtitle')}</p>
             </div>
             <Stepper step={2} ui={ui} data-testid="Stepper__e9ef3f" />
           </div>
@@ -935,11 +935,11 @@ function SubquestionScreen({ t, orgName, selectedOrg, orgList, onSelectOrg, onGo
           </div>
 
           {/* Info box — when does SII apply */}
-          <div className="mt-4 rounded-xl px-5 py-4" style={{ background: '#F0FAFF', color: '#0075AD' }}>
+          <div className="mt-4 rounded-xl px-5 py-4" style={{ background: 'var(--status-info-bg)', color: 'var(--status-info-fg)' }}>
             <div className="flex items-center gap-3 mb-3">
               <span
                 className="flex-shrink-0 flex items-center justify-center text-white font-bold"
-                style={{ width: 28, height: 28, borderRadius: '50%', background: '#00ACFF', fontSize: 14 }}
+                style={{ width: 28, height: 28, borderRadius: '50%', background: 'var(--status-info-fg)', fontSize: 14 }}
               >i</span>
               <span className="font-semibold" style={{ fontSize: 14 }}>
                 {ui('fiscal.onboarding.subq.sii.info.title')}
@@ -966,10 +966,10 @@ function SubquestionScreen({ t, orgName, selectedOrg, orgList, onSelectOrg, onGo
           {/* Section 1: Obligation — title+stepper top row, cards full-width 2 cols below */}
           <div className="flex items-start justify-between gap-4 mb-5">
             <div>
-              <h2 className="font-semibold mb-1" style={{ fontSize: 18, color: '#121217' }}>
+              <h2 className="font-semibold mb-1" style={{ fontSize: 18, color: 'hsl(var(--foreground))' }}>
                 {ui('fiscal.onboarding.subq.obligation.title')}
               </h2>
-              <p style={{ fontSize: 12, color: '#282833' }}>
+              <p style={{ fontSize: 12, color: 'hsl(var(--foreground))' }}>
                 {ui('fiscal.onboarding.subq.obligation.subtitle')}
               </p>
             </div>
@@ -1000,10 +1000,10 @@ function SubquestionScreen({ t, orgName, selectedOrg, orgList, onSelectOrg, onGo
 
               {/* Section 2: Choice — same structure, no stepper (already shown above) */}
               <div className="mb-5">
-                <h2 className="font-semibold mb-1" style={{ fontSize: 18, color: '#121217' }}>
+                <h2 className="font-semibold mb-1" style={{ fontSize: 18, color: 'hsl(var(--foreground))' }}>
                   {ui('fiscal.onboarding.subq.choice.title')}
                 </h2>
-                <p style={{ fontSize: 12, color: '#282833' }}>
+                <p style={{ fontSize: 12, color: 'hsl(var(--foreground))' }}>
                   {ui('fiscal.onboarding.subq.choice.subtitle')}
                 </p>
               </div>
@@ -1030,10 +1030,10 @@ function SubquestionScreen({ t, orgName, selectedOrg, orgList, onSelectOrg, onGo
                   data-testid="BulletOptionCard__e9ef3f" />
               </div>
 
-              <div className="mt-4 rounded-xl px-4 py-3 flex gap-2.5 text-sm" style={{ background: '#F0FAFF', color: '#0075AD' }}>
+              <div className="mt-4 rounded-xl px-4 py-3 flex gap-2.5 text-sm" style={{ background: 'var(--status-info-bg)', color: 'var(--status-info-fg)' }}>
                 <span
                   className="flex-shrink-0 flex items-center justify-center text-white font-bold"
-                  style={{ width: 20, height: 20, borderRadius: '50%', background: '#00ACFF', fontSize: 12, marginTop: 1 }}
+                  style={{ width: 20, height: 20, borderRadius: '50%', background: 'var(--status-info-fg)', fontSize: 12, marginTop: 1 }}
                 >i</span>
                 <p>Importante: {ui('fiscal.onboarding.subq.important.note')}</p>
               </div>
@@ -1061,12 +1061,12 @@ function TerritoryScreen({ selectedTerritory, selectedOrg, orgList, onSelectOrg,
       }
       actions={
         <>
-          <p className="text-xs flex-1" style={{ color: '#555B6D' }}>{ui('fiscal.skip.hint')}</p>
+          <p className="text-xs flex-1" style={{ color: 'hsl(var(--muted-foreground))' }}>{ui('fiscal.skip.hint')}</p>
           <button
             type="button"
             onClick={() => goTo('skipped')}
             className="text-sm transition-colors"
-            style={{ color: '#121217' }}
+            style={{ color: 'hsl(var(--foreground))' }}
           >
             {ui('fiscal.onboarding.skip')}
           </button>
@@ -1088,10 +1088,10 @@ function TerritoryScreen({ selectedTerritory, selectedOrg, orgList, onSelectOrg,
         style={{ minHeight: 80, padding: '8px 20px', gap: 10 }}
       >
         <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-          <h2 className="font-semibold leading-8" style={{ color: '#121217', fontSize: 18 }}>
+          <h2 className="font-semibold leading-8" style={{ color: 'hsl(var(--foreground))', fontSize: 18 }}>
             {ui('fiscal.onboarding.territory.title')}
           </h2>
-          <p className="text-xs leading-4" style={{ color: '#282833' }}>
+          <p className="text-xs leading-4" style={{ color: 'hsl(var(--foreground))' }}>
             {ui('fiscal.onboarding.territory.subtitle')}
           </p>
         </div>
@@ -1101,12 +1101,12 @@ function TerritoryScreen({ selectedTerritory, selectedOrg, orgList, onSelectOrg,
       <div style={{ display: 'flex', flexDirection: 'column', padding: '12px 0px', gap: 20 }}>
         {TERRITORY_GROUPS.flatMap(({ regime, label, desc, items }, idx) => [
           ...(idx > 0 ? [
-            <div key={`sep-${regime}`} style={{ height: 1, background: '#E8EAEF', margin: '0 20px' }} />,
+            <div key={`sep-${regime}`} style={{ height: 1, background: 'hsl(var(--border-subtle))', margin: '0 20px' }} />,
           ] : []),
           <div key={regime} className="grid" style={{ gridTemplateColumns: '148px 1fr', gap: 20, padding: '8px 20px 12px' }}>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-              <div className="text-sm font-semibold" style={{ color: '#121217' }}>{label}</div>
-              <div className="text-xs" style={{ color: '#282833', lineHeight: '16px' }}>{desc}</div>
+              <div className="text-sm font-semibold" style={{ color: 'hsl(var(--foreground))' }}>{label}</div>
+              <div className="text-xs" style={{ color: 'hsl(var(--foreground))', lineHeight: '16px' }}>{desc}</div>
             </div>
             <div className="grid grid-cols-3" style={{ gap: 20 }}>
               {items.map(id => (
@@ -1336,16 +1336,16 @@ function NextItem({ icon, title, desc, badge, done, onClick }) {
   return (
     <button type="button" onClick={onClick}
       className={`flex items-center gap-3 p-3.5 border rounded-[10px] hover:bg-muted/40 transition-colors text-left w-full
-        ${done ? 'bg-green-50 border-green-200' : 'bg-background border-border'}`}>
+        ${done ? 'bg-status-success border-status-success-border' : 'bg-background border-border'}`}>
       <span className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 text-sm
-        ${done ? 'bg-green-100 text-green-700' : 'bg-muted text-foreground/60'}`}>
+        ${done ? 'bg-status-success text-status-success-foreground' : 'bg-muted text-foreground/60'}`}>
         {done ? <Check size={15} strokeWidth={2.5} data-testid="Check__e9ef3f" /> : icon}
       </span>
       <span className="flex-1">
         <span className="flex items-center gap-2">
-          <span className={`text-sm font-semibold ${done ? 'text-green-800' : ''}`}>{title}</span>
+          <span className={`text-sm font-semibold ${done ? 'text-status-success-foreground' : ''}`}>{title}</span>
           {badge && !done && (
-            <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700 leading-none">{badge}</span>
+            <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-status-warning text-status-warning-foreground leading-none">{badge}</span>
           )}
         </span>
         <span className="block text-xs text-muted-foreground mt-0.5">{desc}</span>
