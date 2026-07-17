@@ -144,18 +144,15 @@ describe('resolveTaxesForLines', () => {
     };
   }
 
-  // simSearch envelope shape: { message: '{"item_0":{...},"item_1":{...}}' }
+  // simSearch response shape (native /sws/neo/simsearch): the raw object IS the
+  // JSON body — no more { message: "<JSON-string>" } double-encoded wrapper.
   function envelopeWith(matches) {
-    return {
-      message: JSON.stringify(
-        Object.fromEntries(
-          matches.map((value, idx) => [
-            `item_${idx}`,
-            value ? { data: [{ id: value.id, name: value.name, similarity_percent: '90' }] } : { data: [] },
-          ]),
-        ),
-      ),
-    };
+    return Object.fromEntries(
+      matches.map((value, idx) => [
+        `item_${idx}`,
+        value ? { data: [{ id: value.id, name: value.name, similarity_percent: '90' }] } : { data: [] },
+      ]),
+    );
   }
 
   it('returns matched tax ids in the same order as the input lines', async () => {
@@ -173,6 +170,10 @@ describe('resolveTaxesForLines', () => {
     assert.deepEqual(result, ['TAX-21', 'TAX-12']);
     assert.equal(fetchUrls.length, 1, 'one batched simSearch call for all lines');
     assert.match(fetchUrls[0], /entityName=FinancialMgmtTaxRate/);
+    // Native NEO Headless endpoint — no more generic Webhooks dispatcher.
+    assert.match(fetchUrls[0], /\/sws\/neo\/simsearch(\?|$)/);
+    assert.doesNotMatch(fetchUrls[0], /\/webhooks\//);
+    assert.doesNotMatch(fetchUrls[0], /name=SimSearch/);
   });
 
   it('returns null for lines that simSearch did not match', async () => {

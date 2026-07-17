@@ -1,0 +1,10 @@
+codigo,nombre,descripcion,unidad de medida,categoria,categoria impositiva
+SKU-1001,Tornillo hexagonal M8,Tornillo de acero inoxidable M8x30,Unit,Raw Materials,General
+SKU-1002,Cable de red Cat6 (1m),Cable de red Cat6 UTP color gris de 1 metro,Unit,Raw Materials,General
+SKU-1003,Silla de oficina ergonomica,Silla ergonomica con soporte lumbar,Unit,Finished Goods,General
+SKU-1004,Servicio de instalacion,Servicio de instalacion en sitio,Hour,Services,Exempt
+SKU-1005,Paquete de resmas A4,Paquete de 500 hojas A4,Unit,Finished Goods,General
+SKU-1006,Bidon de aceite lubricante,Bidon de 5 litros de aceite lubricante,Litre,Raw Materials,General
+SKU-1007,Producto sin categoria valida,Fila pensada para probar FK no resuelta,Unit,Categoria Que No Existe,General
+SKU-1008,,Fila sin nombre para probar campo requerido,Unit,Raw Materials,General
+SKU-1001,Tornillo hexagonal M8 (duplicado),Fila duplicada para probar dedupe por searchKey,Unit,Raw Materials,General

@@ -1302,6 +1302,25 @@ describe('resolveCanAddLines', () => {
     expect(resolveCanAddLines(null, {}, [])).toBe(true);
     expect(resolveCanAddLines(null, {}, undefined)).toBe(true);
   });
+
+  // Import-only lines pattern (ETP-4462): windows with maxDetailLines = 0 in
+  // decisions.json get an always-false generated guard, so adding lines is
+  // never allowed regardless of header completeness or existing children.
+  it('returns false for the generated maxDetailLines:0 guard regardless of children', () => {
+    const importOnlyGuard = (_, children) => children.length < 0;
+    expect(resolveCanAddLines(importOnlyGuard, { businessPartner: 'bp' }, null, [])).toBe(false);
+    expect(resolveCanAddLines(importOnlyGuard, { businessPartner: 'bp' }, null, [{}, {}])).toBe(false);
+  });
+
+  it('defaults children to an empty array when the caller omits them (guard still runs)', () => {
+    const importOnlyGuard = (_, children) => children.length < 0;
+    expect(resolveCanAddLines(importOnlyGuard, {}, null)).toBe(false);
+  });
+
+  it('ignores requiredHeaderFields when a guard is provided (guard wins)', () => {
+    const importOnlyGuard = (_, children) => children.length < 0;
+    expect(resolveCanAddLines(importOnlyGuard, { bp: 'x', wh: 'y' }, ['bp', 'wh'], [])).toBe(false);
+  });
 });
 
 describe('getDocumentIds', () => {

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { DateField } from '@/components/ui/date-field';
@@ -106,15 +106,6 @@ function SiiStatusBadge({ estado, ui, size = 'md' }) {
   );
 }
 
-function TbaiBadge({ issent, ui, size = 'md' }) {
-  const sent = issent === true || issent === 'Y';
-  return (
-    <span className={`${pillCls(size)} ${sent ? PILL_CLS.success : PILL_CLS.neutral}`}>
-      {ui(sent ? 'sifDataTabs.status.tbai.sent' : 'sifDataTabs.status.tbai.notSent')}
-    </span>
-  );
-}
-
 function VerifactuBadge({ status, sent, ui, size = 'md' }) {
   const normalized = status || (sent === true || sent === 'Y' ? 'AC' : null);
   const current = VERIFACTU_STATUS[normalized] ?? VERIFACTU_DEFAULT;
@@ -125,25 +116,21 @@ function VerifactuBadge({ status, sent, ui, size = 'md' }) {
 
 const RAIL_META = {
   sii: { labelKey: 'sifDataTabs.tab.sii', subtitleKey: 'sifDataTabs.rail.sii.subtitle' },
-  tbai: { labelKey: 'sifDataTabs.tab.tbai', subtitleKey: 'sifDataTabs.rail.tbai.subtitle' },
   verifactu: { labelKey: 'sifDataTabs.tab.verifactu', subtitleKey: 'sifDataTabs.rail.verifactu.subtitle' },
 };
 
 const PANEL_META = {
   sii: { titleKey: 'sifDataTabs.panel.sii.title', subtitleKey: 'sifDataTabs.panel.sii.subtitle' },
-  tbai: { titleKey: 'sifDataTabs.panel.tbai.title', subtitleKey: 'sifDataTabs.panel.tbai.subtitle' },
   verifactu: { titleKey: 'sifDataTabs.panel.verifactu.title', subtitleKey: 'sifDataTabs.panel.verifactu.subtitle' },
 };
 
-function resolveDefaultTab(showSii, showTbai) {
+function resolveDefaultTab(showSii) {
   if (showSii) return 'sii';
-  if (showTbai) return 'tbai';
   return 'verifactu';
 }
 
-function resolveEffectiveTab(activeTab, showSii, showTbai, showVerifactu, defaultTab) {
+function resolveEffectiveTab(activeTab, showSii, showVerifactu, defaultTab) {
   if (activeTab === 'sii' && showSii) return 'sii';
-  if (activeTab === 'tbai' && showTbai) return 'tbai';
   if (activeTab === 'verifactu' && showVerifactu) return 'verifactu';
   return defaultTab;
 }
@@ -229,14 +216,13 @@ function shouldShowReverseInvType(showVerifactu, invType) {
     || invType === 'R5';
 }
 
-export default function SifTab({ recordId, data, token, apiBaseUrl, onChange }) {
+export default function SifTab({ recordId, data, token, apiBaseUrl, onChange, onVisibilityChange }) {
   const {
     ui,
     siiTypeField,
     siiDescriptionMasterIdentifier,
     siiTypeOptions,
     showSii,
-    showTbai,
     showVerifactu,
     dateReadOnly,
     siiFieldReadOnly,
@@ -244,14 +230,23 @@ export default function SifTab({ recordId, data, token, apiBaseUrl, onChange }) 
     getDateVal,
   } = useSifFieldPatcher({ data, recordId, token, apiBaseUrl, onChange });
 
-  const defaultTab = resolveDefaultTab(showSii, showTbai);
+  const defaultTab = resolveDefaultTab(showSii);
   const [activeTab, setActiveTab] = useState(defaultTab);
   // Read live (possibly unsaved) pending value so dependent Verifactu fields react
   // immediately as the user picks a Tipo de Factura — `data` already reflects the
   // pending edit (shared `editing` state) as soon as onChange fires.
   const vfInvType = getVal('etvfacInvType');
 
-  if (!showSii && !showTbai && !showVerifactu) {
+  // Report up to DetailView whether the SIF tab has anything to show at all — a fiscal
+  // configuration that is TBAI-only (no SII, no Verifactu) has nothing for this tab to
+  // display, so the tab itself should disappear from the tab bar instead of showing an
+  // empty placeholder. `onVisibilityChange` is optional: this must be a no-op-safe call
+  // for any consumer that doesn't pass it.
+  useEffect(() => {
+    onVisibilityChange?.(showSii || showVerifactu);
+  }, [showSii, showVerifactu, onVisibilityChange]);
+
+  if (!showSii && !showVerifactu) {
     return (
       <div className="flex items-center justify-center h-full text-sm text-muted-foreground p-8">
         {ui('sifDataTabs.sectionTitle')}
@@ -259,11 +254,10 @@ export default function SifTab({ recordId, data, token, apiBaseUrl, onChange }) 
     );
   }
 
-  const effectiveTab = resolveEffectiveTab(activeTab, showSii, showTbai, showVerifactu, defaultTab);
+  const effectiveTab = resolveEffectiveTab(activeTab, showSii, showVerifactu, defaultTab);
 
   const railItems = [
     showSii && { key: 'sii', ...RAIL_META.sii },
-    showTbai && { key: 'tbai', ...RAIL_META.tbai },
     showVerifactu && { key: 'verifactu', ...RAIL_META.verifactu },
   ].filter(Boolean);
 
@@ -369,34 +363,6 @@ export default function SifTab({ recordId, data, token, apiBaseUrl, onChange }) 
               id="sif-siiPeriod"
               labelKey="sifDataTabs.field.siiPeriod"
               value={data?.aeatsiiPeriodo}
-              ui={ui}
-              data-testid="ReadOnlyField__b99c8b" />
-          </Panel>
-        )}
-
-        {effectiveTab === 'tbai' && showTbai && (
-          <Panel
-            titleKey={PANEL_META.tbai.titleKey}
-            subtitleKey={PANEL_META.tbai.subtitleKey}
-            badge={<TbaiBadge issent={data?.tbaiIssent} ui={ui} data-testid="TbaiBadge__b99c8b" />}
-            ui={ui}
-            data-testid="Panel__b99c8b">
-            <ReadOnlyField
-              id="sif-tbaiSeq"
-              labelKey="sifDataTabs.field.chainSequence"
-              value={data?.tbaiSequence}
-              ui={ui}
-              data-testid="ReadOnlyField__b99c8b" />
-            <ReadOnlyField
-              id="sif-tbaiSerie"
-              labelKey="sifDataTabs.field.invoiceSeries"
-              value={data?.tbaiInvoicenum}
-              ui={ui}
-              data-testid="ReadOnlyField__b99c8b" />
-            <ReadOnlyField
-              id="sif-tbaiInvSeq"
-              labelKey="sifDataTabs.field.invoiceSequence"
-              value={data?.tbaiInvoiceseq}
               ui={ui}
               data-testid="ReadOnlyField__b99c8b" />
           </Panel>
