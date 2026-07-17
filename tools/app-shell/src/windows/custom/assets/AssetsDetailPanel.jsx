@@ -6,15 +6,15 @@ import { useUI } from '@/i18n';
 function GroupHead({ title, description }) {
   return (
     <div>
-      <div className="text-sm font-semibold text-[#121217] mb-4">{title}</div>
-      {description && <div className="text-xs text-[#6C6C89] -mt-2 mb-4">{description}</div>}
+      <div className="text-sm font-semibold text-[hsl(var(--foreground))] mb-4">{title}</div>
+      {description && <div className="text-xs text-[hsl(var(--muted-foreground))] -mt-2 mb-4">{description}</div>}
     </div>
   );
 }
 
 function GroupDivider({ title, description }) {
   return (
-    <div className="mt-5 border-t border-[#E8E8ED] pt-5">
+    <div className="mt-5 border-t border-[hsl(var(--border-subtle))] pt-5">
       <GroupHead title={title} description={description} data-testid="GroupHead__8e32ca" />
     </div>
   );
@@ -31,8 +31,8 @@ function ToggleCard({ label, description, fieldKey, value, onChange, editing }) 
   return (
     <div className="flex items-center justify-between rounded-xl border border-[#D1D1DB] bg-card p-4">
       <div>
-        <div className="text-sm font-medium text-[#121217]">{label}</div>
-        {description && <div className="text-xs text-[#6C6C89] mt-0.5">{description}</div>}
+        <div className="text-sm font-medium text-[hsl(var(--foreground))]">{label}</div>
+        {description && <div className="text-xs text-[hsl(var(--muted-foreground))] mt-0.5">{description}</div>}
       </div>
       <PillToggle
         checked={isOn}
@@ -278,7 +278,7 @@ export default function AssetsDetailPanel({ data, token, apiBaseUrl, catalogs, a
               data-testid="EntityForm__8e32ca" />
           </>
         ) : (
-          <p className="text-xs text-[#6C6C89]">{ui('assetsDepreciationDisabledHint')}</p>
+          <p className="text-xs text-[hsl(var(--muted-foreground))]">{ui('assetsDepreciationDisabledHint')}</p>
         )}
       </div>
       {/* Group 4 — Dates */}

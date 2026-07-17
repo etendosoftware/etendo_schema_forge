@@ -21,19 +21,19 @@ export default function WarehouseSummary({ data, token, apiBaseUrl }) {
 
   return (
     <div className="flex flex-col gap-4">
-      <h3 className="text-base font-semibold text-[#121217]">{ui('warehouseStockDataTitle')}</h3>
+      <h3 className="text-base font-semibold text-[hsl(var(--foreground))]">{ui('warehouseStockDataTitle')}</h3>
       <div className="grid grid-cols-2 gap-4">
         <div>
           <p className="text-xs text-muted-foreground mb-1">{ui('warehouseTotalValuation')}</p>
           <p className="text-2xl font-light tabular-nums mb-2">{formatCurrency(currencyCode, totalValuation)}</p>
-          <span className="inline-block bg-[#F5F7F9] rounded-lg px-2 py-1 text-xs text-[#3F3F50]">
+          <span className="inline-block bg-[hsl(var(--muted))] rounded-lg px-2 py-1 text-xs text-[hsl(var(--muted-foreground))]">
             {ui('warehouseValuationBadge')}
           </span>
         </div>
         <div>
           <p className="text-xs text-muted-foreground mb-1">{ui('warehouseProductsWithStock')}</p>
           <p className="text-2xl font-light tabular-nums mb-2">{fmtNum(totalProducts)}</p>
-          <span className="inline-block bg-emerald-50 rounded-lg px-2 py-1 text-xs text-emerald-700">
+          <span className="inline-block bg-status-success rounded-lg px-2 py-1 text-xs text-status-success-foreground">
             {ui('warehouseProductsWithStockBadge')}
           </span>
         </div>

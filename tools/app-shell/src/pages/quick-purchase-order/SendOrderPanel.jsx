@@ -97,7 +97,7 @@ export default function SendOrderPanel({
               href={whatsappLink}
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex items-center gap-1 text-xs text-emerald-600 hover:text-emerald-700 font-medium"
+              className="inline-flex items-center gap-1 text-xs text-status-success-foreground hover:text-status-success-foreground font-medium"
             >
               <ExternalLink className="h-3 w-3" data-testid="ExternalLink__9c5975" />
               {ui('qpoOpenWhatsApp')}

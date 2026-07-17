@@ -54,7 +54,7 @@ function RailSkeleton() {
         ))}
       </div>
       <div className="mt-auto flex flex-col shrink-0 gap-1 px-2 pb-2">
-        <div className="mb-1 w-10 self-center border-t border-[#E8EAEF]" />
+        <div className="mb-1 w-10 self-center border-t border-[hsl(var(--border-subtle))]" />
         <div className="flex justify-center">
           <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-page-bg text-muted-foreground">
             <Headphones className="h-5 w-5" data-testid="Headphones__2c996d" />

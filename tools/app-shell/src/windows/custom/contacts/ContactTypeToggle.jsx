@@ -111,16 +111,16 @@ export default function ContactTypeToggle({ data, onChange }) {
               <div
                 className="w-[14.5px] h-[14.5px] rounded-full bg-card flex items-center justify-center transition-colors"
                 style={{
-                  border: `1.5px solid ${isSelected ? '#121217' : '#D1D4DB'}`,
-                  boxShadow: isSelected ? 'none' : '0px 1px 2px rgba(18,18,23,0.05)',
+                  border: `1.5px solid ${isSelected ? 'hsl(var(--foreground))' : 'hsl(var(--border-control))'}`,
+                  boxShadow: isSelected ? 'none' : '0px 1px 2px hsl(var(--foreground) / 0.05)',
                 }}
               >
                 {isSelected && (
-                  <div className="w-2 h-2 rounded-full" style={{ background: '#121217' }} />
+                  <div className="w-2 h-2 rounded-full" style={{ background: 'hsl(var(--foreground))' }} />
                 )}
               </div>
             </div>
-            <span className="text-sm text-[#121217]" style={{ lineHeight: '24px' }}>{label}</span>
+            <span className="text-sm text-[hsl(var(--foreground))]" style={{ lineHeight: '24px' }}>{label}</span>
             <input type="radio" className="sr-only" readOnly checked={isSelected} />
           </label>
         );

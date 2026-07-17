@@ -151,7 +151,7 @@ export default function GoodsShipmentPreview({ shipment, token, apiBaseUrl, wind
     <>
       <Button
         size="sm"
-        className="gap-1 px-2 py-1 h-8 rounded-lg text-sm font-medium bg-[#121217] hover:bg-[#2a2a30] text-white [&_svg]:size-5"
+        className="gap-1 px-2 py-1 h-8 rounded-lg text-sm font-medium bg-[hsl(var(--foreground))] hover:bg-[hsl(var(--foreground))] text-white [&_svg]:size-5"
         onClick={openEmailModal}
         data-testid="Button__5d626b">
         <Mail data-testid="Mail__5d626b" />
@@ -160,20 +160,20 @@ export default function GoodsShipmentPreview({ shipment, token, apiBaseUrl, wind
       <Button
         size="sm"
         variant="outline"
-        className="gap-1 px-2 py-1 h-8 rounded-lg text-sm font-medium bg-card border-[#D1D4DB] shadow-sm text-[#121217] disabled:opacity-40 disabled:cursor-not-allowed [&_svg]:size-5"
+        className="gap-1 px-2 py-1 h-8 rounded-lg text-sm font-medium bg-card border-[hsl(var(--border-control))] shadow-sm text-[hsl(var(--foreground))] disabled:opacity-40 disabled:cursor-not-allowed [&_svg]:size-5"
         disabled={!pdfBlob}
         onClick={pdfBlob ? handleDownload : undefined}
         data-testid="Button__5d626b">
-        <Download className="text-[#828FA3]" data-testid="Download__5d626b" />
+        <Download className="text-[hsl(var(--text-disabled))]" data-testid="Download__5d626b" />
         {ui('invoicePreviewDownloadPdf')}
       </Button>
       <Button
         size="sm"
         variant="outline"
-        className="gap-1 px-2 py-1 h-8 rounded-lg text-sm font-medium bg-card border-[#D1D4DB] shadow-sm text-[#121217] [&_svg]:size-5"
+        className="gap-1 px-2 py-1 h-8 rounded-lg text-sm font-medium bg-card border-[hsl(var(--border-control))] shadow-sm text-[hsl(var(--foreground))] [&_svg]:size-5"
         onClick={() => modalRef.current?.triggerEdit?.()}
         data-testid="Button__5d626b">
-        <Edit2 className="text-[#828FA3]" data-testid="Edit2__5d626b" />
+        <Edit2 className="text-[hsl(var(--text-disabled))]" data-testid="Edit2__5d626b" />
         {ui('invoicePreviewEdit')}
       </Button>
     </>

@@ -46,7 +46,7 @@ function ReceiptStatsPanel({ receipt, partnerName, movementDate, token, apiBaseU
             <button
               type="button"
               onClick={onOrderClick}
-              className="text-blue-600 font-medium text-right max-w-[55%] truncate hover:underline bg-transparent border-none p-0 cursor-pointer"
+              className="text-status-info-foreground font-medium text-right max-w-[55%] truncate hover:underline bg-transparent border-none p-0 cursor-pointer"
             >
               {purchaseOrderNo}
             </button>
@@ -87,10 +87,10 @@ export default function GoodsReceiptPreview({ receipt, token, apiBaseUrl, window
       <Button
         size="sm"
         variant="outline"
-        className="gap-1 px-2 py-1 h-8 rounded-lg text-sm font-medium bg-card border-[#D1D4DB] shadow-sm text-[#121217] [&_svg]:size-5"
+        className="gap-1 px-2 py-1 h-8 rounded-lg text-sm font-medium bg-card border-[hsl(var(--border-control))] shadow-sm text-[hsl(var(--foreground))] [&_svg]:size-5"
         onClick={() => modalRef.current?.triggerEdit?.()}
         data-testid="Button__ba7c74">
-        <Edit2 className="text-[#828FA3]" data-testid="Edit2__ba7c74" />
+        <Edit2 className="text-[hsl(var(--text-disabled))]" data-testid="Edit2__ba7c74" />
         {ui('invoicePreviewEdit')}
       </Button>
     </>

@@ -4,9 +4,9 @@ function PercentPill({ label, value }) {
   const n = typeof value === 'string' ? parseFloat(value) : (value ?? 0);
   const pct = Math.round(n);
   const full = pct >= 100;
-  const bg = full ? '#d1fae5' : '#f3f4f6';
-  const color = full ? '#065f46' : '#374151';
-  const dot = full ? '#10b981' : '#9ca3af';
+  const bg = full ? 'var(--status-success-bg)' : 'hsl(var(--muted))';
+  const color = full ? 'var(--status-success-fg)' : '#374151';
+  const dot = full ? 'var(--status-success-fg)' : 'hsl(var(--text-disabled))';
 
   return (
     <span

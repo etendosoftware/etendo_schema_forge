@@ -65,13 +65,13 @@ function TrendBadge({ trend, period, ui }) {
     <span
       className="flex items-center gap-0.5 px-2 py-1 rounded-full text-xs font-normal whitespace-nowrap"
       style={{
-        background: up ? '#EEFBF4' : '#FEF0F4',
-        color: up ? '#17663A' : '#D50B3E',
+        background: up ? 'var(--status-success-bg)' : 'var(--status-destructive-bg)',
+        color: up ? 'var(--status-success-fg)' : 'hsl(var(--destructive))',
       }}
     >
       <Arrow
         className="h-4 w-4 shrink-0"
-        style={{ color: up ? '#1E874C' : '#D50B3E' }}
+        style={{ color: up ? 'var(--status-success-fg)' : 'hsl(var(--destructive))' }}
         data-testid="Arrow__22ed51" />
       {`${pct} ${vsLabel}`}
     </span>
@@ -79,10 +79,10 @@ function TrendBadge({ trend, period, ui }) {
 }
 
 function KpiBlock({ kpi, period, currencyCode, ui }) {
-  const valueColor = kpi.positiveTone ? '#17663A' : '#AF0932';
+  const valueColor = kpi.positiveTone ? 'var(--status-success-fg)' : 'hsl(var(--destructive))';
   return (
     <div className="flex flex-col items-start gap-0.5 min-w-0 flex-1">
-      <span className="text-xs font-normal text-[#3F3F50] truncate">{ui(kpi.labelKey)}</span>
+      <span className="text-xs font-normal text-[hsl(var(--muted-foreground))] truncate">{ui(kpi.labelKey)}</span>
       <div className="flex items-center gap-2 min-w-0">
         <span className="text-base font-medium leading-6" style={{ color: valueColor }}>
           {formatCurrency(currencyCode ?? 'USD', kpi.value)}
@@ -107,12 +107,12 @@ const PERIOD_TOGGLE = [
 function ChartLegend({ ui }) {
   return (
     <div className="flex items-center gap-5">
-      <span className="flex items-center gap-2 text-xs font-normal text-[#121217]">
-        <span className="inline-block w-[14px] h-1 rounded-sm bg-[#26A95F]" />
+      <span className="flex items-center gap-2 text-xs font-normal text-[hsl(var(--foreground))]">
+        <span className="inline-block w-[14px] h-1 rounded-sm bg-[var(--status-success-fg)]" />
         {ui('bpRevenue')}
       </span>
-      <span className="flex items-center gap-2 text-xs font-normal text-[#121217]">
-        <span className="inline-block w-[14px] h-1 rounded-sm bg-[#F3164E]" />
+      <span className="flex items-center gap-2 text-xs font-normal text-[hsl(var(--foreground))]">
+        <span className="inline-block w-[14px] h-1 rounded-sm bg-[hsl(var(--destructive))]" />
         {ui('bpExpenses')}
       </span>
     </div>
@@ -154,7 +154,7 @@ function ChartDialog({ open, onOpenChange, trend, period, currencyCode, ui }) {
                     onClick={() => setChartPeriod(opt.value)}
                     className={`px-3 py-1 rounded-md text-sm font-medium transition-colors ${
                       chartPeriod === opt.value
-                        ? 'bg-card text-blue-600 shadow-sm'
+                        ? 'bg-card text-status-info-foreground shadow-sm'
                         : 'text-muted-foreground hover:text-foreground'
                     }`}
                   >
@@ -212,7 +212,7 @@ export default function ContactsSummaryWidget({ data, optionalProvider = false }
 
   return (
     <div className="px-2 pt-2">
-      <div className="flex flex-row items-center justify-between gap-5 border border-[#E8EAEF] rounded-lg px-3 py-2 min-h-14">
+      <div className="flex flex-row items-center justify-between gap-5 border border-[hsl(var(--border-subtle))] rounded-lg px-3 py-2 min-h-14">
         {loading ? (
           <>
             <div className="h-10 rounded bg-muted animate-pulse flex-1" />
@@ -233,9 +233,9 @@ export default function ContactsSummaryWidget({ data, optionalProvider = false }
         <button
           type="button"
           onClick={() => setChartOpen(true)}
-          className="shrink-0 flex items-center gap-1 px-2 py-1 h-8 bg-[#F5F7F9] rounded-lg text-sm font-medium text-[#121217] hover:brightness-95 transition-all"
+          className="shrink-0 flex items-center gap-1 px-2 py-1 h-8 bg-[hsl(var(--muted))] rounded-lg text-sm font-medium text-[hsl(var(--foreground))] hover:brightness-95 transition-all"
         >
-          <LineChart className="h-5 w-5 text-[#828FA3]" data-testid="LineChart__22ed51" />
+          <LineChart className="h-5 w-5 text-[hsl(var(--text-disabled))]" data-testid="LineChart__22ed51" />
           {ui('bpViewChart')}
         </button>
       </div>

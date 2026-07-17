@@ -19,7 +19,7 @@ export function Field({ label, required, className = '', children }) {
         <UiLabel
           className="text-sm font-medium text-foreground"
           data-testid="UiLabel__7183e9">
-          {label}{required ? <span className="ml-0.5 text-red-500">*</span> : null}
+          {label}{required ? <span className="ml-0.5 text-destructive">*</span> : null}
         </UiLabel>
       ) : null}
       {children}
@@ -182,18 +182,18 @@ export function LookupPicker({ value, onChange, useLookup, placeholder = 'Buscar
         sideOffset={4}
         onOpenAutoFocus={(e) => e.preventDefault()}
         onFocusOutside={(e) => e.preventDefault()}
-        className="max-h-56 overflow-auto rounded-lg border border-[#D1D4DB] bg-card p-0 shadow-lg"
+        className="max-h-56 overflow-auto rounded-lg border border-[hsl(var(--border-control))] bg-card p-0 shadow-lg"
         style={{ width: 'var(--radix-popover-trigger-width)' }}
         data-testid="PopoverContent__7183e9">
         {loading && results.length === 0 ? (
-          <div className="px-3 py-2 text-sm text-[#6C6C89]">…</div>
+          <div className="px-3 py-2 text-sm text-[hsl(var(--muted-foreground))]">…</div>
         ) : null}
         {results.map((r) => (
           <button
             key={r.id}
             type="button"
             onClick={() => { onChange(r); setOpen(false); }}
-            className="block w-full px-3 py-2 text-left text-sm text-[#121217] hover:bg-[#F5F7F9]"
+            className="block w-full px-3 py-2 text-left text-sm text-[hsl(var(--foreground))] hover:bg-[hsl(var(--muted))]"
           >
             {r.name}
           </button>
@@ -205,7 +205,7 @@ export function LookupPicker({ value, onChange, useLookup, placeholder = 'Buscar
 
 export function Note({ children }) {
   return (
-    <div className="flex items-start gap-2 rounded-lg border border-[#E8EAEF] bg-card px-3 py-2.5 text-xs leading-[17px] text-[#6C6C89] [&_b]:font-semibold [&_b]:text-[#121217]">
+    <div className="flex items-start gap-2 rounded-lg border border-[hsl(var(--border-subtle))] bg-card px-3 py-2.5 text-xs leading-[17px] text-[hsl(var(--muted-foreground))] [&_b]:font-semibold [&_b]:text-[hsl(var(--foreground))]">
       {children}
     </div>
   );
@@ -213,7 +213,7 @@ export function Note({ children }) {
 
 export function SectionLabel({ children }) {
   return (
-    <div className="mb-3 mt-[18px] text-xs font-bold uppercase leading-4 tracking-[0.06em] text-[#8A8AA3] first:mt-1.5">
+    <div className="mb-3 mt-[18px] text-xs font-bold uppercase leading-4 tracking-[0.06em] text-[hsl(var(--text-disabled))] first:mt-1.5">
       {children}
     </div>
   );

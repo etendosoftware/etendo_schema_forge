@@ -34,7 +34,7 @@ function resolveId(value) {
 function BlockingToggle({ label, value, onCheckedChange }) {
   return (
     <div className="flex flex-col gap-2">
-      <p className="text-sm font-medium text-[#121217]">{label}</p>
+      <p className="text-sm font-medium text-[hsl(var(--foreground))]">{label}</p>
       <div className="flex items-center gap-3 h-10">
         <PillToggle
           checked={value}
@@ -54,7 +54,7 @@ function DiscountSelect({ value, options, onChange, loading }) {
         <Tag size={13} className="text-muted-foreground" data-testid="Tag__7f0756" />
       </div>
       <select
-        className="h-10 w-full rounded-lg border border-[#D1D4DB] bg-card pl-8 pr-3 text-sm appearance-none cursor-pointer shadow-[0px_1px_2px_rgba(18,18,23,0.05)] transition-colors disabled:cursor-not-allowed"
+        className="h-10 w-full rounded-lg border border-[hsl(var(--border-control))] bg-card pl-8 pr-3 text-sm appearance-none cursor-pointer shadow-[0px_1px_2px_hsl(var(--foreground) / 0.05)] transition-colors disabled:cursor-not-allowed"
         value={value ?? ''}
         onChange={e => onChange(e.target.value || null)}
         disabled={loading}
@@ -274,7 +274,7 @@ export default function BillingPreferencesForm(props) {
       ) : (
         <>
           {/* ── Cliente ───────────────────────────────────────────────────── */}
-          <div className="bg-[#F5F7F9] rounded-lg p-3 flex flex-col gap-3">
+          <div className="bg-[hsl(var(--muted))] rounded-lg p-3 flex flex-col gap-3">
             <SquareCheckbox
               label={ui('customer')}
               checked={!!data?.customer}
@@ -310,7 +310,7 @@ export default function BillingPreferencesForm(props) {
           </div>
 
           {/* ── Proveedor ─────────────────────────────────────────────────── */}
-          <div className="bg-[#F5F7F9] rounded-lg p-3 flex flex-col gap-3">
+          <div className="bg-[hsl(var(--muted))] rounded-lg p-3 flex flex-col gap-3">
             <SquareCheckbox
               label={ui('vendor')}
               checked={!!data?.vendor}

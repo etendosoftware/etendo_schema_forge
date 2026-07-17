@@ -36,8 +36,8 @@ function InicioTab({ onStartChat, onSwitchTab, onClose }) {
             <div className="sc-e-sub">{ui('supportTeamHelpDesc')}</div>
           </div>
           <div className="sc-avatars">
-            <div className="sc-av" style={{ background: '#F4F1FD', color: '#4316CA' }}>J</div>
-            <div className="sc-av" style={{ background: '#FFF2EE', color: '#EB3A00' }}>L</div>
+            <div className="sc-av" style={{ background: 'var(--status-info-bg)', color: 'var(--status-info-fg)' }}>J</div>
+            <div className="sc-av" style={{ background: 'var(--status-warning-bg)', color: 'var(--status-warning-fg)' }}>L</div>
             <div className="sc-av bot"><ValerIATile size={20} radius={4} data-testid="ValerIATile__4d85ab" /></div>
           </div>
         </div>

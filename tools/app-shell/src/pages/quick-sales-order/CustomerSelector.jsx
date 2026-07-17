@@ -77,7 +77,7 @@ export default function CustomerSelector({ selected, onSelect, customers = [], i
               >
                 <div
                   className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-medium text-white"
-                  style={{ backgroundColor: c.isAnonymous ? '#94a3b8' : '#6366f1' }}
+                  style={{ backgroundColor: c.isAnonymous ? 'hsl(var(--text-disabled))' : 'hsl(var(--primary))' }}
                 >
                   {c.isAnonymous ? '?' : c.name.charAt(0)}
                 </div>

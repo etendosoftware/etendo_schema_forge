@@ -99,7 +99,7 @@ export default function PaymentPanel({
         {amountTendered > 0 && (
           <div className="flex items-center justify-between rounded-lg bg-muted/50 px-3 py-2">
             <span className="text-sm font-medium text-muted-foreground">{ui('qsoChange')}</span>
-            <span className={`text-lg font-bold ${change >= 0 ? 'text-emerald-600' : 'text-destructive'}`}>
+            <span className={`text-lg font-bold ${change >= 0 ? 'text-status-success-foreground' : 'text-destructive'}`}>
               {change.toFixed(2)} &euro;
             </span>
           </div>

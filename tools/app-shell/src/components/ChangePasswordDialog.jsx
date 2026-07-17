@@ -115,7 +115,7 @@ export function ChangePasswordDialog({ open, onOpenChange, onSuccess }) {
           </div>
 
           {error && (
-            <div className="rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-sm font-medium text-rose-600">
+            <div className="rounded-md border border-destructive bg-destructive px-3 py-2 text-sm font-medium text-destructive">
               {error}
             </div>
           )}

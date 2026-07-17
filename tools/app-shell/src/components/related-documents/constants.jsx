@@ -74,11 +74,11 @@ export const CHIP_ICONS = {
 };
 
 export const CHIP_COLORS = {
-  shipment: 'text-blue-600',
+  shipment: 'text-status-info-foreground',
   invoice: 'text-purple-600',
-  payment: 'text-emerald-600',
-  quotation: 'text-amber-600',
-  order: 'text-indigo-600',
+  payment: 'text-status-success-foreground',
+  quotation: 'text-status-warning-foreground',
+  order: 'text-status-info-foreground',
   receipt: 'text-teal-600',
-  returnDoc: 'text-orange-600',
+  returnDoc: 'text-status-warning-foreground',
 };

@@ -1,18 +1,18 @@
 /* not-posted-documents.css — Not Posted Documents window styles (npd- prefix). */
 
 :root {
-  --npd-gray-50:    #F7F7F8;
-  --npd-gray-100:   #E8E8ED;
+  --npd-gray-50:    hsl(var(--muted));
+  --npd-gray-100:   hsl(var(--border-subtle));
   --npd-gray-200:   #D1D1DB;
-  --npd-gray-400:   #8A8AA3;
-  --npd-gray-600:   #55556D;
-  --npd-gray-700:   #3F3F50;
-  --npd-gray-800:   #282833;
-  --npd-blue-600:   #0075AD;
-  --npd-green-50:   #EEFBF4;
-  --npd-green-600:  #17913A;
-  --npd-red-50:     #FEF0F4;
-  --npd-red-700:    #D50B3E;
+  --npd-gray-400:   hsl(var(--text-disabled));
+  --npd-gray-600:   hsl(var(--muted-foreground));
+  --npd-gray-700:   hsl(var(--muted-foreground));
+  --npd-gray-800:   hsl(var(--foreground));
+  --npd-blue-600:   var(--status-info-fg);
+  --npd-green-50:   var(--status-success-bg);
+  --npd-green-600:  var(--status-success-fg);
+  --npd-red-50:     var(--status-destructive-bg);
+  --npd-red-700:    hsl(var(--destructive));
   --npd-radius:     8px;
 }
 
@@ -34,7 +34,7 @@
   align-items: flex-end;
   gap: 10px;
   padding: 12px 16px;
-  background: #fff;
+  background: hsl(var(--card));
   border-bottom: 1px solid var(--npd-gray-100);
   flex-shrink: 0;
 }
@@ -61,7 +61,7 @@
   border: 1px solid var(--npd-gray-200);
   border-radius: 6px;
   font-size: 13px;
-  background: #fff;
+  background: hsl(var(--card));
   color: var(--npd-gray-800);
   outline: none;
   cursor: pointer;
@@ -80,7 +80,7 @@
   align-items: center;
   justify-content: space-between;
   padding: 8px 16px;
-  background: #fff;
+  background: hsl(var(--card));
   border-bottom: 1px solid var(--npd-gray-100);
   flex-shrink: 0;
 }
@@ -117,11 +117,11 @@
 
 .npd-btn-primary {
   background: var(--npd-blue-600);
-  color: #fff;
+  color: hsl(var(--card));
 }
 
 .npd-btn-primary:hover:not(:disabled) {
-  background: #006090;
+  background: var(--status-info-fg);
 }
 
 .npd-btn-ghost {
@@ -151,7 +151,7 @@
 .npd-table thead th {
   position: sticky;
   top: 0;
-  background: #fff;
+  background: hsl(var(--card));
   z-index: 1;
   padding: 8px 12px;
   text-align: left;
@@ -184,7 +184,7 @@
 }
 
 .npd-table tbody tr.is-selected {
-  background: #EFF6FF;
+  background: var(--status-info-bg);
 }
 
 .npd-table tbody td {
@@ -257,7 +257,7 @@
   border: 1px solid var(--npd-gray-200);
   border-radius: 6px;
   font-size: 13px;
-  background: #fff;
+  background: hsl(var(--card));
   color: var(--npd-gray-800);
   cursor: pointer;
   text-align: left;
@@ -288,10 +288,10 @@
   top: calc(100% + 4px);
   left: 0;
   min-width: 100%;
-  background: #fff;
+  background: hsl(var(--card));
   border: 1px solid var(--npd-gray-200);
   border-radius: 6px;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.10);
+  box-shadow: 0 4px 12px hsl(var(--foreground) / 0.10);
   z-index: 100;
   padding: 4px 0;
 }

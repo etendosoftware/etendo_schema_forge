@@ -218,7 +218,7 @@ export default function PriceListProductPrices({ recordId, data, token, apiBaseU
           )}
 
           {canAddProducts && !adding && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, borderTop: '0.5px solid var(--color-border-tertiary, #e5e7eb)', padding: '10px 16px' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, borderTop: '0.5px solid var(--color-border-tertiary, hsl(var(--border-subtle)))', padding: '10px 16px' }}>
               <AddLineButton
                 onClick={() => { setAdding(true); closeSidePanel(); }}
                 label={ui('addEntity', { label: tMenu('Product') })}

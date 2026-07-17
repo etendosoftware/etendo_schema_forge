@@ -3,24 +3,24 @@ import { useUI } from '@/i18n/index.js';
 
 // ─── Design tokens (mapped from Etendo design system) ───────────────────────
 const T = {
-  ink:       '#121217',
-  fg1:       '#121217',
-  fg2:       '#3F3F50',
-  fg3:       '#6C6C89',
-  fg4:       '#8A8AA3',
+  ink:       'hsl(var(--foreground))',
+  fg1:       'hsl(var(--foreground))',
+  fg2:       'hsl(var(--muted-foreground))',
+  fg3:       'hsl(var(--muted-foreground))',
+  fg4:       'hsl(var(--text-disabled))',
   border2:   '#D1D1DB',
-  bgSubtle:  '#F7F7F8',
-  successBg: '#EEFBF4',
-  successFg: '#17663A',
-  yellowTop: '#F8D414',
-  yellowBot: '#FFE356',
+  bgSubtle:  'hsl(var(--muted))',
+  successBg: 'var(--status-success-bg)',
+  successFg: 'var(--status-success-fg)',
+  yellowTop: 'hsl(var(--primary))',
+  yellowBot: 'hsl(var(--primary))',
   // NPS segments
-  detractorBg: '#FEF0F4', detractorFg: '#D50B3E', detractorRing: '#FBB1C4',
-  passiveBg:   '#FFF9EB', passiveFg:   '#C28800', passiveRing:   '#FFDA85',
-  promoterBg:  '#EEFBF4', promoterFg:  '#17663A', promoterRing:  '#84E4AE',
+  detractorBg: 'var(--status-destructive-bg)', detractorFg: 'hsl(var(--destructive))', detractorRing: 'hsl(var(--destructive) / 0.3)',
+  passiveBg:   'var(--status-warning-bg)', passiveFg:   'var(--status-warning-fg)', passiveRing:   'var(--status-warning-border)',
+  promoterBg:  'var(--status-success-bg)', promoterFg:  'var(--status-success-fg)', promoterRing:  'var(--status-success-border)',
   // Stars
-  starFill:    '#FFC233',
-  starStroke:  '#E2A410',
+  starFill:    'var(--status-warning-fg)',
+  starStroke:  'var(--status-warning-fg)',
   starEmpty:   '#D1D1DB',
 };
 
@@ -113,7 +113,7 @@ function NPSScale({ value, onChange, labelLow, labelHigh }) {
                 aspectRatio: '1/1', borderRadius: 8,
                 border: sel ? `2px solid ${c.fg}` : `1px solid ${c.ring}`,
                 background: sel ? c.fg : c.bg,
-                color: sel ? '#fff' : c.fg,
+                color: sel ? 'hsl(var(--card))' : c.fg,
                 font: font(13, 600),
                 cursor: 'pointer', transition: 'all .15s',
               }}
@@ -197,8 +197,8 @@ function ChipGroup({ options, value, onChange }) {
             style={{
               padding: '6px 12px', borderRadius: 999,
               border: sel ? `1.5px solid ${T.ink}` : `1px solid ${T.border2}`,
-              background: sel ? T.ink : '#fff',
-              color: sel ? '#fff' : T.fg2,
+              background: sel ? T.ink : 'hsl(var(--card))',
+              color: sel ? 'hsl(var(--card))' : T.fg2,
               font: font(12, 500), cursor: 'pointer',
             }}
           >
@@ -236,7 +236,7 @@ function PrimaryBtn({ children, onClick, disabled }) {
         height: 38, padding: '0 16px', borderRadius: 8,
         border: 0,
         background: disabled ? T.bgSubtle : T.ink,
-        color: disabled ? T.fg4 : '#fff',
+        color: disabled ? T.fg4 : 'hsl(var(--card))',
         font: font(13, 600), cursor: disabled ? 'not-allowed' : 'pointer',
         display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6,
         transition: 'all .15s',
@@ -322,7 +322,7 @@ function NPSSurveyContent({ phase, setPhase, score, setScore, feedback, setFeedb
           style={{
             width: '100%', resize: 'none',
             padding: '10px 12px', borderRadius: 10, border: `1px solid ${T.border2}`,
-            font: font(13, 400, 18), color: T.fg1, background: '#fff',
+            font: font(13, 400, 18), color: T.fg1, background: 'hsl(var(--card))',
             outline: 'none', boxSizing: 'border-box',
           }}
         />
@@ -390,7 +390,7 @@ function CSATSurveyContent({ survey, phase, setPhase, score, setScore, feedback,
           style={{
             width: '100%', resize: 'none',
             padding: '10px 12px', borderRadius: 10, border: `1px solid ${T.border2}`,
-            font: font(13, 400, 18), color: T.fg1, background: '#fff',
+            font: font(13, 400, 18), color: T.fg1, background: 'hsl(var(--card))',
             outline: 'none', boxSizing: 'border-box',
           }}
         />
@@ -489,7 +489,7 @@ export function SurveyModal({ survey, open, onRespond, onDismiss, onClose }) {
         style={{
           position: 'relative',
           width: 520, maxWidth: '92vw',
-          background: '#fff', borderRadius: 16,
+          background: 'hsl(var(--card))', borderRadius: 16,
           boxShadow: '0 24px 64px rgba(16,20,28,.18), 0 4px 12px rgba(16,20,28,.06)',
           animation: 'sf-survey-pop .25s cubic-bezier(.2,.9,.3,1.2)',
         }}
