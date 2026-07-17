@@ -160,3 +160,10 @@ pipeline-generated with no override mechanism that fits the new `dimensionsPanel
 — only the heavier, fully self-fetching `customLinesComponent`/`CustomLines` contract exists.
 Back to pre-ETP-4543 state pending a coordinator decision — see `docs/feedback.md`'s ETP-4543
 supersession note.
+
+**Resolved (ETP-4529 generator support):** `generate-frontend.js`'s `generateTableComponent`
+(`schema_forge_core`) now emits a synthetic `dimensionsPanel` column directly from
+`decisions.json` — no custom override needed. `lines.project.dimensionsPanel` and
+`lines.costcenter.dimensionsPanel` are now `true` (grid stays `false`); the pipeline-generated
+`GoodsReceiptLineTable.jsx` renders the expand-row "Dimensiones contables" panel for existing
+rows. See `docs/decisions-reference.md` (`dimensionsPanel`) and `docs/ui-customization.md` §14b.

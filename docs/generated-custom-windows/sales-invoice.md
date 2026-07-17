@@ -445,3 +445,14 @@ window at all (`HeaderPage.jsx` renders the plain generated `LinesTable.jsx` via
 `DetailTable={LinesTable}`, not `InvoiceLinesTable.jsx` via `CustomLines` — neither window's
 `decisions.json` sets `window.customLinesComponent`) — see `docs/feedback.md`'s ETP-4543
 supersession note.
+
+### Generator support closes the reachability gap (ETP-4529 follow-up)
+
+Since `InvoiceLinesTable.jsx` is dead code for this window (the point above), the fix is at the
+generator level, not in that component: `generate-frontend.js`'s `generateTableComponent`
+(`schema_forge_core`) now emits the `dimensionsPanel` column directly from `decisions.json` for
+ANY pipeline-generated lines table. `lines.project.dimensionsPanel` and
+`lines.costcenter.dimensionsPanel` are `true` (grid stays `false`); the actually-rendered
+generated `LinesTable.jsx` now declares the synthetic column, so the "Dimensiones contables"
+panel renders for real on this window regardless of the `InvoiceLinesTable.jsx` gap above. See
+`docs/decisions-reference.md` (`dimensionsPanel`) and `docs/ui-customization.md` §14b.

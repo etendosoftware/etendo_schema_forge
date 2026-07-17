@@ -332,7 +332,8 @@
         "costcenter": {
           "visibility": "editable",
           "grid": false,
-          "reason": "ETP-4529 — reverted ETP-4543's plain grid column, same rationale as lines.project above."
+          "reason": "ETP-4529 — accounting dimension. Collected into the generator's synthetic dimensionsPanel column (see docs/decisions-reference.md) instead of a plain grid column; grid stays false, dimensionsPanel: true routes it into the expand-row \"Dimensiones contables\" UX.",
+          "dimensionsPanel": true
         },
         "stDimension": {
           "visibility": "discarded"
@@ -355,7 +356,8 @@
         "project": {
           "visibility": "editable",
           "grid": false,
-          "reason": "ETP-4529 — reverted ETP-4543's plain grid column. The user asked for the same expand-row \"Dimensiones contables\" UX Amortización already has instead of an always-rendered column; that replacement needs a lines-grid custom-override mechanism this pipeline-generated window doesn't have yet (only `customLinesComponent`'s fully self-fetching CustomLines contract exists, which is a much heavier rebuild — see docs/generated-custom-windows/goods-shipment.md). Escalated to the coordinator; grid stays false until resolved."
+          "reason": "ETP-4529 — accounting dimension. Collected into the generator's synthetic dimensionsPanel column (see docs/decisions-reference.md) instead of a plain grid column; grid stays false, dimensionsPanel: true routes it into the expand-row \"Dimensiones contables\" UX.",
+          "dimensionsPanel": true
         },
         "asset": {
           "visibility": "discarded"

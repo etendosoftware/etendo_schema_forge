@@ -458,3 +458,11 @@ were superseded by a single `type: 'dimensionsPanel'` column on `InvoiceLinesTab
 same shared component both windows use) — full write-up, including a wiring gap discovered
 while doing this (`InvoiceLinesTable.jsx` is not currently reachable from either window's
 running app), in `sales-invoice.md` and `docs/feedback.md`'s ETP-4543 supersession note.
+
+**Resolved (ETP-4529 generator support):** since `InvoiceLinesTable.jsx` doesn't actually render
+for this window either, `generate-frontend.js`'s `generateTableComponent` (`schema_forge_core`)
+now emits the `dimensionsPanel` column directly from `decisions.json`. `lines.project.dimensionsPanel`
+and `lines.costcenter.dimensionsPanel` are `true` (grid stays `false`); the actually-rendered
+generated `LinesTable.jsx` declares the synthetic column, so the panel renders for real — see
+`sales-invoice.md`'s matching note, `docs/decisions-reference.md` (`dimensionsPanel`), and
+`docs/ui-customization.md` §14b.
