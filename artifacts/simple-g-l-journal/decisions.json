@@ -93,23 +93,23 @@
         },
         "businessPartner": {
           "visibility": "editable",
-          "section": "other",
-          "reason": "ETP-4529 — accounting dimension, config-gated (@ACCT_DIMENSION_DISPLAY@). Supersedes the prior 'not part of the simplified 7-field header form' discard."
+          "section": "principal",
+          "reason": "ETP-4529 — accounting dimension, config-gated (@ACCT_DIMENSION_DISPLAY@). Supersedes the prior 'not part of the simplified 7-field header form' discard. Moved from \"other\" to \"principal\" — the config-gated header dimension fields were rendering in the secondary/collapsed area instead of the main visible form."
         },
         "product": {
           "visibility": "editable",
-          "section": "other",
-          "reason": "ETP-4529 — accounting dimension, config-gated (@ACCT_DIMENSION_DISPLAY@). Supersedes the prior 'not part of the simplified 7-field header form' discard."
+          "section": "principal",
+          "reason": "ETP-4529 — accounting dimension, config-gated (@ACCT_DIMENSION_DISPLAY@). Supersedes the prior 'not part of the simplified 7-field header form' discard. Moved from \"other\" to \"principal\", same rationale as header.businessPartner above."
         },
         "project": {
           "visibility": "editable",
-          "section": "other",
-          "reason": "ETP-4529 — accounting dimension, config-gated (@ACCT_DIMENSION_DISPLAY@). Supersedes the prior 'not part of the simplified 7-field header form' discard."
+          "section": "principal",
+          "reason": "ETP-4529 — accounting dimension, config-gated (@ACCT_DIMENSION_DISPLAY@). Supersedes the prior 'not part of the simplified 7-field header form' discard. Moved from \"other\" to \"principal\", same rationale as header.businessPartner above."
         },
         "costCenter": {
           "visibility": "editable",
-          "section": "other",
-          "reason": "ETP-4529 — accounting dimension, config-gated (@ACCT_DIMENSION_DISPLAY@). Supersedes the prior 'not part of the simplified 7-field header form' discard."
+          "section": "principal",
+          "reason": "ETP-4529 — accounting dimension, config-gated (@ACCT_DIMENSION_DISPLAY@). Supersedes the prior 'not part of the simplified 7-field header form' discard. Moved from \"other\" to \"principal\", same rationale as header.businessPartner above."
         },
         "asset": {
           "visibility": "discarded",

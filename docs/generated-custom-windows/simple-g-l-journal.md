@@ -132,3 +132,13 @@ config-gated at runtime. Unlike the inlineEditable windows (sales-invoice, purch
 goods-shipment, goods-receipt, physical-inventory, goods-movements), this window uses the
 classic `linesLayout`, so `LinesForm.jsx`'s sidebar always mounts and the lines-scoped evaluator
 fix is fully effective here — no residual UI-surface limitation.
+
+### Header section placement fix (ETP-4529 follow-up)
+
+All four header dimension fields — `businessPartner`, `product`, `project`, `costCenter` (all
+already present and config-gated, confirmed — no AD-level gap) — had `"section": "other"`
+instead of `"section": "principal"`, making them render in the secondary/collapsed area instead
+of the main visible form, even though the header design reversal above intentionally promoted
+them from `discarded`. Fixed by changing `section` to `"principal"` for all four fields in
+`decisions.json` and regenerating; confirmed in `contract.json` (`section: "principal"`) and in
+the generated `GLJournalForm.jsx`.

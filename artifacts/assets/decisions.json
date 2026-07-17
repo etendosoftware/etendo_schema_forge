@@ -249,8 +249,8 @@
         },
         "project": {
           "visibility": "editable",
-          "section": "other",
-          "reason": "ETP-4529 — accounting dimension, config-gated (raw AD: @$Element_PJ@='Y' & @IsDepreciated@='Y')."
+          "section": "principal",
+          "reason": "ETP-4529 — accounting dimension, config-gated (raw AD: @$Element_PJ@='Y' & @IsDepreciated@='Y'). Moved from \"other\" to \"principal\" — the config-gated dimension field was rendering in the secondary/collapsed area instead of the main visible form."
         },
         "eTADASCostCenter": {
           "visibility": "discarded",

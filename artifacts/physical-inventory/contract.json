@@ -1,8 +1,8 @@
 {
-  "version": "0.30.0",
+  "version": "0.31.0",
   "generatedAt": "2026-06-29T12:25:17.116Z",
-  "updatedAt": "2026-07-16T14:28:23.756Z",
-  "checksum": "883036a0557ee399",
+  "updatedAt": "2026-07-17T14:02:48.484Z",
+  "checksum": "20435ffcaf8823d0",
   "frontendContract": {
     "window": {
       "id": "168",
@@ -250,7 +250,7 @@
             "form": true,
             "reference": "Project",
             "inputMode": "search",
-            "section": "other",
+            "section": "principal",
             "displayLogic": {
               "raw": "@ACCT_DIMENSION_DISPLAY@",
               "evaluable": false,
@@ -276,7 +276,7 @@
             "form": true,
             "reference": "Costcenter",
             "inputMode": "selector",
-            "section": "other",
+            "section": "principal",
             "displayLogic": {
               "raw": "@ACCT_DIMENSION_DISPLAY@",
               "evaluable": false,

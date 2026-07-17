@@ -113,3 +113,11 @@ all, so the lines-scoped part of the fix and the inlineEditable line-rendering l
 `sales-invoice.md`) don't apply here — there is no such field in this window's `lines` entity
 for that gap to affect in the first place, so the header fix is the whole story for this
 window.
+
+### Header section placement fix (ETP-4529 follow-up)
+
+`header.project` and `header.costCenter` (both already present and config-gated, confirmed —
+no AD-level gap) had `"section": "other"` instead of `"section": "principal"`, making them
+render in the secondary/collapsed area instead of the main visible form. Fixed by changing
+`section` to `"principal"` for both fields in `decisions.json` and regenerating; confirmed in
+`contract.json` (`section: "principal"`) and in the generated `MovementForm.jsx`.

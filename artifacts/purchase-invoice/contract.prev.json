@@ -1,8 +1,8 @@
 {
-  "version": "0.67.0",
+  "version": "0.68.0",
   "generatedAt": "2026-04-30T15:42:46.722Z",
-  "updatedAt": "2026-07-06T13:19:15.454Z",
-  "checksum": "ba5b71d06c8590f7",
+  "updatedAt": "2026-07-16T14:28:23.933Z",
+  "checksum": "e9742b37f249cbef",
   "frontendContract": {
     "window": {
       "id": "183",
@@ -787,7 +787,7 @@
             "visibility": "editable",
             "required": false,
             "grid": false,
-            "form": false,
+            "form": true,
             "reference": "Project",
             "inputMode": "search",
             "section": "other",
@@ -802,6 +802,38 @@
             },
             "callout": {
               "className": "org.openbravo.erpCommon.ad_callouts.SE_Invoice_Project"
+            },
+            "displayLogic": {
+              "raw": "@ACCT_DIMENSION_DISPLAY@",
+              "evaluable": false,
+              "reason": "server-macro",
+              "js": null
+            },
+            "readOnlyLogic": {
+              "raw": "@Posted@='Y'",
+              "evaluable": true,
+              "js": "record['posted'] === true"
+            }
+          },
+          {
+            "name": "costcenter",
+            "apiKey": "costcenter",
+            "column": "C_Costcenter_ID",
+            "label": "Cost Center",
+            "type": "foreignKey",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": false,
+            "grid": false,
+            "form": true,
+            "reference": "CostCenter",
+            "inputMode": "selector",
+            "section": "other",
+            "displayLogic": {
+              "raw": "@ACCT_DIMENSION_DISPLAY@",
+              "evaluable": false,
+              "reason": "server-macro",
+              "js": null
             },
             "readOnlyLogic": {
               "raw": "@Posted@='Y'",
@@ -1907,9 +1939,15 @@
             "visibility": "editable",
             "required": false,
             "grid": false,
-            "form": false,
+            "form": true,
             "reference": "Project",
             "inputMode": "search",
+            "displayLogic": {
+              "raw": "@ACCT_DIMENSION_DISPLAY@",
+              "evaluable": false,
+              "reason": "server-macro",
+              "js": null
+            },
             "readOnlyLogic": {
               "raw": "@Posted@='Y'",
               "evaluable": true,
@@ -1926,9 +1964,15 @@
             "visibility": "editable",
             "required": false,
             "grid": false,
-            "form": false,
+            "form": true,
             "reference": "CostCenter",
             "inputMode": "selector",
+            "displayLogic": {
+              "raw": "@ACCT_DIMENSION_DISPLAY@",
+              "evaluable": false,
+              "reason": "server-macro",
+              "js": null
+            },
             "readOnlyLogic": {
               "raw": "@Posted@='Y'",
               "evaluable": true,
@@ -4884,7 +4928,7 @@
             "apiKey": "costcenter",
             "column": "C_Costcenter_ID",
             "type": "foreignKey",
-            "visibility": "discarded",
+            "visibility": "editable",
             "required": false
           },
           {
@@ -8945,6 +8989,14 @@
       },
       {
         "entity": "header",
+        "field": "costcenter",
+        "column": "C_Costcenter_ID",
+        "reference": "CostCenter",
+        "inputMode": "selector",
+        "url": "/sws/neo/purchase-invoice/header/selectors/costcenter"
+      },
+      {
+        "entity": "header",
         "field": "aeatsiiPurDescription",
         "column": "EM_Aeatsii_Pur_Description_ID",
         "reference": "aeatsii_description",
@@ -10178,6 +10230,14 @@
         "description": "Display logic for 'aeatsiiPurDescription' in header should have evaluable flag"
       },
       {
+        "id": "t-displaylogic-evaluable-header-costcenter",
+        "category": "displaylogic-evaluable",
+        "entity": "header",
+        "field": "costcenter",
+        "runner": "node",
+        "description": "Display logic for 'costcenter' in header should have evaluable flag"
+      },
+      {
         "id": "t-displaylogic-evaluable-header-etsgDateOperation",
         "category": "displaylogic-evaluable",
         "entity": "header",
@@ -10200,6 +10260,14 @@
         "field": "posted",
         "runner": "node",
         "description": "Display logic for 'posted' in header should have evaluable flag"
+      },
+      {
+        "id": "t-displaylogic-evaluable-header-project",
+        "category": "displaylogic-evaluable",
+        "entity": "header",
+        "field": "project",
+        "runner": "node",
+        "description": "Display logic for 'project' in header should have evaluable flag"
       },
       {
         "id": "t-displaylogic-evaluable-intrastat-conversionRate",
@@ -10226,6 +10294,14 @@
         "description": "Display logic for 'supplementaryUOM' in intrastat should have evaluable flag"
       },
       {
+        "id": "t-displaylogic-evaluable-lines-costcenter",
+        "category": "displaylogic-evaluable",
+        "entity": "lines",
+        "field": "costcenter",
+        "runner": "node",
+        "description": "Display logic for 'costcenter' in lines should have evaluable flag"
+      },
+      {
         "id": "t-displaylogic-evaluable-lines-grossUnitPrice",
         "category": "displaylogic-evaluable",
         "entity": "lines",
@@ -10240,6 +10316,14 @@
         "field": "listPrice",
         "runner": "node",
         "description": "Display logic for 'listPrice' in lines should have evaluable flag"
+      },
+      {
+        "id": "t-displaylogic-evaluable-lines-project",
+        "category": "displaylogic-evaluable",
+        "entity": "lines",
+        "field": "project",
+        "runner": "node",
+        "description": "Display logic for 'project' in lines should have evaluable flag"
       },
       {
         "id": "t-displaylogic-evaluable-paymentDetails-invoicePaid",
@@ -10314,6 +10398,14 @@
         "description": "Display logic for 'aeatsiiPurDescription' in header should be valid JS"
       },
       {
+        "id": "t-displaylogic-valid-header-costcenter",
+        "category": "displaylogic-valid",
+        "entity": "header",
+        "field": "costcenter",
+        "runner": "node",
+        "description": "Display logic for 'costcenter' in header should be valid JS"
+      },
+      {
         "id": "t-displaylogic-valid-header-etsgDateOperation",
         "category": "displaylogic-valid",
         "entity": "header",
@@ -10336,6 +10428,14 @@
         "field": "posted",
         "runner": "node",
         "description": "Display logic for 'posted' in header should be valid JS"
+      },
+      {
+        "id": "t-displaylogic-valid-header-project",
+        "category": "displaylogic-valid",
+        "entity": "header",
+        "field": "project",
+        "runner": "node",
+        "description": "Display logic for 'project' in header should be valid JS"
       },
       {
         "id": "t-displaylogic-valid-intrastat-conversionRate",
@@ -10362,6 +10462,14 @@
         "description": "Display logic for 'supplementaryUOM' in intrastat should be valid JS"
       },
       {
+        "id": "t-displaylogic-valid-lines-costcenter",
+        "category": "displaylogic-valid",
+        "entity": "lines",
+        "field": "costcenter",
+        "runner": "node",
+        "description": "Display logic for 'costcenter' in lines should be valid JS"
+      },
+      {
         "id": "t-displaylogic-valid-lines-grossUnitPrice",
         "category": "displaylogic-valid",
         "entity": "lines",
@@ -10376,6 +10484,14 @@
         "field": "listPrice",
         "runner": "node",
         "description": "Display logic for 'listPrice' in lines should be valid JS"
+      },
+      {
+        "id": "t-displaylogic-valid-lines-project",
+        "category": "displaylogic-valid",
+        "entity": "lines",
+        "field": "project",
+        "runner": "node",
+        "description": "Display logic for 'project' in lines should be valid JS"
       },
       {
         "id": "t-displaylogic-valid-paymentDetails-invoicePaid",
@@ -10784,6 +10900,14 @@
         "field": "chargeAmount",
         "runner": "node",
         "description": "Field 'chargeAmount' should be present in header"
+      },
+      {
+        "id": "t-field-presence-header-costcenter",
+        "category": "field-presence",
+        "entity": "header",
+        "field": "costcenter",
+        "runner": "node",
+        "description": "Field 'costcenter' should be present in header"
       },
       {
         "id": "t-field-presence-header-currency",
@@ -11978,6 +12102,14 @@
         "description": "Field 'chargeAmount' should have type 'number' in header"
       },
       {
+        "id": "t-field-type-header-costcenter",
+        "category": "field-type",
+        "entity": "header",
+        "field": "costcenter",
+        "runner": "node",
+        "description": "Field 'costcenter' should have type 'string' in header"
+      },
+      {
         "id": "t-field-type-header-currency",
         "category": "field-type",
         "entity": "header",
@@ -12914,6 +13046,14 @@
         "description": "Read-only logic for 'chargeAmount' in header should have evaluable flag"
       },
       {
+        "id": "t-readonlylogic-evaluable-header-costcenter",
+        "category": "readonlylogic-evaluable",
+        "entity": "header",
+        "field": "costcenter",
+        "runner": "node",
+        "description": "Read-only logic for 'costcenter' in header should have evaluable flag"
+      },
+      {
         "id": "t-readonlylogic-evaluable-header-currency",
         "category": "readonlylogic-evaluable",
         "entity": "header",
@@ -13424,6 +13564,14 @@
         "field": "chargeAmount",
         "runner": "node",
         "description": "Read-only logic for 'chargeAmount' in header should be valid JS"
+      },
+      {
+        "id": "t-readonlylogic-valid-header-costcenter",
+        "category": "readonlylogic-valid",
+        "entity": "header",
+        "field": "costcenter",
+        "runner": "node",
+        "description": "Read-only logic for 'costcenter' in header should be valid JS"
       },
       {
         "id": "t-readonlylogic-valid-header-currency",
@@ -14147,6 +14295,14 @@
         "field": "charge",
         "runner": "node",
         "description": "Selector endpoint for 'charge' in header should exist"
+      },
+      {
+        "id": "t-selector-endpoint-header-costcenter",
+        "category": "selector-endpoint",
+        "entity": "header",
+        "field": "costcenter",
+        "runner": "node",
+        "description": "Selector endpoint for 'costcenter' in header should exist"
       },
       {
         "id": "t-selector-endpoint-header-currency",
@@ -15315,14 +15471,6 @@
         "field": "copyFrom",
         "runner": "node",
         "description": "System field 'copyFrom' should exist in backend but not frontend for header"
-      },
-      {
-        "id": "t-system-field-header-costcenter",
-        "category": "system-field",
-        "entity": "header",
-        "field": "costcenter",
-        "runner": "node",
-        "description": "System field 'costcenter' should exist in backend but not frontend for header"
       },
       {
         "id": "t-system-field-header-createdBy",
@@ -16994,25 +17142,25 @@
       }
     ],
     "summary": {
-      "total": 940,
+      "total": 952,
       "byCategory": {
         "action-endpoint": 26,
         "crud-flags": 12,
         "default-value-type": 38,
-        "displaylogic-evaluable": 17,
-        "displaylogic-valid": 17,
-        "field-presence": 149,
-        "field-type": 149,
-        "readonlylogic-evaluable": 64,
-        "readonlylogic-valid": 64,
+        "displaylogic-evaluable": 21,
+        "displaylogic-valid": 21,
+        "field-presence": 150,
+        "field-type": 150,
+        "readonlylogic-evaluable": 65,
+        "readonlylogic-valid": 65,
         "rule-declared": 21,
         "searchable-filters": 6,
-        "selector-endpoint": 50,
-        "system-field": 315,
+        "selector-endpoint": 51,
+        "system-field": 314,
         "visibility": 12
       },
       "byRunner": {
-        "node": 940,
+        "node": 952,
         "junit": 0
       }
     }

@@ -1,8 +1,8 @@
 {
-  "version": "0.55.0",
+  "version": "0.56.0",
   "generatedAt": "2026-04-30T15:42:46.582Z",
-  "updatedAt": "2026-07-16T14:28:24.099Z",
-  "checksum": "30db1c770a217bb7",
+  "updatedAt": "2026-07-17T14:02:48.688Z",
+  "checksum": "a0e65ddb43f9061d",
   "frontendContract": {
     "window": {
       "id": "167",
@@ -616,7 +616,7 @@
             "form": true,
             "reference": "Project",
             "inputMode": "search",
-            "section": "other",
+            "section": "principal",
             "validationRule": {
               "code": "C_Project.projectstatus in ('OP', 'OR') and (C_Project.c_bpartner_id=@C_BPartner_ID@ or '@IsSOTrx@'='N') or C_Project.c_project_id = @c_project_id@",
               "contextParams": [],
@@ -654,7 +654,7 @@
             "form": true,
             "reference": "Costcenter",
             "inputMode": "selector",
-            "section": "other",
+            "section": "principal",
             "displayLogic": {
               "raw": "@ACCT_DIMENSION_DISPLAY@",
               "evaluable": false,

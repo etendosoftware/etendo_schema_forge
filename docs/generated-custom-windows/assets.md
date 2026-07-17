@@ -530,3 +530,10 @@ assertion covering the `useAccountingDimensionFields` wiring. `AssetsDetailPanel
 gained coverage for the config-driven filtering (dimension hidden when the evaluator returns
 `visibility.project === false`, section gated on `dimensionFields.length > 0`). All suites
 pass against the 1-field (`project`-only), config-driven behavior.
+
+### Header (`assets` entity) section placement fix (ETP-4529 follow-up)
+
+`assets.project` (this window's header-equivalent entity is named `assets`, not `header`) had
+`"section": "other"` instead of `"section": "principal"`. Fixed by changing `section` to
+`"principal"` in `decisions.json` and regenerating; confirmed in `contract.json`
+(`section: "principal"`) and in the generated `AssetsForm.jsx`.

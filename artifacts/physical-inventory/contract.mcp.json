@@ -1,8 +1,8 @@
 {
-  "version": "0.30.0",
+  "version": "0.31.0",
   "generatedAt": "2026-06-29T12:25:17.116Z",
   "updatedAt": "2026-07-16T14:28:23.756Z",
-  "contractChecksum": "883036a0557ee399",
+  "contractChecksum": "20435ffcaf8823d0",
   "apiPrediction": {
     "specName": "physical-inventory",
     "baseUrl": "/sws/neo/physical-inventory",
