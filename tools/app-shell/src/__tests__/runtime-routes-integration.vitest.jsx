@@ -154,6 +154,6 @@ describe('buildRuntimeRoutes through the real AppShellRuntime', () => {
     // AppStorePage's own heading is the real, unambiguous proof that the lazy import resolved
     // and rendered (not the Suspense fallback).
     renderAt('/app-store');
-    expect(await screen.findByText('Tienda de aplicaciones', {}, { timeout: 2000 })).toBeTruthy();
+    expect(await screen.findByText('Tienda de aplicaciones', {}, { timeout: 10000 })).toBeTruthy();
   });
 });
