@@ -476,7 +476,7 @@
           "form": false
         },
         "tbaiIssent": {
-          "visibility": "readOnly",
+          "visibility": "discarded",
           "form": false
         },
         "etvfacInvoiceStatus": {

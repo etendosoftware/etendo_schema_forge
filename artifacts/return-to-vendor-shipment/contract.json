@@ -1,7 +1,8 @@
 {
   "version": "0.21.0",
   "generatedAt": "2026-07-06T16:17:20.534Z",
-  "checksum": "e3e80dd38d7f01c5",
+  "updatedAt": "2026-07-08T14:54:47.093Z",
+  "checksum": "4ac58a0e2101c187",
   "frontendContract": {
     "window": {
       "id": "273673D2ED914C399A6C51DB758BE0F9",
@@ -38,7 +39,8 @@
         "enabled": false
       },
       "layoutType": "default",
-      "linesLayout": "inlineEditable"
+      "linesLayout": "inlineEditable",
+      "maxDetailLines": 0
     },
     "entities": {
       "returnToVendorShipment": {
@@ -604,7 +606,8 @@
       "sendDocument": {
         "enabled": false
       },
-      "linesLayout": "inlineEditable"
+      "linesLayout": "inlineEditable",
+      "maxDetailLines": 0
     },
     "entities": {
       "returnToVendorShipment": {

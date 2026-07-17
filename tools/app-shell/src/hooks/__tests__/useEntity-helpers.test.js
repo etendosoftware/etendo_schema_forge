@@ -114,6 +114,7 @@ const {
   pickMessage,
   pickMessageFromObject,
   applyContactNameDefaults,
+  applyContactsRequiredFields,
   parseCriteriaInto,
   normalizeDefaultValue,
   shouldSkipPayloadField,
@@ -273,6 +274,68 @@ describe('applyContactNameDefaults', () => {
     assert.equal(payload.name.length, 60);
     assert.equal(payload.username, expected.slice(0, 60));
     assert.equal(payload.username.length, 60);
+  });
+});
+
+describe('applyContactsRequiredFields', () => {
+  it('applies contact name defaults for a "contact" entity', () => {
+    const payload = { firstName: 'John', lastName: 'Doe' };
+    applyContactsRequiredFields('contact', payload, {});
+    assert.equal(payload.name, 'John Doe');
+  });
+
+  it('falls back businessPartner.name to source.name when payload lacks it', () => {
+    const payload = {};
+    applyContactsRequiredFields('businessPartner', payload, { name: 'Acme Corp' });
+    assert.equal(payload.name, 'Acme Corp');
+  });
+
+  it('defaults businessPartner.searchKey from source.name when absent', () => {
+    const payload = {};
+    applyContactsRequiredFields('businessPartner', payload, { name: 'Acme Corp' });
+    assert.equal(payload.searchKey, 'Acme Corp');
+  });
+
+  it('does NOT overwrite an existing searchKey', () => {
+    const payload = { searchKey: 'EXISTING' };
+    applyContactsRequiredFields('businessPartner', payload, { name: 'Acme Corp' });
+    assert.equal(payload.searchKey, 'EXISTING');
+  });
+
+  it('regression: truncates a long derived searchKey to 40 chars (C_BPartner.Value AD column limit)', () => {
+    // Reproduced via a real create with a 48-char commercial name:
+    // "Value too long. Length 48, maximum allowed 40".
+    const longName = 'a'.repeat(48);
+    const payload = {};
+    applyContactsRequiredFields('businessPartner', payload, { name: longName });
+    assert.equal(payload.searchKey, longName.slice(0, 40));
+    assert.equal(payload.searchKey.length, 40);
+  });
+
+  it('regression: does not truncate payload.name itself (only searchKey), Name has more headroom (60)', () => {
+    const longName = 'b'.repeat(48);
+    const payload = {};
+    applyContactsRequiredFields('businessPartner', payload, { name: longName });
+    assert.equal(payload.name, longName);
+    assert.equal(payload.name.length, 48);
+  });
+
+  it('truncates the source.searchKey fallback too (not just source.name)', () => {
+    const longSearchKey = 'c'.repeat(45);
+    const payload = {};
+    applyContactsRequiredFields('businessPartner', payload, { searchKey: longSearchKey, name: 'Short Name' });
+    assert.equal(payload.searchKey, longSearchKey.slice(0, 40));
+    assert.equal(payload.searchKey.length, 40);
+  });
+
+  it('leaves payload untouched for entities that are not contact/businessPartner', () => {
+    const payload = { name: 'Product X' };
+    const result = applyContactsRequiredFields('product', payload, {});
+    assert.deepEqual(result, { name: 'Product X' });
+  });
+
+  it('returns payload unchanged for non-object input', () => {
+    assert.equal(applyContactsRequiredFields('businessPartner', null, {}), null);
   });
 });
 

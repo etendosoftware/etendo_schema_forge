@@ -31,7 +31,7 @@ vi.mock('@/lib/formatAmount.js', () => ({ formatAmount: (v) => String(v) }));
 vi.mock('@/lib/applyCalloutUpdates.js', () => ({ applyCalloutUpdates: () => ({}) }));
 vi.mock('@/lib/linesColumnWidth.js', () => ({ columnMinWidthPx: () => 80 }));
 vi.mock('./ProductSearchDrawer.jsx', () => ({ default: () => null }));
-vi.mock('./InternalConsumptionProductSearchDrawer.jsx', () => ({ default: () => null }));
+vi.mock('./ProductStockSearchDrawer.jsx', () => ({ default: () => null }));
 vi.mock('./SelectorInput.jsx', () => ({ SelectorInput: () => null }));
 vi.mock('./RowQuickActions.jsx', () => ({ default: () => null }));
 vi.mock('sonner', () => ({ toast: { error: vi.fn(), success: vi.fn() } }));

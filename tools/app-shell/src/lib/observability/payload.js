@@ -30,6 +30,7 @@ const SAFE_EVENT_PROPERTY_KEYS = new Set([
   'attempt',
   'category',
   'channel',
+  'client',
   'component',
   'correctCount',
   'count',

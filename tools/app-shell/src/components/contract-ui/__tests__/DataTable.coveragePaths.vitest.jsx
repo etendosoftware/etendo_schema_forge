@@ -103,7 +103,7 @@ vi.mock('../ProductSearchDrawer.jsx', () => ({
   ),
 }));
 
-vi.mock('../InternalConsumptionProductSearchDrawer.jsx', () => ({
+vi.mock('../ProductStockSearchDrawer.jsx', () => ({
   default: ({ open }) => open ? <div data-testid="internal-consumption-drawer" /> : null,
 }));
 

@@ -46,10 +46,6 @@
           "visibility": "system",
           "derivation": "fromParent"
         },
-        "verifactuConfig": {
-          "visibility": "system",
-          "derivation": "fromConfig"
-        },
         "creationDate": {
           "visibility": "system",
           "derivation": "fromConfig"
