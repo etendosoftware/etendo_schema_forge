@@ -1,8 +1,8 @@
 {
-  "version": "0.68.0",
+  "version": "0.69.0",
   "generatedAt": "2026-04-30T15:42:46.722Z",
-  "updatedAt": "2026-07-16T14:25:57.063Z",
-  "checksum": "8bdcb5d32ea314da",
+  "updatedAt": "2026-07-15T13:21:36.841Z",
+  "checksum": "7f8b974a9ffd9dbc",
   "frontendContract": {
     "window": {
       "id": "183",
@@ -312,15 +312,14 @@
             "visibility": "editable",
             "required": true,
             "grid": false,
-            "form": true,
+            "form": false,
             "sourceRequired": true,
             "derivation": {
               "type": "computed",
               "source": "@#Date@"
             },
             "defaultValue": "@#Date@",
-            "section": "principal",
-            "seq": 35,
+            "section": "other",
             "callout": {
               "className": "org.openbravo.erpCommon.ad_callouts.SE_Invoice_TaxDate"
             },
@@ -1166,18 +1165,6 @@
             "callout": {
               "className": "org.openbravo.module.sii.callouts.SiiAuthorizationCallout"
             }
-          },
-          {
-            "name": "tbaiIssent",
-            "apiKey": "tbaiIssent",
-            "column": "EM_Tbai_Issent",
-            "label": "Enviada a Batuz",
-            "type": "boolean",
-            "tsType": "boolean",
-            "visibility": "readOnly",
-            "required": false,
-            "grid": false,
-            "form": false
           },
           {
             "name": "processed",
@@ -5101,7 +5088,7 @@
             "apiKey": "tbaiIssent",
             "column": "EM_Tbai_Issent",
             "type": "boolean",
-            "visibility": "readOnly",
+            "visibility": "discarded",
             "required": false
           },
           {
@@ -11043,14 +11030,6 @@
         "description": "Field 'summedLineAmount' should be present in header"
       },
       {
-        "id": "t-field-presence-header-tbaiIssent",
-        "category": "field-presence",
-        "entity": "header",
-        "field": "tbaiIssent",
-        "runner": "node",
-        "description": "Field 'tbaiIssent' should be present in header"
-      },
-      {
         "id": "t-field-presence-header-totalPaid",
         "category": "field-presence",
         "entity": "header",
@@ -12233,14 +12212,6 @@
         "field": "summedLineAmount",
         "runner": "node",
         "description": "Field 'summedLineAmount' should have type 'number' in header"
-      },
-      {
-        "id": "t-field-type-header-tbaiIssent",
-        "category": "field-type",
-        "entity": "header",
-        "field": "tbaiIssent",
-        "runner": "node",
-        "description": "Field 'tbaiIssent' should have type 'boolean' in header"
       },
       {
         "id": "t-field-type-header-totalPaid",
@@ -15870,6 +15841,14 @@
         "description": "System field 'tbaiIsreverseinvoice' should exist in backend but not frontend for header"
       },
       {
+        "id": "t-system-field-header-tbaiIssent",
+        "category": "system-field",
+        "entity": "header",
+        "field": "tbaiIssent",
+        "runner": "node",
+        "description": "System field 'tbaiIssent' should exist in backend but not frontend for header"
+      },
+      {
         "id": "t-system-field-header-tbaiIssueDate",
         "category": "system-field",
         "entity": "header",
@@ -16995,25 +16974,25 @@
       }
     ],
     "summary": {
-      "total": 940,
+      "total": 939,
       "byCategory": {
         "action-endpoint": 26,
         "crud-flags": 12,
         "default-value-type": 38,
         "displaylogic-evaluable": 17,
         "displaylogic-valid": 17,
-        "field-presence": 149,
-        "field-type": 149,
+        "field-presence": 148,
+        "field-type": 148,
         "readonlylogic-evaluable": 64,
         "readonlylogic-valid": 64,
         "rule-declared": 21,
         "searchable-filters": 6,
         "selector-endpoint": 50,
-        "system-field": 315,
+        "system-field": 316,
         "visibility": 12
       },
       "byRunner": {
-        "node": 940,
+        "node": 939,
         "junit": 0
       }
     }

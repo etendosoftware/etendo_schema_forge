@@ -1,8 +1,8 @@
 {
   "version": "0.40.0",
-  "generatedAt": "2026-05-06T15:52:09.982Z",
-  "updatedAt": "2026-07-06T17:42:25.976Z",
-  "checksum": "43148e5c2c90e652",
+  "generatedAt": "2026-07-07T21:53:25.883Z",
+  "updatedAt": "2026-07-08T15:05:31.449Z",
+  "checksum": "306c342d2b869af1",
   "frontendContract": {
     "window": {
       "id": "123",
@@ -132,7 +132,179 @@
         }
       ],
       "layoutType": "default",
-      "linesLayout": "inlineEditable"
+      "linesLayout": "inlineEditable",
+      "import": {
+        "enabled": true,
+        "spec": "contacts",
+        "entity": "businessPartner",
+        "formats": [
+          "csv",
+          "txt"
+        ],
+        "limit": {
+          "maxRows": 5000,
+          "concurrency": 4
+        },
+        "dedupe": {
+          "scope": "file",
+          "key": [
+            "etgoEmail"
+          ]
+        },
+        "descriptor": "contacts",
+        "fields": [
+          {
+            "target": "name",
+            "aliases": [
+              "nombre comercial",
+              "razon social"
+            ],
+            "label": "Commercial Name",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "target": "etgoFirstname",
+            "aliases": [
+              "nombre"
+            ],
+            "label": "First Name (Company)",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "target": "etgoLastname",
+            "aliases": [
+              "apellido",
+              "apellidos"
+            ],
+            "label": "Last Name (Company)",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "target": "etgoEmail",
+            "aliases": [
+              "email",
+              "correo",
+              "e-mail"
+            ],
+            "isEmail": true,
+            "label": "Email (Company)",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "target": "etgoPhone",
+            "aliases": [
+              "telefono",
+              "teléfono"
+            ],
+            "label": "Phone (Company)",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "target": "email",
+            "aliases": [
+              "email de contacto"
+            ],
+            "isEmail": true,
+            "label": "Email (Contact)",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "target": "firstName",
+            "aliases": [
+              "nombre de contacto"
+            ],
+            "label": "First Name (Contact)",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "target": "lastName",
+            "aliases": [
+              "apellido de contacto"
+            ],
+            "label": "Last Name (Contact)",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "target": "phone",
+            "aliases": [
+              "telefono de contacto"
+            ],
+            "label": "Phone (Contact)",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "target": "position",
+            "aliases": [
+              "cargo"
+            ],
+            "label": "Position",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "required": false,
+            "type": "string",
+            "target": "address",
+            "aliases": [
+              "direccion",
+              "dirección"
+            ],
+            "label": "Address"
+          },
+          {
+            "required": false,
+            "type": "string",
+            "target": "city",
+            "aliases": [
+              "ciudad"
+            ],
+            "label": "City"
+          },
+          {
+            "required": false,
+            "type": "string",
+            "target": "postal",
+            "aliases": [
+              "codigo postal",
+              "código postal",
+              "cp"
+            ],
+            "label": "Postal Code"
+          },
+          {
+            "target": "country",
+            "aliases": [
+              "pais",
+              "país"
+            ],
+            "label": "Country",
+            "matchEntity": "Country",
+            "required": false,
+            "type": "foreignKey",
+            "reference": "Country"
+          },
+          {
+            "required": false,
+            "type": "string",
+            "target": "region",
+            "aliases": [
+              "provincia",
+              "region",
+              "región"
+            ],
+            "label": "Region"
+          }
+        ]
+      }
     },
     "entities": {
       "businessPartner": {
@@ -299,6 +471,47 @@
             "section": "principal"
           },
           {
+            "name": "oBTIKVIESStatus",
+            "apiKey": "oBTIKVIESStatus",
+            "column": "EM_OBTIK_VIESStatus",
+            "label": "Estado VIES",
+            "type": "enum",
+            "tsType": "string",
+            "visibility": "readOnly",
+            "required": false,
+            "grid": false,
+            "form": true,
+            "enumValues": [
+              {
+                "value": "P",
+                "name": "Pendiente",
+                "labels": {
+                  "es_ES": "Pendiente"
+                }
+              },
+              {
+                "value": "V",
+                "name": "Válido",
+                "labels": {
+                  "es_ES": "Válido"
+                }
+              },
+              {
+                "value": "I",
+                "name": "No válido",
+                "labels": {
+                  "es_ES": "No válido"
+                }
+              }
+            ],
+            "section": "principal",
+            "displayLogic": {
+              "raw": "record.oBTIKTaxIDKey === '2'",
+              "evaluable": true,
+              "js": "record.oBTIKTaxIDKey === '2'"
+            }
+          },
+          {
             "name": "etgoWeb",
             "apiKey": "etgoWeb",
             "column": "EM_Etgo_Web",
@@ -336,6 +549,24 @@
             "grid": true,
             "form": true,
             "section": "principal"
+          },
+          {
+            "name": "etgoIsperson",
+            "apiKey": "etgoIsperson",
+            "column": "EM_Etgo_Isperson",
+            "label": "Is Person",
+            "type": "boolean",
+            "tsType": "boolean",
+            "visibility": "editable",
+            "required": true,
+            "grid": false,
+            "form": false,
+            "sourceRequired": true,
+            "derivation": {
+              "type": "computed",
+              "source": "N"
+            },
+            "defaultValue": "N"
           },
           {
             "name": "businessPartnerCategory",
@@ -590,24 +821,6 @@
             "defaultValue": "N"
           },
           {
-            "name": "etgoIsperson",
-            "apiKey": "etgoIsperson",
-            "column": "EM_Etgo_Isperson",
-            "label": "Is Person",
-            "type": "boolean",
-            "tsType": "boolean",
-            "visibility": "editable",
-            "required": true,
-            "grid": false,
-            "form": false,
-            "sourceRequired": true,
-            "derivation": {
-              "type": "computed",
-              "source": "N"
-            },
-            "defaultValue": "N"
-          },
-          {
             "name": "operator",
             "apiKey": "operator",
             "column": "Isworker",
@@ -699,6 +912,18 @@
               "evaluable": true,
               "js": "record.customer"
             }
+          },
+          {
+            "name": "eTGOLocation",
+            "apiKey": "eTGOLocation",
+            "column": "em_etgo_location",
+            "label": "em_etgo_location",
+            "type": "string",
+            "tsType": "string",
+            "visibility": "readOnly",
+            "required": false,
+            "grid": false,
+            "form": false
           },
           {
             "name": "account",
@@ -910,59 +1135,6 @@
               "evaluable": true,
               "js": "record.vendor"
             }
-          },
-          {
-            "name": "eTGOLocation",
-            "apiKey": "eTGOLocation",
-            "column": "em_etgo_location",
-            "label": "em_etgo_location",
-            "type": "string",
-            "tsType": "string",
-            "visibility": "readOnly",
-            "required": false,
-            "grid": false,
-            "form": false
-          },
-          {
-            "name": "oBTIKVIESStatus",
-            "apiKey": "oBTIKVIESStatus",
-            "column": "EM_OBTIK_VIESStatus",
-            "label": "Estado VIES",
-            "type": "enum",
-            "tsType": "string",
-            "visibility": "readOnly",
-            "required": false,
-            "grid": false,
-            "form": true,
-            "enumValues": [
-              {
-                "value": "P",
-                "name": "Pendiente",
-                "labels": {
-                  "es_ES": "Pendiente"
-                }
-              },
-              {
-                "value": "V",
-                "name": "Válido",
-                "labels": {
-                  "es_ES": "Válido"
-                }
-              },
-              {
-                "value": "I",
-                "name": "No válido",
-                "labels": {
-                  "es_ES": "No válido"
-                }
-              }
-            ],
-            "section": "principal",
-            "displayLogic": {
-              "raw": "record.oBTIKTaxIDKey === '2'",
-              "evaluable": true,
-              "js": "record.oBTIKTaxIDKey === '2'"
-            }
           }
         ],
         "searchableFields": [
@@ -974,6 +1146,13 @@
             "derivation": {
               "type": "computed",
               "source": "'1'"
+            }
+          },
+          {
+            "name": "etgoIsperson",
+            "derivation": {
+              "type": "computed",
+              "source": "N"
             }
           },
           {
@@ -1013,13 +1192,6 @@
           },
           {
             "name": "isCustomerConsent",
-            "derivation": {
-              "type": "computed",
-              "source": "N"
-            }
-          },
-          {
-            "name": "etgoIsperson",
             "derivation": {
               "type": "computed",
               "source": "N"
@@ -4431,7 +4603,179 @@
           "filter": "criteria=%5B%7B%22fieldName%22%3A%22vendor%22%2C%22operator%22%3A%22equals%22%2C%22value%22%3Atrue%7D%5D"
         }
       ],
-      "linesLayout": "inlineEditable"
+      "linesLayout": "inlineEditable",
+      "import": {
+        "enabled": true,
+        "spec": "contacts",
+        "entity": "businessPartner",
+        "formats": [
+          "csv",
+          "txt"
+        ],
+        "limit": {
+          "maxRows": 5000,
+          "concurrency": 4
+        },
+        "dedupe": {
+          "scope": "file",
+          "key": [
+            "etgoEmail"
+          ]
+        },
+        "descriptor": "contacts",
+        "fields": [
+          {
+            "target": "name",
+            "aliases": [
+              "nombre comercial",
+              "razon social"
+            ],
+            "label": "Commercial Name",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "target": "etgoFirstname",
+            "aliases": [
+              "nombre"
+            ],
+            "label": "First Name (Company)",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "target": "etgoLastname",
+            "aliases": [
+              "apellido",
+              "apellidos"
+            ],
+            "label": "Last Name (Company)",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "target": "etgoEmail",
+            "aliases": [
+              "email",
+              "correo",
+              "e-mail"
+            ],
+            "isEmail": true,
+            "label": "Email (Company)",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "target": "etgoPhone",
+            "aliases": [
+              "telefono",
+              "teléfono"
+            ],
+            "label": "Phone (Company)",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "target": "email",
+            "aliases": [
+              "email de contacto"
+            ],
+            "isEmail": true,
+            "label": "Email (Contact)",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "target": "firstName",
+            "aliases": [
+              "nombre de contacto"
+            ],
+            "label": "First Name (Contact)",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "target": "lastName",
+            "aliases": [
+              "apellido de contacto"
+            ],
+            "label": "Last Name (Contact)",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "target": "phone",
+            "aliases": [
+              "telefono de contacto"
+            ],
+            "label": "Phone (Contact)",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "target": "position",
+            "aliases": [
+              "cargo"
+            ],
+            "label": "Position",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "required": false,
+            "type": "string",
+            "target": "address",
+            "aliases": [
+              "direccion",
+              "dirección"
+            ],
+            "label": "Address"
+          },
+          {
+            "required": false,
+            "type": "string",
+            "target": "city",
+            "aliases": [
+              "ciudad"
+            ],
+            "label": "City"
+          },
+          {
+            "required": false,
+            "type": "string",
+            "target": "postal",
+            "aliases": [
+              "codigo postal",
+              "código postal",
+              "cp"
+            ],
+            "label": "Postal Code"
+          },
+          {
+            "target": "country",
+            "aliases": [
+              "pais",
+              "país"
+            ],
+            "label": "Country",
+            "matchEntity": "Country",
+            "required": false,
+            "type": "foreignKey",
+            "reference": "Country"
+          },
+          {
+            "required": false,
+            "type": "string",
+            "target": "region",
+            "aliases": [
+              "provincia",
+              "region",
+              "región"
+            ],
+            "label": "Region"
+          }
+        ]
+      }
     },
     "entities": {
       "businessPartner": {
@@ -4496,6 +4840,14 @@
             "required": false
           },
           {
+            "name": "oBTIKVIESStatus",
+            "apiKey": "oBTIKVIESStatus",
+            "column": "EM_OBTIK_VIESStatus",
+            "type": "enum",
+            "visibility": "readOnly",
+            "required": false
+          },
+          {
             "name": "etgoWeb",
             "apiKey": "etgoWeb",
             "column": "EM_Etgo_Web",
@@ -4525,6 +4877,14 @@
             "column": "AD_Org_ID",
             "type": "foreignKey",
             "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "etgoIsperson",
+            "apiKey": "etgoIsperson",
+            "column": "EM_Etgo_Isperson",
+            "type": "boolean",
+            "visibility": "editable",
             "required": true
           },
           {
@@ -4776,14 +5136,6 @@
             "required": true
           },
           {
-            "name": "etgoIsperson",
-            "apiKey": "etgoIsperson",
-            "column": "EM_Etgo_Isperson",
-            "type": "boolean",
-            "visibility": "editable",
-            "required": true
-          },
-          {
             "name": "invoiceTerms",
             "apiKey": "invoiceTerms",
             "column": "InvoiceRule",
@@ -4997,6 +5349,14 @@
             "column": "EM_Aeatsii_Siikeylist",
             "type": "enum",
             "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "eTGOLocation",
+            "apiKey": "eTGOLocation",
+            "column": "em_etgo_location",
+            "type": "string",
+            "visibility": "readOnly",
             "required": false
           },
           {
@@ -5318,22 +5678,6 @@
             "type": "boolean",
             "visibility": "editable",
             "required": true
-          },
-          {
-            "name": "eTGOLocation",
-            "apiKey": "eTGOLocation",
-            "column": "em_etgo_location",
-            "type": "string",
-            "visibility": "readOnly",
-            "required": false
-          },
-          {
-            "name": "oBTIKVIESStatus",
-            "apiKey": "oBTIKVIESStatus",
-            "column": "EM_OBTIK_VIESStatus",
-            "type": "enum",
-            "visibility": "readOnly",
-            "required": false
           }
         ],
         "javaQualifier": "businessPartnerHandler"
@@ -5832,6 +6176,14 @@
             "required": false
           },
           {
+            "name": "eTGOLocation",
+            "apiKey": "eTGOLocation",
+            "column": "em_etgo_location",
+            "type": "string",
+            "visibility": "system",
+            "required": false
+          },
+          {
             "name": "etgoPhone",
             "apiKey": "etgoPhone",
             "column": "EM_Etgo_Phone",
@@ -5854,6 +6206,14 @@
             "type": "enum",
             "visibility": "system",
             "required": true
+          },
+          {
+            "name": "oBTIKVIESStatus",
+            "apiKey": "oBTIKVIESStatus",
+            "column": "EM_OBTIK_VIESStatus",
+            "type": "enum",
+            "visibility": "system",
+            "required": false
           },
           {
             "name": "tbaiIssimplifiedinv",
@@ -6222,22 +6582,6 @@
             "type": "boolean",
             "visibility": "system",
             "required": true
-          },
-          {
-            "name": "eTGOLocation",
-            "apiKey": "eTGOLocation",
-            "column": "em_etgo_location",
-            "type": "string",
-            "visibility": "system",
-            "required": false
-          },
-          {
-            "name": "oBTIKVIESStatus",
-            "apiKey": "oBTIKVIESStatus",
-            "column": "EM_OBTIK_VIESStatus",
-            "type": "enum",
-            "visibility": "system",
-            "required": false
           }
         ]
       },
@@ -6311,6 +6655,14 @@
             "required": true
           },
           {
+            "name": "id",
+            "apiKey": "id",
+            "column": "C_Bp_Customer_Acct_ID",
+            "type": "id",
+            "visibility": "system",
+            "required": true
+          },
+          {
             "name": "creationDate",
             "apiKey": "creationDate",
             "column": "Created",
@@ -6339,14 +6691,6 @@
             "apiKey": "updatedBy",
             "column": "UpdatedBy",
             "type": "foreignKey",
-            "visibility": "system",
-            "required": true
-          },
-          {
-            "name": "id",
-            "apiKey": "id",
-            "column": "C_Bp_Customer_Acct_ID",
-            "type": "id",
             "visibility": "system",
             "required": true
           }
@@ -6439,6 +6783,14 @@
             "required": false
           },
           {
+            "name": "id",
+            "apiKey": "id",
+            "column": "Intr_C_Bpartner_ID",
+            "type": "id",
+            "visibility": "system",
+            "required": true
+          },
+          {
             "name": "country",
             "apiKey": "country",
             "column": "C_Country_ID",
@@ -6483,14 +6835,6 @@
             "apiKey": "updatedBy",
             "column": "Updatedby",
             "type": "foreignKey",
-            "visibility": "system",
-            "required": true
-          },
-          {
-            "name": "id",
-            "apiKey": "id",
-            "column": "Intr_C_Bpartner_ID",
-            "type": "id",
             "visibility": "system",
             "required": true
           }
@@ -6942,6 +7286,14 @@
             "required": false
           },
           {
+            "name": "eTGOLocation",
+            "apiKey": "eTGOLocation",
+            "column": "em_etgo_location",
+            "type": "string",
+            "visibility": "system",
+            "required": false
+          },
+          {
             "name": "etgoPhone",
             "apiKey": "etgoPhone",
             "column": "EM_Etgo_Phone",
@@ -6964,6 +7316,14 @@
             "type": "enum",
             "visibility": "system",
             "required": true
+          },
+          {
+            "name": "oBTIKVIESStatus",
+            "apiKey": "oBTIKVIESStatus",
+            "column": "EM_OBTIK_VIESStatus",
+            "type": "enum",
+            "visibility": "system",
+            "required": false
           },
           {
             "name": "tbaiIssimplifiedinv",
@@ -7380,22 +7740,6 @@
             "type": "string",
             "visibility": "system",
             "required": false
-          },
-          {
-            "name": "eTGOLocation",
-            "apiKey": "eTGOLocation",
-            "column": "em_etgo_location",
-            "type": "string",
-            "visibility": "system",
-            "required": false
-          },
-          {
-            "name": "oBTIKVIESStatus",
-            "apiKey": "oBTIKVIESStatus",
-            "column": "EM_OBTIK_VIESStatus",
-            "type": "enum",
-            "visibility": "system",
-            "required": false
           }
         ]
       },
@@ -7477,6 +7821,14 @@
             "required": true
           },
           {
+            "name": "id",
+            "apiKey": "id",
+            "column": "C_Bp_Vendor_Acct_ID",
+            "type": "id",
+            "visibility": "system",
+            "required": true
+          },
+          {
             "name": "creationDate",
             "apiKey": "creationDate",
             "column": "Created",
@@ -7505,14 +7857,6 @@
             "apiKey": "updatedBy",
             "column": "UpdatedBy",
             "type": "foreignKey",
-            "visibility": "system",
-            "required": true
-          },
-          {
-            "name": "id",
-            "apiKey": "id",
-            "column": "C_Bp_Vendor_Acct_ID",
-            "type": "id",
             "visibility": "system",
             "required": true
           }
@@ -7605,6 +7949,14 @@
             "required": true
           },
           {
+            "name": "id",
+            "apiKey": "id",
+            "column": "Intr_C_Bpartner_ID",
+            "type": "id",
+            "visibility": "system",
+            "required": true
+          },
+          {
             "name": "creationDate",
             "apiKey": "creationDate",
             "column": "Created",
@@ -7649,14 +8001,6 @@
             "apiKey": "updatedBy",
             "column": "Updatedby",
             "type": "foreignKey",
-            "visibility": "system",
-            "required": true
-          },
-          {
-            "name": "id",
-            "apiKey": "id",
-            "column": "Intr_C_Bpartner_ID",
-            "type": "id",
             "visibility": "system",
             "required": true
           }
@@ -7980,6 +8324,14 @@
             "required": false
           },
           {
+            "name": "eTGOLocation",
+            "apiKey": "eTGOLocation",
+            "column": "em_etgo_location",
+            "type": "string",
+            "visibility": "system",
+            "required": false
+          },
+          {
             "name": "etgoPhone",
             "apiKey": "etgoPhone",
             "column": "EM_Etgo_Phone",
@@ -8002,6 +8354,14 @@
             "type": "enum",
             "visibility": "system",
             "required": true
+          },
+          {
+            "name": "oBTIKVIESStatus",
+            "apiKey": "oBTIKVIESStatus",
+            "column": "EM_OBTIK_VIESStatus",
+            "type": "enum",
+            "visibility": "system",
+            "required": false
           },
           {
             "name": "tbaiIssimplifiedinv",
@@ -8546,22 +8906,6 @@
             "type": "boolean",
             "visibility": "system",
             "required": true
-          },
-          {
-            "name": "eTGOLocation",
-            "apiKey": "eTGOLocation",
-            "column": "em_etgo_location",
-            "type": "string",
-            "visibility": "system",
-            "required": false
-          },
-          {
-            "name": "oBTIKVIESStatus",
-            "apiKey": "oBTIKVIESStatus",
-            "column": "EM_OBTIK_VIESStatus",
-            "type": "enum",
-            "visibility": "system",
-            "required": false
           }
         ]
       },
@@ -8730,6 +9074,14 @@
             "required": true
           },
           {
+            "name": "id",
+            "apiKey": "id",
+            "column": "C_Bp_Salcategory_ID",
+            "type": "id",
+            "visibility": "system",
+            "required": true
+          },
+          {
             "name": "createdBy",
             "apiKey": "createdBy",
             "column": "Createdby",
@@ -8750,14 +9102,6 @@
             "apiKey": "updatedBy",
             "column": "Updatedby",
             "type": "foreignKey",
-            "visibility": "system",
-            "required": true
-          },
-          {
-            "name": "id",
-            "apiKey": "id",
-            "column": "C_Bp_Salcategory_ID",
-            "type": "id",
             "visibility": "system",
             "required": true
           }
@@ -9104,6 +9448,14 @@
             "required": true
           },
           {
+            "name": "id",
+            "apiKey": "id",
+            "column": "C_Bpartner_Doctype_ID",
+            "type": "id",
+            "visibility": "system",
+            "required": true
+          },
+          {
             "name": "creationDate",
             "apiKey": "creationDate",
             "column": "Created",
@@ -9132,14 +9484,6 @@
             "apiKey": "updatedBy",
             "column": "Updatedby",
             "type": "foreignKey",
-            "visibility": "system",
-            "required": true
-          },
-          {
-            "name": "id",
-            "apiKey": "id",
-            "column": "C_Bpartner_Doctype_ID",
-            "type": "id",
             "visibility": "system",
             "required": true
           }
@@ -9758,6 +10102,14 @@
             "required": true
           },
           {
+            "name": "id",
+            "apiKey": "id",
+            "column": "C_Bpartner_Discount_ID",
+            "type": "id",
+            "visibility": "system",
+            "required": true
+          },
+          {
             "name": "client",
             "apiKey": "client",
             "column": "AD_Client_ID",
@@ -9810,14 +10162,6 @@
             "apiKey": "updatedBy",
             "column": "Updatedby",
             "type": "foreignKey",
-            "visibility": "system",
-            "required": true
-          },
-          {
-            "name": "id",
-            "apiKey": "id",
-            "column": "C_Bpartner_Discount_ID",
-            "type": "id",
             "visibility": "system",
             "required": true
           }

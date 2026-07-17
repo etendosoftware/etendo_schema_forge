@@ -1,8 +1,8 @@
 {
-  "version": "0.15.1",
+  "version": "0.16.0",
   "generatedAt": "2026-04-29T19:05:48.778Z",
-  "updatedAt": "2026-06-29T22:43:31.954Z",
-  "checksum": "e31470929f91fada",
+  "updatedAt": "2026-07-16T12:52:39.736Z",
+  "checksum": "0775f50ac7a8954b",
   "frontendContract": {
     "window": {
       "id": "170",
@@ -298,16 +298,16 @@
             "reference": "Product",
             "inputMode": "search",
             "lookup": true,
-            "lookupDrawer": "goods-movements-product",
+            "lookupDrawer": "product-stock",
             "lookupTitle": "Product",
             "onSelectMappings": [
               {
                 "from": "_aux._LOC",
                 "to": "storageBin",
                 "labelFrom": [
-                  "storageBin",
-                  "storageBin$_identifier",
-                  "warehouse"
+                  "warehouse",
+                  "warehouse$_identifier",
+                  "storageBin"
                 ]
               }
             ],

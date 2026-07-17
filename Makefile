@@ -1,4 +1,4 @@
-.PHONY: test test-all-coverage test-ci test-ci-coverage test-e2e test-e2e-headless test-e2e-debug test-e2e-ui test-e2e-report test-e2e-record test-e2e-onboarding-integration generate regen dev dev-mock build install bump-core-version install-e2e deploy clean help dev-local-core report-serve report-serve-detach report-stop report-preview validate-pipeline method-budget window-leak-budget quality-gate domain-boundary-check sonar sonar-coverage menu-cache uuid merge-block-check xml-regeneration-check dump-delta regen-check regen-check-help regen-check-clean regen-help data-fixes data-fixes-help data-fixes-remote db-tunnel db-tunnel-down db-tunnel-status db-psql db-tunnel-help switch-to-es ensure-locale project-status
+.PHONY: test test-all-coverage test-ci test-ci-coverage test-frontend test-e2e test-e2e-headless test-e2e-debug test-e2e-ui test-e2e-report test-e2e-record test-e2e-onboarding-integration email-stress-limits email-stress-limits-report email-stress-help generate regen dev dev-local-core dev-mock build install bump-core-version install-e2e deploy clean help report-serve report-serve-detach report-stop report-preview validate-pipeline method-budget window-leak-budget quality-gate domain-boundary-check sonar sonar-coverage menu-cache uuid merge-block-check xml-regeneration-check dump-delta regen-check regen-check-help regen-check-clean regen-help data-fixes data-fixes-help data-fixes-remote db-tunnel db-tunnel-down db-tunnel-status db-psql db-tunnel-help switch-to-es ensure-locale project-status
 
 export SF_ROOT := $(CURDIR)
 
@@ -26,14 +26,32 @@ test: ## Run all unit tests (CLI data-fixes + app-shell + artifacts + vitest)
 
 test-all-coverage: ## Run ALL unit tests (Node + Vitest) with coverage reports
 	@mkdir -p coverage
-	@echo "=== CLI data-fixes tests ==="
-	node --test --experimental-test-coverage --test-reporter=lcov --test-reporter-destination=coverage/cli-lcov.info 'cli/test/*.test.js'
-	@echo "=== App-shell Node tests ==="
-	node --test --experimental-test-coverage --test-reporter=lcov --test-reporter-destination=coverage/appshell-lcov.info $(shell find tools/app-shell/src -path '*/__tests__/*.test.js' ! -name 'useEntity-helpers.test.js')
-	@echo "=== App-shell extra tests ==="
-	node --test --experimental-test-coverage --test-reporter=lcov --test-reporter-destination=coverage/appshell-test-lcov.info $(shell find tools/app-shell/test -name '*.test.js')
-	@echo "=== Artifact custom tests ==="
-	node --test --experimental-test-coverage --test-reporter=lcov --test-reporter-destination=coverage/artifacts-lcov.info $(shell find artifacts -path '*/__tests__/*.test.js')
+	@echo "=== Node tests (4 groups in parallel) ==="
+	@node --test --experimental-test-coverage \
+		--test-reporter=spec --test-reporter-destination=stdout \
+		--test-reporter=lcov --test-reporter-destination=coverage/cli-lcov.info \
+		$(shell find cli/test -name '*.test.js') > coverage/cli.log 2>&1 & pid1=$$!; \
+	node --test --experimental-test-coverage \
+		--test-reporter=spec --test-reporter-destination=stdout \
+		--test-reporter=lcov --test-reporter-destination=coverage/appshell-lcov.info \
+		$(shell find tools/app-shell/src -path '*/__tests__/*.test.js' ! -name 'useEntity-helpers.test.js') > coverage/appshell.log 2>&1 & pid2=$$!; \
+	node --test --experimental-test-coverage \
+		--test-reporter=spec --test-reporter-destination=stdout \
+		--test-reporter=lcov --test-reporter-destination=coverage/appshell-test-lcov.info \
+		$(shell find tools/app-shell/test -name '*.test.js') > coverage/appshell-test.log 2>&1 & pid3=$$!; \
+	node --test --experimental-test-coverage \
+		--test-reporter=spec --test-reporter-destination=stdout \
+		--test-reporter=lcov --test-reporter-destination=coverage/artifacts-lcov.info \
+		$(shell find artifacts -path '*/__tests__/*.test.js') > coverage/artifacts.log 2>&1 & pid4=$$!; \
+	wait $$pid1; e1=$$?; \
+	wait $$pid2; e2=$$?; \
+	wait $$pid3; e3=$$?; \
+	wait $$pid4; e4=$$?; \
+	[ $$e1 -eq 0 ] || { echo "CLI tests FAILED:"; tail -30 coverage/cli.log; exit 1; }; \
+	[ $$e2 -eq 0 ] || { echo "App-shell Node tests FAILED:"; tail -30 coverage/appshell.log; exit 1; }; \
+	[ $$e3 -eq 0 ] || { echo "App-shell extra tests FAILED:"; tail -30 coverage/appshell-test.log; exit 1; }; \
+	[ $$e4 -eq 0 ] || { echo "Artifact tests FAILED:"; tail -30 coverage/artifacts.log; exit 1; }; \
+	echo "=== Node tests: all passed ==="
 	@echo "=== Vitest (React components) ==="
 	cd tools/app-shell && npx vitest run --coverage --coverage.reporter=lcov && sed 's|^SF:src/|SF:tools/app-shell/src/|' coverage/vitest/lcov.info > ../../coverage/vitest-lcov.info
 	@echo "=== Merging LCOV reports ==="
@@ -95,6 +113,66 @@ method-budget: ## Ratchet guard: fail only if a tracked class grew past its meth
 
 window-leak-budget: ## Ratchet guard: fail only if window-specific literals in contract-ui grew (use --list to enumerate)
 	$(SF) sf-window-leak-budget
+
+test-frontend: ## Run only frontend generator tests
+	cd cli && node --test 'test/generate-frontend.test.js'
+
+SCENARIO ?= double-send
+WINDOW_NAME ?= sales-order
+BASE_URL ?= http://127.0.0.1:8080/etendo_sf2
+WORKER_STEPS ?= 1,2,5,10,20,50
+RESET_SAFETY ?= 1
+DOC_ID ?=
+DOC_IDS ?=
+TOKEN ?=
+DB_GRADLE_PROPERTIES ?=
+EMAIL_STRESS_REPORT ?= docs/reports/email-stress-limit-report-$(shell date +%Y-%m-%d-%H%M%S).html
+
+email-stress-limits: ## Probe email contract limits. Usage: make email-stress-limits TOKEN=... DOC_ID=... [WORKER_STEPS=1,2,5,10,20]
+	@if [ -z "$(TOKEN)" ]; then \
+	  echo "Usage: make email-stress-limits TOKEN=<jwt> DOC_ID=<id> [SCENARIO=double-send|concurrent-load] [WORKER_STEPS=1,2,5,10,20]"; \
+	  exit 1; \
+	fi; \
+	if [ "$(SCENARIO)" = "double-send" ] && [ -z "$(DOC_ID)" ]; then \
+	  echo "DOC_ID is required for SCENARIO=double-send"; \
+	  exit 1; \
+	fi; \
+	if [ "$(SCENARIO)" = "concurrent-load" ] && [ -z "$(DOC_IDS)" ]; then \
+	  echo "DOC_IDS is recommended for SCENARIO=concurrent-load; synthetic IDs will not work against a real backend."; \
+	fi; \
+	EXTRA_ARGS=""; \
+	if [ -n "$(DB_GRADLE_PROPERTIES)" ]; then EXTRA_ARGS="$$EXTRA_ARGS --db-gradle-properties $(DB_GRADLE_PROPERTIES)"; fi; \
+	STRESS_RESET_SAFETY="$(RESET_SAFETY)" \
+	ETENDO_TOKEN="$(TOKEN)" \
+	ETENDO_BASE_URL="$(BASE_URL)" \
+	STRESS_WINDOW="$(WINDOW_NAME)" \
+	STRESS_WORKER_STEPS="$(WORKER_STEPS)" \
+	STRESS_DOC_ID="$(DOC_ID)" \
+	STRESS_DOC_IDS="$(DOC_IDS)" \
+	node cli/test/stress/limits.js --scenario "$(SCENARIO)" $$EXTRA_ARGS
+
+email-stress-limits-report: ## Probe email limits and generate a Jest/JUnit-style HTML report
+	@STRESS_HTML_REPORT="$(EMAIL_STRESS_REPORT)" \
+	$(MAKE) email-stress-limits; \
+	status=$$?; \
+	echo "Email stress HTML report: $(EMAIL_STRESS_REPORT)"; \
+	exit $$status
+
+email-stress-help: ## Show email stress limit probe variables
+	@echo "Usage:"
+	@echo "  make email-stress-limits TOKEN=<jwt> DOC_ID=<id>"
+	@echo "  make email-stress-limits SCENARIO=concurrent-load TOKEN=<jwt> DOC_IDS=id1,id2,id3 WORKER_STEPS=5,10,25"
+	@echo ""
+	@echo "Variables:"
+	@echo "  SCENARIO=double-send|concurrent-load   Default: double-send"
+	@echo "  WINDOW_NAME=<spec>                     Default: sales-order"
+	@echo "  BASE_URL=<etendo-root>                 Default: http://127.0.0.1:8080/etendo_sf2"
+	@echo "  WORKER_STEPS=1,2,5,10,20,50            Worker ramp to execute"
+	@echo "  RESET_SAFETY=1                         Clear target record throttle + matching audits before each step"
+	@echo "  DOC_ID=<id>                            Required for double-send"
+	@echo "  DOC_IDS=id1,id2,...                    Recommended for concurrent-load"
+	@echo "  DB_GRADLE_PROPERTIES=<path>            Optional DB config source for RESET_SAFETY"
+	@echo "  EMAIL_STRESS_REPORT=<path>             HTML report path for email-stress-limits-report"
 
 quality-gate: ## Run Schema Forge quality gate for PR-affected windows
 	$(SF) sf-quality-gate --pr-affected --baseline-ref origin/main --format md

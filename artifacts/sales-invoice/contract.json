@@ -1,8 +1,8 @@
 {
-  "version": "0.55.0",
+  "version": "0.56.0",
   "generatedAt": "2026-04-30T15:42:46.582Z",
-  "updatedAt": "2026-07-16T22:09:16.428Z",
-  "checksum": "68070236b3c28272",
+  "updatedAt": "2026-07-15T13:21:37.153Z",
+  "checksum": "ce52ffa31fc41ef0",
   "frontendContract": {
     "window": {
       "id": "167",
@@ -604,34 +604,6 @@
             }
           },
           {
-            "name": "accountingDate",
-            "apiKey": "accountingDate",
-            "column": "DateAcct",
-            "label": "Accounting Date",
-            "type": "date",
-            "tsType": "string",
-            "visibility": "editable",
-            "required": true,
-            "grid": false,
-            "form": true,
-            "sourceRequired": true,
-            "derivation": {
-              "type": "computed",
-              "source": "@#Date@"
-            },
-            "defaultValue": "@#Date@",
-            "section": "principal",
-            "seq": 35,
-            "callout": {
-              "className": "org.openbravo.erpCommon.ad_callouts.SE_Invoice_TaxDate"
-            },
-            "readOnlyLogic": {
-              "raw": "@Posted@='Y'",
-              "evaluable": true,
-              "js": "record['posted'] === true"
-            }
-          },
-          {
             "name": "etsgDateOperation",
             "apiKey": "etsgDateOperation",
             "column": "EM_Etsg_Date_Operation",
@@ -864,70 +836,6 @@
               "raw": "@processed@='Y'",
               "evaluable": true,
               "js": "record['processed'] === true"
-            }
-          },
-          {
-            "name": "tbaiSequence",
-            "apiKey": "tbaiSequence",
-            "column": "EM_Tbai_Sequence",
-            "label": "Secuencia de encadenamiento",
-            "type": "integer",
-            "tsType": "number",
-            "visibility": "readOnly",
-            "required": false,
-            "grid": false,
-            "form": false,
-            "displayLogic": {
-              "raw": "@TBAI_ExistTBAIConfig@=1",
-              "evaluable": true
-            }
-          },
-          {
-            "name": "tbaiInvoicenum",
-            "apiKey": "tbaiInvoicenum",
-            "column": "EM_Tbai_Invoicenum",
-            "label": "Serie Factura",
-            "type": "string",
-            "tsType": "string",
-            "visibility": "readOnly",
-            "required": false,
-            "grid": false,
-            "form": false,
-            "displayLogic": {
-              "raw": "@TBAI_ExistTBAIConfig@=1",
-              "evaluable": true
-            }
-          },
-          {
-            "name": "tbaiInvoiceseq",
-            "apiKey": "tbaiInvoiceseq",
-            "column": "EM_Tbai_Invoiceseq",
-            "label": "Secuencia Factura",
-            "type": "string",
-            "tsType": "string",
-            "visibility": "readOnly",
-            "required": false,
-            "grid": false,
-            "form": false,
-            "displayLogic": {
-              "raw": "@TBAI_ExistTBAIConfig@=1",
-              "evaluable": true
-            }
-          },
-          {
-            "name": "tbaiIssent",
-            "apiKey": "tbaiIssent",
-            "column": "EM_Tbai_Issent",
-            "label": "Enviada a TBAI",
-            "type": "boolean",
-            "tsType": "boolean",
-            "visibility": "readOnly",
-            "required": false,
-            "grid": false,
-            "form": false,
-            "displayLogic": {
-              "raw": "@TBAI_ExistTBAIConfig@=1",
-              "evaluable": true
             }
           },
           {
@@ -1408,13 +1316,6 @@
             "derivation": {
               "type": "computed",
               "source": "0"
-            }
-          },
-          {
-            "name": "accountingDate",
-            "derivation": {
-              "type": "computed",
-              "source": "@#Date@"
             }
           },
           {
@@ -2502,7 +2403,7 @@
             "apiKey": "accountingDate",
             "column": "DateAcct",
             "type": "date",
-            "visibility": "editable",
+            "visibility": "system",
             "required": true
           },
           {
@@ -2806,7 +2707,7 @@
             "apiKey": "tbaiSequence",
             "column": "EM_Tbai_Sequence",
             "type": "integer",
-            "visibility": "readOnly",
+            "visibility": "discarded",
             "required": false
           },
           {
@@ -2814,7 +2715,7 @@
             "apiKey": "tbaiInvoicenum",
             "column": "EM_Tbai_Invoicenum",
             "type": "string",
-            "visibility": "readOnly",
+            "visibility": "discarded",
             "required": false
           },
           {
@@ -2822,7 +2723,7 @@
             "apiKey": "tbaiInvoiceseq",
             "column": "EM_Tbai_Invoiceseq",
             "type": "string",
-            "visibility": "readOnly",
+            "visibility": "discarded",
             "required": false
           },
           {
@@ -2854,7 +2755,7 @@
             "apiKey": "tbaiIssent",
             "column": "EM_Tbai_Issent",
             "type": "boolean",
-            "visibility": "readOnly",
+            "visibility": "discarded",
             "required": false
           },
           {
@@ -5237,14 +5138,6 @@
         "description": "Default value for 'foreignAmount' in exchangeRates should be a string"
       },
       {
-        "id": "t-default-value-type-header-accountingDate",
-        "category": "default-value-type",
-        "entity": "header",
-        "field": "accountingDate",
-        "runner": "node",
-        "description": "Default value for 'accountingDate' in header should be a string"
-      },
-      {
         "id": "t-default-value-type-header-adOrgId",
         "category": "default-value-type",
         "entity": "header",
@@ -5605,38 +5498,6 @@
         "description": "Display logic for 'posted' in header should have evaluable flag"
       },
       {
-        "id": "t-displaylogic-evaluable-header-tbaiInvoicenum",
-        "category": "displaylogic-evaluable",
-        "entity": "header",
-        "field": "tbaiInvoicenum",
-        "runner": "node",
-        "description": "Display logic for 'tbaiInvoicenum' in header should have evaluable flag"
-      },
-      {
-        "id": "t-displaylogic-evaluable-header-tbaiInvoiceseq",
-        "category": "displaylogic-evaluable",
-        "entity": "header",
-        "field": "tbaiInvoiceseq",
-        "runner": "node",
-        "description": "Display logic for 'tbaiInvoiceseq' in header should have evaluable flag"
-      },
-      {
-        "id": "t-displaylogic-evaluable-header-tbaiIssent",
-        "category": "displaylogic-evaluable",
-        "entity": "header",
-        "field": "tbaiIssent",
-        "runner": "node",
-        "description": "Display logic for 'tbaiIssent' in header should have evaluable flag"
-      },
-      {
-        "id": "t-displaylogic-evaluable-header-tbaiSequence",
-        "category": "displaylogic-evaluable",
-        "entity": "header",
-        "field": "tbaiSequence",
-        "runner": "node",
-        "description": "Display logic for 'tbaiSequence' in header should have evaluable flag"
-      },
-      {
         "id": "t-displaylogic-evaluable-lines-grossUnitPrice",
         "category": "displaylogic-evaluable",
         "entity": "lines",
@@ -5813,38 +5674,6 @@
         "description": "Display logic for 'posted' in header should be valid JS"
       },
       {
-        "id": "t-displaylogic-valid-header-tbaiInvoicenum",
-        "category": "displaylogic-valid",
-        "entity": "header",
-        "field": "tbaiInvoicenum",
-        "runner": "node",
-        "description": "Display logic for 'tbaiInvoicenum' in header should be valid JS"
-      },
-      {
-        "id": "t-displaylogic-valid-header-tbaiInvoiceseq",
-        "category": "displaylogic-valid",
-        "entity": "header",
-        "field": "tbaiInvoiceseq",
-        "runner": "node",
-        "description": "Display logic for 'tbaiInvoiceseq' in header should be valid JS"
-      },
-      {
-        "id": "t-displaylogic-valid-header-tbaiIssent",
-        "category": "displaylogic-valid",
-        "entity": "header",
-        "field": "tbaiIssent",
-        "runner": "node",
-        "description": "Display logic for 'tbaiIssent' in header should be valid JS"
-      },
-      {
-        "id": "t-displaylogic-valid-header-tbaiSequence",
-        "category": "displaylogic-valid",
-        "entity": "header",
-        "field": "tbaiSequence",
-        "runner": "node",
-        "description": "Display logic for 'tbaiSequence' in header should be valid JS"
-      },
-      {
         "id": "t-displaylogic-valid-lines-grossUnitPrice",
         "category": "displaylogic-valid",
         "entity": "lines",
@@ -5891,14 +5720,6 @@
         "field": "toCurrency",
         "runner": "node",
         "description": "Field 'toCurrency' should be present in exchangeRates"
-      },
-      {
-        "id": "t-field-presence-header-accountingDate",
-        "category": "field-presence",
-        "entity": "header",
-        "field": "accountingDate",
-        "runner": "node",
-        "description": "Field 'accountingDate' should be present in header"
       },
       {
         "id": "t-field-presence-header-adOrgId",
@@ -6197,38 +6018,6 @@
         "description": "Field 'summedLineAmount' should be present in header"
       },
       {
-        "id": "t-field-presence-header-tbaiInvoicenum",
-        "category": "field-presence",
-        "entity": "header",
-        "field": "tbaiInvoicenum",
-        "runner": "node",
-        "description": "Field 'tbaiInvoicenum' should be present in header"
-      },
-      {
-        "id": "t-field-presence-header-tbaiInvoiceseq",
-        "category": "field-presence",
-        "entity": "header",
-        "field": "tbaiInvoiceseq",
-        "runner": "node",
-        "description": "Field 'tbaiInvoiceseq' should be present in header"
-      },
-      {
-        "id": "t-field-presence-header-tbaiIssent",
-        "category": "field-presence",
-        "entity": "header",
-        "field": "tbaiIssent",
-        "runner": "node",
-        "description": "Field 'tbaiIssent' should be present in header"
-      },
-      {
-        "id": "t-field-presence-header-tbaiSequence",
-        "category": "field-presence",
-        "entity": "header",
-        "field": "tbaiSequence",
-        "runner": "node",
-        "description": "Field 'tbaiSequence' should be present in header"
-      },
-      {
         "id": "t-field-presence-header-transactionDocument",
         "category": "field-presence",
         "entity": "header",
@@ -6435,14 +6224,6 @@
         "field": "toCurrency",
         "runner": "node",
         "description": "Field 'toCurrency' should have type 'string' in exchangeRates"
-      },
-      {
-        "id": "t-field-type-header-accountingDate",
-        "category": "field-type",
-        "entity": "header",
-        "field": "accountingDate",
-        "runner": "node",
-        "description": "Field 'accountingDate' should have type 'string' in header"
       },
       {
         "id": "t-field-type-header-adOrgId",
@@ -6741,38 +6522,6 @@
         "description": "Field 'summedLineAmount' should have type 'number' in header"
       },
       {
-        "id": "t-field-type-header-tbaiInvoicenum",
-        "category": "field-type",
-        "entity": "header",
-        "field": "tbaiInvoicenum",
-        "runner": "node",
-        "description": "Field 'tbaiInvoicenum' should have type 'string' in header"
-      },
-      {
-        "id": "t-field-type-header-tbaiInvoiceseq",
-        "category": "field-type",
-        "entity": "header",
-        "field": "tbaiInvoiceseq",
-        "runner": "node",
-        "description": "Field 'tbaiInvoiceseq' should have type 'string' in header"
-      },
-      {
-        "id": "t-field-type-header-tbaiIssent",
-        "category": "field-type",
-        "entity": "header",
-        "field": "tbaiIssent",
-        "runner": "node",
-        "description": "Field 'tbaiIssent' should have type 'boolean' in header"
-      },
-      {
-        "id": "t-field-type-header-tbaiSequence",
-        "category": "field-type",
-        "entity": "header",
-        "field": "tbaiSequence",
-        "runner": "node",
-        "description": "Field 'tbaiSequence' should have type 'number' in header"
-      },
-      {
         "id": "t-field-type-header-transactionDocument",
         "category": "field-type",
         "entity": "header",
@@ -6979,14 +6728,6 @@
         "field": "toCurrency",
         "runner": "node",
         "description": "Read-only logic for 'toCurrency' in exchangeRates should have evaluable flag"
-      },
-      {
-        "id": "t-readonlylogic-evaluable-header-accountingDate",
-        "category": "readonlylogic-evaluable",
-        "entity": "header",
-        "field": "accountingDate",
-        "runner": "node",
-        "description": "Read-only logic for 'accountingDate' in header should have evaluable flag"
       },
       {
         "id": "t-readonlylogic-evaluable-header-adOrgId",
@@ -7267,14 +7008,6 @@
         "field": "toCurrency",
         "runner": "node",
         "description": "Read-only logic for 'toCurrency' in exchangeRates should be valid JS"
-      },
-      {
-        "id": "t-readonlylogic-valid-header-accountingDate",
-        "category": "readonlylogic-valid",
-        "entity": "header",
-        "field": "accountingDate",
-        "runner": "node",
-        "description": "Read-only logic for 'accountingDate' in header should be valid JS"
       },
       {
         "id": "t-readonlylogic-valid-header-adOrgId",
@@ -7574,25 +7307,11 @@
         "description": "Rule 'Product_AutoFill_Price' (callout) should be declared"
       },
       {
-        "id": "t-rule-declared-READONLY-Posted-AccountingDate",
-        "category": "rule-declared",
-        "rule": "READONLY_Posted_AccountingDate",
-        "runner": "node",
-        "description": "Rule 'READONLY_Posted_AccountingDate' (readOnlyLogic) should be declared"
-      },
-      {
         "id": "t-rule-declared-ReadOnly-When-Processed",
         "category": "rule-declared",
         "rule": "ReadOnly_When_Processed",
         "runner": "node",
         "description": "Rule 'ReadOnly_When_Processed' (displayLogic) should be declared"
-      },
-      {
-        "id": "t-rule-declared-SE-Invoice-TaxDate",
-        "category": "rule-declared",
-        "rule": "SE_Invoice_TaxDate",
-        "runner": "node",
-        "description": "Rule 'SE_Invoice_TaxDate' (callout) should be declared"
       },
       {
         "id": "t-searchable-filters-header-businessPartner",
@@ -7873,6 +7592,14 @@
         "field": "updatedBy",
         "runner": "node",
         "description": "System field 'updatedBy' should exist in backend but not frontend for exchangeRates"
+      },
+      {
+        "id": "t-system-field-header-accountingDate",
+        "category": "system-field",
+        "entity": "header",
+        "field": "accountingDate",
+        "runner": "node",
+        "description": "System field 'accountingDate' should exist in backend but not frontend for header"
       },
       {
         "id": "t-system-field-header-activity",
@@ -8715,12 +8442,36 @@
         "description": "System field 'tbaiIdtbai' should exist in backend but not frontend for header"
       },
       {
+        "id": "t-system-field-header-tbaiInvoicenum",
+        "category": "system-field",
+        "entity": "header",
+        "field": "tbaiInvoicenum",
+        "runner": "node",
+        "description": "System field 'tbaiInvoicenum' should exist in backend but not frontend for header"
+      },
+      {
+        "id": "t-system-field-header-tbaiInvoiceseq",
+        "category": "system-field",
+        "entity": "header",
+        "field": "tbaiInvoiceseq",
+        "runner": "node",
+        "description": "System field 'tbaiInvoiceseq' should exist in backend but not frontend for header"
+      },
+      {
         "id": "t-system-field-header-tbaiIsreverseinvoice",
         "category": "system-field",
         "entity": "header",
         "field": "tbaiIsreverseinvoice",
         "runner": "node",
         "description": "System field 'tbaiIsreverseinvoice' should exist in backend but not frontend for header"
+      },
+      {
+        "id": "t-system-field-header-tbaiIssent",
+        "category": "system-field",
+        "entity": "header",
+        "field": "tbaiIssent",
+        "runner": "node",
+        "description": "System field 'tbaiIssent' should exist in backend but not frontend for header"
       },
       {
         "id": "t-system-field-header-tbaiIssueDate",
@@ -8753,6 +8504,14 @@
         "field": "tbaiReverseinvoicetype",
         "runner": "node",
         "description": "System field 'tbaiReverseinvoicetype' should exist in backend but not frontend for header"
+      },
+      {
+        "id": "t-system-field-header-tbaiSequence",
+        "category": "system-field",
+        "entity": "header",
+        "field": "tbaiSequence",
+        "runner": "node",
+        "description": "System field 'tbaiSequence' should exist in backend but not frontend for header"
       },
       {
         "id": "t-system-field-header-tbaiSignaturevalue",
@@ -9384,25 +9143,25 @@
       }
     ],
     "summary": {
-      "total": 551,
+      "total": 533,
       "byCategory": {
         "action-endpoint": 26,
         "crud-flags": 4,
-        "default-value-type": 27,
-        "displaylogic-evaluable": 26,
-        "displaylogic-valid": 26,
-        "field-presence": 68,
-        "field-type": 68,
-        "readonlylogic-evaluable": 36,
-        "readonlylogic-valid": 36,
-        "rule-declared": 10,
+        "default-value-type": 26,
+        "displaylogic-evaluable": 22,
+        "displaylogic-valid": 22,
+        "field-presence": 63,
+        "field-type": 63,
+        "readonlylogic-evaluable": 35,
+        "readonlylogic-valid": 35,
+        "rule-declared": 8,
         "searchable-filters": 6,
         "selector-endpoint": 16,
-        "system-field": 198,
+        "system-field": 203,
         "visibility": 4
       },
       "byRunner": {
-        "node": 551,
+        "node": 533,
         "junit": 0
       }
     }

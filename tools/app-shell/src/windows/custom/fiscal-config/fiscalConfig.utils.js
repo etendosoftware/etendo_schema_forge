@@ -196,19 +196,14 @@ export function buildVerifactuUpdatePayload(form) {
   };
 }
 
-export function getFiscalRecordId(record, system) {
+export function getFiscalRecordId(record, _system) {
+  // The extractor now assigns the PK field its java_qualifier via IsKey='Y' (see
+  // schema_forge_core commit 5d363ad2f), so NeoFieldFilter no longer renames the
+  // PK to a per-system field name (tbaiConfigID / configuracinSII / verifactuConfig) —
+  // the API always returns it as `id`, for every system. The `system` param is kept
+  // for call-site compatibility in case a future system needs a different lookup.
   if (!record) return null;
-
-  switch (system) {
-    case 'SII':
-      return record.configuracinSII ?? null;
-    case 'TBAI':
-      return record.tbaiConfigID ?? null;
-    case 'VERIFACTU':
-      return record.verifactuConfig ?? null;
-    default:
-      return record.id ?? null;
-  }
+  return record.id ?? null;
 }
 
 export function mapSiiRecordToForm(record) {
