@@ -42,7 +42,7 @@ export function AccountsToolbar({
             value={search ?? ''}
             onChange={(e) => onSearchChange?.(e.target.value)}
             placeholder={ui('financeAccountsSearchPlaceholder')}
-            className="h-10 rounded-lg border-[#D1D4DB] bg-white pl-10 text-sm font-medium leading-6 text-[#121217] shadow-[0_1px_2px_rgba(18,18,23,0.05)] placeholder:text-[#6C6C89]"
+            className="h-10 rounded-lg border-[#D1D4DB] bg-card pl-10 text-sm font-medium leading-6 text-[#121217] shadow-[0_1px_2px_rgba(18,18,23,0.05)] placeholder:text-[#6C6C89]"
             data-testid="cuentas-search-input"
           />
         </div>
@@ -51,7 +51,7 @@ export function AccountsToolbar({
           type="button"
           variant="outline"
           onClick={onMatchingRules}
-          className="h-10 w-[188px] gap-1 rounded-lg border-[#D1D4DB] bg-white px-3 text-sm font-medium leading-6 text-[#121217] shadow-[0_1px_2px_rgba(18,18,23,0.05)] hover:bg-[#F5F7F9] [&_svg]:size-5"
+          className="h-10 w-[188px] gap-1 rounded-lg border-[#D1D4DB] bg-card px-3 text-sm font-medium leading-6 text-[#121217] shadow-[0_1px_2px_rgba(18,18,23,0.05)] hover:bg-[#F5F7F9] [&_svg]:size-5"
           data-testid="cuentas-matching-rules-button"
         >
           <Filter className="text-[#828FA3]" data-testid="Filter__c01b81" />

@@ -98,7 +98,7 @@ function PriceStepper({ value, prefix, disabled, onCommit }) {
   }
 
   return (
-    <div className="flex flex-row items-center h-10 border border-[#D1D4DB] rounded-lg shadow-[0px_1px_2px_rgba(18,18,23,0.05)] overflow-hidden bg-white focus-within:border-[#121217] focus-within:shadow-[0px_0px_0px_1px_#121217] transition-colors">
+    <div className="flex flex-row items-center h-10 border border-[#D1D4DB] rounded-lg shadow-[0px_1px_2px_rgba(18,18,23,0.05)] overflow-hidden bg-card focus-within:border-[#121217] focus-within:shadow-[0px_0px_0px_1px_#121217] transition-colors">
       {prefix && <span className="pl-3 text-sm text-[#121217] select-none">{prefix}</span>}
       <input
         type="number"
@@ -113,7 +113,7 @@ function PriceStepper({ value, prefix, disabled, onCommit }) {
         type="button"
         onClick={() => step(-1)}
         disabled={disabled}
-        className="w-10 h-[38px] flex items-center justify-center border-l border-[#E8EAEF] text-[#828FA3] hover:bg-gray-50 disabled:opacity-40 shrink-0"
+        className="w-10 h-[38px] flex items-center justify-center border-l border-[#E8EAEF] text-[#828FA3] hover:bg-muted disabled:opacity-40 shrink-0"
       >
         <Minus size={16} data-testid="Minus__d76b90" />
       </button>
@@ -121,7 +121,7 @@ function PriceStepper({ value, prefix, disabled, onCommit }) {
         type="button"
         onClick={() => step(1)}
         disabled={disabled}
-        className="w-10 h-[38px] flex items-center justify-center border-l border-[#E8EAEF] text-[#828FA3] hover:bg-gray-50 disabled:opacity-40 shrink-0"
+        className="w-10 h-[38px] flex items-center justify-center border-l border-[#E8EAEF] text-[#828FA3] hover:bg-muted disabled:opacity-40 shrink-0"
       >
         <Plus size={16} data-testid="Plus__d76b90" />
       </button>
@@ -392,7 +392,7 @@ export default function ProductPriceBar({ data, token, apiBaseUrl, catalogs, api
   if (!recordId) {
     return (
       <div className="p-2">
-        <div className="text-sm text-gray-500 mt-1">{ui('saveProductFirstPricing')}</div>
+        <div className="text-sm text-muted-foreground mt-1">{ui('saveProductFirstPricing')}</div>
       </div>
     );
   }
@@ -400,7 +400,7 @@ export default function ProductPriceBar({ data, token, apiBaseUrl, catalogs, api
   if (loading) {
     return (
       <div className="p-2">
-        <div className="rounded-xl border border-gray-200 bg-white p-4 text-sm text-gray-500 flex items-center gap-2">
+        <div className="rounded-xl border border-border-subtle bg-card p-4 text-sm text-muted-foreground flex items-center gap-2">
           <Loader2 size={14} className="animate-spin" data-testid="Loader2__d76b90" />
           {ui('loadingPricing')}
         </div>
@@ -444,7 +444,7 @@ export default function ProductPriceBar({ data, token, apiBaseUrl, catalogs, api
         </div>
 
         {sectionRows.length === 0 && !adding && (
-          <div className="text-sm text-gray-400">{ui('priceNoLists')}</div>
+          <div className="text-sm text-muted-foreground">{ui('priceNoLists')}</div>
         )}
 
         {/* Column headers — rendered once, not repeated per row */}
@@ -469,7 +469,7 @@ export default function ProductPriceBar({ data, token, apiBaseUrl, catalogs, api
                     type="text"
                     readOnly
                     value={name}
-                    className="h-10 w-full px-3 text-sm text-[#121217] bg-white border border-[#D1D4DB] rounded-lg shadow-[0px_1px_2px_rgba(18,18,23,0.05)] outline-none truncate"
+                    className="h-10 w-full px-3 text-sm text-[#121217] bg-card border border-[#D1D4DB] rounded-lg shadow-[0px_1px_2px_rgba(18,18,23,0.05)] outline-none truncate"
                   />
                 </div>
                 {/* Unit price */}
@@ -514,7 +514,7 @@ export default function ProductPriceBar({ data, token, apiBaseUrl, catalogs, api
             {/* Name selector — white at rest, whole box greys uniformly on hover (Figma).
                 The color lives on the root box so the input + chevron (transparent) match it,
                 instead of only the input greying (the product-window rule targets input:hover). */}
-            <div className="w-[300px] shrink-0 rounded-lg [&>div]:!bg-white [&>div:hover]:!bg-[#F5F7F9]">
+            <div className="w-[300px] shrink-0 rounded-lg [&>div]:!bg-card [&>div:hover]:!bg-[#F5F7F9]">
               <CreatableSearchSelect
                 key={selectOptions.map(o => o.id).join(',')}
                 field={{ key: 'priceListVersion', id: 'priceListVersion', required: false }}

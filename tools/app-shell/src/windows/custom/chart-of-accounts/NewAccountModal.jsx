@@ -37,10 +37,10 @@ import { ACCOUNT_TYPE_UI_KEYS } from './accountTypeLabels';
  */
 
 const INPUT_CLS =
-  'w-full h-10 rounded-lg border border-[#D1D4DB] bg-white px-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#121217] focus:border-transparent';
+  'w-full h-10 rounded-lg border border-[#D1D4DB] bg-card px-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#121217] focus:border-transparent';
 
 const SELECT_CLS =
-  'w-full h-10 rounded-lg border border-[#D1D4DB] bg-white px-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#121217] focus:border-transparent cursor-pointer';
+  'w-full h-10 rounded-lg border border-[#D1D4DB] bg-card px-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#121217] focus:border-transparent cursor-pointer';
 
 const FIELD_LABEL_CLS = 'block text-sm font-medium text-[#121217] mb-1.5';
 const ERROR_CLS = 'mt-1 text-xs text-red-500';
@@ -375,7 +375,7 @@ export default function NewAccountModal({
             data-testid="new-account-modal-cancel"
             onClick={onClose}
             disabled={saving}
-            className="px-4 py-2 text-sm font-medium text-[#121217] bg-white border border-[#D1D4DB] rounded-full shadow-sm hover:bg-[#F9FAFB] disabled:opacity-50 transition-colors"
+            className="px-4 py-2 text-sm font-medium text-[#121217] bg-card border border-[#D1D4DB] rounded-full shadow-sm hover:bg-[#F9FAFB] disabled:opacity-50 transition-colors"
           >
             {ui('cancel')}
           </button>

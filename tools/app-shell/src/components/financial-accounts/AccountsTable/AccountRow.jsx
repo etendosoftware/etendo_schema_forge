@@ -22,7 +22,7 @@ export function AccountRow({ account, onOpen, onReconcile, onEdit, onArchive, on
   return (
     <TableRow
       data-testid={`account-row-${account.id}`}
-      className="group relative h-16 cursor-pointer bg-white transition-shadow hover:z-10 hover:bg-white hover:shadow-lg"
+      className="group relative h-16 cursor-pointer bg-card transition-shadow hover:z-10 hover:bg-card hover:shadow-lg"
       onClick={() => onOpen?.(account)}
     >
       {/* Contract-driven data columns (decisions.json → contract.json) */}

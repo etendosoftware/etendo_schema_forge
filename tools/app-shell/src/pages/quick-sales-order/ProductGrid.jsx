@@ -77,7 +77,7 @@ export default function ProductGrid({ products, categories: categoriesProp, cate
   } else if (viewMode === 'list') {
     productDisplay = (
       /* List mode: compact rows */
-      (<div className="flex flex-col rounded-lg border border-border bg-white overflow-hidden">
+      (<div className="flex flex-col rounded-lg border border-border bg-card overflow-hidden">
         {sorted.map((product, idx) => {
           const isTop = showPriority && topSellerIds?.has(product.productId || product.id);
           return (
@@ -151,7 +151,7 @@ export default function ProductGrid({ products, categories: categoriesProp, cate
               data-product-id={product.id}
               type="button"
               onClick={() => onAddProduct(product)}
-              className={`group relative flex flex-col items-start gap-2 rounded-lg border bg-white p-3 text-left hover:shadow-sm transition-[border-color,box-shadow,ring] ${
+              className={`group relative flex flex-col items-start gap-2 rounded-lg border bg-card p-3 text-left hover:shadow-sm transition-[border-color,box-shadow,ring] ${
                 isTop
                   ? 'border-amber-300 ring-1 ring-amber-200/50'
                   : 'border-border hover:border-primary/40'
@@ -238,7 +238,7 @@ export default function ProductGrid({ products, categories: categoriesProp, cate
               title={ui('qsoGridView')}
               className={`flex h-7 w-7 items-center justify-center rounded-md transition-colors ${
                 viewMode === 'grid'
-                  ? 'bg-white text-foreground shadow-sm'
+                  ? 'bg-card text-foreground shadow-sm'
                   : 'text-muted-foreground hover:text-foreground'
               }`}
             >
@@ -250,7 +250,7 @@ export default function ProductGrid({ products, categories: categoriesProp, cate
               title={ui('qsoListView')}
               className={`flex h-7 w-7 items-center justify-center rounded-md transition-colors ${
                 viewMode === 'list'
-                  ? 'bg-white text-foreground shadow-sm'
+                  ? 'bg-card text-foreground shadow-sm'
                   : 'text-muted-foreground hover:text-foreground'
               }`}
             >

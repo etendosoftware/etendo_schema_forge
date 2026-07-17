@@ -54,7 +54,7 @@ function InvoiceActionButtons({ triggerEdit, onEmail, canSendToSif, onOpenSif, c
         <Button
           size="sm"
           variant="outline"
-          className="gap-1 px-2 py-1 h-8 rounded-lg text-sm font-medium bg-white border-[#D1D4DB] shadow-sm text-[#121217] [&_svg]:size-5"
+          className="gap-1 px-2 py-1 h-8 rounded-lg text-sm font-medium bg-card border-[#D1D4DB] shadow-sm text-[#121217] [&_svg]:size-5"
           onClick={onOpenSif}
           data-testid="Button__cf88e6">
           <FileText className="text-[#828FA3]" data-testid="FileText__cf88e6" />
@@ -64,7 +64,7 @@ function InvoiceActionButtons({ triggerEdit, onEmail, canSendToSif, onOpenSif, c
       <Button
         size="sm"
         variant="outline"
-        className="gap-1 px-2 py-1 h-8 rounded-lg text-sm font-medium bg-white border-[#D1D4DB] shadow-sm text-[#121217] disabled:opacity-40 disabled:cursor-not-allowed [&_svg]:size-5"
+        className="gap-1 px-2 py-1 h-8 rounded-lg text-sm font-medium bg-card border-[#D1D4DB] shadow-sm text-[#121217] disabled:opacity-40 disabled:cursor-not-allowed [&_svg]:size-5"
         disabled={!canAddPayment}
         onClick={canAddPayment ? onAddPayment : undefined}
         data-testid="Button__cf88e6">
@@ -75,7 +75,7 @@ function InvoiceActionButtons({ triggerEdit, onEmail, canSendToSif, onOpenSif, c
         <Button
           size="sm"
           variant="outline"
-          className="gap-1 px-2 py-1 h-8 rounded-lg text-sm font-medium bg-white border-[#D1D4DB] shadow-sm text-[#121217] [&_svg]:size-5"
+          className="gap-1 px-2 py-1 h-8 rounded-lg text-sm font-medium bg-card border-[#D1D4DB] shadow-sm text-[#121217] [&_svg]:size-5"
           onClick={onDownloadPdf}
           disabled={!hasPdf}
           data-testid="Button__cf88e6">
@@ -86,7 +86,7 @@ function InvoiceActionButtons({ triggerEdit, onEmail, canSendToSif, onOpenSif, c
       <Button
         size="sm"
         variant="outline"
-        className="gap-1 px-2 py-1 h-8 rounded-lg text-sm font-medium bg-white border-[#D1D4DB] shadow-sm text-[#121217] [&_svg]:size-5"
+        className="gap-1 px-2 py-1 h-8 rounded-lg text-sm font-medium bg-card border-[#D1D4DB] shadow-sm text-[#121217] [&_svg]:size-5"
         onClick={triggerEdit}
         data-testid="Button__cf88e6">
         <Edit2 className="text-[#828FA3]" data-testid="Edit2__cf88e6" />
@@ -94,7 +94,7 @@ function InvoiceActionButtons({ triggerEdit, onEmail, canSendToSif, onOpenSif, c
       </Button>
       <button
         type="button"
-        className="w-8 h-8 flex items-center justify-center bg-white border border-[#D1D4DB] shadow-sm rounded-lg hover:bg-gray-50 transition-colors"
+        className="w-8 h-8 flex items-center justify-center bg-card border border-[#D1D4DB] shadow-sm rounded-lg hover:bg-muted transition-colors"
       >
         <MoreVertical size={20} className="text-[#828FA3]" data-testid="MoreVertical__cf88e6" />
       </button>
@@ -143,7 +143,7 @@ function InvoiceGeneralTab({ invoice, partnerName, badgeProps, statusLabel, inst
             label={ui('invoicePreview.fiscalStatus.sii')}
             data-testid="InfoRow__cf88e6">
             {fiscalLoading
-              ? <span className="h-5 w-16 bg-gray-100 rounded animate-pulse inline-block" />
+              ? <span className="h-5 w-16 bg-muted rounded animate-pulse inline-block" />
               : <StatusPill estado={siiStatus ?? 'PE'} data-testid="StatusPill__cf88e6" />}
           </InfoRow>
         )}
@@ -152,7 +152,7 @@ function InvoiceGeneralTab({ invoice, partnerName, badgeProps, statusLabel, inst
             label={ui('invoicePreview.fiscalStatus.tbai')}
             data-testid="InfoRow__cf88e6">
             {fiscalLoading
-              ? <span className="h-5 w-16 bg-gray-100 rounded animate-pulse inline-block" />
+              ? <span className="h-5 w-16 bg-muted rounded animate-pulse inline-block" />
               : <StatusPill estado={tbaiStatus ?? 'Pendiente'} data-testid="StatusPill__cf88e6" />}
           </InfoRow>
         )}
@@ -161,7 +161,7 @@ function InvoiceGeneralTab({ invoice, partnerName, badgeProps, statusLabel, inst
             label={ui('invoicePreview.fiscalStatus.verifactu')}
             data-testid="InfoRow__cf88e6">
             {fiscalLoading
-              ? <span className="h-5 w-16 bg-gray-100 rounded animate-pulse inline-block" />
+              ? <span className="h-5 w-16 bg-muted rounded animate-pulse inline-block" />
               : <StatusPill estado={vfStatus ?? 'PE'} data-testid="StatusPill__cf88e6" />}
           </InfoRow>
         )}
@@ -190,7 +190,7 @@ function InvoiceGeneralTab({ invoice, partnerName, badgeProps, statusLabel, inst
 
 function EmptyPanel({ icon, text }) {
   return (
-    <div className="flex flex-col items-center justify-center h-full gap-3 text-gray-400 py-20">
+    <div className="flex flex-col items-center justify-center h-full gap-3 text-muted-foreground py-20">
       <span className="text-3xl">{icon}</span>
       <p className="text-sm">{text}</p>
     </div>

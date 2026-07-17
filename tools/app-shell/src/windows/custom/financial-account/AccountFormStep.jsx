@@ -16,7 +16,7 @@ const EMPTY = { name: '', iban: '', swiftCode: '', currencyId: '' };
 const TYPE_BY_MODE = { bank: 'B', card: 'CA' };
 
 const FIELD_LABEL = 'text-sm font-medium leading-6 text-[#121217]';
-const FIELD_INPUT = 'bg-white shadow-[0_1px_2px_rgba(18,18,23,0.05)]';
+const FIELD_INPUT = 'bg-card shadow-[0_1px_2px_rgba(18,18,23,0.05)]';
 
 /**
  * Reusable account form for the offline flow (ETP-4096). Used both by the New

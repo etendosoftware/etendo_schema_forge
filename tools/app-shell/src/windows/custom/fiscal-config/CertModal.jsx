@@ -222,12 +222,12 @@ export default function CertModal({ context, orgId, apiBaseUrl, onClose, onUploa
 
   let dropzoneClass;
   if (drag) dropzoneClass = 'border-foreground bg-muted/40';
-  else if (file) dropzoneClass = 'border-[#121217] bg-white';
+  else if (file) dropzoneClass = 'border-[#121217] bg-card';
   else dropzoneClass = 'border-dashed border-[#D1D4DB] hover:border-foreground/40 hover:bg-muted/20';
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-foreground/40 backdrop-blur-sm"
       onClick={onClose}
     >
       <div
@@ -315,7 +315,7 @@ export default function CertModal({ context, orgId, apiBaseUrl, onClose, onUploa
                     value={pwd}
                     onChange={e => setPwd(e.target.value)}
                     placeholder="••••••••"
-                    className="w-full h-10 rounded-lg border border-[#D1D4DB] bg-white px-3 pr-10 text-sm focus:outline-none focus:ring-2 focus:ring-foreground/20"
+                    className="w-full h-10 rounded-lg border border-[#D1D4DB] bg-card px-3 pr-10 text-sm focus:outline-none focus:ring-2 focus:ring-foreground/20"
                   />
                   <button
                     type="button"

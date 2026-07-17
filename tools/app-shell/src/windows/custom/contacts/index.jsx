@@ -72,7 +72,7 @@ export default function ContactsWindow(props) {
       <>
         <button
           onClick={() => setPendingBulkDelete({ rows: selectedRows, clearSelection, onDataMutated, apiBaseUrl, token })}
-          className="h-9 w-9 flex items-center justify-center rounded-lg border border-[#FBB1C4] bg-white shadow-[0px_1px_2px_rgba(18,18,23,0.05)] hover:bg-[#FFF0F4] transition-colors"
+          className="h-9 w-9 flex items-center justify-center rounded-lg border border-[#FBB1C4] bg-card shadow-[0px_1px_2px_rgba(18,18,23,0.05)] hover:bg-[#FFF0F4] transition-colors"
         >
           <Trash2 className="h-4 w-4 text-[#F3164E]" data-testid="Trash2__ef097c" />
         </button>

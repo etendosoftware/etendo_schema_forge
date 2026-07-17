@@ -4,7 +4,7 @@ import EntityCell from './EntityCell.jsx';
 /* eslint-disable react/prop-types */
 
 export default function KindRenderer({ mode = 'field', kind, ...props }) {
-  const className = props.className || 'w-full rounded-md border border-gray-200 bg-white px-2 py-1.5 text-sm text-gray-900 focus:border-gray-900 focus:outline-none';
+  const className = props.className || 'w-full rounded-md border border-border-subtle bg-card px-2 py-1.5 text-sm text-foreground focus:border-gray-900 focus:outline-none';
 
   if (kind === 'entity') {
     return mode === 'cell'

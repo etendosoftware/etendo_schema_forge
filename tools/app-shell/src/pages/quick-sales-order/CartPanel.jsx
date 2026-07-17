@@ -159,7 +159,7 @@ export default function CartPanel({
   }
 
   return (
-    <div className="flex h-full flex-col rounded-lg border border-border bg-white">
+    <div className="flex h-full flex-col rounded-lg border border-border bg-card">
       {/* Tabs */}
       <div className="flex border-b border-border">
         <button

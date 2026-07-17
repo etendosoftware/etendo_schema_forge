@@ -31,7 +31,7 @@ export default function SupplierSelector({ selected, onSelect, suppliers = [], i
       <button
         type="button"
         onClick={() => { setOpen(!open); setQuery(''); }}
-        className="flex w-full items-center gap-2 rounded-lg border border-border bg-white px-3 py-2 text-sm text-left hover:bg-muted/30 transition-colors"
+        className="flex w-full items-center gap-2 rounded-lg border border-border bg-card px-3 py-2 text-sm text-left hover:bg-muted/30 transition-colors"
       >
         <Truck
           className="h-4 w-4 text-muted-foreground shrink-0"
@@ -44,7 +44,7 @@ export default function SupplierSelector({ selected, onSelect, suppliers = [], i
           data-testid="ChevronDown__fbef91" />
       </button>
       {open && (
-        <div className="absolute z-50 mt-1 w-full rounded-lg border border-border bg-white shadow-lg">
+        <div className="absolute z-50 mt-1 w-full rounded-lg border border-border bg-card shadow-lg">
           <div className="relative p-2">
             <Search
               className="absolute left-4 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground"

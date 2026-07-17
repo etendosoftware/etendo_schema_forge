@@ -29,7 +29,7 @@ function ToggleCard({ label, description, fieldKey, value, onChange, editing }) 
   }
 
   return (
-    <div className="flex items-center justify-between rounded-xl border border-[#D1D1DB] bg-white p-4">
+    <div className="flex items-center justify-between rounded-xl border border-[#D1D1DB] bg-card p-4">
       <div>
         <div className="text-sm font-medium text-[#121217]">{label}</div>
         {description && <div className="text-xs text-[#6C6C89] mt-0.5">{description}</div>}
@@ -224,7 +224,7 @@ export default function AssetsDetailPanel({ data, token, apiBaseUrl, catalogs, a
   ];
 
   return (
-    <div className="p-2 pb-6 bg-white overflow-y-auto max-h-[380px] [&_input]:bg-white [&_textarea]:bg-white [&_textarea:disabled]:!bg-white [&_textarea:disabled]:opacity-50">
+    <div className="p-2 pb-6 bg-card overflow-y-auto max-h-[380px] [&_input]:bg-card [&_textarea]:bg-card [&_textarea:disabled]:!bg-card [&_textarea:disabled]:opacity-50">
       {/* Group 1 — Asset Info (no subtitle) */}
       <div className="mb-5">
         <EntityForm
@@ -299,7 +299,7 @@ export default function AssetsDetailPanel({ data, token, apiBaseUrl, catalogs, a
           data-testid="GroupDivider__8e32ca" />
       )}
       {depreciate && (
-        <div className="[&_button[role=combobox]]:!bg-white [&_input]:!bg-white">
+        <div className="[&_button[role=combobox]]:!bg-card [&_input]:!bg-card">
           <EntityForm
             fields={dimensionFields}
             {...common}

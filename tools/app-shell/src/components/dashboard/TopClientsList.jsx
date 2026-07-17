@@ -53,7 +53,7 @@ export function TopClientsList({ clients = [], currencyLabel = '', token = '', a
   };
 
   return (
-    <div className="rounded-xl border overflow-hidden bg-white flex flex-col h-full" style={{ borderColor: '#E8EAEF' }}>
+    <div className="rounded-xl border overflow-hidden bg-card flex flex-col h-full" style={{ borderColor: '#E8EAEF' }}>
       {/* Cabecera */}
       <div
         className="flex items-center border-b"

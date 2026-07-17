@@ -335,7 +335,7 @@ export function ListFilterBar({
               variant="outline"
               size="sm"
               className={[
-                'gap-1.5 font-normal h-9 px-3 rounded-lg bg-white',
+                'gap-1.5 font-normal h-9 px-3 rounded-lg bg-card',
                 activeStatusCode ? 'text-foreground border-primary/40' : 'text-muted-foreground',
               ].join(' ')}
             >
@@ -375,7 +375,7 @@ export function ListFilterBar({
               variant="outline"
               size="sm"
               className={[
-                'gap-1.5 font-normal h-9 px-3 rounded-lg bg-white',
+                'gap-1.5 font-normal h-9 px-3 rounded-lg bg-card',
                 activeTypeCode ? 'text-foreground border-primary/40' : 'text-muted-foreground',
               ].join(' ')}
             >
@@ -415,7 +415,7 @@ export function ListFilterBar({
               variant="outline"
               size="sm"
               className={[
-                'gap-1.5 font-normal h-9 px-3 rounded-lg bg-white',
+                'gap-1.5 font-normal h-9 px-3 rounded-lg bg-card',
                 hasActiveDate ? 'text-foreground border-primary/40' : 'text-muted-foreground',
               ].join(' ')}
             >
@@ -441,7 +441,7 @@ export function ListFilterBar({
           <button
             type="button"
             data-testid="filter-advanced"
-            className="relative inline-flex h-9 items-center gap-1.5 rounded-lg border border-border bg-white px-3 text-sm font-medium text-foreground transition-colors hover:bg-[#F5F7F9]"
+            className="relative inline-flex h-9 items-center gap-1.5 rounded-lg border border-border bg-card px-3 text-sm font-medium text-foreground transition-colors hover:bg-[#F5F7F9]"
           >
             <Filter className="h-4 w-4 text-muted-foreground" data-testid="Filter__6d5e90" />
             <span>{ui('filters')}</span>

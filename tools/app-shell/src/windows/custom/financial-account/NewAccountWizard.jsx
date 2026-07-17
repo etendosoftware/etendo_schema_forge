@@ -196,7 +196,7 @@ export function NewAccountWizard({ open, onClose, onCreated, onConnectWithCreati
       onOpenChange={(value) => { if (!value) onClose?.(); }}
       data-testid="Dialog__24760b">
       <DialogContent
-        className={cn('bg-white', contentWidth)}
+        className={cn('bg-card', contentWidth)}
         data-testid="new-account-wizard"
       >
         <DialogHeader data-testid="DialogHeader__24760b">
@@ -318,7 +318,7 @@ function TypePicker({ ui, onPick }) {
           type="button"
           onClick={() => onPick(type)}
           data-testid={`new-account-type-${type}`}
-          className="flex flex-col rounded-xl border border-[#E8EAEF] bg-white p-1 text-left shadow-[0_1px_2px_rgba(18,18,23,0.05)] transition-colors hover:bg-[#F5F7F9]"
+          className="flex flex-col rounded-xl border border-[#E8EAEF] bg-card p-1 text-left shadow-[0_1px_2px_rgba(18,18,23,0.05)] transition-colors hover:bg-[#F5F7F9]"
         >
           <img
             src={image}
@@ -328,7 +328,7 @@ function TypePicker({ ui, onPick }) {
           />
           <div className="flex flex-col gap-1 p-3">
             <div className="flex items-center gap-2">
-              <span className="flex h-8 w-8 items-center justify-center rounded-lg border border-[#D1D4DB] bg-white text-[#828FA3] shadow-[0_1px_3px_rgba(18,18,23,0.1),0_1px_2px_rgba(18,18,23,0.06)]">
+              <span className="flex h-8 w-8 items-center justify-center rounded-lg border border-[#D1D4DB] bg-card text-[#828FA3] shadow-[0_1px_3px_rgba(18,18,23,0.1),0_1px_2px_rgba(18,18,23,0.06)]">
                 <Icon className="h-5 w-5" data-testid="Icon__24760b" />
               </span>
               <span className="text-base font-medium leading-6 text-[#121217]">{ui(titleKey)}</span>
@@ -373,7 +373,7 @@ function BankPicker({ ui, query, onQueryChange, onPick, onSkip }) {
       {/* Banco field: country selector + search input */}
       <div className="flex flex-col gap-2">
         <p className="text-sm font-medium leading-6 text-[#121217]">{ui('financeAccountsNewBankLabel')}</p>
-        <div className="flex h-10 w-full items-center overflow-hidden rounded-lg border border-[#D1D4DB] bg-white shadow-[0_1px_2px_rgba(18,18,23,0.05)]">
+        <div className="flex h-10 w-full items-center overflow-hidden rounded-lg border border-[#D1D4DB] bg-card shadow-[0_1px_2px_rgba(18,18,23,0.05)]">
           <DropdownMenu data-testid="DropdownMenu__24760b">
             <DropdownMenuTrigger asChild data-testid="DropdownMenuTrigger__24760b">
               <button
@@ -423,7 +423,7 @@ function BankPicker({ ui, query, onQueryChange, onPick, onSkip }) {
             {BANK_SKELETON_KEYS.map((key) => (
               <div
                 key={key}
-                className="flex h-[124px] flex-col items-start gap-3 rounded-xl border border-[#E8EAEF] bg-white p-4 shadow-[0_1px_2px_rgba(18,18,23,0.05)]"
+                className="flex h-[124px] flex-col items-start gap-3 rounded-xl border border-[#E8EAEF] bg-card p-4 shadow-[0_1px_2px_rgba(18,18,23,0.05)]"
               >
                 <Skeleton className="h-10 w-10 rounded-lg" data-testid="Skeleton__24760b" />
                 <Skeleton className="h-4 w-24 rounded" data-testid="Skeleton__24760b" />
@@ -438,16 +438,16 @@ function BankPicker({ ui, query, onQueryChange, onPick, onSkip }) {
               type="button"
               onClick={() => onPick(bank)}
               data-testid={`new-account-bank-${bank.id}`}
-              className="flex h-[124px] flex-col items-start gap-3 rounded-xl border border-[#E8EAEF] bg-white p-4 text-left shadow-[0_1px_2px_rgba(18,18,23,0.05)] transition-colors hover:bg-[#F5F7F9]"
+              className="flex h-[124px] flex-col items-start gap-3 rounded-xl border border-[#E8EAEF] bg-card p-4 text-left shadow-[0_1px_2px_rgba(18,18,23,0.05)] transition-colors hover:bg-[#F5F7F9]"
             >
               {bank.logoUrl ? (
                 <img
                   src={bank.logoUrl}
                   alt=""
-                  className="h-10 w-10 rounded-lg border border-[#D1D4DB] bg-white object-contain p-1 shadow-[0_1px_2px_rgba(18,18,23,0.05)]"
+                  className="h-10 w-10 rounded-lg border border-[#D1D4DB] bg-card object-contain p-1 shadow-[0_1px_2px_rgba(18,18,23,0.05)]"
                 />
               ) : (
-                <span className="flex h-10 w-10 items-center justify-center rounded-lg border border-[#D1D4DB] bg-white shadow-[0_1px_2px_rgba(18,18,23,0.05)]">
+                <span className="flex h-10 w-10 items-center justify-center rounded-lg border border-[#D1D4DB] bg-card shadow-[0_1px_2px_rgba(18,18,23,0.05)]">
                   <Landmark className="h-5 w-5 text-[#828FA3]" data-testid="Landmark__24760b" />
                 </span>
               )}
@@ -476,7 +476,7 @@ function InstitutionList({ ui, bank, onPick }) {
       {/* Bank display field */}
       <div className="flex flex-col gap-2">
         <p className="text-sm font-medium leading-6 text-[#121217]">{ui('financeAccountsNewBankLabel')}</p>
-        <div className="flex h-10 w-full items-center overflow-hidden rounded-lg border border-[#D1D4DB] bg-white shadow-[0_1px_2px_rgba(18,18,23,0.05)]">
+        <div className="flex h-10 w-full items-center overflow-hidden rounded-lg border border-[#D1D4DB] bg-card shadow-[0_1px_2px_rgba(18,18,23,0.05)]">
           <div className="flex h-full w-[60px] shrink-0 items-center justify-center gap-0.5 border-r border-[#E8EAEF] px-2">
             <Landmark className="h-4 w-4 text-[#828FA3]" data-testid="Landmark__24760b" />
             <ChevronDown className="h-4 w-4 text-[#828FA3]" data-testid="ChevronDown__24760b" />
@@ -532,7 +532,7 @@ function ConnectionCard({ icon: Icon, iconTone = 'neutral', title, description, 
       type="button"
       onClick={onClick}
       data-testid={testid}
-      className="flex flex-col rounded-xl border border-[#E8EAEF] bg-white p-5 text-left shadow-[0_1px_2px_rgba(18,18,23,0.05)] transition-colors hover:bg-[#F5F7F9]"
+      className="flex flex-col rounded-xl border border-[#E8EAEF] bg-card p-5 text-left shadow-[0_1px_2px_rgba(18,18,23,0.05)] transition-colors hover:bg-[#F5F7F9]"
     >
       <span
         className={cn(

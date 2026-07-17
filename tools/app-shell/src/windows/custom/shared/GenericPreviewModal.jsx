@@ -91,7 +91,7 @@ function ManagedLeftPanel({ cfg, leftPanel }) {
             <a
               href={objectUrl}
               download={fileName}
-              className="w-8 h-8 flex items-center justify-center bg-white border border-[#D1D4DB] shadow-sm rounded-lg hover:bg-gray-50 transition-colors"
+              className="w-8 h-8 flex items-center justify-center bg-card border border-[#D1D4DB] shadow-sm rounded-lg hover:bg-muted transition-colors"
               title={`${ui('downloadPdf')} — ${fileName}`}
               aria-label={ui('downloadPdf')}
             >
@@ -100,7 +100,7 @@ function ManagedLeftPanel({ cfg, leftPanel }) {
             <button
               type="button"
               onClick={() => attachment.deleteFile().catch(() => {})}
-              className="w-8 h-8 flex items-center justify-center bg-white border border-[#D1D4DB] shadow-sm rounded-lg hover:bg-gray-50 transition-colors"
+              className="w-8 h-8 flex items-center justify-center bg-card border border-[#D1D4DB] shadow-sm rounded-lg hover:bg-muted transition-colors"
               title={`${ui('deleteDocument')} — ${fileName}`}
               aria-label={ui('deleteDocument')}
             >
@@ -110,7 +110,7 @@ function ManagedLeftPanel({ cfg, leftPanel }) {
         )}
         {mimeType?.startsWith('image/') ? (
           <div className="w-full h-full overflow-auto flex items-center justify-center">
-            <img src={objectUrl} alt={fileName} className="max-w-full max-h-full object-contain bg-white shadow-md" />
+            <img src={objectUrl} alt={fileName} className="max-w-full max-h-full object-contain bg-card shadow-md" />
           </div>
         ) : (
           <PdfViewer url={objectUrl} data-testid="PdfViewer__152ff6" />
@@ -138,24 +138,24 @@ function ManagedLeftPanel({ cfg, leftPanel }) {
         onDragLeave={handleDragLeave}
         onClick={() => fileInputRef.current?.click()}
         className={`w-full h-full max-h-[420px] border-2 border-dashed rounded-2xl flex flex-col items-center justify-center gap-4 cursor-pointer transition-colors ${
-          isDragOver ? 'border-gray-400 bg-gray-100' : 'border-gray-300 bg-gray-50 hover:border-gray-400 hover:bg-gray-100/60'
+          isDragOver ? 'border-border-control bg-muted' : 'border-border-control bg-muted hover:border-border-control hover:bg-muted/60'
         }`}
       >
-        <div className="w-16 h-20 bg-white rounded-lg border border-gray-200 flex items-center justify-center shadow-sm">
-          <Upload size={20} className="text-gray-400" data-testid="Upload__152ff6" />
+        <div className="w-16 h-20 bg-card rounded-lg border border-border-subtle flex items-center justify-center shadow-sm">
+          <Upload size={20} className="text-muted-foreground" data-testid="Upload__152ff6" />
         </div>
         {isDragOver ? (
-          <p className="text-sm font-medium text-gray-700">{ui('dropZoneDropHere')}</p>
+          <p className="text-sm font-medium text-foreground">{ui('dropZoneDropHere')}</p>
         ) : (
           <>
-            <p className="text-sm text-gray-600 mt-1">{ui('dropZoneUploadPrompt')}</p>
+            <p className="text-sm text-muted-foreground mt-1">{ui('dropZoneUploadPrompt')}</p>
             <button
-              className="px-4 py-2 text-sm font-medium text-gray-900 bg-transparent border border-gray-900 rounded-lg hover:bg-gray-900 hover:text-white transition-colors"
+              className="px-4 py-2 text-sm font-medium text-foreground bg-transparent border border-gray-900 rounded-lg hover:bg-gray-900 hover:text-white transition-colors"
               onClick={(e) => { e.stopPropagation(); fileInputRef.current?.click(); }}
             >
               {ui('dropZoneBrowse')}
             </button>
-            <p className="text-xs text-gray-400">{ui('dropZoneAcceptedTypes')}</p>
+            <p className="text-xs text-muted-foreground">{ui('dropZoneAcceptedTypes')}</p>
           </>
         )}
         <input ref={fileInputRef} type="file" accept={ACCEPT_ATTR} className="hidden" onChange={handleFileChange} />
@@ -256,12 +256,12 @@ const GenericPreviewModal = forwardRef(function GenericPreviewModal({
 
   return (
     <div
-      className={`fixed inset-0 z-50 bg-black/30 ${getBackdropClass(animState)}`}
+      className={`fixed inset-0 z-50 bg-foreground/30 ${getBackdropClass(animState)}`}
       onClick={triggerClose}
     >
       <div
         data-testid="generic-preview-modal"
-        className={`absolute bg-white shadow-2xl overflow-hidden flex flex-col ${getCardClass(animState)}`}
+        className={`absolute bg-card shadow-2xl overflow-hidden flex flex-col ${getCardClass(animState)}`}
         style={{ top: 8, right: 8, bottom: 8, width: resolvedLeftPanel != null ? 'min(calc(100vw - 308px), 1400px)' : 380, borderRadius: 12 }}
         onClick={(e) => e.stopPropagation()}
       >
@@ -282,18 +282,18 @@ const GenericPreviewModal = forwardRef(function GenericPreviewModal({
 
             <button
               onClick={triggerClose}
-              className="absolute top-3 right-3 z-10 p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+              className="absolute top-3 right-3 z-10 p-1.5 text-muted-foreground hover:text-muted-foreground hover:bg-muted rounded-lg transition-colors"
               aria-label={ui('close')}
             >
               <X size={16} data-testid="X__152ff6" />
             </button>
 
             {/* Header: title + subtitle + action buttons */}
-            <div className="px-4 pt-4 pb-3 border-b border-gray-200 shrink-0">
+            <div className="px-4 pt-4 pb-3 border-b border-border-subtle shrink-0">
               <div className="pr-8 mb-3">
-                <span className="font-bold text-gray-900 text-lg leading-tight block">{title}</span>
+                <span className="font-bold text-foreground text-lg leading-tight block">{title}</span>
                 {subtitle && (
-                  <span className="text-xs text-gray-500 mt-0.5 block">{subtitle}</span>
+                  <span className="text-xs text-muted-foreground mt-0.5 block">{subtitle}</span>
                 )}
               </div>
               {resolvedActionButtons != null && (
@@ -315,7 +315,7 @@ const GenericPreviewModal = forwardRef(function GenericPreviewModal({
                       key={tab.key}
                       onClick={() => setActiveTab(tab.key)}
                       className={`flex-1 h-8 px-2 py-1 text-sm font-medium rounded-lg transition-colors text-[#121217] ${
-                        activeTab === tab.key ? 'bg-white shadow-sm' : 'hover:bg-white/50'
+                        activeTab === tab.key ? 'bg-card shadow-sm' : 'hover:bg-card/50'
                       }`}
                     >
                       {tab.label}
@@ -341,7 +341,7 @@ export default GenericPreviewModal;
 
 export function EmptyPanel({ icon, text }) {
   return (
-    <div className="flex flex-col items-center justify-center h-full gap-3 text-gray-400 py-20">
+    <div className="flex flex-col items-center justify-center h-full gap-3 text-muted-foreground py-20">
       <span className="text-3xl">{icon}</span>
       <p className="text-sm">{text}</p>
     </div>

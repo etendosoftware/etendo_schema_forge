@@ -55,7 +55,7 @@ function ImportSplitButton({ ui, onImportClick, onManualClick }) {
       {open ? (
         <div
           role="menu"
-          className="absolute right-0 top-11 z-50 w-[229px] overflow-hidden rounded-lg border border-[#E8EAEF] bg-white py-2 shadow-lg"
+          className="absolute right-0 top-11 z-50 w-[229px] overflow-hidden rounded-lg border border-[#E8EAEF] bg-card py-2 shadow-lg"
         >
           <button
             type="button"
@@ -145,7 +145,7 @@ export function StatementsToolbar({
         aria-label={ui('financeAccountDetailBack')}
         data-testid="statements-toolbar-back"
         onClick={() => navigate(-1)}
-        className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-border bg-white text-muted-foreground transition-colors hover:bg-[#F5F7F9] hover:text-foreground"
+        className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-border bg-card text-muted-foreground transition-colors hover:bg-[#F5F7F9] hover:text-foreground"
       >
         <ArrowLeft className="h-4 w-4" data-testid="ArrowLeft__8a428c" />
       </button>
@@ -178,7 +178,7 @@ export function StatementsToolbar({
           value={search}
           onChange={(e) => onSearchChange(e.target.value)}
           data-testid="statements-search-input"
-          className="h-10 w-48 rounded-lg border border-[#D1D4DB] bg-white px-3 text-sm text-[#121217] placeholder:text-[#8a8aa3] shadow-[0_1px_2px_rgba(18,18,23,0.05)] focus:outline-none focus:ring-2 focus:ring-[#121217] focus:ring-offset-1"
+          className="h-10 w-48 rounded-lg border border-[#D1D4DB] bg-card px-3 text-sm text-[#121217] placeholder:text-[#8a8aa3] shadow-[0_1px_2px_rgba(18,18,23,0.05)] focus:outline-none focus:ring-2 focus:ring-[#121217] focus:ring-offset-1"
         />
       </div>
       {/* PSD2-synced accounts: a single "sync statements" action (Salt Edge fetch) replaces the

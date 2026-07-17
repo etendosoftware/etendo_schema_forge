@@ -182,7 +182,7 @@ export default function AssetsAmortizationPanel({ data, recordId: recordIdProp, 
   const renderBody = () => {
     if (loading) {
       return (
-        <div className="text-xs text-gray-400 py-4 text-center inline-flex items-center gap-1.5 justify-center w-full">
+        <div className="text-xs text-muted-foreground py-4 text-center inline-flex items-center gap-1.5 justify-center w-full">
           <Loader2 className="h-3.5 w-3.5 animate-spin" data-testid="Loader2__34159c" />
           {ui('assetsLoading')}
         </div>
@@ -191,7 +191,7 @@ export default function AssetsAmortizationPanel({ data, recordId: recordIdProp, 
 
     if (lines.length === 0) {
       return (
-        <div className="text-xs text-gray-400 py-6 text-center border border-dashed border-gray-200 rounded-lg">
+        <div className="text-xs text-muted-foreground py-6 text-center border border-dashed border-border-subtle rounded-lg">
           {ui('assetsNoAmortizationLines')}
         </div>
       );

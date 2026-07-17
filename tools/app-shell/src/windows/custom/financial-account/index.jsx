@@ -237,7 +237,7 @@ export default function FinancialAccountWindow({ recordId }) {
               type="button"
               data-testid="financial-account-automatch"
               onClick={() => setAutoMatchOpen(true)}
-              className="inline-flex h-10 items-center gap-1 rounded-lg border border-[#D1D4DB] bg-white px-3 text-sm font-medium leading-6 text-[#121217] shadow-[0_1px_2px_rgba(18,18,23,0.05)] hover:bg-[#F5F7F9]"
+              className="inline-flex h-10 items-center gap-1 rounded-lg border border-[#D1D4DB] bg-card px-3 text-sm font-medium leading-6 text-[#121217] shadow-[0_1px_2px_rgba(18,18,23,0.05)] hover:bg-[#F5F7F9]"
             >
               <Sparkles className="h-5 w-5 text-[#828FA3]" data-testid="Sparkles__f7dbb3" />
               <span className="px-1">{ui('financeReconcileActionAutomatch')}</span>
@@ -247,7 +247,7 @@ export default function FinancialAccountWindow({ recordId }) {
               type="button"
               data-testid="financial-account-export"
               onClick={handleExport}
-              className="inline-flex h-10 items-center gap-1 rounded-lg border border-[#D1D4DB] bg-white px-3 text-sm font-medium leading-6 text-[#121217] shadow-[0_1px_2px_rgba(18,18,23,0.05)] hover:bg-[#F5F7F9]"
+              className="inline-flex h-10 items-center gap-1 rounded-lg border border-[#D1D4DB] bg-card px-3 text-sm font-medium leading-6 text-[#121217] shadow-[0_1px_2px_rgba(18,18,23,0.05)] hover:bg-[#F5F7F9]"
             >
               <Upload className="h-6 w-6 text-[#828FA3]" data-testid="Upload__f7dbb3" />
               <span className="px-1">{ui('financeAccountDetailExport')}</span>

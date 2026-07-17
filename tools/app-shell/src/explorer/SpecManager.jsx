@@ -27,7 +27,7 @@ export default function SpecManager({ spec, onRefresh }) {
   const [editingQualifier, setEditingQualifier] = useState(null);
   const [qualifierValue, setQualifierValue] = useState('');
 
-  if (!spec) return <div className="p-4 text-sm text-zinc-500">Select a spec to manage</div>;
+  if (!spec) return <div className="p-4 text-sm text-inverse-muted">Select a spec to manage</div>;
 
   const showMessage = (text, isError = false) => {
     setMessage({ text, isError });
@@ -127,10 +127,10 @@ export default function SpecManager({ spec, onRefresh }) {
   return (
     <div className="flex flex-col h-full overflow-y-auto">
       {/* Header */}
-      <div className="px-4 py-3 border-b border-zinc-800 flex items-center justify-between">
+      <div className="px-4 py-3 border-b border-inverse-border flex items-center justify-between">
         <div>
-          <h3 className="text-sm font-semibold text-zinc-200">{spec.name}</h3>
-          <p className="text-[10px] text-zinc-500">
+          <h3 className="text-sm font-semibold text-inverse-foreground">{spec.name}</h3>
+          <p className="text-[10px] text-inverse-muted">
             {spec.type === 'W' ? 'Window' : 'Process'} · {spec.entities?.length || 0} entities · ID: {spec.id?.substring(0, 8)}...
           </p>
         </div>
@@ -155,20 +155,20 @@ export default function SpecManager({ spec, onRefresh }) {
 
       {/* Entities */}
       {(spec.entities || []).map(entity => (
-        <div key={entity.id || entity.name} className="border-b border-zinc-800/50">
+        <div key={entity.id || entity.name} className="border-b border-inverse-border/50">
           {/* Entity header */}
           <button
             onClick={() => setExpandedEntity(expandedEntity === entity.name ? null : entity.name)}
-            className="w-full text-left px-4 py-3 hover:bg-zinc-800/50 transition-colors"
+            className="w-full text-left px-4 py-3 hover:bg-inverse-muted/50 transition-colors"
           >
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <span className="text-sm font-medium text-zinc-200">{entity.name}</span>
+                <span className="text-sm font-medium text-inverse-foreground">{entity.name}</span>
                 {entity.tabLevel > 0 && (
-                  <span className="text-[10px] text-zinc-600 bg-zinc-800 px-1.5 py-0.5 rounded">L{entity.tabLevel}</span>
+                  <span className="text-[10px] text-inverse-muted bg-inverse-muted px-1.5 py-0.5 rounded">L{entity.tabLevel}</span>
                 )}
               </div>
-              <span className="text-[10px] text-zinc-600">
+              <span className="text-[10px] text-inverse-muted">
                 {entity.fields?.length || 0} fields · {expandedEntity === entity.name ? '▼' : '▶'}
               </span>
             </div>
@@ -183,8 +183,8 @@ export default function SpecManager({ spec, onRefresh }) {
                   className={cn(
                     'px-2 py-0.5 rounded border text-[10px] font-mono font-semibold transition-all',
                     entity[flag.key]
-                      ? METHOD_COLORS[flag.label.split(' ')[0]] || 'bg-zinc-700 text-zinc-300 border-zinc-600'
-                      : 'bg-zinc-900 text-zinc-600 border-zinc-800 opacity-50 hover:opacity-80'
+                      ? METHOD_COLORS[flag.label.split(' ')[0]] || 'bg-inverse-muted text-inverse-foreground border-inverse-border'
+                      : 'bg-inverse text-inverse-muted border-inverse-border opacity-50 hover:opacity-80'
                   )}
                 >
                   {saving === entity.id + flag.key ? '...' : flag.label}
@@ -199,7 +199,7 @@ export default function SpecManager({ spec, onRefresh }) {
                       value={qualifierValue}
                       onChange={e => setQualifierValue(e.target.value)}
                       placeholder="CDI qualifier"
-                      className="w-32 bg-zinc-800 text-zinc-200 border border-zinc-600 rounded px-1.5 py-0.5 text-[10px] font-mono focus:outline-none focus:ring-1 focus:ring-blue-500"
+                      className="w-32 bg-inverse-muted text-inverse-foreground border border-inverse-border rounded px-1.5 py-0.5 text-[10px] font-mono focus:outline-none focus:ring-1 focus:ring-focus-ring"
                       autoFocus
                       onKeyDown={e => {
                         if (e.key === 'Enter') handleSaveQualifier(entity);
@@ -215,7 +215,7 @@ export default function SpecManager({ spec, onRefresh }) {
                     </button>
                     <button
                       onClick={() => setEditingQualifier(null)}
-                      className="text-[10px] text-zinc-500 hover:text-zinc-300"
+                      className="text-[10px] text-inverse-muted hover:text-inverse-foreground"
                     >
                       ✗
                     </button>
@@ -227,7 +227,7 @@ export default function SpecManager({ spec, onRefresh }) {
                       'px-2 py-0.5 rounded border text-[10px] font-mono transition-all',
                       entity.javaQualifier
                         ? 'bg-cyan-600/20 text-cyan-400 border-cyan-600/40'
-                        : 'bg-zinc-900 text-zinc-600 border-zinc-800 opacity-50 hover:opacity-80'
+                        : 'bg-inverse text-inverse-muted border-inverse-border opacity-50 hover:opacity-80'
                     )}
                     title="Set CDI Java qualifier for custom NeoHandler override"
                   >
@@ -240,21 +240,21 @@ export default function SpecManager({ spec, onRefresh }) {
 
           {/* Fields (expanded) */}
           {expandedEntity === entity.name && entity.fields && (
-            <div className="bg-zinc-900/50 border-t border-zinc-800/50">
-              <div className="px-4 py-1.5 flex items-center text-[10px] text-zinc-600 font-medium uppercase tracking-wider border-b border-zinc-800/30">
+            <div className="bg-inverse/50 border-t border-inverse-border/50">
+              <div className="px-4 py-1.5 flex items-center text-[10px] text-inverse-muted font-medium uppercase tracking-wider border-b border-inverse-border/30">
                 <span className="w-8">Inc</span>
                 <span className="w-8">RO</span>
                 <span className="flex-1">Field</span>
                 <span className="w-20 text-right">Type</span>
               </div>
               {entity.fields.map(field => (
-                <div key={field.id || field.name} className="px-4 py-1.5 flex items-center hover:bg-zinc-800/30 transition-colors">
+                <div key={field.id || field.name} className="px-4 py-1.5 flex items-center hover:bg-inverse-muted/30 transition-colors">
                   <button
                     onClick={() => handleToggleField(entity, field, 'included')}
                     disabled={saving === field.id + 'included'}
                     className={cn(
                       'w-8 text-center text-xs',
-                      field.included ? 'text-green-400' : 'text-zinc-600'
+                      field.included ? 'text-green-400' : 'text-inverse-muted'
                     )}
                   >
                     {saving === field.id + 'included' ? '·' : field.included ? '✓' : '✗'}
@@ -264,14 +264,14 @@ export default function SpecManager({ spec, onRefresh }) {
                     disabled={saving === field.id + 'readOnly'}
                     className={cn(
                       'w-8 text-center text-xs',
-                      field.readOnly ? 'text-amber-400' : 'text-zinc-600'
+                      field.readOnly ? 'text-amber-400' : 'text-inverse-muted'
                     )}
                   >
                     {saving === field.id + 'readOnly' ? '·' : field.readOnly ? 'RO' : '—'}
                   </button>
                   <span className={cn(
                     'flex-1 text-xs font-mono',
-                    field.included ? 'text-zinc-300' : 'text-zinc-600 line-through'
+                    field.included ? 'text-inverse-foreground' : 'text-inverse-muted line-through'
                   )}>
                     {field.name}
                     {field.required && <span className="text-red-400 ml-1">*</span>}
@@ -279,7 +279,7 @@ export default function SpecManager({ spec, onRefresh }) {
                       <span className="text-blue-400/60 ml-1 text-[10px]">[{field.selectorType}]</span>
                     )}
                   </span>
-                  <span className="w-20 text-right text-[10px] text-zinc-500">{field.columnType}</span>
+                  <span className="w-20 text-right text-[10px] text-inverse-muted">{field.columnType}</span>
                 </div>
               ))}
             </div>

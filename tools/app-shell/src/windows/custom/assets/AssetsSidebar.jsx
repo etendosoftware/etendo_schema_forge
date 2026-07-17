@@ -45,7 +45,7 @@ export default function AssetsSidebar({ data }) {
     <div className="flex flex-col gap-3">
       <div>
         <div className="pb-3">
-          <span className="text-sm font-semibold text-gray-800">{ui('assetsDepreciationSummary')}</span>
+          <span className="text-sm font-semibold text-foreground">{ui('assetsDepreciationSummary')}</span>
         </div>
         <div className="flex flex-col gap-3">
           <MetricCard

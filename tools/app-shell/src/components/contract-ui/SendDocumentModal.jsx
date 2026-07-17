@@ -494,7 +494,7 @@ export default function SendDocumentModal({ documentType = 'Document', documentN
         @keyframes sfSlideUpOut  { from { transform: translateY(0); opacity: 1; } to { transform: translateY(-40px); opacity: 0; } }
         @keyframes sfSpin { to { transform: rotate(360deg); } }
       `}</style>
-      <div onClick={onClose} className="fixed inset-0 z-50 flex items-center justify-center bg-black/30">
+      <div onClick={onClose} className="fixed inset-0 z-50 flex items-center justify-center bg-foreground/30">
         <div onClick={e => e.stopPropagation()} style={{ width: 800, height: 560, display: 'flex', flexDirection: 'column', overflow: 'hidden', borderRadius: 12, backgroundColor: '#fff', boxShadow: '0 8px 30px rgba(0,0,0,0.12)', border: '0.5px solid #E5E7EB', animation: isClosing ? 'sfSlideUpOut 280ms ease-in forwards' : 'sfSlideDownIn 280ms ease-out' }}>
           <div style={{ padding: '12px 16px', background: '#F5F5F5', borderBottom: '1px solid #E5E5E5', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -581,7 +581,7 @@ export function SendDocumentButton({ onClick }) {
         data-testid="action-send-email"
         onClick={onClick}
         aria-label={label}
-        className="flex items-center justify-center p-[7px] rounded-md bg-white border border-[#D1D4DB] shadow-[0px_1px_2px_0px_#1212170D] text-muted-foreground hover:bg-[#F1F5F9] hover:text-foreground transition-colors"
+        className="flex items-center justify-center p-[7px] rounded-md bg-card border border-[#D1D4DB] shadow-[0px_1px_2px_0px_#1212170D] text-muted-foreground hover:bg-[#F1F5F9] hover:text-foreground transition-colors"
       >
         <Mail className="h-[15px] w-[15px]" data-testid="Mail__afec0a" />
       </button>

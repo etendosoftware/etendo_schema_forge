@@ -26,7 +26,7 @@ import { isValidIban, normalizeIban } from '@/lib/validateIban.js';
 import { formatCalendarDate } from '@/lib/dateOnly.js';
 
 const GROUPING_OPTIONS = ['1BD', '1BW', '1BM', '1BE'];
-const FIELD_INPUT = 'bg-white shadow-[0_1px_2px_rgba(18,18,23,0.05)]';
+const FIELD_INPUT = 'bg-card shadow-[0_1px_2px_rgba(18,18,23,0.05)]';
 
 // ---------------------------------------------------------------------------
 // Pure helpers (kept top-level so the component/hooks stay simple)
@@ -396,7 +396,7 @@ export function EditAccountModal({ open, onClose, onSaved, account, onArchive, o
       open={open}
       onOpenChange={(value) => { if (!value) onClose?.(); }}
       data-testid="Dialog__73027d">
-      <DialogContent className="max-w-[1020px] bg-white" data-testid="edit-account-modal">
+      <DialogContent className="max-w-[1020px] bg-card" data-testid="edit-account-modal">
         <DialogHeader data-testid="DialogHeader__73027d">
           <DialogTitle data-testid="DialogTitle__73027d">{ui('financeAccountsEditTitle')}</DialogTitle>
         </DialogHeader>
@@ -521,7 +521,7 @@ function AccountFieldsGrid({ ui, account, isCash, psd2Connected, typeLabel, fiel
           label={ui('financeAccountsPsd2FieldCurrency')}
           data-testid="EditField__73027d">
           <Select value={fields.currencyId} onValueChange={fields.setCurrencyId} data-testid="Select__73027d">
-            <SelectTrigger data-testid="edit-account-currency" className="bg-white">
+            <SelectTrigger data-testid="edit-account-currency" className="bg-card">
               <SelectValue
                 placeholder={ui('financeAccountsNewFieldCurrencyPlaceholder')}
                 data-testid="SelectValue__73027d" />
@@ -596,7 +596,7 @@ function Psd2Panel({ ui, psd2, busy, reauthMessage }) {
           disabled={busy || !psd2.connected}
           onClick={psd2.handleSync}
           data-testid="psd2-edit-sync"
-          className="inline-flex items-center gap-1.5 rounded-lg border border-[#D1D4DB] bg-white px-3 py-1.5 text-sm font-medium text-[#121217] shadow-[0_1px_2px_rgba(18,18,23,0.05)] hover:bg-[#F5F7F9] disabled:opacity-50"
+          className="inline-flex items-center gap-1.5 rounded-lg border border-[#D1D4DB] bg-card px-3 py-1.5 text-sm font-medium text-[#121217] shadow-[0_1px_2px_rgba(18,18,23,0.05)] hover:bg-[#F5F7F9] disabled:opacity-50"
         >
           <RefreshCw className="h-4 w-4 text-[#828FA3]" data-testid="RefreshCw__73027d" />
           {ui('financeAccountsMenuSyncNow')}
@@ -619,7 +619,7 @@ function Psd2Panel({ ui, psd2, busy, reauthMessage }) {
         <Field label={ui('financeAccountsPsd2Grouping')} data-testid="Field__73027d">
           {/* White wrapper: the picker's box is bg-transparent (built for white cards),
               so on this gray card it blends in — the white backing makes it stand out. */}
-          <div className="rounded-lg bg-white">
+          <div className="rounded-lg bg-card">
             <CreatableSearchSelect
               field={{ name: 'statementGrouping' }}
               value={psd2.form.statementGrouping || ''}
@@ -685,7 +685,7 @@ function EditFooter({ ui, account, psd2Connected, connected, busy, canSave, onAr
           type="button"
           onClick={onCancel}
           data-testid="edit-account-cancel"
-          className="rounded-full border border-[#D1D4DB] bg-white px-4 py-2 text-sm font-medium text-[#121217] shadow-[0_1px_2px_rgba(18,18,23,0.05)] hover:bg-[#F5F7F9]"
+          className="rounded-full border border-[#D1D4DB] bg-card px-4 py-2 text-sm font-medium text-[#121217] shadow-[0_1px_2px_rgba(18,18,23,0.05)] hover:bg-[#F5F7F9]"
         >
           {ui('cancel')}
         </button>
@@ -716,7 +716,7 @@ function ReadField({ label, value, onCopy, copyLabel }) {
   return (
     <div className="flex flex-col gap-2">
       <span className="text-sm font-medium leading-6 text-[#121217]">{label}</span>
-      <div className="flex h-10 items-center gap-2 rounded-lg border border-[#D1D4DB] bg-white px-3 shadow-[0_1px_2px_rgba(18,18,23,0.05)]">
+      <div className="flex h-10 items-center gap-2 rounded-lg border border-[#D1D4DB] bg-card px-3 shadow-[0_1px_2px_rgba(18,18,23,0.05)]">
         <span className="min-w-0 flex-1 truncate text-sm text-[#121217]">{value || '—'}</span>
         {onCopy ? (
           <button type="button" onClick={onCopy} aria-label={copyLabel} className="text-[#828FA3] hover:text-[#121217]">
@@ -734,7 +734,7 @@ function FooterButton({ icon: Icon, label, onClick, disabled, danger }) {
       type="button"
       onClick={onClick}
       disabled={disabled}
-      className={`inline-flex items-center gap-2 rounded-full border bg-white px-3 py-2 text-sm font-medium shadow-[0_1px_2px_rgba(18,18,23,0.05)] disabled:opacity-50 ${
+      className={`inline-flex items-center gap-2 rounded-full border bg-card px-3 py-2 text-sm font-medium shadow-[0_1px_2px_rgba(18,18,23,0.05)] disabled:opacity-50 ${
         danger ? 'border-[#FBB1C4] text-[#D50B3E] hover:bg-[#FDEEF2]' : 'border-[#D1D4DB] text-[#121217] hover:bg-[#F5F7F9]'
       }`}
     >

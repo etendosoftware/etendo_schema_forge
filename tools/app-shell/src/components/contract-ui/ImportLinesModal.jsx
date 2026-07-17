@@ -187,7 +187,7 @@ export default function ImportLinesModal({
   const fmtNum = (v) => v != null ? Number(v).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '-';
 
   return (
-    <div onClick={onClose} className="fixed inset-0 z-50 flex items-center justify-center bg-black/30">
+    <div onClick={onClose} className="fixed inset-0 z-50 flex items-center justify-center bg-foreground/30">
       <div onClick={e => e.stopPropagation()} style={{ width: 580, maxHeight: '80vh', display: 'flex', flexDirection: 'column', overflow: 'hidden', borderRadius: 12, backgroundColor: '#fff', boxShadow: '0 8px 30px rgba(0,0,0,0.12)', border: '0.5px solid #E5E7EB' }}>
 
         <div style={{ padding: '14px 16px', borderBottom: '2px solid #E5E7EB' }}>

@@ -26,8 +26,8 @@ function isFalsyBoolean(value) {
 
 function renderBooleanFallback(val, ui) {
   if (isTruthyBoolean(val)) return <span className="text-emerald-600">{ui('yes')}</span>;
-  if (isFalsyBoolean(val)) return <span className="text-slate-400">{ui('no')}</span>;
-  return <span className="text-slate-300">&mdash;</span>;
+  if (isFalsyBoolean(val)) return <span className="text-muted-foreground">{ui('no')}</span>;
+  return <span className="text-muted-foreground">&mdash;</span>;
 }
 
 function renderBooleanBadge(col, val, trueLabel, falseLabel) {
@@ -112,7 +112,7 @@ function getPercentCellPalette(row, col) {
   } else if (pct > 0) {
     textColor = 'text-amber-700';
   } else {
-    textColor = 'text-slate-400';
+    textColor = 'text-muted-foreground';
   }
   return { color, pct, textColor };
 }
@@ -218,7 +218,7 @@ export function renderDefaultCell({ row, col, display, visibleColumns }) {
       <span className="inline-flex items-center gap-2">
         <span>{display}</span>
         {pillLabel && (
-          <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full border ${pill.className || 'bg-gray-50 text-gray-600 border-gray-200'}`} style={{ borderWidth: '0.5px' }}>
+          <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full border ${pill.className || 'bg-muted text-muted-foreground border-border-subtle'}`} style={{ borderWidth: '0.5px' }}>
             {pillLabel}
           </span>
         )}

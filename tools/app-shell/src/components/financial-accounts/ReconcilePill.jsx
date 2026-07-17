@@ -29,7 +29,7 @@ export function ReconcilePill({ pendingCount = 0, onClick }) {
     <button
       type="button"
       onClick={onClick}
-      className="inline-flex items-center gap-1 rounded-full bg-white px-2.5 py-0.5 text-xs font-medium text-[#121217] underline decoration-[#d1d4db] underline-offset-4 hover:decoration-[#121217]"
+      className="inline-flex items-center gap-1 rounded-full bg-card px-2.5 py-0.5 text-xs font-medium text-[#121217] underline decoration-[#d1d4db] underline-offset-4 hover:decoration-[#121217]"
       data-testid="reconcile-status-pending"
     >
       <span className="h-1.5 w-1.5 rounded-full bg-[#f3164e]" aria-hidden="true" />

@@ -132,7 +132,7 @@ const SiiSection = forwardRef(function SiiSection({ record, apiBaseUrl, orgId, o
                   min={0}
                   value={form.plazoLmiteDeEnvoASII}
                   onChange={e => set('plazoLmiteDeEnvoASII', e.target.value)}
-                  className="flex-1 min-w-0 h-10 rounded-l-lg border border-[#D1D4DB] px-3 text-sm bg-white [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                  className="flex-1 min-w-0 h-10 rounded-l-lg border border-[#D1D4DB] px-3 text-sm bg-card [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                 />
                 <button
                   type="button"
@@ -157,7 +157,7 @@ const SiiSection = forwardRef(function SiiSection({ record, apiBaseUrl, orgId, o
                 min={0}
                 value={form.cadenciaEnvoFacturasVentaASII}
                 onChange={e => set('cadenciaEnvoFacturasVentaASII', e.target.value)}
-                className="bg-white"
+                className="bg-card"
                 data-testid="Input__fcb159" />
             </div>
             <div className="space-y-1 w-[376px]">
@@ -167,7 +167,7 @@ const SiiSection = forwardRef(function SiiSection({ record, apiBaseUrl, orgId, o
                 min={0}
                 value={form.cadenciaEnvoFacturasCompraASII}
                 onChange={e => set('cadenciaEnvoFacturasCompraASII', e.target.value)}
-                className="bg-white"
+                className="bg-card"
                 data-testid="Input__fcb159" />
             </div>
           </div>
@@ -202,7 +202,7 @@ const SiiSection = forwardRef(function SiiSection({ record, apiBaseUrl, orgId, o
             <Input
               value={form.authorizationno}
               onChange={e => set('authorizationno', e.target.value)}
-              className="bg-white"
+              className="bg-card"
               data-testid="Input__fcb159" />
           </div>
         </div>

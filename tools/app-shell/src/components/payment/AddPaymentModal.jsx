@@ -17,7 +17,7 @@ import { PaymentForm } from './PaymentForm';
 const BTN_PRIMARY =
   'inline-flex h-10 items-center gap-2 rounded-lg bg-[#121217] px-[18px] text-sm font-semibold text-white hover:bg-[#282833] disabled:opacity-50 disabled:pointer-events-none';
 const BTN_GHOST =
-  'inline-flex h-10 items-center gap-2 rounded-lg border border-[#D1D4DB] bg-white px-[18px] text-sm font-semibold text-[#3F3F50] hover:bg-[#F5F7F9]';
+  'inline-flex h-10 items-center gap-2 rounded-lg border border-[#D1D4DB] bg-card px-[18px] text-sm font-semibold text-[#3F3F50] hover:bg-[#F5F7F9]';
 
 /**
  * @param {boolean} open
@@ -51,7 +51,7 @@ export function AddPaymentModal({
       onOpenChange={(v) => { if (!v) onClose(); }}
       data-testid="Dialog__bfa23e">
       <DialogContent
-        className="flex w-[1280px] max-w-[96vw] max-h-[90vh] flex-col gap-0 overflow-hidden rounded-2xl border border-[#E8EAEF] bg-white p-0 [&>button]:hidden"
+        className="flex w-[1280px] max-w-[96vw] max-h-[90vh] flex-col gap-0 overflow-hidden rounded-2xl border border-[#E8EAEF] bg-card p-0 [&>button]:hidden"
         data-testid="DialogContent__bfa23e">
         {/* Header */}
         <div className="shrink-0 px-6 pt-5">

@@ -222,7 +222,7 @@ export function NewMovementDialog({ open, accountId, accountCurrency, onClose, o
             <DialogClose asChild data-testid="DialogClose__cc1c8b">
               <button
                 type="button"
-                className="inline-flex h-10 items-center rounded-lg border border-[#D1D4DB] bg-white px-4 text-sm font-medium text-[#121217] hover:bg-[#F5F7F9]"
+                className="inline-flex h-10 items-center rounded-lg border border-[#D1D4DB] bg-card px-4 text-sm font-medium text-[#121217] hover:bg-[#F5F7F9]"
               >
                 {ui('financeAccountMovementsNewCancel')}
               </button>

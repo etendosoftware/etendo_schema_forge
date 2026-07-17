@@ -220,7 +220,7 @@ export function StatementLinesInline({ statementId, currency = 'EUR' }) {
 
   return (
     <>
-      <div className="overflow-hidden rounded-lg border border-[#E8EAEF] bg-white shadow-[0_1px_2px_rgba(18,18,23,0.05)]">
+      <div className="overflow-hidden rounded-lg border border-[#E8EAEF] bg-card shadow-[0_1px_2px_rgba(18,18,23,0.05)]">
         {/* Column header — same style as the parent Statements table headers. */}
         <div
           style={MINI_GRID_STYLE}

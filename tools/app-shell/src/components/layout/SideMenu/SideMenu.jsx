@@ -697,7 +697,7 @@ export default function SideMenu({
                   data-testid={`menu-item-${item.slug || item.name?.replace(/\s+/g, '-').toLowerCase()}`}>
                   <span className={cn(
                     'absolute left-[33px] top-0 bottom-0 w-px',
-                    isItemActive ? 'bg-white/40' : 'bg-[#E8EAEF]'
+                    isItemActive ? 'bg-card/40' : 'bg-[#E8EAEF]'
                   )} />
                   {isItemActive && (
                     <span className="absolute left-[33px] right-2 top-0 bottom-0 bg-accent-highlight" />

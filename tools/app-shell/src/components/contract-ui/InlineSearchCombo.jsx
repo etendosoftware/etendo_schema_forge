@@ -176,7 +176,7 @@ export function InlineSearchCombo({ field, value, options, onChange, onKeyDown, 
           onKeyDown?.(e);
         }}
         placeholder={placeholder}
-        className="w-full h-8 text-sm rounded-md border border-input bg-white px-2 pr-6 focus:ring-2 focus:ring-primary focus:outline-none"
+        className="w-full h-8 text-sm rounded-md border border-input bg-card px-2 pr-6 focus:ring-2 focus:ring-primary focus:outline-none"
       />
       <button
         type="button"
@@ -201,7 +201,7 @@ export function InlineSearchCombo({ field, value, options, onChange, onKeyDown, 
         <div
           ref={dropdownRef}
           data-testid={`inline-add-options-${field.key}`}
-          className="bg-white border rounded-md shadow-lg overflow-auto"
+          className="bg-card border rounded-md shadow-lg overflow-auto"
           style={dropdownStyle}
           data-open-up={openUp ? 'true' : 'false'}
           data-inline-add-portal="true"

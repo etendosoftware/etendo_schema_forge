@@ -34,7 +34,7 @@ const TRX_LABEL_KEY = {
 const BTN_PRIMARY =
   'inline-flex h-10 items-center gap-2 rounded-lg bg-[#121217] px-[18px] text-sm font-semibold text-white hover:bg-[#282833] disabled:opacity-50 disabled:pointer-events-none';
 const BTN_GHOST =
-  'inline-flex h-10 items-center gap-2 rounded-lg border border-[#D1D4DB] bg-white px-[18px] text-sm font-semibold text-[#3F3F50] hover:bg-[#F5F7F9]';
+  'inline-flex h-10 items-center gap-2 rounded-lg border border-[#D1D4DB] bg-card px-[18px] text-sm font-semibold text-[#3F3F50] hover:bg-[#F5F7F9]';
 
 // ── Stage 1 ──────────────────────────────────────────────────────────────────
 function MovementBasics({ form, set, dimensions, optionsByDim, trxTypes }) {
@@ -71,7 +71,7 @@ function MovementBasics({ form, set, dimensions, optionsByDim, trxTypes }) {
           className="col-span-2"
           data-testid="Field__e2e571">
           <textarea
-            className="min-h-16 w-full box-border resize-y rounded-lg border border-[#D1D4DB] bg-white px-3 py-2.5 text-sm leading-5 text-[#121217] placeholder:text-[#8A8AA3] focus:outline-none focus:border-[#121217] focus:ring-2 focus:ring-[#121217]/10"
+            className="min-h-16 w-full box-border resize-y rounded-lg border border-[#D1D4DB] bg-card px-3 py-2.5 text-sm leading-5 text-[#121217] placeholder:text-[#8A8AA3] focus:outline-none focus:border-[#121217] focus:ring-2 focus:ring-[#121217]/10"
             placeholder={ui('financeAccountMovementsWizardDescriptionPlaceholder')}
             value={form.description}
             onChange={(e) => set({ description: e.target.value })}
@@ -429,7 +429,7 @@ export function NewMovementWizard({ open, accountId, accountCurrency, dimensions
           <button
             type="button"
             onClick={() => setChoice(null)}
-            className="ml-auto inline-flex items-center gap-1.5 rounded-md border border-[#D1D4DB] bg-white px-3 py-[7px] text-[13px] font-semibold text-[#3F3F50] hover:border-[#A9A9BC] hover:bg-[#F5F7F9]"
+            className="ml-auto inline-flex items-center gap-1.5 rounded-md border border-[#D1D4DB] bg-card px-3 py-[7px] text-[13px] font-semibold text-[#3F3F50] hover:border-[#A9A9BC] hover:bg-[#F5F7F9]"
           >
             <ChevronDown className="h-3.5 w-3.5" data-testid="ChevronDown__e2e571" /> {ui('financeAccountMovementsWizardChange')}
           </button>
@@ -458,7 +458,7 @@ export function NewMovementWizard({ open, accountId, accountCurrency, dimensions
       onOpenChange={(v) => { if (!v) onClose(); }}
       data-testid="Dialog__e2e571">
       <DialogContent
-        className="flex w-[1280px] max-w-[96vw] max-h-[90vh] flex-col gap-0 overflow-hidden rounded-2xl border border-[#E8EAEF] bg-white p-0 [&>button]:hidden"
+        className="flex w-[1280px] max-w-[96vw] max-h-[90vh] flex-col gap-0 overflow-hidden rounded-2xl border border-[#E8EAEF] bg-card p-0 [&>button]:hidden"
         data-testid="DialogContent__e2e571">
         {/* Header */}
         <div className="shrink-0 px-6 pt-5">

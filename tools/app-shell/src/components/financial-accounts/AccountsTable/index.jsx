@@ -120,7 +120,7 @@ export function AccountsTable({
   };
 
   return (
-    <div className="flex h-full flex-col overflow-y-auto bg-white [&>div]:overflow-visible">
+    <div className="flex h-full flex-col overflow-y-auto bg-card [&>div]:overflow-visible">
       <Table data-testid="Table__db8970">
         <AccountsTableHeader data-testid="AccountsTableHeader__db8970" />
         <TableBody

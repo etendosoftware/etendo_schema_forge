@@ -224,7 +224,7 @@ const LINES_GRID =
 // Inline cell inputs: borderless until focused (spreadsheet feel), so the
 // editable row reads as plain text cells matching the read-only rows.
 const cellInput =
-  'h-9 w-full rounded-md border border-transparent bg-transparent px-2 text-sm text-[#121217] placeholder:text-[#A8AAB8] focus:border-[#D1D4DB] focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#121217]/15';
+  'h-9 w-full rounded-md border border-transparent bg-transparent px-2 text-sm text-[#121217] placeholder:text-[#A8AAB8] focus:border-[#D1D4DB] focus:bg-card focus:outline-none focus:ring-2 focus:ring-[#121217]/15';
 const cellAmount = cn(cellInput, 'text-right tabular-nums');
 
 // Column header styled like the invoices table in the New movement modal:
@@ -241,7 +241,7 @@ function ColHead({ label, required, className }) {
 
 function LinesHeader({ ui }) {
   return (
-    <div className={cn(LINES_GRID, 'items-center border-b border-[#E8EAEF] bg-white px-6 py-2.5 text-xs font-semibold tracking-normal text-[#121217]')}>
+    <div className={cn(LINES_GRID, 'items-center border-b border-[#E8EAEF] bg-card px-6 py-2.5 text-xs font-semibold tracking-normal text-[#121217]')}>
       <ColHead
         label={ui('financeAccountStatementsManualColDate')}
         required
@@ -291,7 +291,7 @@ function EditRow({ row, onChange, onRemove, ui, currencySym }) {
     </div>
   );
   return (
-    <div className={cn(LINES_GRID, 'group items-center bg-white px-6 py-1.5 hover:bg-[#FAFBFC]')} data-testid="manual-line-editrow">
+    <div className={cn(LINES_GRID, 'group items-center bg-card px-6 py-1.5 hover:bg-[#FAFBFC]')} data-testid="manual-line-editrow">
       <DateField value={row.date} onChange={setVal('date')} data-testid="manual-line-date" className="w-full" />
       <input type="text" value={row.reference} onChange={set('reference')} className={cellInput} data-testid="manual-line-ref" />
       <input type="text" value={row.description} onChange={set('description')}
@@ -541,7 +541,7 @@ function SaveSplitButton({ creating, onProcess, onDraft, ui }) {
           ref={menuRef}
           role="menu"
           style={{ position: 'fixed', top: pos.top, left: pos.left, width: 256, zIndex: 9999, pointerEvents: 'auto' }}
-          className="overflow-hidden rounded-lg border border-[#E8EAEF] bg-white shadow-lg"
+          className="overflow-hidden rounded-lg border border-[#E8EAEF] bg-card shadow-lg"
         >
           <button
             type="button"
@@ -722,7 +722,7 @@ export function ManualStatementModal({
           onPointerDownOutside={(e) => e.preventDefault()}
           onEscapeKeyDown={(e) => { e.preventDefault(); requestClose(); }}
           data-testid="DialogContent__6b4086">
-          <div className="bg-white px-6 pt-6">
+          <div className="bg-card px-6 pt-6">
             <h2 className="text-xl font-semibold leading-7 text-[#121217]">
               {ui(editing ? 'financeAccountStatementsManualEditTitle' : 'financeAccountStatementsManualTitle')}
             </h2>
@@ -731,7 +731,7 @@ export function ManualStatementModal({
             </p>
           </div>
 
-          <div className="max-h-[62vh] overflow-y-auto overflow-x-hidden bg-white px-6 py-4">
+          <div className="max-h-[62vh] overflow-y-auto overflow-x-hidden bg-card px-6 py-4">
             <div className="flex flex-col gap-5">
               <StatementSummaryWidget
                 rows={rows}
@@ -756,7 +756,7 @@ export function ManualStatementModal({
               data-testid="EditableLines__6b4086" />
           </div>
 
-          <div className="flex items-center justify-end border-t border-[#E8EAEF] bg-white px-6 py-4">
+          <div className="flex items-center justify-end border-t border-[#E8EAEF] bg-card px-6 py-4">
             <SaveSplitButton
               creating={saving}
               onProcess={() => handleSave(true)}
@@ -771,7 +771,7 @@ export function ManualStatementModal({
         open={confirmClose}
         onOpenChange={(v) => { if (!v) setConfirmClose(false); }}
         data-testid="Dialog__6b4086">
-        <DialogContent className="max-w-sm bg-white" data-testid="DialogContent__6b4086">
+        <DialogContent className="max-w-sm bg-card" data-testid="DialogContent__6b4086">
           <div data-testid="manual-discard-overlay">
             <h3 className="text-base font-semibold text-[#121217]">
               {ui('financeAccountStatementsManualDiscardTitle')}
@@ -784,7 +784,7 @@ export function ManualStatementModal({
                 type="button"
                 onClick={() => setConfirmClose(false)}
                 data-testid="manual-discard-keep"
-                className="inline-flex h-10 items-center rounded-lg border border-[#D1D4DB] bg-white px-3 text-sm font-medium text-[#121217] hover:bg-[#F5F7F9]"
+                className="inline-flex h-10 items-center rounded-lg border border-[#D1D4DB] bg-card px-3 text-sm font-medium text-[#121217] hover:bg-[#F5F7F9]"
               >
                 {ui('financeAccountStatementsManualDiscardKeep')}
               </button>

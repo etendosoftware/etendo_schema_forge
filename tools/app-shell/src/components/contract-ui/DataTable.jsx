@@ -362,7 +362,7 @@ function renderSelectorCell({
             onKeyDown={(e) => {
               if (e.key === 'Escape') handleKeyDown(e);
             }}
-            className="w-full h-8 text-sm bg-white focus:ring-2 focus:ring-primary"
+            className="w-full h-8 text-sm bg-card focus:ring-2 focus:ring-primary"
         >
           <SelectValue placeholder={fieldLabel} data-testid={"SelectValue__" + field.id} />
         </SelectTrigger>
@@ -437,7 +437,7 @@ function renderInputCell({
         onKeyDown={handleKeyDown}
         placeholder={fieldLabel}
         required={field.required}
-        className={`w-full h-8 text-sm rounded-md border bg-white px-2 focus:ring-2 focus:outline-none${isNumeric ? ' text-right tabular-nums' : ''}${invalidFields.has(field.key) ? ' border-red-500 focus:ring-red-500' : ' border-input focus:ring-primary'}`}
+        className={`w-full h-8 text-sm rounded-md border bg-card px-2 focus:ring-2 focus:outline-none${isNumeric ? ' text-right tabular-nums' : ''}${invalidFields.has(field.key) ? ' border-red-500 focus:ring-red-500' : ' border-input focus:ring-primary'}`}
       />
     </TableCell>
   );
@@ -879,7 +879,7 @@ const InlineAddRow = forwardRef(function InlineAddRow({ columns, fields, onAdd, 
                   ref={isFirst ? firstInputRef : undefined}
                   data-testid={`inline-add-field-${field.key}`}
                   onKeyDown={(e) => { if (e.key === 'Escape') handleKeyDown(e); }}
-                  className="w-full h-8 text-sm bg-white focus:ring-2 focus:ring-primary"
+                  className="w-full h-8 text-sm bg-card focus:ring-2 focus:ring-primary"
                 >
                   <SelectValue placeholder={field.label ?? field.key} data-testid="SelectValue__eb5261" />
                 </SelectTrigger>
@@ -1037,7 +1037,7 @@ function LookupField({ value, fieldKey, placeholder, selectorUrl, selectorContex
           if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setOpen(true); }
           else if (onKeyDown) onKeyDown(e);
         }}
-        className={`w-full h-8 text-sm rounded-md border bg-white px-2 text-left flex items-center gap-2 focus:ring-2 focus:outline-none transition-colors${isInvalid ? ' border-red-500 focus:ring-red-500' : ' border-input hover:border-primary/50 focus:ring-primary'}`}
+        className={`w-full h-8 text-sm rounded-md border bg-card px-2 text-left flex items-center gap-2 focus:ring-2 focus:outline-none transition-colors${isInvalid ? ' border-red-500 focus:ring-red-500' : ' border-input hover:border-primary/50 focus:ring-primary'}`}
       >
         <Search
           className="h-3.5 w-3.5 text-muted-foreground shrink-0"
@@ -1477,7 +1477,7 @@ function TableDataRow({
                 <button
                   type="button"
                   onClick={() => onCloneRow(row)}
-                  className="opacity-0 group-hover/row:opacity-100 focus-visible:opacity-100 flex items-center justify-center rounded border border-border bg-white text-muted-foreground hover:text-foreground hover:border-border/80 transition-all"
+                  className="opacity-0 group-hover/row:opacity-100 focus-visible:opacity-100 flex items-center justify-center rounded border border-border bg-card text-muted-foreground hover:text-foreground hover:border-border/80 transition-all"
                   style={{ width: 26, height: 26 }}
                   aria-label={ui('cloneOrderBtn')}
                 >
@@ -1883,7 +1883,7 @@ export function DataTable({
             quickActionsEnabled, ilpHasNoAmountCol,
           })}
           <TableHeader
-            className={linesLayout === 'inlineEditable' ? 'sticky top-0 z-20 bg-white' : ''}
+            className={linesLayout === 'inlineEditable' ? 'sticky top-0 z-20 bg-card' : ''}
             aria-hidden={hideHeader || undefined}
             style={hideHeader ? { display: 'none' } : undefined}
             data-testid="TableHeader__eb5261">

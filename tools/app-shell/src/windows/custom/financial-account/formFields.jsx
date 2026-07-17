@@ -5,13 +5,13 @@
  */
 
 export const inputClass =
-  'h-10 rounded-lg border border-[#D1D4DB] bg-white px-3 text-sm text-[#121217] placeholder:text-[#8a8aa3] shadow-[0_1px_2px_rgba(18,18,23,0.05)] focus:outline-none focus:ring-2 focus:ring-[#121217] focus:ring-offset-1';
+  'h-10 rounded-lg border border-[#D1D4DB] bg-card px-3 text-sm text-[#121217] placeholder:text-[#8a8aa3] shadow-[0_1px_2px_rgba(18,18,23,0.05)] focus:outline-none focus:ring-2 focus:ring-[#121217] focus:ring-offset-1';
 
 export const selectClass = inputClass;
 
 /** Multi-line variant of {@link inputClass} (auto height instead of h-10). */
 export const textareaClass =
-  'min-h-[60px] rounded-lg border border-[#D1D4DB] bg-white px-3 py-2 text-sm text-[#121217] placeholder:text-[#8a8aa3] shadow-[0_1px_2px_rgba(18,18,23,0.05)] focus:outline-none focus:ring-2 focus:ring-[#121217] focus:ring-offset-1';
+  'min-h-[60px] rounded-lg border border-[#D1D4DB] bg-card px-3 py-2 text-sm text-[#121217] placeholder:text-[#8a8aa3] shadow-[0_1px_2px_rgba(18,18,23,0.05)] focus:outline-none focus:ring-2 focus:ring-[#121217] focus:ring-offset-1';
 
 /**
  * Label + control stacked vertically. The control fills the cell width via the

@@ -109,7 +109,7 @@ export default function ContactTypeToggle({ data, onChange }) {
           >
             <div className="relative flex items-center justify-center w-6 h-6 shrink-0">
               <div
-                className="w-[14.5px] h-[14.5px] rounded-full bg-white flex items-center justify-center transition-colors"
+                className="w-[14.5px] h-[14.5px] rounded-full bg-card flex items-center justify-center transition-colors"
                 style={{
                   border: `1.5px solid ${isSelected ? '#121217' : '#D1D4DB'}`,
                   boxShadow: isSelected ? 'none' : '0px 1px 2px rgba(18,18,23,0.05)',

@@ -55,7 +55,7 @@ export default function PaymentPanel({
                   className={`flex flex-1 items-center justify-center gap-2 rounded-lg border-2 py-2.5 text-sm font-medium transition-all ${
                     isActive
                       ? 'border-primary bg-primary/5 text-primary'
-                      : 'border-border bg-white text-muted-foreground hover:border-primary/30'
+                      : 'border-border bg-card text-muted-foreground hover:border-primary/30'
                   }`}
                 >
                   <Icon className="h-4 w-4" data-testid="Icon__e5e0c5" />
@@ -79,7 +79,7 @@ export default function PaymentPanel({
                 step="0.01"
                 value={amountTendered || ''}
                 onChange={(e) => onAmountChange(parseFloat(e.target.value) || 0)}
-                className="w-full rounded-lg border border-border bg-white px-3 py-2 text-sm text-right font-mono focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/40"
+                className="w-full rounded-lg border border-border bg-card px-3 py-2 text-sm text-right font-mono focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/40"
                 placeholder={ui('amountPlaceholder')}
               />
               <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">&euro;</span>

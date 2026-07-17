@@ -99,7 +99,7 @@ function DashboardContent({ apiBaseUrl }) {
   return (
     <div className="h-full flex flex-col">
       {(loading || !isCurrencyReady) ? <DashboardSkeleton data-testid="DashboardSkeleton__3a4535" /> : (
-        <div className="bg-white rounded-tl-2xl flex-1 flex flex-col overflow-hidden">
+        <div className="bg-card rounded-tl-2xl flex-1 flex flex-col overflow-hidden">
           {/* Fixed header — always visible */}
           <div
             className="px-2 pt-2 pb-0 flex-shrink-0"

@@ -46,7 +46,7 @@ const TITLE_TEXT_STYLE = {
 
 export function DashboardCard({ title, headerExtra = null, children, testId }) {
   return (
-    <div className="overflow-hidden bg-white" style={SHELL_STYLE} data-testid={testId}>
+    <div className="overflow-hidden bg-card" style={SHELL_STYLE} data-testid={testId}>
       <div style={HEADER_BAR_STYLE}>
         <div style={TITLE_WRAPPER_STYLE}>
           <span style={TITLE_TEXT_STYLE}>{title}</span>

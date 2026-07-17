@@ -36,7 +36,7 @@ export function FinancialSummaryCard({ kpis = [], currencyLabel = '' }) {
 
   return (
     <div
-      className="flex flex-col items-start overflow-hidden bg-white"
+      className="flex flex-col items-start overflow-hidden bg-card"
       style={{
         boxSizing: 'border-box',
         width: '100%',

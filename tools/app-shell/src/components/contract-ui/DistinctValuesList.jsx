@@ -46,7 +46,7 @@ export function DistinctValuesList({
           value={distinct.search}
           onChange={(e) => distinct.setSearch(e.target.value)}
           placeholder={searchPlaceholder}
-          className="w-full h-8 px-2 text-sm rounded-md border border-border bg-white focus:outline-none focus:ring-1 focus:ring-ring"
+          className="w-full h-8 px-2 text-sm rounded-md border border-border bg-card focus:outline-none focus:ring-1 focus:ring-ring"
         />
       </div>
       <div className="max-h-72 overflow-auto py-1">

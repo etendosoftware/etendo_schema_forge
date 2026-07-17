@@ -146,7 +146,7 @@ function ChartDialog({ open, onOpenChange, trend, period, currencyCode, ui }) {
           <DialogTitle data-testid="DialogTitle__22ed51">
             <div className="flex items-center justify-between gap-4 pr-8">
               <span>{ui('bpSalesPurchases')}</span>
-              <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-1">
+              <div className="flex items-center gap-1 bg-muted rounded-lg p-1">
                 {PERIOD_TOGGLE.map((opt) => (
                   <button
                     key={opt.value}
@@ -154,8 +154,8 @@ function ChartDialog({ open, onOpenChange, trend, period, currencyCode, ui }) {
                     onClick={() => setChartPeriod(opt.value)}
                     className={`px-3 py-1 rounded-md text-sm font-medium transition-colors ${
                       chartPeriod === opt.value
-                        ? 'bg-white text-blue-600 shadow-sm'
-                        : 'text-gray-500 hover:text-gray-700'
+                        ? 'bg-card text-blue-600 shadow-sm'
+                        : 'text-muted-foreground hover:text-foreground'
                     }`}
                   >
                     {ui(opt.labelKey)}
@@ -215,9 +215,9 @@ export default function ContactsSummaryWidget({ data, optionalProvider = false }
       <div className="flex flex-row items-center justify-between gap-5 border border-[#E8EAEF] rounded-lg px-3 py-2 min-h-14">
         {loading ? (
           <>
-            <div className="h-10 rounded bg-gray-100 animate-pulse flex-1" />
-            <div className="h-10 rounded bg-gray-100 animate-pulse flex-1" />
-            <div className="h-10 rounded bg-gray-100 animate-pulse flex-1" />
+            <div className="h-10 rounded bg-muted animate-pulse flex-1" />
+            <div className="h-10 rounded bg-muted animate-pulse flex-1" />
+            <div className="h-10 rounded bg-muted animate-pulse flex-1" />
           </>
         ) : (
           kpis.map((kpi) => (

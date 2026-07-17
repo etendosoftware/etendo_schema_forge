@@ -27,7 +27,7 @@ function ReportCard({ report, onRun }) {
   return (
     <button
       onClick={() => onRun(report)}
-      className="flex items-start gap-4 p-4 rounded-xl border border-border/50 bg-white hover:border-primary/30 hover:shadow-md transition-all text-left w-full"
+      className="flex items-start gap-4 p-4 rounded-xl border border-border/50 bg-card hover:border-primary/30 hover:shadow-md transition-all text-left w-full"
     >
       <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
         <FileText className="h-5 w-5 text-primary" data-testid="FileText__3c998a" />
@@ -122,8 +122,8 @@ function SelectorPopup({ open, onClose, onSelect, selector, title, extraParams =
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30" onMouseDown={onClose}>
-      <div className="bg-white rounded-xl shadow-2xl w-96 max-h-[480px] flex flex-col" onMouseDown={e => e.stopPropagation()}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-foreground/30" onMouseDown={onClose}>
+      <div className="bg-card rounded-xl shadow-2xl w-96 max-h-[480px] flex flex-col" onMouseDown={e => e.stopPropagation()}>
         <div className="flex items-center justify-between px-4 py-3 border-b border-border/30">
           <span className="text-sm font-semibold">{title}</span>
           <button onClick={onClose} className="text-muted-foreground hover:text-foreground"><X className="h-4 w-4" data-testid="X__3c998a" /></button>
@@ -136,7 +136,7 @@ function SelectorPopup({ open, onClose, onSelect, selector, title, extraParams =
             onChange={e => setQuery(e.target.value)}
             onKeyDown={handleKey}
             placeholder={`${ui('Search')}...`}
-            className="w-full h-8 px-2 text-sm border border-border rounded-md bg-white focus:outline-none focus:ring-1 focus:ring-primary/30"
+            className="w-full h-8 px-2 text-sm border border-border rounded-md bg-card focus:outline-none focus:ring-1 focus:ring-primary/30"
           />
         </div>
         <div ref={listRef} className="flex-1 overflow-auto py-1">
@@ -332,7 +332,7 @@ function SearchInput({ selector, value, displayValue, onChange, multi, minLength
 
     return (
       <div className={inputWidthClass}>
-        <div className="flex items-center h-8 border border-border rounded-md bg-white overflow-hidden focus-within:ring-1 focus-within:ring-primary/30">
+        <div className="flex items-center h-8 border border-border rounded-md bg-card overflow-hidden focus-within:ring-1 focus-within:ring-primary/30">
           <button
             type="button"
             onClick={() => setDrawerOpen(true)}
@@ -396,7 +396,7 @@ function SearchInput({ selector, value, displayValue, onChange, multi, minLength
           onChange={handleChange}
           onFocus={handleFocus}
           placeholder={label ? `Search ${label}…` : ui('searchPlaceholder')}
-          className={`h-8 px-2 text-sm rounded-md bg-white focus:outline-none focus:ring-1 w-full border ${hasError ? 'border-destructive ring-destructive/30' : 'border-border focus:ring-primary/30'} ${showDropdownArrow ? 'pr-7' : ''}`}
+          className={`h-8 px-2 text-sm rounded-md bg-card focus:outline-none focus:ring-1 w-full border ${hasError ? 'border-destructive ring-destructive/30' : 'border-border focus:ring-primary/30'} ${showDropdownArrow ? 'pr-7' : ''}`}
         />
         {showDropdownArrow && (
           <button
@@ -422,7 +422,7 @@ function SearchInput({ selector, value, displayValue, onChange, multi, minLength
         )}
       </div>
       {open && options.length > 0 && (
-        <div className="absolute z-50 top-full left-0 mt-1 w-full max-h-48 overflow-auto rounded-lg border bg-white shadow-lg py-1">
+        <div className="absolute z-50 top-full left-0 mt-1 w-full max-h-48 overflow-auto rounded-lg border bg-card shadow-lg py-1">
           {options.filter(o => !selectedIds.has(o.id)).map(o => (
             <button key={o.id} onClick={() => addItem(o)}
               className="w-full text-left px-3 py-1.5 text-sm hover:bg-muted/50 truncate">{o.name}</button>
@@ -515,7 +515,7 @@ function PopupMultiSelector({ selector, label, onChange }) {
         <button
           type="button"
           onClick={openModal}
-          className="h-8 px-3 text-xs font-medium rounded-md border border-border bg-white hover:bg-muted/50 flex items-center gap-1.5 text-muted-foreground"
+          className="h-8 px-3 text-xs font-medium rounded-md border border-border bg-card hover:bg-muted/50 flex items-center gap-1.5 text-muted-foreground"
         >
           <span className="text-sm font-bold leading-none">+</span>
           {confirmed.length === 0 ? label : ui('editSelection')}
@@ -523,8 +523,8 @@ function PopupMultiSelector({ selector, label, onChange }) {
       </div>
 
       {open && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30" onClick={e => { if (e.target === e.currentTarget) setOpen(false); }}>
-          <div className="bg-white rounded-xl shadow-2xl w-[480px] max-h-[560px] flex flex-col">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-foreground/30" onClick={e => { if (e.target === e.currentTarget) setOpen(false); }}>
+          <div className="bg-card rounded-xl shadow-2xl w-[480px] max-h-[560px] flex flex-col">
             <div className="flex items-center justify-between px-4 py-3 border-b border-border/50">
               <h3 className="text-sm font-semibold">{ui('selectLabelPrefix')} {label}</h3>
               <button onClick={() => setOpen(false)} className="text-lg leading-none text-muted-foreground hover:text-foreground">&times;</button>
@@ -620,7 +620,7 @@ function SingleSelectModal({ selector, label, value, displayValue, onChange, has
       <button
         type="button"
         onClick={openModal}
-        className={`w-full h-9 px-3 text-sm rounded-md border bg-white hover:bg-muted/50 flex items-center justify-between gap-2 ${hasError ? 'border-destructive ring-1 ring-destructive/30' : 'border-border'}`}
+        className={`w-full h-9 px-3 text-sm rounded-md border bg-card hover:bg-muted/50 flex items-center justify-between gap-2 ${hasError ? 'border-destructive ring-1 ring-destructive/30' : 'border-border'}`}
       >
         <span className={`truncate ${displayValue ? 'text-foreground' : 'text-muted-foreground'}`}>
           {displayValue || `Select ${label}...`}
@@ -631,8 +631,8 @@ function SingleSelectModal({ selector, label, value, displayValue, onChange, has
       </button>
 
       {open && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30" onClick={e => { if (e.target === e.currentTarget) setOpen(false); }}>
-          <div className="bg-white rounded-xl shadow-2xl w-[420px] max-h-[500px] flex flex-col">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-foreground/30" onClick={e => { if (e.target === e.currentTarget) setOpen(false); }}>
+          <div className="bg-card rounded-xl shadow-2xl w-[420px] max-h-[500px] flex flex-col">
             <div className="flex items-center justify-between px-4 py-3 border-b border-border/50">
               <h3 className="text-sm font-semibold">{label}</h3>
               <button onClick={() => setOpen(false)} className="text-lg leading-none text-muted-foreground hover:text-foreground">&times;</button>
@@ -755,7 +755,7 @@ function ReportSidebar({ report, params, onChange, onSubmit, onReset, loading, r
                 }
                 setPopup({ name: p.name, selector: p.selector, label, extraParams: extra });
               }}
-                className={`flex-1 h-9 px-3 text-sm border rounded-md bg-white hover:bg-muted/50 text-left truncate text-muted-foreground ${errorBorder}`}
+                className={`flex-1 h-9 px-3 text-sm border rounded-md bg-card hover:bg-muted/50 text-left truncate text-muted-foreground ${errorBorder}`}
               >
                 {display || <span className="opacity-50">{ui('selectPlaceholder')}</span>}
               </button>
@@ -814,7 +814,7 @@ function ReportSidebar({ report, params, onChange, onSubmit, onReset, loading, r
           <select
             value={params[p.name] || ''}
             onChange={e => handleChange(p.name, e.target.value)}
-            className={`w-full h-9 px-2 text-sm rounded-md bg-white focus:outline-none focus:ring-1 focus:ring-primary/30 border ${errorBorder}`}
+            className={`w-full h-9 px-2 text-sm rounded-md bg-card focus:outline-none focus:ring-1 focus:ring-primary/30 border ${errorBorder}`}
           >
             {resolvedOptions.map(o => {
               const optLabel = o.label && typeof o.label === 'object' ? (o.label[locale] || o.label.en_US) : o.label;
@@ -867,7 +867,7 @@ function ReportSidebar({ report, params, onChange, onSubmit, onReset, loading, r
           type={p.type === 'number' ? 'number' : 'text'}
           value={params[p.name] || ''}
           onChange={e => handleChange(p.name, e.target.value)}
-          className={`w-full h-9 px-2 text-sm rounded-md bg-white focus:outline-none focus:ring-1 focus:ring-primary/30 border ${errorBorder}`}
+          className={`w-full h-9 px-2 text-sm rounded-md bg-card focus:outline-none focus:ring-1 focus:ring-primary/30 border ${errorBorder}`}
         />
         {hasError && <p className="text-[10px] text-destructive mt-1">{ui('required')}</p>}
       </div>
@@ -1000,9 +1000,9 @@ function DrillDownViewer({ report, token, baseParams, bpId, targetReportId, extr
           </button>
         ))}
       </div>
-      <div className="flex-1 bg-white rounded-lg border border-border/30 overflow-hidden relative">
+      <div className="flex-1 bg-card rounded-lg border border-border/30 overflow-hidden relative">
         {loading && (
-          <div className="absolute inset-0 flex items-center justify-center bg-white/80 z-10 gap-2 text-muted-foreground">
+          <div className="absolute inset-0 flex items-center justify-center bg-card/80 z-10 gap-2 text-muted-foreground">
             <Loader2 className="h-5 w-5 animate-spin" data-testid="Loader2__3c998a" /><span>{ui('loadingDetails')}</span>
           </div>
         )}
@@ -1190,7 +1190,7 @@ function ReportViewer({ report, onBack, token, selectedOrgId, roleOrgIds, catego
         {/* ===== Content: sidebar + right panel ===== */}
         <div className="flex-1 flex overflow-hidden">
           {/* Left sidebar */}
-          <div className="w-72 shrink-0 flex flex-col border-r border-border/30 bg-white overflow-hidden">
+          <div className="w-72 shrink-0 flex flex-col border-r border-border/30 bg-card overflow-hidden">
             <ReportSidebar
               report={report}
               params={params}
@@ -1206,9 +1206,9 @@ function ReportViewer({ report, onBack, token, selectedOrgId, roleOrgIds, catego
           </div>
 
           {/* Right panel */}
-          <div className="flex-1 flex flex-col overflow-hidden bg-slate-50">
+          <div className="flex-1 flex flex-col overflow-hidden bg-muted">
             {/* Format actions bar */}
-            <div className="flex items-center justify-between px-5 py-2 bg-white border-b border-border/30 shrink-0">
+            <div className="flex items-center justify-between px-5 py-2 bg-card border-b border-border/30 shrink-0">
               <div className="flex items-center gap-2 text-xs text-muted-foreground">
                 {loading && <Loader2 className="h-4 w-4 animate-spin" data-testid="Loader2__3c998a" />}
                 {recordCount != null && !loading && <span>{ui('recordsFound').replace('{count}', recordCount)}</span>}
@@ -1218,7 +1218,7 @@ function ReportViewer({ report, onBack, token, selectedOrgId, roleOrgIds, catego
                   const Icon = fmt.icon;
                   return (
                     <button key={fmt.id} onClick={() => renderReport(fmt.id)} disabled={loading}
-                      className="inline-flex items-center gap-1.5 h-8 px-3 rounded-lg text-xs font-medium border border-border bg-white text-foreground hover:bg-muted/50 disabled:opacity-40">
+                      className="inline-flex items-center gap-1.5 h-8 px-3 rounded-lg text-xs font-medium border border-border bg-card text-foreground hover:bg-muted/50 disabled:opacity-40">
                       <Icon className="h-3.5 w-3.5" data-testid="Icon__3c998a" />{ui(fmt.labelKey)}
                     </button>
                   );
@@ -1233,14 +1233,14 @@ function ReportViewer({ report, onBack, token, selectedOrgId, roleOrgIds, catego
 
           {/* Report iframe */}
           <div className="flex-1 overflow-hidden p-4">
-            <div className="bg-white rounded-lg shadow-sm h-full overflow-hidden relative border border-border/30">
+            <div className="bg-card rounded-lg shadow-sm h-full overflow-hidden relative border border-border/30">
               {loading && (
-                <div className="absolute inset-0 flex items-center justify-center bg-white/80 z-10 gap-2 text-muted-foreground">
+                <div className="absolute inset-0 flex items-center justify-center bg-card/80 z-10 gap-2 text-muted-foreground">
                   <Loader2 className="h-5 w-5 animate-spin" data-testid="Loader2__3c998a" /><span>{ui('renderingReport')}</span>
                 </div>
               )}
               {error && (
-                <div className="absolute inset-0 flex items-center justify-center bg-white/90 z-10 text-destructive text-sm px-8 text-center">{error}</div>
+                <div className="absolute inset-0 flex items-center justify-center bg-card/90 z-10 text-destructive text-sm px-8 text-center">{error}</div>
               )}
               {!loading && !error && !previewHtmlRef.current && (
                 <div className="absolute inset-0 overflow-hidden">
@@ -1248,13 +1248,13 @@ function ReportViewer({ report, onBack, token, selectedOrgId, roleOrgIds, catego
                   <div className="p-6 opacity-30 pointer-events-none select-none blur-[2px]">
                     <div className="h-4 w-48 bg-slate-200 rounded mb-6" />
                     <div className="space-y-0">
-                      <div className="grid grid-cols-6 gap-3 pb-2 border-b border-slate-200 mb-1">
+                      <div className="grid grid-cols-6 gap-3 pb-2 border-b border-border-subtle mb-1">
                         {[40, 15, 15, 15, 15, 15].map((w, i) => (
                           <div key={i} className="h-3 bg-slate-300 rounded" style={{ width: `${w}%` }} />
                         ))}
                       </div>
                       {Array.from({ length: 8 }).map((_, r) => (
-                        <div key={r} className="grid grid-cols-6 gap-3 py-2.5 border-b border-slate-100">
+                        <div key={r} className="grid grid-cols-6 gap-3 py-2.5 border-b border-border-subtle">
                           {[40, 15, 15, 15, 15, 15].map((w, i) => (
                             <div key={i} className="h-3 rounded" style={{ width: `${w}%`, background: r % 2 === 0 ? '#e2e8f0' : '#edf2f7' }} />
                           ))}

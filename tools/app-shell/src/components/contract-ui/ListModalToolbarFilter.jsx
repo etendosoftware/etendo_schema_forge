@@ -33,7 +33,7 @@ export function ListModalToolbarFilter({ filter, value, onChange, ui }) {
         <button
           type="button"
           data-testid={`list-modal-filter-${filter.key}`}
-          className="inline-flex h-10 items-center justify-between gap-2 rounded-lg border border-[#D1D4DB] bg-white px-3 text-sm font-normal leading-6 text-muted-foreground shadow-[0_1px_2px_rgba(18,18,23,0.05)] transition-colors hover:bg-[#F5F7F9]"
+          className="inline-flex h-10 items-center justify-between gap-2 rounded-lg border border-[#D1D4DB] bg-card px-3 text-sm font-normal leading-6 text-muted-foreground shadow-[0_1px_2px_rgba(18,18,23,0.05)] transition-colors hover:bg-[#F5F7F9]"
         >
           <span className="truncate text-left">{active.label}</span>
           <ChevronDown

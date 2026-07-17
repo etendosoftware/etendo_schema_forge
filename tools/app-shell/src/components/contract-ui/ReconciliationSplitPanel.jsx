@@ -91,7 +91,7 @@ function ToolbarShell({ children, search, onSearchChange, testIdPrefix }) {
         value={search}
         onChange={(e) => onSearchChange(e.target.value)}
         data-testid={`${testIdPrefix}-search`}
-        className="h-9 w-40 rounded-lg border border-[#D1D4DB] bg-white px-3 text-sm text-[#121217] placeholder:text-[#8a8aa3] focus:outline-none focus:ring-2 focus:ring-[#121217] focus:ring-offset-1"
+        className="h-9 w-40 rounded-lg border border-[#D1D4DB] bg-card px-3 text-sm text-[#121217] placeholder:text-[#8a8aa3] focus:outline-none focus:ring-2 focus:ring-[#121217] focus:ring-offset-1"
       />
     </div>
   );
@@ -261,17 +261,17 @@ function StatementLinesPanel({
     const selected = line.id === selectedLineId;
     // The engine-computed `state` drives the badge (suggested/byRule/difference/reconciled/pending).
     const badgeKind = line.state || (line.status === 'reconciled' ? 'reconciled' : 'pending');
-    const cellBg = cn('transition-colors', selected ? 'bg-[#F5F7F9]' : 'bg-white');
+    const cellBg = cn('transition-colors', selected ? 'bg-[#F5F7F9]' : 'bg-card');
     return (
       <TableRow
         key={line.id}
         data-testid={`recon-line-row-${line.id}`}
         onClick={() => onSelectLine(line)}
         className={cn(
-          'group relative h-[62px] cursor-pointer border-b border-[#E8EAEF] bg-white transition-shadow',
+          'group relative h-[62px] cursor-pointer border-b border-[#E8EAEF] bg-card transition-shadow',
           selected
             ? `z-20 ${ELEVATED_SHADOW}`
-            : 'hover:z-10 hover:bg-white hover:shadow-lg',
+            : 'hover:z-10 hover:bg-card hover:shadow-lg',
         )}
       >
         <TableCell
@@ -339,7 +339,7 @@ function StatementLinesPanel({
         aria-label={ui('financeAccountDetailBack')}
         data-testid="recon-toolbar-back"
         onClick={onBack}
-        className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-border bg-white text-muted-foreground transition-colors hover:bg-[#F5F7F9] hover:text-foreground"
+        className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-border bg-card text-muted-foreground transition-colors hover:bg-[#F5F7F9] hover:text-foreground"
       >
         <ArrowLeft className="h-4 w-4" data-testid="ArrowLeft__d0f4d5" />
       </button>
@@ -401,10 +401,10 @@ function CandidateOperationsPanel({
       key={cand.id}
       data-testid={`recon-cand-row-${cand.id}`}
       className={cn(
-        'group relative h-[62px] border-b border-[#E8EAEF] bg-white transition-shadow',
+        'group relative h-[62px] border-b border-[#E8EAEF] bg-card transition-shadow',
         selectedIds.has(cand.id)
           ? `z-10 bg-[#F5F7F9] ${ELEVATED_SHADOW}`
-          : 'hover:z-10 hover:bg-white hover:shadow-lg',
+          : 'hover:z-10 hover:bg-card hover:shadow-lg',
       )}
     >
       <TableCell className="h-[62px] w-8 px-0 pl-2" data-testid="TableCell__d0f4d5">
@@ -502,7 +502,7 @@ function ReconciliationActionBar({
 }) {
   const ui = useUI();
   return (
-    <div className="border-t border-[#E8EAEF] bg-white px-0 pt-2 pb-1">
+    <div className="border-t border-[#E8EAEF] bg-card px-0 pt-2 pb-1">
       {/* Selection totals only make sense while building a new reconciliation; a reconciled
           line is already balanced, so the "selected / remaining" rows would be misleading. */}
       {!isReconciledLine && (
@@ -524,7 +524,7 @@ function ReconciliationActionBar({
           type="button"
           onClick={onCancel}
           data-testid="recon-action-cancel"
-          className="inline-flex h-8 items-center gap-1.5 rounded-full border border-[#D1D4DB] bg-white px-3 text-sm font-medium text-[#121217] shadow-[0px_1px_2px_rgba(18,18,23,0.05)] hover:bg-[#F5F7F9]"
+          className="inline-flex h-8 items-center gap-1.5 rounded-full border border-[#D1D4DB] bg-card px-3 text-sm font-medium text-[#121217] shadow-[0px_1px_2px_rgba(18,18,23,0.05)] hover:bg-[#F5F7F9]"
         >
           <X className="h-4 w-4" data-testid="X__d0f4d5" />
           {ui('financeReconcileActionCancel')}

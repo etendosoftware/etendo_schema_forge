@@ -300,11 +300,11 @@ export function MovementsTable({ movements, loading, enabledDimensions = [], sel
         <TableRow
           data-testid={`movement-row-${movement.id}`}
           className={`group relative transition-shadow ${hasDimensions ? 'cursor-pointer' : ''} ${
-            highlighted ? 'bg-[#F5F7F9]' : 'bg-white'
+            highlighted ? 'bg-[#F5F7F9]' : 'bg-card'
           } ${
             expanded
-              ? 'z-20 border-b-0 [&>td]:border-b-0 hover:bg-white'
-              : 'hover:z-10 hover:bg-white hover:shadow-lg'
+              ? 'z-20 border-b-0 [&>td]:border-b-0 hover:bg-card'
+              : 'hover:z-10 hover:bg-card hover:shadow-lg'
           }`}
           onClick={() => { if (hasDimensions) toggleExpand(movement.id); }}
         >
@@ -317,7 +317,7 @@ export function MovementsTable({ movements, loading, enabledDimensions = [], sel
                 aria-expanded={expanded}
                 data-testid={`movement-expand-${movement.id}`}
                 onClick={() => toggleExpand(movement.id)}
-                className="flex h-7 w-7 items-center justify-center rounded-full border border-[#D1D4DB] bg-white text-[#6C6C89] transition-transform hover:bg-[#F5F7F9] hover:text-[#121217]"
+                className="flex h-7 w-7 items-center justify-center rounded-full border border-[#D1D4DB] bg-card text-[#6C6C89] transition-transform hover:bg-[#F5F7F9] hover:text-[#121217]"
                 style={{ transform: expanded ? 'rotate(180deg)' : undefined }}
               >
                 <ChevronDown className="h-4 w-4" data-testid="ChevronDown__ae5a16" />
@@ -365,7 +365,7 @@ export function MovementsTable({ movements, loading, enabledDimensions = [], sel
         </TableRow>
         {expanded ? (
           <TableRow
-            className="relative z-10 border-b-0 bg-white shadow-lg [&>td]:border-b-0 hover:bg-white"
+            className="relative z-10 border-b-0 bg-card shadow-lg [&>td]:border-b-0 hover:bg-card"
             data-testid={`movement-moreinfo-${movement.id}`}
           >
             <TableCell colSpan={COL_COUNT} className="p-0" data-testid="TableCell__ae5a16">

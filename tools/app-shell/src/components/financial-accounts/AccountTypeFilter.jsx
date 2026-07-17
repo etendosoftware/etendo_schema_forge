@@ -31,7 +31,7 @@ export function AccountTypeFilter({ value, onChange }) {
         <button
           type="button"
           data-testid="account-type-filter-trigger"
-          className="inline-flex h-9 w-[181px] items-center justify-between gap-1.5 rounded-lg border border-border bg-white px-3 text-sm font-normal leading-6 text-muted-foreground transition-colors hover:bg-[#F5F7F9]"
+          className="inline-flex h-9 w-[181px] items-center justify-between gap-1.5 rounded-lg border border-border bg-card px-3 text-sm font-normal leading-6 text-muted-foreground transition-colors hover:bg-[#F5F7F9]"
         >
           <span className="truncate text-left">{active.label}</span>
           <ChevronDown

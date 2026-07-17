@@ -470,7 +470,7 @@ export function ListModalWindow({
             type="button"
             onClick={handleBack}
             data-testid="list-modal-back"
-            className="inline-flex h-10 items-center rounded-lg border border-[#D1D4DB] bg-white px-3 text-sm font-medium leading-6 text-[#121217] shadow-[0_1px_2px_rgba(18,18,23,0.05)] transition-colors hover:bg-[#F5F7F9]"
+            className="inline-flex h-10 items-center rounded-lg border border-[#D1D4DB] bg-card px-3 text-sm font-medium leading-6 text-[#121217] shadow-[0_1px_2px_rgba(18,18,23,0.05)] transition-colors hover:bg-[#F5F7F9]"
           >
             {config?.backLabelKey ? ui(config.backLabelKey) : ui('cancel')}
           </button>
@@ -506,7 +506,7 @@ export function ListModalWindow({
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder={config?.searchPlaceholderKey ? ui(config.searchPlaceholderKey) : ui('search')}
                 data-testid="list-modal-search"
-                className="h-10 w-full rounded-lg border border-[#D1D4DB] bg-white pl-9 pr-3 text-sm leading-6 text-[#121217] shadow-[0_1px_2px_rgba(18,18,23,0.05)] placeholder:text-[#6C6C89] focus:outline-none focus:ring-2 focus:ring-[#121217]/10"
+                className="h-10 w-full rounded-lg border border-[#D1D4DB] bg-card pl-9 pr-3 text-sm leading-6 text-[#121217] shadow-[0_1px_2px_rgba(18,18,23,0.05)] placeholder:text-[#6C6C89] focus:outline-none focus:ring-2 focus:ring-[#121217]/10"
               />
             </div>
           )}
@@ -566,7 +566,7 @@ export function ListModalWindow({
         onOpenChange={(o) => (o ? setModalOpen(true) : closeModal())}
         data-testid="Dialog__19eda5">
         <DialogContent
-          className="flex max-h-[90vh] w-full max-w-6xl flex-col gap-0 overflow-hidden rounded-lg bg-white p-0"
+          className="flex max-h-[90vh] w-full max-w-6xl flex-col gap-0 overflow-hidden rounded-lg bg-card p-0"
           data-testid="DialogContent__19eda5">
           {/* Header */}
           <DialogHeader
@@ -696,7 +696,7 @@ function DeleteConfirmDialog({ open, busy, onCancel, onConfirm, ui }) {
       onOpenChange={(o) => { if (!o && !busy) onCancel(); }}
       data-testid="Dialog__19eda5">
       <DialogContent
-        className="max-w-md gap-0 rounded-lg bg-white p-6"
+        className="max-w-md gap-0 rounded-lg bg-card p-6"
         data-testid="DialogContent__19eda5">
         <DialogHeader className="space-y-1.5 text-left" data-testid="DialogHeader__19eda5">
           <DialogTitle
@@ -711,7 +711,7 @@ function DeleteConfirmDialog({ open, busy, onCancel, onConfirm, ui }) {
             type="button"
             onClick={onCancel}
             disabled={busy}
-            className="inline-flex h-10 items-center rounded-lg border border-[#D1D4DB] bg-white px-4 text-sm font-medium leading-6 text-[#121217] transition-colors hover:bg-[#F5F7F9] disabled:opacity-50"
+            className="inline-flex h-10 items-center rounded-lg border border-[#D1D4DB] bg-card px-4 text-sm font-medium leading-6 text-[#121217] transition-colors hover:bg-[#F5F7F9] disabled:opacity-50"
           >
             {ui('cancel')}
           </button>
@@ -786,7 +786,7 @@ function ListModalGrid({ columns, data, tMenu, ui, onEdit, onClone, onDelete, de
             <TableRow
               key={row.id}
               data-testid={`list-modal-row-${row.id}`}
-              className="group/row relative border-b border-[#E8EAEF] bg-white transition-shadow hover:z-10 hover:bg-white hover:shadow-lg"
+              className="group/row relative border-b border-[#E8EAEF] bg-card transition-shadow hover:z-10 hover:bg-card hover:shadow-lg"
             >
               {/* Drag handle — visual only; drag-to-reorder deferred */}
               <TableCell className="w-11 p-0" data-testid="TableCell__19eda5">

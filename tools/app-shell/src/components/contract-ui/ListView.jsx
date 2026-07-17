@@ -133,13 +133,13 @@ function ViewToggle({ galleryRenderer, onSelectList, onSelectGallery, viewMode }
     <div data-testid="view-toggle" className="flex flex-row items-center p-1 gap-1 h-10 w-[108px] bg-[#F5F7F9] rounded-xl">
       <button
         onClick={onSelectList}
-        className={`flex items-center justify-center w-12 h-8 rounded-lg transition-all ${viewMode === "list" ? "bg-white shadow-sm" : ""}`}
+        className={`flex items-center justify-center w-12 h-8 rounded-lg transition-all ${viewMode === "list" ? "bg-card shadow-sm" : ""}`}
       >
         <TableRowsIcon size={24} color="#828FA3" data-testid="TableRowsIcon__620cbc" />
       </button>
       <button
         onClick={onSelectGallery}
-        className={`flex items-center justify-center w-12 h-8 rounded-lg transition-all ${viewMode === "gallery" ? "bg-white shadow-sm" : ""}`}
+        className={`flex items-center justify-center w-12 h-8 rounded-lg transition-all ${viewMode === "gallery" ? "bg-card shadow-sm" : ""}`}
       >
         <LayoutGrid
           className="h-6 w-6"
@@ -613,7 +613,7 @@ export function ListView({
     <>
       <div className="flex-1 min-h-0 flex flex-col" data-testid="list-view">
         {/* White content card with rounded top-left corner */}
-        <div className="flex-1 flex flex-col bg-white rounded-tl-2xl overflow-hidden min-h-0">
+        <div className="flex-1 flex flex-col bg-card rounded-tl-2xl overflow-hidden min-h-0">
           {/* Selection bar or filter bar */}
           {selectedRows.length > 0 ? (
             <div className={`flex items-center justify-between ${listbarPaddingX} ${listbarPaddingY} border-b border-border/30`}>
@@ -676,7 +676,7 @@ export function ListView({
                         className={[
                           'h-8 px-3 text-sm font-medium text-[#121217] rounded-lg transition-all whitespace-nowrap',
                           activeSubsetIndex === i
-                            ? 'bg-white shadow-sm'
+                            ? 'bg-card shadow-sm'
                             : 'bg-[#F5F7F9] hover:brightness-95',
                         ].join(' ')}
                       >
@@ -693,7 +693,7 @@ export function ListView({
                         onClick={() => toggleQuickFilter(i)}
                         data-testid={`quick-filter-${qf.key || qf.label?.toLowerCase()}`}
                         className={[
-                          'h-9 px-3 text-xs rounded-lg border bg-white transition-colors',
+                          'h-9 px-3 text-xs rounded-lg border bg-card transition-colors',
                           activeFilterIndices.has(i)
                             ? 'border-primary text-primary bg-primary/5 font-medium'
                             : 'border-border text-muted-foreground hover:text-foreground',
@@ -795,7 +795,7 @@ export function ListView({
                   <Button
                     variant="outline"
                     size="sm"
-                    className="gap-1.5 text-muted-foreground font-normal h-9 px-3 rounded-lg bg-white"
+                    className="gap-1.5 text-muted-foreground font-normal h-9 px-3 rounded-lg bg-card"
                     onClick={() => setShowImportDialog(true)}
                     aria-label={ui('import')}
                     title={ui('import')}
@@ -808,7 +808,7 @@ export function ListView({
                   <Button
                     variant="outline"
                     size="sm"
-                    className="gap-1.5 text-muted-foreground font-normal h-9 px-3 rounded-lg bg-white"
+                    className="gap-1.5 text-muted-foreground font-normal h-9 px-3 rounded-lg bg-card"
                     onClick={() => setShowReport(true)}
                     data-testid="Button__620cbc">
                     <Printer className="h-3.5 w-3.5" data-testid="Printer__620cbc" />

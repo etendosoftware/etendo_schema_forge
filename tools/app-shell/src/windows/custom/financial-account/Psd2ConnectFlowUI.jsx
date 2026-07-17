@@ -23,7 +23,7 @@ export function Psd2ConnectFlowUI({ flow }) {
     <>
       <Dialog open={connecting} data-testid="Dialog__psd2flow">
         <DialogContent
-          className="max-w-sm bg-white"
+          className="max-w-sm bg-card"
           onPointerDownOutside={(e) => e.preventDefault()}
           onEscapeKeyDown={(e) => e.preventDefault()}
           data-testid="psd2-connecting-overlay"
@@ -60,14 +60,14 @@ function Psd2AccountSelectModal({ selection, onConfirm, onCancel }) {
       open={open}
       onOpenChange={(value) => { if (!value) onCancel?.(); }}
       data-testid="Dialog__psd2select">
-      <DialogContent className="bg-white" data-testid="psd2-account-select-modal">
+      <DialogContent className="bg-card" data-testid="psd2-account-select-modal">
         <DialogHeader data-testid="DialogHeader__psd2select">
           <DialogTitle className="flex items-center gap-2" data-testid="DialogTitle__psd2select">
             {providerLogoUrl ? (
               <img
                 src={providerLogoUrl}
                 alt=""
-                className="h-6 w-6 rounded border border-[#E8EAEF] bg-white object-contain p-0.5"
+                className="h-6 w-6 rounded border border-[#E8EAEF] bg-card object-contain p-0.5"
               />
             ) : null}
             <span>

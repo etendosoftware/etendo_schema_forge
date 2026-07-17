@@ -84,7 +84,7 @@ export function AmountFilter({ value, onChange }) {
       <PopoverTrigger asChild data-testid="PopoverTrigger__c66309">
         <button
           type="button"
-          className="inline-flex h-10 items-center justify-between gap-1 rounded-lg border border-[#D1D4DB] bg-white px-3 text-sm font-medium leading-6 text-[#121217] shadow-[0_1px_2px_rgba(18,18,23,0.05)] hover:bg-[#F5F7F9]"
+          className="inline-flex h-10 items-center justify-between gap-1 rounded-lg border border-[#D1D4DB] bg-card px-3 text-sm font-medium leading-6 text-[#121217] shadow-[0_1px_2px_rgba(18,18,23,0.05)] hover:bg-[#F5F7F9]"
         >
           <span className="truncate text-left">{triggerLabel}</span>
           <ChevronDown
@@ -172,7 +172,7 @@ export function AmountFilter({ value, onChange }) {
           <button
             type="button"
             onClick={() => setOpen(false)}
-            className="inline-flex h-9 items-center justify-center rounded-full border border-[#D1D4DB] bg-white px-3 text-sm font-medium text-[#121217] shadow-[0px_1px_2px_rgba(18,18,23,0.05)] transition-colors hover:bg-[rgba(18,18,23,0.05)]"
+            className="inline-flex h-9 items-center justify-center rounded-full border border-[#D1D4DB] bg-card px-3 text-sm font-medium text-[#121217] shadow-[0px_1px_2px_rgba(18,18,23,0.05)] transition-colors hover:bg-[rgba(18,18,23,0.05)]"
           >
             {ui('dateRangeCancel')}
           </button>
@@ -202,7 +202,7 @@ function NumberField({ value, onChange, placeholder, invalid }) {
       onChange={(e) => onChange(e.target.value)}
       placeholder={placeholder}
       className={cn(
-        'h-9 w-full min-w-0 rounded-md border bg-white px-2 text-sm text-[#121217] placeholder:text-[#828FA3] focus:outline-none focus:ring-2 focus:ring-offset-1',
+        'h-9 w-full min-w-0 rounded-md border bg-card px-2 text-sm text-[#121217] placeholder:text-[#828FA3] focus:outline-none focus:ring-2 focus:ring-offset-1',
         invalid
           ? 'border-[#D50B3E] focus:ring-[#D50B3E]'
           : 'border-[#D1D4DB] focus:ring-[#121217]',

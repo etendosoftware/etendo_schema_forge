@@ -99,7 +99,7 @@ export function AccountBadgeSelect({
         <PopoverTrigger asChild data-testid="PopoverTrigger__2082a8">
           <button
             type="button"
-            className={`flex w-full items-center justify-between gap-2 h-9 px-3 rounded-lg border ${borderClass} bg-white text-sm hover:border-[#C4C7D0] focus:outline-none focus:ring-2 focus:ring-primary transition-colors`}
+            className={`flex w-full items-center justify-between gap-2 h-9 px-3 rounded-lg border ${borderClass} bg-card text-sm hover:border-[#C4C7D0] focus:outline-none focus:ring-2 focus:ring-primary transition-colors`}
           >
             <span className="flex items-center gap-2 min-w-0">{triggerInner}</span>
             <ChevronDown

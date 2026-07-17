@@ -51,7 +51,7 @@ export function getStatusBadgeProps(status) {
     return { variant: 'outline', className: 'border-amber-300 bg-amber-50 text-amber-700' };
   }
   if (s === 'rpap') {
-    return { variant: 'outline', className: 'border-gray-200 bg-gray-50 text-gray-600' };
+    return { variant: 'outline', className: 'border-border-subtle bg-muted text-muted-foreground' };
   }
   if (s === 'under evaluation' || s === 'ue') {
     return { variant: 'outline', className: 'border-purple-300 bg-purple-50 text-purple-700' };
@@ -76,29 +76,29 @@ export function getStatusDotColor(status) {
 export function getStatusPillClass(status) {
   const s = String(status ?? '').toLowerCase();
   if (s === 'true' || s === 'processed') return 'bg-emerald-50 text-emerald-800';
-  if (s === 'false' || s === 'not processed') return 'bg-gray-100 text-gray-700';
-  if (s === 'draft' || s === 'dr') return 'bg-gray-100 text-gray-700';
+  if (s === 'false' || s === 'not processed') return 'bg-muted text-foreground';
+  if (s === 'draft' || s === 'dr') return 'bg-muted text-foreground';
   if (s === 'completed' || s === 'complete' || s === 'confirmed' || s === 'booked' || s === 'co' || s === 'ca' || s === 'etgo_ci' || s === 'rppc' || s === 'ppm' || s === 'pwnc' || s === 'rdnc') return 'bg-emerald-50 text-emerald-800';
   if (s === 'closed' || s === 'cl' || s === 'paid' || s === 'pa') return 'bg-blue-50 text-blue-800';
   if (s === 'voided' || s === 'cancelled' || s === 'void' || s === 'vo' || s === 'cj' || s === 'rejected' || s === 'rpvoid') return 'bg-red-50 text-red-800';
   if (s === 'in process' || s === 'ip' || s === 'rpae' || s === 'rpr') return 'bg-amber-50 text-amber-800';
-  if (s === 'rpap') return 'bg-gray-100 text-gray-700';
+  if (s === 'rpap') return 'bg-muted text-foreground';
   if (s === 'under evaluation' || s === 'ue') return 'bg-purple-50 text-purple-800';
-  return 'bg-gray-100 text-gray-700';
+  return 'bg-muted text-foreground';
 }
 
 export function getStatusGridPillClass(status) {
   const s = String(status ?? '').toLowerCase();
   if (s === 'true' || s === 'processed') return 'bg-emerald-500 text-white';
-  if (s === 'false' || s === 'not processed') return 'bg-gray-200 text-gray-700';
-  if (s === 'draft' || s === 'dr') return 'bg-gray-100 text-gray-600 border border-gray-300';
+  if (s === 'false' || s === 'not processed') return 'bg-muted text-foreground';
+  if (s === 'draft' || s === 'dr') return 'bg-muted text-muted-foreground border border-border-control';
   if (s === 'completed' || s === 'complete' || s === 'confirmed' || s === 'booked' || s === 'co' || s === 'ca' || s === 'etgo_ci' || s === 'rppc' || s === 'ppm' || s === 'pwnc' || s === 'rdnc') return 'bg-emerald-500 text-white';
   if (s === 'closed' || s === 'cl' || s === 'paid' || s === 'pa') return 'bg-slate-500 text-white';
   if (s === 'voided' || s === 'cancelled' || s === 'void' || s === 'vo' || s === 'cj' || s === 'rejected' || s === 'rpvoid') return 'bg-red-500 text-white';
   if (s === 'in process' || s === 'ip' || s === 'rpae' || s === 'rpr') return 'bg-amber-500 text-white';
-  if (s === 'rpap') return 'bg-gray-100 text-gray-600 border border-gray-300';
+  if (s === 'rpap') return 'bg-muted text-muted-foreground border border-border-control';
   if (s === 'under evaluation' || s === 'ue') return 'bg-purple-500 text-white';
-  return 'bg-gray-100 text-gray-600 border border-gray-300';
+  return 'bg-muted text-muted-foreground border border-border-control';
 }
 
 /**

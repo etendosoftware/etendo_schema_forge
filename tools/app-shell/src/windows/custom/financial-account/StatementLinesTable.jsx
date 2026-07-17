@@ -83,7 +83,7 @@ export function StatementLinesTable({ lines, loading, currency = 'EUR' }) {
             <TableRow
               key={line.id}
               data-testid={`statement-line-row-${line.id}`}
-              className="bg-white"
+              className="bg-card"
             >
               <TableCell className="text-sm text-[#6c6c89]" data-testid="TableCell__2364e3">{line.lineNo}</TableCell>
               <TableCell

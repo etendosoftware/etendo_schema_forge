@@ -150,7 +150,7 @@ const TbaiSection = forwardRef(function TbaiSection({ record, apiBaseUrl, orgId,
             <Input
               value={form.invoiceDescription}
               onChange={e => set('invoiceDescription', e.target.value)}
-              className="bg-white"
+              className="bg-card"
               data-testid="Input__f06d4b" />
           </div>
         </div>

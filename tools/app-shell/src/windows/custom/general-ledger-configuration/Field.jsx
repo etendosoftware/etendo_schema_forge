@@ -80,7 +80,7 @@ export default function Field({
           onValueChange={onChange}
           data-testid="Select__39edc8">
           <SelectTrigger
-            className={`h-9 bg-white ${borderClass} focus:ring-2 focus:ring-primary`}
+            className={`h-9 bg-card ${borderClass} focus:ring-2 focus:ring-primary`}
             data-testid="SelectTrigger__39edc8">
             <SelectValue placeholder={placeholder} data-testid="SelectValue__39edc8" />
           </SelectTrigger>
@@ -102,7 +102,7 @@ export default function Field({
         value={value ?? ''}
         onChange={(e) => onChange?.(e.target.value)}
         placeholder={placeholder}
-        className={`h-9 bg-white ${borderClass} focus:ring-2 focus:ring-primary`}
+        className={`h-9 bg-card ${borderClass} focus:ring-2 focus:ring-primary`}
         data-testid="Input__39edc8" />
       {error && <p className="mt-1 text-xs text-[#D7373F]">{error}</p>}
     </div>

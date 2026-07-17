@@ -35,7 +35,7 @@ function SidebarPeriodSelector({ period, onChangePeriod, ui, disabled = false })
         disabled={disabled}
         onClick={() => !disabled && setOpen(o => !o)}
         className={`h-10 flex items-center gap-1 px-3 border border-[#D1D4DB] rounded-lg shadow-[0px_1px_2px_rgba(18,18,23,0.05)] text-sm font-medium transition-colors
-          ${disabled ? 'bg-[#F5F7F9] text-[#828FA3] cursor-not-allowed' : 'bg-white text-[#121217]'}`}
+          ${disabled ? 'bg-[#F5F7F9] text-[#828FA3] cursor-not-allowed' : 'bg-card text-[#121217]'}`}
       >
         <Calendar
           className={`h-5 w-5 shrink-0 ${disabled ? 'text-[#C1C7D0]' : 'text-[#828FA3]'}`}
@@ -46,7 +46,7 @@ function SidebarPeriodSelector({ period, onChangePeriod, ui, disabled = false })
           data-testid="ChevronDown__59b33d" />
       </button>
       {open && (
-        <div className="absolute top-11 left-0 z-50 min-w-full bg-white border border-[#D1D4DB] rounded-lg shadow-md overflow-hidden">
+        <div className="absolute top-11 left-0 z-50 min-w-full bg-card border border-[#D1D4DB] rounded-lg shadow-md overflow-hidden">
           {SIDEBAR_PERIOD_OPTIONS.map(opt => (
             <button
               key={opt.value}
@@ -66,8 +66,8 @@ function SidebarPeriodSelector({ period, onChangePeriod, ui, disabled = false })
 // Horizontal availability widget: icon box + label + locations badge + big number.
 function AvailabilityWidget({ label, value, badge }) {
   return (
-    <div className="flex-1 flex items-center gap-3 pl-3 pr-2 py-2 bg-white border border-[#E8EAEF] rounded-lg shadow-[0px_1px_2px_rgba(18,18,23,0.05)]">
-      <div className="w-10 h-10 shrink-0 flex items-center justify-center bg-white border border-[#D1D4DB] rounded-lg shadow-[0px_1px_2px_rgba(18,18,23,0.05)]">
+    <div className="flex-1 flex items-center gap-3 pl-3 pr-2 py-2 bg-card border border-[#E8EAEF] rounded-lg shadow-[0px_1px_2px_rgba(18,18,23,0.05)]">
+      <div className="w-10 h-10 shrink-0 flex items-center justify-center bg-card border border-[#D1D4DB] rounded-lg shadow-[0px_1px_2px_rgba(18,18,23,0.05)]">
         <Box className="w-6 h-6 text-[#828FA3]" data-testid="Box__59b33d" />
       </div>
       <div className="flex-1 min-w-0 flex flex-col">
@@ -78,7 +78,7 @@ function AvailabilityWidget({ label, value, badge }) {
           )}
         </div>
         <span className="text-2xl font-medium tracking-[-0.01em] text-[#121217] leading-9">
-          {value === null ? <span className="text-gray-300">—</span> : value}
+          {value === null ? <span className="text-muted-foreground">—</span> : value}
         </span>
       </div>
     </div>
@@ -344,7 +344,7 @@ function StockEmptyState({ onAdjustStock, onReplenish }) {
         <button
           type="button"
           onClick={onAdjustStock}
-          className="flex items-center justify-center px-2 py-1 h-8 bg-white border border-[#D1D4DB] shadow-[0px_1px_2px_rgba(18,18,23,0.05)] rounded-lg text-sm font-medium text-[#121217]"
+          className="flex items-center justify-center px-2 py-1 h-8 bg-card border border-[#D1D4DB] shadow-[0px_1px_2px_rgba(18,18,23,0.05)] rounded-lg text-sm font-medium text-[#121217]"
         >
           {ui('adjustStock')}
         </button>
@@ -462,10 +462,10 @@ function StockChart({
             <DialogTitle data-testid="DialogTitle__59b33d">
               <div className="flex items-center justify-between gap-4 pr-8">
                 <span>{ui('stockMovement')}</span>
-                <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-1">
+                <div className="flex items-center gap-1 bg-muted rounded-lg p-1">
                   {SIDEBAR_PERIOD_OPTIONS.map(opt => (
                     <button key={opt.value} onClick={() => setPeriod(opt.value)}
-                      className={`px-3 py-1 rounded-md text-sm font-medium transition-colors ${period === opt.value ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
+                      className={`px-3 py-1 rounded-md text-sm font-medium transition-colors ${period === opt.value ? 'bg-card text-blue-600 shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}>
                       {ui(opt.key)}
                     </button>
                   ))}
@@ -496,7 +496,7 @@ function StockChart({
                   return (
                     <button key={b.binName} onClick={() => handleWarehouseClick(b.binName)}
                       className={`w-full flex items-center justify-between gap-2 px-3 py-2.5 rounded-lg transition-colors text-left
-                        ${isSelected ? 'bg-blue-50 ring-1 ring-blue-200' : 'bg-[#F5F7F9] hover:bg-gray-100'}
+                        ${isSelected ? 'bg-blue-50 ring-1 focus:ring-focus-ring' : 'bg-[#F5F7F9] hover:bg-muted'}
                         ${isDimmed ? 'opacity-40' : ''}`}>
                       <div className="flex items-center gap-2.5 min-w-0">
                         <span className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: DOT_COLORS[i % DOT_COLORS.length] }} />

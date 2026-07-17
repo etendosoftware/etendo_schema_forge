@@ -61,10 +61,10 @@ function SelectBox({ checked = false, dash = false, onClick, testId, ariaLabel }
       aria-checked={ariaCheckedValue(dash, checked)}
       className={cn(
         'flex h-4 w-4 flex-none cursor-pointer items-center justify-center rounded-[4px] border',
-        active ? 'border-[#121217] bg-[#121217]' : 'border-[#D1D4DB] bg-white',
+        active ? 'border-[#121217] bg-[#121217]' : 'border-[#D1D4DB] bg-card',
       )}
     >
-      {dash && <span className="h-[2px] w-2 rounded-full bg-white" />}
+      {dash && <span className="h-[2px] w-2 rounded-full bg-card" />}
       {checked && !dash && <Check
         className="h-3 w-3 text-white"
         strokeWidth={3}
@@ -193,13 +193,13 @@ function GroupRow({ group, checked, onToggle, currency }) {
           data-testid="SelectBox__a89979" />
       </div>
       {/* Statement line (left half) */}
-      <div className="flex flex-1 items-start border-r border-[#E8EAEF] bg-white px-3 py-3">
+      <div className="flex flex-1 items-start border-r border-[#E8EAEF] bg-card px-3 py-3">
         <div className="w-full">
           <StatementContent group={group} currency={currency} data-testid="StatementContent__a89979" />
         </div>
       </div>
       {/* Operations (right half) */}
-      <div className="flex flex-1 flex-col bg-white">
+      <div className="flex flex-1 flex-col bg-card">
         {ops.length === 0 ? (
           <div className="px-3 py-3 text-sm text-[#6C6C89]">—</div>
         ) : (
@@ -419,7 +419,7 @@ export function AutoMatchSuggestionModal({
               type="button"
               onClick={onClose}
               data-testid="automatch-modal-open-reconciliation"
-              className="flex h-10 items-center gap-1 rounded-full border border-[#D1D4DB] bg-white px-3 text-sm font-medium text-[#121217] shadow-[0_1px_2px_rgba(18,18,23,0.05)] hover:bg-[#F5F7F9]"
+              className="flex h-10 items-center gap-1 rounded-full border border-[#D1D4DB] bg-card px-3 text-sm font-medium text-[#121217] shadow-[0_1px_2px_rgba(18,18,23,0.05)] hover:bg-[#F5F7F9]"
             >
               <ArrowUpRight className="h-5 w-5 text-[#828FA3]" data-testid="ArrowUpRight__a89979" />
               <span>{ui('financeReconcileAutomatchActionOpen')}</span>

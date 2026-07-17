@@ -72,7 +72,7 @@ export default function CertSection({ context, orgId, apiBaseUrl }) {
             ? 'border-foreground bg-muted/40'
             : 'border-[#D1D4DB] hover:border-foreground/40 hover:bg-muted/20'}`}
       >
-        <div className="mx-auto mb-2 w-9 h-9 rounded-xl border border-[#E8EAEF] bg-white flex items-center justify-center shadow-[0_1px_2px_rgba(18,18,23,0.05)]">
+        <div className="mx-auto mb-2 w-9 h-9 rounded-xl border border-[#E8EAEF] bg-card flex items-center justify-center shadow-[0_1px_2px_rgba(18,18,23,0.05)]">
           <Upload
             size={16}
             strokeWidth={1.75}

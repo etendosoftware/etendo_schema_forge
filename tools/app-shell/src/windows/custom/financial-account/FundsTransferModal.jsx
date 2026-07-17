@@ -77,7 +77,7 @@ function CurrencyBadge({ iso }) {
 }
 
 /** Field wrapper that doubles as the chip host and the search-input box (border + focus ring). */
-const FIELD_WRAPPER_CLS = 'relative flex h-10 w-full items-center gap-1 rounded-md border border-[#D1D1DB] bg-white px-2 shadow-[0px_1px_2px_rgba(18,18,23,0.05)] focus-within:border-[#121217] focus-within:ring-[3px] focus-within:ring-black/[0.08]';
+const FIELD_WRAPPER_CLS = 'relative flex h-10 w-full items-center gap-1 rounded-md border border-[#D1D1DB] bg-card px-2 shadow-[0px_1px_2px_rgba(18,18,23,0.05)] focus-within:border-[#121217] focus-within:ring-[3px] focus-within:ring-black/[0.08]';
 /** Borderless input used inside FIELD_WRAPPER_CLS. */
 const FIELD_INPUT_CLS = 'h-full min-w-0 flex-1 border-0 bg-transparent px-1 text-sm outline-none placeholder:text-[#A9A9BC]';
 
@@ -85,7 +85,7 @@ const FIELD_INPUT_CLS = 'h-full min-w-0 flex-1 border-0 bg-transparent px-1 text
  * Floating list panel rendered inline (NOT portaled) so it scrolls with wheel/touchpad inside the
  * RemoveScroll-locked Dialog (a portaled popover would block wheel events outside the modal).
  */
-const DROPDOWN_PANEL_CLS = 'absolute left-0 right-0 top-[calc(100%+6px)] z-50 max-h-64 overflow-auto rounded-xl border border-[#E8E8ED] bg-white p-1.5 shadow-lg';
+const DROPDOWN_PANEL_CLS = 'absolute left-0 right-0 top-[calc(100%+6px)] z-50 max-h-64 overflow-auto rounded-xl border border-[#E8E8ED] bg-card p-1.5 shadow-lg';
 
 /** Closes the dropdown when a pointer-down lands outside the given ref. */
 function useCloseOnOutside(ref, open, close) {
@@ -244,7 +244,7 @@ function AmountField({ value, onChange, currencyIso, testId }) {
   return (
     <div className="relative">
       <input
-        className="h-10 w-full rounded-md border border-[#D1D1DB] bg-white pr-9 pl-3 text-right text-sm leading-5 tabular-nums text-[#121217] placeholder:text-[#A9A9BC] focus:outline-none focus:border-[#121217] focus:ring-[3px] focus:ring-black/[0.08]"
+        className="h-10 w-full rounded-md border border-[#D1D1DB] bg-card pr-9 pl-3 text-right text-sm leading-5 tabular-nums text-[#121217] placeholder:text-[#A9A9BC] focus:outline-none focus:border-[#121217] focus:ring-[3px] focus:ring-black/[0.08]"
         placeholder={ui('financeAccountTransferAmountPlaceholder')}
         inputMode="decimal"
         value={value}
@@ -344,7 +344,7 @@ export function FundsTransferModal({ sourceAccountId, onClose, onSuccess }) {
   return (
     <Dialog open onOpenChange={(v) => { if (!v) onClose?.(); }} data-testid="Dialog__transfer">
       <DialogContent
-        className="max-w-[600px] gap-0 overflow-hidden border-[#E8E8ED] bg-white p-0"
+        className="max-w-[600px] gap-0 overflow-hidden border-[#E8E8ED] bg-card p-0"
         onOpenAutoFocus={(e) => e.preventDefault()}
         data-testid="funds-transfer-modal"
       >
@@ -437,7 +437,7 @@ export function FundsTransferModal({ sourceAccountId, onClose, onSuccess }) {
                 </div>
                 <div className="flex items-center gap-2">
                   <input
-                    className="h-10 min-w-0 flex-1 rounded-md border border-[#D1D1DB] bg-white px-3 text-right text-sm leading-5 tabular-nums text-[#121217] placeholder:text-[#A9A9BC] focus:outline-none focus:border-[#121217] focus:ring-[3px] focus:ring-black/[0.08]"
+                    className="h-10 min-w-0 flex-1 rounded-md border border-[#D1D1DB] bg-card px-3 text-right text-sm leading-5 tabular-nums text-[#121217] placeholder:text-[#A9A9BC] focus:outline-none focus:border-[#121217] focus:ring-[3px] focus:ring-black/[0.08]"
                     placeholder={ui('financeAccountTransferRatePlaceholder')}
                     inputMode="decimal"
                     value={conversionRate}
@@ -511,7 +511,7 @@ export function FundsTransferModal({ sourceAccountId, onClose, onSuccess }) {
           <div className="flex flex-col gap-1.5">
             <Label data-testid="Label__7ff08b">{ui('financeAccountTransferDescription')}</Label>
             <input
-              className="h-10 w-full rounded-md border border-[#D1D1DB] bg-white px-3 text-sm leading-5 text-[#121217] focus:outline-none focus:border-[#121217] focus:ring-[3px] focus:ring-black/[0.08]"
+              className="h-10 w-full rounded-md border border-[#D1D1DB] bg-card px-3 text-sm leading-5 text-[#121217] focus:outline-none focus:border-[#121217] focus:ring-[3px] focus:ring-black/[0.08]"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               data-testid="transfer-description" />
@@ -528,7 +528,7 @@ export function FundsTransferModal({ sourceAccountId, onClose, onSuccess }) {
             type="button"
             onClick={() => onClose?.()}
             data-testid="transfer-cancel"
-            className="inline-flex h-10 items-center rounded-md border border-[#D1D1DB] bg-white px-[18px] text-sm font-semibold text-[#3F3F50] hover:bg-[#F7F7F8] hover:border-[#A9A9BC]"
+            className="inline-flex h-10 items-center rounded-md border border-[#D1D1DB] bg-card px-[18px] text-sm font-semibold text-[#3F3F50] hover:bg-[#F7F7F8] hover:border-[#A9A9BC]"
           >
             {ui('financeAccountTransferCancel')}
           </button>

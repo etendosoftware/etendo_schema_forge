@@ -14,7 +14,7 @@ function ReceiptStatsPanel({ receipt, partnerName, movementDate, token, apiBaseU
   const invoiceStatusPct = Number(receipt.invoiceStatus ?? 0);
   const docStatus = receipt.documentStatus;
   const statusLabel = ui(STATUS_KEYS[docStatus]) || receipt['documentStatus$_identifier'] || docStatus || '—';
-  const statusBadgeClass = STATUS_BADGE[docStatus] || 'bg-gray-50 text-gray-600 border-gray-200';
+  const statusBadgeClass = STATUS_BADGE[docStatus] || 'bg-muted text-muted-foreground border-border-subtle';
   const purchaseOrderNo = receipt['salesOrder$_identifier'] || null;
 
   const specs = [
@@ -87,7 +87,7 @@ export default function GoodsReceiptPreview({ receipt, token, apiBaseUrl, window
       <Button
         size="sm"
         variant="outline"
-        className="gap-1 px-2 py-1 h-8 rounded-lg text-sm font-medium bg-white border-[#D1D4DB] shadow-sm text-[#121217] [&_svg]:size-5"
+        className="gap-1 px-2 py-1 h-8 rounded-lg text-sm font-medium bg-card border-[#D1D4DB] shadow-sm text-[#121217] [&_svg]:size-5"
         onClick={() => modalRef.current?.triggerEdit?.()}
         data-testid="Button__ba7c74">
         <Edit2 className="text-[#828FA3]" data-testid="Edit2__ba7c74" />

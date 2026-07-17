@@ -10,7 +10,7 @@ export function AccountsTableHeader() {
   return (
     <TableHeader data-testid="TableHeader__18040e">
       <TableRow
-        className="h-10 border-b border-[#E8EAEF] bg-white hover:bg-white"
+        className="h-10 border-b border-[#E8EAEF] bg-card hover:bg-card"
         data-testid="TableRow__18040e">
         {/* Contract-driven data columns (decisions.json → contract.json) */}
         {ACCOUNT_COLUMNS.map((col) => {

@@ -60,7 +60,7 @@ export default function SendOrderPanel({
                   className={`flex flex-1 items-center justify-center gap-2 rounded-lg border-2 py-2.5 text-sm font-medium transition-all ${
                     isActive
                       ? 'border-primary bg-primary/5 text-primary'
-                      : 'border-border bg-white text-muted-foreground hover:border-primary/30'
+                      : 'border-border bg-card text-muted-foreground hover:border-primary/30'
                   }`}
                 >
                   <Icon className="h-4 w-4" data-testid="Icon__9c5975" />
@@ -77,7 +77,7 @@ export default function SendOrderPanel({
             <label className="text-xs font-medium text-muted-foreground block">
               {ui('qpoEmailTo')}
             </label>
-            <div className="flex items-center gap-2 rounded-lg border border-border bg-white px-3 py-2 text-sm">
+            <div className="flex items-center gap-2 rounded-lg border border-border bg-card px-3 py-2 text-sm">
               <Mail className="h-3.5 w-3.5 text-muted-foreground" data-testid="Mail__9c5975" />
               <span className="text-muted-foreground">{supplier?.email || '—'}</span>
             </div>
@@ -90,7 +90,7 @@ export default function SendOrderPanel({
             <label className="text-xs font-medium text-muted-foreground block">
               {ui('qpoMessagePreview')}
             </label>
-            <div className="rounded-lg border border-border bg-white p-3 text-xs text-muted-foreground whitespace-pre-line max-h-28 overflow-auto font-mono">
+            <div className="rounded-lg border border-border bg-card p-3 text-xs text-muted-foreground whitespace-pre-line max-h-28 overflow-auto font-mono">
               {whatsappPreview}
             </div>
             <a

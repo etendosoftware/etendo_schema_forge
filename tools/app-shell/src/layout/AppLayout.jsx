@@ -63,7 +63,7 @@ function AppLayoutInner({ menuGroups, embedded }) {
               key={pageKey}
               className="relative flex-1 min-h-0 flex flex-col page-transition pr-3 pb-3"
             >
-              <div className="flex-1 flex flex-col min-h-0 bg-white rounded-xl border border-border/30 overflow-hidden">
+              <div className="flex-1 flex flex-col min-h-0 bg-card rounded-xl border border-border/30 overflow-hidden">
                 <Outlet data-testid="Outlet__488148" />
               </div>
             </div>

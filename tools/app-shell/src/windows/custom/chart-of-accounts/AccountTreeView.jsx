@@ -477,7 +477,7 @@ export default function AccountTreeView({
   return (
     <div data-testid="account-tree" role="grid" {...rest}>
       {/* ── Toolbar ── */}
-      <div className="flex items-center justify-between px-4 py-2.5 border-b border-[#E8EAEF] bg-white">
+      <div className="flex items-center justify-between px-4 py-2.5 border-b border-[#E8EAEF] bg-card">
         <div className="flex items-center gap-3">
           <button
             type="button"

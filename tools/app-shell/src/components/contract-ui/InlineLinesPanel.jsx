@@ -66,7 +66,7 @@ function LookupTrigger({ field, displayLabel, selectorUrl, selectorContext, toke
         type="button"
         data-testid={`field-${field.key}`}
         onClick={() => setOpen(true)}
-        className="w-full flex items-center gap-2 h-7 rounded-md border border-input bg-white px-2 text-sm text-left hover:border-primary/50 focus:ring-2 focus:ring-primary focus:outline-none transition-colors"
+        className="w-full flex items-center gap-2 h-7 rounded-md border border-input bg-card px-2 text-sm text-left hover:border-primary/50 focus:ring-2 focus:ring-primary focus:outline-none transition-colors"
       >
         <Search
           className="h-3.5 w-3.5 text-muted-foreground shrink-0"
@@ -110,13 +110,13 @@ function renderBooleanCell(value, ui) {
     return <span className="text-emerald-600">{ui?.('yes') ?? 'Yes'}</span>;
   }
   if (FALSY_BOOLEAN_VALUES.has(value)) {
-    return <span className="text-slate-400">{ui?.('no') ?? 'No'}</span>;
+    return <span className="text-muted-foreground">{ui?.('no') ?? 'No'}</span>;
   }
-  return <span className="text-slate-300">—</span>;
+  return <span className="text-muted-foreground">—</span>;
 }
 
 function renderDateCell(raw, locale) {
-  if (!raw) return <span className="text-slate-300">—</span>;
+  if (!raw) return <span className="text-muted-foreground">—</span>;
   const parsed = /^\d{4}-\d{2}-\d{2}$/.test(raw) ? new Date(raw + 'T00:00:00') : new Date(raw);
   if (Number.isNaN(parsed.getTime())) return <span>{String(raw)}</span>;
   const localeTag = typeof locale === 'string' && locale
@@ -157,7 +157,7 @@ function ReadCell({ row, col, locale, t, ui }) {
 function editInputClassName(isNumeric, isInvalid) {
   const numericClass = isNumeric ? ' text-right tabular-nums' : '';
   const borderClass = isInvalid ? 'border-red-500 focus-visible:ring-red-500' : 'border-input';
-  return `h-7 px-2 text-sm bg-white${numericClass} ${borderClass}`;
+  return `h-7 px-2 text-sm bg-card${numericClass} ${borderClass}`;
 }
 
 function isValueBelowMin(col, value) {
@@ -267,7 +267,7 @@ function EditCell({ col, row, value, displayLabel, onCommit, autoFocus, entity, 
         <SelectTrigger
           ref={inputRef}
           data-testid={`field-${col.key}`}
-          className="w-full h-7 text-sm bg-white focus:ring-2 focus:ring-primary"
+          className="w-full h-7 text-sm bg-card focus:ring-2 focus:ring-primary"
         >
           <SelectValue data-testid="SelectValue__3b7ec2" />
         </SelectTrigger>
@@ -630,7 +630,7 @@ const InlineLinesPanel = forwardRef(function InlineLinesPanel({
           labels stay visible while rows scroll. The white background and z-10
           keep it opaque above the scrolled content. */}
       <div
-        className="flex items-stretch border-b sticky top-0 z-10 bg-white"
+        className="flex items-stretch border-b sticky top-0 z-10 bg-card"
         style={{ borderColor: TOKENS.separator, height: TOKENS.rowHeight, ...headerStyle }}
       >
         <div className="flex items-center justify-center px-2" style={{ width: 40, flexShrink: 0 }}>
@@ -683,7 +683,7 @@ const InlineLinesPanel = forwardRef(function InlineLinesPanel({
             className={[
               // `hover:relative hover:z-10` lifts the row above its neighbors so the
               // shadow can spill onto the rows below without being clipped by them.
-              'group/row flex items-stretch border-b bg-white transition-shadow',
+              'group/row flex items-stretch border-b bg-card transition-shadow',
               'hover:relative hover:z-20 hover:shadow-[0_4px_12px_rgba(18,18,23,0.08)]',
               isHighlighted ? 'bg-muted/40' : '',
               isEditing ? 'shadow-[0_4px_12px_rgba(18,18,23,0.08)] relative z-20' : '',

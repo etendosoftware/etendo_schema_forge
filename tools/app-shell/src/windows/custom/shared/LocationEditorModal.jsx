@@ -40,7 +40,7 @@ async function fetchSelectorPage(url, headers) {
 }
 
 function PickerMessage({text}) {
-    return <div className="px-4 py-6 text-center text-sm text-gray-500">{text}</div>;
+    return <div className="px-4 py-6 text-center text-sm text-muted-foreground">{text}</div>;
 }
 
 function renderCountryPickerBody(isLoading, loadingText, hasLoadFailed, loadErrorText, filteredCountries, emptyText, renderCountryRow) {
@@ -71,29 +71,29 @@ function CountryPicker({
                        }) {
     return (
         <div
-            className="fixed inset-0 z-[160] flex items-center justify-center bg-black/30 p-4"
+            className="fixed inset-0 z-[160] flex items-center justify-center bg-foreground/30 p-4"
             onMouseDown={onClose}
         >
             <div
-                className="w-full max-w-md max-h-[540px] bg-white rounded-xl shadow-2xl flex flex-col"
+                className="w-full max-w-md max-h-[540px] bg-card rounded-xl shadow-2xl flex flex-col"
                 onMouseDown={onContentMouseDown}
             >
-                <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200">
-                    <h3 className="text-sm font-semibold text-gray-900">{title}</h3>
+                <div className="flex items-center justify-between px-4 py-3 border-b border-border-subtle">
+                    <h3 className="text-sm font-semibold text-foreground">{title}</h3>
                     <button
                         type="button"
                         onClick={onClose}
-                        className="text-gray-400 hover:text-gray-600 transition-colors"
+                        className="text-muted-foreground hover:text-muted-foreground transition-colors"
                         aria-label={closeAriaLabel}
                     >
                         <X size={16} data-testid="X__927831" />
                     </button>
                 </div>
-                <div className="px-4 py-3 border-b border-gray-100">
+                <div className="px-4 py-3 border-b border-border-subtle">
                     <div className="relative">
                         <Search
                             size={14}
-                            className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
+                            className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground"
                             data-testid="Search__927831" />
                         <input
                             ref={searchInputRef}
@@ -101,7 +101,7 @@ function CountryPicker({
                             value={searchValue}
                             onChange={onSearchChange}
                             placeholder={searchPlaceholder}
-                            className="w-full border border-gray-300 rounded-lg pl-9 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            className="w-full border border-border-control rounded-lg pl-9 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-focus-ring"
                         />
                     </div>
                 </div>
@@ -111,7 +111,7 @@ function CountryPicker({
                         <div ref={loadMoreRef} className="flex justify-center py-2">
                             {isLoadingMore ? <Loader2
                                 size={14}
-                                className="animate-spin text-gray-400"
+                                className="animate-spin text-muted-foreground"
                                 data-testid="Loader2__927831" /> :
                                 <span className="h-3"/>}
                         </div>

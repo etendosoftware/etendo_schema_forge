@@ -36,7 +36,7 @@ export function ReadOnly({ children }) {
 export function TextInput({ className = '', name, ...rest }) {
   // White background: these are editable; the app's default Input is grey, which
   // reads as read-only. Caller className can still override.
-  return <Input className={`bg-white ${className}`} name={name} {...rest} data-testid={name ? `field-text-${name}` : 'field-text'} />;
+  return <Input className={`bg-card ${className}`} name={name} {...rest} data-testid={name ? `field-text-${name}` : 'field-text'} />;
 }
 
 /**
@@ -126,7 +126,7 @@ export function AmountInput({ label, required, value, onChange, placeholder, rea
       data-testid="Field__7183e9">
       <div className="relative">
         <Input
-          className={`pr-8 text-right tabular-nums ${readOnly ? '' : 'bg-white'}`}
+          className={`pr-8 text-right tabular-nums ${readOnly ? '' : 'bg-card'}`}
           value={focused ? buffer : value}
           onChange={(e) => { setBuffer(e.target.value); onChange?.(e); }}
           onFocus={() => setFocused(true)}
@@ -166,7 +166,7 @@ export function LookupPicker({ value, onChange, useLookup, placeholder = 'Buscar
       <PopoverAnchor asChild data-testid="PopoverAnchor__7183e9">
         <div className="relative">
           <Input
-            className="bg-white pr-9"
+            className="bg-card pr-9"
             value={query}
             placeholder={placeholder}
             onChange={(e) => { setQuery(e.target.value); setOpen(true); if (value) onChange(null); }}
@@ -182,7 +182,7 @@ export function LookupPicker({ value, onChange, useLookup, placeholder = 'Buscar
         sideOffset={4}
         onOpenAutoFocus={(e) => e.preventDefault()}
         onFocusOutside={(e) => e.preventDefault()}
-        className="max-h-56 overflow-auto rounded-lg border border-[#D1D4DB] bg-white p-0 shadow-lg"
+        className="max-h-56 overflow-auto rounded-lg border border-[#D1D4DB] bg-card p-0 shadow-lg"
         style={{ width: 'var(--radix-popover-trigger-width)' }}
         data-testid="PopoverContent__7183e9">
         {loading && results.length === 0 ? (
@@ -205,7 +205,7 @@ export function LookupPicker({ value, onChange, useLookup, placeholder = 'Buscar
 
 export function Note({ children }) {
   return (
-    <div className="flex items-start gap-2 rounded-lg border border-[#E8EAEF] bg-white px-3 py-2.5 text-xs leading-[17px] text-[#6C6C89] [&_b]:font-semibold [&_b]:text-[#121217]">
+    <div className="flex items-start gap-2 rounded-lg border border-[#E8EAEF] bg-card px-3 py-2.5 text-xs leading-[17px] text-[#6C6C89] [&_b]:font-semibold [&_b]:text-[#121217]">
       {children}
     </div>
   );

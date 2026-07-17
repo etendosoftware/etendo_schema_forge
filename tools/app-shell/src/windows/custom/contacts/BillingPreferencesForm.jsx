@@ -54,7 +54,7 @@ function DiscountSelect({ value, options, onChange, loading }) {
         <Tag size={13} className="text-muted-foreground" data-testid="Tag__7f0756" />
       </div>
       <select
-        className="h-10 w-full rounded-lg border border-[#D1D4DB] bg-white pl-8 pr-3 text-sm appearance-none cursor-pointer shadow-[0px_1px_2px_rgba(18,18,23,0.05)] transition-colors disabled:cursor-not-allowed"
+        className="h-10 w-full rounded-lg border border-[#D1D4DB] bg-card pl-8 pr-3 text-sm appearance-none cursor-pointer shadow-[0px_1px_2px_rgba(18,18,23,0.05)] transition-colors disabled:cursor-not-allowed"
         value={value ?? ''}
         onChange={e => onChange(e.target.value || null)}
         disabled={loading}

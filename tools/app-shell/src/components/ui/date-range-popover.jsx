@@ -150,7 +150,7 @@ export function DateRangePopoverContent({ value, onChange, onClose }) {
             <button
               type="button"
               onClick={onClose}
-              className="inline-flex h-10 items-center justify-center rounded-full border border-[#D1D4DB] bg-white px-3 text-sm font-medium text-[#121217] shadow-[0px_1px_2px_rgba(18,18,23,0.05)] transition-colors hover:bg-[rgba(18,18,23,0.05)]"
+              className="inline-flex h-10 items-center justify-center rounded-full border border-[#D1D4DB] bg-card px-3 text-sm font-medium text-[#121217] shadow-[0px_1px_2px_rgba(18,18,23,0.05)] transition-colors hover:bg-[rgba(18,18,23,0.05)]"
             >
               {ui('dateRangeCancel')}
             </button>
@@ -195,7 +195,7 @@ export function DateRangePopover({ value, onChange, placeholder }) {
       <PopoverTrigger asChild data-testid="PopoverTrigger__482ed1">
         <button
           type="button"
-          className="inline-flex h-9 items-center justify-between gap-1.5 rounded-lg border border-border bg-white px-3 text-sm font-normal leading-6 text-muted-foreground transition-colors hover:bg-[#F5F7F9]"
+          className="inline-flex h-9 items-center justify-between gap-1.5 rounded-lg border border-border bg-card px-3 text-sm font-normal leading-6 text-muted-foreground transition-colors hover:bg-[#F5F7F9]"
         >
           <CalendarDays
             className="h-3.5 w-3.5 shrink-0 text-muted-foreground"
@@ -246,7 +246,7 @@ function FilterNavBtn({ onClick, children }) {
     <button
       type="button"
       onClick={onClick}
-      className="inline-flex h-6 w-6 items-center justify-center rounded-full border border-[#D1D4DB] bg-white shadow-[0px_1px_2px_rgba(18,18,23,0.05)] transition-colors hover:bg-[rgba(18,18,23,0.05)]"
+      className="inline-flex h-6 w-6 items-center justify-center rounded-full border border-[#D1D4DB] bg-card shadow-[0px_1px_2px_rgba(18,18,23,0.05)] transition-colors hover:bg-[rgba(18,18,23,0.05)]"
     >
       {children}
     </button>
@@ -387,7 +387,7 @@ function CalendarWithPicker({ month, onMonthChange, selected, onSelect, modifier
                   className={cn(
                     'h-8 flex-1 rounded-lg px-2 text-sm font-medium transition-colors',
                     pickerTab === tab.key
-                      ? 'bg-white text-[#121217] shadow-[0px_1px_3px_rgba(18,18,23,0.1),0px_1px_2px_rgba(18,18,23,0.06)]'
+                      ? 'bg-card text-[#121217] shadow-[0px_1px_3px_rgba(18,18,23,0.1),0px_1px_2px_rgba(18,18,23,0.06)]'
                       : 'text-[#121217] hover:bg-[rgba(18,18,23,0.05)]',
                   )}
                 >

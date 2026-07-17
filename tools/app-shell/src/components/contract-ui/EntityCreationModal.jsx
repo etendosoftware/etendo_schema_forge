@@ -4,10 +4,10 @@ import { MODAL_STYLES } from './modal-styles.js';
 import { LABEL_GAP, FIELD_HEIGHT_IMPORTANT } from '@/components/ui/formDensity';
 
 const INPUT_BASE =
-  'w-full rounded-md border border-input bg-white px-3 focus:ring-2 focus:ring-primary focus:outline-none';
+  'w-full rounded-md border border-input bg-card px-3 focus:ring-2 focus:ring-primary focus:outline-none';
 const INPUT_CLS = `${INPUT_BASE} ${FIELD_HEIGHT_IMPORTANT} !text-[14px]`;
 const SELECT_CLS =
-  `w-full ${FIELD_HEIGHT_IMPORTANT} rounded-md border border-input bg-white px-3 !text-[14px] focus:ring-2 focus:ring-primary focus:outline-none cursor-pointer`;
+  `w-full ${FIELD_HEIGHT_IMPORTANT} rounded-md border border-input bg-card px-3 !text-[14px] focus:ring-2 focus:ring-primary focus:outline-none cursor-pointer`;
 // ETP-4321: height now comes from the FIELD_HEIGHT class (36px). Keep fontSize
 // only — the inline height/minHeight would otherwise override the token.
 const SELECT_STYLE = { fontSize: '14px' };

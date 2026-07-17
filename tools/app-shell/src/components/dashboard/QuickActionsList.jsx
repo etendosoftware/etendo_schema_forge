@@ -7,7 +7,7 @@ export function QuickActionsList({ actions = [] }) {
   const ui = useUI();
 
   return (
-    <div className="rounded-xl border overflow-hidden bg-white flex flex-col h-full" style={{ borderColor: '#E8EAEF' }}>
+    <div className="rounded-xl border overflow-hidden bg-card flex flex-col h-full" style={{ borderColor: '#E8EAEF' }}>
       <div
         className="flex items-center border-b"
         style={{ backgroundColor: '#F5F7F9', borderBottomColor: '#E8EAEF', padding: '8px 12px', minHeight: '48px' }}

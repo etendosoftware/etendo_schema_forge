@@ -34,9 +34,9 @@ function normalizeText(value) {
  *   onCancel       — discards the import entirely
  */
 function SelectorOption({ option, selected, onPick, sizing = 'compact' }) {
-  const base = 'flex w-full items-center gap-2 text-left hover:bg-gray-50';
+  const base = 'flex w-full items-center gap-2 text-left hover:bg-muted';
   const pad = sizing === 'compact' ? 'px-3 py-2 text-sm' : 'px-4 py-2.5 text-sm';
-  const tone = selected ? 'bg-blue-50 text-blue-700 font-medium' : 'text-gray-800';
+  const tone = selected ? 'bg-blue-50 text-blue-700 font-medium' : 'text-foreground';
   return (
     <button
       type="button"
@@ -73,18 +73,18 @@ export default function ProductResolverPopup({
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/30 flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col">
-        <div className="flex items-center justify-between px-6 pt-5 pb-4 border-b border-gray-200">
-          <h2 className="text-base font-semibold text-gray-900">
+    <div className="fixed inset-0 z-50 bg-foreground/30 flex items-center justify-center p-4">
+      <div className="bg-card rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col">
+        <div className="flex items-center justify-between px-6 pt-5 pb-4 border-b border-border-subtle">
+          <h2 className="text-base font-semibold text-foreground">
             {ui('ocrProductResolverTitle')}
           </h2>
-          <button onClick={cancel} aria-label={ui('cancel')} className="text-gray-400 hover:text-gray-600">
+          <button onClick={cancel} aria-label={ui('cancel')} className="text-muted-foreground hover:text-muted-foreground">
             <X size={18} data-testid="X__b3ae11" />
           </button>
         </div>
 
-        <div className="px-6 py-3 text-xs text-gray-500 border-b border-gray-100">
+        <div className="px-6 py-3 text-xs text-muted-foreground border-b border-border-subtle">
           {ui('ocrProductResolverHint')}
         </div>
 
@@ -104,10 +104,10 @@ export default function ProductResolverPopup({
           ))}
         </div>
 
-        <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-gray-200">
+        <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-border-subtle">
           <button
             onClick={cancel}
-            className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg"
+            className="px-4 py-2 text-sm font-medium text-foreground bg-muted hover:bg-muted rounded-lg"
           >
             {ui('cancel')}
           </button>
@@ -127,14 +127,14 @@ function ProductRow({ row, selection, onSelect, selectorUrl, productSpecUrl, aut
   const [creating, setCreating] = useState(false);
 
   return (
-    <div className="flex items-start gap-3 border border-gray-200 rounded-lg p-3">
+    <div className="flex items-start gap-3 border border-border-subtle rounded-lg p-3">
       <div className="flex-1 min-w-0">
-        <div className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">
+        <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-1">
           {ui('ocrProductExtracted')}
         </div>
-        <div className="text-sm text-gray-900 break-words">{row.description}</div>
+        <div className="text-sm text-foreground break-words">{row.description}</div>
         {(row.quantity != null || row.unitPrice != null) && (
-          <div className="text-xs text-gray-500 mt-1">
+          <div className="text-xs text-muted-foreground mt-1">
             {row.quantity != null && <span>{ui('ocrProductQty')}: {row.quantity}</span>}
             {row.quantity != null && row.unitPrice != null && <span> · </span>}
             {row.unitPrice != null && <span>{ui('ocrProductUnit')}: {row.unitPrice}</span>}
@@ -142,7 +142,7 @@ function ProductRow({ row, selection, onSelect, selectorUrl, productSpecUrl, aut
         )}
       </div>
       <div className="w-72 shrink-0">
-        <div className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">
+        <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-1">
           {ui('ocrProductPick')}
         </div>
         <InlineSelector
@@ -251,14 +251,14 @@ function InlineSelector({ selectorUrl, authHeader, initialQuery, value, onPick, 
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white hover:border-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 flex items-center justify-between gap-2"
+        className="w-full border border-border-control rounded-lg px-3 py-2 text-sm bg-card hover:border-border-control focus:outline-none focus:ring-2 focus:ring-focus-ring flex items-center justify-between gap-2"
       >
-        <span className={`truncate ${value ? 'text-gray-900' : 'text-gray-500'}`}>
+        <span className={`truncate ${value ? 'text-foreground' : 'text-muted-foreground'}`}>
           {value?.label || ui('ocrProductSkip')}
         </span>
         <ChevronDown
           size={16}
-          className="text-gray-500 shrink-0"
+          className="text-muted-foreground shrink-0"
           data-testid="ChevronDown__b3ae11" />
       </button>
     );
@@ -266,37 +266,37 @@ function InlineSelector({ selectorUrl, authHeader, initialQuery, value, onPick, 
 
   return (
     <div className="relative" ref={wrapRef}>
-      <div className="flex items-center gap-2 rounded-lg border border-gray-900 bg-white px-3 py-2">
-        <Search size={14} className="text-gray-400 shrink-0" data-testid="Search__b3ae11" />
+      <div className="flex items-center gap-2 rounded-lg border border-gray-900 bg-card px-3 py-2">
+        <Search size={14} className="text-muted-foreground shrink-0" data-testid="Search__b3ae11" />
         <input
           ref={inputRef}
           type="text"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder={ui('ocrProductSearchPlaceholder')}
-          className="flex-1 text-sm text-gray-900 placeholder-gray-500 outline-none"
+          className="flex-1 text-sm text-foreground placeholder-gray-500 outline-none"
         />
         {loading && <Loader2
           size={14}
-          className="animate-spin text-gray-400"
+          className="animate-spin text-muted-foreground"
           data-testid="Loader2__b3ae11" />}
       </div>
-      <div className="absolute z-10 mt-1 max-h-56 w-full overflow-auto rounded-lg border border-gray-200 bg-white shadow-lg">
+      <div className="absolute z-10 mt-1 max-h-56 w-full overflow-auto rounded-lg border border-border-subtle bg-card shadow-lg">
         {onCreateNew && (
           <button
             type="button"
             onClick={onCreateNew}
-            className="flex w-full items-center gap-2 border-b border-gray-100 px-3 py-2 text-left text-sm text-blue-700 hover:bg-blue-50"
+            className="flex w-full items-center gap-2 border-b border-border-subtle px-3 py-2 text-left text-sm text-blue-700 hover:bg-blue-50"
           >
             <Plus size={14} className="shrink-0" data-testid="Plus__b3ae11" />
             <span className="truncate">{ui('ocrProductCreateNew')}</span>
           </button>
         )}
         {!loading && failed && (
-          <div className="px-3 py-2 text-xs text-gray-500">{ui('ocrProductLoadError')}</div>
+          <div className="px-3 py-2 text-xs text-muted-foreground">{ui('ocrProductLoadError')}</div>
         )}
         {!loading && !failed && options.length === 0 && (
-          <div className="px-3 py-2 text-xs text-gray-500">{ui('noResults')}</div>
+          <div className="px-3 py-2 text-xs text-muted-foreground">{ui('noResults')}</div>
         )}
         {options.map(o => (
           <SelectorOption
@@ -398,24 +398,24 @@ function SelectorDialog({
 
   return (
     <div
-      className="fixed inset-0 z-60 flex items-center justify-center bg-black/30 p-4"
+      className="fixed inset-0 z-60 flex items-center justify-center bg-foreground/30 p-4"
       onMouseDown={onClose}
     >
       <div
-        className="w-full max-w-md max-h-[540px] bg-white rounded-xl shadow-2xl flex flex-col"
+        className="w-full max-w-md max-h-[540px] bg-card rounded-xl shadow-2xl flex flex-col"
         onMouseDown={e => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200">
-          <h3 className="text-sm font-semibold text-gray-900">{title}</h3>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-border-subtle">
+          <h3 className="text-sm font-semibold text-foreground">{title}</h3>
+          <button onClick={onClose} className="text-muted-foreground hover:text-muted-foreground">
             <X size={16} data-testid="X__b3ae11" />
           </button>
         </div>
-        <div className="px-4 py-3 border-b border-gray-100">
+        <div className="px-4 py-3 border-b border-border-subtle">
           <div className="relative">
             <Search
               size={14}
-              className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
+              className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground"
               data-testid="Search__b3ae11" />
             <input
               ref={inputRef}
@@ -423,7 +423,7 @@ function SelectorDialog({
               value={query}
               onChange={e => setQuery(e.target.value)}
               placeholder={ui('ocrProductSearchPlaceholder')}
-              className="w-full border border-gray-300 rounded-lg pl-9 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full border border-border-control rounded-lg pl-9 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-focus-ring"
             />
           </div>
         </div>
@@ -432,22 +432,22 @@ function SelectorDialog({
             <button
               type="button"
               onClick={onCreateNew}
-              className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-left text-blue-700 hover:bg-blue-50 border-b border-gray-100"
+              className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-left text-blue-700 hover:bg-blue-50 border-b border-border-subtle"
             >
               <Plus size={14} className="shrink-0" data-testid="Plus__b3ae11" />
               <span className="truncate">{createLabel}</span>
             </button>
           )}
           {loading && (
-            <div className="px-4 py-6 text-center text-sm text-gray-500 flex items-center justify-center gap-2">
+            <div className="px-4 py-6 text-center text-sm text-muted-foreground flex items-center justify-center gap-2">
               <Loader2 size={14} className="animate-spin" data-testid="Loader2__b3ae11" /> {ui('loading')}
             </div>
           )}
           {!loading && failed && (
-            <div className="px-4 py-6 text-center text-sm text-gray-500">{ui('ocrProductLoadError')}</div>
+            <div className="px-4 py-6 text-center text-sm text-muted-foreground">{ui('ocrProductLoadError')}</div>
           )}
           {!loading && !failed && filtered.length === 0 && (
-            <div className="px-4 py-6 text-center text-sm text-gray-500">{ui('noResults')}</div>
+            <div className="px-4 py-6 text-center text-sm text-muted-foreground">{ui('noResults')}</div>
           )}
           {!loading && !failed && filtered.length > 0 && (
             filtered.map(o => (
@@ -579,62 +579,62 @@ function ProductCreateForm({ initialName, productSpecUrl, authHeader, token, onC
   const taxSelectorUrl = productSpecUrl ? `${productSpecUrl}/product/selectors/C_TaxCategory_ID` : null;
 
   return (
-    <div className="fixed inset-0 z-60 flex items-center justify-center bg-black/30 p-4">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md flex flex-col">
-        <div className="flex items-center justify-between px-6 pt-5 pb-4 border-b border-gray-200">
-          <h2 className="text-base font-semibold text-gray-900">{ui('ocrProductCreateTitle')}</h2>
-          <button onClick={onCancel} aria-label={ui('cancel')} className="text-gray-400 hover:text-gray-600">
+    <div className="fixed inset-0 z-60 flex items-center justify-center bg-foreground/30 p-4">
+      <div className="bg-card rounded-2xl shadow-2xl w-full max-w-md flex flex-col">
+        <div className="flex items-center justify-between px-6 pt-5 pb-4 border-b border-border-subtle">
+          <h2 className="text-base font-semibold text-foreground">{ui('ocrProductCreateTitle')}</h2>
+          <button onClick={onCancel} aria-label={ui('cancel')} className="text-muted-foreground hover:text-muted-foreground">
             <X size={18} data-testid="X__b3ae11" />
           </button>
         </div>
         <div className="px-6 py-4 space-y-3">
           <div>
-            <label className="block text-xs font-medium text-gray-700 mb-1">{ui('ocrProductCreateName')}</label>
+            <label className="block text-xs font-medium text-foreground mb-1">{ui('ocrProductCreateName')}</label>
             <input
               type="text"
               value={name}
               onChange={e => handleNameChange(e.target.value)}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full border border-border-control rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-focus-ring"
             />
           </div>
           <div>
-            <label className="block text-xs font-medium text-gray-700 mb-1">{ui('ocrProductCreateSearchKey')}</label>
+            <label className="block text-xs font-medium text-foreground mb-1">{ui('ocrProductCreateSearchKey')}</label>
             <input
               type="text"
               value={searchKey}
               onChange={e => handleSearchKeyChange(e.target.value)}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full border border-border-control rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-focus-ring"
             />
           </div>
           <div>
-            <label className="block text-xs font-medium text-gray-700 mb-1">{ui('ocrProductCreateUom')}</label>
+            <label className="block text-xs font-medium text-foreground mb-1">{ui('ocrProductCreateUom')}</label>
             <button
               type="button"
               onClick={() => setPicker('uom')}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white hover:border-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 flex items-center justify-between gap-2"
+              className="w-full border border-border-control rounded-lg px-3 py-2 text-sm bg-card hover:border-border-control focus:outline-none focus:ring-2 focus:ring-focus-ring flex items-center justify-between gap-2"
             >
-              <span className={`truncate ${uom ? 'text-gray-900' : 'text-gray-500'}`}>
+              <span className={`truncate ${uom ? 'text-foreground' : 'text-muted-foreground'}`}>
                 {uom?.label || ui('ocrProductCreateSelect')}
               </span>
               <ChevronDown
                 size={16}
-                className="text-gray-500 shrink-0"
+                className="text-muted-foreground shrink-0"
                 data-testid="ChevronDown__b3ae11" />
             </button>
           </div>
           <div>
-            <label className="block text-xs font-medium text-gray-700 mb-1">{ui('ocrProductCreateTaxCategory')}</label>
+            <label className="block text-xs font-medium text-foreground mb-1">{ui('ocrProductCreateTaxCategory')}</label>
             <button
               type="button"
               onClick={() => setPicker('taxCategory')}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white hover:border-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 flex items-center justify-between gap-2"
+              className="w-full border border-border-control rounded-lg px-3 py-2 text-sm bg-card hover:border-border-control focus:outline-none focus:ring-2 focus:ring-focus-ring flex items-center justify-between gap-2"
             >
-              <span className={`truncate ${taxCategory ? 'text-gray-900' : 'text-gray-500'}`}>
+              <span className={`truncate ${taxCategory ? 'text-foreground' : 'text-muted-foreground'}`}>
                 {taxCategory?.label || ui('ocrProductCreateSelect')}
               </span>
               <ChevronDown
                 size={16}
-                className="text-gray-500 shrink-0"
+                className="text-muted-foreground shrink-0"
                 data-testid="ChevronDown__b3ae11" />
             </button>
           </div>
@@ -649,11 +649,11 @@ function ProductCreateForm({ initialName, productSpecUrl, authHeader, token, onC
             </div>
           )}
         </div>
-        <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-gray-200">
+        <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-border-subtle">
           <button
             onClick={onCancel}
             disabled={submitting}
-            className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg disabled:opacity-50"
+            className="px-4 py-2 text-sm font-medium text-foreground bg-muted hover:bg-muted rounded-lg disabled:opacity-50"
           >
             {ui('cancel')}
           </button>

@@ -29,10 +29,10 @@ function SectionCard({ title, titleRight, children }) {
   return (
     <div className="mx-4 mt-5">
       <div className="flex items-center justify-between mb-2">
-        <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">{title}</span>
+        <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">{title}</span>
         {titleRight}
       </div>
-      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+      <div className="bg-card rounded-xl border border-border-subtle overflow-hidden">
         {children}
       </div>
     </div>
@@ -129,7 +129,7 @@ export default function PaymentsCard({
     titleRight = (
       <button
         onClick={onAddPayment}
-        className="text-xs font-medium text-gray-900 underline decoration-gray-600 hover:decoration-gray-900 transition-colors"
+        className="text-xs font-medium text-foreground underline decoration-gray-600 hover:decoration-gray-900 transition-colors"
       >
         {ui('previewCardAddPayment')}
       </button>
@@ -145,7 +145,7 @@ export default function PaymentsCard({
 
   let content;
   if (loading) {
-    content = <p className="text-xs text-gray-400 py-4 text-center">{ui('loading')}</p>;
+    content = <p className="text-xs text-muted-foreground py-4 text-center">{ui('loading')}</p>;
   } else if (payments.length === 0) {
     let emptyLabel;
     if (isCreditNote) {
@@ -193,7 +193,7 @@ export default function PaymentsCard({
                 alignItems: 'center',
                 cursor: 'pointer',
               }}
-              className="hover:bg-gray-50 transition-colors"
+              className="hover:bg-muted transition-colors"
               data-testid={`PaymentsCard__row-${idx}`}
             >
               <DirBadge isIn={isIn} data-testid="DirBadge__c6fe34" />

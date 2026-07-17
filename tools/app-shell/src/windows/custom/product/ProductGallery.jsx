@@ -13,7 +13,7 @@ function ProductCard({ row, onNavigate, token, apiBaseUrl }) {
   return (
     <div
       onClick={() => onNavigate(row.id)}
-      className="cursor-pointer bg-white border border-[#E8EAEF] rounded-xl p-1 shadow-[0px_1px_2px_rgba(18,18,23,0.05)] flex flex-col hover:shadow-md transition-shadow"
+      className="cursor-pointer bg-card border border-[#E8EAEF] rounded-xl p-1 shadow-[0px_1px_2px_rgba(18,18,23,0.05)] flex flex-col hover:shadow-md transition-shadow"
     >
       {/* Image area */}
       <div className="relative w-full h-[180px] rounded-lg overflow-hidden flex-shrink-0 bg-[#E8EAEF]">

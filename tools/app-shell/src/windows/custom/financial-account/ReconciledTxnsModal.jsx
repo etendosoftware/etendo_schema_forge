@@ -75,7 +75,7 @@ export function ReconciledTxnsModal({ line, currency = 'EUR', onClose }) {
 
   return (
     <Dialog open={open} onOpenChange={(v) => { if (!v) onClose(); }} data-testid="Dialog__2dbb84">
-      <DialogContent className="w-[92vw] max-w-[1080px] overflow-hidden rounded-xl bg-white p-0 shadow-[0px_0px_0px_1px_rgba(18,18,23,0.1),0px_24px_48px_rgba(18,18,23,0.08)]" data-testid="reconciled-txns-modal">
+      <DialogContent className="w-[92vw] max-w-[1080px] overflow-hidden rounded-xl bg-card p-0 shadow-[0px_0px_0px_1px_rgba(18,18,23,0.1),0px_24px_48px_rgba(18,18,23,0.08)]" data-testid="reconciled-txns-modal">
         {/* Header */}
         <div className="px-6 pb-2 pt-5">
           <DialogTitle
@@ -200,7 +200,7 @@ export function ReconciledTxnsModal({ line, currency = 'EUR', onClose }) {
                     aria-label={ui('financeAccountStatementLinesTxnGoToMovement')}
                     data-testid={`reconciled-txn-go-${t.documentNo}`}
                     onClick={() => goToMovement(t)}
-                    className="inline-flex h-[30px] w-[30px] items-center justify-center rounded-md border border-[#E8EAEF] bg-white text-[#6C6C89] hover:border-[#D1D4DB] hover:bg-[#F5F7F9] hover:text-[#121217]"
+                    className="inline-flex h-[30px] w-[30px] items-center justify-center rounded-md border border-[#E8EAEF] bg-card text-[#6C6C89] hover:border-[#D1D4DB] hover:bg-[#F5F7F9] hover:text-[#121217]"
                   >
                     <ArrowUpRight className="h-3.5 w-3.5" data-testid="ArrowUpRight__2dbb84" />
                   </button>
@@ -216,7 +216,7 @@ export function ReconciledTxnsModal({ line, currency = 'EUR', onClose }) {
             type="button"
             onClick={onClose}
             data-testid="reconciled-txns-cancel"
-            className="inline-flex h-10 items-center justify-center rounded-full border border-[#D1D4DB] bg-white px-4 text-sm font-medium text-[#121217] shadow-[0_1px_2px_rgba(18,18,23,0.05)] hover:bg-[#F5F7F9]"
+            className="inline-flex h-10 items-center justify-center rounded-full border border-[#D1D4DB] bg-card px-4 text-sm font-medium text-[#121217] shadow-[0_1px_2px_rgba(18,18,23,0.05)] hover:bg-[#F5F7F9]"
           >
             {ui('financeAccountStatementLinesTxnCancel')}
           </button>

@@ -33,13 +33,13 @@ export function DocumentPreview({ open, onClose, title = 'Document Preview', pdf
     <>
       {/* Backdrop */}
       <div
-        className="fixed inset-0 bg-black/30 z-50 transition-opacity"
+        className="fixed inset-0 bg-foreground/30 z-50 transition-opacity"
         onClick={onClose}
       />
       {/* Modal */}
-      <div className="fixed inset-4 sm:inset-8 lg:inset-12 z-50 flex flex-col bg-white rounded-xl shadow-2xl overflow-hidden">
+      <div className="fixed inset-4 sm:inset-8 lg:inset-12 z-50 flex flex-col bg-card rounded-xl shadow-2xl overflow-hidden">
         {/* Header */}
-        <div className="flex items-center justify-between px-5 py-3 border-b border-border/30 bg-slate-50 shrink-0">
+        <div className="flex items-center justify-between px-5 py-3 border-b border-border/30 bg-muted shrink-0">
           <div className="flex items-center gap-3 min-w-0">
             <FileText
               className="h-4 w-4 text-muted-foreground shrink-0"
@@ -73,7 +73,7 @@ export function DocumentPreview({ open, onClose, title = 'Document Preview', pdf
             <object
               data={pdfUrl}
               type="application/pdf"
-              className="w-full h-full rounded-lg shadow-lg bg-white"
+              className="w-full h-full rounded-lg shadow-lg bg-card"
             >
               <iframe
                 src={pdfUrl}
@@ -83,9 +83,9 @@ export function DocumentPreview({ open, onClose, title = 'Document Preview', pdf
             </object>
           ) : (
             /* Placeholder when no PDF URL is available */
-            (<div className="h-full flex flex-col items-center justify-center text-center px-8 bg-white rounded-lg shadow-lg">
+            (<div className="h-full flex flex-col items-center justify-center text-center px-8 bg-card rounded-lg shadow-lg">
               <div className="h-16 w-16 rounded-full bg-slate-100 flex items-center justify-center mb-4">
-                <FileText className="h-8 w-8 text-slate-400" data-testid="FileText__152a2f" />
+                <FileText className="h-8 w-8 text-muted-foreground" data-testid="FileText__152a2f" />
               </div>
               <h3 className="text-base font-medium text-foreground mb-2">
                 Preview not available

@@ -5,9 +5,9 @@ import { MODAL_STYLES } from './modal-styles.js';
 import { LABEL_GAP, FIELD_HEIGHT_IMPORTANT } from '@/components/ui/formDensity';
 
 const INPUT_CLS =
-  `w-full ${FIELD_HEIGHT_IMPORTANT} rounded-md border border-gray-300 bg-white px-3 !text-[14px] focus:outline-none focus:ring-2 focus:ring-primary`;
+  `w-full ${FIELD_HEIGHT_IMPORTANT} rounded-md border border-border-control bg-card px-3 !text-[14px] focus:outline-none focus:ring-2 focus:ring-primary`;
 const PICKER_BTN_CLS =
-  `w-full ${FIELD_HEIGHT_IMPORTANT} rounded-md border border-gray-300 bg-white px-3 !text-[14px] flex items-center justify-between gap-2 hover:border-gray-400 focus:outline-none focus:ring-2 focus:ring-primary transition-colors`;
+  `w-full ${FIELD_HEIGHT_IMPORTANT} rounded-md border border-border-control bg-card px-3 !text-[14px] flex items-center justify-between gap-2 hover:border-border-control focus:outline-none focus:ring-2 focus:ring-primary transition-colors`;
 
 function normalizeText(v) {
   return String(v ?? '')
@@ -38,29 +38,29 @@ function OptionPicker({ open, onClose, title, options, loading, failed, loadErro
 
   return (
     <div
-      className="fixed inset-0 z-[60] flex items-center justify-center bg-black/30 p-4"
+      className="fixed inset-0 z-[60] flex items-center justify-center bg-foreground/30 p-4"
       onMouseDown={onClose}
     >
       <div
-        className="w-full max-w-md max-h-[540px] bg-white rounded-xl shadow-2xl flex flex-col overflow-hidden"
+        className="w-full max-w-md max-h-[540px] bg-card rounded-xl shadow-2xl flex flex-col overflow-hidden"
         onMouseDown={e => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200">
-          <h3 className="text-sm font-semibold text-gray-900">{title}</h3>
+        <div className="flex items-center justify-between px-4 py-3 border-b border-border-subtle">
+          <h3 className="text-sm font-semibold text-foreground">{title}</h3>
           <button
             type="button"
             onClick={onClose}
-            className="text-gray-400 hover:text-gray-600 transition-colors"
+            className="text-muted-foreground hover:text-muted-foreground transition-colors"
             aria-label={ui('cancel')}
           >
             <X size={16} data-testid="X__e483be" />
           </button>
         </div>
 
-        <div className="px-4 py-3 border-b border-gray-100">
+        <div className="px-4 py-3 border-b border-border-subtle">
           <div className="relative">
             <Search
-              className="absolute left-2.5 top-2.5 h-4 w-4 text-gray-400 pointer-events-none"
+              className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground pointer-events-none"
               data-testid="Search__e483be" />
             <input
               ref={searchRef}
@@ -68,24 +68,24 @@ function OptionPicker({ open, onClose, title, options, loading, failed, loadErro
               value={query}
               onChange={e => onQuery(e.target.value)}
               placeholder={searchPlaceholder}
-              className="option-picker-search w-full border border-gray-300 rounded-lg pl-8 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="option-picker-search w-full border border-border-control rounded-lg pl-8 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-focus-ring"
             />
           </div>
         </div>
 
         <div className="flex-1 overflow-auto py-1">
           {(() => {
-            if (loading) return <div className="px-4 py-6 text-center text-sm text-gray-500">{ui('loading')}</div>;
-            if (failed) return <div className="px-4 py-6 text-center text-sm text-gray-500">{loadError}</div>;
-            if (filtered.length === 0) return <div className="px-4 py-6 text-center text-sm text-gray-500">{ui('noResults')}</div>;
+            if (loading) return <div className="px-4 py-6 text-center text-sm text-muted-foreground">{ui('loading')}</div>;
+            if (failed) return <div className="px-4 py-6 text-center text-sm text-muted-foreground">{loadError}</div>;
+            if (filtered.length === 0) return <div className="px-4 py-6 text-center text-sm text-muted-foreground">{ui('noResults')}</div>;
             return filtered.map(opt => (
               <button
                 key={opt.id}
                 type="button"
                 onClick={() => onSelect(opt.id, opt.label)}
                 className={[
-                  'w-full flex items-center gap-2 px-4 py-2.5 text-sm text-left hover:bg-gray-50',
-                  selected === opt.id ? 'bg-blue-50 text-blue-700 font-medium' : 'text-gray-800',
+                  'w-full flex items-center gap-2 px-4 py-2.5 text-sm text-left hover:bg-muted',
+                  selected === opt.id ? 'bg-blue-50 text-blue-700 font-medium' : 'text-foreground',
                 ].join(' ')}
               >
                 <span className="w-4 shrink-0">

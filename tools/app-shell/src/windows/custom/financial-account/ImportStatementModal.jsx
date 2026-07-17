@@ -235,11 +235,11 @@ function Dropzone({ onPick, dragging, onDragOver, onDragLeave, onDrop, ui }) {
         'cursor-pointer rounded-lg border border-dashed px-6 py-8 text-center transition-colors',
         dragging
           ? 'border-[#A8AAB8] bg-[#F5F7F9]'
-          : 'border-[#D1D4DB] bg-white hover:border-[#A8AAB8] hover:bg-[#F5F7F9]',
+          : 'border-[#D1D4DB] bg-card hover:border-[#A8AAB8] hover:bg-[#F5F7F9]',
       )}
     >
       <div
-        className="mx-auto mb-2 flex h-8 w-8 items-center justify-center rounded-lg border border-[#D1D4DB] bg-white text-[#828FA3] shadow-[0_1px_2px_rgba(18,18,23,0.05)]"
+        className="mx-auto mb-2 flex h-8 w-8 items-center justify-center rounded-lg border border-[#D1D4DB] bg-card text-[#828FA3] shadow-[0_1px_2px_rgba(18,18,23,0.05)]"
         aria-hidden="true"
       >
         <UploadCloud className="h-5 w-5" data-testid="UploadCloud__de9647" />
@@ -356,7 +356,7 @@ function PreviewLines({ lines, max = 5, currency, bcpLocale, ui }) {
   const hasMore = lines.length > max;
   return (
     <div className="flex flex-col gap-2">
-      <div className="overflow-hidden rounded-lg border border-[#E8EAEF] bg-white shadow-[0_1px_2px_rgba(18,18,23,0.05)]">
+      <div className="overflow-hidden rounded-lg border border-[#E8EAEF] bg-card shadow-[0_1px_2px_rgba(18,18,23,0.05)]">
         <div
           className={cn(
             PREV_GRID,
@@ -666,7 +666,7 @@ function ModalFooter({
         <button
           type="button"
           onClick={() => setView('selected')}
-          className="inline-flex h-10 items-center justify-center rounded-full border border-[#D1D4DB] bg-white px-4 text-sm font-medium text-[#121217] shadow-[0_1px_2px_rgba(18,18,23,0.05)] hover:bg-[#F5F7F9]"
+          className="inline-flex h-10 items-center justify-center rounded-full border border-[#D1D4DB] bg-card px-4 text-sm font-medium text-[#121217] shadow-[0_1px_2px_rgba(18,18,23,0.05)] hover:bg-[#F5F7F9]"
         >
           {ui('financeAccountStatementsImportChangeFile')}
         </button>

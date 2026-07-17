@@ -29,7 +29,7 @@ export function PillToggle({ checked, onCheckedChange, disabled = false, classNa
       {...rest}
     >
       <span
-        className={`inline-block h-[18px] w-[18px] transform rounded-full bg-white shadow-sm transition-all duration-150
+        className={`inline-block h-[18px] w-[18px] transform rounded-full bg-card shadow-sm transition-all duration-150
           ${isOn ? 'translate-x-[19px]' : 'translate-x-[3px]'}`}
       />
     </button>

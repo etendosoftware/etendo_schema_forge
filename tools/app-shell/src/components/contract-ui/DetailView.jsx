@@ -786,7 +786,7 @@ export function getChildSaveButtonLabel(savingChild, ui) {
 }
 
 export function getAddLineWrapperClassName(linesLayout) {
-  return linesLayout === 'inlineEditable' ? 'sticky bottom-0 bg-white z-10' : 'relative';
+  return linesLayout === 'inlineEditable' ? 'sticky bottom-0 bg-card z-10' : 'relative';
 }
 
 export function getAddLineWrapperStyle(linesLayout, { withBorder = true, noTopPadding = false } = {}) {
@@ -1401,7 +1401,7 @@ function renderDraftModeSaveActions({
 }) {
   return (
     <>
-      <Button variant="outline" size="default" className={`${saveBtnCls} bg-white border-[#D1D4DB] text-[#121217]`} data-testid="action-save-draft" disabled={hook.isSaving || !isDirty || blockSaveForBalance} title={blockSaveForBalance ? ui('journalUnbalancedSaveBlocked') : undefined} onClick={async () => {
+      <Button variant="outline" size="default" className={`${saveBtnCls} bg-card border-[#D1D4DB] text-[#121217]`} data-testid="action-save-draft" disabled={hook.isSaving || !isDirty || blockSaveForBalance} title={blockSaveForBalance ? ui('journalUnbalancedSaveBlocked') : undefined} onClick={async () => {
         if (!(await flushPendingLines())) return;
         const saved = await hook.handleSave(data);
         if (saved?.id && isNew) {
@@ -1500,7 +1500,7 @@ function renderExistingRecordSaveAction({
   isDocumentReadOnly, blockSaveForBalance,
 }) {
   return (
-    <Button variant="outline" size="default" className={`${saveBtnCls} bg-white border-[#D1D4DB] text-[#121217]`} data-testid="action-save" disabled={isDocumentReadOnly || hook.isSaving || !isDirty || blockSaveForBalance} title={blockSaveForBalance ? ui('journalUnbalancedSaveBlocked') : undefined} onClick={async () => {
+    <Button variant="outline" size="default" className={`${saveBtnCls} bg-card border-[#D1D4DB] text-[#121217]`} data-testid="action-save" disabled={isDocumentReadOnly || hook.isSaving || !isDirty || blockSaveForBalance} title={blockSaveForBalance ? ui('journalUnbalancedSaveBlocked') : undefined} onClick={async () => {
       if (!(await flushPendingLines())) return;
       const saved = await hook.handleSave(data);
       await handlePostSaveNavigation(saved, { isNew, onAfterCreate, onAfterSave, navigate, windowName, token, apiBaseUrl, hook });
@@ -1758,7 +1758,7 @@ export function DetailView({
   sidebarContent = null,
   othersLabel = null,
   primaryTabs = null,
-  contentBg = 'bg-white',
+  contentBg = 'bg-card',
   lineConfig = ORDER_LINE_CONFIG,
   lockWhenProcessed = true,
   addLineGuard = null,
@@ -3116,7 +3116,7 @@ export function DetailView({
         <div className={getLinesToolbarClassName(linesLayout, toolbarPaddingX, toolbarBorderBottom)}>
           <div className="flex items-center gap-3">
             <Button
-              className="h-10 px-3 rounded-lg bg-white border border-[#D1D4DB] shadow-[0px_1px_2px_rgba(18,18,23,0.05)] text-[#121217] text-sm font-medium hover:bg-[#F5F7F9] transition-colors"
+              className="h-10 px-3 rounded-lg bg-card border border-[#D1D4DB] shadow-[0px_1px_2px_rgba(18,18,23,0.05)] text-[#121217] text-sm font-medium hover:bg-[#F5F7F9] transition-colors"
               data-testid="action-cancel"
               onClick={() => navigate(`/${windowName}`)}
             >
@@ -3205,7 +3205,7 @@ export function DetailView({
               {documentPreview && !isNew && recordId && (
                 <button
                   onClick={() => setShowPrint(true)}
-                  className="flex items-center justify-center p-[7px] rounded-md bg-white border border-[#D1D4DB] shadow-[0px_1px_2px_0px_#1212170D] text-muted-foreground hover:bg-[#F1F5F9] hover:text-foreground transition-colors"
+                  className="flex items-center justify-center p-[7px] rounded-md bg-card border border-[#D1D4DB] shadow-[0px_1px_2px_0px_#1212170D] text-muted-foreground hover:bg-[#F1F5F9] hover:text-foreground transition-colors"
                   title={ui('sendPreview')}
                   data-testid="action-document-preview"
                 >
@@ -3286,7 +3286,7 @@ export function DetailView({
                     <button
                       data-testid="action-more"
                       onClick={() => setShowMoreMenu(v => !v)}
-                      className={`${sqBtnSize} flex items-center justify-center rounded-md bg-white border border-[#D1D4DB] shadow-[0px_1px_2px_0px_#1212170D] text-muted-foreground hover:bg-[#F1F5F9] hover:text-foreground transition-colors`}
+                      className={`${sqBtnSize} flex items-center justify-center rounded-md bg-card border border-[#D1D4DB] shadow-[0px_1px_2px_0px_#1212170D] text-muted-foreground hover:bg-[#F1F5F9] hover:text-foreground transition-colors`}
                     >
                       <MoreVertical className="h-[15px] w-[15px]" data-testid="MoreVertical__fa3275" />
                     </button>
@@ -3307,7 +3307,7 @@ export function DetailView({
                     })()}
                     {showMoreMenu && (
                     <div
-                      className="absolute right-0 top-full mt-1 z-50 bg-white py-2 min-w-[148px]"
+                      className="absolute right-0 top-full mt-1 z-50 bg-card py-2 min-w-[148px]"
                       style={{
                         borderRadius: '8px',
                         boxShadow:
@@ -3587,7 +3587,7 @@ export function DetailView({
                     const formSection = (
                       <>
                         {/* Principal + collapsed fields wrapped in a card */}
-                        <div className={`${hideFormCard ? 'hidden' : ''}${noHeaderBorder ? '' : ' rounded-2xl border border-gray-200/70 bg-white shadow-sm'}${whiteFormBackground ? ' bg-white [&_input]:bg-white [&_textarea]:bg-white [&_textarea:disabled]:!bg-white [&_textarea:disabled]:opacity-50' : ''}${embedded ? ' pointer-events-none' : ''}`}>
+                        <div className={`${hideFormCard ? 'hidden' : ''}${noHeaderBorder ? '' : ' rounded-2xl border border-border-subtle/70 bg-card shadow-sm'}${whiteFormBackground ? ' bg-card [&_input]:bg-card [&_textarea]:bg-card [&_textarea:disabled]:!bg-card [&_textarea:disabled]:opacity-50' : ''}${embedded ? ' pointer-events-none' : ''}`}>
                           <div className={linesLayout === 'inlineEditable' ? 'p-2' : formCardPadding}>
                             {lockedAlert && isProcessed && (
                               <div
@@ -4504,7 +4504,7 @@ export function DetailView({
                             {notesField && (
                               <div className={getNotesRowClassName(embedded)}>
                                 <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider pt-1.5 shrink-0 w-24">{ui('notes')}</span>
-                                <div data-testid="notes-textarea" className={`flex-1 flex flex-col border border-border/40 rounded bg-white transition-all py-1.5`} style={{ borderWidth: '0.5px' }}>
+                                <div data-testid="notes-textarea" className={`flex-1 flex flex-col border border-border/40 rounded bg-card transition-all py-1.5`} style={{ borderWidth: '0.5px' }}>
                                   {renderNotesField(notesFocused, data, notesField, handleChangeWithCallout, handleNotesSave, setNotesFocused, ui)}
                                 </div>
                               </div>
@@ -4543,7 +4543,7 @@ export function DetailView({
                 </div>
                 {sidePanel && (
                   <div
-                    className="w-full max-w-full shrink-0 self-stretch border-t lg:border-t-0 lg:w-[292px] lg:border-l border-gray-200 pt-3 lg:pt-0 pl-0 lg:pl-3 pr-0 lg:pr-3"
+                    className="w-full max-w-full shrink-0 self-stretch border-t lg:border-t-0 lg:w-[292px] lg:border-l border-border-subtle pt-3 lg:pt-0 pl-0 lg:pl-3 pr-0 lg:pr-3"
                     style={sidePanelStyle}
                   >
                     {renderSidePanel(sidePanel, data, recordId, token, apiBaseUrl, api, isNew)}
@@ -4870,14 +4870,14 @@ function populateIdentifierFields(api, result, detailEntity, catalogs) {
 
 function getButtonClass(salesTheme, p, isPrimary) {
   if (p.style === 'ghost-danger') {
-    return 'bg-white border-[#FBB1C4] text-[#D50B3E] hover:bg-[#FFF0F3]';
+    return 'bg-card border-[#FBB1C4] text-[#D50B3E] hover:bg-[#FFF0F3]';
   }
   if (salesTheme) {
     if (p.style === 'destructive') {
       return 'border-amber-300 bg-amber-50 text-amber-700 hover:bg-amber-100';
     } else {
       if (isPrimary) {
-        return 'bg-amber-400 text-black hover:bg-amber-500 border-transparent font-medium';
+        return 'bg-amber-400 text-foreground hover:bg-amber-500 border-transparent font-medium';
       } else {
         return 'border-emerald-300 bg-emerald-50 text-emerald-700 hover:bg-emerald-100';
       }

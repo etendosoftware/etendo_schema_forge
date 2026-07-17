@@ -48,19 +48,19 @@ function JsonView({ data }) {
       // Null
       .replace(
         /:\s*(null)/g,
-        ': <span class="text-gray-400">$1</span>'
+        ': <span class="text-muted-foreground">$1</span>'
       );
   }, [data]);
 
   const lines = highlighted.split('\n');
 
   return (
-    <div className="relative overflow-auto rounded-lg border border-gray-200 bg-gray-50 font-mono text-sm">
+    <div className="relative overflow-auto rounded-lg border border-border-subtle bg-muted font-mono text-sm">
       <table className="w-full border-collapse">
         <tbody>
           {lines.map((line, i) => (
-            <tr key={i} className="hover:bg-gray-100/50">
-              <td className="select-none border-r border-gray-200 px-3 py-0 text-right text-xs text-gray-400 align-top">
+            <tr key={i} className="hover:bg-muted/50">
+              <td className="select-none border-r border-border-subtle px-3 py-0 text-right text-xs text-muted-foreground align-top">
                 {i + 1}
               </td>
               <td
@@ -166,25 +166,25 @@ export default function ArtifactViewerPage() {
   return (
     <div className="flex h-full">
       {/* Left sidebar — window list */}
-      <aside className="flex w-[220px] shrink-0 flex-col border-r border-gray-200 bg-white">
-        <div className="border-b border-gray-200 p-3">
+      <aside className="flex w-[220px] shrink-0 flex-col border-r border-border-subtle bg-card">
+        <div className="border-b border-border-subtle p-3">
           <div className="flex items-center gap-2 mb-2">
-            <FileJson className="h-4 w-4 text-gray-500" data-testid="FileJson__8fb485" />
-            <h2 className="text-sm font-semibold text-gray-700">{ui("artifactsTitle")}</h2>
-            <span className="ml-auto rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-500">
+            <FileJson className="h-4 w-4 text-muted-foreground" data-testid="FileJson__8fb485" />
+            <h2 className="text-sm font-semibold text-foreground">{ui("artifactsTitle")}</h2>
+            <span className="ml-auto rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">
               {windows.length}
             </span>
           </div>
           <div className="relative">
             <Search
-              className="absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-gray-400"
+              className="absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground"
               data-testid="Search__8fb485" />
             <input
               type="text"
               placeholder={ui("searchWindows")}
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="w-full rounded-md border border-gray-200 bg-gray-50 py-1.5 pl-7 pr-2 text-xs placeholder:text-gray-400 focus:border-blue-300 focus:outline-none focus:ring-1 focus:ring-blue-200"
+              className="w-full rounded-md border border-border-subtle bg-muted py-1.5 pl-7 pr-2 text-xs placeholder:text-muted-foreground focus:border-focus-ring focus:outline-none focus:ring-1 focus:ring-focus-ring"
             />
           </div>
         </div>
@@ -197,24 +197,24 @@ export default function ArtifactViewerPage() {
               className={`w-full rounded-md px-2.5 py-1.5 text-left text-xs transition-colors ${
                 name === selectedWindow
                   ? 'bg-blue-50 font-medium text-blue-700'
-                  : 'text-gray-600 hover:bg-gray-50'
+                  : 'text-muted-foreground hover:bg-muted'
               }`}
             >
               {name}
             </button>
           ))}
           {filteredWindows.length === 0 && (
-            <p className="px-3 py-4 text-xs text-gray-400">{ui("noWindowsFound")}</p>
+            <p className="px-3 py-4 text-xs text-muted-foreground">{ui("noWindowsFound")}</p>
           )}
         </nav>
       </aside>
       {/* Main content */}
       <main className="flex flex-1 flex-col overflow-hidden">
         {!selectedWindow ? (
-          <div className="flex flex-1 items-center justify-center text-gray-400">
+          <div className="flex flex-1 items-center justify-center text-muted-foreground">
             <div className="text-center">
               <FolderOpen
-                className="mx-auto mb-3 h-12 w-12 text-gray-300"
+                className="mx-auto mb-3 h-12 w-12 text-muted-foreground"
                 data-testid="FolderOpen__8fb485" />
               <p className="text-sm">{ui("selectWindowFromList")}</p>
             </div>
@@ -222,7 +222,7 @@ export default function ArtifactViewerPage() {
         ) : (
           <>
             {/* Top bar — tabs + version selector */}
-            <div className="flex items-center gap-4 border-b border-gray-200 bg-white px-4 py-2">
+            <div className="flex items-center gap-4 border-b border-border-subtle bg-card px-4 py-2">
               {/* File tabs */}
               <div className="flex gap-1">
                 {ARTIFACT_FILES.map(({ key, labelKey }) => (
@@ -235,7 +235,7 @@ export default function ArtifactViewerPage() {
                     className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
                       key === selectedFile
                         ? 'bg-gray-900 text-white'
-                        : 'text-gray-600 hover:bg-gray-100'
+                        : 'text-muted-foreground hover:bg-muted'
                     }`}
                   >
                     {ui(labelKey)}
@@ -244,15 +244,15 @@ export default function ArtifactViewerPage() {
               </div>
 
               {/* Separator */}
-              <div className="h-5 w-px bg-gray-200" />
+              <div className="h-5 w-px bg-muted" />
 
               {/* Version selector */}
               <div className="flex items-center gap-2">
-                <History className="h-3.5 w-3.5 text-gray-400" data-testid="History__8fb485" />
+                <History className="h-3.5 w-3.5 text-muted-foreground" data-testid="History__8fb485" />
                 <select
                   value={selectedRef || ''}
                   onChange={(e) => setSelectedRef(e.target.value || null)}
-                  className="rounded-md border border-gray-200 bg-white px-2 py-1 text-xs text-gray-700 focus:border-blue-300 focus:outline-none focus:ring-1 focus:ring-blue-200"
+                  className="rounded-md border border-border-subtle bg-card px-2 py-1 text-xs text-foreground focus:border-focus-ring focus:outline-none focus:ring-1 focus:ring-focus-ring"
                 >
                   <option value="">{ui("currentVersion")}</option>
                   {commits.map((c) => (
@@ -264,7 +264,7 @@ export default function ArtifactViewerPage() {
               </div>
 
               {/* Window name badge */}
-              <span className="ml-auto rounded-md bg-gray-100 px-2.5 py-1 text-xs font-medium text-gray-600">
+              <span className="ml-auto rounded-md bg-muted px-2.5 py-1 text-xs font-medium text-muted-foreground">
                 {selectedWindow}
               </span>
             </div>
@@ -274,9 +274,9 @@ export default function ArtifactViewerPage() {
               {loading && (
                 <div className="flex items-center justify-center py-16">
                   <Loader2
-                    className="h-6 w-6 animate-spin text-gray-400"
+                    className="h-6 w-6 animate-spin text-muted-foreground"
                     data-testid="Loader2__8fb485" />
-                  <span className="ml-2 text-sm text-gray-500">{ui("loading")}</span>
+                  <span className="ml-2 text-sm text-muted-foreground">{ui("loading")}</span>
                 </div>
               )}
 
@@ -289,7 +289,7 @@ export default function ArtifactViewerPage() {
               {jsonData && !loading && !error && <JsonView data={jsonData} data-testid="JsonView__8fb485" />}
 
               {!jsonData && !loading && !error && (
-                <div className="flex items-center justify-center py-16 text-gray-400">
+                <div className="flex items-center justify-center py-16 text-muted-foreground">
                   <p className="text-sm">{ui("noDataToDisplay")}</p>
                 </div>
               )}

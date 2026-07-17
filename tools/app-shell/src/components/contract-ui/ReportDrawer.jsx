@@ -365,11 +365,11 @@ export default function ReportDrawer({
   return (
     <>
       {/* Backdrop */}
-      <div className={`fixed inset-0 bg-black/30 z-50 ${isClosing ? 'scrim-fade-out' : 'scrim-fade-in'}`} onClick={onClose} />
+      <div className={`fixed inset-0 bg-foreground/30 z-50 ${isClosing ? 'scrim-fade-out' : 'scrim-fade-in'}`} onClick={onClose} />
       {/* Drawer */}
-      <div className={`fixed right-0 top-0 bottom-0 w-[70%] max-w-5xl bg-white shadow-2xl z-50 flex flex-col ${isClosing ? 'sidebar-slide-out' : 'sidebar-slide-in'}`}>
+      <div className={`fixed right-0 top-0 bottom-0 w-[70%] max-w-5xl bg-card shadow-2xl z-50 flex flex-col ${isClosing ? 'sidebar-slide-out' : 'sidebar-slide-in'}`}>
         {/* Toolbar */}
-        <div className="flex items-center justify-between px-4 py-3 border-b border-border/30 bg-slate-50 shrink-0">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-border/30 bg-muted shrink-0">
           <div className="flex items-center gap-3">
             <h2 className="text-sm font-semibold text-foreground">{title || windowName || ui('report')}</h2>
             {fetchingData ? (
@@ -398,7 +398,7 @@ export default function ReportDrawer({
                     'inline-flex items-center gap-1.5 h-8 px-3 rounded-lg text-xs font-medium transition-colors',
                     isActive
                       ? 'bg-primary text-primary-foreground'
-                      : 'bg-white border border-border text-foreground hover:bg-muted/50',
+                      : 'bg-card border border-border text-foreground hover:bg-muted/50',
                     disabled ? 'opacity-40 cursor-not-allowed' : '',
                   ].join(' ')}
                 >
@@ -438,15 +438,15 @@ export default function ReportDrawer({
 
         {/* Preview area */}
         <div className="flex-1 overflow-hidden bg-slate-100 p-4">
-          <div className="bg-white rounded-lg shadow-lg h-full overflow-hidden relative">
+          <div className="bg-card rounded-lg shadow-lg h-full overflow-hidden relative">
             {(fetchingData || loading) && (
-              <div className="absolute inset-0 flex items-center justify-center bg-white/80 z-10 gap-2 text-muted-foreground">
+              <div className="absolute inset-0 flex items-center justify-center bg-card/80 z-10 gap-2 text-muted-foreground">
                 <Loader2 className="h-5 w-5 animate-spin" data-testid="Loader2__3ba698" />
                 <span>{fetchingData ? ui('fetchingAllRecords') : ui('renderingReport')}</span>
               </div>
             )}
             {error && (
-              <div className="absolute inset-0 flex items-center justify-center bg-white/90 z-10 text-destructive text-sm px-8 text-center">
+              <div className="absolute inset-0 flex items-center justify-center bg-card/90 z-10 text-destructive text-sm px-8 text-center">
                 {error}
               </div>
             )}

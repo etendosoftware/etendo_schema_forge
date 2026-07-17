@@ -103,12 +103,12 @@ function DeleteDraftButton({ onClick, ui }) {
 function DeleteDraftConfirm({ payment, isSales, currency, deleting, error, onCancel, onConfirm, ui }) {
   return (
     <div
-      className="fixed inset-0 z-[60] flex items-center justify-center bg-black/30"
+      className="fixed inset-0 z-[60] flex items-center justify-center bg-foreground/30"
       onClick={onCancel}
       data-testid="InvoicePaymentHistoryModal__delete-confirm-backdrop"
     >
       <div
-        className="bg-white flex flex-col"
+        className="bg-card flex flex-col"
         style={{ width: 380, maxWidth: '100%', borderRadius: 12, boxShadow: '0 20px 50px rgba(16,20,28,.18), 0 0 0 1px rgba(16,20,28,.06)', padding: 20, gap: 12, display: 'flex' }}
         onClick={e => e.stopPropagation()}
         data-testid="InvoicePaymentHistoryModal__delete-confirm-panel"
@@ -485,13 +485,13 @@ export default function InvoicePaymentHistoryModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/30"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-foreground/30"
       style={{ padding: 24 }}
       onClick={handleClose}
       data-testid="InvoicePaymentHistoryModal__backdrop"
     >
       <div
-        className="bg-white flex flex-col"
+        className="bg-card flex flex-col"
         style={{ width: 760, maxWidth: '100%', maxHeight: '100%', borderRadius: 12, boxShadow: '0 0 0 1px rgba(18,18,23,0.1), 0 24px 48px rgba(18,18,23,0.03), 0 10px 18px rgba(18,18,23,0.03), 0 5px 8px rgba(18,18,23,0.04), 0 2px 4px rgba(18,18,23,0.04)', overflow: 'hidden' }}
         onClick={e => e.stopPropagation()}
         data-testid="InvoicePaymentHistoryModal__panel"

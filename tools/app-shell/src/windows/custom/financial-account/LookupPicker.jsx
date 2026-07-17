@@ -4,7 +4,7 @@ import { Search } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const DEFAULT_INPUT_CLASS =
-  'h-10 w-full rounded-lg border border-[#D1D4DB] bg-white px-3 text-sm text-[#121217] placeholder:text-[#8a8aa3] shadow-[0_1px_2px_rgba(18,18,23,0.05)] focus:outline-none focus:ring-2 focus:ring-[#121217] focus:ring-offset-1';
+  'h-10 w-full rounded-lg border border-[#D1D4DB] bg-card px-3 text-sm text-[#121217] placeholder:text-[#8a8aa3] shadow-[0_1px_2px_rgba(18,18,23,0.05)] focus:outline-none focus:ring-2 focus:ring-[#121217] focus:ring-offset-1';
 
 const DROPDOWN_MAX_H = 224; // matches max-h-56
 
@@ -105,7 +105,7 @@ export function LookupPicker({ value, onSelect, onClear, placeholder, useLookup,
             pointerEvents: 'auto',
             overscrollBehavior: 'contain',
           }}
-          className="max-h-56 overflow-auto rounded-lg border border-[#D1D4DB] bg-white shadow-lg"
+          className="max-h-56 overflow-auto rounded-lg border border-[#D1D4DB] bg-card shadow-lg"
         >
           {loading && results.length === 0 ? (
             <div className="px-3 py-2 text-sm text-[#6c6c89]">…</div>

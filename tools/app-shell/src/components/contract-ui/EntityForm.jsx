@@ -80,7 +80,7 @@ function PopupSearchInput({ field, value, displayValue, onChange, label, selecto
         type="button"
         onClick={() => setOpen(true)}
         data-testid={`field-${field.key}`}
-        className={`w-full ${FIELD_HEIGHT} text-sm rounded-lg border border-[#D1D4DB] bg-white p-2 text-left flex items-center gap-2 shadow-[0px_1px_2px_rgba(18,18,23,0.05)] hover:border-primary/50 focus:ring-2 focus:ring-primary focus:outline-none transition-colors`}
+        className={`w-full ${FIELD_HEIGHT} text-sm rounded-lg border border-[#D1D4DB] bg-card p-2 text-left flex items-center gap-2 shadow-[0px_1px_2px_rgba(18,18,23,0.05)] hover:border-primary/50 focus:ring-2 focus:ring-primary focus:outline-none transition-colors`}
       >
         <Search
           className="h-4 w-4 text-muted-foreground shrink-0"
@@ -337,7 +337,7 @@ function SearchInput({ entityName, field, value, displayValue, onChange, catalog
         </button>
       )}
       {open && (canCreate || filtered.length > 0) && (
-        <div className="absolute z-50 top-full left-0 right-0 mt-1 bg-white border rounded-md shadow-lg max-h-48 overflow-auto">
+        <div className="absolute z-50 top-full left-0 right-0 mt-1 bg-card border rounded-md shadow-lg max-h-48 overflow-auto">
           {createBtn}
           {filtered.map(opt => (
             <button
@@ -353,7 +353,7 @@ function SearchInput({ entityName, field, value, displayValue, onChange, catalog
         </div>
       )}
       {open && query.length > 0 && !fetching && filtered.length === 0 && (
-        <div className="absolute z-50 top-full left-0 right-0 mt-1 bg-white border rounded-md shadow-lg max-h-48 overflow-auto">
+        <div className="absolute z-50 top-full left-0 right-0 mt-1 bg-card border rounded-md shadow-lg max-h-48 overflow-auto">
           {createBtn}
           <div className="px-3 py-2 text-xs text-muted-foreground">
             {ui('noResultsFor')} &ldquo;{query}&rdquo;
@@ -361,7 +361,7 @@ function SearchInput({ entityName, field, value, displayValue, onChange, catalog
         </div>
       )}
       {open && !query && !fetching && canCreate && filtered.length === 0 && (
-        <div className="absolute z-50 top-full left-0 right-0 mt-1 bg-white border rounded-md shadow-lg">
+        <div className="absolute z-50 top-full left-0 right-0 mt-1 bg-card border rounded-md shadow-lg">
           {createBtn}
         </div>
       )}
@@ -486,7 +486,7 @@ function LookupFormField({ field, value, displayValue, selectorUrl, selectorCont
         type="button"
         data-testid={`field-${field.key}`}
         onClick={() => setOpen(true)}
-        className={`w-full flex items-center gap-2 ${FIELD_HEIGHT} rounded-lg border border-[#D1D4DB] bg-white p-2 text-sm text-left shadow-[0px_1px_2px_rgba(18,18,23,0.05)] hover:border-primary/50 focus:ring-2 focus:ring-primary focus:outline-none transition-colors`}
+        className={`w-full flex items-center gap-2 ${FIELD_HEIGHT} rounded-lg border border-[#D1D4DB] bg-card p-2 text-sm text-left shadow-[0px_1px_2px_rgba(18,18,23,0.05)] hover:border-primary/50 focus:ring-2 focus:ring-primary focus:outline-none transition-colors`}
       >
         <Search
           className="h-4 w-4 text-muted-foreground shrink-0"

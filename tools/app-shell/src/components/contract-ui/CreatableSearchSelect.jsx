@@ -482,7 +482,7 @@ export function CreatableSearchSelect({
         <div
           ref={dropdownRef}
           data-testid={`options-${field.key}`}
-          className="bg-white border rounded-md shadow-lg overflow-auto"
+          className="bg-card border rounded-md shadow-lg overflow-auto"
           style={dropdownStyle}
           data-open-up={openUp ? 'true' : 'false'}
         >

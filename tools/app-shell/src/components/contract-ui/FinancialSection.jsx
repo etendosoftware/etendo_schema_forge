@@ -5,7 +5,7 @@ import { MODAL_STYLES } from './modal-styles.js';
 import { LABEL_GAP, FIELD_HEIGHT } from '@/components/ui/formDensity';
 
 const TRIGGER_CLS =
-  `w-full ${FIELD_HEIGHT} flex items-center justify-between gap-2 rounded-md border border-input bg-white px-3 !text-[14px] text-left hover:border-gray-400 focus:outline-none focus:ring-2 focus:ring-primary transition-colors cursor-pointer`;
+  `w-full ${FIELD_HEIGHT} flex items-center justify-between gap-2 rounded-md border border-input bg-card px-3 !text-[14px] text-left hover:border-border-control focus:outline-none focus:ring-2 focus:ring-primary transition-colors cursor-pointer`;
 // ETP-4321: height now comes from the FIELD_HEIGHT class (36px). Keep fontSize
 // only — the inline height would otherwise override the token.
 const TRIGGER_STYLE = { fontSize: '14px' };
@@ -34,7 +34,7 @@ function Checkbox({ checked, onChange, label, small }) {
         )}
       </button>
       <label
-        className={`cursor-pointer select-none ${small ? 'text-[13px] font-medium text-muted-foreground' : 'text-[14px] font-medium text-gray-900'}`}
+        className={`cursor-pointer select-none ${small ? 'text-[13px] font-medium text-muted-foreground' : 'text-[14px] font-medium text-foreground'}`}
         onClick={() => onChange(!checked)}
       >
         {label}
@@ -108,11 +108,11 @@ function DynamicSelect({ value, onChange, options = [], loading, error, onRetry,
           data-testid="ChevronDown__4e3585" />
       </button>
       {open && (
-        <ul className="absolute z-50 left-0 right-0 top-[calc(100%+2px)] bg-white border border-gray-200 rounded-md shadow-lg max-h-48 overflow-y-auto py-1">
+        <ul className="absolute z-50 left-0 right-0 top-[calc(100%+2px)] bg-card border border-border-subtle rounded-md shadow-lg max-h-48 overflow-y-auto py-1">
           <li>
             <button
               type="button"
-              className="w-full flex items-center gap-2 px-3 py-2 text-[13px] text-left text-muted-foreground hover:bg-gray-50"
+              className="w-full flex items-center gap-2 px-3 py-2 text-[13px] text-left text-muted-foreground hover:bg-muted"
               onClick={() => { onChange(''); setOpen(false); }}
             >
               <span className="w-4 shrink-0" />
@@ -123,7 +123,7 @@ function DynamicSelect({ value, onChange, options = [], loading, error, onRetry,
             <li key={o.id}>
               <button
                 type="button"
-                className={`w-full flex items-center gap-2 px-3 py-2 text-[13px] text-left hover:bg-gray-50 ${value === o.id ? 'text-primary font-medium' : 'text-foreground'}`}
+                className={`w-full flex items-center gap-2 px-3 py-2 text-[13px] text-left hover:bg-muted ${value === o.id ? 'text-primary font-medium' : 'text-foreground'}`}
                 onClick={() => { onChange(o.id); setOpen(false); }}
               >
                 <span className="w-4 shrink-0">

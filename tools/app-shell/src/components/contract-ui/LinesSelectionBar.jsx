@@ -85,7 +85,7 @@ export default function LinesSelectionBar({
               disabled={deleting}
               title={deleteTitle}
               onClick={onDelete}
-              className="bg-white hover:bg-[#FEF0F4] disabled:opacity-50 transition-colors"
+              className="bg-card hover:bg-[#FEF0F4] disabled:opacity-50 transition-colors"
               style={{
                 width: btnSize,
                 height: btnSize,

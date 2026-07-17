@@ -33,17 +33,17 @@ function TreeNode({ node, onSelect, expanded, onToggle }) {
       <div>
         <button
           onClick={() => onToggle(node.id)}
-          className="w-full flex items-center gap-1.5 px-2 py-1 text-xs text-zinc-300 hover:bg-zinc-700/50 rounded transition-colors"
+          className="w-full flex items-center gap-1.5 px-2 py-1 text-xs text-inverse-foreground hover:bg-inverse-muted/50 rounded transition-colors"
         >
           <ChevronRight
-            className={cn('h-3 w-3 text-zinc-500 transition-transform flex-shrink-0', isOpen && 'rotate-90')}
+            className={cn('h-3 w-3 text-inverse-muted transition-transform flex-shrink-0', isOpen && 'rotate-90')}
             data-testid="ChevronRight__1a98b9" />
           <TypeIcon type="folder" data-testid="TypeIcon__1a98b9" />
           <span className="truncate">{node.name}</span>
-          {hasChildren && <span className="text-[10px] text-zinc-500 ml-auto">{node.children.length}</span>}
+          {hasChildren && <span className="text-[10px] text-inverse-muted ml-auto">{node.children.length}</span>}
         </button>
         {isOpen && hasChildren && (
-          <div className="ml-3 border-l border-zinc-700/50">
+          <div className="ml-3 border-l border-inverse-border/50">
             {node.children.map(child => (
               <TreeNode
                 key={child.id}
@@ -62,7 +62,7 @@ function TreeNode({ node, onSelect, expanded, onToggle }) {
   return (
     <button
       onClick={() => onSelect(node)}
-      className="w-full flex items-center gap-1.5 px-2 py-1 ml-1 text-xs text-zinc-300 hover:bg-blue-600/20 hover:text-blue-300 rounded transition-colors"
+      className="w-full flex items-center gap-1.5 px-2 py-1 ml-1 text-xs text-inverse-foreground hover:bg-blue-600/20 hover:text-blue-300 rounded transition-colors"
     >
       <TypeIcon type={node.type} data-testid="TypeIcon__1a98b9" />
       <span className="truncate">{node.name}</span>
@@ -121,7 +121,7 @@ function MenuSelector({ onSelect, onClose }) {
   let menuContent;
   if (loading) {
     menuContent = (
-      <div className="flex items-center justify-center gap-2 py-4 text-zinc-500">
+      <div className="flex items-center justify-center gap-2 py-4 text-inverse-muted">
         <Loader2 className="h-4 w-4 animate-spin" data-testid="Loader2__1a98b9" />
         <span className="text-xs">Loading menu...</span>
       </div>
@@ -129,19 +129,19 @@ function MenuSelector({ onSelect, onClose }) {
   } else if (error) {
     menuContent = <div className="px-2 py-3 text-xs text-red-400">{error}</div>;
   } else if (!items || items.length === 0) {
-    menuContent = <div className="px-2 py-3 text-xs text-zinc-500">No items found</div>;
+    menuContent = <div className="px-2 py-3 text-xs text-inverse-muted">No items found</div>;
   } else if (filtered) {
     // Flat filtered results
     menuContent = items.map(item => (
       <button
         key={item.id}
         onClick={() => onSelect(item)}
-        className="w-full flex items-center gap-1.5 px-2 py-1.5 text-xs text-zinc-300 hover:bg-blue-600/20 hover:text-blue-300 rounded transition-colors"
+        className="w-full flex items-center gap-1.5 px-2 py-1.5 text-xs text-inverse-foreground hover:bg-blue-600/20 hover:text-blue-300 rounded transition-colors"
       >
         <TypeIcon type={item.type} data-testid="TypeIcon__1a98b9" />
         <span className="truncate">{item.name}</span>
         {item.type !== 'folder' && (
-          <span className="text-[10px] text-zinc-500 ml-auto">{item.type}</span>
+          <span className="text-[10px] text-inverse-muted ml-auto">{item.type}</span>
         )}
       </button>
     ));
@@ -159,20 +159,20 @@ function MenuSelector({ onSelect, onClose }) {
   }
 
   return (
-    <div className="border border-zinc-700 rounded bg-zinc-800/90 overflow-hidden">
-      <div className="flex items-center gap-1.5 px-2 py-1.5 border-b border-zinc-700">
+    <div className="border border-inverse-border rounded bg-inverse-muted/90 overflow-hidden">
+      <div className="flex items-center gap-1.5 px-2 py-1.5 border-b border-inverse-border">
         <Search
-          className="h-3.5 w-3.5 text-zinc-500 flex-shrink-0"
+          className="h-3.5 w-3.5 text-inverse-muted flex-shrink-0"
           data-testid="Search__1a98b9" />
         <input
           ref={inputRef}
           value={query}
           onChange={e => setQuery(e.target.value)}
           placeholder="Search menu items..."
-          className="flex-1 bg-transparent text-xs text-zinc-200 focus:outline-none placeholder:text-zinc-500"
+          className="flex-1 bg-transparent text-xs text-inverse-foreground focus:outline-none placeholder:text-inverse-muted"
         />
         {query && (
-          <button onClick={() => setQuery('')} className="text-zinc-500 hover:text-zinc-300">
+          <button onClick={() => setQuery('')} className="text-inverse-muted hover:text-inverse-foreground">
             <X className="h-3 w-3" data-testid="X__1a98b9" />
           </button>
         )}
@@ -267,10 +267,10 @@ export default function AddSpec({ onCreated }) {
   }
 
   return (
-    <div className="border-b border-zinc-800 p-3 bg-zinc-900/50">
+    <div className="border-b border-inverse-border p-3 bg-inverse/50">
       <div className="flex items-center justify-between mb-3">
-        <span className="text-xs font-semibold text-zinc-400 uppercase tracking-wider">New Spec</span>
-        <button onClick={() => { setOpen(false); setShowPicker(false); }} className="text-xs text-zinc-500 hover:text-zinc-300">Close</button>
+        <span className="text-xs font-semibold text-inverse-muted uppercase tracking-wider">New Spec</span>
+        <button onClick={() => { setOpen(false); setShowPicker(false); }} className="text-xs text-inverse-muted hover:text-inverse-foreground">Close</button>
       </div>
       <form onSubmit={handleSubmit} className="space-y-2">
         {/* Menu item selector */}
@@ -279,20 +279,20 @@ export default function AddSpec({ onCreated }) {
             type="button"
             onClick={() => setShowPicker(!showPicker)}
             className={cn(
-              'w-full flex items-center gap-2 bg-zinc-800 border border-zinc-700 rounded px-2 py-1.5 text-xs text-left transition-colors hover:border-zinc-600',
-              showPicker && 'ring-1 ring-blue-500 border-blue-500'
+              'w-full flex items-center gap-2 bg-inverse-muted border border-inverse-border rounded px-2 py-1.5 text-xs text-left transition-colors hover:border-inverse-border',
+              showPicker && 'ring-1 focus:ring-focus-ring focus:border-focus-ring'
             )}
           >
             {selectedItem ? (
               <>
                 <TypeIcon type={selectedItem.type} data-testid="TypeIcon__1a98b9" />
-                <span className="text-zinc-200 truncate flex-1">{selectedItem.name}</span>
-                <span className="text-[10px] text-zinc-500">{selectedItem.type}</span>
+                <span className="text-inverse-foreground truncate flex-1">{selectedItem.name}</span>
+                <span className="text-[10px] text-inverse-muted">{selectedItem.type}</span>
               </>
             ) : (
               <>
-                <Search className="h-3.5 w-3.5 text-zinc-500" data-testid="Search__1a98b9" />
-                <span className="text-zinc-500 flex-1">Select a window or process...</span>
+                <Search className="h-3.5 w-3.5 text-inverse-muted" data-testid="Search__1a98b9" />
+                <span className="text-inverse-muted flex-1">Select a window or process...</span>
               </>
             )}
           </button>
@@ -312,12 +312,12 @@ export default function AddSpec({ onCreated }) {
           onChange={e => update('Name', e.target.value)}
           placeholder="Spec name (URL slug)"
           required
-          className="w-full bg-zinc-800 text-zinc-200 border border-zinc-700 rounded px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
+          className="w-full bg-inverse-muted text-inverse-foreground border border-inverse-border rounded px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-focus-ring"
         />
 
         {/* Show selected ID as read-only info */}
         {selectedItem && (
-          <div className="text-[10px] text-zinc-500 px-1">
+          <div className="text-[10px] text-inverse-muted px-1">
             {form.SpecType === 'W' ? `Window ID: ${form.WindowID}` : `Process ID: ${form.ProcessID}`}
           </div>
         )}
@@ -327,17 +327,17 @@ export default function AddSpec({ onCreated }) {
           onChange={e => update('ModuleID', e.target.value)}
           placeholder="Module ID"
           required
-          className="w-full bg-zinc-800 text-zinc-200 border border-zinc-700 rounded px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
+          className="w-full bg-inverse-muted text-inverse-foreground border border-inverse-border rounded px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-focus-ring"
         />
 
         <input
           value={form.Description}
           onChange={e => update('Description', e.target.value)}
           placeholder="Description (optional)"
-          className="w-full bg-zinc-800 text-zinc-200 border border-zinc-700 rounded px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
+          className="w-full bg-inverse-muted text-inverse-foreground border border-inverse-border rounded px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-focus-ring"
         />
 
-        <div className="flex items-center gap-4 text-[10px] text-zinc-400">
+        <div className="flex items-center gap-4 text-[10px] text-inverse-muted">
           <label className="flex items-center gap-1.5 cursor-pointer">
             <input
               type="checkbox"

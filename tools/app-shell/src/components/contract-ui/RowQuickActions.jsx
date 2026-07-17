@@ -283,7 +283,7 @@ export default function RowQuickActions({
               <div className="fixed inset-0 z-[60]" aria-hidden="true" />
             <div
               ref={menuRef}
-              className="fixed z-[61] bg-white py-2 min-w-[160px] rounded-lg"
+              className="fixed z-[61] bg-card py-2 min-w-[160px] rounded-lg"
               style={{
                 top: menuPos.top,
                 right: menuPos.right,

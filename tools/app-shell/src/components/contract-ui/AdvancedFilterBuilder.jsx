@@ -949,7 +949,7 @@ function DistinctEnumPicker({ col, entity, apiBaseUrl, rows, value, onChange, ui
           variant="outline"
           size="sm"
           className={[
-            'w-full justify-between gap-1.5 h-9 text-xs font-normal rounded-md bg-white',
+            'w-full justify-between gap-1.5 h-9 text-xs font-normal rounded-md bg-card',
             value ? 'text-foreground' : 'text-muted-foreground',
           ].join(' ')}
           data-testid="Button__4eedf1">

@@ -338,8 +338,8 @@ function StatementRow({
         style={GRID_STYLE}
         className={cn(
           GRID_CLASS,
-          'group relative cursor-pointer items-center bg-white px-4 py-3 text-sm transition-shadow',
-          open ? 'bg-white' : 'hover:z-10 hover:bg-white hover:shadow-lg',
+          'group relative cursor-pointer items-center bg-card px-4 py-3 text-sm transition-shadow',
+          open ? 'bg-card' : 'hover:z-10 hover:bg-card hover:shadow-lg',
         )}
         onClick={onToggle}
       >
@@ -348,7 +348,7 @@ function StatementRow({
           aria-label={open ? ui('financeAccountStatementsCollapseAria') : ui('financeAccountStatementsExpandAria')}
           aria-expanded={open}
           onClick={(e) => { e.stopPropagation(); onToggle(); }}
-          className="flex h-7 w-7 items-center justify-center rounded-full border border-[#D1D4DB] bg-white text-[#6C6C89] transition-transform hover:bg-[#F5F7F9] hover:text-[#121217]"
+          className="flex h-7 w-7 items-center justify-center rounded-full border border-[#D1D4DB] bg-card text-[#6C6C89] transition-transform hover:bg-[#F5F7F9] hover:text-[#121217]"
           style={{ transform: open ? 'rotate(180deg)' : undefined }}
         >
           <ChevronDown className="h-4 w-4" data-testid="ChevronDown__3acaeb" />
@@ -388,7 +388,7 @@ function StatementRow({
         <span aria-hidden="true" />
         {actions ? (
           <div
-            className="absolute right-3 top-1/2 z-10 flex -translate-y-1/2 items-center gap-0.5 rounded-lg bg-white px-1 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100"
+            className="absolute right-3 top-1/2 z-10 flex -translate-y-1/2 items-center gap-0.5 rounded-lg bg-card px-1 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100"
             onClick={(e) => e.stopPropagation()}
           >
             <RowActions statement={s} actions={actions} ui={ui} data-testid="RowActions__3acaeb" />
