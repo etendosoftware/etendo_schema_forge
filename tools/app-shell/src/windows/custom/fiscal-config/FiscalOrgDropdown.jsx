@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { ChevronDown } from 'lucide-react';
 
-const ORG_COLORS = ['bg-red-500', 'bg-blue-500', 'bg-green-600', 'bg-orange-500', 'bg-purple-500', 'bg-teal-500'];
+const ORG_COLORS = ['bg-destructive', 'bg-status-info', 'bg-status-success', 'bg-status-warning', 'bg-purple-500', 'bg-teal-500'];
 
 function orgAvatarColor(name) {
   return ORG_COLORS[(name?.charCodeAt(0) ?? 0) % ORG_COLORS.length];
