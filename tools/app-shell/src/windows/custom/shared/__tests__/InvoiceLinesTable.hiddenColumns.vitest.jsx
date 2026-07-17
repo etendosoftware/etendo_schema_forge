@@ -1,23 +1,34 @@
 import { render, screen } from '@testing-library/react';
 
-// ETP-4543 — end-to-end coverage for the Project/Cost Center columns
-// InvoiceLinesTable declares (see InvoiceLinesTable.jsx, columns 'project'
-// and 'costcenter'). These columns are ALWAYS declared (independent of
-// decisions.json's `grid` flag); actual visibility is enforced dynamically
-// via the `hiddenColumns` prop, which DetailView computes from
-// `lineDisplayLogic.visibility` (see DetailView.lineHiddenColumns.vitest.jsx
-// for that derivation) and forwards down through
-// `<DetailTable hiddenColumns={lineHiddenColumns} />` → InvoiceLinesTable
-// (`{...props}` spread) → InlineLinesPanel.
+// ETP-4543 (superseded by ETP-4529) — this test originally covered two
+// ALWAYS-declared plain grid columns, 'project' and 'costcenter', toggled
+// independently via `hiddenColumns`. ETP-4529 replaced that plain-column UX
+// with the shared "Dimensiones contables" expand-row pattern (the same one
+// Amortización already used — see DimensionsPanel.jsx / DimSummary /
+// DimensionGrid): InvoiceLinesTable now declares a SINGLE `dimensionsPanel`
+// column (key `'dimensions'`) built from `DIMENSION_FIELD_CANDIDATES_BASE`
+// (`project`, `costcenter`), which is itself filtered by `hiddenColumns`
+// before being handed to the panel, and the column is entirely omitted from
+// `columns` when every candidate ends up hidden (see InvoiceLinesTable.jsx's
+// `dimensionFields.length > 0` guard).
+//
+// `hiddenColumns` still arrives the same way DetailView always produced it —
+// computed from `lineDisplayLogic.visibility` (see
+// DetailView.lineHiddenColumns.vitest.jsx for that derivation) and forwarded
+// through `<DetailTable hiddenColumns={lineHiddenColumns} />` →
+// InvoiceLinesTable (`{...props}` spread) → InlineLinesPanel — only what it
+// controls downstream has changed.
 //
 // This test mounts the REAL InvoiceLinesTable + REAL InlineLinesPanel (only
 // their leaf UI dependencies are stubbed — icons, i18n, formatting helpers,
-// the selector combo/lookup widgets used only in edit mode) and asserts that
-// passing `hiddenColumns={['project']}` (the shape DetailView produces when
-// evaluate-display resolves `visibility.project === false`) actually removes
-// the Project column from the rendered grid, while `hiddenColumns={[]}` /
-// omitting the key (the `visibility.project === true` / fail-open case)
-// keeps it visible — end to end, not just at the prop-plumbing level.
+// the selector combo/lookup widgets used only in edit mode) and asserts,
+// end to end (not just at the prop-plumbing level):
+//   - by default, the `dimensions` column renders with both `project` and
+//     `costcenter` candidates represented in the collapsed DimSummary badges;
+//   - hiding one candidate (`hiddenColumns={['project']}`) removes only that
+//     candidate's evidence from the panel, leaving the other intact;
+//   - hiding every candidate omits the `dimensions` column (and its expand
+//     chevron) entirely, per the `dimensionFields.length > 0` guard.
 
 vi.mock('@/hooks/useCurrency', () => ({
   useCurrency: () => 'EUR',
@@ -105,57 +116,37 @@ function renderTable(props = {}) {
   );
 }
 
-describe('InvoiceLinesTable — dynamic project/costcenter column visibility (ETP-4543)', () => {
-  it('renders the Project and Cost Center columns by default (visibility=true / key absent)', () => {
+describe('InvoiceLinesTable — dimensionsPanel column visibility (ETP-4529, superseding ETP-4543)', () => {
+  it('renders the dimensions column by default, with both project and costcenter represented in it', () => {
     renderTable();
-    expect(screen.getByTestId('column-header-project')).toBeInTheDocument();
-    expect(screen.getByTestId('column-header-costcenter')).toBeInTheDocument();
+    expect(screen.getByTestId('column-header-dimensions')).toBeInTheDocument();
+    // Evidence both candidates are part of the panel: their identifiers surface
+    // in the collapsed DimSummary badges (see DimensionsPanel.jsx's DimBadge).
     expect(screen.getByText('Project Alpha')).toBeInTheDocument();
     expect(screen.getByText('HQ')).toBeInTheDocument();
   });
 
-  it('hides the Project column when hiddenColumns includes "project" (visibility.project=false)', () => {
+  it('excludes project from the dimensions panel when hiddenColumns includes "project", keeping costcenter', () => {
     renderTable({ hiddenColumns: ['project'] });
-    expect(screen.queryByTestId('column-header-project')).toBeNull();
+    // The column itself is still declared — costcenter remains a live candidate.
+    expect(screen.getByTestId('column-header-dimensions')).toBeInTheDocument();
     expect(screen.queryByText('Project Alpha')).toBeNull();
-    // Cost Center is unaffected — only the explicitly-false key is hidden.
-    expect(screen.getByTestId('column-header-costcenter')).toBeInTheDocument();
     expect(screen.getByText('HQ')).toBeInTheDocument();
   });
 
-  it('hides the Cost Center column when hiddenColumns includes "costcenter"', () => {
-    renderTable({ hiddenColumns: ['costcenter'] });
-    expect(screen.queryByTestId('column-header-costcenter')).toBeNull();
+  it('omits the dimensions column entirely when hiddenColumns hides every candidate', () => {
+    renderTable({ hiddenColumns: ['project', 'costcenter'] });
+    // dimensionFields.length === 0 → the column (and its expand chevron) is
+    // dropped from `columns` altogether — not just emptied.
+    expect(screen.queryByTestId('column-header-dimensions')).toBeNull();
+    expect(screen.queryByTestId('dimensions-panel-toggle')).toBeNull();
+    expect(screen.queryByText('Project Alpha')).toBeNull();
     expect(screen.queryByText('HQ')).toBeNull();
-    expect(screen.getByTestId('column-header-project')).toBeInTheDocument();
   });
 
-  it('shows the Project column again once hiddenColumns no longer includes it (visibility.project=true)', () => {
-    const { rerender } = renderTable({ hiddenColumns: ['project'] });
-    expect(screen.queryByTestId('column-header-project')).toBeNull();
-
-    rerender(
-      <InvoiceLinesTable
-        data={ROWS}
-        linesLayout="inlineEditable"
-        addRow={{ active: false }}
-        entity="sales-invoice-line"
-        token="test"
-        apiBaseUrl="/api"
-        selectorContext={{}}
-        onSelectionChange={vi.fn()}
-        onUpdateRow={vi.fn().mockResolvedValue()}
-        onDeleteRow={vi.fn().mockResolvedValue()}
-        hiddenColumns={[]}
-      />,
-    );
-    expect(screen.getByTestId('column-header-project')).toBeInTheDocument();
-    expect(screen.getByText('Project Alpha')).toBeInTheDocument();
-  });
-
-  it('uses DataTable (not InlineLinesPanel) when linesLayout is not inlineEditable', () => {
+  it('uses DataTable when linesLayout is not inlineEditable', () => {
     renderTable({ linesLayout: undefined, addRow: undefined });
     expect(screen.getByTestId('datatable-stub')).toBeInTheDocument();
-    expect(screen.queryByTestId('column-header-project')).toBeNull();
+    expect(screen.queryByTestId('column-header-dimensions')).toBeNull();
   });
 });
