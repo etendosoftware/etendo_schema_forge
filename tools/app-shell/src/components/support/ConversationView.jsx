@@ -66,7 +66,7 @@ function consumeList(lines, startIndex, re, TagName) {
     i++;
   }
   const node = (
-    <TagName key={`list-${startIndex}`}>
+    <TagName key={`list-${startIndex}`} data-testid="TagName__50ab90">
       {items.map((item) => <li key={item}>{renderInline(item)}</li>)}
     </TagName>
   );
