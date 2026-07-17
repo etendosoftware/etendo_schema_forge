@@ -1298,21 +1298,14 @@ export function isDeleteButtonVisible({
 
 export function renderPrimaryTabButtons(primaryTabsVariant, primaryTabs, setActivePrimaryTab, activePrimaryTab, tMenu) {
   return primaryTabsVariant === 'pill' ? (
-      <div className="inline-flex items-center gap-1 p-1 h-10 rounded-xl" style={{background: '#F5F7F9'}}>
+      <div className="inline-flex items-center gap-1 p-1 h-10 rounded-xl bg-muted">
         {primaryTabs.map(tab => (
             <button
                 key={tab.key}
                 onClick={() => setActivePrimaryTab(tab.key)}
-                className="h-8 px-4 text-sm font-medium rounded-lg transition-all"
-                style={
-                  activePrimaryTab === tab.key
-                      ? {
-                        background: '#FFFFFF',
-                        color: '#121217',
-                        boxShadow: '0px 1px 3px rgba(18,18,23,0.10), 0px 1px 2px rgba(18,18,23,0.06)'
-                      }
-                      : {color: '#121217'}
-                }
+                className={activePrimaryTab === tab.key
+                  ? 'h-8 px-4 text-sm font-medium rounded-lg transition-all bg-card text-text-primary shadow-sm'
+                  : 'h-8 px-4 text-sm font-medium rounded-lg transition-all text-text-secondary'}
             >
               {tMenu(tab.label)}
             </button>
@@ -1326,8 +1319,8 @@ export function renderPrimaryTabButtons(primaryTabsVariant, primaryTabs, setActi
               className={[
                 'relative px-4 py-1.5 text-sm font-medium rounded-lg transition-colors border',
                 activePrimaryTab === tab.key
-                    ? 'bg-white border-gray-200 shadow-sm text-foreground'
-                    : 'border-transparent text-muted-foreground hover:text-foreground',
+                    ? 'bg-card border-border-control shadow-sm text-text-primary'
+                    : 'border-transparent text-text-secondary hover:text-text-primary',
               ].join(' ')}
           >
             {tMenu(tab.label)}

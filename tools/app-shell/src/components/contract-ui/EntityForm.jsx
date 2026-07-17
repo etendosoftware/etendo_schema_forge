@@ -595,7 +595,7 @@ function renderSelectField(f, data, label, isReadOnly, onChange, ctx) {
         disabled={isReadOnly}
         required={f.required}
         data-testid="Select__a8d626">
-        <SelectTrigger id={f.key} data-testid={`field-${f.key}`} className="bg-white focus:ring-2 focus:ring-primary">
+        <SelectTrigger id={f.key} data-testid={`field-${f.key}`} className="bg-card focus:ring-2 focus:ring-focus-ring">
           <SelectValue
             placeholder={buildSelectPlaceholder(ui, label)}
             data-testid="SelectValue__a8d626" />
@@ -699,7 +699,7 @@ function requiredAsteriskIfEditable(f, isReadOnly) {
 }
 
 function getInputStateClass(isReadOnly) {
-  return isReadOnly ? 'bg-muted/50' : 'bg-white focus:ring-2 focus:ring-primary focus:outline-none';
+  return isReadOnly ? 'bg-muted/50' : 'bg-card focus:ring-2 focus:ring-focus-ring focus:outline-none';
 }
 
 function DependentFkField(props) {
@@ -790,7 +790,7 @@ function getFieldValue(isReadOnly, displayValue, data, f) {
 }
 
 function getReadOnlyBgClass(isReadOnly) {
-  return isReadOnly ? 'bg-muted/50 cursor-default' : 'bg-white';
+  return isReadOnly ? 'bg-muted/50 cursor-default' : 'bg-card';
 }
 
 /**

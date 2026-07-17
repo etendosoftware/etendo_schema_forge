@@ -27,9 +27,7 @@ export default function BalanceFooterPanel({
 
   const fmt = (v) => (typeof formatAmount === 'function' ? formatAmount(v, currency) : String(v));
 
-  const divider = (
-    <div style={{ borderTopWidth: '0.5px', borderTopStyle: 'solid', borderTopColor: 'var(--border)' }} />
-  );
+  const divider = <div className="border-t border-border-structural" />;
 
   return (
     <div className="mt-1 flex flex-col items-end" data-testid="balance-footer">
