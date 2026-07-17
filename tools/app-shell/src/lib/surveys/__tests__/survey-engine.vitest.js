@@ -43,6 +43,12 @@ describe('isGlobalCooldownActive', () => {
     const state = makeState({ lastShownAt: isoAgo(31 * MS_DAY) });
     expect(isGlobalCooldownActive(state, NOW)).toBe(false);
   });
+
+  it('respects VITE_SURVEY_GLOBAL_COOLDOWN_DAYS override', () => {
+    const state = makeState({ lastShownAt: isoAgo(15 * MS_DAY) });
+    // Default (30d) would still be active at 15 days; a shortened 10-day cooldown should not be.
+    expect(isGlobalCooldownActive(state, NOW, { VITE_SURVEY_GLOBAL_COOLDOWN_DAYS: '10' })).toBe(false);
+  });
 });
 
 describe('isMonthlyLimitReached', () => {
@@ -64,6 +70,18 @@ describe('isMonthlyLimitReached', () => {
     const state = makeState({ shownThisMonth: { '2026-05': 5 } });
     expect(isMonthlyLimitReached(state, NOW)).toBe(false);
   });
+
+  it('respects VITE_SURVEY_MAX_PER_MONTH override', () => {
+    const state = makeState({ shownThisMonth: { '2026-06': 3 } });
+    // Default cap (2) would already be reached at 3, but a raised cap of 5 should not be.
+    expect(isMonthlyLimitReached(state, NOW, { VITE_SURVEY_MAX_PER_MONTH: '5' })).toBe(false);
+    expect(isMonthlyLimitReached(state, NOW, { VITE_SURVEY_MAX_PER_MONTH: '3' })).toBe(true);
+  });
+
+  it('falls back to the default cap when the override is invalid', () => {
+    const state = makeState({ shownThisMonth: { '2026-06': 2 } });
+    expect(isMonthlyLimitReached(state, NOW, { VITE_SURVEY_MAX_PER_MONTH: 'not-a-number' })).toBe(true);
+  });
 });
 
 describe('isDismissedCooldownActive', () => {
@@ -84,6 +102,12 @@ describe('isDismissedCooldownActive', () => {
   it('does not affect other survey ids', () => {
     const state = makeState({ dismissals: { nps: isoAgo(5 * MS_DAY) } });
     expect(isDismissedCooldownActive(state, 'csat_invoicing', NOW)).toBe(false);
+  });
+
+  it('respects VITE_SURVEY_DISMISSED_COOLDOWN_DAYS override', () => {
+    const state = makeState({ dismissals: { nps: isoAgo(10 * MS_DAY) } });
+    // Default (21d) would still be active at 10 days; a shortened 5-day cooldown should not be.
+    expect(isDismissedCooldownActive(state, 'nps', NOW, { VITE_SURVEY_DISMISSED_COOLDOWN_DAYS: '5' })).toBe(false);
   });
 });
 
@@ -285,5 +309,36 @@ describe('selectNextSurvey', () => {
     vi.stubGlobal('window', {}); // no localStorage property
     expect(() => selectNextSurvey({ isAdmin: false, now: NOW })).not.toThrow();
     expect(selectNextSurvey({ isAdmin: false, now: NOW })).toBeNull();
+  });
+
+  // -------------------------------------------------------------------------
+  // env threading: selectNextSurvey passes env down to per-survey isEligible
+  // -------------------------------------------------------------------------
+
+  it('threads a custom env into NPS eligibility (shortened min-age)', () => {
+    mockStorage.setItem(STORAGE_KEY, JSON.stringify({
+      firstLoginAt: new Date(NOW - 10 * MS_DAY).toISOString(),
+      counters: { invoicing: 0, order: 0 },
+    }));
+    // Default min-age (60d) would reject a 10-day-old account; override lowers it to 5d.
+    const survey = selectNextSurvey({
+      isAdmin: false,
+      now: NOW,
+      env: { VITE_SURVEY_NPS_MIN_AGE_DAYS: '5' },
+    });
+    expect(survey?.id).toBe('nps');
+  });
+
+  it('threads a custom env into CSAT document-minimum eligibility', () => {
+    mockStorage.setItem(STORAGE_KEY, JSON.stringify({
+      counters: { invoicing: 2, order: 0 },
+    }));
+    // Default min-docs (5) would reject 2 invoices; override lowers it to 2.
+    const survey = selectNextSurvey({
+      isAdmin: false,
+      now: NOW,
+      env: { VITE_SURVEY_CSAT_MIN_DOCS: '2' },
+    });
+    expect(survey?.id).toBe('csat_invoicing');
   });
 });

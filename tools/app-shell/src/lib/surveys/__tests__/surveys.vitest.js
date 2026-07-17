@@ -1,0 +1,173 @@
+import { describe, it, expect } from 'vitest';
+import { SURVEYS, isInvoiceSpec, isOrderSpec } from '../surveys.js';
+
+const MS_DAY = 86_400_000;
+const NOW = new Date('2026-06-26T12:00:00.000Z').getTime();
+
+function isoAgo(ms, from = NOW) {
+  return new Date(from - ms).toISOString();
+}
+
+function surveyById(id) {
+  return SURVEYS.find((s) => s.id === id);
+}
+
+function baseState(overrides = {}) {
+  return {
+    firstLoginAt: null,
+    lastLoginAt: null,
+    counters: { invoicing: 0, order: 0 },
+    respondedCounts: {},
+    respondedAt: {},
+    respondedCountAt: {},
+    ...overrides,
+  };
+}
+
+describe('isInvoiceSpec / isOrderSpec', () => {
+  it('recognizes both invoice spec names', () => {
+    expect(isInvoiceSpec('sales-invoice')).toBe(true);
+    expect(isInvoiceSpec('purchase-invoice')).toBe(true);
+    expect(isInvoiceSpec('sales-order')).toBe(false);
+  });
+
+  it('recognizes both order spec names', () => {
+    expect(isOrderSpec('purchase-order')).toBe(true);
+    expect(isOrderSpec('sales-order')).toBe(true);
+    expect(isOrderSpec('sales-invoice')).toBe(false);
+  });
+});
+
+describe('nps.isEligible', () => {
+  const nps = surveyById('nps');
+
+  it('is not eligible without a firstLoginAt', () => {
+    expect(nps.isEligible({ state: baseState(), now: NOW })).toBe(false);
+  });
+
+  it('is not eligible before the default 60-day min age', () => {
+    const state = baseState({ firstLoginAt: isoAgo(30 * MS_DAY) });
+    expect(nps.isEligible({ state, now: NOW })).toBe(false);
+  });
+
+  it('is eligible after the default 60-day min age', () => {
+    const state = baseState({ firstLoginAt: isoAgo(61 * MS_DAY) });
+    expect(nps.isEligible({ state, now: NOW })).toBe(true);
+  });
+
+  it('respects a VITE_SURVEY_NPS_MIN_AGE_DAYS override', () => {
+    const state = baseState({ firstLoginAt: isoAgo(10 * MS_DAY) });
+    expect(nps.isEligible({ state, now: NOW, env: {} })).toBe(false);
+    expect(
+      nps.isEligible({ state, now: NOW, env: { VITE_SURVEY_NPS_MIN_AGE_DAYS: '5' } }),
+    ).toBe(true);
+  });
+
+  it('respects a VITE_SURVEY_NPS_INACTIVITY_DAYS override', () => {
+    const state = baseState({
+      firstLoginAt: isoAgo(61 * MS_DAY),
+      lastLoginAt: isoAgo(20 * MS_DAY),
+    });
+    // Default inactivity guard (14d) blocks a 20-day-inactive user.
+    expect(nps.isEligible({ state, now: NOW, env: {} })).toBe(false);
+    expect(
+      nps.isEligible({ state, now: NOW, env: { VITE_SURVEY_NPS_INACTIVITY_DAYS: '30' } }),
+    ).toBe(true);
+  });
+
+  it('respects a VITE_SURVEY_RESPONSE_COOLDOWN_DAYS override for re-eligibility', () => {
+    const state = baseState({
+      firstLoginAt: isoAgo(61 * MS_DAY),
+      respondedCounts: { nps: 1 },
+      respondedAt: { nps: isoAgo(40 * MS_DAY) },
+    });
+    // Default cooldown (90d) blocks re-showing after only 40 days.
+    expect(nps.isEligible({ state, now: NOW, env: {} })).toBe(false);
+    expect(
+      nps.isEligible({ state, now: NOW, env: { VITE_SURVEY_RESPONSE_COOLDOWN_DAYS: '30' } }),
+    ).toBe(true);
+  });
+});
+
+describe('csat_invoicing / csat_order.isEligible (shared csatDocumentIsEligible helper)', () => {
+  it.each([
+    ['csat_invoicing', 'invoicing'],
+    ['csat_order', 'order'],
+  ])('%s is not eligible below the default 5-document minimum', (id, counterKey) => {
+    const survey = surveyById(id);
+    const state = baseState({ counters: { invoicing: 0, order: 0, [counterKey]: 4 } });
+    expect(survey.isEligible({ state, now: NOW })).toBe(false);
+  });
+
+  it.each([
+    ['csat_invoicing', 'invoicing'],
+    ['csat_order', 'order'],
+  ])('%s is eligible at the default 5-document minimum', (id, counterKey) => {
+    const survey = surveyById(id);
+    const state = baseState({ counters: { invoicing: 0, order: 0, [counterKey]: 5 } });
+    expect(survey.isEligible({ state, now: NOW })).toBe(true);
+  });
+
+  it.each([
+    ['csat_invoicing', 'invoicing'],
+    ['csat_order', 'order'],
+  ])('%s respects a VITE_SURVEY_CSAT_MIN_DOCS override', (id, counterKey) => {
+    const survey = surveyById(id);
+    const state = baseState({ counters: { invoicing: 0, order: 0, [counterKey]: 2 } });
+    expect(survey.isEligible({ state, now: NOW, env: {} })).toBe(false);
+    expect(
+      survey.isEligible({ state, now: NOW, env: { VITE_SURVEY_CSAT_MIN_DOCS: '2' } }),
+    ).toBe(true);
+  });
+
+  it.each([
+    ['csat_invoicing', 'invoicing'],
+    ['csat_order', 'order'],
+  ])('%s respects a VITE_SURVEY_CSAT_DOC_GAP override for re-eligibility', (id, counterKey) => {
+    const survey = surveyById(id);
+    const state = baseState({
+      counters: { invoicing: 0, order: 0, [counterKey]: 15 },
+      respondedCounts: { [id]: 1 },
+      respondedAt: { [id]: isoAgo(91 * MS_DAY) },
+      respondedCountAt: { [id]: 10 },
+    });
+    // Default gap (30 docs) blocks re-showing after only 5 more documents.
+    expect(survey.isEligible({ state, now: NOW, env: {} })).toBe(false);
+    expect(
+      survey.isEligible({ state, now: NOW, env: { VITE_SURVEY_CSAT_DOC_GAP: '5' } }),
+    ).toBe(true);
+  });
+
+  it.each([
+    ['csat_invoicing', 'invoicing'],
+    ['csat_order', 'order'],
+  ])('%s respects a VITE_SURVEY_RESPONSE_COOLDOWN_DAYS override for re-eligibility', (id, counterKey) => {
+    const survey = surveyById(id);
+    const state = baseState({
+      counters: { invoicing: 0, order: 0, [counterKey]: 40 },
+      respondedCounts: { [id]: 1 },
+      respondedAt: { [id]: isoAgo(40 * MS_DAY) },
+      respondedCountAt: { [id]: 5 },
+    });
+    // Default cooldown (90d) blocks re-showing after only 40 days.
+    expect(survey.isEligible({ state, now: NOW, env: {} })).toBe(false);
+    expect(
+      survey.isEligible({ state, now: NOW, env: { VITE_SURVEY_RESPONSE_COOLDOWN_DAYS: '30' } }),
+    ).toBe(true);
+  });
+
+  it('csat_invoicing and csat_order track independent counters', () => {
+    const invoicing = surveyById('csat_invoicing');
+    const order = surveyById('csat_order');
+    const state = baseState({ counters: { invoicing: 5, order: 0 } });
+    expect(invoicing.isEligible({ state, now: NOW })).toBe(true);
+    expect(order.isEligible({ state, now: NOW })).toBe(false);
+  });
+});
+
+describe('csat_onboarding.isEligible', () => {
+  it('is always disabled', () => {
+    const survey = surveyById('csat_onboarding');
+    expect(survey.isEligible({ state: baseState(), now: NOW })).toBe(false);
+  });
+});

@@ -1,4 +1,4 @@
-const MS_DAY = 86_400_000;
+import { getSurveyConfig } from './survey-config.js';
 
 const INVOICE_SPEC_NAMES = new Set(['sales-invoice', 'purchase-invoice']);
 const ORDER_SPEC_NAMES = new Set(['purchase-order', 'sales-order']);
@@ -11,44 +11,43 @@ export function isOrderSpec(specName) {
   return ORDER_SPEC_NAMES.has(specName);
 }
 
-function npsIsEligible({ state, now }) {
+function npsIsEligible({ state, now, env = import.meta.env }) {
   if (!state.firstLoginAt) return false;
+  const { npsMinAgeMs, npsInactivityMs, responseCooldownMs } = getSurveyConfig(env);
   const msSinceFirst = now - new Date(state.firstLoginAt).getTime();
-  if (msSinceFirst < 60 * MS_DAY) return false;
-  if (state.lastLoginAt && now - new Date(state.lastLoginAt).getTime() > 14 * MS_DAY) return false;
+  if (msSinceFirst < npsMinAgeMs) return false;
+  if (state.lastLoginAt && now - new Date(state.lastLoginAt).getTime() > npsInactivityMs) return false;
   const respondedCount = state.respondedCounts['nps'] ?? 0;
   if (respondedCount === 0) return true;
   const lastRespondedAt = state.respondedAt['nps'];
   if (!lastRespondedAt) return true;
-  return now - new Date(lastRespondedAt).getTime() >= 90 * MS_DAY;
+  return now - new Date(lastRespondedAt).getTime() >= responseCooldownMs;
 }
 
 function csatOnboardingIsEligible() {
   return false; // onboarding survey disabled until fully implemented
 }
 
-function csatInvoicingIsEligible({ state, now }) {
-  const count = state.counters.invoicing ?? 0;
-  if (count < 5) return false;
-  const respondedCount = state.respondedCounts['csat_invoicing'] ?? 0;
+// Shared by csat_invoicing/csat_order — previously duplicated verbatim per survey.
+function csatDocumentIsEligible(counterKey, surveyId, { state, now, env = import.meta.env }) {
+  const { csatMinDocs, csatDocGap, responseCooldownMs } = getSurveyConfig(env);
+  const count = state.counters[counterKey] ?? 0;
+  if (count < csatMinDocs) return false;
+  const respondedCount = state.respondedCounts[surveyId] ?? 0;
   if (respondedCount === 0) return true;
-  const lastRespondedCountAt = state.respondedCountAt?.['csat_invoicing'] ?? 0;
-  if (count - lastRespondedCountAt < 30) return false;
-  const lastRespondedAt = state.respondedAt['csat_invoicing'];
+  const lastRespondedCountAt = state.respondedCountAt?.[surveyId] ?? 0;
+  if (count - lastRespondedCountAt < csatDocGap) return false;
+  const lastRespondedAt = state.respondedAt[surveyId];
   if (!lastRespondedAt) return true;
-  return now - new Date(lastRespondedAt).getTime() >= 90 * MS_DAY;
+  return now - new Date(lastRespondedAt).getTime() >= responseCooldownMs;
 }
 
-function csatOrderIsEligible({ state, now }) {
-  const count = state.counters.order ?? 0;
-  if (count < 5) return false;
-  const respondedCount = state.respondedCounts['csat_order'] ?? 0;
-  if (respondedCount === 0) return true;
-  const lastRespondedCountAt = state.respondedCountAt?.['csat_order'] ?? 0;
-  if (count - lastRespondedCountAt < 30) return false;
-  const lastRespondedAt = state.respondedAt['csat_order'];
-  if (!lastRespondedAt) return true;
-  return now - new Date(lastRespondedAt).getTime() >= 90 * MS_DAY;
+function csatInvoicingIsEligible(args) {
+  return csatDocumentIsEligible('invoicing', 'csat_invoicing', args);
+}
+
+function csatOrderIsEligible(args) {
+  return csatDocumentIsEligible('order', 'csat_order', args);
 }
 
 export const SURVEYS = Object.freeze([
