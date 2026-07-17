@@ -17,9 +17,9 @@
     "generate:contacts-csv": "node scripts/generate-contacts-csv.js"
   },
   "devDependencies": {
-    "@etendosoftware/app-shell-core": "0.3.10",
-    "@etendosoftware/schema-forge-cli": "0.3.10",
-    "@etendosoftware/schema-forge-core": "0.3.10",
+    "@etendosoftware/app-shell-core": "0.3.11-preview.feature-ETP-4526.20260717142634.0bcc079",
+    "@etendosoftware/schema-forge-cli": "0.3.11-preview.feature-ETP-4526.20260717142634.0bcc079",
+    "@etendosoftware/schema-forge-core": "0.3.11-preview.feature-ETP-4526.20260717142634.0bcc079",
     "esbuild": "^0.28.0",
     "handlebars": "^4.7.9",
     "jscodeshift": "^17.3.0",
