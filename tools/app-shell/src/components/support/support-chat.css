@@ -342,6 +342,32 @@
 .sc-inicio-search-result span { flex: 1; }
 
 /* ---- MENSAJES tab ------------------------------------------------------- */
+.sc-msg-search {
+  padding: 8px 18px 6px;
+  position: sticky;
+  top: 0;
+  background: #fff;
+  z-index: 2;
+}
+.sc-msg-search-inner {
+  background: var(--sc-bg-chrome);
+  border-radius: 10px;
+  padding: 0 14px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--sc-fg-3);
+}
+.sc-msg-search-inner input {
+  flex: 1;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  font: 400 13px/1 'Inter', sans-serif;
+  color: var(--sc-fg-1);
+}
+.sc-msg-search-inner input::placeholder { color: var(--sc-fg-3); }
 .sc-ticket-list { padding: 6px 0; }
 .sc-ticket-row {
   display: flex;
@@ -706,8 +732,27 @@
 }
 .sc-bubble p { margin: 0; color: inherit; font: inherit; }
 .sc-bubble p + p { margin-top: 8px; }
+.sc-bubble ul, .sc-bubble ol { margin: 8px 0 0; padding-left: 20px; color: inherit; font: inherit; }
+.sc-bubble li + li { margin-top: 4px; }
+.sc-bubble ul + p, .sc-bubble ol + p, .sc-bubble p + ul, .sc-bubble p + ol { margin-top: 8px; }
+.sc-bubble code {
+  background: rgba(0, 0, 0, .06);
+  border-radius: 4px;
+  padding: 1px 5px;
+  font: 12px/1.4 'SF Mono', 'Menlo', monospace;
+}
+.sc-msg.user .sc-bubble code { background: rgba(255, 255, 255, .18); }
 .sc-bubble strong { font-weight: 600; color: var(--sc-fg-1); }
 .sc-msg.user .sc-bubble strong { color: #fff; }
+.sc-bubble a {
+  color: var(--sc-purple-700);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  font-weight: 500;
+}
+.sc-bubble a:hover { color: var(--sc-purple-500); }
+.sc-msg.user .sc-bubble a { color: #fff; text-decoration-color: rgba(255, 255, 255, .6); }
+.sc-msg.user .sc-bubble a:hover { text-decoration-color: #fff; }
 
 /* Timestamp tooltip on hover */
 .sc-msg::after {
@@ -1038,6 +1083,26 @@
 .sc-att .sc-a-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .sc-att .sc-a-size { color: var(--sc-fg-3); font-size: 11px; }
 .sc-att svg { width: 14px; height: 14px; flex-shrink: 0; }
+.sc-att-download {
+  background: none;
+  border: 0;
+  padding: 0;
+  margin: 0;
+  color: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+}
+.sc-att-download:disabled { cursor: default; opacity: .6; text-decoration: none; }
+.sc-att-img-link { display: inline-block; margin-top: 8px; }
+.sc-att-img {
+  display: block;
+  max-width: 200px;
+  max-height: 160px;
+  border-radius: 10px;
+  object-fit: cover;
+}
 
 /* ---- Expanded panel -------------------------------------------------------- */
 .sc-panel.expanded {
@@ -1103,36 +1168,3 @@
 }
 .sc-emoji-btn:hover { background: var(--sc-bg-subtle); }
 .sc-clip.active { background: var(--sc-bg-subtle); color: var(--sc-fg-1); }
-
-/* ---- Mic / recording ------------------------------------------------------- */
-.sc-mic-btn { transition: color .15s; }
-.sc-mic-btn.recording {
-  color: #e53935;
-  animation: sc-mic-pulse 1s ease-in-out infinite;
-}
-@keyframes sc-mic-pulse {
-  0%, 100% { opacity: 1; }
-  50%       { opacity: 0.45; }
-}
-.sc-rec-timer {
-  font: 600 12px/1 'Inter', sans-serif;
-  color: #e53935;
-  min-width: 32px;
-  text-align: center;
-  flex-shrink: 0;
-}
-
-/* ---- Audio chip play button ------------------------------------------------ */
-.sc-audio-play {
-  border: none;
-  background: rgba(255,255,255,.15);
-  border-radius: 4px;
-  cursor: pointer;
-  padding: 2px 6px;
-  color: inherit;
-  font-size: 12px;
-  line-height: 1;
-  opacity: 0.85;
-  flex-shrink: 0;
-}
-.sc-audio-play:hover { opacity: 1; background: rgba(255,255,255,.25); }
