@@ -15,7 +15,7 @@
 // reads `window.location` directly. To exercise a given path we push it onto
 // `window.history` before rendering, same as a real browser navigation would.
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { render, screen, cleanup } from '@testing-library/react';
+import { render, screen, cleanup, waitFor } from '@testing-library/react';
 import { AppShellRuntime } from '@etendosoftware/app-shell-core/runtime';
 import { buildRuntimeRoutes } from '../runtime-routes.jsx';
 import en_US from '../locales/en_US.json';
@@ -42,6 +42,7 @@ vi.mock('../components/CopilotContext.jsx', () => ({
 
 afterEach(() => {
   cleanup();
+  window.localStorage.clear();
   window.history.pushState({}, '', '/');
 });
 
@@ -101,6 +102,48 @@ describe('buildRuntimeRoutes through the real AppShellRuntime', () => {
     // must render without an authenticated session, unlike the window/dashboard routes above.
     renderAt('/financial-account/psd2-callback', { auth: { loginPath: '/login' } });
     expect(screen.getByText('Conexión completada')).toBeInTheDocument();
+  });
+
+  it.each([
+    ['no session', []],
+    ['platform-only session', [['sf_platform_token', 'platform-token']]],
+    ['full environment and platform session', [
+      ['sf_auth_token', 'environment-token'],
+      ['sf_auth_user', 'Ada'],
+      ['sf_auth_client_id', 'client'],
+      ['sf_auth_rolelist', JSON.stringify([{ id: 'admin' }])],
+      ['sf_auth_selected_role', JSON.stringify({ id: 'admin' })],
+      ['sf_auth_selected_org', JSON.stringify({ id: 'org' })],
+      ['sf_platform_token', 'platform-token'],
+    ]],
+    ['expired environment token', [
+      ['sf_auth_token', 'expired-token'],
+      ['sf_platform_token', 'expired-platform-token'],
+    ]],
+  ])('handles logout with a %s without AuthGate interception', async (_description, sessionEntries) => {
+    sessionEntries.forEach(([key, value]) => window.localStorage.setItem(key, value));
+    renderAt('/logout', { auth: { loginPath: '/login' } });
+
+    await waitFor(() => expect(window.location.pathname).toBe('/onboarding'));
+    expect(window.location.search).toBe('');
+    expect(window.location.href).not.toContain('/onboarding?returnTo=/logout');
+    expect(window.localStorage.getItem('sf_auth_token')).toBeNull();
+    expect(window.localStorage.getItem('sf_platform_token')).toBeNull();
+  });
+
+  it.each([
+    '/logout?returnTo=/logout',
+    '/logout?returnTo=/onboarding%3FreturnTo%3D%252Flogout',
+    '/logout?returnTo=https%3A%2F%2Fattacker.example%2Fsteal',
+    '/logout?returnTo=%2F%2Fattacker.example%2Fsteal',
+    '/logout?returnTo=%2F%25',
+  ])('uses onboarding as the safe destination for unsafe logout return targets: %s', async (path) => {
+    window.localStorage.setItem('sf_platform_token', 'platform-token');
+    renderAt(path, { auth: { loginPath: '/login' } });
+
+    await waitFor(() => expect(window.location.pathname).toBe('/onboarding'));
+    expect(window.location.search).toBe('');
+    expect(window.localStorage.getItem('sf_platform_token')).toBeNull();
   });
 
   it('resolves a lazy-loaded route via Suspense', async () => {
