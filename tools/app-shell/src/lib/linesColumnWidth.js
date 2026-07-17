@@ -29,6 +29,10 @@ export function columnFlex(col, idx) {
   // word inside the trigger. `1 1` keeps the column elastic on top.
   if (col.type === 'enum' || col.type === 'select') return '1 1 224px';
   if (col.type === 'date') return '1 1 130px';
+  // ETP-4529 — the dimensionsPanel column (badges + "+N"/"Add dimensions" trigger)
+  // needs more room than a plain selector cell; mirrors Amortización's w-96 (384px)
+  // column, elastic so it still absorbs the row's surplus width.
+  if (col.type === 'dimensionsPanel') return '1 1 320px';
   return `${g} 0 120px`;
 }
 
@@ -48,5 +52,6 @@ export function columnMinWidthPx(col, idx) {
   if (col.type === 'selector' || col.type === 'search' || col.type === 'foreignKey') return 192;
   if (col.type === 'enum' || col.type === 'select') return 224;
   if (col.type === 'date') return 130;
+  if (col.type === 'dimensionsPanel') return 320;
   return 120;
 }

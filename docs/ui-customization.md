@@ -563,6 +563,37 @@ Default: `"classic"`. Validator F12 enforces the enum (`"classic"` | `"inlineEdi
 
 ---
 
+### 14b. `dimensionsPanel` — expand-row accounting-dimension panel (`InlineLinesPanel` column type)
+
+**What it does:** an opt-in column `type` for `InlineLinesPanel` (NOT a `decisions.json` key — declared directly in a hand-written `columns` array, e.g. `InvoiceLinesTable.jsx`). Renders the shared "Dimensiones contables" UX Amortización originated: a per-row cell showing up to 2 "Label: Value" badges + a "+N" overflow, or a dashed "+ Add dimensions" trigger when every candidate field is empty. Clicking it (or the leftmost chevron, also added only when this column type is present) expands a full-width sub-row directly below the data row with a 4-column grid of selectors — one per visible dimension field.
+
+**Why it exists (ETP-4529):** supersedes ETP-4543's plain, always-rendered `project`/`costcenter` grid columns (see `docs/feedback.md`) — a permanently-visible column reads as a field the client always has, even with no accounting-dimension config at all. The expand panel only invites the user in when there's something to show or fill, matching the pattern Amortización already shipped.
+
+**Column shape:**
+```js
+{
+  key: 'dimensions',           // any unique key, like any other column
+  type: 'dimensionsPanel',
+  label: ui('dimensionsPanelTitle'),   // column header label, resolved like any other column
+  dimensionFields: [                    // candidate fields, already visibility-filtered by the caller
+    { key: 'project', column: 'C_Project_ID', type: 'selector', label: t('C_Project_ID'), lookup: true },
+    { key: 'costcenter', column: 'C_Costcenter_ID', type: 'selector', label: t('C_Costcenter_ID') },
+  ],
+  emptyLabel: undefined,        // optional: override the "+ Add dimensions" trigger text (defaults to the generic `dimensionsPanelEmpty` i18n key)
+}
+```
+`dimensionFields` entries are ordinary column-shaped objects (`key`/`column`/`type`/`label`) — `InlineLinesPanel` reuses the same `commitField` path every other inline edit uses to persist a dimension-field change, so no special save wiring is needed. Drop the column entirely (don't include it in `columns`) when every candidate would be hidden — `InvoiceLinesTable.jsx` does this via `dimensionFields.length > 0 ? [...] : []`.
+
+**Fully additive/opt-in:** a table that never declares a `dimensionsPanel` column renders byte-for-byte the same as before this feature shipped — no leading chevron column, no expand state, zero behavior change. Verified against the full existing `InlineLinesPanel` test suite.
+
+**Shared building blocks:** `tools/app-shell/src/components/contract-ui/DimensionsPanel.jsx` exports `DimBadge`, `DimSummary`, `DimensionGrid` — generic, reusable by any lines table (`InlineLinesPanel`'s column type, or a fully hand-built table like `AmortizationLinesTable.jsx`, which was refactored to import from here instead of defining them locally).
+
+**Current limitation — no pipeline-generator support yet:** the pipeline-generated `<Window>LineTable.jsx` files (goods-shipment, goods-receipt, and every other generated window) have no override mechanism that fits this column type. The only existing lines-tab override point, `window.customLinesComponent` → `CustomLines`, replaces the ENTIRE lines tab with a fully self-fetching component (own `fetch`, own add/delete, own count — matching `AmortizationLinesTable.jsx`'s `recordId`/`data`=header-record contract), not a drop-in for the `columns`-array + `DetailView`-orchestrated `data`/`onUpdateRow`/`onDeleteRow` contract the generated table and `InvoiceLinesTable.jsx` use. Adding a lighter override point (or extending the generator to emit a `dimensionsPanel` column from a new `decisions.json` flag) needs a `schema_forge_core` change and is pending a coordinator decision — see `docs/feedback.md` ("ETP-4543" supersession note) and `docs/generated-custom-windows/goods-shipment.md`/`goods-receipt.md`.
+
+**Real example:** `InvoiceLinesTable.jsx` (sales-invoice/purchase-invoice), `AmortizationLinesTable.jsx` (post-extraction, via the shared components directly rather than the column type — it is a wholly custom `<table>`, not an `InlineLinesPanel` consumer).
+
+---
+
 ### 15. `window.balanceFooter` — debit/credit balance footer
 
 **What it does:** replaces the product/discount/tax totals panel with a `BalanceFooterPanel` for double-entry windows. It shows **Σ debit**, **Σ credit**, the **difference**, and a **balanced ✓ / unbalanced ✗** badge, and **disables the Save button** (with a tooltip) only when the entry is **unbalanced** (`Σ debit ≠ Σ credit`). An empty/zero entry is balanced and savable as a draft; the badge stays hidden until the lines carry amounts.

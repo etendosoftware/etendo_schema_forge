@@ -7,7 +7,7 @@ import React, {
   useRef,
   useState,
 } from 'react';
-import { Pencil, Search, Trash2 } from 'lucide-react';
+import { ChevronDown, Pencil, Search, Trash2 } from 'lucide-react';
 import { QUICK_ACTIONS_PILL_CLASS } from './quickActionsStyle.js';
 import { toast } from 'sonner';
 import { Input } from '@/components/ui/input';
@@ -22,6 +22,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { resolveLookupDrawer } from './lookupDrawers.js';
 import { columnFlex } from '@/lib/linesColumnWidth.js';
 import { getEmailFieldError, getPhoneFieldError } from './recipientEdits.js';
+// ETP-4529 — shared "Dimensiones contables" expand-row UX (extracted from
+// AmortizationLinesTable.jsx), reused here by the opt-in `dimensionsPanel` column type.
+import { DimSummary, DimensionGrid } from './DimensionsPanel.jsx';
 
 // Figma tokens — extracted from /home/agustin/Desktop/newlines.css.
 const TOKENS = {
@@ -424,6 +427,16 @@ const InlineLinesPanel = forwardRef(function InlineLinesPanel({
   const [pendingDelete, setPendingDelete] = useState(null);
   const [invalidCell, setInvalidCell] = useState(null);
 
+  // ETP-4529 — row-expand state for the opt-in `dimensionsPanel` column type (see
+  // `dimensionsColumn` below). At most one row is expanded at a time, mirroring
+  // AmortizationLinesTable's original `expandedId` state that this generalizes.
+  // Both stay unused (and inert) for every table that doesn't declare that column.
+  const [expandedRowId, setExpandedRowId] = useState(null);
+  // Optimistic local overlay for in-flight dimension-field edits, keyed by row id,
+  // so the expand panel doesn't flash back to the pre-save value while the PATCH
+  // (routed through the same `commitField` every other inline edit uses) round-trips.
+  const [pendingDimEdits, setPendingDimEdits] = useState({});
+
   // Active in-flight edit. Holds the latest pending field commit so a global "Save"
   // can flush it via the imperative ref before the document save runs.
   const pendingEditRef = useRef(null);
@@ -457,6 +470,24 @@ const InlineLinesPanel = forwardRef(function InlineLinesPanel({
   const actionStripFlex = trailingColumn
     ? columnFlex(trailingColumn, visibleColumns.indexOf(trailingColumn))
     : '0 0 160px';
+
+  // ETP-4529 — at most one column may declare `type: 'dimensionsPanel'` (see
+  // InvoiceLinesTable.jsx for a caller example). When present, an extra leading
+  // expand-chevron column and a full-width sub-row (the shared DimensionGrid) render
+  // for whichever row is expanded. Fully additive: `dimensionsColumn` is `null` for
+  // every table that doesn't declare this column type, and every render branch below
+  // is gated on it, so behavior for those tables is byte-for-byte unchanged.
+  const dimensionsColumn = useMemo(
+    () => visibleColumns.find(c => c.type === 'dimensionsPanel') ?? null,
+    [visibleColumns]
+  );
+  const dimensionFieldByKey = useMemo(
+    () => Object.fromEntries((dimensionsColumn?.dimensionFields ?? []).map(f => [f.key, f])),
+    [dimensionsColumn]
+  );
+  const handleDimensionFieldChange = useCallback((rowId, key, value) => {
+    setPendingDimEdits(prev => ({ ...prev, [rowId]: { ...(prev[rowId] ?? {}), [key]: value } }));
+  }, []);
 
   const selectableRows = useMemo(() => data || [], [data]);
 
@@ -639,6 +670,12 @@ const InlineLinesPanel = forwardRef(function InlineLinesPanel({
         className="flex items-stretch border-b sticky top-0 z-10 bg-white"
         style={{ borderColor: TOKENS.separator, height: TOKENS.rowHeight, ...headerStyle }}
       >
+        {/* ETP-4529 — leading expand-chevron placeholder, only when a
+            `dimensionsPanel` column is declared (keeps header cells aligned
+            with the body rows' own chevron column below). */}
+        {dimensionsColumn && (
+          <div style={{ width: 32, flexShrink: 0 }} aria-hidden="true" />
+        )}
         <div className="flex items-center justify-center px-2" style={{ width: 40, flexShrink: 0 }}>
           <Checkbox
             aria-label={ui('selectAll')}
@@ -681,10 +718,14 @@ const InlineLinesPanel = forwardRef(function InlineLinesPanel({
         const isHighlighted = selectedRowId === row.id;
         const isDeleting = pendingDelete === row.id;
         const showActions = (isHovered || isEditing) && !isDocumentReadOnly;
+        // ETP-4529 — see `dimensionsColumn` above: both stay `false`/unused for
+        // every table that doesn't declare a `dimensionsPanel` column.
+        const isRowExpanded = Boolean(dimensionsColumn) && expandedRowId === row.id;
+        const dimRowData = pendingDimEdits[row.id] ? { ...row, ...pendingDimEdits[row.id] } : row;
 
         return (
+          <React.Fragment key={row.id}>
           <div
-            key={row.id}
             data-testid={`line-row-${row.id}`}
             className={[
               // `hover:relative hover:z-10` lifts the row above its neighbors so the
@@ -715,6 +756,23 @@ const InlineLinesPanel = forwardRef(function InlineLinesPanel({
               onRowClick(row);
             } : undefined}
           >
+            {/* ETP-4529 — expand toggle for the dimensions sub-row, mirroring
+                AmortizationLinesTable's chevron button (rotates 180deg when expanded). */}
+            {dimensionsColumn && (
+              <div className="flex items-center justify-center" style={{ width: 32, flexShrink: 0 }} onClick={e => e.stopPropagation()}>
+                <button
+                  type="button"
+                  onClick={() => setExpandedRowId(isRowExpanded ? null : row.id)}
+                  className="flex h-7 w-7 items-center justify-center rounded-full border border-[#D1D4DB] bg-white text-[#6C6C89] transition-transform hover:bg-[#F5F7F9] hover:text-[#121217]"
+                  style={{ transform: isRowExpanded ? 'rotate(180deg)' : undefined }}
+                  aria-label={ui(isRowExpanded ? 'collapse' : 'expand')}
+                  aria-expanded={isRowExpanded}
+                  data-testid="dimensions-panel-toggle"
+                >
+                  <ChevronDown className="h-4 w-4" data-testid="ChevronDown__3b7ec2" />
+                </button>
+              </div>
+            )}
             {/* Selection checkbox */}
             <div className="flex items-center justify-center px-2" style={{ width: 40, flexShrink: 0 }}>
               <Checkbox
@@ -726,6 +784,30 @@ const InlineLinesPanel = forwardRef(function InlineLinesPanel({
             </div>
             {/* Cells */}
             {visibleColumns.map((col, idx) => {
+              // ETP-4529 — the `dimensionsPanel` column renders the shared DimSummary
+              // instead of the normal read/edit cell machinery. It is never editable
+              // (not in EDITABLE_TYPES) and never the trailing/amount column.
+              if (col.type === 'dimensionsPanel') {
+                return (
+                  <div
+                    key={col.key}
+                    className="flex items-center"
+                    style={{ padding: `0 ${TOKENS.cellPaddingX}px`, flex: columnFlex(col, idx), minWidth: 0 }}
+                    data-cell-key={col.key}
+                    onClick={e => e.stopPropagation()}
+                  >
+                    <DimSummary
+                      line={dimRowData}
+                      onClick={() => setExpandedRowId(isRowExpanded ? null : row.id)}
+                      processed={isDocumentReadOnly}
+                      labelOverrides={labelOverrides}
+                      fields={col.dimensionFields ?? []}
+                      emptyLabel={col.emptyLabel}
+                      data-testid="DimSummary__3b7ec2" />
+                  </div>
+                );
+              }
+
               const isTrailing = col === trailingColumn;
               // The trailing column is hidden when the action strip is showing,
               // so the icons can take its space. Other amount columns stay visible.
@@ -830,6 +912,39 @@ const InlineLinesPanel = forwardRef(function InlineLinesPanel({
             )}
             <div style={{ width: 48, flexShrink: 0 }} aria-hidden="true" />
           </div>
+          {/* ETP-4529 — full-width dimensions sub-row, directly below the expanded
+              data row. Mirrors AmortizationLinesTable's expand `<tr>` structure:
+              an optional read-only "Organización" field followed by the shared
+              DimensionGrid. Field edits are optimistic (`pendingDimEdits`) and
+              persist through the same `commitField` every other inline edit uses. */}
+          {isRowExpanded && (
+            <div className="border-b bg-white px-10 pb-5 pt-3" style={{ borderColor: TOKENS.separator }} data-testid={`dimensions-panel-${row.id}`}>
+              {row['organization$_identifier'] && (
+                <div className="mb-4 grid grid-cols-4 gap-4">
+                  <div>
+                    <label className="block text-xs font-medium text-muted-foreground mb-1">{ui('organization')} *</label>
+                    <div className="h-10 flex items-center px-3 rounded-lg border border-[#D1D4DB] bg-white text-sm text-foreground">{row['organization$_identifier']}</div>
+                  </div>
+                </div>
+              )}
+              <DimensionGrid
+                fields={dimensionsColumn.dimensionFields ?? []}
+                data={dimRowData}
+                onChange={(key, value) => handleDimensionFieldChange(row.id, key, value)}
+                onFieldSave={(key, value) => {
+                  const field = dimensionFieldByKey[key];
+                  if (field) commitField(row, field, value);
+                }}
+                apiBaseUrl={apiBaseUrl}
+                token={token}
+                readOnly={isDocumentReadOnly}
+                isCompleted={isDocumentReadOnly}
+                labelOverrides={labelOverrides}
+                entityName={entity}
+                data-testid="DimensionGrid__3b7ec2" />
+            </div>
+          )}
+          </React.Fragment>
         );
       })}
     </div>
