@@ -43,7 +43,7 @@ The ownership boundary gate verifies that the four retired files do not exist an
 
 ## Preview compatibility decision
 
-The published-preview gate is pending. The complete Core feature branch must be pushed, its lockstep preview version captured, and Schema Forge must be pinned with `make bump-core-version VERSION=<preview-version>` before the published-preview route, full Vitest, and build gates can run. The preview artifact is not a stable release.
+Core preview `0.3.12-preview.feature-ETP-4584.20260717180344.c7c03a7` was published successfully from `feature/ETP-4584` by the lockstep preview workflow. Schema Forge is pinned to that exact preview. Without `LOCAL_CORE`, the published-package route suite passed (18 tests) and the production build passed. The full consumer Vitest gate remains blocked by pre-existing unrelated failures, including `ReportViewerPage.jsx:999` (`ui is not defined`) and existing `OnboardingPage.vitest.jsx` failures. The preview artifact is not a stable release.
 
 ## QA
 
