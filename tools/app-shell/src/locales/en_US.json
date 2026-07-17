@@ -17210,7 +17210,7 @@
     "supportLater": "Later",
     "supportRatingAriaLabel": "Rating {n}",
     "supportNeedMoreHelp": "Need more help with this?",
-    "supportNewLinkedConversation": "We'll start a new conversation linked to this one.",
+    "supportNewLinkedConversation": "We'll open a new support ticket linked to this one, without losing the thread.",
     "supportAiDisclaimer": "ValerIA can make mistakes. If needed, we'll connect you with an agent.",
     "supportHandoverIntro": "Connecting you with {name} from the support team",
     "supportHandoverStatus": "Active · usually responds within 5 min",

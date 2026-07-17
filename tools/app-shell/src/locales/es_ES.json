@@ -17456,7 +17456,7 @@
     "supportLater": "Más tarde",
     "supportRatingAriaLabel": "Valoración {n}",
     "supportNeedMoreHelp": "¿Necesitas algo más sobre este tema?",
-    "supportNewLinkedConversation": "Empezaremos una nueva conversación enlazada con esta.",
+    "supportNewLinkedConversation": "Abriremos un nuevo ticket de soporte enlazado a este, sin perder el hilo de la charla.",
     "supportAiDisclaimer": "ValerIA puede equivocarse. Si necesitas, te pasamos con un agente.",
     "supportHandoverIntro": "Te paso con {name}, del equipo de soporte",
     "supportHandoverStatus": "Activo · suele responder en menos de 5 min",
