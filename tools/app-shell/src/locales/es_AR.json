@@ -18682,6 +18682,7 @@
     "changePasswordLogoutNotice": "Después de cambiar tu contraseña se cerrará la sesión y deberás iniciar sesión nuevamente.",
     "onboardingPasswordChangedNotice": "Tu contraseña se cambió correctamente. Iniciá sesión con tu nueva contraseña.",
     "onboardingDraftRestoredNotice": "Recuperamos tu progreso guardado para que continúes donde lo dejaste.",
+    "onboardingDraftSaveWarning": "No pudimos guardar tu progreso de configuración. Tus cambios se conservarán en este dispositivo; intentá de nuevo.",
     "onboardingCurrentPasswordLabel": "Contraseña actual",
     "onboardingCredentialChangeSuccess": "Contraseña actualizada.",
     "onboardingCredentialChangeFailed": "No se pudo cambiar la contraseña.",
