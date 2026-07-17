@@ -1,5 +1,14 @@
 import { render, screen, fireEvent, act } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { toast } from 'sonner';
+
+vi.mock('sonner', () => ({
+  toast: {
+    success: vi.fn(),
+    error: vi.fn(),
+    info: vi.fn(),
+  },
+}));
 
 vi.mock('@/i18n', () => ({
   useUI: () => (key, params) => (params ? `${key} ${JSON.stringify(params)}` : key),
@@ -11,6 +20,13 @@ vi.mock('@/i18n', () => ({
 const mockUseAuth = vi.fn(() => ({ username: 'lucas.palacios' }));
 vi.mock('@/auth/AuthContext.jsx', () => ({
   useAuth: () => mockUseAuth(),
+}));
+
+// Attachments without an `id` never trigger a fetch, so this stub is only
+// exercised by tests that explicitly pass an attachment with an id.
+const mockApiFetch = vi.fn();
+vi.mock('@/auth/useApiFetch', () => ({
+  useApiFetch: () => mockApiFetch,
 }));
 
 import { ConversationView } from '../ConversationView.jsx';
@@ -129,6 +145,15 @@ describe('ConversationView', () => {
     expect(screen.queryByText('supportRateExperience')).not.toBeInTheDocument();
   });
 
+  it('hides the rated thank-you banner once a rated conversation is reopened (status back to open)', () => {
+    // `rated` stays true forever once a CSAT score was submitted, but the banner should
+    // only show while the conversation is actually closed — otherwise it lingers on top
+    // of an active, reopened conversation.
+    const conversation = { id: 'c1', status: 'open', rated: true };
+    render(<ConversationView {...baseProps({ conversation })} />);
+    expect(screen.queryByText('supportRatingThanks')).not.toBeInTheDocument();
+  });
+
   it('hides the survey once it has been dismissed', () => {
     const conversation = { id: 'c1', status: 'closed', rated: false, csatDismissed: true };
     render(<ConversationView {...baseProps({ conversation })} />);
@@ -183,11 +208,10 @@ describe('ConversationView', () => {
     expect(screen.getByText('factura.pdf')).toBeInTheDocument();
   });
 
-  it('renders an audio attachment as "Audio" without a play control when no local audio URL is available', () => {
-    const messages = [{ id: 'm1', sender: 'ai', text: 'Nota de voz', attachments: [{ name: 'nota.webm' }] }];
+  it('renders a plain filename for an attachment with no id or mimeType (legacy/optimistic echo)', () => {
+    const messages = [{ id: 'm1', sender: 'ai', text: 'Aquí tenés', attachments: [{ name: 'nota.webm' }] }];
     render(<ConversationView {...baseProps({ messages })} />);
-    expect(screen.getByText('Audio')).toBeInTheDocument();
-    expect(screen.queryByTitle('supportPlayAudio')).not.toBeInTheDocument();
+    expect(screen.getByText('nota.webm')).toBeInTheDocument();
   });
 
   it('shows a day divider before the first timestamped message and whenever the day changes', () => {
@@ -288,54 +312,6 @@ describe('ConversationView', () => {
     expect(onDismissRating).toHaveBeenCalledTimes(1);
   });
 
-  describe('voice recording', () => {
-    beforeEach(() => {
-      global.navigator.mediaDevices = {
-        getUserMedia: vi.fn().mockResolvedValue({ getTracks: () => [{ stop: vi.fn() }] }),
-      };
-      global.URL.createObjectURL = vi.fn(() => 'blob:mock-url');
-
-      class FakeMediaRecorder {
-        constructor() {
-          this.state = 'recording';
-          this.mimeType = 'audio/webm';
-        }
-        start() {}
-        stop() {
-          this.state = 'inactive';
-          this.onstop?.();
-        }
-      }
-      global.MediaRecorder = FakeMediaRecorder;
-    });
-
-    it('starts and stops recording, adding the captured audio as a pending file', async () => {
-      const user = userEvent.setup();
-      const onAddFile = vi.fn();
-      render(<ConversationView {...baseProps({ onAddFile })} />);
-      await user.click(screen.getByLabelText('supportStartRecording'));
-      expect(await screen.findByLabelText('supportStopRecording')).toBeInTheDocument();
-      await user.click(screen.getByLabelText('supportStopRecording'));
-      expect(onAddFile).toHaveBeenCalledTimes(1);
-      expect(onAddFile.mock.calls[0][0]).toBeInstanceOf(File);
-    });
-
-    it('sends the recording immediately when clicking send while recording', async () => {
-      const user = userEvent.setup();
-      const onSend = vi.fn();
-      render(<ConversationView {...baseProps({ onSend })} />);
-      await user.click(screen.getByLabelText('supportStartRecording'));
-      await screen.findByLabelText('supportStopRecording');
-      await user.type(screen.getByPlaceholderText('supportTypeMessage'), 'Nota');
-      await user.click(screen.getByLabelText('send'));
-      expect(onSend).toHaveBeenCalledTimes(1);
-      const [text, files] = onSend.mock.calls[0];
-      expect(text).toBe('Nota');
-      expect(files).toHaveLength(1);
-      expect(files[0]).toBeInstanceOf(File);
-    });
-  });
-
   describe('additional coverage', () => {
     afterEach(() => {
       delete window.AudioContext;
@@ -353,6 +329,97 @@ describe('ConversationView', () => {
       const { container } = render(<ConversationView {...baseProps({ messages })} />);
       const strong = container.querySelector('strong');
       expect(strong).toHaveTextContent('importante');
+    });
+
+    describe('markdown-ish block/inline rendering', () => {
+      it('renders a # heading as a bold paragraph', () => {
+        const messages = [{ id: 'm1', sender: 'ai', text: '# Título principal' }];
+        const { container } = render(<ConversationView {...baseProps({ messages })} />);
+        const strong = container.querySelector('.sc-bubble p strong');
+        expect(strong).toHaveTextContent('Título principal');
+      });
+
+      it('renders a bullet list (- item) as <ul><li>', () => {
+        const messages = [{ id: 'm1', sender: 'ai', text: '- Uno\n- Dos\n- Tres' }];
+        const { container } = render(<ConversationView {...baseProps({ messages })} />);
+        const items = container.querySelectorAll('.sc-bubble ul li');
+        expect(items).toHaveLength(3);
+        expect(items[0]).toHaveTextContent('Uno');
+        expect(items[2]).toHaveTextContent('Tres');
+      });
+
+      it('renders a bullet list using * markers the same as -', () => {
+        const messages = [{ id: 'm1', sender: 'ai', text: '* Alfa\n* Beta' }];
+        const { container } = render(<ConversationView {...baseProps({ messages })} />);
+        const items = container.querySelectorAll('.sc-bubble ul li');
+        expect(items).toHaveLength(2);
+      });
+
+      it('renders an ordered list (1. item) as <ol><li>', () => {
+        const messages = [{ id: 'm1', sender: 'ai', text: '1. Primero\n2. Segundo' }];
+        const { container } = render(<ConversationView {...baseProps({ messages })} />);
+        const list = container.querySelector('.sc-bubble ol');
+        expect(list).toBeInTheDocument();
+        const items = list.querySelectorAll('li');
+        expect(items).toHaveLength(2);
+        expect(items[0]).toHaveTextContent('Primero');
+        expect(items[1]).toHaveTextContent('Segundo');
+      });
+
+      it('renders a plain paragraph with <br/> between continuation lines', () => {
+        const messages = [{ id: 'm1', sender: 'ai', text: 'Línea uno\nLínea dos' }];
+        const { container } = render(<ConversationView {...baseProps({ messages })} />);
+        const p = container.querySelector('.sc-bubble p');
+        expect(p.querySelectorAll('br')).toHaveLength(1);
+        expect(p).toHaveTextContent('Línea unoLínea dos');
+      });
+
+      it('renders *italic* segments as <em>', () => {
+        const messages = [{ id: 'm1', sender: 'ai', text: 'Esto es *importante* de verdad' }];
+        const { container } = render(<ConversationView {...baseProps({ messages })} />);
+        const em = container.querySelector('.sc-bubble em');
+        expect(em).toHaveTextContent('importante');
+        expect(container.querySelector('.sc-bubble strong')).not.toBeInTheDocument();
+      });
+
+      it('does not misparse **bold** as two *italic* runs', () => {
+        const messages = [{ id: 'm1', sender: 'ai', text: 'Esto es **muy importante** che' }];
+        const { container } = render(<ConversationView {...baseProps({ messages })} />);
+        const strong = container.querySelectorAll('.sc-bubble strong');
+        expect(strong).toHaveLength(1);
+        expect(strong[0]).toHaveTextContent('muy importante');
+        expect(container.querySelector('.sc-bubble em')).not.toBeInTheDocument();
+      });
+
+      it('renders `code` segments as <code>', () => {
+        const messages = [{ id: 'm1', sender: 'ai', text: 'Ejecutá `npm install` primero' }];
+        const { container } = render(<ConversationView {...baseProps({ messages })} />);
+        const code = container.querySelector('.sc-bubble code');
+        expect(code).toHaveTextContent('npm install');
+      });
+
+      it('renders a markdown [label](https://...) link as a clickable, safe <a>', () => {
+        const messages = [{ id: 'm1', sender: 'ai', text: 'Mirá [la doc](https://docs.example.com/guia)' }];
+        const { container } = render(<ConversationView {...baseProps({ messages })} />);
+        const link = container.querySelector('.sc-bubble a');
+        expect(link).toHaveTextContent('la doc');
+        expect(link).toHaveAttribute('href', 'https://docs.example.com/guia');
+        expect(link).toHaveAttribute('target', '_blank');
+        expect(link).toHaveAttribute('rel', 'noopener noreferrer');
+      });
+
+      it('does NOT turn a javascript: URL into a clickable link (XSS guard)', () => {
+        const messages = [{ id: 'm1', sender: 'ai', text: 'Click [acá](javascript:alert(1))' }];
+        const { container } = render(<ConversationView {...baseProps({ messages })} />);
+        expect(container.querySelector('.sc-bubble a')).not.toBeInTheDocument();
+        expect(screen.getByText(/\[acá\]\(javascript:alert\(1\)\)/)).toBeInTheDocument();
+      });
+
+      it('does NOT turn a data: URL into a clickable link (XSS guard)', () => {
+        const messages = [{ id: 'm1', sender: 'ai', text: 'Ver [imagen](data:text/html,<script>alert(1)</script>)' }];
+        const { container } = render(<ConversationView {...baseProps({ messages })} />);
+        expect(container.querySelector('.sc-bubble a')).not.toBeInTheDocument();
+      });
     });
 
     it('splits a message with a blank line into separate paragraphs', () => {
@@ -417,45 +484,6 @@ describe('ConversationView', () => {
       expect(closeSpy).toHaveBeenCalled();
     });
 
-    it('toggles playback of a locally recorded audio bubble on repeated clicks', async () => {
-      const user = userEvent.setup();
-      const nowSpy = vi.spyOn(Date, 'now').mockReturnValue(1700000000000);
-      global.navigator.mediaDevices = {
-        getUserMedia: vi.fn().mockResolvedValue({ getTracks: () => [{ stop: vi.fn() }] }),
-      };
-      global.URL.createObjectURL = vi.fn(() => 'blob:mock-url');
-      class FakeMediaRecorder {
-        constructor() { this.state = 'recording'; this.mimeType = 'audio/webm'; }
-        start() {}
-        stop() { this.state = 'inactive'; this.onstop?.(); }
-      }
-      global.MediaRecorder = FakeMediaRecorder;
-
-      const onAddFile = vi.fn();
-      const messages = [{ id: 'm1', sender: 'ai', text: 'Nota', attachments: [{ name: 'audio-1700000000000.webm' }] }];
-      render(<ConversationView {...baseProps({ onAddFile, messages })} />);
-      await user.click(screen.getByLabelText('supportStartRecording'));
-      await screen.findByLabelText('supportStopRecording');
-      await user.click(screen.getByLabelText('supportStopRecording'));
-      expect(onAddFile).toHaveBeenCalledTimes(1);
-
-      const playButton = await screen.findByTitle('supportPlayAudio');
-      await user.click(playButton);
-      expect(screen.getByTitle('supportStopAudio')).toBeInTheDocument();
-      await user.click(screen.getByTitle('supportStopAudio'));
-      expect(screen.getByTitle('supportPlayAudio')).toBeInTheDocument();
-      nowSpy.mockRestore();
-    });
-
-    it('plays a pending audio attachment from the composer', async () => {
-      const user = userEvent.setup();
-      global.URL.createObjectURL = vi.fn(() => 'blob:mock-url');
-      const file = new File(['x'], 'nota.webm', { type: 'audio/webm' });
-      render(<ConversationView {...baseProps({ pendingFiles: [file] })} />);
-      await user.click(screen.getByTitle('supportPlayAudio'));
-      expect(global.URL.createObjectURL).toHaveBeenCalledWith(file);
-    });
-
     it('shows a "new messages" divider once earlier messages are marked as seen', () => {
       const initialMessages = [
         { id: 'm1', sender: 'user', text: 'Hola' },
@@ -468,25 +496,6 @@ describe('ConversationView', () => {
       const withNewMessage = [...initialMessages, { id: 'm3', sender: 'bot', text: 'Nuevo mensaje' }];
       rerender(<ConversationView {...baseProps({ isLoadingMessages: false, messages: withNewMessage })} />);
       expect(screen.getByText('supportNewDivider')).toBeInTheDocument();
-    });
-
-    it('stops an in-progress recording when the component unmounts', async () => {
-      const user = userEvent.setup();
-      global.navigator.mediaDevices = {
-        getUserMedia: vi.fn().mockResolvedValue({ getTracks: () => [{ stop: vi.fn() }] }),
-      };
-      const stop = vi.fn();
-      class FakeMediaRecorder {
-        constructor() { this.state = 'recording'; this.mimeType = 'audio/webm'; }
-        start() {}
-        stop = stop;
-      }
-      global.MediaRecorder = FakeMediaRecorder;
-      const { unmount } = render(<ConversationView {...baseProps()} />);
-      await user.click(screen.getByLabelText('supportStartRecording'));
-      await screen.findByLabelText('supportStopRecording');
-      unmount();
-      expect(stop).toHaveBeenCalled();
     });
 
     it('shows the drop overlay only while dragging and hides it on drag-leave', () => {
@@ -551,21 +560,140 @@ describe('ConversationView', () => {
       expect(screen.queryByLabelText('moreOptions')).not.toBeInTheDocument();
     });
 
-    it('silently ignores a denied microphone permission when starting to record', async () => {
-      const user = userEvent.setup();
-      global.navigator.mediaDevices = {
-        getUserMedia: vi.fn().mockRejectedValue(new Error('denied')),
-      };
-      render(<ConversationView {...baseProps()} />);
-      await user.click(screen.getByLabelText('supportStartRecording'));
-      await act(async () => { await Promise.resolve(); await Promise.resolve(); });
-      expect(screen.queryByLabelText('supportStopRecording')).not.toBeInTheDocument();
+    it('re-triggers auto-scroll when the conversation transitions to closed (revealing the CSAT card below the last message)', () => {
+      // The messages array doesn't change when a conversation is closed (no new message is
+      // appended), so `conversation?.status` has to be its own dependency for the
+      // scroll-to-bottom effect to fire and reveal the CSAT/reopen card below the thread.
+      const scrollToSpy = vi.fn();
+      const realScrollTo = Element.prototype.scrollTo;
+      Element.prototype.scrollTo = scrollToSpy;
+      try {
+        const messages = [{ id: 'm1', sender: 'user', text: 'Hola' }];
+        const conversation = { id: 'c1', status: 'open', rated: false };
+        const { rerender } = render(<ConversationView {...baseProps({ conversation, messages })} />);
+        scrollToSpy.mockClear();
+        rerender(<ConversationView {...baseProps({ conversation: { ...conversation, status: 'closed' }, messages })} />);
+        expect(scrollToSpy).toHaveBeenCalledWith({ top: 1e6, behavior: 'smooth' });
+      } finally {
+        Element.prototype.scrollTo = realScrollTo;
+      }
     });
 
     it('shows an empty first-name greeting when there is no authenticated username', () => {
       mockUseAuth.mockReturnValueOnce({ username: '' });
       render(<ConversationView {...baseProps({ conversation: null })} />);
       expect(screen.getByText(/supportWelcomeBubble1/)).toBeInTheDocument();
+    });
+  });
+
+  describe('attachment type validation', () => {
+    beforeEach(() => {
+      toast.error.mockClear();
+    });
+
+    it('adds an allowed document selected via the hidden file input', () => {
+      const onAddFile = vi.fn();
+      const { container } = render(<ConversationView {...baseProps({ onAddFile })} />);
+      const input = container.querySelector('input[type="file"]');
+      const file = new File(['%PDF-1.4'], 'invoice.pdf', { type: 'application/pdf' });
+      fireEvent.change(input, { target: { files: [file] } });
+      expect(onAddFile).toHaveBeenCalledWith(file);
+      expect(toast.error).not.toHaveBeenCalled();
+    });
+
+    it('adds an allowed image selected via the hidden file input', () => {
+      const onAddFile = vi.fn();
+      const { container } = render(<ConversationView {...baseProps({ onAddFile })} />);
+      const input = container.querySelector('input[type="file"]');
+      const file = new File(['\x89PNG'], 'photo.png', { type: 'image/png' });
+      fireEvent.change(input, { target: { files: [file] } });
+      expect(onAddFile).toHaveBeenCalledWith(file);
+    });
+
+    it('rejects a disallowed audio file selected via the hidden file input and shows the unsupported-type error', () => {
+      const onAddFile = vi.fn();
+      const { container } = render(<ConversationView {...baseProps({ onAddFile })} />);
+      const input = container.querySelector('input[type="file"]');
+      const file = new File(['fake-audio'], 'nota.mp3', { type: 'audio/mpeg' });
+      fireEvent.change(input, { target: { files: [file] } });
+      expect(onAddFile).not.toHaveBeenCalled();
+      expect(toast.error).toHaveBeenCalledWith('supportUnsupportedFileType {"name":"nota.mp3"}');
+    });
+
+    it('rejects a disallowed video file dropped onto the conversation (drag-and-drop bypassed validation before this fix)', () => {
+      const onAddFile = vi.fn();
+      const { container } = render(<ConversationView {...baseProps({ onAddFile })} />);
+      const wrap = container.querySelector('.sc-conv-wrap');
+      const file = new File(['fake-video'], 'clip.mp4', { type: 'video/mp4' });
+      fireEvent.drop(wrap, { dataTransfer: { files: [file] } });
+      expect(onAddFile).not.toHaveBeenCalled();
+      expect(toast.error).toHaveBeenCalledWith('supportUnsupportedFileType {"name":"clip.mp4"}');
+    });
+
+    it('accepts an allowed document dropped onto the conversation', () => {
+      const onAddFile = vi.fn();
+      const { container } = render(<ConversationView {...baseProps({ onAddFile })} />);
+      const wrap = container.querySelector('.sc-conv-wrap');
+      const file = new File(['col1,col2'], 'data.csv', { type: 'text/csv' });
+      fireEvent.drop(wrap, { dataTransfer: { files: [file] } });
+      expect(onAddFile).toHaveBeenCalledWith(file);
+      expect(toast.error).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('inbound attachment rendering (AttachmentItem)', () => {
+    const realCreateObjectURL = global.URL.createObjectURL;
+    const realRevokeObjectURL = global.URL.revokeObjectURL;
+
+    beforeEach(() => {
+      mockApiFetch.mockReset();
+      global.URL.createObjectURL = vi.fn(() => 'blob:mock-url');
+      global.URL.revokeObjectURL = vi.fn();
+    });
+
+    afterEach(() => {
+      global.URL.createObjectURL = realCreateObjectURL;
+      global.URL.revokeObjectURL = realRevokeObjectURL;
+    });
+
+    it('renders an image attachment as a thumbnail via authenticated fetch', async () => {
+      mockApiFetch.mockResolvedValueOnce({ ok: true, blob: async () => new Blob(['img']) });
+      const messages = [{
+        id: 'm1',
+        sender: 'ai',
+        text: 'Mirá esto',
+        attachments: [{ id: 'att-1', filename: 'foto.png', mimeType: 'image/png' }],
+      }];
+      render(<ConversationView {...baseProps({ messages })} />);
+      expect(mockApiFetch).toHaveBeenCalledWith('/sws/support/attachments/att-1');
+      const img = await screen.findByAltText('foto.png');
+      expect(img).toHaveAttribute('src', 'blob:mock-url');
+    });
+
+    it('renders a document attachment (pdf) as a download control, not an image', async () => {
+      mockApiFetch.mockResolvedValueOnce({ ok: true, blob: async () => new Blob(['pdf']) });
+      const messages = [{
+        id: 'm1',
+        sender: 'ai',
+        text: 'Aquí el archivo',
+        attachments: [{ id: 'att-2', filename: 'reporte.pdf', mimeType: 'application/pdf' }],
+      }];
+      render(<ConversationView {...baseProps({ messages })} />);
+      const downloadBtn = await screen.findByRole('button', { name: 'reporte.pdf' });
+      expect(downloadBtn.tagName).toBe('BUTTON');
+      expect(screen.queryByAltText('reporte.pdf')).not.toBeInTheDocument();
+    });
+
+    it('renders the neutral unsupported fallback for a mimetype outside the allowed set, without fetching it', () => {
+      const messages = [{
+        id: 'm1',
+        sender: 'human',
+        text: 'Adjunto desde Jira',
+        attachments: [{ id: 'att-3', filename: 'clip.mp4', mimeType: 'video/mp4' }],
+      }];
+      render(<ConversationView {...baseProps({ messages })} />);
+      expect(screen.getByText('supportAttachmentUnsupported')).toBeInTheDocument();
+      expect(mockApiFetch).not.toHaveBeenCalled();
     });
   });
 });
