@@ -53,13 +53,13 @@ export function TopClientsList({ clients = [], currencyLabel = '', token = '', a
   };
 
   return (
-    <div className="rounded-xl border overflow-hidden bg-card flex flex-col h-full" style={{ borderColor: '#E8EAEF' }}>
+    <div className="rounded-xl border overflow-hidden bg-card flex flex-col h-full" style={{ borderColor: 'hsl(var(--border-subtle))' }}>
       {/* Cabecera */}
       <div
         className="flex items-center border-b"
-        style={{ backgroundColor: '#F5F7F9', borderBottomColor: '#E8EAEF', padding: '8px 12px', minHeight: '48px' }}
+        style={{ backgroundColor: 'hsl(var(--muted))', borderBottomColor: 'hsl(var(--border-subtle))', padding: '8px 12px', minHeight: '48px' }}
       >
-        <span className="text-xs font-medium uppercase" style={{ color: '#282833', letterSpacing: 0 }}>
+        <span className="text-xs font-medium uppercase" style={{ color: 'hsl(var(--foreground))', letterSpacing: 0 }}>
           {ui('topClientsTitle')}
         </span>
       </div>
@@ -68,10 +68,10 @@ export function TopClientsList({ clients = [], currencyLabel = '', token = '', a
         <div className="flex-1 flex items-center justify-center">
           <div className="flex flex-col items-center" style={{ gap: '12px', width: '340px' }}>
             <div className="flex flex-col items-center" style={{ gap: '4px' }}>
-              <p style={{ fontSize: '20px', fontWeight: 600, lineHeight: '28px', textAlign: 'center', color: '#121217' }}>
+              <p style={{ fontSize: '20px', fontWeight: 600, lineHeight: '28px', textAlign: 'center', color: 'hsl(var(--foreground))' }}>
                 {ui('topClientsEmptyTitle')}
               </p>
-              <p style={{ fontSize: '12px', fontWeight: 400, lineHeight: '16px', textAlign: 'center', color: '#282833' }}>
+              <p style={{ fontSize: '12px', fontWeight: 400, lineHeight: '16px', textAlign: 'center', color: 'hsl(var(--foreground))' }}>
                 {ui('topClientsEmptySubtitle')}
               </p>
             </div>
@@ -80,12 +80,12 @@ export function TopClientsList({ clients = [], currencyLabel = '', token = '', a
                 type="button"
                 onClick={openCopilot}
                 className="flex items-center justify-center"
-                style={{ padding: '4px 8px', height: '32px', background: '#FFFFFF', border: '1px solid #D1D4DB', boxShadow: '0px 1px 2px rgba(18,18,23,0.05)', borderRadius: '8px', gap: '4px', cursor: 'pointer' }}
+                style={{ padding: '4px 8px', height: '32px', background: 'hsl(var(--card))', border: '1px solid hsl(var(--border-control))', boxShadow: '0px 1px 2px hsl(var(--foreground) / 0.05)', borderRadius: '8px', gap: '4px', cursor: 'pointer' }}
               >
                 <Sparkles
-                  style={{ width: '20px', height: '20px', color: '#828FA3' }}
+                  style={{ width: '20px', height: '20px', color: 'hsl(var(--text-disabled))' }}
                   data-testid="Sparkles__2d735a" />
-                <span style={{ fontSize: '14px', fontWeight: 500, lineHeight: '24px', color: '#121217' }}>
+                <span style={{ fontSize: '14px', fontWeight: 500, lineHeight: '24px', color: 'hsl(var(--foreground))' }}>
                   {ui('createWithCopilot')}
                 </span>
               </button>
@@ -93,12 +93,12 @@ export function TopClientsList({ clients = [], currencyLabel = '', token = '', a
                 type="button"
                 onClick={() => navigate('/contacts/new')}
                 className="flex items-center justify-center"
-                style={{ padding: '4px 8px', height: '32px', background: '#121217', borderRadius: '8px', gap: '4px', cursor: 'pointer', border: 'none' }}
+                style={{ padding: '4px 8px', height: '32px', background: 'hsl(var(--foreground))', borderRadius: '8px', gap: '4px', cursor: 'pointer', border: 'none' }}
               >
                 <Plus
                   style={{ width: '20px', height: '20px', color: 'rgba(255,255,255,0.9)' }}
                   data-testid="Plus__2d735a" />
-                <span style={{ fontSize: '14px', fontWeight: 500, lineHeight: '24px', color: '#FFFFFF' }}>
+                <span style={{ fontSize: '14px', fontWeight: 500, lineHeight: '24px', color: 'hsl(var(--card))' }}>
                   {ui('newClient')}
                 </span>
               </button>
@@ -112,19 +112,19 @@ export function TopClientsList({ clients = [], currencyLabel = '', token = '', a
               key={c.name || i}
               type="button"
               onClick={() => handleClick(c)}
-              className="bg-transparent hover:bg-[#F5F7F9] transition-colors w-full text-left"
+              className="bg-transparent hover:bg-[hsl(var(--muted))] transition-colors w-full text-left"
               style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', padding: '4px 8px', height: '32px', border: 'none', cursor: 'pointer' }}
             >
               {/* Value: nombre del cliente, padding 0 16px 0 8px, flex-grow */}
               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', padding: '0 16px 0 8px', flex: 1, minWidth: 0 }}>
-                <span style={{ fontWeight: 400, fontSize: '14px', lineHeight: '24px', color: '#121217', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', width: '100%' }}>
+                <span style={{ fontWeight: 400, fontSize: '14px', lineHeight: '24px', color: 'hsl(var(--foreground))', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', width: '100%' }}>
                   {c.name}
                 </span>
               </div>
 
               {/* Keyboard Shortcut: badge con monto */}
               <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'flex-start', padding: '0 8px 0 0', flexShrink: 0 }}>
-                <span style={{ display: 'inline-flex', flexDirection: 'row', justifyContent: 'center', alignItems: 'center', padding: '0 8px', height: '24px', border: '1px solid #D1D4DB', borderRadius: '360px', fontSize: '12px', fontWeight: 400, lineHeight: '24px', color: '#6C6C89', whiteSpace: 'nowrap' }}>
+                <span style={{ display: 'inline-flex', flexDirection: 'row', justifyContent: 'center', alignItems: 'center', padding: '0 8px', height: '24px', border: '1px solid hsl(var(--border-control))', borderRadius: '360px', fontSize: '12px', fontWeight: 400, lineHeight: '24px', color: 'hsl(var(--muted-foreground))', whiteSpace: 'nowrap' }}>
                   {formatDashboardAmount(c.total, currencyLabel, numberLocale)}
                 </span>
               </div>
@@ -132,7 +132,7 @@ export function TopClientsList({ clients = [], currencyLabel = '', token = '', a
               {/* Trailing: chevron 24x24, padding 0 4px 0 0 */}
               <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'flex-start', padding: '0 4px 0 0', width: '28px', height: '24px', flexShrink: 0 }}>
                 <ChevronRight
-                  style={{ width: '16px', height: '16px', color: '#828FA3' }}
+                  style={{ width: '16px', height: '16px', color: 'hsl(var(--text-disabled))' }}
                   data-testid="ChevronRight__2d735a" />
               </div>
             </button>

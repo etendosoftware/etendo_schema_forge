@@ -43,7 +43,7 @@ export function FinancialSummaryCard({ kpis = [], currencyLabel = '' }) {
         height: '100%',
         minWidth: 0,
         padding: '0px',
-        border: '1px solid #E8EAEF',
+        border: '1px solid hsl(var(--border-subtle))',
         borderRadius: '8px',
       }}
     >
@@ -55,8 +55,8 @@ export function FinancialSummaryCard({ kpis = [], currencyLabel = '' }) {
           height: '48px',
           padding: '8px 12px',
           gap: '16px',
-          backgroundColor: '#F5F7F9',
-          borderBottom: '1px solid #E8EAEF',
+          backgroundColor: 'hsl(var(--muted))',
+          borderBottom: '1px solid hsl(var(--border-subtle))',
         }}
       >
         <span
@@ -67,7 +67,7 @@ export function FinancialSummaryCard({ kpis = [], currencyLabel = '' }) {
             fontWeight: 500,
             fontSize: '12px',
             lineHeight: '16px',
-            color: '#282833',
+            color: 'hsl(var(--foreground))',
             whiteSpace: 'nowrap',
           }}
         >
@@ -78,10 +78,10 @@ export function FinancialSummaryCard({ kpis = [], currencyLabel = '' }) {
         <div className="flex-1 flex items-center justify-center w-full">
           <div className="flex flex-col items-center" style={{ gap: '12px' }}>
             <div className="flex flex-col items-center" style={{ gap: '4px' }}>
-              <p style={{ width: '340px', fontSize: '20px', fontWeight: 600, lineHeight: '28px', textAlign: 'center', color: '#121217' }}>
+              <p style={{ width: '340px', fontSize: '20px', fontWeight: 600, lineHeight: '28px', textAlign: 'center', color: 'hsl(var(--foreground))' }}>
                 {ui('financialSummaryEmptyTitle')}
               </p>
-              <p style={{ fontSize: '12px', fontWeight: 400, lineHeight: '16px', textAlign: 'center', color: '#282833' }}>
+              <p style={{ fontSize: '12px', fontWeight: 400, lineHeight: '16px', textAlign: 'center', color: 'hsl(var(--foreground))' }}>
                 {ui('financialSummaryEmptySubtitle')}
               </p>
             </div>
@@ -90,12 +90,12 @@ export function FinancialSummaryCard({ kpis = [], currencyLabel = '' }) {
                 type="button"
                 onClick={() => navigate('/purchase-invoice/new')}
                 className="flex items-center justify-center"
-                style={{ padding: '4px 8px', height: '32px', background: '#121217', borderRadius: '8px', gap: '4px', cursor: 'pointer', border: 'none' }}
+                style={{ padding: '4px 8px', height: '32px', background: 'hsl(var(--foreground))', borderRadius: '8px', gap: '4px', cursor: 'pointer', border: 'none' }}
               >
                 <Plus
                   style={{ width: '20px', height: '20px', color: 'rgba(255,255,255,0.9)' }}
                   data-testid="Plus__81e75f" />
-                <span style={{ fontSize: '14px', fontWeight: 500, lineHeight: '24px', color: '#FFFFFF' }}>
+                <span style={{ fontSize: '14px', fontWeight: 500, lineHeight: '24px', color: 'hsl(var(--card))' }}>
                   {ui('newPurchase')}
                 </span>
               </button>
@@ -103,12 +103,12 @@ export function FinancialSummaryCard({ kpis = [], currencyLabel = '' }) {
                 type="button"
                 onClick={() => navigate('/sales-invoice/new')}
                 className="flex items-center justify-center"
-                style={{ padding: '4px 8px', height: '32px', background: '#121217', borderRadius: '8px', gap: '4px', cursor: 'pointer', border: 'none' }}
+                style={{ padding: '4px 8px', height: '32px', background: 'hsl(var(--foreground))', borderRadius: '8px', gap: '4px', cursor: 'pointer', border: 'none' }}
               >
                 <Plus
                   style={{ width: '20px', height: '20px', color: 'rgba(255,255,255,0.9)' }}
                   data-testid="Plus__81e75f" />
-                <span style={{ fontSize: '14px', fontWeight: 500, lineHeight: '24px', color: '#FFFFFF' }}>
+                <span style={{ fontSize: '14px', fontWeight: 500, lineHeight: '24px', color: 'hsl(var(--card))' }}>
                   {ui('newSale')}
                 </span>
               </button>
@@ -141,12 +141,12 @@ export function FinancialSummaryCard({ kpis = [], currencyLabel = '' }) {
               height: '20px',
               flexShrink: 0,
               padding: '0px',
-              backgroundColor: '#EEFBF4',
+              backgroundColor: 'var(--status-success-bg)',
               borderRadius: '10px',
             }}
           >
             <Check
-              style={{ width: '12.5px', height: '12.5px', color: '#17663A' }}
+              style={{ width: '12.5px', height: '12.5px', color: 'var(--status-success-fg)' }}
               data-testid="Check__81e75f" />
           </div>
           <span
@@ -158,7 +158,7 @@ export function FinancialSummaryCard({ kpis = [], currencyLabel = '' }) {
               fontWeight: 400,
               fontSize: '12px',
               lineHeight: '16px',
-              color: '#17663A',
+              color: 'var(--status-success-fg)',
               whiteSpace: 'nowrap',
               overflow: 'hidden',
               textOverflow: 'ellipsis',
@@ -188,8 +188,8 @@ export function FinancialSummaryCard({ kpis = [], currencyLabel = '' }) {
             const formattedValue = kpi ? formatDashboardCompact(kpi.value, { currencyLabel, locale: numberLocale }) : '—';
             const valueTypography = getMetricValueTypography(formattedValue);
             const badgeStyle = trendPositive
-              ? { backgroundColor: '#EEFBF4', color: '#17663A' }
-              : { backgroundColor: '#FEF0F4', color: '#D50B3E' };
+              ? { backgroundColor: 'var(--status-success-bg)', color: 'var(--status-success-fg)' }
+              : { backgroundColor: 'var(--status-destructive-bg)', color: 'hsl(var(--destructive))' };
 
             return (
               <div
@@ -200,7 +200,7 @@ export function FinancialSummaryCard({ kpis = [], currencyLabel = '' }) {
                   height: '130px',
                   padding: '0px',
                   gap: '8px',
-                  filter: 'drop-shadow(0px 1px 2px rgba(18, 18, 23, 0.05))',
+                  filter: 'drop-shadow(0px 1px 2px hsl(var(--foreground) / 0.05))',
                   borderRadius: '8px',
                   alignSelf: 'stretch',
                   flexGrow: 1,
@@ -215,7 +215,7 @@ export function FinancialSummaryCard({ kpis = [], currencyLabel = '' }) {
                       fontSize: '14px',
                       fontWeight: 400,
                       lineHeight: '20px',
-                      color: '#3F3F50',
+                      color: 'hsl(var(--muted-foreground))',
                       whiteSpace: 'nowrap',
                     }}
                   >
@@ -229,7 +229,7 @@ export function FinancialSummaryCard({ kpis = [], currencyLabel = '' }) {
                       height: '32px',
                       ...valueTypography,
                       fontWeight: 500,
-                      color: '#121217',
+                      color: 'hsl(var(--foreground))',
                       whiteSpace: 'nowrap',
                       overflow: 'hidden',
                       textOverflow: 'ellipsis',

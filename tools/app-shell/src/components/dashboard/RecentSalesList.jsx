@@ -61,7 +61,7 @@ export function RecentSalesList({ invoices = [], currencyLabel = '' }) {
                     entityType: 'sales_invoice',
                     source: 'dashboard_recent_sales',
                   })}
-                  className="hover:bg-[#F5F7F9] transition-colors"
+                  className="hover:bg-[hsl(var(--muted))] transition-colors"
                   style={{
                     display: 'flex',
                     flexDirection: 'row',
@@ -93,7 +93,7 @@ export function RecentSalesList({ invoices = [], currencyLabel = '' }) {
                         fontWeight: 400,
                         fontSize: '14px',
                         lineHeight: '24px',
-                        color: '#121217',
+                        color: 'hsl(var(--foreground))',
                         overflow: 'hidden',
                         textOverflow: 'ellipsis',
                         whiteSpace: 'nowrap',
@@ -121,7 +121,7 @@ export function RecentSalesList({ invoices = [], currencyLabel = '' }) {
                         alignItems: 'center',
                         padding: '4px 8px',
                         height: '24px',
-                        background: '#F5F7F9',
+                        background: 'hsl(var(--muted))',
                         borderRadius: '360px',
                       }}
                     >
@@ -143,7 +143,7 @@ export function RecentSalesList({ invoices = [], currencyLabel = '' }) {
                             fontWeight: 400,
                             fontSize: '12px',
                             lineHeight: '16px',
-                            color: '#3F3F50',
+                            color: 'hsl(var(--muted-foreground))',
                             whiteSpace: 'nowrap',
                           }}
                         >
@@ -172,7 +172,7 @@ export function RecentSalesList({ invoices = [], currencyLabel = '' }) {
                         alignItems: 'center',
                         padding: '0px 8px',
                         height: '24px',
-                        border: '1px solid #D1D4DB',
+                        border: '1px solid hsl(var(--border-control))',
                         borderRadius: '360px',
                       }}
                     >
@@ -184,7 +184,7 @@ export function RecentSalesList({ invoices = [], currencyLabel = '' }) {
                           fontWeight: 400,
                           fontSize: '12px',
                           lineHeight: '24px',
-                          color: '#6C6C89',
+                          color: 'hsl(var(--muted-foreground))',
                           whiteSpace: 'nowrap',
                         }}
                       >
