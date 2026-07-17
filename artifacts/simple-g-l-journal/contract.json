@@ -1,8 +1,8 @@
 {
-  "version": "0.17.0",
+  "version": "0.18.0",
   "generatedAt": "2026-06-16T16:34:09.049Z",
-  "updatedAt": "2026-07-17T14:02:48.772Z",
-  "checksum": "cfa7e4932332754d",
+  "updatedAt": "2026-07-17T18:53:33.098Z",
+  "checksum": "b5fa1d05fb892c01",
   "frontendContract": {
     "window": {
       "id": "B917E8A7B0864ACEA9D941E3B7494E53",
@@ -570,6 +570,7 @@
             "form": true,
             "reference": "BPartner",
             "inputMode": "search",
+            "dimensionsPanel": true,
             "displayLogic": {
               "raw": "@Open_Items@='Y' | @ACCT_DIMENSION_DISPLAY@",
               "evaluable": false,
@@ -596,6 +597,7 @@
             "form": true,
             "reference": "Product",
             "inputMode": "selector",
+            "dimensionsPanel": true,
             "displayLogic": {
               "raw": "@ACCT_DIMENSION_DISPLAY@",
               "evaluable": false,
@@ -621,6 +623,7 @@
             "form": true,
             "reference": "Project",
             "inputMode": "search",
+            "dimensionsPanel": true,
             "displayLogic": {
               "raw": "@ACCT_DIMENSION_DISPLAY@",
               "evaluable": false,
@@ -670,6 +673,7 @@
             "form": true,
             "reference": "Costcenter",
             "inputMode": "selector",
+            "dimensionsPanel": true,
             "displayLogic": {
               "raw": "@ACCT_DIMENSION_DISPLAY@",
               "evaluable": false,

@@ -48,7 +48,7 @@ Records are typically created from the **Assets** window via the **Create Amorti
 - **New record currency default**: the `currency` field defaults to the org's functional currency via `defaultExpr: "@$C_Currency_ID@"` in decisions.json. Currency is classified `readOnly`, so it is displayed but never editable from this window.
 - **Main list total**: the `totalAmortization` column uses `type: 'amount'` (with `summable: true`) so it renders with the currency symbol and a column footer total.
 - **Status filter dropdown**: the list toolbar shows an "All statuses ▾" dropdown (same mechanism as Sales Order). It filters by `processed` column value: 'N' → Borrador/Draft, 'Y' → Procesado/Processed. The `processed` column is in the table schema (type `status`, `filterOnly: true`) so `ListFilterBar` can detect it, but is hidden from visual display via `hiddenColumns` and excluded from the Conditional Filter via `filterable: false`.
-- Header accounting dimensions are discarded: `project`, `salesCampaign`, `activity`, `stDimension`, `ndDimension` are not surfaced on the header.
+- Header accounting dimensions: `salesCampaign`, `activity`, `stDimension`, `ndDimension` are discarded and not surfaced on the header. `project` **is** surfaced (config-gated — see the ETP-4529 header section below); it is the one header dimension the ETP-4529 matrix requires (TC-104).
 - **Line accounting dimensions**: only **Project**, **Cost Center**, and **Contact** are shown in the per-line expand panel. The remaining dimensions (1st/2nd Dimension, Sales Region, Activity, Sales Campaign) are discarded. **Product** is not shown on amortization lines.
 - **"+ Add dimensions" trigger**: on a line with no dimensions set, the dashed "+ Añadir dimensiones" affordance is shown only while the document is editable. When the document is **processed** and the line has no dimensions, the trigger is hidden entirely (there is nothing to reveal but disabled fields). When a line has at least one dimension set, the value(s) render as read-only "Label: Value" chips regardless of state.
 - **Others tab removed**: the empty "Others" tab is gone. Its Accounting Status field (`etblkpAccountingstatus`) is discarded and no longer appears in the header, and the `etblkpBulkposting` label was removed from the summary/footer area.
@@ -305,6 +305,31 @@ the project dimension (no hidden: true on any candidate entry)", updated for the
 `AmortizationLinesTable.vitest.jsx` gained coverage for the config-driven filtering
 (a candidate dropping out of both `DimSummary` and the expand panel when the evaluator
 returns `visibility[key] === false`). All suites pass.
+
+### Header `project` was fully discarded instead of config-gated (ETP-4529 gap fix)
+
+The ETP-4529 matrix's own test case (TC-104: "Activo (Amortizaciones) header shows only
+Proyecto, gated by global config — visible when the global Proyecto dimension is enabled,
+hidden when disabled") requires the header `project` field to be **config-gated**, not
+absent. Confirmed by direct inspection, `header.project` in `decisions.json` was instead
+`{"visibility": "discarded", "reason": "Accounting dimension — out of MVP scope, only visible
+when @ACCT_DIMENSION_DISPLAY@"}` — the reason text itself described config-gating, but the
+`visibility` value made the field **never** visible regardless of config, contradicting TC-104.
+
+`schema-raw.json` confirms the raw AD field (`C_Project_ID`, header entity) carries
+`displayLogic: "@ACCT_DIMENSION_DISPLAY@"` and `readOnlyLogic: "@Posted@='Y'"` — the same
+config macro used everywhere else in this ticket, plus the standard posted-lock rule other
+Amortización header fields already rely on (`decisions.json`'s raw-AD-passthrough
+convention).
+
+Fixed by promoting `header.project` from `discarded` to `{"visibility": "editable", "section":
+"principal", "reason": "..."}`, matching the exact shape already used for `header.project` on
+`sales-invoice`/`goods-shipment`/`purchase-invoice`/`goods-receipt` — no `displayLogic` or
+`readOnlyLogic` override, so the raw AD passthrough handles both the config gating and the
+posted-lock automatically. Confirmed in the regenerated `HeaderForm.jsx`: `project` now
+appears with `section: 'principal'`, `visibilitySource: 'server'` (evaluated against
+`@ACCT_DIMENSION_DISPLAY@` at runtime), and `readOnlyLogic: (record) => record['posted'] ===
+true`.
 
 ### DimBadge/DimSummary/DimensionGrid extracted to a shared component (ETP-4529 follow-up)
 

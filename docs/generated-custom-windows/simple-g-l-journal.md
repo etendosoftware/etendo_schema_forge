@@ -142,3 +142,23 @@ of the main visible form, even though the header design reversal above intention
 them from `discarded`. Fixed by changing `section` to `"principal"` for all four fields in
 `decisions.json` and regenerating; confirmed in `contract.json` (`section: "principal"`) and in
 the generated `GLJournalForm.jsx`.
+
+### Lines dimensions had no rendering surface at all (ETP-4529 gap fix)
+
+Confirmed by direct inspection: despite the `displayLogic` fix above, `businessPartner`,
+`product`, `project`, and `costCenter` on the `lines` entity were `{"visibility": "editable",
+"grid": false}` with **no `grid` and no `dimensionsPanel` key set to `true`**. Since the
+generator only emits a lines-grid entry for a field when either `grid: true` or
+`dimensionsPanel: true` is set, these four fields had **no rendering surface whatsoever** in the
+generated `GLJournalLineTable.jsx` — not hidden-but-present, entirely absent from the columns
+array. TC-106 ("Asientos Manuales header and lines: all four dimensions follow global config in
+both sections") could not pass on the lines side because there was nothing to show or hide.
+
+Fixed by adding `"dimensionsPanel": true` to all four fields in `decisions.json` (keeping
+`grid: false` and the raw-AD-passthrough `displayLogic`/`reason` as-is). Regenerated
+`GLJournalLineTable.jsx` now emits a synthetic `dimensions` column
+(`type: 'dimensionsPanel'`, `label`/`labels: {"Dimensiones contables"}`) listing all four fields
+as `dimensionFields`. This column definition is passed to both `InlineLinesPanel` and
+`DataTable`, so the expand-row "Dimensiones contables" panel renders in the lines grid for this
+window's classic grid + side-panel layout too — in addition to (not instead of) the existing
+side-panel editor, which still separately gates `asset` behind the Open Items checkbox.

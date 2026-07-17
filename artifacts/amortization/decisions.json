@@ -182,8 +182,9 @@
           "reason": "Bulk Posting accounting process — button already excluded via processOverrides; discard removes the stale label from the SummaryBar and requiredHeaderFields"
         },
         "project": {
-          "visibility": "discarded",
-          "reason": "Accounting dimension — out of MVP scope, only visible when @ACCT_DIMENSION_DISPLAY@"
+          "visibility": "editable",
+          "section": "principal",
+          "reason": "ETP-4529 — accounting dimension, config-gated (@ACCT_DIMENSION_DISPLAY@), promoted from discarded to match TC-104. Moved from \"other\" to \"principal\", same convention as sales-invoice/goods-shipment/purchase-invoice/goods-receipt header.project."
         },
         "salesCampaign": {
           "visibility": "discarded",

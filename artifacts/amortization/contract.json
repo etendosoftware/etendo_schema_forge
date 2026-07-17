@@ -1,8 +1,8 @@
 {
-  "version": "0.36.0",
+  "version": "0.37.0",
   "generatedAt": "2026-07-14T13:57:24.059Z",
-  "updatedAt": "2026-07-16T15:04:16.418Z",
-  "checksum": "6fa3fb426053dcc9",
+  "updatedAt": "2026-07-17T18:53:33.025Z",
+  "checksum": "137fa2479fc7434e",
   "frontendContract": {
     "window": {
       "id": "800026",
@@ -298,6 +298,32 @@
               "evaluable": false,
               "reason": "session-preference",
               "js": null
+            }
+          },
+          {
+            "name": "project",
+            "apiKey": "project",
+            "column": "C_Project_ID",
+            "label": "Project",
+            "type": "foreignKey",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": false,
+            "grid": false,
+            "form": true,
+            "reference": "Project",
+            "inputMode": "selector",
+            "section": "principal",
+            "displayLogic": {
+              "raw": "@ACCT_DIMENSION_DISPLAY@",
+              "evaluable": false,
+              "reason": "server-macro",
+              "js": null
+            },
+            "readOnlyLogic": {
+              "raw": "@Posted@='Y'",
+              "evaluable": true,
+              "js": "record['posted'] === true"
             }
           }
         ],
@@ -676,7 +702,7 @@
             "apiKey": "project",
             "column": "C_Project_ID",
             "type": "foreignKey",
-            "visibility": "discarded",
+            "visibility": "editable",
             "required": false
           },
           {
@@ -1095,6 +1121,14 @@
         "url": "/sws/neo/amortization/header/selectors/currency"
       },
       {
+        "entity": "header",
+        "field": "project",
+        "column": "C_Project_ID",
+        "reference": "Project",
+        "inputMode": "selector",
+        "url": "/sws/neo/amortization/header/selectors/project"
+      },
+      {
         "entity": "lines",
         "field": "asset",
         "column": "A_Asset_ID",
@@ -1269,6 +1303,14 @@
         "description": "Display logic for 'posted' in header should have evaluable flag"
       },
       {
+        "id": "t-displaylogic-evaluable-header-project",
+        "category": "displaylogic-evaluable",
+        "entity": "header",
+        "field": "project",
+        "runner": "node",
+        "description": "Display logic for 'project' in header should have evaluable flag"
+      },
+      {
         "id": "t-displaylogic-evaluable-lines-project",
         "category": "displaylogic-evaluable",
         "entity": "lines",
@@ -1283,6 +1325,14 @@
         "field": "posted",
         "runner": "node",
         "description": "Display logic for 'posted' in header should be valid JS"
+      },
+      {
+        "id": "t-displaylogic-valid-header-project",
+        "category": "displaylogic-valid",
+        "entity": "header",
+        "field": "project",
+        "runner": "node",
+        "description": "Display logic for 'project' in header should be valid JS"
       },
       {
         "id": "t-displaylogic-valid-lines-project",
@@ -1339,6 +1389,14 @@
         "field": "processed",
         "runner": "node",
         "description": "Field 'processed' should be present in header"
+      },
+      {
+        "id": "t-field-presence-header-project",
+        "category": "field-presence",
+        "entity": "header",
+        "field": "project",
+        "runner": "node",
+        "description": "Field 'project' should be present in header"
       },
       {
         "id": "t-field-presence-header-startingDate",
@@ -1461,6 +1519,14 @@
         "description": "Field 'processed' should have type 'string' in header"
       },
       {
+        "id": "t-field-type-header-project",
+        "category": "field-type",
+        "entity": "header",
+        "field": "project",
+        "runner": "node",
+        "description": "Field 'project' should have type 'string' in header"
+      },
+      {
         "id": "t-field-type-header-startingDate",
         "category": "field-type",
         "entity": "header",
@@ -1565,6 +1631,14 @@
         "description": "Read-only logic for 'name' in header should have evaluable flag"
       },
       {
+        "id": "t-readonlylogic-evaluable-header-project",
+        "category": "readonlylogic-evaluable",
+        "entity": "header",
+        "field": "project",
+        "runner": "node",
+        "description": "Read-only logic for 'project' in header should have evaluable flag"
+      },
+      {
         "id": "t-readonlylogic-evaluable-header-startingDate",
         "category": "readonlylogic-evaluable",
         "entity": "header",
@@ -1667,6 +1741,14 @@
         "field": "name",
         "runner": "node",
         "description": "Read-only logic for 'name' in header should be valid JS"
+      },
+      {
+        "id": "t-readonlylogic-valid-header-project",
+        "category": "readonlylogic-valid",
+        "entity": "header",
+        "field": "project",
+        "runner": "node",
+        "description": "Read-only logic for 'project' in header should be valid JS"
       },
       {
         "id": "t-readonlylogic-valid-header-startingDate",
@@ -2214,6 +2296,14 @@
         "description": "Selector endpoint for 'currency' in header should exist"
       },
       {
+        "id": "t-selector-endpoint-header-project",
+        "category": "selector-endpoint",
+        "entity": "header",
+        "field": "project",
+        "runner": "node",
+        "description": "Selector endpoint for 'project' in header should exist"
+      },
+      {
         "id": "t-selector-endpoint-lines-asset",
         "category": "selector-endpoint",
         "entity": "lines",
@@ -2348,14 +2438,6 @@
         "field": "processNow",
         "runner": "node",
         "description": "System field 'processNow' should exist in backend but not frontend for header"
-      },
-      {
-        "id": "t-system-field-header-project",
-        "category": "system-field",
-        "entity": "header",
-        "field": "project",
-        "runner": "node",
-        "description": "System field 'project' should exist in backend but not frontend for header"
       },
       {
         "id": "t-system-field-header-salesCampaign",
@@ -2533,25 +2615,25 @@
       }
     ],
     "summary": {
-      "total": 173,
+      "total": 179,
       "byCategory": {
         "action-endpoint": 2,
         "crud-flags": 2,
         "default-value-type": 2,
-        "displaylogic-evaluable": 2,
-        "displaylogic-valid": 2,
-        "field-presence": 15,
-        "field-type": 15,
-        "readonlylogic-evaluable": 13,
-        "readonlylogic-valid": 13,
+        "displaylogic-evaluable": 3,
+        "displaylogic-valid": 3,
+        "field-presence": 16,
+        "field-type": 16,
+        "readonlylogic-evaluable": 14,
+        "readonlylogic-valid": 14,
         "rule-declared": 63,
         "searchable-filters": 3,
-        "selector-endpoint": 6,
-        "system-field": 33,
+        "selector-endpoint": 7,
+        "system-field": 32,
         "visibility": 2
       },
       "byRunner": {
-        "node": 173,
+        "node": 179,
         "junit": 0
       }
     }

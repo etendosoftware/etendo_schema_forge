@@ -238,17 +238,20 @@
         "businessPartner": {
           "visibility": "editable",
           "grid": false,
-          "reason": "ETP-4529 — raw AD passthrough (@Open_Items@='Y' | @ACCT_DIMENSION_DISPLAY@): keeps the Open-Items rule AND adds accounting-dimension config gating."
+          "dimensionsPanel": true,
+          "reason": "ETP-4529 — raw AD passthrough (@Open_Items@='Y' | @ACCT_DIMENSION_DISPLAY@): keeps the Open-Items rule AND adds accounting-dimension config gating. dimensionsPanel: true routes it into the expand-row \"Dimensiones contables\" UX (previously absent from the lines grid entirely)."
         },
         "product": {
           "visibility": "editable",
           "grid": false,
-          "reason": "ETP-4529 — accounting dimension, config-gated (@ACCT_DIMENSION_DISPLAY@). Supersedes the prior Open-Items-only override, which didn't match this field's raw AD display logic."
+          "dimensionsPanel": true,
+          "reason": "ETP-4529 — accounting dimension, config-gated (@ACCT_DIMENSION_DISPLAY@). Supersedes the prior Open-Items-only override, which didn't match this field's raw AD display logic. dimensionsPanel: true routes it into the expand-row \"Dimensiones contables\" UX (previously absent from the lines grid entirely)."
         },
         "project": {
           "visibility": "editable",
           "grid": false,
-          "reason": "ETP-4529 — accounting dimension, config-gated (@ACCT_DIMENSION_DISPLAY@). Supersedes the prior Open-Items-only override, which didn't match this field's raw AD display logic."
+          "dimensionsPanel": true,
+          "reason": "ETP-4529 — accounting dimension, config-gated (@ACCT_DIMENSION_DISPLAY@). Supersedes the prior Open-Items-only override, which didn't match this field's raw AD display logic. dimensionsPanel: true routes it into the expand-row \"Dimensiones contables\" UX (previously absent from the lines grid entirely)."
         },
         "activity": {
           "visibility": "discarded",
@@ -280,7 +283,8 @@
         "costCenter": {
           "visibility": "editable",
           "grid": false,
-          "reason": "ETP-4529 — accounting dimension, config-gated (@ACCT_DIMENSION_DISPLAY@). Supersedes the prior Open-Items-only override, which didn't match this field's raw AD display logic."
+          "dimensionsPanel": true,
+          "reason": "ETP-4529 — accounting dimension, config-gated (@ACCT_DIMENSION_DISPLAY@). Supersedes the prior Open-Items-only override, which didn't match this field's raw AD display logic. dimensionsPanel: true routes it into the expand-row \"Dimensiones contables\" UX (previously absent from the lines grid entirely)."
         },
         "debit": {
           "visibility": "system",
