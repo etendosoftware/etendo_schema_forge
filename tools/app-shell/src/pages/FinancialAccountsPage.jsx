@@ -127,7 +127,7 @@ export default function FinancialAccountsPage() {
 
   return (
     <div className="flex h-full min-h-0 flex-1 flex-col">
-      <div className="border-b border-[#E8EAEF] p-2">
+      <div className="border-b border-[hsl(var(--border-subtle))] p-2">
         <AccountsToolbar
           typeFilter={typeFilter}
           onTypeFilterChange={setTypeFilter}
@@ -143,7 +143,7 @@ export default function FinancialAccountsPage() {
       >
         <AccountsSidebar summary={summary} loading={loading} data-testid="AccountsSidebar__7c3fbc" />
 
-        <div className="w-px self-stretch bg-[#E8EAEF]" aria-hidden="true" />
+        <div className="w-px self-stretch bg-[hsl(var(--border-subtle))]" aria-hidden="true" />
 
         <div className="flex flex-1 flex-col overflow-hidden">
           <AccountsTable

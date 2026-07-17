@@ -171,7 +171,7 @@ export default function FirstStepsPage() {
                       )}
                       {step.done ? (
                         <CheckCircle
-                          className="h-6 w-6 text-green-500 fill-green-500 stroke-white"
+                          className="h-6 w-6 text-status-success-foreground fill-green-500 stroke-white"
                           data-testid="CheckCircle__45a28a" />
                       ) : (
                         <Circle className="h-6 w-6 text-muted-foreground/30" data-testid="Circle__45a28a" />

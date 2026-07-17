@@ -1256,7 +1256,7 @@ function ReportViewer({ report, onBack, token, selectedOrgId, roleOrgIds, catego
                       {Array.from({ length: 8 }).map((_, r) => (
                         <div key={r} className="grid grid-cols-6 gap-3 py-2.5 border-b border-border-subtle">
                           {[40, 15, 15, 15, 15, 15].map((w, i) => (
-                            <div key={i} className="h-3 rounded" style={{ width: `${w}%`, background: r % 2 === 0 ? '#e2e8f0' : '#edf2f7' }} />
+                            <div key={i} className="h-3 rounded" style={{ width: `${w}%`, background: r % 2 === 0 ? 'hsl(var(--border-subtle))' : 'hsl(var(--muted))' }} />
                           ))}
                         </div>
                       ))}

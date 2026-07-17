@@ -28,17 +28,17 @@ function JsonView({ data }) {
       // Keys (quoted strings followed by colon)
       .replace(
         /^(\s*)(&quot;|")([^"]+)(&quot;|")(\s*:)/gm,
-        '$1<span class="text-blue-600">"$3"</span>$5'
+        '$1<span class="text-status-info-foreground">"$3"</span>$5'
       )
       // String values
       .replace(
         /:\s*(&quot;|")([^"]*?)(&quot;|")/g,
-        ': <span class="text-green-600">"$2"</span>'
+        ': <span class="text-status-success-foreground">"$2"</span>'
       )
       // Numbers
       .replace(
         /:\s*(-?\d+\.?\d*([eE][+-]?\d+)?)/g,
-        ': <span class="text-amber-600">$1</span>'
+        ': <span class="text-status-warning-foreground">$1</span>'
       )
       // Booleans
       .replace(
@@ -196,7 +196,7 @@ export default function ArtifactViewerPage() {
               onClick={() => handleSelectWindow(name)}
               className={`w-full rounded-md px-2.5 py-1.5 text-left text-xs transition-colors ${
                 name === selectedWindow
-                  ? 'bg-blue-50 font-medium text-blue-700'
+                  ? 'bg-status-info font-medium text-status-info-foreground'
                   : 'text-muted-foreground hover:bg-muted'
               }`}
             >
@@ -281,8 +281,8 @@ export default function ArtifactViewerPage() {
               )}
 
               {error && !loading && (
-                <div className="rounded-lg border border-amber-200 bg-amber-50 p-6 text-center">
-                  <p className="text-sm text-amber-700">{error}</p>
+                <div className="rounded-lg border border-status-warning-border bg-status-warning p-6 text-center">
+                  <p className="text-sm text-status-warning-foreground">{error}</p>
                 </div>
               )}
 

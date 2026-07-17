@@ -104,8 +104,8 @@ function DashboardContent({ apiBaseUrl }) {
           <div
             className="px-2 pt-2 pb-0 flex-shrink-0"
             style={{
-              borderBottom: scrolled ? '1px solid #E8EAEF' : '1px solid transparent',
-              filter: scrolled ? 'drop-shadow(0px 4px 6px rgba(18, 18, 23, 0.1))' : 'none',
+              borderBottom: scrolled ? '1px solid hsl(var(--border-subtle))' : '1px solid transparent',
+              filter: scrolled ? 'drop-shadow(0px 4px 6px hsl(var(--foreground) / 0.1))' : 'none',
               transition: 'border-color 0.2s ease, filter 0.2s ease',
             }}
           >
