@@ -13,7 +13,8 @@
         "C_Currency_ID": "Moneda",
         "Costbased": "Basado en coste",
         "IsTaxIncluded": "Precio incluye impuesto",
-        "IsDefault": "Por defecto"
+        "IsDefault": "Por defecto",
+        "IsActive": "Activo"
       }
     }
   },
@@ -68,7 +69,11 @@
           "seq": 7
         },
         "active": {
-          "visibility": "discarded"
+          "visibility": "editable",
+          "grid": false,
+          "form": true,
+          "section": "principal",
+          "seq": 8
         },
         "enforcePriceLimit": {
           "visibility": "discarded"

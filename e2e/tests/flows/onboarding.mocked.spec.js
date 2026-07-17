@@ -198,7 +198,13 @@ test.describe('Onboarding with mocked Schema Forge backend boundary', () => {
     // Onboarding now defaults to the login view, which also exposes the
     // language selector. Switch the language to English first, then move to
     // the register view (the register heading is asserted in English).
-    await page.locator('#onboarding-language').selectOption('en_US');
+    // The selector is now a Radix combobox: click the trigger to open the
+    // popover, then click the "English" option. Since the page is still in
+    // Spanish at this point, the option's accessible name is the Spanish
+    // translation of "English" (ui('onboardingLanguageEnglish') = "Inglés"),
+    // not the label heading ("Idioma") that also sits inside the popover.
+    await page.locator('#onboarding-language').click();
+    await page.getByRole('option', { name: 'Inglés', exact: true }).click();
     await page.getByTestId('action-switch-to-register').click();
     await expect(page.getByRole('heading', { name: labels.heading })).toBeVisible();
 

@@ -14,6 +14,7 @@ export default function QuotationConfirmModal({
   token,
   apiBaseUrl,
   onClose,
+  onSave,
 }) {
   const ui = useUI();
   const [selected, setSelected] = useState('order');
@@ -59,8 +60,12 @@ export default function QuotationConfirmModal({
     return () => { cancelled = true; };
   }, [quotationId, entityUrl, apiBaseUrl, headers]);
 
-  // Use fresh data when available, fallback to prop data
-  const d              = freshData || data || {};
+  // ETP-4468 — the in-memory `data` prop (which already reflects any unsaved
+  // header edit the user made before clicking Confirm) must win over the
+  // server-fetched `freshData` (stale because nothing was saved yet). The
+  // fresh fetch is only a fallback for the very first render before `data`
+  // arrives, or if `data` is genuinely empty.
+  const d              = data || freshData || {};
   const documentNo     = d.documentNo || '';
   const bpName         = d['businessPartner$_identifier'] || '';
   // Trust the server totals: once the quotation reached UE, TotalDiscountService
@@ -76,6 +81,19 @@ export default function QuotationConfirmModal({
     if (loading) return;
     setLoading(true);
     setError(null);
+
+    // ETP-4468 — force-save any unsaved header edit before either conversion
+    // path (order or invoice). Both convert the quotation using whatever
+    // header state is current, so an unsaved edit would otherwise be
+    // silently discarded.
+    if (onSave) {
+      const saved = await onSave();
+      if (!saved?.id) {
+        setError(ui('sqSaveBeforeConfirmError'));
+        setLoading(false);
+        return;
+      }
+    }
 
     try {
       const baseNeoUrl = apiBaseUrl.replace(/\/sales-quotation$/, '');

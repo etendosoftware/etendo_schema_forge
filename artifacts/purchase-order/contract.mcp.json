@@ -1,8 +1,8 @@
 {
-  "version": "0.35.0",
+  "version": "0.36.0",
   "generatedAt": "2026-04-30T15:42:46.497Z",
-  "updatedAt": "2026-06-25T14:15:37.499Z",
-  "contractChecksum": "903dc41f7fc5d4bd",
+  "updatedAt": "2026-07-14T01:05:39.068Z",
+  "contractChecksum": "0fbe017944ec853e",
   "apiPrediction": {
     "specName": "purchase-order",
     "baseUrl": "/sws/neo/purchase-order",
@@ -115,7 +115,7 @@
         "field": "warehouse",
         "column": "M_Warehouse_ID",
         "reference": "Warehouse",
-        "inputMode": "selector",
+        "inputMode": "search",
         "url": "/sws/neo/purchase-order/header/selectors/warehouse"
       },
       {
@@ -1660,5 +1660,5 @@
       "confirmcancelandreplace"
     ]
   },
-  "checksum": "ba86c482a3b6907e"
+  "checksum": "22a0a614e6b084ac"
 }

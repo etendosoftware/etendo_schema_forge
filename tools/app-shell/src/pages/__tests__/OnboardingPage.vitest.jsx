@@ -308,19 +308,19 @@ describe('OnboardingPage', () => {
     expect(consoleError).toHaveBeenCalledWith('Failed to load environments', expect.any(Error));
   });
 
-  it('exposes the inline language selector on the profile step', async () => {
-    // The profile step keeps its inline language selector so the onboarding
-    // language can be chosen independently of the global locale switch.
+  it('exposes the inline language selector on the login step', async () => {
+    // Core 0.3.9 preview scoped the inline language selector to the login
+    // step only (company/env-select/profile/register steps no longer render
+    // it), so the onboarding language can still be chosen there, independently
+    // of the global locale switch.
     localeSwitchMock.locale = 'es_ES';
-    localStorage.setItem('sf_platform_token', 'platform-token');
-    fetchAccount.mockResolvedValue({ name: 'Ada Lovelace' });
-    fetchEnvironments.mockResolvedValue([]);
+    localStorage.removeItem('sf_platform_token');
 
     render(<OnboardingPage />);
 
-    // The profile setup step renders under the active locale ...
-    expect(await screen.findByText(/onboardingGreeting/)).toBeInTheDocument();
-    // ... and still exposes an inline language selector.
+    // The default (no-token) view is the login step ...
+    expect(await screen.findByText('onboardingLoginTitle')).toBeInTheDocument();
+    // ... and it exposes an inline language selector.
     expect(screen.getByLabelText('language')).toBeInTheDocument();
   });
 
@@ -661,7 +661,7 @@ describe('OnboardingPage', () => {
     await waitFor(() => {
       expect(requestPasswordReset).toHaveBeenCalledWith(expect.any(Function), '', 'reset@example.com');
     });
-    expect(screen.getAllByText('onboardingResetEmailSent').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('onboardingResetEmailSentTitle').length).toBeGreaterThan(0);
   });
 
   it('renders reset password from the reset token URL and handles success', async () => {
@@ -793,7 +793,7 @@ describe('OnboardingPage', () => {
     expect(screen.getByText('onboardingPreparingTitle')).toBeInTheDocument();
   });
 
-  it('shows the company-data description while the dataset step runs', async () => {
+  it('shows the rotating status line and the dataset milestone while the dataset step runs', async () => {
     localStorage.setItem('sf_platform_token', 'platform-token');
     fetchAccount.mockResolvedValue({ name: 'Ada Lovelace' });
     fetchEnvironments.mockResolvedValue([]);
@@ -807,9 +807,17 @@ describe('OnboardingPage', () => {
     fireEvent.click(await screen.findByText('onboardingContinueAction'));
     fireEvent.click(screen.getByText('onboardingStartAction'));
 
+    // Since core 0.3.9 (ETP-4446) the loading screen no longer pins the
+    // per-step description: while running, the status line rotates through the
+    // generic "working" phrases (starting at the activating one) over the
+    // dashboard backdrop. The dataset step still drives the real 65% milestone.
     await waitFor(() => {
-      expect(screen.getByText('onboardingPreparingDataDescription')).toBeInTheDocument();
+      expect(screen.getByText('onboardingPreparingActivatingDescription')).toBeInTheDocument();
+      expect(screen.getByText('65%')).toBeInTheDocument();
     });
+    expect(screen.getByTestId('OnboardingDashboardBackdrop__ETP4446')).toBeInTheDocument();
+    // The old fixed per-step text is no longer rendered statically.
+    expect(screen.queryByText('onboardingPreparingDataDescription')).not.toBeInTheDocument();
   });
 
   it('keeps the progress bar monotonic when an untracked step runs after a tracked one', async () => {
@@ -828,11 +836,18 @@ describe('OnboardingPage', () => {
     fireEvent.click(await screen.findByText('onboardingContinueAction'));
     fireEvent.click(screen.getByText('onboardingStartAction'));
 
-    // Tracked step: client → 35%.
+    // Reads the "NN%" counter next to the progress bar. Since core 0.3.9
+    // (ETP-4446) the displayed value trickles forward between real milestones,
+    // so exact equality on the percentage is no longer stable.
+    const readPercent = () => Number(screen.getByText(/^\d+%$/).textContent.replace('%', ''));
+
+    // Tracked step: client → milestone 35%. The status line shows the rotating
+    // "working" phrase (starting at the activating one), not the per-step text.
     await waitFor(() => {
       expect(screen.getByText('onboardingPreparingActivatingDescription')).toBeInTheDocument();
-      expect(screen.getByText('35%')).toBeInTheDocument();
+      expect(readPercent()).toBeGreaterThanOrEqual(35);
     });
+    const percentAfterClient = readPercent();
 
     // Client finishes; an untracked backend step (accounting) starts running.
     act(() => {
@@ -840,11 +855,15 @@ describe('OnboardingPage', () => {
       emit({ type: 'progress', step: 'accounting', status: 'running' });
     });
 
-    // Generic "configuring" description shows, but the bar holds at 35% (monotonic, never drops).
+    // The untracked step's raw milestone (15%) never wins: the bar holds at or
+    // above the client milestone (monotonic, never drops) and stays below the
+    // next real milestone (dataset, 65%) thanks to the trickle soft cap. The
+    // rotating status line keeps showing while running.
     await waitFor(() => {
-      expect(screen.getByText('onboardingPreparingConfiguringDescription')).toBeInTheDocument();
-      expect(screen.getByText('35%')).toBeInTheDocument();
+      expect(screen.getByText('onboardingPreparingActivatingDescription')).toBeInTheDocument();
+      expect(readPercent()).toBeGreaterThanOrEqual(percentAfterClient);
     });
+    expect(readPercent()).toBeLessThan(65);
   });
 
   it('tracks onboarding run failures', async () => {
@@ -1416,7 +1435,7 @@ describe('OnboardingPage', () => {
       fireEvent.change(screen.getByLabelText(/onboardingEmailLabel/), {
         target: { value: 'reset@example.com' },
       });
-      fireEvent.click(screen.getByTestId('action-forgot-back-to-login'));
+      fireEvent.click(screen.getByTestId('action-forgot-password-back-to-login'));
 
       expect(screen.getByText('onboardingLoginTitle')).toBeInTheDocument();
     });
@@ -1437,7 +1456,7 @@ describe('OnboardingPage', () => {
       expect(confirmPasswordReset).not.toHaveBeenCalled();
     });
 
-    it('toggles reset password visibility and returns to login from the reset view', () => {
+    it('toggles reset password visibility on the reset view', () => {
       window.history.replaceState(null, '', '/onboarding?resetToken=reset-token');
       render(<OnboardingPage />);
 
@@ -1445,9 +1464,9 @@ describe('OnboardingPage', () => {
       expect(newPassword).toHaveAttribute('type', 'password');
       fireEvent.click(screen.getByLabelText('onboardingShowPassword'));
       expect(newPassword).toHaveAttribute('type', 'text');
-
-      fireEvent.click(screen.getByTestId('action-reset-back-to-login'));
-      expect(screen.getByText('onboardingLoginTitle')).toBeInTheDocument();
+      // core >= 0.3.7 (ETP-4442 Figma redesign) removed the back-to-login button
+      // from the reset form; the only return to login is the reset-success screen
+      // (covered by the next test).
     });
 
     it('returns to login from the reset success screen', async () => {
@@ -1465,7 +1484,7 @@ describe('OnboardingPage', () => {
 
       // After success the form is replaced by the standalone success button.
       await screen.findByText('onboardingResetPasswordSuccess');
-      const buttons = screen.getAllByText('onboardingBackToLoginAction');
+      const buttons = screen.getAllByText('onboardingLoginAction');
       fireEvent.click(buttons[buttons.length - 1]);
       expect(screen.getByText('onboardingLoginTitle')).toBeInTheDocument();
     });
@@ -1507,7 +1526,14 @@ describe('OnboardingPage', () => {
       await act(async () => {
         emit({ type: 'progress', step: 'finalize', status: 'running' });
       });
-      expect(screen.getByText('onboardingPreparingFinishingDescription')).toBeInTheDocument();
+      // Since core 0.3.9 (ETP-4446) the finalize milestone drives the bar to
+      // 92%, but the status line shows a rotating "working" phrase instead of
+      // the fixed finishing text — that key is deliberately excluded from the
+      // rotation so the screen never claims near-completion early.
+      expect(screen.getByText('onboardingPreparingTitle')).toBeInTheDocument();
+      expect(screen.getByText('92%')).toBeInTheDocument();
+      expect(screen.getByText('onboardingPreparingActivatingDescription')).toBeInTheDocument();
+      expect(screen.queryByText('onboardingPreparingFinishingDescription')).not.toBeInTheDocument();
     });
   });
 

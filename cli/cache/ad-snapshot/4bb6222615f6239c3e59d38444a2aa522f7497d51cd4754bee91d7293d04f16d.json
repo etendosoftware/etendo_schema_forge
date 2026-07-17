@@ -1497,6 +1497,13 @@
         }
       ]
     },
+    "62e7d6689c11ba27fdc238450bbc940c71cc4a579d87d3669861331f4f00b615": {
+      "checksum": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "params": [
+        "B5673F73F613496C8BEA22FB55E4E1E4"
+      ],
+      "rows": []
+    },
     "675461360c94bf1fe8bbe3121d5b8aeec6025503b503da010fa3adf22f7c1e92": {
       "checksum": "6ccddcbce8b9c5be38a15f25a5b7ad9c92304f0caf1d0829ce0379466d5f952a",
       "params": [
@@ -1721,6 +1728,21 @@
           "classname": "org.openbravo.erpCommon.ad_callouts.SE_Order_Organization",
           "columnname": "AD_Org_ID",
           "name": "SE_Order_Organization"
+        }
+      ]
+    },
+    "81933096771953c6cf094e465f86e91738157acf5f9d32e9a078c92c5281ca5e": {
+      "checksum": "39457ea88bebbd2e95d4d6b95b8ec9b8f25a42fbe86f465097066c29a2814c1d",
+      "params": [
+        "117"
+      ],
+      "rows": [
+        {
+          "ad_callout_id": "C252244131684EE28DB86DDFD278DB85",
+          "ad_table_id": "177",
+          "classname": "org.openbravo.erpCommon.ad_callouts.SL_Year_Validation",
+          "columnname": "Year",
+          "name": "SL_Year_Validation"
         }
       ]
     },
