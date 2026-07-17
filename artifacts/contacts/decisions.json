@@ -126,6 +126,32 @@
         ],
         "requireSavedRecord": true
       }
+    },
+    "import": {
+      "enabled": true,
+      "spec": "contacts",
+      "entity": "businessPartner",
+      "formats": ["csv", "txt"],
+      "limit": { "maxRows": 5000, "concurrency": 4 },
+      "dedupe": { "scope": "file", "key": ["etgoEmail"] },
+      "descriptor": "contacts",
+      "fields": [
+        { "target": "name", "aliases": ["nombre comercial", "razon social"], "label": "Commercial Name" },
+        { "target": "etgoFirstname", "aliases": ["nombre"], "label": "First Name (Company)" },
+        { "target": "etgoLastname", "aliases": ["apellido", "apellidos"], "label": "Last Name (Company)" },
+        { "target": "etgoEmail", "aliases": ["email", "correo", "e-mail"], "isEmail": true, "label": "Email (Company)" },
+        { "target": "etgoPhone", "aliases": ["telefono", "teléfono"], "label": "Phone (Company)" },
+        { "target": "email", "aliases": ["email de contacto"], "isEmail": true, "label": "Email (Contact)" },
+        { "target": "firstName", "aliases": ["nombre de contacto"], "label": "First Name (Contact)" },
+        { "target": "lastName", "aliases": ["apellido de contacto"], "label": "Last Name (Contact)" },
+        { "target": "phone", "aliases": ["telefono de contacto"], "label": "Phone (Contact)" },
+        { "target": "position", "aliases": ["cargo"], "label": "Position" },
+        { "target": "address", "aliases": ["direccion", "dirección"], "label": "Address" },
+        { "target": "city", "aliases": ["ciudad"], "label": "City" },
+        { "target": "postal", "aliases": ["codigo postal", "código postal", "cp"], "label": "Postal Code" },
+        { "target": "country", "aliases": ["pais", "país"], "label": "Country", "matchEntity": "Country" },
+        { "target": "region", "aliases": ["provincia", "region", "región"], "label": "Region" }
+      ]
     }
   },
   "entities": {

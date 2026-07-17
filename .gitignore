@@ -16,6 +16,7 @@ artifacts/test-report.html
 .worktrees/
 .quality-gate-cache/
 window-locks.json
+.active-locale
 tools/app-shell/dist/
 tools/app-shell/.env.local
 tools/app-shell/.env.development

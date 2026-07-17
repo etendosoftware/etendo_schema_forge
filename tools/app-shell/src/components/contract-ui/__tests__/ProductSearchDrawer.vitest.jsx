@@ -1,5 +1,8 @@
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { dirname, join } from 'node:path';
 
 // Mock buildUrlWithParams
 vi.mock('@/lib/buildUrlWithParams.js', () => ({
@@ -143,16 +146,9 @@ describe('ProductSearchDrawer', () => {
     const user = userEvent.setup();
     const onClose = vi.fn();
     render(<ProductSearchDrawer {...BASE_PROPS} onClose={onClose} />);
-    // The X close button is inside the search bar
-    const closeButtons = document.querySelectorAll('button');
-    // The last small button in the search bar is the close button
-    const closeBtn = Array.from(closeButtons).find(
-      (btn) => btn.querySelector('svg') && btn.classList.contains('shrink-0')
-    );
-    if (closeBtn) {
-      await user.click(closeBtn);
-      expect(onClose).toHaveBeenCalled();
-    }
+    // Search-bar icon testids now live on the shared shell with the `__pds` suffix.
+    await user.click(screen.getByTestId('X__pds'));
+    expect(onClose).toHaveBeenCalled();
   });
 
   it('shows no results message when search yields nothing', async () => {
@@ -286,5 +282,43 @@ describe('ProductSearchDrawer', () => {
     });
     // Results were cleared — no product option rows rendered.
     expect(screen.queryAllByTestId(/^product-search-option-/)).toHaveLength(0);
+  });
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // Footer-count bugfix: footerCount must always reflect the deduplicated
+  // visible list, never the backend's raw (pre-dedup) totalCount. Regressed by
+  // e.g. sales-invoice's ProductSimple selector, which returns one row per
+  // active price-list-version for the same product.
+  // ──────────────────────────────────────────────────────────────────────────
+
+  it('shows the deduplicated footer count, not the raw backend totalCount', async () => {
+    // Two rows share the same searchKey — deduplicateBySearchKey collapses them into a
+    // single visible row, while the backend's totalCount still reports the raw row count.
+    const items = [
+      { id: '1', label: 'Widget A', searchKey: 'W001', standardPrice: 10 },
+      { id: '1b', label: 'Widget A', searchKey: 'W001', standardPrice: 12 },
+    ];
+    setupFetchMock(items, { totalCount: 5 });
+    render(<ProductSearchDrawer {...BASE_PROPS} />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Widget A')).toBeInTheDocument();
+    });
+    // Only one row is visible after dedup...
+    expect(screen.getAllByText('Widget A')).toHaveLength(1);
+    // ...and the footer must reflect that deduped count (1), never the raw totalCount (5).
+    expect(screen.getByText('1 products')).toBeInTheDocument();
+    expect(screen.queryByText('5 products')).not.toBeInTheDocument();
+  });
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // Props contract: dead props dropped by the shell refactor must stay dropped.
+  // ──────────────────────────────────────────────────────────────────────────
+
+  it('no longer references the dropped onDeselect / imageEntityUrl props', () => {
+    const __dirname = dirname(fileURLToPath(import.meta.url));
+    const src = readFileSync(join(__dirname, '..', 'ProductSearchDrawer.jsx'), 'utf8');
+    expect(src).not.toMatch(/onDeselect/);
+    expect(src).not.toMatch(/imageEntityUrl/);
   });
 });

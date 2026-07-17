@@ -1,6 +1,8 @@
 import { useState, useCallback } from 'react';
 import { toast } from 'sonner';
 import './contacts.css';
+import './contactsFkResolvers.js';
+import './contactsImportDescriptor.js';
 import BusinessPartnerPage from '@generated/contacts/generated/web/contacts/BusinessPartnerPage';
 import { ContactsProvider } from './ContactsContext';
 import { ContactsFinanceProvider } from './ContactsFinanceContext';
@@ -96,7 +98,6 @@ export default function ContactsWindow(props) {
            {...props}
            Form={ContactsBusinessPartnerForm}
            subsetFilters={SUBSET_FILTERS}
-           autoSaveOnBlur={true}
            enableSecondaryRowDelete={true}
            tabsBarAfter={ContactsPeriodButton}
            headerContent={renderContactsHeaderSummary}

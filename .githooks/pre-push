@@ -10,6 +10,14 @@ echo "==> Running pre-push checks..."
 
 cd "$REPO_DIR"
 
+# Require Node 22+ for local validation tooling and coverage workers.
+NODE_MAJOR=$(node -e "process.stdout.write(process.versions.node.split('.')[0])" 2>/dev/null || echo "0")
+if [ "$NODE_MAJOR" -lt 22 ]; then
+  echo "❌ ERROR: pre-push requires Node.js >= 22 (found $(node --version 2>/dev/null || echo '?'))."
+  echo "   Switch to Node 22 before pushing (e.g. nvm use 22, volta install node@22, etc.)."
+  exit 1
+fi
+
 # Path where run-sonar.sh writes a copy-pasteable handoff prompt when the
 # Quality Gate fails. Cleared up-front so a stale file is never shown.
 HANDOFF_FILE="$REPO_DIR/sonar-reports/sonar-handoff-prompt.md"

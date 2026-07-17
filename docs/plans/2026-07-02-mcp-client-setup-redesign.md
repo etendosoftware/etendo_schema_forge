@@ -60,11 +60,21 @@ Estado actual de esa página (`ConnectionsLanding`):
 
 ## Decisiones confirmadas
 
-- **Selector de cliente**: la página `ConnectionsLanding` debe mostrar un **selector** (tabs) con,
-  como mínimo: **Claude Desktop, Claude Code (CLI), Cursor, VS Code, OpenAI Codex, OpenCode,
-  ChatGPT (Web/Desktop), Google Antigravity**, más una pestaña **"Otros / genérico"** para cualquier
-  cliente MCP no listado explícitamente (con la URL + explicación mínima de qué es un servidor MCP
-  remoto, para que sirva de fallback).
+- **Selector de cliente**: la página `ConnectionsLanding` debe mostrar un **selector** (tabs) con:
+  **Claude Desktop, Claude Code (CLI), Cursor, VS Code, OpenAI Codex, OpenCode, Google Antigravity**,
+  más una pestaña **"Otros / genérico"** para cualquier cliente MCP no listado explícitamente (con la
+  URL + explicación mínima de qué es un servidor MCP remoto, para que sirva de fallback).
+  - **ChatGPT (Web/Desktop) queda FUERA de alcance de esta entrega** (decisión ronda 3, 2026-07-07):
+    de OpenAI solo entra Codex. La tab de ChatGPT no se implementa ahora; su borrador de copy se
+    conserva más abajo marcado como follow-up futuro (requiere validación OAuth end-to-end antes de
+    exponerse).
+- **Botón de copiar = componente genérico nuevo** (decisión ronda 3, 2026-07-07): NO existe un
+  componente compartido de copiar; el patrón (`navigator.clipboard.writeText` + toast + estado
+  `copied`) está duplicado en 5+ lugares (`OAuth2ClientDialog.jsx`, `AccountSummaryStrip.jsx`,
+  `EditAccountModal.jsx`, `accountColumns.jsx`, `OAuth2ClientsPage.jsx`). Dado que esta landing tiene
+  muchos bloques copiables (una URL/snippet/comando por tab + JSONs + prompt de agentes), el Developer
+  crea un `CopyButton`/`CopyBlock` genérico en `tools/app-shell/src/components/ui/` y lo usa en toda la
+  página. Migrar los 5 usos existentes es opcional y va en commit aparte para no ensuciar el scope.
 - **Audiencia: usuarios sin contexto técnico.** Esto es lo que más cambia el copy respecto al doc
   interno: nada de OAuth discovery, RFC 8414/9728, issuers ni audiencias. El público objetivo es,
   literalmente, "el gerente de una empresa que quiere conectar su asistente de IA a Etendo". Cada
@@ -358,6 +368,7 @@ Confirmado contra la doc oficial (opencode.ai/docs/mcp-servers, opencode.ai/docs
    global) — y agregá:
    ```json
    {
+     "$schema": "https://opencode.ai/config.json",
      "mcp": {
        "etendo-go": {
          "type": "remote",
@@ -367,12 +378,16 @@ Confirmado contra la doc oficial (opencode.ai/docs/mcp-servers, opencode.ai/docs
      }
    }
    ```
+   (nota: el top-level es `mcp` — no `mcpServers` como Cursor/Antigravity — y el tipo es `"remote"`.)
 2. OpenCode maneja el login automáticamente vía Dynamic Client Registration: al recibir un `401`
    del servidor dispara el flujo OAuth por su cuenta y abre el navegador.
-3. Aprobá el acceso — listo.
+3. Completá el login en Etendo y aprobá el acceso — listo, el servidor `etendo-go` queda disponible.
 
 **Alternativa — pedile al agente que lo configure él mismo**: ver "Bloque de Prompt" abajo.
-> que con el deep link de Cursor/VS Code: no se fija en este plan un dato no verificado).
+
+> Nota menor: el único dato a confirmar al implementar es el nombre exacto del comando de login CLI
+> (`opencode mcp auth <server>` / equivalente vigente) por si se quiere mencionar explícitamente; el
+> formato del archivo/clave de config ya está confirmado arriba.
 
 ### Tab: Google Antigravity
 1. Abrí (o creá) el archivo de config MCP de Antigravity y agregá:
@@ -391,12 +406,12 @@ Confirmado contra la doc oficial (opencode.ai/docs/mcp-servers, opencode.ai/docs
 3. Iniciá sesión en Etendo cuando se te pida y aprobá el acceso.
 4. Listo, el servidor `etendo-go` queda disponible para usar desde Antigravity.
 
-### Tab: ChatGPT (Web / Desktop) — ⚠️ A TESTEAR, no validado contra Etendo GO todavía
+### Tab: ChatGPT (Web / Desktop) — 🚫 FUERA DE ALCANCE (follow-up futuro)
 
-> Basado en la doc oficial de OpenAI (Developer Mode, beta — planes Pro/Plus/Team/Enterprise/Edu),
-> pero **no se probó end-to-end contra el servidor MCP de Etendo GO**. El flujo OAuth de ChatGPT
-> podría comportarse distinto al de Claude/Cursor/VS Code — validar antes de dar esta tab por
-> definitiva.
+> **Decisión ronda 3 (2026-07-07): esta tab NO se implementa en esta entrega.** El copy se conserva
+> abajo solo como referencia para un follow-up. Basado en la doc oficial de OpenAI (Developer Mode,
+> beta), pero **no se probó end-to-end contra el servidor MCP de Etendo GO** — el flujo OAuth de
+> ChatGPT podría comportarse distinto. No agregar la tab hasta validar contra nuestro servidor real.
 
 1. Activá el modo desarrollador: **Configuración → Apps → Configuración avanzada → Activar modo
    desarrollador**.
@@ -498,9 +513,11 @@ Título "Connect with Claude" + los 4 pasos genéricos existentes (`oauthStep1`-
       selector + tabs en `AuthorizePage.jsx` (componente `ConnectionsLanding`), dar de alta las
       claves i18n nuevas en `en_US.json` + `es_ES.json`, y seguir el pipeline normal
       (DEV → REVIEW → QA → DOCS).
-- [ ] **(OPCIONAL, etapa final) Migrar `ConnectionsLanding`/`AuthorizePage.jsx` a
-      `schema_forge_core`.** No decidido si se hace en esta tarea o en una posterior — se deja
-      documentado para no perder el análisis. Justificación: es un flujo genérico igual para todos
+- [x] **(OPCIONAL, etapa final) Migrar `ConnectionsLanding`/`AuthorizePage.jsx` a
+      `schema_forge_core`.** ✅ EN EJECUCIÓN bajo ETP-4394 (2026-07-13): pasos 0–5 completos, solo
+      falta el Paso 6 (release + bump, lo gestiona el usuario). Ver el bloque "🚧 ESTADO DE EJECUCIÓN"
+      en la sección "Procedimiento concreto de migración a core" más abajo. Justificación original: es
+      un flujo genérico igual para todos
       los clientes (no es "per-client config"), por lo que conceptualmente encaja mejor en el
       charter de core ("HOW the tooling works") que en el de funcional ("WHAT to expose, per
       client").
@@ -541,3 +558,212 @@ Título "Connect with Claude" + los 4 pasos genéricos existentes (`oauthStep1`-
       en `schema_forge` primero, donde el ciclo es rápido; recién evaluar la migración a core como
       paso de "hardening" posterior, con `Tabs` ya migrado y un seam de observability definido en
       core.
+
+## Procedimiento concreto de migración a core (paso a paso)
+
+> **Estado (2026-07-08):** el rediseño ya está implementado y estabilizado en `schema_forge`
+> (tabs por cliente, `deriveServerName()`, catálogo `mcpClients.js`, `CopyBlock`, evento
+> `mcp_connect_tab_selected`). Esta sección documenta CÓMO se haría la promoción a core cuando se
+> decida encararla — es el "paso opcional de hardening" de la recomendación de arriba, ya
+> operacionalizado. No ejecutar sin abrir su propia tarea Jira.
+
+> **🚧 ESTADO DE EJECUCIÓN (2026-07-13 — ETP-4394):** la migración a core SE ESTÁ EJECUTANDO en
+> esta tarea. **Pasos 0–5 COMPLETOS y verdes; solo falta el Paso 6 (release + bump), que lo dispara
+> el usuario.** Detalle por paso más abajo (cada uno marcado ✅/⏳). Resumen:
+>
+> - ✅ **Paso 0 — Tabs** en core (`components/ui/tabs.jsx`), test huérfano ahora verde (8/8). Shim en funcional.
+> - ✅ **Paso 1 — CopyButton/CopyBlock** en core, test copiado (6/6). Shim en funcional.
+> - ✅ **Paso 2 — Seam de observability** en core (opción A): `observability/ObservabilityContext.jsx`
+>   con `ObservabilityProvider` + `useObservability()` y **default no-op**. Test 2/2. Export `./observability`.
+> - ✅ **Paso 3 — `mcpClients.js`** en core (`lib/mcpClients.js`, módulo puro), test copiado como
+>   `*.vitest.js` (core lib 21/21). Shim en funcional. Export `./lib/*`.
+> - ✅ **Paso 4 — `AuthorizePage.jsx`** en core (`pages/AuthorizePage.jsx`): imports reapuntados a
+>   rutas relativas de core; telemetría consumida vía `useObservability()` (seam del Paso 2, sin fuga
+>   de `mcpConnectTelemetry` a core — grep limpio); export `./pages/*`. Shim de re-export en funcional
+>   (`runtime-routes.jsx` sin cambios). Host wrap en `App.jsx`: `<ObservabilityProvider value={{ trackMcpConnectTabSelected }}>`
+>   envuelve `<AppShellRuntime>` e inyecta el tracking real de dominio. Test copiado a core (23/23).
+>   El test original de funcional se reescribió como **smoke-test de shim** (2/2, full-mount con
+>   `AuthProvider` + `ObservabilityProvider` reales de core) — decisión del usuario, porque sus mocks
+>   `@/` ya no interceptaban los imports relativos de la página en core (`useAuth` estricto lanzaba).
+> - ✅ **Paso 5 — i18n:** verificado. Todas las claves que la página usa (literales + `oauthConnectTab<Id>`
+>   dinámicos de 8 clientes + 2 sub-tabs) existen en `en_US` y `es_ES` con paridad `oauth*` perfecta.
+>   Los diccionarios se quedan en funcional (core es resolver; el host inyecta vía `LocaleProvider`).
+>   (Nota: hay 24 claves no-`oauth*` solo en `es_ES` — desbalance preexistente del repo, fuera de alcance.)
+> - ⏳ **Paso 6 — Release + bump: PENDIENTE (lo gestiona el usuario).** Publicar core primero, luego
+>   bumpear el pin `@etendosoftware/app-shell-core` (`0.3.5` → nueva) en funcional. Cierra el "peaje"
+>   de todos los shims a la vez.
+>
+> **Verificación:** todo verde bajo `LOCAL_CORE=1` (el perfil de dev). En build default (paquete
+> publicado) los shims de exports NUEVOS (`observability`, `lib/mcpClients`, `pages/AuthorizePage`)
+> recién resuelven tras el Paso 6 — es el peaje conocido, no una regresión.
+>
+> **Excepción del peaje — `mcpClients.test.js`:** el test original de funcional para `mcpClients` es
+> **node:test** (no vitest), y el alias `LOCAL_CORE` es un resolver de vite/vitest → node no lo usa.
+> Ese test resuelve el shim contra el paquete publicado y recién pasa a verde tras el Paso 6. Su
+> lógica está cubierta mientras tanto por la copia en core (`mcpClients.vitest.js`, 21/21).
+>
+> **Jira relacionada:** ETP-4484 (`plataforma`) — migrar la librería de observability completa a core
+> (el sink Mixpanel + catálogo de eventos), creada como follow-up y colgada de la epic ETP-3504.
+
+### 🎯 Estado actual (2026-07-14) — validar el Paso 6 con una preview version
+
+**Dónde estamos:** Pasos 0–5 completos y verdes bajo `LOCAL_CORE=1`. El único pendiente es el Paso 6
+(release `latest` + bump del pin), pero **antes de gastar un release real** queremos confirmar que la
+migración de `AuthorizePage` resuelve bien **por el camino de paquete publicado** (no `LOCAL_CORE`) —
+que es justo lo que `LOCAL_CORE` NO valida (exports del `package.json`, shims resolviendo contra el
+registro, el `mcpClients.test.js` que es `node:test` y no usa el alias de vitest).
+
+**Cómo:** usar el [sistema de preview versions](./2026-07-14-preview-package-publishing.md) recién
+implementado — publica un `alpha` descartable sin tocar `latest`. Procedimiento concreto:
+
+1. **Publicar la preview.** Pushear `feature/ETP-4394` de `schema_forge_core` (commit `31822cdcd` ya
+   hecho, sin push) → dispara `publish-preview.yml` automáticamente. Anotar la versión que publica:
+   `0.3.7-preview.feature-ETP-4394.<ts>.<sha>` (los 6 paquetes, bajo `alpha`).
+2. **Pinear la preview en funcional.** En `schema_forge/tools/app-shell/package.json`, reemplazar
+   temporalmente el pin `@etendosoftware/app-shell-core` (hoy `0.3.6`) por esa versión exacta de
+   preview. `npm install` para bajarla del registro.
+3. **Correr por camino de paquete publicado** (SIN `LOCAL_CORE`): `make dev` y recorrer el checklist
+   post-migración de abajo — con foco en los exports NUEVOS que hoy son "el peaje" (`observability`,
+   `lib/mcpClients`, `pages/AuthorizePage`) y en `mcpClients.test.js` (`node:test`), que solo resuelve
+   contra el paquete publicado.
+4. **Interpretar el resultado.** Si todo verde por este camino → el Paso 6 real (release `latest` +
+   bump) va a funcionar; se procede a disparar el release definitivo con confianza. Si algo falla, se
+   corrige en core y se re-publica otra preview (D5a autopurga la anterior) — sin haber quemado ningún
+   `latest`.
+5. **Revertir el pin.** Terminada la validación, volver el pin a su valor real (no dejar el `-preview.`
+   commiteado en funcional). El release real del Paso 6 traerá la versión `latest` definitiva.
+
+**Bloqueos posibles (ver plan de preview):** si el borrado D5a da 403, falta un PAT con
+`delete:packages` — no bloquea la validación (la publicación sí ocurre; solo no se autolimpia).
+
+### Actualización del análisis previo (lo que cambió respecto a la investigación de arriba)
+
+Dos supuestos de la investigación original quedaron **desactualizados** al implementar:
+
+- ✅ **Auth e i18n YA resuelven a core.** En este repo `tools/app-shell/src/auth/AuthContext.jsx`
+  y `src/i18n/index.js` son shims de una línea (`export * from '@etendosoftware/app-shell-core/auth'`
+  y `.../i18n`). O sea: `useAuth`, `createApiFetch` y `useUI` que consume `AuthorizePage.jsx` ya
+  vienen de core. **No hay seam nuevo que diseñar para auth/i18n** — solo hay que cambiar los
+  imports de `@/auth/...`/`@/i18n` a `@etendosoftware/app-shell-core/auth`/`/i18n` cuando el archivo
+  viva dentro de core (imports relativos internos).
+- ⚠️ **El JSON de locales sigue partido** (sin cambios): core es un resolver, las claves
+  `oauthConnect*` se quedan en `schema_forge/tools/app-shell/src/locales/{en_US,es_ES,es_AR}.json`.
+  Es aceptable — el resto de componentes de core ya funcionan así (el host inyecta el diccionario
+  vía `LocaleProvider`).
+
+Bloqueantes reales que quedan (confirmados contra el árbol de core, 2026-07-08):
+
+| Dependencia de la página | ¿En core hoy? | Acción |
+|---|---|---|
+| `useAuth`, `createApiFetch`, `useUI` | ✅ sí | solo reapuntar imports |
+| `Card`, `Button`, `Badge` | ✅ sí (`components/ui/`) | ninguna |
+| `Tabs`/`TabsList`/`TabsTrigger`/`TabsContent` | ❌ no (solo test huérfano `tabs.vitest.jsx`) | **migrar primero** |
+| `CopyBlock`/`CopyButton` (`components/ui/copy-button.jsx`) | ❌ no | **migrar primero** |
+| `mcpClients.js` (catálogo + `deriveServerName`) | ❌ no (lib local) | migrar como lib de core |
+| `mcpConnectTelemetry.js` → `observability.js`/`observability/events.js` | ❌ no existe observability en core | **seam de observability** (el blocker de dirección de dependencia) |
+| dir `pages/` + export en `package.json` | ❌ core no tiene `pages/` ni lo exporta | crear + agregar entrada en `exports` |
+
+### Orden de ejecución (cada paso es su propio PR en core, en este orden)
+
+**Paso 0 — Migrar `Tabs` a core** ✅ HECHO (2026-07-13) (`packages/app-shell-core/src/components/ui/tabs.jsx`).
+Es hand-built (no Radix), su única dependencia es `cn` de `@/lib/utils` → en core es `./lib/utils`
+o el `utils.js` que ya existe ahí. Ya hay un test huérfano (`tabs.vitest.jsx`) esperando la
+implementación — al migrar el componente ese test empieza a pasar. Dejar en `schema_forge` un shim
+`tools/app-shell/src/components/ui/tabs.jsx` = `export * from '@etendosoftware/app-shell-core/components/ui/tabs.jsx'`
+(mismo patrón que auth/i18n) para no tocar a los otros consumidores locales (`DetailTabs.jsx`).
+
+**Paso 1 — Migrar `CopyButton`/`CopyBlock` a core** ✅ HECHO (2026-07-13)
+(`packages/app-shell-core/src/components/ui/copy-button.jsx`). Depende de `Button`, `cn`, `toast`
+(sonner, ya en core) y `useUI`/`ui('copied')`. Mover el componente + su test
+(`copy-button.vitest.jsx`, ya escrito y verde con el fix de `userEvent.setup({ writeToClipboard:
+false })`). Shim de re-export en `schema_forge` igual que Tabs. La clave i18n `copied` ya la resuelve
+el host.
+
+**Paso 2 — Definir el seam de observability en core** ✅ HECHO (2026-07-13) — se implementó la
+**opción (A) Inyección por contexto**: `packages/app-shell-core/src/observability/ObservabilityContext.jsx`
+(`ObservabilityProvider` + `useObservability()`, default no-op) + barrel `index.js` + export `./observability`.
+Test `observability-context.vitest.jsx` (2/2). El sink Mixpanel + catálogo de eventos se quedan en
+el host (funcional); solo migró la *invocación*. (Detalle de diseño original abajo.)
+`mcpConnectTelemetry.js` importa `@/lib/observability.js` (que expone `track`) + `observability/events.js`
+(catálogo `OBSERVABILITY_EVENTS` + `buildObservabilityEvent`), y todo eso vive en
+`schema_forge/tools/app-shell/src/lib/observability/` — que core **no puede importar** (invierte la
+dirección de dependencia funcional→core). Dos opciones:
+  - **(A) Inyección por contexto (preferida).** Core define una interfaz mínima `track(name, props)`
+    y un `ObservabilityProvider`/hook (`useObservability()`) que el host implementa contra su pipeline
+    real de Mixpanel. La página en core llama `track` del contexto; si el host no provee nada, es
+    no-op. Es el patrón menos acoplado y reutilizable por cualquier feature futura que core quiera
+    instrumentar.
+  - **(B) Prop/callback.** El host pasa `onTabSelected={client => trackMcpConnectTabSelected({client})}`
+    como prop a `<ConnectionsLanding>`. Más simple, pero traslada el catálogo de eventos y el
+    sanitizado al host y no escala si core suma más features instrumentadas.
+  - En **ambos casos** el catálogo `MCP_CONNECT_TAB_SELECTED` y el fix de allowlist (`'client'` en
+    `SAFE_EVENT_PROPERTY_KEYS`, `payload.js`) se quedan en el host, porque el pipeline Mixpanel es
+    del host. Solo migra la *invocación*, no el sink.
+
+**Paso 3 — Migrar `mcpClients.js` a core** ✅ HECHO (2026-07-13) (`packages/app-shell-core/src/lib/mcpClients.js`).
+Es JS puro sin dependencias de entorno (`deriveServerName`, `buildMcpClients`, helpers de deep link
+con `btoa`/`encodeURIComponent`). Mover el archivo + su test node (`mcpClients.test.js`, 21 casos).
+Shim de re-export en el host. `detectMcpUrl()`/`detectBaseUrl()` **no** se migran acá: son helpers de
+`AuthorizePage` (usan `window.location`), viajan con la página en el Paso 4.
+
+**Paso 4 — Migrar `AuthorizePage.jsx` (`ConnectionsLanding` + `McpInstructions`) a core.** ✅ HECHO (2026-07-13).
+Nota de ejecución: el test original de funcional se reescribió como **smoke-test de shim** (full-mount
+con providers reales de core), no se conservó tal cual — sus mocks `@/` dejaron de interceptar los
+imports relativos de la página en core (`useAuth` estricto lanzaba `useAuth must be used within AuthProvider`).
+La cobertura de comportamiento (23 casos) vive ahora en la copia de core.
+  - Crear `packages/app-shell-core/src/pages/` (no existe) y mover el archivo.
+  - Reapuntar imports internos: `@/auth/...`→`../auth/...`, `@/i18n`→`../i18n`, `@/components/ui/*`→
+    `../components/ui/*`, `@/lib/mcpClients.js`→`../lib/mcpClients.js`, y la telemetría al seam del
+    Paso 2.
+  - Agregar la entrada de export en `package.json` de core:
+    `"./pages/AuthorizePage.jsx": "./src/pages/AuthorizePage.jsx"` (o un barrel `./pages`).
+  - En `schema_forge`, reemplazar `tools/app-shell/src/pages/AuthorizePage.jsx` por un shim:
+    `export { default } from '@etendosoftware/app-shell-core/pages/AuthorizePage.jsx';`
+    `runtime-routes.jsx` sigue haciendo `lazy(() => import('./pages/AuthorizePage.jsx'))` sin cambios.
+  - Mover también el test `AuthorizePage.vitest.jsx` a core (23 casos) — al vivir en core, el host
+    ya no lo corre; validar que el mock de `useUI`/observability sigue funcionando con el seam nuevo.
+  - **La mitad OAuth de la página (consentimiento, la que se ve CON params) viaja entera sin
+    bloqueantes nuevos** (verificado 2026-07-08): `useSearchParams` usa `react-router-dom ^7`, que ya
+    es peerDependency de core y core ya consume internamente (`ShellLayout`, `AppShellRuntime`);
+    `createApiFetch` viene de `@/auth/api.js` (ya re-export de core); `window.location`,
+    `import.meta.env.VITE_API_BASE` y `fetch('/oauth2/authorize')` [ruta relativa al origin] son
+    autocontenidos y funcionan igual servidos desde core. O sea la página se migra como UNA sola
+    unidad — no hay que partir landing y consentimiento.
+
+**Paso 5 — i18n.** ✅ HECHO (2026-07-13) — verificado: paridad `oauth*` perfecta entre `en_US`/`es_ES`
+y todas las claves usadas (literales + `oauthConnectTab<Id>` dinámicos) presentes en ambos. No mover el JSON. Verificar que las claves `oauthConnect*` (incluidas las 5
+nuevas de la tab "Otros": `oauthConnectOtherAutoHeading/ManualHeading/Step1..3`) siguen en los 3
+locales del host y que el `LocaleProvider` las inyecta. Agregar una nota en
+`docs/repo-topology.md`: "las claves de una página que vive en core pueden seguir en el host".
+
+**Paso 6 — Release + bump (el "peaje" de latencia).** ⏳ PENDIENTE (2026-07-13 — lo gestiona el usuario).
+`publish-private-packages.yml` es `workflow_dispatch` (release manual de core) → `bump-core-on-release.yml`
+abre el PR de bump del pin en `schema_forge` (merge humano) → recién ahí live. Durante desarrollo,
+validar todo el encadenamiento con `LOCAL_CORE=1` / `make dev-local-core` antes de publicar, para no
+gastar ciclos de release en errores de imports.
+
+> **Mecanismo para abaratar este peaje → [Sistema de "preview versions"](./2026-07-14-preview-package-publishing.md).**
+> Para validar el camino de **paquete publicado** (no `LOCAL_CORE`) sin gastar un release `latest`,
+> se implementó un sistema de previews descartables (dist-tag `alpha`, auto en cada push a
+> `feature/**`). Nació de este Paso 6. **Estado: implementado** en `schema_forge_core@feature/ETP-4394`
+> (commit `31822cdcd`), pendiente de validación end-to-end.
+
+### Estrategia de shims (clave para hacerlo incremental y sin big-bang)
+
+Cada paso deja en `schema_forge` un re-export de una línea del artefacto movido, exactamente como ya
+existe para `@/auth` e `@/i18n`. Ventaja: ningún otro consumidor local se entera del move, cada PR es
+chico y revisable, y si algo falla se revierte el shim sin tocar core. Los shims se pueden limpiar
+más adelante (oportunísticamente) reapuntando los imports directos a `@etendosoftware/app-shell-core/...`.
+
+### Riesgos / checklist de verificación post-migración
+
+- [ ] `make dev-local-core` levanta y `/authorize` (sin params OAuth) renderiza la landing con tabs.
+- [ ] `/authorize?...` (con params) sigue mostrando la pantalla de consentimiento — la parte OAuth de
+      `AuthorizePage` viaja junto y no se debe romper.
+- [ ] El evento `mcp_connect_tab_selected` sigue llegando a Mixpanel con `client` (verificar que el
+      seam del Paso 2 no volvió a romper el allowlist de `payload.js`).
+- [ ] Los 3 tests (`mcpClients.test.js`, `copy-button.vitest.jsx`, `AuthorizePage.vitest.jsx`) corren
+      verdes desde core (`pnpm --filter app-shell-core test` / `test:vitest`).
+- [ ] `deriveServerName()` sigue devolviendo el alias correcto por entorno (local/staging/exp/prod).
+- [ ] `domain-boundary-check.yml` sigue no-op (no hay gate que valide el move) — la revisión de la
+      frontera es manual contra `docs/repo-topology.md`.
