@@ -165,11 +165,11 @@ export function ImageField({ imageId, onChange, token, apiBaseUrl, readOnly = fa
     <>
       <div data-testid={`field-${fieldKey}`} className={stretch ? 'h-full' : ''}>
         {stretch ? (
-          <div className="h-full flex flex-col bg-card border border-[#E8EAEF] rounded-xl p-1">
+          <div className="h-full flex flex-col bg-card border border-[hsl(var(--border-subtle))] rounded-xl p-1">
             {/* Label */}
             {label && (
               <div className="px-3 h-8 flex items-center flex-shrink-0">
-                <span className="text-sm font-medium text-[#121217] leading-6">{label}</span>
+                <span className="text-sm font-medium text-[hsl(var(--foreground))] leading-6">{label}</span>
               </div>
             )}
 
@@ -182,16 +182,16 @@ export function ImageField({ imageId, onChange, token, apiBaseUrl, readOnly = fa
                     onClick={handlePreviewClick}
                   >
                     <img src={blobUrl} alt="Product" className="absolute inset-0 w-full h-full object-contain rounded-lg" />
-                    {/* Hover overlay — rgba(18,18,23,0.05) per Figma */}
-                    <div className="absolute inset-0 bg-[rgba(18,18,23,0.05)] opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none rounded-lg" />
+                    {/* Hover overlay — hsl(var(--foreground) / 0.05) per Figma */}
+                    <div className="absolute inset-0 bg-[hsl(var(--foreground) / 0.05)] opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none rounded-lg" />
                     {!readOnly && (
                       <button
                         type="button"
                         onClick={(e) => { e.stopPropagation(); onChange?.(''); }}
-                        className="absolute top-1 right-1 w-6 h-6 flex items-center justify-center bg-card border border-[#D1D4DB] shadow-[0px_1px_2px_rgba(18,18,23,0.05)] rounded-full opacity-0 group-hover:opacity-100 hover:bg-[#F5F7F9] transition-all"
+                        className="absolute top-1 right-1 w-6 h-6 flex items-center justify-center bg-card border border-[hsl(var(--border-control))] shadow-[0px_1px_2px_hsl(var(--foreground) / 0.05)] rounded-full opacity-0 group-hover:opacity-100 hover:bg-[hsl(var(--muted))] transition-all"
                         aria-label="Remove image"
                       >
-                        <TrashIcon className="w-4 h-4 text-[#828FA3]" data-testid="TrashIcon__266d2c" />
+                        <TrashIcon className="w-4 h-4 text-[hsl(var(--text-disabled))]" data-testid="TrashIcon__266d2c" />
                       </button>
                     )}
                   </div>
@@ -203,10 +203,10 @@ export function ImageField({ imageId, onChange, token, apiBaseUrl, readOnly = fa
                       type="button"
                       onClick={openFilePicker}
                       disabled={uploading}
-                      className="h-12 w-12 border border-dashed border-[#D1D4DB] rounded-lg flex items-center justify-center hover:border-[#828FA3] hover:bg-[#F5F7F9] transition-colors disabled:opacity-50"
+                      className="h-12 w-12 border border-dashed border-[hsl(var(--border-control))] rounded-lg flex items-center justify-center hover:border-[hsl(var(--text-disabled))] hover:bg-[hsl(var(--muted))] transition-colors disabled:opacity-50"
                       aria-label={ui('uploadImage')}
                     >
-                      <Upload className="h-5 w-5 text-[#828FA3]" data-testid="Upload__266d2c" />
+                      <Upload className="h-5 w-5 text-[hsl(var(--text-disabled))]" data-testid="Upload__266d2c" />
                     </button>
                   </div>
                 )}
@@ -217,7 +217,7 @@ export function ImageField({ imageId, onChange, token, apiBaseUrl, readOnly = fa
                 <div
                   className={`flex-1 flex flex-col items-center justify-center gap-2 px-5 py-5 border border-dashed rounded-lg transition-colors
                     ${!readOnly ? 'cursor-pointer' : ''}
-                    ${isDragging ? 'border-[#828FA3] bg-[#F5F7F9]' : 'border-[#D1D4DB]'}`}
+                    ${isDragging ? 'border-[hsl(var(--text-disabled))] bg-[hsl(var(--muted))]' : 'border-[hsl(var(--border-control))]'}`}
                   onClick={() => { if (!readOnly && !uploading) openFilePicker(); }}
                   onDragEnter={handleDragEnter}
                   onDragOver={handleDragOver}
@@ -231,14 +231,14 @@ export function ImageField({ imageId, onChange, token, apiBaseUrl, readOnly = fa
                   ) : (
                     <>
                       <span
-                        className="w-8 h-8 flex items-center justify-center bg-card border border-[#D1D4DB] shadow-[0px_1px_2px_rgba(18,18,23,0.05)] rounded-lg"
+                        className="w-8 h-8 flex items-center justify-center bg-card border border-[hsl(var(--border-control))] shadow-[0px_1px_2px_hsl(var(--foreground) / 0.05)] rounded-lg"
                         aria-hidden="true"
                       >
-                        <Upload className="h-5 w-5 text-[#828FA3]" data-testid="Upload__266d2c" />
+                        <Upload className="h-5 w-5 text-[hsl(var(--text-disabled))]" data-testid="Upload__266d2c" />
                       </span>
                       <div className="flex flex-col items-center gap-1">
-                        <span className="text-sm font-normal text-[#121217] text-center">{ui('imageDropTitle')}</span>
-                        <span className="text-xs font-normal text-[#6C6C89] text-center">
+                        <span className="text-sm font-normal text-[hsl(var(--foreground))] text-center">{ui('imageDropTitle')}</span>
+                        <span className="text-xs font-normal text-[hsl(var(--muted-foreground))] text-center">
                           {ui('imageDropSubtitle', { max: IMAGE_MAX_SIZE_MB, w: IMAGE_MAX_WIDTH, h: IMAGE_MAX_HEIGHT })}
                         </span>
                       </div>

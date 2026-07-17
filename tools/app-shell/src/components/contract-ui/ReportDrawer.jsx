@@ -21,23 +21,23 @@ const FORMATS = [
 // ---------------------------------------------------------------------------
 const REPORT_CSS = `
   * { margin: 0; padding: 0; box-sizing: border-box; }
-  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 10pt; color: #1e293b; line-height: 1.4; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 10pt; color: hsl(var(--foreground)); line-height: 1.4; }
   .report-container { padding: 20mm 15mm; }
-  .report-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 4mm; padding-bottom: 4mm; border-bottom: 2px solid #1a1a2e; }
-  .report-title { font-size: 16pt; font-weight: 700; color: #1a1a2e; }
-  .report-meta { text-align: right; font-size: 8pt; color: #64748b; }
-  .report-filters { margin-bottom: 4mm; padding: 2mm 3mm; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 2mm; font-size: 8pt; color: #475569; }
-  .report-filters strong { color: #1e293b; }
+  .report-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 4mm; padding-bottom: 4mm; border-bottom: 2px solid hsl(var(--foreground)); }
+  .report-title { font-size: 16pt; font-weight: 700; color: hsl(var(--foreground)); }
+  .report-meta { text-align: right; font-size: 8pt; color: hsl(var(--muted-foreground)); }
+  .report-filters { margin-bottom: 4mm; padding: 2mm 3mm; background: hsl(var(--muted)); border: 1px solid hsl(var(--border-control)); border-radius: 2mm; font-size: 8pt; color: hsl(var(--muted-foreground)); }
+  .report-filters strong { color: hsl(var(--foreground)); }
   .report-table { width: 100%; border-collapse: collapse; font-size: 9pt; }
-  .report-table thead th { background: #f8fafc; border-bottom: 2px solid #e2e8f0; padding: 2mm 3mm; text-align: left; font-weight: 600; font-size: 8pt; text-transform: uppercase; letter-spacing: 0.5px; color: #64748b; white-space: nowrap; }
-  .report-table tbody td { padding: 1.5mm 3mm; border-bottom: 1px solid #e2e8f0; vertical-align: top; }
-  .report-table tbody tr:nth-child(even) { background: #f1f5f9; }
+  .report-table thead th { background: hsl(var(--muted)); border-bottom: 2px solid hsl(var(--border-control)); padding: 2mm 3mm; text-align: left; font-weight: 600; font-size: 8pt; text-transform: uppercase; letter-spacing: 0.5px; color: hsl(var(--muted-foreground)); white-space: nowrap; }
+  .report-table tbody td { padding: 1.5mm 3mm; border-bottom: 1px solid hsl(var(--border-control)); vertical-align: top; }
+  .report-table tbody tr:nth-child(even) { background: hsl(var(--muted)); }
   .cell-boolean { text-align: center; }
-  .cell-boolean .yes { color: #16a34a; font-weight: 600; }
-  .cell-boolean .no { color: #64748b; }
+  .cell-boolean .yes { color: var(--status-success-fg); font-weight: 600; }
+  .cell-boolean .no { color: hsl(var(--muted-foreground)); }
   .cell-amount { text-align: right; font-family: 'SF Mono', 'Fira Code', monospace; font-size: 8.5pt; }
-  .report-footer { margin-top: 6mm; padding-top: 3mm; border-top: 1px solid #e2e8f0; display: flex; justify-content: space-between; font-size: 8pt; color: #64748b; }
-  .report-summary { font-weight: 600; color: #1e293b; }
+  .report-footer { margin-top: 6mm; padding-top: 3mm; border-top: 1px solid hsl(var(--border-control)); display: flex; justify-content: space-between; font-size: 8pt; color: hsl(var(--muted-foreground)); }
+  .report-summary { font-weight: 600; color: hsl(var(--foreground)); }
   @page { margin: 15mm; size: A4 landscape; }
   @media print { .report-container { padding: 0; } }
 `;
@@ -431,8 +431,8 @@ export default function ReportDrawer({
 
         {/* jsreport status bar */}
         {jsreportAvailable === false && (
-          <div className="px-4 py-1.5 bg-amber-50 border-b border-amber-200 text-xs text-amber-700">
-            {ui('jsreportNotAvailableBanner')} <code className="bg-amber-100 px-1 rounded">docker compose -f docker/jsreport/docker-compose.yml up -d</code>
+          <div className="px-4 py-1.5 bg-status-warning border-b border-status-warning-border text-xs text-status-warning-foreground">
+            {ui('jsreportNotAvailableBanner')} <code className="bg-status-warning px-1 rounded">docker compose -f docker/jsreport/docker-compose.yml up -d</code>
           </div>
         )}
 

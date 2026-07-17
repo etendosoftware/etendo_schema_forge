@@ -83,7 +83,7 @@ function DynamicSelect({ value, onChange, options = [], loading, error, onRetry,
         <button
           type="button"
           onClick={onRetry}
-          className="text-xs font-medium text-blue-600 hover:text-blue-700 whitespace-nowrap transition-colors"
+          className="text-xs font-medium text-status-info-foreground hover:text-status-info-foreground whitespace-nowrap transition-colors"
         >
           {retryLabel}
         </button>

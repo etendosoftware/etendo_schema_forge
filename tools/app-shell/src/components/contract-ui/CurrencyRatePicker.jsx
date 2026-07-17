@@ -224,7 +224,7 @@ export function CurrencyRatePicker({
             data-testid="currency-rate-confirm"
             type="button"
             onClick={handleRateConfirm}
-            className="text-green-600 hover:text-green-700 p-0.5 rounded"
+            className="text-status-success-foreground hover:text-status-success-foreground p-0.5 rounded"
             title="Confirmar"
           >
             <Check className="h-3.5 w-3.5" data-testid={"Check__" + field.id} />

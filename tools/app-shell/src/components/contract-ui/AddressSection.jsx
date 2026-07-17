@@ -85,7 +85,7 @@ function OptionPicker({ open, onClose, title, options, loading, failed, loadErro
                 onClick={() => onSelect(opt.id, opt.label)}
                 className={[
                   'w-full flex items-center gap-2 px-4 py-2.5 text-sm text-left hover:bg-muted',
-                  selected === opt.id ? 'bg-blue-50 text-blue-700 font-medium' : 'text-foreground',
+                  selected === opt.id ? 'bg-status-info text-status-info-foreground font-medium' : 'text-foreground',
                 ].join(' ')}
               >
                 <span className="w-4 shrink-0">
@@ -102,7 +102,7 @@ function OptionPicker({ open, onClose, title, options, loading, failed, loadErro
 }
 
 const RequiredMark = () => (
-  <span style={{ color: '#ef4444', marginLeft: '2px' }}>*</span>
+  <span style={{ color: 'hsl(var(--destructive))', marginLeft: '2px' }}>*</span>
 );
 
 export default function AddressSection({ form, onChange, opts, requiredFields = [] }) {

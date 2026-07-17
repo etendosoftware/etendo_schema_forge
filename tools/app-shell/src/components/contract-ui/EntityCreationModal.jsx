@@ -40,7 +40,7 @@ export function DynamicSelect({
         <button
           type="button"
           onClick={onRetry}
-          className="text-xs font-medium text-blue-600 hover:text-blue-700 whitespace-nowrap transition-colors"
+          className="text-xs font-medium text-status-info-foreground hover:text-status-info-foreground whitespace-nowrap transition-colors"
         >
           {retryLabel}
         </button>
@@ -200,7 +200,7 @@ function RepeatableSection({ section, rows, onAdd, onUpdate, onRemove, ui }) {
             <button
               type="button"
               onClick={() => onRemove(i)}
-              className="text-muted-foreground hover:text-red-500 transition-colors text-lg leading-none flex-shrink-0 mb-1"
+              className="text-muted-foreground hover:text-destructive transition-colors text-lg leading-none flex-shrink-0 mb-1"
               style={{ width: '20px' }}
             >
               ×
@@ -210,7 +210,7 @@ function RepeatableSection({ section, rows, onAdd, onUpdate, onRemove, ui }) {
         <button
           type="button"
           onClick={() => onAdd({ ...emptyRow })}
-          className="text-sm font-medium text-blue-600 hover:text-blue-700 transition-colors"
+          className="text-sm font-medium text-status-info-foreground hover:text-status-info-foreground transition-colors"
         >
           + {ui(section.addLabelKey)}
         </button>
@@ -251,7 +251,7 @@ function RepeatableSection({ section, rows, onAdd, onUpdate, onRemove, ui }) {
                       <button
                         type="button"
                         onClick={() => onRemove(i)}
-                        className="text-muted-foreground hover:text-red-500 transition-colors text-base leading-none"
+                        className="text-muted-foreground hover:text-destructive transition-colors text-base leading-none"
                       >
                         ×
                       </button>
@@ -266,7 +266,7 @@ function RepeatableSection({ section, rows, onAdd, onUpdate, onRemove, ui }) {
       <button
         type="button"
         onClick={() => onAdd({ ...emptyRow })}
-        className="text-sm font-medium text-blue-600 hover:text-blue-700 transition-colors"
+        className="text-sm font-medium text-status-info-foreground hover:text-status-info-foreground transition-colors"
       >
         + {ui(section.addLabelKey)}
       </button>
@@ -306,7 +306,7 @@ function CollapsibleFieldSection({ section, form, onChange, opts, ui }) {
           <button
             type="button"
             onClick={() => setExpanded(true)}
-            className="text-xs font-medium text-blue-600 hover:text-blue-700 transition-colors"
+            className="text-xs font-medium text-status-info-foreground hover:text-status-info-foreground transition-colors"
           >
             + {ui('add')}
           </button>
@@ -315,7 +315,7 @@ function CollapsibleFieldSection({ section, form, onChange, opts, ui }) {
           <button
             type="button"
             onClick={() => setExpanded(false)}
-            className="text-xs font-medium text-blue-600 hover:text-blue-700 transition-colors"
+            className="text-xs font-medium text-status-info-foreground hover:text-status-info-foreground transition-colors"
           >
             &minus;
           </button>
@@ -340,7 +340,7 @@ function CollapsibleFieldSection({ section, form, onChange, opts, ui }) {
                 allFields.forEach(f => onChange(f.id, ''));
                 setExpanded(false);
               }}
-              className="px-3 py-1.5 text-muted-foreground hover:text-red-500 transition-colors text-base leading-none shrink-0"
+              className="px-3 py-1.5 text-muted-foreground hover:text-destructive transition-colors text-base leading-none shrink-0"
             >
               ×
             </button>
@@ -521,12 +521,12 @@ export default function EntityCreationModal({
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center p-4"
-      style={{ backgroundColor: 'rgba(0,0,0,0.4)' }}
+      style={{ backgroundColor: 'hsl(var(--foreground) / 0.4)' }}
       onClick={onCancel}
     >
       <div className="entity-creation-modal" onClick={e => e.stopPropagation()} style={MODAL_STYLES.dialog}>
         {/* Title */}
-        <div style={{ boxSizing: 'border-box', display: 'flex', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: '8px 20px 16px 20px', gap: '20px', width: '100%', height: '64px', borderBottom: '1px solid #E8EAEF', flexShrink: 0 }}>
+        <div style={{ boxSizing: 'border-box', display: 'flex', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: '8px 20px 16px 20px', gap: '20px', width: '100%', height: '64px', borderBottom: '1px solid hsl(var(--border-subtle))', flexShrink: 0 }}>
           <h2 style={MODAL_STYLES.title}>{title}</h2>
           {titleRightContent}
         </div>
@@ -546,7 +546,7 @@ export default function EntityCreationModal({
             {headerFields.map((f, idx) => (
               <div key={f.id} style={{ ...MODAL_STYLES.field, gridColumn: f.fullWidth ? 'span 4' : undefined }}>
                 <label style={MODAL_STYLES.fieldLabel}>
-                  {ui(f.labelKey)}{f.required && <span style={{ color: '#ef4444', marginLeft: '2px' }}>*</span>}
+                  {ui(f.labelKey)}{f.required && <span style={{ color: 'hsl(var(--destructive))', marginLeft: '2px' }}>*</span>}
                 </label>
                 <FieldRenderer
                   field={f}
@@ -580,13 +580,13 @@ export default function EntityCreationModal({
                     gap: '4px',
                     background: 'transparent',
                     border: 'none',
-                    borderBottom: active ? '2px solid #121217' : '2px solid transparent',
+                    borderBottom: active ? '2px solid hsl(var(--foreground))' : '2px solid transparent',
                     borderRadius: 0,
                     cursor: 'pointer',
                     fontFamily: 'Inter, sans-serif',
                     fontSize: '14px',
                     fontWeight: active ? 600 : 400,
-                    color: active ? '#121217' : '#9ca3af',
+                    color: active ? 'hsl(var(--foreground))' : 'hsl(var(--text-disabled))',
                     whiteSpace: 'nowrap',
                     transition: 'color 0.15s',
                   }}
@@ -606,7 +606,7 @@ export default function EntityCreationModal({
             </div>
           ))}
           {error && (
-            <div className="mt-4 rounded-md bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
+            <div className="mt-4 rounded-md bg-destructive border border-destructive px-4 py-3 text-sm text-destructive">
               {error}
             </div>
           )}

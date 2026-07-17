@@ -437,7 +437,7 @@ function renderInputCell({
         onKeyDown={handleKeyDown}
         placeholder={fieldLabel}
         required={field.required}
-        className={`w-full h-8 text-sm rounded-md border bg-card px-2 focus:ring-2 focus:outline-none${isNumeric ? ' text-right tabular-nums' : ''}${invalidFields.has(field.key) ? ' border-red-500 focus:ring-red-500' : ' border-input focus:ring-primary'}`}
+        className={`w-full h-8 text-sm rounded-md border bg-card px-2 focus:ring-2 focus:outline-none${isNumeric ? ' text-right tabular-nums' : ''}${invalidFields.has(field.key) ? ' border-destructive focus:ring-destructive' : ' border-input focus:ring-primary'}`}
       />
     </TableCell>
   );
@@ -771,7 +771,7 @@ const InlineAddRow = forwardRef(function InlineAddRow({ columns, fields, onAdd, 
   let firstInputAssigned = false;
 
   return (
-    <TableRow ref={rowRef} data-testid="inline-add-row" className="bg-blue-50/50 border-t-2 border-primary/20">
+    <TableRow ref={rowRef} data-testid="inline-add-row" className="bg-status-info/50 border-t-2 border-primary/20">
       {/* Saving spinner — aligned with selection checkbox column (empty when idle). */}
       {selectable && (
         <TableCell className="w-10 px-1" data-testid="TableCell__eb5261">
@@ -1037,7 +1037,7 @@ function LookupField({ value, fieldKey, placeholder, selectorUrl, selectorContex
           if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setOpen(true); }
           else if (onKeyDown) onKeyDown(e);
         }}
-        className={`w-full h-8 text-sm rounded-md border bg-card px-2 text-left flex items-center gap-2 focus:ring-2 focus:outline-none transition-colors${isInvalid ? ' border-red-500 focus:ring-red-500' : ' border-input hover:border-primary/50 focus:ring-primary'}`}
+        className={`w-full h-8 text-sm rounded-md border bg-card px-2 text-left flex items-center gap-2 focus:ring-2 focus:outline-none transition-colors${isInvalid ? ' border-destructive focus:ring-destructive' : ' border-input hover:border-primary/50 focus:ring-primary'}`}
       >
         <Search
           className="h-3.5 w-3.5 text-muted-foreground shrink-0"
@@ -1386,7 +1386,7 @@ function TableDataRow({
               <button
                 type="button"
                 onClick={(e) => { e.stopPropagation(); onSaveRow?.(); }}
-                className="h-8 w-8 flex items-center justify-center rounded-full text-[#17663A] hover:bg-[#EEFBF4] transition-all"
+                className="h-8 w-8 flex items-center justify-center rounded-full text-[var(--status-success-fg)] hover:bg-[var(--status-success-bg)] transition-all"
                 aria-label={ui('save')}
               >
                 <Check className="h-5 w-5" aria-hidden="true" data-testid="Check__eb5261" />
@@ -1399,7 +1399,7 @@ function TableDataRow({
                   if (onEditRow) { onEditRow(row); }
                   else { handleRowActivation(row, idx); }
                 }}
-                className="opacity-0 group-hover/row:opacity-100 focus-visible:opacity-100 h-8 w-8 flex items-center justify-center rounded-full text-[#828FA3] hover:bg-[#F5F7F9] transition-all"
+                className="opacity-0 group-hover/row:opacity-100 focus-visible:opacity-100 h-8 w-8 flex items-center justify-center rounded-full text-[hsl(var(--text-disabled))] hover:bg-[hsl(var(--muted))] transition-all"
                 aria-label={ui('edit')}
               >
                 <Pencil className="h-5 w-5" aria-hidden="true" data-testid="Pencil__eb5261" />
@@ -1415,7 +1415,7 @@ function TableDataRow({
                 <button
                   type="button"
                   onClick={(e) => { e.stopPropagation(); onCancelEdit?.(); }}
-                  className="h-8 w-8 flex items-center justify-center rounded-full text-[#828FA3] hover:bg-[#F5F7F9] transition-all"
+                  className="h-8 w-8 flex items-center justify-center rounded-full text-[hsl(var(--text-disabled))] hover:bg-[hsl(var(--muted))] transition-all"
                   aria-label={ui('cancel')}
                 >
                   <X className="h-5 w-5" aria-hidden="true" data-testid="X__eb5261" />
@@ -1428,7 +1428,7 @@ function TableDataRow({
                     e.stopPropagation();
                     await handleDeleteRowClick(row, onDeleteRow, setDeletingRows);
                   }}
-                  className="opacity-0 group-hover/row:opacity-100 focus-visible:opacity-100 h-8 w-8 flex items-center justify-center rounded-full text-[#D50B3E] hover:bg-[#FEF0F4] transition-all"
+                  className="opacity-0 group-hover/row:opacity-100 focus-visible:opacity-100 h-8 w-8 flex items-center justify-center rounded-full text-[hsl(var(--destructive))] hover:bg-[var(--status-destructive-bg)] transition-all"
                   aria-label={ui('deleteRowTooltip')}
                   data-testid={`row-delete-${row.id}`}
                 >
@@ -1849,7 +1849,7 @@ export function DataTable({
   const quickActionsCol = oneIfTrue(quickActionsEnabled);
   const actionCols = hoverRowActions ? 1 + deleteCol : deleteCol + cloneCol;
   const colSpan = visibleColumns.length + oneIfTrue(selectable) + actionCols + quickActionsCol;
-  const selectedRowBg = hoverRowActions ? 'bg-[#F5F7F9]' : 'bg-primary/5';
+  const selectedRowBg = hoverRowActions ? 'bg-[hsl(var(--muted))]' : 'bg-primary/5';
 
   // In inlineEditable add-row mode (hideHeader=true), the DataTable only renders
   // the new-line form while InlineLinesPanel owns the existing rows. InlineLinesPanel

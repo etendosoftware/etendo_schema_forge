@@ -211,7 +211,7 @@ export function InlineSearchCombo({ field, value, options, onChange, onKeyDown, 
               key={opt.id}
               type="button"
               data-testid={`inline-add-option-${field.key}-${opt.id}`}
-              className="w-full text-left px-2 py-1.5 text-sm hover:bg-blue-50 cursor-pointer whitespace-nowrap"
+              className="w-full text-left px-2 py-1.5 text-sm hover:bg-status-info cursor-pointer whitespace-nowrap"
               onMouseDown={(e) => { e.preventDefault(); handleSelect(opt); }}
             >
               {opt.name || opt.label || opt._identifier || opt.id}

@@ -470,7 +470,7 @@ export function ListModalWindow({
             type="button"
             onClick={handleBack}
             data-testid="list-modal-back"
-            className="inline-flex h-10 items-center rounded-lg border border-[#D1D4DB] bg-card px-3 text-sm font-medium leading-6 text-[#121217] shadow-[0_1px_2px_rgba(18,18,23,0.05)] transition-colors hover:bg-[#F5F7F9]"
+            className="inline-flex h-10 items-center rounded-lg border border-[hsl(var(--border-control))] bg-card px-3 text-sm font-medium leading-6 text-[hsl(var(--foreground))] shadow-[0_1px_2px_hsl(var(--foreground) / 0.05)] transition-colors hover:bg-[hsl(var(--muted))]"
           >
             {config?.backLabelKey ? ui(config.backLabelKey) : ui('cancel')}
           </button>
@@ -498,7 +498,7 @@ export function ListModalWindow({
           {hasSearch && (
             <div className="relative w-[280px]">
               <Search
-                className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#828FA3]"
+                className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[hsl(var(--text-disabled))]"
                 data-testid="Search__19eda5" />
               <input
                 type="text"
@@ -506,7 +506,7 @@ export function ListModalWindow({
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder={config?.searchPlaceholderKey ? ui(config.searchPlaceholderKey) : ui('search')}
                 data-testid="list-modal-search"
-                className="h-10 w-full rounded-lg border border-[#D1D4DB] bg-card pl-9 pr-3 text-sm leading-6 text-[#121217] shadow-[0_1px_2px_rgba(18,18,23,0.05)] placeholder:text-[#6C6C89] focus:outline-none focus:ring-2 focus:ring-[#121217]/10"
+                className="h-10 w-full rounded-lg border border-[hsl(var(--border-control))] bg-card pl-9 pr-3 text-sm leading-6 text-[hsl(var(--foreground))] shadow-[0_1px_2px_hsl(var(--foreground) / 0.05)] placeholder:text-[hsl(var(--muted-foreground))] focus:outline-none focus:ring-2 focus:ring-[hsl(var(--foreground))]/10"
               />
             </div>
           )}
@@ -514,10 +514,10 @@ export function ListModalWindow({
             type="button"
             onClick={openCreate}
             data-testid="list-modal-new"
-            className="group inline-flex h-10 items-center gap-1.5 rounded-lg bg-[#121217] px-3 text-sm font-medium leading-6 text-white transition-colors hover:bg-[#FFD500] hover:text-[#121217]"
+            className="group inline-flex h-10 items-center gap-1.5 rounded-lg bg-[hsl(var(--foreground))] px-3 text-sm font-medium leading-6 text-white transition-colors hover:bg-[hsl(var(--primary))] hover:text-[hsl(var(--foreground))]"
           >
             <Plus
-              className="h-4 w-4 text-white/90 group-hover:text-[#121217]"
+              className="h-4 w-4 text-white/90 group-hover:text-[hsl(var(--foreground))]"
               data-testid="Plus__19eda5" />
             {config?.newLabelKey ? ui(config.newLabelKey) : ui('newRecord')}
           </button>
@@ -573,12 +573,12 @@ export function ListModalWindow({
             className="space-y-1 px-5 py-2 text-left"
             data-testid="DialogHeader__19eda5">
             <DialogTitle
-              className="text-xl font-semibold leading-7 tracking-normal text-[#121217]"
+              className="text-xl font-semibold leading-7 tracking-normal text-[hsl(var(--foreground))]"
               data-testid="DialogTitle__19eda5">
               {title}
             </DialogTitle>
             {subtitle && (
-              <p className="text-xs font-normal leading-4 text-[#6C6C89]" data-testid="list-modal-subtitle">
+              <p className="text-xs font-normal leading-4 text-[hsl(var(--muted-foreground))]" data-testid="list-modal-subtitle">
                 {subtitle}
               </p>
             )}
@@ -595,7 +595,7 @@ export function ListModalWindow({
               return (
                 <div key={sec.key} className="flex flex-col gap-3">
                   {sectionLabel && (
-                    <h4 className="text-sm font-semibold leading-6 text-[#121217]" data-testid={`list-modal-section-${sec.key}`}>
+                    <h4 className="text-sm font-semibold leading-6 text-[hsl(var(--foreground))]" data-testid={`list-modal-section-${sec.key}`}>
                       {sectionLabel}
                     </h4>
                   )}
@@ -615,7 +615,7 @@ export function ListModalWindow({
             })}
 
             {formError && (
-              <div className="flex items-start gap-2 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+              <div className="flex items-start gap-2 rounded-md border border-destructive bg-destructive px-3 py-2 text-sm text-destructive">
                 <X size={16} className="mt-0.5 flex-shrink-0" data-testid="X__19eda5" />
                 <span>{formError}</span>
               </div>
@@ -654,7 +654,7 @@ export function ListModalWindow({
  */
 function ModalFooter({ toggleField, toggleKey, toggleLabel, toggleChecked, onToggleChange, onSubmit, submitDisabled, submitting, submitLabel, ui }) {
   return (
-    <div className="flex items-center justify-between gap-4 border-t border-[#E8EAEF] px-5 py-3">
+    <div className="flex items-center justify-between gap-4 border-t border-[hsl(var(--border-subtle))] px-5 py-3">
       <div className="flex min-w-0 flex-1 flex-col gap-0.5">
         {toggleField ? (
           <>
@@ -665,10 +665,10 @@ function ModalFooter({ toggleField, toggleKey, toggleLabel, toggleChecked, onTog
                 aria-label={toggleLabel}
                 data-testid={`list-modal-footer-toggle-${toggleKey}`}
               />
-              <span className="text-sm font-medium leading-6 text-[#121217]">{toggleLabel}</span>
+              <span className="text-sm font-medium leading-6 text-[hsl(var(--foreground))]">{toggleLabel}</span>
             </div>
             {toggleField.help && (
-              <p className="text-sm leading-6 text-[#6C6C89]">{ui(toggleField.help) ?? toggleField.help}</p>
+              <p className="text-sm leading-6 text-[hsl(var(--muted-foreground))]">{ui(toggleField.help) ?? toggleField.help}</p>
             )}
           </>
         ) : (
@@ -680,7 +680,7 @@ function ModalFooter({ toggleField, toggleKey, toggleLabel, toggleChecked, onTog
         onClick={onSubmit}
         disabled={submitDisabled}
         data-testid="list-modal-submit"
-        className="inline-flex h-10 shrink-0 items-center justify-center rounded-full px-3 py-2 text-sm font-medium leading-6 text-white transition-colors disabled:bg-[#D1D4DB] disabled:text-white enabled:bg-[#121217] enabled:hover:bg-[#FFD500] enabled:hover:text-[#121217]"
+        className="inline-flex h-10 shrink-0 items-center justify-center rounded-full px-3 py-2 text-sm font-medium leading-6 text-white transition-colors disabled:bg-[hsl(var(--border-control))] disabled:text-white enabled:bg-[hsl(var(--foreground))] enabled:hover:bg-[hsl(var(--primary))] enabled:hover:text-[hsl(var(--foreground))]"
       >
         {submitting ? ui('saving') : submitLabel}
       </button>
@@ -700,18 +700,18 @@ function DeleteConfirmDialog({ open, busy, onCancel, onConfirm, ui }) {
         data-testid="DialogContent__19eda5">
         <DialogHeader className="space-y-1.5 text-left" data-testid="DialogHeader__19eda5">
           <DialogTitle
-            className="text-lg font-semibold leading-6 text-[#121217]"
+            className="text-lg font-semibold leading-6 text-[hsl(var(--foreground))]"
             data-testid="DialogTitle__19eda5">
             {ui('deleteConfirmTitle')}
           </DialogTitle>
-          <p className="text-sm leading-5 text-[#6C6C89]">{ui('deleteConfirmMessage')}</p>
+          <p className="text-sm leading-5 text-[hsl(var(--muted-foreground))]">{ui('deleteConfirmMessage')}</p>
         </DialogHeader>
         <div className="mt-5 flex justify-end gap-2">
           <button
             type="button"
             onClick={onCancel}
             disabled={busy}
-            className="inline-flex h-10 items-center rounded-lg border border-[#D1D4DB] bg-card px-4 text-sm font-medium leading-6 text-[#121217] transition-colors hover:bg-[#F5F7F9] disabled:opacity-50"
+            className="inline-flex h-10 items-center rounded-lg border border-[hsl(var(--border-control))] bg-card px-4 text-sm font-medium leading-6 text-[hsl(var(--foreground))] transition-colors hover:bg-[hsl(var(--muted))] disabled:opacity-50"
           >
             {ui('cancel')}
           </button>
@@ -720,7 +720,7 @@ function DeleteConfirmDialog({ open, busy, onCancel, onConfirm, ui }) {
             onClick={onConfirm}
             disabled={busy}
             data-testid="list-modal-delete-confirm"
-            className="inline-flex h-10 items-center gap-1.5 rounded-lg bg-[#D92D20] px-4 text-sm font-medium leading-6 text-white transition-colors hover:bg-[#B42318] disabled:opacity-50"
+            className="inline-flex h-10 items-center gap-1.5 rounded-lg bg-[hsl(var(--destructive))] px-4 text-sm font-medium leading-6 text-white transition-colors hover:bg-[hsl(var(--destructive))] disabled:opacity-50"
           >
             {busy ? <Loader2 className="h-4 w-4 animate-spin" data-testid="Loader2__19eda5" /> : null}
             {ui('delete')}
@@ -747,7 +747,7 @@ function ListModalGrid({ columns, data, tMenu, ui, onEdit, onClone, onDelete, de
       <Table data-testid="Table__19eda5">
         <TableHeader data-testid="TableHeader__19eda5">
           <TableRow
-            className="border-b border-[#E8EAEF] hover:bg-transparent"
+            className="border-b border-[hsl(var(--border-subtle))] hover:bg-transparent"
             data-testid="TableRow__19eda5">
             {/* Drag-handle column header (44px) */}
             <TableHead className="w-11 p-0" aria-hidden="true" data-testid="TableHead__19eda5" />
@@ -755,7 +755,7 @@ function ListModalGrid({ columns, data, tMenu, ui, onEdit, onClone, onDelete, de
               <TableHead
                 key={col.key}
                 className={cn(
-                  'h-10 px-3 text-xs font-semibold leading-4 text-[#121217]',
+                  'h-10 px-3 text-xs font-semibold leading-4 text-[hsl(var(--foreground))]',
                   cellAlignClass(col),
                   idx === 0 ? 'pl-0' : '',
                 )}
@@ -775,7 +775,7 @@ function ListModalGrid({ columns, data, tMenu, ui, onEdit, onClone, onDelete, de
             <TableRow className="hover:bg-transparent" data-testid="TableRow__19eda5">
               <TableCell
                 colSpan={columns.length + 2}
-                className="py-12 text-center text-[#6C6C89]"
+                className="py-12 text-center text-[hsl(var(--muted-foreground))]"
                 data-testid="list-modal-empty"
               >
                 <p className="text-sm font-medium">{ui('noRecordsYet')}</p>
@@ -786,13 +786,13 @@ function ListModalGrid({ columns, data, tMenu, ui, onEdit, onClone, onDelete, de
             <TableRow
               key={row.id}
               data-testid={`list-modal-row-${row.id}`}
-              className="group/row relative border-b border-[#E8EAEF] bg-card transition-shadow hover:z-10 hover:bg-card hover:shadow-lg"
+              className="group/row relative border-b border-[hsl(var(--border-subtle))] bg-card transition-shadow hover:z-10 hover:bg-card hover:shadow-lg"
             >
               {/* Drag handle — visual only; drag-to-reorder deferred */}
               <TableCell className="w-11 p-0" data-testid="TableCell__19eda5">
                 <div className="flex w-11 items-center justify-center opacity-0 transition-opacity group-hover/row:opacity-100">
                   <GripVertical
-                    className="h-5 w-5 text-[#828FA3]"
+                    className="h-5 w-5 text-[hsl(var(--text-disabled))]"
                     aria-hidden="true"
                     data-testid="GripVertical__19eda5" />
                 </div>
@@ -820,7 +820,7 @@ function ListModalGrid({ columns, data, tMenu, ui, onEdit, onClone, onDelete, de
                     onClick={() => onEdit?.(row)}
                     aria-label={ui('edit')}
                     data-testid={`list-modal-edit-${row.id}`}
-                    className="inline-flex h-8 w-8 items-center justify-center rounded-full text-[#828FA3] transition-colors hover:bg-[#E8EAEF]"
+                    className="inline-flex h-8 w-8 items-center justify-center rounded-full text-[hsl(var(--text-disabled))] transition-colors hover:bg-[hsl(var(--border-subtle))]"
                   >
                     <Pencil className="h-4 w-4" data-testid="Pencil__19eda5" />
                   </button>
@@ -830,7 +830,7 @@ function ListModalGrid({ columns, data, tMenu, ui, onEdit, onClone, onDelete, de
                       onClick={() => onClone(row)}
                       aria-label={ui('clone')}
                       data-testid={`list-modal-clone-${row.id}`}
-                      className="inline-flex h-8 w-8 items-center justify-center rounded-full text-[#828FA3] transition-colors hover:bg-[#E8EAEF]"
+                      className="inline-flex h-8 w-8 items-center justify-center rounded-full text-[hsl(var(--text-disabled))] transition-colors hover:bg-[hsl(var(--border-subtle))]"
                     >
                       <Copy className="h-4 w-4" data-testid="Copy__19eda5" />
                     </button>
@@ -842,7 +842,7 @@ function ListModalGrid({ columns, data, tMenu, ui, onEdit, onClone, onDelete, de
                       disabled={deletingId === row.id}
                       aria-label={ui('delete')}
                       data-testid={`list-modal-delete-${row.id}`}
-                      className="inline-flex h-8 w-8 items-center justify-center rounded-full text-[#D92D20] transition-colors hover:bg-[#FEE4E2] disabled:opacity-50"
+                      className="inline-flex h-8 w-8 items-center justify-center rounded-full text-[hsl(var(--destructive))] transition-colors hover:bg-[var(--status-destructive-bg)] disabled:opacity-50"
                     >
                       {deletingId === row.id
                         ? <Loader2 className="h-4 w-4 animate-spin" data-testid="Loader2__19eda5" />

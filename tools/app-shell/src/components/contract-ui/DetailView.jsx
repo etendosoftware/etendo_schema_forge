@@ -812,7 +812,7 @@ export function getAddLineWrapperStyle(linesLayout, { withBorder = true, noTopPa
     // The top border separates the lines from the add-button in the primary
     // header-lines path. Secondary/child tabs already have the table's own
     // bottom border, so they pass withBorder:false to avoid a double divider.
-    ...(withBorder ? { borderTop: '0.5px solid var(--color-border-tertiary, #e5e7eb)' } : {}),
+    ...(withBorder ? { borderTop: '0.5px solid var(--color-border-tertiary, hsl(var(--border-subtle)))' } : {}),
     padding
   };
 }
@@ -897,7 +897,7 @@ function getSidebarSlideClassName(isClosingLine) {
 }
 
 function getLinesToolbarClassName(linesLayout, toolbarPaddingX, toolbarBorderBottom) {
-  return `flex items-center justify-between ${linesLayout === 'inlineEditable' ? 'p-2' : toolbarPaddingX + ' py-2'}${toolbarBorderBottom || linesLayout === 'inlineEditable' ? ' border-b border-[#E8EAEF]' : ''}`;
+  return `flex items-center justify-between ${linesLayout === 'inlineEditable' ? 'p-2' : toolbarPaddingX + ' py-2'}${toolbarBorderBottom || linesLayout === 'inlineEditable' ? ' border-b border-[hsl(var(--border-subtle))]' : ''}`;
 }
 
 function getLineMenuActionsRef(getLineMenuActions, extraActionsRef) {
@@ -1401,7 +1401,7 @@ function renderDraftModeSaveActions({
 }) {
   return (
     <>
-      <Button variant="outline" size="default" className={`${saveBtnCls} bg-card border-[#D1D4DB] text-[#121217]`} data-testid="action-save-draft" disabled={hook.isSaving || !isDirty || blockSaveForBalance} title={blockSaveForBalance ? ui('journalUnbalancedSaveBlocked') : undefined} onClick={async () => {
+      <Button variant="outline" size="default" className={`${saveBtnCls} bg-card border-[hsl(var(--border-control))] text-[hsl(var(--foreground))]`} data-testid="action-save-draft" disabled={hook.isSaving || !isDirty || blockSaveForBalance} title={blockSaveForBalance ? ui('journalUnbalancedSaveBlocked') : undefined} onClick={async () => {
         if (!(await flushPendingLines())) return;
         const saved = await hook.handleSave(data);
         if (saved?.id && isNew) {
@@ -1409,7 +1409,7 @@ function renderDraftModeSaveActions({
           navigate(`/${windowName}/${saved.id}`, { replace: true, state: { justSaved: saved } });
         }
       }}>
-        {hook.isSaving ? <Loader2 className="h-3.5 w-3.5 animate-spin" data-testid="Loader2__fa3275" /> : <Save className="h-3.5 w-3.5" color="#64748B" data-testid="Save__fa3275" />}
+        {hook.isSaving ? <Loader2 className="h-3.5 w-3.5 animate-spin" data-testid="Loader2__fa3275" /> : <Save className="h-3.5 w-3.5" color="hsl(var(--muted-foreground))" data-testid="Save__fa3275" />}
         {ui('save')}
       </Button>
       <Button size="default" className={saveBtnCls} data-testid="action-save" disabled={hook.isSaving || blockCompleteForBalance || (draftMode.disableWhenEmpty === true && !hook.childrenLoading && hook.children.length === 0)} title={blockCompleteForBalance ? ui('journalUnbalancedCompleteBlocked') : undefined} onClick={async () => {
@@ -1500,12 +1500,12 @@ function renderExistingRecordSaveAction({
   isDocumentReadOnly, blockSaveForBalance,
 }) {
   return (
-    <Button variant="outline" size="default" className={`${saveBtnCls} bg-card border-[#D1D4DB] text-[#121217]`} data-testid="action-save" disabled={isDocumentReadOnly || hook.isSaving || !isDirty || blockSaveForBalance} title={blockSaveForBalance ? ui('journalUnbalancedSaveBlocked') : undefined} onClick={async () => {
+    <Button variant="outline" size="default" className={`${saveBtnCls} bg-card border-[hsl(var(--border-control))] text-[hsl(var(--foreground))]`} data-testid="action-save" disabled={isDocumentReadOnly || hook.isSaving || !isDirty || blockSaveForBalance} title={blockSaveForBalance ? ui('journalUnbalancedSaveBlocked') : undefined} onClick={async () => {
       if (!(await flushPendingLines())) return;
       const saved = await hook.handleSave(data);
       await handlePostSaveNavigation(saved, { isNew, onAfterCreate, onAfterSave, navigate, windowName, token, apiBaseUrl, hook });
     }}>
-      {hook.isSaving ? <Loader2 className="h-3.5 w-3.5 animate-spin" data-testid="Loader2__fa3275" /> : <Save className="h-3.5 w-3.5" color="#64748B" data-testid="Save__fa3275" />}
+      {hook.isSaving ? <Loader2 className="h-3.5 w-3.5 animate-spin" data-testid="Loader2__fa3275" /> : <Save className="h-3.5 w-3.5" color="hsl(var(--muted-foreground))" data-testid="Save__fa3275" />}
       {ui('save')}
     </Button>
   );
@@ -3116,7 +3116,7 @@ export function DetailView({
         <div className={getLinesToolbarClassName(linesLayout, toolbarPaddingX, toolbarBorderBottom)}>
           <div className="flex items-center gap-3">
             <Button
-              className="h-10 px-3 rounded-lg bg-card border border-[#D1D4DB] shadow-[0px_1px_2px_rgba(18,18,23,0.05)] text-[#121217] text-sm font-medium hover:bg-[#F5F7F9] transition-colors"
+              className="h-10 px-3 rounded-lg bg-card border border-[hsl(var(--border-control))] shadow-[0px_1px_2px_hsl(var(--foreground) / 0.05)] text-[hsl(var(--foreground))] text-sm font-medium hover:bg-[hsl(var(--muted))] transition-colors"
               data-testid="action-cancel"
               onClick={() => navigate(`/${windowName}`)}
             >
@@ -3152,8 +3152,8 @@ export function DetailView({
               if (!show) return null;
               if (b.hideWhenStatus?.includes(data[statusField])) return null;
               const cls = b.style === 'warning'
-                ? 'ml-1 border-amber-300 bg-amber-50 text-amber-700'
-                : 'ml-1 bg-blue-600 hover:bg-blue-700 border-transparent text-white';
+                ? 'ml-1 border-status-warning-border bg-status-warning text-status-warning-foreground'
+                : 'ml-1 bg-status-info hover:bg-status-info border-transparent text-white';
               const variant = b.style === 'warning' ? 'outline' : 'default';
               return (
                 <Badge
@@ -3205,7 +3205,7 @@ export function DetailView({
               {documentPreview && !isNew && recordId && (
                 <button
                   onClick={() => setShowPrint(true)}
-                  className="flex items-center justify-center p-[7px] rounded-md bg-card border border-[#D1D4DB] shadow-[0px_1px_2px_0px_#1212170D] text-muted-foreground hover:bg-[#F1F5F9] hover:text-foreground transition-colors"
+                  className="flex items-center justify-center p-[7px] rounded-md bg-card border border-[hsl(var(--border-control))] shadow-[0px_1px_2px_0px_hsl(var(--foreground))0D] text-muted-foreground hover:bg-[hsl(var(--muted))] hover:text-foreground transition-colors"
                   title={ui('sendPreview')}
                   data-testid="action-document-preview"
                 >
@@ -3235,7 +3235,7 @@ export function DetailView({
               }) && (
                 <button
                   onClick={() => setShowDeleteConfirm(true)}
-                  className={`${sqBtnSize} flex items-center justify-center rounded-lg border border-red-200 text-red-500 hover:bg-red-50 hover:text-red-600 transition-colors`}
+                  className={`${sqBtnSize} flex items-center justify-center rounded-lg border border-destructive text-destructive hover:bg-destructive hover:text-destructive transition-colors`}
                   title={ui('delete')}
                   data-testid="action-delete"
                 >
@@ -3286,7 +3286,7 @@ export function DetailView({
                     <button
                       data-testid="action-more"
                       onClick={() => setShowMoreMenu(v => !v)}
-                      className={`${sqBtnSize} flex items-center justify-center rounded-md bg-card border border-[#D1D4DB] shadow-[0px_1px_2px_0px_#1212170D] text-muted-foreground hover:bg-[#F1F5F9] hover:text-foreground transition-colors`}
+                      className={`${sqBtnSize} flex items-center justify-center rounded-md bg-card border border-[hsl(var(--border-control))] shadow-[0px_1px_2px_0px_hsl(var(--foreground))0D] text-muted-foreground hover:bg-[hsl(var(--muted))] hover:text-foreground transition-colors`}
                     >
                       <MoreVertical className="h-[15px] w-[15px]" data-testid="MoreVertical__fa3275" />
                     </button>
@@ -3311,7 +3311,7 @@ export function DetailView({
                       style={{
                         borderRadius: '8px',
                         boxShadow:
-                          '0px 0px 0px 1px rgba(18,18,23,0.1), 0px 24px 48px rgba(18,18,23,0.03), 0px 10px 18px rgba(18,18,23,0.03), 0px 5px 8px rgba(18,18,23,0.04), 0px 2px 4px rgba(18,18,23,0.04)',
+                          '0px 0px 0px 1px hsl(var(--foreground) / 0.1), 0px 24px 48px hsl(var(--foreground) / 0.03), 0px 10px 18px hsl(var(--foreground) / 0.03), 0px 5px 8px hsl(var(--foreground) / 0.04), 0px 2px 4px hsl(var(--foreground) / 0.04)',
                       }}
                     >
                       {visibleActions.map((action, i) => {
@@ -3346,7 +3346,7 @@ export function DetailView({
                               }
                             }}
                             className={`w-full text-left px-2 py-1 text-sm leading-6 transition-colors flex items-center gap-2 ${action.destructive
-                              ? 'text-red-600 hover:bg-red-50'
+                              ? 'text-destructive hover:bg-destructive'
                               : 'text-foreground hover:bg-secondary'
                               } ${docAction.loading || neoAction.loading ? 'opacity-50 cursor-not-allowed' : ''}`}
                             style={{ fontFamily: 'Inter, sans-serif', fontWeight: 400 }}
@@ -3354,7 +3354,7 @@ export function DetailView({
                             {ActionIcon && (
                               <ActionIcon
                                 className="h-4 w-4 flex-shrink-0 ml-1"
-                                style={{ color: action.destructive ? undefined : '#828FA3' }}
+                                style={{ color: action.destructive ? undefined : 'hsl(var(--text-disabled))' }}
                                 data-testid="ActionIcon__fa3275" />
                             )}
                             <span className={ActionIcon ? 'pl-1' : ''}>
@@ -3413,7 +3413,7 @@ export function DetailView({
                         dispatchProcessAction(p, processCtx);
                       }}
                       data-testid="Button__fa3275">
-                      {p.style === 'ghost-danger' && <Undo2 size={16} className="mr-1 text-[#D50B3E]" data-testid="Undo2__fa3275" />}
+                      {p.style === 'ghost-danger' && <Undo2 size={16} className="mr-1 text-[hsl(var(--destructive))]" data-testid="Undo2__fa3275" />}
                       {tMenu(resolveProcessLabel(p, data))}
                     </Button>
                   );
@@ -3490,7 +3490,7 @@ export function DetailView({
                 style={getTabsBarStyle(tabsBarRight, tabsBarRightDivider)}
               >
                 {tabsBarRightDivider && (
-                  <div className="absolute top-0 bottom-0 w-px bg-[#E8EAEF] pointer-events-none" style={{ left: `calc(100% - ${tabsBarRightDivider})` }} />
+                  <div className="absolute top-0 bottom-0 w-px bg-[hsl(var(--border-subtle))] pointer-events-none" style={{ left: `calc(100% - ${tabsBarRightDivider})` }} />
                 )}
                 {renderPrimaryTabButtons(primaryTabsVariant, primaryTabs, setActivePrimaryTab, activePrimaryTab, tMenu)}
                 {tabsBarAfter && (() => {
@@ -3592,18 +3592,18 @@ export function DetailView({
                             {lockedAlert && isProcessed && (
                               <div
                                 className="flex flex-row items-center gap-1 rounded-lg mb-3"
-                                style={{ padding: '8px', background: '#F5F7F9' }}
+                                style={{ padding: '8px', background: 'hsl(var(--muted))' }}
                                 data-testid="locked-alert"
                               >
                                 <span className="flex items-start pl-1 shrink-0">
-                                  <Lock className="h-6 w-6" style={{ color: '#828FA3' }} data-testid="Lock__fa3275" />
+                                  <Lock className="h-6 w-6" style={{ color: 'hsl(var(--text-disabled))' }} data-testid="Lock__fa3275" />
                                 </span>
                                 <div className="flex flex-1 flex-row items-center min-w-0">
                                   <div className="flex flex-1 items-center gap-2 px-2 min-w-0">
-                                    <span className="text-sm font-medium leading-6 shrink-0" style={{ color: '#121217' }}>
+                                    <span className="text-sm font-medium leading-6 shrink-0" style={{ color: 'hsl(var(--foreground))' }}>
                                       {ui(lockedAlert.title)}
                                     </span>
-                                    <span className="text-sm font-normal leading-6 truncate" style={{ color: '#6C6C89' }}>
+                                    <span className="text-sm font-normal leading-6 truncate" style={{ color: 'hsl(var(--muted-foreground))' }}>
                                       {ui(lockedAlert.message)}
                                     </span>
                                   </div>
@@ -3613,7 +3613,7 @@ export function DetailView({
                                         type="button"
                                         onClick={() => navigate(lockedAlert.navigateTo)}
                                         className="text-sm font-medium leading-6 underline whitespace-nowrap"
-                                        style={{ color: '#121217' }}
+                                        style={{ color: 'hsl(var(--foreground))' }}
                                         data-testid="locked-alert-action"
                                       >
                                         {ui(lockedAlert.actionLabel)}
@@ -3679,7 +3679,7 @@ export function DetailView({
                     );
                     if (sidebarAboveTabsOnly && sidebarContent) {
                       return (
-                        <div className={`flex items-stretch${tabsSeparator ? ' border-b border-[#E8EAEF]' : ''}`}>
+                        <div className={`flex items-stretch${tabsSeparator ? ' border-b border-[hsl(var(--border-subtle))]' : ''}`}>
                           <div className="flex-1 min-w-0 space-y-2">{formSection}</div>
                           <div className={sidebarClassName}>{sidebarContent(data)}</div>
                         </div>
@@ -4870,16 +4870,16 @@ function populateIdentifierFields(api, result, detailEntity, catalogs) {
 
 function getButtonClass(salesTheme, p, isPrimary) {
   if (p.style === 'ghost-danger') {
-    return 'bg-card border-[#FBB1C4] text-[#D50B3E] hover:bg-[#FFF0F3]';
+    return 'bg-card border-[hsl(var(--destructive) / 0.3)] text-[hsl(var(--destructive))] hover:bg-[var(--status-destructive-bg)]';
   }
   if (salesTheme) {
     if (p.style === 'destructive') {
-      return 'border-amber-300 bg-amber-50 text-amber-700 hover:bg-amber-100';
+      return 'border-status-warning-border bg-status-warning text-status-warning-foreground hover:bg-status-warning';
     } else {
       if (isPrimary) {
-        return 'bg-amber-400 text-foreground hover:bg-amber-500 border-transparent font-medium';
+        return 'bg-status-warning text-foreground hover:bg-status-warning border-transparent font-medium';
       } else {
-        return 'border-emerald-300 bg-emerald-50 text-emerald-700 hover:bg-emerald-100';
+        return 'border-status-success-border bg-status-success text-status-success-foreground hover:bg-status-success';
       }
     }
   } else {

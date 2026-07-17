@@ -81,16 +81,16 @@ export function InlineCreateModal({
             onChange={(e) => setName(e.target.value)}
             onKeyDown={(e) => { if (e.key === 'Enter') submit(); }}
             placeholder={namePlaceholder}
-            className="h-10 w-full rounded-lg border border-[#D1D4DB] bg-card px-3 text-sm shadow-[0px_1px_2px_rgba(18,18,23,0.05)] placeholder:text-[#6C6C89] focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+            className="h-10 w-full rounded-lg border border-[hsl(var(--border-control))] bg-card px-3 text-sm shadow-[0px_1px_2px_hsl(var(--foreground) / 0.05)] placeholder:text-[hsl(var(--muted-foreground))] focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
           />
-          {error && <p className="mt-2 text-sm text-red-600">{error}</p>}
+          {error && <p className="mt-2 text-sm text-destructive">{error}</p>}
         </div>
 
         <div className="mt-5 flex justify-end gap-2">
           <button
             type="button"
             onClick={onCancel}
-            className="inline-flex h-10 items-center justify-center rounded-full border border-[#D1D4DB] bg-card px-4 text-sm font-medium text-[#121217] shadow-[0px_1px_2px_rgba(18,18,23,0.05)] transition-colors hover:bg-muted/40"
+            className="inline-flex h-10 items-center justify-center rounded-full border border-[hsl(var(--border-control))] bg-card px-4 text-sm font-medium text-[hsl(var(--foreground))] shadow-[0px_1px_2px_hsl(var(--foreground) / 0.05)] transition-colors hover:bg-muted/40"
           >
             {ui('cancel')}
           </button>
@@ -99,7 +99,7 @@ export function InlineCreateModal({
             data-testid="inline-create-submit"
             onClick={submit}
             disabled={!canSubmit}
-            className="inline-flex h-10 shrink-0 items-center justify-center rounded-full px-4 py-2 text-sm font-medium leading-6 text-white transition-colors disabled:bg-[#D1D4DB] disabled:text-white enabled:bg-[#121217] enabled:hover:bg-[#FFD500] enabled:hover:text-[#121217]"
+            className="inline-flex h-10 shrink-0 items-center justify-center rounded-full px-4 py-2 text-sm font-medium leading-6 text-white transition-colors disabled:bg-[hsl(var(--border-control))] disabled:text-white enabled:bg-[hsl(var(--foreground))] enabled:hover:bg-[hsl(var(--primary))] enabled:hover:text-[hsl(var(--foreground))]"
           >
             {saving ? ui('processing') : ui('create')}
           </button>

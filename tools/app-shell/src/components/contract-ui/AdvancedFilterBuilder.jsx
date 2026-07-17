@@ -779,7 +779,7 @@ function IdentifierMultiPicker({ col, entity, apiBaseUrl, rows, value, onChange,
         </button>
       </PopoverTrigger>
       <PopoverContent align="start" className="w-64 p-0" data-testid="PopoverContent__4eedf1">
-        <div className="px-3 pt-3 pb-2 text-xs font-normal leading-6" style={{ color: '#6C6C89' }}>
+        <div className="px-3 pt-3 pb-2 text-xs font-normal leading-6" style={{ color: 'hsl(var(--muted-foreground))' }}>
           {ui('advancedFilterSelectorOf', { label: colLabelKey })}
         </div>
         <div className="px-3 pb-2">

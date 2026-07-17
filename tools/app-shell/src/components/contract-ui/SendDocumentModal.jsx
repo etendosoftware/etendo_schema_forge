@@ -116,19 +116,19 @@ function RecipientFields({ editableRecipients, ccEnabled, toRecipients, ccRecipi
   if (!editableRecipients) {
     return (
       <div style={{ position: 'relative' }}>
-        <label style={{ fontSize: 12, fontWeight: 500, color: '#6B7280', display: 'block', marginBottom: 4 }}>{ui('sendModalTo')}</label>
+        <label style={{ fontSize: 12, fontWeight: 500, color: 'hsl(var(--muted-foreground))', display: 'block', marginBottom: 4 }}>{ui('sendModalTo')}</label>
         <div style={{ position: 'relative' }}>
           <input
             type="text"
             value={toRecipients.join(', ')}
             readOnly
             placeholder={emailLoading ? '' : 'email@company.com'}
-            style={{ width: '100%', fontSize: 13, padding: '8px 32px 8px 10px', border: '0.5px solid #d1d5db', borderRadius: 6, outline: 'none', color: '#111827', background: '#f9fafb', boxSizing: 'border-box' }}
+            style={{ width: '100%', fontSize: 13, padding: '8px 32px 8px 10px', border: '0.5px solid hsl(var(--text-disabled))', borderRadius: 6, outline: 'none', color: 'hsl(var(--foreground))', background: 'hsl(var(--muted))', boxSizing: 'border-box' }}
           />
           <Search
             size={13}
             strokeWidth={1.5}
-            color="#9ca3af"
+            color="hsl(var(--text-disabled))"
             style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }}
             data-testid="Search__afec0a" />
         </div>
@@ -149,7 +149,7 @@ function RecipientFields({ editableRecipients, ccEnabled, toRecipients, ccRecipi
           type="button"
           data-testid="send-modal-add-cc"
           onClick={() => setCcExpanded(true)}
-          style={{ alignSelf: 'flex-start', fontSize: 12, color: '#2563eb', padding: 0, border: 'none', background: 'none', cursor: 'pointer' }}
+          style={{ alignSelf: 'flex-start', fontSize: 12, color: 'var(--status-info-fg)', padding: 0, border: 'none', background: 'none', cursor: 'pointer' }}
         >
           {ui('sendModalAddCc')}
         </button>
@@ -164,10 +164,10 @@ function RecipientFields({ editableRecipients, ccEnabled, toRecipients, ccRecipi
           data-testid="RecipientChipEditor__afec0a" />
       )}
       {noToRecipient && (
-        <span role="alert" style={{ fontSize: 12, color: '#dc2626' }}>{ui('sendModalNoToRecipient')}</span>
+        <span role="alert" style={{ fontSize: 12, color: 'hsl(var(--destructive))' }}>{ui('sendModalNoToRecipient')}</span>
       )}
       {overMaxRecipients && (
-        <span role="alert" style={{ fontSize: 12, color: '#dc2626' }}>{ui('sendModalMaxRecipients', { max: maxRecipients })}</span>
+        <span role="alert" style={{ fontSize: 12, color: 'hsl(var(--destructive))' }}>{ui('sendModalMaxRecipients', { max: maxRecipients })}</span>
       )}
     </div>
   );
@@ -178,21 +178,21 @@ function EmailFormPanel({ recipientFieldsProps, subject, message, ui }) {
     <div style={{ width: '40%', padding: 16, display: 'flex', flexDirection: 'column', gap: 12, overflowY: 'auto' }}>
       <RecipientFields {...recipientFieldsProps} ui={ui} data-testid="RecipientFields__afec0a" />
       <div>
-        <label style={{ fontSize: 12, fontWeight: 500, color: '#6B7280', display: 'block', marginBottom: 4 }}>{ui('sendModalSubject')}</label>
+        <label style={{ fontSize: 12, fontWeight: 500, color: 'hsl(var(--muted-foreground))', display: 'block', marginBottom: 4 }}>{ui('sendModalSubject')}</label>
         <input
           type="text"
           value={subject}
           readOnly
-          style={{ width: '100%', fontSize: 13, padding: '8px 10px', border: '0.5px solid #d1d5db', borderRadius: 6, outline: 'none', color: '#111827', background: '#f9fafb', boxSizing: 'border-box' }}
+          style={{ width: '100%', fontSize: 13, padding: '8px 10px', border: '0.5px solid hsl(var(--text-disabled))', borderRadius: 6, outline: 'none', color: 'hsl(var(--foreground))', background: 'hsl(var(--muted))', boxSizing: 'border-box' }}
         />
       </div>
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-        <label style={{ fontSize: 12, fontWeight: 500, color: '#6B7280', display: 'block', marginBottom: 4 }}>{ui('sendModalMessage')}</label>
+        <label style={{ fontSize: 12, fontWeight: 500, color: 'hsl(var(--muted-foreground))', display: 'block', marginBottom: 4 }}>{ui('sendModalMessage')}</label>
         <textarea
           value={message}
           readOnly
           placeholder={ui('sendModalMessagePlaceholder')}
-          style={{ width: '100%', flex: 1, minHeight: 80, fontSize: 13, padding: '8px 10px', border: '0.5px solid #d1d5db', borderRadius: 6, outline: 'none', color: '#111827', background: '#f9fafb', resize: 'none', boxSizing: 'border-box' }}
+          style={{ width: '100%', flex: 1, minHeight: 80, fontSize: 13, padding: '8px 10px', border: '0.5px solid hsl(var(--text-disabled))', borderRadius: 6, outline: 'none', color: 'hsl(var(--foreground))', background: 'hsl(var(--muted))', resize: 'none', boxSizing: 'border-box' }}
         />
       </div>
     </div>
@@ -276,10 +276,10 @@ function downloadExistingPdfBlobUrl(pdfBlobUrl, windowName, documentNo) {
  */
 function DocumentPreviewPane({ allowEmail, pdfLoading, pdfError, waitingForBlob, iframeRef, downloading, onDownload, ui }) {
   return (
-    <div style={{ width: allowEmail ? '60%' : '100%', display: 'flex', flexDirection: 'column', borderRight: allowEmail ? '0.5px solid #E5E7EB' : 'none' }}>
-      <div style={{ flex: 1, position: 'relative', background: '#EFEFEF' }}>
+    <div style={{ width: allowEmail ? '60%' : '100%', display: 'flex', flexDirection: 'column', borderRight: allowEmail ? '0.5px solid hsl(var(--border-subtle))' : 'none' }}>
+      <div style={{ flex: 1, position: 'relative', background: 'hsl(var(--border-subtle))' }}>
         {pdfLoading && (
-          <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: '#9ca3af', fontSize: 13, gap: 10 }}>
+          <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: 'hsl(var(--text-disabled))', fontSize: 13, gap: 10 }}>
             <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ animation: 'sfSpin 0.9s linear infinite' }}>
               <path d="M21 12a9 9 0 1 1-6.219-8.56" />
             </svg>
@@ -287,10 +287,10 @@ function DocumentPreviewPane({ allowEmail, pdfLoading, pdfError, waitingForBlob,
           </div>
         )}
         {pdfError && !waitingForBlob && !pdfLoading && (
-          <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: '#9ca3af', padding: 24, textAlign: 'center', gap: 8 }}>
-            <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#d1d5db" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
-            <span style={{ fontSize: 14, fontWeight: 500, color: '#6B7280' }}>{ui('sendModalPdfPreview')}</span>
-            <span style={{ fontSize: 13, color: '#9ca3af', maxWidth: 220 }}>{ui('sendModalPdfNotConfigured')}</span>
+          <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: 'hsl(var(--text-disabled))', padding: 24, textAlign: 'center', gap: 8 }}>
+            <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="hsl(var(--text-disabled))" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+            <span style={{ fontSize: 14, fontWeight: 500, color: 'hsl(var(--muted-foreground))' }}>{ui('sendModalPdfPreview')}</span>
+            <span style={{ fontSize: 13, color: 'hsl(var(--text-disabled))', maxWidth: 220 }}>{ui('sendModalPdfNotConfigured')}</span>
           </div>
         )}
         <iframe ref={iframeRef} style={{ width: '100%', height: '100%', border: 'none', opacity: pdfLoading ? 0 : 1 }} title="Document preview" />
@@ -299,7 +299,7 @@ function DocumentPreviewPane({ allowEmail, pdfLoading, pdfError, waitingForBlob,
         type="button"
         onClick={onDownload}
         disabled={downloading}
-        style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, padding: '8px 16px', background: '#fff', border: 'none', borderTop: '0.5px solid #E5E7EB', fontSize: 13, color: '#374151', cursor: downloading ? 'wait' : 'pointer', flexShrink: 0 }}
+        style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, padding: '8px 16px', background: 'hsl(var(--card))', border: 'none', borderTop: '0.5px solid hsl(var(--border-subtle))', fontSize: 13, color: 'hsl(var(--foreground))', cursor: downloading ? 'wait' : 'pointer', flexShrink: 0 }}
       >
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
         {downloading ? ui('sendModalDownloading') : ui('downloadPdf')}
@@ -495,13 +495,13 @@ export default function SendDocumentModal({ documentType = 'Document', documentN
         @keyframes sfSpin { to { transform: rotate(360deg); } }
       `}</style>
       <div onClick={onClose} className="fixed inset-0 z-50 flex items-center justify-center bg-foreground/30">
-        <div onClick={e => e.stopPropagation()} style={{ width: 800, height: 560, display: 'flex', flexDirection: 'column', overflow: 'hidden', borderRadius: 12, backgroundColor: '#fff', boxShadow: '0 8px 30px rgba(0,0,0,0.12)', border: '0.5px solid #E5E7EB', animation: isClosing ? 'sfSlideUpOut 280ms ease-in forwards' : 'sfSlideDownIn 280ms ease-out' }}>
-          <div style={{ padding: '12px 16px', background: '#F5F5F5', borderBottom: '1px solid #E5E5E5', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
+        <div onClick={e => e.stopPropagation()} style={{ width: 800, height: 560, display: 'flex', flexDirection: 'column', overflow: 'hidden', borderRadius: 12, backgroundColor: 'hsl(var(--card))', boxShadow: '0 8px 30px hsl(var(--foreground) / 0.12)', border: '0.5px solid hsl(var(--border-subtle))', animation: isClosing ? 'sfSlideUpOut 280ms ease-in forwards' : 'sfSlideDownIn 280ms ease-out' }}>
+          <div style={{ padding: '12px 16px', background: 'hsl(var(--muted))', borderBottom: '1px solid hsl(var(--border-subtle))', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <Mail size={16} strokeWidth={1.5} color="#374151" data-testid="Mail__afec0a" />
-              <span style={{ fontSize: 15, fontWeight: 600, color: '#111827' }}>{ui('sendModalTitle', { documentType, documentNo })}</span>
+              <Mail size={16} strokeWidth={1.5} color="hsl(var(--foreground))" data-testid="Mail__afec0a" />
+              <span style={{ fontSize: 15, fontWeight: 600, color: 'hsl(var(--foreground))' }}>{ui('sendModalTitle', { documentType, documentNo })}</span>
             </div>
-            <button type="button" onClick={onClose} style={{ fontSize: 18, lineHeight: 1, padding: '2px 6px', borderRadius: 4, background: 'none', border: 'none', cursor: 'pointer', color: '#9ca3af' }}>&times;</button>
+            <button type="button" onClick={onClose} style={{ fontSize: 18, lineHeight: 1, padding: '2px 6px', borderRadius: 4, background: 'none', border: 'none', cursor: 'pointer', color: 'hsl(var(--text-disabled))' }}>&times;</button>
           </div>
 
         <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
@@ -539,10 +539,10 @@ export default function SendDocumentModal({ documentType = 'Document', documentN
           )}
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: allowEmail ? 'space-between' : 'flex-end', background: '#F5F5F5', borderTop: '1px solid #E5E5E5', padding: '10px 16px', flexShrink: 0 }}>
-          <button type="button" onClick={onClose} style={{ fontSize: 13, padding: '6px 14px', borderRadius: 6, border: '1px solid #E5E7EB', background: 'transparent', color: '#6B7280', cursor: 'pointer' }}>{allowEmail ? ui('cancel') : ui('close')}</button>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: allowEmail ? 'space-between' : 'flex-end', background: 'hsl(var(--muted))', borderTop: '1px solid hsl(var(--border-subtle))', padding: '10px 16px', flexShrink: 0 }}>
+          <button type="button" onClick={onClose} style={{ fontSize: 13, padding: '6px 14px', borderRadius: 6, border: '1px solid hsl(var(--border-subtle))', background: 'transparent', color: 'hsl(var(--muted-foreground))', cursor: 'pointer' }}>{allowEmail ? ui('cancel') : ui('close')}</button>
           {sendFeedback && (
-            <span role="status" style={{ flex: 1, marginLeft: 12, marginRight: 12, fontSize: 12, color: sendFeedback.type === 'error' ? '#dc2626' : '#15803d', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            <span role="status" style={{ flex: 1, marginLeft: 12, marginRight: 12, fontSize: 12, color: sendFeedback.type === 'error' ? 'hsl(var(--destructive))' : 'var(--status-success-fg)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
               {sendFeedback.message}
             </span>
           )}
@@ -551,7 +551,7 @@ export default function SendDocumentModal({ documentType = 'Document', documentN
             type="button"
             onClick={handleSend}
             disabled={sendDisabled}
-            style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 500, padding: '6px 16px', borderRadius: 6, border: 'none', background: '#18181b', color: '#fff', cursor: sendDisabled ? 'not-allowed' : 'pointer', opacity: sendDisabled ? 0.4 : 1 }}
+            style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 500, padding: '6px 16px', borderRadius: 6, border: 'none', background: 'hsl(var(--foreground))', color: 'hsl(var(--card))', cursor: sendDisabled ? 'not-allowed' : 'pointer', opacity: sendDisabled ? 0.4 : 1 }}
           >
             {sending ? ui('sendModalSending') : (
               <>
@@ -581,7 +581,7 @@ export function SendDocumentButton({ onClick }) {
         data-testid="action-send-email"
         onClick={onClick}
         aria-label={label}
-        className="flex items-center justify-center p-[7px] rounded-md bg-card border border-[#D1D4DB] shadow-[0px_1px_2px_0px_#1212170D] text-muted-foreground hover:bg-[#F1F5F9] hover:text-foreground transition-colors"
+        className="flex items-center justify-center p-[7px] rounded-md bg-card border border-[hsl(var(--border-control))] shadow-[0px_1px_2px_0px_hsl(var(--foreground))0D] text-muted-foreground hover:bg-[hsl(var(--muted))] hover:text-foreground transition-colors"
       >
         <Mail className="h-[15px] w-[15px]" data-testid="Mail__afec0a" />
       </button>

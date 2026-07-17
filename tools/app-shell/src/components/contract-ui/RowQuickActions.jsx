@@ -166,11 +166,11 @@ export default function RowQuickActions({
     ));
 
   // ETP-3504 — Figma exact colors:
-  // - Neutral icons (Edit, Clone, Email, More): #828FA3
-  // - Delete: #D50B3E
+  // - Neutral icons (Edit, Clone, Email, More): hsl(var(--text-disabled))
+  // - Delete: hsl(var(--destructive))
   // Hover darkens slightly: neutrals → text-foreground; delete → red-700.
-  const neutralBtnCls = 'h-8 w-8 p-0 flex items-center justify-center rounded-full text-[#828FA3] hover:text-foreground hover:bg-muted/60 transition-colors';
-  const dangerBtnCls = 'h-8 w-8 p-0 flex items-center justify-center rounded-full text-[#D50B3E] hover:text-red-700 hover:bg-red-50 transition-colors';
+  const neutralBtnCls = 'h-8 w-8 p-0 flex items-center justify-center rounded-full text-[hsl(var(--text-disabled))] hover:text-foreground hover:bg-muted/60 transition-colors';
+  const dangerBtnCls = 'h-8 w-8 p-0 flex items-center justify-center rounded-full text-[hsl(var(--destructive))] hover:text-destructive hover:bg-destructive transition-colors';
 
   const handleMenuActionClick = useCallback(async (action) => {
     setShowMenu(false);
@@ -288,7 +288,7 @@ export default function RowQuickActions({
                 top: menuPos.top,
                 right: menuPos.right,
                 boxShadow:
-                  '0px 0px 0px 1px rgba(18,18,23,0.1), 0px 24px 48px rgba(18,18,23,0.03), 0px 10px 18px rgba(18,18,23,0.03), 0px 5px 8px rgba(18,18,23,0.04), 0px 2px 4px rgba(18,18,23,0.04)',
+                  '0px 0px 0px 1px hsl(var(--foreground) / 0.1), 0px 24px 48px hsl(var(--foreground) / 0.03), 0px 10px 18px hsl(var(--foreground) / 0.03), 0px 5px 8px hsl(var(--foreground) / 0.04), 0px 2px 4px hsl(var(--foreground) / 0.04)',
               }}
             >
               {visibleMenuActions.map((action, i) => {
@@ -305,7 +305,7 @@ export default function RowQuickActions({
                     onClick={(e) => { stop(e); handleMenuActionClick(action); }}
                     className={[
                       'w-full text-left px-3 py-1.5 text-sm leading-6 transition-colors flex items-center gap-2',
-                      action.destructive ? 'text-red-600 hover:bg-red-50' : 'text-foreground hover:bg-secondary',
+                      action.destructive ? 'text-destructive hover:bg-destructive' : 'text-foreground hover:bg-secondary',
                       (pending || docAction.loading) ? 'opacity-50 cursor-not-allowed' : '',
                     ].filter(Boolean).join(' ')}
                   >
@@ -316,7 +316,7 @@ export default function RowQuickActions({
                     ) : ActionIcon && (
                       <ActionIcon
                         className="h-4 w-4 flex-shrink-0"
-                        style={{ color: action.destructive ? undefined : '#828FA3' }}
+                        style={{ color: action.destructive ? undefined : 'hsl(var(--text-disabled))' }}
                         data-testid="ActionIcon__ec6673" />
                     )}
                     <span>{label}</span>

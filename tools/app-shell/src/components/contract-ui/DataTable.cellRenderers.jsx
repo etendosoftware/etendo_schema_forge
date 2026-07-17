@@ -13,7 +13,7 @@ function getDateDotColor(dateValue) {
   const d = /^\d{4}-\d{2}-\d{2}$/.test(str) ? new Date(str + 'T00:00:00') : new Date(str);
   d.setHours(0, 0, 0, 0);
   if (d.getTime() === today.getTime()) return null;
-  return d > today ? 'bg-emerald-500' : 'bg-red-500';
+  return d > today ? 'bg-status-success' : 'bg-destructive';
 }
 
 function isTruthyBoolean(value) {
@@ -25,7 +25,7 @@ function isFalsyBoolean(value) {
 }
 
 function renderBooleanFallback(val, ui) {
-  if (isTruthyBoolean(val)) return <span className="text-emerald-600">{ui('yes')}</span>;
+  if (isTruthyBoolean(val)) return <span className="text-status-success-foreground">{ui('yes')}</span>;
   if (isFalsyBoolean(val)) return <span className="text-muted-foreground">{ui('no')}</span>;
   return <span className="text-muted-foreground">&mdash;</span>;
 }
@@ -39,8 +39,8 @@ function renderBooleanBadge(col, val, trueLabel, falseLabel) {
 }
 
 function renderColoredBooleanBadge(col, val, trueLabel, falseLabel) {
-  const trueColor = col.badgeColors.true ?? 'bg-emerald-100 text-emerald-800';
-  const falseColor = col.badgeColors.false ?? 'bg-amber-100 text-amber-700';
+  const trueColor = col.badgeColors.true ?? 'bg-status-success text-status-success-foreground';
+  const falseColor = col.badgeColors.false ?? 'bg-status-warning text-status-warning-foreground';
   if (isTruthyBoolean(val)) return (
     <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${trueColor}`}>
       {trueLabel}
@@ -100,17 +100,17 @@ function getPercentCellPalette(row, col) {
   const pct = Number.isNaN(val) ? 0 : val;
   let color;
   if (pct >= 100) {
-    color = 'bg-emerald-500';
+    color = 'bg-status-success';
   } else if (pct > 0) {
-    color = 'bg-amber-400';
+    color = 'bg-status-warning';
   } else {
     color = 'bg-slate-200';
   }
   let textColor;
   if (pct >= 100) {
-    textColor = 'text-emerald-700';
+    textColor = 'text-status-success-foreground';
   } else if (pct > 0) {
-    textColor = 'text-amber-700';
+    textColor = 'text-status-warning-foreground';
   } else {
     textColor = 'text-muted-foreground';
   }

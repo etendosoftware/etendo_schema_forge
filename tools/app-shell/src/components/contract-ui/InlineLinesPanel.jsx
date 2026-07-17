@@ -27,8 +27,8 @@ import { getEmailFieldError, getPhoneFieldError } from './recipientEdits.js';
 const TOKENS = {
   rowHeight: 41,
   cellPaddingX: 12,
-  separator: '#E8EAEF',
-  textPrimary: '#121217',
+  separator: 'hsl(var(--border-subtle))',
+  textPrimary: 'hsl(var(--foreground))',
   headerFontSize: 12,
   headerFontWeight: 600,
   cellFontSize: 14,
@@ -107,7 +107,7 @@ const FALSY_BOOLEAN_VALUES = new Set([false, 'N', 'false']);
 
 function renderBooleanCell(value, ui) {
   if (TRUTHY_BOOLEAN_VALUES.has(value)) {
-    return <span className="text-emerald-600">{ui?.('yes') ?? 'Yes'}</span>;
+    return <span className="text-status-success-foreground">{ui?.('yes') ?? 'Yes'}</span>;
   }
   if (FALSY_BOOLEAN_VALUES.has(value)) {
     return <span className="text-muted-foreground">{ui?.('no') ?? 'No'}</span>;
@@ -156,7 +156,7 @@ function ReadCell({ row, col, locale, t, ui }) {
 
 function editInputClassName(isNumeric, isInvalid) {
   const numericClass = isNumeric ? ' text-right tabular-nums' : '';
-  const borderClass = isInvalid ? 'border-red-500 focus-visible:ring-red-500' : 'border-input';
+  const borderClass = isInvalid ? 'border-destructive focus-visible:ring-destructive' : 'border-input';
   return `h-7 px-2 text-sm bg-card${numericClass} ${borderClass}`;
 }
 
@@ -684,9 +684,9 @@ const InlineLinesPanel = forwardRef(function InlineLinesPanel({
               // `hover:relative hover:z-10` lifts the row above its neighbors so the
               // shadow can spill onto the rows below without being clipped by them.
               'group/row flex items-stretch border-b bg-card transition-shadow',
-              'hover:relative hover:z-20 hover:shadow-[0_4px_12px_rgba(18,18,23,0.08)]',
+              'hover:relative hover:z-20 hover:shadow-[0_4px_12px_hsl(var(--foreground) / 0.08)]',
               isHighlighted ? 'bg-muted/40' : '',
-              isEditing ? 'shadow-[0_4px_12px_rgba(18,18,23,0.08)] relative z-20' : '',
+              isEditing ? 'shadow-[0_4px_12px_hsl(var(--foreground) / 0.08)] relative z-20' : '',
               onRowClick ? 'cursor-pointer' : '',
             ].join(' ')}
             style={{ borderColor: TOKENS.separator, minHeight: TOKENS.rowHeight, ...cellStyle }}

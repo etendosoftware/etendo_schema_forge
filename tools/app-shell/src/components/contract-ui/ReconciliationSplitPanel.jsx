@@ -41,7 +41,7 @@ const SKELETON_ROWS = [1, 2, 3, 4];
 const SKELETON_CELL_KEYS = ['c0', 'c1', 'c2', 'c3', 'c4', 'c5'];
 // Elevation shadow shared by the selected row in both panels.
 const ELEVATED_SHADOW =
-  'shadow-[0px_10px_15px_-3px_rgba(18,18,23,0.08),0px_4px_6px_-2px_rgba(18,18,23,0.05)]';
+  'shadow-[0px_10px_15px_-3px_hsl(var(--foreground) / 0.08),0px_4px_6px_-2px_hsl(var(--foreground) / 0.05)]';
 const STATUS_CODES = ['pending', 'suggested', 'byRule', 'difference', 'reconciled'];
 // i18n label key per status code, shared by the filter and the row badges.
 const STATUS_LABEL_KEY = {
@@ -57,12 +57,12 @@ function StatusBadge({ kind }) {
   const ui = useUI();
   // Figma badge palette: grey / blue / amber / red / green (all full pills).
   const map = {
-    suggested: { labelKey: 'financeReconcileBadgeSuggested', cls: 'bg-[#F0FAFF] text-[#0075AD]' },
-    byRule: { labelKey: 'financeReconcileBadgeByRule', cls: 'bg-[#FFF9EB] text-[#92600A]' },
-    difference: { labelKey: 'financeReconcileBadgeDifference', cls: 'bg-[#FEF0F4] text-[#D50B3E]' },
-    reconciled: { labelKey: 'financeReconcileBadgeReconciled', cls: 'bg-[#EEFBF4] text-[#17663A]' },
-    pending: { labelKey: 'financeReconcileBadgePending', cls: 'bg-[#F5F7F9] text-[#3F3F50]' },
-    invoice: { labelKey: 'financeReconcileBadgeInvoice', cls: 'bg-[#FFF9EB] text-[#92600A]' },
+    suggested: { labelKey: 'financeReconcileBadgeSuggested', cls: 'bg-[var(--status-info-bg)] text-[var(--status-info-fg)]' },
+    byRule: { labelKey: 'financeReconcileBadgeByRule', cls: 'bg-[var(--status-warning-bg)] text-[var(--status-warning-fg)]' },
+    difference: { labelKey: 'financeReconcileBadgeDifference', cls: 'bg-[var(--status-destructive-bg)] text-[hsl(var(--destructive))]' },
+    reconciled: { labelKey: 'financeReconcileBadgeReconciled', cls: 'bg-[var(--status-success-bg)] text-[var(--status-success-fg)]' },
+    pending: { labelKey: 'financeReconcileBadgePending', cls: 'bg-[hsl(var(--muted))] text-[hsl(var(--muted-foreground))]' },
+    invoice: { labelKey: 'financeReconcileBadgeInvoice', cls: 'bg-[var(--status-warning-bg)] text-[var(--status-warning-fg)]' },
   };
   const cfg = map[kind] ?? map.pending;
   return (
@@ -91,7 +91,7 @@ function ToolbarShell({ children, search, onSearchChange, testIdPrefix }) {
         value={search}
         onChange={(e) => onSearchChange(e.target.value)}
         data-testid={`${testIdPrefix}-search`}
-        className="h-9 w-40 rounded-lg border border-[#D1D4DB] bg-card px-3 text-sm text-[#121217] placeholder:text-[#8a8aa3] focus:outline-none focus:ring-2 focus:ring-[#121217] focus:ring-offset-1"
+        className="h-9 w-40 rounded-lg border border-[hsl(var(--border-control))] bg-card px-3 text-sm text-[hsl(var(--foreground))] placeholder:text-[hsl(var(--text-disabled))] focus:outline-none focus:ring-2 focus:ring-[hsl(var(--foreground))] focus:ring-offset-1"
       />
     </div>
   );
@@ -158,8 +158,8 @@ function renderRows({ loading, items, colSpan, emptyTitle, emptyHint, renderRow 
       <TableRow className="hover:bg-transparent" data-testid="TableRow__d0f4d5">
         <TableCell colSpan={colSpan} className="py-12" data-testid="TableCell__d0f4d5">
           <div className="flex flex-col items-center gap-1 text-center">
-            <p className="text-sm font-medium text-[#121217]">{emptyTitle}</p>
-            {emptyHint ? <p className="max-w-sm text-sm text-[#6C6C89]">{emptyHint}</p> : null}
+            <p className="text-sm font-medium text-[hsl(var(--foreground))]">{emptyTitle}</p>
+            {emptyHint ? <p className="max-w-sm text-sm text-[hsl(var(--muted-foreground))]">{emptyHint}</p> : null}
           </div>
         </TableCell>
       </TableRow>
@@ -180,7 +180,7 @@ function PanelTable({ headCells, loading, items, renderRow }) {
       <Table data-testid="Table__d0f4d5">
         <TableHeader data-testid="TableHeader__d0f4d5">
           <TableRow
-            className="h-11 border-b border-[#E8EAEF] [&_th]:text-xs [&_th]:font-semibold [&_th]:text-[#121217]"
+            className="h-11 border-b border-[hsl(var(--border-subtle))] [&_th]:text-xs [&_th]:font-semibold [&_th]:text-[hsl(var(--foreground))]"
             data-testid="TableRow__d0f4d5">
             {headCells}
           </TableRow>
@@ -204,7 +204,7 @@ function PanelTable({ headCells, loading, items, renderRow }) {
 function DateCell({ date, bcpLocale, cellClassName }) {
   return (
     <TableCell
-      className={cn('h-[62px] px-3 text-sm font-normal text-[#121217]', cellClassName)}
+      className={cn('h-[62px] px-3 text-sm font-normal text-[hsl(var(--foreground))]', cellClassName)}
       data-testid="TableCell__d0f4d5">
       {formatDate(date, bcpLocale)}
     </TableCell>
@@ -221,7 +221,7 @@ function MoneyCell({ value, currency, cellClassName, bold = false }) {
         value={Number(value) || 0}
         currency={currency}
         tone="neutral"
-        className={cn('text-sm leading-5 text-[#121217]', bold ? 'font-semibold' : 'font-normal')}
+        className={cn('text-sm leading-5 text-[hsl(var(--foreground))]', bold ? 'font-semibold' : 'font-normal')}
         data-testid="MoneyAmount__d0f4d5" />
     </TableCell>
   );
@@ -261,14 +261,14 @@ function StatementLinesPanel({
     const selected = line.id === selectedLineId;
     // The engine-computed `state` drives the badge (suggested/byRule/difference/reconciled/pending).
     const badgeKind = line.state || (line.status === 'reconciled' ? 'reconciled' : 'pending');
-    const cellBg = cn('transition-colors', selected ? 'bg-[#F5F7F9]' : 'bg-card');
+    const cellBg = cn('transition-colors', selected ? 'bg-[hsl(var(--muted))]' : 'bg-card');
     return (
       <TableRow
         key={line.id}
         data-testid={`recon-line-row-${line.id}`}
         onClick={() => onSelectLine(line)}
         className={cn(
-          'group relative h-[62px] cursor-pointer border-b border-[#E8EAEF] bg-card transition-shadow',
+          'group relative h-[62px] cursor-pointer border-b border-[hsl(var(--border-subtle))] bg-card transition-shadow',
           selected
             ? `z-20 ${ELEVATED_SHADOW}`
             : 'hover:z-10 hover:bg-card hover:shadow-lg',
@@ -285,7 +285,7 @@ function StatementLinesPanel({
             checked={selected}
             onChange={() => onSelectLine(line)}
             data-testid={`recon-line-radio-${line.id}`}
-            className="h-4 w-4 accent-[#121217]"
+            className="h-4 w-4 accent-[hsl(var(--foreground))]"
           />
         </TableCell>
         <DateCell
@@ -294,7 +294,7 @@ function StatementLinesPanel({
           cellClassName={cn('w-[108px]', cellBg)}
           data-testid="DateCell__d0f4d5" />
         <TableCell
-          className={cn('h-[62px] px-3 py-2 text-sm text-[#121217]', cellBg)}
+          className={cn('h-[62px] px-3 py-2 text-sm text-[hsl(var(--foreground))]', cellBg)}
           data-testid="TableCell__d0f4d5">
           <div className="flex flex-col items-start gap-0.5">
             <span className={cn('w-full truncate leading-5', selected ? 'font-semibold' : 'font-normal')}>
@@ -317,7 +317,7 @@ function StatementLinesPanel({
             tabIndex={-1}
             aria-hidden="true"
             className={cn(
-              'flex h-8 w-8 items-center justify-center rounded-full text-[#828FA3] transition-opacity hover:bg-[#EDF0F4]',
+              'flex h-8 w-8 items-center justify-center rounded-full text-[hsl(var(--text-disabled))] transition-opacity hover:bg-[hsl(var(--muted))]',
               selected ? 'opacity-100' : 'opacity-0 group-hover:opacity-100',
             )}
           >
@@ -339,7 +339,7 @@ function StatementLinesPanel({
         aria-label={ui('financeAccountDetailBack')}
         data-testid="recon-toolbar-back"
         onClick={onBack}
-        className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-border bg-card text-muted-foreground transition-colors hover:bg-[#F5F7F9] hover:text-foreground"
+        className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-border bg-card text-muted-foreground transition-colors hover:bg-[hsl(var(--muted))] hover:text-foreground"
       >
         <ArrowLeft className="h-4 w-4" data-testid="ArrowLeft__d0f4d5" />
       </button>
@@ -349,14 +349,14 @@ function StatementLinesPanel({
   );
 
   const footer = (
-    <div className="flex items-center justify-end gap-2 border-t border-[#E8EAEF] px-4 py-3 text-sm font-semibold text-[#121217]">
+    <div className="flex items-center justify-end gap-2 border-t border-[hsl(var(--border-subtle))] px-4 py-3 text-sm font-semibold text-[hsl(var(--foreground))]">
       {ui('financeReconcileFooterTotal', { amount: formatSigned(total === 0 ? 0 : (Number(lines.reduce((a, l) => a + (Number(l.amount) || 0), 0).toFixed(2))), currency) })}
     </div>
   );
 
   return (
     <PanelShell
-      className="border-r border-[#E8EAEF]"
+      className="border-r border-[hsl(var(--border-subtle))]"
       toolbar={toolbar}
       loading={loading}
       items={lines}
@@ -386,11 +386,11 @@ function CandidateOperationsPanel({
     return (
       <div className="flex min-w-[30%] flex-1 flex-col items-center justify-center px-0 text-center" data-testid="recon-right-empty">
         <div className="flex w-full flex-col items-center gap-1 px-5">
-          <div className="mb-1 flex h-10 w-10 items-center justify-center rounded-full bg-[#F5F7F9] text-[#828FA3]">
+          <div className="mb-1 flex h-10 w-10 items-center justify-center rounded-full bg-[hsl(var(--muted))] text-[hsl(var(--text-disabled))]">
             <CircleCheckBig className="h-6 w-6" data-testid="CircleCheckBig__d0f4d5" />
           </div>
-          <p className="w-full text-[20px] font-semibold leading-7 text-[#121217]">{ui('financeReconcileRightEmptyTitle')}</p>
-          <p className="w-full text-xs leading-4 text-[#282833]">{ui('financeReconcileRightEmptyHint')}</p>
+          <p className="w-full text-[20px] font-semibold leading-7 text-[hsl(var(--foreground))]">{ui('financeReconcileRightEmptyTitle')}</p>
+          <p className="w-full text-xs leading-4 text-[hsl(var(--foreground))]">{ui('financeReconcileRightEmptyHint')}</p>
         </div>
       </div>
     );
@@ -401,9 +401,9 @@ function CandidateOperationsPanel({
       key={cand.id}
       data-testid={`recon-cand-row-${cand.id}`}
       className={cn(
-        'group relative h-[62px] border-b border-[#E8EAEF] bg-card transition-shadow',
+        'group relative h-[62px] border-b border-[hsl(var(--border-subtle))] bg-card transition-shadow',
         selectedIds.has(cand.id)
-          ? `z-10 bg-[#F5F7F9] ${ELEVATED_SHADOW}`
+          ? `z-10 bg-[hsl(var(--muted))] ${ELEVATED_SHADOW}`
           : 'hover:z-10 hover:bg-card hover:shadow-lg',
       )}
     >
@@ -422,15 +422,15 @@ function CandidateOperationsPanel({
         cellClassName="w-[104px]"
         data-testid="DateCell__d0f4d5" />
       <TableCell
-        className="h-[62px] px-3 py-2 text-sm text-[#121217]"
+        className="h-[62px] px-3 py-2 text-sm text-[hsl(var(--foreground))]"
         data-testid="TableCell__d0f4d5">
         <div className="flex flex-col items-start gap-0.5">
           <div className="flex w-full items-center gap-1 overflow-hidden text-sm leading-5">
-            <span className="shrink-0 font-normal text-[#121217]">
+            <span className="shrink-0 font-normal text-[hsl(var(--foreground))]">
               {cand.documentNo || cand.description || '—'}
             </span>
             {cand.partnerName ? (
-              <span className="truncate text-xs font-medium leading-4 text-[#6C6C89]">{cand.partnerName}</span>
+              <span className="truncate text-xs font-medium leading-4 text-[hsl(var(--muted-foreground))]">{cand.partnerName}</span>
             ) : null}
           </div>
           <StatusBadge
@@ -502,18 +502,18 @@ function ReconciliationActionBar({
 }) {
   const ui = useUI();
   return (
-    <div className="border-t border-[#E8EAEF] bg-card px-0 pt-2 pb-1">
+    <div className="border-t border-[hsl(var(--border-subtle))] bg-card px-0 pt-2 pb-1">
       {/* Selection totals only make sense while building a new reconciliation; a reconciled
           line is already balanced, so the "selected / remaining" rows would be misleading. */}
       {!isReconciledLine && (
         <div className="flex flex-col gap-1">
           <div className="flex items-center justify-between px-3 text-sm leading-5">
-            <span className="font-medium text-[#121217]">{ui('financeReconcileBarSelected')}</span>
-            <span className="font-semibold text-[#1E874C]">{formatSigned(selectedSum, currency)}</span>
+            <span className="font-medium text-[hsl(var(--foreground))]">{ui('financeReconcileBarSelected')}</span>
+            <span className="font-semibold text-[var(--status-success-fg)]">{formatSigned(selectedSum, currency)}</span>
           </div>
           <div className="flex items-center justify-between px-3 text-sm leading-5">
-            <span className="font-medium text-[#121217]">{ui('financeReconcileBarRemaining')}</span>
-            <span className={cn('font-semibold', Math.abs(remaining) <= RECONCILE_TOLERANCE ? 'text-[#1E874C]' : 'text-[#D50B3E]')}>
+            <span className="font-medium text-[hsl(var(--foreground))]">{ui('financeReconcileBarRemaining')}</span>
+            <span className={cn('font-semibold', Math.abs(remaining) <= RECONCILE_TOLERANCE ? 'text-[var(--status-success-fg)]' : 'text-[hsl(var(--destructive))]')}>
               {formatSigned(remaining, currency)}
             </span>
           </div>
@@ -524,7 +524,7 @@ function ReconciliationActionBar({
           type="button"
           onClick={onCancel}
           data-testid="recon-action-cancel"
-          className="inline-flex h-8 items-center gap-1.5 rounded-full border border-[#D1D4DB] bg-card px-3 text-sm font-medium text-[#121217] shadow-[0px_1px_2px_rgba(18,18,23,0.05)] hover:bg-[#F5F7F9]"
+          className="inline-flex h-8 items-center gap-1.5 rounded-full border border-[hsl(var(--border-control))] bg-card px-3 text-sm font-medium text-[hsl(var(--foreground))] shadow-[0px_1px_2px_hsl(var(--foreground) / 0.05)] hover:bg-[hsl(var(--muted))]"
         >
           <X className="h-4 w-4" data-testid="X__d0f4d5" />
           {ui('financeReconcileActionCancel')}
@@ -536,7 +536,7 @@ function ReconciliationActionBar({
           // follow-up task); a pending line gates "Conciliar" on a balanced selection.
           disabled={busy || (isReconciledLine ? false : !canReconcile)}
           data-testid="recon-action-reconcile"
-          className="inline-flex h-8 items-center gap-1.5 rounded-full bg-[#121217] px-3 text-sm font-medium text-white hover:bg-[#FFD500] hover:text-[#121217] disabled:cursor-not-allowed disabled:bg-[#D1D4DB] disabled:text-white disabled:hover:bg-[#D1D4DB] disabled:hover:text-white"
+          className="inline-flex h-8 items-center gap-1.5 rounded-full bg-[hsl(var(--foreground))] px-3 text-sm font-medium text-white hover:bg-[hsl(var(--primary))] hover:text-[hsl(var(--foreground))] disabled:cursor-not-allowed disabled:bg-[hsl(var(--border-control))] disabled:text-white disabled:hover:bg-[hsl(var(--border-control))] disabled:hover:text-white"
         >
           <CheckCircle className="h-4 w-4" data-testid="CheckCircle__d0f4d5" />
           {isReconciledLine
