@@ -351,7 +351,7 @@ function StockEmptyState({ onAdjustStock, onReplenish }) {
         <button
           type="button"
           onClick={onReplenish}
-          className="flex items-center justify-center px-2 py-1 h-8 bg-foreground rounded-lg text-sm font-medium text-white"
+          className="flex items-center justify-center px-2 py-1 h-8 bg-foreground rounded-lg text-sm font-medium text-primary-foreground"
         >
           {ui('replenishStock')}
         </button>

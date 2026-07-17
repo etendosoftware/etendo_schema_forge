@@ -25,8 +25,8 @@ export default function ReactivarModal({ dir, onConfirm, onClose }) {
   ];
 
   return (
-    <div style={{ position: 'fixed', inset: 0, background: 'rgba(16,20,28,.42)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 500, padding: 24 }}>
-      <div style={{ width: 520, maxWidth: '100%', background: 'hsl(var(--card))', borderRadius: 14, boxShadow: '0 24px 60px rgba(16,20,28,.28)', overflow: 'hidden' }}>
+    <div style={{ position: 'fixed', inset: 0, background: 'hsl(var(--foreground) / 0.42)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 500, padding: 24 }}>
+      <div style={{ width: 520, maxWidth: '100%', background: 'hsl(var(--card))', borderRadius: 14, boxShadow: '0 24px 60px hsl(var(--foreground) / 0.28)', overflow: 'hidden' }}>
 
         {/* Header */}
         <div style={{ padding: '22px 24px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>

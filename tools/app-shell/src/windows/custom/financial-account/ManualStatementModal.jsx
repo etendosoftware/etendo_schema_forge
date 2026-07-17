@@ -508,7 +508,7 @@ function SaveSplitButton({ creating, onProcess, onDraft, ui }) {
     };
   }, [open]);
 
-  const btnBase = 'inline-flex h-10 items-center bg-[hsl(var(--foreground))] text-white transition-colors hover:bg-[hsl(var(--primary))] hover:text-[hsl(var(--foreground))] disabled:cursor-not-allowed disabled:opacity-50';
+  const btnBase = 'inline-flex h-10 items-center bg-[hsl(var(--foreground))] text-primary-foreground transition-colors hover:bg-[hsl(var(--primary))] hover:text-[hsl(var(--foreground))] disabled:cursor-not-allowed disabled:opacity-50';
 
   return (
     <div ref={wrapRef} className="relative flex items-stretch">
@@ -530,7 +530,7 @@ function SaveSplitButton({ creating, onProcess, onDraft, ui }) {
         aria-haspopup="menu"
         aria-expanded={open}
         data-testid="manual-statement-save-split"
-        className={cn(btnBase, 'w-9 justify-center rounded-r-lg border-l border-white/20')}
+        className={cn(btnBase, 'w-9 justify-center rounded-r-lg border-l border-inverse-border/20')}
       >
         <ChevronDown
           className={cn('h-4 w-4 transition-transform', open && 'rotate-180')}
@@ -792,7 +792,7 @@ export function ManualStatementModal({
                 type="button"
                 onClick={() => { setConfirmClose(false); onClose(); }}
                 data-testid="manual-discard-confirm"
-                className="inline-flex h-10 items-center rounded-lg bg-[hsl(var(--destructive))] px-3 text-sm font-medium text-white hover:bg-[hsl(var(--destructive))]"
+                className="inline-flex h-10 items-center rounded-lg bg-[hsl(var(--destructive))] px-3 text-sm font-medium text-primary-foreground hover:bg-[hsl(var(--destructive))]"
               >
                 {ui('financeAccountStatementsManualDiscardConfirm')}
               </button>

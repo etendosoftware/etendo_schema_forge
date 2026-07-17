@@ -201,7 +201,7 @@ function StepperItem({ label, isActive, isDone, index }) {
   else if (isDone) textClass = 'text-[hsl(var(--muted-foreground))] font-normal line-through';
 
   let badgeClass = 'border-[hsl(var(--border-control))] bg-[hsl(var(--muted))] text-[hsl(var(--muted-foreground))]';
-  if (isActive) badgeClass = 'border-transparent bg-[hsl(var(--foreground))] text-white';
+  if (isActive) badgeClass = 'border-transparent bg-[hsl(var(--foreground))] text-primary-foreground';
   else if (isDone) badgeClass = 'border-transparent bg-[var(--status-success-bg)] text-[var(--status-success-fg)]';
 
   return (
@@ -276,7 +276,7 @@ function SelectedFile({
       )}
     >
       <div
-        className="mx-auto mb-2 flex h-8 w-8 items-center justify-center rounded-lg bg-[hsl(var(--foreground))] text-white/90"
+        className="mx-auto mb-2 flex h-8 w-8 items-center justify-center rounded-lg bg-[hsl(var(--foreground))] text-primary-foreground/90"
         aria-hidden="true"
       >
         <FileText className="h-5 w-5" data-testid="FileText__de9647" />
@@ -607,7 +607,7 @@ function PreviewFooterButton({ ui, importing, previewData, handleConfirmImport }
       type="button"
       onClick={handleConfirmImport}
       disabled={importing}
-      className="inline-flex h-10 items-center justify-center gap-1.5 rounded-full bg-[hsl(var(--foreground))] px-4 text-sm font-medium text-white transition-colors hover:bg-[hsl(var(--foreground))] disabled:cursor-not-allowed disabled:opacity-50"
+      className="inline-flex h-10 items-center justify-center gap-1.5 rounded-full bg-[hsl(var(--foreground))] px-4 text-sm font-medium text-primary-foreground transition-colors hover:bg-[hsl(var(--foreground))] disabled:cursor-not-allowed disabled:opacity-50"
     >
       <Check className="h-5 w-5" data-testid="Check__de9647" />
       {ui('financeAccountStatementsImportConfirm', {
@@ -625,7 +625,7 @@ function DefaultFooterButtons({ ui, view, previewing, handleContinue }) {
       onClick={handleContinue}
       disabled={disabled}
       className={cn(
-        'inline-flex h-10 items-center justify-center gap-1.5 rounded-full px-4 text-sm font-medium text-white transition-colors',
+        'inline-flex h-10 items-center justify-center gap-1.5 rounded-full px-4 text-sm font-medium text-primary-foreground transition-colors',
         disabled ? 'cursor-not-allowed bg-[hsl(var(--border-control))]' : 'bg-[hsl(var(--foreground))] hover:bg-[hsl(var(--foreground))]',
       )}
     >

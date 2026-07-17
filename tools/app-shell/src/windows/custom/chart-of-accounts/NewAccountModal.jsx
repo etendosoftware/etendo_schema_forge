@@ -384,7 +384,7 @@ export default function NewAccountModal({
             data-testid="new-account-modal-save"
             onClick={handleSave}
             disabled={saving}
-            className="px-5 py-2 text-sm font-medium text-white bg-[hsl(var(--foreground))] rounded-full hover:bg-[hsl(var(--foreground))] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            className="px-5 py-2 text-sm font-medium text-primary-foreground bg-[hsl(var(--foreground))] rounded-full hover:bg-[hsl(var(--foreground))] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
             {saving ? ui('loading') : ui('save')}
           </button>

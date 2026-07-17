@@ -308,7 +308,7 @@ function ImagePreview({ blobUrl, imageId, uploading, readOnly, ui, onRemove, onU
         {/* Hover overlay */}
         <div className="absolute inset-0 bg-foreground/0 group-hover:bg-foreground/20 transition-colors pointer-events-none flex items-center justify-center">
           <ZoomIn
-            className="h-7 w-7 text-white opacity-0 group-hover:opacity-100 transition-opacity drop-shadow"
+            className="h-7 w-7 text-primary-foreground opacity-0 group-hover:opacity-100 transition-opacity drop-shadow"
             data-testid="ZoomIn__266d2c" />
         </div>
         {!readOnly && (
@@ -316,7 +316,7 @@ function ImagePreview({ blobUrl, imageId, uploading, readOnly, ui, onRemove, onU
             <button
               type="button"
               onClick={(e) => { e.stopPropagation(); onRemove(); }}
-              className="absolute top-1.5 right-1.5 h-6 w-6 rounded-full bg-foreground/50 text-white flex items-center justify-center hover:bg-foreground/70 opacity-0 group-hover:opacity-100 transition-opacity"
+              className="absolute top-1.5 right-1.5 h-6 w-6 rounded-full bg-foreground/50 text-primary-foreground flex items-center justify-center hover:bg-foreground/70 opacity-0 group-hover:opacity-100 transition-opacity"
               aria-label="Remove image"
             >
               <X className="h-3.5 w-3.5" data-testid="X__266d2c" />
@@ -325,7 +325,7 @@ function ImagePreview({ blobUrl, imageId, uploading, readOnly, ui, onRemove, onU
               type="button"
               disabled={uploading}
               onClick={(e) => { e.stopPropagation(); onUpload(); }}
-              className="absolute bottom-2 left-1/2 -translate-x-1/2 inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-foreground/50 text-white text-xs font-medium hover:bg-foreground/70 disabled:opacity-50 opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap"
+              className="absolute bottom-2 left-1/2 -translate-x-1/2 inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-foreground/50 text-primary-foreground text-xs font-medium hover:bg-foreground/70 disabled:opacity-50 opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap"
             >
               {uploading ? <Loader2 className="h-3 w-3 animate-spin" data-testid="Loader2__266d2c" /> : <Upload className="h-3 w-3" data-testid="Upload__266d2c" />}
               {ui('uploadImage')}
@@ -362,7 +362,7 @@ function ImageLightbox({ blobUrl, onClose }) {
       <button
         type="button"
         onClick={onClose}
-        className="absolute top-4 right-4 h-9 w-9 rounded-full bg-card/20 text-white flex items-center justify-center hover:bg-card/30 transition-colors"
+        className="absolute top-4 right-4 h-9 w-9 rounded-full bg-card/20 text-primary-foreground flex items-center justify-center hover:bg-card/30 transition-colors"
         aria-label="Close"
       >
         <X className="h-5 w-5" data-testid="X__266d2c" />

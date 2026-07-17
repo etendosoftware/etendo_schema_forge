@@ -121,7 +121,7 @@ export default function DocumentPrintDrawer({ open, onClose, windowName, documen
             <button
               disabled
               title={ui('comingSoon')}
-              className="h-8 px-3 flex items-center gap-1.5 rounded-md bg-blue-600/50 text-white text-xs font-medium cursor-not-allowed"
+              className="h-8 px-3 flex items-center gap-1.5 rounded-md bg-blue-600/50 text-primary-foreground text-xs font-medium cursor-not-allowed"
             >
               <Send className="h-3.5 w-3.5" data-testid="Send__8d2ae7" />
               {ui('sendByEmail')}

@@ -29,7 +29,7 @@ export const COLORS = {
 };
 
 export const SHADOWS = {
-  xs: '0 1px 2px rgba(18, 18, 23, 0.05)',
+  xs: '0 1px 2px hsl(var(--foreground) / 0.05)',
 };
 
 export const RADII = {

@@ -344,7 +344,7 @@ function UnreadBadge({ unreadCount, expanded }) {
   }
   return (
     <span
-      className="absolute top-1 right-1 flex h-4 w-4 items-center justify-center rounded-full text-[10px] font-bold leading-none ring-2 ring-white"
+      className="absolute top-1 right-1 flex h-4 w-4 items-center justify-center rounded-full text-[10px] font-bold leading-none ring-2 ring-background"
       style={{ background: 'hsl(var(--primary))', color: 'hsl(var(--foreground))' }}
     >
       {label}

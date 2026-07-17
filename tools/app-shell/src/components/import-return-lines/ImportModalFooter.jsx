@@ -13,8 +13,8 @@ export function ImportModalHeader({ title, bpName, onClose }) {
 export default function ImportModalFooter({ selectedCount, importing, importButtonLabel, onClose, onImport, ui }) {
   const disabled = selectedCount === 0 || importing;
   return (
-    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: '#F8F9FA', borderTop: '1px solid hsl(var(--border-subtle))', padding: '10px 16px' }}>
-      <span style={{ fontSize: 12, color: selectedCount > 0 ? 'var(--color-text-info, #2563eb)' : 'hsl(var(--muted-foreground))', fontWeight: selectedCount > 0 ? 500 : 400 }}>
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'hsl(var(--muted))', borderTop: '1px solid hsl(var(--border-subtle))', padding: '10px 16px' }}>
+      <span style={{ fontSize: 12, color: selectedCount > 0 ? 'var(--color-text-info, var(--status-info-fg))' : 'hsl(var(--muted-foreground))', fontWeight: selectedCount > 0 ? 500 : 400 }}>
         {selectedCount > 0 ? ui('selectedLinesCount').replace('{count}', String(selectedCount)) : ui('selectLinesToImport')}
       </span>
       <div style={{ display: 'flex', gap: 8 }}>
@@ -29,7 +29,7 @@ export default function ImportModalFooter({ selectedCount, importing, importButt
           type="button"
           onClick={onImport}
           disabled={disabled}
-          style={{ fontSize: 13, fontWeight: 500, padding: '5px 14px', borderRadius: 6, border: 'none', background: '#18181b', color: 'hsl(var(--card))', cursor: disabled ? 'not-allowed' : 'pointer', opacity: disabled ? 0.4 : 1 }}
+          style={{ fontSize: 13, fontWeight: 500, padding: '5px 14px', borderRadius: 6, border: 'none', background: 'hsl(var(--foreground))', color: 'hsl(var(--card))', cursor: disabled ? 'not-allowed' : 'pointer', opacity: disabled ? 0.4 : 1 }}
         >
           {importButtonLabel}
         </button>

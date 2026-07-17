@@ -27,7 +27,7 @@ function AlertBox({ type, title, body, onDismiss }) {
       icon: <div className="w-6 h-6 rounded-full bg-status-success flex items-center justify-center flex-shrink-0 mt-0.5"><Check
         size={13}
         strokeWidth={2.5}
-        className="text-white"
+        className="text-primary-foreground"
         data-testid="Check__a22bc2" /></div>,
       title: 'text-status-success-foreground font-semibold',
       body:  'text-status-success-foreground',
@@ -37,7 +37,7 @@ function AlertBox({ type, title, body, onDismiss }) {
       icon: <div className="w-6 h-6 rounded-full bg-status-warning flex items-center justify-center flex-shrink-0 mt-0.5"><Info
         size={13}
         strokeWidth={2.5}
-        className="text-white"
+        className="text-primary-foreground"
         data-testid="Info__a22bc2" /></div>,
       title: 'text-status-warning-foreground font-semibold',
       body:  'text-status-warning-foreground',
@@ -271,7 +271,7 @@ export default function CertModal({ context, orgId, apiBaseUrl, onClose, onUploa
                     ? <FileText
                     size={20}
                     strokeWidth={1.5}
-                    className="text-white"
+                    className="text-primary-foreground"
                     data-testid="FileText__a22bc2" />
                     : <Upload size={20} strokeWidth={1.5} data-testid="Upload__a22bc2" />}
                 </div>

@@ -102,7 +102,7 @@ export default function OcrLinesReviewModal({ columns = [], lines = [], token, a
           <button
             type="button"
             onClick={handleSubmit}
-            className="rounded-full bg-gray-900 px-5 py-2 text-sm font-medium text-white hover:bg-gray-800"
+            className="rounded-full bg-foreground px-5 py-2 text-sm font-medium text-primary-foreground hover:bg-foreground"
           >
             {ui('ocrReviewSubmit')}
           </button>

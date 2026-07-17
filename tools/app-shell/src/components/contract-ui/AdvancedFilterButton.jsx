@@ -43,7 +43,7 @@ export function AdvancedFilterButton({ columns, rows = [], value = null, onChang
           <Filter className="h-4 w-4 text-muted-foreground" data-testid="Filter__1026f3" />
           <span>{ui('filters')}</span>
           {activeConditions > 0 ? (
-            <span className="absolute -right-1.5 -top-1.5 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-[hsl(var(--foreground))] px-1 text-[10px] font-semibold leading-none text-white">
+            <span className="absolute -right-1.5 -top-1.5 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-[hsl(var(--foreground))] px-1 text-[10px] font-semibold leading-none text-primary-foreground">
               {activeConditions}
             </span>
           ) : null}

@@ -16,7 +16,7 @@ function Toggle({ checked, onChange, disabled }) {
       onClick={() => !disabled && onChange(!checked)}
       className={[
         'relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors',
-        checked ? 'bg-gray-900' : 'bg-muted',
+        checked ? 'bg-foreground' : 'bg-muted',
         disabled ? 'cursor-not-allowed opacity-60' : 'cursor-pointer',
       ].join(' ')}
     >
@@ -188,7 +188,7 @@ export default function OcrReviewModal({
             type="button"
             onClick={handleSubmit}
             disabled={!canSubmit}
-            className="rounded-full bg-gray-900 px-5 py-2 text-sm font-medium text-white hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-50"
+            className="rounded-full bg-foreground px-5 py-2 text-sm font-medium text-primary-foreground hover:bg-foreground disabled:cursor-not-allowed disabled:opacity-50"
           >
             {ui('ocrReviewContinue')}
           </button>

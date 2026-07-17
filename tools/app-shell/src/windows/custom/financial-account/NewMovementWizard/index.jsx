@@ -32,7 +32,7 @@ const TRX_LABEL_KEY = {
 };
 
 const BTN_PRIMARY =
-  'inline-flex h-10 items-center gap-2 rounded-lg bg-[hsl(var(--foreground))] px-[18px] text-sm font-semibold text-white hover:bg-[hsl(var(--foreground))] disabled:opacity-50 disabled:pointer-events-none';
+  'inline-flex h-10 items-center gap-2 rounded-lg bg-[hsl(var(--foreground))] px-[18px] text-sm font-semibold text-primary-foreground hover:bg-[hsl(var(--foreground))] disabled:opacity-50 disabled:pointer-events-none';
 const BTN_GHOST =
   'inline-flex h-10 items-center gap-2 rounded-lg border border-[hsl(var(--border-control))] bg-card px-[18px] text-sm font-semibold text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--muted))]';
 
@@ -142,7 +142,7 @@ function ChoiceCard({ choice, active, onClick }) {
       }`}
     >
       <div className="flex items-center gap-3">
-        <span className={`grid h-10 w-10 shrink-0 place-items-center rounded-md ${active ? 'bg-[hsl(var(--foreground))] text-white' : 'bg-[hsl(var(--border-subtle))] text-[hsl(var(--foreground))]'}`}>
+        <span className={`grid h-10 w-10 shrink-0 place-items-center rounded-md ${active ? 'bg-[hsl(var(--foreground))] text-primary-foreground' : 'bg-[hsl(var(--border-subtle))] text-[hsl(var(--foreground))]'}`}>
           <Icon className="h-[22px] w-[22px]" data-testid="Icon__e2e571" />
         </span>
         <span className="text-[15px] font-bold leading-5 text-[hsl(var(--foreground))]">{ui(choice.titleKey)}</span>
@@ -180,7 +180,7 @@ function GLItemBlock({ value, onChange }) {
 
 // ── Stepper ──────────────────────────────────────────────────────────────────
 const STEP_CIRCLE_CLASS = {
-  on: 'bg-[hsl(var(--foreground))] text-white',
+  on: 'bg-[hsl(var(--foreground))] text-primary-foreground',
   done: 'border-[1.5px] border-[var(--status-success-border)] bg-[var(--status-success-bg)] text-[var(--status-success-fg)]',
   todo: 'bg-[hsl(var(--border-subtle))] text-[hsl(var(--muted-foreground))]',
 };
@@ -419,7 +419,7 @@ export function NewMovementWizard({ open, accountId, accountCurrency, dimensions
       <>
         {/* Summary line — collapsed choice with a "Cambiar" button */}
         <div className="flex items-center gap-3 rounded-lg border border-[hsl(var(--border-subtle))] bg-[hsl(var(--muted))] px-3.5 py-3">
-          <span className="grid h-[34px] w-[34px] shrink-0 place-items-center rounded-md bg-[hsl(var(--foreground))] text-white">
+          <span className="grid h-[34px] w-[34px] shrink-0 place-items-center rounded-md bg-[hsl(var(--foreground))] text-primary-foreground">
             <choiceMeta.Icon className="h-4 w-4" />
           </span>
           <span className="flex flex-col gap-px">

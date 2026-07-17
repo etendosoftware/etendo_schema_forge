@@ -186,7 +186,7 @@ export default function OcrInlineUploader({
             type="button"
             onClick={handleExtract}
             disabled={isBusy}
-            className="w-full shrink-0 rounded-md border border-gray-900 px-3 py-2 text-sm font-medium text-foreground transition-colors hover:bg-gray-900 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+            className="w-full shrink-0 rounded-md border border-foreground px-3 py-2 text-sm font-medium text-foreground transition-colors hover:bg-foreground hover:text-primary-foreground disabled:cursor-not-allowed disabled:opacity-50"
           >
             {buttonLabel}
           </button>

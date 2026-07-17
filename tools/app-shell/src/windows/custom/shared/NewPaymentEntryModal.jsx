@@ -627,7 +627,7 @@ function PaymentModalFooter({
             <button
               type="button" data-testid="cp-pis-reopen"
               onClick={onReopenPis}
-              className="bg-[hsl(var(--foreground))] text-white"
+              className="bg-[hsl(var(--foreground))] text-primary-foreground"
               style={{ height: 32, padding: '0 12px', borderRadius: 360, border: 'none', outline: 'none', font: '500 14px/24px Inter', cursor: 'pointer' }}
             >
               {ui('cpPisReopen')}
@@ -646,7 +646,7 @@ function PaymentModalFooter({
           <button type="button" data-testid="cp-save-draft" onClick={onSaveDraft} disabled={saveDisabled} style={{ height: 40, padding: '8px 12px', borderRadius: 360, border: `1px solid ${BORDER2}`, outline: 'none', background: 'hsl(var(--card))', boxShadow: '0 1px 2px hsl(var(--foreground) / .05)', color: INK, font: '500 14px/24px Inter', display: 'inline-flex', alignItems: 'center', gap: 8, cursor: saveDisabled ? 'not-allowed' : 'pointer', opacity: saveDisabled ? 0.5 : 1 }}>
             {floppy}{ui('save')}
           </button>
-          <button type="button" data-testid="cp-confirm" onClick={onConfirm} disabled={confirmDisabled || loading} className="bg-[hsl(var(--foreground))] text-white hover:bg-[hsl(var(--primary))] hover:text-[hsl(var(--foreground))] transition-colors" style={{ height: 40, padding: '8px 12px', borderRadius: 360, border: 'none', outline: 'none', font: '500 14px/24px Inter', display: 'inline-flex', alignItems: 'center', gap: 8, cursor: confirmDisabled ? 'not-allowed' : 'pointer', opacity: confirmDisabled ? 0.45 : 1 }}>
+          <button type="button" data-testid="cp-confirm" onClick={onConfirm} disabled={confirmDisabled || loading} className="bg-[hsl(var(--foreground))] text-primary-foreground hover:bg-[hsl(var(--primary))] hover:text-[hsl(var(--foreground))] transition-colors" style={{ height: 40, padding: '8px 12px', borderRadius: 360, border: 'none', outline: 'none', font: '500 14px/24px Inter', display: 'inline-flex', alignItems: 'center', gap: 8, cursor: confirmDisabled ? 'not-allowed' : 'pointer', opacity: confirmDisabled ? 0.45 : 1 }}>
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
             {confirmLabel}
           </button>
@@ -1033,7 +1033,7 @@ export default function NewPaymentEntryModal({
 
   return (
     <div
-      style={{ position: 'fixed', inset: 0, zIndex: 50, background: 'rgba(16,20,28,.46)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}
+      style={{ position: 'fixed', inset: 0, zIndex: 50, background: 'hsl(var(--foreground) / 0.46)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}
       onClick={requestClose}
     >
       <div

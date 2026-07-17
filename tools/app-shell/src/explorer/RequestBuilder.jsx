@@ -93,7 +93,7 @@ export default function RequestBuilder({ specName, entity, onResponse }) {
         <button
           onClick={send}
           disabled={sending || !path}
-          className={`px-4 py-2 rounded text-sm font-semibold text-white transition-colors disabled:opacity-50 ${METHOD_COLORS[method] || 'bg-inverse-muted'}`}
+          className={`px-4 py-2 rounded text-sm font-semibold text-primary-foreground transition-colors disabled:opacity-50 ${METHOD_COLORS[method] || 'bg-inverse-muted'}`}
         >
           {sending ? '...' : 'Send'}
         </button>

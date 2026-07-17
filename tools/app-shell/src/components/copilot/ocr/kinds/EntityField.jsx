@@ -74,7 +74,7 @@ export default function EntityField({
 
   return (
     <div className="relative" ref={wrapRef}>
-      <div className="flex items-center gap-2 rounded-lg border border-border-control bg-card px-3 py-2 focus-within:border-gray-900">
+      <div className="flex items-center gap-2 rounded-lg border border-border-control bg-card px-3 py-2 focus-within:border-foreground">
         <Search
           size={14}
           className="shrink-0 text-muted-foreground"

@@ -173,7 +173,7 @@ export default function CartPanel({
           <ShoppingCart className="h-4 w-4" data-testid="ShoppingCart__4008af" />
           {ui('qsoCart')}
           {lines.length > 0 && (
-            <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1.5 text-[11px] font-medium text-white">
+            <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1.5 text-[11px] font-medium text-primary-foreground">
               {lines.length}
             </span>
           )}

@@ -585,7 +585,7 @@ export function SendDocumentButton({ onClick }) {
       >
         <Mail className="h-[15px] w-[15px]" data-testid="Mail__afec0a" />
       </button>
-      <span className="pointer-events-none absolute -bottom-8 left-1/2 -translate-x-1/2 whitespace-nowrap rounded bg-zinc-800 px-2 py-1 text-[11px] text-white opacity-0 group-hover:opacity-100 transition-opacity" style={{ zIndex: 50 }}>
+      <span className="pointer-events-none absolute -bottom-8 left-1/2 -translate-x-1/2 whitespace-nowrap rounded bg-foreground px-2 py-1 text-[11px] text-primary-foreground opacity-0 group-hover:opacity-100 transition-opacity" style={{ zIndex: 50 }}>
         {label}
       </span>
     </div>

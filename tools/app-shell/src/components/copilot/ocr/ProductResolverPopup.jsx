@@ -113,7 +113,7 @@ export default function ProductResolverPopup({
           </button>
           <button
             onClick={submit}
-            className="px-4 py-2 text-sm font-medium text-white bg-status-info hover:bg-status-info rounded-lg"
+            className="px-4 py-2 text-sm font-medium text-primary-foreground bg-status-info hover:bg-status-info rounded-lg"
           >
             {ui('continue')}
           </button>
@@ -266,7 +266,7 @@ function InlineSelector({ selectorUrl, authHeader, initialQuery, value, onPick, 
 
   return (
     <div className="relative" ref={wrapRef}>
-      <div className="flex items-center gap-2 rounded-lg border border-gray-900 bg-card px-3 py-2">
+      <div className="flex items-center gap-2 rounded-lg border border-foreground bg-card px-3 py-2">
         <Search size={14} className="text-muted-foreground shrink-0" data-testid="Search__b3ae11" />
         <input
           ref={inputRef}
@@ -660,7 +660,7 @@ function ProductCreateForm({ initialName, productSpecUrl, authHeader, token, onC
           <button
             onClick={submit}
             disabled={submitting}
-            className="px-4 py-2 text-sm font-medium text-white bg-status-info hover:bg-status-info rounded-lg disabled:opacity-50 flex items-center gap-2"
+            className="px-4 py-2 text-sm font-medium text-primary-foreground bg-status-info hover:bg-status-info rounded-lg disabled:opacity-50 flex items-center gap-2"
           >
             {submitting && <Loader2 size={13} className="animate-spin" data-testid="Loader2__b3ae11" />}
             {ui('ocrProductCreate')}

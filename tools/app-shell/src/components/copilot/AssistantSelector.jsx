@@ -82,7 +82,7 @@ export function AssistantSelector({
                 <div className="flex items-center gap-2 font-medium">
                   {assistant.featured === 'Y' && (
                     <Star
-                      className="h-3.5 w-3.5 shrink-0 text-status-warning-foreground fill-yellow-400"
+                      className="h-3.5 w-3.5 shrink-0 text-status-warning-foreground fill-status-warning-foreground"
                       data-testid="Star__8ea2ef" />
                   )}
                   <span>{assistant.name}</span>

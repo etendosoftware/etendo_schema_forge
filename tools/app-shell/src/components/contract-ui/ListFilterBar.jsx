@@ -446,7 +446,7 @@ export function ListFilterBar({
             <Filter className="h-4 w-4 text-muted-foreground" data-testid="Filter__6d5e90" />
             <span>{ui('filters')}</span>
             {hasActiveAdvancedFilter && (
-              <span className="absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] px-1 flex items-center justify-center rounded-full bg-[hsl(var(--foreground))] text-white text-[10px] font-semibold leading-none">
+              <span className="absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] px-1 flex items-center justify-center rounded-full bg-[hsl(var(--foreground))] text-primary-foreground text-[10px] font-semibold leading-none">
                 {advancedFilter.conditions.length}
               </span>
             )}

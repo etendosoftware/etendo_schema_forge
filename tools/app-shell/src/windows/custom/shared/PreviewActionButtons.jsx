@@ -18,7 +18,7 @@ export default function PreviewActionButtons({
       {onEmail && (
         <Button
           size="sm"
-          className="gap-1 px-2 py-1 h-8 rounded-lg text-sm font-medium bg-[hsl(var(--foreground))] hover:bg-[hsl(var(--foreground))] text-white [&_svg]:size-5"
+          className="gap-1 px-2 py-1 h-8 rounded-lg text-sm font-medium bg-[hsl(var(--foreground))] hover:bg-[hsl(var(--foreground))] text-primary-foreground [&_svg]:size-5"
           onClick={onEmail}
           data-testid="Button__9ccdc3">
           <Mail data-testid="Mail__9ccdc3" />

@@ -29,7 +29,7 @@ function ToggleCard({ label, description, fieldKey, value, onChange, editing }) 
   }
 
   return (
-    <div className="flex items-center justify-between rounded-xl border border-[#D1D1DB] bg-card p-4">
+    <div className="flex items-center justify-between rounded-xl border border-[hsl(var(--border-control))] bg-card p-4">
       <div>
         <div className="text-sm font-medium text-[hsl(var(--foreground))]">{label}</div>
         {description && <div className="text-xs text-[hsl(var(--muted-foreground))] mt-0.5">{description}</div>}

@@ -49,7 +49,7 @@ export default function SpecList({ selected, onSelect, useAdmin = false }) {
               className={cn(
                 'w-full text-left px-3 py-2 text-sm transition-colors flex items-center',
                 selected === s.name
-                  ? 'bg-purple-600/15 text-purple-400 border-l-2 border-purple-500'
+                  ? 'bg-primary text-primary border-l-2 border-primary'
                   : 'text-inverse-foreground hover:bg-inverse-muted border-l-2 border-transparent'
               )}
             >

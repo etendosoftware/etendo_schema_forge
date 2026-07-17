@@ -437,7 +437,7 @@ export default function ReportDrawer({
         )}
 
         {/* Preview area */}
-        <div className="flex-1 overflow-hidden bg-slate-100 p-4">
+        <div className="flex-1 overflow-hidden bg-muted p-4">
           <div className="bg-card rounded-lg shadow-lg h-full overflow-hidden relative">
             {(fetchingData || loading) && (
               <div className="absolute inset-0 flex items-center justify-center bg-card/80 z-10 gap-2 text-muted-foreground">

@@ -32,7 +32,7 @@ function DocCard({ doc, currency, ui, navigate, onClose, onNavigate }) {
       onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleActivate(); } }}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
-      onFocus={e => { e.currentTarget.style.boxShadow = '0 0 0 3px rgba(47,115,214,.2)'; }}
+      onFocus={e => { e.currentTarget.style.boxShadow = '0 0 0 3px hsl(var(--focus-ring) / 0.2)'; }}
       onBlur={e => { e.currentTarget.style.boxShadow = 'none'; }}
       style={{
         display: 'flex', alignItems: 'center', gap: 12,

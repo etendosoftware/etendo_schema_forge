@@ -137,7 +137,7 @@ export default function SpecManager({ spec, onRefresh }) {
         <button
           onClick={handlePopulate}
           disabled={populating}
-          className="px-3 py-1.5 bg-purple-600 hover:bg-purple-700 text-white text-xs font-medium rounded transition-colors disabled:opacity-50"
+          className="px-3 py-1.5 bg-primary hover:bg-primary text-primary-foreground text-xs font-medium rounded transition-colors disabled:opacity-50"
         >
           {populating ? 'Populating...' : 'Populate from AD'}
         </button>

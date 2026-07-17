@@ -5,7 +5,7 @@ function PercentPill({ label, value }) {
   const pct = Math.round(n);
   const full = pct >= 100;
   const bg = full ? 'var(--status-success-bg)' : 'hsl(var(--muted))';
-  const color = full ? 'var(--status-success-fg)' : '#374151';
+  const color = full ? 'var(--status-success-fg)' : 'hsl(var(--muted-foreground))';
   const dot = full ? 'var(--status-success-fg)' : 'hsl(var(--text-disabled))';
 
   return (

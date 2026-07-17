@@ -28,7 +28,7 @@ export default function TabBar({ tabs, active, onChange }) {
             {tab.badge != null && (
               <span
                 className={`inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full text-[11px] font-medium
-                  ${active === i ? 'bg-[hsl(var(--foreground))] text-white' : 'bg-[hsl(var(--border-subtle))] text-[hsl(var(--muted-foreground))]'}`}
+                  ${active === i ? 'bg-[hsl(var(--foreground))] text-primary-foreground' : 'bg-[hsl(var(--border-subtle))] text-[hsl(var(--muted-foreground))]'}`}
               >
                 {tab.badge}
               </span>

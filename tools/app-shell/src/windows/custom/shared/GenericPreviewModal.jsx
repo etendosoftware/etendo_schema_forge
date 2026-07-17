@@ -150,7 +150,7 @@ function ManagedLeftPanel({ cfg, leftPanel }) {
           <>
             <p className="text-sm text-muted-foreground mt-1">{ui('dropZoneUploadPrompt')}</p>
             <button
-              className="px-4 py-2 text-sm font-medium text-foreground bg-transparent border border-gray-900 rounded-lg hover:bg-gray-900 hover:text-white transition-colors"
+              className="px-4 py-2 text-sm font-medium text-foreground bg-transparent border border-foreground rounded-lg hover:bg-foreground hover:text-primary-foreground transition-colors"
               onClick={(e) => { e.stopPropagation(); fileInputRef.current?.click(); }}
             >
               {ui('dropZoneBrowse')}

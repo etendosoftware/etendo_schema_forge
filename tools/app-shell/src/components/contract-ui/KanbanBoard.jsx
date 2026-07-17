@@ -14,10 +14,10 @@ const COLOR_MAP = {
   green: 'border-t-emerald-500 bg-status-success/10',
   red: 'border-t-red-500 bg-destructive/10',
   yellow: 'border-t-amber-500 bg-status-warning/10',
-  purple: 'border-t-purple-500 bg-purple-500/10',
+  purple: 'border-t-purple-500 bg-primary',
   orange: 'border-t-orange-500 bg-status-warning/10',
   pink: 'border-t-pink-500 bg-destructive/10',
-  gray: 'border-t-gray-400 bg-gray-500/10',
+  gray: 'border-t-gray-400 bg-muted',
 };
 
 const COLOR_DOT_MAP = {
@@ -25,10 +25,10 @@ const COLOR_DOT_MAP = {
   green: 'bg-status-success',
   red: 'bg-destructive',
   yellow: 'bg-status-warning',
-  purple: 'bg-purple-500',
+  purple: 'bg-primary',
   orange: 'bg-status-warning',
   pink: 'bg-destructive',
-  gray: 'bg-gray-400',
+  gray: 'bg-muted',
 };
 
 /**
@@ -57,7 +57,7 @@ function PriorityStars({ priority }) {
           key={i}
           className={cn(
             'h-3 w-3',
-            i < count ? 'fill-amber-400 text-status-warning-foreground' : 'text-muted-foreground/30'
+            i < count ? 'fill-status-warning-foreground text-status-warning-foreground' : 'text-muted-foreground/30'
           )}
           data-testid="Star__22de88" />
       ))}
@@ -160,7 +160,7 @@ function KanbanCard({ card, onCardClick, renderCard, isDragging }) {
 function KanbanColumn({ column, cards, onDragEnd, onCardClick, renderCard, emptyMessage, dragOverColumnId, setDragOverColumnId }) {
   const isOver = dragOverColumnId === column.id;
   const colorClasses = column.color ? COLOR_MAP[column.color] : '';
-  const dotColor = column.color ? COLOR_DOT_MAP[column.color] : 'bg-gray-400';
+  const dotColor = column.color ? COLOR_DOT_MAP[column.color] : 'bg-muted';
 
   const handleDragOver = useCallback(
     (e) => {

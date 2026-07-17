@@ -13,7 +13,7 @@ function TypeIcon({ type, className }) {
   );
   if (type === 'process') return (
     <Cog
-      className={cn('h-3.5 w-3.5 text-purple-400/70', className)}
+      className={cn('h-3.5 w-3.5 text-primary', className)}
       data-testid="Cog__1a98b9" />
   );
   return (
@@ -366,7 +366,7 @@ export default function AddSpec({ onCreated }) {
         <button
           type="submit"
           disabled={saving || !form.Name}
-          className="w-full px-3 py-1.5 bg-status-info hover:bg-status-info text-white text-xs font-medium rounded transition-colors disabled:opacity-50"
+          className="w-full px-3 py-1.5 bg-status-info hover:bg-status-info text-primary-foreground text-xs font-medium rounded transition-colors disabled:opacity-50"
         >
           {saving ? 'Creating...' : 'Create Spec'}
         </button>

@@ -74,7 +74,7 @@ export default function SupplierSelector({ selected, onSelect, suppliers = [], i
               onClick={() => { onSelect(null); setOpen(false); }}
               className="flex w-full items-center gap-2 px-3 py-2 text-sm hover:bg-muted/50 transition-colors"
             >
-              <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-slate-400 text-xs font-medium text-white">
+              <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-medium text-primary-foreground">
                 *
               </div>
               <span className="font-medium">{ui('qpoAllSuppliers')}</span>
@@ -86,7 +86,7 @@ export default function SupplierSelector({ selected, onSelect, suppliers = [], i
                 onClick={() => { onSelect(s); setOpen(false); }}
                 className="flex w-full items-center gap-2 px-3 py-2 text-sm hover:bg-muted/50 transition-colors"
               >
-                <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-status-info text-xs font-medium text-white">
+                <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-status-info text-xs font-medium text-primary-foreground">
                   {s.name.charAt(0)}
                 </div>
                 <div className="flex-1 text-left min-w-0">

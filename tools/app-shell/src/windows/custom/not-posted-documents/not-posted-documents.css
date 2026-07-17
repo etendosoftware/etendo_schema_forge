@@ -3,7 +3,7 @@
 :root {
   --npd-gray-50:    hsl(var(--muted));
   --npd-gray-100:   hsl(var(--border-subtle));
-  --npd-gray-200:   #D1D1DB;
+  --npd-gray-200:   hsl(var(--border-control));
   --npd-gray-400:   hsl(var(--text-disabled));
   --npd-gray-600:   hsl(var(--muted-foreground));
   --npd-gray-700:   hsl(var(--muted-foreground));
@@ -70,7 +70,7 @@
 .npd-filter-field select:focus,
 .npd-filter-field input[type="date"]:focus {
   border-color: var(--npd-blue-600);
-  box-shadow: 0 0 0 2px rgba(0, 117, 173, 0.12);
+  box-shadow: 0 0 0 2px hsl(var(--status-info-fg) / 0.12);
 }
 
 /* ── Toolbar ────────────────────────────────────────────────────────────────── */
@@ -266,7 +266,7 @@
 
 .npd-multiselect-trigger:focus {
   border-color: var(--npd-blue-600);
-  box-shadow: 0 0 0 2px rgba(0, 117, 173, 0.12);
+  box-shadow: 0 0 0 2px hsl(var(--status-info-fg) / 0.12);
 }
 
 .npd-multiselect-trigger .npd-placeholder {

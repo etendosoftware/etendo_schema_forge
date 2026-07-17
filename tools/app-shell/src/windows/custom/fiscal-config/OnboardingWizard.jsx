@@ -578,7 +578,7 @@ function ConfirmScreen({ resolvedSystem, selectedTerritory, alsoNational, volume
       </div>
       <div className="rounded-xl p-4 flex gap-3 text-sm" style={{ background: 'var(--status-info-bg)', color: 'var(--status-info-fg)' }}>
         <span
-          className="flex-shrink-0 flex items-center justify-center text-white font-bold"
+          className="flex-shrink-0 flex items-center justify-center text-primary-foreground font-bold"
           style={{ width: 20, height: 20, borderRadius: '50%', background: 'var(--status-info-fg)', fontSize: 12, marginTop: 1 }}
         >i</span>
         <p>
@@ -665,7 +665,7 @@ function ObligationCard({ label, paragraphs, note, info, selected, onPick }) {
       {info && (
         <div className="rounded-lg px-3 py-2.5 flex gap-2 text-xs" style={{ background: 'var(--status-info-bg)', color: 'var(--status-info-fg)' }}>
           <span
-            className="flex-shrink-0 flex items-center justify-center text-white font-bold"
+            className="flex-shrink-0 flex items-center justify-center text-primary-foreground font-bold"
             style={{ width: 16, height: 16, borderRadius: '50%', background: 'var(--status-info-fg)', fontSize: 10, marginTop: 1 }}
           >i</span>
           <span>{info}</span>
@@ -938,7 +938,7 @@ function SubquestionScreen({ t, orgName, selectedOrg, orgList, onSelectOrg, onGo
           <div className="mt-4 rounded-xl px-5 py-4" style={{ background: 'var(--status-info-bg)', color: 'var(--status-info-fg)' }}>
             <div className="flex items-center gap-3 mb-3">
               <span
-                className="flex-shrink-0 flex items-center justify-center text-white font-bold"
+                className="flex-shrink-0 flex items-center justify-center text-primary-foreground font-bold"
                 style={{ width: 28, height: 28, borderRadius: '50%', background: 'var(--status-info-fg)', fontSize: 14 }}
               >i</span>
               <span className="font-semibold" style={{ fontSize: 14 }}>
@@ -1032,7 +1032,7 @@ function SubquestionScreen({ t, orgName, selectedOrg, orgList, onSelectOrg, onGo
 
               <div className="mt-4 rounded-xl px-4 py-3 flex gap-2.5 text-sm" style={{ background: 'var(--status-info-bg)', color: 'var(--status-info-fg)' }}>
                 <span
-                  className="flex-shrink-0 flex items-center justify-center text-white font-bold"
+                  className="flex-shrink-0 flex items-center justify-center text-primary-foreground font-bold"
                   style={{ width: 20, height: 20, borderRadius: '50%', background: 'var(--status-info-fg)', fontSize: 12, marginTop: 1 }}
                 >i</span>
                 <p>Importante: {ui('fiscal.onboarding.subq.important.note')}</p>

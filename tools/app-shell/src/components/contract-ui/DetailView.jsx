@@ -3153,7 +3153,7 @@ export function DetailView({
               if (b.hideWhenStatus?.includes(data[statusField])) return null;
               const cls = b.style === 'warning'
                 ? 'ml-1 border-status-warning-border bg-status-warning text-status-warning-foreground'
-                : 'ml-1 bg-status-info hover:bg-status-info border-transparent text-white';
+                : 'ml-1 bg-status-info hover:bg-status-info border-transparent text-primary-foreground';
               const variant = b.style === 'warning' ? 'outline' : 'default';
               return (
                 <Badge

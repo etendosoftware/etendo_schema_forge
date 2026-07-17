@@ -1246,11 +1246,11 @@ function ReportViewer({ report, onBack, token, selectedOrgId, roleOrgIds, catego
                 <div className="absolute inset-0 overflow-hidden">
                   {/* Skeleton table background */}
                   <div className="p-6 opacity-30 pointer-events-none select-none blur-[2px]">
-                    <div className="h-4 w-48 bg-slate-200 rounded mb-6" />
+                    <div className="h-4 w-48 bg-muted rounded mb-6" />
                     <div className="space-y-0">
                       <div className="grid grid-cols-6 gap-3 pb-2 border-b border-border-subtle mb-1">
                         {[40, 15, 15, 15, 15, 15].map((w, i) => (
-                          <div key={i} className="h-3 bg-slate-300 rounded" style={{ width: `${w}%` }} />
+                          <div key={i} className="h-3 bg-muted rounded" style={{ width: `${w}%` }} />
                         ))}
                       </div>
                       {Array.from({ length: 8 }).map((_, r) => (

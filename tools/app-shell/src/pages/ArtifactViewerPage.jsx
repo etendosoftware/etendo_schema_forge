@@ -43,7 +43,7 @@ function JsonView({ data }) {
       // Booleans
       .replace(
         /:\s*(true|false)/g,
-        ': <span class="text-purple-600">$1</span>'
+        ': <span class="text-primary">$1</span>'
       )
       // Null
       .replace(
@@ -234,7 +234,7 @@ export default function ArtifactViewerPage() {
                     }}
                     className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
                       key === selectedFile
-                        ? 'bg-gray-900 text-white'
+                        ? 'bg-foreground text-primary-foreground'
                         : 'text-muted-foreground hover:bg-muted'
                     }`}
                   >

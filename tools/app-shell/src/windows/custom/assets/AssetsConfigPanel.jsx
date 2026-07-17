@@ -33,7 +33,7 @@ function ToggleCard({ label, description, fieldKey, value, onChange, editing }) 
         onClick={handleToggle}
         disabled={!editing}
         className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none
-          ${isOn ? 'bg-gray-900' : 'bg-muted'}
+          ${isOn ? 'bg-foreground' : 'bg-muted'}
           ${!editing ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer'}`}
         aria-checked={isOn}
         role="switch"

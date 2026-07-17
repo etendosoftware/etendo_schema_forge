@@ -122,7 +122,7 @@ function Psd2AccountSelectModal({ selection, onConfirm, onCancel }) {
             disabled={!selected}
             onClick={() => onConfirm?.(selected)}
             data-testid="psd2-account-select-confirm"
-            className="rounded-lg bg-[hsl(var(--foreground))] px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-[hsl(var(--primary))] hover:text-[hsl(var(--foreground))] disabled:bg-[hsl(var(--border-control))] disabled:text-white disabled:hover:bg-[hsl(var(--border-control))] disabled:hover:text-white"
+            className="rounded-lg bg-[hsl(var(--foreground))] px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-[hsl(var(--primary))] hover:text-[hsl(var(--foreground))] disabled:bg-[hsl(var(--border-control))] disabled:text-primary-foreground disabled:hover:bg-[hsl(var(--border-control))] disabled:hover:text-primary-foreground"
           >
             {ui('financeAccountsPsd2SelectConfirm')}
           </button>

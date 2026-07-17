@@ -104,7 +104,7 @@ function getPercentCellPalette(row, col) {
   } else if (pct > 0) {
     color = 'bg-status-warning';
   } else {
-    color = 'bg-slate-200';
+    color = 'bg-muted';
   }
   let textColor;
   if (pct >= 100) {
@@ -155,7 +155,7 @@ export function renderPercentCell({ row, col }) {
   const { color, pct, textColor } = getPercentCellPalette(row, col);
   return (
     <div className="flex items-center gap-2">
-      <div className="w-16 h-1.5 bg-slate-100 rounded-full overflow-hidden">
+      <div className="w-16 h-1.5 bg-muted rounded-full overflow-hidden">
         <div className={`h-full rounded-full ${color}`} style={{ width: `${Math.min(pct, 100)}%` }} />
       </div>
       <span className={`text-xs tabular-nums ${textColor}`}>{pct}%</span>

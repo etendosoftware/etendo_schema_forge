@@ -1147,7 +1147,7 @@ function isQuickActionsEnabled(rowQuickActions) {
 function getRowClassName(onRowClick, onNavigate, isChecked, selectedRowBg, selectedId, row, isSelectedLine) {
   let hoverClass;
   if (isSelectedLine) {
-    hoverClass = 'hover:bg-slate-300/80';
+    hoverClass = 'hover:bg-muted';
   } else {
     hoverClass = (onRowClick || onNavigate) ? 'hover:bg-muted/50' : '';
   }
@@ -1156,7 +1156,7 @@ function getRowClassName(onRowClick, onNavigate, isChecked, selectedRowBg, selec
     (onRowClick || onNavigate) ? 'cursor-pointer' : 'cursor-default',
     isChecked ? selectedRowBg : '',
     selectedId != null && row.id === selectedId ? 'bg-primary/10' : '',
-    isSelectedLine ? 'bg-slate-200/90 ring-1 ring-slate-300' : '',
+    isSelectedLine ? 'bg-muted ring-1 ring-focus-ring' : '',
     hoverClass,
   ].filter(Boolean).join(' ');
 }
@@ -1483,7 +1483,7 @@ function TableDataRow({
                 >
                   <Copy className="h-3.5 w-3.5" aria-hidden="true" data-testid="Copy__eb5261" />
                 </button>
-                <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 px-2 py-1 text-xs font-medium text-white bg-gray-800 rounded whitespace-nowrap opacity-0 group-hover/clonebtn:opacity-100 pointer-events-none transition-opacity z-10">
+                <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 px-2 py-1 text-xs font-medium text-primary-foreground bg-foreground rounded whitespace-nowrap opacity-0 group-hover/clonebtn:opacity-100 pointer-events-none transition-opacity z-10">
                   {ui('cloneOrderBtn')}
                 </div>
               </div>

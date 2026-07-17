@@ -75,10 +75,10 @@ export const CHIP_ICONS = {
 
 export const CHIP_COLORS = {
   shipment: 'text-status-info-foreground',
-  invoice: 'text-purple-600',
+  invoice: 'text-primary',
   payment: 'text-status-success-foreground',
   quotation: 'text-status-warning-foreground',
   order: 'text-status-info-foreground',
-  receipt: 'text-teal-600',
+  receipt: 'text-status-info-foreground',
   returnDoc: 'text-status-warning-foreground',
 };

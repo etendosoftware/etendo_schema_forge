@@ -170,7 +170,7 @@ export default function ConfirmInOutModal({
               transition: 'border-color .15s, background .15s',
               outline: 'none',
             }}
-            onFocus={e => { e.currentTarget.style.boxShadow = '0 0 0 3px rgba(47,115,214,.22)'; }}
+            onFocus={e => { e.currentTarget.style.boxShadow = '0 0 0 3px hsl(var(--focus-ring) / 0.22)'; }}
             onBlur={e => { e.currentTarget.style.boxShadow = 'none'; }}
           >
             <div style={{ width: 38, height: 38, borderRadius: 9, background: 'var(--status-info-bg)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>

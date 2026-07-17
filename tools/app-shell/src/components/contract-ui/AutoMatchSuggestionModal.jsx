@@ -66,7 +66,7 @@ function SelectBox({ checked = false, dash = false, onClick, testId, ariaLabel }
     >
       {dash && <span className="h-[2px] w-2 rounded-full bg-card" />}
       {checked && !dash && <Check
-        className="h-3 w-3 text-white"
+        className="h-3 w-3 text-primary-foreground"
         strokeWidth={3}
         data-testid="Check__a89979" />}
     </button>
@@ -434,7 +434,7 @@ export function AutoMatchSuggestionModal({
               className={cn(
                 'flex h-10 items-center gap-1 rounded-full px-3 text-sm font-medium transition-colors',
                 checkedGroups.length > 0 && !loading
-                  ? 'bg-[hsl(var(--foreground))] text-white hover:bg-[hsl(var(--primary))] hover:text-[hsl(var(--foreground))]'
+                  ? 'bg-[hsl(var(--foreground))] text-primary-foreground hover:bg-[hsl(var(--primary))] hover:text-[hsl(var(--foreground))]'
                   : 'cursor-not-allowed bg-[hsl(var(--border-control))] text-[hsl(var(--muted-foreground))]',
               )}
             >

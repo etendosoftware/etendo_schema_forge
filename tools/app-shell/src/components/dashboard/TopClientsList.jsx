@@ -96,7 +96,7 @@ export function TopClientsList({ clients = [], currencyLabel = '', token = '', a
                 style={{ padding: '4px 8px', height: '32px', background: 'hsl(var(--foreground))', borderRadius: '8px', gap: '4px', cursor: 'pointer', border: 'none' }}
               >
                 <Plus
-                  style={{ width: '20px', height: '20px', color: 'rgba(255,255,255,0.9)' }}
+                  style={{ width: '20px', height: '20px', color: 'hsl(var(--background) / 0.9)' }}
                   data-testid="Plus__2d735a" />
                 <span style={{ fontSize: '14px', fontWeight: 500, lineHeight: '24px', color: 'hsl(var(--card))' }}>
                   {ui('newClient')}

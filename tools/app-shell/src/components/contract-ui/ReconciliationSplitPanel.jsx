@@ -536,7 +536,7 @@ function ReconciliationActionBar({
           // follow-up task); a pending line gates "Conciliar" on a balanced selection.
           disabled={busy || (isReconciledLine ? false : !canReconcile)}
           data-testid="recon-action-reconcile"
-          className="inline-flex h-8 items-center gap-1.5 rounded-full bg-[hsl(var(--foreground))] px-3 text-sm font-medium text-white hover:bg-[hsl(var(--primary))] hover:text-[hsl(var(--foreground))] disabled:cursor-not-allowed disabled:bg-[hsl(var(--border-control))] disabled:text-white disabled:hover:bg-[hsl(var(--border-control))] disabled:hover:text-white"
+          className="inline-flex h-8 items-center gap-1.5 rounded-full bg-[hsl(var(--foreground))] px-3 text-sm font-medium text-primary-foreground hover:bg-[hsl(var(--primary))] hover:text-[hsl(var(--foreground))] disabled:cursor-not-allowed disabled:bg-[hsl(var(--border-control))] disabled:text-primary-foreground disabled:hover:bg-[hsl(var(--border-control))] disabled:hover:text-primary-foreground"
         >
           <CheckCircle className="h-4 w-4" data-testid="CheckCircle__d0f4d5" />
           {isReconciledLine

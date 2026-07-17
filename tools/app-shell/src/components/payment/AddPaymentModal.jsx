@@ -15,7 +15,7 @@ import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@/compone
 import { PaymentForm } from './PaymentForm';
 
 const BTN_PRIMARY =
-  'inline-flex h-10 items-center gap-2 rounded-lg bg-[hsl(var(--foreground))] px-[18px] text-sm font-semibold text-white hover:bg-[hsl(var(--foreground))] disabled:opacity-50 disabled:pointer-events-none';
+  'inline-flex h-10 items-center gap-2 rounded-lg bg-[hsl(var(--foreground))] px-[18px] text-sm font-semibold text-primary-foreground hover:bg-[hsl(var(--foreground))] disabled:opacity-50 disabled:pointer-events-none';
 const BTN_GHOST =
   'inline-flex h-10 items-center gap-2 rounded-lg border border-[hsl(var(--border-control))] bg-card px-[18px] text-sm font-semibold text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--muted))]';
 

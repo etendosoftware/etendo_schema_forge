@@ -36,7 +36,7 @@ const BTN_VARIANTS = {
     background: 'hsl(var(--foreground))',
     border: 'none',
     color: 'hsl(var(--card))',
-    iconColor: 'rgba(255,255,255,0.9)',
+    iconColor: 'hsl(var(--background) / 0.9)',
   },
 };
 

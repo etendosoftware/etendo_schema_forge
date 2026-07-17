@@ -505,7 +505,7 @@ export default function AccountTreeView({
         <button
           type="button"
           onClick={() => setIsModalOpen(true)}
-          className="flex items-center gap-1 text-xs font-medium px-3 py-1.5 bg-[hsl(var(--foreground))] text-white rounded-full hover:bg-[hsl(var(--foreground))] transition-colors"
+          className="flex items-center gap-1 text-xs font-medium px-3 py-1.5 bg-[hsl(var(--foreground))] text-primary-foreground rounded-full hover:bg-[hsl(var(--foreground))] transition-colors"
         >
           + {ui('newSubAccount')}
         </button>

@@ -11,11 +11,23 @@ states use `status-success`, `status-warning`, `status-info`,
 `status-neutral`, or `destructive`; their background, foreground and border
 variants are available as Tailwind utilities and CSS custom properties.
 
-Do not add hexadecimal, RGB, HSL palette literals, or palette-specific
-Tailwind utilities to application UI. The only exceptions are intentionally
-data-encoded visuals (charts and deterministic avatars), externally branded
-assets, and print/PDF output, where a theme role would change the data or the
-document contract.
+Do not add hexadecimal, RGB, or numeric-HSL palette literals; named palette
+utilities (including `white` and `black`); or palette-specific Tailwind
+utilities to application UI. The only exceptions are intentionally data-encoded
+visuals (charts and deterministic avatars), externally branded assets, and
+print/PDF output, where a theme role would change the data or the document
+contract.
+
+`semanticThemeUsage.test.js` enforces this rule for application source. Its
+explicit exception list is limited to chart series and category identities,
+developer debug panels, and print/PDF or document-preview contracts. Adding an
+exception requires documenting why a semantic role would alter the represented
+data or document.
+
+The guard names every allowed exception with its rationale: event, product,
+warehouse, application-section, or chart-series identity; developer diagnostic
+palettes; and print/PDF or document-preview contracts. It deliberately does
+not exempt ordinary screens, controls, overlays, or status feedback.
 
 For inline styles, use the semantic CSS custom properties, for example
 `var(--status-success-bg)` or `hsl(var(--foreground))`. For class names, use

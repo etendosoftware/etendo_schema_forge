@@ -23,7 +23,7 @@ export function PillToggle({ checked, onCheckedChange, disabled = false, classNa
       disabled={disabled}
       onClick={() => { if (!disabled) onCheckedChange?.(!isOn); }}
       className={`relative inline-flex h-6 w-[42px] shrink-0 items-center rounded-full transition-colors focus:outline-none
-        ${isOn ? 'bg-[hsl(var(--foreground))]' : 'bg-[#D1D1DB]'}
+        ${isOn ? 'bg-[hsl(var(--foreground))]' : 'bg-[hsl(var(--border-control))]'}
         ${disabled ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}
         ${className}`}
       {...rest}

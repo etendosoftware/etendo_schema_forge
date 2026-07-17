@@ -226,7 +226,7 @@
 /* ── Table ─────────────────────────────────────────────────────────────────── */
 /* ── Table — exact match to DataTable / TableHead / TableCell ───────────────── */
 /* Header: text-xs (12px) font-semibold text-text-primary (≈hsl(var(--foreground)))            */
-/* Cell:   text-sm (14px) text-foreground (hsl(222 47% 11%)) px-3 py-2.5        */
+/* Cell:   text-sm (14px) text-foreground px-3 py-2.5                           */
 .fm-tablecard .fm-table {
   width: 100%; border-collapse: collapse;
   font: 400 14px/20px var(--fm-font-sans);
@@ -248,7 +248,7 @@
   font-size: 14px; line-height: 20px;
 }
 .fm-tablecard .fm-table tr:last-child td { border-bottom: 0; }
-.fm-tablecard .fm-table tr:hover td { background: hsl(210 40% 96% / 0.5); }
+.fm-tablecard .fm-table tr:hover td { background: hsl(var(--muted) / 0.5); }
 .fm-tablecard .fm-table td.num { text-align: right; font-variant-numeric: tabular-nums; }
 .fm-tablecard .fm-table td.strong { font-weight: 500; }
 .fm-tablecard .fm-table td.mono {
@@ -265,7 +265,7 @@
 }
 .fm-num-factura-link:hover { color: var(--fm-purple-600); }
 .fm-num-factura-arrow {
-  color: hsl(215 16% 47%); flex-shrink: 0;
+  color: hsl(var(--muted-foreground)); flex-shrink: 0;
   transition: color .12s ease;
 }
 .fm-num-factura-link:hover .fm-num-factura-arrow { color: var(--fm-purple-600); }

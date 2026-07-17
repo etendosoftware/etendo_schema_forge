@@ -77,7 +77,7 @@ function CurrencyBadge({ iso }) {
 }
 
 /** Field wrapper that doubles as the chip host and the search-input box (border + focus ring). */
-const FIELD_WRAPPER_CLS = 'relative flex h-10 w-full items-center gap-1 rounded-md border border-[hsl(var(--border-control))] bg-card px-2 shadow-[0px_1px_2px_hsl(var(--foreground) / 0.05)] focus-within:border-[hsl(var(--foreground))] focus-within:ring-[3px] focus-within:ring-black/[0.08]';
+const FIELD_WRAPPER_CLS = 'relative flex h-10 w-full items-center gap-1 rounded-md border border-[hsl(var(--border-control))] bg-card px-2 shadow-[0px_1px_2px_hsl(var(--foreground) / 0.05)] focus-within:border-[hsl(var(--foreground))] focus-within:ring-[3px] focus-within:ring-foreground/[0.08]';
 /** Borderless input used inside FIELD_WRAPPER_CLS. */
 const FIELD_INPUT_CLS = 'h-full min-w-0 flex-1 border-0 bg-transparent px-1 text-sm outline-none placeholder:text-[hsl(var(--text-disabled))]';
 
@@ -244,7 +244,7 @@ function AmountField({ value, onChange, currencyIso, testId }) {
   return (
     <div className="relative">
       <input
-        className="h-10 w-full rounded-md border border-[hsl(var(--border-control))] bg-card pr-9 pl-3 text-right text-sm leading-5 tabular-nums text-[hsl(var(--foreground))] placeholder:text-[hsl(var(--text-disabled))] focus:outline-none focus:border-[hsl(var(--foreground))] focus:ring-[3px] focus:ring-black/[0.08]"
+        className="h-10 w-full rounded-md border border-[hsl(var(--border-control))] bg-card pr-9 pl-3 text-right text-sm leading-5 tabular-nums text-[hsl(var(--foreground))] placeholder:text-[hsl(var(--text-disabled))] focus:outline-none focus:border-[hsl(var(--foreground))] focus:ring-[3px] focus:ring-foreground/[0.08]"
         placeholder={ui('financeAccountTransferAmountPlaceholder')}
         inputMode="decimal"
         value={value}
@@ -351,7 +351,7 @@ export function FundsTransferModal({ sourceAccountId, onClose, onSuccess }) {
         {/* Header */}
         <div className="flex items-start justify-between px-6 pb-3.5 pt-[22px]">
           <div className="flex items-center gap-3">
-            <span className="flex h-9 w-9 flex-none items-center justify-center rounded-md bg-[hsl(var(--foreground))] text-white">
+            <span className="flex h-9 w-9 flex-none items-center justify-center rounded-md bg-[hsl(var(--foreground))] text-primary-foreground">
               <ArrowLeftRight className="h-[18px] w-[18px]" data-testid="ArrowLeftRight__tf-head" />
             </span>
             <div>
@@ -437,7 +437,7 @@ export function FundsTransferModal({ sourceAccountId, onClose, onSuccess }) {
                 </div>
                 <div className="flex items-center gap-2">
                   <input
-                    className="h-10 min-w-0 flex-1 rounded-md border border-[hsl(var(--border-control))] bg-card px-3 text-right text-sm leading-5 tabular-nums text-[hsl(var(--foreground))] placeholder:text-[hsl(var(--text-disabled))] focus:outline-none focus:border-[hsl(var(--foreground))] focus:ring-[3px] focus:ring-black/[0.08]"
+                    className="h-10 min-w-0 flex-1 rounded-md border border-[hsl(var(--border-control))] bg-card px-3 text-right text-sm leading-5 tabular-nums text-[hsl(var(--foreground))] placeholder:text-[hsl(var(--text-disabled))] focus:outline-none focus:border-[hsl(var(--foreground))] focus:ring-[3px] focus:ring-foreground/[0.08]"
                     placeholder={ui('financeAccountTransferRatePlaceholder')}
                     inputMode="decimal"
                     value={conversionRate}
@@ -511,7 +511,7 @@ export function FundsTransferModal({ sourceAccountId, onClose, onSuccess }) {
           <div className="flex flex-col gap-1.5">
             <Label data-testid="Label__7ff08b">{ui('financeAccountTransferDescription')}</Label>
             <input
-              className="h-10 w-full rounded-md border border-[hsl(var(--border-control))] bg-card px-3 text-sm leading-5 text-[hsl(var(--foreground))] focus:outline-none focus:border-[hsl(var(--foreground))] focus:ring-[3px] focus:ring-black/[0.08]"
+              className="h-10 w-full rounded-md border border-[hsl(var(--border-control))] bg-card px-3 text-sm leading-5 text-[hsl(var(--foreground))] focus:outline-none focus:border-[hsl(var(--foreground))] focus:ring-[3px] focus:ring-foreground/[0.08]"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               data-testid="transfer-description" />
@@ -537,7 +537,7 @@ export function FundsTransferModal({ sourceAccountId, onClose, onSuccess }) {
             onClick={handleConfirm}
             disabled={!canSubmit}
             data-testid="transfer-confirm"
-            className="inline-flex h-10 items-center gap-2 rounded-md bg-[hsl(var(--foreground))] px-[18px] text-sm font-semibold text-white transition-colors hover:bg-[hsl(var(--primary))] hover:text-[hsl(var(--foreground))] disabled:cursor-not-allowed disabled:bg-[hsl(var(--border-control))] disabled:text-[hsl(var(--text-disabled))] disabled:hover:bg-[hsl(var(--border-control))] disabled:hover:text-[hsl(var(--text-disabled))]"
+            className="inline-flex h-10 items-center gap-2 rounded-md bg-[hsl(var(--foreground))] px-[18px] text-sm font-semibold text-primary-foreground transition-colors hover:bg-[hsl(var(--primary))] hover:text-[hsl(var(--foreground))] disabled:cursor-not-allowed disabled:bg-[hsl(var(--border-control))] disabled:text-[hsl(var(--text-disabled))] disabled:hover:bg-[hsl(var(--border-control))] disabled:hover:text-[hsl(var(--text-disabled))]"
           >
             <ArrowLeftRight className="h-4 w-4" data-testid="ArrowLeftRight__tf-confirm" />
             {ui('financeAccountTransferConfirm')}

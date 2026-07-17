@@ -109,7 +109,7 @@ function DeleteDraftConfirm({ payment, isSales, currency, deleting, error, onCan
     >
       <div
         className="bg-card flex flex-col"
-        style={{ width: 380, maxWidth: '100%', borderRadius: 12, boxShadow: '0 20px 50px rgba(16,20,28,.18), 0 0 0 1px rgba(16,20,28,.06)', padding: 20, gap: 12, display: 'flex' }}
+        style={{ width: 380, maxWidth: '100%', borderRadius: 12, boxShadow: '0 20px 50px hsl(var(--foreground) / 0.18), 0 0 0 1px hsl(var(--foreground) / 0.06)', padding: 20, gap: 12, display: 'flex' }}
         onClick={e => e.stopPropagation()}
         data-testid="InvoicePaymentHistoryModal__delete-confirm-panel"
       >
@@ -580,7 +580,7 @@ export default function InvoicePaymentHistoryModal({
                 type="button"
                 onClick={() => { setEditingPayment(null); setShowPaymentModal(true); }}
                 data-testid="InvoicePaymentHistoryModal__add-btn"
-                className="bg-[hsl(var(--foreground))] text-white hover:bg-[hsl(var(--primary))] hover:text-[hsl(var(--foreground))] transition-colors"
+                className="bg-[hsl(var(--foreground))] text-primary-foreground hover:bg-[hsl(var(--primary))] hover:text-[hsl(var(--foreground))] transition-colors"
                 style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 14, lineHeight: '24px', fontWeight: 500, padding: '8px 14px', borderRadius: 360, border: 'none', outline: 'none', cursor: 'pointer' }}
               >
                 <svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 5v14M5 12h14"/></svg>

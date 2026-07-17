@@ -81,7 +81,7 @@ export function MovementsToolbar({
         type="button"
         data-testid="transfer-funds-button"
         onClick={onTransfer}
-        className="inline-flex h-10 items-center gap-2 rounded-lg bg-[hsl(var(--foreground))] px-3 text-sm font-medium text-white transition-colors hover:bg-[hsl(var(--primary))] hover:text-[hsl(var(--foreground))]"
+        className="inline-flex h-10 items-center gap-2 rounded-lg bg-[hsl(var(--foreground))] px-3 text-sm font-medium text-primary-foreground transition-colors hover:bg-[hsl(var(--primary))] hover:text-[hsl(var(--foreground))]"
       >
         <ArrowLeftRight className="h-4 w-4" data-testid="ArrowLeftRight__f863ac" />
         {ui('financeAccountTransferAction')}

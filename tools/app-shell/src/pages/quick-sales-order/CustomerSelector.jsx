@@ -76,7 +76,7 @@ export default function CustomerSelector({ selected, onSelect, customers = [], i
                 className="flex w-full items-center gap-2 px-3 py-2 text-sm hover:bg-muted/50 transition-colors"
               >
                 <div
-                  className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-medium text-white"
+                  className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-medium text-primary-foreground"
                   style={{ backgroundColor: c.isAnonymous ? 'hsl(var(--text-disabled))' : 'hsl(var(--primary))' }}
                 >
                   {c.isAnonymous ? '?' : c.name.charAt(0)}

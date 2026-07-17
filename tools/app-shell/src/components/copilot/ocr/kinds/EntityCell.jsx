@@ -60,7 +60,7 @@ export default function EntityCell({ column, value, token, apiBaseUrl, onChange 
 
   return (
     <div className="relative" ref={wrapRef}>
-      <div className="flex items-center gap-2 rounded-md border border-gray-900 bg-card px-2 py-1.5">
+      <div className="flex items-center gap-2 rounded-md border border-foreground bg-card px-2 py-1.5">
         <Search size={12} className="shrink-0 text-muted-foreground" data-testid="Search__65a761" />
         <input
           ref={inputRef}

@@ -22,10 +22,10 @@ const filters = ['documentNo', 'invoiceDate', 'businessPartner', 'orderReference
 const NC_RETURN_TYPES = new Set(['AP CreditMemo', 'Return Material Purchase Invoice', 'Reversed Purchase Invoice']);
 
 const DOC_TYPE_BADGE = {
-  'AP Invoice':                         { color: '#1d4ed8', bg: 'var(--status-info-bg)', label: 'invoicesTab' },
-  'AP CreditMemo':                      { color: '#92400e', bg: '#fffbeb', label: 'creditNotesTab' },
-  'Return Material Purchase Invoice':   { color: '#9a3412', bg: '#fff7ed', label: 'returnInvoiceTab' },
-  'Reversed Purchase Invoice':          { color: '#9a3412', bg: '#fff7ed', label: 'returnInvoiceTab' },
+  'AP Invoice':                         { color: 'var(--status-info-fg)', bg: 'var(--status-info-bg)', label: 'invoicesTab' },
+  'AP CreditMemo':                      { color: 'var(--status-warning-fg)', bg: 'var(--status-warning-bg)', label: 'creditNotesTab' },
+  'Return Material Purchase Invoice':   { color: 'var(--status-warning-fg)', bg: 'var(--status-warning-bg)', label: 'returnInvoiceTab' },
+  'Reversed Purchase Invoice':          { color: 'var(--status-warning-fg)', bg: 'var(--status-warning-bg)', label: 'returnInvoiceTab' },
 };
 
 function isNcOrReturn(row) {

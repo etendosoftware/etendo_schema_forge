@@ -8,7 +8,7 @@ const T = {
   fg2:       'hsl(var(--muted-foreground))',
   fg3:       'hsl(var(--muted-foreground))',
   fg4:       'hsl(var(--text-disabled))',
-  border2:   '#D1D1DB',
+  border2:   'hsl(var(--border-control))',
   bgSubtle:  'hsl(var(--muted))',
   successBg: 'var(--status-success-bg)',
   successFg: 'var(--status-success-fg)',
@@ -21,7 +21,7 @@ const T = {
   // Stars
   starFill:    'var(--status-warning-fg)',
   starStroke:  'var(--status-warning-fg)',
-  starEmpty:   '#D1D1DB',
+  starEmpty:   'hsl(var(--border-control))',
 };
 
 const font = (size, weight = 400, lh = undefined) =>
@@ -478,7 +478,7 @@ export function SurveyModal({ survey, open, onRespond, onDismiss, onClose }) {
         onClick={handleClose}
         style={{
           position: 'absolute', inset: 0,
-          background: 'rgba(16,20,28,.32)',
+          background: 'hsl(var(--foreground) / 0.32)',
           backdropFilter: 'blur(2px)',
           animation: 'sf-survey-fade .2s ease-out',
         }}
@@ -490,7 +490,7 @@ export function SurveyModal({ survey, open, onRespond, onDismiss, onClose }) {
           position: 'relative',
           width: 520, maxWidth: '92vw',
           background: 'hsl(var(--card))', borderRadius: 16,
-          boxShadow: '0 24px 64px rgba(16,20,28,.18), 0 4px 12px rgba(16,20,28,.06)',
+          boxShadow: '0 24px 64px hsl(var(--foreground) / 0.18), 0 4px 12px hsl(var(--foreground) / 0.06)',
           animation: 'sf-survey-pop .25s cubic-bezier(.2,.9,.3,1.2)',
         }}
         data-testid="SurveyModal__card"

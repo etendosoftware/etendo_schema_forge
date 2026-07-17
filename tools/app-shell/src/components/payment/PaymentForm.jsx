@@ -97,7 +97,7 @@ function InvoiceFilter({ q, setQ, advFilter, setAdvFilter, rows }) {
           >
             <Filter className="h-4 w-4" data-testid="Filter__bca0e2" />
             {count ? (
-              <span className="absolute -top-1.5 -right-1.5 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-foreground px-1 text-[10px] font-semibold leading-none text-white">{count}</span>
+              <span className="absolute -top-1.5 -right-1.5 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-foreground px-1 text-[10px] font-semibold leading-none text-primary-foreground">{count}</span>
             ) : null}
           </button>
         </PopoverTrigger>
@@ -239,7 +239,7 @@ function InvoiceTable({ invoices, sel, toggle, setAmt, exp, setExp, wo, setWo, q
         <span className="ml-auto flex items-center gap-2 whitespace-nowrap text-sm font-semibold text-foreground">
           <FileText className="h-4 w-4" data-testid="FileText__bca0e2" /> Facturas
           {Object.keys(sel).length ? (
-            <span className="whitespace-nowrap rounded-full bg-foreground px-2 py-0.5 text-[11px] font-semibold text-white">{Object.keys(sel).length} sel.</span>
+            <span className="whitespace-nowrap rounded-full bg-foreground px-2 py-0.5 text-[11px] font-semibold text-primary-foreground">{Object.keys(sel).length} sel.</span>
           ) : null}
           <span className="text-xs font-medium text-disabled">· {rows.length} de {invoices.length}</span>
         </span>
@@ -274,7 +274,7 @@ function InvoiceTable({ invoices, sel, toggle, setAmt, exp, setExp, wo, setWo, q
                       <button
                         type="button"
                         onClick={() => toggle(r)}
-                        className={`grid h-[18px] w-[18px] place-items-center rounded-[5px] border-[1.5px] ${on ? 'border-foreground bg-foreground text-white' : 'border-border-control bg-card text-transparent'}`}
+                        className={`grid h-[18px] w-[18px] place-items-center rounded-[5px] border-[1.5px] ${on ? 'border-foreground bg-foreground text-primary-foreground' : 'border-border-control bg-card text-transparent'}`}
                       >
                         <Check className="h-3 w-3" data-testid="Check__bca0e2" />
                       </button>
@@ -305,7 +305,7 @@ function InvoiceTable({ invoices, sel, toggle, setAmt, exp, setExp, wo, setWo, q
                         type="button"
                         onClick={() => setWo((w) => ({ ...w, [r.id]: !w[r.id] }))}
                         title={wo[r.id] ? 'Con descuento' : 'Sin descuento'}
-                        className={`inline-flex w-[42px] items-center justify-center rounded-md border px-2 py-0.5 text-[11px] font-semibold ${wo[r.id] ? 'border-foreground bg-foreground text-white' : 'border-border-control bg-card text-disabled hover:border-border-control'}`}
+                        className={`inline-flex w-[42px] items-center justify-center rounded-md border px-2 py-0.5 text-[11px] font-semibold ${wo[r.id] ? 'border-foreground bg-foreground text-primary-foreground' : 'border-border-control bg-card text-disabled hover:border-border-control'}`}
                       >
                         {wo[r.id] ? 'Sí' : 'No'}
                       </button>
@@ -366,7 +366,7 @@ function Commissions({ gl, addGl, delGl, setGlField }) {
         onClick={addGl}
         className="flex w-full items-center gap-3 rounded-xl border border-dashed border-border-control bg-muted px-4 py-3.5 text-left hover:border-border-control"
       >
-        <span className="grid h-8 w-8 shrink-0 place-items-center rounded-md bg-foreground text-white"><Plus className="h-[18px] w-[18px]" data-testid="Plus__bca0e2" /></span>
+        <span className="grid h-8 w-8 shrink-0 place-items-center rounded-md bg-foreground text-primary-foreground"><Plus className="h-[18px] w-[18px]" data-testid="Plus__bca0e2" /></span>
         <span className="flex flex-col gap-px">
           <span className="text-sm font-semibold text-foreground">Añadir comisiones y conceptos (GL)</span>
           <span className="text-xs text-muted-foreground">Opcional · comisiones bancarias y otros conceptos contables</span>
@@ -379,7 +379,7 @@ function Commissions({ gl, addGl, delGl, setGlField }) {
       <div className="flex items-center gap-3 border-b border-border-subtle px-3.5 py-3">
         <span className="flex items-center gap-2 text-sm font-semibold text-foreground">
           <Percent className="h-4 w-4" data-testid="Percent__bca0e2" /> Comisiones y conceptos (GL)
-          <span className="whitespace-nowrap rounded-full bg-foreground px-2 py-0.5 text-[11px] font-semibold text-white">
+          <span className="whitespace-nowrap rounded-full bg-foreground px-2 py-0.5 text-[11px] font-semibold text-primary-foreground">
             {gl.length}
           </span>
         </span>
