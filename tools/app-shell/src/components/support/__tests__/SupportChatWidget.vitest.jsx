@@ -80,6 +80,7 @@ function mockChat(stateOverrides = {}, actionOverrides = {}) {
     submitRating: vi.fn(),
     dismissRating: vi.fn(),
     closeConversation: vi.fn(),
+    reopenConversation: vi.fn(),
     addPendingFile: vi.fn(),
     removePendingFile: vi.fn(),
     ...actionOverrides,
@@ -285,13 +286,24 @@ describe('SupportChatWidget', () => {
     expect(actions.closeConversation).toHaveBeenCalledWith('c1');
   });
 
-  it('reopening a conversation starts a new draft conversation on the Mensajes tab', async () => {
+  it('reopening a conversation continues the SAME conversation via actions.reopenConversation (not a new one)', async () => {
+    // Regression: this used to call handleStartChat(), opening an unrelated brand-new
+    // conversation instead of continuing the existing thread the user asked to follow up on.
     const user = userEvent.setup();
     const actions = mockChat({ isOpen: true, activeConversationId: 'c1' });
     render(<SupportChatWidget />);
     await user.click(screen.getByText('conv-reopen'));
-    expect(actions.selectConversation).toHaveBeenCalledWith('new');
-    expect(actions.setTab).toHaveBeenCalledWith('mensajes');
+    expect(actions.reopenConversation).toHaveBeenCalledWith('c1');
+    expect(actions.startConversation).not.toHaveBeenCalled();
+    expect(actions.selectConversation).not.toHaveBeenCalledWith('new');
+  });
+
+  it('does nothing when reopening without a real active conversation ("new")', async () => {
+    const user = userEvent.setup();
+    const actions = mockChat({ isOpen: true, activeConversationId: 'new' });
+    render(<SupportChatWidget />);
+    await user.click(screen.getByText('conv-reopen'));
+    expect(actions.reopenConversation).not.toHaveBeenCalled();
   });
 
   it('toggles the expanded flag passed to ConversationView', async () => {
@@ -464,6 +476,40 @@ describe('SupportChatWidget', () => {
         render(<SupportChatWidget />);
         await user.type(screen.getByPlaceholderText('supportSearchPlaceholder'), 'duda');
         expect(screen.getByTestId('ticket-c2')).toBeInTheDocument();
+        expect(screen.queryByTestId('ticket-c1')).not.toBeInTheDocument();
+      });
+
+      it('surfaces a conversation matched only by its Jira ticket key, case-insensitively', async () => {
+        // Customers get the Jira ticket key (e.g. "EGS-165") via the JSM notification
+        // email, so they may search for it directly instead of the chat's own subject/preview.
+        const convWithTicket = {
+          id: 'c3',
+          subject: 'Otro asunto sin relación',
+          lastMessage: 'nada que ver',
+          status: 'open',
+          jiraTicketKey: 'EGS-165',
+        };
+        const user = userEvent.setup();
+        mockChat({ isOpen: true, activeTab: 'mensajes', conversations: [CONV_INVOICE, convWithTicket] });
+        render(<SupportChatWidget />);
+        await user.type(screen.getByPlaceholderText('supportSearchPlaceholder'), 'egs-165');
+        expect(screen.getByTestId('ticket-c3')).toBeInTheDocument();
+        expect(screen.queryByTestId('ticket-c1')).not.toBeInTheDocument();
+      });
+
+      it('surfaces a conversation by a partial, case-insensitive match on the Jira ticket key', async () => {
+        const convWithTicket = {
+          id: 'c3',
+          subject: 'Otro asunto sin relación',
+          lastMessage: 'nada que ver',
+          status: 'open',
+          jiraTicketKey: 'EGS-165',
+        };
+        const user = userEvent.setup();
+        mockChat({ isOpen: true, activeTab: 'mensajes', conversations: [CONV_INVOICE, convWithTicket] });
+        render(<SupportChatWidget />);
+        await user.type(screen.getByPlaceholderText('supportSearchPlaceholder'), '165');
+        expect(screen.getByTestId('ticket-c3')).toBeInTheDocument();
         expect(screen.queryByTestId('ticket-c1')).not.toBeInTheDocument();
       });
 

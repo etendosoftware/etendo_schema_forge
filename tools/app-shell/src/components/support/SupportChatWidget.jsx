@@ -243,7 +243,10 @@ function MensajesTab({ conversations, activeConversationId, isLoading, onSelect,
     return conversations.filter((conv) => {
       const subject = (conv.subject || ui('supportDefaultSubject')).toLowerCase();
       const preview = (conv.lastMessage || conv.preview || '').toLowerCase();
-      return subject.includes(q) || preview.includes(q);
+      // Customers now get the Jira ticket key (e.g. "EGS-165") via the JSM notification email,
+      // so they may search for it directly instead of remembering the chat's own subject/preview.
+      const ticketKey = (conv.jiraTicketKey || '').toLowerCase();
+      return subject.includes(q) || preview.includes(q) || ticketKey.includes(q);
     });
   }, [conversations, searchQuery, ui]);
 
@@ -362,7 +365,13 @@ export function SupportChatWidget() {
   };
 
   const handleReopenConversation = () => {
-    handleStartChat();
+    // Reopen the SAME conversation (same thread, same ADK session — the agent keeps the prior
+    // context automatically) via the backend's /reopen endpoint. This used to just call
+    // handleStartChat(), which opened an unrelated brand-new conversation instead — the whole
+    // point of "Hacer seguimiento" is continuity, not a fresh start.
+    if (activeConversationId && activeConversationId !== 'new') {
+      actions.reopenConversation(activeConversationId);
+    }
   };
 
   const showConversation = activeConversationId !== null;

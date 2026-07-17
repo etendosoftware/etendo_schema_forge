@@ -2,6 +2,7 @@ import { renderHook, act } from '@testing-library/react';
 
 const mockApiFetch = vi.fn();
 const mockTrack = vi.fn();
+const mockPlayReceiveSound = vi.fn();
 
 vi.mock('@/auth/useApiFetch', () => ({
   useApiFetch: () => mockApiFetch,
@@ -13,6 +14,10 @@ vi.mock('@/i18n', () => ({
 
 vi.mock('@/lib/observability.js', () => ({
   track: (...args) => mockTrack(...args),
+}));
+
+vi.mock('../chatSounds.js', () => ({
+  playReceiveSound: (...args) => mockPlayReceiveSound(...args),
 }));
 
 import { SupportChatProvider, useSupportChat } from '../SupportChatContext.jsx';
@@ -35,6 +40,7 @@ describe('SupportChatContext', () => {
     vi.useFakeTimers();
     mockApiFetch.mockReset();
     mockTrack.mockReset();
+    mockPlayReceiveSound.mockReset();
     mockApiFetch.mockResolvedValue(jsonResponse({ conversations: [] }));
   });
 
@@ -429,6 +435,110 @@ describe('SupportChatContext', () => {
       });
       expect(result.current.state.conversations.map((c) => c.id)).toEqual(['c1', 'c2']);
     });
+
+    describe('sound notifications', () => {
+      it('the 5s message poll plays a receive sound when a genuinely new reply (non-user sender) arrives', async () => {
+        const { result } = await renderSupportChat();
+        act(() => {
+          result.current.actions.open();
+          result.current.actions.selectConversation('c1');
+        });
+        mockApiFetch.mockResolvedValueOnce(jsonResponse({
+          messages: [{ id: 'm1', sender: 'ai', text: 'Nuevo' }],
+        }));
+        await act(async () => {
+          await vi.advanceTimersByTimeAsync(5000);
+        });
+        expect(mockPlayReceiveSound).toHaveBeenCalledTimes(1);
+      });
+
+      it('the 5s message poll does NOT play a sound when the new last message is from the user (self-echo)', async () => {
+        const { result } = await renderSupportChat();
+        act(() => {
+          result.current.actions.open();
+          result.current.actions.selectConversation('c1');
+        });
+        mockApiFetch.mockResolvedValueOnce(jsonResponse({
+          messages: [{ id: 'm1', sender: 'user', text: 'Yo mismo' }],
+        }));
+        await act(async () => {
+          await vi.advanceTimersByTimeAsync(5000);
+        });
+        expect(result.current.state.messages).toHaveLength(1);
+        expect(mockPlayReceiveSound).not.toHaveBeenCalled();
+      });
+
+      it('the 5s message poll does NOT play a sound when nothing changed', async () => {
+        const { result } = await renderSupportChat();
+        act(() => {
+          result.current.actions.open();
+          result.current.actions.selectConversation('c1');
+        });
+        mockApiFetch.mockResolvedValueOnce(jsonResponse({ messages: [] }));
+        await act(async () => {
+          await vi.advanceTimersByTimeAsync(5000);
+        });
+        expect(mockPlayReceiveSound).not.toHaveBeenCalled();
+      });
+
+      it('the 15s conversation-list poll plays a receive sound for an unread arrival on a conversation that is NOT the actively open one', async () => {
+        const { result } = await renderSupportChat();
+        act(() => result.current.actions.open()); // widget open, but no conversation selected
+        mockApiFetch.mockResolvedValueOnce(jsonResponse({
+          conversations: [{ id: 'c1', subject: 'X', unread: false, status: 'open', rated: false, lastActivity: '2024-01-01T00:00:00.000Z' }],
+        }));
+        await act(async () => {
+          await result.current.actions.loadConversations();
+        });
+        mockApiFetch.mockResolvedValueOnce(jsonResponse({
+          conversations: [{ id: 'c1', subject: 'X', unread: true, status: 'open', rated: false, lastActivity: '2024-01-02T00:00:00.000Z' }],
+        }));
+        await act(async () => {
+          await vi.advanceTimersByTimeAsync(15000);
+        });
+        expect(mockPlayReceiveSound).toHaveBeenCalledTimes(1);
+      });
+
+      it('the 15s conversation-list poll does NOT play a sound for the conversation that is actively open (avoids double-play with the in-conversation poll)', async () => {
+        const { result } = await renderSupportChat();
+        act(() => {
+          result.current.actions.open();
+          result.current.actions.selectConversation('c1');
+        });
+        mockApiFetch.mockResolvedValueOnce(jsonResponse({
+          conversations: [{ id: 'c1', subject: 'X', unread: false, status: 'open', rated: false, lastActivity: '2024-01-01T00:00:00.000Z' }],
+        }));
+        await act(async () => {
+          await result.current.actions.loadConversations();
+        });
+        mockApiFetch.mockResolvedValueOnce(jsonResponse({
+          conversations: [{ id: 'c1', subject: 'X', unread: true, status: 'open', rated: false, lastActivity: '2024-01-02T00:00:00.000Z' }],
+        }));
+        await act(async () => {
+          await vi.advanceTimersByTimeAsync(15000);
+        });
+        expect(mockPlayReceiveSound).not.toHaveBeenCalled();
+      });
+
+      it('the 15s conversation-list poll does NOT play a sound when the conversation is already read (unread stays false)', async () => {
+        const { result } = await renderSupportChat();
+        act(() => result.current.actions.open());
+        mockApiFetch.mockResolvedValueOnce(jsonResponse({
+          conversations: [{ id: 'c1', subject: 'X', unread: false, status: 'open', rated: false, lastActivity: '2024-01-01T00:00:00.000Z' }],
+        }));
+        await act(async () => {
+          await result.current.actions.loadConversations();
+        });
+        // status flips (so hasChange is true, the poll does dispatch) but unread never became true.
+        mockApiFetch.mockResolvedValueOnce(jsonResponse({
+          conversations: [{ id: 'c1', subject: 'X', unread: false, status: 'closed', rated: false, lastActivity: '2024-01-01T00:00:00.000Z' }],
+        }));
+        await act(async () => {
+          await vi.advanceTimersByTimeAsync(15000);
+        });
+        expect(mockPlayReceiveSound).not.toHaveBeenCalled();
+      });
+    });
   });
 
   describe('additional coverage', () => {
@@ -556,6 +666,107 @@ describe('SupportChatContext', () => {
         await result.current.actions.closeConversation('c1');
       });
       expect(result.current.state.conversations[0].id).toBe('c1');
+    });
+
+    describe('UPDATE_CONVERSATION staleness guard', () => {
+      it('keeps the newer cached lastActivity/lastMessage when a stale-timestamped update arrives, but still applies other fields', async () => {
+        const { result } = await renderSupportChat();
+        mockApiFetch.mockResolvedValueOnce(jsonResponse({
+          conversations: [{
+            id: 'c1',
+            subject: 'X',
+            status: 'open',
+            rated: false,
+            lastActivity: '2024-01-05T00:00:00.000Z',
+            lastMessage: 'el mensaje más nuevo',
+          }],
+        }));
+        await act(async () => {
+          await result.current.actions.loadConversations();
+        });
+        // A slow request (e.g. closeConversation) resolves with a snapshot taken BEFORE
+        // a faster background poll already landed a newer lastActivity/lastMessage.
+        mockApiFetch.mockResolvedValueOnce(jsonResponse({
+          conversation: {
+            id: 'c1',
+            status: 'closed',
+            rated: true,
+            lastActivity: '2024-01-01T00:00:00.000Z',
+            lastMessage: 'un mensaje viejo',
+          },
+        }));
+        await act(async () => {
+          await result.current.actions.closeConversation('c1');
+        });
+        const updated = result.current.state.conversations.find((c) => c.id === 'c1');
+        // Stale lastActivity/lastMessage must NOT clobber the newer cached values...
+        expect(updated.lastActivity).toBe('2024-01-05T00:00:00.000Z');
+        expect(updated.lastMessage).toBe('el mensaje más nuevo');
+        // ...but every other field from the stale-timestamped update still applies.
+        expect(updated.status).toBe('closed');
+        expect(updated.rated).toBe(true);
+      });
+
+      it('applies lastActivity/lastMessage normally when the incoming update is newer', async () => {
+        const { result } = await renderSupportChat();
+        mockApiFetch.mockResolvedValueOnce(jsonResponse({
+          conversations: [{
+            id: 'c1',
+            subject: 'X',
+            status: 'open',
+            lastActivity: '2024-01-01T00:00:00.000Z',
+            lastMessage: 'viejo',
+          }],
+        }));
+        await act(async () => {
+          await result.current.actions.loadConversations();
+        });
+        mockApiFetch.mockResolvedValueOnce(jsonResponse({
+          conversation: {
+            id: 'c1',
+            status: 'closed',
+            lastActivity: '2024-01-05T00:00:00.000Z',
+            lastMessage: 'nuevo',
+          },
+        }));
+        await act(async () => {
+          await result.current.actions.closeConversation('c1');
+        });
+        const updated = result.current.state.conversations.find((c) => c.id === 'c1');
+        expect(updated.lastActivity).toBe('2024-01-05T00:00:00.000Z');
+        expect(updated.lastMessage).toBe('nuevo');
+        expect(updated.status).toBe('closed');
+      });
+
+      it('applies lastActivity/lastMessage normally when the incoming update has an equal timestamp', async () => {
+        const { result } = await renderSupportChat();
+        mockApiFetch.mockResolvedValueOnce(jsonResponse({
+          conversations: [{
+            id: 'c1',
+            subject: 'X',
+            status: 'open',
+            lastActivity: '2024-01-05T00:00:00.000Z',
+            lastMessage: 'igual',
+          }],
+        }));
+        await act(async () => {
+          await result.current.actions.loadConversations();
+        });
+        mockApiFetch.mockResolvedValueOnce(jsonResponse({
+          conversation: {
+            id: 'c1',
+            status: 'closed',
+            lastActivity: '2024-01-05T00:00:00.000Z',
+            lastMessage: 'igual actualizado',
+          },
+        }));
+        await act(async () => {
+          await result.current.actions.closeConversation('c1');
+        });
+        const updated = result.current.state.conversations.find((c) => c.id === 'c1');
+        expect(updated.lastMessage).toBe('igual actualizado');
+        expect(updated.status).toBe('closed');
+      });
     });
 
     it('dismissRating flags only the matching conversation among several', async () => {

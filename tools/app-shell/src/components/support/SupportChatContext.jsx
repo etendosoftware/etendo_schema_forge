@@ -3,6 +3,7 @@ import { useApiFetch } from '@/auth/useApiFetch';
 import { getStoredLocale } from '@/i18n';
 import { track } from '@/lib/observability.js';
 import { OBSERVABILITY_EVENTS, buildObservabilityEvent } from '@/lib/observability/events.js';
+import { playReceiveSound } from './chatSounds.js';
 
 const TEXT_MIME_TYPES = new Set([
   'text/plain', 'text/csv', 'text/html', 'text/xml', 'text/markdown',
@@ -120,7 +121,24 @@ function reducer(state, action) {
       return {
         ...state,
         conversations: state.conversations
-          .map((c) => (c.id === action.conversation.id ? { ...c, ...action.conversation } : c))
+          .map((c) => {
+            if (c.id !== action.conversation.id) return c;
+            const incoming = action.conversation;
+            // A request that touches one conversation (sendMessage, closeConversation, a
+            // rating, ...) snapshots that conversation's summary at the START of the
+            // request. If it's slow (the AI/Jira round trip can take several seconds) and a
+            // faster response — another request, or the 15s background poll — already
+            // landed a newer lastMessage/lastActivity in the meantime, this stale snapshot
+            // must not overwrite it. Every other field (status, rated, humanTakeover, ...)
+            // still applies unconditionally — those are authoritative regardless of timing.
+            const incomingIsStale = incoming.lastActivity && c.lastActivity &&
+              new Date(incoming.lastActivity) < new Date(c.lastActivity);
+            if (incomingIsStale) {
+              const { lastActivity, lastMessage, ...rest } = incoming;
+              return { ...c, ...rest };
+            }
+            return { ...c, ...incoming };
+          })
           .sort((a, b) => new Date(b.lastActivity || 0) - new Date(a.lastActivity || 0)),
       };
     case 'DISMISS_RATING':
@@ -397,8 +415,18 @@ export function SupportChatProvider({ children }) {
         const incoming = data.messages || [];
         const current = stateRef.current;
         if (current.activeConversationId !== s.activeConversationId) return;
-        if (incoming.length !== current.messages.length ||
-            incoming[incoming.length - 1]?.id !== current.messages[current.messages.length - 1]?.id) {
+        const currentLastId = current.messages[current.messages.length - 1]?.id;
+        const incomingLast = incoming[incoming.length - 1];
+        if (incoming.length !== current.messages.length || incomingLast?.id !== currentLastId) {
+          // A reply (ValerIA or a human agent) that lands here — as opposed to via the direct
+          // sendMessage response, which already updates `messages` before this poll ever sees
+          // a difference — is exactly the "chat is open, someone replied while I was just
+          // looking at it" case. The send→reply round trip is handled separately by
+          // ConversationView's isSending-based effect and never reaches this branch, since by
+          // the time this poll runs the direct response already delivered that message.
+          if (incomingLast && incomingLast.id !== currentLastId && incomingLast.sender !== 'user') {
+            playReceiveSound();
+          }
           dispatch({ type: 'SET_MESSAGES', messages: incoming });
         }
       } catch (_) { /* silent */ }
@@ -435,10 +463,28 @@ export function SupportChatProvider({ children }) {
             return existing && (
               existing.unread !== c.unread ||
               existing.status !== c.status ||
-              existing.rated !== c.rated
+              existing.rated !== c.rated ||
+              existing.lastActivity !== c.lastActivity
             );
           });
-        if (hasChange) dispatch({ type: 'SET_CONVERSATIONS', conversations: incoming });
+        if (hasChange) {
+          // Ding for a reply (ValerIA or a human agent from Jira) that arrives while the
+          // conversation isn't the one actively open — that in-conversation case already
+          // gets its own sound from ConversationView, so this would otherwise double-play.
+          // Keyed off `lastActivity` (not just the `unread` flag): `unread` stays stuck at
+          // true across multiple back-to-back replies once it first flips, so a second or
+          // third reply that arrives before the conversation is read would otherwise be
+          // silent. `lastActivity` changes on every single message.
+          incoming.forEach((c) => {
+            const existing = current.conversations.find((e) => e.id === c.id);
+            const arrived = existing && c.unread && existing.lastActivity !== c.lastActivity;
+            const isActiveOpenConversation = current.isOpen && current.activeConversationId === c.id;
+            if (arrived && !isActiveOpenConversation) {
+              playReceiveSound();
+            }
+          });
+          dispatch({ type: 'SET_CONVERSATIONS', conversations: incoming });
+        }
       } catch (_) { /* silent */ }
     }, 15000);
     return () => clearInterval(id);
