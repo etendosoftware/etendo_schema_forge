@@ -1,8 +1,8 @@
 {
   "version": "0.56.0",
   "generatedAt": "2026-04-30T15:42:46.582Z",
-  "updatedAt": "2026-07-17T14:42:04.544Z",
-  "checksum": "88d2eab368d99292",
+  "updatedAt": "2026-07-15T13:21:37.153Z",
+  "checksum": "ce52ffa31fc41ef0",
   "frontendContract": {
     "window": {
       "id": "167",
@@ -604,70 +604,6 @@
             }
           },
           {
-            "name": "project",
-            "apiKey": "project",
-            "column": "C_Project_ID",
-            "label": "Project",
-            "type": "foreignKey",
-            "tsType": "string",
-            "visibility": "editable",
-            "required": false,
-            "grid": false,
-            "form": true,
-            "reference": "Project",
-            "inputMode": "search",
-            "section": "principal",
-            "validationRule": {
-              "code": "C_Project.projectstatus in ('OP', 'OR') and (C_Project.c_bpartner_id=@C_BPartner_ID@ or '@IsSOTrx@'='N') or C_Project.c_project_id = @c_project_id@",
-              "contextParams": [],
-              "cascadeParams": [
-                "C_BPartner_ID",
-                "IsSOTrx",
-                "c_project_id"
-              ]
-            },
-            "callout": {
-              "className": "org.openbravo.erpCommon.ad_callouts.SE_Invoice_Project"
-            },
-            "displayLogic": {
-              "raw": "@ACCT_DIMENSION_DISPLAY@",
-              "evaluable": false,
-              "reason": "server-macro",
-              "js": null
-            },
-            "readOnlyLogic": {
-              "raw": "@Posted@='Y'",
-              "evaluable": true,
-              "js": "record['posted'] === true"
-            }
-          },
-          {
-            "name": "costcenter",
-            "apiKey": "costcenter",
-            "column": "C_Costcenter_ID",
-            "label": "Cost Center",
-            "type": "foreignKey",
-            "tsType": "string",
-            "visibility": "editable",
-            "required": false,
-            "grid": false,
-            "form": true,
-            "reference": "Costcenter",
-            "inputMode": "selector",
-            "section": "principal",
-            "displayLogic": {
-              "raw": "@ACCT_DIMENSION_DISPLAY@",
-              "evaluable": false,
-              "reason": "server-macro",
-              "js": null
-            },
-            "readOnlyLogic": {
-              "raw": "@Posted@='Y'",
-              "evaluable": true,
-              "js": "record['posted'] === true"
-            }
-          },
-          {
             "name": "etsgDateOperation",
             "apiKey": "etsgDateOperation",
             "column": "EM_Etsg_Date_Operation",
@@ -900,70 +836,6 @@
               "raw": "@processed@='Y'",
               "evaluable": true,
               "js": "record['processed'] === true"
-            }
-          },
-          {
-            "name": "tbaiSequence",
-            "apiKey": "tbaiSequence",
-            "column": "EM_Tbai_Sequence",
-            "label": "Secuencia de encadenamiento",
-            "type": "integer",
-            "tsType": "number",
-            "visibility": "readOnly",
-            "required": false,
-            "grid": false,
-            "form": false,
-            "displayLogic": {
-              "raw": "@TBAI_ExistTBAIConfig@=1",
-              "evaluable": true
-            }
-          },
-          {
-            "name": "tbaiInvoicenum",
-            "apiKey": "tbaiInvoicenum",
-            "column": "EM_Tbai_Invoicenum",
-            "label": "Serie Factura",
-            "type": "string",
-            "tsType": "string",
-            "visibility": "readOnly",
-            "required": false,
-            "grid": false,
-            "form": false,
-            "displayLogic": {
-              "raw": "@TBAI_ExistTBAIConfig@=1",
-              "evaluable": true
-            }
-          },
-          {
-            "name": "tbaiInvoiceseq",
-            "apiKey": "tbaiInvoiceseq",
-            "column": "EM_Tbai_Invoiceseq",
-            "label": "Secuencia Factura",
-            "type": "string",
-            "tsType": "string",
-            "visibility": "readOnly",
-            "required": false,
-            "grid": false,
-            "form": false,
-            "displayLogic": {
-              "raw": "@TBAI_ExistTBAIConfig@=1",
-              "evaluable": true
-            }
-          },
-          {
-            "name": "tbaiIssent",
-            "apiKey": "tbaiIssent",
-            "column": "EM_Tbai_Issent",
-            "label": "Enviada a TBAI",
-            "type": "boolean",
-            "tsType": "boolean",
-            "visibility": "readOnly",
-            "required": false,
-            "grid": false,
-            "form": false,
-            "displayLogic": {
-              "raw": "@TBAI_ExistTBAIConfig@=1",
-              "evaluable": true
             }
           },
           {
@@ -1774,58 +1646,6 @@
             "defaultValue": "0",
             "section": "principal",
             "gridOrder": 7
-          },
-          {
-            "name": "project",
-            "apiKey": "project",
-            "column": "C_Project_ID",
-            "label": "Project",
-            "type": "foreignKey",
-            "tsType": "string",
-            "visibility": "editable",
-            "required": false,
-            "grid": false,
-            "form": true,
-            "reference": "Project",
-            "inputMode": "search",
-            "dimensionsPanel": true,
-            "displayLogic": {
-              "raw": "@ACCT_DIMENSION_DISPLAY@",
-              "evaluable": false,
-              "reason": "server-macro",
-              "js": null
-            },
-            "readOnlyLogic": {
-              "raw": "@Posted@='Y'",
-              "evaluable": true,
-              "js": "record['posted'] === true"
-            }
-          },
-          {
-            "name": "costcenter",
-            "apiKey": "costcenter",
-            "column": "C_Costcenter_ID",
-            "label": "Cost Center",
-            "type": "foreignKey",
-            "tsType": "string",
-            "visibility": "editable",
-            "required": false,
-            "grid": false,
-            "form": true,
-            "reference": "Costcenter",
-            "inputMode": "selector",
-            "dimensionsPanel": true,
-            "displayLogic": {
-              "raw": "@ACCT_DIMENSION_DISPLAY@",
-              "evaluable": false,
-              "reason": "server-macro",
-              "js": null
-            },
-            "readOnlyLogic": {
-              "raw": "@Posted@='Y'",
-              "evaluable": true,
-              "js": "record['posted'] === true"
-            }
           }
         ],
         "searchableFields": [
@@ -2663,7 +2483,7 @@
             "apiKey": "project",
             "column": "C_Project_ID",
             "type": "foreignKey",
-            "visibility": "editable",
+            "visibility": "discarded",
             "required": false
           },
           {
@@ -2671,7 +2491,7 @@
             "apiKey": "costcenter",
             "column": "C_Costcenter_ID",
             "type": "foreignKey",
-            "visibility": "editable",
+            "visibility": "discarded",
             "required": false
           },
           {
@@ -2887,7 +2707,7 @@
             "apiKey": "tbaiSequence",
             "column": "EM_Tbai_Sequence",
             "type": "integer",
-            "visibility": "readOnly",
+            "visibility": "discarded",
             "required": false
           },
           {
@@ -2895,7 +2715,7 @@
             "apiKey": "tbaiInvoicenum",
             "column": "EM_Tbai_Invoicenum",
             "type": "string",
-            "visibility": "readOnly",
+            "visibility": "discarded",
             "required": false
           },
           {
@@ -2903,7 +2723,7 @@
             "apiKey": "tbaiInvoiceseq",
             "column": "EM_Tbai_Invoiceseq",
             "type": "string",
-            "visibility": "readOnly",
+            "visibility": "discarded",
             "required": false
           },
           {
@@ -2935,7 +2755,7 @@
             "apiKey": "tbaiIssent",
             "column": "EM_Tbai_Issent",
             "type": "boolean",
-            "visibility": "readOnly",
+            "visibility": "discarded",
             "required": false
           },
           {
@@ -3879,7 +3699,7 @@
             "apiKey": "project",
             "column": "C_Project_ID",
             "type": "foreignKey",
-            "visibility": "editable",
+            "visibility": "discarded",
             "required": false
           },
           {
@@ -3887,7 +3707,7 @@
             "apiKey": "costcenter",
             "column": "C_Costcenter_ID",
             "type": "foreignKey",
-            "visibility": "editable",
+            "visibility": "discarded",
             "required": false
           },
           {
@@ -4734,35 +4554,6 @@
       },
       {
         "entity": "header",
-        "field": "project",
-        "column": "C_Project_ID",
-        "reference": "Project",
-        "inputMode": "search",
-        "url": "/sws/neo/sales-invoice/header/selectors/project",
-        "context": {
-          "required": [
-            {
-              "param": "IsSOTrx",
-              "source": "windowCategory"
-            },
-            {
-              "param": "C_BPartner_ID",
-              "source": "field",
-              "field": "businessPartner"
-            }
-          ]
-        }
-      },
-      {
-        "entity": "header",
-        "field": "costcenter",
-        "column": "C_Costcenter_ID",
-        "reference": "Costcenter",
-        "inputMode": "selector",
-        "url": "/sws/neo/sales-invoice/header/selectors/costcenter"
-      },
-      {
-        "entity": "header",
         "field": "aeatsiiDescription",
         "column": "EM_Aeatsii_Description_ID",
         "reference": "aeatsii_description",
@@ -4829,22 +4620,6 @@
         }
       },
       {
-        "entity": "lines",
-        "field": "project",
-        "column": "C_Project_ID",
-        "reference": "Project",
-        "inputMode": "search",
-        "url": "/sws/neo/sales-invoice/lines/selectors/project"
-      },
-      {
-        "entity": "lines",
-        "field": "costcenter",
-        "column": "C_Costcenter_ID",
-        "reference": "Costcenter",
-        "inputMode": "selector",
-        "url": "/sws/neo/sales-invoice/lines/selectors/costcenter"
-      },
-      {
         "entity": "paymentPlan",
         "field": "finPaymentmethodID",
         "column": "Fin_Paymentmethod_ID",
@@ -4879,658 +4654,208 @@
     ],
     "actions": [
       {
-        "name": "aPRMAddpayment",
-        "actionType": "paymentAction",
         "entity": "header",
+        "field": "aPRMAddpayment",
         "column": "EM_APRM_Addpayment",
-        "requiresRecord": true,
-        "method": "POST",
         "url": "/sws/neo/sales-invoice/header/{id}/action/aPRMAddpayment",
-        "parameters": [],
-        "preconditions": [],
-        "effects": [
-          "Creates or processes payment records",
-          "May update invoice/order payment status"
-        ],
-        "dryRunSupported": false,
-        "edgeCases": [
-          "Payment amount exceeds remaining balance",
-          "Payment method is not configured for the business partner",
-          "Invoice is already fully paid"
-        ],
         "processId": "9BED7889E1034FE68BD85D5D16857320",
         "processType": "obuiapp"
       },
       {
-        "name": "aPRMProcessinvoice",
-        "actionType": "paymentAction",
         "entity": "header",
+        "field": "aPRMProcessinvoice",
         "column": "EM_APRM_Processinvoice",
-        "requiresRecord": true,
-        "method": "POST",
         "url": "/sws/neo/sales-invoice/header/{id}/action/aPRMProcessinvoice",
-        "parameters": [],
-        "preconditions": [],
-        "effects": [
-          "Creates or processes payment records",
-          "May update invoice/order payment status"
-        ],
-        "dryRunSupported": false,
-        "edgeCases": [
-          "Payment amount exceeds remaining balance",
-          "Payment method is not configured for the business partner",
-          "Invoice is already fully paid"
-        ],
         "processId": "B54318B49E984B9CB855AEFB1F474CD6",
         "processType": "classic"
       },
       {
-        "name": "documentAction",
-        "actionType": "documentAction",
         "entity": "header",
+        "field": "documentAction",
         "column": "DocAction",
-        "requiresRecord": true,
-        "method": "POST",
         "url": "/sws/neo/sales-invoice/header/{id}/action/documentAction",
-        "parameters": [
-          {
-            "name": "docAction",
-            "type": "string",
-            "required": true,
-            "description": "Document action code (e.g. CO=Complete, VO=Void, RE=Reactivate)"
-          }
-        ],
-        "preconditions": [
-          {
-            "field": "documentStatus",
-            "operator": "in",
-            "values": [
-              "DR",
-              "IP"
-            ],
-            "description": "Document must be in draft or in-progress state"
-          }
-        ],
-        "effects": [
-          "Updates document status",
-          "May trigger workflow transitions"
-        ],
-        "dryRunSupported": true,
-        "edgeCases": [
-          "Document is already completed or closed",
-          "Document has pending lines or missing required fields",
-          "User lacks permission to execute the action"
-        ],
         "processId": "111",
         "processType": "classic"
       },
       {
-        "name": "createLinesFromOrder",
-        "actionType": "createFrom",
         "entity": "header",
+        "field": "createLinesFromOrder",
         "column": "Createfromorders",
-        "requiresRecord": true,
-        "method": "POST",
         "url": "/sws/neo/sales-invoice/header/{id}/action/createLinesFromOrder",
-        "parameters": [],
-        "preconditions": [],
-        "effects": [
-          "Creates child or related records",
-          "May copy data from source document"
-        ],
-        "dryRunSupported": false,
-        "edgeCases": [
-          "Source document has no valid lines to copy",
-          "Target entity already has linked records",
-          "Required reference data is missing (price list, warehouse, etc.)"
-        ],
         "processId": "AB2EFCAABB7B4EC0A9B30CFB82963FB6",
         "processType": "obuiapp"
       },
       {
-        "name": "createLinesFromShipment",
-        "actionType": "createFrom",
         "entity": "header",
+        "field": "createLinesFromShipment",
         "column": "Createfrominouts",
-        "requiresRecord": true,
-        "method": "POST",
         "url": "/sws/neo/sales-invoice/header/{id}/action/createLinesFromShipment",
-        "parameters": [],
-        "preconditions": [],
-        "effects": [
-          "Creates child or related records",
-          "May copy data from source document"
-        ],
-        "dryRunSupported": false,
-        "edgeCases": [
-          "Source document has no valid lines to copy",
-          "Target entity already has linked records",
-          "Required reference data is missing (price list, warehouse, etc.)"
-        ],
         "processId": "7737CA7330FD49FBA7EBC225E85F2BC9",
         "processType": "obuiapp"
       },
       {
-        "name": "copyFrom",
-        "actionType": "createFrom",
         "entity": "header",
+        "field": "copyFrom",
         "column": "CopyFrom",
-        "requiresRecord": true,
-        "method": "POST",
         "url": "/sws/neo/sales-invoice/header/{id}/action/copyFrom",
-        "parameters": [],
-        "preconditions": [],
-        "effects": [
-          "Creates child or related records",
-          "May copy data from source document"
-        ],
-        "dryRunSupported": false,
-        "edgeCases": [
-          "Source document has no valid lines to copy",
-          "Target entity already has linked records",
-          "Required reference data is missing (price list, warehouse, etc.)"
-        ],
         "processId": "210",
         "processType": "classic"
       },
       {
-        "name": "calculatePromotions",
-        "actionType": "utilityAction",
         "entity": "header",
+        "field": "calculatePromotions",
         "column": "Calculate_Promotions",
-        "requiresRecord": true,
-        "method": "POST",
         "url": "/sws/neo/sales-invoice/header/{id}/action/calculatePromotions",
-        "parameters": [],
-        "preconditions": [],
-        "effects": [
-          "May update related records"
-        ],
-        "dryRunSupported": false,
-        "edgeCases": [
-          "Required context is missing",
-          "User lacks permission",
-          "Record is in an incompatible state"
-        ],
         "processId": "9EB2228A60684C0DBEC12D5CD8D85218",
         "processType": "classic"
       },
       {
-        "name": "tBAIQRcode",
-        "actionType": "utilityAction",
         "entity": "header",
+        "field": "tBAIQRcode",
         "column": "em_tbai_qrcode",
-        "requiresRecord": true,
-        "method": "POST",
         "url": "/sws/neo/sales-invoice/header/{id}/action/tBAIQRcode",
-        "parameters": [],
-        "preconditions": [],
-        "effects": [
-          "May update related records"
-        ],
-        "dryRunSupported": false,
-        "edgeCases": [
-          "Required context is missing",
-          "User lacks permission",
-          "Record is in an incompatible state"
-        ],
         "processId": "12FECC9DF1F4418AB7DAA46D6A05FEC6",
         "processType": "obuiapp"
       },
       {
-        "name": "etvfacRectCreate",
-        "actionType": "createFrom",
         "entity": "header",
+        "field": "etvfacRectCreate",
         "column": "EM_Etvfac_Rect_Create",
-        "requiresRecord": true,
-        "method": "POST",
         "url": "/sws/neo/sales-invoice/header/{id}/action/etvfacRectCreate",
-        "parameters": [],
-        "preconditions": [],
-        "effects": [
-          "Creates child or related records",
-          "May copy data from source document"
-        ],
-        "dryRunSupported": false,
-        "edgeCases": [
-          "Source document has no valid lines to copy",
-          "Target entity already has linked records",
-          "Required reference data is missing (price list, warehouse, etc.)"
-        ],
         "processId": "E36A8BA259164E78AFDDC760172C18F5",
         "processType": "obuiapp"
       },
       {
-        "name": "tbaiXmlgenerator",
-        "actionType": "utilityAction",
         "entity": "header",
+        "field": "tbaiXmlgenerator",
         "column": "EM_Tbai_Xmlgenerator",
-        "requiresRecord": true,
-        "method": "POST",
         "url": "/sws/neo/sales-invoice/header/{id}/action/tbaiXmlgenerator",
-        "parameters": [],
-        "preconditions": [],
-        "effects": [
-          "May update related records"
-        ],
-        "dryRunSupported": false,
-        "edgeCases": [
-          "Required context is missing",
-          "User lacks permission",
-          "Record is in an incompatible state"
-        ],
         "processId": "BE2486102F2C41779B760609FD69A225",
         "processType": "obuiapp"
       },
       {
-        "name": "tbaiVoidxmlgenerator",
-        "actionType": "documentAction",
         "entity": "header",
+        "field": "tbaiVoidxmlgenerator",
         "column": "EM_Tbai_Voidxmlgenerator",
-        "requiresRecord": true,
-        "method": "POST",
         "url": "/sws/neo/sales-invoice/header/{id}/action/tbaiVoidxmlgenerator",
-        "parameters": [
-          {
-            "name": "docAction",
-            "type": "string",
-            "required": true,
-            "description": "Document action code (e.g. CO=Complete, VO=Void, RE=Reactivate)"
-          }
-        ],
-        "preconditions": [
-          {
-            "field": "documentStatus",
-            "operator": "in",
-            "values": [
-              "DR",
-              "IP"
-            ],
-            "description": "Document must be in draft or in-progress state"
-          }
-        ],
-        "effects": [
-          "Updates document status",
-          "May trigger workflow transitions"
-        ],
-        "dryRunSupported": true,
-        "edgeCases": [
-          "Document is already completed or closed",
-          "Document has pending lines or missing required fields",
-          "User lacks permission to execute the action"
-        ],
         "processId": "535A8BAE44A34759A7C8FF40D62A5070",
         "processType": "obuiapp"
       },
       {
-        "name": "aeatsiiSend",
-        "actionType": "createFrom",
         "entity": "header",
+        "field": "aeatsiiSend",
         "column": "EM_Aeatsii_Send",
-        "requiresRecord": true,
-        "method": "POST",
         "url": "/sws/neo/sales-invoice/header/{id}/action/aeatsiiSend",
-        "parameters": [],
-        "preconditions": [],
-        "effects": [
-          "Creates child or related records",
-          "May copy data from source document"
-        ],
-        "dryRunSupported": false,
-        "edgeCases": [
-          "Source document has no valid lines to copy",
-          "Target entity already has linked records",
-          "Required reference data is missing (price list, warehouse, etc.)"
-        ],
         "processId": "2ECF46DAAEEB486EAF79D3594D50DE5F",
         "processType": "obuiapp"
       },
       {
-        "name": "aeatsiiModif",
-        "actionType": "utilityAction",
         "entity": "header",
+        "field": "aeatsiiModif",
         "column": "EM_Aeatsii_Modif",
-        "requiresRecord": true,
-        "method": "POST",
         "url": "/sws/neo/sales-invoice/header/{id}/action/aeatsiiModif",
-        "parameters": [],
-        "preconditions": [],
-        "effects": [
-          "May update related records"
-        ],
-        "dryRunSupported": false,
-        "edgeCases": [
-          "Required context is missing",
-          "User lacks permission",
-          "Record is in an incompatible state"
-        ],
         "processId": "BAAECFDF9FF144E8A610E9F1EF3E5FBE",
         "processType": "obuiapp"
       },
       {
-        "name": "processNow",
-        "actionType": "documentAction",
         "entity": "header",
+        "field": "processNow",
         "column": "Processing",
-        "requiresRecord": true,
-        "method": "POST",
         "url": "/sws/neo/sales-invoice/header/{id}/action/processNow",
-        "parameters": [
-          {
-            "name": "docAction",
-            "type": "string",
-            "required": true,
-            "description": "Document action code (e.g. CO=Complete, VO=Void, RE=Reactivate)"
-          }
-        ],
-        "preconditions": [
-          {
-            "field": "documentStatus",
-            "operator": "in",
-            "values": [
-              "DR",
-              "IP"
-            ],
-            "description": "Document must be in draft or in-progress state"
-          }
-        ],
-        "effects": [
-          "Updates document status",
-          "May trigger workflow transitions"
-        ],
-        "dryRunSupported": true,
-        "edgeCases": [
-          "Document is already completed or closed",
-          "Document has pending lines or missing required fields",
-          "User lacks permission to execute the action"
-        ],
         "processId": "111",
         "processType": "classic"
       },
       {
-        "name": "generateTo",
-        "actionType": "createFrom",
         "entity": "header",
+        "field": "generateTo",
         "column": "GenerateTo",
-        "requiresRecord": true,
-        "method": "POST",
         "url": "/sws/neo/sales-invoice/header/{id}/action/generateTo",
-        "parameters": [],
-        "preconditions": [],
-        "effects": [
-          "Creates child or related records",
-          "May copy data from source document"
-        ],
-        "dryRunSupported": false,
-        "edgeCases": [
-          "Source document has no valid lines to copy",
-          "Target entity already has linked records",
-          "Required reference data is missing (price list, warehouse, etc.)"
-        ],
         "processId": "142",
         "processType": "classic"
       },
       {
-        "name": "createLinesFrom",
-        "actionType": "createFrom",
         "entity": "header",
+        "field": "createLinesFrom",
         "column": "CreateFrom",
-        "requiresRecord": true,
-        "method": "POST",
-        "url": "/sws/neo/sales-invoice/header/{id}/action/createLinesFrom",
-        "parameters": [],
-        "preconditions": [],
-        "effects": [
-          "Creates child or related records",
-          "May copy data from source document"
-        ],
-        "dryRunSupported": false,
-        "edgeCases": [
-          "Source document has no valid lines to copy",
-          "Target entity already has linked records",
-          "Required reference data is missing (price list, warehouse, etc.)"
-        ]
+        "url": "/sws/neo/sales-invoice/header/{id}/action/createLinesFrom"
       },
       {
-        "name": "aeatsiiDup",
-        "actionType": "utilityAction",
         "entity": "header",
+        "field": "aeatsiiDup",
         "column": "EM_Aeatsii_Dup",
-        "requiresRecord": true,
-        "method": "POST",
         "url": "/sws/neo/sales-invoice/header/{id}/action/aeatsiiDup",
-        "parameters": [],
-        "preconditions": [],
-        "effects": [
-          "May update related records"
-        ],
-        "dryRunSupported": false,
-        "edgeCases": [
-          "Required context is missing",
-          "User lacks permission",
-          "Record is in an incompatible state"
-        ],
         "processId": "92C02F9A367140C085D1EE3BD27C4E96",
         "processType": "obuiapp"
       },
       {
-        "name": "aeatsiiUnsubscribe",
-        "actionType": "utilityAction",
         "entity": "header",
+        "field": "aeatsiiUnsubscribe",
         "column": "EM_Aeatsii_Unsubscribe",
-        "requiresRecord": true,
-        "method": "POST",
         "url": "/sws/neo/sales-invoice/header/{id}/action/aeatsiiUnsubscribe",
-        "parameters": [],
-        "preconditions": [],
-        "effects": [
-          "May update related records"
-        ],
-        "dryRunSupported": false,
-        "edgeCases": [
-          "Required context is missing",
-          "User lacks permission",
-          "Record is in an incompatible state"
-        ],
         "processId": "BE564945CB2D4892AC0EE51204C5DB7D",
         "processType": "obuiapp"
       },
       {
-        "name": "psd2GenerateBankPayment",
-        "actionType": "paymentAction",
         "entity": "header",
+        "field": "psd2GenerateBankPayment",
         "column": "EM_Psd2_Generate_Bank_Payment",
-        "requiresRecord": true,
-        "method": "POST",
         "url": "/sws/neo/sales-invoice/header/{id}/action/psd2GenerateBankPayment",
-        "parameters": [],
-        "preconditions": [],
-        "effects": [
-          "Creates or processes payment records",
-          "May update invoice/order payment status"
-        ],
-        "dryRunSupported": false,
-        "edgeCases": [
-          "Payment amount exceeds remaining balance",
-          "Payment method is not configured for the business partner",
-          "Invoice is already fully paid"
-        ],
         "processId": "0661406A983B4D8EA611F8596F114D52",
         "processType": "obuiapp"
       },
       {
-        "name": "eTPRRemovePayment",
-        "actionType": "paymentAction",
         "entity": "header",
+        "field": "eTPRRemovePayment",
         "column": "EM_Etpr_Remove_Payment",
-        "requiresRecord": true,
-        "method": "POST",
         "url": "/sws/neo/sales-invoice/header/{id}/action/eTPRRemovePayment",
-        "parameters": [],
-        "preconditions": [],
-        "effects": [
-          "Creates or processes payment records",
-          "May update invoice/order payment status"
-        ],
-        "dryRunSupported": false,
-        "edgeCases": [
-          "Payment amount exceeds remaining balance",
-          "Payment method is not configured for the business partner",
-          "Invoice is already fully paid"
-        ],
         "processId": "745FCF75B6F14024B96CC14429D8E952",
         "processType": "obuiapp"
       },
       {
-        "name": "etblkpBulkposting",
-        "actionType": "documentAction",
         "entity": "header",
+        "field": "etblkpBulkposting",
         "column": "EM_Etblkp_Bulkposting",
-        "requiresRecord": true,
-        "method": "POST",
         "url": "/sws/neo/sales-invoice/header/{id}/action/etblkpBulkposting",
-        "parameters": [
-          {
-            "name": "docAction",
-            "type": "string",
-            "required": true,
-            "description": "Document action code (e.g. CO=Complete, VO=Void, RE=Reactivate)"
-          }
-        ],
-        "preconditions": [
-          {
-            "field": "documentStatus",
-            "operator": "in",
-            "values": [
-              "DR",
-              "IP"
-            ],
-            "description": "Document must be in draft or in-progress state"
-          }
-        ],
-        "effects": [
-          "Updates document status",
-          "May trigger workflow transitions"
-        ],
-        "dryRunSupported": true,
-        "edgeCases": [
-          "Document is already completed or closed",
-          "Document has pending lines or missing required fields",
-          "User lacks permission to execute the action"
-        ],
         "processId": "57496FB9CF9E4E8F847224017941570E",
         "processType": "obuiapp"
       },
       {
-        "name": "explode",
-        "actionType": "utilityAction",
         "entity": "lines",
+        "field": "explode",
         "column": "Explode",
-        "requiresRecord": true,
-        "method": "POST",
         "url": "/sws/neo/sales-invoice/lines/{id}/action/explode",
-        "parameters": [],
-        "preconditions": [],
-        "effects": [
-          "May update related records"
-        ],
-        "dryRunSupported": false,
-        "edgeCases": [
-          "Required context is missing",
-          "User lacks permission",
-          "Record is in an incompatible state"
-        ],
         "processId": "6E1ADD5C8B6B4ACB82237DAA8114451E",
         "processType": "classic"
       },
       {
-        "name": "matchLCCosts",
-        "actionType": "utilityAction",
         "entity": "lines",
+        "field": "matchLCCosts",
         "column": "Match_Lccosts",
-        "requiresRecord": true,
-        "method": "POST",
         "url": "/sws/neo/sales-invoice/lines/{id}/action/matchLCCosts",
-        "parameters": [],
-        "preconditions": [],
-        "effects": [
-          "May update related records"
-        ],
-        "dryRunSupported": false,
-        "edgeCases": [
-          "Required context is missing",
-          "User lacks permission",
-          "Record is in an incompatible state"
-        ],
         "processId": "281FFDFAB31C4394A2EAA73A6F9F3A3F",
         "processType": "obuiapp"
       },
       {
-        "name": "updatePaymentPlan",
-        "actionType": "paymentAction",
         "entity": "paymentPlan",
+        "field": "updatePaymentPlan",
         "column": "Update_Payment_Plan",
-        "requiresRecord": true,
-        "method": "POST",
         "url": "/sws/neo/sales-invoice/paymentPlan/{id}/action/updatePaymentPlan",
-        "parameters": [],
-        "preconditions": [],
-        "effects": [
-          "Creates or processes payment records",
-          "May update invoice/order payment status"
-        ],
-        "dryRunSupported": false,
-        "edgeCases": [
-          "Payment amount exceeds remaining balance",
-          "Payment method is not configured for the business partner",
-          "Invoice is already fully paid"
-        ],
         "processId": "FB740AB61B0E42B198D2C88D3A0D0CE6",
         "processType": "classic"
       },
       {
-        "name": "aprmModifPaymentINPlan",
-        "actionType": "paymentAction",
         "entity": "paymentPlan",
+        "field": "aprmModifPaymentINPlan",
         "column": "EM_Aprm_Modif_Paym_Sched",
-        "requiresRecord": true,
-        "method": "POST",
         "url": "/sws/neo/sales-invoice/paymentPlan/{id}/action/aprmModifPaymentINPlan",
-        "parameters": [],
-        "preconditions": [],
-        "effects": [
-          "Creates or processes payment records",
-          "May update invoice/order payment status"
-        ],
-        "dryRunSupported": false,
-        "edgeCases": [
-          "Payment amount exceeds remaining balance",
-          "Payment method is not configured for the business partner",
-          "Invoice is already fully paid"
-        ],
         "processId": "4EEB3497082C4F2182E16A4371CD5D96",
         "processType": "obuiapp"
       },
       {
-        "name": "aprmModifPaymentOUTPlan",
-        "actionType": "paymentAction",
         "entity": "paymentPlan",
+        "field": "aprmModifPaymentOUTPlan",
         "column": "EM_Aprm_Modif_Paym_Out_Sched",
-        "requiresRecord": true,
-        "method": "POST",
         "url": "/sws/neo/sales-invoice/paymentPlan/{id}/action/aprmModifPaymentOUTPlan",
-        "parameters": [],
-        "preconditions": [],
-        "effects": [
-          "Creates or processes payment records",
-          "May update invoice/order payment status"
-        ],
-        "dryRunSupported": false,
-        "edgeCases": [
-          "Payment amount exceeds remaining balance",
-          "Payment method is not configured for the business partner",
-          "Invoice is already fully paid"
-        ],
         "processId": "6F87442DF7BC43AB8A666BDED2F7D64E",
         "processType": "obuiapp"
       }
@@ -5565,494 +4890,6 @@
         "C_DocTypeTarget_ID": "Document Type"
       }
     }
-  },
-  "formState": {
-    "entities": {
-      "header": {
-        "fields": {
-          "adOrgId": {
-            "readOnly": true,
-            "required": true,
-            "readOnlyLogic": "@Processed@='Y'",
-            "defaultValue": "@#AD_Org_ID@"
-          },
-          "documentNo": {
-            "readOnly": true,
-            "required": true,
-            "readOnlyLogic": "@Processed@='Y'"
-          },
-          "invoiceDate": {
-            "required": true,
-            "readOnlyLogic": "@Posted@='Y' | (@Processed@='Y' & (@DocStatus@!'VO'))",
-            "defaultValue": "@#Date@"
-          },
-          "businessPartner": {
-            "required": true,
-            "readOnlyLogic": "@Processed@='Y'"
-          },
-          "partnerAddress": {
-            "required": true,
-            "readOnlyLogic": "@Processed@='Y'"
-          },
-          "description": {},
-          "paymentTerms": {
-            "required": true,
-            "readOnlyLogic": "@Processed@='Y'"
-          },
-          "paymentMethod": {
-            "required": true,
-            "readOnlyLogic": "@Processed@='Y'"
-          },
-          "documentStatus": {
-            "readOnly": true,
-            "required": true,
-            "defaultValue": "DR"
-          },
-          "grandTotalAmount": {
-            "readOnly": true,
-            "required": true
-          },
-          "summedLineAmount": {
-            "readOnly": true,
-            "required": true
-          },
-          "currency": {
-            "required": true,
-            "readOnlyLogic": "@Processed@='Y'",
-            "defaultValue": "@C_Currency_ID@"
-          },
-          "paymentComplete": {
-            "readOnly": true,
-            "required": true,
-            "defaultValue": "N"
-          },
-          "posted": {
-            "readOnly": true,
-            "required": true,
-            "defaultValue": "N"
-          },
-          "outstandingAmount": {
-            "readOnly": true,
-            "required": true,
-            "defaultValue": "0"
-          },
-          "priceList": {
-            "required": true,
-            "readOnlyLogic": "@Processed@='Y'"
-          },
-          "project": {
-            "readOnlyLogic": "@Posted@='Y'"
-          },
-          "costcenter": {
-            "readOnlyLogic": "@Posted@='Y'"
-          },
-          "etsgDateOperation": {
-            "readOnlyLogic": "@processed@='Y'",
-            "defaultValue": "@DateInvoiced@"
-          },
-          "etvfacInvoiceStatus": {
-            "readOnly": true,
-            "readOnlyLogic": "@processed@='Y'"
-          },
-          "etvfacInvType": {
-            "readOnlyLogic": "@processed@='Y'",
-            "defaultValue": "F1"
-          },
-          "etvfacVerifacDesc": {
-            "readOnlyLogic": "@processed@='Y'"
-          },
-          "etvfacReverseinvtype": {
-            "readOnlyLogic": "@processed@='Y'"
-          },
-          "etvfacSimpinvart7273": {
-            "required": true,
-            "readOnlyLogic": "@processed@='Y'",
-            "defaultValue": "N"
-          },
-          "etvfacInvNoIDArt61d": {
-            "required": true,
-            "readOnlyLogic": "@processed@='Y'",
-            "defaultValue": "N"
-          },
-          "tbaiSequence": {
-            "readOnly": true
-          },
-          "tbaiInvoicenum": {
-            "readOnly": true
-          },
-          "tbaiInvoiceseq": {
-            "readOnly": true
-          },
-          "tbaiIssent": {
-            "readOnly": true
-          },
-          "aeatsiiIssent": {
-            "readOnly": true,
-            "required": true,
-            "readOnlyLogic": "true",
-            "defaultValue": "N"
-          },
-          "aeatsiiClaveTipo": {
-            "readOnlyLogic": "(@em_aeatsii_estado@='CO' | @em_aeatsii_estado@='AE' | @DocStatus@='VO') & @Processed@='Y'",
-            "defaultValue": "@SQL=SELECT CASE WHEN ((SELECT c.insiisystem FROM aeatsii_config c WHERE c.ad_org_id = (SELECT ad_get_org_le_bu(@AD_Org_ID@,'LE') FROM dual))='Y') THEN 'F1' ELSE null END FROM dual"
-          },
-          "aeatsiiDescription": {
-            "readOnlyLogic": "(@em_aeatsii_estado@='CO' | @em_aeatsii_estado@='AE' | (@DocStatus@='VO' & @em_aeatsii_issent@='Y')) & @Processed@='Y'",
-            "defaultValue": "@SQL=\n\tSELECT\n\t\tCASE\n\t\t\tWHEN\n\t\t\t\t(\n\t\t\t\t\t(\n\t\t\t\t\t\tSELECT c.insiisystem\n\t\t\t\t\t\tFROM aeatsii_config c\n\t\t\t\t\t\tWHERE c.ad_org_id = (\n\t\t\t\t\t\t\tSELECT ad_get_org_le_bu(@AD_Org_ID@,'LE')\n\t\t\t\t\t\t\tFROM dual\n\t\t\t\t\t\t)\n\t\t\t\t\t)='Y'\n\t\t\t\t)\n\t\t\tTHEN\n\t\t\t\t(\n\t\t\t\t\tSELECT\n\t\t\t\t\t\t(\n\t\t\t\t\t\t\tCASE\n\t\t\t\t\t\t\t\tWHEN ('Y' = 'Y')\n\t\t\t\t\t\t\t\tTHEN (\n\t\t\t\t\t\t\t\t\tSELECT aeatsii_description_id\n\t\t\t\t\t\t\t\t\tFROM aeatsii_description\n\t\t\t\t\t\t\t\t\tWHERE isdefault = 'Y'\n\t\t\t\t\t\t\t\t\tAND issales = 'Y'\n\t\t\t\t\t\t\t\t\tAND ad_org_id = @AD_Org_ID@\n\t\t\t\t\t\t\t\t\tAND ad_client_id = @ad_client_id@\n\t\t\t\t\t\t\t\t) ELSE (null)\n\t\t\t\t\t\t\tEND\n\t\t\t\t\t\t)\n\t\t\t\t\tFROM dual\n\t\t\t\t)\n\t\t\tELSE null\n\t\tEND\n\tFROM dual"
-          },
-          "aeatsiiDescripcionSii": {
-            "readOnlyLogic": "(@em_aeatsii_estado@='CO' | @em_aeatsii_estado@='AE' | (@DocStatus@='VO' & @em_aeatsii_issent@='Y')) & @Processed@='Y'",
-            "defaultValue": "@SQL=\n\tSELECT\n\t\tCASE\n\t\t\tWHEN\n\t\t\t\t(\n\t\t\t\t\t(\n\t\t\t\t\t\tSELECT c.insiisystem\n\t\t\t\t\t\tFROM aeatsii_config c\n\t\t\t\t\t\tWHERE c.ad_org_id = (\n\t\t\t\t\t\t\tSELECT ad_get_org_le_bu(@AD_Org_ID@,'LE')\n\t\t\t\t\t\t\tFROM dual\n\t\t\t\t\t\t)\n\t\t\t\t\t)='Y'\n\t\t\t\t)\n\t\t\tTHEN\n\t\t\t\t(\n\t\t\t\t\tSELECT\n\t\t\t\t\t\t(\n\t\t\t\t\t\t\tCASE\n\t\t\t\t\t\t\t\tWHEN(@issotrx@ = 'Y')\n\t\t\t\t\t\t\t\tTHEN (\n\t\t\t\t\t\t\t\t\tSELECT description\n\t\t\t\t\t\t\t\t\tFROM aeatsii_description\n\t\t\t\t\t\t\t\t\tWHERE isdefault = 'Y'\n\t\t\t\t\t\t\t\t\tAND issales = 'Y'\n\t\t\t\t\t\t\t\t\tAND ad_org_id = @AD_Org_ID@\n\t\t\t\t\t\t\t\t\tAND ad_client_id = @ad_client_id@\n\t\t\t\t\t\t\t\t) ELSE (\n\t\t\t\t\t\t\t\t\tSELECT description\n\t\t\t\t\t\t\t\t\tFROM aeatsii_description\n\t\t\t\t\t\t\t\t\tWHERE isdefault = 'Y'\n\t\t\t\t\t\t\t\t\tAND ispurchase = 'Y'\n\t\t\t\t\t\t\t\t\tAND ad_org_id = @AD_Org_ID@\n\t\t\t\t\t\t\t\t\tAND ad_client_id = @ad_client_id@\n\t\t\t\t\t\t\t\t)\n\t\t\t\t\t\t\tEND\n\t\t\t\t\t\t)\n\t\t\t\t\tFROM dual\n\t\t\t\t)\n\t\t\tELSE null\n\t\tEND\n\tFROM dual"
-          },
-          "aeatsiiEstado": {
-            "readOnly": true,
-            "readOnlyLogic": "true",
-            "defaultValue": "@SQL=SELECT CASE WHEN ((SELECT c.insiisystem FROM aeatsii_config c WHERE c.ad_org_id = (SELECT ad_get_org_le_bu(@AD_Org_ID@,'LE') FROM dual))='Y') THEN 'PE' ELSE null END FROM dual"
-          },
-          "aeatsiiEjercicio": {
-            "readOnly": true,
-            "readOnlyLogic": "true"
-          },
-          "aeatsiiPeriodo": {
-            "readOnly": true,
-            "readOnlyLogic": "true"
-          },
-          "aeatsiiCauseExemption": {},
-          "aeatsiiIsauthorization": {
-            "required": true,
-            "defaultValue": "N"
-          },
-          "processed": {
-            "readOnly": true,
-            "required": true
-          },
-          "etgoTotalDiscount": {},
-          "eTGODueDate": {
-            "readOnly": true
-          },
-          "eTGODeliveryStatus": {
-            "readOnly": true
-          },
-          "transactionDocument": {
-            "required": true,
-            "readOnlyLogic": "@Processed@='Y'"
-          },
-          "eTGOCurrencyRate": {}
-        }
-      },
-      "lines": {
-        "fields": {
-          "product": {
-            "readOnlyLogic": "@Processed@='Y'"
-          },
-          "description": {},
-          "invoicedQuantity": {
-            "required": true,
-            "readOnlyLogic": "@Processed@='Y' | (@UomManagement@='Y' & @Financial_Invoice_Line@='N')",
-            "defaultValue": "1"
-          },
-          "listPrice": {
-            "required": true,
-            "readOnlyLogic": "@Processed@='Y'"
-          },
-          "etgoDiscount": {
-            "readOnlyLogic": "@Processed@='Y'",
-            "defaultValue": "0"
-          },
-          "tax": {
-            "readOnlyLogic": "@Processed@='Y'"
-          },
-          "unitPrice": {
-            "required": true,
-            "readOnlyLogic": "@Processed@='Y'|@GROSSPRICE@='Y'"
-          },
-          "grossUnitPrice": {
-            "readOnly": true,
-            "readOnlyLogic": "@Processed@='Y'|@GROSSPRICE@='N'",
-            "defaultValue": "0"
-          },
-          "grossAmount": {
-            "readOnly": true,
-            "defaultValue": "0"
-          },
-          "project": {
-            "readOnlyLogic": "@Posted@='Y'"
-          },
-          "costcenter": {
-            "readOnlyLogic": "@Posted@='Y'"
-          }
-        }
-      },
-      "paymentPlan": {
-        "fields": {
-          "dueDate": {
-            "readOnly": true,
-            "required": true
-          },
-          "expectedDate": {
-            "required": true
-          },
-          "finPaymentmethodID": {
-            "readOnly": true,
-            "required": true
-          },
-          "amount": {
-            "readOnly": true,
-            "required": true,
-            "defaultValue": "0"
-          },
-          "paidAmount": {
-            "readOnly": true,
-            "required": true,
-            "defaultValue": "0"
-          },
-          "outstandingAmount": {
-            "readOnly": true,
-            "required": true,
-            "defaultValue": "0"
-          },
-          "currency": {
-            "readOnly": true,
-            "required": true
-          },
-          "lastPaymentDate": {
-            "readOnly": true
-          },
-          "daysOverdue": {
-            "readOnly": true
-          },
-          "numberOfPayments": {
-            "readOnly": true
-          },
-          "description": {},
-          "totalDebtAmount": {
-            "readOnly": true,
-            "defaultValue": "0"
-          }
-        }
-      },
-      "exchangeRates": {
-        "fields": {
-          "currency": {
-            "readOnly": true,
-            "required": true,
-            "readOnlyLogic": "@HASREVERSEDINVOICESO@='Y' | @HASREVERSEDINVOICEPO@='Y' | @Posted@='Y'"
-          },
-          "toCurrency": {
-            "required": true,
-            "readOnlyLogic": "@HASREVERSEDINVOICESO@='Y' | @HASREVERSEDINVOICEPO@='Y' | @Posted@='Y'"
-          },
-          "rate": {
-            "readOnlyLogic": "@HASREVERSEDINVOICESO@='Y' | @HASREVERSEDINVOICEPO@='Y' | @Posted@='Y'"
-          },
-          "foreignAmount": {
-            "required": true,
-            "readOnlyLogic": "@HASREVERSEDINVOICESO@='Y' | @HASREVERSEDINVOICEPO@='Y' | @Posted@='Y'",
-            "defaultValue": "0"
-          }
-        }
-      }
-    },
-    "requiredSessionVariables": [
-      "#ShowAcct"
-    ],
-    "evaluationMode": "runtime"
-  },
-  "agentProfile": {
-    "purpose": "Create and manage sales invoice documents.",
-    "whenToUse": [
-      "Use for customer sales invoice before receipt or invoice."
-    ],
-    "minimumCreate": {
-      "headerFields": [
-        "invoiceDate",
-        "businessPartner",
-        "partnerAddress",
-        "paymentTerms",
-        "paymentMethod",
-        "currency",
-        "priceList",
-        "etvfacSimpinvart7273",
-        "etvfacInvNoIDArt61d",
-        "aeatsiiIsauthorization",
-        "transactionDocument"
-      ],
-      "lineFields": [
-        "invoicedQuantity",
-        "listPrice",
-        "unitPrice",
-        "expectedDate",
-        "toCurrency",
-        "foreignAmount"
-      ],
-      "recommendedOrder": [
-        "createHeader",
-        "createLines"
-      ]
-    },
-    "selectorContexts": [
-      {
-        "entity": "header",
-        "field": "partnerAddress",
-        "context": {
-          "required": [
-            {
-              "param": "C_BPartner_ID",
-              "source": "field",
-              "field": "businessPartner"
-            }
-          ]
-        }
-      },
-      {
-        "entity": "header",
-        "field": "paymentMethod",
-        "context": {
-          "required": [
-            {
-              "param": "IsSOTrx",
-              "source": "windowCategory"
-            }
-          ]
-        }
-      },
-      {
-        "entity": "header",
-        "field": "priceList",
-        "context": {
-          "required": [
-            {
-              "param": "isSOTrx",
-              "source": "windowCategory"
-            }
-          ]
-        }
-      },
-      {
-        "entity": "header",
-        "field": "project",
-        "context": {
-          "required": [
-            {
-              "param": "IsSOTrx",
-              "source": "windowCategory"
-            },
-            {
-              "param": "C_BPartner_ID",
-              "source": "field",
-              "field": "businessPartner"
-            }
-          ]
-        }
-      },
-      {
-        "entity": "header",
-        "field": "transactionDocument",
-        "context": {
-          "required": [
-            {
-              "param": "IsSOTrx",
-              "source": "windowCategory"
-            },
-            {
-              "param": "AD_Org_ID",
-              "source": "field",
-              "field": "adOrgId"
-            }
-          ]
-        }
-      },
-      {
-        "entity": "lines",
-        "field": "tax",
-        "context": {
-          "required": [
-            {
-              "param": "IsSOTrx",
-              "source": "windowCategory"
-            },
-            {
-              "param": "DateInvoiced",
-              "source": "parentField",
-              "field": "invoiceDate",
-              "format": "DD-MM-YYYY"
-            }
-          ]
-        }
-      }
-    ],
-    "actions": [
-      "documentAction",
-      "createLinesFromOrder",
-      "createLinesFromShipment",
-      "copyFrom",
-      "etvfacRectCreate",
-      "tbaiVoidxmlgenerator",
-      "aeatsiiSend",
-      "processNow",
-      "generateTo",
-      "createLinesFrom",
-      "etblkpBulkposting"
-    ],
-    "workflow": [
-      "Create draft header with required fields",
-      "Add at least one valid line",
-      "Validate form state",
-      "Complete the document"
-    ],
-    "edgeCases": [
-      "Payment amount exceeds remaining balance",
-      "Payment method is not configured for the business partner",
-      "Invoice is already fully paid",
-      "Document is already completed or closed",
-      "Document has pending lines or missing required fields",
-      "User lacks permission to execute the action",
-      "Source document has no valid lines to copy",
-      "Target entity already has linked records",
-      "Required reference data is missing (price list, warehouse, etc.)",
-      "Required context is missing"
-    ],
-    "examples": [
-      {
-        "operation": "createHeader",
-        "description": "Create a draft header with the minimum required editable fields.",
-        "fields": [
-          "invoiceDate",
-          "businessPartner",
-          "partnerAddress",
-          "paymentTerms",
-          "paymentMethod",
-          "currency",
-          "priceList",
-          "etvfacSimpinvart7273",
-          "etvfacInvNoIDArt61d",
-          "aeatsiiIsauthorization",
-          "transactionDocument"
-        ]
-      },
-      {
-        "operation": "createLine",
-        "description": "Add a line after the header exists and parent context is available.",
-        "fields": [
-          "invoicedQuantity",
-          "listPrice",
-          "unitPrice",
-          "expectedDate",
-          "toCurrency",
-          "foreignAmount"
-        ]
-      },
-      {
-        "operation": "completeDocument",
-        "description": "Validate form state and run the document lifecycle action when the draft is complete.",
-        "action": "documentAction"
-      }
-    ],
-    "warnings": [],
-    "knownLimitations": [],
-    "dangerousOperations": [
-      "tbaiVoidxmlgenerator"
-    ]
   },
   "testManifest": {
     "tests": [
@@ -6581,14 +5418,6 @@
         "description": "Display logic for 'aeatsiiPeriodo' in header should have evaluable flag"
       },
       {
-        "id": "t-displaylogic-evaluable-header-costcenter",
-        "category": "displaylogic-evaluable",
-        "entity": "header",
-        "field": "costcenter",
-        "runner": "node",
-        "description": "Display logic for 'costcenter' in header should have evaluable flag"
-      },
-      {
         "id": "t-displaylogic-evaluable-header-etsgDateOperation",
         "category": "displaylogic-evaluable",
         "entity": "header",
@@ -6669,54 +5498,6 @@
         "description": "Display logic for 'posted' in header should have evaluable flag"
       },
       {
-        "id": "t-displaylogic-evaluable-header-project",
-        "category": "displaylogic-evaluable",
-        "entity": "header",
-        "field": "project",
-        "runner": "node",
-        "description": "Display logic for 'project' in header should have evaluable flag"
-      },
-      {
-        "id": "t-displaylogic-evaluable-header-tbaiInvoicenum",
-        "category": "displaylogic-evaluable",
-        "entity": "header",
-        "field": "tbaiInvoicenum",
-        "runner": "node",
-        "description": "Display logic for 'tbaiInvoicenum' in header should have evaluable flag"
-      },
-      {
-        "id": "t-displaylogic-evaluable-header-tbaiInvoiceseq",
-        "category": "displaylogic-evaluable",
-        "entity": "header",
-        "field": "tbaiInvoiceseq",
-        "runner": "node",
-        "description": "Display logic for 'tbaiInvoiceseq' in header should have evaluable flag"
-      },
-      {
-        "id": "t-displaylogic-evaluable-header-tbaiIssent",
-        "category": "displaylogic-evaluable",
-        "entity": "header",
-        "field": "tbaiIssent",
-        "runner": "node",
-        "description": "Display logic for 'tbaiIssent' in header should have evaluable flag"
-      },
-      {
-        "id": "t-displaylogic-evaluable-header-tbaiSequence",
-        "category": "displaylogic-evaluable",
-        "entity": "header",
-        "field": "tbaiSequence",
-        "runner": "node",
-        "description": "Display logic for 'tbaiSequence' in header should have evaluable flag"
-      },
-      {
-        "id": "t-displaylogic-evaluable-lines-costcenter",
-        "category": "displaylogic-evaluable",
-        "entity": "lines",
-        "field": "costcenter",
-        "runner": "node",
-        "description": "Display logic for 'costcenter' in lines should have evaluable flag"
-      },
-      {
         "id": "t-displaylogic-evaluable-lines-grossUnitPrice",
         "category": "displaylogic-evaluable",
         "entity": "lines",
@@ -6731,14 +5512,6 @@
         "field": "listPrice",
         "runner": "node",
         "description": "Display logic for 'listPrice' in lines should have evaluable flag"
-      },
-      {
-        "id": "t-displaylogic-evaluable-lines-project",
-        "category": "displaylogic-evaluable",
-        "entity": "lines",
-        "field": "project",
-        "runner": "node",
-        "description": "Display logic for 'project' in lines should have evaluable flag"
       },
       {
         "id": "t-displaylogic-valid-header-adOrgId",
@@ -6821,14 +5594,6 @@
         "description": "Display logic for 'aeatsiiPeriodo' in header should be valid JS"
       },
       {
-        "id": "t-displaylogic-valid-header-costcenter",
-        "category": "displaylogic-valid",
-        "entity": "header",
-        "field": "costcenter",
-        "runner": "node",
-        "description": "Display logic for 'costcenter' in header should be valid JS"
-      },
-      {
         "id": "t-displaylogic-valid-header-etsgDateOperation",
         "category": "displaylogic-valid",
         "entity": "header",
@@ -6909,54 +5674,6 @@
         "description": "Display logic for 'posted' in header should be valid JS"
       },
       {
-        "id": "t-displaylogic-valid-header-project",
-        "category": "displaylogic-valid",
-        "entity": "header",
-        "field": "project",
-        "runner": "node",
-        "description": "Display logic for 'project' in header should be valid JS"
-      },
-      {
-        "id": "t-displaylogic-valid-header-tbaiInvoicenum",
-        "category": "displaylogic-valid",
-        "entity": "header",
-        "field": "tbaiInvoicenum",
-        "runner": "node",
-        "description": "Display logic for 'tbaiInvoicenum' in header should be valid JS"
-      },
-      {
-        "id": "t-displaylogic-valid-header-tbaiInvoiceseq",
-        "category": "displaylogic-valid",
-        "entity": "header",
-        "field": "tbaiInvoiceseq",
-        "runner": "node",
-        "description": "Display logic for 'tbaiInvoiceseq' in header should be valid JS"
-      },
-      {
-        "id": "t-displaylogic-valid-header-tbaiIssent",
-        "category": "displaylogic-valid",
-        "entity": "header",
-        "field": "tbaiIssent",
-        "runner": "node",
-        "description": "Display logic for 'tbaiIssent' in header should be valid JS"
-      },
-      {
-        "id": "t-displaylogic-valid-header-tbaiSequence",
-        "category": "displaylogic-valid",
-        "entity": "header",
-        "field": "tbaiSequence",
-        "runner": "node",
-        "description": "Display logic for 'tbaiSequence' in header should be valid JS"
-      },
-      {
-        "id": "t-displaylogic-valid-lines-costcenter",
-        "category": "displaylogic-valid",
-        "entity": "lines",
-        "field": "costcenter",
-        "runner": "node",
-        "description": "Display logic for 'costcenter' in lines should be valid JS"
-      },
-      {
         "id": "t-displaylogic-valid-lines-grossUnitPrice",
         "category": "displaylogic-valid",
         "entity": "lines",
@@ -6971,14 +5688,6 @@
         "field": "listPrice",
         "runner": "node",
         "description": "Display logic for 'listPrice' in lines should be valid JS"
-      },
-      {
-        "id": "t-displaylogic-valid-lines-project",
-        "category": "displaylogic-valid",
-        "entity": "lines",
-        "field": "project",
-        "runner": "node",
-        "description": "Display logic for 'project' in lines should be valid JS"
       },
       {
         "id": "t-field-presence-exchangeRates-currency",
@@ -7099,14 +5808,6 @@
         "field": "businessPartner",
         "runner": "node",
         "description": "Field 'businessPartner' should be present in header"
-      },
-      {
-        "id": "t-field-presence-header-costcenter",
-        "category": "field-presence",
-        "entity": "header",
-        "field": "costcenter",
-        "runner": "node",
-        "description": "Field 'costcenter' should be present in header"
       },
       {
         "id": "t-field-presence-header-currency",
@@ -7309,14 +6010,6 @@
         "description": "Field 'processed' should be present in header"
       },
       {
-        "id": "t-field-presence-header-project",
-        "category": "field-presence",
-        "entity": "header",
-        "field": "project",
-        "runner": "node",
-        "description": "Field 'project' should be present in header"
-      },
-      {
         "id": "t-field-presence-header-summedLineAmount",
         "category": "field-presence",
         "entity": "header",
@@ -7325,52 +6018,12 @@
         "description": "Field 'summedLineAmount' should be present in header"
       },
       {
-        "id": "t-field-presence-header-tbaiInvoicenum",
-        "category": "field-presence",
-        "entity": "header",
-        "field": "tbaiInvoicenum",
-        "runner": "node",
-        "description": "Field 'tbaiInvoicenum' should be present in header"
-      },
-      {
-        "id": "t-field-presence-header-tbaiInvoiceseq",
-        "category": "field-presence",
-        "entity": "header",
-        "field": "tbaiInvoiceseq",
-        "runner": "node",
-        "description": "Field 'tbaiInvoiceseq' should be present in header"
-      },
-      {
-        "id": "t-field-presence-header-tbaiIssent",
-        "category": "field-presence",
-        "entity": "header",
-        "field": "tbaiIssent",
-        "runner": "node",
-        "description": "Field 'tbaiIssent' should be present in header"
-      },
-      {
-        "id": "t-field-presence-header-tbaiSequence",
-        "category": "field-presence",
-        "entity": "header",
-        "field": "tbaiSequence",
-        "runner": "node",
-        "description": "Field 'tbaiSequence' should be present in header"
-      },
-      {
         "id": "t-field-presence-header-transactionDocument",
         "category": "field-presence",
         "entity": "header",
         "field": "transactionDocument",
         "runner": "node",
         "description": "Field 'transactionDocument' should be present in header"
-      },
-      {
-        "id": "t-field-presence-lines-costcenter",
-        "category": "field-presence",
-        "entity": "lines",
-        "field": "costcenter",
-        "runner": "node",
-        "description": "Field 'costcenter' should be present in lines"
       },
       {
         "id": "t-field-presence-lines-description",
@@ -7427,14 +6080,6 @@
         "field": "product",
         "runner": "node",
         "description": "Field 'product' should be present in lines"
-      },
-      {
-        "id": "t-field-presence-lines-project",
-        "category": "field-presence",
-        "entity": "lines",
-        "field": "project",
-        "runner": "node",
-        "description": "Field 'project' should be present in lines"
       },
       {
         "id": "t-field-presence-lines-tax",
@@ -7669,14 +6314,6 @@
         "description": "Field 'businessPartner' should have type 'string' in header"
       },
       {
-        "id": "t-field-type-header-costcenter",
-        "category": "field-type",
-        "entity": "header",
-        "field": "costcenter",
-        "runner": "node",
-        "description": "Field 'costcenter' should have type 'string' in header"
-      },
-      {
         "id": "t-field-type-header-currency",
         "category": "field-type",
         "entity": "header",
@@ -7877,14 +6514,6 @@
         "description": "Field 'processed' should have type 'boolean' in header"
       },
       {
-        "id": "t-field-type-header-project",
-        "category": "field-type",
-        "entity": "header",
-        "field": "project",
-        "runner": "node",
-        "description": "Field 'project' should have type 'string' in header"
-      },
-      {
         "id": "t-field-type-header-summedLineAmount",
         "category": "field-type",
         "entity": "header",
@@ -7893,52 +6522,12 @@
         "description": "Field 'summedLineAmount' should have type 'number' in header"
       },
       {
-        "id": "t-field-type-header-tbaiInvoicenum",
-        "category": "field-type",
-        "entity": "header",
-        "field": "tbaiInvoicenum",
-        "runner": "node",
-        "description": "Field 'tbaiInvoicenum' should have type 'string' in header"
-      },
-      {
-        "id": "t-field-type-header-tbaiInvoiceseq",
-        "category": "field-type",
-        "entity": "header",
-        "field": "tbaiInvoiceseq",
-        "runner": "node",
-        "description": "Field 'tbaiInvoiceseq' should have type 'string' in header"
-      },
-      {
-        "id": "t-field-type-header-tbaiIssent",
-        "category": "field-type",
-        "entity": "header",
-        "field": "tbaiIssent",
-        "runner": "node",
-        "description": "Field 'tbaiIssent' should have type 'boolean' in header"
-      },
-      {
-        "id": "t-field-type-header-tbaiSequence",
-        "category": "field-type",
-        "entity": "header",
-        "field": "tbaiSequence",
-        "runner": "node",
-        "description": "Field 'tbaiSequence' should have type 'number' in header"
-      },
-      {
         "id": "t-field-type-header-transactionDocument",
         "category": "field-type",
         "entity": "header",
         "field": "transactionDocument",
         "runner": "node",
         "description": "Field 'transactionDocument' should have type 'string' in header"
-      },
-      {
-        "id": "t-field-type-lines-costcenter",
-        "category": "field-type",
-        "entity": "lines",
-        "field": "costcenter",
-        "runner": "node",
-        "description": "Field 'costcenter' should have type 'string' in lines"
       },
       {
         "id": "t-field-type-lines-description",
@@ -7995,14 +6584,6 @@
         "field": "product",
         "runner": "node",
         "description": "Field 'product' should have type 'string' in lines"
-      },
-      {
-        "id": "t-field-type-lines-project",
-        "category": "field-type",
-        "entity": "lines",
-        "field": "project",
-        "runner": "node",
-        "description": "Field 'project' should have type 'string' in lines"
       },
       {
         "id": "t-field-type-lines-tax",
@@ -8221,14 +6802,6 @@
         "description": "Read-only logic for 'businessPartner' in header should have evaluable flag"
       },
       {
-        "id": "t-readonlylogic-evaluable-header-costcenter",
-        "category": "readonlylogic-evaluable",
-        "entity": "header",
-        "field": "costcenter",
-        "runner": "node",
-        "description": "Read-only logic for 'costcenter' in header should have evaluable flag"
-      },
-      {
         "id": "t-readonlylogic-evaluable-header-currency",
         "category": "readonlylogic-evaluable",
         "entity": "header",
@@ -8341,28 +6914,12 @@
         "description": "Read-only logic for 'priceList' in header should have evaluable flag"
       },
       {
-        "id": "t-readonlylogic-evaluable-header-project",
-        "category": "readonlylogic-evaluable",
-        "entity": "header",
-        "field": "project",
-        "runner": "node",
-        "description": "Read-only logic for 'project' in header should have evaluable flag"
-      },
-      {
         "id": "t-readonlylogic-evaluable-header-transactionDocument",
         "category": "readonlylogic-evaluable",
         "entity": "header",
         "field": "transactionDocument",
         "runner": "node",
         "description": "Read-only logic for 'transactionDocument' in header should have evaluable flag"
-      },
-      {
-        "id": "t-readonlylogic-evaluable-lines-costcenter",
-        "category": "readonlylogic-evaluable",
-        "entity": "lines",
-        "field": "costcenter",
-        "runner": "node",
-        "description": "Read-only logic for 'costcenter' in lines should have evaluable flag"
       },
       {
         "id": "t-readonlylogic-evaluable-lines-etgoDiscount",
@@ -8403,14 +6960,6 @@
         "field": "product",
         "runner": "node",
         "description": "Read-only logic for 'product' in lines should have evaluable flag"
-      },
-      {
-        "id": "t-readonlylogic-evaluable-lines-project",
-        "category": "readonlylogic-evaluable",
-        "entity": "lines",
-        "field": "project",
-        "runner": "node",
-        "description": "Read-only logic for 'project' in lines should have evaluable flag"
       },
       {
         "id": "t-readonlylogic-evaluable-lines-tax",
@@ -8533,14 +7082,6 @@
         "description": "Read-only logic for 'businessPartner' in header should be valid JS"
       },
       {
-        "id": "t-readonlylogic-valid-header-costcenter",
-        "category": "readonlylogic-valid",
-        "entity": "header",
-        "field": "costcenter",
-        "runner": "node",
-        "description": "Read-only logic for 'costcenter' in header should be valid JS"
-      },
-      {
         "id": "t-readonlylogic-valid-header-currency",
         "category": "readonlylogic-valid",
         "entity": "header",
@@ -8653,28 +7194,12 @@
         "description": "Read-only logic for 'priceList' in header should be valid JS"
       },
       {
-        "id": "t-readonlylogic-valid-header-project",
-        "category": "readonlylogic-valid",
-        "entity": "header",
-        "field": "project",
-        "runner": "node",
-        "description": "Read-only logic for 'project' in header should be valid JS"
-      },
-      {
         "id": "t-readonlylogic-valid-header-transactionDocument",
         "category": "readonlylogic-valid",
         "entity": "header",
         "field": "transactionDocument",
         "runner": "node",
         "description": "Read-only logic for 'transactionDocument' in header should be valid JS"
-      },
-      {
-        "id": "t-readonlylogic-valid-lines-costcenter",
-        "category": "readonlylogic-valid",
-        "entity": "lines",
-        "field": "costcenter",
-        "runner": "node",
-        "description": "Read-only logic for 'costcenter' in lines should be valid JS"
       },
       {
         "id": "t-readonlylogic-valid-lines-etgoDiscount",
@@ -8715,14 +7240,6 @@
         "field": "product",
         "runner": "node",
         "description": "Read-only logic for 'product' in lines should be valid JS"
-      },
-      {
-        "id": "t-readonlylogic-valid-lines-project",
-        "category": "readonlylogic-valid",
-        "entity": "lines",
-        "field": "project",
-        "runner": "node",
-        "description": "Read-only logic for 'project' in lines should be valid JS"
       },
       {
         "id": "t-readonlylogic-valid-lines-tax",
@@ -8893,14 +7410,6 @@
         "description": "Selector endpoint for 'businessPartner' in header should exist"
       },
       {
-        "id": "t-selector-endpoint-header-costcenter",
-        "category": "selector-endpoint",
-        "entity": "header",
-        "field": "costcenter",
-        "runner": "node",
-        "description": "Selector endpoint for 'costcenter' in header should exist"
-      },
-      {
         "id": "t-selector-endpoint-header-currency",
         "category": "selector-endpoint",
         "entity": "header",
@@ -8941,14 +7450,6 @@
         "description": "Selector endpoint for 'priceList' in header should exist"
       },
       {
-        "id": "t-selector-endpoint-header-project",
-        "category": "selector-endpoint",
-        "entity": "header",
-        "field": "project",
-        "runner": "node",
-        "description": "Selector endpoint for 'project' in header should exist"
-      },
-      {
         "id": "t-selector-endpoint-header-transactionDocument",
         "category": "selector-endpoint",
         "entity": "header",
@@ -8957,28 +7458,12 @@
         "description": "Selector endpoint for 'transactionDocument' in header should exist"
       },
       {
-        "id": "t-selector-endpoint-lines-costcenter",
-        "category": "selector-endpoint",
-        "entity": "lines",
-        "field": "costcenter",
-        "runner": "node",
-        "description": "Selector endpoint for 'costcenter' in lines should exist"
-      },
-      {
         "id": "t-selector-endpoint-lines-product",
         "category": "selector-endpoint",
         "entity": "lines",
         "field": "product",
         "runner": "node",
         "description": "Selector endpoint for 'product' in lines should exist"
-      },
-      {
-        "id": "t-selector-endpoint-lines-project",
-        "category": "selector-endpoint",
-        "entity": "lines",
-        "field": "project",
-        "runner": "node",
-        "description": "Selector endpoint for 'project' in lines should exist"
       },
       {
         "id": "t-selector-endpoint-lines-tax",
@@ -9387,6 +7872,14 @@
         "field": "copyFrom",
         "runner": "node",
         "description": "System field 'copyFrom' should exist in backend but not frontend for header"
+      },
+      {
+        "id": "t-system-field-header-costcenter",
+        "category": "system-field",
+        "entity": "header",
+        "field": "costcenter",
+        "runner": "node",
+        "description": "System field 'costcenter' should exist in backend but not frontend for header"
       },
       {
         "id": "t-system-field-header-created",
@@ -9869,6 +8362,14 @@
         "description": "System field 'processNow' should exist in backend but not frontend for header"
       },
       {
+        "id": "t-system-field-header-project",
+        "category": "system-field",
+        "entity": "header",
+        "field": "project",
+        "runner": "node",
+        "description": "System field 'project' should exist in backend but not frontend for header"
+      },
+      {
         "id": "t-system-field-header-psd2GenerateBankPayment",
         "category": "system-field",
         "entity": "header",
@@ -9941,12 +8442,36 @@
         "description": "System field 'tbaiIdtbai' should exist in backend but not frontend for header"
       },
       {
+        "id": "t-system-field-header-tbaiInvoicenum",
+        "category": "system-field",
+        "entity": "header",
+        "field": "tbaiInvoicenum",
+        "runner": "node",
+        "description": "System field 'tbaiInvoicenum' should exist in backend but not frontend for header"
+      },
+      {
+        "id": "t-system-field-header-tbaiInvoiceseq",
+        "category": "system-field",
+        "entity": "header",
+        "field": "tbaiInvoiceseq",
+        "runner": "node",
+        "description": "System field 'tbaiInvoiceseq' should exist in backend but not frontend for header"
+      },
+      {
         "id": "t-system-field-header-tbaiIsreverseinvoice",
         "category": "system-field",
         "entity": "header",
         "field": "tbaiIsreverseinvoice",
         "runner": "node",
         "description": "System field 'tbaiIsreverseinvoice' should exist in backend but not frontend for header"
+      },
+      {
+        "id": "t-system-field-header-tbaiIssent",
+        "category": "system-field",
+        "entity": "header",
+        "field": "tbaiIssent",
+        "runner": "node",
+        "description": "System field 'tbaiIssent' should exist in backend but not frontend for header"
       },
       {
         "id": "t-system-field-header-tbaiIssueDate",
@@ -9979,6 +8504,14 @@
         "field": "tbaiReverseinvoicetype",
         "runner": "node",
         "description": "System field 'tbaiReverseinvoicetype' should exist in backend but not frontend for header"
+      },
+      {
+        "id": "t-system-field-header-tbaiSequence",
+        "category": "system-field",
+        "entity": "header",
+        "field": "tbaiSequence",
+        "runner": "node",
+        "description": "System field 'tbaiSequence' should exist in backend but not frontend for header"
       },
       {
         "id": "t-system-field-header-tbaiSignaturevalue",
@@ -10171,6 +8704,14 @@
         "field": "cInvoiceId",
         "runner": "node",
         "description": "System field 'cInvoiceId' should exist in backend but not frontend for lines"
+      },
+      {
+        "id": "t-system-field-lines-costcenter",
+        "category": "system-field",
+        "entity": "lines",
+        "field": "costcenter",
+        "runner": "node",
+        "description": "System field 'costcenter' should exist in backend but not frontend for lines"
       },
       {
         "id": "t-system-field-lines-createdBy",
@@ -10371,6 +8912,14 @@
         "field": "priceLimit",
         "runner": "node",
         "description": "System field 'priceLimit' should exist in backend but not frontend for lines"
+      },
+      {
+        "id": "t-system-field-lines-project",
+        "category": "system-field",
+        "entity": "lines",
+        "field": "project",
+        "runner": "node",
+        "description": "System field 'project' should exist in backend but not frontend for lines"
       },
       {
         "id": "t-system-field-lines-projectLine",
@@ -10594,25 +9143,25 @@
       }
     ],
     "summary": {
-      "total": 569,
+      "total": 533,
       "byCategory": {
         "action-endpoint": 26,
         "crud-flags": 4,
         "default-value-type": 26,
-        "displaylogic-evaluable": 30,
-        "displaylogic-valid": 30,
-        "field-presence": 71,
-        "field-type": 71,
-        "readonlylogic-evaluable": 39,
-        "readonlylogic-valid": 39,
+        "displaylogic-evaluable": 22,
+        "displaylogic-valid": 22,
+        "field-presence": 63,
+        "field-type": 63,
+        "readonlylogic-evaluable": 35,
+        "readonlylogic-valid": 35,
         "rule-declared": 8,
         "searchable-filters": 6,
-        "selector-endpoint": 20,
-        "system-field": 195,
+        "selector-endpoint": 16,
+        "system-field": 203,
         "visibility": 4
       },
       "byRunner": {
-        "node": 569,
+        "node": 533,
         "junit": 0
       }
     }

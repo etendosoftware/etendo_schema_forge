@@ -4,7 +4,8 @@
   "window": {
     "category": "finance",
     "name": "End Year Close",
-    "detailEntity": null
+    "detailEntity": null,
+    "secondaryTabs": {}
   },
   "entities": {
     "endYearClose": {

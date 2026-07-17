@@ -1,8 +1,8 @@
 {
-  "version": "0.17.0",
+  "version": "0.16.0",
   "generatedAt": "2026-04-29T19:05:48.778Z",
-  "updatedAt": "2026-07-17T14:02:48.141Z",
-  "checksum": "f137b40afce99549",
+  "updatedAt": "2026-07-16T12:52:39.736Z",
+  "checksum": "0775f50ac7a8954b",
   "frontendContract": {
     "window": {
       "id": "170",
@@ -155,58 +155,6 @@
             "form": false
           },
           {
-            "name": "project",
-            "apiKey": "project",
-            "column": "C_Project_ID",
-            "label": "Project",
-            "type": "foreignKey",
-            "tsType": "string",
-            "visibility": "editable",
-            "required": false,
-            "grid": false,
-            "form": true,
-            "reference": "Project",
-            "inputMode": "search",
-            "section": "principal",
-            "displayLogic": {
-              "raw": "@ACCT_DIMENSION_DISPLAY@",
-              "evaluable": false,
-              "reason": "server-macro",
-              "js": null
-            },
-            "readOnlyLogic": {
-              "raw": "@Posted@='Y'",
-              "evaluable": true,
-              "js": "record['posted'] === 'Y'"
-            }
-          },
-          {
-            "name": "costCenter",
-            "apiKey": "costCenter",
-            "column": "C_Costcenter_ID",
-            "label": "Cost Center",
-            "type": "foreignKey",
-            "tsType": "string",
-            "visibility": "editable",
-            "required": false,
-            "grid": false,
-            "form": true,
-            "reference": "Costcenter",
-            "inputMode": "selector",
-            "section": "principal",
-            "displayLogic": {
-              "raw": "@ACCT_DIMENSION_DISPLAY@",
-              "evaluable": false,
-              "reason": "server-macro",
-              "js": null
-            },
-            "readOnlyLogic": {
-              "raw": "@Posted@='Y'",
-              "evaluable": true,
-              "js": "record['posted'] === 'Y'"
-            }
-          },
-          {
             "name": "documentNo",
             "apiKey": "documentNo",
             "column": "DocumentNo",
@@ -350,16 +298,16 @@
             "reference": "Product",
             "inputMode": "search",
             "lookup": true,
-            "lookupDrawer": "goods-movements-product",
+            "lookupDrawer": "product-stock",
             "lookupTitle": "Product",
             "onSelectMappings": [
               {
                 "from": "_aux._LOC",
                 "to": "storageBin",
                 "labelFrom": [
-                  "storageBin",
-                  "storageBin$_identifier",
-                  "warehouse"
+                  "warehouse",
+                  "warehouse$_identifier",
+                  "storageBin"
                 ]
               }
             ],
@@ -663,7 +611,7 @@
             "apiKey": "project",
             "column": "C_Project_ID",
             "type": "foreignKey",
-            "visibility": "editable",
+            "visibility": "discarded",
             "required": false
           },
           {
@@ -671,7 +619,7 @@
             "apiKey": "costCenter",
             "column": "C_Costcenter_ID",
             "type": "foreignKey",
-            "visibility": "editable",
+            "visibility": "discarded",
             "required": false
           },
           {
@@ -1092,22 +1040,6 @@
     },
     "selectors": [
       {
-        "entity": "movement",
-        "field": "project",
-        "column": "C_Project_ID",
-        "reference": "Project",
-        "inputMode": "search",
-        "url": "/sws/neo/goods-movements/movement/selectors/project"
-      },
-      {
-        "entity": "movement",
-        "field": "costCenter",
-        "column": "C_Costcenter_ID",
-        "reference": "Costcenter",
-        "inputMode": "selector",
-        "url": "/sws/neo/goods-movements/movement/selectors/costCenter"
-      },
-      {
         "entity": "movementLine",
         "field": "product",
         "column": "M_Product_ID",
@@ -1284,46 +1216,6 @@
         "description": "Default value for 'movementQuantity' in movementLine should be a string"
       },
       {
-        "id": "t-displaylogic-evaluable-movement-costCenter",
-        "category": "displaylogic-evaluable",
-        "entity": "movement",
-        "field": "costCenter",
-        "runner": "node",
-        "description": "Display logic for 'costCenter' in movement should have evaluable flag"
-      },
-      {
-        "id": "t-displaylogic-evaluable-movement-project",
-        "category": "displaylogic-evaluable",
-        "entity": "movement",
-        "field": "project",
-        "runner": "node",
-        "description": "Display logic for 'project' in movement should have evaluable flag"
-      },
-      {
-        "id": "t-displaylogic-valid-movement-costCenter",
-        "category": "displaylogic-valid",
-        "entity": "movement",
-        "field": "costCenter",
-        "runner": "node",
-        "description": "Display logic for 'costCenter' in movement should be valid JS"
-      },
-      {
-        "id": "t-displaylogic-valid-movement-project",
-        "category": "displaylogic-valid",
-        "entity": "movement",
-        "field": "project",
-        "runner": "node",
-        "description": "Display logic for 'project' in movement should be valid JS"
-      },
-      {
-        "id": "t-field-presence-movement-costCenter",
-        "category": "field-presence",
-        "entity": "movement",
-        "field": "costCenter",
-        "runner": "node",
-        "description": "Field 'costCenter' should be present in movement"
-      },
-      {
         "id": "t-field-presence-movement-description",
         "category": "field-presence",
         "entity": "movement",
@@ -1362,14 +1254,6 @@
         "field": "processed",
         "runner": "node",
         "description": "Field 'processed' should be present in movement"
-      },
-      {
-        "id": "t-field-presence-movement-project",
-        "category": "field-presence",
-        "entity": "movement",
-        "field": "project",
-        "runner": "node",
-        "description": "Field 'project' should be present in movement"
       },
       {
         "id": "t-field-presence-movementLine-description",
@@ -1428,14 +1312,6 @@
         "description": "Field 'uOM' should be present in movementLine"
       },
       {
-        "id": "t-field-type-movement-costCenter",
-        "category": "field-type",
-        "entity": "movement",
-        "field": "costCenter",
-        "runner": "node",
-        "description": "Field 'costCenter' should have type 'string' in movement"
-      },
-      {
         "id": "t-field-type-movement-description",
         "category": "field-type",
         "entity": "movement",
@@ -1474,14 +1350,6 @@
         "field": "processed",
         "runner": "node",
         "description": "Field 'processed' should have type 'boolean' in movement"
-      },
-      {
-        "id": "t-field-type-movement-project",
-        "category": "field-type",
-        "entity": "movement",
-        "field": "project",
-        "runner": "node",
-        "description": "Field 'project' should have type 'string' in movement"
       },
       {
         "id": "t-field-type-movementLine-description",
@@ -1540,14 +1408,6 @@
         "description": "Field 'uOM' should have type 'string' in movementLine"
       },
       {
-        "id": "t-readonlylogic-evaluable-movement-costCenter",
-        "category": "readonlylogic-evaluable",
-        "entity": "movement",
-        "field": "costCenter",
-        "runner": "node",
-        "description": "Read-only logic for 'costCenter' in movement should have evaluable flag"
-      },
-      {
         "id": "t-readonlylogic-evaluable-movement-documentNo",
         "category": "readonlylogic-evaluable",
         "entity": "movement",
@@ -1570,14 +1430,6 @@
         "field": "name",
         "runner": "node",
         "description": "Read-only logic for 'name' in movement should have evaluable flag"
-      },
-      {
-        "id": "t-readonlylogic-evaluable-movement-project",
-        "category": "readonlylogic-evaluable",
-        "entity": "movement",
-        "field": "project",
-        "runner": "node",
-        "description": "Read-only logic for 'project' in movement should have evaluable flag"
       },
       {
         "id": "t-readonlylogic-evaluable-movementLine-description",
@@ -1628,14 +1480,6 @@
         "description": "Read-only logic for 'storageBin' in movementLine should have evaluable flag"
       },
       {
-        "id": "t-readonlylogic-valid-movement-costCenter",
-        "category": "readonlylogic-valid",
-        "entity": "movement",
-        "field": "costCenter",
-        "runner": "node",
-        "description": "Read-only logic for 'costCenter' in movement should be valid JS"
-      },
-      {
         "id": "t-readonlylogic-valid-movement-documentNo",
         "category": "readonlylogic-valid",
         "entity": "movement",
@@ -1658,14 +1502,6 @@
         "field": "name",
         "runner": "node",
         "description": "Read-only logic for 'name' in movement should be valid JS"
-      },
-      {
-        "id": "t-readonlylogic-valid-movement-project",
-        "category": "readonlylogic-valid",
-        "entity": "movement",
-        "field": "project",
-        "runner": "node",
-        "description": "Read-only logic for 'project' in movement should be valid JS"
       },
       {
         "id": "t-readonlylogic-valid-movementLine-description",
@@ -1824,22 +1660,6 @@
         "description": "Field 'product' should be a supported filter for movementLine"
       },
       {
-        "id": "t-selector-endpoint-movement-costCenter",
-        "category": "selector-endpoint",
-        "entity": "movement",
-        "field": "costCenter",
-        "runner": "node",
-        "description": "Selector endpoint for 'costCenter' in movement should exist"
-      },
-      {
-        "id": "t-selector-endpoint-movement-project",
-        "category": "selector-endpoint",
-        "entity": "movement",
-        "field": "project",
-        "runner": "node",
-        "description": "Selector endpoint for 'project' in movement should exist"
-      },
-      {
         "id": "t-selector-endpoint-movementLine-newStorageBin",
         "category": "selector-endpoint",
         "entity": "movementLine",
@@ -1902,6 +1722,14 @@
         "field": "client",
         "runner": "node",
         "description": "System field 'client' should exist in backend but not frontend for movement"
+      },
+      {
+        "id": "t-system-field-movement-costCenter",
+        "category": "system-field",
+        "entity": "movement",
+        "field": "costCenter",
+        "runner": "node",
+        "description": "System field 'costCenter' should exist in backend but not frontend for movement"
       },
       {
         "id": "t-system-field-movement-createdBy",
@@ -1982,6 +1810,14 @@
         "field": "processNow",
         "runner": "node",
         "description": "System field 'processNow' should exist in backend but not frontend for movement"
+      },
+      {
+        "id": "t-system-field-movement-project",
+        "category": "system-field",
+        "entity": "movement",
+        "field": "project",
+        "runner": "node",
+        "description": "System field 'project' should exist in backend but not frontend for movement"
       },
       {
         "id": "t-system-field-movement-salesCampaign",
@@ -2167,25 +2003,23 @@
       }
     ],
     "summary": {
-      "total": 122,
+      "total": 110,
       "byCategory": {
         "action-endpoint": 4,
         "crud-flags": 2,
         "default-value-type": 4,
-        "displaylogic-evaluable": 2,
-        "displaylogic-valid": 2,
-        "field-presence": 14,
-        "field-type": 14,
-        "readonlylogic-evaluable": 11,
-        "readonlylogic-valid": 11,
+        "field-presence": 12,
+        "field-type": 12,
+        "readonlylogic-evaluable": 9,
+        "readonlylogic-valid": 9,
         "rule-declared": 12,
         "searchable-filters": 3,
-        "selector-endpoint": 6,
-        "system-field": 35,
+        "selector-endpoint": 4,
+        "system-field": 37,
         "visibility": 2
       },
       "byRunner": {
-        "node": 122,
+        "node": 110,
         "junit": 0
       }
     }

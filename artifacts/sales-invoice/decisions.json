@@ -416,7 +416,7 @@
           "grid": true
         },
         "tbaiIssent": {
-          "visibility": "readOnly",
+          "visibility": "discarded",
           "form": false
         },
         "etvfacInvoiceStatus": {
@@ -469,15 +469,15 @@
           "form": false
         },
         "tbaiSequence": {
-          "visibility": "readOnly",
+          "visibility": "discarded",
           "form": false
         },
         "tbaiInvoicenum": {
-          "visibility": "readOnly",
+          "visibility": "discarded",
           "form": false
         },
         "tbaiInvoiceseq": {
-          "visibility": "readOnly",
+          "visibility": "discarded",
           "form": false
         }
       }

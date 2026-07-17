@@ -732,6 +732,31 @@ identifier resolution).
 
 Setting `dependsOn` automatically sets `inputMode` to `"dependent"`.
 
+### Lookup Drawer Override (`lookupDrawer`, `lookupTitle`, `onSelectMappings`)
+
+For a `lookup: true` field (the inline add-row / inline-edit product picker), these
+properties swap in a different picker component and control what happens when a row is
+selected.
+
+| Property | Type | Default | Purpose |
+|----------|------|---------|---------|
+| `lookup` | boolean | `false` | Enables the drawer-style picker for this field (instead of a plain search input). |
+| `lookupDrawer` | string \| null | `null` (→ `"default"`) | Key into `LOOKUP_DRAWERS` (`tools/app-shell/src/components/contract-ui/lookupDrawers.js`). `"default"` is the plain `ProductSearchDrawer`. `"product-stock"` is the shared, window-agnostic product+stock picker (groups by product, warehouse-filter pills, expand/collapse per-locator rows) — used by any window whose product field needs to resolve a storage bin/warehouse on selection. |
+| `lookupTitle` | string \| null | Field label | Title shown in the drawer header. |
+| `onSelectMappings` | array \| null | `null` | Maps data from the selected raw selector row onto other fields in the same line. Each entry: `{ "from": "<path into the row, e.g. _aux._LOC>", "to": "<sibling field key>", "labelFrom": ["<row key>", ...] }`. `labelFrom` is tried in order — the first non-empty value becomes the label shown for `to`. Applied by `applyOnSelectMappings` in `DataTable.jsx`, caller-side; the drawer itself never writes to sibling fields. |
+
+```json
+"product": {
+  "grid": true,
+  "lookup": true,
+  "lookupDrawer": "product-stock",
+  "lookupTitle": "Product",
+  "onSelectMappings": [
+    { "from": "_aux._LOC", "to": "storageBin", "labelFrom": ["warehouse", "warehouse$_identifier", "storageBin"] }
+  ]
+}
+```
+
 ### Custom Renderer (`customRenderer`)
 
 Swap in a custom React component as the input widget for a single field inside `EntityForm`.

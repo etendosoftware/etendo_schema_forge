@@ -16,6 +16,7 @@ const OBSERVABILITY_PROPERTY_VALUES = Object.freeze({
   ACCOUNT_ID: 'accountId',
   ATTEMPT: 'attempt',
   CATEGORY: 'category',
+  CLIENT: 'client',
   COUNT: 'count',
   DURATION_MS: 'durationMs',
   ENTITY: 'entity',
@@ -509,6 +510,12 @@ export const OBSERVABILITY_EVENTS = Object.freeze({
       OBSERVABILITY_PROPERTY_KEYS.TAGS,
       OBSERVABILITY_PROPERTY_KEYS.TYPE,
       OBSERVABILITY_PROPERTY_KEYS.USER_ID,
+    ],
+  }),
+  MCP_CONNECT_TAB_SELECTED: defineEvent('mcp_connect_tab_selected', {
+    channels: [OBSERVABILITY_CHANNELS.MIXPANEL],
+    properties: [
+      OBSERVABILITY_PROPERTY_KEYS.CLIENT,
     ],
   }),
   SURVEY_DISMISSED: defineEvent('survey_dismissed', {

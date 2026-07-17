@@ -6,17 +6,54 @@ import RelatedDocuments from './RelatedDocuments';
 import ImportFromShipmentModal from '@/windows/custom/return-material-receipt/ImportFromShipmentModal';
 
 export default function ReturnMaterialReceiptBottomPanel(props) {
+  // Import-only lines (ETP-4462): this window sets `window.maxDetailLines: 0`,
+  // so DetailView suppresses the whole add-line area — including the
+  // detailExtraActions slot that normally hosts the import trigger once the
+  // document has lines. Re-render the trigger here (bottomSection is always
+  // rendered below the lines area) so importing more lines stays possible on
+  // a draft that already has lines. Gated on lines.length > 0 to avoid
+  // doubling the empty state's own import button, and on draft + business
+  // partner to avoid an empty bordered strip on completed documents
+  // (ReturnReceiptLineActions self-gates on the same condition).
+  // No refresh callback exists in DetailView's bottomSection contract, so a
+  // successful import falls back to a full reload (same pattern as
+  // ConfirmWithCreditButtonBase / BulkDocumentAction).
+  const hasLines = Array.isArray(props.lines) && props.lines.length > 0;
+  const showImportTrigger = hasLines && props.data?.documentStatus === 'DR' && props.data?.businessPartner;
   return (
-    <LinesBottomSection
-      {...props}
-      relatedDocuments={RelatedDocuments}
-      showTotals={false}
-    />
+    <>
+      {showImportTrigger && (
+        <div
+          style={{
+            // Mirrors DetailView's suppressed add-line wrapper (default
+            // linesLayout) so the trigger keeps the same visual slot.
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 6,
+            borderTop: '0.5px solid var(--color-border-tertiary, #e5e7eb)',
+            padding: '10px 16px',
+          }}
+        >
+          <ReturnReceiptLineActions
+            data={props.data}
+            recordId={props.recordId}
+            token={props.token}
+            apiBaseUrl={props.apiBaseUrl}
+            onRefresh={() => window.location.reload()}
+          />
+        </div>
+      )}
+      <LinesBottomSection
+        {...props}
+        relatedDocuments={RelatedDocuments}
+        showTotals={false}
+      />
+    </>
   );
 }
 ReturnMaterialReceiptBottomPanel.showLineTotals = false;
 
-function ReturnReceiptLinesEmptyState({ data, onAddLine, recordId, token, apiBaseUrl, onRefresh, onSave, forceOpen, onForceOpenHandled }) {
+function ReturnReceiptLinesEmptyState({ data, onAddLine, recordId, token, apiBaseUrl, onRefresh, onSave, forceOpen, onForceOpenHandled, canAddLine = true }) {
   const ui = useUI();
   const [showModal, setShowModal] = useState(false);
   const bpId = data?.businessPartner;
@@ -58,7 +95,8 @@ function ReturnReceiptLinesEmptyState({ data, onAddLine, recordId, token, apiBas
       <LinesEmptyState
         data={data}
         onAddLine={onAddLine}
-        description={ui('addLinesManuallyOrImportFromShipment')}
+        canAddLine={canAddLine}
+        description={canAddLine ? ui('addLinesManuallyOrImportFromShipment') : ui('linesImportOnlyFromShipment')}
         secondaryAction={importButton}
       />
       {showModal && (
@@ -110,9 +148,11 @@ const ReturnReceiptLineActions = forwardRef(function ReturnReceiptLineActions(
         <button
           type="button"
           onClick={handleImportClick}
-          style={{ all: 'unset', display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 12, color: 'var(--color-text-secondary, #6b7280)', cursor: 'pointer' }}
+          // Same look as the empty state's import button; alignSelf keeps the
+          // bordered pill compact inside the flex-column with-lines wrapper.
+          style={{ display: 'inline-flex', alignItems: 'center', alignSelf: 'flex-start', gap: 5, border: '0.5px solid #888', borderRadius: 8, padding: '6px 14px', fontSize: 13, fontWeight: 500, color: 'var(--color-text-secondary)', background: 'transparent', cursor: 'pointer' }}
         >
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
             <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
             <polyline points="17 8 12 3 7 8" />
             <line x1="12" y1="3" x2="12" y2="15" />
