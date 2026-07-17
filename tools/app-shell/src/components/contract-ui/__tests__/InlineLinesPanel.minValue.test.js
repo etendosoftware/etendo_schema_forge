@@ -43,12 +43,12 @@ describe('InlineLinesPanel — min-value validation (ETP-4005)', () => {
     assert.match(src, /function editInputClassName\s*\(\s*isNumeric\s*,\s*isInvalid\s*\)/);
   });
 
-  it('editInputClassName toggles border-red-500 when isInvalid is true', () => {
-    assert.match(src, /isInvalid\s*\?\s*'border-red-500 focus-visible:ring-red-500'\s*:\s*'border-input'/);
+  it('editInputClassName toggles the semantic destructive border when isInvalid is true', () => {
+    assert.match(src, /isInvalid\s*\?\s*'border-destructive focus-visible:ring-destructive'\s*:\s*'border-input'/);
   });
 
-  it('editInputClassName keeps the white background and numeric alignment', () => {
-    assert.match(src, /h-7 px-2 text-sm bg-white/);
+  it('editInputClassName keeps the semantic card background and numeric alignment', () => {
+    assert.match(src, /h-7 px-2 text-sm bg-card/);
     assert.match(src, /isNumeric \? ' text-right tabular-nums' : ''/);
   });
 

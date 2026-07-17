@@ -149,10 +149,10 @@ describe('AssetsDetailPanel — accounting dimensions section', () => {
 });
 
 describe('AssetsDetailPanel — visual style', () => {
-  it('applies white background with white input/textarea overrides', () => {
-    assert.match(src, /bg-white/);
-    assert.match(src, /\[&_input\]:bg-white/);
-    assert.match(src, /\[&_textarea\]:bg-white/);
+  it('applies semantic card backgrounds with matching input/textarea overrides', () => {
+    assert.match(src, /bg-card/);
+    assert.match(src, /\[&_input\]:bg-card/);
+    assert.match(src, /\[&_textarea\]:bg-card/);
   });
 
   it('applies p-2 padding to root container', () => {

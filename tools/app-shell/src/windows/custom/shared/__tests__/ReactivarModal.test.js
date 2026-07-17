@@ -37,12 +37,12 @@ describe('ReactivarModal', () => {
 
   // ── Yellow warning box ─────────────────────────────────────────────────────
 
-  it('has yellow warning box with FFFBEB background', () => {
-    assert.match(src, /#FFFBEB/);
+  it('has a semantic warning box', () => {
+    assert.match(src, /var\(--status-warning-bg\)/);
   });
 
-  it('uses amber stroke color #D97706 for warning icon', () => {
-    assert.match(src, /#D97706/);
+  it('uses the semantic warning foreground for the warning icon', () => {
+    assert.match(src, /var\(--status-warning-fg\)/);
   });
 
   // ── Buttons ────────────────────────────────────────────────────────────────
