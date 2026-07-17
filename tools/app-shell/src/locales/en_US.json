@@ -8045,8 +8045,8 @@
       "description": "Reversed Invoice"
     },
     "Reversed_C_Invoice_ID": {
-      "label": "Reversed Invoice",
-      "description": "Reversed Invoice"
+      "label": "Original invoice",
+      "description": "Original invoice being rectified"
     },
     "IsOpening": {
       "label": "Opening",
@@ -12225,8 +12225,8 @@
       "description": "Configuración que permite el envío automático de facturas cuando se completen."
     },
     "EM_AEAT349_BP_BaseAmount_S": {
-      "label": "Base Imponible del 349 Servicios",
-      "description": "Base Imponible del tercero declarada en el modelo 349 para Servicios"
+      "label": "349 taxable base · Services",
+      "description": "Taxable base of services declared in Model 349"
     },
     "Estado": {
       "label": "SII Registration Status",
@@ -12241,8 +12241,8 @@
       "description": "La contraseña del certificado."
     },
     "EM_AEAT349_C_Year_ID": {
-      "label": "Año",
-      "description": "Seleccionar el año en caso de que la factura rectificada haya sido declarada anteriormente en el modelo 349"
+      "label": "Year",
+      "description": "Select the year if the rectified invoice was previously declared in Model 349"
     },
     "EM_Etvfac_Id_Type": {
       "label": "Tipo ID Entidad Productora",
@@ -12253,8 +12253,8 @@
       "description": "SII error code"
     },
     "EM_AEAT349_IsCorrective": {
-      "label": "Correctiva del 349",
-      "description": "Indica si será necesario realizar una corrección en el modelo oficial 349"
+      "label": "349 corrective",
+      "description": "Indicates whether a correction in the official Model 349 will be required"
     },
     "EM_Aeatsii_Ejercicio": {
       "label": "SII exercise",
@@ -12517,8 +12517,8 @@
       "description": "A task or process completed directly by the user, not automatically by the application."
     },
     "EM_AEAT349_Period": {
-      "label": "Periodo",
-      "description": "Seleccionar el periodo en caso de que la factura rectificada haya sido declarada anteriormente en el modelo 349"
+      "label": "Period",
+      "description": "Select the period if the rectified invoice was previously declared in Model 349"
     },
     "EM_Aeatsii_Fecha_Operacion": {
       "label": "Operation date",
@@ -13469,8 +13469,8 @@
       "description": "Estado de registro en VERI*FACTU."
     },
     "EM_AEAT349_BP_BaseAmount": {
-      "label": "Base Imponible del 349 Productos",
-      "description": "Base Imponible del tercero declarada en el modelo 349 para Productos"
+      "label": "349 taxable base · Products",
+      "description": "Taxable base of products declared in Model 349"
     },
     "Last_Query_Period": {
       "label": "Last query period",
@@ -16654,7 +16654,25 @@
     "accountingStatus": "Accounting status",
     "postedStatus": "Posted",
     "notPostedStatus": "Not posted",
+    "rectificativeLabel": "Rectificative",
+    "rectificationsTab": "Rectifications",
+    "rectifiedInvoice": "Rectified Invoice",
+    "correctiva349": "Correctiva del 349",
+    "year349": "Year",
+    "period349": "Period",
+    "base349Products": "Base 349 Products",
+    "base349Services": "Base 349 Services",
     "salesOrderRef": "Sales Order #",
+    "ripTitle": "RECTIFIED INVOICES",
+    "ripAdd": "Add rectified invoice",
+    "ripNoRecords": "No rectified invoices registered for this document.",
+    "ripOriginalInvoice": "Original invoice",
+    "ripDate": "Date",
+    "ripDocType": "Doc type & number",
+    "ripTotal": "Total",
+    "ripDeleteConfirm": "Delete?",
+    "ripCorrectiva349Desc": "Check this when the credit note corrects a period already declared in a previous Modelo 349 (generates Tipo Registro 2).",
+    "ripNewRow": "New rectified invoice",
     "deleteRecord": "Delete record",
     "deleteConfirmTitle": "Delete record",
     "deleteConfirmMessage": "Are you sure you want to delete this record? This action cannot be undone.",
@@ -20624,7 +20642,7 @@
     "fm.m349.kpi.total_ops": "Total transactions",
     "fm.m349.kpi.total_ops_desc": "Total base",
     "fm.m349.kpi.rectif": "Rectifications",
-    "fm.m349.kpi.rectif_desc": "Previous",
+    "fm.m349.kpi.rectif_desc": "Previous periods",
     "fm.m349.kpi.vies_pending": "VIES pending",
     "fm.m349.kpi.vies_pending_desc": "Not validated",
     "fm.m349.col.nif_iva": "VAT ID",
@@ -20941,7 +20959,41 @@
     "glc.acct.incomeSummary": "Income summary account",
     "glc.acct.cfsOrderAccount": "Cash flow statement order account",
     "glc.toggle.reversePermanentBalances": "Reverse permanent balances",
-    "glc.validation.required": "This field is required."
+    "glc.validation.required": "This field is required.",
+    "rectPickerTitle": "Select invoice to rectify",
+    "rectSearchInvoice": "Search invoice...",
+    "rectNoInvoices": "No invoices available",
+    "rectMoreInvoicesHint": "more invoices — filter by document number or contact",
+    "rectEmptyTitle": "No rectifications yet",
+    "rectAddInvoice": "Add rectification",
+    "rectCorrective349Badge": "Corrective 349",
+    "rectTooltip349": "Check it when the credit note corrects a period already declared in a previous Model 349. Generates record type 2.",
+    "rectColDate": "Date",
+    "rectColDocument": "Document",
+    "rectColModel349": "Model 349",
+    "rectColTotal": "Total",
+    "rectDocSales": "Sales invoice",
+    "rectDocPurchase": "Purchase invoice",
+    "rectBaseProducts": "349 Base · Products",
+    "rectBaseServices": "349 Base · Services",
+    "rectSaveError": "Could not save the rectification",
+    "rectPeriodAnnual": "Annual",
+    "rectPeriodQ1": "First Quarter",
+    "rectPeriodQ2": "Second Quarter",
+    "rectPeriodQ3": "Third Quarter",
+    "rectPeriodQ4": "Fourth Quarter",
+    "rectMoreInfo": "More information",
+    "rectSearchAria": "Search invoice",
+    "rectExpand": "Expand",
+    "rectCollapse": "Collapse",
+    "rectColOriginalInvoice": "Original invoice",
+    "fm.m349.rectif.empty": "No corrective rectifications in this period",
+    "fm.m349.rectif.col.invoice": "Rectificative invoice",
+    "fm.m349.rectif.col.original": "Original invoice",
+    "fm.m349.rectif.col.declared_period": "Declared period",
+    "fm.m349.rectif.col.base_products": "Base · Products",
+    "fm.m349.rectif.col.base_services": "Base · Services",
+    "fm.col.date": "Date"
   },
   "menus": {
     "Currency": {
