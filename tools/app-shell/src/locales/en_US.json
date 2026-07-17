@@ -16629,6 +16629,8 @@
     "amortizationDimensionsEmpty": "Add dimensions",
     "amortizationDimensionsFilled": "{n} of 8 filled",
     "amortizationDimensionsSave": "Save dimensions",
+    "dimensionsPanelTitle": "Accounting dimensions",
+    "dimensionsPanelEmpty": "Add dimensions",
     "editLine": "Edit line",
     "noLines": "No lines",
     "backendError.amortizationCurrencyRequired": "Currency field cannot be empty",

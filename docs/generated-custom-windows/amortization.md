@@ -305,3 +305,18 @@ the project dimension (no hidden: true on any candidate entry)", updated for the
 `AmortizationLinesTable.vitest.jsx` gained coverage for the config-driven filtering
 (a candidate dropping out of both `DimSummary` and the expand panel when the evaluator
 returns `visibility[key] === false`). All suites pass.
+
+### DimBadge/DimSummary/DimensionGrid extracted to a shared component (ETP-4529 follow-up)
+
+`DimBadge`, `DimSummary`, and `DimensionGrid` — the "Dimensiones contables" badge/summary/
+expand-grid pattern this window originated — were extracted into
+`tools/app-shell/src/components/contract-ui/DimensionsPanel.jsx`, generalized (the
+`amortizationDimensionsEmpty`/`amortizationDimensionsTitle` i18n keys became an optional
+`emptyLabel` prop plus a generic `dimensionsPanelEmpty` default; `entityName` became a prop
+defaulting to `'lines'`), so `InlineLinesPanel`'s new `dimensionsPanel` column type (see
+`docs/ui-customization.md` §14b) and any future custom lines table can reuse the exact same
+UX. This window was refactored to import from the shared file instead of defining them
+locally — a pure extraction, verified against the full existing `AmortizationLinesTable.test.js`
+and `AmortizationLinesTable.vitest.jsx` suites (all 31 + 34 assertions pass unmodified), and
+this window's own visible behavior/labels are unchanged (it still passes its original i18n
+keys through as explicit props).

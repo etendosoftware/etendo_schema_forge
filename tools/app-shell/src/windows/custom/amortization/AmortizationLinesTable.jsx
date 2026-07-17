@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { ChevronDown, Plus, Loader2, Pencil, Trash2 } from 'lucide-react';
+import { ChevronDown, Loader2, Pencil, Trash2 } from 'lucide-react';
 import { useUI, useLabel } from '@/i18n';
 import { useCurrency } from '@/hooks/useCurrency';
 import { useAccountingDimensionFields } from '@/hooks/useAccountingDimensionFields';
@@ -9,6 +9,19 @@ import SelectorInput from '@/components/contract-ui/SelectorInput';
 import { AddLineButton } from '@/components/ui/add-line-button';
 import { Checkbox } from '@/components/ui/checkbox';
 import LinesSelectionBar from '@/components/contract-ui/LinesSelectionBar';
+// ETP-4529 — DimBadge, DimSummary, and DimensionGrid (the "Dimensiones contables"
+// badge/summary/expand-grid pattern this file originated) were extracted to the
+// shared tools/app-shell/src/components/contract-ui/DimensionsPanel.jsx, so
+// InlineLinesPanel's new `dimensionsPanel` column type (and any future custom lines
+// table) can reuse the exact same UX instead of re-implementing it. This is a pure
+// extraction — no behavior change here. DimSummary caps visible badges via its
+// internal MAX_BADGES=2 constant and falls back to the generic `dimensionsPanelEmpty`
+// i18n key unless an explicit `emptyLabel` prop is passed — kept as
+// 'amortizationDimensionsEmpty' below for continuity with this window's existing
+// translations. DimensionGrid still renders each SelectorInput with resolvedLabel=""
+// so the placeholder text stays controlled locally instead of by the selector's own
+// default.
+import { DimSummary, DimensionGrid } from '@/components/contract-ui/DimensionsPanel';
 
 // ── field definitions ────────────────────────────────────────────────
 const CORE_FIELDS = [
@@ -31,116 +44,6 @@ const DIMENSION_FIELD_CANDIDATES = [
   { key: 'costcenter', column: 'C_Costcenter_ID', type: 'selector', reference: 'Costcenter', inputMode: 'selector', readOnlyLogic: (r) => r['posted'] === 'Y' },
   { key: 'eTADASBpartner', column: 'EM_Etadas_C_Bpartner_ID', type: 'selector', reference: 'BPartner', inputMode: 'selector', readOnlyLogic: (r) => r['posted'] === 'Y' },
 ];
-
-// ── DimensionGrid ────────────────────────────────────────────────────
-// Renders the resolved dimension fields directly via SelectorInput so we can control
-// the placeholder (empty resolvedLabel → "Seleccionar..." / "Select...").
-function DimensionGrid({ fields, data, onChange, onFieldSave, apiBaseUrl, token, catalogs, readOnly, isCompleted, labelOverrides }) {
-  const t = useLabel(labelOverrides);
-  return (
-    <div
-      className={`[&_button[role=combobox]]:!bg-white [&_button[role=combobox]:hover]:!bg-[#F5F7F9] [&_input]:!bg-white${isCompleted ? '' : ' [&_input:disabled]:!opacity-100'}`}
-      style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16 }}
-    >
-      {fields.filter(f => !f.hidden).map(f => {
-        const label = t(f.column) ?? f.label ?? f.key;
-        const value = data?.[f.key] ?? '';
-        const displayValue = data?.[`${f.key}$_identifier`] ?? '';
-        const selectorUrl = apiBaseUrl ? `${apiBaseUrl}/lines/selectors/${f.column}` : null;
-        return (
-          <div key={f.key} className="space-y-1.5">
-            <label className="text-sm text-foreground font-medium block">{label}</label>
-            {readOnly ? (
-              <input
-                className="flex h-10 w-full rounded-lg border border-[#D1D4DB] bg-white p-2 text-sm disabled:cursor-not-allowed disabled:opacity-50"
-                value={displayValue || value || ''}
-                disabled
-                readOnly
-              />
-            ) : (
-              <SelectorInput
-                entityName="lines"
-                field={f}
-                value={value}
-                displayValue={displayValue}
-                onChange={(val, lbl) => {
-                  onChange(f.key, val);
-                  onChange(`${f.key}$_identifier`, lbl ?? '');
-                  onFieldSave?.(f.key, val);
-                }}
-                catalogs={catalogs}
-                resolvedLabel=""
-                selectorUrl={selectorUrl}
-                token={token}
-                data-testid="SelectorInput__fecdcf" />
-            )}
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
-function getIdentifier(line, key) {
-  return line[`${key}$_identifier`] ?? (typeof line[key] === 'string' ? line[key] : null) ?? null;
-}
-
-// Badge with "Label: Value" format, matching the UX spec
-// (bg #F5F7F9, radius 8px, padding 4px 8px, label #3F3F50, Inter 14px/20px).
-function DimBadge({ label, value }) {
-  return (
-    <span className="inline-flex items-center px-2 py-1 rounded-lg bg-[#F5F7F9] text-sm leading-5 whitespace-nowrap max-w-full">
-      <span className="text-[#3F3F50]">{label}:</span>
-      <span className="ml-1 font-medium text-[#121217] truncate">{value}</span>
-    </span>
-  );
-}
-
-function DimSummary({ line, onClick, processed, labelOverrides, fields }) {
-  const ui = useUI();
-  const t = useLabel(labelOverrides);
-  const org = line['organization$_identifier'];
-  const filled = fields
-    .map(f => ({ column: f.column, value: getIdentifier(line, f.key) }))
-    .filter(d => d.value);
-
-  // Organization always leads the badge list (per design), followed by filled dimensions.
-  const badges = [];
-  if (org) badges.push({ label: ui('organization'), value: org });
-  filled.forEach(d => badges.push({ label: t(d.column), value: d.value }));
-
-  if (badges.length === 0) {
-    // Processed + no dimensions: the "+ Add dimensions" trigger would only reveal
-    // disabled fields, so hide it entirely. Editable docs still show the affordance.
-    if (processed) return null;
-    return (
-      <button
-        onClick={onClick}
-        className="inline-flex items-center gap-1 h-7 px-2.5 rounded-lg border border-dashed border-[#D1D4DB] text-xs font-medium text-muted-foreground hover:text-foreground hover:border-[#828FA3] transition-colors"
-      >
-        <Plus className="h-3 w-3" data-testid="Plus__fecdcf" />
-        {ui('amortizationDimensionsEmpty')}
-      </button>
-    );
-  }
-
-  const MAX_BADGES = 2;
-  const shown = badges.slice(0, MAX_BADGES);
-  const extra = badges.length - shown.length;
-
-  return (
-    <button onClick={onClick} className="inline-flex items-center gap-1.5 bg-transparent border-0 p-0 cursor-pointer max-w-full">
-      {shown.map(b => <DimBadge
-        key={b.label}
-        label={b.label}
-        value={b.value}
-        data-testid="DimBadge__fecdcf" />)}
-      {extra > 0 && (
-        <span className="px-2 py-1 rounded-lg bg-[#F5F7F9] text-sm leading-5 font-medium text-[#3F3F50]">+{extra}</span>
-      )}
-    </button>
-  );
-}
 
 // ── main component ──────────────────────────────────────────────────
 export default function AmortizationLinesTable({
@@ -546,6 +449,7 @@ export default function AmortizationLinesTable({
                           processed={processed}
                           labelOverrides={api?.labelOverrides}
                           fields={dimensionFields}
+                          emptyLabel={ui('amortizationDimensionsEmpty')}
                           data-testid="DimSummary__fecdcf" />
                       </td>
 
