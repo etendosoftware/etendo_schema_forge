@@ -201,7 +201,7 @@ export default function ImportReturnLinesModal({ targetId, bpId, base, headers, 
 
   return createPortal(
     <div onClick={onClose} className="fixed inset-0 z-50 flex items-center justify-center bg-foreground/30">
-      <div onClick={(e) => e.stopPropagation()} style={{ width: 600, maxHeight: '80vh', display: 'flex', flexDirection: 'column', overflow: 'hidden', borderRadius: 12, backgroundColor: '#fff', boxShadow: '0 8px 30px rgba(0,0,0,0.12)', border: '0.5px solid #E5E7EB' }}>
+      <div onClick={(e) => e.stopPropagation()} style={{ width: 600, maxHeight: '80vh', display: 'flex', flexDirection: 'column', overflow: 'hidden', borderRadius: 12, backgroundColor: 'hsl(var(--card))', boxShadow: '0 8px 30px hsl(var(--foreground) / 0.12)', border: '0.5px solid hsl(var(--border-subtle))' }}>
         <ImportModalHeader
           title={ui(titleKey)}
           bpName={bpName}
@@ -214,16 +214,16 @@ export default function ImportReturnLinesModal({ targetId, bpId, base, headers, 
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder={ui(searchPlaceholderKey)}
-            style={{ width: '100%', fontSize: 13, padding: '7px 10px', border: '0.5px solid #E5E7EB', borderRadius: 6, outline: 'none', color: '#111827' }}
+            style={{ width: '100%', fontSize: 13, padding: '7px 10px', border: '0.5px solid hsl(var(--border-subtle))', borderRadius: 6, outline: 'none', color: 'hsl(var(--foreground))' }}
           />
         </div>
 
         <div style={{ flex: 1, overflowY: 'auto' }}>
           {loading && (
-            <p style={{ fontSize: 13, color: '#9ca3af', padding: '24px 0', textAlign: 'center' }}>{ui('loading')}</p>
+            <p style={{ fontSize: 13, color: 'hsl(var(--text-disabled))', padding: '24px 0', textAlign: 'center' }}>{ui('loading')}</p>
           )}
           {!loading && filtered.length === 0 && (
-            <p style={{ fontSize: 13, color: '#9ca3af', padding: '24px 0', textAlign: 'center' }}>
+            <p style={{ fontSize: 13, color: 'hsl(var(--text-disabled))', padding: '24px 0', textAlign: 'center' }}>
               {docs.length === 0 ? ui(noDocsKey) : ui(noDocsMatchSearchKey)}
             </p>
           )}
@@ -235,46 +235,46 @@ export default function ImportReturnLinesModal({ targetId, bpId, base, headers, 
               const hasAnySelected = checkState.checked || checkState.indeterminate;
 
               return (
-                <div key={doc.id} style={{ borderLeft: (isExpanded || hasAnySelected) ? '3px solid var(--color-border-info, #3b82f6)' : '3px solid transparent' }}>
+                <div key={doc.id} style={{ borderLeft: (isExpanded || hasAnySelected) ? '3px solid var(--status-info-border)' : '3px solid transparent' }}>
                   <div
-                    style={{ display: 'flex', alignItems: 'center', padding: '10px 12px', borderBottom: '0.5px solid #F3F4F6', cursor: 'pointer' }}
-                    onMouseEnter={(e) => { e.currentTarget.style.background = '#F9FAFB'; }}
+                    style={{ display: 'flex', alignItems: 'center', padding: '10px 12px', borderBottom: '0.5px solid hsl(var(--border-subtle))', cursor: 'pointer' }}
+                    onMouseEnter={(e) => { e.currentTarget.style.background = 'hsl(var(--muted))'; }}
                     onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
                     onClick={() => toggleExpand(doc.id)}
                   >
-                    <span style={{ fontSize: 11, color: '#9ca3af', width: 16, textAlign: 'center', transition: 'transform 0.15s', transform: isExpanded ? 'rotate(90deg)' : 'rotate(0deg)', flexShrink: 0 }}>▶</span>
+                    <span style={{ fontSize: 11, color: 'hsl(var(--text-disabled))', width: 16, textAlign: 'center', transition: 'transform 0.15s', transform: isExpanded ? 'rotate(90deg)' : 'rotate(0deg)', flexShrink: 0 }}>▶</span>
                     <input
                       type="checkbox"
                       checked={checkState.checked}
                       ref={(el) => { if (el) el.indeterminate = checkState.indeterminate; }}
                       onChange={(e) => { e.stopPropagation(); toggleDoc(doc.id); }}
                       onClick={(e) => e.stopPropagation()}
-                      style={{ accentColor: '#3b82f6', cursor: 'pointer', margin: '0 8px', flexShrink: 0 }}
+                      style={{ accentColor: 'var(--status-info-fg)', cursor: 'pointer', margin: '0 8px', flexShrink: 0 }}
                     />
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
-                        <span style={{ fontSize: 13, fontWeight: 600, color: '#111827' }}>{doc.documentNo || doc.id}</span>
-                        <span style={{ fontSize: 12, color: '#6B7280' }}>{fmtDate(doc[dateField])}</span>
+                        <span style={{ fontSize: 13, fontWeight: 600, color: 'hsl(var(--foreground))' }}>{doc.documentNo || doc.id}</span>
+                        <span style={{ fontSize: 12, color: 'hsl(var(--muted-foreground))' }}>{fmtDate(doc[dateField])}</span>
                       </div>
                     </div>
                     {showAmount && doc.grandTotalAmount != null && (
-                      <span style={{ fontSize: 12, color: '#9ca3af', fontVariantNumeric: 'tabular-nums', flexShrink: 0, marginLeft: 8 }}>
+                      <span style={{ fontSize: 12, color: 'hsl(var(--text-disabled))', fontVariantNumeric: 'tabular-nums', flexShrink: 0, marginLeft: 8 }}>
                         {fmtQty(doc.grandTotalAmount)}
                       </span>
                     )}
                   </div>
 
                   {isExpanded && (
-                    <div style={{ background: 'var(--color-background-secondary, #F9FAFB)' }}>
+                    <div style={{ background: 'var(--color-background-secondary, hsl(var(--muted)))' }}>
                       {isLoadingLines && (
-                        <div style={{ padding: '8px 12px 8px 48px', fontSize: 12, color: '#9ca3af' }}>{ui('loadingLines')}</div>
+                        <div style={{ padding: '8px 12px 8px 48px', fontSize: 12, color: 'hsl(var(--text-disabled))' }}>{ui('loadingLines')}</div>
                       )}
                       {!isLoadingLines && lines.length === 0 && (
-                        <div style={{ padding: '8px 12px 8px 48px', fontSize: 12, color: '#9ca3af' }}>{ui('noLinesFound')}</div>
+                        <div style={{ padding: '8px 12px 8px 48px', fontSize: 12, color: 'hsl(var(--text-disabled))' }}>{ui('noLinesFound')}</div>
                       )}
                       {!isLoadingLines && lines.length > 0 && (
                         <>
-                          <div style={{ display: 'flex', padding: '4px 12px 4px 48px', fontSize: 11, fontWeight: 600, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.5px', borderBottom: '0.5px solid #E5E7EB' }}>
+                          <div style={{ display: 'flex', padding: '4px 12px 4px 48px', fontSize: 11, fontWeight: 600, color: 'hsl(var(--text-disabled))', textTransform: 'uppercase', letterSpacing: '0.5px', borderBottom: '0.5px solid hsl(var(--border-subtle))' }}>
                             <span style={{ flex: 1 }}>{ui('product')}</span>
                             <span style={{ width: 90, textAlign: 'right' }}>{ui('qty')}</span>
                             <span style={{ width: 90, textAlign: 'right' }}>{ui('returnQty')}</span>
@@ -288,19 +288,19 @@ export default function ImportReturnLinesModal({ targetId, bpId, base, headers, 
                               <div
                                 key={line.id}
                                 onClick={() => toggleLine(line.id)}
-                                style={{ display: 'flex', alignItems: 'center', padding: '6px 12px 6px 48px', borderBottom: '0.5px solid #F3F4F6', cursor: 'pointer', background: lineSelected ? '#eff6ff' : 'transparent' }}
+                                style={{ display: 'flex', alignItems: 'center', padding: '6px 12px 6px 48px', borderBottom: '0.5px solid hsl(var(--border-subtle))', cursor: 'pointer', background: lineSelected ? 'var(--status-info-bg)' : 'transparent' }}
                               >
                                 <input
                                   type="checkbox"
                                   checked={lineSelected}
                                   onChange={() => toggleLine(line.id)}
                                   onClick={(e) => e.stopPropagation()}
-                                  style={{ accentColor: '#3b82f6', cursor: 'pointer', marginRight: 8, flexShrink: 0 }}
+                                  style={{ accentColor: 'var(--status-info-fg)', cursor: 'pointer', marginRight: 8, flexShrink: 0 }}
                                 />
-                                <span style={{ fontSize: 13, color: lineSelected ? '#2563eb' : '#111827', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontWeight: lineSelected ? 500 : 400 }}>
+                                <span style={{ fontSize: 13, color: lineSelected ? 'var(--status-info-fg)' : 'hsl(var(--foreground))', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontWeight: lineSelected ? 500 : 400 }}>
                                   {productName}
                                 </span>
-                                <span style={{ width: 90, fontSize: 12, color: '#6B7280', fontVariantNumeric: 'tabular-nums', textAlign: 'right', flexShrink: 0 }}>
+                                <span style={{ width: 90, fontSize: 12, color: 'hsl(var(--muted-foreground))', fontVariantNumeric: 'tabular-nums', textAlign: 'right', flexShrink: 0 }}>
                                   {fmtQty(maxQty)}
                                 </span>
                                 <span style={{ width: 90, flexShrink: 0, textAlign: 'right' }}>
@@ -315,7 +315,7 @@ export default function ImportReturnLinesModal({ targetId, bpId, base, headers, 
                                       const value = Math.max(qtyStep, Math.min(maxQty, Number(e.target.value) || qtyStep));
                                       setLineQuantities((prev) => ({ ...prev, [line.id]: value }));
                                     }}
-                                    style={{ width: 72, fontSize: 12, padding: '3px 4px', borderRadius: 4, textAlign: 'center', fontVariantNumeric: 'tabular-nums', outline: 'none', border: '0.5px solid var(--color-border-secondary, #d1d5db)', background: '#fff' }}
+                                    style={{ width: 72, fontSize: 12, padding: '3px 4px', borderRadius: 4, textAlign: 'center', fontVariantNumeric: 'tabular-nums', outline: 'none', border: '0.5px solid hsl(var(--border-control))', background: 'hsl(var(--card))' }}
                                   />
                                 </span>
                               </div>
