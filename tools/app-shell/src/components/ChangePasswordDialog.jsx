@@ -12,7 +12,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog.jsx';
-import { changePassword } from '../pages/onboarding/onboardingApi.js';
+import { changePassword } from '@etendosoftware/etendo-go-core/onboarding/api';
 import { detectBaseUrl } from './copilot/copilotApi.js';
 
 const EMPTY_FORM = { currentPassword: '', newPassword: '', confirmPassword: '' };
