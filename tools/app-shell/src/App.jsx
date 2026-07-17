@@ -3,6 +3,8 @@ import { createPortal } from 'react-dom';
 import { Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { AppShellRuntime } from '@etendosoftware/app-shell-core/runtime';
+import { ObservabilityProvider } from '@etendosoftware/app-shell-core/observability';
+import { trackMcpConnectTabSelected } from '@/lib/mcpConnectTelemetry.js';
 import AppLayout from './layout/AppLayout.jsx';
 import { buildMenuGroups, buildWindowMap } from './windows/registry.js';
 import { buildRuntimeRoutes } from './runtime-routes.jsx';
@@ -62,7 +64,6 @@ async function loadAllMockData() {
     import('@generated/user/generated/web/user/mockData.js'),
     import('@generated/purchase-order/generated/web/purchase-order/mockData.js'),
     import('@generated/goods-receipt/generated/web/goods-receipt/mockData.js'),
-    import('@generated/return-to-vendor/generated/web/return-to-vendor/mockData.js'),
     import('@generated/return-to-vendor-shipment/generated/web/return-to-vendor-shipment/mockData.js'),
     import('@generated/physical-inventory/generated/web/physical-inventory/mockData.js'),
     import('@generated/internal-consumption/generated/web/internal-consumption/mockData.js'),
@@ -70,7 +71,6 @@ async function loadAllMockData() {
     import('@generated/warehouse-storage-bins/generated/web/warehouse-storage-bins/mockData.js'),
     import('@generated/sales-quotation/custom/mockData.js'),
     import('@generated/goods-shipment/custom/mockData.js'),
-    import('@generated/return-from-customer/generated/web/return-from-customer/mockData.js'),
     import('@generated/return-material-receipt/generated/web/return-material-receipt/mockData.js'),
     import('@generated/sales-invoice/custom/mockData.js'),
     import('@generated/purchase-invoice/generated/web/purchase-invoice/mockData.js'),
@@ -199,21 +199,25 @@ export default function App() {
   const routes = buildRuntimeRoutes({ windowMap, apiBaseUrl: API_BASE_URL });
 
   return (
-    <AppShellRuntime
-      basename={routerBase}
-      menuGroups={menuGroups}
-      routes={routes}
-      layout={AppLayout}
-      auth={{ loginPath: '/login', unauthenticatedFallback: <UnauthenticatedRedirect data-testid="UnauthenticatedRedirect__ecaf3f" /> }}
-      locale={locale}
-      setLocale={setLocale}
-      dictionaries={dictionaries}
-      notFoundElement={<div className="p-8 text-muted-foreground">Loading...</div>}
-      data-testid="AppShellRuntime__ecaf3f">
-      <ObservabilityRouteTracker data-testid="ObservabilityRouteTracker__ecaf3f" />
-      <ServiceWorkerManager data-testid="ServiceWorkerManager__ecaf3f" />
-      <AppStoreKeyWatcher data-testid="AppStoreKeyWatcher__ecaf3f" />
-      <SurveyManager data-testid="SurveyManager__ecaf3f" />
-    </AppShellRuntime>
+    <ObservabilityProvider
+      value={{ trackMcpConnectTabSelected }}
+      data-testid="ObservabilityProvider__ecaf3f">
+      <AppShellRuntime
+        basename={routerBase}
+        menuGroups={menuGroups}
+        routes={routes}
+        layout={AppLayout}
+        auth={{ loginPath: '/login', unauthenticatedFallback: <UnauthenticatedRedirect data-testid="UnauthenticatedRedirect__ecaf3f" /> }}
+        locale={locale}
+        setLocale={setLocale}
+        dictionaries={dictionaries}
+        notFoundElement={<div className="p-8 text-muted-foreground">Loading...</div>}
+        data-testid="AppShellRuntime__ecaf3f">
+        <ObservabilityRouteTracker data-testid="ObservabilityRouteTracker__ecaf3f" />
+        <ServiceWorkerManager data-testid="ServiceWorkerManager__ecaf3f" />
+        <AppStoreKeyWatcher data-testid="AppStoreKeyWatcher__ecaf3f" />
+        <SurveyManager data-testid="SurveyManager__ecaf3f" />
+      </AppShellRuntime>
+    </ObservabilityProvider>
   );
 }

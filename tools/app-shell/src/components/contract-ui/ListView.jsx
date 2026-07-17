@@ -5,7 +5,7 @@ import { Skeleton } from '@/components/ui/skeleton.jsx';
 import { useEntity } from '@/hooks/useEntity';
 import { useRowDelete } from '@/hooks/useRowDelete';
 import { useMenuLabel, useLabel, useUI } from '@/i18n';
-import { ArrowUpDown, ChevronDown, Plus, Link2, Printer, LayoutGrid, RefreshCw, Eye, Copy } from 'lucide-react';
+import { ArrowUpDown, ChevronDown, Plus, Link2, Printer, LayoutGrid, RefreshCw, Eye, Copy, Upload } from 'lucide-react';
 import { useRegisterWindowContext } from '@/components/CurrentWindowContext';
 import { useSetPageMeta } from '@/components/layout/PageMetaContext';
 import { useFavorites } from '@/components/layout/FavoritesContext';
@@ -13,6 +13,10 @@ import ReportDrawer from './ReportDrawer.jsx';
 import DocumentPrintDrawer, { printDocuments } from './DocumentPrintDrawer.jsx';
 import SendDocumentModal from './SendDocumentModal.jsx';
 import { ListFilterBar } from './ListFilterBar.jsx';
+import { ImportDialog } from '@etendosoftware/app-shell-core/components/import/ImportDialog.jsx';
+import { simSearch } from '@etendosoftware/app-shell-core/lib/simSearch.js';
+import { ScrollPane } from '@etendosoftware/app-shell-core/components/ui/scroll-pane.jsx';
+import { useBatch } from '../copilot/ocr/ingest/useBatch.js';
 import { buildAdvancedFilterCriteria } from '@/lib/gridQuery';
 import { useWindowFilterPresets } from '@/hooks/useWindowFilterPresets';
 import { trackSearchPerformed, trackWindowOpened } from '@/lib/productUsageTelemetry.js';
@@ -233,6 +237,7 @@ export function ListView({
   onExternalPreviewClose = null,
   hiddenColumns = [],
   listSortBy = null,
+  import: importConfig = null,
 }) {
   // Subset filters — radio-style, always one active, applied first.
   const [activeSubsetIndex, setActiveSubsetIndex] = useState(() => {
@@ -265,6 +270,9 @@ export function ListView({
   const [advancedFilter, setAdvancedFilter] = useState(initialAdvancedFilter);
 
   const [tableColumns, setTableColumns] = useState(initialColumns ?? []);
+
+  const [showImportDialog, setShowImportDialog] = useState(false);
+  const { runBatch } = useBatch({ apiBaseUrl, token });
 
   const advancedFilterPart = useMemo(() => {
     const criteria = buildAdvancedFilterCriteria(advancedFilter, tableColumns);
@@ -558,7 +566,6 @@ export function ListView({
   };
 
   const sortBtnRef = useRef(null);
-  const scrollRef = useRef(null);
 
   const isDefaultSort = isDefaultSortActive(hook, initialSortColumn, initialSortDirection);
 
@@ -604,12 +611,8 @@ export function ListView({
     setShowSortPopover(false);
   }, [hook.setSortColumn, hook.setSortDirection]);
 
-  const handleScroll = useCallback(() => {
-    const el = scrollRef.current;
-    if (!el) return;
-    if (el.scrollHeight - el.scrollTop - el.clientHeight < 200 && hook.hasMore && !hook.loadingMore) {
-      hook.loadMore();
-    }
+  const handleReachBottom = useCallback(() => {
+    if (hook.hasMore && !hook.loadingMore) hook.loadMore();
   }, [hook.hasMore, hook.loadingMore, hook.loadMore]);
 
   return (
@@ -794,6 +797,19 @@ export function ListView({
                   onRefresh={() => hook.refresh()}
                   label={ui('refresh')}
                   data-testid="RefreshButton__620cbc" />
+                {importConfig?.enabled && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="gap-1.5 text-muted-foreground font-normal h-9 px-3 rounded-lg bg-white"
+                    onClick={() => setShowImportDialog(true)}
+                    aria-label={ui('import')}
+                    title={ui('import')}
+                    data-testid="ListView__importButton"
+                  >
+                    <Upload className="h-3.5 w-3.5" data-testid="Upload__ListViewImport" />
+                  </Button>
+                )}
                 {!(listViewOptions?.hidePrint ?? hidePrint) && (
                   <Button
                     variant="outline"
@@ -870,7 +886,10 @@ export function ListView({
           )}
 
           {/* Table */}
-          <div ref={scrollRef} onScroll={handleScroll} className={`flex-1 overflow-auto ${tablePaddingX} ${tablePaddingBottom}`}>
+          <ScrollPane
+            onReachBottom={handleReachBottom}
+            className={`${tablePaddingX} ${tablePaddingBottom}`}
+            data-testid="ScrollPane__620cbc">
             {hook.loading && hook.items.length === 0 ? (
               <div className="space-y-3">
                 <Skeleton className="h-10 w-full" data-testid="Skeleton__620cbc" />
@@ -923,7 +942,7 @@ export function ListView({
                 )}
               </div>
             )}
-          </div>
+          </ScrollPane>
         </div>
         <ReportDrawer
           open={showReport}
@@ -963,6 +982,27 @@ export function ListView({
             sendPolicy={effectiveSendDocument}
             onClose={() => setEmailRow(null)}
             data-testid="SendDocumentModal__620cbc" />
+        )}
+        {importConfig?.enabled && showImportDialog && (
+          <ImportDialog
+            open={showImportDialog}
+            onOpenChange={setShowImportDialog}
+            config={importConfig}
+            token={token}
+            postBatch={runBatch}
+            simSearchFn={simSearch}
+            onImported={({ failedCount }) => {
+              // Refresh unconditionally — some rows may have committed even when others
+              // failed. Only auto-close when there is nothing left to review: closing
+              // unconditionally (the original wiring) unmounted the dialog the instant it
+              // rendered the Result step's review queue, hiding every failed row's error
+              // message the moment it became visible — confirmed via a real browser run
+              // where a batch that failed outright showed nothing on screen at all, even
+              // after ImportDialog/sendRow were fixed to surface the real message.
+              hook.refresh();
+              if (failedCount === 0) setShowImportDialog(false);
+            }}
+            data-testid="ImportDialog__620cbc" />
         )}
       </div>
       {activePreviewRow && renderPreview?.({

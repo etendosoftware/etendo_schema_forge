@@ -1,55 +1,9 @@
-import { useState, useRef, useEffect, useCallback } from 'react';
-import { Search, X, Loader2, Check } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Check } from 'lucide-react';
 import { formatCurrency } from '@/lib/formatCurrency.js';
 import { useCurrency } from '@/hooks/useCurrency.jsx';
-import { useUI } from '@/i18n';
-import {
-  getColor,
-  useProductSelectorFetch,
-} from './productSelectorDrawerShared.jsx';
-
-/**
- * Product avatar that fetches and displays the product image when available.
- * Falls back to an initials badge (using the shared COLORS palette) when there
- * is no image or while the image is loading.
- */
-function ProductAvatar({ name, id, imageUrl, imageId, neoBaseUrl, token }) {
-  const [src, setSrc] = useState(imageUrl || null);
-  const objectUrlRef = useRef(null);
-
-  useEffect(() => {
-    if (src || !imageId || !neoBaseUrl || !token) return;
-    let cancelled = false;
-    fetch(`${neoBaseUrl}/image/${imageId}`, {
-      headers: { Authorization: `Bearer ${token}` },
-    })
-      .then(r => r.ok ? r.blob() : null)
-      .then(blob => {
-        if (blob && !cancelled) {
-          const url = URL.createObjectURL(blob);
-          objectUrlRef.current = url;
-          setSrc(url);
-        }
-      })
-      .catch(() => {});
-    return () => { cancelled = true; };
-  }, [imageId, neoBaseUrl, token, src]);
-
-  // Revoke object URL only on unmount
-  useEffect(() => {
-    return () => { if (objectUrlRef.current) URL.revokeObjectURL(objectUrlRef.current); };
-  }, []);
-
-  if (src) {
-    return <img src={src} alt={name} className="w-11 h-11 rounded-lg object-cover shrink-0" />;
-  }
-  const initial = (name || '?')[0].toUpperCase();
-  return (
-    <div className={`w-11 h-11 rounded-lg flex items-center justify-center text-sm font-semibold shrink-0 ${getColor(id)}`}>
-      {initial}
-    </div>
-  );
-}
+import ProductDrawerShell from './ProductDrawerShell.jsx';
+import { ProductAvatar, resolveImageId } from './productSelectorDrawerShared.jsx';
 
 /**
  * Deduplicates selector results by searchKey — prefer warehouse-specific rows (with
@@ -75,97 +29,32 @@ function deduplicateBySearchKey(items) {
   return result;
 }
 
-export default function ProductSearchDrawer({
-  open,
-  onClose,
-  onSelect,
-  onDeselect,
-  selectorUrl,
-  token,
-  title = null,
-  imageEntityUrl,
-  keepOpenOnSelect = false,
-  selectedIds = [],
-  selectorContext = {},
-}) {
-  const [selectedId, setSelectedId] = useState(null);
-  const [activeIdx, setActiveIdx] = useState(-1);
-  const [imageMap, setImageMap] = useState({});
-  const ui = useUI();
+const FETCH_CONFIG = { transform: deduplicateBySearchKey, autoWaterfallMin: 15 };
+
+const getName = (item) => item.label || item.name || item._identifier || item.id;
+const getCode = (item) => item.searchKey || item.code || item.value || null;
+const getImage = (item) => item.imageUrl || item.imageurl || null;
+
+/**
+ * Default / price variant: a flat, deduplicated product list showing the product image, name,
+ * code and price. Supports optional multi-select (keepOpenOnSelect + selectedIds toggle) for the
+ * report-viewer picker; single-select for form fields. Keyboard navigation indexes the flat
+ * results list.
+ */
+function useDefaultVariant(ctx) {
   const sessionCurrency = useCurrency();
-  const currency = selectorContext?.priceCurrency ?? selectorContext?.currency ?? sessionCurrency;
-  const resolvedTitle = title ?? ui('product');
-
-  const neoBaseUrl = selectorUrl ? selectorUrl.replace(/\/[^/]+\/[^/]+\/selectors\/.*$/, '') : '';
-  const resolvedImageUrl = imageEntityUrl || (neoBaseUrl ? `${neoBaseUrl}/product/product` : null);
-
-  const fetchAllImages = useCallback(() => {
-    if (!resolvedImageUrl || !token) return;
-    fetch(`${resolvedImageUrl}?_startRow=0&_endRow=500`, {
-      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-    })
-      .then(r => r.ok ? r.json() : null)
-      .then(data => {
-        const rows = data?.response?.data || [];
-        const map = {};
-        for (const row of rows) {
-          if (row.image) {
-            if (row.searchKey) map[row.searchKey] = row.image;
-            if (row.id) map[row.id] = row.image;
-          }
-        }
-        setImageMap(map);
-      })
-      .catch(() => {});
-  }, [resolvedImageUrl, token]);
+  const [selectedId, setSelectedId] = useState(null);
 
   const {
-    query, setQuery,
-    results,
-    loading, loadingMore, totalCount,
-    inputRef, listRef, activeItemRef,
-    doFetch, handleScroll,
-  } = useProductSelectorFetch({
-    open,
-    selectorUrl,
-    token,
-    transform: deduplicateBySearchKey,
-    onFreshResults: () => setActiveIdx(-1),
-    selectorContext,
-    autoWaterfallMin: 15,
-    onOpen: () => {
-      setSelectedId(null);
-      setActiveIdx(-1);
-      setImageMap({});
-      fetchAllImages();
-    },
-    onClose,
-    activeIdx,
-  });
+    open, results, activeIdx, setActiveIdx, activeItemRef, inputRef,
+    select, onSelect, selectedIds, selectorContext, imageMap, neoBaseUrl, token,
+  } = ctx;
 
-  const handleSelect = (item) => {
-    const alreadySelected = selectedIds.includes(item.id);
-    if (alreadySelected) {
-      setSelectedId(null);
-      onSelect(item);
-      return;
-    }
-    setSelectedId(item.id);
-    setTimeout(() => {
-      onSelect(item);
-      if (!keepOpenOnSelect) onClose();
-    }, 120);
-  };
+  const currency = selectorContext?.priceCurrency ?? selectorContext?.currency ?? sessionCurrency;
 
-  const handleKeyDown = (e) => {
-    if (e.key === 'Escape') { e.preventDefault(); onClose(); }
-    if (e.key === 'ArrowDown') { e.preventDefault(); inputRef.current?.focus(); setActiveIdx(prev => Math.min(prev + 1, results.length - 1)); }
-    if (e.key === 'ArrowUp') { e.preventDefault(); inputRef.current?.focus(); setActiveIdx(prev => Math.max(prev - 1, 0)); }
-    if (e.key === 'Enter' && activeIdx >= 0 && results[activeIdx]) { e.preventDefault(); handleSelect(results[activeIdx]); }
-  };
+  // Reset the transient highlight when the drawer opens (the shell stays mounted).
+  useEffect(() => { if (open) setSelectedId(null); }, [open]);
 
-  const getName = (item) => item.label || item.name || item._identifier || item.id;
-  const getCode = (item) => item.searchKey || item.code || item.value || null;
   const getPrice = (item) => {
     const p = item.standardPrice || item.listPrice || item.price;
     if (p == null) return null;
@@ -173,130 +62,105 @@ export default function ProductSearchDrawer({
     if (isNaN(num)) return String(p);
     return currency ? formatCurrency(currency, num) : num.toFixed(2);
   };
-  const getImageId = (item) => item.image || null;
-  const getImage = (item) => item.imageUrl || item.imageurl || null;
 
-  if (!open) return null;
+  const handleSelect = (item) => {
+    if (selectedIds.includes(item.id)) {
+      setSelectedId(null);
+      onSelect(item);
+      return;
+    }
+    setSelectedId(item.id);
+    select(item);
+  };
 
-  return (
-    <>
-      <div className="fixed inset-0 z-50 bg-black/30" onClick={onClose} />
-      <div className="fixed inset-0 z-50 flex items-start justify-center pt-[12vh]" onClick={onClose}>
-        <div
-          data-testid="product-search-drawer"
-          className="w-full max-w-xl bg-background rounded-xl border border-border shadow-2xl flex flex-col overflow-hidden"
-          onClick={(e) => e.stopPropagation()}
-          onKeyDown={handleKeyDown}
-          style={{ maxHeight: '65vh' }}
-          role="dialog"
-          aria-modal="true"
-        >
-          {/* Search bar */}
-          <div className="flex items-center gap-3 px-4 py-3 border-b border-border">
-            <Search
-              className="h-4 w-4 text-muted-foreground shrink-0"
-              data-testid="Search__2e8824" />
-            <input
-              ref={inputRef}
-              data-testid="product-search-input"
-              type="text"
-              value={query}
-              onChange={(e) => { setQuery(e.target.value); doFetch(e.target.value, 0); }}
-              placeholder={`${ui('searchLabelPrefix')} ${resolvedTitle}...`}
-              className="flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground focus:outline-none"
-            />
-            {(loading || loadingMore) && <Loader2
-              className="h-4 w-4 text-muted-foreground animate-spin shrink-0"
-              data-testid="Loader2__2e8824" />}
-            <button onClick={onClose} className="h-6 w-6 flex items-center justify-center rounded text-muted-foreground hover:text-foreground shrink-0">
-              <X className="h-4 w-4" data-testid="X__2e8824" />
+  const onNavKeyDown = (e) => {
+    if (e.key === 'ArrowDown') { e.preventDefault(); inputRef.current?.focus(); setActiveIdx(prev => Math.min(prev + 1, results.length - 1)); }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); inputRef.current?.focus(); setActiveIdx(prev => Math.max(prev - 1, 0)); }
+    else if (e.key === 'Enter' && activeIdx >= 0 && results[activeIdx]) { e.preventDefault(); handleSelect(results[activeIdx]); }
+  };
+
+  const body = (
+    <ul className="py-1">
+      {results.map((item, i) => {
+        const name = getName(item);
+        const code = getCode(item);
+        const price = getPrice(item);
+        const isActive = i === activeIdx;
+        const isSelected = selectedId === item.id || selectedIds.includes(item.id);
+
+        return (
+          <li key={item.id} ref={isActive ? activeItemRef : null}>
+            <button
+              type="button"
+              data-testid={`product-search-option-${item.id}`}
+              onClick={() => handleSelect(item)}
+              className={`w-full text-left px-4 py-2 transition-colors cursor-pointer flex items-center gap-3 border-l-2 ${
+                isActive
+                  ? `border-primary ${isSelected ? 'bg-primary/20' : 'bg-primary/10'}`
+                  : `border-transparent ${isSelected ? 'bg-primary/10' : 'hover:bg-muted/50'}`
+              }`}
+            >
+              <ProductAvatar
+                name={name}
+                id={item.id}
+                imageUrl={getImage(item)}
+                imageId={resolveImageId(item, imageMap)}
+                neoBaseUrl={neoBaseUrl}
+                token={token}
+                data-testid="Avatar__pds" />
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-foreground truncate">{name}</p>
+                {code && <p className="text-xs text-muted-foreground">{code}</p>}
+              </div>
+              {price && (
+                <span className="text-sm tabular-nums text-muted-foreground shrink-0">{price}</span>
+              )}
+              {isSelected && (
+                <Check className="h-4 w-4 text-primary shrink-0" data-testid="Check__pds" />
+              )}
             </button>
-          </div>
+          </li>
+        );
+      })}
+    </ul>
+  );
 
-          {/* Results */}
-          <div className="flex-1 overflow-y-auto" ref={listRef} onScroll={handleScroll}>
-            {loading && results.length === 0 && (
-              <div className="flex items-center justify-center py-12">
-                <Loader2
-                  className="h-6 w-6 text-muted-foreground animate-spin"
-                  data-testid="Loader2__2e8824" />
-              </div>
-            )}
+  return {
+    body,
+    // Always reflect the deduplicated list the user sees, not the backend's
+    // raw row count (which can exceed the visible count for selectors that
+    // return multiple rows per product, e.g. one per price-list version).
+    footerCount: results.length,
+    hasResults: results.length > 0,
+    onNavKeyDown,
+  };
+}
 
-            {!loading && results.length === 0 && query.trim() && (
-              <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
-                <p className="text-sm">{ui('productSearchNoResults', { query })}</p>
-              </div>
-            )}
-
-            {results.length > 0 && (
-              <ul className="py-1">
-                {results.map((item, i) => {
-                  const name = getName(item);
-                  const code = getCode(item);
-                  const price = getPrice(item);
-                  const image = getImage(item);
-                  const isActive = i === activeIdx;
-                  const isSelected = selectedId === item.id || selectedIds.includes(item.id);
-
-                  return (
-                    <li key={item.id} ref={isActive ? activeItemRef : null}>
-                      <button
-                        type="button"
-                        data-testid={`product-search-option-${item.id}`}
-                        onClick={() => handleSelect(item)}
-                        className={`w-full text-left px-4 py-2 transition-colors cursor-pointer flex items-center gap-3 border-l-2 ${
-                          isActive
-                            ? `border-primary ${isSelected ? 'bg-primary/20' : 'bg-primary/10'}`
-                            : `border-transparent ${isSelected ? 'bg-primary/10' : 'hover:bg-muted/50'}`
-                        }`}
-                      >
-                        <ProductAvatar
-                          name={name}
-                          id={item.id}
-                          imageUrl={image}
-                          imageId={getImageId(item) || imageMap[item.searchKey] || imageMap[item.id]}
-                          neoBaseUrl={neoBaseUrl}
-                          token={token}
-                          data-testid="Avatar__2e8824" />
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium text-foreground truncate">{name}</p>
-                          {code && <p className="text-xs text-muted-foreground">{code}</p>}
-                        </div>
-                        {price && (
-                          <span className="text-sm tabular-nums text-muted-foreground shrink-0">{price}</span>
-                        )}
-                        {isSelected && (
-                          <Check className="h-4 w-4 text-primary shrink-0" data-testid="Check__2e8824" />
-                        )}
-                      </button>
-                    </li>
-                  );
-                })}
-                {loadingMore && (
-                  <li className="flex items-center justify-center py-3">
-                    <Loader2
-                      className="h-4 w-4 text-muted-foreground animate-spin"
-                      data-testid="Loader2__2e8824" />
-                  </li>
-                )}
-              </ul>
-            )}
-          </div>
-
-          {/* Footer */}
-          {results.length > 0 && (
-            <div className="px-4 py-1.5 border-t border-border flex items-center justify-between text-xs text-muted-foreground">
-              <span>{ui('productSearchCount', { count: totalCount || results.length })}</span>
-              <span className="flex items-center gap-2">
-                <kbd className="px-1 py-0.5 rounded bg-muted border border-border text-[10px]">↑↓</kbd> {ui('productSearchNavigate')}
-                <kbd className="px-1 py-0.5 rounded bg-muted border border-border text-[10px]">↵</kbd> {ui('productSearchSelect')}
-                <kbd className="px-1 py-0.5 rounded bg-muted border border-border text-[10px]">esc</kbd> {ui('productSearchClose')}
-              </span>
-            </div>
-          )}
-        </div>
-      </div>
-    </>
+export default function ProductSearchDrawer({
+  open,
+  onClose,
+  onSelect,
+  selectorUrl,
+  token,
+  title = null,
+  keepOpenOnSelect = false,
+  selectedIds = [],
+  selectorContext = {},
+}) {
+  return (
+    <ProductDrawerShell
+      open={open}
+      onClose={onClose}
+      onSelect={onSelect}
+      selectorUrl={selectorUrl}
+      token={token}
+      title={title}
+      selectorContext={selectorContext}
+      keepOpenOnSelect={keepOpenOnSelect}
+      selectedIds={selectedIds}
+      fetchConfig={FETCH_CONFIG}
+      useVariant={useDefaultVariant}
+      maxHeight="65vh"
+      data-testid="ProductDrawerShell__2e8824" />
   );
 }

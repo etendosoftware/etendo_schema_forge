@@ -8,7 +8,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(__dirname, '..', '..', '..');
 const ARTIFACTS = join(ROOT, 'artifacts');
 
-// All 15 windows that opted into inline-editable lines layout
+// All 13 windows that opted into inline-editable lines layout
 const INLINE_WINDOWS = [
   'contacts',
   'goods-movements',
@@ -18,9 +18,7 @@ const INLINE_WINDOWS = [
   'physical-inventory',
   'purchase-invoice',
   'purchase-order',
-  'return-from-customer',
   'return-material-receipt',
-  'return-to-vendor',
   'return-to-vendor-shipment',
   'sales-invoice',
   'sales-order',
@@ -38,16 +36,14 @@ const LINES_TABLE = {
   'physical-inventory':        'physical-inventory/InventoryLineTable.jsx',
   'purchase-invoice':          'purchase-invoice/LinesTable.jsx',
   'purchase-order':            'purchase-order/LinesTable.jsx',
-  'return-from-customer':      'return-from-customer/CustomerReturnLineTable.jsx',
   'return-material-receipt':   'return-material-receipt/ReturnMaterialReceiptLineTable.jsx',
-  'return-to-vendor':          'return-to-vendor/LinesTable.jsx',
   'return-to-vendor-shipment': 'return-to-vendor-shipment/LinesTable.jsx',
   'sales-invoice':             'sales-invoice/LinesTable.jsx',
   'sales-order':               'sales-order/LinesTable.jsx',
   'sales-quotation':           'sales-quotation/QuotationLineTable.jsx',
 };
 
-describe('Inline-editable lines rollout — all 15 windows', () => {
+describe('Inline-editable lines rollout — all 13 windows', () => {
   describe('decisions.json — linesLayout flag', () => {
     for (const win of INLINE_WINDOWS) {
       it(`${win} declares linesLayout: inlineEditable`, () => {
