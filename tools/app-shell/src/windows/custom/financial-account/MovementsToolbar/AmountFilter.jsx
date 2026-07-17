@@ -84,11 +84,11 @@ export function AmountFilter({ value, onChange }) {
       <PopoverTrigger asChild data-testid="PopoverTrigger__c66309">
         <button
           type="button"
-          className="inline-flex h-10 items-center justify-between gap-1 rounded-lg border border-[#D1D4DB] bg-card px-3 text-sm font-medium leading-6 text-[#121217] shadow-[0_1px_2px_rgba(18,18,23,0.05)] hover:bg-[#F5F7F9]"
+          className="inline-flex h-10 items-center justify-between gap-1 rounded-lg border border-[hsl(var(--border-control))] bg-card px-3 text-sm font-medium leading-6 text-[hsl(var(--foreground))] shadow-[0_1px_2px_hsl(var(--foreground) / 0.05)] hover:bg-[hsl(var(--muted))]"
         >
           <span className="truncate text-left">{triggerLabel}</span>
           <ChevronDown
-            className="h-5 w-5 shrink-0 text-[#828FA3]"
+            className="h-5 w-5 shrink-0 text-[hsl(var(--text-disabled))]"
             data-testid="ChevronDown__c66309" />
         </button>
       </PopoverTrigger>
@@ -99,8 +99,8 @@ export function AmountFilter({ value, onChange }) {
             type="button"
             onClick={handleClear}
             className={cn(
-              'relative flex h-8 items-center px-3 text-left text-sm leading-6 text-[#121217] transition-colors',
-              !value ? 'bg-[rgba(18,18,23,0.05)]' : 'hover:bg-[rgba(18,18,23,0.05)]',
+              'relative flex h-8 items-center px-3 text-left text-sm leading-6 text-[hsl(var(--foreground))] transition-colors',
+              !value ? 'bg-[hsl(var(--foreground) / 0.05)]' : 'hover:bg-[hsl(var(--foreground) / 0.05)]',
             )}
           >
             <span className="flex-1">{ui('financeAccountMovementsFilterAmountAll')}</span>
@@ -114,8 +114,8 @@ export function AmountFilter({ value, onChange }) {
                 type="button"
                 onClick={() => handlePresetClick(preset.id)}
                 className={cn(
-                  'relative flex h-8 items-center px-3 text-left text-sm leading-6 text-[#121217] transition-colors',
-                  active ? 'bg-[rgba(18,18,23,0.05)]' : 'hover:bg-[rgba(18,18,23,0.05)]',
+                  'relative flex h-8 items-center px-3 text-left text-sm leading-6 text-[hsl(var(--foreground))] transition-colors',
+                  active ? 'bg-[hsl(var(--foreground) / 0.05)]' : 'hover:bg-[hsl(var(--foreground) / 0.05)]',
                 )}
               >
                 <span className="flex-1">{preset.label}</span>
@@ -126,9 +126,9 @@ export function AmountFilter({ value, onChange }) {
         </div>
 
         {/* Custom range — manual inputs */}
-        <div className="border-t border-[#E8EAEF] p-3">
+        <div className="border-t border-[hsl(var(--border-subtle))] p-3">
           <div className="mb-2 flex items-center justify-between">
-            <span className="text-xs font-medium leading-4 text-[#3F3F50]">
+            <span className="text-xs font-medium leading-4 text-[hsl(var(--muted-foreground))]">
               {ui('financeAccountMovementsFilterAmountManualRange')}
             </span>
             {(draftMin !== '' || draftMax !== '' || isCustom) && (
@@ -139,7 +139,7 @@ export function AmountFilter({ value, onChange }) {
                   setDraftMax('');
                   if (isCustom) onChange?.(null);
                 }}
-                className="text-xs font-medium leading-4 text-[#6C6C89] hover:text-[#121217] hover:underline"
+                className="text-xs font-medium leading-4 text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))] hover:underline"
               >
                 {ui('financeAccountMovementsFilterAmountClear')}
               </button>
@@ -152,7 +152,7 @@ export function AmountFilter({ value, onChange }) {
               placeholder={ui('financeAccountMovementsFilterAmountMin')}
               invalid={!minValid || !rangeValid}
               data-testid="NumberField__c66309" />
-            <span className="text-sm text-[#6C6C89]">–</span>
+            <span className="text-sm text-[hsl(var(--muted-foreground))]">–</span>
             <NumberField
               value={draftMax}
               onChange={setDraftMax}
@@ -161,18 +161,18 @@ export function AmountFilter({ value, onChange }) {
               data-testid="NumberField__c66309" />
           </div>
           {!rangeValid && (
-            <p className="mt-2 text-xs text-[#D50B3E]">
+            <p className="mt-2 text-xs text-[hsl(var(--destructive))]">
               {ui('financeAccountMovementsFilterAmountInvalidRange')}
             </p>
           )}
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-end gap-2 border-t border-[#E8EAEF] px-3 py-2">
+        <div className="flex items-center justify-end gap-2 border-t border-[hsl(var(--border-subtle))] px-3 py-2">
           <button
             type="button"
             onClick={() => setOpen(false)}
-            className="inline-flex h-9 items-center justify-center rounded-full border border-[#D1D4DB] bg-card px-3 text-sm font-medium text-[#121217] shadow-[0px_1px_2px_rgba(18,18,23,0.05)] transition-colors hover:bg-[rgba(18,18,23,0.05)]"
+            className="inline-flex h-9 items-center justify-center rounded-full border border-[hsl(var(--border-control))] bg-card px-3 text-sm font-medium text-[hsl(var(--foreground))] shadow-[0px_1px_2px_hsl(var(--foreground) / 0.05)] transition-colors hover:bg-[hsl(var(--foreground) / 0.05)]"
           >
             {ui('dateRangeCancel')}
           </button>
@@ -180,7 +180,7 @@ export function AmountFilter({ value, onChange }) {
             type="button"
             onClick={handleApply}
             disabled={!canApply}
-            className="inline-flex h-9 items-center justify-center rounded-full bg-[#121217] px-3 text-sm font-medium text-white transition-colors hover:bg-[#FFD500] hover:text-[#121217] disabled:cursor-not-allowed disabled:opacity-40"
+            className="inline-flex h-9 items-center justify-center rounded-full bg-[hsl(var(--foreground))] px-3 text-sm font-medium text-white transition-colors hover:bg-[hsl(var(--primary))] hover:text-[hsl(var(--foreground))] disabled:cursor-not-allowed disabled:opacity-40"
           >
             {ui('dateRangeApply')}
           </button>
@@ -202,10 +202,10 @@ function NumberField({ value, onChange, placeholder, invalid }) {
       onChange={(e) => onChange(e.target.value)}
       placeholder={placeholder}
       className={cn(
-        'h-9 w-full min-w-0 rounded-md border bg-card px-2 text-sm text-[#121217] placeholder:text-[#828FA3] focus:outline-none focus:ring-2 focus:ring-offset-1',
+        'h-9 w-full min-w-0 rounded-md border bg-card px-2 text-sm text-[hsl(var(--foreground))] placeholder:text-[hsl(var(--text-disabled))] focus:outline-none focus:ring-2 focus:ring-offset-1',
         invalid
-          ? 'border-[#D50B3E] focus:ring-[#D50B3E]'
-          : 'border-[#D1D4DB] focus:ring-[#121217]',
+          ? 'border-[hsl(var(--destructive))] focus:ring-[hsl(var(--destructive))]'
+          : 'border-[hsl(var(--border-control))] focus:ring-[hsl(var(--foreground))]',
       )}
     />
   );

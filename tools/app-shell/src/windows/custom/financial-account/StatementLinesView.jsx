@@ -21,21 +21,21 @@ export function StatementLinesView({ statementId, statementName, currency, onBac
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
       {/* Header */}
-      <div className="flex h-[52px] items-center gap-3 border-b border-[#E8EAEF] px-4">
+      <div className="flex h-[52px] items-center gap-3 border-b border-[hsl(var(--border-subtle))] px-4">
         <button
           type="button"
           aria-label={ui('financeAccountDetailBack')}
           data-testid="statement-lines-back"
           onClick={onBack}
-          className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-[#D1D4DB] bg-card text-[#6c6c89] shadow-[0_1px_2px_rgba(18,18,23,0.05)] hover:bg-[#F5F7F9] hover:text-[#121217]"
+          className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-[hsl(var(--border-control))] bg-card text-[hsl(var(--muted-foreground))] shadow-[0_1px_2px_hsl(var(--foreground) / 0.05)] hover:bg-[hsl(var(--muted))] hover:text-[hsl(var(--foreground))]"
         >
           <ArrowLeft className="h-4 w-4" data-testid="ArrowLeft__4e62e5" />
         </button>
         <div className="flex flex-col">
-          <span className="text-sm font-semibold text-[#121217]">
+          <span className="text-sm font-semibold text-[hsl(var(--foreground))]">
             {statementName || ui('financeAccountStatementLinesTitle')}
           </span>
-          <span className="text-xs text-[#6c6c89]">
+          <span className="text-xs text-[hsl(var(--muted-foreground))]">
             {ui('financeAccountStatementLinesSubtitle', { count: lines.length })}
           </span>
         </div>

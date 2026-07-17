@@ -32,9 +32,9 @@ const TRX_LABEL_KEY = {
 };
 
 const BTN_PRIMARY =
-  'inline-flex h-10 items-center gap-2 rounded-lg bg-[#121217] px-[18px] text-sm font-semibold text-white hover:bg-[#282833] disabled:opacity-50 disabled:pointer-events-none';
+  'inline-flex h-10 items-center gap-2 rounded-lg bg-[hsl(var(--foreground))] px-[18px] text-sm font-semibold text-white hover:bg-[hsl(var(--foreground))] disabled:opacity-50 disabled:pointer-events-none';
 const BTN_GHOST =
-  'inline-flex h-10 items-center gap-2 rounded-lg border border-[#D1D4DB] bg-card px-[18px] text-sm font-semibold text-[#3F3F50] hover:bg-[#F5F7F9]';
+  'inline-flex h-10 items-center gap-2 rounded-lg border border-[hsl(var(--border-control))] bg-card px-[18px] text-sm font-semibold text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--muted))]';
 
 // ── Stage 1 ──────────────────────────────────────────────────────────────────
 function MovementBasics({ form, set, dimensions, optionsByDim, trxTypes }) {
@@ -71,7 +71,7 @@ function MovementBasics({ form, set, dimensions, optionsByDim, trxTypes }) {
           className="col-span-2"
           data-testid="Field__e2e571">
           <textarea
-            className="min-h-16 w-full box-border resize-y rounded-lg border border-[#D1D4DB] bg-card px-3 py-2.5 text-sm leading-5 text-[#121217] placeholder:text-[#8A8AA3] focus:outline-none focus:border-[#121217] focus:ring-2 focus:ring-[#121217]/10"
+            className="min-h-16 w-full box-border resize-y rounded-lg border border-[hsl(var(--border-control))] bg-card px-3 py-2.5 text-sm leading-5 text-[hsl(var(--foreground))] placeholder:text-[hsl(var(--text-disabled))] focus:outline-none focus:border-[hsl(var(--foreground))] focus:ring-2 focus:ring-[hsl(var(--foreground))]/10"
             placeholder={ui('financeAccountMovementsWizardDescriptionPlaceholder')}
             value={form.description}
             onChange={(e) => set({ description: e.target.value })}
@@ -138,19 +138,19 @@ function ChoiceCard({ choice, active, onClick }) {
       type="button"
       onClick={onClick}
       className={`relative flex flex-col gap-2.5 rounded-xl border-[1.5px] p-[18px] text-left transition-colors ${
-        active ? 'border-[#121217] ring-[3px] ring-[#121217]/[0.08]' : 'border-[#D1D4DB] hover:border-[#A9A9BC] hover:bg-[#F5F7F9]'
+        active ? 'border-[hsl(var(--foreground))] ring-[3px] ring-[hsl(var(--foreground))]/[0.08]' : 'border-[hsl(var(--border-control))] hover:border-[hsl(var(--text-disabled))] hover:bg-[hsl(var(--muted))]'
       }`}
     >
       <div className="flex items-center gap-3">
-        <span className={`grid h-10 w-10 shrink-0 place-items-center rounded-md ${active ? 'bg-[#121217] text-white' : 'bg-[#E8E8ED] text-[#121217]'}`}>
+        <span className={`grid h-10 w-10 shrink-0 place-items-center rounded-md ${active ? 'bg-[hsl(var(--foreground))] text-white' : 'bg-[hsl(var(--border-subtle))] text-[hsl(var(--foreground))]'}`}>
           <Icon className="h-[22px] w-[22px]" data-testid="Icon__e2e571" />
         </span>
-        <span className="text-[15px] font-bold leading-5 text-[#121217]">{ui(choice.titleKey)}</span>
-        <span className={`ml-auto grid h-5 w-5 place-items-center rounded-full border-2 ${active ? 'border-[#121217]' : 'border-[#A9A9BC]'}`}>
-          {active ? <span className="h-2.5 w-2.5 rounded-full bg-[#121217]" /> : null}
+        <span className="text-[15px] font-bold leading-5 text-[hsl(var(--foreground))]">{ui(choice.titleKey)}</span>
+        <span className={`ml-auto grid h-5 w-5 place-items-center rounded-full border-2 ${active ? 'border-[hsl(var(--foreground))]' : 'border-[hsl(var(--text-disabled))]'}`}>
+          {active ? <span className="h-2.5 w-2.5 rounded-full bg-[hsl(var(--foreground))]" /> : null}
         </span>
       </div>
-      <span className="text-[13px] leading-[18px] text-[#6C6C89]">{ui(choice.hintKey)}</span>
+      <span className="text-[13px] leading-[18px] text-[hsl(var(--muted-foreground))]">{ui(choice.hintKey)}</span>
     </button>
   );
 }
@@ -180,11 +180,11 @@ function GLItemBlock({ value, onChange }) {
 
 // ── Stepper ──────────────────────────────────────────────────────────────────
 const STEP_CIRCLE_CLASS = {
-  on: 'bg-[#121217] text-white',
-  done: 'border-[1.5px] border-[#B2EECC] bg-[#EEFBF4] text-[#17663A]',
-  todo: 'bg-[#E8E8ED] text-[#6C6C89]',
+  on: 'bg-[hsl(var(--foreground))] text-white',
+  done: 'border-[1.5px] border-[var(--status-success-border)] bg-[var(--status-success-bg)] text-[var(--status-success-fg)]',
+  todo: 'bg-[hsl(var(--border-subtle))] text-[hsl(var(--muted-foreground))]',
 };
-const STEP_LABEL_CLASS = { on: 'text-[#121217]', done: 'text-[#3F3F50]', todo: 'text-[#6C6C89]' };
+const STEP_LABEL_CLASS = { on: 'text-[hsl(var(--foreground))]', done: 'text-[hsl(var(--muted-foreground))]', todo: 'text-[hsl(var(--muted-foreground))]' };
 
 function stepState(stage, n) {
   if (stage === n) return 'on';
@@ -202,7 +202,7 @@ function Stepper({ stage }) {
       {steps.map((s, i) => {
         const state = stepState(stage, s.n);
         const done = state === 'done';
-        const connectorClass = done ? 'bg-[#B2EECC]' : 'bg-[#E8EAEF]';
+        const connectorClass = done ? 'bg-[var(--status-success-border)]' : 'bg-[hsl(var(--border-subtle))]';
         return (
           <Fragment key={s.n} data-testid="Fragment__e2e571">
             <div className="inline-flex items-center gap-2.5">
@@ -375,8 +375,8 @@ export function NewMovementWizard({ open, accountId, accountCurrency, dimensions
   };
 
   const trxBadgeClass = doc === 'in'
-    ? 'border-[#B2EECC] bg-[#EEFBF4] text-[#17663A]'
-    : 'border-[#FBB1C4] bg-[#FEF0F4] text-[#D50B3E]';
+    ? 'border-[var(--status-success-border)] bg-[var(--status-success-bg)] text-[var(--status-success-fg)]'
+    : 'border-[hsl(var(--destructive) / 0.3)] bg-[var(--status-destructive-bg)] text-[hsl(var(--destructive))]';
   const assocLabel = ui(choice === 'gl'
     ? 'financeAccountMovementsWizardAssocGl'
     : 'financeAccountMovementsWizardAssocPay');
@@ -399,8 +399,8 @@ export function NewMovementWizard({ open, accountId, accountCurrency, dimensions
       return (
         <>
           <div className="mb-4 mt-1">
-            <h3 className="m-0 mb-1 text-base font-bold leading-[22px] text-[#121217]">{ui('financeAccountMovementsWizardReconcileQuestion')}</h3>
-            <p className="m-0 max-w-[620px] text-[13px] leading-[18px] text-[#6C6C89]">{ui('financeAccountMovementsWizardReconcileHintA')} <b className="font-semibold text-[#121217]">{ui('financeAccountMovementsWizardReconcileOr')}</b> {ui('financeAccountMovementsWizardReconcileHintB')}</p>
+            <h3 className="m-0 mb-1 text-base font-bold leading-[22px] text-[hsl(var(--foreground))]">{ui('financeAccountMovementsWizardReconcileQuestion')}</h3>
+            <p className="m-0 max-w-[620px] text-[13px] leading-[18px] text-[hsl(var(--muted-foreground))]">{ui('financeAccountMovementsWizardReconcileHintA')} <b className="font-semibold text-[hsl(var(--foreground))]">{ui('financeAccountMovementsWizardReconcileOr')}</b> {ui('financeAccountMovementsWizardReconcileHintB')}</p>
           </div>
           <div className="grid grid-cols-2 gap-3.5">
             {CHOICES.map((c) => (
@@ -418,18 +418,18 @@ export function NewMovementWizard({ open, accountId, accountCurrency, dimensions
     return (
       <>
         {/* Summary line — collapsed choice with a "Cambiar" button */}
-        <div className="flex items-center gap-3 rounded-lg border border-[#E8EAEF] bg-[#F5F7F9] px-3.5 py-3">
-          <span className="grid h-[34px] w-[34px] shrink-0 place-items-center rounded-md bg-[#121217] text-white">
+        <div className="flex items-center gap-3 rounded-lg border border-[hsl(var(--border-subtle))] bg-[hsl(var(--muted))] px-3.5 py-3">
+          <span className="grid h-[34px] w-[34px] shrink-0 place-items-center rounded-md bg-[hsl(var(--foreground))] text-white">
             <choiceMeta.Icon className="h-4 w-4" />
           </span>
           <span className="flex flex-col gap-px">
-            <span className="text-[11px] font-semibold uppercase tracking-[0.04em] text-[#8A8AA3]">{ui('financeAccountMovementsWizardAssocType')}</span>
-            <span className="text-sm font-bold leading-5 text-[#121217]">{ui(choiceMeta.titleKey)}</span>
+            <span className="text-[11px] font-semibold uppercase tracking-[0.04em] text-[hsl(var(--text-disabled))]">{ui('financeAccountMovementsWizardAssocType')}</span>
+            <span className="text-sm font-bold leading-5 text-[hsl(var(--foreground))]">{ui(choiceMeta.titleKey)}</span>
           </span>
           <button
             type="button"
             onClick={() => setChoice(null)}
-            className="ml-auto inline-flex items-center gap-1.5 rounded-md border border-[#D1D4DB] bg-card px-3 py-[7px] text-[13px] font-semibold text-[#3F3F50] hover:border-[#A9A9BC] hover:bg-[#F5F7F9]"
+            className="ml-auto inline-flex items-center gap-1.5 rounded-md border border-[hsl(var(--border-control))] bg-card px-3 py-[7px] text-[13px] font-semibold text-[hsl(var(--muted-foreground))] hover:border-[hsl(var(--text-disabled))] hover:bg-[hsl(var(--muted))]"
           >
             <ChevronDown className="h-3.5 w-3.5" data-testid="ChevronDown__e2e571" /> {ui('financeAccountMovementsWizardChange')}
           </button>
@@ -458,14 +458,14 @@ export function NewMovementWizard({ open, accountId, accountCurrency, dimensions
       onOpenChange={(v) => { if (!v) onClose(); }}
       data-testid="Dialog__e2e571">
       <DialogContent
-        className="flex w-[1280px] max-w-[96vw] max-h-[90vh] flex-col gap-0 overflow-hidden rounded-2xl border border-[#E8EAEF] bg-card p-0 [&>button]:hidden"
+        className="flex w-[1280px] max-w-[96vw] max-h-[90vh] flex-col gap-0 overflow-hidden rounded-2xl border border-[hsl(var(--border-subtle))] bg-card p-0 [&>button]:hidden"
         data-testid="DialogContent__e2e571">
         {/* Header */}
         <div className="shrink-0 px-6 pt-5">
           <div className="flex items-start justify-between">
             <div>
               <DialogTitle asChild data-testid="DialogTitle__e2e571">
-                <h2 className="m-0 flex items-center gap-2.5 text-lg font-bold leading-6 tracking-[-0.01em] text-[#121217]">
+                <h2 className="m-0 flex items-center gap-2.5 text-lg font-bold leading-6 tracking-[-0.01em] text-[hsl(var(--foreground))]">
                   {ui('financeAccountMovementsNewTitle')}
                   {stage === 2 && trxLabel ? (
                     <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-semibold ${trxBadgeClass}`}>
@@ -475,12 +475,12 @@ export function NewMovementWizard({ open, accountId, accountCurrency, dimensions
                 </h2>
               </DialogTitle>
               <DialogDescription asChild data-testid="DialogDescription__e2e571">
-                <p className="mt-0.5 text-[13px] leading-[18px] text-[#6C6C89]">
+                <p className="mt-0.5 text-[13px] leading-[18px] text-[hsl(var(--muted-foreground))]">
                   {ui('financeAccountMovementsWizardSubtitle', { iso: accountCurrency?.iso || 'EUR' })}
                 </p>
               </DialogDescription>
             </div>
-            <button type="button" onClick={onClose} className="grid h-[30px] w-[30px] place-items-center rounded-md text-[#6C6C89] hover:bg-[#F5F7F9] hover:text-[#121217]">
+            <button type="button" onClick={onClose} className="grid h-[30px] w-[30px] place-items-center rounded-md text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--muted))] hover:text-[hsl(var(--foreground))]">
               <X className="h-4 w-4" data-testid="X__e2e571" />
             </button>
           </div>
@@ -493,10 +493,10 @@ export function NewMovementWizard({ open, accountId, accountCurrency, dimensions
         </div>
 
         {/* Footer */}
-        <div className="flex shrink-0 items-center gap-2.5 border-t border-[#E8EAEF] px-6 py-4">
+        <div className="flex shrink-0 items-center gap-2.5 border-t border-[hsl(var(--border-subtle))] px-6 py-4">
           {stage === 1 ? (
             <>
-              <span className="mr-auto text-xs leading-4 text-[#6C6C89]">{ui('financeAccountMovementsWizardStep1Footer')}</span>
+              <span className="mr-auto text-xs leading-4 text-[hsl(var(--muted-foreground))]">{ui('financeAccountMovementsWizardStep1Footer')}</span>
               <button type="button" className={BTN_GHOST} onClick={onClose}>{ui('financeAccountMovementsNewCancel')}</button>
               <button type="button" className={BTN_PRIMARY} onClick={() => setStage(2)}>{ui('financeAccountMovementsWizardNext')} <ChevronDown
                 className="h-[15px] w-[15px] -rotate-90"
@@ -504,8 +504,8 @@ export function NewMovementWizard({ open, accountId, accountCurrency, dimensions
             </>
           ) : (
             <>
-              <span className="mr-auto inline-flex items-center gap-1.5 text-xs leading-4 text-[#6C6C89]">
-                <Info className="h-[13px] w-[13px]" data-testid="Info__e2e571" /> {ui('financeAccountMovementsWizardWillCreate')} {choice ? <>{ui('financeAccountMovementsWizardWith')} <span className="font-semibold text-[#121217]">{assocLabel}</span></> : ui('financeAccountMovementsWizardWithoutAssoc')}
+              <span className="mr-auto inline-flex items-center gap-1.5 text-xs leading-4 text-[hsl(var(--muted-foreground))]">
+                <Info className="h-[13px] w-[13px]" data-testid="Info__e2e571" /> {ui('financeAccountMovementsWizardWillCreate')} {choice ? <>{ui('financeAccountMovementsWizardWith')} <span className="font-semibold text-[hsl(var(--foreground))]">{assocLabel}</span></> : ui('financeAccountMovementsWizardWithoutAssoc')}
               </span>
               <button type="button" className={BTN_GHOST} onClick={() => setStage(1)}>{ui('financeAccountMovementsWizardBack')}</button>
               <button type="button" className={BTN_PRIMARY} disabled={!choice || creating || creatingPayment} onClick={handleCreate}>

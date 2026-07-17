@@ -99,7 +99,7 @@ export function MovementRowKebab({ movement, onReload }) {
             type="button"
             aria-label={ui('financeAccountMovementsRowActions')}
             data-testid={`movement-row-menu-${movement.id}`}
-            className="inline-flex h-8 w-8 items-center justify-center rounded-full text-[#828FA3] opacity-0 transition-opacity group-hover:opacity-100 hover:bg-[#E8EAEF]"
+            className="inline-flex h-8 w-8 items-center justify-center rounded-full text-[hsl(var(--text-disabled))] opacity-0 transition-opacity group-hover:opacity-100 hover:bg-[hsl(var(--border-subtle))]"
           >
             <MoreVertical className="h-5 w-5" data-testid="MoreVertical__64eff3" />
           </button>
@@ -112,8 +112,8 @@ export function MovementRowKebab({ movement, onReload }) {
           <DropdownMenuItem
             onClick={() => toast(ui('financeAccountMovementsRowViewDetailToast'))}
             data-testid="DropdownMenuItem__64eff3">
-            <ExternalLink className="h-5 w-5 text-[#828FA3]" data-testid="ExternalLink__64eff3" />
-            <span className="text-sm font-normal leading-6 text-[#121217]">
+            <ExternalLink className="h-5 w-5 text-[hsl(var(--text-disabled))]" data-testid="ExternalLink__64eff3" />
+            <span className="text-sm font-normal leading-6 text-[hsl(var(--foreground))]">
               {ui('financeAccountMovementsRowViewDetail')}
             </span>
           </DropdownMenuItem>
@@ -125,8 +125,8 @@ export function MovementRowKebab({ movement, onReload }) {
             <TooltipTrigger asChild data-testid="TooltipTrigger__64eff3">
               <span>
                 <DropdownMenuItem disabled data-testid="DropdownMenuItem__64eff3">
-                  <GitMerge className="h-5 w-5 text-[#828FA3]" data-testid="GitMerge__64eff3" />
-                  <span className="text-sm font-normal leading-6 text-[#121217]">
+                  <GitMerge className="h-5 w-5 text-[hsl(var(--text-disabled))]" data-testid="GitMerge__64eff3" />
+                  <span className="text-sm font-normal leading-6 text-[hsl(var(--foreground))]">
                     {ui('financeAccountMovementsRowUnreconcile')}
                   </span>
                 </DropdownMenuItem>
@@ -141,8 +141,8 @@ export function MovementRowKebab({ movement, onReload }) {
               onClick={handlePost}
               disabled={posting}
               data-testid="DropdownMenuItem__64eff3">
-              <BookOpen className="h-5 w-5 text-[#828FA3]" data-testid="BookOpen__64eff3" />
-              <span className="text-sm font-normal leading-6 text-[#121217]">
+              <BookOpen className="h-5 w-5 text-[hsl(var(--text-disabled))]" data-testid="BookOpen__64eff3" />
+              <span className="text-sm font-normal leading-6 text-[hsl(var(--foreground))]">
                 {posting ? ui('financeAccountMovementsRowPosting') : ui('financeAccountMovementsRowPost')}
               </span>
             </DropdownMenuItem>
@@ -157,8 +157,8 @@ export function MovementRowKebab({ movement, onReload }) {
               onClick={handleUnpost}
               disabled={unposting}
               data-testid="DropdownMenuItem__64eff3">
-              <BookX className="h-5 w-5 text-[#828FA3]" data-testid="BookX__64eff3" />
-              <span className="text-sm font-normal leading-6 text-[#121217]">
+              <BookX className="h-5 w-5 text-[hsl(var(--text-disabled))]" data-testid="BookX__64eff3" />
+              <span className="text-sm font-normal leading-6 text-[hsl(var(--foreground))]">
                 {unposting ? ui('financeAccountMovementsRowUnposting') : ui('financeAccountMovementsRowUnpost')}
               </span>
             </DropdownMenuItem>

@@ -178,7 +178,7 @@ export function NewMovementDialog({ open, accountId, accountCurrency, onClose, o
               type="text"
               readOnly
               value={accountCurrency?.iso ?? ''}
-              className={`${inputClass} cursor-not-allowed bg-[#F5F7F9] text-[#6c6c89]`}
+              className={`${inputClass} cursor-not-allowed bg-[hsl(var(--muted))] text-[hsl(var(--muted-foreground))]`}
             />
           </FieldRow>
 
@@ -197,7 +197,7 @@ export function NewMovementDialog({ open, accountId, accountCurrency, onClose, o
                 data-testid="new-movement-deposit"
                 className={depositEditable(form.trxType)
                   ? inputClass
-                  : `${inputClass} cursor-not-allowed bg-[#F5F7F9] text-[#6c6c89]`}
+                  : `${inputClass} cursor-not-allowed bg-[hsl(var(--muted))] text-[hsl(var(--muted-foreground))]`}
               />
             </FieldRow>
             <FieldRow
@@ -213,7 +213,7 @@ export function NewMovementDialog({ open, accountId, accountCurrency, onClose, o
                 data-testid="new-movement-payment"
                 className={paymentEditable(form.trxType)
                   ? inputClass
-                  : `${inputClass} cursor-not-allowed bg-[#F5F7F9] text-[#6c6c89]`}
+                  : `${inputClass} cursor-not-allowed bg-[hsl(var(--muted))] text-[hsl(var(--muted-foreground))]`}
               />
             </FieldRow>
           </div>
@@ -222,7 +222,7 @@ export function NewMovementDialog({ open, accountId, accountCurrency, onClose, o
             <DialogClose asChild data-testid="DialogClose__cc1c8b">
               <button
                 type="button"
-                className="inline-flex h-10 items-center rounded-lg border border-[#D1D4DB] bg-card px-4 text-sm font-medium text-[#121217] hover:bg-[#F5F7F9]"
+                className="inline-flex h-10 items-center rounded-lg border border-[hsl(var(--border-control))] bg-card px-4 text-sm font-medium text-[hsl(var(--foreground))] hover:bg-[hsl(var(--muted))]"
               >
                 {ui('financeAccountMovementsNewCancel')}
               </button>
@@ -231,7 +231,7 @@ export function NewMovementDialog({ open, accountId, accountCurrency, onClose, o
               type="submit"
               disabled={creating}
               data-testid="new-movement-submit"
-              className="inline-flex h-10 items-center rounded-lg bg-[#121217] px-4 text-sm font-medium text-white hover:bg-[#FFD500] hover:text-[#121217] disabled:opacity-50 disabled:cursor-not-allowed"
+              className="inline-flex h-10 items-center rounded-lg bg-[hsl(var(--foreground))] px-4 text-sm font-medium text-white hover:bg-[hsl(var(--primary))] hover:text-[hsl(var(--foreground))] disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {creating ? ui('financeAccountMovementsNewSaving') : ui('financeAccountMovementsNewConfirm')}
             </button>

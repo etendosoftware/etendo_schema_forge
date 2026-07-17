@@ -207,21 +207,21 @@ export function NewAccountWizard({ open, onClose, onCreated, onConnectWithCreati
                 onClick={goBack}
                 aria-label={ui('financeAccountsNewBack')}
                 data-testid="new-account-back"
-                className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-[#D1D4DB] text-[#121217] hover:bg-[#F5F7F9]"
+                className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-[hsl(var(--border-control))] text-[hsl(var(--foreground))] hover:bg-[hsl(var(--muted))]"
               >
                 <ArrowLeft className="h-4 w-4" data-testid="ArrowLeft__24760b" />
               </button>
             ) : null}
             <DialogTitle className="text-xl leading-7" data-testid="DialogTitle__24760b">{titles[step]}</DialogTitle>
             {showBadge ? (
-              <span className="rounded-full bg-[#F5F7F9] px-2 py-0.5 text-xs font-normal text-[#6C6C89]">
+              <span className="rounded-full bg-[hsl(var(--muted))] px-2 py-0.5 text-xs font-normal text-[hsl(var(--muted-foreground))]">
                 {ui('financeAccountsNewOfflineBadge')}
               </span>
             ) : null}
           </div>
           {step === STEP.TYPE ? (
             <DialogDescription
-              className="text-xs leading-4 text-[#555B6D]"
+              className="text-xs leading-4 text-[hsl(var(--muted-foreground))]"
               data-testid="DialogDescription__24760b">
               {ui('financeAccountsNewSubtitle')}
             </DialogDescription>
@@ -318,7 +318,7 @@ function TypePicker({ ui, onPick }) {
           type="button"
           onClick={() => onPick(type)}
           data-testid={`new-account-type-${type}`}
-          className="flex flex-col rounded-xl border border-[#E8EAEF] bg-card p-1 text-left shadow-[0_1px_2px_rgba(18,18,23,0.05)] transition-colors hover:bg-[#F5F7F9]"
+          className="flex flex-col rounded-xl border border-[hsl(var(--border-subtle))] bg-card p-1 text-left shadow-[0_1px_2px_hsl(var(--foreground) / 0.05)] transition-colors hover:bg-[hsl(var(--muted))]"
         >
           <img
             src={image}
@@ -328,12 +328,12 @@ function TypePicker({ ui, onPick }) {
           />
           <div className="flex flex-col gap-1 p-3">
             <div className="flex items-center gap-2">
-              <span className="flex h-8 w-8 items-center justify-center rounded-lg border border-[#D1D4DB] bg-card text-[#828FA3] shadow-[0_1px_3px_rgba(18,18,23,0.1),0_1px_2px_rgba(18,18,23,0.06)]">
+              <span className="flex h-8 w-8 items-center justify-center rounded-lg border border-[hsl(var(--border-control))] bg-card text-[hsl(var(--text-disabled))] shadow-[0_1px_3px_hsl(var(--foreground) / 0.1),0_1px_2px_hsl(var(--foreground) / 0.06)]">
                 <Icon className="h-5 w-5" data-testid="Icon__24760b" />
               </span>
-              <span className="text-base font-medium leading-6 text-[#121217]">{ui(titleKey)}</span>
+              <span className="text-base font-medium leading-6 text-[hsl(var(--foreground))]">{ui(titleKey)}</span>
             </div>
-            <span className="text-sm font-normal leading-5 text-[#555B6D]">{ui(descKey)}</span>
+            <span className="text-sm font-normal leading-5 text-[hsl(var(--muted-foreground))]">{ui(descKey)}</span>
           </div>
         </button>
       ))}
@@ -372,19 +372,19 @@ function BankPicker({ ui, query, onQueryChange, onPick, onSkip }) {
     <div className="flex flex-col gap-5">
       {/* Banco field: country selector + search input */}
       <div className="flex flex-col gap-2">
-        <p className="text-sm font-medium leading-6 text-[#121217]">{ui('financeAccountsNewBankLabel')}</p>
-        <div className="flex h-10 w-full items-center overflow-hidden rounded-lg border border-[#D1D4DB] bg-card shadow-[0_1px_2px_rgba(18,18,23,0.05)]">
+        <p className="text-sm font-medium leading-6 text-[hsl(var(--foreground))]">{ui('financeAccountsNewBankLabel')}</p>
+        <div className="flex h-10 w-full items-center overflow-hidden rounded-lg border border-[hsl(var(--border-control))] bg-card shadow-[0_1px_2px_hsl(var(--foreground) / 0.05)]">
           <DropdownMenu data-testid="DropdownMenu__24760b">
             <DropdownMenuTrigger asChild data-testid="DropdownMenuTrigger__24760b">
               <button
                 type="button"
                 data-testid="new-account-bank-country"
                 aria-label={ui('financeAccountsNewBankCountry')}
-                className="flex h-full w-[60px] shrink-0 items-center justify-center gap-2 border-r border-[#E8EAEF] hover:bg-[#F5F7F9] focus:outline-none"
+                className="flex h-full w-[60px] shrink-0 items-center justify-center gap-2 border-r border-[hsl(var(--border-subtle))] hover:bg-[hsl(var(--muted))] focus:outline-none"
               >
                 <span className="text-base leading-none">{selectedFlag}</span>
                 <ChevronDown
-                  className="h-4 w-4 shrink-0 text-[#828FA3]"
+                  className="h-4 w-4 shrink-0 text-[hsl(var(--text-disabled))]"
                   data-testid="ChevronDown__24760b" />
               </button>
             </DropdownMenuTrigger>
@@ -399,7 +399,7 @@ function BankPicker({ ui, query, onQueryChange, onPick, onSkip }) {
                   data-testid={`new-account-bank-country-${c.code}`}
                 >
                   <span className="text-base leading-none">{c.flag}</span>
-                  <span className="text-sm text-[#121217]">{c.code}</span>
+                  <span className="text-sm text-[hsl(var(--foreground))]">{c.code}</span>
                 </DropdownMenuItem>
               ))}
             </DropdownMenuContent>
@@ -409,7 +409,7 @@ function BankPicker({ ui, query, onQueryChange, onPick, onSkip }) {
             onChange={(e) => onQueryChange(e.target.value)}
             placeholder={ui('financeAccountsNewBankSearchPlaceholder')}
             data-testid="new-account-bank-search"
-            className="h-full flex-1 bg-transparent px-3 text-sm text-[#121217] placeholder:text-[#6C6C89] focus:outline-none"
+            className="h-full flex-1 bg-transparent px-3 text-sm text-[hsl(var(--foreground))] placeholder:text-[hsl(var(--muted-foreground))] focus:outline-none"
           />
         </div>
       </div>
@@ -423,7 +423,7 @@ function BankPicker({ ui, query, onQueryChange, onPick, onSkip }) {
             {BANK_SKELETON_KEYS.map((key) => (
               <div
                 key={key}
-                className="flex h-[124px] flex-col items-start gap-3 rounded-xl border border-[#E8EAEF] bg-card p-4 shadow-[0_1px_2px_rgba(18,18,23,0.05)]"
+                className="flex h-[124px] flex-col items-start gap-3 rounded-xl border border-[hsl(var(--border-subtle))] bg-card p-4 shadow-[0_1px_2px_hsl(var(--foreground) / 0.05)]"
               >
                 <Skeleton className="h-10 w-10 rounded-lg" data-testid="Skeleton__24760b" />
                 <Skeleton className="h-4 w-24 rounded" data-testid="Skeleton__24760b" />
@@ -438,20 +438,20 @@ function BankPicker({ ui, query, onQueryChange, onPick, onSkip }) {
               type="button"
               onClick={() => onPick(bank)}
               data-testid={`new-account-bank-${bank.id}`}
-              className="flex h-[124px] flex-col items-start gap-3 rounded-xl border border-[#E8EAEF] bg-card p-4 text-left shadow-[0_1px_2px_rgba(18,18,23,0.05)] transition-colors hover:bg-[#F5F7F9]"
+              className="flex h-[124px] flex-col items-start gap-3 rounded-xl border border-[hsl(var(--border-subtle))] bg-card p-4 text-left shadow-[0_1px_2px_hsl(var(--foreground) / 0.05)] transition-colors hover:bg-[hsl(var(--muted))]"
             >
               {bank.logoUrl ? (
                 <img
                   src={bank.logoUrl}
                   alt=""
-                  className="h-10 w-10 rounded-lg border border-[#D1D4DB] bg-card object-contain p-1 shadow-[0_1px_2px_rgba(18,18,23,0.05)]"
+                  className="h-10 w-10 rounded-lg border border-[hsl(var(--border-control))] bg-card object-contain p-1 shadow-[0_1px_2px_hsl(var(--foreground) / 0.05)]"
                 />
               ) : (
-                <span className="flex h-10 w-10 items-center justify-center rounded-lg border border-[#D1D4DB] bg-card shadow-[0_1px_2px_rgba(18,18,23,0.05)]">
-                  <Landmark className="h-5 w-5 text-[#828FA3]" data-testid="Landmark__24760b" />
+                <span className="flex h-10 w-10 items-center justify-center rounded-lg border border-[hsl(var(--border-control))] bg-card shadow-[0_1px_2px_hsl(var(--foreground) / 0.05)]">
+                  <Landmark className="h-5 w-5 text-[hsl(var(--text-disabled))]" data-testid="Landmark__24760b" />
                 </span>
               )}
-              <span className="line-clamp-2 w-full text-left text-sm font-medium leading-5 text-[#121217]">{bank.name}</span>
+              <span className="line-clamp-2 w-full text-left text-sm font-medium leading-5 text-[hsl(var(--foreground))]">{bank.name}</span>
             </button>
           ))}
         </div>
@@ -461,7 +461,7 @@ function BankPicker({ ui, query, onQueryChange, onPick, onSkip }) {
         type="button"
         onClick={onSkip}
         data-testid="new-account-bank-skip"
-        className="self-center text-sm text-[#555B6D] hover:text-[#121217] hover:underline"
+        className="self-center text-sm text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))] hover:underline"
       >
         {ui('financeAccountsNewBankSkip')}
       </button>
@@ -475,18 +475,18 @@ function InstitutionList({ ui, bank, onPick }) {
     <div className="flex flex-col gap-5">
       {/* Bank display field */}
       <div className="flex flex-col gap-2">
-        <p className="text-sm font-medium leading-6 text-[#121217]">{ui('financeAccountsNewBankLabel')}</p>
-        <div className="flex h-10 w-full items-center overflow-hidden rounded-lg border border-[#D1D4DB] bg-card shadow-[0_1px_2px_rgba(18,18,23,0.05)]">
-          <div className="flex h-full w-[60px] shrink-0 items-center justify-center gap-0.5 border-r border-[#E8EAEF] px-2">
-            <Landmark className="h-4 w-4 text-[#828FA3]" data-testid="Landmark__24760b" />
-            <ChevronDown className="h-4 w-4 text-[#828FA3]" data-testid="ChevronDown__24760b" />
+        <p className="text-sm font-medium leading-6 text-[hsl(var(--foreground))]">{ui('financeAccountsNewBankLabel')}</p>
+        <div className="flex h-10 w-full items-center overflow-hidden rounded-lg border border-[hsl(var(--border-control))] bg-card shadow-[0_1px_2px_hsl(var(--foreground) / 0.05)]">
+          <div className="flex h-full w-[60px] shrink-0 items-center justify-center gap-0.5 border-r border-[hsl(var(--border-subtle))] px-2">
+            <Landmark className="h-4 w-4 text-[hsl(var(--text-disabled))]" data-testid="Landmark__24760b" />
+            <ChevronDown className="h-4 w-4 text-[hsl(var(--text-disabled))]" data-testid="ChevronDown__24760b" />
           </div>
-          <span className="flex-1 px-3 text-sm leading-6 text-[#121217]">{bank?.name ?? ''}</span>
+          <span className="flex-1 px-3 text-sm leading-6 text-[hsl(var(--foreground))]">{bank?.name ?? ''}</span>
         </div>
       </div>
       {/* Institutions section */}
       <div className="flex flex-col gap-2">
-        <p className="text-sm font-medium leading-6 text-[#121217]">{ui('financeAccountsNewInstitutions')}</p>
+        <p className="text-sm font-medium leading-6 text-[hsl(var(--foreground))]">{ui('financeAccountsNewInstitutions')}</p>
         <div className="flex flex-col gap-4">
           {institutions.map((inst) => (
             <button
@@ -494,16 +494,16 @@ function InstitutionList({ ui, bank, onPick }) {
               type="button"
               onClick={onPick}
               data-testid={`new-account-institution-${inst.id}`}
-              className="flex h-8 w-full items-center rounded-lg px-2 py-1 text-left hover:bg-[#F5F7F9]"
+              className="flex h-8 w-full items-center rounded-lg px-2 py-1 text-left hover:bg-[hsl(var(--muted))]"
             >
               <span className="flex flex-1 items-center gap-2">
-                <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[#E8EAEF] text-[#828FA3]">
+                <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[hsl(var(--border-subtle))] text-[hsl(var(--text-disabled))]">
                   <Landmark className="h-3.5 w-3.5" data-testid="Landmark__24760b" />
                 </span>
-                <span className="text-sm leading-6 text-[#121217]">{inst.name}</span>
+                <span className="text-sm leading-6 text-[hsl(var(--foreground))]">{inst.name}</span>
               </span>
               <span className="flex shrink-0 items-center pr-1">
-                <ChevronRight className="h-4 w-4 text-[#828FA3]" data-testid="ChevronRight__24760b" />
+                <ChevronRight className="h-4 w-4 text-[hsl(var(--text-disabled))]" data-testid="ChevronRight__24760b" />
               </span>
             </button>
           ))}
@@ -525,14 +525,14 @@ function InstitutionList({ ui, bank, onPick }) {
  */
 function ConnectionCard({ icon: Icon, iconTone = 'neutral', title, description, onClick, testid }) {
   const toneClasses = iconTone === 'green'
-    ? 'bg-[#EEFBF4] border-[#C5F0D8] text-[#17663A]'
-    : 'bg-[#F5F7F9] border-[#E8EAEF] text-[#3F3F50]';
+    ? 'bg-[var(--status-success-bg)] border-[var(--status-success-border)] text-[var(--status-success-fg)]'
+    : 'bg-[hsl(var(--muted))] border-[hsl(var(--border-subtle))] text-[hsl(var(--muted-foreground))]';
   return (
     <button
       type="button"
       onClick={onClick}
       data-testid={testid}
-      className="flex flex-col rounded-xl border border-[#E8EAEF] bg-card p-5 text-left shadow-[0_1px_2px_rgba(18,18,23,0.05)] transition-colors hover:bg-[#F5F7F9]"
+      className="flex flex-col rounded-xl border border-[hsl(var(--border-subtle))] bg-card p-5 text-left shadow-[0_1px_2px_hsl(var(--foreground) / 0.05)] transition-colors hover:bg-[hsl(var(--muted))]"
     >
       <span
         className={cn(
@@ -542,8 +542,8 @@ function ConnectionCard({ icon: Icon, iconTone = 'neutral', title, description, 
       >
         <Icon className="h-[22px] w-[22px]" data-testid="Icon__24760b" />
       </span>
-      <h3 className="m-0 text-base font-semibold leading-5 text-[#121217]">{title}</h3>
-      <p className="mt-1 text-[13px] font-normal leading-[18px] text-[#6C6C89]">{description}</p>
+      <h3 className="m-0 text-base font-semibold leading-5 text-[hsl(var(--foreground))]">{title}</h3>
+      <p className="mt-1 text-[13px] font-normal leading-[18px] text-[hsl(var(--muted-foreground))]">{description}</p>
     </button>
   );
 }

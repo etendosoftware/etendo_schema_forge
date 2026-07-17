@@ -41,7 +41,7 @@ function renderBody({ loading, lines, emptyLabel, renderRow }) {
       <TableRow data-testid="TableRow__2364e3">
         <TableCell
           colSpan={7}
-          className="py-16 text-center text-sm text-[#6c6c89]"
+          className="py-16 text-center text-sm text-[hsl(var(--muted-foreground))]"
           data-testid="TableCell__2364e3">
           {emptyLabel}
         </TableCell>
@@ -63,7 +63,7 @@ export function StatementLinesTable({ lines, loading, currency = 'EUR' }) {
     <Table data-testid="Table__2364e3">
       <TableHeader data-testid="TableHeader__2364e3">
         <TableRow
-          className="h-10 [&_th]:text-xs [&_th]:font-semibold [&_th]:leading-4 [&_th]:text-[#121217]"
+          className="h-10 [&_th]:text-xs [&_th]:font-semibold [&_th]:leading-4 [&_th]:text-[hsl(var(--foreground))]"
           data-testid="TableRow__2364e3">
           <TableHead data-testid="TableHead__2364e3">{ui('financeAccountStatementLinesColLineNo')}</TableHead>
           <TableHead data-testid="TableHead__2364e3">{ui('financeAccountStatementLinesColDate')}</TableHead>
@@ -85,19 +85,19 @@ export function StatementLinesTable({ lines, loading, currency = 'EUR' }) {
               data-testid={`statement-line-row-${line.id}`}
               className="bg-card"
             >
-              <TableCell className="text-sm text-[#6c6c89]" data-testid="TableCell__2364e3">{line.lineNo}</TableCell>
+              <TableCell className="text-sm text-[hsl(var(--muted-foreground))]" data-testid="TableCell__2364e3">{line.lineNo}</TableCell>
               <TableCell
-                className="whitespace-nowrap text-sm text-[#121217]"
+                className="whitespace-nowrap text-sm text-[hsl(var(--foreground))]"
                 data-testid="TableCell__2364e3">
                 {formatDate(line.date, bcpLocale)}
               </TableCell>
               <TableCell
-                className="max-w-[220px] truncate text-sm text-[#121217]"
+                className="max-w-[220px] truncate text-sm text-[hsl(var(--foreground))]"
                 data-testid="TableCell__2364e3">
                 {line.description || '—'}
               </TableCell>
-              <TableCell className="text-sm text-[#121217]" data-testid="TableCell__2364e3">{line.reference || '—'}</TableCell>
-              <TableCell className="text-sm text-[#121217]" data-testid="TableCell__2364e3">{line.bpartnerName || '—'}</TableCell>
+              <TableCell className="text-sm text-[hsl(var(--foreground))]" data-testid="TableCell__2364e3">{line.reference || '—'}</TableCell>
+              <TableCell className="text-sm text-[hsl(var(--foreground))]" data-testid="TableCell__2364e3">{line.bpartnerName || '—'}</TableCell>
               <TableCell className="text-right" data-testid="TableCell__2364e3">
                 <MoneyAmount
                   value={line.amount}
@@ -109,7 +109,7 @@ export function StatementLinesTable({ lines, loading, currency = 'EUR' }) {
               <TableCell data-testid="TableCell__2364e3">
                 <span
                   className="inline-block h-2 w-2 rounded-full"
-                  style={{ backgroundColor: line.matched ? '#26A95F' : '#D1D4DB' }}
+                  style={{ backgroundColor: line.matched ? 'var(--status-success-fg)' : 'hsl(var(--border-control))' }}
                   aria-label={line.matched ? ui('financeAccountStatementLinesMatchedYes') : ui('financeAccountStatementLinesMatchedNo')}
                 />
               </TableCell>

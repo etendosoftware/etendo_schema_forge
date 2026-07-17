@@ -291,7 +291,7 @@ describe('MovementsTable — highlightTxnId deep-link', () => {
       highlightTxnId: 'm1',
     });
     const row = screen.getByTestId('movement-row-m1');
-    expect(row.className).toContain('bg-[#F5F7F9]');
+    expect(row.className).toContain('bg-[hsl(var(--muted))]');
     expect(screen.queryByTestId('movement-moreinfo-m1')).not.toBeInTheDocument();
   });
 

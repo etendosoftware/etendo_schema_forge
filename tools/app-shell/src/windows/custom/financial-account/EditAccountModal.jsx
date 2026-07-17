@@ -26,7 +26,7 @@ import { isValidIban, normalizeIban } from '@/lib/validateIban.js';
 import { formatCalendarDate } from '@/lib/dateOnly.js';
 
 const GROUPING_OPTIONS = ['1BD', '1BW', '1BM', '1BE'];
-const FIELD_INPUT = 'bg-card shadow-[0_1px_2px_rgba(18,18,23,0.05)]';
+const FIELD_INPUT = 'bg-card shadow-[0_1px_2px_hsl(var(--foreground) / 0.05)]';
 
 // ---------------------------------------------------------------------------
 // Pure helpers (kept top-level so the component/hooks stay simple)
@@ -271,8 +271,8 @@ function useReconciliationSettings(open, account) {
 
 function ReconciliationSettingsSection({ ui, recon }) {
   return (
-    <div className="mt-4 border-b border-[#E8EAEF] pb-4" data-testid="reconciliation-settings-section">
-      <p className="text-sm font-medium text-[#1E1E2C] mb-3">
+    <div className="mt-4 border-b border-[hsl(var(--border-subtle))] pb-4" data-testid="reconciliation-settings-section">
+      <p className="text-sm font-medium text-[hsl(var(--foreground))] mb-3">
         {ui('financeAccountsReconciliationSection')}
       </p>
       <div className="grid grid-cols-2 gap-4">
@@ -429,7 +429,7 @@ export function EditAccountModal({ open, onClose, onSaved, account, onArchive, o
         ) : null}
 
         {error ? (
-          <p className="text-xs text-[#F53D6B]" data-testid="edit-account-error">{error}</p>
+          <p className="text-xs text-[hsl(var(--destructive))]" data-testid="edit-account-error">{error}</p>
         ) : null}
 
         <EditFooter
@@ -467,7 +467,7 @@ export function EditAccountModal({ open, onClose, onSaved, account, onArchive, o
 
 function AccountFieldsGrid({ ui, account, isCash, psd2Connected, typeLabel, fields }) {
   return (
-    <div className="grid grid-cols-1 gap-4 border-b border-[#E8EAEF] pb-4 sm:grid-cols-2">
+    <div className="grid grid-cols-1 gap-4 border-b border-[hsl(var(--border-subtle))] pb-4 sm:grid-cols-2">
       <EditField
         label={ui('financeAccountsPsd2FieldName')}
         data-testid="EditField__73027d">
@@ -505,7 +505,7 @@ function AccountFieldsGrid({ ui, account, isCash, psd2Connected, typeLabel, fiel
             className={FIELD_INPUT}
           />
           {fields.ibanInvalid && fields.ibanTouched ? (
-            <p className="text-xs text-[#F53D6B]" data-testid="edit-account-iban-error">
+            <p className="text-xs text-[hsl(var(--destructive))]" data-testid="edit-account-iban-error">
               {ui('financeAccountsNewIbanInvalid')}
             </p>
           ) : null}
@@ -545,12 +545,12 @@ function Psd2ConnectionSection({ ui, psd2Connected, psd2, busy, reauthMessage, o
     <div className="flex flex-col gap-3">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <p className="text-sm font-semibold leading-5 text-[#121217]">{ui('financeAccountsEditConnectionSection')}</p>
+          <p className="text-sm font-semibold leading-5 text-[hsl(var(--foreground))]">{ui('financeAccountsEditConnectionSection')}</p>
           <div className="mt-1 flex items-center gap-2">
-            <span className="text-xs text-[#282833]">{ui('financeAccountsPsd2AutoSyncSubtitle')}</span>
+            <span className="text-xs text-[hsl(var(--foreground))]">{ui('financeAccountsPsd2AutoSyncSubtitle')}</span>
             {psd2Connected ? (
               <span className={`rounded-full px-2 py-0.5 text-xs font-normal ${
-                psd2.connected ? 'bg-[#EEFBF4] text-[#17663A]' : 'bg-[#F5F7F9] text-[#6C6C89]'
+                psd2.connected ? 'bg-[var(--status-success-bg)] text-[var(--status-success-fg)]' : 'bg-[hsl(var(--muted))] text-[hsl(var(--muted-foreground))]'
               }`}>
                 {psd2.connected ? `✓ ${ui('financeAccountsPsd2StatusConnected')}` : ui('financeAccountsPsd2StatusDisconnected')}
               </span>
@@ -562,7 +562,7 @@ function Psd2ConnectionSection({ ui, psd2Connected, psd2, busy, reauthMessage, o
             type="button"
             onClick={onConnect}
             data-testid="edit-account-connect-psd2"
-            className="inline-flex shrink-0 items-center gap-2 rounded-full bg-[#121217] px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-[#FFD500] hover:text-[#121217]"
+            className="inline-flex shrink-0 items-center gap-2 rounded-full bg-[hsl(var(--foreground))] px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-[hsl(var(--primary))] hover:text-[hsl(var(--foreground))]"
           >
             <Plug className="h-4 w-4" data-testid="Plug__73027d" />
             {ui('financeAccountsMenuConnect')}
@@ -570,7 +570,7 @@ function Psd2ConnectionSection({ ui, psd2Connected, psd2, busy, reauthMessage, o
         ) : null}
       </div>
       {psd2Connected && psd2.loading ? (
-        <p className="text-xs text-[#6C6C89]">{ui('financeAccountsPsd2Loading')}</p>
+        <p className="text-xs text-[hsl(var(--muted-foreground))]">{ui('financeAccountsPsd2Loading')}</p>
       ) : null}
       {psd2Connected && !psd2.loading ? (
         <Psd2Panel
@@ -586,9 +586,9 @@ function Psd2ConnectionSection({ ui, psd2Connected, psd2, busy, reauthMessage, o
 
 function Psd2Panel({ ui, psd2, busy, reauthMessage }) {
   return (
-    <div className="flex flex-col gap-3 rounded-lg bg-[#F5F7F9] p-3">
+    <div className="flex flex-col gap-3 rounded-lg bg-[hsl(var(--muted))] p-3">
       <div className="flex items-center justify-between gap-2">
-        <span className="text-sm font-semibold text-[#121217]">
+        <span className="text-sm font-semibold text-[hsl(var(--foreground))]">
           {psd2.status?.providerName || ui('financeAccountsPsd2StatusConnected')}
         </span>
         <button
@@ -596,9 +596,9 @@ function Psd2Panel({ ui, psd2, busy, reauthMessage }) {
           disabled={busy || !psd2.connected}
           onClick={psd2.handleSync}
           data-testid="psd2-edit-sync"
-          className="inline-flex items-center gap-1.5 rounded-lg border border-[#D1D4DB] bg-card px-3 py-1.5 text-sm font-medium text-[#121217] shadow-[0_1px_2px_rgba(18,18,23,0.05)] hover:bg-[#F5F7F9] disabled:opacity-50"
+          className="inline-flex items-center gap-1.5 rounded-lg border border-[hsl(var(--border-control))] bg-card px-3 py-1.5 text-sm font-medium text-[hsl(var(--foreground))] shadow-[0_1px_2px_hsl(var(--foreground) / 0.05)] hover:bg-[hsl(var(--muted))] disabled:opacity-50"
         >
-          <RefreshCw className="h-4 w-4 text-[#828FA3]" data-testid="RefreshCw__73027d" />
+          <RefreshCw className="h-4 w-4 text-[hsl(var(--text-disabled))]" data-testid="RefreshCw__73027d" />
           {ui('financeAccountsMenuSyncNow')}
         </button>
       </div>
@@ -638,10 +638,10 @@ function Psd2Panel({ ui, psd2, busy, reauthMessage }) {
       </div>
 
       {reauthMessage ? (
-        <div className="flex items-center justify-between gap-2 rounded-lg bg-[#FFF9EB] px-3 py-3" data-testid="psd2-edit-reauth-banner">
-          <span className="flex items-center gap-2 text-sm font-medium text-[#8A6100]">
+        <div className="flex items-center justify-between gap-2 rounded-lg bg-[var(--status-warning-bg)] px-3 py-3" data-testid="psd2-edit-reauth-banner">
+          <span className="flex items-center gap-2 text-sm font-medium text-[var(--status-warning-fg)]">
             <AlertTriangle
-              className="h-4 w-4 shrink-0 text-[#C28800]"
+              className="h-4 w-4 shrink-0 text-[var(--status-warning-fg)]"
               data-testid="AlertTriangle__73027d" />
             {reauthMessage}
           </span>
@@ -650,7 +650,7 @@ function Psd2Panel({ ui, psd2, busy, reauthMessage }) {
             disabled={busy}
             onClick={psd2.handleReconnect}
             data-testid="psd2-edit-reauth-link"
-            className="shrink-0 text-sm font-medium text-[#8A6100] underline disabled:opacity-50"
+            className="shrink-0 text-sm font-medium text-[var(--status-warning-fg)] underline disabled:opacity-50"
           >
             {ui('financeAccountsPsd2Reauth')}
           </button>
@@ -685,7 +685,7 @@ function EditFooter({ ui, account, psd2Connected, connected, busy, canSave, onAr
           type="button"
           onClick={onCancel}
           data-testid="edit-account-cancel"
-          className="rounded-full border border-[#D1D4DB] bg-card px-4 py-2 text-sm font-medium text-[#121217] shadow-[0_1px_2px_rgba(18,18,23,0.05)] hover:bg-[#F5F7F9]"
+          className="rounded-full border border-[hsl(var(--border-control))] bg-card px-4 py-2 text-sm font-medium text-[hsl(var(--foreground))] shadow-[0_1px_2px_hsl(var(--foreground) / 0.05)] hover:bg-[hsl(var(--muted))]"
         >
           {ui('cancel')}
         </button>
@@ -694,7 +694,7 @@ function EditFooter({ ui, account, psd2Connected, connected, busy, canSave, onAr
           disabled={!canSave}
           onClick={onSave}
           data-testid="edit-account-save"
-          className="rounded-full bg-[#121217] px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-[#FFD500] hover:text-[#121217] disabled:bg-[#D1D4DB] disabled:text-white disabled:hover:bg-[#D1D4DB] disabled:hover:text-white"
+          className="rounded-full bg-[hsl(var(--foreground))] px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-[hsl(var(--primary))] hover:text-[hsl(var(--foreground))] disabled:bg-[hsl(var(--border-control))] disabled:text-white disabled:hover:bg-[hsl(var(--border-control))] disabled:hover:text-white"
         >
           {ui('financeAccountsEditSave')}
         </button>
@@ -706,7 +706,7 @@ function EditFooter({ ui, account, psd2Connected, connected, busy, canSave, onAr
 function EditField({ label, children }) {
   return (
     <div className="flex flex-col gap-2">
-      <span className="text-sm font-medium leading-6 text-[#121217]">{label}</span>
+      <span className="text-sm font-medium leading-6 text-[hsl(var(--foreground))]">{label}</span>
       {children}
     </div>
   );
@@ -715,11 +715,11 @@ function EditField({ label, children }) {
 function ReadField({ label, value, onCopy, copyLabel }) {
   return (
     <div className="flex flex-col gap-2">
-      <span className="text-sm font-medium leading-6 text-[#121217]">{label}</span>
-      <div className="flex h-10 items-center gap-2 rounded-lg border border-[#D1D4DB] bg-card px-3 shadow-[0_1px_2px_rgba(18,18,23,0.05)]">
-        <span className="min-w-0 flex-1 truncate text-sm text-[#121217]">{value || '—'}</span>
+      <span className="text-sm font-medium leading-6 text-[hsl(var(--foreground))]">{label}</span>
+      <div className="flex h-10 items-center gap-2 rounded-lg border border-[hsl(var(--border-control))] bg-card px-3 shadow-[0_1px_2px_hsl(var(--foreground) / 0.05)]">
+        <span className="min-w-0 flex-1 truncate text-sm text-[hsl(var(--foreground))]">{value || '—'}</span>
         {onCopy ? (
-          <button type="button" onClick={onCopy} aria-label={copyLabel} className="text-[#828FA3] hover:text-[#121217]">
+          <button type="button" onClick={onCopy} aria-label={copyLabel} className="text-[hsl(var(--text-disabled))] hover:text-[hsl(var(--foreground))]">
             <Copy className="h-4 w-4" data-testid="Copy__73027d" />
           </button>
         ) : null}
@@ -734,12 +734,12 @@ function FooterButton({ icon: Icon, label, onClick, disabled, danger }) {
       type="button"
       onClick={onClick}
       disabled={disabled}
-      className={`inline-flex items-center gap-2 rounded-full border bg-card px-3 py-2 text-sm font-medium shadow-[0_1px_2px_rgba(18,18,23,0.05)] disabled:opacity-50 ${
-        danger ? 'border-[#FBB1C4] text-[#D50B3E] hover:bg-[#FDEEF2]' : 'border-[#D1D4DB] text-[#121217] hover:bg-[#F5F7F9]'
+      className={`inline-flex items-center gap-2 rounded-full border bg-card px-3 py-2 text-sm font-medium shadow-[0_1px_2px_hsl(var(--foreground) / 0.05)] disabled:opacity-50 ${
+        danger ? 'border-[hsl(var(--destructive) / 0.3)] text-[hsl(var(--destructive))] hover:bg-[var(--status-destructive-bg)]' : 'border-[hsl(var(--border-control))] text-[hsl(var(--foreground))] hover:bg-[hsl(var(--muted))]'
       }`}
     >
       <Icon
-        className={`h-5 w-5 ${danger ? 'text-[#D50B3E]' : 'text-[#828FA3]'}`}
+        className={`h-5 w-5 ${danger ? 'text-[hsl(var(--destructive))]' : 'text-[hsl(var(--text-disabled))]'}`}
         data-testid="Icon__73027d" />
       {label}
     </button>

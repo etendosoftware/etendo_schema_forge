@@ -92,13 +92,13 @@ function ProgressRing({ active, size = 160, stroke = 12 }) {
   return (
     <div className="relative" style={{ width: size, height: size }}>
       <svg width={size} height={size} className="-rotate-90">
-        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="#E8EAEF" strokeWidth={stroke} />
+        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="hsl(var(--border-subtle))" strokeWidth={stroke} />
         <circle
           cx={size / 2}
           cy={size / 2}
           r={r}
           fill="none"
-          stroke="#121217"
+          stroke="hsl(var(--foreground))"
           strokeWidth={stroke}
           strokeLinecap="round"
           strokeDasharray={circ}
@@ -106,7 +106,7 @@ function ProgressRing({ active, size = 160, stroke = 12 }) {
           style={{ transition: 'stroke-dashoffset .4s ease' }}
         />
       </svg>
-      <span className="absolute inset-0 flex items-center justify-center text-2xl leading-8 text-[#121217]">
+      <span className="absolute inset-0 flex items-center justify-center text-2xl leading-8 text-[hsl(var(--foreground))]">
         {Math.round(pct)}%
       </span>
     </div>
@@ -119,8 +119,8 @@ function ProcessingBody({ active = true, titleKey, subtitleKey, ui }) {
     <div className="flex flex-col items-center justify-center gap-3 py-3">
       <ProgressRing active={active} data-testid="ProgressRing__de9647" />
       <div className="flex flex-col items-center gap-0.5">
-        <div className="text-xl font-semibold leading-7 text-[#121217]">{ui(titleKey)}</div>
-        <div className="max-w-[323px] text-center text-sm leading-5 text-[#6C6C89]">
+        <div className="text-xl font-semibold leading-7 text-[hsl(var(--foreground))]">{ui(titleKey)}</div>
+        <div className="max-w-[323px] text-center text-sm leading-5 text-[hsl(var(--muted-foreground))]">
           {ui(subtitleKey)}
         </div>
       </div>
@@ -184,7 +184,7 @@ function Stepper({ step, ui }) {
               <span
                 className={cn(
                   'h-[1.5px] w-16 rounded-sm',
-                  isDone ? 'bg-[#C5F0D8]' : 'bg-[#E8EAEF]',
+                  isDone ? 'bg-[var(--status-success-border)]' : 'bg-[hsl(var(--border-subtle))]',
                 )}
               />
             ) : null}
@@ -196,13 +196,13 @@ function Stepper({ step, ui }) {
 }
 
 function StepperItem({ label, isActive, isDone, index }) {
-  let textClass = 'text-[#555B6D] font-normal';
-  if (isActive) textClass = 'text-[#121217] font-semibold';
-  else if (isDone) textClass = 'text-[#555B6D] font-normal line-through';
+  let textClass = 'text-[hsl(var(--muted-foreground))] font-normal';
+  if (isActive) textClass = 'text-[hsl(var(--foreground))] font-semibold';
+  else if (isDone) textClass = 'text-[hsl(var(--muted-foreground))] font-normal line-through';
 
-  let badgeClass = 'border-[#D1D4DB] bg-[#F5F7F9] text-[#3F3F50]';
-  if (isActive) badgeClass = 'border-transparent bg-[#121217] text-white';
-  else if (isDone) badgeClass = 'border-transparent bg-[#EEFBF4] text-[#1E874C]';
+  let badgeClass = 'border-[hsl(var(--border-control))] bg-[hsl(var(--muted))] text-[hsl(var(--muted-foreground))]';
+  if (isActive) badgeClass = 'border-transparent bg-[hsl(var(--foreground))] text-white';
+  else if (isDone) badgeClass = 'border-transparent bg-[var(--status-success-bg)] text-[var(--status-success-fg)]';
 
   return (
     <div className={cn('flex items-center gap-1.5 text-sm leading-5', textClass)}>
@@ -234,22 +234,22 @@ function Dropzone({ onPick, dragging, onDragOver, onDragLeave, onDrop, ui }) {
       className={cn(
         'cursor-pointer rounded-lg border border-dashed px-6 py-8 text-center transition-colors',
         dragging
-          ? 'border-[#A8AAB8] bg-[#F5F7F9]'
-          : 'border-[#D1D4DB] bg-card hover:border-[#A8AAB8] hover:bg-[#F5F7F9]',
+          ? 'border-[hsl(var(--text-disabled))] bg-[hsl(var(--muted))]'
+          : 'border-[hsl(var(--border-control))] bg-card hover:border-[hsl(var(--text-disabled))] hover:bg-[hsl(var(--muted))]',
       )}
     >
       <div
-        className="mx-auto mb-2 flex h-8 w-8 items-center justify-center rounded-lg border border-[#D1D4DB] bg-card text-[#828FA3] shadow-[0_1px_2px_rgba(18,18,23,0.05)]"
+        className="mx-auto mb-2 flex h-8 w-8 items-center justify-center rounded-lg border border-[hsl(var(--border-control))] bg-card text-[hsl(var(--text-disabled))] shadow-[0_1px_2px_hsl(var(--foreground) / 0.05)]"
         aria-hidden="true"
       >
         <UploadCloud className="h-5 w-5" data-testid="UploadCloud__de9647" />
       </div>
-      <div className="text-sm font-medium text-[#121217]">
+      <div className="text-sm font-medium text-[hsl(var(--foreground))]">
         {dragging
           ? ui('financeAccountStatementsImportDropDrop')
           : ui('financeAccountStatementsImportDropTitlePrefix')}
       </div>
-      <div className="mt-1 text-xs text-[#6C6C89]">
+      <div className="mt-1 text-xs text-[hsl(var(--muted-foreground))]">
         {ui('financeAccountStatementsImportDropHint')}
       </div>
     </div>
@@ -271,18 +271,18 @@ function SelectedFile({
       onDragLeave={onDragLeave}
       onDrop={onDrop}
       className={cn(
-        'cursor-pointer rounded-lg border-2 border-[#121217] px-6 py-8 text-center transition-colors',
-        dragging ? 'bg-[rgba(18,18,23,0.08)]' : 'bg-[rgba(18,18,23,0.05)]',
+        'cursor-pointer rounded-lg border-2 border-[hsl(var(--foreground))] px-6 py-8 text-center transition-colors',
+        dragging ? 'bg-[hsl(var(--foreground) / 0.08)]' : 'bg-[hsl(var(--foreground) / 0.05)]',
       )}
     >
       <div
-        className="mx-auto mb-2 flex h-8 w-8 items-center justify-center rounded-lg bg-[#121217] text-white/90"
+        className="mx-auto mb-2 flex h-8 w-8 items-center justify-center rounded-lg bg-[hsl(var(--foreground))] text-white/90"
         aria-hidden="true"
       >
         <FileText className="h-5 w-5" data-testid="FileText__de9647" />
       </div>
-      <div className="truncate text-sm font-semibold text-[#121217]">{file.name}</div>
-      <div className="mt-1 text-xs text-[#6C6C89]">
+      <div className="truncate text-sm font-semibold text-[hsl(var(--foreground))]">{file.name}</div>
+      <div className="mt-1 text-xs text-[hsl(var(--muted-foreground))]">
         <div>
           {formatBytes(file.size)} · {ui('financeAccountStatementsImportLines', { count: lineCount })}
         </div>
@@ -297,12 +297,12 @@ function SelectedFile({
 // ─────────────────────────────────────────────────────────────────────────────
 
 function WidgetKpi({ label, value, tone }) {
-  let valueClass = 'text-[#121217]';
-  if (tone === 'pos') valueClass = 'text-[#17663A]';
-  else if (tone === 'neg') valueClass = 'text-[#AF0932]';
+  let valueClass = 'text-[hsl(var(--foreground))]';
+  if (tone === 'pos') valueClass = 'text-[var(--status-success-fg)]';
+  else if (tone === 'neg') valueClass = 'text-[hsl(var(--destructive))]';
   return (
     <div className="flex min-w-0 flex-col">
-      <span className="text-xs leading-4 text-[#3F3F50]">{label}</span>
+      <span className="text-xs leading-4 text-[hsl(var(--muted-foreground))]">{label}</span>
       <span className={cn('truncate text-base font-medium leading-6 tabular-nums', valueClass)}>
         {value}
       </span>
@@ -313,7 +313,7 @@ function WidgetKpi({ label, value, tone }) {
 /** Step 2 summary strip: inline Líneas / Abonos / Cargos / Periodo. */
 function SummaryWidget({ count, totalIn, totalOut, period, currency, bcpLocale, ui }) {
   return (
-    <div className="flex items-center gap-5 rounded-lg border border-[#E8EAEF] px-3 py-2">
+    <div className="flex items-center gap-5 rounded-lg border border-[hsl(var(--border-subtle))] px-3 py-2">
       <WidgetKpi label={ui('financeAccountStatementsImportKpiLines')} value={count} data-testid="WidgetKpi__de9647" />
       <WidgetKpi
         label={ui('financeAccountStatementsImportKpiCredits')}
@@ -343,7 +343,7 @@ function AmountCell({ value, sign, toneClass, currency, bcpLocale }) {
   if (value > 0) {
     return <span className={toneClass}>{sign}{formatMoney(value, currency, bcpLocale)}</span>;
   }
-  return <span className="text-[#C1C3CC]">—</span>;
+  return <span className="text-[hsl(var(--text-disabled))]">—</span>;
 }
 
 function lineKeyOf(l) {
@@ -356,11 +356,11 @@ function PreviewLines({ lines, max = 5, currency, bcpLocale, ui }) {
   const hasMore = lines.length > max;
   return (
     <div className="flex flex-col gap-2">
-      <div className="overflow-hidden rounded-lg border border-[#E8EAEF] bg-card shadow-[0_1px_2px_rgba(18,18,23,0.05)]">
+      <div className="overflow-hidden rounded-lg border border-[hsl(var(--border-subtle))] bg-card shadow-[0_1px_2px_hsl(var(--foreground) / 0.05)]">
         <div
           className={cn(
             PREV_GRID,
-            'h-10 border-b border-[#E8EAEF] text-xs font-semibold text-[#121217]',
+            'h-10 border-b border-[hsl(var(--border-subtle))] text-xs font-semibold text-[hsl(var(--foreground))]',
           )}
         >
           <span>{ui('financeAccountStatementLinesColDate')}</span>
@@ -374,20 +374,20 @@ function PreviewLines({ lines, max = 5, currency, bcpLocale, ui }) {
           return (
             <div
               key={lineKeyOf(l)}
-              className={cn(PREV_GRID, 'border-b border-[#E8EAEF] py-2 last:border-0')}
+              className={cn(PREV_GRID, 'border-b border-[hsl(var(--border-subtle))] py-2 last:border-0')}
             >
-              <span className="text-sm text-[#121217]">{formatDate(l.date, bcpLocale)}</span>
+              <span className="text-sm text-[hsl(var(--foreground))]">{formatDate(l.date, bcpLocale)}</span>
               <div className="flex min-w-0 flex-col">
-                <span className="truncate text-sm font-semibold text-[#121217]">{l.description || '—'}</span>
+                <span className="truncate text-sm font-semibold text-[hsl(var(--foreground))]">{l.description || '—'}</span>
                 {l.bpartnerName ? (
-                  <span className="truncate text-xs font-medium text-[#6C6C89]">{l.bpartnerName}</span>
+                  <span className="truncate text-xs font-medium text-[hsl(var(--muted-foreground))]">{l.bpartnerName}</span>
                 ) : null}
               </div>
               <span className="text-right text-sm font-semibold tabular-nums">
                 <AmountCell
                   value={dr}
                   sign="−"
-                  toneClass="text-[#AF0932]"
+                  toneClass="text-[hsl(var(--destructive))]"
                   currency={currency}
                   bcpLocale={bcpLocale}
                   data-testid="AmountCell__de9647" />
@@ -396,7 +396,7 @@ function PreviewLines({ lines, max = 5, currency, bcpLocale, ui }) {
                 <AmountCell
                   value={cr}
                   sign="+"
-                  toneClass="text-[#17663A]"
+                  toneClass="text-[var(--status-success-fg)]"
                   currency={currency}
                   bcpLocale={bcpLocale}
                   data-testid="AmountCell__de9647" />
@@ -410,13 +410,13 @@ function PreviewLines({ lines, max = 5, currency, bcpLocale, ui }) {
           <button
             type="button"
             onClick={() => setShowAll((v) => !v)}
-            className="inline-flex items-center gap-1 text-sm font-medium text-[#121217] underline"
+            className="inline-flex items-center gap-1 text-sm font-medium text-[hsl(var(--foreground))] underline"
           >
             {showAll
               ? ui('financeAccountStatementsImportShowLess')
               : ui('financeAccountStatementsImportShowAll')}
             <ChevronDown
-              className={cn('h-4 w-4 text-[#828FA3] transition-transform', showAll && 'rotate-180')}
+              className={cn('h-4 w-4 text-[hsl(var(--text-disabled))] transition-transform', showAll && 'rotate-180')}
               data-testid="ChevronDown__de9647" />
           </button>
         </div>
@@ -454,16 +454,16 @@ function EmptyOrErrorBody({ view, ui, inputRef, dragging, setDragging, handlePic
         }}
         data-testid="Dropzone__de9647" />
       {view === 'error' ? (
-        <div className="mt-3 flex items-start gap-2 rounded-lg bg-[#FEF0F4] py-3 pl-1.5 pr-2">
-          <AlertTriangle className="h-6 w-6 shrink-0 text-[#D50B3E]" data-testid="AlertTriangle__de9647" />
-          <span className="flex-1 px-1 text-sm font-medium leading-6 text-[#D50B3E]">
+        <div className="mt-3 flex items-start gap-2 rounded-lg bg-[var(--status-destructive-bg)] py-3 pl-1.5 pr-2">
+          <AlertTriangle className="h-6 w-6 shrink-0 text-[hsl(var(--destructive))]" data-testid="AlertTriangle__de9647" />
+          <span className="flex-1 px-1 text-sm font-medium leading-6 text-[hsl(var(--destructive))]">
             {ui('financeAccountStatementsImportErrorBody')}
           </span>
           <button
             type="button"
             onClick={reset}
             aria-label={ui('financeAccountStatementsImportCloseBtn')}
-            className="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg text-[#828FA3] transition-colors hover:bg-[#FBD9E2]"
+            className="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg text-[hsl(var(--text-disabled))] transition-colors hover:bg-[var(--status-destructive-bg)]"
           >
             <X className="h-5 w-5" data-testid="X__de9647" />
           </button>
@@ -607,7 +607,7 @@ function PreviewFooterButton({ ui, importing, previewData, handleConfirmImport }
       type="button"
       onClick={handleConfirmImport}
       disabled={importing}
-      className="inline-flex h-10 items-center justify-center gap-1.5 rounded-full bg-[#121217] px-4 text-sm font-medium text-white transition-colors hover:bg-[#2A2A30] disabled:cursor-not-allowed disabled:opacity-50"
+      className="inline-flex h-10 items-center justify-center gap-1.5 rounded-full bg-[hsl(var(--foreground))] px-4 text-sm font-medium text-white transition-colors hover:bg-[hsl(var(--foreground))] disabled:cursor-not-allowed disabled:opacity-50"
     >
       <Check className="h-5 w-5" data-testid="Check__de9647" />
       {ui('financeAccountStatementsImportConfirm', {
@@ -626,7 +626,7 @@ function DefaultFooterButtons({ ui, view, previewing, handleContinue }) {
       disabled={disabled}
       className={cn(
         'inline-flex h-10 items-center justify-center gap-1.5 rounded-full px-4 text-sm font-medium text-white transition-colors',
-        disabled ? 'cursor-not-allowed bg-[#D1D4DB]' : 'bg-[#121217] hover:bg-[#2A2A30]',
+        disabled ? 'cursor-not-allowed bg-[hsl(var(--border-control))]' : 'bg-[hsl(var(--foreground))] hover:bg-[hsl(var(--foreground))]',
       )}
     >
       <ArrowRight className="h-5 w-5" data-testid="ArrowRight__de9647" />
@@ -666,7 +666,7 @@ function ModalFooter({
         <button
           type="button"
           onClick={() => setView('selected')}
-          className="inline-flex h-10 items-center justify-center rounded-full border border-[#D1D4DB] bg-card px-4 text-sm font-medium text-[#121217] shadow-[0_1px_2px_rgba(18,18,23,0.05)] hover:bg-[#F5F7F9]"
+          className="inline-flex h-10 items-center justify-center rounded-full border border-[hsl(var(--border-control))] bg-card px-4 text-sm font-medium text-[hsl(var(--foreground))] shadow-[0_1px_2px_hsl(var(--foreground) / 0.05)] hover:bg-[hsl(var(--muted))]"
         >
           {ui('financeAccountStatementsImportChangeFile')}
         </button>
@@ -782,7 +782,7 @@ export function ImportStatementModal({
           'imp-modal-enter overflow-hidden p-0',
           wide ? 'max-w-[720px]' : 'max-w-[600px]',
         )}
-        style={{ background: 'var(--surface-overlay, #FFFFFF)' }}
+        style={{ background: 'var(--surface-overlay, hsl(var(--card)))' }}
         onPointerDownOutside={(e) => e.preventDefault()}
         data-testid="DialogContent__de9647">
         <style>{ANIMATIONS_CSS}</style>
@@ -790,10 +790,10 @@ export function ImportStatementModal({
         {/* Header */}
         <div className="flex items-start gap-4 px-6 pt-6">
           <div className="flex-1">
-            <h2 className="text-lg font-semibold leading-6 text-[#121217]">
+            <h2 className="text-lg font-semibold leading-6 text-[hsl(var(--foreground))]">
               {ui('financeAccountStatementsImportTitle')}
             </h2>
-            <p className="mt-1 text-[13px] leading-[19px] text-[#6C6C89]">
+            <p className="mt-1 text-[13px] leading-[19px] text-[hsl(var(--muted-foreground))]">
               {ui(VIEW_TO_SUBTITLE_KEY[view] ?? VIEW_TO_SUBTITLE_KEY.empty)}
             </p>
           </div>
