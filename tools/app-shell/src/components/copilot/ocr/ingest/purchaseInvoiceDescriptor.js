@@ -1,4 +1,4 @@
-import { simSearch } from '../../../../lib/simSearch.js';
+import { simSearch } from '@etendosoftware/app-shell-core/lib/simSearch.js';
 import { deriveContactsApiBase } from '../contactApi.js';
 
 /**

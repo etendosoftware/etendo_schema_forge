@@ -1,7 +1,7 @@
 import { nonBlank, toIsoDate, buildTaxSearchTerm, buildLineOps, findBp, resolveTaxesForLines, findTax } from '../purchaseInvoiceDescriptor';
 
 // Mock simSearch and contactApi to test findBp/resolveTaxesForLines without network
-vi.mock('../../../../../lib/simSearch.js', () => ({
+vi.mock('@etendosoftware/app-shell-core/lib/simSearch.js', () => ({
   simSearch: vi.fn().mockResolvedValue([]),
 }));
 vi.mock('../../contactApi.js', () => ({
@@ -227,7 +227,7 @@ describe('purchaseInvoiceDescriptor', () => {
     });
 
     it('calls simSearch and maps results to ids when terms exist', async () => {
-      const { simSearch } = await import('../../../../../lib/simSearch.js');
+      const { simSearch } = await import('@etendosoftware/app-shell-core/lib/simSearch.js');
       simSearch.mockResolvedValueOnce([{ id: 'TAX-21' }, null, { id: 'TAX-0' }]);
       const lines = [
         { tax_label: 'IVA 21%' },
@@ -244,7 +244,7 @@ describe('purchaseInvoiceDescriptor', () => {
     });
 
     it('returns null for entries where simSearch match has no id', async () => {
-      const { simSearch } = await import('../../../../../lib/simSearch.js');
+      const { simSearch } = await import('@etendosoftware/app-shell-core/lib/simSearch.js');
       simSearch.mockResolvedValueOnce([{ name: 'no-id-field' }]);
       const result = await resolveTaxesForLines({ token: 'tk', lines: [{ tax_label: 'Exento' }] });
       expect(result).toEqual([null]);
@@ -261,35 +261,35 @@ describe('purchaseInvoiceDescriptor', () => {
     });
 
     it('returns matched tax with id and label when simSearch finds a match', async () => {
-      const { simSearch } = await import('../../../../../lib/simSearch.js');
+      const { simSearch } = await import('@etendosoftware/app-shell-core/lib/simSearch.js');
       simSearch.mockResolvedValueOnce([{ id: 'TAX-21', name: 'IVA Compras 21%' }]);
       const result = await findTax({ token: 'tk', value: 'IVA 21%' });
       expect(result).toEqual({ id: 'TAX-21', label: 'IVA Compras 21%' });
     });
 
     it('uses value term for label when match has no name', async () => {
-      const { simSearch } = await import('../../../../../lib/simSearch.js');
+      const { simSearch } = await import('@etendosoftware/app-shell-core/lib/simSearch.js');
       simSearch.mockResolvedValueOnce([{ id: 'TAX-21' }]);
       const result = await findTax({ token: 'tk', value: 'IVA 21%' });
       expect(result).toEqual({ id: 'TAX-21', label: 'IVA 21%' });
     });
 
     it('returns null when simSearch returns empty match', async () => {
-      const { simSearch } = await import('../../../../../lib/simSearch.js');
+      const { simSearch } = await import('@etendosoftware/app-shell-core/lib/simSearch.js');
       simSearch.mockResolvedValueOnce([null]);
       const result = await findTax({ token: 'tk', value: 'IVA' });
       expect(result).toBeNull();
     });
 
     it('returns null when simSearch returns match without id', async () => {
-      const { simSearch } = await import('../../../../../lib/simSearch.js');
+      const { simSearch } = await import('@etendosoftware/app-shell-core/lib/simSearch.js');
       simSearch.mockResolvedValueOnce([{ name: 'something' }]);
       const result = await findTax({ token: 'tk', value: 'IVA' });
       expect(result).toBeNull();
     });
 
     it('falls back to extracted.tax_label when value is null', async () => {
-      const { simSearch } = await import('../../../../../lib/simSearch.js');
+      const { simSearch } = await import('@etendosoftware/app-shell-core/lib/simSearch.js');
       simSearch.mockResolvedValueOnce([{ id: 'TAX-EX', name: 'Exento' }]);
       const result = await findTax({ token: 'tk', value: null, extracted: { tax_label: 'Exento' } });
       expect(result).toEqual({ id: 'TAX-EX', label: 'Exento' });
@@ -478,7 +478,7 @@ describe('purchaseInvoiceDescriptor', () => {
     beforeEach(async () => {
       const mod = await import('../purchaseInvoiceDescriptor');
       buildPurchaseInvoiceBatch = mod.buildPurchaseInvoiceBatch;
-      const simMod = await import('../../../../../lib/simSearch.js');
+      const simMod = await import('@etendosoftware/app-shell-core/lib/simSearch.js');
       simSearchMock = simMod.simSearch;
       simSearchMock.mockReset();
       globalThis.fetch = vi.fn();
@@ -732,7 +732,7 @@ describe('purchaseInvoiceDescriptor', () => {
 
   describe('resolveTaxesForLines — simSearch returns objects without .id', () => {
     it('returns null for entries where match has no .id property', async () => {
-      const { simSearch } = await import('../../../../../lib/simSearch.js');
+      const { simSearch } = await import('@etendosoftware/app-shell-core/lib/simSearch.js');
       simSearch.mockResolvedValueOnce([
         { name: 'IVA 21%' },          // no .id
         { similarity: 0.8 },           // no .id
@@ -748,7 +748,7 @@ describe('purchaseInvoiceDescriptor', () => {
     });
 
     it('returns null for undefined match entries', async () => {
-      const { simSearch } = await import('../../../../../lib/simSearch.js');
+      const { simSearch } = await import('@etendosoftware/app-shell-core/lib/simSearch.js');
       simSearch.mockResolvedValueOnce([undefined, null]);
       const lines = [
         { tax_label: 'Missing' },

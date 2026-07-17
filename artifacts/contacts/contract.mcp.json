@@ -1,8 +1,7 @@
 {
   "version": "0.40.0",
-  "generatedAt": "2026-05-06T15:52:09.982Z",
-  "updatedAt": "2026-06-19T12:52:46.818Z",
-  "contractChecksum": "43148e5c2c90e652",
+  "generatedAt": "2026-07-07T21:53:25.883Z",
+  "contractChecksum": "306c342d2b869af1",
   "apiPrediction": {
     "specName": "contacts",
     "baseUrl": "/sws/neo/contacts",
@@ -722,9 +721,16 @@
             "defaultValue": "'1'"
           },
           "taxID": {},
+          "oBTIKVIESStatus": {
+            "readOnly": true
+          },
           "etgoWeb": {},
           "etgoEmail": {},
           "etgoPhone": {},
+          "etgoIsperson": {
+            "required": true,
+            "defaultValue": "N"
+          },
           "businessPartnerCategory": {
             "required": true,
             "defaultValue": "@SQL=SELECT MAX(C_BP_GROUP_ID) FROM C_BP_GROUP WHERE AD_ISORGINCLUDED(@AD_ORG_ID@, AD_ORG_ID, @#AD_CLIENT_ID@) <> -1 AND ISDEFAULT = 'Y' AND AD_CLIENT_ID = @#AD_CLIENT_ID@"
@@ -763,10 +769,6 @@
           "isCustomerConsent": {
             "defaultValue": "N"
           },
-          "etgoIsperson": {
-            "required": true,
-            "defaultValue": "N"
-          },
           "operator": {
             "defaultValue": "N"
           },
@@ -782,6 +784,9 @@
             "required": true,
             "defaultValue": "N"
           },
+          "eTGOLocation": {
+            "readOnly": true
+          },
           "account": {},
           "paymentMethod": {},
           "isSalesRepresentative": {
@@ -795,12 +800,6 @@
           "vendorBlocking": {
             "required": true,
             "defaultValue": "N"
-          },
-          "eTGOLocation": {
-            "readOnly": true
-          },
-          "oBTIKVIESStatus": {
-            "readOnly": true
           }
         }
       },
@@ -1120,13 +1119,13 @@
         "etgoFirstname",
         "etgoLastname",
         "oBTIKTaxIDKey",
+        "etgoIsperson",
         "businessPartnerCategory",
         "customer",
         "vendor",
         "employee",
         "setNewCurrency",
         "creditLimit",
-        "etgoIsperson",
         "customerBlocking",
         "isSalesRepresentative",
         "vendorBlocking"
@@ -1230,13 +1229,13 @@
           "etgoFirstname",
           "etgoLastname",
           "oBTIKTaxIDKey",
+          "etgoIsperson",
           "businessPartnerCategory",
           "customer",
           "vendor",
           "employee",
           "setNewCurrency",
           "creditLimit",
-          "etgoIsperson",
           "customerBlocking",
           "isSalesRepresentative",
           "vendorBlocking"
@@ -1247,5 +1246,5 @@
     "knownLimitations": [],
     "dangerousOperations": []
   },
-  "checksum": "c893e5be2aae8206"
+  "checksum": "5f071bb50c23a960"
 }

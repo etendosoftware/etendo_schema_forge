@@ -415,9 +415,73 @@ The generic `LinesEmptyState` component lives at `tools/app-shell/src/components
 
 `addLineGuard` receives current form data and must return `true` to enable adding lines. It gates both the button inside the empty state (`canAddLine` prop) and the `+ Add Line` button in the lines table header. Without a guard, adding is always allowed.
 
+**`window.maxDetailLines` — cap the line count (decisions-driven; `0` = import-only lines):**
+
+```json
+// decisions.json
+"window": {
+  "maxDetailLines": 0
+}
+```
+
+Unlike `addLineGuard` (a JSX prop on the custom wrapper), `maxDetailLines` is a `decisions.json` option, so it survives pipeline re-runs. The generator translates it into a count-based guard on the generated page:
+
+```jsx
+// emitted in artifacts/{window}/generated/web/{window}/*Page.jsx
+addLineGuard={(_, children) => children.length < 0}   // maxDetailLines: 0 — always false
+```
+
+- **`N > 0`** caps the detail entity at `N` lines: the add-line affordances disappear once the child count reaches `N`.
+- **`0`** disables manual line creation entirely — the **import-only lines pattern**. `canAddLines` resolves to `false` unconditionally, so `DetailView`:
+  - passes `canAddLine={false}` to the lines empty state — the shared `LinesEmptyState` hides its primary `+ Add Lines` button and keeps `secondaryAction` (typically an import button), which becomes the only way to create lines;
+  - never renders the add-line area below the lines table (`canShowAddLineArea` requires `canAddLines`), which also hides the inline `detailExtraActions` trigger and the add-line kebab fed by `lineMenuActions`, since both live inside that area — `DetailView` itself renders no line-creation control once lines exist (see the panel-rendered pattern below to keep import available).
+
+**Keeping import available once lines exist (window-scoped, panel-rendered pattern):** because the suppressed add-line area is also where `detailExtraActions` renders, a window that must allow importing MORE lines into a draft that already has lines re-renders its import trigger from its own `customComponents.bottomSection` panel — the bottom section always renders below the lines area and receives `lines`, `data`, `recordId`, `token`, and `apiBaseUrl` from `DetailView`:
+
+```jsx
+export default function MyBottomPanel(props) {
+  const hasLines = Array.isArray(props.lines) && props.lines.length > 0;
+  const showImportTrigger = hasLines && props.data?.documentStatus === 'DR' && props.data?.businessPartner;
+  return (
+    <>
+      {showImportTrigger && (
+        <MyImportTrigger
+          data={props.data}
+          recordId={props.recordId}
+          token={props.token}
+          apiBaseUrl={props.apiBaseUrl}
+          onRefresh={() => window.location.reload()}
+        />
+      )}
+      <LinesBottomSection {...props} />
+    </>
+  );
+}
+```
+
+Gate the trigger on `lines.length > 0` (with no lines, the empty state already shows its own import button) plus the trigger's own visibility conditions (draft status + business partner above), so completed documents don't render an empty strip. **Known limitations** of this path: `DetailView`'s `bottomSection` contract passes no refresh callback and no save-header hook (`onSave`), so the trigger cannot save a dirty header before importing and must refresh via `window.location.reload()` after a successful import.
+
+**Custom empty states MUST forward `canAddLine`.** A Pattern B empty state that omits the prop silently falls back to the shared component's default (`canAddLine = true`) and re-enables the manual button:
+
+```jsx
+function MyLinesEmptyState({ data, onAddLine, canAddLine = true, ...rest }) {
+  return (
+    <LinesEmptyState
+      data={data}
+      onAddLine={onAddLine}
+      canAddLine={canAddLine}   // ← forward, never hardcode
+      description={canAddLine ? ui('addLinesManuallyOrImportFromShipment') : ui('linesImportOnlyFromShipment')}
+      secondaryAction={importButton}
+    />
+  );
+}
+```
+
 **Real examples:**
 - `linesEmptyState` (Pattern B): `purchase-invoice` (`PurchaseInvoiceBottomPanel.linesEmptyState`)
 - `linesEmptyState` (Pattern A) + `addLineGuard`: `sales-order`, `purchase-order`, `sales-quotation`
+- `maxDetailLines: 1`: `business-partner-category`, `product-category` (accounting tab capped at one row per accounting schema)
+- `maxDetailLines: 0` (import-only lines, ETP-4462): `return-material-receipt` (lines imported from the source shipment) and `return-to-vendor-shipment` (lines imported from the source goods receipt) — both bottom panels (`artifacts/{window}/custom/*BottomPanel.jsx`) forward `canAddLine`, swap the empty-state description to the import-only keys `linesImportOnlyFromShipment` / `linesImportOnlyFromReceipt` (defined in `en_US`, `es_ES`, and `es_AR`), and re-render their import trigger (`ReturnReceiptLineActions` / `ReturnToVendorLineActions`) above `LinesBottomSection` via the panel-rendered pattern so importing stays available on drafts that already have lines
 
 ---
 
@@ -764,6 +828,7 @@ I need to customize the UI of a window
     ├─ → window.attachments (auto-on; set to false to opt out, object to tune limits)
     ├─ Empty state when lines tab is empty → linesEmptyState prop + addLineGuard
     ├─ Gate add-line button on header field → addLineGuard prop
+    ├─ Cap line count / disable manual line creation (import-only lines) → window.maxDetailLines (0 = import-only)
     ├─ Hide ⋮ menu on new/processed records → hideMoreMenu prop (boolean or function)
     ├─ Hover overlay with per-row actions on the list (Edit/Duplicate/Email/kebab/Delete)
     │   └─ → window.rowQuickActions (on by default; declare only to disable or override)
