@@ -30,7 +30,7 @@
         "sidePanelStyle": {
           "order": -1,
           "borderLeft": "none",
-          "borderRight": "1px solid #E8EAEF",
+          "borderRight": "1px solid hsl(var(--border-subtle))",
           "padding": 0
         }
       },
@@ -1788,7 +1788,7 @@
         "sidePanelStyle": {
           "order": -1,
           "borderLeft": "none",
-          "borderRight": "1px solid #E8EAEF",
+          "borderRight": "1px solid hsl(var(--border-subtle))",
           "padding": 0
         }
       },

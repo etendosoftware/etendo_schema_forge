@@ -51,11 +51,24 @@ function artifactCustomFiles() {
   });
 }
 
+function artifactGeneratedFiles() {
+  return readdirSync(ARTIFACTS_ROOT, { withFileTypes: true }).flatMap((entry) => {
+    if (!entry.isDirectory()) return [];
+    const generatedDirectory = join(ARTIFACTS_ROOT, entry.name, 'generated');
+    try {
+      return sourceFiles(generatedDirectory).filter((filePath) => !filePath.endsWith('/mockData.js'));
+    } catch {
+      return [];
+    }
+  });
+}
+
 describe('semantic theme usage', () => {
   it('does not allow palette literals in application UI outside documented exceptions', () => {
     const sources = [
       ...sourceFiles(SOURCE_ROOT).map((filePath) => ({ filePath, sourcePath: relative(SOURCE_ROOT, filePath) })),
       ...artifactCustomFiles().map((filePath) => ({ filePath, sourcePath: `artifacts/${relative(ARTIFACTS_ROOT, filePath)}` })),
+      ...artifactGeneratedFiles().map((filePath) => ({ filePath, sourcePath: `artifacts/${relative(ARTIFACTS_ROOT, filePath)}` })),
     ];
     const offenders = sources.flatMap(({ filePath, sourcePath }) => {
       const appSourcePath = sourcePath.replace(/^artifacts\//, '');

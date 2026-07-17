@@ -1,5 +1,13 @@
 # Assets
 
+## Theme roles
+
+The generated page, depreciation-progress cell, and artifact custom components
+use shared semantic roles. Structural layout consumes card and subtle-border
+roles; amortization progress uses success or warning foreground roles. The
+window does not declare a local palette, so its appearance follows the active
+application theme.
+
 ## Intent
 
 The Assets window should let a finance user register fixed assets, define how each asset will depreciate or amortize over time, review the resulting amortization schedule, and inspect the accounting mappings that support depreciation posting and reporting.
