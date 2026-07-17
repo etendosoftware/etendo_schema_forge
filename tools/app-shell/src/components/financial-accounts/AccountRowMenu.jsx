@@ -48,7 +48,7 @@ export function AccountRowMenu({ account, onOpen, onEdit, onArchive, onPsd2Actio
           type="button"
           aria-label={ui('financeAccountsRowMenuLabel')}
           data-testid={`account-row-menu-trigger-${account.id}`}
-          className="inline-flex h-8 w-8 items-center justify-center rounded-full text-[#828FA3] hover:bg-[#E8EAEF]"
+          className="inline-flex h-8 w-8 items-center justify-center rounded-full text-[hsl(var(--text-disabled))] hover:bg-[hsl(var(--border-subtle))]"
         >
           <MoreVertical className="h-5 w-5" data-testid="MoreVertical__ffaf9f" />
         </button>
@@ -61,8 +61,8 @@ export function AccountRowMenu({ account, onOpen, onEdit, onArchive, onPsd2Actio
           onClick={() => onOpen?.(account)}
           data-testid={`account-row-menu-open-${account.id}`}
         >
-          <ExternalLink className="h-5 w-5 text-[#828FA3]" data-testid="ExternalLink__ffaf9f" />
-          <span className="text-sm font-normal leading-6 text-[#121217]">
+          <ExternalLink className="h-5 w-5 text-[hsl(var(--text-disabled))]" data-testid="ExternalLink__ffaf9f" />
+          <span className="text-sm font-normal leading-6 text-[hsl(var(--foreground))]">
             {ui('financeAccountsMenuOpen')}
           </span>
         </DropdownMenuItem>
@@ -71,8 +71,8 @@ export function AccountRowMenu({ account, onOpen, onEdit, onArchive, onPsd2Actio
           onClick={() => onEdit?.(account)}
           data-testid={`account-row-menu-edit-${account.id}`}
         >
-          <Pencil className="h-5 w-5 text-[#828FA3]" data-testid="Pencil__ffaf9f" />
-          <span className="text-sm font-normal leading-6 text-[#121217]">
+          <Pencil className="h-5 w-5 text-[hsl(var(--text-disabled))]" data-testid="Pencil__ffaf9f" />
+          <span className="text-sm font-normal leading-6 text-[hsl(var(--foreground))]">
             {ui('financeAccountsMenuEdit')}
           </span>
         </DropdownMenuItem>
@@ -81,8 +81,8 @@ export function AccountRowMenu({ account, onOpen, onEdit, onArchive, onPsd2Actio
           onClick={() => onTransfer?.(account)}
           data-testid={`account-row-menu-transfer-${account.id}`}
         >
-          <ArrowLeftRight className="h-5 w-5 text-[#828FA3]" data-testid="ArrowLeftRight__ffaf9f" />
-          <span className="text-sm font-normal leading-6 text-[#121217]">
+          <ArrowLeftRight className="h-5 w-5 text-[hsl(var(--text-disabled))]" data-testid="ArrowLeftRight__ffaf9f" />
+          <span className="text-sm font-normal leading-6 text-[hsl(var(--foreground))]">
             {ui('financeAccountTransferAction')}
           </span>
         </DropdownMenuItem>
@@ -95,8 +95,8 @@ export function AccountRowMenu({ account, onOpen, onEdit, onArchive, onPsd2Actio
                   onClick={() => onPsd2Action?.('syncNow', account)}
                   data-testid={`account-row-menu-sync-${account.id}`}
                 >
-                  <RefreshCw className="h-5 w-5 text-[#828FA3]" data-testid="RefreshCw__ffaf9f" />
-                  <span className="text-sm font-normal leading-6 text-[#121217]">
+                  <RefreshCw className="h-5 w-5 text-[hsl(var(--text-disabled))]" data-testid="RefreshCw__ffaf9f" />
+                  <span className="text-sm font-normal leading-6 text-[hsl(var(--foreground))]">
                     {ui('financeAccountsMenuSyncNow')}
                   </span>
                 </DropdownMenuItem>
@@ -105,8 +105,8 @@ export function AccountRowMenu({ account, onOpen, onEdit, onArchive, onPsd2Actio
                   onClick={() => onPsd2Action?.('disconnect', account)}
                   data-testid={`account-row-menu-disconnect-${account.id}`}
                 >
-                  <Unlink2 className="h-5 w-5 text-[#828FA3]" data-testid="Unlink2__ffaf9f" />
-                  <span className="text-sm font-normal leading-6 text-[#121217]">
+                  <Unlink2 className="h-5 w-5 text-[hsl(var(--text-disabled))]" data-testid="Unlink2__ffaf9f" />
+                  <span className="text-sm font-normal leading-6 text-[hsl(var(--foreground))]">
                     {ui('financeAccountsMenuDisconnect')}
                   </span>
                 </DropdownMenuItem>
@@ -116,8 +116,8 @@ export function AccountRowMenu({ account, onOpen, onEdit, onArchive, onPsd2Actio
                 onClick={() => onPsd2Action?.('connect', account)}
                 data-testid={`account-row-menu-connect-${account.id}`}
               >
-                <Plug className="h-5 w-5 text-[#828FA3]" data-testid="Plug__ffaf9f" />
-                <span className="text-sm font-normal leading-6 text-[#121217]">
+                <Plug className="h-5 w-5 text-[hsl(var(--text-disabled))]" data-testid="Plug__ffaf9f" />
+                <span className="text-sm font-normal leading-6 text-[hsl(var(--foreground))]">
                   {ui('financeAccountsMenuConnect')}
                 </span>
               </DropdownMenuItem>
@@ -130,8 +130,8 @@ export function AccountRowMenu({ account, onOpen, onEdit, onArchive, onPsd2Actio
           onClick={() => onArchive?.(account)}
           data-testid={`account-row-menu-archive-${account.id}`}
         >
-          <Archive className="h-5 w-5 text-[#D50B3E]" data-testid="Archive__ffaf9f" />
-          <span className="text-sm font-normal leading-6 text-[#D50B3E]">
+          <Archive className="h-5 w-5 text-[hsl(var(--destructive))]" data-testid="Archive__ffaf9f" />
+          <span className="text-sm font-normal leading-6 text-[hsl(var(--destructive))]">
             {ui('financeAccountsMenuArchive')}
           </span>
         </DropdownMenuItem>

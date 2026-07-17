@@ -36,7 +36,7 @@ function normalizeText(value) {
 function SelectorOption({ option, selected, onPick, sizing = 'compact' }) {
   const base = 'flex w-full items-center gap-2 text-left hover:bg-muted';
   const pad = sizing === 'compact' ? 'px-3 py-2 text-sm' : 'px-4 py-2.5 text-sm';
-  const tone = selected ? 'bg-blue-50 text-blue-700 font-medium' : 'text-foreground';
+  const tone = selected ? 'bg-status-info text-status-info-foreground font-medium' : 'text-foreground';
   return (
     <button
       type="button"
@@ -113,7 +113,7 @@ export default function ProductResolverPopup({
           </button>
           <button
             onClick={submit}
-            className="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg"
+            className="px-4 py-2 text-sm font-medium text-white bg-status-info hover:bg-status-info rounded-lg"
           >
             {ui('continue')}
           </button>
@@ -286,7 +286,7 @@ function InlineSelector({ selectorUrl, authHeader, initialQuery, value, onPick, 
           <button
             type="button"
             onClick={onCreateNew}
-            className="flex w-full items-center gap-2 border-b border-border-subtle px-3 py-2 text-left text-sm text-blue-700 hover:bg-blue-50"
+            className="flex w-full items-center gap-2 border-b border-border-subtle px-3 py-2 text-left text-sm text-status-info-foreground hover:bg-status-info"
           >
             <Plus size={14} className="shrink-0" data-testid="Plus__b3ae11" />
             <span className="truncate">{ui('ocrProductCreateNew')}</span>
@@ -432,7 +432,7 @@ function SelectorDialog({
             <button
               type="button"
               onClick={onCreateNew}
-              className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-left text-blue-700 hover:bg-blue-50 border-b border-border-subtle"
+              className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-left text-status-info-foreground hover:bg-status-info border-b border-border-subtle"
             >
               <Plus size={14} className="shrink-0" data-testid="Plus__b3ae11" />
               <span className="truncate">{createLabel}</span>
@@ -639,12 +639,12 @@ function ProductCreateForm({ initialName, productSpecUrl, authHeader, token, onC
             </button>
           </div>
           {error && (
-            <div className="rounded-md bg-red-50 border border-red-200 px-3 py-2 text-sm text-red-700">
+            <div className="rounded-md bg-destructive border border-destructive px-3 py-2 text-sm text-destructive">
               {error}
             </div>
           )}
           {defaultsFailed && (
-            <div className="rounded-md bg-amber-50 border border-amber-200 px-3 py-2 text-xs text-amber-700">
+            <div className="rounded-md bg-status-warning border border-status-warning-border px-3 py-2 text-xs text-status-warning-foreground">
               {ui('ocrProductCreateDefaultsFailed')}
             </div>
           )}
@@ -660,7 +660,7 @@ function ProductCreateForm({ initialName, productSpecUrl, authHeader, token, onC
           <button
             onClick={submit}
             disabled={submitting}
-            className="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg disabled:opacity-50 flex items-center gap-2"
+            className="px-4 py-2 text-sm font-medium text-white bg-status-info hover:bg-status-info rounded-lg disabled:opacity-50 flex items-center gap-2"
           >
             {submitting && <Loader2 size={13} className="animate-spin" data-testid="Loader2__b3ae11" />}
             {ui('ocrProductCreate')}

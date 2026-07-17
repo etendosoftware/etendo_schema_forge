@@ -93,7 +93,7 @@ export default function EntityCell({ column, value, token, apiBaseUrl, onChange 
           const label = item.name || item._identifier || item.id;
           const selected = value?.id === item.id;
           const itemCls = selected
-            ? 'bg-blue-50 font-medium text-blue-700'
+            ? 'bg-status-info font-medium text-status-info-foreground'
             : 'text-foreground';
           return (
             <button

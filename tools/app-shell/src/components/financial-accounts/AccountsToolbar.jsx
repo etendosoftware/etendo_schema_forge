@@ -35,14 +35,14 @@ export function AccountsToolbar({
       <div className="flex items-center gap-2">
         <div className="relative h-10 w-[232px]">
           <Search
-            className="pointer-events-none absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-[#828FA3]"
+            className="pointer-events-none absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-[hsl(var(--text-disabled))]"
             data-testid="Search__c01b81" />
           <Input
             type="search"
             value={search ?? ''}
             onChange={(e) => onSearchChange?.(e.target.value)}
             placeholder={ui('financeAccountsSearchPlaceholder')}
-            className="h-10 rounded-lg border-[#D1D4DB] bg-card pl-10 text-sm font-medium leading-6 text-[#121217] shadow-[0_1px_2px_rgba(18,18,23,0.05)] placeholder:text-[#6C6C89]"
+            className="h-10 rounded-lg border-[hsl(var(--border-control))] bg-card pl-10 text-sm font-medium leading-6 text-[hsl(var(--foreground))] shadow-[0_1px_2px_hsl(var(--foreground) / 0.05)] placeholder:text-[hsl(var(--muted-foreground))]"
             data-testid="cuentas-search-input"
           />
         </div>
@@ -51,21 +51,21 @@ export function AccountsToolbar({
           type="button"
           variant="outline"
           onClick={onMatchingRules}
-          className="h-10 w-[188px] gap-1 rounded-lg border-[#D1D4DB] bg-card px-3 text-sm font-medium leading-6 text-[#121217] shadow-[0_1px_2px_rgba(18,18,23,0.05)] hover:bg-[#F5F7F9] [&_svg]:size-5"
+          className="h-10 w-[188px] gap-1 rounded-lg border-[hsl(var(--border-control))] bg-card px-3 text-sm font-medium leading-6 text-[hsl(var(--foreground))] shadow-[0_1px_2px_hsl(var(--foreground) / 0.05)] hover:bg-[hsl(var(--muted))] [&_svg]:size-5"
           data-testid="cuentas-matching-rules-button"
         >
-          <Filter className="text-[#828FA3]" data-testid="Filter__c01b81" />
+          <Filter className="text-[hsl(var(--text-disabled))]" data-testid="Filter__c01b81" />
           {ui('financeAccountsMatchingRules')}
         </Button>
 
         <Button
           type="button"
           onClick={onNewAccount}
-          className="group h-10 w-[153px] gap-1 rounded-lg bg-[#121217] px-3 text-sm font-medium leading-6 text-white transition-colors hover:bg-[#FFD500] hover:text-[#121217] [&_svg]:size-5"
+          className="group h-10 w-[153px] gap-1 rounded-lg bg-[hsl(var(--foreground))] px-3 text-sm font-medium leading-6 text-white transition-colors hover:bg-[hsl(var(--primary))] hover:text-[hsl(var(--foreground))] [&_svg]:size-5"
           data-testid="cuentas-new-account-button"
         >
           <Plus
-            className="text-white/90 group-hover:text-[#121217]"
+            className="text-white/90 group-hover:text-[hsl(var(--foreground))]"
             data-testid="Plus__c01b81" />
           {ui('financeAccountsNewAccount')}
         </Button>

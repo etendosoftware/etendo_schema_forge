@@ -3,14 +3,14 @@ import { useUI } from '@/i18n';
 import { cn } from '@/lib/utils';
 import { ACCOUNT_COLUMNS, ACCOUNT_CELL_RENDERERS } from './accountColumns.jsx';
 
-const HEAD_BASE = 'text-xs font-semibold leading-4 text-[#121217]';
+const HEAD_BASE = 'text-xs font-semibold leading-4 text-[hsl(var(--foreground))]';
 
 export function AccountsTableHeader() {
   const ui = useUI();
   return (
     <TableHeader data-testid="TableHeader__18040e">
       <TableRow
-        className="h-10 border-b border-[#E8EAEF] bg-card hover:bg-card"
+        className="h-10 border-b border-[hsl(var(--border-subtle))] bg-card hover:bg-card"
         data-testid="TableRow__18040e">
         {/* Contract-driven data columns (decisions.json → contract.json) */}
         {ACCOUNT_COLUMNS.map((col) => {

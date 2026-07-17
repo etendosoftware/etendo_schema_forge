@@ -226,27 +226,27 @@ export default function OcrInlineUploader({
         </div>
       )}
       {status === 'error' && (
-        <div className="flex items-start gap-2 text-xs text-red-600">
+        <div className="flex items-start gap-2 text-xs text-destructive">
           <AlertCircle className="mt-0.5 h-3 w-3 shrink-0" data-testid="AlertCircle__5fab8d" />
           <span>{error || ui('ocrFailed')}</span>
         </div>
       )}
       {pickError && (
-        <div className="flex items-start gap-2 text-xs text-red-600">
+        <div className="flex items-start gap-2 text-xs text-destructive">
           <AlertCircle className="mt-0.5 h-3 w-3 shrink-0" data-testid="AlertCircle__5fab8d" />
           <span>{pickError}</span>
         </div>
       )}
       {result && status === 'done' && !applying && (
-        <div className="flex items-center gap-2 text-xs text-emerald-600">
+        <div className="flex items-center gap-2 text-xs text-status-success-foreground">
           <CheckCircle2 className="h-3 w-3" data-testid="CheckCircle2__5fab8d" />
           {ui('ocrDone')}
           {result.linesCreated > 0 && ` · ${ui('ocrLinesCreated', { count: result.linesCreated })}`}
           {result.linesFailed > 0 && (
-            <span className="text-amber-600"> · {ui('ocrLinesFailed', { count: result.linesFailed })}</span>
+            <span className="text-status-warning-foreground"> · {ui('ocrLinesFailed', { count: result.linesFailed })}</span>
           )}
           {result.unresolved?.length > 0 && (
-            <span className="text-amber-600"> · {result.unresolved.length} {ui('ocrUnresolved')}</span>
+            <span className="text-status-warning-foreground"> · {result.unresolved.length} {ui('ocrUnresolved')}</span>
           )}
         </div>
       )}

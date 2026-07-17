@@ -98,7 +98,7 @@ export default function EntityField({
             <button
               type="button"
               onMouseDown={(e) => { e.preventDefault(); setOpen(false); setShowCreate(true); }}
-              className="flex w-full items-center gap-1.5 border-b border-border-subtle px-3 py-2 text-left text-sm font-medium text-foreground hover:bg-blue-50"
+              className="flex w-full items-center gap-1.5 border-b border-border-subtle px-3 py-2 text-left text-sm font-medium text-foreground hover:bg-status-info"
             >
               <Plus size={14} data-testid={"Plus__" + field.id} />
               {ui(field.createLabel || 'ocrReviewVendorCreate')}

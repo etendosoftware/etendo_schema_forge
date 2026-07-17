@@ -15,9 +15,9 @@ import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@/compone
 import { PaymentForm } from './PaymentForm';
 
 const BTN_PRIMARY =
-  'inline-flex h-10 items-center gap-2 rounded-lg bg-[#121217] px-[18px] text-sm font-semibold text-white hover:bg-[#282833] disabled:opacity-50 disabled:pointer-events-none';
+  'inline-flex h-10 items-center gap-2 rounded-lg bg-[hsl(var(--foreground))] px-[18px] text-sm font-semibold text-white hover:bg-[hsl(var(--foreground))] disabled:opacity-50 disabled:pointer-events-none';
 const BTN_GHOST =
-  'inline-flex h-10 items-center gap-2 rounded-lg border border-[#D1D4DB] bg-card px-[18px] text-sm font-semibold text-[#3F3F50] hover:bg-[#F5F7F9]';
+  'inline-flex h-10 items-center gap-2 rounded-lg border border-[hsl(var(--border-control))] bg-card px-[18px] text-sm font-semibold text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--muted))]';
 
 /**
  * @param {boolean} open
@@ -51,20 +51,20 @@ export function AddPaymentModal({
       onOpenChange={(v) => { if (!v) onClose(); }}
       data-testid="Dialog__bfa23e">
       <DialogContent
-        className="flex w-[1280px] max-w-[96vw] max-h-[90vh] flex-col gap-0 overflow-hidden rounded-2xl border border-[#E8EAEF] bg-card p-0 [&>button]:hidden"
+        className="flex w-[1280px] max-w-[96vw] max-h-[90vh] flex-col gap-0 overflow-hidden rounded-2xl border border-[hsl(var(--border-subtle))] bg-card p-0 [&>button]:hidden"
         data-testid="DialogContent__bfa23e">
         {/* Header */}
         <div className="shrink-0 px-6 pt-5">
           <div className="flex items-start justify-between">
             <div>
               <DialogTitle asChild data-testid="DialogTitle__bfa23e">
-                <h2 className="m-0 flex items-center gap-2.5 text-lg font-bold leading-6 tracking-[-0.01em] text-[#121217]">
+                <h2 className="m-0 flex items-center gap-2.5 text-lg font-bold leading-6 tracking-[-0.01em] text-[hsl(var(--foreground))]">
                   Agregar pago
                   <span
                     className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-semibold ${
                       doc === 'in'
-                        ? 'border-[#B2EECC] bg-[#EEFBF4] text-[#17663A]'
-                        : 'border-[#FBB1C4] bg-[#FEF0F4] text-[#D50B3E]'
+                        ? 'border-[var(--status-success-border)] bg-[var(--status-success-bg)] text-[var(--status-success-fg)]'
+                        : 'border-[hsl(var(--destructive) / 0.3)] bg-[var(--status-destructive-bg)] text-[hsl(var(--destructive))]'
                     }`}
                   >
                     {label}
@@ -72,12 +72,12 @@ export function AddPaymentModal({
                 </h2>
               </DialogTitle>
               <DialogDescription asChild data-testid="DialogDescription__bfa23e">
-                <p className="mt-0.5 text-[13px] leading-[18px] text-[#6C6C89]">
+                <p className="mt-0.5 text-[13px] leading-[18px] text-[hsl(var(--muted-foreground))]">
                   {subtitle || 'Registra un pago contra una transacción existente'}
                 </p>
               </DialogDescription>
             </div>
-            <button type="button" onClick={onClose} className="grid h-[30px] w-[30px] place-items-center rounded-md text-[#6C6C89] hover:bg-[#F5F7F9] hover:text-[#121217]">
+            <button type="button" onClick={onClose} className="grid h-[30px] w-[30px] place-items-center rounded-md text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--muted))] hover:text-[hsl(var(--foreground))]">
               <X className="h-4 w-4" data-testid="X__bfa23e" />
             </button>
           </div>
@@ -98,8 +98,8 @@ export function AddPaymentModal({
         </div>
 
         {/* Footer */}
-        <div className="flex shrink-0 items-center gap-2.5 border-t border-[#E8EAEF] px-6 py-4">
-          <span className="mr-auto inline-flex items-center gap-1.5 text-xs leading-4 text-[#6C6C89]">
+        <div className="flex shrink-0 items-center gap-2.5 border-t border-[hsl(var(--border-subtle))] px-6 py-4">
+          <span className="mr-auto inline-flex items-center gap-1.5 text-xs leading-4 text-[hsl(var(--muted-foreground))]">
             <Info className="h-[13px] w-[13px]" data-testid="Info__bfa23e" /> El pago se vincula a la transacción ya creada
           </span>
           <button type="button" className={BTN_GHOST} onClick={onClose}>Cancelar</button>
