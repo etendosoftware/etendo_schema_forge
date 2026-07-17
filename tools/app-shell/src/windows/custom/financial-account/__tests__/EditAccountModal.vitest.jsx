@@ -563,6 +563,43 @@ describe('EditAccountModal', () => {
     });
   });
 
+  // ── Manual-QA regression: General tab must not render for cash accounts ───
+  // The General tab (PSD2 connection + reconciliation config) has nothing to show for a Caja
+  // account — before this fix the tab trigger still rendered (with blank content once selected).
+  describe('General tab hidden for cash accounts (manual QA regression)', () => {
+    const CASH_ACCOUNT = { id: 'acc-cash', name: 'Caja', type: 'C', currencyId: '102', psd2Connected: false };
+
+    it('does not render the General tab trigger for a cash account', () => {
+      renderModal({ account: CASH_ACCOUNT });
+      expect(screen.queryByText('financeAccountsEditTabGeneral')).not.toBeInTheDocument();
+      expect(getTab('financeAccountsEditTabAccounting')).toHaveAttribute('aria-selected', 'true');
+    });
+
+    it('still renders the General tab trigger for a bank account', () => {
+      renderModal();
+      expect(getTab('financeAccountsEditTabGeneral')).toBeInTheDocument();
+    });
+
+    it('defaults straight to Contabilidad when reopened for a cash account after a bank account', () => {
+      const { rerender } = renderModal();
+      expect(getTab('financeAccountsEditTabGeneral')).toHaveAttribute('aria-selected', 'true');
+
+      rerender(
+        <EditAccountModal
+          open
+          account={CASH_ACCOUNT}
+          onClose={vi.fn()}
+          onSaved={vi.fn()}
+          onArchive={vi.fn()}
+          onConnect={vi.fn()}
+        />,
+      );
+
+      expect(screen.queryByText('financeAccountsEditTabGeneral')).not.toBeInTheDocument();
+      expect(getTab('financeAccountsEditTabAccounting')).toHaveAttribute('aria-selected', 'true');
+    });
+  });
+
   // ── ETP-4530 / BUG-1 regression ───────────────────────────────────────────
   // The Cuenta bancaria requirement is validated on the Contabilidad tab, but Save is
   // disabled regardless of the active tab. Before this fix the reason was invisible while

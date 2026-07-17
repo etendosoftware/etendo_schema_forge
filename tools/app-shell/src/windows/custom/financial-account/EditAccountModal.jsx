@@ -474,8 +474,11 @@ function AccountingConfigurationSection({ ui, accounting }) {
  * every state. The top section (Name | Type, IBAN | Currency) sits OUTSIDE both tabs, followed by
  * two tabs:
  *
- * - **General**: PSD2 connection configuration, then reconciliation configuration (both hidden
- *   for cash accounts, which have no bank connection and no statement reconciliation).
+ * - **General**: PSD2 connection configuration, then reconciliation configuration. The tab itself
+ *   is not rendered for cash accounts (`isCash`), which have no bank connection and no statement
+ *   reconciliation — rendering an empty, blank-content tab for Caja accounts was a QA regression
+ *   fixed post-ETP-4530; the modal now defaults straight to Contabilidad when opened for a cash
+ *   account.
  * - **Contabilidad**: the accounting accounts used when generating transaction journal entries —
  *   Cuenta bancaria (required) and Cuenta transitoria (optional). Backed by the
  *   `accountingConfiguration` entity / `FinancialAccountAccountingHandler` (ETP-4530).
@@ -520,10 +523,13 @@ export function EditAccountModal({ open, onClose, onSaved, account, onArchive, o
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
 
-  // Reset to the first tab whenever the modal (re)opens for an account.
+  // Reset to the first AVAILABLE tab whenever the modal (re)opens for an account. Cash accounts
+  // have no PSD2 connection and no statement reconciliation, so the General tab itself is not
+  // rendered for them — defaulting to it would leave the modal on a tab whose trigger doesn't
+  // exist, with no visible content and no tab shown as active.
   useEffect(() => {
-    if (open) setEditTab(EDIT_TAB_GENERAL);
-  }, [open, account?.id]);
+    if (open) setEditTab(isCash ? EDIT_TAB_ACCOUNTING : EDIT_TAB_GENERAL);
+  }, [open, account?.id, isCash]);
 
   if (!account) return null;
 
@@ -590,34 +596,35 @@ export function EditAccountModal({ open, onClose, onSaved, account, onArchive, o
 
         <Tabs value={editTab} onValueChange={setEditTab} className="mt-2" data-testid="EditAccountTabs__73027d">
           <TabsList data-testid="EditAccountTabsList__73027d">
-            <TabsTrigger value={EDIT_TAB_GENERAL} icon={Settings2} data-testid="edit-account-tab-general">
-              {ui('financeAccountsEditTabGeneral')}
-            </TabsTrigger>
+            {/* Cash accounts have no bank connection and no statement reconciliation, so the
+                General tab (PSD2 + reconciliation config) has nothing to show for them — hide the
+                tab itself rather than rendering it with empty content. */}
+            {!isCash ? (
+              <TabsTrigger value={EDIT_TAB_GENERAL} icon={Settings2} data-testid="edit-account-tab-general">
+                {ui('financeAccountsEditTabGeneral')}
+              </TabsTrigger>
+            ) : null}
             <TabsTrigger value={EDIT_TAB_ACCOUNTING} icon={Calculator} data-testid="edit-account-tab-accounting">
               {ui('financeAccountsEditTabAccounting')}
             </TabsTrigger>
           </TabsList>
         </Tabs>
 
-        {editTab === EDIT_TAB_GENERAL ? (
+        {!isCash && editTab === EDIT_TAB_GENERAL ? (
           <>
-            {!isCash ? (
-              <Psd2ConnectionSection
-                ui={ui}
-                psd2Connected={psd2Connected}
-                psd2={psd2}
-                busy={busy}
-                reauthMessage={reauthMessage}
-                onConnect={handleConnectClick}
-                data-testid="Psd2ConnectionSection__73027d" />
-            ) : null}
+            <Psd2ConnectionSection
+              ui={ui}
+              psd2Connected={psd2Connected}
+              psd2={psd2}
+              busy={busy}
+              reauthMessage={reauthMessage}
+              onConnect={handleConnectClick}
+              data-testid="Psd2ConnectionSection__73027d" />
 
-            {!isCash ? (
-              <ReconciliationSettingsSection
-                ui={ui}
-                recon={recon}
-                data-testid="ReconciliationSettingsSection__73027d" />
-            ) : null}
+            <ReconciliationSettingsSection
+              ui={ui}
+              recon={recon}
+              data-testid="ReconciliationSettingsSection__73027d" />
           </>
         ) : null}
 

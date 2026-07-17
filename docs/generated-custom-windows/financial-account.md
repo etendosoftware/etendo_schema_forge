@@ -63,11 +63,22 @@ tabs built with the shared `Tabs`/`TabsList`/`TabsTrigger` primitives (`componen
 the same primitives `DetailTabs.jsx` uses for the Movements/Reconciliation/Statements strip):
 
 - **General** (`financeAccountsEditTabGeneral`): PSD2 connection configuration, then reconciliation
-  configuration, in that order. Both are hidden for cash accounts (no bank connection, no
-  statement reconciliation for a manual cash drawer).
+  configuration, in that order. **The tab itself is not rendered for cash accounts** (no bank
+  connection, no statement reconciliation for a manual cash drawer) — a manual-QA regression found
+  the tab trigger still showing (with blank content) for Caja accounts; the modal now hides the
+  trigger and defaults to Contabilidad when opened for a cash account. See `useAccountFields`'s
+  `isCash` flag (`account?.type === ACCOUNT_TYPE.CASH`, i.e. `'C'` — Bank `'B'` and Card `'CA'`
+  both still get the General tab, since Card accounts support PSD2 too).
 - **Contabilidad** (`financeAccountsEditTabAccounting`, ETP-4530): the accounting accounts used
   when generating transaction journal entries — **Cuenta bancaria** (`fINAssetAcct`, required) and
   **Cuenta transitoria** (`fINTransitoryAcct`, optional). See "Accounting configuration" below.
+  If the selectors show no options at all, check the account's organization has a **General
+  Ledger** configured (`AD_Org.C_Acctschema_ID`, Classic: Organization window → General Ledger
+  field) — with no ledger the handler soft-degrades (`ledgerConfigured: false`) and the tab shows
+  an explanatory message instead of empty selects; this is a data/config gap, not a bug (confirmed
+  in local dev data: e.g. the "F&B US, Inc." and "Spain" organizations have no ledger configured,
+  so their bank accounts — including the highest-traffic demo account, "Bank - Account 1" — cannot
+  populate this tab until an admin sets one).
 
 Field editability in the top section:
 
