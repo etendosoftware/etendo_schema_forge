@@ -101,9 +101,9 @@ function KeyFilterDropdown({ value, onChange, t }) {
     ? allLabel
     : `${value} — ${t('fm.m349.key.' + value) ?? value}`;
 
-  const keyColors = { E: '#F0FAFF', S: '#FEECFB', A: '#FFF2EE', I: '#F4F1FD' };
-  const keyFgColors = { E: '#0075AD', S: '#A5088C', A: '#B82E00', I: '#4316CA' };
-  const keyBorderColors = { E: '#ADE4FF', S: '#FCC5F3', A: '#FFCDBD', I: '#C6B6F7' };
+  const keyColors = { E: 'var(--status-info-bg)', S: 'var(--status-info-bg)', A: 'var(--status-warning-bg)', I: 'var(--status-info-bg)' };
+  const keyFgColors = { E: 'var(--status-info-fg)', S: 'var(--status-info-fg)', A: 'var(--status-warning-fg)', I: 'var(--status-info-fg)' };
+  const keyBorderColors = { E: 'var(--status-info-border)', S: 'var(--status-info-border)', A: 'var(--status-warning-border)', I: 'var(--status-info-border)' };
 
   return (
     <div ref={ref} style={{ position: 'relative' }}>
@@ -176,7 +176,7 @@ function MoreOptionsMenu349({ onVies, onPreviewPdf, onGenerate, pdfLoading, gene
             <Globe
               size={13}
               strokeWidth={1.75}
-              style={{ color: '#6b7280' }}
+              style={{ color: 'hsl(var(--muted-foreground))' }}
               data-testid="Globe__346dd5" />
             VIES
           </button>
@@ -184,7 +184,7 @@ function MoreOptionsMenu349({ onVies, onPreviewPdf, onGenerate, pdfLoading, gene
             <Eye
               size={13}
               strokeWidth={1.75}
-              style={{ color: '#6b7280' }}
+              style={{ color: 'hsl(var(--muted-foreground))' }}
               data-testid="Eye__346dd5" />
             {t('fm.action.preview_pdf') ?? 'Vista previa PDF'}
           </button>
@@ -192,7 +192,7 @@ function MoreOptionsMenu349({ onVies, onPreviewPdf, onGenerate, pdfLoading, gene
             <Download
               size={13}
               strokeWidth={1.75}
-              style={{ color: '#6b7280' }}
+              style={{ color: 'hsl(var(--muted-foreground))' }}
               data-testid="Download__346dd5" />
             {t('fm.action.generate_file') ?? 'Generar fichero'}
           </button>
@@ -324,21 +324,21 @@ export default function FmModel349Page({ decl, onBack, onStatusChange, token, ap
       {/* ── Title bar ────────────────────────────────────────────── */}
       <div style={{
         padding: '12px 20px',
-        background: '#fff', flexShrink: 0,
+        background: 'hsl(var(--card))', flexShrink: 0,
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <span className="fm-model-badge fm-model-badge--349">349</span>
-          <span style={{ fontWeight: 600, fontSize: 20, color: '#121217' }}>
+          <span style={{ fontWeight: 600, fontSize: 20, color: 'hsl(var(--foreground))' }}>
             Modelo 349 - {periodLabel}
           </span>
           <div style={{ flex: 1 }} />
           <MoreVertical
             size={16}
             strokeWidth={1.75}
-            style={{ color: '#9ca3af', cursor: 'pointer' }}
+            style={{ color: 'hsl(var(--text-disabled))', cursor: 'pointer' }}
             data-testid="MoreVertical__346dd5" />
         </div>
-        <div style={{ fontSize: 12, color: '#828FA3', marginTop: 2 }}>
+        <div style={{ fontSize: 12, color: 'hsl(var(--text-disabled))', marginTop: 2 }}>
           Tesorería / Declaraciones / Modelo 349 - {periodLabel}
         </div>
       </div>
@@ -346,15 +346,15 @@ export default function FmModel349Page({ decl, onBack, onStatusChange, token, ap
       <div style={{
         display: 'flex', alignItems: 'center', gap: 8,
         padding: '6px 20px 10px',
-        background: '#fff', flexShrink: 0,
+        background: 'hsl(var(--card))', flexShrink: 0,
       }}>
         <button className="fm-btn" onClick={onBack}
-          style={{ borderRadius: 8, border: '1px solid #D1D4DB', boxShadow: '0px 1px 2px rgba(18,18,23,0.05)', fontSize: 14, color: '#121217' }}>
+          style={{ borderRadius: 8, border: '1px solid hsl(var(--border-control))', boxShadow: '0px 1px 2px hsl(var(--foreground) / 0.05)', fontSize: 14, color: 'hsl(var(--foreground))' }}>
           {t('fm.action.cancel') ?? 'Cancelar'}
         </button>
         <span style={{
           padding: '4px 8px', borderRadius: 8, fontSize: 14, fontWeight: 400,
-          background: '#F5F7F9', color: '#3F3F50',
+          background: 'hsl(var(--muted))', color: 'hsl(var(--muted-foreground))',
         }}>
           {t('fm.col.status') ?? 'Estado'}: {t(`fm.status.${status}`) ?? status}
         </span>
@@ -374,7 +374,7 @@ export default function FmModel349Page({ decl, onBack, onStatusChange, token, ap
           className="fm-btn"
           onClick={handleCompute}
           disabled={computing}
-          style={{ display: 'inline-flex', alignItems: 'center', gap: 6, border: '1px solid #D1D4DB', boxShadow: '0px 1px 2px rgba(18,18,23,0.05)', padding: '8px 12px', fontSize: 14 }}
+          style={{ display: 'inline-flex', alignItems: 'center', gap: 6, border: '1px solid hsl(var(--border-control))', boxShadow: '0px 1px 2px hsl(var(--foreground) / 0.05)', padding: '8px 12px', fontSize: 14 }}
         >
           <RefreshCw
             size={20}
@@ -400,29 +400,29 @@ export default function FmModel349Page({ decl, onBack, onStatusChange, token, ap
         <div style={{ padding: '8px 20px', flexShrink: 0 }}>
           <div style={{
             display: 'flex', alignItems: 'center', gap: 8,
-            padding: '10px 12px', borderRadius: 8, background: '#F0FAFF',
+            padding: '10px 12px', borderRadius: 8, background: 'var(--status-info-bg)',
           }}>
             <Globe
               size={14}
               strokeWidth={1.75}
-              style={{ color: '#0075AD', flexShrink: 0 }}
+              style={{ color: 'var(--status-info-fg)', flexShrink: 0 }}
               data-testid="Globe__346dd5" />
             <span style={{ fontSize: 14, flex: 1 }}>
-              <span style={{ color: '#0075AD', fontWeight: 500 }}>
+              <span style={{ color: 'var(--status-info-fg)', fontWeight: 500 }}>
                 {t('fm.m349.banner.vies_title', { count: viesPending }) ?? `${viesPending} NIF-IVA con validación VIES pendiente`}
               </span>
               {' '}
-              <span style={{ color: '#0075AD', fontWeight: 400 }}>
+              <span style={{ color: 'var(--status-info-fg)', fontWeight: 400 }}>
                 {t('fm.m349.banner.vies_sub') ?? 'Validación VIES asíncrona — informativa, no bloqueante'}
               </span>
             </span>
             <button
-              style={{ fontSize: 14, fontWeight: 500, color: '#0075AD', background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline', textUnderlineOffset: 2, whiteSpace: 'nowrap' }}
+              style={{ fontSize: 14, fontWeight: 500, color: 'var(--status-info-fg)', background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline', textUnderlineOffset: 2, whiteSpace: 'nowrap' }}
             >
               {t('fm.m349.banner.vies_action') ?? 'Validar VIES'}
             </button>
             <button
-              style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#0075AD', fontSize: 16, padding: '0 4px', lineHeight: 1 }}
+              style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--status-info-fg)', fontSize: 16, padding: '0 4px', lineHeight: 1 }}
               onClick={() => setViesBannerDismissed(true)}
               aria-label={t('fm.action.close') ?? 'Cerrar'}
             >×</button>
@@ -437,40 +437,40 @@ export default function FmModel349Page({ decl, onBack, onStatusChange, token, ap
       }}>
         <KpiWidget
           icon={<Users size={20} strokeWidth={1.75} data-testid="Users__346dd5" />}
-          iconColor="#828FA3"
+          iconColor="hsl(var(--text-disabled))"
           label={t('fm.m349.kpi.operators') ?? 'Operadores'}
           value={String(operators.length)}
           badge={t('fm.m349.kpi.operators_desc') ?? 'Activos'}
-          badgeBg="#F5F7F9"
-          badgeColor="#828FA3"
+          badgeBg="hsl(var(--muted))"
+          badgeColor="hsl(var(--text-disabled))"
           data-testid="KpiWidget__346dd5" />
         <KpiWidget
           icon={<Calculator size={20} strokeWidth={1.75} data-testid="Calculator__346dd5" />}
-          iconColor="#828FA3"
+          iconColor="hsl(var(--text-disabled))"
           label={t('fm.m349.kpi.total_ops') ?? 'Total operaciones'}
           value={formatAmount(totalBase)}
           badge={t('fm.m349.kpi.total_ops_desc') ?? 'Base total'}
-          badgeBg="#F5F7F9"
-          badgeColor="#828FA3"
+          badgeBg="hsl(var(--muted))"
+          badgeColor="hsl(var(--text-disabled))"
           data-testid="KpiWidget__346dd5" />
         <KpiWidget
           icon={<PenLine size={20} strokeWidth={1.75} data-testid="PenLine__346dd5" />}
-          iconColor="#828FA3"
+          iconColor="hsl(var(--text-disabled))"
           label={t('fm.m349.kpi.rectif') ?? 'Rectificaciones'}
           value={String(rectifications)}
           badge={t('fm.m349.kpi.rectif_desc') ?? 'Previos'}
-          badgeBg="#FFF9EB"
-          badgeColor="#8A6100"
+          badgeBg="var(--status-warning-bg)"
+          badgeColor="var(--status-warning-fg)"
           data-testid="KpiWidget__346dd5" />
         <KpiWidget
           icon={<ShieldAlert size={20} strokeWidth={1.75} data-testid="ShieldAlert__346dd5" />}
-          iconColor="#828FA3"
+          iconColor="hsl(var(--text-disabled))"
           label={t('fm.m349.kpi.vies_pending') ?? 'Pendientes VIES'}
           value={String(viesPending)}
-          valueColor={viesPending > 0 ? '#D50B3E' : '#121217'}
+          valueColor={viesPending > 0 ? 'hsl(var(--destructive))' : 'hsl(var(--foreground))'}
           badge={t('fm.m349.kpi.vies_pending_desc') ?? 'Sin validar'}
-          badgeBg={viesPending > 0 ? '#FEF0F4' : '#F5F7F9'}
-          badgeColor={viesPending > 0 ? '#D50B3E' : '#828FA3'}
+          badgeBg={viesPending > 0 ? 'var(--status-destructive-bg)' : 'hsl(var(--muted))'}
+          badgeColor={viesPending > 0 ? 'hsl(var(--destructive))' : 'hsl(var(--text-disabled))'}
           data-testid="KpiWidget__346dd5" />
       </div>
       {/* ── Tabs ─────────────────────────────────────────────────── */}
@@ -494,20 +494,20 @@ export default function FmModel349Page({ decl, onBack, onStatusChange, token, ap
                 t={t}
                 data-testid="KeyFilterDropdown__346dd5" />
               <div style={{ flex: 1 }} />
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 12px', border: `1px solid ${searchQuery ? '#6366f1' : '#E8E8ED'}`, borderRadius: 8, fontSize: 14, color: '#6C6C89', background: '#fff', minWidth: 240 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 12px', border: `1px solid ${searchQuery ? 'hsl(var(--focus-ring))' : 'hsl(var(--border-subtle))'}`, borderRadius: 8, fontSize: 14, color: 'hsl(var(--muted-foreground))', background: 'hsl(var(--card))', minWidth: 240 }}>
                 <Search
                   size={15}
                   strokeWidth={1.75}
-                  style={{ flexShrink: 0, color: '#6C6C89' }}
+                  style={{ flexShrink: 0, color: 'hsl(var(--muted-foreground))' }}
                   data-testid="Search__346dd5" />
                 <input
                   value={searchQuery}
                   onChange={e => setSearchQuery(e.target.value)}
                   placeholder={t('fm.m349.search_placeholder')}
-                  style={{ border: 'none', outline: 'none', background: 'transparent', fontSize: 14, color: '#6C6C89', width: '100%' }}
+                  style={{ border: 'none', outline: 'none', background: 'transparent', fontSize: 14, color: 'hsl(var(--muted-foreground))', width: '100%' }}
                 />
                 {searchQuery && (
-                  <button onClick={() => setSearchQuery('')} style={{ border: 'none', background: 'none', cursor: 'pointer', color: '#6C6C89', padding: 0, lineHeight: 1, fontSize: 16 }}>×</button>
+                  <button onClick={() => setSearchQuery('')} style={{ border: 'none', background: 'none', cursor: 'pointer', color: 'hsl(var(--muted-foreground))', padding: 0, lineHeight: 1, fontSize: 16 }}>×</button>
                 )}
               </div>
               <button className="fm-toolbar__btn fm-toolbar__btn--primary" style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 14, padding: '8px 12px' }}>
@@ -516,7 +516,7 @@ export default function FmModel349Page({ decl, onBack, onStatusChange, token, ap
             </div>
 
             {/* Full-width separator above NIF-IVA columns */}
-            <div style={{ margin: '4px -20px 0', borderTop: '1px solid #E8EAEF' }} />
+            <div style={{ margin: '4px -20px 0', borderTop: '1px solid hsl(var(--border-subtle))' }} />
 
             {/* Layout: totals panel + table */}
             <div style={{ display: 'flex', gap: 0 }}>
@@ -580,10 +580,10 @@ export default function FmModel349Page({ decl, onBack, onStatusChange, token, ap
 
         {activeTab === 'rectif' && (
           <div style={{ padding: '60px 0', textAlign: 'center' }}>
-            <div style={{ fontWeight: 700, fontSize: 15, color: '#0f172a', marginBottom: 6 }}>
+            <div style={{ fontWeight: 700, fontSize: 15, color: 'hsl(var(--foreground))', marginBottom: 6 }}>
               {t('fm.m349.tab.rectif') ?? 'Rectificaciones'}
             </div>
-            <div style={{ fontSize: 13, color: '#9ca3af' }}>
+            <div style={{ fontSize: 13, color: 'hsl(var(--text-disabled))' }}>
               {t('fm.m349.coming_soon') ?? 'Contenido disponible próximamente'}
             </div>
           </div>
