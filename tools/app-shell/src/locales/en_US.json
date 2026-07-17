@@ -18960,6 +18960,7 @@
     "typeAtLeast2Characters": "Type at least 2 characters",
     "setLocation": "Set location",
     "locationSelectorTitle": "Location",
+    "locationFieldPlaceholder": "Add or edit location...",
     "addressLine1": "1st line",
     "addressLine2": "2nd line",
     "postalCodeLabel": "Postal code",

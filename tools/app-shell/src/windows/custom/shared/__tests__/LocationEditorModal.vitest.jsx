@@ -544,4 +544,158 @@ describe('LocationEditorModal', () => {
     fireEvent.click(closeBtn);
     expect(props.onClose).toHaveBeenCalled();
   });
+
+  // ---------------------------------------------------------------------------
+  // saveMode="location" (plain C_Location) — ETP-4526
+  // ---------------------------------------------------------------------------
+
+  describe('saveMode="location" and showAddressTypeCheckboxes=false', () => {
+    it('does NOT render the shipping/invoicing checkboxes', () => {
+      renderModal({ saveMode: 'location', showAddressTypeCheckboxes: false });
+      expect(
+        screen.queryByTestId('SquareCheckbox__location-shipping'),
+      ).not.toBeInTheDocument();
+      expect(
+        screen.queryByTestId('SquareCheckbox__location-invoicing'),
+      ).not.toBeInTheDocument();
+      expect(screen.queryAllByRole('checkbox')).toHaveLength(0);
+    });
+
+    it('CREATE (rowId null) POSTs to `${apiBase}/location` with no businessPartner and no address-type flags', async () => {
+      global.fetch = vi.fn((url, opts) => {
+        if (url.includes('/location') && !url.includes('selectors') && opts?.method === 'POST') {
+          return Promise.resolve({
+            ok: true,
+            json: () => Promise.resolve({
+              response: { status: 0, data: [{ id: 'new-c-loc-1', name: 'Madrid, Calle Mayor' }] },
+            }),
+          });
+        }
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ items: [{ id: 'ES', label: 'Spain' }], hasMore: false }),
+        });
+      });
+
+      const onSaved = vi.fn();
+      renderModal({
+        rowId: null,
+        saveMode: 'location',
+        showAddressTypeCheckboxes: false,
+        apiBase: '/api/warehouse',
+        onSaved,
+      });
+
+      // Select a country (required for save)
+      const buttons = screen.getAllByRole('button');
+      const countryBtn = buttons.find(
+        (b) => b.getAttribute('aria-haspopup') === 'dialog' && !b.disabled,
+      );
+      fireEvent.click(countryBtn);
+      const spainBtn = await screen.findByText('Spain');
+      fireEvent.click(spainBtn);
+
+      fireEvent.click(screen.getByText('save'));
+
+      let postCall;
+      await vi.waitFor(() => {
+        postCall = global.fetch.mock.calls.find(
+          ([url, opts]) => opts?.method === 'POST',
+        );
+        expect(postCall).toBeDefined();
+      });
+
+      const [postUrl, postOpts] = postCall;
+      // Plain C_Location endpoint — no parentId query, no /locationAddress segment.
+      expect(postUrl).toBe('/api/warehouse/location');
+      expect(postUrl).not.toContain('parentId');
+      expect(postUrl).not.toContain('locationAddress');
+
+      const body = JSON.parse(postOpts.body);
+      // No BP link and no address-type flags in location mode.
+      expect(body).not.toHaveProperty('businessPartner');
+      expect(body).not.toHaveProperty('shipToAddress');
+      expect(body).not.toHaveProperty('invoiceToAddress');
+      expect(body.country).toBe('ES');
+
+      await vi.waitFor(() => {
+        expect(onSaved).toHaveBeenCalledWith('new-c-loc-1', 'Madrid, Calle Mayor');
+      });
+    });
+
+    it('EDIT (rowId set) PUTs to `${apiBase}/location/{rowId}`', async () => {
+      const rowId = 'c-loc-77';
+      global.fetch = vi.fn((url, opts) => {
+        // Initial GET-by-id to prefill the form (populate country so save is enabled)
+        if (url.includes(`/location/${rowId}`) && (!opts?.method || opts.method === 'GET')) {
+          return Promise.resolve({
+            ok: true,
+            json: () => Promise.resolve({
+              response: {
+                data: [{
+                  id: rowId,
+                  address: '123 Main St',
+                  country: 'ES',
+                  'country$_identifier': 'Spain',
+                }],
+              },
+            }),
+          });
+        }
+        // PUT edit
+        if (url.includes(`/location/${rowId}`) && opts?.method === 'PUT') {
+          return Promise.resolve({
+            ok: true,
+            json: () => Promise.resolve({
+              response: { data: [{ id: rowId, name: 'Updated Location' }] },
+            }),
+          });
+        }
+        // Selectors
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ items: [{ id: 'ES', label: 'Spain' }], hasMore: false }),
+        });
+      });
+
+      const onSaved = vi.fn();
+      renderModal({
+        rowId,
+        saveMode: 'location',
+        showAddressTypeCheckboxes: false,
+        apiBase: '/api/warehouse',
+        onSaved,
+      });
+
+      await screen.findByText('save', {}, { timeout: 3000 });
+      await vi.waitFor(() => {
+        const btns = screen.getAllByRole('button');
+        const countryBtn = btns.find((b) => b.getAttribute('aria-haspopup') === 'dialog');
+        expect(countryBtn).not.toBeDisabled();
+      });
+
+      fireEvent.click(screen.getByText('save'));
+
+      let putCall;
+      await vi.waitFor(() => {
+        putCall = global.fetch.mock.calls.find(
+          ([url, opts]) => opts?.method === 'PUT',
+        );
+        expect(putCall).toBeDefined();
+      });
+
+      const [putUrl, putOpts] = putCall;
+      expect(putUrl).toBe('/api/warehouse/location/c-loc-77');
+      expect(putUrl).not.toContain('locationAddress');
+
+      const body = JSON.parse(putOpts.body);
+      expect(body).not.toHaveProperty('businessPartner');
+      expect(body).not.toHaveProperty('shipToAddress');
+      expect(body).not.toHaveProperty('invoiceToAddress');
+
+      await vi.waitFor(() => {
+        expect(onSaved).toHaveBeenCalledWith('c-loc-77', 'Updated Location');
+      });
+    });
+  });
 });

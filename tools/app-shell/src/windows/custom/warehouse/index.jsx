@@ -9,7 +9,7 @@ import WarehouseCustomTable from './WarehouseCustomTable';
 
 async function createDefaultStorageBin(warehouse, { token, apiBaseUrl }) {
   const searchKey = `${warehouse.searchKey}-0-0-0`;
-  const res = await fetch(`${apiBaseUrl}/sws/neo/warehouse/storageBin`, {
+  const res = await fetch(`${apiBaseUrl}/storageBin`, {
     method: 'POST',
     headers: {
       Authorization: `Bearer ${token}`,

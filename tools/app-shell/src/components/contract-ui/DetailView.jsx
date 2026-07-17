@@ -1471,6 +1471,7 @@ function renderNewRecordSaveActions({
         if (!(await flushPendingLines())) return;
         const saved = await hook.handleSave(data);
         if (saved?.id && isNew) {
+          if (onAfterCreate) await onAfterCreate(saved, { token, apiBaseUrl });
           hook.primeSaved?.(saved);
           navigate(`/${windowName}/${saved.id}`, { replace: true, state: { justSaved: saved } });
         }
