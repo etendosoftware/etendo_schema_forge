@@ -121,7 +121,7 @@ export default function DocumentPrintDrawer({ open, onClose, windowName, documen
             <button
               disabled
               title={ui('comingSoon')}
-              className="h-8 px-3 flex items-center gap-1.5 rounded-md bg-blue-600/50 text-primary-foreground text-xs font-medium cursor-not-allowed"
+              className="h-8 px-3 flex items-center gap-1.5 rounded-md bg-status-info/50 text-status-info-foreground text-xs font-medium cursor-not-allowed"
             >
               <Send className="h-3.5 w-3.5" data-testid="Send__8d2ae7" />
               {ui('sendByEmail')}
@@ -132,7 +132,7 @@ export default function DocumentPrintDrawer({ open, onClose, windowName, documen
           </div>
         </div>
         {/* Document area */}
-        <div className="flex-1 overflow-hidden bg-slate-100 p-6 flex justify-center">
+        <div className="flex-1 overflow-hidden bg-muted p-6 flex justify-center">
           <div className="bg-card rounded-lg shadow-lg w-full max-w-[850px] overflow-hidden relative">
             {loading && <div className="absolute inset-0 flex items-center justify-center bg-card/80 z-10 gap-2 text-muted-foreground"><Loader2 className="h-5 w-5 animate-spin" data-testid="Loader2__8d2ae7" /><span>{ui('generating')}</span></div>}
             {error && <div className="absolute inset-0 flex items-center justify-center bg-card/90 z-10 text-destructive text-sm px-8 text-center">{error}</div>}

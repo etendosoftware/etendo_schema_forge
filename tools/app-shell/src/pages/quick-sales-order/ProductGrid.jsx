@@ -88,7 +88,7 @@ export default function ProductGrid({ products, categories: categoriesProp, cate
               onClick={() => onAddProduct(product)}
               className={`group flex items-center gap-3 px-3 py-2 text-left transition-colors hover:bg-muted/40 ${
                 idx > 0 ? 'border-t border-border' : ''
-              } ${isTop ? 'bg-amber-50/50' : ''}`}
+              } ${isTop ? 'bg-status-warning/50' : ''}`}
             >
               {/* Small avatar */}
               <div
@@ -103,7 +103,7 @@ export default function ProductGrid({ products, categories: categoriesProp, cate
                   <span className="text-sm font-medium truncate">{product.name}</span>
                   {isTop && (
                     <Badge
-                      className="bg-amber-500 hover:bg-amber-500 text-primary-foreground text-[9px] px-1 py-0 gap-0.5 shrink-0"
+                      className="bg-status-warning hover:bg-status-warning text-status-warning-foreground text-[9px] px-1 py-0 gap-0.5 shrink-0"
                       data-testid="Badge__ff9d59">
                       <TrendingUp className="h-2 w-2" data-testid="TrendingUp__ff9d59" />
                       {ui('qsoTopSeller')}
@@ -153,7 +153,7 @@ export default function ProductGrid({ products, categories: categoriesProp, cate
               onClick={() => onAddProduct(product)}
               className={`group relative flex flex-col items-start gap-2 rounded-lg border bg-card p-3 text-left hover:shadow-sm transition-[border-color,box-shadow,ring] ${
                 isTop
-                  ? 'border-amber-300 ring-1 ring-amber-200/50'
+                  ? 'border-status-warning-border ring-1 ring-status-warning-border/50'
                   : 'border-border hover:border-primary/40'
               }`}
             >
@@ -161,7 +161,7 @@ export default function ProductGrid({ products, categories: categoriesProp, cate
               {isTop && (
                 <div className="absolute top-2 left-2 z-10">
                   <Badge
-                    className="bg-amber-500 hover:bg-amber-500 text-primary-foreground text-[10px] px-1.5 py-0 gap-0.5"
+                    className="bg-status-warning hover:bg-status-warning text-status-warning-foreground text-[10px] px-1.5 py-0 gap-0.5"
                     data-testid="Badge__ff9d59">
                     <TrendingUp className="h-2.5 w-2.5" data-testid="TrendingUp__ff9d59" />
                     {ui('qsoTopSeller')}

@@ -68,7 +68,7 @@ export function DocumentPreview({ open, onClose, title = 'Document Preview', pdf
         </div>
 
         {/* Content */}
-        <div className="flex-1 overflow-hidden bg-slate-100 p-4">
+        <div className="flex-1 overflow-hidden bg-muted p-4">
           {pdfUrl ? (
             <object
               data={pdfUrl}
@@ -84,7 +84,7 @@ export function DocumentPreview({ open, onClose, title = 'Document Preview', pdf
           ) : (
             /* Placeholder when no PDF URL is available */
             (<div className="h-full flex flex-col items-center justify-center text-center px-8 bg-card rounded-lg shadow-lg">
-              <div className="h-16 w-16 rounded-full bg-slate-100 flex items-center justify-center mb-4">
+              <div className="h-16 w-16 rounded-full bg-muted flex items-center justify-center mb-4">
                 <FileText className="h-8 w-8 text-muted-foreground" data-testid="FileText__152a2f" />
               </div>
               <h3 className="text-base font-medium text-foreground mb-2">
