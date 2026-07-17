@@ -628,6 +628,17 @@ export function EditAccountModal({ open, onClose, onSaved, account, onArchive, o
             data-testid="AccountingConfigurationSection__73027d" />
         ) : null}
 
+        {/* Cuenta bancaria is validated on the Contabilidad tab, but Save is disabled regardless
+            of which tab is active — surface a summary here so the reason isn't invisible when the
+            user is looking at General (the field-level error inside AccountingConfigurationSection
+            already covers the Contabilidad tab itself, so this is skipped there to avoid a
+            duplicate message, ETP-4530 / BUG-1). */}
+        {accounting.assetAcctMissing && editTab !== EDIT_TAB_ACCOUNTING ? (
+          <p className="text-xs text-[#F53D6B]" data-testid="edit-account-accounting-error-summary">
+            {ui('financeAccountsAccountingBankAssetRequiredSummary')}
+          </p>
+        ) : null}
+
         {error ? (
           <p className="text-xs text-[#F53D6B]" data-testid="edit-account-error">{error}</p>
         ) : null}

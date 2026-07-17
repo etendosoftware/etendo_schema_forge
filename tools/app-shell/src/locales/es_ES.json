@@ -18347,6 +18347,7 @@
     "financeAccountsAccountingSection": "Configuración contable",
     "financeAccountsAccountingBankAsset": "Cuenta bancaria",
     "financeAccountsAccountingBankAssetRequired": "La cuenta bancaria es obligatoria",
+    "financeAccountsAccountingBankAssetRequiredSummary": "La cuenta bancaria es obligatoria en la pestaña Contabilidad",
     "financeAccountsAccountingTransitory": "Cuenta transitoria",
     "financeAccountsAccountingNone": "Ninguna",
     "financeAccountsAccountingLoading": "Cargando configuración contable…",

@@ -18097,6 +18097,7 @@
     "financeAccountsAccountingSection": "Accounting configuration",
     "financeAccountsAccountingBankAsset": "Bank account",
     "financeAccountsAccountingBankAssetRequired": "Bank account is required",
+    "financeAccountsAccountingBankAssetRequiredSummary": "Bank account is required in the Accounting tab",
     "financeAccountsAccountingTransitory": "Transitory account",
     "financeAccountsAccountingNone": "None",
     "financeAccountsAccountingLoading": "Loading accounting configuration…",

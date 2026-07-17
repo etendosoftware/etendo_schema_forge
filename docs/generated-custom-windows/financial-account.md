@@ -92,7 +92,14 @@ Field editability in the top section:
   `updateAccount(id, payload)`, PSD2 import settings via the bridge `import-settings` action, and
   (ETP-4530) the accounting configuration via `saveAccountingConfiguration`. Enabled only when
   something is dirty, Name/IBAN are valid, and — if the Contabilidad tab was touched — Cuenta
-  bancaria is filled.
+  bancaria is filled. Since `accounting.assetAcctMissing` can disable Save while the user is
+  looking at **either** tab (it only requires having touched Contabilidad at some point during
+  this modal session, not currently viewing it), a summary line
+  (`edit-account-accounting-error-summary`, `financeAccountsAccountingBankAssetRequiredSummary`)
+  renders near the footer whenever the General tab is active and the condition holds — otherwise a
+  disabled Save button would have no visible explanation on that tab (QA BUG-1). The field-level
+  error inside `AccountingConfigurationSection` already covers the Contabilidad tab itself, so the
+  summary line is skipped there to avoid showing the same message twice.
 - The consent-expiry date in the re-auth banner is formatted with the active locale (dd/MM/yyyy in
   Spanish).
 
