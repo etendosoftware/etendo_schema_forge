@@ -81,8 +81,9 @@ describe('MovementsToolbar', () => {
     expect(screen.getByTestId('type-filter')).toBeInTheDocument();
     expect(screen.getByTestId('movements-advanced-filter')).toBeInTheDocument();
     expect(screen.getByTestId('movements-search-input')).toBeInTheDocument();
-    // Manual movement creation is feature-flagged off in this release.
-    expect(screen.queryByTestId('new-movement-button')).not.toBeInTheDocument();
+    // Primary "Nuevo movimiento" split-button is present.
+    expect(screen.getByTestId('new-movement-button')).toBeInTheDocument();
+    expect(screen.getByTestId('new-movement-split')).toBeInTheDocument();
   });
 
   it('renders the search input using i18n keys', () => {
@@ -126,7 +127,22 @@ describe('MovementsToolbar', () => {
     expect(lastCall[0]).toBe('c');
   });
 
-  it('renders the Transfer funds button (in the former New-movement slot) and fires onTransfer', async () => {
+  it('fires onNewMovement from the primary split-button action', async () => {
+    const user = userEvent.setup();
+    const onNewMovement = vi.fn();
+    render(
+      <MovementsToolbar
+        filters={defaultFilters}
+        onFiltersChange={() => () => {}}
+        onNewMovement={onNewMovement}
+      />,
+    );
+
+    await user.click(screen.getByTestId('new-movement-button'));
+    expect(onNewMovement).toHaveBeenCalledTimes(1);
+  });
+
+  it('opens the split menu and fires onTransfer from the "Transferir fondos" item', async () => {
     const user = userEvent.setup();
     const onTransfer = vi.fn();
     render(
@@ -137,11 +153,12 @@ describe('MovementsToolbar', () => {
       />,
     );
 
-    // The feature-flagged "New movement" button is gone; its slot now holds Transfer funds.
-    expect(screen.queryByTestId('new-movement-button')).not.toBeInTheDocument();
-    const btn = screen.getByTestId('transfer-funds-button');
-    expect(btn).toBeInTheDocument();
-    await user.click(btn);
+    // Transfer moved into the split-button dropdown; standalone button is gone.
+    expect(screen.queryByTestId('transfer-funds-button')).not.toBeInTheDocument();
+    await user.click(screen.getByTestId('new-movement-split'));
+    const item = screen.getByTestId('movements-transfer-menu-item');
+    expect(item).toBeInTheDocument();
+    await user.click(item);
     expect(onTransfer).toHaveBeenCalledTimes(1);
   });
 

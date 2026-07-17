@@ -1,16 +1,20 @@
 import { useUI } from '@/i18n';
 import { MOVEMENT_STATUS_TONE } from '@/components/financial-accounts/tokens';
 import { cn } from '@/lib/utils';
-import { MOVEMENT_STATUS_CONFIG } from './movementStatusConfig';
+import { MOVEMENT_STATUS_CONFIG, DRAFT } from './movementStatusConfig';
 
 /**
- * Renders a colored badge for a movement payment status.
+ * Renders a colored badge for a movement.
  *
- * @param {{ status: string; className?: string }} props
+ * When `processed === false` the movement is a **Draft** (Borrador) regardless of
+ * its raw status code — a reactivated transaction keeps RPR/PPM but is a Draft
+ * again — so that takes precedence over the status-code mapping.
+ *
+ * @param {{ status: string; processed?: boolean; className?: string }} props
  */
-export function MovementStatusBadge({ status, className }) {
+export function MovementStatusBadge({ status, processed, className }) {
   const ui = useUI();
-  const config = MOVEMENT_STATUS_CONFIG[status];
+  const config = processed === false ? DRAFT : MOVEMENT_STATUS_CONFIG[status];
   if (!config) return null;
 
   const tone = MOVEMENT_STATUS_TONE[config.family];
