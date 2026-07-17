@@ -1,8 +1,8 @@
 {
   "version": "0.70.0",
   "generatedAt": "2026-04-30T15:42:46.722Z",
-  "updatedAt": "2026-07-16T11:29:00.031Z",
-  "checksum": "75fba21f63dc1387",
+  "updatedAt": "2026-07-17T13:02:48.132Z",
+  "checksum": "0a8c8fb86dd23932",
   "frontendContract": {
     "window": {
       "id": "183",
@@ -1172,18 +1172,6 @@
             "callout": {
               "className": "org.openbravo.module.sii.callouts.SiiAuthorizationCallout"
             }
-          },
-          {
-            "name": "tbaiIssent",
-            "apiKey": "tbaiIssent",
-            "column": "EM_Tbai_Issent",
-            "label": "Enviada a Batuz",
-            "type": "boolean",
-            "tsType": "boolean",
-            "visibility": "readOnly",
-            "required": false,
-            "grid": false,
-            "form": false
           },
           {
             "name": "processed",
@@ -5327,7 +5315,7 @@
             "apiKey": "tbaiIssent",
             "column": "EM_Tbai_Issent",
             "type": "boolean",
-            "visibility": "readOnly",
+            "visibility": "discarded",
             "required": false
           },
           {
@@ -11532,14 +11520,6 @@
         "description": "Field 'summedLineAmount' should be present in header"
       },
       {
-        "id": "t-field-presence-header-tbaiIssent",
-        "category": "field-presence",
-        "entity": "header",
-        "field": "tbaiIssent",
-        "runner": "node",
-        "description": "Field 'tbaiIssent' should be present in header"
-      },
-      {
         "id": "t-field-presence-header-totalPaid",
         "category": "field-presence",
         "entity": "header",
@@ -12770,14 +12750,6 @@
         "field": "summedLineAmount",
         "runner": "node",
         "description": "Field 'summedLineAmount' should have type 'number' in header"
-      },
-      {
-        "id": "t-field-type-header-tbaiIssent",
-        "category": "field-type",
-        "entity": "header",
-        "field": "tbaiIssent",
-        "runner": "node",
-        "description": "Field 'tbaiIssent' should have type 'boolean' in header"
       },
       {
         "id": "t-field-type-header-totalPaid",
@@ -16567,6 +16539,14 @@
         "description": "System field 'tbaiIsreverseinvoice' should exist in backend but not frontend for header"
       },
       {
+        "id": "t-system-field-header-tbaiIssent",
+        "category": "system-field",
+        "entity": "header",
+        "field": "tbaiIssent",
+        "runner": "node",
+        "description": "System field 'tbaiIssent' should exist in backend but not frontend for header"
+      },
+      {
         "id": "t-system-field-header-tbaiIssueDate",
         "category": "system-field",
         "entity": "header",
@@ -17779,25 +17759,25 @@
       }
     ],
     "summary": {
-      "total": 986,
+      "total": 985,
       "byCategory": {
         "action-endpoint": 26,
         "crud-flags": 13,
         "default-value-type": 38,
         "displaylogic-evaluable": 21,
         "displaylogic-valid": 21,
-        "field-presence": 155,
-        "field-type": 155,
+        "field-presence": 154,
+        "field-type": 154,
         "readonlylogic-evaluable": 70,
         "readonlylogic-valid": 70,
         "rule-declared": 21,
         "searchable-filters": 6,
         "selector-endpoint": 52,
-        "system-field": 325,
+        "system-field": 326,
         "visibility": 13
       },
       "byRunner": {
-        "node": 986,
+        "node": 985,
         "junit": 0
       }
     }

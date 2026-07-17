@@ -1,13 +1,15 @@
 {
   "version": "0.1.0",
   "generatedAt": "2026-07-13T13:35:37.405Z",
-  "checksum": "964ba950370f3d03",
+  "updatedAt": "2026-07-15T12:11:24.082Z",
+  "checksum": "954af1f27c4f1b49",
   "frontendContract": {
     "window": {
       "id": "B5673F73F613496C8BEA22FB55E4E1E4",
       "name": "End Year Close",
       "primaryEntity": "accounting",
       "category": "finance",
+      "secondaryTabs": {},
       "detailEntity": null,
       "layoutType": "default"
     },
@@ -133,6 +135,7 @@
       "name": "End Year Close",
       "primaryEntity": "accounting",
       "category": "finance",
+      "secondaryTabs": {},
       "detailEntity": null
     },
     "entities": {

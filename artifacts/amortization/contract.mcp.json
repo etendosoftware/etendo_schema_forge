@@ -1,7 +1,7 @@
 {
   "version": "0.36.0",
   "generatedAt": "2026-07-14T13:57:24.059Z",
-  "contractChecksum": "98b37336732f2c74",
+  "contractChecksum": "6fa3fb426053dcc9",
   "apiPrediction": {
     "specName": "amortization",
     "baseUrl": "/sws/neo/amortization",

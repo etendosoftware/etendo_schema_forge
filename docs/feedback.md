@@ -204,6 +204,26 @@ Owner: whoever next touches the goods-shipment window.
 
 ---
 
+## [2026-07-13] ETP-4401 — SII/TBAI/Verifactu Onboarding Save Broken by Extractor PK-Naming Convention Fix
+
+**Component:** `tools/app-shell/src/windows/custom/fiscal-config/fiscalConfig.utils.js` (`getFiscalRecordId`)
+
+**Affected windows:** `sii-config`, `tbai-config`, `verifactu-config` (backing artifacts for the custom `fiscal-config` window)
+
+**Symptom:** Saving the SII/TBAI/Verifactu onboarding wizard failed with a "record id not found" error. The record was created successfully on the backend, but the frontend could not recover its id afterward, so any subsequent update (e.g., certificate association, follow-up PATCH) had no id to target.
+
+**Root cause:** `getFiscalRecordId()` used to `switch` on the fiscal system name and read a hardcoded, ad-hoc PK field name per window: `tbaiConfigID`, `configuracinSII`, `verifactuConfig`. Those names existed only because the old extractor derived the PK's `java_qualifier` from a name heuristic (`columnname === tableName + '_ID'`), which never matched these 3 windows' actual PK columns due to case mismatches (e.g. table `TBAI_Config` vs. column `Tbai_Config_ID`). The heuristic's failure silently fell through to camelCasing the raw column name instead, and those camelCase names got baked into `decisions.json` and hardcoded into `fiscalConfig.utils.js`.
+
+`schema_forge_core` commit `5d363ad2f` ("Fix extractor — use IsKey for PK and tab table for tableName") fixed the underlying bug: PK detection now uses the `IsKey='Y'` column flag instead of the name heuristic. This is a legitimate, intentional, platform-wide convention change — after the fix, NEO Headless correctly and uniformly serializes every window's PK as `id` (`ETGO_SF_FIELD.java_qualifier = 'id'`), which is also required for other windows (e.g. `open-close-period-control`). It is not a regression in the extractor. But it meant the 3 fiscal windows' API responses stopped including `tbaiConfigID`/`configuracinSII`/`verifactuConfig` entirely — `getFiscalRecordId()`'s per-system switch had nothing left to read, so it returned `undefined`/`null` and the id was silently lost after every record creation.
+
+**Fix:** `getFiscalRecordId(record, _system)` now returns `record?.id ?? null` unconditionally for all systems — the `system` parameter is kept only for call-site compatibility. Also removed the now-dead `tbaiConfigID`/`configuracinSII`/`verifactuConfig` entries from `artifacts/{tbai-config,sii-config,verifactu-config}/decisions.json` (confirmed absent from each window's `schema-raw.json` — genuinely dead, not a re-derivable field), and fixed stale mocks in `FiscalConfigDebugPanel.jsx` that still referenced the old field names. Regression tests added (unit + Playwright e2e) covering record-id recovery for all three systems.
+
+**Lesson:** Any frontend code — custom components especially — that hardcodes a specific PK field name instead of reading `record.id` is fragile to this class of extractor/pipeline convention fix. The platform's direction is that PK fields are always serialized as `id`; code that special-cases a different name per window/system is relying on an accident of a buggy heuristic, not a contract. **Recommendation (not done as part of this fix, scope was kept to the 3 fiscal windows):** a quick grep sweep across `tools/app-shell/src/windows/custom/**` for other hardcoded non-`id` PK-like field names (e.g. `*ConfigID`, `*RecordId`, per-window id variables) would catch other windows silently exposed to the same class of bug before they surface as production incidents.
+
+**Reference:** Fix lives in `getFiscalRecordId()`, `tools/app-shell/src/windows/custom/fiscal-config/fiscalConfig.utils.js`; branch `feature/ETP-4401`.
+
+---
+
 ## Callout-Filled Warehouse Shows Raw ID on Purchase Order (but not Sales Order)
 
 **Component:** `artifacts/purchase-order/decisions.json` — header `warehouse` field config (NOT a shared-component bug)

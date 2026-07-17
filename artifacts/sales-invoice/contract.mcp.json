@@ -1,8 +1,8 @@
 {
-  "version": "0.51.0",
+  "version": "0.57.0",
   "generatedAt": "2026-04-30T15:42:46.582Z",
-  "updatedAt": "2026-07-15T16:14:17.099Z",
-  "contractChecksum": "30c3f798574018a2",
+  "updatedAt": "2026-07-17T13:02:48.214Z",
+  "contractChecksum": "637a00de439f4d4c",
   "apiPrediction": {
     "specName": "sales-invoice",
     "baseUrl": "/sws/neo/sales-invoice",
@@ -1060,18 +1060,6 @@
             "readOnlyLogic": "@processed@='Y'",
             "defaultValue": "N"
           },
-          "tbaiSequence": {
-            "readOnly": true
-          },
-          "tbaiInvoicenum": {
-            "readOnly": true
-          },
-          "tbaiInvoiceseq": {
-            "readOnly": true
-          },
-          "tbaiIssent": {
-            "readOnly": true
-          },
           "aeatsiiIssent": {
             "readOnly": true,
             "required": true,
@@ -1442,5 +1430,5 @@
       "tbaiVoidxmlgenerator"
     ]
   },
-  "checksum": "0367e4c191b85292"
+  "checksum": "d6ad3d106fcbb2d1"
 }

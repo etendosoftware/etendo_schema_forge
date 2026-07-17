@@ -72,10 +72,6 @@
           "visibility": "system",
           "derivation": "fromParent"
         },
-        "configuracinSII": {
-          "visibility": "system",
-          "derivation": "fromConfig"
-        },
         "nuevaConsultaFacturasASII": {
           "visibility": "discarded"
         },

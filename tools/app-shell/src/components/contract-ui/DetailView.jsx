@@ -1167,9 +1167,13 @@ function buildInitialTabs(p) {
   }
   // Append 'tab' placement custom items after lines/secondary tabs but before Others.
   // Items may pass `labelKey` to resolve a generic i18n label via useUI() instead of a
-  // hardcoded string in `label`.
+  // hardcoded string in `label`. A tab-placement custom component may opt out of being
+  // shown entirely by calling `onVisibilityChange(false)` (see customTabVisibility state
+  // in DetailView) — until it does, it defaults to visible so every other consumer of
+  // `customTabs` keeps behaving exactly as before.
   if (!p.customTabsAfterBottom) {
     p.tabCustomTabs.forEach(ct => {
+      if (p.customTabVisibility[ct.key] === false) return;
       const resolvedLabel = ct.labelKey ? p.ui(ct.labelKey) : ct.label;
       tabs.push({ key: customTabKey(ct), label: resolvedLabel, count: p.customTabCounts[ct.key] ?? null });
     });
@@ -1681,6 +1685,13 @@ async function executeDetailProcessImpl(process, paramValues, explicitRows, {
  * tab is picked up automatically by the next header save (no per-field persistence
  * needed, no separate save button required). This prop is additive/optional — custom
  * tabs that don't use it are unaffected.
+ *
+ * 'tab' placement items also receive an `onVisibilityChange(visible: boolean)` callback
+ * (mirroring `onCountChange`). The tab defaults to visible and stays that way unless the
+ * component calls `onVisibilityChange(false)` — e.g. to hide itself entirely when it has
+ * nothing to show for the current record. Calling `onVisibilityChange(true)` afterwards
+ * (e.g. once the underlying data changes) restores it. Components that never call it are
+ * unaffected — the tab is always shown, so this is fully backwards compatible.
  */
 export function hasUnsavedEdits(editing, selected) {
   if (!editing || !selected) return false;
@@ -3017,6 +3028,9 @@ export function DetailView({
   // optionally restoring an in-progress draft (+ error) across the remount
   const [pendingCustomTabAdd, setPendingCustomTabAdd] = useState(null);
   const [pendingCustomTabRestore, setPendingCustomTabRestore] = useState(null);
+  // Defaults every tab-placement custom component to visible (true/undefined) until it
+  // explicitly reports otherwise via `onVisibilityChange(false)` — see buildInitialTabs.
+  const [customTabVisibility, setCustomTabVisibility] = useState({});
   const [customLinesCount, setCustomLinesCount] = useState(null);
   const [activeCustomBelowTab, setActiveCustomBelowTab] = useState(0);
   // Reuse the secondaryTabs/lines/others activeTab state for custom tabs by prefixing
@@ -3026,7 +3040,7 @@ export function DetailView({
   const tabs = buildInitialTabs({
     secondaryTabs, secondaryHooks, panelCounts, DetailTable, detailLabel, detailEntity,
     hook, detailTabIndex, CustomLines, customLinesLabel, customLinesCount,
-    customTabsAfterBottom, tabCustomTabs, ui, customTabCounts,
+    customTabsAfterBottom, tabCustomTabs, ui, customTabCounts, customTabVisibility,
   });
 
   // When primaryTabs is in use, skip auto-adding Others (handled by a primary tab)
@@ -3048,6 +3062,25 @@ export function DetailView({
   });
 
   pushOthers(showOthers, tabs, othersLabel, ui);
+
+  // `activeTab` is a numeric index into `tabs`, but `tabs` is rebuilt fresh on every render
+  // (buildInitialTabs) and can shrink — e.g. a 'tab'-placement custom component calling
+  // onVisibilityChange(false) on itself (see customTabVisibility above). If the entry that
+  // WAS active disappears, the numeric index either goes out of range or now points at a
+  // different tab, leaving the tab strip with no active tab and no panel shown. Track the
+  // active tab by its stable `key` (not the index, which shifts when entries are removed)
+  // and redirect to the first tab whenever the previously active key is no longer present.
+  const activeTabKeyRef = useRef(null);
+  useEffect(() => {
+    const prevKey = activeTabKeyRef.current;
+    const prevKeyStillExists = prevKey == null || tabs.some(t => t.key === prevKey);
+    if (!prevKeyStillExists) {
+      setActiveTab(0);
+      activeTabKeyRef.current = tabs[0]?.key ?? null;
+    } else {
+      activeTabKeyRef.current = tabs[activeTab]?.key ?? prevKey;
+    }
+  }, [tabs, activeTab]);
 
   const isCustomTabActive = tabCustomTabs.some(ct => tabs[activeTab]?.key === customTabKey(ct));
 
@@ -3125,6 +3158,10 @@ export function DetailView({
         },
       });
     };
+    const updateCustomTabVisibility = (visible) => setCustomTabVisibility(prev => {
+      if (prev[ct.key] === visible) return prev;
+      return { ...prev, [ct.key]: visible };
+    });
     return (
       <div
         key={customTabKey(ct)}
@@ -3145,6 +3182,7 @@ export function DetailView({
           restoreDraft={pendingCustomTabAdd === ct.key ? pendingCustomTabRestore : null}
           onCountChange={updateCustomTabCount}
           onChange={hook.handleChange}
+          onVisibilityChange={updateCustomTabVisibility}
           {...(ct.props || {})}
           data-testid="TabComponent__fa3275" />
       </div>
@@ -3233,6 +3271,7 @@ export function DetailView({
                   token={token}
                   apiBaseUrl={apiBaseUrl}
                   api={api}
+                  onChange={hook.handleChange}
                   onProcess={hook.handleProcess}
                   onRefresh={() => hook.fetchById?.(data?.id || recordId)}
                   data-testid="TopbarExtraComponent__fa3275" />
