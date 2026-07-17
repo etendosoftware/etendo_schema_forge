@@ -4,18 +4,20 @@ import { useUI } from '@/i18n';
 import CertModal from './CertModal.jsx';
 import { useDraggable } from '../fiscal-monitor/useDraggable.js';
 
-// idField = javaQualifier of the PK column in ETGO_SF_FIELD; NeoFieldFilter renames 'id' → qualifier
+// PK fields are now extracted via IsKey='Y' (schema_forge_core commit 5d363ad2f), so
+// NeoFieldFilter no longer renames them to a per-system name — the API always returns
+// the PK as `id`. idField stays null so deleteNeoRecord() falls back to r.id.
 const CONFIGS = [
-  { key: 'sii',      labelKey: 'fiscalDebug.label.sii',      spec: 'sii-config',       entity: 'siiConfiguration',                 idField: 'configuracinSII' },
-  { key: 'tbai',     labelKey: 'fiscalDebug.label.tbai',     spec: 'tbai-config',      entity: 'header',                           idField: 'tbaiConfigID' },
-  { key: 'verifactu',labelKey: 'fiscalDebug.label.verifactu',spec: 'verifactu-config', entity: 'cabeceraDeConfiguraciónVerifactu', idField: 'verifactuConfig' },
+  { key: 'sii',      labelKey: 'fiscalDebug.label.sii',      spec: 'sii-config',       entity: 'siiConfiguration',                 idField: null },
+  { key: 'tbai',     labelKey: 'fiscalDebug.label.tbai',     spec: 'tbai-config',      entity: 'header',                           idField: null },
+  { key: 'verifactu',labelKey: 'fiscalDebug.label.verifactu',spec: 'verifactu-config', entity: 'cabeceraDeConfiguraciónVerifactu', idField: null },
   { key: 'cert',     labelKey: 'fiscalDebug.label.cert',     spec: 'certificate',      entity: null,                               idField: null },
 ];
 
 // ── Mock record fixtures ──────────────────────────────────────────────────────
 
 const MOCK_SII = {
-  configuracinSII: 'debug-sii-001',
+  id: 'debug-sii-001',
   acogidaAlSII: 'N',
   fechaAcogidaSII: '',
   entornoDeProduccin: 'N',
@@ -35,26 +37,22 @@ const MOCK_SII = {
 const MOCK_SII_NAVARRA = { ...MOCK_SII, navarra: 'Y' };
 
 const MOCK_TBAI = {
-  tbaiConfigID: 'debug-tbai-001',
+  id: 'debug-tbai-001',
   tbaisystemdate: '2024-01-01',
   etsgSifTerritory: 'ARABA',
-  entornoDeProduccin: 'N',
-  etsgInvoicedescription: '',
-  etsgUseasproduct: 'N',
-  etsgAutosend: 'N',
-  etsgJasperreport: '',
-  etsgValidateprevious: 'N',
+  productionEnv: 'N',
+  invoiceDescription: '',
+  uSEAsproductDesc: 'N',
+  autoSendInvoices: 'N',
+  jasperreportPath: '',
+  validatePreviousInvoice: 'N',
 };
 
 const MOCK_VERIFACTU = {
-  verifactuConfig: 'debug-vf-001',
+  id: 'debug-vf-001',
   tAXType: '01',
   defaultQR: 'N',
-  nif: '',
-  systemstart: '',
-  systemstop: '',
-  incident: 'N',
-  tbaisystemdate: '',
+  isReady: 'N',
 };
 
 const MOCK_CERT_DETAILS = {

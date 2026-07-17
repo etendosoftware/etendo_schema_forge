@@ -11,3 +11,13 @@ if (!Element.prototype.scrollIntoView) {
 if (!Element.prototype.scrollTo) {
   Element.prototype.scrollTo = () => {};
 }
+
+// scroll-pane (app-shell-core) observes size via ResizeObserver, which jsdom
+// does not implement.
+if (!globalThis.ResizeObserver) {
+  globalThis.ResizeObserver = class {
+    observe() { /* no-op: size never changes under jsdom */ }
+    unobserve() { /* no-op: nothing is ever observed */ }
+    disconnect() { /* no-op: nothing is ever observed */ }
+  };
+}

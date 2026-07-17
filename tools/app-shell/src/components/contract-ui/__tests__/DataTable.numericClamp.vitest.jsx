@@ -34,7 +34,7 @@ vi.mock('@/lib/applyCalloutUpdates.js', () => ({
   applyCalloutUpdates: (prev, updates) => ({ ...prev, ...updates }),
 }));
 vi.mock('../ProductSearchDrawer.jsx', () => ({ default: () => null }));
-vi.mock('../InternalConsumptionProductSearchDrawer.jsx', () => ({ default: () => null }));
+vi.mock('../ProductStockSearchDrawer.jsx', () => ({ default: () => null }));
 vi.mock('../SelectorInput.jsx', () => ({ SelectorInput: () => <div data-testid="selector-input" /> }));
 vi.mock('sonner', () => ({ toast: { error: vi.fn(), success: vi.fn() } }));
 

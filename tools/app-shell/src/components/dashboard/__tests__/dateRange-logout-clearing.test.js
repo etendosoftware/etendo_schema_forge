@@ -25,7 +25,6 @@ const LOGOUT_CONSUMERS = [
   'hooks/useEntity.js',
   'components/UserAvatarButton.jsx',
   'pages/OAuth2ClientsPage.jsx',
-  'pages/AuthorizePage.jsx',
 ];
 
 describe('useLogout — the single clear+logout choke point', () => {

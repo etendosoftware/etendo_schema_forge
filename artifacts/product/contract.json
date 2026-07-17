@@ -1,8 +1,8 @@
 {
-  "version": "0.18.0",
-  "generatedAt": "2026-04-29T18:11:24.842Z",
-  "updatedAt": "2026-07-06T17:42:30.156Z",
-  "checksum": "aebf17aa7bc1e6ab",
+  "version": "0.17.0",
+  "generatedAt": "2026-07-07T21:53:26.027Z",
+  "updatedAt": "2026-07-14T12:19:49.651Z",
+  "checksum": "bf6e48d15f64d02a",
   "frontendContract": {
     "window": {
       "id": "140",
@@ -71,6 +71,94 @@
         }
       ],
       "layoutType": "gallery",
+      "import": {
+        "enabled": true,
+        "spec": "product",
+        "entity": "product",
+        "formats": [
+          "csv",
+          "txt"
+        ],
+        "limit": {
+          "maxRows": 5000,
+          "concurrency": 4
+        },
+        "dedupe": {
+          "scope": "file",
+          "key": [
+            "searchKey"
+          ]
+        },
+        "fields": [
+          {
+            "target": "searchKey",
+            "aliases": [
+              "codigo",
+              "código",
+              "sku"
+            ],
+            "label": "Search Key",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "target": "name",
+            "aliases": [
+              "nombre"
+            ],
+            "label": "Name",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "target": "description",
+            "aliases": [
+              "descripcion",
+              "descripción"
+            ],
+            "label": "Description",
+            "required": false,
+            "type": "textarea"
+          },
+          {
+            "target": "uOM",
+            "aliases": [
+              "unidad de medida",
+              "uom"
+            ],
+            "matchEntity": "UOM",
+            "label": "UOM",
+            "required": true,
+            "type": "foreignKey",
+            "reference": "UOM"
+          },
+          {
+            "target": "productCategory",
+            "aliases": [
+              "categoria",
+              "categoría"
+            ],
+            "matchEntity": "ProductCategory",
+            "label": "Product Category",
+            "required": true,
+            "type": "foreignKey",
+            "reference": "ProductCategory"
+          },
+          {
+            "target": "taxCategory",
+            "aliases": [
+              "categoria impositiva",
+              "categoría impositiva",
+              "impuesto"
+            ],
+            "matchEntity": "FinancialMgmtTaxCategory",
+            "label": "Tax Category",
+            "required": true,
+            "type": "foreignKey",
+            "reference": "TaxCategory"
+          }
+        ]
+      },
       "autoSaveOnBlur": true
     },
     "entities": {
@@ -1959,6 +2047,94 @@
         }
       ],
       "layoutType": "gallery",
+      "import": {
+        "enabled": true,
+        "spec": "product",
+        "entity": "product",
+        "formats": [
+          "csv",
+          "txt"
+        ],
+        "limit": {
+          "maxRows": 5000,
+          "concurrency": 4
+        },
+        "dedupe": {
+          "scope": "file",
+          "key": [
+            "searchKey"
+          ]
+        },
+        "fields": [
+          {
+            "target": "searchKey",
+            "aliases": [
+              "codigo",
+              "código",
+              "sku"
+            ],
+            "label": "Search Key",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "target": "name",
+            "aliases": [
+              "nombre"
+            ],
+            "label": "Name",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "target": "description",
+            "aliases": [
+              "descripcion",
+              "descripción"
+            ],
+            "label": "Description",
+            "required": false,
+            "type": "textarea"
+          },
+          {
+            "target": "uOM",
+            "aliases": [
+              "unidad de medida",
+              "uom"
+            ],
+            "matchEntity": "UOM",
+            "label": "UOM",
+            "required": true,
+            "type": "foreignKey",
+            "reference": "UOM"
+          },
+          {
+            "target": "productCategory",
+            "aliases": [
+              "categoria",
+              "categoría"
+            ],
+            "matchEntity": "ProductCategory",
+            "label": "Product Category",
+            "required": true,
+            "type": "foreignKey",
+            "reference": "ProductCategory"
+          },
+          {
+            "target": "taxCategory",
+            "aliases": [
+              "categoria impositiva",
+              "categoría impositiva",
+              "impuesto"
+            ],
+            "matchEntity": "FinancialMgmtTaxCategory",
+            "label": "Tax Category",
+            "required": true,
+            "type": "foreignKey",
+            "reference": "TaxCategory"
+          }
+        ]
+      },
       "autoSaveOnBlur": true
     },
     "entities": {
@@ -2200,20 +2376,20 @@
             "required": false
           },
           {
-            "name": "aeat347Isleasebusiness",
-            "apiKey": "aeat347Isleasebusiness",
-            "column": "EM_Aeat347_Isleasebusiness",
-            "type": "boolean",
-            "visibility": "discarded",
-            "required": false
-          },
-          {
             "name": "summaryLevel",
             "apiKey": "summaryLevel",
             "column": "IsSummary",
             "type": "boolean",
             "visibility": "system",
             "required": true
+          },
+          {
+            "name": "aeat347Isleasebusiness",
+            "apiKey": "aeat347Isleasebusiness",
+            "column": "EM_Aeat347_Isleasebusiness",
+            "type": "boolean",
+            "visibility": "discarded",
+            "required": false
           },
           {
             "name": "storageBin",
@@ -2304,19 +2480,19 @@
             "required": false
           },
           {
-            "name": "aeat347Streetnumber",
-            "apiKey": "aeat347Streetnumber",
-            "column": "EM_Aeat347_Streetnumber",
-            "type": "string",
-            "visibility": "discarded",
-            "required": false
-          },
-          {
             "name": "discontinued",
             "apiKey": "discontinued",
             "column": "Discontinued",
             "type": "boolean",
             "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "aeat347Streetnumber",
+            "apiKey": "aeat347Streetnumber",
+            "column": "EM_Aeat347_Streetnumber",
+            "type": "string",
+            "visibility": "discarded",
             "required": false
           },
           {
@@ -2336,14 +2512,6 @@
             "required": false
           },
           {
-            "name": "aeat347Building",
-            "apiKey": "aeat347Building",
-            "column": "EM_Aeat347_Building",
-            "type": "string",
-            "visibility": "discarded",
-            "required": false
-          },
-          {
             "name": "billOfMaterials",
             "apiKey": "billOfMaterials",
             "column": "IsBOM",
@@ -2352,9 +2520,9 @@
             "required": true
           },
           {
-            "name": "aeat347Hall",
-            "apiKey": "aeat347Hall",
-            "column": "EM_Aeat347_Hall",
+            "name": "aeat347Building",
+            "apiKey": "aeat347Building",
+            "column": "EM_Aeat347_Building",
             "type": "string",
             "visibility": "discarded",
             "required": false
@@ -2368,9 +2536,9 @@
             "required": true
           },
           {
-            "name": "aeat347Hallway",
-            "apiKey": "aeat347Hallway",
-            "column": "EM_Aeat347_Hallway",
+            "name": "aeat347Hall",
+            "apiKey": "aeat347Hall",
+            "column": "EM_Aeat347_Hall",
             "type": "string",
             "visibility": "discarded",
             "required": false
@@ -2382,6 +2550,14 @@
             "type": "boolean",
             "visibility": "system",
             "required": true
+          },
+          {
+            "name": "aeat347Hallway",
+            "apiKey": "aeat347Hallway",
+            "column": "EM_Aeat347_Hallway",
+            "type": "string",
+            "visibility": "discarded",
+            "required": false
           },
           {
             "name": "bOMVerified",
@@ -2416,18 +2592,18 @@
             "required": false
           },
           {
-            "name": "aeat347Complement",
-            "apiKey": "aeat347Complement",
-            "column": "EM_Aeat347_Complement",
-            "type": "string",
-            "visibility": "discarded",
-            "required": false
-          },
-          {
             "name": "expenseType",
             "apiKey": "expenseType",
             "column": "S_ExpenseType_ID",
             "type": "foreignKey",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "aeat347Complement",
+            "apiKey": "aeat347Complement",
+            "column": "EM_Aeat347_Complement",
+            "type": "string",
             "visibility": "discarded",
             "required": false
           },
@@ -2456,20 +2632,20 @@
             "required": false
           },
           {
-            "name": "aeat347County",
-            "apiKey": "aeat347County",
-            "column": "EM_Aeat347_County",
-            "type": "string",
-            "visibility": "discarded",
-            "required": false
-          },
-          {
             "name": "returnable",
             "apiKey": "returnable",
             "column": "Returnable",
             "type": "boolean",
             "visibility": "editable",
             "required": true
+          },
+          {
+            "name": "aeat347County",
+            "apiKey": "aeat347County",
+            "column": "EM_Aeat347_County",
+            "type": "string",
+            "visibility": "discarded",
+            "required": false
           },
           {
             "name": "overdueReturnDays",
@@ -2800,36 +2976,12 @@
             "required": true
           },
           {
-            "name": "guaranteedDays",
-            "apiKey": "guaranteedDays",
-            "column": "GuaranteeDays",
-            "type": "integer",
-            "visibility": "system",
-            "required": false
-          },
-          {
-            "name": "sKU",
-            "apiKey": "sKU",
-            "column": "SKU",
-            "type": "string",
-            "visibility": "system",
-            "required": false
-          },
-          {
             "name": "id",
             "apiKey": "id",
             "column": "M_Product_ID",
             "type": "id",
             "visibility": "system",
             "required": true
-          },
-          {
-            "name": "versionNo",
-            "apiKey": "versionNo",
-            "column": "VersionNo",
-            "type": "string",
-            "visibility": "discarded",
-            "required": false
           },
           {
             "name": "client",
@@ -2840,10 +2992,66 @@
             "required": true
           },
           {
-            "name": "name2",
-            "apiKey": "name2",
-            "column": "Name2",
+            "name": "sKU",
+            "apiKey": "sKU",
+            "column": "SKU",
             "type": "string",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "classification",
+            "apiKey": "classification",
+            "column": "Classification",
+            "type": "string",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "comments",
+            "apiKey": "comments",
+            "column": "DocumentNote",
+            "type": "text",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "helpComment",
+            "apiKey": "helpComment",
+            "column": "Help",
+            "type": "text",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "versionNo",
+            "apiKey": "versionNo",
+            "column": "VersionNo",
+            "type": "string",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "guaranteedDays",
+            "apiKey": "guaranteedDays",
+            "column": "GuaranteeDays",
+            "type": "integer",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "downloadURL",
+            "apiKey": "downloadURL",
+            "column": "DownloadURL",
+            "type": "string",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "freightCategory",
+            "apiKey": "freightCategory",
+            "column": "M_FreightCategory_ID",
+            "type": "foreignKey",
             "visibility": "system",
             "required": false
           },
@@ -2852,6 +3060,14 @@
             "apiKey": "printPrice",
             "column": "Ispriceprinted",
             "type": "boolean",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "name2",
+            "apiKey": "name2",
+            "column": "Name2",
+            "type": "string",
             "visibility": "system",
             "required": false
           },
@@ -2869,46 +3085,6 @@
             "column": "Enforce_Attribute",
             "type": "boolean",
             "visibility": "discarded",
-            "required": false
-          },
-          {
-            "name": "helpComment",
-            "apiKey": "helpComment",
-            "column": "Help",
-            "type": "text",
-            "visibility": "system",
-            "required": false
-          },
-          {
-            "name": "freightCategory",
-            "apiKey": "freightCategory",
-            "column": "M_FreightCategory_ID",
-            "type": "foreignKey",
-            "visibility": "system",
-            "required": false
-          },
-          {
-            "name": "downloadURL",
-            "apiKey": "downloadURL",
-            "column": "DownloadURL",
-            "type": "string",
-            "visibility": "system",
-            "required": false
-          },
-          {
-            "name": "comments",
-            "apiKey": "comments",
-            "column": "DocumentNote",
-            "type": "text",
-            "visibility": "system",
-            "required": false
-          },
-          {
-            "name": "classification",
-            "apiKey": "classification",
-            "column": "Classification",
-            "type": "string",
-            "visibility": "system",
             "required": false
           },
           {
@@ -2999,14 +3175,6 @@
             "required": true
           },
           {
-            "name": "id",
-            "apiKey": "id",
-            "column": "M_ProductPrice_ID",
-            "type": "id",
-            "visibility": "system",
-            "required": true
-          },
-          {
             "name": "client",
             "apiKey": "client",
             "column": "AD_Client_ID",
@@ -3027,6 +3195,14 @@
             "apiKey": "organization",
             "column": "AD_Org_ID",
             "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "id",
+            "apiKey": "id",
+            "column": "M_ProductPrice_ID",
+            "type": "id",
             "visibility": "system",
             "required": true
           },
@@ -3127,6 +3303,14 @@
             "required": true
           },
           {
+            "name": "id",
+            "apiKey": "id",
+            "column": "M_Servicepricerule_Version_ID",
+            "type": "id",
+            "visibility": "system",
+            "required": true
+          },
+          {
             "name": "creationDate",
             "apiKey": "creationDate",
             "column": "Created",
@@ -3171,14 +3355,6 @@
             "apiKey": "updatedBy",
             "column": "Updatedby",
             "type": "foreignKey",
-            "visibility": "system",
-            "required": true
-          },
-          {
-            "name": "id",
-            "apiKey": "id",
-            "column": "M_Servicepricerule_Version_ID",
-            "type": "id",
             "visibility": "system",
             "required": true
           }
@@ -3430,9 +3606,17 @@
             "required": false
           },
           {
-            "name": "product",
-            "apiKey": "product",
-            "column": "M_Product_ID",
+            "name": "id",
+            "apiKey": "id",
+            "column": "M_Product_BOM_ID",
+            "type": "id",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "client",
+            "apiKey": "client",
+            "column": "AD_Client_ID",
             "type": "foreignKey",
             "visibility": "system",
             "required": true
@@ -3446,18 +3630,10 @@
             "required": true
           },
           {
-            "name": "client",
-            "apiKey": "client",
-            "column": "AD_Client_ID",
+            "name": "product",
+            "apiKey": "product",
+            "column": "M_Product_ID",
             "type": "foreignKey",
-            "visibility": "system",
-            "required": true
-          },
-          {
-            "name": "id",
-            "apiKey": "id",
-            "column": "M_Product_BOM_ID",
-            "type": "id",
             "visibility": "system",
             "required": true
           },
@@ -3629,12 +3805,12 @@
             "required": false
           },
           {
-            "name": "invoiceLine",
-            "apiKey": "invoiceLine",
-            "column": "C_InvoiceLine_ID",
-            "type": "foreignKey",
-            "visibility": "system",
-            "required": false
+            "name": "active",
+            "apiKey": "active",
+            "column": "Isactive",
+            "type": "boolean",
+            "visibility": "discarded",
+            "required": true
           },
           {
             "name": "id",
@@ -3661,12 +3837,12 @@
             "required": true
           },
           {
-            "name": "active",
-            "apiKey": "active",
-            "column": "Isactive",
-            "type": "boolean",
-            "visibility": "discarded",
-            "required": true
+            "name": "invoiceLine",
+            "apiKey": "invoiceLine",
+            "column": "C_InvoiceLine_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": false
           },
           {
             "name": "creationDate",
@@ -3756,17 +3932,17 @@
             "required": true
           },
           {
-            "name": "id",
-            "apiKey": "id",
-            "column": "M_Transaction_Cost_ID",
-            "type": "id",
+            "name": "inventoryTransaction",
+            "apiKey": "inventoryTransaction",
+            "column": "M_Transaction_ID",
+            "type": "foreignKey",
             "visibility": "system",
             "required": true
           },
           {
-            "name": "inventoryTransaction",
-            "apiKey": "inventoryTransaction",
-            "column": "M_Transaction_ID",
+            "name": "client",
+            "apiKey": "client",
+            "column": "AD_Client_ID",
             "type": "foreignKey",
             "visibility": "system",
             "required": true
@@ -3780,10 +3956,10 @@
             "required": true
           },
           {
-            "name": "client",
-            "apiKey": "client",
-            "column": "AD_Client_ID",
-            "type": "foreignKey",
+            "name": "id",
+            "apiKey": "id",
+            "column": "M_Transaction_Cost_ID",
+            "type": "id",
             "visibility": "system",
             "required": true
           },
@@ -4011,6 +4187,14 @@
             "required": false
           },
           {
+            "name": "client",
+            "apiKey": "client",
+            "column": "AD_Client_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
             "name": "product",
             "apiKey": "product",
             "column": "M_Product_ID",
@@ -4033,14 +4217,6 @@
             "type": "foreignKey",
             "visibility": "discarded",
             "required": false
-          },
-          {
-            "name": "client",
-            "apiKey": "client",
-            "column": "AD_Client_ID",
-            "type": "foreignKey",
-            "visibility": "system",
-            "required": true
           },
           {
             "name": "checkpricedifference",
@@ -4202,14 +4378,6 @@
             "required": true
           },
           {
-            "name": "client",
-            "apiKey": "client",
-            "column": "AD_Client_ID",
-            "type": "foreignKey",
-            "visibility": "system",
-            "required": true
-          },
-          {
             "name": "id",
             "apiKey": "id",
             "column": "M_Product_Ch_ID",
@@ -4218,9 +4386,9 @@
             "required": true
           },
           {
-            "name": "product",
-            "apiKey": "product",
-            "column": "M_Product_ID",
+            "name": "client",
+            "apiKey": "client",
+            "column": "AD_Client_ID",
             "type": "foreignKey",
             "visibility": "system",
             "required": true
@@ -4229,6 +4397,14 @@
             "name": "organization",
             "apiKey": "organization",
             "column": "AD_Org_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "product",
+            "apiKey": "product",
+            "column": "M_Product_ID",
             "type": "foreignKey",
             "visibility": "system",
             "required": true
@@ -4385,18 +4561,18 @@
             "required": true
           },
           {
-            "name": "client",
-            "apiKey": "client",
-            "column": "AD_Client_ID",
-            "type": "foreignKey",
-            "visibility": "system",
-            "required": true
-          },
-          {
             "name": "id",
             "apiKey": "id",
             "column": "M_Storage_Detail_ID",
             "type": "id",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "client",
+            "apiKey": "client",
+            "column": "AD_Client_ID",
+            "type": "foreignKey",
             "visibility": "system",
             "required": true
           },
@@ -4415,6 +4591,14 @@
             "type": "foreignKey",
             "visibility": "system",
             "required": true
+          },
+          {
+            "name": "etgoValuation",
+            "apiKey": "etgoValuation",
+            "column": "EM_Etgo_Valuation",
+            "type": "amount",
+            "visibility": "system",
+            "required": false
           },
           {
             "name": "referencedInventory",
@@ -4439,14 +4623,6 @@
             "type": "foreignKey",
             "visibility": "system",
             "required": true
-          },
-          {
-            "name": "etgoValuation",
-            "apiKey": "etgoValuation",
-            "column": "EM_Etgo_Valuation",
-            "type": "amount",
-            "visibility": "system",
-            "required": false
           },
           {
             "name": "etgoCost",
@@ -4521,6 +4697,14 @@
             "required": true
           },
           {
+            "name": "id",
+            "apiKey": "id",
+            "column": "M_Servicepricerule_Version_ID",
+            "type": "id",
+            "visibility": "system",
+            "required": true
+          },
+          {
             "name": "creationDate",
             "apiKey": "creationDate",
             "column": "Created",
@@ -4557,14 +4741,6 @@
             "apiKey": "updatedBy",
             "column": "Updatedby",
             "type": "foreignKey",
-            "visibility": "system",
-            "required": true
-          },
-          {
-            "name": "id",
-            "apiKey": "id",
-            "column": "M_Servicepricerule_Version_ID",
-            "type": "id",
             "visibility": "system",
             "required": true
           }
@@ -4648,18 +4824,18 @@
             "required": true
           },
           {
-            "name": "id",
-            "apiKey": "id",
-            "column": "M_Product_Aum_ID",
-            "type": "id",
-            "visibility": "system",
-            "required": true
-          },
-          {
             "name": "client",
             "apiKey": "client",
             "column": "AD_Client_ID",
             "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "id",
+            "apiKey": "id",
+            "column": "M_Product_Aum_ID",
+            "type": "id",
             "visibility": "system",
             "required": true
           },

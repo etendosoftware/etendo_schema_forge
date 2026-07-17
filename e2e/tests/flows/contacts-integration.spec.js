@@ -197,7 +197,8 @@ test.describe('Contacts Integration — Full journey', () => {
     await expect(firstNameInput).toBeVisible({ timeout: 5_000 });
     await expect(lastNameInput).toBeVisible({ timeout: 5_000 });
 
-    // Fill names and trigger auto-save
+    // Fill names — header fields no longer auto-save on blur (ETP-4533 reverted
+    // the blur auto-save), so persistence requires an explicit Save click.
     const firstName = 'E2EFirstName';
     const lastName = 'E2ELastName';
     await firstNameInput.fill(firstName);
@@ -206,8 +207,11 @@ test.describe('Contacts Integration — Full journey', () => {
     await lastNameInput.fill(lastName);
     await page.keyboard.press('Tab');
 
-    // Let the debounced auto-save fire — verified by reload below
-    await page.waitForTimeout(1_500);
+    const saveNamesBtn = page.getByTestId('action-save')
+      .or(page.getByRole('button', { name: /^guardar$|^save$/i }));
+    const saveNamesP = expectSaveResponse(page);
+    await saveNamesBtn.first().click();
+    await saveNamesP;
 
     // Reload and verify persistence
     await page.goto(contactAUrl);
@@ -225,11 +229,17 @@ test.describe('Contacts Integration — Full journey', () => {
     const razonSocialAfterToggle = page.getByRole('textbox', { name: /razón social/i });
     await expect(razonSocialAfterToggle).toBeVisible({ timeout: 5_000 });
 
-    // Restore the original Razon Social so we can find it in the list later
+    // Restore the original Razon Social so we can find it in the list later.
+    // ETP-4533 prefills Razón Social from first/last on Person→Company switch
+    // (see contacts-razon-social-prefill.mocked.spec.js), so clear() + fill()
+    // below overwrites that prefill regardless. Header fields no longer
+    // auto-save on blur, so persist with an explicit Save click.
     await razonSocialAfterToggle.clear();
     await razonSocialAfterToggle.fill(CONTACT_A);
+    const saveToggleBtn = page.getByTestId('action-save')
+      .or(page.getByRole('button', { name: /^guardar$|^save$/i }));
     const saveToggle = expectSaveResponse(page);
-    await page.keyboard.press('Tab');
+    await saveToggleBtn.first().click();
     await saveToggle;
 
     // ═══════════════════════════════════════════════════════════════════════
@@ -247,7 +257,11 @@ test.describe('Contacts Integration — Full journey', () => {
       const newCreditValue = 12345;
       await creditInput.fill(String(newCreditValue));
 
-      // Blur to trigger save
+      // Credit limit is rendered by ContactsFinancialPanel.jsx, which keeps its
+      // own draft state and self-saves on blur (PATCH /businessPartner/{id})
+      // separately from the header form — it does not dirty the header, so
+      // action-save stays disabled here. Blur the field (clicking the
+      // financial tab, same as before) to trigger that self-save.
       const saveCreditP = expectSaveResponse(page);
       await financialTab.click();
       await saveCreditP;
