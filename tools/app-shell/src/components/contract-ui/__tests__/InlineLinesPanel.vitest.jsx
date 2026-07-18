@@ -1548,4 +1548,69 @@ describe('InlineLinesPanel', () => {
       );
     });
   });
+
+  // ETP-4529 follow-up: dimensionFields (project/costcenter/...) is a list nested INSIDE
+  // the single top-level 'dimensions' column, so the existing hiddenColumns filter (which
+  // only matches top-level column keys) never reached it — a dimension disabled in GL
+  // Configuration kept rendering inside the expand panel even after the SAME visibility
+  // signal correctly hid it from the header. Reproduces the live bug (Cost Center
+  // deactivated but still shown in the sales-invoice lines expand panel) and confirms the
+  // fix: dimensionFields is now filtered by hiddenColumns too, and the whole column drops
+  // out when every candidate ends up hidden.
+  describe('dimensionsPanel column — hiddenColumns filters nested dimensionFields', () => {
+    const dimensionColumns = [
+      {
+        key: 'dimensions',
+        type: 'dimensionsPanel',
+        label: 'Dimensions',
+        dimensionFields: [
+          { key: 'project', column: 'C_Project_ID' },
+          { key: 'costcenter', column: 'C_Costcenter_ID' },
+        ],
+      },
+    ];
+    const dimensionRows = [{
+      id: 'L1',
+      project: 'PRJ1', 'project$_identifier': 'Project Alpha',
+      costcenter: 'CC1', 'costcenter$_identifier': 'HQ',
+    }];
+
+    function renderDimensionsPanel(hiddenColumns) {
+      return render(
+        <InlineLinesPanel
+          columns={dimensionColumns}
+          data={dimensionRows}
+          hiddenColumns={hiddenColumns}
+          entity="lines"
+          token="test"
+          apiBaseUrl="/api"
+          selectorContext={{}}
+          onSelectionChange={vi.fn()}
+          onUpdateRow={vi.fn().mockResolvedValue()}
+          onDeleteRow={vi.fn().mockResolvedValue()}
+        />,
+      );
+    }
+
+    it('shows every candidate when nothing is hidden', () => {
+      renderDimensionsPanel([]);
+      expect(screen.getByTestId('column-header-dimensions')).toBeInTheDocument();
+      expect(screen.getByText('Project Alpha')).toBeInTheDocument();
+      expect(screen.getByText('HQ')).toBeInTheDocument();
+    });
+
+    it('hides only the disabled dimension, keeping the column and the other candidate', () => {
+      renderDimensionsPanel(['costcenter']);
+      expect(screen.getByTestId('column-header-dimensions')).toBeInTheDocument();
+      expect(screen.getByText('Project Alpha')).toBeInTheDocument();
+      expect(screen.queryByText('HQ')).toBeNull();
+    });
+
+    it('drops the whole column when every candidate is hidden', () => {
+      renderDimensionsPanel(['project', 'costcenter']);
+      expect(screen.queryByTestId('column-header-dimensions')).toBeNull();
+      expect(screen.queryByText('Project Alpha')).toBeNull();
+      expect(screen.queryByText('HQ')).toBeNull();
+    });
+  });
 });

@@ -448,11 +448,35 @@ const InlineLinesPanel = forwardRef(function InlineLinesPanel({
   // discarded, silently re-saving it. commitField checks this ref and bails.
   const cancelingEditRef = useRef(false);
 
+  // ETP-4529 follow-up: dimensionFields is a nested list (project/costcenter/...) INSIDE one
+  // top-level 'dimensions' column, so the generic hiddenColumns filter below (which only
+  // matches top-level column keys) never reached it — a field disabled in GL Configuration
+  // (e.g. Cost Center) kept rendering inside the expand panel regardless, even though the
+  // SAME visibility signal correctly hid it from the header. Resolve the visible subset of
+  // dimensionFields from the RAW columns prop first (not visibleColumns below, to avoid a
+  // circular dependency), then fold it into the visibleColumns filter itself so the header
+  // row (which maps over the same array) and the data rows never disagree about whether the
+  // whole "Dimensiones contables" column exists at all.
+  const rawDimensionsColumn = useMemo(
+    () => (columns || []).find(c => c.type === 'dimensionsPanel') ?? null,
+    [columns]
+  );
+  const visibleDimensionFields = useMemo(
+    () => (rawDimensionsColumn?.dimensionFields ?? []).filter(f => !hiddenColumns.includes(f.key)),
+    [rawDimensionsColumn, hiddenColumns]
+  );
+
   // Visible columns: respect col.hidden flag (static) and hiddenColumns (dynamic,
-  // e.g. displayLogic-driven) — mirrors DataTable's hiddenColumns filter exactly.
+  // e.g. displayLogic-driven) — mirrors DataTable's hiddenColumns filter exactly. The
+  // dimensionsPanel column additionally drops out entirely once every one of its nested
+  // fields is hidden (no dead expand-chevron for a row with nothing left to show).
   const visibleColumns = useMemo(
-    () => (columns || []).filter(c => !c.hidden && !hiddenColumns.includes(c.key)),
-    [columns, hiddenColumns]
+    () => (columns || []).filter(c => {
+      if (c.hidden || hiddenColumns.includes(c.key)) return false;
+      if (c.type === 'dimensionsPanel') return visibleDimensionFields.length > 0;
+      return true;
+    }),
+    [columns, hiddenColumns, visibleDimensionFields]
   );
   // The last "amount" column is the one that disappears on hover to make room
   // for the action strip — its 160px width matches the strip so the swap is
@@ -482,8 +506,8 @@ const InlineLinesPanel = forwardRef(function InlineLinesPanel({
     [visibleColumns]
   );
   const dimensionFieldByKey = useMemo(
-    () => Object.fromEntries((dimensionsColumn?.dimensionFields ?? []).map(f => [f.key, f])),
-    [dimensionsColumn]
+    () => Object.fromEntries(visibleDimensionFields.map(f => [f.key, f])),
+    [visibleDimensionFields]
   );
   const handleDimensionFieldChange = useCallback((rowId, key, value) => {
     setPendingDimEdits(prev => ({ ...prev, [rowId]: { ...(prev[rowId] ?? {}), [key]: value } }));
@@ -801,7 +825,7 @@ const InlineLinesPanel = forwardRef(function InlineLinesPanel({
                       onClick={() => setExpandedRowId(isRowExpanded ? null : row.id)}
                       processed={isDocumentReadOnly}
                       labelOverrides={labelOverrides}
-                      fields={col.dimensionFields ?? []}
+                      fields={visibleDimensionFields}
                       emptyLabel={col.emptyLabel}
                       data-testid="DimSummary__3b7ec2" />
                   </div>
@@ -928,7 +952,7 @@ const InlineLinesPanel = forwardRef(function InlineLinesPanel({
                 </div>
               )}
               <DimensionGrid
-                fields={dimensionsColumn.dimensionFields ?? []}
+                fields={visibleDimensionFields}
                 data={dimRowData}
                 onChange={(key, value) => handleDimensionFieldChange(row.id, key, value)}
                 onFieldSave={(key, value) => {
