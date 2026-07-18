@@ -95,7 +95,7 @@ describe('WarehouseWindow', () => {
       { token: 'ctx-token', apiBaseUrl: '/ctx-api' },
     );
 
-    expect(fetch).toHaveBeenCalledWith('/ctx-api/sws/neo/warehouse/storageBin', {
+    expect(fetch).toHaveBeenCalledWith('/ctx-api/storageBin', {
       method: 'POST',
       headers: {
         Authorization: 'Bearer ctx-token',

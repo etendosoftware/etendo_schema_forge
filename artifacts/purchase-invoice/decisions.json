@@ -65,6 +65,13 @@
         "component": "SifTab",
         "importFrom": "@/windows/custom/shared/SifTab.jsx",
         "placement": "tab"
+      },
+      {
+        "key": "reversedInvoices",
+        "labelKey": "rectificationsTab",
+        "component": "ReversedInvoicesPanel",
+        "importFrom": "@/windows/custom/sales-invoice/ReversedInvoicesPanel.jsx",
+        "placement": "tab"
       }
     ],
     "labelOverrides": {
@@ -831,15 +838,64 @@
       "javaQualifier": "factAcctHandler"
     },
     "reversedInvoices": {
-      "name": "reversedInvoices",
+      "label": "Rectificaciones",
+      "tabOrder": 90,
+      "renderTab": false,
+      "displayLogic": "@isRectificative@='true'",
+      "readOnlyLogic": "@Processed@='Y' & @DocStatus@!='VO'",
       "fields": {
         "reversedInvoice": {
-          "visibility": "readOnly",
+          "visibility": "editable",
           "grid": true,
-          "readOnlyLogic": null
+          "gridOrder": 1,
+          "form": true,
+          "required": true,
+          "lookup": true,
+          "readOnlyLogic": "@Processed@='Y' & @DocStatus@!='VO'"
+        },
+        "aEAT349IsCorrective": {
+          "visibility": "editable",
+          "grid": true,
+          "gridOrder": 5,
+          "form": true,
+          "readOnlyLogic": "@Processed@='Y' & @DocStatus@!='VO'"
+        },
+        "aEAT349CYear": {
+          "visibility": "editable",
+          "grid": true,
+          "gridOrder": 10,
+          "form": true,
+          "displayLogic": "@aEAT349IsCorrective@='Y'",
+          "readOnlyLogic": "@Processed@='Y' & @DocStatus@!='VO'"
+        },
+        "aEAT349Period": {
+          "visibility": "editable",
+          "grid": true,
+          "gridOrder": 20,
+          "form": true,
+          "displayLogic": "@aEAT349IsCorrective@='Y'",
+          "readOnlyLogic": "@Processed@='Y' & @DocStatus@!='VO'"
+        },
+        "aEAT349BPBaseAmount": {
+          "visibility": "editable",
+          "grid": true,
+          "gridOrder": 30,
+          "form": true,
+          "displayLogic": "@aEAT349IsCorrective@='Y'",
+          "readOnlyLogic": "@Processed@='Y' & @DocStatus@!='VO'"
+        },
+        "aEAT349BPBaseAmountS": {
+          "visibility": "editable",
+          "grid": true,
+          "gridOrder": 40,
+          "form": true,
+          "displayLogic": "@aEAT349IsCorrective@='Y'",
+          "readOnlyLogic": "@Processed@='Y' & @DocStatus@!='VO'"
+        },
+        "aEAT349CBpartner": {
+          "visibility": "discarded"
         }
-      },
-      "exclude": true
+      }
     },
     "lineTax": {
       "exclude": true
