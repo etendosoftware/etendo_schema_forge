@@ -40,8 +40,15 @@ describe('InlineLinesPanel', () => {
   });
 
   it('wires pencil → handleEditClick and trash → handleDeleteClick', () => {
-    assert.match(src, /aria-label=\{ui\('editLineTooltip'\)[^}]*\}\s*\n\s*title=\{ui\('editLineTooltip'\)[^}]*\}\s*\n\s*onClick=\{\(\)\s*=>\s*handleEditClick/);
-    assert.match(src, /aria-label=\{ui\('deleteRowTooltip'\)[^}]*\}\s*\n\s*title=\{ui\('deleteRowTooltip'\)[^}]*\}\s*\n\s*onClick=\{\(\)\s*=>\s*handleDeleteClick/);
+    // ETP-4529 — the action strip was extracted to renderRowActionStrip (Sonar
+    // complexity fix), so the click wiring is now two hops: the row callback binds
+    // onEdit/onDelete to handleEditClick/handleDeleteClick when calling
+    // renderRowActionStrip, which itself wires onClick={onEdit}/onClick={onDelete}
+    // next to the respective aria-labels.
+    assert.match(src, /onEdit:\s*\(\)\s*=>\s*handleEditClick\(row\)/);
+    assert.match(src, /onDelete:\s*\(\)\s*=>\s*handleDeleteClick\(row\)/);
+    assert.match(src, /aria-label=\{ui\('editLineTooltip'\)[^}]*\}\s*\n\s*title=\{ui\('editLineTooltip'\)[^}]*\}\s*\n\s*onClick=\{onEdit\}/);
+    assert.match(src, /aria-label=\{ui\('deleteRowTooltip'\)[^}]*\}\s*\n\s*title=\{ui\('deleteRowTooltip'\)[^}]*\}\s*\n\s*onClick=\{onDelete\}/);
   });
 
   it('locks edit and delete actions when isDocumentReadOnly is true', () => {

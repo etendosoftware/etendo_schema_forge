@@ -55,6 +55,125 @@ function isCellEditable(col) {
   return EDITABLE_TYPES.has(col.type);
 }
 
+/** Which cell gets focused when a row enters edit mode — the last-clicked column if known,
+ *  otherwise the first editable column (skipping col 0 if it's not editable). */
+function computeAutoFocus(idx, focusColIdx, visibleColumns) {
+  if (focusColIdx !== null) return idx === focusColIdx;
+  return idx === 0 || (idx === 1 && !isCellEditable(visibleColumns[0]));
+}
+
+// Catch-all Escape-to-cancel: bubbles here from any focused descendant control (Input,
+// Select, LookupTrigger's button, InlineSearchCombo) so Escape cancels uniformly regardless
+// of cell type. Only wired while the row is actually in edit mode.
+function makeRowEscapeHandler(isEditing, onCancelEdit) {
+  if (!isEditing) return undefined;
+  return (e) => {
+    if (e.key !== 'Escape') return;
+    e.preventDefault();
+    onCancelEdit();
+  };
+}
+
+// Row-body click → open detail, but not when the click originated in the checkbox or the
+// hover-action icons (they have their own handlers and stopping propagation there keeps the
+// row-click semantic clean).
+function makeRowClickHandler(onRowClick, row) {
+  if (!onRowClick) return undefined;
+  return (e) => {
+    if (e.target.closest('[data-testid="line-actions"]') || e.target.closest('button') || e.target.closest('input')) return;
+    onRowClick(row);
+  };
+}
+
+function computeRowClassName(isHighlighted, isEditing, hasRowClick) {
+  return [
+    // `hover:relative hover:z-10` lifts the row above its neighbors so the
+    // shadow can spill onto the rows below without being clipped by them.
+    'group/row flex items-stretch border-b bg-white transition-shadow',
+    'hover:relative hover:z-20 hover:shadow-[0_4px_12px_rgba(18,18,23,0.08)]',
+    isHighlighted ? 'bg-muted/40' : '',
+    isEditing ? 'shadow-[0_4px_12px_rgba(18,18,23,0.08)] relative z-20' : '',
+    hasRowClick ? 'cursor-pointer' : '',
+  ].join(' ');
+}
+
+/** Hover/edit action strip (pencil + trash) shown to the right of each row —
+ *  extracted alongside renderLineCell to keep the row callback's own cognitive
+ *  complexity under Sonar's threshold. */
+function renderRowActionStrip({
+  showActions, reserveActionSlot, actionStripFlex, isEditing, isDeleting, ui, onEdit, onDelete,
+}) {
+  if (!showActions && !reserveActionSlot) return null;
+  return (
+    <div
+      className="flex items-center justify-end gap-2 pr-1"
+      style={{ flex: actionStripFlex }}
+      data-testid="line-actions"
+    >
+      {showActions && (
+        <div className={`flex items-center gap-2 h-10 px-3 ${QUICK_ACTIONS_PILL_CLASS}`.trim()}>
+          <button
+            type="button"
+            aria-label={ui('editLineTooltip') ?? 'Edit line'}
+            title={ui('editLineTooltip') ?? 'Edit line'}
+            onClick={onEdit}
+            className={[
+              'p-1 rounded-full hover:bg-muted',
+              isEditing ? 'text-foreground bg-muted' : 'text-muted-foreground hover:text-foreground',
+            ].join(' ')}
+          >
+            <Pencil className="h-4 w-4" data-testid="Pencil__3b7ec2" />
+          </button>
+          <button
+            type="button"
+            aria-label={ui('deleteRowTooltip') ?? 'Delete'}
+            title={ui('deleteRowTooltip') ?? 'Delete'}
+            onClick={onDelete}
+            disabled={isDeleting}
+            className="p-1 rounded-full text-destructive hover:bg-destructive/10 disabled:opacity-50"
+          >
+            <Trash2 className="h-4 w-4" data-testid="Trash2__3b7ec2" />
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** Full-width dimensions sub-row shown below an expanded data row. Mirrors
+ *  AmortizationLinesTable's expand `<tr>` structure: an optional read-only
+ *  "Organización" field followed by the shared DimensionGrid. */
+function renderDimensionsSubRow({
+  isRowExpanded, row, dimRowData, visibleDimensionFields, labelOverrides, ui,
+  apiBaseUrl, token, isDocumentReadOnly, entity, onDimensionChange, onDimensionFieldSave,
+}) {
+  if (!isRowExpanded) return null;
+  return (
+    <div className="border-b bg-white px-10 pb-5 pt-3" style={{ borderColor: TOKENS.separator }} data-testid={`dimensions-panel-${row.id}`}>
+      {row['organization$_identifier'] && (
+        <div className="mb-4 grid grid-cols-4 gap-4">
+          <div>
+            <label className="block text-xs font-medium text-muted-foreground mb-1">{ui('organization')} *</label>
+            <div className="h-10 flex items-center px-3 rounded-lg border border-[#D1D4DB] bg-white text-sm text-foreground">{row['organization$_identifier']}</div>
+          </div>
+        </div>
+      )}
+      <DimensionGrid
+        fields={visibleDimensionFields}
+        data={dimRowData}
+        onChange={onDimensionChange}
+        onFieldSave={onDimensionFieldSave}
+        apiBaseUrl={apiBaseUrl}
+        token={token}
+        readOnly={isDocumentReadOnly}
+        isCompleted={isDocumentReadOnly}
+        labelOverrides={labelOverrides}
+        entityName={entity}
+        data-testid="DimensionGrid__3b7ec2" />
+    </div>
+  );
+}
+
 /**
  * Renders a single body cell for a line row — extracted out of the row-map callback
  * (Sonar S3776: nesting this inside both the row `.map` and the column `.map` pushed
@@ -130,11 +249,7 @@ function renderLineCell({
           row={row}
           value={row[col.key]}
           displayLabel={resolveIdentifier(row, col.key)}
-          autoFocus={
-            focusColIdx !== null
-              ? idx === focusColIdx
-              : idx === 0 || (idx === 1 && !isCellEditable(visibleColumns[0]))
-          }
+          autoFocus={computeAutoFocus(idx, focusColIdx, visibleColumns)}
           entity={entity}
           token={token}
           apiBaseUrl={apiBaseUrl}
@@ -862,34 +977,12 @@ const InlineLinesPanel = forwardRef(function InlineLinesPanel({
           <React.Fragment key={row.id}>
           <div
             data-testid={`line-row-${row.id}`}
-            className={[
-              // `hover:relative hover:z-10` lifts the row above its neighbors so the
-              // shadow can spill onto the rows below without being clipped by them.
-              'group/row flex items-stretch border-b bg-white transition-shadow',
-              'hover:relative hover:z-20 hover:shadow-[0_4px_12px_rgba(18,18,23,0.08)]',
-              isHighlighted ? 'bg-muted/40' : '',
-              isEditing ? 'shadow-[0_4px_12px_rgba(18,18,23,0.08)] relative z-20' : '',
-              onRowClick ? 'cursor-pointer' : '',
-            ].join(' ')}
+            className={computeRowClassName(isHighlighted, isEditing, Boolean(onRowClick))}
             style={{ borderColor: TOKENS.separator, minHeight: TOKENS.rowHeight, ...cellStyle }}
             onMouseEnter={() => setHoveredRowId(row.id)}
             onMouseLeave={() => setHoveredRowId(prev => (prev === row.id ? null : prev))}
-            onKeyDown={isEditing ? (e) => {
-              // Catch-all: bubbles here from any focused descendant control
-              // (Input, Select, LookupTrigger's button, InlineSearchCombo)
-              // so Escape cancels uniformly regardless of cell type.
-              if (e.key === 'Escape') {
-                e.preventDefault();
-                handleCancelEdit();
-              }
-            } : undefined}
-            onClick={onRowClick ? (e) => {
-              // Don't fire when the click was on the checkbox / hover actions —
-              // those have their own handlers and stopping propagation there
-              // keeps the row body click semantic (open detail).
-              if (e.target.closest('[data-testid="line-actions"]') || e.target.closest('button') || e.target.closest('input')) return;
-              onRowClick(row);
-            } : undefined}
+            onKeyDown={makeRowEscapeHandler(isEditing, handleCancelEdit)}
+            onClick={makeRowClickHandler(onRowClick, row)}
           >
             {/* ETP-4529 — expand toggle for the dimensions sub-row, mirroring
                 AmortizationLinesTable's chevron button (rotates 180deg when expanded). */}
@@ -929,40 +1022,11 @@ const InlineLinesPanel = forwardRef(function InlineLinesPanel({
             {/* Hover / edit action strip. When `reserveActionSlot` is true
                 (no amount column), the slot is rendered in every row so cells
                 don't reflow on hover — only the icons inside fade in. */}
-            {(showActions || reserveActionSlot) && (
-              <div
-                className="flex items-center justify-end gap-2 pr-1"
-                style={{ flex: actionStripFlex }}
-                data-testid="line-actions"
-              >
-                {showActions && (
-                  <div className={`flex items-center gap-2 h-10 px-3 ${QUICK_ACTIONS_PILL_CLASS}`.trim()}>
-                    <button
-                      type="button"
-                      aria-label={ui('editLineTooltip') ?? 'Edit line'}
-                      title={ui('editLineTooltip') ?? 'Edit line'}
-                      onClick={() => handleEditClick(row)}
-                      className={[
-                        'p-1 rounded-full hover:bg-muted',
-                        isEditing ? 'text-foreground bg-muted' : 'text-muted-foreground hover:text-foreground',
-                      ].join(' ')}
-                    >
-                      <Pencil className="h-4 w-4" data-testid="Pencil__3b7ec2" />
-                    </button>
-                    <button
-                      type="button"
-                      aria-label={ui('deleteRowTooltip') ?? 'Delete'}
-                      title={ui('deleteRowTooltip') ?? 'Delete'}
-                      onClick={() => handleDeleteClick(row)}
-                      disabled={isDeleting}
-                      className="p-1 rounded-full text-destructive hover:bg-destructive/10 disabled:opacity-50"
-                    >
-                      <Trash2 className="h-4 w-4" data-testid="Trash2__3b7ec2" />
-                    </button>
-                  </div>
-                )}
-              </div>
-            )}
+            {renderRowActionStrip({
+              showActions, reserveActionSlot, actionStripFlex, isEditing, isDeleting, ui,
+              onEdit: () => handleEditClick(row),
+              onDelete: () => handleDeleteClick(row),
+            })}
             <div style={{ width: 48, flexShrink: 0 }} aria-hidden="true" />
           </div>
           {/* ETP-4529 — full-width dimensions sub-row, directly below the expanded
@@ -970,33 +1034,15 @@ const InlineLinesPanel = forwardRef(function InlineLinesPanel({
               an optional read-only "Organización" field followed by the shared
               DimensionGrid. Field edits are optimistic (`pendingDimEdits`) and
               persist through the same `commitField` every other inline edit uses. */}
-          {isRowExpanded && (
-            <div className="border-b bg-white px-10 pb-5 pt-3" style={{ borderColor: TOKENS.separator }} data-testid={`dimensions-panel-${row.id}`}>
-              {row['organization$_identifier'] && (
-                <div className="mb-4 grid grid-cols-4 gap-4">
-                  <div>
-                    <label className="block text-xs font-medium text-muted-foreground mb-1">{ui('organization')} *</label>
-                    <div className="h-10 flex items-center px-3 rounded-lg border border-[#D1D4DB] bg-white text-sm text-foreground">{row['organization$_identifier']}</div>
-                  </div>
-                </div>
-              )}
-              <DimensionGrid
-                fields={visibleDimensionFields}
-                data={dimRowData}
-                onChange={(key, value) => handleDimensionFieldChange(row.id, key, value)}
-                onFieldSave={(key, value) => {
-                  const field = dimensionFieldByKey[key];
-                  if (field) commitField(row, field, value);
-                }}
-                apiBaseUrl={apiBaseUrl}
-                token={token}
-                readOnly={isDocumentReadOnly}
-                isCompleted={isDocumentReadOnly}
-                labelOverrides={labelOverrides}
-                entityName={entity}
-                data-testid="DimensionGrid__3b7ec2" />
-            </div>
-          )}
+          {renderDimensionsSubRow({
+            isRowExpanded, row, dimRowData, visibleDimensionFields, labelOverrides, ui,
+            apiBaseUrl, token, isDocumentReadOnly, entity,
+            onDimensionChange: (key, value) => handleDimensionFieldChange(row.id, key, value),
+            onDimensionFieldSave: (key, value) => {
+              const field = dimensionFieldByKey[key];
+              if (field) commitField(row, field, value);
+            },
+          })}
           </React.Fragment>
         );
       })}
