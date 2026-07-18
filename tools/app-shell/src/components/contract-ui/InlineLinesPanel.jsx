@@ -56,6 +56,106 @@ function isCellEditable(col) {
 }
 
 /**
+ * Renders a single body cell for a line row — extracted out of the row-map callback
+ * (Sonar S3776: nesting this inside both the row `.map` and the column `.map` pushed
+ * cognitive complexity past the threshold). Handles the three cell shapes: the shared
+ * `dimensionsPanel` summary, a suppressed trailing amount column (hover actions take its
+ * space), and the normal edit/read cell.
+ */
+function renderLineCell({
+  col, idx, row, dimRowData, isEditing, showActions, trailingColumn, isDocumentReadOnly,
+  visibleColumns, visibleDimensionFields, labelOverrides, onToggleExpand, hasRowClick,
+  entity, token, apiBaseUrl, selectorContext, invalidCell, focusColIdx,
+  locale, t, ui, onCommit, onCellClick,
+}) {
+  if (col.type === 'dimensionsPanel') {
+    return (
+      <div
+        key={col.key}
+        className="flex items-center"
+        style={{ padding: `0 ${TOKENS.cellPaddingX}px`, flex: columnFlex(col, idx), minWidth: 0 }}
+        data-cell-key={col.key}
+        onClick={e => e.stopPropagation()}
+      >
+        <DimSummary
+          line={dimRowData}
+          onClick={onToggleExpand}
+          processed={isDocumentReadOnly}
+          labelOverrides={labelOverrides}
+          fields={visibleDimensionFields}
+          emptyLabel={col.emptyLabel}
+          data-testid="DimSummary__3b7ec2" />
+      </div>
+    );
+  }
+
+  const isTrailing = col === trailingColumn;
+  // The trailing column is hidden when the action strip is showing,
+  // so the icons can take its space. Other amount columns stay visible.
+  if (isTrailing && showActions) return null;
+
+  const isNumeric = NUMERIC_TYPES.has(col.type);
+  const editable = isEditing && isCellEditable(col);
+  // When a cell is in edit mode, the input/trigger has its own px-2 (8px)
+  // + 1px border = 9px of internal padding. Reducing the cell's outer
+  // padding to 3px compensates: the input's CONTENT lands exactly where
+  // read-mode text lands (cell_left + 12px), so values don't visually
+  // jump when toggling between view and edit modes.
+  const baseStyle = {
+    padding: editable ? '0 3px' : `0 ${TOKENS.cellPaddingX}px`,
+    flex: columnFlex(col, idx),
+    justifyContent: isNumeric ? 'flex-end' : 'flex-start',
+    textAlign: isNumeric ? 'right' : 'left',
+    minWidth: 0,
+  };
+
+  const cellClickable = !isEditing && !hasRowClick && !isDocumentReadOnly;
+  return (
+    <div
+      key={col.key}
+      className={['flex items-center', cellClickable ? 'cursor-pointer' : ''].join(' ')}
+      style={baseStyle}
+      data-cell-key={col.key}
+      onClick={cellClickable ? () => onCellClick(row, idx, col) : undefined}
+    >
+      {editable ? (
+        <EditCell
+          // Re-key on the underlying value so the uncontrolled <Input> re-hydrates
+          // its defaultValue whenever a callout updates this field externally
+          // (e.g., listPrice changes after the user picks a different product).
+          // The user's currently-focused cell never has its value mutated mid-typing,
+          // so this does not interrupt their input.
+          key={`${row.id}:${col.key}:${row[col.key] ?? ''}`}
+          col={col}
+          row={row}
+          value={row[col.key]}
+          displayLabel={resolveIdentifier(row, col.key)}
+          autoFocus={
+            focusColIdx !== null
+              ? idx === focusColIdx
+              : idx === 0 || (idx === 1 && !isCellEditable(visibleColumns[0]))
+          }
+          entity={entity}
+          token={token}
+          apiBaseUrl={apiBaseUrl}
+          selectorContext={selectorContext}
+          isInvalid={invalidCell?.rowId === row.id && invalidCell?.colKey === col.key}
+          onCommit={(val, extras) => onCommit(row, col, val, extras)}
+          data-testid="EditCell__3b7ec2" />
+      ) : (
+        <ReadCell
+          row={row}
+          col={col}
+          locale={locale}
+          t={t}
+          ui={ui}
+          data-testid="ReadCell__3b7ec2" />
+      )}
+    </div>
+  );
+}
+
+/**
  * Inline trigger for lookup/popup fields (e.g., product). Mirrors `LookupFormField` from
  * `EntityForm.jsx` but rendered compactly inside a row cell — clicking the button opens
  * the same `ProductSearchDrawer` modal the side-panel form used.
@@ -818,96 +918,14 @@ const InlineLinesPanel = forwardRef(function InlineLinesPanel({
                 data-testid="Checkbox__3b7ec2" />
             </div>
             {/* Cells */}
-            {visibleColumns.map((col, idx) => {
-              // ETP-4529 — the `dimensionsPanel` column renders the shared DimSummary
-              // instead of the normal read/edit cell machinery. It is never editable
-              // (not in EDITABLE_TYPES) and never the trailing/amount column.
-              if (col.type === 'dimensionsPanel') {
-                return (
-                  <div
-                    key={col.key}
-                    className="flex items-center"
-                    style={{ padding: `0 ${TOKENS.cellPaddingX}px`, flex: columnFlex(col, idx), minWidth: 0 }}
-                    data-cell-key={col.key}
-                    onClick={e => e.stopPropagation()}
-                  >
-                    <DimSummary
-                      line={dimRowData}
-                      onClick={() => setExpandedRowId(isRowExpanded ? null : row.id)}
-                      processed={isDocumentReadOnly}
-                      labelOverrides={labelOverrides}
-                      fields={visibleDimensionFields}
-                      emptyLabel={col.emptyLabel}
-                      data-testid="DimSummary__3b7ec2" />
-                  </div>
-                );
-              }
-
-              const isTrailing = col === trailingColumn;
-              // The trailing column is hidden when the action strip is showing,
-              // so the icons can take its space. Other amount columns stay visible.
-              if (isTrailing && showActions) return null;
-
-              const isNumeric = NUMERIC_TYPES.has(col.type);
-              const editable = isEditing && isCellEditable(col);
-              // When a cell is in edit mode, the input/trigger has its own px-2 (8px)
-              // + 1px border = 9px of internal padding. Reducing the cell's outer
-              // padding to 3px compensates: the input's CONTENT lands exactly where
-              // read-mode text lands (cell_left + 12px), so values don't visually
-              // jump when toggling between view and edit modes.
-              const baseStyle = {
-                padding: editable ? '0 3px' : `0 ${TOKENS.cellPaddingX}px`,
-                flex: columnFlex(col, idx),
-                justifyContent: isNumeric ? 'flex-end' : 'flex-start',
-                textAlign: isNumeric ? 'right' : 'left',
-                minWidth: 0,
-              };
-
-              const cellClickable = !isEditing && !onRowClick && !isDocumentReadOnly;
-              return (
-                <div
-                  key={col.key}
-                  className={['flex items-center', cellClickable ? 'cursor-pointer' : ''].join(' ')}
-                  style={baseStyle}
-                  data-cell-key={col.key}
-                  onClick={cellClickable ? () => handleCellClick(row, idx, col) : undefined}
-                >
-                  {editable ? (
-                    <EditCell
-                      // Re-key on the underlying value so the uncontrolled <Input> re-hydrates
-                      // its defaultValue whenever a callout updates this field externally
-                      // (e.g., listPrice changes after the user picks a different product).
-                      // The user's currently-focused cell never has its value mutated mid-typing,
-                      // so this does not interrupt their input.
-                      key={`${row.id}:${col.key}:${row[col.key] ?? ''}`}
-                      col={col}
-                      row={row}
-                      value={row[col.key]}
-                      displayLabel={resolveIdentifier(row, col.key)}
-                      autoFocus={
-                        focusColIdx !== null
-                          ? idx === focusColIdx
-                          : idx === 0 || (idx === 1 && !isCellEditable(visibleColumns[0]))
-                      }
-                      entity={entity}
-                      token={token}
-                      apiBaseUrl={apiBaseUrl}
-                      selectorContext={selectorContext}
-                      isInvalid={invalidCell?.rowId === row.id && invalidCell?.colKey === col.key}
-                      onCommit={(val, extras) => commitField(row, col, val, extras)}
-                      data-testid="EditCell__3b7ec2" />
-                  ) : (
-                    <ReadCell
-                      row={row}
-                      col={col}
-                      locale={locale}
-                      t={t}
-                      ui={ui}
-                      data-testid="ReadCell__3b7ec2" />
-                  )}
-                </div>
-              );
-            })}
+            {visibleColumns.map((col, idx) => renderLineCell({
+              col, idx, row, dimRowData, isEditing, showActions, trailingColumn, isDocumentReadOnly,
+              visibleColumns, visibleDimensionFields, labelOverrides,
+              onToggleExpand: () => setExpandedRowId(isRowExpanded ? null : row.id),
+              hasRowClick: Boolean(onRowClick),
+              entity, token, apiBaseUrl, selectorContext, invalidCell, focusColIdx,
+              locale, t, ui, onCommit: commitField, onCellClick: handleCellClick,
+            }))}
             {/* Hover / edit action strip. When `reserveActionSlot` is true
                 (no amount column), the slot is rendered in every row so cells
                 don't reflow on hover — only the icons inside fade in. */}
