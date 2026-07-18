@@ -68,12 +68,16 @@ const CONNECTED_ACCOUNT = {
   psd2Connected: true,
 };
 
-// TabsTrigger (components/ui/tabs.jsx) does not spread extra props onto its <button>, so the
-// `data-testid="edit-account-tab-general/accounting"` set in EditAccountModal.jsx never reaches
-// the DOM. Locate the tab by its (mocked, key-as-text) i18n label instead, same pattern already
-// used above for footer buttons (e.g. `screen.getByText('financeAccountsMenuDisconnect')`).
+// ETP-4553 — TabsTrigger now spreads extra props (data-testid, aria-*, etc.) onto its
+// <button> (core fix, see @etendosoftware/app-shell-core's tabs.jsx), so the
+// `data-testid="edit-account-tab-general/accounting"` set in EditAccountModal.jsx reaches
+// the DOM. Select tabs by their real data-testid instead of the previous role+label workaround.
+const TAB_TESTID_BY_LABEL = {
+  financeAccountsEditTabGeneral: 'edit-account-tab-general',
+  financeAccountsEditTabAccounting: 'edit-account-tab-accounting',
+};
 function getTab(labelKey) {
-  return screen.getByText(labelKey).closest('[role="tab"]');
+  return screen.getByTestId(TAB_TESTID_BY_LABEL[labelKey]);
 }
 
 function renderModal(props = {}) {
