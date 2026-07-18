@@ -53,6 +53,9 @@ describe('AssetsDetailPanel — depreciation off', () => {
     const forms = formsByFields(container);
     // Only Group 1 (Asset Info) form is rendered.
     expect(forms.some(f => f.includes('searchKey'))).toBe(true);
+    // Product is "Siempre" (ETP-4529 corrected matrix) — a plain Asset Info field,
+    // always shown regardless of depreciate state or GL Configuration.
+    expect(forms.some(f => f.includes('product'))).toBe(true);
     // No dimensions / dates / financial forms.
     expect(forms.some(f => f.includes('project'))).toBe(false);
     expect(forms.some(f => f.includes('purchaseDate'))).toBe(false);

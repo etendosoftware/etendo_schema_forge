@@ -112,20 +112,28 @@ describe('AssetsDetailPanel — field definitions', () => {
 
   it('defines only Project as a dimension field candidate (ETP-4529)', () => {
     // ETP-4529 — per the accounting-dimension matrix, only Proyecto is "Por config"
-    // for Activo (Amortizaciones); the other 3 dimensions kept in v1 (Contacto,
-    // Producto, Centro de costo) are "Nunca" and were dropped as candidates entirely.
-    assert.match(src, /dimensionFieldCandidates/);
-    assert.match(src, /'C_Project_ID'/);
-    // The 3 previously-kept-but-now-"Nunca" dimensions are no longer candidates.
-    assert.doesNotMatch(src, /'EM_Etadas_Costcenter_ID'/);
-    assert.doesNotMatch(src, /'C_BPartner_ID'/);
-    assert.doesNotMatch(src, /'M_Product_ID'/);
+    // for Activo (Amortizaciones); Contacto and Centro de costo are "Nunca" and were
+    // dropped as candidates entirely. Producto is "Siempre" (corrected follow-up) —
+    // it lives in group1Fields as a plain always-visible field, never a dimension
+    // candidate, so this array-scoped check doesn't need to mention it.
+    const candidatesBlock = src.match(/dimensionFieldCandidates = \[[\s\S]*?\];/)[0];
+    assert.match(candidatesBlock, /'C_Project_ID'/);
+    // The 2 previously-kept-but-now-"Nunca" dimensions are no longer candidates.
+    assert.doesNotMatch(candidatesBlock, /'EM_Etadas_Costcenter_ID'/);
+    assert.doesNotMatch(candidatesBlock, /'C_BPartner_ID'/);
     // The 5 out-of-scope dimensions were removed from the panel.
-    assert.doesNotMatch(src, /'EM_Etadas_User1_ID'/);
-    assert.doesNotMatch(src, /'EM_Etadas_User2_ID'/);
-    assert.doesNotMatch(src, /'EM_Etadas_Salesregion_ID'/);
-    assert.doesNotMatch(src, /'EM_Etadas_C_Activity_ID'/);
-    assert.doesNotMatch(src, /'EM_Etadas_Campaign_ID'/);
+    assert.doesNotMatch(candidatesBlock, /'EM_Etadas_User1_ID'/);
+    assert.doesNotMatch(candidatesBlock, /'EM_Etadas_User2_ID'/);
+    assert.doesNotMatch(candidatesBlock, /'EM_Etadas_Salesregion_ID'/);
+    assert.doesNotMatch(candidatesBlock, /'EM_Etadas_C_Activity_ID'/);
+    assert.doesNotMatch(candidatesBlock, /'EM_Etadas_Campaign_ID'/);
+  });
+
+  it('defines product as a plain, always-visible group1Fields entry (ETP-4529 — Siempre)', () => {
+    const group1Block = src.match(/group1Fields = \[[\s\S]*?\];/)[0];
+    assert.match(group1Block, /'product'/);
+    assert.match(group1Block, /'M_Product_ID'/);
+    assert.match(group1Block, /reference: 'Product'/);
   });
 
   it('resolves final dimension visibility via the shared evaluate-display hook (ETP-4529)', () => {

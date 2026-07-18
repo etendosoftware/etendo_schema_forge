@@ -1,8 +1,8 @@
 {
-  "version": "0.41.0",
+  "version": "0.42.0",
   "generatedAt": "2026-04-29T19:06:30.936Z",
-  "updatedAt": "2026-07-17T14:02:48.067Z",
-  "checksum": "68ae953c0dacb9b8",
+  "updatedAt": "2026-07-18T22:08:53.759Z",
+  "checksum": "bb1d1b6768ece566",
   "frontendContract": {
     "window": {
       "id": "800027",
@@ -192,6 +192,24 @@
               "raw": "@existAmortizationLines@ = 'Y'",
               "evaluable": true,
               "js": "Number(record.depreciatedPlan || 0) > 0 || Number(record.depreciatedValue || 0) > 0"
+            }
+          },
+          {
+            "name": "product",
+            "apiKey": "product",
+            "column": "M_Product_ID",
+            "label": "Product",
+            "type": "foreignKey",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": false,
+            "grid": false,
+            "form": true,
+            "reference": "Product",
+            "inputMode": "search",
+            "section": "principal",
+            "callout": {
+              "className": "org.openbravo.erpCommon.ad_callouts.SL_Asset_Product"
             }
           },
           {
@@ -1065,7 +1083,7 @@
             "apiKey": "product",
             "column": "M_Product_ID",
             "type": "foreignKey",
-            "visibility": "discarded",
+            "visibility": "editable",
             "required": false
           },
           {
@@ -2042,6 +2060,14 @@
       },
       {
         "entity": "assets",
+        "field": "product",
+        "column": "M_Product_ID",
+        "reference": "Product",
+        "inputMode": "search",
+        "url": "/sws/neo/assets/assets/selectors/product"
+      },
+      {
+        "entity": "assets",
         "field": "project",
         "column": "C_Project_ID",
         "reference": "Project",
@@ -2814,6 +2840,14 @@
         "description": "Field 'processed' should be present in assets"
       },
       {
+        "id": "t-field-presence-assets-product",
+        "category": "field-presence",
+        "entity": "assets",
+        "field": "product",
+        "runner": "node",
+        "description": "Field 'product' should be present in assets"
+      },
+      {
         "id": "t-field-presence-assets-project",
         "category": "field-presence",
         "entity": "assets",
@@ -3092,6 +3126,14 @@
         "field": "processed",
         "runner": "node",
         "description": "Field 'processed' should have type 'string' in assets"
+      },
+      {
+        "id": "t-field-type-assets-product",
+        "category": "field-type",
+        "entity": "assets",
+        "field": "product",
+        "runner": "node",
+        "description": "Field 'product' should have type 'string' in assets"
       },
       {
         "id": "t-field-type-assets-project",
@@ -3383,6 +3425,14 @@
         "field": "currency",
         "runner": "node",
         "description": "Selector endpoint for 'currency' in assets should exist"
+      },
+      {
+        "id": "t-selector-endpoint-assets-product",
+        "category": "selector-endpoint",
+        "entity": "assets",
+        "field": "product",
+        "runner": "node",
+        "description": "Selector endpoint for 'product' in assets should exist"
       },
       {
         "id": "t-selector-endpoint-assets-project",
@@ -3865,14 +3915,6 @@
         "description": "System field 'partnerAddress' should exist in backend but not frontend for assets"
       },
       {
-        "id": "t-system-field-assets-product",
-        "category": "system-field",
-        "entity": "assets",
-        "field": "product",
-        "runner": "node",
-        "description": "System field 'product' should exist in backend but not frontend for assets"
-      },
-      {
         "id": "t-system-field-assets-profit",
         "category": "system-field",
         "entity": "assets",
@@ -3983,25 +4025,25 @@
       }
     ],
     "summary": {
-      "total": 231,
+      "total": 233,
       "byCategory": {
         "action-endpoint": 2,
         "crud-flags": 3,
         "default-value-type": 9,
         "displaylogic-evaluable": 20,
         "displaylogic-valid": 20,
-        "field-presence": 35,
-        "field-type": 35,
+        "field-presence": 36,
+        "field-type": 36,
         "readonlylogic-evaluable": 4,
         "readonlylogic-valid": 4,
         "rule-declared": 13,
         "searchable-filters": 4,
-        "selector-endpoint": 8,
-        "system-field": 71,
+        "selector-endpoint": 9,
+        "system-field": 70,
         "visibility": 3
       },
       "byRunner": {
-        "node": 231,
+        "node": 233,
         "junit": 0
       }
     }

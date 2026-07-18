@@ -171,6 +171,11 @@ export default function AssetsDetailPanel({ data, token, apiBaseUrl, catalogs, a
     { key: 'searchKey', column: 'Value', type: 'text', label: ui('Search Key'), required: true, section: 'principal' },
     { key: 'name', column: 'Name', type: 'text', label: ui('Name'), required: true, section: 'principal' },
     { key: 'assetCategory', column: 'A_Asset_Group_ID', type: 'selector', label: ui('Asset Category'), required: true, section: 'principal', reference: 'AssetGroup', inputMode: 'selector' },
+    // ETP-4529 — per the corrected accounting-dimension matrix, Producto is "Siempre"
+    // for Activo (Amortizaciones) Cabecera: always visible regardless of GL Configuration.
+    // It is a plain business field (which product this asset represents), not a
+    // config-gated accounting dimension — see dimensionFieldCandidates below.
+    { key: 'product', column: 'M_Product_ID', type: 'search', label: ui('product'), lookup: true, reference: 'Product', inputMode: 'search', section: 'principal' },
     { key: 'description', column: 'Description', type: 'textarea', label: ui('Description'), section: 'other' },
   ];
 
@@ -211,10 +216,12 @@ export default function AssetsDetailPanel({ data, token, apiBaseUrl, catalogs, a
   }
 
   // ETP-4529 — per the accounting-dimension matrix, only Proyecto is "Por config"
-  // (config-gated) for Activo (Amortizaciones); Contacto, Producto, and Centro de
-  // costo are "Nunca" (never applicable) and are intentionally NOT candidates here
-  // at all — see decisions.json (businessPartner/product/eTADASCostCenter are
-  // discarded) and docs/generated-custom-windows/assets.md.
+  // (config-gated) for Activo (Amortizaciones); Contacto and Centro de costo are
+  // "Nunca" (never applicable) and are intentionally NOT candidates here at all —
+  // see decisions.json (businessPartner/eTADASCostCenter are discarded) and
+  // docs/generated-custom-windows/assets.md. Producto is "Siempre" (always visible,
+  // rendered unconditionally in group1Fields above) — it is not a GL-config-gated
+  // dimension, so it is deliberately excluded from this candidates list too.
   const dimensionFieldCandidates = [
     { key: 'project', column: 'C_Project_ID', type: 'selector', section: 'principal', reference: 'Project', inputMode: 'selector' },
   ];

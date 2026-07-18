@@ -1,8 +1,8 @@
 {
-  "version": "0.41.0",
+  "version": "0.42.0",
   "generatedAt": "2026-04-29T19:06:30.936Z",
-  "updatedAt": "2026-07-16T16:52:56.437Z",
-  "contractChecksum": "68ae953c0dacb9b8",
+  "updatedAt": "2026-07-18T22:08:53.759Z",
+  "contractChecksum": "bb1d1b6768ece566",
   "apiPrediction": {
     "specName": "assets",
     "baseUrl": "/sws/neo/assets",
@@ -62,6 +62,14 @@
         "reference": "Currency",
         "inputMode": "selector",
         "url": "/sws/neo/assets/assets/selectors/currency"
+      },
+      {
+        "entity": "assets",
+        "field": "product",
+        "column": "M_Product_ID",
+        "reference": "Product",
+        "inputMode": "search",
+        "url": "/sws/neo/assets/assets/selectors/product"
       },
       {
         "entity": "assets",
@@ -219,6 +227,7 @@
             "readOnlyLogic": "@existAmortizationLines@ = 'Y'",
             "defaultValue": "@C_Currency_ID@"
           },
+          "product": {},
           "depreciate": {
             "required": true
           },
@@ -382,5 +391,5 @@
     "knownLimitations": [],
     "dangerousOperations": []
   },
-  "checksum": "724bb42c526f082c"
+  "checksum": "946c9b872cb1ae55"
 }

@@ -107,6 +107,14 @@ export const api = {
     },
     {
       "entity": "assets",
+      "field": "product",
+      "column": "M_Product_ID",
+      "reference": "Product",
+      "inputMode": "search",
+      "url": "/sws/neo/assets/assets/selectors/product"
+    },
+    {
+      "entity": "assets",
       "field": "project",
       "column": "C_Project_ID",
       "reference": "Project",

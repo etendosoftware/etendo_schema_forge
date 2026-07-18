@@ -123,8 +123,9 @@
           "reason": "Internal sequential number \u2014 not relevant for users in simplified UI"
         },
         "product": {
-          "visibility": "discarded",
-          "reason": "ETP-4529 — Producto is 'Nunca' for Activo (Amortizaciones) per the accounting-dimension matrix."
+          "visibility": "editable",
+          "section": "principal",
+          "reason": "ETP-4529 — corrected matrix: Producto is 'Siempre' for Activo (Amortizaciones) Cabecera, always visible regardless of GL Configuration. Rendered by the custom AssetsDetailPanel (not a config-gated accounting dimension)."
         },
         "summaryLevel": {
           "visibility": "discarded",
