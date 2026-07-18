@@ -1,6 +1,7 @@
 import { useCallback } from 'react';
 import { useAuth } from '@/auth/AuthContext.jsx';
 import { getApiBase } from '@/hooks/useNeoResource.js';
+import { authHeaders, throwHttpError } from '@/hooks/financialAccountHttp.js';
 
 /**
  * Read/write operations against the `accountingConfiguration` entity of the
@@ -21,26 +22,6 @@ import { getApiBase } from '@/hooks/useNeoResource.js';
 
 const BASE_PATH = '/sws/neo/financial-account';
 const ENTITY_PATH = `${BASE_PATH}/accountingConfiguration`;
-
-function authHeaders(token) {
-  return { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
-}
-
-async function readErrorMessage(res) {
-  try {
-    const json = await res.json();
-    return json?.error?.message || `HTTP ${res.status}`;
-  } catch {
-    return `HTTP ${res.status}`;
-  }
-}
-
-async function throwHttpError(res) {
-  const message = await readErrorMessage(res);
-  const error = new Error(message);
-  error.status = res.status;
-  throw error;
-}
 
 /** First record of a generic single-row envelope ({ response: { data: [row] } }). */
 function firstRecord(json) {
