@@ -934,8 +934,12 @@ function ReadField({ label, value, onCopy, copyLabel }) {
   return (
     <div className="flex flex-col gap-2">
       <span className="text-sm font-medium leading-6 text-[#121217]">{label}</span>
-      <div className="flex h-10 items-center gap-2 rounded-lg border border-[#D1D4DB] bg-white px-3 shadow-[0_1px_2px_rgba(18,18,23,0.05)]">
-        <span className="min-w-0 flex-1 truncate text-sm text-[#121217]">{value || '—'}</span>
+      {/* bg-muted/50 + cursor-default matches the read-only styling EntityForm.jsx already
+          uses everywhere else in the app (contract-ui's generic pipeline-generated forms) —
+          this custom modal's ReadField had been left visually identical to an editable Input
+          (bg-white), giving no visual cue that Tipo de cuenta/Moneda aren't editable. */}
+      <div className="flex h-10 cursor-default items-center gap-2 rounded-lg border border-[#D1D4DB] bg-muted/50 px-3 shadow-[0_1px_2px_rgba(18,18,23,0.05)]">
+        <span className="min-w-0 flex-1 truncate text-sm text-[#6C6C89]">{value || '—'}</span>
         {onCopy ? (
           <button type="button" onClick={onCopy} aria-label={copyLabel} className="text-[#828FA3] hover:text-[#121217]">
             <Copy className="h-4 w-4" data-testid="Copy__73027d" />
