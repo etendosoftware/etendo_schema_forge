@@ -408,7 +408,16 @@ export function CreatableSearchSelect({
   useEffect(() => {
     if (!showDropdown) return;
     updateDropdownDirection();
-    const onReflow = () => updateDropdownDirection();
+    const onReflow = (e) => {
+      // 'scroll' is captured at the window level (capture=true) so the panel stays glued
+      // to its trigger when an ANCESTOR scrolls (e.g. the modal body). But capture-phase
+      // listeners on window also see the dropdown's OWN internal scroll (scrolling the
+      // options list itself), which re-triggers this on every scroll tick — fighting the
+      // user's own scroll gesture inside a long options list (e.g. a full chart of
+      // accounts). Skip recompute when the scroll originated from inside the dropdown.
+      if (dropdownRef.current?.contains(e.target)) return;
+      updateDropdownDirection();
+    };
     window.addEventListener('resize', onReflow);
     window.addEventListener('scroll', onReflow, true);
     return () => {
