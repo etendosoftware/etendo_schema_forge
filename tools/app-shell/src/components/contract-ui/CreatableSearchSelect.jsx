@@ -512,6 +512,23 @@ export function CreatableSearchSelect({
           className="bg-white border rounded-md shadow-lg overflow-auto"
           style={dropdownStyle}
           data-open-up={openUp ? 'true' : 'false'}
+          // Radix Dialog (react-remove-scroll) locks body scroll while open by attaching a
+          // global, capture-phase wheel listener that calls preventDefault() on any wheel
+          // event outside the dialog's own DOM subtree — it only recognizes elements nested
+          // inside Dialog.Content as scrollable exceptions. This panel is portaled to
+          // document.body as a SIBLING of the dialog content (so it can be positioned
+          // relative to the viewport instead of the modal, see the comment on
+          // updateDropdownDirection above), so react-remove-scroll never allowlists it: the
+          // browser's native wheel-to-scroll translation gets cancelled before it can move
+          // this element's scrollTop, even though overflow:auto and a real maxHeight are
+          // correctly set (confirmed live: scrollTop stayed 0 after a wheel event, but a
+          // direct `el.scrollTop = x` assignment worked fine — only the NATIVE scroll
+          // mechanism is blocked). Bypass it manually, matching the same fix already used by
+          // LookupPicker.jsx for the identical scenario.
+          onWheel={(e) => {
+            e.stopPropagation();
+            e.currentTarget.scrollTop += e.deltaY;
+          }}
         >
           <SearchSelectOptionsPanel
             field={field}

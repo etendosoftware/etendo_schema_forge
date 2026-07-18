@@ -205,6 +205,14 @@ export function InlineSearchCombo({ field, value, options, onChange, onKeyDown, 
           style={dropdownStyle}
           data-open-up={openUp ? 'true' : 'false'}
           data-inline-add-portal="true"
+          // Same fix as CreatableSearchSelect's identical panel (and LookupPicker.jsx) — see
+          // CreatableSearchSelect's onWheel comment for the full root cause (Radix Dialog's
+          // react-remove-scroll blocks the native wheel-to-scroll translation for anything
+          // portaled outside the dialog's own DOM subtree). Bypass it manually.
+          onWheel={(e) => {
+            e.stopPropagation();
+            e.currentTarget.scrollTop += e.deltaY;
+          }}
         >
           {filtered.map(opt => (
             <button
