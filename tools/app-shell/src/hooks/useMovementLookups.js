@@ -72,6 +72,21 @@ export function useGLItemLookup(query) {
 }
 
 /**
+ * Server-side searchable lookup over an accounting dimension (project,
+ * costcenter, product, …), backed by the same `dimension-values` action the
+ * dimension selects use — but filtered by `q` so it feeds a searchable picker.
+ *
+ * @param {string} query - the search text
+ * @param {string} dimension - dimension key (e.g. 'project', 'costcenter', 'product')
+ */
+export function useDimensionLookup(query, dimension) {
+  return useDebouncedLookup(
+    { action: 'dimension-values', resultKey: 'values', extraParams: `&dimension=${encodeURIComponent(dimension)}` },
+    query,
+  );
+}
+
+/**
  * Outstanding (unpaid) invoices for a business partner, filtered by direction:
  *   doc='in'  → sales invoices    (receivables / cobro)
  *   doc='out' → purchase invoices (payables / pago)

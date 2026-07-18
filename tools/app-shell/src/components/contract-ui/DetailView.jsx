@@ -603,7 +603,153 @@ export function SecondaryPanelTab(props) {
   </div>;
 }
 
+function secondaryTabEmptyState({ ui, onAddLineClick, addLineLabel }) {
+  return (
+    <div style={{ margin: '24px 16px', padding: '32px 24px', background: 'var(--color-background-secondary)', borderRadius: 'var(--border-radius-lg)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }} data-testid="secondary-tab-empty-state">
+      <div style={{ width: 40, height: 40, borderRadius: 'var(--border-radius-md)', background: 'var(--color-background-tertiary)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 12 }}>
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+          <polyline points="14 2 14 8 20 8" />
+          <line x1="8" y1="13" x2="16" y2="13" />
+          <line x1="8" y1="17" x2="13" y2="17" />
+        </svg>
+      </div>
+      <span style={{ fontSize: 14, fontWeight: 500, color: 'var(--color-text-primary)', marginBottom: 4 }}>{ui('noRecordsYet')}</span>
+      <span style={{ fontSize: 13, color: 'var(--color-text-secondary)', marginBottom: 20 }}>{ui('createNewRecord')}</span>
+      <button type="button" onClick={onAddLineClick} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, borderRadius: 8, padding: '6px 14px', fontSize: 13, fontWeight: 500, background: '#18181b', color: '#fff', border: 'none', cursor: 'pointer' }}>
+        + {addLineLabel}
+      </button>
+    </div>
+  );
+}
+
+function secondaryDetailSidebar(props) {
+  if (!(props.st.Form && !props.st.Panel && (props.selectedSecondaryLine?._tabKey === props.st.key || props.closingSecondaryLine))) {
+    return null;
+  }
+  return (
+    <div
+        className={`w-[48rem] shrink-0 border-l border-border pl-4 self-stretch overflow-hidden ${props.closingSecondaryLine ? "sidebar-slide-out" : "sidebar-slide-in"}`}>
+      <div className="flex items-center justify-between mb-3">
+        <span className="text-sm font-medium text-foreground">{props.detailPanelTitle}</span>
+        <button
+            onClick={props.onCloseDetailPanel}
+            className="h-6 w-6 flex items-center justify-center rounded text-muted-foreground hover:text-foreground transition-colors"
+        >
+          <X className="h-3.5 w-3.5" data-testid="X__fa3275" />
+        </button>
+      </div>
+      <props.st.Form
+          data={props.secondaryLineEdits ?? props.selectedSecondaryLine}
+          readOnly={!props.hook.editing}
+          onChange={props.onChange}
+          entity={props.st.key}
+          catalogs={props.catalogs}
+          token={props.token}
+          apiBaseUrl={props.apiBaseUrl}
+          selectorContext={props.selectorContextByEntity[props.st.key]}
+          excludeFields={props.st.key === "contact" ? ["active"] : []}
+          labelOverrides={props.labelOverrides}
+      />
+      {props.hook.editing && (props.secondaryLineEdits || props.selectedSecondaryLine?.id) && (
+          <div className="flex gap-2 mt-4">
+            {props.secondaryLineEdits && (
+                <>
+                  <button
+                      disabled={props.savingLine}
+                      onClick={props.onSaveLine}
+                      className="inline-flex items-center gap-1 px-3 py-1.5 text-sm font-medium rounded-md bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+                  >
+                    {props.savingLine ? props.loadingLabel : props.saveLabel}
+                  </button>
+                  <button
+                      onClick={props.onDiscardLine}
+                      className="inline-flex items-center gap-1 px-3 py-1.5 text-sm font-medium rounded-md border hover:bg-accent"
+                  >
+                    {props.discardLabel}
+                  </button>
+                </>
+            )}
+            {(props.crud?.[props.st.key]?.delete ?? true) && props.selectedSecondaryLine?.id && (
+                <button
+                    disabled={props.savingLine}
+                    onClick={props.onDeleteLine}
+                    className="inline-flex items-center gap-1 px-3 py-1.5 text-sm font-medium rounded-md border border-destructive text-destructive hover:bg-destructive/10 disabled:opacity-50 ml-auto"
+                >
+                  <Trash2 className="h-4 w-4" data-testid="Trash2__fa3275" />
+                  {props.deleteLabel}
+                </button>
+            )}
+          </div>
+      )}
+    </div>
+  );
+}
+
+function secondaryAddLineBar(props) {
+  if (!((props.st.addLineFields?.entry?.length > 0 || props.st.customAddModal) && props.hook.editing)) {
+    return null;
+  }
+  return (
+    // Wrapper measured by the secondary selection bar — its
+    // `position: fixed` portal overlays exactly this region.
+    // Mirrors the primary header-lines add-button wrapper (shared
+    // getAddLineWrapperClassName/Style helpers) so both paths get the
+    // same top border, vertical spacing and padding — keeps alignment
+    // consistent across primary and secondary tabs.
+    // Always `relative` (never sticky): the child-tab add-line button
+    // must stay in flow below the table. getAddLineWrapperClassName's
+    // sticky bottom-0 variant is only correct for the tall PRIMARY
+    // header-lines area — applying it here makes the button overlap the
+    // last table row when the scroll container is resized.
+    <div
+      ref={props.secondaryAddLineWrapperRef}
+      className="relative"
+      // No borderTop: the child table already renders its own bottom
+      // border, so the primary path's top divider would double up here.
+      // noTopPadding: keep the button snug under the table (no vertical
+      // gap above it) while preserving horizontal alignment.
+      style={getAddLineWrapperStyle(props.linesLayout, { withBorder: false, noTopPadding: true })}
+    >
+      {/* alignSelf:flex-start keeps this span from being stretched by
+          the flex-column parent — otherwise data-inline-add-portal would
+          cover the whole bar and the outside-click save would never fire. */}
+      <span data-inline-add-portal="true" style={{ alignSelf: 'flex-start' }}>
+        <AddLineButton
+          onClick={props.onAddLineClick}
+          label={props.addLineLabel}
+          hideChevron={props.hideChevron}
+          data-testid="AddLineButton__fa3275" />
+      </span>
+      {props.linesLayout === "inlineEditable" && (props.crud?.[props.st.key]?.delete ?? true) && (
+          <LinesSelectionBar
+            visible={props.secondaryBarVisible[props.st.key] ?? false}
+            closing={props.secondaryBarClosing[props.st.key] ?? false}
+            barRect={props.secondaryBarRects[props.st.key]}
+            count={(props.secondarySelectedRows[props.st.key] ?? []).length}
+            selectedLabel={props.selectedLabel}
+            totalLabel={null}
+            deleting={props.secondaryDeleting[props.st.key] ?? false}
+            deleteTitle={props.deleteLabel}
+            closeTitle={props.closeTitle}
+            compact
+            onDelete={props.onDelete}
+            onClose={props.onClose}
+            data-testid="LinesSelectionBar__fa3275" />
+      )}
+    </div>
+  );
+}
+
 export function SecondaryTableTab(props) {
+  const secondaryChildren = props.secondaryHooks[props.stIdx]?.children ?? [];
+  const isAddingThis = props.addingSecondaryLine?.[props.st.key] ?? false;
+  const hasAddFields = (props.st.addLineFields?.entry?.length ?? 0) > 0;
+  const showEmptyState = secondaryChildren.length === 0 && !isAddingThis
+    && props.hook.editing && hasAddFields && !props.st.customAddModal;
+  if (showEmptyState) {
+    return secondaryTabEmptyState({ ui: props.ui, onAddLineClick: props.onAddLineClick, addLineLabel: props.addLineLabel });
+  }
   return (
     <>
       <div className="flex items-start gap-4">
@@ -654,113 +800,9 @@ export function SecondaryTableTab(props) {
               } : undefined}
           />
         </div>
-        {props.st.Form && !props.st.Panel && (props.selectedSecondaryLine?._tabKey === props.st.key || props.closingSecondaryLine) && (
-            <div
-                className={`w-[48rem] shrink-0 border-l border-border pl-4 self-stretch overflow-hidden ${props.closingSecondaryLine ? "sidebar-slide-out" : "sidebar-slide-in"}`}>
-              <div className="flex items-center justify-between mb-3">
-                <span className="text-sm font-medium text-foreground">{props.detailPanelTitle}</span>
-                <button
-                    onClick={props.onCloseDetailPanel}
-                    className="h-6 w-6 flex items-center justify-center rounded text-muted-foreground hover:text-foreground transition-colors"
-                >
-                  <X className="h-3.5 w-3.5" data-testid="X__fa3275" />
-                </button>
-              </div>
-              <props.st.Form
-                  data={props.secondaryLineEdits ?? props.selectedSecondaryLine}
-                  readOnly={!props.hook.editing}
-                  onChange={props.onChange}
-                  entity={props.st.key}
-                  catalogs={props.catalogs}
-                  token={props.token}
-                  apiBaseUrl={props.apiBaseUrl}
-                  selectorContext={props.selectorContextByEntity[props.st.key]}
-                  excludeFields={props.st.key === "contact" ? ["active"] : []}
-                  labelOverrides={props.labelOverrides}
-              />
-              {props.hook.editing && (props.secondaryLineEdits || props.selectedSecondaryLine?.id) && (
-                  <div className="flex gap-2 mt-4">
-                    {props.secondaryLineEdits && (
-                        <>
-                          <button
-                              disabled={props.savingLine}
-                              onClick={props.onSaveLine}
-                              className="inline-flex items-center gap-1 px-3 py-1.5 text-sm font-medium rounded-md bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
-                          >
-                            {props.savingLine ? props.loadingLabel : props.saveLabel}
-                          </button>
-                          <button
-                              onClick={props.onDiscardLine}
-                              className="inline-flex items-center gap-1 px-3 py-1.5 text-sm font-medium rounded-md border hover:bg-accent"
-                          >
-                            {props.discardLabel}
-                          </button>
-                        </>
-                    )}
-                    {(props.crud?.[props.st.key]?.delete ?? true) && props.selectedSecondaryLine?.id && (
-                        <button
-                            disabled={props.savingLine}
-                            onClick={props.onDeleteLine}
-                            className="inline-flex items-center gap-1 px-3 py-1.5 text-sm font-medium rounded-md border border-destructive text-destructive hover:bg-destructive/10 disabled:opacity-50 ml-auto"
-                        >
-                          <Trash2 className="h-4 w-4" data-testid="Trash2__fa3275" />
-                          {props.deleteLabel}
-                        </button>
-                    )}
-                  </div>
-              )}
-            </div>
-        )}
+        {secondaryDetailSidebar(props)}
       </div>
-      {(props.st.addLineFields?.entry?.length > 0 || props.st.customAddModal) && props.hook.editing && (
-          // Wrapper measured by the secondary selection bar — its
-          // `position: fixed` portal overlays exactly this region.
-          // Mirrors the primary header-lines add-button wrapper (shared
-          // getAddLineWrapperClassName/Style helpers) so both paths get the
-          // same top border, vertical spacing and padding — keeps alignment
-          // consistent across primary and secondary tabs.
-          // Always `relative` (never sticky): the child-tab add-line button
-          // must stay in flow below the table. getAddLineWrapperClassName's
-          // sticky bottom-0 variant is only correct for the tall PRIMARY
-          // header-lines area — applying it here makes the button overlap the
-          // last table row when the scroll container is resized.
-          (<div
-            ref={props.secondaryAddLineWrapperRef}
-            className="relative"
-            // No borderTop: the child table already renders its own bottom
-            // border, so the primary path's top divider would double up here.
-            // noTopPadding: keep the button snug under the table (no vertical
-            // gap above it) while preserving horizontal alignment.
-            style={getAddLineWrapperStyle(props.linesLayout, { withBorder: false, noTopPadding: true })}
-          >
-            {/* alignSelf:flex-start keeps this span from being stretched by
-                the flex-column parent — otherwise data-inline-add-portal would
-                cover the whole bar and the outside-click save would never fire. */}
-            <span data-inline-add-portal="true" style={{ alignSelf: 'flex-start' }}>
-              <AddLineButton
-                onClick={props.onAddLineClick}
-                label={props.addLineLabel}
-                hideChevron={props.hideChevron}
-                data-testid="AddLineButton__fa3275" />
-            </span>
-            {props.linesLayout === "inlineEditable" && (props.crud?.[props.st.key]?.delete ?? true) && (
-                <LinesSelectionBar
-                  visible={props.secondaryBarVisible[props.st.key] ?? false}
-                  closing={props.secondaryBarClosing[props.st.key] ?? false}
-                  barRect={props.secondaryBarRects[props.st.key]}
-                  count={(props.secondarySelectedRows[props.st.key] ?? []).length}
-                  selectedLabel={props.selectedLabel}
-                  totalLabel={null}
-                  deleting={props.secondaryDeleting[props.st.key] ?? false}
-                  deleteTitle={props.deleteLabel}
-                  closeTitle={props.closeTitle}
-                  compact
-                  onDelete={props.onDelete}
-                  onClose={props.onClose}
-                  data-testid="LinesSelectionBar__fa3275" />
-            )}
-          </div>)
-      )}
+      {secondaryAddLineBar(props)}
     </>
   );
 }
@@ -1115,7 +1157,8 @@ function buildInitialTabs(p) {
   p.secondaryTabs.forEach((st, i) => {
     const secondaryChildCount = !st.isFormTab ? (p.secondaryHooks[i]?.children?.length ?? null) : null;
     const childCount = st.Panel ? (p.panelCounts[st.key] ?? null) : secondaryChildCount;
-    tabs.push({ key: st.key, label: st.label, count: childCount });
+    const label = (st.labelKey && p.ui(st.labelKey)) || st.label;
+    tabs.push({ key: st.key, label, count: childCount });
   });
   if (p.DetailTable) {
     insertLinesTab(p.detailLabel, p.detailEntity, p.hook, p.detailTabIndex, tabs);
@@ -1484,6 +1527,7 @@ function renderNewRecordSaveActions({
         if (!(await flushPendingLines())) return;
         const saved = await hook.handleSave(data);
         if (saved?.id && isNew) {
+          if (onAfterCreate) await onAfterCreate(saved, { token, apiBaseUrl });
           hook.primeSaved?.(saved);
           navigate(`/${windowName}/${saved.id}`, { replace: true, state: { justSaved: saved } });
         }
@@ -3031,6 +3075,10 @@ export function DetailView({
   const footerCustomTabs = customTabs.filter(ct => (ct?.placement ?? 'footer') === 'footer');
   const tabCustomTabs = customTabs.filter(ct => ct?.placement === 'tab');
   const [customTabCounts, setCustomTabCounts] = useState({});
+  // Custom-tab add form to auto-open after a save-header-first navigation,
+  // optionally restoring an in-progress draft (+ error) across the remount
+  const [pendingCustomTabAdd, setPendingCustomTabAdd] = useState(null);
+  const [pendingCustomTabRestore, setPendingCustomTabRestore] = useState(null);
   // Defaults every tab-placement custom component to visible (true/undefined) until it
   // explicitly reports otherwise via `onVisibilityChange(false)` — see buildInitialTabs.
   const [customTabVisibility, setCustomTabVisibility] = useState({});
@@ -3087,6 +3135,44 @@ export function DetailView({
 
   const isCustomTabActive = tabCustomTabs.some(ct => tabs[activeTab]?.key === customTabKey(ct));
 
+  // extraBadges rendering — split by type to keep each path simple.
+  // statusPill: a DocumentStatusPill from i18n keys. One-sided badges (only a
+  // trueKey declared) hide on the false value — the generator emits the missing
+  // side as the literal string 'undefined', which must never reach the screen.
+  const renderStatusPillBadge = (b) => {
+    const val = data[b.key];
+    if (val == null) return null;
+    const isTrue = val === true || val === 'Y' || val === 'true';
+    const labelKey = isTrue ? b.trueKey : b.falseKey;
+    if (!labelKey || labelKey === 'undefined') return null;
+    return (
+      <DocumentStatusPill
+        key={b.key}
+        status={isTrue ? 'Y' : 'N'}
+        label={ui(labelKey)}
+        tone={isTrue ? 'success' : 'warning'}
+        data-testid={`DocumentStatusPill__${b.key}`} />
+    );
+  };
+  const renderLegacyBadge = (b) => {
+    const when = b.when !== undefined ? b.when : true;
+    const show = when ? !!data[b.key] : !data[b.key];
+    if (!show) return null;
+    if (b.hideWhenStatus?.includes(data[statusField])) return null;
+    const cls = b.style === 'warning'
+      ? 'ml-1 border-amber-300 bg-amber-50 text-amber-700'
+      : 'ml-1 bg-blue-600 hover:bg-blue-700 border-transparent text-white';
+    return (
+      <Badge
+        key={`${b.key}-${when}`}
+        variant={b.style === 'warning' ? 'outline' : 'default'}
+        className={cls}
+        data-testid="Badge__fa3275">
+        {b.label}
+      </Badge>
+    );
+  };
+
   const renderCustomTabPanels = (resolveIsActive) => tabCustomTabs.map((ct, idx) => {
     const TabComponent = ct.Component;
     const isActive = resolveIsActive(ct, idx);
@@ -3094,6 +3180,35 @@ export function DetailView({
       if (prev[ct.key] === count) return prev;
       return { ...prev, [ct.key]: count };
     });
+    // Save-header-first support for custom tabs (child rows need a persisted
+    // parent FK). The tab decides WHEN: onSaveHeader({ navigateAfter: false })
+    // just persists and returns the saved record (the tab keeps its in-progress
+    // form and posts the child row itself), then calls onGoToSavedRecord to land
+    // on the saved record with this tab re-opened. The default (navigateAfter
+    // true) mirrors handleAddLineClick: save, navigate, re-open the add form.
+    const saveHeaderForCustomTab = async ({ navigateAfter = true } = {}) => {
+      const saved = await hook.handleSave();
+      if (!saved?.id) return null;
+      hook.primeSaved?.(saved);
+      if (navigateAfter) {
+        navigate(`/${windowName}/${saved.id}`, {
+          replace: true,
+          state: { openSecondaryTab: customTabKey(ct), openCustomTabAdd: ct.key, justSaved: saved },
+        });
+      }
+      return saved;
+    };
+    const goToSavedRecord = (saved, { reopenAdd = false, draft = null, error = null } = {}) => {
+      if (!saved?.id) return;
+      navigate(`/${windowName}/${saved.id}`, {
+        replace: true,
+        state: {
+          openSecondaryTab: customTabKey(ct),
+          ...(reopenAdd ? { openCustomTabAdd: ct.key, customTabRestore: { draft, error } } : {}),
+          justSaved: saved,
+        },
+      });
+    };
     const updateCustomTabVisibility = (visible) => setCustomTabVisibility(prev => {
       if (prev[ct.key] === visible) return prev;
       return { ...prev, [ct.key]: visible };
@@ -3111,6 +3226,11 @@ export function DetailView({
           apiBaseUrl={apiBaseUrl}
           api={api}
           isActive={isActive}
+          isNew={isNew}
+          onSaveHeader={isNew ? saveHeaderForCustomTab : undefined}
+          onGoToSavedRecord={isNew ? goToSavedRecord : undefined}
+          autoOpenAdd={pendingCustomTabAdd === ct.key}
+          restoreDraft={pendingCustomTabAdd === ct.key ? pendingCustomTabRestore : null}
           onCountChange={updateCustomTabCount}
           onChange={hook.handleChange}
           onVisibilityChange={updateCustomTabVisibility}
@@ -3141,8 +3261,12 @@ export function DetailView({
         setSelectedSecondaryLine(null);
       }
     }
+    if (location.state?.openCustomTabAdd) {
+      setPendingCustomTabAdd(location.state.openCustomTabAdd);
+      setPendingCustomTabRestore(location.state.customTabRestore ?? null);
+    }
     navigate(location.pathname, { replace: true, state: {} });
-  }, [location.state?.openSecondaryTab, location.state?.openAddSecondaryLine, isNew, hook.editing, navigate, location.pathname, tabs, secondaryTabs]);
+  }, [location.state?.openSecondaryTab, location.state?.openAddSecondaryLine, location.state?.openCustomTabAdd, isNew, hook.editing, navigate, location.pathname, tabs, secondaryTabs]);
 
   // Only black out the whole window when we actually don't have the record yet.
   // A list refresh (hook.loading for the side list) or any unrelated background
@@ -3186,42 +3310,9 @@ export function DetailView({
                 prefix={resolveStatusPrefix(statusFieldLabel, ui)}
                 data-testid="DocumentStatusPill__fa3275" />
             )}
-            {extraBadges.map(b => {
-              // type: 'statusPill' — renders as DocumentStatusPill, always visible,
-              // labels resolved from i18n keys trueKey / falseKey.
-              if (b.type === 'statusPill') {
-                const val = data[b.key];
-                if (val == null) return null;
-                const isTrue = val === true || val === 'Y' || val === 'true';
-                const label = isTrue ? ui(b.trueKey) : ui(b.falseKey);
-                const tone = isTrue ? 'success' : 'warning';
-                return (
-                  <DocumentStatusPill
-                    key={b.key}
-                    status={isTrue ? 'Y' : 'N'}
-                    label={label}
-                    tone={tone}
-                    data-testid={`DocumentStatusPill__${b.key}`} />
-                );
-              }
-              const when = b.when !== undefined ? b.when : true;
-              const show = when ? !!data[b.key] : !data[b.key];
-              if (!show) return null;
-              if (b.hideWhenStatus?.includes(data[statusField])) return null;
-              const cls = b.style === 'warning'
-                ? 'ml-1 border-amber-300 bg-amber-50 text-amber-700'
-                : 'ml-1 bg-blue-600 hover:bg-blue-700 border-transparent text-white';
-              const variant = b.style === 'warning' ? 'outline' : 'default';
-              return (
-                <Badge
-                  key={`${b.key}-${when}`}
-                  variant={variant}
-                  className={cls}
-                  data-testid="Badge__fa3275">
-                  {b.label}
-                </Badge>
-              );
-            })}
+            {extraBadges.map(b => b.type === 'statusPill'
+              ? renderStatusPillBadge(b)
+              : renderLegacyBadge(b))}
             {topbarExtra && (() => {
               const TopbarExtraComponent = topbarExtra;
               return (
@@ -4382,8 +4473,8 @@ export function DetailView({
                                 secondarySelectedRows={secondarySelectedRows}
                                 setSecondarySelectedRows={setSecondarySelectedRows}
                                 setCustomModalState={setCustomModalState}
-                                detailPanelTitle={ui('entityDetail', {label: tMenu(st.label)})}
-                                addLineLabel={ui('addEntity', {label: tMenu(st.label)})}
+                                detailPanelTitle={ui('entityDetail', {label: (st.labelKey && ui(st.labelKey)) || tMenu(st.label)})}
+                                addLineLabel={ui('addEntity', {label: (st.labelKey && ui(st.labelKey)) || tMenu(st.label)})}
                                 selectedLabel={ui('selected', {count: (secondarySelectedRows[st.key] ?? []).length})}
                                 loadingLabel={ui('loading')}
                                 saveLabel={ui('save')}

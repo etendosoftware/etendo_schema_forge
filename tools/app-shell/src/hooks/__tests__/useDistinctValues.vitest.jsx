@@ -1,14 +1,35 @@
+/**
+ * Functional boundary test for useDistinctValues.
+ *
+ * Post-split, the hook itself lives in schema_forge_core; this repo only ships a
+ * thin shim at `@/hooks/useDistinctValues.js` (re-export of
+ * `@etendosoftware/app-shell-core/hooks/useDistinctValues.js`). Under plain
+ * vitest the shim resolves to the published package; under LOCAL_CORE it resolves
+ * to the moved core source. The exhaustive unit coverage now lives beside the
+ * source in core (packages/app-shell-core/src/hooks/__tests__).
+ *
+ * This suite is deliberately re-angled to verify the FUNCTIONAL boundary: the
+ * shim resolves to the real hook AND `useAuth()` is satisfied by a REAL
+ * AuthProvider. The old `vi.mock('@/auth/...')` stubs are gone — they never
+ * crossed the shim (the hook imports auth via core's own relative path, which the
+ * `@/auth` alias does not intercept), which is exactly what caused the
+ * "useAuth must be used within AuthProvider" failures. We wrap renderHook in the
+ * real core AuthProvider (via the `@/auth` shim → same core context the hook
+ * uses) seeded with a token, and let the REAL `buildHeaders` run.
+ *
+ * Run against local core source:
+ *   LOCAL_CORE=1 npx vitest run src/hooks/__tests__/useDistinctValues.vitest.jsx
+ */
 import { renderHook, act, waitFor } from '@testing-library/react';
 
-vi.mock('@/auth/AuthContext.jsx', () => ({
-  useAuth: () => ({ token: 'test-token' }),
-}));
-
-vi.mock('@/auth/api.js', () => ({
-  buildHeaders: (token) => ({ Authorization: `Bearer ${token}` }),
-}));
-
+import { AuthProvider } from '@/auth/AuthContext.jsx';
 import { useDistinctValues } from '../useDistinctValues.js';
+
+// Real AuthProvider seeded with a token so the hook's useAuth() resolves — both
+// the hook and this provider reach the same core auth context through the shim.
+const wrapper = ({ children }) => (
+  <AuthProvider initialSession={{ token: 'test-token' }}>{children}</AuthProvider>
+);
 
 describe('useDistinctValues', () => {
   beforeEach(() => {
@@ -22,6 +43,7 @@ describe('useDistinctValues', () => {
     });
     const { result } = renderHook(() =>
       useDistinctValues('orderLine', 'product', { apiBaseUrl: '/api', enabled: false }),
+      { wrapper },
     );
     expect(result.current.values).toEqual([]);
     expect(result.current.loading).toBe(false);
@@ -37,6 +59,7 @@ describe('useDistinctValues', () => {
     });
     const { result } = renderHook(() =>
       useDistinctValues('orderLine', 'product', { apiBaseUrl: '/api' }),
+      { wrapper },
     );
     await waitFor(() => {
       expect(result.current.values).toHaveLength(1);
@@ -54,6 +77,7 @@ describe('useDistinctValues', () => {
     });
     const { result } = renderHook(() =>
       useDistinctValues('entity', 'status', { apiBaseUrl: '/api' }),
+      { wrapper },
     );
     await waitFor(() => {
       expect(result.current.values).toHaveLength(2);
@@ -70,6 +94,7 @@ describe('useDistinctValues', () => {
     });
     const { result } = renderHook(() =>
       useDistinctValues('entity', 'field', { apiBaseUrl: '/api' }),
+      { wrapper },
     );
     await waitFor(() => {
       expect(result.current.values).toHaveLength(1);
@@ -86,6 +111,7 @@ describe('useDistinctValues', () => {
     });
     const { result } = renderHook(() =>
       useDistinctValues('entity', 'field', { apiBaseUrl: '/api' }),
+      { wrapper },
     );
     await waitFor(() => {
       expect(result.current.hasMore).toBe(true);
@@ -96,6 +122,7 @@ describe('useDistinctValues', () => {
     vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('Network error'));
     const { result } = renderHook(() =>
       useDistinctValues('entity', 'field', { apiBaseUrl: '/api' }),
+      { wrapper },
     );
     await waitFor(() => {
       expect(result.current.error).toBeTruthy();
@@ -110,6 +137,7 @@ describe('useDistinctValues', () => {
     });
     const { result } = renderHook(() =>
       useDistinctValues('entity', 'field', { apiBaseUrl: '/api' }),
+      { wrapper },
     );
     await waitFor(() => {
       expect(result.current.error).toBeTruthy();
@@ -123,6 +151,7 @@ describe('useDistinctValues', () => {
     });
     renderHook(() =>
       useDistinctValues('entity', 'field', { apiBaseUrl: '/api', enabled: false }),
+      { wrapper },
     );
     expect(fetchSpy).not.toHaveBeenCalled();
   });
@@ -134,6 +163,7 @@ describe('useDistinctValues', () => {
     });
     renderHook(() =>
       useDistinctValues('', 'field', { apiBaseUrl: '/api' }),
+      { wrapper },
     );
     expect(fetchSpy).not.toHaveBeenCalled();
   });
@@ -145,6 +175,7 @@ describe('useDistinctValues', () => {
     });
     renderHook(() =>
       useDistinctValues('entity', '', { apiBaseUrl: '/api' }),
+      { wrapper },
     );
     expect(fetchSpy).not.toHaveBeenCalled();
   });
@@ -156,6 +187,7 @@ describe('useDistinctValues', () => {
     });
     renderHook(() =>
       useDistinctValues('entity', 'field', { apiBaseUrl: '' }),
+      { wrapper },
     );
     expect(fetchSpy).not.toHaveBeenCalled();
   });
@@ -167,6 +199,7 @@ describe('useDistinctValues', () => {
     });
     const { result } = renderHook(() =>
       useDistinctValues('entity', 'field', { apiBaseUrl: '/api' }),
+      { wrapper },
     );
     expect(result.current.search).toBe('');
     act(() => { result.current.setSearch('test'); });
@@ -180,6 +213,7 @@ describe('useDistinctValues', () => {
     });
     const { result } = renderHook(() =>
       useDistinctValues('entity', 'field', { apiBaseUrl: '/api' }),
+      { wrapper },
     );
     await waitFor(() => expect(result.current.loading).toBe(false));
     const fetchCount = globalThis.fetch.mock.calls.length;
@@ -197,6 +231,7 @@ describe('useDistinctValues', () => {
     });
     const { result } = renderHook(() =>
       useDistinctValues('entity', 'field', { apiBaseUrl: '/api' }),
+      { wrapper },
     );
     await waitFor(() => expect(result.current.values).toHaveLength(1));
     expect(result.current.values[0]._identifier).toBe('X1');
@@ -213,6 +248,7 @@ describe('useDistinctValues', () => {
     });
     const { result } = renderHook(() =>
       useDistinctValues('entity', 'field', { apiBaseUrl: '/api' }),
+      { wrapper },
     );
     await waitFor(() => expect(result.current.values).toHaveLength(1));
     await act(async () => { result.current.refresh(); });

@@ -13,13 +13,12 @@
     "prepare": "git config core.hooksPath .githooks",
     "test": "mkdir -p artifacts && node --test --test-reporter=spec --test-reporter-destination=stdout --test-reporter=junit --test-reporter-destination=artifacts/test-report.xml 'cli/test/*.test.js' 'tools/app-shell/src/**/__tests__/*.test.js' 'tools/app-shell/test/*.test.js' 'artifacts/**/__tests__/*.test.js'",
     "check:data-testid": "./scripts/check-add-data-testid.sh",
-    "apply:data-testid": "./scripts/apply-add-data-testid.sh",
-    "generate:contacts-csv": "node scripts/generate-contacts-csv.js"
+    "apply:data-testid": "./scripts/apply-add-data-testid.sh"
   },
   "devDependencies": {
-    "@etendosoftware/app-shell-core": "0.3.11-preview.feature-ETP-4529.20260717150012.6c61fd3",
-    "@etendosoftware/schema-forge-cli": "0.3.11-preview.feature-ETP-4529.20260717150012.6c61fd3",
-    "@etendosoftware/schema-forge-core": "0.3.11-preview.feature-ETP-4529.20260717150012.6c61fd3",
+    "@etendosoftware/app-shell-core": "0.3.12-preview.feature-ETP-4529.20260718224403.f35e27a",
+    "@etendosoftware/schema-forge-cli": "0.3.12-preview.feature-ETP-4529.20260718224403.f35e27a",
+    "@etendosoftware/schema-forge-core": "0.3.12-preview.feature-ETP-4529.20260718224403.f35e27a",
     "esbuild": "^0.28.0",
     "handlebars": "^4.7.9",
     "jscodeshift": "^17.3.0",
