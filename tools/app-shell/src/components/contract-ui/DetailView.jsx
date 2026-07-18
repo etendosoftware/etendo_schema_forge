@@ -1941,7 +1941,10 @@ export function DetailView({
     return next;
   }, [entity, detailEntity, parentRecordId, secondaryTabKeysStr, priceListId, api, hook.selected, hook.editing, sessionCurrencyCode, selectorPriceCurrency]);
   const { catalogs, catalogsLoaded } = useCatalogs(api, token, apiBaseUrl, staticCatalogs);
-  const displayLogic = useDisplayLogic(entity, hook.editing, { token, apiBaseUrl });
+  // cacheableKeys: only the dimension-macro fields are safe to pre-seed from a previous
+  // record's resolution — everything else in this window's header (e.g. Posted-based
+  // readOnly) is genuinely per-record and must never carry over between mounts.
+  const displayLogic = useDisplayLogic(entity, hook.editing, { token, apiBaseUrl, cacheableKeys: DIMENSION_MACRO_KEYS });
   // ETP-4529 — mirror the header evaluate-display call for the lines/detail entity.
   // There is no single "current line record" to evaluate against (many rows share one
   // entity), and dimension-macro visibility (@ACCT_DIMENSION_DISPLAY@ and friends) is
@@ -1949,7 +1952,7 @@ export function DetailView({
   // payload is a safe, representative context (it also satisfies useDisplayLogic's
   // "skip when !values.id" guard once the header record is saved). Only `visibility` is
   // consumed downstream — `readOnly` stays per-line via each field's own readOnlyLogic.
-  const lineDisplayLogic = useDisplayLogic(detailEntity, hook.editing, { token, apiBaseUrl });
+  const lineDisplayLogic = useDisplayLogic(detailEntity, hook.editing, { token, apiBaseUrl, cacheableKeys: DIMENSION_MACRO_KEYS });
   // ETP-4543 — dynamic column visibility for the primary lines grid (InlineLinesPanel /
   // DataTable), derived from lineDisplayLogic.visibility. Fail-open: a key that is absent
   // from the map, or explicitly `true`, is NOT hidden — only an explicit `false` (e.g. the

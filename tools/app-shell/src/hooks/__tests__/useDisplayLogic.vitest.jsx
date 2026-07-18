@@ -1,5 +1,5 @@
 import { renderHook, act, waitFor } from '@testing-library/react';
-import { useDisplayLogic } from '../useDisplayLogic';
+import { useDisplayLogic, __resetDisplayLogicCacheForTests } from '../useDisplayLogic';
 
 describe('useDisplayLogic', () => {
   const opts = { token: 'test-token', apiBaseUrl: 'http://localhost/api' };
@@ -7,6 +7,10 @@ describe('useDisplayLogic', () => {
   beforeEach(() => {
     vi.useFakeTimers();
     globalThis.fetch = vi.fn();
+    // The dimension-visibility cache is module-level (by design — see useDisplayLogic.js)
+    // so it survives across renderHook calls; reset it here so no test's cacheableKeys
+    // writes leak into a later test that happens to reuse the same entity/apiBaseUrl.
+    __resetDisplayLogicCacheForTests();
   });
 
   afterEach(() => {
@@ -269,5 +273,148 @@ describe('useDisplayLogic', () => {
     expect(result.current.readOnly).toEqual({});
     expect(result.current.visibility).toEqual({});
     vi.useFakeTimers();
+  });
+
+  // cacheableKeys: pre-seeds the FIRST render of a new mount from the last resolved value
+  // of a previous mount for the same window/entity, avoiding the "renders visible, flips
+  // to hidden a moment later" flicker while evaluate-display is still in flight — without
+  // ever skipping or delaying the real per-record evaluate-display call itself.
+  describe('cacheableKeys (dimension-visibility flicker fix)', () => {
+    it('does not pre-seed anything on a cold cache (first mount ever for this key)', () => {
+      const { result } = renderHook(() =>
+        useDisplayLogic('header', { id: '1' }, { ...opts, cacheableKeys: ['project'] })
+      );
+
+      expect(result.current).toEqual({ readOnly: {}, visibility: {} });
+    });
+
+    it('pre-seeds only the declared cacheable keys from a previous mount, synchronously', async () => {
+      vi.useRealTimers();
+      globalThis.fetch.mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          readOnly: { amount: true },
+          visibility: { project: false, costcenter: true, otherField: false },
+        }),
+      });
+
+      const first = renderHook(() =>
+        useDisplayLogic('header', { id: '1' }, { ...opts, cacheableKeys: ['project', 'costcenter'] })
+      );
+      await waitFor(() => {
+        expect(first.result.current.visibility.project).toBe(false);
+      });
+      first.unmount();
+
+      // A second, independent mount for the SAME window/entity — before its own
+      // evaluate-display call has resolved (fetch is about to be told to hang).
+      globalThis.fetch.mockImplementation(() => new Promise(() => {})); // never resolves
+      const second = renderHook(() =>
+        useDisplayLogic('header', { id: '2' }, { ...opts, cacheableKeys: ['project', 'costcenter'] })
+      );
+
+      // Synchronous first render already reflects the previous mount's cacheable keys —
+      // no need to wait for anything, this is the whole point of the fix.
+      expect(second.result.current.visibility.project).toBe(false);
+      expect(second.result.current.visibility.costcenter).toBe(true);
+      // Non-cacheable keys (readOnly entirely, and any visibility key not declared
+      // cacheable) must NOT carry over — those are genuinely per-record.
+      expect(second.result.current.visibility.otherField).toBeUndefined();
+      expect(second.result.current.readOnly.amount).toBeUndefined();
+
+      vi.useFakeTimers();
+    });
+
+    it('still calls evaluate-display on every mount even when the cache pre-seeds a value', async () => {
+      globalThis.fetch.mockResolvedValue({
+        ok: true,
+        json: async () => ({ readOnly: {}, visibility: { project: false } }),
+      });
+
+      // Stable fieldValues references (not inline object literals): an inline literal
+      // gets recreated on every re-render of the renderHook wrapper, so once the fetch
+      // resolves and setDisplayState triggers a re-render, the effect's dependency array
+      // would see a "new" fieldValues and debounce a second, unwanted evaluate-display
+      // call — an artifact of the test harness, not the behavior under test.
+      const first = renderHook(() =>
+        useDisplayLogic('header', { id: '1' }, { ...opts, cacheableKeys: ['project'] })
+      );
+      await act(async () => {
+        vi.advanceTimersByTime(300);
+        await vi.runAllTimersAsync();
+      });
+      first.unmount();
+
+      renderHook(() =>
+        useDisplayLogic('header', { id: '2' }, { ...opts, cacheableKeys: ['project'] })
+      );
+      await act(async () => {
+        vi.advanceTimersByTime(300);
+        await vi.runAllTimersAsync();
+      });
+
+      // The cache pre-seeds the FIRST render only — it never replaces the real,
+      // per-record evaluate-display call, which must still fire for every mount.
+      expect(globalThis.fetch).toHaveBeenCalledTimes(2);
+    });
+
+    it('refreshes the cache when a fresh resolution disagrees with the seeded value', async () => {
+      vi.useRealTimers();
+      globalThis.fetch.mockResolvedValue({
+        ok: true,
+        json: async () => ({ readOnly: {}, visibility: { project: false } }),
+      });
+      const first = renderHook(() =>
+        useDisplayLogic('header', { id: '1' }, { ...opts, cacheableKeys: ['project'] })
+      );
+      await waitFor(() => expect(first.result.current.visibility.project).toBe(false));
+      first.unmount();
+
+      // GL Configuration was re-enabled in the meantime — the next record's fresh
+      // resolution disagrees with what was cached.
+      globalThis.fetch.mockResolvedValue({
+        ok: true,
+        json: async () => ({ readOnly: {}, visibility: { project: true } }),
+      });
+      const second = renderHook(() =>
+        useDisplayLogic('header', { id: '2' }, { ...opts, cacheableKeys: ['project'] })
+      );
+      // Pre-seeded from the stale cached value first...
+      expect(second.result.current.visibility.project).toBe(false);
+      // ...then self-corrects once its own evaluate-display call resolves.
+      await waitFor(() => expect(second.result.current.visibility.project).toBe(true));
+
+      // A THIRD mount now sees the corrected value from the cache immediately.
+      globalThis.fetch.mockImplementation(() => new Promise(() => {}));
+      const third = renderHook(() =>
+        useDisplayLogic('header', { id: '3' }, { ...opts, cacheableKeys: ['project'] })
+      );
+      expect(third.result.current.visibility.project).toBe(true);
+
+      vi.useFakeTimers();
+    });
+
+    it('keeps separate caches for different entities on the same window', async () => {
+      vi.useRealTimers();
+      globalThis.fetch.mockResolvedValue({
+        ok: true,
+        json: async () => ({ readOnly: {}, visibility: { project: false } }),
+      });
+      const headerMount = renderHook(() =>
+        useDisplayLogic('header', { id: '1' }, { ...opts, cacheableKeys: ['project'] })
+      );
+      await waitFor(() => expect(headerMount.result.current.visibility.project).toBe(false));
+      headerMount.unmount();
+
+      // A DIFFERENT entity (e.g. the lines entity) on the same window must not inherit
+      // the header entity's cached value — they're keyed separately.
+      globalThis.fetch.mockImplementation(() => new Promise(() => {}));
+      const linesMount = renderHook(() =>
+        useDisplayLogic('lines', { id: '1' }, { ...opts, cacheableKeys: ['project'] })
+      );
+      expect(linesMount.result.current).toEqual({ readOnly: {}, visibility: {} });
+
+      vi.useFakeTimers();
+    });
   });
 });
