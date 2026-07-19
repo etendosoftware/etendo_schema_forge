@@ -228,8 +228,8 @@ export function CreatableSearchSelect({
   // actually synced from: many callers pass an inline-mapped array (a new reference every render),
   // and syncing unconditionally on every reference change would (a) trigger an extra render per
   // parent render, resetting dropdown/scroll state while open, and (b) clobber a locally-created
-  // option (`onCreated` below pushes straight into `options`) the moment the parent next re-renders
-  // with a content-identical-but-new-reference array.
+  // option (`handleCreate` below adds it into `options` immutably via `setOptions(prev => ...)`)
+  // the moment the parent next re-renders with a content-identical-but-new-reference array.
   const lastSyncedStaticOptionsRef = useRef(undefined);
   useEffect(() => {
     if (!staticOptions) return;
