@@ -48,7 +48,7 @@ vi.mock('@/hooks/useFinancialAccountAccounting.js', () => ({
   useFinancialAccountAccounting: () => ({ fetchAccountingConfiguration, saveAccountingConfiguration }),
 }));
 
-import { EditAccountModal } from '../EditAccountModal.jsx';
+import { EditAccountModal, initialEditTab } from '../EditAccountModal.jsx';
 
 const BANK_ACCOUNT = {
   id: 'acc-1',
@@ -582,6 +582,18 @@ describe('EditAccountModal', () => {
     it('still renders the General tab trigger for a bank account', () => {
       renderModal();
       expect(getTab('financeAccountsEditTabGeneral')).toBeInTheDocument();
+    });
+
+    // Review fix (PR #913): editTab used to initialize to a fixed EDIT_TAB_GENERAL and rely
+    // entirely on the reset useEffect above to correct it for cash accounts — meaning the very
+    // FIRST render (before that effect flushes) had no active trigger and no visible content.
+    // React Testing Library's render() flushes effects synchronously, so a render-based test
+    // can't observe that first-paint gap; initialEditTab is exported specifically so the FIRST
+    // render's own computation (the useState lazy initializer) can be verified directly,
+    // independent of the reset effect.
+    it('initialEditTab computes the same tab the reset effect would — cash starts on Contabilidad', () => {
+      expect(initialEditTab(true)).toBe('accounting');
+      expect(initialEditTab(false)).toBe('general');
     });
 
     it('defaults straight to Contabilidad when reopened for a cash account after a bank account', () => {

@@ -37,6 +37,11 @@ const FIELD_INPUT = 'bg-white shadow-[0_1px_2px_rgba(18,18,23,0.05)]';
 // Pure helpers (kept top-level so the component/hooks stay simple)
 // ---------------------------------------------------------------------------
 
+/** The tab a cash account (no General tab trigger/content) must open on. */
+export function initialEditTab(isCash) {
+  return isCash ? EDIT_TAB_ACCOUNTING : EDIT_TAB_GENERAL;
+}
+
 function formatTypeLabel(type, ui) {
   const labels = {
     [ACCOUNT_TYPE.BANK]: ui('financeAccountsNewTypeBank'),
@@ -518,7 +523,11 @@ export function EditAccountModal({ open, onClose, onSaved, account, onArchive, o
   const psd2 = usePsd2Connection(open, account, psd2Connected, onSaved, onClose);
   const recon = useReconciliationSettings(open, account);
   const accounting = useAccountingConfiguration(open, account);
-  const [editTab, setEditTab] = useState(EDIT_TAB_GENERAL);
+  // Initialize from account?.type (not a fixed EDIT_TAB_GENERAL default) so the very first
+  // render is already consistent for cash accounts — the General tab's trigger/content are
+  // not rendered for them, so an unconditional EDIT_TAB_GENERAL default would leave the first
+  // paint with no active trigger and no visible content until the effect below corrects it.
+  const [editTab, setEditTab] = useState(() => initialEditTab(isCash));
   const [confirmDisconnectOpen, setConfirmDisconnectOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
@@ -528,7 +537,7 @@ export function EditAccountModal({ open, onClose, onSaved, account, onArchive, o
   // rendered for them — defaulting to it would leave the modal on a tab whose trigger doesn't
   // exist, with no visible content and no tab shown as active.
   useEffect(() => {
-    if (open) setEditTab(isCash ? EDIT_TAB_ACCOUNTING : EDIT_TAB_GENERAL);
+    if (open) setEditTab(initialEditTab(isCash));
   }, [open, account?.id, isCash]);
 
   if (!account) return null;
