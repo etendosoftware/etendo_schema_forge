@@ -208,10 +208,14 @@ export function InlineSearchCombo({ field, value, options, onChange, onKeyDown, 
           // Same fix as CreatableSearchSelect's identical panel (and LookupPicker.jsx) — see
           // CreatableSearchSelect's onWheel comment for the full root cause (Radix Dialog's
           // react-remove-scroll blocks the native wheel-to-scroll translation for anything
-          // portaled outside the dialog's own DOM subtree). Bypass it manually.
+          // portaled outside the dialog's own DOM subtree). Bypass it manually, but only when
+          // e.defaultPrevented (native scroll was actually blocked) — outside a Dialog, native
+          // scrolling works normally and adding deltaY on top of it would double-scroll.
           onWheel={(e) => {
             e.stopPropagation();
-            e.currentTarget.scrollTop += e.deltaY;
+            if (e.defaultPrevented) {
+              e.currentTarget.scrollTop += e.deltaY;
+            }
           }}
         >
           {filtered.map(opt => (

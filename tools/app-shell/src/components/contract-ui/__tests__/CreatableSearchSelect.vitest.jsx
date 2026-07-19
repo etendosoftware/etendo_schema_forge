@@ -192,3 +192,130 @@ describe('CreatableSearchSelect — portaled options panel (modal-scroll fix)', 
     ).not.toBeInTheDocument();
   });
 });
+
+describe('CreatableSearchSelect — staticOptions content comparison (review fix)', () => {
+  const baseProps = {
+    value: '',
+    displayValue: '',
+    formData: {},
+    resolvedLabel: 'Financial Account',
+    selectorUrl: null,
+    selectorContext: {},
+    token: null,
+  };
+  const field = { key: 'financialAccount', required: false };
+
+  // A caller re-rendering with an inline-mapped array (new reference, same content) is common
+  // in this codebase. Re-syncing unconditionally on every reference change used to clobber a
+  // locally-created option (pushed straight into `options` by `onCreated`) the moment the
+  // parent next re-rendered — this proves that no longer happens.
+  it('does not clobber a locally-created option when staticOptions re-renders with the same content under a new array reference', () => {
+    let capturedCallback;
+    const onCreateRequest = vi.fn((query, cb) => { capturedCallback = cb; });
+    const { rerender } = render(
+      <CreatableSearchSelect
+        {...baseProps}
+        field={field}
+        staticOptions={[{ id: '1', name: 'Existing' }]}
+        createLabel="Create new"
+        onCreateRequest={onCreateRequest}
+        onChange={vi.fn()}
+      />
+    );
+
+    fireEvent.focus(screen.getByTestId('field-financialAccount'));
+    fireEvent.mouseDown(screen.getByTestId('action-create-financialAccount'));
+    expect(onCreateRequest).toHaveBeenCalled();
+    capturedCallback('new-id', 'Freshly created');
+
+    // handleCreate closes the dropdown before invoking onCreateRequest — reopen it to
+    // inspect the (now locally-updated) options list.
+    fireEvent.focus(screen.getByTestId('field-financialAccount'));
+    expect(screen.getByTestId('option-financialAccount-new-id')).toBeInTheDocument();
+
+    // Parent re-renders with a NEW array reference, same content as before.
+    rerender(
+      <CreatableSearchSelect
+        {...baseProps}
+        field={field}
+        staticOptions={[{ id: '1', name: 'Existing' }]}
+        createLabel="Create new"
+        onCreateRequest={onCreateRequest}
+        onChange={vi.fn()}
+      />
+    );
+
+    fireEvent.focus(screen.getByTestId('field-financialAccount'));
+    expect(screen.getByTestId('option-financialAccount-new-id')).toBeInTheDocument();
+  });
+
+  it('still re-syncs when staticOptions content genuinely changes (e.g. async fetch resolves)', () => {
+    const { rerender } = render(
+      <CreatableSearchSelect
+        {...baseProps}
+        field={field}
+        staticOptions={[]}
+        onChange={vi.fn()}
+      />
+    );
+    fireEvent.focus(screen.getByTestId('field-financialAccount'));
+    expect(screen.queryByText('Loaded Account')).not.toBeInTheDocument();
+
+    rerender(
+      <CreatableSearchSelect
+        {...baseProps}
+        field={field}
+        staticOptions={[{ id: '1', name: 'Loaded Account' }]}
+        onChange={vi.fn()}
+      />
+    );
+
+    expect(screen.getByText('Loaded Account')).toBeInTheDocument();
+  });
+});
+
+describe('CreatableSearchSelect — onWheel avoids double-scroll outside a Dialog (review fix)', () => {
+  const baseProps = {
+    value: '',
+    displayValue: '',
+    formData: {},
+    resolvedLabel: 'Financial Account',
+    selectorUrl: null,
+    selectorContext: {},
+    token: null,
+  };
+
+  function dispatchWheel(el, { deltaY, defaultPrevented }) {
+    const event = new WheelEvent('wheel', { deltaY, bubbles: true, cancelable: true });
+    if (defaultPrevented) event.preventDefault();
+    el.dispatchEvent(event);
+  }
+
+  it('does NOT manually adjust scrollTop when native scroll was not blocked (no Dialog present)', () => {
+    const field = { key: 'financialAccount', required: false };
+    render(
+      <CreatableSearchSelect {...baseProps} field={field} emptyOptionLabel="All accounts" onChange={vi.fn()} />
+    );
+    fireEvent.focus(screen.getByTestId('field-financialAccount'));
+    const panel = screen.getByTestId('options-financialAccount');
+    panel.scrollTop = 0;
+
+    dispatchWheel(panel, { deltaY: 40, defaultPrevented: false });
+
+    expect(panel.scrollTop).toBe(0);
+  });
+
+  it('manually adjusts scrollTop when native scroll WAS blocked (e.g. inside a Radix Dialog)', () => {
+    const field = { key: 'financialAccount', required: false };
+    render(
+      <CreatableSearchSelect {...baseProps} field={field} emptyOptionLabel="All accounts" onChange={vi.fn()} />
+    );
+    fireEvent.focus(screen.getByTestId('field-financialAccount'));
+    const panel = screen.getByTestId('options-financialAccount');
+    panel.scrollTop = 0;
+
+    dispatchWheel(panel, { deltaY: 40, defaultPrevented: true });
+
+    expect(panel.scrollTop).toBe(40);
+  });
+});

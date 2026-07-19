@@ -223,17 +223,23 @@ export function CreatableSearchSelect({
   // The initial `useState(staticOptions ?? [])` above only covers the first render, so without this
   // effect a caller that loads its options after the component mounts would see an empty dropdown
   // forever (ETP-4530). Callers passing a stable array (e.g. a module-level constant) are unaffected.
-  // CAVEAT for future callers: a caller that combines `onCreateRequest`'s local-push `onCreated`
-  // callback (which is expected to append the newly created item straight into `options`, see
-  // `CreateAction`/`onCreate` below) with a non-memoized `staticOptions` array (a new array literal
-  // on every render) would have that locally-created option silently clobbered on the next
-  // re-render, since this effect always overwrites `options` from `staticOptions`. Memoize
-  // `staticOptions` (e.g. `useMemo`/module-level constant/state) if you also pass `onCreateRequest`.
-  // No current consumer combines the two, so this is a caveat, not an active bug.
+  //
+  // staticOptions is compared BY CONTENT (not by reference) against the last value this effect
+  // actually synced from: many callers pass an inline-mapped array (a new reference every render),
+  // and syncing unconditionally on every reference change would (a) trigger an extra render per
+  // parent render, resetting dropdown/scroll state while open, and (b) clobber a locally-created
+  // option (`onCreated` below pushes straight into `options`) the moment the parent next re-renders
+  // with a content-identical-but-new-reference array.
+  const lastSyncedStaticOptionsRef = useRef(undefined);
   useEffect(() => {
-    if (staticOptions) {
-      setOptions(staticOptions);
-    }
+    if (!staticOptions) return;
+    const lastSynced = lastSyncedStaticOptionsRef.current;
+    const unchanged = lastSynced
+      && lastSynced.length === staticOptions.length
+      && lastSynced.every((opt, i) => opt.id === staticOptions[i]?.id && opt.name === staticOptions[i]?.name);
+    if (unchanged) return;
+    lastSyncedStaticOptionsRef.current = staticOptions;
+    setOptions(staticOptions);
   }, [staticOptions]);
 
   // Fetch options whenever the parent value changes or after a forced refresh (refreshKey)
@@ -524,10 +530,17 @@ export function CreatableSearchSelect({
           // correctly set (confirmed live: scrollTop stayed 0 after a wheel event, but a
           // direct `el.scrollTop = x` assignment worked fine — only the NATIVE scroll
           // mechanism is blocked). Bypass it manually, matching the same fix already used by
-          // LookupPicker.jsx for the identical scenario.
+          // LookupPicker.jsx for the identical scenario. Only do the manual adjustment when
+          // e.defaultPrevented is already true — react-remove-scroll's capture-phase listener
+          // runs before this bubble-phase handler, so that flag tells us whether native scroll
+          // was actually blocked. When this component is used OUTSIDE a Dialog (no
+          // react-remove-scroll active), native scrolling works normally and adding deltaY on
+          // top of it here would double-scroll the panel.
           onWheel={(e) => {
             e.stopPropagation();
-            e.currentTarget.scrollTop += e.deltaY;
+            if (e.defaultPrevented) {
+              e.currentTarget.scrollTop += e.deltaY;
+            }
           }}
         >
           <SearchSelectOptionsPanel
