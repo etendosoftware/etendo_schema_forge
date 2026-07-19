@@ -87,7 +87,7 @@ export default function FinancialAccountWindow({ recordId }) {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const [activeTab, setActiveTab] = useState(() => searchParams.get('tab') ?? 'movements');
-  // Editar (ETP-4530): reachable from the detail view too, not just the Cuentas list kebab.
+  // Edit modal (ETP-4530): reachable from the detail view too, not just the accounts-list kebab.
   const [editOpen, setEditOpen] = useState(false);
   const [archiveTarget, setArchiveTarget] = useState(null);
   // The automatch modal opens whenever the user enters the Reconciliation tab — either via the
@@ -128,7 +128,7 @@ export default function FinancialAccountWindow({ recordId }) {
   }, [searchParams, setSearchParams]);
   const { account, reload: reloadAccount } = useFinancialAccount(recordId);
   // ETP-4530: powers the Edit modal's "Connect to PSD2" button from this entry point too — same
-  // flow/UI as the Cuentas list (FinancialAccountsPage.jsx), just reloading the account instead.
+  // flow/UI as the accounts list (FinancialAccountsPage.jsx), just reloading the account instead.
   const psd2Flow = usePsd2ConnectFlow({ onDone: reloadAccount });
   const { groups: autoMatchGroups, kpis: autoMatchKpis, reload: reloadAutoMatch } = useAutoMatch(
     autoMatchOpen ? recordId : null,

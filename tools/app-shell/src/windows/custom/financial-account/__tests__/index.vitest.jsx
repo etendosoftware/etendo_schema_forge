@@ -81,7 +81,7 @@ vi.mock('../ImportedStatementsTab.jsx', () => ({
   }),
 }));
 
-// ETP-4530: Editar entry point — stubbed like the other child components above so this suite
+// ETP-4530: Edit modal entry point — stubbed like the other child components above so this suite
 // stays isolated from EditAccountModal's own dependencies (i18n locale switch, account mutations,
 // PSD2 actions, accounting configuration). EditAccountModal has its own dedicated test suite.
 vi.mock('../EditAccountModal.jsx', () => ({

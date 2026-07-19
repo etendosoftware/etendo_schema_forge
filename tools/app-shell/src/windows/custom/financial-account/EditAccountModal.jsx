@@ -85,7 +85,7 @@ async function copyIbanToClipboard(account, ui) {
 
 /**
  * Persists the changed account fields (name/iban/currency/tolerances), PSD2 import settings and
- * the Tab Contabilidad accounting configuration (ETP-4530) in one go.
+ * the Accounting tab's accounting configuration (ETP-4530) in one go.
  */
 async function persistAccountEdits({
   account, fields, settings, reconciliation, accounting, updateAccount, saveImportSettings,
@@ -343,11 +343,11 @@ function ReconciliationSettingsSection({ ui, recon }) {
 }
 
 // ---------------------------------------------------------------------------
-// Accounting configuration hook + section (ETP-4530 — Tab Contabilidad)
+// Accounting configuration hook + section (ETP-4530 — Accounting tab)
 // ---------------------------------------------------------------------------
 
 /**
- * Loads and saves the account's accounting configuration (Cuenta bancaria / Cuenta transitoria)
+ * Loads and saves the account's accounting configuration (asset account / transitory account)
  * — the two accounts used when generating transaction journal entries. Backed by the
  * `accountingConfiguration` entity, fully owned by `FinancialAccountAccountingHandler`: GET
  * resolves the account's ledger and finds-or-defaults the row; save finds-or-creates it. The GET
@@ -392,7 +392,7 @@ function useAccountingConfiguration(open, account) {
   }, [open, account, fetchAccountingConfiguration]);
 
   const dirty = assetAcct !== snapshot.assetAcct || transitoryAcct !== snapshot.transitoryAcct;
-  // "Cuenta bancaria" is required, but only blocks Save once the user actually touches this tab —
+  // The asset account is required, but only blocks Save once the user actually touches this tab —
   // editing Name/PSD2/reconciliation on an account that never configured accounting must not be
   // blocked by an unrelated mandatory field (ETP-4530).
   const assetAcctMissing = dirty && !assetAcct;
@@ -474,18 +474,18 @@ function AccountingConfigurationSection({ ui, accounting }) {
 
 /**
  * Unified "Edit account" modal (ETP-4097 / T3, tabs added in ETP-4530). A single entry point that
- * replaced the former separate "Editar cuenta" and "Editar conexión PSD2" modals, since both
+ * replaced the former separate "Edit account" and "Edit PSD2 connection" modals, since both
  * surfaced the same account data. Same width and footer (Archive / Cancel / Save changes) in
  * every state. The top section (Name | Type, IBAN | Currency) sits OUTSIDE both tabs, followed by
  * two tabs:
  *
  * - **General**: PSD2 connection configuration, then reconciliation configuration. The tab itself
  *   is not rendered for cash accounts (`isCash`), which have no bank connection and no statement
- *   reconciliation — rendering an empty, blank-content tab for Caja accounts was a QA regression
- *   fixed post-ETP-4530; the modal now defaults straight to Contabilidad when opened for a cash
+ *   reconciliation — rendering an empty, blank-content tab for cash accounts was a QA regression
+ *   fixed post-ETP-4530; the modal now defaults straight to Accounting when opened for a cash
  *   account.
- * - **Contabilidad**: the accounting accounts used when generating transaction journal entries —
- *   Cuenta bancaria (required) and Cuenta transitoria (optional). Backed by the
+ * - **Accounting**: the accounting accounts used when generating transaction journal entries —
+ *   asset account (required) and transitory account (optional). Backed by the
  *   `accountingConfiguration` entity / `FinancialAccountAccountingHandler` (ETP-4530).
  *
  * Field editability in the top section:
@@ -644,11 +644,11 @@ export function EditAccountModal({ open, onClose, onSaved, account, onArchive, o
             data-testid="AccountingConfigurationSection__73027d" />
         ) : null}
 
-        {/* Cuenta bancaria is validated on the Contabilidad tab, but Save is disabled regardless
-            of which tab is active — surface a summary here so the reason isn't invisible when the
-            user is looking at General (the field-level error inside AccountingConfigurationSection
-            already covers the Contabilidad tab itself, so this is skipped there to avoid a
-            duplicate message, ETP-4530 / BUG-1). */}
+        {/* The bank account's asset account is validated on the Accounting tab, but Save is
+            disabled regardless of which tab is active — surface a summary here so the reason
+            isn't invisible when the user is looking at General (the field-level error inside
+            AccountingConfigurationSection already covers the Accounting tab itself, so this is
+            skipped there to avoid a duplicate message, ETP-4530 / BUG-1). */}
         {accounting.assetAcctMissing && editTab !== EDIT_TAB_ACCOUNTING ? (
           <p className="text-xs text-[#F53D6B]" data-testid="edit-account-accounting-error-summary">
             {ui('financeAccountsAccountingBankAssetRequiredSummary')}
