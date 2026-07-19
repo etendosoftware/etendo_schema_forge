@@ -40,6 +40,12 @@ import { useDisplayLogic } from './useDisplayLogic';
  * @returns the filtered fields array
  */
 export function useAccountingDimensionFields(entity, record, fields, { token, apiBaseUrl } = {}) {
-  const displayLogic = useDisplayLogic(entity, record, { token, apiBaseUrl });
+  // The candidate `fields` ARE this caller's config-only dimension-macro keys (that's the whole
+  // point of this hook), so they're exactly what useDisplayLogic's "last known good" cache should
+  // pre-seed on mount — without this, every caller of this hook (AssetsDetailPanel,
+  // AmortizationLinesTable, ...) would see the dimension-visibility flicker the cache exists to
+  // eliminate, even though DetailView's own generated-window path is already flicker-free.
+  const cacheableKeys = fields.map(f => f.key);
+  const displayLogic = useDisplayLogic(entity, record, { token, apiBaseUrl, cacheableKeys });
   return fields.filter(f => displayLogic?.visibility?.[f.key] !== false);
 }
