@@ -15,7 +15,7 @@ import {
   SelectContent,
   SelectItem,
 } from '@/components/ui/select';
-import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ConfirmDialog } from '@/components/OAuth2ClientDialog';
 import { useUI, useLocaleSwitch } from '@/i18n';
 import { useAccountMutations } from '@/hooks/useAccountMutations.js';
@@ -365,11 +365,24 @@ function useAccountingConfiguration(open, account) {
   const [loading, setLoading] = useState(false);
   const [snapshot, setSnapshot] = useState({ assetAcct: '', transitoryAcct: '' });
 
+  const accountId = account?.id;
+
   useEffect(() => {
-    if (!open || !account) return undefined;
+    if (!open || !accountId) return undefined;
     let cancelled = false;
+    // Reset to a clean slate before fetching — otherwise a failed or slow fetch for a
+    // NEW account (opened right after a previously-loaded one) would leave the previous
+    // account's assetAcct/labels/catalog/snapshot in memory, making dirty/validation
+    // derive from the wrong account.
+    setAssetAcct('');
+    setAssetAcctLabel('');
+    setTransitoryAcct('');
+    setTransitoryAcctLabel('');
+    setCatalog([]);
+    setSnapshot({ assetAcct: '', transitoryAcct: '' });
+    setLedgerConfigured(true);
     setLoading(true);
-    fetchAccountingConfiguration(account.id)
+    fetchAccountingConfiguration(accountId)
       .then((row) => {
         if (cancelled) return;
         const asset = row?.fINAssetAcct || '';
@@ -389,7 +402,10 @@ function useAccountingConfiguration(open, account) {
         if (!cancelled) setLoading(false);
       });
     return () => { cancelled = true; };
-  }, [open, account, fetchAccountingConfiguration]);
+    // Keyed on accountId (not the `account` object reference) so a re-render that
+    // produces a new `account` object for the SAME id doesn't trigger an unnecessary refetch.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, accountId, fetchAccountingConfiguration]);
 
   const dirty = assetAcct !== snapshot.assetAcct || transitoryAcct !== snapshot.transitoryAcct;
   // The asset account is required, but only blocks Save once the user actually touches this tab —
@@ -617,32 +633,32 @@ export function EditAccountModal({ open, onClose, onSaved, account, onArchive, o
               {ui('financeAccountsEditTabAccounting')}
             </TabsTrigger>
           </TabsList>
+
+          {!isCash ? (
+            <TabsContent value={EDIT_TAB_GENERAL} data-testid="edit-account-tabpanel-general">
+              <Psd2ConnectionSection
+                ui={ui}
+                psd2Connected={psd2Connected}
+                psd2={psd2}
+                busy={busy}
+                reauthMessage={reauthMessage}
+                onConnect={handleConnectClick}
+                data-testid="Psd2ConnectionSection__73027d" />
+
+              <ReconciliationSettingsSection
+                ui={ui}
+                recon={recon}
+                data-testid="ReconciliationSettingsSection__73027d" />
+            </TabsContent>
+          ) : null}
+
+          <TabsContent value={EDIT_TAB_ACCOUNTING} data-testid="edit-account-tabpanel-accounting">
+            <AccountingConfigurationSection
+              ui={ui}
+              accounting={accounting}
+              data-testid="AccountingConfigurationSection__73027d" />
+          </TabsContent>
         </Tabs>
-
-        {!isCash && editTab === EDIT_TAB_GENERAL ? (
-          <>
-            <Psd2ConnectionSection
-              ui={ui}
-              psd2Connected={psd2Connected}
-              psd2={psd2}
-              busy={busy}
-              reauthMessage={reauthMessage}
-              onConnect={handleConnectClick}
-              data-testid="Psd2ConnectionSection__73027d" />
-
-            <ReconciliationSettingsSection
-              ui={ui}
-              recon={recon}
-              data-testid="ReconciliationSettingsSection__73027d" />
-          </>
-        ) : null}
-
-        {editTab === EDIT_TAB_ACCOUNTING ? (
-          <AccountingConfigurationSection
-            ui={ui}
-            accounting={accounting}
-            data-testid="AccountingConfigurationSection__73027d" />
-        ) : null}
 
         {/* The bank account's asset account is validated on the Accounting tab, but Save is
             disabled regardless of which tab is active — surface a summary here so the reason
