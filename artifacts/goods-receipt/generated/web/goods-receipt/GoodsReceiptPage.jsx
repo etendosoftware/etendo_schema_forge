@@ -301,11 +301,13 @@ export const api = {
   "actions": [
     {
       "entity": "goodsReceipt",
+      "field": "createLinesFrom",
       "column": "CreateFrom",
       "url": "/sws/neo/goods-receipt/goodsReceipt/{id}/action/createLinesFrom"
     },
     {
       "entity": "goodsReceipt",
+      "field": "generateTo",
       "column": "GenerateTo",
       "url": "/sws/neo/goods-receipt/goodsReceipt/{id}/action/generateTo",
       "processId": "154",
@@ -313,6 +315,7 @@ export const api = {
     },
     {
       "entity": "goodsReceipt",
+      "field": "documentAction",
       "column": "DocAction",
       "url": "/sws/neo/goods-receipt/goodsReceipt/{id}/action/documentAction",
       "processId": "109",
@@ -320,6 +323,7 @@ export const api = {
     },
     {
       "entity": "goodsReceipt",
+      "field": "processGoodsJava",
       "column": "Process_Goods_Java",
       "url": "/sws/neo/goods-receipt/goodsReceipt/{id}/action/processGoodsJava",
       "processId": "49DEE812BF0545269781FCEBF2235924",
@@ -327,6 +331,7 @@ export const api = {
     },
     {
       "entity": "goodsReceipt",
+      "field": "calculateFreight",
       "column": "Calculate_Freight",
       "url": "/sws/neo/goods-receipt/goodsReceipt/{id}/action/calculateFreight",
       "processId": "800141",
@@ -334,6 +339,7 @@ export const api = {
     },
     {
       "entity": "goodsReceipt",
+      "field": "receiveMaterials",
       "column": "RM_Receipt_PickEdit",
       "url": "/sws/neo/goods-receipt/goodsReceipt/{id}/action/receiveMaterials",
       "processId": "5E9F9D7EECC24E4FBB2C60840FF613BE",
@@ -341,6 +347,7 @@ export const api = {
     },
     {
       "entity": "goodsReceipt",
+      "field": "updateLines",
       "column": "UpdateLines",
       "url": "/sws/neo/goods-receipt/goodsReceipt/{id}/action/updateLines",
       "processId": "800010",
@@ -348,6 +355,7 @@ export const api = {
     },
     {
       "entity": "goodsReceipt",
+      "field": "sendMaterials",
       "column": "RM_Shipment_Pickedit",
       "url": "/sws/neo/goods-receipt/goodsReceipt/{id}/action/sendMaterials",
       "processId": "4AD70293357245AB96E59C2CDB43A35D",
@@ -355,6 +363,7 @@ export const api = {
     },
     {
       "entity": "goodsReceipt",
+      "field": "invoicefromshipment",
       "column": "Invoicefromshipment",
       "url": "/sws/neo/goods-receipt/goodsReceipt/{id}/action/invoicefromshipment",
       "processId": "62250E8866EA4D96A66C309878DC039E",
@@ -362,6 +371,7 @@ export const api = {
     },
     {
       "entity": "goodsReceipt",
+      "field": "etblkpBulkposting",
       "column": "EM_Etblkp_Bulkposting",
       "url": "/sws/neo/goods-receipt/goodsReceipt/{id}/action/etblkpBulkposting",
       "processId": "57496FB9CF9E4E8F847224017941570E",
@@ -369,6 +379,7 @@ export const api = {
     },
     {
       "entity": "goodsReceiptLine",
+      "field": "managePrereservation",
       "column": "Manage_Prereservation",
       "url": "/sws/neo/goods-receipt/goodsReceiptLine/{id}/action/managePrereservation",
       "processId": "70E42AD47E5F4698A9ACCCAF3EB72B9E",
@@ -376,6 +387,7 @@ export const api = {
     },
     {
       "entity": "goodsReceiptLine",
+      "field": "explode",
       "column": "Explode",
       "url": "/sws/neo/goods-receipt/goodsReceiptLine/{id}/action/explode",
       "processId": "DAE719940FE9463F8A3E3C401BBAFC53",
