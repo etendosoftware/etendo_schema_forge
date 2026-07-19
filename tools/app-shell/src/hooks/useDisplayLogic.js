@@ -60,6 +60,15 @@ export function useDisplayLogic(entity, fieldValues, { token, apiBaseUrl, cachea
   const [displayState, setDisplayState] = useState(() => readCache(cacheKey));
   const debounceRef = useRef(null);
 
+  // `evaluate` is memoized on [entity, token, apiBaseUrl] only — NOT on cacheKeySet — so that
+  // a caller passing a fresh `cacheableKeys` array identity every render doesn't tear down and
+  // recreate the debounce effect below. Reading through a ref (updated every render, below)
+  // instead of closing over the value keeps `writeCache` honoring whatever `cacheableKeys` the
+  // MOST RECENT render passed in, rather than whichever one happened to be in scope the last
+  // time [entity, token, apiBaseUrl] changed.
+  const cacheRef = useRef({ cacheKey, cacheKeySet });
+  cacheRef.current = { cacheKey, cacheKeySet };
+
   const evaluate = useCallback(async (values) => {
     if (!values || !token || !apiBaseUrl || !entity) return;
     // Skip evaluation for new records (no id) — they have no meaningful state to evaluate
@@ -81,14 +90,11 @@ export function useDisplayLogic(entity, fieldValues, { token, apiBaseUrl, cachea
           visibility: data.visibility ?? {},
         };
         setDisplayState(next);
-        writeCache(cacheKey, cacheKeySet, next);
+        writeCache(cacheRef.current.cacheKey, cacheRef.current.cacheKeySet, next);
       }
     } catch {
       // Best-effort — if evaluate-display fails, all fields remain editable
     }
-    // cacheKey/cacheKeySet intentionally omitted: derived fresh from cacheableKeys/apiBaseUrl/entity
-    // each render, and including the Set instance itself would re-run this on every render.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [entity, token, apiBaseUrl]);
 
   // Evaluate when fieldValues change (debounced to avoid flooding on rapid edits)

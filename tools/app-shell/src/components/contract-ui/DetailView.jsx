@@ -1322,6 +1322,19 @@ const WINDOW_DELETE_ACTIONS = {
 // Some windows' extractors emit 'costcenter', others the camelCase 'costCenter' — both
 // casings are included so the macro is recognized (cacheable, filterable) regardless of
 // which one a given generated entity actually uses.
+//
+// 'product' is deliberately NOT included, despite simple-g-l-journal's dimensionsPanel
+// listing it alongside project/costCenter/businessPartner as an @ACCT_DIMENSION_DISPLAY@
+// candidate there: in sales-invoice/purchase-invoice, `product` is a real per-line field
+// with its OWN record-dependent raw AD displayLogic (`@Financial_Invoice_Line@='N'`, see
+// the ETP-4530 regression note below on `lineHiddenColumns`) — the exact "false noise"
+// this allowlist exists to filter out. Trusting 'product' here would fix the cache-seed
+// gap for simple-g-l-journal but silently reintroduce that already-fixed regression for
+// every OTHER window that shares this component and has a real, per-record 'product'
+// field. This constant is global across all generated windows; safely special-casing
+// simple-g-l-journal's product-as-dimension usage needs a per-window signal (e.g. a
+// dimensionsPanel-derived prop) that DetailView does not currently receive — out of
+// scope for a same-key allowlist fix.
 const DIMENSION_MACRO_KEYS = new Set(['project', 'costcenter', 'costCenter', 'businessPartner']);
 
 export function isDeleteButtonVisible({
