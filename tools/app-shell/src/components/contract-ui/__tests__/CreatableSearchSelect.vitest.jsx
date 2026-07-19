@@ -319,3 +319,46 @@ describe('CreatableSearchSelect — onWheel avoids double-scroll outside a Dialo
     expect(panel.scrollTop).toBe(40);
   });
 });
+
+describe('CreatableSearchSelect — resize reflow does not throw on Node.contains (review fix)', () => {
+  const baseProps = {
+    value: '',
+    displayValue: '',
+    formData: {},
+    resolvedLabel: 'Financial Account',
+    selectorUrl: null,
+    selectorContext: {},
+    token: null,
+  };
+
+  // A native 'resize' event's target is `window` itself (not a Node). The reflow
+  // listener used to call dropdownRef.current?.contains(e.target) unconditionally for
+  // both 'scroll' and 'resize', and Node.prototype.contains() throws a TypeError when
+  // given a non-Node argument — so the dropdown's reflow handler crashed the moment the
+  // viewport resized while the options panel was open. Gating the containment check to
+  // 'scroll' only (and always recomputing on 'resize') fixes this.
+  it('does NOT throw when the window is resized while the dropdown is open', () => {
+    const field = { key: 'financialAccount', required: false };
+    render(
+      <CreatableSearchSelect {...baseProps} field={field} emptyOptionLabel="All accounts" onChange={vi.fn()} />
+    );
+    fireEvent.focus(screen.getByTestId('field-financialAccount'));
+    expect(screen.getByTestId('options-financialAccount')).toBeInTheDocument();
+
+    // jsdom (like real browsers) reports an exception thrown INSIDE an event listener
+    // via a window 'error' event rather than propagating it synchronously to
+    // dispatchEvent's caller — so a plain `expect(() => dispatchEvent(...)).not.toThrow()`
+    // would NOT catch the regression. Capture the window 'error' event explicitly instead.
+    const onWindowError = vi.fn();
+    window.addEventListener('error', onWindowError);
+    try {
+      window.dispatchEvent(new Event('resize'));
+    } finally {
+      window.removeEventListener('error', onWindowError);
+    }
+
+    expect(onWindowError).not.toHaveBeenCalled();
+    // The dropdown remains functional after the reflow recompute.
+    expect(screen.getByTestId('options-financialAccount')).toBeInTheDocument();
+  });
+});

@@ -421,7 +421,10 @@ export function CreatableSearchSelect({
       // options list itself), which re-triggers this on every scroll tick — fighting the
       // user's own scroll gesture inside a long options list (e.g. a full chart of
       // accounts). Skip recompute when the scroll originated from inside the dropdown.
-      if (dropdownRef.current?.contains(e.target)) return;
+      // Only 'scroll' events carry a Node target here — a 'resize' event's target is
+      // `window` itself, which Node.contains() throws on, so gate the containment check
+      // to 'scroll' and always recompute on 'resize'.
+      if (e.type === 'scroll' && dropdownRef.current?.contains(e.target)) return;
       updateDropdownDirection();
     };
     window.addEventListener('resize', onReflow);
