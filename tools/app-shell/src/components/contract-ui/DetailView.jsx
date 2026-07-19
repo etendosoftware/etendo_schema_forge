@@ -1319,7 +1319,10 @@ const WINDOW_DELETE_ACTIONS = {
 // (`DimensionDisplayUtility.computeAccountingDimensionDisplayLogic()`) depends solely on
 // the client's dimension config, never on record field values — see the `lineHiddenColumns`
 // comment for the full incident writeup (product/listPrice/grossAmount regression).
-const DIMENSION_MACRO_KEYS = new Set(['project', 'costcenter', 'businessPartner']);
+// Some windows' extractors emit 'costcenter', others the camelCase 'costCenter' — both
+// casings are included so the macro is recognized (cacheable, filterable) regardless of
+// which one a given generated entity actually uses.
+const DIMENSION_MACRO_KEYS = new Set(['project', 'costcenter', 'costCenter', 'businessPartner']);
 
 export function isDeleteButtonVisible({
   isNew,
@@ -4268,10 +4271,21 @@ export function DetailView({
                                     apiBaseUrl={apiBaseUrl}
                                     selectorContext={selectorContextByEntity[detailEntity]}
                                     labelOverrides={labelOverrides}
-                                    // ETP-4529 — only `visibility` is forwarded; `readOnly` stays {} so
-                                    // each field's own readOnlyLogic (evaluated against the actual line,
-                                    // not the header) keeps controlling per-row read-only state.
-                                    displayLogic={{ readOnly: {}, visibility: lineDisplayLogic?.visibility ?? {} }}
+                                    // ETP-4529 — only `visibility` is forwarded, and only for the
+                                    // config-only dimension macro keys: lineDisplayLogic is evaluated
+                                    // against the header (representative context), not the actual
+                                    // selected line, so any OTHER key's visibility (e.g. product,
+                                    // listPrice, grossAmount) can resolve to false noise here that
+                                    // doesn't reflect this line's real state. `readOnly` stays {} so
+                                    // each field's own readOnlyLogic (evaluated against the actual line)
+                                    // keeps controlling per-row read-only state.
+                                    displayLogic={{
+                                      readOnly: {},
+                                      visibility: Object.fromEntries(
+                                        Object.entries(lineDisplayLogic?.visibility ?? {})
+                                          .filter(([key]) => DIMENSION_MACRO_KEYS.has(key))
+                                      ),
+                                    }}
                                     data-testid="DetailForm__fa3275" />
                                   {shouldShowLineActionButtons(hook, lineEdits, selectedLine) && (
                                     <div className="flex gap-2 mt-4">

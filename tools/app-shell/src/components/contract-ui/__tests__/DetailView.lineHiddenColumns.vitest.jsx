@@ -299,4 +299,14 @@ describe('DetailView — lineHiddenColumns forwarded to the line grid (ETP-4543)
 
     expect(detailTableProps.current.hiddenColumns).toContain('businessPartner');
   });
+
+  // Some windows' extractors emit 'costCenter' (camelCase) instead of 'costcenter' —
+  // DIMENSION_MACRO_KEYS must recognize both casings or this window's cost-center
+  // column silently stops being hideable.
+  it('hides costCenter (camelCase) when the lines-entity evaluator resolves it false', () => {
+    displayLogicByEntity.current[DETAIL_ENTITY] = { readOnly: {}, visibility: { costCenter: false } };
+    render(<DetailView {...BASE_PROPS} />);
+
+    expect(detailTableProps.current.hiddenColumns).toContain('costCenter');
+  });
 });
