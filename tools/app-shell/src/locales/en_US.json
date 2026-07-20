@@ -19508,6 +19508,7 @@
     "contactLegalName": "Legal name",
     "taxIDField": "Tax ID",
     "bpGroupField": "Business partner group",
+    "contactCategoryField": "Contact Category",
     "taxIdTypeField": "Tax ID country type",
     "contactPersonSubtable": "Contact person",
     "bankAccountSubtable": "Contact bank account",

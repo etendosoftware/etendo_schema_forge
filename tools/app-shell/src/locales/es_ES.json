@@ -19758,6 +19758,7 @@
     "contactLegalName": "Razón social",
     "taxIDField": "CIF/NIF",
     "bpGroupField": "Grupos de terceros",
+    "contactCategoryField": "Categoría de contacto",
     "taxIdTypeField": "Clave NIF país residencia",
     "contactPersonSubtable": "Persona de contacto",
     "bankAccountSubtable": "Cuenta bancaria del contacto",
