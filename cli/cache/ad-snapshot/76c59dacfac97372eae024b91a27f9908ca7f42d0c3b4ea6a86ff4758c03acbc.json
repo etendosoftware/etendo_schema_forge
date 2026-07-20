@@ -476,49 +476,49 @@
         {
           "ad_reference_id": "575BCB88A4694C27BC013DE9C73E6FE7",
           "name": "Awaiting Payment",
-          "name_es": "Awaiting Payment",
+          "name_es": "A Pagar",
           "value": "RPAP"
         },
         {
           "ad_reference_id": "575BCB88A4694C27BC013DE9C73E6FE7",
           "name": "Awaiting Execution",
-          "name_es": "Awaiting Execution",
+          "name_es": "A Ejecutar",
           "value": "RPAE"
         },
         {
           "ad_reference_id": "575BCB88A4694C27BC013DE9C73E6FE7",
           "name": "Void",
-          "name_es": "Void",
+          "name_es": "Anulado",
           "value": "RPVOID"
         },
         {
           "ad_reference_id": "575BCB88A4694C27BC013DE9C73E6FE7",
           "name": "Payment Made",
-          "name_es": "Payment Made",
+          "name_es": "Pagado",
           "value": "PPM"
         },
         {
           "ad_reference_id": "575BCB88A4694C27BC013DE9C73E6FE7",
           "name": "Payment Received",
-          "name_es": "Payment Received",
+          "name_es": "Cobrado",
           "value": "RPR"
         },
         {
           "ad_reference_id": "575BCB88A4694C27BC013DE9C73E6FE7",
           "name": "Deposited not Cleared",
-          "name_es": "Deposited not Cleared",
+          "name_es": "Cobro depositado",
           "value": "RDNC"
         },
         {
           "ad_reference_id": "575BCB88A4694C27BC013DE9C73E6FE7",
           "name": "Withdrawn not Cleared",
-          "name_es": "Withdrawn not Cleared",
+          "name_es": "Pago reintegrado",
           "value": "PWNC"
         },
         {
           "ad_reference_id": "575BCB88A4694C27BC013DE9C73E6FE7",
           "name": "Payment Cleared",
-          "name_es": "Payment Cleared",
+          "name_es": "Conciliado",
           "value": "RPPC"
         },
         {
@@ -578,19 +578,19 @@
         {
           "ad_reference_id": "150",
           "name": "After Delivery",
-          "name_es": "After Delivery",
+          "name_es": "Después de entregado",
           "value": "D"
         },
         {
           "ad_reference_id": "150",
           "name": "After Order Delivered",
-          "name_es": "After Order Delivered",
+          "name_es": "Pedido completamente entregado",
           "value": "O"
         },
         {
           "ad_reference_id": "151",
           "name": "After Receipt",
-          "name_es": "After Receipt",
+          "name_es": "Después de cobrado",
           "value": "R"
         },
         {
@@ -608,19 +608,19 @@
         {
           "ad_reference_id": "1852D69AB3FD453F8F031813501B26F0",
           "name": "Automatic",
-          "name_es": "Automatic",
+          "name_es": "Automático",
           "value": "CRP"
         },
         {
           "ad_reference_id": "FF80818130217A350130218D802B0011",
           "name": "Automatic Evaluation",
-          "name_es": "Automatic Evaluation",
+          "name_es": "Evaluación Automática",
           "value": "AE"
         },
         {
           "ad_reference_id": "151",
           "name": "Availability",
-          "name_es": "Availability",
+          "name_es": "Si hay disponible",
           "value": "A"
         },
         {
@@ -656,19 +656,19 @@
         {
           "ad_reference_id": "195",
           "name": "Bank Deposit",
-          "name_es": "Bank Deposit",
+          "name_es": "Ingreso por banco",
           "value": "5"
         },
         {
           "ad_reference_id": "195",
           "name": "Bank Remittance",
-          "name_es": "Bank Remittance",
+          "name_es": "Remesa bancaria",
           "value": "R"
         },
         {
           "ad_reference_id": "FF80818130217A350130218D802B0011",
           "name": "Booked",
-          "name_es": "Booked",
+          "name_es": "Registrado",
           "value": "CO"
         },
         {
@@ -692,25 +692,25 @@
         {
           "ad_reference_id": "153",
           "name": "Calculated",
-          "name_es": "Calculated",
+          "name_es": "Calculado",
           "value": "C"
         },
         {
           "ad_reference_id": "195",
           "name": "Cash",
-          "name_es": "Cash",
+          "name_es": "Efectivo",
           "value": "B"
         },
         {
           "ad_reference_id": "195",
           "name": "Cash on Delivery",
-          "name_es": "Cash on Delivery",
+          "name_es": "Contado albarán",
           "value": "C"
         },
         {
           "ad_reference_id": "195",
           "name": "Check",
-          "name_es": "Check",
+          "name_es": "Cheque",
           "value": "2"
         },
         {
@@ -728,7 +728,7 @@
         {
           "ad_reference_id": "FF80818130217A350130218D802B0011",
           "name": "Closed",
-          "name_es": "Closed",
+          "name_es": "Cerrado",
           "value": "CL"
         },
         {
@@ -740,13 +740,13 @@
         {
           "ad_reference_id": "FF80818130217A350130218D802B0011",
           "name": "Closed - Order Created",
-          "name_es": "Closed - Order Created",
+          "name_es": "Cerrado - Pedido creado",
           "value": "CA"
         },
         {
           "ad_reference_id": "FF80818130217A350130218D802B0011",
           "name": "Closed - Rejected",
-          "name_es": "Closed - Rejected",
+          "name_es": "Cerrado - Rechazado",
           "value": "CJ"
         },
         {
@@ -758,19 +758,19 @@
         {
           "ad_reference_id": "151",
           "name": "Complete Line",
-          "name_es": "Complete Line",
+          "name_es": "Línea completa",
           "value": "L"
         },
         {
           "ad_reference_id": "151",
           "name": "Complete Order",
-          "name_es": "Complete Order",
+          "name_es": "Pedido completo",
           "value": "O"
         },
         {
           "ad_reference_id": "C3C19DE8AB3B42E78748E20D986FBBC9",
           "name": "Completely Reserved",
-          "name_es": "Completely Reserved",
+          "name_es": "Reservado completamente",
           "value": "CR"
         },
         {
@@ -812,7 +812,7 @@
         {
           "ad_reference_id": "195",
           "name": "Credit Card",
-          "name_es": "Credit Card",
+          "name_es": "Tarjeta de crédito",
           "value": "K"
         },
         {
@@ -824,13 +824,13 @@
         {
           "ad_reference_id": "150",
           "name": "Customer Schedule After Delivery",
-          "name_es": "Customer Schedule After Delivery",
+          "name_es": "Periódico después de entregado",
           "value": "S"
         },
         {
           "ad_reference_id": "152",
           "name": "Delivery",
-          "name_es": "Delivery",
+          "name_es": "Entrega",
           "value": "D"
         },
         {
@@ -842,13 +842,13 @@
         {
           "ad_reference_id": "150",
           "name": "Do Not Invoice",
-          "name_es": "Do Not Invoice",
+          "name_es": "No facturar",
           "value": "N"
         },
         {
           "ad_reference_id": "FF80818130217A350130218D802B0011",
           "name": "Draft",
-          "name_es": "Draft",
+          "name_es": "Borrador",
           "value": "DR"
         },
         {
@@ -878,7 +878,7 @@
         {
           "ad_reference_id": "153",
           "name": "Freight included",
-          "name_es": "Freight included",
+          "name_es": "Gastos incluidos",
           "value": "I"
         },
         {
@@ -926,7 +926,7 @@
         {
           "ad_reference_id": "154",
           "name": "High",
-          "name_es": "High",
+          "name_es": "Alta",
           "value": "3"
         },
         {
@@ -944,7 +944,7 @@
         {
           "ad_reference_id": "150",
           "name": "Immediate",
-          "name_es": "Immediate",
+          "name_es": "Inmediato",
           "value": "I"
         },
         {
@@ -986,7 +986,7 @@
         {
           "ad_reference_id": "154",
           "name": "Low",
-          "name_es": "Low",
+          "name_es": "Baja",
           "value": "7"
         },
         {
@@ -1046,13 +1046,13 @@
         {
           "ad_reference_id": "FF80818130217A350130218D802B0011",
           "name": "Manual Evaluation",
-          "name_es": "Manual Evaluation",
+          "name_es": "Evaluación Manual",
           "value": "ME"
         },
         {
           "ad_reference_id": "154",
           "name": "Medium",
-          "name_es": "Medium",
+          "name_es": "Media",
           "value": "5"
         },
         {
@@ -1064,37 +1064,37 @@
         {
           "ad_reference_id": "195",
           "name": "Money Order",
-          "name_es": "Money Order",
+          "name_es": "Giro bancario",
           "value": "4"
         },
         {
           "ad_reference_id": "FF80818130217A350130218D802B0011",
           "name": "Not Accepted",
-          "name_es": "Not Accepted",
+          "name_es": "No aprobado",
           "value": "NA"
         },
         {
           "ad_reference_id": "FF80818130217A350130218D802B0011",
           "name": "Not Confirmed",
-          "name_es": "Not Confirmed",
+          "name_es": "No Confirmado",
           "value": "NC"
         },
         {
           "ad_reference_id": "FF80818130217A350130218D802B0011",
           "name": "Not Paid",
-          "name_es": "Not Paid",
+          "name_es": "Pendiente de Pago",
           "value": "WP"
         },
         {
           "ad_reference_id": "C3C19DE8AB3B42E78748E20D986FBBC9",
           "name": "Not Reserved",
-          "name_es": "Not Reserved",
+          "name_es": "No reservado",
           "value": "NR"
         },
         {
           "ad_reference_id": "195",
           "name": "On Credit",
-          "name_es": "On Credit",
+          "name_es": "A la vista",
           "value": "P"
         },
         {
@@ -1190,13 +1190,13 @@
         {
           "ad_reference_id": "C3C19DE8AB3B42E78748E20D986FBBC9",
           "name": "Partially Reserved",
-          "name_es": "Partially Reserved",
+          "name_es": "Reservado parcialmente",
           "value": "PR"
         },
         {
           "ad_reference_id": "152",
           "name": "Pickup",
-          "name_es": "Pickup",
+          "name_es": "Recogida",
           "value": "P"
         },
         {
@@ -1208,7 +1208,7 @@
         {
           "ad_reference_id": "195",
           "name": "Promissory Note",
-          "name_es": "Promissory Note",
+          "name_es": "Pagaré",
           "value": "3"
         },
         {
@@ -1226,7 +1226,7 @@
         {
           "ad_reference_id": "FF80818130217A350130218D802B0011",
           "name": "Re-Opened",
-          "name_es": "Re-Opened",
+          "name_es": "Reabierto",
           "value": "RE"
         },
         {
@@ -1334,7 +1334,7 @@
         {
           "ad_reference_id": "152",
           "name": "Shipper",
-          "name_es": "Shipper",
+          "name_es": "Transportista",
           "value": "S"
         },
         {
@@ -1394,19 +1394,19 @@
         {
           "ad_reference_id": "FF80818130217A350130218D802B0011",
           "name": "Under Evaluation",
-          "name_es": "Under Evaluation",
+          "name_es": "Bajo evaluación",
           "value": "UE"
         },
         {
           "ad_reference_id": "FF80818130217A350130218D802B0011",
           "name": "Under Way",
-          "name_es": "Under Way",
+          "name_es": "En curso",
           "value": "IP"
         },
         {
           "ad_reference_id": "FF80818130217A350130218D802B0011",
           "name": "Unknown",
-          "name_es": "Unknown",
+          "name_es": "Desconocido",
           "value": "??"
         },
         {
@@ -1448,19 +1448,19 @@
         {
           "ad_reference_id": "FF80818130217A350130218D802B0011",
           "name": "Voided",
-          "name_es": "Voided",
+          "name_es": "Anulado",
           "value": "VO"
         },
         {
           "ad_reference_id": "195",
           "name": "Wire Transfer",
-          "name_es": "Wire Transfer",
+          "name_es": "Transferencia",
           "value": "1"
         },
         {
           "ad_reference_id": "195",
           "name": "Withholding",
-          "name_es": "Withholding",
+          "name_es": "Retención",
           "value": "W"
         },
         {
@@ -1932,13 +1932,13 @@
         {
           "ad_reference_id": "575BCB88A4694C27BC013DE9C73E6FE7",
           "name": "Awaiting Payment",
-          "name_es": "Awaiting Payment",
+          "name_es": "A Pagar",
           "value": "RPAP"
         },
         {
           "ad_reference_id": "73625A8F22EF4CD7808603156BA606D7",
           "name": "Monthly",
-          "name_es": "Monthly",
+          "name_es": "Mensual",
           "value": "M"
         },
         {
@@ -1950,7 +1950,7 @@
         {
           "ad_reference_id": "575BCB88A4694C27BC013DE9C73E6FE7",
           "name": "Awaiting Execution",
-          "name_es": "Awaiting Execution",
+          "name_es": "A Ejecutar",
           "value": "RPAE"
         },
         {
@@ -1962,37 +1962,37 @@
         {
           "ad_reference_id": "575BCB88A4694C27BC013DE9C73E6FE7",
           "name": "Void",
-          "name_es": "Void",
+          "name_es": "Anulado",
           "value": "RPVOID"
         },
         {
           "ad_reference_id": "575BCB88A4694C27BC013DE9C73E6FE7",
           "name": "Payment Made",
-          "name_es": "Payment Made",
+          "name_es": "Pagado",
           "value": "PPM"
         },
         {
           "ad_reference_id": "575BCB88A4694C27BC013DE9C73E6FE7",
           "name": "Payment Received",
-          "name_es": "Payment Received",
+          "name_es": "Cobrado",
           "value": "RPR"
         },
         {
           "ad_reference_id": "575BCB88A4694C27BC013DE9C73E6FE7",
           "name": "Deposited not Cleared",
-          "name_es": "Deposited not Cleared",
+          "name_es": "Cobro depositado",
           "value": "RDNC"
         },
         {
           "ad_reference_id": "575BCB88A4694C27BC013DE9C73E6FE7",
           "name": "Withdrawn not Cleared",
-          "name_es": "Withdrawn not Cleared",
+          "name_es": "Pago reintegrado",
           "value": "PWNC"
         },
         {
           "ad_reference_id": "575BCB88A4694C27BC013DE9C73E6FE7",
           "name": "Payment Cleared",
-          "name_es": "Payment Cleared",
+          "name_es": "Conciliado",
           "value": "RPPC"
         },
         {
@@ -2178,7 +2178,7 @@
         {
           "ad_reference_id": "125",
           "name": "Actual",
-          "name_es": "Actual",
+          "name_es": "Real",
           "value": "A"
         },
         {
@@ -2244,7 +2244,7 @@
         {
           "ad_reference_id": "125",
           "name": "Budget",
-          "name_es": "Budget",
+          "name_es": "Presupuesto",
           "value": "B"
         },
         {
@@ -2274,19 +2274,19 @@
         {
           "ad_reference_id": "131",
           "name": "Closed",
-          "name_es": "Closed",
+          "name_es": "Cerrado",
           "value": "CL"
         },
         {
           "ad_reference_id": "DBCF65339D0F4403822A8A7928533D6B",
           "name": "Closing Entry",
-          "name_es": "Closing Entry",
+          "name_es": "Asiento de cierre",
           "value": "C"
         },
         {
           "ad_reference_id": "131",
           "name": "Completed",
-          "name_es": "Completed",
+          "name_es": "Completado",
           "value": "CO"
         },
         {
@@ -2358,7 +2358,7 @@
         {
           "ad_reference_id": "DBCF65339D0F4403822A8A7928533D6B",
           "name": "Divide Up",
-          "name_es": "Divide Up",
+          "name_es": "Reparto de reservas",
           "value": "D"
         },
         {
@@ -2376,7 +2376,7 @@
         {
           "ad_reference_id": "131",
           "name": "Draft",
-          "name_es": "Draft",
+          "name_es": "Borrador",
           "value": "DR"
         },
         {
@@ -2388,7 +2388,7 @@
         {
           "ad_reference_id": "125",
           "name": "Encumbrance",
-          "name_es": "Encumbrance",
+          "name_es": "Gravamen",
           "value": "E"
         },
         {
@@ -2526,7 +2526,7 @@
         {
           "ad_reference_id": "DBCF65339D0F4403822A8A7928533D6B",
           "name": "Income Statement",
-          "name_es": "Income Statement",
+          "name_es": "Entrada de regularización",
           "value": "R"
         },
         {
@@ -2670,7 +2670,7 @@
         {
           "ad_reference_id": "131",
           "name": "Not Accepted",
-          "name_es": "Not Accepted",
+          "name_es": "No aprobado",
           "value": "NA"
         },
         {
@@ -2688,7 +2688,7 @@
         {
           "ad_reference_id": "131",
           "name": "Not Paid",
-          "name_es": "Not Paid",
+          "name_es": "Pendiente de Pago",
           "value": "WP"
         },
         {
@@ -2706,7 +2706,7 @@
         {
           "ad_reference_id": "DBCF65339D0F4403822A8A7928533D6B",
           "name": "Opening Entry",
-          "name_es": "Opening Entry",
+          "name_es": "Asiento de apertura",
           "value": "O"
         },
         {
@@ -2922,7 +2922,7 @@
         {
           "ad_reference_id": "131",
           "name": "Re-Opened",
-          "name_es": "Re-Opened",
+          "name_es": "Reabierto",
           "value": "RE"
         },
         {
@@ -2934,7 +2934,7 @@
         {
           "ad_reference_id": "DBCF65339D0F4403822A8A7928533D6B",
           "name": "Regular Entry",
-          "name_es": "Regular Entry",
+          "name_es": "Asiento normal",
           "value": "N"
         },
         {
@@ -3066,7 +3066,7 @@
         {
           "ad_reference_id": "125",
           "name": "Statistical",
-          "name_es": "Statistical",
+          "name_es": "Estadística",
           "value": "S"
         },
         {
@@ -3132,13 +3132,13 @@
         {
           "ad_reference_id": "131",
           "name": "Under Way",
-          "name_es": "Under Way",
+          "name_es": "En curso",
           "value": "IP"
         },
         {
           "ad_reference_id": "131",
           "name": "Unknown",
-          "name_es": "Unknown",
+          "name_es": "Desconocido",
           "value": "??"
         },
         {
@@ -3192,7 +3192,7 @@
         {
           "ad_reference_id": "131",
           "name": "Voided",
-          "name_es": "Voided",
+          "name_es": "Anulado",
           "value": "VO"
         },
         {
@@ -4696,13 +4696,13 @@
         {
           "ad_reference_id": "575BCB88A4694C27BC013DE9C73E6FE7",
           "name": "Awaiting Payment",
-          "name_es": "Awaiting Payment",
+          "name_es": "A Pagar",
           "value": "RPAP"
         },
         {
           "ad_reference_id": "73625A8F22EF4CD7808603156BA606D7",
           "name": "Monthly",
-          "name_es": "Monthly",
+          "name_es": "Mensual",
           "value": "M"
         },
         {
@@ -4714,7 +4714,7 @@
         {
           "ad_reference_id": "575BCB88A4694C27BC013DE9C73E6FE7",
           "name": "Awaiting Execution",
-          "name_es": "Awaiting Execution",
+          "name_es": "A Ejecutar",
           "value": "RPAE"
         },
         {
@@ -4726,37 +4726,37 @@
         {
           "ad_reference_id": "575BCB88A4694C27BC013DE9C73E6FE7",
           "name": "Void",
-          "name_es": "Void",
+          "name_es": "Anulado",
           "value": "RPVOID"
         },
         {
           "ad_reference_id": "575BCB88A4694C27BC013DE9C73E6FE7",
           "name": "Payment Made",
-          "name_es": "Payment Made",
+          "name_es": "Pagado",
           "value": "PPM"
         },
         {
           "ad_reference_id": "575BCB88A4694C27BC013DE9C73E6FE7",
           "name": "Payment Received",
-          "name_es": "Payment Received",
+          "name_es": "Cobrado",
           "value": "RPR"
         },
         {
           "ad_reference_id": "575BCB88A4694C27BC013DE9C73E6FE7",
           "name": "Deposited not Cleared",
-          "name_es": "Deposited not Cleared",
+          "name_es": "Cobro depositado",
           "value": "RDNC"
         },
         {
           "ad_reference_id": "575BCB88A4694C27BC013DE9C73E6FE7",
           "name": "Withdrawn not Cleared",
-          "name_es": "Withdrawn not Cleared",
+          "name_es": "Pago reintegrado",
           "value": "PWNC"
         },
         {
           "ad_reference_id": "575BCB88A4694C27BC013DE9C73E6FE7",
           "name": "Payment Cleared",
-          "name_es": "Payment Cleared",
+          "name_es": "Conciliado",
           "value": "RPPC"
         },
         {
@@ -4948,7 +4948,7 @@
         {
           "ad_reference_id": "125",
           "name": "Actual",
-          "name_es": "Actual",
+          "name_es": "Real",
           "value": "A"
         },
         {
@@ -5020,7 +5020,7 @@
         {
           "ad_reference_id": "125",
           "name": "Budget",
-          "name_es": "Budget",
+          "name_es": "Presupuesto",
           "value": "B"
         },
         {
@@ -5050,19 +5050,19 @@
         {
           "ad_reference_id": "131",
           "name": "Closed",
-          "name_es": "Closed",
+          "name_es": "Cerrado",
           "value": "CL"
         },
         {
           "ad_reference_id": "DBCF65339D0F4403822A8A7928533D6B",
           "name": "Closing Entry",
-          "name_es": "Closing Entry",
+          "name_es": "Asiento de cierre",
           "value": "C"
         },
         {
           "ad_reference_id": "131",
           "name": "Completed",
-          "name_es": "Completed",
+          "name_es": "Completado",
           "value": "CO"
         },
         {
@@ -5134,7 +5134,7 @@
         {
           "ad_reference_id": "DBCF65339D0F4403822A8A7928533D6B",
           "name": "Divide Up",
-          "name_es": "Divide Up",
+          "name_es": "Reparto de reservas",
           "value": "D"
         },
         {
@@ -5152,7 +5152,7 @@
         {
           "ad_reference_id": "131",
           "name": "Draft",
-          "name_es": "Draft",
+          "name_es": "Borrador",
           "value": "DR"
         },
         {
@@ -5164,7 +5164,7 @@
         {
           "ad_reference_id": "125",
           "name": "Encumbrance",
-          "name_es": "Encumbrance",
+          "name_es": "Gravamen",
           "value": "E"
         },
         {
@@ -5302,7 +5302,7 @@
         {
           "ad_reference_id": "DBCF65339D0F4403822A8A7928533D6B",
           "name": "Income Statement",
-          "name_es": "Income Statement",
+          "name_es": "Entrada de regularización",
           "value": "R"
         },
         {
@@ -5446,7 +5446,7 @@
         {
           "ad_reference_id": "131",
           "name": "Not Accepted",
-          "name_es": "Not Accepted",
+          "name_es": "No aprobado",
           "value": "NA"
         },
         {
@@ -5464,7 +5464,7 @@
         {
           "ad_reference_id": "131",
           "name": "Not Paid",
-          "name_es": "Not Paid",
+          "name_es": "Pendiente de Pago",
           "value": "WP"
         },
         {
@@ -5482,7 +5482,7 @@
         {
           "ad_reference_id": "DBCF65339D0F4403822A8A7928533D6B",
           "name": "Opening Entry",
-          "name_es": "Opening Entry",
+          "name_es": "Asiento de apertura",
           "value": "O"
         },
         {
@@ -5698,7 +5698,7 @@
         {
           "ad_reference_id": "131",
           "name": "Re-Opened",
-          "name_es": "Re-Opened",
+          "name_es": "Reabierto",
           "value": "RE"
         },
         {
@@ -5710,7 +5710,7 @@
         {
           "ad_reference_id": "DBCF65339D0F4403822A8A7928533D6B",
           "name": "Regular Entry",
-          "name_es": "Regular Entry",
+          "name_es": "Asiento normal",
           "value": "N"
         },
         {
@@ -5842,7 +5842,7 @@
         {
           "ad_reference_id": "125",
           "name": "Statistical",
-          "name_es": "Statistical",
+          "name_es": "Estadística",
           "value": "S"
         },
         {
@@ -5908,13 +5908,13 @@
         {
           "ad_reference_id": "131",
           "name": "Under Way",
-          "name_es": "Under Way",
+          "name_es": "En curso",
           "value": "IP"
         },
         {
           "ad_reference_id": "131",
           "name": "Unknown",
-          "name_es": "Unknown",
+          "name_es": "Desconocido",
           "value": "??"
         },
         {
@@ -5968,7 +5968,7 @@
         {
           "ad_reference_id": "131",
           "name": "Voided",
-          "name_es": "Voided",
+          "name_es": "Anulado",
           "value": "VO"
         },
         {

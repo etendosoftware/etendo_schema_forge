@@ -1,5 +1,5 @@
 {
-  "version": "0.36.0",
+  "version": "0.37.0",
   "generatedAt": "2026-04-30T15:42:46.497Z",
   "updatedAt": "2026-07-14T01:05:39.068Z",
   "checksum": "0fbe017944ec853e",
@@ -1844,7 +1844,7 @@
             "label": "Currency",
             "type": "foreignKey",
             "tsType": "string",
-            "visibility": "editable",
+            "visibility": "readOnly",
             "required": true,
             "grid": false,
             "form": false,
@@ -3662,7 +3662,7 @@
             "apiKey": "currency",
             "column": "C_Currency_ID",
             "type": "foreignKey",
-            "visibility": "editable",
+            "visibility": "readOnly",
             "required": true
           },
           {
