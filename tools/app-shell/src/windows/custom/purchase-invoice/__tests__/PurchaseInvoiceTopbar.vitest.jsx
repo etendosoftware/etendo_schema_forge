@@ -289,4 +289,18 @@ describe('PurchaseInvoiceTopbar', () => {
     // outstanding = grandTotal (1000), grandTotal (1000) => not fully paid (outstanding > 0)
     expect(screen.getByText('statusPending')).toBeInTheDocument();
   });
+
+  // ETP-4404: the backend enriches invoices with hasRectifications; the topbar
+  // must simply tolerate the extra field (there is no badge for it by design —
+  // the Nota de Crédito doc-type badge already conveys rectificative)
+  it('renders cleanly with the hasRectifications enrichment field present', () => {
+    const { container } = render(
+      <PurchaseInvoiceTopbar
+        {...defaultProps}
+        data={{ ...BASE_DATA, hasRectifications: true }}
+      />,
+    );
+    expect(container.firstChild).not.toBeNull();
+    expect(screen.getByText('statusPending')).toBeInTheDocument();
+  });
 });

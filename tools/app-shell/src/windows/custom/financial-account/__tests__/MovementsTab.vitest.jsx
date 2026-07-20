@@ -113,15 +113,15 @@ vi.mock('../MovementsTable.jsx', () => ({
   ),
 }));
 
-// Stub the wizard — its internals (useCreateMovement → useAuth, lookups, etc.)
-// are out of scope for MovementsTab filtering behaviour and need a real
-// AuthProvider otherwise. onClose/onSuccess are surfaced so tests can trigger
+// Stub the new-transaction modal — its internals (useCreateMovement → useAuth,
+// lookups, etc.) are out of scope for MovementsTab filtering behaviour and need a
+// real AuthProvider otherwise. onClose/onSuccess are surfaced so tests can trigger
 // the callbacks MovementsTab wires up (setNewMovementOpen(false) / onReload).
-vi.mock('../NewMovementWizard/index.jsx', () => ({
-  NewMovementWizard: ({ open, onClose, onSuccess }) => (
-    <div data-testid="new-movement-wizard" data-open={String(!!open)}>
-      <button data-testid="wizard-close" onClick={() => onClose?.()}>close</button>
-      <button data-testid="wizard-success" onClick={() => onSuccess?.()}>success</button>
+vi.mock('../NewTransactionModal.jsx', () => ({
+  NewTransactionModal: ({ open, onClose, onSuccess }) => (
+    <div data-testid="new-transaction-modal" data-open={String(!!open)}>
+      <button data-testid="modal-close" onClick={() => onClose?.()}>close</button>
+      <button data-testid="modal-success" onClick={() => onSuccess?.()}>success</button>
     </div>
   ),
 }));
@@ -372,19 +372,19 @@ describe('MovementsTab — transfer flow', () => {
   });
 });
 
-describe('MovementsTab — new movement wizard callbacks', () => {
-  it('invokes onReload on wizard success, and onClose does not throw', () => {
+describe('MovementsTab — new transaction modal callbacks', () => {
+  it('invokes onReload on modal success, and onClose does not throw', () => {
     const onReload = vi.fn();
     renderTab({ onReload });
 
     act(() => {
-      screen.getByTestId('wizard-success').click();
+      screen.getByTestId('modal-success').click();
     });
     expect(onReload).toHaveBeenCalledTimes(1);
 
     expect(() => {
       act(() => {
-        screen.getByTestId('wizard-close').click();
+        screen.getByTestId('modal-close').click();
       });
     }).not.toThrow();
   });

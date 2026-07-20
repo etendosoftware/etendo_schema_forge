@@ -5,6 +5,13 @@
 
 > Read this FIRST on every ticket (orientation step 2). Append a dated bullet whenever you learn something durable. Never delete a correction; supersede it with a newer dated note.
 
+## Retrieving the ticket backlog
+
+All tickets filed by the agentic-validation bot carry the label `validacion-agentica`. To pull the current backlog:
+
+- **JQL:** `labels = "validacion-agentica"`
+- **Saved filter:** https://etendoproject.atlassian.net/issues/?jql=labels%20%3D%20%22validacion-agentica%22
+
 ---
 
 ## Recurring root-cause categories
@@ -30,6 +37,18 @@ How a reported symptom usually maps to a real cause. The point: **not every "fai
   - **test-data / environment gap:** ETP-4289 — 6 specs (`return-from-customer`, `return-to-vendor`, `sii-config`, `sii-monitor`, `simple-g-l-journal`, `tbai-config`) unevaluable for lack of records.
   - **opaque / diagnostic gap:** ETP-4280 — Card financial-account create failed but the validator captured NO error message/HTTP status/body. The ticket is itself about the missing diagnostic. Canonical evidence for rubric #3/#4.
   - **under-specified:** ETP-4242 — "no W spec for ERP entities" with no entity/tool/repro named.
+
+---
+
+## ETGO_SF_FIELD agent-facing flags → fix upstream, not in Java
+
+A ticket asking to change something the agent *sees* per field — `businessCritical`, the
+per-field agent prompt, `visibility`, a per-field `defaultValue`, or `Java_Qualifier` — is
+**upstream-config**, NOT an MCP code bug. These are `ETGO_SF_FIELD` values driven from
+`decisions.json`; the Java only surfaces them. Full table, pipeline path, fix recipe, and
+the advisory-only note on `businessCritical` are in
+**`docs/agentic-validation/mcp-field-flags-pipeline.md`** — read it only when a ticket
+actually concerns one of those flags.
 
 ---
 

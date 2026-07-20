@@ -142,7 +142,7 @@ describe('generate349File', () => {
     const anchor = mockFetchOk();
     const result = await generate349File(DECL, { token: TOKEN, apiBaseUrl: API_BASE });
     expect(result).toBe(true);
-    expect(anchor.download).toBe('349_T2_2026.349');
+    expect(anchor.download).toBe('349_T2_2026.txt');
     expect(anchor.click).toHaveBeenCalled();
   });
 
