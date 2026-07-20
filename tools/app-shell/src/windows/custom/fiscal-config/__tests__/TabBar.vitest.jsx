@@ -13,7 +13,7 @@ describe('TabBar — rendering', () => {
   it('applies active styling to the selected tab', () => {
     render(<TabBar tabs={TABS} active={0} onChange={vi.fn()} />);
     const siiBtn = screen.getByText('SII');
-    expect(siiBtn.className).toContain('bg-white');
+    expect(siiBtn.className).toContain('bg-card');
     expect(siiBtn.className).toContain('font-medium');
   });
 

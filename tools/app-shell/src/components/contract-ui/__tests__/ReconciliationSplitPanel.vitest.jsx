@@ -242,8 +242,8 @@ describe('ReconciliationSplitPanel', () => {
     fireEvent.click(screen.getByTestId('recon-line-radio-L1'));
 
     // No user interaction with the checkboxes — pre-selection comes from `suggested`.
-    expect(screen.getByTestId('recon-cand-check-C1')).toBeChecked();
-    expect(screen.getByTestId('recon-cand-check-C2')).not.toBeChecked();
+    expect(screen.getByTestId('recon-cand-check-C1').querySelector('input')).toBeChecked();
+    expect(screen.getByTestId('recon-cand-check-C2').querySelector('input')).not.toBeChecked();
   });
 
   it('reflects the pre-selected suggested count in the reconcile button without any click', () => {
@@ -257,9 +257,9 @@ describe('ReconciliationSplitPanel', () => {
 
     // No checkbox clicked — the two suggested candidates are pre-checked, the
     // non-suggested one is not. This drives reconcileCount = 2.
-    expect(screen.getByTestId('recon-cand-check-C1')).toBeChecked();
-    expect(screen.getByTestId('recon-cand-check-C3')).toBeChecked();
-    expect(screen.getByTestId('recon-cand-check-C2')).not.toBeChecked();
+    expect(screen.getByTestId('recon-cand-check-C1').querySelector('input')).toBeChecked();
+    expect(screen.getByTestId('recon-cand-check-C3').querySelector('input')).toBeChecked();
+    expect(screen.getByTestId('recon-cand-check-C2').querySelector('input')).not.toBeChecked();
 
     // The reconcile button uses the count-bearing label and, since the pre-selected
     // amounts balance the line (-5 + -3.31 == -8.31), it is immediately enabled.
@@ -275,7 +275,7 @@ describe('ReconciliationSplitPanel', () => {
     fireEvent.click(screen.getByTestId('recon-line-radio-L1'));
 
     // Straight to reconcile — the suggested candidate is already pre-checked.
-    expect(screen.getByTestId('recon-cand-check-C1')).toBeChecked();
+    expect(screen.getByTestId('recon-cand-check-C1').querySelector('input')).toBeChecked();
     fireEvent.click(screen.getByTestId('recon-action-reconcile'));
 
     await waitFor(() => expect(reconcileState.reconcile).toHaveBeenCalledTimes(1));

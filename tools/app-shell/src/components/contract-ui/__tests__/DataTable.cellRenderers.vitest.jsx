@@ -165,7 +165,7 @@ describe('renderPercentCell', () => {
     }));
 
     expect(screen.getByText('45%')).toBeInTheDocument();
-    expect(container.querySelector('.bg-amber-400')).toBeTruthy();
+    expect(container.querySelector('.bg-status-warning')).toBeTruthy();
   });
 });
 
@@ -178,7 +178,7 @@ describe('renderBooleanCell', () => {
     }));
 
     expect(screen.getByText('yes')).toBeInTheDocument();
-    expect(container.querySelector('.text-emerald-600')).toBeTruthy();
+    expect(container.querySelector('.text-status-success-foreground')).toBeTruthy();
   });
 });
 

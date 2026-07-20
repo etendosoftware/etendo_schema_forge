@@ -18,7 +18,7 @@ describe('PostingStatusDot', () => {
     const { container } = render(<PostingStatusDot posted="N" />);
     expect(screen.getByText('financeAccountMovementsNotPosted')).toBeInTheDocument();
     const dot = container.querySelector('span > span');
-    expect(dot.className).toContain('bg-[#E68A00]');
+    expect(dot.className).toContain('bg-[var(--status-warning-fg)]');
   });
 
   it('treats missing posted as "not posted"', () => {

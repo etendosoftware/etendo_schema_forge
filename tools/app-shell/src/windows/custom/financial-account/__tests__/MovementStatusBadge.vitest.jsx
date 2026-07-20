@@ -23,14 +23,14 @@ describe('MovementStatusBadge', () => {
     const { container } = render(<MovementStatusBadge status="RPPC" />);
     const span = container.firstChild;
     // cleared family: bg var(--status-success-bg)
-    expect(span.style.backgroundColor).toMatch(/238,\s*251,\s*244|var(--status-success-bg)/i);
+    expect(span.style.backgroundColor).toMatch(/238,\s*251,\s*244|var\(--status-success-bg\)/i);
   });
 
   it('uses the neutral unreconciled tone for non-cleared statuses (RPAE)', () => {
     const { container } = render(<MovementStatusBadge status="RPAE" />);
     const span = container.firstChild;
     // unreconciled family: bg hsl(var(--muted))
-    expect(span.style.backgroundColor).toMatch(/245,\s*247,\s*249|hsl(var(--muted))/i);
+    expect(span.style.backgroundColor).toMatch(/245,\s*247,\s*249|hsl\(var\(--muted\)\)/i);
   });
 
   it('returns null for an unknown status code', () => {
