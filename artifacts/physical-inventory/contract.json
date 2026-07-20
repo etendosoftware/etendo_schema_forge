@@ -1,8 +1,8 @@
 {
   "version": "0.32.0",
   "generatedAt": "2026-06-29T12:25:17.116Z",
-  "updatedAt": "2026-07-20T12:22:07.369Z",
-  "checksum": "3769f1a825961239",
+  "updatedAt": "2026-07-20T14:29:26.227Z",
+  "checksum": "5941c48bc1f9c392",
   "frontendContract": {
     "window": {
       "id": "168",
@@ -333,6 +333,7 @@
             }
           }
         ],
+        "javaQualifier": "inventory",
         "draftMode": {
           "enabled": true,
           "processField": "processNow",
@@ -894,7 +895,8 @@
             "visibility": "system",
             "required": true
           }
-        ]
+        ],
+        "javaQualifier": "inventory"
       },
       "inventoryLine": {
         "tableName": "M_InventoryLine",

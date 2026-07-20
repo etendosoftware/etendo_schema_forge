@@ -70,6 +70,7 @@
   "entities": {
     "header": {
       "name": "inventory",
+      "javaQualifier": "inventory",
       "fields": {
         "warehouse": {
           "grid": true,
