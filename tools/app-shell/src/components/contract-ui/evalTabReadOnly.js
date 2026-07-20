@@ -30,10 +30,16 @@ export function evalTabReadOnly(tab, record) {
   }
 }
 
+function normalizeYesNoValue(value) {
+  if (value === 'Y') return true;
+  if (value === 'N') return false;
+  return value;
+}
+
 function normalizeYesNo(record) {
   const normalized = {};
   for (const [key, value] of Object.entries(record)) {
-    normalized[key] = value === 'Y' ? true : value === 'N' ? false : value;
+    normalized[key] = normalizeYesNoValue(value);
   }
   return normalized;
 }
