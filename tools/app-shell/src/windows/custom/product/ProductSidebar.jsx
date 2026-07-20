@@ -38,11 +38,11 @@ function SidebarPeriodSelector({ period, onChangePeriod, ui, disabled = false })
           ${disabled ? 'bg-muted text-disabled cursor-not-allowed' : 'bg-card text-foreground'}`}
       >
         <Calendar
-          className={`h-5 w-5 shrink-0 ${disabled ? 'text-disabled' : 'text-disabled'}`}
+          className={`h-5 w-5 shrink-0 ${disabled ? 'text-disabled' : 'text-muted-foreground'}`}
           data-testid="Calendar__59b33d" />
         <span className="flex-1 text-left mx-1">{ui(current.key)}</span>
         <ChevronDown
-          className={`h-5 w-5 shrink-0 ${disabled ? 'text-disabled' : 'text-disabled'}`}
+          className={`h-5 w-5 shrink-0 ${disabled ? 'text-disabled' : 'text-muted-foreground'}`}
           data-testid="ChevronDown__59b33d" />
       </button>
       {open && (

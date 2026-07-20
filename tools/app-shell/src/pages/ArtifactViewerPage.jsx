@@ -59,7 +59,7 @@ function JsonView({ data }) {
       <table className="w-full border-collapse">
         <tbody>
           {lines.map((line, i) => (
-            <tr key={i} className="hover:bg-muted/50">
+            <tr key={`${i}-${line.slice(0, 20)}`} className="hover:bg-muted/50">
               <td className="select-none border-r border-border-subtle px-3 py-0 text-right text-xs text-muted-foreground align-top">
                 {i + 1}
               </td>

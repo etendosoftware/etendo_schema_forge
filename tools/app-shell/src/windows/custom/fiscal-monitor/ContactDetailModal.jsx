@@ -203,7 +203,7 @@ function OptionPicker({ options, value, onChange, loading, ariaLabel, ui, error 
                     padding: '10px 14px', fontSize: 14, textAlign: 'left',
                     border: 'none', cursor: 'pointer',
                     background: opt.id === value ? 'hsl(var(--muted))' : 'hsl(var(--card))',
-                    color: opt.id === value ? 'hsl(var(--foreground))' : 'hsl(var(--foreground))',
+                    color: opt.id === value ? 'hsl(var(--foreground))' : 'hsl(var(--muted-foreground))',
                     fontWeight: opt.id === value ? 600 : 400,
                   }}
                 >

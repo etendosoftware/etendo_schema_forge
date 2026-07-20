@@ -131,7 +131,7 @@ function renderRegionPickerBody(regionsLoading, ui, regionsLoadFailed, filteredR
             key={region.id}
             type="button"
             onClick={() => handleRegionSelect(region.id)}
-            style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 8, padding: '10px 20px', fontSize: 14, textAlign: 'left', border: 'none', cursor: 'pointer', background: form.region === region.id ? 'hsl(var(--muted))' : 'hsl(var(--card))', color: form.region === region.id ? 'hsl(var(--foreground))' : 'hsl(var(--foreground))', fontWeight: form.region === region.id ? 600 : 400 }}
+            style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 8, padding: '10px 20px', fontSize: 14, textAlign: 'left', border: 'none', cursor: 'pointer', background: form.region === region.id ? 'hsl(var(--muted))' : 'hsl(var(--card))', color: form.region === region.id ? 'hsl(var(--foreground))' : 'hsl(var(--muted-foreground))', fontWeight: form.region === region.id ? 600 : 400 }}
         >
             <span style={{ width: 16, flexShrink: 0 }}>
                 {form.region === region.id ? <Check size={13} data-testid="Check__927831" /> : null}
@@ -913,7 +913,7 @@ export default function LocationEditorModal({
                             {!countriesLoading && !countriesLoadFailed && filteredCountries.length === 0 && <div style={{ padding: '24px 16px', textAlign: 'center', fontSize: 14, color: 'hsl(var(--text-disabled))' }}>{ui('noResults')}</div>}
                             {filteredCountries.map(country => (
                                 <button key={country.id} type="button" onClick={() => handleCountrySelect(country.id)}
-                                    style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 8, padding: '10px 20px', fontSize: 14, textAlign: 'left', border: 'none', cursor: 'pointer', background: form.country === country.id ? 'hsl(var(--muted))' : 'hsl(var(--card))', color: form.country === country.id ? 'hsl(var(--foreground))' : 'hsl(var(--foreground))', fontWeight: form.country === country.id ? 600 : 400 }}>
+                                    style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 8, padding: '10px 20px', fontSize: 14, textAlign: 'left', border: 'none', cursor: 'pointer', background: form.country === country.id ? 'hsl(var(--muted))' : 'hsl(var(--card))', color: form.country === country.id ? 'hsl(var(--foreground))' : 'hsl(var(--muted-foreground))', fontWeight: form.country === country.id ? 600 : 400 }}>
                                     <span style={{ width: 16, flexShrink: 0 }}>{form.country === country.id && <Check size={13} data-testid="Check__927831" />}</span>
                                     <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{country.label}</span>
                                 </button>

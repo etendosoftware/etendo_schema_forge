@@ -1,5 +1,12 @@
 import { cn } from '@/lib/utils';
 
+function resolveStatusColor(status) {
+  if (status >= 200 && status < 300) return 'text-status-success-foreground';
+  if (status >= 400 && status < 500) return 'text-status-warning-foreground';
+  if (status >= 500) return 'text-destructive';
+  return 'text-inverse-muted';
+}
+
 export default function ResponseViewer({ response }) {
   if (!response) {
     return (
@@ -11,11 +18,7 @@ export default function ResponseViewer({ response }) {
 
   const { status, statusText, elapsed, body } = response;
 
-  const statusColor =
-    status >= 200 && status < 300 ? 'text-status-success-foreground' :
-    status >= 400 && status < 500 ? 'text-status-warning-foreground' :
-    status >= 500 ? 'text-destructive' :
-    'text-inverse-muted';
+  const statusColor = resolveStatusColor(status);
 
   const formatted = typeof body === 'object' ? JSON.stringify(body, null, 2) : String(body);
 

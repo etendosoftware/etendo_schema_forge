@@ -8,6 +8,12 @@ import { formatDashboardAmount, formatDashboardNumber, localeFromUi } from '@/li
 import { DASHBOARD_KPI_IDS, trackDashboardKpi } from '@/lib/dashboardKpiTelemetry.js';
 import { DashboardCard, DashboardEmptyState, DashboardRowChevron } from './_shared';
 
+function trendPillStyle(isFlat, isUp) {
+  if (isFlat) return { backgroundColor: 'hsl(var(--muted))', color: 'hsl(var(--muted-foreground))' };
+  if (isUp) return { backgroundColor: 'var(--status-success-bg)', color: 'var(--status-success-fg)' };
+  return { backgroundColor: 'var(--status-destructive-bg)', color: 'hsl(var(--destructive))' };
+}
+
 function TrendPill({ pct }) {
   if (pct === null || pct === undefined) return null;
   const isUp = pct > 0;
@@ -16,11 +22,7 @@ function TrendPill({ pct }) {
   return (
     <span
       className="inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-xs font-medium"
-      style={isFlat
-        ? { backgroundColor: 'hsl(var(--muted))', color: 'hsl(var(--muted-foreground))' }
-        : isUp
-          ? { backgroundColor: 'var(--status-success-bg)', color: 'var(--status-success-fg)' }
-          : { backgroundColor: 'var(--status-destructive-bg)', color: 'hsl(var(--destructive))' }}
+      style={trendPillStyle(isFlat, isUp)}
     >
       <Icon className="h-3 w-3" data-testid="Icon__4d53b7" />
       {isUp ? '+' : ''}{pct}%

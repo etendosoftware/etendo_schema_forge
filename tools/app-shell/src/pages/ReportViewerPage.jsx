@@ -20,6 +20,10 @@ function getEtendoBase() {
 }
 const ETENDO_BASE = getEtendoBase();
 
+// Static skeleton placeholders shown while a report renders — fixed-length, never reordered.
+const SKELETON_COLUMN_WIDTHS = [40, 15, 15, 15, 15, 15].map((w, i) => ({ id: i, w }));
+const SKELETON_ROWS = Array.from({ length: 8 }, (_, r) => ({ id: r }));
+
 function ReportCard({ report, onRun }) {
   const ui = useUI();
   const { locale } = useLocaleSwitch();
@@ -1249,14 +1253,14 @@ function ReportViewer({ report, onBack, token, selectedOrgId, roleOrgIds, catego
                     <div className="h-4 w-48 bg-muted rounded mb-6" />
                     <div className="space-y-0">
                       <div className="grid grid-cols-6 gap-3 pb-2 border-b border-border-subtle mb-1">
-                        {[40, 15, 15, 15, 15, 15].map((w, i) => (
-                          <div key={i} className="h-3 bg-muted rounded" style={{ width: `${w}%` }} />
+                        {SKELETON_COLUMN_WIDTHS.map(col => (
+                          <div key={col.id} className="h-3 bg-muted rounded" style={{ width: `${col.w}%` }} />
                         ))}
                       </div>
-                      {Array.from({ length: 8 }).map((_, r) => (
-                        <div key={r} className="grid grid-cols-6 gap-3 py-2.5 border-b border-border-subtle">
-                          {[40, 15, 15, 15, 15, 15].map((w, i) => (
-                            <div key={i} className="h-3 rounded" style={{ width: `${w}%`, background: r % 2 === 0 ? 'hsl(var(--border-subtle))' : 'hsl(var(--muted))' }} />
+                      {SKELETON_ROWS.map(row => (
+                        <div key={row.id} className="grid grid-cols-6 gap-3 py-2.5 border-b border-border-subtle">
+                          {SKELETON_COLUMN_WIDTHS.map(col => (
+                            <div key={col.id} className="h-3 rounded" style={{ width: `${col.w}%`, background: row.id % 2 === 0 ? 'hsl(var(--border-subtle))' : 'hsl(var(--muted))' }} />
                           ))}
                         </div>
                       ))}
