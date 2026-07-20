@@ -110,7 +110,7 @@ rated (e.g. pricing complaints do not belong in a workflow-usability survey).
 
 The global cooldown and monthly cap are checked first. If either fails, no survey is evaluated further. The dismiss cooldown is checked per survey in the loop, so one dismissed survey does not block others that have not been dismissed recently.
 
-All defaults above are read from `getSurveyConfig()` in `survey-config.js` and are overridable at build time via `VITE_SURVEY_*` env vars — see [Configuration](#configuration-vite_survey_) below. This is an internal ops knob for the Etendo GO team, not a customer-facing setting.
+All defaults above are read from `getSurveyConfig()` in `survey-config.js`, which prefers the "Survey Configuration" backoffice window at runtime, falling back to `VITE_SURVEY_*` build-time env vars, then to the hardcoded defaults — see [Configuration](#configuration) below. This is an internal ops knob for the Etendo GO team, not a customer-facing setting.
 
 ---
 
