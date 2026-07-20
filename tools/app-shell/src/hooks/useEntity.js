@@ -880,6 +880,35 @@ export function useEntity(entity, childEntity, {
             });
     }, [apiBaseUrl, entity, headers]);
 
+    // ETP-4029 — narrow escape hatch for refreshHeaderTotals's userChangedKeysRef
+    // protection above, scoped to ONE known cross-surface-sync case (see call site
+    // in DetailView.jsx: the Exchange Rates secondary tab on sales-invoice /
+    // purchase-invoice reverse-syncing the header's hidden eTGOCurrencyRate field).
+    //
+    // handleChange marks a field in userChangedKeysRef the moment the user edits
+    // it via the header form, and — by design — that mark is never cleared by a
+    // save, only by loading a different record (see handleSelect below). That is
+    // correct for its original purpose: protecting a genuinely UNSAVED header
+    // edit from being clobbered when a line add/update triggers refreshHeaderTotals
+    // mid-edit. But eTGOCurrencyRate is unusual: it can ALSO be written from a
+    // completely different UI surface (the Exchange Rates tab's own PATCH, whose
+    // backend handler — InvoiceExchangeRateHandler — mirrors the new value onto
+    // the invoice header as a reverse sync). If the user had earlier edited the
+    // rate via the header's CurrencyRatePicker in the same visit (already saved,
+    // long done), that stale mark would permanently block refreshHeaderTotals from
+    // ever showing the tab's newer, already-persisted value — the header would
+    // keep displaying the old rate until a manual reload.
+    //
+    // This forgets the "user changed" mark for exactly one caller-supplied key, so
+    // the NEXT refreshHeaderTotals call is free to update it from the fresh GET.
+    // It is intentionally NOT a general escape hatch from the unsaved-edit
+    // protection — callers must only use it where they can prove the field was
+    // just re-derived from an authoritative backend write (as the Exchange Rates
+    // tab's PATCH response is), never to paper over an unrelated staleness bug.
+    const clearUserChangedKey = useCallback((key) => {
+        userChangedKeysRef.current.delete(key);
+    }, []);
+
     const handleSelect = useCallback((row) => {
         // Reset the per-session changed-keys set when a different record is loaded,
         // so format validation (email/website/phone) only ever re-checks fields the
@@ -1229,7 +1258,7 @@ export function useEntity(entity, childEntity, {
         fieldErrors, registerFields,
         handleSelect, handleNew, handleChange, handleSave, handleSaveAndProcess, handleDelete, handleProcess,
         handleAddChild, handleUpdateChild, handleDeleteChild, primeSaved,
-        refresh, fetchById, fetchChildren, fetchChildDefaults, loadMore,
+        refresh, fetchById, fetchChildren, fetchChildDefaults, loadMore, refreshHeaderTotals, clearUserChangedKey,
         sortColumn, sortDirection, setSortColumn, setSortDirection,
     };
 }

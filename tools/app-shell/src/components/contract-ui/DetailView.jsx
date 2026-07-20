@@ -68,6 +68,7 @@ import BalanceFooterPanel from './BalanceFooterPanel.jsx';
 import { resolveTotalDiscountPct } from '@/lib/documentTotals';
 import { computeBalance } from '@/lib/balanceTotals';
 import LinesSelectionBar from './LinesSelectionBar.jsx';
+import { evalTabReadOnly } from './evalTabReadOnly.js';
 import { resolveIdentifier } from '@/lib/resolveIdentifier.js';
 import {
   buildCalloutFormState, extractAuxValues, normalizeCalloutQty,
@@ -397,8 +398,8 @@ export function getSecondarySelectionChangeHandler(linesLayout, setSecondarySele
 }
 
 export function getSecondaryRowUpdateHandler(st, linesLayout, ctx) {
-  const { api, apiBaseUrl, secondaryHooks, stIdx, token, ui, extractErrorMessage } = ctx;
-  return !st.customAddModal && linesLayout === 'inlineEditable' ? async (row, fieldKey, value, opts) => {
+  const { api, apiBaseUrl, secondaryHooks, stIdx, token, ui, extractErrorMessage, isDocumentReadOnly, hook } = ctx;
+  return !st.customAddModal && linesLayout === 'inlineEditable' && !isDocumentReadOnly ? async (row, fieldKey, value, opts) => {
     const childUrl = api?.crud?.[st.key]?.detailUrl?.replace('{id}', row.id)
         || `${apiBaseUrl}/${st.key}/${row.id}`;
     const includesIdentifier = opts?.identifier !== undefined;
@@ -429,6 +430,28 @@ export function getSecondaryRowUpdateHandler(st, linesLayout, ctx) {
       // NEO wraps the saved record in {response:{data:[...]}}.
       const serverRow = updated?.response?.data?.[0] ?? null;
       if (serverRow) secondaryHooks[stIdx]?.handleUpdateChild?.(row.id, serverRow);
+      // ETP-4029: editing rate/foreignAmount here also updates the invoice
+      // header's hidden eTGOCurrencyRate on the backend (reverse sync — see
+      // InvoiceExchangeRateHandler). Without this, the header's currency-rate
+      // picker keeps showing the stale value until a manual reload.
+      // refreshHeaderTotals is the same lightweight, non-disruptive header
+      // refresh already used after primary-line edits — it re-GETs the header
+      // and merges in only the fields the user hasn't touched, so any of the
+      // user's own in-progress unsaved header edits survive untouched.
+      //
+      // clearUserChangedKey('eTGOCurrencyRate') runs first, and ONLY for this
+      // one field: if the user had earlier edited the rate via the header's
+      // own CurrencyRatePicker in this same visit (already saved), that edit
+      // permanently marks eTGOCurrencyRate as "user changed" for the rest of
+      // the session (see useEntity.handleChange) — refreshHeaderTotals would
+      // then refuse to overwrite it, leaving the header stuck on the old
+      // value even though the tab's edit just persisted a newer one. This is
+      // a narrow, deliberate exception for this specific cross-surface sync;
+      // see the full rationale on clearUserChangedKey's definition.
+      if (st.key === 'exchangeRates' && hook?.selected?.id) {
+        hook.clearUserChangedKey('eTGOCurrencyRate');
+        hook.refreshHeaderTotals(hook.selected.id);
+      }
     } else {
       secondaryHooks[stIdx]?.handleUpdateChild?.(row.id, previous);
       const msg = await extractErrorMessage(res);
@@ -604,6 +627,11 @@ export function SecondaryPanelTab(props) {
 }
 
 export function SecondaryTableTab(props) {
+  // Evaluates the tab's own readOnlyLogic (if declared) against the current
+  // header record — independent of the document-wide isDocumentReadOnly, which
+  // only governs the primary lines table. Most tabs declare no readOnlyLogic
+  // and this stays false, preserving today's behavior everywhere else.
+  const tabReadOnly = evalTabReadOnly(props.st, props.hook.selected);
   return (
     <>
       <div className="flex items-start gap-4">
@@ -617,6 +645,7 @@ export function SecondaryTableTab(props) {
               labelOverrides={props.labelOverrides}
               selectorContext={props.selectorContextByEntity[props.st.key]}
               linesLayout={props.linesLayout}
+              isDocumentReadOnly={tabReadOnly}
               onRowClick={resolveSecondaryRowClickHandler(props.st, {
                 openCustomModal: props.openCustomModal,
                 openSecondaryLine: props.openSecondaryLine,
@@ -627,7 +656,7 @@ export function SecondaryTableTab(props) {
               onEditRow={getSecondaryEditRowHandler(props.st, props.setCustomModalState)}
               selectedRowId={props.selectedSecondaryLine?._tabKey === props.st.key ? props.selectedSecondaryLine?.id : undefined}
               onSelectionChange={getSecondarySelectionChangeHandler(props.linesLayout, props.setSecondarySelectedRows, props.st)}
-              onDeleteRow={(props.enableSecondaryRowDelete || (props.linesLayout === 'inlineEditable' && !props.st.customAddModal)) && (props.crud?.[props.st.key]?.delete ?? true) ? props.onDeleteRow : undefined}
+              onDeleteRow={(props.enableSecondaryRowDelete || (props.linesLayout === 'inlineEditable' && !props.st.customAddModal)) && !tabReadOnly && (props.crud?.[props.st.key]?.delete ?? true) ? props.onDeleteRow : undefined}
               // Inline edit save for secondary-tab rows. Fires when a
               // cell loses focus while in edit mode. Optimistic flow:
               // we update the local cache FIRST so the Radix Select
@@ -641,8 +670,10 @@ export function SecondaryTableTab(props) {
                 token: props.token,
                 ui: props.ui,
                 extractErrorMessage: props.extractErrorMessage,
+                isDocumentReadOnly: tabReadOnly,
+                hook: props.hook,
               })}
-              addRow={props.st.addLineFields?.entry?.length > 0 ? {
+              addRow={props.st.addLineFields?.entry?.length > 0 && !tabReadOnly ? {
                 ref: props.secondaryAddRowRef,
                 active: props.addingSecondaryLine[props.st.key] ?? false,
                 fields: props.st.addLineFields.entry,
@@ -712,7 +743,7 @@ export function SecondaryTableTab(props) {
             </div>
         )}
       </div>
-      {(props.st.addLineFields?.entry?.length > 0 || props.st.customAddModal) && props.hook.editing && (
+      {(props.st.addLineFields?.entry?.length > 0 || props.st.customAddModal) && props.hook.editing && !tabReadOnly && (
           // Wrapper measured by the secondary selection bar — its
           // `position: fixed` portal overlays exactly this region.
           // Mirrors the primary header-lines add-button wrapper (shared
@@ -2686,6 +2717,21 @@ export function DetailView({
       if (secondaryTabs[i]) sh.handleSelect(hook.selected);
     });
   }, [hook.selected?.id]);
+
+  // ETP-4029: the Exchange Rates tab caches its own row (rate/foreignAmount)
+  // independently of the header. Saving a new header currency rate updates
+  // that row on the backend (AbstractInvoiceHeaderHandler), but the effect
+  // above only re-syncs on a record ID change, not on same-record field
+  // changes — so this tab would keep showing the previously-fetched values
+  // until a manual reload. Scoped to exchangeRates only: no other secondary
+  // tab is known to depend on the header's currency/rate.
+  useEffect(() => {
+    if (!hook.selected?.id) return;
+    const exchangeRatesIdx = secondaryTabs.findIndex(st => st.key === 'exchangeRates');
+    if (exchangeRatesIdx < 0) return;
+    secondaryHooks[exchangeRatesIdx]?.fetchChildren(hook.selected.id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hook.selected?.currency, hook.selected?.eTGOCurrencyRate]);
 
   // Apply callout results to the form when they arrive
   useEffect(() => {
