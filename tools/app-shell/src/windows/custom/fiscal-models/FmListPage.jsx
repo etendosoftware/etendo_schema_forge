@@ -322,7 +322,7 @@ const DEMO_DECLARATIONS = [
     type: 'ord', status: 'submitted_ack', nif: 'B12345678',
     result: { kind: 'N', amount: 0 },
     incidents: { blocking: 0, warning: 0, items: [] },
-    file: '349_B12345678_2026_T1.349',
+    file: '349_B12345678_2026_T1.txt',
     updatedAt: '2026-04-20',
   },
 ];

@@ -1,11 +1,65 @@
 import { useMemo } from 'react';
-import { ArrowLeft, ArrowLeftRight } from 'lucide-react';
+import { ArrowLeft, ArrowLeftRight, ChevronDown, Plus } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useUI } from '@/i18n';
 import { AdvancedFilterButton } from '@/components/contract-ui/AdvancedFilterButton.jsx';
 import { DateRangeFilter } from './DateRangeFilter';
 import { TypeFilter } from './TypeFilter';
 import { buildMovementFilterColumns } from '../movementAdvancedFilter';
+import { useSplitButtonDropdown } from '../useSplitButtonDropdown';
+
+/**
+ * Split-button: primary "Nuevo movimiento" action plus a ▾ trigger that opens a
+ * small menu with "Transferir fondos". Mirrors the Imported-statements
+ * SplitImport. Closes on outside click / Escape.
+ */
+function MovementsSplitButton({ ui, onNewMovement, onTransfer }) {
+  const { open, setOpen, ref } = useSplitButtonDropdown();
+
+  return (
+    <div ref={ref} className="relative flex items-stretch">
+      <button
+        type="button"
+        data-testid="new-movement-button"
+        onClick={onNewMovement}
+        className="inline-flex h-10 items-center gap-2 rounded-l-lg bg-[#121217] px-3 text-sm font-medium text-white transition-colors hover:bg-[#FFD500] hover:text-[#121217]"
+      >
+        <Plus className="h-4 w-4" data-testid="Plus__f863ac" />
+        {ui('financeAccountTxNewAction')}
+      </button>
+      <button
+        type="button"
+        aria-label={ui('financeAccountTransferAction')}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        data-testid="new-movement-split"
+        onClick={() => setOpen((o) => !o)}
+        className="inline-flex h-10 w-9 items-center justify-center rounded-r-lg border-l border-white/20 bg-[#121217] text-white transition-colors hover:bg-[#FFD500] hover:text-[#121217]"
+      >
+        <ChevronDown
+          className={`h-4 w-4 transition-transform ${open ? 'rotate-180' : ''}`}
+          data-testid="ChevronDown__f863ac" />
+      </button>
+      {open ? (
+        <div
+          role="menu"
+          className="absolute right-0 top-11 z-50 w-[229px] overflow-hidden rounded-lg border border-[#E8EAEF] bg-white py-2 shadow-lg"
+        >
+          <button
+            type="button"
+            role="menuitem"
+            data-testid="movements-transfer-menu-item"
+            onClick={() => { setOpen(false); onTransfer?.(); }}
+            className="flex w-full items-center gap-2 px-2 py-1 text-left hover:bg-[#F5F7F9]"
+          >
+            <ArrowLeftRight className="h-6 w-6 shrink-0 text-[#828FA3]" data-testid="ArrowLeftRight__f863ac" />
+            <span className="text-sm text-[#121217]">{ui('financeAccountTransferAction')}</span>
+          </button>
+        </div>
+      ) : null}
+    </div>
+  );
+}
 
 /**
  * Toolbar for the movements tab.
@@ -27,6 +81,7 @@ export function MovementsToolbar({
   onFiltersChange,
   advancedFilter,
   onAdvancedFilterChange,
+  onNewMovement,
   onTransfer,
   rows = [],
 }) {
@@ -76,16 +131,13 @@ export function MovementsToolbar({
           className="h-10 w-48 rounded-lg border border-[hsl(var(--border-control))] bg-card px-3 text-sm text-[hsl(var(--foreground))] placeholder:text-[hsl(var(--text-disabled))] shadow-[0_1px_2px_hsl(var(--foreground) / 0.05)] focus:outline-none focus:ring-2 focus:ring-[hsl(var(--foreground))] focus:ring-offset-1"
         />
       </div>
-      {/* Transfer funds — occupies the slot of the former "New movement" button. */}
-      <button
-        type="button"
-        data-testid="transfer-funds-button"
-        onClick={onTransfer}
-        className="inline-flex h-10 items-center gap-2 rounded-lg bg-[hsl(var(--foreground))] px-3 text-sm font-medium text-primary-foreground transition-colors hover:bg-[hsl(var(--primary))] hover:text-[hsl(var(--foreground))]"
-      >
-        <ArrowLeftRight className="h-4 w-4" data-testid="ArrowLeftRight__f863ac" />
-        {ui('financeAccountTransferAction')}
-      </button>
+      {/* Split button: primary "Nuevo movimiento" (opens the GL-item modal) +
+          a ▾ menu with "Transferir fondos". */}
+      <MovementsSplitButton
+        ui={ui}
+        onNewMovement={onNewMovement}
+        onTransfer={onTransfer}
+        data-testid="MovementsSplitButton__f863ac" />
     </div>
   );
 }

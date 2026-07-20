@@ -62,14 +62,18 @@ describe('useWarehouseStock', () => {
   });
 
   describe('no warehouseId', () => {
-    it('stays in initial loading state when warehouseId is falsy', () => {
+    it('settles into a neutral/empty state (no spinner) when warehouseId is falsy', () => {
       globalThis.fetch = vi.fn();
       const { result } = renderHook(() =>
         useWarehouseStock(null, 'token', '/api'),
       );
-      // useEffect returns early — no fetch
+      // No saved warehouse yet: no fetch is issued and the hook drops out of the
+      // loading state immediately, showing an empty section instead of an endless spinner.
       expect(globalThis.fetch).not.toHaveBeenCalled();
-      expect(result.current.loading).toBe(true);
+      expect(result.current.loading).toBe(false);
+      expect(result.current.error).toBeNull();
+      expect(result.current.products).toEqual([]);
+      expect(result.current.transactions).toEqual([]);
     });
   });
 

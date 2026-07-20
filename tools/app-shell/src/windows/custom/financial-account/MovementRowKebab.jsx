@@ -1,9 +1,10 @@
 import { useState } from 'react';
-import { MoreVertical, ExternalLink, GitMerge, BookOpen, BookX } from 'lucide-react';
+import { MoreVertical, BookOpen, BookX, CheckCircle2, RotateCcw, Trash2, Pencil } from 'lucide-react';
 import { toast } from 'sonner';
 import { useUI } from '@/i18n';
 import { useAuth } from '@/auth/AuthContext.jsx';
 import { getApiBase } from '@/hooks/useNeoResource';
+import { useProcessMovement, useReactivateMovement, useDeleteMovement } from '@/hooks/useCreateMovement';
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -11,16 +12,12 @@ import {
   DropdownMenuItem,
   DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu';
-import {
-  Tooltip,
-  TooltipTrigger,
-  TooltipContent,
-  TooltipProvider,
-} from '@/components/ui/tooltip';
+import MovementConfirmModal from './MovementConfirmModal';
 
+// Post (contabilizar) / Unpost (descontabilizar) go through the financial-account spec's
+// document-posting action (Java_Qualifier `document-posting` on the transaction entity).
 const POST_URL = (id) =>
   `${getApiBase()}/sws/neo/financial-account/transaction/${encodeURIComponent(id)}/action/post`;
-
 const UNPOST_URL = (id) =>
   `${getApiBase()}/sws/neo/financial-account/transaction/${encodeURIComponent(id)}/action/unpost`;
 
@@ -45,18 +42,72 @@ async function callTransactionAction(url, token) {
  * Per-row kebab menu for a movement row.
  * Only visible on row hover (parent row must have `group` class).
  *
- * @param {{ movement: object, onReload?: () => void }} props
+ * Edit / Process / Reactivate / Delete apply ONLY to manual G/L-item transactions
+ * (no `paymentId`); movements linked to an invoice payment/collection are managed
+ * from the Payments module, so those actions are hidden for them. Post/Unpost
+ * (contabilizar/descontabilizar) apply to any processed/posted movement.
+ *
+ * @param {{ movement: object, onReload?: () => void, onEdit?: (m: object) => void }} props
  */
-export function MovementRowKebab({ movement, onReload }) {
+export function MovementRowKebab({ movement, onReload, onEdit }) {
   const ui = useUI();
   const { token } = useAuth();
+  const { processMovement, processing } = useProcessMovement();
+  const { reactivateMovement, reactivating } = useReactivateMovement();
+  const { deleteMovement, deleting } = useDeleteMovement();
   const [posting, setPosting] = useState(false);
   const [unposting, setUnposting] = useState(false);
+  // Destructive-action confirmation ('reactivate' | 'delete' | null).
+  const [confirm, setConfirm] = useState(null);
 
   const isPosted = movement.posted === 'Y';
+  const isProcessed = Boolean(movement.processed);
+  const isReconciled = movement.paymentStatus === 'RPPC';
+  const isPaymentLinked = Boolean(movement.paymentId);
+  const isGlTransaction = !isPaymentLinked;
+  // Editable while not posted (contabilizado): Draft → full edit, Processed → partial edit
+  // (the modal locks amount/type). Posted → must reactivate first, so no edit.
+  const canEdit = isGlTransaction && !isPosted;
+  const canProcess = isGlTransaction && !isProcessed;
+  const canReactivate = isGlTransaction && isProcessed;
+  const canDelete = isGlTransaction;
+  // Contabilizar only makes sense once the movement is Processed (and not yet posted).
+  const canPost = isProcessed && !isPosted;
+  // The destructive-action confirmation only matters when there is something to undo — i.e. the
+  // movement is posted (contabilizado) and/or reconciled. A merely-Processed movement reactivates
+  // or deletes directly, without the dialog.
+  const needsConfirm = isPosted || isReconciled;
+
+  // Nothing to offer → don't render an empty kebab. Unpost applies to any posted movement, so it
+  // keeps the kebab alive even for payment-linked posted rows.
+  if (!canEdit && !canProcess && !canReactivate && !canDelete && !canPost && !isPosted) {
+    return null;
+  }
+  const busy = posting || unposting || processing || reactivating || deleting;
+
+  async function runLifecycle(fn, successKey, errorKey) {
+    if (busy) return;
+    try {
+      await fn({ id: movement.id });
+      toast.success(ui(successKey));
+      onReload?.();
+    } catch (e) {
+      toast.error(e?.message || ui(errorKey));
+    }
+  }
+
+  // Runs the action confirmed in the dialog, then closes it.
+  async function runConfirmed() {
+    if (confirm === 'delete') {
+      await runLifecycle(deleteMovement, 'financeAccountTxRowDeleteSuccess', 'financeAccountTxRowDeleteError');
+    } else {
+      await runLifecycle(reactivateMovement, 'financeAccountTxRowReactivateSuccess', 'financeAccountTxRowReactivateError');
+    }
+    setConfirm(null);
+  }
 
   async function handlePost() {
-    if (posting || isPosted) return;
+    if (busy) return;
     setPosting(true);
     try {
       const { success, message } = await callTransactionAction(POST_URL(movement.id), token);
@@ -74,7 +125,7 @@ export function MovementRowKebab({ movement, onReload }) {
   }
 
   async function handleUnpost() {
-    if (unposting || !isPosted) return;
+    if (busy || !isPosted) return;
     setUnposting(true);
     try {
       const { success, message } = await callTransactionAction(UNPOST_URL(movement.id), token);
@@ -92,7 +143,7 @@ export function MovementRowKebab({ movement, onReload }) {
   }
 
   return (
-    <TooltipProvider data-testid="TooltipProvider__64eff3">
+    <>
       <DropdownMenu data-testid="DropdownMenu__64eff3">
         <DropdownMenuTrigger asChild data-testid="DropdownMenuTrigger__64eff3">
           <button
@@ -108,39 +159,38 @@ export function MovementRowKebab({ movement, onReload }) {
           align="end"
           className="w-[220px]"
           data-testid="DropdownMenuContent__64eff3">
-          {/* View detail — active */}
-          <DropdownMenuItem
-            onClick={() => toast(ui('financeAccountMovementsRowViewDetailToast'))}
-            data-testid="DropdownMenuItem__64eff3">
-            <ExternalLink className="h-5 w-5 text-[hsl(var(--text-disabled))]" data-testid="ExternalLink__64eff3" />
-            <span className="text-sm font-normal leading-6 text-[hsl(var(--foreground))]">
-              {ui('financeAccountMovementsRowViewDetail')}
-            </span>
-          </DropdownMenuItem>
-
-          <DropdownMenuSeparator data-testid="DropdownMenuSeparator__64eff3" />
-
-          {/* Unreconcile — disabled with tooltip */}
-          <Tooltip data-testid="Tooltip__64eff3">
-            <TooltipTrigger asChild data-testid="TooltipTrigger__64eff3">
-              <span>
-                <DropdownMenuItem disabled data-testid="DropdownMenuItem__64eff3">
-                  <GitMerge className="h-5 w-5 text-[hsl(var(--text-disabled))]" data-testid="GitMerge__64eff3" />
-                  <span className="text-sm font-normal leading-6 text-[hsl(var(--foreground))]">
-                    {ui('financeAccountMovementsRowUnreconcile')}
-                  </span>
-                </DropdownMenuItem>
+          {/* Edit — reopen the movement modal for a Draft/Processed G/L transaction */}
+          {canEdit && (
+            <DropdownMenuItem
+              onClick={() => onEdit?.(movement)}
+              disabled={busy}
+              data-testid="movement-row-edit">
+              <Pencil className="h-5 w-5 text-[hsl(var(--text-disabled))]" data-testid="Pencil__64eff3" />
+              <span className="text-sm font-normal leading-6 text-[hsl(var(--foreground))]">
+                {ui('financeAccountTxRowEdit')}
               </span>
-            </TooltipTrigger>
-            <TooltipContent data-testid="TooltipContent__64eff3">{ui('financeAccountMovementsRowUnreconcileTooltip')}</TooltipContent>
-          </Tooltip>
+            </DropdownMenuItem>
+          )}
 
-          {/* Post — enabled when not yet posted */}
-          {!isPosted && (
+          {/* Process — Draft → Processed (G/L transactions only) */}
+          {canProcess && (
+            <DropdownMenuItem
+              onClick={() => runLifecycle(processMovement, 'financeAccountTxRowProcessSuccess', 'financeAccountTxRowProcessError')}
+              disabled={busy}
+              data-testid="movement-row-process">
+              <CheckCircle2 className="h-5 w-5 text-[hsl(var(--text-disabled))]" data-testid="CheckCircle2__64eff3" />
+              <span className="text-sm font-normal leading-6 text-[hsl(var(--foreground))]">
+                {processing ? ui('financeAccountTxRowProcessing') : ui('financeAccountTxRowProcess')}
+              </span>
+            </DropdownMenuItem>
+          )}
+
+          {/* Post — contabilizar; only for Processed, not-yet-posted movements */}
+          {canPost && (
             <DropdownMenuItem
               onClick={handlePost}
-              disabled={posting}
-              data-testid="DropdownMenuItem__64eff3">
+              disabled={busy}
+              data-testid="movement-row-post">
               <BookOpen className="h-5 w-5 text-[hsl(var(--text-disabled))]" data-testid="BookOpen__64eff3" />
               <span className="text-sm font-normal leading-6 text-[hsl(var(--foreground))]">
                 {posting ? ui('financeAccountMovementsRowPosting') : ui('financeAccountMovementsRowPost')}
@@ -148,23 +198,63 @@ export function MovementRowKebab({ movement, onReload }) {
             </DropdownMenuItem>
           )}
 
-          {/* Unpost — enabled when already posted. No reconciliation-state field is
-              exposed on the row (see artifacts/financial-account/contract.json —
-              `reconciliation` is a system field with no apiKey), so it cannot be
-              gated on reconciliation status here. */}
+          {/* Unpost — descontabilizar; enabled while posted. No reconciliation-state field is
+              exposed on the row, so it cannot be gated on reconciliation status here. */}
           {isPosted && (
             <DropdownMenuItem
               onClick={handleUnpost}
-              disabled={unposting}
-              data-testid="DropdownMenuItem__64eff3">
+              disabled={busy}
+              data-testid="movement-row-unpost">
               <BookX className="h-5 w-5 text-[hsl(var(--text-disabled))]" data-testid="BookX__64eff3" />
               <span className="text-sm font-normal leading-6 text-[hsl(var(--foreground))]">
                 {unposting ? ui('financeAccountMovementsRowUnposting') : ui('financeAccountMovementsRowUnpost')}
               </span>
             </DropdownMenuItem>
           )}
+
+          {/* Reactivate — Processed → Draft (G/L only); confirms first only when posted/reconciled */}
+          {canReactivate && (
+            <DropdownMenuItem
+              onClick={() => (needsConfirm
+                ? setConfirm('reactivate')
+                : runLifecycle(reactivateMovement, 'financeAccountTxRowReactivateSuccess', 'financeAccountTxRowReactivateError'))}
+              disabled={busy}
+              data-testid="movement-row-reactivate">
+              <RotateCcw className="h-5 w-5 text-[hsl(var(--text-disabled))]" data-testid="RotateCcw__64eff3" />
+              <span className="text-sm font-normal leading-6 text-[hsl(var(--foreground))]">
+                {reactivating ? ui('financeAccountTxRowReactivating') : ui('financeAccountTxRowReactivate')}
+              </span>
+            </DropdownMenuItem>
+          )}
+
+          {/* Delete — Draft removed directly; Processed confirms first (Payment Removal) */}
+          {canDelete && (
+            <>
+              <DropdownMenuSeparator data-testid="DropdownMenuSeparator__64eff3" />
+              <DropdownMenuItem
+                onClick={() => (needsConfirm
+                  ? setConfirm('delete')
+                  : runLifecycle(deleteMovement, 'financeAccountTxRowDeleteSuccess', 'financeAccountTxRowDeleteError'))}
+                disabled={busy}
+                data-testid="movement-row-delete">
+                <Trash2 className="h-5 w-5 text-[hsl(var(--destructive))]" data-testid="Trash2__64eff3" />
+                <span className="text-sm font-normal leading-6 text-[hsl(var(--destructive))]">
+                  {deleting ? ui('financeAccountTxRowDeleting') : ui('financeAccountTxRowDelete')}
+                </span>
+              </DropdownMenuItem>
+            </>
+          )}
         </DropdownMenuContent>
       </DropdownMenu>
-    </TooltipProvider>
+      {confirm && (
+        <MovementConfirmModal
+          action={confirm}
+          reconciled={isReconciled}
+          posted={isPosted}
+          onConfirm={runConfirmed}
+          onClose={() => setConfirm(null)}
+          data-testid="MovementConfirmModal__64eff3" />
+      )}
+    </>
   );
 }

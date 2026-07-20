@@ -89,6 +89,10 @@ export default function FinancialAccountWindow({ recordId }) {
   );
   // Transaction to highlight in the Movements tab (deep-link from the reconciled-txns modal arrow).
   const [highlightTxnId, setHighlightTxnId] = useState(() => searchParams.get('txn') || null);
+  // Auto-open the New-movement modal (deep-link from the accounts-grid row kebab).
+  const [autoOpenNewMovement, setAutoOpenNewMovement] = useState(
+    () => searchParams.get('newMovement') === 'true',
+  );
 
   // Switching INTO the Reconciliation tab opens the automatch modal first.
   const handleTabChange = useCallback((tab) => {
@@ -106,10 +110,12 @@ export default function FinancialAccountWindow({ recordId }) {
     const tab = searchParams.get('tab');
     const txn = searchParams.get('txn');
     const autoMatch = searchParams.get('autoMatch');
-    if (!tab && !txn && !autoMatch) return;
+    const newMovement = searchParams.get('newMovement');
+    if (!tab && !txn && !autoMatch && !newMovement) return;
     if (tab) setActiveTab(tab);
     if (txn) setHighlightTxnId(txn);
     if (autoMatch === 'true' || tab === 'reconciliation') setAutoMatchOpen(true);
+    if (newMovement === 'true') setAutoOpenNewMovement(true);
     setSearchParams({}, { replace: true });
   }, [searchParams, setSearchParams]);
   const { account, reload: reloadAccount } = useFinancialAccount(recordId);
@@ -271,6 +277,7 @@ export default function FinancialAccountWindow({ recordId }) {
               loading={movementsLoading}
               onReload={reloadMovements}
               highlightTxnId={highlightTxnId}
+              autoOpenNewMovement={autoOpenNewMovement}
               data-testid="MovementsTab__f7dbb3" />
           )}
           {activeTab === 'reconciliation' && (
