@@ -143,6 +143,28 @@ export async function ensureVendorSetup(page, { navigateTo }) {
 }
 
 /**
+ * Re-pick the currently displayed (or first) option of an EntityForm Select.
+ *
+ * Needed when a callout CLEARS a field's value in the editing state while the
+ * shadcn Select keeps displaying the stale label (uncontrolled→controlled):
+ * the form looks filled but required-field validation blocks the save. Opening
+ * the dropdown and clicking an option commits a real value again.
+ */
+export async function reselectComboOption(page, fieldKey) {
+  const trigger = page.getByTestId(`field-${fieldKey}`);
+  if (!await trigger.isVisible({ timeout: 2_000 }).catch(() => false)) return;
+  await trigger.click();
+  const option = page.getByRole('option').first();
+  if (await option.isVisible({ timeout: 3_000 }).catch(() => false)) {
+    await option.click();
+  } else {
+    // No options (or not a Select) — close the dropdown and move on.
+    await page.keyboard.press('Escape');
+  }
+  await page.waitForTimeout(300);
+}
+
+/**
  * Select the first vendor BP in a selector field and wait for callout.
  */
 export async function selectVendorBP(page) {

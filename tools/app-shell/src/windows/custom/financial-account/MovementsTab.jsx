@@ -1,8 +1,8 @@
-import { forwardRef, useImperativeHandle, useRef, useState, useMemo } from 'react';
+import { forwardRef, useEffect, useImperativeHandle, useRef, useState, useMemo } from 'react';
 import { AccountSummaryStrip } from './AccountSummaryStrip';
 import { MovementsToolbar } from './MovementsToolbar/index';
 import { MovementsTable } from './MovementsTable';
-import { NewMovementWizard } from './NewMovementWizard/index.jsx';
+import { NewTransactionModal } from './NewTransactionModal.jsx';
 import { FundsTransferModal } from './FundsTransferModal.jsx';
 import { applyAdvancedFilter } from './movementAdvancedFilter';
 import { getDateBounds } from '@/lib/dateRangeBounds';
@@ -84,7 +84,7 @@ function applyFilters(movements, filters) {
  * }} props
  */
 export const MovementsTab = forwardRef(function MovementsTab(
-  { account, totals, movements, enabledDimensions = [], headerDimensions = [], trxTypes = [], accountOrgId = null, paymentMethods = [], loading, onReload, highlightTxnId = null },
+  { account, totals, movements, enabledDimensions = [], headerDimensions = [], loading, onReload, highlightTxnId = null, autoOpenNewMovement = false },
   ref,
 ) {
   const [filters, setFilters] = useState({
@@ -95,7 +95,14 @@ export const MovementsTab = forwardRef(function MovementsTab(
   const [advancedFilter, setAdvancedFilter] = useState(null);
   const [selectedIds, setSelectedIds] = useState(new Set());
   const [newMovementOpen, setNewMovementOpen] = useState(false);
+  const [editMovement, setEditMovement] = useState(null);
   const [transferOpen, setTransferOpen] = useState(false);
+
+  // Deep-link from the accounts grid ("Nuevo movimiento" row action) opens the
+  // modal once when the tab mounts with the flag set.
+  useEffect(() => {
+    if (autoOpenNewMovement) setNewMovementOpen(true);
+  }, [autoOpenNewMovement]);
 
   const handleFilterChange = (key) => (val) => {
     setFilters((prev) => ({ ...prev, [key]: val }));
@@ -152,6 +159,7 @@ export const MovementsTab = forwardRef(function MovementsTab(
         onFiltersChange={handleFilterChange}
         advancedFilter={advancedFilter}
         onAdvancedFilterChange={setAdvancedFilter}
+        onNewMovement={() => setNewMovementOpen(true)}
         onTransfer={() => setTransferOpen(true)}
         rows={movements}
         data-testid="MovementsToolbar__c1f76a" />
@@ -169,21 +177,21 @@ export const MovementsTab = forwardRef(function MovementsTab(
           onSelectionChange={handleSelectionChange}
           highlightTxnId={highlightTxnId}
           onReload={onReload}
+          onEdit={setEditMovement}
           data-testid="MovementsTable__c1f76a" />
       </div>
-      <NewMovementWizard
-        open={newMovementOpen}
+      <NewTransactionModal
+        open={newMovementOpen || !!editMovement}
         accountId={account?.id}
+        accountName={account?.name ?? ''}
         accountCurrency={account?.currencyIso
           ? { id: account?.currencyId, iso: account.currencyIso }
           : null}
         dimensions={headerDimensions}
-        trxTypes={trxTypes}
-        defaultOrgId={accountOrgId}
-        paymentMethods={paymentMethods}
-        onClose={() => setNewMovementOpen(false)}
+        movement={editMovement}
+        onClose={() => { setNewMovementOpen(false); setEditMovement(null); }}
         onSuccess={() => onReload?.()}
-        data-testid="NewMovementWizard__c1f76a" />
+        data-testid="NewTransactionModal__c1f76a" />
       {transferOpen ? (
         <FundsTransferModal
           sourceAccountId={account?.id}

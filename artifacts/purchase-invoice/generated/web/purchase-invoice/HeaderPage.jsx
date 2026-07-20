@@ -11,6 +11,7 @@ import ExchangeRatesForm from './ExchangeRatesForm';
 import RelatedDocuments from '@/windows/custom/purchase-invoice/RelatedDocuments';
 import { AttachmentsTab } from '@/components/attachments';
 import SifTab from '@/windows/custom/shared/SifTab.jsx';
+import ReversedInvoicesPanel from '@/windows/custom/sales-invoice/ReversedInvoicesPanel.jsx';
 import PurchaseInvoiceBottomPanel from '../../../custom/PurchaseInvoiceBottomPanel';
 import catalogs from './mockCatalogs';
 
@@ -167,6 +168,17 @@ export const api = {
       "delete": true,
       "listUrl": "/sws/neo/purchase-invoice/paymentDetails",
       "detailUrl": "/sws/neo/purchase-invoice/paymentDetails/{id}",
+      "supportedFilters": []
+    },
+    "reversedInvoices": {
+      "get": true,
+      "getById": true,
+      "post": true,
+      "put": true,
+      "patch": true,
+      "delete": true,
+      "listUrl": "/sws/neo/purchase-invoice/reversedInvoices",
+      "detailUrl": "/sws/neo/purchase-invoice/reversedInvoices/{id}",
       "supportedFilters": []
     },
     "exchangeRates": {
@@ -563,6 +575,22 @@ export const api = {
       "reference": "Payment",
       "inputMode": "selector",
       "url": "/sws/neo/purchase-invoice/paymentDetails/selectors/finPaymentID"
+    },
+    {
+      "entity": "reversedInvoices",
+      "field": "reversedInvoice",
+      "column": "Reversed_C_Invoice_ID",
+      "reference": "Invoice",
+      "inputMode": "search",
+      "url": "/sws/neo/purchase-invoice/reversedInvoices/selectors/reversedInvoice"
+    },
+    {
+      "entity": "reversedInvoices",
+      "field": "aEAT349CYear",
+      "column": "EM_AEAT349_C_Year_ID",
+      "reference": "Year",
+      "inputMode": "search",
+      "url": "/sws/neo/purchase-invoice/reversedInvoices/selectors/aEAT349CYear"
     },
     {
       "entity": "exchangeRates",
@@ -974,7 +1002,7 @@ export default function HeaderPage({ windowName, recordId, ...props }) {
         hideDeleteWhenComplete
         noHeaderBorder
         notesField="description"
-        customTabs={[{ key: 'related', labelKey: 'relatedDocuments', Component: RelatedDocuments }, { key: 'attachments', labelKey: 'attachments', Component: AttachmentsTab, placement: 'tab', props: { tableName: "C_Invoice", config: {} } }, { key: 'sif', labelKey: 'sifDataTabs.sectionTitle', Component: SifTab, placement: 'tab' }]}
+        customTabs={[{ key: 'related', labelKey: 'relatedDocuments', Component: RelatedDocuments }, { key: 'attachments', labelKey: 'attachments', Component: AttachmentsTab, placement: 'tab', props: { tableName: "C_Invoice", config: {} } }, { key: 'sif', labelKey: 'sifDataTabs.sectionTitle', Component: SifTab, placement: 'tab' }, { key: 'reversedInvoices', labelKey: 'rectificationsTab', Component: ReversedInvoicesPanel, placement: 'tab' }]}
         bottomSection={PurchaseInvoiceBottomPanel}
         menuActions={({ data, status }) => [
           { key: 'reactivate', label: 'Reactivate', visible: status === 'CO', labelKey: 'reactivate', successKey: 'reactivated', preUnpost: true, documentAction: 'RE',  },
