@@ -56,22 +56,22 @@ export default function MovementConfirmModal({ action, reconciled, posted, onCon
   // escaping any transformed/overflow ancestor that would otherwise clip a `position: fixed` layer.
   return createPortal((
     <div
-      style={{ position: 'fixed', inset: 0, background: 'rgba(16,20,28,.42)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 500, padding: 24 }}
+      style={{ position: 'fixed', inset: 0, background: 'hsl(var(--foreground) / 0.42)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 500, padding: 24 }}
       data-testid="movement-confirm-modal"
     >
-      <div style={{ width: 520, maxWidth: '100%', background: '#fff', borderRadius: 14, boxShadow: '0 24px 60px rgba(16,20,28,.28)', overflow: 'hidden' }}>
+      <div style={{ width: 520, maxWidth: '100%', background: 'hsl(var(--card))', borderRadius: 14, boxShadow: '0 24px 60px hsl(var(--foreground) / 0.28)', overflow: 'hidden' }}>
         {/* Header */}
         <div style={{ padding: '22px 24px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
           <div style={{ flex: 1, paddingRight: 12 }}>
-            <h3 style={{ margin: 0, font: '700 18px/24px Inter', color: '#D50B3E' }}>{title}</h3>
-            <div style={{ font: '400 13px/19px Inter', color: '#555B6D', marginTop: 6 }}>{sub}</div>
+            <h3 style={{ margin: 0, font: '700 18px/24px Inter', color: 'var(--status-destructive-fg)' }}>{title}</h3>
+            <div style={{ font: '400 13px/19px Inter', color: 'hsl(var(--text-disabled))', marginTop: 6 }}>{sub}</div>
           </div>
           <button
             onClick={onClose}
             data-testid="movement-confirm-close"
-            style={{ width: 28, height: 28, borderRadius: 6, border: '1px solid #E3E7EC', background: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0 }}
+            style={{ width: 28, height: 28, borderRadius: 6, border: '1px solid hsl(var(--border-control))', background: 'hsl(var(--card))', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0 }}
           >
-            <svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke="#6C6C89" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke="hsl(var(--text-secondary))" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
             </svg>
           </button>
@@ -82,32 +82,32 @@ export default function MovementConfirmModal({ action, reconciled, posted, onCon
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 16 }}>
             {items.map(([t, d]) => (
               <div key={t} style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
-                <svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="#C5234A" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, marginTop: 2 }}>
+                <svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="var(--status-destructive-fg)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, marginTop: 2 }}>
                   <circle cx="12" cy="12" r="10" /><line x1="15" y1="9" x2="9" y2="15" /><line x1="9" y1="9" x2="15" y2="15" />
                 </svg>
                 <div>
-                  <span style={{ font: '600 13px/18px Inter', color: '#19191D' }}>{t}.</span>
-                  <span style={{ font: '400 13px/18px Inter', color: '#555B6D' }}> {d}</span>
+                  <span style={{ font: '600 13px/18px Inter', color: 'hsl(var(--text-primary))' }}>{t}.</span>
+                  <span style={{ font: '400 13px/18px Inter', color: 'hsl(var(--text-disabled))' }}> {d}</span>
                 </div>
               </div>
             ))}
           </div>
 
           {/* Yellow warning box */}
-          <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start', padding: '12px 14px', background: '#FFFBEB', border: '1px solid #FDE68A', borderRadius: 8 }}>
-            <svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="#D97706" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, marginTop: 1 }}>
+          <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start', padding: '12px 14px', background: 'var(--status-warning-bg)', border: '1px solid var(--status-warning-border)', borderRadius: 8 }}>
+            <svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="var(--status-warning-fg)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, marginTop: 1 }}>
               <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" /><line x1="12" y1="9" x2="12" y2="13" /><line x1="12" y1="17" x2="12.01" y2="17" />
             </svg>
-            <span style={{ font: '400 13px/18px Inter', color: '#92400E' }}>{ui('financeAccountTxConfirmWarning')}</span>
+            <span style={{ font: '400 13px/18px Inter', color: 'var(--status-warning-fg)' }}>{ui('financeAccountTxConfirmWarning')}</span>
           </div>
         </div>
 
         {/* Footer */}
-        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, padding: '14px 24px', borderTop: '1px solid #E3E7EC', background: '#FAFAFB' }}>
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, padding: '14px 24px', borderTop: '1px solid hsl(var(--border-subtle))', background: 'hsl(var(--muted))' }}>
           <button
             onClick={onClose}
             data-testid="movement-confirm-cancel"
-            style={{ height: 40, padding: '0 20px', borderRadius: 9999, border: '1px solid #E3E7EC', background: '#fff', font: '500 14px/1 Inter', color: '#19191D', cursor: 'pointer' }}
+            style={{ height: 40, padding: '0 20px', borderRadius: 9999, border: '1px solid hsl(var(--border-control))', background: 'hsl(var(--card))', font: '500 14px/1 Inter', color: 'hsl(var(--text-primary))', cursor: 'pointer' }}
           >
             {ui('financeAccountTxNewCancel')}
           </button>
@@ -115,7 +115,7 @@ export default function MovementConfirmModal({ action, reconciled, posted, onCon
             disabled={loading}
             onClick={handleConfirm}
             data-testid="movement-confirm-accept"
-            style={{ height: 40, padding: '0 20px', borderRadius: 9999, border: 0, background: loading ? '#F1F2F4' : '#D50B3E', font: '500 14px/1 Inter', color: loading ? '#A9A9BC' : '#fff', cursor: loading ? 'default' : 'pointer' }}
+            style={{ height: 40, padding: '0 20px', borderRadius: 9999, border: 0, background: loading ? 'hsl(var(--muted))' : 'var(--status-destructive-fg)', font: '500 14px/1 Inter', color: loading ? 'hsl(var(--muted-foreground))' : 'hsl(var(--primary-foreground))', cursor: loading ? 'default' : 'pointer' }}
           >
             {loading ? '…' : confirmLabel}
           </button>

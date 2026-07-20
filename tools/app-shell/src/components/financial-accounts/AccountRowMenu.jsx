@@ -82,8 +82,8 @@ export function AccountRowMenu({ account, onOpen, onEdit, onArchive, onPsd2Actio
           onClick={() => onNewMovement?.(account)}
           data-testid={`account-row-menu-new-movement-${account.id}`}
         >
-          <Plus className="h-5 w-5 text-[#828FA3]" data-testid="Plus__ffaf9f" />
-          <span className="text-sm font-normal leading-6 text-[#121217]">
+          <Plus className="h-5 w-5 text-[hsl(var(--text-disabled))]" data-testid="Plus__ffaf9f" />
+          <span className="text-sm font-normal leading-6 text-[hsl(var(--text-primary))]">
             {ui('financeAccountTxNewAction')}
           </span>
         </DropdownMenuItem>

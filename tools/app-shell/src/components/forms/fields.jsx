@@ -240,7 +240,7 @@ export function ChipSelect({ value, onChange, useLookup, placeholder = 'Buscarâ€
     <Popover open={open} onOpenChange={(v) => (v ? setOpen(true) : close())} data-testid="Popover__chip">
       <PopoverAnchor asChild data-testid="PopoverAnchor__chip">
         <div
-          className="relative flex h-10 w-full items-center gap-1 rounded-md border border-[#D1D1DB] bg-white px-2 shadow-[0px_1px_2px_rgba(18,18,23,0.05)] focus-within:border-[#121217] focus-within:ring-[3px] focus-within:ring-black/[0.08]"
+          className="relative flex h-10 w-full items-center gap-1 rounded-md border border-[hsl(var(--border-control))] bg-card px-2 shadow-[0px_1px_2px_rgba(18,18,23,0.05)] focus-within:border-[hsl(var(--text-primary))] focus-within:ring-[3px] focus-within:ring-[hsl(var(--focus-ring))]/[0.08]"
           onClick={showChip ? startEditing : undefined}
         >
           {showChip ? (
@@ -254,14 +254,14 @@ export function ChipSelect({ value, onChange, useLookup, placeholder = 'Buscarâ€
           ) : (
             <input
               ref={inputRef}
-              className="h-full min-w-0 flex-1 border-0 bg-transparent px-1 text-sm outline-none placeholder:text-[#A9A9BC]"
+              className="h-full min-w-0 flex-1 border-0 bg-transparent px-1 text-sm outline-none placeholder:text-[hsl(var(--muted-foreground))]"
               value={query}
               placeholder={placeholder}
               onChange={(e) => { setQuery(e.target.value); setOpen(true); }}
               onFocus={() => setOpen(true)}
               data-testid={`${testId}-search`} />
           )}
-          <ChevronDown className="ml-auto h-4 w-4 flex-none text-[#6E6E80]" data-testid={`${testId}-chevron`} />
+          <ChevronDown className="ml-auto h-4 w-4 flex-none text-muted-foreground" data-testid={`${testId}-chevron`} />
         </div>
       </PopoverAnchor>
       <PopoverContent
@@ -269,12 +269,12 @@ export function ChipSelect({ value, onChange, useLookup, placeholder = 'Buscarâ€
         sideOffset={6}
         onOpenAutoFocus={(e) => e.preventDefault()}
         onFocusOutside={(e) => e.preventDefault()}
-        className="max-h-64 overflow-auto rounded-xl border border-[#E8E8ED] bg-white p-1.5 shadow-lg"
+        className="max-h-64 overflow-auto rounded-xl border border-[hsl(var(--border-control))] bg-card p-1.5 shadow-lg"
         style={{ width: 'var(--radix-popover-trigger-width)' }}
         data-testid={`${testId}-popover`}
       >
         {results.length === 0 ? (
-          <div className="px-2.5 py-3 text-sm text-[#A9A9BC]">â€”</div>
+          <div className="px-2.5 py-3 text-sm text-[hsl(var(--muted-foreground))]">â€”</div>
         ) : null}
         {results.map((r) => (
           <button
@@ -282,7 +282,7 @@ export function ChipSelect({ value, onChange, useLookup, placeholder = 'Buscarâ€
             type="button"
             onClick={() => { onChange(r); close(); }}
             data-testid={`${testId}-option-${r.id}`}
-            className={`flex w-full items-center rounded-md px-2.5 py-2 text-left text-sm text-[#121217] hover:bg-[#F7F7F8] ${value?.id === r.id ? 'bg-[#F7F7F8]' : ''}`}
+            className={`flex w-full items-center rounded-md px-2.5 py-2 text-left text-sm text-[hsl(var(--text-primary))] hover:bg-[hsl(var(--page-bg))] ${value?.id === r.id ? 'bg-[hsl(var(--page-bg))]' : ''}`}
           >
             {r.name}
           </button>

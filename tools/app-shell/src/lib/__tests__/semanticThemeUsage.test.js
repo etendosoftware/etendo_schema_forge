@@ -29,6 +29,12 @@ const DATA_COLOR_LITERALS = new Map([
     '#6366f1', '#ec4899', '#f59e0b', '#10b981', '#3b82f6',
     '#8b5cf6', '#ef4444', '#14b8a6', '#f97316', '#06b6d4',
   ])],
+  // AEAT-349 "Correctiva" badge: a purple tint with no existing semantic
+  // precedent (checked the status/border/accent token families — none cover
+  // purple). Proposed: --status-corrective-bg/-fg, pending design confirmation.
+  ['windows/custom/sales-invoice/ReversedInvoicesPanel.jsx', new Set([
+    'text-purple-700', '#f4f1fd', '#c6b6f7',
+  ])],
 ]);
 
 const COLOR_LITERAL = /#[0-9a-f]{3,8}\b|\brgba?\(\s*\d|\bhsl\(\s*\d|['"](?:white|black)['"]|\b(?:bg|text|border|ring|outline|fill|stroke)-(?:white|black|slate|gray|zinc|neutral|stone|red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose)(?:-[0-9]{2,3})?\b/gi;
