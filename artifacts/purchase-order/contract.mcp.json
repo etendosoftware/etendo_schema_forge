@@ -1,8 +1,8 @@
 {
-  "version": "0.36.0",
+  "version": "0.37.0",
   "generatedAt": "2026-04-30T15:42:46.497Z",
-  "updatedAt": "2026-07-14T01:05:39.068Z",
-  "contractChecksum": "0fbe017944ec853e",
+  "updatedAt": "2026-07-17T18:04:56.004Z",
+  "contractChecksum": "a66c97a4945e61d2",
   "apiPrediction": {
     "specName": "purchase-order",
     "baseUrl": "/sws/neo/purchase-order",
@@ -1180,12 +1180,6 @@
           "etgoTotalDiscount": {
             "defaultValue": "0"
           },
-          "accountingDate": {
-            "readOnly": true,
-            "required": true,
-            "readOnlyLogic": "@Posted@='Y'",
-            "defaultValue": "@#Date@"
-          },
           "deliveryTerms": {
             "required": true,
             "readOnlyLogic": "@Processed@='Y'",
@@ -1660,5 +1654,5 @@
       "confirmcancelandreplace"
     ]
   },
-  "checksum": "22a0a614e6b084ac"
+  "checksum": "c1d6ab9f0ce69809"
 }
