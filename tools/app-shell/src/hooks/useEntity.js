@@ -859,7 +859,8 @@ export function useEntity(entity, childEntity, {
         const key = cacheScope
             ? createQueryKey({ ...cacheScope, apiBase: apiBaseUrl, spec: specName, entity: childEntity, parentId, filters: { childSortBy } })
             : null;
-        const fetcher = (signal) => fetch(`${apiBaseUrl}/${childEntity}?parentId=${parentId}${childSortBy ? `&_sortBy=${childSortBy}` : ''}`, { headers, signal })
+        const sortParam = childSortBy ? `&_sortBy=${childSortBy}` : '';
+        const fetcher = (signal) => fetch(`${apiBaseUrl}/${childEntity}?parentId=${parentId}${sortParam}`, { headers, signal })
             .then(res => {
                 if (!res.ok) throw new Error(`${res.status}`);
                 return res.json();
