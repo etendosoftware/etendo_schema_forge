@@ -38,7 +38,12 @@ export function useWarehouseStock(warehouseId, token, apiBaseUrl, refreshKey = 0
   const [state, setState] = useState({ loading: true, error: null, products: [], transactions: [] });
 
   useEffect(() => {
-    if (!warehouseId) return;
+    // No saved warehouse yet: there is no stock to load, so drop out of the
+    // loading state and show a neutral/empty section instead of an endless spinner.
+    if (!warehouseId) {
+      setState({ loading: false, error: null, products: [], transactions: [] });
+      return;
+    }
     let cancelled = false;
     setState({ loading: true, error: null, products: [], transactions: [] });
 

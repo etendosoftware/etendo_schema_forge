@@ -18,6 +18,21 @@ test('OPERATORS string predicates are case-insensitive', () => {
   assert.equal(OPERATORS.iNotEqual('ABC', 'xyz'), true);
 });
 
+test('OPERATORS.iStartsWith matches case-insensitive prefixes only', () => {
+  assert.equal(OPERATORS.iStartsWith('Hello World', 'hello'), true);
+  assert.equal(OPERATORS.iStartsWith('Hello World', 'HELLO'), true);
+  assert.equal(OPERATORS.iStartsWith('Hello World', 'world'), false); // prefix, not substring
+  assert.equal(OPERATORS.iStartsWith('Hello', ''), true); // empty prefix matches
+  assert.equal(OPERATORS.iStartsWith(null, 'x'), false);
+});
+
+test('applyConditions filters rows with iStartsWith', () => {
+  const out = applyConditions(ROWS, f([
+    { field: 'name', operator: 'iStartsWith', value: 'al' },
+  ]));
+  assert.deepEqual(out.map((r) => r.name), ['Alpha']);
+});
+
 test('OPERATORS null checks', () => {
   assert.equal(OPERATORS.isNull(''), true);
   assert.equal(OPERATORS.isNull(null), true);

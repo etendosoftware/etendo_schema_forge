@@ -427,7 +427,9 @@ describe('SecondaryTableTab', () => {
     });
     render(SecondaryTableTab(props));
 
-    const addBtn = screen.getByText('Add a line');
+    // Empty secondary tabs render the centered empty state (ETP-4404); its add
+    // button shows "+ <addLineLabel>" and stays wired to onAddLineClick
+    const addBtn = screen.getByText(/Add a line/);
     expect(addBtn).toBeTruthy();
     fireEvent.click(addBtn);
     expect(onAddLineClick).toHaveBeenCalled();

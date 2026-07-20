@@ -31,6 +31,7 @@ const toSet = (value) => (Array.isArray(value)
 export const OPERATORS = {
   iContains:    (raw, value) => lc(raw).includes(lc(value)),
   iNotContains: (raw, value) => !lc(raw).includes(lc(value)),
+  iStartsWith:  (raw, value) => lc(raw).startsWith(lc(value)),
   iEquals:      (raw, value) => lc(raw) === lc(value),
   iNotEqual:    (raw, value) => lc(raw) !== lc(value),
   isNull:       (raw) => raw == null || raw === '',
