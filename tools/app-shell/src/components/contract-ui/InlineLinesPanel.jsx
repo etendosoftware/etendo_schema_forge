@@ -19,6 +19,7 @@ import { resolveIdentifier } from '@/lib/resolveIdentifier.js';
 import { resolveColumnLabel } from '@/lib/resolveColumnLabel.js';
 import { InlineSearchCombo } from './InlineSearchCombo.jsx';
 import { SelectorInput } from './SelectorInput.jsx';
+import { PillToggle } from '@/components/PillToggle';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { resolveLookupDrawer } from './lookupDrawers.js';
 import { columnFlex } from '@/lib/linesColumnWidth.js';
@@ -50,7 +51,7 @@ const SIGNED_DELTA_TONE_COLOR = {
 // the add-row flow uses), so the inline experience matches the form-mode UX.
 const EDITABLE_TYPES = new Set([
   'string', 'text', 'number', 'integer', 'amount', 'percent', 'date', 'selector', 'search',
-  'enum', 'select',
+  'enum', 'select', 'boolean', 'checkbox',
 ]);
 
 function isCellEditable(col) {
@@ -298,6 +299,16 @@ function EditCell({ col, row, value, displayLabel, onCommit, autoFocus, entity, 
           ))}
         </SelectContent>
       </Select>
+    );
+  }
+
+  if (col.type === 'boolean' || col.type === 'checkbox') {
+    const checked = value === true || value === 'Y' || value === 'true';
+    return (
+      <PillToggle
+        checked={checked}
+        onCheckedChange={(next) => onCommit(next)}
+        data-testid={`field-${col.key}`} />
     );
   }
 

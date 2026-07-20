@@ -37,6 +37,16 @@
 - Note to bot team: <concrete: "include X next time">
 -->
 
+### 2026-06-26 — ETP-4274 — `neo_create` drops resolvable defaults for non-mandatory columns (defaults/create asymmetry)
+- Tool/spec: `neo_create` (and `neo_defaults`) on spec/entity `assets` header; column `C_Currency_ID` (`required:false`, `defaultExpression:@C_Currency_ID@`).
+- Root-cause category: **code-bug** (category 1) — `NeoDefaultsService.injectMandatoryDefaults` iterated mandatory columns only, so genuine non-mandatory defaults that `/defaults` returns were silently dropped on create.
+- Time-to-locate: **fast** — the ticket pinpointed the exact file and the offending `!col.isMandatory()` filter, gave a 4-step verbatim MCP repro (`neo_defaults` returns `currency:102`, `neo_create` persists `currency:null`), and named the trigger schema condition (non-mandatory FK with `@C_Currency_ID@` default). No reconstruction needed.
+- Missing rubric fields: **none** — tool (#1), spec/entity (#2), verbatim request/response (#3/#4), expected vs actual (#9), minimal repro (#10), and self-classification (#11, code-bug) were all present.
+- Highest-value field that was missing: **n/a — exemplary ticket.**
+- Note to bot team: **This is the standard, and it carried the single most useful thing a code-bug ticket can have: the file + the exact offending condition, plus a before/after value diff between `/defaults` and `neo_create` on the same payload.** The verbatim `neo_defaults` vs `neo_create` comparison instantly proved the asymmetry and gave us the acceptance test for free. Keep emitting that read-vs-write value diff whenever a value present in one path is absent in the parallel path — it both localizes the bug and defines "done".
+
+---
+
 ### 2026-06-24 — ETP-4255 — Remove runtime Jasper report generation; expose only NEO-callable reports
 - Tool/spec: `neo_discover` + `generate_<report>` MCP tools and NEO HTTP `/sws/neo/<report-spec>`; report specs (`SPEC_TYPE=R`), e.g. `aging-receivable`, `tax-report`, `inventory-stock-report` (callable) vs. all other R specs (non-callable).
 - Root-cause category: **code-bug** (category 1) — runtime Jasper execution (`ReportingUtils.exportJR`) was reachable from the live NEO/MCP request path; it had to be removed and replaced with a stable non-callable response.

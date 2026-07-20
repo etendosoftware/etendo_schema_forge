@@ -53,6 +53,7 @@ export const ACCOUNT_TYPE_ORDER = [ACCOUNT_TYPE.BANK, ACCOUNT_TYPE.CASH, ACCOUNT
 // Backend search_keys — do NOT rename these; they must match FIN_Payment.Status values.
 // Follow-up: once /sws/neo/reference/payment-status exists, these can be fetched dynamically.
 export const MOVEMENT_STATUS_FAMILY = {
+  DRAFT: 'draft',
   PENDING: 'pending',
   VOIDED: 'voided',
   CLEARED: 'cleared',
@@ -62,6 +63,7 @@ export const MOVEMENT_STATUS_FAMILY = {
 };
 
 export const MOVEMENT_STATUS_TONE = {
+  draft:        { bg: '#F1F2F4', text: '#55556D', border: '#D1D4DB' },
   pending:      { bg: '#FFF7E0', text: '#7A5A00', border: '#FAAF00' },
   voided:       { bg: '#F5F7F9', text: '#6C6C89', border: '#D1D4DB' },
   cleared:      { bg: '#EEFBF4', text: '#17663A', border: '#26A95F' },

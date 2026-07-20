@@ -792,6 +792,8 @@ instead of the default input when it detects this property.
 | `businessCritical` | boolean | `false` | Advisory-only metadata flag. When `true`, marks the field as business-critical data. This flag does **not** change any functional behavior (validation, read-only logic, visibility, etc.). It travels through the pipeline (`decisions.json` → `resolve-curated` → `contract.json` → `push-to-neo` → `ETGO_SF_FIELD.ISBUSINESSCRITICAL`) so that downstream consumers (e.g., AI agents reading `neo_schema`) know they must confirm with the user before creating or updating records that include this field. |
 | `agentPrompt` | string | `null` | Per-field guidance for AI agents. Carried into the curated field and persisted to `ETGO_SF_FIELD.AGENT_PROMPT`, from where `neo_schema` returns it inside each field object. Empty or whitespace-only values clear the persisted prompt and are omitted from the MCP response. |
 
+> **MCP-oriented field config:** `businessCritical`, `agentPrompt`, `visibility`, a per-field `defaultValue`, and an entity's `Java_Qualifier` are the per-field knobs the NEO Headless **MCP** surfaces to AI agents (via `neo_schema` / `neo_defaults`). They are decided **only here in `decisions.json`** — the MCP/NEO Java reads and surfaces them, never decides them. The flag→`ETGO_SF_FIELD` column→surfacing map and the `make regen … PUSH_TO_NEO=1` → `./gradlew export.database` fix recipe are in `docs/agentic-validation/mcp-field-flags-pipeline.md`. A request to change one of these is upstream-config, not an MCP code change.
+
 ### Explicit null
 
 Setting a property to `null` removes it from the curated output and contracts:

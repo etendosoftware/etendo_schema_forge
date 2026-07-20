@@ -154,9 +154,17 @@ function renderRegionPickerBody(regionsLoading, ui, regionsLoadFailed, filteredR
  *   onClose         — () => void
  *   onSaved         — () => void: called after successful save; caller re-fetches address state
  *   onParentRefresh — () => void: called when backend indicates the parent record changed (e.g. tax key auto-updated)
- *   rowId           — string|null: C_BPartner_Location_ID of existing record (null = create)
- *   bpId            — string: parent Business Partner ID (required for create)
- *   apiBase         — string: e.g. "/sws/neo/contacts"
+ *   rowId           — string|null: existing record id (C_BPartner_Location_ID in 'bpartner'
+ *                     mode, C_Location_ID in 'location' mode). null = create.
+ *   bpId            — string: parent Business Partner ID (required for create in 'bpartner' mode)
+ *   apiBase         — string: NEO base for this window, e.g. "/sws/neo/contacts" or "/sws/neo/warehouse"
+ *   saveMode        — 'bpartner' (default) | 'location':
+ *                       'bpartner' → CRUD through {apiBase}/locationAddress, creates C_Location +
+ *                                    C_BPartner_Location (requires bpId on create). Contacts behaviour.
+ *                       'location' → CRUD through {apiBase}/location, plain C_Location only, returns
+ *                                    the C_Location id. Used by Warehouse's Location field.
+ *   showAddressTypeCheckboxes — boolean (default true): render the Shipping/Invoicing Address checks.
+ *                     Set false for windows (e.g. Warehouse) where address type does not apply.
  */
 export default function LocationEditorModal({
                                                 open,
@@ -167,7 +175,11 @@ export default function LocationEditorModal({
                                                 bpId,
                                                 apiBase: contactsApiBase,
                                                 selectorContext = {},
+                                                saveMode = 'bpartner',
+                                                showAddressTypeCheckboxes = true,
                                             }) {
+    // Entity segment of the NEO path: 'locationAddress' (BP-linked) or 'location' (plain C_Location).
+    const entityPath = saveMode === 'location' ? 'location' : 'locationAddress';
     const ui = useUI();
     const t = useLabel();
     const {token} = useAuth();
@@ -296,6 +308,8 @@ export default function LocationEditorModal({
         const loadCountries = async () => {
             setCountriesLoading(true);
             const selectorBases = [
+                `${contactsApiBase}/${entityPath}/selectors/C_Country_ID`,
+                `${contactsApiBase}/${entityPath}/selectors/country`,
                 `${contactsApiBase}/locationAddress/selectors/C_Country_ID`,
                 `${contactsApiBase}/intrastatAdquisitions/selectors/country`,
                 `${contactsApiBase}/locationAddress/selectors/country`,
@@ -348,8 +362,9 @@ export default function LocationEditorModal({
         // Populate form when editing an existing record
         if (bplLinkId) {
             setInitialLoading(true);
-            // ContactsLocationAddressHandler enriches the GET-by-ID response with C_Location fields.
-            fetch(`${contactsApiBase}/locationAddress/${bplLinkId}`, {headers: authHeader})
+            // The handler enriches the GET-by-ID response with C_Location fields
+            // (ContactsLocationAddressHandler for 'bpartner', the plain location handler for 'location').
+            fetch(`${contactsApiBase}/${entityPath}/${bplLinkId}`, {headers: authHeader})
                 .then(r => (r.ok ? r.json() : null))
                 .then(d => {
                     const rec = d?.response?.data?.[0] ?? d;
@@ -409,6 +424,8 @@ export default function LocationEditorModal({
             regionLoadingMoreRef.current = false;
 
             const selectorBases = [
+                `${contactsApiBase}/${entityPath}/selectors/C_Region_ID`,
+                `${contactsApiBase}/${entityPath}/selectors/region`,
                 `${contactsApiBase}/locationAddress/selectors/C_Region_ID`,
                 `${contactsApiBase}/intrastatAdquisitions/selectors/C_Region_ID`,
                 `${contactsApiBase}/bankAccount/selectors/C_Region_ID`,
@@ -676,31 +693,46 @@ export default function LocationEditorModal({
                 cityName: form.city || null,
                 country: form.country || null,
                 region: form.region || null,
-                shipToAddress: form.shipToAddress ? 'Y' : 'N',
-                invoiceToAddress: form.invoiceToAddress ? 'Y' : 'N',
             };
+            // Address-type flags only exist in 'bpartner' mode (C_BPartner_Location);
+            // omit them entirely when the checkboxes are hidden (e.g. Warehouse).
+            if (showAddressTypeCheckboxes) {
+                payload.shipToAddress = form.shipToAddress ? 'Y' : 'N';
+                payload.invoiceToAddress = form.invoiceToAddress ? 'Y' : 'N';
+            }
             const postHeaders = {...authHeader, 'Content-Type': 'application/json'};
 
             if (bplLinkId) {
-                // EDIT: ContactsLocationAddressHandler updates C_Location + C_BPartner_Location atomically
-                const res = await fetch(`${contactsApiBase}/locationAddress/${bplLinkId}`, {
+                // EDIT: 'bpartner' updates C_Location + C_BPartner_Location atomically;
+                // 'location' updates the plain C_Location.
+                const res = await fetch(`${contactsApiBase}/${entityPath}/${bplLinkId}`, {
                     method: 'PUT',
                     headers: postHeaders,
                     body: JSON.stringify(payload),
                 });
                 if (res.ok) {
                     const data = await res.json().catch(() => null);
-                    showBackendMessages(data?.response?.data?.[0]?.messages);
-                    onSaved?.();
+                    const rec = data?.response?.data?.[0] ?? null;
+                    showBackendMessages(rec?.messages);
+                    // Return id/name so a single-FK field (Warehouse) can refresh its display.
+                    onSaved?.(rec?.id ?? bplLinkId, rec?.name ?? name);
                 }
                 return;
             }
 
-            // CREATE: ContactsLocationAddressHandler creates C_Location + C_BPartner_Location atomically
-            const res = await fetch(`${contactsApiBase}/locationAddress?parentId=${bpId}`, {
+            // CREATE:
+            //   'bpartner' → creates C_Location + C_BPartner_Location atomically (needs parentId/bpId)
+            //   'location' → creates a plain C_Location, no business partner link
+            const createUrl = saveMode === 'location'
+                ? `${contactsApiBase}/${entityPath}`
+                : `${contactsApiBase}/locationAddress?parentId=${bpId}`;
+            const createBody = saveMode === 'location'
+                ? payload
+                : {...payload, businessPartner: bpId};
+            const res = await fetch(createUrl, {
                 method: 'POST',
                 headers: postHeaders,
-                body: JSON.stringify({...payload, businessPartner: bpId}),
+                body: JSON.stringify(createBody),
             });
 
             if (!res.ok) {
@@ -847,7 +879,8 @@ export default function LocationEditorModal({
                                 </button>
                             </div>
 
-                            {/* Checkboxes */}
+                            {/* Checkboxes — only for BPartner locations (Contacts), not plain C_Location */}
+                            {showAddressTypeCheckboxes && (
                             <div style={{ display: 'flex', gap: 24, paddingTop: 4 }}>
                                 <SquareCheckbox
                                     label={t('IsShipTo') || 'Shipping Address'}
@@ -860,6 +893,7 @@ export default function LocationEditorModal({
                                     onChange={val => setField('invoiceToAddress', val)}
                                     data-testid="SquareCheckbox__location-invoicing" />
                             </div>
+                            )}
 
                         </div>
                     )}

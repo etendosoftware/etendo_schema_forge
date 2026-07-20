@@ -2,6 +2,7 @@ import { test, expect } from '@playwright/test';
 import { login, navigateTo } from '../helpers/auth.js';
 import {
   loadCredentials, slow, waitForDetailReady, saveDraft, selectVendorBP,
+  reselectComboOption,
   addProductLine, ensureVendorSetup, clickConfirmButton, expectStatusPill,
   expectSaveResponse, waitForConfirmResponse, dismissSuccessModal, safeReload,
   readDocumentTotals, verifyTotalsConsistency,
@@ -195,15 +196,27 @@ test.describe('Purchase Order → Invoice — Happy path (integration)', () => {
 
     await selectVendorBP(page);
 
+    // The test vendor (Default Customer + isVendor flag) has NO purchase-side
+    // config, so the BP callout CLEARS priceList/paymentMethod/paymentTerms —
+    // while the Selects keep displaying the stale org defaults. Re-pick the
+    // three combos explicitly so the editing state holds real values and the
+    // save is not blocked by required-field validation (race with the debounced
+    // callout made this pass or fail depending on timing).
+    await reselectComboOption(page, 'paymentMethod');
+    await reselectComboOption(page, 'paymentTerms');
+    await reselectComboOption(page, 'priceList');
+
     // ═══════════════════════════════════════════════════════════════════════
     // STEP 12: Save invoice as draft
     // ═══════════════════════════════════════════════════════════════════════
 
     await saveDraft(page);
 
+    // (?!new$) — a silent save failure leaves the URL at /purchase-invoice/new,
+    // which a bare [a-zA-Z0-9]+ would happily match.
     await expect(page,
       'After saving draft, URL should include the invoice record ID',
-    ).toHaveURL(/\/purchase-invoice\/[a-zA-Z0-9]+/, { timeout: 15_000 });
+    ).toHaveURL(/\/purchase-invoice\/(?!new$)[a-zA-Z0-9]+$/, { timeout: 15_000 });
     await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
     await waitForDetailReady(page);
 

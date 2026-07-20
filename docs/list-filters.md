@@ -59,7 +59,7 @@ The funnel button on the far right opens a **conditional-filter builder**. Each 
 - State: **ephemeral** — lives in `ListView` `useState`. Refreshing the page clears it.
 - Precedence: subset → quick → document-type filters → advanced. All four always combine with AND, *except* the rows inside the advanced block which honor the `Y/O` connector (wrapped in a single `AdvancedCriteria` object when OR is selected).
 - Operators per column type:
-  - string / selector: `Contiene`, `No contiene`, `Es`, `No es`, `Está vacío`, `No está vacío`
+  - string / selector: `Contiene`, `No contiene`, `Empieza por`, `Es`, `No es`, `Está vacío`, `No está vacío`
   - enum (status): `Es`, `No es`, `Es cualquiera de`, `Está vacío`, `No está vacío`
   - number / amount: `=`, `≠`, `>`, `≥`, `<`, `≤`, `Entre`, `Está vacío`, `No está vacío`
   - date: `Es`, `Antes de`, `Después de`, `Entre`, `Está vacío`, `No está vacío`
