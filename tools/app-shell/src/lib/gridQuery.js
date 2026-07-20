@@ -204,7 +204,15 @@ function parseByMode(mode, trimmed, col) {
 
 function parseDateFilter(trimmed) {
   // Range: "01/04/2026..15/04/2026"
-  const rangeMatch = /^(.+?)\.\.(.+)$/.exec(trimmed);
+  // Group 1 excludes literal ".." runs (via the negative lookahead) instead of
+  // relying on an unbounded lazy `.+?` to find the delimiter by backtracking.
+  // A lazy-then-greedy split on a 2-char literal is vulnerable to O(n^2)
+  // backtracking when the string contains many ".." occurrences and a
+  // character `.` cannot match (line terminator) appears later on, since
+  // every candidate split point forces the greedy second group to re-scan
+  // for `$` (Sonar S5852). This form has exactly one valid split point per
+  // position, so there is nothing left to backtrack into.
+  const rangeMatch = /^((?:[^.]|\.(?!\.))+)\.\.(.+)$/.exec(trimmed);
   if (rangeMatch) {
     const from = parseDateString(rangeMatch[1].trim());
     const to = parseDateString(rangeMatch[2].trim());

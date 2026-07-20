@@ -77,14 +77,21 @@ const OP_LABEL_KEY_DATE = {
 const NULLISH_OPS = new Set(['isNull', 'isNotNull']);
 
 function makeEmptyRow() {
-  return { field: '', operator: '', value: '' };
+  return { field: '', operator: '', value: '', _rowKey: crypto.randomUUID() };
+}
+
+// External values (e.g. loaded from a saved preset) don't carry a `_rowKey`,
+// so mint one on load — gives each condition row a stable React key that
+// survives row removal, instead of the array index (see IdentifierMultiPicker
+// precedent in OcrLinesReviewModal.jsx for the same pattern).
+function ensureRowKeys(conditions) {
+  return conditions.map((c) => (c._rowKey ? c : { ...c, _rowKey: crypto.randomUUID() }));
 }
 
 function isFilterableColumn(col) {
   if (!col?.key) return false;
   if (col.type === 'discarded' || col.type === 'system') return false;
-  if (col.filterable === false) return false;
-  return true;
+  return col.filterable !== false;
 }
 
 function isRowComplete(row, col) {
@@ -145,7 +152,7 @@ export function AdvancedFilterBuilder({
 
   const initialDraft = useMemo(() => (
     value?.conditions?.length
-      ? { rowOperator: value.rowOperator ?? 'and', conditions: cloneConditions(value.conditions) }
+      ? { rowOperator: value.rowOperator ?? 'and', conditions: ensureRowKeys(cloneConditions(value.conditions)) }
       : { rowOperator: 'and', conditions: [makeEmptyRow()] }
   ), [value]);
 
@@ -284,7 +291,7 @@ export function AdvancedFilterBuilder({
           const showValue = !!row.operator && !NULLISH_OPS.has(row.operator);
 
           return (
-            <div key={idx} className="flex items-start gap-2">
+            <div key={row._rowKey} className="flex items-start gap-2">
               {/* Connector */}
               <div className="w-16 shrink-0">
                 {idx === 0 ? (
@@ -558,9 +565,15 @@ export function AdvancedFilterBuilder({
   );
 }
 
+function resolveInputType(mode) {
+  if (mode === 'date') return 'date';
+  if (mode === 'numeric') return 'number';
+  return 'text';
+}
+
 function betweenOperator(value, mode, onChange) {
   const pair = Array.isArray(value) ? value : ['', ''];
-  const inputType = mode === 'date' ? 'date' : mode === 'numeric' ? 'number' : 'text';
+  const inputType = resolveInputType(mode);
   return (
     <div className="flex gap-1">
       <Input
@@ -589,6 +602,12 @@ function getJoinedValue(value) {
 function resolveBadgeText(raw, locale, fallback) {
   if (raw && typeof raw === 'object') return raw[locale] ?? raw.en_US ?? fallback;
   return raw ?? fallback;
+}
+
+function resolveBooleanSelectValue(value) {
+  if (value === true || value === 'true') return 'true';
+  if (value === false || value === 'false') return 'false';
+  return undefined;
 }
 
 function ValueInput({ col, mode, operator, value, onChange, ui, dictionary, rows, entity, apiBaseUrl, labelOverrides }) {
@@ -641,7 +660,7 @@ function ValueInput({ col, mode, operator, value, onChange, ui, dictionary, rows
   if (mode === 'booleanLabel') {
     const trueLabel = resolveBadgeText(col.badgeLabels?.true, locale, ui('yes') ?? 'Yes');
     const falseLabel = resolveBadgeText(col.badgeLabels?.false, locale, ui('no') ?? 'No');
-    const selected = value === true || value === 'true' ? 'true' : value === false || value === 'false' ? 'false' : undefined;
+    const selected = resolveBooleanSelectValue(value);
     return (
       <Select
         value={selected}
@@ -660,7 +679,7 @@ function ValueInput({ col, mode, operator, value, onChange, ui, dictionary, rows
     );
   }
 
-  const inputType = mode === 'date' ? 'date' : mode === 'numeric' ? 'number' : 'text';
+  const inputType = resolveInputType(mode);
   return (
     <Input
       type={inputType}
@@ -749,11 +768,14 @@ function IdentifierMultiPicker({ col, entity, apiBaseUrl, rows, value, onChange,
     return selected.map((id) => byId.get(id) ?? id);
   }, [mergedOptions, selected]);
 
-  const triggerLabel = selected.length === 0
-    ? ui('advancedFilterSelectValue')
-    : selected.length === 1
-      ? selectedLabels[0]
-      : `${selectedLabels[0]} +${selected.length - 1}`;
+  let triggerLabel;
+  if (selected.length === 0) {
+    triggerLabel = ui('advancedFilterSelectValue');
+  } else if (selected.length === 1) {
+    triggerLabel = selectedLabels[0];
+  } else {
+    triggerLabel = `${selectedLabels[0]} +${selected.length - 1}`;
+  }
 
   const colLabelKey = labelOf(col.column) ?? col.label ?? col.key;
 

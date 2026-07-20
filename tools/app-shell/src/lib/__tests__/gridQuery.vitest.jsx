@@ -172,6 +172,27 @@ describe('parseUserFilter', () => {
     expect(parseUserFilter(col, 'abc..def')).toBeNull();
   });
 
+  it('parses date range with dot-separated dates on both sides', () => {
+    const col = { key: 'd', type: 'date' };
+    const result = parseUserFilter(col, '14.04.2026..15.04.2026');
+    expect(result).toEqual({
+      mode: 'date', op: 'range', value: ['2026-04-14', '2026-04-15'],
+      originalValue: '14.04.2026..15.04.2026',
+    });
+  });
+
+  it('does not hang on adversarial ".." range input (ReDoS regression, S5852)', () => {
+    const col = { key: 'd', type: 'date' };
+    // Many ".." occurrences followed by a line terminator (which `.` can't
+    // match) used to force O(n^2) backtracking in the old `.+?` / `.+` split.
+    const adversarial = '..'.repeat(200_000) + '\n' + 'z';
+    const start = performance.now();
+    const result = parseUserFilter(col, adversarial);
+    const elapsed = performance.now() - start;
+    expect(result).toBeNull();
+    expect(elapsed).toBeLessThan(1000);
+  });
+
   it('parses enum label matching', () => {
     const col = { key: 's', type: 'status', enumLabels: { DR: 'Draft', CO: 'Completed' } };
     expect(parseUserFilter(col, 'draft')).toEqual({
