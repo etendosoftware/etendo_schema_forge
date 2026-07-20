@@ -1,7 +1,10 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, afterEach, vi } from 'vitest';
 import {
   resolvePositiveInt,
   getSurveyConfig,
+  setRemoteSurveyConfig,
+  getRemoteCannedResponses,
+  loadRemoteSurveyConfig,
   DEFAULT_SURVEY_GLOBAL_COOLDOWN_DAYS,
   DEFAULT_SURVEY_DISMISSED_COOLDOWN_DAYS,
   DEFAULT_SURVEY_MAX_PER_MONTH,
@@ -13,6 +16,10 @@ import {
 } from '../survey-config.js';
 
 const MS_DAY = 86_400_000;
+
+afterEach(() => {
+  setRemoteSurveyConfig(null);
+});
 
 describe('resolvePositiveInt', () => {
   it('returns the fallback when value is null or undefined', () => {
@@ -98,5 +105,88 @@ describe('getSurveyConfig', () => {
     });
     expect(config.csatMinDocs).toBe(3);
     expect(config.csatDocGap).toBe(15);
+  });
+
+  describe('remote config precedence (backoffice window > env var > default)', () => {
+    it('prefers the remote value over an env var override', () => {
+      setRemoteSurveyConfig({ maxPerMonth: 7 });
+      const config = getSurveyConfig({ VITE_SURVEY_MAX_PER_MONTH: '5' });
+      expect(config.maxPerMonth).toBe(7);
+    });
+
+    it('falls back to the env var when the remote value is missing', () => {
+      setRemoteSurveyConfig({ dismissedCooldownDays: undefined });
+      const config = getSurveyConfig({ VITE_SURVEY_DISMISSED_COOLDOWN_DAYS: '3' });
+      expect(config.dismissedCooldownMs).toBe(3 * MS_DAY);
+    });
+
+    it('falls back to the default when both remote and env values are invalid', () => {
+      setRemoteSurveyConfig({ csatMinDocs: 0 });
+      const config = getSurveyConfig({ VITE_SURVEY_CSAT_MIN_DOCS: 'not-a-number' });
+      expect(config.csatMinDocs).toBe(DEFAULT_SURVEY_CSAT_MIN_DOCS);
+    });
+
+    it('converts remote day counts to milliseconds like the env/default path', () => {
+      setRemoteSurveyConfig({ globalCooldownDays: 12, npsMinAgeDays: 40 });
+      const config = getSurveyConfig({});
+      expect(config.globalCooldownMs).toBe(12 * MS_DAY);
+      expect(config.npsMinAgeMs).toBe(40 * MS_DAY);
+    });
+  });
+});
+
+describe('getRemoteCannedResponses', () => {
+  it('returns null when no remote config has been loaded', () => {
+    expect(getRemoteCannedResponses('csat_invoicing', 'es_ES')).toBeNull();
+  });
+
+  it('returns null when the survey or language is not present in the remote config', () => {
+    setRemoteSurveyConfig({ canned: { csat_invoicing: { es_ES: [{ icon: '🐢', text: 'Es lento' }] } } });
+    expect(getRemoteCannedResponses('csat_order', 'es_ES')).toBeNull();
+    expect(getRemoteCannedResponses('csat_invoicing', 'en_US')).toBeNull();
+  });
+
+  it('returns the array of {icon, text} for a known survey/language', () => {
+    const phrases = [{ icon: '🐢', text: 'Es lento' }, { icon: '🤔', text: 'Difícil de usar' }];
+    setRemoteSurveyConfig({ canned: { csat_invoicing: { es_ES: phrases } } });
+    expect(getRemoteCannedResponses('csat_invoicing', 'es_ES')).toEqual(phrases);
+  });
+});
+
+describe('loadRemoteSurveyConfig', () => {
+  it('does nothing when apiBaseUrl or token is missing', async () => {
+    const fetchImpl = vi.fn();
+    await loadRemoteSurveyConfig({ apiBaseUrl: null, token: 'tok', fetchImpl });
+    await loadRemoteSurveyConfig({ apiBaseUrl: '/etendo', token: null, fetchImpl });
+    expect(fetchImpl).not.toHaveBeenCalled();
+  });
+
+  it('fetches the endpoint with a Bearer token and stores the result', async () => {
+    const payload = { maxPerMonth: 9, canned: {} };
+    const fetchImpl = vi.fn().mockResolvedValue({ ok: true, json: async () => payload });
+
+    await loadRemoteSurveyConfig({ apiBaseUrl: '/etendo', token: 'tok-123', fetchImpl });
+
+    expect(fetchImpl).toHaveBeenCalledWith('/etendo/sws/survey-config/', {
+      headers: { Authorization: 'Bearer tok-123' },
+    });
+    expect(getSurveyConfig({}).maxPerMonth).toBe(9);
+  });
+
+  it('leaves the config untouched on a non-ok response', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue({ ok: false });
+    await loadRemoteSurveyConfig({ apiBaseUrl: '/etendo', token: 'tok', fetchImpl });
+    expect(getSurveyConfig({}).maxPerMonth).toBe(DEFAULT_SURVEY_MAX_PER_MONTH);
+  });
+
+  it('leaves the config untouched and logs a warning on a network error', async () => {
+    const fetchImpl = vi.fn().mockRejectedValue(new Error('network down'));
+    const logger = { warn: vi.fn() };
+    await loadRemoteSurveyConfig({ apiBaseUrl: '/etendo', token: 'tok', fetchImpl, logger });
+    expect(logger.warn).toHaveBeenCalledWith(
+      '[surveys] Failed to load remote survey config, using local defaults',
+      expect.any(Error),
+    );
+    expect(getSurveyConfig({}).maxPerMonth).toBe(DEFAULT_SURVEY_MAX_PER_MONTH);
   });
 });

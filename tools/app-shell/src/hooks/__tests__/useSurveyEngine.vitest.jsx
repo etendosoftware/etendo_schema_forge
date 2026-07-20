@@ -35,6 +35,14 @@ const observabilityEventsMocks = vi.hoisted(() => ({
   },
 }));
 
+const surveyConfigMocks = vi.hoisted(() => ({
+  loadRemoteSurveyConfig: vi.fn(),
+}));
+
+const neoResourceMocks = vi.hoisted(() => ({
+  getApiBase: vi.fn(() => '/etendo'),
+}));
+
 // ---------------------------------------------------------------------------
 // Module mocks — must appear before any import of the hook
 // ---------------------------------------------------------------------------
@@ -44,6 +52,10 @@ vi.mock('@/auth/AuthContext.jsx', () => authMocks);
 vi.mock('@/lib/surveys/survey-engine.js', () => surveyEngineMocks);
 
 vi.mock('@/lib/surveys/survey-state.js', () => surveyStateMocks);
+
+vi.mock('@/lib/surveys/survey-config.js', () => surveyConfigMocks);
+
+vi.mock('../useNeoResource.js', () => neoResourceMocks);
 
 vi.mock('@/lib/observability.js', () => observabilityMocks);
 
@@ -77,6 +89,8 @@ const { selectNextSurvey, SURVEY_TRIGGER_EVENT } = surveyEngineMocks;
 const { markFirstLogin, markSurveyShown, markSurveyResponded, markSurveyDismissed } = surveyStateMocks;
 const { track, identify } = observabilityMocks;
 const { buildObservabilityEvent, OBSERVABILITY_EVENTS } = observabilityEventsMocks;
+const { loadRemoteSurveyConfig } = surveyConfigMocks;
+const { getApiBase } = neoResourceMocks;
 
 // ---------------------------------------------------------------------------
 // Suite
@@ -667,6 +681,37 @@ describe('useSurveyEngine', () => {
           accountId: expect.anything(),
         }),
       );
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // Remote survey config (backoffice "Survey Configuration" window)
+  // -------------------------------------------------------------------------
+
+  describe('loadRemoteSurveyConfig', () => {
+    it('loads the remote config when authenticated with a token', () => {
+      useAuth.mockReturnValue(makeAuth({ isAuthenticated: true, username: 'alice', token: 'tok-123' }));
+
+      renderHook(() => useSurveyEngine());
+
+      expect(getApiBase).toHaveBeenCalled();
+      expect(loadRemoteSurveyConfig).toHaveBeenCalledWith({ apiBaseUrl: '/etendo', token: 'tok-123' });
+    });
+
+    it('does not load the remote config when not authenticated', () => {
+      useAuth.mockReturnValue(makeAuth({ isAuthenticated: false, token: 'tok-123' }));
+
+      renderHook(() => useSurveyEngine());
+
+      expect(loadRemoteSurveyConfig).not.toHaveBeenCalled();
+    });
+
+    it('does not load the remote config when there is no token', () => {
+      useAuth.mockReturnValue(makeAuth({ isAuthenticated: true, username: 'alice', token: null }));
+
+      renderHook(() => useSurveyEngine());
+
+      expect(loadRemoteSurveyConfig).not.toHaveBeenCalled();
     });
   });
 });

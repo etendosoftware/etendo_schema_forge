@@ -7,6 +7,8 @@ import {
   markSurveyResponded,
   markSurveyDismissed,
 } from '../lib/surveys/survey-state.js';
+import { loadRemoteSurveyConfig } from '../lib/surveys/survey-config.js';
+import { getApiBase } from './useNeoResource.js';
 import { track, identify } from '../lib/observability.js';
 import { OBSERVABILITY_EVENTS, buildObservabilityEvent } from '../lib/observability/events.js';
 
@@ -22,7 +24,7 @@ function trackSurveyEvent(eventDef, properties) {
 }
 
 export function useSurveyEngine() {
-  const { isAuthenticated, selectedRole, username, selectedOrg } = useAuth();
+  const { isAuthenticated, selectedRole, username, selectedOrg, token } = useAuth();
   const [activeSurvey, setActiveSurvey] = useState(null);
 
   const userProps = useMemo(() => {
@@ -56,6 +58,11 @@ export function useSurveyEngine() {
     const timer = setTimeout(() => checkAndShowSurvey('login'), 2500);
     return () => clearTimeout(timer);
   }, [isAuthenticated, checkAndShowSurvey]);
+
+  useEffect(() => {
+    if (!isAuthenticated || !token) return;
+    loadRemoteSurveyConfig({ apiBaseUrl: getApiBase(), token });
+  }, [isAuthenticated, token]);
 
   useEffect(() => {
     let timer;

@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
-import { useUI } from '@/i18n/index.js';
+import { useUI, useLocaleSwitch } from '@/i18n/index.js';
+import { getRemoteCannedResponses } from '@/lib/surveys/survey-config.js';
 
 // ─── Design tokens (mapped from Etendo design system) ───────────────────────
 const T = {
@@ -210,26 +211,32 @@ function ChipGroup({ options, value, onChange }) {
   );
 }
 
-// ─── Canned-response row (CSAT Q2) ───────────────────────────────────────────
+// ─── Canned-response grid (CSAT Q2) ──────────────────────────────────────────
 // Click a phrase to prefill the free-text field below — same "click to fill, then keep
 // editing" pattern as ConversationView's support-chat quick replies (onQuickReply sets the
 // draft text, doesn't lock it). Fulfills ETP-4352's "predefined answers, still editable" ask.
-function CannedResponseRow({ options, onPick }) {
+// options is [{ icon, label }] — icon is decorative only (aria-hidden), onPick always
+// receives the plain translated label, never the icon, so feedback data/Mixpanel payloads
+// stay icon-free. Content is per-survey (survey.canned in surveys.js), not a shared generic
+// list, so invoicing and order surveys each surface phrases tied to their own flow.
+function CannedResponseGrid({ options, onPick }) {
   return (
-    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 10 }}>
-      {options.map(o => (
+    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 10 }}>
+      {options.map(({ icon, label }) => (
         <button
-          key={o}
+          key={label}
           type="button"
-          onClick={() => onPick(o)}
+          onClick={() => onPick(label)}
           style={{
-            padding: '6px 12px', borderRadius: 999,
+            display: 'flex', alignItems: 'center', gap: 8,
+            padding: '10px 12px', borderRadius: 10, textAlign: 'left',
             border: `1px solid ${T.border2}`,
             background: '#fff', color: T.fg2,
             font: font(12, 500), cursor: 'pointer',
           }}
         >
-          {o}
+          <span aria-hidden="true">{icon}</span>
+          {label}
         </button>
       ))}
     </div>
@@ -390,7 +397,20 @@ function NPSSurveyContent({ phase, setPhase, score, setScore, feedback, setFeedb
 }
 
 // ─── CSAT survey content ──────────────────────────────────────────────────────
+// Prefers canned responses configured in the backoffice "Survey Configuration" window
+// (already resolved to plain, language-specific text — no ui() lookup needed) over the
+// hardcoded locale-key list in surveys.js, which only serves as an offline/unreachable-
+// backend fallback.
+function resolveCannedOptions(survey, locale, ui) {
+  const remote = getRemoteCannedResponses(survey.id, locale);
+  if (remote) {
+    return remote.map(({ icon, text }) => ({ icon, label: text }));
+  }
+  return (survey.canned ?? []).map(({ icon, key }) => ({ icon, label: ui(key) }));
+}
+
 function CSATSurveyContent({ survey, phase, setPhase, score, setScore, feedback, setFeedback, onDismiss, ui }) {
+  const { locale } = useLocaleSwitch();
 
   if (phase === 'thanks') {
     return (
@@ -408,15 +428,10 @@ function CSATSurveyContent({ survey, phase, setPhase, score, setScore, feedback,
           {ui(survey.q2TitleKey)}
         </div>
         <div style={{ font: font(13, 400, 18), color: T.fg3, marginBottom: 14 }}>{ui('surveyQ2Optional')}</div>
-        <CannedResponseRow
-          options={[
-            ui('surveyCsatCanned1'),
-            ui('surveyCsatCanned2'),
-            ui('surveyCsatCanned3'),
-            ui('surveyCsatCanned4'),
-          ]}
+        <CannedResponseGrid
+          options={resolveCannedOptions(survey, locale, ui)}
           onPick={setFeedback}
-          data-testid="CannedResponseRow__91aeca" />
+          data-testid="CannedResponseGrid__91aeca" />
         <textarea
           value={feedback}
           onChange={e => setFeedback(e.target.value)}
@@ -486,11 +501,20 @@ export function SurveyModal({ survey, open, onScoreSelected, onRespond, onDismis
 
   function handleScoreSelect(n) {
     setScore(n);
-    onScoreSelected?.(n);
+  }
+
+  // Fires the "abandoned vote" signal exactly once, only when the survey is left without a
+  // final submit — never on every click (that would fire N times for N score changes) and
+  // never when the user actually submits (survey_responded already carries the score there).
+  function handleDismissWithScore() {
+    if (score !== null) {
+      onScoreSelected?.(score);
+    }
+    onDismiss();
   }
 
   function handleClose() {
-    if (phase !== 'thanks') onDismiss();
+    if (phase !== 'thanks') handleDismissWithScore();
   }
 
   function handleSetPhase(next) {
@@ -551,7 +575,7 @@ export function SurveyModal({ survey, open, onScoreSelected, onRespond, onDismis
               setFeedback={setFeedback}
               tags={tags}
               setTags={setTags}
-              onDismiss={onDismiss}
+              onDismiss={handleDismissWithScore}
               ui={ui}
               data-testid="NPSSurveyContent__91aeca" />
           ) : (
@@ -563,7 +587,7 @@ export function SurveyModal({ survey, open, onScoreSelected, onRespond, onDismis
               setScore={handleScoreSelect}
               feedback={feedback}
               setFeedback={setFeedback}
-              onDismiss={onDismiss}
+              onDismiss={handleDismissWithScore}
               ui={ui}
               data-testid="CSATSurveyContent__91aeca" />
           )}

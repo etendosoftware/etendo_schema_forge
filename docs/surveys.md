@@ -69,13 +69,27 @@ The `SURVEYS` array in `surveys.js` is evaluated in order. The first survey that
 
 ## CSAT Predefined Responses
 
-When a CSAT survey's score is <= 3, `SurveyModal` shows a `CannedResponseRow` above the free-text
-textarea — four generic dissatisfaction phrases (`surveyCsatCanned1..4` locale keys, shared by both
-`csat_invoicing` and `csat_order`, not per-survey copy). Clicking one calls `setFeedback(phrase)`,
-prefilling the textarea; the text remains fully editable afterward — same "click to fill, keep
-editing" pattern as `ConversationView`'s support-chat quick replies. This is presentation-only: no
-new state, no Mixpanel event of its own (a canned pick still surfaces via the `feedback` property on
-`survey_responded` once submitted).
+When a CSAT survey's score is <= 3, `SurveyModal` shows a `CannedResponseGrid` above the free-text
+textarea — a 2-column grid of 6 phrases, each with a decorative icon. Content is **per-survey**, not
+a shared generic list: each CSAT survey object in `surveys.js` declares its own `canned` array of
+`{ icon, key }` pairs, tied to what that flow's `q2PlaceholderKey` already hints at.
+
+| Survey | Locale keys | Topics |
+|---|---|---|
+| `csat_invoicing` | `surveyInvoicingCanned1..6` | Speed, usability, templates, VAT/tax handling, sending to the client, bugs |
+| `csat_order` | `surveyOrderCanned1..6` | Speed, usability, product search, order lines, confirmation, bugs |
+
+Icons are decorative only (`aria-hidden`) and live in `survey.canned[].icon` in `surveys.js`, never in
+the translated strings — clicking a card calls `setFeedback(label)` with the plain translated text
+only (no icon), prefilling the textarea; the text remains fully editable afterward — same "click to
+fill, keep editing" pattern as `ConversationView`'s support-chat quick replies. This is
+presentation-only: no new state, no Mixpanel event of its own (a canned pick still surfaces via the
+`feedback` property on `survey_responded` once submitted).
+
+**Adding a canned option to a survey:** add a locale key to both `en_US.json`/`es_ES.json`, then
+append `{ icon: '…', key: '…' }` to that survey's `canned` array in `surveys.js`. Keep phrases tied to
+concrete pain points in that specific flow — avoid generic complaints unrelated to the process being
+rated (e.g. pricing complaints do not belong in a workflow-usability survey).
 
 ---
 
@@ -285,10 +299,12 @@ Four events are emitted via `track()` (from `tools/app-shell/src/lib/observabili
 
 ### `survey_score_selected`
 
-Fired by `useSurveyEngine.handleScoreSelected` the moment the user picks a score/star, independent
-of whether they ever press submit — captures intent even if the survey is dismissed mid-flow. Fires
-on every score change, not just the first (a later `survey_responded` on actual submit is expected,
-minor overlap by design).
+Fired via `useSurveyEngine.handleScoreSelected` **only when the user selects a score/star and then
+abandons the survey without submitting** (close button, backdrop click, or Skip) — captures the vote
+that would otherwise be lost. `SurveyModal` tracks the score locally and calls this exactly once, at
+the moment of dismissal, with the last score selected (re-clicking the scale before dismissing does
+not fire it multiple times). It is never fired when the user submits — `survey_responded` already
+carries the score in that case, so there is no overlap between the two events.
 
 | Property | Value |
 |---|---|
@@ -338,32 +354,67 @@ Fired by `useSurveyEngine.handleDismiss` when the user clicks the close button o
 
 ---
 
-## Configuration (`VITE_SURVEY_*`)
+## Configuration
 
-All anti-fatigue tunables are read once through `getSurveyConfig()` in `survey-config.js`, which
-resolves each value from a `VITE_SURVEY_*` build-time env var, falling back to a hardcoded default
-when the var is unset, empty, or not a positive number (`resolvePositiveInt`). This mirrors the
-existing `VITE_RUM_SESSION_SAMPLE_RATE` pattern in `rum.js` (see `docs/ops/app-shell-observability.md`).
+Survey tuning is layered, in this precedence order (highest wins):
 
-**This is an internal ops knob for the Etendo GO team — not a customer-facing setting.** There is no
-UI, no AD window, no per-org override, and no database table involved. Changing a value requires
-editing the env var for the target environment and triggering a rebuild + redeploy of `app-shell`;
-it does not take effect at runtime.
+1. **Backoffice window** — "Survey Configuration" in com.etendoerp.go (tables
+   `ETGO_Survey_Config` + `ETGO_Survey_Canned_Resp`), served read-only via
+   `GET /sws/survey-config/` (JWT-protected, same auth as `/sws/neo/*`). Fetched once via
+   `loadRemoteSurveyConfig()` — called from `useSurveyEngine` as soon as the user is
+   authenticated — and cached in-memory in `survey-config.js`. Takes effect **at runtime**, no
+   rebuild needed: an Etendo GO team member edits a value in the window, and it's live for the
+   next page load / login.
+2. **`VITE_SURVEY_*` build-time env vars** — used only when the backoffice endpoint is
+   unreachable (offline dev, backend down) or a given field wasn't returned. Mirrors the
+   existing `VITE_RUM_SESSION_SAMPLE_RATE` pattern in `rum.js` (see
+   `docs/ops/app-shell-observability.md`).
+3. **Hardcoded defaults** in `survey-config.js` — the final fallback, always safe.
 
-| Env var | Default | Resolves to |
-|---|---|---|
-| `VITE_SURVEY_GLOBAL_COOLDOWN_DAYS` | `30` | `globalCooldownMs` — global cooldown after any survey shown |
-| `VITE_SURVEY_DISMISSED_COOLDOWN_DAYS` | `21` | `dismissedCooldownMs` — cooldown after a survey is dismissed |
-| `VITE_SURVEY_MAX_PER_MONTH` | `2` | `maxPerMonth` — max surveys shown per calendar month |
-| `VITE_SURVEY_NPS_MIN_AGE_DAYS` | `60` | `npsMinAgeMs` — minimum account age before NPS is eligible |
-| `VITE_SURVEY_NPS_INACTIVITY_DAYS` | `14` | `npsInactivityMs` — skip NPS if the user has been inactive longer than this |
-| `VITE_SURVEY_RESPONSE_COOLDOWN_DAYS` | `90` | `responseCooldownMs` — re-eligibility window after a response, shared by NPS and both CSAT surveys |
-| `VITE_SURVEY_CSAT_MIN_DOCS` | `5` | `csatMinDocs` — minimum confirmed documents before CSAT invoicing/order is eligible |
-| `VITE_SURVEY_CSAT_DOC_GAP` | `30` | `csatDocGap` — additional documents required before CSAT is eligible again |
+**This is an internal ops knob for the Etendo GO team — not a customer-facing setting.** The
+window has no menu-driven customer visibility expectations; access is governed by normal Etendo
+role/window security, same as any other backoffice window. Global config only (single row,
+`AD_Client_ID = '0'`) — not per-tenant.
+
+Canned CSAT responses (see [CSAT Predefined Responses](#csat-predefined-responses) above) follow
+the same precedence: `SurveyModal` calls `getRemoteCannedResponses(surveyId, locale)` first: if the
+backoffice has rows for that survey + language, their `text` is used directly (already
+locale-specific, no `ui()` lookup); otherwise it falls back to the hardcoded `survey.canned`
+locale-key list in `surveys.js`.
+
+### Numeric parameters — `ETGO_Survey_Config` / `VITE_SURVEY_*`
+
+| Window field (`ETGO_Survey_Config`) | Env var fallback | Default | Resolves to |
+|---|---|---|---|
+| Global Cooldown (days) | `VITE_SURVEY_GLOBAL_COOLDOWN_DAYS` | `30` | `globalCooldownMs` — global cooldown after any survey shown |
+| Dismissed Cooldown (days) | `VITE_SURVEY_DISMISSED_COOLDOWN_DAYS` | `21` | `dismissedCooldownMs` — cooldown after a survey is dismissed |
+| Max Surveys Per Month | `VITE_SURVEY_MAX_PER_MONTH` | `2` | `maxPerMonth` — max surveys shown per calendar month |
+| NPS Min Account Age (days) | `VITE_SURVEY_NPS_MIN_AGE_DAYS` | `60` | `npsMinAgeMs` — minimum account age before NPS is eligible |
+| NPS Inactivity Guard (days) | `VITE_SURVEY_NPS_INACTIVITY_DAYS` | `14` | `npsInactivityMs` — skip NPS if the user has been inactive longer than this |
+| Response Re-eligibility Cooldown (days) | `VITE_SURVEY_RESPONSE_COOLDOWN_DAYS` | `90` | `responseCooldownMs` — re-eligibility window after a response, shared by NPS and both CSAT surveys |
+| CSAT Min Documents | `VITE_SURVEY_CSAT_MIN_DOCS` | `5` | `csatMinDocs` — minimum confirmed documents before CSAT invoicing/order is eligible |
+| CSAT Document Gap | `VITE_SURVEY_CSAT_DOC_GAP` | `30` | `csatDocGap` — additional documents required before CSAT is eligible again |
 
 All values are whole days (converted to milliseconds internally) except `maxPerMonth`, `csatMinDocs`,
-and `csatDocGap`, which are plain counts. Invalid values (non-numeric, zero, negative) fall back to
-the default rather than disabling the guard.
+and `csatDocGap`, which are plain counts. Invalid values (non-numeric, zero, negative — from either
+the window or the env var) fall back to the next tier rather than disabling the guard.
+
+The window enforces a single global row (`AD_Client_ID = '0'`); the servlet reads whichever active
+row was created first (`ORDER BY created LIMIT 1`) and ignores any others.
+
+### Canned responses — `ETGO_Survey_Canned_Resp`
+
+Each row: **Survey Key** (`csat_invoicing` / `csat_order`), **Language** (`en_US` / `es_ES`), **Icon**
+(decorative, shown in the chip), **Response Text** (the actual phrase), **Line No** (display order).
+The servlet groups active rows into `canned: { <surveyKey>: { <language>: [{icon, text}] } }`.
+
+### `GET /sws/survey-config/`
+
+Implemented by `SurveyConfigServlet` (`com.etendoerp.go.schemaforge`), registered via
+`AD_MODEL_OBJECT` / `AD_MODEL_OBJECT_MAPPING` like the other lightweight `/sws/*` endpoints
+(`AppsServlet`, `SupportConversationsServlet`). JWT-protected — same `Authorization: Bearer <token>`
+as `/sws/neo/*` — returns 401 without a valid session. Read-only; there is no write endpoint —
+config is only edited through the backoffice window's native grid.
 
 ---
 

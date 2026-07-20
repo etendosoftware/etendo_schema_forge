@@ -80,6 +80,16 @@ export const SURVEYS = Object.freeze([
     q2PlaceholderKey: 'surveyInvoicingQ2Placeholder',
     thanksKey: 'surveyInvoicingThanks',
     isEligible: csatInvoicingIsEligible,
+    // Canned Q2 options tied to what this flow's placeholder already hints at
+    // (templates, tax handling, sending to the client) — not generic complaints.
+    canned: Object.freeze([
+      Object.freeze({ icon: '🐢', key: 'surveyInvoicingCanned1' }),
+      Object.freeze({ icon: '🤔', key: 'surveyInvoicingCanned2' }),
+      Object.freeze({ icon: '📄', key: 'surveyInvoicingCanned3' }),
+      Object.freeze({ icon: '🧾', key: 'surveyInvoicingCanned4' }),
+      Object.freeze({ icon: '📤', key: 'surveyInvoicingCanned5' }),
+      Object.freeze({ icon: '🐛', key: 'surveyInvoicingCanned6' }),
+    ]),
   }),
   Object.freeze({
     id: 'csat_order',
@@ -91,5 +101,15 @@ export const SURVEYS = Object.freeze([
     q2PlaceholderKey: 'surveyOrderQ2Placeholder',
     thanksKey: 'surveyOrderThanks',
     isEligible: csatOrderIsEligible,
+    // Canned Q2 options tied to what this flow's placeholder already hints at
+    // (product search, order lines, confirmation) — not generic complaints.
+    canned: Object.freeze([
+      Object.freeze({ icon: '🐢', key: 'surveyOrderCanned1' }),
+      Object.freeze({ icon: '🤔', key: 'surveyOrderCanned2' }),
+      Object.freeze({ icon: '🔍', key: 'surveyOrderCanned3' }),
+      Object.freeze({ icon: '📋', key: 'surveyOrderCanned4' }),
+      Object.freeze({ icon: '✅', key: 'surveyOrderCanned5' }),
+      Object.freeze({ icon: '🐛', key: 'surveyOrderCanned6' }),
+    ]),
   }),
 ]);
