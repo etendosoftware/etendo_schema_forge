@@ -87,6 +87,16 @@ describe('nps.isEligible', () => {
       nps.isEligible({ state, now: NOW, env: { VITE_SURVEY_RESPONSE_COOLDOWN_DAYS: '30' } }),
     ).toBe(true);
   });
+
+  it('is eligible again when respondedAt is missing despite a prior response', () => {
+    const state = baseState({
+      firstLoginAt: isoAgo(61 * MS_DAY),
+      respondedCounts: { nps: 1 },
+      // respondedAt intentionally has no 'nps' entry — malformed/partial state
+      // (e.g. data written before respondedAt tracking existed).
+    });
+    expect(nps.isEligible({ state, now: NOW })).toBe(true);
+  });
 });
 
 describe('csat_invoicing / csat_order.isEligible (shared csatDocumentIsEligible helper)', () => {
@@ -154,6 +164,47 @@ describe('csat_invoicing / csat_order.isEligible (shared csatDocumentIsEligible 
     expect(
       survey.isEligible({ state, now: NOW, env: { VITE_SURVEY_RESPONSE_COOLDOWN_DAYS: '30' } }),
     ).toBe(true);
+  });
+
+  it.each([
+    ['csat_invoicing', 'invoicing'],
+    ['csat_order', 'order'],
+  ])('%s treats a missing counters key as zero', (id, counterKey) => {
+    const survey = surveyById(id);
+    // counters entirely omits counterKey (not just set to 0).
+    const state = baseState({ counters: {} });
+    expect(survey.isEligible({ state, now: NOW })).toBe(false);
+  });
+
+  it.each([
+    ['csat_invoicing', 'invoicing'],
+    ['csat_order', 'order'],
+  ])('%s treats a missing respondedCountAt map as a zero last-responded count', (id, counterKey) => {
+    const survey = surveyById(id);
+    const state = baseState({
+      counters: { invoicing: 0, order: 0, [counterKey]: 20 },
+      respondedCounts: { [id]: 1 },
+      respondedAt: { [id]: isoAgo(200 * MS_DAY) },
+      // respondedCountAt is entirely absent, not just missing the survey's key.
+      respondedCountAt: undefined,
+    });
+    // Gap since last response falls back to the full count (20), which is
+    // below the default 30-doc gap, so it stays ineligible.
+    expect(survey.isEligible({ state, now: NOW })).toBe(false);
+  });
+
+  it.each([
+    ['csat_invoicing', 'invoicing'],
+    ['csat_order', 'order'],
+  ])('%s is eligible again when respondedAt is missing despite a prior response', (id, counterKey) => {
+    const survey = surveyById(id);
+    const state = baseState({
+      counters: { invoicing: 0, order: 0, [counterKey]: 40 },
+      respondedCounts: { [id]: 1 },
+      respondedCountAt: { [id]: 5 },
+      // respondedAt intentionally has no entry for this survey id — malformed/partial state.
+    });
+    expect(survey.isEligible({ state, now: NOW })).toBe(true);
   });
 
   it('csat_invoicing and csat_order track independent counters', () => {
