@@ -3,6 +3,7 @@ import { useApiFetch } from '@/auth/useApiFetch';
 import { getStoredLocale } from '@/i18n';
 import { track } from '@/lib/observability.js';
 import { OBSERVABILITY_EVENTS, buildObservabilityEvent } from '@/lib/observability/events.js';
+import { playReceiveSound } from './chatSounds.js';
 
 const TEXT_MIME_TYPES = new Set([
   'text/plain', 'text/csv', 'text/html', 'text/xml', 'text/markdown',
@@ -36,8 +37,11 @@ function readAsBase64(file) {
 async function serializeFile(file) {
   const mimeType = file.type || 'application/octet-stream';
   if (isTextFile(file)) {
-    const text = await readAsText(file);
-    return { name: file.name, mimeType, text };
+    // Text files carry both the readable `text` (for the AI) and the base64
+    // `data` (so the backend can also upload the original file to Jira as a
+    // real, downloadable attachment — today only `text` reaches the AI).
+    const [text, data] = await Promise.all([readAsText(file), readAsBase64(file)]);
+    return { name: file.name, mimeType, text, data };
   }
   // Images and PDFs go as base64 — GPT-4o handles both via vision/file API
   const data = await readAsBase64(file);
@@ -48,6 +52,14 @@ async function serializeFiles(files) {
   if (!files || files.length === 0) return [];
   return Promise.all(files.map(serializeFile));
 }
+
+// Maximum number of local image preview blob URLs kept alive at once. The
+// browser never gives us the raw bytes back for an outgoing attachment once
+// it round-trips through the server (only `{filename, mimeType}` survives),
+// so this cache is the ONLY way to keep showing a thumbnail for an image the
+// user just sent. Capped + FIFO-evicted so a long chat session with many
+// image sends can't leak blob URLs indefinitely.
+const MAX_LOCAL_IMAGE_URLS = 20;
 
 // Fire-and-forget telemetry: a failed track() call should never block the UI.
 function trackSupportEvent(eventDefinition, properties = {}) {
@@ -109,7 +121,24 @@ function reducer(state, action) {
       return {
         ...state,
         conversations: state.conversations
-          .map((c) => (c.id === action.conversation.id ? { ...c, ...action.conversation } : c))
+          .map((c) => {
+            if (c.id !== action.conversation.id) return c;
+            const incoming = action.conversation;
+            // A request that touches one conversation (sendMessage, closeConversation, a
+            // rating, ...) snapshots that conversation's summary at the START of the
+            // request. If it's slow (the AI/Jira round trip can take several seconds) and a
+            // faster response — another request, or the 15s background poll — already
+            // landed a newer lastMessage/lastActivity in the meantime, this stale snapshot
+            // must not overwrite it. Every other field (status, rated, humanTakeover, ...)
+            // still applies unconditionally — those are authoritative regardless of timing.
+            const incomingIsStale = incoming.lastActivity && c.lastActivity &&
+              new Date(incoming.lastActivity) < new Date(c.lastActivity);
+            if (incomingIsStale) {
+              const { lastActivity, lastMessage, ...rest } = incoming;
+              return { ...c, ...rest };
+            }
+            return { ...c, ...incoming };
+          })
           .sort((a, b) => new Date(b.lastActivity || 0) - new Date(a.lastActivity || 0)),
       };
     case 'DISMISS_RATING':
@@ -150,6 +179,43 @@ export function SupportChatProvider({ children }) {
   const apiFetchRef = React.useRef(apiFetch);
   React.useEffect(() => { apiFetchRef.current = apiFetch; }, [apiFetch]);
 
+  // filename -> local blob URL, insertion-ordered (Map preserves insertion
+  // order) so the oldest entry is always the first one evicted. Lives on a
+  // ref (not component state) so it survives the optimistic-message → real
+  // server message swap without triggering re-renders of its own.
+  const localImageUrlsRef = React.useRef(new Map());
+
+  const cacheLocalImageUrl = React.useCallback((file) => {
+    if (!file || !file.type || !file.type.startsWith('image/')) return;
+    const cache = localImageUrlsRef.current;
+    const previous = cache.get(file.name);
+    if (previous) {
+      URL.revokeObjectURL(previous);
+      cache.delete(file.name);
+    }
+    cache.set(file.name, URL.createObjectURL(file));
+    while (cache.size > MAX_LOCAL_IMAGE_URLS) {
+      const oldestKey = cache.keys().next().value;
+      URL.revokeObjectURL(cache.get(oldestKey));
+      cache.delete(oldestKey);
+    }
+  }, []);
+
+  const getLocalImageUrl = React.useCallback((filename) => {
+    if (!filename) return null;
+    return localImageUrlsRef.current.get(filename) || null;
+  }, []);
+
+  // Revoke every cached blob URL when the provider unmounts (app teardown) —
+  // this cache's lifetime spans the whole widget session, not a single
+  // AttachmentItem instance, so it must clean up at its own level.
+  React.useEffect(() => {
+    return () => {
+      localImageUrlsRef.current.forEach((url) => URL.revokeObjectURL(url));
+      localImageUrlsRef.current.clear();
+    };
+  }, []);
+
   const loadConversations = React.useCallback(async () => {
     dispatch({ type: 'SET_LOADING_CONVERSATIONS' });
     try {
@@ -176,7 +242,7 @@ export function SupportChatProvider({ children }) {
   }, [apiFetch]);
 
   const startConversation = React.useCallback(async (text, files) => {
-    const attachmentMeta = (files || []).map(f => ({ name: f.name, size: f.size }));
+    const attachmentMeta = (files || []).map(f => ({ name: f.name, size: f.size, mimeType: f.type || undefined }));
     const optimistic = {
       id: `tmp-${Date.now()}`,
       sender: 'user',
@@ -209,7 +275,7 @@ export function SupportChatProvider({ children }) {
 
   const sendMessage = React.useCallback(async (conversationId, text, files) => {
     if (!text.trim() && (!files || files.length === 0)) return;
-    const attachmentMeta = (files || []).map(f => ({ name: f.name, size: f.size }));
+    const attachmentMeta = (files || []).map(f => ({ name: f.name, size: f.size, mimeType: f.type || undefined }));
     const optimistic = {
       id: `tmp-${Date.now()}`,
       sender: 'user',
@@ -325,8 +391,12 @@ export function SupportChatProvider({ children }) {
   }, []);
 
   const addPendingFile = React.useCallback((file) => {
+    // Cache the local preview at pick-time — before the file ever reaches the
+    // server — so it can keep being shown after the optimistic message is
+    // replaced by the server's response (which has no raw bytes to fetch).
+    cacheLocalImageUrl(file);
     dispatch({ type: 'ADD_PENDING_FILE', file });
-  }, []);
+  }, [cacheLocalImageUrl]);
 
   const removePendingFile = React.useCallback((index) => {
     dispatch({ type: 'REMOVE_PENDING_FILE', index });
@@ -345,8 +415,18 @@ export function SupportChatProvider({ children }) {
         const incoming = data.messages || [];
         const current = stateRef.current;
         if (current.activeConversationId !== s.activeConversationId) return;
-        if (incoming.length !== current.messages.length ||
-            incoming[incoming.length - 1]?.id !== current.messages[current.messages.length - 1]?.id) {
+        const currentLastId = current.messages[current.messages.length - 1]?.id;
+        const incomingLast = incoming[incoming.length - 1];
+        if (incoming.length !== current.messages.length || incomingLast?.id !== currentLastId) {
+          // A reply (ValerIA or a human agent) that lands here — as opposed to via the direct
+          // sendMessage response, which already updates `messages` before this poll ever sees
+          // a difference — is exactly the "chat is open, someone replied while I was just
+          // looking at it" case. The send→reply round trip is handled separately by
+          // ConversationView's isSending-based effect and never reaches this branch, since by
+          // the time this poll runs the direct response already delivered that message.
+          if (incomingLast && incomingLast.id !== currentLastId && incomingLast.sender !== 'user') {
+            playReceiveSound();
+          }
           dispatch({ type: 'SET_MESSAGES', messages: incoming });
         }
       } catch (_) { /* silent */ }
@@ -383,10 +463,28 @@ export function SupportChatProvider({ children }) {
             return existing && (
               existing.unread !== c.unread ||
               existing.status !== c.status ||
-              existing.rated !== c.rated
+              existing.rated !== c.rated ||
+              existing.lastActivity !== c.lastActivity
             );
           });
-        if (hasChange) dispatch({ type: 'SET_CONVERSATIONS', conversations: incoming });
+        if (hasChange) {
+          // Ding for a reply (ValerIA or a human agent from Jira) that arrives while the
+          // conversation isn't the one actively open — that in-conversation case already
+          // gets its own sound from ConversationView, so this would otherwise double-play.
+          // Keyed off `lastActivity` (not just the `unread` flag): `unread` stays stuck at
+          // true across multiple back-to-back replies once it first flips, so a second or
+          // third reply that arrives before the conversation is read would otherwise be
+          // silent. `lastActivity` changes on every single message.
+          incoming.forEach((c) => {
+            const existing = current.conversations.find((e) => e.id === c.id);
+            const arrived = existing && c.unread && existing.lastActivity !== c.lastActivity;
+            const isActiveOpenConversation = current.isOpen && current.activeConversationId === c.id;
+            if (arrived && !isActiveOpenConversation) {
+              playReceiveSound();
+            }
+          });
+          dispatch({ type: 'SET_CONVERSATIONS', conversations: incoming });
+        }
       } catch (_) { /* silent */ }
     }, 15000);
     return () => clearInterval(id);
@@ -412,12 +510,14 @@ export function SupportChatProvider({ children }) {
       setInput,
       addPendingFile,
       removePendingFile,
+      getLocalImageUrl,
     },
   }), [
     state, unreadCount, openChat, closeChat, setTab,
     loadConversations, loadMessages, startConversation, sendMessage,
     closeConversation, reopenConversation,
     submitRating, dismissRating, selectConversation, setInput, addPendingFile, removePendingFile,
+    getLocalImageUrl,
   ]);
 
   return (

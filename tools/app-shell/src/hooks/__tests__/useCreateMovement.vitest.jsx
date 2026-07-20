@@ -4,7 +4,12 @@ vi.mock('@/auth/AuthContext.jsx', () => ({
   useAuth: () => ({ token: 'test-token' }),
 }));
 
-import { useCreateMovement } from '../useCreateMovement.js';
+import {
+  useCreateMovement,
+  useProcessMovement,
+  useReactivateMovement,
+  useDeleteMovement,
+} from '../useCreateMovement.js';
 
 function setPathname(pathname) {
   Object.defineProperty(window, 'location', {
@@ -138,4 +143,87 @@ describe('useCreateMovement', () => {
     });
     expect(res).toEqual({});
   });
+});
+
+// ── Lifecycle hooks (ETP-4500) ────────────────────────────────────────────────
+// process / reactivate / delete all share the usePostAction plumbing, POSTing
+// { id } to ?action=<verb>. Parametrized to keep the coverage symmetric.
+describe('movement lifecycle hooks', () => {
+  beforeEach(() => {
+    setPathname('/etendo/web/app');
+    globalThis.fetch = vi.fn();
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  const CASES = [
+    { name: 'useProcessMovement', hook: useProcessMovement, fn: 'processMovement', busy: 'processing', action: 'process' },
+    { name: 'useReactivateMovement', hook: useReactivateMovement, fn: 'reactivateMovement', busy: 'reactivating', action: 'reactivate' },
+    { name: 'useDeleteMovement', hook: useDeleteMovement, fn: 'deleteMovement', busy: 'deleting', action: 'delete' },
+  ];
+
+  for (const { name, hook, fn, busy, action } of CASES) {
+    describe(name, () => {
+      it(`starts idle and POSTs { id } to ?action=${action} with bearer auth`, async () => {
+        globalThis.fetch.mockResolvedValue({
+          ok: true,
+          json: async () => ({ response: { data: { id: 'mov-1' } } }),
+        });
+
+        const { result } = renderHook(() => hook());
+        expect(result.current[busy]).toBe(false);
+        expect(result.current.error).toBeNull();
+        expect(typeof result.current[fn]).toBe('function');
+
+        let res;
+        await act(async () => {
+          res = await result.current[fn]({ id: 'mov-1' });
+        });
+
+        expect(globalThis.fetch).toHaveBeenCalledTimes(1);
+        const [url, init] = globalThis.fetch.mock.calls[0];
+        expect(url).toBe(
+          `/etendo/sws/neo/financial-account-transactions?action=${action}`,
+        );
+        expect(init.method).toBe('POST');
+        expect(init.headers.Authorization).toBe('Bearer test-token');
+        expect(JSON.parse(init.body)).toEqual({ id: 'mov-1' });
+        expect(res).toEqual({ id: 'mov-1' });
+      });
+
+      it('flips the busy flag during the call and clears it after', async () => {
+        let resolve;
+        globalThis.fetch.mockReturnValue(new Promise((r) => { resolve = r; }));
+
+        const { result } = renderHook(() => hook());
+        let promise;
+        act(() => { promise = result.current[fn]({ id: 'x' }); });
+
+        await waitFor(() => expect(result.current[busy]).toBe(true));
+
+        await act(async () => {
+          resolve({ ok: true, json: async () => ({ response: { data: {} } }) });
+          await promise;
+        });
+        expect(result.current[busy]).toBe(false);
+      });
+
+      it('throws and captures the error on HTTP failure', async () => {
+        globalThis.fetch.mockResolvedValue({
+          ok: false,
+          status: 409,
+          text: async () => 'conflict',
+        });
+
+        const { result } = renderHook(() => hook());
+        await act(async () => {
+          await expect(result.current[fn]({ id: 'x' })).rejects.toThrow(/HTTP 409/);
+        });
+        expect(result.current.error).toBeInstanceOf(Error);
+        expect(result.current.error.message).toContain('HTTP 409');
+      });
+    });
+  }
 });
