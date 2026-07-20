@@ -42,11 +42,11 @@ describe('aggregateProducts', () => {
     });
   });
 
-  describe('zero / negative quantity — no filtering (caller decides)', () => {
-    // aggregateProducts no longer filters by qty. Each consumer (Products tab,
-    // list product-count cell, "in stock > 0" KPI) applies its own predicate,
-    // so this helper must return every aggregated product, including qty === 0
-    // and qty < 0 rows.
+  describe('non-positive quantities are not filtered by this helper', () => {
+    // Filtering by quantity is now a caller concern, not aggregateProducts':
+    // the Products tab and the list count cell use qty!==0, while the "in
+    // stock" KPI still wants qty>0. So every aggregated row must survive
+    // here, whatever its sign.
     it('keeps products with qty === 0 after aggregation', () => {
       const rows = [
         { product: 'p1', 'product$_identifier': 'Widget', uOM: 'u1', quantityOnHand: 0, etgoValuation: 0 },
