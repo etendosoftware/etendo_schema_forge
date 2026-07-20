@@ -14,7 +14,8 @@ describe('NewPaymentEntryModal (step 2 — Nuevo cobro/pago)', () => {
   });
 
   it('drives the cuadre via the usePaymentBalance hook', () => {
-    assert.match(src, /import \{ usePaymentBalance, formatPlain \} from '\.\/usePaymentBalance\.js'/);
+    // round2 is also imported (ETP-4504 amount-in-account conversion math).
+    assert.match(src, /import \{ usePaymentBalance, formatPlain, round2 \} from '\.\/usePaymentBalance\.js'/);
     assert.match(src, /usePaymentBalance\(\{\s*total,\s*dir,\s*sources,\s*usedSources:/s);
   });
 
@@ -63,10 +64,53 @@ describe('NewPaymentEntryModal (step 2 — Nuevo cobro/pago)', () => {
     assert.match(src, /balance\.equalize/);
   });
 
-  it('offers credit/refund on excess for receipts and an inline error for payments', () => {
+  // ETP-4504: the only excess resolution is leaving customer credit; the
+  // "refund"/"dar vuelto" path was removed, and the credit option is gated on
+  // canLeaveCredit (receipt in the org currency).
+  it('offers only the "leave credit" option on excess (refund removed) and an inline error otherwise', () => {
     assert.match(src, /ui\('cpLeaveCredit'\)/);
-    assert.match(src, /ui\('cpGiveChange'\)/);
     assert.match(src, /ui\('cpExcessInline'/);
+    // the refund / "dar vuelto" option must be gone
+    assert.doesNotMatch(src, /cpGiveChange/);
+    // the excess band is gated on canLeaveCredit
+    assert.match(src, /canLeaveCredit/);
+  });
+
+  // ETP-4504: multi-currency conversion — conversion fields + amount-in-account
+  // readout when the account currency differs from the invoice currency, and the
+  // conversionRate is sent in the register payload only in that foreign case.
+  describe('multi-currency conversion (ETP-4504)', () => {
+    it('imports and uses the useConversionRate hook for the (invoice→account) prefill', () => {
+      assert.match(src, /import \{ useConversionRate \} from '\.\/useConversionRate\.js'/);
+      assert.match(src, /useConversionRate\(\{\s*fromCode: currency, toCode: accountCurrency/s);
+    });
+
+    it('gates canLeaveCredit on a receipt whose invoice is in the org currency (useDocumentCurrency)', () => {
+      assert.match(src, /import \{ useDocumentCurrency \} from '\.\/useDocumentCurrency\.js'/);
+      assert.match(src, /const invoiceInOrgCurrency = !!orgCurrencyCode && currency === orgCurrencyCode;/);
+      assert.match(src, /const canLeaveCredit = isReceipt && invoiceInOrgCurrency;/);
+      assert.match(src, /usePaymentBalance\(\{[\s\S]*?canLeaveCredit,[\s\S]*?\}\)/);
+    });
+
+    it('derives isForeign from account currency ≠ invoice currency', () => {
+      assert.match(src, /const accountCurrency = selectedAccount\?\.currency \|\| '';/);
+      assert.match(src, /const isForeign = !!\(accountCurrency && currency && accountCurrency !== currency\);/);
+    });
+
+    it('computes amountInAccount = round2(amount × rate) live', () => {
+      assert.match(src, /const amountInAccount = \(isForeign && rate != null\) \? round2\(balance\.amount \* rate\) : null;/);
+    });
+
+    it('renders the conversion fields only in the foreign case', () => {
+      assert.match(src, /\{isForeign && \(/);
+      assert.match(src, /data-testid="cp-conversion-fields"/);
+      assert.match(src, /data-testid="cp-conversion-rate-input"/);
+      assert.match(src, /data-testid="cp-amount-in-account"/);
+    });
+
+    it('sends conversionRate in the register body only when foreign (else undefined)', () => {
+      assert.match(src, /conversionRate: \(isForeign && rate != null\) \? String\(rate\) : undefined,/);
+    });
   });
 
   it('submits a draft on Guardar and a confirm on Confirmar', () => {
@@ -102,14 +146,16 @@ describe('NewPaymentEntryModal (step 2 — Nuevo cobro/pago)', () => {
       assert.match(src, /<Field label=\{ui\('account'\)\} required/);
     });
 
-    it('derives missingRequired from funds (cash + used credit), date, methodId and accountId', () => {
+    it('derives missingRequired from funds (cash + used credit), date, methodId, accountId and rateInvalid', () => {
       // "Importe" is satisfied by the total applied (cash + used credit), not the
       // cash field alone — a credit/saldo a favor line covering 100% of the
       // invoice legitimately leaves the cash amount (balance.amount) at 0, so the
       // gate must read balance.funds, not balance.amount (ETP-4331 bug fix).
+      // A foreign payment whose conversion rate is missing/non-positive OR exactly 1
+      // (rateInvalid) also blocks Save and Confirm (ETP-4504 B1 + rate==1 gate).
       assert.match(
         src,
-        /const missingRequired = balance\.funds <= 0 \|\| !date \|\| !methodId \|\| !accountId;/,
+        /const missingRequired = balance\.funds <= 0 \|\| !date \|\| !methodId \|\| !accountId \|\| rateInvalid;/,
       );
     });
 

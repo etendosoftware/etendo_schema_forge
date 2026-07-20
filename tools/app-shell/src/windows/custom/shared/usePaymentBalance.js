@@ -78,18 +78,25 @@ function seedLines(sources, usedSources) {
  *                                   { id, kind:'credit'|'abono', doc, date, note, avail, psdId?, paymentId? }
  * @param {Array}    params.usedSources  (edit mode only) sources the draft already consumes:
  *                                   { kind:'credit'|'abono', paymentId?, psdId?, use }
+ * @param {boolean}  params.canLeaveCredit  whether an overpayment may be left as customer
+ *                                   credit — the modal passes `isReceipt && invoiceInOrgCurrency`.
+ *                                   When false the only excess resolution is adjusting the amount
+ *                                   ("Igualar"), so any excess blocks confirmation.
  *
  * Returns the editable amount (number + es-ES string), the credit lines with
  * selection/usage, the derived totals, and the mutators the modal wires to the UI.
  */
-export function usePaymentBalance({ total, dir = 'in', sources = [], usedSources = EMPTY_USED_SOURCES }) {
+export function usePaymentBalance({
+  total, dir = 'in', sources = [], usedSources = EMPTY_USED_SOURCES, canLeaveCredit = false,
+}) {
   const applied = round2(total);
   const isReceipt = dir === 'in';
 
   const [amount, setAmount] = useState(applied);
   const [amountStr, setAmountStr] = useState(formatPlain(applied));
   const [lines, setLines] = useState(() => seedLines(sources, usedSources));
-  // 'credit' = leave overpayment as customer credit, 'refund' = give change back.
+  // 'credit' = leave overpayment as customer credit, null = unresolved.
+  // (The "refund"/"dar vuelto" path was dropped — product decision, ETP-4504.)
   const [excessMode, setExcessMode] = useState(null);
 
   // Credit/abono sources arrive asynchronously (fetched after mount); re-seed the
@@ -111,9 +118,10 @@ export function usePaymentBalance({ total, dir = 'in', sources = [], usedSources
   const isPartial = diff < -TOLERANCE;
   const isExact = !isExcess && !isPartial;
 
-  // Receipts may resolve an overpayment (credit / refund); payments cannot leave
-  // supplier credit in it1, so any excess blocks confirmation outright.
-  const excessUnresolved = isReceipt ? (isExcess && excessMode == null) : isExcess;
+  // An overpayment can only be left as customer credit when `canLeaveCredit` (receipt in the
+  // org currency). Otherwise — payments, or a foreign-currency receipt — the only resolution
+  // is adjusting the amount ("Igualar"), so any excess blocks confirmation outright.
+  const excessUnresolved = isExcess && !(canLeaveCredit && excessMode === 'credit');
   const canConfirm = !excessUnresolved && amount >= 0;
 
   // ── amount input ──────────────────────────────────────────────────────────

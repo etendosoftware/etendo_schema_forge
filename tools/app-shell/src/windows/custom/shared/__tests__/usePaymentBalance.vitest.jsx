@@ -50,9 +50,12 @@ describe('usePaymentBalance', () => {
     });
   });
 
+  // ETP-4504: an overpayment may only be left as customer credit when
+  // `canLeaveCredit` is true (the modal passes `isReceipt && invoiceInOrgCurrency`).
+  // The "refund"/"dar vuelto" mode was removed entirely.
   describe('excess — receipts (dir "in")', () => {
-    it('blocks confirmation until an excessMode is chosen', () => {
-      const { result } = setup({ total: 1000, dir: 'in', sources: [] });
+    it('blocks confirmation until an excessMode is chosen (canLeaveCredit true)', () => {
+      const { result } = setup({ total: 1000, dir: 'in', sources: [], canLeaveCredit: true });
       act(() => result.current.onAmountChange('1200'));
       expect(result.current.isExcess).toBe(true);
       expect(result.current.excessAmount).toBe(200);
@@ -60,21 +63,47 @@ describe('usePaymentBalance', () => {
       expect(result.current.canConfirm).toBe(false);
     });
 
-    it('allows confirmation once excessMode is set (credit or refund)', () => {
-      const { result } = setup({ total: 1000, dir: 'in', sources: [] });
+    it('allows confirmation once excessMode "credit" is set when canLeaveCredit is true', () => {
+      const { result } = setup({ total: 1000, dir: 'in', sources: [], canLeaveCredit: true });
       act(() => result.current.onAmountChange('1200'));
       act(() => result.current.setExcessMode('credit'));
       expect(result.current.excessUnresolved).toBe(false);
       expect(result.current.canConfirm).toBe(true);
+    });
 
+    it('keeps confirmation blocked on excess when canLeaveCredit is false, even with excessMode "credit"', () => {
+      // Foreign-currency receipt: canLeaveCredit is false, so leaving credit is
+      // not a valid resolution — only adjusting the amount ("Igualar") clears it.
+      const { result } = setup({ total: 1000, dir: 'in', sources: [], canLeaveCredit: false });
+      act(() => result.current.onAmountChange('1200'));
+      expect(result.current.excessUnresolved).toBe(true);
+      expect(result.current.canConfirm).toBe(false);
+
+      act(() => result.current.setExcessMode('credit'));
+      expect(result.current.excessUnresolved).toBe(true);
+      expect(result.current.canConfirm).toBe(false);
+    });
+
+    it('defaults canLeaveCredit to false (any excess blocks confirmation when omitted)', () => {
+      const { result } = setup({ total: 1000, dir: 'in', sources: [] });
+      act(() => result.current.onAmountChange('1200'));
+      act(() => result.current.setExcessMode('credit'));
+      expect(result.current.canConfirm).toBe(false);
+    });
+
+    it('never resolves an excess via the removed "refund" mode', () => {
+      const { result } = setup({ total: 1000, dir: 'in', sources: [], canLeaveCredit: true });
+      act(() => result.current.onAmountChange('1200'));
+      // "refund" is no longer a recognized mode — only "credit" resolves the excess.
       act(() => result.current.setExcessMode('refund'));
-      expect(result.current.canConfirm).toBe(true);
+      expect(result.current.excessUnresolved).toBe(true);
+      expect(result.current.canConfirm).toBe(false);
     });
   });
 
   describe('excess — payments (dir "out")', () => {
     it('blocks confirmation on any excess regardless of mode', () => {
-      const { result } = setup({ total: 1000, dir: 'out', sources: [] });
+      const { result } = setup({ total: 1000, dir: 'out', sources: [], canLeaveCredit: false });
       act(() => result.current.onAmountChange('1200'));
       expect(result.current.isExcess).toBe(true);
       expect(result.current.excessUnresolved).toBe(true);
