@@ -127,7 +127,8 @@
           "seq": 20,
           "dot": false,
           "defaultExpr": "@#Date@",
-          "section": "principal"
+          "section": "principal",
+          "_note": "ETP-4531: exception confirmed 2026-07-17 (see Jira comment) — Amortización is NOT a duplicate document-date/accounting-date pair like Facturas/Albaranes/Pedidos. accountingDate is already not independently editable by the user (auto-defaulted via @#Date@), which satisfies the spirit of unification. startingDate is a distinct schedule concept, not a duplicate of this field. No functional change made under this ticket."
         },
         "startingDate": {
           "visibility": "readOnly",
