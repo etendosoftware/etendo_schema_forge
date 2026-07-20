@@ -1,8 +1,8 @@
 {
-  "version": "0.70.0",
+  "version": "0.72.0",
   "generatedAt": "2026-04-30T15:42:46.722Z",
-  "updatedAt": "2026-07-17T13:02:48.132Z",
-  "contractChecksum": "0a8c8fb86dd23932",
+  "updatedAt": "2026-07-20T19:57:50.562Z",
+  "contractChecksum": "74500e23d423125c",
   "apiPrediction": {
     "specName": "purchase-invoice",
     "baseUrl": "/sws/neo/purchase-invoice",
@@ -1827,9 +1827,9 @@
             "readOnlyLogic": "@HASREVERSEDINVOICESO@='Y' | @HASREVERSEDINVOICEPO@='Y' | @Posted@='Y'"
           },
           "toCurrency": {
+            "readOnly": true,
             "required": true,
-            "readOnlyLogic": "@HASREVERSEDINVOICESO@='Y' | @HASREVERSEDINVOICEPO@='Y' | @Posted@='Y'",
-            "readOnly": true
+            "readOnlyLogic": "@HASREVERSEDINVOICESO@='Y' | @HASREVERSEDINVOICEPO@='Y' | @Posted@='Y'"
           },
           "rate": {
             "readOnlyLogic": "@HASREVERSEDINVOICESO@='Y' | @HASREVERSEDINVOICEPO@='Y' | @Posted@='Y'"
@@ -1968,7 +1968,6 @@
         "expectedDate",
         "amount2",
         "reversedInvoice",
-        "toCurrency",
         "foreignAmount",
         "estadoRegistro",
         "active"
@@ -2157,7 +2156,6 @@
           "expectedDate",
           "amount2",
           "reversedInvoice",
-          "toCurrency",
           "foreignAmount",
           "estadoRegistro",
           "active"
@@ -2175,5 +2173,5 @@
       "tbaiVoidxmlgenerator"
     ]
   },
-  "checksum": "9fcc3ed9e43068ef"
+  "checksum": "85a8d6097c6bdd71"
 }

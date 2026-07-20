@@ -1,8 +1,8 @@
 {
-  "version": "0.57.0",
+  "version": "0.59.0",
   "generatedAt": "2026-04-30T15:42:46.582Z",
-  "updatedAt": "2026-07-17T13:02:48.214Z",
-  "contractChecksum": "637a00de439f4d4c",
+  "updatedAt": "2026-07-20T19:57:51.790Z",
+  "contractChecksum": "0e699869e5fb1c90",
   "apiPrediction": {
     "specName": "sales-invoice",
     "baseUrl": "/sws/neo/sales-invoice",
@@ -1230,9 +1230,9 @@
             "readOnlyLogic": "@HASREVERSEDINVOICESO@='Y' | @HASREVERSEDINVOICEPO@='Y' | @Posted@='Y'"
           },
           "toCurrency": {
+            "readOnly": true,
             "required": true,
-            "readOnlyLogic": "@HASREVERSEDINVOICESO@='Y' | @HASREVERSEDINVOICEPO@='Y' | @Posted@='Y'",
-            "readOnly": true
+            "readOnlyLogic": "@HASREVERSEDINVOICESO@='Y' | @HASREVERSEDINVOICEPO@='Y' | @Posted@='Y'"
           },
           "rate": {
             "readOnlyLogic": "@HASREVERSEDINVOICESO@='Y' | @HASREVERSEDINVOICEPO@='Y' | @Posted@='Y'"
@@ -1275,7 +1275,6 @@
         "unitPrice",
         "expectedDate",
         "reversedInvoice",
-        "toCurrency",
         "foreignAmount"
       ],
       "recommendedOrder": [
@@ -1415,7 +1414,6 @@
           "unitPrice",
           "expectedDate",
           "reversedInvoice",
-          "toCurrency",
           "foreignAmount"
         ]
       },
@@ -1431,5 +1429,5 @@
       "tbaiVoidxmlgenerator"
     ]
   },
-  "checksum": "d6ad3d106fcbb2d1"
+  "checksum": "deab773738bb857d"
 }

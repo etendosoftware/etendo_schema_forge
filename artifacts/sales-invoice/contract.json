@@ -1,8 +1,8 @@
 {
-  "version": "0.57.0",
+  "version": "0.59.0",
   "generatedAt": "2026-04-30T15:42:46.582Z",
-  "updatedAt": "2026-07-17T13:02:48.214Z",
-  "checksum": "637a00de439f4d4c",
+  "updatedAt": "2026-07-20T19:57:51.790Z",
+  "checksum": "0e699869e5fb1c90",
   "frontendContract": {
     "window": {
       "id": "167",
@@ -2122,6 +2122,7 @@
             "sourceRequired": true,
             "reference": "Currency",
             "inputMode": "selector",
+            "gridReadOnly": true,
             "validationRule": {
               "code": "C_Currency.C_Currency_id = \nCASE WHEN @C_Invoice_ID@ is not null THEN (SELECT C_Currency_ID FROM C_Invoice WHERE C_Invoice_ID = COALESCE(@C_Invoice_ID@,'---'))\nWHEN @APRM_Finacc_Transaction_V_ID@ is not null THEN (SELECT c_currency_id FROM aprm_finacc_transaction_v WHERE aprm_finacc_transaction_v_id = COALESCE(@APRM_Finacc_Transaction_V_ID@, '---')) \nWHEN @FIN_Finacc_Transaction_ID@ is not null THEN (SELECT c_currency_id FROM fin_finacc_transaction WHERE fin_finacc_transaction_id = COALESCE(@FIN_Finacc_Transaction_ID@, '---'))\nWHEN @GL_Journal_ID@ is not null THEN (SELECT c_currency_id FROM gl_journal WHERE gl_journal_id = COALESCE(@GL_Journal_ID@, '---'))\nELSE (SELECT C_Currency_ID FROM FIN_Payment WHERE FIN_Payment_ID = COALESCE(@FIN_Payment_ID@, '---')) END",
               "contextParams": [],
@@ -2137,8 +2138,7 @@
               "raw": "@HASREVERSEDINVOICESO@='Y' | @HASREVERSEDINVOICEPO@='Y' | @Posted@='Y'",
               "evaluable": true,
               "js": "record['hASREVERSEDINVOICESO'] === 'Y' || record['hASREVERSEDINVOICEPO'] === 'Y' || record['posted'] === true"
-            },
-            "gridReadOnly": true
+            }
           },
           {
             "name": "toCurrency",
@@ -2154,6 +2154,7 @@
             "sourceRequired": true,
             "reference": "Currency",
             "inputMode": "search",
+            "gridReadOnly": true,
             "validationRule": {
               "code": "C_Currency.C_Currency_id in (SELECT C_Currency_ID FROM C_Acctschema)",
               "contextParams": [],
@@ -2163,8 +2164,7 @@
               "raw": "@HASREVERSEDINVOICESO@='Y' | @HASREVERSEDINVOICEPO@='Y' | @Posted@='Y'",
               "evaluable": true,
               "js": "record['hASREVERSEDINVOICESO'] === 'Y' || record['hASREVERSEDINVOICEPO'] === 'Y' || record['posted'] === true"
-            },
-            "gridReadOnly": true
+            }
           },
           {
             "name": "rate",

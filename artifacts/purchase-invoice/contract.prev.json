@@ -1,8 +1,8 @@
 {
-  "version": "0.70.0",
+  "version": "0.71.0",
   "generatedAt": "2026-04-30T15:42:46.722Z",
-  "updatedAt": "2026-07-17T13:02:48.132Z",
-  "checksum": "0a8c8fb86dd23932",
+  "updatedAt": "2026-07-20T19:57:50.562Z",
+  "checksum": "74500e23d423125c",
   "frontendContract": {
     "window": {
       "id": "183",
@@ -41,16 +41,8 @@
         "exchangeRates": {
           "label": "Exchange Rates",
           "tabOrder": 50,
-          "addLineFields": [
-            "toCurrency",
-            "rate",
-            "foreignAmount"
-          ],
           "requireSavedRecord": true,
-          "readOnlyLogic": "@DocumentStatus@!='DR'",
-          "addLineFieldExclusions": {
-            "toCurrency": "currency"
-          }
+          "readOnlyLogic": "@Posted@='Y' | @HASREVERSEDINVOICESO@='Y' | @HASREVERSEDINVOICEPO@='Y'"
         }
       },
       "documentDateField": "invoiceDate",
@@ -3910,6 +3902,7 @@
             "sourceRequired": true,
             "reference": "Currency",
             "inputMode": "selector",
+            "gridReadOnly": true,
             "validationRule": {
               "code": "C_Currency.C_Currency_id = \nCASE WHEN @C_Invoice_ID@ is not null THEN (SELECT C_Currency_ID FROM C_Invoice WHERE C_Invoice_ID = COALESCE(@C_Invoice_ID@,'---'))\nWHEN @APRM_Finacc_Transaction_V_ID@ is not null THEN (SELECT c_currency_id FROM aprm_finacc_transaction_v WHERE aprm_finacc_transaction_v_id = COALESCE(@APRM_Finacc_Transaction_V_ID@, '---')) \nWHEN @FIN_Finacc_Transaction_ID@ is not null THEN (SELECT c_currency_id FROM fin_finacc_transaction WHERE fin_finacc_transaction_id = COALESCE(@FIN_Finacc_Transaction_ID@, '---'))\nWHEN @GL_Journal_ID@ is not null THEN (SELECT c_currency_id FROM gl_journal WHERE gl_journal_id = COALESCE(@GL_Journal_ID@, '---'))\nELSE (SELECT C_Currency_ID FROM FIN_Payment WHERE FIN_Payment_ID = COALESCE(@FIN_Payment_ID@, '---')) END",
               "contextParams": [],
@@ -3934,13 +3927,14 @@
             "label": "To Currency",
             "type": "foreignKey",
             "tsType": "string",
-            "visibility": "editable",
+            "visibility": "readOnly",
             "required": true,
             "grid": true,
             "form": true,
             "sourceRequired": true,
             "reference": "Currency",
             "inputMode": "search",
+            "gridReadOnly": true,
             "validationRule": {
               "code": "C_Currency.C_Currency_id in (SELECT C_Currency_ID FROM C_Acctschema)",
               "contextParams": [],
@@ -4614,16 +4608,8 @@
         "exchangeRates": {
           "label": "Exchange Rates",
           "tabOrder": 50,
-          "addLineFields": [
-            "toCurrency",
-            "rate",
-            "foreignAmount"
-          ],
           "requireSavedRecord": true,
-          "readOnlyLogic": "@DocumentStatus@!='DR'",
-          "addLineFieldExclusions": {
-            "toCurrency": "currency"
-          }
+          "readOnlyLogic": "@Posted@='Y' | @HASREVERSEDINVOICESO@='Y' | @HASREVERSEDINVOICEPO@='Y'"
         }
       },
       "documentDateField": "invoiceDate",
@@ -7853,7 +7839,7 @@
             "apiKey": "toCurrency",
             "column": "C_Currency_Id_To",
             "type": "foreignKey",
-            "visibility": "editable",
+            "visibility": "readOnly",
             "required": true
           },
           {
