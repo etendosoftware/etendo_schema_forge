@@ -4,6 +4,49 @@ import LifecycleConfirmModal from '@/windows/custom/shared/LifecycleConfirmModal
 
 /* eslint-disable react/prop-types */
 
+const SUB_KEY_BY_ACTION = {
+  delete: {
+    both: 'financeAccountTxConfirmDeleteSubBoth',
+    reconciled: 'financeAccountTxConfirmDeleteSubReconciledOnly',
+    posted: 'financeAccountTxConfirmDeleteSubPostedOnly',
+  },
+  reactivate: {
+    both: 'financeAccountTxConfirmReactivateSubBoth',
+    reconciled: 'financeAccountTxConfirmReactivateSubReconciledOnly',
+    posted: 'financeAccountTxConfirmReactivateSubPostedOnly',
+  },
+};
+
+const WARNING_KEY_BY_STATE = {
+  both: 'financeAccountTxConfirmWarningBoth',
+  reconciled: 'financeAccountTxConfirmWarningReconciledOnly',
+  posted: 'financeAccountTxConfirmWarningPostedOnly',
+};
+
+const TITLE_KEY_BY_ACTION = {
+  delete: 'financeAccountTxConfirmDeleteTitle',
+  reactivate: {
+    reconciled: 'financeAccountTxConfirmReactivateTitleReconciled',
+    default: 'financeAccountTxConfirmReactivateTitle',
+  },
+};
+
+const CONFIRM_LABEL_KEY_BY_ACTION = {
+  delete: 'financeAccountTxConfirmDeleteBtn',
+  reactivate: 'financeAccountTxConfirmReactivateBtn',
+};
+
+const CONFIRM_ICON_BY_ACTION = {
+  delete: Trash2,
+  reactivate: RotateCcw,
+};
+
+function resolveStateKey(reconciled, posted) {
+  if (reconciled && posted) return 'both';
+  if (reconciled) return 'reconciled';
+  return 'posted';
+}
+
 /**
  * Resolves the sub-title (below the red title) naming exactly which effects apply.
  * Mirrors `PaymentLifecycleConfirmModal`'s `resolveSubKey`, but Movimientos only has
@@ -13,21 +56,17 @@ import LifecycleConfirmModal from '@/windows/custom/shared/LifecycleConfirmModal
  * `MovementRowKebab`'s `needsConfirm`), so "neither" is unreachable.
  */
 function resolveSubKey(action, reconciled, posted) {
-  const isDelete = action === 'delete';
-  if (reconciled && posted) {
-    return isDelete ? 'financeAccountTxConfirmDeleteSubBoth' : 'financeAccountTxConfirmReactivateSubBoth';
-  }
-  if (reconciled) {
-    return isDelete ? 'financeAccountTxConfirmDeleteSubReconciledOnly' : 'financeAccountTxConfirmReactivateSubReconciledOnly';
-  }
-  return isDelete ? 'financeAccountTxConfirmDeleteSubPostedOnly' : 'financeAccountTxConfirmReactivateSubPostedOnly';
+  return SUB_KEY_BY_ACTION[action][resolveStateKey(reconciled, posted)];
 }
 
 /** Same tiering as {@link resolveSubKey} for the yellow warning box. */
 function resolveWarningKey(reconciled, posted) {
-  if (reconciled && posted) return 'financeAccountTxConfirmWarningBoth';
-  if (reconciled) return 'financeAccountTxConfirmWarningReconciledOnly';
-  return 'financeAccountTxConfirmWarningPostedOnly';
+  return WARNING_KEY_BY_STATE[resolveStateKey(reconciled, posted)];
+}
+
+function resolveTitleKey(action, reconciled) {
+  if (action === 'delete') return TITLE_KEY_BY_ACTION.delete;
+  return reconciled ? TITLE_KEY_BY_ACTION.reactivate.reconciled : TITLE_KEY_BY_ACTION.reactivate.default;
 }
 
 /**
@@ -48,17 +87,13 @@ function resolveWarningKey(reconciled, posted) {
  */
 export default function MovementLifecycleConfirmModal({ action, reconciled, posted, onConfirm, onClose }) {
   const ui = useUI();
-  const isDelete = action === 'delete';
-
-  const title = isDelete
-    ? ui('financeAccountTxConfirmDeleteTitle')
-    : ui(reconciled ? 'financeAccountTxConfirmReactivateTitleReconciled' : 'financeAccountTxConfirmReactivateTitle');
+  const title = ui(resolveTitleKey(action, reconciled));
   const sub = ui(resolveSubKey(action, reconciled, posted));
-  const confirmLabel = ui(isDelete ? 'financeAccountTxConfirmDeleteBtn' : 'financeAccountTxConfirmReactivateBtn');
+  const confirmLabel = ui(CONFIRM_LABEL_KEY_BY_ACTION[action]);
   const warning = ui(resolveWarningKey(reconciled, posted));
   // Matches PaymentLifecycleConfirmModal's confirm-button icon treatment (restored from
   // the pre-refactor payments ReactivarModal; applied here too for full parity).
-  const ConfirmIconComponent = isDelete ? Trash2 : RotateCcw;
+  const ConfirmIconComponent = CONFIRM_ICON_BY_ACTION[action];
 
   return (
     <LifecycleConfirmModal

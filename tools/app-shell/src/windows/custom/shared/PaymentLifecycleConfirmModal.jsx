@@ -11,6 +11,44 @@ import { DEPOSITED_STATUSES } from './paymentStatuses';
 // item — that was the original bug this component fixes.
 const RECONCILED_STATUS = 'RPPC';
 
+// Per-dir i18n key lookups, one object per state tier — flat lookups instead of nested
+// ternaries (Sonar S3358) and much lower branching in the resolver functions below (S3776).
+const RECONCILED_DELETE_SUB_KEY = { in: 'paymentConfirmDeleteSubInReconciled', out: 'paymentConfirmDeleteSubOutReconciled' };
+const RECONCILED_REACTIVATE_SUB_KEY = { in: 'reactivarInSub', out: 'reactivarOutSub' };
+const DEPOSITED_DELETE_SUB_KEY = { in: 'paymentConfirmDeleteSubIn', out: 'paymentConfirmDeleteSubOut' };
+const DEPOSITED_REACTIVATE_SUB_KEY = { in: 'paymentConfirmReactivateSubIn', out: 'paymentConfirmReactivateSubOut' };
+const DRAFT_DELETE_SUB_KEY = { in: 'paymentConfirmDeleteSubInDraft', out: 'paymentConfirmDeleteSubOutDraft' };
+const RECONCILED_WARNING_KEY = { in: 'reactivarWarningIn', out: 'reactivarWarningOut' };
+const DEPOSITED_WARNING_KEY = { in: 'paymentConfirmWarningPostedIn', out: 'paymentConfirmWarningPostedOut' };
+const RECONCILED_REACTIVATE_TITLE_KEY = { in: 'paymentConfirmReactivateTitleInReconciled', out: 'paymentConfirmReactivateTitleOutReconciled' };
+const UNRECONCILED_REACTIVATE_TITLE_KEY = { in: 'paymentConfirmReactivateTitleIn', out: 'paymentConfirmReactivateTitleOut' };
+const DELETE_TITLE_KEY = { in: 'paymentConfirmDeleteTitleIn', out: 'paymentConfirmDeleteTitleOut' };
+const SUB_KEY_BY_ACTION_AND_STATE = {
+  delete: {
+    reconciled: RECONCILED_DELETE_SUB_KEY,
+    deposited: DEPOSITED_DELETE_SUB_KEY,
+    draft: DRAFT_DELETE_SUB_KEY,
+  },
+  reactivate: {
+    reconciled: RECONCILED_REACTIVATE_SUB_KEY,
+    deposited: DEPOSITED_REACTIVATE_SUB_KEY,
+  },
+};
+const CONFIRM_LABEL_KEY_BY_ACTION = {
+  delete: 'paymentConfirmDeleteBtn',
+  reactivate: 'paymentConfirmReactivateBtn',
+};
+const CONFIRM_ICON_BY_ACTION = {
+  delete: Trash2,
+  reactivate: RotateCcw,
+};
+
+function resolvePaymentStateKey(reconciled, hasTransaction) {
+  if (reconciled) return 'reconciled';
+  if (hasTransaction) return 'deposited';
+  return 'draft';
+}
+
 /**
  * Resolves the sub-title (below the red title) describing exactly what will be undone,
  * matching the level of detail the pre-refactor `ReactivarModal` had — but accurate to
@@ -24,25 +62,20 @@ const RECONCILED_STATUS = 'RPPC';
  *     related ever existed; falls back to the plain generic copy.
  */
 function resolveSubKey(action, dir, reconciled, hasTransaction) {
-  const isDelete = action === 'delete';
-  if (reconciled) {
-    if (isDelete) return dir === 'in' ? 'paymentConfirmDeleteSubInReconciled' : 'paymentConfirmDeleteSubOutReconciled';
-    return dir === 'in' ? 'reactivarInSub' : 'reactivarOutSub';
-  }
-  if (hasTransaction) {
-    return isDelete
-      ? (dir === 'in' ? 'paymentConfirmDeleteSubIn' : 'paymentConfirmDeleteSubOut')
-      : (dir === 'in' ? 'paymentConfirmReactivateSubIn' : 'paymentConfirmReactivateSubOut');
-  }
-  // Draft, never deposited — delete-only path (reactivate is never offered on a Draft).
-  return dir === 'in' ? 'paymentConfirmDeleteSubInDraft' : 'paymentConfirmDeleteSubOutDraft';
+  const stateKey = resolvePaymentStateKey(reconciled, hasTransaction);
+  return SUB_KEY_BY_ACTION_AND_STATE[action][stateKey][dir];
 }
 
 /** Same tiering as {@link resolveSubKey} for the yellow warning box. */
 function resolveWarningKey(dir, reconciled, hasTransaction) {
-  if (reconciled) return dir === 'in' ? 'reactivarWarningIn' : 'reactivarWarningOut';
-  if (hasTransaction) return dir === 'in' ? 'paymentConfirmWarningPostedIn' : 'paymentConfirmWarningPostedOut';
+  if (reconciled) return RECONCILED_WARNING_KEY[dir];
+  if (hasTransaction) return DEPOSITED_WARNING_KEY[dir];
   return 'paymentConfirmWarning';
+}
+
+function resolveTitleKey(dir, action, reconciled) {
+  if (action === 'delete') return DELETE_TITLE_KEY[dir];
+  return reconciled ? RECONCILED_REACTIVATE_TITLE_KEY[dir] : UNRECONCILED_REACTIVATE_TITLE_KEY[dir];
 }
 
 /**
@@ -62,8 +95,6 @@ function resolveWarningKey(dir, reconciled, hasTransaction) {
  */
 export default function PaymentLifecycleConfirmModal({ dir, action, data, onConfirm, onClose }) {
   const ui = useUI();
-  const isIn = dir === 'in';
-  const isDelete = action === 'delete';
   const reconciled = data?.status === RECONCILED_STATUS;
   // A deposited (processed) payment always has its OWN associated financial-account
   // movement (FIN_Finacc_Transaction), separate from the payment record itself — unlike
@@ -79,18 +110,13 @@ export default function PaymentLifecycleConfirmModal({ dir, action, data, onConf
   // criterion still TBD (ETP-4500 follow-up) if this needs to be more precise later.
   const posted = hasTransaction;
 
-  const reactivateTitleKey = reconciled
-    ? (isIn ? 'paymentConfirmReactivateTitleInReconciled' : 'paymentConfirmReactivateTitleOutReconciled')
-    : (isIn ? 'paymentConfirmReactivateTitleIn' : 'paymentConfirmReactivateTitleOut');
-  const title = isDelete
-    ? ui(isIn ? 'paymentConfirmDeleteTitleIn' : 'paymentConfirmDeleteTitleOut')
-    : ui(reactivateTitleKey);
+  const title = ui(resolveTitleKey(dir, action, reconciled));
   const sub = ui(resolveSubKey(action, dir, reconciled, hasTransaction));
-  const confirmLabel = ui(isDelete ? 'paymentConfirmDeleteBtn' : 'paymentConfirmReactivateBtn');
+  const confirmLabel = ui(CONFIRM_LABEL_KEY_BY_ACTION[action]);
   const warning = ui(resolveWarningKey(dir, reconciled, hasTransaction));
   // Matches the pre-refactor ReactivarModal, which always paired its confirm button with
   // this rotate icon; Eliminar gets the analogous Trash2 (new — delete had no cartel before).
-  const ConfirmIconComponent = isDelete ? Trash2 : RotateCcw;
+  const ConfirmIconComponent = CONFIRM_ICON_BY_ACTION[action];
 
   return (
     <LifecycleConfirmModal
