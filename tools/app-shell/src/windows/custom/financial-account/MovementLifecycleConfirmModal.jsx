@@ -69,12 +69,16 @@ export default function MovementLifecycleConfirmModal({ action, reconciled, post
       confirmLabel={confirmLabel}
       cancelLabel={ui('financeAccountTxNewCancel')}
       warning={warning}
-      confirmIcon={<ConfirmIconComponent width={15} height={15} strokeWidth={2.2} />}
+      confirmIcon={<ConfirmIconComponent
+        width={15}
+        height={15}
+        strokeWidth={2.2}
+        data-testid="ConfirmIconComponent__d0836d" />}
       itemConciliacion={[ui('reactivarItem1Title'), ui('reactivarItem1Desc')]}
       itemAsiento={[ui('reactivarItem3Title'), ui('reactivarItem3Desc')]}
       onConfirm={onConfirm}
       onClose={onClose}
       testIdPrefix="movement-confirm"
-    />
+      data-testid="LifecycleConfirmModal__d0836d" />
   );
 }

@@ -102,13 +102,17 @@ export default function PaymentLifecycleConfirmModal({ dir, action, data, onConf
       confirmLabel={confirmLabel}
       cancelLabel={ui('cancel')}
       warning={warning}
-      confirmIcon={<ConfirmIconComponent width={15} height={15} strokeWidth={2.2} />}
+      confirmIcon={<ConfirmIconComponent
+        width={15}
+        height={15}
+        strokeWidth={2.2}
+        data-testid="ConfirmIconComponent__5f76e8" />}
       itemConciliacion={[ui('reactivarItem1Title'), ui('reactivarItem1Desc')]}
       itemTransaccion={[ui('reactivarItem2Title'), ui('reactivarItem2Desc')]}
       itemAsiento={[ui('reactivarItem3Title'), ui('reactivarItem3Desc')]}
       onConfirm={onConfirm}
       onClose={onClose}
       testIdPrefix="payment-confirm"
-    />
+      data-testid="LifecycleConfirmModal__5f76e8" />
   );
 }
