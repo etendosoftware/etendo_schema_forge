@@ -25,6 +25,14 @@ platform config file, and eight functional windows (plus a sibling-repo XML):
 Splitting per window is not meaningful: the regen is a single deterministic
 tooling run, and the LOCAL_CORE infra is a single feature.
 
+> **Related — preview versions.** `LOCAL_CORE` validates the *local core source*
+> path but not the *published-package* path (package.json exports, shims resolving
+> against the registry). Its complement is the
+> [preview versions system](./2026-07-14-preview-package-publishing.md), which
+> publishes throwaway `alpha` prereleases so that published-package path can be
+> tested without cutting a real `latest` release. Implemented on
+> `schema_forge_core@feature/ETP-4394`.
+
 ## Domains touched (dominios)
 
 - **repo-infra** — `cli/sf-local` (new CLI dispatcher), `Makefile`

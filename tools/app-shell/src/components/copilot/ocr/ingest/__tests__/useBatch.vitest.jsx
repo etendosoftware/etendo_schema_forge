@@ -149,6 +149,29 @@ describe('useBatch — runBatch', () => {
     expect(result.current.error).toBe(error);
   });
 
+  it('regression: preserves the raw response text on the thrown error (a genuinely uncontrolled failure, e.g. a stack trace or gateway error page)', async () => {
+    // A non-ok response whose body isn't even valid JSON has nothing else worth
+    // inspecting besides its raw text — without this, the import UI's system-error
+    // dialog would have nothing to show beyond the generic "Batch failed (502)".
+    globalThis.fetch = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 502,
+      text: async () => 'Gateway error: upstream connection reset\n  at some.internal.Handler',
+    });
+    const { result } = renderHook(() => useBatch({ token: 'tok' }));
+
+    let error;
+    await act(async () => {
+      try {
+        await result.current.runBatch([]);
+      } catch (e) {
+        error = e;
+      }
+    });
+
+    expect(error.raw).toBe('Gateway error: upstream connection reset\n  at some.internal.Handler');
+  });
+
   it('sets error and rethrows when fetch rejects', async () => {
     const networkErr = new Error('network down');
     globalThis.fetch = vi.fn().mockRejectedValue(networkErr);

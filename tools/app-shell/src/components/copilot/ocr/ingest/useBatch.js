@@ -44,7 +44,15 @@ export function useBatch({ apiBaseUrl, token }) {
         try { json = JSON.parse(text); } catch { /* leave null */ }
       }
       if (!res.ok && !json) {
-        throw new Error(`Batch failed (${res.status})`);
+        // A non-ok response whose body isn't even valid JSON is a genuinely uncontrolled
+        // failure (a raw Tomcat/servlet-container error page, an unhandled exception's
+        // stack trace as plain text) — as opposed to BatchService.java's own graceful
+        // `{ committed: false, ... }` JSON failure, which is returned above, not thrown.
+        // The raw text is the only diagnostic available for this case; preserving it as
+        // `.raw` lets the import UI show it instead of just a bare "Batch failed (500)".
+        const err = new Error(`Batch failed (${res.status})`);
+        err.raw = text;
+        throw err;
       }
       return json;
     } catch (e) {

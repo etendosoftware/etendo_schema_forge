@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import {
-  ArrowLeftRight, ArrowRight, Landmark, ChevronDown, Globe,
+  ArrowLeftRight, ArrowRight, Landmark, ChevronDown,
 } from 'lucide-react';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -300,6 +300,12 @@ export function FundsTransferModal({ sourceAccountId, onClose, onSuccess }) {
   // source balance (it never blocks on balance), so we deliberately do not gate on it.
   const available = Number(source?.currentBalance ?? 0);
   const rateNum = Number(normalizeRate(conversionRate));
+  // Read-only preview of what the destination account will receive, once amount and
+  // rate are both valid — formatCurrency renders '—' for null (incomplete) inputs.
+  const receiveAmount = Number.isFinite(amountNum) && amountNum > 0
+    && Number.isFinite(rateNum) && rateNum > 0
+    ? amountNum * rateNum
+    : null;
   const canSubmit = !!destId
     && !!glItem
     && Number.isFinite(amountNum) && amountNum > 0
@@ -360,7 +366,11 @@ export function FundsTransferModal({ sourceAccountId, onClose, onSuccess }) {
         </div>
 
         {/* Body */}
-        <div className="flex flex-col gap-4 px-6 pb-2 pt-1.5">
+        {/* min-w-0 is required: DialogContent is `display: grid`, and grid items default to
+            min-width:auto — without this, a very long value deep inside (e.g. the receive-amount
+            preview with a huge typed number) inflates this whole column past the dialog's own
+            width, and only its rightmost sliver gets clipped, cropping every row uniformly. */}
+        <div className="flex min-w-0 flex-col gap-4 px-6 pb-2 pt-1.5">
           {/* Source → destination flow */}
           <div className="flex flex-col">
             <div className="flex items-center gap-3 rounded-xl border border-[#E8E8ED] bg-[#F7F7F8] px-4 py-3.5">
@@ -416,26 +426,33 @@ export function FundsTransferModal({ sourceAccountId, onClose, onSuccess }) {
           {/* Currency conversion (multi-currency only) */}
           {multiCurrency ? (
             <div className="flex flex-col gap-3 rounded-xl border border-[#D1D1DB] bg-[#F7F7F8] px-4 py-3.5" data-testid="transfer-fx-block">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2 text-xs font-semibold leading-4 text-[#121217]">
-                  <Globe className="h-3.5 w-3.5" data-testid="Globe__tf" />
-                  {ui('financeAccountTransferFx')}
-                </div>
-                <div className="flex items-center gap-2 text-[13px] font-semibold leading-[18px] text-[#121217]">
-                  <CurrencyBadge iso={source?.currencyIso} data-testid="CurrencyBadge__7ff08b" />
-                  <ArrowRight className="h-[15px] w-[15px] text-[#A9A9BC]" data-testid="ArrowRight__tf" />
-                  <CurrencyBadge iso={dest?.currencyIso} data-testid="CurrencyBadge__7ff08b" />
-                </div>
-              </div>
               <div className="flex flex-col gap-1.5">
-                <Label required data-testid="Label__7ff08b">{ui('financeAccountTransferRate')}</Label>
-                <input
-                  className="h-10 w-full rounded-md border border-[#D1D1DB] bg-white px-3 text-right text-sm leading-5 tabular-nums text-[#121217] placeholder:text-[#A9A9BC] focus:outline-none focus:border-[#121217] focus:ring-[3px] focus:ring-black/[0.08]"
-                  placeholder={ui('financeAccountTransferRatePlaceholder')}
-                  inputMode="decimal"
-                  value={conversionRate}
-                  onChange={(e) => setConversionRate(sanitizeNumeric(e.target.value))}
-                  data-testid="transfer-rate" />
+                <div className="flex items-center justify-between">
+                  <Label required data-testid="Label__7ff08b">{ui('financeAccountTransferRate')}</Label>
+                  <div className="flex items-center gap-2 text-[13px] font-semibold leading-[18px] text-[#121217]">
+                    <CurrencyBadge iso={source?.currencyIso} data-testid="CurrencyBadge__7ff08b" />
+                    <ArrowRight className="h-[15px] w-[15px] text-[#A9A9BC]" data-testid="ArrowRight__tf" />
+                    <CurrencyBadge iso={dest?.currencyIso} data-testid="CurrencyBadge__7ff08b" />
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <input
+                    className="h-10 min-w-0 flex-1 rounded-md border border-[#D1D1DB] bg-white px-3 text-right text-sm leading-5 tabular-nums text-[#121217] placeholder:text-[#A9A9BC] focus:outline-none focus:border-[#121217] focus:ring-[3px] focus:ring-black/[0.08]"
+                    placeholder={ui('financeAccountTransferRatePlaceholder')}
+                    inputMode="decimal"
+                    value={conversionRate}
+                    onChange={(e) => setConversionRate(sanitizeNumeric(e.target.value))}
+                    data-testid="transfer-rate" />
+                  <div
+                    className="flex h-10 min-w-0 flex-1 items-center gap-1 overflow-hidden rounded-md border border-[#D1D1DB] bg-[#EDEDF0] px-2.5 text-sm leading-5 tabular-nums text-[#121217]"
+                    title={`${ui('financeAccountTransferReceiveAmount')}: ${formatCurrency(dest?.currencyIso, receiveAmount)}`}
+                    aria-label={`${ui('financeAccountTransferReceiveAmount')}: ${formatCurrency(dest?.currencyIso, receiveAmount)}`}
+                    data-testid="transfer-receive-amount"
+                  >
+                    <span className="flex-none text-[#6E6E80]">≈</span>
+                    <span className="min-w-0 truncate">{formatCurrency(dest?.currencyIso, receiveAmount)}</span>
+                  </div>
+                </div>
               </div>
             </div>
           ) : null}

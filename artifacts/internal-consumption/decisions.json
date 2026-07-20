@@ -104,7 +104,7 @@
           "grid": true,
           "searchable": true,
           "lookup": true,
-          "lookupDrawer": "internal-consumption-product",
+          "lookupDrawer": "product-stock",
           "lookupTitle": "Product + Warehouse",
           "onSelectMappings": [
             {

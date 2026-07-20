@@ -1,17 +1,13 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Landmark } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
-import {
-  Select,
-  SelectTrigger,
-  SelectValue,
-  SelectContent,
-  SelectItem,
-} from '@/components/ui/select';
 import { useUI } from '@/i18n';
 import { isValidIban, normalizeIban } from '@/lib/validateIban.js';
+import { CreatableSearchSelect } from '@/components/contract-ui/CreatableSearchSelect';
+
+const CURRENCY_FIELD = { key: 'account-form-currency', id: 'account-form-currency' };
 
 const EMPTY = { name: '', iban: '', swiftCode: '', currencyId: '' };
 
@@ -53,9 +49,23 @@ export function AccountFormStep({
   const [currencyId, setCurrencyId] = useState(seed.currencyId || defaultCurrencyId || '');
   const [ibanTouched, setIbanTouched] = useState(false);
 
+  // Auto-applies defaultCurrencyId only once (mount, or once it arrives async from
+  // fetchDefaults()). Without the ref guard this would refire — and stomp the user's
+  // choice — every time CreatableSearchSelect's chip-clear handler resets currencyId
+  // to '' while the user searches for a different currency.
+  const currencyDefaultedRef = useRef(currencyId !== '');
   useEffect(() => {
-    if (!currencyId && defaultCurrencyId) setCurrencyId(defaultCurrencyId);
+    if (!currencyId && defaultCurrencyId && !currencyDefaultedRef.current) {
+      currencyDefaultedRef.current = true;
+      setCurrencyId(defaultCurrencyId);
+    }
   }, [defaultCurrencyId, currencyId]);
+
+  // The allowed currency set (EUR/USD/GBP) is enforced server-side by the
+  // C_Currency_ID selector; `currencies` arrives already restricted, so this is
+  // just a client-side (staticOptions) chip picker over that list.
+  const selectedCurrency = currencies.find((currency) => currency.id === currencyId) || null;
+  const currencyOptions = currencies.map((currency) => ({ id: currency.id, name: currency.iso }));
 
   const isBank = mode === 'bank';
   const ibanInvalid = isBank && iban.trim() !== '' && !isValidIban(iban);
@@ -154,35 +164,21 @@ export function AccountFormStep({
 
         <div className="flex flex-col gap-2">
           <Label
-            htmlFor="account-form-currency-trigger"
+            htmlFor={CURRENCY_FIELD.key}
             className={FIELD_LABEL}
             data-testid="Label__5e0d1d">
             {ui('financeAccountsNewFieldCurrency')}
           </Label>
-          <Select
+          <CreatableSearchSelect
+            field={CURRENCY_FIELD}
             value={currencyId}
-            onValueChange={setCurrencyId}
-            data-testid="Select__5e0d1d">
-            <SelectTrigger
-              id="account-form-currency-trigger"
-              data-testid="account-form-currency"
-              className="bg-white"
-            >
-              <SelectValue
-                placeholder={ui('financeAccountsNewFieldCurrencyPlaceholder')}
-                data-testid="SelectValue__5e0d1d" />
-            </SelectTrigger>
-            {/* Force the (long) currency list to open BELOW the trigger instead
-                of flipping up — the form sits near the bottom of the dialog so
-                Radix's collision avoidance would otherwise open it upward. */}
-            <SelectContent side="bottom" avoidCollisions={false} data-testid="SelectContent__5e0d1d">
-              {currencies.map((currency) => (
-                <SelectItem key={currency.id} value={currency.id} data-testid="SelectItem__5e0d1d">
-                  {currency.iso}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+            displayValue={selectedCurrency?.iso || ''}
+            onChange={(id) => setCurrencyId(id)}
+            formData={{}}
+            resolvedLabel={ui('financeAccountsNewFieldCurrency')}
+            staticOptions={currencyOptions}
+            data-testid="CreatableSearchSelect__5e0d1d"
+          />
         </div>
       </div>
       {error ? (

@@ -54,6 +54,22 @@
         ],
         "requireSavedRecord": true
       }
+    },
+    "import": {
+      "enabled": true,
+      "spec": "product",
+      "entity": "product",
+      "formats": ["csv", "txt"],
+      "limit": { "maxRows": 5000, "concurrency": 4 },
+      "dedupe": { "scope": "file", "key": ["searchKey"] },
+      "fields": [
+        { "target": "searchKey", "aliases": ["codigo", "código", "sku"] },
+        { "target": "name", "aliases": ["nombre"] },
+        { "target": "description", "aliases": ["descripcion", "descripción"] },
+        { "target": "uOM", "aliases": ["unidad de medida", "uom"], "matchEntity": "UOM" },
+        { "target": "productCategory", "aliases": ["categoria", "categoría"], "matchEntity": "ProductCategory" },
+        { "target": "taxCategory", "aliases": ["categoria impositiva", "categoría impositiva", "impuesto"], "matchEntity": "FinancialMgmtTaxCategory" }
+      ]
     }
   },
   "entities": {

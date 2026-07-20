@@ -1,8 +1,8 @@
 {
   "version": "0.2.0",
   "generatedAt": "2026-04-28T16:08:39.756Z",
-  "updatedAt": "2026-06-26T12:27:58.848Z",
-  "checksum": "bac42a6f5c952ea2",
+  "updatedAt": "2026-07-14T12:55:38.681Z",
+  "checksum": "064b693fa50d1444",
   "frontendContract": {
     "window": {
       "id": "C327DE215AC945F69363905840118177",
@@ -227,7 +227,8 @@
               "source": "N"
             }
           }
-        ]
+        ],
+        "javaQualifier": "tbai-config-sequence-handler"
       }
     }
   },
@@ -373,7 +374,8 @@
             "visibility": "system",
             "required": true
           }
-        ]
+        ],
+        "javaQualifier": "tbai-config-sequence-handler"
       }
     },
     "endpoints": [
