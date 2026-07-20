@@ -2780,13 +2780,21 @@ export function DetailView({
   // changes — so this tab would keep showing the previously-fetched values
   // until a manual reload. Scoped to exchangeRates only: no other secondary
   // tab is known to depend on the header's currency/rate.
+  //
+  // grandTotalAmount is also a trigger: adding/editing/deleting a primary
+  // invoice line never touches currency/eTGOCurrencyRate, but it does change
+  // grandTotalAmount (refreshed into hook.selected by handleAddChild/
+  // handleUpdateChild/handleDeleteChild's refreshHeaderTotals call), and the
+  // backend recomputes this row's foreignAmount from grandTotalAmount on
+  // every line save (InvoiceLineHandler#syncConversionRateDocumentAfterLineSave)
+  // — so this tab needs the same refetch whenever that total changes.
   useEffect(() => {
     if (!hook.selected?.id) return;
     const exchangeRatesIdx = secondaryTabs.findIndex(st => st.key === 'exchangeRates');
     if (exchangeRatesIdx < 0) return;
     secondaryHooks[exchangeRatesIdx]?.fetchChildren(hook.selected.id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [hook.selected?.currency, hook.selected?.eTGOCurrencyRate]);
+  }, [hook.selected?.currency, hook.selected?.eTGOCurrencyRate, hook.selected?.grandTotalAmount]);
 
   // Apply callout results to the form when they arrive
   useEffect(() => {
