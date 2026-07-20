@@ -11832,6 +11832,10 @@
       "label": "User Count",
       "description": "Counted Quantity"
     },
+    "EM_Etgo_Qtydiff": {
+      "label": "Difference",
+      "description": "Difference between the counted quantity and the system (book) quantity"
+    },
     "voidcheck": {
       "label": "Void",
       "description": ""

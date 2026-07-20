@@ -76,6 +76,7 @@ Physical Inventory should let a warehouse user create an inventory count session
 - Lines tab redesign: Line No. hidden from grid; columns reordered to Product → UOM → System Count → User Count; all columns `grow: true` with `columnWidth: 192` on number columns for equal flex-basis and alignment between `InlineLinesPanel` and the add-row `DataTable`; UOM marked `gridReadOnly: true` to prevent inline editing.
 - Replaced process button with `draftMode` (`processField: processNow`, `label: confirm`, `disableWhenEmpty: true`): Save button gets a floppy disk icon; Confirm button (dark, checkmark) is disabled without lines and hidden when processed. `processNow` set to `visibility: discarded` to suppress the legacy process button from the `processes` array.
 - Added `lockedAlert` (reusing `goodsMovementsLockedTitle/Message/Action` i18n keys) that shows when processed, with a "Create new inventory" link to `/physical-inventory/new`.
+- "Difference" column (`etgoQtydiff`) rendered with the new declarative `columnType: "signedDelta"` (`decisions.json`): shows `-N`/`±0`/`+N` in `#D50B3E`/`#121217`/`#1E874C` at Inter 600, tabular-nums, right-aligned, in both `InlineLinesPanel` and the main `DataTable`. See `docs/decisions-reference.md` § "Signed delta column rendering".
 
 ## Merge refresh notes
 - This guide was refreshed against `origin/develop` after the `epic/ETP-3504` merge by re-reading the current Physical Inventory window code rather than relying on older guide text.

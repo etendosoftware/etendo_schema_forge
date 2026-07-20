@@ -184,6 +184,16 @@
           "columnWidth": 192,
           "readOnlyLogic": null
         },
+        "etgoQtydiff": {
+          "visibility": "readOnly",
+          "label": "Difference",
+          "columnType": "signedDelta",
+          "grid": true,
+          "gridOrder": 5,
+          "grow": true,
+          "columnWidth": 192,
+          "readOnlyLogic": null
+        },
         "adjustmentQuantity": {
           "visibility": "readOnly",
           "grid": true,

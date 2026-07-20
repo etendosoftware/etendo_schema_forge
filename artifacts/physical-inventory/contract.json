@@ -1,8 +1,8 @@
 {
-  "version": "0.29.1",
+  "version": "0.32.0",
   "generatedAt": "2026-06-29T12:25:17.116Z",
-  "updatedAt": "2026-06-29T22:43:32.117Z",
-  "checksum": "74ff606db3b82619",
+  "updatedAt": "2026-07-20T12:22:07.369Z",
+  "checksum": "3769f1a825961239",
   "frontendContract": {
     "window": {
       "id": "168",
@@ -543,6 +543,27 @@
               "evaluable": true,
               "js": "record['processed'] === true"
             }
+          },
+          {
+            "name": "etgoQtydiff",
+            "apiKey": "etgoQtydiff",
+            "column": "EM_Etgo_Qtydiff",
+            "label": "Difference",
+            "type": "quantity",
+            "tsType": "number",
+            "visibility": "readOnly",
+            "required": false,
+            "grid": true,
+            "form": true,
+            "derivation": {
+              "type": "computed",
+              "source": "0"
+            },
+            "columnType": "signedDelta",
+            "defaultValue": "0",
+            "gridOrder": 5,
+            "grow": true,
+            "columnWidth": 192
           }
         ],
         "searchableFields": [],
@@ -563,6 +584,13 @@
           },
           {
             "name": "quantityOrderBook",
+            "derivation": {
+              "type": "computed",
+              "source": "0"
+            }
+          },
+          {
+            "name": "etgoQtydiff",
             "derivation": {
               "type": "computed",
               "source": "0"
@@ -1048,6 +1076,14 @@
             "type": "foreignKey",
             "visibility": "system",
             "required": true
+          },
+          {
+            "name": "etgoQtydiff",
+            "apiKey": "etgoQtydiff",
+            "column": "EM_Etgo_Qtydiff",
+            "type": "quantity",
+            "visibility": "readOnly",
+            "required": false
           }
         ],
         "javaQualifier": "inventoryLine"
@@ -1341,6 +1377,14 @@
         "description": "Default value for 'posted' in inventory should be a string"
       },
       {
+        "id": "t-default-value-type-inventoryLine-etgoQtydiff",
+        "category": "default-value-type",
+        "entity": "inventoryLine",
+        "field": "etgoQtydiff",
+        "runner": "node",
+        "description": "Default value for 'etgoQtydiff' in inventoryLine should be a string"
+      },
+      {
         "id": "t-default-value-type-inventoryLine-lineNo",
         "category": "default-value-type",
         "entity": "inventoryLine",
@@ -1501,6 +1545,14 @@
         "description": "Field 'description' should be present in inventoryLine"
       },
       {
+        "id": "t-field-presence-inventoryLine-etgoQtydiff",
+        "category": "field-presence",
+        "entity": "inventoryLine",
+        "field": "etgoQtydiff",
+        "runner": "node",
+        "description": "Field 'etgoQtydiff' should be present in inventoryLine"
+      },
+      {
         "id": "t-field-presence-inventoryLine-lineNo",
         "category": "field-presence",
         "entity": "inventoryLine",
@@ -1635,6 +1687,14 @@
         "field": "description",
         "runner": "node",
         "description": "Field 'description' should have type 'string' in inventoryLine"
+      },
+      {
+        "id": "t-field-type-inventoryLine-etgoQtydiff",
+        "category": "field-type",
+        "entity": "inventoryLine",
+        "field": "etgoQtydiff",
+        "runner": "node",
+        "description": "Field 'etgoQtydiff' should have type 'number' in inventoryLine"
       },
       {
         "id": "t-field-type-inventoryLine-lineNo",
@@ -2257,15 +2317,15 @@
       }
     ],
     "summary": {
-      "total": 126,
+      "total": 129,
       "byCategory": {
         "action-endpoint": 4,
         "crud-flags": 2,
-        "default-value-type": 7,
+        "default-value-type": 8,
         "displaylogic-evaluable": 3,
         "displaylogic-valid": 3,
-        "field-presence": 17,
-        "field-type": 17,
+        "field-presence": 18,
+        "field-type": 18,
         "readonlylogic-evaluable": 10,
         "readonlylogic-valid": 10,
         "rule-declared": 11,
@@ -2275,7 +2335,7 @@
         "visibility": 2
       },
       "byRunner": {
-        "node": 126,
+        "node": 129,
         "junit": 0
       }
     }
