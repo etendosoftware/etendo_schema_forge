@@ -423,32 +423,41 @@ describe('buildVerifactuUpdatePayload', () => {
 // ---------------------------------------------------------------------------
 
 describe('getFiscalRecordId', () => {
+  // The extractor now assigns PK fields via IsKey='Y' (schema_forge_core commit
+  // 5d363ad2f), so NeoFieldFilter no longer renames the PK to a per-system field
+  // name — the API always returns it as `id`, regardless of system.
   it('returns null for null record', () => {
     expect(getFiscalRecordId(null, 'SII')).toBeNull();
   });
 
-  it('returns configuracinSII for SII', () => {
-    expect(getFiscalRecordId({ configuracinSII: 'id-sii' }, 'SII')).toBe('id-sii');
+  it('returns record.id for SII', () => {
+    expect(getFiscalRecordId({ id: 'id-sii' }, 'SII')).toBe('id-sii');
   });
 
-  it('returns null when configuracinSII is absent', () => {
+  it('returns null when id is absent', () => {
     expect(getFiscalRecordId({}, 'SII')).toBeNull();
   });
 
-  it('returns tbaiConfigID for TBAI', () => {
-    expect(getFiscalRecordId({ tbaiConfigID: 'id-tbai' }, 'TBAI')).toBe('id-tbai');
+  it('returns record.id for TBAI', () => {
+    expect(getFiscalRecordId({ id: 'id-tbai' }, 'TBAI')).toBe('id-tbai');
   });
 
-  it('returns verifactuConfig for VERIFACTU', () => {
-    expect(getFiscalRecordId({ verifactuConfig: 'id-vf' }, 'VERIFACTU')).toBe('id-vf');
+  it('returns record.id for VERIFACTU', () => {
+    expect(getFiscalRecordId({ id: 'id-vf' }, 'VERIFACTU')).toBe('id-vf');
   });
 
-  it('falls back to record.id for unknown system', () => {
+  it('returns record.id for an unknown system', () => {
     expect(getFiscalRecordId({ id: 'fallback' }, 'UNKNOWN')).toBe('fallback');
   });
 
   it('returns null for unknown system with no id', () => {
     expect(getFiscalRecordId({}, 'UNKNOWN')).toBeNull();
+  });
+
+  it('ignores stale per-system field names now that the API returns id', () => {
+    expect(getFiscalRecordId({ configuracinSII: 'stale-sii' }, 'SII')).toBeNull();
+    expect(getFiscalRecordId({ tbaiConfigID: 'stale-tbai' }, 'TBAI')).toBeNull();
+    expect(getFiscalRecordId({ verifactuConfig: 'stale-vf' }, 'VERIFACTU')).toBeNull();
   });
 });
 

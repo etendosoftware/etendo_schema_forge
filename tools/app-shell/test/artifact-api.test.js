@@ -85,7 +85,8 @@ describe('artifact-api filesystem', () => {
 
   it('window names match SAFE_WINDOW_RE pattern', () => {
     const entries = readdirSync(ARTIFACTS_DIR, { withFileTypes: true });
-    const dirs = entries.filter((e) => e.isDirectory());
+    // Skip directories starting with _ — those are test fixtures created by parallel test runs.
+    const dirs = entries.filter((e) => e.isDirectory() && !e.name.startsWith('_'));
     for (const d of dirs) {
       assert.ok(SAFE_WINDOW_RE.test(d.name), `Window "${d.name}" should match safe pattern`);
     }

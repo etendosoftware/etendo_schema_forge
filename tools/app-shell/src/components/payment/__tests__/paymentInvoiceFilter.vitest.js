@@ -71,6 +71,15 @@ describe('paymentInvoiceFilter — applyInvoiceAdvancedFilter', () => {
       expect(ids(applyInvoiceAdvancedFilter(invoices, { conditions: [{ field: 'metodo', operator: 'iEquals', value: 'efectivo' }] }))).toEqual(['2']);
       expect(ids(applyInvoiceAdvancedFilter(invoices, { conditions: [{ field: 'metodo', operator: 'iNotEqual', value: 'efectivo' }] }))).toEqual(['1', '3']);
     });
+
+    it('iStartsWith (case-insensitive prefix)', () => {
+      // 'FAC-00' is a shared prefix → all rows match
+      expect(ids(applyInvoiceAdvancedFilter(invoices, { conditions: [{ field: 'no', operator: 'iStartsWith', value: 'fac-00' }] }))).toEqual(['1', '2', '3']);
+      // Prefix match only: 'trans' is at the start of Transferencia (row 1), not a substring elsewhere
+      expect(ids(applyInvoiceAdvancedFilter(invoices, { conditions: [{ field: 'metodo', operator: 'iStartsWith', value: 'trans' }] }))).toEqual(['1']);
+      // Substring that is not a prefix must not match
+      expect(ids(applyInvoiceAdvancedFilter(invoices, { conditions: [{ field: 'metodo', operator: 'iStartsWith', value: 'ferencia' }] }))).toEqual([]);
+    });
   });
 
   describe('null operators', () => {

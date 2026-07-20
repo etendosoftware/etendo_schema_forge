@@ -303,50 +303,50 @@ describe('SifTab', () => {
     });
   });
 
-  // ── TBAI panel ──────────────────────────────────────────────────────────────
+  // ── TBAI removed ────────────────────────────────────────────────────────────
+  // The TBAI tab/section was removed from SifTab (ETP-4401): the chaining
+  // sequence is now configured automatically by TbaiConfigSequenceHandler, so
+  // per-invoice TBAI fields no longer need a UI surface here. SII and
+  // Verifactu are unaffected. The 'tbai' fiscal-config profile still exists
+  // (used elsewhere, e.g. SifDataTabs), but SifTab no longer renders anything
+  // for it — it falls through to the empty state.
 
-  describe('TBAI panel (tbai profile, sales-invoice)', () => {
+  describe('TBAI removed from SifTab (tbai profile, sales-invoice)', () => {
     beforeEach(() => {
       mockFiscalConfig('tbai');
     });
 
-    it('renders TBAI rail button', () => {
+    it('never renders a TBAI rail button', () => {
       render(<SifTab {...makeProps()} />);
-      expect(screen.getByText('sifDataTabs.tab.tbai')).toBeInTheDocument();
+      expect(screen.queryByText('sifDataTabs.tab.tbai')).not.toBeInTheDocument();
     });
 
-    it('does not render SII or Verifactu rail buttons', () => {
+    it('never renders the TBAI panel title', () => {
       render(<SifTab {...makeProps()} />);
-      expect(screen.queryByText('sifDataTabs.tab.sii')).not.toBeInTheDocument();
-      expect(screen.queryByText('sifDataTabs.tab.verifactu')).not.toBeInTheDocument();
+      expect(screen.queryByText('sifDataTabs.panel.tbai.title')).not.toBeInTheDocument();
     });
 
-    it('renders the TBAI panel title by default', () => {
-      render(<SifTab {...makeProps()} />);
-      expect(screen.getByText('sifDataTabs.panel.tbai.title')).toBeInTheDocument();
-    });
-
-    it('renders 3 read-only TBAI fields', () => {
+    it('never renders the TBAI read-only fields', () => {
       render(<SifTab {...makeProps({ data: { tbaiSequence: 'SEQ1', tbaiInvoicenum: 'SER1', tbaiInvoiceseq: 'INV1' } })} />);
-      expect(screen.getByTestId('input-sif-tbaiSeq')).toBeInTheDocument();
-      expect(screen.getByTestId('input-sif-tbaiSerie')).toBeInTheDocument();
-      expect(screen.getByTestId('input-sif-tbaiInvSeq')).toBeInTheDocument();
+      expect(screen.queryByTestId('input-sif-tbaiSeq')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('input-sif-tbaiSerie')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('input-sif-tbaiInvSeq')).not.toBeInTheDocument();
     });
 
-    it('renders TbaiBadge as not-sent when tbaiIssent is falsy', () => {
-      render(<SifTab {...makeProps({ data: { tbaiIssent: false } })} />);
-      expect(screen.getByText('sifDataTabs.status.tbai.notSent')).toBeInTheDocument();
-    });
-
-    it('renders TbaiBadge as sent when tbaiIssent is Y', () => {
+    it('never renders the TBAI badge, sent or not', () => {
       render(<SifTab {...makeProps({ data: { tbaiIssent: 'Y' } })} />);
-      expect(screen.getByText('sifDataTabs.status.tbai.sent')).toBeInTheDocument();
+      expect(screen.queryByText('sifDataTabs.status.tbai.sent')).not.toBeInTheDocument();
+      expect(screen.queryByText('sifDataTabs.status.tbai.notSent')).not.toBeInTheDocument();
     });
 
-    it('does not show TBAI for purchase-invoice (tbai profile)', () => {
+    it('falls through to the empty state since only TBAI targets the invoice', () => {
+      render(<SifTab {...makeProps()} />);
+      expect(screen.getByText('sifDataTabs.sectionTitle')).toBeInTheDocument();
+    });
+
+    it('does not show TBAI for purchase-invoice either (tbai profile)', () => {
       render(<SifTab {...makeProps({ apiBaseUrl: '/sws/neo/purchase-invoice' })} />);
       expect(screen.queryByText('sifDataTabs.tab.tbai')).not.toBeInTheDocument();
-      // Falls through to empty state because no target is active for purchase-invoice + tbai
       expect(screen.getByText('sifDataTabs.sectionTitle')).toBeInTheDocument();
     });
   });
@@ -409,35 +409,22 @@ describe('SifTab', () => {
     });
   });
 
-  // ── sii+tbai dual rail ──────────────────────────────────────────────────────
+  // ── sii+tbai profile — TBAI half removed ────────────────────────────────────
 
   describe('sii+tbai profile (sales-invoice)', () => {
     beforeEach(() => {
       mockFiscalConfig('sii+tbai');
     });
 
-    it('renders both SII and TBAI rail buttons', () => {
+    it('renders only the SII rail button (TBAI removed)', () => {
       render(<SifTab {...makeProps()} />);
       expect(screen.getByText('sifDataTabs.tab.sii')).toBeInTheDocument();
-      expect(screen.getByText('sifDataTabs.tab.tbai')).toBeInTheDocument();
+      expect(screen.queryByText('sifDataTabs.tab.tbai')).not.toBeInTheDocument();
     });
 
     it('defaults to the SII panel', () => {
       render(<SifTab {...makeProps()} />);
       expect(screen.getByText('sifDataTabs.panel.sii.title')).toBeInTheDocument();
-    });
-
-    it('switches to TBAI panel on rail click', async () => {
-      render(<SifTab {...makeProps()} />);
-      fireEvent.click(screen.getByText('sifDataTabs.tab.tbai'));
-      await screen.findByText('sifDataTabs.panel.tbai.title');
-    });
-
-    it('switches back to SII panel on SII rail click', async () => {
-      render(<SifTab {...makeProps()} />);
-      fireEvent.click(screen.getByText('sifDataTabs.tab.tbai'));
-      fireEvent.click(screen.getByText('sifDataTabs.tab.sii'));
-      await screen.findByText('sifDataTabs.panel.sii.title');
     });
 
     it('does not render Verifactu rail button', () => {
@@ -861,6 +848,58 @@ describe('SifTab', () => {
       render(<SifTab {...makeProps({ data: { documentStatus: 'DR', aeatsiiEjercicio: undefined } })} />);
       const yearInput = screen.getByTestId('input-sif-siiYear');
       expect(yearInput).toHaveValue('—');
+    });
+  });
+
+  // ── onVisibilityChange callback (ETP-4401 follow-up: hide the SIF tab itself) ──
+  // DetailView's `customTabs` (placement: 'tab') mechanism mounts SifTab regardless of
+  // whether it has anything to show, and relies on this callback to decide whether the
+  // tab button itself should stay in the tab bar. See DetailView.jsx customTabVisibility.
+
+  describe('onVisibilityChange callback', () => {
+    it('calls onVisibilityChange(false) when neither SII nor Verifactu applies (TBAI-only/unconfigured)', () => {
+      mockFiscalConfig('unconfigured');
+      const onVisibilityChange = vi.fn();
+      render(<SifTab {...makeProps({ onVisibilityChange })} />);
+      expect(onVisibilityChange).toHaveBeenCalledWith(false);
+      expect(onVisibilityChange).not.toHaveBeenCalledWith(true);
+    });
+
+    it('calls onVisibilityChange(false) for a TBAI-only profile (TBAI removed from SifTab)', () => {
+      mockFiscalConfig('tbai');
+      const onVisibilityChange = vi.fn();
+      render(<SifTab {...makeProps({ onVisibilityChange })} />);
+      expect(onVisibilityChange).toHaveBeenCalledWith(false);
+    });
+
+    it('calls onVisibilityChange(true) when SII applies', () => {
+      mockFiscalConfig('sii');
+      const onVisibilityChange = vi.fn();
+      render(<SifTab {...makeProps({ onVisibilityChange })} />);
+      expect(onVisibilityChange).toHaveBeenCalledWith(true);
+      expect(onVisibilityChange).not.toHaveBeenCalledWith(false);
+    });
+
+    it('calls onVisibilityChange(true) when Verifactu applies', () => {
+      mockFiscalConfig('verifactu');
+      const onVisibilityChange = vi.fn();
+      render(<SifTab {...makeProps({ onVisibilityChange })} />);
+      expect(onVisibilityChange).toHaveBeenCalledWith(true);
+      expect(onVisibilityChange).not.toHaveBeenCalledWith(false);
+    });
+
+    it('calls onVisibilityChange(true) when sii+tbai profile applies (SII half still active)', () => {
+      mockFiscalConfig('sii+tbai');
+      const onVisibilityChange = vi.fn();
+      render(<SifTab {...makeProps({ onVisibilityChange })} />);
+      expect(onVisibilityChange).toHaveBeenCalledWith(true);
+    });
+
+    it('is safe to omit onVisibilityChange — no crash regardless of profile', () => {
+      mockFiscalConfig('unconfigured');
+      expect(() => render(<SifTab {...makeProps()} />)).not.toThrow();
+      mockFiscalConfig('sii');
+      expect(() => render(<SifTab {...makeProps()} />)).not.toThrow();
     });
   });
 });

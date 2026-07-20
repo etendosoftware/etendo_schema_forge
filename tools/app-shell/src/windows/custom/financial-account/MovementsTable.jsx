@@ -108,7 +108,7 @@ const MOVEMENT_CELL_RENDERERS = {
     labelKey: 'financeAccountMovementsColStatus',
     renderCell: (m) => (
       <TableCell data-testid="TableCell__ae5a16">
-        <MovementStatusBadge status={m.paymentStatus} data-testid="MovementStatusBadge__ae5a16" />
+        <MovementStatusBadge status={m.paymentStatus} processed={m.processed} data-testid="MovementStatusBadge__ae5a16" />
       </TableCell>
     ),
   },
@@ -218,9 +218,8 @@ function useTrxTypeLabel() {
  * Classic), as read-only fields. The business partner is excluded — it already
  * has its own "Contacto" column.
  */
-function DimensionsPanel({ movement, ui }) {
+function DimensionsPanel({ movement, ui, visible }) {
   const dims = movement.dimensions || {};
-  const visible = DISPLAYED_DIMENSIONS;
 
   return (
     <div className="grid grid-cols-1 gap-5 pl-16 pr-[52px] pb-8 pt-3 sm:grid-cols-2 lg:grid-cols-4">
@@ -253,14 +252,17 @@ function DimensionsPanel({ movement, ui }) {
  *   onSelectionChange: (id: string) => void;
  * }} props
  */
-export function MovementsTable({ movements, loading, enabledDimensions = [], selectedIds, onSelectionChange, highlightTxnId = null, onReload }) {
+export function MovementsTable({ movements, loading, enabledDimensions = [], selectedIds, onSelectionChange, highlightTxnId = null, onReload, onEdit }) {
   const ui = useUI();
   const navigate = useNavigate();
   const { locale: appLocale } = useLocaleSwitch();
   const bcpLocale = (appLocale || 'es_ES').replace('_', '-');
   const getTrxTypeLabel = useTrxTypeLabel();
   const [expandedId, setExpandedId] = useState(null);
-  const hasDimensions = enabledDimensions.length > 0;
+  // The "more info" panel shows Proyecto / Centro de coste / Producto, but ONLY the ones actually
+  // enabled in the chart of accounts (respects the org's accounting-dimension config).
+  const displayedDims = DISPLAYED_DIMENSIONS.filter((k) => enabledDimensions.includes(k));
+  const hasDimensions = displayedDims.length > 0;
 
   // Scroll the deep-linked transaction (from the reconciled-txns modal) into view once loaded and
   // expand it so its accounting dimensions are visible.
@@ -359,7 +361,7 @@ export function MovementsTable({ movements, loading, enabledDimensions = [], sel
           {/* Kebab — visible on row hover */}
           <TableCell onClick={(e) => e.stopPropagation()} data-testid="TableCell__ae5a16">
             <div className="opacity-0 transition-opacity group-hover:opacity-100">
-              <MovementRowKebab movement={movement} onReload={onReload} data-testid="MovementRowKebab__ae5a16" />
+              <MovementRowKebab movement={movement} onReload={onReload} onEdit={onEdit} data-testid="MovementRowKebab__ae5a16" />
             </div>
           </TableCell>
         </TableRow>
@@ -372,6 +374,7 @@ export function MovementsTable({ movements, loading, enabledDimensions = [], sel
               <DimensionsPanel
                 movement={movement}
                 ui={ui}
+                visible={displayedDims}
                 data-testid="DimensionsPanel__ae5a16" />
             </TableCell>
           </TableRow>
@@ -400,8 +403,8 @@ export function MovementsTable({ movements, loading, enabledDimensions = [], sel
                 {MOVEMENT_CELL_RENDERERS[col.name] ? ui(MOVEMENT_CELL_RENDERERS[col.name].labelKey) : col.label}
               </TableHead>
             ))}
-            <TableHead data-testid="TableHead__ae5a16">{ui('financeAccountMovementsColAmount')}</TableHead>
-            <TableHead data-testid="TableHead__ae5a16">{ui('financeAccountMovementsColBalance')}</TableHead>
+            <TableHead className="text-right" data-testid="TableHead__ae5a16">{ui('financeAccountMovementsColAmount')}</TableHead>
+            <TableHead className="text-right" data-testid="TableHead__ae5a16">{ui('financeAccountMovementsColBalance')}</TableHead>
             <TableHead className="w-10" data-testid="TableHead__ae5a16" />
           </TableRow>
         </TableHeader>

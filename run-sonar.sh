@@ -269,11 +269,19 @@ rm -rf .scannerwork
 # ── Step 0.5: Run coverage if requested ────────────────────────────────────
 if [[ "$RUN_COVERAGE" == "true" ]]; then
   echo "==> Running unit tests with coverage..."
-  # Ensure Node 22 is active (project requires Node 22; jsdom 29 uses ESM-only @exodus/bytes).
+  # Require Node 22+: vitest coverage uses the threads pool which relies on Node 22 ESM
+  # worker behaviour (jsdom 29 uses ESM-only @exodus/bytes). nvm use 22 keeps us on the
+  # right version if nvm is present.
   if [ -s "${NVM_DIR:-$HOME/.nvm}/nvm.sh" ]; then
     # shellcheck source=/dev/null
     source "${NVM_DIR:-$HOME/.nvm}/nvm.sh"
-    nvm use --silent 2>/dev/null || true
+    nvm use 22 --silent 2>/dev/null || true
+  fi
+  NODE_MAJOR=$(node -e "process.stdout.write(process.versions.node.split('.')[0])" 2>/dev/null || echo "0")
+  if [[ "$NODE_MAJOR" -lt 22 ]]; then
+    echo "ERROR: coverage requires Node.js >= 22 (found $(node --version 2>/dev/null || echo '?'))."
+    echo "Install or activate Node 22 before running coverage."
+    exit 1
   fi
   make test-all-coverage
 fi

@@ -1,7 +1,8 @@
 {
   "version": "0.36.0",
   "generatedAt": "2026-07-14T13:57:24.059Z",
-  "checksum": "98b37336732f2c74",
+  "updatedAt": "2026-07-16T15:04:16.418Z",
+  "checksum": "6fa3fb426053dcc9",
   "frontendContract": {
     "window": {
       "id": "800026",
@@ -19,7 +20,7 @@
           "label": "Reactivate",
           "labelKey": "reactivate",
           "visibleWhenFieldTrue": "processed",
-          "visibleWhenFieldFalse": "posted",
+          "preUnpost": true,
           "columnName": "Processed"
         },
         {
@@ -30,14 +31,6 @@
           "visibleWhenFieldFalse": "posted",
           "successKey": "documentPosted",
           "visibleWhenFieldTrue": "processed"
-        },
-        {
-          "key": "unpost",
-          "label": "Unpost",
-          "action": "unpost",
-          "labelKey": "unpost",
-          "visibleWhenFieldTrue": "posted",
-          "successKey": "documentUnposted"
         }
       ],
       "processOverrides": {
@@ -512,7 +505,7 @@
           "label": "Reactivate",
           "labelKey": "reactivate",
           "visibleWhenFieldTrue": "processed",
-          "visibleWhenFieldFalse": "posted",
+          "preUnpost": true,
           "columnName": "Processed"
         },
         {
@@ -523,14 +516,6 @@
           "visibleWhenFieldFalse": "posted",
           "successKey": "documentPosted",
           "visibleWhenFieldTrue": "processed"
-        },
-        {
-          "key": "unpost",
-          "label": "Unpost",
-          "action": "unpost",
-          "labelKey": "unpost",
-          "visibleWhenFieldTrue": "posted",
-          "successKey": "documentUnposted"
         }
       ],
       "processOverrides": {
