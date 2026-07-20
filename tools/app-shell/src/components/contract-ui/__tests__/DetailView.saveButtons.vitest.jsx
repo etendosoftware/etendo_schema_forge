@@ -207,6 +207,32 @@ describe('DetailView footer save buttons (onClick coverage)', () => {
     );
   });
 
+  it('new record (no draftMode, no children): Save calls onAfterCreate before navigating', async () => {
+    // Regression: header-only windows with a plain new-record Save (no draftMode,
+    // no detail lines) used to skip onAfterCreate entirely — only the draftMode
+    // Confirm button and the "complete" button (gated by children.length > 0)
+    // invoked it. This left onAfterCreate dead code for e.g. the Warehouse window
+    // (ETP-4526 default-storage-bin creation never actually ran).
+    mockHook.handleSave = vi.fn(() => Promise.resolve({ id: 'new-555' }));
+    const onAfterCreate = vi.fn(() => Promise.resolve());
+    render(<DetailView {...BASE_PROPS} recordId="new" onAfterCreate={onAfterCreate} />);
+    fireEvent.click(screen.getByTestId('action-save'));
+    await waitFor(() => expect(mockHook.handleSave).toHaveBeenCalled());
+    await waitFor(() =>
+      expect(onAfterCreate).toHaveBeenCalledWith(
+        { id: 'new-555' },
+        { token: 'test-token', apiBaseUrl: 'http://localhost:8080/etendo/neo' },
+      ),
+    );
+    await waitFor(() => expect(mockHook.primeSaved).toHaveBeenCalledWith({ id: 'new-555' }));
+    await waitFor(() =>
+      expect(mockNavigate).toHaveBeenCalledWith(
+        '/sales-order/new-555',
+        { replace: true, state: { justSaved: { id: 'new-555' } } },
+      ),
+    );
+  });
+
   it('draftMode Confirm on a new record: onAfterCreate then navigate to the record', async () => {
     mockHook.handleSaveAndProcess = vi.fn(() => Promise.resolve({ id: 'new-777' }));
     const onAfterCreate = vi.fn(() => Promise.resolve());
