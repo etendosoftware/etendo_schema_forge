@@ -38,7 +38,8 @@
         "locationAddress": {
           "grid": true,
           "seq": 3,
-          "span": 2
+          "span": 2,
+          "editModal": "location"
         },
         "warehouseRule": {
           "grid": false,

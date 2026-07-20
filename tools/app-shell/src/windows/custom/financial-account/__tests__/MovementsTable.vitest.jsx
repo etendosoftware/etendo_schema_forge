@@ -117,7 +117,7 @@ describe('MovementsTable — expandable dimensions panel', () => {
 
   it('shows only project, cost center and product as read-only fields (never organization)', () => {
     renderTable({
-      enabledDimensions: ['organization', 'project', 'costcenter', 'campaign', 'bpartner'],
+      enabledDimensions: ['organization', 'project', 'costcenter', 'product', 'campaign', 'bpartner'],
       movements: [
         baseMovement({
           dimensions: {
@@ -149,16 +149,26 @@ describe('MovementsTable — expandable dimensions panel', () => {
     expect(within(panel).queryByDisplayValue('Should Not Show')).not.toBeInTheDocument();
   });
 
-  it('renders the three fixed dimensions regardless of which dimensions are enabled', () => {
+  it('hides a displayable dimension that is NOT enabled in the chart of accounts (e.g. product)', () => {
+    // Product is deactivated → it must not appear even though the movement carries a value.
     renderTable({
-      enabledDimensions: ['bpartner'],
-      movements: [baseMovement({ dimensions: { product: 'Prod X' } })],
+      enabledDimensions: ['project', 'costcenter'],
+      movements: [baseMovement({ dimensions: { project: 'Proj A', costcenter: 'CC 1', product: 'Prod X' } })],
     });
     fireEvent.click(screen.getByTestId('movement-expand-m1'));
     const panel = screen.getByTestId('movement-moreinfo-m1');
     expect(within(panel).getByText('financeAccountMovementsDimProject')).toBeInTheDocument();
     expect(within(panel).getByText('financeAccountMovementsDimCostcenter')).toBeInTheDocument();
-    expect(within(panel).getByText('financeAccountMovementsDimProduct')).toBeInTheDocument();
+    expect(within(panel).queryByText('financeAccountMovementsDimProduct')).not.toBeInTheDocument();
+    expect(within(panel).queryByDisplayValue('Prod X')).not.toBeInTheDocument();
+  });
+
+  it('renders no expand control when only non-displayable dimensions are enabled (e.g. bpartner)', () => {
+    renderTable({
+      enabledDimensions: ['bpartner'],
+      movements: [baseMovement({ dimensions: { product: 'Prod X' } })],
+    });
+    expect(screen.queryByTestId('movement-expand-m1')).not.toBeInTheDocument();
   });
 });
 
