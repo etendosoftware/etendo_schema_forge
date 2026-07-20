@@ -50,16 +50,8 @@
       "exchangeRates": {
         "label": "Exchange Rates",
         "tabOrder": 50,
-        "addLineFields": [
-          "toCurrency",
-          "rate",
-          "foreignAmount"
-        ],
         "requireSavedRecord": true,
-        "readOnlyLogic": "@DocumentStatus@!='DR'",
-        "addLineFieldExclusions": {
-          "toCurrency": "currency"
-        }
+        "readOnlyLogic": "@Posted@='Y' | @HASREVERSEDINVOICESO@='Y' | @HASREVERSEDINVOICEPO@='Y'"
       }
     },
     "processOverrides": {},
@@ -751,10 +743,14 @@
         },
         "currency": {
           "grid": true,
-          "form": false
+          "form": false,
+          "visibility": "readOnly",
+          "gridReadOnly": true
         },
         "toCurrency": {
-          "grid": true
+          "grid": true,
+          "visibility": "readOnly",
+          "gridReadOnly": true
         },
         "rate": {
           "grid": true

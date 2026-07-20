@@ -1,5 +1,5 @@
 {
-  "version": "0.67.0",
+  "version": "0.68.0",
   "generatedAt": "2026-04-30T15:42:46.722Z",
   "updatedAt": "2026-07-01T14:34:29.036Z",
   "contractChecksum": "ba5b71d06c8590f7",
@@ -1781,7 +1781,8 @@
           },
           "toCurrency": {
             "required": true,
-            "readOnlyLogic": "@HASREVERSEDINVOICESO@='Y' | @HASREVERSEDINVOICEPO@='Y' | @Posted@='Y'"
+            "readOnlyLogic": "@HASREVERSEDINVOICESO@='Y' | @HASREVERSEDINVOICEPO@='Y' | @Posted@='Y'",
+            "readOnly": true
           },
           "rate": {
             "readOnlyLogic": "@HASREVERSEDINVOICESO@='Y' | @HASREVERSEDINVOICEPO@='Y' | @Posted@='Y'"

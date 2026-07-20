@@ -1,5 +1,5 @@
 {
-  "version": "0.54.0",
+  "version": "0.55.0",
   "generatedAt": "2026-04-30T15:42:46.582Z",
   "updatedAt": "2026-07-13T14:57:52.412Z",
   "checksum": "a42dd981e45dff7c",
@@ -43,16 +43,8 @@
         "exchangeRates": {
           "label": "Exchange Rates",
           "tabOrder": 50,
-          "addLineFields": [
-            "toCurrency",
-            "rate",
-            "foreignAmount"
-          ],
           "requireSavedRecord": true,
-          "readOnlyLogic": "@DocumentStatus@!='DR'",
-          "addLineFieldExclusions": {
-            "toCurrency": "currency"
-          }
+          "readOnlyLogic": "@Posted@='Y' | @HASREVERSEDINVOICESO@='Y' | @HASREVERSEDINVOICEPO@='Y'"
         }
       },
       "salesTheme": true,
@@ -1989,7 +1981,8 @@
               "raw": "@HASREVERSEDINVOICESO@='Y' | @HASREVERSEDINVOICEPO@='Y' | @Posted@='Y'",
               "evaluable": true,
               "js": "record['hASREVERSEDINVOICESO'] === 'Y' || record['hASREVERSEDINVOICEPO'] === 'Y' || record['posted'] === true"
-            }
+            },
+            "gridReadOnly": true
           },
           {
             "name": "toCurrency",
@@ -1998,7 +1991,7 @@
             "label": "To Currency",
             "type": "foreignKey",
             "tsType": "string",
-            "visibility": "editable",
+            "visibility": "readOnly",
             "required": true,
             "grid": true,
             "form": true,
@@ -2014,7 +2007,8 @@
               "raw": "@HASREVERSEDINVOICESO@='Y' | @HASREVERSEDINVOICEPO@='Y' | @Posted@='Y'",
               "evaluable": true,
               "js": "record['hASREVERSEDINVOICESO'] === 'Y' || record['hASREVERSEDINVOICEPO'] === 'Y' || record['posted'] === true"
-            }
+            },
+            "gridReadOnly": true
           },
           {
             "name": "rate",
@@ -2117,16 +2111,8 @@
         "exchangeRates": {
           "label": "Exchange Rates",
           "tabOrder": 50,
-          "addLineFields": [
-            "toCurrency",
-            "rate",
-            "foreignAmount"
-          ],
           "requireSavedRecord": true,
-          "readOnlyLogic": "@DocumentStatus@!='DR'",
-          "addLineFieldExclusions": {
-            "toCurrency": "currency"
-          }
+          "readOnlyLogic": "@Posted@='Y' | @HASREVERSEDINVOICESO@='Y' | @HASREVERSEDINVOICEPO@='Y'"
         }
       },
       "salesTheme": true,
@@ -4234,7 +4220,7 @@
             "apiKey": "toCurrency",
             "column": "C_Currency_Id_To",
             "type": "foreignKey",
-            "visibility": "editable",
+            "visibility": "readOnly",
             "required": true
           },
           {
