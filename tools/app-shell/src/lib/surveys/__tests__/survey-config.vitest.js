@@ -154,11 +154,20 @@ describe('getRemoteCannedResponses', () => {
 });
 
 describe('loadRemoteSurveyConfig', () => {
-  it('does nothing when apiBaseUrl or token is missing', async () => {
+  it('does nothing when apiBaseUrl is null/undefined or token is missing', async () => {
     const fetchImpl = vi.fn();
     await loadRemoteSurveyConfig({ apiBaseUrl: null, token: 'tok', fetchImpl });
+    await loadRemoteSurveyConfig({ apiBaseUrl: undefined, token: 'tok', fetchImpl });
     await loadRemoteSurveyConfig({ apiBaseUrl: '/etendo', token: null, fetchImpl });
     expect(fetchImpl).not.toHaveBeenCalled();
+  });
+
+  it('still fetches when apiBaseUrl is an empty string (the real dev-mode value from getApiBase())', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue({ ok: true, json: async () => ({}) });
+    await loadRemoteSurveyConfig({ apiBaseUrl: '', token: 'tok', fetchImpl });
+    expect(fetchImpl).toHaveBeenCalledWith('/sws/survey-config/', {
+      headers: { Authorization: 'Bearer tok' },
+    });
   });
 
   it('fetches the endpoint with a Bearer token and stores the result', async () => {

@@ -81,7 +81,9 @@ export function getRemoteCannedResponses(surveyId, language) {
  * is unreachable. Never throws.
  */
 export async function loadRemoteSurveyConfig({ apiBaseUrl, token, fetchImpl = fetch, logger = console } = {}) {
-  if (!apiBaseUrl || !token) return;
+  // apiBaseUrl is legitimately '' in dev (getApiBase() resolves to the app root) — only bail
+  // when it's truly absent (null/undefined), not just falsy, or the fetch never fires locally.
+  if (apiBaseUrl == null || !token) return;
   try {
     const response = await fetchImpl(`${apiBaseUrl}/sws/survey-config/`, {
       headers: { Authorization: `Bearer ${token}` },
