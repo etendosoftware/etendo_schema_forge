@@ -1,0 +1,146 @@
+{
+  "version": "0.4.0",
+  "generatedAt": "2026-05-21T20:22:50.312Z",
+  "updatedAt": "2026-07-15T18:13:15.696Z",
+  "contractChecksum": "01e82774884d50a6",
+  "apiPrediction": {
+    "specName": "conversion-rates",
+    "baseUrl": "/sws/neo/conversion-rates",
+    "crud": {
+      "conversionRate": {
+        "get": true,
+        "getById": true,
+        "post": false,
+        "put": false,
+        "patch": false,
+        "delete": false,
+        "listUrl": "/sws/neo/conversion-rates/conversionRate",
+        "detailUrl": "/sws/neo/conversion-rates/conversionRate/{id}",
+        "supportedFilters": [
+          "currency",
+          "toCurrency"
+        ]
+      }
+    },
+    "selectors": [
+      {
+        "entity": "conversionRate",
+        "field": "currency",
+        "column": "C_Currency_ID",
+        "reference": "Currency",
+        "inputMode": "selector",
+        "url": "/sws/neo/conversion-rates/conversionRate/selectors/currency"
+      },
+      {
+        "entity": "conversionRate",
+        "field": "toCurrency",
+        "column": "C_Currency_ID_To",
+        "reference": "Currency",
+        "inputMode": "selector",
+        "url": "/sws/neo/conversion-rates/conversionRate/selectors/toCurrency"
+      }
+    ],
+    "actions": [],
+    "queryParams": {
+      "pagination": {
+        "startRow": "_startRow",
+        "endRow": "_endRow",
+        "default": "0-100"
+      },
+      "sorting": {
+        "param": "_sortBy",
+        "example": "_sortBy=creationDate desc"
+      },
+      "filtering": "Use field name as query param: ?fieldName=value",
+      "parentFilter": "parentId={id} for child entities"
+    },
+    "window": {
+      "category": "finance",
+      "readOnly": true
+    }
+  },
+  "formState": {
+    "entities": {
+      "conversionRate": {
+        "fields": {
+          "currency": {
+            "required": true,
+            "readOnlyLogic": "@sMFCRSynced@='Y'",
+            "defaultValue": "@SQL=SELECT C_CURRENCY_ID FROM AD_CLIENT  WHERE AD_CLIENT_ID = @AD_CLIENT_ID@"
+          },
+          "toCurrency": {
+            "required": true,
+            "readOnlyLogic": "@sMFCRSynced@='Y'",
+            "defaultValue": "@SQL=SELECT C_CURRENCY_ID FROM AD_CLIENT  WHERE AD_CLIENT_ID = @AD_CLIENT_ID@"
+          },
+          "validFromDate": {
+            "required": true,
+            "readOnlyLogic": "@sMFCRSynced@='Y'"
+          },
+          "validToDate": {
+            "readOnlyLogic": "@sMFCRSynced@='Y'"
+          },
+          "multipleRateBy": {
+            "required": true,
+            "readOnlyLogic": "@sMFCRSynced@='Y'"
+          },
+          "divideRateBy": {
+            "required": true,
+            "readOnlyLogic": "@sMFCRSynced@='Y'"
+          },
+          "sMFCRSynced": {
+            "readOnly": true,
+            "defaultValue": "N"
+          }
+        }
+      }
+    },
+    "requiredSessionVariables": [],
+    "evaluationMode": "runtime"
+  },
+  "agentProfile": {
+    "purpose": "Manage conversion rates financial records.",
+    "whenToUse": [
+      "Use for conversion rates management."
+    ],
+    "minimumCreate": {
+      "headerFields": [
+        "currency",
+        "toCurrency",
+        "validFromDate",
+        "multipleRateBy",
+        "divideRateBy"
+      ],
+      "recommendedOrder": [
+        "createHeader"
+      ]
+    },
+    "selectorContexts": [],
+    "actions": [],
+    "workflow": [
+      "Create draft header with required fields"
+    ],
+    "edgeCases": [
+      "Required field without default value must be provided"
+    ],
+    "examples": [
+      {
+        "operation": "createHeader",
+        "description": "Create a draft header with the minimum required editable fields.",
+        "fields": [
+          "currency",
+          "toCurrency",
+          "validFromDate",
+          "multipleRateBy",
+          "divideRateBy"
+        ]
+      }
+    ],
+    "warnings": [
+      "Transactional spec has no generated lifecycle action metadata"
+    ],
+    "knownLimitations": [],
+    "dangerousOperations": []
+  },
+  "checksum": "b97bf0dc23badc29"
+}

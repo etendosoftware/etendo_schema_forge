@@ -931,6 +931,20 @@
         }
       ]
     },
+    "88ad8a1f069401e3146d7f655acfc6a28ca92062200daae9b33395feed8061f1": {
+      "checksum": "aa13a626e7efde62c367a7946a3fe94bb84ff93b295cb344ec36e46913a1b24e",
+      "params": [
+        "116"
+      ],
+      "rows": [
+        {
+          "ad_tab_id": "198",
+          "ad_table_id": "140",
+          "name": "Conversion Rate",
+          "seqno": "10"
+        }
+      ]
+    },
     "8b543deb8e44e185e72cf9d4fc98b17a1b417138b8b2e25b139459d68e0bc945": {
       "checksum": "d8518c9dd94fe01927ca31f1bce235cce6740960c3cd8629e354731686cd4ea2",
       "params": [
@@ -1010,6 +1024,20 @@
           "ad_table_id": "314",
           "name": "Tax",
           "seqno": "40"
+        }
+      ]
+    },
+    "99c77d72fc6f49da80e9db85826999d4bdb48df40b9db4d4c619f80ac282732a": {
+      "checksum": "cb513e2cf884fff62b8e6d90dba3da92d9c7d8038d4d32b612605e317664ebfa",
+      "params": [
+        "6FEBA130CDE24CC09041FFA6117ADFA9"
+      ],
+      "rows": [
+        {
+          "ad_tab_id": "005CE51FBD2D4ABCA2D01B63FDDE469C",
+          "ad_table_id": "BA820F5D8A194AB69D508BE4A83DE42F",
+          "name": "Conversion Rate Downloader Log",
+          "seqno": "10"
         }
       ]
     },

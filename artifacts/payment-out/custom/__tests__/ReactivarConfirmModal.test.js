@@ -13,8 +13,8 @@ describe('payment-out ReactivarConfirmModal', () => {
     assert.match(src, /export default function ReactivarConfirmModal/);
   });
 
-  it('accepts a process prop to route between modals', () => {
-    assert.match(src, /\{\s*process\s*,\s*onConfirm\s*,\s*onClose\s*\}/);
+  it('accepts process/record props to route between modals and forward the record', () => {
+    assert.match(src, /\{\s*process\s*,\s*record\s*,\s*onConfirm\s*,\s*onClose\s*\}/);
   });
 
   it('routes aPRMProcessPayment to ConfirmPaymentModal with dir="out"', () => {
@@ -22,12 +22,12 @@ describe('payment-out ReactivarConfirmModal', () => {
     assert.match(src, /<ConfirmPaymentModal dir="out"/);
   });
 
-  it('falls through to ReactivarModal with dir="out" for any other process', () => {
-    assert.match(src, /<ReactivarModal dir="out"/);
+  it('falls through to PaymentLifecycleConfirmModal with dir="out", action="reactivate", forwarding the record', () => {
+    assert.match(src, /<PaymentLifecycleConfirmModal dir="out" action="reactivate" data={record}/);
   });
 
   it('imports both modal components from the shared window', () => {
-    assert.match(src, /import ReactivarModal from '@\/windows\/custom\/shared\/ReactivarModal'/);
+    assert.match(src, /import PaymentLifecycleConfirmModal from '@\/windows\/custom\/shared\/PaymentLifecycleConfirmModal'/);
     assert.match(src, /import ConfirmPaymentModal from '@\/windows\/custom\/shared\/ConfirmPaymentModal'/);
   });
 
