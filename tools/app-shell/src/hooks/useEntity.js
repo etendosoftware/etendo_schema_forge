@@ -502,7 +502,7 @@ export function getNumericFieldViolation(fields, editing) {
 // since those fields don't fire a competing toast on blur), so they keep
 // stacking a fresh toast per call exactly as before. Only the numeric gate
 // passes a stable id, shared with EntityForm's blur toast for the same field.
-export function reportInvalidFormatField(messageKey, ui, setSaveError, setIsSaving, params = {}, toastId) {
+export function reportInvalidFormatField(messageKey, ui, setSaveError, setIsSaving, toastId, params = {}) {
     const msg = ui(messageKey, params);
     setSaveError(msg);
     // Call with exactly one arg when there's no toastId — passing `undefined`
@@ -1028,8 +1028,8 @@ export function useEntity(entity, childEntity, {
                 ui,
                 setSaveError,
                 setIsSaving,
-                numericViolation.errorParams,
                 numericFieldToastId(numericViolation.key),
+                numericViolation.errorParams,
             );
         }
         // Format validation (email/website/phone) is scoped to fields the user

@@ -876,7 +876,7 @@ describe('reportInvalidFormatField (ETP-4542, bug 2/3 — toast dedup id)', () =
 
   it('passes { id: toastId } to toast.error when a toastId is given', () => {
     withCapturedToastError((calls) => {
-      reportInvalidFormatField('fieldMinValueError', ui, noop, noop, { min: 1 }, 'numeric-field-qty');
+      reportInvalidFormatField('fieldMinValueError', ui, noop, noop, 'numeric-field-qty', { min: 1 });
       assert.equal(calls.length, 1);
       assert.deepEqual(calls[0], [ui('fieldMinValueError', { min: 1 }), { id: 'numeric-field-qty' }]);
     });
@@ -894,7 +894,7 @@ describe('reportInvalidFormatField (ETP-4542, bug 2/3 — toast dedup id)', () =
     const isSavingCalls = [];
     let result;
     withCapturedToastError(() => {
-      result = reportInvalidFormatField('fieldMinValueError', ui, noop, (v) => isSavingCalls.push(v), { min: 1 }, 'numeric-field-qty');
+      result = reportInvalidFormatField('fieldMinValueError', ui, noop, (v) => isSavingCalls.push(v), 'numeric-field-qty', { min: 1 });
     });
     assert.equal(result, null);
     assert.deepEqual(isSavingCalls, [false]);

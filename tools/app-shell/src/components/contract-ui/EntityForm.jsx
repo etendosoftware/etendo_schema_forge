@@ -1282,7 +1282,12 @@ export function EntityForm({ entity, fields = [], data, onChange, catalogs, layo
             type={getInputType(f)}
             value={getFieldValue(isReadOnly, displayValue, data, f)}
             onChange={(e) => onChange?.(f.key, e.target.value, f.column)}
-            onBlur={(e) => { if (!isReadOnly) validateNumericOnBlur(f, e.target.value); onFieldBlur?.(f.key); }}
+            onBlur={(e) => {
+              if (!isReadOnly) {
+                validateNumericOnBlur(f, e.target.value);
+              }
+              onFieldBlur?.(f.key);
+            }}
             placeholder={!isReadOnly ? resolveUiKey(ui, f.placeholderKey) : undefined}
             className={getInputStateClass(isReadOnly)}
             required={f.required && !isReadOnly}
