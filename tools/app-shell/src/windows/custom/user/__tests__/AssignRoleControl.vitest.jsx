@@ -87,6 +87,29 @@ describe('AssignRoleControl', () => {
       render(<AssignRoleControl data={{}} token="t" onChange={vi.fn()} />);
       expect(globalThis.fetch).not.toHaveBeenCalled();
     });
+
+    it('does not update state (or warn) after unmount while a fetch is still in flight', async () => {
+      let resolveFetch;
+      globalThis.fetch = vi.fn().mockReturnValue(
+        new Promise((resolve) => { resolveFetch = resolve; }),
+      );
+
+      const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+      const { unmount } = render(
+        <AssignRoleControl data={{}} token="t" apiBaseUrl="/sws/neo/user" onChange={vi.fn()} />,
+      );
+      unmount();
+
+      // Resolve after unmount — the effect cleanup's `cancelled` flag should
+      // prevent the post-unmount setOptions()/setLoading() calls, so React
+      // never warns about a state update on an unmounted component.
+      resolveFetch({ ok: true, json: async () => ({ items: ROLE_OPTIONS }) });
+      await new Promise((r) => setTimeout(r, 0));
+
+      expect(consoleErrorSpy).not.toHaveBeenCalled();
+      consoleErrorSpy.mockRestore();
+    });
   });
 
   describe('reflecting the current role', () => {

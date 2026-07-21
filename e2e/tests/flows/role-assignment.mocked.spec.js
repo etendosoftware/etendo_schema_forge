@@ -38,13 +38,16 @@ const ROLE_OPTIONS = [
 /**
  * Child tab mock — the userRoles entity is fully read-only (ETP-4512) and has
  * no addLineFields, so an empty envelope is enough to render the tab without
- * errors. Registered BEFORE the more specific selectors mock below so the
- * selectors route wins on the overlapping URL (Playwright matches routes in
- * reverse registration order).
+ * errors. `**\/sws/neo/user/userRoles**` also matches the more specific
+ * `.../userRoles/selectors/AD_Role_ID` selectors URL (substring match), so
+ * this handler explicitly falls back on `/selectors/` URLs instead of
+ * relying solely on registration order for installRoleSelectorsMock below to
+ * win.
  */
 async function installUserRolesChildMock(page) {
   await page.route('**/sws/neo/user/userRoles**', async (route) => {
     const req = route.request();
+    if (req.url().includes('/selectors/')) return route.fallback();
     if (req.method() !== 'GET') return route.fallback();
     await route.fulfill({
       status: 200,
@@ -95,9 +98,7 @@ async function installUserRecordMock(page) {
 
 /**
  * AssignRoleControl's role-options mock — deliberately a DIFFERENT (broader)
- * selector than defaultRole's own, per the component's doc comment. Registered
- * LAST so it takes priority over the userRoles child-tab mock above on the
- * overlapping URL prefix.
+ * selector than defaultRole's own, per the component's doc comment.
  */
 async function installRoleSelectorsMock(page) {
   await page.route('**/sws/neo/user/userRoles/selectors/AD_Role_ID**', async (route) => {
@@ -155,7 +156,7 @@ test.describe('Role Assignment — user', () => {
     await expect(refreshedRow.getByText(t('roleNamePurchasing'))).toBeVisible();
   });
 
-  test('the assign-role select is disabled while options are loading, then enabled', async ({ page }) => {
+  test('the assign-role select is enabled once options load', async ({ page }) => {
     const userRow = page.locator('tbody tr').filter({ hasText: 'jane.roe' }).first();
     await userRow.hover();
     await userRow.getByTestId('row-quick-action-edit').click();

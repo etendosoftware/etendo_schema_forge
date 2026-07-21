@@ -30,12 +30,18 @@ export default function AssignRoleControl(props) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!token || !apiBaseUrl) return;
+    if (!token || !apiBaseUrl) {
+      setLoading(false);
+      return undefined;
+    }
+    let cancelled = false;
+    setLoading(true);
     fetch(`${apiBaseUrl}/userRoles/selectors/AD_Role_ID?limit=50&offset=0`, {
       headers: { Authorization: `Bearer ${token}` },
     })
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => {
+        if (cancelled) return;
         const seen = new Set();
         const items = [];
         (d?.items ?? []).forEach((item) => {
@@ -45,8 +51,13 @@ export default function AssignRoleControl(props) {
         });
         setOptions(items);
       })
-      .catch(() => setOptions([]))
-      .finally(() => setLoading(false));
+      .catch(() => {
+        if (!cancelled) setOptions([]);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => { cancelled = true; };
   }, [token, apiBaseUrl]);
 
   const handleChange = useCallback((e) => {
