@@ -738,6 +738,81 @@ export const transaction = [
   }
 ];
 
+export const accountingConfiguration = [
+  {
+    "id": "mock-accountingConfiguration-001",
+    "fINAssetAcct": "Sample fINAssetAcct",
+    "fINTransitoryAcct": "Sample fINTransitoryAcct",
+    "accountId": "mock-account-001"
+  },
+  {
+    "id": "mock-accountingConfiguration-002",
+    "fINAssetAcct": "Sample fINAssetAcct",
+    "fINTransitoryAcct": "Sample fINTransitoryAcct",
+    "accountId": "mock-account-002"
+  },
+  {
+    "id": "mock-accountingConfiguration-003",
+    "fINAssetAcct": "Sample fINAssetAcct",
+    "fINTransitoryAcct": "Sample fINTransitoryAcct",
+    "accountId": "mock-account-003"
+  },
+  {
+    "id": "mock-accountingConfiguration-004",
+    "fINAssetAcct": "Sample fINAssetAcct",
+    "fINTransitoryAcct": "Sample fINTransitoryAcct",
+    "accountId": "mock-account-004"
+  },
+  {
+    "id": "mock-accountingConfiguration-005",
+    "fINAssetAcct": "Sample fINAssetAcct",
+    "fINTransitoryAcct": "Sample fINTransitoryAcct",
+    "accountId": "mock-account-005"
+  },
+  {
+    "id": "mock-accountingConfiguration-006",
+    "fINAssetAcct": "Sample fINAssetAcct",
+    "fINTransitoryAcct": "Sample fINTransitoryAcct",
+    "accountId": "mock-account-006"
+  },
+  {
+    "id": "mock-accountingConfiguration-007",
+    "fINAssetAcct": "Sample fINAssetAcct",
+    "fINTransitoryAcct": "Sample fINTransitoryAcct",
+    "accountId": "mock-account-007"
+  },
+  {
+    "id": "mock-accountingConfiguration-008",
+    "fINAssetAcct": "Sample fINAssetAcct",
+    "fINTransitoryAcct": "Sample fINTransitoryAcct",
+    "accountId": "mock-account-008"
+  },
+  {
+    "id": "mock-accountingConfiguration-009",
+    "fINAssetAcct": "Sample fINAssetAcct",
+    "fINTransitoryAcct": "Sample fINTransitoryAcct",
+    "accountId": "mock-account-009"
+  },
+  {
+    "id": "mock-accountingConfiguration-010",
+    "fINAssetAcct": "Sample fINAssetAcct",
+    "fINTransitoryAcct": "Sample fINTransitoryAcct",
+    "accountId": "mock-account-010"
+  },
+  {
+    "id": "mock-accountingConfiguration-011",
+    "fINAssetAcct": "Sample fINAssetAcct",
+    "fINTransitoryAcct": "Sample fINTransitoryAcct",
+    "accountId": "mock-account-011"
+  },
+  {
+    "id": "mock-accountingConfiguration-012",
+    "fINAssetAcct": "Sample fINAssetAcct",
+    "fINTransitoryAcct": "Sample fINTransitoryAcct",
+    "accountId": "mock-account-012"
+  }
+];
+
 export const importedBankStatements = [
   {
     "id": "mock-importedBankStatements-001",
