@@ -216,3 +216,39 @@ describe('InlineSearchCombo — display sync', () => {
     expect(screen.getByTestId('inline-add-field-tax')).toHaveValue('External Label');
   });
 });
+
+// ---------------------------------------------------------------------------
+// 7. onWheel avoids double-scroll outside a Dialog (review fix)
+// ---------------------------------------------------------------------------
+
+describe('InlineSearchCombo — onWheel avoids double-scroll outside a Dialog', () => {
+  function dispatchWheel(el, { deltaY, defaultPrevented }) {
+    const event = new WheelEvent('wheel', { deltaY, bubbles: true, cancelable: true });
+    if (defaultPrevented) event.preventDefault();
+    el.dispatchEvent(event);
+  }
+
+  it('does NOT manually adjust scrollTop when native scroll was not blocked (no Dialog present)', async () => {
+    const user = userEvent.setup();
+    const { input } = renderCombo();
+    await user.click(input);
+    const panel = await waitFor(() => screen.getByTestId('inline-add-options-tax'));
+    panel.scrollTop = 0;
+
+    dispatchWheel(panel, { deltaY: 40, defaultPrevented: false });
+
+    expect(panel.scrollTop).toBe(0);
+  });
+
+  it('manually adjusts scrollTop when native scroll WAS blocked (e.g. inside a Radix Dialog)', async () => {
+    const user = userEvent.setup();
+    const { input } = renderCombo();
+    await user.click(input);
+    const panel = await waitFor(() => screen.getByTestId('inline-add-options-tax'));
+    panel.scrollTop = 0;
+
+    dispatchWheel(panel, { deltaY: 40, defaultPrevented: true });
+
+    expect(panel.scrollTop).toBe(40);
+  });
+});

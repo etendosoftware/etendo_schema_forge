@@ -27,17 +27,17 @@ export function DetailTabs({ value, onValueChange, movementsCount, reconciliatio
           value="movements"
           icon={ArrowLeftRight}
           badge={movementsCount}
-          data-testid="TabsTrigger__a9be0b">
+          data-testid="detail-tab-movements">
           {ui('financeAccountDetailTabMovements')}
         </TabsTrigger>
         <TabsTrigger
           value="reconciliation"
           icon={Scale}
           badge={reconciliationCount}
-          data-testid="TabsTrigger__a9be0b">
+          data-testid="detail-tab-reconciliation">
           {ui('financeAccountDetailTabReconciliation')}
         </TabsTrigger>
-        <TabsTrigger value="statements" icon={FileText} data-testid="TabsTrigger__a9be0b">
+        <TabsTrigger value="statements" icon={FileText} data-testid="detail-tab-statements">
           {ui('financeAccountDetailTabStatements')}
         </TabsTrigger>
       </TabsList>

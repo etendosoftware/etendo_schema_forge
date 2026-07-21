@@ -120,6 +120,82 @@ describe('CreateContactModal', () => {
     expect(capturedProps.requiredFields).not.toContain('name');
   });
 
+  // --- ETP-4566: Categoría de contacto (businessPartnerCategory) ---
+
+  it('marks businessPartnerCategory as required in both company and person mode', async () => {
+    const user = userEvent.setup();
+    render(<CreateContactModal {...defaultProps} />);
+    expect(capturedProps.requiredFields).toContain('businessPartnerCategory');
+
+    await user.click(screen.getByText('Person'));
+    expect(capturedProps.requiredFields).toContain('businessPartnerCategory');
+  });
+
+  it('renders businessPartnerCategory as a dynamicSelect header field next to the legal name', () => {
+    render(<CreateContactModal {...defaultProps} />);
+    const headerFieldIds = capturedProps.headerFields.map(f => f.id);
+    expect(headerFieldIds).toContain('businessPartnerCategory');
+
+    const field = capturedProps.headerFields.find(f => f.id === 'businessPartnerCategory');
+    expect(field.type).toBe('dynamicSelect');
+    expect(field.optionsKey).toBe('businessPartnerCategories');
+    expect(field.required).toBe(true);
+    expect(field.labelKey).toBe('contactCategoryField');
+
+    // Adjacent to the legal name field (Razón Social) in company mode
+    expect(headerFieldIds.indexOf('businessPartnerCategory')).toBe(headerFieldIds.indexOf('name') + 1);
+  });
+
+  it('defaults businessPartnerCategory to an empty value (no hardcoded category)', () => {
+    render(<CreateContactModal {...defaultProps} />);
+    expect(capturedProps.initialValues.businessPartnerCategory).toBe('');
+  });
+
+  it('fetches businessPartnerCategory selector options from C_BP_Group_ID', async () => {
+    render(<CreateContactModal {...defaultProps} />);
+    await waitFor(() => {
+      expect(globalThis.fetch).toHaveBeenCalled();
+    });
+    const urls = globalThis.fetch.mock.calls.map(c => c[0]);
+    expect(urls.some(u => typeof u === 'string' && u.includes('/selectors/C_BP_Group_ID'))).toBe(true);
+  });
+
+  it('exposes businessPartnerCategories in opts with an onRetry callback', () => {
+    render(<CreateContactModal {...defaultProps} />);
+    const opts = capturedProps.opts;
+    expect(opts.businessPartnerCategories).toBeDefined();
+    expect(typeof opts.businessPartnerCategories.onRetry).toBe('function');
+  });
+
+  it('includes businessPartnerCategory in the create payload sent on save', async () => {
+    globalThis.fetch = vi.fn((url, init) => {
+      if (init?.method === 'POST' && typeof url === 'string' && url.endsWith('/businessPartner')) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({ response: { data: [{ id: 'bp-1', name: 'Acme' }] } }),
+        });
+      }
+      return Promise.resolve({ ok: true, json: async () => ({ items: [] }) });
+    });
+
+    render(<CreateContactModal {...defaultProps} />);
+    await waitFor(() => expect(globalThis.fetch).toHaveBeenCalled());
+
+    // Simulate a fully-filled form (as EntityCreationModal would provide once
+    // requiredFields — including businessPartnerCategory — are satisfied).
+    await capturedProps.onSave(
+      { name: 'Acme', taxID: 'B123', taxIdType: '1', businessPartnerCategory: 'cat-1', country: 'ES' },
+      { contacts: [], bankAccount: [] }
+    );
+
+    const createCall = globalThis.fetch.mock.calls.find(
+      ([url, init]) => init?.method === 'POST' && typeof url === 'string' && url.endsWith('/businessPartner')
+    );
+    expect(createCall).toBeDefined();
+    const payload = JSON.parse(createCall[1].body);
+    expect(payload.businessPartnerCategory).toBe('cat-1');
+  });
+
   it('calls onClose when cancel is triggered', async () => {
     const user = userEvent.setup();
     render(<CreateContactModal {...defaultProps} />);
