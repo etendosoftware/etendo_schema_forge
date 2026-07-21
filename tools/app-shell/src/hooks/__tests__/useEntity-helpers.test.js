@@ -129,6 +129,7 @@ const {
   reportMissingRequiredFields,
   showSaveSuccessToast,
   handleSaveErrorResponse,
+  extractErrorMessage,
 } = await import('../useEntity.js');
 
 describe('pickMessage', () => {
@@ -815,5 +816,50 @@ describe('handleSaveErrorResponse', () => {
     assert.equal(result, undefined);
     assert.equal(fieldErrorsCalled, false);
     assert.deepEqual(saveErrorCalls, ['bad']);
+  });
+});
+
+describe('extractErrorMessage — AD-translated duplicate-identifier error (ETP-4597)', () => {
+  // Bug: Etendo AD's backend core sometimes already rewrites a raw Postgres
+  // unique-constraint violation into a human-readable-but-still-technical
+  // sentence that names the AD entity's technical field group — e.g. (in
+  // Spanish) "Ya existe un/a Categoría del producto con el mismo (Entidad,
+  // Organización, Identificador). (Entidad, Organización, Identificador) debe
+  // ser único. Cambie los valores introducidos" — or the English equivalent
+  // naming (Client, Organization, Identifier). normalizeServerError (private
+  // to useEntity.js, exercised here through the exported extractErrorMessage)
+  // only recognizes the RAW Postgres wording ("duplicate key value violates
+  // unique constraint"); this AD-translated sentence falls through untouched
+  // to the raw-message passthrough, so the technical field names leak to the
+  // end user.
+  //
+  // Contract asserted here (the eventual fix must satisfy this test, not the
+  // other way around): extractErrorMessage(res, ui) must rewrite this sentence
+  // into a short, generic, user-friendly message — the Spanish text below,
+  // picked because this app is primarily used in Spanish per project i18n
+  // policy — and it must never leak "Entidad/Organización/Identificador" (or
+  // the EN equivalents Client/Organization/Identifier).
+  //
+  // `ui` is mocked as identity (i.e. "no translation available"), same
+  // convention already used by the handleSaveErrorResponse tests above — this
+  // exercises the untranslated fallback default text the fix needs to supply
+  // for its new normalizeServerError branch.
+  const ui = (key) => key;
+  const FRIENDLY_MESSAGE = 'Ya existe un registro con este identificador. Por favor, ingresá uno diferente.';
+  const AD_MESSAGE_ES = 'Ya existe un/a Categoría del producto con el mismo (Entidad, Organización, Identificador). '
+    + '(Entidad, Organización, Identificador) debe ser único. Cambie los valores introducidos';
+
+  const fakeResponse = (body, status = 400) => ({
+    status,
+    json: async () => body,
+  });
+
+  it('rewrites the AD-translated unique-constraint sentence into a generic friendly message', async () => {
+    const res = fakeResponse({ error: { message: AD_MESSAGE_ES } });
+
+    const result = await extractErrorMessage(res, ui);
+
+    assert.equal(result, FRIENDLY_MESSAGE);
+    assert.doesNotMatch(result, /Entidad|Organizaci[oó]n|Identificador|Client|Organization|Identifier/i);
   });
 });
