@@ -1,8 +1,8 @@
 {
-  "version": "0.1.0",
+  "version": "0.2.0",
   "generatedAt": "2026-07-13T13:35:37.405Z",
-  "updatedAt": "2026-07-15T12:11:24.082Z",
-  "checksum": "954af1f27c4f1b49",
+  "updatedAt": "2026-07-21T12:35:25.423Z",
+  "checksum": "db9b2ce7708db6da",
   "frontendContract": {
     "window": {
       "id": "B5673F73F613496C8BEA22FB55E4E1E4",
@@ -68,7 +68,10 @@
                 }
               }
             ],
-            "gridOrder": 4
+            "gridOrder": 4,
+            "validation": {
+              "maxLength": 60
+            }
           },
           {
             "name": "account",
@@ -81,7 +84,10 @@
             "required": false,
             "grid": true,
             "form": true,
-            "gridOrder": 1
+            "gridOrder": 1,
+            "validation": {
+              "maxLength": 60
+            }
           },
           {
             "name": "debit",
@@ -94,7 +100,10 @@
             "required": false,
             "grid": true,
             "form": true,
-            "gridOrder": 2
+            "gridOrder": 2,
+            "validation": {
+              "maxLength": 2
+            }
           },
           {
             "name": "credit",
@@ -107,7 +116,10 @@
             "required": false,
             "grid": true,
             "form": true,
-            "gridOrder": 3
+            "gridOrder": 3,
+            "validation": {
+              "maxLength": 2
+            }
           },
           {
             "name": "description",
@@ -120,7 +132,10 @@
             "required": false,
             "grid": true,
             "form": true,
-            "gridOrder": 5
+            "gridOrder": 5,
+            "validation": {
+              "maxLength": 255
+            }
           }
         ],
         "searchableFields": [],

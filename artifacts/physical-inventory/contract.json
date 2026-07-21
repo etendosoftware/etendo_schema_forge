@@ -1,8 +1,8 @@
 {
-  "version": "0.29.1",
+  "version": "0.30.0",
   "generatedAt": "2026-06-29T12:25:17.116Z",
-  "updatedAt": "2026-06-29T22:43:32.117Z",
-  "checksum": "74ff606db3b82619",
+  "updatedAt": "2026-07-21T12:35:20.949Z",
+  "checksum": "62f5b3dba083d0c0",
   "frontendContract": {
     "window": {
       "id": "168",
@@ -92,6 +92,10 @@
             },
             "defaultValue": "@#Date@",
             "gridOrder": 1,
+            "validation": {
+              "required": true,
+              "maxLength": 10
+            },
             "readOnlyLogic": {
               "raw": "@Processed@='Y'",
               "evaluable": true,
@@ -116,6 +120,10 @@
             },
             "defaultValue": "@#Date@",
             "gridOrder": 2,
+            "validation": {
+              "required": true,
+              "maxLength": 100
+            },
             "readOnlyLogic": {
               "raw": "@Processed@='Y'",
               "evaluable": true,
@@ -137,6 +145,10 @@
             "reference": "Warehouse",
             "inputMode": "search",
             "gridOrder": 3,
+            "validation": {
+              "required": true,
+              "maxLength": 22
+            },
             "readOnlyLogic": {
               "raw": "@Processed@='Y'",
               "evaluable": true,
@@ -153,7 +165,10 @@
             "visibility": "editable",
             "required": false,
             "grid": false,
-            "form": false
+            "form": false,
+            "validation": {
+              "maxLength": 255
+            }
           },
           {
             "name": "posted",
@@ -189,6 +204,10 @@
               "false": "orange"
             },
             "gridOrder": 5,
+            "validation": {
+              "required": true,
+              "maxLength": 60
+            },
             "displayLogic": {
               "raw": "@Processed@='Y' & @#ShowAcct@='Y'",
               "evaluable": false,
@@ -235,7 +254,11 @@
                 }
               }
             ],
-            "defaultValue": "N"
+            "defaultValue": "N",
+            "validation": {
+              "required": true,
+              "maxLength": 60
+            }
           },
           {
             "name": "project",
@@ -250,6 +273,9 @@
             "form": false,
             "reference": "Project",
             "inputMode": "search",
+            "validation": {
+              "maxLength": 60
+            },
             "displayLogic": {
               "raw": "@ACCT_DIMENSION_DISPLAY@",
               "evaluable": false,
@@ -289,7 +315,11 @@
                 "name": "statusDraft"
               }
             ],
-            "gridOrder": 4
+            "gridOrder": 4,
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            }
           }
         ],
         "searchableFields": [
@@ -363,6 +393,9 @@
               "source": "SELECT COALESCE(MAX(Line),0)+10 AS DefaultValue FROM M_InventoryLine WHERE M_Inventory_ID=@M_Inventory_ID@"
             },
             "defaultValue": "@SQL=SELECT COALESCE(MAX(Line),0)+10 AS DefaultValue FROM M_InventoryLine WHERE M_Inventory_ID=@M_Inventory_ID@",
+            "validation": {
+              "maxLength": 10
+            },
             "readOnlyLogic": {
               "raw": "@Processed@='Y'",
               "evaluable": true,
@@ -390,6 +423,10 @@
             ],
             "gridOrder": 1,
             "grow": true,
+            "validation": {
+              "required": true,
+              "maxLength": 60
+            },
             "callout": {
               "className": "org.openbravo.erpCommon.ad_callouts.SL_Inventory_Product"
             },
@@ -418,6 +455,10 @@
             "reference": "Locator",
             "inputMode": "search",
             "defaultValue": "@SQL=SELECT M_LOCATOR_ID AS DEFAULTVALUE FROM M_LOCATOR WHERE AD_ISORGINCLUDED(@AD_Org_ID@, M_LOCATOR.AD_Org_ID, @#AD_Client_ID@) <> -1 AND ISACTIVE='Y' AND M_WAREHOUSE_ID=@M_WAREHOUSE_ID@  ORDER BY M_LOCATOR.ISDEFAULT DESC",
+            "validation": {
+              "required": true,
+              "maxLength": 60
+            },
             "validationRule": {
               "code": "M_Locator.M_Warehouse_ID=@M_Warehouse_ID@",
               "contextParams": [],
@@ -445,6 +486,9 @@
             "required": false,
             "grid": false,
             "form": true,
+            "validation": {
+              "maxLength": 255
+            },
             "readOnlyLogic": {
               "raw": "@Processed@='Y'",
               "evaluable": true,
@@ -467,6 +511,9 @@
               "source": "0"
             },
             "defaultValue": "0",
+            "validation": {
+              "maxLength": 10
+            },
             "displayLogic": {
               "raw": "@HASSECONDUOM@=1",
               "evaluable": true
@@ -487,6 +534,11 @@
             "gridOrder": 4,
             "grow": true,
             "columnWidth": 192,
+            "validation": {
+              "required": true,
+              "maxLength": 10,
+              "minimum": 0
+            },
             "readOnlyLogic": {
               "raw": "@Processed@='Y'",
               "evaluable": true,
@@ -509,7 +561,11 @@
             "inputMode": "selector",
             "gridOrder": 2,
             "grow": true,
-            "gridReadOnly": true
+            "gridReadOnly": true,
+            "validation": {
+              "required": true,
+              "maxLength": 22
+            }
           },
           {
             "name": "bookQuantity",
@@ -525,7 +581,11 @@
             "sourceRequired": true,
             "gridOrder": 3,
             "grow": true,
-            "columnWidth": 192
+            "columnWidth": 192,
+            "validation": {
+              "required": true,
+              "maxLength": 10
+            }
           },
           {
             "name": "cost",
@@ -538,6 +598,9 @@
             "required": false,
             "grid": false,
             "form": true,
+            "validation": {
+              "maxLength": 10
+            },
             "readOnlyLogic": {
               "raw": "@Processed@='Y'",
               "evaluable": true,
