@@ -1,8 +1,8 @@
 {
-  "version": "0.37.0",
+  "version": "0.38.0",
   "generatedAt": "2026-04-30T15:42:46.497Z",
-  "updatedAt": "2026-07-20T21:33:18.825Z",
-  "checksum": "56429e6cfe3f1b31",
+  "updatedAt": "2026-07-21T11:55:43.685Z",
+  "checksum": "0d1211b8105506fb",
   "frontendContract": {
     "window": {
       "id": "181",
@@ -1007,30 +1007,6 @@
             "defaultValue": "0"
           },
           {
-            "name": "accountingDate",
-            "apiKey": "accountingDate",
-            "column": "DateAcct",
-            "label": "Accounting Date",
-            "type": "date",
-            "tsType": "string",
-            "visibility": "readOnly",
-            "required": true,
-            "grid": false,
-            "form": false,
-            "sourceRequired": true,
-            "derivation": {
-              "type": "computed",
-              "source": "@#Date@"
-            },
-            "defaultValue": "@#Date@",
-            "section": "other",
-            "readOnlyLogic": {
-              "raw": "@Posted@='Y'",
-              "evaluable": true,
-              "js": "record['posted'] === 'Y'"
-            }
-          },
-          {
             "name": "deliveryTerms",
             "apiKey": "deliveryTerms",
             "column": "DeliveryRule",
@@ -1173,13 +1149,6 @@
             "derivation": {
               "type": "computed",
               "source": "0"
-            }
-          },
-          {
-            "name": "accountingDate",
-            "derivation": {
-              "type": "computed",
-              "source": "@#Date@"
             }
           },
           {
@@ -2998,7 +2967,7 @@
             "apiKey": "accountingDate",
             "column": "DateAcct",
             "type": "date",
-            "visibility": "readOnly",
+            "visibility": "system",
             "required": true
           },
           {
@@ -5498,14 +5467,6 @@
         "description": "CRUD flags for 'reservedStock' should all be booleans"
       },
       {
-        "id": "t-default-value-type-header-accountingDate",
-        "category": "default-value-type",
-        "entity": "header",
-        "field": "accountingDate",
-        "runner": "node",
-        "description": "Default value for 'accountingDate' in header should be a string"
-      },
-      {
         "id": "t-default-value-type-header-cashVAT",
         "category": "default-value-type",
         "entity": "header",
@@ -5720,14 +5681,6 @@
         "field": "lineGrossAmount",
         "runner": "node",
         "description": "Display logic for 'lineGrossAmount' in lines should be valid JS"
-      },
-      {
-        "id": "t-field-presence-header-accountingDate",
-        "category": "field-presence",
-        "entity": "header",
-        "field": "accountingDate",
-        "runner": "node",
-        "description": "Field 'accountingDate' should be present in header"
       },
       {
         "id": "t-field-presence-header-asset",
@@ -6482,14 +6435,6 @@
         "description": "Field 'storageBin' should be present in reservedStock"
       },
       {
-        "id": "t-field-type-header-accountingDate",
-        "category": "field-type",
-        "entity": "header",
-        "field": "accountingDate",
-        "runner": "node",
-        "description": "Field 'accountingDate' should have type 'string' in header"
-      },
-      {
         "id": "t-field-type-header-asset",
         "category": "field-type",
         "entity": "header",
@@ -7242,14 +7187,6 @@
         "description": "Field 'storageBin' should have type 'string' in reservedStock"
       },
       {
-        "id": "t-readonlylogic-evaluable-header-accountingDate",
-        "category": "readonlylogic-evaluable",
-        "entity": "header",
-        "field": "accountingDate",
-        "runner": "node",
-        "description": "Read-only logic for 'accountingDate' in header should have evaluable flag"
-      },
-      {
         "id": "t-readonlylogic-evaluable-header-asset",
         "category": "readonlylogic-evaluable",
         "entity": "header",
@@ -7592,14 +7529,6 @@
         "field": "businessPartner",
         "runner": "node",
         "description": "Read-only logic for 'businessPartner' in reservedStock should have evaluable flag"
-      },
-      {
-        "id": "t-readonlylogic-valid-header-accountingDate",
-        "category": "readonlylogic-valid",
-        "entity": "header",
-        "field": "accountingDate",
-        "runner": "node",
-        "description": "Read-only logic for 'accountingDate' in header should be valid JS"
       },
       {
         "id": "t-readonlylogic-valid-header-asset",
@@ -9921,6 +9850,14 @@
         "description": "Selector endpoint for 'storageBin' in reservedStock should exist"
       },
       {
+        "id": "t-system-field-header-accountingDate",
+        "category": "system-field",
+        "entity": "header",
+        "field": "accountingDate",
+        "runner": "node",
+        "description": "System field 'accountingDate' should exist in backend but not frontend for header"
+      },
+      {
         "id": "t-system-field-header-active",
         "category": "system-field",
         "entity": "header",
@@ -11181,25 +11118,25 @@
       }
     ],
     "summary": {
-      "total": 768,
+      "total": 764,
       "byCategory": {
         "action-endpoint": 23,
         "crud-flags": 5,
-        "default-value-type": 26,
+        "default-value-type": 25,
         "displaylogic-evaluable": 1,
         "displaylogic-valid": 1,
-        "field-presence": 95,
-        "field-type": 95,
-        "readonlylogic-evaluable": 44,
-        "readonlylogic-valid": 44,
+        "field-presence": 94,
+        "field-type": 94,
+        "readonlylogic-evaluable": 43,
+        "readonlylogic-valid": 43,
         "rule-declared": 233,
         "searchable-filters": 5,
         "selector-endpoint": 38,
-        "system-field": 153,
+        "system-field": 154,
         "visibility": 5
       },
       "byRunner": {
-        "node": 768,
+        "node": 764,
         "junit": 0
       }
     }
