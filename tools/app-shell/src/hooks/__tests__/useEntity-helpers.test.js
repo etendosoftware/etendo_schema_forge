@@ -860,6 +860,13 @@ describe('extractErrorMessage — AD-translated duplicate-identifier error (ETP-
     const result = await extractErrorMessage(res, ui);
 
     assert.equal(result, FRIENDLY_MESSAGE);
-    assert.doesNotMatch(result, /Entidad|Organizaci[oó]n|Identificador|Client|Organization|Identifier/i);
+    // Guards against leaking the AD's technical field-group fingerprint
+    // (the parenthesized listing, e.g. "(Entidad, Organización, Identificador)"
+    // or "(Client, Organization, Identifier)") — not the word "identificador"
+    // in natural prose, which the mandated friendly message itself contains.
+    assert.doesNotMatch(
+      result,
+      /\(Entidad[,)]|\(Organizaci[oó]n[,)]|\(Client[,)]|\(Organization[,)]/i,
+    );
   });
 });
