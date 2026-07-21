@@ -7,7 +7,9 @@ import { Button } from '@/components/ui/button';
 import { FIELD_HEIGHT, ROW_GAP_Y, LABEL_GAP } from '@/components/ui/formDensity';
 import { PillToggle } from '@/components/PillToggle';
 import { ChevronDown, Loader2, Search } from 'lucide-react';
+import { toast } from 'sonner';
 import { useLabel, useLocaleSwitch, useMenuLabel, useUI } from '@/i18n';
+import { getNumericFieldError, numericFieldToastId } from '@/lib/numericValidation.js';
 import { buildHeaders } from '@/auth/api.js';
 import { buildUrlWithParams } from '@/lib/buildUrlWithParams.js';
 import { resolveIdentifier } from '@/lib/resolveIdentifier.js';
@@ -817,7 +819,7 @@ function getReadOnlyBgClass(isReadOnly) {
  * `committedValue` is the same `data?.[f.key] ?? ''` the default path reads, so the
  * value semantics are identical — only the commit TIMING differs.
  */
-function DeferredInput({ f, committedValue, onCommit, onFieldBlur, placeholder, className, required, disabled }) {
+function DeferredInput({ f, committedValue, onCommit, onFieldBlur, onValidateBlur, placeholder, className, required, disabled }) {
   const [buffer, setBuffer] = useState(committedValue);
   const focusedRef = useRef(false);
   // The last value the USER actually committed (or that arrived externally while the field
@@ -875,6 +877,9 @@ function DeferredInput({ f, committedValue, onCommit, onFieldBlur, placeholder, 
         const changed = !sameAsLast(v);
         lastUserValueRef.current = v;
         if (changed) onCommit?.(f.key, v, f.column);
+        // Validate the RAW value the user left (pre-'0' coercion) so a genuinely
+        // empty field is not reported as below-min. ETP-4542.
+        onValidateBlur?.(f, raw);
         onFieldBlur?.(f.key);
       }}
       placeholder={placeholder}
@@ -1235,6 +1240,18 @@ export function EntityForm({ entity, fields = [], data, onChange, catalogs, layo
   // both updates `editing` (so anything mirroring it, e.g. the Assets sidebar, defers too)
   // AND fires the callout in one shot. Fields without the flag keep the default fully
   // controlled path: every keystroke commits and fires the callout immediately.
+  // Generic on-blur numeric feedback (min / integer), driven by the field config.
+  // A no-op for fields that declare neither constraint (getNumericFieldError → null),
+  // so no existing window changes behaviour. ETP-4542.
+  const validateNumericOnBlur = (f, value) => {
+    const err = getNumericFieldError(f, value);
+    // Shared `id` with the useEntity.js save-gate toast for this same field: if
+    // the user clicks "Save" without leaving the input first, blur fires just
+    // before the click's onClick, and sonner dedupes the two same-id calls into
+    // one visible toast instead of stacking duplicates. ETP-4542.
+    if (err) toast.error(ui(err.key, err.params), { id: numericFieldToastId(f.key) });
+  };
+
   const renderInputField = (f, label, isReadOnly, displayValue) => {
     const calloutOnBlur = f.calloutOn === 'blur';
     return (
@@ -1251,6 +1268,7 @@ export function EntityForm({ entity, fields = [], data, onChange, catalogs, layo
             committedValue={data?.[f.key] ?? ''}
             onCommit={onChange}
             onFieldBlur={onFieldBlur}
+            onValidateBlur={validateNumericOnBlur}
             placeholder={resolveUiKey(ui, f.placeholderKey)}
             className={getInputStateClass(isReadOnly)}
             required={f.required && !isReadOnly}
@@ -1264,7 +1282,7 @@ export function EntityForm({ entity, fields = [], data, onChange, catalogs, layo
             type={getInputType(f)}
             value={getFieldValue(isReadOnly, displayValue, data, f)}
             onChange={(e) => onChange?.(f.key, e.target.value, f.column)}
-            onBlur={() => onFieldBlur?.(f.key)}
+            onBlur={(e) => { if (!isReadOnly) validateNumericOnBlur(f, e.target.value); onFieldBlur?.(f.key); }}
             placeholder={!isReadOnly ? resolveUiKey(ui, f.placeholderKey) : undefined}
             className={getInputStateClass(isReadOnly)}
             required={f.required && !isReadOnly}

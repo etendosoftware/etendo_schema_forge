@@ -71,8 +71,8 @@ describe('InlineLinesPanel — min-value validation (ETP-4005)', () => {
     assert.match(src, /setInvalidCell\(\{ rowId: row\.id, colKey: col\.key \}\)/);
   });
 
-  it('emits the translated fieldMinValueError toast (no hardcoded English/Spanish)', () => {
-    assert.match(src, /toast\.error\(ui\('fieldMinValueError'\)\)/);
+  it('emits the translated fieldMinValueError toast with the interpolated {min}', () => {
+    assert.match(src, /toast\.error\(ui\('fieldMinValueError', \{ min: col\.min \}\)\)/);
     assert.doesNotMatch(src, /toast\.error\(['"`]Value cannot be negative/);
     assert.doesNotMatch(src, /toast\.error\(['"`]El valor no puede ser negativo/);
   });
@@ -88,7 +88,7 @@ describe('InlineLinesPanel — min-value validation (ETP-4005)', () => {
     // The early `return;` after toast.error must precede the onUpdateRow call.
     const commit = src.match(/if \(isValueBelowMin\(col, value\)\) \{[\s\S]*?\}\s*(?:const effectiveValue[\s\S]*?)?\s*pendingEditRef/);
     assert.ok(commit, 'min-check + return block not found before pendingEditRef');
-    assert.match(commit[0], /toast\.error\(ui\('fieldMinValueError'\)\);\s*return;/);
+    assert.match(commit[0], /toast\.error\(ui\('fieldMinValueError', \{ min: col\.min \}\)\);\s*return;/);
   });
 
   // ── EditCell propagates the invalid flag ──────────────────────────────────

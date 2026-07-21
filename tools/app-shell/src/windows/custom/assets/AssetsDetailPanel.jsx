@@ -91,7 +91,7 @@ export function computeAssetAmounts(field, asset, residual, amort) {
   return { assetValue: round2(a), residualAssetValue: round2(r), depreciationAmt: round2(m) };
 }
 
-export default function AssetsDetailPanel({ data, token, apiBaseUrl, catalogs, api, editing, onChange, onLocalChange }) {
+export default function AssetsDetailPanel({ data, token, apiBaseUrl, catalogs, api, editing, onChange, onLocalChange, registerFields, fieldErrors }) {
   const ui = useUI();
   const d = data ?? {};
   const depreciate = isDepreciate(d);
@@ -155,7 +155,12 @@ export default function AssetsDetailPanel({ data, token, apiBaseUrl, catalogs, a
     }
   }, [isNewRecord, d?.currency]);
 
-  const common = { data: d, onChange, catalogs, api, token, apiBaseUrl, entity: 'assets', layout: 'horizontal' };
+  // registerFields/fieldErrors are threaded through from DetailView (hook.registerFields /
+  // hook.fieldErrors) so the EntityForms rendered here — in particular deprecFields below,
+  // which carries usableLifeMonths/usableLifeYears — register into useEntity's formFieldsRef.
+  // Without this, handleSave's generic numeric gate (getNumericFieldViolation) never sees these
+  // fields and the hard save-block is a no-op (blur toast fired but save still went through).
+  const common = { data: d, onChange, catalogs, api, token, apiBaseUrl, entity: 'assets', layout: 'horizontal', registerFields, fieldErrors };
 
   const readOnlyAll = !editing ? { readOnly: Object.fromEntries([
     'searchKey','name','assetCategory','description',
@@ -192,10 +197,19 @@ export default function AssetsDetailPanel({ data, token, apiBaseUrl, catalogs, a
   const deprecFields = [
     { key: 'depreciationType', column: 'Amortizationtype', type: 'select', label: ui('assetsOptLinear'), required: true, section: 'principal', options: [{ value: 'LI', label: ui('assetsOptLinear') }] },
     { key: 'calculateType', column: 'Amortizationcalctype', type: 'select', required: true, section: 'principal', options: [{ value: 'PE', label: ui('assetsOptPercentage') }, { value: 'TI', label: ui('assetsOptTime') }] },
-    { key: 'annualDepreciation', column: 'Amortizationpercentage', type: 'number', label: ui('assetsAnnualDepreciationLabel'), section: 'principal', displayLogic: (record) => isDepreciate(record) && record.calculateType !== 'TI', requiredVisual: true },
+    // Annual Depreciation % must be a positive value (backend "Create Amortization"
+    // rejects empty/zero/negative). Decimals ARE allowed here — it's a percentage
+    // (e.g. 12.5% is valid) — so only `min: 1` is set, no `integer`. Drives the
+    // generic numeric validation in EntityForm (on-blur toast) and the useEntity
+    // save-block gate — no window-specific code. ETP-4542.
+    { key: 'annualDepreciation', column: 'Amortizationpercentage', type: 'number', label: ui('assetsAnnualDepreciationLabel'), section: 'principal', min: 1, displayLogic: (record) => isDepreciate(record) && record.calculateType !== 'TI', requiredVisual: true },
     { key: 'amortize', column: 'Assetschedule', type: 'select', required: true, section: 'principal', options: [{ value: 'MO', label: ui('assetsOptMonthly') }, { value: 'YE', label: ui('assetsOptYearly') }], displayLogic: (record) => isDepreciate(record) && record.calculateType === 'TI' },
-    { key: 'usableLifeYears', column: 'UseLifeYears', type: 'number', section: 'principal', displayLogic: (record) => isDepreciate(record) && record.calculateType === 'TI' && record.amortize === 'YE', requiredVisual: true },
-    { key: 'usableLifeMonths', column: 'UseLifeMonths', type: 'number', section: 'principal', displayLogic: (record) => isDepreciate(record) && record.calculateType === 'TI' && record.amortize !== 'YE', requiredVisual: true },
+    // Usable Life must be a positive whole number (backend "Create Amortization"
+    // rejects empty/zero/negative/decimal). `min: 1` + `integer: true` drive the
+    // generic numeric validation in EntityForm (on-blur toast) and the useEntity
+    // save-block gate — no window-specific code. ETP-4542.
+    { key: 'usableLifeYears', column: 'UseLifeYears', type: 'number', section: 'principal', min: 1, integer: true, displayLogic: (record) => isDepreciate(record) && record.calculateType === 'TI' && record.amortize === 'YE', requiredVisual: true },
+    { key: 'usableLifeMonths', column: 'UseLifeMonths', type: 'number', section: 'principal', min: 1, integer: true, displayLogic: (record) => isDepreciate(record) && record.calculateType === 'TI' && record.amortize !== 'YE', requiredVisual: true },
   ];
 
   function makeDisplayLogic(fields) {

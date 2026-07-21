@@ -1,8 +1,8 @@
 {
-  "version": "0.38.0",
+  "version": "0.41.0",
   "generatedAt": "2026-04-29T19:06:30.936Z",
-  "updatedAt": "2026-07-08T11:39:25.357Z",
-  "checksum": "1a08a830501023e7",
+  "updatedAt": "2026-07-21T15:13:54.440Z",
+  "checksum": "a608df3f2c829e39",
   "frontendContract": {
     "window": {
       "id": "800027",
@@ -299,6 +299,7 @@
             "grid": false,
             "form": false,
             "businessCritical": true,
+            "min": 1,
             "displayLogic": {
               "raw": "@IsDepreciated@='Y' & @Amortizationcalctype@!'TI'",
               "evaluable": true,
@@ -352,6 +353,8 @@
             "grid": false,
             "form": false,
             "businessCritical": true,
+            "min": 1,
+            "integer": true,
             "displayLogic": {
               "raw": "@IsDepreciated@='Y'  & @Amortizationcalctype@ = 'TI' & @Assetschedule@='YE'",
               "evaluable": true,
@@ -370,6 +373,8 @@
             "grid": false,
             "form": false,
             "businessCritical": true,
+            "min": 1,
+            "integer": true,
             "displayLogic": {
               "raw": "@IsDepreciated@='Y' & @Amortizationcalctype@='TI' & @Assetschedule@!'YE'",
               "evaluable": true,

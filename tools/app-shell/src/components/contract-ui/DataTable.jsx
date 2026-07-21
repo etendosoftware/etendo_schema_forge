@@ -724,7 +724,9 @@ const InlineAddRow = forwardRef(function InlineAddRow({ columns, fields, onAdd, 
     const belowMin = fields.filter(f => isBelowMin(f, valuesRef));
     if (belowMin.length > 0) {
       setInvalidFields(new Set(belowMin.map(f => f.key)));
-      toast.error(ui('fieldMinValueError'));
+      // Interpolate the offending field's `min` so the message is precise
+      // ("Value must be at least 1") rather than the imprecise negative wording.
+      toast.error(ui('fieldMinValueError', { min: belowMin[0].min }));
       const firstInvalid = belowMin[0];
       const inputEl = document.querySelector(`[data-testid="field-${firstInvalid.key}"]`);
       inputEl?.focus?.({ preventScroll: true });

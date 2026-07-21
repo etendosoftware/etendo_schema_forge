@@ -482,3 +482,125 @@ This iteration adjusts the **Accounting dimensions** group (Group 5) in the Depr
 
 1. Open an asset with **Depreciate** enabled and scroll to **Dimensiones contables**. Confirm exactly four selectors are shown: Project, Cost Center, Business Partner, Product — no 1st/2nd Dimension, Sales Region, Activity, or Sales Campaign.
 2. Open the **Product** selector and confirm it returns product options. Select a product, save, and reopen the asset — confirm the product value persists.
+
+## ETP-4542 — Generic declarative numeric validation (min + integer), applied to Usable Life
+
+Bug: `usableLifeMonths` ("Vida útil - Meses") and `usableLifeYears` ("Vida útil - Años")
+accepted zero, negative or decimal values in the form. The **Create Amortization** process
+already rejected these server-side, but the user only found out after completing the whole
+form and running the process.
+
+This iteration **replaced the earlier Assets-specific hack** (`isInvalidUsableLife` /
+`USABLE_LIFE_ERROR_KEYS` / `handleUsableLifeBlur` / the key-based `getInvalidUsableLifeField`
+gate) with a **generic, declarative mechanism usable by ANY window**. A numeric field now
+opts into validation purely through two field-config properties (see
+`docs/decisions-reference.md`):
+
+- `min` — value must be `>= min`.
+- `integer: true` — decimals are rejected. **Default (flag absent) accepts decimals**, so
+  every other window is unaffected. Only whole-number fields declare it.
+
+Assets declares `"min": 1, "integer": true` on both `usableLifeYears` and `usableLifeMonths`
+(in `artifacts/assets/decisions.json`, and mirrored on the hardcoded field configs in
+`AssetsDetailPanel.jsx` / `AssetsConfigPanel.jsx` since those panels build their own field
+arrays rather than reading them from the contract).
+
+**How the generic mechanism works:**
+
+- `getNumericFieldError(field, value)` (`tools/app-shell/src/lib/numericValidation.js`) is a
+  pure function returning the first failing i18n descriptor `{ key, params }`
+  (`fieldMinValueError` with `params: { min }`, or `fieldIntegerError` with `params: {}`) or
+  `null`. Returning the interpolation params — not a bare key — lets the caller render a precise
+  message: `fieldMinValueError` is `"Value must be at least {min}"`, so a `0` on a `min: 1`
+  field reads "Value must be at least 1" instead of the old, inaccurate "Value cannot be
+  negative" (0 is not negative). An empty/null value is always `null` — emptiness stays the
+  responsibility of the existing `required` mechanism, never mixed in here.
+- **Inline blur feedback** lives in the shared `EntityForm.jsx`: on blur of any numeric field
+  (both the default `Input` path and the `DeferredInput`/`calloutOn: 'blur'` path) it calls
+  `getNumericFieldError` and, on a hit, `toast.error(ui(err.key, err.params))`. Fields declaring
+  neither `min` nor `integer` produce `null` → no toast, so the behaviour is fully
+  backwards-compatible.
+- **Hard save block** lives in the shared `useEntity.js` `handleSave`: `getNumericFieldViolation(fields, editing)`
+  scans ALL currently registered fields (not just ones the user "changed" this session),
+  skips read-only / hidden fields, and returns `{ key, errorKey, errorParams }` for the first
+  violation. On a hit `handleSave` calls `reportInvalidFormatField(errorKey, ui, ..., errorParams)`
+  (same helper as the email/website/phone gates, extended with an optional `params` argument so
+  the `{min}` interpolates) and returns before the network request, so the save is blocked.
+- The same interpolation is applied in the two grid/inline call sites that reimplement the
+  below-min guard: `DataTable.jsx` (`ui('fieldMinValueError', { min: belowMin[0].min })`) and
+  `InlineLinesPanel.jsx` (`ui('fieldMinValueError', { min: col.min })`).
+- The registration wiring landed previously (Bug 2/3 follow-up) is unchanged: `DetailView.jsx`
+  passes `registerFields`/`fieldErrors` into the `formFooter` slot, and `AssetsDetailPanel.jsx`
+  forwards them into every internal `EntityForm`, so the `deprecFields` reach `formFieldsRef`.
+- The backend validation in the "Create Amortization" process is unchanged and remains the
+  authoritative safety net.
+
+**Design note — emptiness:** the Usable Life fields are `requiredVisual` (conditional
+obligation), not hard `required`, so under the generic mechanism an *empty* value no longer
+raises a client toast (it did under the old hack). This is deliberate: numeric validation
+does not duplicate required semantics. The backend still rejects an empty value on process.
+
+**Pipeline (`integer` passthrough):** the new `integer` property travels the full chain —
+`decisions.json` → `resolve-curated.js` (`if (fieldDecision.integer !== undefined) field.integer = ...`)
+→ `generate-contract.js` `applyFieldUIHints` (`if (f.integer !== undefined) mapped.integer = ...`)
+→ `contract.json`. Verified in `artifacts/assets/contract.json`: `usableLifeMonths` and
+`usableLifeYears` now carry `min: 1, integer: true`.
+
+- **Files changed:**
+  - `schema_forge_core/cli/src/resolve-curated.js` (+`integer` passthrough) + test
+  - `schema_forge_core/cli/src/generate-contract.js` (+`integer` passthrough in `applyFieldUIHints`) + test
+  - `tools/app-shell/src/lib/numericValidation.js` (new — generic `getNumericFieldError`; replaces the deleted `lib/usableLife.js`)
+  - `tools/app-shell/src/components/contract-ui/EntityForm.jsx` (generic on-blur numeric validation, both input paths)
+  - `tools/app-shell/src/hooks/useEntity.js` (generic `getNumericFieldViolation` gate replaces `getInvalidUsableLifeField`)
+  - `tools/app-shell/src/windows/custom/assets/AssetsDetailPanel.jsx` (removed the ad-hoc helper/blur handler; `usableLife*` now declare `min: 1, integer: true`)
+  - `tools/app-shell/src/windows/custom/assets/AssetsConfigPanel.jsx` (`usableLife*` declare `min: 1, integer: true`)
+  - `artifacts/assets/decisions.json` (`usableLifeYears`/`usableLifeMonths` → `min: 1, integer: true`)
+  - `tools/app-shell/src/locales/{en_US,es_ES,es_AR}.json` (new `fieldIntegerError` key; `fieldMinValueError` reworded to the interpolated `"Value must be at least {min}"` / `"El valor debe ser al menos {min}"`)
+  - `tools/app-shell/src/components/contract-ui/{DataTable,InlineLinesPanel}.jsx` (below-min toasts now interpolate `{min}`)
+  - tests: `lib/__tests__/numericValidation.test.js` (new), `hooks/__tests__/useEntity-helpers.test.js` (rewritten gate coverage), `components/contract-ui/__tests__/EntityForm.numericBlur.vitest.jsx` (new, window-agnostic), `windows/custom/assets/__tests__/AssetsDetailPanel.{usableLifeValidation,registerFieldsWiring}.vitest.jsx` (rewritten to the generic mechanism)
+
+### Manual verification (ETP-4542)
+
+1. Open an asset with **Depreciate** enabled, **Calculation type** = "Time" (`TI`), and
+   **Amortize** = "Monthly" so **Usable Life - Months** is visible.
+2. Type `0`, a negative number, or a decimal like `5.5`, then click away (blur). Confirm a
+   toast error appears — "Value must be at least 1" for below-min (the message names the actual
+   threshold; `0` is NOT reported as "negative"), "Value must be a whole number" for decimals
+   (or the Spanish equivalents under `es_ES`).
+3. Click **Save** with the field still invalid — confirm the save is blocked (the toast
+   reappears, no network request is sent, the form stays in edit mode).
+4. Type a valid positive integer (e.g. `12`), blur — confirm no toast appears — then Save.
+   Confirm the save succeeds.
+5. Repeat steps 1–4 with **Amortize** = "Yearly" for **Usable Life - Years**.
+
+## ETP-4542 (Bloque 1) — extended to Annual Depreciation %
+
+Same generic mechanism, extended to `annualDepreciation` ("Annual Depreciation %" /
+`Amortizationpercentage`), visible when **Depreciate** is on and **Calculate Type** =
+"Percentage" (`PE`). Unlike Usable Life, this field declares **only `min: 1`** —
+**no `integer: true`** — because it is a percentage and decimals are valid business input
+(e.g. `12.5%`). It rejects empty/zero/negative but accepts any positive decimal.
+
+Changed in `annualDepreciation`'s field config in three places, mirroring the Usable Life
+pattern: `artifacts/assets/decisions.json` (documentation source of truth, field renders via
+`headerExtra.customForm` so this entry is `form: false` + `min: 1`), and the hardcoded field
+arrays in `AssetsDetailPanel.jsx` (`deprecFields`, principal section) and
+`AssetsConfigPanel.jsx` (`deprecFields`, other section) — both custom panels build their own
+field arrays rather than reading them from the contract.
+
+**Files changed:**
+- `artifacts/assets/decisions.json` (`annualDepreciation` → `min: 1`)
+- `tools/app-shell/src/windows/custom/assets/AssetsDetailPanel.jsx` (`annualDepreciation` → `min: 1`)
+- `tools/app-shell/src/windows/custom/assets/AssetsConfigPanel.jsx` (`annualDepreciation` → `min: 1`)
+- test: `tools/app-shell/src/windows/custom/assets/__tests__/AssetsDetailPanel.annualDepreciationValidation.vitest.jsx` (new)
+
+### Manual verification (ETP-4542, Bloque 1)
+
+1. Open an asset with **Depreciate** enabled and **Calculate Type** = "Percentage" (`PE`) so
+   **Annual Depreciation %** is visible.
+2. Type `0` or a negative number, then blur. Confirm the "Value must be at least 1" toast
+   appears (or the Spanish equivalent).
+3. Type a decimal like `12.5`, blur — confirm **no** toast appears (decimals are valid for a
+   percentage) — then Save. Confirm the save succeeds.
+4. Type a valid positive integer (e.g. `20`), blur — confirm no toast appears — then Save.
+   Confirm the save succeeds.
