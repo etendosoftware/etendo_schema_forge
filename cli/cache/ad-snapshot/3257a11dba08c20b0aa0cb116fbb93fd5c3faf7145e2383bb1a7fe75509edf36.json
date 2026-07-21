@@ -16525,7 +16525,7 @@
       "rows": []
     },
     "f96633ac204ea54d299e732b9b90d118784f1968476b98b9d9df3e7c10b7da59": {
-      "checksum": "ae799f169495c760d5902815db63a42c0466b201738585def92305d106d26498",
+      "checksum": "8cc67801c48ea2b623b5c362c0563a2ea56c68fb7b1a33141186fe8f93b2b8a3",
       "params": [
         "800027"
       ],
@@ -16547,22 +16547,6 @@
           "readonlylogic": "@Posted@='Y'"
         },
         {
-          "columnname": "Acctvalueamt",
-          "displaylogic": "@IsDepreciated@='Y'",
-          "displaylogic_server": null,
-          "displaylogicgrid": null,
-          "name": "Acctvalueamt",
-          "readonlylogic": null
-        },
-        {
-          "columnname": "AD_Client_ID",
-          "displaylogic": null,
-          "displaylogic_server": null,
-          "displaylogicgrid": null,
-          "name": "Client",
-          "readonlylogic": "@Processed@='Y'"
-        },
-        {
           "columnname": "A_Disposal_Gain",
           "displaylogic": "@ADVANCED_ASSETS_MANAGEMENT@ = 'Y'",
           "displaylogic_server": null,
@@ -16579,6 +16563,22 @@
           "readonlylogic": null
         },
         {
+          "columnname": "Acctvalueamt",
+          "displaylogic": "@IsDepreciated@='Y'",
+          "displaylogic_server": null,
+          "displaylogicgrid": null,
+          "name": "Acctvalueamt",
+          "readonlylogic": null
+        },
+        {
+          "columnname": "AD_Client_ID",
+          "displaylogic": null,
+          "displaylogic_server": null,
+          "displaylogicgrid": null,
+          "name": "Client",
+          "readonlylogic": "@Processed@='Y'"
+        },
+        {
           "columnname": "AD_Org_ID",
           "displaylogic": null,
           "displaylogic_server": null,
@@ -16593,6 +16593,14 @@
           "displaylogicgrid": null,
           "name": "User/Contact",
           "readonlylogic": null
+        },
+        {
+          "columnname": "Amortization_Percentage",
+          "displaylogic": null,
+          "displaylogic_server": null,
+          "displaylogicgrid": null,
+          "name": "Amortization Percentage",
+          "readonlylogic": "@Processed@='Y'"
         },
         {
           "columnname": "Amortizationamt",
@@ -16617,14 +16625,6 @@
           "displaylogicgrid": null,
           "name": "Depreciation End Date",
           "readonlylogic": null
-        },
-        {
-          "columnname": "Amortization_Percentage",
-          "displaylogic": null,
-          "displaylogic_server": null,
-          "displaylogicgrid": null,
-          "name": "Amortization Percentage",
-          "readonlylogic": "@Processed@='Y'"
         },
         {
           "columnname": "Amortizationstartdate",

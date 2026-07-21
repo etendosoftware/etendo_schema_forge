@@ -311490,7 +311490,7 @@
       ]
     },
     "f96633ac204ea54d299e732b9b90d118784f1968476b98b9d9df3e7c10b7da59": {
-      "checksum": "501980a6f461b90d6f42da7eec45df4914760b2bd822f356a0d7c2231ac2a8c9",
+      "checksum": "2f6d3fe460830a4ae2ab42e61c7fb90debb43777ab075700092b1d43cc618e7c",
       "params": [
         "800027"
       ],
@@ -314702,7 +314702,7 @@
           "ad_val_rule_id": null,
           "ad_window_id": "800027",
           "callout_class": null,
-          "columnname": "EM_Etadas_Campaign_ID",
+          "columnname": "EM_Etadas_C_Bpartner_ID",
           "defaultvalue": null,
           "displaylogic": null,
           "displaylogic_server": null,
@@ -314711,7 +314711,7 @@
           "entity_classname": "AmortizationLine",
           "entity_javapackage": "org.openbravo.model.financialmgmt.assetmgmt",
           "field_isactive": "Y",
-          "field_name": "EM_Etadas_Campaign_ID",
+          "field_name": "EM_Etadas_C_Bpartner_ID",
           "field_seq": "99999",
           "fieldlength": "32",
           "filterclause": null,
@@ -314742,7 +314742,7 @@
           "ad_val_rule_id": null,
           "ad_window_id": "800027",
           "callout_class": null,
-          "columnname": "EM_Etadas_C_Bpartner_ID",
+          "columnname": "EM_Etadas_Campaign_ID",
           "defaultvalue": null,
           "displaylogic": null,
           "displaylogic_server": null,
@@ -314751,7 +314751,7 @@
           "entity_classname": "AmortizationLine",
           "entity_javapackage": "org.openbravo.model.financialmgmt.assetmgmt",
           "field_isactive": "Y",
-          "field_name": "EM_Etadas_C_Bpartner_ID",
+          "field_name": "EM_Etadas_Campaign_ID",
           "field_seq": "99999",
           "fieldlength": "32",
           "filterclause": null,
