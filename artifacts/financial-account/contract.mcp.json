@@ -1,8 +1,8 @@
 {
-  "version": "0.15.0",
+  "version": "0.16.0",
   "generatedAt": "2026-06-11T01:47:08.755Z",
-  "updatedAt": "2026-06-29T19:59:03.963Z",
-  "contractChecksum": "d0bb4681f9439696",
+  "updatedAt": "2026-07-16T14:16:24.181Z",
+  "contractChecksum": "ecbaad061517903c",
   "apiPrediction": {
     "specName": "financial-account-detail",
     "baseUrl": "/sws/neo/financial-account-detail",
@@ -27,6 +27,17 @@
         "delete": true,
         "listUrl": "/sws/neo/financial-account-detail/transaction",
         "detailUrl": "/sws/neo/financial-account-detail/transaction/{id}",
+        "supportedFilters": []
+      },
+      "accountingConfiguration": {
+        "get": true,
+        "getById": true,
+        "post": true,
+        "put": true,
+        "patch": true,
+        "delete": true,
+        "listUrl": "/sws/neo/financial-account-detail/accountingConfiguration",
+        "detailUrl": "/sws/neo/financial-account-detail/accountingConfiguration/{id}",
         "supportedFilters": []
       },
       "importedBankStatements": {
@@ -148,6 +159,22 @@
         "reference": "User2",
         "inputMode": "selector",
         "url": "/sws/neo/financial-account-detail/transaction/selectors/ndDimension"
+      },
+      {
+        "entity": "accountingConfiguration",
+        "field": "fINAssetAcct",
+        "column": "FIN_Asset_Acct",
+        "reference": "ValidCombination",
+        "inputMode": "selector",
+        "url": "/sws/neo/financial-account-detail/accountingConfiguration/selectors/fINAssetAcct"
+      },
+      {
+        "entity": "accountingConfiguration",
+        "field": "fINTransitoryAcct",
+        "column": "FIN_Transitory_Acct",
+        "reference": "ValidCombination",
+        "inputMode": "selector",
+        "url": "/sws/neo/financial-account-detail/accountingConfiguration/selectors/fINTransitoryAcct"
       },
       {
         "entity": "bankStatementLines",
@@ -903,6 +930,14 @@
           }
         }
       },
+      "accountingConfiguration": {
+        "fields": {
+          "fINAssetAcct": {
+            "required": true
+          },
+          "fINTransitoryAcct": {}
+        }
+      },
       "importedBankStatements": {
         "fields": {
           "documentNo": {
@@ -1000,6 +1035,7 @@
       "lineFields": [
         "etprReactivateTransaction",
         "etprRemoveTransaction",
+        "fINAssetAcct",
         "name",
         "etblkpBulkposting",
         "referenceNo",
@@ -1052,6 +1088,7 @@
         "fields": [
           "etprReactivateTransaction",
           "etprRemoveTransaction",
+          "fINAssetAcct",
           "name",
           "etblkpBulkposting",
           "referenceNo",
@@ -1071,5 +1108,5 @@
       "etprReactivateTransaction"
     ]
   },
-  "checksum": "34f019c02a8ae48a"
+  "checksum": "b8e07b667fffdbeb"
 }

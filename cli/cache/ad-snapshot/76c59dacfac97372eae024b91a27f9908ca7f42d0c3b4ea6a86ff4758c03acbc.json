@@ -8365,6 +8365,34 @@
         }
       ]
     },
+    "a94c8fd13642419e183f465b6bfd06c018e362595b475af945efdf6ff6ac88a4": {
+      "checksum": "65c1ff439d154d420f09d24289b4bfe09a2ca79dfa12474418d6b8e74c1bad5b",
+      "params": [
+        [
+          "8F75B92DFD4D47BBBFC61FA1B08E6D8D"
+        ]
+      ],
+      "rows": [
+        {
+          "ad_reference_id": "8F75B92DFD4D47BBBFC61FA1B08E6D8D",
+          "name": "FAILED",
+          "name_es": "FAILED",
+          "value": "FAILED"
+        },
+        {
+          "ad_reference_id": "8F75B92DFD4D47BBBFC61FA1B08E6D8D",
+          "name": "PARTIAL",
+          "name_es": "PARTIAL",
+          "value": "PARTIAL"
+        },
+        {
+          "ad_reference_id": "8F75B92DFD4D47BBBFC61FA1B08E6D8D",
+          "name": "SUCCESS",
+          "name_es": "SUCCESS",
+          "value": "SUCCESS"
+        }
+      ]
+    },
     "b08cc8fe3fd8ddfaf45e2325b7e0c6476be43fd3ce3f6a6c707fe93c1a3ffe18": {
       "checksum": "191b5a4c7106e8724e63c166be229585e80dcf014c27f3cebb2684c5ef0c667d",
       "params": [
@@ -11716,6 +11744,64 @@
           "name": "Work Requirement",
           "name_es": "Orden de fabricación",
           "value": "WRE"
+        }
+      ]
+    },
+    "d6cf1a69019f2c522e1e974f636e51c825ca6b7a6f98bb69a511910993097d55": {
+      "checksum": "7e1c00065d16f3e098ed26bd0ad0fc4347c3971004c3ed40edb0aebaaa387285",
+      "params": [
+        [
+          "111"
+        ]
+      ],
+      "rows": [
+        {
+          "ad_reference_id": "111",
+          "name": "Average",
+          "name_es": "Promedio",
+          "value": "A"
+        },
+        {
+          "ad_reference_id": "111",
+          "name": "Company",
+          "name_es": "Empresa",
+          "value": "C"
+        },
+        {
+          "ad_reference_id": "111",
+          "name": "Fixed",
+          "name_es": "Fijo",
+          "value": "F"
+        },
+        {
+          "ad_reference_id": "111",
+          "name": "Manual Rate",
+          "name_es": "Porcentaje manual",
+          "value": "M"
+        },
+        {
+          "ad_reference_id": "111",
+          "name": "None",
+          "name_es": "Ninguno",
+          "value": "N"
+        },
+        {
+          "ad_reference_id": "111",
+          "name": "Period End",
+          "name_es": "Fin periodo",
+          "value": "P"
+        },
+        {
+          "ad_reference_id": "111",
+          "name": "Spot",
+          "name_es": "Punto",
+          "value": "S"
+        },
+        {
+          "ad_reference_id": "111",
+          "name": "User Type",
+          "name_es": "Definido por el usuario",
+          "value": "U"
         }
       ]
     },

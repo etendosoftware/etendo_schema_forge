@@ -237,6 +237,61 @@
 
 ---
 
+## ETP-4503 — Payment-method multicurrency defaults (G1 / R14, 2026-07-16)
+
+- **2026-07-16 — "Multicurrency" is TWO independent columns, not one.** `payin_ismulticurrency` AND
+  `payout_ismulticurrency` on BOTH `fin_paymentmethod` (the method template) and
+  `fin_finacc_paymentmethod` (the per-account link). Both are `character(1)` with column default
+  `'N'`. Java setters `setPayinIsMulticurrency(Boolean)` / `setPayoutIsMulticurrency(Boolean)`,
+  getters `isPayinIsMulticurrency()` / `isPayoutIsMulticurrency()` (return `Boolean`) on both
+  `FIN_PaymentMethod` and `FinAccPaymentMethod` (`src-gen`). **Apply:** any "enable multicurrency"
+  fix must set/guard BOTH columns — flipping only one leaves a half-configured method.
+- **2026-07-16 — `em_psd2_is_bank_transfer` DIVERGES seed-vs-live: the bundled sampledata ships it
+  `'Y'` for "Transferencia bancaria", but every live payment method has it `'N'`.** Verified across
+  the whole fleet (`SELECT em_psd2_is_bank_transfer, count(*) FROM fin_paymentmethod WHERE
+  ad_client_id<>'0' GROUP BY 1` → 42 rows, ALL `'N'`), including GOClient's own Transferencia
+  bancaria — yet `FIN_PAYMENTMETHOD.xml` carries `<EM_PSD2_IS_BANK_TRANSFER>Y</...>` for it. The
+  flag was never propagated to the live rows (same class of seed↔live drift as the write-off account
+  and amortization table). **Apply:** to identify the bank-transfer method reliably on existing
+  tenants, use the flag WITH a name fallback — `em_psd2_is_bank_transfer='Y' OR name IN
+  ('Transferencia bancaria','Transferencia')`. The Java runtime helper
+  (`FinancialAccountSupport.isBankTransferMethod`) and the R14 `.sql` use the identical predicate;
+  keep them in lockstep. Column accessor: `FIN_PaymentMethod.isPSD2IsBankTransfer()` (Boolean),
+  setter `setPSD2IsBankTransfer(Boolean)`.
+- **2026-07-16 — The multicurrency PSD2 exception is applied on the per-account LINK, never the
+  template.** A Bank account (`type='B'`) with an active PSD2 connection must have multicurrency OFF
+  on ITS "Transferencia bancaria" `fin_finacc_paymentmethod` link; the `fin_paymentmethod` template
+  stays `'Y'`. "Active PSD2" = `fin_financial_account.em_psd2_connection_status='CO'`
+  (`BankIntegrationConstants.FA_CONNECTION_STATUS_CONNECTED`) OR an active row in
+  `psd2_finacc_connection (connection_status='AC' AND isactive='Y')` — two independent signals, OR
+  them. Live sweep found exactly ONE such account fleet-wide (GOClient "Societe Generale Luxembourg
+  Corporate", both signals true), and its transfer link was already `N/N`. Non-transfer links on the
+  same PSD2 account (Cheque, Tarjeta) are NOT excepted — they go to `Y/Y`.
+- **2026-07-16 — Runtime placement: put the exception in the shared `linkAccount(...)` choke point,
+  not in each handler.** `FinancialAccountPsd2Handler.handleCreateAndLink` and `handleLink` both
+  call the private `linkAccount(...)` helper (which is where `linkAccountToFinancialAccount` persists
+  `em_psd2_connection_status='CO'` and where `disableAutomaticWithdrawnForTransferMethod` already
+  lives). Adding `FinancialAccountSupport.disableMulticurrencyForBankTransfer(finAcc)` there covers
+  BOTH connect paths in one line (DRY) — deviation from the plan's "add it in both handlers" that is
+  strictly better. `handleReconnect`/`handleDisconnect` do NOT call `linkAccount`, so they are
+  correctly untouched. The helper self-gates on `type='B'`, so the call is unconditional/safe.
+- **2026-07-16 — Dataset-only preventive + no CUT bump (3rd instance of the ETP-4341 pattern).** The
+  static front is a pure `FIN_PAYMENTMETHOD.xml` / `FIN_FINACC_PAYMENTMETHOD.xml` edit (both already
+  whitelisted in `OnboardingDatasetDefinition`), plus the inert `SeedReferenceDataStep` aligned for
+  drift. `ONBOARDING_PROVISIONED_THROUGH` was deliberately NOT bumped: the sampledata makes new
+  tenants born correct, and R14 only repairs legacy tenants — so the watermark stays put and R14
+  keeps applying to pre-existing tenants (new tenants hit `@check → SKIPPED_NOT_NEEDED` anyway). This
+  differs from ETP-4245 (A3), where a dataset-only change still bumped the CUT — there the CUT
+  tracked "what a new tenant already has." Here the corrective is intentionally allowed to overlap
+  new tenants harmlessly rather than be watermark-skipped, so no bump is needed. (If the team later
+  wants the baseline to reflect T, bump to `2026-07-16T12:00:00Z` — only AFTER R14 is in the repo.)
+- **2026-07-16 — New gap-label series `G`.** Payment-method config defaults don't fit the A–F
+  provisioning-gap taxonomy (A=accounting, B=org tree, C=period, D=legal entity, E=session,
+  F=default customer/org info). Used `@gap: G1` for R14 and noted it in the map §4. Future
+  payment-config gaps continue the `G` series.
+
+---
+
 ## Org type / period-control gate (ad_org_trg) — R3 in-place amendment (C1-pre)
 
 - **2026-07-14 — `@OrgTypeDoesNotAllowPeriodControl@` comes from core trigger `ad_org_trg`, gated ONLY on org-type flags (no acctschema requirement).** Verified via `pg_get_functiondef` on staging: on INSERT/UPDATE, when `new.ISPERIODCONTROLALLOWED='Y'`, it counts `ad_orgtype` rows for `new.AD_ORGTYPE_ID` where `ISBUSINESSUNIT='Y' OR (ISLEGALENTITY='Y' AND ISACCTLEGALENTITY='Y')`; if 0, it raises. So R3's final `UPDATE ad_org SET isperiodcontrolallowed='Y'` fails whenever the operative org's type does not allow period control. **Apply:** to unblock R3, the org's `ad_orgtype_id` must satisfy that flag condition — nothing else (no C_ACCTSCHEMA, no link) is checked by the trigger.
