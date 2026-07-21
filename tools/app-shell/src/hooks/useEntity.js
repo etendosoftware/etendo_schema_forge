@@ -700,6 +700,10 @@ export function useEntity(entity, childEntity, {
     const [loading, setLoading] = useState(false);
     const [loadingMore, setLoadingMore] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
+    // ETP-4542: identifier of the header process currently running (POST in flight),
+    // or null when idle. A per-process id (not a global boolean) gives per-button
+    // granularity so only the button that was clicked reflects the loading state.
+    const [runningProcess, setRunningProcess] = useState(null);
     const [hasMore, setHasMore] = useState(true);
     const [saveError, setSaveError] = useState(null);
     // ETP-3894: per-field error map. Set when handleSave fails because mandatory fields
@@ -1232,6 +1236,12 @@ export function useEntity(entity, childEntity, {
 
     const handleProcess = useCallback(async (process, paramValues = {}) => {
         if (!selected?.id) return;
+        // ETP-4542: mark this process as running so consumers (DetailView) can show a
+        // loading state and block re-clicks. The id must match the one the button uses
+        // to render (columnName ?? name). Cleared in the finally block below on both
+        // success and error, so the button always returns to its normal state.
+        const processId = process.columnName ?? process.name;
+        setRunningProcess(processId);
         // Build field values: start with hidden params from process definition, then merge user-supplied values
         const fieldValues = {};
         for (const p of (process.params ?? [])) {
@@ -1273,6 +1283,8 @@ export function useEntity(entity, childEntity, {
             }
         } catch (err) {
             toast.error(err?.message || 'Network error');
+        } finally {
+            setRunningProcess(null);
         }
     }, [selected, entity, specName, apiBaseUrl, token, refresh, fetchById, ui]);
 
@@ -1289,6 +1301,7 @@ export function useEntity(entity, childEntity, {
 
     return {
         items, selected, editing, children, childDefaults, childrenLoading, loading, loadingMore, hasMore, saveError, isSaving,
+        runningProcess,
         isDirtyHeader,
         fieldErrors, registerFields,
         handleSelect, handleNew, handleChange, handleSave, handleSaveAndProcess, handleDelete, handleProcess,

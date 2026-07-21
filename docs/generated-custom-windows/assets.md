@@ -357,6 +357,8 @@ all windows; everything else is scoped to Assets via `decisions.json` or a custo
 - `tools/app-shell/src/components/contract-ui/DetailView.jsx` — new `saveBeforeProcesses`
   prop (default `false`). When set, `renderSaveActions` is rendered before the process-button
   block instead of after it. Default-off, so no behavioral change for any other window.
+  (ETP-4542 Bloque 2 later extended this same flag to also silently save before running a
+  process — see the "ETP-4542 (Bloque 2)" section below.)
 
 ## ETP-4335 — Amortization status bar fix, plan tab row selection, and Search Key list column (feature/ETP-4335)
 
@@ -604,3 +606,99 @@ field arrays rather than reading them from the contract.
    percentage) — then Save. Confirm the save succeeds.
 4. Type a valid positive integer (e.g. `20`), blur — confirm no toast appears — then Save.
    Confirm the save succeeds.
+
+## ETP-4542 (Bloque 2) — auto-save before running a process
+
+`saveBeforeProcesses` (documented above as an Assets-only toolbar preference that reorders the
+**Save** button before the process buttons) now **also drives a silent save gate** in front of
+every toolbar process button (e.g. **Create Amortization**). The flag stays opt-in — only
+windows that pass it participate; every other window's process buttons behave exactly as before.
+
+Behavior when the flag is set and a process button is clicked:
+
+1. **Form dirty + save succeeds** → the pending changes are persisted silently (no "Record
+   saved" toast) and the process then runs on the fresh data.
+2. **Form dirty + save fails** (required empty, ETP-4542 numeric violation, or backend error)
+   → the process is **aborted**; no confirm modal, no param dialog, no process POST.
+   `handleSave` has already shown the validation/error toast, so nothing extra is surfaced.
+3. **Form not dirty** → the process runs directly, no save step.
+
+**Interception point & rationale:** the save gate runs in the toolbar process-button `onClick`
+in `DetailView.jsx`, **before** `dispatchProcessAction` — i.e. before any confirm modal or
+param dialog opens. Saving first means the process always operates on persisted data, and a
+failed save never opens a modal the user would then have to dismiss. The dirty signal reused is
+the same `isDirty` (`computeIsDirty`) that drives the **Save** button, so the two never diverge
+(header edits, line edits, and `additionalDirtyState` all count). The logic is extracted into
+the exported, unit-tested `maybeSaveBeforeProcess({ saveBeforeProcesses, isDirty, handleSave })`
+helper, which returns `true` to proceed or `false` to abort.
+
+**Files changed:**
+- `tools/app-shell/src/components/contract-ui/DetailView.jsx` — new exported
+  `maybeSaveBeforeProcess` helper + process-button `onClick` now awaits it before dispatching.
+  Additive: no-op for any window that does not pass `saveBeforeProcesses`.
+- test: `tools/app-shell/src/components/contract-ui/__tests__/DetailView.dispatchProcessAction.vitest.jsx`
+  (four new cases: dirty+ok → runs, dirty+fail → aborts, not dirty → runs, no flag → never saves)
+
+### Manual verification (ETP-4542, Bloque 2)
+
+1. Open an existing asset, edit a header field so the form is dirty, then click
+   **Create Amortization**. Confirm the record is saved (no success toast) and the process runs.
+2. Clear a required field (or enter an invalid numeric value), then click **Create Amortization**.
+   Confirm the validation error toast appears and the process does **not** run.
+3. Open an asset without editing anything and click **Create Amortization**. Confirm the process
+   runs immediately with no extra save.
+4. On any window that does **not** set `saveBeforeProcesses` (e.g. sales-order), confirm process
+   buttons still run with no save-first step.
+
+## ETP-4542 (Bloque 2, Bug 6) — process button loading state
+
+While a header process is running in the backend (e.g. **Create Amortization**), its toolbar
+button now shows a spinner + a **"Generating…"** label (`ui('generating')`, already present in
+`en_US` / `es_ES` / `es_AR` as "Generating…" / "Generando…") and is **disabled** so the user
+cannot fire the same process twice. When the process finishes — **success or error** — the button
+returns to its normal label and enabled state.
+
+This is a **separate opt-in flag** from `saveBeforeProcesses` (the two behaviors are distinct and
+were deliberately not conflated). The Assets wrapper passes both.
+
+**How it works:**
+- `useEntity.js` tracks a `runningProcess` state holding the id of the header process whose POST
+  is in flight (`process.columnName ?? process.name`), or `null` when idle. It is set at the start
+  of `handleProcess` and cleared in a `finally` block, so both the success and error paths reset it.
+  Using a per-process id (not a global boolean) gives per-button granularity: only the clicked
+  button reflects the loading state, not every process button in the toolbar. Exposed on the hook
+  return alongside `isSaving`.
+- `DetailView.jsx` gained a new opt-in prop **`showProcessLoadingState`** (default `false`). Only
+  when it is set does a header process button whose `columnName ?? name` matches `hook.runningProcess`
+  render the spinner (`Loader2`, `data-testid="Loader2__process-running"`) + `ui('generating')` and
+  become `disabled`. Windows that don't pass the flag are completely unchanged (normal label, no
+  extra disabled state) — the running state is still tracked in the hook (harmless) but never shown.
+- The spinner turns on when the real POST starts inside `handleProcess`, not when the click opens a
+  confirm modal or param dialog. If the user **cancels** a confirm/param modal, `handleProcess` never
+  runs, so `runningProcess` never gets set — the button never gets stuck in the loading state.
+
+**Files changed:**
+- `tools/app-shell/src/hooks/useEntity.js` — new `runningProcess` state, set/cleared in
+  `handleProcess` (set at start, cleared in `finally`), exposed on the hook return.
+- `tools/app-shell/src/components/contract-ui/DetailView.jsx` — new opt-in `showProcessLoadingState`
+  prop; header process button conditionally renders spinner + "Generating…" + `disabled` while its
+  process runs. Additive: no-op for any window that does not pass the flag.
+- `tools/app-shell/src/windows/custom/assets/index.jsx` — passes `showProcessLoadingState` next to
+  `saveBeforeProcesses`.
+- test: `tools/app-shell/src/components/contract-ui/__tests__/DetailView.processLoadingState.vitest.jsx`
+  (flag on + running → disabled + spinner + "generating"; finished → normal; flag off → never shows;
+  double-click blocked; different running process → button stays normal).
+- i18n: reuses the existing `generating` key (`Generating…` / `Generando…`) in all three locales — no
+  new key added.
+
+### Manual verification (ETP-4542, Bloque 2, Bug 6)
+
+1. Open an existing asset and click **Create Amortization**. While the backend runs, confirm the
+   button shows the spinner + "Generando…" and is greyed out / not clickable.
+2. On success, confirm the button returns to "Create Amortization" and is clickable again.
+3. Force an error (e.g. backend rejects), confirm the button also returns to normal (not stuck).
+4. Rapidly double-click **Create Amortization**; confirm only one process request is sent.
+5. Cancel the confirm/param modal (if the process has one) and confirm the button never enters the
+   loading state.
+6. On any window that does **not** set `showProcessLoadingState` (e.g. sales-order), confirm process
+   buttons show no spinner and behave exactly as before.
