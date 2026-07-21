@@ -64,16 +64,18 @@ describe('NewPaymentEntryModal (step 2 — Nuevo cobro/pago)', () => {
     assert.match(src, /balance\.equalize/);
   });
 
-  // ETP-4504: the only excess resolution is leaving customer credit; the
-  // "refund"/"dar vuelto" path was removed, and the credit option is gated on
-  // canLeaveCredit (receipt in the org currency).
-  it('offers only the "leave credit" option on excess (refund removed) and an inline error otherwise', () => {
+  // ETP-4504 (Option C): both excess resolutions — "Dejar a crédito" and
+  // "Dar vuelto"/refund — render on the SAME gate (canLeaveCredit: a receipt whose
+  // invoice is in the org currency); otherwise only the inline error shows.
+  it('offers both the "leave credit" and "refund" options on excess and an inline error otherwise', () => {
     assert.match(src, /ui\('cpLeaveCredit'\)/);
     assert.match(src, /ui\('cpExcessInline'/);
-    // the refund / "dar vuelto" option must be gone
-    assert.doesNotMatch(src, /cpGiveChange/);
-    // the excess band is gated on canLeaveCredit
+    // the refund / "dar vuelto" option is present again
+    assert.match(src, /ui\('cpGiveChange'\)/);
+    assert.match(src, /cp-excess-refund/);
+    // both cards share the canLeaveCredit gate (credit) / canRefund (refund)
     assert.match(src, /canLeaveCredit/);
+    assert.match(src, /balance\.canRefund/);
   });
 
   // ETP-4504: multi-currency conversion — conversion fields + amount-in-account

@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
-// ─── es-ES plain number helpers (no currency symbol) ─────────────────────────
-// The amount input shows a grouped es-ES number ("6.420,00") with the "€" suffix
-// rendered separately, mirroring the design prototype's `fmtPlain`.
+// ─── en-US plain number helpers (no currency symbol) ─────────────────────────
+// The amount input shows a grouped en-US number ("6,420.00") with the currency suffix rendered
+// separately, matching the app-wide formatCurrency() format used everywhere else in the modal.
 
 const TOLERANCE = 0.001;
 const STEP = 100;
@@ -16,32 +16,32 @@ export function round2(n) {
   return Math.round((Number(n) || 0) * 100) / 100;
 }
 
-/** Inserts es-ES thousands separators without regex backtracking (ReDoS-safe). */
+/** Inserts en-US thousands separators without regex backtracking (ReDoS-safe). */
 function groupThousands(intStr) {
   let out = '';
   for (let i = 0; i < intStr.length; i += 1) {
     if (i > 0 && (intStr.length - i) % 3 === 0) {
-      out += '.';
+      out += ',';
     }
     out += intStr[i];
   }
   return out;
 }
 
-/** Formats a number as a plain es-ES amount: "6.420,00" (no symbol). */
+/** Formats a number as a plain en-US amount: "6,420.00" (no symbol). */
 export function formatPlain(n) {
   const value = Number.isFinite(n) ? n : 0;
   const neg = value < 0;
   const [intPart, decPart] = Math.abs(value).toFixed(2).split('.');
-  return `${neg ? '-' : ''}${groupThousands(intPart)},${decPart}`;
+  return `${neg ? '-' : ''}${groupThousands(intPart)}.${decPart}`;
 }
 
-/** Parses an es-ES amount string ("6.420,00") into a number, or null if blank/invalid. */
+/** Parses an en-US amount string ("6,420.00") into a number, or null if blank/invalid. */
 export function parsePlain(str) {
   if (str == null) return null;
   const trimmed = String(str).trim();
   if (trimmed === '') return null;
-  const normalized = trimmed.replace(/\./g, '').replace(',', '.');
+  const normalized = trimmed.replace(/,/g, '');
   const n = parseFloat(normalized);
   return Number.isNaN(n) ? null : n;
 }

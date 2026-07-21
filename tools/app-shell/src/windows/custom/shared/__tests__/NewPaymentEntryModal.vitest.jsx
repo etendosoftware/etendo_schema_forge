@@ -224,7 +224,7 @@ describe('NewPaymentEntryModal', () => {
       // payment.accountId is used directly (no default-account heuristic needed).
       expect(screen.getByTestId('field-account-chip')).toHaveTextContent('Main Account');
       // balance.onAmountChange(formatPlain(payment.amount)) prefills the cash amount.
-      await waitFor(() => expect(screen.getByTestId('cp-amount-input')).toHaveValue('500,00'));
+      await waitFor(() => expect(screen.getByTestId('cp-amount-input')).toHaveValue('500.00'));
     });
 
     it('shows the edit-payment title for dir "out"', () => {
@@ -271,9 +271,9 @@ describe('NewPaymentEntryModal', () => {
   });
 
   describe('amount field', () => {
-    it('prefills the amount input with the outstanding total (es-ES)', () => {
+    it('prefills the amount input with the outstanding total (en-US)', () => {
       renderModal({ outstanding: 6420 });
-      expect(screen.getByTestId('cp-amount-input')).toHaveValue('6.420,00');
+      expect(screen.getByTestId('cp-amount-input')).toHaveValue('6,420.00');
     });
   });
 
@@ -329,8 +329,8 @@ describe('NewPaymentEntryModal', () => {
     });
 
     // Regression (ETP-4331 follow-up): user report — "Nuevo cobro" for an invoice
-    // with 25,30€ pending; selecting a "Saldo a favor" line that covers it in full
-    // left cash ("Importe") at 0,00€ and "Diferencia" at 0,00€ (a fully exact,
+    // with 25.30€ pending; selecting a "Saldo a favor" line that covers it in full
+    // left cash ("Importe") at 0.00€ and "Diferencia" at 0.00€ (a fully exact,
     // valid reconciliation), yet "Confirmar" stayed disabled. Root cause:
     // missingRequired gated on balance.amount (cash only), which is legitimately 0
     // once a credit line covers 100% of the invoice by design. Fixed to gate on
@@ -347,12 +347,12 @@ describe('NewPaymentEntryModal', () => {
 
       // Selecting the line auto-caps usage to min(avail, need) = 25.30 and drops
       // the cash amount to max(0, applied - usedByOthers - use) = 0 — exactly the
-      // repro: cash "Importe" left at 0,00€, credit fully covering the invoice.
+      // repro: cash "Importe" left at 0.00€, credit fully covering the invoice.
       const input = await within(row).findByTestId('cp-credit-use-s1');
-      await waitFor(() => expect(input).toHaveValue('25,30'));
-      await waitFor(() => expect(screen.getByTestId('cp-amount-input')).toHaveValue('0,00'));
+      await waitFor(() => expect(input).toHaveValue('25.30'));
+      await waitFor(() => expect(screen.getByTestId('cp-amount-input')).toHaveValue('0.00'));
 
-      // Balance is exact — no missing, no excess — "Diferencia" shows 0,00 €.
+      // Balance is exact — no missing, no excess — "Diferencia" shows 0.00 €.
       expect(screen.getByText('cpDifference')).toBeInTheDocument();
       expect(screen.queryByText('cpMissing')).not.toBeInTheDocument();
       expect(screen.queryByText('cpExcess')).not.toBeInTheDocument();
@@ -373,17 +373,17 @@ describe('NewPaymentEntryModal', () => {
       fireEvent.click(row);
       // selecting caps "use" to the invoice need (50, since avail=500 > need).
       const input = await within(row).findByTestId('cp-credit-use-s1');
-      await waitFor(() => expect(input).toHaveValue('50,00'));
+      await waitFor(() => expect(input).toHaveValue('50.00'));
 
       // typing a value within [0, avail] is reflected exactly after blur.
-      fireEvent.change(input, { target: { value: '150,00' } });
+      fireEvent.change(input, { target: { value: '150.00' } });
       fireEvent.blur(input);
-      await waitFor(() => expect(input).toHaveValue('150,00'));
+      await waitFor(() => expect(input).toHaveValue('150.00'));
 
       // typing a negative value clamps to 0.
       fireEvent.change(input, { target: { value: '-100' } });
       fireEvent.blur(input);
-      await waitFor(() => expect(input).toHaveValue('0,00'));
+      await waitFor(() => expect(input).toHaveValue('0.00'));
     });
 
     it('clamps the "use" amount at avail when the typed value exceeds the available credit', async () => {
@@ -395,12 +395,12 @@ describe('NewPaymentEntryModal', () => {
       fireEvent.click(row);
       // selecting caps "use" to avail (120), since need (1000) > avail.
       const input = await within(row).findByTestId('cp-credit-use-s1');
-      await waitFor(() => expect(input).toHaveValue('120,00'));
+      await waitFor(() => expect(input).toHaveValue('120.00'));
 
-      fireEvent.change(input, { target: { value: '220,00' } });
+      fireEvent.change(input, { target: { value: '220.00' } });
       fireEvent.blur(input);
       // 220 would exceed avail (120) — clamps down to 120 on blur.
-      await waitFor(() => expect(input).toHaveValue('120,00'));
+      await waitFor(() => expect(input).toHaveValue('120.00'));
     });
 
     it('does not toggle the row off when clicking inside the "use" amount container (stopPropagation)', async () => {
@@ -1015,7 +1015,7 @@ describe('NewPaymentEntryModal', () => {
       await screen.findByTestId('cp-conversion-fields');
       // Consume the credit: it caps to min(avail 40, need 100) = 40 and drops cash to 60.
       fireEvent.click(await screen.findByTestId('cp-credit-row-s1'));
-      await waitFor(() => expect(screen.getByTestId('cp-amount-input')).toHaveValue('60,00'));
+      await waitFor(() => expect(screen.getByTestId('cp-amount-input')).toHaveValue('60.00'));
 
       // Amount-in-account tracks the CASH portion only: 60 × 0.92 = 55.20 (account currency).
       await waitFor(() => expect(screen.getByTestId('cp-amount-in-account')).toHaveTextContent(/55[.,]20/));
