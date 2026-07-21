@@ -17655,6 +17655,7 @@
     "validationRequiredField": "The field \"{field}\" is required.",
     "validationRequiredGeneric": "A required field is missing.",
     "validationDuplicateRecord": "A record with the same value already exists.",
+    "validationDuplicateIdentifier": "A record with this identifier already exists. Please enter a different one.",
     "validationError": "Validation error",
     "validationFieldGeneric": "Field",
     "validationFieldSearchKey": "Search Key",

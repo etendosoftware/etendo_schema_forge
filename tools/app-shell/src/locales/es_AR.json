@@ -17486,6 +17486,7 @@
     "validationRequiredField": "El campo \"{field}\" es obligatorio.",
     "validationRequiredGeneric": "Falta un campo obligatorio.",
     "validationDuplicateRecord": "Ya existe un registro con el mismo valor.",
+    "validationDuplicateIdentifier": "Ya existe un registro con este identificador. Por favor, ingresá uno diferente.",
     "validationError": "Error de validación",
     "validationFieldGeneric": "Campo",
     "validationFieldSearchKey": "Identificador",
