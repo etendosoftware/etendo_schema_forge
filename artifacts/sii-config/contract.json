@@ -1,8 +1,8 @@
 {
-  "version": "0.3.0",
+  "version": "0.4.0",
   "generatedAt": "2026-04-28T16:08:39.756Z",
-  "updatedAt": "2026-06-29T12:09:17.864Z",
-  "checksum": "b15c1d1763c3ce05",
+  "updatedAt": "2026-07-21T18:54:47.728Z",
+  "checksum": "3499dd205a5c6052",
   "frontendContract": {
     "window": {
       "id": "C1D3A2A017AC4B82B9FEE6F4D2A0C55A",
@@ -35,7 +35,11 @@
               "type": "computed",
               "source": "N"
             },
-            "defaultValue": "N"
+            "defaultValue": "N",
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            }
           },
           {
             "name": "fechaAcogidaSII",
@@ -48,6 +52,9 @@
             "required": false,
             "grid": false,
             "form": true,
+            "validation": {
+              "maxLength": 19
+            },
             "displayLogic": {
               "raw": "@Insiisystem@",
               "evaluable": true
@@ -70,6 +77,10 @@
               "source": "8"
             },
             "defaultValue": "8",
+            "validation": {
+              "required": true,
+              "maxLength": 2
+            },
             "displayLogic": {
               "raw": "@Insiisystem@",
               "evaluable": true
@@ -92,6 +103,10 @@
               "source": "0"
             },
             "defaultValue": "0",
+            "validation": {
+              "required": true,
+              "maxLength": 2
+            },
             "displayLogic": {
               "raw": "@Insiisystem@",
               "evaluable": true
@@ -114,6 +129,10 @@
               "source": "0"
             },
             "defaultValue": "0",
+            "validation": {
+              "required": true,
+              "maxLength": 2
+            },
             "displayLogic": {
               "raw": "@Insiisystem@",
               "evaluable": true
@@ -136,6 +155,10 @@
               "source": "Y"
             },
             "defaultValue": "Y",
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            },
             "displayLogic": {
               "raw": "@Insiisystem@",
               "evaluable": true
@@ -158,6 +181,10 @@
               "source": "N"
             },
             "defaultValue": "N",
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            },
             "displayLogic": {
               "raw": "@Insiisystem@",
               "evaluable": true
@@ -180,6 +207,10 @@
               "source": "N"
             },
             "defaultValue": "N",
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            },
             "displayLogic": {
               "raw": "@Insiisystem@ & @Taxtype@='IVA'",
               "evaluable": true
@@ -201,7 +232,11 @@
               "type": "computed",
               "source": "N"
             },
-            "defaultValue": "N"
+            "defaultValue": "N",
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            }
           },
           {
             "name": "monitordate",
@@ -219,6 +254,9 @@
               "source": "01-01-2017"
             },
             "defaultValue": "01-01-2017",
+            "validation": {
+              "maxLength": 19
+            },
             "displayLogic": {
               "raw": "@Insiisystem@",
               "evaluable": true
@@ -241,6 +279,10 @@
               "source": "N"
             },
             "defaultValue": "N",
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            },
             "displayLogic": {
               "raw": "@Insiisystem@",
               "evaluable": true
@@ -256,7 +298,10 @@
             "visibility": "editable",
             "required": false,
             "grid": false,
-            "form": true
+            "form": true,
+            "validation": {
+              "maxLength": 15
+            }
           },
           {
             "name": "validHash",
@@ -274,7 +319,11 @@
               "type": "computed",
               "source": "N"
             },
-            "defaultValue": "N"
+            "defaultValue": "N",
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            }
           },
           {
             "name": "cIF",
@@ -286,7 +335,10 @@
             "visibility": "readOnly",
             "required": false,
             "grid": false,
-            "form": true
+            "form": true,
+            "validation": {
+              "maxLength": 20
+            }
           },
           {
             "name": "conexiones",
@@ -298,7 +350,10 @@
             "visibility": "readOnly",
             "required": false,
             "grid": false,
-            "form": true
+            "form": true,
+            "validation": {
+              "maxLength": 0
+            }
           },
           {
             "name": "cashVAT",
@@ -310,7 +365,10 @@
             "visibility": "editable",
             "required": false,
             "grid": false,
-            "form": true
+            "form": true,
+            "validation": {
+              "maxLength": 0
+            }
           },
           {
             "name": "lastQueryBook",
@@ -338,7 +396,10 @@
                   "es_ES": "Recibidas"
                 }
               }
-            ]
+            ],
+            "validation": {
+              "maxLength": 60
+            }
           },
           {
             "name": "lastQueryExercise",
@@ -350,7 +411,10 @@
             "visibility": "readOnly",
             "required": false,
             "grid": false,
-            "form": true
+            "form": true,
+            "validation": {
+              "maxLength": 4
+            }
           },
           {
             "name": "lastQueryPeriod",
@@ -448,7 +512,10 @@
                   "es_ES": "9 - Septiembre"
                 }
               }
-            ]
+            ],
+            "validation": {
+              "maxLength": 60
+            }
           },
           {
             "name": "sinceJanuary2017",
@@ -466,7 +533,11 @@
               "type": "computed",
               "source": "N"
             },
-            "defaultValue": "N"
+            "defaultValue": "N",
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            }
           }
         ],
         "searchableFields": [],
@@ -579,7 +650,11 @@
               "type": "computed",
               "source": "Y"
             },
-            "defaultValue": "Y"
+            "defaultValue": "Y",
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            }
           },
           {
             "name": "logs",
@@ -591,7 +666,10 @@
             "visibility": "readOnly",
             "required": false,
             "grid": false,
-            "form": true
+            "form": true,
+            "validation": {
+              "maxLength": 1000000
+            }
           }
         ],
         "searchableFields": [],

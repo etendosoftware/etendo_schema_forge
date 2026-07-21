@@ -1,8 +1,8 @@
 {
-  "version": "0.2.0",
+  "version": "0.3.0",
   "generatedAt": "2026-04-28T16:08:39.756Z",
-  "updatedAt": "2026-07-14T12:55:38.681Z",
-  "checksum": "064b693fa50d1444",
+  "updatedAt": "2026-07-21T18:54:48.255Z",
+  "checksum": "82c2eff8cf66a81e",
   "frontendContract": {
     "window": {
       "id": "C327DE215AC945F69363905840118177",
@@ -56,6 +56,9 @@
                 "name": "Navarra (Hacienda Foral de Navarra)"
               }
             ],
+            "validation": {
+              "maxLength": 60
+            },
             "validationRule": {
               "code": "AD_Ref_List.Value IN ('ARABA', 'BIZKAIA', 'GIPUZKOA')",
               "contextParams": [],
@@ -78,7 +81,11 @@
               "type": "computed",
               "source": "@#Date@"
             },
-            "defaultValue": "@#Date@"
+            "defaultValue": "@#Date@",
+            "validation": {
+              "required": true,
+              "maxLength": 19
+            }
           },
           {
             "name": "productionEnv",
@@ -96,7 +103,11 @@
               "type": "computed",
               "source": "Y"
             },
-            "defaultValue": "Y"
+            "defaultValue": "Y",
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            }
           },
           {
             "name": "invoiceDescription",
@@ -114,7 +125,11 @@
               "type": "computed",
               "source": "Descripcion Factura"
             },
-            "defaultValue": "Descripcion Factura"
+            "defaultValue": "Descripcion Factura",
+            "validation": {
+              "required": true,
+              "maxLength": 60
+            }
           },
           {
             "name": "uSEAsproductDesc",
@@ -132,7 +147,11 @@
               "type": "computed",
               "source": "N"
             },
-            "defaultValue": "N"
+            "defaultValue": "N",
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            }
           },
           {
             "name": "autoSendInvoices",
@@ -150,7 +169,11 @@
               "type": "computed",
               "source": "N"
             },
-            "defaultValue": "N"
+            "defaultValue": "N",
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            }
           },
           {
             "name": "jasperreportPath",
@@ -162,7 +185,10 @@
             "visibility": "editable",
             "required": false,
             "grid": false,
-            "form": true
+            "form": true,
+            "validation": {
+              "maxLength": 500
+            }
           },
           {
             "name": "validatePreviousInvoice",
@@ -180,7 +206,11 @@
               "type": "computed",
               "source": "N"
             },
-            "defaultValue": "N"
+            "defaultValue": "N",
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            }
           }
         ],
         "searchableFields": [],

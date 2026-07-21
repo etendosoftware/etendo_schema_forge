@@ -1,8 +1,8 @@
 {
-  "version": "0.10.0",
+  "version": "0.11.0",
   "generatedAt": "2026-04-29T19:05:52.312Z",
-  "updatedAt": "2026-07-14T12:35:21.921Z",
-  "checksum": "eee82f93d84a16a0",
+  "updatedAt": "2026-07-21T18:54:45.643Z",
+  "checksum": "45271ccb71ed77cd",
   "frontendContract": {
     "window": {
       "id": "E547CE89D4C04429B6340FFA44E70716",
@@ -103,6 +103,10 @@
               "type": "sequence",
               "source": "documentType.sequence"
             },
+            "validation": {
+              "required": true,
+              "maxLength": 30
+            },
             "readOnlyLogic": {
               "raw": "@Processed@='Y'",
               "evaluable": true,
@@ -119,7 +123,10 @@
             "visibility": "readOnly",
             "required": false,
             "grid": false,
-            "form": false
+            "form": false,
+            "validation": {
+              "maxLength": 40
+            }
           },
           {
             "name": "paymentDate",
@@ -137,6 +144,9 @@
               "source": "@#Date@"
             },
             "defaultValue": "@#Date@",
+            "validation": {
+              "maxLength": 19
+            },
             "callout": {
               "className": "org.openbravo.erpCommon.ad_callouts.SE_Payment_MultiCurrency"
             },
@@ -159,6 +169,9 @@
             "form": false,
             "reference": "BPartner",
             "inputMode": "search",
+            "validation": {
+              "maxLength": 32
+            },
             "callout": {
               "className": "org.openbravo.erpCommon.ad_callouts.SE_Payment_BPartner"
             },
@@ -184,7 +197,10 @@
             "visibility": "editable",
             "required": false,
             "grid": false,
-            "form": false
+            "form": false,
+            "validation": {
+              "maxLength": 255
+            }
           },
           {
             "name": "paymentMethod",
@@ -200,6 +216,10 @@
             "sourceRequired": true,
             "reference": "Paymentmethod",
             "inputMode": "search",
+            "validation": {
+              "required": true,
+              "maxLength": 32
+            },
             "validationRule": {
               "code": "EXISTS (SELECT 1 FROM FIN_FinAcc_PaymentMethod fapm WHERE FIN_PaymentMethod.FIN_PaymentMethod_ID=fapm.FIN_PaymentMethod_ID\nAND fapm.isActive='Y'\nAND fapm.Payin_Allow = (SELECT CASE WHEN '@FIN_ISRECEIPT@'='Y' THEN 'Y' ELSE fapm.Payin_Allow END FROM DUAL)\nAND fapm.Payout_Allow = (SELECT CASE WHEN '@FIN_ISRECEIPT@'='N' THEN 'Y' ELSE fapm.Payout_Allow END FROM DUAL))",
               "contextParams": [],
@@ -233,6 +253,10 @@
               "source": "0"
             },
             "defaultValue": "0",
+            "validation": {
+              "required": true,
+              "maxLength": 22
+            },
             "callout": {
               "className": "org.openbravo.erpCommon.ad_callouts.SE_Payment_MultiCurrency"
             },
@@ -260,6 +284,10 @@
             "dependsOn": {
               "field": "paymentMethod",
               "filterKey": "Fin_Paymentmethod_ID"
+            },
+            "validation": {
+              "required": true,
+              "maxLength": 32
             },
             "validationRule": {
               "code": "Fin_Financial_Account_ID IN (SELECT Fin_Financial_Account_ID FROM Fin_Finacc_Paymentmethod WHERE Fin_Paymentmethod_ID=@Fin_Paymentmethod_ID@ AND (CASE WHEN @IsReceipt@='Y' THEN Payin_Allow  ELSE Payout_Allow END)='Y' AND isActive='Y')",
@@ -297,6 +325,10 @@
               "filterKey": "FIN_Financial_Account_ID"
             },
             "section": "principal",
+            "validation": {
+              "required": true,
+              "maxLength": 32
+            },
             "validationRule": {
               "code": "c_currency.c_currency_id in (select c_currency_id from fin_financial_account where fin_financial_account_id = @FIN_Financial_Account_ID@) \nOR \nexists (select 1 from fin_finacc_paymentmethod where fin_financial_account_id = @FIN_Financial_Account_ID@ and fin_paymentmethod_id = @FIN_PaymentMethod_ID@ and isactive='Y' and  (\n(@IsReceipt@ = 'Y' and payin_allow ='Y' and payin_ismulticurrency='Y')\nOR\n(@IsReceipt@ = 'N' and payout_allow ='Y' and payout_ismulticurrency='Y')\n))",
               "contextParams": [],
@@ -332,6 +364,9 @@
               "source": "P"
             },
             "defaultValue": "P",
+            "validation": {
+              "maxLength": 60
+            },
             "displayLogic": {
               "raw": "@Processed@='Y' & @Status@!'RPVOID' & @FIN_Rev_Payment_ID@ = ''",
               "evaluable": true
@@ -412,6 +447,10 @@
               }
             ],
             "defaultValue": "RPAP",
+            "validation": {
+              "required": true,
+              "maxLength": 40
+            },
             "validationRule": {
               "code": "(((@Isreceipt@='Y') AND Value not IN  ('PPM','PWNC')) OR ((@Isreceipt@='N') AND Value not IN ('RPR','RDNC')))",
               "contextParams": [],
@@ -436,7 +475,11 @@
               "type": "fromConfig",
               "source": "new Date()"
             },
-            "defaultValue": "SYSDATE"
+            "defaultValue": "SYSDATE",
+            "validation": {
+              "required": true,
+              "maxLength": 19
+            }
           },
           {
             "name": "updated",
@@ -454,7 +497,11 @@
               "type": "fromConfig",
               "source": "new Date()"
             },
-            "defaultValue": "SYSDATE"
+            "defaultValue": "SYSDATE",
+            "validation": {
+              "required": true,
+              "maxLength": 19
+            }
           },
           {
             "name": "etblkpAccountingstatus",
@@ -600,7 +647,11 @@
                 }
               }
             ],
-            "defaultValue": "N"
+            "defaultValue": "N",
+            "validation": {
+              "required": true,
+              "maxLength": 60
+            }
           },
           {
             "name": "etblkpBulkposting",
@@ -619,6 +670,10 @@
               "source": "N"
             },
             "defaultValue": "N",
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            },
             "displayLogic": {
               "raw": "@Status@!'RPAE' & @Status@!'RPVOID' & @Processed@='Y' & @#ShowAcct@='Y'",
               "evaluable": false,
@@ -643,6 +698,10 @@
               "source": "N"
             },
             "defaultValue": "N",
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            },
             "displayLogic": {
               "raw": "@Processed@='Y' & @Status@!'RPVOID'",
               "evaluable": true
@@ -659,6 +718,9 @@
             "required": false,
             "grid": false,
             "form": false,
+            "validation": {
+              "maxLength": 1
+            },
             "displayLogic": {
               "raw": "@Processed@='Y' & @Status@!'RPVOID'",
               "evaluable": true
@@ -761,7 +823,10 @@
             "visibility": "readOnly",
             "required": false,
             "grid": true,
-            "form": true
+            "form": true,
+            "validation": {
+              "maxLength": 0
+            }
           },
           {
             "name": "expected",
@@ -773,7 +838,10 @@
             "visibility": "readOnly",
             "required": false,
             "grid": false,
-            "form": false
+            "form": false,
+            "validation": {
+              "maxLength": 0
+            }
           },
           {
             "name": "amount",
@@ -791,7 +859,11 @@
               "type": "computed",
               "source": "0"
             },
-            "defaultValue": "0"
+            "defaultValue": "0",
+            "validation": {
+              "required": true,
+              "maxLength": 12
+            }
           },
           {
             "name": "invoicePaymentSchedule",
@@ -806,6 +878,9 @@
             "form": true,
             "reference": "Payment_Schedule",
             "inputMode": "search",
+            "validation": {
+              "maxLength": 32
+            },
             "displayLogic": {
               "raw": "@FIN_Payment_Schedule_Invoice@!''",
               "evaluable": true

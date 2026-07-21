@@ -1,8 +1,8 @@
 {
-  "version": "0.13.1",
+  "version": "0.14.0",
   "generatedAt": "2026-04-29T18:11:26.703Z",
-  "updatedAt": "2026-06-09T15:22:56.654Z",
-  "checksum": "06c1fdafac2d7a61",
+  "updatedAt": "2026-07-21T18:54:46.484Z",
+  "checksum": "1ee00082a8db1933",
   "frontendContract": {
     "window": {
       "id": "144",
@@ -46,7 +46,11 @@
             "form": true,
             "sourceRequired": true,
             "section": "principal",
-            "seq": 1
+            "seq": 1,
+            "validation": {
+              "required": true,
+              "maxLength": 40
+            }
           },
           {
             "name": "name",
@@ -61,7 +65,11 @@
             "form": true,
             "sourceRequired": true,
             "section": "principal",
-            "seq": 2
+            "seq": 2,
+            "validation": {
+              "required": true,
+              "maxLength": 60
+            }
           },
           {
             "name": "description",
@@ -78,7 +86,10 @@
             "seq": 3,
             "span": 2,
             "rows": 1,
-            "explicitType": true
+            "explicitType": true,
+            "validation": {
+              "maxLength": 255
+            }
           },
           {
             "name": "default",
@@ -93,7 +104,11 @@
             "form": true,
             "sourceRequired": true,
             "section": "principal",
-            "seq": 4
+            "seq": 4,
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            }
           },
           {
             "name": "summaryLevel",
@@ -113,7 +128,11 @@
             },
             "defaultValue": "N",
             "section": "principal",
-            "seq": 5
+            "seq": 5,
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            }
           }
         ],
         "searchableFields": [
@@ -150,7 +169,11 @@
             "sourceRequired": true,
             "reference": "ValidCombination",
             "inputMode": "selector",
-            "seq": 1
+            "seq": 1,
+            "validation": {
+              "required": true,
+              "maxLength": 32
+            }
           },
           {
             "name": "productExpense",
@@ -167,7 +190,11 @@
             "reference": "ValidCombination",
             "inputMode": "selector",
             "seq": 2,
-            "grow": true
+            "grow": true,
+            "validation": {
+              "required": true,
+              "maxLength": 32
+            }
           },
           {
             "name": "productRevenue",
@@ -184,7 +211,11 @@
             "reference": "ValidCombination",
             "inputMode": "selector",
             "seq": 3,
-            "grow": true
+            "grow": true,
+            "validation": {
+              "required": true,
+              "maxLength": 32
+            }
           },
           {
             "name": "productCOGS",
@@ -201,7 +232,11 @@
             "reference": "ValidCombination",
             "inputMode": "selector",
             "seq": 4,
-            "grow": true
+            "grow": true,
+            "validation": {
+              "required": true,
+              "maxLength": 32
+            }
           }
         ],
         "searchableFields": [],
