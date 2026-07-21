@@ -143,7 +143,8 @@ export async function ensureVendorSetup(page, { navigateTo }) {
 }
 
 /**
- * Re-pick the currently displayed (or first) option of an EntityForm Select.
+ * Re-pick the currently displayed (or first) option of an EntityForm Select,
+ * but ONLY when the field is not already holding a real, valid value.
  *
  * Needed when a callout CLEARS a field's value in the editing state while the
  * shadcn Select keeps displaying the stale label (uncontrolled→controlled):
