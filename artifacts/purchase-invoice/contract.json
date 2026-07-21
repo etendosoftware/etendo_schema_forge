@@ -1,8 +1,8 @@
 {
-  "version": "0.73.0",
+  "version": "0.74.0",
   "generatedAt": "2026-04-30T15:42:46.722Z",
-  "updatedAt": "2026-07-21T11:55:43.244Z",
-  "checksum": "3059fd78b7487e2f",
+  "updatedAt": "2026-07-21T12:54:46.277Z",
+  "checksum": "10f4281a316da8f8",
   "frontendContract": {
     "window": {
       "id": "183",
@@ -5972,7 +5972,8 @@
             "column": "M_Product_ID",
             "type": "foreignKey",
             "visibility": "editable",
-            "required": false
+            "required": false,
+            "order": 1
           },
           {
             "name": "description",
@@ -5980,7 +5981,8 @@
             "column": "Description",
             "type": "text",
             "visibility": "editable",
-            "required": false
+            "required": false,
+            "order": 2
           },
           {
             "name": "invoicedQuantity",
@@ -5988,7 +5990,8 @@
             "column": "QtyInvoiced",
             "type": "quantity",
             "visibility": "editable",
-            "required": true
+            "required": true,
+            "order": 3
           },
           {
             "name": "listPrice",
@@ -5996,7 +5999,8 @@
             "column": "PriceList",
             "type": "price",
             "visibility": "editable",
-            "required": true
+            "required": true,
+            "order": 4
           },
           {
             "name": "etgoDiscount",
@@ -6004,7 +6008,8 @@
             "column": "EM_Etgo_Discount",
             "type": "decimal",
             "visibility": "editable",
-            "required": false
+            "required": false,
+            "order": 5
           },
           {
             "name": "tax",
@@ -6012,7 +6017,8 @@
             "column": "C_Tax_ID",
             "type": "foreignKey",
             "visibility": "editable",
-            "required": false
+            "required": false,
+            "order": 6
           },
           {
             "name": "lineNo",
@@ -6444,7 +6450,8 @@
             "column": "AD_Client_ID",
             "type": "foreignKey",
             "visibility": "system",
-            "required": true
+            "required": true,
+            "order": 1
           },
           {
             "name": "organization",
@@ -6452,7 +6459,8 @@
             "column": "AD_Org_ID",
             "type": "foreignKey",
             "visibility": "system",
-            "required": true
+            "required": true,
+            "order": 2
           },
           {
             "name": "invoiceLine",
@@ -6460,7 +6468,8 @@
             "column": "C_Invoiceline_ID",
             "type": "foreignKey",
             "visibility": "readOnly",
-            "required": true
+            "required": true,
+            "order": 3
           },
           {
             "name": "product",
@@ -6468,7 +6477,8 @@
             "column": "M_Product_ID",
             "type": "foreignKey",
             "visibility": "readOnly",
-            "required": true
+            "required": true,
+            "order": 4
           },
           {
             "name": "incoterms",
@@ -6476,7 +6486,8 @@
             "column": "C_Incoterms_ID",
             "type": "foreignKey",
             "visibility": "editable",
-            "required": false
+            "required": false,
+            "order": 5
           },
           {
             "name": "transactionType",
@@ -6484,7 +6495,8 @@
             "column": "Transaction_Type",
             "type": "enum",
             "visibility": "editable",
-            "required": false
+            "required": false,
+            "order": 6
           },
           {
             "name": "transportationType",
@@ -6492,7 +6504,8 @@
             "column": "Transportation_Type",
             "type": "enum",
             "visibility": "editable",
-            "required": false
+            "required": false,
+            "order": 7
           },
           {
             "name": "portAirport",
@@ -6500,7 +6513,8 @@
             "column": "Port",
             "type": "enum",
             "visibility": "editable",
-            "required": false
+            "required": false,
+            "order": 8
           },
           {
             "name": "statisticalRegime",
@@ -6508,7 +6522,8 @@
             "column": "Statistical_Regime",
             "type": "enum",
             "visibility": "editable",
-            "required": false
+            "required": false,
+            "order": 9
           },
           {
             "name": "origCountry",
@@ -6516,7 +6531,8 @@
             "column": "Orig_C_Country_ID",
             "type": "foreignKey",
             "visibility": "editable",
-            "required": false
+            "required": false,
+            "order": 10
           },
           {
             "name": "nC8Code",
@@ -6524,7 +6540,8 @@
             "column": "NC8_Code",
             "type": "string",
             "visibility": "editable",
-            "required": false
+            "required": false,
+            "order": 11
           },
           {
             "name": "netMassKg",
@@ -6532,7 +6549,8 @@
             "column": "Netmass_Kg",
             "type": "decimal",
             "visibility": "editable",
-            "required": false
+            "required": false,
+            "order": 12
           },
           {
             "name": "hasSuplementaryUnit",
@@ -6540,7 +6558,8 @@
             "column": "Hasunit",
             "type": "boolean",
             "visibility": "editable",
-            "required": true
+            "required": true,
+            "order": 13
           },
           {
             "name": "conversionRate",
@@ -6548,7 +6567,8 @@
             "column": "Conversion",
             "type": "amount",
             "visibility": "editable",
-            "required": false
+            "required": false,
+            "order": 14
           },
           {
             "name": "staticalValue",
@@ -6556,7 +6576,8 @@
             "column": "Statical_Amt",
             "type": "amount",
             "visibility": "editable",
-            "required": false
+            "required": false,
+            "order": 15
           },
           {
             "name": "supplementaryUOM",
@@ -6564,7 +6585,8 @@
             "column": "Intr_C_Uom_ID",
             "type": "foreignKey",
             "visibility": "editable",
-            "required": false
+            "required": false,
+            "order": 16
           },
           {
             "name": "active",
@@ -6572,7 +6594,8 @@
             "column": "Isactive",
             "type": "boolean",
             "visibility": "system",
-            "required": true
+            "required": true,
+            "order": 17
           },
           {
             "name": "creationDate",
@@ -6580,7 +6603,8 @@
             "column": "Created",
             "type": "dateTime",
             "visibility": "system",
-            "required": true
+            "required": true,
+            "order": 19
           },
           {
             "name": "createdBy",
@@ -6588,7 +6612,8 @@
             "column": "Createdby",
             "type": "foreignKey",
             "visibility": "system",
-            "required": true
+            "required": true,
+            "order": 20
           },
           {
             "name": "updated",
@@ -6596,7 +6621,8 @@
             "column": "Updated",
             "type": "dateTime",
             "visibility": "system",
-            "required": true
+            "required": true,
+            "order": 21
           },
           {
             "name": "updatedBy",
@@ -6604,7 +6630,8 @@
             "column": "Updatedby",
             "type": "foreignKey",
             "visibility": "system",
-            "required": true
+            "required": true,
+            "order": 22
           },
           {
             "name": "id",

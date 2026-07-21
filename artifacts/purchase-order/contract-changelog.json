@@ -1594,5 +1594,21 @@
     ],
     "author": "pipeline",
     "date": "2026-07-21"
+  },
+  {
+    "from": "0.38.0",
+    "to": "0.39.0",
+    "level": "additive",
+    "reasons": [
+      "Field \"product\" property \"order\" changed from \"undefined\" to \"1\" in backend (additive)",
+      "Field \"description\" property \"order\" changed from \"undefined\" to \"2\" in backend (additive)",
+      "Field \"orderedQuantity\" property \"order\" changed from \"undefined\" to \"3\" in backend (additive)",
+      "Field \"listPrice\" property \"order\" changed from \"undefined\" to \"4\" in backend (additive)",
+      "Field \"discount\" property \"order\" changed from \"undefined\" to \"5\" in backend (additive)",
+      "Field \"tax\" property \"order\" changed from \"undefined\" to \"6\" in backend (additive)",
+      "Field \"lineGrossAmount\" property \"order\" changed from \"undefined\" to \"7\" in backend (additive)"
+    ],
+    "author": "pipeline",
+    "date": "2026-07-21"
   }
 ]

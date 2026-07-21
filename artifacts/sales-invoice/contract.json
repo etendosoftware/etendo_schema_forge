@@ -1,8 +1,8 @@
 {
-  "version": "0.60.0",
+  "version": "0.61.0",
   "generatedAt": "2026-04-30T15:42:46.582Z",
-  "updatedAt": "2026-07-21T11:55:44.288Z",
-  "checksum": "2c7ba02f6ded03ec",
+  "updatedAt": "2026-07-21T12:54:47.111Z",
+  "checksum": "350887248337e9b8",
   "frontendContract": {
     "window": {
       "id": "167",
@@ -3665,7 +3665,8 @@
             "column": "M_Product_ID",
             "type": "foreignKey",
             "visibility": "editable",
-            "required": false
+            "required": false,
+            "order": 1
           },
           {
             "name": "description",
@@ -3673,7 +3674,8 @@
             "column": "Description",
             "type": "text",
             "visibility": "editable",
-            "required": false
+            "required": false,
+            "order": 2
           },
           {
             "name": "invoicedQuantity",
@@ -3681,7 +3683,8 @@
             "column": "QtyInvoiced",
             "type": "quantity",
             "visibility": "editable",
-            "required": true
+            "required": true,
+            "order": 3
           },
           {
             "name": "listPrice",
@@ -3689,7 +3692,8 @@
             "column": "PriceList",
             "type": "price",
             "visibility": "editable",
-            "required": true
+            "required": true,
+            "order": 4
           },
           {
             "name": "etgoDiscount",
@@ -3697,7 +3701,8 @@
             "column": "EM_Etgo_Discount",
             "type": "decimal",
             "visibility": "editable",
-            "required": false
+            "required": false,
+            "order": 5
           },
           {
             "name": "tax",
@@ -3705,7 +3710,8 @@
             "column": "C_Tax_ID",
             "type": "foreignKey",
             "visibility": "editable",
-            "required": false
+            "required": false,
+            "order": 6
           },
           {
             "name": "lineNo",
