@@ -127,5 +127,21 @@ describe('menuTree', () => {
 
       expect(data).toEqual(raw);
     });
+
+    // A 200 with a non-JSON body — e.g. a SPA-fallback index.html served when
+    // /webhooks/SFListMenu isn't actually backed by anything (no dev proxy, no
+    // real backend, as in most E2E test environments) — must reject rather than
+    // silently "succeed" with a raw string. Without this guard,
+    // collectAllowedIds(rawString?.tree) resolves to an empty-but-valid Set,
+    // which permanently hides every AD-backed menu item instead of failing
+    // open the way a real HTTP error does.
+    it('rejects when the 200 response body is not valid JSON (e.g. an HTML fallback page)', async () => {
+      globalThis.fetch.mockResolvedValue({
+        ok: true,
+        text: async () => '<!doctype html><html><body>App</body></html>',
+      });
+
+      await expect(fetchMenuTree()).rejects.toThrow(/non-JSON/);
+    });
   });
 });

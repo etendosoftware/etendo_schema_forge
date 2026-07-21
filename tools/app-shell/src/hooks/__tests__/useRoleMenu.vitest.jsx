@@ -108,9 +108,13 @@ describe('useRoleMenu', () => {
     rerender();
     expect(result.current).toBeNull();
 
-    // Flip back to authenticated: starts fetch B.
+    // Flip back to authenticated: starts fetch B. Must snap back to `undefined`
+    // (in-flight), not linger at the previous `null` from the unauthenticated
+    // branch — otherwise the sidebar would render fully unfiltered again during
+    // this window, reintroducing the flash-of-full-menu-then-shrink bug.
     mockUseAuth.mockReturnValue({ isAuthenticated: true });
     rerender();
+    expect(result.current).toBeUndefined();
     expect(mockFetchMenuTree).toHaveBeenCalledTimes(2);
 
     // B resolves first (out-of-order vs. A, which was started earlier).

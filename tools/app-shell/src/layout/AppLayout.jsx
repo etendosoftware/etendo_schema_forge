@@ -87,9 +87,14 @@ export default function AppLayout({ menuGroups }) {
   // the note in App.jsx. That's why role-filtering is applied here rather than
   // where menuGroups is originally built.
   const allowedIds = useRoleMenu();
-  // `undefined` = SFListMenu fetch still in flight — filter to empty so the sidebar
-  // grows in once real data arrives, instead of rendering the full menu and then
-  // shrinking it (see useRoleMenu.js for the full undefined/null/Set contract).
+  // `undefined` = SFListMenu fetch still in flight — pass an empty Set so
+  // filterMenuGroupsByAccess() fails closed for AD-backed items (any item
+  // carrying a windowId/processId/obuiappProcessId is hidden until the real
+  // Set arrives); items with none of those ids (dashboard, custom pages,
+  // installed apps) and the Favorites group are never filtered and stay
+  // visible throughout. This avoids the AD-backed part of the menu rendering
+  // fully, then shrinking, once real data arrives (see useRoleMenu.js for the
+  // full undefined/null/Set contract).
   const filteredMenuGroups = filterMenuGroupsByAccess(
     menuGroups,
     allowedIds === undefined ? new Set() : allowedIds

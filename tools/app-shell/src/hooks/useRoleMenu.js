@@ -24,6 +24,12 @@ export function useRoleMenu() {
       setAllowedIds(null);
       return undefined;
     }
+    // Reset to the in-flight state on every new authenticated fetch — otherwise a
+    // login (isAuthenticated flipping false -> true without a full page reload)
+    // would leave `allowedIds` at the previous `null` from the unauthenticated
+    // branch until this fetch resolves, re-enabling the unfiltered sidebar and
+    // reintroducing the flash-of-full-menu-then-shrink this hook exists to avoid.
+    setAllowedIds(undefined);
     let cancelled = false;
     fetchMenuTree()
       .then((data) => {

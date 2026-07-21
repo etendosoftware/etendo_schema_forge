@@ -23,14 +23,28 @@ function getToken() {
 async function callMenuWebhook(params) {
   const url = `${WEBHOOK_BASE}/SFListMenu`;
   const token = getToken();
-  const headers = { 'Content-Type': 'application/json' };
+  // No Content-Type: this is a GET with no body, and application/json isn't a
+  // CORS-safelisted value — setting it unnecessarily triggers a preflight
+  // OPTIONS request (and risks it failing) whenever VITE_API_BASE points at a
+  // different origin than the SPA.
+  const headers = {};
   if (token) headers['Authorization'] = `Bearer ${token}`;
   const query = new URLSearchParams(params).toString();
   const res = await fetch(query ? `${url}?${query}` : url, { headers });
   const text = await res.text();
   let data;
-  try { data = JSON.parse(text); } catch { data = text; }
+  let parsed = true;
+  try { data = JSON.parse(text); } catch { data = text; parsed = false; }
   if (!res.ok) throw new Error(data?.error || data?.message || `SFListMenu error: ${res.status}`);
+  // A 200 with a non-JSON body (e.g. a SPA-fallback index.html served when this
+  // endpoint isn't actually backed — no dev proxy, no backend, as in most E2E
+  // test environments) must be treated as a failure, not a silently "successful"
+  // response: letting a raw string through would resolve to an empty-but-valid
+  // allowed-id Set downstream, which permanently hides every AD-backed menu item
+  // instead of failing open like a real error does.
+  if (!parsed || typeof data !== 'object' || data === null) {
+    throw new Error('SFListMenu returned a non-JSON response');
+  }
   return data;
 }
 
