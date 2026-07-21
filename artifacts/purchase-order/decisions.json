@@ -474,7 +474,7 @@
           "displayLogic": null
         },
         "currency": {
-          "visibility": "editable",
+          "visibility": "readOnly",
           "grid": false,
           "form": false,
           "reference": "Currency",

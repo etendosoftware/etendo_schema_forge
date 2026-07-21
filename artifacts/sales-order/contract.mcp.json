@@ -1,8 +1,8 @@
 {
-  "version": "0.19.0",
+  "version": "0.21.0",
   "generatedAt": "2026-05-12T16:47:39.614Z",
-  "updatedAt": "2026-06-25T14:15:39.328Z",
-  "contractChecksum": "cc86a503b3b05214",
+  "updatedAt": "2026-07-14T15:10:25.533Z",
+  "contractChecksum": "c7fd0e90475d7615",
   "apiPrediction": {
     "specName": "sales-order",
     "baseUrl": "/sws/neo/sales-order",
@@ -868,6 +868,7 @@
             "defaultValue": "0"
           },
           "currency": {
+            "readOnly": true,
             "required": true,
             "defaultValue": "@C_Currency_ID@"
           }
@@ -897,8 +898,7 @@
         "orderedQuantity",
         "listPrice",
         "tax",
-        "unitPrice",
-        "currency"
+        "unitPrice"
       ],
       "recommendedOrder": [
         "createHeader",
@@ -1016,8 +1016,7 @@
           "orderedQuantity",
           "listPrice",
           "tax",
-          "unitPrice",
-          "currency"
+          "unitPrice"
         ]
       },
       {
@@ -1033,5 +1032,5 @@
       "confirmCancelAndReplace"
     ]
   },
-  "checksum": "407d688588ba6a97"
+  "checksum": "479950653b6032bf"
 }

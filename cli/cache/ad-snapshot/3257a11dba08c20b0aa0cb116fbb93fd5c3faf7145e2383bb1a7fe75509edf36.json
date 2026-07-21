@@ -1082,7 +1082,7 @@
       ]
     },
     "314caee3650d614f6e16516792b6ae0979d23d630da4a9b794b05902fc5a07c8": {
-      "checksum": "167300050cd825eeb81c16ecb5438858e37c5df2b2ab276f41f08e867f743704",
+      "checksum": "af21cbac56a7cfe030116f79f1170580718d59843b9465b7bb0640e2ea247e1a",
       "params": [
         "143"
       ],
@@ -1240,46 +1240,6 @@
           "readonlylogic": "@Posted@='Y'"
         },
         {
-          "columnname": "Calculate_Promotions",
-          "displaylogic": "@DocStatus@='DR' & @PromotionsDefined@='Y'",
-          "displaylogic_server": null,
-          "displaylogicgrid": null,
-          "name": "Calculate Promotions",
-          "readonlylogic": null
-        },
-        {
-          "columnname": "Cancelandreplace",
-          "displaylogic": "@DocStatus@='CO'&@Cancelledorder_id@=''&@Iscancelled@='N' & @OrderType@='SO' & @EnableCanceAndReplace@!''",
-          "displaylogic_server": null,
-          "displaylogicgrid": null,
-          "name": "Cancel and Replace",
-          "readonlylogic": null
-        },
-        {
-          "columnname": "Cancelledorder_id",
-          "displaylogic": "@Cancelledorder_id@!''",
-          "displaylogic_server": null,
-          "displaylogicgrid": null,
-          "name": "Canceled Order",
-          "readonlylogic": null
-        },
-        {
-          "columnname": "CANCELPRICEAD",
-          "displaylogic": "@IsStocked@ = 'Y'",
-          "displaylogic_server": null,
-          "displaylogicgrid": null,
-          "name": "Cancel Discounts and Promotions",
-          "readonlylogic": null
-        },
-        {
-          "columnname": "Cascade",
-          "displaylogic": null,
-          "displaylogic_server": null,
-          "displaylogicgrid": null,
-          "name": "Cascade",
-          "readonlylogic": "@Processed@='Y'"
-        },
-        {
           "columnname": "C_Aum",
           "displaylogic": "@M_Product_Uom_Id@=''",
           "displaylogic_server": "@UomManagement@='Y'",
@@ -1416,60 +1376,12 @@
           "readonlylogic": "@Processed@='Y' | @DocStatus@='TMP'"
         },
         {
-          "columnname": "ChargeAmt",
-          "displaylogic": null,
-          "displaylogic_server": null,
-          "displaylogicgrid": null,
-          "name": "Charge Amount",
-          "readonlylogic": "@Processed@='Y'"
-        },
-        {
-          "columnname": "ChargeAmt",
-          "displaylogic": "@HasCharge@='Y'",
-          "displaylogic_server": null,
-          "displaylogicgrid": null,
-          "name": "Charge Amount",
-          "readonlylogic": "@Processed@='Y'"
-        },
-        {
           "columnname": "C_Incoterms_ID",
           "displaylogic": null,
           "displaylogic_server": null,
           "displaylogicgrid": null,
           "name": "Incoterms",
           "readonlylogic": "@INTR_ORDER@='Y'"
-        },
-        {
-          "columnname": "Confirmcancelandreplace",
-          "displaylogic": "@DocStatus@='TMP' & @OrderType@='SO' & @EnableCanceAndReplace@!''",
-          "displaylogic_server": null,
-          "displaylogicgrid": null,
-          "name": "Confirm Cancel and Replace",
-          "readonlylogic": null
-        },
-        {
-          "columnname": "Conversion",
-          "displaylogic": "@Hasunit@='Y'",
-          "displaylogic_server": null,
-          "displaylogicgrid": null,
-          "name": "Conversion Rate",
-          "readonlylogic": "@INTR_ORDER@='Y'"
-        },
-        {
-          "columnname": "CopyFrom",
-          "displaylogic": "@processed@='N'",
-          "displaylogic_server": null,
-          "displaylogicgrid": null,
-          "name": "Copy Lines",
-          "readonlylogic": null
-        },
-        {
-          "columnname": "CopyFromPO",
-          "displaylogic": "@processed@='N'",
-          "displaylogic_server": null,
-          "displaylogicgrid": null,
-          "name": "Copy from Orders",
-          "readonlylogic": null
         },
         {
           "columnname": "C_PaymentTerm_ID",
@@ -1504,14 +1416,6 @@
           "readonlylogic": "@Posted@='Y'"
         },
         {
-          "columnname": "Create_Reservation",
-          "displaylogic": "@StockReservations@!''",
-          "displaylogic_server": null,
-          "displaylogicgrid": null,
-          "name": "Stock Reservation",
-          "readonlylogic": "@processed@='Y'"
-        },
-        {
           "columnname": "C_Reject_Reason_ID",
           "displaylogic": null,
           "displaylogic_server": null,
@@ -1534,6 +1438,102 @@
           "displaylogicgrid": null,
           "name": "UOM",
           "readonlylogic": "@UomManagement@='Y'"
+        },
+        {
+          "columnname": "Calculate_Promotions",
+          "displaylogic": "@DocStatus@='DR' & @PromotionsDefined@='Y'",
+          "displaylogic_server": null,
+          "displaylogicgrid": null,
+          "name": "Calculate Promotions",
+          "readonlylogic": null
+        },
+        {
+          "columnname": "Cancelandreplace",
+          "displaylogic": "@DocStatus@='CO'&@Cancelledorder_id@=''&@Iscancelled@='N' & @OrderType@='SO' & @EnableCanceAndReplace@!''",
+          "displaylogic_server": null,
+          "displaylogicgrid": null,
+          "name": "Cancel and Replace",
+          "readonlylogic": null
+        },
+        {
+          "columnname": "Cancelledorder_id",
+          "displaylogic": "@Cancelledorder_id@!''",
+          "displaylogic_server": null,
+          "displaylogicgrid": null,
+          "name": "Canceled Order",
+          "readonlylogic": null
+        },
+        {
+          "columnname": "CANCELPRICEAD",
+          "displaylogic": "@IsStocked@ = 'Y'",
+          "displaylogic_server": null,
+          "displaylogicgrid": null,
+          "name": "Cancel Discounts and Promotions",
+          "readonlylogic": null
+        },
+        {
+          "columnname": "Cascade",
+          "displaylogic": null,
+          "displaylogic_server": null,
+          "displaylogicgrid": null,
+          "name": "Cascade",
+          "readonlylogic": "@Processed@='Y'"
+        },
+        {
+          "columnname": "ChargeAmt",
+          "displaylogic": null,
+          "displaylogic_server": null,
+          "displaylogicgrid": null,
+          "name": "Charge Amount",
+          "readonlylogic": "@Processed@='Y'"
+        },
+        {
+          "columnname": "ChargeAmt",
+          "displaylogic": "@HasCharge@='Y'",
+          "displaylogic_server": null,
+          "displaylogicgrid": null,
+          "name": "Charge Amount",
+          "readonlylogic": "@Processed@='Y'"
+        },
+        {
+          "columnname": "Confirmcancelandreplace",
+          "displaylogic": "@DocStatus@='TMP' & @OrderType@='SO' & @EnableCanceAndReplace@!''",
+          "displaylogic_server": null,
+          "displaylogicgrid": null,
+          "name": "Confirm Cancel and Replace",
+          "readonlylogic": null
+        },
+        {
+          "columnname": "Conversion",
+          "displaylogic": "@Hasunit@='Y'",
+          "displaylogic_server": null,
+          "displaylogicgrid": null,
+          "name": "Conversion Rate",
+          "readonlylogic": "@INTR_ORDER@='Y'"
+        },
+        {
+          "columnname": "CopyFrom",
+          "displaylogic": "@processed@='N'",
+          "displaylogic_server": null,
+          "displaylogicgrid": null,
+          "name": "Copy Lines",
+          "readonlylogic": null
+        },
+        {
+          "columnname": "CopyFromPO",
+          "displaylogic": "@processed@='N'",
+          "displaylogic_server": null,
+          "displaylogicgrid": null,
+          "name": "Copy from Orders",
+          "readonlylogic": null
+        },
+        {
+          "columnname": "Create_Reservation",
+          "displaylogic": "@StockReservations@!''",
+          "displaylogic_server": null,
+          "displaylogicgrid": null,
+          "name": "Stock Reservation",
+          "readonlylogic": "@processed@='Y'"
         },
         {
           "columnname": "DateAcct",
@@ -1704,20 +1704,20 @@
           "readonlylogic": null
         },
         {
-          "columnname": "Finacc_Txn_Convert_Rate",
-          "displaylogic": "@C_Currency_ID@!@FinAcc_Currency_ID@",
-          "displaylogic_server": null,
-          "displaylogicgrid": null,
-          "name": "Exchange Rate",
-          "readonlylogic": null
-        },
-        {
           "columnname": "FIN_Paymentmethod_ID",
           "displaylogic": null,
           "displaylogic_server": null,
           "displaylogicgrid": null,
           "name": "Payment Method",
           "readonlylogic": "@Processed@='Y'"
+        },
+        {
+          "columnname": "Finacc_Txn_Convert_Rate",
+          "displaylogic": "@C_Currency_ID@!@FinAcc_Currency_ID@",
+          "displaylogic_server": null,
+          "displaylogicgrid": null,
+          "name": "Exchange Rate",
+          "readonlylogic": null
         },
         {
           "columnname": "FreightAmt",
@@ -1744,6 +1744,14 @@
           "readonlylogic": null
         },
         {
+          "columnname": "Gross_Unit_Price",
+          "displaylogic": "@GROSSPRICE@='Y'",
+          "displaylogic_server": null,
+          "displaylogicgrid": null,
+          "name": "Gross Unit Price",
+          "readonlylogic": "@Processed@='Y' | @GROSSPRICE@='N'"
+        },
+        {
           "columnname": "GrossPriceList",
           "displaylogic": "@GROSSPRICE@='Y'",
           "displaylogic_server": null,
@@ -1758,14 +1766,6 @@
           "displaylogicgrid": null,
           "name": "Base Gross Unit Price",
           "readonlylogic": null
-        },
-        {
-          "columnname": "Gross_Unit_Price",
-          "displaylogic": "@GROSSPRICE@='Y'",
-          "displaylogic_server": null,
-          "displaylogicgrid": null,
-          "name": "Gross Unit Price",
-          "readonlylogic": "@Processed@='Y' | @GROSSPRICE@='N'"
         },
         {
           "columnname": "Hasunit",
@@ -1880,22 +1880,6 @@
           "readonlylogic": "@Iseditlinenetamt@='N'|@GROSSPRICE@='Y'"
         },
         {
-          "columnname": "Manage_Prereservation",
-          "displaylogic": "@StockReservations@!''",
-          "displaylogic_server": null,
-          "displaylogicgrid": null,
-          "name": "Manage_Prereservation",
-          "readonlylogic": null
-        },
-        {
-          "columnname": "Manage_Reservation",
-          "displaylogic": "@StockReservations@!'' & @processed@='Y' & @qtyordered@!@qtydelivered@ & @DocStatus@!'CL'",
-          "displaylogic_server": null,
-          "displaylogicgrid": null,
-          "name": "Manage Reservation",
-          "readonlylogic": null
-        },
-        {
           "columnname": "M_AttributeSetInstance_ID",
           "displaylogic": "(@ATTRIBUTESET@!''&@ATTRSETVALUETYPE@!'F')|(@M_AttributeSetInstance_ID@!''&@M_AttributeSetInstance_ID@!'0')",
           "displaylogic_server": null,
@@ -1982,6 +1966,22 @@
           "displaylogicgrid": null,
           "name": "Warehouse",
           "readonlylogic": "@OrderType@!'SO'"
+        },
+        {
+          "columnname": "Manage_Prereservation",
+          "displaylogic": "@StockReservations@!''",
+          "displaylogic_server": null,
+          "displaylogicgrid": null,
+          "name": "Manage_Prereservation",
+          "readonlylogic": null
+        },
+        {
+          "columnname": "Manage_Reservation",
+          "displaylogic": "@StockReservations@!'' & @processed@='Y' & @qtyordered@!@qtydelivered@ & @DocStatus@!'CL'",
+          "displaylogic_server": null,
+          "displaylogicgrid": null,
+          "name": "Manage Reservation",
+          "readonlylogic": null
         },
         {
           "columnname": "NC8_Code",
@@ -2410,7 +2410,7 @@
       ]
     },
     "372af9720002cd00d7ab60cf2919961286c4022d7cae4da33f0586eff52202ca": {
-      "checksum": "ec7d483cce209094311175e2b68b1f6d09d54004f757dbbe1b50dff002329510",
+      "checksum": "f8720987550732cea1b3fccfb515c1012d89879a1bf140a48770513840d7a193",
       "params": [
         "167"
       ],
@@ -2600,22 +2600,6 @@
           "readonlylogic": "@Posted@='Y'"
         },
         {
-          "columnname": "Calculate_Promotions",
-          "displaylogic": "@DocStatus@='DR' & @PromotionsDefined@='Y'",
-          "displaylogic_server": null,
-          "displaylogicgrid": null,
-          "name": "Calculate Promotions",
-          "readonlylogic": null
-        },
-        {
-          "columnname": "CANCELPRICEAD",
-          "displaylogic": "@IsStocked@ = 'Y'",
-          "displaylogic_server": null,
-          "displaylogicgrid": null,
-          "name": "Cancel Discounts and Promotions",
-          "readonlylogic": null
-        },
-        {
           "columnname": "C_Aum",
           "displaylogic": "@M_Product_Uom_Id@='' & @Financial_Invoice_Line@='N'",
           "displaylogic_server": "@UomManagement@='Y'",
@@ -2760,22 +2744,6 @@
           "readonlylogic": "@Processed@='Y'"
         },
         {
-          "columnname": "ChargeAmt",
-          "displaylogic": null,
-          "displaylogic_server": null,
-          "displaylogicgrid": null,
-          "name": "Charge Amount",
-          "readonlylogic": "@Processed@='Y'"
-        },
-        {
-          "columnname": "ChargeAmt",
-          "displaylogic": "@HasCharge@='Y'",
-          "displaylogic_server": null,
-          "displaylogicgrid": null,
-          "name": "Charge Amount",
-          "readonlylogic": "@Processed@='Y'"
-        },
-        {
           "columnname": "C_Incoterms_ID",
           "displaylogic": null,
           "displaylogic_server": null,
@@ -2790,22 +2758,6 @@
           "displaylogicgrid": null,
           "name": "Invoice",
           "readonlylogic": "@HASREVERSEDINVOICESO@='Y' | @HASREVERSEDINVOICEPO@='Y' | @Posted@='Y'"
-        },
-        {
-          "columnname": "Conversion",
-          "displaylogic": "@Hasunit@='Y'",
-          "displaylogic_server": null,
-          "displaylogicgrid": null,
-          "name": "Conversion Rate",
-          "readonlylogic": "@INTR_INVOICE@='Y'"
-        },
-        {
-          "columnname": "CopyFrom",
-          "displaylogic": "@Processed@='N'",
-          "displaylogic_server": null,
-          "displaylogicgrid": null,
-          "name": "Copy Lines",
-          "readonlylogic": null
         },
         {
           "columnname": "C_PaymentTerm_ID",
@@ -2848,22 +2800,6 @@
           "readonlylogic": "@Posted@='Y'"
         },
         {
-          "columnname": "Createfrominouts",
-          "displaylogic": "@Processed@='N' & @IsReversalDocument@='N'",
-          "displaylogic_server": null,
-          "displaylogicgrid": null,
-          "name": "Create Lines From Shipment",
-          "readonlylogic": null
-        },
-        {
-          "columnname": "Createfromorders",
-          "displaylogic": "@Processed@='N' & @IsReversalDocument@='N'",
-          "displaylogic_server": null,
-          "displaylogicgrid": null,
-          "name": "Create Lines From Order",
-          "readonlylogic": null
-        },
-        {
           "columnname": "C_Tax_ID",
           "displaylogic": null,
           "displaylogic_server": null,
@@ -2893,6 +2829,70 @@
           "displaylogic_server": null,
           "displaylogicgrid": null,
           "name": "Withholding",
+          "readonlylogic": null
+        },
+        {
+          "columnname": "Calculate_Promotions",
+          "displaylogic": "@DocStatus@='DR' & @PromotionsDefined@='Y'",
+          "displaylogic_server": null,
+          "displaylogicgrid": null,
+          "name": "Calculate Promotions",
+          "readonlylogic": null
+        },
+        {
+          "columnname": "CANCELPRICEAD",
+          "displaylogic": "@IsStocked@ = 'Y'",
+          "displaylogic_server": null,
+          "displaylogicgrid": null,
+          "name": "Cancel Discounts and Promotions",
+          "readonlylogic": null
+        },
+        {
+          "columnname": "ChargeAmt",
+          "displaylogic": null,
+          "displaylogic_server": null,
+          "displaylogicgrid": null,
+          "name": "Charge Amount",
+          "readonlylogic": "@Processed@='Y'"
+        },
+        {
+          "columnname": "ChargeAmt",
+          "displaylogic": "@HasCharge@='Y'",
+          "displaylogic_server": null,
+          "displaylogicgrid": null,
+          "name": "Charge Amount",
+          "readonlylogic": "@Processed@='Y'"
+        },
+        {
+          "columnname": "Conversion",
+          "displaylogic": "@Hasunit@='Y'",
+          "displaylogic_server": null,
+          "displaylogicgrid": null,
+          "name": "Conversion Rate",
+          "readonlylogic": "@INTR_INVOICE@='Y'"
+        },
+        {
+          "columnname": "CopyFrom",
+          "displaylogic": "@Processed@='N'",
+          "displaylogic_server": null,
+          "displaylogicgrid": null,
+          "name": "Copy Lines",
+          "readonlylogic": null
+        },
+        {
+          "columnname": "Createfrominouts",
+          "displaylogic": "@Processed@='N' & @IsReversalDocument@='N'",
+          "displaylogic_server": null,
+          "displaylogicgrid": null,
+          "name": "Create Lines From Shipment",
+          "readonlylogic": null
+        },
+        {
+          "columnname": "Createfromorders",
+          "displaylogic": "@Processed@='N' & @IsReversalDocument@='N'",
+          "displaylogic_server": null,
+          "displaylogicgrid": null,
+          "name": "Create Lines From Order",
           "readonlylogic": null
         },
         {
@@ -3224,6 +3224,14 @@
           "readonlylogic": "@processed@='Y'"
         },
         {
+          "columnname": "EM_Etvfac_Inv_Type",
+          "displaylogic": "@etvfac_has_configuration@='Y'",
+          "displaylogic_server": null,
+          "displaylogicgrid": null,
+          "name": "Tipo de Factura",
+          "readonlylogic": "@processed@='Y'"
+        },
+        {
           "columnname": "EM_Etvfac_Invnoidart61d",
           "displaylogic": "@etvfac_has_configuration@='Y' & (@EM_Etvfac_Inv_Type@='R5' | @EM_Etvfac_Inv_Type@='F2')",
           "displaylogic_server": null,
@@ -3237,14 +3245,6 @@
           "displaylogic_server": null,
           "displaylogicgrid": null,
           "name": "Estado de Envío a Verifactu",
-          "readonlylogic": "@processed@='Y'"
-        },
-        {
-          "columnname": "EM_Etvfac_Inv_Type",
-          "displaylogic": "@etvfac_has_configuration@='Y'",
-          "displaylogic_server": null,
-          "displaylogicgrid": null,
-          "name": "Tipo de Factura",
           "readonlylogic": "@processed@='Y'"
         },
         {
@@ -3432,30 +3432,6 @@
           "readonlylogic": null
         },
         {
-          "columnname": "Finacc_Txn_Convert_Rate",
-          "displaylogic": "@C_Currency_ID@!@FinAcc_Currency_ID@",
-          "displaylogic_server": null,
-          "displaylogicgrid": null,
-          "name": "Exchange Rate",
-          "readonlylogic": null
-        },
-        {
-          "columnname": "Finalsettlement",
-          "displaylogic": "@Processed@='Y' & @Ispaid@='Y'",
-          "displaylogic_server": null,
-          "displaylogicgrid": null,
-          "name": "Paid in Full Date",
-          "readonlylogic": null
-        },
-        {
-          "columnname": "Financial_Invoice_Line",
-          "displaylogic": null,
-          "displaylogic_server": null,
-          "displaylogicgrid": null,
-          "name": "Financial Invoice Line",
-          "readonlylogic": "@Processed@='Y'"
-        },
-        {
           "columnname": "Fin_Financial_Account_ID",
           "displaylogic": null,
           "displaylogic_server": null,
@@ -3488,12 +3464,44 @@
           "readonlylogic": "@Processed@='Y'"
         },
         {
+          "columnname": "Finacc_Txn_Convert_Rate",
+          "displaylogic": "@C_Currency_ID@!@FinAcc_Currency_ID@",
+          "displaylogic_server": null,
+          "displaylogicgrid": null,
+          "name": "Exchange Rate",
+          "readonlylogic": null
+        },
+        {
+          "columnname": "Finalsettlement",
+          "displaylogic": "@Processed@='Y' & @Ispaid@='Y'",
+          "displaylogic_server": null,
+          "displaylogicgrid": null,
+          "name": "Paid in Full Date",
+          "readonlylogic": null
+        },
+        {
+          "columnname": "Financial_Invoice_Line",
+          "displaylogic": null,
+          "displaylogic_server": null,
+          "displaylogicgrid": null,
+          "name": "Financial Invoice Line",
+          "readonlylogic": "@Processed@='Y'"
+        },
+        {
           "columnname": "Foreign_Amount",
           "displaylogic": null,
           "displaylogic_server": null,
           "displaylogicgrid": null,
           "name": "Foreign  Amount",
           "readonlylogic": "@HASREVERSEDINVOICESO@='Y' | @HASREVERSEDINVOICEPO@='Y' | @Posted@='Y'"
+        },
+        {
+          "columnname": "Gross_Unit_Price",
+          "displaylogic": "@GROSSPRICE@='Y'",
+          "displaylogic_server": null,
+          "displaylogicgrid": null,
+          "name": "Gross Unit Price",
+          "readonlylogic": "@Processed@='Y'|@GROSSPRICE@='N'"
         },
         {
           "columnname": "Grosspricelist",
@@ -3510,14 +3518,6 @@
           "displaylogicgrid": null,
           "name": "Base Gross Unit Price",
           "readonlylogic": null
-        },
-        {
-          "columnname": "Gross_Unit_Price",
-          "displaylogic": "@GROSSPRICE@='Y'",
-          "displaylogic_server": null,
-          "displaylogicgrid": null,
-          "name": "Gross Unit Price",
-          "readonlylogic": "@Processed@='Y'|@GROSSPRICE@='N'"
         },
         {
           "columnname": "Hasunit",
@@ -4474,7 +4474,7 @@
       ]
     },
     "4bc12fadc3f4675f289d036b6b78cded78314e733c80834fa999e947d67ec251": {
-      "checksum": "30a759670ea6d650b03ce78517c8fd0d52daf454c6c49d787af3246ffde3c374",
+      "checksum": "50a7d0d73e1b73501e48353c081bf33254a1bb1ab06b751c42cd07ce750dcbaa",
       "params": [
         "183"
       ],
@@ -4800,22 +4800,6 @@
           "readonlylogic": "@Processed@='Y'"
         },
         {
-          "columnname": "ChargeAmt",
-          "displaylogic": null,
-          "displaylogic_server": null,
-          "displaylogicgrid": null,
-          "name": "Charge Amount",
-          "readonlylogic": "@Processed@='Y'"
-        },
-        {
-          "columnname": "ChargeAmt",
-          "displaylogic": null,
-          "displaylogic_server": null,
-          "displaylogicgrid": null,
-          "name": "Charge Amount",
-          "readonlylogic": "@Processed@='Y'"
-        },
-        {
           "columnname": "C_Incoterms_ID",
           "displaylogic": null,
           "displaylogic_server": null,
@@ -4830,22 +4814,6 @@
           "displaylogicgrid": null,
           "name": "Invoice",
           "readonlylogic": "@HASREVERSEDINVOICESO@='Y' | @HASREVERSEDINVOICEPO@='Y' | @Posted@='Y'"
-        },
-        {
-          "columnname": "Conversion",
-          "displaylogic": "@Hasunit@='Y'",
-          "displaylogic_server": null,
-          "displaylogicgrid": null,
-          "name": "Conversion Rate",
-          "readonlylogic": "@INTR_INVOICE@='Y'"
-        },
-        {
-          "columnname": "CopyFrom",
-          "displaylogic": "@Processed@='N'",
-          "displaylogic_server": null,
-          "displaylogicgrid": null,
-          "name": "Copy Lines",
-          "readonlylogic": null
         },
         {
           "columnname": "C_PaymentTerm_ID",
@@ -4888,22 +4856,6 @@
           "readonlylogic": "@Posted@='Y'"
         },
         {
-          "columnname": "Createfrominouts",
-          "displaylogic": "@Processed@='N' & @IsReversalDocument@='N'",
-          "displaylogic_server": null,
-          "displaylogicgrid": null,
-          "name": "Create Lines From Receipt",
-          "readonlylogic": null
-        },
-        {
-          "columnname": "Createfromorders",
-          "displaylogic": "@Processed@='N' & @IsReversalDocument@='N'",
-          "displaylogic_server": null,
-          "displaylogicgrid": null,
-          "name": "Create Lines From Order",
-          "readonlylogic": null
-        },
-        {
           "columnname": "C_Tax_ID",
           "displaylogic": null,
           "displaylogic_server": null,
@@ -4933,6 +4885,54 @@
           "displaylogic_server": null,
           "displaylogicgrid": null,
           "name": "Withholding",
+          "readonlylogic": null
+        },
+        {
+          "columnname": "ChargeAmt",
+          "displaylogic": null,
+          "displaylogic_server": null,
+          "displaylogicgrid": null,
+          "name": "Charge Amount",
+          "readonlylogic": "@Processed@='Y'"
+        },
+        {
+          "columnname": "ChargeAmt",
+          "displaylogic": null,
+          "displaylogic_server": null,
+          "displaylogicgrid": null,
+          "name": "Charge Amount",
+          "readonlylogic": "@Processed@='Y'"
+        },
+        {
+          "columnname": "Conversion",
+          "displaylogic": "@Hasunit@='Y'",
+          "displaylogic_server": null,
+          "displaylogicgrid": null,
+          "name": "Conversion Rate",
+          "readonlylogic": "@INTR_INVOICE@='Y'"
+        },
+        {
+          "columnname": "CopyFrom",
+          "displaylogic": "@Processed@='N'",
+          "displaylogic_server": null,
+          "displaylogicgrid": null,
+          "name": "Copy Lines",
+          "readonlylogic": null
+        },
+        {
+          "columnname": "Createfrominouts",
+          "displaylogic": "@Processed@='N' & @IsReversalDocument@='N'",
+          "displaylogic_server": null,
+          "displaylogicgrid": null,
+          "name": "Create Lines From Receipt",
+          "readonlylogic": null
+        },
+        {
+          "columnname": "Createfromorders",
+          "displaylogic": "@Processed@='N' & @IsReversalDocument@='N'",
+          "displaylogic_server": null,
+          "displaylogicgrid": null,
+          "name": "Create Lines From Order",
           "readonlylogic": null
         },
         {
@@ -5304,30 +5304,6 @@
           "readonlylogic": null
         },
         {
-          "columnname": "Finacc_Txn_Convert_Rate",
-          "displaylogic": "@C_Currency_ID@!@FinAcc_Currency_ID@",
-          "displaylogic_server": null,
-          "displaylogicgrid": null,
-          "name": "Exchange Rate",
-          "readonlylogic": null
-        },
-        {
-          "columnname": "Finalsettlement",
-          "displaylogic": "@Processed@='Y' & @Ispaid@='Y'",
-          "displaylogic_server": null,
-          "displaylogicgrid": null,
-          "name": "Paid In Full Date",
-          "readonlylogic": null
-        },
-        {
-          "columnname": "Financial_Invoice_Line",
-          "displaylogic": null,
-          "displaylogic_server": null,
-          "displaylogicgrid": null,
-          "name": "Financial Invoice Line",
-          "readonlylogic": "@Processed@='Y'"
-        },
-        {
           "columnname": "Fin_Financial_Account_ID",
           "displaylogic": null,
           "displaylogic_server": null,
@@ -5360,6 +5336,30 @@
           "readonlylogic": "@Processed@='Y'"
         },
         {
+          "columnname": "Finacc_Txn_Convert_Rate",
+          "displaylogic": "@C_Currency_ID@!@FinAcc_Currency_ID@",
+          "displaylogic_server": null,
+          "displaylogicgrid": null,
+          "name": "Exchange Rate",
+          "readonlylogic": null
+        },
+        {
+          "columnname": "Finalsettlement",
+          "displaylogic": "@Processed@='Y' & @Ispaid@='Y'",
+          "displaylogic_server": null,
+          "displaylogicgrid": null,
+          "name": "Paid In Full Date",
+          "readonlylogic": null
+        },
+        {
+          "columnname": "Financial_Invoice_Line",
+          "displaylogic": null,
+          "displaylogic_server": null,
+          "displaylogicgrid": null,
+          "name": "Financial Invoice Line",
+          "readonlylogic": "@Processed@='Y'"
+        },
+        {
           "columnname": "Foreign_Amount",
           "displaylogic": null,
           "displaylogic_server": null,
@@ -5376,6 +5376,14 @@
           "readonlylogic": null
         },
         {
+          "columnname": "Gross_Unit_Price",
+          "displaylogic": "@GROSSPRICE@='Y'",
+          "displaylogic_server": null,
+          "displaylogicgrid": null,
+          "name": "Gross Unit Price",
+          "readonlylogic": "@Processed@='Y'|@GROSSPRICE@='N'"
+        },
+        {
           "columnname": "Grosspricelist",
           "displaylogic": "@GROSSPRICE@='Y'",
           "displaylogic_server": null,
@@ -5390,14 +5398,6 @@
           "displaylogicgrid": null,
           "name": "Base Gross Unit Price",
           "readonlylogic": null
-        },
-        {
-          "columnname": "Gross_Unit_Price",
-          "displaylogic": "@GROSSPRICE@='Y'",
-          "displaylogic_server": null,
-          "displaylogicgrid": null,
-          "name": "Gross Unit Price",
-          "readonlylogic": "@Processed@='Y'|@GROSSPRICE@='N'"
         },
         {
           "columnname": "Hasunit",
@@ -5536,14 +5536,6 @@
           "readonlylogic": "@Iseditlinenetamt@='N' | @Processed@='Y'"
         },
         {
-          "columnname": "Match_Lccosts",
-          "displaylogic": " @Processed@='Y' & @LC_MATCHED@ = 'N'",
-          "displaylogic_server": null,
-          "displaylogicgrid": null,
-          "name": "Match LC Costs",
-          "readonlylogic": null
-        },
-        {
           "columnname": "M_AttributeSetInstance_ID",
           "displaylogic": "(@ATTRIBUTESET@!''&@ATTRSETVALUETYPE@!'F')|(@M_AttributeSetInstance_ID@!''&@M_AttributeSetInstance_ID@!'0')",
           "displaylogic_server": null,
@@ -5582,6 +5574,14 @@
           "displaylogicgrid": null,
           "name": "Order UOM",
           "readonlylogic": "@Processed@='Y'"
+        },
+        {
+          "columnname": "Match_Lccosts",
+          "displaylogic": " @Processed@='Y' & @LC_MATCHED@ = 'N'",
+          "displaylogic_server": null,
+          "displaylogicgrid": null,
+          "name": "Match LC Costs",
+          "readonlylogic": null
         },
         {
           "columnname": "NC8_Code",
