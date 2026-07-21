@@ -50,9 +50,12 @@ describe('usePaymentBalance', () => {
     });
   });
 
-  // ETP-4504: an overpayment may only be left as customer credit when
-  // `canLeaveCredit` is true (the modal passes `isReceipt && invoiceInOrgCurrency`).
-  // The "refund"/"dar vuelto" mode was removed entirely.
+  // ETP-4504 (Option C gating): an overpayment on a receipt may be resolved either
+  // as customer credit ("Dejar a crédito") or as change/refund ("Dar vuelto"), and
+  // BOTH share the same gate — `canLeaveCredit` (the modal passes
+  // `isReceipt && invoiceInOrgCurrency`). When `canLeaveCredit` is false
+  // (foreign-currency receipt or a payment) NEITHER mode resolves the excess; only
+  // adjusting the amount ("Igualar") clears it. `canRefund === canLeaveCredit`.
   describe('excess — receipts (dir "in")', () => {
     it('blocks confirmation until an excessMode is chosen (canLeaveCredit true)', () => {
       const { result } = setup({ total: 1000, dir: 'in', sources: [], canLeaveCredit: true });
@@ -91,10 +94,23 @@ describe('usePaymentBalance', () => {
       expect(result.current.canConfirm).toBe(false);
     });
 
-    it('never resolves an excess via the removed "refund" mode', () => {
+    it('resolves an excess via the "refund" mode when canLeaveCredit is true', () => {
+      // ETP-4504 Option C: "Dar vuelto"/refund is a valid resolution for an
+      // org-currency receipt (canLeaveCredit true), on the same gate as "credit".
       const { result } = setup({ total: 1000, dir: 'in', sources: [], canLeaveCredit: true });
       act(() => result.current.onAmountChange('1200'));
-      // "refund" is no longer a recognized mode — only "credit" resolves the excess.
+      expect(result.current.canRefund).toBe(true);
+      act(() => result.current.setExcessMode('refund'));
+      expect(result.current.excessUnresolved).toBe(false);
+      expect(result.current.canConfirm).toBe(true);
+    });
+
+    it('does NOT resolve an excess via "refund" when canLeaveCredit is false (foreign-currency receipt)', () => {
+      // Same shared gate: with canLeaveCredit false, neither "refund" nor "credit"
+      // resolves the excess — only adjusting the amount ("Igualar") clears it.
+      const { result } = setup({ total: 1000, dir: 'in', sources: [], canLeaveCredit: false });
+      act(() => result.current.onAmountChange('1200'));
+      expect(result.current.canRefund).toBe(false);
       act(() => result.current.setExcessMode('refund'));
       expect(result.current.excessUnresolved).toBe(true);
       expect(result.current.canConfirm).toBe(false);

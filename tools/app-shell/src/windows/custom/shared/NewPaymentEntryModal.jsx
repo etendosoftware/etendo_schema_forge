@@ -3,6 +3,7 @@ import { toast } from 'sonner';
 import { DateField } from '@/components/ui/date-field';
 import { Skeleton } from '@/components/ui/skeleton';
 import { CreatableSearchSelect } from '@/components/contract-ui/CreatableSearchSelect.jsx';
+import { MoneyAmount } from '@/components/ui/money-amount';
 import { useApiFetch } from '@/auth/useApiFetch.js';
 import { useAuth } from '@/auth/AuthContext.jsx';
 import { useUI } from '@/i18n';
@@ -115,23 +116,26 @@ function buildPisPaymentFields(template, creditorValues) {
   };
 }
 
-/** Returns the currency as its 3-letter ISO code (the modal shows codes, not symbols). */
-function curSuffix(currency) {
-  return currency || '';
+/**
+ * Resolves a currency's real symbol via Intl (no hardcoded currency→symbol map). es-ES 'symbol'
+ * mode falls back to the raw ISO code for some currencies (e.g. GBP), so 'narrowSymbol' is used
+ * to get a distinct symbol for every currency actually in use here (USD "$", EUR "€", GBP "£").
+ */
+function currencySymbol(currency) {
+  if (!currency) return '';
+  try {
+    return new Intl.NumberFormat('es-ES', { style: 'currency', currency, currencyDisplay: 'narrowSymbol' })
+      .formatToParts(0).find(p => p.type === 'currency')?.value || currency;
+  } catch { return currency; }
 }
-/** Formats an amount with its ISO currency code in es-ES grouping ("6.420,00 EUR"). */
+/** Currency suffix for plain-text (non-JSX) spots — the real symbol, Intl-derived. */
+function curSuffix(currency) {
+  return currencySymbol(currency);
+}
+/** Formats an amount with its currency symbol in es-ES grouping ("6.420,00 €"), for the spots
+ *  that need a plain string rather than JSX (e.g. interpolated into a ui() translation). */
 function fmtCur(n, currency) {
   return `${formatPlain(n)} ${curSuffix(currency)}`.trim();
-}
-
-/**
- * The modal's single money renderer: es-ES grouped number + 3-letter ISO code ("68,74 USD").
- * Kept local so this ISO-code format is scoped to the Cobros/Pagos modal only and never leaks
- * into the shared MoneyAmount/formatCurrency used elsewhere. Accepts className (for tone colors)
- * and data-testid. Negatives already render a leading "-" via formatPlain, so no tone/sign logic.
- */
-function Money({ value, currency, className, 'data-testid': tid }) {
-  return <span className={className} data-testid={tid}>{fmtCur(value, currency)}</span>;
 }
 
 /** Label for the balance delta (excess / missing / exact). */
@@ -147,12 +151,13 @@ function modalTitleFor(isEdit, isReceipt, ui) {
   return isReceipt ? ui('cpNewCollection') : ui('cpNewPayment');
 }
 
-/** Over-payment action sent to the backend (only relevant when there is excess).
- *  The "refund"/"dar vuelto" path was dropped (ETP-4504): the only resolution now is
- *  leaving the excess as customer credit, which is offered solely when it applies. */
+/** Over-payment action sent to the backend (only relevant when there is excess):
+ *  'refund' → give change back (createRefundPayment), 'leave-credit' → keep as customer credit. */
 function overpaymentActionFor(balance) {
   if (!balance.isExcess) return undefined;
-  return balance.excessMode === 'credit' ? 'leave-credit' : undefined;
+  if (balance.excessMode === 'refund') return 'refund';
+  if (balance.excessMode === 'credit') return 'leave-credit';
+  return undefined;
 }
 
 /** Reads a fetch response body as JSON, or null when the response failed. */
@@ -389,7 +394,7 @@ function CreditRow({ l, currency, ui, onToggle, onUseChange, onUseBlur }) {
         <span style={{ font: '400 12px/16px Inter', color: FG3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{l.date}</span>
       </div>
       <div style={{ textAlign: 'right', font: '400 14px/20px Inter', color: INK, fontVariantNumeric: 'tabular-nums' }}>
-        {ui('cpAvailShort')} <Money value={l.avail} currency={currency} data-testid="MoneyAmount__cp-avail" />
+        {ui('cpAvailShort')} <MoneyAmount value={l.avail} currency={currency} tone="neutral" currencyDisplay="narrowSymbol" data-testid="MoneyAmount__cp-avail" />
       </div>
       <div style={{ display: 'flex', justifyContent: 'flex-end' }} onClick={e => e.stopPropagation()}>
         {l.sel ? (
@@ -421,7 +426,7 @@ function CreditSection({ rows, currency, ui, balance }) {
         <div style={{ flex: 1 }} />
         {used > 0 && (
           <span style={{ font: '600 12px/16px Inter', color: INK, fontVariantNumeric: 'tabular-nums' }}>
-            − <Money value={used} currency={currency} data-testid="MoneyAmount__cp-used" />
+            − <MoneyAmount value={used} currency={currency} tone="neutral" currencyDisplay="narrowSymbol" data-testid="MoneyAmount__cp-used" />
           </span>
         )}
       </div>
@@ -440,16 +445,20 @@ function CreditSection({ rows, currency, ui, balance }) {
   );
 }
 
-// ─── excess band — only a receipt in the org currency can leave credit (ETP-4504);
-// payments and foreign-currency receipts must adjust the amount ("Igualar") instead. ─
-function ExcessBand({ balance, currency, ui, isReceipt, canLeaveCredit }) {
+// ─── excess band — an org-currency receipt resolves an overpayment by giving change back
+// ("Dar vuelto") OR leaving it as credit ("Dejar a crédito"); both share the same gate. A
+// foreign-currency receipt or any payment gets neither, so the excess blocks confirmation
+// (adjust with "Igualar" only). ─
+function ExcessBand({ balance, currency, ui, canLeaveCredit }) {
   if (!balance.isExcess) {
     return null;
   }
   const amount = fmtCur(balance.excessAmount, currency);
-  // No credit option applies (payment, or foreign-currency receipt) → the only resolution
-  // is the "Igualar"/"Ajustar importe" action, so surface guidance and block confirmation.
-  if (!isReceipt || !canLeaveCredit) {
+  const showCredit = canLeaveCredit;
+  const showRefund = balance.canRefund;
+  // No resolution applies (foreign-currency receipt or a payment) → surface guidance; the only
+  // path is "Igualar"/adjust.
+  if (!showCredit && !showRefund) {
     return (
       <div style={{ padding: '10px 14px', background: RED_BG, border: `1px solid ${RED_FG}33`, borderRadius: 8, font: '600 13px/18px Inter', color: RED_FG }}>
         {ui('cpExcessInline', { amount })}
@@ -477,7 +486,8 @@ function ExcessBand({ balance, currency, ui, isReceipt, canLeaveCredit }) {
         <span style={{ font: '500 14px/20px Inter', color: EXCESS_FG }}>{ui('cpExcessQuestion', { amount })}</span>
       </div>
       <div style={{ display: 'flex', gap: 16 }}>
-        {card('credit', ui('cpLeaveCredit'), ui('cpLeaveCreditHint', { amount }), 'cp-excess-credit')}
+        {showCredit && card('credit', ui('cpLeaveCredit'), ui('cpLeaveCreditHint', { amount }), 'cp-excess-credit')}
+        {showRefund && card('refund', ui('cpGiveChange'), ui('cpGiveChangeHint', { amount }), 'cp-excess-refund')}
       </div>
     </div>
   );
@@ -547,7 +557,7 @@ function PisTransferSection({
             <line x1="5" y1="12" x2="19" y2="12" /><polyline points="12 5 19 12 12 19" />
           </svg>
           <span style={{ font: '400 14px/20px Inter', color: FG2 }}>
-            <Money value={balance.amount} currency={currency} data-testid="MoneyAmount__cp-pis-amount" />
+            <MoneyAmount value={balance.amount} currency={currency} tone="neutral" currencyDisplay="narrowSymbol" data-testid="MoneyAmount__cp-pis-amount" />
           </span>
         </div>
       </div>
@@ -1137,7 +1147,7 @@ export default function NewPaymentEntryModal({
                 <span style={{ display: 'inline-flex', alignItems: 'center', width: 'fit-content', font: '400 12px/16px Inter', padding: '4px 8px', borderRadius: 360, background: WIDGET_BG, color: FG2, marginTop: 2 }}>{ui('cpStatusDraft')}</span>
               </div>
               <WidgetCell label={ui('cpPendingPrefix')} valueColor={AMBER} data-testid="WidgetCell__pending">
-                <Money value={total} currency={currency} className="text-[#C28800]" data-testid="MoneyAmount__cp-pending" />
+                <MoneyAmount value={total} currency={currency} tone="neutral" className="text-[#C28800]" currencyDisplay="narrowSymbol" data-testid="MoneyAmount__cp-pending" />
               </WidgetCell>
             </div>
           </div>
@@ -1217,7 +1227,7 @@ export default function NewPaymentEntryModal({
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', height: 40, border: `1px solid ${BORDER1}`, borderRadius: 8, background: WIDGET_BG, minWidth: 0, padding: '0 12px', font: '400 14px/24px Inter', color: INK, fontVariantNumeric: 'tabular-nums' }} data-testid="cp-amount-in-account">
                   {amountInAccount == null
                     ? '—'
-                    : <Money value={amountInAccount} currency={accountCurrency} data-testid="MoneyAmount__cp-amount-in-account" />}
+                    : <MoneyAmount value={amountInAccount} currency={accountCurrency} tone="neutral" currencyDisplay="narrowSymbol" data-testid="MoneyAmount__cp-amount-in-account" />}
                 </div>
               </Field>
             </div>
@@ -1238,17 +1248,17 @@ export default function NewPaymentEntryModal({
           {/* balance summary */}
           <div style={{ padding: '0 20px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap', padding: '8px 12px', borderRadius: 8, background: WIDGET_BG }}>
-              <div><div style={{ font: '400 12px/16px Inter', color: FG2 }}>{ui('cpTotalInvoice')}</div><div style={{ font: '500 14px/20px Inter' }}><Money value={balance.applied} currency={currency} data-testid="MoneyAmount__cp-total" /></div></div>
+              <div><div style={{ font: '400 12px/16px Inter', color: FG2 }}>{ui('cpTotalInvoice')}</div><div style={{ font: '500 14px/20px Inter' }}><MoneyAmount value={balance.applied} currency={currency} tone="neutral" currencyDisplay="narrowSymbol" data-testid="MoneyAmount__cp-total" /></div></div>
               <span style={{ color: FG2, font: '400 12px/16px Inter' }}>·</span>
-              <div><div style={{ font: '400 12px/16px Inter', color: FG2 }}>{ui('cpMoney')}</div><div style={{ font: '500 14px/20px Inter' }}><Money value={balance.amount} currency={currency} data-testid="MoneyAmount__cp-money" /></div></div>
+              <div><div style={{ font: '400 12px/16px Inter', color: FG2 }}>{ui('cpMoney')}</div><div style={{ font: '500 14px/20px Inter' }}><MoneyAmount value={balance.amount} currency={currency} tone="neutral" currencyDisplay="narrowSymbol" data-testid="MoneyAmount__cp-money" /></div></div>
               {balance.usedCredit > 0 && (<>
                 <span style={{ color: FG2, font: '400 12px/16px Inter' }}>+</span>
-                <div><div style={{ font: '400 12px/16px Inter', color: '#8D6CEF' }}>{ui('cpFavorBadge')}</div><div style={{ font: '500 14px/20px Inter' }}><Money value={balance.usedCredit} currency={currency} className="text-[#7047EB]" data-testid="MoneyAmount__cp-credit" /></div></div>
+                <div><div style={{ font: '400 12px/16px Inter', color: '#8D6CEF' }}>{ui('cpFavorBadge')}</div><div style={{ font: '500 14px/20px Inter' }}><MoneyAmount value={balance.usedCredit} currency={currency} tone="neutral" className="text-[#7047EB]" currencyDisplay="narrowSymbol" data-testid="MoneyAmount__cp-credit" /></div></div>
               </>)}
               <span style={{ color: FG2, font: '400 12px/16px Inter' }}>=</span>
-              <div><div style={{ font: '400 12px/16px Inter', color: FG2 }}>{ui('cpApplied')}</div><div style={{ font: '500 14px/20px Inter' }}><Money value={balance.funds} currency={currency} data-testid="MoneyAmount__cp-applied" /></div></div>
+              <div><div style={{ font: '400 12px/16px Inter', color: FG2 }}>{ui('cpApplied')}</div><div style={{ font: '500 14px/20px Inter' }}><MoneyAmount value={balance.funds} currency={currency} tone="neutral" currencyDisplay="narrowSymbol" data-testid="MoneyAmount__cp-applied" /></div></div>
               <div style={{ flex: 1 }} />
-              <div style={{ textAlign: 'right' }}><div style={{ font: '400 12px/16px Inter', color: FG2 }}>{deltaLabel}</div><div style={{ font: '600 14px/20px Inter' }}><Money value={Math.abs(balance.diff)} currency={currency} className={balance.isPartial ? 'text-[#C5234A]' : 'text-[#17663A]'} data-testid="MoneyAmount__cp-delta" /></div></div>
+              <div style={{ textAlign: 'right' }}><div style={{ font: '400 12px/16px Inter', color: FG2 }}>{deltaLabel}</div><div style={{ font: '600 14px/20px Inter' }}><MoneyAmount value={Math.abs(balance.diff)} currency={currency} tone="neutral" className={balance.isPartial ? 'text-[#C5234A]' : 'text-[#17663A]'} currencyDisplay="narrowSymbol" data-testid="MoneyAmount__cp-delta" /></div></div>
               <button type="button" data-testid="cp-equalize" onClick={balance.equalize} style={{ height: 32, padding: '0 12px', borderRadius: 8, border: `1px solid ${BORDER2}`, outline: 'none', background: '#fff', boxShadow: '0 1px 2px rgba(18,18,23,.05)', cursor: 'pointer', color: INK, font: '500 14px/24px Inter' }}>{ui('cpEqualize')}</button>
             </div>
           </div>
@@ -1282,7 +1292,6 @@ export default function NewPaymentEntryModal({
               balance={balance}
               currency={currency}
               ui={ui}
-              isReceipt={isReceipt}
               canLeaveCredit={canLeaveCredit}
               data-testid="ExcessBand__7727b3" />
           </div>

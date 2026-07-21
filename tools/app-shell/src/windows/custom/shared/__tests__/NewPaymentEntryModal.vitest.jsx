@@ -3,9 +3,11 @@ vi.mock('@/i18n', () => ({
   useUI: () => (key) => key,
 }));
 
-vi.mock('@/lib/formatCurrency', () => ({
-  formatCurrency: (_curr, val) => `$${Number(val || 0).toFixed(2)}`,
-}));
+// NOTE: `@/lib/formatCurrency` is intentionally NOT mocked. MoneyAmount now delegates to the
+// real shared util, which formats en-US with a narrowSymbol (USD→"$92.00", EUR→"92.00 €",
+// GBP→"£92.00"). The old crude stub here hardcoded a leading "$" and ignored the currency code,
+// which masked the account-currency symbol on the multi-currency readout — using the real,
+// dependency-free util keeps these assertions faithful to what the running app renders.
 
 vi.mock('@/components/ui/select', () => ({
   Select: ({ children, value, onValueChange }) => (
@@ -525,8 +527,9 @@ describe('NewPaymentEntryModal', () => {
       await waitFor(() => expect(mockApiFetch).toHaveBeenCalled());
       fireEvent.change(screen.getByTestId('cp-amount-input'), { target: { value: '800' } });
       expect(screen.getByText('cpMissing')).toBeInTheDocument();
-      // the delta amount (200,00) should be rendered nearby
-      expect(screen.getByText(/200,00/)).toBeInTheDocument();
+      // the delta amount (200.00) should be rendered nearby — MoneyAmount now renders
+      // en-US digits via the shared formatCurrency util ("200.00 €" for the EUR invoice).
+      expect(screen.getByText(/200\.00/)).toBeInTheDocument();
       // Confirmar stays enabled for a partial payment — only excess blocks it.
       const confirm = screen.getByText('cpConfirm').closest('button');
       expect(confirm).not.toBeDisabled();
@@ -735,16 +738,36 @@ describe('NewPaymentEntryModal', () => {
       });
     });
 
-    // ETP-4504: the "refund"/"dar vuelto" over-payment path was dropped. The only
-    // excess resolution is leaving the excess as customer credit, so the refund
-    // radio must never render and the confirm payload must never carry "refund".
-    it('never renders the "Dar vuelto"/refund option on excess (dir "in")', async () => {
+    // ETP-4504 (Option C): both excess resolutions — "Dejar a crédito" and
+    // "Dar vuelto"/refund — render side by side for an org-currency receipt,
+    // and choosing refund makes the confirm payload carry overpaymentAction "refund".
+    it('renders BOTH the "Dejar a crédito" and "Dar vuelto"/refund cards on excess (dir "in")', async () => {
       renderModal({ dir: 'in', outstanding: 1000 });
       await waitFor(() => expect(mockApiFetch).toHaveBeenCalled());
       fireEvent.change(screen.getByTestId('cp-amount-input'), { target: { value: '1200' } });
-      // The credit option still renders (receipt in org currency); the refund one is gone.
+      // Default beforeEach: org currency EUR === invoice EUR → canLeaveCredit true,
+      // so both cards render (shared gate).
       expect(screen.getByTestId('cp-excess-credit')).toBeInTheDocument();
-      expect(screen.queryByText('cpGiveChange')).not.toBeInTheDocument();
+      expect(screen.getByTestId('cp-excess-refund')).toBeInTheDocument();
+      expect(screen.getByText('cpLeaveCredit')).toBeInTheDocument();
+      expect(screen.getByText('cpGiveChange')).toBeInTheDocument();
+    });
+
+    it('sends overpaymentAction "refund" when "Dar vuelto" is chosen on excess (dir "in")', async () => {
+      renderModal({ dir: 'in', outstanding: 1000 });
+      await waitFor(() => expect(mockApiFetch).toHaveBeenCalled());
+      fireEvent.change(screen.getByTestId('cp-amount-input'), { target: { value: '1200' } });
+      // Choose the refund resolution instead of the default credit one.
+      fireEvent.click(screen.getByTestId('cp-excess-refund'));
+      const confirm = screen.getByText('cpConfirm').closest('button');
+      await waitFor(() => expect(confirm).not.toBeDisabled());
+      fireEvent.click(confirm);
+
+      await waitFor(() => {
+        const call = mockApiFetch.mock.calls.find(c => c[0].includes('registerPayment'));
+        expect(call).toBeTruthy();
+        expect(JSON.parse(call[1].body).overpaymentAction).toBe('refund');
+      });
     });
   });
 
@@ -794,16 +817,18 @@ describe('NewPaymentEntryModal', () => {
       renderModal({ invoiceData: USD_INVOICE, outstanding: 100 });
 
       const readout = await screen.findByTestId('cp-amount-in-account');
-      // 100 × 0.92 = 92, rendered es-ES with the 3-letter ISO code ("92,00 EUR").
+      // 100 × 0.92 = 92, rendered en-US via the shared formatCurrency util with the real
+      // account-currency symbol ("92.00 €" — EUR account, symbol-after).
       await waitFor(() => expect(readout).toHaveTextContent(/92([.,]00)?/));
 
-      // ISO-code money convention (ETP-4504): the modal shows the 3-letter currency code,
-      // never a "€"/"US$" symbol. The account-currency readout carries the account code (EUR);
-      // the amount input's own suffix carries the invoice code (USD). Pinning both guards
-      // against a future refactor silently reverting to symbol formatting.
-      expect(readout).toHaveTextContent(/EUR/);
-      expect(readout).not.toHaveTextContent(/[€$]/);
-      expect(screen.getByTestId('cp-amount-input').parentElement).toHaveTextContent(/USD/);
+      // Symbol money convention (ETP-4504): the modal shows the real currency symbol via
+      // Intl `narrowSymbol` (USD→$, EUR→€, GBP→£), never the raw 3-letter ISO code — and with
+      // no hardcoded currency→symbol map (MoneyAmount's `currencyDisplay` prop resolves it).
+      // The account-currency readout carries the account symbol (€, EUR); the amount input's
+      // own suffix carries the invoice symbol ($, USD). Pinning both guards against a future
+      // refactor silently reverting to ISO-code text.
+      expect(readout).toHaveTextContent(/€/);
+      expect(screen.getByTestId('cp-amount-input').parentElement).toHaveTextContent(/\$/);
 
       // Recompute on amount change: 200 × 0.92 = 184.
       fireEvent.change(screen.getByTestId('cp-amount-input'), { target: { value: '200' } });
@@ -1013,9 +1038,10 @@ describe('NewPaymentEntryModal', () => {
     });
   });
 
-  // ETP-4504: the excess "leave credit" option is gated on `canLeaveCredit`
-  // (receipt AND invoice in the org currency). A foreign-currency receipt — or
-  // any payment — may only "Igualar"; the excess blocks confirmation until then.
+  // ETP-4504 (Option C): the excess resolution cards ("Dejar a crédito" +
+  // "Dar vuelto"/refund) share one gate — `canLeaveCredit` (receipt AND invoice
+  // in the org currency). A foreign-currency receipt — or any payment — shows
+  // NEITHER card and may only "Igualar"; the excess blocks confirmation until then.
   describe('excess resolution gating by org currency (ETP-4504)', () => {
     const USD_INVOICE = { ...INVOICE, 'currency$_identifier': 'USD' };
 
@@ -1037,8 +1063,9 @@ describe('NewPaymentEntryModal', () => {
       await waitFor(() => expect(mockApiFetch).toHaveBeenCalled());
       fireEvent.change(screen.getByTestId('cp-amount-input'), { target: { value: '1200' } });
 
-      // No credit card — only the inline "adjust the amount" guidance.
+      // Neither card renders (shared gate off) — only the inline "adjust the amount" guidance.
       expect(screen.queryByTestId('cp-excess-credit')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('cp-excess-refund')).not.toBeInTheDocument();
       expect(screen.getByText('cpExcessInline')).toBeInTheDocument();
       // Confirm stays blocked while the excess is unresolved.
       expect(screen.getByTestId('cp-confirm')).toBeDisabled();
@@ -1048,13 +1075,26 @@ describe('NewPaymentEntryModal', () => {
       await waitFor(() => expect(screen.getByTestId('cp-confirm')).not.toBeDisabled());
     });
 
-    it('never renders the removed refund radio in the excess band (dir "in")', async () => {
+    it('renders BOTH excess cards side by side for an org-currency receipt (dir "in")', async () => {
+      // ETP-4504 Option C: credit + refund share the canLeaveCredit gate, so an
+      // org-currency receipt shows both cards together (not the old single card).
       renderModal({ dir: 'in', outstanding: 1000 });
       await waitFor(() => expect(mockApiFetch).toHaveBeenCalled());
       fireEvent.change(screen.getByTestId('cp-amount-input'), { target: { value: '1200' } });
-      // Only the single credit card renders; the old two-card credit/refund layout is gone.
       expect(screen.getByTestId('cp-excess-credit')).toBeInTheDocument();
-      expect(screen.queryByText('cpGiveChange')).not.toBeInTheDocument();
+      expect(screen.getByTestId('cp-excess-refund')).toBeInTheDocument();
+      expect(screen.getByText('cpGiveChange')).toBeInTheDocument();
+    });
+
+    it('shows NEITHER card for a payment (dir "out") and blocks confirmation on excess', async () => {
+      // Payments never expose a resolution card regardless of currency — only "Igualar".
+      renderModal({ dir: 'out', outstanding: 1000 });
+      await waitFor(() => expect(mockApiFetch).toHaveBeenCalled());
+      fireEvent.change(screen.getByTestId('cp-amount-input'), { target: { value: '1200' } });
+      expect(screen.queryByTestId('cp-excess-credit')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('cp-excess-refund')).not.toBeInTheDocument();
+      expect(screen.getByText('cpExcessInline')).toBeInTheDocument();
+      expect(screen.getByTestId('cp-confirm')).toBeDisabled();
     });
   });
 

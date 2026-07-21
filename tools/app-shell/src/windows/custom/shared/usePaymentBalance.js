@@ -95,9 +95,12 @@ export function usePaymentBalance({
   const [amount, setAmount] = useState(applied);
   const [amountStr, setAmountStr] = useState(formatPlain(applied));
   const [lines, setLines] = useState(() => seedLines(sources, usedSources));
-  // 'credit' = leave overpayment as customer credit, null = unresolved.
-  // (The "refund"/"dar vuelto" path was dropped — product decision, ETP-4504.)
+  // 'credit' = leave the overpayment as customer credit, 'refund' = give change back, null = unresolved.
   const [excessMode, setExcessMode] = useState(null);
+  // "Dar vuelto" (refund) and "Dejar a crédito" (credit) share the SAME gate: both are offered only
+  // when the invoice is in the org currency (canLeaveCredit). A foreign-currency receipt — and any
+  // payment — gets neither; the only resolution there is adjusting the amount ("Igualar").
+  const canRefund = canLeaveCredit;
 
   // Credit/abono sources arrive asynchronously (fetched after mount); re-seed the
   // consumable lines whenever they change so the section appears once data loads.
@@ -118,10 +121,12 @@ export function usePaymentBalance({
   const isPartial = diff < -TOLERANCE;
   const isExact = !isExcess && !isPartial;
 
-  // An overpayment can only be left as customer credit when `canLeaveCredit` (receipt in the
-  // org currency). Otherwise — payments, or a foreign-currency receipt — the only resolution
-  // is adjusting the amount ("Igualar"), so any excess blocks confirmation outright.
-  const excessUnresolved = isExcess && !(canLeaveCredit && excessMode === 'credit');
+  // An overpayment is resolved by giving change back ("Dar vuelto") or leaving it as customer
+  // credit ("Dejar a crédito") — BOTH gated on the invoice being in the org currency
+  // (canLeaveCredit). Foreign-currency receipts and all payments get neither, so any excess
+  // blocks confirmation and "Igualar"/adjust is the only path there.
+  const excessResolved = canLeaveCredit && (excessMode === 'credit' || excessMode === 'refund');
+  const excessUnresolved = isExcess && !excessResolved;
   const canConfirm = !excessUnresolved && amount >= 0;
 
   // ── amount input ──────────────────────────────────────────────────────────
@@ -219,7 +224,7 @@ export function usePaymentBalance({
     missingAmount: isPartial ? round2(-diff) : 0,
     // excess resolution
     excessMode, setExcessMode,
-    excessUnresolved, canConfirm,
+    excessUnresolved, canConfirm, canRefund,
     // actions
     equalize, STEP,
   };
