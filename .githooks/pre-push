@@ -475,10 +475,43 @@ fi
 run_step "2" "Running unit tests and SonarQube analysis" "$REPO_DIR" "tmp/pre-push/sonar-and-tests.log" "$SONAR_CMD"
 
 # 3. Run offline regeneration check
+#
+# CI's offline-regen-check.yml runs TWO separate steps here, and both must be
+# mirrored: (a) `make regen-check` compares ETGO_SF_*.xml against com.etendoerp.go
+# — a stale core-package pin or AD-snapshot cache shows up here; (b) a SEPARATE
+# `git status --porcelain` check on schema_forge itself, because `sf-regen-all`
+# (called by `make regen-check`) rewrites artifacts/*/contract.json and generated
+# JSX in place — if the freshly-regenerated files differ from what's committed
+# (e.g. a generator feature like window.readOnly/order that the pinned core
+# package doesn't emit yet), (a) can report FAIL:0 while the actual committed
+# UI is still stale. Without (b), that class of drift never blocks the push
+# locally, only in CI.
 if [ -d "etendo_core/modules/com.etendoerp.go/src-db/database/sourcedata" ]; then
   check_go_module_push_sync
   REGEN_CMD="make regen-check FROM_CACHE=1 REGEN_CHECK_PREV_XML_DIR=etendo_core/modules/com.etendoerp.go/src-db/database/sourcedata"
   run_step "3" "Running offline regeneration check" "$REPO_DIR" "tmp/pre-push/offline-regen-check.log" "$REGEN_CMD"
+
+  echo "==> Verifying no UI / contract drift (git status after regen-check)..."
+  if [ -n "$(git status --porcelain)" ]; then
+    echo "    FAILED ❌"
+    echo ""
+    echo "========================================================================="
+    echo "❌ ERROR: UI drift — committed contract.json / generated files do not"
+    echo "   match what the offline pipeline (pinned core package + cached AD"
+    echo "   snapshot) produces. This is exactly what CI's offline-regen-check.yml"
+    echo "   'Verify no UI / contract drift' step checks."
+    echo "========================================================================="
+    git status
+    git --no-pager diff | head -200
+    echo ""
+    echo "👉 Either regenerate + commit (make regen ONLY=<window>), or the pinned"
+    echo "   core package (@etendosoftware/schema-forge-cli) is missing/behind a"
+    echo "   generator feature the committed artifacts already rely on."
+    echo "   Bypass with 'git push --no-verify'."
+    echo "========================================================================="
+    exit 1
+  fi
+  echo "    SUCCESS ✅ (schema_forge clean — no UI / contract drift)"
 else
   echo "==> [3/4] Running offline regeneration check... SKIPPED ⚠️ (com.etendoerp.go sourcedata not found)"
 fi
