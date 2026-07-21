@@ -99,6 +99,13 @@
   "entities": {
     "assets": {
       "javaQualifier": "assetsHandler",
+      "preconditions": {
+        "800125": [
+          { "field": "usableLifeMonths", "requiredWhen": "@calculateType@ != 'PE' && @amortize@ != 'YE'" },
+          { "field": "usableLifeYears", "requiredWhen": "@amortize@ == 'YE'" },
+          { "field": "currency" }
+        ]
+      },
       "fields": {
         "searchKey": {
           "grid": true,
