@@ -1060,6 +1060,14 @@ export function buildInlineRowUpdateHandler({ linesLayout, isDocumentReadOnly, a
     });
     if (res.ok) {
       applyLocalChildRowUpdate(derivedUpdates, fieldKey, payloadValue, fieldValues, opts, hook, row);
+      // Server response wins over the optimistic cache when present —
+      // picks up trigger-computed fields (e.g. etgoQtydiff) that only
+      // exist after the DB flush, mirroring the secondary-tab handler
+      // above (line ~425). NEO wraps the saved record in
+      // {response:{data:[...]}}.
+      const updated = await res.json().catch(() => null);
+      const serverRow = updated?.response?.data?.[0] ?? null;
+      if (serverRow) hook.handleUpdateChild?.(row.id, serverRow);
     } else {
       const msg = await extractErrorMessage(res);
       toast.error(msg || ui('networkError'));

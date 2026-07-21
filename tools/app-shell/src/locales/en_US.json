@@ -11832,6 +11832,10 @@
       "label": "User Count",
       "description": "Counted Quantity"
     },
+    "EM_Etgo_Qtydiff": {
+      "label": "Difference",
+      "description": "Difference between the counted quantity and the system (book) quantity"
+    },
     "voidcheck": {
       "label": "Void",
       "description": ""
@@ -16896,6 +16900,8 @@
     "addLinesManuallyOrImportFromPurchaseOrder": "Add lines manually or import from a purchase order",
     "addLinesManuallyOrImportFromPurchaseOrderOrInvoice": "Add lines manually or import from a purchase order or invoice",
     "addLinesManually": "Add lines manually",
+    "addLinesManuallyOrGenerateAutomatically": "Add lines manually or generate them automatically",
+    "generateLinesAutomatically": "Generate lines automatically",
     "addLinesManuallyOrImportFromOrderOrReceipt": "Add lines manually or import from a purchase order or goods receipt",
     "importFromPurchaseOrder": "Import from PO",
     "importFromPurchaseInvoice": "Add from Invoice",
@@ -19461,9 +19467,11 @@
     "qtyZero": "0",
     "qtyLessZero": "< 0",
     "qtyGreaterZero": "> 0",
+    "setBookQuantityToZero": "Set Book Quantity to zero",
     "generate": "Generate",
     "generating": "Generating...",
     "inventoryListGenerated": "Inventory count list generated",
+    "linesGeneratedAutomatically": "Lines generated automatically",
     "errorGeneratingList": "Failed to generate inventory list",
     "updateListSystemCount": "Update List System Count",
     "updating": "Updating...",

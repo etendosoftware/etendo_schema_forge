@@ -35204,7 +35204,7 @@
       ]
     },
     "f059b24ecd20866b3f9f2bc8f3e5f8c6e2852af85784f3ade7eaa77668d467e5": {
-      "checksum": "80d089eeda1473bc87a61de3918e20057899c8229d4b9475a05fb6c1e17fb5a2",
+      "checksum": "3c62538401f39855f7045bdd76504e2ad4d729548d69acc85daa873199a88f75",
       "params": [
         "168"
       ],
@@ -35820,6 +35820,12 @@
           "ad_table_id": "322",
           "columnname": "Relatedinventorylineid",
           "position": "22"
+        },
+        {
+          "ad_column_id": "A64CA09596E6451F91D6E8C48E1E5B59",
+          "ad_table_id": "322",
+          "columnname": "EM_Etgo_Qtydiff",
+          "position": "24"
         }
       ]
     },
