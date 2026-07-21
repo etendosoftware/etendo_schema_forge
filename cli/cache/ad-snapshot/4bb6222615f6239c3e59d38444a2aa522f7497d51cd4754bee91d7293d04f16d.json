@@ -1838,6 +1838,28 @@
         }
       ]
     },
+    "88ad8a1f069401e3146d7f655acfc6a28ca92062200daae9b33395feed8061f1": {
+      "checksum": "1ca512e630b8d6aa85e7d2f91f9393582bcc5612f9f71ede8da65b703438cb4a",
+      "params": [
+        "116"
+      ],
+      "rows": [
+        {
+          "ad_callout_id": "119",
+          "ad_table_id": "140",
+          "classname": "org.openbravo.erpCommon.ad_callouts.SL_Conversion_Rate",
+          "columnname": "DivideRate",
+          "name": "SL_Conversion_Rate"
+        },
+        {
+          "ad_callout_id": "119",
+          "ad_table_id": "140",
+          "classname": "org.openbravo.erpCommon.ad_callouts.SL_Conversion_Rate",
+          "columnname": "MultiplyRate",
+          "name": "SL_Conversion_Rate"
+        }
+      ]
+    },
     "8b543deb8e44e185e72cf9d4fc98b17a1b417138b8b2e25b139459d68e0bc945": {
       "checksum": "a38e2ec17b8348f805143513e6f0bad509002a802ff75495d03899e938f3e68b",
       "params": [
@@ -2035,6 +2057,13 @@
           "name": "SE_Order_Organization"
         }
       ]
+    },
+    "99c77d72fc6f49da80e9db85826999d4bdb48df40b9db4d4c619f80ac282732a": {
+      "checksum": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "params": [
+        "6FEBA130CDE24CC09041FFA6117ADFA9"
+      ],
+      "rows": []
     },
     "9af6c3647465867cc635696d802fced95ce307fa9ce43e002d8fff078398bc28": {
       "checksum": "1b07d90490aaeecdb0deb0ca9eb7afc9ab5bb3f59a46ae6125dcdc80f8493f20",

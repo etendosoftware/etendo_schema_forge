@@ -223,9 +223,8 @@
           "inputMode": null
         },
         "accountingDate": {
-          "visibility": "readOnly",
-          "form": false,
-          "section": "other"
+          "visibility": "system",
+          "_note": "ETP-4531 (redefined 2026-07-17): previously readOnly+form:false, which suppresses rendering but still leaves the field present in frontendContract.fields. Switched to system to fully exclude it from the frontend contract, matching sales-order's accountingDate (raw AD visibility already system, no override) and the invoice/shipment/receipt windows touched by this ticket."
         },
         "incoterms": {
           "visibility": "editable",

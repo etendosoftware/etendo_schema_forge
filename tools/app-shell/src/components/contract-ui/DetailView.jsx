@@ -7,6 +7,7 @@ import { AddLineButton } from '@/components/ui/add-line-button.jsx';
 import { X, MoreVertical, Check, Save, List, Printer, Mail, Trash2, Loader2, Shield, Lock, Undo2 } from 'lucide-react';
 import { AttachmentIcon } from '@/components/attachments/AttachmentIcon';
 import { PricingIcon, WarehouseProductsIcon } from '@/components/ui/custom-icons';
+import PaymentLifecycleConfirmModal from '@/windows/custom/shared/PaymentLifecycleConfirmModal';
 
 const TAB_ICONS = {
   'custom:attachments': AttachmentIcon,
@@ -1343,6 +1344,14 @@ const WINDOW_DELETE_ACTIONS = {
   'payment-out': 'eTPRRemovePayment',
 };
 
+// ETP-4500 — same rationale/hardcoding constraint as WINDOW_DELETE_ACTIONS above: these
+// windows show the rich Reactivar/Eliminar cartel (conditional Conciliación/Asiento items)
+// instead of the generic delete confirmation Dialog. `dir` feeds the cobro/pago wording.
+const WINDOW_DELETE_CONFIRM_MODALS = {
+  'payment-in': { Component: PaymentLifecycleConfirmModal, dir: 'in' },
+  'payment-out': { Component: PaymentLifecycleConfirmModal, dir: 'out' },
+};
+
 export function isDeleteButtonVisible({
   isNew,
   recordId,
@@ -1747,9 +1756,9 @@ export function resolveProcessLabel(p, data) {
   return p.label;
 }
 
-function renderProcessConfirmModal(process, Modal, onConfirm, onClose) {
+function renderProcessConfirmModal(process, Modal, onConfirm, onClose, record) {
   if (!process || !Modal) return null;
-  return React.createElement(Modal, { process, onConfirm, onClose });
+  return React.createElement(Modal, { process, onConfirm, onClose, record });
 }
 
 function resolveStatusPrefix(key, translate) {
@@ -2014,6 +2023,8 @@ export function DetailView({
   // ETP-4479 — fall back to the per-window default when the caller didn't
   // explicitly pass `deleteAction` (see WINDOW_DELETE_ACTIONS above).
   const effectiveDeleteAction = deleteAction ?? WINDOW_DELETE_ACTIONS[windowName] ?? null;
+  // ETP-4500 — per-window rich delete cartel (see WINDOW_DELETE_CONFIRM_MODALS above).
+  const deleteConfirmModal = WINDOW_DELETE_CONFIRM_MODALS[windowName] ?? null;
   const navigate = useNavigate();
   const location = useLocation();
   const [searchParams] = useSearchParams();
@@ -2112,7 +2123,11 @@ export function DetailView({
     } : null
   ), [_headerData, windowName, _detailTabTitle, hook.editing, _isFormEditing]);
   useRegisterWindowContext(_windowContextInfo);
-  const isDocumentReadOnly = getDocumentReadOnly(lockWhenProcessed, _headerData);
+  // Window-level read-only (GO view-only windows, e.g. Conversion Rates): forces the
+  // whole detail read-only, reusing every isDocumentReadOnly gate (save, delete,
+  // add-line, inline edits). Also passed to the header <Form> so its fields render RO.
+  const windowReadOnly = api?.window?.readOnly === true;
+  const isDocumentReadOnly = getDocumentReadOnly(lockWhenProcessed, _headerData) || windowReadOnly;
   const isProcessed = _headerData?.processed === true || _headerData?.processed === 'Y';
   // When draftMode declares an explicit completedStatuses array, only those documentStatus
   // values hide the Save/Confirm pair. This lets windows like sales-quotation keep the
@@ -2125,6 +2140,38 @@ export function DetailView({
   const [confirmProcess, setConfirmProcess] = useState(null);
   // showNotes state removed — notes panel is always visible in side-by-side layout
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  // Shared by both the generic delete Dialog and the rich per-window cartel
+  // (WINDOW_DELETE_CONFIRM_MODALS) below — same eTPRRemovePayment / handleDelete
+  // routing either way; only the confirmation UI differs. Named distinctly from
+  // the line-level `confirmDelete` (a Promise-based prompt declared further down)
+  // since this one deletes the HEADER record.
+  const confirmHeaderDelete = async () => {
+    setShowDeleteConfirm(false);
+    // ETP-4479 — deleteAction-backed windows go through the same
+    // `neoAction.execute(recordId, actionName)` mechanism the
+    // detail-view "more" menu already uses for NEO actions
+    // (see runNeoMenuAction above), mirroring the URL convention
+    // PaymentHeaderTableBase's row-level delete relies on
+    // (POST {apiBaseUrl}/{entity}/{id}/action/{actionName}).
+    if (effectiveDeleteAction) {
+      const currentId = data?.id || recordId;
+      const result = await neoAction.execute(currentId, effectiveDeleteAction);
+      if (result.success) {
+        // Reuse the per-action i18n key convention (`${action}Completed`,
+        // e.g. eTPRRemovePaymentCompleted) when translated; otherwise
+        // fall back to the generic delete-success message.
+        const key = `${effectiveDeleteAction}Completed`;
+        const msg = ui(key);
+        toast.success(msg !== key ? msg : ui('recordDeleted'));
+        navigate(`/${windowName}`);
+      } else {
+        toast.error(result.message || ui('actionFailed'));
+      }
+      return;
+    }
+    await hook.handleDelete();
+    navigate(`/${windowName}`);
+  };
   // Non-dismissible loading modal shown while a draftMode confirm action with
   // draftMode.processingModal is in flight (e.g. Verifactu's ~8s GenerateRF).
   const [showProcessingModal, setShowProcessingModal] = useState(false);
@@ -3383,7 +3430,10 @@ export function DetailView({
                 hideDeleteWhenComplete,
                 isProcessed,
                 deleteAction: effectiveDeleteAction,
-                hideDeleteButton,
+                // View-only window (window.readOnly): never show the toolbar Delete.
+                // Reuses the existing unconditional opt-out so no other window's
+                // processed-document delete behavior changes.
+                hideDeleteButton: hideDeleteButton || windowReadOnly,
               }) && (
                 <button
                   onClick={() => setShowDeleteConfirm(true)}
@@ -3629,6 +3679,7 @@ export function DetailView({
           processConfirmModal,
           async () => { await hook.handleProcess?.(confirmProcess); setConfirmProcess(null); },
           () => setConfirmProcess(null),
+          data,
         )}
 
         {/* Scrollable content + optional sidebarContent (full-height independent column) */}
@@ -3782,6 +3833,7 @@ export function DetailView({
                               catalogs={catalogs}
                               layout="horizontal"
                               section="principal"
+                              readOnly={windowReadOnly}
                               displayLogic={{ readOnly: displayLogic?.readOnly ?? {}, visibility: {} }}
                               api={api}
                               token={token}
@@ -3805,6 +3857,7 @@ export function DetailView({
                                   catalogs={catalogs}
                                   layout="horizontal"
                                   section="collapsed"
+                                  readOnly={windowReadOnly}
                                   excludeFields={notesField ? [notesField] : []}
                                   displayLogic={displayLogic}
                                   api={api}
@@ -4731,58 +4784,44 @@ export function DetailView({
         documentIds={getDocumentIds(recordId)}
         token={token}
         data-testid="DocumentPrintDrawer__fa3275" />
-      <Dialog
-        open={showDeleteConfirm}
-        onOpenChange={setShowDeleteConfirm}
-        data-testid="Dialog__fa3275">
-        <DialogContent className="max-w-sm" data-testid="DialogContent__fa3275">
-          <DialogHeader data-testid="DialogHeader__fa3275">
-            <DialogTitle data-testid="DialogTitle__fa3275">{ui('deleteConfirmTitle')}</DialogTitle>
-            <DialogDescription data-testid="DialogDescription__fa3275">
-              {ui('deleteConfirmMessage')}
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter data-testid="DialogFooter__fa3275">
-            <DialogClose asChild data-testid="DialogClose__fa3275">
-              <Button variant="outline" size="sm" data-testid="Button__fa3275">{ui('cancel')}</Button>
-            </DialogClose>
-            <Button
-              variant="destructive"
-              size="sm"
-              data-testid="action-delete-confirm"
-              onClick={async () => {
-                setShowDeleteConfirm(false);
-                // ETP-4479 — deleteAction-backed windows go through the same
-                // `neoAction.execute(recordId, actionName)` mechanism the
-                // detail-view "more" menu already uses for NEO actions
-                // (see runNeoMenuAction above), mirroring the URL convention
-                // PaymentHeaderTableBase's row-level delete relies on
-                // (POST {apiBaseUrl}/{entity}/{id}/action/{actionName}).
-                if (effectiveDeleteAction) {
-                  const currentId = data?.id || recordId;
-                  const result = await neoAction.execute(currentId, effectiveDeleteAction);
-                  if (result.success) {
-                    // Reuse the per-action i18n key convention (`${action}Completed`,
-                    // e.g. eTPRRemovePaymentCompleted) when translated; otherwise
-                    // fall back to the generic delete-success message.
-                    const key = `${effectiveDeleteAction}Completed`;
-                    const msg = ui(key);
-                    toast.success(msg !== key ? msg : ui('recordDeleted'));
-                    navigate(`/${windowName}`);
-                  } else {
-                    toast.error(result.message || ui('actionFailed'));
-                  }
-                  return;
-                }
-                await hook.handleDelete();
-                navigate(`/${windowName}`);
-              }}
-            >
-              {ui('delete')}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {deleteConfirmModal ? (
+        showDeleteConfirm && (
+          <deleteConfirmModal.Component
+            dir={deleteConfirmModal.dir}
+            action="delete"
+            data={data}
+            onConfirm={confirmHeaderDelete}
+            onClose={() => setShowDeleteConfirm(false)}
+          />
+        )
+      ) : (
+        <Dialog
+          open={showDeleteConfirm}
+          onOpenChange={setShowDeleteConfirm}
+          data-testid="Dialog__fa3275">
+          <DialogContent className="max-w-sm" data-testid="DialogContent__fa3275">
+            <DialogHeader data-testid="DialogHeader__fa3275">
+              <DialogTitle data-testid="DialogTitle__fa3275">{ui('deleteConfirmTitle')}</DialogTitle>
+              <DialogDescription data-testid="DialogDescription__fa3275">
+                {ui('deleteConfirmMessage')}
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter data-testid="DialogFooter__fa3275">
+              <DialogClose asChild data-testid="DialogClose__fa3275">
+                <Button variant="outline" size="sm" data-testid="Button__fa3275">{ui('cancel')}</Button>
+              </DialogClose>
+              <Button
+                variant="destructive"
+                size="sm"
+                data-testid="action-delete-confirm"
+                onClick={confirmHeaderDelete}
+              >
+                {ui('delete')}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
       <Dialog
         open={Boolean(secondaryDeleteConfirm)}
         onOpenChange={(open) => { if (!open) setSecondaryDeleteConfirm(null); }}

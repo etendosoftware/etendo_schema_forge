@@ -31,6 +31,10 @@ import { QUICK_ACTIONS_PILL_CLASS } from './quickActionsStyle.js';
  *
  * NOTE: this component is generic — every prop is optional and gates behavior
  * gracefully. It is safe to mount on every list row regardless of window config.
+ *
+ * `readOnly` (window.readOnly): when true, the mutating actions (Edit, Clone, Delete)
+ * are hidden so a view-only window (e.g. Conversion Rates in GO) cannot be edited from
+ * the list. Row click still navigates to the read-only detail.
  */
 export default function RowQuickActions({
   row,
@@ -72,6 +76,12 @@ export default function RowQuickActions({
   // for canonical buttons are still derived from the existing props (documentPreview, statusField,
   // hideDeleteWhenComplete) — `actionsConfig` only refines visibility further.
   actionsConfig = null,
+  // View-only window (decisions.json → window.readOnly, threaded via ListView →
+  // DataTable). When true the write actions (Edit, Clone, Delete) are suppressed so
+  // a GO tenant cannot mutate the record from the list; row click still opens the
+  // read-only detail for viewing. Non-mutating affordances (Email/Send, kebab
+  // menu actions) stay gated by their own config. Defaults to false → unchanged.
+  readOnly = false,
 }) {
   const ui = useUI();
   const [showMenu, setShowMenu] = useState(false);
@@ -144,7 +154,7 @@ export default function RowQuickActions({
   // Same gate as DetailView's edit toolbar — centralized in utils/recordActions.js.
   // `hideDeleteButton` short-circuits before the status-based gate: it's an
   // unconditional opt-out, not a conditional one.
-  const showDelete = !hideDeleteButton && isDeleteVisibleForRecord({
+  const showDelete = !readOnly && !hideDeleteButton && isDeleteVisibleForRecord({
     record: row,
     statusField,
     hideDeleteWhenComplete,
@@ -215,8 +225,8 @@ export default function RowQuickActions({
       data-testid="row-quick-actions"
       onClick={stop}
     >
-      {/* Edit */}
-      {passesVisibleWhen('edit') && (
+      {/* Edit — suppressed on read-only windows (row click still opens the view). */}
+      {!readOnly && passesVisibleWhen('edit') && (
         <button
           type="button"
           onClick={(e) => { stop(e); runWithInFlight('edit', onEdit)(row); }}
@@ -229,8 +239,8 @@ export default function RowQuickActions({
           {inFlight.edit ? <Loader2 className="h-5 w-5 animate-spin" data-testid="Loader2__ec6673" /> : <Pencil className="h-5 w-5" data-testid="Pencil__ec6673" />}
         </button>
       )}
-      {/* Clone — only when host wires onClone (no generic default exists). */}
-      {onClone && passesVisibleWhen('duplicate') && (
+      {/* Clone — only when host wires onClone (no generic default exists); never on read-only. */}
+      {!readOnly && onClone && passesVisibleWhen('duplicate') && (
         <button
           type="button"
           onClick={(e) => { stop(e); runWithInFlight('duplicate', onClone)(row); }}

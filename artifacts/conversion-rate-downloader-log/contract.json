@@ -1,14 +1,17 @@
 {
-  "version": "0.2.0",
+  "version": "0.3.0",
   "generatedAt": "2026-05-26T14:01:54.525Z",
-  "updatedAt": "2026-05-26T14:53:21.474Z",
-  "checksum": "d9b4a3d05935dffb",
+  "updatedAt": "2026-07-15T18:13:15.971Z",
+  "checksum": "3a6771ca45f25010",
   "frontendContract": {
     "window": {
       "id": "6FEBA130CDE24CC09041FFA6117ADFA9",
       "name": "Conversion Rate Downloader Log",
       "primaryEntity": "conversionRateDownloaderLog",
       "category": "settings",
+      "hideCreate": true,
+      "readOnly": true,
+      "hideDelete": true,
       "detailEntity": null,
       "layoutType": "default"
     },
@@ -131,15 +134,24 @@
             "enumValues": [
               {
                 "value": "FAILED",
-                "name": "FAILED"
+                "name": "FAILED",
+                "labels": {
+                  "es_ES": "FAILED"
+                }
               },
               {
                 "value": "PARTIAL",
-                "name": "PARTIAL"
+                "name": "PARTIAL",
+                "labels": {
+                  "es_ES": "PARTIAL"
+                }
               },
               {
                 "value": "SUCCESS",
-                "name": "SUCCESS"
+                "name": "SUCCESS",
+                "labels": {
+                  "es_ES": "SUCCESS"
+                }
               }
             ],
             "defaultValue": "SUCCESS",
@@ -189,6 +201,9 @@
       "name": "Conversion Rate Downloader Log",
       "primaryEntity": "conversionRateDownloaderLog",
       "category": "settings",
+      "hideCreate": true,
+      "readOnly": true,
+      "hideDelete": true,
       "detailEntity": null
     },
     "entities": {
@@ -262,14 +277,6 @@
             "required": false
           },
           {
-            "name": "syncLogID",
-            "apiKey": "syncLogID",
-            "column": "Smfcr_Sync_Log_ID",
-            "type": "id",
-            "visibility": "system",
-            "required": true
-          },
-          {
             "name": "client",
             "apiKey": "client",
             "column": "AD_Client_ID",
@@ -306,6 +313,14 @@
             "apiKey": "updatedBy",
             "column": "Updatedby",
             "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "id",
+            "apiKey": "id",
+            "column": "Smfcr_Sync_Log_ID",
+            "type": "id",
             "visibility": "system",
             "required": true
           }
@@ -356,10 +371,10 @@
       "conversionRateDownloaderLog": {
         "get": true,
         "getById": true,
-        "post": true,
-        "put": true,
-        "patch": true,
-        "delete": true,
+        "post": false,
+        "put": false,
+        "patch": false,
+        "delete": false,
         "listUrl": "/sws/neo/conversion-rate-downloader-log/conversionRateDownloaderLog",
         "detailUrl": "/sws/neo/conversion-rate-downloader-log/conversionRateDownloaderLog/{id}",
         "supportedFilters": [
@@ -384,7 +399,8 @@
       "parentFilter": "parentId={id} for child entities"
     },
     "window": {
-      "category": "settings"
+      "category": "settings",
+      "readOnly": true
     }
   },
   "testManifest": {
@@ -581,20 +597,20 @@
         "description": "System field 'creationDate' should exist in backend but not frontend for conversionRateDownloaderLog"
       },
       {
+        "id": "t-system-field-conversionRateDownloaderLog-id",
+        "category": "system-field",
+        "entity": "conversionRateDownloaderLog",
+        "field": "id",
+        "runner": "node",
+        "description": "System field 'id' should exist in backend but not frontend for conversionRateDownloaderLog"
+      },
+      {
         "id": "t-system-field-conversionRateDownloaderLog-organization",
         "category": "system-field",
         "entity": "conversionRateDownloaderLog",
         "field": "organization",
         "runner": "node",
         "description": "System field 'organization' should exist in backend but not frontend for conversionRateDownloaderLog"
-      },
-      {
-        "id": "t-system-field-conversionRateDownloaderLog-syncLogID",
-        "category": "system-field",
-        "entity": "conversionRateDownloaderLog",
-        "field": "syncLogID",
-        "runner": "node",
-        "description": "System field 'syncLogID' should exist in backend but not frontend for conversionRateDownloaderLog"
       },
       {
         "id": "t-system-field-conversionRateDownloaderLog-updated",

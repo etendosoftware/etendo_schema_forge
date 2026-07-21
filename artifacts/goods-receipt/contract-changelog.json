@@ -938,5 +938,28 @@
     ],
     "author": "pipeline",
     "date": "2026-06-29"
+  },
+  {
+    "from": "0.20.0",
+    "to": "0.21.0",
+    "level": "additive",
+    "reasons": [
+      "Field \"accountingDate\" property \"form\" changed from \"false\" to \"true\" in frontend (patch)",
+      "Field \"accountingDate\" property \"section\" changed from \"undefined\" to \"principal\" in frontend (additive)",
+      "Field \"accountingDate\" property \"seq\" changed from \"undefined\" to \"35\" in frontend (additive)"
+    ],
+    "author": "pipeline",
+    "date": "2026-07-16"
+  },
+  {
+    "from": "0.21.0",
+    "to": "0.22.0",
+    "level": "breaking",
+    "reasons": [
+      "Field \"accountingDate\" removed from entity \"goodsReceipt\" in frontend",
+      "Field \"accountingDate\" property \"visibility\" changed from \"editable\" to \"system\" in backend (patch)"
+    ],
+    "author": "pipeline",
+    "date": "2026-07-17"
   }
 ]
