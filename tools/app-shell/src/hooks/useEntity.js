@@ -788,13 +788,22 @@ export function useEntity(entity, childEntity, {
         refresh();
     }, [refresh, skipListFetch]);
 
-    const fetchChildren = useCallback((parentId) => {
+    const fetchChildren = useCallback((parentId, { silent = false } = {}) => {
         if (!childEntity || !parentId) {
             setChildren([]);
-            setChildrenLoading(false);
+            if (!silent) setChildrenLoading(false);
             return;
         }
-        setChildrenLoading(true);
+        // `silent` skips the childrenLoading flag entirely (used by handleSave's
+        // post-save background refresh, ETP-4512): toggling childrenLoading while
+        // children.length is still 0 makes DetailView's isInitialChildrenLoading
+        // gate swap bottomSection.linesEmptyState for a spinner for one render —
+        // unmounting any in-flight click handler on that component (e.g. an
+        // "Import from receipt" button awaiting handleSave() before opening its
+        // modal) and silently dropping its queued setState. See
+        // purchase-invoice-import-from-receipt.mocked.spec.js and
+        // return-to-vendor-shipment.mocked.spec.js.
+        if (!silent) setChildrenLoading(true);
         // NEO Headless uses ?parentId= to filter child entity records
         fetch(`${apiBaseUrl}/${childEntity}?parentId=${parentId}${childSortBy ? `&_sortBy=${childSortBy}` : ''}`, { headers })
             .then(res => {
@@ -806,7 +815,7 @@ export function useEntity(entity, childEntity, {
                 setChildren(rows);
             })
             .catch(() => setChildren([]))
-            .finally(() => setChildrenLoading(false));
+            .finally(() => { if (!silent) setChildrenLoading(false); });
     }, [apiBaseUrl, childEntity, token, childSortBy]);
 
     // HandleDefaults: fetch backend-resolved defaults for a NEW child line under the
@@ -1060,7 +1069,11 @@ export function useEntity(entity, childEntity, {
                 // frontend has no other way to learn about. Mirrors the reasoning
                 // DetailView's justSaved fast-path already applies for the create
                 // path ("children ... must be loaded") — this extends it to update.
-                fetchChildren(resolvedSaved?.id);
+                // `silent: true`: this call must not toggle childrenLoading — see
+                // fetchChildren's own comment for why (it unmounts bottomSection
+                // .linesEmptyState mid-click on windows whose "import" flow calls
+                // handleSave() before opening its modal).
+                fetchChildren(resolvedSaved?.id, { silent: true });
                 afterSaveNotifications(data, { silent, isNew, entity, specName, ui });
                 return saved;
             } else {
