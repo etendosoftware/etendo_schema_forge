@@ -1,8 +1,8 @@
 {
-  "version": "0.32.0",
+  "version": "0.33.0",
   "generatedAt": "2026-06-29T12:25:17.116Z",
-  "updatedAt": "2026-07-21T12:35:20.949Z",
-  "checksum": "5941c48bc1f9c392",
+  "updatedAt": "2026-07-21T19:17:44.597Z",
+  "checksum": "9162cd8e06b5f1b3",
   "frontendContract": {
     "window": {
       "id": "168",
@@ -627,7 +627,10 @@
             "defaultValue": "0",
             "gridOrder": 5,
             "grow": true,
-            "columnWidth": 192
+            "columnWidth": 192,
+            "validation": {
+              "maxLength": 10
+            }
           }
         ],
         "searchableFields": [],
