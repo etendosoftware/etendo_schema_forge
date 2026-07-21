@@ -3,7 +3,10 @@
   "version": 2,
   "window": {
     "category": "settings",
-    "name": "User"
+    "name": "User",
+    "headerExtra": {
+      "customForm": "AssignRoleControl"
+    }
   },
   "discardPatterns": ["EM_*"],
   "entities": {
@@ -89,12 +92,19 @@
           "reason": "Supervisor for escalation workflows"
         },
         "defaultRole": {
-          "visibility": "editable",
+          "visibility": "readOnly",
           "grid": true,
+          "form": false,
           "section": "defaults",
-          "inputMode": "selector",
-          "reference": "Role",
-          "reason": "Default role at login, essential config field"
+          "columnType": "status",
+          "enumValues": [
+            { "value": "9B8D736190724807AB256DC95F20EC5E", "name": "roleNameGoClientAdmin" },
+            { "value": "127AE77FE2994067B7FE6495FC21D51E", "name": "roleNameFinance" },
+            { "value": "2A159DF4F4B944A6AA903202AD35B545", "name": "roleNameSales" },
+            { "value": "A826430F723E4C1B9A53EBB0746A98C0", "name": "roleNamePurchasing" },
+            { "value": "55E05A4B43514A029D6FB6B8D94B49D4", "name": "roleNameInventory" }
+          ],
+          "reason": "Editing moved to the AssignRoleControl headerExtra (ETP-4512), which writes this same field but sources its dropdown options from the unrestricted userRoles.role selector instead of this field's own EXISTS-restricted native selector (which only lists roles the user already has, useless for assigning a NEW one). Shown here as a read-only grid badge only; the AssignRoleControl.jsx headerExtra is the only editing surface. Still cascades defaultClient/defaultOrganization via dependsOn below, unaffected by this change."
         },
         "defaultLanguage": {
           "visibility": "editable",
@@ -164,16 +174,15 @@
     "userRoles": {
       "fields": {
         "role": {
-          "visibility": "editable",
+          "visibility": "readOnly",
           "grid": true,
           "searchable": true,
-          "inputMode": "selector",
-          "reference": "Role"
+          "reason": "Role assignment now happens exclusively via the user header's AssignRoleControl (ETP-4512), which enforces a single active role and is the only writer of AD_User_Roles (via UserRoleAssignmentHandler in com.etendoerp.go). This grid becomes a read-only confirmation view; visibility:readOnly on every field in this entity empties addLineFields.entry so the Add-line button no longer renders."
         },
         "roleAdmin": {
-          "visibility": "editable",
+          "visibility": "readOnly",
           "grid": true,
-          "reason": "Controls whether user can administer the role"
+          "reason": "See role field above — locked read-only alongside it."
         }
       }
     },
@@ -300,10 +309,10 @@
     "AD_Role_of_User": {
       "type": "validation",
       "entity": "user",
-      "decision": "Keep",
+      "decision": "Omit",
       "description": "Restricts default role selection to roles assigned to this user",
-      "impactIfOmitted": "Users could select a role they don't have access to",
-      "reason": "Data integrity constraint for role-based cascade"
+      "impactIfOmitted": "No impact — the native defaultRole selector this rule filters no longer has a form control (ETP-4512: form:false, replaced by AssignRoleControl headerExtra). This EXISTS-based restriction is exactly why the native selector couldn't be reused for assigning a NEW role in the first place — see defaultRole's decisions.json reason.",
+      "reason": "Superseded 2026-07-21 (ETP-4512): moot now that defaultRole is read-only/form:false. Left documented here rather than silently dropped, since the underlying raw AD validation rule is unchanged — only this window's use of it changed."
     },
     "AD_Client_of_Role": {
       "type": "validation",

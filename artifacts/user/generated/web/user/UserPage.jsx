@@ -4,6 +4,7 @@ import UserTable from './UserTable';
 import UserForm from './UserForm';
 import UserRolesTable from './UserRolesTable';
 import UserRolesForm from './UserRolesForm';
+import AssignRoleControl from '@/windows/custom/user/AssignRoleControl';
 import { AttachmentsTab } from '@/components/attachments';
 import catalogs from './mockCatalogs';
 
@@ -44,8 +45,7 @@ const requiredHeaderFields = ['name', 'username', 'locked', 'lastPasswordUpdate'
 // @sf-generated-start addLineFields:userRoles
 const addLineFields = {
   entry: [
-    { key: 'role', column: 'AD_Role_ID', type: 'selector', required: true, label: 'Role', reference: 'Role', inputMode: 'selector' },
-    { key: 'roleAdmin', column: 'Is_Role_Admin', type: 'checkbox', required: true, label: 'Role Administrator' },
+
   ],
   derived: [
 
@@ -124,7 +124,7 @@ export const api = {
       "field": "defaultRole",
       "column": "Default_Ad_Role_ID",
       "reference": "Role",
-      "inputMode": "selector",
+      "inputMode": "search",
       "url": "/sws/neo/user/user/selectors/defaultRole"
     },
     {
@@ -260,6 +260,7 @@ export default function UserPage({ windowName, recordId, ...props }) {
         recordId={recordId}
         breadcrumb={breadcrumb}
       api={api}
+        formFooter={AssignRoleControl}
         customTabs={[{ key: 'attachments', labelKey: 'attachments', Component: AttachmentsTab, placement: 'tab', props: { tableName: "AD_User", config: {} } }]}
         requiredHeaderFields={requiredHeaderFields}
         {...props}

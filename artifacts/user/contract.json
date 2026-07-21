@@ -1,14 +1,17 @@
 {
   "version": "0.16.0",
   "generatedAt": "2026-04-29T18:12:34.035Z",
-  "updatedAt": "2026-07-21T12:35:24.907Z",
-  "checksum": "386a4817461acdb9",
+  "updatedAt": "2026-07-21T17:12:09.184Z",
+  "checksum": "987c5fc105955bc9",
   "frontendContract": {
     "window": {
       "id": "108",
       "name": "User",
       "primaryEntity": "user",
       "category": "settings",
+      "headerExtra": {
+        "customForm": "AssignRoleControl"
+      },
       "layoutType": "default"
     },
     "entities": {
@@ -31,10 +34,6 @@
             "form": true,
             "sourceRequired": true,
             "section": "principal",
-            "validation": {
-              "required": true,
-              "maxLength": 60
-            },
             "callout": {
               "className": "org.openbravo.erpCommon.ad_callouts.SL_User_Name"
             }
@@ -51,11 +50,7 @@
             "grid": true,
             "form": true,
             "sourceRequired": true,
-            "section": "principal",
-            "validation": {
-              "required": true,
-              "maxLength": 60
-            }
+            "section": "principal"
           },
           {
             "name": "firstName",
@@ -69,9 +64,6 @@
             "grid": true,
             "form": true,
             "section": "principal",
-            "validation": {
-              "maxLength": 60
-            },
             "callout": {
               "className": "org.openbravo.erpCommon.ad_callouts.SL_User_Name"
             }
@@ -88,9 +80,6 @@
             "grid": true,
             "form": true,
             "section": "principal",
-            "validation": {
-              "maxLength": 60
-            },
             "callout": {
               "className": "org.openbravo.erpCommon.ad_callouts.SL_User_Name"
             }
@@ -106,10 +95,7 @@
             "required": false,
             "grid": false,
             "form": true,
-            "section": "security",
-            "validation": {
-              "maxLength": 255
-            }
+            "section": "security"
           },
           {
             "name": "isPasswordExpired",
@@ -127,10 +113,7 @@
               "source": "N"
             },
             "defaultValue": "N",
-            "section": "security",
-            "validation": {
-              "maxLength": 1
-            }
+            "section": "security"
           },
           {
             "name": "description",
@@ -143,10 +126,7 @@
             "required": false,
             "grid": false,
             "form": true,
-            "section": "details",
-            "validation": {
-              "maxLength": 255
-            }
+            "section": "details"
           },
           {
             "name": "businessPartner",
@@ -161,10 +141,7 @@
             "form": true,
             "reference": "BusinessPartner",
             "inputMode": "search",
-            "section": "details",
-            "validation": {
-              "maxLength": 60
-            }
+            "section": "details"
           },
           {
             "name": "email",
@@ -177,10 +154,7 @@
             "required": false,
             "grid": true,
             "form": true,
-            "section": "principal",
-            "validation": {
-              "maxLength": 255
-            }
+            "section": "principal"
           },
           {
             "name": "locked",
@@ -199,11 +173,7 @@
               "source": "N"
             },
             "defaultValue": "N",
-            "section": "security",
-            "validation": {
-              "required": true,
-              "maxLength": 1
-            }
+            "section": "security"
           },
           {
             "name": "position",
@@ -216,10 +186,7 @@
             "required": false,
             "grid": false,
             "form": true,
-            "section": "details",
-            "validation": {
-              "maxLength": 40
-            }
+            "section": "details"
           },
           {
             "name": "phone",
@@ -232,10 +199,7 @@
             "required": false,
             "grid": false,
             "form": true,
-            "section": "details",
-            "validation": {
-              "maxLength": 40
-            }
+            "section": "details"
           },
           {
             "name": "supervisor",
@@ -250,10 +214,7 @@
             "form": true,
             "reference": "User",
             "inputMode": "search",
-            "section": "details",
-            "validation": {
-              "maxLength": 22
-            }
+            "section": "details"
           },
           {
             "name": "defaultRole",
@@ -262,16 +223,36 @@
             "label": "Default Role",
             "type": "foreignKey",
             "tsType": "string",
-            "visibility": "editable",
+            "visibility": "readOnly",
             "required": false,
             "grid": true,
-            "form": true,
+            "form": false,
+            "columnType": "status",
             "reference": "Role",
-            "inputMode": "selector",
+            "enumValues": [
+              {
+                "value": "9B8D736190724807AB256DC95F20EC5E",
+                "name": "roleNameGoClientAdmin"
+              },
+              {
+                "value": "127AE77FE2994067B7FE6495FC21D51E",
+                "name": "roleNameFinance"
+              },
+              {
+                "value": "2A159DF4F4B944A6AA903202AD35B545",
+                "name": "roleNameSales"
+              },
+              {
+                "value": "A826430F723E4C1B9A53EBB0746A98C0",
+                "name": "roleNamePurchasing"
+              },
+              {
+                "value": "55E05A4B43514A029D6FB6B8D94B49D4",
+                "name": "roleNameInventory"
+              }
+            ],
+            "inputMode": "search",
             "section": "defaults",
-            "validation": {
-              "maxLength": 12
-            },
             "validationRule": {
               "code": "EXISTS ( SELECT 1\n        FROM  AD_USER_ROLES A_U_R\n        WHERE A_U_R.AD_ROLE_ID = AD_Role.AD_Role_ID\n        AND A_U_R.ISACTIVE = 'Y'\n        AND A_U_R.AD_USER_ID = @AD_User_ID@)",
               "contextParams": [],
@@ -293,10 +274,7 @@
             "form": true,
             "reference": "Language",
             "inputMode": "selector",
-            "section": "defaults",
-            "validation": {
-              "maxLength": 6
-            }
+            "section": "defaults"
           },
           {
             "name": "defaultClient",
@@ -316,9 +294,6 @@
               "filterKey": "Default_AD_Role_ID"
             },
             "section": "defaults",
-            "validation": {
-              "maxLength": 12
-            },
             "validationRule": {
               "code": "AD_CLIENT.ISACTIVE = 'Y' AND EXISTS (SELECT 1 FROM AD_ROLE_ORGACCESS WHERE AD_ROLE_ORGACCESS.AD_CLIENT_ID = AD_CLIENT.AD_CLIENT_ID AND AD_ROLE_ORGACCESS.AD_ROLE_ID = @Default_AD_Role_ID@ AND AD_ROLE_ORGACCESS.ISACTIVE = 'Y')",
               "contextParams": [],
@@ -345,9 +320,6 @@
               "filterKey": "Default_AD_Role_ID"
             },
             "section": "defaults",
-            "validation": {
-              "maxLength": 12
-            },
             "validationRule": {
               "code": "EXISTS (SELECT 1 FROM AD_ROLE_ORGACCESS A_R_O, ad_role r\n        WHERE A_R_O.AD_ORG_ID = AD_ORG.AD_Org_ID\n        AND A_R_O.ISACTIVE = 'Y'\n        AND A_R_O.AD_ROLE_ID = R.AD_ROLE_ID\n        and r.ad_role_id = @Default_AD_Role_ID@\n        AND R.ISACTIVE = 'Y'\n        AND (LPAD(TO_CHAR(R.USERLEVEL), 1, '1')='S' OR AD_ORG.AD_ORG_ID <> '0')\n        AND A_R_O.AD_ROLE_ID = @Default_AD_Role_ID@)",
               "contextParams": [],
@@ -374,9 +346,6 @@
               "filterKey": "Default_AD_Client_ID"
             },
             "section": "defaults",
-            "validation": {
-              "maxLength": 12
-            },
             "validationRule": {
               "code": "M_Warehouse.AD_Client_ID = @Default_AD_Client_ID@",
               "contextParams": [],
@@ -402,11 +371,7 @@
               "source": "@#Date@"
             },
             "defaultValue": "@#Date@",
-            "section": "security",
-            "validation": {
-              "required": true,
-              "maxLength": 19
-            }
+            "section": "security"
           }
         ],
         "searchableFields": [
@@ -451,17 +416,13 @@
             "label": "Role",
             "type": "foreignKey",
             "tsType": "string",
-            "visibility": "editable",
+            "visibility": "readOnly",
             "required": true,
             "grid": true,
             "form": true,
             "sourceRequired": true,
             "reference": "Role",
             "inputMode": "selector",
-            "validation": {
-              "required": true,
-              "maxLength": 22
-            },
             "validationRule": {
               "code": "AD_Role.AD_Client_ID=@#AD_Client_ID@",
               "contextParams": [
@@ -477,7 +438,7 @@
             "label": "Role Administrator",
             "type": "boolean",
             "tsType": "boolean",
-            "visibility": "editable",
+            "visibility": "readOnly",
             "required": true,
             "grid": true,
             "form": true,
@@ -486,11 +447,7 @@
               "type": "computed",
               "source": "N"
             },
-            "defaultValue": "N",
-            "validation": {
-              "required": true,
-              "maxLength": 1
-            }
+            "defaultValue": "N"
           }
         ],
         "searchableFields": [
@@ -523,11 +480,7 @@
             "required": true,
             "grid": true,
             "form": true,
-            "sourceRequired": true,
-            "validation": {
-              "required": true,
-              "maxLength": 1
-            }
+            "sourceRequired": true
           },
           {
             "name": "smtpServer",
@@ -541,11 +494,7 @@
             "grid": true,
             "form": true,
             "sourceRequired": true,
-            "section": "server",
-            "validation": {
-              "required": true,
-              "maxLength": 200
-            }
+            "section": "server"
           },
           {
             "name": "sMTPAuthentification",
@@ -559,11 +508,7 @@
             "grid": true,
             "form": true,
             "sourceRequired": true,
-            "section": "server",
-            "validation": {
-              "required": true,
-              "maxLength": 1
-            }
+            "section": "server"
           },
           {
             "name": "smtpServerAccount",
@@ -576,10 +521,7 @@
             "required": false,
             "grid": true,
             "form": true,
-            "section": "auth",
-            "validation": {
-              "maxLength": 50
-            }
+            "section": "auth"
           },
           {
             "name": "smtpServerPassword",
@@ -592,10 +534,7 @@
             "required": false,
             "grid": false,
             "form": true,
-            "section": "auth",
-            "validation": {
-              "maxLength": 60
-            }
+            "section": "auth"
           },
           {
             "name": "smtpServerSenderAddress",
@@ -608,10 +547,7 @@
             "required": false,
             "grid": false,
             "form": true,
-            "section": "sender",
-            "validation": {
-              "maxLength": 50
-            }
+            "section": "sender"
           },
           {
             "name": "smtpConnectionSecurity",
@@ -649,10 +585,6 @@
               }
             ],
             "section": "server",
-            "validation": {
-              "required": true,
-              "maxLength": 60
-            },
             "callout": {
               "className": "org.openbravo.erpCommon.ad_callouts.EmailConfiguration_Port"
             }
@@ -674,11 +606,7 @@
               "source": "25"
             },
             "defaultValue": "25",
-            "section": "server",
-            "validation": {
-              "required": true,
-              "maxLength": 10
-            }
+            "section": "server"
           },
           {
             "name": "smtpConnectionTimeout",
@@ -696,10 +624,7 @@
               "source": "600"
             },
             "defaultValue": "600",
-            "section": "server",
-            "validation": {
-              "maxLength": 10
-            }
+            "section": "server"
           },
           {
             "name": "fromName",
@@ -712,10 +637,7 @@
             "required": false,
             "grid": false,
             "form": true,
-            "section": "sender",
-            "validation": {
-              "maxLength": 200
-            }
+            "section": "sender"
           },
           {
             "name": "replyToAddress",
@@ -728,10 +650,7 @@
             "required": false,
             "grid": false,
             "form": true,
-            "section": "sender",
-            "validation": {
-              "maxLength": 200
-            }
+            "section": "sender"
           },
           {
             "name": "testSuccessful",
@@ -749,11 +668,7 @@
               "type": "computed",
               "source": "N"
             },
-            "defaultValue": "N",
-            "validation": {
-              "required": true,
-              "maxLength": 1
-            }
+            "defaultValue": "N"
           },
           {
             "name": "lastTestDate",
@@ -765,10 +680,7 @@
             "visibility": "readOnly",
             "required": false,
             "grid": false,
-            "form": true,
-            "validation": {
-              "maxLength": 19
-            }
+            "form": true
           },
           {
             "name": "smtpconnectiontest",
@@ -786,11 +698,7 @@
               "type": "computed",
               "source": "N"
             },
-            "defaultValue": "N",
-            "validation": {
-              "required": true,
-              "maxLength": 1
-            }
+            "defaultValue": "N"
           },
           {
             "name": "defaultConfiguration",
@@ -808,11 +716,7 @@
               "type": "computed",
               "source": "N"
             },
-            "defaultValue": "N",
-            "validation": {
-              "required": true,
-              "maxLength": 1
-            }
+            "defaultValue": "N"
           }
         ],
         "searchableFields": [
@@ -863,7 +767,10 @@
       "id": "108",
       "name": "User",
       "primaryEntity": "user",
-      "category": "settings"
+      "category": "settings",
+      "headerExtra": {
+        "customForm": "AssignRoleControl"
+      }
     },
     "entities": {
       "user": {
@@ -1060,7 +967,7 @@
             "apiKey": "defaultRole",
             "column": "Default_Ad_Role_ID",
             "type": "foreignKey",
-            "visibility": "editable",
+            "visibility": "readOnly",
             "required": false
           },
           {
@@ -1251,7 +1158,7 @@
             "apiKey": "role",
             "column": "AD_Role_ID",
             "type": "foreignKey",
-            "visibility": "editable",
+            "visibility": "readOnly",
             "required": true
           },
           {
@@ -1267,7 +1174,7 @@
             "apiKey": "roleAdmin",
             "column": "Is_Role_Admin",
             "type": "boolean",
-            "visibility": "editable",
+            "visibility": "readOnly",
             "required": true
           },
           {
@@ -1714,7 +1621,7 @@
         "field": "defaultRole",
         "column": "Default_Ad_Role_ID",
         "reference": "Role",
-        "inputMode": "selector",
+        "inputMode": "search",
         "url": "/sws/neo/user/user/selectors/defaultRole"
       },
       {
