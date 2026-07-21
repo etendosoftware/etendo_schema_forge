@@ -1,8 +1,8 @@
 {
-  "version": "0.3.0",
+  "version": "0.4.0",
   "generatedAt": "2026-07-07T11:18:10.164Z",
   "updatedAt": "2026-07-13T18:35:22.869Z",
-  "contractChecksum": "de2c03c526bde48a",
+  "contractChecksum": "cf3b1051c306dcc3",
   "apiPrediction": {
     "specName": "fiscal-calendar",
     "baseUrl": "/sws/neo/fiscal-calendar",
