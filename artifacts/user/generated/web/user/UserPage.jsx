@@ -81,7 +81,7 @@ export const api = {
       "post": true,
       "put": true,
       "patch": true,
-      "delete": true,
+      "delete": false,
       "listUrl": "/sws/neo/user/userRoles",
       "detailUrl": "/sws/neo/user/userRoles/{id}",
       "supportedFilters": [

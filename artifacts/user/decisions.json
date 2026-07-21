@@ -172,6 +172,7 @@
       }
     },
     "userRoles": {
+      "hideDelete": true,
       "fields": {
         "role": {
           "visibility": "readOnly",

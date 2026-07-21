@@ -1,8 +1,8 @@
 {
   "version": "0.16.0",
   "generatedAt": "2026-04-29T18:12:34.035Z",
-  "updatedAt": "2026-07-21T17:12:09.184Z",
-  "checksum": "987c5fc105955bc9",
+  "updatedAt": "2026-07-21T17:54:51.519Z",
+  "checksum": "ade6164e9ad0e0bf",
   "frontendContract": {
     "window": {
       "id": "108",
@@ -461,7 +461,8 @@
               "source": "N"
             }
           }
-        ]
+        ],
+        "hideDelete": true
       },
       "emailConfiguration": {
         "tableName": "C_POC_CONFIGURATION",
@@ -1578,7 +1579,7 @@
         "post": true,
         "put": true,
         "patch": true,
-        "delete": true,
+        "delete": false,
         "listUrl": "/sws/neo/user/userRoles",
         "detailUrl": "/sws/neo/user/userRoles/{id}",
         "supportedFilters": [

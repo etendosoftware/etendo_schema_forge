@@ -1054,6 +1054,13 @@ export function useEntity(entity, childEntity, {
                 setEditing({ ...resolvedSaved });
                 setSaveError(null);
                 setFieldErrors({});
+                // Refresh children after every save, not just create: a header field
+                // can drive a backend NeoHandler side effect on a child/join entity
+                // (e.g. syncing AD_User_Roles from a role field, ETP-4512) that the
+                // frontend has no other way to learn about. Mirrors the reasoning
+                // DetailView's justSaved fast-path already applies for the create
+                // path ("children ... must be loaded") — this extends it to update.
+                fetchChildren(resolvedSaved?.id);
                 afterSaveNotifications(data, { silent, isNew, entity, specName, ui });
                 return saved;
             } else {
@@ -1068,7 +1075,7 @@ export function useEntity(entity, childEntity, {
         } finally {
             setIsSaving(false);
         }
-    }, [editing, selected, apiBaseUrl, entity, specName, refetchAfterSave, token, ui]);
+    }, [editing, selected, apiBaseUrl, entity, specName, refetchAfterSave, token, ui, fetchChildren]);
 
     const handleDelete = useCallback(async () => {
         if (!selected?.id) return;
