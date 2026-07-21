@@ -1,5 +1,7 @@
 import { Outlet, useLocation, useSearchParams } from 'react-router-dom';
 import SideMenu from '@/components/layout/SideMenu';
+import { filterMenuGroupsByAccess } from '@/windows/registry.js';
+import { useRoleMenu } from '@/hooks/useRoleMenu.js';
 import { SidebarProvider, useSidebar } from '@/components/layout/SidebarContext';
 import { FavoritesProvider } from '@/components/layout/FavoritesContext';
 import { PageMetaProvider, usePageMeta } from '@/components/layout/PageMetaContext';
@@ -80,6 +82,18 @@ function AppLayoutInner({ menuGroups, embedded }) {
 export default function AppLayout({ menuGroups }) {
   const [searchParams] = useSearchParams();
   const embedded = searchParams.get('embedded') === '1';
+  // AppLayout is rendered inside AppShellRuntime's AuthProvider (same place
+  // SideMenu below already calls useAuth() today), unlike App.jsx itself — see
+  // the note in App.jsx. That's why role-filtering is applied here rather than
+  // where menuGroups is originally built.
+  const allowedIds = useRoleMenu();
+  // `undefined` = SFListMenu fetch still in flight — filter to empty so the sidebar
+  // grows in once real data arrives, instead of rendering the full menu and then
+  // shrinking it (see useRoleMenu.js for the full undefined/null/Set contract).
+  const filteredMenuGroups = filterMenuGroupsByAccess(
+    menuGroups,
+    allowedIds === undefined ? new Set() : allowedIds
+  );
 
   return (
     <CurrentWindowProvider data-testid="CurrentWindowProvider__488148">
@@ -89,7 +103,7 @@ export default function AppLayout({ menuGroups }) {
             <SidebarProvider data-testid="SidebarProvider__488148">
               <PageMetaProvider data-testid="PageMetaProvider__488148">
                 <AppLayoutInner
-                  menuGroups={menuGroups}
+                  menuGroups={filteredMenuGroups}
                   embedded={embedded}
                   data-testid="AppLayoutInner__488148" />
               </PageMetaProvider>
