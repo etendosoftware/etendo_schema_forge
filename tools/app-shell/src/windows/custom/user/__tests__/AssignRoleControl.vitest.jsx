@@ -80,12 +80,14 @@ describe('AssignRoleControl', () => {
       globalThis.fetch = vi.fn();
       render(<AssignRoleControl data={{}} apiBaseUrl="/sws/neo/user" onChange={vi.fn()} />);
       expect(globalThis.fetch).not.toHaveBeenCalled();
+      expect(screen.getByTestId('AssignRoleControl__select')).not.toBeDisabled();
     });
 
     it('does not fetch when apiBaseUrl is missing', () => {
       globalThis.fetch = vi.fn();
       render(<AssignRoleControl data={{}} token="t" onChange={vi.fn()} />);
       expect(globalThis.fetch).not.toHaveBeenCalled();
+      expect(screen.getByTestId('AssignRoleControl__select')).not.toBeDisabled();
     });
 
     it('does not update state (or warn) after unmount while a fetch is still in flight', async () => {
