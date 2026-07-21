@@ -19322,6 +19322,7 @@
     "onboardingInvalidCredentials": "Credenciales inválidas.",
     "onboardingEnvironmentLoginFailed": "No se pudo entrar al entorno.",
     "onboardingGenericError": "Ocurrió un problema durante el onboarding.",
+    "onboardingRetry": "Reintentar",
     "onboardingInvalidSession": "Tu sesión ya no es válida.",
     "onboardingLoadEnvironmentsFailed": "No se pudieron cargar los entornos.",
     "onboardingStreamUnavailable": "El progreso del onboarding no está disponible en este momento.",
