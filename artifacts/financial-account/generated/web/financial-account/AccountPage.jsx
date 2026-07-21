@@ -112,6 +112,17 @@ export const api = {
       "detailUrl": "/sws/neo/financial-account-detail/transaction/{id}",
       "supportedFilters": []
     },
+    "accountingConfiguration": {
+      "get": true,
+      "getById": true,
+      "post": true,
+      "put": true,
+      "patch": true,
+      "delete": true,
+      "listUrl": "/sws/neo/financial-account-detail/accountingConfiguration",
+      "detailUrl": "/sws/neo/financial-account-detail/accountingConfiguration/{id}",
+      "supportedFilters": []
+    },
     "importedBankStatements": {
       "get": true,
       "getById": true,
@@ -231,6 +242,22 @@ export const api = {
       "reference": "User2",
       "inputMode": "selector",
       "url": "/sws/neo/financial-account-detail/transaction/selectors/ndDimension"
+    },
+    {
+      "entity": "accountingConfiguration",
+      "field": "fINAssetAcct",
+      "column": "FIN_Asset_Acct",
+      "reference": "ValidCombination",
+      "inputMode": "selector",
+      "url": "/sws/neo/financial-account-detail/accountingConfiguration/selectors/fINAssetAcct"
+    },
+    {
+      "entity": "accountingConfiguration",
+      "field": "fINTransitoryAcct",
+      "column": "FIN_Transitory_Acct",
+      "reference": "ValidCombination",
+      "inputMode": "selector",
+      "url": "/sws/neo/financial-account-detail/accountingConfiguration/selectors/fINTransitoryAcct"
     },
     {
       "entity": "bankStatementLines",

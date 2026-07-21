@@ -1,8 +1,8 @@
 {
-  "version": "0.57.0",
+  "version": "0.58.0",
   "generatedAt": "2026-04-30T15:42:46.582Z",
-  "updatedAt": "2026-07-17T13:02:48.214Z",
-  "checksum": "637a00de439f4d4c",
+  "updatedAt": "2026-07-20T20:41:37.210Z",
+  "checksum": "f50d196ed83f1f2e",
   "frontendContract": {
     "window": {
       "id": "167",
@@ -3679,7 +3679,8 @@
             "column": "M_Product_ID",
             "type": "foreignKey",
             "visibility": "editable",
-            "required": false
+            "required": false,
+            "order": 1
           },
           {
             "name": "description",
@@ -3687,7 +3688,8 @@
             "column": "Description",
             "type": "text",
             "visibility": "editable",
-            "required": false
+            "required": false,
+            "order": 2
           },
           {
             "name": "invoicedQuantity",
@@ -3695,7 +3697,8 @@
             "column": "QtyInvoiced",
             "type": "quantity",
             "visibility": "editable",
-            "required": true
+            "required": true,
+            "order": 3
           },
           {
             "name": "listPrice",
@@ -3703,7 +3706,8 @@
             "column": "PriceList",
             "type": "price",
             "visibility": "editable",
-            "required": true
+            "required": true,
+            "order": 4
           },
           {
             "name": "etgoDiscount",
@@ -3711,7 +3715,8 @@
             "column": "EM_Etgo_Discount",
             "type": "decimal",
             "visibility": "editable",
-            "required": false
+            "required": false,
+            "order": 5
           },
           {
             "name": "tax",
@@ -3719,7 +3724,8 @@
             "column": "C_Tax_ID",
             "type": "foreignKey",
             "visibility": "editable",
-            "required": false
+            "required": false,
+            "order": 6
           },
           {
             "name": "lineNo",
@@ -7989,11 +7995,25 @@
         "description": "Rule 'Product_AutoFill_Price' (callout) should be declared"
       },
       {
+        "id": "t-rule-declared-READONLY-Posted-AccountingDate",
+        "category": "rule-declared",
+        "rule": "READONLY_Posted_AccountingDate",
+        "runner": "node",
+        "description": "Rule 'READONLY_Posted_AccountingDate' (readOnlyLogic) should be declared"
+      },
+      {
         "id": "t-rule-declared-ReadOnly-When-Processed",
         "category": "rule-declared",
         "rule": "ReadOnly_When_Processed",
         "runner": "node",
         "description": "Rule 'ReadOnly_When_Processed' (displayLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-SE-Invoice-TaxDate",
+        "category": "rule-declared",
+        "rule": "SE_Invoice_TaxDate",
+        "runner": "node",
+        "description": "Rule 'SE_Invoice_TaxDate' (callout) should be declared"
       },
       {
         "id": "t-searchable-filters-header-businessPartner",
@@ -9928,7 +9948,7 @@
       }
     ],
     "summary": {
-      "total": 579,
+      "total": 581,
       "byCategory": {
         "action-endpoint": 26,
         "crud-flags": 5,
@@ -9939,14 +9959,14 @@
         "field-type": 69,
         "readonlylogic-evaluable": 41,
         "readonlylogic-valid": 41,
-        "rule-declared": 8,
+        "rule-declared": 10,
         "searchable-filters": 6,
         "selector-endpoint": 18,
         "system-field": 213,
         "visibility": 5
       },
       "byRunner": {
-        "node": 579,
+        "node": 581,
         "junit": 0
       }
     }

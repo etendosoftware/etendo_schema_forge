@@ -22045,6 +22045,110 @@
         }
       ]
     },
+    "88ad8a1f069401e3146d7f655acfc6a28ca92062200daae9b33395feed8061f1": {
+      "checksum": "5aa1325b31e694a9e531c904547efe279dbf96f9da9fc4b1403e2f64ef2ef361",
+      "params": [
+        "116"
+      ],
+      "rows": [
+        {
+          "ad_column_id": "778",
+          "ad_table_id": "140",
+          "columnname": "C_Conversion_Rate_ID",
+          "position": "1"
+        },
+        {
+          "ad_column_id": "779",
+          "ad_table_id": "140",
+          "columnname": "AD_Client_ID",
+          "position": "2"
+        },
+        {
+          "ad_column_id": "780",
+          "ad_table_id": "140",
+          "columnname": "AD_Org_ID",
+          "position": "3"
+        },
+        {
+          "ad_column_id": "781",
+          "ad_table_id": "140",
+          "columnname": "IsActive",
+          "position": "4"
+        },
+        {
+          "ad_column_id": "782",
+          "ad_table_id": "140",
+          "columnname": "Created",
+          "position": "5"
+        },
+        {
+          "ad_column_id": "783",
+          "ad_table_id": "140",
+          "columnname": "CreatedBy",
+          "position": "6"
+        },
+        {
+          "ad_column_id": "784",
+          "ad_table_id": "140",
+          "columnname": "Updated",
+          "position": "7"
+        },
+        {
+          "ad_column_id": "785",
+          "ad_table_id": "140",
+          "columnname": "UpdatedBy",
+          "position": "8"
+        },
+        {
+          "ad_column_id": "786",
+          "ad_table_id": "140",
+          "columnname": "C_Currency_ID",
+          "position": "9"
+        },
+        {
+          "ad_column_id": "787",
+          "ad_table_id": "140",
+          "columnname": "C_Currency_ID_To",
+          "position": "10"
+        },
+        {
+          "ad_column_id": "453",
+          "ad_table_id": "140",
+          "columnname": "ValidFrom",
+          "position": "11"
+        },
+        {
+          "ad_column_id": "454",
+          "ad_table_id": "140",
+          "columnname": "ValidTo",
+          "position": "12"
+        },
+        {
+          "ad_column_id": "788",
+          "ad_table_id": "140",
+          "columnname": "ConversionRateType",
+          "position": "13"
+        },
+        {
+          "ad_column_id": "455",
+          "ad_table_id": "140",
+          "columnname": "MultiplyRate",
+          "position": "14"
+        },
+        {
+          "ad_column_id": "456",
+          "ad_table_id": "140",
+          "columnname": "DivideRate",
+          "position": "15"
+        },
+        {
+          "ad_column_id": "8552BAB04A1A4F779EF4875B78C4D5BB",
+          "ad_table_id": "140",
+          "columnname": "EM_SMFCR_Is_Synced",
+          "position": null
+        }
+      ]
+    },
     "8b543deb8e44e185e72cf9d4fc98b17a1b417138b8b2e25b139459d68e0bc945": {
       "checksum": "4f870dc09fc1ee3d2c2dbb68e375f28045646215a7cea32d40b8266280dca6a3",
       "params": [
@@ -24458,6 +24562,98 @@
           "ad_table_id": "E42DDB42FF0B4F82B1CF3C711B3F0DC0",
           "columnname": "C_Order_ID",
           "position": "14"
+        }
+      ]
+    },
+    "99c77d72fc6f49da80e9db85826999d4bdb48df40b9db4d4c619f80ac282732a": {
+      "checksum": "bc86913da409ca77671de0aa57b019c008590b6fad68e1d27d13aba1ac718bb4",
+      "params": [
+        "6FEBA130CDE24CC09041FFA6117ADFA9"
+      ],
+      "rows": [
+        {
+          "ad_column_id": "53000F063FF44374BBD1F5A5EF47C43B",
+          "ad_table_id": "BA820F5D8A194AB69D508BE4A83DE42F",
+          "columnname": "Smfcr_Sync_Log_ID",
+          "position": "1"
+        },
+        {
+          "ad_column_id": "A96BB81DA60240CCAAC613968946D87B",
+          "ad_table_id": "BA820F5D8A194AB69D508BE4A83DE42F",
+          "columnname": "AD_Client_ID",
+          "position": "2"
+        },
+        {
+          "ad_column_id": "72C907AB07B546A2A51A24CC4AEC8D1E",
+          "ad_table_id": "BA820F5D8A194AB69D508BE4A83DE42F",
+          "columnname": "AD_Org_ID",
+          "position": "3"
+        },
+        {
+          "ad_column_id": "F9BE9B3C7D0F4756960C08124BFC9C1C",
+          "ad_table_id": "BA820F5D8A194AB69D508BE4A83DE42F",
+          "columnname": "Isactive",
+          "position": "4"
+        },
+        {
+          "ad_column_id": "FCF2258A70FF4B8B939E095FBDFBBC2D",
+          "ad_table_id": "BA820F5D8A194AB69D508BE4A83DE42F",
+          "columnname": "Created",
+          "position": "5"
+        },
+        {
+          "ad_column_id": "2D6D0A497F5E4714863434296821E553",
+          "ad_table_id": "BA820F5D8A194AB69D508BE4A83DE42F",
+          "columnname": "Createdby",
+          "position": "6"
+        },
+        {
+          "ad_column_id": "B9BBE78BD82A48D6866D3718BB3B0E61",
+          "ad_table_id": "BA820F5D8A194AB69D508BE4A83DE42F",
+          "columnname": "Updated",
+          "position": "7"
+        },
+        {
+          "ad_column_id": "1B7BBCA597E64C1CBE3C5179D94B3EA9",
+          "ad_table_id": "BA820F5D8A194AB69D508BE4A83DE42F",
+          "columnname": "Updatedby",
+          "position": "8"
+        },
+        {
+          "ad_column_id": "406F84B0A2BD46CE857B3AE320996193",
+          "ad_table_id": "BA820F5D8A194AB69D508BE4A83DE42F",
+          "columnname": "sync_date",
+          "position": "9"
+        },
+        {
+          "ad_column_id": "F0D3B88D5B894E7D811B3A97A7984E53",
+          "ad_table_id": "BA820F5D8A194AB69D508BE4A83DE42F",
+          "columnname": "pairs_updated",
+          "position": "10"
+        },
+        {
+          "ad_column_id": "3E732F6D5450485199A5D0D45CD9571C",
+          "ad_table_id": "BA820F5D8A194AB69D508BE4A83DE42F",
+          "columnname": "pairs_failed",
+          "position": "11"
+        },
+        {
+          "ad_column_id": "64CEED0F225341728BADB3203E870076",
+          "ad_table_id": "BA820F5D8A194AB69D508BE4A83DE42F",
+          "columnname": "error_detail",
+          "position": "12"
+        },
+        {
+          "ad_column_id": "D0DAD836EFF44CE7A427CD27EC0FE61B",
+          "ad_table_id": "BA820F5D8A194AB69D508BE4A83DE42F",
+          "columnname": "duration_ms",
+          "position": "13"
+        },
+        {
+          "ad_column_id": "47CC432AFEBE4A1B8A962F82EC267A30",
+          "ad_table_id": "BA820F5D8A194AB69D508BE4A83DE42F",
+          "columnname": "status",
+          "position": "15"
         }
       ]
     },

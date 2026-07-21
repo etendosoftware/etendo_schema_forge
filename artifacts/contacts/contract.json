@@ -1,8 +1,8 @@
 {
-  "version": "0.40.0",
+  "version": "0.43.0",
   "generatedAt": "2026-07-07T21:53:25.883Z",
-  "updatedAt": "2026-07-08T15:05:31.449Z",
-  "checksum": "306c342d2b869af1",
+  "updatedAt": "2026-07-17T17:14:42.971Z",
+  "checksum": "42326bb23f9af6dc",
   "frontendContract": {
     "window": {
       "id": "123",
@@ -88,7 +88,8 @@
           "PO_Financial_Account_ID": "Expense Account",
           "EM_Etgo_Web": "Website",
           "EM_Etgo_Firstname": "First Name",
-          "EM_Etgo_Lastname": "Last Name"
+          "EM_Etgo_Lastname": "Last Name",
+          "C_BP_Group_ID": "Contact Category"
         },
         "es_ES": {
           "Name": "Razón Social",
@@ -97,7 +98,8 @@
           "PO_Financial_Account_ID": "Cuenta contable de gastos",
           "EM_Etgo_Web": "Página web",
           "EM_Etgo_Firstname": "Nombre",
-          "EM_Etgo_Lastname": "Apellidos"
+          "EM_Etgo_Lastname": "Apellidos",
+          "C_BP_Group_ID": "Categoría de contacto"
         }
       },
       "primaryTabs": [
@@ -355,6 +357,27 @@
             "section": "principal"
           },
           {
+            "name": "businessPartnerCategory",
+            "apiKey": "businessPartnerCategory",
+            "column": "C_BP_Group_ID",
+            "label": "Contact Category",
+            "type": "foreignKey",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": true,
+            "grid": false,
+            "form": true,
+            "sourceRequired": true,
+            "derivation": {
+              "type": "lookup",
+              "source": "SELECT MAX(C_BP_GROUP_ID) FROM C_BP_GROUP WHERE AD_ISORGINCLUDED(@AD_ORG_ID@, AD_ORG_ID, @#AD_CLIENT_ID@) <> -1 AND ISDEFAULT = 'Y' AND AD_CLIENT_ID = @#AD_CLIENT_ID@"
+            },
+            "reference": "BusinessPartnerCategory",
+            "inputMode": "selector",
+            "defaultValue": "@SQL=SELECT MAX(C_BP_GROUP_ID) FROM C_BP_GROUP WHERE AD_ISORGINCLUDED(@AD_ORG_ID@, AD_ORG_ID, @#AD_CLIENT_ID@) <> -1 AND ISDEFAULT = 'Y' AND AD_CLIENT_ID = @#AD_CLIENT_ID@",
+            "section": "principal"
+          },
+          {
             "name": "etgoFirstname",
             "apiKey": "etgoFirstname",
             "column": "EM_Etgo_Firstname",
@@ -567,27 +590,6 @@
               "source": "N"
             },
             "defaultValue": "N"
-          },
-          {
-            "name": "businessPartnerCategory",
-            "apiKey": "businessPartnerCategory",
-            "column": "C_BP_Group_ID",
-            "label": "Business Partner Category",
-            "type": "foreignKey",
-            "tsType": "string",
-            "visibility": "editable",
-            "required": true,
-            "grid": false,
-            "form": false,
-            "sourceRequired": true,
-            "derivation": {
-              "type": "lookup",
-              "source": "SELECT MAX(C_BP_GROUP_ID) FROM C_BP_GROUP WHERE AD_ISORGINCLUDED(@AD_ORG_ID@, AD_ORG_ID, @#AD_CLIENT_ID@) <> -1 AND ISDEFAULT = 'Y' AND AD_CLIENT_ID = @#AD_CLIENT_ID@"
-            },
-            "reference": "BusinessPartnerCategory",
-            "inputMode": "selector",
-            "defaultValue": "@SQL=SELECT MAX(C_BP_GROUP_ID) FROM C_BP_GROUP WHERE AD_ISORGINCLUDED(@AD_ORG_ID@, AD_ORG_ID, @#AD_CLIENT_ID@) <> -1 AND ISDEFAULT = 'Y' AND AD_CLIENT_ID = @#AD_CLIENT_ID@",
-            "section": "principal"
           },
           {
             "name": "name2",
@@ -1142,6 +1144,13 @@
         ],
         "computedFields": [
           {
+            "name": "businessPartnerCategory",
+            "derivation": {
+              "type": "lookup",
+              "source": "SELECT MAX(C_BP_GROUP_ID) FROM C_BP_GROUP WHERE AD_ISORGINCLUDED(@AD_ORG_ID@, AD_ORG_ID, @#AD_CLIENT_ID@) <> -1 AND ISDEFAULT = 'Y' AND AD_CLIENT_ID = @#AD_CLIENT_ID@"
+            }
+          },
+          {
             "name": "oBTIKTaxIDKey",
             "derivation": {
               "type": "computed",
@@ -1153,13 +1162,6 @@
             "derivation": {
               "type": "computed",
               "source": "N"
-            }
-          },
-          {
-            "name": "businessPartnerCategory",
-            "derivation": {
-              "type": "lookup",
-              "source": "SELECT MAX(C_BP_GROUP_ID) FROM C_BP_GROUP WHERE AD_ISORGINCLUDED(@AD_ORG_ID@, AD_ORG_ID, @#AD_CLIENT_ID@) <> -1 AND ISDEFAULT = 'Y' AND AD_CLIENT_ID = @#AD_CLIENT_ID@"
             }
           },
           {
@@ -4560,7 +4562,8 @@
           "PO_Financial_Account_ID": "Expense Account",
           "EM_Etgo_Web": "Website",
           "EM_Etgo_Firstname": "First Name",
-          "EM_Etgo_Lastname": "Last Name"
+          "EM_Etgo_Lastname": "Last Name",
+          "C_BP_Group_ID": "Contact Category"
         },
         "es_ES": {
           "Name": "Razón Social",
@@ -4569,7 +4572,8 @@
           "PO_Financial_Account_ID": "Cuenta contable de gastos",
           "EM_Etgo_Web": "Página web",
           "EM_Etgo_Firstname": "Nombre",
-          "EM_Etgo_Lastname": "Apellidos"
+          "EM_Etgo_Lastname": "Apellidos",
+          "C_BP_Group_ID": "Categoría de contacto"
         }
       },
       "primaryTabs": [
@@ -4789,7 +4793,8 @@
             "column": "EM_Etgo_Identifier",
             "type": "string",
             "visibility": "readOnly",
-            "required": false
+            "required": false,
+            "order": 0
           },
           {
             "name": "searchKey",
@@ -4797,7 +4802,8 @@
             "column": "Value",
             "type": "string",
             "visibility": "editable",
-            "required": true
+            "required": true,
+            "order": 1
           },
           {
             "name": "name",
@@ -4805,7 +4811,17 @@
             "column": "Name",
             "type": "string",
             "visibility": "editable",
-            "required": true
+            "required": true,
+            "order": 2
+          },
+          {
+            "name": "businessPartnerCategory",
+            "apiKey": "businessPartnerCategory",
+            "column": "C_BP_Group_ID",
+            "type": "foreignKey",
+            "visibility": "editable",
+            "required": true,
+            "order": 3
           },
           {
             "name": "etgoFirstname",
@@ -4813,7 +4829,8 @@
             "column": "EM_Etgo_Firstname",
             "type": "string",
             "visibility": "editable",
-            "required": true
+            "required": true,
+            "order": 4
           },
           {
             "name": "etgoLastname",
@@ -4821,7 +4838,8 @@
             "column": "EM_Etgo_Lastname",
             "type": "string",
             "visibility": "editable",
-            "required": true
+            "required": true,
+            "order": 5
           },
           {
             "name": "oBTIKTaxIDKey",
@@ -4829,7 +4847,8 @@
             "column": "EM_OBTIK_Tax_ID_Key",
             "type": "enum",
             "visibility": "editable",
-            "required": true
+            "required": true,
+            "order": 6
           },
           {
             "name": "taxID",
@@ -4837,7 +4856,8 @@
             "column": "TaxID",
             "type": "string",
             "visibility": "editable",
-            "required": false
+            "required": false,
+            "order": 7
           },
           {
             "name": "oBTIKVIESStatus",
@@ -4845,7 +4865,8 @@
             "column": "EM_OBTIK_VIESStatus",
             "type": "enum",
             "visibility": "readOnly",
-            "required": false
+            "required": false,
+            "order": 8
           },
           {
             "name": "etgoWeb",
@@ -4853,7 +4874,8 @@
             "column": "EM_Etgo_Web",
             "type": "string",
             "visibility": "editable",
-            "required": false
+            "required": false,
+            "order": 9
           },
           {
             "name": "etgoEmail",
@@ -4861,7 +4883,8 @@
             "column": "EM_Etgo_Email",
             "type": "string",
             "visibility": "editable",
-            "required": false
+            "required": false,
+            "order": 10
           },
           {
             "name": "etgoPhone",
@@ -4869,7 +4892,8 @@
             "column": "EM_Etgo_Phone",
             "type": "string",
             "visibility": "editable",
-            "required": false
+            "required": false,
+            "order": 11
           },
           {
             "name": "organization",
@@ -4884,14 +4908,6 @@
             "apiKey": "etgoIsperson",
             "column": "EM_Etgo_Isperson",
             "type": "boolean",
-            "visibility": "editable",
-            "required": true
-          },
-          {
-            "name": "businessPartnerCategory",
-            "apiKey": "businessPartnerCategory",
-            "column": "C_BP_Group_ID",
-            "type": "foreignKey",
             "visibility": "editable",
             "required": true
           },
@@ -11209,7 +11225,8 @@
         "PO_Financial_Account_ID": "Expense Account",
         "EM_Etgo_Web": "Website",
         "EM_Etgo_Firstname": "First Name",
-        "EM_Etgo_Lastname": "Last Name"
+        "EM_Etgo_Lastname": "Last Name",
+        "C_BP_Group_ID": "Contact Category"
       },
       "es_ES": {
         "Name": "Razón Social",
@@ -11218,7 +11235,8 @@
         "PO_Financial_Account_ID": "Cuenta contable de gastos",
         "EM_Etgo_Web": "Página web",
         "EM_Etgo_Firstname": "Nombre",
-        "EM_Etgo_Lastname": "Apellidos"
+        "EM_Etgo_Lastname": "Apellidos",
+        "C_BP_Group_ID": "Categoría de contacto"
       }
     }
   },

@@ -1,8 +1,8 @@
 {
-  "version": "0.17.0",
+  "version": "0.18.0",
   "generatedAt": "2026-05-12T16:47:39.614Z",
-  "updatedAt": "2026-07-06T13:19:15.554Z",
-  "checksum": "1c6dd74023a8d0a7",
+  "updatedAt": "2026-07-20T11:39:49.014Z",
+  "checksum": "72d27873b20f779e",
   "frontendContract": {
     "window": {
       "id": "143",
@@ -1824,7 +1824,8 @@
             "column": "M_Product_ID",
             "type": "foreignKey",
             "visibility": "editable",
-            "required": true
+            "required": true,
+            "order": 1
           },
           {
             "name": "description",
@@ -1832,7 +1833,8 @@
             "column": "Description",
             "type": "text",
             "visibility": "editable",
-            "required": false
+            "required": false,
+            "order": 2
           },
           {
             "name": "orderedQuantity",
@@ -1840,7 +1842,8 @@
             "column": "QtyOrdered",
             "type": "quantity",
             "visibility": "editable",
-            "required": true
+            "required": true,
+            "order": 3
           },
           {
             "name": "listPrice",
@@ -1848,7 +1851,8 @@
             "column": "PriceList",
             "type": "price",
             "visibility": "editable",
-            "required": true
+            "required": true,
+            "order": 4
           },
           {
             "name": "discount",
@@ -1856,7 +1860,8 @@
             "column": "Discount",
             "type": "decimal",
             "visibility": "editable",
-            "required": false
+            "required": false,
+            "order": 5
           },
           {
             "name": "tax",
@@ -1864,7 +1869,8 @@
             "column": "C_Tax_ID",
             "type": "foreignKey",
             "visibility": "editable",
-            "required": true
+            "required": true,
+            "order": 6
           },
           {
             "name": "lineGrossAmount",
@@ -1872,7 +1878,8 @@
             "column": "Line_Gross_Amount",
             "type": "amount",
             "visibility": "readOnly",
-            "required": false
+            "required": false,
+            "order": 7
           },
           {
             "name": "lineNo",

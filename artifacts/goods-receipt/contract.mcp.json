@@ -1,8 +1,8 @@
 {
-  "version": "0.20.0",
+  "version": "0.22.0",
   "generatedAt": "2026-04-29T19:05:20.719Z",
-  "updatedAt": "2026-06-24T20:46:47.331Z",
-  "contractChecksum": "87374b090a474b72",
+  "updatedAt": "2026-07-17T18:04:55.296Z",
+  "contractChecksum": "3936c6fe28471ae3",
   "apiPrediction": {
     "specName": "goods-receipt",
     "baseUrl": "/sws/neo/goods-receipt",
@@ -589,11 +589,6 @@
             "readOnlyLogic": "@Processed@='Y'",
             "defaultValue": "@#Date@"
           },
-          "accountingDate": {
-            "required": true,
-            "readOnlyLogic": "@Posted@='Y'",
-            "defaultValue": "@#Date@"
-          },
           "salesOrder": {},
           "orderReference": {
             "readOnlyLogic": "@Processed@='Y'"
@@ -716,8 +711,7 @@
         "warehouse",
         "businessPartner",
         "partnerAddress",
-        "movementDate",
-        "accountingDate"
+        "movementDate"
       ],
       "lineFields": [
         "lineNo",
@@ -825,8 +819,7 @@
           "warehouse",
           "businessPartner",
           "partnerAddress",
-          "movementDate",
-          "accountingDate"
+          "movementDate"
         ]
       },
       {
@@ -848,5 +841,5 @@
     "knownLimitations": [],
     "dangerousOperations": []
   },
-  "checksum": "fc78652a77337d78"
+  "checksum": "1c995a622aee03fb"
 }

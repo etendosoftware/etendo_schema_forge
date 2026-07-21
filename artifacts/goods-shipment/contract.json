@@ -1,8 +1,8 @@
 {
-  "version": "0.26.0",
+  "version": "0.29.0",
   "generatedAt": "2026-04-29T19:04:55.657Z",
-  "updatedAt": "2026-07-06T17:42:27.381Z",
-  "checksum": "a4ad279aa4b7c4db",
+  "updatedAt": "2026-07-19T03:49:03.034Z",
+  "checksum": "0f280839c8b8782a",
   "frontendContract": {
     "window": {
       "id": "169",
@@ -2546,11 +2546,25 @@
         "description": "Rule 'Product_AutoFill_UOM' (callout) should be declared"
       },
       {
+        "id": "t-rule-declared-READONLY-Posted-AccountingDate",
+        "category": "rule-declared",
+        "rule": "READONLY_Posted_AccountingDate",
+        "runner": "node",
+        "description": "Rule 'READONLY_Posted_AccountingDate' (readOnlyLogic) should be declared"
+      },
+      {
         "id": "t-rule-declared-ReadOnly-When-Processed",
         "category": "rule-declared",
         "rule": "ReadOnly_When_Processed",
         "runner": "node",
         "description": "Rule 'ReadOnly_When_Processed' (displayLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-SL-InOut-AccountingDate",
+        "category": "rule-declared",
+        "rule": "SL_InOut_AccountingDate",
+        "runner": "node",
+        "description": "Rule 'SL_InOut_AccountingDate' (callout) should be declared"
       },
       {
         "id": "t-searchable-filters-goodsShipment-businessPartner",
@@ -3352,7 +3366,7 @@
       }
     ],
     "summary": {
-      "total": 180,
+      "total": 182,
       "byCategory": {
         "action-endpoint": 12,
         "crud-flags": 2,
@@ -3363,14 +3377,14 @@
         "field-type": 17,
         "readonlylogic-evaluable": 8,
         "readonlylogic-valid": 8,
-        "rule-declared": 3,
+        "rule-declared": 5,
         "searchable-filters": 6,
         "selector-endpoint": 4,
         "system-field": 88,
         "visibility": 2
       },
       "byRunner": {
-        "node": 180,
+        "node": 182,
         "junit": 0
       }
     }

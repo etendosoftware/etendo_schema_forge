@@ -300,6 +300,22 @@ describe('RowQuickActions', () => {
     });
   });
 
+  // ── window.readOnly: suppress the write actions (Edit, Clone, Delete) ──────
+  describe('readOnly window (window.readOnly)', () => {
+    it('hides Edit, Clone and Delete when readOnly is true', () => {
+      setup({ readOnly: true });
+      expect(screen.queryByTestId('row-quick-action-edit')).toBeNull();
+      expect(screen.queryByTestId('row-quick-action-clone')).toBeNull();
+      expect(screen.queryByTestId('row-quick-action-delete')).toBeNull();
+    });
+
+    it('renders Edit and Delete when readOnly is absent (default false, regression)', () => {
+      setup();
+      expect(screen.getByTestId('row-quick-action-edit')).toBeTruthy();
+      expect(screen.getByTestId('row-quick-action-delete')).toBeTruthy();
+    });
+  });
+
   describe('visibleWhen predicate', () => {
     it('hides a canonical action when its visibleWhen expression evaluates false for the row', () => {
       // DRAFT_ROW.documentStatus === 'DR'. Expression demands status === 'CO'.

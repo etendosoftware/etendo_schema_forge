@@ -1545,6 +1545,7 @@ function TableDataRow({
             menuActions={rowQuickActions.menuActions}
             hideDeleteWhenComplete={rowQuickActions.hideDeleteWhenComplete}
             hideDeleteButton={rowQuickActions.hideDeleteButton}
+            readOnly={rowQuickActions.readOnly}
             statusField={rowQuickActions.statusField}
             onEdit={rowQuickActions.onEdit}
             onClone={rowQuickActions.onClone}

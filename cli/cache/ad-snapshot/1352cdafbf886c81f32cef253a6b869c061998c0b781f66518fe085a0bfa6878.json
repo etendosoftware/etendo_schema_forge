@@ -1689,6 +1689,20 @@
         }
       ]
     },
+    "88ad8a1f069401e3146d7f655acfc6a28ca92062200daae9b33395feed8061f1": {
+      "checksum": "bef63248c658ac3beb415a9855befef09d4b8232787d456412ff6d5700a25449",
+      "params": [
+        "116"
+      ],
+      "rows": [
+        {
+          "ad_val_rule_id": "103",
+          "code": "AD_Client.AD_Client_ID in (@#User_Client@)",
+          "columnname": "AD_Client_ID",
+          "name": "AD_Client Security validation"
+        }
+      ]
+    },
     "8b543deb8e44e185e72cf9d4fc98b17a1b417138b8b2e25b139459d68e0bc945": {
       "checksum": "2952ceec6fde4f9424d647ee73b29af7137d0421bb723e176957a726e6af0cd5",
       "params": [
@@ -1932,6 +1946,13 @@
           "name": "FIN_PaymentMethodsWithAccountIsSOTrxControl"
         }
       ]
+    },
+    "99c77d72fc6f49da80e9db85826999d4bdb48df40b9db4d4c619f80ac282732a": {
+      "checksum": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "params": [
+        "6FEBA130CDE24CC09041FFA6117ADFA9"
+      ],
+      "rows": []
     },
     "9af6c3647465867cc635696d802fced95ce307fa9ce43e002d8fff078398bc28": {
       "checksum": "4fd3136dfc1f9742c1fb0edf511ad761b7c64741715b1baf8ee52f167ff0a9b0",

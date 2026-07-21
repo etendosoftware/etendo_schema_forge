@@ -1,6 +1,7 @@
 import { useCallback } from 'react';
 import { useAuth } from '@/auth/AuthContext.jsx';
 import { getApiBase } from '@/hooks/useNeoResource.js';
+import { authHeaders, throwHttpError } from '@/hooks/financialAccountHttp.js';
 
 /**
  * Write operations against the `financial-account` NEO spec.
@@ -25,26 +26,6 @@ import { getApiBase } from '@/hooks/useNeoResource.js';
 
 const BASE_PATH = '/sws/neo/financial-account';
 const ENTITY_PATH = `${BASE_PATH}/account`;
-
-function authHeaders(token) {
-  return { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
-}
-
-async function readErrorMessage(res) {
-  try {
-    const json = await res.json();
-    return json?.error?.message || `HTTP ${res.status}`;
-  } catch {
-    return `HTTP ${res.status}`;
-  }
-}
-
-async function throwHttpError(res) {
-  const message = await readErrorMessage(res);
-  const error = new Error(message);
-  error.status = res.status;
-  throw error;
-}
 
 /**
  * Map the SPA form payload to the DAL property names of FIN_Financial_Account.

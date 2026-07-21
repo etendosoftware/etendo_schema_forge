@@ -84,4 +84,18 @@ describe('DetailTabs', () => {
     // Two "0" badges expected — movements and reconciliation (statements has none).
     expect(screen.getAllByText('0')).toHaveLength(2);
   });
+
+  it('gives each tab a distinct data-testid (ETP-4553 — all 3 used to share one)', () => {
+    render(
+      <DetailTabs
+        value="movements"
+        onValueChange={() => {}}
+        movementsCount={0}
+        reconciliationCount={0}
+      />,
+    );
+    expect(screen.getByTestId('detail-tab-movements')).toBeInTheDocument();
+    expect(screen.getByTestId('detail-tab-reconciliation')).toBeInTheDocument();
+    expect(screen.getByTestId('detail-tab-statements')).toBeInTheDocument();
+  });
 });

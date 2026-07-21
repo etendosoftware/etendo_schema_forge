@@ -12,7 +12,7 @@ import {
   DropdownMenuItem,
   DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu';
-import MovementConfirmModal from './MovementConfirmModal';
+import MovementLifecycleConfirmModal from './MovementLifecycleConfirmModal';
 
 // Post (contabilizar) / Unpost (descontabilizar) go through the financial-account spec's
 // document-posting action (Java_Qualifier `document-posting` on the transaction entity).
@@ -247,13 +247,13 @@ export function MovementRowKebab({ movement, onReload, onEdit }) {
         </DropdownMenuContent>
       </DropdownMenu>
       {confirm && (
-        <MovementConfirmModal
+        <MovementLifecycleConfirmModal
           action={confirm}
           reconciled={isReconciled}
           posted={isPosted}
           onConfirm={runConfirmed}
           onClose={() => setConfirm(null)}
-          data-testid="MovementConfirmModal__64eff3" />
+          data-testid="MovementLifecycleConfirmModal__64eff3" />
       )}
     </>
   );

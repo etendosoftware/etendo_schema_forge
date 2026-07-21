@@ -151,9 +151,13 @@ function renderDetailView(props = {}) {
   );
 }
 
-async function clickDeleteAndConfirm(user) {
+// payment-in/out now show the rich Reactivar/Eliminar cartel (ETP-4500,
+// WINDOW_DELETE_CONFIRM_MODALS) instead of the generic delete Dialog, so its
+// confirm button carries a different testid (`payment-confirm-accept`, from
+// PaymentLifecycleConfirmModal's `testIdPrefix="payment-confirm"`).
+async function clickDeleteAndConfirm(user, confirmTestId = 'action-delete-confirm') {
   await user.click(screen.getByTestId('action-delete'));
-  await user.click(screen.getByTestId('action-delete-confirm'));
+  await user.click(screen.getByTestId(confirmTestId));
 }
 
 describe('DetailView — per-window deleteAction fallback (ETP-4479)', () => {
@@ -171,7 +175,7 @@ describe('DetailView — per-window deleteAction fallback (ETP-4479)', () => {
     renderDetailView({ windowName: 'payment-in' });
 
     expect(screen.getByTestId('action-delete')).toBeTruthy();
-    await clickDeleteAndConfirm(user);
+    await clickDeleteAndConfirm(user, 'payment-confirm-accept');
 
     expect(neoExecuteMock).toHaveBeenCalledWith('123', 'eTPRRemovePayment');
     expect(currentHook.handleDelete).not.toHaveBeenCalled();
@@ -185,7 +189,7 @@ describe('DetailView — per-window deleteAction fallback (ETP-4479)', () => {
     renderDetailView({ windowName: 'payment-in', hideDeleteWhenComplete: true });
 
     expect(screen.getByTestId('action-delete')).toBeTruthy();
-    await clickDeleteAndConfirm(user);
+    await clickDeleteAndConfirm(user, 'payment-confirm-accept');
 
     expect(neoExecuteMock).toHaveBeenCalledWith('123', 'eTPRRemovePayment');
     expect(currentHook.handleDelete).not.toHaveBeenCalled();
@@ -214,5 +218,42 @@ describe('DetailView — per-window deleteAction fallback (ETP-4479)', () => {
 
     expect(neoExecuteMock).not.toHaveBeenCalled();
     expect(currentHook.handleDelete).toHaveBeenCalled();
+  });
+
+  it('payment-in reconciled (status: RPPC): the rich delete cartel shows all three items (RPPC is also a deposited status, so hasTransaction/posted are both true)', async () => {
+    currentHook = makeHook({ id: '123', documentNo: 'PAY-001', status: 'RPPC', processed: false });
+    const user = userEvent.setup();
+    renderDetailView({ windowName: 'payment-in' });
+
+    await user.click(screen.getByTestId('action-delete'));
+
+    // RPPC is a member of DEPOSITED_STATUSES, so — unlike the pre-ETP-4500-followup
+    // derivation (posted := data.posted === 'Y') — `hasTransaction`/`posted` are
+    // BOTH true here too, alongside `reconciled`. All three items show.
+    expect(screen.getByText('reactivarItem1Title.')).toBeInTheDocument();
+    expect(screen.getByText('reactivarItem2Title.')).toBeInTheDocument();
+    expect(screen.getByText('reactivarItem3Title.')).toBeInTheDocument();
+  });
+
+  it('payment-out posted (processed: true — posted=="Y" per the hook fixture): the rich delete cartel shows the Asiento item', async () => {
+    currentHook = makeHook({ id: '123', documentNo: 'PAY-002', status: 'RPR', processed: true, posted: 'Y' });
+    const user = userEvent.setup();
+    renderDetailView({ windowName: 'payment-out' });
+
+    await user.click(screen.getByTestId('action-delete'));
+
+    expect(screen.getByText('reactivarItem3Title.')).toBeInTheDocument();
+    expect(screen.queryByText('reactivarItem1Title.')).not.toBeInTheDocument();
+  });
+
+  it('payment-in neither reconciled nor posted (status: RPAP, posted: "N"): the rich delete cartel shows neither item', async () => {
+    currentHook = makeHook({ id: '123', documentNo: 'PAY-003', status: 'RPAP', processed: false, posted: 'N' });
+    const user = userEvent.setup();
+    renderDetailView({ windowName: 'payment-in' });
+
+    await user.click(screen.getByTestId('action-delete'));
+
+    expect(screen.queryByText('reactivarItem1Title.')).not.toBeInTheDocument();
+    expect(screen.queryByText('reactivarItem3Title.')).not.toBeInTheDocument();
   });
 });

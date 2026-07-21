@@ -3,19 +3,13 @@ import { toast } from 'sonner';
 import { RotateCcw, Check } from 'lucide-react';
 import { useUI, useLocaleSwitch } from '@/i18n';
 import { DataTable } from '@/components/contract-ui';
-import { useRowDelete } from '@/hooks/useRowDelete.jsx';
-import ReactivarModal from './ReactivarModal';
+import PaymentLifecycleConfirmModal from './PaymentLifecycleConfirmModal';
 import ConfirmPaymentModal from './ConfirmPaymentModal';
+import { DEPOSITED_STATUSES, DEPOSITED_STATUSES_LIST } from './paymentStatuses';
 
 const ENTITY_BY_SPEC = { 'payment-in': 'finPayment', 'payment-out': 'header' };
 
 /* eslint-disable react/prop-types */
-
-// ─── Constants ────────────────────────────────────────────────────────────────
-
-const DEPOSITED_STATUSES = new Set(['RPR', 'RPPC', 'RDNC', 'PPM', 'PWNC', 'RPAE']);
-
-const DEPOSITED_STATUSES_LIST = ['RPR', 'RPPC', 'RDNC', 'PPM', 'PWNC', 'RPAE'];
 
 function buildColumns(dir, ui, locale) {
   const depositedKey = dir === 'in' ? 'cobroDepositado' : 'pagoDepositado';
@@ -370,7 +364,9 @@ const DRAFT_STATUS = 'RPAP';
 export default function PaymentHeaderTableBase({ dir, specName, data, onNavigate, apiBaseUrl, ...props }) {
   const ui = useUI();
   const { locale } = useLocaleSwitch();
-  const [reactivateRow, setReactivateRow] = useState(null);
+  // Unified Reactivar/Eliminar confirmation ({ action: 'reactivate'|'delete', row } | null) —
+  // both now go through the same LifecycleConfirmModal-backed cartel (ETP-4500).
+  const [confirm, setConfirm] = useState(null);
   const [confirmRow, setConfirmRow] = useState(null);
   const rootRef = useRef(null);
   const token = props.token;
@@ -400,11 +396,39 @@ export default function PaymentHeaderTableBase({ dir, specName, data, onNavigate
     }
   };
 
+  // Confirmed from the cartel: Reactivar goes through the same NEO action as before.
   const handleReactivate = async (row) => {
-    const ok = await runAction(row, 'etprReactivatePayment',
+    await runAction(row, 'etprReactivatePayment',
       dir === 'in' ? 'cobroReactivadoOk' : 'pagoReactivadoOk',
       dir === 'in' ? 'cobroReactivadoError' : 'pagoReactivadoError');
-    if (ok) setReactivateRow(null);
+    setConfirm(null);
+  };
+
+  // Confirmed from the cartel: Eliminar always goes through the removal process
+  // (never a plain DELETE) — it's the only path that safely reactivates (if
+  // needed), cleans up applied invoice lines (FIN_PaymentDetail/ScheduleDetail),
+  // and updates the related invoices; a bare header DELETE fails on FK
+  // constraints the moment any invoice has ever been applied to the payment.
+  const handleDelete = async (row) => {
+    const url = `${apiBaseUrl}/${entity}/${row.id}/action/eTPRRemovePayment`;
+    try {
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({}),
+      });
+      if (res.ok) {
+        toast.success(ui('recordDeleted'));
+        window.dispatchEvent(new CustomEvent('neo:processSuccess'));
+        props.onDataMutated?.();
+      } else {
+        const body = await res.json().catch(() => ({}));
+        toast.error(body.message || body.error || ui('networkError'));
+      }
+    } catch {
+      toast.error(ui('networkError'));
+    }
+    setConfirm(null);
   };
 
   const handleConfirmPayment = async (row) => {
@@ -413,33 +437,6 @@ export default function PaymentHeaderTableBase({ dir, specName, data, onNavigate
       dir === 'in' ? 'cobroConfirmadoError' : 'pagoConfirmadoError');
     if (ok) setConfirmRow(null);
   };
-
-  const { requestDelete, deleteDialog } = useRowDelete({
-    apiBaseUrl,
-    entity,
-    token,
-    onSuccess: () => {
-      window.dispatchEvent(new CustomEvent('neo:processSuccess'));
-      props.onDataMutated?.();
-    },
-    // Always go through the removal process (never a plain DELETE): it's the
-    // only path that safely reactivates (if needed), cleans up applied
-    // invoice lines (FIN_PaymentDetail/ScheduleDetail), and updates the
-    // related invoices — a bare header DELETE fails on FK constraints the
-    // moment any invoice has ever been applied to the payment.
-    deleteFn: async (row) => {
-      const url = `${apiBaseUrl}/${entity}/${row.id}/action/eTPRRemovePayment`;
-      const res = await fetch(url, {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({}),
-      });
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        throw new Error(body.message || body.error || `${res.status} ${res.statusText}`);
-      }
-    },
-  });
 
   const menuActions = useCallback(({ row }) => {
     const status = row.status || '';
@@ -457,7 +454,7 @@ export default function PaymentHeaderTableBase({ dir, specName, data, onNavigate
         label: ui('reactivar'),
         destructive: true,
         icon: RotateCcw,
-        onClick: () => { setReactivateRow(row); return Promise.resolve(); },
+        onClick: () => { setConfirm({ action: 'reactivate', row }); return Promise.resolve(); },
       }];
     }
     return [];
@@ -501,7 +498,7 @@ export default function PaymentHeaderTableBase({ dir, specName, data, onNavigate
             hideDeleteWhenComplete: false,
             statusField: 'status',
             sendDocument: null,
-            onDelete: requestDelete,
+            onDelete: (row) => { if (row?.id) setConfirm({ action: 'delete', row }); },
             actions: {
               edit: { visibleWhen: "@status@='__hidden__'" },
               delete: { visibleWhen: "@status@!='RPVOID'" },
@@ -510,12 +507,14 @@ export default function PaymentHeaderTableBase({ dir, specName, data, onNavigate
           data-testid="PaymentDataTable__743b1b"
         />
       </div>
-      {reactivateRow && (
-        <ReactivarModal
+      {confirm && (
+        <PaymentLifecycleConfirmModal
           dir={dir}
-          onClose={() => setReactivateRow(null)}
-          onConfirm={() => handleReactivate(reactivateRow)}
-          data-testid="ReactivarModal__743b1b"
+          action={confirm.action}
+          data={confirm.row}
+          onClose={() => setConfirm(null)}
+          onConfirm={() => (confirm.action === 'delete' ? handleDelete(confirm.row) : handleReactivate(confirm.row))}
+          data-testid="PaymentLifecycleConfirmModal__743b1b"
         />
       )}
       {confirmRow && (
@@ -526,7 +525,6 @@ export default function PaymentHeaderTableBase({ dir, specName, data, onNavigate
           data-testid="ConfirmPaymentModal__743b1b"
         />
       )}
-      {deleteDialog}
     </div>
   );
 }
