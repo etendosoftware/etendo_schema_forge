@@ -303,7 +303,7 @@ function computePaymentModalState({ dir, selectedAccount, selectedMethodObj, cur
   // The backend also rejects a rate of exactly 1 for a foreign payment (compareTo(ONE)==0 →
   // 400), so mirror that here (small tolerance) instead of letting the user hit a raw-English
   // 400 after submit. Both cases block Save AND Confirm (ETP-4504 B1 + QA cross-layer gap).
-  const rateMissing = isForeign && !(rate > 0);
+  const rateMissing = isForeign && rate <= 0;
   const rateIsOne = isForeign && rate > 0 && Math.abs(rate - 1) < RATE_ONE_TOLERANCE;
   const rateInvalid = rateMissing || rateIsOne;
   // Importe, Fecha, Método de pago y Cuenta are mandatory to save or confirm. "Importe"
