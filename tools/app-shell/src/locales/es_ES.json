@@ -4121,8 +4121,8 @@
       "description": ""
     },
     "AssetDepreciationDate": {
-      "label": "F.depreciación activo",
-      "description": "Fecha de última depreciación"
+      "label": "F.amortización activo",
+      "description": "Fecha de última amortización"
     },
     "AssetDisposalDate": {
       "label": "F.disponibilidad activo",
@@ -4193,8 +4193,8 @@
       "description": "Moneda objeitvo"
     },
     "IsFullyDepreciated": {
-      "label": "Depreciación completa",
-      "description": "El activo está completamente depreciado"
+      "label": "Amortización completa",
+      "description": "El activo está completamente amortizado"
     },
     "C_DocType_ID": {
       "label": "Tipo de documento",
@@ -16865,10 +16865,10 @@
     "actionFailed": "La acción falló",
     "assetsGroupInfoTitle": "Información del activo",
     "assetsGroupFinancialTitle": "Información financiera",
-    "assetsGroupDepreciationTitle": "Configuración de depreciación",
+    "assetsGroupDepreciationTitle": "Configuración de amortización",
     "assetsGroupDatesTitle": "Fechas",
     "assetsGroupDimensionsTitle": "Dimensiones contables",
-    "assetsDepreciationDisabledHint": "La depreciación está desactivada. Activala para configurar el método, el cálculo y la vida útil.",
+    "assetsDepreciationDisabledHint": "La amortización está desactivada. Activala para configurar el método, el cálculo y la vida útil.",
     "assetsAmortizationPlanTab": "Plan de amortización",
     "amortizationDimensionsTitle": "Dimensiones contables",
     "amortizationDimensionsEmpty": "Añadir dimensiones",
@@ -19587,23 +19587,23 @@
     "assetsTotalPlanned": "Total planificado:",
     "assetsStatusProcessed": "Confirmado",
     "assetsStatusPlanned": "Pendiente",
-    "assetsDepreciationSummary": "Resumen de depreciación",
+    "assetsDepreciationSummary": "Resumen de amortización",
     "assetsCurrentValue": "Valor actual",
     "assetsBookValue": "Valor contable del activo",
-    "assetsPlannedDepreciation": "Depreciación planificada",
+    "assetsPlannedDepreciation": "Amortización planificada",
     "assetsTotalScheduled": "Monto total programado",
-    "assetsDepreciated": "Depreciado",
-    "assetsFullyDepreciated": "Totalmente depreciado",
+    "assetsDepreciated": "Amortizado",
+    "assetsFullyDepreciated": "Totalmente amortizado",
     "assetsStillInProgress": "En progreso",
-    "assetsDepreciationProgress": "Progreso de depreciación",
+    "assetsDepreciationProgress": "Progreso de amortización",
     "assetsPendingCount": "Pendiente: {count}",
     "assetsDoneCount": "Hecho: {count}",
     "assetsCreateAmortization": "Crear amortización",
-    "assetsConfigDesc": "Configurá el método, el calendario y los montos de depreciación para este activo.",
+    "assetsConfigDesc": "Configurá el método, el calendario y los montos de amortización para este activo.",
     "assetsDepreciateLabel": "Amortizar",
     "assetsDepreciateDesc": "Habilitar la amortización para este activo.",
     "assets30DaysLabel": "Cada mes tiene 30 días",
-    "assets30DaysDesc": "Usar meses de 30 días para el cálculo de depreciación.",
+    "assets30DaysDesc": "Usar meses de 30 días para el cálculo de amortización.",
     "assetsOptLinear": "Lineal",
     "assetsOptPercentage": "Porcentaje",
     "assetsOptTime": "Tiempo",
@@ -19612,12 +19612,12 @@
     "assetsCurrencyLabel": "Moneda",
     "assetsPurchaseDateLabel": "Fecha de compra",
     "assetsCancellationDateLabel": "Fecha de cancelación",
-    "assetsDepStartDateLabel": "Fecha inicio de depreciación",
-    "assetsDepEndDateLabel": "Fecha fin de depreciación",
+    "assetsDepStartDateLabel": "Fecha inicio de amortización",
+    "assetsDepEndDateLabel": "Fecha fin de amortización",
     "assetsAssetValueLabel": "Valor del activo",
     "assetsResidualValueLabel": "Valor residual del activo",
-    "assetsDepreciationAmtLabel": "Monto de depreciación",
-    "assetsPrevDepreciatedLabel": "Monto ya depreciado",
+    "assetsDepreciationAmtLabel": "Monto de amortización",
+    "assetsPrevDepreciatedLabel": "Monto ya amortizado",
     "poSave": "Guardar",
     "poSaveDraft": "Guardar borrador",
     "poConfirmBtn": "Confirmar",
@@ -22675,7 +22675,7 @@
       "label": "Recalcular amortización"
     },
     "Depreciation Setup": {
-      "label": "Configuración de depreciación"
+      "label": "Configuración de amortización"
     },
     "Order": {
       "label": "Pedido"
