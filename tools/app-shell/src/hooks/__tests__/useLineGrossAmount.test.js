@@ -234,6 +234,78 @@ describe('deriveLineNet — invoice config (priceField=listPrice)', () => {
 
 });
 
+// ─── deriveLineNet — negative qty/price (ETP-4567) ───────────────────────────
+//
+// ETP-4567 lifted the old decisions.json `min:0` constraint, so orderedQuantity
+// and listPrice can now legitimately be negative (e.g. credit/return lines).
+// The `qty > 0 && price > 0` guard inherited from when negatives were impossible
+// makes deriveLineNet (and calculateBasicLineNet, used by the 'tax' branch)
+// silently collapse the result to 0 instead of computing the real signed total.
+
+describe('deriveLineNet — negative qty/price (ETP-4567 regression)', () => {
+
+  it('qty change — negative qty × positive price yields negative net (not 0)', () => {
+    // -5 × 100 × 1 = -500
+    const net = deriveLineNet(
+      'orderedQuantity', -5, {},
+      { orderedQuantity: -5, listPrice: 100, discount: 0 },
+      'orderedQuantity', 'listPrice', 'discount',
+    );
+    assert.equal(net, -500);
+  });
+
+  it('listPrice change — positive qty × negative price yields negative net (not 0)', () => {
+    // 5 × -100 × 1 = -500
+    const net = deriveLineNet(
+      'listPrice', -100, {},
+      { orderedQuantity: 5, listPrice: -100, discount: 0 },
+      'orderedQuantity', 'listPrice', 'discount',
+    );
+    assert.equal(net, -500);
+  });
+
+  it('qty change — both qty and price negative yields positive net (not 0)', () => {
+    // -5 × -100 × 1 = 500
+    const net = deriveLineNet(
+      'orderedQuantity', -5, {},
+      { orderedQuantity: -5, listPrice: -100, discount: 0 },
+      'orderedQuantity', 'listPrice', 'discount',
+    );
+    assert.equal(net, 500);
+  });
+
+  it('sanity — positive qty × positive price still works (no regression)', () => {
+    // 5 × 100 × 1 = 500
+    const net = deriveLineNet(
+      'orderedQuantity', 5, {},
+      { orderedQuantity: 5, listPrice: 100, discount: 0 },
+      'orderedQuantity', 'listPrice', 'discount',
+    );
+    assert.equal(net, 500);
+  });
+
+  it('discount change — negative qty still yields the correct negative net', () => {
+    // -5 × 100 × (1 - 10/100) = -450
+    const net = deriveLineNet(
+      'discount', '10', {},
+      { orderedQuantity: -5, listPrice: 100, discount: 10 },
+      'orderedQuantity', 'listPrice', 'discount',
+    );
+    assert.equal(net, -450);
+  });
+
+  it('tax change (calculateBasicLineNet) — negative qty yields the correct negative net', () => {
+    // -5 × 100 × 1 = -500
+    const net = deriveLineNet(
+      'tax', 'TAX-NEW', {},
+      { orderedQuantity: -5, listPrice: 100, discount: 0 },
+      'orderedQuantity', 'listPrice', 'discount',
+    );
+    assert.equal(net, -500);
+  });
+
+});
+
 // ─── computeLineGrossAmount ───────────────────────────────────────────────────
 
 describe('computeLineGrossAmount — order config', () => {
@@ -474,6 +546,58 @@ describe('computeLineGrossAmount — lineNetAmount sync', () => {
 
 });
 
+// ─── computeLineGrossAmount — negative lineNet (ETP-4567 round 3) ────────────
+//
+// ETP-4567 lifted the old decisions.json `min:0` constraint, so orderedQuantity
+// and listPrice (and therefore the derived lineNet) can legitimately be
+// negative (credit/return lines). Two guards in computeLineGrossAmount still
+// belong to the pre-fix "must be positive" family:
+//   1. The lineNetAmount sync guard requires `lineNet > 0`, so a negative
+//      lineNet is never synced onto calloutResult.lineNetAmount.
+//   2. `if (lineNet <= 0) return;` bails out before the tax factor is even
+//      resolved, so grossAmount/config.grossField are never computed for a
+//      negative lineNet — the UI is left showing a stale gross amount.
+// Both should only treat lineNet === 0 as the genuinely indeterminate case.
+
+describe('computeLineGrossAmount — negative lineNet (ETP-4567 regression)', () => {
+
+  it('qty change — negative lineNet still computes grossAmount and lineGrossAmount', () => {
+    const cache  = { [TAX_ID]: 21 };
+    const result = { tax: TAX_ID };
+    // qty=-5, price=100, discount=0 → lineNet = -500 → gross = -500 × 1.21 = -605
+    computeLineGrossAmount('orderedQuantity', -5, result, { listPrice: 100, discount: 0 }, cache, [], ORDER_LINE_CONFIG);
+    assert.equal(result.grossAmount, -605);
+    assert.equal(result[ORDER_LINE_CONFIG.grossField], -605);
+  });
+
+  it('qty change — negative lineNet still syncs lineNetAmount', () => {
+    const cache  = { [TAX_ID]: 21 };
+    const result = { tax: TAX_ID };
+    computeLineGrossAmount('orderedQuantity', -5, result, { listPrice: 100, discount: 0 }, cache, [], ORDER_LINE_CONFIG);
+    assert.equal(result.lineNetAmount, -500);
+  });
+
+  it('listPrice change — negative lineNet still computes grossAmount (invoice config)', () => {
+    const cache  = { [TAX_ID_10]: 10 };
+    const result = { tax: TAX_ID_10 };
+    // qty=3, listPrice=-40 → lineNet = -120 → gross = -120 × 1.10 = -132
+    computeLineGrossAmount('listPrice', -40, result, { invoicedQuantity: 3 }, cache, [], INVOICE_LINE_CONFIG);
+    assert.equal(result.grossAmount, -132);
+    assert.equal(result.lineNetAmount, -120);
+  });
+
+  it('sanity — positive lineNet still computes grossAmount/lineNetAmount (no regression)', () => {
+    const cache  = { [TAX_ID]: 21 };
+    const result = { tax: TAX_ID };
+    // qty=5, price=100, discount=0 → lineNet = 500 → gross = 500 × 1.21 = 605
+    computeLineGrossAmount('orderedQuantity', 5, result, { listPrice: 100, discount: 0 }, cache, [], ORDER_LINE_CONFIG);
+    assert.equal(result.grossAmount, 605);
+    assert.equal(result[ORDER_LINE_CONFIG.grossField], 605);
+    assert.equal(result.lineNetAmount, 500);
+  });
+
+});
+
 // ─── computeUnitPriceForPost ──────────────────────────────────────────────────
 
 describe('computeUnitPriceForPost', () => {
@@ -518,6 +642,28 @@ describe('computeUnitPriceForPost', () => {
     const lineData = {};
     computeUnitPriceForPost(lineData, INVOICE_LINE_CONFIG);
     assert.equal(lineData.unitPrice, undefined);
+  });
+
+  // ─ negative listPrice (ETP-4567 regression) ─
+  //
+  // ETP-4567 lifted the old `min:0` constraint so listPrice can legitimately be
+  // negative (credit/return lines). The `listPrice > 0` guard inherited from
+  // when negatives were impossible makes computeUnitPriceForPost silently skip
+  // deriving `unitPrice` for negative list prices, so the field is left
+  // undefined and never sent in the PATCH/POST body — the backend's native
+  // callout then overwrites the price with its own default on line creation.
+
+  it('order config: negative listPrice still derives unitPrice (not left undefined)', () => {
+    const lineData = { listPrice: -100, discount: 0 };
+    computeUnitPriceForPost(lineData, ORDER_LINE_CONFIG);
+    assert.equal(lineData.unitPrice, -100);
+  });
+
+  it('order config: negative listPrice with discount derives the correct discounted unitPrice', () => {
+    // -100 × (1 - 10/100) = -90
+    const lineData = { listPrice: -100, discount: 10 };
+    computeUnitPriceForPost(lineData, ORDER_LINE_CONFIG);
+    assert.equal(lineData.unitPrice, -90);
   });
 
 });
