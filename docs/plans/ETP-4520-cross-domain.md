@@ -64,12 +64,14 @@ Splitting the endpoint into a separate ticket/session would mean dispatching `sc
 - "Grid + Form" from the ticket's AC is **already structurally satisfied** — `posted` renders in Grid (field-level `badge` config) and Form (window-level `statusPills` → `DetailView`'s status-pill badge) independently of the field's own `form:false`. Part B's capability gate is the only missing piece; no `form:true` change needed.
 - Full Window Change Integrity Protocol after: `make regen ONLY=sales-invoice,purchase-invoice`, contract-integrity check, generated import-path check, `addLineFields` check (N/A here, no lines entity change).
 
-### 5. ETP-4530 — FA edit tabs (folded in)
-- Per the prior session's confirmed scope (memory: `project-accounting-followups-etp-3504`): `financial-account` is `layoutType: "custom"`; `EditAccountModal.jsx` currently has no tabs; `Cuenta bancaria`/`Cuenta transitoria` are `exclude: true` (fully unexposed); backend NeoHandler read/write exposure for these fields is confirmed in scope, not just a UI reshuffle.
-- `com.etendoerp.go`: build the NeoHandler exposure for the two previously-excluded fields (existing empty `feature/ETP-4530` worktree).
-- `etendo_schema_forge`: add a new "Cuentas contables" tab to `EditAccountModal.jsx` using the already-proven `DetailTabs.jsx` kit (existing empty `feature/ETP-4530` worktree in this repo).
-- Because `financial-account` is a custom window, this tab is **not** decisions.json-driven — it calls `useHasCapability("showAccountingFields")` directly in the hand-written component to decide whether to render the tab at all. This is the second (and, for this MVP, last) consumer of the capability hook alongside Part B's generic field mechanism.
-- `schema_forge_core`'s existing empty `feature/ETP-4530` worktree there is superseded by this plan folding the work into `feature/ETP-4520` unless the Developer agent finds core-level (generator) changes are actually needed for the tab kit — check `DetailTabs.jsx`'s current location (custom-window-local vs. shared core component) before assuming no core change is needed.
+### 5. ETP-4530 — FA edit tabs (folded in) — **corrected 2026-07-22: already built, not greenfield**
+- **Verified 2026-07-22 (superseding the earlier "no tabs / exclude:true" premise, which was stale):** ETP-4530 was already fully built end-to-end in a prior session and merged into `epic/ETP-3504`, on both sides:
+  - Backend: `FinancialAccountAccountingHandler` (`@Named("financialAccountAccountingHandler")` in `com.etendoerp.go`) already exposes `fINAssetAcct`/`fINTransitoryAcct` (GET+PUT) on the `accountingConfiguration` entity (`artifacts/financial-account/decisions.json` lines 134-163) — 6 commits, all merged.
+  - Frontend: `EditAccountModal.jsx` already has the full tab — `EDIT_TAB_ACCOUNTING` trigger + `AccountingConfigurationSection` (asset/transitory account selectors, ledger-not-configured empty state) — present in the main checkout today, not just a feature branch.
+- **What's actually left, folded into ETP-4520:** wrap the *existing* `EDIT_TAB_ACCOUNTING` tab trigger + `TabsContent` with `useHasCapability("showAccountingFields")` so the tab is omitted entirely (not just disabled) for roles without the capability. This is a small additive change to already-working code, not new tab construction.
+- Because `financial-account` is a custom window, this gate is **not** decisions.json-driven — it's a direct call in the hand-written component. This is the second (and, for this MVP, last) consumer of the capability hook alongside Part B's generic field mechanism.
+- No backend changes needed for this piece — the NeoHandler exposure is unaffected; only frontend rendering is gated.
+- Reuse the existing `feature/ETP-4530` worktree in `etendo_schema_forge` (already has the tab code merged via epic, so start from `feature/ETP-4520` or rebase — check which base has the current `EditAccountModal.jsx` before choosing).
 
 ## Acceptance criteria (from the handoff doc, expanded)
 
