@@ -96,6 +96,26 @@ describe('RowQuickActions', () => {
     expect(screen.getByTestId('row-quick-action-delete')).toBeTruthy();
   });
 
+  it('hides Delete unconditionally when hideDeleteButton is true (draft row)', () => {
+    setup({ row: DRAFT_ROW, hideDeleteButton: true, statusField: 'documentStatus' });
+    expect(screen.queryByTestId('row-quick-action-delete')).toBeNull();
+  });
+
+  it('hides Delete via hideDeleteButton even with hideDeleteWhenComplete off', () => {
+    setup({
+      row: COMPLETED_ROW,
+      hideDeleteWhenComplete: false,
+      hideDeleteButton: true,
+      statusField: 'documentStatus',
+    });
+    expect(screen.queryByTestId('row-quick-action-delete')).toBeNull();
+  });
+
+  it('renders Delete when hideDeleteButton is absent (default false)', () => {
+    setup({ row: DRAFT_ROW, statusField: 'documentStatus' });
+    expect(screen.getByTestId('row-quick-action-delete')).toBeTruthy();
+  });
+
   it('shows kebab when menuActions are provided and filters invisible ones', async () => {
     const user = userEvent.setup();
     const menuActions = [
@@ -277,6 +297,22 @@ describe('RowQuickActions', () => {
       expect(menuBtn.className).toContain('opacity-50');
       expect(menuBtn.className).toContain('cursor-not-allowed');
       expect(menuBtn).toHaveProperty('disabled', true);
+    });
+  });
+
+  // ── window.readOnly: suppress the write actions (Edit, Clone, Delete) ──────
+  describe('readOnly window (window.readOnly)', () => {
+    it('hides Edit, Clone and Delete when readOnly is true', () => {
+      setup({ readOnly: true });
+      expect(screen.queryByTestId('row-quick-action-edit')).toBeNull();
+      expect(screen.queryByTestId('row-quick-action-clone')).toBeNull();
+      expect(screen.queryByTestId('row-quick-action-delete')).toBeNull();
+    });
+
+    it('renders Edit and Delete when readOnly is absent (default false, regression)', () => {
+      setup();
+      expect(screen.getByTestId('row-quick-action-edit')).toBeTruthy();
+      expect(screen.getByTestId('row-quick-action-delete')).toBeTruthy();
     });
   });
 

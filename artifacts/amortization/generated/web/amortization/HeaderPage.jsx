@@ -14,8 +14,7 @@ const breadcrumb = 'Finance / Amortization';
 
 // @sf-generated-start summary:header
 const summary = [
-  { key: 'etblkpAccountingstatus', column: 'EM_Etblkp_Accountingstatus', type: 'status' },
-  { key: 'etblkpBulkposting', column: 'EM_Etblkp_Bulkposting', type: 'string' },
+
 ];
 
 const statusField = 'processed';
@@ -44,7 +43,7 @@ const draftMode = {
 // @sf-generated-end draftMode:header
 
 // @sf-generated-start requiredHeaderFields:header
-const requiredHeaderFields = ['name', 'accountingDate', 'currency', 'etblkpAccountingstatus', 'etblkpBulkposting'];
+const requiredHeaderFields = ['name', 'accountingDate', 'currency'];
 // @sf-generated-end requiredHeaderFields:header
 
 // @sf-generated-start addLineFields:lines
@@ -55,12 +54,7 @@ const addLineFields = {
     { key: 'amortizationAmount', column: 'Amortizationamt', type: 'number', required: true, label: 'Amortization Amount' },
     { key: 'project', column: 'C_Project_ID', type: 'selector', label: 'Project', reference: 'Project', inputMode: 'selector' },
     { key: 'costcenter', column: 'C_Costcenter_ID', type: 'selector', label: 'Cost Center', reference: 'Costcenter', inputMode: 'selector' },
-    { key: 'stDimension', column: 'User1_ID', type: 'selector', label: '1st Dimension', reference: 'User1', inputMode: 'selector' },
-    { key: 'ndDimension', column: 'User2_ID', type: 'selector', label: '2nd Dimension', reference: 'User2', inputMode: 'selector' },
-    { key: 'eTADASActivity', column: 'EM_Etadas_C_Activity_ID', type: 'selector', label: 'Activity', reference: 'Activity', inputMode: 'selector' },
     { key: 'eTADASBpartner', column: 'EM_Etadas_C_Bpartner_ID', type: 'selector', label: 'Business Partner', reference: 'BPartner', inputMode: 'selector' },
-    { key: 'eTADASSalesCampaign', column: 'EM_Etadas_Campaign_ID', type: 'selector', label: 'Sales Campaign', reference: 'Campaign', inputMode: 'selector' },
-    { key: 'eTADASSalesRegion', column: 'EM_Etadas_Salesregion_ID', type: 'selector', label: 'Sales Region', reference: 'SalesRegion', inputMode: 'selector' },
   ],
   derived: [
 
@@ -145,51 +139,11 @@ export const api = {
     },
     {
       "entity": "lines",
-      "field": "stDimension",
-      "column": "User1_ID",
-      "reference": "User1",
-      "inputMode": "selector",
-      "url": "/sws/neo/amortization/lines/selectors/stDimension"
-    },
-    {
-      "entity": "lines",
-      "field": "ndDimension",
-      "column": "User2_ID",
-      "reference": "User2",
-      "inputMode": "selector",
-      "url": "/sws/neo/amortization/lines/selectors/ndDimension"
-    },
-    {
-      "entity": "lines",
-      "field": "eTADASActivity",
-      "column": "EM_Etadas_C_Activity_ID",
-      "reference": "Activity",
-      "inputMode": "selector",
-      "url": "/sws/neo/amortization/lines/selectors/eTADASActivity"
-    },
-    {
-      "entity": "lines",
       "field": "eTADASBpartner",
       "column": "EM_Etadas_C_Bpartner_ID",
       "reference": "BPartner",
       "inputMode": "selector",
       "url": "/sws/neo/amortization/lines/selectors/eTADASBpartner"
-    },
-    {
-      "entity": "lines",
-      "field": "eTADASSalesCampaign",
-      "column": "EM_Etadas_Campaign_ID",
-      "reference": "Campaign",
-      "inputMode": "selector",
-      "url": "/sws/neo/amortization/lines/selectors/eTADASSalesCampaign"
-    },
-    {
-      "entity": "lines",
-      "field": "eTADASSalesRegion",
-      "column": "EM_Etadas_Salesregion_ID",
-      "reference": "SalesRegion",
-      "inputMode": "selector",
-      "url": "/sws/neo/amortization/lines/selectors/eTADASSalesRegion"
     }
   ],
   "actions": [
@@ -296,7 +250,7 @@ export default function HeaderPage({ windowName, recordId, ...props }) {
       api={api}
         CustomLines={AmortizationLinesTable}
         customLinesLabel="Lines"
-        hideDeleteWhenComplete
+        hideDeleteButton
         hidePrint
         noHeaderBorder
         whiteFormBackground
@@ -341,9 +295,10 @@ export default function HeaderPage({ windowName, recordId, ...props }) {
       listbarPaddingX="px-2"
       tablePaddingX="px-2"
       hidePrint
+      hideCreate
       hideLink
       labelOverrides={labelOverrides}
-      rowQuickActions={{}}
+      rowQuickActions={{"hideDeleteButton":true}}
       {...props}
     />
   );

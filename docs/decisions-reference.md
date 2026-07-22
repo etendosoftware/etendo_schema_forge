@@ -85,7 +85,9 @@ Per-locale field label overrides. When the simplified interface needs to rename 
 | `customListIcons` | boolean | `false` | — | Swaps the list toolbar sort/refresh icons for the shared `SortIcon` / `RefreshIcon` set (`@/components/ui/custom-icons`), matching Contacts/Warehouse. Emits `SortIconComponent` / `RefreshIconComponent` on `ListView`. |
 | `contentBg` | string | `"bg-white"` | Any Tailwind bg class | Background color of the main content card in the detail view (e.g., `"bg-slate-50"` for a light gray tone). |
 | `formCardPadding` | string | `null` | Any Tailwind padding class | Override the Tailwind padding class applied to the form card div in the detail view. When `null`, `DetailView` falls back to `p-6`. Use `"px-2 pb-2"` for tighter (8px horizontal) padding, for example on windows with dense form layouts. |
+| `hideDelete` | boolean | `false` | — | Disables the CRUD delete capability at the contract/API level — emits `apiPrediction.crud.<entity>.delete: false` in `contract.json` for the window's entities. This is an **API-level** declaration only; it does not by itself remove the delete button/icon from the UI (see `hideDeleteButton` below for that). Used for master-data windows whose records are provisioned/retired outside the app (e.g. `tax`, `tax-category`, `open-close-period-control`). |
 | `hideDeleteWhenComplete` | boolean | `false` | — | Hides the delete button in the detail view when the document status is not Draft. Prevents accidental deletion of completed/processed records. |
+| `hideDeleteButton` | boolean | `false` | — | **Unconditionally** hides the Delete (trash) button/icon in **both** the detail view toolbar and the list-row hover quick actions, for every record regardless of status. Distinct from `hideDelete` (which only disables the CRUD delete capability declared in `contract.json`/the API) — use `hideDeleteButton` when you also need to remove the UI affordance. Use this instead of `hideDeleteWhenComplete` when Delete should never be available, not just once the document leaves Draft; when set, `hideDeleteWhenComplete` becomes redundant (the button is always hidden). When `false`/absent, delete visibility is unchanged. |
 | `customComponents` | object | `null` | See below | Override generated components with custom ones from `artifacts/{window}/custom/`. The generator emits the correct imports and props automatically. |
 | `menuActions` | array | `[]` | See below | Additional actions in the detail view's "more" menu (triple dot). Each action can have visibility conditions based on document status. |
 | `newActions` | array | `[]` | See below | Additional actions in the split "New" button dropdown in the list view. Each action can optionally open a custom modal component. |
@@ -471,8 +473,24 @@ Each override entry supports the following properties:
 | `requiresLines` | boolean | If `true`, the button is disabled until at least one line exists. |
 | `requiresFieldMax` | array | Validation rules checked before firing the action. Each entry: `{ field, max, conditionalOnField?, conditionalValue?, errorKey }`. |
 | `params` | array | Parameter definitions for a pre-process dialog. When at least one non-hidden param is present, clicking the button opens `ProcessParamDialog` first; the collected values are passed to `handleProcess` as `paramValues`. Each entry: `{ key, type, label, required?, hidden?, options? }`. Supported `type`: `"select"` (renders a dropdown using `options: [{ value, label }]`). The first option is pre-selected. See [Process Parameter Dialog](#process-parameter-dialog-params) below. |
+| `labelToggle` | object | Optional. Switches the button caption based on a record field value. Shape: `{ field, equals, label }`. When the current record's `field` value strictly equals `equals`, the button shows `label`; otherwise it shows the default `label` property. Both captions are translated via `useMenuLabel`. Purely opt-in — omitting it leaves the button behavior byte-identical. Mirrors Etendo Classic buttons backed by a list reference (e.g. Assets ref 800042: N→Create Amortization, Y→Recalculate Amortization keyed on `processed`). |
 
 When `style` is not specified, the generator defaults to `"destructive"` for processes whose names contain destructive keywords (e.g., `void`, `cancel`, `reverse`) and `"positive"` for all others.
+
+**Example — dynamic caption with `labelToggle`:**
+
+```json
+"processOverrides": {
+  "processAsset": {
+    "add": true,
+    "label": "Create Amortization",
+    "style": "positive",
+    "labelToggle": { "field": "processed", "equals": "Y", "label": "Recalculate Amortization" }
+  }
+}
+```
+
+The button reads "Create Amortization" while `processed !== 'Y'` and flips to "Recalculate Amortization" once `processed === 'Y'`.
 
 #### Process Parameter Dialog (`params`)
 
@@ -594,7 +612,7 @@ Two field-level props control how the grid column renders raw values as labeled 
 
 | Property | Type | Default | Purpose |
 |----------|------|---------|---------|
-| `columnType` | string | Inferred | Forces the grid column renderer. `"status"` renders the cell as a status badge. When absent, the renderer is inferred from the field name/type via `mapFieldType` in `generate-frontend.js`. |
+| `columnType` | string | Inferred | Forces the grid column renderer. `"status"` renders the cell as a status badge. `"signedDelta"` renders a signed numeric delta (see below). When absent, the renderer is inferred from the field name/type via `mapFieldType` in `generate-frontend.js`. |
 | `enumValues` | array | `null` | Maps raw cell values to display labels. Each entry: `{ "value": "<raw>", "name": "<i18nKeyOrLabel>" }`. The generator emits these as `enumLabels: { '<raw>': '<name>' }` on the table column descriptor. |
 
 **How `enumValues` is resolved at runtime:**
@@ -629,6 +647,42 @@ Two field-level props control how the grid column renders raw values as labeled 
 ```
 
 This renders the badge as "Processed"/"Draft" (EN) and "Procesado"/"Borrador" (ES), reusing the existing `statusProcessed`/`statusDraft` keys from `genericLabels`. The advanced filter and the status quick-filter pill also show these labels instead of raw `true`/`false`.
+
+#### Signed delta column rendering (`columnType: "signedDelta"`)
+
+Renders a numeric delta with sign + semantic color, for lines-grid columns that show a
+computed difference (e.g. physical-inventory's `etgoQtydiff` "Difference" column between
+counted and book quantity).
+
+| Value | Text | Color |
+|-------|------|-------|
+| `< 0` | `-N` | `#D50B3E` (negative) |
+| `= 0` | `±0` (only exactly zero) | `#121217` (neutral) |
+| `> 0` | `+N` | `#1E874C` (positive) |
+
+Implementation: `formatSignedDelta()` in `tools/app-shell/src/lib/formatSigned.js` is the
+single source of truth for the text/tone computation — both the inline lines grid
+(`InlineLinesPanel.jsx` `ReadCell`) and the main `DataTable` (`DataTable.cellRenderers.jsx`
+`renderSignedDeltaCell` via `CELL_RENDERERS.signedDelta`) call it, so the two grids render
+identically. It deliberately does **not** apply thousands grouping — sibling quantity
+columns in the same lines grid (e.g. `bookQuantity`, `quantityCount`) render their raw
+value with no `Intl` formatting, and `signedDelta` stays consistent with them rather than
+introducing a different number format for one column.
+
+**Example — `physical-inventory` `etgoQtydiff` field:**
+
+```json
+"etgoQtydiff": {
+  "visibility": "readOnly",
+  "label": "Difference",
+  "columnType": "signedDelta",
+  "grid": true,
+  "gridOrder": 5,
+  "grow": true,
+  "columnWidth": 192,
+  "readOnlyLogic": null
+}
+```
 
 #### `list-modal` cell renderers (`cellType`)
 
@@ -669,6 +723,31 @@ identifier resolution).
 ```
 
 Setting `dependsOn` automatically sets `inputMode` to `"dependent"`.
+
+### Lookup Drawer Override (`lookupDrawer`, `lookupTitle`, `onSelectMappings`)
+
+For a `lookup: true` field (the inline add-row / inline-edit product picker), these
+properties swap in a different picker component and control what happens when a row is
+selected.
+
+| Property | Type | Default | Purpose |
+|----------|------|---------|---------|
+| `lookup` | boolean | `false` | Enables the drawer-style picker for this field (instead of a plain search input). |
+| `lookupDrawer` | string \| null | `null` (→ `"default"`) | Key into `LOOKUP_DRAWERS` (`tools/app-shell/src/components/contract-ui/lookupDrawers.js`). `"default"` is the plain `ProductSearchDrawer`. `"product-stock"` is the shared, window-agnostic product+stock picker (groups by product, warehouse-filter pills, expand/collapse per-locator rows) — used by any window whose product field needs to resolve a storage bin/warehouse on selection. |
+| `lookupTitle` | string \| null | Field label | Title shown in the drawer header. |
+| `onSelectMappings` | array \| null | `null` | Maps data from the selected raw selector row onto other fields in the same line. Each entry: `{ "from": "<path into the row, e.g. _aux._LOC>", "to": "<sibling field key>", "labelFrom": ["<row key>", ...] }`. `labelFrom` is tried in order — the first non-empty value becomes the label shown for `to`. Applied by `applyOnSelectMappings` in `DataTable.jsx`, caller-side; the drawer itself never writes to sibling fields. |
+
+```json
+"product": {
+  "grid": true,
+  "lookup": true,
+  "lookupDrawer": "product-stock",
+  "lookupTitle": "Product",
+  "onSelectMappings": [
+    { "from": "_aux._LOC", "to": "storageBin", "labelFrom": ["warehouse", "warehouse$_identifier", "storageBin"] }
+  ]
+}
+```
 
 ### Custom Renderer (`customRenderer`)
 
@@ -712,6 +791,8 @@ instead of the default input when it detects this property.
 | `displayLogic` | string \| null | `null` | Expression for conditional visibility. Set `null` to omit. |
 | `businessCritical` | boolean | `false` | Advisory-only metadata flag. When `true`, marks the field as business-critical data. This flag does **not** change any functional behavior (validation, read-only logic, visibility, etc.). It travels through the pipeline (`decisions.json` → `resolve-curated` → `contract.json` → `push-to-neo` → `ETGO_SF_FIELD.ISBUSINESSCRITICAL`) so that downstream consumers (e.g., AI agents reading `neo_schema`) know they must confirm with the user before creating or updating records that include this field. |
 | `agentPrompt` | string | `null` | Per-field guidance for AI agents. Carried into the curated field and persisted to `ETGO_SF_FIELD.AGENT_PROMPT`, from where `neo_schema` returns it inside each field object. Empty or whitespace-only values clear the persisted prompt and are omitted from the MCP response. |
+
+> **MCP-oriented field config:** `businessCritical`, `agentPrompt`, `visibility`, a per-field `defaultValue`, and an entity's `Java_Qualifier` are the per-field knobs the NEO Headless **MCP** surfaces to AI agents (via `neo_schema` / `neo_defaults`). They are decided **only here in `decisions.json`** — the MCP/NEO Java reads and surfaces them, never decides them. The flag→`ETGO_SF_FIELD` column→surfacing map and the `make regen … PUSH_TO_NEO=1` → `./gradlew export.database` fix recipe are in `docs/agentic-validation/mcp-field-flags-pipeline.md`. A request to change one of these is upstream-config, not an MCP code change.
 
 ### Explicit null
 

@@ -1,4 +1,4 @@
-.PHONY: test test-all-coverage test-ci test-ci-coverage test-e2e test-e2e-headless test-e2e-debug test-e2e-ui test-e2e-report test-e2e-record test-e2e-onboarding-integration generate regen dev dev-mock build install bump-core-version install-e2e deploy clean help dev-local-core report-serve report-serve-detach report-stop report-preview validate-pipeline method-budget window-leak-budget quality-gate domain-boundary-check sonar sonar-coverage menu-cache uuid xml-regeneration-check dump-delta regen-check regen-check-help regen-check-clean regen-help data-fixes data-fixes-help switch-to-es ensure-locale project-status
+.PHONY: test test-all-coverage test-ci test-ci-coverage test-frontend test-e2e test-e2e-headless test-e2e-debug test-e2e-ui test-e2e-report test-e2e-record test-e2e-onboarding-integration email-stress-limits email-stress-limits-report email-stress-help generate regen dev dev-local-core dev-mock build install bump-core-version install-e2e deploy clean help report-serve report-serve-detach report-stop report-preview validate-pipeline method-budget window-leak-budget quality-gate domain-boundary-check sonar sonar-coverage menu-cache uuid merge-block-check xml-regeneration-check dump-delta regen-check regen-check-help regen-check-clean regen-help data-fixes data-fixes-help data-fixes-remote db-tunnel db-tunnel-down db-tunnel-status db-psql db-tunnel-help switch-to-es ensure-locale project-status
 
 export SF_ROOT := $(CURDIR)
 
@@ -26,14 +26,32 @@ test: ## Run all unit tests (CLI data-fixes + app-shell + artifacts + vitest)
 
 test-all-coverage: ## Run ALL unit tests (Node + Vitest) with coverage reports
 	@mkdir -p coverage
-	@echo "=== CLI data-fixes tests ==="
-	node --test --experimental-test-coverage --test-reporter=lcov --test-reporter-destination=coverage/cli-lcov.info 'cli/test/*.test.js'
-	@echo "=== App-shell Node tests ==="
-	node --test --experimental-test-coverage --test-reporter=lcov --test-reporter-destination=coverage/appshell-lcov.info $(shell find tools/app-shell/src -path '*/__tests__/*.test.js' ! -name 'useEntity-helpers.test.js')
-	@echo "=== App-shell extra tests ==="
-	node --test --experimental-test-coverage --test-reporter=lcov --test-reporter-destination=coverage/appshell-test-lcov.info $(shell find tools/app-shell/test -name '*.test.js')
-	@echo "=== Artifact custom tests ==="
-	node --test --experimental-test-coverage --test-reporter=lcov --test-reporter-destination=coverage/artifacts-lcov.info $(shell find artifacts -path '*/__tests__/*.test.js')
+	@echo "=== Node tests (4 groups in parallel) ==="
+	@node --test --experimental-test-coverage \
+		--test-reporter=spec --test-reporter-destination=stdout \
+		--test-reporter=lcov --test-reporter-destination=coverage/cli-lcov.info \
+		$(shell find cli/test -name '*.test.js') > coverage/cli.log 2>&1 & pid1=$$!; \
+	node --test --experimental-test-coverage \
+		--test-reporter=spec --test-reporter-destination=stdout \
+		--test-reporter=lcov --test-reporter-destination=coverage/appshell-lcov.info \
+		$(shell find tools/app-shell/src -path '*/__tests__/*.test.js' ! -name 'useEntity-helpers.test.js') > coverage/appshell.log 2>&1 & pid2=$$!; \
+	node --test --experimental-test-coverage \
+		--test-reporter=spec --test-reporter-destination=stdout \
+		--test-reporter=lcov --test-reporter-destination=coverage/appshell-test-lcov.info \
+		$(shell find tools/app-shell/test -name '*.test.js') > coverage/appshell-test.log 2>&1 & pid3=$$!; \
+	node --test --experimental-test-coverage \
+		--test-reporter=spec --test-reporter-destination=stdout \
+		--test-reporter=lcov --test-reporter-destination=coverage/artifacts-lcov.info \
+		$(shell find artifacts -path '*/__tests__/*.test.js') > coverage/artifacts.log 2>&1 & pid4=$$!; \
+	wait $$pid1; e1=$$?; \
+	wait $$pid2; e2=$$?; \
+	wait $$pid3; e3=$$?; \
+	wait $$pid4; e4=$$?; \
+	[ $$e1 -eq 0 ] || { echo "CLI tests FAILED:"; tail -30 coverage/cli.log; exit 1; }; \
+	[ $$e2 -eq 0 ] || { echo "App-shell Node tests FAILED:"; tail -30 coverage/appshell.log; exit 1; }; \
+	[ $$e3 -eq 0 ] || { echo "App-shell extra tests FAILED:"; tail -30 coverage/appshell-test.log; exit 1; }; \
+	[ $$e4 -eq 0 ] || { echo "Artifact tests FAILED:"; tail -30 coverage/artifacts.log; exit 1; }; \
+	echo "=== Node tests: all passed ==="
 	@echo "=== Vitest (React components) ==="
 	cd tools/app-shell && npx vitest run --coverage --coverage.reporter=lcov && sed 's|^SF:src/|SF:tools/app-shell/src/|' coverage/vitest/lcov.info > ../../coverage/vitest-lcov.info
 	@echo "=== Merging LCOV reports ==="
@@ -95,6 +113,66 @@ method-budget: ## Ratchet guard: fail only if a tracked class grew past its meth
 
 window-leak-budget: ## Ratchet guard: fail only if window-specific literals in contract-ui grew (use --list to enumerate)
 	$(SF) sf-window-leak-budget
+
+test-frontend: ## Run only frontend generator tests
+	cd cli && node --test 'test/generate-frontend.test.js'
+
+SCENARIO ?= double-send
+WINDOW_NAME ?= sales-order
+BASE_URL ?= http://127.0.0.1:8080/etendo_sf2
+WORKER_STEPS ?= 1,2,5,10,20,50
+RESET_SAFETY ?= 1
+DOC_ID ?=
+DOC_IDS ?=
+TOKEN ?=
+DB_GRADLE_PROPERTIES ?=
+EMAIL_STRESS_REPORT ?= docs/reports/email-stress-limit-report-$(shell date +%Y-%m-%d-%H%M%S).html
+
+email-stress-limits: ## Probe email contract limits. Usage: make email-stress-limits TOKEN=... DOC_ID=... [WORKER_STEPS=1,2,5,10,20]
+	@if [ -z "$(TOKEN)" ]; then \
+	  echo "Usage: make email-stress-limits TOKEN=<jwt> DOC_ID=<id> [SCENARIO=double-send|concurrent-load] [WORKER_STEPS=1,2,5,10,20]"; \
+	  exit 1; \
+	fi; \
+	if [ "$(SCENARIO)" = "double-send" ] && [ -z "$(DOC_ID)" ]; then \
+	  echo "DOC_ID is required for SCENARIO=double-send"; \
+	  exit 1; \
+	fi; \
+	if [ "$(SCENARIO)" = "concurrent-load" ] && [ -z "$(DOC_IDS)" ]; then \
+	  echo "DOC_IDS is recommended for SCENARIO=concurrent-load; synthetic IDs will not work against a real backend."; \
+	fi; \
+	EXTRA_ARGS=""; \
+	if [ -n "$(DB_GRADLE_PROPERTIES)" ]; then EXTRA_ARGS="$$EXTRA_ARGS --db-gradle-properties $(DB_GRADLE_PROPERTIES)"; fi; \
+	STRESS_RESET_SAFETY="$(RESET_SAFETY)" \
+	ETENDO_TOKEN="$(TOKEN)" \
+	ETENDO_BASE_URL="$(BASE_URL)" \
+	STRESS_WINDOW="$(WINDOW_NAME)" \
+	STRESS_WORKER_STEPS="$(WORKER_STEPS)" \
+	STRESS_DOC_ID="$(DOC_ID)" \
+	STRESS_DOC_IDS="$(DOC_IDS)" \
+	node cli/test/stress/limits.js --scenario "$(SCENARIO)" $$EXTRA_ARGS
+
+email-stress-limits-report: ## Probe email limits and generate a Jest/JUnit-style HTML report
+	@STRESS_HTML_REPORT="$(EMAIL_STRESS_REPORT)" \
+	$(MAKE) email-stress-limits; \
+	status=$$?; \
+	echo "Email stress HTML report: $(EMAIL_STRESS_REPORT)"; \
+	exit $$status
+
+email-stress-help: ## Show email stress limit probe variables
+	@echo "Usage:"
+	@echo "  make email-stress-limits TOKEN=<jwt> DOC_ID=<id>"
+	@echo "  make email-stress-limits SCENARIO=concurrent-load TOKEN=<jwt> DOC_IDS=id1,id2,id3 WORKER_STEPS=5,10,25"
+	@echo ""
+	@echo "Variables:"
+	@echo "  SCENARIO=double-send|concurrent-load   Default: double-send"
+	@echo "  WINDOW_NAME=<spec>                     Default: sales-order"
+	@echo "  BASE_URL=<etendo-root>                 Default: http://127.0.0.1:8080/etendo_sf2"
+	@echo "  WORKER_STEPS=1,2,5,10,20,50            Worker ramp to execute"
+	@echo "  RESET_SAFETY=1                         Clear target record throttle + matching audits before each step"
+	@echo "  DOC_ID=<id>                            Required for double-send"
+	@echo "  DOC_IDS=id1,id2,...                    Recommended for concurrent-load"
+	@echo "  DB_GRADLE_PROPERTIES=<path>            Optional DB config source for RESET_SAFETY"
+	@echo "  EMAIL_STRESS_REPORT=<path>             HTML report path for email-stress-limits-report"
 
 quality-gate: ## Run Schema Forge quality gate for PR-affected windows
 	$(SF) sf-quality-gate --pr-affected --baseline-ref origin/main --format md
@@ -342,6 +420,86 @@ data-fixes-help: ## Show usage and examples for `make data-fixes`
 	@echo "  - Authoring rules + skeleton: cli/src/data-fixes/sql/README.md."
 	@echo "  - Exit code is non-zero if any tenant's chain halted on a FAILED fix."
 
+# --- Remote DB tunnel (SSH → RDS in a private VPC) ---
+#
+# Supply connection details inline (SSH_HOST, DB_HOST, DB_USER, DB_PASSWORD, ...)
+# or save a profile at ~/.config/schema-forge/remote/<name>.env and pass PROFILE=.
+# Flags always win over a profile. Run `make db-tunnel-help` for the full guide.
+
+PROFILE     ?=
+SSH_HOST    ?=
+DB_HOST     ?=
+DB_PORT     ?=
+DB_NAME     ?=
+DB_USER     ?=
+DB_PASSWORD ?=
+LOCAL_PORT  ?=
+
+# Assemble scripts/db-tunnel.sh connection flags from whatever vars are set.
+TUNNEL_FLAGS = $(if $(PROFILE),--profile $(PROFILE)) $(if $(SSH_HOST),--ssh-host $(SSH_HOST)) $(if $(DB_HOST),--db-host $(DB_HOST)) $(if $(DB_PORT),--db-port $(DB_PORT)) $(if $(DB_NAME),--db-name $(DB_NAME)) $(if $(DB_USER),--db-user $(DB_USER)) $(if $(DB_PASSWORD),--db-password '$(DB_PASSWORD)') $(if $(LOCAL_PORT),--local-port $(LOCAL_PORT))
+
+db-tunnel: ## Open a persistent SSH tunnel to a remote DB (connection vars or PROFILE=)
+	@scripts/db-tunnel.sh $(strip $(TUNNEL_FLAGS)) up
+
+db-tunnel-down: ## Close the remote DB tunnel
+	@scripts/db-tunnel.sh $(strip $(TUNNEL_FLAGS)) down
+
+db-tunnel-status: ## Report whether the remote DB tunnel is up
+	@scripts/db-tunnel.sh $(strip $(TUNNEL_FLAGS)) status
+
+db-psql: ## Interactive psql to a remote DB through the tunnel (SQL='...' or ARGS='...' optional)
+	@scripts/db-tunnel.sh $(strip $(TUNNEL_FLAGS)) psql $(if $(SQL),-- -c "$(SQL)") $(ARGS)
+
+data-fixes-remote: ## Run the tenant data-fixes runner against a REMOTE DB via the tunnel (same vars as data-fixes; no flags = interactive TUI)
+	@if [ "$(HELP)" = "1" ]; then $(MAKE) -s db-tunnel-help; exit 0; fi; \
+	DF_ARGS=""; \
+	if [ "$(LIST_CLIENTS)" = "1" ]; then DF_ARGS="$$DF_ARGS --list-clients"; fi; \
+	if [ "$(MARK_FIXED)" = "1" ]; then DF_ARGS="$$DF_ARGS --mark-fixed"; fi; \
+	if [ "$(DRY_RUN)" = "1" ]; then DF_ARGS="$$DF_ARGS --dry-run"; fi; \
+	if [ -n "$(CLIENT)" ]; then DF_ARGS="$$DF_ARGS --client $(CLIENT)"; fi; \
+	if [ -n "$(FIX)" ]; then DF_ARGS="$$DF_ARGS --fix $(FIX)"; fi; \
+	if [ -n "$(REASON)" ]; then DF_ARGS="$$DF_ARGS --reason \"$(REASON)\""; fi; \
+	scripts/db-tunnel.sh $(strip $(TUNNEL_FLAGS)) run -- \
+		sh -c "node cli/src/data-fixes/run.js $$DF_ARGS"
+
+db-tunnel-help: ## Show usage and examples for the remote DB tunnel targets
+	@echo "Remote DB tunnel — reach an RDS in a private VPC through an SSH bastion."
+	@echo ""
+	@echo "Connection (inline flags win over a saved PROFILE):"
+	@echo "  SSH_HOST=<alias|host>   Bastion to tunnel through (e.g. etendo-go-staging)"
+	@echo "  DB_HOST=<rds-endpoint>  Remote DB host as seen FROM the bastion"
+	@echo "  DB_PORT=<port>          Remote DB port                       (default 5432)"
+	@echo "  DB_NAME=<db>            Database name                        (default etendo)"
+	@echo "  DB_USER=<user>          DB user"
+	@echo "  DB_PASSWORD=<pass>      DB password  (quote it; escape \$$ as \$$\$$ in make)"
+	@echo "  LOCAL_PORT=<port>       Local forwarded port                 (default 15432)"
+	@echo "  PROFILE=<name>          Load ~/.config/schema-forge/remote/<name>.env instead"
+	@echo ""
+	@echo "Targets:"
+	@echo "  make db-tunnel          Open a persistent tunnel + print connection info"
+	@echo "  make db-tunnel-status   Is the tunnel up?"
+	@echo "  make db-tunnel-down     Close the tunnel"
+	@echo "  make db-psql            Interactive psql through the tunnel"
+	@echo "  make db-psql SQL='...'  Run one SQL statement and exit"
+	@echo "  make data-fixes-remote  Run the data-fixes runner against the remote DB,"
+	@echo "                          non-interactively (accepts every make data-fixes"
+	@echo "                          var: DRY_RUN, CLIENT, FIX, LIST_CLIENTS, ...)"
+	@echo ""
+	@echo "Interactive: run 'make data-fixes' and choose 'Remote (through an SSH tunnel)'."
+	@echo "The wizard lets you pick/create a profile, opens the tunnel, and TESTS the"
+	@echo "connection before doing anything — then closes the tunnel on exit."
+	@echo ""
+	@echo "Examples:"
+	@echo "  make db-psql SSH_HOST=etendo-go-staging DB_HOST=my.rds.amazonaws.com \\"
+	@echo "       DB_USER=postgres DB_PASSWORD='secret' SQL='SELECT count(*) FROM c_invoice;'"
+	@echo "  make data-fixes-remote PROFILE=staging DRY_RUN=1"
+	@echo "  make data-fixes-remote PROFILE=staging CLIENT=<id>"
+	@echo ""
+	@echo "Save a profile once (kept OUTSIDE the repo, never committed):"
+	@echo "  mkdir -p ~/.config/schema-forge/remote"
+	@echo "  printf 'SSH_HOST=etendo-go-staging\\nDB_HOST=my.rds.amazonaws.com\\nDB_USER=postgres\\nDB_PASSWORD=secret\\nDB_NAME=etendo\\n' \\"
+	@echo "       > ~/.config/schema-forge/remote/staging.env && chmod 600 ~/.config/schema-forge/remote/staging.env"
+
 sync-regen-check-workflow: ## Regenerate the mirror Offline Regen Check workflow in com.etendoerp.go
 	./scripts/sync-offline-regen-check.sh
 
@@ -369,6 +527,10 @@ menu-cache: ## Refresh the AD menu cache from the database
 
 uuid: ## Generate a new Etendo-format UUID (32 uppercase hex chars, no hyphens)
 	@uuidgen | tr -d '-' | tr '[:lower:]' '[:upper:]'
+
+merge-block-check: ## Merge-block pre-flight: PR checks across the 3 repos + copy-paste merge cmds (TASK="ETP-XXXX [ETP-YYYY ...]")
+	@if [ -z "$(TASK)" ]; then echo "Usage: make merge-block-check TASK=ETP-4442"; exit 1; fi
+	@./scripts/merge-block-check.sh $(TASK)
 
 install: ## Install all workspace dependencies and activate git hooks
 	npm install

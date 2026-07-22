@@ -725,6 +725,26 @@
         }
       ]
     },
+    "62e7d6689c11ba27fdc238450bbc940c71cc4a579d87d3669861331f4f00b615": {
+      "checksum": "ae91047dd356679884f856d0f90ba551946bb97578f63f0e6ce85e2e7679d3d1",
+      "params": [
+        "B5673F73F613496C8BEA22FB55E4E1E4"
+      ],
+      "rows": [
+        {
+          "ad_tab_id": "97E1F35BE08840AFB1DA4FE66D329542",
+          "ad_table_id": "1CC5C039577C4F348CDF82DD0E6F3A7D",
+          "name": "End Year Close",
+          "seqno": "10"
+        },
+        {
+          "ad_tab_id": "6A77F910DAF24EA8BE7FF3F5084FED67",
+          "ad_table_id": "A45FDE07216C40FBA472E7B91F7273E4",
+          "name": "Accounting",
+          "seqno": "20"
+        }
+      ]
+    },
     "675461360c94bf1fe8bbe3121d5b8aeec6025503b503da010fa3adf22f7c1e92": {
       "checksum": "f54e61fabbfc8dfb141e5807462457252322b3285ac986ba990d51fde329a55b",
       "params": [
@@ -791,53 +811,29 @@
         }
       ]
     },
-    "815e23e49d7d45ef28d64a769100a5fa1e1aec24b8c6f25a101070342ebeaeb1": {
-      "checksum": "d7db912212006afa5e0b248c46cc94e0691bbe0194269e34bb80e9696858b553",
+    "81933096771953c6cf094e465f86e91738157acf5f9d32e9a078c92c5281ca5e": {
+      "checksum": "d3af29292c7b8e65de076c95d8fc7effa0cb943edcd8d6a8912923aa3482b065",
       "params": [
-        "C50A8AEE6F044825B5EF54FAAE76826F"
+        "117"
       ],
       "rows": [
         {
-          "ad_tab_id": "5A5CCFC8359B4D79BA705DC487FE8173",
-          "ad_table_id": "259",
-          "name": "Header",
+          "ad_tab_id": "128",
+          "ad_table_id": "139",
+          "name": "Calendar",
           "seqno": "10"
         },
         {
-          "ad_tab_id": "387B6179438D4C4CB40769A77F4C304C",
-          "ad_table_id": "260",
-          "name": "Lines",
+          "ad_tab_id": "129",
+          "ad_table_id": "177",
+          "name": "Year",
           "seqno": "20"
         },
         {
-          "ad_tab_id": "0F65E95AA2A14A53AE6DDA18B5009A97",
-          "ad_table_id": "E42DDB42FF0B4F82B1CF3C711B3F0DC0",
-          "name": "Line Tax",
-          "seqno": "27"
-        },
-        {
-          "ad_tab_id": "A0F74205D11848FAB0393A11B0CFB515",
-          "ad_table_id": "1011100000",
-          "name": "Basic Discounts",
+          "ad_tab_id": "130",
+          "ad_table_id": "145",
+          "name": "Period",
           "seqno": "30"
-        },
-        {
-          "ad_tab_id": "D173CDA24A0C431A94CEE845DC1E6290",
-          "ad_table_id": "314",
-          "name": "Tax",
-          "seqno": "30"
-        },
-        {
-          "ad_tab_id": "3D342267CAAE4CA5B191082E20F87660",
-          "ad_table_id": "70E57DEA195843729FF303C9A71EBCA3",
-          "name": "Payment Out Plan",
-          "seqno": "35"
-        },
-        {
-          "ad_tab_id": "FA619778CCD24476BD89873D139824BB",
-          "ad_table_id": "DC63963AB3F1489BAAB5A9A7EFD1B407",
-          "name": "Payment Out Details",
-          "seqno": "36"
         }
       ]
     },
@@ -882,6 +878,20 @@
           "ad_table_id": "270",
           "name": "Accounting",
           "seqno": "60"
+        }
+      ]
+    },
+    "88ad8a1f069401e3146d7f655acfc6a28ca92062200daae9b33395feed8061f1": {
+      "checksum": "aa13a626e7efde62c367a7946a3fe94bb84ff93b295cb344ec36e46913a1b24e",
+      "params": [
+        "116"
+      ],
+      "rows": [
+        {
+          "ad_tab_id": "198",
+          "ad_table_id": "140",
+          "name": "Conversion Rate",
+          "seqno": "10"
         }
       ]
     },
@@ -964,6 +974,20 @@
           "ad_table_id": "314",
           "name": "Tax",
           "seqno": "40"
+        }
+      ]
+    },
+    "99c77d72fc6f49da80e9db85826999d4bdb48df40b9db4d4c619f80ac282732a": {
+      "checksum": "cb513e2cf884fff62b8e6d90dba3da92d9c7d8038d4d32b612605e317664ebfa",
+      "params": [
+        "6FEBA130CDE24CC09041FFA6117ADFA9"
+      ],
+      "rows": [
+        {
+          "ad_tab_id": "005CE51FBD2D4ABCA2D01B63FDDE469C",
+          "ad_table_id": "BA820F5D8A194AB69D508BE4A83DE42F",
+          "name": "Conversion Rate Downloader Log",
+          "seqno": "10"
         }
       ]
     },
@@ -1354,68 +1378,6 @@
           "ad_table_id": "191",
           "name": "Accounting",
           "seqno": "110"
-        }
-      ]
-    },
-    "dc3625edf6e3b3ba3d373862af247d21be277872e900727c4a4025b968fa702b": {
-      "checksum": "e9b075450d2651b204ca759b5d62abddc0bb8120b041b481c294cb17eef868d9",
-      "params": [
-        "FF808081330213E60133021822E40007"
-      ],
-      "rows": [
-        {
-          "ad_tab_id": "AF4090093CFF1431E040007F010048A5",
-          "ad_table_id": "259",
-          "name": "Header",
-          "seqno": "10"
-        },
-        {
-          "ad_tab_id": "AF4090093D471431E040007F010048A5",
-          "ad_table_id": "260",
-          "name": "Lines",
-          "seqno": "20"
-        },
-        {
-          "ad_tab_id": "AF4090093DAF1431E040007F010048A5",
-          "ad_table_id": "E42DDB42FF0B4F82B1CF3C711B3F0DC0",
-          "name": "Line Tax",
-          "seqno": "27"
-        },
-        {
-          "ad_tab_id": "7A6E25742CE4442D89E2D26E8B128C12",
-          "ad_table_id": "3099A57126F24DC6BAFF15EDBF2B969D",
-          "name": "Related Products",
-          "seqno": "28"
-        },
-        {
-          "ad_tab_id": "CC476480E70F4352A541DAC64ADEB922",
-          "ad_table_id": "15EAF61631484A11B6921AB05A342E8B",
-          "name": "Related Services",
-          "seqno": "28"
-        },
-        {
-          "ad_tab_id": "AF4090093DA61431E040007F010048A5",
-          "ad_table_id": "1011100000",
-          "name": "Basic Discounts",
-          "seqno": "30"
-        },
-        {
-          "ad_tab_id": "AF4090093D741431E040007F010048A5",
-          "ad_table_id": "314",
-          "name": "Tax",
-          "seqno": "40"
-        },
-        {
-          "ad_tab_id": "AF4090093DD21431E040007F010048A5",
-          "ad_table_id": "70E57DEA195843729FF303C9A71EBCA3",
-          "name": "Payment In Plan",
-          "seqno": "45"
-        },
-        {
-          "ad_tab_id": "AF4090093DB91431E040007F010048A5",
-          "ad_table_id": "DC63963AB3F1489BAAB5A9A7EFD1B407",
-          "name": "Payment In Details",
-          "seqno": "46"
         }
       ]
     },

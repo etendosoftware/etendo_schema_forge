@@ -1,8 +1,8 @@
 {
-  "version": "0.8.0",
+  "version": "0.11.0",
   "generatedAt": "2026-04-27T19:18:32.198Z",
-  "updatedAt": "2026-07-02T11:33:22.008Z",
-  "checksum": "c114734415e59dc4",
+  "updatedAt": "2026-07-21T12:35:24.213Z",
+  "checksum": "962aef819724116d",
   "frontendContract": {
     "window": {
       "id": "137",
@@ -10,7 +10,10 @@
       "primaryEntity": "tax",
       "category": "settings",
       "hidePrint": true,
+      "hideCreate": true,
       "hideMoreMenu": true,
+      "hideDelete": true,
+      "hideDeleteButton": true,
       "breadcrumb": "Settings / Tax",
       "detailEntity": "accounting",
       "labelOverrides": {
@@ -19,7 +22,6 @@
           "Rate": "Índice",
           "SOPOType": "Tipo venta/compra",
           "ValidFrom": "Válido desde",
-          "IsActive": "Activo",
           "Description": "Descripción"
         },
         "en_US": {
@@ -27,7 +29,6 @@
           "Rate": "Rate",
           "SOPOType": "Sales/Purchase Type",
           "ValidFrom": "Valid From",
-          "IsActive": "Active",
           "Description": "Description"
         }
       },
@@ -53,7 +54,11 @@
             "form": true,
             "sourceRequired": true,
             "section": "principal",
-            "seq": 1
+            "seq": 1,
+            "validation": {
+              "required": true,
+              "maxLength": 60
+            }
           },
           {
             "name": "rate",
@@ -70,6 +75,10 @@
             "section": "principal",
             "seq": 2,
             "cellType": "taxRate",
+            "validation": {
+              "required": true,
+              "maxLength": 22
+            },
             "validationRule": {
               "code": "AD_Client.AD_Client_ID in (@#User_Client@)",
               "contextParams": [
@@ -117,6 +126,10 @@
             "defaultValue": "D",
             "section": "principal",
             "seq": 5,
+            "validation": {
+              "required": true,
+              "maxLength": 60
+            },
             "displayLogic": {
               "raw": "@IsSummary@='N'",
               "evaluable": true
@@ -178,6 +191,10 @@
             "defaultValue": "LNA",
             "section": "principal",
             "seq": 6,
+            "validation": {
+              "required": true,
+              "maxLength": 10
+            },
             "displayLogic": {
               "raw": "@IsSummary@='N'",
               "evaluable": true
@@ -225,7 +242,11 @@
             "defaultValue": "B",
             "section": "principal",
             "seq": 3,
-            "cellType": "taxScope"
+            "cellType": "taxScope",
+            "validation": {
+              "required": true,
+              "maxLength": 60
+            }
           },
           {
             "name": "validFrom",
@@ -240,7 +261,11 @@
             "form": true,
             "sourceRequired": true,
             "section": "principal",
-            "seq": 4
+            "seq": 4,
+            "validation": {
+              "required": true,
+              "maxLength": 10
+            }
           }
         ],
         "searchableFields": [
@@ -291,7 +316,11 @@
             "reference": "ValidCombination",
             "inputMode": "selector",
             "seq": 1,
-            "grow": true
+            "grow": true,
+            "validation": {
+              "required": true,
+              "maxLength": 32
+            }
           },
           {
             "name": "taxCredit",
@@ -308,7 +337,11 @@
             "reference": "ValidCombination",
             "inputMode": "selector",
             "seq": 2,
-            "grow": true
+            "grow": true,
+            "validation": {
+              "required": true,
+              "maxLength": 32
+            }
           }
         ],
         "searchableFields": [],
@@ -327,7 +360,10 @@
       "primaryEntity": "tax",
       "category": "settings",
       "hidePrint": true,
+      "hideCreate": true,
       "hideMoreMenu": true,
+      "hideDelete": true,
+      "hideDeleteButton": true,
       "breadcrumb": "Settings / Tax",
       "detailEntity": "accounting",
       "labelOverrides": {
@@ -336,7 +372,6 @@
           "Rate": "Índice",
           "SOPOType": "Tipo venta/compra",
           "ValidFrom": "Válido desde",
-          "IsActive": "Activo",
           "Description": "Descripción"
         },
         "en_US": {
@@ -344,7 +379,6 @@
           "Rate": "Rate",
           "SOPOType": "Sales/Purchase Type",
           "ValidFrom": "Valid From",
-          "IsActive": "Active",
           "Description": "Description"
         }
       }
@@ -1050,7 +1084,7 @@
         "post": true,
         "put": true,
         "patch": true,
-        "delete": true,
+        "delete": false,
         "listUrl": "/sws/neo/tax-rate/tax",
         "detailUrl": "/sws/neo/tax-rate/tax/{id}",
         "supportedFilters": [
@@ -1063,7 +1097,7 @@
         "post": true,
         "put": true,
         "patch": true,
-        "delete": true,
+        "delete": false,
         "listUrl": "/sws/neo/tax-rate/accounting",
         "detailUrl": "/sws/neo/tax-rate/accounting/{id}",
         "supportedFilters": []
@@ -1110,7 +1144,6 @@
         "Rate": "Índice",
         "SOPOType": "Tipo venta/compra",
         "ValidFrom": "Válido desde",
-        "IsActive": "Activo",
         "Description": "Descripción"
       },
       "en_US": {
@@ -1118,7 +1151,6 @@
         "Rate": "Rate",
         "SOPOType": "Sales/Purchase Type",
         "ValidFrom": "Valid From",
-        "IsActive": "Active",
         "Description": "Description"
       }
     }

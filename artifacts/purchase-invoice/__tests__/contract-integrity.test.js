@@ -72,7 +72,6 @@ describe('purchase-invoice contract integrity (ETP-3778 SIF regressions)', () =>
       'aeatsiiPurDescription',
       'etsgDateOperation',
       'etvfacInvoiceStatus',
-      'tbaiIssent',
     ];
 
     for (const name of expectedNames) {
@@ -81,5 +80,25 @@ describe('purchase-invoice contract integrity (ETP-3778 SIF regressions)', () =>
       assert.notEqual(field.visibility, 'discarded', `${name} must not be discarded`);
       assert.equal(field.form, false, `${name} must stay out of the main header form`);
     }
+  });
+
+  it('discards tbaiIssent from the frontend contract now that TbaiConfigSequenceHandler chains TBAI sequencing on the backend (ETP-4401)', () => {
+    assert.equal(
+      headerField('tbaiIssent'),
+      undefined,
+      'tbaiIssent must be absent from frontendContract.entities.header (discarded fields are excluded from the frontend contract)',
+    );
+
+    const backendHeader = contract.backendContract.entities.header;
+    const backendTbaiIssent = backendHeader.fields.find((field) => field.name === 'tbaiIssent');
+    assert.ok(
+      backendTbaiIssent,
+      'tbaiIssent must still be present in backendContract.entities.header (discarded fields remain in the backend contract)',
+    );
+    assert.equal(
+      backendTbaiIssent.visibility,
+      'discarded',
+      'tbaiIssent must be tagged visibility: "discarded" in the backend contract',
+    );
   });
 });

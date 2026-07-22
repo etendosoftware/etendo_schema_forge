@@ -6,6 +6,14 @@
       "windowId": "800026"
     },
     {
+      "name": "conversion-rates",
+      "windowId": "116"
+    },
+    {
+      "name": "conversion-rate-downloader-log",
+      "windowId": "6FEBA130CDE24CC09041FFA6117ADFA9"
+    },
+    {
       "name": "asset-group",
       "windowId": "252",
       "menuName": "Asset Group"
@@ -103,16 +111,8 @@
       "windowId": "181"
     },
     {
-      "name": "return-from-customer",
-      "windowId": "FF808081330213E60133021822E40007"
-    },
-    {
       "name": "return-material-receipt",
       "windowId": "123271B9AD60469BAE8A924841456B63"
-    },
-    {
-      "name": "return-to-vendor",
-      "windowId": "C50A8AEE6F044825B5EF54FAAE76826F"
     },
     {
       "name": "return-to-vendor-shipment",
@@ -178,6 +178,15 @@
     {
       "name": "warehouse",
       "windowId": "139"
+    },
+    {
+      "name": "fiscal-calendar",
+      "windowId": "117"
+    },
+    {
+      "name": "end-year-close",
+      "windowId": "B5673F73F613496C8BEA22FB55E4E1E4",
+      "menuName": "End Year Close"
     }
   ]
 }

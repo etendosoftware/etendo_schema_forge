@@ -81,4 +81,37 @@ describe('QuotationConfirmModal', () => {
       assert.match(src, /createdDoc\.type\s*===\s*'order'\s*\?\s*ui\('sqViewOrder'\)\s*:\s*ui\('soViewInvoice'\)/);
     });
   });
+
+  // ETP-4468: "Confirmar" must not discard an unsaved header edit — force-save
+  // first (both order and invoice conversion paths), and the in-memory data
+  // prop must win over the stale server fetch.
+  describe('force-save before confirm (ETP-4468)', () => {
+    it('accepts an onSave prop', () => {
+      assert.match(src, /export default function QuotationConfirmModal\(\{[\s\S]*?onSave,?[\s\S]*?\}\)/);
+    });
+
+    it('in-memory data wins over the stale freshData fetch', () => {
+      assert.match(src, /const d\s*=\s*data \|\| freshData \|\| \{\}/);
+      assert.doesNotMatch(src, /const d\s*=\s*freshData \|\| data \|\| \{\}/);
+    });
+
+    it('calls onSave before either conversion POST and aborts on failure', () => {
+      assert.match(
+        src,
+        /if\s*\(onSave\)\s*\{\s*const saved\s*=\s*await onSave\(\);\s*if\s*\(!saved\?\.id\)\s*\{[\s\S]*?setError\([\s\S]*?setLoading\(false\);\s*return;\s*\}\s*\}/,
+      );
+      // The onSave guard runs before both the order-conversion and the
+      // invoice-conversion POST (single guard placed before the branch).
+      const saveGuardIdx = src.indexOf('if (onSave) {');
+      const orderPostIdx = src.indexOf('Convertquotation');
+      const invoicePostIdx = src.indexOf('createDraftInvoice');
+      assert.ok(saveGuardIdx >= 0 && orderPostIdx >= 0 && invoicePostIdx >= 0);
+      assert.ok(saveGuardIdx < orderPostIdx);
+      assert.ok(saveGuardIdx < invoicePostIdx);
+    });
+
+    it('shows the dedicated sqSaveBeforeConfirmError message on save-guard failure (not the generic soErrorOccurred)', () => {
+      assert.match(src, /if\s*\(!saved\?\.id\)\s*\{\s*setError\(ui\('sqSaveBeforeConfirmError'\)\);/);
+    });
+  });
 });

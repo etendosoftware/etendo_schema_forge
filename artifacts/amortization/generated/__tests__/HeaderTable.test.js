@@ -51,7 +51,29 @@ describe('Amortization HeaderPage — post menuAction', () => {
     assert.match(pageSrc, /data\?\.posted/);
   });
 
-  it('does not declare an independent unpost action (uses reactivate instead)', () => {
+  it('does not generate the legacy unpost action', () => {
+    assert.doesNotMatch(pageSrc, /key:\s*'unpost'/);
     assert.doesNotMatch(pageSrc, /neoAction:\s*'unpost'/);
+  });
+
+  it('reactivate is visible for processed documents and pre-unposts when needed', () => {
+    const reactivateLine = pageSrc
+      .split('\n')
+      .find((l) => l.includes("key: 'reactivate'"));
+    assert.ok(reactivateLine, "Expected a menuAction with key: 'reactivate'");
+    assert.match(reactivateLine, /preUnpost:\s*true/);
+    assert.match(reactivateLine, /columnName:\s*'Processed'/);
+    assert.doesNotMatch(reactivateLine, /data\?\.posted/);
+    assert.match(reactivateLine, /data\?\.processed === 'Y'\s*\|\|\s*data\?\.processed === true/);
+  });
+
+  it('post action is gated on !posted && processed', () => {
+    const postLine = pageSrc
+      .split('\n')
+      .find((l) => l.includes("key: 'post'"));
+    assert.ok(postLine, "Expected a menuAction with key: 'post'");
+    assert.match(postLine, /neoAction:\s*'post'/);
+    assert.match(postLine, /!\(data\?\.posted === 'Y'\s*\|\|\s*data\?\.posted === true\)/);
+    assert.match(postLine, /data\?\.processed === 'Y'\s*\|\|\s*data\?\.processed === true/);
   });
 });

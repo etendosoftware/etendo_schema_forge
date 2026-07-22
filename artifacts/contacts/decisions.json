@@ -46,7 +46,8 @@
         "PO_Financial_Account_ID": "Expense Account",
         "EM_Etgo_Web": "Website",
         "EM_Etgo_Firstname": "First Name",
-        "EM_Etgo_Lastname": "Last Name"
+        "EM_Etgo_Lastname": "Last Name",
+        "C_BP_Group_ID": "Contact Category"
       },
       "es_ES": {
         "Name": "Razón Social",
@@ -55,7 +56,8 @@
         "PO_Financial_Account_ID": "Cuenta contable de gastos",
         "EM_Etgo_Web": "Página web",
         "EM_Etgo_Firstname": "Nombre",
-        "EM_Etgo_Lastname": "Apellidos"
+        "EM_Etgo_Lastname": "Apellidos",
+        "C_BP_Group_ID": "Categoría de contacto"
       }
     },
     "processOverrides": {
@@ -126,6 +128,32 @@
         ],
         "requireSavedRecord": true
       }
+    },
+    "import": {
+      "enabled": true,
+      "spec": "contacts",
+      "entity": "businessPartner",
+      "formats": ["csv", "txt"],
+      "limit": { "maxRows": 5000, "concurrency": 4 },
+      "dedupe": { "scope": "file", "key": ["etgoEmail"] },
+      "descriptor": "contacts",
+      "fields": [
+        { "target": "name", "aliases": ["nombre comercial", "razon social"], "label": "Commercial Name" },
+        { "target": "etgoFirstname", "aliases": ["nombre"], "label": "First Name (Company)" },
+        { "target": "etgoLastname", "aliases": ["apellido", "apellidos"], "label": "Last Name (Company)" },
+        { "target": "etgoEmail", "aliases": ["email", "correo", "e-mail"], "isEmail": true, "label": "Email (Company)" },
+        { "target": "etgoPhone", "aliases": ["telefono", "teléfono"], "label": "Phone (Company)" },
+        { "target": "email", "aliases": ["email de contacto"], "isEmail": true, "label": "Email (Contact)" },
+        { "target": "firstName", "aliases": ["nombre de contacto"], "label": "First Name (Contact)" },
+        { "target": "lastName", "aliases": ["apellido de contacto"], "label": "Last Name (Contact)" },
+        { "target": "phone", "aliases": ["telefono de contacto"], "label": "Phone (Contact)" },
+        { "target": "position", "aliases": ["cargo"], "label": "Position" },
+        { "target": "address", "aliases": ["direccion", "dirección"], "label": "Address" },
+        { "target": "city", "aliases": ["ciudad"], "label": "City" },
+        { "target": "postal", "aliases": ["codigo postal", "código postal", "cp"], "label": "Postal Code" },
+        { "target": "country", "aliases": ["pais", "país"], "label": "Country", "matchEntity": "Country" },
+        { "target": "region", "aliases": ["provincia", "region", "región"], "label": "Region" }
+      ]
     }
   },
   "entities": {
@@ -162,7 +190,7 @@
           "form": true,
           "grid": false,
           "section": "principal",
-          "order": 3,
+          "order": 4,
           "required": true
         },
         "etgoLastname": {
@@ -170,7 +198,7 @@
           "form": true,
           "grid": false,
           "section": "principal",
-          "order": 4,
+          "order": 5,
           "required": true
         },
         "etgoIsperson": {
@@ -200,10 +228,12 @@
         },
         "businessPartnerCategory": {
           "visibility": "editable",
-          "form": false,
+          "form": true,
           "grid": false,
           "section": "principal",
-          "label": "Business Partner Category",
+          "order": 3,
+          "required": true,
+          "label": "Contact Category",
           "reference": "BusinessPartnerCategory",
           "inputMode": "selector"
         },
@@ -216,19 +246,19 @@
         "taxID": {
           "visibility": "editable",
           "section": "principal",
-          "order": 6
+          "order": 7
         },
         "oBTIKVIESStatus": {
           "visibility": "readOnly",
           "section": "principal",
           "form": true,
           "grid": false,
-          "order": 7,
+          "order": 8,
           "displayLogic": "record.oBTIKTaxIDKey === '2'"
         },
         "oBTIKTaxIDKey": {
           "visibility": "editable",
-          "order": 5
+          "order": 6
         },
         "etgoWeb": {
           "visibility": "editable",
@@ -236,7 +266,7 @@
           "grid": true,
           "label": "Web",
           "section": "principal",
-          "order": 7
+          "order": 9
         },
         "etgoEmail": {
           "visibility": "editable",
@@ -244,7 +274,7 @@
           "grid": true,
           "label": "Email",
           "section": "principal",
-          "order": 8
+          "order": 10
         },
         "etgoPhone": {
           "visibility": "editable",
@@ -252,7 +282,7 @@
           "grid": true,
           "label": "Phone",
           "section": "principal",
-          "order": 9
+          "order": 11
         },
         "creditLimit": {
           "visibility": "editable",

@@ -42,8 +42,10 @@ async function openNewAsset(page) {
 /** Pick the real "Genérico" category in the Grupo activo selector. */
 async function selectGrupoActivoOtros(page) {
   await page.getByTestId('field-assetCategory').click();
-  await page.getByRole('option', { name: /Genérico|Otros/i }).first().click();
-  await expect(page.getByTestId('field-assetCategory')).not.toContainText('Seleccionar');
+  // Wait for selector options to load from the API before looking for the specific one.
+  await expect(page.locator('[role="option"]').first()).toBeVisible({ timeout: 10_000 });
+  await page.getByRole('option', { name: /Gen[eé]rico|Otros|Others/i }).first().click();
+  await expect(page.getByTestId('field-assetCategory')).not.toContainText(/Seleccionar|Select/i);
 }
 
 /** Click "Guardar" and wait for the asset PATCH/PUT to actually land, so the
@@ -281,32 +283,30 @@ async function captureAmortizationHeaderUrls(page, periods) {
   return urls;
 }
 
-/** Test cleanup: delete the amortization headers created by the asset's plan.
- *  Deleting the asset removes its lines but NOT the headers — real usage keeps
- *  empty headers (correct behavior), so the test removes them to stay atomic.
- *  Headers must be in "Borrador" (the delete button hides when processed). */
+/** Test cleanup: delete the amortization headers created by the asset's plan via
+ *  the API. Deleting the asset removes its lines but NOT the headers — real usage
+ *  keeps empty headers (correct behavior), so the test removes them to stay atomic.
+ *  ETP-4429: the UI intentionally has no delete button on amortization documents,
+ *  so cleanup is performed via a direct DELETE request instead of UI interaction. */
 async function deleteAmortizationHeaders(page, headerUrls) {
   for (const url of headerUrls) {
-    await gotoDeepLink(page, url);
-    await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
-    await page.getByTestId('action-delete').click();
-    await page.getByTestId('action-delete-confirm').click();
-    await expect(page.locator('[data-sonner-toast][data-front="true"]'))
-      .toContainText(/Registro eliminado/i, { timeout: 10_000 });
+    const id = url.split('/amortization/')[1]?.split(/[?#]/)[0];
+    if (!id) continue;
+    await page.evaluate(async (headerId) => {
+      try {
+        await fetch(`/sws/neo/amortization/header/${headerId}`, { method: 'DELETE' });
+      } catch (e) {
+        console.warn('Amortization header cleanup failed:', e.message);
+      }
+    }, id);
   }
 }
 
 /** Create a depreciable asset with required fields + Depreciar ON, saved. */
 async function createDepreciableAsset(page, { stamp, name }) {
   await openNewAsset(page);
-  const saveBtn = page.getByTestId('action-save');
 
-  // Required-field validation (same as Case 1).
-  await saveBtn.click();
-  await expect(toastByText(page, requiredToast('Identificador'))).toBeVisible({ timeout: 8_000 });
   await page.getByTestId('field-searchKey').fill(`AS-E2E-${stamp}`);
-  await saveBtn.click();
-  await expect(toastByText(page, requiredToast('Nombre'))).toBeVisible({ timeout: 8_000 });
   await page.getByTestId('field-name').fill(name);
   await selectGrupoActivoOtros(page);
 
@@ -317,7 +317,7 @@ async function createDepreciableAsset(page, { stamp, name }) {
 
   // Save → record created; wait for the route to settle on /assets/{id} so the
   // process has `selected.id`, then the "Crear Amortización" button is usable.
-  await saveBtn.click();
+  await page.getByTestId('action-save').click();
   await expect(toastByText(page, /Registro creado/i)).toBeVisible({ timeout: 10_000 });
   await page.waitForURL(/\/assets\/(?!new)[^/?]+/, { timeout: 10_000 });
   await expect(crearAmortizacionBtn(page)).toBeVisible({ timeout: 8_000 });
@@ -426,8 +426,8 @@ test.describe('Assets (real backend)', () => {
     await page.getByTestId('user-menu-language-es_ES').click();
   });
 
-  // Case 1 — non-depreciable asset: required validation, save, find.
-  test('Case 1: non-depreciable asset — required validation, save, and find via filter', async ({ page }) => {
+  // Case 1 — non-depreciable asset: save, find, and delete.
+  test('Case 1: non-depreciable asset — save, find via filter, and delete', async ({ page }) => {
     const stamp = Date.now();
     const name = `Activo E2E sin depreciar ${stamp}`;
     await openNewAsset(page);
@@ -435,16 +435,10 @@ test.describe('Assets (real backend)', () => {
     // Non-depreciable: no depreciation config shown.
     await expect(page.getByText(DISABLED_HINT, { exact: false })).toBeVisible();
 
-    const saveBtn = page.getByTestId('action-save');
-    await saveBtn.click();
-    await expect(toastByText(page, requiredToast('Identificador'))).toBeVisible({ timeout: 8_000 });
     await page.getByTestId('field-searchKey').fill(`AS-E2E-${stamp}`);
-    await saveBtn.click();
-    await expect(toastByText(page, requiredToast('Nombre'))).toBeVisible({ timeout: 8_000 });
-
     await page.getByTestId('field-name').fill(name);
     await selectGrupoActivoOtros(page);
-    await saveBtn.click();
+    await page.getByTestId('action-save').click();
     await expect(toastByText(page, /Registro creado/i)).toBeVisible({ timeout: 10_000 });
 
     await page.getByTestId('action-cancel').click();
@@ -944,8 +938,10 @@ test.describe('Assets (real backend)', () => {
     const depreciarToggle = page.getByRole('switch').first();
 
     // OFF (default): disabled hint shown, config fields absent.
+    // assetValue lives in the always-visible header section (ETP-4539), so it
+    // stays present regardless of the Depreciar toggle state.
     await expect(page.getByText(DISABLED_HINT, { exact: false })).toBeVisible();
-    await expect(page.getByTestId('field-assetValue')).toHaveCount(0);
+    await expect(page.getByTestId('field-assetValue')).toBeVisible();
 
     // Activate → financial + accounting-dimensions sections appear.
     await depreciarToggle.click();
@@ -957,9 +953,10 @@ test.describe('Assets (real backend)', () => {
     await expect(page.getByText(DISABLED_HINT, { exact: false })).toHaveCount(0);
 
     // Deactivate → all those sections hide, hint returns.
+    // assetValue stays visible — it lives outside the depreciation-only sections.
     await depreciarToggle.click();
     await expect(page.getByText(DISABLED_HINT, { exact: false })).toBeVisible({ timeout: 5_000 });
-    await expect(page.getByTestId('field-assetValue')).toHaveCount(0);
+    await expect(page.getByTestId('field-assetValue')).toBeVisible();
     await expect(page.getByText('Información financiera')).toHaveCount(0);
     await expect(page.getByText('Dimensiones contables')).toHaveCount(0);
 

@@ -24,6 +24,13 @@
         "component": "SifTab",
         "importFrom": "@/windows/custom/shared/SifTab.jsx",
         "placement": "tab"
+      },
+      {
+        "key": "reversedInvoices",
+        "labelKey": "rectificationsTab",
+        "component": "ReversedInvoicesPanel",
+        "importFrom": "@/windows/custom/sales-invoice/ReversedInvoicesPanel.jsx",
+        "placement": "tab"
       }
     ],
     "menuActions": [
@@ -50,16 +57,8 @@
       "exchangeRates": {
         "label": "Exchange Rates",
         "tabOrder": 50,
-        "addLineFields": [
-          "toCurrency",
-          "rate",
-          "foreignAmount"
-        ],
         "requireSavedRecord": true,
-        "readOnlyLogic": "@DocumentStatus@!='DR'",
-        "addLineFieldExclusions": {
-          "toCurrency": "currency"
-        }
+        "readOnlyLogic": "@Posted@='Y' | @HASREVERSEDINVOICESO@='Y' | @HASREVERSEDINVOICEPO@='Y'"
       }
     },
     "processOverrides": {},
@@ -132,7 +131,8 @@
           "seq": 30
         },
         "accountingDate": {
-          "visibility": "system"
+          "visibility": "system",
+          "_note": "ETP-4531 (redefined 2026-07-17): accounting date is now hidden and unified with the document date internally; the Java-side guard that used to block this cascade has been removed so the native document-date→accounting-date coupling flows through untouched."
         },
         "partnerAddress": {
           "reference": "BusinessPartnerLocation",
@@ -412,7 +412,7 @@
           "grid": true
         },
         "tbaiIssent": {
-          "visibility": "readOnly",
+          "visibility": "discarded",
           "form": false
         },
         "etvfacInvoiceStatus": {
@@ -424,6 +424,38 @@
           "visibility": "editable",
           "form": false
         },
+        "etvfacInvType": {
+          "visibility": "editable",
+          "form": false
+        },
+        "etvfacVerifacDesc": {
+          "visibility": "editable",
+          "form": false
+        },
+        "etvfacSimpinvart7273": {
+          "visibility": "editable",
+          "form": false
+        },
+        "etvfacInvNoIDArt61d": {
+          "visibility": "editable",
+          "form": false
+        },
+        "etvfacReverseinvtype": {
+          "visibility": "editable",
+          "form": false
+        },
+        "etvfacDateIssue": {
+          "visibility": "discarded"
+        },
+        "etvfacHash": {
+          "visibility": "discarded"
+        },
+        "etvfacQRURL": {
+          "visibility": "discarded"
+        },
+        "etvfacIssueDescription": {
+          "visibility": "discarded"
+        },
         "aeatsiiEjercicio": {
           "visibility": "readOnly",
           "form": false
@@ -433,15 +465,15 @@
           "form": false
         },
         "tbaiSequence": {
-          "visibility": "readOnly",
+          "visibility": "discarded",
           "form": false
         },
         "tbaiInvoicenum": {
-          "visibility": "readOnly",
+          "visibility": "discarded",
           "form": false
         },
         "tbaiInvoiceseq": {
-          "visibility": "readOnly",
+          "visibility": "discarded",
           "form": false
         }
       }
@@ -684,7 +716,12 @@
       "exclude": true
     },
     "siiData": {
-      "exclude": true
+      "exclude": true,
+      "fields": {
+        "cdigoCSV": {
+          "visibility": "discarded"
+        }
+      }
     },
     "ticketbai": {
       "exclude": true
@@ -702,7 +739,64 @@
       "exclude": true
     },
     "reversedInvoices": {
-      "exclude": true
+      "label": "Rectificaciones",
+      "tabOrder": 90,
+      "renderTab": false,
+      "displayLogic": "@isRectificative@='true'",
+      "readOnlyLogic": "@Processed@='Y' & @DocStatus@!='VO'",
+      "fields": {
+        "reversedInvoice": {
+          "visibility": "editable",
+          "grid": true,
+          "gridOrder": 1,
+          "form": true,
+          "required": true,
+          "lookup": true,
+          "readOnlyLogic": "@Processed@='Y' & @DocStatus@!='VO'"
+        },
+        "aEAT349IsCorrective": {
+          "visibility": "editable",
+          "grid": true,
+          "gridOrder": 5,
+          "form": true,
+          "readOnlyLogic": "@Processed@='Y' & @DocStatus@!='VO'"
+        },
+        "aEAT349CYear": {
+          "visibility": "editable",
+          "grid": true,
+          "gridOrder": 10,
+          "form": true,
+          "displayLogic": "@aEAT349IsCorrective@='Y'",
+          "readOnlyLogic": "@Processed@='Y' & @DocStatus@!='VO'"
+        },
+        "aEAT349Period": {
+          "visibility": "editable",
+          "grid": true,
+          "gridOrder": 20,
+          "form": true,
+          "displayLogic": "@aEAT349IsCorrective@='Y'",
+          "readOnlyLogic": "@Processed@='Y' & @DocStatus@!='VO'"
+        },
+        "aEAT349BPBaseAmount": {
+          "visibility": "editable",
+          "grid": true,
+          "gridOrder": 30,
+          "form": true,
+          "displayLogic": "@aEAT349IsCorrective@='Y'",
+          "readOnlyLogic": "@Processed@='Y' & @DocStatus@!='VO'"
+        },
+        "aEAT349BPBaseAmountS": {
+          "visibility": "editable",
+          "grid": true,
+          "gridOrder": 40,
+          "form": true,
+          "displayLogic": "@aEAT349IsCorrective@='Y'",
+          "readOnlyLogic": "@Processed@='Y' & @DocStatus@!='VO'"
+        },
+        "aEAT349CBpartner": {
+          "visibility": "discarded"
+        }
+      }
     },
     "accounting": {
       "exclude": true
@@ -714,10 +808,14 @@
         },
         "currency": {
           "grid": true,
-          "form": false
+          "form": false,
+          "visibility": "readOnly",
+          "gridReadOnly": true
         },
         "toCurrency": {
-          "grid": true
+          "grid": true,
+          "visibility": "readOnly",
+          "gridReadOnly": true
         },
         "rate": {
           "grid": true
@@ -770,7 +868,22 @@
       "type": "callout",
       "entity": "invoice",
       "decision": "Keep",
-      "description": "When dateInvoiced changes, auto-fill dateAcct with the same value unless manually overridden"
+      "description": "ETP-4531 (redefined 2026-07-17): C_Invoice.DateInvoiced carries AD_Column.AD_Callout_ID = com.etendoerp.sif.general.callouts.SifInvoiceOperationDateCallout, which extends org.openbravo.erpCommon.ad_callouts.SE_Invoice_AccountingDate and calls super.execute() to auto-fill dateAcct from dateInvoiced. NeoCalloutService/NeoCalloutEndpoint in com.etendoerp.go execute this same callout server-side (create-time cascade and interactive per-field callout), so it fires in the GO SPA too. accountingDate is now hidden (visibility: system) and unified with the document date — the native cascade is intentionally kept as-is (the com.etendoerp.go-side guard that used to block it, per the earlier independent-editable-field design, was removed) so this is the primary mechanism keeping accountingDate in sync. AbstractInvoiceHeaderHandler#mirrorAccountingDate is a server-side safety net for write paths that don't trigger this callout (e.g. a bare PATCH).",
+      "impactIfOmitted": "If this native callout were blocked again, accountingDate would only stay in sync via the mirrorAccountingDate safety net — any gap between the two would desynchronize the hidden accounting date from the visible document date."
+    },
+    "READONLY_Posted_AccountingDate": {
+      "type": "readOnlyLogic",
+      "entity": "invoice",
+      "decision": "Keep",
+      "description": "Accounting date becomes read-only once the invoice is posted (Posted=Y). Mirrors Goods Receipt/Goods Shipment. Uses Posted rather than Processed so the date can still be corrected if a posting attempt failed and the document needs to be re-posted.",
+      "impactIfOmitted": "Users could change accounting date on already-posted invoices, desynchronizing the frontend from the accounting facts already generated."
+    },
+    "SE_Invoice_TaxDate": {
+      "type": "callout",
+      "entity": "invoice",
+      "decision": "Keep",
+      "description": "ETP-4531 (redefined 2026-07-17): C_Invoice.DateAcct carries AD_Column.AD_Callout_ID = org.openbravo.erpCommon.ad_callouts.SE_Invoice_TaxDate, reachable whenever accountingDate is written (now hidden/visibility: system, unified with the document date, rather than the earlier independent-editable-field design). It only fires an update when the callout request's formState already carries a non-empty 'taxDate' that differs from the new accountingDate value (info.getStringParameter(\"inptaxdate\")). taxDate IS present in contract.json as a backend-only field (visibility: system — it exists in the backend contract but is never sent to the frontend form), so the frontend never sends a 'taxDate' key in formState; the callout's isNotEmpty(strTaxDate) guard is always false and it never produces an update. Verified harmless — kept as-is, not implemented client-side.",
+      "impactIfOmitted": "None observed: the callout's only effect targets a field this window never exposes, so there is nothing to omit."
     },
     "Currency_From_PriceList": {
       "type": "callout",

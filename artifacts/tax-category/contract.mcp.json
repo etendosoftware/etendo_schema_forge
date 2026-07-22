@@ -1,7 +1,8 @@
 {
-  "version": "0.2.0",
+  "version": "0.3.0",
   "generatedAt": "2026-06-26T17:01:05.650Z",
-  "contractChecksum": "5672b79e18d4062d",
+  "updatedAt": "2026-07-14T00:34:34.923Z",
+  "contractChecksum": "fe68572d8a6ad233",
   "apiPrediction": {
     "specName": "tax-category",
     "baseUrl": "/sws/neo/tax-category",
@@ -12,7 +13,7 @@
         "post": true,
         "put": true,
         "patch": true,
-        "delete": true,
+        "delete": false,
         "listUrl": "/sws/neo/tax-category/taxCategory",
         "detailUrl": "/sws/neo/tax-category/taxCategory/{id}",
         "supportedFilters": [
@@ -103,5 +104,5 @@
     "knownLimitations": [],
     "dangerousOperations": []
   },
-  "checksum": "7c67a30fd997c1d7"
+  "checksum": "011b555e9cd6bc29"
 }

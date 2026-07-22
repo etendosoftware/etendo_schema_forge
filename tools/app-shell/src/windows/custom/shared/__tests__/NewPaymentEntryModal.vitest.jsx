@@ -3,9 +3,11 @@ vi.mock('@/i18n', () => ({
   useUI: () => (key) => key,
 }));
 
-vi.mock('@/lib/formatCurrency', () => ({
-  formatCurrency: (_curr, val) => `$${Number(val || 0).toFixed(2)}`,
-}));
+// NOTE: `@/lib/formatCurrency` is intentionally NOT mocked. MoneyAmount now delegates to the
+// real shared util, which formats en-US with a narrowSymbol (USD→"$92.00", EUR→"92.00 €",
+// GBP→"£92.00"). The old crude stub here hardcoded a leading "$" and ignored the currency code,
+// which masked the account-currency symbol on the multi-currency readout — using the real,
+// dependency-free util keeps these assertions faithful to what the running app renders.
 
 vi.mock('@/components/ui/select', () => ({
   Select: ({ children, value, onValueChange }) => (
@@ -28,6 +30,39 @@ vi.mock('@/components/ui/date-field', () => ({
 let mockApiFetch;
 vi.mock('@/auth/useApiFetch.js', () => ({
   useApiFetch: () => (...args) => mockApiFetch(...args),
+}));
+
+// The modal reads the bearer token from AuthContext (ETP-4504 added the
+// multi-currency hooks, which need it) — a static token is enough for the mock.
+vi.mock('@/auth/AuthContext.jsx', () => ({
+  useAuth: () => ({ token: 'test-token' }),
+}));
+
+// ── multi-currency hooks (ETP-4504) ──────────────────────────────────────────
+// useDocumentCurrency resolves the org currency (gates the "leave credit" excess
+// option); useConversionRate prefills the editable conversion rate. Both are
+// mocked with module-level, per-test-configurable values so each test can drive
+// canLeaveCredit / the foreign-currency conversion path deterministically without
+// a network round-trip. Reset in beforeEach.
+let mockOrgCurrency = 'EUR';
+vi.mock('../useDocumentCurrency.js', () => ({
+  useDocumentCurrency: () => ({
+    orgCurrencyCode: mockOrgCurrency,
+    exchangeRate: null,
+    isSameCurrency: true,
+    loading: false,
+    convertAmount: (x) => x,
+  }),
+}));
+
+let mockConversion = { rate: null, hasRate: false, loading: false };
+vi.mock('../useConversionRate.js', () => ({
+  // Returns the module-level value. A test may assign a FUNCTION instead of a
+  // plain object, in which case it is invoked with the hook args
+  // ({ fromCode, toCode, ... }) so a scenario can vary the prefilled rate per
+  // currency pair (ETP-4504 W1 — rate cleared when switching to a pair with no
+  // DB rate). A plain object is returned as-is (the common single-pair case).
+  useConversionRate: (args) => (typeof mockConversion === 'function' ? mockConversion(args) : mockConversion),
 }));
 
 import { render, screen, fireEvent, waitFor, within, act } from '@testing-library/react';
@@ -136,6 +171,10 @@ function renderModal(overrides = {}) {
 describe('NewPaymentEntryModal', () => {
   beforeEach(() => {
     mockApiFetch = buildApiFetch();
+    // Default: org currency equals the (EUR) invoice currency, so a receipt may
+    // leave an overpayment as credit; no conversion prefill (same-currency path).
+    mockOrgCurrency = 'EUR';
+    mockConversion = { rate: null, hasRate: false, loading: false };
   });
 
   afterEach(() => {
@@ -163,10 +202,78 @@ describe('NewPaymentEntryModal', () => {
     });
   });
 
+  // Edit mode (re-opening an existing draft via the `payment` prop) — covers
+  // modalTitleFor's isEdit branches, the isEdit prefill block, normalizeDraftDate,
+  // and matchMethodIdByName, none of which run under the default (create) mode
+  // exercised by every other test in this file.
+  describe('edit mode (payment prop present)', () => {
+    it('shows the edit-collection title and prefills method/account/amount/date from the draft', async () => {
+      mockApiFetch = buildApiFetch();
+      renderModal({
+        dir: 'in',
+        payment: { id: 'pay-edit-1', paymentDate: '2024-05-10', paymentMethod: 'Transfer', accountId: 'acc-1', amount: 500 },
+      });
+
+      expect(screen.getByText('cpEditCollection')).toBeInTheDocument();
+      expect(screen.queryByText('cpNewCollection')).not.toBeInTheDocument();
+
+      // normalizeDraftDate matches the 'YYYY-MM-DD' prefix regex and returns it as-is.
+      await waitFor(() => expect(screen.getByTestId('date-field')).toHaveValue('2024-05-10'));
+      // matchMethodIdByName finds 'Transfer' in the method catalog by name.
+      expect(await screen.findByTestId('field-paymentMethod-chip')).toHaveTextContent('Transfer');
+      // payment.accountId is used directly (no default-account heuristic needed).
+      expect(screen.getByTestId('field-account-chip')).toHaveTextContent('Main Account');
+      // balance.onAmountChange(formatPlain(payment.amount)) prefills the cash amount.
+      await waitFor(() => expect(screen.getByTestId('cp-amount-input')).toHaveValue('500.00'));
+    });
+
+    it('shows the edit-payment title for dir "out"', () => {
+      mockApiFetch = buildApiFetch();
+      renderModal({
+        dir: 'out',
+        payment: { id: 'pay-edit-2', paymentDate: '2024-05-10', paymentMethod: 'Transfer', accountId: 'acc-1', amount: 500 },
+      });
+      expect(screen.getByText('cpEditPayment')).toBeInTheDocument();
+      expect(screen.queryByText('cpNewPayment')).not.toBeInTheDocument();
+    });
+
+    it('falls back to today when the draft date does not match the yyyy-MM-dd prefix and is unparseable', async () => {
+      mockApiFetch = buildApiFetch();
+      renderModal({
+        payment: { id: 'pay-edit-3', paymentDate: 'not-a-real-date', paymentMethod: 'Transfer', accountId: 'acc-1', amount: 10 },
+      });
+      const today = new Date().toISOString().slice(0, 10);
+      expect(screen.getByTestId('date-field')).toHaveValue(today);
+    });
+
+    it('parses a non-yyyy-MM-dd but valid date string via the Date fallback branch', async () => {
+      mockApiFetch = buildApiFetch();
+      renderModal({
+        payment: { id: 'pay-edit-4', paymentDate: '03/05/2024', paymentMethod: 'Transfer', accountId: 'acc-1', amount: 10 },
+      });
+      // The regex requires a leading 'YYYY-MM-DD'; a slash-formatted date falls through to
+      // `new Date(raw)`, which parses successfully here, so the fallback returns a real
+      // (not "today") normalized date instead of degrading to today() — asserted loosely
+      // to stay independent of the test runner's local timezone.
+      const value = screen.getByTestId('date-field').value;
+      expect(value).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    });
+
+    it('falls back to the default-method heuristic when the draft has no paymentMethod (matchMethodIdByName "!name" branch)', async () => {
+      mockApiFetch = buildApiFetch();
+      renderModal({
+        payment: { id: 'pay-edit-5', paymentDate: '2024-05-10', accountId: 'acc-1', amount: 10 },
+      });
+      // matchMethodIdByName(methods, undefined) short-circuits to '' -> pickDefaultMethodId
+      // resolves the account's defaultPaymentMethod name ("Transfer") instead.
+      expect(await screen.findByTestId('field-paymentMethod-chip')).toHaveTextContent('Transfer');
+    });
+  });
+
   describe('amount field', () => {
-    it('prefills the amount input with the outstanding total (es-ES)', () => {
+    it('prefills the amount input with the outstanding total (en-US)', () => {
       renderModal({ outstanding: 6420 });
-      expect(screen.getByTestId('cp-amount-input')).toHaveValue('6.420,00');
+      expect(screen.getByTestId('cp-amount-input')).toHaveValue('6,420.00');
     });
   });
 
@@ -222,8 +329,8 @@ describe('NewPaymentEntryModal', () => {
     });
 
     // Regression (ETP-4331 follow-up): user report — "Nuevo cobro" for an invoice
-    // with 25,30€ pending; selecting a "Saldo a favor" line that covers it in full
-    // left cash ("Importe") at 0,00€ and "Diferencia" at 0,00€ (a fully exact,
+    // with 25.30€ pending; selecting a "Saldo a favor" line that covers it in full
+    // left cash ("Importe") at 0.00€ and "Diferencia" at 0.00€ (a fully exact,
     // valid reconciliation), yet "Confirmar" stayed disabled. Root cause:
     // missingRequired gated on balance.amount (cash only), which is legitimately 0
     // once a credit line covers 100% of the invoice by design. Fixed to gate on
@@ -240,12 +347,12 @@ describe('NewPaymentEntryModal', () => {
 
       // Selecting the line auto-caps usage to min(avail, need) = 25.30 and drops
       // the cash amount to max(0, applied - usedByOthers - use) = 0 — exactly the
-      // repro: cash "Importe" left at 0,00€, credit fully covering the invoice.
+      // repro: cash "Importe" left at 0.00€, credit fully covering the invoice.
       const input = await within(row).findByTestId('cp-credit-use-s1');
-      await waitFor(() => expect(input).toHaveValue('25,30'));
-      await waitFor(() => expect(screen.getByTestId('cp-amount-input')).toHaveValue('0,00'));
+      await waitFor(() => expect(input).toHaveValue('25.30'));
+      await waitFor(() => expect(screen.getByTestId('cp-amount-input')).toHaveValue('0.00'));
 
-      // Balance is exact — no missing, no excess — "Diferencia" shows 0,00 €.
+      // Balance is exact — no missing, no excess — "Diferencia" shows 0.00 €.
       expect(screen.getByText('cpDifference')).toBeInTheDocument();
       expect(screen.queryByText('cpMissing')).not.toBeInTheDocument();
       expect(screen.queryByText('cpExcess')).not.toBeInTheDocument();
@@ -266,17 +373,17 @@ describe('NewPaymentEntryModal', () => {
       fireEvent.click(row);
       // selecting caps "use" to the invoice need (50, since avail=500 > need).
       const input = await within(row).findByTestId('cp-credit-use-s1');
-      await waitFor(() => expect(input).toHaveValue('50,00'));
+      await waitFor(() => expect(input).toHaveValue('50.00'));
 
       // typing a value within [0, avail] is reflected exactly after blur.
-      fireEvent.change(input, { target: { value: '150,00' } });
+      fireEvent.change(input, { target: { value: '150.00' } });
       fireEvent.blur(input);
-      await waitFor(() => expect(input).toHaveValue('150,00'));
+      await waitFor(() => expect(input).toHaveValue('150.00'));
 
       // typing a negative value clamps to 0.
       fireEvent.change(input, { target: { value: '-100' } });
       fireEvent.blur(input);
-      await waitFor(() => expect(input).toHaveValue('0,00'));
+      await waitFor(() => expect(input).toHaveValue('0.00'));
     });
 
     it('clamps the "use" amount at avail when the typed value exceeds the available credit', async () => {
@@ -288,12 +395,29 @@ describe('NewPaymentEntryModal', () => {
       fireEvent.click(row);
       // selecting caps "use" to avail (120), since need (1000) > avail.
       const input = await within(row).findByTestId('cp-credit-use-s1');
-      await waitFor(() => expect(input).toHaveValue('120,00'));
+      await waitFor(() => expect(input).toHaveValue('120.00'));
 
-      fireEvent.change(input, { target: { value: '220,00' } });
+      fireEvent.change(input, { target: { value: '220.00' } });
       fireEvent.blur(input);
       // 220 would exceed avail (120) — clamps down to 120 on blur.
-      await waitFor(() => expect(input).toHaveValue('120,00'));
+      await waitFor(() => expect(input).toHaveValue('120.00'));
+    });
+
+    it('does not toggle the row off when clicking inside the "use" amount container (stopPropagation)', async () => {
+      mockApiFetch = buildApiFetch({
+        sources: [{ id: 's1', kind: 'credit', doc: 'AB-1', date: '2024-01-01', avail: 500 }],
+      });
+      renderModal({ outstanding: 50 });
+      const row = await screen.findByTestId('cp-credit-row-s1');
+      fireEvent.click(row);
+      const input = await within(row).findByTestId('cp-credit-use-s1');
+
+      // The "use" input's wrapper stops propagation on click so that interacting with the
+      // amount field never bubbles up to the row's own onClick (which toggles selection off).
+      fireEvent.click(input);
+
+      expect(screen.getByTestId('cp-credit-use-s1')).toBeInTheDocument();
+      expect(screen.queryByText('cpUnused')).not.toBeInTheDocument();
     });
   });
 
@@ -403,8 +527,9 @@ describe('NewPaymentEntryModal', () => {
       await waitFor(() => expect(mockApiFetch).toHaveBeenCalled());
       fireEvent.change(screen.getByTestId('cp-amount-input'), { target: { value: '800' } });
       expect(screen.getByText('cpMissing')).toBeInTheDocument();
-      // the delta amount (200,00) should be rendered nearby
-      expect(screen.getByText(/200,00/)).toBeInTheDocument();
+      // the delta amount (200.00) should be rendered nearby — MoneyAmount now renders
+      // en-US digits via the shared formatCurrency util ("200.00 €" for the EUR invoice).
+      expect(screen.getByText(/200\.00/)).toBeInTheDocument();
       // Confirmar stays enabled for a partial payment — only excess blocks it.
       const confirm = screen.getByText('cpConfirm').closest('button');
       expect(confirm).not.toBeDisabled();
@@ -613,11 +738,27 @@ describe('NewPaymentEntryModal', () => {
       });
     });
 
-    it('sends overpaymentAction "refund" when "Dar vuelto" is selected (dir "in")', async () => {
+    // ETP-4504 (Option C): both excess resolutions — "Dejar a crédito" and
+    // "Dar vuelto"/refund — render side by side for an org-currency receipt,
+    // and choosing refund makes the confirm payload carry overpaymentAction "refund".
+    it('renders BOTH the "Dejar a crédito" and "Dar vuelto"/refund cards on excess (dir "in")', async () => {
       renderModal({ dir: 'in', outstanding: 1000 });
       await waitFor(() => expect(mockApiFetch).toHaveBeenCalled());
       fireEvent.change(screen.getByTestId('cp-amount-input'), { target: { value: '1200' } });
-      fireEvent.click(screen.getByText('cpGiveChange').closest('button'));
+      // Default beforeEach: org currency EUR === invoice EUR → canLeaveCredit true,
+      // so both cards render (shared gate).
+      expect(screen.getByTestId('cp-excess-credit')).toBeInTheDocument();
+      expect(screen.getByTestId('cp-excess-refund')).toBeInTheDocument();
+      expect(screen.getByText('cpLeaveCredit')).toBeInTheDocument();
+      expect(screen.getByText('cpGiveChange')).toBeInTheDocument();
+    });
+
+    it('sends overpaymentAction "refund" when "Dar vuelto" is chosen on excess (dir "in")', async () => {
+      renderModal({ dir: 'in', outstanding: 1000 });
+      await waitFor(() => expect(mockApiFetch).toHaveBeenCalled());
+      fireEvent.change(screen.getByTestId('cp-amount-input'), { target: { value: '1200' } });
+      // Choose the refund resolution instead of the default credit one.
+      fireEvent.click(screen.getByTestId('cp-excess-refund'));
       const confirm = screen.getByText('cpConfirm').closest('button');
       await waitFor(() => expect(confirm).not.toBeDisabled());
       fireEvent.click(confirm);
@@ -636,6 +777,324 @@ describe('NewPaymentEntryModal', () => {
       await waitFor(() => expect(mockApiFetch).toHaveBeenCalled());
       fireEvent.click(screen.getByText('cancel').closest('button'));
       expect(props.onClose).toHaveBeenCalled();
+    });
+  });
+
+  // ETP-4504: multi-currency conversion. When the selected financial account's
+  // currency differs from the invoice currency the modal shows an editable
+  // conversion-rate field plus a live "amount in account currency" readout, and
+  // sends `conversionRate` in the register payload. Same-currency → none of that.
+  describe('multi-currency conversion (ETP-4504)', () => {
+    // Account whose currency (EUR) differs from the USD invoice → foreign path.
+    const FOREIGN_ACCOUNTS = [{ id: 'acc-eur', label: 'Cuenta EUR', currency: 'EUR', defaultPaymentMethod: 'Transfer' }];
+    // Account matching the invoice currency (USD) → same-currency path.
+    const SAME_ACCOUNTS = [{ id: 'acc-usd', label: 'Cuenta USD', currency: 'USD', defaultPaymentMethod: 'Transfer' }];
+    const USD_INVOICE = { ...INVOICE, 'currency$_identifier': 'USD' };
+
+    it('shows the conversion fields when the account currency differs from the invoice currency', async () => {
+      mockApiFetch = buildApiFetch({ accounts: FOREIGN_ACCOUNTS });
+      mockConversion = { rate: 0.92, hasRate: true, loading: false };
+      renderModal({ invoiceData: USD_INVOICE });
+      // Conversion fields appear once the account (and thus its currency) resolves.
+      expect(await screen.findByTestId('cp-conversion-fields')).toBeInTheDocument();
+      expect(screen.getByTestId('cp-conversion-rate-input')).toBeInTheDocument();
+      expect(screen.getByTestId('cp-amount-in-account')).toBeInTheDocument();
+    });
+
+    it('hides the conversion fields when the account currency matches the invoice currency', async () => {
+      mockApiFetch = buildApiFetch({ accounts: SAME_ACCOUNTS });
+      renderModal({ invoiceData: USD_INVOICE });
+      // Wait for the account (USD) to auto-select so its currency is known.
+      await screen.findByTestId('field-account-chip');
+      // Same currency → no conversion UI at all.
+      expect(screen.queryByTestId('cp-conversion-fields')).not.toBeInTheDocument();
+    });
+
+    it('auto-calculates amount-in-account = amount × rate and recomputes on amount and rate changes', async () => {
+      mockApiFetch = buildApiFetch({ accounts: FOREIGN_ACCOUNTS });
+      // Rate prefilled to 0.92; amount prefilled to the outstanding (100).
+      mockConversion = { rate: 0.92, hasRate: true, loading: false };
+      renderModal({ invoiceData: USD_INVOICE, outstanding: 100 });
+
+      const readout = await screen.findByTestId('cp-amount-in-account');
+      // 100 × 0.92 = 92, rendered en-US via the shared formatCurrency util with the real
+      // account-currency symbol ("92.00 €" — EUR account, symbol-after).
+      await waitFor(() => expect(readout).toHaveTextContent(/92([.,]00)?/));
+
+      // Symbol money convention (ETP-4504): the modal shows the real currency symbol via
+      // Intl `narrowSymbol` (USD→$, EUR→€, GBP→£), never the raw 3-letter ISO code — and with
+      // no hardcoded currency→symbol map (MoneyAmount's `currencyDisplay` prop resolves it).
+      // The account-currency readout carries the account symbol (€, EUR); the amount input's
+      // own suffix carries the invoice symbol ($, USD). Pinning both guards against a future
+      // refactor silently reverting to ISO-code text.
+      expect(readout).toHaveTextContent(/€/);
+      expect(screen.getByTestId('cp-amount-input').parentElement).toHaveTextContent(/\$/);
+
+      // Recompute on amount change: 200 × 0.92 = 184.
+      fireEvent.change(screen.getByTestId('cp-amount-input'), { target: { value: '200' } });
+      await waitFor(() => expect(readout).toHaveTextContent(/184([.,]00)?/));
+
+      // Recompute on rate change: 200 × 0.5 = 100.
+      fireEvent.change(screen.getByTestId('cp-conversion-rate-input'), { target: { value: '0.5' } });
+      await waitFor(() => expect(readout).toHaveTextContent(/100([.,]00)?/));
+    });
+
+    it('includes conversionRate in the register body only in the foreign-currency case', async () => {
+      mockApiFetch = buildApiFetch({ accounts: FOREIGN_ACCOUNTS });
+      mockConversion = { rate: 0.92, hasRate: true, loading: false };
+      renderModal({ invoiceData: USD_INVOICE, outstanding: 100 });
+      await screen.findByTestId('cp-conversion-fields');
+
+      const confirm = screen.getByTestId('cp-confirm');
+      await waitFor(() => expect(confirm).not.toBeDisabled());
+      fireEvent.click(confirm);
+
+      await waitFor(() => {
+        const call = mockApiFetch.mock.calls.find(c => c[0].includes('registerPayment'));
+        expect(call).toBeTruthy();
+        expect(JSON.parse(call[1].body).conversionRate).toBe('0.92');
+      });
+    });
+
+    it('omits conversionRate from the register body when the account currency matches the invoice currency', async () => {
+      mockApiFetch = buildApiFetch({ accounts: SAME_ACCOUNTS });
+      renderModal({ invoiceData: USD_INVOICE, outstanding: 100 });
+      await waitFor(() => expect(mockApiFetch).toHaveBeenCalled());
+
+      const confirm = screen.getByTestId('cp-confirm');
+      await waitFor(() => expect(confirm).not.toBeDisabled());
+      fireEvent.click(confirm);
+
+      await waitFor(() => {
+        const call = mockApiFetch.mock.calls.find(c => c[0].includes('registerPayment'));
+        expect(call).toBeTruthy();
+        // `conversionRate: undefined` is dropped by JSON.stringify → key absent.
+        expect(JSON.parse(call[1].body)).not.toHaveProperty('conversionRate');
+      });
+    });
+
+    // ETP-4504 B1: a foreign payment MUST carry a positive conversion rate. When
+    // no DB rate prefills the field (and the user has not typed one), both Save and
+    // Confirm are blocked and a required-rate hint is shown — otherwise the backend
+    // would silently apply a 1:1 rate and post the wrong ledger amount.
+    it('blocks Save AND Confirm and shows the rate error when a foreign account has no prefilled rate (ETP-4504 B1)', async () => {
+      mockApiFetch = buildApiFetch({ accounts: FOREIGN_ACCOUNTS });
+      // No DB rate for the pair → the field stays empty (nothing to prefill).
+      mockConversion = { rate: null, hasRate: false, loading: false };
+      renderModal({ invoiceData: USD_INVOICE, outstanding: 100 });
+
+      await screen.findByTestId('cp-conversion-fields');
+      // Empty rate → required-rate hint visible and BOTH actions disabled.
+      expect(screen.getByTestId('cp-conversion-rate-error')).toBeInTheDocument();
+      expect(screen.getByTestId('cp-save-draft')).toBeDisabled();
+      expect(screen.getByTestId('cp-confirm')).toBeDisabled();
+
+      // Typing a valid positive rate clears the hint and re-enables both actions.
+      fireEvent.change(screen.getByTestId('cp-conversion-rate-input'), { target: { value: '0.92' } });
+      await waitFor(() => {
+        expect(screen.queryByTestId('cp-conversion-rate-error')).not.toBeInTheDocument();
+        expect(screen.getByTestId('cp-save-draft')).not.toBeDisabled();
+        expect(screen.getByTestId('cp-confirm')).not.toBeDisabled();
+      });
+    });
+
+    it('enables Save and Confirm with no rate error when a foreign account has a valid prefilled rate (ETP-4504 B1)', async () => {
+      mockApiFetch = buildApiFetch({ accounts: FOREIGN_ACCOUNTS });
+      mockConversion = { rate: 0.92, hasRate: true, loading: false };
+      renderModal({ invoiceData: USD_INVOICE, outstanding: 100 });
+
+      await screen.findByTestId('cp-conversion-fields');
+      // A valid prefilled rate satisfies the gate: no hint, both actions enabled.
+      expect(screen.queryByTestId('cp-conversion-rate-error')).not.toBeInTheDocument();
+      await waitFor(() => {
+        expect(screen.getByTestId('cp-save-draft')).not.toBeDisabled();
+        expect(screen.getByTestId('cp-confirm')).not.toBeDisabled();
+      });
+    });
+
+    // ETP-4504 W1: the rate hook is keyed on the target (account) currency, so
+    // switching to a different foreign account re-seeds the field — and CLEARS it
+    // when the new pair has no DB rate, rather than carrying the stale rate across.
+    it('clears the prefilled rate when switching to a foreign account that has no DB rate (ETP-4504 W1)', async () => {
+      mockApiFetch = buildApiFetch({
+        accounts: [
+          { id: 'acc-eur', label: 'Cuenta EUR', currency: 'EUR', defaultPaymentMethod: 'Transfer' },
+          { id: 'acc-gbp', label: 'Cuenta GBP', currency: 'GBP', defaultPaymentMethod: 'Transfer' },
+        ],
+      });
+      // EUR pair has a rate; GBP pair has none — driven by the target currency.
+      mockConversion = ({ toCode }) => (toCode === 'EUR'
+        ? { rate: 0.92, hasRate: true, loading: false }
+        : { rate: null, hasRate: false, loading: false });
+      renderModal({ invoiceData: USD_INVOICE, outstanding: 100 });
+
+      // Auto-selects the first account (EUR) → rate prefilled to 0.92.
+      await screen.findByTestId('cp-conversion-fields');
+      await waitFor(() => expect(screen.getByTestId('cp-conversion-rate-input')).toHaveValue('0.92'));
+
+      // Switch the account to the GBP one (which has no DB rate).
+      fireEvent.click(screen.getByTestId('field-account-chip'));
+      const accountInput = await screen.findByTestId('field-account');
+      fireEvent.focus(accountInput);
+      fireEvent.change(accountInput, { target: { value: '' } });
+      await waitFor(() => expect(screen.getByTestId('options-account')).toBeInTheDocument());
+      // Options select on mouseDown (fires before blur), not click.
+      fireEvent.mouseDown(screen.getByTestId('option-account-acc-gbp'));
+
+      // Stale 0.92 must NOT carry over: the field is cleared and the gate blocks again.
+      await waitFor(() => expect(screen.getByTestId('cp-conversion-rate-input')).toHaveValue(''));
+      expect(screen.getByTestId('cp-conversion-rate-error')).toBeInTheDocument();
+    });
+
+    it('applies no rate gating and renders no rate error for a same-currency account (ETP-4504)', async () => {
+      mockApiFetch = buildApiFetch({ accounts: SAME_ACCOUNTS });
+      renderModal({ invoiceData: USD_INVOICE, outstanding: 100 });
+      await waitFor(() => expect(mockApiFetch).toHaveBeenCalled());
+
+      // Same currency → no conversion UI and no rate error node at all.
+      expect(screen.queryByTestId('cp-conversion-fields')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('cp-conversion-rate-error')).not.toBeInTheDocument();
+      // Save/Confirm follow the normal rules (enabled with a valid amount).
+      await waitFor(() => {
+        expect(screen.getByTestId('cp-save-draft')).not.toBeDisabled();
+        expect(screen.getByTestId('cp-confirm')).not.toBeDisabled();
+      });
+    });
+
+    // ETP-4504: a foreign rate of exactly 1 is also invalid — the backend rejects it
+    // (compareTo(ONE)==0 → 400), so the modal blocks it up-front and the shared error
+    // node switches to the "must differ from 1" message. A missing/0 rate keeps the
+    // original "enter the rate" message; a valid non-1 rate clears the gate.
+    it('blocks Save AND Confirm and shows the "invalid" hint when a foreign rate is exactly 1 (ETP-4504)', async () => {
+      mockApiFetch = buildApiFetch({ accounts: FOREIGN_ACCOUNTS });
+      // No DB prefill → the field starts empty and the rate is typed manually.
+      mockConversion = { rate: null, hasRate: false, loading: false };
+      renderModal({ invoiceData: USD_INVOICE, outstanding: 100 });
+      await screen.findByTestId('cp-conversion-fields');
+      const rateInput = screen.getByTestId('cp-conversion-rate-input');
+
+      // A rate of exactly 1 (any spelling) → the "must differ from 1" hint + both actions blocked.
+      for (const oneStr of ['1', '1.00']) {
+        fireEvent.change(rateInput, { target: { value: oneStr } });
+        await waitFor(() => {
+          expect(screen.getByTestId('cp-conversion-rate-error')).toHaveTextContent('cpConversionRateInvalid');
+          expect(screen.getByTestId('cp-save-draft')).toBeDisabled();
+          expect(screen.getByTestId('cp-confirm')).toBeDisabled();
+        });
+      }
+
+      // 0 or empty → the hint reverts to the "enter the rate" (required) message.
+      fireEvent.change(rateInput, { target: { value: '0' } });
+      await waitFor(() => expect(screen.getByTestId('cp-conversion-rate-error')).toHaveTextContent('cpConversionRateRequired'));
+      fireEvent.change(rateInput, { target: { value: '' } });
+      await waitFor(() => expect(screen.getByTestId('cp-conversion-rate-error')).toHaveTextContent('cpConversionRateRequired'));
+
+      // A valid non-1 rate clears the error node entirely and re-enables both actions.
+      fireEvent.change(rateInput, { target: { value: '0.92' } });
+      await waitFor(() => {
+        expect(screen.queryByTestId('cp-conversion-rate-error')).not.toBeInTheDocument();
+        expect(screen.getByTestId('cp-save-draft')).not.toBeDisabled();
+        expect(screen.getByTestId('cp-confirm')).not.toBeDisabled();
+      });
+    });
+
+    // QA gap #2: partial cash + same-currency credit + foreign account, combined. A USD
+    // credit line covers part of a USD invoice, cash covers the rest, and the EUR account
+    // needs a rate. The balance must reconcile exactly (confirmable, no excess), the
+    // account-currency readout tracks the CASH portion × rate, and the payload carries BOTH
+    // the conversion rate and the consumed credit sources.
+    it('reconciles a partial credit + cash payment on a foreign account and sends rate + creditSources (ETP-4504)', async () => {
+      mockApiFetch = buildApiFetch({
+        accounts: FOREIGN_ACCOUNTS,
+        // Same-currency (USD) credit worth 40 against a 100 USD invoice.
+        sources: [{ id: 's1', kind: 'credit', doc: 'CN-1', date: '2024-01-01', avail: 40, paymentId: 'cn-1' }],
+      });
+      mockConversion = { rate: 0.92, hasRate: true, loading: false };
+      renderModal({ invoiceData: USD_INVOICE, outstanding: 100 });
+
+      await screen.findByTestId('cp-conversion-fields');
+      // Consume the credit: it caps to min(avail 40, need 100) = 40 and drops cash to 60.
+      fireEvent.click(await screen.findByTestId('cp-credit-row-s1'));
+      await waitFor(() => expect(screen.getByTestId('cp-amount-input')).toHaveValue('60.00'));
+
+      // Amount-in-account tracks the CASH portion only: 60 × 0.92 = 55.20 (account currency).
+      await waitFor(() => expect(screen.getByTestId('cp-amount-in-account')).toHaveTextContent(/55[.,]20/));
+
+      // Exact balance (60 cash + 40 credit = 100) → no excess, confirm enabled.
+      expect(screen.queryByTestId('cp-excess-credit')).not.toBeInTheDocument();
+      const confirm = screen.getByTestId('cp-confirm');
+      await waitFor(() => expect(confirm).not.toBeDisabled());
+      fireEvent.click(confirm);
+
+      // The payload carries BOTH the conversion rate and the consumed credit source.
+      await waitFor(() => {
+        const call = mockApiFetch.mock.calls.find(c => c[0].includes('registerPayment'));
+        expect(call).toBeTruthy();
+        const body = JSON.parse(call[1].body);
+        expect(body.conversionRate).toBe('0.92');
+        expect(body.creditSources).toHaveLength(1);
+        expect(body.creditSources[0]).toMatchObject({ kind: 'credit', paymentId: 'cn-1', use: 40 });
+      });
+    });
+  });
+
+  // ETP-4504 (Option C): the excess resolution cards ("Dejar a crédito" +
+  // "Dar vuelto"/refund) share one gate — `canLeaveCredit` (receipt AND invoice
+  // in the org currency). A foreign-currency receipt — or any payment — shows
+  // NEITHER card and may only "Igualar"; the excess blocks confirmation until then.
+  describe('excess resolution gating by org currency (ETP-4504)', () => {
+    const USD_INVOICE = { ...INVOICE, 'currency$_identifier': 'USD' };
+
+    it('offers "Generar crédito a favor" for a receipt whose invoice is in the org currency', async () => {
+      // Default beforeEach: org currency EUR === invoice EUR → canLeaveCredit true.
+      renderModal({ dir: 'in', outstanding: 1000 });
+      await waitFor(() => expect(mockApiFetch).toHaveBeenCalled());
+      fireEvent.change(screen.getByTestId('cp-amount-input'), { target: { value: '1200' } });
+
+      expect(screen.getByTestId('cp-excess-credit')).toBeInTheDocument();
+      expect(screen.getByText('cpLeaveCredit')).toBeInTheDocument();
+    });
+
+    it('hides the credit option for a foreign-currency receipt and blocks confirmation until adjusted', async () => {
+      // Invoice in USD but org currency is EUR → invoice NOT in org currency →
+      // canLeaveCredit false even for a receipt.
+      mockOrgCurrency = 'EUR';
+      renderModal({ dir: 'in', invoiceData: USD_INVOICE, outstanding: 1000 });
+      await waitFor(() => expect(mockApiFetch).toHaveBeenCalled());
+      fireEvent.change(screen.getByTestId('cp-amount-input'), { target: { value: '1200' } });
+
+      // Neither card renders (shared gate off) — only the inline "adjust the amount" guidance.
+      expect(screen.queryByTestId('cp-excess-credit')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('cp-excess-refund')).not.toBeInTheDocument();
+      expect(screen.getByText('cpExcessInline')).toBeInTheDocument();
+      // Confirm stays blocked while the excess is unresolved.
+      expect(screen.getByTestId('cp-confirm')).toBeDisabled();
+
+      // "Igualar" resets the amount to exactly cover the invoice → confirm re-enables.
+      fireEvent.click(screen.getByTestId('cp-equalize'));
+      await waitFor(() => expect(screen.getByTestId('cp-confirm')).not.toBeDisabled());
+    });
+
+    it('renders BOTH excess cards side by side for an org-currency receipt (dir "in")', async () => {
+      // ETP-4504 Option C: credit + refund share the canLeaveCredit gate, so an
+      // org-currency receipt shows both cards together (not the old single card).
+      renderModal({ dir: 'in', outstanding: 1000 });
+      await waitFor(() => expect(mockApiFetch).toHaveBeenCalled());
+      fireEvent.change(screen.getByTestId('cp-amount-input'), { target: { value: '1200' } });
+      expect(screen.getByTestId('cp-excess-credit')).toBeInTheDocument();
+      expect(screen.getByTestId('cp-excess-refund')).toBeInTheDocument();
+      expect(screen.getByText('cpGiveChange')).toBeInTheDocument();
+    });
+
+    it('shows NEITHER card for a payment (dir "out") and blocks confirmation on excess', async () => {
+      // Payments never expose a resolution card regardless of currency — only "Igualar".
+      renderModal({ dir: 'out', outstanding: 1000 });
+      await waitFor(() => expect(mockApiFetch).toHaveBeenCalled());
+      fireEvent.change(screen.getByTestId('cp-amount-input'), { target: { value: '1200' } });
+      expect(screen.queryByTestId('cp-excess-credit')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('cp-excess-refund')).not.toBeInTheDocument();
+      expect(screen.getByText('cpExcessInline')).toBeInTheDocument();
+      expect(screen.getByTestId('cp-confirm')).toBeDisabled();
     });
   });
 
@@ -1185,6 +1644,28 @@ describe('NewPaymentEntryModal', () => {
       });
     });
 
+    describe('PIS catalog fetch resilience', () => {
+      it('degrades gracefully (no crash, no preselected IBAN) when pisSupplierAccounts rejects', async () => {
+        // Each per-action POST inside the PIS accounts effect is individually wrapped in
+        // `.catch(() => null)`, so a single rejected request must not blow up Promise.all
+        // or crash the section — it should just leave that catalog empty.
+        const base = buildPisApiFetch();
+        mockApiFetch = vi.fn(async (path, opts) => {
+          if (path.includes('pisSupplierAccounts')) return Promise.reject(new Error('network error'));
+          return base(path, opts);
+        });
+        renderModal({ dir: 'out', specName: 'purchase-invoice' });
+
+        expect(await screen.findByTestId('cp-pis-section')).toBeInTheDocument();
+        await waitFor(() => expect(
+          mockApiFetch.mock.calls.some(c => c[0].includes('pisSupplierAccounts')),
+        ).toBe(true));
+        // No supplier accounts resolved -> no default IBAN was preselected, so the
+        // selector shows its plain (unselected) input rather than a value chip.
+        expect(screen.queryByTestId('field-pisIban-chip')).not.toBeInTheDocument();
+      });
+    });
+
     describe('confirm request body', () => {
       it('sends pis:true only on Confirmar when the block is active, leaving Guardar (draft) unchanged', async () => {
         mockApiFetch = buildPisApiFetch();
@@ -1240,6 +1721,46 @@ describe('NewPaymentEntryModal', () => {
           const body = JSON.parse(call[1].body);
           expect(body).not.toHaveProperty('pis');
         });
+      });
+    });
+
+    describe('PIS alert — used-credit clause', () => {
+      it('appends the cpPisAlertCredit clause when a credit/saldo-a-favor line is applied alongside a PIS transfer', async () => {
+        mockApiFetch = buildPisApiFetch({
+          sources: [{ id: 's1', kind: 'credit', doc: 'AB-1', date: '2024-01-01', avail: 200 }],
+        });
+        renderModal({ dir: 'out', specName: 'purchase-invoice' });
+        await screen.findByTestId('cp-pis-section');
+
+        // Selecting the line auto-applies it, raising balance.usedCredit above 0.
+        const row = await screen.findByTestId('cp-credit-row-s1');
+        fireEvent.click(row);
+
+        await waitFor(() => expect(screen.getByText(/cpPisAlertCredit/)).toBeInTheDocument());
+      });
+    });
+
+    describe('PIS iban — hand-typed creation (onCreateRequest)', () => {
+      it('creates a hand-typed IBAN when the user types a value with no matching supplier option', async () => {
+        mockApiFetch = buildPisApiFetch();
+        renderModal({ dir: 'out', specName: 'purchase-invoice' });
+        await screen.findByTestId('cp-pis-section');
+
+        // Open the IBAN selector (pre-filled with the default supplier account) and type a
+        // value that isn't one of the fetched options.
+        fireEvent.click(screen.getByTestId('field-pisIban-chip'));
+        const ibanInput = await screen.findByTestId('field-pisIban');
+        fireEvent.focus(ibanInput);
+        fireEvent.change(ibanInput, { target: { value: 'DE89370400440532013000' } });
+        await waitFor(() => expect(screen.getByTestId('options-pisIban')).toBeInTheDocument());
+
+        // The pinned "create" action (its onMouseDown fires before blur) invokes
+        // onCreateRequest(query, onCreated), which trims the typed value and — since it's
+        // non-empty — calls onCreated(typed, typed), setting pisIban to the typed IBAN.
+        fireEvent.mouseDown(screen.getByTestId('action-create-pisIban'));
+
+        await waitFor(() => expect(screen.getByTestId('field-pisIban-chip'))
+          .toHaveTextContent('DE89370400440532013000'));
       });
     });
 
@@ -1424,6 +1945,34 @@ describe('NewPaymentEntryModal', () => {
         fireEvent.click(confirm);
         expect(await screen.findByTestId('cp-pis-waiting')).toBeInTheDocument();
 
+        await waitFor(() => expect(screen.getByText('cpPisFailedError')).toBeInTheDocument(),
+          { timeout: 4500 });
+        expect(screen.queryByTestId('cp-pis-waiting')).not.toBeInTheDocument();
+        expect(props.onSaved).not.toHaveBeenCalled();
+      }, 8000);
+
+      it('treats a rejected pisPaymentStatus poll as "failed" (network-error catch branch) and surfaces the inline error', async () => {
+        // Unlike the "terminal non-executed status" test above (which resolves the poll with
+        // a JSON body carrying status:"failed"), this rejects the apiFetch call outright —
+        // exercising the poll's own `catch { setPisPolling(... status: 'failed' ...) }` branch
+        // instead of its success path.
+        const base = buildPisApiFetch({
+          register: { response: { data: { id: 'pay-1', pisPaymentUrl: 'https://saltedge.example/widget/abc', pisPaymentId: 'pis-1' } } },
+        });
+        mockApiFetch = vi.fn(async (path, opts) => {
+          if (path.includes('pisPaymentStatus')) return Promise.reject(new Error('network blip'));
+          return base(path, opts);
+        });
+        const { props } = renderModal({ dir: 'out', specName: 'purchase-invoice' });
+        await screen.findByTestId('cp-pis-section');
+
+        const confirm = screen.getByTestId('cp-confirm');
+        await waitFor(() => expect(confirm).not.toBeDisabled());
+        fireEvent.click(confirm);
+        expect(await screen.findByTestId('cp-pis-waiting')).toBeInTheDocument();
+
+        // First poll tick rejects -> status becomes 'failed', a terminal, non-executed status
+        // that immediately surfaces the inline error and stops polling.
         await waitFor(() => expect(screen.getByText('cpPisFailedError')).toBeInTheDocument(),
           { timeout: 4500 });
         expect(screen.queryByTestId('cp-pis-waiting')).not.toBeInTheDocument();

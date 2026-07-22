@@ -49,6 +49,18 @@ describe('WarehouseSummary — valuation calculation', () => {
     assert.match(src, /products\.reduce.*valuation/s);
   });
 
+  it('filters the KPI by qty > 0 (regression guard, ETP-4528: must stay strict-positive)', () => {
+    // The KPI intentionally differs from the Products tab (qty !== 0) — this asserts
+    // the strict-positive predicate is present so a future edit cannot silently widen
+    // it to include negative/zero-stock (shrinkage) products.
+    assert.match(src, /allProducts\.filter\(p => p\.qty > 0\)/);
+  });
+
+  it('does not use the list-tab non-zero predicate for the KPI filter', () => {
+    // Guards against copy-pasting the Products tab's `qty !== 0` predicate into the KPI.
+    assert.doesNotMatch(src, /allProducts\.filter\(p => p\.qty !== 0\)/);
+  });
+
   it('does not import chart or dashboard utilities', () => {
     assert.doesNotMatch(src, /niceScale/);
     assert.doesNotMatch(src, /formatDashboardAxisTick/);

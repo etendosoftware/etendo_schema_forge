@@ -1,7 +1,8 @@
 {
-  "version": "0.18.0",
+  "version": "0.19.0",
   "generatedAt": "2026-07-06T16:17:20.249Z",
-  "checksum": "5a9f480f8a98cfc4",
+  "updatedAt": "2026-07-21T12:35:22.212Z",
+  "checksum": "4062dd639dd4b6f2",
   "frontendContract": {
     "window": {
       "id": "123271B9AD60469BAE8A924841456B63",
@@ -38,7 +39,8 @@
         "enabled": false
       },
       "layoutType": "default",
-      "linesLayout": "inlineEditable"
+      "linesLayout": "inlineEditable",
+      "maxDetailLines": 0
     },
     "entities": {
       "returnMaterialReceipt": {
@@ -66,6 +68,10 @@
             "section": "principal",
             "seq": 2,
             "gridOrder": 2,
+            "validation": {
+              "required": true,
+              "maxLength": 30
+            },
             "readOnlyLogic": {
               "raw": "@Processed@='Y'",
               "evaluable": true,
@@ -93,6 +99,10 @@
             "seq": 3,
             "gridOrder": 1,
             "dot": false,
+            "validation": {
+              "required": true,
+              "maxLength": 10
+            },
             "callout": {
               "className": "org.openbravo.erpCommon.ad_callouts.SL_InOut_AccountingDate"
             },
@@ -119,6 +129,10 @@
             "section": "principal",
             "seq": 1,
             "gridOrder": 3,
+            "validation": {
+              "required": true,
+              "maxLength": 60
+            },
             "callout": {
               "className": "org.openbravo.erpCommon.ad_callouts.SL_InOut_BPartner"
             },
@@ -139,7 +153,10 @@
             "required": false,
             "grid": false,
             "form": false,
-            "section": "other"
+            "section": "other",
+            "validation": {
+              "maxLength": 255
+            }
           },
           {
             "name": "warehouse",
@@ -158,6 +175,10 @@
             "section": "principal",
             "seq": 4,
             "gridOrder": 5,
+            "validation": {
+              "required": true,
+              "maxLength": 22
+            },
             "callout": {
               "className": "org.openbravo.erpCommon.ad_callouts.SE_InOut_Warehouse"
             },
@@ -187,6 +208,10 @@
             },
             "section": "principal",
             "seq": 5,
+            "validation": {
+              "required": true,
+              "maxLength": 22
+            },
             "validationRule": {
               "code": "C_BPartner_Location.C_BPartner_ID=@C_BPartner_ID@ AND C_BPartner_Location.IsShipTo='Y' AND C_BPartner_Location.IsActive='Y'",
               "contextParams": [],
@@ -289,7 +314,11 @@
               }
             ],
             "defaultValue": "DR",
-            "gridOrder": 4
+            "gridOrder": 4,
+            "validation": {
+              "required": true,
+              "maxLength": 60
+            }
           },
           {
             "name": "trackingNo",
@@ -303,6 +332,9 @@
             "grid": false,
             "form": false,
             "section": "other",
+            "validation": {
+              "maxLength": 60
+            },
             "displayLogic": {
               "raw": "@DeliveryViaRule@='S'",
               "evaluable": true
@@ -320,7 +352,10 @@
             "grid": true,
             "form": false,
             "columnType": "percent",
-            "gridOrder": 7
+            "gridOrder": 7,
+            "validation": {
+              "maxLength": 4
+            }
           },
           {
             "name": "etblkpBulkposting",
@@ -339,6 +374,10 @@
               "source": "N"
             },
             "defaultValue": "N",
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            },
             "displayLogic": {
               "raw": "@Processed@='Y' & @#ShowAcct@='Y'\n",
               "evaluable": false,
@@ -423,6 +462,10 @@
             },
             "defaultValue": "@SQL=SELECT COALESCE(MAX(Line),0)+10 AS DefaultValue FROM M_InOutLine WHERE M_InOut_ID=@M_InOut_ID@",
             "section": "principal",
+            "validation": {
+              "required": true,
+              "maxLength": 10
+            },
             "readOnlyLogic": {
               "raw": "@Processed@='Y'",
               "evaluable": true,
@@ -444,6 +487,9 @@
             "inputMode": "search",
             "section": "principal",
             "gridOrder": 1,
+            "validation": {
+              "maxLength": 60
+            },
             "callout": {
               "className": "org.openbravo.erpCommon.ad_callouts.SL_InOutLine_Product"
             },
@@ -472,6 +518,10 @@
             "defaultValue": "0",
             "section": "principal",
             "gridOrder": 2,
+            "validation": {
+              "required": true,
+              "maxLength": 10
+            },
             "readOnlyLogic": {
               "raw": "@Processed@='Y' | @UomManagement@='Y'",
               "evaluable": true,
@@ -493,6 +543,10 @@
             "reference": "UOM",
             "inputMode": "search",
             "section": "other",
+            "validation": {
+              "required": true,
+              "maxLength": 22
+            },
             "readOnlyLogic": {
               "raw": "@UomManagement@='Y'",
               "evaluable": true,
@@ -512,7 +566,10 @@
             "form": true,
             "reference": "OrderLine",
             "inputMode": "search",
-            "section": "other"
+            "section": "other",
+            "validation": {
+              "maxLength": 60
+            }
           },
           {
             "name": "description",
@@ -525,7 +582,10 @@
             "required": false,
             "grid": false,
             "form": true,
-            "section": "other"
+            "section": "other",
+            "validation": {
+              "maxLength": 2000
+            }
           },
           {
             "name": "orderQuantity",
@@ -540,6 +600,9 @@
             "form": true,
             "section": "principal",
             "gridOrder": 3,
+            "validation": {
+              "maxLength": 10
+            },
             "callout": {
               "className": "org.openbravo.erpCommon.ad_callouts.SL_InOut_Conversion"
             },
@@ -612,7 +675,8 @@
       "sendDocument": {
         "enabled": false
       },
-      "linesLayout": "inlineEditable"
+      "linesLayout": "inlineEditable",
+      "maxDetailLines": 0
     },
     "entities": {
       "returnMaterialReceipt": {
@@ -737,7 +801,7 @@
             "apiKey": "salesOrder",
             "column": "C_Order_ID",
             "type": "foreignKey",
-            "visibility": "discarded",
+            "visibility": "system",
             "required": false
           },
           {

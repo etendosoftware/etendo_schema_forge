@@ -11,6 +11,7 @@ import ExchangeRatesForm from './ExchangeRatesForm';
 import RelatedDocuments from '@/windows/custom/purchase-invoice/RelatedDocuments';
 import { AttachmentsTab } from '@/components/attachments';
 import SifTab from '@/windows/custom/shared/SifTab.jsx';
+import ReversedInvoicesPanel from '@/windows/custom/sales-invoice/ReversedInvoicesPanel.jsx';
 import PurchaseInvoiceBottomPanel from '../../../custom/PurchaseInvoiceBottomPanel';
 import catalogs from './mockCatalogs';
 
@@ -167,6 +168,17 @@ export const api = {
       "delete": true,
       "listUrl": "/sws/neo/purchase-invoice/paymentDetails",
       "detailUrl": "/sws/neo/purchase-invoice/paymentDetails/{id}",
+      "supportedFilters": []
+    },
+    "reversedInvoices": {
+      "get": true,
+      "getById": true,
+      "post": true,
+      "put": true,
+      "patch": true,
+      "delete": true,
+      "listUrl": "/sws/neo/purchase-invoice/reversedInvoices",
+      "detailUrl": "/sws/neo/purchase-invoice/reversedInvoices/{id}",
       "supportedFilters": []
     },
     "exchangeRates": {
@@ -563,6 +575,22 @@ export const api = {
       "reference": "Payment",
       "inputMode": "selector",
       "url": "/sws/neo/purchase-invoice/paymentDetails/selectors/finPaymentID"
+    },
+    {
+      "entity": "reversedInvoices",
+      "field": "reversedInvoice",
+      "column": "Reversed_C_Invoice_ID",
+      "reference": "Invoice",
+      "inputMode": "search",
+      "url": "/sws/neo/purchase-invoice/reversedInvoices/selectors/reversedInvoice"
+    },
+    {
+      "entity": "reversedInvoices",
+      "field": "aEAT349CYear",
+      "column": "EM_AEAT349_C_Year_ID",
+      "reference": "Year",
+      "inputMode": "search",
+      "url": "/sws/neo/purchase-invoice/reversedInvoices/selectors/aEAT349CYear"
     },
     {
       "entity": "exchangeRates",
@@ -965,16 +993,12 @@ export default function HeaderPage({ windowName, recordId, ...props }) {
         breadcrumb={breadcrumb}
       api={api}
         secondaryTabs={[
-          { key: 'exchangeRates', label: 'Exchange Rates', Table: ExchangeRatesTable, Form: ExchangeRatesForm, addLineFields: { entry: [
-          { key: 'toCurrency', column: 'C_Currency_Id_To', type: 'search', required: true, label: 'To Currency', reference: 'Currency', inputMode: 'search', excludeValueOf: 'currency' },
-          { key: 'rate', column: 'Rate', type: 'text', label: 'Rate' },
-          { key: 'foreignAmount', column: 'Foreign_Amount', type: 'number', required: true, label: 'Foreign  Amount', defaultValue: '0' },
-          ], derived: [], hidden: [] }, requireSavedRecord: true, readOnlyLogic: (record) => record['documentStatus'] !== 'DR' },
+          { key: 'exchangeRates', label: 'Exchange Rates', Table: ExchangeRatesTable, Form: ExchangeRatesForm, requireSavedRecord: true, readOnlyLogic: (record) => record['posted'] === true || record['hASREVERSEDINVOICESO'] === 'Y' || record['hASREVERSEDINVOICEPO'] === 'Y' },
         ]}
         hideDeleteWhenComplete
         noHeaderBorder
         notesField="description"
-        customTabs={[{ key: 'related', labelKey: 'relatedDocuments', Component: RelatedDocuments }, { key: 'attachments', labelKey: 'attachments', Component: AttachmentsTab, placement: 'tab', props: { tableName: "C_Invoice", config: {} } }, { key: 'sif', labelKey: 'sifDataTabs.sectionTitle', Component: SifTab, placement: 'tab' }]}
+        customTabs={[{ key: 'related', labelKey: 'relatedDocuments', Component: RelatedDocuments }, { key: 'attachments', labelKey: 'attachments', Component: AttachmentsTab, placement: 'tab', props: { tableName: "C_Invoice", config: {} } }, { key: 'sif', labelKey: 'sifDataTabs.sectionTitle', Component: SifTab, placement: 'tab' }, { key: 'reversedInvoices', labelKey: 'rectificationsTab', Component: ReversedInvoicesPanel, placement: 'tab' }]}
         bottomSection={PurchaseInvoiceBottomPanel}
         menuActions={({ data, status }) => [
           { key: 'reactivate', label: 'Reactivate', visible: status === 'CO', labelKey: 'reactivate', successKey: 'reactivated', preUnpost: true, documentAction: 'RE',  },

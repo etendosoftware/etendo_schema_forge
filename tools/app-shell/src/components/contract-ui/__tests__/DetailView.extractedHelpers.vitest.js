@@ -899,27 +899,27 @@ describe('getTabsBarClassName', () => {
 
 describe('isDeleteButtonVisible', () => {
   it('is falsy when the record is new (isNew short-circuits)', () => {
-    expect(isDeleteButtonVisible(true, 'rec-1', { documentStatus: 'DR' }, 'documentStatus', true, false)).toBeFalsy();
+    expect(isDeleteButtonVisible({ isNew: true, recordId: 'rec-1', data: { documentStatus: 'DR' }, statusField: 'documentStatus', hideDeleteWhenComplete: true, isProcessed: false })).toBeFalsy();
   });
 
   it('is falsy when recordId is missing', () => {
-    expect(isDeleteButtonVisible(false, undefined, { documentStatus: 'DR' }, 'documentStatus', true, false)).toBeFalsy();
+    expect(isDeleteButtonVisible({ isNew: false, recordId: undefined, data: { documentStatus: 'DR' }, statusField: 'documentStatus', hideDeleteWhenComplete: true, isProcessed: false })).toBeFalsy();
   });
 
   it('is truthy on the happy path (draft record, not processed)', () => {
-    expect(isDeleteButtonVisible(false, 'rec-1', { documentStatus: 'DR' }, 'documentStatus', true, false)).toBeTruthy();
+    expect(isDeleteButtonVisible({ isNew: false, recordId: 'rec-1', data: { documentStatus: 'DR' }, statusField: 'documentStatus', hideDeleteWhenComplete: true, isProcessed: false })).toBeTruthy();
   });
 
   it('is falsy when the record is completed under hideDeleteWhenComplete', () => {
-    expect(isDeleteButtonVisible(false, 'rec-1', { documentStatus: 'CO' }, 'documentStatus', true, false)).toBeFalsy();
+    expect(isDeleteButtonVisible({ isNew: false, recordId: 'rec-1', data: { documentStatus: 'CO' }, statusField: 'documentStatus', hideDeleteWhenComplete: true, isProcessed: false })).toBeFalsy();
   });
 
   it('is falsy when hideDeleteWhenComplete and the record is processed', () => {
-    expect(isDeleteButtonVisible(false, 'rec-1', { documentStatus: 'DR' }, 'documentStatus', true, true)).toBeFalsy();
+    expect(isDeleteButtonVisible({ isNew: false, recordId: 'rec-1', data: { documentStatus: 'DR' }, statusField: 'documentStatus', hideDeleteWhenComplete: true, isProcessed: true })).toBeFalsy();
   });
 
   it('is truthy when hideDeleteWhenComplete is false regardless of status', () => {
-    expect(isDeleteButtonVisible(false, 'rec-1', { documentStatus: 'CO' }, 'documentStatus', false, true)).toBeTruthy();
+    expect(isDeleteButtonVisible({ isNew: false, recordId: 'rec-1', data: { documentStatus: 'CO' }, statusField: 'documentStatus', hideDeleteWhenComplete: false, isProcessed: true })).toBeTruthy();
   });
 });
 
@@ -1301,6 +1301,25 @@ describe('resolveCanAddLines', () => {
   it('returns true when there are no required fields', () => {
     expect(resolveCanAddLines(null, {}, [])).toBe(true);
     expect(resolveCanAddLines(null, {}, undefined)).toBe(true);
+  });
+
+  // Import-only lines pattern (ETP-4462): windows with maxDetailLines = 0 in
+  // decisions.json get an always-false generated guard, so adding lines is
+  // never allowed regardless of header completeness or existing children.
+  it('returns false for the generated maxDetailLines:0 guard regardless of children', () => {
+    const importOnlyGuard = (_, children) => children.length < 0;
+    expect(resolveCanAddLines(importOnlyGuard, { businessPartner: 'bp' }, null, [])).toBe(false);
+    expect(resolveCanAddLines(importOnlyGuard, { businessPartner: 'bp' }, null, [{}, {}])).toBe(false);
+  });
+
+  it('defaults children to an empty array when the caller omits them (guard still runs)', () => {
+    const importOnlyGuard = (_, children) => children.length < 0;
+    expect(resolveCanAddLines(importOnlyGuard, {}, null)).toBe(false);
+  });
+
+  it('ignores requiredHeaderFields when a guard is provided (guard wins)', () => {
+    const importOnlyGuard = (_, children) => children.length < 0;
+    expect(resolveCanAddLines(importOnlyGuard, { bp: 'x', wh: 'y' }, ['bp', 'wh'], [])).toBe(false);
   });
 });
 

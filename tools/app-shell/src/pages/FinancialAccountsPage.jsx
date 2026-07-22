@@ -125,6 +125,13 @@ export default function FinancialAccountsPage() {
     navigate(`/financial-account/${account.id}?tab=reconciliation&autoMatch=true`);
   };
 
+  // "Nuevo movimiento" from the accounts grid opens the account detail's Movements
+  // tab with the New-movement modal auto-opened (the modal needs the account's
+  // currency + header dimensions, which the detail view loads).
+  const handleNewMovement = (account) => {
+    navigate(`/financial-account/${account.id}?tab=movements&newMovement=true`);
+  };
+
   return (
     <div className="flex h-full min-h-0 flex-1 flex-col">
       <div className="border-b border-[#E8EAEF] p-2">
@@ -156,6 +163,7 @@ export default function FinancialAccountsPage() {
             onArchive={setArchiveTarget}
             onPsd2Action={handlePsd2Action}
             onTransfer={setTransferSource}
+            onNewMovement={handleNewMovement}
             onRetry={reload}
             data-testid="AccountsTable__7c3fbc" />
         </div>

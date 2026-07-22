@@ -1,7 +1,8 @@
 {
-  "version": "0.21.0",
+  "version": "0.22.0",
   "generatedAt": "2026-07-06T16:17:20.534Z",
-  "checksum": "e3e80dd38d7f01c5",
+  "updatedAt": "2026-07-21T12:35:22.639Z",
+  "checksum": "a7808c99a8b397bd",
   "frontendContract": {
     "window": {
       "id": "273673D2ED914C399A6C51DB758BE0F9",
@@ -38,7 +39,8 @@
         "enabled": false
       },
       "layoutType": "default",
-      "linesLayout": "inlineEditable"
+      "linesLayout": "inlineEditable",
+      "maxDetailLines": 0
     },
     "entities": {
       "returnToVendorShipment": {
@@ -66,6 +68,10 @@
             "section": "principal",
             "seq": 2,
             "gridOrder": 2,
+            "validation": {
+              "required": true,
+              "maxLength": 30
+            },
             "readOnlyLogic": {
               "raw": "@Processed@='Y'",
               "evaluable": true,
@@ -89,6 +95,10 @@
             "section": "principal",
             "seq": 1,
             "gridOrder": 3,
+            "validation": {
+              "required": true,
+              "maxLength": 60
+            },
             "callout": {
               "className": "org.openbravo.erpCommon.ad_callouts.SL_InOut_BPartner"
             },
@@ -118,6 +128,10 @@
             },
             "section": "principal",
             "seq": 5,
+            "validation": {
+              "required": true,
+              "maxLength": 22
+            },
             "validationRule": {
               "code": "C_BPartner_Location.C_BPartner_ID=@C_BPartner_ID@ AND C_BPartner_Location.IsShipTo='Y' AND C_BPartner_Location.IsActive='Y'",
               "contextParams": [],
@@ -152,6 +166,10 @@
             "seq": 3,
             "gridOrder": 1,
             "dot": false,
+            "validation": {
+              "required": true,
+              "maxLength": 10
+            },
             "callout": {
               "className": "org.openbravo.erpCommon.ad_callouts.SL_InOut_AccountingDate"
             },
@@ -178,6 +196,10 @@
             "section": "principal",
             "seq": 4,
             "gridOrder": 5,
+            "validation": {
+              "required": true,
+              "maxLength": 22
+            },
             "callout": {
               "className": "org.openbravo.erpCommon.ad_callouts.SE_InOut_Warehouse"
             },
@@ -198,7 +220,10 @@
             "required": false,
             "grid": false,
             "form": false,
-            "section": "other"
+            "section": "other",
+            "validation": {
+              "maxLength": 255
+            }
           },
           {
             "name": "documentStatus",
@@ -289,7 +314,11 @@
               }
             ],
             "defaultValue": "DR",
-            "gridOrder": 4
+            "gridOrder": 4,
+            "validation": {
+              "required": true,
+              "maxLength": 60
+            }
           },
           {
             "name": "etblkpBulkposting",
@@ -308,6 +337,10 @@
               "source": "N"
             },
             "defaultValue": "N",
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            },
             "displayLogic": {
               "raw": "@Processed@='Y' & @#ShowAcct@='Y'",
               "evaluable": false,
@@ -326,7 +359,10 @@
             "required": false,
             "grid": false,
             "form": false,
-            "section": "other"
+            "section": "other",
+            "validation": {
+              "maxLength": 60
+            }
           },
           {
             "name": "invoiceStatus",
@@ -340,7 +376,10 @@
             "grid": true,
             "form": false,
             "columnType": "percent",
-            "gridOrder": 7
+            "gridOrder": 7,
+            "validation": {
+              "maxLength": 4
+            }
           },
           {
             "name": "sourceReceiptDocNo",
@@ -419,6 +458,10 @@
             },
             "defaultValue": "@SQL=SELECT COALESCE(MAX(Line),0)+10 AS DefaultValue FROM M_InOutLine WHERE M_InOut_ID=@M_InOut_ID@",
             "section": "principal",
+            "validation": {
+              "required": true,
+              "maxLength": 10
+            },
             "readOnlyLogic": {
               "raw": "@Processed@='Y'",
               "evaluable": true,
@@ -440,6 +483,9 @@
             "inputMode": "search",
             "section": "principal",
             "gridOrder": 1,
+            "validation": {
+              "maxLength": 60
+            },
             "callout": {
               "className": "org.openbravo.erpCommon.ad_callouts.SL_InOutLine_Product"
             },
@@ -473,6 +519,10 @@
             },
             "gridOrder": 2,
             "grow": true,
+            "validation": {
+              "required": true,
+              "maxLength": 10
+            },
             "readOnlyLogic": {
               "raw": "@Processed@='Y' | @UomManagement@='Y'",
               "evaluable": true,
@@ -494,6 +544,10 @@
             "reference": "UOM",
             "inputMode": "search",
             "section": "other",
+            "validation": {
+              "required": true,
+              "maxLength": 22
+            },
             "readOnlyLogic": {
               "raw": "@UomManagement@='Y'",
               "evaluable": true,
@@ -511,7 +565,10 @@
             "required": false,
             "grid": false,
             "form": true,
-            "section": "other"
+            "section": "other",
+            "validation": {
+              "maxLength": 2000
+            }
           },
           {
             "name": "orderQuantity",
@@ -532,6 +589,9 @@
             "gridOrder": 3,
             "grow": true,
             "gridReadOnly": true,
+            "validation": {
+              "maxLength": 10
+            },
             "callout": {
               "className": "org.openbravo.erpCommon.ad_callouts.SL_InOut_Conversion"
             },
@@ -604,7 +664,8 @@
       "sendDocument": {
         "enabled": false
       },
-      "linesLayout": "inlineEditable"
+      "linesLayout": "inlineEditable",
+      "maxDetailLines": 0
     },
     "entities": {
       "returnToVendorShipment": {

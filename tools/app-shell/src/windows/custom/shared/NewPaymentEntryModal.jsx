@@ -5,9 +5,12 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { CreatableSearchSelect } from '@/components/contract-ui/CreatableSearchSelect.jsx';
 import { MoneyAmount } from '@/components/ui/money-amount';
 import { useApiFetch } from '@/auth/useApiFetch.js';
+import { useAuth } from '@/auth/AuthContext.jsx';
 import { useUI } from '@/i18n';
 import { isValidIban, normalizeIban } from '@/lib/validateIban.js';
-import { usePaymentBalance, formatPlain } from './usePaymentBalance.js';
+import { usePaymentBalance, formatPlain, round2 } from './usePaymentBalance.js';
+import { useConversionRate } from './useConversionRate.js';
+import { useDocumentCurrency } from './useDocumentCurrency.js';
 
 // ─── design tokens (Etendo Design System — cobros/pagos Figma handoff) ────────
 const INK = '#121217';
@@ -22,9 +25,16 @@ const GREEN_BG = '#EEFBF4';
 const RED_FG = '#C5234A';
 const RED_BG = '#FDE2E9';
 const AMBER = '#C28800';
+// Stable reference for "no used sources" (create mode / no credit consumed) — a fresh []
+// literal on every render would change identity each time and loop usePaymentBalance's seed
+// effect (same failure mode as the apiFetch dependency fixed earlier).
+const EMPTY_USED_SOURCES = [];
 const EXCESS_BG = '#F5F7F9';
 const EXCESS_BORDER = '#D1D4DB';
 const EXCESS_FG = '#3F3F50';
+// A foreign-currency payment with a rate of exactly 1 is rejected by the backend
+// (compareTo(ONE)==0). Mirror that with a tight tolerance so the FE gate matches (ETP-4504).
+const RATE_ONE_TOLERANCE = 1e-9;
 
 // Per-source-kind row accents. credit → purple, abono (saldo a favor) → green.
 const BADGE = {
@@ -106,11 +116,24 @@ function buildPisPaymentFields(template, creditorValues) {
   };
 }
 
-/** Returns a short currency suffix ("€" for EUR, otherwise the ISO code). */
-function curSuffix(currency) {
-  return currency === 'EUR' ? '€' : (currency || '');
+/**
+ * Resolves a currency's real symbol via Intl (no hardcoded currency→symbol map). es-ES 'symbol'
+ * mode falls back to the raw ISO code for some currencies (e.g. GBP), so 'narrowSymbol' is used
+ * to get a distinct symbol for every currency actually in use here (USD "$", EUR "€", GBP "£").
+ */
+function currencySymbol(currency) {
+  if (!currency) return '';
+  try {
+    return new Intl.NumberFormat('es-ES', { style: 'currency', currency, currencyDisplay: 'narrowSymbol' })
+      .formatToParts(0).find(p => p.type === 'currency')?.value || currency;
+  } catch { return currency; }
 }
-/** Formats an amount with its currency suffix in es-ES grouping ("6.420,00 €"). */
+/** Currency suffix for plain-text (non-JSX) spots — the real symbol, Intl-derived. */
+function curSuffix(currency) {
+  return currencySymbol(currency);
+}
+/** Formats an amount with its currency symbol in es-ES grouping ("6.420,00 €"), for the spots
+ *  that need a plain string rather than JSX (e.g. interpolated into a ui() translation). */
 function fmtCur(n, currency) {
   return `${formatPlain(n)} ${curSuffix(currency)}`.trim();
 }
@@ -122,10 +145,19 @@ function deltaLabelFor(balance, ui) {
   return ui('cpDifference');
 }
 
-/** Over-payment action sent to the backend (only relevant when there is excess). */
+/** Modal title: edit vs create, receipt (cobro) vs payment (pago). */
+function modalTitleFor(isEdit, isReceipt, ui) {
+  if (isEdit) return isReceipt ? ui('cpEditCollection') : ui('cpEditPayment');
+  return isReceipt ? ui('cpNewCollection') : ui('cpNewPayment');
+}
+
+/** Over-payment action sent to the backend (only relevant when there is excess):
+ *  'refund' → give change back (createRefundPayment), 'leave-credit' → keep as customer credit. */
 function overpaymentActionFor(balance) {
   if (!balance.isExcess) return undefined;
-  return balance.excessMode === 'refund' ? 'refund' : 'leave-credit';
+  if (balance.excessMode === 'refund') return 'refund';
+  if (balance.excessMode === 'credit') return 'leave-credit';
+  return undefined;
 }
 
 /** Reads a fetch response body as JSON, or null when the response failed. */
@@ -140,6 +172,10 @@ function mapAccounts(json) {
   return (json?.items || []).map(a => ({
     id: a.id, name: a.label || a.name, defaultMethod: a.defaultPaymentMethod,
     paymentMethodIds: a.paymentMethodIds, defaultForMethodIds: a.defaultForMethodIds || [],
+    // Account currency (ETP-4504) — ISO code + DB id, used to decide whether the
+    // payment crosses currencies and to render the amount in the account currency.
+    // Absent on older backends → null (treated as "same currency, no conversion").
+    currency: a.currency || null, currencyId: a.currencyId || null,
     // PSD2/PIS enrichment (ETP-4406) — absent on older backends, so default
     // to "not connected" rather than throwing off the eligibility gate.
     psd2Connected: !!a.psd2Connected, maskedPan: a.maskedPan || null,
@@ -262,15 +298,23 @@ function extractSaveError(json, ui) {
 }
 
 /** Derived save/confirm gating + PIS eligibility state — extracted to keep the component's own cognitive complexity down. */
-function computePaymentModalState({ dir, selectedAccount, selectedMethodObj, currency, saving, loading, balance, date, methodId, accountId, pisPolling, pisTemplate, pisIban, pisBban, pisAccountNumber, pisSortCode, ui }) {
+function computePaymentModalState({ dir, selectedAccount, selectedMethodObj, currency, saving, loading, balance, date, methodId, accountId, isForeign, rate, pisPolling, pisTemplate, pisIban, pisBban, pisAccountNumber, pisSortCode, ui }) {
   const pisEligible = dir === 'out'
     && !!selectedAccount?.psd2Connected
     && looksLikeTransfer(selectedMethodObj?.name)
     && PIS_ELIGIBLE_CURRENCIES.has(currency);
+  // A foreign-currency payment (invoice ≠ account currency) MUST carry a positive conversion
+  // rate — otherwise the backend would silently apply 1:1 and post the wrong ledger amount.
+  // The backend also rejects a rate of exactly 1 for a foreign payment (compareTo(ONE)==0 →
+  // 400), so mirror that here (small tolerance) instead of letting the user hit a raw-English
+  // 400 after submit. Both cases block Save AND Confirm (ETP-4504 B1 + QA cross-layer gap).
+  const rateMissing = isForeign && rate <= 0;
+  const rateIsOne = isForeign && rate > 0 && Math.abs(rate - 1) < RATE_ONE_TOLERANCE;
+  const rateInvalid = rateMissing || rateIsOne;
   // Importe, Fecha, Método de pago y Cuenta are mandatory to save or confirm. "Importe"
   // is satisfied by the total applied (cash + used credit), not the cash field alone —
   // a credit/saldo a favor line covering 100% legitimately leaves the cash amount at 0.
-  const missingRequired = balance.funds <= 0 || !date || !methodId || !accountId;
+  const missingRequired = balance.funds <= 0 || !date || !methodId || !accountId || rateInvalid;
   const saveDisabled = saving || loading || missingRequired;
   // For PIS, the template-specific creditor fields must be filled before confirming
   // (SEPA→IBAN, FPS→sort code + account number, DOMESTIC→any one identifier).
@@ -279,7 +323,7 @@ function computePaymentModalState({ dir, selectedAccount, selectedMethodObj, cur
   });
   const confirmDisabled = saving || missingRequired || !balance.canConfirm || !!pisPolling || !pisReady;
   const confirmLabel = pisEligible ? ui('cpPisConfirmButton') : ui('cpConfirm');
-  return { pisEligible, saveDisabled, confirmDisabled, confirmLabel };
+  return { pisEligible, rateMissing, rateIsOne, saveDisabled, confirmDisabled, confirmLabel };
 }
 
 function Check({ checked, size = 18 }) {
@@ -350,7 +394,7 @@ function CreditRow({ l, currency, ui, onToggle, onUseChange, onUseBlur }) {
         <span style={{ font: '400 12px/16px Inter', color: FG3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{l.date}</span>
       </div>
       <div style={{ textAlign: 'right', font: '400 14px/20px Inter', color: INK, fontVariantNumeric: 'tabular-nums' }}>
-        {ui('cpAvailShort')} <MoneyAmount value={l.avail} currency={currency} tone="neutral" data-testid="MoneyAmount__cp-avail" />
+        {ui('cpAvailShort')} <MoneyAmount value={l.avail} currency={currency} tone="neutral" currencyDisplay="narrowSymbol" data-testid="MoneyAmount__cp-avail" />
       </div>
       <div style={{ display: 'flex', justifyContent: 'flex-end' }} onClick={e => e.stopPropagation()}>
         {l.sel ? (
@@ -382,7 +426,7 @@ function CreditSection({ rows, currency, ui, balance }) {
         <div style={{ flex: 1 }} />
         {used > 0 && (
           <span style={{ font: '600 12px/16px Inter', color: INK, fontVariantNumeric: 'tabular-nums' }}>
-            − <MoneyAmount value={used} currency={currency} tone="neutral" data-testid="MoneyAmount__cp-used" />
+            − <MoneyAmount value={used} currency={currency} tone="neutral" currencyDisplay="narrowSymbol" data-testid="MoneyAmount__cp-used" />
           </span>
         )}
       </div>
@@ -401,13 +445,20 @@ function CreditSection({ rows, currency, ui, balance }) {
   );
 }
 
-// ─── excess band — receipts offer credit/refund; payments block with inline error ─
-function ExcessBand({ balance, currency, ui, isReceipt }) {
+// ─── excess band — an org-currency receipt resolves an overpayment by giving change back
+// ("Dar vuelto") OR leaving it as credit ("Dejar a crédito"); both share the same gate. A
+// foreign-currency receipt or any payment gets neither, so the excess blocks confirmation
+// (adjust with "Igualar" only). ─
+function ExcessBand({ balance, currency, ui, canLeaveCredit }) {
   if (!balance.isExcess) {
     return null;
   }
   const amount = fmtCur(balance.excessAmount, currency);
-  if (!isReceipt) {
+  const showCredit = canLeaveCredit;
+  const showRefund = balance.canRefund;
+  // No resolution applies (foreign-currency receipt or a payment) → surface guidance; the only
+  // path is "Igualar"/adjust.
+  if (!showCredit && !showRefund) {
     return (
       <div style={{ padding: '10px 14px', background: RED_BG, border: `1px solid ${RED_FG}33`, borderRadius: 8, font: '600 13px/18px Inter', color: RED_FG }}>
         {ui('cpExcessInline', { amount })}
@@ -435,8 +486,8 @@ function ExcessBand({ balance, currency, ui, isReceipt }) {
         <span style={{ font: '500 14px/20px Inter', color: EXCESS_FG }}>{ui('cpExcessQuestion', { amount })}</span>
       </div>
       <div style={{ display: 'flex', gap: 16 }}>
-        {card('credit', ui('cpLeaveCredit'), ui('cpLeaveCreditHint', { amount }), 'cp-excess-credit')}
-        {card('refund', ui('cpGiveChange'), ui('cpGiveChangeHint', { amount }), 'cp-excess-refund')}
+        {showCredit && card('credit', ui('cpLeaveCredit'), ui('cpLeaveCreditHint', { amount }), 'cp-excess-credit')}
+        {showRefund && card('refund', ui('cpGiveChange'), ui('cpGiveChangeHint', { amount }), 'cp-excess-refund')}
       </div>
     </div>
   );
@@ -506,7 +557,7 @@ function PisTransferSection({
             <line x1="5" y1="12" x2="19" y2="12" /><polyline points="12 5 19 12 12 19" />
           </svg>
           <span style={{ font: '400 14px/20px Inter', color: FG2 }}>
-            <MoneyAmount value={balance.amount} currency={currency} tone="neutral" data-testid="MoneyAmount__cp-pis-amount" />
+            <MoneyAmount value={balance.amount} currency={currency} tone="neutral" currencyDisplay="narrowSymbol" data-testid="MoneyAmount__cp-pis-amount" />
           </span>
         </div>
       </div>
@@ -661,6 +712,23 @@ function PaymentModalFooter({
  *   onClose      — close callback (returns to the history popup)
  *   onSaved      — (result, state) callback after save/confirm to refresh the popup
  */
+/** Normalizes a draft's payment date to yyyy-MM-dd (today when absent/invalid). */
+function normalizeDraftDate(raw) {
+  const today = () => new Date().toISOString().slice(0, 10);
+  if (!raw) return today();
+  const m = String(raw).match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (m) return `${m[1]}-${m[2]}-${m[3]}`;
+  const d = new Date(raw);
+  return Number.isNaN(d.getTime()) ? today() : d.toISOString().slice(0, 10);
+}
+
+/** Resolves a payment-method id from its display name (draft rows carry the name). */
+function matchMethodIdByName(methods, name) {
+  if (!name) return '';
+  const hit = methods.find(m => m.name === name);
+  return hit ? hit.id : '';
+}
+
 export default function NewPaymentEntryModal({
   dir = 'in',
   specName,
@@ -671,11 +739,17 @@ export default function NewPaymentEntryModal({
   apiBaseUrl,
   onClose,
   onSaved,
+  // Existing draft being re-opened for editing (from the history popup). When
+  // present the modal runs in edit mode: fields are prefilled from this record
+  // and save/confirm update the SAME payment (its id is sent as `paymentId`).
+  payment = null,
 }) {
   const ui = useUI();
+  const { token } = useAuth();
   const base = useMemo(() => (apiBaseUrl || '').replace(/\/[^/]+$/, ''), [apiBaseUrl]);
   const apiFetch = useApiFetch(base);
   const isReceipt = dir === 'in';
+  const isEdit = !!payment?.id;
 
   const currency = invoiceData?.['currency$_identifier'] || '';
   const docNo = invoiceData?.documentNo || '';
@@ -683,7 +757,7 @@ export default function NewPaymentEntryModal({
   const total = Number(outstanding) || 0;
 
   // ── catalogs ────────────────────────────────────────────────────────────────
-  const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [date, setDate] = useState(() => normalizeDraftDate(payment?.paymentDate));
   const [accounts, setAccounts] = useState([]);
   const [accountId, setAccountId] = useState('');
   const [methods, setMethods] = useState([]);
@@ -722,17 +796,32 @@ export default function NewPaymentEntryModal({
   // they successfully authorized.
   const pisReturnedRef = useRef(false);
 
-  const balance = usePaymentBalance({ total, dir, sources });
+  // Org currency (ETP-4504) — a receipt may only leave an overpayment as customer credit when
+  // the invoice is in the organization currency; a foreign-currency invoice must adjust instead.
+  const { orgCurrencyCode } = useDocumentCurrency({
+    docCurrencyCode: currency, orderDate: date, apiBaseUrl, token,
+  });
+  const invoiceInOrgCurrency = !!orgCurrencyCode && currency === orgCurrencyCode;
+  const canLeaveCredit = isReceipt && invoiceInOrgCurrency;
+
+  const balance = usePaymentBalance({
+    total, dir, sources, usedSources: payment?.creditSourcesUsed || EMPTY_USED_SOURCES,
+    canLeaveCredit,
+  });
 
   // Fetch accounts, payment methods, credit sources, and (if needed) the schedule.
   useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
-        const post = (action) => apiFetch(`/${specName}/header/${invoiceId}/action/${action}`,
-          { method: 'POST', body: '{}' }).catch(() => null);
+        const post = (action, body = '{}') => apiFetch(`/${specName}/header/${invoiceId}/action/${action}`,
+          { method: 'POST', body }).catch(() => null);
+        // Edit mode: the draft's own consumption must be added back into each source's avail
+        // (and its already-used abono PSDs re-listed) so the modal can re-check them.
+        const creditSourcesBody = isEdit ? JSON.stringify({ editPaymentId: payment.id }) : '{}';
         const [accRes, methRes, srcRes] = await Promise.all([
-          post('invoiceAccounts'), post('invoicePaymentMethods'), post('invoiceCreditSources'),
+          post('invoiceAccounts'), post('invoicePaymentMethods'),
+          post('invoiceCreditSources', creditSourcesBody),
         ]);
         if (cancelled) return;
 
@@ -743,9 +832,18 @@ export default function NewPaymentEntryModal({
         setMethods(methList);
         setSources(mapSources(await readJson(srcRes)));
         bpPreferredAccountIdRef.current = accJson?.bpPreferredAccountId || '';
-        const defaultMethodId = pickDefaultMethodId(accJson, accList, methList);
-        setMethodId(defaultMethodId);
-        setAccountId(pickDefaultAccountId(accList, defaultMethodId, bpPreferredAccountIdRef.current));
+        if (isEdit) {
+          // Edit mode: prefill from the draft instead of picking defaults.
+          setMethodId(matchMethodIdByName(methList, payment.paymentMethod)
+            || pickDefaultMethodId(accJson, accList, methList));
+          setAccountId(payment.accountId
+            || pickDefaultAccountId(accList, '', bpPreferredAccountIdRef.current));
+          balance.onAmountChange(formatPlain(Number(payment.amount) || 0));
+        } else {
+          const defaultMethodId = pickDefaultMethodId(accJson, accList, methList);
+          setMethodId(defaultMethodId);
+          setAccountId(pickDefaultAccountId(accList, defaultMethodId, bpPreferredAccountIdRef.current));
+        }
 
         if (!scheduleIdProp) {
           const sched = await fetchPendingSchedule(apiFetch, specName, invoiceId);
@@ -782,12 +880,40 @@ export default function NewPaymentEntryModal({
   // (mirrors the backend's own heuristic) — not meant to be exhaustive.
   const selectedAccount = useMemo(() => accounts.find(a => a.id === accountId), [accounts, accountId]);
   const selectedMethodObj = useMemo(() => methods.find(m => m.id === methodId), [methods, methodId]);
+
+  // ── multi-currency conversion (ETP-4504) ────────────────────────────────────
+  // When the invoice currency differs from the selected account's currency, the user must
+  // supply a conversion rate; the amount is then also shown in the account currency.
+  const accountCurrency = selectedAccount?.currency || '';
+  const isForeign = !!(accountCurrency && currency && accountCurrency !== currency);
+  // Prefill the (editable) rate from the system exchange rate for invoice→account currency.
+  const conversion = useConversionRate({
+    fromCode: currency, toCode: accountCurrency, date, apiBaseUrl, token,
+  });
+  const [rateStr, setRateStr] = useState('');
+  // Seed the rate field from the freshly-fetched prefill, re-running when the currency pair
+  // (accountCurrency) or the fetched rate changes. Crucially this also CLEARS the field when
+  // moving to a pair that has no DB rate, so a stale rate from a previously-selected account
+  // never silently carries across currency pairs (ETP-4504 W1). Manual edits persist until one
+  // of these inputs changes; when not foreign the field is kept empty.
+  useEffect(() => {
+    setRateStr(isForeign && conversion.rate != null ? String(conversion.rate) : '');
+  }, [isForeign, accountCurrency, conversion.rate]);
+  // Parse the typed rate (accepts "0.92" or "0,92"); null when blank/invalid/non-positive.
+  const rate = useMemo(() => {
+    const n = parseFloat(String(rateStr).replace(',', '.'));
+    return Number.isFinite(n) && n > 0 ? n : null;
+  }, [rateStr]);
+  // Amount expressed in the account currency = payment amount × rate (recomputes live on both).
+  const amountInAccount = (isForeign && rate != null) ? round2(balance.amount * rate) : null;
+
   // Derived gating/eligibility state, computed together since save/confirm disabled-ness,
   // the PIS block's visibility, and its "ready to confirm" state all share the same inputs.
-  const { pisEligible, saveDisabled, confirmDisabled, confirmLabel } =
+  const { pisEligible, rateMissing, rateIsOne, saveDisabled, confirmDisabled, confirmLabel } =
     computePaymentModalState({
       dir, selectedAccount, selectedMethodObj, currency, saving, loading, balance, date, methodId,
-      accountId, pisPolling, pisTemplate, pisIban, pisBban, pisAccountNumber, pisSortCode, ui,
+      accountId, isForeign, rate, pisPolling, pisTemplate, pisIban, pisBban, pisAccountNumber,
+      pisSortCode, ui,
     });
 
   // Fetch the supplier's PIS-eligible bank accounts + the payment-template ref-list once,
@@ -903,6 +1029,11 @@ export default function NewPaymentEntryModal({
         process, // 'draft' | 'confirm'
         creditSources: balance.consumedSources,
         overpaymentAction: overpaymentActionFor(balance),
+        // Conversion rate when the invoice and account currencies differ (ETP-4504); the
+        // backend recomputes the account-currency amount authoritatively from this rate.
+        conversionRate: (isForeign && rate != null) ? String(rate) : undefined,
+        // Edit mode: update this existing draft instead of creating a new one.
+        paymentId: payment?.id || undefined,
       };
       // PIS only ever accompanies the primary "confirm" action — Guardar
       // borrador keeps recording a plain manual payment, byte-for-byte
@@ -938,7 +1069,7 @@ export default function NewPaymentEntryModal({
       setSaving(false);
     }
   }, [apiFetch, specName, invoiceId, scheduleId, accountId, methodId, date, balance, ui, onSaved,
-    pisEligible, pisTemplate, pisIban, pisBban, pisAccountNumber, pisSortCode]);
+    pisEligible, pisTemplate, pisIban, pisBban, pisAccountNumber, pisSortCode, isForeign, rate]);
 
   // Cancel a pending PIS wait: the payment was already processed to PPM (so the invoice shows as
   // paid), but the transfer was never authorized — so we ask the backend to reactivate + delete it
@@ -974,7 +1105,7 @@ export default function NewPaymentEntryModal({
     onClose?.();
   }, [pisPolling, cancelPisWait, onClose]);
 
-  const title = isReceipt ? ui('cpNewCollection') : ui('cpNewPayment');
+  const title = modalTitleFor(isEdit, isReceipt, ui);
   const deltaLabel = deltaLabelFor(balance, ui);
 
   // Floppy + check icons for the footer actions (Figma).
@@ -1016,7 +1147,7 @@ export default function NewPaymentEntryModal({
                 <span style={{ display: 'inline-flex', alignItems: 'center', width: 'fit-content', font: '400 12px/16px Inter', padding: '4px 8px', borderRadius: 360, background: WIDGET_BG, color: FG2, marginTop: 2 }}>{ui('cpStatusDraft')}</span>
               </div>
               <WidgetCell label={ui('cpPendingPrefix')} valueColor={AMBER} data-testid="WidgetCell__pending">
-                <MoneyAmount value={total} currency={currency} tone="neutral" className="text-[#C28800]" data-testid="MoneyAmount__cp-pending" />
+                <MoneyAmount value={total} currency={currency} tone="neutral" className="text-[#C28800]" currencyDisplay="narrowSymbol" data-testid="MoneyAmount__cp-pending" />
               </WidgetCell>
             </div>
           </div>
@@ -1074,6 +1205,34 @@ export default function NewPaymentEntryModal({
             </Field>
           </div>
 
+          {/* multi-currency conversion (ETP-4504) — only when invoice currency ≠ account currency */}
+          {isForeign && (
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20, padding: '0 20px' }} data-testid="cp-conversion-fields">
+              <Field label={ui('cpConversionRate')} required data-testid="Field__conversion-rate">
+                <div style={{ display: 'flex', alignItems: 'center', height: 40, border: `1px solid ${BORDER2}`, borderRadius: 8, background: '#fff', boxShadow: '0 1px 2px rgba(18,18,23,.05)', minWidth: 0, padding: '0 12px', gap: 4 }}>
+                  <input
+                    type="text" inputMode="decimal" value={rateStr}
+                    onChange={e => setRateStr(e.target.value)}
+                    data-testid="cp-conversion-rate-input"
+                    style={{ flex: 1, minWidth: 0, border: 0, outline: 'none', background: 'transparent', textAlign: 'right', padding: 0, font: '400 14px/24px Inter', color: INK, fontVariantNumeric: 'tabular-nums' }}
+                  />
+                </div>
+                {(rateMissing || rateIsOne) && (
+                  <p style={{ font: '400 12px/16px Inter', color: RED_FG, marginTop: 4 }} data-testid="cp-conversion-rate-error">
+                    {ui(rateIsOne ? 'cpConversionRateInvalid' : 'cpConversionRateRequired')}
+                  </p>
+                )}
+              </Field>
+              <Field label={ui('cpAmountInAccount')} data-testid="Field__amount-in-account">
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', height: 40, border: `1px solid ${BORDER1}`, borderRadius: 8, background: WIDGET_BG, minWidth: 0, padding: '0 12px', font: '400 14px/24px Inter', color: INK, fontVariantNumeric: 'tabular-nums' }} data-testid="cp-amount-in-account">
+                  {amountInAccount == null
+                    ? '—'
+                    : <MoneyAmount value={amountInAccount} currency={accountCurrency} tone="neutral" currencyDisplay="narrowSymbol" data-testid="MoneyAmount__cp-amount-in-account" />}
+                </div>
+              </Field>
+            </div>
+          )}
+
           {/* unified credit / saldo a favor — credit (purple) + abono (green) rows */}
           {balance.lines.length > 0 && (
             <div style={{ padding: '0 20px' }}>
@@ -1089,17 +1248,17 @@ export default function NewPaymentEntryModal({
           {/* balance summary */}
           <div style={{ padding: '0 20px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap', padding: '8px 12px', borderRadius: 8, background: WIDGET_BG }}>
-              <div><div style={{ font: '400 12px/16px Inter', color: FG2 }}>{ui('cpTotalInvoice')}</div><div style={{ font: '500 14px/20px Inter' }}><MoneyAmount value={balance.applied} currency={currency} tone="neutral" data-testid="MoneyAmount__cp-total" /></div></div>
+              <div><div style={{ font: '400 12px/16px Inter', color: FG2 }}>{ui('cpTotalInvoice')}</div><div style={{ font: '500 14px/20px Inter' }}><MoneyAmount value={balance.applied} currency={currency} tone="neutral" currencyDisplay="narrowSymbol" data-testid="MoneyAmount__cp-total" /></div></div>
               <span style={{ color: FG2, font: '400 12px/16px Inter' }}>·</span>
-              <div><div style={{ font: '400 12px/16px Inter', color: FG2 }}>{ui('cpMoney')}</div><div style={{ font: '500 14px/20px Inter' }}><MoneyAmount value={balance.amount} currency={currency} tone="neutral" data-testid="MoneyAmount__cp-money" /></div></div>
+              <div><div style={{ font: '400 12px/16px Inter', color: FG2 }}>{ui('cpMoney')}</div><div style={{ font: '500 14px/20px Inter' }}><MoneyAmount value={balance.amount} currency={currency} tone="neutral" currencyDisplay="narrowSymbol" data-testid="MoneyAmount__cp-money" /></div></div>
               {balance.usedCredit > 0 && (<>
                 <span style={{ color: FG2, font: '400 12px/16px Inter' }}>+</span>
-                <div><div style={{ font: '400 12px/16px Inter', color: '#8D6CEF' }}>{ui('cpFavorBadge')}</div><div style={{ font: '500 14px/20px Inter' }}><MoneyAmount value={balance.usedCredit} currency={currency} tone="neutral" className="text-[#7047EB]" data-testid="MoneyAmount__cp-credit" /></div></div>
+                <div><div style={{ font: '400 12px/16px Inter', color: '#8D6CEF' }}>{ui('cpFavorBadge')}</div><div style={{ font: '500 14px/20px Inter' }}><MoneyAmount value={balance.usedCredit} currency={currency} tone="neutral" className="text-[#7047EB]" currencyDisplay="narrowSymbol" data-testid="MoneyAmount__cp-credit" /></div></div>
               </>)}
               <span style={{ color: FG2, font: '400 12px/16px Inter' }}>=</span>
-              <div><div style={{ font: '400 12px/16px Inter', color: FG2 }}>{ui('cpApplied')}</div><div style={{ font: '500 14px/20px Inter' }}><MoneyAmount value={balance.funds} currency={currency} tone="neutral" data-testid="MoneyAmount__cp-applied" /></div></div>
+              <div><div style={{ font: '400 12px/16px Inter', color: FG2 }}>{ui('cpApplied')}</div><div style={{ font: '500 14px/20px Inter' }}><MoneyAmount value={balance.funds} currency={currency} tone="neutral" currencyDisplay="narrowSymbol" data-testid="MoneyAmount__cp-applied" /></div></div>
               <div style={{ flex: 1 }} />
-              <div style={{ textAlign: 'right' }}><div style={{ font: '400 12px/16px Inter', color: FG2 }}>{deltaLabel}</div><div style={{ font: '600 14px/20px Inter' }}><MoneyAmount value={Math.abs(balance.diff)} currency={currency} tone="neutral" className={balance.isPartial ? 'text-[#C5234A]' : 'text-[#17663A]'} data-testid="MoneyAmount__cp-delta" /></div></div>
+              <div style={{ textAlign: 'right' }}><div style={{ font: '400 12px/16px Inter', color: FG2 }}>{deltaLabel}</div><div style={{ font: '600 14px/20px Inter' }}><MoneyAmount value={Math.abs(balance.diff)} currency={currency} tone="neutral" className={balance.isPartial ? 'text-[#C5234A]' : 'text-[#17663A]'} currencyDisplay="narrowSymbol" data-testid="MoneyAmount__cp-delta" /></div></div>
               <button type="button" data-testid="cp-equalize" onClick={balance.equalize} style={{ height: 32, padding: '0 12px', borderRadius: 8, border: `1px solid ${BORDER2}`, outline: 'none', background: '#fff', boxShadow: '0 1px 2px rgba(18,18,23,.05)', cursor: 'pointer', color: INK, font: '500 14px/24px Inter' }}>{ui('cpEqualize')}</button>
             </div>
           </div>
@@ -1133,7 +1292,7 @@ export default function NewPaymentEntryModal({
               balance={balance}
               currency={currency}
               ui={ui}
-              isReceipt={isReceipt}
+              canLeaveCredit={canLeaveCredit}
               data-testid="ExcessBand__7727b3" />
           </div>
           {error && <div style={{ padding: '0 20px', font: '500 12px/16px Inter', color: RED_FG }}>{error}</div>}

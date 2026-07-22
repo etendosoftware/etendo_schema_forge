@@ -1,8 +1,8 @@
 {
-  "version": "0.5.0",
+  "version": "0.6.0",
   "generatedAt": "2026-06-25T12:12:33.694Z",
-  "updatedAt": "2026-07-07T12:43:22.544Z",
-  "checksum": "a68b9a0c35c35073",
+  "updatedAt": "2026-07-21T12:35:20.219Z",
+  "checksum": "f5d9fa9ee28f4f14",
   "frontendContract": {
     "window": {
       "id": "E66E701CCBA14B8BA480CBDE37C50D7A",
@@ -13,13 +13,6 @@
       "hideCreate": true,
       "hideDetailForm": true,
       "hideDelete": true,
-      "menuActions": [
-        {
-          "key": "goToFiscalCalendar",
-          "labelKey": "goToFiscalCalendar",
-          "component": "GoToFiscalCalendarModal"
-        }
-      ],
       "processOverrides": {
         "openClose": {
           "label": "Open Close Period",
@@ -50,9 +43,6 @@
       },
       "detailEntity": "documents",
       "listSortBy": "periodNo asc",
-      "listKpiCards": {
-        "customComponent": "GoToFiscalCalendarButton"
-      },
       "labelOverrides": {
         "es_ES": {
           "Name": "Período",
@@ -159,7 +149,10 @@
               "P": "red",
               "M": "orange"
             },
-            "gridOrder": 1
+            "gridOrder": 1,
+            "validation": {
+              "maxLength": 32
+            }
           },
           {
             "name": "calendar",
@@ -175,7 +168,11 @@
             "sourceRequired": true,
             "reference": "Calendar",
             "inputMode": "selector",
-            "gridOrder": 2
+            "gridOrder": 2,
+            "validation": {
+              "required": true,
+              "maxLength": 22
+            }
           },
           {
             "name": "year",
@@ -191,7 +188,11 @@
             "sourceRequired": true,
             "reference": "Year",
             "inputMode": "selector",
-            "gridOrder": 3
+            "gridOrder": 3,
+            "validation": {
+              "required": true,
+              "maxLength": 22
+            }
           },
           {
             "name": "periodNo",
@@ -206,6 +207,10 @@
             "form": true,
             "sourceRequired": true,
             "gridOrder": 5,
+            "validation": {
+              "required": true,
+              "maxLength": 10
+            },
             "readOnlyLogic": {
               "raw": "@C_Period_Not_Editable@='Y'",
               "evaluable": true,
@@ -224,7 +229,11 @@
             "grid": true,
             "form": true,
             "sourceRequired": true,
-            "gridOrder": 4
+            "gridOrder": 4,
+            "validation": {
+              "required": true,
+              "maxLength": 60
+            }
           },
           {
             "name": "startingDate",
@@ -239,6 +248,10 @@
             "form": true,
             "sourceRequired": true,
             "gridOrder": 6,
+            "validation": {
+              "required": true,
+              "maxLength": 10
+            },
             "readOnlyLogic": {
               "raw": "@C_Period_Not_Editable@='Y'",
               "evaluable": true,
@@ -256,6 +269,9 @@
             "required": false,
             "grid": false,
             "form": true,
+            "validation": {
+              "maxLength": 10
+            },
             "readOnlyLogic": {
               "raw": "@C_Period_Not_Editable@='Y'",
               "evaluable": true,
@@ -295,6 +311,10 @@
               }
             ],
             "defaultValue": "S",
+            "validation": {
+              "required": true,
+              "maxLength": 60
+            },
             "readOnlyLogic": {
               "raw": "@C_Period_Not_Editable@='Y'",
               "evaluable": true,
@@ -318,6 +338,10 @@
               "source": "O"
             },
             "defaultValue": "O",
+            "validation": {
+              "required": true,
+              "maxLength": 60
+            },
             "validationRule": {
               "code": "Value<>'N'",
               "contextParams": [],
@@ -404,7 +428,10 @@
               "C": "red",
               "P": "red"
             },
-            "gridOrder": 2
+            "gridOrder": 2,
+            "validation": {
+              "maxLength": 60
+            }
           },
           {
             "name": "documentCategory",
@@ -721,7 +748,11 @@
                 }
               }
             ],
-            "gridOrder": 1
+            "gridOrder": 1,
+            "validation": {
+              "required": true,
+              "maxLength": 60
+            }
           },
           {
             "name": "openClose",
@@ -740,6 +771,10 @@
               "source": "O"
             },
             "defaultValue": "O",
+            "validation": {
+              "required": true,
+              "maxLength": 60
+            },
             "validationRule": {
               "code": "Value<>'N'",
               "contextParams": [],
@@ -778,13 +813,6 @@
       "hideCreate": true,
       "hideDetailForm": true,
       "hideDelete": true,
-      "menuActions": [
-        {
-          "key": "goToFiscalCalendar",
-          "labelKey": "goToFiscalCalendar",
-          "component": "GoToFiscalCalendarModal"
-        }
-      ],
       "processOverrides": {
         "openClose": {
           "label": "Open Close Period",
@@ -815,9 +843,6 @@
       },
       "detailEntity": "documents",
       "listSortBy": "periodNo asc",
-      "listKpiCards": {
-        "customComponent": "GoToFiscalCalendarButton"
-      },
       "labelOverrides": {
         "es_ES": {
           "Name": "Período",

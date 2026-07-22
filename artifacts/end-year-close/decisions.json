@@ -1,0 +1,85 @@
+{
+  "$schema": "decisions-v2",
+  "version": 2,
+  "window": {
+    "category": "finance",
+    "name": "End Year Close",
+    "detailEntity": null,
+    "secondaryTabs": {}
+  },
+  "entities": {
+    "endYearClose": {
+      "exclude": true
+    },
+    "accounting": {
+      "javaQualifier": "year-accounting",
+      "fields": {
+        "account": {
+          "grid": true,
+          "form": true,
+          "visibility": "readOnly",
+          "gridOrder": 1
+        },
+        "debit": {
+          "grid": true,
+          "form": true,
+          "visibility": "readOnly",
+          "gridOrder": 2
+        },
+        "credit": {
+          "grid": true,
+          "form": true,
+          "visibility": "readOnly",
+          "gridOrder": 3
+        },
+        "type": {
+          "grid": true,
+          "form": true,
+          "visibility": "readOnly",
+          "gridOrder": 4
+        },
+        "description": {
+          "grid": true,
+          "form": true,
+          "visibility": "readOnly",
+          "gridOrder": 5
+        },
+        "generalLedger": {
+          "visibility": "discarded"
+        },
+        "accountingFact": {
+          "visibility": "discarded"
+        },
+        "cYearCloseVID": {
+          "visibility": "discarded"
+        },
+        "active": {
+          "visibility": "discarded"
+        },
+        "organization": {
+          "visibility": "discarded"
+        },
+        "client": {
+          "visibility": "discarded"
+        },
+        "id": {
+          "visibility": "discarded"
+        },
+        "creationDate": {
+          "visibility": "discarded"
+        },
+        "createdBy": {
+          "visibility": "discarded"
+        },
+        "updated": {
+          "visibility": "discarded"
+        },
+        "updatedBy": {
+          "visibility": "discarded"
+        }
+      }
+    }
+  },
+  "rules": {},
+  "discardPatterns": ["EM_*"]
+}

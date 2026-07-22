@@ -201,3 +201,85 @@ Owner: whoever next touches the goods-shipment window.
 - `useEntity.helpers.vitest.jsx` verifies non-JSON responses and unrecognized JSON payloads fall back to `Error <status>`.
 
 **Lesson:** For selector context objects created by parent renders, compare by content at callback boundaries. For error handling, keep final fallback helpers outside parsing blocks that can throw.
+
+---
+
+## [2026-07-13] ETP-4401 — SII/TBAI/Verifactu Onboarding Save Broken by Extractor PK-Naming Convention Fix
+
+**Component:** `tools/app-shell/src/windows/custom/fiscal-config/fiscalConfig.utils.js` (`getFiscalRecordId`)
+
+**Affected windows:** `sii-config`, `tbai-config`, `verifactu-config` (backing artifacts for the custom `fiscal-config` window)
+
+**Symptom:** Saving the SII/TBAI/Verifactu onboarding wizard failed with a "record id not found" error. The record was created successfully on the backend, but the frontend could not recover its id afterward, so any subsequent update (e.g., certificate association, follow-up PATCH) had no id to target.
+
+**Root cause:** `getFiscalRecordId()` used to `switch` on the fiscal system name and read a hardcoded, ad-hoc PK field name per window: `tbaiConfigID`, `configuracinSII`, `verifactuConfig`. Those names existed only because the old extractor derived the PK's `java_qualifier` from a name heuristic (`columnname === tableName + '_ID'`), which never matched these 3 windows' actual PK columns due to case mismatches (e.g. table `TBAI_Config` vs. column `Tbai_Config_ID`). The heuristic's failure silently fell through to camelCasing the raw column name instead, and those camelCase names got baked into `decisions.json` and hardcoded into `fiscalConfig.utils.js`.
+
+`schema_forge_core` commit `5d363ad2f` ("Fix extractor — use IsKey for PK and tab table for tableName") fixed the underlying bug: PK detection now uses the `IsKey='Y'` column flag instead of the name heuristic. This is a legitimate, intentional, platform-wide convention change — after the fix, NEO Headless correctly and uniformly serializes every window's PK as `id` (`ETGO_SF_FIELD.java_qualifier = 'id'`), which is also required for other windows (e.g. `open-close-period-control`). It is not a regression in the extractor. But it meant the 3 fiscal windows' API responses stopped including `tbaiConfigID`/`configuracinSII`/`verifactuConfig` entirely — `getFiscalRecordId()`'s per-system switch had nothing left to read, so it returned `undefined`/`null` and the id was silently lost after every record creation.
+
+**Fix:** `getFiscalRecordId(record, _system)` now returns `record?.id ?? null` unconditionally for all systems — the `system` parameter is kept only for call-site compatibility. Also removed the now-dead `tbaiConfigID`/`configuracinSII`/`verifactuConfig` entries from `artifacts/{tbai-config,sii-config,verifactu-config}/decisions.json` (confirmed absent from each window's `schema-raw.json` — genuinely dead, not a re-derivable field), and fixed stale mocks in `FiscalConfigDebugPanel.jsx` that still referenced the old field names. Regression tests added (unit + Playwright e2e) covering record-id recovery for all three systems.
+
+**Lesson:** Any frontend code — custom components especially — that hardcodes a specific PK field name instead of reading `record.id` is fragile to this class of extractor/pipeline convention fix. The platform's direction is that PK fields are always serialized as `id`; code that special-cases a different name per window/system is relying on an accident of a buggy heuristic, not a contract. **Recommendation (not done as part of this fix, scope was kept to the 3 fiscal windows):** a quick grep sweep across `tools/app-shell/src/windows/custom/**` for other hardcoded non-`id` PK-like field names (e.g. `*ConfigID`, `*RecordId`, per-window id variables) would catch other windows silently exposed to the same class of bug before they surface as production incidents.
+
+**Reference:** Fix lives in `getFiscalRecordId()`, `tools/app-shell/src/windows/custom/fiscal-config/fiscalConfig.utils.js`; branch `feature/ETP-4401`.
+
+---
+
+## Callout-Filled Warehouse Shows Raw ID on Purchase Order (but not Sales Order)
+
+**Component:** `artifacts/purchase-order/decisions.json` — header `warehouse` field config (NOT a shared-component bug)
+
+**Symptom:** On a new Purchase Order, selecting the Contact (vendor) fires a callout that auto-fills Warehouse. The field showed the raw ID (`1FF18B06...`) instead of the name (`Almacen GO`). Opening the dropdown loaded the options and fixed the display; picking a value manually always worked. Sales Order has the identical warehouse selector and did NOT have the bug.
+
+**Root cause (comparative):** The two windows rendered warehouse with different widgets. `sales-order/decisions.json` declares `warehouse: { inputMode: "search" }` -> generated field `type: "search"` -> rendered by `SearchInput` (`EntityForm.jsx`), which resolves the label on-demand via the selector `?id=` endpoint when a value arrives without its `$_identifier` (exactly the callout case). `purchase-order/decisions.json` had no `inputMode`, so it defaulted to `type: "selector"` -> rendered by `SelectorInput` (Radix dropdown), which defers its option fetch until the user opens the dropdown, so the callout-set ID had no resolved label and showed raw. Because the working window (sales-order) never used `SelectorInput` at all, the cause was the per-window field config, not the shared component.
+
+**Fix:** Added `"inputMode": "search"` to the `warehouse` header field in `artifacts/purchase-order/decisions.json` (aligning it with sales-order) and regenerated. Warehouse now renders as `SearchInput` and shows the name of the callout-filled value immediately.
+
+**Rejected approach:** An earlier attempt added an on-demand `?id=` fetch to the shared `SelectorInput` component. It was reverted: the working window did not exercise that code path, so the real difference was the field config, and touching a component shared by many windows was unwarranted for a per-window config gap.
+
+**Tests updated:**
+- `SearchInput-chip.vitest.jsx` verifies a `search` FK field whose value has no `$_identifier` resolves the label on-demand via the selector endpoint and shows the record name.
+
+**Lesson:** When one window works and a sibling does not for the same field, compare the per-window `decisions.json` (and the generated field `type`/`inputMode`) BEFORE touching shared components. FK fields that get auto-filled by a callout should use `inputMode: "search"` so the label resolves on-demand, or the value must arrive with its `$_identifier`.
+
+---
+
+## `make regen` Silently Strips es_ES Enum Labels on a DB Missing `AD_Ref_List_Trl` Rows
+
+**Component:** none (not a code bug) — local DB data gap, hit while running `make regen ONLY=financial-account` for ETP-4530
+
+**Symptom:** Running `make regen ONLY=<window>` against a local dev DB regenerated `contract.json` with 43 enum `enumValues[].labels` blocks silently dropped (e.g. `{ "value": "CA", "name": "Card", "labels": {"es_ES": "Card"} }` became `{ "value": "CA", "name": "Card" }`) even though `decisions.json` for the affected fields was untouched. The three generated JSX forms that consume those enums (`AccountForm.jsx`, `TransactionForm.jsx`, `ImportedBankStatementsForm.jsx`) picked up the same regression. Nothing in the regen output flags this as an error — the run reports success, only the (harder to notice) "AD cache looks STALE" warning hints at drift.
+
+**Root cause:** The extractor's `AD_Ref_List_Trl` query (`SELECT ... FROM AD_Ref_List rl LEFT JOIN AD_Ref_List_Trl rlt_es ...`) returns real data when it exists, but this specific local sandbox DB is missing the es_ES translation rows for several `AD_Ref_List` values that DO have translations on whatever DB originally produced the committed `contract.json` (staging/CI, presumably). The `es_ES` language itself is installed (2067 other `AD_Ref_List_Trl` rows exist), so this is not a missing-locale-pack problem — specific rows are simply absent for these particular reference lists in this sandbox. Confirmed missing (value → English name), by `AD_Reference_ID`:
+  - `A6BDFA712FF948CE903C4C463E832FC1` ("Financial account type"): `CA` → "Card"
+  - `86F92F3C04C148E69F12FF84F50AD51D` ("Statement Grouping"): `1BD`/`1BE`/`1BM`/`1BW` → "Within 1 day" / "New statement each run" / "Within 30 days" / "Within 7 days"
+  - `A1B2C3D4E5F607890A1B2C3D4E5F6A7B` ("FA Connection Status"): `CO`/`DC` → "Active" / "Inactive"
+  - `D431058F6B7345598D1E0709DFF3B5DD` ("ETBLKP_All_Accounting Status", consumed by BOTH the `transaction` and `importedBankStatements` entities, hence the higher block count): 18 values (`NC`, `d`, `D`, `L`, `E`, `C`, `i`, `AD`, `DT`, `NO`, `b`, `c`, `l`, `p`, `y`, `Y`, `T`, `N`) → "Cost Not Calculated", "Disabled For Background", "Document Disabled", "Document Locked", "Error", "Error, No cost", "Invalid Account", "No Accounting Date", "No Document Type", "No Related PO", "Not Balanced", "Not Convertible (no rate)", "Pending Refresh", "Period Closed", "Post Prepared", "Posted", "Table Disabled", "Unposted"
+
+  `18*2 (two consuming entities) + 4 + 2 + 1 = 43` — matches the exact count observed.
+
+**Fix (workaround, not a code change):** Diffed the freshly-regenerated `contract.json` against the git-committed baseline and restored only the `labels` keys that existed in the baseline and were dropped by the fresh extraction (same `value`, same `name` — a pure translation restore, zero structural drift, verified byte-for-byte against the baseline otherwise). The three affected generated JSX forms carried NO other change from this regen run, so they were reverted outright to their committed version instead of hand-patched. `decisions.json`'s legitimate, additive change (the new `accountingConfiguration` entity) was kept as-is.
+
+**This is NOT something to "fix" in code.** It is a gap in this local sandbox's reference data. Anyone running `make regen` (with or without `SKIP_EXTRACT`) on a similarly incomplete local DB — for ANY window that touches one of the 4 `AD_Reference_ID`s above, or any other reference list missing its `AD_Ref_List_Trl` es_ES rows — will silently strip the same (or other) label blocks with no warning, and a naive commit of the regenerated artifacts would ship a translation regression.
+
+**Lesson:** Before trusting a `make regen` diff on `contract.json`, check whether the diff includes UNRELATED `enumValues[].labels` removals on entities/fields the current task never touched — that is a strong signal of incomplete local `AD_Ref_List_Trl` data, not a real change. When it happens: (1) do not commit the label loss, (2) diff against the git baseline and restore just the dropped `labels`, keeping every field the actual task changed, (3) do not regenerate the frontend a second time to "fix" it — that just re-runs the same broken extraction — (4) leave a note like this one so the next person recognizes the symptom immediately instead of re-diagnosing it. A proper long-term fix would be seeding this local sandbox's `AD_Ref_List_Trl` es_ES rows from a reference/CI DB, which is out of scope for a functional-repo window ticket.
+
+---
+
+## [2026-07-17] ETP-4531 — Scope redefinition: unify document/accounting date instead of keeping them independent
+
+**Note:** this is not a bug entry — it records a **scope reversal** on the same ticket, so a future reader who finds the earlier `blockCalloutFieldUpdate`/"independent accounting date" work (see `docs/neo-headless-extensibility.md` Common Pattern entry, commit `40e086041`, and the per-window notes previously in `docs/generated-custom-windows/{sales-invoice,purchase-invoice,goods-shipment,goods-receipt}.md`) does not mistake it for the current behavior.
+
+**Original scope (obsolete):** `sales-invoice`, `purchase-invoice`, `goods-shipment`, `goods-receipt` kept `documentDate` and `accountingDate` as two independent, user-editable header fields. A Java-side guard (`NeoHandlerUtils.blockCalloutFieldUpdate`, generalizing the `blockCalloutCurrencyUpdate`/ETP-4029 precedent) stripped the classic AD callout cascade (`SE_Invoice_AccountingDate` / `SL_InOut_AccountingDate`) that would otherwise auto-fill `accountingDate` from the document date, so the user could set each date separately. `accountingDate` was `visibility: editable`, visible, with its own `readOnlyLogic: "@Posted@='Y'"`.
+
+**Redefinition (2026-07-17, per updated Jira description on ETP-4531):** the requirement flipped to the opposite — each postable document must show exactly ONE visible date field; on save, that value is written internally to both the document-date and accounting-date columns; the user never sees or edits accounting date independently. Newly in scope: `sales-order` and `purchase-order` (never touched by the original work).
+
+**What changed (frontend/config side, this pass):**
+- `accountingDate` switched from `visibility: editable` (+ `readOnlyLogic`) to `visibility: system` in all four invoice/shipment/receipt windows' `decisions.json`, fully removing it from `frontendContract.entities.*.fields` and from every generated form/grid.
+- `purchase-order`'s `accountingDate` switched from `visibility: readOnly` + `form: false` to `visibility: system` — the prior config already suppressed rendering but still left the field listed (inert) in the frontend contract; `system` matches `sales-order`'s already-compliant shape (raw AD visibility `system`, no override) and the other four windows.
+- `sales-order` needed no change — confirmed already compliant (raw AD visibility is `system`, no decisions.json override, absent from `contract.json`'s frontend fields, absent from generated JSX).
+- `amortization`'s `accountingDate` is an explicit, confirmed exception (see Jira comment on ETP-4531, 2026-07-17): it is a distinct concept from `startingDate` (the amortization schedule start), already not independently editable, and was left functionally unchanged (annotation-only `_note` added).
+- `financial-account`'s `transaction.dateAcct` was already `visibility: system` with `transaction.transactionDate` as the sole visible date — already compliant, no change.
+
+**Java-side counterpart (separate change, tracked by a companion task, not this repo):** the `blockCalloutFieldUpdate` guard in `com.etendoerp.go` that stripped the cascade is being removed, so the native classic-AD `documentDate → accountingDate` callout cascade is now intentionally allowed to flow through unmodified on save.
+
+**Lesson:** when a ticket's scope reverses mid-implementation, don't just overwrite the old work silently — leave a dated trail (here + the affected window docs) explaining that the earlier "independence" behavior was intentional, correct-at-the-time, and has been superseded by an explicit redefinition, not reverted because it was wrong. Also: `visibility: readOnly` + `form: false` and `visibility: system` can look functionally equivalent in the rendered UI (both fully suppressed from form and grid), but only `system` fully excludes the field from `frontendContract.entities.*.fields` — prefer `system` for "never shown, never independently editable" fields over the readOnly+form:false combination, to avoid two different-looking representations of the same "fully hidden" intent across sibling windows.

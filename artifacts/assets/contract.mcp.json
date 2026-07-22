@@ -1,8 +1,8 @@
 {
-  "version": "0.36.1",
+  "version": "0.40.0",
   "generatedAt": "2026-04-29T19:06:30.936Z",
-  "updatedAt": "2026-06-03T22:48:41.703Z",
-  "contractChecksum": "38fd80be39efe26c",
+  "updatedAt": "2026-07-21T12:35:17.860Z",
+  "contractChecksum": "0110ff5e9f0978e9",
   "apiPrediction": {
     "specName": "assets",
     "baseUrl": "/sws/neo/assets",
@@ -65,6 +65,14 @@
       },
       {
         "entity": "assets",
+        "field": "product",
+        "column": "M_Product_ID",
+        "reference": "Product",
+        "inputMode": "search",
+        "url": "/sws/neo/assets/assets/selectors/product"
+      },
+      {
+        "entity": "assets",
         "field": "project",
         "column": "C_Project_ID",
         "reference": "Project",
@@ -81,51 +89,11 @@
       },
       {
         "entity": "assets",
-        "field": "eTADASActivity",
-        "column": "EM_Etadas_C_Activity_ID",
-        "reference": "Activity",
-        "inputMode": "selector",
-        "url": "/sws/neo/assets/assets/selectors/eTADASActivity"
-      },
-      {
-        "entity": "assets",
         "field": "eTADASCostCenter",
         "column": "EM_Etadas_Costcenter_ID",
         "reference": "Costcenter",
         "inputMode": "selector",
         "url": "/sws/neo/assets/assets/selectors/eTADASCostCenter"
-      },
-      {
-        "entity": "assets",
-        "field": "eTADASSalesCampaign",
-        "column": "EM_Etadas_Campaign_ID",
-        "reference": "Campaign",
-        "inputMode": "selector",
-        "url": "/sws/neo/assets/assets/selectors/eTADASSalesCampaign"
-      },
-      {
-        "entity": "assets",
-        "field": "eTADASSalesRegion",
-        "column": "EM_Etadas_Salesregion_ID",
-        "reference": "SalesRegion",
-        "inputMode": "selector",
-        "url": "/sws/neo/assets/assets/selectors/eTADASSalesRegion"
-      },
-      {
-        "entity": "assets",
-        "field": "eTADASUser1",
-        "column": "EM_Etadas_User1_ID",
-        "reference": "User1",
-        "inputMode": "selector",
-        "url": "/sws/neo/assets/assets/selectors/eTADASUser1"
-      },
-      {
-        "entity": "assets",
-        "field": "eTADASUser2",
-        "column": "EM_Etadas_User2_ID",
-        "reference": "User2",
-        "inputMode": "selector",
-        "url": "/sws/neo/assets/assets/selectors/eTADASUser2"
       },
       {
         "entity": "amortizationLine",
@@ -240,7 +208,8 @@
         "EM_Etadas_Salesregion_ID": "Región de ventas",
         "EM_Etadas_C_Activity_ID": "Actividad",
         "EM_Etadas_Campaign_ID": "Campaña",
-        "EM_Etgo_Amortization_Status": "Estado de amortización"
+        "EM_Etgo_Amortization_Status": "Estado de amortización",
+        "M_Product_ID": "Producto"
       },
       "en_US": {
         "C_Project_ID": "Project",
@@ -251,7 +220,8 @@
         "EM_Etadas_Salesregion_ID": "Sales Region",
         "EM_Etadas_C_Activity_ID": "Activity",
         "EM_Etadas_Campaign_ID": "Sales Campaign",
-        "EM_Etgo_Amortization_Status": "Amortization Status"
+        "EM_Etgo_Amortization_Status": "Amortization Status",
+        "M_Product_ID": "Product"
       }
     }
   },
@@ -270,9 +240,11 @@
           },
           "description": {},
           "currency": {
+            "readOnly": true,
             "readOnlyLogic": "@existAmortizationLines@ = 'Y'",
             "defaultValue": "@C_Currency_ID@"
           },
+          "product": {},
           "depreciate": {
             "required": true
           },
@@ -320,12 +292,7 @@
             "defaultValue": "N"
           },
           "businessPartner": {},
-          "eTADASActivity": {},
           "eTADASCostCenter": {},
-          "eTADASSalesCampaign": {},
-          "eTADASSalesRegion": {},
-          "eTADASUser1": {},
-          "eTADASUser2": {},
           "etgoAmortizationStatus": {
             "readOnly": true,
             "defaultValue": "0"
@@ -443,5 +410,5 @@
     "knownLimitations": [],
     "dangerousOperations": []
   },
-  "checksum": "03fe64f5fb61c84e"
+  "checksum": "0d8887e3e81d710b"
 }

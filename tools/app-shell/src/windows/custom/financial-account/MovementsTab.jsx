@@ -1,11 +1,12 @@
-import { forwardRef, useImperativeHandle, useRef, useState, useMemo } from 'react';
+import { forwardRef, useEffect, useImperativeHandle, useRef, useState, useMemo } from 'react';
 import { AccountSummaryStrip } from './AccountSummaryStrip';
 import { MovementsToolbar } from './MovementsToolbar/index';
 import { MovementsTable } from './MovementsTable';
-import { NewMovementWizard } from './NewMovementWizard/index.jsx';
+import { NewTransactionModal } from './NewTransactionModal.jsx';
 import { FundsTransferModal } from './FundsTransferModal.jsx';
 import { applyAdvancedFilter } from './movementAdvancedFilter';
 import { getDateBounds } from '@/lib/dateRangeBounds';
+import { parseCalendarDate } from '@/lib/dateOnly';
 
 // ---------------------------------------------------------------------------
 // KPI window suffix (shown in parentheses next to Inflows / Outflows labels)
@@ -33,30 +34,35 @@ function kpiWindowSuffix(dateRange) {
 // amount moved to the advanced "by conditions" filter (applyAdvancedFilter).
 // ---------------------------------------------------------------------------
 
+// Date range check shared by applyFilters and dateScopedTotals — parses as a
+// calendar date (year/month/day in LOCAL time), not via the naive Date
+// constructor: the backend sends "yyyy-mm-ddT00:00:00Z" (a civil date, not a
+// real instant), which the naive parser reads as UTC midnight — in any
+// timezone behind UTC that rolls back to the previous day, so a single-day
+// range around the movement's own date matched nothing.
+function isOutsideDateRange(dateStr, from, to) {
+  if (!from && !to) return false;
+  const d = parseCalendarDate(dateStr);
+  if (!d) return false;
+  return (from && d < from) || (to && d > to);
+}
+
+function matchesSearch(m, q) {
+  if (!q) return true;
+  const haystack = [m.documentNo, m.contact, m.description]
+    .map((s) => (s ?? '').toLowerCase())
+    .join(' ');
+  return haystack.includes(q);
+}
+
 function applyFilters(movements, filters) {
   const { from, to } = getDateBounds(filters.dateRange);
   const q = filters.search.trim().toLowerCase();
 
   return movements.filter((m) => {
-    // Date range
-    if (from || to) {
-      const d = new Date(m.date);
-      if (from && d < from) return false;
-      if (to && d > to) return false;
-    }
-
-    // Type (BPD / BPW)
+    if (isOutsideDateRange(m.date, from, to)) return false;
     if (filters.type && m.trxType !== filters.type) return false;
-
-    // Full-text search on document, contact, description
-    if (q) {
-      const haystack = [m.documentNo, m.contact, m.description]
-        .map((s) => (s ?? '').toLowerCase())
-        .join(' ');
-      if (!haystack.includes(q)) return false;
-    }
-
-    return true;
+    return matchesSearch(m, q);
   });
 }
 
@@ -78,7 +84,7 @@ function applyFilters(movements, filters) {
  * }} props
  */
 export const MovementsTab = forwardRef(function MovementsTab(
-  { account, totals, movements, enabledDimensions = [], headerDimensions = [], trxTypes = [], accountOrgId = null, paymentMethods = [], loading, onReload, highlightTxnId = null },
+  { account, totals, movements, enabledDimensions = [], headerDimensions = [], loading, onReload, highlightTxnId = null, autoOpenNewMovement = false },
   ref,
 ) {
   const [filters, setFilters] = useState({
@@ -89,7 +95,14 @@ export const MovementsTab = forwardRef(function MovementsTab(
   const [advancedFilter, setAdvancedFilter] = useState(null);
   const [selectedIds, setSelectedIds] = useState(new Set());
   const [newMovementOpen, setNewMovementOpen] = useState(false);
+  const [editMovement, setEditMovement] = useState(null);
   const [transferOpen, setTransferOpen] = useState(false);
+
+  // Deep-link from the accounts grid ("Nuevo movimiento" row action) opens the
+  // modal once when the tab mounts with the flag set.
+  useEffect(() => {
+    if (autoOpenNewMovement) setNewMovementOpen(true);
+  }, [autoOpenNewMovement]);
 
   const handleFilterChange = (key) => (val) => {
     setFilters((prev) => ({ ...prev, [key]: val }));
@@ -125,11 +138,7 @@ export const MovementsTab = forwardRef(function MovementsTab(
     let inflows = 0;
     let outflows = 0;
     for (const m of movements) {
-      if (from || to) {
-        const d = new Date(m.date);
-        if (from && d < from) continue;
-        if (to && d > to) continue;
-      }
+      if (isOutsideDateRange(m.date, from, to)) continue;
       const amt = Number(m.amount) || 0;
       if (amt >= 0) inflows += amt;
       else outflows += amt;
@@ -150,6 +159,7 @@ export const MovementsTab = forwardRef(function MovementsTab(
         onFiltersChange={handleFilterChange}
         advancedFilter={advancedFilter}
         onAdvancedFilterChange={setAdvancedFilter}
+        onNewMovement={() => setNewMovementOpen(true)}
         onTransfer={() => setTransferOpen(true)}
         rows={movements}
         data-testid="MovementsToolbar__c1f76a" />
@@ -167,21 +177,21 @@ export const MovementsTab = forwardRef(function MovementsTab(
           onSelectionChange={handleSelectionChange}
           highlightTxnId={highlightTxnId}
           onReload={onReload}
+          onEdit={setEditMovement}
           data-testid="MovementsTable__c1f76a" />
       </div>
-      <NewMovementWizard
-        open={newMovementOpen}
+      <NewTransactionModal
+        open={newMovementOpen || !!editMovement}
         accountId={account?.id}
+        accountName={account?.name ?? ''}
         accountCurrency={account?.currencyIso
           ? { id: account?.currencyId, iso: account.currencyIso }
           : null}
         dimensions={headerDimensions}
-        trxTypes={trxTypes}
-        defaultOrgId={accountOrgId}
-        paymentMethods={paymentMethods}
-        onClose={() => setNewMovementOpen(false)}
+        movement={editMovement}
+        onClose={() => { setNewMovementOpen(false); setEditMovement(null); }}
         onSuccess={() => onReload?.()}
-        data-testid="NewMovementWizard__c1f76a" />
+        data-testid="NewTransactionModal__c1f76a" />
       {transferOpen ? (
         <FundsTransferModal
           sourceAccountId={account?.id}

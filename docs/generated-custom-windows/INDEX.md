@@ -32,7 +32,6 @@ This folder is the entry point for documentation that describes how generated an
 | [sales-order.md](sales-order.md) | Custom sales-order flow with fulfillment/invoicing actions and related documents |
 | [goods-shipment.md](goods-shipment.md) | Custom shipment flow with invoice/return actions and bulk invoicing cues |
 | [sales-invoice.md](sales-invoice.md) | Custom sales-invoice flow with payment-plan and related-document behavior |
-| [return-from-customer.md](return-from-customer.md) | Generated return-from-customer flow linked to shipment lines |
 | [return-material-receipt.md](return-material-receipt.md) | Generated return-material-receipt flow linked back to sales orders |
 
 ## Purchases
@@ -42,7 +41,6 @@ This folder is the entry point for documentation that describes how generated an
 | [purchase-order.md](purchase-order.md) | Custom purchase-order flow |
 | [goods-receipt.md](goods-receipt.md) | Custom goods-receipt flow |
 | [purchase-invoice.md](purchase-invoice.md) | Custom purchase-invoice flow |
-| [return-to-vendor.md](return-to-vendor.md) | Generated vendor-return flow |
 | [return-to-vendor-shipment.md](return-to-vendor-shipment.md) | Generated return-to-vendor-shipment flow |
 
 ## Inventory
@@ -68,8 +66,7 @@ This folder is the entry point for documentation that describes how generated an
 | [match-rule.md](match-rule.md) | Bank Reconciliation matching-rules catalog ("Reglas de matcheo") — first `list-modal` window (grid + create/edit modal, no detail) on generic W CRUD + validation hook |
 | [transaction-type.md](transaction-type.md) | Backend-only user-definable lookup behind the match-rule "Tipo de transacción" field — no menu/route; created inline from the selector (W spec + `TransactionTypeHandler`) |
 | [chart-of-accounts.md](chart-of-accounts.md) | Generated chart-of-accounts maintenance window |
-| [open-close-period-control.md](open-close-period-control.md) | Generated open/close period control window for fiscal period status management |
-| [fiscal-calendar.md](fiscal-calendar.md) | Generated Fiscal Calendar window (Years + read-only Periods) — the only place to create a new fiscal year and generate its periods via the classic Create Periods process; Periods links here via a "more" menu action |
+| [calendar.md](calendar.md) | Custom unified Calendar window (ETP-4478) — merges the retired Fiscal Calendar + Periods windows into one: Create Periods, Periods/Accounting secondary tabs with inline period→document expand, and Close Year/Undo Close Year via a server-guarded legacy-servlet reflection handler. No spec of its own — aggregates `fiscal-calendar`, `open-close-period-control` (unchanged), and a new backend-only `end-year-close` spec (same no-menu/no-route shape as `transaction-type.md`) |
 | [assets.md](assets.md) | Generated assets flow with custom setup, sidebar, and amortization surfaces |
 | [asset-group.md](asset-group.md) | Generated asset-category master/detail flow — header with conditional depreciation-policy fields (`displayLogicJs`), inline-editable accounting accounts subtab |
 | [amortization.md](amortization.md) | Generated amortization master/detail flow (MVP read+draft, sidebar metrics, linked assets) |

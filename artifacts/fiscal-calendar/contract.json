@@ -1,13 +1,26 @@
 {
-  "version": "0.1.0",
+  "version": "0.4.0",
   "generatedAt": "2026-07-07T11:18:10.164Z",
-  "checksum": "06d17f919d6fbbfc",
+  "updatedAt": "2026-07-21T12:35:25.300Z",
+  "checksum": "cf3b1051c306dcc3",
   "frontendContract": {
     "window": {
       "id": "117",
       "name": "Fiscal Calendar",
       "primaryEntity": "year",
       "category": "finance",
+      "menuActions": [
+        {
+          "key": "closeYear",
+          "labelKey": "closeYearTitle",
+          "component": "CloseYearModal"
+        },
+        {
+          "key": "undoCloseYear",
+          "labelKey": "undoCloseYearTitle",
+          "component": "UndoCloseYearModal"
+        }
+      ],
       "processOverrides": {
         "processNow": {
           "label": "Create Periods",
@@ -31,7 +44,7 @@
           ]
         }
       },
-      "detailEntity": "period",
+      "detailEntity": null,
       "listSortBy": "fiscalYear desc",
       "labelOverrides": {
         "es_ES": {
@@ -65,6 +78,10 @@
             "form": true,
             "sourceRequired": true,
             "gridOrder": 1,
+            "validation": {
+              "required": true,
+              "maxLength": 10
+            },
             "callout": {
               "className": "org.openbravo.erpCommon.ad_callouts.SL_Year_Validation"
             }
@@ -80,7 +97,10 @@
             "required": false,
             "grid": true,
             "form": true,
-            "gridOrder": 2
+            "gridOrder": 2,
+            "validation": {
+              "maxLength": 255
+            }
           },
           {
             "name": "processNow",
@@ -97,23 +117,10 @@
               "type": "computed",
               "source": "false"
             },
-            "defaultValue": "N"
-          },
-          {
-            "name": "calendar",
-            "apiKey": "calendar",
-            "column": "C_Calendar_ID",
-            "label": "Calendar",
-            "type": "foreignKey",
-            "tsType": "string",
-            "visibility": "editable",
-            "required": true,
-            "grid": false,
-            "form": true,
-            "sourceRequired": true,
-            "reference": "Calendar",
-            "inputMode": "selector",
-            "lookup": true
+            "defaultValue": "N",
+            "validation": {
+              "maxLength": 1
+            }
           }
         ],
         "searchableFields": [],
@@ -125,192 +132,8 @@
               "source": "false"
             }
           }
-        ]
-      },
-      "period": {
-        "tableName": "C_Period",
-        "tabId": "130",
-        "tabName": "Period",
-        "uiPattern": "STD",
-        "fields": [
-          {
-            "name": "periodNo",
-            "apiKey": "periodNo",
-            "column": "PeriodNo",
-            "label": "Period No.",
-            "type": "integer",
-            "tsType": "number",
-            "visibility": "readOnly",
-            "required": true,
-            "grid": true,
-            "form": true,
-            "sourceRequired": true,
-            "gridOrder": 1,
-            "readOnlyLogic": {
-              "raw": "@C_Period_Not_Editable@='Y'",
-              "evaluable": true,
-              "js": "record['c_Period_Not_Editable'] === 'Y'"
-            }
-          },
-          {
-            "name": "name",
-            "apiKey": "name",
-            "column": "Name",
-            "label": "Name",
-            "type": "string",
-            "tsType": "string",
-            "visibility": "readOnly",
-            "required": true,
-            "grid": true,
-            "form": true,
-            "sourceRequired": true,
-            "gridOrder": 2
-          },
-          {
-            "name": "startingDate",
-            "apiKey": "startingDate",
-            "column": "StartDate",
-            "label": "Starting Date",
-            "type": "date",
-            "tsType": "string",
-            "visibility": "readOnly",
-            "required": true,
-            "grid": true,
-            "form": true,
-            "sourceRequired": true,
-            "gridOrder": 3,
-            "readOnlyLogic": {
-              "raw": "@C_Period_Not_Editable@='Y'",
-              "evaluable": true,
-              "js": "record['c_Period_Not_Editable'] === 'Y'"
-            }
-          },
-          {
-            "name": "endingDate",
-            "apiKey": "endingDate",
-            "column": "EndDate",
-            "label": "Ending Date",
-            "type": "date",
-            "tsType": "string",
-            "visibility": "readOnly",
-            "required": false,
-            "grid": true,
-            "form": true,
-            "gridOrder": 4,
-            "readOnlyLogic": {
-              "raw": "@C_Period_Not_Editable@='Y'",
-              "evaluable": true,
-              "js": "record['c_Period_Not_Editable'] === 'Y'"
-            }
-          },
-          {
-            "name": "periodType",
-            "apiKey": "periodType",
-            "column": "PeriodType",
-            "label": "Period Type",
-            "type": "enum",
-            "tsType": "string",
-            "visibility": "readOnly",
-            "required": true,
-            "grid": false,
-            "form": true,
-            "sourceRequired": true,
-            "derivation": {
-              "type": "computed",
-              "source": "S"
-            },
-            "enumValues": [
-              {
-                "value": "A",
-                "name": "Adjustment Period",
-                "labels": {
-                  "es_ES": "Cambio periodo"
-                }
-              },
-              {
-                "value": "S",
-                "name": "Standard Calendar Period",
-                "labels": {
-                  "es_ES": "Calendario Periodo estándar"
-                }
-              }
-            ],
-            "defaultValue": "S",
-            "readOnlyLogic": {
-              "raw": "@C_Period_Not_Editable@='Y'",
-              "evaluable": true,
-              "js": "record['c_Period_Not_Editable'] === 'Y'"
-            }
-          },
-          {
-            "name": "status",
-            "apiKey": "status",
-            "column": "Status",
-            "label": "Status",
-            "type": "enum",
-            "tsType": "string",
-            "visibility": "readOnly",
-            "required": false,
-            "grid": true,
-            "form": true,
-            "columnType": "enum",
-            "enumValues": [
-              {
-                "value": "C",
-                "name": "All Closed",
-                "labels": {
-                  "es_ES": "Todos cerrados"
-                }
-              },
-              {
-                "value": "N",
-                "name": "All Never Opened",
-                "labels": {
-                  "es_ES": "Ningún periodo abierto."
-                }
-              },
-              {
-                "value": "O",
-                "name": "All Opened",
-                "labels": {
-                  "es_ES": "Todos abiertos"
-                }
-              },
-              {
-                "value": "P",
-                "name": "All Permanently Closed",
-                "labels": {
-                  "es_ES": "Todos permanentemente cerrados"
-                }
-              },
-              {
-                "value": "M",
-                "name": "Mixed",
-                "labels": {
-                  "es_ES": "Mixto"
-                }
-              }
-            ],
-            "badge": true,
-            "enumVariants": {
-              "O": "green",
-              "N": "neutral",
-              "C": "neutral",
-              "P": "red"
-            },
-            "gridOrder": 5
-          }
         ],
-        "searchableFields": [],
-        "computedFields": [
-          {
-            "name": "periodType",
-            "derivation": {
-              "type": "computed",
-              "source": "S"
-            }
-          }
-        ]
+        "javaQualifier": "year-close"
       }
     }
   },
@@ -320,6 +143,18 @@
       "name": "Fiscal Calendar",
       "primaryEntity": "year",
       "category": "finance",
+      "menuActions": [
+        {
+          "key": "closeYear",
+          "labelKey": "closeYearTitle",
+          "component": "CloseYearModal"
+        },
+        {
+          "key": "undoCloseYear",
+          "labelKey": "undoCloseYearTitle",
+          "component": "UndoCloseYearModal"
+        }
+      ],
       "processOverrides": {
         "processNow": {
           "label": "Create Periods",
@@ -343,7 +178,7 @@
           ]
         }
       },
-      "detailEntity": "period",
+      "detailEntity": null,
       "listSortBy": "fiscalYear desc",
       "labelOverrides": {
         "es_ES": {
@@ -439,7 +274,7 @@
             "apiKey": "calendar",
             "column": "C_Calendar_ID",
             "type": "foreignKey",
-            "visibility": "editable",
+            "visibility": "system",
             "required": true
           },
           {
@@ -474,182 +309,8 @@
             "visibility": "discarded",
             "required": true
           }
-        ]
-      },
-      "period": {
-        "tableName": "C_Period",
-        "tabId": "130",
-        "tabName": "Period",
-        "fields": [
-          {
-            "name": "periodNo",
-            "apiKey": "periodNo",
-            "column": "PeriodNo",
-            "type": "integer",
-            "visibility": "readOnly",
-            "required": true
-          },
-          {
-            "name": "name",
-            "apiKey": "name",
-            "column": "Name",
-            "type": "string",
-            "visibility": "readOnly",
-            "required": true
-          },
-          {
-            "name": "startingDate",
-            "apiKey": "startingDate",
-            "column": "StartDate",
-            "type": "date",
-            "visibility": "readOnly",
-            "required": true
-          },
-          {
-            "name": "endingDate",
-            "apiKey": "endingDate",
-            "column": "EndDate",
-            "type": "date",
-            "visibility": "readOnly",
-            "required": false
-          },
-          {
-            "name": "periodType",
-            "apiKey": "periodType",
-            "column": "PeriodType",
-            "type": "enum",
-            "visibility": "readOnly",
-            "required": true
-          },
-          {
-            "name": "active",
-            "apiKey": "active",
-            "column": "IsActive",
-            "type": "boolean",
-            "visibility": "discarded",
-            "required": true
-          },
-          {
-            "name": "organization",
-            "apiKey": "organization",
-            "column": "AD_Org_ID",
-            "type": "foreignKey",
-            "visibility": "discarded",
-            "required": true
-          },
-          {
-            "name": "processNow",
-            "apiKey": "processNow",
-            "column": "Processing",
-            "type": "button",
-            "visibility": "discarded",
-            "required": false
-          },
-          {
-            "name": "id",
-            "apiKey": "id",
-            "column": "C_Period_ID",
-            "type": "id",
-            "visibility": "discarded",
-            "required": true
-          },
-          {
-            "name": "client",
-            "apiKey": "client",
-            "column": "AD_Client_ID",
-            "type": "foreignKey",
-            "visibility": "discarded",
-            "required": true
-          },
-          {
-            "name": "year",
-            "apiKey": "year",
-            "column": "C_Year_ID",
-            "type": "foreignKey",
-            "visibility": "discarded",
-            "required": true
-          },
-          {
-            "name": "closingFactAcctGroupID",
-            "apiKey": "closingFactAcctGroupID",
-            "column": "Close_Fact_Acct_Group_ID",
-            "type": "string",
-            "visibility": "discarded",
-            "required": false
-          },
-          {
-            "name": "creationDate",
-            "apiKey": "creationDate",
-            "column": "Created",
-            "type": "dateTime",
-            "visibility": "discarded",
-            "required": true
-          },
-          {
-            "name": "createdBy",
-            "apiKey": "createdBy",
-            "column": "CreatedBy",
-            "type": "foreignKey",
-            "visibility": "discarded",
-            "required": true
-          },
-          {
-            "name": "divideupFactAcctGroupID",
-            "apiKey": "divideupFactAcctGroupID",
-            "column": "Divideup_Fact_Acct_Group_ID",
-            "type": "string",
-            "visibility": "discarded",
-            "required": false
-          },
-          {
-            "name": "openFactAcctGroupID",
-            "apiKey": "openFactAcctGroupID",
-            "column": "Open_Fact_Acct_Group_ID",
-            "type": "string",
-            "visibility": "discarded",
-            "required": false
-          },
-          {
-            "name": "openClose",
-            "apiKey": "openClose",
-            "column": "OpenClose",
-            "type": "button",
-            "visibility": "discarded",
-            "required": true
-          },
-          {
-            "name": "regularizationFactAcctGroupID",
-            "apiKey": "regularizationFactAcctGroupID",
-            "column": "Reg_Fact_Acct_Group_ID",
-            "type": "string",
-            "visibility": "discarded",
-            "required": false
-          },
-          {
-            "name": "status",
-            "apiKey": "status",
-            "column": "Status",
-            "type": "enum",
-            "visibility": "readOnly",
-            "required": false
-          },
-          {
-            "name": "updated",
-            "apiKey": "updated",
-            "column": "Updated",
-            "type": "dateTime",
-            "visibility": "discarded",
-            "required": true
-          },
-          {
-            "name": "updatedBy",
-            "apiKey": "updatedBy",
-            "column": "UpdatedBy",
-            "type": "foreignKey",
-            "visibility": "discarded",
-            "required": true
-          }
-        ]
+        ],
+        "javaQualifier": "year-close"
       }
     },
     "endpoints": [
@@ -682,36 +343,6 @@
         "path": "/year/:id",
         "entity": "year",
         "supportedFilters": []
-      },
-      {
-        "method": "GET",
-        "path": "/period",
-        "entity": "period",
-        "supportedFilters": []
-      },
-      {
-        "method": "GET",
-        "path": "/period/:id",
-        "entity": "period",
-        "supportedFilters": []
-      },
-      {
-        "method": "POST",
-        "path": "/period",
-        "entity": "period",
-        "supportedFilters": []
-      },
-      {
-        "method": "PUT",
-        "path": "/period/:id",
-        "entity": "period",
-        "supportedFilters": []
-      },
-      {
-        "method": "DELETE",
-        "path": "/period/:id",
-        "entity": "period",
-        "supportedFilters": []
       }
     ],
     "processEndpoints": []
@@ -730,29 +361,9 @@
         "listUrl": "/sws/neo/fiscal-calendar/year",
         "detailUrl": "/sws/neo/fiscal-calendar/year/{id}",
         "supportedFilters": []
-      },
-      "period": {
-        "get": true,
-        "getById": true,
-        "post": true,
-        "put": true,
-        "patch": true,
-        "delete": true,
-        "listUrl": "/sws/neo/fiscal-calendar/period",
-        "detailUrl": "/sws/neo/fiscal-calendar/period/{id}",
-        "supportedFilters": []
       }
     },
-    "selectors": [
-      {
-        "entity": "year",
-        "field": "calendar",
-        "column": "C_Calendar_ID",
-        "reference": "Calendar",
-        "inputMode": "selector",
-        "url": "/sws/neo/fiscal-calendar/year/selectors/calendar"
-      }
-    ],
+    "selectors": [],
     "actions": [
       {
         "entity": "year",
@@ -777,22 +388,6 @@
         "url": "/sws/neo/fiscal-calendar/year/{id}/action/dropRegFactAcct",
         "processId": "800038",
         "processType": "classic"
-      },
-      {
-        "entity": "period",
-        "field": "processNow",
-        "column": "Processing",
-        "url": "/sws/neo/fiscal-calendar/period/{id}/action/processNow",
-        "processId": "167",
-        "processType": "classic"
-      },
-      {
-        "entity": "period",
-        "field": "openClose",
-        "column": "OpenClose",
-        "url": "/sws/neo/fiscal-calendar/period/{id}/action/openClose",
-        "processId": "A832A5DA28FB4BB391BDE883E928DFC5",
-        "processType": "obuiapp"
       }
     ],
     "queryParams": {
@@ -825,22 +420,6 @@
   "testManifest": {
     "tests": [
       {
-        "id": "t-action-endpoint-period-openClose",
-        "category": "action-endpoint",
-        "entity": "period",
-        "field": "openClose",
-        "runner": "node",
-        "description": "Action endpoint for 'openClose' in period should exist"
-      },
-      {
-        "id": "t-action-endpoint-period-processNow",
-        "category": "action-endpoint",
-        "entity": "period",
-        "field": "processNow",
-        "runner": "node",
-        "description": "Action endpoint for 'processNow' in period should exist"
-      },
-      {
         "id": "t-action-endpoint-year-createRegFactAcct",
         "category": "action-endpoint",
         "entity": "year",
@@ -865,26 +444,11 @@
         "description": "Action endpoint for 'processNow' in year should exist"
       },
       {
-        "id": "t-crud-flags-period",
-        "category": "crud-flags",
-        "entity": "period",
-        "runner": "node",
-        "description": "CRUD flags for 'period' should all be booleans"
-      },
-      {
         "id": "t-crud-flags-year",
         "category": "crud-flags",
         "entity": "year",
         "runner": "node",
         "description": "CRUD flags for 'year' should all be booleans"
-      },
-      {
-        "id": "t-default-value-type-period-periodType",
-        "category": "default-value-type",
-        "entity": "period",
-        "field": "periodType",
-        "runner": "node",
-        "description": "Default value for 'periodType' in period should be a string"
       },
       {
         "id": "t-default-value-type-year-processNow",
@@ -893,62 +457,6 @@
         "field": "processNow",
         "runner": "node",
         "description": "Default value for 'processNow' in year should be a string"
-      },
-      {
-        "id": "t-field-presence-period-endingDate",
-        "category": "field-presence",
-        "entity": "period",
-        "field": "endingDate",
-        "runner": "node",
-        "description": "Field 'endingDate' should be present in period"
-      },
-      {
-        "id": "t-field-presence-period-name",
-        "category": "field-presence",
-        "entity": "period",
-        "field": "name",
-        "runner": "node",
-        "description": "Field 'name' should be present in period"
-      },
-      {
-        "id": "t-field-presence-period-periodNo",
-        "category": "field-presence",
-        "entity": "period",
-        "field": "periodNo",
-        "runner": "node",
-        "description": "Field 'periodNo' should be present in period"
-      },
-      {
-        "id": "t-field-presence-period-periodType",
-        "category": "field-presence",
-        "entity": "period",
-        "field": "periodType",
-        "runner": "node",
-        "description": "Field 'periodType' should be present in period"
-      },
-      {
-        "id": "t-field-presence-period-startingDate",
-        "category": "field-presence",
-        "entity": "period",
-        "field": "startingDate",
-        "runner": "node",
-        "description": "Field 'startingDate' should be present in period"
-      },
-      {
-        "id": "t-field-presence-period-status",
-        "category": "field-presence",
-        "entity": "period",
-        "field": "status",
-        "runner": "node",
-        "description": "Field 'status' should be present in period"
-      },
-      {
-        "id": "t-field-presence-year-calendar",
-        "category": "field-presence",
-        "entity": "year",
-        "field": "calendar",
-        "runner": "node",
-        "description": "Field 'calendar' should be present in year"
       },
       {
         "id": "t-field-presence-year-description",
@@ -975,62 +483,6 @@
         "description": "Field 'processNow' should be present in year"
       },
       {
-        "id": "t-field-type-period-endingDate",
-        "category": "field-type",
-        "entity": "period",
-        "field": "endingDate",
-        "runner": "node",
-        "description": "Field 'endingDate' should have type 'string' in period"
-      },
-      {
-        "id": "t-field-type-period-name",
-        "category": "field-type",
-        "entity": "period",
-        "field": "name",
-        "runner": "node",
-        "description": "Field 'name' should have type 'string' in period"
-      },
-      {
-        "id": "t-field-type-period-periodNo",
-        "category": "field-type",
-        "entity": "period",
-        "field": "periodNo",
-        "runner": "node",
-        "description": "Field 'periodNo' should have type 'number' in period"
-      },
-      {
-        "id": "t-field-type-period-periodType",
-        "category": "field-type",
-        "entity": "period",
-        "field": "periodType",
-        "runner": "node",
-        "description": "Field 'periodType' should have type 'string' in period"
-      },
-      {
-        "id": "t-field-type-period-startingDate",
-        "category": "field-type",
-        "entity": "period",
-        "field": "startingDate",
-        "runner": "node",
-        "description": "Field 'startingDate' should have type 'string' in period"
-      },
-      {
-        "id": "t-field-type-period-status",
-        "category": "field-type",
-        "entity": "period",
-        "field": "status",
-        "runner": "node",
-        "description": "Field 'status' should have type 'string' in period"
-      },
-      {
-        "id": "t-field-type-year-calendar",
-        "category": "field-type",
-        "entity": "year",
-        "field": "calendar",
-        "runner": "node",
-        "description": "Field 'calendar' should have type 'string' in year"
-      },
-      {
         "id": "t-field-type-year-description",
         "category": "field-type",
         "entity": "year",
@@ -1053,70 +505,6 @@
         "field": "processNow",
         "runner": "node",
         "description": "Field 'processNow' should have type 'string' in year"
-      },
-      {
-        "id": "t-readonlylogic-evaluable-period-endingDate",
-        "category": "readonlylogic-evaluable",
-        "entity": "period",
-        "field": "endingDate",
-        "runner": "node",
-        "description": "Read-only logic for 'endingDate' in period should have evaluable flag"
-      },
-      {
-        "id": "t-readonlylogic-evaluable-period-periodNo",
-        "category": "readonlylogic-evaluable",
-        "entity": "period",
-        "field": "periodNo",
-        "runner": "node",
-        "description": "Read-only logic for 'periodNo' in period should have evaluable flag"
-      },
-      {
-        "id": "t-readonlylogic-evaluable-period-periodType",
-        "category": "readonlylogic-evaluable",
-        "entity": "period",
-        "field": "periodType",
-        "runner": "node",
-        "description": "Read-only logic for 'periodType' in period should have evaluable flag"
-      },
-      {
-        "id": "t-readonlylogic-evaluable-period-startingDate",
-        "category": "readonlylogic-evaluable",
-        "entity": "period",
-        "field": "startingDate",
-        "runner": "node",
-        "description": "Read-only logic for 'startingDate' in period should have evaluable flag"
-      },
-      {
-        "id": "t-readonlylogic-valid-period-endingDate",
-        "category": "readonlylogic-valid",
-        "entity": "period",
-        "field": "endingDate",
-        "runner": "node",
-        "description": "Read-only logic for 'endingDate' in period should be valid JS"
-      },
-      {
-        "id": "t-readonlylogic-valid-period-periodNo",
-        "category": "readonlylogic-valid",
-        "entity": "period",
-        "field": "periodNo",
-        "runner": "node",
-        "description": "Read-only logic for 'periodNo' in period should be valid JS"
-      },
-      {
-        "id": "t-readonlylogic-valid-period-periodType",
-        "category": "readonlylogic-valid",
-        "entity": "period",
-        "field": "periodType",
-        "runner": "node",
-        "description": "Read-only logic for 'periodType' in period should be valid JS"
-      },
-      {
-        "id": "t-readonlylogic-valid-period-startingDate",
-        "category": "readonlylogic-valid",
-        "entity": "period",
-        "field": "startingDate",
-        "runner": "node",
-        "description": "Read-only logic for 'startingDate' in period should be valid JS"
       },
       {
         "id": "t-rule-declared-AD-Client-Security-validation",
@@ -1217,140 +605,20 @@
         "description": "Rule 'Undo Close Year' (process) should be declared"
       },
       {
-        "id": "t-selector-endpoint-year-calendar",
-        "category": "selector-endpoint",
-        "entity": "year",
-        "field": "calendar",
-        "runner": "node",
-        "description": "Selector endpoint for 'calendar' in year should exist"
-      },
-      {
-        "id": "t-system-field-period-active",
-        "category": "system-field",
-        "entity": "period",
-        "field": "active",
-        "runner": "node",
-        "description": "System field 'active' should exist in backend but not frontend for period"
-      },
-      {
-        "id": "t-system-field-period-client",
-        "category": "system-field",
-        "entity": "period",
-        "field": "client",
-        "runner": "node",
-        "description": "System field 'client' should exist in backend but not frontend for period"
-      },
-      {
-        "id": "t-system-field-period-closingFactAcctGroupID",
-        "category": "system-field",
-        "entity": "period",
-        "field": "closingFactAcctGroupID",
-        "runner": "node",
-        "description": "System field 'closingFactAcctGroupID' should exist in backend but not frontend for period"
-      },
-      {
-        "id": "t-system-field-period-createdBy",
-        "category": "system-field",
-        "entity": "period",
-        "field": "createdBy",
-        "runner": "node",
-        "description": "System field 'createdBy' should exist in backend but not frontend for period"
-      },
-      {
-        "id": "t-system-field-period-creationDate",
-        "category": "system-field",
-        "entity": "period",
-        "field": "creationDate",
-        "runner": "node",
-        "description": "System field 'creationDate' should exist in backend but not frontend for period"
-      },
-      {
-        "id": "t-system-field-period-divideupFactAcctGroupID",
-        "category": "system-field",
-        "entity": "period",
-        "field": "divideupFactAcctGroupID",
-        "runner": "node",
-        "description": "System field 'divideupFactAcctGroupID' should exist in backend but not frontend for period"
-      },
-      {
-        "id": "t-system-field-period-id",
-        "category": "system-field",
-        "entity": "period",
-        "field": "id",
-        "runner": "node",
-        "description": "System field 'id' should exist in backend but not frontend for period"
-      },
-      {
-        "id": "t-system-field-period-openClose",
-        "category": "system-field",
-        "entity": "period",
-        "field": "openClose",
-        "runner": "node",
-        "description": "System field 'openClose' should exist in backend but not frontend for period"
-      },
-      {
-        "id": "t-system-field-period-openFactAcctGroupID",
-        "category": "system-field",
-        "entity": "period",
-        "field": "openFactAcctGroupID",
-        "runner": "node",
-        "description": "System field 'openFactAcctGroupID' should exist in backend but not frontend for period"
-      },
-      {
-        "id": "t-system-field-period-organization",
-        "category": "system-field",
-        "entity": "period",
-        "field": "organization",
-        "runner": "node",
-        "description": "System field 'organization' should exist in backend but not frontend for period"
-      },
-      {
-        "id": "t-system-field-period-processNow",
-        "category": "system-field",
-        "entity": "period",
-        "field": "processNow",
-        "runner": "node",
-        "description": "System field 'processNow' should exist in backend but not frontend for period"
-      },
-      {
-        "id": "t-system-field-period-regularizationFactAcctGroupID",
-        "category": "system-field",
-        "entity": "period",
-        "field": "regularizationFactAcctGroupID",
-        "runner": "node",
-        "description": "System field 'regularizationFactAcctGroupID' should exist in backend but not frontend for period"
-      },
-      {
-        "id": "t-system-field-period-updated",
-        "category": "system-field",
-        "entity": "period",
-        "field": "updated",
-        "runner": "node",
-        "description": "System field 'updated' should exist in backend but not frontend for period"
-      },
-      {
-        "id": "t-system-field-period-updatedBy",
-        "category": "system-field",
-        "entity": "period",
-        "field": "updatedBy",
-        "runner": "node",
-        "description": "System field 'updatedBy' should exist in backend but not frontend for period"
-      },
-      {
-        "id": "t-system-field-period-year",
-        "category": "system-field",
-        "entity": "period",
-        "field": "year",
-        "runner": "node",
-        "description": "System field 'year' should exist in backend but not frontend for period"
-      },
-      {
         "id": "t-system-field-year-active",
         "category": "system-field",
         "entity": "year",
         "field": "active",
         "runner": "node",
         "description": "System field 'active' should exist in backend but not frontend for year"
+      },
+      {
+        "id": "t-system-field-year-calendar",
+        "category": "system-field",
+        "entity": "year",
+        "field": "calendar",
+        "runner": "node",
+        "description": "System field 'calendar' should exist in backend but not frontend for year"
       },
       {
         "id": "t-system-field-year-client",
@@ -1425,13 +693,6 @@
         "description": "System field 'updatedBy' should exist in backend but not frontend for year"
       },
       {
-        "id": "t-visibility-period",
-        "category": "visibility",
-        "entity": "period",
-        "runner": "node",
-        "description": "Entity 'period' should only expose visible fields in frontend"
-      },
-      {
         "id": "t-visibility-year",
         "category": "visibility",
         "entity": "year",
@@ -1440,22 +701,19 @@
       }
     ],
     "summary": {
-      "total": 79,
+      "total": 37,
       "byCategory": {
-        "action-endpoint": 5,
-        "crud-flags": 2,
-        "default-value-type": 2,
-        "field-presence": 10,
-        "field-type": 10,
-        "readonlylogic-evaluable": 4,
-        "readonlylogic-valid": 4,
+        "action-endpoint": 3,
+        "crud-flags": 1,
+        "default-value-type": 1,
+        "field-presence": 3,
+        "field-type": 3,
         "rule-declared": 14,
-        "selector-endpoint": 1,
-        "system-field": 25,
-        "visibility": 2
+        "system-field": 11,
+        "visibility": 1
       },
       "byRunner": {
-        "node": 79,
+        "node": 37,
         "junit": 0
       }
     }

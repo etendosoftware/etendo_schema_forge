@@ -207,6 +207,32 @@ describe('DetailView footer save buttons (onClick coverage)', () => {
     );
   });
 
+  it('new record (no draftMode, no children): Save calls onAfterCreate before navigating', async () => {
+    // Regression: header-only windows with a plain new-record Save (no draftMode,
+    // no detail lines) used to skip onAfterCreate entirely — only the draftMode
+    // Confirm button and the "complete" button (gated by children.length > 0)
+    // invoked it. This left onAfterCreate dead code for e.g. the Warehouse window
+    // (ETP-4526 default-storage-bin creation never actually ran).
+    mockHook.handleSave = vi.fn(() => Promise.resolve({ id: 'new-555' }));
+    const onAfterCreate = vi.fn(() => Promise.resolve());
+    render(<DetailView {...BASE_PROPS} recordId="new" onAfterCreate={onAfterCreate} />);
+    fireEvent.click(screen.getByTestId('action-save'));
+    await waitFor(() => expect(mockHook.handleSave).toHaveBeenCalled());
+    await waitFor(() =>
+      expect(onAfterCreate).toHaveBeenCalledWith(
+        { id: 'new-555' },
+        { token: 'test-token', apiBaseUrl: 'http://localhost:8080/etendo/neo' },
+      ),
+    );
+    await waitFor(() => expect(mockHook.primeSaved).toHaveBeenCalledWith({ id: 'new-555' }));
+    await waitFor(() =>
+      expect(mockNavigate).toHaveBeenCalledWith(
+        '/sales-order/new-555',
+        { replace: true, state: { justSaved: { id: 'new-555' } } },
+      ),
+    );
+  });
+
   it('draftMode Confirm on a new record: onAfterCreate then navigate to the record', async () => {
     mockHook.handleSaveAndProcess = vi.fn(() => Promise.resolve({ id: 'new-777' }));
     const onAfterCreate = vi.fn(() => Promise.resolve());
@@ -239,5 +265,97 @@ describe('DetailView footer save buttons (onClick coverage)', () => {
     const complete = screen.getByTestId('action-complete');
     fireEvent.click(complete);
     await waitFor(() => expect(mockHook.handleSaveAndProcess).toHaveBeenCalled());
+  });
+});
+
+// Non-dismissible loading modal shown while Confirm runs a draftMode with
+// `processingModal` set (e.g. sales-invoice + active Verifactu → ~8s
+// synchronous GenerateRF). Covers: shows while in flight, closes on success,
+// closes on failure (the `finally` regression case), stays hidden for
+// draftMode configs without processingModal (SII/TBAI/no-fiscal-config,
+// other draftMode windows), and cannot be dismissed via Escape.
+describe('DetailView draftMode processingModal (Verifactu-style loading modal)', () => {
+  beforeEach(resetHook);
+
+  const PROCESSING_BODY = 'Generating the billing record for submission to VERI*FACTU';
+  const draftModeWithModal = () => ({
+    enabled: true,
+    draftField: 'documentStatus',
+    draftValue: 'DR',
+    label: 'process',
+    processingModal: { body: PROCESSING_BODY },
+  });
+
+  it('shows the modal while handleSaveAndProcess is in flight, then closes it on success', async () => {
+    let resolveSave;
+    mockHook.handleSaveAndProcess = vi.fn(() => new Promise((resolve) => { resolveSave = resolve; }));
+    render(<DetailView {...BASE_PROPS} draftMode={draftModeWithModal()} />);
+
+    fireEvent.click(screen.getByTestId('action-save'));
+
+    const modalContent = await screen.findByTestId('DialogContent__verifactu-processing');
+    expect(modalContent).toHaveTextContent(PROCESSING_BODY);
+
+    resolveSave({ id: '123' });
+
+    await waitFor(() => expect(mockHook.fetchById).toHaveBeenCalledWith('123'));
+    await waitFor(() => expect(screen.queryByTestId('DialogContent__verifactu-processing')).toBeNull());
+  });
+
+  it('closes the modal even when handleSaveAndProcess resolves null (failure) — the finally-block regression case', async () => {
+    let resolveSave;
+    mockHook.handleSaveAndProcess = vi.fn(() => new Promise((resolve) => { resolveSave = resolve; }));
+    render(<DetailView {...BASE_PROPS} draftMode={draftModeWithModal()} />);
+
+    // DetailView's mount effect already calls hook.fetchById(recordId) once on
+    // load, so capture the baseline before triggering save to isolate the
+    // post-save refetch (which must NOT happen on the failure path).
+    const fetchByIdCallsBeforeSave = mockHook.fetchById.mock.calls.length;
+
+    fireEvent.click(screen.getByTestId('action-save'));
+
+    // Confirm the modal actually opened before resolving — otherwise a test
+    // that only checks "eventually absent" would pass even if the modal never
+    // showed up at all (tautology guard).
+    await screen.findByTestId('DialogContent__verifactu-processing');
+
+    resolveSave(null);
+
+    await waitFor(() => expect(screen.queryByTestId('DialogContent__verifactu-processing')).toBeNull());
+    // Failure path (saved is falsy) must not trigger the post-save refetch.
+    expect(mockHook.fetchById.mock.calls.length).toBe(fetchByIdCallsBeforeSave);
+  });
+
+  it('never shows the modal when draftMode has no processingModal (e.g. non-Verifactu invoices, other draftMode windows)', async () => {
+    let resolveSave;
+    mockHook.handleSaveAndProcess = vi.fn(() => new Promise((resolve) => { resolveSave = resolve; }));
+    const draftMode = { enabled: true, draftField: 'documentStatus', draftValue: 'DR', label: 'process' };
+    render(<DetailView {...BASE_PROPS} draftMode={draftMode} />);
+
+    fireEvent.click(screen.getByTestId('action-save'));
+    await waitFor(() => expect(mockHook.handleSaveAndProcess).toHaveBeenCalled());
+    expect(screen.queryByTestId('DialogContent__verifactu-processing')).toBeNull();
+
+    resolveSave({ id: '123' });
+    await waitFor(() => expect(mockHook.fetchById).toHaveBeenCalledWith('123'));
+    expect(screen.queryByTestId('DialogContent__verifactu-processing')).toBeNull();
+  });
+
+  it('is non-dismissible: pressing Escape while it is open does not close it', async () => {
+    let resolveSave;
+    mockHook.handleSaveAndProcess = vi.fn(() => new Promise((resolve) => { resolveSave = resolve; }));
+    render(<DetailView {...BASE_PROPS} draftMode={draftModeWithModal()} />);
+
+    fireEvent.click(screen.getByTestId('action-save'));
+    const modalContent = await screen.findByTestId('DialogContent__verifactu-processing');
+
+    fireEvent.keyDown(modalContent, { key: 'Escape', code: 'Escape' });
+    // Give any (unwanted) close handling a tick to take effect.
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(screen.getByTestId('DialogContent__verifactu-processing')).toBeInTheDocument();
+
+    // Clean up the pending promise so it doesn't leak into other tests.
+    resolveSave({ id: '123' });
+    await waitFor(() => expect(screen.queryByTestId('DialogContent__verifactu-processing')).toBeNull());
   });
 });

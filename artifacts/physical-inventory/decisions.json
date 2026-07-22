@@ -70,6 +70,7 @@
   "entities": {
     "header": {
       "name": "inventory",
+      "javaQualifier": "inventory",
       "fields": {
         "warehouse": {
           "grid": true,
@@ -180,6 +181,16 @@
           "label": "User Count",
           "grid": true,
           "gridOrder": 4,
+          "grow": true,
+          "columnWidth": 192,
+          "readOnlyLogic": null
+        },
+        "etgoQtydiff": {
+          "visibility": "readOnly",
+          "label": "Difference",
+          "columnType": "signedDelta",
+          "grid": true,
+          "gridOrder": 5,
           "grow": true,
           "columnWidth": 192,
           "readOnlyLogic": null

@@ -35,7 +35,8 @@
         "EM_Etadas_Salesregion_ID": "Región de ventas",
         "EM_Etadas_C_Activity_ID": "Actividad",
         "EM_Etadas_Campaign_ID": "Campaña",
-        "EM_Etgo_Amortization_Status": "Estado de amortización"
+        "EM_Etgo_Amortization_Status": "Estado de amortización",
+        "M_Product_ID": "Producto"
       },
       "en_US": {
         "C_Project_ID": "Project",
@@ -46,7 +47,8 @@
         "EM_Etadas_Salesregion_ID": "Sales Region",
         "EM_Etadas_C_Activity_ID": "Activity",
         "EM_Etadas_Campaign_ID": "Sales Campaign",
-        "EM_Etgo_Amortization_Status": "Amortization Status"
+        "EM_Etgo_Amortization_Status": "Amortization Status",
+        "M_Product_ID": "Product"
       }
     },
     "sidebarLayout": true,
@@ -56,6 +58,7 @@
       "processAsset": {
         "add": true,
         "label": "Create Amortization",
+        "labelToggle": { "field": "processed", "equals": "Y", "label": "Recalculate Amortization" },
         "style": "positive",
         "displayLogicRaw": "@Depreciate@='Y' AND @etgoAmortizationStatus@!='100'",
         "requiresFieldMax": [
@@ -120,8 +123,8 @@
           "reason": "Internal sequential number \u2014 not relevant for users in simplified UI"
         },
         "product": {
-          "visibility": "discarded",
-          "reason": "Not included in this iteration per UX feedback"
+          "visibility": "editable",
+          "form": false
         },
         "summaryLevel": {
           "visibility": "discarded",
@@ -196,8 +199,8 @@
           "grid": true,
           "summable": true,
           "form": false,
-          "displayLogicJs": "record.depreciate === true || record.depreciate === 'Y'",
-          "businessCritical": true
+          "businessCritical": true,
+          "displayLogic": null
         },
         "residualAssetValue": {
           "form": false,
@@ -257,29 +260,30 @@
           "form": false
         },
         "eTADASUser1": {
-          "visibility": "editable",
-          "form": false
+          "visibility": "discarded",
+          "reason": "Accounting dimension — out of scope for simplified Assets UI"
         },
         "eTADASUser2": {
-          "visibility": "editable",
-          "form": false
+          "visibility": "discarded",
+          "reason": "Accounting dimension — out of scope for simplified Assets UI"
         },
         "eTADASSalesRegion": {
-          "visibility": "editable",
-          "form": false
+          "visibility": "discarded",
+          "reason": "Accounting dimension — out of scope for simplified Assets UI"
         },
         "eTADASActivity": {
-          "visibility": "editable",
-          "form": false
+          "visibility": "discarded",
+          "reason": "Accounting dimension — out of scope for simplified Assets UI"
         },
         "eTADASSalesCampaign": {
-          "visibility": "editable",
-          "form": false
+          "visibility": "discarded",
+          "reason": "Accounting dimension — out of scope for simplified Assets UI"
         },
         "currency": {
+          "visibility": "readOnly",
           "form": false,
           "defaultExpr": "@C_Currency_ID@",
-          "readOnlyLogicJs": "Number(record.depreciatedPlan || 0) > 0 || Number(record.depreciatedValue || 0) > 0"
+          "readOnlyLogic": null
         },
         "description": {
           "form": false
@@ -398,13 +402,13 @@
       "impactIfOmitted": "Organization selector shows all orgs instead of the valid subset",
       "reason": "Simple SQL expression, standard Etendo org hierarchy pattern"
     },
-    "readOnlyLogic_Currency_existAmortizationLines": {
+    "readOnlyLogic_Currency_alwaysReadOnly": {
       "type": "readOnlyLogic",
       "entity": "asset",
       "decision": "Keep",
-      "description": "Currency becomes read-only once amortization lines exist",
+      "description": "Currency is always read-only (ETP-4539) \u2014 no longer conditional on existing amortization progress; the raw AD readOnlyLogic (@existAmortizationLines@ = 'Y') is neutralized via decisions.entities.assets.fields.currency.readOnlyLogic = null, and visibility: readOnly governs the field permanently instead",
       "impactIfOmitted": "Users could change currency mid-process, corrupting amortization financial data",
-      "reason": "Critical data integrity rule \u2014 currency must be locked after depreciation schedule is created"
+      "reason": "Critical data integrity rule \u2014 currency must never change after asset creation, regardless of amortization state"
     },
     "readOnlyLogic_Processed_AmortizationLine": {
       "type": "readOnlyLogic",

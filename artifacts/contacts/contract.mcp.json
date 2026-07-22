@@ -1,8 +1,8 @@
 {
-  "version": "0.40.0",
-  "generatedAt": "2026-05-06T15:52:09.982Z",
-  "updatedAt": "2026-06-19T12:52:46.818Z",
-  "contractChecksum": "43148e5c2c90e652",
+  "version": "0.44.0",
+  "generatedAt": "2026-07-07T21:53:25.883Z",
+  "updatedAt": "2026-07-17T17:14:42.971Z",
+  "contractChecksum": "8552f5c48c448cb9",
   "apiPrediction": {
     "specName": "contacts",
     "baseUrl": "/sws/neo/contacts",
@@ -685,7 +685,8 @@
         "PO_Financial_Account_ID": "Expense Account",
         "EM_Etgo_Web": "Website",
         "EM_Etgo_Firstname": "First Name",
-        "EM_Etgo_Lastname": "Last Name"
+        "EM_Etgo_Lastname": "Last Name",
+        "C_BP_Group_ID": "Contact Category"
       },
       "es_ES": {
         "Name": "Razón Social",
@@ -694,7 +695,8 @@
         "PO_Financial_Account_ID": "Cuenta contable de gastos",
         "EM_Etgo_Web": "Página web",
         "EM_Etgo_Firstname": "Nombre",
-        "EM_Etgo_Lastname": "Apellidos"
+        "EM_Etgo_Lastname": "Apellidos",
+        "C_BP_Group_ID": "Categoría de contacto"
       }
     }
   },
@@ -711,6 +713,10 @@
           "name": {
             "required": true
           },
+          "businessPartnerCategory": {
+            "required": true,
+            "defaultValue": "@SQL=SELECT MAX(C_BP_GROUP_ID) FROM C_BP_GROUP WHERE AD_ISORGINCLUDED(@AD_ORG_ID@, AD_ORG_ID, @#AD_CLIENT_ID@) <> -1 AND ISDEFAULT = 'Y' AND AD_CLIENT_ID = @#AD_CLIENT_ID@"
+          },
           "etgoFirstname": {
             "required": true
           },
@@ -722,12 +728,15 @@
             "defaultValue": "'1'"
           },
           "taxID": {},
+          "oBTIKVIESStatus": {
+            "readOnly": true
+          },
           "etgoWeb": {},
           "etgoEmail": {},
           "etgoPhone": {},
-          "businessPartnerCategory": {
+          "etgoIsperson": {
             "required": true,
-            "defaultValue": "@SQL=SELECT MAX(C_BP_GROUP_ID) FROM C_BP_GROUP WHERE AD_ISORGINCLUDED(@AD_ORG_ID@, AD_ORG_ID, @#AD_CLIENT_ID@) <> -1 AND ISDEFAULT = 'Y' AND AD_CLIENT_ID = @#AD_CLIENT_ID@"
+            "defaultValue": "N"
           },
           "name2": {},
           "description": {},
@@ -763,10 +772,6 @@
           "isCustomerConsent": {
             "defaultValue": "N"
           },
-          "etgoIsperson": {
-            "required": true,
-            "defaultValue": "N"
-          },
           "operator": {
             "defaultValue": "N"
           },
@@ -782,6 +787,9 @@
             "required": true,
             "defaultValue": "N"
           },
+          "eTGOLocation": {
+            "readOnly": true
+          },
           "account": {},
           "paymentMethod": {},
           "isSalesRepresentative": {
@@ -795,12 +803,6 @@
           "vendorBlocking": {
             "required": true,
             "defaultValue": "N"
-          },
-          "eTGOLocation": {
-            "readOnly": true
-          },
-          "oBTIKVIESStatus": {
-            "readOnly": true
           }
         }
       },
@@ -1117,16 +1119,16 @@
       "headerFields": [
         "searchKey",
         "name",
+        "businessPartnerCategory",
         "etgoFirstname",
         "etgoLastname",
         "oBTIKTaxIDKey",
-        "businessPartnerCategory",
+        "etgoIsperson",
         "customer",
         "vendor",
         "employee",
         "setNewCurrency",
         "creditLimit",
-        "etgoIsperson",
         "customerBlocking",
         "isSalesRepresentative",
         "vendorBlocking"
@@ -1227,16 +1229,16 @@
         "fields": [
           "searchKey",
           "name",
+          "businessPartnerCategory",
           "etgoFirstname",
           "etgoLastname",
           "oBTIKTaxIDKey",
-          "businessPartnerCategory",
+          "etgoIsperson",
           "customer",
           "vendor",
           "employee",
           "setNewCurrency",
           "creditLimit",
-          "etgoIsperson",
           "customerBlocking",
           "isSalesRepresentative",
           "vendorBlocking"
@@ -1247,5 +1249,5 @@
     "knownLimitations": [],
     "dangerousOperations": []
   },
-  "checksum": "c893e5be2aae8206"
+  "checksum": "254a1b8f9a34ca9b"
 }

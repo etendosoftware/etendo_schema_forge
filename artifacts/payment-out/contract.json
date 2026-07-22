@@ -1,8 +1,8 @@
 {
-  "version": "0.12.0",
+  "version": "0.13.0",
   "generatedAt": "2026-04-29T18:11:46.137Z",
-  "updatedAt": "2026-07-06T14:31:22.110Z",
-  "checksum": "3aa39031bae66f77",
+  "updatedAt": "2026-07-21T12:35:20.614Z",
+  "checksum": "b23e7b48a650e8f1",
   "frontendContract": {
     "window": {
       "id": "6F8F913FA60F4CBD93DC1D3AA696E76E",
@@ -104,6 +104,10 @@
             "inputMode": "selector",
             "defaultValue": "@SQL=SELECT C_DocType_ID from C_DocType WHERE AD_ISORGINCLUDED(@AD_Org_ID@,C_DocType.AD_Org_ID, @#AD_Client_ID@) <> -1 AND C_DocType.DocBaseType IN ('APP', 'ARR') AND C_DocType.IsSOTrx='@Isreceipt@'  ORDER BY C_DocType.isdefault DESC, AD_ISORGINCLUDED(@AD_Org_ID@,C_DocType.AD_Org_ID, @#AD_Client_ID@)",
             "section": "principal",
+            "validation": {
+              "required": true,
+              "maxLength": 32
+            },
             "validationRule": {
               "code": "C_DocType.DocBaseType IN ('APP', 'ARR') AND C_DocType.IsSOTrx='@Isreceipt@' AND AD_ISORGINCLUDED(@AD_Org_ID@,C_DocType.AD_Org_ID, @#AD_Client_ID@) <> '-1'",
               "contextParams": [
@@ -136,6 +140,10 @@
             },
             "section": "principal",
             "seq": 10,
+            "validation": {
+              "required": true,
+              "maxLength": 30
+            },
             "readOnlyLogic": {
               "raw": "@Processed@='Y'",
               "evaluable": true,
@@ -154,7 +162,10 @@
             "grid": false,
             "form": false,
             "section": "collapsed",
-            "seq": 70
+            "seq": 70,
+            "validation": {
+              "maxLength": 40
+            }
           },
           {
             "name": "paymentDate",
@@ -174,6 +185,9 @@
             "defaultValue": "@#Date@",
             "section": "principal",
             "seq": 40,
+            "validation": {
+              "maxLength": 19
+            },
             "callout": {
               "className": "org.openbravo.erpCommon.ad_callouts.SE_Payment_MultiCurrency"
             },
@@ -198,6 +212,9 @@
             "inputMode": "search",
             "section": "principal",
             "seq": 20,
+            "validation": {
+              "maxLength": 32
+            },
             "callout": {
               "className": "org.openbravo.erpCommon.ad_callouts.SE_Payment_BPartner"
             },
@@ -225,7 +242,10 @@
             "grid": false,
             "form": false,
             "section": "collapsed",
-            "seq": 80
+            "seq": 80,
+            "validation": {
+              "maxLength": 255
+            }
           },
           {
             "name": "paymentMethod",
@@ -243,6 +263,10 @@
             "inputMode": "selector",
             "section": "principal",
             "seq": 50,
+            "validation": {
+              "required": true,
+              "maxLength": 32
+            },
             "validationRule": {
               "code": "EXISTS (SELECT 1 FROM FIN_FinAcc_PaymentMethod fapm WHERE FIN_PaymentMethod.FIN_PaymentMethod_ID=fapm.FIN_PaymentMethod_ID\nAND fapm.isActive='Y'\nAND fapm.Payin_Allow = (SELECT CASE WHEN '@FIN_ISRECEIPT@'='Y' THEN 'Y' ELSE fapm.Payin_Allow END FROM DUAL)\nAND fapm.Payout_Allow = (SELECT CASE WHEN '@FIN_ISRECEIPT@'='N' THEN 'Y' ELSE fapm.Payout_Allow END FROM DUAL))",
               "contextParams": [],
@@ -275,6 +299,10 @@
             "inputMode": "selector",
             "section": "principal",
             "seq": 30,
+            "validation": {
+              "required": true,
+              "maxLength": 32
+            },
             "validationRule": {
               "code": "Fin_Financial_Account_ID IN (SELECT Fin_Financial_Account_ID FROM Fin_Finacc_Paymentmethod WHERE Fin_Paymentmethod_ID=@Fin_Paymentmethod_ID@ AND (CASE WHEN @IsReceipt@='Y' THEN Payin_Allow  ELSE Payout_Allow END)='Y' AND isActive='Y')",
               "contextParams": [],
@@ -308,6 +336,10 @@
             "inputMode": "selector",
             "section": "principal",
             "seq": 60,
+            "validation": {
+              "required": true,
+              "maxLength": 32
+            },
             "validationRule": {
               "code": "c_currency.c_currency_id in (select c_currency_id from fin_financial_account where fin_financial_account_id = @FIN_Financial_Account_ID@) \nOR \nexists (select 1 from fin_finacc_paymentmethod where fin_financial_account_id = @FIN_Financial_Account_ID@ and fin_paymentmethod_id = @FIN_PaymentMethod_ID@ and isactive='Y' and  (\n(@IsReceipt@ = 'Y' and payin_allow ='Y' and payin_ismulticurrency='Y')\nOR\n(@IsReceipt@ = 'N' and payout_allow ='Y' and payout_ismulticurrency='Y')\n))",
               "contextParams": [],
@@ -340,6 +372,10 @@
             "form": false,
             "sourceRequired": true,
             "section": "other",
+            "validation": {
+              "required": true,
+              "maxLength": 22
+            },
             "callout": {
               "className": "org.openbravo.erpCommon.ad_callouts.SE_Payment_MultiCurrency"
             },
@@ -372,6 +408,10 @@
             },
             "defaultValue": "1.0",
             "section": "other",
+            "validation": {
+              "required": true,
+              "maxLength": 12
+            },
             "callout": {
               "className": "org.openbravo.erpCommon.ad_callouts.SE_Payment_MultiCurrency"
             },
@@ -403,6 +443,9 @@
             },
             "defaultValue": "0",
             "section": "other",
+            "validation": {
+              "maxLength": 12
+            },
             "callout": {
               "className": "org.openbravo.erpCommon.ad_callouts.SE_Payment_MultiCurrency"
             },
@@ -425,6 +468,9 @@
             "grid": false,
             "form": false,
             "section": "other",
+            "validation": {
+              "maxLength": 1
+            },
             "displayLogic": {
               "raw": "@Processed@='N'",
               "evaluable": true
@@ -447,6 +493,9 @@
             },
             "defaultValue": "P",
             "section": "other",
+            "validation": {
+              "maxLength": 60
+            },
             "displayLogic": {
               "raw": "@Processed@='Y' & @Status@!'RPVOID'",
               "evaluable": true
@@ -464,6 +513,9 @@
             "grid": false,
             "form": false,
             "section": "other",
+            "validation": {
+              "maxLength": 1
+            },
             "displayLogic": {
               "raw": "@Status@='RPAE'",
               "evaluable": true
@@ -487,6 +539,10 @@
             },
             "defaultValue": "0",
             "section": "principal",
+            "validation": {
+              "required": true,
+              "maxLength": 22
+            },
             "callout": {
               "className": "org.openbravo.erpCommon.ad_callouts.SE_Payment_MultiCurrency"
             },
@@ -573,6 +629,10 @@
             ],
             "defaultValue": "RPAP",
             "section": "principal",
+            "validation": {
+              "required": true,
+              "maxLength": 40
+            },
             "validationRule": {
               "code": "(((@Isreceipt@='Y') AND Value not IN  ('PPM','PWNC')) OR ((@Isreceipt@='N') AND Value not IN ('RPR','RDNC')))",
               "contextParams": [],
@@ -597,7 +657,10 @@
               "source": "0"
             },
             "defaultValue": "0",
-            "section": "other"
+            "section": "other",
+            "validation": {
+              "maxLength": 12
+            }
           },
           {
             "name": "writeoffAmount",
@@ -616,7 +679,11 @@
               "source": "0"
             },
             "defaultValue": "0",
-            "section": "other"
+            "section": "other",
+            "validation": {
+              "required": true,
+              "maxLength": 22
+            }
           },
           {
             "name": "reversedPayment",
@@ -632,6 +699,9 @@
             "reference": "Payment",
             "inputMode": "selector",
             "section": "other",
+            "validation": {
+              "maxLength": 32
+            },
             "displayLogic": {
               "raw": "@FIN_Rev_Payment_ID@ ! ''",
               "evaluable": true
@@ -651,6 +721,9 @@
             "reference": "Project",
             "inputMode": "search",
             "section": "other",
+            "validation": {
+              "maxLength": 32
+            },
             "displayLogic": {
               "raw": "@ACCT_DIMENSION_DISPLAY@",
               "evaluable": false,
@@ -677,6 +750,9 @@
             "reference": "CostCenter",
             "inputMode": "selector",
             "section": "other",
+            "validation": {
+              "maxLength": 32
+            },
             "displayLogic": {
               "raw": "@ACCT_DIMENSION_DISPLAY@",
               "evaluable": false,
@@ -703,6 +779,9 @@
             "reference": "UserDimension1",
             "inputMode": "selector",
             "section": "other",
+            "validation": {
+              "maxLength": 32
+            },
             "displayLogic": {
               "raw": "@ACCT_DIMENSION_DISPLAY@",
               "evaluable": false,
@@ -729,6 +808,9 @@
             "reference": "UserDimension2",
             "inputMode": "selector",
             "section": "other",
+            "validation": {
+              "maxLength": 32
+            },
             "displayLogic": {
               "raw": "@ACCT_DIMENSION_DISPLAY@",
               "evaluable": false,
@@ -757,7 +839,11 @@
               "type": "fromConfig",
               "source": "new Date()"
             },
-            "defaultValue": "SYSDATE"
+            "defaultValue": "SYSDATE",
+            "validation": {
+              "required": true,
+              "maxLength": 19
+            }
           },
           {
             "name": "updated",
@@ -775,7 +861,11 @@
               "type": "fromConfig",
               "source": "new Date()"
             },
-            "defaultValue": "SYSDATE"
+            "defaultValue": "SYSDATE",
+            "validation": {
+              "required": true,
+              "maxLength": 19
+            }
           },
           {
             "name": "psd2GenerateBankPayment",
@@ -788,6 +878,9 @@
             "required": false,
             "grid": false,
             "form": false,
+            "validation": {
+              "maxLength": 1
+            },
             "displayLogic": {
               "raw": "@PSD2_HasPayments@=0 & @PSD2_ClientHasApiKey@=1 & @Status@='PPM'  & @PSD2_HasFinTransaction@=0 & @PSD2_FAIsBank@=1 & @PSD2_PMIsBankTransfer@=1",
               "evaluable": true
@@ -937,7 +1030,11 @@
                 }
               }
             ],
-            "defaultValue": "N"
+            "defaultValue": "N",
+            "validation": {
+              "required": true,
+              "maxLength": 60
+            }
           },
           {
             "name": "etblkpBulkposting",
@@ -956,6 +1053,10 @@
               "source": "N"
             },
             "defaultValue": "N",
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            },
             "displayLogic": {
               "raw": "@Status@!'RPAE' & @Status@!'RPVOID' & @Processed@='Y' & @#ShowAcct@='Y'",
               "evaluable": false,
@@ -980,6 +1081,10 @@
               "source": "N"
             },
             "defaultValue": "N",
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            },
             "displayLogic": {
               "raw": "@Processed@='Y' & @Status@!'RPVOID'",
               "evaluable": true
@@ -996,6 +1101,9 @@
             "required": false,
             "grid": false,
             "form": false,
+            "validation": {
+              "maxLength": 1
+            },
             "displayLogic": {
               "raw": "@Processed@='Y' & @Status@!'RPVOID'",
               "evaluable": true
@@ -1136,7 +1244,10 @@
             "grid": true,
             "form": true,
             "section": "principal",
-            "seq": 10
+            "seq": 10,
+            "validation": {
+              "maxLength": 0
+            }
           },
           {
             "name": "invoiceAmount",
@@ -1148,7 +1259,10 @@
             "visibility": "readOnly",
             "required": false,
             "grid": false,
-            "form": false
+            "form": false,
+            "validation": {
+              "maxLength": 0
+            }
           },
           {
             "name": "expected",
@@ -1162,7 +1276,10 @@
             "grid": true,
             "form": true,
             "section": "principal",
-            "seq": 30
+            "seq": 30,
+            "validation": {
+              "maxLength": 0
+            }
           },
           {
             "name": "amount",
@@ -1182,7 +1299,11 @@
             },
             "defaultValue": "0",
             "section": "principal",
-            "seq": 20
+            "seq": 20,
+            "validation": {
+              "required": true,
+              "maxLength": 12
+            }
           },
           {
             "name": "orderNo",
@@ -1199,6 +1320,10 @@
             "derivation": {
               "type": "sequence",
               "source": "documentType.sequence"
+            },
+            "validation": {
+              "required": true,
+              "maxLength": 30
             },
             "readOnlyLogic": {
               "raw": "@Processed@='Y' | @DocStatus@='TMP'",
@@ -1219,6 +1344,9 @@
             "form": false,
             "reference": "Payment_Schedule",
             "inputMode": "search",
+            "validation": {
+              "maxLength": 32
+            },
             "displayLogic": {
               "raw": "@FIN_Payment_Schedule_Order@!''",
               "evaluable": true
@@ -1239,6 +1367,10 @@
             "derivation": {
               "type": "sequence",
               "source": "documentType.sequence"
+            },
+            "validation": {
+              "required": true,
+              "maxLength": 30
             },
             "readOnlyLogic": {
               "raw": "@Processed@='Y'",
@@ -1261,6 +1393,9 @@
             "inputMode": "search",
             "section": "principal",
             "seq": 40,
+            "validation": {
+              "maxLength": 32
+            },
             "displayLogic": {
               "raw": "@FIN_Payment_Schedule_Invoice@!''",
               "evaluable": true
@@ -1278,7 +1413,10 @@
             "grid": false,
             "form": false,
             "reference": "Glitem",
-            "inputMode": "selector"
+            "inputMode": "selector",
+            "validation": {
+              "maxLength": 32
+            }
           },
           {
             "name": "canceled",
@@ -1296,7 +1434,11 @@
               "type": "computed",
               "source": "N"
             },
-            "defaultValue": "N"
+            "defaultValue": "N",
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            }
           },
           {
             "name": "businessPartner",
@@ -1311,6 +1453,9 @@
             "form": false,
             "reference": "BusinessPartner",
             "inputMode": "search",
+            "validation": {
+              "maxLength": 32
+            },
             "displayLogic": {
               "raw": "@ACCT_DIMENSION_DISPLAY@",
               "evaluable": false,
@@ -1331,6 +1476,9 @@
             "form": false,
             "reference": "Activity",
             "inputMode": "selector",
+            "validation": {
+              "maxLength": 32
+            },
             "displayLogic": {
               "raw": "@$Element_AY@='Y'",
               "evaluable": false,
@@ -1351,6 +1499,9 @@
             "form": false,
             "reference": "Product",
             "inputMode": "search",
+            "validation": {
+              "maxLength": 32
+            },
             "displayLogic": {
               "raw": "@ACCT_DIMENSION_DISPLAY@",
               "evaluable": false,
@@ -1371,6 +1522,9 @@
             "form": false,
             "reference": "Campaign",
             "inputMode": "selector",
+            "validation": {
+              "maxLength": 32
+            },
             "displayLogic": {
               "raw": "@$Element_MC@='Y'",
               "evaluable": false,
@@ -1391,6 +1545,9 @@
             "form": false,
             "reference": "Project",
             "inputMode": "search",
+            "validation": {
+              "maxLength": 32
+            },
             "displayLogic": {
               "raw": "@ACCT_DIMENSION_DISPLAY@",
               "evaluable": false,
@@ -1411,6 +1568,9 @@
             "form": false,
             "reference": "SalesRegion",
             "inputMode": "selector",
+            "validation": {
+              "maxLength": 32
+            },
             "displayLogic": {
               "raw": "@$Element_SR@='Y'",
               "evaluable": false,
@@ -1431,6 +1591,9 @@
             "form": false,
             "reference": "CostCenter",
             "inputMode": "selector",
+            "validation": {
+              "maxLength": 32
+            },
             "displayLogic": {
               "raw": "@ACCT_DIMENSION_DISPLAY@",
               "evaluable": false,
@@ -1451,6 +1614,9 @@
             "form": false,
             "reference": "UserDimension1",
             "inputMode": "selector",
+            "validation": {
+              "maxLength": 32
+            },
             "displayLogic": {
               "raw": "@ACCT_DIMENSION_DISPLAY@",
               "evaluable": false,
@@ -1471,6 +1637,9 @@
             "form": false,
             "reference": "UserDimension2",
             "inputMode": "selector",
+            "validation": {
+              "maxLength": 32
+            },
             "displayLogic": {
               "raw": "@ACCT_DIMENSION_DISPLAY@",
               "evaluable": false,
@@ -1606,7 +1775,11 @@
                 }
               }
             ],
-            "defaultValue": "requested"
+            "defaultValue": "requested",
+            "validation": {
+              "required": true,
+              "maxLength": 60
+            }
           },
           {
             "name": "saltedgeProviderCode",
@@ -1618,7 +1791,10 @@
             "visibility": "editable",
             "required": false,
             "grid": false,
-            "form": true
+            "form": true,
+            "validation": {
+              "maxLength": 255
+            }
           },
           {
             "name": "amount",
@@ -1636,7 +1812,11 @@
               "type": "computed",
               "source": "0"
             },
-            "defaultValue": "0"
+            "defaultValue": "0",
+            "validation": {
+              "required": true,
+              "maxLength": 22
+            }
           },
           {
             "name": "currency",
@@ -1651,7 +1831,11 @@
             "form": true,
             "sourceRequired": true,
             "reference": "Currency",
-            "inputMode": "selector"
+            "inputMode": "selector",
+            "validation": {
+              "required": true,
+              "maxLength": 32
+            }
           },
           {
             "name": "creditorName",
@@ -1663,7 +1847,10 @@
             "visibility": "editable",
             "required": false,
             "grid": false,
-            "form": true
+            "form": true,
+            "validation": {
+              "maxLength": 255
+            }
           },
           {
             "name": "creditorIban",
@@ -1675,7 +1862,10 @@
             "visibility": "editable",
             "required": false,
             "grid": false,
-            "form": true
+            "form": true,
+            "validation": {
+              "maxLength": 34
+            }
           },
           {
             "name": "debtorName",
@@ -1687,7 +1877,10 @@
             "visibility": "editable",
             "required": false,
             "grid": false,
-            "form": true
+            "form": true,
+            "validation": {
+              "maxLength": 255
+            }
           },
           {
             "name": "debtorIban",
@@ -1699,7 +1892,10 @@
             "visibility": "editable",
             "required": false,
             "grid": false,
-            "form": true
+            "form": true,
+            "validation": {
+              "maxLength": 34
+            }
           },
           {
             "name": "description",
@@ -1711,7 +1907,10 @@
             "visibility": "editable",
             "required": false,
             "grid": false,
-            "form": true
+            "form": true,
+            "validation": {
+              "maxLength": 2000
+            }
           },
           {
             "name": "financialAccount",
@@ -1726,7 +1925,11 @@
             "form": true,
             "sourceRequired": true,
             "reference": "Financial_Account",
-            "inputMode": "selector"
+            "inputMode": "selector",
+            "validation": {
+              "required": true,
+              "maxLength": 32
+            }
           },
           {
             "name": "refreshPayment",
@@ -1738,7 +1941,10 @@
             "visibility": "editable",
             "required": false,
             "grid": false,
-            "form": true
+            "form": true,
+            "validation": {
+              "maxLength": 1
+            }
           }
         ],
         "searchableFields": [],

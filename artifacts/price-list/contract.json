@@ -1,8 +1,8 @@
 {
-  "version": "0.3.0",
+  "version": "0.5.0",
   "generatedAt": "2026-04-29T18:12:11.134Z",
-  "updatedAt": "2026-06-29T12:09:16.125Z",
-  "checksum": "63eaa5de5087a0a2",
+  "updatedAt": "2026-07-21T12:35:21.129Z",
+  "checksum": "f9b95228657ee15b",
   "frontendContract": {
     "window": {
       "id": "146",
@@ -17,7 +17,8 @@
           "C_Currency_ID": "Moneda",
           "Costbased": "Basado en coste",
           "IsTaxIncluded": "Precio incluye impuesto",
-          "IsDefault": "Por defecto"
+          "IsDefault": "Por defecto",
+          "IsActive": "Activo"
         }
       },
       "layoutType": "default"
@@ -42,7 +43,11 @@
             "form": true,
             "sourceRequired": true,
             "section": "principal",
-            "seq": 1
+            "seq": 1,
+            "validation": {
+              "required": true,
+              "maxLength": 60
+            }
           },
           {
             "name": "currency",
@@ -59,7 +64,11 @@
             "reference": "Currency",
             "inputMode": "selector",
             "section": "principal",
-            "seq": 2
+            "seq": 2,
+            "validation": {
+              "required": true,
+              "maxLength": 22
+            }
           },
           {
             "name": "description",
@@ -73,7 +82,10 @@
             "grid": false,
             "form": true,
             "section": "principal",
-            "seq": 3
+            "seq": 3,
+            "validation": {
+              "maxLength": 255
+            }
           },
           {
             "name": "salesPriceList",
@@ -108,6 +120,10 @@
               "es_ES": "Tipo",
               "en_US": "Type"
             },
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            },
             "callout": {
               "className": "org.openbravo.erpCommon.ad_callouts.SE_Sales_Pricelist"
             }
@@ -131,9 +147,39 @@
             "defaultValue": "N",
             "section": "principal",
             "seq": 5,
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            },
             "displayLogic": {
               "raw": "@IsSOPriceList@='Y'",
               "evaluable": true
+            }
+          },
+          {
+            "name": "active",
+            "apiKey": "active",
+            "column": "IsActive",
+            "label": "Active",
+            "type": "boolean",
+            "tsType": "boolean",
+            "visibility": "editable",
+            "required": true,
+            "grid": false,
+            "form": true,
+            "sourceRequired": true,
+            "derivation": {
+              "type": "computed",
+              "source": "true"
+            },
+            "section": "principal",
+            "seq": 8,
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            },
+            "callout": {
+              "className": "org.openbravo.erpCommon.ad_callouts.SE_Pricelist_Active"
             }
           },
           {
@@ -150,6 +196,10 @@
             "sourceRequired": true,
             "section": "principal",
             "seq": 6,
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            },
             "validationRule": {
               "code": "AD_Client.AD_Client_ID in (@#User_Client@)",
               "contextParams": [
@@ -171,7 +221,11 @@
             "form": true,
             "sourceRequired": true,
             "section": "principal",
-            "seq": 7
+            "seq": 7,
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            }
           }
         ],
         "searchableFields": [
@@ -183,6 +237,13 @@
             "derivation": {
               "type": "computed",
               "source": "N"
+            }
+          },
+          {
+            "name": "active",
+            "derivation": {
+              "type": "computed",
+              "source": "true"
             }
           }
         ],
@@ -210,7 +271,11 @@
               "type": "computed",
               "source": "@#Date@"
             },
-            "defaultValue": "@#Date@"
+            "defaultValue": "@#Date@",
+            "validation": {
+              "required": true,
+              "maxLength": 60
+            }
           },
           {
             "name": "validFromDate",
@@ -228,7 +293,11 @@
               "type": "computed",
               "source": "@#Date@"
             },
-            "defaultValue": "@#Date@"
+            "defaultValue": "@#Date@",
+            "validation": {
+              "required": true,
+              "maxLength": 10
+            }
           },
           {
             "name": "priceListSchema",
@@ -244,6 +313,10 @@
             "sourceRequired": true,
             "reference": "DiscountSchema",
             "inputMode": "selector",
+            "validation": {
+              "required": true,
+              "maxLength": 22
+            },
             "validationRule": {
               "code": "M_DiscountSchema.DiscountType='P'",
               "contextParams": [],
@@ -262,7 +335,10 @@
             "grid": false,
             "form": true,
             "reference": "PriceList_Version",
-            "inputMode": "search"
+            "inputMode": "search",
+            "validation": {
+              "maxLength": 22
+            }
           },
           {
             "name": "description",
@@ -274,7 +350,10 @@
             "visibility": "editable",
             "required": false,
             "grid": false,
-            "form": true
+            "form": true,
+            "validation": {
+              "maxLength": 255
+            }
           },
           {
             "name": "create",
@@ -286,7 +365,10 @@
             "visibility": "editable",
             "required": false,
             "grid": false,
-            "form": true
+            "form": true,
+            "validation": {
+              "maxLength": 1
+            }
           }
         ],
         "searchableFields": [],
@@ -327,7 +409,11 @@
             "form": true,
             "sourceRequired": true,
             "reference": "Product",
-            "inputMode": "selector"
+            "inputMode": "selector",
+            "validation": {
+              "required": true,
+              "maxLength": 60
+            }
           },
           {
             "name": "standardPrice",
@@ -340,7 +426,11 @@
             "required": true,
             "grid": false,
             "form": true,
-            "sourceRequired": true
+            "sourceRequired": true,
+            "validation": {
+              "required": true,
+              "maxLength": 22
+            }
           },
           {
             "name": "listPrice",
@@ -353,7 +443,11 @@
             "required": true,
             "grid": false,
             "form": true,
-            "sourceRequired": true
+            "sourceRequired": true,
+            "validation": {
+              "required": true,
+              "maxLength": 22
+            }
           },
           {
             "name": "cost",
@@ -372,6 +466,10 @@
               "source": "0"
             },
             "defaultValue": "0",
+            "validation": {
+              "required": true,
+              "maxLength": 12
+            },
             "displayLogic": {
               "raw": "@Costbased@='Y'",
               "evaluable": true
@@ -403,6 +501,10 @@
               }
             ],
             "defaultValue": "S",
+            "validation": {
+              "required": true,
+              "maxLength": 60
+            },
             "displayLogic": {
               "raw": "(@numberOfAlgorithms@>1)",
               "evaluable": true
@@ -443,7 +545,8 @@
           "C_Currency_ID": "Moneda",
           "Costbased": "Basado en coste",
           "IsTaxIncluded": "Precio incluye impuesto",
-          "IsDefault": "Por defecto"
+          "IsDefault": "Por defecto",
+          "IsActive": "Activo"
         }
       }
     },
@@ -514,7 +617,7 @@
             "apiKey": "active",
             "column": "IsActive",
             "type": "boolean",
-            "visibility": "discarded",
+            "visibility": "editable",
             "required": true
           },
           {
@@ -1066,7 +1169,8 @@
         "C_Currency_ID": "Moneda",
         "Costbased": "Basado en coste",
         "IsTaxIncluded": "Precio incluye impuesto",
-        "IsDefault": "Por defecto"
+        "IsDefault": "Por defecto",
+        "IsActive": "Activo"
       }
     }
   },
@@ -1196,6 +1300,14 @@
         "field": "cost",
         "runner": "node",
         "description": "Display logic for 'cost' in productPrice should be valid JS"
+      },
+      {
+        "id": "t-field-presence-priceList-active",
+        "category": "field-presence",
+        "entity": "priceList",
+        "field": "active",
+        "runner": "node",
+        "description": "Field 'active' should be present in priceList"
       },
       {
         "id": "t-field-presence-priceList-costBasedPriceList",
@@ -1340,6 +1452,14 @@
         "field": "standardPrice",
         "runner": "node",
         "description": "Field 'standardPrice' should be present in productPrice"
+      },
+      {
+        "id": "t-field-type-priceList-active",
+        "category": "field-type",
+        "entity": "priceList",
+        "field": "active",
+        "runner": "node",
+        "description": "Field 'active' should have type 'boolean' in priceList"
       },
       {
         "id": "t-field-type-priceList-costBasedPriceList",
@@ -1603,14 +1723,6 @@
         "description": "Selector endpoint for 'product' in productPrice should exist"
       },
       {
-        "id": "t-system-field-priceList-active",
-        "category": "system-field",
-        "entity": "priceList",
-        "field": "active",
-        "runner": "node",
-        "description": "System field 'active' should exist in backend but not frontend for priceList"
-      },
-      {
         "id": "t-system-field-priceList-basePricelist",
         "category": "system-field",
         "entity": "priceList",
@@ -1865,23 +1977,23 @@
       }
     ],
     "summary": {
-      "total": 101,
+      "total": 102,
       "byCategory": {
         "action-endpoint": 2,
         "crud-flags": 3,
         "default-value-type": 5,
         "displaylogic-evaluable": 3,
         "displaylogic-valid": 3,
-        "field-presence": 18,
-        "field-type": 18,
+        "field-presence": 19,
+        "field-type": 19,
         "rule-declared": 11,
         "searchable-filters": 1,
         "selector-endpoint": 4,
-        "system-field": 30,
+        "system-field": 29,
         "visibility": 3
       },
       "byRunner": {
-        "node": 101,
+        "node": 102,
         "junit": 0
       }
     }

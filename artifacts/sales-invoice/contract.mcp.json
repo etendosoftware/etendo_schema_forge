@@ -1,8 +1,8 @@
 {
-  "version": "0.47.0",
+  "version": "0.62.0",
   "generatedAt": "2026-04-30T15:42:46.582Z",
-  "updatedAt": "2026-07-01T14:34:29.873Z",
-  "contractChecksum": "0afb11783dd12e84",
+  "updatedAt": "2026-07-20T19:57:51.790Z",
+  "contractChecksum": "5265d041bbe1a0fe",
   "apiPrediction": {
     "specName": "sales-invoice",
     "baseUrl": "/sws/neo/sales-invoice",
@@ -46,6 +46,17 @@
         "delete": true,
         "listUrl": "/sws/neo/sales-invoice/paymentPlan",
         "detailUrl": "/sws/neo/sales-invoice/paymentPlan/{id}",
+        "supportedFilters": []
+      },
+      "reversedInvoices": {
+        "get": true,
+        "getById": true,
+        "post": true,
+        "put": true,
+        "patch": true,
+        "delete": true,
+        "listUrl": "/sws/neo/sales-invoice/reversedInvoices",
+        "detailUrl": "/sws/neo/sales-invoice/reversedInvoices/{id}",
         "supportedFilters": []
       },
       "exchangeRates": {
@@ -224,6 +235,22 @@
         "reference": "Currency",
         "inputMode": "selector",
         "url": "/sws/neo/sales-invoice/paymentPlan/selectors/currency"
+      },
+      {
+        "entity": "reversedInvoices",
+        "field": "reversedInvoice",
+        "column": "Reversed_C_Invoice_ID",
+        "reference": "Invoice",
+        "inputMode": "search",
+        "url": "/sws/neo/sales-invoice/reversedInvoices/selectors/reversedInvoice"
+      },
+      {
+        "entity": "reversedInvoices",
+        "field": "aEAT349CYear",
+        "column": "EM_AEAT349_C_Year_ID",
+        "reference": "Year",
+        "inputMode": "search",
+        "url": "/sws/neo/sales-invoice/reversedInvoices/selectors/aEAT349CYear"
       },
       {
         "entity": "exchangeRates",
@@ -1013,17 +1040,25 @@
             "readOnly": true,
             "readOnlyLogic": "@processed@='Y'"
           },
-          "tbaiSequence": {
-            "readOnly": true
+          "etvfacInvType": {
+            "readOnlyLogic": "@processed@='Y'",
+            "defaultValue": "F1"
           },
-          "tbaiInvoicenum": {
-            "readOnly": true
+          "etvfacVerifacDesc": {
+            "readOnlyLogic": "@processed@='Y'"
           },
-          "tbaiInvoiceseq": {
-            "readOnly": true
+          "etvfacReverseinvtype": {
+            "readOnlyLogic": "@processed@='Y'"
           },
-          "tbaiIssent": {
-            "readOnly": true
+          "etvfacSimpinvart7273": {
+            "required": true,
+            "readOnlyLogic": "@processed@='Y'",
+            "defaultValue": "N"
+          },
+          "etvfacInvNoIDArt61d": {
+            "required": true,
+            "readOnlyLogic": "@processed@='Y'",
+            "defaultValue": "N"
           },
           "aeatsiiIssent": {
             "readOnly": true,
@@ -1164,6 +1199,29 @@
           }
         }
       },
+      "reversedInvoices": {
+        "fields": {
+          "reversedInvoice": {
+            "required": true,
+            "readOnlyLogic": "@Processed@='Y' & @DocStatus@!='VO'"
+          },
+          "aEAT349IsCorrective": {
+            "readOnlyLogic": "@Processed@='Y' & @DocStatus@!='VO'"
+          },
+          "aEAT349CYear": {
+            "readOnlyLogic": "@Processed@='Y' & @DocStatus@!='VO'"
+          },
+          "aEAT349Period": {
+            "readOnlyLogic": "@Processed@='Y' & @DocStatus@!='VO'"
+          },
+          "aEAT349BPBaseAmount": {
+            "readOnlyLogic": "@Processed@='Y' & @DocStatus@!='VO'"
+          },
+          "aEAT349BPBaseAmountS": {
+            "readOnlyLogic": "@Processed@='Y' & @DocStatus@!='VO'"
+          }
+        }
+      },
       "exchangeRates": {
         "fields": {
           "currency": {
@@ -1172,6 +1230,7 @@
             "readOnlyLogic": "@HASREVERSEDINVOICESO@='Y' | @HASREVERSEDINVOICEPO@='Y' | @Posted@='Y'"
           },
           "toCurrency": {
+            "readOnly": true,
             "required": true,
             "readOnlyLogic": "@HASREVERSEDINVOICESO@='Y' | @HASREVERSEDINVOICEPO@='Y' | @Posted@='Y'"
           },
@@ -1205,6 +1264,8 @@
         "paymentMethod",
         "currency",
         "priceList",
+        "etvfacSimpinvart7273",
+        "etvfacInvNoIDArt61d",
         "aeatsiiIsauthorization",
         "transactionDocument"
       ],
@@ -1213,7 +1274,7 @@
         "listPrice",
         "unitPrice",
         "expectedDate",
-        "toCurrency",
+        "reversedInvoice",
         "foreignAmount"
       ],
       "recommendedOrder": [
@@ -1338,6 +1399,8 @@
           "paymentMethod",
           "currency",
           "priceList",
+          "etvfacSimpinvart7273",
+          "etvfacInvNoIDArt61d",
           "aeatsiiIsauthorization",
           "transactionDocument"
         ]
@@ -1350,7 +1413,7 @@
           "listPrice",
           "unitPrice",
           "expectedDate",
-          "toCurrency",
+          "reversedInvoice",
           "foreignAmount"
         ]
       },
@@ -1366,5 +1429,5 @@
       "tbaiVoidxmlgenerator"
     ]
   },
-  "checksum": "51233355e09fb288"
+  "checksum": "deab773738bb857d"
 }

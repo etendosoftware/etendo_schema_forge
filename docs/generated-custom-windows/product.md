@@ -182,3 +182,13 @@ Updated on 2026-06-08 as part of the feature/ETP-4190 branch. Significant change
 - **Drag & drop:** `onDragEnter/Over/Leave/Drop` handlers (mirrors `UploadDropzone` pattern). Zone highlights to `border-[#828FA3] bg-[#F5F7F9]` while dragging.
 - **File validation:** type (`image/png`, `image/jpeg` only via `IMAGE_ALLOWED_TYPES`), size (≤ 30 MB), pixel dimensions (≤ 7680 × 4320 via `readImageDimensions`). The `accept` attribute narrowed from `image/*` to `image/png,image/jpeg`. Errors surface as `toast.error()` — the inline `<p className="text-destructive">` was removed.
 - **i18n keys added:** `imageDropTitle`, `imageDropSubtitle`, `imageInvalidType`, `imageTooLarge`, `imageTooLargeDimensions`.
+
+## ETP-4447 — CSV/TXT import
+
+**Import button added to the list toolbar.** `decisions.json → window.import` (`enabled: true`, `spec: "product"`, `entity: "product"`, `formats: ["csv", "txt"]`) renders an Import action in `ListView.jsx`'s toolbar, opening the shared `ImportDialog` (dropzone → column mapping → review queue → send).
+
+**Plain declarative field mapping — no composite descriptor.** Unlike Contacts, Product doesn't register a custom descriptor: each CSV row maps straight to a single `product` create op. Fields: `searchKey` (required, aliases `codigo`/`código`/`sku`), `name` (required), `description`, `uOM` (FK → `UOM`), `productCategory` (FK → `ProductCategory`), `taxCategory` (FK → `TaxCategory`).
+
+**Row-level dedupe by search key.** `window.import.dedupe` is `{ scope: "file", key: ["searchKey"] }` — an in-file duplicate SKU is flagged `skipped` rather than sent twice.
+
+**FK fields (UOM/Category/Tax Category) get the same pick-a-value review UI as Contacts' country field:** a field that couldn't be matched renders as a click-to-open popover backed by SimSearch candidates, with live re-search as the user types and a "browse all" fallback when nothing matched at all — see `contacts.md`'s ETP-4447 section for the full review-queue mechanics (frozen Status column, per-field grid, skip/unskip), which is shared code, not Product-specific.

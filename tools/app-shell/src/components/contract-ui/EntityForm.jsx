@@ -8,6 +8,7 @@ import { FIELD_HEIGHT, ROW_GAP_Y, LABEL_GAP } from '@/components/ui/formDensity'
 import { PillToggle } from '@/components/PillToggle';
 import { ChevronDown, Loader2, Search } from 'lucide-react';
 import { useLabel, useLocaleSwitch, useMenuLabel, useUI } from '@/i18n';
+import { buildHeaders } from '@/auth/api.js';
 import { buildUrlWithParams } from '@/lib/buildUrlWithParams.js';
 import { resolveIdentifier } from '@/lib/resolveIdentifier.js';
 import { getCatalogOptions } from '@/lib/selectorCatalog.js';
@@ -20,6 +21,7 @@ import { SelectorChip } from './SelectorChip.jsx';
 import { SelectorInput } from './SelectorInput.jsx';
 import { CreatableSearchSelect } from './CreatableSearchSelect.jsx';
 import { InlineCreateSelector } from './InlineCreateSelector.jsx';
+import LocationModalField from './LocationModalField.jsx';
 
 function buildSelectPlaceholder(ui, label) {
   return `${ui('selectLabelPrefix')} ${label}...`;
@@ -150,7 +152,7 @@ function SearchInput({ entityName, field, value, displayValue, onChange, catalog
     // Try server selector with ?id=
     if (!selectorUrl || !token) return;
     fetch(buildUrlWithParams(selectorUrl, { ...selectorContext, id: value }), {
-      headers: { 'Authorization': `Bearer ${token}` },
+      headers: buildHeaders(token),
     })
       .then(res => res.ok ? res.json() : null)
       .then(data => {
@@ -173,7 +175,7 @@ function SearchInput({ entityName, field, value, displayValue, onChange, catalog
 
     setFetching(true);
     fetch(buildUrlWithParams(selectorUrl, params), {
-      headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+      headers: buildHeaders(token),
     })
       .then(res => res.ok ? res.json() : null)
       .then(data => {
@@ -399,7 +401,7 @@ function DependentSelect({ field, value, displayValue, onChange, catalogs, formD
       [field.dependsOn?.filterKey]: parentValue,
     });
     fetch(url, {
-      headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+      headers: buildHeaders(token),
     })
       .then(res => res.ok ? res.json() : null)
       .then(data => {
@@ -1081,6 +1083,25 @@ export function EntityForm({ entity, fields = [], data, onChange, catalogs, layo
         applyLookupAuxData(auxData, isGross, onChange, f);
       }
     };
+    // Opt-in (decisions: `editModal: "location"`): a single C_Location FK that opens the
+    // shared LocationEditorModal to create/edit the address inline, instead of a pick-only
+    // dropdown of existing records (ETP-4526, Warehouse Location/Address field).
+    if (f.editModal === 'location') {
+      return (
+        <LocationModalField
+          key={f.key}
+          field={f}
+          value={data?.[f.key] ?? ''}
+          displayValue={data?.[f.key + '$_identifier']}
+          onChange={searchOnChange}
+          apiBaseUrl={apiBaseUrl}
+          token={token}
+          resolvedLabel={label}
+          required={!!(f.required || f.requiredVisual)}
+          selectorContext={effectiveSelectorContext}
+          data-testid="LocationModalField__a8d626" />
+      );
+    }
     if (f.popup) {
       return (
         <PopupSearchField

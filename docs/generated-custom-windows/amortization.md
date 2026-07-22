@@ -8,18 +8,21 @@ Records are typically created from the **Assets** window via the **Create Amorti
 
 ## What this window should allow
 
-- List existing amortization documents with name, accounting date, starting date, and total amortization formatted with currency symbol, with a status filter dropdown ("All statuses / Borrador / Procesado") in the toolbar.
+- List existing amortization documents with name, accounting date, starting date, and total amortization formatted with currency symbol, with a status filter dropdown ("All statuses / Borrador / Procesado") in the toolbar. Amortization documents cannot be created from the list — the create button is hidden (`window.hideCreate: true`); records originate from the **Assets** → **Create Amortization** action.
 - Open a document to inspect the header and its amortization lines.
+- Header fields are read-only regardless of document state — **Name**, **Accounting Date**, **Starting Date**, and **Currency** are locked unconditionally. Only **Description** is editable.
 - While in **draft** (`processed='N'`):
-  - Edit header fields: name, description, accounting date, starting date, currency.
+  - Edit the **Description** header field.
   - Edit lines inline: asset (required), amortization percentage, amortization amount.
   - Add and delete lines.
+  - Set line accounting dimensions (**Project**, **Cost Center**, **Contact**) via the per-line expand panel.
   - Press **Confirmar** to open a confirmation modal showing the current total, line count, and a lock warning, then confirm the document.
 - Once **processed** (`processed='Y'`):
-  - All header and line fields become read-only.
-  - The **Delete** action is hidden.
-  - A **Reactivar** option appears in the three-dot menu to unprocess the document.
+  - The remaining editable field (Description) and all line fields become read-only.
+  - A **Reactivar** option appears in the three-dot menu to unprocess the document, including when it is posted. When posted, the action first unposts the document and then reactivates it; when not posted, it only reactivates. There is no separate **Descontabilizar** action in Etendo Go.
+- The header **Delete** (trash) button is hidden in all states via `window.hideDeleteButton` (see `docs/decisions-reference.md` / `docs/ui-customization.md` for the flag mechanics).
 - Attach files via the **Adjuntos** tab.
+- The document-level **Delete** action (list row trash icon and detail toolbar) is hidden unconditionally, in both draft and processed status (`window.hideDeleteButton: true`) — this is stricter than the previous processed-only behavior. Deleting individual **lines** while in draft is unaffected and still available.
 
 ## Interaction model
 
@@ -30,19 +33,26 @@ Records are typically created from the **Assets** window via the **Create Amorti
 - Detail layout: full-width form (no sidebar); **Adjuntos** tab in the tab strip.
 - Lines layout: `inlineEditable` — existing rows use InlineLinesPanel (flex), new rows use a DataTable add-row form. Hovering a row reveals pencil/trash icons in a dedicated 160px action slot (not a trailing-column swap, because `amortizationAmount` has `noTrailing: true`).
 - Confirm button: black primary button on the far right, disabled when no lines exist. Opens `AmortizationConfirmModal` rather than executing directly.
-- List toolbar: Print and Link buttons are hidden (`hidePrint: true`, `hideLink: true`). Only the status dropdown, funnel, and "New amortization" button are shown.
+- List toolbar: Print, Link, and the create button are hidden (`hidePrint: true`, `hideLink: true`, `hideCreate: true`). Only the status dropdown and funnel are shown — there is no "New amortization" button.
+- Delete action fully suppressed: `hideDeleteButton: true` hides the delete (red trash) icon in the list grid rows and in the detail toolbar, regardless of the document's processed state. This is stronger than `hideDeleteWhenComplete` (which only hides delete once the document is processed). Deleting individual **lines** while in draft is unaffected and still available.
+- No footer summary bar: `window.summaryFields: []` removes the bottom summary strip. The header form already surfaces those fields, so the footer strip is redundant.
 
 ## Reactive behavior and dependencies
 
-- **Draft/processed lock**: all editable header fields and all line fields carry `readOnlyLogic: @Processed@='Y'`. Delete is suppressed on processed documents.
+- **Header field locking**: Name, Accounting Date, Starting Date, and Currency are classified `readOnly` in `decisions.json`, so they are locked in every state (not just once processed). Description stays editable in draft and locks when the document is processed. The header **Delete** button is hidden in all states via `window.hideDeleteButton`.
+- **Independent accounting date (ETP-4531)**: scope was explicitly confirmed to keep `accountingDate` fully read-only here — no change made. Verified against live AD metadata: `A_Amortization` has zero `AD_Column.AD_Callout_ID` entries on any column (no callouts wired at all), so no field edit — in Classic or in `com.etendoerp.go`'s callout cascade — can ever write into `accountingDate`. Combined with its `readOnly` visibility, this field is immutable by construction; nothing else in this window can recalculate it.
+- **Line lock**: all line fields carry `readOnlyLogic: @Processed@='Y'` and become read-only once the document is processed.
 - **Confirmar button**: wired via `draftMode.processField: "Processed"`. Only visible while draft; disabled when no lines; opens the confirm modal. The modal fetches the record and line count independently, calculates the total from line amounts (not from the stored header field), shows a warning, and submits `POST /action/Processed`. On success, the detail view refetches the header.
-- **Reactivar menu action**: appears in the three-dot menu only when `processed='Y'`. Calls `/action/Processed` again, which the backend interprets as an unprocess request. After success, the page reloads.
+- **Reactivar menu action**: appears in the three-dot menu only when `processed='Y'`, regardless of the accounting `posted` value. It uses `preUnpost: true`, so posted records first call `/action/unpost` and then `/action/Processed`; unposted records skip the unpost step and only call `/action/Processed`. After success, the page reloads. The independent **Descontabilizar** menu action is intentionally not exposed for amortizations.
 - **Status pill**: `statusField: "processed"` in `decisions.json` causes DetailView to render a `DocumentStatusPill` next to the Cancel button. Values: `'Y'` → "✓ Procesado" (green/success), `'N'` → "Borrador" (neutral/grey). Tone mapping lives in `tools/app-shell/src/lib/statusBadge.js` (`getStatusTone`).
 - **Lines total footer**: computed from visible lines (`lines.reduce()`) so it updates immediately on any mutation — no server round-trip needed. `TOTALAMORTIZATION` on the header is kept in sync by `ETGO_A_AMORTLINE_TOTAL_TRG` (AFTER trigger on `A_AMORTIZATIONLINE`) and is the authoritative value shown in the list view column.
-- **New record currency default**: the `currency` field defaults to the org's functional currency via `defaultExpr: "@$C_Currency_ID@"` in decisions.json. The currency is editable until the document is processed.
+- **New record currency default**: the `currency` field defaults to the org's functional currency via `defaultExpr: "@$C_Currency_ID@"` in decisions.json. Currency is classified `readOnly`, so it is displayed but never editable from this window.
 - **Main list total**: the `totalAmortization` column uses `type: 'amount'` (with `summable: true`) so it renders with the currency symbol and a column footer total.
 - **Status filter dropdown**: the list toolbar shows an "All statuses ▾" dropdown (same mechanism as Sales Order). It filters by `processed` column value: 'N' → Borrador/Draft, 'Y' → Procesado/Processed. The `processed` column is in the table schema (type `status`, `filterOnly: true`) so `ListFilterBar` can detect it, but is hidden from visual display via `hiddenColumns` and excluded from the Conditional Filter via `filterable: false`.
-- Accounting dimensions are discarded: `project`, `salesCampaign`, `activity`, `costcenter`, `User1_ID`, `User2_ID` are not surfaced.
+- Header accounting dimensions are discarded: `project`, `salesCampaign`, `activity`, `stDimension`, `ndDimension` are not surfaced on the header.
+- **Line accounting dimensions**: only **Project**, **Cost Center**, and **Contact** are shown in the per-line expand panel. The remaining dimensions (1st/2nd Dimension, Sales Region, Activity, Sales Campaign) are discarded. **Product** is not shown on amortization lines.
+- **"+ Add dimensions" trigger**: on a line with no dimensions set, the dashed "+ Añadir dimensiones" affordance is shown only while the document is editable. When the document is **processed** and the line has no dimensions, the trigger is hidden entirely (there is nothing to reveal but disabled fields). When a line has at least one dimension set, the value(s) render as read-only "Label: Value" chips regardless of state.
+- **Others tab removed**: the empty "Others" tab is gone. Its Accounting Status field (`etblkpAccountingstatus`) is discarded and no longer appears in the header, and the `etblkpBulkposting` label was removed from the summary/footer area.
 
 ## Gap assessment
 
@@ -56,13 +66,13 @@ Records are typically created from the **Assets** window via the **Create Amorti
 1. Open `/amortization` from Finance and confirm the list renders with formatted amounts (e.g., `5,000.00 €`) and no currency column.
 2. From Assets, trigger **Create Amortization** on a depreciation-enabled asset. Open the new record in `/amortization`.
 3. Confirm the record is in draft:
-   - Header fields (name, accounting date, starting date, currency) are editable.
+   - Header fields Name, Accounting Date, Starting Date, and Currency are displayed read-only; only **Description** is editable. The header trash/Delete button is absent.
    - Lines render in the custom `AmortizationLinesTable` — columns: Asset | Amortization % | Amount | Accounting dimensions.
    - Toolbar shows a grey "Borrador" pill next to the Cancel button (no sidebar).
    - Below the lines table a right-aligned footer shows "Amortización total: X €".
    - **Confirmar** button is black/primary on the far right; **Guardar** is grey.
 4. Click the pencil icon on an existing line and confirm the Asset, %, and Amount fields become editable inline within the same row. Edit the amount and click outside (blur) — confirm the value saves without pressing a confirm button. Verify the sidebar total updates to reflect the new sum.
-4a. Click the circular chevron button on a line row — confirm it rotates and a white panel expands below (no section title, no filled-count counter). The panel shows the Organisation field (read-only) and 7 dimension selectors. Hover a selector — confirm the background changes to `#F5F7F9`. Select a value in one selector (e.g., Cost Center) and confirm it auto-saves immediately without a Save button. Collapse the panel and verify the Accounting dimensions column now shows a "Label: Value" badge for the filled dimension.
+4a. Click the circular chevron button on a line row — confirm it rotates and a white panel expands below (no section title, no filled-count counter). The panel shows the Organisation field (read-only) and 3 dimension selectors: **Project**, **Cost Center**, and **Contact**. Hover a selector — confirm the background changes to `#F5F7F9`. Select a value in one selector (e.g., Cost Center) and confirm it auto-saves immediately without a Save button. Collapse the panel and verify the Accounting dimensions column now shows a "Label: Value" badge for the filled dimension. On a processed document, verify a line with no dimensions shows no "+ Añadir dimensiones" affordance, while a line that already has dimensions still renders its value chips as read-only.
 4b. Select one or more rows using the row checkboxes — confirm the shared `LinesSelectionBar` appears at the bottom with the count and a red trash button. Click × to clear the selection. In processed/read-only state, confirm the checkboxes are visible but disabled.
 4c. Click "+ Añadir línea" — confirm an inline draft row appears aligned to the table columns (asset buscador, % and amount inputs with column-name placeholders). The "+ Añadir línea" button must remain visible. Type a value, press Enter — confirm the line saves and the draft row stays open. Press Esc — confirm the draft row closes. Click outside with a value entered — confirm it saves and closes.
 4d. Add the first line to a new draft record and confirm the **Confirmar** button becomes enabled immediately (without page reload).
@@ -79,7 +89,7 @@ Records are typically created from the **Assets** window via the **Create Amorti
 
 ## Manual verification (list toolbar)
 
-1. Open `/amortization` list — toolbar shows: **All statuses ▾** | **funnel** | **+ New amortization**. Print and Link buttons are absent.
+1. Open `/amortization` list — toolbar shows: **All statuses ▾** | **funnel**. The create ("+ New amortization"), Print, and Link buttons are all absent.
 2. Click "All statuses ▾" — dropdown shows: All statuses ✓ / Borrador / Procesado. Selecting "Borrador" filters to draft records only.
 3. Open the funnel (Conditional Filter) — `processed` does NOT appear in the field selector.
 
@@ -94,13 +104,15 @@ Records are typically created from the **Assets** window via the **Create Amorti
   - `statusField: "processed"` — drives the `DocumentStatusPill` in the toolbar (green for 'Y', grey for 'N').
   - `asset.grow: true` and `amortizationPercentage.grow: true` for balanced column distribution.
   - `draftMode: { processField: "Processed", label: "confirm", confirmModal: "AmortizationConfirmModal", disableWhenEmpty: true }`.
-  - `menuActions: [{ key: "reactivate", visibleWhenFieldTrue: "processed", columnName: "Processed" }]`.
-  - `hideDeleteWhenComplete: true`, `hidePrint: true`, `hideLink: true`.
-  - `currency.defaultExpr: "@$C_Currency_ID@"`.
+  - `menuActions: [{ key: "reactivate", visibleWhenFieldTrue: "processed", preUnpost: true, columnName: "Processed" }]`; there is no standalone `unpost` action for amortizations.
+  - `hideDeleteButton: true`, `hideCreate: true`, `summaryFields: []`, `hidePrint: true`, `hideLink: true`.
+  - `currency.defaultExpr: "@$C_Currency_ID@"`; `currency.visibility: "readOnly"`.
+  - Header fields `name`, `accountingDate`, `startingDate`, `currency`: `visibility: "readOnly"`. Only `description` stays editable.
+  - `etblkpAccountingstatus` and `etblkpBulkposting`: `visibility: "discarded"` — removes the "Others" tab Accounting Status field and the stale Bulk Posting label.
   - `processed` header field: `grid: true`, `filterOnly: true`, `columnType: "status"`, `filterable: false` — feeds the status dropdown without showing as a column.
-  - Accounting entity excluded; accounting dimensions discarded.
+  - Accounting entity excluded. Line dimensions kept: `project`, `costcenter`, `eTADASBpartner` (editable); all other line dimensions discarded.
 - `tools/app-shell/src/lib/statusBadge.js` — `getStatusTone` maps `'y'`/`'yes'` → `'success'`; `statusLabel` MAP includes `Y: 'statusProcessed'` and `N: 'statusDraft'` so `DocumentStatusPill` resolves tones and labels for `processed` field values.
-- `tools/app-shell/src/windows/custom/amortization/AmortizationLinesTable.jsx` — custom lines component. Renders Asset (`w-64`, 256 px) | Amortization % | Amount | Accounting dimensions columns. The Asset column has an explicit `w-64` so it stays proportional on wide viewports instead of absorbing all remaining table space. Per-row and select-all checkboxes for multi-select (disabled, not hidden, in read-only state); shared `LinesSelectionBar` for bulk delete. Circular icon button toggles a white-background expand panel with Organisation (read-only) + 7 dimension selectors (auto-save on `onChange`). Pencil activates inline editing for 3 core fields (blur-saves; calls `onRefresh` after each save to keep header in sync). Add-line auto-saves the header first when `isNew` (mirrors Sales Order `openAddLine` pattern: saves → navigates to real recordId → useEffect opens inline form on re-mount). New lines include `currency` from header. Footer computed from `lines.reduce()` for immediate accuracy. Test coverage: `__tests__/AmortizationLinesTable.vitest.jsx` (27 tests).
+- `tools/app-shell/src/windows/custom/amortization/AmortizationLinesTable.jsx` — custom lines component. Renders Asset | Amortization % | Amount | Accounting dimensions columns. Per-row and select-all checkboxes for multi-select (disabled, not hidden, in read-only state); shared `LinesSelectionBar` for bulk delete. Circular icon button toggles a white-background expand panel with Organisation (read-only) + 3 dimension selectors — **Project**, **Cost Center**, **Contact** (`DIMENSION_FIELDS`) — auto-saving on `onChange`. `DimSummary` returns `null` (hides the "+ Add dimensions" affordance) when the document is processed and the line has no dimensions; when dimensions exist it always renders read-only "Label: Value" chips. Pencil activates inline editing for 3 core fields (blur-saves; calls `onRefresh` after each save to keep header in sync). Add-line auto-saves the header first when `isNew` (mirrors Sales Order `openAddLine` pattern: saves → navigates to real recordId → useEffect opens inline form on re-mount). New lines include `currency` from header. Footer computed from `lines.reduce()` for immediate accuracy.
 - `artifacts/amortization/custom/AmortizationConfirmModal.jsx` — confirmation modal. Fetches lines to calculate current total independently. Calls `POST /action/Processed` on confirm. On success calls `onClose(true)` which triggers `window.location.reload()`. Blocks confirmation when any line has a zero/negative amount (`amortizationErrorLineAmountInvalid`) or a missing percentage (`amortizationErrorLinePercentageMissing`). Both i18n keys are in `packages/app-shell-core/src/locales/`. Headers include `Accept-Language: getStoredLocale()` so backend process errors (e.g. closed accounting period) are returned in the user's UI language.
 
 ## ETP-4103 changes
@@ -131,14 +143,14 @@ Changes landed in `feature/ETP-4103`. Covers visual polish, sidebar simplificati
 - **Multi-select checkboxes**: every row has a checkbox; the header has a select-all checkbox (indeterminate when partially selected). In read-only/processed mode checkboxes remain visible but are disabled (matching Sales Order behaviour). Selecting ≥1 row shows the shared `LinesSelectionBar` (same as Sales Order) — a floating bottom bar with the selection count, a red trash/delete button, and an × cancel button. Bulk delete issues concurrent DELETE requests via `Promise.all`.
 - **Circular expand toggle**: each row has a circular icon button (24 px, border `#D1D4DB`, rounded-full, shadow xs, `ChevronDown #828FA3`) that toggles the accounting dimensions panel. Rotates 180° when expanded.
 - **Inline editing** (pencil icon): clicking the pencil on a row makes the 3 core fields (Asset, %, Amount) editable inline within the same row. Save happens on blur — no confirm button needed. Same pattern as Sales Order.
-- **Expandable dimensions panel**: expanding a row reveals a white-background panel (no section title, no filled-count counter) with a read-only Organisation field and 7 dimension selectors: Cost Center, Contact/Business Partner, 1st Dimension, 2nd Dimension, Sales Region, Activity, Sales Campaign. Project is hidden (`displayLogic: @ACCT_DIMENSION_DISPLAY@`). Selectors have a hover background (`#F5F7F9`) on pointer-over.
+- **Expandable dimensions panel**: expanding a row reveals a white-background panel (no section title, no filled-count counter) with a read-only Organisation field and dimension selectors. Selectors have a hover background (`#F5F7F9`) on pointer-over. _(Superseded by ETP-4429: the selector set was trimmed to Project, Cost Center, and Contact — see the ETP-4429 section below.)_
 - Dimension selectors auto-save on `onChange` — immediate PUT per field, no Save button required.
 - When the document is **processed** (`processed='Y'`), dimension selectors are rendered as disabled `<input>` elements with `opacity-50` and `cursor-not-allowed` — visually greyed out to signal that no editing is possible. In draft mode, read-only inputs retain full opacity (`!opacity-100`) to stay visually neutral. This is controlled via the `isCompleted` prop on `DimensionGrid`, passed as `processed` from the parent component.
 - **Accounting dimensions column summary**: badges in "Label: Value" format (`#F5F7F9` background, 8px radius, `#3F3F50` label text). Organisation always leads when filled. Up to 2 badges shown; remaining are collapsed into a `+N` badge. Empty rows show a dashed "+ Añadir dimensiones" button.
 - **Add line — inline draft row** (Sales Order pattern): clicking "+ Añadir línea" inserts an inline editable row aligned to the table columns. Field placeholders are the column labels (e.g. "Activo", "Amortization %", "Amortization Amount"). Enter saves and keeps the row open for rapid entry; Esc cancels; clicking outside saves (or cancels if empty). The "+ Añadir línea" button stays visible while the draft row is open. The hint "Enter o clic fuera para guardar · Esc para cancelar" (`inlineAddHint`) appears below the table while the draft row is active.
 - After any line mutation (create, delete, bulk delete), the component calls `onRefresh()` to trigger `hook.fetchChildren()` in the parent DetailView — this keeps the **Confirmar** button state in sync without a page reload (`hook.children.length > 0` enables the button).
 - Delete individual line via trash icon on row hover.
-- Dimension fields are also exposed as columns in the list view: Project, Cost Center, 1st Dimension, 2nd Dimension, Business Partner, Sales Region, Activity, Sales Campaign.
+- Dimension fields are also exposed as columns in the list view. _(Superseded by ETP-4429: only Project, Cost Center, and Contact remain — see the ETP-4429 section below.)_
 
 ### Lines — badge labels
 
@@ -192,3 +204,53 @@ Changes landed in `feature/ETP-4173`. Covers AD_Message error token resolution a
 ### Deferred to a follow-up
 
 - Direct FK from the header (`A_Amortization`) to the asset (Issue 3 of ETP-4230) — requires a new AD column; tracked separately.
+
+## ETP-4429 — Simplified header, hidden create/delete, trimmed line dimensions
+
+This iteration tightens the Amortization window to a read-focused, assets-driven flow. All changes are declared in `artifacts/amortization/decisions.json` (or realised through `AmortizationLinesTable.jsx`) and survive pipeline re-runs.
+
+### List view — create button hidden
+
+- `window.hideCreate: true` — the "New amortization" create button is removed from the list toolbar. Users can no longer start an amortization from the list; documents are created from the **Assets** window via **Create Amortization**. The list toolbar now shows only the status dropdown and the funnel.
+
+### Record header — read-only except Description
+
+- `name`, `accountingDate`, `startingDate`, and `currency` are classified `visibility: "readOnly"` in `decisions.json`, so they are displayed but locked in every state (draft and processed alike). This replaces the previous "editable until processed" behaviour.
+- `description` remains the only editable header field in draft; it locks when the document is processed.
+
+### "Others" tab and stale labels removed
+
+- `etblkpAccountingstatus` → `visibility: "discarded"` — removes the empty "Others" tab and its Accounting Status field. It no longer appears in the header.
+- `etblkpBulkposting` → `visibility: "discarded"` — removes the stale Bulk Posting label from the summary/footer area (the Bulk Posting button was already excluded via `processOverrides`).
+
+### Footer summary bar removed
+
+- `window.summaryFields: []` — the bottom summary strip is removed. The fields it duplicated already appear in the header form, so the strip was redundant.
+
+### Header Delete button hidden
+
+- `window.hideDeleteButton: true` — the header trash/Delete button is hidden in all states. This is a distinct flag from the previous `hideDeleteWhenComplete` (which only hid Delete once processed); the mechanics of the flag are documented in `docs/ui-customization.md` and `docs/decisions-reference.md`.
+
+### Line accounting dimensions trimmed to three
+
+- The per-line expand panel and the list-view dimension columns now show only **Project**, **Cost Center**, and **Contact**. In `decisions.json` the `lines` entity keeps `project`, `costcenter`, and `eTADASBpartner` (editable, `grid: true`); `stDimension`, `ndDimension`, `eTADASSalesRegion`, `eTADASActivity`, and `eTADASSalesCampaign` are discarded. `AmortizationLinesTable.jsx` reflects the same trimmed set in its `DIMENSION_FIELDS`.
+- **Product is not shown** on amortization lines.
+
+### "+ Add dimensions" trigger — conditional on state and content
+
+- `DimSummary` in `AmortizationLinesTable.jsx` hides the dashed "+ Añadir dimensiones" affordance when the document is **processed** and the line has **no** dimensions set — there would be nothing to reveal but disabled fields. On editable documents the affordance still appears for empty lines.
+- When a line has at least one dimension set, the value(s) always render as read-only "Label: Value" chips (Organisation leads when present), regardless of document state.
+
+### Manual verification (ETP-4429)
+
+1. Open `/amortization` — confirm there is no create/"New amortization" button in the toolbar; only the status dropdown and funnel are present.
+2. Open a draft amortization — confirm Name, Accounting Date, Starting Date, and Currency are read-only and only Description accepts input. Confirm there is no header trash/Delete button and no bottom summary strip.
+3. Confirm there is no "Others" tab and no Accounting Status field anywhere in the header.
+4. Expand a line — confirm the dimension panel shows exactly Organisation (read-only) + Project, Cost Center, Contact. Confirm no Product selector is present.
+5. On a processed document, confirm an empty-dimension line shows no "+ Añadir dimensiones" trigger, while a line with dimensions still displays its value chips.
+
+## ETP-4538 — Reactivate replaces Unpost on posted amortizations
+
+- The three-dot menu no longer exposes the independent **Descontabilizar** (`unpost`) action for amortization documents.
+- **Reactivar** is visible whenever the document is processed (`processed='Y'`), including records whose accounting status is posted (`posted='Y'`). For posted records, `preUnpost: true` makes the UI call the existing unpost endpoint before triggering the `Processed` action; for unposted records, only the `Processed` action runs. This matches the Etendo Go document lifecycle rule: reactivation is the single user action and accounting reversal is part of that flow.
+- Role-based access restrictions for **Reactivar** are deferred until the role permissions model exists.

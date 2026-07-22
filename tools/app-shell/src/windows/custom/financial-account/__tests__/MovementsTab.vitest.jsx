@@ -1,11 +1,12 @@
 import { render, screen, act } from '@testing-library/react';
+import { createRef } from 'react';
 
 // Stub the three children. We expose:
 //   - MovementsToolbar: lets the test drive filter changes via onFiltersChange
 //   - MovementsTable: just emits the current filtered movements as JSON for assertions
 //   - AccountSummaryStrip: just a marker
 vi.mock('../MovementsToolbar/index.jsx', () => ({
-  MovementsToolbar: ({ filters, onFiltersChange, onAdvancedFilterChange }) => (
+  MovementsToolbar: ({ filters, onFiltersChange, onAdvancedFilterChange, onTransfer }) => (
     <div data-testid="toolbar">
       <span data-testid="filters">{JSON.stringify(filters)}</span>
       {/* Quick filters driven via onFiltersChange */}
@@ -14,6 +15,10 @@ vi.mock('../MovementsToolbar/index.jsx', () => ({
       </button>
       <button data-testid="set-search-acme" onClick={() => onFiltersChange('search')('acme')}>
         set search
+      </button>
+      {/* Triggers the parent's onTransfer callback (opens FundsTransferModal). */}
+      <button data-testid="trigger-transfer" onClick={() => onTransfer?.()}>
+        transfer
       </button>
       {/*
         Status and amount are now advanced ("by conditions") filters, applied via
@@ -73,29 +78,63 @@ vi.mock('../MovementsToolbar/index.jsx', () => ({
       <button data-testid="set-date-null" onClick={() => onFiltersChange('dateRange')(null)}>
         date null
       </button>
+      {/*
+        A dateRange shape with neither `presetId` nor `from`/`to` — exercises the
+        final `return null;` branch of kpiWindowSuffix().
+      */}
+      <button data-testid="set-date-weird" onClick={() => onFiltersChange('dateRange')({})}>
+        date weird
+      </button>
     </div>
   ),
 }));
 
 vi.mock('../AccountSummaryStrip.jsx', () => ({
-  AccountSummaryStrip: () => <div data-testid="summary-strip" />,
-}));
-
-vi.mock('../MovementsTable.jsx', () => ({
-  MovementsTable: ({ movements }) => (
-    <div data-testid="table">
-      <span data-testid="row-count">{movements.length}</span>
-      <span data-testid="row-ids">{movements.map((m) => m.id).join(',')}</span>
+  // Surface totals.windowSuffix so tests can assert on kpiWindowSuffix()'s output.
+  AccountSummaryStrip: ({ totals }) => (
+    <div data-testid="summary-strip">
+      <span data-testid="window-suffix">{JSON.stringify(totals?.windowSuffix ?? null)}</span>
     </div>
   ),
 }));
 
-// Stub the wizard — its internals (useCreateMovement → useAuth, lookups, etc.)
-// are out of scope for MovementsTab filtering behaviour and need a real
-// AuthProvider otherwise.
-vi.mock('../NewMovementWizard/index.jsx', () => ({
-  NewMovementWizard: ({ open }) => (
-    <div data-testid="new-movement-wizard" data-open={String(!!open)} />
+vi.mock('../MovementsTable.jsx', () => ({
+  MovementsTable: ({ movements, selectedIds, onSelectionChange }) => (
+    <div data-testid="table">
+      <span data-testid="row-count">{movements.length}</span>
+      <span data-testid="row-ids">{movements.map((m) => m.id).join(',')}</span>
+      <span data-testid="selected-ids">{[...(selectedIds ?? [])].join(',')}</span>
+      {/* Toggles selection of movement "a" — exercises both the select and
+          deselect branches of handleSelectionChange. */}
+      <button data-testid="toggle-select-a" onClick={() => onSelectionChange('a')}>
+        toggle a
+      </button>
+    </div>
+  ),
+}));
+
+// Stub the new-transaction modal — its internals (useCreateMovement → useAuth,
+// lookups, etc.) are out of scope for MovementsTab filtering behaviour and need a
+// real AuthProvider otherwise. onClose/onSuccess are surfaced so tests can trigger
+// the callbacks MovementsTab wires up (setNewMovementOpen(false) / onReload).
+vi.mock('../NewTransactionModal.jsx', () => ({
+  NewTransactionModal: ({ open, onClose, onSuccess }) => (
+    <div data-testid="new-transaction-modal" data-open={String(!!open)}>
+      <button data-testid="modal-close" onClick={() => onClose?.()}>close</button>
+      <button data-testid="modal-success" onClick={() => onSuccess?.()}>success</button>
+    </div>
+  ),
+}));
+
+// Stub the transfer modal similarly — its internals (useFundsTransfer, account
+// lookups) are out of scope here. onClose/onSuccess are surfaced so tests can
+// trigger MovementsTab's setTransferOpen(false) / onReload callbacks.
+vi.mock('../FundsTransferModal.jsx', () => ({
+  FundsTransferModal: ({ onClose, onSuccess }) => (
+    <div data-testid="funds-transfer-modal">
+      <button data-testid="transfer-close" onClick={() => onClose?.()}>close</button>
+      <button data-testid="transfer-success" onClick={() => onSuccess?.()}>success</button>
+    </div>
   ),
 }));
 
@@ -243,5 +282,110 @@ describe('MovementsTab — pass-through props', () => {
     renderTab({ loading: true, movements: [] });
     expect(screen.getByTestId('table')).toBeInTheDocument();
     expect(screen.getByTestId('row-count').textContent).toBe('0');
+  });
+});
+
+describe('MovementsTab — selection toggle', () => {
+  it('selects then deselects the same id (both branches of handleSelectionChange)', () => {
+    renderTab();
+    expect(screen.getByTestId('selected-ids').textContent).toBe('');
+
+    act(() => {
+      screen.getByTestId('toggle-select-a').click();
+    });
+    expect(screen.getByTestId('selected-ids').textContent).toBe('a');
+
+    act(() => {
+      screen.getByTestId('toggle-select-a').click();
+    });
+    expect(screen.getByTestId('selected-ids').textContent).toBe('');
+  });
+});
+
+describe('MovementsTab — kpi window suffix', () => {
+  it('returns null when dateRange has neither presetId nor from/to', () => {
+    renderTab();
+    act(() => {
+      screen.getByTestId('set-date-weird').click();
+    });
+    expect(screen.getByTestId('window-suffix').textContent).toBe('null');
+  });
+});
+
+describe('MovementsTab — imperative handle', () => {
+  it('exposes getFilteredMovements() via ref, reflecting the current filters', () => {
+    const ref = createRef();
+    render(
+      <MovementsTab
+        ref={ref}
+        account={{ id: 'acc-1', currencyIso: 'EUR' }}
+        totals={{ balance: 0, inflows: 0, outflows: 0, currency: 'EUR' }}
+        movements={M}
+        loading={false}
+      />,
+    );
+    const filtered = ref.current.getFilteredMovements();
+    expect(filtered.map((m) => m.id).sort()).toEqual(['a', 'b', 'c']);
+
+    // Filter narrows further — the ref must reflect the latest filtered list.
+    act(() => {
+      screen.getByTestId('set-type-bpd').click();
+    });
+    expect(ref.current.getFilteredMovements().map((m) => m.id).sort()).toEqual(['a', 'c']);
+  });
+});
+
+describe('MovementsTab — transfer flow', () => {
+  it('opens FundsTransferModal via onTransfer, and its onSuccess/onClose callbacks work', () => {
+    const onReload = vi.fn();
+    renderTab({ onReload });
+
+    // Not rendered until the toolbar's transfer action fires.
+    expect(screen.queryByTestId('funds-transfer-modal')).not.toBeInTheDocument();
+
+    act(() => {
+      screen.getByTestId('trigger-transfer').click();
+    });
+    expect(screen.getByTestId('funds-transfer-modal')).toBeInTheDocument();
+
+    act(() => {
+      screen.getByTestId('transfer-success').click();
+    });
+    expect(onReload).toHaveBeenCalledTimes(1);
+
+    act(() => {
+      screen.getByTestId('transfer-close').click();
+    });
+    expect(screen.queryByTestId('funds-transfer-modal')).not.toBeInTheDocument();
+  });
+
+  it('does not throw when onSuccess fires without an onReload prop', () => {
+    renderTab({ onReload: undefined });
+    act(() => {
+      screen.getByTestId('trigger-transfer').click();
+    });
+    expect(() => {
+      act(() => {
+        screen.getByTestId('transfer-success').click();
+      });
+    }).not.toThrow();
+  });
+});
+
+describe('MovementsTab — new transaction modal callbacks', () => {
+  it('invokes onReload on modal success, and onClose does not throw', () => {
+    const onReload = vi.fn();
+    renderTab({ onReload });
+
+    act(() => {
+      screen.getByTestId('modal-success').click();
+    });
+    expect(onReload).toHaveBeenCalledTimes(1);
+
+    expect(() => {
+      act(() => {
+        screen.getByTestId('modal-close').click();
+      });
+    }).not.toThrow();
   });
 });
