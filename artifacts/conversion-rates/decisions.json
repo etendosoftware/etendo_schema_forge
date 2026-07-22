@@ -3,7 +3,8 @@
   "window": {
     "category": "finance",
     "name": "Conversion Rates",
-    "detailEntity": null
+    "detailEntity": null,
+    "readOnly": true
   },
   "entities": {
     "header": {

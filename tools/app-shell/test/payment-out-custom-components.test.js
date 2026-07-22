@@ -197,12 +197,12 @@ describe('ReactivarConfirmModal', () => {
     assert.match(src, /export default function ReactivarConfirmModal/);
   });
 
-  it('imports ReactivarModal from the shared path', () => {
-    assert.match(src, /import ReactivarModal from '@\/windows\/custom\/shared\/ReactivarModal'/);
+  it('imports PaymentLifecycleConfirmModal from the shared path', () => {
+    assert.match(src, /import PaymentLifecycleConfirmModal from '@\/windows\/custom\/shared\/PaymentLifecycleConfirmModal'/);
   });
 
-  it('passes dir="out" to the shared ReactivarModal', () => {
-    assert.match(src, /dir=["']out["']/);
+  it('passes dir="out" and action="reactivate" with the record to PaymentLifecycleConfirmModal', () => {
+    assert.match(src, /<PaymentLifecycleConfirmModal dir="out" action="reactivate" data={record}/);
   });
 
   it('forwards onConfirm and onClose props to the shared modal', () => {

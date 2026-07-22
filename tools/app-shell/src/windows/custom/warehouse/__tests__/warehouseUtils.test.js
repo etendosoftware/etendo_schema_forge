@@ -43,20 +43,38 @@ describe('aggregateProducts', () => {
     });
   });
 
-  describe('zero / negative quantity filtering', () => {
-    it('filters out products with qty <= 0 after aggregation', () => {
+  describe('zero / negative quantity — no filtering (caller decides)', () => {
+    // aggregateProducts no longer filters by qty. Each consumer (Products tab,
+    // list product-count cell, "in stock > 0" KPI) applies its own predicate,
+    // so this helper must return every aggregated product, including qty === 0
+    // and qty < 0 rows.
+    it('keeps products with qty === 0 after aggregation', () => {
       const rows = [
         { product: 'p1', 'product$_identifier': 'Widget', uOM: 'u1', quantityOnHand: 0, etgoValuation: 0 },
       ];
-      assert.deepEqual(aggregateProducts(rows), []);
+      const result = aggregateProducts(rows);
+      assert.equal(result.length, 1);
+      assert.equal(result[0].qty, 0);
     });
 
-    it('filters out products where positive and negative sums cancel to 0', () => {
+    it('keeps products where positive and negative sums cancel to 0', () => {
       const rows = [
         { product: 'p1', 'product$_identifier': 'Widget', uOM: 'u1', quantityOnHand: 5, etgoValuation: 50 },
         { product: 'p1', 'product$_identifier': 'Widget', uOM: 'u1', quantityOnHand: -5, etgoValuation: -50 },
       ];
-      assert.deepEqual(aggregateProducts(rows), []);
+      const result = aggregateProducts(rows);
+      assert.equal(result.length, 1);
+      assert.equal(result[0].qty, 0);
+    });
+
+    it('keeps products where qty is negative after aggregation', () => {
+      const rows = [
+        { product: 'p1', 'product$_identifier': 'Widget', uOM: 'u1', quantityOnHand: 3, etgoValuation: 30 },
+        { product: 'p1', 'product$_identifier': 'Widget', uOM: 'u1', quantityOnHand: -10, etgoValuation: -100 },
+      ];
+      const result = aggregateProducts(rows);
+      assert.equal(result.length, 1);
+      assert.equal(result[0].qty, -7);
     });
 
     it('keeps products where qty is positive after aggregation', () => {
@@ -102,15 +120,19 @@ describe('aggregateProducts', () => {
       const rows = [
         { product: 'p1', 'product$_identifier': 'Widget', uOM: 'u1', quantityOnHand: 'bad', etgoValuation: 0 },
       ];
-      // qty becomes 0 → filtered out
-      assert.deepEqual(aggregateProducts(rows), []);
+      // qty becomes 0 — still returned; no filtering happens in aggregateProducts
+      const result = aggregateProducts(rows);
+      assert.equal(result.length, 1);
+      assert.equal(result[0].qty, 0);
     });
 
     it('treats undefined quantityOnHand as 0', () => {
       const rows = [
         { product: 'p1', 'product$_identifier': 'Widget', uOM: 'u1', etgoValuation: 0 },
       ];
-      assert.deepEqual(aggregateProducts(rows), []);
+      const result = aggregateProducts(rows);
+      assert.equal(result.length, 1);
+      assert.equal(result[0].qty, 0);
     });
 
     it('treats non-numeric etgoValuation as 0', () => {

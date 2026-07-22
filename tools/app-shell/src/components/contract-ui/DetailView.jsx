@@ -7,6 +7,7 @@ import { AddLineButton } from '@/components/ui/add-line-button.jsx';
 import { X, MoreVertical, Check, Save, List, Printer, Mail, Trash2, Loader2, Shield, Lock, Undo2 } from 'lucide-react';
 import { AttachmentIcon } from '@/components/attachments/AttachmentIcon';
 import { PricingIcon, WarehouseProductsIcon } from '@/components/ui/custom-icons';
+import PaymentLifecycleConfirmModal from '@/windows/custom/shared/PaymentLifecycleConfirmModal';
 
 const TAB_ICONS = {
   'custom:attachments': AttachmentIcon,
@@ -68,6 +69,7 @@ import BalanceFooterPanel from './BalanceFooterPanel.jsx';
 import { resolveTotalDiscountPct } from '@/lib/documentTotals';
 import { computeBalance } from '@/lib/balanceTotals';
 import LinesSelectionBar from './LinesSelectionBar.jsx';
+import { evalTabReadOnly } from './evalTabReadOnly.js';
 import { resolveIdentifier } from '@/lib/resolveIdentifier.js';
 import {
   buildCalloutFormState, extractAuxValues, normalizeCalloutQty,
@@ -397,8 +399,8 @@ export function getSecondarySelectionChangeHandler(linesLayout, setSecondarySele
 }
 
 export function getSecondaryRowUpdateHandler(st, linesLayout, ctx) {
-  const { api, apiBaseUrl, secondaryHooks, stIdx, token, ui, extractErrorMessage } = ctx;
-  return !st.customAddModal && linesLayout === 'inlineEditable' ? async (row, fieldKey, value, opts) => {
+  const { api, apiBaseUrl, secondaryHooks, stIdx, token, ui, extractErrorMessage, isDocumentReadOnly, hook } = ctx;
+  return !st.customAddModal && linesLayout === 'inlineEditable' && !isDocumentReadOnly ? async (row, fieldKey, value, opts) => {
     const childUrl = api?.crud?.[st.key]?.detailUrl?.replace('{id}', row.id)
         || `${apiBaseUrl}/${st.key}/${row.id}`;
     const includesIdentifier = opts?.identifier !== undefined;
@@ -429,6 +431,28 @@ export function getSecondaryRowUpdateHandler(st, linesLayout, ctx) {
       // NEO wraps the saved record in {response:{data:[...]}}.
       const serverRow = updated?.response?.data?.[0] ?? null;
       if (serverRow) secondaryHooks[stIdx]?.handleUpdateChild?.(row.id, serverRow);
+      // ETP-4029: editing rate/foreignAmount here also updates the invoice
+      // header's hidden eTGOCurrencyRate on the backend (reverse sync — see
+      // InvoiceExchangeRateHandler). Without this, the header's currency-rate
+      // picker keeps showing the stale value until a manual reload.
+      // refreshHeaderTotals is the same lightweight, non-disruptive header
+      // refresh already used after primary-line edits — it re-GETs the header
+      // and merges in only the fields the user hasn't touched, so any of the
+      // user's own in-progress unsaved header edits survive untouched.
+      //
+      // clearUserChangedKey('eTGOCurrencyRate') runs first, and ONLY for this
+      // one field: if the user had earlier edited the rate via the header's
+      // own CurrencyRatePicker in this same visit (already saved), that edit
+      // permanently marks eTGOCurrencyRate as "user changed" for the rest of
+      // the session (see useEntity.handleChange) — refreshHeaderTotals would
+      // then refuse to overwrite it, leaving the header stuck on the old
+      // value even though the tab's edit just persisted a newer one. This is
+      // a narrow, deliberate exception for this specific cross-surface sync;
+      // see the full rationale on clearUserChangedKey's definition.
+      if (st.key === 'exchangeRates' && hook?.selected?.id) {
+        hook.clearUserChangedKey('eTGOCurrencyRate');
+        hook.refreshHeaderTotals(hook.selected.id);
+      }
     } else {
       secondaryHooks[stIdx]?.handleUpdateChild?.(row.id, previous);
       const msg = await extractErrorMessage(res);
@@ -742,11 +766,16 @@ function secondaryAddLineBar(props) {
 }
 
 export function SecondaryTableTab(props) {
+  // Evaluates the tab's own readOnlyLogic (if declared) against the current
+  // header record — independent of the document-wide isDocumentReadOnly, which
+  // only governs the primary lines table. Most tabs declare no readOnlyLogic
+  // and this stays false, preserving today's behavior everywhere else.
+  const tabReadOnly = evalTabReadOnly(props.st, props.hook.selected);
   const secondaryChildren = props.secondaryHooks[props.stIdx]?.children ?? [];
   const isAddingThis = props.addingSecondaryLine?.[props.st.key] ?? false;
   const hasAddFields = (props.st.addLineFields?.entry?.length ?? 0) > 0;
   const showEmptyState = secondaryChildren.length === 0 && !isAddingThis
-    && props.hook.editing && hasAddFields && !props.st.customAddModal;
+    && props.hook.editing && hasAddFields && !props.st.customAddModal && !tabReadOnly;
   if (showEmptyState) {
     return secondaryTabEmptyState({ ui: props.ui, onAddLineClick: props.onAddLineClick, addLineLabel: props.addLineLabel });
   }
@@ -763,6 +792,7 @@ export function SecondaryTableTab(props) {
               labelOverrides={props.labelOverrides}
               selectorContext={props.selectorContextByEntity[props.st.key]}
               linesLayout={props.linesLayout}
+              isDocumentReadOnly={tabReadOnly}
               onRowClick={resolveSecondaryRowClickHandler(props.st, {
                 openCustomModal: props.openCustomModal,
                 openSecondaryLine: props.openSecondaryLine,
@@ -773,7 +803,7 @@ export function SecondaryTableTab(props) {
               onEditRow={getSecondaryEditRowHandler(props.st, props.setCustomModalState)}
               selectedRowId={props.selectedSecondaryLine?._tabKey === props.st.key ? props.selectedSecondaryLine?.id : undefined}
               onSelectionChange={getSecondarySelectionChangeHandler(props.linesLayout, props.setSecondarySelectedRows, props.st)}
-              onDeleteRow={(props.enableSecondaryRowDelete || (props.linesLayout === 'inlineEditable' && !props.st.customAddModal)) && (props.crud?.[props.st.key]?.delete ?? true) ? props.onDeleteRow : undefined}
+              onDeleteRow={(props.enableSecondaryRowDelete || (props.linesLayout === 'inlineEditable' && !props.st.customAddModal)) && !tabReadOnly && (props.crud?.[props.st.key]?.delete ?? true) ? props.onDeleteRow : undefined}
               // Inline edit save for secondary-tab rows. Fires when a
               // cell loses focus while in edit mode. Optimistic flow:
               // we update the local cache FIRST so the Radix Select
@@ -787,8 +817,10 @@ export function SecondaryTableTab(props) {
                 token: props.token,
                 ui: props.ui,
                 extractErrorMessage: props.extractErrorMessage,
+                isDocumentReadOnly: tabReadOnly,
+                hook: props.hook,
               })}
-              addRow={props.st.addLineFields?.entry?.length > 0 ? {
+              addRow={props.st.addLineFields?.entry?.length > 0 && !tabReadOnly ? {
                 ref: props.secondaryAddRowRef,
                 active: props.addingSecondaryLine[props.st.key] ?? false,
                 fields: props.st.addLineFields.entry,
@@ -802,7 +834,7 @@ export function SecondaryTableTab(props) {
         </div>
         {secondaryDetailSidebar(props)}
       </div>
-      {secondaryAddLineBar(props)}
+      {!tabReadOnly && secondaryAddLineBar(props)}
     </>
   );
 }
@@ -1059,6 +1091,14 @@ export function buildInlineRowUpdateHandler({ linesLayout, isDocumentReadOnly, a
     });
     if (res.ok) {
       applyLocalChildRowUpdate(derivedUpdates, fieldKey, payloadValue, fieldValues, opts, hook, row);
+      // Server response wins over the optimistic cache when present —
+      // picks up trigger-computed fields (e.g. etgoQtydiff) that only
+      // exist after the DB flush, mirroring the secondary-tab handler
+      // above (line ~425). NEO wraps the saved record in
+      // {response:{data:[...]}}.
+      const updated = await res.json().catch(() => null);
+      const serverRow = updated?.response?.data?.[0] ?? null;
+      if (serverRow) hook.handleUpdateChild?.(row.id, serverRow);
     } else {
       const msg = await extractErrorMessage(res);
       toast.error(msg || ui('networkError'));
@@ -1310,6 +1350,14 @@ export function getTabsBarClassName(tabsBarPaddingX, tabsBarRightDivider) {
 const WINDOW_DELETE_ACTIONS = {
   'payment-in': 'eTPRRemovePayment',
   'payment-out': 'eTPRRemovePayment',
+};
+
+// ETP-4500 — same rationale/hardcoding constraint as WINDOW_DELETE_ACTIONS above: these
+// windows show the rich Reactivar/Eliminar cartel (conditional Conciliación/Asiento items)
+// instead of the generic delete confirmation Dialog. `dir` feeds the cobro/pago wording.
+const WINDOW_DELETE_CONFIRM_MODALS = {
+  'payment-in': { Component: PaymentLifecycleConfirmModal, dir: 'in' },
+  'payment-out': { Component: PaymentLifecycleConfirmModal, dir: 'out' },
 };
 
 export function isDeleteButtonVisible({
@@ -1716,9 +1764,9 @@ export function resolveProcessLabel(p, data) {
   return p.label;
 }
 
-function renderProcessConfirmModal(process, Modal, onConfirm, onClose) {
+function renderProcessConfirmModal(process, Modal, onConfirm, onClose, record) {
   if (!process || !Modal) return null;
-  return React.createElement(Modal, { process, onConfirm, onClose });
+  return React.createElement(Modal, { process, onConfirm, onClose, record });
 }
 
 function resolveStatusPrefix(key, translate) {
@@ -1983,6 +2031,8 @@ export function DetailView({
   // ETP-4479 — fall back to the per-window default when the caller didn't
   // explicitly pass `deleteAction` (see WINDOW_DELETE_ACTIONS above).
   const effectiveDeleteAction = deleteAction ?? WINDOW_DELETE_ACTIONS[windowName] ?? null;
+  // ETP-4500 — per-window rich delete cartel (see WINDOW_DELETE_CONFIRM_MODALS above).
+  const deleteConfirmModal = WINDOW_DELETE_CONFIRM_MODALS[windowName] ?? null;
   const navigate = useNavigate();
   const location = useLocation();
   const [searchParams] = useSearchParams();
@@ -2081,7 +2131,11 @@ export function DetailView({
     } : null
   ), [_headerData, windowName, _detailTabTitle, hook.editing, _isFormEditing]);
   useRegisterWindowContext(_windowContextInfo);
-  const isDocumentReadOnly = getDocumentReadOnly(lockWhenProcessed, _headerData);
+  // Window-level read-only (GO view-only windows, e.g. Conversion Rates): forces the
+  // whole detail read-only, reusing every isDocumentReadOnly gate (save, delete,
+  // add-line, inline edits). Also passed to the header <Form> so its fields render RO.
+  const windowReadOnly = api?.window?.readOnly === true;
+  const isDocumentReadOnly = getDocumentReadOnly(lockWhenProcessed, _headerData) || windowReadOnly;
   const isProcessed = _headerData?.processed === true || _headerData?.processed === 'Y';
   // When draftMode declares an explicit completedStatuses array, only those documentStatus
   // values hide the Save/Confirm pair. This lets windows like sales-quotation keep the
@@ -2094,6 +2148,38 @@ export function DetailView({
   const [confirmProcess, setConfirmProcess] = useState(null);
   // showNotes state removed — notes panel is always visible in side-by-side layout
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  // Shared by both the generic delete Dialog and the rich per-window cartel
+  // (WINDOW_DELETE_CONFIRM_MODALS) below — same eTPRRemovePayment / handleDelete
+  // routing either way; only the confirmation UI differs. Named distinctly from
+  // the line-level `confirmDelete` (a Promise-based prompt declared further down)
+  // since this one deletes the HEADER record.
+  const confirmHeaderDelete = async () => {
+    setShowDeleteConfirm(false);
+    // ETP-4479 — deleteAction-backed windows go through the same
+    // `neoAction.execute(recordId, actionName)` mechanism the
+    // detail-view "more" menu already uses for NEO actions
+    // (see runNeoMenuAction above), mirroring the URL convention
+    // PaymentHeaderTableBase's row-level delete relies on
+    // (POST {apiBaseUrl}/{entity}/{id}/action/{actionName}).
+    if (effectiveDeleteAction) {
+      const currentId = data?.id || recordId;
+      const result = await neoAction.execute(currentId, effectiveDeleteAction);
+      if (result.success) {
+        // Reuse the per-action i18n key convention (`${action}Completed`,
+        // e.g. eTPRRemovePaymentCompleted) when translated; otherwise
+        // fall back to the generic delete-success message.
+        const key = `${effectiveDeleteAction}Completed`;
+        const msg = ui(key);
+        toast.success(msg !== key ? msg : ui('recordDeleted'));
+        navigate(`/${windowName}`);
+      } else {
+        toast.error(result.message || ui('actionFailed'));
+      }
+      return;
+    }
+    await hook.handleDelete();
+    navigate(`/${windowName}`);
+  };
   // Non-dismissible loading modal shown while a draftMode confirm action with
   // draftMode.processingModal is in flight (e.g. Verifactu's ~8s GenerateRF).
   const [showProcessingModal, setShowProcessingModal] = useState(false);
@@ -2742,6 +2828,29 @@ export function DetailView({
     });
   }, [hook.selected?.id]);
 
+  // ETP-4029: the Exchange Rates tab caches its own row (rate/foreignAmount)
+  // independently of the header. Saving a new header currency rate updates
+  // that row on the backend (AbstractInvoiceHeaderHandler), but the effect
+  // above only re-syncs on a record ID change, not on same-record field
+  // changes — so this tab would keep showing the previously-fetched values
+  // until a manual reload. Scoped to exchangeRates only: no other secondary
+  // tab is known to depend on the header's currency/rate.
+  //
+  // grandTotalAmount is also a trigger: adding/editing/deleting a primary
+  // invoice line never touches currency/eTGOCurrencyRate, but it does change
+  // grandTotalAmount (refreshed into hook.selected by handleAddChild/
+  // handleUpdateChild/handleDeleteChild's refreshHeaderTotals call), and the
+  // backend recomputes this row's foreignAmount from grandTotalAmount on
+  // every line save (InvoiceLineHandler#syncConversionRateDocumentAfterLineSave)
+  // — so this tab needs the same refetch whenever that total changes.
+  useEffect(() => {
+    if (!hook.selected?.id) return;
+    const exchangeRatesIdx = secondaryTabs.findIndex(st => st.key === 'exchangeRates');
+    if (exchangeRatesIdx < 0) return;
+    secondaryHooks[exchangeRatesIdx]?.fetchChildren(hook.selected.id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hook.selected?.currency, hook.selected?.eTGOCurrencyRate, hook.selected?.grandTotalAmount]);
+
   // Apply callout results to the form when they arrive
   useEffect(() => {
     if (!calloutResult) return;
@@ -3329,7 +3438,10 @@ export function DetailView({
                 hideDeleteWhenComplete,
                 isProcessed,
                 deleteAction: effectiveDeleteAction,
-                hideDeleteButton,
+                // View-only window (window.readOnly): never show the toolbar Delete.
+                // Reuses the existing unconditional opt-out so no other window's
+                // processed-document delete behavior changes.
+                hideDeleteButton: hideDeleteButton || windowReadOnly,
               }) && (
                 <button
                   onClick={() => setShowDeleteConfirm(true)}
@@ -3575,6 +3687,7 @@ export function DetailView({
           processConfirmModal,
           async () => { await hook.handleProcess?.(confirmProcess); setConfirmProcess(null); },
           () => setConfirmProcess(null),
+          data,
         )}
 
         {/* Scrollable content + optional sidebarContent (full-height independent column) */}
@@ -3728,6 +3841,7 @@ export function DetailView({
                               catalogs={catalogs}
                               layout="horizontal"
                               section="principal"
+                              readOnly={windowReadOnly}
                               displayLogic={{ readOnly: displayLogic?.readOnly ?? {}, visibility: {} }}
                               api={api}
                               token={token}
@@ -3751,6 +3865,7 @@ export function DetailView({
                                   catalogs={catalogs}
                                   layout="horizontal"
                                   section="collapsed"
+                                  readOnly={windowReadOnly}
                                   excludeFields={notesField ? [notesField] : []}
                                   displayLogic={displayLogic}
                                   api={api}
@@ -3998,6 +4113,19 @@ export function DetailView({
                                     catalogs,
                                     onFieldChange: handleLineFieldChange,
                                     onValuesChange: setPendingLineValues,
+                                    // Convert the price-list price synchronously, at selection time,
+                                    // instead of letting the raw (org base currency) amount render
+                                    // first and get overwritten once the callout's currency-converted
+                                    // value lands — that gap is what caused the price to visibly
+                                    // flash from e.g. 12 (EUR) to 13.92 (USD).
+                                    convertOptimisticPrice: (rawPrice) => {
+                                      const conversion = activeCurrencyConversionRef.current;
+                                      if (!conversion) return rawPrice;
+                                      const { rate } = conversion;
+                                      const n = parseFloat(String(rawPrice ?? 0));
+                                      if (Number.isNaN(n) || n <= 0 || rate === 1) return rawPrice;
+                                      return parseFloat((n * rate).toFixed(2));
+                                    },
                                   }}
                                   data-testid="DetailTable__fa3275" />
 
@@ -4664,58 +4792,44 @@ export function DetailView({
         documentIds={getDocumentIds(recordId)}
         token={token}
         data-testid="DocumentPrintDrawer__fa3275" />
-      <Dialog
-        open={showDeleteConfirm}
-        onOpenChange={setShowDeleteConfirm}
-        data-testid="Dialog__fa3275">
-        <DialogContent className="max-w-sm" data-testid="DialogContent__fa3275">
-          <DialogHeader data-testid="DialogHeader__fa3275">
-            <DialogTitle data-testid="DialogTitle__fa3275">{ui('deleteConfirmTitle')}</DialogTitle>
-            <DialogDescription data-testid="DialogDescription__fa3275">
-              {ui('deleteConfirmMessage')}
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter data-testid="DialogFooter__fa3275">
-            <DialogClose asChild data-testid="DialogClose__fa3275">
-              <Button variant="outline" size="sm" data-testid="Button__fa3275">{ui('cancel')}</Button>
-            </DialogClose>
-            <Button
-              variant="destructive"
-              size="sm"
-              data-testid="action-delete-confirm"
-              onClick={async () => {
-                setShowDeleteConfirm(false);
-                // ETP-4479 — deleteAction-backed windows go through the same
-                // `neoAction.execute(recordId, actionName)` mechanism the
-                // detail-view "more" menu already uses for NEO actions
-                // (see runNeoMenuAction above), mirroring the URL convention
-                // PaymentHeaderTableBase's row-level delete relies on
-                // (POST {apiBaseUrl}/{entity}/{id}/action/{actionName}).
-                if (effectiveDeleteAction) {
-                  const currentId = data?.id || recordId;
-                  const result = await neoAction.execute(currentId, effectiveDeleteAction);
-                  if (result.success) {
-                    // Reuse the per-action i18n key convention (`${action}Completed`,
-                    // e.g. eTPRRemovePaymentCompleted) when translated; otherwise
-                    // fall back to the generic delete-success message.
-                    const key = `${effectiveDeleteAction}Completed`;
-                    const msg = ui(key);
-                    toast.success(msg !== key ? msg : ui('recordDeleted'));
-                    navigate(`/${windowName}`);
-                  } else {
-                    toast.error(result.message || ui('actionFailed'));
-                  }
-                  return;
-                }
-                await hook.handleDelete();
-                navigate(`/${windowName}`);
-              }}
-            >
-              {ui('delete')}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {deleteConfirmModal ? (
+        showDeleteConfirm && (
+          <deleteConfirmModal.Component
+            dir={deleteConfirmModal.dir}
+            action="delete"
+            data={data}
+            onConfirm={confirmHeaderDelete}
+            onClose={() => setShowDeleteConfirm(false)}
+          />
+        )
+      ) : (
+        <Dialog
+          open={showDeleteConfirm}
+          onOpenChange={setShowDeleteConfirm}
+          data-testid="Dialog__fa3275">
+          <DialogContent className="max-w-sm" data-testid="DialogContent__fa3275">
+            <DialogHeader data-testid="DialogHeader__fa3275">
+              <DialogTitle data-testid="DialogTitle__fa3275">{ui('deleteConfirmTitle')}</DialogTitle>
+              <DialogDescription data-testid="DialogDescription__fa3275">
+                {ui('deleteConfirmMessage')}
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter data-testid="DialogFooter__fa3275">
+              <DialogClose asChild data-testid="DialogClose__fa3275">
+                <Button variant="outline" size="sm" data-testid="Button__fa3275">{ui('cancel')}</Button>
+              </DialogClose>
+              <Button
+                variant="destructive"
+                size="sm"
+                data-testid="action-delete-confirm"
+                onClick={confirmHeaderDelete}
+              >
+                {ui('delete')}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
       <Dialog
         open={Boolean(secondaryDeleteConfirm)}
         onOpenChange={(open) => { if (!open) setSecondaryDeleteConfirm(null); }}

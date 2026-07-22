@@ -1,8 +1,8 @@
 {
-  "version": "0.16.0",
+  "version": "0.17.0",
   "generatedAt": "2026-04-29T19:05:48.778Z",
-  "updatedAt": "2026-07-16T12:52:39.736Z",
-  "checksum": "0775f50ac7a8954b",
+  "updatedAt": "2026-07-21T12:35:19.402Z",
+  "checksum": "60306b6898a947b5",
   "frontendContract": {
     "window": {
       "id": "170",
@@ -111,6 +111,10 @@
             },
             "defaultValue": "@#Date@",
             "gridOrder": 1,
+            "validation": {
+              "required": true,
+              "maxLength": 60
+            },
             "readOnlyLogic": {
               "raw": "@Processed@='Y'",
               "evaluable": true,
@@ -136,6 +140,10 @@
             "defaultValue": "@#Date@",
             "gridOrder": 2,
             "dot": false,
+            "validation": {
+              "required": true,
+              "maxLength": 10
+            },
             "readOnlyLogic": {
               "raw": "@Processed@='Y'",
               "evaluable": true,
@@ -152,7 +160,10 @@
             "visibility": "editable",
             "required": false,
             "grid": false,
-            "form": false
+            "form": false,
+            "validation": {
+              "maxLength": 255
+            }
           },
           {
             "name": "documentNo",
@@ -172,6 +183,9 @@
             },
             "section": "principal",
             "gridOrder": 3,
+            "validation": {
+              "maxLength": 30
+            },
             "readOnlyLogic": {
               "raw": "@Processed@='Y'",
               "evaluable": true,
@@ -205,7 +219,11 @@
                 "name": "statusDraft"
               }
             ],
-            "gridOrder": 4
+            "gridOrder": 4,
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            }
           }
         ],
         "searchableFields": [
@@ -277,6 +295,10 @@
               "source": "SELECT COALESCE(MAX(Line),0)+10 AS DefaultValue FROM M_MovementLine WHERE M_Movement_ID=@M_Movement_ID@"
             },
             "defaultValue": "@SQL=SELECT COALESCE(MAX(Line),0)+10 AS DefaultValue FROM M_MovementLine WHERE M_Movement_ID=@M_Movement_ID@",
+            "validation": {
+              "required": true,
+              "maxLength": 10
+            },
             "readOnlyLogic": {
               "raw": "@Processed@='Y'",
               "evaluable": true,
@@ -312,6 +334,10 @@
               }
             ],
             "gridOrder": 1,
+            "validation": {
+              "required": true,
+              "maxLength": 60
+            },
             "callout": {
               "className": "org.openbravo.erpCommon.ad_callouts.SL_Movement_Product"
             },
@@ -333,6 +359,9 @@
             "grid": false,
             "form": true,
             "section": "other",
+            "validation": {
+              "maxLength": 255
+            },
             "readOnlyLogic": {
               "raw": "@Processed@='Y'",
               "evaluable": true,
@@ -358,6 +387,10 @@
             "defaultValue": "1",
             "gridOrder": 5,
             "columnWidth": 160,
+            "validation": {
+              "required": true,
+              "maxLength": 10
+            },
             "readOnlyLogic": {
               "raw": "@Processed@='Y' | @UomManagement@='Y'",
               "evaluable": true,
@@ -378,7 +411,11 @@
             "sourceRequired": true,
             "reference": "UOM",
             "inputMode": "selector",
-            "gridOrder": 2
+            "gridOrder": 2,
+            "validation": {
+              "required": true,
+              "maxLength": 22
+            }
           },
           {
             "name": "storageBin",
@@ -395,6 +432,10 @@
             "reference": "Locator",
             "inputMode": "selector",
             "gridOrder": 3,
+            "validation": {
+              "required": true,
+              "maxLength": 60
+            },
             "readOnlyLogic": {
               "raw": "@Processed@='Y'",
               "evaluable": true,
@@ -417,6 +458,10 @@
             "inputMode": "selector",
             "excludeValueOf": "storageBin",
             "gridOrder": 4,
+            "validation": {
+              "required": true,
+              "maxLength": 60
+            },
             "readOnlyLogic": {
               "raw": "@Processed@='Y'",
               "evaluable": true,

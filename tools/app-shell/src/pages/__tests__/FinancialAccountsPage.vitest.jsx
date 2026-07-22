@@ -60,6 +60,17 @@ vi.mock('@/hooks/usePsd2ConnectFlow.js', () => ({
   }),
 }));
 
+// ETP-4530: EditAccountModal's Tab Contabilidad also calls useAuth internally via this hook.
+vi.mock('@/hooks/useFinancialAccountAccounting.js', () => ({
+  useFinancialAccountAccounting: () => ({
+    fetchAccountingConfiguration: vi.fn().mockResolvedValue({
+      id: null, fINAssetAcct: null, fINTransitoryAcct: null,
+      ledgerConfigured: true, catalogs: { accounts: [] },
+    }),
+    saveAccountingConfiguration: vi.fn(),
+  }),
+}));
+
 const mockNavigate = vi.fn();
 vi.mock('react-router-dom', async () => {
   const actual = await vi.importActual('react-router-dom');

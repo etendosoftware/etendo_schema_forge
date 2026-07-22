@@ -1,8 +1,8 @@
 {
-  "version": "0.17.0",
+  "version": "0.18.0",
   "generatedAt": "2026-07-07T21:53:26.027Z",
-  "updatedAt": "2026-07-14T12:19:49.651Z",
-  "checksum": "bf6e48d15f64d02a",
+  "updatedAt": "2026-07-21T12:35:21.499Z",
+  "checksum": "04dacc6840efc846",
   "frontendContract": {
     "window": {
       "id": "140",
@@ -181,7 +181,11 @@
             "form": true,
             "sourceRequired": true,
             "section": "principal",
-            "seq": 1
+            "seq": 1,
+            "validation": {
+              "required": true,
+              "maxLength": 40
+            }
           },
           {
             "name": "name",
@@ -196,7 +200,11 @@
             "form": true,
             "sourceRequired": true,
             "section": "principal",
-            "seq": 2
+            "seq": 2,
+            "validation": {
+              "required": true,
+              "maxLength": 60
+            }
           },
           {
             "name": "image",
@@ -211,7 +219,10 @@
             "form": true,
             "section": "principal",
             "seq": 7,
-            "explicitType": true
+            "explicitType": true,
+            "validation": {
+              "maxLength": 32
+            }
           },
           {
             "name": "uOM",
@@ -229,7 +240,11 @@
             "inputMode": "search",
             "clearable": false,
             "section": "principal",
-            "seq": 5
+            "seq": 5,
+            "validation": {
+              "required": true,
+              "maxLength": 22
+            }
           },
           {
             "name": "productCategory",
@@ -252,6 +267,10 @@
             "defaultValue": "@SQL=SELECT MAX(M_PRODUCT_CATEGORY_ID) FROM M_PRODUCT_CATEGORY WHERE AD_ISORGINCLUDED(@AD_ORG_ID@, AD_ORG_ID, @#AD_CLIENT_ID@) <> -1 AND ISDEFAULT = 'Y' AND AD_CLIENT_ID = @#AD_CLIENT_ID@ AND ISSUMMARY='N'",
             "section": "principal",
             "seq": 4,
+            "validation": {
+              "required": true,
+              "maxLength": 22
+            },
             "validationRule": {
               "code": "Issummary='N'",
               "contextParams": [],
@@ -272,7 +291,11 @@
             "sourceRequired": true,
             "reference": "TaxCategory",
             "inputMode": "selector",
-            "section": "other"
+            "section": "other",
+            "validation": {
+              "required": true,
+              "maxLength": 22
+            }
           },
           {
             "name": "purchase",
@@ -291,7 +314,11 @@
               "source": "Y"
             },
             "defaultValue": "Y",
-            "section": "other"
+            "section": "other",
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            }
           },
           {
             "name": "sale",
@@ -310,7 +337,11 @@
               "source": "Y"
             },
             "defaultValue": "Y",
-            "section": "other"
+            "section": "other",
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            }
           },
           {
             "name": "description",
@@ -326,7 +357,10 @@
             "section": "principal",
             "seq": 6,
             "span": 3,
-            "explicitType": true
+            "explicitType": true,
+            "validation": {
+              "maxLength": 255
+            }
           },
           {
             "name": "productType",
@@ -383,6 +417,10 @@
               "R": "teal",
               "E": "orange"
             },
+            "validation": {
+              "required": true,
+              "maxLength": 60
+            },
             "callout": {
               "className": "org.openbravo.erpCommon.ad_callouts.SL_Product_Type"
             }
@@ -405,6 +443,10 @@
             },
             "defaultValue": "Y",
             "section": "other",
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            },
             "readOnlyLogic": {
               "raw": "@ProductType@='R' | @ProductType@='E' | @ProductType@='O'",
               "evaluable": true,
@@ -423,6 +465,9 @@
             "grid": false,
             "form": true,
             "section": "other",
+            "validation": {
+              "maxLength": 22
+            },
             "displayLogic": {
               "raw": "@IsSummary@='N' & @ProductType@='I'",
               "evaluable": true
@@ -442,6 +487,9 @@
             "reference": "UOM",
             "inputMode": "selector",
             "section": "other",
+            "validation": {
+              "maxLength": 32
+            },
             "displayLogic": {
               "raw": "@IsSummary@='N' & @ProductType@='I'",
               "evaluable": true
@@ -460,7 +508,10 @@
             "form": true,
             "reference": "AttributeSet",
             "inputMode": "selector",
-            "section": "other"
+            "section": "other",
+            "validation": {
+              "maxLength": 22
+            }
           },
           {
             "name": "uPCEAN",
@@ -473,7 +524,10 @@
             "required": false,
             "grid": false,
             "form": true,
-            "section": "other"
+            "section": "other",
+            "validation": {
+              "maxLength": 30
+            }
           },
           {
             "name": "brand",
@@ -488,7 +542,10 @@
             "form": true,
             "reference": "Brand",
             "inputMode": "selector",
-            "section": "other"
+            "section": "other",
+            "validation": {
+              "maxLength": 32
+            }
           },
           {
             "name": "returnable",
@@ -507,7 +564,11 @@
               "source": "Y"
             },
             "defaultValue": "Y",
-            "section": "other"
+            "section": "other",
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            }
           },
           {
             "name": "mProductStatusID",
@@ -522,7 +583,10 @@
             "form": true,
             "reference": "ProductStatus",
             "inputMode": "selector",
-            "section": "other"
+            "section": "other",
+            "validation": {
+              "maxLength": 32
+            }
           }
         ],
         "searchableFields": [
@@ -598,6 +662,10 @@
             "sourceRequired": true,
             "reference": "PriceListVersion",
             "inputMode": "selector",
+            "validation": {
+              "required": true,
+              "maxLength": 22
+            },
             "validationRule": {
               "code": "EXISTS (SELECT 1 \n        FROM AD_ROLE_ORGACCESS A_R_O\n        INNER JOIN ad_role r ON (A_R_O.AD_ROLE_ID = r.AD_ROLE_ID)\n        WHERE A_R_O.ISACTIVE = 'Y'\n        AND r.ISACTIVE = 'Y'\n        and r.ad_role_id = @#AD_Role_ID@\n        AND (A_R_O.AD_ORG_ID = td0.AD_Org_ID \n             OR (SUBSTR(TO_CHAR(r.USERLEVEL), 2, 1) = 'C' AND td0.AD_ORG_ID = '0')\n             )\n        )",
               "contextParams": [
@@ -617,7 +685,11 @@
             "required": true,
             "grid": true,
             "form": true,
-            "sourceRequired": true
+            "sourceRequired": true,
+            "validation": {
+              "required": true,
+              "maxLength": 22
+            }
           },
           {
             "name": "listPrice",
@@ -630,7 +702,11 @@
             "required": true,
             "grid": true,
             "form": true,
-            "sourceRequired": true
+            "sourceRequired": true,
+            "validation": {
+              "required": true,
+              "maxLength": 22
+            }
           },
           {
             "name": "cost",
@@ -648,7 +724,11 @@
               "type": "computed",
               "source": "0"
             },
-            "defaultValue": "0"
+            "defaultValue": "0",
+            "validation": {
+              "required": true,
+              "maxLength": 12
+            }
           }
         ],
         "searchableFields": [],
@@ -685,7 +765,11 @@
               "type": "computed",
               "source": "Y"
             },
-            "defaultValue": "Y"
+            "defaultValue": "Y",
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            }
           },
           {
             "name": "validFromDate",
@@ -698,7 +782,11 @@
             "required": true,
             "grid": false,
             "form": true,
-            "sourceRequired": true
+            "sourceRequired": true,
+            "validation": {
+              "required": true,
+              "maxLength": 19
+            }
           },
           {
             "name": "servicePriceRule",
@@ -713,7 +801,11 @@
             "form": true,
             "sourceRequired": true,
             "reference": "ServicePriceRule",
-            "inputMode": "selector"
+            "inputMode": "selector",
+            "validation": {
+              "required": true,
+              "maxLength": 32
+            }
           }
         ],
         "searchableFields": [],
@@ -746,7 +838,10 @@
             "form": true,
             "reference": "ValidCombination",
             "inputMode": "selector",
-            "seq": 1
+            "seq": 1,
+            "validation": {
+              "maxLength": 32
+            }
           },
           {
             "name": "productExpense",
@@ -763,7 +858,11 @@
             "reference": "ValidCombination",
             "inputMode": "selector",
             "seq": 2,
-            "grow": true
+            "grow": true,
+            "validation": {
+              "required": true,
+              "maxLength": 32
+            }
           },
           {
             "name": "productRevenue",
@@ -780,7 +879,11 @@
             "reference": "ValidCombination",
             "inputMode": "selector",
             "seq": 3,
-            "grow": true
+            "grow": true,
+            "validation": {
+              "required": true,
+              "maxLength": 32
+            }
           },
           {
             "name": "productCOGS",
@@ -796,7 +899,10 @@
             "reference": "ValidCombination",
             "inputMode": "selector",
             "seq": 4,
-            "grow": true
+            "grow": true,
+            "validation": {
+              "maxLength": 32
+            }
           }
         ],
         "searchableFields": [],
@@ -828,7 +934,11 @@
               "type": "lookup",
               "source": "SELECT COALESCE(MAX(Line),0)+10 AS DefaultValue FROM M_Product_BOM WHERE M_Product_ID=@M_Product_ID@"
             },
-            "defaultValue": "@SQL=SELECT COALESCE(MAX(Line),0)+10 AS DefaultValue FROM M_Product_BOM WHERE M_Product_ID=@M_Product_ID@"
+            "defaultValue": "@SQL=SELECT COALESCE(MAX(Line),0)+10 AS DefaultValue FROM M_Product_BOM WHERE M_Product_ID=@M_Product_ID@",
+            "validation": {
+              "required": true,
+              "maxLength": 10
+            }
           },
           {
             "name": "bOMProduct",
@@ -843,7 +953,11 @@
             "form": true,
             "sourceRequired": true,
             "reference": "Product",
-            "inputMode": "search"
+            "inputMode": "search",
+            "validation": {
+              "required": true,
+              "maxLength": 60
+            }
           },
           {
             "name": "bOMQuantity",
@@ -861,7 +975,11 @@
               "type": "computed",
               "source": "1"
             },
-            "defaultValue": "1"
+            "defaultValue": "1",
+            "validation": {
+              "required": true,
+              "maxLength": 10
+            }
           },
           {
             "name": "bomprice",
@@ -873,7 +991,10 @@
             "visibility": "editable",
             "required": false,
             "grid": false,
-            "form": true
+            "form": true,
+            "validation": {
+              "maxLength": 22
+            }
           },
           {
             "name": "description",
@@ -885,7 +1006,10 @@
             "visibility": "editable",
             "required": false,
             "grid": false,
-            "form": true
+            "form": true,
+            "validation": {
+              "maxLength": 255
+            }
           }
         ],
         "searchableFields": [],
@@ -939,7 +1063,11 @@
                   "es_ES": "Estándar"
                 }
               }
-            ]
+            ],
+            "validation": {
+              "required": true,
+              "maxLength": 60
+            }
           },
           {
             "name": "cost",
@@ -951,7 +1079,10 @@
             "visibility": "readOnly",
             "required": false,
             "grid": true,
-            "form": true
+            "form": true,
+            "validation": {
+              "maxLength": 10
+            }
           },
           {
             "name": "startingDate",
@@ -964,7 +1095,11 @@
             "required": true,
             "grid": true,
             "form": true,
-            "sourceRequired": true
+            "sourceRequired": true,
+            "validation": {
+              "required": true,
+              "maxLength": 10
+            }
           },
           {
             "name": "endingDate",
@@ -977,7 +1112,11 @@
             "required": true,
             "grid": true,
             "form": true,
-            "sourceRequired": true
+            "sourceRequired": true,
+            "validation": {
+              "required": true,
+              "maxLength": 10
+            }
           },
           {
             "name": "quantity",
@@ -989,7 +1128,10 @@
             "visibility": "readOnly",
             "required": false,
             "grid": true,
-            "form": true
+            "form": true,
+            "validation": {
+              "maxLength": 10
+            }
           },
           {
             "name": "warehouse",
@@ -1003,7 +1145,10 @@
             "grid": true,
             "form": true,
             "reference": "Warehouse",
-            "inputMode": "selector"
+            "inputMode": "selector",
+            "validation": {
+              "maxLength": 32
+            }
           },
           {
             "name": "cCurrencyID",
@@ -1023,7 +1168,11 @@
             },
             "reference": "Currency",
             "inputMode": "selector",
-            "defaultValue": "100"
+            "defaultValue": "100",
+            "validation": {
+              "required": true,
+              "maxLength": 32
+            }
           },
           {
             "name": "originalCost",
@@ -1035,7 +1184,10 @@
             "visibility": "readOnly",
             "required": false,
             "grid": false,
-            "form": true
+            "form": true,
+            "validation": {
+              "maxLength": 12
+            }
           }
         ],
         "searchableFields": [],
@@ -1066,7 +1218,11 @@
             "required": true,
             "grid": false,
             "form": true,
-            "sourceRequired": true
+            "sourceRequired": true,
+            "validation": {
+              "required": true,
+              "maxLength": 10
+            }
           },
           {
             "name": "cost",
@@ -1079,7 +1235,11 @@
             "required": true,
             "grid": false,
             "form": true,
-            "sourceRequired": true
+            "sourceRequired": true,
+            "validation": {
+              "required": true,
+              "maxLength": 12
+            }
           },
           {
             "name": "cCurrencyID",
@@ -1094,7 +1254,11 @@
             "form": true,
             "sourceRequired": true,
             "reference": "Currency",
-            "inputMode": "selector"
+            "inputMode": "selector",
+            "validation": {
+              "required": true,
+              "maxLength": 32
+            }
           },
           {
             "name": "costAdjustmentLine",
@@ -1108,7 +1272,10 @@
             "grid": false,
             "form": true,
             "reference": "Costadjustmentline",
-            "inputMode": "selector"
+            "inputMode": "selector",
+            "validation": {
+              "maxLength": 32
+            }
           },
           {
             "name": "unitCost",
@@ -1126,7 +1293,11 @@
               "type": "computed",
               "source": "Y"
             },
-            "defaultValue": "Y"
+            "defaultValue": "Y",
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            }
           },
           {
             "name": "accountingDate",
@@ -1139,7 +1310,11 @@
             "required": true,
             "grid": false,
             "form": true,
-            "sourceRequired": true
+            "sourceRequired": true,
+            "validation": {
+              "required": true,
+              "maxLength": 19
+            }
           }
         ],
         "searchableFields": [],
@@ -1177,7 +1352,11 @@
             },
             "reference": "Organization",
             "inputMode": "selector",
-            "defaultValue": "@AD_Org_ID@"
+            "defaultValue": "@AD_Org_ID@",
+            "validation": {
+              "required": true,
+              "maxLength": 22
+            }
           },
           {
             "name": "storageBin",
@@ -1192,7 +1371,11 @@
             "form": true,
             "sourceRequired": true,
             "reference": "StorageBin",
-            "inputMode": "selector"
+            "inputMode": "selector",
+            "validation": {
+              "required": true,
+              "maxLength": 60
+            }
           },
           {
             "name": "movementQuantity",
@@ -1205,7 +1388,11 @@
             "required": true,
             "grid": true,
             "form": true,
-            "sourceRequired": true
+            "sourceRequired": true,
+            "validation": {
+              "required": true,
+              "maxLength": 10
+            }
           },
           {
             "name": "movementDate",
@@ -1218,7 +1405,11 @@
             "required": true,
             "grid": true,
             "form": true,
-            "sourceRequired": true
+            "sourceRequired": true,
+            "validation": {
+              "required": true,
+              "maxLength": 10
+            }
           },
           {
             "name": "movementType",
@@ -1303,7 +1494,11 @@
                   "es_ES": "Consumo Interno +"
                 }
               }
-            ]
+            ],
+            "validation": {
+              "required": true,
+              "maxLength": 60
+            }
           },
           {
             "name": "totalCost",
@@ -1316,6 +1511,9 @@
             "required": false,
             "grid": true,
             "form": true,
+            "validation": {
+              "maxLength": 10
+            },
             "displayLogic": {
               "raw": "@IsCostCalculated@='Y'",
               "evaluable": true
@@ -1334,7 +1532,11 @@
             "form": true,
             "sourceRequired": true,
             "reference": "UOM",
-            "inputMode": "selector"
+            "inputMode": "selector",
+            "validation": {
+              "required": true,
+              "maxLength": 22
+            }
           }
         ],
         "searchableFields": [],
@@ -1370,7 +1572,11 @@
               "type": "lookup",
               "source": "SELECT COALESCE(MAX(SEQNO),0)+10 AS DefaultValue FROM M_PRODUCT_CH WHERE m_product_id=@m_product_id@"
             },
-            "defaultValue": "@SQL=SELECT COALESCE(MAX(SEQNO),0)+10 AS DefaultValue FROM M_PRODUCT_CH WHERE m_product_id=@m_product_id@"
+            "defaultValue": "@SQL=SELECT COALESCE(MAX(SEQNO),0)+10 AS DefaultValue FROM M_PRODUCT_CH WHERE m_product_id=@m_product_id@",
+            "validation": {
+              "required": true,
+              "maxLength": 12
+            }
           },
           {
             "name": "characteristic",
@@ -1386,6 +1592,10 @@
             "sourceRequired": true,
             "reference": "Characteristic",
             "inputMode": "selector",
+            "validation": {
+              "required": true,
+              "maxLength": 32
+            },
             "callout": {
               "className": "org.openbravo.erpCommon.ad_callouts.SL_ProductCh_Characteristic"
             }
@@ -1406,7 +1616,11 @@
               "type": "computed",
               "source": "N"
             },
-            "defaultValue": "N"
+            "defaultValue": "N",
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            }
           },
           {
             "name": "explodeConfigurationTab",
@@ -1425,6 +1639,10 @@
               "source": "Y"
             },
             "defaultValue": "Y",
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            },
             "displayLogic": {
               "raw": "@isVariant@='Y'&@IsGeneric@='Y'",
               "evaluable": true
@@ -1446,7 +1664,11 @@
               "type": "computed",
               "source": "N"
             },
-            "defaultValue": "N"
+            "defaultValue": "N",
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            }
           },
           {
             "name": "priceListType",
@@ -1481,6 +1703,10 @@
               }
             ],
             "defaultValue": "SALES",
+            "validation": {
+              "required": true,
+              "maxLength": 60
+            },
             "displayLogic": {
               "raw": "@isGeneric@='Y' & @Define_Price@='Y'",
               "evaluable": true
@@ -1502,7 +1728,11 @@
               "type": "computed",
               "source": "N"
             },
-            "defaultValue": "N"
+            "defaultValue": "N",
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            }
           },
           {
             "name": "characteristicSubset",
@@ -1516,7 +1746,10 @@
             "grid": false,
             "form": true,
             "reference": "CharacteristicSubset",
-            "inputMode": "selector"
+            "inputMode": "selector",
+            "validation": {
+              "maxLength": 32
+            }
           },
           {
             "name": "active",
@@ -1534,7 +1767,11 @@
               "type": "computed",
               "source": "Y"
             },
-            "defaultValue": "Y"
+            "defaultValue": "Y",
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            }
           }
         ],
         "searchableFields": [],
@@ -1609,7 +1846,11 @@
             "form": true,
             "sourceRequired": true,
             "reference": "StorageBin",
-            "inputMode": "selector"
+            "inputMode": "selector",
+            "validation": {
+              "required": true,
+              "maxLength": 60
+            }
           },
           {
             "name": "attributeSetValue",
@@ -1621,7 +1862,10 @@
             "visibility": "readOnly",
             "required": false,
             "grid": true,
-            "form": true
+            "form": true,
+            "validation": {
+              "maxLength": 12
+            }
           },
           {
             "name": "uOM",
@@ -1636,7 +1880,11 @@
             "form": true,
             "sourceRequired": true,
             "reference": "UOM",
-            "inputMode": "selector"
+            "inputMode": "selector",
+            "validation": {
+              "required": true,
+              "maxLength": 12
+            }
           },
           {
             "name": "quantityOnHand",
@@ -1649,7 +1897,11 @@
             "required": true,
             "grid": true,
             "form": true,
-            "sourceRequired": true
+            "sourceRequired": true,
+            "validation": {
+              "required": true,
+              "maxLength": 10
+            }
           },
           {
             "name": "reservedQty",
@@ -1667,7 +1919,11 @@
               "type": "computed",
               "source": "0"
             },
-            "defaultValue": "0"
+            "defaultValue": "0",
+            "validation": {
+              "required": true,
+              "maxLength": 2
+            }
           },
           {
             "name": "allocatedQuantity",
@@ -1685,7 +1941,11 @@
               "type": "computed",
               "source": "0"
             },
-            "defaultValue": "0"
+            "defaultValue": "0",
+            "validation": {
+              "required": true,
+              "maxLength": 2
+            }
           }
         ],
         "searchableFields": [],
@@ -1729,7 +1989,11 @@
               "type": "computed",
               "source": "Y"
             },
-            "defaultValue": "Y"
+            "defaultValue": "Y",
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            }
           },
           {
             "name": "validFromDate",
@@ -1742,7 +2006,11 @@
             "required": true,
             "grid": false,
             "form": true,
-            "sourceRequired": true
+            "sourceRequired": true,
+            "validation": {
+              "required": true,
+              "maxLength": 19
+            }
           },
           {
             "name": "servicePriceRule",
@@ -1757,7 +2025,11 @@
             "form": true,
             "sourceRequired": true,
             "reference": "ServicePriceRule",
-            "inputMode": "selector"
+            "inputMode": "selector",
+            "validation": {
+              "required": true,
+              "maxLength": 32
+            }
           }
         ],
         "searchableFields": [],
@@ -1791,6 +2063,10 @@
             "sourceRequired": true,
             "reference": "UOM",
             "inputMode": "selector",
+            "validation": {
+              "required": true,
+              "maxLength": 32
+            },
             "callout": {
               "className": "org.openbravo.erpCommon.ad_callouts.AUM_ConversionRate"
             }
@@ -1807,6 +2083,10 @@
             "grid": true,
             "form": true,
             "sourceRequired": true,
+            "validation": {
+              "required": true,
+              "maxLength": 12
+            },
             "readOnlyLogic": {
               "raw": "@EXISTS_CONVERSION@='Y'",
               "evaluable": true,
@@ -1824,6 +2104,9 @@
             "required": false,
             "grid": false,
             "form": true,
+            "validation": {
+              "maxLength": 60
+            },
             "callout": {
               "className": "org.openbravo.erpCommon.ad_callouts.GtinFormat"
             }
@@ -1867,7 +2150,11 @@
                 }
               }
             ],
-            "defaultValue": "S"
+            "defaultValue": "S",
+            "validation": {
+              "required": true,
+              "maxLength": 60
+            }
           },
           {
             "name": "purchase",
@@ -1908,7 +2195,11 @@
                 }
               }
             ],
-            "defaultValue": "S"
+            "defaultValue": "S",
+            "validation": {
+              "required": true,
+              "maxLength": 60
+            }
           },
           {
             "name": "logistics",
@@ -1949,7 +2240,11 @@
                 }
               }
             ],
-            "defaultValue": "S"
+            "defaultValue": "S",
+            "validation": {
+              "required": true,
+              "maxLength": 60
+            }
           }
         ],
         "searchableFields": [],
