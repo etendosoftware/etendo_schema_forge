@@ -55,6 +55,7 @@ import {
   renderDefaultCell,
   renderEnumCell,
   renderPercentCell,
+  renderSignedDeltaCell,
   renderStatusCell,
 } from '../DataTable.cellRenderers.jsx';
 
@@ -88,6 +89,7 @@ describe('CELL_RENDERERS', () => {
       boolean: renderBooleanCell,
       date: renderDateCell,
       amount: renderAmountCell,
+      signedDelta: renderSignedDeltaCell,
       default: renderDefaultCell,
     });
   });
@@ -204,6 +206,55 @@ describe('renderAmountCell', () => {
 
     expect(screen.getByText('USD1234.5')).toBeInTheDocument();
     expect(container.querySelector('span.tabular-nums')).toBeTruthy();
+  });
+});
+
+describe('renderSignedDeltaCell', () => {
+  it('renders a negative value as "-N" with the negative color', () => {
+    const { container } = renderCell(renderSignedDeltaCell({
+      ...baseContext,
+      row: { id: '1', etgoQtydiff: -8 },
+      col: { key: 'etgoQtydiff', type: 'signedDelta' },
+    }));
+
+    const cell = screen.getByText('-8');
+    expect(cell).toBeInTheDocument();
+    expect(cell.style.color).toBe('hsl(var(--destructive))');
+    expect(container.querySelector('span.text-right.tabular-nums')).toBeTruthy();
+  });
+
+  it('renders exactly-zero as "±0" with the neutral color', () => {
+    renderCell(renderSignedDeltaCell({
+      ...baseContext,
+      row: { id: '1', etgoQtydiff: 0 },
+      col: { key: 'etgoQtydiff', type: 'signedDelta' },
+    }));
+
+    const cell = screen.getByText('±0');
+    expect(cell).toBeInTheDocument();
+    expect(cell.style.color).toBe('hsl(var(--foreground))');
+  });
+
+  it('renders a positive value as "+N" with the positive color', () => {
+    renderCell(renderSignedDeltaCell({
+      ...baseContext,
+      row: { id: '1', etgoQtydiff: 2 },
+      col: { key: 'etgoQtydiff', type: 'signedDelta' },
+    }));
+
+    const cell = screen.getByText('+2');
+    expect(cell).toBeInTheDocument();
+    expect(cell.style.color).toBe('var(--status-success-fg)');
+  });
+
+  it('renders the signed text with fontWeight 600', () => {
+    renderCell(renderSignedDeltaCell({
+      ...baseContext,
+      row: { id: '1', etgoQtydiff: -3 },
+      col: { key: 'etgoQtydiff', type: 'signedDelta' },
+    }));
+
+    expect(screen.getByText('-3').style.fontWeight).toBe('600');
   });
 });
 

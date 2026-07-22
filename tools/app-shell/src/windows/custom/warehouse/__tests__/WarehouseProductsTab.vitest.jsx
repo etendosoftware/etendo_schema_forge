@@ -195,6 +195,39 @@ describe('WarehouseProductsTab', () => {
     });
   });
 
+  describe('qty filtering (regression guard: list keeps negatives, hides only exact zero)', () => {
+    // Regression for ETP-4528: aggregateProducts no longer pre-filters by qty, so the
+    // tab must apply its own `qty !== 0` predicate — keeping negative-stock (shrinkage)
+    // products visible while hiding rows that aggregate to exactly zero.
+    const mixedProducts = [
+      { id: 'p1', label: 'Agua', uom: 'Each', valuation: -2020, qty: -202, cost: 10 },
+      { id: 'p2', label: 'Cerveza', uom: 'Each', valuation: -3000, qty: -300, cost: 10 },
+      { id: 'p3', label: 'Zero Stock Item', uom: 'Each', valuation: 0, qty: 0, cost: 5 },
+      { id: 'p4', label: 'Widget A', uom: 'Each', valuation: 1500, qty: 10, cost: 150 },
+    ];
+
+    beforeEach(() => {
+      useWarehouseStock.mockReturnValue({ loading: false, error: null, products: mixedProducts });
+    });
+
+    it('renders negative-stock products (does not hide shrinkage/loss)', () => {
+      render(<WarehouseProductsTab {...defaultProps} />);
+      expect(screen.getByText('Agua')).toBeInTheDocument();
+      expect(screen.getByText('Cerveza')).toBeInTheDocument();
+    });
+
+    it('does not render products whose qty aggregates to exactly 0', () => {
+      render(<WarehouseProductsTab {...defaultProps} />);
+      expect(screen.queryByText('Zero Stock Item')).not.toBeInTheDocument();
+    });
+
+    it('calls onCount with the count excluding only the qty === 0 product (keeps negatives)', () => {
+      render(<WarehouseProductsTab {...defaultProps} />);
+      // 4 products in, 1 filtered out (qty === 0) -> 3 remain (2 negative + 1 positive)
+      expect(defaultProps.onCount).toHaveBeenCalledWith(3);
+    });
+  });
+
   describe('UOM fallback', () => {
     it('renders — when uom is empty string', () => {
       useWarehouseStock.mockReturnValue({

@@ -14,6 +14,7 @@ import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
 import { useLabel, useLocaleSwitch, useUI } from '@/i18n';
 import { formatAmount } from '@/lib/formatAmount.js';
+import { formatSignedDelta } from '@/lib/formatSigned.js';
 import { resolveIdentifier } from '@/lib/resolveIdentifier.js';
 import { resolveColumnLabel } from '@/lib/resolveColumnLabel.js';
 import { InlineSearchCombo } from './InlineSearchCombo.jsx';
@@ -36,7 +37,15 @@ const TOKENS = {
   cellFontWeight: 400,
 };
 
-const NUMERIC_TYPES = new Set(['number', 'amount', 'integer', 'percent', 'decimal', 'price', 'quantity']);
+const NUMERIC_TYPES = new Set(['number', 'amount', 'integer', 'percent', 'decimal', 'price', 'quantity', 'signedDelta']);
+
+// Maps formatSignedDelta's tone key to the semantic theme role — mirrors TONE_CLASS
+// in components/ui/money-amount.jsx so both grids render identical colors.
+const SIGNED_DELTA_TONE_COLOR = {
+  positive: 'var(--status-success-fg)',
+  negative: 'hsl(var(--destructive))',
+  neutral: 'hsl(var(--foreground))',
+};
 // Inline-edit covers all column types that the line table renders today. Selector/search
 // FK columns (e.g., product, tax) use the shared `SelectorInput` (the same Radix dropdown
 // the add-row flow uses), so the inline experience matches the form-mode UX.
@@ -141,6 +150,17 @@ function ReadCell({ row, col, locale, t, ui }) {
   if (col.type === 'percent') {
     const val = Number(row[col.key]);
     return <span className="tabular-nums">{Number.isFinite(val) ? `${val}%` : '—'}</span>;
+  }
+  if (col.type === 'signedDelta') {
+    const { text, tone } = formatSignedDelta(row[col.key]);
+    return (
+      <span
+        className="block text-right tabular-nums"
+        style={{ fontWeight: 600, color: SIGNED_DELTA_TONE_COLOR[tone] }}
+      >
+        {text}
+      </span>
+    );
   }
   if (col.type === 'boolean') {
     return renderBooleanCell(row[col.key], ui);

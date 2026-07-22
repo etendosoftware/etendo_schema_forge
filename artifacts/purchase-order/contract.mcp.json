@@ -1,8 +1,8 @@
 {
-  "version": "0.39.0",
+  "version": "0.40.0",
   "generatedAt": "2026-04-30T15:42:46.497Z",
-  "updatedAt": "2026-07-20T20:41:36.732Z",
-  "contractChecksum": "fb7cb75d178b5f82",
+  "updatedAt": "2026-07-21T11:55:43.685Z",
+  "contractChecksum": "97965f9f07e1b828",
   "apiPrediction": {
     "specName": "purchase-order",
     "baseUrl": "/sws/neo/purchase-order",
@@ -1302,6 +1302,7 @@
             "readOnlyLogic": "@Posted@='Y'"
           },
           "currency": {
+            "readOnly": true,
             "required": true,
             "defaultValue": "@C_Currency_ID@"
           }
@@ -1438,8 +1439,7 @@
         "listPrice",
         "tax",
         "unitPrice",
-        "lineNetAmount",
-        "currency"
+        "lineNetAmount"
       ],
       "recommendedOrder": [
         "createHeader",
@@ -1637,8 +1637,7 @@
           "listPrice",
           "tax",
           "unitPrice",
-          "lineNetAmount",
-          "currency"
+          "lineNetAmount"
         ]
       },
       {
@@ -1654,5 +1653,5 @@
       "confirmcancelandreplace"
     ]
   },
-  "checksum": "c1d6ab9f0ce69809"
+  "checksum": "1e5048ad24fa5f56"
 }

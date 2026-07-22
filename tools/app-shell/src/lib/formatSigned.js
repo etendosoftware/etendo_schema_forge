@@ -38,3 +38,25 @@ export function formatSigned(amount, currency) {
   }).format(abs);
   return (Number(amount) < 0 ? '-' : '+') + formatted;
 }
+
+/**
+ * Formats a signed plain (non-currency) numeric delta for the `signedDelta`
+ * lines-grid column type (e.g. physical-inventory's "Difference" column).
+ * Deliberately does NOT apply thousands grouping — sibling quantity columns
+ * in the same lines grid (bookQuantity, quantityCount) render their raw
+ * numeric value with no Intl formatting, so this stays consistent with them
+ * instead of hand-rolling a grouped format that would look out of place
+ * next to `1500`, `1600`.
+ *
+ * @param {number|string} value
+ * @returns {{ text: string, tone: 'positive'|'negative'|'neutral' }}
+ *   `text` is `±0` for exactly zero, `+N` for positive, `-N` for negative.
+ *   `tone` maps 1:1 to the TONE_CLASS keys in components/ui/money-amount.jsx
+ *   (positive/negative/neutral semantic theme roles).
+ */
+export function formatSignedDelta(value) {
+  const num = Number(value) || 0;
+  if (num === 0) return { text: '±0', tone: 'neutral' };
+  if (num < 0) return { text: `-${Math.abs(num)}`, tone: 'negative' };
+  return { text: `+${num}`, tone: 'positive' };
+}

@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useMemo } from 'react';
 import { Loader2 } from 'lucide-react';
 import { useUI } from '@/i18n';
 import { useCurrency } from '@/hooks/useCurrency';
@@ -14,7 +14,10 @@ function fmtQty(val) {
 export default function WarehouseProductsTab({ parentId, token, apiBaseUrl, onCount }) {
   const ui = useUI();
   const currencyCode = useCurrency();
-  const { loading, error, products } = useWarehouseStock(parentId, token, apiBaseUrl);
+  const { loading, error, products: allProducts } = useWarehouseStock(parentId, token, apiBaseUrl);
+
+  // Products list: show any non-zero stock (negative shrinkage/loss included), hide exact zero.
+  const products = useMemo(() => allProducts.filter(p => p.qty !== 0), [allProducts]);
 
   useEffect(() => {
     if (!loading && !error) {

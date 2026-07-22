@@ -1,8 +1,8 @@
 {
-  "version": "0.39.0",
+  "version": "0.40.0",
   "generatedAt": "2026-04-29T19:06:30.936Z",
-  "updatedAt": "2026-07-22T01:47:58.429Z",
-  "checksum": "a4f1c105ca63427e",
+  "updatedAt": "2026-07-21T19:17:39.692Z",
+  "checksum": "0110ff5e9f0978e9",
   "frontendContract": {
     "window": {
       "id": "800027",
@@ -192,7 +192,7 @@
             "label": "Currency",
             "type": "foreignKey",
             "tsType": "string",
-            "visibility": "editable",
+            "visibility": "readOnly",
             "required": false,
             "grid": false,
             "form": false,
@@ -208,8 +208,9 @@
             },
             "readOnlyLogic": {
               "raw": "@existAmortizationLines@ = 'Y'",
-              "evaluable": true,
-              "js": "Number(record.depreciatedPlan || 0) > 0 || Number(record.depreciatedValue || 0) > 0"
+              "evaluable": false,
+              "reason": "untranslatable-token",
+              "js": null
             }
           },
           {
@@ -550,11 +551,6 @@
             },
             "callout": {
               "className": "org.openbravo.erpCommon.ad_callouts.SL_Assets"
-            },
-            "displayLogic": {
-              "raw": "@IsDepreciated@='Y'",
-              "evaluable": true,
-              "js": "record.depreciate === true || record.depreciate === 'Y'"
             }
           },
           {
@@ -1238,7 +1234,7 @@
             "apiKey": "currency",
             "column": "C_Currency_ID",
             "type": "foreignKey",
-            "visibility": "editable",
+            "visibility": "readOnly",
             "required": false
           },
           {
@@ -2483,14 +2479,6 @@
         "description": "Display logic for 'annualDepreciation' in assets should have evaluable flag"
       },
       {
-        "id": "t-displaylogic-evaluable-assets-assetValue",
-        "category": "displaylogic-evaluable",
-        "entity": "assets",
-        "field": "assetValue",
-        "runner": "node",
-        "description": "Display logic for 'assetValue' in assets should have evaluable flag"
-      },
-      {
         "id": "t-displaylogic-evaluable-assets-businessPartner",
         "category": "displaylogic-evaluable",
         "entity": "assets",
@@ -2657,14 +2645,6 @@
         "field": "annualDepreciation",
         "runner": "node",
         "description": "Display logic for 'annualDepreciation' in assets should be valid JS"
-      },
-      {
-        "id": "t-displaylogic-valid-assets-assetValue",
-        "category": "displaylogic-valid",
-        "entity": "assets",
-        "field": "assetValue",
-        "runner": "node",
-        "description": "Display logic for 'assetValue' in assets should be valid JS"
       },
       {
         "id": "t-displaylogic-valid-assets-businessPartner",
@@ -3533,11 +3513,11 @@
         "description": "Rule 'process_Processing' (process) should be declared"
       },
       {
-        "id": "t-rule-declared-readOnlyLogic-Currency-existAmortizationLines",
+        "id": "t-rule-declared-readOnlyLogic-Currency-alwaysReadOnly",
         "category": "rule-declared",
-        "rule": "readOnlyLogic_Currency_existAmortizationLines",
+        "rule": "readOnlyLogic_Currency_alwaysReadOnly",
         "runner": "node",
-        "description": "Rule 'readOnlyLogic_Currency_existAmortizationLines' (readOnlyLogic) should be declared"
+        "description": "Rule 'readOnlyLogic_Currency_alwaysReadOnly' (readOnlyLogic) should be declared"
       },
       {
         "id": "t-rule-declared-readOnlyLogic-Processed-AmortizationLine",
@@ -4268,13 +4248,13 @@
       }
     ],
     "summary": {
-      "total": 241,
+      "total": 239,
       "byCategory": {
         "action-endpoint": 2,
         "crud-flags": 3,
         "default-value-type": 9,
-        "displaylogic-evaluable": 22,
-        "displaylogic-valid": 22,
+        "displaylogic-evaluable": 21,
+        "displaylogic-valid": 21,
         "field-presence": 38,
         "field-type": 38,
         "readonlylogic-evaluable": 4,
@@ -4286,7 +4266,7 @@
         "visibility": 3
       },
       "byRunner": {
-        "node": 241,
+        "node": 239,
         "junit": 0
       }
     }

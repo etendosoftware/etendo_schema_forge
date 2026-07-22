@@ -175,6 +175,29 @@ describe('formatCurrency', () => {
     });
   });
 
+  describe('compact notation — opt-in third argument', () => {
+    it('USD: formats thousands in compact notation with the symbol before', () => {
+      assert.equal(formatCurrency('USD', 12500, { compact: true }), '$12.50K');
+    });
+
+    it('USD: formats millions in compact notation', () => {
+      assert.equal(formatCurrency('USD', 1_500_000, { compact: true }), '$1.50M');
+    });
+
+    it('EUR: formats compact notation with the symbol after the amount', () => {
+      assert.equal(formatCurrency('EUR', 12500, { compact: true }), '12.50K €');
+    });
+
+    it('omitting the option leaves standard (non-compact) output unchanged', () => {
+      // Backward-compatible: no third arg → standard notation, as every existing call site relies on.
+      assert.equal(formatCurrency('USD', 12500), '$12,500.00');
+    });
+
+    it('compact: false is equivalent to omitting the option', () => {
+      assert.equal(formatCurrency('USD', 12500, { compact: false }), '$12,500.00');
+    });
+  });
+
   describe('large negative amounts', () => {
     it('USD handles large negative with thousand separators', () => {
       assert.equal(formatCurrency('USD', -1_000_000), '-$1,000,000.00');

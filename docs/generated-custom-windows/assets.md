@@ -490,3 +490,42 @@ This iteration adjusts the **Accounting dimensions** group (Group 5) in the Depr
 
 1. Open an asset with **Depreciate** enabled and scroll to **Dimensiones contables**. Confirm exactly four selectors are shown: Project, Cost Center, Business Partner, Product — no 1st/2nd Dimension, Sales Region, Activity, or Sales Campaign.
 2. Open the **Product** selector and confirm it returns product options. Select a product, save, and reopen the asset — confirm the product value persists.
+
+## ETP-4539 — "Amortizar" toggle rename, header-level Asset Value, currency always read-only
+
+### Depreciate toggle renamed to "Amortizar" / "Amortize"
+
+The main depreciation toggle in the **Depreciación** group previously read "Depreciar" / "Depreciate" (description: "Habilitar la depreciación para este activo." / "Enable depreciation for this asset."). It now reads **"Amortizar" / "Amortize"** (description: "Habilitar la amortización para este activo." / "Enable amortization for this asset."). Only the i18n label/description changed — the underlying field key (`depreciate`, column `IsDepreciated`) is untouched.
+
+- **Files changed:** `tools/app-shell/src/locales/en_US.json`, `es_ES.json`, `es_AR.json` — `assetsDepreciateLabel` / `assetsDepreciateDesc` keys.
+
+### "Valor del activo" moved to the main header section
+
+`assetValue` (column `AssetValueAmt`) previously lived in the **Información financiera** group, visible only when **Amortizar** is enabled. It is now part of **Group 1 (Asset Info)** in `AssetsDetailPanel.jsx`, rendered right after **Description**, and is therefore always visible regardless of the depreciation toggle.
+
+- `artifacts/assets/decisions.json` — `assetValue` no longer carries `displayLogicJs` (it was gating visibility to `record.depreciate === true || record.depreciate === 'Y'`); the field's `grid`/`summable`/`businessCritical` flags are unchanged.
+- `tools/app-shell/src/windows/custom/assets/AssetsDetailPanel.jsx` — `assetValue`'s field descriptor moved from `group2Fields` to `group1Fields`. The Group 1 `EntityForm` now uses `onChange={handleAmountChange}` (previously only Group 2 did) so the ETP-4333 local-recompute arithmetic (`computeAssetAmounts`) still fires correctly when the field is edited from its new position; `handleAmountChange` already forwards non-amount fields to the plain `onChange` untouched, so `searchKey`/`name`/`assetCategory`/`description` are unaffected.
+- The field's grid column position and summable behavior in the list view are unchanged — only its position/visibility inside the detail form moved.
+
+### Currency is always read-only
+
+`currency` (column `C_Currency_ID`) was previously read-only only *after* amortization progress existed (`depreciatedPlan` or `depreciatedValue` > 0) — editable otherwise. It is now **always** read-only, in every document state.
+
+- `artifacts/assets/decisions.json` — `currency` gains `"visibility": "readOnly"` (maps to `isReadOnly: 'Y'` unconditionally in `push-to-neo.js`'s `mapVisibility`, so the backend rejects writes regardless of state), the field-level `readOnlyLogic` is explicitly set to `null` to neutralize the raw AD expression (`@existAmortizationLines@ = 'Y'`), and it no longer carries `readOnlyLogicJs`. The rule catalog entry was renamed to `readOnlyLogic_Currency_alwaysReadOnly` (previously `readOnlyLogic_Currency_existAmortizationLines`) and its description updated, since the old name implied the field is still conditional on amortization progress.
+- `tools/app-shell/src/windows/custom/assets/AssetsDetailPanel.jsx` — the `currency` field descriptor's conditional `readOnlyLogic: (record) => Number(record.depreciatedPlan || 0) > 0 || Number(record.depreciatedValue || 0) > 0` was replaced with **`readOnlyLogic: () => true`** (a function, not a static `readOnly: true` boolean). This distinction matters: `EntityForm`'s horizontal-layout-without-`section` render path filters `displayFields = visibleBaseFields.filter(f => !f.readOnly)` — any field with a truthy *static* `f.readOnly` is stripped from the form entirely, not just disabled. A static `readOnly: true` on `currency` would have made **Moneda** disappear from the form altogether instead of rendering as a disabled input. `readOnlyLogic` is not checked by that filter — it only feeds `evalReadOnlyLogic()`, which correctly disables the input (see `isReadOnly` in `renderField`) while keeping the field visible. See the inline comment at `AssetsDetailPanel.jsx` lines ~184-192 for the full rationale. Do not replace this with a static `readOnly: true` in future changes.
+- The currency default-echo `useEffect` (ETP-4333, `currencyEchoedRef`) is unaffected — new records still get `@C_Currency_ID@` defaulted and registered in the form's change tracking; the field is simply never editable afterward.
+
+### Known follow-up — unit tests updated as part of this change
+
+Three assertions in the existing test suite encoded the previous behavior and were updated (as part of this change, following review feedback) to match the new intended behavior:
+
+- `tools/app-shell/src/windows/custom/assets/__tests__/AssetsDetailPanel.vitest.jsx` — "hides financial... fields when depreciate is off" asserted `assetValue` is absent from any rendered form when `depreciate: 'N'`; it now asserts `assetValue` renders unconditionally in Group 1.
+- `tools/app-shell/src/windows/custom/assets/__tests__/AssetsDetailPanel.test.js` — "currency field has readOnlyLogic when amortization lines exist" asserted the source contains `depreciatedPlan`/`depreciatedValue`/`readOnlyLogic` for the currency field descriptor; it now asserts `readOnlyLogic: () => true` (unconditional) is present instead.
+- Any snapshot/manual-verification step in this doc's earlier sections that describes "Depreciar" as the toggle label, or describes `assetValue` as conditional on depreciation, should be read in light of this section going forward.
+
+### Manual verification (ETP-4539)
+
+1. Open an asset and confirm the toggle previously labeled "Depreciar" now reads **"Amortizar"** (with description "Habilitar la amortización para este activo."), in both `es_ES` and `en_US` locales.
+2. Open a new or existing asset with **Amortizar** off and confirm **"Valor del activo"** is visible in the main section, right after **Descripción** — not hidden, not inside a Depreciation-only group.
+3. Toggle **Amortizar** on and off and confirm **"Valor del activo"** remains visible and editable in both states, at the same position.
+4. Confirm the **Moneda** field is read-only (not editable) on a brand-new asset record (before any amortization progress exists), and remains read-only after amortization lines are generated.

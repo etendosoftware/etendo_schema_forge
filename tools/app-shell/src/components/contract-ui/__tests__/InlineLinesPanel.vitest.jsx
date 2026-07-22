@@ -313,6 +313,88 @@ describe('InlineLinesPanel', () => {
     expect(screen.getByText('—')).toBeInTheDocument();
   });
 
+  it('renders signedDelta column in read mode: negative value with negative color', () => {
+    const columns = [
+      { key: 'etgoQtydiff', label: 'Difference', type: 'signedDelta' },
+    ];
+    const rows = [
+      { id: 'S1', etgoQtydiff: -8 },
+    ];
+    const ref = createRef();
+    render(
+      <InlineLinesPanel
+        ref={ref}
+        columns={columns}
+        data={rows}
+        entity="lines"
+        token="test"
+        apiBaseUrl="/api"
+        selectorContext={{}}
+        onSelectionChange={vi.fn()}
+        onUpdateRow={vi.fn().mockResolvedValue()}
+        onDeleteRow={vi.fn().mockResolvedValue()}
+      />,
+    );
+    const cell = screen.getByText('-8');
+    expect(cell).toBeInTheDocument();
+    expect(cell.style.color).toBe('hsl(var(--destructive))');
+    expect(cell.style.fontWeight).toBe('600');
+  });
+
+  it('renders signedDelta column in read mode: exactly-zero as "±0" with neutral color', () => {
+    const columns = [
+      { key: 'etgoQtydiff', label: 'Difference', type: 'signedDelta' },
+    ];
+    const rows = [
+      { id: 'S2', etgoQtydiff: 0 },
+    ];
+    const ref = createRef();
+    render(
+      <InlineLinesPanel
+        ref={ref}
+        columns={columns}
+        data={rows}
+        entity="lines"
+        token="test"
+        apiBaseUrl="/api"
+        selectorContext={{}}
+        onSelectionChange={vi.fn()}
+        onUpdateRow={vi.fn().mockResolvedValue()}
+        onDeleteRow={vi.fn().mockResolvedValue()}
+      />,
+    );
+    const cell = screen.getByText('±0');
+    expect(cell).toBeInTheDocument();
+    expect(cell.style.color).toBe('hsl(var(--foreground))');
+  });
+
+  it('renders signedDelta column in read mode: positive value with positive color', () => {
+    const columns = [
+      { key: 'etgoQtydiff', label: 'Difference', type: 'signedDelta' },
+    ];
+    const rows = [
+      { id: 'S3', etgoQtydiff: 5 },
+    ];
+    const ref = createRef();
+    render(
+      <InlineLinesPanel
+        ref={ref}
+        columns={columns}
+        data={rows}
+        entity="lines"
+        token="test"
+        apiBaseUrl="/api"
+        selectorContext={{}}
+        onSelectionChange={vi.fn()}
+        onUpdateRow={vi.fn().mockResolvedValue()}
+        onDeleteRow={vi.fn().mockResolvedValue()}
+      />,
+    );
+    const cell = screen.getByText('+5');
+    expect(cell).toBeInTheDocument();
+    expect(cell.style.color).toBe('var(--status-success-fg)');
+  });
+
   it('commitField skips when value is unchanged (onUpdateRow NOT called)', async () => {
     const onUpdateRow = vi.fn().mockResolvedValue();
     renderPanel({ onUpdateRow });

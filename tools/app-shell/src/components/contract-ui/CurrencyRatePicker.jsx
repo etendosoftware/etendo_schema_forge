@@ -12,6 +12,9 @@ import { useCurrencyPrecision } from '@/hooks/useCurrencyPrecision.js';
  *
  * An inline pencil icon allows the user to override the displayed rate. The override is
  * staged via `onChange('eTGOCurrencyRate', rate)` and saved with the normal form save.
+ * The pencil is hidden when the selected currency IS the org's own currency (rate 1.0,
+ * always returned that way by the currencyOptions action) — there is no conversion to
+ * override in that case.
  *
  * Falls back to the recordId-less state (no rate fetching) for new records.
  *
@@ -266,7 +269,14 @@ export function CurrencyRatePicker({
               className="h-4 w-4 opacity-50 shrink-0 ml-1"
               data-testid={"ChevronDown__" + field.id} />
           </button>
-          {value && hasRecord && (
+          {/* The org's own currency is always returned by the currencyOptions action with
+              rate exactly 1.0 (hardcoded server-side — see CurrencyOptionsHandler.java —
+              never a queried conversion rate), so it doubles as an org-currency marker
+              without a separate lookup. There is no conversion to override when the
+              header currency IS the org currency, so the pencil has no effect there —
+              hide it rather than let the user "edit" a rate that never applies to
+              anything (ETP-4029). */}
+          {value && hasRecord && selectedOption?.rate !== 1 && (
             <button
               data-testid="currency-rate-pencil"
               type="button"

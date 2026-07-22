@@ -2,6 +2,7 @@ import { Switch } from '@/components/ui/switch';
 import { StatusTag } from '@/components/ui/status-tag';
 import { Tag } from '@/components/ui/tag';
 import { formatAmount } from '@/lib/formatAmount.js';
+import { formatSignedDelta } from '@/lib/formatSigned.js';
 import { resolveColumnLabel } from '@/lib/resolveColumnLabel.js';
 import { getStatusDotColor, getStatusTone, statusLabel } from '@/lib/statusBadge.js';
 
@@ -210,6 +211,28 @@ export function renderAmountCell({ row, col }) {
   return <span className="tabular-nums">{formatAmount(row[col.key], row['currency$_identifier'])}</span>;
 }
 
+// Mirrors TONE_CLASS in components/ui/money-amount.jsx and the sibling
+// InlineLinesPanel ReadCell branch — kept as a single source via
+// formatSignedDelta so both grids render identical text/color for the same
+// `signedDelta` column type.
+const SIGNED_DELTA_TONE_COLOR = {
+  positive: 'var(--status-success-fg)',
+  negative: 'hsl(var(--destructive))',
+  neutral: 'hsl(var(--foreground))',
+};
+
+export function renderSignedDeltaCell({ row, col }) {
+  const { text, tone } = formatSignedDelta(row[col.key]);
+  return (
+    <span
+      className="block text-right tabular-nums"
+      style={{ fontWeight: 600, color: SIGNED_DELTA_TONE_COLOR[tone] }}
+    >
+      {text}
+    </span>
+  );
+}
+
 export function renderDefaultCell({ row, col, display, visibleColumns }) {
   if (isFirstVisibleStringColumn(col, visibleColumns)) {
     const pill = col.pill;
@@ -239,5 +262,6 @@ export const CELL_RENDERERS = {
   boolean: renderBooleanCell,
   date: renderDateCell,
   amount: renderAmountCell,
+  signedDelta: renderSignedDeltaCell,
   default: renderDefaultCell,
 };
