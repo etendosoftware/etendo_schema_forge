@@ -1,8 +1,8 @@
 {
-  "version": "0.13.0",
+  "version": "0.14.0",
   "generatedAt": "2026-06-26T00:48:58.290Z",
-  "updatedAt": "2026-07-16T12:52:39.887Z",
-  "checksum": "9284affe8ec1e6fd",
+  "updatedAt": "2026-07-21T12:35:19.869Z",
+  "checksum": "f09b93604133dd85",
   "frontendContract": {
     "window": {
       "id": "800076",
@@ -46,6 +46,10 @@
             "form": true,
             "sourceRequired": true,
             "dot": false,
+            "validation": {
+              "required": true,
+              "maxLength": 10
+            },
             "readOnlyLogic": {
               "raw": "@Processed@='Y'",
               "evaluable": true,
@@ -64,6 +68,10 @@
             "grid": true,
             "form": true,
             "sourceRequired": true,
+            "validation": {
+              "required": true,
+              "maxLength": 60
+            },
             "readOnlyLogic": {
               "raw": "@Processed@='Y'",
               "evaluable": true,
@@ -110,7 +118,11 @@
                 }
               }
             ],
-            "defaultValue": "DR"
+            "defaultValue": "DR",
+            "validation": {
+              "required": true,
+              "maxLength": 60
+            }
           }
         ],
         "searchableFields": [
@@ -156,7 +168,10 @@
               "type": "lookup",
               "source": "SELECT COALESCE(MAX(LINE),0)+10 AS DefaultValue FROM M_INTERNAL_CONSUMPTIONLINE WHERE M_INTERNAL_CONSUMPTION_ID=@M_INTERNAL_CONSUMPTION_ID@"
             },
-            "defaultValue": "@SQL=SELECT COALESCE(MAX(LINE),0)+10 AS DefaultValue FROM M_INTERNAL_CONSUMPTIONLINE WHERE M_INTERNAL_CONSUMPTION_ID=@M_INTERNAL_CONSUMPTION_ID@"
+            "defaultValue": "@SQL=SELECT COALESCE(MAX(LINE),0)+10 AS DefaultValue FROM M_INTERNAL_CONSUMPTIONLINE WHERE M_INTERNAL_CONSUMPTION_ID=@M_INTERNAL_CONSUMPTION_ID@",
+            "validation": {
+              "maxLength": 10
+            }
           },
           {
             "name": "product",
@@ -186,6 +201,10 @@
                 ]
               }
             ],
+            "validation": {
+              "required": true,
+              "maxLength": 60
+            },
             "callout": {
               "className": "org.openbravo.erpCommon.ad_callouts.SL_Internal_Consumption_Product"
             }
@@ -207,7 +226,11 @@
               "source": "0"
             },
             "defaultValue": "0",
-            "columnWidth": 160
+            "columnWidth": 160,
+            "validation": {
+              "required": true,
+              "maxLength": 12
+            }
           },
           {
             "name": "uOM",
@@ -221,7 +244,10 @@
             "grid": true,
             "form": true,
             "reference": "UOM",
-            "inputMode": "selector"
+            "inputMode": "selector",
+            "validation": {
+              "maxLength": 12
+            }
           },
           {
             "name": "storageBin",
@@ -237,7 +263,11 @@
             "sourceRequired": true,
             "reference": "Locator",
             "inputMode": "search",
-            "displayFromCatalog": true
+            "displayFromCatalog": true,
+            "validation": {
+              "required": true,
+              "maxLength": 60
+            }
           }
         ],
         "searchableFields": [
