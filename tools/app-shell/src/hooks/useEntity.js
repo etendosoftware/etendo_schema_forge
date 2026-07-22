@@ -814,7 +814,9 @@ export function useEntity(entity, childEntity, {
                 const rows = normalizeRows(data?.response?.data ?? (Array.isArray(data) ? data : []), childEntity);
                 setChildren(rows);
             })
-            .catch(() => setChildren([]))
+            // Silent refreshes must not blank a table the user is already looking
+            // at just because one background request failed transiently.
+            .catch(() => { if (!silent) setChildren([]); })
             .finally(() => { if (!silent) setChildrenLoading(false); });
     }, [apiBaseUrl, childEntity, token, childSortBy]);
 

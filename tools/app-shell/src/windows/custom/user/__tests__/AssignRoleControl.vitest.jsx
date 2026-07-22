@@ -71,7 +71,7 @@ describe('AssignRoleControl', () => {
 
       await waitFor(() => expect(globalThis.fetch).toHaveBeenCalledTimes(1));
       expect(globalThis.fetch).toHaveBeenCalledWith(
-        '/sws/neo/user/userRoles/selectors/AD_Role_ID?limit=50&offset=0',
+        '/sws/neo/user/userRoles/selectors/role?limit=50&offset=0',
         expect.objectContaining({ headers: { Authorization: 'Bearer t' } }),
       );
     });

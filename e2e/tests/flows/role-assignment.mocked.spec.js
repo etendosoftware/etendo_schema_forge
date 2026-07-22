@@ -39,7 +39,7 @@ const ROLE_OPTIONS = [
  * Child tab mock — the userRoles entity is fully read-only (ETP-4512) and has
  * no addLineFields, so an empty envelope is enough to render the tab without
  * errors. `**\/sws/neo/user/userRoles**` also matches the more specific
- * `.../userRoles/selectors/AD_Role_ID` selectors URL (substring match), so
+ * `.../userRoles/selectors/role` selectors URL (substring match), so
  * this handler explicitly falls back on `/selectors/` URLs instead of
  * relying solely on registration order for installRoleSelectorsMock below to
  * win.
@@ -101,7 +101,7 @@ async function installUserRecordMock(page) {
  * selector than defaultRole's own, per the component's doc comment.
  */
 async function installRoleSelectorsMock(page) {
-  await page.route('**/sws/neo/user/userRoles/selectors/AD_Role_ID**', async (route) => {
+  await page.route('**/sws/neo/user/userRoles/selectors/role**', async (route) => {
     await route.fulfill({
       status: 200,
       contentType: 'application/json',

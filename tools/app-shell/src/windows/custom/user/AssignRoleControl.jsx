@@ -36,7 +36,7 @@ export default function AssignRoleControl(props) {
     }
     let cancelled = false;
     setLoading(true);
-    fetch(`${apiBaseUrl}/userRoles/selectors/AD_Role_ID?limit=50&offset=0`, {
+    fetch(`${apiBaseUrl}/userRoles/selectors/role?limit=50&offset=0`, {
       headers: { Authorization: `Bearer ${token}` },
     })
       .then((r) => (r.ok ? r.json() : null))
