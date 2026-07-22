@@ -938,8 +938,10 @@ test.describe('Assets (real backend)', () => {
     const depreciarToggle = page.getByRole('switch').first();
 
     // OFF (default): disabled hint shown, config fields absent.
+    // assetValue lives in the always-visible header section (ETP-4539), so it
+    // stays present regardless of the Depreciar toggle state.
     await expect(page.getByText(DISABLED_HINT, { exact: false })).toBeVisible();
-    await expect(page.getByTestId('field-assetValue')).toHaveCount(0);
+    await expect(page.getByTestId('field-assetValue')).toBeVisible();
 
     // Activate → financial + accounting-dimensions sections appear.
     await depreciarToggle.click();
@@ -951,9 +953,10 @@ test.describe('Assets (real backend)', () => {
     await expect(page.getByText(DISABLED_HINT, { exact: false })).toHaveCount(0);
 
     // Deactivate → all those sections hide, hint returns.
+    // assetValue stays visible — it lives outside the depreciation-only sections.
     await depreciarToggle.click();
     await expect(page.getByText(DISABLED_HINT, { exact: false })).toBeVisible({ timeout: 5_000 });
-    await expect(page.getByTestId('field-assetValue')).toHaveCount(0);
+    await expect(page.getByTestId('field-assetValue')).toBeVisible();
     await expect(page.getByText('Información financiera')).toHaveCount(0);
     await expect(page.getByText('Dimensiones contables')).toHaveCount(0);
 

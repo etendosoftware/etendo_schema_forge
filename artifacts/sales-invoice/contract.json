@@ -1,8 +1,8 @@
 {
-  "version": "0.59.0",
+  "version": "0.62.0",
   "generatedAt": "2026-04-30T15:42:46.582Z",
-  "updatedAt": "2026-07-21T18:54:47.206Z",
-  "checksum": "c938230b927e785b",
+  "updatedAt": "2026-07-21T19:17:47.858Z",
+  "checksum": "5265d041bbe1a0fe",
   "frontendContract": {
     "window": {
       "id": "167",
@@ -43,16 +43,8 @@
         "exchangeRates": {
           "label": "Exchange Rates",
           "tabOrder": 50,
-          "addLineFields": [
-            "toCurrency",
-            "rate",
-            "foreignAmount"
-          ],
           "requireSavedRecord": true,
-          "readOnlyLogic": "@DocumentStatus@!='DR'",
-          "addLineFieldExclusions": {
-            "toCurrency": "currency"
-          }
+          "readOnlyLogic": "@Posted@='Y' | @HASREVERSEDINVOICESO@='Y' | @HASREVERSEDINVOICEPO@='Y'"
         }
       },
       "salesTheme": true,
@@ -2361,6 +2353,7 @@
             "sourceRequired": true,
             "reference": "Currency",
             "inputMode": "selector",
+            "gridReadOnly": true,
             "validation": {
               "required": true,
               "maxLength": 32
@@ -2389,13 +2382,14 @@
             "label": "To Currency",
             "type": "foreignKey",
             "tsType": "string",
-            "visibility": "editable",
+            "visibility": "readOnly",
             "required": true,
             "grid": true,
             "form": true,
             "sourceRequired": true,
             "reference": "Currency",
             "inputMode": "search",
+            "gridReadOnly": true,
             "validation": {
               "required": true,
               "maxLength": 32
@@ -2519,16 +2513,8 @@
         "exchangeRates": {
           "label": "Exchange Rates",
           "tabOrder": 50,
-          "addLineFields": [
-            "toCurrency",
-            "rate",
-            "foreignAmount"
-          ],
           "requireSavedRecord": true,
-          "readOnlyLogic": "@DocumentStatus@!='DR'",
-          "addLineFieldExclusions": {
-            "toCurrency": "currency"
-          }
+          "readOnlyLogic": "@Posted@='Y' | @HASREVERSEDINVOICESO@='Y' | @HASREVERSEDINVOICEPO@='Y'"
         }
       },
       "salesTheme": true,
@@ -4784,7 +4770,7 @@
             "apiKey": "toCurrency",
             "column": "C_Currency_Id_To",
             "type": "foreignKey",
-            "visibility": "editable",
+            "visibility": "readOnly",
             "required": true
           },
           {

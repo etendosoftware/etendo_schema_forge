@@ -1,8 +1,8 @@
 {
-  "version": "0.39.0",
+  "version": "0.40.0",
   "generatedAt": "2026-04-30T15:42:46.497Z",
-  "updatedAt": "2026-07-21T18:54:46.792Z",
-  "checksum": "fb7cb75d178b5f82",
+  "updatedAt": "2026-07-21T19:17:46.806Z",
+  "checksum": "97965f9f07e1b828",
   "frontendContract": {
     "window": {
       "id": "181",
@@ -2056,7 +2056,7 @@
             "label": "Currency",
             "type": "foreignKey",
             "tsType": "string",
-            "visibility": "editable",
+            "visibility": "readOnly",
             "required": true,
             "grid": false,
             "form": false,
@@ -3291,6 +3291,14 @@
             "required": false
           },
           {
+            "name": "accountingDate",
+            "apiKey": "accountingDate",
+            "column": "DateAcct",
+            "type": "date",
+            "visibility": "system",
+            "required": true
+          },
+          {
             "name": "selfService",
             "apiKey": "selfService",
             "column": "IsSelfService",
@@ -3311,14 +3319,6 @@
             "apiKey": "print",
             "column": "IsPrinted",
             "type": "boolean",
-            "visibility": "system",
-            "required": true
-          },
-          {
-            "name": "accountingDate",
-            "apiKey": "accountingDate",
-            "column": "DateAcct",
-            "type": "date",
             "visibility": "system",
             "required": true
           },
@@ -3966,7 +3966,7 @@
             "apiKey": "currency",
             "column": "C_Currency_ID",
             "type": "foreignKey",
-            "visibility": "editable",
+            "visibility": "readOnly",
             "required": true
           },
           {

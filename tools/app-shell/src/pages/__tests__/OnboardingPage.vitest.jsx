@@ -103,6 +103,15 @@ vi.mock('@etendosoftware/etendo-go-core/onboarding/state', () => ({
   ],
   isCompanyStepValid: () => true,
   isProfileStepValid: () => true,
+  ENVIRONMENT_SESSION_KEYS: [
+    'sf_auth_token',
+    'sf_auth_user',
+    'sf_auth_client_id',
+    'sf_auth_client_name',
+    'sf_auth_rolelist',
+    'sf_auth_selected_role',
+    'sf_auth_selected_org',
+  ],
 }));
 
 vi.mock('../../lib/observability.js', () => ({
