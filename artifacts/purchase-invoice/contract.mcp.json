@@ -1,8 +1,7 @@
 {
-  "version": "0.72.0",
-  "generatedAt": "2026-04-30T15:42:46.722Z",
-  "updatedAt": "2026-07-20T20:41:36.341Z",
-  "contractChecksum": "5e388a591b2999cf",
+  "version": "0.73.0",
+  "generatedAt": "2026-07-21T18:19:50.548Z",
+  "contractChecksum": "00425085826f3fba",
   "apiPrediction": {
     "specName": "purchase-invoice",
     "baseUrl": "/sws/neo/purchase-invoice",
@@ -859,6 +858,29 @@
         "processType": "classic"
       },
       {
+        "name": "psd2GenerateBankPayment",
+        "actionType": "paymentAction",
+        "entity": "header",
+        "column": "EM_Psd2_Generate_Bank_Payment",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/purchase-invoice/header/{id}/action/psd2GenerateBankPayment",
+        "parameters": [],
+        "preconditions": [],
+        "effects": [
+          "Creates or processes payment records",
+          "May update invoice/order payment status"
+        ],
+        "dryRunSupported": false,
+        "edgeCases": [
+          "Payment amount exceeds remaining balance",
+          "Payment method is not configured for the business partner",
+          "Invoice is already fully paid"
+        ],
+        "processId": "0661406A983B4D8EA611F8596F114D52",
+        "processType": "obuiapp"
+      },
+      {
         "name": "aeatsiiSend",
         "actionType": "createFrom",
         "entity": "header",
@@ -901,6 +923,69 @@
           "Record is in an incompatible state"
         ],
         "processId": "BAAECFDF9FF144E8A610E9F1EF3E5FBE",
+        "processType": "obuiapp"
+      },
+      {
+        "name": "etblkpBulkposting",
+        "actionType": "documentAction",
+        "entity": "header",
+        "column": "EM_Etblkp_Bulkposting",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/purchase-invoice/header/{id}/action/etblkpBulkposting",
+        "parameters": [
+          {
+            "name": "docAction",
+            "type": "string",
+            "required": true,
+            "description": "Document action code (e.g. CO=Complete, VO=Void, RE=Reactivate)"
+          }
+        ],
+        "preconditions": [
+          {
+            "field": "documentStatus",
+            "operator": "in",
+            "values": [
+              "DR",
+              "IP"
+            ],
+            "description": "Document must be in draft or in-progress state"
+          }
+        ],
+        "effects": [
+          "Updates document status",
+          "May trigger workflow transitions"
+        ],
+        "dryRunSupported": true,
+        "edgeCases": [
+          "Document is already completed or closed",
+          "Document has pending lines or missing required fields",
+          "User lacks permission to execute the action"
+        ],
+        "processId": "57496FB9CF9E4E8F847224017941570E",
+        "processType": "obuiapp"
+      },
+      {
+        "name": "eTPRRemovePayment",
+        "actionType": "paymentAction",
+        "entity": "header",
+        "column": "EM_Etpr_Remove_Payment",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/purchase-invoice/header/{id}/action/eTPRRemovePayment",
+        "parameters": [],
+        "preconditions": [],
+        "effects": [
+          "Creates or processes payment records",
+          "May update invoice/order payment status"
+        ],
+        "dryRunSupported": false,
+        "edgeCases": [
+          "Payment amount exceeds remaining balance",
+          "Payment method is not configured for the business partner",
+          "Invoice is already fully paid"
+        ],
+        "processId": "745FCF75B6F14024B96CC14429D8E952",
         "processType": "obuiapp"
       },
       {
@@ -1116,92 +1201,6 @@
         "processType": "obuiapp"
       },
       {
-        "name": "psd2GenerateBankPayment",
-        "actionType": "paymentAction",
-        "entity": "header",
-        "column": "EM_Psd2_Generate_Bank_Payment",
-        "requiresRecord": true,
-        "method": "POST",
-        "url": "/sws/neo/purchase-invoice/header/{id}/action/psd2GenerateBankPayment",
-        "parameters": [],
-        "preconditions": [],
-        "effects": [
-          "Creates or processes payment records",
-          "May update invoice/order payment status"
-        ],
-        "dryRunSupported": false,
-        "edgeCases": [
-          "Payment amount exceeds remaining balance",
-          "Payment method is not configured for the business partner",
-          "Invoice is already fully paid"
-        ],
-        "processId": "0661406A983B4D8EA611F8596F114D52",
-        "processType": "obuiapp"
-      },
-      {
-        "name": "eTPRRemovePayment",
-        "actionType": "paymentAction",
-        "entity": "header",
-        "column": "EM_Etpr_Remove_Payment",
-        "requiresRecord": true,
-        "method": "POST",
-        "url": "/sws/neo/purchase-invoice/header/{id}/action/eTPRRemovePayment",
-        "parameters": [],
-        "preconditions": [],
-        "effects": [
-          "Creates or processes payment records",
-          "May update invoice/order payment status"
-        ],
-        "dryRunSupported": false,
-        "edgeCases": [
-          "Payment amount exceeds remaining balance",
-          "Payment method is not configured for the business partner",
-          "Invoice is already fully paid"
-        ],
-        "processId": "745FCF75B6F14024B96CC14429D8E952",
-        "processType": "obuiapp"
-      },
-      {
-        "name": "etblkpBulkposting",
-        "actionType": "documentAction",
-        "entity": "header",
-        "column": "EM_Etblkp_Bulkposting",
-        "requiresRecord": true,
-        "method": "POST",
-        "url": "/sws/neo/purchase-invoice/header/{id}/action/etblkpBulkposting",
-        "parameters": [
-          {
-            "name": "docAction",
-            "type": "string",
-            "required": true,
-            "description": "Document action code (e.g. CO=Complete, VO=Void, RE=Reactivate)"
-          }
-        ],
-        "preconditions": [
-          {
-            "field": "documentStatus",
-            "operator": "in",
-            "values": [
-              "DR",
-              "IP"
-            ],
-            "description": "Document must be in draft or in-progress state"
-          }
-        ],
-        "effects": [
-          "Updates document status",
-          "May trigger workflow transitions"
-        ],
-        "dryRunSupported": true,
-        "edgeCases": [
-          "Document is already completed or closed",
-          "Document has pending lines or missing required fields",
-          "User lacks permission to execute the action"
-        ],
-        "processId": "57496FB9CF9E4E8F847224017941570E",
-        "processType": "obuiapp"
-      },
-      {
         "name": "explode",
         "actionType": "utilityAction",
         "entity": "lines",
@@ -1337,7 +1336,8 @@
         "OutstandingAmt": "Pendiente de pago",
         "EM_Etgo_Due_Date": "Vencimiento",
         "em_etgo_delivery_status": "Estado de recepción",
-        "C_DocTypeTarget_ID": "Tipo de documento"
+        "C_DocTypeTarget_ID": "Tipo de documento",
+        "PriceList": "Precio"
       },
       "en_US": {
         "POReference": "Document No.",
@@ -1496,11 +1496,19 @@
             "required": true,
             "defaultValue": "N"
           },
+          "etgoTotalDiscount": {},
           "processed": {
             "readOnly": true,
             "required": true
           },
           "aeatsiiCauseExemption": {},
+          "eTGOCurrencyRate": {},
+          "eTGODeliveryStatus": {
+            "readOnly": true
+          },
+          "eTGODueDate": {
+            "readOnly": true
+          },
           "etvfacDateIssue": {
             "readOnly": true,
             "readOnlyLogic": "@processed@='Y'"
@@ -1524,15 +1532,7 @@
             "readOnly": true,
             "required": true,
             "defaultValue": "N"
-          },
-          "etgoTotalDiscount": {},
-          "eTGODueDate": {
-            "readOnly": true
-          },
-          "eTGODeliveryStatus": {
-            "readOnly": true
-          },
-          "eTGOCurrencyRate": {}
+          }
         }
       },
       "lines": {
@@ -2095,11 +2095,11 @@
       "createLinesFromShipment",
       "copyFrom",
       "aeatsiiSend",
+      "etblkpBulkposting",
       "processNow",
       "createLinesFrom",
       "etvfacRectCreate",
-      "tbaiVoidxmlgenerator",
-      "etblkpBulkposting"
+      "tbaiVoidxmlgenerator"
     ],
     "workflow": [
       "Create draft header with required fields",
@@ -2167,5 +2167,5 @@
       "tbaiVoidxmlgenerator"
     ]
   },
-  "checksum": "85bab60e5c87ca0c"
+  "checksum": "18e1bfd2e7212cd4"
 }

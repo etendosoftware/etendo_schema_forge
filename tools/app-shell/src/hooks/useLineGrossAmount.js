@@ -107,11 +107,11 @@ function deriveNetFromProductChange(calloutResult, priceField, rowValues, discou
       : String(rowValues[priceField] ?? '');
   const p = parseFloat(priceStr) || 0;
   const d = parseFloat(String(calloutResult[discountField] ?? rowValues[discountField] ?? '')) || 0;
-  return qty > 0 && p > 0 ? qty * p * (1 - d / 100) : 0;
+  return qty !== 0 && p !== 0 ? qty * p * (1 - d / 100) : 0;
 }
 
 function calculateBasicLineNet(qty, price, discFactor) {
-  return qty > 0 && price > 0 ? qty * price * discFactor : 0;
+  return qty !== 0 && price !== 0 ? qty * price * discFactor : 0;
 }
 
 /**
@@ -140,17 +140,17 @@ export function deriveLineNet(field, value, calloutResult, rowValues, qtyField, 
 
   if (field === qtyField) {
     const q = parseFloat(value) || 0;
-    return q > 0 && price > 0 ? q * price * discFactor : 0;
+    return q !== 0 && price !== 0 ? q * price * discFactor : 0;
   }
 
   if (field === priceField) {
     const p = parseFloat(value) || 0;
-    return qty > 0 && p > 0 ? qty * p * discFactor : 0;
+    return qty !== 0 && p !== 0 ? qty * p * discFactor : 0;
   }
 
   if (field === discountField) {
     const d = parseFloat(String(value)) || 0;
-    return qty > 0 && price > 0 ? qty * price * (1 - d / 100) : 0;
+    return qty !== 0 && price !== 0 ? qty * price * (1 - d / 100) : 0;
   }
 
   if (field === 'product') {
@@ -189,7 +189,7 @@ export function computeLineGrossAmount(field, value, calloutResult, rowValues, t
 
   // Keep lineNetAmount in sync for fields the UI computes client-side.
   const clientSideFields = [config.qtyField, config.priceField, discountField];
-  if (clientSideFields.includes(field) && lineNet > 0) {
+  if (clientSideFields.includes(field) && lineNet !== 0) {
     if (calloutResult.lineNetAmount == null || Number(calloutResult.lineNetAmount) === 0) {
       calloutResult.lineNetAmount = parseFloat(lineNet.toFixed(2));
     }
@@ -206,7 +206,7 @@ export function computeLineGrossAmount(field, value, calloutResult, rowValues, t
   if (clientSideFields.includes(field) && lineNet === 0) {
     const qty   = parseFloat(String(rowValues[config.qtyField]   ?? '')) || 0;
     const price = parseFloat(String(rowValues[config.priceField] ?? '')) || 0;
-    if (qty > 0 && price > 0) {
+    if (qty !== 0 && price !== 0) {
       calloutResult.lineNetAmount = 0;
       calloutResult.grossAmount = 0;
       calloutResult[config.grossField] = 0;
@@ -214,7 +214,7 @@ export function computeLineGrossAmount(field, value, calloutResult, rowValues, t
     return;
   }
 
-  if (lineNet <= 0) return;
+  if (lineNet === 0) return;
 
   const taxId  = calloutResult.tax ?? rowValues.tax;
   const factor = resolveTaxFactor(taxId, calloutResult, rowValues, taxRateCache, siblings, config.grossField, discountField);
@@ -243,7 +243,11 @@ export function computeUnitPriceForPost(lineData, config) {
   const discountField = config.discountField || 'discount';
   const listPrice = parseFloat(String(lineData[config.priceField] ?? '')) || 0;
   const discount  = parseFloat(String(lineData[discountField]     ?? '')) || 0;
-  if (listPrice > 0) {
+  // 0 means "not entered" (indeterminate, skip deriving unitPrice), but a real
+  // negative listPrice (credit/return lines, ETP-4567) must still compute and
+  // be sent — see the guard fix in computeLineGrossAmount above for the same
+  // reason.
+  if (listPrice !== 0) {
     lineData.unitPrice = parseFloat((listPrice * (1 - discount / 100)).toFixed(6));
   }
 }

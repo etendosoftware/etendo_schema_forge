@@ -1,8 +1,7 @@
 {
   "version": "0.18.0",
-  "generatedAt": "2026-05-12T16:47:39.614Z",
-  "updatedAt": "2026-07-20T11:39:49.014Z",
-  "checksum": "72d27873b20f779e",
+  "generatedAt": "2026-07-21T18:19:51.189Z",
+  "checksum": "f34f9a072b8e6800",
   "frontendContract": {
     "window": {
       "id": "143",
@@ -37,7 +36,8 @@
         "es_ES": {
           "C_BPartner_ID": "Contacto",
           "DeliveryStatus": "Estado de entrega",
-          "InvoiceStatus": "Estado de facturación"
+          "InvoiceStatus": "Estado de facturación",
+          "PriceList": "Precio"
         },
         "en_US": {
           "C_BPartner_ID": "Contact",
@@ -677,7 +677,6 @@
             "defaultValue": "1",
             "section": "principal",
             "gridOrder": 3,
-            "min": 0,
             "callout": {
               "className": "org.openbravo.erpCommon.ad_callouts.SL_Order_Amt"
             },
@@ -703,7 +702,6 @@
             "columnType": "amount",
             "section": "principal",
             "gridOrder": 4,
-            "min": 0,
             "callout": {
               "className": "org.openbravo.erpCommon.ad_callouts.SL_Order_Amt"
             },
@@ -959,7 +957,8 @@
         "es_ES": {
           "C_BPartner_ID": "Contacto",
           "DeliveryStatus": "Estado de entrega",
-          "InvoiceStatus": "Estado de facturación"
+          "InvoiceStatus": "Estado de facturación",
+          "PriceList": "Precio"
         },
         "en_US": {
           "C_BPartner_ID": "Contact",
@@ -1523,6 +1522,14 @@
             "required": false
           },
           {
+            "name": "eTPRRemovePayment",
+            "apiKey": "eTPRRemovePayment",
+            "column": "EM_Etpr_Remove_Payment",
+            "type": "button",
+            "visibility": "discarded",
+            "required": true
+          },
+          {
             "name": "etvfacReversedInvoice",
             "apiKey": "etvfacReversedInvoice",
             "column": "EM_Etvfac_Reversed_Invoice",
@@ -1723,14 +1730,6 @@
             "required": false
           },
           {
-            "name": "createPOLines",
-            "apiKey": "createPOLines",
-            "column": "Create_POLines",
-            "type": "button",
-            "visibility": "system",
-            "required": false
-          },
-          {
             "name": "creationDate",
             "apiKey": "creationDate",
             "column": "Created",
@@ -1747,11 +1746,35 @@
             "required": true
           },
           {
+            "name": "createPOLines",
+            "apiKey": "createPOLines",
+            "column": "Create_POLines",
+            "type": "button",
+            "visibility": "system",
+            "required": false
+          },
+          {
             "name": "deliveryStatusPurchase",
             "apiKey": "deliveryStatusPurchase",
             "column": "DeliveryStatusPurchase",
             "type": "integer",
             "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "eTGOCurrencyRate",
+            "apiKey": "eTGOCurrencyRate",
+            "column": "EM_ETGO_Currency_Rate",
+            "type": "string",
+            "visibility": "editable",
+            "required": false
+          },
+          {
+            "name": "psd2GenerateBankPayment",
+            "apiKey": "psd2GenerateBankPayment",
+            "column": "EM_Psd2_Generate_Bank_Payment",
+            "type": "button",
+            "visibility": "discarded",
             "required": false
           },
           {
@@ -1785,30 +1808,6 @@
             "type": "foreignKey",
             "visibility": "system",
             "required": true
-          },
-          {
-            "name": "psd2GenerateBankPayment",
-            "apiKey": "psd2GenerateBankPayment",
-            "column": "EM_Psd2_Generate_Bank_Payment",
-            "type": "button",
-            "visibility": "discarded",
-            "required": false
-          },
-          {
-            "name": "eTGOCurrencyRate",
-            "apiKey": "eTGOCurrencyRate",
-            "column": "EM_ETGO_Currency_Rate",
-            "type": "string",
-            "visibility": "editable",
-            "required": false
-          },
-          {
-            "name": "eTPRRemovePayment",
-            "apiKey": "eTPRRemovePayment",
-            "column": "EM_Etpr_Remove_Payment",
-            "type": "button",
-            "visibility": "discarded",
-            "required": true
           }
         ],
         "javaQualifier": "salesOrderHeaderHandler"
@@ -1824,8 +1823,7 @@
             "column": "M_Product_ID",
             "type": "foreignKey",
             "visibility": "editable",
-            "required": true,
-            "order": 1
+            "required": true
           },
           {
             "name": "description",
@@ -1833,8 +1831,7 @@
             "column": "Description",
             "type": "text",
             "visibility": "editable",
-            "required": false,
-            "order": 2
+            "required": false
           },
           {
             "name": "orderedQuantity",
@@ -1842,8 +1839,7 @@
             "column": "QtyOrdered",
             "type": "quantity",
             "visibility": "editable",
-            "required": true,
-            "order": 3
+            "required": true
           },
           {
             "name": "listPrice",
@@ -1851,8 +1847,7 @@
             "column": "PriceList",
             "type": "price",
             "visibility": "editable",
-            "required": true,
-            "order": 4
+            "required": true
           },
           {
             "name": "discount",
@@ -1860,8 +1855,7 @@
             "column": "Discount",
             "type": "decimal",
             "visibility": "editable",
-            "required": false,
-            "order": 5
+            "required": false
           },
           {
             "name": "tax",
@@ -1869,8 +1863,7 @@
             "column": "C_Tax_ID",
             "type": "foreignKey",
             "visibility": "editable",
-            "required": true,
-            "order": 6
+            "required": true
           },
           {
             "name": "lineGrossAmount",
@@ -1878,8 +1871,7 @@
             "column": "Line_Gross_Amount",
             "type": "amount",
             "visibility": "readOnly",
-            "required": false,
-            "order": 7
+            "required": false
           },
           {
             "name": "lineNo",
@@ -2744,6 +2736,14 @@
       },
       {
         "entity": "header",
+        "field": "eTPRRemovePayment",
+        "column": "EM_Etpr_Remove_Payment",
+        "url": "/sws/neo/sales-order/header/{id}/action/eTPRRemovePayment",
+        "processId": "D2923463223C4F1EADE335D22B9D8FE8",
+        "processType": "obuiapp"
+      },
+      {
+        "entity": "header",
         "field": "processNow",
         "column": "Processing",
         "url": "/sws/neo/sales-order/header/{id}/action/processNow",
@@ -2776,14 +2776,6 @@
       },
       {
         "entity": "header",
-        "field": "rMPickfromreceipt",
-        "column": "RM_Pickfromreceipt",
-        "url": "/sws/neo/sales-order/header/{id}/action/rMPickfromreceipt",
-        "processId": "A2C19D0EF6594D14A64BC62E99A89CC3",
-        "processType": "obuiapp"
-      },
-      {
-        "entity": "header",
         "field": "psd2GenerateBankPayment",
         "column": "EM_Psd2_Generate_Bank_Payment",
         "url": "/sws/neo/sales-order/header/{id}/action/psd2GenerateBankPayment",
@@ -2792,10 +2784,10 @@
       },
       {
         "entity": "header",
-        "field": "eTPRRemovePayment",
-        "column": "EM_Etpr_Remove_Payment",
-        "url": "/sws/neo/sales-order/header/{id}/action/eTPRRemovePayment",
-        "processId": "D2923463223C4F1EADE335D22B9D8FE8",
+        "field": "rMPickfromreceipt",
+        "column": "RM_Pickfromreceipt",
+        "url": "/sws/neo/sales-order/header/{id}/action/rMPickfromreceipt",
+        "processId": "A2C19D0EF6594D14A64BC62E99A89CC3",
         "processType": "obuiapp"
       },
       {
@@ -2851,7 +2843,8 @@
       "es_ES": {
         "C_BPartner_ID": "Contacto",
         "DeliveryStatus": "Estado de entrega",
-        "InvoiceStatus": "Estado de facturación"
+        "InvoiceStatus": "Estado de facturación",
+        "PriceList": "Precio"
       },
       "en_US": {
         "C_BPartner_ID": "Contact",

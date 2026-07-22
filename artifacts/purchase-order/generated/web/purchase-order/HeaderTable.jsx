@@ -13,7 +13,7 @@ const columns = [
 ];
 // @sf-generated-end columns:header
 
-const filters = ['businessPartner', 'documentNo', 'orderDate', 'documentStatus', 'orderReference'];
+const filters = ['documentNo', 'orderDate', 'businessPartner', 'documentStatus', 'orderReference'];
 
 // @sf-generated-start component:HeaderTable
 const HeaderTable = forwardRef(function HeaderTable(props, ref) {

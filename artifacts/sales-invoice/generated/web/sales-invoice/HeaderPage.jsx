@@ -52,7 +52,7 @@ const draftMode = {
 // @sf-generated-end draftMode:header
 
 // @sf-generated-start requiredHeaderFields:header
-const requiredHeaderFields = ['documentNo', 'invoiceDate', 'businessPartner', 'partnerAddress', 'paymentTerms', 'paymentMethod', 'grandTotalAmount', 'summedLineAmount', 'currency', 'priceList', 'transactionDocument'];
+const requiredHeaderFields = ['transactionDocument', 'documentNo', 'invoiceDate', 'businessPartner', 'partnerAddress', 'paymentTerms', 'paymentMethod', 'grandTotalAmount', 'summedLineAmount', 'currency', 'priceList'];
 // @sf-generated-end requiredHeaderFields:header
 
 // @sf-generated-start addLineFields:lines
@@ -60,8 +60,8 @@ const addLineFields = {
   entry: [
     { key: 'product', column: 'M_Product_ID', type: 'search', lookup: true, label: 'Product', reference: 'Product', inputMode: 'search', forceCalloutFields: ["listPrice","unitPrice","tax","uOM","grossUnitPrice"] },
     { key: 'description', column: 'Description', type: 'textarea', label: 'Description' },
-    { key: 'invoicedQuantity', column: 'QtyInvoiced', type: 'number', required: true, label: 'Invoiced Quantity', defaultValue: 1, min: 0 },
-    { key: 'listPrice', column: 'PriceList', type: 'number', required: true, label: 'List Price', min: 0 },
+    { key: 'invoicedQuantity', column: 'QtyInvoiced', type: 'number', required: true, label: 'Invoiced Quantity', defaultValue: 1 },
+    { key: 'listPrice', column: 'PriceList', type: 'number', required: true, label: 'List Price' },
     { key: 'etgoDiscount', column: 'EM_Etgo_Discount', type: 'number', label: 'Discount %', defaultValue: 0, min: 0, max: 100 },
     { key: 'tax', column: 'C_Tax_ID', type: 'selector', label: 'Tax', reference: 'Tax', inputMode: 'selector', forceCalloutFields: ["lineNetAmount"] },
   ],
@@ -153,6 +153,27 @@ export const api = {
     },
     {
       "entity": "header",
+      "field": "transactionDocument",
+      "column": "C_DocTypeTarget_ID",
+      "reference": "DocumentType",
+      "inputMode": "selector",
+      "url": "/sws/neo/sales-invoice/header/selectors/transactionDocument",
+      "context": {
+        "required": [
+          {
+            "param": "IsSOTrx",
+            "source": "windowCategory"
+          },
+          {
+            "param": "AD_Org_ID",
+            "source": "field",
+            "field": "adOrgId"
+          }
+        ]
+      }
+    },
+    {
+      "entity": "header",
       "field": "businessPartner",
       "column": "C_BPartner_ID",
       "reference": "BusinessPartner",
@@ -239,27 +260,6 @@ export const api = {
       "reference": "aeatsii_cause_exemption",
       "inputMode": "selector",
       "url": "/sws/neo/sales-invoice/header/selectors/aeatsiiCauseExemption"
-    },
-    {
-      "entity": "header",
-      "field": "transactionDocument",
-      "column": "C_DocTypeTarget_ID",
-      "reference": "DocumentType",
-      "inputMode": "selector",
-      "url": "/sws/neo/sales-invoice/header/selectors/transactionDocument",
-      "context": {
-        "required": [
-          {
-            "param": "IsSOTrx",
-            "source": "windowCategory"
-          },
-          {
-            "param": "AD_Org_ID",
-            "source": "field",
-            "field": "adOrgId"
-          }
-        ]
-      }
     },
     {
       "entity": "lines",
@@ -399,6 +399,14 @@ export const api = {
     },
     {
       "entity": "header",
+      "field": "etblkpBulkposting",
+      "column": "EM_Etblkp_Bulkposting",
+      "url": "/sws/neo/sales-invoice/header/{id}/action/etblkpBulkposting",
+      "processId": "57496FB9CF9E4E8F847224017941570E",
+      "processType": "obuiapp"
+    },
+    {
+      "entity": "header",
       "field": "tBAIQRcode",
       "column": "em_tbai_qrcode",
       "url": "/sws/neo/sales-invoice/header/{id}/action/tBAIQRcode",
@@ -419,6 +427,14 @@ export const api = {
       "column": "EM_Tbai_Xmlgenerator",
       "url": "/sws/neo/sales-invoice/header/{id}/action/tbaiXmlgenerator",
       "processId": "BE2486102F2C41779B760609FD69A225",
+      "processType": "obuiapp"
+    },
+    {
+      "entity": "header",
+      "field": "eTPRRemovePayment",
+      "column": "EM_Etpr_Remove_Payment",
+      "url": "/sws/neo/sales-invoice/header/{id}/action/eTPRRemovePayment",
+      "processId": "745FCF75B6F14024B96CC14429D8E952",
       "processType": "obuiapp"
     },
     {
@@ -492,22 +508,6 @@ export const api = {
       "processType": "obuiapp"
     },
     {
-      "entity": "header",
-      "field": "eTPRRemovePayment",
-      "column": "EM_Etpr_Remove_Payment",
-      "url": "/sws/neo/sales-invoice/header/{id}/action/eTPRRemovePayment",
-      "processId": "745FCF75B6F14024B96CC14429D8E952",
-      "processType": "obuiapp"
-    },
-    {
-      "entity": "header",
-      "field": "etblkpBulkposting",
-      "column": "EM_Etblkp_Bulkposting",
-      "url": "/sws/neo/sales-invoice/header/{id}/action/etblkpBulkposting",
-      "processId": "57496FB9CF9E4E8F847224017941570E",
-      "processType": "obuiapp"
-    },
-    {
       "entity": "lines",
       "field": "explode",
       "column": "Explode",
@@ -569,7 +569,8 @@ export const api = {
       "OutstandingAmt": "Pendiente de pago",
       "EM_Etgo_Due_Date": "Vencimiento",
       "em_etgo_delivery_status": "Estado de entrega",
-      "C_DocTypeTarget_ID": "Tipo de documento"
+      "C_DocTypeTarget_ID": "Tipo de documento",
+      "PriceList": "Precio"
     },
     "en_US": {
       "OutstandingAmt": "Pending Payment",

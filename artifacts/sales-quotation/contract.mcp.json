@@ -1,8 +1,7 @@
 {
   "version": "0.18.0",
-  "generatedAt": "2026-06-26T16:40:04.731Z",
-  "updatedAt": "2026-06-26T17:15:16.334Z",
-  "contractChecksum": "7213f1fc26200538",
+  "generatedAt": "2026-07-21T18:19:51.366Z",
+  "contractChecksum": "84718d98ca314567",
   "apiPrediction": {
     "specName": "sales-quotation",
     "baseUrl": "/sws/neo/sales-quotation",
@@ -743,7 +742,8 @@
       "es_ES": {
         "C_BPartner_ID": "Contacto",
         "C_Reject_Reason_ID": "Razón de rechazo",
-        "DateOrdered": "Fecha de presupuesto"
+        "DateOrdered": "Fecha de presupuesto",
+        "PriceList": "Precio"
       },
       "en_US": {
         "C_BPartner_ID": "Contact",
@@ -1019,5 +1019,5 @@
       "confirmcancelandreplace"
     ]
   },
-  "checksum": "609d5c5455dfa503"
+  "checksum": "f98136a725d5400b"
 }

@@ -80,7 +80,8 @@
         "OutstandingAmt": "Pendiente de pago",
         "EM_Etgo_Due_Date": "Vencimiento",
         "em_etgo_delivery_status": "Estado de recepción",
-        "C_DocTypeTarget_ID": "Tipo de documento"
+        "C_DocTypeTarget_ID": "Tipo de documento",
+        "PriceList": "Precio"
       },
       "en_US": {
         "POReference": "Document No.",
@@ -575,8 +576,7 @@
           "order": 3,
           "gridOrder": 3,
           "section": "principal",
-          "readOnlyLogic": null,
-          "min": 0
+          "readOnlyLogic": null
         },
         "uOM": {
           "visibility": "system"
@@ -593,8 +593,7 @@
           "order": 4,
           "gridOrder": 4,
           "section": "principal",
-          "columnType": "amount",
-          "min": 0
+          "columnType": "amount"
         },
         "etgoDiscount": {
           "visibility": "editable",

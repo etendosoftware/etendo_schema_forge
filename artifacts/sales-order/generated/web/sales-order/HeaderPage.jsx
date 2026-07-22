@@ -57,8 +57,8 @@ const addLineFields = {
   entry: [
     { key: 'product', column: 'M_Product_ID', type: 'search', required: true, lookup: true, label: 'Product', reference: 'Product', inputMode: 'search', forceCalloutFields: ["listPrice","unitPrice","tax","uOM","grossUnitPrice","discount"] },
     { key: 'description', column: 'Description', type: 'textarea', label: 'Description' },
-    { key: 'orderedQuantity', column: 'QtyOrdered', type: 'number', required: true, label: 'Ordered Quantity', defaultValue: 1, min: 0 },
-    { key: 'listPrice', column: 'PriceList', type: 'number', required: true, label: 'Net List Price', min: 0 },
+    { key: 'orderedQuantity', column: 'QtyOrdered', type: 'number', required: true, label: 'Ordered Quantity', defaultValue: 1 },
+    { key: 'listPrice', column: 'PriceList', type: 'number', required: true, label: 'Net List Price' },
     { key: 'discount', column: 'Discount', type: 'number', label: 'Discount', defaultValue: 0, min: 0, max: 100 },
     { key: 'tax', column: 'C_Tax_ID', type: 'selector', required: true, label: 'Tax', reference: 'Tax', inputMode: 'selector', forceCalloutFields: ["lineGrossAmount","grossUnitPrice","lineNetAmount"] },
   ],
@@ -324,6 +324,14 @@ export const api = {
     },
     {
       "entity": "header",
+      "field": "eTPRRemovePayment",
+      "column": "EM_Etpr_Remove_Payment",
+      "url": "/sws/neo/sales-order/header/{id}/action/eTPRRemovePayment",
+      "processId": "D2923463223C4F1EADE335D22B9D8FE8",
+      "processType": "obuiapp"
+    },
+    {
+      "entity": "header",
       "field": "processNow",
       "column": "Processing",
       "url": "/sws/neo/sales-order/header/{id}/action/processNow",
@@ -356,14 +364,6 @@ export const api = {
     },
     {
       "entity": "header",
-      "field": "rMPickfromreceipt",
-      "column": "RM_Pickfromreceipt",
-      "url": "/sws/neo/sales-order/header/{id}/action/rMPickfromreceipt",
-      "processId": "A2C19D0EF6594D14A64BC62E99A89CC3",
-      "processType": "obuiapp"
-    },
-    {
-      "entity": "header",
       "field": "psd2GenerateBankPayment",
       "column": "EM_Psd2_Generate_Bank_Payment",
       "url": "/sws/neo/sales-order/header/{id}/action/psd2GenerateBankPayment",
@@ -372,10 +372,10 @@ export const api = {
     },
     {
       "entity": "header",
-      "field": "eTPRRemovePayment",
-      "column": "EM_Etpr_Remove_Payment",
-      "url": "/sws/neo/sales-order/header/{id}/action/eTPRRemovePayment",
-      "processId": "D2923463223C4F1EADE335D22B9D8FE8",
+      "field": "rMPickfromreceipt",
+      "column": "RM_Pickfromreceipt",
+      "url": "/sws/neo/sales-order/header/{id}/action/rMPickfromreceipt",
+      "processId": "A2C19D0EF6594D14A64BC62E99A89CC3",
       "processType": "obuiapp"
     },
     {
@@ -431,7 +431,8 @@ export const api = {
     "es_ES": {
       "C_BPartner_ID": "Contacto",
       "DeliveryStatus": "Estado de entrega",
-      "InvoiceStatus": "Estado de facturación"
+      "InvoiceStatus": "Estado de facturación",
+      "PriceList": "Precio"
     },
     "en_US": {
       "C_BPartner_ID": "Contact",

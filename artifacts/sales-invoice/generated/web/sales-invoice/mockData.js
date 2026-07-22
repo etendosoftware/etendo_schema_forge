@@ -4,6 +4,7 @@ export const header = [
   {
     "id": "mock-header-001",
     "adOrgId": "Sample adOrgId",
+    "transactionDocument": "Sample transactionDocument",
     "documentNo": "HE-00001",
     "invoiceDate": "2026-01-15",
     "businessPartner": "Acme Corp",
@@ -35,16 +36,16 @@ export const header = [
     "aeatsiiPeriodo": 90,
     "aeatsiiCauseExemption": "Sample aeatsiiCauseExemption",
     "aeatsiiIsauthorization": "Sample aeatsiiIsauthorization",
-    "processed": "Sample processed",
     "etgoTotalDiscount": 99.44,
-    "eTGODueDate": "2026-01-15",
+    "processed": "Sample processed",
+    "eTGOCurrencyRate": "USD",
     "eTGODeliveryStatus": "DR",
-    "transactionDocument": "Sample transactionDocument",
-    "eTGOCurrencyRate": "USD"
+    "eTGODueDate": "2026-01-15"
   },
   {
     "id": "mock-header-002",
     "adOrgId": "Sample adOrgId",
+    "transactionDocument": "Sample transactionDocument",
     "documentNo": "HE-00002",
     "invoiceDate": "2026-01-16",
     "businessPartner": "TechFlow Inc",
@@ -76,16 +77,16 @@ export const header = [
     "aeatsiiPeriodo": 93,
     "aeatsiiCauseExemption": "Sample aeatsiiCauseExemption",
     "aeatsiiIsauthorization": "Sample aeatsiiIsauthorization",
-    "processed": "Sample processed",
     "etgoTotalDiscount": 96.94,
-    "eTGODueDate": "2026-01-16",
+    "processed": "Sample processed",
+    "eTGOCurrencyRate": "EUR",
     "eTGODeliveryStatus": "CO",
-    "transactionDocument": "Sample transactionDocument",
-    "eTGOCurrencyRate": "EUR"
+    "eTGODueDate": "2026-01-16"
   },
   {
     "id": "mock-header-003",
     "adOrgId": "Sample adOrgId",
+    "transactionDocument": "Sample transactionDocument",
     "documentNo": "HE-00003",
     "invoiceDate": "2026-01-17",
     "businessPartner": "Global Trade Ltd",
@@ -117,16 +118,16 @@ export const header = [
     "aeatsiiPeriodo": 8,
     "aeatsiiCauseExemption": "Sample aeatsiiCauseExemption",
     "aeatsiiIsauthorization": "Sample aeatsiiIsauthorization",
-    "processed": "Sample processed",
     "etgoTotalDiscount": 12.48,
-    "eTGODueDate": "2026-01-17",
+    "processed": "Sample processed",
+    "eTGOCurrencyRate": "GBP",
     "eTGODeliveryStatus": "VO",
-    "transactionDocument": "Sample transactionDocument",
-    "eTGOCurrencyRate": "GBP"
+    "eTGODueDate": "2026-01-17"
   },
   {
     "id": "mock-header-004",
     "adOrgId": "Sample adOrgId",
+    "transactionDocument": "Sample transactionDocument",
     "documentNo": "HE-00004",
     "invoiceDate": "2026-01-18",
     "businessPartner": "Summit Industries",
@@ -158,16 +159,16 @@ export const header = [
     "aeatsiiPeriodo": 91,
     "aeatsiiCauseExemption": "Sample aeatsiiCauseExemption",
     "aeatsiiIsauthorization": "Sample aeatsiiIsauthorization",
-    "processed": "Sample processed",
     "etgoTotalDiscount": 96.31,
-    "eTGODueDate": "2026-01-18",
+    "processed": "Sample processed",
+    "eTGOCurrencyRate": "USD",
     "eTGODeliveryStatus": "IP",
-    "transactionDocument": "Sample transactionDocument",
-    "eTGOCurrencyRate": "USD"
+    "eTGODueDate": "2026-01-18"
   },
   {
     "id": "mock-header-005",
     "adOrgId": "Sample adOrgId",
+    "transactionDocument": "Sample transactionDocument",
     "documentNo": "HE-00005",
     "invoiceDate": "2026-01-19",
     "businessPartner": "Pacific Partners",
@@ -199,16 +200,16 @@ export const header = [
     "aeatsiiPeriodo": 72,
     "aeatsiiCauseExemption": "Sample aeatsiiCauseExemption",
     "aeatsiiIsauthorization": "Sample aeatsiiIsauthorization",
-    "processed": "Sample processed",
     "etgoTotalDiscount": 31.27,
-    "eTGODueDate": "2026-01-19",
+    "processed": "Sample processed",
+    "eTGOCurrencyRate": "EUR",
     "eTGODeliveryStatus": "DR",
-    "transactionDocument": "Sample transactionDocument",
-    "eTGOCurrencyRate": "EUR"
+    "eTGODueDate": "2026-01-19"
   },
   {
     "id": "mock-header-006",
     "adOrgId": "Sample adOrgId",
+    "transactionDocument": "Sample transactionDocument",
     "documentNo": "HE-00006",
     "invoiceDate": "2026-01-20",
     "businessPartner": "Alpine Solutions",
@@ -240,16 +241,16 @@ export const header = [
     "aeatsiiPeriodo": 78,
     "aeatsiiCauseExemption": "Sample aeatsiiCauseExemption",
     "aeatsiiIsauthorization": "Sample aeatsiiIsauthorization",
-    "processed": "Sample processed",
     "etgoTotalDiscount": 76.52,
-    "eTGODueDate": "2026-01-20",
+    "processed": "Sample processed",
+    "eTGOCurrencyRate": "GBP",
     "eTGODeliveryStatus": "CO",
-    "transactionDocument": "Sample transactionDocument",
-    "eTGOCurrencyRate": "GBP"
+    "eTGODueDate": "2026-01-20"
   },
   {
     "id": "mock-header-007",
     "adOrgId": "Sample adOrgId",
+    "transactionDocument": "Sample transactionDocument",
     "documentNo": "HE-00007",
     "invoiceDate": "2026-01-21",
     "businessPartner": "Meridian Group",
@@ -281,16 +282,16 @@ export const header = [
     "aeatsiiPeriodo": 31,
     "aeatsiiCauseExemption": "Sample aeatsiiCauseExemption",
     "aeatsiiIsauthorization": "Sample aeatsiiIsauthorization",
-    "processed": "Sample processed",
     "etgoTotalDiscount": 2.66,
-    "eTGODueDate": "2026-01-21",
+    "processed": "Sample processed",
+    "eTGOCurrencyRate": "USD",
     "eTGODeliveryStatus": "VO",
-    "transactionDocument": "Sample transactionDocument",
-    "eTGOCurrencyRate": "USD"
+    "eTGODueDate": "2026-01-21"
   },
   {
     "id": "mock-header-008",
     "adOrgId": "Sample adOrgId",
+    "transactionDocument": "Sample transactionDocument",
     "documentNo": "HE-00008",
     "invoiceDate": "2026-01-22",
     "businessPartner": "Vertex Systems",
@@ -322,16 +323,16 @@ export const header = [
     "aeatsiiPeriodo": 97,
     "aeatsiiCauseExemption": "Sample aeatsiiCauseExemption",
     "aeatsiiIsauthorization": "Sample aeatsiiIsauthorization",
-    "processed": "Sample processed",
     "etgoTotalDiscount": 10.03,
-    "eTGODueDate": "2026-01-22",
+    "processed": "Sample processed",
+    "eTGOCurrencyRate": "EUR",
     "eTGODeliveryStatus": "IP",
-    "transactionDocument": "Sample transactionDocument",
-    "eTGOCurrencyRate": "EUR"
+    "eTGODueDate": "2026-01-22"
   },
   {
     "id": "mock-header-009",
     "adOrgId": "Sample adOrgId",
+    "transactionDocument": "Sample transactionDocument",
     "documentNo": "HE-00009",
     "invoiceDate": "2026-01-23",
     "businessPartner": "Atlas Manufacturing",
@@ -363,16 +364,16 @@ export const header = [
     "aeatsiiPeriodo": 70,
     "aeatsiiCauseExemption": "Sample aeatsiiCauseExemption",
     "aeatsiiIsauthorization": "Sample aeatsiiIsauthorization",
-    "processed": "Sample processed",
     "etgoTotalDiscount": 93.97,
-    "eTGODueDate": "2026-01-23",
+    "processed": "Sample processed",
+    "eTGOCurrencyRate": "GBP",
     "eTGODeliveryStatus": "DR",
-    "transactionDocument": "Sample transactionDocument",
-    "eTGOCurrencyRate": "GBP"
+    "eTGODueDate": "2026-01-23"
   },
   {
     "id": "mock-header-010",
     "adOrgId": "Sample adOrgId",
+    "transactionDocument": "Sample transactionDocument",
     "documentNo": "HE-00010",
     "invoiceDate": "2026-01-24",
     "businessPartner": "Nova Enterprises",
@@ -404,16 +405,16 @@ export const header = [
     "aeatsiiPeriodo": 77,
     "aeatsiiCauseExemption": "Sample aeatsiiCauseExemption",
     "aeatsiiIsauthorization": "Sample aeatsiiIsauthorization",
-    "processed": "Sample processed",
     "etgoTotalDiscount": 1.1,
-    "eTGODueDate": "2026-01-24",
+    "processed": "Sample processed",
+    "eTGOCurrencyRate": "USD",
     "eTGODeliveryStatus": "CO",
-    "transactionDocument": "Sample transactionDocument",
-    "eTGOCurrencyRate": "USD"
+    "eTGODueDate": "2026-01-24"
   },
   {
     "id": "mock-header-011",
     "adOrgId": "Sample adOrgId",
+    "transactionDocument": "Sample transactionDocument",
     "documentNo": "HE-00011",
     "invoiceDate": "2026-01-25",
     "businessPartner": "Pinnacle Services",
@@ -445,16 +446,16 @@ export const header = [
     "aeatsiiPeriodo": 32,
     "aeatsiiCauseExemption": "Sample aeatsiiCauseExemption",
     "aeatsiiIsauthorization": "Sample aeatsiiIsauthorization",
-    "processed": "Sample processed",
     "etgoTotalDiscount": 79.99,
-    "eTGODueDate": "2026-01-25",
+    "processed": "Sample processed",
+    "eTGOCurrencyRate": "EUR",
     "eTGODeliveryStatus": "VO",
-    "transactionDocument": "Sample transactionDocument",
-    "eTGOCurrencyRate": "EUR"
+    "eTGODueDate": "2026-01-25"
   },
   {
     "id": "mock-header-012",
     "adOrgId": "Sample adOrgId",
+    "transactionDocument": "Sample transactionDocument",
     "documentNo": "HE-00012",
     "invoiceDate": "2026-01-26",
     "businessPartner": "Horizon Labs",
@@ -486,12 +487,11 @@ export const header = [
     "aeatsiiPeriodo": 26,
     "aeatsiiCauseExemption": "Sample aeatsiiCauseExemption",
     "aeatsiiIsauthorization": "Sample aeatsiiIsauthorization",
-    "processed": "Sample processed",
     "etgoTotalDiscount": 53.61,
-    "eTGODueDate": "2026-01-26",
+    "processed": "Sample processed",
+    "eTGOCurrencyRate": "GBP",
     "eTGODeliveryStatus": "IP",
-    "transactionDocument": "Sample transactionDocument",
-    "eTGOCurrencyRate": "GBP"
+    "eTGODueDate": "2026-01-26"
   }
 ];
 

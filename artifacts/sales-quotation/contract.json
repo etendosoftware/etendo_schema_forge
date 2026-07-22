@@ -1,8 +1,7 @@
 {
   "version": "0.18.0",
-  "generatedAt": "2026-06-26T16:40:04.731Z",
-  "updatedAt": "2026-07-20T11:39:49.207Z",
-  "checksum": "7213f1fc26200538",
+  "generatedAt": "2026-07-21T18:19:51.366Z",
+  "checksum": "84718d98ca314567",
   "frontendContract": {
     "window": {
       "id": "6CB5B67ED33F47DFA334079D3EA2340E",
@@ -58,7 +57,8 @@
         "es_ES": {
           "C_BPartner_ID": "Contacto",
           "C_Reject_Reason_ID": "Razón de rechazo",
-          "DateOrdered": "Fecha de presupuesto"
+          "DateOrdered": "Fecha de presupuesto",
+          "PriceList": "Precio"
         },
         "en_US": {
           "C_BPartner_ID": "Contact",
@@ -702,7 +702,6 @@
             },
             "defaultValue": "1",
             "gridOrder": 3,
-            "min": 0,
             "callout": {
               "className": "org.openbravo.erpCommon.ad_callouts.SL_Order_Amt"
             },
@@ -727,7 +726,6 @@
             "sourceRequired": true,
             "columnType": "amount",
             "gridOrder": 4,
-            "min": 0,
             "callout": {
               "className": "org.openbravo.erpCommon.ad_callouts.SL_Order_Amt"
             },
@@ -960,7 +958,8 @@
         "es_ES": {
           "C_BPartner_ID": "Contacto",
           "C_Reject_Reason_ID": "Razón de rechazo",
-          "DateOrdered": "Fecha de presupuesto"
+          "DateOrdered": "Fecha de presupuesto",
+          "PriceList": "Precio"
         },
         "en_US": {
           "C_BPartner_ID": "Contact",
@@ -985,8 +984,7 @@
             "column": "C_Currency_ID",
             "type": "foreignKey",
             "visibility": "editable",
-            "required": true,
-            "order": 10
+            "required": true
           },
           {
             "name": "priceList",
@@ -994,8 +992,7 @@
             "column": "M_PriceList_ID",
             "type": "foreignKey",
             "visibility": "editable",
-            "required": true,
-            "order": 11
+            "required": true
           },
           {
             "name": "organization",
@@ -1590,14 +1587,6 @@
             "required": false
           },
           {
-            "name": "costcenter",
-            "apiKey": "costcenter",
-            "column": "C_Costcenter_ID",
-            "type": "foreignKey",
-            "visibility": "discarded",
-            "required": false
-          },
-          {
             "name": "cancelandreplace",
             "apiKey": "cancelandreplace",
             "column": "Cancelandreplace",
@@ -1614,17 +1603,17 @@
             "required": false
           },
           {
-            "name": "confirmcancelandreplace",
-            "apiKey": "confirmcancelandreplace",
-            "column": "Confirmcancelandreplace",
-            "type": "button",
-            "visibility": "system",
+            "name": "costcenter",
+            "apiKey": "costcenter",
+            "column": "C_Costcenter_ID",
+            "type": "foreignKey",
+            "visibility": "discarded",
             "required": false
           },
           {
-            "name": "createPOLines",
-            "apiKey": "createPOLines",
-            "column": "Create_POLines",
+            "name": "confirmcancelandreplace",
+            "apiKey": "confirmcancelandreplace",
+            "column": "Confirmcancelandreplace",
             "type": "button",
             "visibility": "system",
             "required": false
@@ -1644,6 +1633,14 @@
             "type": "foreignKey",
             "visibility": "system",
             "required": true
+          },
+          {
+            "name": "createPOLines",
+            "apiKey": "createPOLines",
+            "column": "Create_POLines",
+            "type": "button",
+            "visibility": "system",
+            "required": false
           },
           {
             "name": "deliveryStatus",
@@ -1683,6 +1680,14 @@
             "column": "EM_APRM_AddPayment",
             "type": "button",
             "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "eTGOCurrencyRate",
+            "apiKey": "eTGOCurrencyRate",
+            "column": "EM_ETGO_Currency_Rate",
+            "type": "string",
+            "visibility": "editable",
             "required": false
           },
           {
@@ -1804,14 +1809,6 @@
             "type": "foreignKey",
             "visibility": "system",
             "required": true
-          },
-          {
-            "name": "eTGOCurrencyRate",
-            "apiKey": "eTGOCurrencyRate",
-            "column": "EM_ETGO_Currency_Rate",
-            "type": "string",
-            "visibility": "editable",
-            "required": false
           }
         ],
         "javaQualifier": "salesQuotationHeaderHandler"
@@ -1827,8 +1824,7 @@
             "column": "M_Product_ID",
             "type": "foreignKey",
             "visibility": "editable",
-            "required": true,
-            "order": 1
+            "required": true
           },
           {
             "name": "description",
@@ -1836,8 +1832,7 @@
             "column": "Description",
             "type": "text",
             "visibility": "editable",
-            "required": false,
-            "order": 2
+            "required": false
           },
           {
             "name": "orderedQuantity",
@@ -1845,8 +1840,7 @@
             "column": "QtyOrdered",
             "type": "quantity",
             "visibility": "editable",
-            "required": true,
-            "order": 3
+            "required": true
           },
           {
             "name": "listPrice",
@@ -1854,8 +1848,7 @@
             "column": "PriceList",
             "type": "price",
             "visibility": "editable",
-            "required": true,
-            "order": 4
+            "required": true
           },
           {
             "name": "discount",
@@ -1863,8 +1856,7 @@
             "column": "Discount",
             "type": "decimal",
             "visibility": "editable",
-            "required": false,
-            "order": 5
+            "required": false
           },
           {
             "name": "tax",
@@ -1872,8 +1864,7 @@
             "column": "C_Tax_ID",
             "type": "foreignKey",
             "visibility": "editable",
-            "required": true,
-            "order": 6
+            "required": true
           },
           {
             "name": "lineGrossAmount",
@@ -1881,8 +1872,7 @@
             "column": "Line_Gross_Amount",
             "type": "amount",
             "visibility": "readOnly",
-            "required": false,
-            "order": 7
+            "required": false
           },
           {
             "name": "lineNo",
@@ -2293,14 +2283,6 @@
             "required": false
           },
           {
-            "name": "createReservation",
-            "apiKey": "createReservation",
-            "column": "Create_Reservation",
-            "type": "enum",
-            "visibility": "system",
-            "required": false
-          },
-          {
             "name": "creationDate",
             "apiKey": "creationDate",
             "column": "Created",
@@ -2317,19 +2299,19 @@
             "required": true
           },
           {
+            "name": "createReservation",
+            "apiKey": "createReservation",
+            "column": "Create_Reservation",
+            "type": "enum",
+            "visibility": "system",
+            "required": false
+          },
+          {
             "name": "explode",
             "apiKey": "explode",
             "column": "Explode",
             "type": "button",
             "visibility": "discarded",
-            "required": false
-          },
-          {
-            "name": "warehouseRule",
-            "apiKey": "warehouseRule",
-            "column": "M_Warehouse_Rule_ID",
-            "type": "foreignKey",
-            "visibility": "system",
             "required": false
           },
           {
@@ -2345,6 +2327,14 @@
             "apiKey": "manageReservation",
             "column": "Manage_Reservation",
             "type": "button",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "warehouseRule",
+            "apiKey": "warehouseRule",
+            "column": "M_Warehouse_Rule_ID",
+            "type": "foreignKey",
             "visibility": "system",
             "required": false
           },
@@ -2848,7 +2838,8 @@
       "es_ES": {
         "C_BPartner_ID": "Contacto",
         "C_Reject_Reason_ID": "Razón de rechazo",
-        "DateOrdered": "Fecha de presupuesto"
+        "DateOrdered": "Fecha de presupuesto",
+        "PriceList": "Precio"
       },
       "en_US": {
         "C_BPartner_ID": "Contact",
