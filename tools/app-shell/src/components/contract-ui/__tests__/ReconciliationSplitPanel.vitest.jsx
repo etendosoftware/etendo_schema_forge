@@ -39,7 +39,7 @@ vi.mock('@/hooks/useReconciliation', () => ({
   useReactivateReconciliation: () => reactivateState,
 }));
 
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { ReconciliationSplitPanel } from '@/components/contract-ui/ReconciliationSplitPanel.jsx';
 
@@ -70,6 +70,16 @@ function setCandidates(candidates) {
 function renderPanel(props = {}) {
   const merged = { accountId: 'ACC-1', currency: 'EUR', onReconcileSuccess: vi.fn(), ...props };
   return { ...render(<ReconciliationSplitPanel {...merged} />), props: merged };
+}
+
+// The shared Checkbox (app-shell-core, Semantic Theme Contract) renders a
+// <label data-testid="recon-cand-check-...">  wrapping a nested
+// <input type="checkbox">. The checked state (and `.toBeChecked()`) only
+// applies to that nested input, not the label, so drill into it here.
+// (`recon-line-radio-*` is a plain native <input type="radio"> and is
+// unaffected — it keeps asserting directly on the testid element.)
+function candidateCheckbox(candidateId) {
+  return within(screen.getByTestId(`recon-cand-check-${candidateId}`)).getByRole('checkbox');
 }
 
 // ── Tests ─────────────────────────────────────────────────────────────────────
@@ -242,8 +252,8 @@ describe('ReconciliationSplitPanel', () => {
     fireEvent.click(screen.getByTestId('recon-line-radio-L1'));
 
     // No user interaction with the checkboxes — pre-selection comes from `suggested`.
-    expect(screen.getByTestId('recon-cand-check-C1').querySelector('input')).toBeChecked();
-    expect(screen.getByTestId('recon-cand-check-C2').querySelector('input')).not.toBeChecked();
+    expect(candidateCheckbox('C1')).toBeChecked();
+    expect(candidateCheckbox('C2')).not.toBeChecked();
   });
 
   it('reflects the pre-selected suggested count in the reconcile button without any click', () => {
@@ -257,9 +267,9 @@ describe('ReconciliationSplitPanel', () => {
 
     // No checkbox clicked — the two suggested candidates are pre-checked, the
     // non-suggested one is not. This drives reconcileCount = 2.
-    expect(screen.getByTestId('recon-cand-check-C1').querySelector('input')).toBeChecked();
-    expect(screen.getByTestId('recon-cand-check-C3').querySelector('input')).toBeChecked();
-    expect(screen.getByTestId('recon-cand-check-C2').querySelector('input')).not.toBeChecked();
+    expect(candidateCheckbox('C1')).toBeChecked();
+    expect(candidateCheckbox('C3')).toBeChecked();
+    expect(candidateCheckbox('C2')).not.toBeChecked();
 
     // The reconcile button uses the count-bearing label and, since the pre-selected
     // amounts balance the line (-5 + -3.31 == -8.31), it is immediately enabled.
@@ -275,7 +285,7 @@ describe('ReconciliationSplitPanel', () => {
     fireEvent.click(screen.getByTestId('recon-line-radio-L1'));
 
     // Straight to reconcile — the suggested candidate is already pre-checked.
-    expect(screen.getByTestId('recon-cand-check-C1').querySelector('input')).toBeChecked();
+    expect(candidateCheckbox('C1')).toBeChecked();
     fireEvent.click(screen.getByTestId('recon-action-reconcile'));
 
     await waitFor(() => expect(reconcileState.reconcile).toHaveBeenCalledTimes(1));

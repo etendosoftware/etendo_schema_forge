@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, waitFor, fireEvent } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent, within } from '@testing-library/react';
 
 // ── Mocks ──
 vi.mock('@/i18n', () => ({
@@ -24,6 +24,14 @@ vi.mock('@/components/ui/status-tag', () => ({
 }));
 
 import AssetsAmortizationPanel from '../AssetsAmortizationPanel.jsx';
+
+// The shared Checkbox (app-shell-core, Semantic Theme Contract) renders a
+// <label data-testid="..."> wrapping a nested <input type="checkbox">.
+// `aria-checked` and the native checked state live on that nested input,
+// not on the label, so assertions on checkbox semantics must drill into it.
+function checkboxInput(testId) {
+  return within(screen.getByTestId(testId)).getByRole('checkbox');
+}
 
 const BASE_PROPS = {
   data: { id: 'asset-1' },
@@ -272,8 +280,8 @@ describe('AssetsAmortizationPanel', () => {
     const deleteButton = await screen.findByTitle('delete');
     expect(deleteButton).toBeInTheDocument();
     expect(screen.getByTitle('close')).toBeInTheDocument();
-    expect(screen.getByTestId('Checkbox__amort-row-l1').querySelector('input')).toHaveAttribute('aria-checked', 'true');
-    expect(screen.getByTestId('Checkbox__amort-row-l2').querySelector('input')).toHaveAttribute('aria-checked', 'false');
+    expect(checkboxInput('Checkbox__amort-row-l1')).toHaveAttribute('aria-checked', 'true');
+    expect(checkboxInput('Checkbox__amort-row-l2')).toHaveAttribute('aria-checked', 'false');
   });
 
   it('unchecking the only selected row hides the selection bar', async () => {
@@ -309,24 +317,24 @@ describe('AssetsAmortizationPanel', () => {
     // Select a single row first -> header checkbox should be indeterminate.
     fireEvent.click(screen.getByTestId('Checkbox__amort-row-l1'));
     await waitFor(() => {
-      expect(screen.getByTestId('Checkbox__amort-all').querySelector('input')).toHaveAttribute('aria-checked', 'mixed');
+      expect(checkboxInput('Checkbox__amort-all')).toHaveAttribute('aria-checked', 'mixed');
     });
 
     // Toggling "select all" while indeterminate/partial should select every row.
     fireEvent.click(screen.getByTestId('Checkbox__amort-all'));
 
     await waitFor(() => {
-      expect(screen.getByTestId('Checkbox__amort-row-l1').querySelector('input')).toHaveAttribute('aria-checked', 'true');
-      expect(screen.getByTestId('Checkbox__amort-row-l2').querySelector('input')).toHaveAttribute('aria-checked', 'true');
-      expect(screen.getByTestId('Checkbox__amort-all').querySelector('input')).toHaveAttribute('aria-checked', 'true');
+      expect(checkboxInput('Checkbox__amort-row-l1')).toHaveAttribute('aria-checked', 'true');
+      expect(checkboxInput('Checkbox__amort-row-l2')).toHaveAttribute('aria-checked', 'true');
+      expect(checkboxInput('Checkbox__amort-all')).toHaveAttribute('aria-checked', 'true');
     });
 
     // Toggling again with all selected should clear the whole selection.
     fireEvent.click(screen.getByTestId('Checkbox__amort-all'));
 
     await waitFor(() => {
-      expect(screen.getByTestId('Checkbox__amort-row-l1').querySelector('input')).toHaveAttribute('aria-checked', 'false');
-      expect(screen.getByTestId('Checkbox__amort-row-l2').querySelector('input')).toHaveAttribute('aria-checked', 'false');
+      expect(checkboxInput('Checkbox__amort-row-l1')).toHaveAttribute('aria-checked', 'false');
+      expect(checkboxInput('Checkbox__amort-row-l2')).toHaveAttribute('aria-checked', 'false');
     });
   });
 
@@ -387,7 +395,7 @@ describe('AssetsAmortizationPanel', () => {
     await waitFor(() => {
       expect(screen.queryByTitle('delete')).not.toBeInTheDocument();
     });
-    expect(screen.getByTestId('Checkbox__amort-row-l1').querySelector('input')).toHaveAttribute('aria-checked', 'false');
+    expect(checkboxInput('Checkbox__amort-row-l1')).toHaveAttribute('aria-checked', 'false');
     // No DELETE request should have been issued.
     expect(globalThis.fetch).not.toHaveBeenCalledWith(
       expect.stringContaining('/amortizationLine/'),
@@ -425,7 +433,7 @@ describe('AssetsAmortizationPanel', () => {
       expect(screen.queryByTitle('delete')).not.toBeInTheDocument();
     });
     await waitFor(() => {
-      expect(screen.getByTestId('Checkbox__amort-row-l1').querySelector('input')).toHaveAttribute('aria-checked', 'false');
+      expect(checkboxInput('Checkbox__amort-row-l1')).toHaveAttribute('aria-checked', 'false');
     });
   });
 
@@ -485,17 +493,17 @@ describe('AssetsAmortizationPanel', () => {
 
     fireEvent.click(screen.getByTestId('Checkbox__amort-row-7'));
     await waitFor(() => {
-      expect(screen.getByTestId('Checkbox__amort-row-7').querySelector('input')).toHaveAttribute('aria-checked', 'true');
+      expect(checkboxInput('Checkbox__amort-row-7')).toHaveAttribute('aria-checked', 'true');
     });
 
     // Select-all with a line that also relies on sEQNoAsset as its key.
     fireEvent.click(screen.getByTestId('Checkbox__amort-all'));
     await waitFor(() => {
-      expect(screen.getByTestId('Checkbox__amort-row-7').querySelector('input')).toHaveAttribute('aria-checked', 'false');
+      expect(checkboxInput('Checkbox__amort-row-7')).toHaveAttribute('aria-checked', 'false');
     });
     fireEvent.click(screen.getByTestId('Checkbox__amort-all'));
     await waitFor(() => {
-      expect(screen.getByTestId('Checkbox__amort-row-7').querySelector('input')).toHaveAttribute('aria-checked', 'true');
+      expect(checkboxInput('Checkbox__amort-row-7')).toHaveAttribute('aria-checked', 'true');
     });
   });
 
@@ -592,15 +600,15 @@ describe('AssetsAmortizationPanel — row selection & bulk delete', () => {
     const selectAll = screen.getByTestId('Checkbox__amort-all');
     fireEvent.click(selectAll);
     await waitFor(() => {
-      expect(screen.getByTestId('Checkbox__amort-row-l1').querySelector('input')).toHaveAttribute('aria-checked', 'true');
-      expect(screen.getByTestId('Checkbox__amort-row-l2').querySelector('input')).toHaveAttribute('aria-checked', 'true');
+      expect(checkboxInput('Checkbox__amort-row-l1')).toHaveAttribute('aria-checked', 'true');
+      expect(checkboxInput('Checkbox__amort-row-l2')).toHaveAttribute('aria-checked', 'true');
     });
     // select-all is now checked → clicking again clears.
     fireEvent.click(selectAll);
     await waitFor(() => {
       expect(screen.queryByTitle('delete')).not.toBeInTheDocument();
-      expect(screen.getByTestId('Checkbox__amort-row-l1').querySelector('input')).toHaveAttribute('aria-checked', 'false');
-      expect(screen.getByTestId('Checkbox__amort-row-l2').querySelector('input')).toHaveAttribute('aria-checked', 'false');
+      expect(checkboxInput('Checkbox__amort-row-l1')).toHaveAttribute('aria-checked', 'false');
+      expect(checkboxInput('Checkbox__amort-row-l2')).toHaveAttribute('aria-checked', 'false');
     });
   });
 
@@ -622,15 +630,15 @@ describe('AssetsAmortizationPanel — row selection & bulk delete', () => {
     await waitFor(() => {
       expect(screen.queryByTitle('delete')).not.toBeInTheDocument();
     });
-    expect(screen.getByTestId('Checkbox__amort-row-l1').querySelector('input')).toHaveAttribute('aria-checked', 'false');
+    expect(checkboxInput('Checkbox__amort-row-l1')).toHaveAttribute('aria-checked', 'false');
   });
 
   it('bulk delete DELETEs each selected line then refetches', async () => {
     await renderWithLines();
     fireEvent.click(screen.getByTestId('Checkbox__amort-all'));
     await waitFor(() => {
-      expect(screen.getByTestId('Checkbox__amort-row-l1').querySelector('input')).toHaveAttribute('aria-checked', 'true');
-      expect(screen.getByTestId('Checkbox__amort-row-l2').querySelector('input')).toHaveAttribute('aria-checked', 'true');
+      expect(checkboxInput('Checkbox__amort-row-l1')).toHaveAttribute('aria-checked', 'true');
+      expect(checkboxInput('Checkbox__amort-row-l2')).toHaveAttribute('aria-checked', 'true');
     });
 
     const callsBefore = globalThis.fetch.mock.calls.length;
