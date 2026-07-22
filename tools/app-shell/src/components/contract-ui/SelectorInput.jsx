@@ -4,6 +4,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useUI } from '@/i18n';
 import { buildUrlWithParams } from '@/lib/buildUrlWithParams.js';
 import { getCatalogOptions } from '@/lib/selectorCatalog.js';
+import { createQueryKey, useOptionalDataCache } from '@etendosoftware/app-shell-core/data';
 
 const SELECTOR_PAGE = 50;
 
@@ -40,6 +41,10 @@ export function SelectorInput({
   optionTranslator,
 }) {
   const ui = useUI();
+  // ETP-4564: shared cache for selector option pages. Null when no DataProvider
+  // is mounted → falls back to a direct fetch (prior behavior).
+  const dataCache = useOptionalDataCache();
+  const cacheScope = dataCache?.scope;
   const catalogOptions = selectorUrl ? [] : getCatalogOptions(catalogs, entityName, field);
   const [serverOptions, setServerOptions] = useState(null);
   const [hasMore, setHasMore] = useState(true);
@@ -63,10 +68,18 @@ export function SelectorInput({
       limit: SELECTOR_PAGE,
       offset,
     });
-    fetch(url, {
-      headers: { 'Authorization': `Bearer ${token}` },
-    })
-      .then(res => res.ok ? res.json() : null)
+    const fetcher = (signal) => fetch(url, { headers: { 'Authorization': `Bearer ${token}` }, signal })
+      .then(res => (res.ok ? res.json() : null));
+    // Cache pages by URL + normalized context + offset (scope-isolated); catalog
+    // freshness — selectors are relatively stable lookup data.
+    const run = (dataCache?.cache && cacheScope)
+      ? dataCache.cache.fetchQuery({
+        key: createQueryKey({ ...cacheScope, apiBase: selectorUrl, entity: 'selector', filters: selectorContext ?? {}, recordId: `offset:${offset}` }),
+        fetcher: ({ signal }) => fetcher(signal),
+        staleTime: dataCache.catalogStaleTime,
+      })
+      : fetcher();
+    run
       .then(data => {
         const items = data?.items ?? data?.response?.data ?? (Array.isArray(data) ? data : null);
         if (items) {
@@ -83,7 +96,7 @@ export function SelectorInput({
         setFetching(false);
       })
       .catch(() => { loadingRef.current = false; setFetching(false); });
-  }, [selectorUrl, contextKey, token]);
+  }, [selectorUrl, contextKey, token, dataCache, cacheScope]);
 
   // Invalidate cached options when the URL or the selector context changes.
   // We do NOT eager-fetch here — the identifier (`<field>$_identifier`) usually

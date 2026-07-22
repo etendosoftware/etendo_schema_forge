@@ -8,6 +8,7 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
 } from '@/components/ui/dialog.jsx';
 import { extractApiErrorMessage } from '@/lib/apiError';
+import { useContactsCacheInvalidation } from './contactsCacheInvalidation';
 
 const filters = ['searchKey', 'name', 'etgoFirstname', 'etgoLastname'];
 
@@ -48,6 +49,7 @@ function EditableCell({ value, onChange, onKeyDown }) {
 }
 
 export default function ContactsTable({ data = [], apiBaseUrl, token, onDataMutated, ...rest }) {
+  const { invalidateBusinessPartner } = useContactsCacheInvalidation();
   const dictionary = useLocale();
   const ui = useUI();
   const gl = dictionary?.genericLabels || {};
@@ -77,7 +79,8 @@ export default function ContactsTable({ data = [], apiBaseUrl, token, onDataMuta
     });
     if (!res.ok) throw new Error(`Error ${res.status}`);
     onDataMutated?.();
-  }, [editingRow, apiBaseUrl, token, onDataMutated]);
+    invalidateBusinessPartner();
+  }, [editingRow, apiBaseUrl, token, onDataMutated, invalidateBusinessPartner]);
 
   const handleEditRow = useCallback((row) => {
     const isPerson = isPersonRow(row);
@@ -213,13 +216,14 @@ export default function ContactsTable({ data = [], apiBaseUrl, token, onDataMuta
         toast.error(await extractApiErrorMessage(res));
       } else {
         onDataMutated?.();
+        invalidateBusinessPartner();
       }
     } catch (err) {
       toast.error(err.message || 'Network error');
     } finally {
       resolve();
     }
-  }, [pendingDelete, apiBaseUrl, token, onDataMutated]);
+  }, [pendingDelete, apiBaseUrl, token, onDataMutated, invalidateBusinessPartner]);
 
   const cancelDelete = useCallback(() => {
     pendingDelete?.resolve();

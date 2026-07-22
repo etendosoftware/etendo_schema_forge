@@ -6,6 +6,7 @@ import './contactsImportDescriptor.js';
 import BusinessPartnerPage from '@generated/contacts/generated/web/contacts/BusinessPartnerPage';
 import { ContactsProvider } from './ContactsContext';
 import { ContactsFinanceProvider } from './ContactsFinanceContext';
+import { useContactsCacheInvalidation } from './contactsCacheInvalidation';
 import ContactsBusinessPartnerForm from './ContactsBusinessPartnerForm';
 import ContactsPeriodButton from './ContactsPeriodButton';
 import ContactsSummaryWidget from './ContactsSummaryWidget';
@@ -41,6 +42,7 @@ function renderContactsHeaderSummary(data) {
 export default function ContactsWindow(props) {
   const ui = useUI();
   const [pendingBulkDelete, setPendingBulkDelete] = useState(null);
+  const { invalidateBusinessPartner } = useContactsCacheInvalidation();
 
   const handleBulkDeleteConfirm = useCallback(async () => {
     if (!pendingBulkDelete) return;
@@ -61,7 +63,8 @@ export default function ContactsWindow(props) {
 
     clearSelection();
     onDataMutated?.();
-  }, [pendingBulkDelete]);
+    invalidateBusinessPartner();
+  }, [pendingBulkDelete, invalidateBusinessPartner]);
 
   const handleBulkDeleteCancel = useCallback(() => {
     setPendingBulkDelete(null);

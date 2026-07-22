@@ -4,6 +4,7 @@ import { PillToggle } from '@/components/PillToggle';
 import { SquareCheckbox } from '../shared/SquareCheckbox';
 import { ChevronDown, Tag } from 'lucide-react';
 import { useUI } from '@/i18n';
+import { useContactsCacheInvalidation } from './contactsCacheInvalidation';
 
 const PRE_SAVE_BILLING_PREF_FIELDS = [
   'priceList',
@@ -76,6 +77,7 @@ function DiscountSelect({ value, options, onChange, loading }) {
 
 export default function BillingPreferencesForm(props) {
   const ui = useUI();
+  const { invalidateBusinessPartner, invalidateFinanceKpis } = useContactsCacheInvalidation();
   const { data, api, token, onChange, apiBaseUrl } = props;
   const bpId = data?.id;
   const canEditBillingPreferences = Boolean(bpId);
@@ -226,6 +228,9 @@ export default function BillingPreferencesForm(props) {
           setDiscountRecord(d?.response?.data?.[0] ?? null);
         }
       }
+      // Discount change affects finance KPIs and the partner record.
+      invalidateFinanceKpis();
+      invalidateBusinessPartner();
     } finally {
       setSaving(false);
     }
