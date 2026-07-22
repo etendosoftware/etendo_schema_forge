@@ -87,6 +87,30 @@ the same primitives `DetailTabs.jsx` uses for the Movements/Reconciliation/State
   in local dev data: e.g. the "F&B US, Inc." and "Spain" organizations have no ledger configured,
   so their bank accounts — including the highest-traffic demo account, "Bank - Account 1" — cannot
   populate this tab until an admin sets one).
+- **Capability-gated Contabilidad tab (ETP-4520):** the tab is only reachable for a role granted
+  the `showAccountingFields` capability. This window is `layoutType: "custom"`, so — unlike the
+  invoice windows' `posted` field/status pill, which declares `"visibleWhenCapability":
+  "showAccountingFields"` in `decisions.json` and is resolved generically by `isCapabilityVisible()`
+  inside `DataTable.jsx`/`DetailView.jsx` (see `sales-invoice.md`/`purchase-invoice.md`, "Reactive
+  behavior and dependencies") — there is no generated contract to declare the gate in.
+  `EditAccountModal.jsx` instead calls `useHasCapability('showAccountingFields')`
+  (`@/auth/AuthContext.jsx`) directly and holds the result in `canSeeAccounting`. Both the
+  `TabsTrigger value={EDIT_TAB_ACCOUNTING}` and its `TabsContent` are wrapped in
+  `canSeeAccounting ? (...) : null` — omitted from the DOM entirely (not disabled, not
+  CSS-hidden) when the capability resolves false, the same "omit, don't disable" contract as the
+  invoice windows, just enforced by the component itself rather than the shared helper. A
+  dedicated effect (kept separate from the open/account-id tab-reset effect so it doesn't also
+  force non-cash accounts back to General on every unrelated render) watches `canSeeAccounting`
+  and resets `editTab` to General the moment it turns false while Accounting is the active tab —
+  covering a role switch mid-session that revokes the capability while the modal stays open. For
+  a cash account with the capability denied, neither tab has anything to show; the modal still
+  renders cleanly with `editTab` settled on General internally, just with no trigger visible for
+  either tab.
+  Automated evidence: `tools/app-shell/src/windows/custom/financial-account/__tests__/EditAccountModal.vitest.jsx`,
+  describe block `"showAccountingFields capability gate (ETP-4530)"` (test source predates the
+  ETP-4520/ETP-4530 scope split — the gate itself is ETP-4520) — covers tab+panel shown when
+  granted, both entirely absent when denied, the fallback to General on a mid-session capability
+  revoke, and the cash-account-with-no-capability edge case.
 
 Field editability in the top section:
 
