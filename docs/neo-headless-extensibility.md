@@ -418,6 +418,71 @@ public NeoResponse afterHandle(NeoContext ctx) {
 }
 ```
 
+### Post-hook: Guard a Field Against Callout Cross-Updates
+
+**Trigger condition:** suspect this problem whenever a field must be *independent* from another
+field on the same document, but a classic Etendo callout on that other field auto-fills it as a
+side effect. `NeoCalloutService` re-executes the same classic callout server-side that Classic UI
+runs client-side, so the coupling reproduces in NEO even though the frontend never asked for it —
+editing field A silently overwrites field B's value (or the user's own prior edit to it) the next
+time A's callout fires.
+
+This was first solved narrowly for currency (ETP-4029, `blockCalloutCurrencyUpdate`: block a
+callout-driven currency change unless the user edited currency directly) and generalized into a
+reusable, field-name-parameterized helper in ETP-4531 to decouple `accountingDate` (`DateAcct`)
+from each document's own date (`invoiceDate`/`movementDate`/etc.) on Sales Invoice, Purchase
+Invoice, Goods Receipt, and Goods Shipment — four unrelated classic callouts
+(`SifInvoiceOperationDateCallout`/`SE_Invoice_AccountingDate`, `SL_InOut_AccountingDate`, ...) all
+carrying the exact same anti-pattern on every postable-document table.
+
+**The guard, generalized:** `NeoHandlerUtils.blockCalloutFieldUpdate(updates, triggerField,
+fieldName)` removes a callout-driven update to `fieldName` from the callout response's `updates`
+map, *unless* `fieldName` is itself the field that triggered the callout (in which case the user
+edited it directly and the update must pass through). Call it from your handler's `afterCallout()`:
+
+```java
+@Override
+public NeoResponse afterCallout(NeoContext context) {
+  NeoHandlerUtils.CalloutFields fields = NeoHandlerUtils.extractCalloutFields(context);
+  if (fields == null) return null;
+  NeoHandlerUtils.blockCalloutFieldUpdate(fields.updates(), fields.triggerField(), "accountingDate");
+  return null; // keep the (mutated) previous result
+}
+```
+
+**⚠️ One guard point is not enough — the same classic callout also fires outside the interactive
+callout endpoint.** `afterCallout()` only covers `POST /{spec}/{entity}/callout` (the per-field
+interactive callout). Two other paths execute the identical classic callout and are *not* routed
+through any `NeoHandler` hook:
+- `GET /{spec}/{entity}/defaults` (new-record form bootstrap) — `NeoDefaultsService` runs the
+  callout cascade to resolve field defaults before the form ever renders.
+- `POST` create — the callout cascade re-runs during record creation, and relying on "the field
+  survives if it was already a body key" is not a real guarantee.
+
+Both paths funnel through the single choke point `NeoDefaultsCascadeHelper.processCalloutForField`,
+so the fix is a second call to the *same* `blockCalloutFieldUpdate` helper there — a table/property-name
+check, not a per-window branch, alongside the other cross-cutting invariants already hardcoded in
+that helper family (PK/audit-column skips, `AD_Reference_ID` literals). Guarding only `afterCallout()`
+and skipping `processCalloutForField` leaves the GET `/defaults` and POST create paths silently
+unprotected — cover all three entry points for any field-independence guard of this shape.
+
+Real implementations: `AbstractInvoiceHeaderHandler#blockCalloutCurrencyUpdate` (ETP-4029, currency).
+
+**⚠️ Superseded (2026-07-17):** the `accountingDate` implementation of this pattern —
+`AbstractInvoiceHeaderHandler#afterCallout` (shared by `SalesInvoiceHeaderHandler` and
+`PurchaseInvoiceHeaderHandler`), `GoodsReceiptHeaderHandler#afterCallout`,
+`GoodsShipmentHeaderHandler#afterCallout`, and the `accountingDate` call into
+`NeoDefaultsCascadeHelper#processCalloutForField` — is being removed. ETP-4531 was redefined from
+"keep document date and accounting date independent" to "unify them: show a single visible date,
+write it to both columns internally." The native classic-AD callout cascade
+(`SE_Invoice_AccountingDate` / `SL_InOut_AccountingDate`) is now intentionally left unguarded so it
+flows through on save. See `docs/feedback.md` ("[2026-07-17] ETP-4531 — Scope redefinition...") and
+the frontend-side change (`accountingDate` → `visibility: system` in
+`sales-invoice`/`purchase-invoice`/`goods-shipment`/`goods-receipt`/`purchase-order`'s
+`decisions.json`, in `etendo_schema_forge`). The generic `blockCalloutFieldUpdate` helper and its
+three-entry-point coverage requirement above remain valid guidance for the next field-independence
+guard (e.g., currency, ETP-4029) — only the `accountingDate` application of it is obsolete.
+
 ### Pre-hook: Intercept Completion to Preserve Classic Hooks/Extension Points
 
 **Trigger condition:** suspect this problem whenever a document's `DocAction` column is backed by

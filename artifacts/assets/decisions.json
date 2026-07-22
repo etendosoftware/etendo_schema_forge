@@ -206,8 +206,8 @@
           "grid": true,
           "summable": true,
           "form": false,
-          "displayLogicJs": "record.depreciate === true || record.depreciate === 'Y'",
-          "businessCritical": true
+          "businessCritical": true,
+          "displayLogic": null
         },
         "residualAssetValue": {
           "form": false,
@@ -287,9 +287,10 @@
           "reason": "Accounting dimension — out of scope for simplified Assets UI"
         },
         "currency": {
+          "visibility": "readOnly",
           "form": false,
           "defaultExpr": "@C_Currency_ID@",
-          "readOnlyLogicJs": "Number(record.depreciatedPlan || 0) > 0 || Number(record.depreciatedValue || 0) > 0"
+          "readOnlyLogic": null
         },
         "description": {
           "form": false
@@ -408,13 +409,13 @@
       "impactIfOmitted": "Organization selector shows all orgs instead of the valid subset",
       "reason": "Simple SQL expression, standard Etendo org hierarchy pattern"
     },
-    "readOnlyLogic_Currency_existAmortizationLines": {
+    "readOnlyLogic_Currency_alwaysReadOnly": {
       "type": "readOnlyLogic",
       "entity": "asset",
       "decision": "Keep",
-      "description": "Currency becomes read-only once amortization lines exist",
+      "description": "Currency is always read-only (ETP-4539) \u2014 no longer conditional on existing amortization progress; the raw AD readOnlyLogic (@existAmortizationLines@ = 'Y') is neutralized via decisions.entities.assets.fields.currency.readOnlyLogic = null, and visibility: readOnly governs the field permanently instead",
       "impactIfOmitted": "Users could change currency mid-process, corrupting amortization financial data",
-      "reason": "Critical data integrity rule \u2014 currency must be locked after depreciation schedule is created"
+      "reason": "Critical data integrity rule \u2014 currency must never change after asset creation, regardless of amortization state"
     },
     "readOnlyLogic_Processed_AmortizationLine": {
       "type": "readOnlyLogic",

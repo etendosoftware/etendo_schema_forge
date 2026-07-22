@@ -21,6 +21,10 @@ const SYMBOL_AFTER_CURRENCIES = new Set(['EUR', 'SEK', 'NOK', 'DKK', 'CZK', 'HUF
  *
  * @param {string} currencyCode - ISO 4217 currency code (e.g. "USD", "EUR", "ARS").
  * @param {number|string|null|undefined} value - The numeric amount to format.
+ * @param {object} [options]
+ * @param {boolean} [options.compact=false] - Use compact notation (e.g. "$12.5K" instead of
+ *   "$12,500.00"). Additive/backward-compatible — omitting the third argument entirely keeps
+ *   every existing call site's output unchanged.
  * @returns {string} Formatted currency string, or '—' for invalid/missing values.
  *
  * @example
@@ -29,11 +33,13 @@ const SYMBOL_AFTER_CURRENCIES = new Set(['EUR', 'SEK', 'NOK', 'DKK', 'CZK', 'HUF
  * formatCurrency('EUR', -99.9)    // '-99.90 €'
  * formatCurrency('XYZ', 99)       // '99.00'  (unknown code falls back to numeric)
  * formatCurrency('USD', null)     // '—'
+ * formatCurrency('USD', 12500, { compact: true }) // '$12.5K'
  */
-export function formatCurrency(currencyCode, value) {
+export function formatCurrency(currencyCode, value, { compact = false } = {}) {
   if (value == null || !Number.isFinite(Number(value))) return '\u2014';
 
   const amount = Number(value);
+  const notation = compact ? 'compact' : 'standard';
 
   try {
     const formatter = new Intl.NumberFormat(DEFAULT_LOCALE, {
@@ -42,6 +48,7 @@ export function formatCurrency(currencyCode, value) {
       currencyDisplay: 'narrowSymbol',
       minimumFractionDigits: 2,
       maximumFractionDigits: 2,
+      notation,
     });
 
     // Symbol-after convention: amount first, then symbol with a space ("1,234.56 €")
@@ -50,6 +57,7 @@ export function formatCurrency(currencyCode, value) {
       const numFormatter = new Intl.NumberFormat(DEFAULT_LOCALE, {
         minimumFractionDigits: 2,
         maximumFractionDigits: 2,
+        notation,
       });
       const sign = amount < 0 ? '-' : '';
       return `${sign}${numFormatter.format(Math.abs(amount))} ${symbol}`;

@@ -7,6 +7,7 @@ const columns = [
   { key: 'uOM', column: 'C_UOM_ID', type: 'selector', label: 'UOM', required: true, grow: true, readOnly: true },
   { key: 'bookQuantity', column: 'QtyBook', type: 'number', label: 'System Count', required: true, grow: true, minWidth: 192 },
   { key: 'quantityCount', column: 'QtyCount', type: 'number', label: 'User Count', required: true, grow: true, minWidth: 192 },
+  { key: 'etgoQtydiff', column: 'EM_Etgo_Qtydiff', type: 'signedDelta', label: 'Difference', grow: true, minWidth: 192 },
 ];
 // @sf-generated-end columns:inventoryLine
 

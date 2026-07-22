@@ -96,6 +96,14 @@ function SelectableMockTable({ data, onSelectionChange, ...rest }) {
   );
 }
 
+// A Table mock that captures the forwarded rowQuickActions prop so the test
+// can assert what ListView derived (e.g. the readOnly flag from api.window).
+let capturedRowQuickActions = null;
+function CapturingMockTable({ rowQuickActions }) {
+  capturedRowQuickActions = rowQuickActions;
+  return <table data-testid="mock-table"><tbody /></table>;
+}
+
 describe('ListView', () => {
   const defaultProps = {
     entity: 'testEntity',
@@ -226,5 +234,44 @@ describe('ListView', () => {
     const { container } = render(<ListView {...defaultProps} />);
     const toggleWrapper = container.querySelector('.inline-flex.border.border-border.rounded-lg.overflow-hidden');
     expect(toggleWrapper).not.toBeInTheDocument();
+  });
+
+  // ── window.readOnly propagation (windowReadOnly true branch) ───────────────
+  describe('window.readOnly', () => {
+    beforeEach(() => { capturedRowQuickActions = null; });
+
+    it('marks rowQuickActions readOnly and drops the write handlers when api.window.readOnly is true', () => {
+      render(
+        <ListView
+          {...defaultProps}
+          Table={CapturingMockTable}
+          api={{ window: { readOnly: true }, crud: {} }}
+          rowQuickActions={{}}
+        />,
+      );
+      expect(capturedRowQuickActions.readOnly).toBe(true);
+      // windowReadOnly branch leaves the default onEdit/onDelete unwired.
+      expect(capturedRowQuickActions.onEdit).toBeUndefined();
+      expect(capturedRowQuickActions.onDelete).toBeUndefined();
+    });
+
+    it('keeps readOnly false and wires default handlers when api.window.readOnly is absent (regression)', () => {
+      render(
+        <ListView
+          {...defaultProps}
+          Table={CapturingMockTable}
+          api={{ crud: {} }}
+          rowQuickActions={{}}
+        />,
+      );
+      expect(capturedRowQuickActions.readOnly).toBe(false);
+      expect(typeof capturedRowQuickActions.onEdit).toBe('function');
+      expect(typeof capturedRowQuickActions.onDelete).toBe('function');
+      // Invoke the default onEdit arrow so its body (navigate to detail) runs.
+      // navigate is mocked (useNavigate → vi.fn()), so this is a no-op call.
+      expect(() => capturedRowQuickActions.onEdit({ id: 'r1' })).not.toThrow();
+      // A row without an id must not navigate (row?.id short-circuit).
+      expect(() => capturedRowQuickActions.onEdit({})).not.toThrow();
+    });
   });
 });
