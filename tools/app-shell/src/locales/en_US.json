@@ -16398,6 +16398,7 @@
     }
   },
   "genericLabels": {
+    "windowAccessDenied": "You don't have access to this window",
     "balanced": "Balanced",
     "difference": "Difference",
     "journalUnbalancedSaveBlocked": "Debit and credit must be equal before saving",

@@ -50,6 +50,35 @@ const API_BASE_URL = import.meta.env.VITE_MOCK === 'true'
   ? `${apiBase}/api`
   : `${apiBase}/sws/neo`;
 
+// ETP-4520 — resolves the per-window access tier + named capability flags for
+// the current session via the SFWindowAccessMap webhook. Passed into
+// AuthProvider (via the `auth` prop bag below) as `fetchWindowAccess`, which
+// calls it every time a role is selected (see AuthContext.jsx in
+// @etendosoftware/app-shell-core). Fails closed on any error — returning
+// `null` leaves AuthProvider's existing ({}) windowAccess/capabilities maps in
+// place, which useWindowAccess/useHasCapability both treat as "no access".
+async function fetchWindowAccess(session) {
+  try {
+    const res = await fetch(`${apiBase}/webhooks/SFWindowAccessMap`, {
+      method: 'GET',
+      credentials: 'include',
+      headers: session?.token ? { Authorization: `Bearer ${session.token}` } : {},
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    // Webhook responses in this app are inconsistent about wrapping the
+    // payload — some (the `?name=`-style POST webhooks, e.g. SFListMenu) nest
+    // it as a JSON string under `data.result`; this GET webhook may or may not.
+    // Handle both shapes defensively rather than assuming one.
+    if (typeof data?.result === 'string') {
+      try { return JSON.parse(data.result); } catch { return null; }
+    }
+    return data;
+  } catch {
+    return null;
+  }
+}
+
 async function loadAllMockData() {
   const modules = await Promise.all([
     import('@generated/sales-order/custom/mockData.js'),
@@ -213,7 +242,7 @@ export default function App() {
         menuGroups={menuGroups}
         routes={routes}
         layout={AppLayout}
-        auth={{ loginPath: '/login', unauthenticatedFallback: <UnauthenticatedRedirect data-testid="UnauthenticatedRedirect__ecaf3f" /> }}
+        auth={{ loginPath: '/login', unauthenticatedFallback: <UnauthenticatedRedirect data-testid="UnauthenticatedRedirect__ecaf3f" />, fetchWindowAccess }}
         locale={locale}
         setLocale={setLocale}
         dictionaries={dictionaries}

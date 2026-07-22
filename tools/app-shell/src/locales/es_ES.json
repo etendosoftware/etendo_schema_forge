@@ -16640,6 +16640,7 @@
     }
   },
   "genericLabels": {
+    "windowAccessDenied": "No tienes acceso a esta ventana",
     "balanced": "Cuadrado",
     "difference": "Diferencia",
     "journalUnbalancedSaveBlocked": "El debe y el haber deben ser iguales antes de guardar",
