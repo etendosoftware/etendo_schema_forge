@@ -477,7 +477,7 @@
           "visibility": "discarded"
         },
         "currency": {
-          "visibility": "editable",
+          "visibility": "readOnly",
           "grid": false,
           "form": false
         }

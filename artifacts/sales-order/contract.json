@@ -1,7 +1,8 @@
 {
-  "version": "0.18.0",
-  "generatedAt": "2026-07-21T18:19:51.189Z",
-  "checksum": "f34f9a072b8e6800",
+  "version": "0.23.0",
+  "generatedAt": "2026-05-12T16:47:39.614Z",
+  "updatedAt": "2026-07-22T10:47:48.784Z",
+  "checksum": "0f153a424bde3e49",
   "frontendContract": {
     "window": {
       "id": "143",
@@ -865,7 +866,7 @@
             "label": "Currency",
             "type": "foreignKey",
             "tsType": "string",
-            "visibility": "editable",
+            "visibility": "readOnly",
             "required": true,
             "grid": false,
             "form": false,
@@ -1522,14 +1523,6 @@
             "required": false
           },
           {
-            "name": "eTPRRemovePayment",
-            "apiKey": "eTPRRemovePayment",
-            "column": "EM_Etpr_Remove_Payment",
-            "type": "button",
-            "visibility": "discarded",
-            "required": true
-          },
-          {
             "name": "etvfacReversedInvoice",
             "apiKey": "etvfacReversedInvoice",
             "column": "EM_Etvfac_Reversed_Invoice",
@@ -1730,6 +1723,14 @@
             "required": false
           },
           {
+            "name": "createPOLines",
+            "apiKey": "createPOLines",
+            "column": "Create_POLines",
+            "type": "button",
+            "visibility": "system",
+            "required": false
+          },
+          {
             "name": "creationDate",
             "apiKey": "creationDate",
             "column": "Created",
@@ -1746,35 +1747,11 @@
             "required": true
           },
           {
-            "name": "createPOLines",
-            "apiKey": "createPOLines",
-            "column": "Create_POLines",
-            "type": "button",
-            "visibility": "system",
-            "required": false
-          },
-          {
             "name": "deliveryStatusPurchase",
             "apiKey": "deliveryStatusPurchase",
             "column": "DeliveryStatusPurchase",
             "type": "integer",
             "visibility": "system",
-            "required": false
-          },
-          {
-            "name": "eTGOCurrencyRate",
-            "apiKey": "eTGOCurrencyRate",
-            "column": "EM_ETGO_Currency_Rate",
-            "type": "string",
-            "visibility": "editable",
-            "required": false
-          },
-          {
-            "name": "psd2GenerateBankPayment",
-            "apiKey": "psd2GenerateBankPayment",
-            "column": "EM_Psd2_Generate_Bank_Payment",
-            "type": "button",
-            "visibility": "discarded",
             "required": false
           },
           {
@@ -1807,6 +1784,30 @@
             "column": "UpdatedBy",
             "type": "foreignKey",
             "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "psd2GenerateBankPayment",
+            "apiKey": "psd2GenerateBankPayment",
+            "column": "EM_Psd2_Generate_Bank_Payment",
+            "type": "button",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "eTGOCurrencyRate",
+            "apiKey": "eTGOCurrencyRate",
+            "column": "EM_ETGO_Currency_Rate",
+            "type": "string",
+            "visibility": "editable",
+            "required": false
+          },
+          {
+            "name": "eTPRRemovePayment",
+            "apiKey": "eTPRRemovePayment",
+            "column": "EM_Etpr_Remove_Payment",
+            "type": "button",
+            "visibility": "discarded",
             "required": true
           }
         ],
@@ -2294,7 +2295,7 @@
             "apiKey": "currency",
             "column": "C_Currency_ID",
             "type": "foreignKey",
-            "visibility": "editable",
+            "visibility": "readOnly",
             "required": true
           },
           {
@@ -2736,14 +2737,6 @@
       },
       {
         "entity": "header",
-        "field": "eTPRRemovePayment",
-        "column": "EM_Etpr_Remove_Payment",
-        "url": "/sws/neo/sales-order/header/{id}/action/eTPRRemovePayment",
-        "processId": "D2923463223C4F1EADE335D22B9D8FE8",
-        "processType": "obuiapp"
-      },
-      {
-        "entity": "header",
         "field": "processNow",
         "column": "Processing",
         "url": "/sws/neo/sales-order/header/{id}/action/processNow",
@@ -2776,6 +2769,14 @@
       },
       {
         "entity": "header",
+        "field": "rMPickfromreceipt",
+        "column": "RM_Pickfromreceipt",
+        "url": "/sws/neo/sales-order/header/{id}/action/rMPickfromreceipt",
+        "processId": "A2C19D0EF6594D14A64BC62E99A89CC3",
+        "processType": "obuiapp"
+      },
+      {
+        "entity": "header",
         "field": "psd2GenerateBankPayment",
         "column": "EM_Psd2_Generate_Bank_Payment",
         "url": "/sws/neo/sales-order/header/{id}/action/psd2GenerateBankPayment",
@@ -2784,10 +2785,10 @@
       },
       {
         "entity": "header",
-        "field": "rMPickfromreceipt",
-        "column": "RM_Pickfromreceipt",
-        "url": "/sws/neo/sales-order/header/{id}/action/rMPickfromreceipt",
-        "processId": "A2C19D0EF6594D14A64BC62E99A89CC3",
+        "field": "eTPRRemovePayment",
+        "column": "EM_Etpr_Remove_Payment",
+        "url": "/sws/neo/sales-order/header/{id}/action/eTPRRemovePayment",
+        "processId": "D2923463223C4F1EADE335D22B9D8FE8",
         "processType": "obuiapp"
       },
       {

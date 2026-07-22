@@ -1,7 +1,8 @@
 {
-  "version": "0.18.0",
-  "generatedAt": "2026-07-21T18:19:51.366Z",
-  "checksum": "84718d98ca314567",
+  "version": "0.20.0",
+  "generatedAt": "2026-06-26T16:40:04.731Z",
+  "updatedAt": "2026-07-22T10:47:48.949Z",
+  "checksum": "d57aefa98cd9e416",
   "frontendContract": {
     "window": {
       "id": "6CB5B67ED33F47DFA334079D3EA2340E",
@@ -1587,6 +1588,14 @@
             "required": false
           },
           {
+            "name": "costcenter",
+            "apiKey": "costcenter",
+            "column": "C_Costcenter_ID",
+            "type": "foreignKey",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
             "name": "cancelandreplace",
             "apiKey": "cancelandreplace",
             "column": "Cancelandreplace",
@@ -1603,17 +1612,17 @@
             "required": false
           },
           {
-            "name": "costcenter",
-            "apiKey": "costcenter",
-            "column": "C_Costcenter_ID",
-            "type": "foreignKey",
-            "visibility": "discarded",
-            "required": false
-          },
-          {
             "name": "confirmcancelandreplace",
             "apiKey": "confirmcancelandreplace",
             "column": "Confirmcancelandreplace",
+            "type": "button",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "createPOLines",
+            "apiKey": "createPOLines",
+            "column": "Create_POLines",
             "type": "button",
             "visibility": "system",
             "required": false
@@ -1633,14 +1642,6 @@
             "type": "foreignKey",
             "visibility": "system",
             "required": true
-          },
-          {
-            "name": "createPOLines",
-            "apiKey": "createPOLines",
-            "column": "Create_POLines",
-            "type": "button",
-            "visibility": "system",
-            "required": false
           },
           {
             "name": "deliveryStatus",
@@ -1680,14 +1681,6 @@
             "column": "EM_APRM_AddPayment",
             "type": "button",
             "visibility": "system",
-            "required": false
-          },
-          {
-            "name": "eTGOCurrencyRate",
-            "apiKey": "eTGOCurrencyRate",
-            "column": "EM_ETGO_Currency_Rate",
-            "type": "string",
-            "visibility": "editable",
             "required": false
           },
           {
@@ -1809,6 +1802,14 @@
             "type": "foreignKey",
             "visibility": "system",
             "required": true
+          },
+          {
+            "name": "eTGOCurrencyRate",
+            "apiKey": "eTGOCurrencyRate",
+            "column": "EM_ETGO_Currency_Rate",
+            "type": "string",
+            "visibility": "editable",
+            "required": false
           }
         ],
         "javaQualifier": "salesQuotationHeaderHandler"
@@ -2283,6 +2284,14 @@
             "required": false
           },
           {
+            "name": "createReservation",
+            "apiKey": "createReservation",
+            "column": "Create_Reservation",
+            "type": "enum",
+            "visibility": "system",
+            "required": false
+          },
+          {
             "name": "creationDate",
             "apiKey": "creationDate",
             "column": "Created",
@@ -2299,19 +2308,19 @@
             "required": true
           },
           {
-            "name": "createReservation",
-            "apiKey": "createReservation",
-            "column": "Create_Reservation",
-            "type": "enum",
-            "visibility": "system",
-            "required": false
-          },
-          {
             "name": "explode",
             "apiKey": "explode",
             "column": "Explode",
             "type": "button",
             "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "warehouseRule",
+            "apiKey": "warehouseRule",
+            "column": "M_Warehouse_Rule_ID",
+            "type": "foreignKey",
+            "visibility": "system",
             "required": false
           },
           {
@@ -2327,14 +2336,6 @@
             "apiKey": "manageReservation",
             "column": "Manage_Reservation",
             "type": "button",
-            "visibility": "system",
-            "required": false
-          },
-          {
-            "name": "warehouseRule",
-            "apiKey": "warehouseRule",
-            "column": "M_Warehouse_Rule_ID",
-            "type": "foreignKey",
             "visibility": "system",
             "required": false
           },

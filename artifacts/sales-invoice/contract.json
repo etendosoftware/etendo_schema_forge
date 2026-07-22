@@ -1,7 +1,8 @@
 {
-  "version": "0.58.0",
-  "generatedAt": "2026-07-21T18:19:50.995Z",
-  "checksum": "b733df016fe4e467",
+  "version": "0.63.0",
+  "generatedAt": "2026-04-30T15:42:46.582Z",
+  "updatedAt": "2026-07-22T10:47:48.603Z",
+  "checksum": "5358414840f1134c",
   "frontendContract": {
     "window": {
       "id": "167",
@@ -42,16 +43,8 @@
         "exchangeRates": {
           "label": "Exchange Rates",
           "tabOrder": 50,
-          "addLineFields": [
-            "toCurrency",
-            "rate",
-            "foreignAmount"
-          ],
           "requireSavedRecord": true,
-          "readOnlyLogic": "@DocumentStatus@!='DR'",
-          "addLineFieldExclusions": {
-            "toCurrency": "currency"
-          }
+          "readOnlyLogic": "@Posted@='Y' | @HASREVERSEDINVOICESO@='Y' | @HASREVERSEDINVOICEPO@='Y'"
         }
       },
       "salesTheme": true,
@@ -162,45 +155,6 @@
               "raw": "@Processed@='Y'",
               "evaluable": true,
               "js": "record['processed'] === true"
-            }
-          },
-          {
-            "name": "transactionDocument",
-            "apiKey": "transactionDocument",
-            "column": "C_DocTypeTarget_ID",
-            "label": "Transaction Document",
-            "type": "foreignKey",
-            "tsType": "string",
-            "visibility": "editable",
-            "required": true,
-            "grid": false,
-            "form": true,
-            "sourceRequired": true,
-            "derivation": {
-              "type": "fromConfig",
-              "source": "doctype.salesOrder"
-            },
-            "reference": "DocumentType",
-            "inputMode": "selector",
-            "section": "principal",
-            "seq": 15,
-            "validationRule": {
-              "code": "C_DocType.DocBaseType IN ('ARI', 'API','ARC','APC','ARI_RM') AND C_DocType.IsSOTrx='@IsSOTrx@' AND (AD_ISORGINCLUDED(@AD_Org_ID@,C_DocType.AD_Org_ID, @#AD_Client_ID@) <> '-1' OR COALESCE(@AD_Org_ID@,'-1')='-1')",
-              "contextParams": [
-                "AD_Client_ID"
-              ],
-              "cascadeParams": [
-                "IsSOTrx",
-                "AD_Org_ID"
-              ]
-            },
-            "callout": {
-              "className": "com.etendoerp.verifactu.ad_callouts.AddDefaultInfo"
-            },
-            "readOnlyLogic": {
-              "raw": "@Processed@='Y'",
-              "evaluable": true,
-              "js": "!!record.id"
             }
           },
           {
@@ -1194,18 +1148,6 @@
             }
           },
           {
-            "name": "etgoTotalDiscount",
-            "apiKey": "etgoTotalDiscount",
-            "column": "EM_Etgo_Total_Discount",
-            "label": "Total Discount %",
-            "type": "decimal",
-            "tsType": "number",
-            "visibility": "editable",
-            "required": false,
-            "grid": false,
-            "form": false
-          },
-          {
             "name": "processed",
             "apiKey": "processed",
             "column": "Processed",
@@ -1223,16 +1165,29 @@
             }
           },
           {
-            "name": "eTGOCurrencyRate",
-            "apiKey": "eTGOCurrencyRate",
-            "column": "EM_ETGO_Currency_Rate",
-            "label": "EM_ETGO_Currency_Rate",
-            "type": "string",
-            "tsType": "string",
+            "name": "etgoTotalDiscount",
+            "apiKey": "etgoTotalDiscount",
+            "column": "EM_Etgo_Total_Discount",
+            "label": "Total Discount %",
+            "type": "decimal",
+            "tsType": "number",
             "visibility": "editable",
             "required": false,
             "grid": false,
             "form": false
+          },
+          {
+            "name": "eTGODueDate",
+            "apiKey": "eTGODueDate",
+            "column": "em_etgo_due_date",
+            "label": "em_etgo_due_date",
+            "type": "date",
+            "tsType": "string",
+            "visibility": "readOnly",
+            "required": false,
+            "grid": true,
+            "form": false,
+            "gridOrder": 8
           },
           {
             "name": "eTGODeliveryStatus",
@@ -1248,17 +1203,55 @@
             "gridOrder": 9
           },
           {
-            "name": "eTGODueDate",
-            "apiKey": "eTGODueDate",
-            "column": "em_etgo_due_date",
-            "label": "em_etgo_due_date",
-            "type": "date",
+            "name": "transactionDocument",
+            "apiKey": "transactionDocument",
+            "column": "C_DocTypeTarget_ID",
+            "label": "Transaction Document",
+            "type": "foreignKey",
             "tsType": "string",
-            "visibility": "readOnly",
+            "visibility": "editable",
+            "required": true,
+            "grid": false,
+            "form": true,
+            "sourceRequired": true,
+            "derivation": {
+              "type": "fromConfig",
+              "source": "doctype.salesOrder"
+            },
+            "reference": "DocumentType",
+            "inputMode": "selector",
+            "section": "principal",
+            "seq": 15,
+            "validationRule": {
+              "code": "C_DocType.DocBaseType IN ('ARI', 'API','ARC','APC','ARI_RM') AND C_DocType.IsSOTrx='@IsSOTrx@' AND (AD_ISORGINCLUDED(@AD_Org_ID@,C_DocType.AD_Org_ID, @#AD_Client_ID@) <> '-1' OR COALESCE(@AD_Org_ID@,'-1')='-1')",
+              "contextParams": [
+                "AD_Client_ID"
+              ],
+              "cascadeParams": [
+                "IsSOTrx",
+                "AD_Org_ID"
+              ]
+            },
+            "callout": {
+              "className": "com.etendoerp.verifactu.ad_callouts.AddDefaultInfo"
+            },
+            "readOnlyLogic": {
+              "raw": "@Processed@='Y'",
+              "evaluable": true,
+              "js": "!!record.id"
+            }
+          },
+          {
+            "name": "eTGOCurrencyRate",
+            "apiKey": "eTGOCurrencyRate",
+            "column": "EM_ETGO_Currency_Rate",
+            "label": "EM_ETGO_Currency_Rate",
+            "type": "string",
+            "tsType": "string",
+            "visibility": "editable",
             "required": false,
-            "grid": true,
-            "form": false,
-            "gridOrder": 8
+            "grid": false,
+            "form": false
           }
         ],
         "searchableFields": [
@@ -1274,13 +1267,6 @@
             "derivation": {
               "type": "fromConfig",
               "source": "context.organization"
-            }
-          },
-          {
-            "name": "transactionDocument",
-            "derivation": {
-              "type": "fromConfig",
-              "source": "doctype.salesOrder"
             }
           },
           {
@@ -1407,6 +1393,13 @@
             "derivation": {
               "type": "computed",
               "source": "false"
+            }
+          },
+          {
+            "name": "transactionDocument",
+            "derivation": {
+              "type": "fromConfig",
+              "source": "doctype.salesOrder"
             }
           }
         ],
@@ -2128,6 +2121,7 @@
             "sourceRequired": true,
             "reference": "Currency",
             "inputMode": "selector",
+            "gridReadOnly": true,
             "validationRule": {
               "code": "C_Currency.C_Currency_id = \nCASE WHEN @C_Invoice_ID@ is not null THEN (SELECT C_Currency_ID FROM C_Invoice WHERE C_Invoice_ID = COALESCE(@C_Invoice_ID@,'---'))\nWHEN @APRM_Finacc_Transaction_V_ID@ is not null THEN (SELECT c_currency_id FROM aprm_finacc_transaction_v WHERE aprm_finacc_transaction_v_id = COALESCE(@APRM_Finacc_Transaction_V_ID@, '---')) \nWHEN @FIN_Finacc_Transaction_ID@ is not null THEN (SELECT c_currency_id FROM fin_finacc_transaction WHERE fin_finacc_transaction_id = COALESCE(@FIN_Finacc_Transaction_ID@, '---'))\nWHEN @GL_Journal_ID@ is not null THEN (SELECT c_currency_id FROM gl_journal WHERE gl_journal_id = COALESCE(@GL_Journal_ID@, '---'))\nELSE (SELECT C_Currency_ID FROM FIN_Payment WHERE FIN_Payment_ID = COALESCE(@FIN_Payment_ID@, '---')) END",
               "contextParams": [],
@@ -2152,13 +2146,14 @@
             "label": "To Currency",
             "type": "foreignKey",
             "tsType": "string",
-            "visibility": "editable",
+            "visibility": "readOnly",
             "required": true,
             "grid": true,
             "form": true,
             "sourceRequired": true,
             "reference": "Currency",
             "inputMode": "search",
+            "gridReadOnly": true,
             "validationRule": {
               "code": "C_Currency.C_Currency_id in (SELECT C_Currency_ID FROM C_Acctschema)",
               "contextParams": [],
@@ -2271,16 +2266,8 @@
         "exchangeRates": {
           "label": "Exchange Rates",
           "tabOrder": 50,
-          "addLineFields": [
-            "toCurrency",
-            "rate",
-            "foreignAmount"
-          ],
           "requireSavedRecord": true,
-          "readOnlyLogic": "@DocumentStatus@!='DR'",
-          "addLineFieldExclusions": {
-            "toCurrency": "currency"
-          }
+          "readOnlyLogic": "@Posted@='Y' | @HASREVERSEDINVOICESO@='Y' | @HASREVERSEDINVOICEPO@='Y'"
         }
       },
       "salesTheme": true,
@@ -2358,14 +2345,6 @@
             "column": "AD_Org_ID",
             "type": "foreignKey",
             "visibility": "readOnly",
-            "required": true
-          },
-          {
-            "name": "transactionDocument",
-            "apiKey": "transactionDocument",
-            "column": "C_DocTypeTarget_ID",
-            "type": "foreignKey",
-            "visibility": "editable",
             "required": true
           },
           {
@@ -2697,20 +2676,20 @@
             "required": false
           },
           {
-            "name": "externalBusinessPartnerReference",
-            "apiKey": "externalBusinessPartnerReference",
-            "column": "BPartner_ExtRef",
-            "type": "string",
-            "visibility": "discarded",
-            "required": false
-          },
-          {
             "name": "cashVAT",
             "apiKey": "cashVAT",
             "column": "Iscashvat",
             "type": "boolean",
             "visibility": "discarded",
             "required": true
+          },
+          {
+            "name": "externalBusinessPartnerReference",
+            "apiKey": "externalBusinessPartnerReference",
+            "column": "BPartner_ExtRef",
+            "type": "string",
+            "visibility": "discarded",
+            "required": false
           },
           {
             "name": "project",
@@ -2849,14 +2828,6 @@
             "required": true
           },
           {
-            "name": "etblkpBulkposting",
-            "apiKey": "etblkpBulkposting",
-            "column": "EM_Etblkp_Bulkposting",
-            "type": "button",
-            "visibility": "discarded",
-            "required": true
-          },
-          {
             "name": "etvfacIssue",
             "apiKey": "etvfacIssue",
             "column": "EM_Etvfac_Issue",
@@ -2929,10 +2900,10 @@
             "required": true
           },
           {
-            "name": "etblkpAccountingstatus",
-            "apiKey": "etblkpAccountingstatus",
-            "column": "EM_Etblkp_Accountingstatus",
-            "type": "enum",
+            "name": "etvfacSentToVerifac",
+            "apiKey": "etvfacSentToVerifac",
+            "column": "EM_Etvfac_Senttoverifac",
+            "type": "boolean",
             "visibility": "discarded",
             "required": true
           },
@@ -2943,14 +2914,6 @@
             "type": "button",
             "visibility": "discarded",
             "required": false
-          },
-          {
-            "name": "etvfacSentToVerifac",
-            "apiKey": "etvfacSentToVerifac",
-            "column": "EM_Etvfac_Senttoverifac",
-            "type": "boolean",
-            "visibility": "discarded",
-            "required": true
           },
           {
             "name": "tbaiSequence",
@@ -2981,14 +2944,6 @@
             "apiKey": "etvfacIsGenManual",
             "column": "EM_Etvfac_Is_Gen_Manual",
             "type": "boolean",
-            "visibility": "discarded",
-            "required": true
-          },
-          {
-            "name": "eTPRRemovePayment",
-            "apiKey": "eTPRRemovePayment",
-            "column": "EM_Etpr_Remove_Payment",
-            "type": "button",
             "visibility": "discarded",
             "required": true
           },
@@ -3153,42 +3108,26 @@
             "required": false
           },
           {
-            "name": "etgoTotalDiscount",
-            "apiKey": "etgoTotalDiscount",
-            "column": "EM_Etgo_Total_Discount",
-            "type": "decimal",
-            "visibility": "editable",
-            "required": false
-          },
-          {
-            "name": "withholding",
-            "apiKey": "withholding",
-            "column": "C_Withholding_ID",
-            "type": "foreignKey",
-            "visibility": "discarded",
-            "required": false
-          },
-          {
-            "name": "created",
-            "apiKey": "created",
-            "column": "Created",
-            "type": "dateTime",
-            "visibility": "system",
-            "required": true
-          },
-          {
-            "name": "withholdingamount",
-            "apiKey": "withholdingamount",
-            "column": "Withholdingamount",
-            "type": "amount",
-            "visibility": "discarded",
-            "required": false
-          },
-          {
             "name": "adClientId",
             "apiKey": "adClientId",
             "column": "AD_Client_ID",
             "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "selfService",
+            "apiKey": "selfService",
+            "column": "IsSelfService",
+            "type": "boolean",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "print",
+            "apiKey": "print",
+            "column": "IsPrinted",
+            "type": "boolean",
             "visibility": "system",
             "required": true
           },
@@ -3201,11 +3140,51 @@
             "required": true
           },
           {
-            "name": "isActive",
-            "apiKey": "isActive",
-            "column": "IsActive",
+            "name": "priceIncludesTax",
+            "apiKey": "priceIncludesTax",
+            "column": "IsTaxIncluded",
             "type": "boolean",
             "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "isSotrx",
+            "apiKey": "isSotrx",
+            "column": "IsSOTrx",
+            "type": "boolean",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "withholdingamount",
+            "apiKey": "withholdingamount",
+            "column": "Withholdingamount",
+            "type": "amount",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "datePrinted",
+            "apiKey": "datePrinted",
+            "column": "DatePrinted",
+            "type": "date",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "lastCalculatedOnDate",
+            "apiKey": "lastCalculatedOnDate",
+            "column": "LastCalculatedOnDate",
+            "type": "date",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "created",
+            "apiKey": "created",
+            "column": "Created",
+            "type": "dateTime",
+            "visibility": "system",
             "required": true
           },
           {
@@ -3225,50 +3204,10 @@
             "required": false
           },
           {
-            "name": "datePrinted",
-            "apiKey": "datePrinted",
-            "column": "DatePrinted",
-            "type": "date",
-            "visibility": "system",
-            "required": false
-          },
-          {
-            "name": "isSotrx",
-            "apiKey": "isSotrx",
-            "column": "IsSOTrx",
-            "type": "boolean",
-            "visibility": "system",
-            "required": true
-          },
-          {
-            "name": "lastCalculatedOnDate",
-            "apiKey": "lastCalculatedOnDate",
-            "column": "LastCalculatedOnDate",
-            "type": "date",
-            "visibility": "system",
-            "required": false
-          },
-          {
-            "name": "printDiscount",
-            "apiKey": "printDiscount",
-            "column": "IsDiscountPrinted",
-            "type": "boolean",
-            "visibility": "system",
-            "required": true
-          },
-          {
-            "name": "print",
-            "apiKey": "print",
-            "column": "IsPrinted",
-            "type": "boolean",
-            "visibility": "system",
-            "required": true
-          },
-          {
-            "name": "priceIncludesTax",
-            "apiKey": "priceIncludesTax",
-            "column": "IsTaxIncluded",
-            "type": "boolean",
+            "name": "withholding",
+            "apiKey": "withholding",
+            "column": "C_Withholding_ID",
+            "type": "foreignKey",
             "visibility": "discarded",
             "required": false
           },
@@ -3281,11 +3220,19 @@
             "required": false
           },
           {
-            "name": "selfService",
-            "apiKey": "selfService",
-            "column": "IsSelfService",
+            "name": "printDiscount",
+            "apiKey": "printDiscount",
+            "column": "IsDiscountPrinted",
             "type": "boolean",
             "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "isActive",
+            "apiKey": "isActive",
+            "column": "IsActive",
+            "type": "boolean",
+            "visibility": "discarded",
             "required": true
           },
           {
@@ -3441,30 +3388,6 @@
             "required": false
           },
           {
-            "name": "eTGOCurrencyRate",
-            "apiKey": "eTGOCurrencyRate",
-            "column": "EM_ETGO_Currency_Rate",
-            "type": "string",
-            "visibility": "editable",
-            "required": false
-          },
-          {
-            "name": "eTGODeliveryStatus",
-            "apiKey": "eTGODeliveryStatus",
-            "column": "em_etgo_delivery_status",
-            "type": "integer",
-            "visibility": "readOnly",
-            "required": false
-          },
-          {
-            "name": "eTGODueDate",
-            "apiKey": "eTGODueDate",
-            "column": "em_etgo_due_date",
-            "type": "date",
-            "visibility": "readOnly",
-            "required": false
-          },
-          {
             "name": "etsgIsF3",
             "apiKey": "etsgIsF3",
             "column": "EM_Etsg_Is_F3",
@@ -3593,14 +3516,6 @@
             "required": false
           },
           {
-            "name": "psd2GenerateBankPayment",
-            "apiKey": "psd2GenerateBankPayment",
-            "column": "EM_Psd2_Generate_Bank_Payment",
-            "type": "button",
-            "visibility": "discarded",
-            "required": false
-          },
-          {
             "name": "tbaiDateOperation",
             "apiKey": "tbaiDateOperation",
             "column": "EM_Tbai_Date_Operation",
@@ -3663,6 +3578,78 @@
             "type": "foreignKey",
             "visibility": "system",
             "required": true
+          },
+          {
+            "name": "etgoTotalDiscount",
+            "apiKey": "etgoTotalDiscount",
+            "column": "EM_Etgo_Total_Discount",
+            "type": "decimal",
+            "visibility": "editable",
+            "required": false
+          },
+          {
+            "name": "eTGODueDate",
+            "apiKey": "eTGODueDate",
+            "column": "em_etgo_due_date",
+            "type": "date",
+            "visibility": "readOnly",
+            "required": false
+          },
+          {
+            "name": "eTGODeliveryStatus",
+            "apiKey": "eTGODeliveryStatus",
+            "column": "em_etgo_delivery_status",
+            "type": "integer",
+            "visibility": "readOnly",
+            "required": false
+          },
+          {
+            "name": "psd2GenerateBankPayment",
+            "apiKey": "psd2GenerateBankPayment",
+            "column": "EM_Psd2_Generate_Bank_Payment",
+            "type": "button",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "eTPRRemovePayment",
+            "apiKey": "eTPRRemovePayment",
+            "column": "EM_Etpr_Remove_Payment",
+            "type": "button",
+            "visibility": "discarded",
+            "required": true
+          },
+          {
+            "name": "etblkpAccountingstatus",
+            "apiKey": "etblkpAccountingstatus",
+            "column": "EM_Etblkp_Accountingstatus",
+            "type": "enum",
+            "visibility": "discarded",
+            "required": true
+          },
+          {
+            "name": "etblkpBulkposting",
+            "apiKey": "etblkpBulkposting",
+            "column": "EM_Etblkp_Bulkposting",
+            "type": "button",
+            "visibility": "discarded",
+            "required": true
+          },
+          {
+            "name": "transactionDocument",
+            "apiKey": "transactionDocument",
+            "column": "C_DocTypeTarget_ID",
+            "type": "foreignKey",
+            "visibility": "editable",
+            "required": true
+          },
+          {
+            "name": "eTGOCurrencyRate",
+            "apiKey": "eTGOCurrencyRate",
+            "column": "EM_ETGO_Currency_Rate",
+            "type": "string",
+            "visibility": "editable",
+            "required": false
           }
         ],
         "javaQualifier": "salesInvoiceHeaderHandler"
@@ -3814,22 +3801,6 @@
             "column": "M_AttributeSetInstance_ID",
             "type": "productAttribute",
             "visibility": "discarded",
-            "required": false
-          },
-          {
-            "name": "salesOrderLine",
-            "apiKey": "salesOrderLine",
-            "column": "C_OrderLine_ID",
-            "type": "foreignKey",
-            "visibility": "system",
-            "required": false
-          },
-          {
-            "name": "goodsShipmentLine",
-            "apiKey": "goodsShipmentLine",
-            "column": "M_InOutLine_ID",
-            "type": "foreignKey",
-            "visibility": "system",
             "required": false
           },
           {
@@ -3993,78 +3964,6 @@
             "required": false
           },
           {
-            "name": "creationDate",
-            "apiKey": "creationDate",
-            "column": "Created",
-            "type": "dateTime",
-            "visibility": "system",
-            "required": true
-          },
-          {
-            "name": "adClientId",
-            "apiKey": "adClientId",
-            "column": "AD_Client_ID",
-            "type": "foreignKey",
-            "visibility": "system",
-            "required": true
-          },
-          {
-            "name": "charge",
-            "apiKey": "charge",
-            "column": "C_Charge_ID",
-            "type": "foreignKey",
-            "visibility": "discarded",
-            "required": false
-          },
-          {
-            "name": "id",
-            "apiKey": "id",
-            "column": "C_InvoiceLine_ID",
-            "type": "id",
-            "visibility": "system",
-            "required": true
-          },
-          {
-            "name": "cInvoiceId",
-            "apiKey": "cInvoiceId",
-            "column": "C_Invoice_ID",
-            "type": "foreignKey",
-            "visibility": "system",
-            "required": true
-          },
-          {
-            "name": "chargeAmount",
-            "apiKey": "chargeAmount",
-            "column": "ChargeAmt",
-            "type": "amount",
-            "visibility": "discarded",
-            "required": false
-          },
-          {
-            "name": "active",
-            "apiKey": "active",
-            "column": "IsActive",
-            "type": "boolean",
-            "visibility": "system",
-            "required": true
-          },
-          {
-            "name": "priceLimit",
-            "apiKey": "priceLimit",
-            "column": "PriceLimit",
-            "type": "price",
-            "visibility": "system",
-            "required": true
-          },
-          {
-            "name": "resourceAssignment",
-            "apiKey": "resourceAssignment",
-            "column": "S_ResourceAssignment_ID",
-            "type": "string",
-            "visibility": "system",
-            "required": false
-          },
-          {
             "name": "invoiceDiscount",
             "apiKey": "invoiceDiscount",
             "column": "C_Invoice_Discount_ID",
@@ -4089,10 +3988,26 @@
             "required": false
           },
           {
-            "name": "descriptionOnly",
-            "apiKey": "descriptionOnly",
-            "column": "IsDescription",
-            "type": "boolean",
+            "name": "charge",
+            "apiKey": "charge",
+            "column": "C_Charge_ID",
+            "type": "foreignKey",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "priceLimit",
+            "apiKey": "priceLimit",
+            "column": "PriceLimit",
+            "type": "price",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "id",
+            "apiKey": "id",
+            "column": "C_InvoiceLine_ID",
+            "type": "id",
             "visibility": "system",
             "required": true
           },
@@ -4103,6 +4018,62 @@
             "type": "foreignKey",
             "visibility": "discarded",
             "required": false
+          },
+          {
+            "name": "cInvoiceId",
+            "apiKey": "cInvoiceId",
+            "column": "C_Invoice_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "creationDate",
+            "apiKey": "creationDate",
+            "column": "Created",
+            "type": "dateTime",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "adClientId",
+            "apiKey": "adClientId",
+            "column": "AD_Client_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "resourceAssignment",
+            "apiKey": "resourceAssignment",
+            "column": "S_ResourceAssignment_ID",
+            "type": "string",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "active",
+            "apiKey": "active",
+            "column": "IsActive",
+            "type": "boolean",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "chargeAmount",
+            "apiKey": "chargeAmount",
+            "column": "ChargeAmt",
+            "type": "amount",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "descriptionOnly",
+            "apiKey": "descriptionOnly",
+            "column": "IsDescription",
+            "type": "boolean",
+            "visibility": "system",
+            "required": true
           },
           {
             "name": "createdBy",
@@ -4135,6 +4106,22 @@
             "type": "foreignKey",
             "visibility": "system",
             "required": true
+          },
+          {
+            "name": "goodsShipmentLine",
+            "apiKey": "goodsShipmentLine",
+            "column": "M_InOutLine_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "salesOrderLine",
+            "apiKey": "salesOrderLine",
+            "column": "C_OrderLine_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": false
           }
         ],
         "javaQualifier": "invoiceLineHandler"
@@ -4161,20 +4148,20 @@
             "required": true
           },
           {
-            "name": "origDueDate",
-            "apiKey": "origDueDate",
-            "column": "OrigDueDate",
-            "type": "date",
-            "visibility": "system",
-            "required": false
-          },
-          {
             "name": "dueDate",
             "apiKey": "dueDate",
             "column": "Duedate",
             "type": "date",
             "visibility": "readOnly",
             "required": true
+          },
+          {
+            "name": "origDueDate",
+            "apiKey": "origDueDate",
+            "column": "OrigDueDate",
+            "type": "date",
+            "visibility": "system",
+            "required": false
           },
           {
             "name": "expectedDate",
@@ -4289,14 +4276,6 @@
             "required": false
           },
           {
-            "name": "id",
-            "apiKey": "id",
-            "column": "Fin_Payment_Schedule_ID",
-            "type": "id",
-            "visibility": "system",
-            "required": true
-          },
-          {
             "name": "client",
             "apiKey": "client",
             "column": "AD_Client_ID",
@@ -4357,6 +4336,14 @@
             "apiKey": "updatedBy",
             "column": "Updatedby",
             "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "id",
+            "apiKey": "id",
+            "column": "Fin_Payment_Schedule_ID",
+            "type": "id",
             "visibility": "system",
             "required": true
           }
@@ -4531,7 +4518,7 @@
             "apiKey": "toCurrency",
             "column": "C_Currency_Id_To",
             "type": "foreignKey",
-            "visibility": "editable",
+            "visibility": "readOnly",
             "required": true
           },
           {
@@ -4883,27 +4870,6 @@
       },
       {
         "entity": "header",
-        "field": "transactionDocument",
-        "column": "C_DocTypeTarget_ID",
-        "reference": "DocumentType",
-        "inputMode": "selector",
-        "url": "/sws/neo/sales-invoice/header/selectors/transactionDocument",
-        "context": {
-          "required": [
-            {
-              "param": "IsSOTrx",
-              "source": "windowCategory"
-            },
-            {
-              "param": "AD_Org_ID",
-              "source": "field",
-              "field": "adOrgId"
-            }
-          ]
-        }
-      },
-      {
-        "entity": "header",
         "field": "businessPartner",
         "column": "C_BPartner_ID",
         "reference": "BusinessPartner",
@@ -4990,6 +4956,27 @@
         "reference": "aeatsii_cause_exemption",
         "inputMode": "selector",
         "url": "/sws/neo/sales-invoice/header/selectors/aeatsiiCauseExemption"
+      },
+      {
+        "entity": "header",
+        "field": "transactionDocument",
+        "column": "C_DocTypeTarget_ID",
+        "reference": "DocumentType",
+        "inputMode": "selector",
+        "url": "/sws/neo/sales-invoice/header/selectors/transactionDocument",
+        "context": {
+          "required": [
+            {
+              "param": "IsSOTrx",
+              "source": "windowCategory"
+            },
+            {
+              "param": "AD_Org_ID",
+              "source": "field",
+              "field": "adOrgId"
+            }
+          ]
+        }
       },
       {
         "entity": "lines",
@@ -5129,14 +5116,6 @@
       },
       {
         "entity": "header",
-        "field": "etblkpBulkposting",
-        "column": "EM_Etblkp_Bulkposting",
-        "url": "/sws/neo/sales-invoice/header/{id}/action/etblkpBulkposting",
-        "processId": "57496FB9CF9E4E8F847224017941570E",
-        "processType": "obuiapp"
-      },
-      {
-        "entity": "header",
         "field": "tBAIQRcode",
         "column": "em_tbai_qrcode",
         "url": "/sws/neo/sales-invoice/header/{id}/action/tBAIQRcode",
@@ -5157,14 +5136,6 @@
         "column": "EM_Tbai_Xmlgenerator",
         "url": "/sws/neo/sales-invoice/header/{id}/action/tbaiXmlgenerator",
         "processId": "BE2486102F2C41779B760609FD69A225",
-        "processType": "obuiapp"
-      },
-      {
-        "entity": "header",
-        "field": "eTPRRemovePayment",
-        "column": "EM_Etpr_Remove_Payment",
-        "url": "/sws/neo/sales-invoice/header/{id}/action/eTPRRemovePayment",
-        "processId": "745FCF75B6F14024B96CC14429D8E952",
         "processType": "obuiapp"
       },
       {
@@ -5235,6 +5206,22 @@
         "column": "EM_Psd2_Generate_Bank_Payment",
         "url": "/sws/neo/sales-invoice/header/{id}/action/psd2GenerateBankPayment",
         "processId": "0661406A983B4D8EA611F8596F114D52",
+        "processType": "obuiapp"
+      },
+      {
+        "entity": "header",
+        "field": "eTPRRemovePayment",
+        "column": "EM_Etpr_Remove_Payment",
+        "url": "/sws/neo/sales-invoice/header/{id}/action/eTPRRemovePayment",
+        "processId": "745FCF75B6F14024B96CC14429D8E952",
+        "processType": "obuiapp"
+      },
+      {
+        "entity": "header",
+        "field": "etblkpBulkposting",
+        "column": "EM_Etblkp_Bulkposting",
+        "url": "/sws/neo/sales-invoice/header/{id}/action/etblkpBulkposting",
+        "processId": "57496FB9CF9E4E8F847224017941570E",
         "processType": "obuiapp"
       },
       {

@@ -324,14 +324,6 @@ export const api = {
     },
     {
       "entity": "header",
-      "field": "eTPRRemovePayment",
-      "column": "EM_Etpr_Remove_Payment",
-      "url": "/sws/neo/sales-order/header/{id}/action/eTPRRemovePayment",
-      "processId": "D2923463223C4F1EADE335D22B9D8FE8",
-      "processType": "obuiapp"
-    },
-    {
-      "entity": "header",
       "field": "processNow",
       "column": "Processing",
       "url": "/sws/neo/sales-order/header/{id}/action/processNow",
@@ -364,6 +356,14 @@ export const api = {
     },
     {
       "entity": "header",
+      "field": "rMPickfromreceipt",
+      "column": "RM_Pickfromreceipt",
+      "url": "/sws/neo/sales-order/header/{id}/action/rMPickfromreceipt",
+      "processId": "A2C19D0EF6594D14A64BC62E99A89CC3",
+      "processType": "obuiapp"
+    },
+    {
+      "entity": "header",
       "field": "psd2GenerateBankPayment",
       "column": "EM_Psd2_Generate_Bank_Payment",
       "url": "/sws/neo/sales-order/header/{id}/action/psd2GenerateBankPayment",
@@ -372,10 +372,10 @@ export const api = {
     },
     {
       "entity": "header",
-      "field": "rMPickfromreceipt",
-      "column": "RM_Pickfromreceipt",
-      "url": "/sws/neo/sales-order/header/{id}/action/rMPickfromreceipt",
-      "processId": "A2C19D0EF6594D14A64BC62E99A89CC3",
+      "field": "eTPRRemovePayment",
+      "column": "EM_Etpr_Remove_Payment",
+      "url": "/sws/neo/sales-order/header/{id}/action/eTPRRemovePayment",
+      "processId": "D2923463223C4F1EADE335D22B9D8FE8",
       "processType": "obuiapp"
     },
     {

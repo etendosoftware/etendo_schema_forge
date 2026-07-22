@@ -1,7 +1,8 @@
 {
-  "version": "0.39.0",
-  "generatedAt": "2026-07-21T18:19:50.769Z",
-  "contractChecksum": "83fb1528d025e7cc",
+  "version": "0.41.0",
+  "generatedAt": "2026-04-30T15:42:46.497Z",
+  "updatedAt": "2026-07-22T10:47:48.420Z",
+  "contractChecksum": "2a087b3737f90378",
   "apiPrediction": {
     "specName": "purchase-order",
     "baseUrl": "/sws/neo/purchase-order",
@@ -16,9 +17,9 @@
         "listUrl": "/sws/neo/purchase-order/header",
         "detailUrl": "/sws/neo/purchase-order/header/{id}",
         "supportedFilters": [
+          "businessPartner",
           "documentNo",
           "orderDate",
-          "businessPartner",
           "documentStatus",
           "orderReference"
         ]
@@ -71,21 +72,6 @@
     "selectors": [
       {
         "entity": "header",
-        "field": "transactionDocument",
-        "column": "C_DocTypeTarget_ID",
-        "reference": "DocumentType",
-        "url": "/sws/neo/purchase-order/header/selectors/transactionDocument",
-        "context": {
-          "required": [
-            {
-              "param": "IsSOTrx",
-              "source": "windowCategory"
-            }
-          ]
-        }
-      },
-      {
-        "entity": "header",
         "field": "businessPartner",
         "column": "C_BPartner_ID",
         "reference": "BusinessPartner",
@@ -105,6 +91,21 @@
               "param": "C_BPartner_ID",
               "source": "field",
               "field": "businessPartner"
+            }
+          ]
+        }
+      },
+      {
+        "entity": "header",
+        "field": "transactionDocument",
+        "column": "C_DocTypeTarget_ID",
+        "reference": "DocumentType",
+        "url": "/sws/neo/purchase-order/header/selectors/transactionDocument",
+        "context": {
+          "required": [
+            {
+              "param": "IsSOTrx",
+              "source": "windowCategory"
             }
           ]
         }
@@ -713,29 +714,6 @@
         "processType": "classic"
       },
       {
-        "name": "psd2GenerateBankPayment",
-        "actionType": "paymentAction",
-        "entity": "header",
-        "column": "EM_Psd2_Generate_Bank_Payment",
-        "requiresRecord": true,
-        "method": "POST",
-        "url": "/sws/neo/purchase-order/header/{id}/action/psd2GenerateBankPayment",
-        "parameters": [],
-        "preconditions": [],
-        "effects": [
-          "Creates or processes payment records",
-          "May update invoice/order payment status"
-        ],
-        "dryRunSupported": false,
-        "edgeCases": [
-          "Payment amount exceeds remaining balance",
-          "Payment method is not configured for the business partner",
-          "Invoice is already fully paid"
-        ],
-        "processId": "0661406A983B4D8EA611F8596F114D52",
-        "processType": "obuiapp"
-      },
-      {
         "name": "createPOLines",
         "actionType": "createFrom",
         "entity": "header",
@@ -756,29 +734,6 @@
           "Required reference data is missing (price list, warehouse, etc.)"
         ],
         "processId": "6995A4C2592D434A9E16B71E1694CBCA",
-        "processType": "obuiapp"
-      },
-      {
-        "name": "eTPRRemovePayment",
-        "actionType": "paymentAction",
-        "entity": "header",
-        "column": "EM_Etpr_Remove_Payment",
-        "requiresRecord": true,
-        "method": "POST",
-        "url": "/sws/neo/purchase-order/header/{id}/action/eTPRRemovePayment",
-        "parameters": [],
-        "preconditions": [],
-        "effects": [
-          "Creates or processes payment records",
-          "May update invoice/order payment status"
-        ],
-        "dryRunSupported": false,
-        "edgeCases": [
-          "Payment amount exceeds remaining balance",
-          "Payment method is not configured for the business partner",
-          "Invoice is already fully paid"
-        ],
-        "processId": "D2923463223C4F1EADE335D22B9D8FE8",
         "processType": "obuiapp"
       },
       {
@@ -929,6 +884,52 @@
         "processType": "obuiapp"
       },
       {
+        "name": "psd2GenerateBankPayment",
+        "actionType": "paymentAction",
+        "entity": "header",
+        "column": "EM_Psd2_Generate_Bank_Payment",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/purchase-order/header/{id}/action/psd2GenerateBankPayment",
+        "parameters": [],
+        "preconditions": [],
+        "effects": [
+          "Creates or processes payment records",
+          "May update invoice/order payment status"
+        ],
+        "dryRunSupported": false,
+        "edgeCases": [
+          "Payment amount exceeds remaining balance",
+          "Payment method is not configured for the business partner",
+          "Invoice is already fully paid"
+        ],
+        "processId": "0661406A983B4D8EA611F8596F114D52",
+        "processType": "obuiapp"
+      },
+      {
+        "name": "eTPRRemovePayment",
+        "actionType": "paymentAction",
+        "entity": "header",
+        "column": "EM_Etpr_Remove_Payment",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/purchase-order/header/{id}/action/eTPRRemovePayment",
+        "parameters": [],
+        "preconditions": [],
+        "effects": [
+          "Creates or processes payment records",
+          "May update invoice/order payment status"
+        ],
+        "dryRunSupported": false,
+        "edgeCases": [
+          "Payment amount exceeds remaining balance",
+          "Payment method is not configured for the business partner",
+          "Invoice is already fully paid"
+        ],
+        "processId": "D2923463223C4F1EADE335D22B9D8FE8",
+        "processType": "obuiapp"
+      },
+      {
         "name": "managePrereservation",
         "actionType": "utilityAction",
         "entity": "lines",
@@ -1053,7 +1054,7 @@
     "entities": {
       "header": {
         "fields": {
-          "transactionDocument": {
+          "businessPartner": {
             "required": true,
             "readOnlyLogic": "@Processed@='Y' | @DocStatus@='TMP'"
           },
@@ -1067,22 +1068,22 @@
             "readOnlyLogic": "@Processed@='Y'",
             "defaultValue": "@#Date@"
           },
-          "businessPartner": {
+          "partnerAddress": {
             "required": true,
             "readOnlyLogic": "@Processed@='Y' | @DocStatus@='TMP'"
           },
-          "partnerAddress": {
+          "scheduledDeliveryDate": {
+            "required": true,
+            "readOnlyLogic": "@Processed@='Y'",
+            "defaultValue": "@#Date@"
+          },
+          "transactionDocument": {
             "required": true,
             "readOnlyLogic": "@Processed@='Y' | @DocStatus@='TMP'"
           },
           "warehouse": {
             "required": true,
             "readOnlyLogic": "@Processed@='Y'"
-          },
-          "scheduledDeliveryDate": {
-            "required": true,
-            "readOnlyLogic": "@Processed@='Y'",
-            "defaultValue": "@#Date@"
           },
           "paymentMethod": {
             "readOnlyLogic": "@Processed@='Y'"
@@ -1302,6 +1303,7 @@
             "readOnlyLogic": "@Posted@='Y'"
           },
           "currency": {
+            "readOnly": true,
             "required": true,
             "defaultValue": "@C_Currency_ID@"
           }
@@ -1417,12 +1419,12 @@
     ],
     "minimumCreate": {
       "headerFields": [
-        "transactionDocument",
-        "orderDate",
         "businessPartner",
+        "orderDate",
         "partnerAddress",
-        "warehouse",
         "scheduledDeliveryDate",
+        "transactionDocument",
+        "warehouse",
         "paymentTerms",
         "priceList",
         "currency",
@@ -1438,8 +1440,7 @@
         "listPrice",
         "tax",
         "unitPrice",
-        "lineNetAmount",
-        "currency"
+        "lineNetAmount"
       ],
       "recommendedOrder": [
         "createHeader",
@@ -1449,18 +1450,6 @@
     "selectorContexts": [
       {
         "entity": "header",
-        "field": "transactionDocument",
-        "context": {
-          "required": [
-            {
-              "param": "IsSOTrx",
-              "source": "windowCategory"
-            }
-          ]
-        }
-      },
-      {
-        "entity": "header",
         "field": "partnerAddress",
         "context": {
           "required": [
@@ -1468,6 +1457,18 @@
               "param": "C_BPartner_ID",
               "source": "field",
               "field": "businessPartner"
+            }
+          ]
+        }
+      },
+      {
+        "entity": "header",
+        "field": "transactionDocument",
+        "context": {
+          "required": [
+            {
+              "param": "IsSOTrx",
+              "source": "windowCategory"
             }
           ]
         }
@@ -1612,12 +1613,12 @@
         "operation": "createHeader",
         "description": "Create a draft header with the minimum required editable fields.",
         "fields": [
-          "transactionDocument",
-          "orderDate",
           "businessPartner",
+          "orderDate",
           "partnerAddress",
-          "warehouse",
           "scheduledDeliveryDate",
+          "transactionDocument",
+          "warehouse",
           "paymentTerms",
           "priceList",
           "currency",
@@ -1637,8 +1638,7 @@
           "listPrice",
           "tax",
           "unitPrice",
-          "lineNetAmount",
-          "currency"
+          "lineNetAmount"
         ]
       },
       {
@@ -1654,5 +1654,5 @@
       "confirmcancelandreplace"
     ]
   },
-  "checksum": "f5c858dd3fe72566"
+  "checksum": "144e611cb49c001c"
 }

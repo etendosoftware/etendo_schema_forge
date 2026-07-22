@@ -1,8 +1,8 @@
 {
-  "version": "0.10.0",
+  "version": "0.11.0",
   "generatedAt": "2026-05-04T17:02:25.021Z",
-  "updatedAt": "2026-07-01T14:17:01.051Z",
-  "checksum": "1345b4eb72e08afd",
+  "updatedAt": "2026-07-21T12:35:20.030Z",
+  "checksum": "05a2c86f9e16e7ad",
   "frontendContract": {
     "window": {
       "id": "F4675DAB02134762B66881DAE4672AD0",
@@ -35,7 +35,11 @@
               "type": "computed",
               "source": "Y"
             },
-            "defaultValue": "Y"
+            "defaultValue": "Y",
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            }
           },
           {
             "name": "tAXType",
@@ -63,6 +67,10 @@
                 "name": "IVA"
               }
             ],
+            "validation": {
+              "required": true,
+              "maxLength": 60
+            },
             "readOnlyLogic": {
               "raw": "@IS_Ready@='Y'",
               "evaluable": true,
@@ -79,7 +87,10 @@
             "visibility": "readOnly",
             "required": false,
             "grid": false,
-            "form": true
+            "form": true,
+            "validation": {
+              "maxLength": 20
+            }
           },
           {
             "name": "nextSendWaitTime",
@@ -97,7 +108,11 @@
               "type": "computed",
               "source": "60"
             },
-            "defaultValue": "60"
+            "defaultValue": "60",
+            "validation": {
+              "required": true,
+              "maxLength": 2
+            }
           }
         ],
         "searchableFields": [],
@@ -134,7 +149,10 @@
             "visibility": "editable",
             "required": false,
             "grid": false,
-            "form": true
+            "form": true,
+            "validation": {
+              "maxLength": 20
+            }
           },
           {
             "name": "active",
@@ -146,7 +164,10 @@
             "visibility": "editable",
             "required": false,
             "grid": false,
-            "form": true
+            "form": true,
+            "validation": {
+              "maxLength": 1
+            }
           },
           {
             "name": "sentToVerifactu",
@@ -158,7 +179,10 @@
             "visibility": "editable",
             "required": false,
             "grid": false,
-            "form": true
+            "form": true,
+            "validation": {
+              "maxLength": 1
+            }
           },
           {
             "name": "errorReason",
@@ -170,7 +194,10 @@
             "visibility": "editable",
             "required": false,
             "grid": false,
-            "form": true
+            "form": true,
+            "validation": {
+              "maxLength": 500
+            }
           },
           {
             "name": "cSV",
@@ -182,7 +209,10 @@
             "visibility": "editable",
             "required": false,
             "grid": false,
-            "form": true
+            "form": true,
+            "validation": {
+              "maxLength": 16
+            }
           },
           {
             "name": "typeOperation",
@@ -204,7 +234,10 @@
                 "value": "BA",
                 "name": "BAJA"
               }
-            ]
+            ],
+            "validation": {
+              "maxLength": 60
+            }
           },
           {
             "name": "codeError",
@@ -216,7 +249,10 @@
             "visibility": "editable",
             "required": false,
             "grid": false,
-            "form": true
+            "form": true,
+            "validation": {
+              "maxLength": 20
+            }
           },
           {
             "name": "isSubsanation",
@@ -228,7 +264,10 @@
             "visibility": "editable",
             "required": false,
             "grid": false,
-            "form": true
+            "form": true,
+            "validation": {
+              "maxLength": 1
+            }
           },
           {
             "name": "invoice",
@@ -242,7 +281,10 @@
             "grid": false,
             "form": true,
             "reference": "Invoice",
-            "inputMode": "selector"
+            "inputMode": "selector",
+            "validation": {
+              "maxLength": 32
+            }
           },
           {
             "name": "verifactuSendingStatus",
@@ -276,7 +318,10 @@
                 "value": "ER",
                 "name": "Rechazada"
               }
-            ]
+            ],
+            "validation": {
+              "maxLength": 60
+            }
           }
         ],
         "searchableFields": [],
@@ -298,7 +343,10 @@
             "visibility": "editable",
             "required": false,
             "grid": false,
-            "form": true
+            "form": true,
+            "validation": {
+              "maxLength": 20
+            }
           },
           {
             "name": "active",
@@ -310,7 +358,10 @@
             "visibility": "editable",
             "required": false,
             "grid": false,
-            "form": true
+            "form": true,
+            "validation": {
+              "maxLength": 1
+            }
           },
           {
             "name": "sentToVerifactu",
@@ -322,7 +373,10 @@
             "visibility": "editable",
             "required": false,
             "grid": false,
-            "form": true
+            "form": true,
+            "validation": {
+              "maxLength": 1
+            }
           },
           {
             "name": "errorReason",
@@ -334,7 +388,10 @@
             "visibility": "editable",
             "required": false,
             "grid": false,
-            "form": true
+            "form": true,
+            "validation": {
+              "maxLength": 500
+            }
           },
           {
             "name": "typeOperation",
@@ -356,7 +413,10 @@
                 "value": "BA",
                 "name": "BAJA"
               }
-            ]
+            ],
+            "validation": {
+              "maxLength": 60
+            }
           },
           {
             "name": "codeError",
@@ -368,7 +428,10 @@
             "visibility": "editable",
             "required": false,
             "grid": false,
-            "form": true
+            "form": true,
+            "validation": {
+              "maxLength": 20
+            }
           },
           {
             "name": "isSubsanation",
@@ -380,7 +443,10 @@
             "visibility": "editable",
             "required": false,
             "grid": false,
-            "form": true
+            "form": true,
+            "validation": {
+              "maxLength": 1
+            }
           },
           {
             "name": "invoice",
@@ -394,7 +460,10 @@
             "grid": false,
             "form": true,
             "reference": "Invoice",
-            "inputMode": "selector"
+            "inputMode": "selector",
+            "validation": {
+              "maxLength": 32
+            }
           },
           {
             "name": "verifactuSendingStatus",
@@ -428,7 +497,10 @@
                 "value": "ER",
                 "name": "Rechazada"
               }
-            ]
+            ],
+            "validation": {
+              "maxLength": 60
+            }
           }
         ],
         "searchableFields": [],
@@ -451,7 +523,10 @@
             "visibility": "editable",
             "required": false,
             "grid": false,
-            "form": true
+            "form": true,
+            "validation": {
+              "maxLength": 20
+            }
           },
           {
             "name": "active",
@@ -463,7 +538,10 @@
             "visibility": "editable",
             "required": false,
             "grid": false,
-            "form": true
+            "form": true,
+            "validation": {
+              "maxLength": 1
+            }
           },
           {
             "name": "sentToVerifactu",
@@ -475,7 +553,10 @@
             "visibility": "editable",
             "required": false,
             "grid": false,
-            "form": true
+            "form": true,
+            "validation": {
+              "maxLength": 1
+            }
           },
           {
             "name": "errorReason",
@@ -487,7 +568,10 @@
             "visibility": "editable",
             "required": false,
             "grid": false,
-            "form": true
+            "form": true,
+            "validation": {
+              "maxLength": 500
+            }
           },
           {
             "name": "cSV",
@@ -499,7 +583,10 @@
             "visibility": "editable",
             "required": false,
             "grid": false,
-            "form": true
+            "form": true,
+            "validation": {
+              "maxLength": 16
+            }
           },
           {
             "name": "typeOperation",
@@ -521,7 +608,10 @@
                 "value": "BA",
                 "name": "BAJA"
               }
-            ]
+            ],
+            "validation": {
+              "maxLength": 60
+            }
           },
           {
             "name": "codeError",
@@ -533,7 +623,10 @@
             "visibility": "editable",
             "required": false,
             "grid": false,
-            "form": true
+            "form": true,
+            "validation": {
+              "maxLength": 20
+            }
           },
           {
             "name": "isSubsanation",
@@ -545,7 +638,10 @@
             "visibility": "editable",
             "required": false,
             "grid": false,
-            "form": true
+            "form": true,
+            "validation": {
+              "maxLength": 1
+            }
           },
           {
             "name": "invoice",
@@ -559,7 +655,10 @@
             "grid": false,
             "form": true,
             "reference": "Invoice",
-            "inputMode": "selector"
+            "inputMode": "selector",
+            "validation": {
+              "maxLength": 32
+            }
           },
           {
             "name": "verifactuSendingStatus",
@@ -593,7 +692,10 @@
                 "value": "ER",
                 "name": "Rechazada"
               }
-            ]
+            ],
+            "validation": {
+              "maxLength": 60
+            }
           }
         ],
         "searchableFields": [],
@@ -615,7 +717,10 @@
             "visibility": "editable",
             "required": false,
             "grid": false,
-            "form": true
+            "form": true,
+            "validation": {
+              "maxLength": 20
+            }
           },
           {
             "name": "active",
@@ -627,7 +732,10 @@
             "visibility": "editable",
             "required": false,
             "grid": false,
-            "form": true
+            "form": true,
+            "validation": {
+              "maxLength": 1
+            }
           },
           {
             "name": "errorReason",
@@ -639,7 +747,10 @@
             "visibility": "editable",
             "required": false,
             "grid": false,
-            "form": true
+            "form": true,
+            "validation": {
+              "maxLength": 500
+            }
           },
           {
             "name": "typeOperation",
@@ -661,7 +772,10 @@
                 "value": "BA",
                 "name": "BAJA"
               }
-            ]
+            ],
+            "validation": {
+              "maxLength": 60
+            }
           },
           {
             "name": "isSubsanation",
@@ -673,7 +787,10 @@
             "visibility": "editable",
             "required": false,
             "grid": false,
-            "form": true
+            "form": true,
+            "validation": {
+              "maxLength": 1
+            }
           },
           {
             "name": "invoice",
@@ -687,7 +804,10 @@
             "grid": false,
             "form": true,
             "reference": "Invoice",
-            "inputMode": "selector"
+            "inputMode": "selector",
+            "validation": {
+              "maxLength": 32
+            }
           },
           {
             "name": "verifactuSendingStatus",
@@ -721,7 +841,10 @@
                 "value": "ER",
                 "name": "Rechazada"
               }
-            ]
+            ],
+            "validation": {
+              "maxLength": 60
+            }
           },
           {
             "name": "correctInvoice",
@@ -734,6 +857,9 @@
             "required": false,
             "grid": false,
             "form": true,
+            "validation": {
+              "maxLength": 1
+            },
             "displayLogic": {
               "raw": "@etvfac_corrected_invoice@='Y'",
               "evaluable": true

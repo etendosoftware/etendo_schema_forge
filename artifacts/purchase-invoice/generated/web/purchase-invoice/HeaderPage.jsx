@@ -792,14 +792,6 @@ export const api = {
     },
     {
       "entity": "header",
-      "field": "psd2GenerateBankPayment",
-      "column": "EM_Psd2_Generate_Bank_Payment",
-      "url": "/sws/neo/purchase-invoice/header/{id}/action/psd2GenerateBankPayment",
-      "processId": "0661406A983B4D8EA611F8596F114D52",
-      "processType": "obuiapp"
-    },
-    {
-      "entity": "header",
       "field": "aeatsiiSend",
       "column": "EM_Aeatsii_Send",
       "url": "/sws/neo/purchase-invoice/header/{id}/action/aeatsiiSend",
@@ -812,22 +804,6 @@ export const api = {
       "column": "EM_Aeatsii_Modif",
       "url": "/sws/neo/purchase-invoice/header/{id}/action/aeatsiiModif",
       "processId": "BAAECFDF9FF144E8A610E9F1EF3E5FBE",
-      "processType": "obuiapp"
-    },
-    {
-      "entity": "header",
-      "field": "etblkpBulkposting",
-      "column": "EM_Etblkp_Bulkposting",
-      "url": "/sws/neo/purchase-invoice/header/{id}/action/etblkpBulkposting",
-      "processId": "57496FB9CF9E4E8F847224017941570E",
-      "processType": "obuiapp"
-    },
-    {
-      "entity": "header",
-      "field": "eTPRRemovePayment",
-      "column": "EM_Etpr_Remove_Payment",
-      "url": "/sws/neo/purchase-invoice/header/{id}/action/eTPRRemovePayment",
-      "processId": "745FCF75B6F14024B96CC14429D8E952",
       "processType": "obuiapp"
     },
     {
@@ -890,6 +866,30 @@ export const api = {
       "column": "EM_Tbai_Voidxmlgenerator",
       "url": "/sws/neo/purchase-invoice/header/{id}/action/tbaiVoidxmlgenerator",
       "processId": "535A8BAE44A34759A7C8FF40D62A5070",
+      "processType": "obuiapp"
+    },
+    {
+      "entity": "header",
+      "field": "psd2GenerateBankPayment",
+      "column": "EM_Psd2_Generate_Bank_Payment",
+      "url": "/sws/neo/purchase-invoice/header/{id}/action/psd2GenerateBankPayment",
+      "processId": "0661406A983B4D8EA611F8596F114D52",
+      "processType": "obuiapp"
+    },
+    {
+      "entity": "header",
+      "field": "eTPRRemovePayment",
+      "column": "EM_Etpr_Remove_Payment",
+      "url": "/sws/neo/purchase-invoice/header/{id}/action/eTPRRemovePayment",
+      "processId": "745FCF75B6F14024B96CC14429D8E952",
+      "processType": "obuiapp"
+    },
+    {
+      "entity": "header",
+      "field": "etblkpBulkposting",
+      "column": "EM_Etblkp_Bulkposting",
+      "url": "/sws/neo/purchase-invoice/header/{id}/action/etblkpBulkposting",
+      "processId": "57496FB9CF9E4E8F847224017941570E",
       "processType": "obuiapp"
     },
     {
@@ -994,11 +994,7 @@ export default function HeaderPage({ windowName, recordId, ...props }) {
         breadcrumb={breadcrumb}
       api={api}
         secondaryTabs={[
-          { key: 'exchangeRates', label: 'Exchange Rates', Table: ExchangeRatesTable, Form: ExchangeRatesForm, addLineFields: { entry: [
-          { key: 'toCurrency', column: 'C_Currency_Id_To', type: 'search', required: true, label: 'To Currency', reference: 'Currency', inputMode: 'search', excludeValueOf: 'currency' },
-          { key: 'rate', column: 'Rate', type: 'text', label: 'Rate' },
-          { key: 'foreignAmount', column: 'Foreign_Amount', type: 'number', required: true, label: 'Foreign  Amount', defaultValue: '0' },
-          ], derived: [], hidden: [] }, requireSavedRecord: true, readOnlyLogic: (record) => record['documentStatus'] !== 'DR' },
+          { key: 'exchangeRates', label: 'Exchange Rates', Table: ExchangeRatesTable, Form: ExchangeRatesForm, requireSavedRecord: true, readOnlyLogic: (record) => record['posted'] === true || record['hASREVERSEDINVOICESO'] === 'Y' || record['hASREVERSEDINVOICEPO'] === 'Y' },
         ]}
         hideDeleteWhenComplete
         noHeaderBorder

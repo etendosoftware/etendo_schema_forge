@@ -1,7 +1,8 @@
 {
-  "version": "0.18.0",
-  "generatedAt": "2026-07-21T18:19:51.189Z",
-  "contractChecksum": "f34f9a072b8e6800",
+  "version": "0.23.0",
+  "generatedAt": "2026-05-12T16:47:39.614Z",
+  "updatedAt": "2026-07-22T10:47:48.784Z",
+  "contractChecksum": "0f153a424bde3e49",
   "apiPrediction": {
     "specName": "sales-order",
     "baseUrl": "/sws/neo/sales-order",
@@ -446,29 +447,6 @@
         "processType": "obuiapp"
       },
       {
-        "name": "eTPRRemovePayment",
-        "actionType": "paymentAction",
-        "entity": "header",
-        "column": "EM_Etpr_Remove_Payment",
-        "requiresRecord": true,
-        "method": "POST",
-        "url": "/sws/neo/sales-order/header/{id}/action/eTPRRemovePayment",
-        "parameters": [],
-        "preconditions": [],
-        "effects": [
-          "Creates or processes payment records",
-          "May update invoice/order payment status"
-        ],
-        "dryRunSupported": false,
-        "edgeCases": [
-          "Payment amount exceeds remaining balance",
-          "Payment method is not configured for the business partner",
-          "Invoice is already fully paid"
-        ],
-        "processId": "D2923463223C4F1EADE335D22B9D8FE8",
-        "processType": "obuiapp"
-      },
-      {
         "name": "processNow",
         "actionType": "documentAction",
         "entity": "header",
@@ -595,6 +573,29 @@
         "processType": "obuiapp"
       },
       {
+        "name": "rMPickfromreceipt",
+        "actionType": "createFrom",
+        "entity": "header",
+        "column": "RM_Pickfromreceipt",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/sales-order/header/{id}/action/rMPickfromreceipt",
+        "parameters": [],
+        "preconditions": [],
+        "effects": [
+          "Creates child or related records",
+          "May copy data from source document"
+        ],
+        "dryRunSupported": false,
+        "edgeCases": [
+          "Source document has no valid lines to copy",
+          "Target entity already has linked records",
+          "Required reference data is missing (price list, warehouse, etc.)"
+        ],
+        "processId": "A2C19D0EF6594D14A64BC62E99A89CC3",
+        "processType": "obuiapp"
+      },
+      {
         "name": "psd2GenerateBankPayment",
         "actionType": "paymentAction",
         "entity": "header",
@@ -618,26 +619,26 @@
         "processType": "obuiapp"
       },
       {
-        "name": "rMPickfromreceipt",
-        "actionType": "createFrom",
+        "name": "eTPRRemovePayment",
+        "actionType": "paymentAction",
         "entity": "header",
-        "column": "RM_Pickfromreceipt",
+        "column": "EM_Etpr_Remove_Payment",
         "requiresRecord": true,
         "method": "POST",
-        "url": "/sws/neo/sales-order/header/{id}/action/rMPickfromreceipt",
+        "url": "/sws/neo/sales-order/header/{id}/action/eTPRRemovePayment",
         "parameters": [],
         "preconditions": [],
         "effects": [
-          "Creates child or related records",
-          "May copy data from source document"
+          "Creates or processes payment records",
+          "May update invoice/order payment status"
         ],
         "dryRunSupported": false,
         "edgeCases": [
-          "Source document has no valid lines to copy",
-          "Target entity already has linked records",
-          "Required reference data is missing (price list, warehouse, etc.)"
+          "Payment amount exceeds remaining balance",
+          "Payment method is not configured for the business partner",
+          "Invoice is already fully paid"
         ],
-        "processId": "A2C19D0EF6594D14A64BC62E99A89CC3",
+        "processId": "D2923463223C4F1EADE335D22B9D8FE8",
         "processType": "obuiapp"
       },
       {
@@ -868,6 +869,7 @@
             "defaultValue": "0"
           },
           "currency": {
+            "readOnly": true,
             "required": true,
             "defaultValue": "@C_Currency_ID@"
           }
@@ -897,8 +899,7 @@
         "orderedQuantity",
         "listPrice",
         "tax",
-        "unitPrice",
-        "currency"
+        "unitPrice"
       ],
       "recommendedOrder": [
         "createHeader",
@@ -1016,8 +1017,7 @@
           "orderedQuantity",
           "listPrice",
           "tax",
-          "unitPrice",
-          "currency"
+          "unitPrice"
         ]
       },
       {
@@ -1033,5 +1033,5 @@
       "confirmCancelAndReplace"
     ]
   },
-  "checksum": "0083bdc9c80af555"
+  "checksum": "eb933e0fbd3c1b52"
 }
