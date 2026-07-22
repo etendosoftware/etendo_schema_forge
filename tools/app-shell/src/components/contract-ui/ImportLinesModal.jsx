@@ -227,7 +227,7 @@ export default function ImportLinesModal({
                 <p style={{ fontSize: 13, color: 'hsl(var(--text-disabled))', padding: '24px 0', textAlign: 'center' }}>{msg}</p>
               );
             }
-            return filtered.map(doc => {
+            return <>{filtered.map(doc => {
               const isExpanded = expanded.has(doc.id);
               const isLoadingLns = loadingLines.has(doc.id);
               const lines = docLines[doc.id] || [];
@@ -347,7 +347,7 @@ export default function ImportLinesModal({
                   )}
                 </div>
               );
-            });
+            })}</>;
           })()}
         </div>
 

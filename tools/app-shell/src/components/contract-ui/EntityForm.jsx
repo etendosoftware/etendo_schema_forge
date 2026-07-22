@@ -646,7 +646,7 @@ function getCheckboxStateClass(checked) {
 // display before the label is built), so no explicit isReadOnly gate is needed
 // here — see labelMarker/requiredAsteriskIfEditable for the gated equivalents.
 function requiredAsterisk(f) {
-  return (f.required || f.requiredVisual) ? <span className="text-destructive ml-0.5">*</span> : '';
+  return (f.required || f.requiredVisual) ? <span className="text-destructive ml-0.5">*</span> : null;
 }
 
 /**
@@ -664,7 +664,7 @@ function labelMarker(f, isReadOnly, optionalSuffix, ui) {
   if (optionalSuffix && !isReadOnly) {
     return <span className="ml-1 font-normal text-[hsl(var(--muted-foreground))]">({ui('optional')})</span>;
   }
-  return '';
+  return null;
 }
 
 /**
@@ -696,7 +696,7 @@ function buildSearchSelectorUrl(apiBaseUrl, entity, f, apiSelectorEntry) {
 }
 
 function requiredAsteriskIfEditable(f, isReadOnly) {
-  return (f.required || f.requiredVisual) && !isReadOnly ? <span className="text-destructive ml-0.5">*</span> : '';
+  return (f.required || f.requiredVisual) && !isReadOnly ? <span className="text-destructive ml-0.5">*</span> : null;
 }
 
 function getInputStateClass(isReadOnly) {
