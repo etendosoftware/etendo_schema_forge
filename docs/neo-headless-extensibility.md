@@ -113,7 +113,7 @@ Keyed by `AD_Process_ID`. Each rule: `field` (required), `requiredWhen` (optiona
 
 - `field` — NEO field identifier (camelCase DAL property), not the raw DB column.
 - `requiredWhen` — optional condition; if absent the precondition is unconditional; if present and it evaluates to `false`, the rule is skipped.
-- `message` — optional human-readable message (falls back to a generic one).
+- `message` — **reserved / not yet surfaced.** Accepted for forward-compatibility but the runtime returns only a single generic `"Preconditions not met"` message plus the `missing` field list; this per-rule value is not read or emitted.
 
 > **Assets mapping (verified against `Asset.java`):** `@amortize@` = DB `Assetschedule` (values `YE`/`MO`, "Amortize"). It is NOT `depreciationType` (that is a different column, `Amortizationtype`). `@calculateType@` = DB `amortizationcalctype` (values `PE`/`TI`).
 
@@ -143,6 +143,15 @@ References record fields with `@prop@`, quoted literals, and operators `==`, `!=
 #### How it is declared (reusable)
 
 The declaration is written to the column via the Schema Forge pipeline (`decisions.json` → `push-to-neo.js`), so any window can declare preconditions without touching Java. Assets is the **first consumer**, not a special case in code.
+
+#### When to declare preconditions (scope)
+
+Preconditions fit a **narrow** case: a field that is **conditionally required but NOT AD-mandatory** — the record saves fine without it, yet a specific process needs it (e.g. an asset's `usableLifeMonths` / `currency` for Create Amortization). Do **not** use them for:
+
+- **AD-mandatory fields** — they can never reach the process null, so there is nothing to check.
+- **Failures that are not about a missing record field** — `no lines`, `already processed`, `period closed`, `business partner blocked`, org/doctype config, stock. These are line/state/environment checks **outside** this model.
+
+A review of the NEO-exposed PL processes (Process Order / Invoice / Shipment, period open-close, movements, amortization posting, BOM explode) found that **Create Amortization is essentially the only good fit** — every other process fails on the out-of-model conditions above. Surfacing those up front would require extending the model with new check types (child-rows-exist, document-status, related-state), which is not implemented.
 
 > **Cross-reference:** for genuinely custom process logic (beyond validating declarative preconditions) use the `NeoHandler` pattern (`@Named` qualifier on `ETGO_SF_ENTITY.JAVA_QUALIFIER`) described in [§2. NeoHandler: CDI Hook System](#2-neohandler-cdi-hook-system).
 
