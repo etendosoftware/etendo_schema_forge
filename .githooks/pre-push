@@ -105,10 +105,19 @@ monitor_progress() {
       prog="${elapsed}s elapsed (no baseline yet)"
     fi
 
-    # Activity = last non-empty log line (strip CR and ANSI color codes).
+    # Activity = last non-empty log line (strip ANSI color codes). Some
+    # subprocesses (vitest, sonar wrappers) redraw their own progress with `\r`
+    # instead of `\n`, so from grep/tail's point of view the "line" they're
+    # mid-writing keeps growing as one giant `\r`-joined blob until they finally
+    # emit a real newline. Treat `\r` as a line break FIRST so tail only ever
+    # sees the most recent redraw, not every historical fragment concatenated
+    # together (which is what happens if you merely strip the CRs afterward).
     local activity=""
     if [ -s "$log" ]; then
-      activity="$(grep -v '^[[:space:]]*$' "$log" 2>/dev/null | tail -n1 | tr -d '\r' | sed $'s/\033\\[[0-9;]*m//g')"
+      # Only the last few KB matter for "the current line" — this log can grow
+      # into the megabytes over a multi-minute step, and re-scanning all of it
+      # on every 0.2s tick would get slower as the step runs longer.
+      activity="$(tail -c 4096 "$log" 2>/dev/null | tr '\r' '\n' | grep -v '^[[:space:]]*$' | tail -n1 | sed $'s/\033\\[[0-9;]*m//g')"
     fi
 
     local line="   ${frame} ${prog}   ${activity}"
