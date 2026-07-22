@@ -1,8 +1,8 @@
 {
-  "version": "0.72.0",
+  "version": "0.75.0",
   "generatedAt": "2026-04-30T15:42:46.722Z",
-  "updatedAt": "2026-07-20T20:41:36.341Z",
-  "contractChecksum": "5e388a591b2999cf",
+  "updatedAt": "2026-07-21T11:55:43.244Z",
+  "contractChecksum": "093fad5b04f70b01",
   "apiPrediction": {
     "specName": "purchase-invoice",
     "baseUrl": "/sws/neo/purchase-invoice",
@@ -1822,6 +1822,7 @@
             "readOnlyLogic": "@HASREVERSEDINVOICESO@='Y' | @HASREVERSEDINVOICEPO@='Y' | @Posted@='Y'"
           },
           "toCurrency": {
+            "readOnly": true,
             "required": true,
             "readOnlyLogic": "@HASREVERSEDINVOICESO@='Y' | @HASREVERSEDINVOICEPO@='Y' | @Posted@='Y'"
           },
@@ -1961,7 +1962,6 @@
         "expectedDate",
         "amount2",
         "reversedInvoice",
-        "toCurrency",
         "foreignAmount",
         "estadoRegistro",
         "active"
@@ -2149,7 +2149,6 @@
           "expectedDate",
           "amount2",
           "reversedInvoice",
-          "toCurrency",
           "foreignAmount",
           "estadoRegistro",
           "active"
@@ -2167,5 +2166,5 @@
       "tbaiVoidxmlgenerator"
     ]
   },
-  "checksum": "85bab60e5c87ca0c"
+  "checksum": "d3b724a98252522f"
 }
