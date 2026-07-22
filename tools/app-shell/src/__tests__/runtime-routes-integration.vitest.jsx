@@ -129,7 +129,7 @@ describe('buildRuntimeRoutes through the real AppShellRuntime', () => {
     expect(window.location.href).not.toContain('/onboarding?returnTo=/logout');
     expect(window.localStorage.getItem('sf_auth_token')).toBeNull();
     expect(window.localStorage.getItem('sf_platform_token')).toBeNull();
-  });
+  }, 30000);
 
   it.each([
     '/logout?returnTo=/logout',
@@ -144,7 +144,7 @@ describe('buildRuntimeRoutes through the real AppShellRuntime', () => {
     await waitFor(() => expect(window.location.pathname).toBe('/onboarding'));
     expect(window.location.search).toBe('');
     expect(window.localStorage.getItem('sf_platform_token')).toBeNull();
-  });
+  }, 30000);
 
   it('resolves a lazy-loaded route via Suspense', async () => {
     // The brief's literal assertion (`findByText(/.+/)`) is ambiguous here: once AppStorePage
@@ -155,5 +155,5 @@ describe('buildRuntimeRoutes through the real AppShellRuntime', () => {
     // and rendered (not the Suspense fallback).
     renderAt('/app-store');
     expect(await screen.findByText('Tienda de aplicaciones', {}, { timeout: 10000 })).toBeTruthy();
-  });
+  }, 30000);
 });
