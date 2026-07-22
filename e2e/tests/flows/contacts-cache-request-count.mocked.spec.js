@@ -6,10 +6,11 @@ import { login } from '../helpers/auth.js';
  *
  * ── What this measures ────────────────────────────────────────────────────
  * It drives a deterministic Contacts flow (list → detail → child tabs →
- * attachments → back → reopen) while intercepting every `/sws/**` request and
- * counting hits per COARSE endpoint label. The per-endpoint counts are printed
- * at the end (console + attached to the Playwright report) so we can capture
- * before/after evidence for the shared-cache migration.
+ * attachments → FK selector dropdown → back → reopen) while intercepting every
+ * `/sws/**` request and counting hits per COARSE endpoint label. The
+ * per-endpoint counts are printed at the end (console + attached to the
+ * Playwright report) so we can capture before/after evidence for the
+ * shared-cache migration.
  *
  * Endpoints counted (GET reads only):
  *   list:businessPartner          GET .../contacts/businessPartner            (no /:id)
@@ -19,9 +20,25 @@ import { login } from '../helpers/auth.js';
  *   kpi:bp-stats                  GET .../contacts/bp-stats?businessPartnerId=...
  *   kpi:bp-trend                  GET .../contacts/bp-trend?businessPartnerId=...
  *   attachments                   GET .../sws/neo/attachments/{table}/{recordId}
- *   selectors                     GET .../selectors/...
+ *   selector:<Column>             GET .../selectors/<Column>?...  (per FK column)
+ *   selectors                     aggregate of every selector:<Column> hit
  *   defaults:businessPartner      GET .../contacts/businessPartner/defaults    (out of cache scope)
  *   child-defaults:{entity}       GET .../contacts/{entity}/defaults?parentId=  (out of cache scope)
+ *
+ * ── FK selector step (ETP-4564 SelectorInput caching) ─────────────────────
+ * The flow opens the `priceList` FK dropdown (SelectorInput) that lives in
+ * BillingPreferencesForm inside the "Financial" primary tab. Mounting Radix
+ * SelectContent triggers the first option-page fetch of
+ * `businessPartner/selectors/M_PriceList_ID` (counted as
+ * `selector:M_PriceList_ID`). The dropdown is opened once per open of contact A
+ * (re-mounting the SelectorInput each time), so the cached-vs-refetch delta is
+ * observable: baselines refetch M_PriceList_ID on every open; post-4564 the
+ * SelectorInput cache (keyed by URL + normalized context + offset, catalog
+ * freshness) reuses it → delta 0. NOTE: BillingPreferencesForm also does a raw,
+ * UNCACHED eager fetch of `basicDiscount/selectors/C_Discount_ID` on every
+ * Financial-tab mount (out of the ETP-4564 scope), so the *aggregate* `selectors`
+ * counter grows on all branches — the win is read on the specific
+ * `selector:M_PriceList_ID` label, not the aggregate.
  *
  * ── Before/after methodology (how to produce the evidence) ────────────────
  * Run THE SAME spec on two branches and diff the printed `counts` object:
@@ -71,6 +88,16 @@ const ROWS = [
 ];
 const CONTACT_A = ROWS[0];
 
+// FK selector exercised for the SelectorInput caching win. `priceList` (column
+// M_PriceList_ID) is a pure-dropdown FK in BillingPreferencesForm (Financial
+// primary tab), rendered because CONTACT_A is a customer.
+const SELECTOR_COLUMN = 'M_PriceList_ID';
+const SELECTOR_LABEL = `selector:${SELECTOR_COLUMN}`;
+const SELECTOR_OPTIONS = [
+  { id: 'pl-1', label: 'Price List 1' },
+  { id: 'pl-2', label: 'Price List 2' },
+];
+
 const jsonBody = (route, obj) => route.fulfill({
   status: 200,
   contentType: 'application/json',
@@ -86,7 +113,12 @@ function classify(url, method) {
   const path = new URL(url).pathname;
 
   if (/\/sws\/neo\/attachments\//.test(path)) return 'attachments';
-  if (path.includes('/selectors/')) return 'selectors';
+  if (path.includes('/selectors/')) {
+    // Key selectors per FK column so the exercised one (M_PriceList_ID) can be
+    // read independently from the uncached discount-catalog fetch.
+    const col = path.split('/selectors/')[1]?.split(/[/?]/)[0] || 'unknown';
+    return `selector:${col}`;
+  }
 
   const m = path.match(/\/sws\/neo\/contacts\/([^/]+)(?:\/([^/?]+))?/);
   if (!m) return 'other';
@@ -121,8 +153,14 @@ async function installCountingMock(page, counts) {
     const method = req.method();
     const label = classify(url, method);
     bump(label);
+    // Maintain an aggregate `selectors` counter across all FK columns.
+    if (label?.startsWith('selector:')) bump('selectors');
 
     if (method === 'GET') {
+      if (label?.startsWith('selector:')) {
+        // Small option page so the dropdown renders (< SELECTOR_PAGE ⇒ no scroll fetch).
+        return jsonBody(route, { items: SELECTOR_OPTIONS });
+      }
       if (label === 'list:businessPartner') {
         return jsonBody(route, { response: { data: ROWS, totalRows: ROWS.length } });
       }
@@ -147,7 +185,7 @@ async function installCountingMock(page, counts) {
         return jsonBody(route, { defaults: {} });
       }
     }
-    // selectors, session, dashboard, currency, writes → login()'s generic mock
+    // session, dashboard, currency, writes → login()'s generic mock
     return route.fallback();
   });
 }
@@ -155,6 +193,23 @@ async function installCountingMock(page, counts) {
 // Deep-ish snapshot of the coarse counters.
 const snap = (counts) => ({ ...counts });
 const get = (o, k) => o[k] ?? 0;
+
+/**
+ * Open the `priceList` FK selector dropdown once. Switches to the "Financial"
+ * primary tab (label is locale-dependent → matched by /financ/i), opens the
+ * Radix Select (its SelectContent mount fires the option-page fetch), waits for
+ * the first option, then closes it with Escape. Re-callable on each open of
+ * contact A — each call re-mounts the SelectorInput, so a cached branch reuses
+ * the option page while a non-cached branch refetches it.
+ */
+async function openPriceListSelector(page) {
+  await page.getByRole('button', { name: /financ/i }).first().click();
+  const trigger = page.getByTestId('field-priceList');
+  await expect(trigger).toBeVisible({ timeout: 10_000 });
+  await trigger.click();
+  await expect(page.getByTestId('option-priceList-pl-1')).toBeVisible({ timeout: 10_000 });
+  await page.keyboard.press('Escape');
+}
 
 test.describe('Contacts client-cache — request amplification (mocked)', () => {
   test('reopening a contact reuses the cache; attachments stay lazy', async ({ page }, testInfo) => {
@@ -202,6 +257,13 @@ test.describe('Contacts client-cache — request amplification (mocked)', () => 
       .toBeGreaterThanOrEqual(1);
     const afterAttachments = snap(counts);
 
+    // ── Step 4b: exercise an FK selector dropdown (priceList, Financial tab) ──
+    await openPriceListSelector(page);
+    await expect
+      .poll(() => get(counts, SELECTOR_LABEL), { timeout: 10_000 })
+      .toBeGreaterThanOrEqual(1);
+    const afterFirstSelector = snap(counts);
+
     // ── Step 5: go back to the list (SPA history pop — keeps cache warm) ──
     // page.goBack() pops the react-router pushState nav WITHOUT a full document
     // reload, so the app-root DataProvider (and its cache) stays mounted.
@@ -216,6 +278,11 @@ test.describe('Contacts client-cache — request amplification (mocked)', () => 
     // Give any (unexpected) network reads a chance to fire before snapshotting.
     await page.waitForTimeout(500);
     const afterSecondOpen = snap(counts);
+
+    // ── Step 6b: reopen the priceList selector (re-mounts SelectorInput) ──
+    await openPriceListSelector(page);
+    await page.waitForTimeout(300);
+    const afterSecondSelector = snap(counts);
 
     // ── Step 7: switch organization — SKIPPED in the mocked harness ──────
     // In mock mode login() only seeds a token (sf_auth_token); it never
@@ -235,13 +302,21 @@ test.describe('Contacts client-cache — request amplification (mocked)', () => 
     await page.waitForTimeout(500);
     const afterThirdOpen = snap(counts);
 
+    // ── Step 8b: reopen the priceList selector a third time ──────────────
+    await openPriceListSelector(page);
+    await page.waitForTimeout(300);
+    const afterThirdSelector = snap(counts);
+
     // ── Report: print + attach per-endpoint counts ───────────────────────
     const report = {
       afterList,
       afterFirstOpen,
       afterAttachments,
+      afterFirstSelector,
       afterSecondOpen,
+      afterSecondSelector,
       afterThirdOpen,
+      afterThirdSelector,
       final: snap(counts),
     };
     // eslint-disable-next-line no-console
@@ -284,5 +359,12 @@ test.describe('Contacts client-cache — request amplification (mocked)', () => 
       expect(get(afterThirdOpen, `child:${entity}`))
         .toBe(get(afterFirstOpen, `child:${entity}`));
     }
+
+    // (g) FK selector option page: fetched on first dropdown open, then reused
+    //     from cache on every subsequent open of contact A (SelectorInput cache,
+    //     catalog freshness). On the baselines this count grows with each open.
+    expect(get(afterFirstSelector, SELECTOR_LABEL)).toBeGreaterThanOrEqual(1);
+    expect(get(afterSecondSelector, SELECTOR_LABEL)).toBe(get(afterFirstSelector, SELECTOR_LABEL));
+    expect(get(afterThirdSelector, SELECTOR_LABEL)).toBe(get(afterFirstSelector, SELECTOR_LABEL));
   });
 });
