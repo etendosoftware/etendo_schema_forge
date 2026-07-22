@@ -291,7 +291,13 @@ test.describe('Purchase Invoice — Import from Goods Receipt (mocked)', () => {
     await expect(qtyInput).toHaveValue('2', { timeout: 5_000 });
 
     // ETP-4299: ImportLinesModal no longer auto-selects lines — click the checkbox.
-    await page.getByRole('checkbox').last().click();
+    // The Checkbox's native <input> (role=checkbox) is sr-only via a 1x1px
+    // clip-rect (Semantic Theme Contract DOM refactor), too small for
+    // Playwright's mouse-based click to reliably hit (both a direct click and
+    // a force:true click on it silently no-op). A genuine DOM .click() call
+    // fires the same native change/click events a real click would, without
+    // depending on hit-testing a 1px target.
+    await page.getByRole('checkbox').last().evaluate(el => el.click());
 
     await clickImportSelected(page);
 
