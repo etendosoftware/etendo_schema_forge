@@ -184,6 +184,7 @@ run_step() {
   if [ $exit_status -eq 0 ]; then
     echo "==> [$step_num/5] $step_name... SUCCESS ✅ (${LAST_DURATION}s)"
     [ "$step_num" = "$LAST_FAILED_STEP" ] && rm -f "$LAST_FAILED_FILE"
+    true
   else
     echo "==> [$step_num/5] $step_name... FAILED ❌ (${LAST_DURATION}s)"
     fail_with_log "$step_name" "$exit_status" "$abs_log" "$step_num"
@@ -550,6 +551,7 @@ process.stdout.write(r.windows.filter(w=>{\
   fi
   echo "    SUCCESS ✅ (schema_forge clean — no UI / contract drift)"
   [ "$LAST_FAILED_STEP" = "3" ] && rm -f "$LAST_FAILED_FILE"
+  true
 }
 
 # 4. Compare ETGO_SF_*.xml against com.etendoerp.go (conditionally skipped
