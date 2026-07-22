@@ -15,8 +15,8 @@
     "test:all": "npm run test && npm run test:vitest"
   },
   "dependencies": {
-    "@etendosoftware/app-shell-core": "0.3.13-preview.feature-ETP-4542.20260721170236.ea78a32",
-    "@etendosoftware/etendo-go-core": "0.3.13-preview.feature-ETP-4542.20260721170236.ea78a32",
+    "@etendosoftware/app-shell-core": "0.3.13",
+    "@etendosoftware/etendo-go-core": "0.3.13",
     "@iconicapp/iconic-react": "^1.1.4",
     "@phosphor-icons/react": "^2.1.10",
     "@radix-ui/react-collapsible": "^1.1.12",

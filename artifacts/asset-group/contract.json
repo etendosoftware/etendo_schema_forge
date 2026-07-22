@@ -1,8 +1,8 @@
 {
-  "version": "0.14.0",
+  "version": "0.15.0",
   "generatedAt": "2026-06-29T17:22:42.125Z",
-  "updatedAt": "2026-07-21T15:13:39.870Z",
-  "checksum": "24e0e0dea4039eca",
+  "updatedAt": "2026-07-22T14:46:22.094Z",
+  "checksum": "d38438032c817d5d",
   "frontendContract": {
     "window": {
       "id": "252",
@@ -42,7 +42,11 @@
             "grid": true,
             "form": true,
             "sourceRequired": true,
-            "gridOrder": 1
+            "gridOrder": 1,
+            "validation": {
+              "required": true,
+              "maxLength": 60
+            }
           },
           {
             "name": "description",
@@ -57,7 +61,10 @@
             "form": true,
             "span": 2,
             "rows": 1,
-            "gridOrder": 2
+            "gridOrder": 2,
+            "validation": {
+              "maxLength": 255
+            }
           },
           {
             "name": "depreciate",
@@ -71,7 +78,11 @@
             "grid": false,
             "form": true,
             "sourceRequired": true,
-            "section": "principal"
+            "section": "principal",
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            }
           },
           {
             "name": "depreciationType",
@@ -95,6 +106,10 @@
               }
             ],
             "section": "principal",
+            "validation": {
+              "required": true,
+              "maxLength": 60
+            },
             "displayLogic": {
               "raw": "@IsDepreciated@='Y'",
               "evaluable": true,
@@ -130,6 +145,10 @@
               }
             ],
             "section": "principal",
+            "validation": {
+              "required": true,
+              "maxLength": 60
+            },
             "displayLogic": {
               "raw": "@IsDepreciated@='Y'",
               "evaluable": true,
@@ -149,6 +168,10 @@
             "form": true,
             "section": "principal",
             "min": 1,
+            "validation": {
+              "maxLength": 12,
+              "minimum": 1
+            },
             "displayLogic": {
               "raw": "@IsDepreciated@='Y' & @Amortizationcalctype@!'TI'",
               "evaluable": true,
@@ -184,6 +207,10 @@
               }
             ],
             "section": "principal",
+            "validation": {
+              "required": true,
+              "maxLength": 60
+            },
             "displayLogic": {
               "raw": "@IsDepreciated@='Y' & @Amortizationcalctype@='TI'",
               "evaluable": true,
@@ -204,6 +231,10 @@
             "section": "principal",
             "min": 1,
             "integer": true,
+            "validation": {
+              "maxLength": 10,
+              "minimum": 1
+            },
             "displayLogic": {
               "raw": "@IsDepreciated@='Y'  & @Amortizationcalctype@ = 'TI' & @Assetschedule@='YE'",
               "evaluable": true,
@@ -224,6 +255,10 @@
             "section": "principal",
             "min": 1,
             "integer": true,
+            "validation": {
+              "maxLength": 12,
+              "minimum": 1
+            },
             "displayLogic": {
               "raw": "@IsDepreciated@='Y' & @Amortizationcalctype@='TI' & @Assetschedule@='MO'",
               "evaluable": true,
@@ -256,7 +291,11 @@
             "inputMode": "selector",
             "lookup": true,
             "gridOrder": 1,
-            "grow": true
+            "grow": true,
+            "validation": {
+              "required": true,
+              "maxLength": 32
+            }
           },
           {
             "name": "depreciation",
@@ -274,7 +313,11 @@
             "inputMode": "selector",
             "lookup": true,
             "gridOrder": 2,
-            "grow": true
+            "grow": true,
+            "validation": {
+              "required": true,
+              "maxLength": 32
+            }
           }
         ],
         "searchableFields": [],

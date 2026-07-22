@@ -1,8 +1,8 @@
 {
-  "version": "0.41.0",
+  "version": "0.42.0",
   "generatedAt": "2026-04-29T19:06:30.936Z",
-  "updatedAt": "2026-07-21T15:13:54.440Z",
-  "checksum": "a608df3f2c829e39",
+  "updatedAt": "2026-07-22T14:46:22.227Z",
+  "checksum": "51514b37d0162c14",
   "frontendContract": {
     "window": {
       "id": "800027",
@@ -124,7 +124,11 @@
             "required": true,
             "grid": true,
             "form": false,
-            "sourceRequired": true
+            "sourceRequired": true,
+            "validation": {
+              "required": true,
+              "maxLength": 40
+            }
           },
           {
             "name": "name",
@@ -137,7 +141,11 @@
             "required": true,
             "grid": true,
             "form": false,
-            "sourceRequired": true
+            "sourceRequired": true,
+            "validation": {
+              "required": true,
+              "maxLength": 60
+            }
           },
           {
             "name": "assetCategory",
@@ -154,6 +162,10 @@
             "reference": "AssetGroup",
             "inputMode": "selector",
             "businessCritical": true,
+            "validation": {
+              "required": true,
+              "maxLength": 22
+            },
             "callout": {
               "className": "org.openbravo.erpCommon.ad_callouts.SL_Depreciate"
             }
@@ -168,7 +180,10 @@
             "visibility": "editable",
             "required": false,
             "grid": false,
-            "form": false
+            "form": false,
+            "validation": {
+              "maxLength": 255
+            }
           },
           {
             "name": "currency",
@@ -177,7 +192,7 @@
             "label": "Currency",
             "type": "foreignKey",
             "tsType": "string",
-            "visibility": "editable",
+            "visibility": "readOnly",
             "required": false,
             "grid": false,
             "form": false,
@@ -188,10 +203,14 @@
             "reference": "Currency",
             "inputMode": "selector",
             "defaultValue": "@C_Currency_ID@",
+            "validation": {
+              "maxLength": 12
+            },
             "readOnlyLogic": {
               "raw": "@existAmortizationLines@ = 'Y'",
-              "evaluable": true,
-              "js": "Number(record.depreciatedPlan || 0) > 0 || Number(record.depreciatedValue || 0) > 0"
+              "evaluable": false,
+              "reason": "untranslatable-token",
+              "js": null
             }
           },
           {
@@ -207,6 +226,9 @@
             "form": false,
             "reference": "Product",
             "inputMode": "search",
+            "validation": {
+              "maxLength": 60
+            },
             "callout": {
               "className": "org.openbravo.erpCommon.ad_callouts.SL_Asset_Product"
             }
@@ -222,7 +244,11 @@
             "required": true,
             "grid": false,
             "form": false,
-            "sourceRequired": true
+            "sourceRequired": true,
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            }
           },
           {
             "name": "depreciationType",
@@ -246,6 +272,10 @@
               }
             ],
             "businessCritical": true,
+            "validation": {
+              "required": true,
+              "maxLength": 60
+            },
             "displayLogic": {
               "raw": "@IsDepreciated@='Y'",
               "evaluable": true,
@@ -281,6 +311,10 @@
               }
             ],
             "businessCritical": true,
+            "validation": {
+              "required": true,
+              "maxLength": 60
+            },
             "displayLogic": {
               "raw": "@IsDepreciated@='Y'",
               "evaluable": true,
@@ -300,6 +334,10 @@
             "form": false,
             "businessCritical": true,
             "min": 1,
+            "validation": {
+              "maxLength": 12,
+              "minimum": 1
+            },
             "displayLogic": {
               "raw": "@IsDepreciated@='Y' & @Amortizationcalctype@!'TI'",
               "evaluable": true,
@@ -335,6 +373,10 @@
               }
             ],
             "businessCritical": true,
+            "validation": {
+              "required": true,
+              "maxLength": 60
+            },
             "displayLogic": {
               "raw": "@IsDepreciated@='Y' & @Amortizationcalctype@='TI'",
               "evaluable": true,
@@ -355,6 +397,10 @@
             "businessCritical": true,
             "min": 1,
             "integer": true,
+            "validation": {
+              "maxLength": 10,
+              "minimum": 1
+            },
             "displayLogic": {
               "raw": "@IsDepreciated@='Y'  & @Amortizationcalctype@ = 'TI' & @Assetschedule@='YE'",
               "evaluable": true,
@@ -375,6 +421,10 @@
             "businessCritical": true,
             "min": 1,
             "integer": true,
+            "validation": {
+              "maxLength": 10,
+              "minimum": 1
+            },
             "displayLogic": {
               "raw": "@IsDepreciated@='Y' & @Amortizationcalctype@='TI' & @Assetschedule@!'YE'",
               "evaluable": true,
@@ -398,6 +448,10 @@
               "source": "Y"
             },
             "defaultValue": "Y",
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            },
             "displayLogic": {
               "raw": "@IsDepreciated@='Y' & @Amortizationcalctype@='TI' & (@Assetschedule@='YE' | @Assetschedule@='MO')",
               "evaluable": true,
@@ -416,6 +470,9 @@
             "grid": true,
             "form": false,
             "dot": false,
+            "validation": {
+              "maxLength": 10
+            },
             "displayLogic": {
               "raw": "@IsDepreciated@='Y'",
               "evaluable": true,
@@ -433,6 +490,9 @@
             "required": false,
             "grid": false,
             "form": false,
+            "validation": {
+              "maxLength": 10
+            },
             "displayLogic": {
               "raw": "@IsDepreciated@='Y'",
               "evaluable": true,
@@ -452,6 +512,9 @@
             "form": false,
             "businessCritical": true,
             "dot": false,
+            "validation": {
+              "maxLength": 10
+            },
             "displayLogic": {
               "raw": "@IsDepreciated@='Y'",
               "evaluable": true,
@@ -469,6 +532,9 @@
             "required": false,
             "grid": false,
             "form": false,
+            "validation": {
+              "maxLength": 10
+            },
             "displayLogic": {
               "raw": "@IsDepreciated@='Y'",
               "evaluable": true,
@@ -488,13 +554,11 @@
             "form": false,
             "summable": true,
             "businessCritical": true,
+            "validation": {
+              "maxLength": 12
+            },
             "callout": {
               "className": "org.openbravo.erpCommon.ad_callouts.SL_Assets"
-            },
-            "displayLogic": {
-              "raw": "@IsDepreciated@='Y'",
-              "evaluable": true,
-              "js": "record.depreciate === true || record.depreciate === 'Y'"
             }
           },
           {
@@ -509,6 +573,9 @@
             "grid": false,
             "form": false,
             "businessCritical": true,
+            "validation": {
+              "maxLength": 12
+            },
             "callout": {
               "className": "org.openbravo.erpCommon.ad_callouts.SL_Assets"
             },
@@ -532,6 +599,9 @@
             "summable": true,
             "businessCritical": true,
             "gridOrder": 6,
+            "validation": {
+              "maxLength": 12
+            },
             "callout": {
               "className": "org.openbravo.erpCommon.ad_callouts.SL_Assets"
             },
@@ -558,6 +628,9 @@
             },
             "defaultValue": "0",
             "businessCritical": true,
+            "validation": {
+              "maxLength": 12
+            },
             "displayLogic": {
               "raw": "@IsDepreciated@='Y'",
               "evaluable": true,
@@ -581,6 +654,10 @@
               "source": "N"
             },
             "defaultValue": "N",
+            "validation": {
+              "required": true,
+              "maxLength": 60
+            },
             "displayLogic": {
               "raw": "@IsDepreciated@='Y'",
               "evaluable": true
@@ -603,6 +680,9 @@
             },
             "defaultValue": "0",
             "summable": true,
+            "validation": {
+              "maxLength": 12
+            },
             "displayLogic": {
               "raw": "@IsDepreciated@='Y'",
               "evaluable": true
@@ -624,6 +704,9 @@
               "source": "0"
             },
             "defaultValue": "0",
+            "validation": {
+              "maxLength": 12
+            },
             "displayLogic": {
               "raw": "@IsDepreciated@='Y'",
               "evaluable": true
@@ -642,6 +725,9 @@
             "form": false,
             "reference": "Project",
             "inputMode": "search",
+            "validation": {
+              "maxLength": 32
+            },
             "displayLogic": {
               "raw": "@$Element_PJ@='Y' & @IsDepreciated@='Y'",
               "evaluable": false,
@@ -666,6 +752,10 @@
               "source": "N"
             },
             "defaultValue": "N",
+            "validation": {
+              "required": true,
+              "maxLength": 60
+            },
             "displayLogic": {
               "raw": "@IsDepreciated@='Y'",
               "evaluable": true
@@ -684,6 +774,9 @@
             "form": false,
             "reference": "BPartner",
             "inputMode": "search",
+            "validation": {
+              "maxLength": 60
+            },
             "displayLogic": {
               "raw": "@IsDepreciated@='Y'",
               "evaluable": true
@@ -702,6 +795,9 @@
             "form": false,
             "reference": "Costcenter",
             "inputMode": "selector",
+            "validation": {
+              "maxLength": 32
+            },
             "displayLogic": {
               "raw": "@$Element_PJ@='Y' & @IsDepreciated@='Y'",
               "evaluable": false,
@@ -726,7 +822,10 @@
             },
             "columnType": "number",
             "defaultValue": "0",
-            "cellType": "depreciationProgress"
+            "cellType": "depreciationProgress",
+            "validation": {
+              "maxLength": 12
+            }
           }
         ],
         "searchableFields": [
@@ -816,7 +915,10 @@
               "type": "lookup",
               "source": "SELECT COALESCE(MAX(SEQ_No_Asset),0)+10 AS DefaultValue FROM A_AMORTIZATIONLINE WHERE A_ASSET_ID=@A_ASSET_ID@"
             },
-            "defaultValue": "@SQL=SELECT COALESCE(MAX(SEQ_No_Asset),0)+10 AS DefaultValue FROM A_AMORTIZATIONLINE WHERE A_ASSET_ID=@A_ASSET_ID@"
+            "defaultValue": "@SQL=SELECT COALESCE(MAX(SEQ_No_Asset),0)+10 AS DefaultValue FROM A_AMORTIZATIONLINE WHERE A_ASSET_ID=@A_ASSET_ID@",
+            "validation": {
+              "maxLength": 12
+            }
           },
           {
             "name": "amortization",
@@ -830,7 +932,10 @@
             "grid": true,
             "form": true,
             "reference": "Amortization",
-            "inputMode": "search"
+            "inputMode": "search",
+            "validation": {
+              "maxLength": 60
+            }
           },
           {
             "name": "amortizationPercentage",
@@ -843,6 +948,9 @@
             "required": false,
             "grid": true,
             "form": true,
+            "validation": {
+              "maxLength": 6
+            },
             "readOnlyLogic": {
               "raw": "@Processed@='Y'",
               "evaluable": true,
@@ -860,6 +968,9 @@
             "required": false,
             "grid": true,
             "form": true,
+            "validation": {
+              "maxLength": 10
+            },
             "readOnlyLogic": {
               "raw": "@Processed@='Y'",
               "evaluable": true,
@@ -879,6 +990,9 @@
             "form": true,
             "reference": "Currency",
             "inputMode": "selector",
+            "validation": {
+              "maxLength": 12
+            },
             "readOnlyLogic": {
               "raw": "@Processed@='Y'",
               "evaluable": true,
@@ -916,7 +1030,11 @@
             "form": true,
             "sourceRequired": true,
             "reference": "AcctSchema",
-            "inputMode": "selector"
+            "inputMode": "selector",
+            "validation": {
+              "required": true,
+              "maxLength": 12
+            }
           },
           {
             "name": "accumulatedDepreciation",
@@ -931,7 +1049,11 @@
             "form": true,
             "sourceRequired": true,
             "reference": "ValidCombination",
-            "inputMode": "selector"
+            "inputMode": "selector",
+            "validation": {
+              "required": true,
+              "maxLength": 32
+            }
           },
           {
             "name": "depreciation",
@@ -946,7 +1068,11 @@
             "form": true,
             "sourceRequired": true,
             "reference": "ValidCombination",
-            "inputMode": "selector"
+            "inputMode": "selector",
+            "validation": {
+              "required": true,
+              "maxLength": 32
+            }
           }
         ],
         "searchableFields": [],
@@ -1116,7 +1242,7 @@
             "apiKey": "currency",
             "column": "C_Currency_ID",
             "type": "foreignKey",
-            "visibility": "editable",
+            "visibility": "readOnly",
             "required": false
           },
           {
@@ -2361,14 +2487,6 @@
         "description": "Display logic for 'annualDepreciation' in assets should have evaluable flag"
       },
       {
-        "id": "t-displaylogic-evaluable-assets-assetValue",
-        "category": "displaylogic-evaluable",
-        "entity": "assets",
-        "field": "assetValue",
-        "runner": "node",
-        "description": "Display logic for 'assetValue' in assets should have evaluable flag"
-      },
-      {
         "id": "t-displaylogic-evaluable-assets-businessPartner",
         "category": "displaylogic-evaluable",
         "entity": "assets",
@@ -2535,14 +2653,6 @@
         "field": "annualDepreciation",
         "runner": "node",
         "description": "Display logic for 'annualDepreciation' in assets should be valid JS"
-      },
-      {
-        "id": "t-displaylogic-valid-assets-assetValue",
-        "category": "displaylogic-valid",
-        "entity": "assets",
-        "field": "assetValue",
-        "runner": "node",
-        "description": "Display logic for 'assetValue' in assets should be valid JS"
       },
       {
         "id": "t-displaylogic-valid-assets-businessPartner",
@@ -3411,11 +3521,11 @@
         "description": "Rule 'process_Processing' (process) should be declared"
       },
       {
-        "id": "t-rule-declared-readOnlyLogic-Currency-existAmortizationLines",
+        "id": "t-rule-declared-readOnlyLogic-Currency-alwaysReadOnly",
         "category": "rule-declared",
-        "rule": "readOnlyLogic_Currency_existAmortizationLines",
+        "rule": "readOnlyLogic_Currency_alwaysReadOnly",
         "runner": "node",
-        "description": "Rule 'readOnlyLogic_Currency_existAmortizationLines' (readOnlyLogic) should be declared"
+        "description": "Rule 'readOnlyLogic_Currency_alwaysReadOnly' (readOnlyLogic) should be declared"
       },
       {
         "id": "t-rule-declared-readOnlyLogic-Processed-AmortizationLine",
@@ -4146,13 +4256,13 @@
       }
     ],
     "summary": {
-      "total": 241,
+      "total": 239,
       "byCategory": {
         "action-endpoint": 2,
         "crud-flags": 3,
         "default-value-type": 9,
-        "displaylogic-evaluable": 22,
-        "displaylogic-valid": 22,
+        "displaylogic-evaluable": 21,
+        "displaylogic-valid": 21,
         "field-presence": 38,
         "field-type": 38,
         "readonlylogic-evaluable": 4,
@@ -4164,7 +4274,7 @@
         "visibility": 3
       },
       "byRunner": {
-        "node": 241,
+        "node": 239,
         "junit": 0
       }
     }

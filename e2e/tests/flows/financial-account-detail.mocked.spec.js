@@ -209,8 +209,8 @@ test.describe('Financial Account Detail (T6) — mocked', () => {
     await expect(page.getByTestId('kpi-inflows')).toContainText('Entradas');
     await expect(page.getByTestId('kpi-outflows')).toContainText('Salidas');
 
-    // Spanish currency formatting: "211.841,01" appears in the balance KPI.
-    await expect(page.getByTestId('kpi-balance')).toContainText('211.841,01');
+    // en-US currency formatting: "211,841.01" appears in the balance KPI.
+    await expect(page.getByTestId('kpi-balance')).toContainText('211,841.01');
   });
 
   test('all five mocked movement rows are visible in the table', async ({ page }) => {

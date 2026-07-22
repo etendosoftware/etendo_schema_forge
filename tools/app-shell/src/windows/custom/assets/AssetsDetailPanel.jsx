@@ -175,12 +175,28 @@ export default function AssetsDetailPanel({ data, token, apiBaseUrl, catalogs, a
     { key: 'searchKey', column: 'Value', type: 'text', label: ui('Search Key'), required: true, section: 'principal' },
     { key: 'name', column: 'Name', type: 'text', label: ui('Name'), required: true, section: 'principal' },
     { key: 'assetCategory', column: 'A_Asset_Group_ID', type: 'selector', label: ui('Asset Category'), required: true, section: 'principal', reference: 'AssetGroup', inputMode: 'selector' },
+    // Moved out of the Financial Info group (ETP-4539) — "Valor del activo" is now always
+    // visible in the main header section, regardless of whether depreciation/amortization is
+    // enabled. calloutOn: 'blur' + handleAmountChange (passed as this form's onChange below)
+    // keep the ETP-4333 local-recompute behavior intact.
+    // Column order (per ETP-4539 follow-up): Identificador, Nombre, Grupo Activo, Valor del
+    // Activo, Descripcion — assetValue must render BEFORE description.
+    { key: 'assetValue', column: 'AssetValueAmt', type: 'number', label: ui('assetsAssetValueLabel'), section: 'principal', calloutOn: 'blur' },
     { key: 'description', column: 'Description', type: 'textarea', label: ui('Description'), section: 'other' },
   ];
 
   const group2Fields = [
-    { key: 'currency', column: 'C_Currency_ID', type: 'selector', label: ui('assetsCurrencyLabel'), section: 'principal', reference: 'Currency', inputMode: 'selector', defaultValue: '@C_Currency_ID@', readOnlyLogic: (record) => Number(record.depreciatedPlan || 0) > 0 || Number(record.depreciatedValue || 0) > 0, requiredVisual: true },
-    // The Asset amount triple (AssetValue, ResidualAssetValue, DepreciationAmt). ETP-4333:
+    // Currency is ALWAYS read-only (ETP-4539) — but MUST use a `readOnlyLogic` function
+    // (always returning true), NOT a static field-level `readOnly: true`. EntityForm's
+    // horizontal-layout-without-`section` render path (this call has no `section` prop)
+    // filters `displayFields = visibleBaseFields.filter(f => !f.readOnly)` — any field with
+    // a truthy static `f.readOnly` is stripped from the form ENTIRELY, not just disabled.
+    // That regression made "Moneda" disappear instead of just becoming non-editable.
+    // `readOnlyLogic` is not checked by that filter — it only feeds `evalReadOnlyLogic()`,
+    // which correctly disables the input (see `isReadOnly` in `renderField`) while keeping
+    // the field visible. Do NOT replace this with a static `readOnly: true`.
+    { key: 'currency', column: 'C_Currency_ID', type: 'selector', label: ui('assetsCurrencyLabel'), section: 'principal', reference: 'Currency', inputMode: 'selector', defaultValue: '@C_Currency_ID@', readOnlyLogic: () => true },
+    // The remaining Asset amount pair (ResidualAssetValue, DepreciationAmt). ETP-4333:
     //  • calloutOn: 'blur' — EntityForm renders these via DeferredInput: typing only updates a
     //    local buffer; on blur a single onChange commits the value. The deferral-to-blur UX
     //    stays; only the commit TARGET changed — see handleAmountChange below.
@@ -188,7 +204,6 @@ export default function AssetsDetailPanel({ data, token, apiBaseUrl, catalogs, a
     //    onChange) replicates the SL_Assets arithmetic LOCALLY and synchronously
     //    (computeAssetAmounts) and writes the recomputed triple via onLocalChange. Deterministic,
     //    no async round-trip to race. The Java remains the source of truth (see computeAssetAmounts).
-    { key: 'assetValue', column: 'AssetValueAmt', type: 'number', label: ui('assetsAssetValueLabel'), section: 'principal', calloutOn: 'blur' },
     { key: 'residualAssetValue', column: 'Residualassetvalueamt', type: 'number', label: ui('assetsResidualValueLabel'), section: 'principal', calloutOn: 'blur' },
     { key: 'depreciationAmt', column: 'Amortizationvalueamt', type: 'number', label: ui('assetsDepreciationAmtLabel'), section: 'principal', calloutOn: 'blur', requiredVisual: true },
     { key: 'previouslyDepreciatedAmt', column: 'Depreciatedpreviousamt', type: 'number', label: ui('assetsPrevDepreciatedLabel'), section: 'principal', defaultValue: '0' },
@@ -239,11 +254,15 @@ export default function AssetsDetailPanel({ data, token, apiBaseUrl, catalogs, a
 
   return (
     <div className="p-2 pb-6 bg-white overflow-y-auto max-h-[380px] [&_input]:bg-white [&_textarea]:bg-white [&_textarea:disabled]:!bg-white [&_textarea:disabled]:opacity-50">
-      {/* Group 1 — Asset Info (no subtitle) */}
+      {/* Group 1 — Asset Info (no subtitle). onChange goes through handleAmountChange so
+          "Valor del activo" keeps the ETP-4333 local-recompute behavior now that it lives
+          here instead of the Financial Info group; handleAmountChange forwards non-amount
+          fields (searchKey, name, assetCategory, description) to the plain onChange untouched. */}
       <div className="mb-5">
         <EntityForm
           fields={group1Fields}
           {...common}
+          onChange={handleAmountChange}
           displayLogic={readOnlyAll}
           data-testid="EntityForm__8e32ca" />
       </div>
