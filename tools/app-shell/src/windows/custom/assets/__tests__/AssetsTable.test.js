@@ -21,7 +21,7 @@ describe('AssetsTable — renderDepreciationProgress', () => {
   });
 
   it('renders 100% in green only when pct === 100', () => {
-    assert.match(src, /pct === 100.*#10b981/);
+    assert.match(src, /pct === 100.*var\(--status-success-fg\)/);
   });
 
   // Skipped: schema_forge_core regression (ETP-4439) reintroduced the "hide bar
