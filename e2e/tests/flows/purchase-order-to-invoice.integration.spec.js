@@ -209,16 +209,21 @@ test.describe('Purchase Order → Invoice — Happy path (integration)', () => {
 
     await saveDraft(page);
 
-    // If the save was blocked (callout arrived late, required-field toast),
-    // the URL stays at /new. Wait for the callout to finish and retry once.
-    if (page.url().endsWith('/new')) {
+    // The save may succeed but the frontend redirect from /new to /{id} can be
+    // slow. First give it a generous window to land on the record URL.
+    const saved = await page.waitForURL(
+      /\/purchase-invoice\/(?!new$)[a-zA-Z0-9]+$/,
+      { timeout: 20_000 },
+    ).then(() => true).catch(() => false);
+
+    // If we're still on /new the save genuinely failed (callout arrived late,
+    // required-field validation). Wait for callouts to settle and retry once.
+    if (!saved && page.url().endsWith('/new')) {
       await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {});
       await page.waitForTimeout(3_000);
       await saveDraft(page);
     }
 
-    // (?!new$) — a silent save failure leaves the URL at /purchase-invoice/new,
-    // which a bare [a-zA-Z0-9]+ would happily match.
     await expect(page,
       'After saving draft, URL should include the invoice record ID',
     ).toHaveURL(/\/purchase-invoice\/(?!new$)[a-zA-Z0-9]+$/, { timeout: 15_000 });

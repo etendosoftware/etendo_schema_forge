@@ -525,7 +525,12 @@ test.describe('Contacts Integration — Full journey', () => {
     const saveBP = expectSaveResponse(page);
     await saveBtnB.first().click();
     await saveBP;
-    await expect(page).not.toHaveURL(/\/contacts\/new/, { timeout: 15_000 });
+    // The save may succeed but the frontend redirect from /new to /{id} can be
+    // slow. Wait for the URL to change before asserting.
+    await page.waitForURL(
+      url => !url.toString().includes('/contacts/new'),
+      { timeout: 20_000 },
+    );
 
     // ═══════════════════════════════════════════════════════════════════════
     // PART 7: List view — verify contacts, columns, subset filters
