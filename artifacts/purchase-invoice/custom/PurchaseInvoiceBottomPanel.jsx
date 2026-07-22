@@ -37,7 +37,10 @@ function PurchaseInvoiceLinesEmptyState({ data, onAddLine, canAddLine = true, re
 
   useEffect(() => {
     if (forceOpen) {
-      if (pendingModal.current === 'order') { setShowImportOrderModal(true); }
+      // forceOpen carries the modal type across the save-navigate remount of a
+      // NEW record (pendingModal is reset on remount, so it can't be trusted then).
+      const type = ['order', 'receipt'].includes(forceOpen) ? forceOpen : pendingModal.current;
+      if (type === 'order') { setShowImportOrderModal(true); }
       else { setShowImportReceiptModal(true); }
       onForceOpenHandled?.();
     }
@@ -46,7 +49,7 @@ function PurchaseInvoiceLinesEmptyState({ data, onAddLine, canAddLine = true, re
   const handleImportReceiptClick = async () => {
     pendingModal.current = 'receipt';
     if (onSave) {
-      const shouldOpen = await onSave();
+      const shouldOpen = await onSave('receipt');
       if (!shouldOpen) return;
     }
     setShowImportReceiptModal(true);
@@ -55,7 +58,7 @@ function PurchaseInvoiceLinesEmptyState({ data, onAddLine, canAddLine = true, re
   const handleImportOrderClick = async () => {
     pendingModal.current = 'order';
     if (onSave) {
-      const shouldOpen = await onSave();
+      const shouldOpen = await onSave('order');
       if (!shouldOpen) return;
     }
     setShowImportOrderModal(true);
@@ -148,7 +151,10 @@ const PurchaseInvoiceLineActions = forwardRef(function PurchaseInvoiceLineAction
 
   useEffect(() => {
     if (forceOpen) {
-      if (pendingModal.current === 'order') { setShowImportOrderModal(true); }
+      // forceOpen carries the modal type across the save-navigate remount of a
+      // NEW record (pendingModal is reset on remount, so it can't be trusted then).
+      const type = ['order', 'receipt'].includes(forceOpen) ? forceOpen : pendingModal.current;
+      if (type === 'order') { setShowImportOrderModal(true); }
       else { setShowImportReceiptModal(true); }
       onForceOpenHandled?.();
     }
@@ -157,7 +163,7 @@ const PurchaseInvoiceLineActions = forwardRef(function PurchaseInvoiceLineAction
   const openReceiptModal = async () => {
     pendingModal.current = 'receipt';
     if (onSave) {
-      const shouldOpen = await onSave();
+      const shouldOpen = await onSave('receipt');
       if (!shouldOpen) return;
     }
     setShowImportReceiptModal(true);
@@ -166,7 +172,7 @@ const PurchaseInvoiceLineActions = forwardRef(function PurchaseInvoiceLineAction
   const openOrderModal = async () => {
     pendingModal.current = 'order';
     if (onSave) {
-      const shouldOpen = await onSave();
+      const shouldOpen = await onSave('order');
       if (!shouldOpen) return;
     }
     setShowImportOrderModal(true);

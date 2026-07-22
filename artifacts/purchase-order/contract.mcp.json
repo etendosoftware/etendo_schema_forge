@@ -1,8 +1,8 @@
 {
-  "version": "0.36.0",
+  "version": "0.40.0",
   "generatedAt": "2026-04-30T15:42:46.497Z",
-  "updatedAt": "2026-07-14T01:05:39.068Z",
-  "contractChecksum": "0fbe017944ec853e",
+  "updatedAt": "2026-07-21T11:55:43.685Z",
+  "contractChecksum": "97965f9f07e1b828",
   "apiPrediction": {
     "specName": "purchase-order",
     "baseUrl": "/sws/neo/purchase-order",
@@ -1180,12 +1180,6 @@
           "etgoTotalDiscount": {
             "defaultValue": "0"
           },
-          "accountingDate": {
-            "readOnly": true,
-            "required": true,
-            "readOnlyLogic": "@Posted@='Y'",
-            "defaultValue": "@#Date@"
-          },
           "deliveryTerms": {
             "required": true,
             "readOnlyLogic": "@Processed@='Y'",
@@ -1308,6 +1302,7 @@
             "readOnlyLogic": "@Posted@='Y'"
           },
           "currency": {
+            "readOnly": true,
             "required": true,
             "defaultValue": "@C_Currency_ID@"
           }
@@ -1444,8 +1439,7 @@
         "listPrice",
         "tax",
         "unitPrice",
-        "lineNetAmount",
-        "currency"
+        "lineNetAmount"
       ],
       "recommendedOrder": [
         "createHeader",
@@ -1643,8 +1637,7 @@
           "listPrice",
           "tax",
           "unitPrice",
-          "lineNetAmount",
-          "currency"
+          "lineNetAmount"
         ]
       },
       {
@@ -1660,5 +1653,5 @@
       "confirmcancelandreplace"
     ]
   },
-  "checksum": "22a0a614e6b084ac"
+  "checksum": "1e5048ad24fa5f56"
 }

@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import { useUI } from '@/i18n';
 import { useCurrency } from '@/hooks/useCurrency';
 import { formatCurrency } from '@/lib/formatCurrency';
@@ -10,9 +11,12 @@ function fmtNum(val) {
 export default function WarehouseSummary({ data, token, apiBaseUrl }) {
   const ui = useUI();
   const currencyCode = useCurrency() ?? 'USD';
-  const { loading, error, products } = useWarehouseStock(data?.id, token, apiBaseUrl);
+  const { loading, error, products: allProducts } = useWarehouseStock(data?.id, token, apiBaseUrl);
 
-  // products are already filtered to qty > 0 by aggregateProducts, so this is the in-stock count.
+  // KPI "in stock > 0" is intentionally strict-positive — excludes zero AND negative
+  // (shrinkage/loss) quantities. Do not change this to `!== 0`; the badge label below
+  // (warehouseProductsWithStockBadge) explicitly promises "> 0".
+  const products = useMemo(() => allProducts.filter(p => p.qty > 0), [allProducts]);
   const totalProducts = products.length;
   const totalValuation = products.reduce((sum, p) => sum + (Number(p.valuation) || 0), 0);
 

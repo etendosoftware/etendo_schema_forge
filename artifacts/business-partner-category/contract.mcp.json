@@ -1,8 +1,8 @@
 {
-  "version": "0.2.0",
+  "version": "0.3.0",
   "generatedAt": "2026-07-01T17:11:14.893Z",
   "updatedAt": "2026-07-01T17:12:24.383Z",
-  "contractChecksum": "b0c899733fdc2169",
+  "contractChecksum": "3fc16763fdc25ca3",
   "apiPrediction": {
     "specName": "business-partner-category",
     "baseUrl": "/sws/neo/business-partner-category",

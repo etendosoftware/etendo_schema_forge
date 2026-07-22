@@ -133,10 +133,10 @@ function build(args) {
 }
 
 function okResponse() {
-  return { ok: true };
+  return { ok: true, json: async () => null };
 }
 function errResponse() {
-  return { ok: false };
+  return { ok: false, json: async () => null };
 }
 
 function lastFetchBody() {
@@ -304,5 +304,111 @@ describe('buildInlineRowUpdateHandler — PATCH behavior', () => {
     const body = lastFetchBody();
     expect('notes' in body).toBe(false);
     expect('kept' in body).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// ETP-4528 regression: after a successful PATCH, server/DB-trigger-computed
+// fields (e.g. etgoQtydiff on physical-inventory lines) must be applied to
+// the row from the PATCH response, not just the optimistic local edit.
+// Pre-fix, the handler never called res.json(), so this second
+// "server wins" handleUpdateChild call never happened and the computed
+// field stayed stale until a full reload.
+// ---------------------------------------------------------------------------
+describe('buildInlineRowUpdateHandler — server-wins update from PATCH response', () => {
+  afterEach(() => {
+    vi.clearAllMocks();
+    delete global.fetch;
+  });
+
+  it('applies server-computed field (etgoQtydiff) via handleUpdateChild after a successful PATCH — regression guard', async () => {
+    const handleUpdateChild = vi.fn();
+    const serverRow = { id: 'L1', quantityCount: 42, etgoQtydiff: 100 };
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ response: { data: [serverRow] } }),
+    });
+    const args = makeArgs({ hook: { editing: {}, selected: null, handleUpdateChild } });
+    const handler = build(args);
+    await handler({ id: 'L1', quantityCount: 10 }, 'quantityCount', '42', {});
+
+    // Two calls: (1) optimistic local update, (2) server-wins update carrying
+    // the trigger-computed field. This second call is the fix under test —
+    // it would never fire against the pre-fix handler.
+    expect(handleUpdateChild).toHaveBeenCalledTimes(2);
+    const [rowId, serverUpdate] = handleUpdateChild.mock.calls[1];
+    expect(rowId).toBe('L1');
+    expect(serverUpdate.etgoQtydiff).toBe(100);
+    expect(serverUpdate.quantityCount).toBe(42);
+  });
+
+  it('still applies the optimistic local update as the first handleUpdateChild call', async () => {
+    const handleUpdateChild = vi.fn();
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ response: { data: [{ id: 'L1', quantityCount: 42, etgoQtydiff: 100 }] } }),
+    });
+    const args = makeArgs({ hook: { editing: {}, selected: null, handleUpdateChild } });
+    const handler = build(args);
+    await handler({ id: 'L1', quantityCount: 10 }, 'quantityCount', '42', { identifier: 'IDENT' });
+
+    expect(handleUpdateChild.mock.calls.length).toBeGreaterThanOrEqual(1);
+    const [rowId, optimisticUpdate] = handleUpdateChild.mock.calls[0];
+    expect(rowId).toBe('L1');
+    expect(optimisticUpdate.quantityCount).toBe(42);
+    expect(optimisticUpdate['quantityCount$_identifier']).toBe('IDENT');
+  });
+
+  it('on !res.ok does not apply a server row; toast.error + reject behavior is preserved', async () => {
+    global.fetch = vi.fn().mockResolvedValue(errResponse());
+    const handleUpdateChild = vi.fn();
+    const extractErrorMessage = vi.fn().mockResolvedValue('server boom');
+    const args = makeArgs({
+      extractErrorMessage,
+      hook: { editing: {}, selected: null, handleUpdateChild },
+    });
+    const handler = build(args);
+
+    await expect(handler({ id: 'L1' }, 'quantityCount', '42', {})).rejects.toThrow('server boom');
+    expect(handleUpdateChild).not.toHaveBeenCalled();
+    expect(toast.error).toHaveBeenCalledWith('server boom');
+  });
+
+  it('a res.json() rejection is swallowed: no throw, optimistic update stands, no bad server call', async () => {
+    const handleUpdateChild = vi.fn();
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => {
+        throw new Error('invalid json');
+      },
+    });
+    const args = makeArgs({ hook: { editing: {}, selected: null, handleUpdateChild } });
+    const handler = build(args);
+
+    await expect(
+      handler({ id: 'L1', quantityCount: 10 }, 'quantityCount', '42', {}),
+    ).resolves.toBeUndefined();
+
+    // Only the optimistic call happened — malformed JSON must not crash the
+    // handler nor produce a bogus second handleUpdateChild call.
+    expect(handleUpdateChild).toHaveBeenCalledTimes(1);
+    const [, optimisticUpdate] = handleUpdateChild.mock.calls[0];
+    expect(optimisticUpdate.quantityCount).toBe(42);
+  });
+
+  it('an empty/no-data response body ({} or null) does not trigger a second handleUpdateChild call', async () => {
+    const handleUpdateChild = vi.fn();
+    global.fetch = vi.fn().mockResolvedValue({ ok: true, json: async () => ({}) });
+    const args = makeArgs({ hook: { editing: {}, selected: null, handleUpdateChild } });
+    const handler = build(args);
+    await handler({ id: 'L1', quantityCount: 10 }, 'quantityCount', '42', {});
+
+    expect(handleUpdateChild).toHaveBeenCalledTimes(1);
+
+    handleUpdateChild.mockClear();
+    global.fetch = vi.fn().mockResolvedValue({ ok: true, json: async () => null });
+    const handler2 = build(args);
+    await handler2({ id: 'L1', quantityCount: 10 }, 'quantityCount', '42', {});
+    expect(handleUpdateChild).toHaveBeenCalledTimes(1);
   });
 });

@@ -46,7 +46,7 @@ const draftMode = null;
 // @sf-generated-end draftMode:businessPartner
 
 // @sf-generated-start requiredHeaderFields:businessPartner
-const requiredHeaderFields = ['name', 'etgoFirstname', 'etgoLastname', 'oBTIKTaxIDKey', 'setNewCurrency', 'creditLimit'];
+const requiredHeaderFields = ['name', 'businessPartnerCategory', 'etgoFirstname', 'etgoLastname', 'oBTIKTaxIDKey', 'setNewCurrency', 'creditLimit'];
 // @sf-generated-end requiredHeaderFields:businessPartner
 
 
@@ -631,7 +631,8 @@ export const api = {
       "PO_Financial_Account_ID": "Expense Account",
       "EM_Etgo_Web": "Website",
       "EM_Etgo_Firstname": "First Name",
-      "EM_Etgo_Lastname": "Last Name"
+      "EM_Etgo_Lastname": "Last Name",
+      "C_BP_Group_ID": "Contact Category"
     },
     "es_ES": {
       "Name": "Razón Social",
@@ -640,7 +641,8 @@ export const api = {
       "PO_Financial_Account_ID": "Cuenta contable de gastos",
       "EM_Etgo_Web": "Página web",
       "EM_Etgo_Firstname": "Nombre",
-      "EM_Etgo_Lastname": "Apellidos"
+      "EM_Etgo_Lastname": "Apellidos",
+      "C_BP_Group_ID": "Categoría de contacto"
     }
   }
 };

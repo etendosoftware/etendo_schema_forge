@@ -6,6 +6,8 @@ export default function LinesEmptyState({
   canAddLine = true,
   description,
   secondaryAction,
+  margin = '24px 16px',
+  padding = '32px 24px',
 }) {
   const ui = useUI();
   const isDraft = !data?.documentStatus || data.documentStatus === 'DR';
@@ -36,8 +38,8 @@ export default function LinesEmptyState({
 
   return (
     <div style={{
-      margin: '24px 16px',
-      padding: '32px 24px',
+      margin,
+      padding,
       background: 'var(--color-background-secondary)',
       borderRadius: 'var(--border-radius-lg)',
       display: 'flex',

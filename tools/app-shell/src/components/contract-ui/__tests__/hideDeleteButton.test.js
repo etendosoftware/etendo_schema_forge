@@ -102,10 +102,10 @@ describe('DetailView — isDeleteButtonVisible with hideDeleteButton (window.hid
     );
   });
 
-  it('DetailView.jsx forwards hideDeleteButton into isDeleteButtonVisible at the render call site', () => {
+  it('DetailView.jsx forwards hideDeleteButton (OR-ed with window.readOnly) into isDeleteButtonVisible at the render call site', () => {
     assert.match(
       detailViewSrc,
-      /isDeleteButtonVisible\(\{[\s\S]*?hideDeleteButton,[\s\S]*?\}\)/,
+      /isDeleteButtonVisible\(\{[\s\S]*?hideDeleteButton:\s*hideDeleteButton\s*\|\|\s*windowReadOnly,[\s\S]*?\}\)/,
     );
   });
 });
@@ -141,10 +141,10 @@ describe('RowQuickActions — showDelete with hideDeleteButton', () => {
     assert.match(rowQuickActionsSrc, /hideDeleteButton\s*=\s*false,/);
   });
 
-  it('RowQuickActions.jsx short-circuits showDelete with hideDeleteButton before calling isDeleteVisibleForRecord', () => {
+  it('RowQuickActions.jsx short-circuits showDelete with readOnly/hideDeleteButton before calling isDeleteVisibleForRecord', () => {
     assert.match(
       rowQuickActionsSrc,
-      /const showDelete = !hideDeleteButton && isDeleteVisibleForRecord\(\{/,
+      /const showDelete = !readOnly && !hideDeleteButton && isDeleteVisibleForRecord\(\{/,
     );
   });
 });

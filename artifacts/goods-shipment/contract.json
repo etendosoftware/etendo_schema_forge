@@ -1,8 +1,8 @@
 {
-  "version": "0.26.0",
+  "version": "0.30.0",
   "generatedAt": "2026-04-29T19:04:55.657Z",
-  "updatedAt": "2026-07-06T17:42:27.381Z",
-  "checksum": "a4ad279aa4b7c4db",
+  "updatedAt": "2026-07-21T12:35:19.734Z",
+  "checksum": "5e26b1eaf5b3d45e",
   "frontendContract": {
     "window": {
       "id": "169",
@@ -83,6 +83,10 @@
             },
             "section": "principal",
             "seq": 20,
+            "validation": {
+              "required": true,
+              "maxLength": 30
+            },
             "readOnlyLogic": {
               "raw": "@Processed@='Y'",
               "evaluable": true,
@@ -105,6 +109,10 @@
             "inputMode": "search",
             "section": "principal",
             "seq": 40,
+            "validation": {
+              "required": true,
+              "maxLength": 22
+            },
             "callout": {
               "className": "org.openbravo.erpCommon.ad_callouts.SE_InOut_Warehouse"
             },
@@ -130,6 +138,10 @@
             "inputMode": "search",
             "section": "principal",
             "seq": 10,
+            "validation": {
+              "required": true,
+              "maxLength": 60
+            },
             "callout": {
               "className": "org.openbravo.erpCommon.ad_callouts.SL_InOut_BPartner"
             },
@@ -159,6 +171,10 @@
             },
             "section": "principal",
             "seq": 50,
+            "validation": {
+              "required": true,
+              "maxLength": 22
+            },
             "validationRule": {
               "code": "C_BPartner_Location.C_BPartner_ID=@C_BPartner_ID@ AND C_BPartner_Location.IsShipTo='Y' AND C_BPartner_Location.IsActive='Y'",
               "contextParams": [],
@@ -183,7 +199,10 @@
             "required": false,
             "grid": false,
             "form": true,
-            "section": "collapsed"
+            "section": "collapsed",
+            "validation": {
+              "maxLength": 255
+            }
           },
           {
             "name": "movementDate",
@@ -204,6 +223,10 @@
             "defaultValue": "@#Date@",
             "section": "principal",
             "seq": 30,
+            "validation": {
+              "required": true,
+              "maxLength": 10
+            },
             "callout": {
               "className": "org.openbravo.erpCommon.ad_callouts.SL_InOut_AccountingDate"
             },
@@ -301,7 +324,11 @@
                 }
               }
             ],
-            "defaultValue": "DR"
+            "defaultValue": "DR",
+            "validation": {
+              "required": true,
+              "maxLength": 60
+            }
           },
           {
             "name": "posted",
@@ -336,6 +363,10 @@
               "true": "green",
               "false": "orange"
             },
+            "validation": {
+              "required": true,
+              "maxLength": 60
+            },
             "displayLogic": {
               "raw": "@Processed@='Y' & @#ShowAcct@='Y'",
               "evaluable": false,
@@ -353,7 +384,10 @@
             "visibility": "readOnly",
             "required": false,
             "grid": false,
-            "form": false
+            "form": false,
+            "validation": {
+              "maxLength": 4
+            }
           },
           {
             "name": "invoiced",
@@ -371,7 +405,11 @@
               "type": "computed",
               "source": "N"
             },
-            "defaultValue": "N"
+            "defaultValue": "N",
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            }
           },
           {
             "name": "processed",
@@ -388,6 +426,10 @@
             "derivation": {
               "type": "computed",
               "source": "false"
+            },
+            "validation": {
+              "required": true,
+              "maxLength": 1
             }
           },
           {
@@ -534,7 +576,11 @@
                 }
               }
             ],
-            "defaultValue": "N"
+            "defaultValue": "N",
+            "validation": {
+              "required": true,
+              "maxLength": 60
+            }
           },
           {
             "name": "etblkpBulkposting",
@@ -553,6 +599,10 @@
               "source": "N"
             },
             "defaultValue": "N",
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            },
             "displayLogic": {
               "raw": "@Processed@='Y' & @#ShowAcct@='Y'",
               "evaluable": false,
@@ -650,6 +700,10 @@
             "lookup": true,
             "section": "principal",
             "seq": 10,
+            "validation": {
+              "required": true,
+              "maxLength": 60
+            },
             "callout": {
               "className": "org.openbravo.erpCommon.ad_callouts.SL_InOutLine_Product"
             },
@@ -678,6 +732,10 @@
             "defaultValue": "0",
             "section": "principal",
             "seq": 20,
+            "validation": {
+              "required": true,
+              "maxLength": 10
+            },
             "readOnlyLogic": {
               "raw": "@Processed@='Y' | @UomManagement@='Y'",
               "evaluable": true,
@@ -695,7 +753,10 @@
             "required": false,
             "grid": false,
             "form": true,
-            "section": "other"
+            "section": "other",
+            "validation": {
+              "maxLength": 2000
+            }
           },
           {
             "name": "orderQuantity",
@@ -710,6 +771,9 @@
             "form": true,
             "section": "principal",
             "seq": 30,
+            "validation": {
+              "maxLength": 10
+            },
             "callout": {
               "className": "org.openbravo.erpCommon.ad_callouts.SL_InOut_Conversion"
             },
@@ -2546,11 +2610,25 @@
         "description": "Rule 'Product_AutoFill_UOM' (callout) should be declared"
       },
       {
+        "id": "t-rule-declared-READONLY-Posted-AccountingDate",
+        "category": "rule-declared",
+        "rule": "READONLY_Posted_AccountingDate",
+        "runner": "node",
+        "description": "Rule 'READONLY_Posted_AccountingDate' (readOnlyLogic) should be declared"
+      },
+      {
         "id": "t-rule-declared-ReadOnly-When-Processed",
         "category": "rule-declared",
         "rule": "ReadOnly_When_Processed",
         "runner": "node",
         "description": "Rule 'ReadOnly_When_Processed' (displayLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-SL-InOut-AccountingDate",
+        "category": "rule-declared",
+        "rule": "SL_InOut_AccountingDate",
+        "runner": "node",
+        "description": "Rule 'SL_InOut_AccountingDate' (callout) should be declared"
       },
       {
         "id": "t-searchable-filters-goodsShipment-businessPartner",
@@ -3352,7 +3430,7 @@
       }
     ],
     "summary": {
-      "total": 180,
+      "total": 182,
       "byCategory": {
         "action-endpoint": 12,
         "crud-flags": 2,
@@ -3363,14 +3441,14 @@
         "field-type": 17,
         "readonlylogic-evaluable": 8,
         "readonlylogic-valid": 8,
-        "rule-declared": 3,
+        "rule-declared": 5,
         "searchable-filters": 6,
         "selector-endpoint": 4,
         "system-field": 88,
         "visibility": 2
       },
       "byRunner": {
-        "node": 180,
+        "node": 182,
         "junit": 0
       }
     }

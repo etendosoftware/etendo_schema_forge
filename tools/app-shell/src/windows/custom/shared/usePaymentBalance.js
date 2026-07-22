@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
-// ─── es-ES plain number helpers (no currency symbol) ─────────────────────────
-// The amount input shows a grouped es-ES number ("6.420,00") with the "€" suffix
-// rendered separately, mirroring the design prototype's `fmtPlain`.
+// ─── en-US plain number helpers (no currency symbol) ─────────────────────────
+// The amount input shows a grouped en-US number ("6,420.00") with the currency suffix rendered
+// separately, matching the app-wide formatCurrency() format used everywhere else in the modal.
 
 const TOLERANCE = 0.001;
 const STEP = 100;
@@ -16,32 +16,32 @@ export function round2(n) {
   return Math.round((Number(n) || 0) * 100) / 100;
 }
 
-/** Inserts es-ES thousands separators without regex backtracking (ReDoS-safe). */
+/** Inserts en-US thousands separators without regex backtracking (ReDoS-safe). */
 function groupThousands(intStr) {
   let out = '';
   for (let i = 0; i < intStr.length; i += 1) {
     if (i > 0 && (intStr.length - i) % 3 === 0) {
-      out += '.';
+      out += ',';
     }
     out += intStr[i];
   }
   return out;
 }
 
-/** Formats a number as a plain es-ES amount: "6.420,00" (no symbol). */
+/** Formats a number as a plain en-US amount: "6,420.00" (no symbol). */
 export function formatPlain(n) {
   const value = Number.isFinite(n) ? n : 0;
   const neg = value < 0;
   const [intPart, decPart] = Math.abs(value).toFixed(2).split('.');
-  return `${neg ? '-' : ''}${groupThousands(intPart)},${decPart}`;
+  return `${neg ? '-' : ''}${groupThousands(intPart)}.${decPart}`;
 }
 
-/** Parses an es-ES amount string ("6.420,00") into a number, or null if blank/invalid. */
+/** Parses an en-US amount string ("6,420.00") into a number, or null if blank/invalid. */
 export function parsePlain(str) {
   if (str == null) return null;
   const trimmed = String(str).trim();
   if (trimmed === '') return null;
-  const normalized = trimmed.replace(/\./g, '').replace(',', '.');
+  const normalized = trimmed.replace(/,/g, '');
   const n = parseFloat(normalized);
   return Number.isNaN(n) ? null : n;
 }
@@ -78,19 +78,29 @@ function seedLines(sources, usedSources) {
  *                                   { id, kind:'credit'|'abono', doc, date, note, avail, psdId?, paymentId? }
  * @param {Array}    params.usedSources  (edit mode only) sources the draft already consumes:
  *                                   { kind:'credit'|'abono', paymentId?, psdId?, use }
+ * @param {boolean}  params.canLeaveCredit  whether an overpayment may be left as customer
+ *                                   credit — the modal passes `isReceipt && invoiceInOrgCurrency`.
+ *                                   When false the only excess resolution is adjusting the amount
+ *                                   ("Igualar"), so any excess blocks confirmation.
  *
  * Returns the editable amount (number + es-ES string), the credit lines with
  * selection/usage, the derived totals, and the mutators the modal wires to the UI.
  */
-export function usePaymentBalance({ total, dir = 'in', sources = [], usedSources = EMPTY_USED_SOURCES }) {
+export function usePaymentBalance({
+  total, dir = 'in', sources = [], usedSources = EMPTY_USED_SOURCES, canLeaveCredit = false,
+}) {
   const applied = round2(total);
   const isReceipt = dir === 'in';
 
   const [amount, setAmount] = useState(applied);
   const [amountStr, setAmountStr] = useState(formatPlain(applied));
   const [lines, setLines] = useState(() => seedLines(sources, usedSources));
-  // 'credit' = leave overpayment as customer credit, 'refund' = give change back.
+  // 'credit' = leave the overpayment as customer credit, 'refund' = give change back, null = unresolved.
   const [excessMode, setExcessMode] = useState(null);
+  // "Dar vuelto" (refund) and "Dejar a crédito" (credit) share the SAME gate: both are offered only
+  // when the invoice is in the org currency (canLeaveCredit). A foreign-currency receipt — and any
+  // payment — gets neither; the only resolution there is adjusting the amount ("Igualar").
+  const canRefund = canLeaveCredit;
 
   // Credit/abono sources arrive asynchronously (fetched after mount); re-seed the
   // consumable lines whenever they change so the section appears once data loads.
@@ -111,9 +121,12 @@ export function usePaymentBalance({ total, dir = 'in', sources = [], usedSources
   const isPartial = diff < -TOLERANCE;
   const isExact = !isExcess && !isPartial;
 
-  // Receipts may resolve an overpayment (credit / refund); payments cannot leave
-  // supplier credit in it1, so any excess blocks confirmation outright.
-  const excessUnresolved = isReceipt ? (isExcess && excessMode == null) : isExcess;
+  // An overpayment is resolved by giving change back ("Dar vuelto") or leaving it as customer
+  // credit ("Dejar a crédito") — BOTH gated on the invoice being in the org currency
+  // (canLeaveCredit). Foreign-currency receipts and all payments get neither, so any excess
+  // blocks confirmation and "Igualar"/adjust is the only path there.
+  const excessResolved = canLeaveCredit && (excessMode === 'credit' || excessMode === 'refund');
+  const excessUnresolved = isExcess && !excessResolved;
   const canConfirm = !excessUnresolved && amount >= 0;
 
   // ── amount input ──────────────────────────────────────────────────────────
@@ -211,7 +224,7 @@ export function usePaymentBalance({ total, dir = 'in', sources = [], usedSources
     missingAmount: isPartial ? round2(-diff) : 0,
     // excess resolution
     excessMode, setExcessMode,
-    excessUnresolved, canConfirm,
+    excessUnresolved, canConfirm, canRefund,
     // actions
     equalize, STEP,
   };

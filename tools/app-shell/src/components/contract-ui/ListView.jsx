@@ -479,13 +479,19 @@ export function ListView({
   const sendDocumentEnabled = !!effectiveSendDocument && effectiveSendDocument.enabled !== false;
   const allowEmail = effectiveSendDocument?.allowEmail !== false;
 
+  // View-only window (decisions.json → window.readOnly): suppress the write quick
+  // actions and don't wire their default handlers. Row click still opens the
+  // (read-only) detail, so viewing is preserved. Complements DetailView's own gate.
+  const windowReadOnly = api?.window?.readOnly === true;
+
   const effectiveRowQuickActions = useMemo(() => {
     if (!quickActionsEnabled) return rowQuickActions;
     const merged = {
       ...rowQuickActions,
+      readOnly: windowReadOnly || rowQuickActions.readOnly === true,
       onEdit: rowQuickActions.onEdit
-        || ((row) => row?.id && navigate(`/${windowName || entity}/${row.id}`)),
-      onDelete: rowQuickActions.onDelete || defaultRequestDelete,
+        || (windowReadOnly ? undefined : (row) => row?.id && navigate(`/${windowName || entity}/${row.id}`)),
+      onDelete: rowQuickActions.onDelete || (windowReadOnly ? undefined : defaultRequestDelete),
     };
     // Thread sendDocument through to DataTable → RowQuickActions for the gate,
     // and inject a default onEmail when the window is eligible but the host
@@ -495,7 +501,7 @@ export function ListView({
       merged.onEmail = (row) => setEmailRow(row);
     }
     return merged;
-  }, [quickActionsEnabled, rowQuickActions, navigate, windowName, entity, defaultRequestDelete, effectiveSendDocument, sendDocumentEnabled]);
+  }, [quickActionsEnabled, rowQuickActions, navigate, windowName, entity, defaultRequestDelete, effectiveSendDocument, sendDocumentEnabled, windowReadOnly]);
   const tMenu = useMenuLabel();
   const t = useLabel(labelOverrides);
   const ui = useUI();

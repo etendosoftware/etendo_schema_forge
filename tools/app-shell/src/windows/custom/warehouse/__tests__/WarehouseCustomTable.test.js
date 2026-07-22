@@ -55,4 +55,14 @@ describe('WarehouseCustomTable — product count cell', () => {
   it('shows dash when count is undefined or null', () => {
     assert.match(src, /count === undefined.*count === null/s);
   });
+
+  it('counts products by qty !== 0 (regression guard, ETP-4528: keeps negative/shrinkage stock in the count)', () => {
+    // aggregateProducts no longer filters internally, so this cell must apply its own
+    // non-zero predicate (matching the Products tab), not the KPI's strict-positive one.
+    assert.match(src, /aggregateProducts\(allContents\)\.filter\(p => p\.qty !== 0\)\.length/);
+  });
+
+  it('does not use the strict-positive KPI predicate for the product count', () => {
+    assert.doesNotMatch(src, /aggregateProducts\(allContents\)\.filter\(p => p\.qty > 0\)/);
+  });
 });

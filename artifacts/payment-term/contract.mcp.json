@@ -1,8 +1,8 @@
 {
-  "version": "0.3.0",
+  "version": "0.4.0",
   "generatedAt": "2026-04-29T19:06:55.269Z",
   "updatedAt": "2026-05-19T17:03:46.080Z",
-  "contractChecksum": "c656cd8e9116704f",
+  "contractChecksum": "7747449adb3281d4",
   "apiPrediction": {
     "specName": "payment-term",
     "baseUrl": "/sws/neo/payment-term",

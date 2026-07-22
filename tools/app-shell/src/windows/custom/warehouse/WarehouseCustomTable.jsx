@@ -30,7 +30,9 @@ async function fetchProductCount(warehouseId, token, apiBaseUrl) {
       ),
     ).then(results => results.flat());
 
-    return aggregateProducts(allContents).length;
+    // Count of products with non-zero stock — consistent with the Products tab it summarizes
+    // (shows negative shrinkage/loss too, hides only exact zero).
+    return aggregateProducts(allContents).filter(p => p.qty !== 0).length;
   })()
     .catch(() => null)
     .finally(() => inFlightCounts.delete(key));

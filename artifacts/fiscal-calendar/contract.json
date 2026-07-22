@@ -1,8 +1,8 @@
 {
-  "version": "0.3.0",
+  "version": "0.4.0",
   "generatedAt": "2026-07-07T11:18:10.164Z",
-  "updatedAt": "2026-07-13T18:35:22.869Z",
-  "checksum": "de2c03c526bde48a",
+  "updatedAt": "2026-07-21T12:35:25.300Z",
+  "checksum": "cf3b1051c306dcc3",
   "frontendContract": {
     "window": {
       "id": "117",
@@ -78,6 +78,10 @@
             "form": true,
             "sourceRequired": true,
             "gridOrder": 1,
+            "validation": {
+              "required": true,
+              "maxLength": 10
+            },
             "callout": {
               "className": "org.openbravo.erpCommon.ad_callouts.SL_Year_Validation"
             }
@@ -93,7 +97,10 @@
             "required": false,
             "grid": true,
             "form": true,
-            "gridOrder": 2
+            "gridOrder": 2,
+            "validation": {
+              "maxLength": 255
+            }
           },
           {
             "name": "processNow",
@@ -110,7 +117,10 @@
               "type": "computed",
               "source": "false"
             },
-            "defaultValue": "N"
+            "defaultValue": "N",
+            "validation": {
+              "maxLength": 1
+            }
           }
         ],
         "searchableFields": [],

@@ -1,6 +1,6 @@
 import ConversionRateDownloaderLogPage, { api } from './ConversionRateDownloaderLogPage';
 
-const windowMeta = { category: 'settings', name: 'Conversion Rate Downloader Log' };
+const windowMeta = { category: 'settings', name: 'Conversion Rate Downloader Log', readOnly: true };
 
 // @sf-generated-start component:App
 export default function App({ windowName, recordId, token, apiBaseUrl, window, ...rest }) {

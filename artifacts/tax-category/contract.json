@@ -1,8 +1,8 @@
 {
-  "version": "0.2.0",
+  "version": "0.3.0",
   "generatedAt": "2026-06-26T17:01:05.650Z",
-  "updatedAt": "2026-07-14T00:34:34.923Z",
-  "checksum": "4df6744186c56276",
+  "updatedAt": "2026-07-21T12:35:24.346Z",
+  "checksum": "fe68572d8a6ad233",
   "frontendContract": {
     "window": {
       "id": "138",
@@ -37,7 +37,11 @@
             "form": true,
             "sourceRequired": true,
             "section": "principal",
-            "seq": 1
+            "seq": 1,
+            "validation": {
+              "required": true,
+              "maxLength": 60
+            }
           },
           {
             "name": "description",
@@ -51,7 +55,10 @@
             "grid": false,
             "form": true,
             "section": "principal",
-            "seq": 2
+            "seq": 2,
+            "validation": {
+              "maxLength": 255
+            }
           },
           {
             "name": "default",
@@ -66,7 +73,11 @@
             "form": true,
             "sourceRequired": true,
             "section": "principal",
-            "seq": 3
+            "seq": 3,
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            }
           },
           {
             "name": "asbom",
@@ -86,7 +97,11 @@
             },
             "defaultValue": "N",
             "section": "principal",
-            "seq": 4
+            "seq": 4,
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            }
           },
           {
             "name": "obsptiTaxtype",
@@ -130,7 +145,10 @@
               }
             ],
             "section": "principal",
-            "seq": 5
+            "seq": 5,
+            "validation": {
+              "maxLength": 60
+            }
           },
           {
             "name": "obsptiTransactiontype",
@@ -167,7 +185,10 @@
               }
             ],
             "section": "principal",
-            "seq": 6
+            "seq": 6,
+            "validation": {
+              "maxLength": 60
+            }
           },
           {
             "name": "obsptiRatetype",
@@ -246,7 +267,10 @@
               }
             ],
             "section": "principal",
-            "seq": 7
+            "seq": 7,
+            "validation": {
+              "maxLength": 60
+            }
           },
           {
             "name": "aeatsiiDeclarable",
@@ -266,7 +290,11 @@
             },
             "defaultValue": "Y",
             "section": "principal",
-            "seq": 8
+            "seq": 8,
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            }
           }
         ],
         "searchableFields": [

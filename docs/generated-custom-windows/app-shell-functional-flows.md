@@ -145,7 +145,9 @@ Any authenticated route can also be opened with `?embedded=1`; in that mode the 
 - **Main path behavior:**
   - With `client_id`, `redirect_uri`, `code_challenge`, and `response_type=code`, the page renders a consent screen.
   - Missing `scope` defaults to `neo:read neo:write`.
-  - Approve posts to `/oauth2/authorize` with the bearer token and PKCE parameters, then redirects to the returned `redirect_url`.
+  - The consent screen includes an **Access duration** selector (`oauthTokenValidity`) that lets the user choose the issued access token's validity period. Presets: **1 day** (default), **1 week**, **1 month**, and **No expiration** (labels `oauthValidity1Day` / `oauthValidity1Week` / `oauthValidity1Month` / `oauthValidityNever`). A live expiry preview shows the resulting expiration timestamp, or "No expiration" when that option is selected.
+  - Approve posts to `/oauth2/authorize` with the bearer token, the PKCE parameters, and `validity_seconds` (the selected duration in seconds; `0` for "No expiration"), then redirects to the returned `redirect_url`.
+  - **Backend contract:** the server normalizes `validity_seconds` before issuing the token — absent/non-numeric falls back to the 1-day default, values are clamped to a MIN of 300s (5 min) and a MAX of 2,592,000s (30 days), and `0` is preserved as a never-expiring token. The granted validity is persisted and reused on `refresh_token` grants, so a never-expiring token stays never-expiring. Full backend rules: `com.etendoerp.go/docs/package-architecture.md` → "Authorize-grant token validity policy".
   - Without a full OAuth request, the page shows the generic connection landing screen and the derived MCP server URL.
 - **Failure or edge behavior:**
   - Deny redirects back to `redirect_uri` with `error=access_denied` and preserves `state` when present.
@@ -157,7 +159,8 @@ Any authenticated route can also be opened with `?embedded=1`; in that mode the 
   1. Open `/authorize` with no query string and confirm the connection landing screen appears.
   2. Open `/authorize?client_id=test-client&redirect_uri=https://example.test/cb&code_challenge=abc&response_type=code&state=xyz` while authenticated.
   3. Click **Deny** and confirm the browser redirects to the callback URL with `error=access_denied` and `state=xyz`.
-  4. Repeat and click **Authorize** against a live backend to confirm redirect to the backend-provided `redirect_url`.
+  4. Change the **Access duration** selector across the presets and confirm the expiry preview updates (and shows "No expiration" for the never-expiring option).
+  5. Repeat and click **Authorize** against a live backend to confirm redirect to the backend-provided `redirect_url`; verify the issued token's expiry matches the selected duration (and that a "No expiration" grant returns a token response with no `expires_in`).
 
 ### 6. OAuth2 client administration
 

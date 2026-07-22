@@ -42,20 +42,38 @@ describe('aggregateProducts', () => {
     });
   });
 
-  describe('zero / negative quantity filtering', () => {
-    it('filters out products with qty <= 0 after aggregation', () => {
+  describe('non-positive quantities are not filtered by this helper', () => {
+    // Filtering by quantity is now a caller concern, not aggregateProducts':
+    // the Products tab and the list count cell use qty!==0, while the "in
+    // stock" KPI still wants qty>0. So every aggregated row must survive
+    // here, whatever its sign.
+    it('keeps products with qty === 0 after aggregation', () => {
       const rows = [
         { product: 'p1', 'product$_identifier': 'Widget', uOM: 'u1', quantityOnHand: 0, etgoValuation: 0 },
       ];
-      expect(aggregateProducts(rows)).toEqual([]);
+      const result = aggregateProducts(rows);
+      expect(result).toHaveLength(1);
+      expect(result[0].qty).toBe(0);
     });
 
-    it('filters out products where positive and negative sums cancel to 0', () => {
+    it('keeps products where positive and negative sums cancel to 0', () => {
       const rows = [
         { product: 'p1', 'product$_identifier': 'Widget', uOM: 'u1', quantityOnHand: 5, etgoValuation: 50 },
         { product: 'p1', 'product$_identifier': 'Widget', uOM: 'u1', quantityOnHand: -5, etgoValuation: -50 },
       ];
-      expect(aggregateProducts(rows)).toEqual([]);
+      const result = aggregateProducts(rows);
+      expect(result).toHaveLength(1);
+      expect(result[0].qty).toBe(0);
+    });
+
+    it('keeps products where qty is negative after aggregation', () => {
+      const rows = [
+        { product: 'p1', 'product$_identifier': 'Widget', uOM: 'u1', quantityOnHand: 3, etgoValuation: 30 },
+        { product: 'p1', 'product$_identifier': 'Widget', uOM: 'u1', quantityOnHand: -10, etgoValuation: -100 },
+      ];
+      const result = aggregateProducts(rows);
+      expect(result).toHaveLength(1);
+      expect(result[0].qty).toBe(-7);
     });
 
     it('keeps products where qty is positive after aggregation', () => {
@@ -101,15 +119,19 @@ describe('aggregateProducts', () => {
       const rows = [
         { product: 'p1', 'product$_identifier': 'Widget', uOM: 'u1', quantityOnHand: 'bad', etgoValuation: 0 },
       ];
-      // qty becomes 0 → filtered out
-      expect(aggregateProducts(rows)).toEqual([]);
+      // qty becomes 0 — still returned; no filtering happens in aggregateProducts
+      const result = aggregateProducts(rows);
+      expect(result).toHaveLength(1);
+      expect(result[0].qty).toBe(0);
     });
 
     it('treats undefined quantityOnHand as 0', () => {
       const rows = [
         { product: 'p1', 'product$_identifier': 'Widget', uOM: 'u1', etgoValuation: 0 },
       ];
-      expect(aggregateProducts(rows)).toEqual([]);
+      const result = aggregateProducts(rows);
+      expect(result).toHaveLength(1);
+      expect(result[0].qty).toBe(0);
     });
 
     it('treats non-numeric etgoValuation as 0', () => {

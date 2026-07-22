@@ -17,6 +17,7 @@ export function columnFlex(col, idx) {
   if (col.type === 'price') return `${g} 0 152px`;
   if (col.type === 'quantity' || col.type === 'integer') return `${g} 0 152px`;
   if (col.type === 'decimal' || col.type === 'percent') return `${g} 0 152px`;
+  if (col.type === 'signedDelta') return `${g} 0 152px`;
   if (col.type === 'string' || col.type === 'text') return '1 1 224px';
   if (col.type === 'selector' || col.type === 'search' || col.type === 'foreignKey') {
     const grow = col.grow !== undefined ? col.grow : (idx === 0);
@@ -44,6 +45,7 @@ export function columnMinWidthPx(col, idx) {
   if (col.type === 'price') return 152;
   if (col.type === 'quantity' || col.type === 'integer') return 152;
   if (col.type === 'decimal' || col.type === 'percent') return 152;
+  if (col.type === 'signedDelta') return 152;
   if (col.type === 'string' || col.type === 'text') return 224;
   if (col.type === 'selector' || col.type === 'search' || col.type === 'foreignKey') return 192;
   if (col.type === 'enum' || col.type === 'select') return 224;

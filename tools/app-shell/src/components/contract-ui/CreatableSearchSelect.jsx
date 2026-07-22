@@ -218,6 +218,30 @@ export function CreatableSearchSelect({
     }
   }, [displayValue]);
 
+  // Re-sync local options whenever the caller passes a NEW staticOptions array — e.g. a catalog
+  // fetched asynchronously after mount (starts as `[]`, then populated once the request resolves).
+  // The initial `useState(staticOptions ?? [])` above only covers the first render, so without this
+  // effect a caller that loads its options after the component mounts would see an empty dropdown
+  // forever (ETP-4530). Callers passing a stable array (e.g. a module-level constant) are unaffected.
+  //
+  // staticOptions is compared BY CONTENT (not by reference) against the last value this effect
+  // actually synced from: many callers pass an inline-mapped array (a new reference every render),
+  // and syncing unconditionally on every reference change would (a) trigger an extra render per
+  // parent render, resetting dropdown/scroll state while open, and (b) clobber a locally-created
+  // option (`handleCreate` below adds it into `options` immutably via `setOptions(prev => ...)`)
+  // the moment the parent next re-renders with a content-identical-but-new-reference array.
+  const lastSyncedStaticOptionsRef = useRef(undefined);
+  useEffect(() => {
+    if (!staticOptions) return;
+    const lastSynced = lastSyncedStaticOptionsRef.current;
+    const unchanged = lastSynced
+      && lastSynced.length === staticOptions.length
+      && lastSynced.every((opt, i) => opt.id === staticOptions[i]?.id && opt.name === staticOptions[i]?.name);
+    if (unchanged) return;
+    lastSyncedStaticOptionsRef.current = staticOptions;
+    setOptions(staticOptions);
+  }, [staticOptions]);
+
   // Fetch options whenever the parent value changes or after a forced refresh (refreshKey)
   useEffect(() => {
     if (staticOptions) return;
@@ -390,7 +414,19 @@ export function CreatableSearchSelect({
   useEffect(() => {
     if (!showDropdown) return;
     updateDropdownDirection();
-    const onReflow = () => updateDropdownDirection();
+    const onReflow = (e) => {
+      // 'scroll' is captured at the window level (capture=true) so the panel stays glued
+      // to its trigger when an ANCESTOR scrolls (e.g. the modal body). But capture-phase
+      // listeners on window also see the dropdown's OWN internal scroll (scrolling the
+      // options list itself), which re-triggers this on every scroll tick — fighting the
+      // user's own scroll gesture inside a long options list (e.g. a full chart of
+      // accounts). Skip recompute when the scroll originated from inside the dropdown.
+      // Only 'scroll' events carry a Node target here — a 'resize' event's target is
+      // `window` itself, which Node.contains() throws on, so gate the containment check
+      // to 'scroll' and always recompute on 'resize'.
+      if (e.type === 'scroll' && dropdownRef.current?.contains(e.target)) return;
+      updateDropdownDirection();
+    };
     window.addEventListener('resize', onReflow);
     window.addEventListener('scroll', onReflow, true);
     return () => {
@@ -485,6 +521,30 @@ export function CreatableSearchSelect({
           className="bg-white border rounded-md shadow-lg overflow-auto"
           style={dropdownStyle}
           data-open-up={openUp ? 'true' : 'false'}
+          // Radix Dialog (react-remove-scroll) locks body scroll while open by attaching a
+          // global, capture-phase wheel listener that calls preventDefault() on any wheel
+          // event outside the dialog's own DOM subtree — it only recognizes elements nested
+          // inside Dialog.Content as scrollable exceptions. This panel is portaled to
+          // document.body as a SIBLING of the dialog content (so it can be positioned
+          // relative to the viewport instead of the modal, see the comment on
+          // updateDropdownDirection above), so react-remove-scroll never allowlists it: the
+          // browser's native wheel-to-scroll translation gets cancelled before it can move
+          // this element's scrollTop, even though overflow:auto and a real maxHeight are
+          // correctly set (confirmed live: scrollTop stayed 0 after a wheel event, but a
+          // direct `el.scrollTop = x` assignment worked fine — only the NATIVE scroll
+          // mechanism is blocked). Bypass it manually, matching the same fix already used by
+          // LookupPicker.jsx for the identical scenario. Only do the manual adjustment when
+          // e.defaultPrevented is already true — react-remove-scroll's capture-phase listener
+          // runs before this bubble-phase handler, so that flag tells us whether native scroll
+          // was actually blocked. When this component is used OUTSIDE a Dialog (no
+          // react-remove-scroll active), native scrolling works normally and adding deltaY on
+          // top of it here would double-scroll the panel.
+          onWheel={(e) => {
+            e.stopPropagation();
+            if (e.defaultPrevented) {
+              e.currentTarget.scrollTop += e.deltaY;
+            }
+          }}
         >
           <SearchSelectOptionsPanel
             field={field}

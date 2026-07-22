@@ -1,14 +1,17 @@
 {
-  "version": "0.4.0",
+  "version": "0.5.0",
   "generatedAt": "2026-05-21T20:22:50.312Z",
-  "updatedAt": "2026-05-22T19:12:35.476Z",
-  "checksum": "f7dea79de409cd79",
+  "updatedAt": "2026-07-21T12:35:17.044Z",
+  "checksum": "9d0f7099b544a92c",
   "frontendContract": {
     "window": {
       "id": "116",
       "name": "Conversion Rates",
       "primaryEntity": "conversionRate",
       "category": "finance",
+      "hideCreate": true,
+      "readOnly": true,
+      "hideDelete": true,
       "detailEntity": null,
       "layoutType": "default"
     },
@@ -38,6 +41,10 @@
             "reference": "Currency",
             "inputMode": "selector",
             "defaultValue": "@SQL=SELECT C_CURRENCY_ID FROM AD_CLIENT  WHERE AD_CLIENT_ID = @AD_CLIENT_ID@",
+            "validation": {
+              "required": true,
+              "maxLength": 22
+            },
             "readOnlyLogic": {
               "raw": "@sMFCRSynced@='Y'",
               "evaluable": true,
@@ -63,6 +70,10 @@
             "reference": "Currency",
             "inputMode": "selector",
             "defaultValue": "@SQL=SELECT C_CURRENCY_ID FROM AD_CLIENT  WHERE AD_CLIENT_ID = @AD_CLIENT_ID@",
+            "validation": {
+              "required": true,
+              "maxLength": 22
+            },
             "readOnlyLogic": {
               "raw": "@sMFCRSynced@='Y'",
               "evaluable": true,
@@ -81,6 +92,10 @@
             "grid": true,
             "form": true,
             "sourceRequired": true,
+            "validation": {
+              "required": true,
+              "maxLength": 10
+            },
             "readOnlyLogic": {
               "raw": "@sMFCRSynced@='Y'",
               "evaluable": true,
@@ -98,6 +113,9 @@
             "required": false,
             "grid": true,
             "form": true,
+            "validation": {
+              "maxLength": 10
+            },
             "readOnlyLogic": {
               "raw": "@sMFCRSynced@='Y'",
               "evaluable": true,
@@ -116,6 +134,10 @@
             "grid": true,
             "form": true,
             "sourceRequired": true,
+            "validation": {
+              "required": true,
+              "maxLength": 22
+            },
             "callout": {
               "className": "org.openbravo.erpCommon.ad_callouts.SL_Conversion_Rate"
             },
@@ -137,6 +159,10 @@
             "grid": true,
             "form": true,
             "sourceRequired": true,
+            "validation": {
+              "required": true,
+              "maxLength": 22
+            },
             "callout": {
               "className": "org.openbravo.erpCommon.ad_callouts.SL_Conversion_Rate"
             },
@@ -162,7 +188,10 @@
               "source": "N"
             },
             "defaultValue": "N",
-            "section": "principal"
+            "section": "principal",
+            "validation": {
+              "maxLength": 1
+            }
           }
         ],
         "searchableFields": [
@@ -201,6 +230,9 @@
       "name": "Conversion Rates",
       "primaryEntity": "conversionRate",
       "category": "finance",
+      "hideCreate": true,
+      "readOnly": true,
+      "hideDelete": true,
       "detailEntity": null
     },
     "entities": {
@@ -385,10 +417,10 @@
       "conversionRate": {
         "get": true,
         "getById": true,
-        "post": true,
-        "put": true,
-        "patch": true,
-        "delete": true,
+        "post": false,
+        "put": false,
+        "patch": false,
+        "delete": false,
         "listUrl": "/sws/neo/conversion-rates/conversionRate",
         "detailUrl": "/sws/neo/conversion-rates/conversionRate/{id}",
         "supportedFilters": [
@@ -430,7 +462,8 @@
       "parentFilter": "parentId={id} for child entities"
     },
     "window": {
-      "category": "finance"
+      "category": "finance",
+      "readOnly": true
     }
   },
   "testManifest": {

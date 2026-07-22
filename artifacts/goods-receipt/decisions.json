@@ -115,8 +115,8 @@
           "readOnlyLogic": "@Processed@='Y'"
         },
         "accountingDate": {
-          "form": false,
-          "readOnlyLogic": null
+          "visibility": "system",
+          "_note": "ETP-4531 (redefined 2026-07-17): accounting date is now hidden and unified with the document date internally; the Java-side guard that used to block this cascade has been removed so the native document-date→accounting-date coupling flows through untouched."
         },
         "salesOrder": {
           "visibility": "editable",
@@ -321,9 +321,9 @@
   "rules": {
     "SL_InOut_AccountingDate": {
       "entity": "goodsReceipt",
-      "decision": "Omit",
-      "description": "Auto-fill accounting date from movement date. Source not found — classic UI only, backend handles date defaulting.",
-      "impactIfOmitted": "Users must manually set accounting date; backend default still applies on save."
+      "decision": "Keep",
+      "description": "ETP-4531 (redefined 2026-07-17): M_InOut.MovementDate carries AD_Column.AD_Callout_ID = org.openbravo.erpCommon.ad_callouts.SL_InOut_AccountingDate, which auto-fills dateAcct from movementDate. com.etendoerp.go's NeoCalloutService executes this same callout server-side (create-time cascade and interactive per-field callout), so it fires in the GO SPA too. accountingDate is now hidden (visibility: system) and unified with movementDate — the native cascade is intentionally kept as-is. GoodsReceiptHeaderHandler#handle calls mirrorAccountingDate on every CRUD write (POST/PUT/PATCH), an explicit server-side mirror of movementDate into accountingDate that is the primary mechanism keeping the two in sync (this callout is a secondary path, e.g. classic-UI edits).",
+      "impactIfOmitted": "If mirrorAccountingDate were removed, this callout alone would not reliably keep accountingDate in sync (the live React UI always sends PATCH for edits, and NeoCalloutService's cascade doesn't cover every write path)."
     },
     "SE_InOut_Organization": {
       "entity": "goodsReceipt",

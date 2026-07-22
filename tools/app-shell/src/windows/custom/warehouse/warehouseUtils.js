@@ -2,6 +2,11 @@
  * Deduplicate M_Storage_Detail rows by product, summing qtyOnHand and etgoValuation.
  * The unit cost (etgoCost) is per-product, identical across bins, so it is taken as-is
  * (not summed) — cost × total qty always reconciles with the summed valuation.
+ *
+ * Returns ALL aggregated products, including zero and negative quantities — no qty
+ * filter is applied here. Each consumer has a different intended semantic (show
+ * non-zero stock, count non-zero stock, or count strictly-positive stock for a KPI),
+ * so the qty predicate must be applied explicitly at each call site.
  */
 export function aggregateProducts(rows, uomMap = {}) {
   const map = new Map();
@@ -20,5 +25,5 @@ export function aggregateProducts(rows, uomMap = {}) {
       map.set(id, { id, label, uom, qty, valuation, cost });
     }
   }
-  return Array.from(map.values()).filter(p => p.qty > 0);
+  return Array.from(map.values());
 }

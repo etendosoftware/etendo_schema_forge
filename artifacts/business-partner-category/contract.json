@@ -1,8 +1,8 @@
 {
-  "version": "0.2.0",
+  "version": "0.3.0",
   "generatedAt": "2026-07-01T17:11:14.893Z",
-  "updatedAt": "2026-07-01T17:12:24.383Z",
-  "checksum": "b0c899733fdc2169",
+  "updatedAt": "2026-07-21T12:35:18.045Z",
+  "checksum": "3fc16763fdc25ca3",
   "frontendContract": {
     "window": {
       "id": "192",
@@ -46,7 +46,11 @@
             "form": true,
             "sourceRequired": true,
             "section": "principal",
-            "seq": 1
+            "seq": 1,
+            "validation": {
+              "required": true,
+              "maxLength": 40
+            }
           },
           {
             "name": "name",
@@ -61,7 +65,11 @@
             "form": true,
             "sourceRequired": true,
             "section": "principal",
-            "seq": 2
+            "seq": 2,
+            "validation": {
+              "required": true,
+              "maxLength": 60
+            }
           },
           {
             "name": "description",
@@ -78,7 +86,10 @@
             "seq": 3,
             "span": 2,
             "rows": 1,
-            "explicitType": true
+            "explicitType": true,
+            "validation": {
+              "maxLength": 255
+            }
           },
           {
             "name": "default",
@@ -93,7 +104,11 @@
             "form": true,
             "sourceRequired": true,
             "section": "principal",
-            "seq": 4
+            "seq": 4,
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            }
           }
         ],
         "searchableFields": [
@@ -123,7 +138,11 @@
             "reference": "ValidCombination",
             "inputMode": "selector",
             "seq": 1,
-            "grow": true
+            "grow": true,
+            "validation": {
+              "required": true,
+              "maxLength": 32
+            }
           },
           {
             "name": "customerPrepayment",
@@ -139,7 +158,10 @@
             "reference": "ValidCombination",
             "inputMode": "selector",
             "seq": 2,
-            "grow": true
+            "grow": true,
+            "validation": {
+              "maxLength": 32
+            }
           },
           {
             "name": "writeoff",
@@ -156,7 +178,11 @@
             "reference": "ValidCombination",
             "inputMode": "selector",
             "seq": 5,
-            "grow": true
+            "grow": true,
+            "validation": {
+              "required": true,
+              "maxLength": 32
+            }
           },
           {
             "name": "writeoffRevAcct",
@@ -171,7 +197,10 @@
             "form": true,
             "reference": "ValidCombination",
             "inputMode": "selector",
-            "seq": 6
+            "seq": 6,
+            "validation": {
+              "maxLength": 32
+            }
           },
           {
             "name": "vendorLiability",
@@ -188,7 +217,11 @@
             "reference": "ValidCombination",
             "inputMode": "selector",
             "seq": 3,
-            "grow": true
+            "grow": true,
+            "validation": {
+              "required": true,
+              "maxLength": 32
+            }
           },
           {
             "name": "vendorPrepayment",
@@ -204,7 +237,10 @@
             "reference": "ValidCombination",
             "inputMode": "selector",
             "seq": 4,
-            "grow": true
+            "grow": true,
+            "validation": {
+              "maxLength": 32
+            }
           },
           {
             "name": "nonInvoicedReceipts",
@@ -219,7 +255,10 @@
             "form": true,
             "reference": "ValidCombination",
             "inputMode": "selector",
-            "seq": 7
+            "seq": 7,
+            "validation": {
+              "maxLength": 32
+            }
           },
           {
             "name": "nonInvoicedReceivables",
@@ -234,7 +273,10 @@
             "form": true,
             "reference": "ValidCombination",
             "inputMode": "selector",
-            "seq": 8
+            "seq": 8,
+            "validation": {
+              "maxLength": 32
+            }
           },
           {
             "name": "nonInvoicedRevenues",
@@ -249,7 +291,10 @@
             "form": true,
             "reference": "ValidCombination",
             "inputMode": "selector",
-            "seq": 9
+            "seq": 9,
+            "validation": {
+              "maxLength": 32
+            }
           },
           {
             "name": "paymentDiscountExpense",
@@ -264,7 +309,10 @@
             "form": true,
             "reference": "ValidCombination",
             "inputMode": "selector",
-            "seq": 10
+            "seq": 10,
+            "validation": {
+              "maxLength": 32
+            }
           },
           {
             "name": "paymentDiscountRevenue",
@@ -279,7 +327,10 @@
             "form": true,
             "reference": "ValidCombination",
             "inputMode": "selector",
-            "seq": 11
+            "seq": 11,
+            "validation": {
+              "maxLength": 32
+            }
           },
           {
             "name": "realizedGainAcct",
@@ -294,7 +345,10 @@
             "form": true,
             "reference": "ValidCombination",
             "inputMode": "selector",
-            "seq": 19
+            "seq": 19,
+            "validation": {
+              "maxLength": 32
+            }
           },
           {
             "name": "realizedLossAcct",
@@ -309,7 +363,10 @@
             "form": true,
             "reference": "ValidCombination",
             "inputMode": "selector",
-            "seq": 20
+            "seq": 20,
+            "validation": {
+              "maxLength": 32
+            }
           },
           {
             "name": "unearnedRevenue",
@@ -324,7 +381,10 @@
             "form": true,
             "reference": "ValidCombination",
             "inputMode": "selector",
-            "seq": 16
+            "seq": 16,
+            "validation": {
+              "maxLength": 32
+            }
           },
           {
             "name": "unrealizedGainsAcct",
@@ -339,7 +399,10 @@
             "form": true,
             "reference": "ValidCombination",
             "inputMode": "selector",
-            "seq": 17
+            "seq": 17,
+            "validation": {
+              "maxLength": 32
+            }
           },
           {
             "name": "unrealizedLossesAcct",
@@ -354,7 +417,10 @@
             "form": true,
             "reference": "ValidCombination",
             "inputMode": "selector",
-            "seq": 18
+            "seq": 18,
+            "validation": {
+              "maxLength": 32
+            }
           },
           {
             "name": "vendorServiceLiability",
@@ -369,7 +435,10 @@
             "form": true,
             "reference": "ValidCombination",
             "inputMode": "selector",
-            "seq": 21
+            "seq": 21,
+            "validation": {
+              "maxLength": 32
+            }
           },
           {
             "name": "doubtfulDebtAccount",
@@ -384,7 +453,10 @@
             "form": true,
             "reference": "ValidCombination",
             "inputMode": "selector",
-            "seq": 12
+            "seq": 12,
+            "validation": {
+              "maxLength": 32
+            }
           },
           {
             "name": "badDebtExpenseAccount",
@@ -399,7 +471,10 @@
             "form": true,
             "reference": "ValidCombination",
             "inputMode": "selector",
-            "seq": 13
+            "seq": 13,
+            "validation": {
+              "maxLength": 32
+            }
           },
           {
             "name": "badDebtRevenueAccount",
@@ -414,7 +489,10 @@
             "form": true,
             "reference": "ValidCombination",
             "inputMode": "selector",
-            "seq": 14
+            "seq": 14,
+            "validation": {
+              "maxLength": 32
+            }
           },
           {
             "name": "allowanceForDoubtfulDebtAccount",
@@ -429,7 +507,10 @@
             "form": true,
             "reference": "ValidCombination",
             "inputMode": "selector",
-            "seq": 15
+            "seq": 15,
+            "validation": {
+              "maxLength": 32
+            }
           }
         ],
         "searchableFields": [],
