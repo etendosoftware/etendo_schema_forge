@@ -1,5 +1,5 @@
 {
-  "sql": "SELECT co.AD_Callout_ID, co.Name, mo.Classname, col.ColumnName, col.AD_Table_ID FROM AD_Callout co JOIN AD_Column col ON col.AD_Callout_ID = co.AD_Callout_ID JOIN AD_Tab t ON col.AD_Table_ID = t.AD_Table_ID LEFT JOIN AD_Model_Object mo ON mo.AD_Callout_ID = co.AD_Callout_ID WHERE t.AD_Window_ID = $1 ORDER BY co.AD_Callout_ID, col.AD_Table_ID, col.ColumnName",
+  "sql": "SELECT co.AD_Callout_ID, co.Name, mo.Classname, col.ColumnName, col.AD_Table_ID FROM AD_Callout co JOIN AD_Column col ON col.AD_Callout_ID = co.AD_Callout_ID JOIN AD_Tab t ON col.AD_Table_ID = t.AD_Table_ID LEFT JOIN AD_Model_Object mo ON mo.AD_Callout_ID = co.AD_Callout_ID WHERE t.AD_Window_ID = $1 ORDER BY co.AD_Callout_ID COLLATE \"C\", col.AD_Table_ID COLLATE \"C\", col.ColumnName COLLATE \"C\"",
   "versions": {
     "1e3e96b5dc79b4c7366315de5249e070d2a81279761af45c7ea30b5365d1ed85": {
       "checksum": "c6392ae9b8962abd7857989884fb52dba32b37b869ed3a0f5b7d26b31624563b",
@@ -244,7 +244,7 @@
       ]
     },
     "314caee3650d614f6e16516792b6ae0979d23d630da4a9b794b05902fc5a07c8": {
-      "checksum": "949fcddab1f8289f313f5e27d4f84f696ee2a85e5b09c5aa93a1bee50ecdfe83",
+      "checksum": "82f8a89bd16becbef6524520e675c0379ea98fe3dd6bcc9e74fe6070c9dcabf4",
       "params": [
         "143"
       ],
@@ -274,14 +274,14 @@
           "ad_callout_id": "138",
           "ad_table_id": "260",
           "classname": "org.openbravo.erpCommon.ad_callouts.SL_Order_Amt",
-          "columnname": "C_Tax_ID",
+          "columnname": "CANCELPRICEAD",
           "name": "SL_Order_Amt"
         },
         {
           "ad_callout_id": "138",
           "ad_table_id": "260",
           "classname": "org.openbravo.erpCommon.ad_callouts.SL_Order_Amt",
-          "columnname": "CANCELPRICEAD",
+          "columnname": "C_Tax_ID",
           "name": "SL_Order_Amt"
         },
         {
@@ -456,7 +456,7 @@
       ]
     },
     "372af9720002cd00d7ab60cf2919961286c4022d7cae4da33f0586eff52202ca": {
-      "checksum": "0a03b44c001736d896ff3f19d1f5c437d43baf9e06b5b95344acaca454d5b9e7",
+      "checksum": "43b9dac1e58eedf12f3e37b97de38f37010a0e7fb98f45ea51af5c09abb12d77",
       "params": [
         "167"
       ],
@@ -493,14 +493,14 @@
           "ad_callout_id": "127",
           "ad_table_id": "333",
           "classname": "org.openbravo.erpCommon.ad_callouts.SL_Invoice_Amt",
-          "columnname": "C_Tax_ID",
+          "columnname": "CANCELPRICEAD",
           "name": "SL_Invoice_Amt"
         },
         {
           "ad_callout_id": "127",
           "ad_table_id": "333",
           "classname": "org.openbravo.erpCommon.ad_callouts.SL_Invoice_Amt",
-          "columnname": "CANCELPRICEAD",
+          "columnname": "C_Tax_ID",
           "name": "SL_Invoice_Amt"
         },
         {
@@ -773,7 +773,7 @@
       ]
     },
     "4bc12fadc3f4675f289d036b6b78cded78314e733c80834fa999e947d67ec251": {
-      "checksum": "0a03b44c001736d896ff3f19d1f5c437d43baf9e06b5b95344acaca454d5b9e7",
+      "checksum": "43b9dac1e58eedf12f3e37b97de38f37010a0e7fb98f45ea51af5c09abb12d77",
       "params": [
         "183"
       ],
@@ -810,14 +810,14 @@
           "ad_callout_id": "127",
           "ad_table_id": "333",
           "classname": "org.openbravo.erpCommon.ad_callouts.SL_Invoice_Amt",
-          "columnname": "C_Tax_ID",
+          "columnname": "CANCELPRICEAD",
           "name": "SL_Invoice_Amt"
         },
         {
           "ad_callout_id": "127",
           "ad_table_id": "333",
           "classname": "org.openbravo.erpCommon.ad_callouts.SL_Invoice_Amt",
-          "columnname": "CANCELPRICEAD",
+          "columnname": "C_Tax_ID",
           "name": "SL_Invoice_Amt"
         },
         {

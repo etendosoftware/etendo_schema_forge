@@ -1,8 +1,8 @@
 {
-  "sql": "-- 1. Tab-level process SELECT 'tab_process' AS mechanism, p.AD_Process_ID AS process_id, NULL AS obuiapp_process_id, p.Name, p.Classname, NULL AS column_name FROM AD_Process p JOIN AD_Tab t ON t.AD_Process_ID = p.AD_Process_ID WHERE t.AD_Window_ID = $1 UNION ALL -- 2. Classic process (button column -> AD_Process) SELECT 'classic_process' AS mechanism, p.AD_Process_ID AS process_id, NULL AS obuiapp_process_id, p.Name, p.Classname, c.ColumnName FROM AD_Process p JOIN AD_Column c ON c.AD_Process_ID = p.AD_Process_ID JOIN AD_Tab t ON c.AD_Table_ID = t.AD_Table_ID WHERE t.AD_Window_ID = $1 UNION ALL -- 3. OBUIAPP Process (button column -> OBUIAPP_Process) SELECT 'obuiapp_process' AS mechanism, NULL AS process_id, op.OBUIAPP_Process_ID AS obuiapp_process_id, op.Name, op.Classname, c.ColumnName FROM OBUIAPP_Process op JOIN AD_Column c ON c.EM_OBUIAPP_Process_ID = op.OBUIAPP_Process_ID JOIN AD_Tab t ON c.AD_Table_ID = t.AD_Table_ID WHERE t.AD_Window_ID = $1 UNION ALL -- 4. Hardcoded buttons (no process linked) SELECT 'hardcoded' AS mechanism, NULL AS process_id, NULL AS obuiapp_process_id, c.ColumnName AS name, NULL AS classname, c.ColumnName FROM AD_Column c JOIN AD_Tab t ON c.AD_Table_ID = t.AD_Table_ID JOIN AD_Reference r ON c.AD_Reference_ID = r.AD_Reference_ID WHERE t.AD_Window_ID = $1 AND r.Name = 'Button' AND c.AD_Process_ID IS NULL AND c.EM_OBUIAPP_Process_ID IS NULL ORDER BY mechanism, name",
+  "sql": "SELECT * FROM ( SELECT 'tab_process' AS mechanism, p.AD_Process_ID AS process_id, NULL AS obuiapp_process_id, p.Name, p.Classname, NULL AS column_name FROM AD_Process p JOIN AD_Tab t ON t.AD_Process_ID = p.AD_Process_ID WHERE t.AD_Window_ID = $1 UNION ALL SELECT 'classic_process' AS mechanism, p.AD_Process_ID AS process_id, NULL AS obuiapp_process_id, p.Name, p.Classname, c.ColumnName FROM AD_Process p JOIN AD_Column c ON c.AD_Process_ID = p.AD_Process_ID JOIN AD_Tab t ON c.AD_Table_ID = t.AD_Table_ID WHERE t.AD_Window_ID = $1 UNION ALL SELECT 'obuiapp_process' AS mechanism, NULL AS process_id, op.OBUIAPP_Process_ID AS obuiapp_process_id, op.Name, op.Classname, c.ColumnName FROM OBUIAPP_Process op JOIN AD_Column c ON c.EM_OBUIAPP_Process_ID = op.OBUIAPP_Process_ID JOIN AD_Tab t ON c.AD_Table_ID = t.AD_Table_ID WHERE t.AD_Window_ID = $1 ) q ORDER BY mechanism COLLATE \"C\", name COLLATE \"C\", column_name COLLATE \"C\" NULLS LAST, process_id COLLATE \"C\" NULLS LAST, obuiapp_process_id COLLATE \"C\" NULLS LAST",
   "versions": {
     "1e3e96b5dc79b4c7366315de5249e070d2a81279761af45c7ea30b5365d1ed85": {
-      "checksum": "28c4e1a74bffade779e5f26580e5b7de73a1319751fef649e9d02a0035c76957",
+      "checksum": "5c0de44f8e43d1fc4a1265303b0a9b5c323e116a2ebe2b76bb45bb6fed4549c0",
       "params": [
         "144"
       ],
@@ -48,19 +48,19 @@
           "process_id": null
         },
         {
-          "classname": "org.openbravo.common.actionhandler.RelateProductCatTaxToServiceProduct",
-          "column_name": "Relateprodcattaxtoservice",
-          "mechanism": "obuiapp_process",
-          "name": "Relate Product Category and new tax to a Service Product",
-          "obuiapp_process_id": "E0870062F05F4DC88E589ABC6A45DF4C",
-          "process_id": null
-        },
-        {
           "classname": "org.openbravo.common.actionhandler.RelateProductCatToServiceProduct",
           "column_name": "Relateprodcattoservice",
           "mechanism": "obuiapp_process",
           "name": "Relate Product Cat to a Service Product",
           "obuiapp_process_id": "8E5996F1F3154B498468938B5341A0CB",
+          "process_id": null
+        },
+        {
+          "classname": "org.openbravo.common.actionhandler.RelateProductCatTaxToServiceProduct",
+          "column_name": "Relateprodcattaxtoservice",
+          "mechanism": "obuiapp_process",
+          "name": "Relate Product Category and new tax to a Service Product",
+          "obuiapp_process_id": "E0870062F05F4DC88E589ABC6A45DF4C",
           "process_id": null
         },
         {
@@ -89,7 +89,7 @@
       "rows": []
     },
     "2f22ba4790bcdcf783b1573c321c1f35b01b170c50ad5e9ab9e0d33f72120f75": {
-      "checksum": "8eddab5c95963851029043bd46ae436c241867000a2f02aff6c0e992411b4896",
+      "checksum": "34fee5791fe25ae175531db493f5248b848070ac802a7484ed32c4f761cddf68",
       "params": [
         "123"
       ],
@@ -101,14 +101,6 @@
           "name": "Create Invoice  (Volume Discount)",
           "obuiapp_process_id": null,
           "process_id": "800068"
-        },
-        {
-          "classname": null,
-          "column_name": "Processing",
-          "mechanism": "hardcoded",
-          "name": "Processing",
-          "obuiapp_process_id": null,
-          "process_id": null
         },
         {
           "classname": "org.openbravo.portal.GrantPortalAccessProcess",
@@ -161,7 +153,7 @@
       ]
     },
     "2f39e9609e474ff1203aed0f3c2e2ac4d33f2eefb8a503de19acec318125e2dc": {
-      "checksum": "ace6b11372c6fde157f26f09a91169470b50c464c2a3494129c41c3721d20948",
+      "checksum": "923e153f2d72eecc5b1d5d7d11c6f34b22cdb5582859e8be552e4f198ca37299",
       "params": [
         "170"
       ],
@@ -183,14 +175,6 @@
           "process_id": "122"
         },
         {
-          "classname": null,
-          "column_name": "Posted",
-          "mechanism": "hardcoded",
-          "name": "Posted",
-          "obuiapp_process_id": null,
-          "process_id": null
-        },
-        {
           "classname": "com.smf.jobs.defaults.Post",
           "column_name": "EM_Etblkp_Bulkposting",
           "mechanism": "obuiapp_process",
@@ -201,7 +185,7 @@
       ]
     },
     "314caee3650d614f6e16516792b6ae0979d23d630da4a9b794b05902fc5a07c8": {
-      "checksum": "b650d25e3b0da5167cec22c45e1c24690846d74ada6d5140dad0ede2c07f0ebd",
+      "checksum": "b4dc7472e67c10bd1454827e8dc8dc8bcf13a8caa61dad7050c9fb377a451b21",
       "params": [
         "143"
       ],
@@ -272,7 +256,7 @@
         },
         {
           "classname": null,
-          "column_name": "Processing",
+          "column_name": "DocAction",
           "mechanism": "classic_process",
           "name": "Process Order",
           "obuiapp_process_id": null,
@@ -280,7 +264,7 @@
         },
         {
           "classname": null,
-          "column_name": "DocAction",
+          "column_name": "Processing",
           "mechanism": "classic_process",
           "name": "Process Order",
           "obuiapp_process_id": null,
@@ -293,14 +277,6 @@
           "name": "Update Payment Plan",
           "obuiapp_process_id": null,
           "process_id": "FB740AB61B0E42B198D2C88D3A0D0CE6"
-        },
-        {
-          "classname": null,
-          "column_name": "RM_ReceiveMaterials",
-          "mechanism": "hardcoded",
-          "name": "RM_ReceiveMaterials",
-          "obuiapp_process_id": null,
-          "process_id": null
         },
         {
           "classname": "org.openbravo.advpaymentmngt.actionHandler.AddPaymentActionHandler",
@@ -375,14 +351,6 @@
           "process_id": null
         },
         {
-          "classname": "com.etendoerp.payment.removal.handler.RemovePaymentFromOrder",
-          "column_name": "EM_Etpr_Remove_Payment",
-          "mechanism": "obuiapp_process",
-          "name": "Remove Payments from Order",
-          "obuiapp_process_id": "D2923463223C4F1EADE335D22B9D8FE8",
-          "process_id": null
-        },
-        {
           "classname": "org.openbravo.common.actionhandler.SRMOPickEditLines",
           "column_name": "RM_PickFromShipment",
           "mechanism": "obuiapp_process",
@@ -396,6 +364,14 @@
           "mechanism": "obuiapp_process",
           "name": "RFC/RTV HQL Pick and Edit Lines",
           "obuiapp_process_id": "A2C19D0EF6594D14A64BC62E99A89CC3",
+          "process_id": null
+        },
+        {
+          "classname": "com.etendoerp.payment.removal.handler.RemovePaymentFromOrder",
+          "column_name": "EM_Etpr_Remove_Payment",
+          "mechanism": "obuiapp_process",
+          "name": "Remove Payments from Order",
+          "obuiapp_process_id": "D2923463223C4F1EADE335D22B9D8FE8",
           "process_id": null
         },
         {
@@ -417,7 +393,7 @@
       ]
     },
     "329bb148af9a6baadc8cc6aa9df89e1dbde1f38927b1a7eb474a4e9522daff88": {
-      "checksum": "d916b0203d0146c659703fb64225720d2b7b4dce0c568b451aba1f08ce8bb7d6",
+      "checksum": "c9c576e905cd6d047522a2535bad8a211bbf8542fc0d9995f3ce882730358d59",
       "params": [
         "800076"
       ],
@@ -431,14 +407,6 @@
           "process_id": "800131"
         },
         {
-          "classname": null,
-          "column_name": "Posted",
-          "mechanism": "hardcoded",
-          "name": "Posted",
-          "obuiapp_process_id": null,
-          "process_id": null
-        },
-        {
           "classname": "com.smf.jobs.defaults.Post",
           "column_name": "EM_Etblkp_Bulkposting",
           "mechanism": "obuiapp_process",
@@ -449,7 +417,7 @@
       ]
     },
     "372af9720002cd00d7ab60cf2919961286c4022d7cae4da33f0586eff52202ca": {
-      "checksum": "75cef8b37660230894a7751fa301a79fcfcbed3ef39091755e1dbcd5e9f5a0b9",
+      "checksum": "3fa01420bef3caa621c512d1db5b96365b86a504cb300d486d43be4ed5810b8c",
       "params": [
         "167"
       ],
@@ -504,14 +472,6 @@
         },
         {
           "classname": null,
-          "column_name": "Processing",
-          "mechanism": "classic_process",
-          "name": "Process Invoice",
-          "obuiapp_process_id": null,
-          "process_id": "111"
-        },
-        {
-          "classname": null,
           "column_name": "DocAction",
           "mechanism": "classic_process",
           "name": "Process Invoice",
@@ -520,6 +480,14 @@
         },
         {
           "classname": null,
+          "column_name": "Processing",
+          "mechanism": "classic_process",
+          "name": "Process Invoice",
+          "obuiapp_process_id": null,
+          "process_id": "111"
+        },
+        {
+          "classname": null,
           "column_name": "Update_Payment_Plan",
           "mechanism": "classic_process",
           "name": "Update Payment Plan",
@@ -533,22 +501,6 @@
           "name": "Update Payment Plan",
           "obuiapp_process_id": null,
           "process_id": "FB740AB61B0E42B198D2C88D3A0D0CE6"
-        },
-        {
-          "classname": null,
-          "column_name": "CreateFrom",
-          "mechanism": "hardcoded",
-          "name": "CreateFrom",
-          "obuiapp_process_id": null,
-          "process_id": null
-        },
-        {
-          "classname": null,
-          "column_name": "Posted",
-          "mechanism": "hardcoded",
-          "name": "Posted",
-          "obuiapp_process_id": null,
-          "process_id": null
         },
         {
           "classname": "org.openbravo.advpaymentmngt.actionHandler.AddPaymentActionHandler",
@@ -556,6 +508,14 @@
           "mechanism": "obuiapp_process",
           "name": "Add Payment",
           "obuiapp_process_id": "9BED7889E1034FE68BD85D5D16857320",
+          "process_id": null
+        },
+        {
+          "classname": "com.smf.ticketbai.process.QRCodeURLCreationProcess",
+          "column_name": "em_tbai_qrcode",
+          "mechanism": "obuiapp_process",
+          "name": "Creación de URL para QR",
+          "obuiapp_process_id": "12FECC9DF1F4418AB7DAA46D6A05FEC6",
           "process_id": null
         },
         {
@@ -572,14 +532,6 @@
           "mechanism": "obuiapp_process",
           "name": "Creación de fichero XML desde Factura",
           "obuiapp_process_id": "BE2486102F2C41779B760609FD69A225",
-          "process_id": null
-        },
-        {
-          "classname": "com.smf.ticketbai.process.QRCodeURLCreationProcess",
-          "column_name": "em_tbai_qrcode",
-          "mechanism": "obuiapp_process",
-          "name": "Creación de URL para QR",
-          "obuiapp_process_id": "12FECC9DF1F4418AB7DAA46D6A05FEC6",
           "process_id": null
         },
         {
@@ -671,14 +623,6 @@
           "process_id": null
         },
         {
-          "classname": "OB.AEATSII.correction",
-          "column_name": "EM_Aeatsii_Dup",
-          "mechanism": "obuiapp_process",
-          "name": "SII duplicated invoice correction",
-          "obuiapp_process_id": "92C02F9A367140C085D1EE3BD27C4E96",
-          "process_id": null
-        },
-        {
           "classname": "OB.AEATSII.modify",
           "column_name": "EM_Aeatsii_Modif",
           "mechanism": "obuiapp_process",
@@ -703,6 +647,14 @@
           "process_id": null
         },
         {
+          "classname": "OB.AEATSII.correction",
+          "column_name": "EM_Aeatsii_Dup",
+          "mechanism": "obuiapp_process",
+          "name": "SII duplicated invoice correction",
+          "obuiapp_process_id": "92C02F9A367140C085D1EE3BD27C4E96",
+          "process_id": null
+        },
+        {
           "classname": null,
           "column_name": null,
           "mechanism": "tab_process",
@@ -713,7 +665,7 @@
       ]
     },
     "497d22250e1d13c84623c8e047b7548d1f6599add1a21bdae45ea1c26363026e": {
-      "checksum": "e64555803815fa7c82d72909bf352ad5f13c14f0a9a0aca56dcfaa11f0ab7e25",
+      "checksum": "888297580905e495642280f4dc42056c9ad95f35402b92ba3d142ecc8ff4e913",
       "params": [
         "6F8F913FA60F4CBD93DC1D3AA696E76E"
       ],
@@ -741,22 +693,6 @@
           "name": "Reverse Payment",
           "obuiapp_process_id": null,
           "process_id": "29D17F515727436DBCE32BC6CA28382B"
-        },
-        {
-          "classname": null,
-          "column_name": "EM_APRM_Reconcile_Payment",
-          "mechanism": "hardcoded",
-          "name": "EM_APRM_Reconcile_Payment",
-          "obuiapp_process_id": null,
-          "process_id": null
-        },
-        {
-          "classname": null,
-          "column_name": "Posted",
-          "mechanism": "hardcoded",
-          "name": "Posted",
-          "obuiapp_process_id": null,
-          "process_id": null
         },
         {
           "classname": "org.openbravo.advpaymentmngt.actionHandler.AddPaymentActionHandler",
@@ -825,7 +761,7 @@
       ]
     },
     "4bc12fadc3f4675f289d036b6b78cded78314e733c80834fa999e947d67ec251": {
-      "checksum": "75cef8b37660230894a7751fa301a79fcfcbed3ef39091755e1dbcd5e9f5a0b9",
+      "checksum": "3fa01420bef3caa621c512d1db5b96365b86a504cb300d486d43be4ed5810b8c",
       "params": [
         "183"
       ],
@@ -880,14 +816,6 @@
         },
         {
           "classname": null,
-          "column_name": "Processing",
-          "mechanism": "classic_process",
-          "name": "Process Invoice",
-          "obuiapp_process_id": null,
-          "process_id": "111"
-        },
-        {
-          "classname": null,
           "column_name": "DocAction",
           "mechanism": "classic_process",
           "name": "Process Invoice",
@@ -896,6 +824,14 @@
         },
         {
           "classname": null,
+          "column_name": "Processing",
+          "mechanism": "classic_process",
+          "name": "Process Invoice",
+          "obuiapp_process_id": null,
+          "process_id": "111"
+        },
+        {
+          "classname": null,
           "column_name": "Update_Payment_Plan",
           "mechanism": "classic_process",
           "name": "Update Payment Plan",
@@ -909,22 +845,6 @@
           "name": "Update Payment Plan",
           "obuiapp_process_id": null,
           "process_id": "FB740AB61B0E42B198D2C88D3A0D0CE6"
-        },
-        {
-          "classname": null,
-          "column_name": "CreateFrom",
-          "mechanism": "hardcoded",
-          "name": "CreateFrom",
-          "obuiapp_process_id": null,
-          "process_id": null
-        },
-        {
-          "classname": null,
-          "column_name": "Posted",
-          "mechanism": "hardcoded",
-          "name": "Posted",
-          "obuiapp_process_id": null,
-          "process_id": null
         },
         {
           "classname": "org.openbravo.advpaymentmngt.actionHandler.AddPaymentActionHandler",
@@ -932,6 +852,14 @@
           "mechanism": "obuiapp_process",
           "name": "Add Payment",
           "obuiapp_process_id": "9BED7889E1034FE68BD85D5D16857320",
+          "process_id": null
+        },
+        {
+          "classname": "com.smf.ticketbai.process.QRCodeURLCreationProcess",
+          "column_name": "em_tbai_qrcode",
+          "mechanism": "obuiapp_process",
+          "name": "Creación de URL para QR",
+          "obuiapp_process_id": "12FECC9DF1F4418AB7DAA46D6A05FEC6",
           "process_id": null
         },
         {
@@ -948,14 +876,6 @@
           "mechanism": "obuiapp_process",
           "name": "Creación de fichero XML desde Factura",
           "obuiapp_process_id": "BE2486102F2C41779B760609FD69A225",
-          "process_id": null
-        },
-        {
-          "classname": "com.smf.ticketbai.process.QRCodeURLCreationProcess",
-          "column_name": "em_tbai_qrcode",
-          "mechanism": "obuiapp_process",
-          "name": "Creación de URL para QR",
-          "obuiapp_process_id": "12FECC9DF1F4418AB7DAA46D6A05FEC6",
           "process_id": null
         },
         {
@@ -1047,14 +967,6 @@
           "process_id": null
         },
         {
-          "classname": "OB.AEATSII.correction",
-          "column_name": "EM_Aeatsii_Dup",
-          "mechanism": "obuiapp_process",
-          "name": "SII duplicated invoice correction",
-          "obuiapp_process_id": "92C02F9A367140C085D1EE3BD27C4E96",
-          "process_id": null
-        },
-        {
           "classname": "OB.AEATSII.modify",
           "column_name": "EM_Aeatsii_Modif",
           "mechanism": "obuiapp_process",
@@ -1079,6 +991,14 @@
           "process_id": null
         },
         {
+          "classname": "OB.AEATSII.correction",
+          "column_name": "EM_Aeatsii_Dup",
+          "mechanism": "obuiapp_process",
+          "name": "SII duplicated invoice correction",
+          "obuiapp_process_id": "92C02F9A367140C085D1EE3BD27C4E96",
+          "process_id": null
+        },
+        {
           "classname": null,
           "column_name": null,
           "mechanism": "tab_process",
@@ -1089,19 +1009,11 @@
       ]
     },
     "4cdbb6a1d5f88ee0967c42ec50f1ebf974918f41cfdc927579046b33fad8d0bc": {
-      "checksum": "3aaaf6d360bb2c90e8210926c1987cf42e8a6014f532ba974c63d4b157c6455b",
+      "checksum": "8ba364c07c54b957370acbe47db67a4cb57d9cdb48dad7260e878dfbddfcb00c",
       "params": [
         "800026"
       ],
       "rows": [
-        {
-          "classname": null,
-          "column_name": "Processing",
-          "mechanism": "classic_process",
-          "name": "Post Amortization",
-          "obuiapp_process_id": null,
-          "process_id": "800134"
-        },
         {
           "classname": null,
           "column_name": "Processed",
@@ -1112,11 +1024,11 @@
         },
         {
           "classname": null,
-          "column_name": "Posted",
-          "mechanism": "hardcoded",
-          "name": "Posted",
+          "column_name": "Processing",
+          "mechanism": "classic_process",
+          "name": "Post Amortization",
           "obuiapp_process_id": null,
-          "process_id": null
+          "process_id": "800134"
         },
         {
           "classname": "com.smf.jobs.defaults.Post",
@@ -1143,7 +1055,7 @@
       "rows": []
     },
     "60408c7726b5b42a4b146fdcf73da0ebf7c500fdd630d2dd8848c6dab4b30290": {
-      "checksum": "74cdb6e209fb795890b3e21e32f9851ac74af03581a282c8adbbf93fd391742f",
+      "checksum": "aad6db54822f499ad69b8175ec799923f52b7ba22769d73ff1b4b7f008b95519",
       "params": [
         "184"
       ],
@@ -1174,7 +1086,7 @@
         },
         {
           "classname": null,
-          "column_name": "Processing",
+          "column_name": "DocAction",
           "mechanism": "classic_process",
           "name": "Process Shipment",
           "obuiapp_process_id": null,
@@ -1182,7 +1094,7 @@
         },
         {
           "classname": null,
-          "column_name": "DocAction",
+          "column_name": "Processing",
           "mechanism": "classic_process",
           "name": "Process Shipment",
           "obuiapp_process_id": null,
@@ -1203,30 +1115,6 @@
           "name": "Update Attributes from Shipment",
           "obuiapp_process_id": null,
           "process_id": "800010"
-        },
-        {
-          "classname": null,
-          "column_name": "CreateFrom",
-          "mechanism": "hardcoded",
-          "name": "CreateFrom",
-          "obuiapp_process_id": null,
-          "process_id": null
-        },
-        {
-          "classname": null,
-          "column_name": "Posted",
-          "mechanism": "hardcoded",
-          "name": "Posted",
-          "obuiapp_process_id": null,
-          "process_id": null
-        },
-        {
-          "classname": null,
-          "column_name": "Processing",
-          "mechanism": "hardcoded",
-          "name": "Processing",
-          "obuiapp_process_id": null,
-          "process_id": null
         },
         {
           "classname": "org.openbravo.common.actionhandler.InvoiceFromShipmentActionHandler",
@@ -1311,7 +1199,7 @@
       ]
     },
     "60a117d97d907d1b9ad13d34a698431e3c1eb6fb73ec08b0786ec0bf24f5d538": {
-      "checksum": "de47d31547f2a6fb8dbe081b2d55c89ec9a1f6b786c6e2d1d8d4d0444f85c140",
+      "checksum": "40fdacedccce368fa3c7b774fc03c5529749939fe7edee598cf0d67562af425e",
       "params": [
         "FEF76C3E0F104F06A89AAD15A4A4A35C"
       ],
@@ -1509,70 +1397,6 @@
           "process_id": "111"
         },
         {
-          "classname": null,
-          "column_name": "CreateFrom",
-          "mechanism": "hardcoded",
-          "name": "CreateFrom",
-          "obuiapp_process_id": null,
-          "process_id": null
-        },
-        {
-          "classname": null,
-          "column_name": "CreateFrom",
-          "mechanism": "hardcoded",
-          "name": "CreateFrom",
-          "obuiapp_process_id": null,
-          "process_id": null
-        },
-        {
-          "classname": null,
-          "column_name": "CreateFrom",
-          "mechanism": "hardcoded",
-          "name": "CreateFrom",
-          "obuiapp_process_id": null,
-          "process_id": null
-        },
-        {
-          "classname": null,
-          "column_name": "CreateFrom",
-          "mechanism": "hardcoded",
-          "name": "CreateFrom",
-          "obuiapp_process_id": null,
-          "process_id": null
-        },
-        {
-          "classname": null,
-          "column_name": "Posted",
-          "mechanism": "hardcoded",
-          "name": "Posted",
-          "obuiapp_process_id": null,
-          "process_id": null
-        },
-        {
-          "classname": null,
-          "column_name": "Posted",
-          "mechanism": "hardcoded",
-          "name": "Posted",
-          "obuiapp_process_id": null,
-          "process_id": null
-        },
-        {
-          "classname": null,
-          "column_name": "Posted",
-          "mechanism": "hardcoded",
-          "name": "Posted",
-          "obuiapp_process_id": null,
-          "process_id": null
-        },
-        {
-          "classname": null,
-          "column_name": "Posted",
-          "mechanism": "hardcoded",
-          "name": "Posted",
-          "obuiapp_process_id": null,
-          "process_id": null
-        },
-        {
           "classname": "org.openbravo.advpaymentmngt.actionHandler.AddPaymentActionHandler",
           "column_name": "EM_APRM_Addpayment",
           "mechanism": "obuiapp_process",
@@ -1602,6 +1426,38 @@
           "mechanism": "obuiapp_process",
           "name": "Add Payment",
           "obuiapp_process_id": "9BED7889E1034FE68BD85D5D16857320",
+          "process_id": null
+        },
+        {
+          "classname": "com.smf.ticketbai.process.QRCodeURLCreationProcess",
+          "column_name": "em_tbai_qrcode",
+          "mechanism": "obuiapp_process",
+          "name": "Creación de URL para QR",
+          "obuiapp_process_id": "12FECC9DF1F4418AB7DAA46D6A05FEC6",
+          "process_id": null
+        },
+        {
+          "classname": "com.smf.ticketbai.process.QRCodeURLCreationProcess",
+          "column_name": "em_tbai_qrcode",
+          "mechanism": "obuiapp_process",
+          "name": "Creación de URL para QR",
+          "obuiapp_process_id": "12FECC9DF1F4418AB7DAA46D6A05FEC6",
+          "process_id": null
+        },
+        {
+          "classname": "com.smf.ticketbai.process.QRCodeURLCreationProcess",
+          "column_name": "em_tbai_qrcode",
+          "mechanism": "obuiapp_process",
+          "name": "Creación de URL para QR",
+          "obuiapp_process_id": "12FECC9DF1F4418AB7DAA46D6A05FEC6",
+          "process_id": null
+        },
+        {
+          "classname": "com.smf.ticketbai.process.QRCodeURLCreationProcess",
+          "column_name": "em_tbai_qrcode",
+          "mechanism": "obuiapp_process",
+          "name": "Creación de URL para QR",
+          "obuiapp_process_id": "12FECC9DF1F4418AB7DAA46D6A05FEC6",
           "process_id": null
         },
         {
@@ -1666,38 +1522,6 @@
           "mechanism": "obuiapp_process",
           "name": "Creación de fichero XML desde Factura",
           "obuiapp_process_id": "BE2486102F2C41779B760609FD69A225",
-          "process_id": null
-        },
-        {
-          "classname": "com.smf.ticketbai.process.QRCodeURLCreationProcess",
-          "column_name": "em_tbai_qrcode",
-          "mechanism": "obuiapp_process",
-          "name": "Creación de URL para QR",
-          "obuiapp_process_id": "12FECC9DF1F4418AB7DAA46D6A05FEC6",
-          "process_id": null
-        },
-        {
-          "classname": "com.smf.ticketbai.process.QRCodeURLCreationProcess",
-          "column_name": "em_tbai_qrcode",
-          "mechanism": "obuiapp_process",
-          "name": "Creación de URL para QR",
-          "obuiapp_process_id": "12FECC9DF1F4418AB7DAA46D6A05FEC6",
-          "process_id": null
-        },
-        {
-          "classname": "com.smf.ticketbai.process.QRCodeURLCreationProcess",
-          "column_name": "em_tbai_qrcode",
-          "mechanism": "obuiapp_process",
-          "name": "Creación de URL para QR",
-          "obuiapp_process_id": "12FECC9DF1F4418AB7DAA46D6A05FEC6",
-          "process_id": null
-        },
-        {
-          "classname": "com.smf.ticketbai.process.QRCodeURLCreationProcess",
-          "column_name": "em_tbai_qrcode",
-          "mechanism": "obuiapp_process",
-          "name": "Creación de URL para QR",
-          "obuiapp_process_id": "12FECC9DF1F4418AB7DAA46D6A05FEC6",
           "process_id": null
         },
         {
@@ -1901,38 +1725,6 @@
           "process_id": null
         },
         {
-          "classname": "OB.AEATSII.correction",
-          "column_name": "EM_Aeatsii_Dup",
-          "mechanism": "obuiapp_process",
-          "name": "SII duplicated invoice correction",
-          "obuiapp_process_id": "92C02F9A367140C085D1EE3BD27C4E96",
-          "process_id": null
-        },
-        {
-          "classname": "OB.AEATSII.correction",
-          "column_name": "EM_Aeatsii_Dup",
-          "mechanism": "obuiapp_process",
-          "name": "SII duplicated invoice correction",
-          "obuiapp_process_id": "92C02F9A367140C085D1EE3BD27C4E96",
-          "process_id": null
-        },
-        {
-          "classname": "OB.AEATSII.correction",
-          "column_name": "EM_Aeatsii_Dup",
-          "mechanism": "obuiapp_process",
-          "name": "SII duplicated invoice correction",
-          "obuiapp_process_id": "92C02F9A367140C085D1EE3BD27C4E96",
-          "process_id": null
-        },
-        {
-          "classname": "OB.AEATSII.correction",
-          "column_name": "EM_Aeatsii_Dup",
-          "mechanism": "obuiapp_process",
-          "name": "SII duplicated invoice correction",
-          "obuiapp_process_id": "92C02F9A367140C085D1EE3BD27C4E96",
-          "process_id": null
-        },
-        {
           "classname": "OB.AEATSII.modify",
           "column_name": "EM_Aeatsii_Modif",
           "mechanism": "obuiapp_process",
@@ -2050,6 +1842,38 @@
           "mechanism": "obuiapp_process",
           "name": "SII Update Invoices",
           "obuiapp_process_id": "47EA4A31145142CCA33C786DFD984041",
+          "process_id": null
+        },
+        {
+          "classname": "OB.AEATSII.correction",
+          "column_name": "EM_Aeatsii_Dup",
+          "mechanism": "obuiapp_process",
+          "name": "SII duplicated invoice correction",
+          "obuiapp_process_id": "92C02F9A367140C085D1EE3BD27C4E96",
+          "process_id": null
+        },
+        {
+          "classname": "OB.AEATSII.correction",
+          "column_name": "EM_Aeatsii_Dup",
+          "mechanism": "obuiapp_process",
+          "name": "SII duplicated invoice correction",
+          "obuiapp_process_id": "92C02F9A367140C085D1EE3BD27C4E96",
+          "process_id": null
+        },
+        {
+          "classname": "OB.AEATSII.correction",
+          "column_name": "EM_Aeatsii_Dup",
+          "mechanism": "obuiapp_process",
+          "name": "SII duplicated invoice correction",
+          "obuiapp_process_id": "92C02F9A367140C085D1EE3BD27C4E96",
+          "process_id": null
+        },
+        {
+          "classname": "OB.AEATSII.correction",
+          "column_name": "EM_Aeatsii_Dup",
+          "mechanism": "obuiapp_process",
+          "name": "SII duplicated invoice correction",
+          "obuiapp_process_id": "92C02F9A367140C085D1EE3BD27C4E96",
           "process_id": null
         },
         {
@@ -2182,7 +2006,7 @@
       ]
     },
     "843359d6657fbb328422a0e2b76bc9bab643118230c1597e04e3917031b6cb1f": {
-      "checksum": "c94bff08754e429955efdd6341c301d713cc22575f9d0328c86834afa9f74c4a",
+      "checksum": "9c56d2614d63bfc2dbd0f5021d3de7e158991599461e5c23802065c7eb7ef182",
       "params": [
         "E547CE89D4C04429B6340FFA44E70716"
       ],
@@ -2210,22 +2034,6 @@
           "name": "Reverse Payment",
           "obuiapp_process_id": null,
           "process_id": "29D17F515727436DBCE32BC6CA28382B"
-        },
-        {
-          "classname": null,
-          "column_name": "EM_APRM_Reconcile_Payment",
-          "mechanism": "hardcoded",
-          "name": "EM_APRM_Reconcile_Payment",
-          "obuiapp_process_id": null,
-          "process_id": null
-        },
-        {
-          "classname": null,
-          "column_name": "Posted",
-          "mechanism": "hardcoded",
-          "name": "Posted",
-          "obuiapp_process_id": null,
-          "process_id": null
         },
         {
           "classname": "org.openbravo.advpaymentmngt.actionHandler.AddPaymentActionHandler",
@@ -2309,7 +2117,7 @@
       ]
     },
     "9875b64b4d474916c9d42e3986d743e8a881ac53d52dca07ea47fb490bfea6df": {
-      "checksum": "b650d25e3b0da5167cec22c45e1c24690846d74ada6d5140dad0ede2c07f0ebd",
+      "checksum": "b4dc7472e67c10bd1454827e8dc8dc8bcf13a8caa61dad7050c9fb377a451b21",
       "params": [
         "6CB5B67ED33F47DFA334079D3EA2340E"
       ],
@@ -2380,7 +2188,7 @@
         },
         {
           "classname": null,
-          "column_name": "Processing",
+          "column_name": "DocAction",
           "mechanism": "classic_process",
           "name": "Process Order",
           "obuiapp_process_id": null,
@@ -2388,7 +2196,7 @@
         },
         {
           "classname": null,
-          "column_name": "DocAction",
+          "column_name": "Processing",
           "mechanism": "classic_process",
           "name": "Process Order",
           "obuiapp_process_id": null,
@@ -2401,14 +2209,6 @@
           "name": "Update Payment Plan",
           "obuiapp_process_id": null,
           "process_id": "FB740AB61B0E42B198D2C88D3A0D0CE6"
-        },
-        {
-          "classname": null,
-          "column_name": "RM_ReceiveMaterials",
-          "mechanism": "hardcoded",
-          "name": "RM_ReceiveMaterials",
-          "obuiapp_process_id": null,
-          "process_id": null
         },
         {
           "classname": "org.openbravo.advpaymentmngt.actionHandler.AddPaymentActionHandler",
@@ -2483,14 +2283,6 @@
           "process_id": null
         },
         {
-          "classname": "com.etendoerp.payment.removal.handler.RemovePaymentFromOrder",
-          "column_name": "EM_Etpr_Remove_Payment",
-          "mechanism": "obuiapp_process",
-          "name": "Remove Payments from Order",
-          "obuiapp_process_id": "D2923463223C4F1EADE335D22B9D8FE8",
-          "process_id": null
-        },
-        {
           "classname": "org.openbravo.common.actionhandler.SRMOPickEditLines",
           "column_name": "RM_PickFromShipment",
           "mechanism": "obuiapp_process",
@@ -2504,6 +2296,14 @@
           "mechanism": "obuiapp_process",
           "name": "RFC/RTV HQL Pick and Edit Lines",
           "obuiapp_process_id": "A2C19D0EF6594D14A64BC62E99A89CC3",
+          "process_id": null
+        },
+        {
+          "classname": "com.etendoerp.payment.removal.handler.RemovePaymentFromOrder",
+          "column_name": "EM_Etpr_Remove_Payment",
+          "mechanism": "obuiapp_process",
+          "name": "Remove Payments from Order",
+          "obuiapp_process_id": "D2923463223C4F1EADE335D22B9D8FE8",
           "process_id": null
         },
         {
@@ -2532,7 +2332,7 @@
       "rows": []
     },
     "9af6c3647465867cc635696d802fced95ce307fa9ce43e002d8fff078398bc28": {
-      "checksum": "2b5e2d85b90c761a2fef631de1239f96a1cb91a69a9b10f98d03a485fbced333",
+      "checksum": "2f47e17c25eaa51b02a75cef2956f23fbec1375398c9b5abda5a454bcf461b09",
       "params": [
         "273673D2ED914C399A6C51DB758BE0F9"
       ],
@@ -2563,7 +2363,7 @@
         },
         {
           "classname": null,
-          "column_name": "Processing",
+          "column_name": "DocAction",
           "mechanism": "classic_process",
           "name": "Process Shipment",
           "obuiapp_process_id": null,
@@ -2571,7 +2371,7 @@
         },
         {
           "classname": null,
-          "column_name": "DocAction",
+          "column_name": "Processing",
           "mechanism": "classic_process",
           "name": "Process Shipment",
           "obuiapp_process_id": null,
@@ -2592,22 +2392,6 @@
           "name": "Update Attributes from Shipment",
           "obuiapp_process_id": null,
           "process_id": "800010"
-        },
-        {
-          "classname": null,
-          "column_name": "CreateFrom",
-          "mechanism": "hardcoded",
-          "name": "CreateFrom",
-          "obuiapp_process_id": null,
-          "process_id": null
-        },
-        {
-          "classname": null,
-          "column_name": "Posted",
-          "mechanism": "hardcoded",
-          "name": "Posted",
-          "obuiapp_process_id": null,
-          "process_id": null
         },
         {
           "classname": "org.openbravo.common.actionhandler.InvoiceFromShipmentActionHandler",
@@ -2660,7 +2444,7 @@
       ]
     },
     "b8f93f89d00e4397d71cd226a3704eee1045f69f9f26ff056c27d50de601db7e": {
-      "checksum": "4918a7ce80afc5d5720f3577878b8d3f1550a387b9f4536e65c85ab3ff8b4c8b",
+      "checksum": "c5898ae186c6a6712e0eb21dd035d514832954b38de505e8cd9a7d88495d4b6b",
       "params": [
         "B917E8A7B0864ACEA9D941E3B7494E53"
       ],
@@ -2680,22 +2464,6 @@
           "name": "Add Payment From Journal Line",
           "obuiapp_process_id": null,
           "process_id": "DE1B382FDD2540199D223586F6E216D0"
-        },
-        {
-          "classname": null,
-          "column_name": "Posted",
-          "mechanism": "hardcoded",
-          "name": "Posted",
-          "obuiapp_process_id": null,
-          "process_id": null
-        },
-        {
-          "classname": null,
-          "column_name": "Processing",
-          "mechanism": "hardcoded",
-          "name": "Processing",
-          "obuiapp_process_id": null,
-          "process_id": null
         },
         {
           "classname": "com.smf.jobs.defaults.Post",
@@ -2796,7 +2564,7 @@
       ]
     },
     "c0351cd0caf4edf2a56beaafd358fe05567a911a68c5ab90cd866d785e6a9dfc": {
-      "checksum": "ebdac23bf97f90515890d795aeb9ac2909aa2bf0e6cbba4aa4bef7513aabe3d5",
+      "checksum": "5c8ca58e06a472037bd6c9581d38646676b9d2804c04b54d6b10e4c8e17c9411",
       "params": [
         "140"
       ],
@@ -2842,19 +2610,19 @@
           "process_id": null
         },
         {
-          "classname": "org.openbravo.common.actionhandler.RelateProductCatTaxToServiceProduct",
-          "column_name": "Relateprodcattaxtoservice",
-          "mechanism": "obuiapp_process",
-          "name": "Relate Product Category and new tax to a Service Product",
-          "obuiapp_process_id": "E0870062F05F4DC88E589ABC6A45DF4C",
-          "process_id": null
-        },
-        {
           "classname": "org.openbravo.common.actionhandler.RelateProductCatToServiceProduct",
           "column_name": "Relateprodcattoservice",
           "mechanism": "obuiapp_process",
           "name": "Relate Product Cat to a Service Product",
           "obuiapp_process_id": "8E5996F1F3154B498468938B5341A0CB",
+          "process_id": null
+        },
+        {
+          "classname": "org.openbravo.common.actionhandler.RelateProductCatTaxToServiceProduct",
+          "column_name": "Relateprodcattaxtoservice",
+          "mechanism": "obuiapp_process",
+          "name": "Relate Product Category and new tax to a Service Product",
+          "obuiapp_process_id": "E0870062F05F4DC88E589ABC6A45DF4C",
           "process_id": null
         },
         {
@@ -2940,19 +2708,11 @@
       ]
     },
     "d8b3062e19579428542c960b281edd38c8b4c4bae753749e7360902192d4cec1": {
-      "checksum": "d2573e7128b9a5db0fb2de99e343bdeae91dd5d2923c0f8f7e8266e3bd53ce06",
+      "checksum": "14b3264c2bd942aa366c1513b41f8207c18d572e6166c1aab168b2a98a3ea7c1",
       "params": [
         "108"
       ],
       "rows": [
-        {
-          "classname": null,
-          "column_name": "Processing",
-          "mechanism": "hardcoded",
-          "name": "Processing",
-          "obuiapp_process_id": null,
-          "process_id": null
-        },
         {
           "classname": "OB.ETRX.approveGoogleDoc",
           "column_name": "Approve_Google_Doc",
@@ -3004,7 +2764,7 @@
       ]
     },
     "e6e7092c8ed304923454f5454ff919ef51a4741eff92635779ea9eb232b00ae9": {
-      "checksum": "2b5e2d85b90c761a2fef631de1239f96a1cb91a69a9b10f98d03a485fbced333",
+      "checksum": "2f47e17c25eaa51b02a75cef2956f23fbec1375398c9b5abda5a454bcf461b09",
       "params": [
         "123271B9AD60469BAE8A924841456B63"
       ],
@@ -3035,7 +2795,7 @@
         },
         {
           "classname": null,
-          "column_name": "Processing",
+          "column_name": "DocAction",
           "mechanism": "classic_process",
           "name": "Process Shipment",
           "obuiapp_process_id": null,
@@ -3043,7 +2803,7 @@
         },
         {
           "classname": null,
-          "column_name": "DocAction",
+          "column_name": "Processing",
           "mechanism": "classic_process",
           "name": "Process Shipment",
           "obuiapp_process_id": null,
@@ -3064,22 +2824,6 @@
           "name": "Update Attributes from Shipment",
           "obuiapp_process_id": null,
           "process_id": "800010"
-        },
-        {
-          "classname": null,
-          "column_name": "CreateFrom",
-          "mechanism": "hardcoded",
-          "name": "CreateFrom",
-          "obuiapp_process_id": null,
-          "process_id": null
-        },
-        {
-          "classname": null,
-          "column_name": "Posted",
-          "mechanism": "hardcoded",
-          "name": "Posted",
-          "obuiapp_process_id": null,
-          "process_id": null
         },
         {
           "classname": "org.openbravo.common.actionhandler.InvoiceFromShipmentActionHandler",
@@ -3132,7 +2876,7 @@
       ]
     },
     "e914309500f47dd6b862879819658bc9e588f339dabc304f81cd3c58853ca4ac": {
-      "checksum": "b650d25e3b0da5167cec22c45e1c24690846d74ada6d5140dad0ede2c07f0ebd",
+      "checksum": "b4dc7472e67c10bd1454827e8dc8dc8bcf13a8caa61dad7050c9fb377a451b21",
       "params": [
         "181"
       ],
@@ -3203,7 +2947,7 @@
         },
         {
           "classname": null,
-          "column_name": "Processing",
+          "column_name": "DocAction",
           "mechanism": "classic_process",
           "name": "Process Order",
           "obuiapp_process_id": null,
@@ -3211,7 +2955,7 @@
         },
         {
           "classname": null,
-          "column_name": "DocAction",
+          "column_name": "Processing",
           "mechanism": "classic_process",
           "name": "Process Order",
           "obuiapp_process_id": null,
@@ -3224,14 +2968,6 @@
           "name": "Update Payment Plan",
           "obuiapp_process_id": null,
           "process_id": "FB740AB61B0E42B198D2C88D3A0D0CE6"
-        },
-        {
-          "classname": null,
-          "column_name": "RM_ReceiveMaterials",
-          "mechanism": "hardcoded",
-          "name": "RM_ReceiveMaterials",
-          "obuiapp_process_id": null,
-          "process_id": null
         },
         {
           "classname": "org.openbravo.advpaymentmngt.actionHandler.AddPaymentActionHandler",
@@ -3306,14 +3042,6 @@
           "process_id": null
         },
         {
-          "classname": "com.etendoerp.payment.removal.handler.RemovePaymentFromOrder",
-          "column_name": "EM_Etpr_Remove_Payment",
-          "mechanism": "obuiapp_process",
-          "name": "Remove Payments from Order",
-          "obuiapp_process_id": "D2923463223C4F1EADE335D22B9D8FE8",
-          "process_id": null
-        },
-        {
           "classname": "org.openbravo.common.actionhandler.SRMOPickEditLines",
           "column_name": "RM_PickFromShipment",
           "mechanism": "obuiapp_process",
@@ -3327,6 +3055,14 @@
           "mechanism": "obuiapp_process",
           "name": "RFC/RTV HQL Pick and Edit Lines",
           "obuiapp_process_id": "A2C19D0EF6594D14A64BC62E99A89CC3",
+          "process_id": null
+        },
+        {
+          "classname": "com.etendoerp.payment.removal.handler.RemovePaymentFromOrder",
+          "column_name": "EM_Etpr_Remove_Payment",
+          "mechanism": "obuiapp_process",
+          "name": "Remove Payments from Order",
+          "obuiapp_process_id": "D2923463223C4F1EADE335D22B9D8FE8",
           "process_id": null
         },
         {
@@ -3348,7 +3084,7 @@
       ]
     },
     "e9796a297caefaf50550fd46b064e00862567eb728d3001bd2e77bcab7db7d3b": {
-      "checksum": "828414839e4bd6e2d17466e0b7dde5f8cb24b3b9272c94c0f0ae7bda3908cc1b",
+      "checksum": "067b7353a7c4b9a0977eb91071d3e95c24a834c201eb0cd93a4009cb3e6f15c8",
       "params": [
         "94EAA455D2644E04AB25D93BE5157B6D"
       ],
@@ -3395,7 +3131,7 @@
         },
         {
           "classname": null,
-          "column_name": "Process_Reconciliation",
+          "column_name": "EM_Aprm_Process_Rec",
           "mechanism": "classic_process",
           "name": "Reconcile",
           "obuiapp_process_id": null,
@@ -3403,7 +3139,7 @@
         },
         {
           "classname": null,
-          "column_name": "EM_Aprm_Process_Rec",
+          "column_name": "Process_Reconciliation",
           "mechanism": "classic_process",
           "name": "Reconcile",
           "obuiapp_process_id": null,
@@ -3456,38 +3192,6 @@
           "name": "Transaction Process",
           "obuiapp_process_id": null,
           "process_id": "F68F2890E96D4D85A1DEF0274D105BCE"
-        },
-        {
-          "classname": null,
-          "column_name": "Posted",
-          "mechanism": "hardcoded",
-          "name": "Posted",
-          "obuiapp_process_id": null,
-          "process_id": null
-        },
-        {
-          "classname": null,
-          "column_name": "Posted",
-          "mechanism": "hardcoded",
-          "name": "Posted",
-          "obuiapp_process_id": null,
-          "process_id": null
-        },
-        {
-          "classname": null,
-          "column_name": "Posted",
-          "mechanism": "hardcoded",
-          "name": "Posted",
-          "obuiapp_process_id": null,
-          "process_id": null
-        },
-        {
-          "classname": null,
-          "column_name": "Posted",
-          "mechanism": "hardcoded",
-          "name": "Posted",
-          "obuiapp_process_id": null,
-          "process_id": null
         },
         {
           "classname": "org.openbravo.advpaymentmngt.actionHandler.AddMultiplePaymentsHandler",
@@ -3611,7 +3315,7 @@
         },
         {
           "classname": "OB.PSD2.Reconnect.getReconnect",
-          "column_name": "Reconnect_Conn",
+          "column_name": "EM_Psd2_Reconnect_Fa",
           "mechanism": "obuiapp_process",
           "name": "Reconnect Account",
           "obuiapp_process_id": "F3ABCD40BD0047AF9E76071CF7D3FF04",
@@ -3619,7 +3323,7 @@
         },
         {
           "classname": "OB.PSD2.Reconnect.getReconnect",
-          "column_name": "EM_Psd2_Reconnect_Fa",
+          "column_name": "Reconnect_Conn",
           "mechanism": "obuiapp_process",
           "name": "Reconnect Account",
           "obuiapp_process_id": "F3ABCD40BD0047AF9E76071CF7D3FF04",
@@ -3652,7 +3356,7 @@
       ]
     },
     "f059b24ecd20866b3f9f2bc8f3e5f8c6e2852af85784f3ade7eaa77668d467e5": {
-      "checksum": "11d0f870c055c96fb02a525da142b29c9b0e47b77bac0e82106df389d0987eab",
+      "checksum": "43de4cb6ae3d4c51dc0240ad0b9c2945f483c2b257e174e5f0210f0bf52dedec",
       "params": [
         "168"
       ],
@@ -3682,14 +3386,6 @@
           "process_id": "106"
         },
         {
-          "classname": null,
-          "column_name": "Posted",
-          "mechanism": "hardcoded",
-          "name": "Posted",
-          "obuiapp_process_id": null,
-          "process_id": null
-        },
-        {
           "classname": "com.smf.jobs.defaults.Post",
           "column_name": "EM_Etblkp_Bulkposting",
           "mechanism": "obuiapp_process",
@@ -3707,7 +3403,7 @@
       "rows": []
     },
     "f5c82198ac86de80bf99be0d705eefac22594c601c50713915de4d1b1920b676": {
-      "checksum": "2b5e2d85b90c761a2fef631de1239f96a1cb91a69a9b10f98d03a485fbced333",
+      "checksum": "2f47e17c25eaa51b02a75cef2956f23fbec1375398c9b5abda5a454bcf461b09",
       "params": [
         "169"
       ],
@@ -3738,7 +3434,7 @@
         },
         {
           "classname": null,
-          "column_name": "Processing",
+          "column_name": "DocAction",
           "mechanism": "classic_process",
           "name": "Process Shipment",
           "obuiapp_process_id": null,
@@ -3746,7 +3442,7 @@
         },
         {
           "classname": null,
-          "column_name": "DocAction",
+          "column_name": "Processing",
           "mechanism": "classic_process",
           "name": "Process Shipment",
           "obuiapp_process_id": null,
@@ -3767,22 +3463,6 @@
           "name": "Update Attributes from Shipment",
           "obuiapp_process_id": null,
           "process_id": "800010"
-        },
-        {
-          "classname": null,
-          "column_name": "CreateFrom",
-          "mechanism": "hardcoded",
-          "name": "CreateFrom",
-          "obuiapp_process_id": null,
-          "process_id": null
-        },
-        {
-          "classname": null,
-          "column_name": "Posted",
-          "mechanism": "hardcoded",
-          "name": "Posted",
-          "obuiapp_process_id": null,
-          "process_id": null
         },
         {
           "classname": "org.openbravo.common.actionhandler.InvoiceFromShipmentActionHandler",
@@ -3858,7 +3538,7 @@
       "rows": []
     },
     "f96633ac204ea54d299e732b9b90d118784f1968476b98b9d9df3e7c10b7da59": {
-      "checksum": "f4b5c36f078f714de5af8795cde41ec1d57d6c05e2746d986da9f8296137de52",
+      "checksum": "99b69e60ce39f06b0007f3ad191d4eba0e500954a49efd74ea895b86a9cfb446",
       "params": [
         "800027"
       ],
@@ -3870,14 +3550,6 @@
           "name": "Create Amortization",
           "obuiapp_process_id": null,
           "process_id": "800125"
-        },
-        {
-          "classname": null,
-          "column_name": "Processing",
-          "mechanism": "hardcoded",
-          "name": "Processing",
-          "obuiapp_process_id": null,
-          "process_id": null
         },
         {
           "classname": "com.etendoerp.accounting.dimensions.assets.process.AssetLinearGroupedDepreciationMethodProcess",

@@ -1,8 +1,8 @@
 {
-  "version": "0.3.0",
+  "version": "0.4.0",
   "generatedAt": "2026-04-28T16:08:39.756Z",
-  "updatedAt": "2026-07-21T12:35:24.579Z",
-  "checksum": "82c2eff8cf66a81e",
+  "updatedAt": "2026-07-22T15:18:31.203Z",
+  "checksum": "f6412bc60aa81588",
   "frontendContract": {
     "window": {
       "id": "C327DE215AC945F69363905840118177",
@@ -403,6 +403,22 @@
             "type": "id",
             "visibility": "system",
             "required": true
+          },
+          {
+            "name": "emailPassword",
+            "apiKey": "emailPassword",
+            "column": "Email_Password",
+            "type": "string",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "emailUser",
+            "apiKey": "emailUser",
+            "column": "Email_User",
+            "type": "string",
+            "visibility": "system",
+            "required": false
           }
         ],
         "javaQualifier": "tbai-config-sequence-handler"
@@ -709,6 +725,22 @@
         "description": "System field 'creationDate' should exist in backend but not frontend for header"
       },
       {
+        "id": "t-system-field-header-emailPassword",
+        "category": "system-field",
+        "entity": "header",
+        "field": "emailPassword",
+        "runner": "node",
+        "description": "System field 'emailPassword' should exist in backend but not frontend for header"
+      },
+      {
+        "id": "t-system-field-header-emailUser",
+        "category": "system-field",
+        "entity": "header",
+        "field": "emailUser",
+        "runner": "node",
+        "description": "System field 'emailUser' should exist in backend but not frontend for header"
+      },
+      {
         "id": "t-system-field-header-id",
         "category": "system-field",
         "entity": "header",
@@ -749,18 +781,18 @@
       }
     ],
     "summary": {
-      "total": 34,
+      "total": 36,
       "byCategory": {
         "crud-flags": 1,
         "default-value-type": 6,
         "field-presence": 8,
         "field-type": 8,
         "rule-declared": 2,
-        "system-field": 8,
+        "system-field": 10,
         "visibility": 1
       },
       "byRunner": {
-        "node": 34,
+        "node": 36,
         "junit": 0
       }
     }

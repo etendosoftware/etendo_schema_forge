@@ -12727,7 +12727,7 @@
       ]
     },
     "2f22ba4790bcdcf783b1573c321c1f35b01b170c50ad5e9ab9e0d33f72120f75": {
-      "checksum": "d9d420b3cebbac84cde0bff60c0ecd58b568e707019970f63be1b7e180817a15",
+      "checksum": "170223c916a679c93d7f14f2c1a38c063e14a2cfbf1537ffe31d9da3ce310ca7",
       "params": [
         "123"
       ],
@@ -13808,7 +13808,7 @@
           "callout_class": null,
           "column_module_id": "FF8081812FFD74ED012FFDBFDD24000C",
           "columnname": "EM_OBTIK_VIESStatus",
-          "defaultvalue": null,
+          "defaultvalue": "P",
           "displaylogic": "@EM_OBTIK_Tax_ID_Key@='2'",
           "displaylogic_server": null,
           "displaylogicgrid": null,
@@ -13820,7 +13820,7 @@
           "field_isactive": "Y",
           "field_name": "Estado VIES",
           "field_seq": "106",
-          "fieldlength": "10",
+          "fieldlength": "60",
           "filterclause": null,
           "help_text": null,
           "hqlfilterclause": null,

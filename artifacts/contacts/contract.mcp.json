@@ -1,8 +1,8 @@
 {
-  "version": "0.44.0",
+  "version": "0.45.0",
   "generatedAt": "2026-07-07T21:53:25.883Z",
-  "updatedAt": "2026-07-17T17:14:42.971Z",
-  "contractChecksum": "8552f5c48c448cb9",
+  "updatedAt": "2026-07-22T15:18:20.178Z",
+  "contractChecksum": "706496e6e55723dd",
   "apiPrediction": {
     "specName": "contacts",
     "baseUrl": "/sws/neo/contacts",
@@ -729,7 +729,8 @@
           },
           "taxID": {},
           "oBTIKVIESStatus": {
-            "readOnly": true
+            "readOnly": true,
+            "defaultValue": "P"
           },
           "etgoWeb": {},
           "etgoEmail": {},
@@ -1249,5 +1250,5 @@
     "knownLimitations": [],
     "dangerousOperations": []
   },
-  "checksum": "254a1b8f9a34ca9b"
+  "checksum": "c12415fd90cc0540"
 }
