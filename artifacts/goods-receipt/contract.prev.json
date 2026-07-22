@@ -1,8 +1,8 @@
 {
-  "version": "0.22.0",
+  "version": "0.23.0",
   "generatedAt": "2026-04-29T19:05:20.719Z",
-  "updatedAt": "2026-07-17T18:04:55.296Z",
-  "checksum": "3936c6fe28471ae3",
+  "updatedAt": "2026-07-21T12:35:19.573Z",
+  "checksum": "5c7b44d77827859f",
   "frontendContract": {
     "window": {
       "id": "184",
@@ -76,6 +76,10 @@
               "type": "sequence",
               "source": "documentType.sequence"
             },
+            "validation": {
+              "required": true,
+              "maxLength": 30
+            },
             "readOnlyLogic": {
               "raw": "@Processed@='Y'",
               "evaluable": true,
@@ -98,6 +102,10 @@
             "inputMode": "selector",
             "section": "principal",
             "seq": 40,
+            "validation": {
+              "required": true,
+              "maxLength": 22
+            },
             "callout": {
               "className": "org.openbravo.erpCommon.ad_callouts.SE_InOut_Warehouse"
             },
@@ -123,6 +131,10 @@
             "inputMode": "search",
             "section": "principal",
             "seq": 10,
+            "validation": {
+              "required": true,
+              "maxLength": 60
+            },
             "callout": {
               "className": "org.openbravo.erpCommon.ad_callouts.SL_InOut_BPartner"
             },
@@ -149,6 +161,10 @@
             "dependsOn": {
               "field": "businessPartner",
               "filterKey": "C_BPartner_ID"
+            },
+            "validation": {
+              "required": true,
+              "maxLength": 22
             },
             "validationRule": {
               "code": "C_BPartner_Location.C_BPartner_ID=@C_BPartner_ID@ AND C_BPartner_Location.IsShipTo='Y' AND C_BPartner_Location.IsActive='Y'",
@@ -182,6 +198,10 @@
             "defaultValue": "@#Date@",
             "section": "principal",
             "seq": 30,
+            "validation": {
+              "required": true,
+              "maxLength": 10
+            },
             "callout": {
               "className": "org.openbravo.erpCommon.ad_callouts.SL_InOut_AccountingDate"
             },
@@ -203,7 +223,10 @@
             "grid": false,
             "form": false,
             "reference": "Order",
-            "inputMode": "search"
+            "inputMode": "search",
+            "validation": {
+              "maxLength": 60
+            }
           },
           {
             "name": "orderReference",
@@ -218,6 +241,9 @@
             "form": true,
             "section": "principal",
             "seq": 20,
+            "validation": {
+              "maxLength": 20
+            },
             "readOnlyLogic": {
               "raw": "@Processed@='Y'",
               "evaluable": true,
@@ -237,6 +263,9 @@
             "form": true,
             "section": "collapsed",
             "seq": 70,
+            "validation": {
+              "maxLength": 255
+            },
             "readOnlyLogic": {
               "raw": "@Processed@='Y'",
               "evaluable": true,
@@ -331,7 +360,11 @@
                 }
               }
             ],
-            "defaultValue": "DR"
+            "defaultValue": "DR",
+            "validation": {
+              "required": true,
+              "maxLength": 60
+            }
           },
           {
             "name": "posted",
@@ -366,6 +399,10 @@
               "true": "green",
               "false": "orange"
             },
+            "validation": {
+              "required": true,
+              "maxLength": 60
+            },
             "displayLogic": {
               "raw": "@Processed@='Y' & @#ShowAcct@='Y'",
               "evaluable": false,
@@ -386,6 +423,9 @@
             "form": false,
             "reference": "Project",
             "inputMode": "search",
+            "validation": {
+              "maxLength": 60
+            },
             "validationRule": {
               "code": "C_Project.projectstatus in ('OP', 'OR') and (C_Project.c_bpartner_id=@C_BPartner_ID@ or '@IsSOTrx@'='N') or C_Project.c_project_id = @c_project_id@",
               "contextParams": [],
@@ -414,6 +454,9 @@
             "form": false,
             "reference": "CostCenter",
             "inputMode": "selector",
+            "validation": {
+              "maxLength": 32
+            },
             "readOnlyLogic": {
               "raw": "@Posted@='Y'",
               "evaluable": true,
@@ -433,6 +476,9 @@
             "form": false,
             "reference": "Asset",
             "inputMode": "selector",
+            "validation": {
+              "maxLength": 32
+            },
             "readOnlyLogic": {
               "raw": "@Posted@='Y'",
               "evaluable": true,
@@ -452,6 +498,9 @@
             "form": false,
             "reference": "UserDimension1",
             "inputMode": "selector",
+            "validation": {
+              "maxLength": 32
+            },
             "readOnlyLogic": {
               "raw": "@Posted@='Y'",
               "evaluable": true,
@@ -471,6 +520,9 @@
             "form": false,
             "reference": "UserDimension2",
             "inputMode": "selector",
+            "validation": {
+              "maxLength": 32
+            },
             "readOnlyLogic": {
               "raw": "@Posted@='Y'",
               "evaluable": true,
@@ -487,7 +539,10 @@
             "visibility": "readOnly",
             "required": false,
             "grid": true,
-            "form": false
+            "form": false,
+            "validation": {
+              "maxLength": 4
+            }
           },
           {
             "name": "processed",
@@ -500,7 +555,11 @@
             "required": true,
             "grid": false,
             "form": false,
-            "sourceRequired": true
+            "sourceRequired": true,
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            }
           }
         ],
         "searchableFields": [
@@ -571,6 +630,10 @@
               "source": "SELECT COALESCE(MAX(Line),0)+10 AS DefaultValue FROM M_InOutLine WHERE M_InOut_ID=@M_InOut_ID@"
             },
             "defaultValue": "@SQL=SELECT COALESCE(MAX(Line),0)+10 AS DefaultValue FROM M_InOutLine WHERE M_InOut_ID=@M_InOut_ID@",
+            "validation": {
+              "required": true,
+              "maxLength": 10
+            },
             "readOnlyLogic": {
               "raw": "@Processed@='Y'",
               "evaluable": true,
@@ -592,6 +655,10 @@
             "inputMode": "search",
             "section": "principal",
             "seq": 10,
+            "validation": {
+              "required": true,
+              "maxLength": 60
+            },
             "callout": {
               "className": "org.openbravo.erpCommon.ad_callouts.SL_InOutLine_Product"
             },
@@ -612,6 +679,9 @@
             "required": false,
             "grid": false,
             "form": false,
+            "validation": {
+              "maxLength": 22
+            },
             "readOnlyLogic": {
               "raw": "@Processed@='Y'",
               "evaluable": true,
@@ -629,6 +699,9 @@
             "required": false,
             "grid": false,
             "form": false,
+            "validation": {
+              "maxLength": 2
+            },
             "callout": {
               "className": "org.openbravo.erpCommon.ad_callouts.OperativeQuantity_To_BaseQuantity"
             },
@@ -651,6 +724,9 @@
             "form": false,
             "reference": "UOM",
             "inputMode": "selector",
+            "validation": {
+              "maxLength": 32
+            },
             "validationRule": {
               "code": "td0.c_uom_id IN(select p.c_uom_id from m_product p where p.m_product_id = @M_Product_ID@) or td0.c_uom_id IN(select a.c_uom_id from m_product_aum a where a.m_product_id = @M_Product_ID@ and ((@IsSOTrx@ = 'Y' and a.sales <> 'NA') OR (@IsSOTrx@ <> 'Y' and a.purchase <> 'NA')))",
               "contextParams": [],
@@ -687,6 +763,10 @@
             "defaultValue": "0",
             "section": "principal",
             "seq": 20,
+            "validation": {
+              "required": true,
+              "maxLength": 10
+            },
             "readOnlyLogic": {
               "raw": "@Processed@='Y' | @UomManagement@='Y'",
               "evaluable": true,
@@ -707,6 +787,10 @@
             "sourceRequired": true,
             "reference": "UOM",
             "inputMode": "selector",
+            "validation": {
+              "required": true,
+              "maxLength": 22
+            },
             "readOnlyLogic": {
               "raw": "@UomManagement@='Y'",
               "evaluable": true,
@@ -731,6 +815,9 @@
             "reference": "Locator",
             "inputMode": "selector",
             "defaultValue": "@OnHandLocatorDefault@",
+            "validation": {
+              "maxLength": 60
+            },
             "validationRule": {
               "code": "M_Locator.M_Warehouse_ID=@M_Warehouse_ID@",
               "contextParams": [],
@@ -754,7 +841,10 @@
             "visibility": "editable",
             "required": false,
             "grid": false,
-            "form": false
+            "form": false,
+            "validation": {
+              "maxLength": 2000
+            }
           },
           {
             "name": "salesOrderLine",
@@ -768,7 +858,10 @@
             "grid": false,
             "form": false,
             "reference": "OrderLine",
-            "inputMode": "search"
+            "inputMode": "search",
+            "validation": {
+              "maxLength": 60
+            }
           },
           {
             "name": "orderQuantity",
@@ -783,6 +876,9 @@
             "form": true,
             "section": "principal",
             "seq": 30,
+            "validation": {
+              "maxLength": 10
+            },
             "callout": {
               "className": "org.openbravo.erpCommon.ad_callouts.SL_InOut_Conversion"
             },
@@ -809,6 +905,9 @@
             "form": false,
             "reference": "BusinessPartner",
             "inputMode": "search",
+            "validation": {
+              "maxLength": 32
+            },
             "readOnlyLogic": {
               "raw": "@Posted@='Y'",
               "evaluable": true,
@@ -828,6 +927,9 @@
             "form": false,
             "reference": "Project",
             "inputMode": "search",
+            "validation": {
+              "maxLength": 32
+            },
             "readOnlyLogic": {
               "raw": "@Posted@='Y'",
               "evaluable": true,
@@ -847,6 +949,9 @@
             "form": false,
             "reference": "CostCenter",
             "inputMode": "selector",
+            "validation": {
+              "maxLength": 32
+            },
             "readOnlyLogic": {
               "raw": "@Posted@='Y'",
               "evaluable": true,
@@ -866,6 +971,9 @@
             "form": false,
             "reference": "Asset",
             "inputMode": "selector",
+            "validation": {
+              "maxLength": 32
+            },
             "readOnlyLogic": {
               "raw": "@Posted@='Y'",
               "evaluable": true,
@@ -885,6 +993,9 @@
             "form": false,
             "reference": "UserDimension1",
             "inputMode": "selector",
+            "validation": {
+              "maxLength": 32
+            },
             "readOnlyLogic": {
               "raw": "@Posted@='Y'",
               "evaluable": true,
@@ -904,6 +1015,9 @@
             "form": false,
             "reference": "UserDimension2",
             "inputMode": "selector",
+            "validation": {
+              "maxLength": 32
+            },
             "readOnlyLogic": {
               "raw": "@Posted@='Y'",
               "evaluable": true,
@@ -926,7 +1040,11 @@
               "type": "computed",
               "source": "0"
             },
-            "defaultValue": "0"
+            "defaultValue": "0",
+            "validation": {
+              "required": true,
+              "maxLength": 10
+            }
           }
         ],
         "searchableFields": [],

@@ -1,8 +1,8 @@
 {
-  "version": "0.10.0",
+  "version": "0.11.0",
   "generatedAt": "2026-04-28T16:08:39.756Z",
-  "updatedAt": "2026-07-06T18:12:04.725Z",
-  "checksum": "cf1960aa75876118",
+  "updatedAt": "2026-07-21T12:35:25.028Z",
+  "checksum": "da73f53efb58144a",
   "frontendContract": {
     "window": {
       "id": "27A453FA86974745977672F1A8DCCEFF",
@@ -45,6 +45,10 @@
                 "name": "IVA"
               }
             ],
+            "validation": {
+              "required": true,
+              "maxLength": 60
+            },
             "readOnlyLogic": {
               "raw": "@IS_Ready@='Y'",
               "evaluable": true,
@@ -67,7 +71,11 @@
               "type": "computed",
               "source": "N"
             },
-            "defaultValue": "N"
+            "defaultValue": "N",
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            }
           },
           {
             "name": "issuerNIF",
@@ -79,7 +87,10 @@
             "visibility": "readOnly",
             "required": false,
             "grid": false,
-            "form": true
+            "form": true,
+            "validation": {
+              "maxLength": 20
+            }
           },
           {
             "name": "systemStartat",
@@ -91,7 +102,10 @@
             "visibility": "readOnly",
             "required": false,
             "grid": false,
-            "form": true
+            "form": true,
+            "validation": {
+              "maxLength": 60
+            }
           },
           {
             "name": "systemStopat",
@@ -103,7 +117,10 @@
             "visibility": "readOnly",
             "required": false,
             "grid": false,
-            "form": true
+            "form": true,
+            "validation": {
+              "maxLength": 60
+            }
           },
           {
             "name": "incidentReport",
@@ -115,7 +132,10 @@
             "visibility": "readOnly",
             "required": false,
             "grid": false,
-            "form": true
+            "form": true,
+            "validation": {
+              "maxLength": 2000
+            }
           },
           {
             "name": "isReady",
@@ -134,6 +154,10 @@
               "source": "N"
             },
             "defaultValue": "N",
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            },
             "displayLogic": {
               "raw": "@IS_Ready@='N'",
               "evaluable": true

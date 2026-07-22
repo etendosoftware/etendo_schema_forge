@@ -811,56 +811,6 @@
         }
       ]
     },
-    "815e23e49d7d45ef28d64a769100a5fa1e1aec24b8c6f25a101070342ebeaeb1": {
-      "checksum": "d7db912212006afa5e0b248c46cc94e0691bbe0194269e34bb80e9696858b553",
-      "params": [
-        "C50A8AEE6F044825B5EF54FAAE76826F"
-      ],
-      "rows": [
-        {
-          "ad_tab_id": "5A5CCFC8359B4D79BA705DC487FE8173",
-          "ad_table_id": "259",
-          "name": "Header",
-          "seqno": "10"
-        },
-        {
-          "ad_tab_id": "387B6179438D4C4CB40769A77F4C304C",
-          "ad_table_id": "260",
-          "name": "Lines",
-          "seqno": "20"
-        },
-        {
-          "ad_tab_id": "0F65E95AA2A14A53AE6DDA18B5009A97",
-          "ad_table_id": "E42DDB42FF0B4F82B1CF3C711B3F0DC0",
-          "name": "Line Tax",
-          "seqno": "27"
-        },
-        {
-          "ad_tab_id": "A0F74205D11848FAB0393A11B0CFB515",
-          "ad_table_id": "1011100000",
-          "name": "Basic Discounts",
-          "seqno": "30"
-        },
-        {
-          "ad_tab_id": "D173CDA24A0C431A94CEE845DC1E6290",
-          "ad_table_id": "314",
-          "name": "Tax",
-          "seqno": "30"
-        },
-        {
-          "ad_tab_id": "3D342267CAAE4CA5B191082E20F87660",
-          "ad_table_id": "70E57DEA195843729FF303C9A71EBCA3",
-          "name": "Payment Out Plan",
-          "seqno": "35"
-        },
-        {
-          "ad_tab_id": "FA619778CCD24476BD89873D139824BB",
-          "ad_table_id": "DC63963AB3F1489BAAB5A9A7EFD1B407",
-          "name": "Payment Out Details",
-          "seqno": "36"
-        }
-      ]
-    },
     "81933096771953c6cf094e465f86e91738157acf5f9d32e9a078c92c5281ca5e": {
       "checksum": "d3af29292c7b8e65de076c95d8fc7effa0cb943edcd8d6a8912923aa3482b065",
       "params": [
@@ -1428,68 +1378,6 @@
           "ad_table_id": "191",
           "name": "Accounting",
           "seqno": "110"
-        }
-      ]
-    },
-    "dc3625edf6e3b3ba3d373862af247d21be277872e900727c4a4025b968fa702b": {
-      "checksum": "e9b075450d2651b204ca759b5d62abddc0bb8120b041b481c294cb17eef868d9",
-      "params": [
-        "FF808081330213E60133021822E40007"
-      ],
-      "rows": [
-        {
-          "ad_tab_id": "AF4090093CFF1431E040007F010048A5",
-          "ad_table_id": "259",
-          "name": "Header",
-          "seqno": "10"
-        },
-        {
-          "ad_tab_id": "AF4090093D471431E040007F010048A5",
-          "ad_table_id": "260",
-          "name": "Lines",
-          "seqno": "20"
-        },
-        {
-          "ad_tab_id": "AF4090093DAF1431E040007F010048A5",
-          "ad_table_id": "E42DDB42FF0B4F82B1CF3C711B3F0DC0",
-          "name": "Line Tax",
-          "seqno": "27"
-        },
-        {
-          "ad_tab_id": "7A6E25742CE4442D89E2D26E8B128C12",
-          "ad_table_id": "3099A57126F24DC6BAFF15EDBF2B969D",
-          "name": "Related Products",
-          "seqno": "28"
-        },
-        {
-          "ad_tab_id": "CC476480E70F4352A541DAC64ADEB922",
-          "ad_table_id": "15EAF61631484A11B6921AB05A342E8B",
-          "name": "Related Services",
-          "seqno": "28"
-        },
-        {
-          "ad_tab_id": "AF4090093DA61431E040007F010048A5",
-          "ad_table_id": "1011100000",
-          "name": "Basic Discounts",
-          "seqno": "30"
-        },
-        {
-          "ad_tab_id": "AF4090093D741431E040007F010048A5",
-          "ad_table_id": "314",
-          "name": "Tax",
-          "seqno": "40"
-        },
-        {
-          "ad_tab_id": "AF4090093DD21431E040007F010048A5",
-          "ad_table_id": "70E57DEA195843729FF303C9A71EBCA3",
-          "name": "Payment In Plan",
-          "seqno": "45"
-        },
-        {
-          "ad_tab_id": "AF4090093DB91431E040007F010048A5",
-          "ad_table_id": "DC63963AB3F1489BAAB5A9A7EFD1B407",
-          "name": "Payment In Details",
-          "seqno": "46"
         }
       ]
     },

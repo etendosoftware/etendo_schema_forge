@@ -1,8 +1,8 @@
 {
-  "version": "0.29.1",
+  "version": "0.33.0",
   "generatedAt": "2026-06-29T12:25:17.116Z",
-  "updatedAt": "2026-06-29T22:43:32.117Z",
-  "checksum": "74ff606db3b82619",
+  "updatedAt": "2026-07-21T19:17:44.597Z",
+  "checksum": "9162cd8e06b5f1b3",
   "frontendContract": {
     "window": {
       "id": "168",
@@ -92,6 +92,10 @@
             },
             "defaultValue": "@#Date@",
             "gridOrder": 1,
+            "validation": {
+              "required": true,
+              "maxLength": 10
+            },
             "readOnlyLogic": {
               "raw": "@Processed@='Y'",
               "evaluable": true,
@@ -116,6 +120,10 @@
             },
             "defaultValue": "@#Date@",
             "gridOrder": 2,
+            "validation": {
+              "required": true,
+              "maxLength": 100
+            },
             "readOnlyLogic": {
               "raw": "@Processed@='Y'",
               "evaluable": true,
@@ -137,6 +145,10 @@
             "reference": "Warehouse",
             "inputMode": "search",
             "gridOrder": 3,
+            "validation": {
+              "required": true,
+              "maxLength": 22
+            },
             "readOnlyLogic": {
               "raw": "@Processed@='Y'",
               "evaluable": true,
@@ -153,7 +165,10 @@
             "visibility": "editable",
             "required": false,
             "grid": false,
-            "form": false
+            "form": false,
+            "validation": {
+              "maxLength": 255
+            }
           },
           {
             "name": "posted",
@@ -189,6 +204,10 @@
               "false": "orange"
             },
             "gridOrder": 5,
+            "validation": {
+              "required": true,
+              "maxLength": 60
+            },
             "displayLogic": {
               "raw": "@Processed@='Y' & @#ShowAcct@='Y'",
               "evaluable": false,
@@ -235,7 +254,11 @@
                 }
               }
             ],
-            "defaultValue": "N"
+            "defaultValue": "N",
+            "validation": {
+              "required": true,
+              "maxLength": 60
+            }
           },
           {
             "name": "project",
@@ -250,6 +273,9 @@
             "form": false,
             "reference": "Project",
             "inputMode": "search",
+            "validation": {
+              "maxLength": 60
+            },
             "displayLogic": {
               "raw": "@ACCT_DIMENSION_DISPLAY@",
               "evaluable": false,
@@ -289,7 +315,11 @@
                 "name": "statusDraft"
               }
             ],
-            "gridOrder": 4
+            "gridOrder": 4,
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            }
           }
         ],
         "searchableFields": [
@@ -333,6 +363,7 @@
             }
           }
         ],
+        "javaQualifier": "inventory",
         "draftMode": {
           "enabled": true,
           "processField": "processNow",
@@ -363,6 +394,9 @@
               "source": "SELECT COALESCE(MAX(Line),0)+10 AS DefaultValue FROM M_InventoryLine WHERE M_Inventory_ID=@M_Inventory_ID@"
             },
             "defaultValue": "@SQL=SELECT COALESCE(MAX(Line),0)+10 AS DefaultValue FROM M_InventoryLine WHERE M_Inventory_ID=@M_Inventory_ID@",
+            "validation": {
+              "maxLength": 10
+            },
             "readOnlyLogic": {
               "raw": "@Processed@='Y'",
               "evaluable": true,
@@ -390,6 +424,10 @@
             ],
             "gridOrder": 1,
             "grow": true,
+            "validation": {
+              "required": true,
+              "maxLength": 60
+            },
             "callout": {
               "className": "org.openbravo.erpCommon.ad_callouts.SL_Inventory_Product"
             },
@@ -418,6 +456,10 @@
             "reference": "Locator",
             "inputMode": "search",
             "defaultValue": "@SQL=SELECT M_LOCATOR_ID AS DEFAULTVALUE FROM M_LOCATOR WHERE AD_ISORGINCLUDED(@AD_Org_ID@, M_LOCATOR.AD_Org_ID, @#AD_Client_ID@) <> -1 AND ISACTIVE='Y' AND M_WAREHOUSE_ID=@M_WAREHOUSE_ID@  ORDER BY M_LOCATOR.ISDEFAULT DESC",
+            "validation": {
+              "required": true,
+              "maxLength": 60
+            },
             "validationRule": {
               "code": "M_Locator.M_Warehouse_ID=@M_Warehouse_ID@",
               "contextParams": [],
@@ -445,6 +487,9 @@
             "required": false,
             "grid": false,
             "form": true,
+            "validation": {
+              "maxLength": 255
+            },
             "readOnlyLogic": {
               "raw": "@Processed@='Y'",
               "evaluable": true,
@@ -467,6 +512,9 @@
               "source": "0"
             },
             "defaultValue": "0",
+            "validation": {
+              "maxLength": 10
+            },
             "displayLogic": {
               "raw": "@HASSECONDUOM@=1",
               "evaluable": true
@@ -487,6 +535,11 @@
             "gridOrder": 4,
             "grow": true,
             "columnWidth": 192,
+            "validation": {
+              "required": true,
+              "maxLength": 10,
+              "minimum": 0
+            },
             "readOnlyLogic": {
               "raw": "@Processed@='Y'",
               "evaluable": true,
@@ -509,7 +562,11 @@
             "inputMode": "selector",
             "gridOrder": 2,
             "grow": true,
-            "gridReadOnly": true
+            "gridReadOnly": true,
+            "validation": {
+              "required": true,
+              "maxLength": 22
+            }
           },
           {
             "name": "bookQuantity",
@@ -525,7 +582,11 @@
             "sourceRequired": true,
             "gridOrder": 3,
             "grow": true,
-            "columnWidth": 192
+            "columnWidth": 192,
+            "validation": {
+              "required": true,
+              "maxLength": 10
+            }
           },
           {
             "name": "cost",
@@ -538,10 +599,37 @@
             "required": false,
             "grid": false,
             "form": true,
+            "validation": {
+              "maxLength": 10
+            },
             "readOnlyLogic": {
               "raw": "@Processed@='Y'",
               "evaluable": true,
               "js": "record['processed'] === true"
+            }
+          },
+          {
+            "name": "etgoQtydiff",
+            "apiKey": "etgoQtydiff",
+            "column": "EM_Etgo_Qtydiff",
+            "label": "Difference",
+            "type": "quantity",
+            "tsType": "number",
+            "visibility": "readOnly",
+            "required": false,
+            "grid": true,
+            "form": true,
+            "derivation": {
+              "type": "computed",
+              "source": "0"
+            },
+            "columnType": "signedDelta",
+            "defaultValue": "0",
+            "gridOrder": 5,
+            "grow": true,
+            "columnWidth": 192,
+            "validation": {
+              "maxLength": 10
             }
           }
         ],
@@ -563,6 +651,13 @@
           },
           {
             "name": "quantityOrderBook",
+            "derivation": {
+              "type": "computed",
+              "source": "0"
+            }
+          },
+          {
+            "name": "etgoQtydiff",
             "derivation": {
               "type": "computed",
               "source": "0"
@@ -866,7 +961,8 @@
             "visibility": "system",
             "required": true
           }
-        ]
+        ],
+        "javaQualifier": "inventory"
       },
       "inventoryLine": {
         "tableName": "M_InventoryLine",
@@ -1048,6 +1144,14 @@
             "type": "foreignKey",
             "visibility": "system",
             "required": true
+          },
+          {
+            "name": "etgoQtydiff",
+            "apiKey": "etgoQtydiff",
+            "column": "EM_Etgo_Qtydiff",
+            "type": "quantity",
+            "visibility": "readOnly",
+            "required": false
           }
         ],
         "javaQualifier": "inventoryLine"
@@ -1341,6 +1445,14 @@
         "description": "Default value for 'posted' in inventory should be a string"
       },
       {
+        "id": "t-default-value-type-inventoryLine-etgoQtydiff",
+        "category": "default-value-type",
+        "entity": "inventoryLine",
+        "field": "etgoQtydiff",
+        "runner": "node",
+        "description": "Default value for 'etgoQtydiff' in inventoryLine should be a string"
+      },
+      {
         "id": "t-default-value-type-inventoryLine-lineNo",
         "category": "default-value-type",
         "entity": "inventoryLine",
@@ -1501,6 +1613,14 @@
         "description": "Field 'description' should be present in inventoryLine"
       },
       {
+        "id": "t-field-presence-inventoryLine-etgoQtydiff",
+        "category": "field-presence",
+        "entity": "inventoryLine",
+        "field": "etgoQtydiff",
+        "runner": "node",
+        "description": "Field 'etgoQtydiff' should be present in inventoryLine"
+      },
+      {
         "id": "t-field-presence-inventoryLine-lineNo",
         "category": "field-presence",
         "entity": "inventoryLine",
@@ -1635,6 +1755,14 @@
         "field": "description",
         "runner": "node",
         "description": "Field 'description' should have type 'string' in inventoryLine"
+      },
+      {
+        "id": "t-field-type-inventoryLine-etgoQtydiff",
+        "category": "field-type",
+        "entity": "inventoryLine",
+        "field": "etgoQtydiff",
+        "runner": "node",
+        "description": "Field 'etgoQtydiff' should have type 'number' in inventoryLine"
       },
       {
         "id": "t-field-type-inventoryLine-lineNo",
@@ -2257,15 +2385,15 @@
       }
     ],
     "summary": {
-      "total": 126,
+      "total": 129,
       "byCategory": {
         "action-endpoint": 4,
         "crud-flags": 2,
-        "default-value-type": 7,
+        "default-value-type": 8,
         "displaylogic-evaluable": 3,
         "displaylogic-valid": 3,
-        "field-presence": 17,
-        "field-type": 17,
+        "field-presence": 18,
+        "field-type": 18,
         "readonlylogic-evaluable": 10,
         "readonlylogic-valid": 10,
         "rule-declared": 11,
@@ -2275,7 +2403,7 @@
         "visibility": 2
       },
       "byRunner": {
-        "node": 126,
+        "node": 129,
         "junit": 0
       }
     }

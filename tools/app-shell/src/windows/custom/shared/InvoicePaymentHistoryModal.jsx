@@ -18,7 +18,9 @@ function fmtDate(raw) {
 /** Plain-text es-ES amount for the delete-confirm message (no JSX, unlike <MoneyAmount>). */
 function fmtAmount(val, currency) {
   const n = typeof val === 'string' ? parseFloat(val) : (val ?? 0);
-  return new Intl.NumberFormat('es-ES', { style: 'currency', currency: currency || 'EUR' }).format(n);
+  return new Intl.NumberFormat('es-ES', {
+    style: 'currency', currency: currency || 'EUR', currencyDisplay: 'narrowSymbol',
+  }).format(n);
 }
 
 // Processed APRM statuses. PWNC ("Withdrawn not Cleared") and RPAE ("Awaiting
@@ -312,7 +314,7 @@ function PaymentHistoryBody({
                   data-testid="PaymentStateTag__b82d4f" />
               </div>
               <div className="tabular-nums" style={{ textAlign: 'right', fontSize: 14, fontWeight: 600, color: amountColor, whiteSpace: 'nowrap' }}>
-                {amountSign}<MoneyAmount value={rowValue} currency={currency} tone="neutral" className={amountClassName} data-testid="MoneyAmount__cp-history-row" />
+                {amountSign}<MoneyAmount value={rowValue} currency={currency} tone="neutral" className={amountClassName} currencyDisplay="narrowSymbol" data-testid="MoneyAmount__cp-history-row" />
               </div>
               <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
                 {!isProcessed(payment) && (
@@ -525,7 +527,7 @@ export default function InvoicePaymentHistoryModal({
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ fontSize: 12, lineHeight: '16px', color: '#3F3F50' }}>{ui('importeTotal')}</div>
               <div className="tabular-nums" style={{ fontSize: 16, lineHeight: '24px', fontWeight: 500 }}>
-                <MoneyAmount value={grandTotal} currency={currency} tone="neutral" data-testid="MoneyAmount__cp-history-total" />
+                <MoneyAmount value={grandTotal} currency={currency} tone="neutral" currencyDisplay="narrowSymbol" data-testid="MoneyAmount__cp-history-total" />
               </div>
             </div>
             <div style={{ flex: 1, minWidth: 0 }}>
@@ -538,6 +540,7 @@ export default function InvoicePaymentHistoryModal({
                   currency={currency}
                   tone="neutral"
                   className={getOutstandingClassName(isCreditInstrument, outstandingAmt)}
+                  currencyDisplay="narrowSymbol"
                   data-testid="MoneyAmount__cp-history-pending" />
               </div>
             </div>

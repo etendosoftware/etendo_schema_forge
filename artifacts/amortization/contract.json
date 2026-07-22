@@ -1,8 +1,8 @@
 {
-  "version": "0.36.0",
+  "version": "0.37.0",
   "generatedAt": "2026-07-14T13:57:24.059Z",
-  "updatedAt": "2026-07-16T15:04:16.418Z",
-  "checksum": "6fa3fb426053dcc9",
+  "updatedAt": "2026-07-21T12:35:16.807Z",
+  "checksum": "3d1d2f26e1ccec6a",
   "frontendContract": {
     "window": {
       "id": "800026",
@@ -122,6 +122,10 @@
             "sourceRequired": true,
             "section": "principal",
             "seq": 10,
+            "validation": {
+              "required": true,
+              "maxLength": 60
+            },
             "readOnlyLogic": {
               "raw": "@Processed@='Y'",
               "evaluable": true,
@@ -141,6 +145,9 @@
             "form": true,
             "section": "principal",
             "seq": 50,
+            "validation": {
+              "maxLength": 255
+            },
             "readOnlyLogic": {
               "raw": "@Processed@='Y'",
               "evaluable": true,
@@ -162,6 +169,10 @@
             "section": "principal",
             "seq": 20,
             "dot": false,
+            "validation": {
+              "required": true,
+              "maxLength": 10
+            },
             "readOnlyLogic": {
               "raw": "@Processed@='Y'",
               "evaluable": true,
@@ -182,6 +193,9 @@
             "section": "principal",
             "seq": 30,
             "dot": false,
+            "validation": {
+              "maxLength": 10
+            },
             "readOnlyLogic": {
               "raw": "@Processed@='Y'",
               "evaluable": true,
@@ -202,6 +216,9 @@
             "columnType": "amount",
             "seq": 40,
             "summable": true,
+            "validation": {
+              "maxLength": 12
+            },
             "readOnlyLogic": {
               "raw": "@Processed@='Y'",
               "evaluable": true,
@@ -224,6 +241,10 @@
             "inputMode": "selector",
             "section": "principal",
             "seq": 35,
+            "validation": {
+              "required": true,
+              "maxLength": 12
+            },
             "readOnlyLogic": {
               "raw": "@Processed@='Y'",
               "evaluable": true,
@@ -258,7 +279,11 @@
               }
             ],
             "defaultValue": "N",
-            "filterOnly": true
+            "filterOnly": true,
+            "validation": {
+              "required": true,
+              "maxLength": 60
+            }
           },
           {
             "name": "posted",
@@ -292,6 +317,10 @@
             "badgeVariants": {
               "true": "green",
               "false": "orange"
+            },
+            "validation": {
+              "required": true,
+              "maxLength": 60
             },
             "displayLogic": {
               "raw": "@Processed@='Y' & @#ShowAcct@='Y'",
@@ -352,6 +381,9 @@
             "reference": "Asset",
             "inputMode": "selector",
             "grow": true,
+            "validation": {
+              "maxLength": 32
+            },
             "readOnlyLogic": {
               "raw": "@Posted@='Y'",
               "evaluable": true,
@@ -370,6 +402,9 @@
             "grid": true,
             "form": true,
             "grow": true,
+            "validation": {
+              "maxLength": 6
+            },
             "readOnlyLogic": {
               "raw": "@Processed@='Y'",
               "evaluable": true,
@@ -388,6 +423,10 @@
             "grid": true,
             "form": true,
             "noTrailing": true,
+            "validation": {
+              "required": true,
+              "maxLength": 10
+            },
             "readOnlyLogic": {
               "raw": "@Processed@='Y'",
               "evaluable": true,
@@ -407,6 +446,9 @@
             "form": false,
             "reference": "Currency",
             "inputMode": "selector",
+            "validation": {
+              "maxLength": 12
+            },
             "readOnlyLogic": {
               "raw": "@Processed@='Y'",
               "evaluable": true,
@@ -428,6 +470,9 @@
             "inputMode": "selector",
             "lookup": true,
             "gridOrder": 4,
+            "validation": {
+              "maxLength": 32
+            },
             "displayLogic": {
               "raw": "@ACCT_DIMENSION_DISPLAY@",
               "evaluable": false,
@@ -455,6 +500,9 @@
             "inputMode": "selector",
             "lookup": true,
             "gridOrder": 5,
+            "validation": {
+              "maxLength": 32
+            },
             "readOnlyLogic": {
               "raw": "@Posted@='Y'",
               "evaluable": true,
@@ -476,6 +524,9 @@
             "inputMode": "selector",
             "lookup": true,
             "gridOrder": 8,
+            "validation": {
+              "maxLength": 32
+            },
             "readOnlyLogic": {
               "raw": "@Posted@='Y'",
               "evaluable": true,

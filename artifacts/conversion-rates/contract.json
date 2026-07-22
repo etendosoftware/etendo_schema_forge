@@ -1,8 +1,8 @@
 {
-  "version": "0.4.0",
+  "version": "0.5.0",
   "generatedAt": "2026-05-21T20:22:50.312Z",
-  "updatedAt": "2026-07-15T18:13:15.696Z",
-  "checksum": "01e82774884d50a6",
+  "updatedAt": "2026-07-21T12:35:17.044Z",
+  "checksum": "9d0f7099b544a92c",
   "frontendContract": {
     "window": {
       "id": "116",
@@ -41,6 +41,10 @@
             "reference": "Currency",
             "inputMode": "selector",
             "defaultValue": "@SQL=SELECT C_CURRENCY_ID FROM AD_CLIENT  WHERE AD_CLIENT_ID = @AD_CLIENT_ID@",
+            "validation": {
+              "required": true,
+              "maxLength": 22
+            },
             "readOnlyLogic": {
               "raw": "@sMFCRSynced@='Y'",
               "evaluable": true,
@@ -66,6 +70,10 @@
             "reference": "Currency",
             "inputMode": "selector",
             "defaultValue": "@SQL=SELECT C_CURRENCY_ID FROM AD_CLIENT  WHERE AD_CLIENT_ID = @AD_CLIENT_ID@",
+            "validation": {
+              "required": true,
+              "maxLength": 22
+            },
             "readOnlyLogic": {
               "raw": "@sMFCRSynced@='Y'",
               "evaluable": true,
@@ -84,6 +92,10 @@
             "grid": true,
             "form": true,
             "sourceRequired": true,
+            "validation": {
+              "required": true,
+              "maxLength": 10
+            },
             "readOnlyLogic": {
               "raw": "@sMFCRSynced@='Y'",
               "evaluable": true,
@@ -101,6 +113,9 @@
             "required": false,
             "grid": true,
             "form": true,
+            "validation": {
+              "maxLength": 10
+            },
             "readOnlyLogic": {
               "raw": "@sMFCRSynced@='Y'",
               "evaluable": true,
@@ -119,6 +134,10 @@
             "grid": true,
             "form": true,
             "sourceRequired": true,
+            "validation": {
+              "required": true,
+              "maxLength": 22
+            },
             "callout": {
               "className": "org.openbravo.erpCommon.ad_callouts.SL_Conversion_Rate"
             },
@@ -140,6 +159,10 @@
             "grid": true,
             "form": true,
             "sourceRequired": true,
+            "validation": {
+              "required": true,
+              "maxLength": 22
+            },
             "callout": {
               "className": "org.openbravo.erpCommon.ad_callouts.SL_Conversion_Rate"
             },
@@ -165,7 +188,10 @@
               "source": "N"
             },
             "defaultValue": "N",
-            "section": "principal"
+            "section": "principal",
+            "validation": {
+              "maxLength": 1
+            }
           }
         ],
         "searchableFields": [

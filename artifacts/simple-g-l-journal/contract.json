@@ -1,8 +1,8 @@
 {
-  "version": "0.15.0",
+  "version": "0.16.0",
   "generatedAt": "2026-06-16T16:34:09.049Z",
-  "updatedAt": "2026-06-24T20:46:49.776Z",
-  "checksum": "202a685d07d22ea8",
+  "updatedAt": "2026-07-21T12:35:23.656Z",
+  "checksum": "19e80ebf3f7692bf",
   "frontendContract": {
     "window": {
       "id": "B917E8A7B0864ACEA9D941E3B7494E53",
@@ -68,6 +68,10 @@
             },
             "defaultValue": "@DESCRIPTION0@",
             "seq": 30,
+            "validation": {
+              "required": true,
+              "maxLength": 255
+            },
             "readOnlyLogic": {
               "js": "record['processed'] === true",
               "evaluable": true
@@ -91,6 +95,10 @@
             },
             "defaultValue": "@SQL=SELECT COALESCE((SELECT ENDDATE FROM C_PERIOD WHERE C_PERIOD_ID = @C_PERIOD_ID@ and periodtype = 'A'),to_date(@HeaderDateAcct@)) FROM DUAL",
             "seq": 10,
+            "validation": {
+              "required": true,
+              "maxLength": 10
+            },
             "callout": {
               "className": "org.openbravo.erpCommon.ad_callouts.SL_Journal_Period"
             },
@@ -120,6 +128,10 @@
             "inputMode": "search",
             "defaultValue": "@SQL= SELECT C_Period_ID FROM C_Period WHERE C_Year_ID IN (SELECT C_Year_ID FROM C_Year WHERE C_Calendar_ID =(SELECT C_Calendar_ID FROM AD_ORG WHERE AD_Client_ID= @AD_Client_ID@ AND AD_ORG_ID=(SELECT AD_ORG_GETCALENDAROWNER( @AD_Org_ID@ ) from dual))) AND to_date( COALESCE(@DateAcct@,@#Date@) ) BETWEEN StartDate AND EndDate AND PeriodType='S' AND exists (select 1 from c_periodcontrol where c_periodcontrol.c_period_id = c_period.c_period_id AND periodstatus = 'O')",
             "seq": 20,
+            "validation": {
+              "required": true,
+              "maxLength": 22
+            },
             "callout": {
               "className": "org.openbravo.erpCommon.ad_callouts.SL_Journal_Period"
             },
@@ -148,6 +160,10 @@
             "reference": "Currency",
             "inputMode": "selector",
             "defaultValue": "@C_Currency_ID@",
+            "validation": {
+              "required": true,
+              "maxLength": 22
+            },
             "callout": {
               "className": "org.openbravo.erpCommon.ad_callouts.SL_Journal_Period"
             },
@@ -173,6 +189,10 @@
               "source": "N"
             },
             "defaultValue": "N",
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            },
             "readOnlyLogic": {
               "js": "record['processed'] === true",
               "evaluable": true
@@ -195,6 +215,10 @@
               "source": "N"
             },
             "defaultValue": "N",
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            },
             "callout": {
               "className": "org.openbravo.erpCommon.ad_callouts.SL_Journal_MultiAcctSchema"
             },
@@ -236,6 +260,10 @@
             "badgeVariants": {
               "true": "green",
               "false": "orange"
+            },
+            "validation": {
+              "required": true,
+              "maxLength": 60
             },
             "displayLogic": {
               "raw": "@Processed@='Y' & @#ShowAcct@='Y'",
@@ -331,6 +359,10 @@
               "source": "SELECT COALESCE(MAX(Line),0)+10 AS DefaultValue FROM GL_JournalLine WHERE GL_Journal_ID=@GL_Journal_ID@"
             },
             "defaultValue": "@SQL=SELECT COALESCE(MAX(Line),0)+10 AS DefaultValue FROM GL_JournalLine WHERE GL_Journal_ID=@GL_Journal_ID@",
+            "validation": {
+              "required": true,
+              "maxLength": 10
+            },
             "readOnlyLogic": {
               "raw": "@Processed@='Y'",
               "evaluable": true,
@@ -351,6 +383,9 @@
             "reference": "ValidCombination",
             "inputMode": "selector",
             "lookup": true,
+            "validation": {
+              "maxLength": 32
+            },
             "displayLogic": {
               "raw": "@Multi_Gl@='N'",
               "evaluable": true
@@ -377,6 +412,9 @@
               "source": "context.description1"
             },
             "defaultValue": "@DESCRIPTION1@",
+            "validation": {
+              "maxLength": 255
+            },
             "readOnlyLogic": {
               "raw": "@Processed@='Y'",
               "evaluable": true,
@@ -400,6 +438,10 @@
               "es_ES": "Débito"
             },
             "clearsField": "foreignCurrencyCredit",
+            "validation": {
+              "required": true,
+              "maxLength": 22
+            },
             "callout": {
               "className": "org.openbravo.erpCommon.ad_callouts.SL_JournalLineAmt"
             },
@@ -426,6 +468,10 @@
               "es_ES": "Crédito"
             },
             "clearsField": "foreignCurrencyDebit",
+            "validation": {
+              "required": true,
+              "maxLength": 22
+            },
             "callout": {
               "className": "org.openbravo.erpCommon.ad_callouts.SL_JournalLineAmt"
             },
@@ -451,7 +497,11 @@
               "type": "computed",
               "source": "N"
             },
-            "defaultValue": "N"
+            "defaultValue": "N",
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            }
           },
           {
             "name": "businessPartner",
@@ -466,6 +516,9 @@
             "form": true,
             "reference": "BPartner",
             "inputMode": "search",
+            "validation": {
+              "maxLength": 32
+            },
             "displayLogic": {
               "raw": "@Open_Items@='Y'",
               "evaluable": true,
@@ -491,6 +544,9 @@
             "form": true,
             "reference": "Product",
             "inputMode": "selector",
+            "validation": {
+              "maxLength": 32
+            },
             "displayLogic": {
               "raw": "@Open_Items@='Y'",
               "evaluable": true,
@@ -515,6 +571,9 @@
             "form": true,
             "reference": "Project",
             "inputMode": "search",
+            "validation": {
+              "maxLength": 32
+            },
             "displayLogic": {
               "raw": "@Open_Items@='Y'",
               "evaluable": true,
@@ -539,6 +598,9 @@
             "form": true,
             "reference": "Asset",
             "inputMode": "selector",
+            "validation": {
+              "maxLength": 32
+            },
             "displayLogic": {
               "raw": "@Open_Items@='Y'",
               "evaluable": true,
@@ -563,6 +625,9 @@
             "form": true,
             "reference": "Costcenter",
             "inputMode": "selector",
+            "validation": {
+              "maxLength": 32
+            },
             "displayLogic": {
               "raw": "@Open_Items@='Y'",
               "evaluable": true,

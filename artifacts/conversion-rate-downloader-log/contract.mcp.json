@@ -1,8 +1,8 @@
 {
-  "version": "0.3.0",
+  "version": "0.4.0",
   "generatedAt": "2026-05-26T14:01:54.525Z",
   "updatedAt": "2026-07-15T18:13:15.971Z",
-  "contractChecksum": "3a6771ca45f25010",
+  "contractChecksum": "855ec7fd6298ff5e",
   "apiPrediction": {
     "specName": "conversion-rate-downloader-log",
     "baseUrl": "/sws/neo/conversion-rate-downloader-log",

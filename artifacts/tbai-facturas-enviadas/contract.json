@@ -1,8 +1,8 @@
 {
-  "version": "0.2.0",
+  "version": "0.3.0",
   "generatedAt": "2026-05-04T17:05:55.224Z",
-  "updatedAt": "2026-06-26T12:27:58.864Z",
-  "checksum": "1a00cb188dbdc3c5",
+  "updatedAt": "2026-07-21T12:35:24.705Z",
+  "checksum": "412ce87e943e851e",
   "frontendContract": {
     "window": {
       "id": "71F24BF89DE748B483BE87594747D6FB",
@@ -35,7 +35,11 @@
               "type": "computed",
               "source": "Y"
             },
-            "defaultValue": "Y"
+            "defaultValue": "Y",
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            }
           },
           {
             "name": "estado",
@@ -47,7 +51,10 @@
             "visibility": "readOnly",
             "required": false,
             "grid": false,
-            "form": true
+            "form": true,
+            "validation": {
+              "maxLength": 10
+            }
           },
           {
             "name": "descripcion",
@@ -59,7 +66,10 @@
             "visibility": "readOnly",
             "required": false,
             "grid": false,
-            "form": true
+            "form": true,
+            "validation": {
+              "maxLength": 20
+            }
           },
           {
             "name": "invoice",
@@ -74,7 +84,11 @@
             "form": true,
             "sourceRequired": true,
             "reference": "Invoice",
-            "inputMode": "selector"
+            "inputMode": "selector",
+            "validation": {
+              "required": true,
+              "maxLength": 32
+            }
           }
         ],
         "searchableFields": [],
@@ -110,7 +124,11 @@
               "type": "computed",
               "source": "Y"
             },
-            "defaultValue": "Y"
+            "defaultValue": "Y",
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            }
           },
           {
             "name": "codigo",
@@ -122,7 +140,10 @@
             "visibility": "readOnly",
             "required": false,
             "grid": false,
-            "form": true
+            "form": true,
+            "validation": {
+              "maxLength": 10
+            }
           },
           {
             "name": "descripcion",
@@ -134,7 +155,10 @@
             "visibility": "readOnly",
             "required": false,
             "grid": false,
-            "form": true
+            "form": true,
+            "validation": {
+              "maxLength": 1000
+            }
           }
         ],
         "searchableFields": [],

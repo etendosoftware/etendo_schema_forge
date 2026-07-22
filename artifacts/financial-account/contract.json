@@ -1,8 +1,8 @@
 {
-  "version": "0.16.0",
+  "version": "0.17.0",
   "generatedAt": "2026-06-11T01:47:08.755Z",
-  "updatedAt": "2026-07-19T03:13:47.407Z",
-  "checksum": "ecbaad061517903c",
+  "updatedAt": "2026-07-21T12:35:19.261Z",
+  "checksum": "effb38fa7ad6cf67",
   "frontendContract": {
     "window": {
       "id": "94EAA455D2644E04AB25D93BE5157B6D",
@@ -30,7 +30,11 @@
             "grid": true,
             "form": true,
             "sourceRequired": true,
-            "gridOrder": 1
+            "gridOrder": 1,
+            "validation": {
+              "required": true,
+              "maxLength": 60
+            }
           },
           {
             "name": "currency",
@@ -46,6 +50,10 @@
             "sourceRequired": true,
             "reference": "Currency",
             "inputMode": "selector",
+            "validation": {
+              "required": true,
+              "maxLength": 32
+            },
             "readOnlyLogic": {
               "raw": "@HasTransaction@>0",
               "evaluable": true,
@@ -92,7 +100,11 @@
               }
             ],
             "defaultValue": "B",
-            "gridOrder": 2
+            "gridOrder": 2,
+            "validation": {
+              "required": true,
+              "maxLength": 60
+            }
           },
           {
             "name": "description",
@@ -104,7 +116,10 @@
             "visibility": "editable",
             "required": false,
             "grid": false,
-            "form": true
+            "form": true,
+            "validation": {
+              "maxLength": 255
+            }
           },
           {
             "name": "active",
@@ -121,7 +136,10 @@
               "type": "computed",
               "source": "Y"
             },
-            "defaultValue": "Y"
+            "defaultValue": "Y",
+            "validation": {
+              "maxLength": 1
+            }
           },
           {
             "name": "currentBalance",
@@ -140,7 +158,11 @@
               "source": "0"
             },
             "defaultValue": "0",
-            "gridOrder": 3
+            "gridOrder": 3,
+            "validation": {
+              "required": true,
+              "maxLength": 12
+            }
           },
           {
             "name": "iBAN",
@@ -153,6 +175,9 @@
             "required": false,
             "grid": false,
             "form": true,
+            "validation": {
+              "maxLength": 34
+            },
             "displayLogic": {
               "raw": "@Type@='B'",
               "evaluable": true
@@ -169,6 +194,9 @@
             "required": false,
             "grid": false,
             "form": true,
+            "validation": {
+              "maxLength": 20
+            },
             "displayLogic": {
               "raw": "@Type@='B'",
               "evaluable": true
@@ -185,6 +213,9 @@
             "required": false,
             "grid": false,
             "form": true,
+            "validation": {
+              "maxLength": 1
+            },
             "displayLogic": {
               "raw": "@Type@='B'&@FIN_Matching_Algorithm_ID@!''",
               "evaluable": true
@@ -201,6 +232,9 @@
             "required": false,
             "grid": false,
             "form": true,
+            "validation": {
+              "maxLength": 1
+            },
             "displayLogic": {
               "raw": "@Type@='B'&@FIN_Matching_Algorithm_ID@!''&(@LASTRECON@=@DRAFTRECONCILIATION@|@DRAFTRECONCILIATION@='')",
               "evaluable": true
@@ -217,6 +251,9 @@
             "required": false,
             "grid": false,
             "form": true,
+            "validation": {
+              "maxLength": 1
+            },
             "displayLogic": {
               "raw": "@Type@='B'&@FIN_Matching_Algorithm_ID@!''&(@LASTRECON@!@DRAFTRECONCILIATION@&@DRAFTRECONCILIATION@!'')",
               "evaluable": true
@@ -233,6 +270,9 @@
             "required": false,
             "grid": false,
             "form": true,
+            "validation": {
+              "maxLength": 1
+            },
             "displayLogic": {
               "raw": "@Type@='C'|@FIN_Matching_Algorithm_ID@=''",
               "evaluable": true
@@ -253,7 +293,10 @@
               "type": "computed",
               "source": "N"
             },
-            "defaultValue": "N"
+            "defaultValue": "N",
+            "validation": {
+              "maxLength": 1
+            }
           },
           {
             "name": "bankCode",
@@ -266,6 +309,9 @@
             "required": false,
             "grid": false,
             "form": true,
+            "validation": {
+              "maxLength": 4
+            },
             "displayLogic": {
               "raw": "(@Type@='B' & @BankFormat@='SPANISH') | @CodeBank@ ! ''",
               "evaluable": true
@@ -282,6 +328,9 @@
             "required": false,
             "grid": false,
             "form": true,
+            "validation": {
+              "maxLength": 4
+            },
             "displayLogic": {
               "raw": "(@Type@='B'  & @BankFormat@='SPANISH') | @CodeBranch@ ! ''",
               "evaluable": true
@@ -298,6 +347,9 @@
             "required": false,
             "grid": false,
             "form": true,
+            "validation": {
+              "maxLength": 10
+            },
             "displayLogic": {
               "raw": "(@Type@='B'  & @BankFormat@='SPANISH') | @Codeaccount@ ! ''",
               "evaluable": true
@@ -314,6 +366,9 @@
             "required": false,
             "grid": false,
             "form": true,
+            "validation": {
+              "maxLength": 120
+            },
             "displayLogic": {
               "raw": "@Type@='B'",
               "evaluable": true
@@ -330,6 +385,9 @@
             "required": false,
             "grid": false,
             "form": true,
+            "validation": {
+              "maxLength": 1
+            },
             "displayLogic": {
               "raw": "false",
               "evaluable": true,
@@ -347,6 +405,9 @@
             "required": false,
             "grid": false,
             "form": true,
+            "validation": {
+              "maxLength": 1
+            },
             "displayLogic": {
               "raw": "false",
               "evaluable": true,
@@ -364,6 +425,9 @@
             "required": false,
             "grid": false,
             "form": true,
+            "validation": {
+              "maxLength": 1
+            },
             "displayLogic": {
               "raw": "@EM_Aprm_Isfundstrans_Enabled@='Y'",
               "evaluable": true
@@ -382,6 +446,9 @@
             "form": true,
             "reference": "PSD2_Provider",
             "inputMode": "search",
+            "validation": {
+              "maxLength": 32
+            },
             "displayLogic": {
               "raw": "@PSD2_ClientHasApiKey@=1 & @Type@!'C'",
               "evaluable": true
@@ -403,6 +470,9 @@
             "required": false,
             "grid": false,
             "form": true,
+            "validation": {
+              "maxLength": 19
+            },
             "displayLogic": {
               "raw": "@PSD2_ClientHasApiKey@=1 & @Type@!'C'",
               "evaluable": true
@@ -419,6 +489,9 @@
             "required": false,
             "grid": false,
             "form": true,
+            "validation": {
+              "maxLength": 19
+            },
             "displayLogic": {
               "raw": "@PSD2_ClientHasApiKey@=1 & @Type@!'C'",
               "evaluable": true
@@ -470,6 +543,9 @@
               }
             ],
             "defaultValue": "1BD",
+            "validation": {
+              "maxLength": 10
+            },
             "displayLogic": {
               "raw": "@PSD2_ClientHasApiKey@=1 & @Type@!'C'",
               "evaluable": true
@@ -486,6 +562,9 @@
             "required": false,
             "grid": false,
             "form": true,
+            "validation": {
+              "maxLength": 1
+            },
             "displayLogic": {
               "raw": "@PSD2_ClientHasApiKey@=1 & @PSD2_HasConnections@=0 & @Type@!'C'",
               "evaluable": true
@@ -502,6 +581,9 @@
             "required": false,
             "grid": false,
             "form": true,
+            "validation": {
+              "maxLength": 1
+            },
             "displayLogic": {
               "raw": "@PSD2_ClientHasApiKey@=1 & @PSD2_HasActiveConnections@>=1 & @Type@!'C'",
               "evaluable": true
@@ -518,6 +600,9 @@
             "required": false,
             "grid": false,
             "form": true,
+            "validation": {
+              "maxLength": 255
+            },
             "displayLogic": {
               "raw": "@PSD2_ClientHasApiKey@=1 & @Type@!'C'",
               "evaluable": true
@@ -534,6 +619,9 @@
             "required": false,
             "grid": false,
             "form": true,
+            "validation": {
+              "maxLength": 20
+            },
             "displayLogic": {
               "raw": "@Type@='CA'",
               "evaluable": true
@@ -571,6 +659,9 @@
               }
             ],
             "defaultValue": "DC",
+            "validation": {
+              "maxLength": 60
+            },
             "displayLogic": {
               "raw": "@Type@!'C'",
               "evaluable": true
@@ -587,6 +678,9 @@
             "required": false,
             "grid": false,
             "form": true,
+            "validation": {
+              "maxLength": 1
+            },
             "displayLogic": {
               "raw": "@PSD2_ClientHasApiKey@=1 & @PSD2_HasInactiveConnections@>0 & @Type@!'C'",
               "evaluable": true
@@ -607,7 +701,10 @@
               "type": "computed",
               "source": "0"
             },
-            "defaultValue": "0"
+            "defaultValue": "0",
+            "validation": {
+              "maxLength": 12
+            }
           },
           {
             "name": "eTGODateTolerance",
@@ -624,7 +721,10 @@
               "type": "computed",
               "source": "3"
             },
-            "defaultValue": "3"
+            "defaultValue": "3",
+            "validation": {
+              "maxLength": 12
+            }
           }
         ],
         "searchableFields": [],
@@ -735,6 +835,10 @@
             ],
             "defaultValue": "BPD",
             "gridOrder": 6,
+            "validation": {
+              "required": true,
+              "maxLength": 60
+            },
             "callout": {
               "className": "org.openbravo.erpCommon.ad_callouts.SE_Trxtype_Transaction"
             },
@@ -820,6 +924,10 @@
             ],
             "defaultValue": "'RPAP'",
             "gridOrder": 5,
+            "validation": {
+              "required": true,
+              "maxLength": 40
+            },
             "validationRule": {
               "code": "Value IN ('RPAP','RDNC','RPPC','PWNC')",
               "contextParams": [],
@@ -848,6 +956,10 @@
             },
             "defaultValue": "@#Date@",
             "gridOrder": 1,
+            "validation": {
+              "required": true,
+              "maxLength": 19
+            },
             "callout": {
               "className": "org.openbravo.erpCommon.ad_callouts.SE_StatementDate_Transaction"
             },
@@ -878,6 +990,10 @@
               "source": "documentType.sequence"
             },
             "gridOrder": 2,
+            "validation": {
+              "required": true,
+              "maxLength": 30
+            },
             "readOnlyLogic": {
               "raw": "@Processed@='Y'",
               "evaluable": true,
@@ -898,6 +1014,9 @@
             "reference": "Glitem",
             "inputMode": "selector",
             "gridOrder": 7,
+            "validation": {
+              "maxLength": 32
+            },
             "callout": {
               "className": "org.openbravo.erpCommon.ad_callouts.SE_GLItem_Transaction"
             },
@@ -923,6 +1042,9 @@
             "grid": true,
             "form": true,
             "gridOrder": 4,
+            "validation": {
+              "maxLength": 255
+            },
             "displayLogic": {
               "raw": "@Trxtype@!''",
               "evaluable": true
@@ -945,6 +1067,10 @@
               "source": "0"
             },
             "defaultValue": "0",
+            "validation": {
+              "required": true,
+              "maxLength": 22
+            },
             "callout": {
               "className": "org.openbravo.erpCommon.ad_callouts.SE_Amount_Transaction"
             },
@@ -975,6 +1101,10 @@
               "source": "0"
             },
             "defaultValue": "0",
+            "validation": {
+              "required": true,
+              "maxLength": 22
+            },
             "callout": {
               "className": "org.openbravo.erpCommon.ad_callouts.SE_Amount_Transaction"
             },
@@ -1021,6 +1151,10 @@
               "true": "green",
               "false": "orange"
             },
+            "validation": {
+              "required": true,
+              "maxLength": 60
+            },
             "displayLogic": {
               "raw": "@Processed@='Y' & @#ShowAcct@='Y'",
               "evaluable": false,
@@ -1047,6 +1181,10 @@
             "reference": "Org",
             "inputMode": "selector",
             "defaultValue": "@AD_Org_ID@",
+            "validation": {
+              "required": true,
+              "maxLength": 32
+            },
             "validationRule": {
               "code": "AD_ISORGINCLUDED(ad_org.ad_org_id, CASE WHEN (@Parent_AD_Org@ IS NULL OR @Parent_AD_Org@ = '') THEN @AD_ORG_ID@ ELSE @Parent_AD_Org@ END, ad_org.ad_client_id)<>-1 AND IsReady='Y'",
               "contextParams": [],
@@ -1081,6 +1219,9 @@
             "reference": "BPartner",
             "inputMode": "search",
             "gridOrder": 3,
+            "validation": {
+              "maxLength": 32
+            },
             "displayLogic": {
               "raw": "@ACCT_DIMENSION_DISPLAY@ & @Trxtype@!''",
               "evaluable": false,
@@ -1106,6 +1247,9 @@
             "form": true,
             "reference": "Project",
             "inputMode": "selector",
+            "validation": {
+              "maxLength": 32
+            },
             "displayLogic": {
               "raw": "@ACCT_DIMENSION_DISPLAY@ & @Trxtype@!''",
               "evaluable": false,
@@ -1131,6 +1275,9 @@
             "form": true,
             "reference": "Costcenter",
             "inputMode": "selector",
+            "validation": {
+              "maxLength": 32
+            },
             "displayLogic": {
               "raw": "@ACCT_DIMENSION_DISPLAY@ & @Trxtype@!''",
               "evaluable": false,
@@ -1156,6 +1303,9 @@
             "form": true,
             "reference": "Campaign",
             "inputMode": "selector",
+            "validation": {
+              "maxLength": 32
+            },
             "displayLogic": {
               "raw": "@$Element_MC@='Y' & @Trxtype@!''",
               "evaluable": false,
@@ -1181,6 +1331,9 @@
             "form": true,
             "reference": "Activity",
             "inputMode": "selector",
+            "validation": {
+              "maxLength": 32
+            },
             "displayLogic": {
               "raw": "@$Element_AY@='Y' & @Trxtype@!''",
               "evaluable": false,
@@ -1206,6 +1359,9 @@
             "form": true,
             "reference": "Salesregion",
             "inputMode": "selector",
+            "validation": {
+              "maxLength": 32
+            },
             "displayLogic": {
               "raw": "@$Element_SR@='Y' & @Trxtype@!''",
               "evaluable": false,
@@ -1231,6 +1387,9 @@
             "form": true,
             "reference": "User1",
             "inputMode": "selector",
+            "validation": {
+              "maxLength": 32
+            },
             "displayLogic": {
               "raw": "@ACCT_DIMENSION_DISPLAY@ & @Trxtype@!''",
               "evaluable": false,
@@ -1256,6 +1415,9 @@
             "form": true,
             "reference": "User2",
             "inputMode": "selector",
+            "validation": {
+              "maxLength": 32
+            },
             "displayLogic": {
               "raw": "@ACCT_DIMENSION_DISPLAY@ & @Trxtype@!''",
               "evaluable": false,
@@ -1412,7 +1574,11 @@
                 }
               }
             ],
-            "defaultValue": "N"
+            "defaultValue": "N",
+            "validation": {
+              "required": true,
+              "maxLength": 60
+            }
           },
           {
             "name": "etblkpBulkposting",
@@ -1431,6 +1597,10 @@
               "source": "N"
             },
             "defaultValue": "N",
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            },
             "displayLogic": {
               "raw": "@Processed@='Y' & @#ShowAcct@='Y'",
               "evaluable": false,
@@ -1455,6 +1625,10 @@
               "source": "N"
             },
             "defaultValue": "N",
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            },
             "displayLogic": {
               "raw": "@processed@='Y'",
               "evaluable": true
@@ -1477,6 +1651,10 @@
               "source": "N"
             },
             "defaultValue": "N",
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            },
             "displayLogic": {
               "raw": "@processed@='Y'",
               "evaluable": true
@@ -1591,6 +1769,10 @@
             "form": true,
             "reference": "ValidCombination",
             "inputMode": "selector",
+            "validation": {
+              "required": true,
+              "maxLength": 32
+            },
             "displayLogic": {
               "raw": "@EnableBankStatement@='Y'",
               "evaluable": true
@@ -1609,6 +1791,9 @@
             "form": true,
             "reference": "ValidCombination",
             "inputMode": "selector",
+            "validation": {
+              "maxLength": 32
+            },
             "callout": {
               "className": "org.openbravo.erpCommon.ad_callouts.SE_FinancialAccount_BSAccounts"
             },
@@ -1645,6 +1830,10 @@
               "source": "documentType.sequence"
             },
             "gridOrder": 1,
+            "validation": {
+              "required": true,
+              "maxLength": 30
+            },
             "callout": {
               "className": "org.openbravo.erpCommon.ad_callouts.SL_AdvPayment_Document"
             },
@@ -1667,6 +1856,10 @@
             "form": true,
             "sourceRequired": true,
             "gridOrder": 2,
+            "validation": {
+              "required": true,
+              "maxLength": 60
+            },
             "readOnlyLogic": {
               "raw": "@Processed@='Y'",
               "evaluable": true,
@@ -1689,6 +1882,9 @@
               "source": "Y"
             },
             "defaultValue": "Y",
+            "validation": {
+              "maxLength": 1
+            },
             "readOnlyLogic": {
               "raw": "@Processed@='Y'",
               "evaluable": true,
@@ -1713,6 +1909,10 @@
             },
             "defaultValue": "@#Date@",
             "gridOrder": 5,
+            "validation": {
+              "required": true,
+              "maxLength": 19
+            },
             "readOnlyLogic": {
               "raw": "@Processed@='Y'",
               "evaluable": true,
@@ -1737,6 +1937,10 @@
             },
             "defaultValue": "@#Date@",
             "gridOrder": 6,
+            "validation": {
+              "required": true,
+              "maxLength": 19
+            },
             "readOnlyLogic": {
               "raw": "@Processed@='Y'",
               "evaluable": true,
@@ -1755,6 +1959,9 @@
             "grid": true,
             "form": true,
             "gridOrder": 3,
+            "validation": {
+              "maxLength": 255
+            },
             "readOnlyLogic": {
               "raw": "@Processed@='Y'",
               "evaluable": true,
@@ -1772,7 +1979,10 @@
             "required": false,
             "grid": true,
             "form": true,
-            "gridOrder": 4
+            "gridOrder": 4,
+            "validation": {
+              "maxLength": 255
+            }
           },
           {
             "name": "etblkpAccountingstatus",
@@ -1918,7 +2128,11 @@
                 }
               }
             ],
-            "defaultValue": "N"
+            "defaultValue": "N",
+            "validation": {
+              "required": true,
+              "maxLength": 60
+            }
           },
           {
             "name": "etblkpBulkposting",
@@ -1937,6 +2151,10 @@
               "source": "N"
             },
             "defaultValue": "N",
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            },
             "displayLogic": {
               "raw": "@Processed@='Y' & @#ShowAcct@='Y'",
               "evaluable": false,
@@ -2013,6 +2231,9 @@
               "source": "Y"
             },
             "defaultValue": "Y",
+            "validation": {
+              "maxLength": 1
+            },
             "readOnlyLogic": {
               "raw": "@APRM_BSProcessed@='Y'",
               "evaluable": false,
@@ -2038,6 +2259,10 @@
             },
             "defaultValue": "@#Date@",
             "gridOrder": 1,
+            "validation": {
+              "required": true,
+              "maxLength": 19
+            },
             "readOnlyLogic": {
               "raw": "@APRM_BSProcessed@='Y'",
               "evaluable": false,
@@ -2058,6 +2283,10 @@
             "form": true,
             "sourceRequired": true,
             "gridOrder": 6,
+            "validation": {
+              "required": true,
+              "maxLength": 30
+            },
             "readOnlyLogic": {
               "raw": "@APRM_BSProcessed@='Y'",
               "evaluable": false,
@@ -2077,6 +2306,9 @@
             "grid": true,
             "form": true,
             "gridOrder": 3,
+            "validation": {
+              "maxLength": 60
+            },
             "readOnlyLogic": {
               "raw": "@APRM_BSProcessed@='Y'",
               "evaluable": false,
@@ -2097,7 +2329,10 @@
             "form": true,
             "reference": "BPartner",
             "inputMode": "selector",
-            "gridOrder": 4
+            "gridOrder": 4,
+            "validation": {
+              "maxLength": 32
+            }
           },
           {
             "name": "gLItem",
@@ -2112,7 +2347,10 @@
             "form": true,
             "reference": "Glitem",
             "inputMode": "selector",
-            "gridOrder": 5
+            "gridOrder": 5,
+            "validation": {
+              "maxLength": 32
+            }
           },
           {
             "name": "dramount",
@@ -2132,6 +2370,10 @@
             },
             "defaultValue": "0",
             "gridOrder": 7,
+            "validation": {
+              "required": true,
+              "maxLength": 12
+            },
             "readOnlyLogic": {
               "raw": "@APRM_BSProcessed@='Y'",
               "evaluable": false,
@@ -2157,6 +2399,10 @@
             },
             "defaultValue": "0",
             "gridOrder": 8,
+            "validation": {
+              "required": true,
+              "maxLength": 12
+            },
             "readOnlyLogic": {
               "raw": "@APRM_BSProcessed@='Y'",
               "evaluable": false,
@@ -2175,7 +2421,10 @@
             "required": false,
             "grid": true,
             "form": true,
-            "gridOrder": 2
+            "gridOrder": 2,
+            "validation": {
+              "maxLength": 2000
+            }
           }
         ],
         "searchableFields": [],

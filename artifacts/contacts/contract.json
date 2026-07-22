@@ -1,8 +1,8 @@
 {
-  "version": "0.43.0",
+  "version": "0.44.0",
   "generatedAt": "2026-07-07T21:53:25.883Z",
-  "updatedAt": "2026-07-17T17:14:42.971Z",
-  "checksum": "42326bb23f9af6dc",
+  "updatedAt": "2026-07-21T12:35:19.014Z",
+  "checksum": "8552f5c48c448cb9",
   "frontendContract": {
     "window": {
       "id": "123",
@@ -326,7 +326,10 @@
             "required": false,
             "grid": false,
             "form": true,
-            "section": "principal"
+            "section": "principal",
+            "validation": {
+              "maxLength": 32
+            }
           },
           {
             "name": "searchKey",
@@ -340,7 +343,11 @@
             "grid": false,
             "form": false,
             "sourceRequired": true,
-            "section": "principal"
+            "section": "principal",
+            "validation": {
+              "required": true,
+              "maxLength": 40
+            }
           },
           {
             "name": "name",
@@ -354,7 +361,11 @@
             "grid": true,
             "form": true,
             "sourceRequired": true,
-            "section": "principal"
+            "section": "principal",
+            "validation": {
+              "required": true,
+              "maxLength": 60
+            }
           },
           {
             "name": "businessPartnerCategory",
@@ -375,7 +386,11 @@
             "reference": "BusinessPartnerCategory",
             "inputMode": "selector",
             "defaultValue": "@SQL=SELECT MAX(C_BP_GROUP_ID) FROM C_BP_GROUP WHERE AD_ISORGINCLUDED(@AD_ORG_ID@, AD_ORG_ID, @#AD_CLIENT_ID@) <> -1 AND ISDEFAULT = 'Y' AND AD_CLIENT_ID = @#AD_CLIENT_ID@",
-            "section": "principal"
+            "section": "principal",
+            "validation": {
+              "required": true,
+              "maxLength": 22
+            }
           },
           {
             "name": "etgoFirstname",
@@ -389,6 +404,10 @@
             "grid": false,
             "form": true,
             "section": "principal",
+            "validation": {
+              "required": true,
+              "maxLength": 60
+            },
             "displayLogic": {
               "raw": "@EM_Etgo_Isperson@='Y'",
               "evaluable": true
@@ -406,6 +425,10 @@
             "grid": false,
             "form": true,
             "section": "principal",
+            "validation": {
+              "required": true,
+              "maxLength": 60
+            },
             "displayLogic": {
               "raw": "@EM_Etgo_Isperson@='Y'",
               "evaluable": true
@@ -478,7 +501,11 @@
                 }
               }
             ],
-            "defaultValue": "'1'"
+            "defaultValue": "'1'",
+            "validation": {
+              "required": true,
+              "maxLength": 60
+            }
           },
           {
             "name": "taxID",
@@ -491,7 +518,10 @@
             "required": false,
             "grid": false,
             "form": true,
-            "section": "principal"
+            "section": "principal",
+            "validation": {
+              "maxLength": 20
+            }
           },
           {
             "name": "oBTIKVIESStatus",
@@ -528,6 +558,9 @@
               }
             ],
             "section": "principal",
+            "validation": {
+              "maxLength": 10
+            },
             "displayLogic": {
               "raw": "record.oBTIKTaxIDKey === '2'",
               "evaluable": true,
@@ -545,7 +578,10 @@
             "required": false,
             "grid": true,
             "form": true,
-            "section": "principal"
+            "section": "principal",
+            "validation": {
+              "maxLength": 60
+            }
           },
           {
             "name": "etgoEmail",
@@ -558,7 +594,10 @@
             "required": false,
             "grid": true,
             "form": true,
-            "section": "principal"
+            "section": "principal",
+            "validation": {
+              "maxLength": 60
+            }
           },
           {
             "name": "etgoPhone",
@@ -571,7 +610,10 @@
             "required": false,
             "grid": true,
             "form": true,
-            "section": "principal"
+            "section": "principal",
+            "validation": {
+              "maxLength": 60
+            }
           },
           {
             "name": "etgoIsperson",
@@ -589,7 +631,11 @@
               "type": "computed",
               "source": "N"
             },
-            "defaultValue": "N"
+            "defaultValue": "N",
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            }
           },
           {
             "name": "name2",
@@ -601,7 +647,10 @@
             "visibility": "editable",
             "required": false,
             "grid": false,
-            "form": false
+            "form": false,
+            "validation": {
+              "maxLength": 60
+            }
           },
           {
             "name": "description",
@@ -614,7 +663,10 @@
             "required": false,
             "grid": false,
             "form": false,
-            "section": "principal"
+            "section": "principal",
+            "validation": {
+              "maxLength": 255
+            }
           },
           {
             "name": "uRL",
@@ -626,7 +678,10 @@
             "visibility": "editable",
             "required": false,
             "grid": false,
-            "form": false
+            "form": false,
+            "validation": {
+              "maxLength": 120
+            }
           },
           {
             "name": "referenceNo",
@@ -638,7 +693,10 @@
             "visibility": "editable",
             "required": false,
             "grid": false,
-            "form": false
+            "form": false,
+            "validation": {
+              "maxLength": 40
+            }
           },
           {
             "name": "consumptionDays",
@@ -655,7 +713,10 @@
               "type": "computed",
               "source": "1000"
             },
-            "defaultValue": "1000"
+            "defaultValue": "1000",
+            "validation": {
+              "maxLength": 10
+            }
           },
           {
             "name": "active",
@@ -674,7 +735,11 @@
               "source": "true"
             },
             "defaultValue": "Y",
-            "section": "other"
+            "section": "other",
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            }
           },
           {
             "name": "greeting",
@@ -688,7 +753,10 @@
             "grid": false,
             "form": false,
             "reference": "Greeting",
-            "inputMode": "selector"
+            "inputMode": "selector",
+            "validation": {
+              "maxLength": 22
+            }
           },
           {
             "name": "customer",
@@ -708,6 +776,10 @@
             },
             "defaultValue": "Y",
             "section": "principal",
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            },
             "displayLogic": {
               "raw": "false",
               "evaluable": true,
@@ -727,6 +799,10 @@
             "form": false,
             "sourceRequired": true,
             "section": "principal",
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            },
             "displayLogic": {
               "raw": "false",
               "evaluable": true,
@@ -745,6 +821,10 @@
             "grid": false,
             "form": false,
             "sourceRequired": true,
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            },
             "displayLogic": {
               "raw": "false",
               "evaluable": true,
@@ -767,7 +847,11 @@
               "type": "computed",
               "source": "N"
             },
-            "defaultValue": "N"
+            "defaultValue": "N",
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            }
           },
           {
             "name": "creditLimit",
@@ -782,6 +866,10 @@
             "form": true,
             "sourceRequired": true,
             "section": "other",
+            "validation": {
+              "required": true,
+              "maxLength": 22
+            },
             "displayLogic": {
               "raw": "@IsCustomer@='Y' | @IsVendor@='Y'",
               "evaluable": true
@@ -800,6 +888,9 @@
             "form": false,
             "reference": "Currency",
             "inputMode": "search",
+            "validation": {
+              "maxLength": 32
+            },
             "displayLogic": {
               "raw": "@IsCustomer@='Y' | @IsVendor@='Y'",
               "evaluable": true
@@ -820,7 +911,10 @@
               "type": "computed",
               "source": "N"
             },
-            "defaultValue": "N"
+            "defaultValue": "N",
+            "validation": {
+              "maxLength": 1
+            }
           },
           {
             "name": "operator",
@@ -837,7 +931,10 @@
               "type": "computed",
               "source": "N"
             },
-            "defaultValue": "N"
+            "defaultValue": "N",
+            "validation": {
+              "maxLength": 1
+            }
           },
           {
             "name": "creditUsed",
@@ -852,6 +949,10 @@
             "form": false,
             "sourceRequired": true,
             "section": "other",
+            "validation": {
+              "required": true,
+              "maxLength": 22
+            },
             "displayLogic": {
               "raw": "@IsCustomer@='Y' | @IsVendor@='Y'",
               "evaluable": true
@@ -871,6 +972,9 @@
             "reference": "PaymentTerm",
             "inputMode": "selector",
             "section": "principal",
+            "validation": {
+              "maxLength": 22
+            },
             "displayLogic": {
               "raw": "record.customer",
               "evaluable": true,
@@ -889,7 +993,10 @@
             "grid": false,
             "form": false,
             "reference": "Salary_Category",
-            "inputMode": "selector"
+            "inputMode": "selector",
+            "validation": {
+              "maxLength": 12
+            }
           },
           {
             "name": "customerBlocking",
@@ -909,6 +1016,10 @@
             },
             "defaultValue": "N",
             "section": "principal",
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            },
             "displayLogic": {
               "raw": "record.customer",
               "evaluable": true,
@@ -925,7 +1036,10 @@
             "visibility": "readOnly",
             "required": false,
             "grid": false,
-            "form": false
+            "form": false,
+            "validation": {
+              "maxLength": 0
+            }
           },
           {
             "name": "account",
@@ -941,6 +1055,9 @@
             "reference": "FIN_Financial_Account",
             "inputMode": "selector",
             "section": "principal",
+            "validation": {
+              "maxLength": 32
+            },
             "validationRule": {
               "code": "Fin_Financial_Account_ID IN (SELECT Fin_Financial_Account_ID FROM Fin_Finacc_Paymentmethod WHERE Fin_Paymentmethod_ID=@Fin_Paymentmethod_ID@)",
               "contextParams": [],
@@ -968,6 +1085,9 @@
             "reference": "PaymentMethod",
             "inputMode": "selector",
             "section": "principal",
+            "validation": {
+              "maxLength": 32
+            },
             "validationRule": {
               "code": "EXISTS (SELECT 1 FROM FIN_FinAcc_PaymentMethod fapm WHERE FIN_PaymentMethod.FIN_PaymentMethod_ID=fapm.FIN_PaymentMethod_ID\nAND fapm.isActive='Y'\nAND fapm.Payin_Allow = (SELECT CASE WHEN '@FIN_ISRECEIPT@'='Y' THEN 'Y' ELSE fapm.Payin_Allow END FROM DUAL)\nAND fapm.Payout_Allow = (SELECT CASE WHEN '@FIN_ISRECEIPT@'='N' THEN 'Y' ELSE fapm.Payout_Allow END FROM DUAL))",
               "contextParams": [],
@@ -995,7 +1115,11 @@
             "required": true,
             "grid": false,
             "form": false,
-            "sourceRequired": true
+            "sourceRequired": true,
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            }
           },
           {
             "name": "priceList",
@@ -1011,6 +1135,9 @@
             "reference": "PriceList",
             "inputMode": "selector",
             "section": "principal",
+            "validation": {
+              "maxLength": 22
+            },
             "displayLogic": {
               "raw": "record.customer",
               "evaluable": true,
@@ -1031,6 +1158,9 @@
             "reference": "FIN_Financial_Account",
             "inputMode": "selector",
             "section": "principal",
+            "validation": {
+              "maxLength": 32
+            },
             "validationRule": {
               "code": "Fin_Financial_Account_ID IN (SELECT Fin_Financial_Account_ID FROM Fin_Finacc_Paymentmethod WHERE Fin_Paymentmethod_ID=@PO_Paymentmethod_ID@)",
               "contextParams": [],
@@ -1058,6 +1188,9 @@
             "reference": "PaymentMethod",
             "inputMode": "selector",
             "section": "principal",
+            "validation": {
+              "maxLength": 32
+            },
             "validationRule": {
               "code": "EXISTS (SELECT 1 FROM FIN_FinAcc_PaymentMethod fapm WHERE FIN_PaymentMethod.FIN_PaymentMethod_ID=fapm.FIN_PaymentMethod_ID\nAND fapm.isActive='Y'\nAND fapm.Payin_Allow = (SELECT CASE WHEN '@FIN_ISRECEIPT@'='Y' THEN 'Y' ELSE fapm.Payin_Allow END FROM DUAL)\nAND fapm.Payout_Allow = (SELECT CASE WHEN '@FIN_ISRECEIPT@'='N' THEN 'Y' ELSE fapm.Payout_Allow END FROM DUAL))",
               "contextParams": [],
@@ -1088,6 +1221,9 @@
             "reference": "PaymentTerm",
             "inputMode": "selector",
             "section": "principal",
+            "validation": {
+              "maxLength": 22
+            },
             "displayLogic": {
               "raw": "record.vendor",
               "evaluable": true,
@@ -1108,6 +1244,9 @@
             "reference": "PriceList",
             "inputMode": "selector",
             "section": "principal",
+            "validation": {
+              "maxLength": 22
+            },
             "displayLogic": {
               "raw": "record.vendor",
               "evaluable": true,
@@ -1132,6 +1271,10 @@
             },
             "defaultValue": "N",
             "section": "principal",
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            },
             "displayLogic": {
               "raw": "record.vendor",
               "evaluable": true,
@@ -1245,7 +1388,11 @@
               "type": "computed",
               "source": "Y"
             },
-            "defaultValue": "Y"
+            "defaultValue": "Y",
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            }
           },
           {
             "name": "priceList",
@@ -1260,6 +1407,9 @@
             "form": true,
             "reference": "PriceList",
             "inputMode": "search",
+            "validation": {
+              "maxLength": 22
+            },
             "displayLogic": {
               "raw": "@IsCustomer@='Y'",
               "evaluable": true
@@ -1278,6 +1428,9 @@
             "form": true,
             "reference": "PaymentMethod",
             "inputMode": "search",
+            "validation": {
+              "maxLength": 32
+            },
             "validationRule": {
               "code": "EXISTS (SELECT 1 FROM FIN_FinAcc_PaymentMethod fapm WHERE FIN_PaymentMethod.FIN_PaymentMethod_ID=fapm.FIN_PaymentMethod_ID\nAND fapm.isActive='Y'\nAND fapm.Payin_Allow = (SELECT CASE WHEN '@FIN_ISRECEIPT@'='Y' THEN 'Y' ELSE fapm.Payin_Allow END FROM DUAL)\nAND fapm.Payout_Allow = (SELECT CASE WHEN '@FIN_ISRECEIPT@'='N' THEN 'Y' ELSE fapm.Payout_Allow END FROM DUAL))",
               "contextParams": [],
@@ -1306,6 +1459,9 @@
             "form": true,
             "reference": "PaymentTerm",
             "inputMode": "selector",
+            "validation": {
+              "maxLength": 22
+            },
             "displayLogic": {
               "raw": "@IsCustomer@='Y'",
               "evaluable": true
@@ -1324,6 +1480,9 @@
             "form": true,
             "reference": "Financial_Account",
             "inputMode": "search",
+            "validation": {
+              "maxLength": 32
+            },
             "validationRule": {
               "code": "Fin_Financial_Account_ID IN (SELECT Fin_Financial_Account_ID FROM Fin_Finacc_Paymentmethod WHERE Fin_Paymentmethod_ID=@Fin_Paymentmethod_ID@)",
               "contextParams": [],
@@ -1349,6 +1508,9 @@
             "form": true,
             "reference": "BPartner",
             "inputMode": "search",
+            "validation": {
+              "maxLength": 22
+            },
             "displayLogic": {
               "raw": "@IsCustomer@='Y'",
               "evaluable": true
@@ -1407,6 +1569,9 @@
               }
             ],
             "defaultValue": "I",
+            "validation": {
+              "maxLength": 60
+            },
             "displayLogic": {
               "raw": "@IsCustomer@='Y'",
               "evaluable": true
@@ -1425,6 +1590,9 @@
             "form": true,
             "reference": "InvoiceSchedule",
             "inputMode": "selector",
+            "validation": {
+              "maxLength": 22
+            },
             "displayLogic": {
               "raw": "@IsCustomer@='Y'&@InvoiceRule@='S'",
               "evaluable": true
@@ -1441,6 +1609,9 @@
             "required": false,
             "grid": false,
             "form": true,
+            "validation": {
+              "maxLength": 1
+            },
             "displayLogic": {
               "raw": "@IsCustomer@='Y'",
               "evaluable": true
@@ -1463,6 +1634,10 @@
               "source": "N"
             },
             "defaultValue": "N",
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            },
             "displayLogic": {
               "raw": "@IsCustomer@='Y'",
               "evaluable": true
@@ -1485,6 +1660,10 @@
               "source": "Y"
             },
             "defaultValue": "Y",
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            },
             "displayLogic": {
               "raw": "@Customer_Blocking@='Y'",
               "evaluable": true
@@ -1507,6 +1686,10 @@
               "source": "Y"
             },
             "defaultValue": "Y",
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            },
             "displayLogic": {
               "raw": "@Customer_Blocking@='Y'",
               "evaluable": true
@@ -1529,6 +1712,10 @@
               "source": "Y"
             },
             "defaultValue": "Y",
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            },
             "displayLogic": {
               "raw": "@Customer_Blocking@='Y'",
               "evaluable": true
@@ -1551,6 +1738,10 @@
               "source": "N"
             },
             "defaultValue": "N",
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            },
             "displayLogic": {
               "raw": "@Customer_Blocking@='Y'",
               "evaluable": true
@@ -1569,6 +1760,9 @@
             "form": true,
             "reference": "BP_TaxCategory",
             "inputMode": "search",
+            "validation": {
+              "maxLength": 12
+            },
             "displayLogic": {
               "raw": "@IsCustomer@='Y'",
               "evaluable": true
@@ -1585,6 +1779,11 @@
             "required": false,
             "grid": false,
             "form": true,
+            "validation": {
+              "maxLength": 2,
+              "minimum": 1,
+              "maximum": 31
+            },
             "displayLogic": {
               "raw": "@IsCustomer@='Y'",
               "evaluable": true
@@ -1601,6 +1800,11 @@
             "required": false,
             "grid": false,
             "form": true,
+            "validation": {
+              "maxLength": 2,
+              "minimum": 1,
+              "maximum": 31
+            },
             "displayLogic": {
               "raw": "@IsCustomer@='Y'",
               "evaluable": true
@@ -1617,6 +1821,11 @@
             "required": false,
             "grid": false,
             "form": true,
+            "validation": {
+              "maxLength": 2,
+              "minimum": 1,
+              "maximum": 31
+            },
             "displayLogic": {
               "raw": "@IsCustomer@='Y'",
               "evaluable": true
@@ -1632,7 +1841,10 @@
             "visibility": "editable",
             "required": false,
             "grid": false,
-            "form": true
+            "form": true,
+            "validation": {
+              "maxLength": 19
+            }
           },
           {
             "name": "birthPlace",
@@ -1644,7 +1856,10 @@
             "visibility": "editable",
             "required": false,
             "grid": false,
-            "form": true
+            "form": true,
+            "validation": {
+              "maxLength": 60
+            }
           },
           {
             "name": "aeatsiiDefaultsiikey",
@@ -1662,7 +1877,11 @@
               "type": "computed",
               "source": "N"
             },
-            "defaultValue": "N"
+            "defaultValue": "N",
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            }
           },
           {
             "name": "aeatsiiSiikeylist",
@@ -1710,6 +1929,9 @@
               }
             ],
             "defaultValue": "F1",
+            "validation": {
+              "maxLength": 60
+            },
             "displayLogic": {
               "raw": "@EM_Aeatsii_Defaultsiikey@='Y'",
               "evaluable": true
@@ -1807,6 +2029,10 @@
             "labels": {
               "en_US": "Receivables Account",
               "es_ES": "Cuenta a Cobrar"
+            },
+            "validation": {
+              "required": true,
+              "maxLength": 32
             }
           },
           {
@@ -1826,6 +2052,9 @@
             "labels": {
               "en_US": "Prepayment Account",
               "es_ES": "Cuenta de Anticipos"
+            },
+            "validation": {
+              "maxLength": 32
             }
           }
         ],
@@ -1855,7 +2084,11 @@
             "form": true,
             "sourceRequired": true,
             "reference": "BPartner",
-            "inputMode": "search"
+            "inputMode": "search",
+            "validation": {
+              "required": true,
+              "maxLength": 32
+            }
           },
           {
             "name": "sOTransportationType",
@@ -1925,7 +2158,10 @@
                   "es_ES": "Transporte marítimo"
                 }
               }
-            ]
+            ],
+            "validation": {
+              "maxLength": 60
+            }
           },
           {
             "name": "port",
@@ -2353,6 +2589,9 @@
                 }
               }
             ],
+            "validation": {
+              "maxLength": 60
+            },
             "displayLogic": {
               "raw": "@SO_Transportation_Type@='1' | @SO_Transportation_Type@='4'",
               "evaluable": true
@@ -2368,7 +2607,10 @@
             "visibility": "editable",
             "required": false,
             "grid": false,
-            "form": true
+            "form": true,
+            "validation": {
+              "maxLength": 22
+            }
           },
           {
             "name": "privateCustomer",
@@ -2386,7 +2628,11 @@
               "type": "computed",
               "source": "N"
             },
-            "defaultValue": "N"
+            "defaultValue": "N",
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            }
           }
         ],
         "searchableFields": [],
@@ -2417,7 +2663,11 @@
             "required": true,
             "grid": false,
             "form": true,
-            "sourceRequired": true
+            "sourceRequired": true,
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            }
           },
           {
             "name": "purchasePricelist",
@@ -2432,6 +2682,9 @@
             "form": true,
             "reference": "PriceList",
             "inputMode": "search",
+            "validation": {
+              "maxLength": 22
+            },
             "displayLogic": {
               "raw": "@IsVendor@='Y'",
               "evaluable": true
@@ -2450,6 +2703,9 @@
             "form": true,
             "reference": "PaymentMethod",
             "inputMode": "search",
+            "validation": {
+              "maxLength": 32
+            },
             "validationRule": {
               "code": "EXISTS (SELECT 1 FROM FIN_FinAcc_PaymentMethod fapm WHERE FIN_PaymentMethod.FIN_PaymentMethod_ID=fapm.FIN_PaymentMethod_ID\nAND fapm.isActive='Y'\nAND fapm.Payin_Allow = (SELECT CASE WHEN '@FIN_ISRECEIPT@'='Y' THEN 'Y' ELSE fapm.Payin_Allow END FROM DUAL)\nAND fapm.Payout_Allow = (SELECT CASE WHEN '@FIN_ISRECEIPT@'='N' THEN 'Y' ELSE fapm.Payout_Allow END FROM DUAL))",
               "contextParams": [],
@@ -2478,6 +2734,9 @@
             "form": true,
             "reference": "PaymentTerm",
             "inputMode": "search",
+            "validation": {
+              "maxLength": 22
+            },
             "displayLogic": {
               "raw": "@IsVendor@='Y'",
               "evaluable": true
@@ -2496,6 +2755,9 @@
             "form": true,
             "reference": "Financial_Account",
             "inputMode": "search",
+            "validation": {
+              "maxLength": 32
+            },
             "validationRule": {
               "code": "Fin_Financial_Account_ID IN (SELECT Fin_Financial_Account_ID FROM Fin_Finacc_Paymentmethod WHERE Fin_Paymentmethod_ID=@PO_Paymentmethod_ID@)",
               "contextParams": [],
@@ -2519,6 +2781,11 @@
             "required": false,
             "grid": false,
             "form": true,
+            "validation": {
+              "maxLength": 2,
+              "minimum": 1,
+              "maximum": 31
+            },
             "displayLogic": {
               "raw": "@IsVendor@='Y'",
               "evaluable": true
@@ -2535,6 +2802,11 @@
             "required": false,
             "grid": false,
             "form": true,
+            "validation": {
+              "maxLength": 2,
+              "minimum": 1,
+              "maximum": 31
+            },
             "displayLogic": {
               "raw": "@IsVendor@='Y'",
               "evaluable": true
@@ -2551,6 +2823,11 @@
             "required": false,
             "grid": false,
             "form": true,
+            "validation": {
+              "maxLength": 2,
+              "minimum": 1,
+              "maximum": 31
+            },
             "displayLogic": {
               "raw": "@IsVendor@='Y'",
               "evaluable": true
@@ -2569,6 +2846,9 @@
             "form": true,
             "reference": "BP_TaxCategory",
             "inputMode": "search",
+            "validation": {
+              "maxLength": 12
+            },
             "displayLogic": {
               "raw": "@IsVendor@='Y'",
               "evaluable": true
@@ -2591,6 +2871,10 @@
               "source": "N"
             },
             "defaultValue": "N",
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            },
             "displayLogic": {
               "raw": "@IsVendor@='Y'",
               "evaluable": true
@@ -2613,6 +2897,10 @@
               "source": "N"
             },
             "defaultValue": "N",
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            },
             "displayLogic": {
               "raw": "@IsVendor@='Y'",
               "evaluable": true
@@ -2635,6 +2923,10 @@
               "source": "Y"
             },
             "defaultValue": "Y",
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            },
             "displayLogic": {
               "raw": "@Vendor_Blocking@='Y'",
               "evaluable": true
@@ -2657,6 +2949,10 @@
               "source": "N"
             },
             "defaultValue": "N",
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            },
             "displayLogic": {
               "raw": "@Vendor_Blocking@='Y'",
               "evaluable": true
@@ -2679,6 +2975,10 @@
               "source": "Y"
             },
             "defaultValue": "Y",
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            },
             "displayLogic": {
               "raw": "@Vendor_Blocking@='Y'",
               "evaluable": true
@@ -2701,6 +3001,10 @@
               "source": "Y"
             },
             "defaultValue": "Y",
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            },
             "displayLogic": {
               "raw": "@Vendor_Blocking@='Y'",
               "evaluable": true
@@ -2777,6 +3081,10 @@
             "labels": {
               "en_US": "Liability Account",
               "es_ES": "Cuenta a Pagar"
+            },
+            "validation": {
+              "required": true,
+              "maxLength": 32
             }
           },
           {
@@ -2796,6 +3104,9 @@
             "labels": {
               "en_US": "Prepayment Account",
               "es_ES": "Cuenta de Anticipos"
+            },
+            "validation": {
+              "maxLength": 32
             }
           }
         ],
@@ -2825,7 +3136,11 @@
             "form": true,
             "sourceRequired": true,
             "reference": "BPartner",
-            "inputMode": "search"
+            "inputMode": "search",
+            "validation": {
+              "required": true,
+              "maxLength": 32
+            }
           },
           {
             "name": "country",
@@ -2839,7 +3154,10 @@
             "grid": false,
             "form": true,
             "reference": "Country",
-            "inputMode": "selector"
+            "inputMode": "selector",
+            "validation": {
+              "maxLength": 32
+            }
           },
           {
             "name": "transportationType",
@@ -2909,7 +3227,10 @@
                   "es_ES": "Transporte marítimo"
                 }
               }
-            ]
+            ],
+            "validation": {
+              "maxLength": 60
+            }
           },
           {
             "name": "portAirport",
@@ -3337,6 +3658,9 @@
                 }
               }
             ],
+            "validation": {
+              "maxLength": 60
+            },
             "displayLogic": {
               "raw": "@PO_Transportation_Type@='1' | @PO_Transportation_Type@='4'",
               "evaluable": true
@@ -3352,7 +3676,10 @@
             "visibility": "editable",
             "required": false,
             "grid": false,
-            "form": true
+            "form": true,
+            "validation": {
+              "maxLength": 22
+            }
           }
         ],
         "searchableFields": [],
@@ -3375,7 +3702,11 @@
             "required": true,
             "grid": false,
             "form": true,
-            "sourceRequired": true
+            "sourceRequired": true,
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            }
           },
           {
             "name": "isSalesRepresentative",
@@ -3388,7 +3719,11 @@
             "required": true,
             "grid": false,
             "form": true,
-            "sourceRequired": true
+            "sourceRequired": true,
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            }
           },
           {
             "name": "operator",
@@ -3406,6 +3741,9 @@
               "source": "N"
             },
             "defaultValue": "N",
+            "validation": {
+              "maxLength": 1
+            },
             "displayLogic": {
               "raw": "@IsEmployee@='Y' & @showMRPandProductionFields@='Y'",
               "evaluable": true
@@ -3424,6 +3762,9 @@
             "form": true,
             "reference": "Salary_Category",
             "inputMode": "selector",
+            "validation": {
+              "maxLength": 12
+            },
             "displayLogic": {
               "raw": "@IsEmployee@='Y'",
               "evaluable": true
@@ -3460,7 +3801,11 @@
             "form": true,
             "sourceRequired": true,
             "reference": "AcctSchema",
-            "inputMode": "selector"
+            "inputMode": "selector",
+            "validation": {
+              "required": true,
+              "maxLength": 22
+            }
           }
         ],
         "searchableFields": [],
@@ -3483,7 +3828,11 @@
             "required": true,
             "grid": false,
             "form": true,
-            "sourceRequired": true
+            "sourceRequired": true,
+            "validation": {
+              "required": true,
+              "maxLength": 19
+            }
           },
           {
             "name": "salaryCategory",
@@ -3498,7 +3847,11 @@
             "form": true,
             "sourceRequired": true,
             "reference": "Salary_Category",
-            "inputMode": "selector"
+            "inputMode": "selector",
+            "validation": {
+              "required": true,
+              "maxLength": 12
+            }
           }
         ],
         "searchableFields": [],
@@ -3521,7 +3874,10 @@
             "required": false,
             "grid": true,
             "form": true,
-            "section": "principal"
+            "section": "principal",
+            "validation": {
+              "maxLength": 50
+            }
           },
           {
             "name": "country",
@@ -3541,7 +3897,10 @@
             "reference": "Country",
             "inputMode": "selector",
             "defaultValue": "@COUNTRYDEF@",
-            "section": "principal"
+            "section": "principal",
+            "validation": {
+              "maxLength": 12
+            }
           },
           {
             "name": "userContact",
@@ -3556,6 +3915,9 @@
             "form": true,
             "reference": "User",
             "inputMode": "selector",
+            "validation": {
+              "maxLength": 22
+            },
             "validationRule": {
               "code": "AD_User.C_BPartner_ID=@C_BPartner_ID@",
               "contextParams": [],
@@ -3617,6 +3979,10 @@
               "es_ES": "Formato"
             },
             "columnWidth": 320,
+            "validation": {
+              "required": true,
+              "maxLength": 60
+            },
             "validationRule": {
               "code": "UPPER(Value)<>'SPANISH'",
               "contextParams": [],
@@ -3635,7 +4001,10 @@
             "grid": true,
             "form": true,
             "section": "principal",
-            "columnWidth": 360
+            "columnWidth": 360,
+            "validation": {
+              "maxLength": 100
+            }
           },
           {
             "name": "iBAN",
@@ -3649,7 +4018,10 @@
             "grid": true,
             "form": true,
             "section": "principal",
-            "columnWidth": 400
+            "columnWidth": 400,
+            "validation": {
+              "maxLength": 34
+            }
           },
           {
             "name": "swiftCode",
@@ -3662,7 +4034,10 @@
             "required": false,
             "grid": true,
             "form": true,
-            "section": "principal"
+            "section": "principal",
+            "validation": {
+              "maxLength": 20
+            }
           },
           {
             "name": "displayedAccount",
@@ -3675,7 +4050,10 @@
             "required": false,
             "grid": false,
             "form": true,
-            "section": "principal"
+            "section": "principal",
+            "validation": {
+              "maxLength": 120
+            }
           }
         ],
         "searchableFields": [],
@@ -3737,6 +4115,10 @@
                 }
               }
             ],
+            "validation": {
+              "required": true,
+              "maxLength": 60
+            },
             "callout": {
               "className": "org.openbravo.erpCommon.ad_callouts.BusinessPartnerDocTypeValidation"
             }
@@ -3758,6 +4140,10 @@
               "source": "N"
             },
             "defaultValue": "N",
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            },
             "callout": {
               "className": "org.openbravo.erpCommon.ad_callouts.BusinessPartnerDocTypeValidation"
             }
@@ -3775,7 +4161,11 @@
             "form": true,
             "sourceRequired": true,
             "reference": "DocType",
-            "inputMode": "selector"
+            "inputMode": "selector",
+            "validation": {
+              "required": true,
+              "maxLength": 32
+            }
           },
           {
             "name": "active",
@@ -3793,7 +4183,11 @@
               "type": "computed",
               "source": "Y"
             },
-            "defaultValue": "Y"
+            "defaultValue": "Y",
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            }
           }
         ],
         "searchableFields": [],
@@ -3834,6 +4228,10 @@
             "sourceRequired": true,
             "reference": "Location",
             "inputMode": "search",
+            "validation": {
+              "required": true,
+              "maxLength": 120
+            },
             "callout": {
               "className": "org.openbravo.erpCommon.ad_callouts.SL_BPartnerLocation"
             }
@@ -3849,7 +4247,10 @@
             "required": false,
             "grid": false,
             "form": true,
-            "section": "other"
+            "section": "other",
+            "validation": {
+              "maxLength": 40
+            }
           },
           {
             "name": "alternativePhone",
@@ -3861,7 +4262,10 @@
             "visibility": "editable",
             "required": false,
             "grid": false,
-            "form": true
+            "form": true,
+            "validation": {
+              "maxLength": 40
+            }
           },
           {
             "name": "name",
@@ -3884,6 +4288,10 @@
             "labels": {
               "en_US": "Location / Address",
               "es_ES": "Dirección"
+            },
+            "validation": {
+              "required": true,
+              "maxLength": 60
             }
           },
           {
@@ -3896,7 +4304,10 @@
             "visibility": "editable",
             "required": false,
             "grid": false,
-            "form": true
+            "form": true,
+            "validation": {
+              "maxLength": 40
+            }
           },
           {
             "name": "shipToAddress",
@@ -3919,6 +4330,10 @@
             "labels": {
               "en_US": "Shipping Address",
               "es_ES": "Dir.envíos"
+            },
+            "validation": {
+              "required": true,
+              "maxLength": 1
             }
           },
           {
@@ -3942,6 +4357,10 @@
             "labels": {
               "en_US": "Invoicing Address",
               "es_ES": "Dir.factura"
+            },
+            "validation": {
+              "required": true,
+              "maxLength": 1
             }
           },
           {
@@ -3960,7 +4379,11 @@
               "type": "computed",
               "source": "true"
             },
-            "section": "other"
+            "section": "other",
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            }
           },
           {
             "name": "taxLocation",
@@ -3979,6 +4402,10 @@
               "source": "N"
             },
             "defaultValue": "N",
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            },
             "callout": {
               "className": "org.openbravo.erpCommon.ad_callouts.SL_BPartnerLocation"
             }
@@ -4044,6 +4471,9 @@
             "grid": true,
             "form": true,
             "section": "principal",
+            "validation": {
+              "maxLength": 60
+            },
             "callout": {
               "className": "org.openbravo.erpCommon.ad_callouts.SL_User_Name"
             }
@@ -4060,6 +4490,9 @@
             "grid": true,
             "form": true,
             "section": "principal",
+            "validation": {
+              "maxLength": 60
+            },
             "callout": {
               "className": "org.openbravo.erpCommon.ad_callouts.SL_User_Name"
             }
@@ -4077,6 +4510,10 @@
             "form": false,
             "sourceRequired": true,
             "section": "principal",
+            "validation": {
+              "required": true,
+              "maxLength": 60
+            },
             "callout": {
               "className": "org.openbravo.erpCommon.ad_callouts.SL_User_Name"
             }
@@ -4093,7 +4530,10 @@
             "grid": true,
             "form": true,
             "section": "principal",
-            "columnWidth": 320
+            "columnWidth": 320,
+            "validation": {
+              "maxLength": 255
+            }
           },
           {
             "name": "phone",
@@ -4106,7 +4546,10 @@
             "required": false,
             "grid": true,
             "form": true,
-            "section": "principal"
+            "section": "principal",
+            "validation": {
+              "maxLength": 40
+            }
           },
           {
             "name": "alternativePhone",
@@ -4119,7 +4562,10 @@
             "required": false,
             "grid": false,
             "form": false,
-            "section": "principal"
+            "section": "principal",
+            "validation": {
+              "maxLength": 40
+            }
           },
           {
             "name": "position",
@@ -4132,7 +4578,10 @@
             "required": false,
             "grid": true,
             "form": true,
-            "section": "principal"
+            "section": "principal",
+            "validation": {
+              "maxLength": 40
+            }
           },
           {
             "name": "comments",
@@ -4144,7 +4593,10 @@
             "visibility": "editable",
             "required": false,
             "grid": false,
-            "form": true
+            "form": true,
+            "validation": {
+              "maxLength": 2000
+            }
           },
           {
             "name": "active",
@@ -4162,7 +4614,11 @@
               "type": "computed",
               "source": "true"
             },
-            "section": "other"
+            "section": "other",
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            }
           },
           {
             "name": "isdefaultfordocs",
@@ -4181,7 +4637,11 @@
               "source": "N"
             },
             "defaultValue": "N",
-            "section": "principal"
+            "section": "principal",
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            }
           },
           {
             "name": "grantPortalAccess",
@@ -4200,6 +4660,10 @@
               "source": "N"
             },
             "defaultValue": "N",
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            },
             "displayLogic": {
               "raw": "@isPortalRolePresent@!0",
               "evaluable": true
@@ -4222,7 +4686,11 @@
               "source": "N"
             },
             "defaultValue": "N",
-            "section": "principal"
+            "section": "principal",
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            }
           },
           {
             "name": "viasms",
@@ -4242,6 +4710,10 @@
             },
             "defaultValue": "N",
             "section": "other",
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            },
             "displayLogic": {
               "raw": "@Commercialauth@='Y'",
               "evaluable": true
@@ -4265,6 +4737,10 @@
             },
             "defaultValue": "N",
             "section": "other",
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            },
             "displayLogic": {
               "raw": "@Commercialauth@='Y'",
               "evaluable": true
@@ -4343,7 +4819,11 @@
               "source": "SELECT COALESCE(MAX(LINE),0)+10 AS DefaultValue FROM C_BPARTNER_DISCOUNT WHERE C_BPARTNER_ID=@C_BPARTNER_ID@"
             },
             "defaultValue": "@SQL=SELECT COALESCE(MAX(LINE),0)+10 AS DefaultValue FROM C_BPARTNER_DISCOUNT WHERE C_BPARTNER_ID=@C_BPARTNER_ID@",
-            "section": "principal"
+            "section": "principal",
+            "validation": {
+              "required": true,
+              "maxLength": 10
+            }
           },
           {
             "name": "discount",
@@ -4359,7 +4839,11 @@
             "sourceRequired": true,
             "reference": "Discount",
             "inputMode": "selector",
-            "section": "principal"
+            "section": "principal",
+            "validation": {
+              "required": true,
+              "maxLength": 12
+            }
           },
           {
             "name": "customer",
@@ -4378,7 +4862,11 @@
               "source": "Y"
             },
             "defaultValue": "Y",
-            "section": "principal"
+            "section": "principal",
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            }
           },
           {
             "name": "vendor",
@@ -4397,7 +4885,11 @@
               "source": "N"
             },
             "defaultValue": "N",
-            "section": "principal"
+            "section": "principal",
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            }
           },
           {
             "name": "applyInOrder",
@@ -4415,7 +4907,11 @@
               "type": "computed",
               "source": "N"
             },
-            "defaultValue": "N"
+            "defaultValue": "N",
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            }
           },
           {
             "name": "cascade",
@@ -4433,7 +4929,11 @@
               "type": "computed",
               "source": "N"
             },
-            "defaultValue": "N"
+            "defaultValue": "N",
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            }
           }
         ],
         "searchableFields": [],

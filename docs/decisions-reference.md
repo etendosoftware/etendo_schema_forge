@@ -612,7 +612,7 @@ Two field-level props control how the grid column renders raw values as labeled 
 
 | Property | Type | Default | Purpose |
 |----------|------|---------|---------|
-| `columnType` | string | Inferred | Forces the grid column renderer. `"status"` renders the cell as a status badge. When absent, the renderer is inferred from the field name/type via `mapFieldType` in `generate-frontend.js`. |
+| `columnType` | string | Inferred | Forces the grid column renderer. `"status"` renders the cell as a status badge. `"signedDelta"` renders a signed numeric delta (see below). When absent, the renderer is inferred from the field name/type via `mapFieldType` in `generate-frontend.js`. |
 | `enumValues` | array | `null` | Maps raw cell values to display labels. Each entry: `{ "value": "<raw>", "name": "<i18nKeyOrLabel>" }`. The generator emits these as `enumLabels: { '<raw>': '<name>' }` on the table column descriptor. |
 
 **How `enumValues` is resolved at runtime:**
@@ -647,6 +647,42 @@ Two field-level props control how the grid column renders raw values as labeled 
 ```
 
 This renders the badge as "Processed"/"Draft" (EN) and "Procesado"/"Borrador" (ES), reusing the existing `statusProcessed`/`statusDraft` keys from `genericLabels`. The advanced filter and the status quick-filter pill also show these labels instead of raw `true`/`false`.
+
+#### Signed delta column rendering (`columnType: "signedDelta"`)
+
+Renders a numeric delta with sign + semantic color, for lines-grid columns that show a
+computed difference (e.g. physical-inventory's `etgoQtydiff` "Difference" column between
+counted and book quantity).
+
+| Value | Text | Color |
+|-------|------|-------|
+| `< 0` | `-N` | `#D50B3E` (negative) |
+| `= 0` | `±0` (only exactly zero) | `#121217` (neutral) |
+| `> 0` | `+N` | `#1E874C` (positive) |
+
+Implementation: `formatSignedDelta()` in `tools/app-shell/src/lib/formatSigned.js` is the
+single source of truth for the text/tone computation — both the inline lines grid
+(`InlineLinesPanel.jsx` `ReadCell`) and the main `DataTable` (`DataTable.cellRenderers.jsx`
+`renderSignedDeltaCell` via `CELL_RENDERERS.signedDelta`) call it, so the two grids render
+identically. It deliberately does **not** apply thousands grouping — sibling quantity
+columns in the same lines grid (e.g. `bookQuantity`, `quantityCount`) render their raw
+value with no `Intl` formatting, and `signedDelta` stays consistent with them rather than
+introducing a different number format for one column.
+
+**Example — `physical-inventory` `etgoQtydiff` field:**
+
+```json
+"etgoQtydiff": {
+  "visibility": "readOnly",
+  "label": "Difference",
+  "columnType": "signedDelta",
+  "grid": true,
+  "gridOrder": 5,
+  "grow": true,
+  "columnWidth": 192,
+  "readOnlyLogic": null
+}
+```
 
 #### `list-modal` cell renderers (`cellType`)
 

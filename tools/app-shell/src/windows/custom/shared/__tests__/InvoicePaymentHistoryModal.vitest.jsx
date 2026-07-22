@@ -284,7 +284,7 @@ describe('InvoicePaymentHistoryModal', () => {
     expect(screen.getByTestId('new-payment-entry-modal')).toBeInTheDocument();
   });
 
-  it('formats amounts > 999 with thousand dots in payment rows', async () => {
+  it('formats amounts > 999 with a thousands separator in payment rows', async () => {
     useApiFetch.mockReturnValue(makeApiFetch([
       { id: 'p1', documentNo: 'PAY-999', paymentDate: '2026-03-01', amount: '1500.50', status: 'DR' },
     ]));
@@ -297,12 +297,14 @@ describe('InvoicePaymentHistoryModal', () => {
         onClose={vi.fn()}
       />,
     );
+    // en-US narrowSymbol formatting via the shared formatCurrency util: EUR renders
+    // the symbol after the amount → "1,500.50 €".
     await waitFor(() =>
-      expect(screen.getByText(/1\.500,50/)).toBeInTheDocument(),
+      expect(screen.getByText(/1,500\.50/)).toBeInTheDocument(),
     );
   });
 
-  it('formats the grand total header with thousand dots', async () => {
+  it('formats the grand total header with a thousands separator', async () => {
     render(
       <InvoicePaymentHistoryModal
         invoiceId="42"
@@ -312,7 +314,8 @@ describe('InvoicePaymentHistoryModal', () => {
         onClose={vi.fn()}
       />,
     );
-    expect(screen.getByText(/2\.345,00/)).toBeInTheDocument();
+    // EUR grand total → "2,345.00 €" (en-US digits, symbol-after).
+    expect(screen.getByText(/2,345\.00/)).toBeInTheDocument();
   });
 
   it('calls onPaymentAdded when payment is saved and modal is closed', async () => {
@@ -569,11 +572,12 @@ describe('InvoicePaymentHistoryModal', () => {
       />,
     );
 
-    // Initial state: 3 cobros registrados, Saldo pendiente = 136,10 €.
+    // Initial state: 3 cobros registrados, Saldo pendiente = 136.10 € (en-US
+    // narrowSymbol format from the shared formatCurrency util).
     await waitFor(() =>
       expect(screen.getAllByTestId('InvoicePaymentHistoryModal__row')).toHaveLength(3),
     );
-    expect(screen.getByText(/136,10/)).toBeInTheDocument();
+    expect(screen.getByText(/136\.10/)).toBeInTheDocument();
     expect(screen.getByText((_, el) => el.tagName === 'SPAN' && /3\s*cobrosRegistrados/.test(el.textContent))).toBeInTheDocument();
 
     // Simulate registering a payment via the nested NewPaymentEntryModal.
@@ -582,13 +586,13 @@ describe('InvoicePaymentHistoryModal', () => {
     fireEvent.click(screen.getByText('Save entry'));
 
     // After handlePaymentRegistered → fetchData() re-run: 4 cobros registrados,
-    // and — the actual regression — Saldo pendiente must update to 116,10 €,
-    // not remain stuck at the stale 136,10 € snapshot.
+    // and — the actual regression — Saldo pendiente must update to 116.10 €,
+    // not remain stuck at the stale 136.10 € snapshot.
     await waitFor(() =>
       expect(screen.getAllByTestId('InvoicePaymentHistoryModal__row')).toHaveLength(4),
     );
-    await waitFor(() => expect(screen.getByText(/116,10/)).toBeInTheDocument());
-    expect(screen.queryByText(/136,10/)).toBeNull();
+    await waitFor(() => expect(screen.getByText(/116\.10/)).toBeInTheDocument());
+    expect(screen.queryByText(/136\.10/)).toBeNull();
     expect(screen.getByText((_, el) => el.tagName === 'SPAN' && /4\s*cobrosRegistrados/.test(el.textContent))).toBeInTheDocument();
 
     // The nested entry modal closed itself but the history modal is still mounted

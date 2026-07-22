@@ -268,6 +268,53 @@ describe('CurrencyRatePicker', () => {
     expect(screen.getByTestId('currency-rate-pencil')).toBeInTheDocument();
   });
 
+  it('hides the pencil when the selected currency is the org currency (rate 1)', async () => {
+    // ETP-4029: CURRENCIES fixture's EUR entry has rate: 1, mirroring how
+    // CurrencyOptionsHandler always returns the org's own currency with a
+    // hardcoded rate of 1.0 — there is nothing to override in that case.
+    renderPicker({ value: 'eur-id', displayValue: 'EUR', formData: { id: 'rec-1', eTGOCurrencyRate: '1' } });
+
+    await waitFor(() => {
+      expect(screen.getByTestId('currency-rate-trigger')).toHaveTextContent('EUR');
+    });
+    expect(screen.queryByTestId('currency-rate-pencil')).not.toBeInTheDocument();
+  });
+
+  it('shows the pencil again after switching from the org currency to a foreign one', async () => {
+    const { rerender } = render(
+      <CurrencyRatePicker
+        field={FIELD}
+        value="eur-id"
+        displayValue="EUR"
+        formData={{ id: 'rec-1', eTGOCurrencyRate: '1' }}
+        resolvedLabel="Currency"
+        token={TOKEN}
+        apiBaseUrl={BASE_URL}
+        onChange={() => {}}
+      />,
+    );
+    await waitFor(() => {
+      expect(screen.getByTestId('currency-rate-trigger')).toHaveTextContent('EUR');
+    });
+    expect(screen.queryByTestId('currency-rate-pencil')).not.toBeInTheDocument();
+
+    rerender(
+      <CurrencyRatePicker
+        field={FIELD}
+        value="usd-id"
+        displayValue="USD"
+        formData={{ id: 'rec-1', eTGOCurrencyRate: '1.2345' }}
+        resolvedLabel="Currency"
+        token={TOKEN}
+        apiBaseUrl={BASE_URL}
+        onChange={() => {}}
+      />,
+    );
+    await waitFor(() => {
+      expect(screen.getByTestId('currency-rate-pencil')).toBeInTheDocument();
+    });
+  });
+
   it('supports the full manual rate override flow: pre-fill, confirm, invalid input, escape, and cancel', async () => {
     const user = userEvent.setup();
     const { onChange } = renderPicker({ formData: { id: 'rec-1', eTGOCurrencyRate: '2.5' } });

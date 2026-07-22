@@ -84,16 +84,28 @@ test.describe('Physical Inventory', () => {
   });
 
   test('New form shows Lines tab with correct columns', async ({ page }) => {
-    await page.getByTestId('action-new').click();
-    await page.waitForURL('**/physical-inventory/new', { timeout: 5_000 });
+    // With 0 lines, the Lines tab renders the custom empty-state panel instead
+    // of the DetailTable (see PhysicalInventoryBottomPanel.linesEmptyState), and
+    // its primary "+ Add line" button only appears once canAddLine is true (i.e.
+    // requiredHeaderFields — movementDate/name/warehouse — are all filled). A
+    // bare /new form has those fields empty, so we use the mocked existing
+    // record (header already filled) to reach the empty-state's primary action
+    // and mount the real DetailTable to verify its columns.
+    await installInventoryMocks(page);
+    await page.goto(`/physical-inventory/${MOCK_INV_ID}`);
+    await expect(page.getByTestId('detail-view')).toBeVisible({ timeout: 8_000 });
 
-    await expect(page.getByTestId('detail-view')).toBeVisible();
+    await page.getByTestId('action-add-lines-empty-state').click();
 
-    // Line columns are <th> elements (not sortable buttons in detail view)
-    await expect(page.getByTestId('column-header-product')).toBeVisible();
-    await expect(page.getByTestId('column-header-uOM')).toBeVisible();
-    await expect(page.getByTestId('column-header-bookQuantity')).toBeVisible();
-    await expect(page.getByTestId('column-header-quantityCount')).toBeVisible();
+    // Column headers render inside the visible inline-lines-panel, and (as of
+    // this feature) DataTable also mounts an off-screen sizing table sharing
+    // the same data-testid — scope to the visible panel to avoid a strict-mode
+    // ambiguity between the two.
+    const linesPanel = page.getByTestId('inline-lines-panel');
+    await expect(linesPanel.getByTestId('column-header-product')).toBeVisible();
+    await expect(linesPanel.getByTestId('column-header-uOM')).toBeVisible();
+    await expect(linesPanel.getByTestId('column-header-bookQuantity')).toBeVisible();
+    await expect(linesPanel.getByTestId('column-header-quantityCount')).toBeVisible();
   });
 
   test('Cancel returns to list view', async ({ page }) => {
@@ -113,7 +125,7 @@ test.describe('Physical Inventory', () => {
     await page.goto(`/physical-inventory/${MOCK_INV_ID}`);
     await expect(page.getByTestId('detail-view')).toBeVisible({ timeout: 8_000 });
 
-    await page.getByTestId('action-add-line').click();
+    await page.getByTestId('action-add-lines-empty-state').click();
 
     // Wait for the inline row to appear. Current UI renders numeric inputs without placeholders.
     await expect(page.getByTestId('inline-add-row')).toBeVisible({ timeout: 5_000 });
@@ -155,7 +167,7 @@ test.describe('Physical Inventory', () => {
     await installInventoryMocks(page);
     await page.goto(`/physical-inventory/${MOCK_INV_ID}`);
     await expect(page.getByTestId('detail-view')).toBeVisible({ timeout: 8_000 });
-    await page.getByTestId('action-add-line').click();
+    await page.getByTestId('action-add-lines-empty-state').click();
 
     // Wait for inline add row
     await expect(page.getByTestId('inline-add-row')).toBeVisible({ timeout: 5_000 });
@@ -233,7 +245,7 @@ test.describe('Physical Inventory', () => {
     await installInventoryMocks(page);
     await page.goto(`/physical-inventory/${MOCK_INV_ID}`);
     await expect(page.getByTestId('detail-view')).toBeVisible({ timeout: 8_000 });
-    await page.getByTestId('action-add-line').click();
+    await page.getByTestId('action-add-lines-empty-state').click();
 
     const userCountInput = page.getByTestId('inline-add-field-quantityCount');
     await expect(userCountInput).toBeVisible({ timeout: 5_000 });
@@ -280,7 +292,7 @@ test.describe('Physical Inventory', () => {
     await installInventoryMocks(page);
     await page.goto(`/physical-inventory/${MOCK_INV_ID}`);
     await expect(page.getByTestId('detail-view')).toBeVisible({ timeout: 8_000 });
-    await page.getByTestId('action-add-line').click();
+    await page.getByTestId('action-add-lines-empty-state').click();
     await expect(page.getByTestId('inline-add-field-quantityCount')).toBeVisible({ timeout: 5_000 });
 
     await selectProduct(page);
@@ -314,7 +326,7 @@ test.describe('Physical Inventory', () => {
     await installInventoryMocks(page);
     await page.goto(`/physical-inventory/${MOCK_INV_ID}`);
     await expect(page.getByTestId('detail-view')).toBeVisible({ timeout: 8_000 });
-    await page.getByTestId('action-add-line').click();
+    await page.getByTestId('action-add-lines-empty-state').click();
     await expect(page.getByTestId('inline-add-field-quantityCount')).toBeVisible({ timeout: 5_000 });
 
     const productButton = page.getByTestId('inline-add-field-product');
