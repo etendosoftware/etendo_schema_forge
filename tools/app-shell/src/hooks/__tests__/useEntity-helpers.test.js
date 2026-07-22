@@ -835,17 +835,19 @@ describe('extractErrorMessage — AD-translated duplicate-identifier error (ETP-
   //
   // Contract asserted here (the eventual fix must satisfy this test, not the
   // other way around): extractErrorMessage(res, ui) must rewrite this sentence
-  // into a short, generic, user-friendly message — the Spanish text below,
-  // picked because this app is primarily used in Spanish per project i18n
-  // policy — and it must never leak "Entidad/Organización/Identificador" (or
-  // the EN equivalents Client/Organization/Identifier).
+  // into a short, generic, user-friendly message, and it must never leak
+  // "Entidad/Organización/Identificador" (or the EN equivalents
+  // Client/Organization/Identifier). The Spanish copy the end user actually
+  // sees lives in es_ES.json under the validationDuplicateIdentifier key (per
+  // the project i18n policy); this test exercises the untranslated code-level
+  // fallback default, which follows the English convention used by every
+  // sibling translate() call in this same function (validationRequiredField,
+  // validationRequiredGeneric, validationDuplicateRecord).
   //
   // `ui` is mocked as identity (i.e. "no translation available"), same
-  // convention already used by the handleSaveErrorResponse tests above — this
-  // exercises the untranslated fallback default text the fix needs to supply
-  // for its new normalizeServerError branch.
+  // convention already used by the handleSaveErrorResponse tests above.
   const ui = (key) => key;
-  const FRIENDLY_MESSAGE = 'Ya existe un registro con este identificador. Por favor, ingresá uno diferente.';
+  const FRIENDLY_MESSAGE = 'A record with the same identifier already exists. Please enter a different one.';
   const AD_MESSAGE_ES = 'Ya existe un/a Categoría del producto con el mismo (Entidad, Organización, Identificador). '
     + '(Entidad, Organización, Identificador) debe ser único. Cambie los valores introducidos';
 

@@ -174,7 +174,7 @@ export async function extractErrorMessage(res, ui) {
             ) {
                 return translate(
                     'validationDuplicateIdentifier',
-                    'Ya existe un registro con este identificador. Por favor, ingresá uno diferente.'
+                    'A record with the same identifier already exists. Please enter a different one.'
                 );
             }
 
