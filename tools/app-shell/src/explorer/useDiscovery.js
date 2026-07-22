@@ -152,16 +152,7 @@ export async function upsertField({ EntityID, ColumnID, ModuleID, IsIncluded, Is
   return callWebhook('SFUpsertField', params);
 }
 
-export async function fetchMenuTree(query) {
-  const params = {};
-  if (query) params.q = query;
-  const data = await callWebhook('SFListMenu', params);
-  // Webhook returns { result: "{json string}" } — need to parse the inner JSON
-  if (typeof data.result === 'string') {
-    try { return JSON.parse(data.result); } catch { /* fall through */ }
-  }
-  return data;
-}
+export { fetchMenuTree } from '@/lib/menuTree.js';
 
 export async function populateSpec({ SpecID, ModuleID, IncludeAllMethods, ExcludeSystemColumns }) {
   const params = { SpecID };

@@ -1,14 +1,17 @@
 {
-  "version": "0.16.0",
+  "version": "0.17.0",
   "generatedAt": "2026-04-29T18:12:34.035Z",
-  "updatedAt": "2026-07-21T12:35:24.907Z",
-  "checksum": "386a4817461acdb9",
+  "updatedAt": "2026-07-22T00:26:28.729Z",
+  "checksum": "d8fc948dcf00ee35",
   "frontendContract": {
     "window": {
       "id": "108",
       "name": "User",
       "primaryEntity": "user",
       "category": "settings",
+      "headerExtra": {
+        "customForm": "AssignRoleControl"
+      },
       "layoutType": "default"
     },
     "entities": {
@@ -262,12 +265,35 @@
             "label": "Default Role",
             "type": "foreignKey",
             "tsType": "string",
-            "visibility": "editable",
+            "visibility": "readOnly",
             "required": false,
             "grid": true,
-            "form": true,
+            "form": false,
+            "columnType": "status",
             "reference": "Role",
-            "inputMode": "selector",
+            "enumValues": [
+              {
+                "value": "9B8D736190724807AB256DC95F20EC5E",
+                "name": "roleNameGoClientAdmin"
+              },
+              {
+                "value": "127AE77FE2994067B7FE6495FC21D51E",
+                "name": "roleNameFinance"
+              },
+              {
+                "value": "2A159DF4F4B944A6AA903202AD35B545",
+                "name": "roleNameSales"
+              },
+              {
+                "value": "A826430F723E4C1B9A53EBB0746A98C0",
+                "name": "roleNamePurchasing"
+              },
+              {
+                "value": "55E05A4B43514A029D6FB6B8D94B49D4",
+                "name": "roleNameInventory"
+              }
+            ],
+            "inputMode": "search",
             "section": "defaults",
             "validation": {
               "maxLength": 12
@@ -451,7 +477,7 @@
             "label": "Role",
             "type": "foreignKey",
             "tsType": "string",
-            "visibility": "editable",
+            "visibility": "readOnly",
             "required": true,
             "grid": true,
             "form": true,
@@ -477,7 +503,7 @@
             "label": "Role Administrator",
             "type": "boolean",
             "tsType": "boolean",
-            "visibility": "editable",
+            "visibility": "readOnly",
             "required": true,
             "grid": true,
             "form": true,
@@ -504,7 +530,8 @@
               "source": "N"
             }
           }
-        ]
+        ],
+        "hideDelete": true
       },
       "emailConfiguration": {
         "tableName": "C_POC_CONFIGURATION",
@@ -863,7 +890,10 @@
       "id": "108",
       "name": "User",
       "primaryEntity": "user",
-      "category": "settings"
+      "category": "settings",
+      "headerExtra": {
+        "customForm": "AssignRoleControl"
+      }
     },
     "entities": {
       "user": {
@@ -1060,7 +1090,7 @@
             "apiKey": "defaultRole",
             "column": "Default_Ad_Role_ID",
             "type": "foreignKey",
-            "visibility": "editable",
+            "visibility": "readOnly",
             "required": false
           },
           {
@@ -1251,7 +1281,7 @@
             "apiKey": "role",
             "column": "AD_Role_ID",
             "type": "foreignKey",
-            "visibility": "editable",
+            "visibility": "readOnly",
             "required": true
           },
           {
@@ -1267,7 +1297,7 @@
             "apiKey": "roleAdmin",
             "column": "Is_Role_Admin",
             "type": "boolean",
-            "visibility": "editable",
+            "visibility": "readOnly",
             "required": true
           },
           {
@@ -1671,7 +1701,7 @@
         "post": true,
         "put": true,
         "patch": true,
-        "delete": true,
+        "delete": false,
         "listUrl": "/sws/neo/user/userRoles",
         "detailUrl": "/sws/neo/user/userRoles/{id}",
         "supportedFilters": [
@@ -1714,7 +1744,7 @@
         "field": "defaultRole",
         "column": "Default_Ad_Role_ID",
         "reference": "Role",
-        "inputMode": "selector",
+        "inputMode": "search",
         "url": "/sws/neo/user/user/selectors/defaultRole"
       },
       {
