@@ -209,6 +209,14 @@ test.describe('Purchase Order → Invoice — Happy path (integration)', () => {
 
     await saveDraft(page);
 
+    // If the save was blocked (callout arrived late, required-field toast),
+    // the URL stays at /new. Wait for the callout to finish and retry once.
+    if (page.url().endsWith('/new')) {
+      await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {});
+      await page.waitForTimeout(3_000);
+      await saveDraft(page);
+    }
+
     // (?!new$) — a silent save failure leaves the URL at /purchase-invoice/new,
     // which a bare [a-zA-Z0-9]+ would happily match.
     await expect(page,
