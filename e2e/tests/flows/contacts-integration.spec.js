@@ -522,7 +522,9 @@ test.describe('Contacts Integration — Full journey', () => {
     const saveBtnB = page.getByTestId('action-save')
       .or(page.getByRole('button', { name: /^guardar$|^save$/i }));
     await expect(saveBtnB.first()).toBeEnabled({ timeout: 10_000 });
+    const saveBP = expectSaveResponse(page);
     await saveBtnB.first().click();
+    await saveBP;
     await expect(page).not.toHaveURL(/\/contacts\/new/, { timeout: 15_000 });
 
     // ═══════════════════════════════════════════════════════════════════════

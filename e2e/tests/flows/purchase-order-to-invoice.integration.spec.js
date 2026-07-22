@@ -2,7 +2,7 @@ import { test, expect } from '@playwright/test';
 import { login, navigateTo } from '../helpers/auth.js';
 import {
   loadCredentials, slow, waitForDetailReady, saveDraft, selectVendorBP,
-  reselectComboOption,
+
   addProductLine, ensureVendorSetup, clickConfirmButton, expectStatusPill,
   expectSaveResponse, waitForConfirmResponse, dismissSuccessModal, safeReload,
   readDocumentTotals, verifyTotalsConsistency,
@@ -34,8 +34,7 @@ test.describe('Purchase Order → Invoice — Happy path (integration)', () => {
     'Set E2E_SALES_INTEGRATION=1 to run this live purchase integration test.',
   );
 
-  // TODO(ETP-4608): Temporarily skipped — flaky/failing after the ETP-4029 merge. Re-enable once stabilized.
-  test.skip('creates a PO, confirms it, then creates an invoice importing its lines', async ({ page }) => {
+  test('creates a PO, confirms it, then creates an invoice importing its lines', async ({ page }) => {
     const user = onboardingCreds?.email || process.env.E2E_USER;
     const password = onboardingCreds?.password || process.env.E2E_PASSWORD;
 
@@ -197,15 +196,12 @@ test.describe('Purchase Order → Invoice — Happy path (integration)', () => {
 
     await selectVendorBP(page);
 
-    // The test vendor (Default Customer + isVendor flag) has NO purchase-side
-    // config, so the BP callout CLEARS priceList/paymentMethod/paymentTerms —
-    // while the Selects keep displaying the stale org defaults. Re-pick the
-    // three combos explicitly so the editing state holds real values and the
-    // save is not blocked by required-field validation (race with the debounced
-    // callout made this pass or fail depending on timing).
-    await reselectComboOption(page, 'paymentMethod');
-    await reselectComboOption(page, 'paymentTerms');
-    await reselectComboOption(page, 'priceList');
+    // The BP callout is debounced — in CI the test can reach saveDraft()
+    // before the callout finishes populating the form fields, causing a
+    // "required fields" validation error. Wait for all callout network
+    // activity to settle before saving.
+    await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {});
+    await page.waitForTimeout(3_000);
 
     // ═══════════════════════════════════════════════════════════════════════
     // STEP 12: Save invoice as draft
