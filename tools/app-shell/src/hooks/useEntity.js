@@ -168,9 +168,12 @@ export async function extractErrorMessage(res, ui) {
             // English equivalent naming (Client, Organization, Identifier). The regex
             // above only matches the RAW Postgres wording, so this AD-translated
             // sentence needs its own branch to avoid leaking technical field names.
+            // Gaps are bounded ({1,200}) rather than unbounded (.+) so the match can't
+            // be forced into super-linear backtracking on a pathological input
+            // (SonarQube javascript:S5852).
             if (
-                /ya existe.+\(.+\).+debe ser único/i.test(decoded)
-                || /there is already.+\(.+\).+must be unique/i.test(decoded)
+                /ya existe.{1,200}\(.{1,200}\).{1,200}debe ser único/i.test(decoded)
+                || /there is already.{1,200}\(.{1,200}\).{1,200}must be unique/i.test(decoded)
             ) {
                 return translate(
                     'validationDuplicateIdentifier',
