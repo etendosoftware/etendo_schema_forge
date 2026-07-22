@@ -361,6 +361,47 @@ public NeoResponse afterHandle(NeoContext ctx) {
 }
 ```
 
+### Post-hook: Sync a Related Entity from a Parent Field
+
+**Trigger condition:** suspect this problem whenever a single-value column on the saved entity
+is meant to drive rows in a *different* table that real backend logic actually reads (login,
+access checks, reporting), but the Go SPA can only sensibly expose a single-select control for
+it — the target table's own selector may be unusable for populating that control (e.g.
+restricted to values that already exist, useless for assigning a *new* one).
+
+**Example (ETP-4512):** `AD_User.Default_Ad_Role_ID` is the only column the Go SPA's
+single-role-per-user dropdown can write to, but real login/window-access checks read
+`AD_User_Roles`, not `Default_Ad_Role_ID`. `UserRoleAssignmentHandler` (`@Named("user")`)
+deletes any existing `AD_User_Roles` row(s) for the saved user and inserts exactly one new row
+for the role currently in `Default_Ad_Role_ID`, keeping the two in sync and enforcing at most
+one active role:
+
+```java
+@Override
+public NeoResponse afterHandle(NeoContext context) {
+  if (context.getEndpointType() != NeoEndpointType.CRUD) return null;
+  String method = context.getHttpMethod();
+  if (!"PUT".equalsIgnoreCase(method) && !"PATCH".equalsIgnoreCase(method)) return null;
+  String userId = context.getRecordId();
+  if (userId == null) return null;
+  try {
+    OBContext.setAdminMode(true);
+    try {
+      syncUserRole(userId); // delete existing AD_User_Roles rows, insert one for defaultRole
+    } finally {
+      OBContext.restorePreviousMode();
+    }
+  } catch (Exception e) {
+    log.warn("sync error for user {}: {}", userId, e.getMessage(), e);
+  }
+  return null; // side effect only, never replaces the response
+}
+```
+
+Real implementation: `UserRoleAssignmentHandler` (ETP-4512, `AD_User_Roles` from
+`Default_Ad_Role_ID`). Never fail the parent request over this side effect — log and swallow,
+same as `TbaiConfigSequenceHandler`'s sequence-assignment pattern.
+
 ### Post-hook: Guard a Field Against Callout Cross-Updates
 
 **Trigger condition:** suspect this problem whenever a field must be *independent* from another
