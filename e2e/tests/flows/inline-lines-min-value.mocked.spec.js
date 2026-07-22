@@ -97,7 +97,7 @@ test.describe('Inline lines min-value validation (mocked)', () => {
     await page.waitForSelector('[data-testid="inline-lines-panel"]', { timeout: 8_000 });
   });
 
-  test('entering a negative orderedQuantity adds border-red-500 to the input', async ({ page }) => {
+  test('entering a negative orderedQuantity adds border-destructive to the input', async ({ page }) => {
     const row = page.locator(`[data-testid="line-row-${LINE_ID}"]`);
     await row.dispatchEvent('mouseover');
     await row.locator('[data-testid="line-actions"] button').first().dispatchEvent('click');
@@ -108,8 +108,8 @@ test.describe('Inline lines min-value validation (mocked)', () => {
     await qtyField.blur();
 
     // commitField detects value < min=0 and sets invalidCell → editInputClassName
-    // adds border-red-500 to the Input's className.
-    await expect(qtyField).toHaveClass(/border-red-500/, { timeout: 3_000 });
+    // adds border-destructive to the Input's className (Semantic Theme Contract).
+    await expect(qtyField).toHaveClass(/border-destructive/, { timeout: 3_000 });
   });
 
   test('entering a negative orderedQuantity blocks the PATCH request', async ({ page }) => {
@@ -130,7 +130,7 @@ test.describe('Inline lines min-value validation (mocked)', () => {
     expect(quantityPatches).toHaveLength(0);
   });
 
-  test('correcting the invalid value clears the red border and fires the PATCH', async ({ page }) => {
+  test('correcting the invalid value clears the destructive border and fires the PATCH', async ({ page }) => {
     const row = page.locator(`[data-testid="line-row-${LINE_ID}"]`);
     await row.dispatchEvent('mouseover');
     await row.locator('[data-testid="line-actions"] button').first().dispatchEvent('click');
@@ -138,16 +138,16 @@ test.describe('Inline lines min-value validation (mocked)', () => {
     const qtyField = row.locator('[data-testid="field-orderedQuantity"]');
     await expect(qtyField).toBeVisible({ timeout: 3_000 });
 
-    // Invalid value → red border.
+    // Invalid value → destructive-tinted border.
     await qtyField.fill('-1');
     await qtyField.blur();
-    await expect(qtyField).toHaveClass(/border-red-500/, { timeout: 3_000 });
+    await expect(qtyField).toHaveClass(/border-destructive/, { timeout: 3_000 });
 
     // The row stays in edit mode (hasValidationErrorRef prevents close-on-outside-click).
     // Entering a valid value directly commits and clears invalidCell.
     await qtyField.fill('3');
     await qtyField.blur();
 
-    await expect(qtyField).not.toHaveClass(/border-red-500/, { timeout: 3_000 });
+    await expect(qtyField).not.toHaveClass(/border-destructive/, { timeout: 3_000 });
   });
 });
