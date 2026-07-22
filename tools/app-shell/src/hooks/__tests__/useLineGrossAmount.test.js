@@ -125,6 +125,43 @@ describe('resolveTaxFactor', () => {
     assert.equal(factor, 1.10);
   });
 
+  it('ETP-4567: source 3 — derives from saved row gross/net ratio when both are negative', () => {
+    const rowValues = { lineGrossAmount: -121, lineNetAmount: -100 };
+    const factor = resolveTaxFactor(TAX_ID, {}, rowValues, emptyCache(), [], 'lineGrossAmount');
+    assert.equal(factor, 1.21);
+  });
+
+  it('ETP-4567: source 4 — derives from a negative sibling line (gross/net ratio)', () => {
+    const siblings = [{ tax: TAX_ID, lineGrossAmount: -121, lineNetAmount: -100, discount: 0 }];
+    const factor = resolveTaxFactor(TAX_ID, {}, {}, emptyCache(), siblings, 'lineGrossAmount');
+    assert.equal(factor, 1.21);
+  });
+
+  it('ETP-4567: source 4 — derives from a negative sibling line (qty x price fallback)', () => {
+    const siblings = [{
+      tax: TAX_ID, lineGrossAmount: -121, lineNetAmount: 0,
+      orderedQuantity: -1, unitPrice: 100, discount: 0,
+    }];
+    const factor = resolveTaxFactor(TAX_ID, {}, {}, emptyCache(), siblings, 'lineGrossAmount');
+    assert.equal(factor, 1.21);
+  });
+
+  it('ETP-4567: source 3 — rejects a stale row where saved gross/net signs disagree', () => {
+    // A line edited in independent steps (price, then qty) can leave a
+    // half-updated gross/net pair from an earlier partial save. Signs must
+    // always agree (a tax factor is positive) — a mismatch means the saved
+    // ratio is untrustworthy, so this source must not resolve a factor from it.
+    const rowValues = { lineGrossAmount: -41.14, lineNetAmount: 68 };
+    const factor = resolveTaxFactor(TAX_ID, {}, rowValues, emptyCache(), [], 'lineGrossAmount');
+    assert.equal(factor, null);
+  });
+
+  it('ETP-4567: source 4 — rejects a sibling whose saved gross/net signs disagree', () => {
+    const siblings = [{ tax: TAX_ID, lineGrossAmount: -41.14, lineNetAmount: 68, discount: 0 }];
+    const factor = resolveTaxFactor(TAX_ID, {}, {}, emptyCache(), siblings, 'lineGrossAmount');
+    assert.equal(factor, null);
+  });
+
 });
 
 // ─── deriveLineNet ────────────────────────────────────────────────────────────
