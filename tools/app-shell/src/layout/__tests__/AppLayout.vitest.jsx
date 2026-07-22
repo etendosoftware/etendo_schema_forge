@@ -7,10 +7,25 @@ vi.mock('react-router-dom', () => ({
   useSearchParams: () => [new URLSearchParams(), vi.fn()],
 }));
 
-// Mock layout components
+// AppLayout now calls useRoleMenu() (ETP-4598), which internally calls useAuth().
+// These 8 existing tests are about generic AppLayout structure, not role
+// filtering, so the default stub is null (its "don't filter" / pre-existing
+// behavior) rather than mocking fetch + AuthContext just to exercise the real
+// implementation. It's a vi.fn() (not a plain arrow) so the loading-state test
+// below can override it for a single render via mockReturnValueOnce.
+vi.mock('@/hooks/useRoleMenu.js', () => ({
+  useRoleMenu: vi.fn(() => null),
+}));
+
+// Mock layout components. menuGroups is rendered (serialized) so tests can
+// assert on what AppLayout actually passed down after filtering, not just
+// that SideMenu rendered.
 vi.mock('@/components/layout/SideMenu', () => ({
-  default: ({ expanded }) => (
-    <div data-testid="side-menu" data-expanded={String(expanded)}>SideMenu</div>
+  default: ({ expanded, menuGroups }) => (
+    <div data-testid="side-menu" data-expanded={String(expanded)}>
+      SideMenu
+      <div data-testid="side-menu-groups">{JSON.stringify(menuGroups)}</div>
+    </div>
   ),
 }));
 
@@ -64,6 +79,7 @@ vi.mock('@/components/support/SupportChatWidget.jsx', () => ({
   SupportChatWidget: () => <div data-testid="support-chat-widget">SupportChatWidget</div>,
 }));
 
+import { useRoleMenu } from '@/hooks/useRoleMenu.js';
 import AppLayout from '../AppLayout.jsx';
 
 describe('AppLayout — normal mode', () => {
@@ -118,5 +134,68 @@ describe('AppLayout — normal mode', () => {
     const mainDiv = container.querySelector('[style*="margin-left"]');
     expect(mainDiv).not.toBeNull();
     expect(mainDiv.style.marginLeft).toBe('240px');
+  });
+
+  it('filters menuGroups to empty (fail-closed) while useRoleMenu is loading (undefined), instead of the FOUC full-then-shrink behavior', () => {
+    // ETP-4598 regression test: while the SFListMenu fetch is in flight,
+    // useRoleMenu() returns undefined (not null). AppLayout must treat that
+    // as "filter to nothing yet" so SideMenu never briefly renders the full,
+    // unfiltered menu before the real allowed-id Set arrives.
+    vi.mocked(useRoleMenu).mockReturnValueOnce(undefined);
+
+    const props = {
+      menuGroups: [
+        {
+          group: 'Sales',
+          items: [{ name: 'sales-order', label: 'Sales Order', windowId: '800166' }],
+        },
+        { group: 'Favorites', items: [] },
+        {
+          group: 'Tools',
+          // No windowId/processId/obuiappProcessId — never filtered, per
+          // filterMenuGroupsByAccess's own contract.
+          items: [{ name: 'dashboard', label: 'Dashboard' }],
+        },
+      ],
+    };
+
+    render(<AppLayout {...props} />);
+
+    const groups = JSON.parse(screen.getByTestId('side-menu-groups').textContent);
+
+    // Sales had a windowId-bearing item and no allowed ids yet -> emptied,
+    // and (being non-Favorites) dropped entirely.
+    expect(groups.find((g) => g.group === 'Sales')).toBeUndefined();
+    // Favorites always survives even while empty.
+    expect(groups.find((g) => g.group === 'Favorites')).toBeDefined();
+    // Tools has no windowId on its item, so it's never filtered out.
+    const tools = groups.find((g) => g.group === 'Tools');
+    expect(tools).toBeDefined();
+    expect(tools.items).toHaveLength(1);
+    expect(tools.items[0].name).toBe('dashboard');
+  });
+
+  it('passes menuGroups through UNFILTERED when useRoleMenu resolves to null (fail-open contract, asserted explicitly rather than relying on the default mock value)', () => {
+    // Explicit override (even though the module mock's default is already
+    // `null`) so this fail-open behavior is a named, intentional assertion —
+    // not an accident of the shared default across the other 8 tests in
+    // this file.
+    vi.mocked(useRoleMenu).mockReturnValueOnce(null);
+
+    const props = {
+      menuGroups: [
+        {
+          group: 'Sales',
+          items: [{ name: 'sales-order', label: 'Sales Order', windowId: '800166' }],
+        },
+      ],
+    };
+
+    render(<AppLayout {...props} />);
+
+    const groups = JSON.parse(screen.getByTestId('side-menu-groups').textContent);
+    const sales = groups.find((g) => g.group === 'Sales');
+    expect(sales).toBeDefined();
+    expect(sales.items.map((i) => i.name)).toContain('sales-order');
   });
 });

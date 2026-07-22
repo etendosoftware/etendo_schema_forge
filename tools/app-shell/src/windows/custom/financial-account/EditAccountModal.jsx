@@ -93,6 +93,7 @@ async function persistAccountEdits({
 }) {
   const updates = {};
   if (fields.nameDirty) updates.name = fields.name.trim();
+  if (fields.typeDirty) updates.type = fields.type;
   if (fields.ibanDirty) updates.iban = normalizeIban(fields.iban);
   if (fields.currencyDirty) updates.currencyId = fields.currencyId;
   if (reconciliation?.dateDirty) updates.dateTolerance = reconciliation.dateTolerance;
@@ -173,25 +174,33 @@ async function runDisconnect({ account, disconnect, onSaved, onClose, ui, setBus
 function useAccountFields(open, account, psd2Connected, hasTransactions) {
   const { fetchDefaults } = useAccountMutations();
   const [name, setName] = useState('');
+  const [type, setType] = useState('');
   const [iban, setIban] = useState('');
   const [currencyId, setCurrencyId] = useState('');
   const [ibanTouched, setIbanTouched] = useState(false);
   const [currencies, setCurrencies] = useState([]);
-  const [snapshot, setSnapshot] = useState({ name: '', iban: '', currencyId: '' });
+  const [snapshot, setSnapshot] = useState({ name: '', type: '', iban: '', currencyId: '' });
 
   useEffect(() => {
     if (!open || !account) return;
     setName(account.name ?? '');
+    setType(account.type ?? '');
     setIban(account.iban ?? '');
     setCurrencyId(account.currencyId ?? '');
     setSnapshot({
       name: account.name ?? '',
+      type: account.type ?? '',
       iban: account.iban ?? '',
       currencyId: account.currencyId ?? '',
     });
     setIbanTouched(false);
   }, [open, account]);
 
+  // Type and Currency lock the moment real movement history exists (or the account is
+  // PSD2-connected, where both are owned by the bank link) — a stricter condition than the
+  // IBAN/connection one. Changing either on an account with movements would break past
+  // balances/journal entries, so they become read-only info instead of inputs (ETP-4581).
+  const typeEditable = !psd2Connected && !hasTransactions;
   const currencyEditable = !psd2Connected && !hasTransactions;
 
   // Currency options are only needed while the currency field is editable.
@@ -206,16 +215,20 @@ function useAccountFields(open, account, psd2Connected, hasTransactions) {
     return () => { cancelled = true; };
   }, [open, currencyEditable, fetchDefaults]);
 
-  const isCash = account?.type === ACCOUNT_TYPE.CASH;
+  // Reactive to the pending Type selection (falling back to the persisted value) so that
+  // switching to/from Cash immediately reflows the IBAN field and the General tab before saving.
+  const isCash = (type || account?.type) === ACCOUNT_TYPE.CASH;
   const ibanEditable = !psd2Connected && !isCash;
   const ibanInvalid = ibanEditable && iban.trim() !== '' && !isValidIban(iban);
   const nameDirty = name.trim() !== snapshot.name.trim();
+  const typeDirty = typeEditable && type !== snapshot.type;
   const ibanDirty = ibanEditable && normalizeIban(iban) !== normalizeIban(snapshot.iban);
   const currencyDirty = currencyEditable && currencyId !== snapshot.currencyId;
 
   return {
-    name, setName, iban, setIban, currencyId, setCurrencyId, ibanTouched, setIbanTouched,
-    currencies, currencyEditable, ibanInvalid, nameDirty, ibanDirty, currencyDirty,
+    name, setName, type, setType, iban, setIban, currencyId, setCurrencyId,
+    ibanTouched, setIbanTouched, currencies, isCash, typeEditable, currencyEditable,
+    ibanInvalid, nameDirty, typeDirty, ibanDirty, currencyDirty,
   };
 }
 
@@ -305,7 +318,7 @@ function useReconciliationSettings(open, account) {
 
 function ReconciliationSettingsSection({ ui, recon }) {
   return (
-    <div className="mt-4 border-b border-[#E8EAEF] pb-4" data-testid="reconciliation-settings-section">
+    <div className="mt-6 border-b border-[#E8EAEF] pb-4" data-testid="reconciliation-settings-section">
       <p className="text-sm font-medium text-[#1E1E2C] mb-3">
         {ui('financeAccountsReconciliationSection')}
       </p>
@@ -426,7 +439,7 @@ function AccountingConfigurationSection({ ui, accounting }) {
 
   if (accounting.loading) {
     return (
-      <p className="mt-4 text-xs text-[#6C6C89]" data-testid="accounting-configuration-loading">
+      <p className="text-xs text-[#6C6C89]" data-testid="accounting-configuration-loading">
         {ui('financeAccountsAccountingLoading')}
       </p>
     );
@@ -434,17 +447,14 @@ function AccountingConfigurationSection({ ui, accounting }) {
 
   if (!accounting.ledgerConfigured) {
     return (
-      <p className="mt-4 text-xs text-[#6C6C89]" data-testid="accounting-configuration-unconfigured">
+      <p className="text-xs text-[#6C6C89]" data-testid="accounting-configuration-unconfigured">
         {ui('financeAccountsAccountingNoLedger')}
       </p>
     );
   }
 
   return (
-    <div className="mt-4 flex flex-col gap-4" data-testid="accounting-configuration-section">
-      <p className="text-sm font-medium text-[#1E1E2C]">
-        {ui('financeAccountsAccountingSection')}
-      </p>
+    <div className="flex flex-col gap-4" data-testid="accounting-configuration-section">
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <Field
           label={ui('financeAccountsAccountingBankAsset')}
@@ -532,10 +542,12 @@ export function EditAccountModal({ open, onClose, onSaved, account, onArchive, o
   const { saveImportSettings } = usePsd2Actions();
   const { saveAccountingConfiguration } = useFinancialAccountAccounting();
 
-  const isCash = account?.type === ACCOUNT_TYPE.CASH;
   const psd2Connected = account?.psd2Connected === true;
   const hasTransactions = account?.hasTransactions === true;
   const fields = useAccountFields(open, account, psd2Connected, hasTransactions);
+  // Reactive to the pending Type selection (see useAccountFields) so the tab layout and IBAN
+  // field reflow when the Type is changed on an account without transactions.
+  const isCash = fields.isCash;
   const psd2 = usePsd2Connection(open, account, psd2Connected, onSaved, onClose);
   const recon = useReconciliationSettings(open, account);
   const accounting = useAccountingConfiguration(open, account);
@@ -560,8 +572,8 @@ export function EditAccountModal({ open, onClose, onSaved, account, onArchive, o
 
   const typeLabel = formatTypeLabel(account.type, ui);
   const reauthMessage = buildReauthMessage(psd2.status, locale, ui);
-  const dirty = fields.nameDirty || fields.ibanDirty || fields.currencyDirty || psd2.settingsDirty
-    || (!isCash && recon.dirty) || accounting.dirty;
+  const dirty = fields.nameDirty || fields.typeDirty || fields.ibanDirty || fields.currencyDirty
+    || psd2.settingsDirty || (!isCash && recon.dirty) || accounting.dirty;
   const canSave = dirty && !saving && fields.name.trim() !== '' && !fields.ibanInvalid
     && !accounting.assetAcctMissing;
   const busy = saving || psd2.busy;
@@ -607,7 +619,16 @@ export function EditAccountModal({ open, onClose, onSaved, account, onArchive, o
       data-testid="Dialog__73027d">
       <DialogContent className="max-w-[1020px] bg-white" data-testid="edit-account-modal">
         <DialogHeader data-testid="DialogHeader__73027d">
-          <DialogTitle data-testid="DialogTitle__73027d">{ui('financeAccountsEditTitle')}</DialogTitle>
+          <div className="flex items-center justify-between gap-6 pr-8">
+            <DialogTitle data-testid="DialogTitle__73027d">{ui('financeAccountsEditTitle')}</DialogTitle>
+            {!fields.typeEditable ? (
+              <AccountStatusInfo
+                ui={ui}
+                account={account}
+                typeLabel={typeLabel}
+                data-testid="AccountStatusInfo__73027d" />
+            ) : null}
+          </div>
         </DialogHeader>
 
         <AccountFieldsGrid
@@ -615,12 +636,11 @@ export function EditAccountModal({ open, onClose, onSaved, account, onArchive, o
           account={account}
           isCash={isCash}
           psd2Connected={psd2Connected}
-          typeLabel={typeLabel}
           fields={fields}
           data-testid="AccountFieldsGrid__73027d" />
 
-        <Tabs value={editTab} onValueChange={setEditTab} className="mt-2" data-testid="EditAccountTabs__73027d">
-          <TabsList data-testid="EditAccountTabsList__73027d">
+        <Tabs value={editTab} onValueChange={setEditTab} className="-mt-3" data-testid="EditAccountTabs__73027d">
+          <TabsList className="w-full border-b border-[#E8EAEF]" data-testid="EditAccountTabsList__73027d">
             {/* Cash accounts have no bank connection and no statement reconciliation, so the
                 General tab (PSD2 + reconciliation config) has nothing to show for them — hide the
                 tab itself rather than rendering it with empty content. */}
@@ -635,7 +655,7 @@ export function EditAccountModal({ open, onClose, onSaved, account, onArchive, o
           </TabsList>
 
           {!isCash ? (
-            <TabsContent value={EDIT_TAB_GENERAL} data-testid="edit-account-tabpanel-general">
+            <TabsContent value={EDIT_TAB_GENERAL} className="pt-4" data-testid="edit-account-tabpanel-general">
               <Psd2ConnectionSection
                 ui={ui}
                 psd2Connected={psd2Connected}
@@ -652,7 +672,7 @@ export function EditAccountModal({ open, onClose, onSaved, account, onArchive, o
             </TabsContent>
           ) : null}
 
-          <TabsContent value={EDIT_TAB_ACCOUNTING} data-testid="edit-account-tabpanel-accounting">
+          <TabsContent value={EDIT_TAB_ACCOUNTING} className="pt-4" data-testid="edit-account-tabpanel-accounting">
             <AccountingConfigurationSection
               ui={ui}
               accounting={accounting}
@@ -708,9 +728,9 @@ export function EditAccountModal({ open, onClose, onSaved, account, onArchive, o
 // Sub-components
 // ---------------------------------------------------------------------------
 
-function AccountFieldsGrid({ ui, account, isCash, psd2Connected, typeLabel, fields }) {
+function AccountFieldsGrid({ ui, account, isCash, psd2Connected, fields }) {
   return (
-    <div className="grid grid-cols-1 gap-4 border-b border-[#E8EAEF] pb-4 sm:grid-cols-2">
+    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
       <EditField
         label={ui('financeAccountsPsd2FieldName')}
         data-testid="EditField__73027d">
@@ -722,10 +742,6 @@ function AccountFieldsGrid({ ui, account, isCash, psd2Connected, typeLabel, fiel
           className={FIELD_INPUT}
         />
       </EditField>
-      <ReadField
-        label={ui('financeAccountsPsd2FieldType')}
-        value={typeLabel}
-        data-testid="ReadField__73027d" />
       {!isCash && psd2Connected ? (
         <ReadField
           label={ui('financeAccountsPsd2FieldIban')}
@@ -754,12 +770,34 @@ function AccountFieldsGrid({ ui, account, isCash, psd2Connected, typeLabel, fiel
           ) : null}
         </EditField>
       ) : null}
-      {!fields.currencyEditable ? (
-        <ReadField
-          label={ui('financeAccountsPsd2FieldCurrency')}
-          value={account.currencyIso}
-          data-testid="ReadField__73027d" />
-      ) : (
+      {/* Type / Currency are editable form fields (below Name/IBAN) only while the account has no
+          transactions and is not PSD2-connected. Once locked they move out of the form and read as
+          account info beside the title (AccountStatusInfo). typeEditable === currencyEditable. */}
+      {fields.typeEditable ? (
+        <EditField
+          label={ui('financeAccountsPsd2FieldType')}
+          data-testid="EditField__73027d">
+          <Select value={fields.type} onValueChange={fields.setType} data-testid="Select__73027d">
+            <SelectTrigger data-testid="edit-account-type" className="bg-white">
+              <SelectValue
+                placeholder={ui('financeAccountsPsd2FieldType')}
+                data-testid="SelectValue__73027d" />
+            </SelectTrigger>
+            <SelectContent side="bottom" avoidCollisions={false} data-testid="SelectContent__73027d">
+              <SelectItem value={ACCOUNT_TYPE.BANK} data-testid="SelectItem__73027d">
+                {ui('financeAccountsNewTypeBank')}
+              </SelectItem>
+              <SelectItem value={ACCOUNT_TYPE.CASH} data-testid="SelectItem__73027d">
+                {ui('financeAccountsNewTypeCash')}
+              </SelectItem>
+              <SelectItem value={ACCOUNT_TYPE.CARD} data-testid="SelectItem__73027d">
+                {ui('financeAccountsNewTypeCard')}
+              </SelectItem>
+            </SelectContent>
+          </Select>
+        </EditField>
+      ) : null}
+      {fields.currencyEditable ? (
         <EditField
           label={ui('financeAccountsPsd2FieldCurrency')}
           data-testid="EditField__73027d">
@@ -778,7 +816,45 @@ function AccountFieldsGrid({ ui, account, isCash, psd2Connected, typeLabel, fiel
             </SelectContent>
           </Select>
         </EditField>
-      )}
+      ) : null}
+    </div>
+  );
+}
+
+/**
+ * Type and Currency shown as read-only account info beside the modal title (ETP-4581), used only
+ * once the account is locked (has transactions or is PSD2-connected). While they are still editable
+ * they live in the form grid instead (AccountFieldsGrid) — the caller renders this only then.
+ */
+function AccountStatusInfo({ ui, account, typeLabel }) {
+  return (
+    <div className="flex shrink-0 items-start gap-6">
+      <StatusItem
+        label={ui('financeAccountsPsd2FieldType')}
+        data-testid="StatusItem__73027d">
+        <span className="text-sm font-semibold leading-6 text-[#121217]" data-testid="edit-account-type-info">
+          {typeLabel || '—'}
+        </span>
+      </StatusItem>
+      <StatusItem
+        label={ui('financeAccountsPsd2FieldCurrency')}
+        data-testid="StatusItem__73027d">
+        <span
+          className="inline-flex h-6 w-fit items-center rounded-md bg-[#F2F3F5] px-2 text-sm font-medium text-[#121217]"
+          data-testid="edit-account-currency-info">
+          {account.currencyIso || '—'}
+        </span>
+      </StatusItem>
+    </div>
+  );
+}
+
+/** Compact label-over-value block used by the header status strip (Type / Currency). */
+function StatusItem({ label, children }) {
+  return (
+    <div className="flex flex-col gap-1">
+      <span className="text-xs font-medium uppercase tracking-wide text-[#6C6C89]">{label}</span>
+      {children}
     </div>
   );
 }

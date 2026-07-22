@@ -162,6 +162,12 @@ function SurveyManager() {
 export default function App() {
   const installedApps = useInstalledApps();
   const appStoreUnlocked = useAppStoreUnlock();
+  // NOTE: role-based filtering is NOT applied here. `App` itself renders above
+  // `AppShellRuntime`'s internal AuthProvider (see main.jsx / this component's own
+  // JSX below), so `useAuth()` — and anything built on it, like useRoleMenu() —
+  // cannot be called at this level. It's applied one level down in AppLayout.jsx,
+  // which IS inside that provider (same place SideMenu already safely calls
+  // useAuth() today).
   const menuGroups = buildMenuGroups(installedApps, { appStoreUnlocked });
   const [windowMap] = useState(() => buildWindowMap());
   const [locale, setLocale] = useLocaleState();
