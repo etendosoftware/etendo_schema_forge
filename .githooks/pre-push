@@ -163,7 +163,7 @@ run_step() {
   local cmd="$5"
   local abs_log="$REPO_DIR/$log_file"
 
-  echo "==> [$step_num/3] $step_name..."
+  echo "==> [$step_num/5] $step_name..."
 
   # Capture the exit status without tripping `set -e`. Calling exec_with_progress
   # bare would abort the whole script on a non-zero return (before we print the
@@ -172,9 +172,9 @@ run_step() {
   exec_with_progress "step-${step_num}" "$run_dir" "$abs_log" "$cmd" || exit_status=$?
 
   if [ $exit_status -eq 0 ]; then
-    echo "==> [$step_num/3] $step_name... SUCCESS ✅ (${LAST_DURATION}s)"
+    echo "==> [$step_num/5] $step_name... SUCCESS ✅ (${LAST_DURATION}s)"
   else
-    echo "==> [$step_num/3] $step_name... FAILED ❌ (${LAST_DURATION}s)"
+    echo "==> [$step_num/5] $step_name... FAILED ❌ (${LAST_DURATION}s)"
     fail_with_log "$step_name" "$exit_status" "$abs_log"
   fi
 }
@@ -290,6 +290,80 @@ check_base_conflicts() {
   fi
 }
 
+# Check that the sibling com.etendoerp.go checkout (used as REGEN_CHECK_PREV_XML_DIR
+# below) has no local commits missing from origin. offline-regen-check.yml resolves
+# its own branch there (exact match, else hotfix/*->main, feature/*->epic/ETP-3504,
+# else->develop) and always fetches fresh — it only ever sees what's actually on
+# GitHub. If your local checkout is ahead of that (unpushed commits), this check
+# passes against YOUR state while CI compares against an older one — exactly the
+# kind of local-pass/CI-fail split this whole exercise is trying to close.
+#
+# Deliberately read-only: we never `git checkout` in etendo_core/modules/com.etendoerp.go
+# — that directory is a real local Etendo install, not a disposable clone, and
+# switching branches there could yank you off work in progress. If it's already on
+# a different branch than CI would resolve, we skip rather than touch it.
+check_go_module_push_sync() {
+  local go_dir="$REPO_DIR/etendo_core/modules/com.etendoerp.go"
+  [ -d "$go_dir/.git" ] || return 0
+
+  echo "==> Checking com.etendoerp.go is fully pushed (sibling used by the offline regen-check)..."
+
+  local sf_branch expected_branch go_branch
+  sf_branch="$(git rev-parse --abbrev-ref HEAD)"
+
+  if ! git -C "$go_dir" fetch --quiet origin 2>/dev/null; then
+    echo "    SKIPPED ⚠️ (could not fetch com.etendoerp.go/origin — offline?)"
+    return 0
+  fi
+
+  if git -C "$go_dir" rev-parse --verify --quiet "origin/$sf_branch" >/dev/null 2>&1; then
+    expected_branch="$sf_branch"
+  else
+    case "$sf_branch" in
+      hotfix/*)  expected_branch="main" ;;
+      feature/*) expected_branch="epic/ETP-3504" ;;
+      *)         expected_branch="develop" ;;
+    esac
+  fi
+
+  go_branch="$(git -C "$go_dir" branch --show-current)"
+
+  if [ "$go_branch" != "$expected_branch" ]; then
+    echo "    SKIPPED ⚠️ (com.etendoerp.go is on '$go_branch', CI would resolve '$expected_branch' — not touching your checkout)"
+    echo "    👉 To let this check run: git -C etendo_core/modules/com.etendoerp.go checkout $expected_branch"
+    return 0
+  fi
+
+  local local_head origin_head
+  local_head="$(git -C "$go_dir" rev-parse HEAD)"
+  origin_head="$(git -C "$go_dir" rev-parse "origin/$expected_branch")"
+
+  if [ "$local_head" = "$origin_head" ]; then
+    echo "    SUCCESS ✅ (com.etendoerp.go '$expected_branch' matches origin)"
+    return 0
+  fi
+
+  if git -C "$go_dir" merge-base --is-ancestor "$local_head" "$origin_head" 2>/dev/null; then
+    echo "    WARNING ⚠️ (com.etendoerp.go '$expected_branch' is BEHIND origin — CI will see newer commits than what you're testing against)"
+    echo "    👉 git -C etendo_core/modules/com.etendoerp.go pull"
+    return 0
+  fi
+
+  echo "    FAILED ❌ (com.etendoerp.go '$expected_branch' has commits not pushed to origin)"
+  echo ""
+  echo "========================================================================="
+  echo "❌ ERROR: etendo_core/modules/com.etendoerp.go has local commits that are"
+  echo "   NOT on origin/$expected_branch. The offline regen-check below would"
+  echo "   compare against YOUR local (unpushed) state, but CI's offline-regen-check"
+  echo "   workflow always fetches fresh and only sees what's on GitHub — they"
+  echo "   would disagree."
+  echo "👉 Push com.etendoerp.go first, then re-run this push:"
+  echo "     git -C etendo_core/modules/com.etendoerp.go push origin $expected_branch"
+  echo "   or bypass with 'git push --no-verify'."
+  echo "========================================================================="
+  exit 1
+}
+
 # ----------------------------------------------------------------------------
 # Optional: Playwright E2E tests (opt-in — declining NEVER blocks the push)
 # ----------------------------------------------------------------------------
@@ -363,13 +437,28 @@ run_optional_playwright() {
 
 check_base_conflicts
 
-# 0. Run data-testid check (fast, runs before expensive checks)
-run_step "0" "Running data-testid check" "$REPO_DIR" "tmp/pre-push/data-testid-check.log" "npm run check:data-testid"
+# 0. Sync node_modules with package-lock.json (CI parity)
+#
+# CI's "Install dependencies" step runs `npm ci || npm install` against the
+# committed package-lock.json before anything else runs. Every later step here
+# (data-testid check, Sonar/tests, and especially `make regen-check`, which
+# resolves `sf-*` bins via `npx` from node_modules) must see the SAME package
+# versions CI would install — not whatever happens to already be on disk from
+# an earlier `npm install` of a newer core-package build. Without this, a
+# locally-ahead node_modules can make `make regen-check` pass here using a
+# newer @etendosoftware/schema-forge-cli than what package.json/lockfile
+# actually pin, while CI's `npm ci` installs the older pinned version and
+# fails (see ETP-4584: Offline Regen Check drift on `warehouse.editModal`
+# caused entirely by a stale core-package pin that only `npm ci` — not a
+# stale local install — would have caught).
+run_step "0" "Syncing npm dependencies with package-lock.json (npm ci)" "$REPO_DIR" "tmp/pre-push/npm-ci.log" "npm ci || npm install"
 
-# Run Step 1
-# Step 1 (domain boundary check) disabled: repos are now split at the repo
-# level (schema_forge_core vs etendo_schema_forge), so the monorepo
-# cross-domain check no longer applies. Re-enable by uncommenting the call.
+# 1. Run data-testid check (fast, runs before expensive checks)
+run_step "1" "Running data-testid check" "$REPO_DIR" "tmp/pre-push/data-testid-check.log" "npm run check:data-testid"
+
+# Domain boundary check disabled: repos are now split at the repo level
+# (schema_forge_core vs etendo_schema_forge), so the monorepo cross-domain
+# check no longer applies. Re-enable by uncommenting the call.
 # run_domain_boundary_check
 
 # 2. Run unit tests and SonarQube analysis
@@ -386,11 +475,63 @@ fi
 run_step "2" "Running unit tests and SonarQube analysis" "$REPO_DIR" "tmp/pre-push/sonar-and-tests.log" "$SONAR_CMD"
 
 # 3. Run offline regeneration check
+#
+# CI's offline-regen-check.yml runs TWO separate steps here, and both must be
+# mirrored: (a) `make regen-check` compares ETGO_SF_*.xml against com.etendoerp.go
+# — a stale core-package pin or AD-snapshot cache shows up here; (b) a SEPARATE
+# `git status --porcelain` check on schema_forge itself, because `sf-regen-all`
+# rewrites artifacts/*/contract.json and generated JSX in place — if the
+# freshly-regenerated files differ from what's committed (e.g. a generator
+# feature like window.readOnly/order/validation that the pinned core package
+# didn't emit before), (a) can report FAIL:0 while the actual committed UI is
+# still stale. This bit us for real: a core pin bump (ETP-4584 <-> epic sync)
+# silently left ~40 windows' contract.json stale, and nothing local caught it.
+#
+# (b) does NOT need the com.etendoerp.go sibling checkout at all — it only
+# needs `sf-regen-all` (which reads the committed cli/cache/ad-snapshot) plus
+# the installed core package. So (b) ALWAYS runs, unconditionally: this class
+# of drift must never have a skip path, because a missing sibling checkout is
+# a common, easy-to-hit local condition (fresh clone, different machine) that
+# must never silently let this push through while CI still fails on it.
+#
+# (a) genuinely needs the sibling repo's committed XML as the "prev" side of
+# the diff, so ONLY that half is conditionally skipped when it's absent.
+ALL_WINDOWS=$(node -e "const r=require('./cli/config/regen-windows.json');\
+process.stdout.write(r.windows.filter(w=>{\
+  try{return require('fs').existsSync('artifacts/'+w.name+'/decisions.json')\
+    && require('fs').existsSync('artifacts/'+w.name+'/contract.json')}catch(e){return false}\
+}).map(w=>w.name).join(','))")
+REGEN_ALL_CMD="make regen ONLY=$ALL_WINDOWS FROM_CACHE=1"
+run_step "3" "Regenerating all windows from cache (UI / contract drift check)" "$REPO_DIR" "tmp/pre-push/regen-all.log" "$REGEN_ALL_CMD"
+
+echo "==> Verifying no UI / contract drift (git status after regen)..."
+if [ -n "$(git status --porcelain)" ]; then
+  echo "    FAILED ❌"
+  echo ""
+  echo "========================================================================="
+  echo "❌ ERROR: UI drift — committed contract.json / generated files do not"
+  echo "   match what the offline pipeline (pinned core package + cached AD"
+  echo "   snapshot) produces. This is exactly what CI's offline-regen-check.yml"
+  echo "   'Verify no UI / contract drift' step checks."
+  echo "========================================================================="
+  git status
+  git --no-pager diff | head -200
+  echo ""
+  echo "👉 Either regenerate + commit (make regen ONLY=<window>), or the pinned"
+  echo "   core package (@etendosoftware/schema-forge-cli) is missing/behind a"
+  echo "   generator feature the committed artifacts already rely on."
+  echo "   Bypass with 'git push --no-verify'."
+  echo "========================================================================="
+  exit 1
+fi
+echo "    SUCCESS ✅ (schema_forge clean — no UI / contract drift)"
+
 if [ -d "etendo_core/modules/com.etendoerp.go/src-db/database/sourcedata" ]; then
+  check_go_module_push_sync
   REGEN_CMD="make regen-check FROM_CACHE=1 REGEN_CHECK_PREV_XML_DIR=etendo_core/modules/com.etendoerp.go/src-db/database/sourcedata"
-  run_step "3" "Running offline regeneration check" "$REPO_DIR" "tmp/pre-push/offline-regen-check.log" "$REGEN_CMD"
+  run_step "4" "Comparing ETGO_SF_*.xml against com.etendoerp.go" "$REPO_DIR" "tmp/pre-push/offline-regen-check.log" "$REGEN_CMD"
 else
-  echo "==> [3/3] Running offline regeneration check... SKIPPED ⚠️ (com.etendoerp.go sourcedata not found)"
+  echo "==> [4/5] Comparing ETGO_SF_*.xml against com.etendoerp.go... SKIPPED ⚠️ (sourcedata not found — UI/contract drift above was still checked)"
 fi
 
 # Mandatory checks passed — offer the optional Playwright E2E run before the banner.

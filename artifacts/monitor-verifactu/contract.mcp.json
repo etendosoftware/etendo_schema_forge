@@ -1,8 +1,8 @@
 {
-  "version": "0.10.0",
+  "version": "0.11.0",
   "generatedAt": "2026-05-04T17:02:25.021Z",
   "updatedAt": "2026-06-16T14:53:08.146Z",
-  "contractChecksum": "1345b4eb72e08afd",
+  "contractChecksum": "05a2c86f9e16e7ad",
   "apiPrediction": {
     "specName": "monitor-verifactu",
     "baseUrl": "/sws/neo/monitor-verifactu",

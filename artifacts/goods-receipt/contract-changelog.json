@@ -938,5 +938,72 @@
     ],
     "author": "pipeline",
     "date": "2026-06-29"
+  },
+  {
+    "from": "0.20.0",
+    "to": "0.21.0",
+    "level": "additive",
+    "reasons": [
+      "Field \"accountingDate\" property \"form\" changed from \"false\" to \"true\" in frontend (patch)",
+      "Field \"accountingDate\" property \"section\" changed from \"undefined\" to \"principal\" in frontend (additive)",
+      "Field \"accountingDate\" property \"seq\" changed from \"undefined\" to \"35\" in frontend (additive)"
+    ],
+    "author": "pipeline",
+    "date": "2026-07-16"
+  },
+  {
+    "from": "0.21.0",
+    "to": "0.22.0",
+    "level": "breaking",
+    "reasons": [
+      "Field \"accountingDate\" removed from entity \"goodsReceipt\" in frontend",
+      "Field \"accountingDate\" property \"visibility\" changed from \"editable\" to \"system\" in backend (patch)"
+    ],
+    "author": "pipeline",
+    "date": "2026-07-17"
+  },
+  {
+    "from": "0.22.0",
+    "to": "0.23.0",
+    "level": "additive",
+    "reasons": [
+      "Field \"documentNo\" property \"validation\" changed from \"undefined\" to \"[object Object]\" in frontend (additive)",
+      "Field \"warehouse\" property \"validation\" changed from \"undefined\" to \"[object Object]\" in frontend (additive)",
+      "Field \"businessPartner\" property \"validation\" changed from \"undefined\" to \"[object Object]\" in frontend (additive)",
+      "Field \"partnerAddress\" property \"validation\" changed from \"undefined\" to \"[object Object]\" in frontend (additive)",
+      "Field \"movementDate\" property \"validation\" changed from \"undefined\" to \"[object Object]\" in frontend (additive)",
+      "Field \"salesOrder\" property \"validation\" changed from \"undefined\" to \"[object Object]\" in frontend (additive)",
+      "Field \"orderReference\" property \"validation\" changed from \"undefined\" to \"[object Object]\" in frontend (additive)",
+      "Field \"description\" property \"validation\" changed from \"undefined\" to \"[object Object]\" in frontend (additive)",
+      "Field \"documentStatus\" property \"validation\" changed from \"undefined\" to \"[object Object]\" in frontend (additive)",
+      "Field \"posted\" property \"validation\" changed from \"undefined\" to \"[object Object]\" in frontend (additive)",
+      "Field \"project\" property \"validation\" changed from \"undefined\" to \"[object Object]\" in frontend (additive)",
+      "Field \"costcenter\" property \"validation\" changed from \"undefined\" to \"[object Object]\" in frontend (additive)",
+      "Field \"asset\" property \"validation\" changed from \"undefined\" to \"[object Object]\" in frontend (additive)",
+      "Field \"stDimension\" property \"validation\" changed from \"undefined\" to \"[object Object]\" in frontend (additive)",
+      "Field \"ndDimension\" property \"validation\" changed from \"undefined\" to \"[object Object]\" in frontend (additive)",
+      "Field \"invoiceStatus\" property \"validation\" changed from \"undefined\" to \"[object Object]\" in frontend (additive)",
+      "Field \"processed\" property \"validation\" changed from \"undefined\" to \"[object Object]\" in frontend (additive)",
+      "Field \"lineNo\" property \"validation\" changed from \"undefined\" to \"[object Object]\" in frontend (additive)",
+      "Field \"product\" property \"validation\" changed from \"undefined\" to \"[object Object]\" in frontend (additive)",
+      "Field \"attributeSetValue\" property \"validation\" changed from \"undefined\" to \"[object Object]\" in frontend (additive)",
+      "Field \"operativeQuantity\" property \"validation\" changed from \"undefined\" to \"[object Object]\" in frontend (additive)",
+      "Field \"operativeUOM\" property \"validation\" changed from \"undefined\" to \"[object Object]\" in frontend (additive)",
+      "Field \"movementQuantity\" property \"validation\" changed from \"undefined\" to \"[object Object]\" in frontend (additive)",
+      "Field \"uOM\" property \"validation\" changed from \"undefined\" to \"[object Object]\" in frontend (additive)",
+      "Field \"storageBin\" property \"validation\" changed from \"undefined\" to \"[object Object]\" in frontend (additive)",
+      "Field \"description\" property \"validation\" changed from \"undefined\" to \"[object Object]\" in frontend (additive)",
+      "Field \"salesOrderLine\" property \"validation\" changed from \"undefined\" to \"[object Object]\" in frontend (additive)",
+      "Field \"orderQuantity\" property \"validation\" changed from \"undefined\" to \"[object Object]\" in frontend (additive)",
+      "Field \"businessPartner\" property \"validation\" changed from \"undefined\" to \"[object Object]\" in frontend (additive)",
+      "Field \"project\" property \"validation\" changed from \"undefined\" to \"[object Object]\" in frontend (additive)",
+      "Field \"costcenter\" property \"validation\" changed from \"undefined\" to \"[object Object]\" in frontend (additive)",
+      "Field \"asset\" property \"validation\" changed from \"undefined\" to \"[object Object]\" in frontend (additive)",
+      "Field \"stDimension\" property \"validation\" changed from \"undefined\" to \"[object Object]\" in frontend (additive)",
+      "Field \"ndDimension\" property \"validation\" changed from \"undefined\" to \"[object Object]\" in frontend (additive)",
+      "Field \"invoiceQuantity\" property \"validation\" changed from \"undefined\" to \"[object Object]\" in frontend (additive)"
+    ],
+    "author": "pipeline",
+    "date": "2026-07-21"
   }
 ]

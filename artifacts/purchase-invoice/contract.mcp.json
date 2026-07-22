@@ -1,8 +1,8 @@
 {
-  "version": "0.70.0",
+  "version": "0.73.0",
   "generatedAt": "2026-04-30T15:42:46.722Z",
-  "updatedAt": "2026-07-17T13:02:48.132Z",
-  "contractChecksum": "0a8c8fb86dd23932",
+  "updatedAt": "2026-07-20T20:41:36.341Z",
+  "contractChecksum": "e6b5ba5d1a8f55c0",
   "apiPrediction": {
     "specName": "purchase-invoice",
     "baseUrl": "/sws/neo/purchase-invoice",
@@ -1378,11 +1378,6 @@
             "required": true,
             "readOnlyLogic": "@Processed@='Y'"
           },
-          "accountingDate": {
-            "required": true,
-            "readOnlyLogic": "@Posted@='Y'",
-            "defaultValue": "@#Date@"
-          },
           "paymentTerms": {
             "required": true,
             "readOnlyLogic": "@Processed@='Y'"
@@ -1950,7 +1945,6 @@
         "businessPartner",
         "partnerAddress",
         "priceList",
-        "accountingDate",
         "paymentTerms",
         "paymentMethod",
         "currency",
@@ -2135,7 +2129,6 @@
           "businessPartner",
           "partnerAddress",
           "priceList",
-          "accountingDate",
           "paymentTerms",
           "paymentMethod",
           "currency",
@@ -2174,5 +2167,5 @@
       "tbaiVoidxmlgenerator"
     ]
   },
-  "checksum": "9fcc3ed9e43068ef"
+  "checksum": "85bab60e5c87ca0c"
 }

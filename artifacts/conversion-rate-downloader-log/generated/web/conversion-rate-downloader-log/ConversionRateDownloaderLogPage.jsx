@@ -23,7 +23,9 @@ const statusField = 'status';
 // @sf-generated-end summary:conversionRateDownloaderLog
 
 // @sf-generated-start extraBadges:conversionRateDownloaderLog
-const extraBadges = [];
+const extraBadges = [
+
+];
 // @sf-generated-end extraBadges:conversionRateDownloaderLog
 
 // @sf-generated-start processes:conversionRateDownloaderLog
@@ -49,10 +51,10 @@ export const api = {
     "conversionRateDownloaderLog": {
       "get": true,
       "getById": true,
-      "post": true,
-      "put": true,
-      "patch": true,
-      "delete": true,
+      "post": false,
+      "put": false,
+      "patch": false,
+      "delete": false,
       "listUrl": "/sws/neo/conversion-rate-downloader-log/conversionRateDownloaderLog",
       "detailUrl": "/sws/neo/conversion-rate-downloader-log/conversionRateDownloaderLog/{id}",
       "supportedFilters": [
@@ -77,7 +79,8 @@ export const api = {
     "parentFilter": "parentId={id} for child entities"
   },
   "window": {
-    "category": "settings"
+    "category": "settings",
+    "readOnly": true
   }
 };
 
@@ -85,6 +88,7 @@ export const api = {
 export default function ConversionRateDownloaderLogPage({ windowName, recordId, ...props }) {
   if (recordId) {
     return (
+      <>
       <DetailView
         entity="conversionRateDownloaderLog"
         Form={ConversionRateDownloaderLogForm}
@@ -102,6 +106,7 @@ export default function ConversionRateDownloaderLogPage({ windowName, recordId, 
         requiredHeaderFields={requiredHeaderFields}
         {...props}
       />
+      </>
     );
   }
 
@@ -113,6 +118,7 @@ export default function ConversionRateDownloaderLogPage({ windowName, recordId, 
       windowName={windowName}
       breadcrumb={breadcrumb}
       api={api}
+      hideCreate
       rowQuickActions={{}}
       {...props}
     />

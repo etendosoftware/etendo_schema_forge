@@ -1,8 +1,8 @@
 {
-  "version": "0.10.0",
+  "version": "0.11.0",
   "generatedAt": "2026-04-27T19:18:32.198Z",
-  "updatedAt": "2026-07-14T00:53:56.456Z",
-  "checksum": "19b4f4c69a742a77",
+  "updatedAt": "2026-07-21T18:54:48.023Z",
+  "checksum": "962aef819724116d",
   "frontendContract": {
     "window": {
       "id": "137",
@@ -54,7 +54,11 @@
             "form": true,
             "sourceRequired": true,
             "section": "principal",
-            "seq": 1
+            "seq": 1,
+            "validation": {
+              "required": true,
+              "maxLength": 60
+            }
           },
           {
             "name": "rate",
@@ -71,6 +75,10 @@
             "section": "principal",
             "seq": 2,
             "cellType": "taxRate",
+            "validation": {
+              "required": true,
+              "maxLength": 22
+            },
             "validationRule": {
               "code": "AD_Client.AD_Client_ID in (@#User_Client@)",
               "contextParams": [
@@ -118,6 +126,10 @@
             "defaultValue": "D",
             "section": "principal",
             "seq": 5,
+            "validation": {
+              "required": true,
+              "maxLength": 60
+            },
             "displayLogic": {
               "raw": "@IsSummary@='N'",
               "evaluable": true
@@ -179,6 +191,10 @@
             "defaultValue": "LNA",
             "section": "principal",
             "seq": 6,
+            "validation": {
+              "required": true,
+              "maxLength": 10
+            },
             "displayLogic": {
               "raw": "@IsSummary@='N'",
               "evaluable": true
@@ -226,7 +242,11 @@
             "defaultValue": "B",
             "section": "principal",
             "seq": 3,
-            "cellType": "taxScope"
+            "cellType": "taxScope",
+            "validation": {
+              "required": true,
+              "maxLength": 60
+            }
           },
           {
             "name": "validFrom",
@@ -241,7 +261,11 @@
             "form": true,
             "sourceRequired": true,
             "section": "principal",
-            "seq": 4
+            "seq": 4,
+            "validation": {
+              "required": true,
+              "maxLength": 10
+            }
           }
         ],
         "searchableFields": [
@@ -292,7 +316,11 @@
             "reference": "ValidCombination",
             "inputMode": "selector",
             "seq": 1,
-            "grow": true
+            "grow": true,
+            "validation": {
+              "required": true,
+              "maxLength": 32
+            }
           },
           {
             "name": "taxCredit",
@@ -309,7 +337,11 @@
             "reference": "ValidCombination",
             "inputMode": "selector",
             "seq": 2,
-            "grow": true
+            "grow": true,
+            "validation": {
+              "required": true,
+              "maxLength": 32
+            }
           }
         ],
         "searchableFields": [],

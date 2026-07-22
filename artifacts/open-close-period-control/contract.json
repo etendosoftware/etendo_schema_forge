@@ -1,8 +1,8 @@
 {
-  "version": "0.5.0",
+  "version": "0.6.0",
   "generatedAt": "2026-06-25T12:12:33.694Z",
-  "updatedAt": "2026-07-13T17:53:25.346Z",
-  "checksum": "923291e899591b19",
+  "updatedAt": "2026-07-21T18:54:45.516Z",
+  "checksum": "f5d9fa9ee28f4f14",
   "frontendContract": {
     "window": {
       "id": "E66E701CCBA14B8BA480CBDE37C50D7A",
@@ -149,7 +149,10 @@
               "P": "red",
               "M": "orange"
             },
-            "gridOrder": 1
+            "gridOrder": 1,
+            "validation": {
+              "maxLength": 32
+            }
           },
           {
             "name": "calendar",
@@ -165,7 +168,11 @@
             "sourceRequired": true,
             "reference": "Calendar",
             "inputMode": "selector",
-            "gridOrder": 2
+            "gridOrder": 2,
+            "validation": {
+              "required": true,
+              "maxLength": 22
+            }
           },
           {
             "name": "year",
@@ -181,7 +188,11 @@
             "sourceRequired": true,
             "reference": "Year",
             "inputMode": "selector",
-            "gridOrder": 3
+            "gridOrder": 3,
+            "validation": {
+              "required": true,
+              "maxLength": 22
+            }
           },
           {
             "name": "periodNo",
@@ -196,6 +207,10 @@
             "form": true,
             "sourceRequired": true,
             "gridOrder": 5,
+            "validation": {
+              "required": true,
+              "maxLength": 10
+            },
             "readOnlyLogic": {
               "raw": "@C_Period_Not_Editable@='Y'",
               "evaluable": true,
@@ -214,7 +229,11 @@
             "grid": true,
             "form": true,
             "sourceRequired": true,
-            "gridOrder": 4
+            "gridOrder": 4,
+            "validation": {
+              "required": true,
+              "maxLength": 60
+            }
           },
           {
             "name": "startingDate",
@@ -229,6 +248,10 @@
             "form": true,
             "sourceRequired": true,
             "gridOrder": 6,
+            "validation": {
+              "required": true,
+              "maxLength": 10
+            },
             "readOnlyLogic": {
               "raw": "@C_Period_Not_Editable@='Y'",
               "evaluable": true,
@@ -246,6 +269,9 @@
             "required": false,
             "grid": false,
             "form": true,
+            "validation": {
+              "maxLength": 10
+            },
             "readOnlyLogic": {
               "raw": "@C_Period_Not_Editable@='Y'",
               "evaluable": true,
@@ -285,6 +311,10 @@
               }
             ],
             "defaultValue": "S",
+            "validation": {
+              "required": true,
+              "maxLength": 60
+            },
             "readOnlyLogic": {
               "raw": "@C_Period_Not_Editable@='Y'",
               "evaluable": true,
@@ -308,6 +338,10 @@
               "source": "O"
             },
             "defaultValue": "O",
+            "validation": {
+              "required": true,
+              "maxLength": 60
+            },
             "validationRule": {
               "code": "Value<>'N'",
               "contextParams": [],
@@ -394,7 +428,10 @@
               "C": "red",
               "P": "red"
             },
-            "gridOrder": 2
+            "gridOrder": 2,
+            "validation": {
+              "maxLength": 60
+            }
           },
           {
             "name": "documentCategory",
@@ -711,7 +748,11 @@
                 }
               }
             ],
-            "gridOrder": 1
+            "gridOrder": 1,
+            "validation": {
+              "required": true,
+              "maxLength": 60
+            }
           },
           {
             "name": "openClose",
@@ -730,6 +771,10 @@
               "source": "O"
             },
             "defaultValue": "O",
+            "validation": {
+              "required": true,
+              "maxLength": 60
+            },
             "validationRule": {
               "code": "Value<>'N'",
               "contextParams": [],

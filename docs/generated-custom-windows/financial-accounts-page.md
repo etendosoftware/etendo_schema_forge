@@ -54,10 +54,15 @@ A multi-step modal launched from **+ Nueva cuenta**:
 
 ### Edit account (`EditAccountModal`)
 
-Row kebab → **Editar cuenta** edits the general data only (Nombre, IBAN for banks,
-Moneda). BIC/SWIFT is intentionally omitted; the backend leaves any field absent from
-the request untouched, so editing never wipes a stored BIC. The "Conexión bancaria"
-section is rendered disabled.
+Row kebab → **Editar cuenta** opens the shared edit modal. BIC/SWIFT is intentionally
+omitted from the top-level form; the backend leaves any field absent from the request
+untouched, so editing never wipes a stored BIC.
+
+> This description reflects T2 (ETP-4096) scope only. The modal has since gained a
+> live PSD2 connection block (ETP-4097 / T3), a General/Contabilidad tab split with a
+> conditional Currency lock (ETP-4530), and a second entry point from the account
+> detail view — see `financial-account.md` → "Edit Account Modal" for the current
+> behavior.
 
 ### Archive account (`ArchiveAccountDialog`)
 
