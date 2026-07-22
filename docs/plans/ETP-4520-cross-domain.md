@@ -13,8 +13,9 @@ This phase touches **three repos on the shared `feature/ETP-4520` branch convent
 | Part A — window-level access rendering | `schema_forge_core` | `AuthContext` + `useWindowAccess` hook, Grid/Form read-only rendering, route guard — generic, applies to every generated window |
 | Part B — field-level capability visibility | `schema_forge_core` | New `decisions.json` field property `visibleWhenCapability`, generator support in Grid columns + `DetailView`'s `statusPills` renderer |
 | Pilot application | `etendo_schema_forge` (this repo) | `visibleWhenCapability: "showAccountingFields"` on the `posted` field, both `sales-invoice` and `purchase-invoice` |
-| ETP-4530 — FA edit tabs (folded in) | `com.etendoerp.go` + `etendo_schema_forge` | NeoHandler exposure of `Cuenta bancaria`/`Cuenta transitoria` (currently `exclude: true`) + a new "Cuentas contables" tab in `EditAccountModal.jsx`, gated by the same capability flag via `useHasCapability()` directly (custom window, not decisions.json-driven) |
-| ETP-4512 role-assignment UI | `etendo_schema_forge` — `artifacts/user/decisions.json` (per `docs/superpowers/plans/2026-07-21-etp-4512-assign-role-ui.md`) | Surface the new checkbox so GOClient admins can toggle it without switching to Etendo Classic |
+| ETP-4530 — FA edit tabs (folded in) | `com.etendoerp.go` + `etendo_schema_forge` | Gate the *already-built* "Cuentas contables" tab in `EditAccountModal.jsx` behind the capability flag via `useHasCapability()` directly (custom window, not decisions.json-driven) — see the correction note in §5 below, the backend/tab themselves already exist |
+
+**Checkbox UI, corrected 2026-07-22:** the checkbox is **Classic-only for this MVP** — toggleable from the standard `AD_Role` window/tab in Etendo Classic only. There is no existing or planned GO-app screen to surface it in: ETP-4512 only assigns *which role a user has* (no role-attribute fields at all), and ETP-4513's "Roles" view is intentionally locked (no create/edit/delete, "próximamente" notice — a prior confirmed decision, see the Roles y usuarios Test Plan TC-23). Extending either would be new scope on a different ticket, not part of ETP-4520.
 
 **Explicitly excluded from this flag:** ETP-4529 (dimension visibility) and ETP-4531 (accounting-date independence) — both apply to every user regardless of role, confirmed by the user; they are not touched by this phase.
 
@@ -34,7 +35,7 @@ Splitting the endpoint into a separate ticket/session would mean dispatching `sc
 - Extension column on the core `AD_Role` table, added via a `com.etendoerp.go` AD module change (module DB prefix `ETGO`, confirmed from `AD_MODULE_DBPREFIX.xml`) — physical name `EM_ETGO_Show_Acct_Fields`, boolean (`Yes/No` reference), default `N`.
 - **IDs generated via `make uuid` for this plan** (do not regenerate — reuse these): `AD_Column_ID = A0F2D12B5B4A48C2855EE73E3E93E274`, `AD_Field_ID (classic Role tab) = 98C71197D0744EED96856A497E49F159`.
 - Label: EN "Show Accounting Fields" / ES "Mostrar campos contables". Help text should reference that it gates the `posted` status pill and the FA edit "Cuentas contables" tab.
-- Exposed as a real field on the classic Role window/tab in Etendo Classic (via `/etendo:alter-db` + `/etendo:window` skills, or direct AD webhook calls per `docs/etendo-webhooks` conventions) — toggleable like any other role attribute — **and** surfaced in ETP-4512's GO role-assignment UI so client admins don't need to drop into Classic.
+- Exposed as a real field on the classic Role window/tab in Etendo Classic (via `/etendo:alter-db` + `/etendo:window` skills, or direct AD webhook calls per `docs/etendo-webhooks` conventions) — toggleable like any other role attribute. **Classic-only for this MVP** — no GO-app screen exists to surface it in (see the correction note under "Scope" above).
 - `AD_Role.is_client_admin` (the existing admin-bypass column) is confirmed **core** Etendo, not a `com.etendoerp.go` extension — this new column follows the correct `EM_<prefix>_` convention instead of assuming another core column exists.
 
 ### 1. `com.etendoerp.go` — `SFWindowAccessMap` webhook
@@ -79,7 +80,7 @@ Splitting the endpoint into a separate ticket/session would mean dispatching `sc
 - [ ] Full window access → normal, fully-editable UI (baseline unaffected).
 - [ ] No window access + direct URL nav → blocked/redirected, no data shown.
 - [ ] Verified against at least one read-only window per role (Facturas de venta for Finance, Productos for Sales, Inventario for Purchasing).
-- [ ] `AD_Role.EM_ETGO_Show_Acct_Fields` exists, toggleable from both the classic Role window and ETP-4512's GO role-assignment UI.
+- [ ] `AD_Role.EM_ETGO_Show_Acct_Fields` exists and is toggleable from the classic Role window (Classic-only for this MVP — no GO-app screen exists to surface it in).
 - [ ] `posted` field visible (Grid + Form) when `showAccountingFields` resolves true; absent entirely otherwise, on both `sales-invoice` and `purchase-invoice`.
 - [ ] "Cuentas contables" tab in `EditAccountModal.jsx` (financial-account) renders only when `showAccountingFields` resolves true; `Cuenta bancaria`/`Cuenta transitoria` correctly read/write through the new NeoHandler exposure when visible.
 - [ ] ETP-4529/4531 behavior unchanged — dimension visibility and accounting-date independence remain universal, not gated by this flag.
@@ -102,7 +103,7 @@ Splitting the endpoint into a separate ticket/session would mean dispatching `sc
 
 1. **AD_Role column + Java endpoint + ETP-4530 NeoHandler** (`com.etendoerp.go`) — no existing Forge team persona owns backend Java in this pipeline; build via the `/etendo:java`/`/etendo:alter-db`/`/etendo:window` skills or a general-purpose agent briefed with the `NeoHandler`/webhook pattern from `docs/neo-headless-extensibility.md`. Reuse the existing empty `feature/ETP-4530` worktree for the NeoHandler piece; use `feature/ETP-4520` (new) for the column + webhook.
 2. **Part A + Part B** (`schema_forge_core`) — Schema Forge Developer persona, worktree on `feature/ETP-4520` off `epic/ETP-3504` in the sibling `schema_forge_core` checkout. Check whether the existing empty `feature/ETP-4530` worktree there is actually needed (per architecture §5 note) or can be abandoned in favor of `feature/ETP-4520`.
-3. **Pilot + ETP-4530 tab** (`etendo_schema_forge`) — per memory (`project-accounting-followups-etp-3504`), ETP-4530's frontend is Developer territory ("changing the tool", not just decisions.json config) — Schema Forge Developer persona, reusing the existing empty `feature/ETP-4530` worktree in this repo. The `posted` pilot itself (pure decisions.json edit + regen) is Window Agent territory and can run separately once Part B is consumable.
-4. **ETP-4512 UI surfacing** (`etendo_schema_forge`, `artifacts/user/decisions.json`) — Window Agent, once the column exists; this is config-level (a new field/checkbox on the existing role-assignment UI), not a tooling change.
+3. **Pilot + ETP-4530 tab gate** (`etendo_schema_forge`) — per memory (`project-accounting-followups-etp-3504`), gating the existing FA tab is Developer territory (calls a hook directly in custom component code) — Schema Forge Developer persona. The `posted` pilot itself (pure decisions.json edit + regen) is Window Agent territory and can run separately once Part B is consumable.
+4. No GO-app UI work needed for the checkbox itself — Classic-only for this MVP (see correction note above).
 5. Publish note: this is a new capability, not a bugfix — `packages/schema-forge-core/package.json` needs a **manual minor bump** in the `schema_forge_core` PR (patch-only is automatic on merge to `main` per `release.yml`; minor/major is not).
 6. Pipeline order: DEV (all workstreams; AD column + endpoint first since everything else depends on its contract) → REVIEW → QA → DOCS, per this repo's standard phases. Reject cycles return to DEV, max 3 per phase.
