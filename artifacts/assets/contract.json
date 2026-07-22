@@ -1,8 +1,8 @@
 {
-  "version": "0.40.0",
+  "version": "0.43.0",
   "generatedAt": "2026-04-29T19:06:30.936Z",
-  "updatedAt": "2026-07-21T19:17:39.692Z",
-  "checksum": "0110ff5e9f0978e9",
+  "updatedAt": "2026-07-22T16:44:45.141Z",
+  "checksum": "ab75fee8f9982a14",
   "frontendContract": {
     "window": {
       "id": "800027",
@@ -242,9 +242,21 @@
             "tsType": "boolean",
             "visibility": "editable",
             "required": true,
-            "grid": false,
+            "grid": true,
             "form": false,
             "sourceRequired": true,
+            "badge": true,
+            "badgeLabels": {
+              "true": {
+                "es_ES": "Sí",
+                "en_US": "Yes"
+              },
+              "false": {
+                "es_ES": "No",
+                "en_US": "No"
+              }
+            },
+            "gridOrder": 5,
             "validation": {
               "required": true,
               "maxLength": 1
@@ -590,7 +602,7 @@
             "form": false,
             "summable": true,
             "businessCritical": true,
-            "gridOrder": 6,
+            "gridOrder": 7,
             "validation": {
               "maxLength": 12
             },

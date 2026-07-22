@@ -26,6 +26,7 @@ The Assets window should let a finance user register fixed assets, define how ea
 - Detail layout: the detail page uses a sidebar layout, exposes an **Overview** tab plus a **Depreciation Setup** tab, and hides print, more-menu, more-details chrome.
 - An **Attachments** tab is available in the detail tab strip, allowing files to be attached to the current record.
 - List toolbar: shows an **"All statuses ▾"** dropdown to filter by `fullyDepreciated` (Fully deprecated / Still in progress) and a funnel icon for the Conditional Filter. The `fullyDepreciated` column is hidden from visual display (`hiddenColumns`) but present in the columns array to power the status dropdown.
+- List columns include a **Depreciate** (`IsDepreciated`) Sí/No badge column (green/gray pill, same pattern as Payment Term's "Default" column) between "Purchase Date" and "Depreciation Start Date", filterable via the Conditional Filter's boolean value picker (ETP-4549).
 
 ## Reactive behavior and dependencies
 
