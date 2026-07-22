@@ -83,7 +83,11 @@ function parseDateString(input) {
  */
 function parseNumericExpression(input) {
   const trimmed = input.trim();
-  const match = /^(>=|<=|>|<|=)\s*(.+)$/.exec(trimmed);
+  // No `\s*` before the value group: it would sit next to `.+` as a second
+  // quantified construct with overlapping charset (Sonar S5852). `.+` alone
+  // already captures any leading spaces, and `Number.parseFloat` ignores
+  // leading whitespace on its own, so the result is unchanged.
+  const match = /^(>=|<=|>|<|=)(.+)$/.exec(trimmed);
   if (match) return { op: match[1], value: Number.parseFloat(match[2].replaceAll(',', '')) };
   const plain = Number.parseFloat(trimmed.replaceAll(',', ''));
   if (!Number.isNaN(plain)) return { op: '=', value: plain };
@@ -219,7 +223,10 @@ function parseDateFilter(trimmed) {
     if (from && to) return { mode: 'date', op: 'range', value: [from, to] };
   }
 
-  const opMatch = /^(>=|<=|>|<|=)\s*(.+)$/.exec(trimmed);
+  // No `\s*` before the value group here either (see parseNumericExpression):
+  // `.+` alone already captures any leading spaces, and parseDateString()
+  // trims its input internally, so the result is unchanged.
+  const opMatch = /^(>=|<=|>|<|=)(.+)$/.exec(trimmed);
   if (opMatch) {
     const parsed = parseDateString(opMatch[2]);
     return parsed ? { mode: 'date', op: opMatch[1], value: parsed } : null;
