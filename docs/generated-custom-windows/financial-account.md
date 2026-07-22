@@ -394,6 +394,32 @@ The Reconciliation tab renders `ReconciliationSplitPanel` (`tools/app-shell/src/
 - When a **reconciled** line is selected, the `Conciliar` button label switches to `Reactivar`. On success, the backend undoes the reconciliation as a unit and, for ETGO-created 1:N groups, collapses the split sub-lines back into a single physical pending bank-statement line before reloading the panel.
 - The right-side header action is the `Automatch` button while the Reconciliation tab is active (T7 — see below). `Transferir` / `Nuevo documento` render but fire a "próximamente" toast (follow-up).
 
+#### Multi-currency reconciliation (ETP-4502)
+
+When a statement line (in the account currency) is reconciled against an invoice in a **different**
+currency, the flow settles the invoice in its own currency while booking the bank transaction in the
+account currency:
+
+- **Invoice selector badge (AC5):** each invoice candidate now carries its `currency` (ISO), emitted
+  by `INVOICE_CANDIDATES_SQL`. When it differs from the account currency the row shows an amber
+  `CurrencyBadge` and its amounts render in the **invoice** currency, so foreign documents are easy
+  to spot. Same-currency candidates look unchanged.
+- **Scope:** a foreign settlement is restricted to **one invoice per statement line, fully settled**
+  (the panel makes a foreign selection exclusive; the backend `ReconciliationFlowSupport` rejects
+  more than one foreign invoice). Same-currency reconciliation keeps its multi-invoice / partial
+  behavior.
+- **Derived rate:** the conversion rate is **derived** from the two amounts —
+  `|statement line| ÷ |invoice outstanding|` — not looked up from `C_Conversion_Rate`. The statement
+  line is ground truth, so the `FIN_Payment` is created in the invoice currency (cancels the
+  outstanding) and the `FIN_Finacc_Transaction` is booked for the exact line amount in the account
+  currency with that rate — no exchange-difference residual. The action bar replaces the
+  selected/remaining totals with a read-only preview: invoice amount, bank amount, and the derived
+  rate (`data-testid="recon-derived-rate"`).
+- **Payment-method guard:** the resolved payment method must be multi-currency enabled for the
+  direction (`payin/payout_ismulticurrency`). A PSD2 bank-transfer method (disabled by ETP-4503) is
+  rejected with a clear error instead of a cryptic Core failure.
+- **Same currency (AC6):** unchanged — rate ONE, standard single-currency flow, no preview.
+
 ### Automatch engine (T7)
 
 The Reconciliation surface gained the automatic matching engine (backend `MatchRuleEngine` + `AutoMatchSupport` inside `ReconciliationHandler`, `@Named("bankReconciliation")`):

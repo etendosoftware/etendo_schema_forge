@@ -376,6 +376,20 @@ function StatementLinesPanel({
 }
 
 /** Right panel — candidate operations with multi-select checkbox rows. */
+/**
+ * Amber pill flagging an invoice whose currency differs from the financial account's — the visual
+ * cue for a multi-currency reconciliation (AC5). Only rendered for foreign-currency candidates.
+ */
+function CurrencyBadge({ code }) {
+  return (
+    <span
+      className="shrink-0 rounded-full bg-[#FFF4E5] px-2 py-0.5 text-[10px] font-semibold leading-4 text-[#B25E00]"
+      data-testid="recon-cand-currency-badge">
+      {code}
+    </span>
+  );
+}
+
 function CandidateOperationsPanel({
   line, candidates, loading, currency, bcpLocale, selectedIds, onToggle, search, onSearchChange,
   source, onSourceChange, sourceCounts = {}, dateRange, onDateRangeChange, footer, readOnly = false,
@@ -396,7 +410,12 @@ function CandidateOperationsPanel({
     );
   }
 
-  const renderRow = (cand) => (
+  const renderRow = (cand) => {
+    // Foreign-currency invoice: its amounts are in the invoice currency (not the account's), so
+    // render them with that currency and flag the row with a badge (AC5).
+    const candForeign = !!cand.currency && cand.currency !== currency;
+    const candCurrency = cand.currency || currency;
+    return (
     <TableRow
       key={cand.id}
       data-testid={`recon-cand-row-${cand.id}`}
@@ -432,6 +451,7 @@ function CandidateOperationsPanel({
             {cand.partnerName ? (
               <span className="truncate text-xs font-medium leading-4 text-[#6C6C89]">{cand.partnerName}</span>
             ) : null}
+            {candForeign ? <CurrencyBadge code={cand.currency} data-testid="CurrencyBadge__d0f4d5" /> : null}
           </div>
           <StatusBadge
             kind={badgeKindFor(cand, readOnly)}
@@ -440,17 +460,18 @@ function CandidateOperationsPanel({
       </TableCell>
       <MoneyCell
         value={cand.pendingBalance}
-        currency={currency}
+        currency={candCurrency}
         cellClassName="w-[121px]"
         data-testid="MoneyCell__d0f4d5" />
       <MoneyCell
         value={cand.amount}
-        currency={currency}
+        currency={candCurrency}
         bold
         cellClassName="w-[121px]"
         data-testid="MoneyCell__d0f4d5" />
     </TableRow>
-  );
+    );
+  };
 
   const toolbar = (
     <ToolbarShell
@@ -495,17 +516,42 @@ function CandidateOperationsPanel({
   );
 }
 
+/** Formats a derived conversion rate with up to 6 decimals, trimming trailing zeros. */
+function formatRate(rate) {
+  if (rate == null || !Number.isFinite(rate)) return '—';
+  return String(Number(rate.toFixed(6)));
+}
+
 /** Bottom action bar with the running totals and the reconcile / placeholder buttons. */
 function ReconciliationActionBar({
   currency, selectedSum, remaining, canReconcile, isReconciledLine, reconcileCount, busy,
-  onCancel, onReconcile,
+  onCancel, onReconcile, foreignReconcile = false, foreignRate = null, foreignCurrency,
+  foreignAmount = 0, lineAmount = 0,
 }) {
   const ui = useUI();
   return (
     <div className="border-t border-[#E8EAEF] bg-white px-0 pt-2 pb-1">
-      {/* Selection totals only make sense while building a new reconciliation; a reconciled
-          line is already balanced, so the "selected / remaining" rows would be misleading. */}
-      {!isReconciledLine && (
+      {/* Multi-currency: the "selected / remaining" arithmetic would mix two currencies, so replace
+          it with a derived-rate preview — invoice amount (settled), bank amount (booked), rate. */}
+      {!isReconciledLine && foreignReconcile && (
+        <div className="flex flex-col gap-1">
+          <div className="flex items-center justify-between px-3 text-sm leading-5">
+            <span className="font-medium text-[#121217]">{ui('financeReconcileBarInvoiceAmount')}</span>
+            <span className="font-semibold text-[#121217]">{formatSigned(Math.abs(foreignAmount), foreignCurrency)}</span>
+          </div>
+          <div className="flex items-center justify-between px-3 text-sm leading-5">
+            <span className="font-medium text-[#121217]">{ui('financeReconcileBarBankAmount')}</span>
+            <span className="font-semibold text-[#121217]">{formatSigned(Math.abs(lineAmount), currency)}</span>
+          </div>
+          <div className="flex items-center justify-between px-3 text-sm leading-5">
+            <span className="font-medium text-[#121217]">{ui('financeReconcileBarRate')}</span>
+            <span className="font-semibold text-[#0075AD]" data-testid="recon-derived-rate">{formatRate(foreignRate)}</span>
+          </div>
+        </div>
+      )}
+      {/* Selection totals only make sense while building a new same-currency reconciliation; a
+          reconciled line is already balanced, so the "selected / remaining" rows would mislead. */}
+      {!isReconciledLine && !foreignReconcile && (
         <div className="flex flex-col gap-1">
           <div className="flex items-center justify-between px-3 text-sm leading-5">
             <span className="font-medium text-[#121217]">{ui('financeReconcileBarSelected')}</span>
@@ -646,11 +692,28 @@ export function ReconciliationSplitPanel({ accountId, currency = 'EUR', onBack, 
     setSelectedOpIds(new Set());
   };
 
+  // A candidate is "foreign" when its currency differs from the account's — multi-currency
+  // reconciliation is restricted to a single foreign invoice per line (full settlement), so a
+  // foreign selection is exclusive and never mixes with other rows (backend enforces the same).
+  const isForeignCand = (cand) => !!cand?.currency && cand.currency !== currency;
+
   const toggleOp = (id) => {
     setSelectedOpIds((prev) => {
       const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
+      if (next.has(id)) {
+        next.delete(id);
+        return next;
+      }
+      const cand = candidates.find((c) => c.id === id);
+      const selectingForeign = isForeignCand(cand);
+      const hadForeign = Array.from(prev).some((sid) =>
+        isForeignCand(candidates.find((c) => c.id === sid)));
+      // Selecting a foreign invoice, or adding to a selection that already holds one, collapses to
+      // just this row: currencies cannot be mixed under a single statement line.
+      if (selectingForeign || hadForeign) {
+        return new Set([id]);
+      }
+      next.add(id);
       return next;
     });
   };
@@ -724,6 +787,22 @@ export function ReconciliationSplitPanel({ accountId, currency = 'EUR', onBack, 
   const lineAmount = Number(selectedLine?.amount) || 0;
   const remaining = Number((lineAmount - selectedSum).toFixed(2));
   const isReconciledLine = selectedLine?.status === 'reconciled';
+
+  // Multi-currency: the selected foreign invoice (if any). Its amount is in the invoice currency,
+  // so it can't be summed against the statement line (account currency) — the match is a single
+  // full settlement and the conversion rate is DERIVED from the two amounts (|line| ÷ |invoice|),
+  // which is exactly what the backend books. Shown as a read-only preview in the action bar.
+  const foreignInvoice = useMemo(() => {
+    if (!invoiceMode) return null;
+    return candidates.find((c) => selectedOpIds.has(c.id) && isForeignCand(c)) || null;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [candidates, selectedOpIds, invoiceMode, currency]);
+  const isForeignReconcile = !!foreignInvoice;
+  const foreignInvoiceAmount = Math.abs(Number(foreignInvoice?.amount) || 0);
+  const derivedRate = isForeignReconcile && foreignInvoiceAmount > 0
+    ? Math.abs(lineAmount) / foreignInvoiceAmount
+    : null;
+
   // Invoices must COVER the line (payments are capped at the line amount). Transactions may match
   // PART of the line — the backend splits it and leaves a remainder — as long as they run in the
   // line's direction and do NOT exceed it (over-reconciliation is not supported).
@@ -731,9 +810,16 @@ export function ReconciliationSplitPanel({ accountId, currency = 'EUR', onBack, 
   const sumSign = Math.sign(selectedSum);
   const sameDirection = sumSign === 0 || lineSign === 0 || sumSign === lineSign;
   const withinLine = Math.abs(selectedSum) <= Math.abs(lineAmount) + RECONCILE_TOLERANCE;
-  const balanced = invoiceMode
-    ? Math.abs(selectedSum) + RECONCILE_TOLERANCE >= Math.abs(lineAmount)
-    : (sameDirection && withinLine);
+  let balanced;
+  if (isForeignReconcile) {
+    // Single foreign invoice fully settled by the line: the match is definitional (currencies
+    // differ, nothing to sum), so it only needs one foreign invoice selected and a positive line.
+    balanced = selectedOpIds.size === 1 && foreignInvoiceAmount > 0 && Math.abs(lineAmount) > 0;
+  } else if (invoiceMode) {
+    balanced = Math.abs(selectedSum) + RECONCILE_TOLERANCE >= Math.abs(lineAmount);
+  } else {
+    balanced = sameDirection && withinLine;
+  }
   const canReconcile =
     !!selectedLine && selectedOpIds.size > 0 && balanced && !isReconciledLine;
 
@@ -834,6 +920,11 @@ export function ReconciliationSplitPanel({ accountId, currency = 'EUR', onBack, 
               busy={reconciling || reactivating}
               onCancel={cancelSelection}
               onReconcile={isReconciledLine ? handleReactivate : handleReconcile}
+              foreignReconcile={isForeignReconcile}
+              foreignRate={derivedRate}
+              foreignCurrency={foreignInvoice?.currency}
+              foreignAmount={Number(foreignInvoice?.amount) || 0}
+              lineAmount={lineAmount}
               data-testid="ReconciliationActionBar__d0f4d5" />
           ) : null}
           data-testid="CandidateOperationsPanel__d0f4d5" />
