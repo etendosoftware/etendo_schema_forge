@@ -82,6 +82,8 @@ import { useRegisterWindowContext } from '@/components/CurrentWindowContext';
 import { matchOcrDocType } from '@/components/copilot/ocr/ocrDocTypes';
 import { isDeleteVisibleForRecord } from '@/utils/recordActions.js';
 import { buildHeaderSelectorContext, buildLineSelectorContext } from '@/lib/selectorContext.js';
+import { isCapabilityVisible } from '@/lib/capabilityVisibility.js';
+import { useCapabilitiesSafe } from '@/hooks/useCapabilitiesSafe.js';
 import DocumentStatusPill from './DocumentStatusPill.jsx';
 
 const LazyOcrInlineUploader = lazy(() => import('@/components/copilot/ocr/OcrInlineUploader.jsx'));
@@ -2056,6 +2058,8 @@ export function DetailView({
   const embedded = searchParams.get('embedded') === '1';
   const tMenu = useMenuLabel();
   const ui = useUI();
+  // ETP-4520 — capability map for visibleWhenCapability-gated status pills (below).
+  const capabilities = useCapabilitiesSafe();
   const [addingLine, setAddingLine] = useState(false);
   // Live snapshot of the in-progress add-row values — updated on every keystroke
   // so DocumentTotalsPanel can compute real-time totals before the line is saved.
@@ -3216,6 +3220,9 @@ export function DetailView({
   // trueKey declared) hide on the false value — the generator emits the missing
   // side as the literal string 'undefined', which must never reach the screen.
   const renderStatusPillBadge = (b) => {
+    // ETP-4520 — omit the pill entirely when gated by a capability the current
+    // role doesn't hold (e.g. `posted` on sales-invoice/purchase-invoice).
+    if (!isCapabilityVisible(capabilities, b.visibleWhenCapability)) return null;
     const val = data[b.key];
     if (val == null) return null;
     const isTrue = val === true || val === 'Y' || val === 'true';
