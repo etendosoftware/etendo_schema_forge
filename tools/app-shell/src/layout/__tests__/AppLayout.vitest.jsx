@@ -1,5 +1,9 @@
 import { render, screen } from '@testing-library/react';
 
+vi.mock('@/i18n', () => ({
+  useUI: () => (key) => key,
+}));
+
 // Mock react-router-dom
 vi.mock('react-router-dom', () => ({
   Outlet: () => <div data-testid="outlet">Outlet</div>,
@@ -197,5 +201,60 @@ describe('AppLayout — normal mode', () => {
     const sales = groups.find((g) => g.group === 'Sales');
     expect(sales).toBeDefined();
     expect(sales.items.map((i) => i.name)).toContain('sales-order');
+  });
+});
+
+describe('AppLayout — no-access guard (ETP-4514)', () => {
+  const defaultProps = {
+    menuGroups: [{ group: 'Sales', items: [{ name: 'sales-order', label: 'Sales Order', windowId: '800166' }] }],
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('renders the blocking NoAccessScreen (and nothing else) when useRoleMenu resolves to a confirmed empty Set', () => {
+    vi.mocked(useRoleMenu).mockReturnValueOnce(new Set());
+
+    render(<AppLayout {...defaultProps} />);
+
+    expect(screen.getByTestId('NoAccessScreen__488148')).toBeInTheDocument();
+    expect(screen.getByText('noAccessTitle')).toBeInTheDocument();
+    expect(screen.getByText('noAccessMessage')).toBeInTheDocument();
+
+    expect(screen.queryByTestId('side-menu')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('top-bar')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('outlet')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('command-palette')).not.toBeInTheDocument();
+  });
+
+  it('does NOT render the blocking screen while useRoleMenu is still loading (undefined)', () => {
+    vi.mocked(useRoleMenu).mockReturnValueOnce(undefined);
+
+    render(<AppLayout {...defaultProps} />);
+
+    expect(screen.queryByTestId('NoAccessScreen__488148')).not.toBeInTheDocument();
+    expect(screen.getByTestId('outlet')).toBeInTheDocument();
+    expect(screen.getByTestId('side-menu')).toBeInTheDocument();
+  });
+
+  it('does NOT render the blocking screen when useRoleMenu resolves to null (unauthenticated / fail-open)', () => {
+    vi.mocked(useRoleMenu).mockReturnValueOnce(null);
+
+    render(<AppLayout {...defaultProps} />);
+
+    expect(screen.queryByTestId('NoAccessScreen__488148')).not.toBeInTheDocument();
+    expect(screen.getByTestId('outlet')).toBeInTheDocument();
+    expect(screen.getByTestId('side-menu')).toBeInTheDocument();
+  });
+
+  it('does NOT render the blocking screen when useRoleMenu resolves to a non-empty Set', () => {
+    vi.mocked(useRoleMenu).mockReturnValueOnce(new Set(['800166']));
+
+    render(<AppLayout {...defaultProps} />);
+
+    expect(screen.queryByTestId('NoAccessScreen__488148')).not.toBeInTheDocument();
+    expect(screen.getByTestId('outlet')).toBeInTheDocument();
+    expect(screen.getByTestId('side-menu')).toBeInTheDocument();
   });
 });

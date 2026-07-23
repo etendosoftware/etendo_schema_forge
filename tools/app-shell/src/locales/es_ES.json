@@ -16640,6 +16640,8 @@
     }
   },
   "genericLabels": {
+    "noAccessTitle": "Sin acceso",
+    "noAccessMessage": "Contacta a tu administrador para obtener acceso.",
     "balanced": "Cuadrado",
     "difference": "Diferencia",
     "journalUnbalancedSaveBlocked": "El debe y el haber deben ser iguales antes de guardar",

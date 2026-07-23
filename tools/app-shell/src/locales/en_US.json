@@ -16398,6 +16398,8 @@
     }
   },
   "genericLabels": {
+    "noAccessTitle": "No access",
+    "noAccessMessage": "Contact your administrator to get access.",
     "balanced": "Balanced",
     "difference": "Difference",
     "journalUnbalancedSaveBlocked": "Debit and credit must be equal before saving",

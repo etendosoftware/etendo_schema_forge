@@ -12,9 +12,27 @@ import { CopilotWidget } from '@/components/CopilotWidget';
 import { CurrentWindowProvider } from '@/components/CurrentWindowContext';
 import { SupportChatProvider, useSupportChat } from '@/components/support/SupportChatContext.jsx';
 import { SupportChatWidget } from '@/components/support/SupportChatWidget.jsx';
+import { useUI } from '@/i18n';
 
 const COLLAPSED_W = 56;
 const EXPANDED_W = 240;
+
+// ETP-4514: `allowedIds` is a real, resolved `Set` only once SFListMenu has
+// answered — `undefined` (in flight) and `null` (unauthenticated or fetch
+// failure, deliberately fail-open per useRoleMenu.js) must NOT trigger this,
+// only a confirmed empty Set (the role — or lack of one — grants zero access).
+function NoAccessScreen() {
+  const ui = useUI();
+  return (
+    <div
+      className="flex min-h-screen flex-col items-center justify-center gap-2 p-8 text-center"
+      data-testid="NoAccessScreen__488148"
+    >
+      <p className="text-base font-medium text-[#121217]">{ui('noAccessTitle')}</p>
+      <p className="text-sm text-[#6C6C89]">{ui('noAccessMessage')}</p>
+    </div>
+  );
+}
 
 function AppLayoutInner({ menuGroups, embedded }) {
   const location = useLocation();
@@ -99,6 +117,15 @@ export default function AppLayout({ menuGroups }) {
     menuGroups,
     allowedIds === undefined ? new Set() : allowedIds
   );
+
+  // ETP-4514: a confirmed (not loading, not fail-open-null) empty Set means
+  // the current role — or the lack of one — grants zero window/process
+  // access. Render the blocking screen in place of the sidebar/Outlet entirely
+  // so no menu item or direct route is reachable, per the "no menu/windows
+  // reachable" acceptance criterion.
+  if (allowedIds instanceof Set && allowedIds.size === 0) {
+    return <NoAccessScreen data-testid="NoAccessScreen__488148" />;
+  }
 
   return (
     <CurrentWindowProvider data-testid="CurrentWindowProvider__488148">

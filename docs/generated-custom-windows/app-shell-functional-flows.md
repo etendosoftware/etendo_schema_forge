@@ -79,16 +79,19 @@ Any authenticated route can also be opened with `?embedded=1`; in that mode the 
   - `?embedded=1` removes shell chrome and left-margin spacing while still rendering the current route content.
   - Hidden groups/items from `menu.json` are filtered out of the visible menu.
   - The visible menu is additionally filtered to the current role's actual window/process access: `AppLayout` calls `useRoleMenu()` (`tools/app-shell/src/hooks/useRoleMenu.js`), which fetches the `SFListMenu` webhook's role-pruned tree once per authenticated session and reduces it to an allowed-id `Set` via `collectAllowedIds()` (`tools/app-shell/src/lib/menuTree.js`). `registry.js`'s `filterMenuGroupsByAccess()` drops any menu item whose `windowId`/`processId`/`obuiappProcessId` is not in that set, and drops any group left empty (except `Favorites`); items carrying none of those ids (dashboard, custom pages, installed SDK apps) are never filtered. While the fetch is in flight, AD-backed items (anything carrying a `windowId`/`processId`/`obuiappProcessId`) are hidden rather than briefly showing the unfiltered full menu; items with none of those ids and the `Favorites` group are never filtered and stay visible throughout.
+  - **No-access blocking screen (ETP-4514):** if `allowedIds` resolves to a confirmed empty `Set` — the authenticated user's role (or lack of one) grants zero `AD_Window_Access`/`AD_Process_Access` — `AppLayout` renders `NoAccessScreen` instead of the sidebar/top bar/`Outlet`, so no menu item and no direct window route is reachable. This only fires on the resolved-empty-Set case: `undefined` (fetch in flight) and `null` (unauthenticated, or a fetch failure — deliberately fail-open so a backend outage doesn't lock everyone out) never trigger it.
 - **Automated evidence:**
   - `tools/app-shell/src/windows/__tests__/registry.test.js` and `registry.vitest.jsx` verify that menu groups are built from `menu.json`, keep the expected name/label shape, and are correctly reduced by `filterMenuGroupsByAccess()`/the optional `allowedIds` argument to `buildMenuGroups()`.
   - `tools/app-shell/src/hooks/__tests__/useRoleMenu.vitest.jsx` and `tools/app-shell/src/lib/__tests__/menuTree.vitest.js` cover the role-menu fetch/collection behavior, including the unauthenticated and fetch-failure fallbacks.
-  - The shell chrome itself is code-backed in `tools/app-shell/src/layout/AppLayout.jsx` and `tools/app-shell/src/components/layout/SideMenu/SideMenu.jsx`; there is no browser automation for the layout behavior beyond the mocked E2E spec covering role-filtered menu rendering.
+  - `tools/app-shell/src/layout/__tests__/AppLayout.vitest.jsx` covers the `NoAccessScreen` guard (empty-Set-only trigger, excluding `null`/`undefined`).
+  - The shell chrome itself is code-backed in `tools/app-shell/src/layout/AppLayout.jsx` and `tools/app-shell/src/components/layout/SideMenu/SideMenu.jsx`; there is no browser automation for the layout behavior beyond the mocked E2E spec covering role-filtered menu rendering and the no-access blocking screen.
 - **Manual verification path:**
   1. Sign in and open `/dashboard`.
   2. Confirm the side menu, top bar, command palette, and copilot widget are visible.
   3. Use the menu entry that targets `/report-viewer?category=purchases` and confirm the URL keeps the query string.
   4. Re-open the same route with `?embedded=1` and confirm the shell chrome is hidden while the routed page still renders.
   5. Sign in as a role with restricted `AD_Window_Access`/`AD_Process_Access` grants and confirm the sidebar shows visibly fewer items than a role with full access (e.g. GOClient Admin).
+  6. Sign in as a user with no role assigned (or a role with zero window/process access) and confirm the "No access" screen renders instead of the sidebar, and that navigating directly to a known window URL (e.g. `/sales-order`) also lands on the blocking screen rather than the window.
 
 ### 3. Generated/custom window loading
 
