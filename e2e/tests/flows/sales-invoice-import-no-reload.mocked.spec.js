@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { login } from '../helpers/auth.js';
+import { clickLastCheckbox } from '../helpers/selectors.js';
 
 /**
  * Sales Invoice — Import from Shipment: no page-reload after success (mocked).
@@ -129,13 +130,7 @@ test.describe('Sales Invoice — import from shipment no-reload', () => {
     await expect(lineRow).toBeVisible({ timeout: 5_000 });
 
     // ETP-4299: ImportLinesModal no longer auto-selects lines — click the checkbox.
-    // The Checkbox's native <input> (role=checkbox) is sr-only via a 1x1px
-    // clip-rect (Semantic Theme Contract DOM refactor), too small for
-    // Playwright's mouse-based click to reliably hit (both a direct click and
-    // a force:true click on it silently no-op). A genuine DOM .click() call
-    // fires the same native change/click events a real click would, without
-    // depending on hit-testing a 1px target.
-    await page.getByRole('checkbox').last().evaluate(el => el.click());
+    await clickLastCheckbox(page);
 
     // Click the import button
     const importSelectedBtn = page.getByRole('button', { name: /Import.*selected|Importar.*seleccionadas/i });
@@ -191,13 +186,7 @@ test.describe('Sales Invoice — import from shipment no-reload', () => {
     await expect(page.getByText(/Cerveza/i).first()).toBeVisible({ timeout: 5_000 });
 
     // ETP-4299: ImportLinesModal no longer auto-selects lines — click the checkbox.
-    // The Checkbox's native <input> (role=checkbox) is sr-only via a 1x1px
-    // clip-rect (Semantic Theme Contract DOM refactor), too small for
-    // Playwright's mouse-based click to reliably hit (both a direct click and
-    // a force:true click on it silently no-op). A genuine DOM .click() call
-    // fires the same native change/click events a real click would, without
-    // depending on hit-testing a 1px target.
-    await page.getByRole('checkbox').last().evaluate(el => el.click());
+    await clickLastCheckbox(page);
 
     const importSelectedBtn = page.getByRole('button', { name: /Import.*selected|Importar.*seleccionadas/i });
     await expect(importSelectedBtn).toBeEnabled({ timeout: 3_000 });
@@ -304,13 +293,7 @@ test.describe('Sales Invoice — import from shipment discount carry-over', () =
     await expect(page.getByText(/Cerveza/i).first()).toBeVisible({ timeout: 5_000 });
 
     // ETP-4299: ImportLinesModal no longer auto-selects lines — click the checkbox.
-    // The Checkbox's native <input> (role=checkbox) is sr-only via a 1x1px
-    // clip-rect (Semantic Theme Contract DOM refactor), too small for
-    // Playwright's mouse-based click to reliably hit (both a direct click and
-    // a force:true click on it silently no-op). A genuine DOM .click() call
-    // fires the same native change/click events a real click would, without
-    // depending on hit-testing a 1px target.
-    await page.getByRole('checkbox').last().evaluate(el => el.click());
+    await clickLastCheckbox(page);
 
     const importSelectedBtn = page.getByRole('button', { name: /Import.*selected|Importar.*seleccionadas/i });
     await expect(importSelectedBtn).toBeEnabled({ timeout: 3_000 });
