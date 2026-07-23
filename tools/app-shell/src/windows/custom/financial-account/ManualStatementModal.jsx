@@ -508,7 +508,7 @@ function SaveSplitButton({ creating, onProcess, onDraft, ui }) {
     };
   }, [open]);
 
-  const btnBase = 'inline-flex h-10 items-center bg-[hsl(var(--foreground))] text-primary-foreground transition-colors hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50';
+  const btnBase = 'inline-flex h-10 items-center bg-[hsl(var(--foreground))] text-primary-foreground transition-colors hover:bg-[hsl(var(--accent-highlight))] hover:text-[hsl(var(--accent-highlight-foreground))] disabled:cursor-not-allowed disabled:opacity-50';
 
   return (
     <div ref={wrapRef} className="relative flex items-stretch">

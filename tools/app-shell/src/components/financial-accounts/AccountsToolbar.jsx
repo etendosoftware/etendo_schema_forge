@@ -61,11 +61,11 @@ export function AccountsToolbar({
         <Button
           type="button"
           onClick={onNewAccount}
-          className="group h-10 w-[153px] gap-1 rounded-lg bg-[hsl(var(--foreground))] px-3 text-sm font-medium leading-6 text-primary-foreground transition-colors hover:opacity-90 [&_svg]:size-5"
+          className="group h-10 w-[153px] gap-1 rounded-lg bg-[hsl(var(--foreground))] px-3 text-sm font-medium leading-6 text-primary-foreground transition-colors hover:bg-[hsl(var(--accent-highlight))] hover:text-[hsl(var(--accent-highlight-foreground))] [&_svg]:size-5"
           data-testid="cuentas-new-account-button"
         >
           <Plus
-            className="text-primary-foreground/90"
+            className="text-primary-foreground/90 group-hover:text-[hsl(var(--accent-highlight-foreground))]"
             data-testid="Plus__c01b81" />
           {ui('financeAccountsNewAccount')}
         </Button>

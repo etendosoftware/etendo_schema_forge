@@ -825,7 +825,7 @@ export function ListView({
                 {!hideCreate && (
                   <div className="inline-flex items-stretch rounded-lg overflow-hidden shadow-sm ml-3">
                     <Button
-                      className="rounded-none rounded-l-lg gap-1.5 px-4 hover:opacity-90 transition-colors"
+                      className="rounded-none rounded-l-lg gap-1.5 px-4 hover:bg-[hsl(var(--accent-highlight))] hover:text-[hsl(var(--accent-highlight-foreground))] transition-colors"
                       data-testid="action-new"
                       onClick={() => onNew ? onNew() : navigate(`/${windowName}/new`)}
                     >
@@ -838,7 +838,7 @@ export function ListView({
                         <DropdownMenu data-testid="DropdownMenu__620cbc">
                           <DropdownMenuTrigger asChild data-testid="DropdownMenuTrigger__620cbc">
                             <Button
-                              className="rounded-none rounded-r-lg px-2 hover:opacity-90 transition-colors"
+                              className="rounded-none rounded-r-lg px-2 hover:bg-[hsl(var(--accent-highlight))] hover:text-[hsl(var(--accent-highlight-foreground))] transition-colors"
                               data-testid="action-new-more">
                               <ChevronDown className="h-3.5 w-3.5" data-testid="ChevronDown__620cbc" />
                             </Button>
