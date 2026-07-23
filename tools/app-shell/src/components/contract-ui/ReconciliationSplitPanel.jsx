@@ -626,7 +626,9 @@ function ReactivateConfirmDialog({ open, busy, onConfirm, onClose }) {
             // theme-token outline colors.
             className="border-[#D1D4DB] bg-white text-[#121217] shadow-[0_1px_2px_rgba(18,18,23,0.05)] hover:bg-[#F5F7F9]"
             data-testid="recon-reactivate-cancel">
-            {ui('financeReconcileActionCancel')}
+            {/* Just closes this dialog (no selection to cancel) — the generic "Cancelar", not
+                the action bar's "Cancelar selección". */}
+            {ui('cancel')}
           </Button>
           <Button
             variant="destructive"
@@ -694,7 +696,9 @@ function PaymentMethodModal({ open, methods, methodId, onSelect, busy, onConfirm
             // theme-token outline colors.
             className="border-[#D1D4DB] bg-white text-[#121217] shadow-[0_1px_2px_rgba(18,18,23,0.05)] hover:bg-[#F5F7F9]"
             data-testid="recon-payment-method-cancel">
-            {ui('financeReconcileActionCancel')}
+            {/* Just closes this modal (no selection to cancel) — the generic "Cancelar", not
+                the action bar's "Cancelar selección". */}
+            {ui('cancel')}
           </Button>
           <Button
             onClick={onConfirm}
