@@ -521,3 +521,44 @@ Three assertions in the existing test suite encoded the previous behavior and we
 2. Open a new or existing asset with **Amortizar** off and confirm **"Valor del activo"** is visible in the main section, right after **Descripción** — not hidden, not inside a Depreciation-only group.
 3. Toggle **Amortizar** on and off and confirm **"Valor del activo"** remains visible and editable in both states, at the same position.
 4. Confirm the **Moneda** field is read-only (not editable) on a brand-new asset record (before any amortization progress exists), and remains read-only after amortization lines are generated.
+
+## ETP-4276 — MCP advertises `usableLifeMonths`/`currency` as conditionally required for amortization
+
+### Problem
+
+`usableLifeMonths` (or `usableLifeYears`) and `currency` are required to generate the amortization plan, but they are **not** mandatory in the AD schema (`AD_Column.isMandatory()` is false — the requirement is conditional on `calculateType`/`amortize`, enforced late by the "Create Amortization" PL/SQL). Because they were not surfaced as required in the MCP schema, an agent had to guess — the validation bot invented `usableLifeMonths = 60`. ETP-4275 already added a reactive gate that rejects the process with a structured `PRECONDITIONS_UNMET` at execution time; this change adds the **proactive** signal so the agent knows upfront.
+
+### What changed (MCP-only, derived from `preconditions`)
+
+`neo_schema` now derives a per-field `userRequired` signal from the **same** `ETGO_SF_ENTITY.preconditions` declaration that the runtime gate enforces (single source of truth — no separate `decisions.json` flag, no duplication). When a field is named in the entity's `preconditions`, the schema emits:
+
+- `userRequired: true`
+- `requiredWhen: "<expr>"` — only when the rule is conditional, so the agent knows the requirement depends on other field values (e.g. `usableLifeMonths` is `@calculateType@ != 'PE' && @amortize@ != 'YE'`; `usableLifeYears` is `@amortize@ == 'YE'`; `currency` is unconditional, so no `requiredWhen`).
+
+- **Files changed (`com.etendoerp.go`):** `src/com/etendoerp/go/mcp/McpSchemaFieldBuilder.java` (`loadPreconditionRequirements` + `applyPreconditionRequirement`, applied in `buildSchemaField` after `addVisibility`), `src/com/etendoerp/go/mcp/McpToolRouter.java` (loads the map and passes it to `buildSchemaFieldsArray`), and the test `src-test/src/com/etendoerp/go/mcp/McpSchemaFieldBuilderTest.java`.
+- **No `decisions.json` change** — the requirement already lives in `preconditions` (ETP-4275). This is intentionally MCP-only: the UI keeps its own cosmetic required-asterisk (`requiredVisual`, see **ETP-4336**), and the reactive gate remains the enforcement backstop.
+
+### Two layers, one declaration
+
+| Layer | Where | When | Behavior |
+|-------|-------|------|----------|
+| Proactive hint (this change) | `neo_schema` → `userRequired`/`requiredWhen` | at schema discovery | advisory — tells the agent to fill the field |
+| Reactive gate (ETP-4275) | `NeoProcessPreconditionValidator` | at process execution | enforcing — returns `PRECONDITIONS_UNMET` (400) |
+
+Both read `ETGO_SF_ENTITY.preconditions`. The hint is best-effort (the condition is dynamic and the client may ignore it); the gate is the guarantee. The proactive hint does **not** make the gate obsolete.
+
+### Create → amortization flow (agent-facing)
+
+1. **schema** — `neo_schema` for the assets window now flags `usableLifeMonths`/`usableLifeYears` + `currency` as `userRequired` (with `requiredWhen` where conditional).
+2. **defaults** — `neo_defaults` resolves server-side defaults (e.g. `currency` from `@C_Currency_ID@`).
+3. **selectors** — resolve foreign keys via the per-field selector endpoints (e.g. asset category, product, accounting dimensions).
+4. **create** — `neo_create` the asset with `depreciate` on and the depreciation setup filled.
+5. **verify state / callouts** — re-read the record: the asset-category callout may change `calculateType`, which flips whether `usableLifeMonths` vs `usableLifeYears` applies (mirrors the reactive-behavior section above).
+6. **action `Processed`** — invoke the "Create Amortization" action. If a precondition is still unmet, the gate returns `PRECONDITIONS_UNMET` with the missing field names instead of an opaque PL/SQL error.
+7. **list `amortizationLine`** — read the generated schedule (child amortization lines, sorted by `sEQNoAsset asc`).
+
+### Manual verification (ETP-4276)
+
+1. Call `neo_schema` for the assets window and confirm `usableLifeMonths`, `usableLifeYears` and `currency` carry `userRequired: true`; confirm `usableLifeMonths`/`usableLifeYears` also carry `requiredWhen` and `currency` does not.
+2. Confirm a field **not** listed in `preconditions` carries no `userRequired` from this path (unchanged behavior).
+3. End-to-end: create an asset omitting `usableLifeMonths` with a Time/non-yearly setup, invoke Create Amortization, and confirm the gate still returns `PRECONDITIONS_UNMET` (the proactive hint does not replace enforcement).
