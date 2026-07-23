@@ -869,16 +869,21 @@ export function ReconciliationSplitPanel({
   const remaining = Number((lineAmount - selectedSum).toFixed(2));
   const isReconciledLine = selectedLine?.status === 'reconciled';
 
-  // Invoices must COVER the line (payments are capped at the line amount). Transactions may match
-  // PART of the line — the backend splits it and leaves a remainder — as long as they run in the
-  // line's direction and do NOT exceed it (over-reconciliation is not supported).
+  // Invoices and transactions both may match PART of the line — the backend splits it and
+  // leaves a remainder pending — but they differ on the UPPER bound:
+  // - Transactions are existing, fixed-amount entities that can't be partially "used", so their
+  //   sum must not EXCEED the line (Core has no mechanism to shrink an existing transaction).
+  // - Invoices are flexible: the amount paid per invoice is ours to decide, so a selection whose
+  //   outstanding total exceeds the line is fine — the backend simply pays the last invoice (in
+  //   date order) only partially with whatever the line has left (same as picking a single
+  //   invoice bigger than the line, e.g. line=100 vs. invoice=120, which already worked before
+  //   this iteration). Invoice candidates already carry the line's own sign (see
+  //   ReconciliationHandler.buildInvoiceCandidates), so sameDirection naturally holds.
   const lineSign = Math.sign(lineAmount);
   const sumSign = Math.sign(selectedSum);
   const sameDirection = sumSign === 0 || lineSign === 0 || sumSign === lineSign;
   const withinLine = Math.abs(selectedSum) <= Math.abs(lineAmount) + RECONCILE_TOLERANCE;
-  const balanced = invoiceMode
-    ? Math.abs(selectedSum) + RECONCILE_TOLERANCE >= Math.abs(lineAmount)
-    : (sameDirection && withinLine);
+  const balanced = invoiceMode ? sameDirection : (sameDirection && withinLine);
   const canReconcile =
     !!selectedLine && selectedOpIds.size > 0 && balanced && !isReconciledLine;
 

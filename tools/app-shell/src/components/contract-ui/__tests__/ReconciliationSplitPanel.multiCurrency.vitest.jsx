@@ -125,9 +125,12 @@ const CAND_NO_CURRENCY = {
 };
 
 // A covering same-currency invoice for the payment-method-modal tests (no FX involved there).
+// Matches LINE_POS (100) exactly — these tests exercise the modal itself, not the coverage
+// boundary (that's covered separately in ReconciliationSplitPanel.vitest.jsx, including the
+// invoice-exceeds-the-line case, which invoiceMode's `balanced` check has no upper bound for).
 const CAND_INVOICE_COVERING = {
   id: 'CI', date: '2026-06-01T00:00:00Z', documentNo: 'F-9', partnerName: 'ACME',
-  amount: 150, pendingBalance: 150, status: 'pending', suggested: false,
+  amount: 100, pendingBalance: 100, status: 'pending', suggested: false,
   kind: 'invoice', invoiceId: 'inv-9', scheduleId: 'sch-9', currency: 'EUR',
 };
 

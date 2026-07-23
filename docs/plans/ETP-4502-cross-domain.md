@@ -89,3 +89,78 @@ Five follow-up changes on top of the above, requested after a review meeting:
 
 ### Rollback
 Same as the base ETP-4502 entry above — revert `feature/ETP-4502`, no DB/export changes.
+
+## Iteration 3 (UI polish + default-method fix + partial line coverage)
+
+Small follow-ups from continued review of iteration 2:
+
+| Domain | Files | Reason |
+|--------|-------|--------|
+| `window:financial-account` | `ReconciliationSplitPanel.jsx` | `PaymentMethodModal`'s selector swapped from `CreatableSearchSelect` to `ChipSelect` (`@/components/forms/fields`) to match "Concepto contable" in the New Movement modal; `DialogContent bg-white`; Confirm button's hover restyled to the app's yellow primary-hover; both modal "Cancelar" buttons switched from the shared `financeReconcileActionCancel` ("Cancelar selección") to the generic `cancel` key ("Cancelar") — they close the modal, not a selection |
+| `backend:etendo-go` | `PaymentRegistrationService.java` | `resolvePaymentMethod`'s account-fallback now orders by `FinAccPaymentMethod.PROPERTY_DEFAULT` desc (mirrors Classic's account-level fallback) then by method name asc (deterministic tie-break — Classic itself has no tie-break here) |
+| `backend:etendo-go` | `ReconciliationFlowSupport.java` | `createInvoicePayments` no longer requires invoices to fully cover the line — under-coverage now succeeds (Core's own line-splitting handles the pending remainder, same mechanism the existing-transaction path already used); over-coverage remains impossible by construction; still rejects the degenerate case where the selection settles nothing at all |
+| `window:financial-account` | `ReconciliationSplitPanel.jsx` | `balanced` no longer requires invoice selections to fully cover the line (`sameDirection` alone, no upper bound) — transaction-mode is unchanged (`sameDirection && withinLine`, since an existing transaction can't be partially "used") |
+
+### Key design decisions
+- **Payment-method default priority**: verified against Classic's own `TransactionAddPaymentDefaultValues.getDefaultPaymentMethod` (Match-Statement "Add Payment" popup). Copied Classic's safe part (account's own `isDefault` flag wins the fallback) but deliberately did NOT copy validating the BP's method against the BP's *own* account — reproduced live as a real Classic bug (BP method not on the reconciliation account still gets defaulted, payment creation then fails with "Selected payment method doesn't exist"). See memory `project-classic-add-payment-default-method-bug`.
+- **Partial line coverage**: a statement line can now be matched against invoice(s) that settle LESS than the line — e.g. a 100 line + a single 60 invoice pays the invoice in full and leaves the line split (60 reconciled + a new 40 pending sub-line), exactly like matching an existing transaction smaller than the line already did. A 100 line + a 120 invoice was already fine before this change (uses the full line, leaves the invoice itself partially paid) — unaffected. The only remaining rejection: selecting invoice(s) that settle nothing at all (e.g. already fully paid) — still a 400, since that accomplishes nothing.
+- Known pre-existing (not introduced here) UX gap: reactivating a reconciliation that was a SINGLE partial match (one operation/invoice, line split in two) doesn't auto-merge the split sub-lines back — they stay split as two pending lines. Not a data issue, just a follow-up UX item; already true today for the transaction path.
+
+### Tests
+- JUnit: `resolvePaymentMethod` fallback order verified via `addOrderBy` (Mockito can't prove real DB ordering — needs OBBaseTest for that); regression test that an invoice method NOT allowed for the account correctly falls through instead of being returned; new regression test that partial-line coverage now returns success (mocks `ReconciliationPaymentService` statically).
+- Vitest: `PaymentMethodModal` tests updated for the `ChipSelect` mock (matches the existing `NewTransactionModal.vitest.jsx` stub pattern); the "Conciliar disabled when invoices don't cover the line" test flipped to "enabled" (now a legitimate partial match); new regression test confirming a single invoice EXCEEDING the line still enables Conciliar (invoiceMode's `balanced` has no upper bound, unlike transaction-mode).
+
+### Rollback
+Same as the base ETP-4502 entry above — revert `feature/ETP-4502`, no DB/export changes.
+
+## Iteration 4 (partial-match display fix)
+
+Real bug reported live: reconciling a 100 EUR line against a single 53.24 EUR invoice correctly
+settles the invoice, but the 46.76 remainder (Core's own split, per iteration 3's "partial line
+coverage") showed up as a brand-new, seemingly-unrelated statement line in "Extractos importados"
+instead of "100, 46.76 pending" (Holded-style). Root cause: the grouping mechanism that re-collapses
+a split line's two physical rows back into one (`EM_ETGO_Match_Group_ID` + `mergeMatchGroups`,
+already built for 1:N matches) was gated on `operationIds.size() > 1` — a single-operation PARTIAL
+match (exactly this case) has only one operation id, so it was never tagged.
+
+| Domain | Files | Reason |
+|--------|-------|--------|
+| `backend:etendo-go` | `ReconciliationHandler.java` | New `willSplitLine(line, operationIds)`: true for 2+ operations (unchanged, Core always splits at least once chaining through them) OR a single operation whose amount doesn't exactly equal the line (the missed case) — replaces the `operationIds.size() > 1` gate before `tagMatchGroup` |
+| `backend:etendo-go` | `BankStatementsSupport.java` | `mapLineRow` now emits `reconcileStatus` (`RECONCILED`/`PARTIAL`/`PENDING`) and a signed `pendingAmount` per physical row; `mergeSubLineIntoHead` accumulates `pendingAmount` across a group's sub-lines and recomputes the group's own `reconcileStatus` (previously: `matched` was forced `true` as soon as the group had ANY transaction, hiding a still-pending remainder) |
+| `window:financial-account` | `StatementLinesInline.jsx` | New `matchKindFor(line)` (3-state: reconciled/partial/pending) + a "Parcial" `MatchPill` state + a pending-amount caption shown only for PARTIAL; `MINI_TAIL_TRACKS` widened to fit it |
+| `window:financial-account` | `StatementLinesTable.jsx` | The old green/gray `matched`-boolean dot replaced with the same 3-state `StatusTag` pill + pending-amount caption (`MatchCell`), for consistency with the accordion view |
+| `app-shell-core` | `en_US.json`, `es_ES.json`, `es_AR.json` | New keys `financeAccountStatementLinesStatusPartial` ("Parcial"/"Partial") and `financeAccountStatementLinesPendingAmount` ("{amount} por conciliar"/"{amount} pending") |
+| `docs` | `docs/generated-custom-windows/financial-account.md` | New "Partial-match display" subsection |
+
+### Key design decisions
+- **Tagging condition, not tagging mechanism**: `tagMatchGroup` itself is unchanged (still stamps a
+  fresh UUID on `EM_ETGO_Match_Group_ID` before the match so `DalUtil.copy` propagates it to Core's
+  clone); only the *condition* for calling it changed. Tagging on an exact 1-operation match (no
+  split will happen) is harmless — the id just sits unused on a single row — but was deliberately
+  kept excluded (`willSplitLine` returns `false` there) to avoid an unnecessary extra DAL
+  save/flush on the hottest path (`testReconcileGroupHappy1to1`'s existing "no split, no tag"
+  regression test still holds).
+- **`reconcileStatus` supersedes `matched` as the source of truth for display**, but `matched` is
+  kept on the wire (now derived as `reconcileStatus === "RECONCILED"`) so any other existing
+  consumer of the plain boolean keeps working unchanged.
+- This directly resolves the "known pre-existing UX gap" flagged in iteration 3 above (reactivating
+  a single partial match left two disconnected pending lines) for the FORWARD direction (creating
+  the partial match now displays correctly); the reactivate-side merge-back behavior
+  (`normalizeReactivatedMatchGroup`) was already correct and untouched by this iteration.
+- Scope boundary, not fixed here: the parent statement's "Parcial N/M" fraction still counts
+  physical rows, not collapsed/logical lines — documented as a known follow-up, out of scope for
+  this fix (the ask was specifically about the line-level display).
+
+### Tests
+- JUnit: new regression test that a single-operation PARTIAL match (line ≠ operation amount) now
+  DOES call `tagMatchGroup` (previously didn't); existing 1:1-exact and 1:N tests re-verified
+  unaffected; `mergeMatchGroups`/`mergeSubLineIntoHead` new regression test — a group with one
+  matched + one still-pending sub-line resolves to `reconcileStatus: "PARTIAL"`, `matched: false`,
+  and the correct summed `pendingAmount`.
+- Vitest: `StatementLinesInline`/`StatementLinesTable` render the "Parcial" pill + pending-amount
+  caption for a `PARTIAL` line and omit the caption for `RECONCILED`/`PENDING`; the stale
+  `aria-label`-based dot assertion in `StatementLinesTable.vitest.jsx` (superseded by the visible
+  `StatusTag` pill) updated accordingly.
+
+### Rollback
+Same as the base ETP-4502 entry above — revert `feature/ETP-4502`, no DB/export changes.

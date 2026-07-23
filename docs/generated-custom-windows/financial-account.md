@@ -408,11 +408,42 @@ its own currency while booking the bank transaction(s) in the account currency:
   reconciliation itself would use. Same-currency candidates look unchanged.
 - **Scope:** one statement line can match **any mix of invoices in any currencies**, not just one —
   `ReconciliationFlowSupport.createInvoicePayments` greedily allocates the line (in account currency)
-  across the selected invoices in order, same as the original same-currency flow, converting each
-  invoice's outstanding via its own rate first. A partial match on the last invoice is allowed, same
-  as same-currency partials always were. The panel's multi-select is no longer restricted to one
-  foreign invoice; `selectedSum`/`remaining` in the action bar sum each candidate's account-currency
-  equivalent (`candidateBaseAmount`), so the same bar now doubles as the EUR-style total.
+  across the selected invoices **in the order they're listed** (oldest invoice date first — the same
+  order `INVOICE_CANDIDATES_SQL`'s `ORDER BY inv.dateinvoiced ASC, inv.documentno ASC` returns, NOT
+  the order the user clicked checkboxes, NOT sorted by amount), converting each invoice's outstanding
+  via its own rate first. The first invoice in that order is always settled in full if the line
+  covers it; whatever remains flows to the next one, and so on, until the line is exhausted — the
+  same greedy "first-come, first-served" allocation the same-currency flow always used, generalized.
+  The panel's multi-select is no longer restricted to one foreign invoice; `selectedSum`/`remaining`
+  in the action bar sum each candidate's account-currency equivalent (`candidateBaseAmount`), so the
+  same bar now doubles as the EUR-style total.
+- **Partial line coverage (under-selection):** the selected invoices no longer have to fully cover
+  the line — e.g. a 100 line matched to a single 60 invoice pays that invoice in full and leaves the
+  line **split**: 60 reconciled, plus a new pending sub-line for the remaining 40 (for a future
+  match), exactly the same mechanism already used when matching a line against an EXISTING
+  transaction smaller than it (Core's own `matchBankStatementLine`/`splitBankStatementLine`, composed
+  via `ReconciliationHandler.compose`/`validateOperations` — no invoice-specific plumbing needed).
+  Over-covering the line remains impossible by construction (each invoice only ever absorbs
+  `remaining.min(outstandingBase)`). The ONE case still rejected is selecting invoice(s) that settle
+  **nothing at all** (e.g. all already have zero outstanding) — that still returns the "do not cover"
+  400, since it's a selection that accomplishes nothing, not a legitimate partial match. Conversely,
+  a line of 100 matched to a single 120 invoice already worked before this change: it uses the full
+  line against the invoice, leaving the invoice itself partially paid (100 of 120, 20 still
+  outstanding on its own schedule) — unaffected by this iteration.
+  - **Display (iteration 4, fixing a real regression):** the split above always produced TWO
+    physical `FIN_BankStatementLine` rows — a reconciled portion and a pending remainder — but
+    `ReconciliationHandler.compose` only tagged them with the shared `EM_ETGO_Match_Group_ID`
+    (needed for `mergeMatchGroups` to re-collapse them into one display row) when `operationIds.size()
+    > 1`. A single partial invoice/transaction (exactly the case above, e.g. 100 line / 53.24
+    invoice) produces only ONE operation id, so it was never tagged, and the pending remainder
+    surfaced as a brand-new, seemingly-unrelated statement line in "Extractos importados" (a real
+    bug, reported live: a 100 line matched to a 53.24 invoice showed a second "loose" 46.76 line
+    instead of "100, 46.76 pending"). Fixed by replacing the `operationIds.size() > 1` gate with
+    `ReconciliationHandler.willSplitLine` — true for 2+ operations (always splits at least once
+    while Core chains through them) OR a single operation whose amount doesn't exactly equal the
+    line (the missed case). The two physical rows now always share a match group whenever a split
+    actually happens, so they collapse back into one row regardless of how many operations caused
+    the split. See "Partial-match display" below for how that collapsed row renders.
 - **Rate source:** the conversion rate comes from the **invoice's own exchange rate**
   (`PaymentCurrencyConverter.resolveInvoiceRate`: the invoice's `ConversionRateDoc` document rate,
   falling back to the general `C_Conversion_Rate` for the invoice date), not from the statement line.
@@ -422,23 +453,67 @@ its own currency while booking the bank transaction(s) in the account currency:
   on the statement line (the existing "partial match, remainder reported" behavior).
 - **Payment method modal:** invoices are no longer filtered by payment method — every unpaid invoice
   is a valid candidate. Instead, clicking "Conciliar" with invoices selected opens `PaymentMethodModal`
-  (a radio list of the account's methods configured for the line's direction, defaulting to the
-  account's default method) before submitting; the chosen id travels as top-level `paymentMethodId`
-  in the `reconcileGroup` payload and applies to **every invoice payment this action creates** — an
-  already-selected existing transaction (`operationIds`) keeps its own payment/method untouched. If
-  the account has no methods configured for the direction, the modal is skipped and the backend
-  auto-resolves a default, same as before this iteration. A cross-currency settlement additionally
-  requires the resolved/chosen method to be multi-currency enabled (`payin/payout_ismulticurrency`);
-  a PSD2 bank-transfer method (disabled by ETP-4503) is rejected with a clear error instead of a
-  cryptic Core failure.
+  — a `ChipSelect` picker (`@/components/forms/fields`, the same chip-style selector used for
+  "Concepto contable" in the New Movement modal) over the account's methods configured for the line's
+  direction, defaulting to the account's default method — before submitting; the chosen id travels as
+  top-level `paymentMethodId` in the `reconcileGroup` payload and applies to **every invoice payment
+  this action creates** — an already-selected existing transaction (`operationIds`) keeps its own
+  payment/method untouched. Method auto-resolution (`PaymentRegistrationService.resolvePaymentMethod`,
+  used when the modal is skipped — no methods configured for the direction) mirrors Classic's
+  `TransactionAddPaymentDefaultValues` account-level fallback (prioritize the account's own
+  `isDefault`-flagged method, tie-broken by name for a deterministic pick) but deliberately does NOT
+  copy Classic's business-partner step, which validates the BP's method against the **BP's own**
+  linked account instead of the account being reconciled — reproduced live in Classic as a real bug
+  (BP method not configured on the reconciliation account still gets defaulted, then payment creation
+  fails with "Selected payment method doesn't exist"). Our version validates the invoice/BP method
+  against the account actually being reconciled instead. If the account has no methods configured for
+  the direction, the modal is skipped and the backend auto-resolves a default, same as before this
+  iteration. A cross-currency settlement additionally requires the resolved/chosen method to be
+  multi-currency enabled (`payin/payout_ismulticurrency`); a PSD2 bank-transfer method (disabled by
+  ETP-4503) is rejected with a clear error instead of a cryptic Core failure.
 - **Same currency:** unchanged — rate ONE, standard flow.
+
+#### Partial-match display (ETP-4502 iteration 4)
+
+A statement line matched against less than its full amount (a single partial invoice, per above, or
+a single existing transaction smaller than the line) now shows as **one row carrying the original
+total, a "Parcial" status tag, and a "{pending amount} por conciliar" caption** — instead of the
+group's reconciled portion and pending remainder appearing as two unrelated-looking lines (the bug
+this iteration fixes; mirrors how Holded shows "X pending" on a partially-matched movement). Applies
+in both places that render statement lines from the same backend contract:
+
+- `windows/custom/financial-account/StatementLinesInline.jsx` — the "mini" table inside each
+  statement's accordion row in "Extractos importados".
+- `windows/custom/financial-account/StatementLinesTable.jsx` — the full-page "Abrir extracto
+  completo" table (`StatementLinesView.jsx`).
+
+Backend contract (`BankStatementsSupport.mapLineRow` / `mergeMatchGroups`): every line row now
+carries `reconcileStatus` (`"RECONCILED" | "PARTIAL" | "PENDING"`, superseding the plain `matched`
+boolean as the source of truth for display — `matched` is kept, now derived as `reconcileStatus ===
+"RECONCILED"`, for any other consumer) and a signed `pendingAmount` (the portion of the line/group
+still uncovered; `0` unless `reconcileStatus === "PARTIAL"`). For a merged 1:N/split group,
+`mergeSubLineIntoHead` sums `pendingAmount` across the group's physical sub-lines and recomputes the
+group's own `reconcileStatus` from that sum — so a group is `PARTIAL` whenever *some* but not *all*
+of it is matched, `RECONCILED` when fully covered, `PENDING` when nothing in it is matched yet
+(e.g. right after a reactivate, before the group is normalized/merged back).
+
+Both components map `reconcileStatus` → a `StatusTag` tone/label (`RECONCILED` → success, `PARTIAL`
+→ warning + the pending caption, `PENDING`/absent → warning, "Sin conciliar"), falling back to the
+old `matched` boolean when `reconcileStatus` is missing (defensive, not expected once this ships).
+
+**Known scope boundary**: the parent statement's own "Parcial N/M" fraction (`StatementsTable.jsx`'s
+`StatusPill`) still counts *physical* rows (`em_etgo_line_count`/`em_etgo_matched_count` from
+`BankStatementAggregates`), not the collapsed/logical line count — so after a split the denominator
+can grow by one even though the visible (collapsed) row count doesn't change. Pre-existing, not
+introduced by this iteration; not in scope here since the user's ask was specifically the
+line-level display inside a statement, not the parent list's fraction.
 
 ### Automatch engine (T7)
 
 The Reconciliation surface gained the automatic matching engine (backend `MatchRuleEngine` + `AutoMatchSupport` inside `ReconciliationHandler`, `@Named("bankReconciliation")`):
 
 - **Automatch modal** (`components/contract-ui/AutoMatchSuggestionModal.jsx`, opened from the `Automatch` header action and from the Cuentas-list `Conciliar (N)` pill): runs the engine in preview (GET `?action=autoMatch`) and shows the suggested groups (statement line + its N operations) with per-group include/exclude checkboxes. Rule-origin groups carry a yellow **"Por regla {nombre}"** badge; candidates that would create a new payment carry a blue **"Nueva"** badge. Applying (POST `?action=applySuggestions`) reconciles only the ticked groups, creating payments for rule matches and incrementing each matched rule's count. On success the panel/list refresh. The 1:N signal matcher first tries the whole same-partner / same-reference block and, if that over-shoots, can now choose an exact subset inside that same signal block (for example two 13,20 receipts balancing a 26,40 statement line).
-- **1:N reconciliation** is done by Etendo core (`APRM_MatchingUtility.matchBankStatementLine` splits the line into sub-lines sharing `EM_ETGO_Match_Group_ID`). The panel and the imported-statements view **collapse those sub-lines into a single reconciled line** (`BankStatementsSupport.mergeMatchGroups`), so a 1:N group shows as one entry, not N.
+- **1:N (and single-partial) reconciliation** is done by Etendo core (`APRM_MatchingUtility.matchBankStatementLine` splits the line into sub-lines sharing `EM_ETGO_Match_Group_ID`, tagged by `ReconciliationHandler.willSplitLine`). The panel and the imported-statements view **collapse those sub-lines back into a single display line** (`BankStatementsSupport.mergeMatchGroups`), so a split group shows as one entry, not N — see "Partial-match display" below for what that collapsed row looks like when the group isn't fully covered yet.
 - **Left-panel state filter**: `pendingLines` returns a fine-grained `state` per line (`pending | suggested | byRule | difference | reconciled`) plus per-state counts. `suggested` now covers both a Classic strong `1:1` match and an exact `1:N` signal-group match, so the left badge stays aligned with the automatch modal and with the right-panel preselection behavior.
 - i18n keys: `financeReconcile*` in `packages/app-shell-core/src/locales/{en_US,es_ES}.json`.
 - Hooks: `tools/app-shell/src/hooks/useReconciliation.js` — `usePendingStatementLines`, `useCandidateOperations`, `useReconcileGroup` (all over `useNeoResource` / the shared auth+fetch pattern). The reconcile POST surfaces the backend `{ error: { message } }` text on the thrown Error so it shows in the error toast.

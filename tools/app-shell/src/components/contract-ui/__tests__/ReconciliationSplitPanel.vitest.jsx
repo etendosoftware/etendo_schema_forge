@@ -464,9 +464,9 @@ describe('ReconciliationSplitPanel', () => {
 
   it('enables Conciliar with an invoice source when the selection COVERS the line', () => {
     setLines([LINE_B]); // line amount 1200 (inflow → default receipts)
-    // A single invoice whose outstanding (1500) covers the line (|1500| >= |1200|).
+    // A single invoice whose outstanding (1200) exactly covers the line (|1200| == |1200|).
     const INV = { id: 'INV9', date: '2026-06-01T00:00:00Z', documentNo: 'F-9', partnerName: 'ACME',
-      amount: 1500, pendingBalance: 1500, kind: 'invoice', invoiceId: 'INV-ID-9', scheduleId: 'SCH-9', suggested: false };
+      amount: 1200, pendingBalance: 1200, kind: 'invoice', invoiceId: 'INV-ID-9', scheduleId: 'SCH-9', suggested: false };
     setCandidates([INV]);
     renderPanel();
     fireEvent.click(screen.getByTestId('recon-line-radio-L2'));
@@ -478,9 +478,31 @@ describe('ReconciliationSplitPanel', () => {
     expect(screen.getByTestId('recon-action-reconcile')).not.toBeDisabled();
   });
 
-  it('keeps Conciliar disabled with an invoice source when the selection does NOT cover the line', () => {
+  it('enables Conciliar with an invoice source when the selection EXCEEDS the line (invoice bigger than the line)', () => {
     setLines([LINE_B]); // line amount 1200 (inflow → default receipts)
-    // A single invoice whose outstanding (500) does NOT cover the line (|500| < |1200|).
+    // A single invoice whose outstanding (1500) is GREATER than the line (1200). Unlike
+    // transactions (fixed-amount, can't be partially "used"), invoices are flexible — the backend
+    // simply pays this invoice only partially with whatever the line has (uses the full line, the
+    // invoice itself ends up partially paid). invoiceMode's `balanced` check has no upper bound.
+    const INV = { id: 'INV10', date: '2026-06-01T00:00:00Z', documentNo: 'F-10', partnerName: 'ACME',
+      amount: 1500, pendingBalance: 1500, kind: 'invoice', invoiceId: 'INV-ID-10', scheduleId: 'SCH-10', suggested: false };
+    setCandidates([INV]);
+    renderPanel();
+    fireEvent.click(screen.getByTestId('recon-line-radio-L2'));
+    fireEvent.click(screen.getByText(/financeReconcileSourceReceipts/));
+    fireEvent.click(screen.getByText(/financeReconcileSourceSalesInvoices/));
+    fireEvent.click(screen.getByTestId('recon-cand-check-INV10'));
+
+    expect(screen.getByTestId('recon-action-reconcile')).not.toBeDisabled();
+  });
+
+  it('enables Conciliar with an invoice source when the selection under-covers the line (partial match)', () => {
+    setLines([LINE_B]); // line amount 1200 (inflow → default receipts)
+    // A single invoice whose outstanding (500) is LESS than the line (|500| < |1200|). Since
+    // ETP-4502 iteration 2, this is no longer rejected: invoices may settle less than the line,
+    // leaving the remainder (700) to be split into a new pending sub-line by the backend
+    // (matchBankStatementLine/splitBankStatementLine) — same rule as the transaction-mode path
+    // (sameDirection && withinLine), no invoice-specific "must cover" special case anymore.
     const INV = { id: 'INV9', date: '2026-06-01T00:00:00Z', documentNo: 'F-9', partnerName: 'ACME',
       amount: 500, pendingBalance: 500, kind: 'invoice', invoiceId: 'INV-ID-9', scheduleId: 'SCH-9', suggested: false };
     setCandidates([INV]);
@@ -490,7 +512,7 @@ describe('ReconciliationSplitPanel', () => {
     fireEvent.click(screen.getByText(/financeReconcileSourceSalesInvoices/));
     fireEvent.click(screen.getByTestId('recon-cand-check-INV9'));
 
-    expect(screen.getByTestId('recon-action-reconcile')).toBeDisabled();
+    expect(screen.getByTestId('recon-action-reconcile')).not.toBeDisabled();
   });
 
   // ── Invoice reconcile payload ─────────────────────────────────────────────────
@@ -500,13 +522,13 @@ describe('ReconciliationSplitPanel', () => {
     const INV_A = { id: 'INVA', date: '2026-06-01T00:00:00Z', documentNo: 'F-A', partnerName: 'ACME',
       amount: 800, pendingBalance: 800, kind: 'invoice', invoiceId: 'INV-ID-A', scheduleId: 'SCH-A', suggested: false };
     const INV_B = { id: 'INVB', date: '2026-06-02T00:00:00Z', documentNo: 'F-B', partnerName: 'ACME',
-      amount: 600, pendingBalance: 600, kind: 'invoice', invoiceId: 'INV-ID-B', scheduleId: 'SCH-B', suggested: false };
+      amount: 400, pendingBalance: 400, kind: 'invoice', invoiceId: 'INV-ID-B', scheduleId: 'SCH-B', suggested: false };
     setCandidates([INV_A, INV_B]);
     const { props } = renderPanel();
     fireEvent.click(screen.getByTestId('recon-line-radio-L2'));
     fireEvent.click(screen.getByText(/financeReconcileSourceReceipts/));
     fireEvent.click(screen.getByText(/financeReconcileSourceSalesInvoices/));
-    // Select both invoices (combined 1400 covers the 1200 line).
+    // Select both invoices (combined 1200 exactly matches the line).
     fireEvent.click(screen.getByTestId('recon-cand-check-INVA'));
     fireEvent.click(screen.getByTestId('recon-cand-check-INVB'));
 
