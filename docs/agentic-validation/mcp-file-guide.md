@@ -99,5 +99,6 @@ Repos:
 ---
 
 ## Per-ticket trace log (which files each ticket touched)
+- **ETP-4280** (validator-side / diagnostic gap — investigation): `schemaforge/FinancialAccountHandler.java` (`validateAndEnrichCreate`, `normalizeType`: preserves `B`/`C`/`CA` before generic persistence); `mcp/McpToolRouter.java` (`handleCreate`: runs handler pre-hook); `mcp/McpHookExecutor.java` (`neoResponseToMcpResult`: returns hook validation body as MCP error text).
 - **ETP-4255** (code-bug — remove runtime Jasper from Etendo Go): `McpToolRouter.java` (handleReport, handleDiscover), `McpToolRouterSupport.java` (buildDiscoverSpec), `ToolRegistry.java` (processSpec, buildReportTool), `McpResourceProvider.java` (process coupling), `NeoReportService.java` (Jasper exportJR), `cli/src/neo-writer.js` (P/R as process-backed).
 - **ETP-4284** (code-bug — expose `neo_widget` enum tool, G4; investigation/plan only): planned touch points `McpConstants.java`, `ToolRegistry.java` (buildWidgetTool + isCrudTool), `McpAuthorizationService.java` (neo:read), `McpToolRouter.java` (route + handleWidget reusing `McpHookExecutor` lookup), `McpToolRouterSupport.java`/`ToolRegistry.addWindowSpec` (exclude `dashboard` from W discovery). Plan: `docs/plans/ETP-4284-neo-widget-tool.md`.

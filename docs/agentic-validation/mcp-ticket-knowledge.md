@@ -126,7 +126,7 @@ End-to-end wiring (all in `src/com/etendoerp/go/mcp/`):
 
 ## MCP code / config quirks
 
-- _None recorded yet._
+- **2026-07-23 — ETP-4280 diagnostic trace:** `FinancialAccountHandler.normalizeType` preserves `"CA"` (Card), and `McpToolRouter.handleCreate` invokes the entity's `NeoHandler` pre-hook before generic persistence. A report that omits the literal request/response cannot establish a Card-type code bug: valid `CA` may coexist with an independent invalid currency, duplicate-name, RBAC, deployment, or environment failure. Apply the rubric before changing this handler.
 
 ---
 
