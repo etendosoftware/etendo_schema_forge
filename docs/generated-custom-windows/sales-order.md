@@ -238,3 +238,11 @@ The line's `currency` field is configured in `artifacts/sales-order/decisions.js
 - `modules/com.etendoerp.go/src/com/etendoerp/go/schemaforge/NeoExchangeRateService.java` — exchange rate endpoint with inverse fallback.
 - `modules/com.etendoerp.go/src/com/etendoerp/go/schemaforge/NeoSessionService.java` — `/session` endpoint returning both `currencyCode` and `currencyId` (added in ETP-4027).
 - `etendo_core_pg/src-db/database/model/triggers/C_ORDER_CHK_RESTRINCTIONS_TRG.xml` — trigger with `C_Currency_ID` clause removed (Phase 0 / ETP-4027).
+
+## Theme roles
+
+The window's live artifact custom components use the shared semantic theme.
+Structural surfaces and controls consume background, card, foreground, muted, and
+border roles; operational feedback uses success, warning, information, neutral,
+and destructive roles. No local palette is used, so the active application theme
+controls the appearance.

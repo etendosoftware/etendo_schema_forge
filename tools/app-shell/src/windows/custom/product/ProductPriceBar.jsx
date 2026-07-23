@@ -98,8 +98,8 @@ function PriceStepper({ value, prefix, disabled, onCommit }) {
   }
 
   return (
-    <div className="flex flex-row items-center h-10 border border-[#D1D4DB] rounded-lg shadow-[0px_1px_2px_rgba(18,18,23,0.05)] overflow-hidden bg-white focus-within:border-[#121217] focus-within:shadow-[0px_0px_0px_1px_#121217] transition-colors">
-      {prefix && <span className="pl-3 text-sm text-[#121217] select-none">{prefix}</span>}
+    <div className="flex flex-row items-center h-10 border border-[hsl(var(--border-control))] rounded-lg shadow-[0px_1px_2px_hsl(var(--foreground) / 0.05)] overflow-hidden bg-card focus-within:border-[hsl(var(--foreground))] focus-within:shadow-[0px_0px_0px_1px_hsl(var(--foreground))] transition-colors">
+      {prefix && <span className="pl-3 text-sm text-[hsl(var(--foreground))] select-none">{prefix}</span>}
       <input
         type="number"
         step="0.01"
@@ -107,13 +107,13 @@ function PriceStepper({ value, prefix, disabled, onCommit }) {
         disabled={disabled}
         onChange={e => setLocal(e.target.value)}
         onBlur={() => onCommit(local === '' ? 0 : Number(local))}
-        className="flex-1 px-3 text-sm text-[#121217] bg-transparent outline-none min-w-0 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+        className="flex-1 px-3 text-sm text-[hsl(var(--foreground))] bg-transparent outline-none min-w-0 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
       />
       <button
         type="button"
         onClick={() => step(-1)}
         disabled={disabled}
-        className="w-10 h-[38px] flex items-center justify-center border-l border-[#E8EAEF] text-[#828FA3] hover:bg-gray-50 disabled:opacity-40 shrink-0"
+        className="w-10 h-[38px] flex items-center justify-center border-l border-[hsl(var(--border-subtle))] text-[hsl(var(--text-disabled))] hover:bg-muted disabled:opacity-40 shrink-0"
       >
         <Minus size={16} data-testid="Minus__d76b90" />
       </button>
@@ -121,7 +121,7 @@ function PriceStepper({ value, prefix, disabled, onCommit }) {
         type="button"
         onClick={() => step(1)}
         disabled={disabled}
-        className="w-10 h-[38px] flex items-center justify-center border-l border-[#E8EAEF] text-[#828FA3] hover:bg-gray-50 disabled:opacity-40 shrink-0"
+        className="w-10 h-[38px] flex items-center justify-center border-l border-[hsl(var(--border-subtle))] text-[hsl(var(--text-disabled))] hover:bg-muted disabled:opacity-40 shrink-0"
       >
         <Plus size={16} data-testid="Plus__d76b90" />
       </button>
@@ -132,7 +132,7 @@ function PriceStepper({ value, prefix, disabled, onCommit }) {
 function FieldLabel({ children }) {
   return (
     <div className="flex items-center h-6">
-      <span className="text-sm font-medium text-[#121217]">{children}</span>
+      <span className="text-sm font-medium text-[hsl(var(--foreground))]">{children}</span>
     </div>
   );
 }
@@ -392,7 +392,7 @@ export default function ProductPriceBar({ data, token, apiBaseUrl, catalogs, api
   if (!recordId) {
     return (
       <div className="p-2">
-        <div className="text-sm text-gray-500 mt-1">{ui('saveProductFirstPricing')}</div>
+        <div className="text-sm text-muted-foreground mt-1">{ui('saveProductFirstPricing')}</div>
       </div>
     );
   }
@@ -400,7 +400,7 @@ export default function ProductPriceBar({ data, token, apiBaseUrl, catalogs, api
   if (loading) {
     return (
       <div className="p-2">
-        <div className="rounded-xl border border-gray-200 bg-white p-4 text-sm text-gray-500 flex items-center gap-2">
+        <div className="rounded-xl border border-border-subtle bg-card p-4 text-sm text-muted-foreground flex items-center gap-2">
           <Loader2 size={14} className="animate-spin" data-testid="Loader2__d76b90" />
           {ui('loadingPricing')}
         </div>
@@ -426,8 +426,8 @@ export default function ProductPriceBar({ data, token, apiBaseUrl, catalogs, api
             className={[
               'flex items-center justify-center px-3 h-10 rounded-lg text-sm font-medium transition-colors',
               activeSection === opt.key
-                ? 'bg-[#F5F7F9] text-[#121217]'
-                : 'text-[#121217] hover:bg-[#F5F7F9]/60',
+                ? 'bg-[hsl(var(--muted))] text-[hsl(var(--foreground))]'
+                : 'text-[hsl(var(--foreground))] hover:bg-[hsl(var(--muted))]/60',
             ].join(' ')}
           >
             {opt.label}
@@ -437,14 +437,14 @@ export default function ProductPriceBar({ data, token, apiBaseUrl, catalogs, api
       {/* Right column — active section */}
       <div className="flex-1 min-w-0 flex flex-col gap-3 pt-3">
         <div className="flex items-center gap-2 h-8">
-          <h3 className="text-lg font-semibold text-[#121217]">{sectionTitle}</h3>
-          <span className="inline-flex items-center px-2 h-6 text-xs text-[#3F3F50] bg-[#F5F7F9] border border-[#D1D4DB] rounded-lg">
+          <h3 className="text-lg font-semibold text-[hsl(var(--foreground))]">{sectionTitle}</h3>
+          <span className="inline-flex items-center px-2 h-6 text-xs text-[hsl(var(--muted-foreground))] bg-[hsl(var(--muted))] border border-[hsl(var(--border-control))] rounded-lg">
             {sectionRows.length}
           </span>
         </div>
 
         {sectionRows.length === 0 && !adding && (
-          <div className="text-sm text-gray-400">{ui('priceNoLists')}</div>
+          <div className="text-sm text-muted-foreground">{ui('priceNoLists')}</div>
         )}
 
         {/* Column headers — rendered once, not repeated per row */}
@@ -469,7 +469,7 @@ export default function ProductPriceBar({ data, token, apiBaseUrl, catalogs, api
                     type="text"
                     readOnly
                     value={name}
-                    className="h-10 w-full px-3 text-sm text-[#121217] bg-white border border-[#D1D4DB] rounded-lg shadow-[0px_1px_2px_rgba(18,18,23,0.05)] outline-none truncate"
+                    className="h-10 w-full px-3 text-sm text-[hsl(var(--foreground))] bg-card border border-[hsl(var(--border-control))] rounded-lg shadow-[0px_1px_2px_hsl(var(--foreground) / 0.05)] outline-none truncate"
                   />
                 </div>
                 {/* Unit price */}
@@ -498,7 +498,7 @@ export default function ProductPriceBar({ data, token, apiBaseUrl, catalogs, api
                     disabled={saving}
                     title={ui('priceRemove')}
                     data-testid={`price-delete-${row.id}`}
-                    className="w-8 h-8 flex items-center justify-center rounded-full text-[#D50B3E] hover:text-red-700 hover:bg-red-50 disabled:opacity-40 opacity-0 group-hover/row:opacity-100 transition-all"
+                    className="w-8 h-8 flex items-center justify-center rounded-full text-[hsl(var(--destructive))] hover:text-destructive hover:bg-destructive disabled:opacity-40 opacity-0 group-hover/row:opacity-100 transition-all"
                   >
                     {saving ? <Loader2 size={18} className="animate-spin" data-testid="Loader2__d76b90" /> : <Trash2 className="h-5 w-5" data-testid="Trash2__d76b90" />}
                   </button>
@@ -514,7 +514,7 @@ export default function ProductPriceBar({ data, token, apiBaseUrl, catalogs, api
             {/* Name selector — white at rest, whole box greys uniformly on hover (Figma).
                 The color lives on the root box so the input + chevron (transparent) match it,
                 instead of only the input greying (the product-window rule targets input:hover). */}
-            <div className="w-[300px] shrink-0 rounded-lg [&>div]:!bg-white [&>div:hover]:!bg-[#F5F7F9]">
+            <div className="w-[300px] shrink-0 rounded-lg [&>div]:!bg-card [&>div:hover]:!bg-[hsl(var(--muted))]">
               <CreatableSearchSelect
                 key={selectOptions.map(o => o.id).join(',')}
                 field={{ key: 'priceListVersion', id: 'priceListVersion', required: false }}
@@ -554,7 +554,7 @@ export default function ProductPriceBar({ data, token, apiBaseUrl, catalogs, api
                 disabled={savingId === 'new'}
                 title={ui('cancel')}
                 data-testid="price-add-cancel"
-                className="w-8 h-8 flex items-center justify-center rounded-full text-[#D50B3E] hover:text-red-700 hover:bg-red-50 disabled:opacity-40 transition-all"
+                className="w-8 h-8 flex items-center justify-center rounded-full text-[hsl(var(--destructive))] hover:text-destructive hover:bg-destructive disabled:opacity-40 transition-all"
               >
                 <Trash2 className="h-5 w-5" data-testid="Trash2__d76b90" />
               </button>
@@ -577,9 +577,9 @@ export default function ProductPriceBar({ data, token, apiBaseUrl, catalogs, api
             type="button"
             onClick={() => setAdding(true)}
             data-testid="price-add-tariff"
-            className="flex items-center gap-1 text-sm font-medium text-[#121217] underline w-fit mt-1"
+            className="flex items-center gap-1 text-sm font-medium text-[hsl(var(--foreground))] underline w-fit mt-1"
           >
-            <Plus size={20} className="text-[#828FA3]" data-testid="Plus__d76b90" />
+            <Plus size={20} className="text-[hsl(var(--text-disabled))]" data-testid="Plus__d76b90" />
             {ui('priceAddTariff')}
           </button>
         )}

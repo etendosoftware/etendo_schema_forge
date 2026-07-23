@@ -41,7 +41,7 @@ const customMenuActions = ({ status }) => [
     icon: XCircle,
     // The XCircle icon already carries the destructive cue; the Figma
     // (Screenshot 2026-04-30 11-38-53) renders both icon and label in the
-    // neutral dark-gray (#121217), not the legacy red text.
+    // neutral dark-gray (hsl(var(--foreground))), not the legacy red text.
     visible: status === 'UE',
     onClick: () => window.dispatchEvent(new CustomEvent('sales-quotation:open-reject-modal')),
   },

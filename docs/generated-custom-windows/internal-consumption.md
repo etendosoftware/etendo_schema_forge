@@ -79,3 +79,11 @@ Use this window to register stock consumed inside the organization rather than s
 - `tools/app-shell/src/components/contract-ui/__tests__/ListFilterBar.vitest.jsx` covers the generic `hideStatusFilter` behavior used by this window's list view.
 - `docs/generated-custom-windows/app-shell-functional-flows.md` documents the shared routed-window behavior and the generic detail flow where child creation posts `parentId` and refreshes both header and children.
 - The generated `InternalConsumptionPage.jsx` includes `AttachmentsTab` in its `customTabs` prop, wired to the `M_Internal_Consumption` AD table.
+
+## Theme roles
+
+The window's live artifact custom components use the shared semantic theme.
+Structural surfaces and controls consume background, card, foreground, muted, and
+border roles; operational feedback uses success, warning, information, neutral,
+and destructive roles. No local palette is used, so the active application theme
+controls the appearance.

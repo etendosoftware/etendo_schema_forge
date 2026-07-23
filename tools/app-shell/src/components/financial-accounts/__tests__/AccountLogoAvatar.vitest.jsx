@@ -8,7 +8,7 @@ describe('AccountLogoAvatar', () => {
     expect(avatar.className).toMatch(/rounded-full/);
     expect(avatar.className).toMatch(/h-8/);
     expect(avatar.className).toMatch(/w-8/);
-    expect(avatar.className).toMatch(/bg-\[#E8EAEF\]/);
+    expect(avatar.className).toMatch(/bg-\[hsl\(var\(--border-subtle\)\)\]/);
   });
 
   it('renders a Landmark icon for bank accounts', () => {

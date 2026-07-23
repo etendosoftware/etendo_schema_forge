@@ -6,15 +6,15 @@ import { useUI } from '@/i18n';
 function GroupHead({ title, description }) {
   return (
     <div>
-      <div className="text-sm font-semibold text-[#121217] mb-4">{title}</div>
-      {description && <div className="text-xs text-[#6C6C89] -mt-2 mb-4">{description}</div>}
+      <div className="text-sm font-semibold text-[hsl(var(--foreground))] mb-4">{title}</div>
+      {description && <div className="text-xs text-[hsl(var(--muted-foreground))] -mt-2 mb-4">{description}</div>}
     </div>
   );
 }
 
 function GroupDivider({ title, description }) {
   return (
-    <div className="mt-5 border-t border-[#E8E8ED] pt-5">
+    <div className="mt-5 border-t border-[hsl(var(--border-subtle))] pt-5">
       <GroupHead title={title} description={description} data-testid="GroupHead__8e32ca" />
     </div>
   );
@@ -29,10 +29,10 @@ function ToggleCard({ label, description, fieldKey, value, onChange, editing }) 
   }
 
   return (
-    <div className="flex items-center justify-between rounded-xl border border-[#D1D1DB] bg-white p-4">
+    <div className="flex items-center justify-between rounded-xl border border-[hsl(var(--border-control))] bg-card p-4">
       <div>
-        <div className="text-sm font-medium text-[#121217]">{label}</div>
-        {description && <div className="text-xs text-[#6C6C89] mt-0.5">{description}</div>}
+        <div className="text-sm font-medium text-[hsl(var(--foreground))]">{label}</div>
+        {description && <div className="text-xs text-[hsl(var(--muted-foreground))] mt-0.5">{description}</div>}
       </div>
       <PillToggle
         checked={isOn}
@@ -253,7 +253,7 @@ export default function AssetsDetailPanel({ data, token, apiBaseUrl, catalogs, a
   ];
 
   return (
-    <div className="p-2 pb-6 bg-white overflow-y-auto max-h-[380px] [&_input]:bg-white [&_textarea]:bg-white [&_textarea:disabled]:!bg-white [&_textarea:disabled]:opacity-50">
+    <div className="p-2 pb-6 bg-card overflow-y-auto max-h-[380px] [&_input]:bg-card [&_textarea]:bg-card [&_textarea:disabled]:!bg-card [&_textarea:disabled]:opacity-50">
       {/* Group 1 — Asset Info (no subtitle). onChange goes through handleAmountChange so
           "Valor del activo" keeps the ETP-4333 local-recompute behavior now that it lives
           here instead of the Financial Info group; handleAmountChange forwards non-amount
@@ -311,7 +311,7 @@ export default function AssetsDetailPanel({ data, token, apiBaseUrl, catalogs, a
               data-testid="EntityForm__8e32ca" />
           </>
         ) : (
-          <p className="text-xs text-[#6C6C89]">{ui('assetsDepreciationDisabledHint')}</p>
+          <p className="text-xs text-[hsl(var(--muted-foreground))]">{ui('assetsDepreciationDisabledHint')}</p>
         )}
       </div>
       {/* Group 4 — Dates */}
@@ -332,7 +332,7 @@ export default function AssetsDetailPanel({ data, token, apiBaseUrl, catalogs, a
           data-testid="GroupDivider__8e32ca" />
       )}
       {depreciate && (
-        <div className="[&_button[role=combobox]]:!bg-white [&_input]:!bg-white">
+        <div className="[&_button[role=combobox]]:!bg-card [&_input]:!bg-card">
           <EntityForm
             fields={dimensionFields}
             {...common}

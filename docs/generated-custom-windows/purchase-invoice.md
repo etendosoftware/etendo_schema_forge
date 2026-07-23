@@ -479,3 +479,11 @@ submitted `conversionRate`.
 - `tools/app-shell/src/windows/custom/shared/usePaymentBalance.js` — excess gating; refund removed.
 - i18n keys `cpConversionRate` / `cpAmountInAccount` / `cpConversionRateRequired` /
   `cpConversionRateInvalid` present in `en_US.json`, `es_ES.json`, and `es_AR.json`.
+
+## Theme roles
+
+The window's live artifact custom components use the shared semantic theme.
+Structural surfaces and controls consume background, card, foreground, muted, and
+border roles; operational feedback uses success, warning, information, neutral,
+and destructive roles. No local palette is used, so the active application theme
+controls the appearance.

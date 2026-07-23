@@ -83,7 +83,7 @@ function PopupSearchInput({ field, value, displayValue, onChange, label, selecto
         type="button"
         onClick={() => setOpen(true)}
         data-testid={`field-${field.key}`}
-        className={`w-full ${FIELD_HEIGHT} text-sm rounded-lg border border-[#D1D4DB] bg-white p-2 text-left flex items-center gap-2 shadow-[0px_1px_2px_rgba(18,18,23,0.05)] hover:border-primary/50 focus:ring-2 focus:ring-primary focus:outline-none transition-colors`}
+        className={`w-full ${FIELD_HEIGHT} text-sm rounded-lg border border-[hsl(var(--border-control))] bg-card p-2 text-left flex items-center gap-2 shadow-[0px_1px_2px_hsl(var(--foreground) / 0.05)] hover:border-primary/50 focus:ring-2 focus:ring-primary focus:outline-none transition-colors`}
       >
         <Search
           className="h-4 w-4 text-muted-foreground shrink-0"
@@ -242,8 +242,8 @@ function SearchInput({ entityName, field, value, displayValue, onChange, catalog
     <button
       type="button"
       data-testid={`action-create-${field.key}`}
-      className="w-full text-left px-3 py-2 text-sm font-medium hover:bg-blue-50 border-b border-border/40 transition-colors"
-      style={{ color: '#202452' }}
+      className="w-full text-left px-3 py-2 text-sm font-medium hover:bg-status-info border-b border-border/40 transition-colors"
+      style={{ color: 'hsl(var(--foreground))' }}
       onMouseDown={e => { e.preventDefault(); setOpen(false); createCtx.onOpen(query, handleSelect); }}
     >
       + {ui('createContact')}
@@ -260,7 +260,7 @@ function SearchInput({ entityName, field, value, displayValue, onChange, catalog
     */
     <div
       data-testid={`field-${field.key}-wrapper`}
-      className={`relative flex ${FIELD_HEIGHT} w-full items-center rounded-lg border border-[#D1D4DB] bg-transparent shadow-[0px_1px_2px_rgba(18,18,23,0.05)] pl-2 pr-2 gap-1 focus-within:ring-2 focus-within:ring-primary`}
+      className={`relative flex ${FIELD_HEIGHT} w-full items-center rounded-lg border border-[hsl(var(--border-control))] bg-transparent shadow-[0px_1px_2px_hsl(var(--foreground) / 0.05)] pl-2 pr-2 gap-1 focus-within:ring-2 focus-within:ring-primary`}
       onClick={showChip ? handleChipClick : undefined}
     >
       {showChip ? (
@@ -309,14 +309,14 @@ function SearchInput({ entityName, field, value, displayValue, onChange, catalog
               if (hasSelection) setEditingIntent(false);
             }, 200);
           }}
-          className="flex-1 min-w-0 h-full bg-transparent border-0 outline-none py-2 text-sm placeholder:text-[#6C6C89]"
+          className="flex-1 min-w-0 h-full bg-transparent border-0 outline-none py-2 text-sm placeholder:text-[hsl(var(--muted-foreground))]"
           required={field.required}
           autoComplete="off"
         />
       )}
       {fetching ? (
         <Loader2
-          className="h-4 w-4 text-[#828FA3] animate-spin shrink-0 ml-auto"
+          className="h-4 w-4 text-[hsl(var(--text-disabled))] animate-spin shrink-0 ml-auto"
           data-testid={"Loader2__" + field.id} />
       ) : (
         <button
@@ -335,12 +335,12 @@ function SearchInput({ entityName, field, value, displayValue, onChange, catalog
           className="shrink-0 ml-auto flex items-center"
         >
           <ChevronDown
-            className="h-4 w-4 text-[#828FA3]"
+            className="h-4 w-4 text-[hsl(var(--text-disabled))]"
             data-testid={"ChevronDown__" + field.id} />
         </button>
       )}
       {open && (canCreate || filtered.length > 0) && (
-        <div className="absolute z-50 top-full left-0 right-0 mt-1 bg-white border rounded-md shadow-lg max-h-48 overflow-auto">
+        <div className="absolute z-50 top-full left-0 right-0 mt-1 bg-card border rounded-md shadow-lg max-h-48 overflow-auto">
           {createBtn}
           {filtered.map(opt => (
             <button
@@ -356,7 +356,7 @@ function SearchInput({ entityName, field, value, displayValue, onChange, catalog
         </div>
       )}
       {open && query.length > 0 && !fetching && filtered.length === 0 && (
-        <div className="absolute z-50 top-full left-0 right-0 mt-1 bg-white border rounded-md shadow-lg max-h-48 overflow-auto">
+        <div className="absolute z-50 top-full left-0 right-0 mt-1 bg-card border rounded-md shadow-lg max-h-48 overflow-auto">
           {createBtn}
           <div className="px-3 py-2 text-xs text-muted-foreground">
             {ui('noResultsFor')} &ldquo;{query}&rdquo;
@@ -364,7 +364,7 @@ function SearchInput({ entityName, field, value, displayValue, onChange, catalog
         </div>
       )}
       {open && !query && !fetching && canCreate && filtered.length === 0 && (
-        <div className="absolute z-50 top-full left-0 right-0 mt-1 bg-white border rounded-md shadow-lg">
+        <div className="absolute z-50 top-full left-0 right-0 mt-1 bg-card border rounded-md shadow-lg">
           {createBtn}
         </div>
       )}
@@ -489,7 +489,7 @@ function LookupFormField({ field, value, displayValue, selectorUrl, selectorCont
         type="button"
         data-testid={`field-${field.key}`}
         onClick={() => setOpen(true)}
-        className={`w-full flex items-center gap-2 ${FIELD_HEIGHT} rounded-lg border border-[#D1D4DB] bg-white p-2 text-sm text-left shadow-[0px_1px_2px_rgba(18,18,23,0.05)] hover:border-primary/50 focus:ring-2 focus:ring-primary focus:outline-none transition-colors`}
+        className={`w-full flex items-center gap-2 ${FIELD_HEIGHT} rounded-lg border border-[hsl(var(--border-control))] bg-card p-2 text-sm text-left shadow-[0px_1px_2px_hsl(var(--foreground) / 0.05)] hover:border-primary/50 focus:ring-2 focus:ring-primary focus:outline-none transition-colors`}
       >
         <Search
           className="h-4 w-4 text-muted-foreground shrink-0"
@@ -598,7 +598,7 @@ function renderSelectField(f, data, label, isReadOnly, onChange, ctx) {
         disabled={isReadOnly}
         required={f.required}
         data-testid="Select__a8d626">
-        <SelectTrigger id={f.key} data-testid={`field-${f.key}`} className="bg-white focus:ring-2 focus:ring-primary">
+        <SelectTrigger id={f.key} data-testid={`field-${f.key}`} className="bg-card focus:ring-2 focus:ring-focus-ring">
           <SelectValue
             placeholder={buildSelectPlaceholder(ui, label)}
             data-testid="SelectValue__a8d626" />
@@ -620,7 +620,7 @@ function PopupSearchField(props) {
       <Label
         className="text-sm text-foreground font-medium"
         data-testid="Label__a8d626">
-        {props.label}{(props.f.required || props.f.requiredVisual) ? <span className="text-red-500 ml-0.5">*</span> : ""}
+        {props.label}{(props.f.required || props.f.requiredVisual) ? <span className="text-destructive ml-0.5">*</span> : ""}
       </Label>
       <PopupSearchInput
         field={props.f}
@@ -648,7 +648,7 @@ function getCheckboxStateClass(checked) {
 // display before the label is built), so no explicit isReadOnly gate is needed
 // here — see labelMarker/requiredAsteriskIfEditable for the gated equivalents.
 function requiredAsterisk(f) {
-  return (f.required || f.requiredVisual) ? <span className="text-red-500 ml-0.5">*</span> : '';
+  return (f.required || f.requiredVisual) ? <span className="text-destructive ml-0.5">*</span> : null;
 }
 
 /**
@@ -662,11 +662,11 @@ function requiredAsterisk(f) {
  * `required: true`.
  */
 function labelMarker(f, isReadOnly, optionalSuffix, ui) {
-  if ((f.required || f.requiredVisual) && !isReadOnly) return <span className="text-[#F53D6B] ml-0.5">*</span>;
+  if ((f.required || f.requiredVisual) && !isReadOnly) return <span className="text-[hsl(var(--destructive))] ml-0.5">*</span>;
   if (optionalSuffix && !isReadOnly) {
-    return <span className="ml-1 font-normal text-[#6C6C89]">({ui('optional')})</span>;
+    return <span className="ml-1 font-normal text-[hsl(var(--muted-foreground))]">({ui('optional')})</span>;
   }
-  return '';
+  return null;
 }
 
 /**
@@ -677,7 +677,7 @@ function labelMarker(f, isReadOnly, optionalSuffix, ui) {
 function FieldHelp({ field, ui }) {
   if (!field?.help) return null;
   const text = ui(field.help) ?? field.help;
-  return <p className="text-sm leading-6 text-[#6C6C89]" data-testid={`help-${field.key}`}>{text}</p>;
+  return <p className="text-sm leading-6 text-[hsl(var(--muted-foreground))]" data-testid={`help-${field.key}`}>{text}</p>;
 }
 
 function formatReadOnlyDisplayValue(f, isReadOnly, rawDisplayValue) {
@@ -698,11 +698,11 @@ function buildSearchSelectorUrl(apiBaseUrl, entity, f, apiSelectorEntry) {
 }
 
 function requiredAsteriskIfEditable(f, isReadOnly) {
-  return (f.required || f.requiredVisual) && !isReadOnly ? <span className="text-red-500 ml-0.5">*</span> : '';
+  return (f.required || f.requiredVisual) && !isReadOnly ? <span className="text-destructive ml-0.5">*</span> : null;
 }
 
 function getInputStateClass(isReadOnly) {
-  return isReadOnly ? 'bg-muted/50' : 'bg-white focus:ring-2 focus:ring-primary focus:outline-none';
+  return isReadOnly ? 'bg-muted/50' : 'bg-card focus:ring-2 focus:ring-focus-ring focus:outline-none';
 }
 
 function DependentFkField(props) {
@@ -793,7 +793,7 @@ function getFieldValue(isReadOnly, displayValue, data, f) {
 }
 
 function getReadOnlyBgClass(isReadOnly) {
-  return isReadOnly ? 'bg-muted/50 cursor-default' : 'bg-white';
+  return isReadOnly ? 'bg-muted/50 cursor-default' : 'bg-card';
 }
 
 /**
@@ -1322,7 +1322,7 @@ export function EntityForm({ entity, fields = [], data, onChange, catalogs, layo
           placeholder={placeholder}
           disabled={isReadOnly}
           className={[
-            'flex w-full rounded-lg border border-[#D1D4DB] p-2 text-sm shadow-[0px_1px_2px_rgba(18,18,23,0.05)]',
+            'flex w-full rounded-lg border border-[hsl(var(--border-control))] p-2 text-sm shadow-[0px_1px_2px_hsl(var(--foreground) / 0.05)]',
             `placeholder:text-muted-foreground resize-none${minHeightClass}`,
             'focus:outline-none focus:ring-2 focus:ring-primary',
             'disabled:bg-muted/50 disabled:cursor-not-allowed',
@@ -1564,7 +1564,7 @@ export function EntityForm({ entity, fields = [], data, onChange, catalogs, layo
         existing,
         React.createElement(
           'p',
-          { key: '__err', role: 'alert', className: 'text-xs text-red-500 mt-0.5', 'data-testid': `error-${f.key}` },
+          { key: '__err', role: 'alert', className: 'text-xs text-destructive mt-0.5', 'data-testid': `error-${f.key}` },
           err
         )
       );

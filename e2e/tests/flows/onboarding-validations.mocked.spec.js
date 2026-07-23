@@ -231,8 +231,11 @@ test.describe('Onboarding — Full registration flow', () => {
     // PART 7: Start — verify the onboarding request fires
     // ═══════════════════════════════════════════════════════════════════════
 
+    // Match the final submission only — `/sws/go/onboarding/draft` (fired by the
+    // durable draft persistence on every step change) also contains this prefix,
+    // and its POST body ({ draft: {...} }) has no top-level clientName.
     const onboardingPromise = page.waitForRequest(
-      req => req.url().includes('/sws/go/onboarding') && req.method() === 'POST',
+      req => req.url().endsWith('/sws/go/onboarding') && req.method() === 'POST',
       { timeout: 15_000 }
     );
     await startBtn.click();

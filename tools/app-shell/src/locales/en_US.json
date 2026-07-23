@@ -19055,6 +19055,7 @@
     "changePasswordLogoutNotice": "After changing your password you'll be signed out and need to log in again.",
     "onboardingPasswordChangedNotice": "Your password has been changed successfully. Sign in with your new password.",
     "onboardingDraftRestoredNotice": "We restored your saved setup progress so you can pick up where you left off.",
+    "onboardingDraftSaveWarning": "We couldn't save your setup progress. Your changes will remain on this device; please try again.",
     "onboardingCurrentPasswordLabel": "Current password",
     "onboardingCredentialChangeSuccess": "Password updated.",
     "onboardingCredentialChangeFailed": "Could not change the password.",
