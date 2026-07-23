@@ -32,6 +32,34 @@ export async function login(page, {
     await page.addInitScript(() => {
       localStorage.setItem('sf_auth_token', 'e2e-mock-token');
       localStorage.setItem('sf_auth_user', 'admin');
+      // ETP-4520 — also seed a selected role: AuthProvider's hydration effect
+      // only fetches window access when `session.selectedRole` is present, so
+      // without this every generated window's WindowAccessGuard would fail
+      // closed to "none" and block rendering entirely (blank page).
+      localStorage.setItem('sf_auth_selected_role', JSON.stringify({ id: 'e2e-mock-role', name: 'Administrator' }));
+
+      // Stub the SFWindowAccessMap webhook itself. It lives under `/webhooks/`,
+      // not `/sws/`, so the page.route('**/sws/**') interception below never
+      // sees it — and unlike that route, a JSON-serialized response can't
+      // grant "full access to every window" without enumerating every window
+      // id up front. A real JS Proxy constructed here (in-browser, not sent
+      // over the wire) can, mirroring the same trick used by the app's own
+      // dev-mode mockFetch.js for this identical webhook.
+      const realFetch = window.fetch.bind(window);
+      window.fetch = (input, init) => {
+        const url = typeof input === 'string' ? input : input?.url;
+        if (url && url.includes('/webhooks/SFWindowAccessMap')) {
+          return Promise.resolve({
+            ok: true,
+            status: 200,
+            json: () => Promise.resolve({
+              windowAccess: new Proxy({}, { get: () => 'full' }),
+              capabilities: new Proxy({}, { get: () => true }),
+            }),
+          });
+        }
+        return realFetch(input, init);
+      };
     });
 
     // Intercept /sws/* to prevent the real Etendo backend receiving our fake
