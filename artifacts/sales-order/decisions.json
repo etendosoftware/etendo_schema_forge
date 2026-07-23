@@ -330,7 +330,8 @@
           "grid": true,
           "section": "principal",
           "order": 3,
-          "gridOrder": 3
+          "gridOrder": 3,
+          "min": false
         },
         "operativeQuantity": {
           "visibility": "discarded"
@@ -377,7 +378,8 @@
           "section": "principal",
           "order": 4,
           "gridOrder": 4,
-          "columnType": "amount"
+          "columnType": "amount",
+          "min": false
         },
         "discount": {
           "grid": true,

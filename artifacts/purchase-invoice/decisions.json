@@ -568,7 +568,8 @@
           "order": 3,
           "gridOrder": 3,
           "section": "principal",
-          "readOnlyLogic": null
+          "readOnlyLogic": null,
+          "min": false
         },
         "uOM": {
           "visibility": "system"
@@ -585,7 +586,8 @@
           "order": 4,
           "gridOrder": 4,
           "section": "principal",
-          "columnType": "amount"
+          "columnType": "amount",
+          "min": false
         },
         "etgoDiscount": {
           "visibility": "editable",

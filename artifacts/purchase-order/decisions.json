@@ -363,7 +363,8 @@
           "section": "principal",
           "order": 3,
           "gridOrder": 3,
-          "readOnlyLogic": null
+          "readOnlyLogic": null,
+          "min": false
         },
         "uOM": {
           "grid": false,
@@ -414,6 +415,7 @@
           "order": 4,
           "gridOrder": 4,
           "readOnlyLogic": null,
+          "min": false,
           "displayLogic": null,
           "columnType": "amount"
         },
