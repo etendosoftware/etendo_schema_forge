@@ -173,6 +173,14 @@ function switchToSalesInvoices() {
   fireEvent.click(screen.getByText(/financeReconcileSourceSalesInvoices/));
 }
 
+// The shared Checkbox (app-shell-core, Semantic Theme Contract) renders a
+// <label data-testid="recon-cand-check-...">  wrapping a nested
+// <input type="checkbox">. The checked state (and `.toBeChecked()`) only
+// applies to that nested input, not the label, so drill into it here.
+function candidateCheckbox(candidateId) {
+  return within(screen.getByTestId(`recon-cand-check-${candidateId}`)).getByRole('checkbox');
+}
+
 // ── Tests ─────────────────────────────────────────────────────────────────────
 
 describe('ReconciliationSplitPanel — multi-currency (ETP-4502 iteration 2)', () => {
@@ -285,12 +293,12 @@ describe('ReconciliationSplitPanel — multi-currency (ETP-4502 iteration 2)', (
       switchToSalesInvoices();
 
       fireEvent.click(screen.getByTestId('recon-cand-check-C-EUR'));
-      expect(screen.getByTestId('recon-cand-check-C-EUR')).toHaveAttribute('aria-checked', 'true');
+      expect(candidateCheckbox('C-EUR')).toBeChecked();
 
       fireEvent.click(screen.getByTestId('recon-cand-check-C-USD'));
       // Both stay selected — the old single-foreign-invoice collapse is gone.
-      expect(screen.getByTestId('recon-cand-check-C-USD')).toHaveAttribute('aria-checked', 'true');
-      expect(screen.getByTestId('recon-cand-check-C-EUR')).toHaveAttribute('aria-checked', 'true');
+      expect(candidateCheckbox('C-USD')).toBeChecked();
+      expect(candidateCheckbox('C-EUR')).toBeChecked();
     });
 
     it('keeps two foreign candidates of DIFFERENT currencies selected simultaneously', () => {
@@ -303,8 +311,8 @@ describe('ReconciliationSplitPanel — multi-currency (ETP-4502 iteration 2)', (
       fireEvent.click(screen.getByTestId('recon-cand-check-C-USD'));
       fireEvent.click(screen.getByTestId('recon-cand-check-C-GBP'));
 
-      expect(screen.getByTestId('recon-cand-check-C-USD')).toHaveAttribute('aria-checked', 'true');
-      expect(screen.getByTestId('recon-cand-check-C-GBP')).toHaveAttribute('aria-checked', 'true');
+      expect(candidateCheckbox('C-USD')).toBeChecked();
+      expect(candidateCheckbox('C-GBP')).toBeChecked();
     });
 
     it('toggling a foreign candidate off only deselects that one row', () => {
@@ -318,8 +326,8 @@ describe('ReconciliationSplitPanel — multi-currency (ETP-4502 iteration 2)', (
       fireEvent.click(screen.getByTestId('recon-cand-check-C-GBP'));
       fireEvent.click(screen.getByTestId('recon-cand-check-C-USD')); // toggle off
 
-      expect(screen.getByTestId('recon-cand-check-C-USD')).toHaveAttribute('aria-checked', 'false');
-      expect(screen.getByTestId('recon-cand-check-C-GBP')).toHaveAttribute('aria-checked', 'true');
+      expect(candidateCheckbox('C-USD')).not.toBeChecked();
+      expect(candidateCheckbox('C-GBP')).toBeChecked();
     });
   });
 

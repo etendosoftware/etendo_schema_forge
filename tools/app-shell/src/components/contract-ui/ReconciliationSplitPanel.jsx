@@ -402,7 +402,7 @@ function StatementLinesPanel({
 function CurrencyBadge({ code }) {
   return (
     <span
-      className="shrink-0 rounded-full bg-[#FFF4E5] px-2 py-0.5 text-[10px] font-semibold leading-4 text-[#B25E00]"
+      className="shrink-0 rounded-full bg-[var(--status-warning-bg)] px-2 py-0.5 text-[10px] font-semibold leading-4 text-[var(--status-warning-fg)]"
       data-testid="recon-cand-currency-badge">
       {code}
     </span>
@@ -607,7 +607,7 @@ function ReactivateConfirmDialog({ open, busy, onConfirm, onClose }) {
       open={open}
       onOpenChange={(v) => { if (!v) onClose(); }}
       data-testid="Dialog__recon-reactivate">
-      <DialogContent className="max-w-md bg-white" data-testid="recon-reactivate-dialog">
+      <DialogContent className="max-w-md bg-card" data-testid="recon-reactivate-dialog">
         <DialogHeader data-testid="DialogHeader__recon-reactivate">
           <DialogTitle data-testid="DialogTitle__recon-reactivate">
             {ui('financeReconcileConfirmReactivateTitle')}
@@ -624,7 +624,7 @@ function ReactivateConfirmDialog({ open, busy, onConfirm, onClose }) {
             // Matches the app's standard secondary-button formula (e.g. the "Cancelar" back
             // button in list windows like Reglas de matcheo) instead of the shared Button's
             // theme-token outline colors.
-            className="border-[#D1D4DB] bg-white text-[#121217] shadow-[0_1px_2px_rgba(18,18,23,0.05)] hover:bg-[#F5F7F9]"
+            className="border-[hsl(var(--border-control))] bg-card text-[hsl(var(--foreground))] shadow-[0_1px_2px_rgba(18,18,23,0.05)] hover:bg-muted"
             data-testid="recon-reactivate-cancel">
             {/* Just closes this dialog (no selection to cancel) — the generic "Cancelar", not
                 the action bar's "Cancelar selección". */}
@@ -668,7 +668,7 @@ function PaymentMethodModal({ open, methods, methodId, onSelect, busy, onConfirm
       open={open}
       onOpenChange={(v) => { if (!v) onClose(); }}
       data-testid="Dialog__recon-payment-method">
-      <DialogContent className="max-w-md bg-white" data-testid="recon-payment-method-dialog">
+      <DialogContent className="max-w-md bg-card" data-testid="recon-payment-method-dialog">
         <DialogHeader data-testid="DialogHeader__recon-payment-method">
           <DialogTitle data-testid="DialogTitle__recon-payment-method">
             {ui('financeReconcileMethodModalTitle')}
@@ -694,7 +694,7 @@ function PaymentMethodModal({ open, methods, methodId, onSelect, busy, onConfirm
             // Matches the app's standard secondary-button formula (e.g. the "Cancelar" back
             // button in list windows like Reglas de matcheo) instead of the shared Button's
             // theme-token outline colors.
-            className="border-[#D1D4DB] bg-white text-[#121217] shadow-[0_1px_2px_rgba(18,18,23,0.05)] hover:bg-[#F5F7F9]"
+            className="border-[hsl(var(--border-control))] bg-card text-[hsl(var(--foreground))] shadow-[0_1px_2px_rgba(18,18,23,0.05)] hover:bg-muted"
             data-testid="recon-payment-method-cancel">
             {/* Just closes this modal (no selection to cancel) — the generic "Cancelar", not
                 the action bar's "Cancelar selección". */}
@@ -706,7 +706,7 @@ function PaymentMethodModal({ open, methods, methodId, onSelect, busy, onConfirm
             // Matches the primary-action hover elsewhere in the app (e.g. "Confirmar" in the New
             // Movement modal) — the shared Button's default variant hovers to primary/90, not the
             // Figma yellow.
-            className="bg-[#121217] text-white hover:bg-[#FFD500] hover:text-[#121217]"
+            className="bg-[hsl(var(--text-primary))] text-primary-foreground hover:bg-accent-highlight hover:text-accent-highlight-foreground"
             data-testid="recon-payment-method-confirm">
             {ui('financeReconcileMethodModalConfirm')}
           </Button>

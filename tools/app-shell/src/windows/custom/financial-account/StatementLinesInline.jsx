@@ -335,7 +335,7 @@ function LineRow({ line, ui, currency, bcpLocale, onOpenTxns }) {
         <MatchPill kind={matchKind} ui={ui} data-testid="MatchPill__10cf4a" />
         {matchKind === 'partial' ? (
           <span
-            className="max-w-full truncate text-[11px] leading-none text-[#828FA3]"
+            className="max-w-full truncate text-[11px] leading-none text-[hsl(var(--muted-foreground))]"
             title={pendingAmountLabel}
             data-testid="statement-line-pending-amount"
           >

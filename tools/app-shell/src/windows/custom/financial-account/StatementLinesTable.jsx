@@ -36,7 +36,7 @@ function MatchCell({ line, ui, currency, bcpLocale }) {
       <StatusTag tone={entry.tone} label={ui(entry.labelKey)} data-testid="StatusTag__2364e3" />
       {isPartial ? (
         <span
-          className="whitespace-nowrap text-[11px] text-[#828FA3]"
+          className="whitespace-nowrap text-[11px] text-[hsl(var(--muted-foreground))]"
           data-testid="statement-line-pending-amount"
         >
           {ui('financeAccountStatementLinesPendingAmount', {
