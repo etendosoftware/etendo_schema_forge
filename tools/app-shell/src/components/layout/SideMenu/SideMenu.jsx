@@ -496,7 +496,15 @@ export default function SideMenu({
 
   useEffect(() => {
     setOpenGroups(activeGroup ? { [activeGroup.group]: true } : {});
-  }, [location.pathname, location.search]);
+    // `activeGroup?.group` (a stable primitive, not the whole recomputed-every-
+    // render object) is also a dependency: `menuGroups` can change without any
+    // navigation when role-filtered data (ETP-4598's allowedIds) resolves after
+    // an initial render where AD-backed items were filtered out. Without this,
+    // a direct/deep-link page load into a filtered group's route could permanently
+    // leave that group collapsed — the active group only gets (re)computed here
+    // on location changes, never in reaction to menuGroups itself changing.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.pathname, location.search, activeGroup?.group]);
 
   const [favOverflowOpen, setFavOverflowOpen] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);

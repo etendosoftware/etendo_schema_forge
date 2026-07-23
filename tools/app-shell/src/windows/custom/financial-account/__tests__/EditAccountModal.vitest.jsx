@@ -1,5 +1,16 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+
+// The Type/Currency dropdowns are Radix <Select>s, which rely on Pointer Capture
+// and scrollIntoView — neither is implemented by jsdom. Polyfill them so the
+// dropdown can open and an option can be picked in the "changing the Type saves
+// the new value" test (ETP-4581).
+beforeAll(() => {
+  Element.prototype.hasPointerCapture = vi.fn(() => false);
+  Element.prototype.setPointerCapture = vi.fn();
+  Element.prototype.releasePointerCapture = vi.fn();
+  Element.prototype.scrollIntoView = vi.fn();
+});
 
 vi.mock('@/i18n', () => ({
   useUI: () => (key) => key,
@@ -665,6 +676,176 @@ describe('EditAccountModal', () => {
       await waitFor(() =>
         expect(screen.queryByTestId('edit-account-accounting-error-summary')).not.toBeInTheDocument(),
       );
+    });
+  });
+
+  // ── ETP-4581: Type field editability mirrors Currency ─────────────────────
+  // Type (like Currency) locks the moment real movement history exists. When
+  // locked it renders as plain info text (label + value, no input box), not a
+  // disabled control; when editable it renders a 3-option Select.
+  describe('type field editability (ETP-4581)', () => {
+    const TX_BANK_ACCOUNT = {
+      id: 'acc-tx',
+      name: 'Bank with movements',
+      type: 'B',
+      iban: 'ES9121000418450200051332',
+      currencyId: '102',
+      currencyIso: 'EUR',
+      psd2Connected: false,
+      hasTransactions: true,
+    };
+    const NO_TX_BANK_ACCOUNT = { ...TX_BANK_ACCOUNT, id: 'acc-notx', hasTransactions: false };
+
+    it('shows Type as plain info text (no editable control) when the account has transactions', async () => {
+      renderModal({ account: TX_BANK_ACCOUNT });
+      // No editable Type select is rendered…
+      await waitFor(() =>
+        expect(screen.queryByTestId('edit-account-type')).not.toBeInTheDocument(),
+      );
+      // …but the localized type label ("Banco") is shown as read-only info.
+      expect(screen.getByText('financeAccountsNewTypeBank')).toBeInTheDocument();
+    });
+
+    it('shows Currency as plain info text (no editable select) when the account has transactions', async () => {
+      renderModal({ account: TX_BANK_ACCOUNT });
+      await waitFor(() =>
+        expect(screen.queryByTestId('edit-account-currency')).not.toBeInTheDocument(),
+      );
+      // The locked currency renders its ISO code as read-only info text.
+      expect(screen.getByText('EUR')).toBeInTheDocument();
+    });
+
+    it('renders both the Type and Currency editable selects when the account has no transactions', async () => {
+      renderModal({ account: NO_TX_BANK_ACCOUNT });
+      expect(await screen.findByTestId('edit-account-type')).toBeInTheDocument();
+      expect(await screen.findByTestId('edit-account-currency')).toBeInTheDocument();
+    });
+
+    it('saves the new Type value via updateAccount when the account has no transactions', async () => {
+      const user = userEvent.setup();
+      const onSaved = vi.fn();
+      renderModal({ account: NO_TX_BANK_ACCOUNT, onSaved });
+
+      // Open the Type dropdown and pick "Card" (CA) — a non-cash change so the
+      // form layout (General tab, IBAN) doesn't reflow mid-interaction.
+      await user.click(await screen.findByTestId('edit-account-type'));
+      await user.click(await screen.findByRole('option', { name: 'financeAccountsNewTypeCard' }));
+
+      await user.click(screen.getByTestId('edit-account-save'));
+
+      await waitFor(() => expect(updateAccount).toHaveBeenCalledTimes(1));
+      const [id, payload] = updateAccount.mock.calls[0];
+      expect(id).toBe('acc-notx');
+      expect(payload).toMatchObject({ type: 'CA' });
+      // Only the changed field is sent — the untouched currency stays out of the payload.
+      expect(payload).not.toHaveProperty('currencyId');
+      await waitFor(() => expect(onSaved).toHaveBeenCalled());
+    });
+
+    it('keeps the Name field editable regardless of transactions (regression)', async () => {
+      const user = userEvent.setup();
+      renderModal({ account: TX_BANK_ACCOUNT });
+      const nameInput = screen.getByTestId('edit-account-name');
+      expect(nameInput).toBeEnabled();
+      await user.clear(nameInput);
+      await user.type(nameInput, 'Renamed with movements');
+      expect(nameInput).toHaveValue('Renamed with movements');
+    });
+
+    it('keeps the PSD2-connected IBAN as a read-only ReadField with a copy button (unchanged)', async () => {
+      renderModal({ account: CONNECTED_ACCOUNT });
+      await screen.findByTestId('psd2-edit-sync');
+      // IBAN stays a copyable ReadField (grey box with copy control), not a plain InfoField…
+      expect(screen.getByLabelText('financeAccountsCopyIban')).toBeInTheDocument();
+      // …and never becomes an editable input.
+      expect(screen.queryByTestId('edit-account-iban')).not.toBeInTheDocument();
+      // Type/Currency, by contrast, are locked (connected) → no editable controls.
+      expect(screen.queryByTestId('edit-account-type')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('edit-account-currency')).not.toBeInTheDocument();
+    });
+  });
+
+  // ── ETP-4581 (follow-up): Type/Currency moved to the header status strip ───
+  // Type and Currency were removed from the field grid and moved beside the modal
+  // title, rendered by AccountStatusInfo inside DialogHeader. The field grid now
+  // holds ONLY Name and (when applicable) IBAN. Behavior (editable vs read-only)
+  // is unchanged; these tests lock the new placement.
+  describe('Type/Currency header placement (ETP-4581)', () => {
+    const TX_BANK_ACCOUNT = {
+      id: 'acc-tx-hdr',
+      name: 'Bank with movements',
+      type: 'B',
+      iban: 'ES9121000418450200051332',
+      currencyId: '102',
+      currencyIso: 'EUR',
+      psd2Connected: false,
+      hasTransactions: true,
+    };
+    const NO_TX_BANK_ACCOUNT = { ...TX_BANK_ACCOUNT, id: 'acc-notx-hdr', hasTransactions: false };
+
+    it('renders read-only Type/Currency info in the header (not the field grid) when the account has transactions', async () => {
+      renderModal({ account: TX_BANK_ACCOUNT });
+
+      const header = screen.getByTestId('DialogHeader__73027d');
+      // AccountFieldsGrid doesn't forward a data-testid to its root, so scope to the
+      // field grid via the Name input's nearest `.grid` ancestor (its container div).
+      const grid = screen.getByTestId('edit-account-name').closest('.grid');
+
+      // Read-only info spans live in the header status strip.
+      expect(within(header).getByTestId('edit-account-type-info')).toHaveTextContent(
+        'financeAccountsNewTypeBank',
+      );
+      expect(within(header).getByTestId('edit-account-currency-info')).toHaveTextContent('EUR');
+
+      // The field grid holds ONLY name + iban — no Type/Currency controls or info spans.
+      expect(within(grid).getByTestId('edit-account-name')).toBeInTheDocument();
+      expect(within(grid).getByTestId('edit-account-iban')).toBeInTheDocument();
+      expect(within(grid).queryByTestId('edit-account-type')).not.toBeInTheDocument();
+      expect(within(grid).queryByTestId('edit-account-currency')).not.toBeInTheDocument();
+      expect(within(grid).queryByTestId('edit-account-type-info')).not.toBeInTheDocument();
+      expect(within(grid).queryByTestId('edit-account-currency-info')).not.toBeInTheDocument();
+    });
+
+    it('renders editable Type/Currency selects in the field grid (not the header) when the account has no transactions', async () => {
+      renderModal({ account: NO_TX_BANK_ACCOUNT });
+
+      // Editable selects live in the field grid, below Name/IBAN.
+      const grid = screen.getByTestId('edit-account-name').closest('.grid');
+      expect(within(grid).getByTestId('edit-account-type')).toBeInTheDocument();
+      expect(await within(grid).findByTestId('edit-account-currency')).toBeInTheDocument();
+
+      // The header status strip (AccountStatusInfo) is not rendered at all in the
+      // editable case — no Type/Currency content anywhere in the header.
+      const header = screen.getByTestId('DialogHeader__73027d');
+      expect(within(header).queryByTestId('edit-account-type')).not.toBeInTheDocument();
+      expect(within(header).queryByTestId('edit-account-currency')).not.toBeInTheDocument();
+      expect(within(header).queryByTestId('edit-account-type-info')).not.toBeInTheDocument();
+      expect(within(header).queryByTestId('edit-account-currency-info')).not.toBeInTheDocument();
+
+      // The read-only info variants are absent everywhere while editable.
+      expect(screen.queryByTestId('edit-account-type-info')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('edit-account-currency-info')).not.toBeInTheDocument();
+    });
+
+    it('limits the field grid to name + iban when locked, and adds the Type/Currency selects when editable', async () => {
+      // READ-ONLY case (has transactions) → Type/Currency read-only in the header,
+      // so the field grid holds ONLY name + iban and no Type/Currency selects.
+      const withTx = renderModal({ account: TX_BANK_ACCOUNT });
+      let grid = screen.getByTestId('edit-account-name').closest('.grid');
+      expect(within(grid).getByTestId('edit-account-name')).toBeInTheDocument();
+      expect(within(grid).getByTestId('edit-account-iban')).toBeInTheDocument();
+      expect(within(grid).queryByTestId('edit-account-type')).not.toBeInTheDocument();
+      expect(within(grid).queryByTestId('edit-account-currency')).not.toBeInTheDocument();
+      withTx.unmount();
+
+      // EDITABLE case (no transactions) → the grid still has name + iban AND now the
+      // editable Type/Currency selects appear below them.
+      renderModal({ account: NO_TX_BANK_ACCOUNT });
+      grid = screen.getByTestId('edit-account-name').closest('.grid');
+      expect(within(grid).getByTestId('edit-account-name')).toBeInTheDocument();
+      expect(within(grid).getByTestId('edit-account-iban')).toBeInTheDocument();
+      expect(within(grid).getByTestId('edit-account-type')).toBeInTheDocument();
+      expect(within(grid).getByTestId('edit-account-currency')).toBeInTheDocument();
     });
   });
 });

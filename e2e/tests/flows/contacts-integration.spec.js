@@ -522,8 +522,15 @@ test.describe('Contacts Integration — Full journey', () => {
     const saveBtnB = page.getByTestId('action-save')
       .or(page.getByRole('button', { name: /^guardar$|^save$/i }));
     await expect(saveBtnB.first()).toBeEnabled({ timeout: 10_000 });
+    const saveBP = expectSaveResponse(page);
     await saveBtnB.first().click();
-    await expect(page).not.toHaveURL(/\/contacts\/new/, { timeout: 15_000 });
+    await saveBP;
+    // The save may succeed but the frontend redirect from /new to /{id} can be
+    // slow. Wait for the URL to change before asserting.
+    await page.waitForURL(
+      url => !url.toString().includes('/contacts/new'),
+      { timeout: 20_000 },
+    );
 
     // ═══════════════════════════════════════════════════════════════════════
     // PART 7: List view — verify contacts, columns, subset filters
