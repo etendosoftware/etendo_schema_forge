@@ -131,6 +131,7 @@ const {
   handleSaveErrorResponse,
   getNumericFieldViolation,
   reportInvalidFormatField,
+  extractErrorMessage,
 } = await import('../useEntity.js');
 
 // `sonner`'s `toast` export is a plain mutable object (Object.assign(basicToast,
@@ -966,5 +967,59 @@ describe('handleSaveErrorResponse', () => {
     assert.equal(result, undefined);
     assert.equal(fieldErrorsCalled, false);
     assert.deepEqual(saveErrorCalls, ['bad']);
+  });
+});
+
+describe('extractErrorMessage — AD-translated duplicate-identifier error (ETP-4597)', () => {
+  // Bug: Etendo AD's backend core sometimes already rewrites a raw Postgres
+  // unique-constraint violation into a human-readable-but-still-technical
+  // sentence that names the AD entity's technical field group — e.g. (in
+  // Spanish) "Ya existe un/a Categoría del producto con el mismo (Entidad,
+  // Organización, Identificador). (Entidad, Organización, Identificador) debe
+  // ser único. Cambie los valores introducidos" — or the English equivalent
+  // naming (Client, Organization, Identifier). normalizeServerError (private
+  // to useEntity.js, exercised here through the exported extractErrorMessage)
+  // only recognizes the RAW Postgres wording ("duplicate key value violates
+  // unique constraint"); this AD-translated sentence falls through untouched
+  // to the raw-message passthrough, so the technical field names leak to the
+  // end user.
+  //
+  // Contract asserted here (the eventual fix must satisfy this test, not the
+  // other way around): extractErrorMessage(res, ui) must rewrite this sentence
+  // into a short, generic, user-friendly message, and it must never leak
+  // "Entidad/Organización/Identificador" (or the EN equivalents
+  // Client/Organization/Identifier). The Spanish copy the end user actually
+  // sees lives in es_ES.json under the validationDuplicateIdentifier key (per
+  // the project i18n policy); this test exercises the untranslated code-level
+  // fallback default, which follows the English convention used by every
+  // sibling translate() call in this same function (validationRequiredField,
+  // validationRequiredGeneric, validationDuplicateRecord).
+  //
+  // `ui` is mocked as identity (i.e. "no translation available"), same
+  // convention already used by the handleSaveErrorResponse tests above.
+  const ui = (key) => key;
+  const FRIENDLY_MESSAGE = 'A record with the same identifier already exists. Please enter a different one.';
+  const AD_MESSAGE_ES = 'Ya existe un/a Categoría del producto con el mismo (Entidad, Organización, Identificador). '
+    + '(Entidad, Organización, Identificador) debe ser único. Cambie los valores introducidos';
+
+  const fakeResponse = (body, status = 400) => ({
+    status,
+    json: async () => body,
+  });
+
+  it('rewrites the AD-translated unique-constraint sentence into a generic friendly message', async () => {
+    const res = fakeResponse({ error: { message: AD_MESSAGE_ES } });
+
+    const result = await extractErrorMessage(res, ui);
+
+    assert.equal(result, FRIENDLY_MESSAGE);
+    // Guards against leaking the AD's technical field-group fingerprint
+    // (the parenthesized listing, e.g. "(Entidad, Organización, Identificador)"
+    // or "(Client, Organization, Identifier)") — not the word "identificador"
+    // in natural prose, which the mandated friendly message itself contains.
+    assert.doesNotMatch(
+      result,
+      /\(Entidad[,)]|\(Organizaci[oó]n[,)]|\(Client[,)]|\(Organization[,)]/i,
+    );
   });
 });

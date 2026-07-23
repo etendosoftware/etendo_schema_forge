@@ -160,6 +160,28 @@ export async function extractErrorMessage(res, ui) {
                 return translate('validationDuplicateRecord', 'A record with the same value already exists.');
             }
 
+            // ETP-4597: Etendo AD's backend core sometimes rewrites the raw Postgres
+            // unique-constraint violation into an already-translated sentence that
+            // names the AD entity's technical field group before it reaches the
+            // frontend, e.g. (Spanish) "Ya existe un/a Categoría del producto con el
+            // mismo (Entidad, Organización, Identificador). (Entidad, Organización,
+            // Identificador) debe ser único. Cambie los valores introducidos" — or the
+            // English equivalent naming (Client, Organization, Identifier). The regex
+            // above only matches the RAW Postgres wording, so this AD-translated
+            // sentence needs its own branch to avoid leaking technical field names.
+            // Gaps are bounded ({1,200}) rather than unbounded (.+) so the match can't
+            // be forced into super-linear backtracking on a pathological input
+            // (SonarQube javascript:S5852).
+            if (
+                /ya existe.{1,200}\(.{1,200}\).{1,200}debe ser único/i.test(decoded)
+                || /there is already.{1,200}\(.{1,200}\).{1,200}must be unique/i.test(decoded)
+            ) {
+                return translate(
+                    'validationDuplicateIdentifier',
+                    'A record with the same identifier already exists. Please enter a different one.'
+                );
+            }
+
             const raw = decoded.replace(/\s+/g, ' ').trim();
             return translateBackendError(raw, ui) || raw;
         };
