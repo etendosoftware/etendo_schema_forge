@@ -65,7 +65,7 @@ export default function InventoryPage() {
               <CardTitle
                 className="flex items-center gap-2 text-base"
                 data-testid="CardTitle__2d6473">
-                <AlertTriangle className="h-5 w-5 text-amber-500" data-testid="AlertTriangle__2d6473" />
+                <AlertTriangle className="h-5 w-5 text-status-warning-foreground" data-testid="AlertTriangle__2d6473" />
                 {ui('lowStockAlerts')}
               </CardTitle>
             </CardHeader>
@@ -84,7 +84,7 @@ export default function InventoryPage() {
                       variant={alert.severity === 'red' ? 'destructive' : 'outline'}
                       className={
                         alert.severity === 'amber'
-                          ? 'border-amber-300 bg-amber-50 text-amber-700'
+                          ? 'border-status-warning-border bg-status-warning text-status-warning-foreground'
                           : ''
                       }
                       data-testid="Badge__2d6473">
@@ -108,8 +108,8 @@ export default function InventoryPage() {
                   <div className="flex items-start gap-3">
                     <div className={`mt-0.5 rounded-full p-1 ${
                       movement.direction === 'in'
-                        ? 'bg-emerald-100 text-emerald-600'
-                        : 'bg-red-100 text-red-600'
+                        ? 'bg-status-success text-status-success-foreground'
+                        : 'bg-destructive text-destructive'
                     }`}>
                       {movement.direction === 'in'
                         ? <ArrowUp className="h-3.5 w-3.5" data-testid="ArrowUp__2d6473" />

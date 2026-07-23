@@ -31,7 +31,7 @@ function DimensionGrid({ fields, data, onChange, onFieldSave, apiBaseUrl, token,
   const t = useLabel(labelOverrides);
   return (
     <div
-      className={`[&_button[role=combobox]]:!bg-white [&_button[role=combobox]:hover]:!bg-[#F5F7F9] [&_input]:!bg-white${isCompleted ? '' : ' [&_input:disabled]:!opacity-100'}`}
+      className={`[&_button[role=combobox]]:!bg-card [&_button[role=combobox]:hover]:!bg-[hsl(var(--muted))] [&_input]:!bg-card${isCompleted ? '' : ' [&_input:disabled]:!opacity-100'}`}
       style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16 }}
     >
       {fields.filter(f => !f.hidden).map(f => {
@@ -44,7 +44,7 @@ function DimensionGrid({ fields, data, onChange, onFieldSave, apiBaseUrl, token,
             <label className="text-sm text-foreground font-medium block">{label}</label>
             {readOnly ? (
               <input
-                className="flex h-10 w-full rounded-lg border border-[#D1D4DB] bg-white p-2 text-sm disabled:cursor-not-allowed disabled:opacity-50"
+                className="flex h-10 w-full rounded-lg border border-[hsl(var(--border-control))] bg-card p-2 text-sm disabled:cursor-not-allowed disabled:opacity-50"
                 value={displayValue || value || ''}
                 disabled
                 readOnly
@@ -78,12 +78,12 @@ function getIdentifier(line, key) {
 }
 
 // Badge with "Label: Value" format, matching the UX spec
-// (bg #F5F7F9, radius 8px, padding 4px 8px, label #3F3F50, Inter 14px/20px).
+// (bg hsl(var(--muted)), radius 8px, padding 4px 8px, label hsl(var(--muted-foreground)), Inter 14px/20px).
 function DimBadge({ label, value }) {
   return (
-    <span className="inline-flex items-center px-2 py-1 rounded-lg bg-[#F5F7F9] text-sm leading-5 whitespace-nowrap max-w-full">
-      <span className="text-[#3F3F50]">{label}:</span>
-      <span className="ml-1 font-medium text-[#121217] truncate">{value}</span>
+    <span className="inline-flex items-center px-2 py-1 rounded-lg bg-[hsl(var(--muted))] text-sm leading-5 whitespace-nowrap max-w-full">
+      <span className="text-[hsl(var(--muted-foreground))]">{label}:</span>
+      <span className="ml-1 font-medium text-[hsl(var(--foreground))] truncate">{value}</span>
     </span>
   );
 }
@@ -108,7 +108,7 @@ function DimSummary({ line, onClick, processed, labelOverrides }) {
     return (
       <button
         onClick={onClick}
-        className="inline-flex items-center gap-1 h-7 px-2.5 rounded-lg border border-dashed border-[#D1D4DB] text-xs font-medium text-muted-foreground hover:text-foreground hover:border-[#828FA3] transition-colors"
+        className="inline-flex items-center gap-1 h-7 px-2.5 rounded-lg border border-dashed border-[hsl(var(--border-control))] text-xs font-medium text-muted-foreground hover:text-foreground hover:border-[hsl(var(--text-disabled))] transition-colors"
       >
         <Plus className="h-3 w-3" data-testid="Plus__fecdcf" />
         {ui('amortizationDimensionsEmpty')}
@@ -128,7 +128,7 @@ function DimSummary({ line, onClick, processed, labelOverrides }) {
         value={b.value}
         data-testid="DimBadge__fecdcf" />)}
       {extra > 0 && (
-        <span className="px-2 py-1 rounded-lg bg-[#F5F7F9] text-sm leading-5 font-medium text-[#3F3F50]">+{extra}</span>
+        <span className="px-2 py-1 rounded-lg bg-[hsl(var(--muted))] text-sm leading-5 font-medium text-[hsl(var(--muted-foreground))]">+{extra}</span>
       )}
     </button>
   );
@@ -378,8 +378,8 @@ export default function AmortizationLinesTable({
   return (
     <div className="flex-1 min-w-0" data-testid="inline-lines-panel">
       <table className="w-full">
-        {/* header — matches inlineEditable: sticky top-0 z-20 bg-white */}
-        <thead className="sticky top-0 z-20 bg-white">
+        {/* header — matches inlineEditable: sticky top-0 z-20 bg-card */}
+        <thead className="sticky top-0 z-20 bg-card">
           <tr className="border-b border-border/40">
             <th className="h-10 w-10 p-2 align-middle" />
             <th className="h-10 w-10 px-3 pr-0 align-middle">
@@ -441,7 +441,7 @@ export default function AmortizationLinesTable({
                         <button
                           type="button"
                           onClick={(e) => { e.stopPropagation(); if (!isEditing) setExpandedId(isExpanded ? null : line.id); }}
-                          className="flex h-7 w-7 items-center justify-center rounded-full border border-[#D1D4DB] bg-white text-[#6C6C89] transition-transform hover:bg-[#F5F7F9] hover:text-[#121217]"
+                          className="flex h-7 w-7 items-center justify-center rounded-full border border-[hsl(var(--border-control))] bg-card text-[hsl(var(--muted-foreground))] transition-transform hover:bg-[hsl(var(--muted))] hover:text-[hsl(var(--foreground))]"
                           style={{ transform: isExpanded ? 'rotate(180deg)' : undefined }}
                           aria-label={ui(isExpanded ? 'collapse' : 'expand')}
                           aria-expanded={isExpanded}
@@ -493,7 +493,7 @@ export default function AmortizationLinesTable({
                         <td className="py-1 px-2 align-middle" onClick={e => e.stopPropagation()}>
                           <input
                             type="number"
-                            className="h-8 w-full rounded-lg border border-[#D1D4DB] bg-white px-2 text-sm text-right tabular-nums"
+                            className="h-8 w-full rounded-lg border border-[hsl(var(--border-control))] bg-card px-2 text-sm text-right tabular-nums"
                             defaultValue={line.amortizationPercentage ?? ''}
                             onBlur={e => saveField(line.id, line, 'amortizationPercentage', e.target.value)}
                             onKeyDown={e => { if (e.key === 'Enter') { e.currentTarget.blur(); } else if (e.key === 'Escape') { setEditingLineId(null); } }}
@@ -510,7 +510,7 @@ export default function AmortizationLinesTable({
                         <td className="py-1 px-2 align-middle" onClick={e => e.stopPropagation()}>
                           <input
                             type="number"
-                            className="h-8 w-full rounded-lg border border-[#D1D4DB] bg-white px-2 text-sm text-right tabular-nums"
+                            className="h-8 w-full rounded-lg border border-[hsl(var(--border-control))] bg-card px-2 text-sm text-right tabular-nums"
                             defaultValue={line.amortizationAmount ?? ''}
                             onBlur={e => saveField(line.id, line, 'amortizationAmount', e.target.value)}
                             onKeyDown={e => { if (e.key === 'Enter') { e.currentTarget.blur(); } else if (e.key === 'Escape') { setEditingLineId(null); } }}
@@ -540,14 +540,14 @@ export default function AmortizationLinesTable({
                           <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-0.5 opacity-0 group-hover/row:opacity-100 transition-opacity z-10">
                             <button
                               onClick={() => setEditingLineId(isEditing ? null : line.id)}
-                              className={`h-8 w-8 p-0 flex items-center justify-center rounded-full transition-colors ${isEditing ? 'text-primary hover:bg-primary/10' : 'text-[#828FA3] hover:text-foreground hover:bg-muted/60'}`}
+                              className={`h-8 w-8 p-0 flex items-center justify-center rounded-full transition-colors ${isEditing ? 'text-primary hover:bg-primary/10' : 'text-[hsl(var(--text-disabled))] hover:text-foreground hover:bg-muted/60'}`}
                             >
                               <Pencil className="h-4 w-4" data-testid="Pencil__fecdcf" />
                             </button>
                             <button
                               onClick={() => deleteLine(line.id)}
                               disabled={deleting === line.id}
-                              className="h-8 w-8 p-0 flex items-center justify-center rounded-full text-[#D50B3E] hover:text-red-700 hover:bg-red-50 transition-colors disabled:opacity-50"
+                              className="h-8 w-8 p-0 flex items-center justify-center rounded-full text-[hsl(var(--destructive))] hover:text-destructive hover:bg-destructive transition-colors disabled:opacity-50"
                             >
                               {deleting === line.id ? <Loader2 className="h-4 w-4 animate-spin" data-testid="Loader2__fecdcf" /> : <Trash2 className="h-4 w-4" data-testid="Trash2__fecdcf" />}
                             </button>
@@ -558,12 +558,12 @@ export default function AmortizationLinesTable({
                     {/* ── dimension expand ── */}
                     {isExpanded && (
                       <tr className="border-b border-border/30">
-                        <td colSpan={7} className="bg-white px-10 pb-5 pt-3">
+                        <td colSpan={7} className="bg-card px-10 pb-5 pt-3">
                           {line['organization$_identifier'] && (
                             <div className="mb-4 grid grid-cols-4 gap-4">
                               <div>
                                 <label className="block text-xs font-medium text-muted-foreground mb-1">{ui('organization')} *</label>
-                                <div className="h-10 flex items-center px-3 rounded-lg border border-[#D1D4DB] bg-white text-sm text-foreground">{line['organization$_identifier']}</div>
+                                <div className="h-10 flex items-center px-3 rounded-lg border border-[hsl(var(--border-control))] bg-card text-sm text-foreground">{line['organization$_identifier']}</div>
                               </div>
                             </div>
                           )}
@@ -588,7 +588,7 @@ export default function AmortizationLinesTable({
 
               {/* ── inline add-line draft row (Sales Order InlineAddRow pattern) ── */}
               {addingLine && (
-                <tr ref={addRowRef} data-testid="inline-add-row" className="bg-blue-50/50 border-t-2 border-primary/20">
+                <tr ref={addRowRef} data-testid="inline-add-row" className="bg-status-info/50 border-t-2 border-primary/20">
                   <td className="w-10 p-2 align-middle" aria-hidden="true" />
                   <td className="px-3 pr-0" aria-hidden="true" />
                   <td className="py-1 px-2 align-middle">
@@ -610,7 +610,7 @@ export default function AmortizationLinesTable({
                       type="number"
                       inputMode="decimal"
                       placeholder={t('Amortization_Percentage')}
-                      className="w-full h-8 text-sm rounded-md border border-input bg-white px-2 text-right tabular-nums focus:ring-2 focus:ring-primary focus:outline-none"
+                      className="w-full h-8 text-sm rounded-md border border-input bg-card px-2 text-right tabular-nums focus:ring-2 focus:ring-primary focus:outline-none"
                       value={newLine.amortizationPercentage ?? ''}
                       onChange={e => setNewLine(p => ({ ...p, amortizationPercentage: e.target.value }))}
                       onKeyDown={onDraftKeyDown}
@@ -621,7 +621,7 @@ export default function AmortizationLinesTable({
                       type="number"
                       inputMode="decimal"
                       placeholder={t('Amortizationamt')}
-                      className="w-full h-8 text-sm rounded-md border border-input bg-white px-2 text-right tabular-nums focus:ring-2 focus:ring-primary focus:outline-none"
+                      className="w-full h-8 text-sm rounded-md border border-input bg-card px-2 text-right tabular-nums focus:ring-2 focus:ring-primary focus:outline-none"
                       value={newLine.amortizationAmount ?? ''}
                       onChange={e => setNewLine(p => ({ ...p, amortizationAmount: e.target.value }))}
                       onKeyDown={onDraftKeyDown}

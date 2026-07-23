@@ -5,27 +5,27 @@ import { formatCurrency } from '@/lib/formatCurrency';
 function MetricCard({ label, value, subtitle, tint = null }) {
   if (tint === 'green') {
     return (
-      <div className="rounded-xl bg-emerald-50 p-3">
-        <div className="text-xs text-emerald-600 mb-0.5">{label}</div>
-        <div className="text-lg font-bold leading-none text-emerald-800">{value}</div>
-        {subtitle && <div className="text-xs text-emerald-600 mt-1">{subtitle}</div>}
+      <div className="rounded-xl bg-status-success p-3">
+        <div className="text-xs text-status-success-foreground mb-0.5">{label}</div>
+        <div className="text-lg font-bold leading-none text-status-success-foreground">{value}</div>
+        {subtitle && <div className="text-xs text-status-success-foreground mt-1">{subtitle}</div>}
       </div>
     );
   }
   if (tint === 'amber') {
     return (
-      <div className="rounded-xl bg-amber-50 p-3">
-        <div className="text-xs text-amber-600 mb-0.5">{label}</div>
-        <div className="text-lg font-bold leading-none text-amber-800">{value}</div>
-        {subtitle && <div className="text-xs text-amber-600 mt-1">{subtitle}</div>}
+      <div className="rounded-xl bg-status-warning p-3">
+        <div className="text-xs text-status-warning-foreground mb-0.5">{label}</div>
+        <div className="text-lg font-bold leading-none text-status-warning-foreground">{value}</div>
+        {subtitle && <div className="text-xs text-status-warning-foreground mt-1">{subtitle}</div>}
       </div>
     );
   }
   return (
-    <div className="rounded-xl bg-blue-50 p-3">
-      <div className="text-xs text-blue-600 mb-0.5">{label}</div>
-      <div className="text-lg font-bold leading-none text-blue-900">{value}</div>
-      {subtitle && <div className="text-xs text-blue-500 mt-1">{subtitle}</div>}
+    <div className="rounded-xl bg-status-info p-3">
+      <div className="text-xs text-status-info-foreground mb-0.5">{label}</div>
+      <div className="text-lg font-bold leading-none text-status-info-foreground">{value}</div>
+      {subtitle && <div className="text-xs text-status-info-foreground mt-1">{subtitle}</div>}
     </div>
   );
 }
@@ -45,7 +45,7 @@ export default function AssetsSidebar({ data }) {
     <div className="flex flex-col gap-3">
       <div>
         <div className="pb-3">
-          <span className="text-sm font-semibold text-gray-800">{ui('assetsDepreciationSummary')}</span>
+          <span className="text-sm font-semibold text-foreground">{ui('assetsDepreciationSummary')}</span>
         </div>
         <div className="flex flex-col gap-3">
           <MetricCard

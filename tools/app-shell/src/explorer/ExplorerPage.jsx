@@ -40,11 +40,11 @@ export default function ExplorerPage() {
   };
 
   return (
-    <div className="flex h-full bg-zinc-950">
+    <div className="flex h-full bg-inverse">
       {/* Left: Spec list + Add */}
-      <div className="w-56 border-r border-zinc-800 flex-shrink-0 flex flex-col">
-        <div className="px-3 py-3 border-b border-zinc-800">
-          <h2 className="text-xs font-semibold text-zinc-400 uppercase tracking-wider">
+      <div className="w-56 border-r border-inverse-border flex-shrink-0 flex flex-col">
+        <div className="px-3 py-3 border-b border-inverse-border">
+          <h2 className="text-xs font-semibold text-inverse-muted uppercase tracking-wider">
             NEO Explorer
           </h2>
           {/* Mode toggle */}
@@ -53,7 +53,7 @@ export default function ExplorerPage() {
               onClick={() => setMode('test')}
               className={cn(
                 'flex-1 px-2 py-1 rounded text-[10px] font-medium transition-colors',
-                mode === 'test' ? 'bg-green-600/20 text-green-400' : 'text-zinc-500 hover:text-zinc-300'
+                mode === 'test' ? 'bg-status-success/20 text-status-success-foreground' : 'text-inverse-muted hover:text-inverse-foreground'
               )}
             >
               Test
@@ -62,7 +62,7 @@ export default function ExplorerPage() {
               onClick={() => setMode('manage')}
               className={cn(
                 'flex-1 px-2 py-1 rounded text-[10px] font-medium transition-colors',
-                mode === 'manage' ? 'bg-blue-600/20 text-blue-400' : 'text-zinc-500 hover:text-zinc-300'
+                mode === 'manage' ? 'bg-status-info/20 text-status-info-foreground' : 'text-inverse-muted hover:text-inverse-foreground'
               )}
             >
               Manage
@@ -85,7 +85,7 @@ export default function ExplorerPage() {
       {mode === 'test' ? (
         <>
           {/* Center: Entity panel */}
-          <div className="w-64 border-r border-zinc-800 flex-shrink-0">
+          <div className="w-64 border-r border-inverse-border flex-shrink-0">
             <EntityPanel
               specName={selectedSpec}
               selectedEntity={selectedEntity}
@@ -95,7 +95,7 @@ export default function ExplorerPage() {
 
           {/* Right: Request + Response */}
           <div className="flex-1 flex flex-col overflow-hidden">
-            <div className="p-4 border-b border-zinc-800">
+            <div className="p-4 border-b border-inverse-border">
               <RequestBuilder
                 specName={selectedSpec}
                 entity={selectedEntity}

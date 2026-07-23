@@ -139,7 +139,7 @@ function CollapsedGroupPopover({
         onMouseLeave={scheduleClose}
         className="w-52 p-0 overflow-hidden"
         data-testid="PopoverContent__247c75">
-        <p className="px-3 pt-3 pb-1 text-xs font-semibold text-[#6C6C89] uppercase tracking-wide">
+        <p className="px-3 pt-3 pb-1 text-xs font-semibold text-[hsl(var(--muted-foreground))] uppercase tracking-wide">
           {tMenu(group)}
         </p>
         <div className="pb-2">
@@ -211,7 +211,7 @@ function ExpandedDirectLink({ group, singleItem, Icon, showSectionLabel, section
     <div>
       {showSectionLabel && (
         <div className="px-4 pt-4 pb-1">
-          <span className="text-xs text-[#6C6C89]">{sectionLabel}</span>
+          <span className="text-xs text-[hsl(var(--muted-foreground))]">{sectionLabel}</span>
         </div>
       )}
       <div className="px-2 py-0.5">
@@ -272,7 +272,7 @@ function ExpandedGroupSection({
     <div>
       {showSectionLabel && (
         <div className="px-4 pt-4 pb-1">
-          <span className="text-xs text-[#6C6C89]">{sectionLabel}</span>
+          <span className="text-xs text-[hsl(var(--muted-foreground))]">{sectionLabel}</span>
         </div>
       )}
       <div className="px-2 py-0.5">
@@ -317,7 +317,7 @@ function ExpandedGroupSection({
                   onClick={onShowMoreFavorites}
                   className="relative flex w-full items-center pl-[52px] pr-4 py-1.5 text-sm text-muted-foreground hover:bg-muted/50 transition-colors"
                 >
-                  <span className="absolute left-[33px] top-0 bottom-0 w-px bg-[#E8EAEF]" />
+                  <span className="absolute left-[33px] top-0 bottom-0 w-px bg-[hsl(var(--border-subtle))]" />
                   <span className="flex-1 text-left">{andNMoreLabel}</span>
                   <ChevronDown className="h-3.5 w-3.5 shrink-0" data-testid="ChevronDown__247c75" />
                 </button>
@@ -336,7 +336,7 @@ function UnreadBadge({ unreadCount, expanded }) {
     return (
       <span
         className="flex h-6 min-w-6 items-center justify-center rounded-full px-1.5 text-xs font-bold leading-none"
-        style={{ background: '#FFD400', color: '#121217' }}
+        style={{ background: 'hsl(var(--primary))', color: 'hsl(var(--foreground))' }}
       >
         {label}
       </span>
@@ -344,8 +344,8 @@ function UnreadBadge({ unreadCount, expanded }) {
   }
   return (
     <span
-      className="absolute top-1 right-1 flex h-4 w-4 items-center justify-center rounded-full text-[10px] font-bold leading-none ring-2 ring-white"
-      style={{ background: '#FFD400', color: '#121217' }}
+      className="absolute top-1 right-1 flex h-4 w-4 items-center justify-center rounded-full text-[10px] font-bold leading-none ring-2 ring-background"
+      style={{ background: 'hsl(var(--primary))', color: 'hsl(var(--foreground))' }}
     >
       {label}
     </span>
@@ -433,7 +433,7 @@ function SideMenuFooter({ expanded, onHelpClick, unreadCount, ui, isArtifactsAct
       'flex flex-col shrink-0 pb-2',
       expanded ? 'px-2 gap-1 pt-2' : 'px-2 gap-1'
     )}>
-      <div className={cn('border-t border-[#E8EAEF] mb-1', expanded ? 'mx-[-8px]' : 'w-10')} />
+      <div className={cn('border-t border-[hsl(var(--border-subtle))] mb-1', expanded ? 'mx-[-8px]' : 'w-10')} />
       <HelpEntryPoint
         expanded={expanded}
         onClick={onHelpClick}
@@ -496,7 +496,15 @@ export default function SideMenu({
 
   useEffect(() => {
     setOpenGroups(activeGroup ? { [activeGroup.group]: true } : {});
-  }, [location.pathname, location.search]);
+    // `activeGroup?.group` (a stable primitive, not the whole recomputed-every-
+    // render object) is also a dependency: `menuGroups` can change without any
+    // navigation when role-filtered data (ETP-4598's allowedIds) resolves after
+    // an initial render where AD-backed items were filtered out. Without this,
+    // a direct/deep-link page load into a filtered group's route could permanently
+    // leave that group collapsed — the active group only gets (re)computed here
+    // on location changes, never in reaction to menuGroups itself changing.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.pathname, location.search, activeGroup?.group]);
 
   const [favOverflowOpen, setFavOverflowOpen] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
@@ -575,7 +583,7 @@ export default function SideMenu({
           </div>
         ) : (
           <div className="flex flex-row items-center justify-center h-[63px] px-2">
-            <div className="flex items-center w-10 h-full border-b border-[#E8EAEF]">
+            <div className="flex items-center w-10 h-full border-b border-[hsl(var(--border-subtle))]">
               <Tooltip delayDuration={0} data-testid="Tooltip__247c75">
                 <TooltipTrigger asChild data-testid="TooltipTrigger__247c75">
                   <button
@@ -697,7 +705,7 @@ export default function SideMenu({
                   data-testid={`menu-item-${item.slug || item.name?.replace(/\s+/g, '-').toLowerCase()}`}>
                   <span className={cn(
                     'absolute left-[33px] top-0 bottom-0 w-px',
-                    isItemActive ? 'bg-white/40' : 'bg-[#E8EAEF]'
+                    isItemActive ? 'bg-card/40' : 'bg-[hsl(var(--border-subtle))]'
                   )} />
                   {isItemActive && (
                     <span className="absolute left-[33px] right-2 top-0 bottom-0 bg-accent-highlight" />
@@ -718,7 +726,7 @@ export default function SideMenu({
                   to={`/${itemPath}`}
                   className="relative flex w-full items-center pl-[52px] pr-4 py-1.5 text-sm text-text-primary hover:bg-muted/50 transition-colors"
                   data-testid="NavLink__247c75">
-                  <span className="absolute left-[33px] top-0 bottom-0 w-px bg-[#E8EAEF]" />
+                  <span className="absolute left-[33px] top-0 bottom-0 w-px bg-[hsl(var(--border-subtle))]" />
                   <span className="relative z-10">
                     {item.labels?.[locale] || tMenu(favNameMap[itemPath] || item.label)}
                   </span>
