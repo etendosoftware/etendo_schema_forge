@@ -13,6 +13,10 @@ export function createMockFetch(mockData, basePath, catalogData = {}) {
   const catalogStore = structuredClone(catalogData);
 
   return async function mockFetch(url, options = {}) {
+    if (isWindowAccessMapRequest(url)) {
+      return handleWindowAccessMapRequest();
+    }
+
     if (!url.startsWith(basePath)) {
       return undefined;
     }
@@ -49,6 +53,33 @@ export function createMockFetch(mockData, basePath, catalogData = {}) {
 
     return makeResponse(404, { error: 'Not found' });
   };
+}
+
+// ETP-4520 — the SFWindowAccessMap webhook lives under `/webhooks/`, not under
+// the entity API `basePath` this file otherwise intercepts (see `App.jsx`'s
+// `fetchWindowAccess`), so it needs its own path check ahead of the
+// `basePath` guard above rather than falling through it. Without this, the
+// call bypasses the mock override entirely, hits a real network request that
+// doesn't exist in mock mode, and fails closed — `AuthProvider` then treats
+// every window/field as access-denied, which is not the intent of mock mode.
+const WINDOW_ACCESS_MAP_PATH = '/webhooks/SFWindowAccessMap';
+
+function isWindowAccessMapRequest(url) {
+  return url.includes(WINDOW_ACCESS_MAP_PATH);
+}
+
+// Grants full access to every window plus the accounting capability, so mock/
+// demo mode is fully usable by default. `windowAccess` is a Proxy (rather
+// than a fixed window-id list) so it resolves `"full"` for any window id
+// looked up (`useWindowAccess`'s `windowAccess?.[windowId]`) without needing
+// to hardcode or keep in sync a list of window ids here.
+const FULL_WINDOW_ACCESS = new Proxy({}, { get: () => 'full', has: () => true });
+
+function handleWindowAccessMapRequest() {
+  return makeResponse(200, {
+    windowAccess: FULL_WINDOW_ACCESS,
+    capabilities: { showAccountingFields: true },
+  });
 }
 
 function isEmailContractSend(method, segments) {

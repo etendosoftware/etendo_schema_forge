@@ -162,6 +162,19 @@ describe('createMockFetch', () => {
     assert.equal(data.error, 'Record not found');
   });
 
+  it('GET SFWindowAccessMap returns full access regardless of basePath', async () => {
+    const mockFetch = createMockFetch(mockData, basePath);
+    // This webhook lives under /webhooks/, not under `basePath` — it must be
+    // intercepted anyway (see ETP-4520 App.jsx `fetchWindowAccess`).
+    const res = await mockFetch('/etendo_sf/webhooks/SFWindowAccessMap');
+    assert.equal(res.ok, true);
+    assert.equal(res.status, 200);
+    const data = await res.json();
+    assert.equal(data.windowAccess['any-window-id'], 'full');
+    assert.equal(data.windowAccess['another-window-id'], 'full');
+    assert.equal(data.capabilities.showAccountingFields, true);
+  });
+
   it('non-API URL returns undefined (passthrough)', async () => {
     const mockFetch = createMockFetch(mockData, basePath);
     const result = await mockFetch('https://example.com/other');

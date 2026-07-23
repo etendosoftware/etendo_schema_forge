@@ -57,7 +57,15 @@ const API_BASE_URL = import.meta.env.VITE_MOCK === 'true'
 // @etendosoftware/app-shell-core). Fails closed on any error — returning
 // `null` leaves AuthProvider's existing ({}) windowAccess/capabilities maps in
 // place, which useWindowAccess/useHasCapability both treat as "no access".
-async function fetchWindowAccess(session) {
+// A valid access-map payload always carries at least one of these two keys
+// (see SFWindowAccessMap.java — both are always present together, but this
+// only requires one so a future partial/evolving shape isn't rejected).
+function looksLikeWindowAccessPayload(value) {
+  return !!value && typeof value === 'object' && !Array.isArray(value)
+    && ('windowAccess' in value || 'capabilities' in value);
+}
+
+export async function fetchWindowAccess(session) {
   try {
     const res = await fetch(`${apiBase}/webhooks/SFWindowAccessMap`, {
       method: 'GET',
@@ -69,11 +77,25 @@ async function fetchWindowAccess(session) {
     // Webhook responses in this app are inconsistent about wrapping the
     // payload — some (the `?name=`-style POST webhooks, e.g. SFListMenu) nest
     // it as a JSON string under `data.result`; this GET webhook may or may not.
-    // Handle both shapes defensively rather than assuming one.
+    // Handle all shapes defensively rather than assuming one:
+    //  - `data.result` is a JSON string  -> parse it (today's real shape,
+    //    see SFWindowAccessMap.java's `responseVars.put("result", ...)`).
+    //  - `data.result` is already a plain object -> use it directly.
+    //  - no `result` key -> `data` itself may already be the unwrapped
+    //    `{windowAccess, capabilities}` payload; use it only if it looks
+    //    right, otherwise fail closed (return `null`) rather than handing
+    //    AuthProvider the wrong shape (e.g. the outer `{result: ...}`
+    //    wrapper itself, which would silently deny every window/field).
     if (typeof data?.result === 'string') {
       try { return JSON.parse(data.result); } catch { return null; }
     }
-    return data;
+    if (data?.result && typeof data.result === 'object' && !Array.isArray(data.result)) {
+      return data.result;
+    }
+    if (looksLikeWindowAccessPayload(data)) {
+      return data;
+    }
+    return null;
   } catch {
     return null;
   }
