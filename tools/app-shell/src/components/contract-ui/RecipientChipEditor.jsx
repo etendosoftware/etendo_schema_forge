@@ -86,16 +86,16 @@ export default function RecipientChipEditor({
   return (
     <div>
       {label && (
-        <label style={{ fontSize: 12, fontWeight: 500, color: '#6B7280', display: 'block', marginBottom: 4 }}>
+        <label style={{ fontSize: 12, fontWeight: 500, color: 'hsl(var(--muted-foreground))', display: 'block', marginBottom: 4 }}>
           {label}
         </label>
       )}
-      <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 4, padding: '4px 8px', border: invalid ? '0.5px solid #dc2626' : '0.5px solid #d1d5db', borderRadius: 6, background: disabled ? '#f9fafb' : '#fff', boxSizing: 'border-box' }}>
+      <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 4, padding: '4px 8px', border: invalid ? '0.5px solid hsl(var(--destructive))' : '0.5px solid hsl(var(--text-disabled))', borderRadius: 6, background: disabled ? 'hsl(var(--muted))' : 'hsl(var(--card))', boxSizing: 'border-box' }}>
         {recipients.map(email => (
           <span
             key={email}
             data-testid={`${testIdPrefix}-chip-${email}`}
-            style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 13, color: '#111827', background: '#f3f4f6', borderRadius: 9999, padding: '2px 8px', maxWidth: '100%' }}
+            style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 13, color: 'hsl(var(--foreground))', background: 'hsl(var(--muted))', borderRadius: 9999, padding: '2px 8px', maxWidth: '100%' }}
           >
             <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{email}</span>
             <button
@@ -104,7 +104,7 @@ export default function RecipientChipEditor({
               aria-label={ui('sendModalRemoveRecipient', { email })}
               disabled={disabled}
               onClick={() => handleRemove(email)}
-              style={{ fontSize: 13, lineHeight: 1, padding: 0, border: 'none', background: 'none', color: '#6B7280', cursor: disabled ? 'default' : 'pointer' }}
+              style={{ fontSize: 13, lineHeight: 1, padding: 0, border: 'none', background: 'none', color: 'hsl(var(--muted-foreground))', cursor: disabled ? 'default' : 'pointer' }}
             >
               &times;
             </button>
@@ -119,11 +119,11 @@ export default function RecipientChipEditor({
           onChange={handleInputChange}
           onKeyDown={handleKeyDown}
           onBlur={() => commitDraft(draft)}
-          style={{ flex: 1, minWidth: 120, fontSize: 13, padding: '4px 2px', border: 'none', outline: 'none', color: '#111827', background: 'transparent' }}
+          style={{ flex: 1, minWidth: 120, fontSize: 13, padding: '4px 2px', border: 'none', outline: 'none', color: 'hsl(var(--foreground))', background: 'transparent' }}
         />
       </div>
       {invalid && (
-        <span role="alert" style={{ display: 'block', fontSize: 12, color: '#dc2626', marginTop: 4 }}>
+        <span role="alert" style={{ display: 'block', fontSize: 12, color: 'hsl(var(--destructive))', marginTop: 4 }}>
           {ui('sendModalInvalidEmail')}
         </span>
       )}

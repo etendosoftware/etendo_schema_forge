@@ -95,24 +95,24 @@ export default function AmortizationConfirmModal({ recordId, token, apiBaseUrl, 
             disabled={loading}
           >&times;</button>
 
-          <div style={{ fontSize: 10, color: '#9CA3AF', letterSpacing: '0.04em', marginBottom: 8, textTransform: 'uppercase' }}>
+          <div style={{ fontSize: 10, color: 'hsl(var(--muted-foreground))', letterSpacing: '0.04em', marginBottom: 8, textTransform: 'uppercase' }}>
             {ui('amortizationRef')}
           </div>
 
           {/* Blue summary card */}
           <div style={blueCardStyle}>
-            <div style={{ fontSize: 11, color: '#185FA5' }}>{name || '...'}</div>
-            <div style={{ fontSize: 28, fontWeight: 500, color: '#042C53', lineHeight: 1, marginTop: 4, marginBottom: 6 }}>
+            <div style={{ fontSize: 11, color: 'var(--status-info-fg)' }}>{name || '...'}</div>
+            <div style={{ fontSize: 28, fontWeight: 500, color: 'var(--status-info-fg)', lineHeight: 1, marginTop: 4, marginBottom: 6 }}>
               {total}{currency ? ` ${currency}` : ''}
             </div>
-            <div style={{ fontSize: 11, color: '#185FA5' }}>
+            <div style={{ fontSize: 11, color: 'var(--status-info-fg)' }}>
               {lineCount != null ? ui('amortizationLineCountLabel', { count: lineCount }) : '...'}
             </div>
 
             {/* Warning */}
             <div style={warningStyle}>
               <span style={{ fontSize: 14 }}>🔒</span>
-              <span style={{ fontSize: 12, color: '#92400E' }}>
+              <span style={{ fontSize: 12, color: 'var(--status-warning-fg)' }}>
                 {ui('amortizationConfirmWarning')}
               </span>
             </div>
@@ -121,7 +121,7 @@ export default function AmortizationConfirmModal({ recordId, token, apiBaseUrl, 
 
         {/* Error */}
         {error && (
-          <div style={{ padding: '8px 16px', fontSize: 12, color: '#DC2626', background: '#FEF2F2', borderTop: '0.5px solid #FECACA' }}>
+          <div style={{ padding: '8px 16px', fontSize: 12, color: 'hsl(var(--destructive))', background: 'hsl(var(--card))', borderTop: '0.5px solid hsl(var(--destructive))' }}>
             {error}
           </div>
         )}
@@ -143,32 +143,32 @@ export default function AmortizationConfirmModal({ recordId, token, apiBaseUrl, 
 const overlayStyle = {
   position: 'fixed', inset: 0, zIndex: 50,
   display: 'flex', alignItems: 'center', justifyContent: 'center',
-  background: 'rgba(0,0,0,0.3)',
+  background: 'hsl(var(--foreground) / 0.3)',
 };
 const cardStyle = {
-  width: 420, borderRadius: 14, background: '#fff',
-  boxShadow: '0 8px 30px rgba(0,0,0,0.15)', border: '0.5px solid #E5E7EB',
+  width: 420, borderRadius: 14, background: 'hsl(var(--card))',
+  boxShadow: '0 8px 30px hsl(var(--foreground) / 0.15)', border: '0.5px solid hsl(var(--card))',
   overflow: 'hidden',
 };
 const blueCardStyle = {
-  background: '#E6F1FB', border: '0.5px solid #B5D4F4', borderRadius: 10,
+  background: 'hsl(var(--card))', border: '0.5px solid var(--status-info-bg)', borderRadius: 10,
   padding: '14px 16px', marginBottom: 14, display: 'flex', flexDirection: 'column', gap: 0,
 };
 const warningStyle = {
   display: 'flex', alignItems: 'flex-start', gap: 8,
-  background: '#FFFBEB', border: '0.5px solid #FDE68A', borderRadius: 8,
+  background: 'hsl(var(--card))', border: '0.5px solid var(--status-warning-bg)', borderRadius: 8,
   padding: '10px 12px', marginTop: 10,
 };
 const closeBtnStyle = {
   position: 'absolute', top: 10, right: 12,
   fontSize: 18, lineHeight: 1, padding: '2px 6px', borderRadius: 4,
-  background: 'none', border: 'none', cursor: 'pointer', color: '#9CA3AF',
+  background: 'none', border: 'none', cursor: 'pointer', color: 'hsl(var(--muted-foreground))',
 };
 const btnSecondary = {
   padding: '8px 16px', borderRadius: 8, fontSize: 13, fontWeight: 500,
-  background: '#fff', border: '1px solid #E5E7EB', color: '#374151', cursor: 'pointer',
+  background: 'hsl(var(--card))', border: '1px solid hsl(var(--card))', color: 'var(--status-info-bg)', cursor: 'pointer',
 };
 const btnPrimary = {
   padding: '8px 20px', borderRadius: 8, fontSize: 13, fontWeight: 600,
-  background: '#1E3A5F', border: 'none', color: '#fff', cursor: 'pointer',
+  background: 'var(--status-info-bg)', border: 'none', color: 'hsl(var(--card))', cursor: 'pointer',
 };

@@ -21,14 +21,14 @@ describe('financial-accounts barrel exports', () => {
 
 describe('financial-accounts tokens', () => {
   it('exposes the Figma color palette', () => {
-    expect(COLORS.textPrimary).toBe('#121217');
-    expect(COLORS.bgGray50).toBe('#f5f7f9');
-    expect(COLORS.brand).toBe('#ffd500');
+    expect(COLORS.textPrimary).toBe('hsl(var(--foreground))');
+    expect(COLORS.bgGray50).toBe('hsl(var(--muted))');
+    expect(COLORS.brand).toBe('hsl(var(--primary))');
   });
 
   it('exposes the radii and shadow tokens', () => {
     expect(RADII).toEqual({ none: 0, md: 8, pill: 360 });
-    expect(SHADOWS.xs).toBe('0 1px 2px rgba(18, 18, 23, 0.05)');
+    expect(SHADOWS.xs).toBe('0 1px 2px hsl(var(--foreground) / 0.05)');
   });
 
   it('exposes the account-type constants', () => {

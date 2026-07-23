@@ -1,8 +1,8 @@
 {
-  "version": "0.40.0",
+  "version": "0.42.0",
   "generatedAt": "2026-04-29T19:06:30.936Z",
-  "updatedAt": "2026-07-21T19:17:39.692Z",
-  "checksum": "0110ff5e9f0978e9",
+  "updatedAt": "2026-07-23T16:39:42.243Z",
+  "checksum": "48cbc477153ab315",
   "frontendContract": {
     "window": {
       "id": "800027",
@@ -13,7 +13,7 @@
       "hidePrint": true,
       "hideMoreMenu": true,
       "hideMoreDetails": true,
-      "contentBg": "bg-white",
+      "contentBg": "bg-card",
       "hideLink": true,
       "hideEyeCount": true,
       "breadcrumb": "Finance / Assets",
@@ -91,7 +91,7 @@
       "hideFormCard": true,
       "sidebarAboveTabsOnly": true,
       "tabsSeparator": true,
-      "sidebarClassName": "w-[30%] shrink-0 border-l border-[#E8EAEF] p-2",
+      "sidebarClassName": "w-[30%] shrink-0 border-l border-border-subtle p-2",
       "formScrollPaddingX": "px-2",
       "toolbarPaddingX": "px-2",
       "toolbarButtonSize": "default",
@@ -333,8 +333,10 @@
             "grid": false,
             "form": false,
             "businessCritical": true,
+            "min": 1,
             "validation": {
-              "maxLength": 12
+              "maxLength": 12,
+              "minimum": 1
             },
             "displayLogic": {
               "raw": "@IsDepreciated@='Y' & @Amortizationcalctype@!'TI'",
@@ -393,8 +395,11 @@
             "grid": false,
             "form": false,
             "businessCritical": true,
+            "min": 1,
+            "integer": true,
             "validation": {
-              "maxLength": 10
+              "maxLength": 10,
+              "minimum": 1
             },
             "displayLogic": {
               "raw": "@IsDepreciated@='Y'  & @Amortizationcalctype@ = 'TI' & @Assetschedule@='YE'",
@@ -414,8 +419,11 @@
             "grid": false,
             "form": false,
             "businessCritical": true,
+            "min": 1,
+            "integer": true,
             "validation": {
-              "maxLength": 10
+              "maxLength": 10,
+              "minimum": 1
             },
             "displayLogic": {
               "raw": "@IsDepreciated@='Y' & @Amortizationcalctype@='TI' & @Assetschedule@!'YE'",
@@ -1082,7 +1090,7 @@
       "hidePrint": true,
       "hideMoreMenu": true,
       "hideMoreDetails": true,
-      "contentBg": "bg-white",
+      "contentBg": "bg-card",
       "hideLink": true,
       "hideEyeCount": true,
       "breadcrumb": "Finance / Assets",
@@ -1160,7 +1168,7 @@
       "hideFormCard": true,
       "sidebarAboveTabsOnly": true,
       "tabsSeparator": true,
-      "sidebarClassName": "w-[30%] shrink-0 border-l border-[#E8EAEF] p-2",
+      "sidebarClassName": "w-[30%] shrink-0 border-l border-border-subtle p-2",
       "formScrollPaddingX": "px-2",
       "toolbarPaddingX": "px-2",
       "toolbarButtonSize": "default",

@@ -25,28 +25,35 @@ export const RETURN_ORDER_LINE_CONFIG = LINE_CONFIGS.returnOrder;
 
 // ─── Pure helpers (no React, fully testable) ──────────────────────────────────
 
+// A tax factor is always positive, so a valid gross/base pair always shares
+// the same sign. Guards against deriving a nonsensical factor from a sibling
+// line left in a stale/inconsistent state.
+function sameSign(a, b) {
+  return (a > 0) === (b > 0);
+}
+
 function resolveTaxFactorFromSiblings(taxId, siblings, grossField, discountField) {
   if (taxId != null) {
     const ref = (siblings || []).find(l => {
       if (l.tax !== taxId) return false;
       const gross = parseFloat(String(l[grossField] ?? l.grossAmount ?? l.lineGrossAmount ?? '')) || 0;
-      if (gross <= 0) return false;
+      if (gross === 0) return false;
       const net = parseFloat(String(l.lineNetAmount ?? '')) || 0;
-      if (net > 0) return true;
+      if (net !== 0) return sameSign(gross, net);
       const qty = parseFloat(String(l.orderedQuantity ?? l.invoicedQuantity ?? '')) || 0;
       const price = parseFloat(String(l.unitPrice ?? '')) || 0;
-      return qty > 0 && price > 0;
+      return qty !== 0 && price !== 0 && sameSign(gross, qty * price);
     });
     if (ref) {
       const gross = parseFloat(String(ref[grossField] ?? ref.grossAmount ?? ref.lineGrossAmount ?? '')) || 0;
       const net = parseFloat(String(ref.lineNetAmount ?? '')) || 0;
       const disc = parseFloat(String(ref[discountField] ?? '')) || 0;
       const factor = disc > 0 ? (1 - disc / 100) : 1;
-      if (net > 0) return gross / (net * factor);
+      if (net !== 0 && sameSign(gross, net)) return gross / (net * factor);
       const qty = parseFloat(String(ref.orderedQuantity ?? ref.invoicedQuantity ?? '')) || 0;
       const price = parseFloat(String(ref.unitPrice ?? '')) || 0;
       const base = qty * price * factor;
-      if (base > 0) return gross / base;
+      if (base !== 0 && sameSign(gross, base)) return gross / base;
     }
   }
 
@@ -91,9 +98,14 @@ export function resolveTaxFactor(taxId, calloutResult, rowValues, taxRateCache, 
   }
 
   // 3. Ratio from current row's persisted amounts (sidebar)
+  // A tax factor is always positive, so a valid gross/net pair always shares
+  // the same sign. A mismatch means the saved line is in a stale/inconsistent
+  // state (e.g. price and quantity edited independently, each partial save
+  // trusting a different ratio) — untrustworthy, fall through instead of
+  // deriving a nonsensical factor from it.
   const savedGross = parseFloat(String(rowValues[grossField] ?? rowValues.grossAmount ?? '')) || 0;
   const savedNet   = parseFloat(String(rowValues.lineNetAmount ?? '')) || 0;
-  if (savedGross > 0 && savedNet > 0) return savedGross / savedNet;
+  if (savedGross !== 0 && savedNet !== 0 && (savedGross > 0) === (savedNet > 0)) return savedGross / savedNet;
 
   // 4. Any sibling line with the same tax
   return resolveTaxFactorFromSiblings(taxId, siblings, grossField, discountField);
@@ -107,11 +119,11 @@ function deriveNetFromProductChange(calloutResult, priceField, rowValues, discou
       : String(rowValues[priceField] ?? '');
   const p = parseFloat(priceStr) || 0;
   const d = parseFloat(String(calloutResult[discountField] ?? rowValues[discountField] ?? '')) || 0;
-  return qty > 0 && p > 0 ? qty * p * (1 - d / 100) : 0;
+  return qty !== 0 && p !== 0 ? qty * p * (1 - d / 100) : 0;
 }
 
 function calculateBasicLineNet(qty, price, discFactor) {
-  return qty > 0 && price > 0 ? qty * price * discFactor : 0;
+  return qty !== 0 && price !== 0 ? qty * price * discFactor : 0;
 }
 
 /**
@@ -140,17 +152,17 @@ export function deriveLineNet(field, value, calloutResult, rowValues, qtyField, 
 
   if (field === qtyField) {
     const q = parseFloat(value) || 0;
-    return q > 0 && price > 0 ? q * price * discFactor : 0;
+    return q !== 0 && price !== 0 ? q * price * discFactor : 0;
   }
 
   if (field === priceField) {
     const p = parseFloat(value) || 0;
-    return qty > 0 && p > 0 ? qty * p * discFactor : 0;
+    return qty !== 0 && p !== 0 ? qty * p * discFactor : 0;
   }
 
   if (field === discountField) {
     const d = parseFloat(String(value)) || 0;
-    return qty > 0 && price > 0 ? qty * price * (1 - d / 100) : 0;
+    return qty !== 0 && price !== 0 ? qty * price * (1 - d / 100) : 0;
   }
 
   if (field === 'product') {
@@ -189,7 +201,7 @@ export function computeLineGrossAmount(field, value, calloutResult, rowValues, t
 
   // Keep lineNetAmount in sync for fields the UI computes client-side.
   const clientSideFields = [config.qtyField, config.priceField, discountField];
-  if (clientSideFields.includes(field) && lineNet > 0) {
+  if (clientSideFields.includes(field) && lineNet !== 0) {
     if (calloutResult.lineNetAmount == null || Number(calloutResult.lineNetAmount) === 0) {
       calloutResult.lineNetAmount = parseFloat(lineNet.toFixed(2));
     }
@@ -206,7 +218,7 @@ export function computeLineGrossAmount(field, value, calloutResult, rowValues, t
   if (clientSideFields.includes(field) && lineNet === 0) {
     const qty   = parseFloat(String(rowValues[config.qtyField]   ?? '')) || 0;
     const price = parseFloat(String(rowValues[config.priceField] ?? '')) || 0;
-    if (qty > 0 && price > 0) {
+    if (qty !== 0 && price !== 0) {
       calloutResult.lineNetAmount = 0;
       calloutResult.grossAmount = 0;
       calloutResult[config.grossField] = 0;
@@ -214,7 +226,7 @@ export function computeLineGrossAmount(field, value, calloutResult, rowValues, t
     return;
   }
 
-  if (lineNet <= 0) return;
+  if (lineNet === 0) return;
 
   const taxId  = calloutResult.tax ?? rowValues.tax;
   const factor = resolveTaxFactor(taxId, calloutResult, rowValues, taxRateCache, siblings, config.grossField, discountField);
@@ -243,7 +255,11 @@ export function computeUnitPriceForPost(lineData, config) {
   const discountField = config.discountField || 'discount';
   const listPrice = parseFloat(String(lineData[config.priceField] ?? '')) || 0;
   const discount  = parseFloat(String(lineData[discountField]     ?? '')) || 0;
-  if (listPrice > 0) {
+  // 0 means "not entered" (indeterminate, skip deriving unitPrice), but a real
+  // negative listPrice (credit/return lines, ETP-4567) must still compute and
+  // be sent — see the guard fix in computeLineGrossAmount above for the same
+  // reason.
+  if (listPrice !== 0) {
     lineData.unitPrice = parseFloat((listPrice * (1 - discount / 100)).toFixed(6));
   }
 }
