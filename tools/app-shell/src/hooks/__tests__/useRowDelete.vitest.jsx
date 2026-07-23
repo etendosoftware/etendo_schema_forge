@@ -168,4 +168,57 @@ describe('useRowDelete', () => {
     expect(toast.error).toHaveBeenCalledWith('Cannot remove: referenced elsewhere');
     expect(defaultOpts.onSuccess).not.toHaveBeenCalled();
   });
+
+  // ETP-4656 — standardized delete UX: a failed delete must close the confirm
+  // dialog too (previously it stayed open on top of the error toast).
+  it('closes the confirm dialog on failure too (not just on success)', async () => {
+    const { toast } = await import('sonner');
+    const deleteFn = vi.fn().mockRejectedValue(new Error('Cannot remove: referenced elsewhere'));
+
+    function TestComponent() {
+      const { requestDelete, deleteDialog } = useRowDelete({ ...defaultOpts, deleteFn });
+      return (
+        <>
+          <button onClick={() => requestDelete({ id: '999' })}>Del</button>
+          {deleteDialog}
+        </>
+      );
+    }
+
+    render(<TestComponent />);
+    const user = userEvent.setup();
+
+    await act(async () => { await user.click(screen.getByText('Del')); });
+    expect(screen.getByText('Confirm Delete')).toBeInTheDocument();
+
+    await act(async () => { await user.click(screen.getByTestId('row-quick-action-delete-confirm')); });
+
+    expect(toast.error).toHaveBeenCalledWith('Cannot remove: referenced elsewhere');
+    // Dialog content is unmounted (Dialog's `open` prop is now false).
+    expect(screen.queryByText('Confirm Delete')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('row-quick-action-delete-confirm')).not.toBeInTheDocument();
+  });
+
+  it('closes the confirm dialog and calls onSuccess on a successful delete (regression)', async () => {
+    globalThis.fetch.mockResolvedValue({ ok: true });
+
+    function TestComponent() {
+      const { requestDelete, deleteDialog } = useRowDelete(defaultOpts);
+      return (
+        <>
+          <button onClick={() => requestDelete({ id: '456' })}>Del</button>
+          {deleteDialog}
+        </>
+      );
+    }
+
+    render(<TestComponent />);
+    const user = userEvent.setup();
+
+    await act(async () => { await user.click(screen.getByText('Del')); });
+    await act(async () => { await user.click(screen.getByTestId('row-quick-action-delete-confirm')); });
+
+    expect(screen.queryByText('Confirm Delete')).not.toBeInTheDocument();
+    expect(defaultOpts.onSuccess).toHaveBeenCalled();
+  });
 });

@@ -2177,8 +2177,8 @@ export function DetailView({
       }
       return;
     }
-    await hook.handleDelete();
-    navigate(`/${windowName}`);
+    const deleted = await hook.handleDelete();
+    if (deleted) navigate(`/${windowName}`);
   };
   // Non-dismissible loading modal shown while a draftMode confirm action with
   // draftMode.processingModal is in flight (e.g. Verifactu's ~8s GenerateRF).
