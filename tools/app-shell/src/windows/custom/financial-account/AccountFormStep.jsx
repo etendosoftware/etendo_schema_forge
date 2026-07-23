@@ -191,7 +191,7 @@ export function AccountFormStep({
           type="submit"
           disabled={!canSubmit}
           data-testid="account-form-submit"
-          className="h-10 rounded-full bg-[hsl(var(--foreground))] px-5 text-sm font-medium text-primary-foreground transition-colors hover:bg-[hsl(var(--primary))] hover:text-[hsl(var(--foreground))] disabled:bg-[hsl(var(--border-control))] disabled:text-primary-foreground disabled:opacity-100"
+          className="h-10 rounded-full bg-[hsl(var(--foreground))] px-5 text-sm font-medium text-primary-foreground transition-colors hover:opacity-90 disabled:bg-[hsl(var(--border-control))] disabled:text-primary-foreground disabled:opacity-100"
         >
           {submitLabel || ui('financeAccountsNewSubmit')}
         </Button>
