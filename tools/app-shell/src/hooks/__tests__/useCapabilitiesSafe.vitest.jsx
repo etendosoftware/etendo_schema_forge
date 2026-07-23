@@ -42,4 +42,38 @@ describe('useCapabilitiesSafe', () => {
     render(<Probe />);
     expect(screen.getByTestId('probe')).toHaveTextContent('{}');
   });
+
+  // ETP-4520 — referential stability: callers (e.g. DataTable.jsx) put the
+  // returned capabilities object in useMemo/useCallback dependency arrays. A
+  // fresh `{}` literal on every fallback call would defeat that memoization
+  // even when nothing changed. useAuth() is mocked as a plain function here
+  // (no real hook internals), so useCapabilitiesSafe() can be called directly
+  // without a component render to compare references across calls.
+  describe('referential stability across calls', () => {
+    it('returns the same object reference when capabilities is undefined', () => {
+      mockUseAuth.mockReturnValue({ capabilities: undefined });
+      const first = useCapabilitiesSafe();
+      const second = useCapabilitiesSafe();
+      expect(first).toBe(second);
+    });
+
+    it('returns the same object reference when useAuth() throws', () => {
+      mockUseAuth.mockImplementation(() => {
+        throw new Error('useAuth must be used within AuthProvider');
+      });
+      const first = useCapabilitiesSafe();
+      const second = useCapabilitiesSafe();
+      expect(first).toBe(second);
+    });
+
+    it('returns the same reference from the undefined path and the throw path', () => {
+      mockUseAuth.mockReturnValue({ capabilities: undefined });
+      const fromUndefined = useCapabilitiesSafe();
+      mockUseAuth.mockImplementation(() => {
+        throw new Error('useAuth must be used within AuthProvider');
+      });
+      const fromThrow = useCapabilitiesSafe();
+      expect(fromUndefined).toBe(fromThrow);
+    });
+  });
 });

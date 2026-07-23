@@ -1,5 +1,12 @@
 import { useAuth } from '@/auth/AuthContext.jsx';
 
+// ETP-4520 — a single shared empty-map reference for both fallback paths
+// below, so callers that memoize on the returned `capabilities` object
+// (`useMemo`/`useCallback` deps, e.g. DataTable.jsx) see a stable reference
+// across renders instead of a fresh `{}` literal every time, which would
+// defeat that memoization even when nothing actually changed.
+const EMPTY_CAPABILITIES = {};
+
 /**
  * ETP-4520 — Reads `capabilities` off `useAuth()` without requiring the
  * caller to be wrapped in `AuthProvider`. `useAuth()` throws when no provider
@@ -20,8 +27,8 @@ import { useAuth } from '@/auth/AuthContext.jsx';
 export function useCapabilitiesSafe() {
   try {
     // eslint-disable-next-line react-hooks/rules-of-hooks -- see comment above
-    return useAuth().capabilities || {};
+    return useAuth().capabilities || EMPTY_CAPABILITIES;
   } catch {
-    return {};
+    return EMPTY_CAPABILITIES;
   }
 }
