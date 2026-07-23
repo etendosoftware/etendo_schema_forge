@@ -217,7 +217,7 @@ Each role has explicit window access grants:
 | `IsReadWrite` | `Y` = full access, `N` = read-only |
 | `IsActive` | Whether this grant is active |
 
-**Frontend enforcement**: The SPA should hide windows and action buttons that the user's role cannot access. This is a UX improvement, not a security boundary.
+**Frontend enforcement**: The SPA's sidebar hides menu items (windows/processes) the current role cannot access — it fetches the `SFListMenu` webhook's role-pruned tree and filters the static `menu.json`-driven sidebar against it (see [06 -- Frontend Delivery: Menu and Registry](06-frontend-delivery.md#menu-and-registry)). Action-button-level hiding per role is not yet implemented. This remains a UX improvement, not a security boundary.
 
 **Backend enforcement (mandatory)**: Every RequestHandler MUST validate that the current user's role has access to the requested window/entity before processing any CRUD operation. Frontend-only enforcement is trivially bypassed.
 
