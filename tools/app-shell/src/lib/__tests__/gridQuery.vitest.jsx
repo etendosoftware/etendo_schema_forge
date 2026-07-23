@@ -437,7 +437,15 @@ describe('buildAdvancedFilterCriteria', () => {
     };
     const result = buildAdvancedFilterCriteria(filter, columns);
     expect(result).toEqual([
-      { fieldName: 'name', operator: 'inSet', value: 'a,b,c' },
+      {
+        _constructor: 'AdvancedCriteria',
+        operator: 'or',
+        criteria: [
+          { fieldName: 'name', operator: 'iEquals', value: 'a' },
+          { fieldName: 'name', operator: 'iEquals', value: 'b' },
+          { fieldName: 'name', operator: 'iEquals', value: 'c' },
+        ],
+      },
     ]);
   });
 
@@ -563,7 +571,7 @@ describe('buildAdvancedFilterCriteria', () => {
       conditions: [{ field: 'name', operator: 'inSet', value: ['only'] }],
     };
     const result = buildAdvancedFilterCriteria(filter, columns);
-    expect(result).toEqual([{ fieldName: 'name', operator: 'equals', value: 'only' }]);
+    expect(result).toEqual([{ fieldName: 'name', operator: 'iEquals', value: 'only' }]);
   });
 
   it('handles inSet with empty array', () => {
@@ -580,7 +588,17 @@ describe('buildAdvancedFilterCriteria', () => {
       conditions: [{ field: 'name', operator: 'inSet', value: 'a,b,c' }],
     };
     const result = buildAdvancedFilterCriteria(filter, columns);
-    expect(result).toEqual([{ fieldName: 'name', operator: 'inSet', value: 'a,b,c' }]);
+    expect(result).toEqual([
+      {
+        _constructor: 'AdvancedCriteria',
+        operator: 'or',
+        criteria: [
+          { fieldName: 'name', operator: 'iEquals', value: 'a' },
+          { fieldName: 'name', operator: 'iEquals', value: 'b' },
+          { fieldName: 'name', operator: 'iEquals', value: 'c' },
+        ],
+      },
+    ]);
   });
 
   it('handles multi-value array with single item (no OR wrap)', () => {
@@ -1394,7 +1412,7 @@ describe('buildAdvancedFilterCriteria — inSet filtering edge cases', () => {
       conditions: [{ field: 'name', operator: 'inSet', value: [null, '', 'valid'] }],
     };
     const result = buildAdvancedFilterCriteria(filter, columns);
-    expect(result).toEqual([{ fieldName: 'name', operator: 'equals', value: 'valid' }]);
+    expect(result).toEqual([{ fieldName: 'name', operator: 'iEquals', value: 'valid' }]);
   });
 
   it('returns null when inSet array has only null/empty values', () => {
@@ -1411,7 +1429,16 @@ describe('buildAdvancedFilterCriteria — inSet filtering edge cases', () => {
       conditions: [{ field: 'name', operator: 'inSet', value: 'a, b' }],
     };
     const result = buildAdvancedFilterCriteria(filter, columns);
-    expect(result).toEqual([{ fieldName: 'name', operator: 'inSet', value: 'a,b' }]);
+    expect(result).toEqual([
+      {
+        _constructor: 'AdvancedCriteria',
+        operator: 'or',
+        criteria: [
+          { fieldName: 'name', operator: 'iEquals', value: 'a' },
+          { fieldName: 'name', operator: 'iEquals', value: 'b' },
+        ],
+      },
+    ]);
   });
 
   it('handles inSet string with single value after trim', () => {
@@ -1420,7 +1447,7 @@ describe('buildAdvancedFilterCriteria — inSet filtering edge cases', () => {
       conditions: [{ field: 'name', operator: 'inSet', value: 'solo' }],
     };
     const result = buildAdvancedFilterCriteria(filter, columns);
-    expect(result).toEqual([{ fieldName: 'name', operator: 'equals', value: 'solo' }]);
+    expect(result).toEqual([{ fieldName: 'name', operator: 'iEquals', value: 'solo' }]);
   });
 });
 
