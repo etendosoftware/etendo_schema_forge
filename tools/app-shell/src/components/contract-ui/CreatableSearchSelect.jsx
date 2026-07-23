@@ -443,7 +443,7 @@ export function CreatableSearchSelect({
     */
     <div
       ref={rootRef}
-      className={`relative flex ${FIELD_HEIGHT} w-full items-center rounded-lg border border-[hsl(var(--border-control))] bg-transparent shadow-[0px_1px_2px_hsl(var(--foreground) / 0.05)] pl-2 pr-2 gap-1 focus-within:ring-2 focus-within:ring-primary${isDisabled ? ' opacity-50 cursor-not-allowed' : ''}`}
+      className={`relative flex ${FIELD_HEIGHT} w-full items-center rounded-lg border border-[hsl(var(--border-control))] shadow-[0px_1px_2px_hsl(var(--foreground) / 0.05)] pl-2 pr-2 gap-1 focus-within:ring-2 focus-within:ring-primary${isDisabled ? ' bg-muted text-text-disabled cursor-not-allowed' : ' bg-transparent'}`}
       onClick={showChip && !isDisabled ? handleChipClick : undefined}
     >
       {showChip ? (

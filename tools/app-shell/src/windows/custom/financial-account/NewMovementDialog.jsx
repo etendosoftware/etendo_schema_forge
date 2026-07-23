@@ -231,7 +231,7 @@ export function NewMovementDialog({ open, accountId, accountCurrency, onClose, o
               type="submit"
               disabled={creating}
               data-testid="new-movement-submit"
-              className="inline-flex h-10 items-center rounded-lg bg-[hsl(var(--foreground))] px-4 text-sm font-medium text-primary-foreground hover:bg-[hsl(var(--primary))] hover:text-[hsl(var(--foreground))] disabled:opacity-50 disabled:cursor-not-allowed"
+              className="inline-flex h-10 items-center rounded-lg bg-[hsl(var(--foreground))] px-4 text-sm font-medium text-primary-foreground hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {creating ? ui('financeAccountMovementsNewSaving') : ui('financeAccountMovementsNewConfirm')}
             </button>

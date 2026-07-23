@@ -583,7 +583,7 @@ export default function InvoicePaymentHistoryModal({
                 type="button"
                 onClick={() => { setEditingPayment(null); setShowPaymentModal(true); }}
                 data-testid="InvoicePaymentHistoryModal__add-btn"
-                className="bg-[hsl(var(--foreground))] text-primary-foreground hover:bg-[hsl(var(--primary))] hover:text-[hsl(var(--foreground))] transition-colors"
+                className="bg-[hsl(var(--foreground))] text-primary-foreground hover:opacity-90 transition-colors"
                 style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 14, lineHeight: '24px', fontWeight: 500, padding: '8px 14px', borderRadius: 360, border: 'none', outline: 'none', cursor: 'pointer' }}
               >
                 <svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 5v14M5 12h14"/></svg>

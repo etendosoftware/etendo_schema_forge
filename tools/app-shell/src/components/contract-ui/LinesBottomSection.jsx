@@ -86,7 +86,7 @@ export default function LinesBottomSection({
 
           {notesField && (
             <div
-              className={`flex items-start gap-3 px-3 ${RelatedDocumentsComponent ? 'mt-3 border-t border-border-structural pt-3' : ''}`}
+              className={`flex items-start gap-3 px-3 ${RelatedDocumentsComponent ? 'mt-3 border-t border-border-subtle pt-3' : ''}`}
             >
               <span className="text-[11px] font-medium text-foreground uppercase shrink-0 w-24 pt-1.5" style={{ letterSpacing: '0.04em' }}>
                 {ui('notes')}
