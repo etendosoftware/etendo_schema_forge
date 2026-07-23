@@ -13,7 +13,7 @@ const breadcrumb = 'Settings / Price List';
 
 // @sf-generated-start summary:priceList
 const summary = [
-
+  { key: 'currency', column: 'C_Currency_ID', type: 'selector' },
 ];
 
 const statusField = null;
@@ -42,7 +42,7 @@ const draftMode = null;
 // @sf-generated-end draftMode:priceList
 
 // @sf-generated-start requiredHeaderFields:priceList
-const requiredHeaderFields = ['name', 'currency', 'salesPriceList', 'costBasedPriceList', 'active', 'priceIncludesTax', 'default'];
+const requiredHeaderFields = ['name', 'salesPriceList', 'default', 'active'];
 // @sf-generated-end requiredHeaderFields:priceList
 
 // @sf-generated-start addLineFields:priceListVersion
@@ -176,6 +176,7 @@ export const api = {
     "es_ES": {
       "Name": "Nombre",
       "C_Currency_ID": "Moneda",
+      "IsSOPriceList": "Tarifa de venta",
       "Costbased": "Basado en coste",
       "IsTaxIncluded": "Precio incluye impuesto",
       "IsDefault": "Por defecto",

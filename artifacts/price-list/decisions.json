@@ -11,6 +11,7 @@
       "es_ES": {
         "Name": "Nombre",
         "C_Currency_ID": "Moneda",
+        "IsSOPriceList": "Tarifa de venta",
         "Costbased": "Basado en coste",
         "IsTaxIncluded": "Precio incluye impuesto",
         "IsDefault": "Por defecto",
@@ -26,10 +27,14 @@
           "grid": true,
           "searchable": true,
           "section": "principal",
-          "seq": 1
+          "seq": 1,
+          "order": 1
         },
         "currency": {
-          "grid": true,
+          "visibility": "readOnly",
+          "grid": false,
+          "form": true,
+          "required": false,
           "section": "principal",
           "seq": 2
         },
@@ -42,6 +47,7 @@
           "grid": true,
           "section": "principal",
           "seq": 4,
+          "order": 2,
           "badge": true,
           "labels": { "es_ES": "Tipo", "en_US": "Type" },
           "badgeLabels": {
@@ -54,26 +60,45 @@
           }
         },
         "costBasedPriceList": {
-          "grid": false,
-          "section": "principal",
-          "seq": 5
+          "visibility": "discarded"
         },
         "priceIncludesTax": {
-          "grid": false,
-          "section": "principal",
-          "seq": 6
+          "visibility": "discarded"
         },
         "default": {
-          "grid": false,
+          "grid": true,
           "section": "principal",
-          "seq": 7
+          "seq": 7,
+          "order": 3,
+          "badge": true,
+          "labels": { "es_ES": "Por defecto", "en_US": "Default" },
+          "badgeLabels": {
+            "true": { "es_ES": "Sí", "en_US": "Yes" },
+            "false": { "es_ES": "No", "en_US": "No" }
+          }
+        },
+        "etgoProductcount": {
+          "visibility": "readOnly",
+          "grid": true,
+          "form": false,
+          "section": "principal",
+          "seq": 8,
+          "order": 4,
+          "labels": { "es_ES": "Nº de productos", "en_US": "Product Count" }
         },
         "active": {
           "visibility": "editable",
-          "grid": false,
+          "grid": true,
           "form": true,
           "section": "principal",
-          "seq": 8
+          "seq": 9,
+          "order": 5,
+          "badge": true,
+          "labels": { "es_ES": "Activo", "en_US": "Active" },
+          "badgeLabels": {
+            "true": { "es_ES": "Sí", "en_US": "Yes" },
+            "false": { "es_ES": "No", "en_US": "No" }
+          }
         },
         "enforcePriceLimit": {
           "visibility": "discarded"
