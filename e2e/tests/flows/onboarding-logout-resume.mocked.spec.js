@@ -77,6 +77,13 @@ async function logout(page) {
 }
 
 test.describe('ETP-4584 — onboarding logout and resume', () => {
+  // SetupShell (Profile/Company steps) plays a 500ms enter transform/opacity
+  // transition on every step mount. Under parallel-worker CPU contention that
+  // can outlast Playwright's actionability polling and make the next click
+  // report "element is not stable" — reduced motion honors the component's
+  // own motion-reduce:transition-none escape hatch and removes the flake.
+  test.use({ reducedMotion: 'reduce' });
+
   test('saves edited Profile before cleanup, logs in, and restores its values', async ({ page }) => {
     const state = await installOnboardingMocks(page);
     await registerToProfile(page);
