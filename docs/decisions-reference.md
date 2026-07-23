@@ -534,6 +534,7 @@ Entity keys use **camelCase from tabName** (e.g., `"header"`, `"lines"`, `"basic
 | `draftMode` | object | `null` | Draft/Processed workflow config. |
 | `javaQualifier` | string | `null` | CDI qualifier for custom NeoHandler. |
 | `handlesDefaults` | boolean | `true` | **HandleDefaults.** When `true` (default), a new detail line's add-row fetches `GET /{detailEntity}/defaults?parentId=…` on open and pre-fills empty editable fields from the backend-resolved defaults (reusing the header-defaults normalization). Set `false` to opt this detail entity out — the add-row keeps literal-only seeding and no `/defaults` request is made. Emitted to the contract / runtime `api.crud` only when `false`. |
+| `hideDelete` | boolean | `false` | Disables the CRUD delete capability for **this entity only** (`apiPrediction.crud.<entity>.delete: false`) — unlike `window.hideDelete`, which disables delete uniformly across every entity in the window. `DetailView`'s row-delete handler, bulk-delete bar, and delete-eligibility checks all gate directly on this same `crud.delete` flag, so setting it also removes the row-level delete icon/checkbox in the UI, not just the declared API capability. Use for a child/detail entity whose rows are exclusively managed as a side effect of the parent's own save (e.g. a NeoHandler syncing a join table from a parent field) — manual row deletion there would let a user bypass that invariant. Added ETP-4512 (`userRoles` on the `user` window). |
 
 ### Line HandleDefaults (`entities.{name}.handlesDefaults`)
 
