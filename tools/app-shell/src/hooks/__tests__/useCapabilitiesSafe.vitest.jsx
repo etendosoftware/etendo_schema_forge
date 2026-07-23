@@ -8,9 +8,15 @@
  *   - no `AuthProvider` ancestor → `useAuth()` throws (its real contract)
  *   - `AuthProvider` present, capabilities loaded → returns the map
  *   - `AuthProvider` present, capabilities not yet loaded (undefined) → {}
+ *   - `useAuth()` throws a DIFFERENT error → must propagate, not be swallowed
  */
 import { render, screen } from '@testing-library/react';
 import { useCapabilitiesSafe } from '../useCapabilitiesSafe.js';
+
+// Suppress React's noisy console.error for the intentional-throw test below —
+// React logs the error boundary-less render error in addition to it
+// propagating, which is expected here and not itself under test.
+const originalConsoleError = console.error;
 
 const mockUseAuth = vi.fn();
 vi.mock('@/auth/AuthContext.jsx', () => ({
@@ -41,6 +47,16 @@ describe('useCapabilitiesSafe', () => {
     mockUseAuth.mockReturnValue({ capabilities: undefined });
     render(<Probe />);
     expect(screen.getByTestId('probe')).toHaveTextContent('{}');
+  });
+
+  it('rethrows an unrelated error instead of swallowing it', () => {
+    // eslint-disable-next-line no-console -- expected React render-error log, silenced deliberately for this test
+    console.error = vi.fn();
+    mockUseAuth.mockImplementation(() => {
+      throw new Error('some unrelated AuthContext bug');
+    });
+    expect(() => render(<Probe />)).toThrow('some unrelated AuthContext bug');
+    console.error = originalConsoleError;
   });
 
   // ETP-4520 — referential stability: callers (e.g. DataTable.jsx) put the

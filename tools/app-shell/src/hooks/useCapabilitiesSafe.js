@@ -7,6 +7,14 @@ import { useAuth } from '@/auth/AuthContext.jsx';
 // defeat that memoization even when nothing actually changed.
 const EMPTY_CAPABILITIES = {};
 
+// ETP-4520 — the exact message `useAuth()` throws (AuthContext.jsx in
+// schema_forge_core, ~line 126) when called with no `AuthProvider` ancestor.
+// AuthContext.jsx does not export an error class/constant to match against,
+// so this is a hardcoded string match — a minor coupling to that literal.
+// If it ever changes, this hook stops recognizing the expected case and
+// starts rethrowing it (fails loud, not silently swallowing something new).
+const NO_AUTH_PROVIDER_MESSAGE = 'useAuth must be used within AuthProvider';
+
 /**
  * ETP-4520 — Reads `capabilities` off `useAuth()` without requiring the
  * caller to be wrapped in `AuthProvider`. `useAuth()` throws when no provider
@@ -22,13 +30,21 @@ const EMPTY_CAPABILITIES = {};
  * `isCapabilityVisible` (`@/lib/capabilityVisibility.js`) already treats as
  * "nothing loaded" (fail closed).
  *
+ * Only the specific "no AuthProvider" error is swallowed — any other error
+ * (e.g. a real bug inside `AuthContext`/`useAuth()` itself) is rethrown so it
+ * surfaces as an actual failure instead of silently looking like "no
+ * capabilities loaded".
+ *
  * @returns {Record<string, boolean>}
  */
 export function useCapabilitiesSafe() {
   try {
     // eslint-disable-next-line react-hooks/rules-of-hooks -- see comment above
     return useAuth().capabilities || EMPTY_CAPABILITIES;
-  } catch {
-    return EMPTY_CAPABILITIES;
+  } catch (err) {
+    if (err instanceof Error && err.message === NO_AUTH_PROVIDER_MESSAGE) {
+      return EMPTY_CAPABILITIES;
+    }
+    throw err;
   }
 }
