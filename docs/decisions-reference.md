@@ -606,6 +606,7 @@ Applied to fields with `grid: true` to control how the list cell renders.
 | `gridReadOnly` | boolean | `false` | Make an otherwise-editable column read-only in the grid. |
 | `grow` | boolean | `false` | Let the column grow to fill available width. |
 | `cellType` | string | `null` | Selects a cell renderer from the registry (see below). Generic to any grid; the `list-modal` layout ships a styled set. |
+| `visibleWhenCapability` | string | `null` | Names a capability key (e.g. `"showAccountingFields"`) from the `capabilities` map returned by the `GET /webhooks/SFWindowAccessMap` webhook. Opt-in — absent means always visible. Gates both the grid column and any `window.statusPills` entry referencing this field; the field is omitted entirely (not disabled) when the capability resolves `false`. Full mechanics (generator wiring, fail-closed behavior): `schema_forge_core`'s `docs/decisions-reference.md`. Shipped example: `posted` on `sales-invoice`/`purchase-invoice` — see those windows' `docs/generated-custom-windows/*.md` guides. |
 
 #### Status column rendering (`columnType` and `enumValues`)
 
