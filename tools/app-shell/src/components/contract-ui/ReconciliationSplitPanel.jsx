@@ -232,14 +232,14 @@ function MoneyCell({ value, currency, cellClassName, bold = false, secondaryValu
         {secondaryValue != null ? (
           // MoneyAmount doesn't forward extra props (no data-testid), so the testid goes on this
           // wrapping span instead — MoneyAmount itself keeps its own internal testid.
-          <span data-testid="recon-cand-amount-base">
+          (<span data-testid="recon-cand-amount-base">
             <MoneyAmount
               value={Number(secondaryValue) || 0}
               currency={secondaryCurrency}
               tone="neutral"
               className="text-xs leading-4 text-[hsl(var(--muted-foreground))]"
               data-testid="MoneyAmount-secondary__d0f4d5" />
-          </span>
+          </span>)
         ) : null}
       </div>
     </TableCell>
