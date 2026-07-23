@@ -640,7 +640,7 @@ export function EditAccountModal({ open, onClose, onSaved, account, onArchive, o
           data-testid="AccountFieldsGrid__73027d" />
 
         <Tabs value={editTab} onValueChange={setEditTab} className="-mt-3" data-testid="EditAccountTabs__73027d">
-          <TabsList className="w-full border-b border-[#E8EAEF]" data-testid="EditAccountTabsList__73027d">
+          <TabsList className="w-full border-b border-border-subtle" data-testid="EditAccountTabsList__73027d">
             {/* Cash accounts have no bank connection and no statement reconciliation, so the
                 General tab (PSD2 + reconciliation config) has nothing to show for them — hide the
                 tab itself rather than rendering it with empty content. */}
@@ -778,7 +778,7 @@ function AccountFieldsGrid({ ui, account, isCash, psd2Connected, fields }) {
           label={ui('financeAccountsPsd2FieldType')}
           data-testid="EditField__73027d">
           <Select value={fields.type} onValueChange={fields.setType} data-testid="Select__73027d">
-            <SelectTrigger data-testid="edit-account-type" className="bg-white">
+            <SelectTrigger data-testid="edit-account-type" className="bg-card">
               <SelectValue
                 placeholder={ui('financeAccountsPsd2FieldType')}
                 data-testid="SelectValue__73027d" />
@@ -832,7 +832,7 @@ function AccountStatusInfo({ ui, account, typeLabel }) {
       <StatusItem
         label={ui('financeAccountsPsd2FieldType')}
         data-testid="StatusItem__73027d">
-        <span className="text-sm font-semibold leading-6 text-[#121217]" data-testid="edit-account-type-info">
+        <span className="text-sm font-semibold leading-6 text-foreground" data-testid="edit-account-type-info">
           {typeLabel || '—'}
         </span>
       </StatusItem>
@@ -840,7 +840,7 @@ function AccountStatusInfo({ ui, account, typeLabel }) {
         label={ui('financeAccountsPsd2FieldCurrency')}
         data-testid="StatusItem__73027d">
         <span
-          className="inline-flex h-6 w-fit items-center rounded-md bg-[#F2F3F5] px-2 text-sm font-medium text-[#121217]"
+          className="inline-flex h-6 w-fit items-center rounded-md bg-muted px-2 text-sm font-medium text-foreground"
           data-testid="edit-account-currency-info">
           {account.currencyIso || '—'}
         </span>
@@ -853,7 +853,7 @@ function AccountStatusInfo({ ui, account, typeLabel }) {
 function StatusItem({ label, children }) {
   return (
     <div className="flex flex-col gap-1">
-      <span className="text-xs font-medium uppercase tracking-wide text-[#6C6C89]">{label}</span>
+      <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{label}</span>
       {children}
     </div>
   );
