@@ -1757,6 +1757,25 @@ export function dispatchProcessAction(p, { processConfirmModal, setConfirmProces
   else { handleProcess?.(p); }
 }
 
+/**
+ * ETP-4542: opt-in "save before running a process" gate. Only windows that pass
+ * `saveBeforeProcesses` participate; every other window keeps the previous behavior
+ * (returns true immediately, no save). When the form has pending changes (`isDirty`,
+ * the same signal that drives the Save button), the changes are persisted silently
+ * (`{ silent: true }` suppresses the success toast) BEFORE the process flow opens, so
+ * the process runs on fresh data. On save failure — required missing, ETP-4542 numeric
+ * violation, or a backend error — `handleSave` has already surfaced the error and returns
+ * a record without an id; this returns false so the caller aborts without opening the
+ * confirm modal, param dialog, or firing the process POST.
+ *
+ * @returns {Promise<boolean>} true → proceed with the process; false → abort silently.
+ */
+export async function maybeSaveBeforeProcess({ saveBeforeProcesses, isDirty, handleSave }) {
+  if (!saveBeforeProcesses || !isDirty) return true;
+  const saved = await handleSave?.({ silent: true });
+  return !!saved?.id;
+}
+
 export function resolveProcessLabel(p, data) {
   if (p.labelToggle && data?.[p.labelToggle.field] === p.labelToggle.equals) {
     return p.labelToggle.label;
@@ -1883,6 +1902,11 @@ export function DetailView({
   secondaryTabsShowHoverLine = false,
   tabsSeparator = false,
   saveBeforeProcesses = false,
+  // ETP-4542: opt-in per window. When true, a header process button whose action is
+  // currently running shows a spinner + "Generating..." label and is disabled to
+  // prevent duplicate executions. Windows that don't pass it keep the current behavior
+  // (no spinner, no extra disabled state). Distinct from saveBeforeProcesses on purpose.
+  showProcessLoadingState = false,
   hideAddLineChevron = false,
   addLineButtonPaddingX = '',
   formScrollPaddingB = 'pb-6',
@@ -3606,13 +3630,19 @@ export function DetailView({
                   const isPrimary = p.style === 'positive';
                   const btnClass = getButtonClass(salesTheme, p, isPrimary);
                   const processCtx = { processConfirmModal, setConfirmProcess, setParamDialogProcess, handleProcess: hook.handleProcess };
+                  // ETP-4542: match the running-process id (columnName ?? name) set by the
+                  // hook. Only reflect the loading state when the window opted in.
+                  const isRunning = showProcessLoadingState
+                    && hook.runningProcess != null
+                    && hook.runningProcess === (p.columnName ?? p.name);
                   return (
                     <Button
                       key={p.name}
                       variant={isPrimary ? 'default' : 'outline'}
                       size="default"
                       className={`${btnClass} ${saveBtnCls}`.trim()}
-                      onClick={() => {
+                      disabled={isRunning}
+                      onClick={async () => {
                         for (const g of (p.requiresFieldMax ?? [])) {
                           const condOk = !g.conditionalOnField || data?.[g.conditionalOnField] === g.conditionalValue;
                           if (condOk && Number(data?.[g.field] ?? 0) > Number(g.max)) {
@@ -3620,11 +3650,29 @@ export function DetailView({
                             return;
                           }
                         }
+                        // ETP-4542: opt-in per window (saveBeforeProcesses). Persist pending
+                        // changes silently before running the process; abort if that save fails
+                        // (handleSave already surfaced the error). See maybeSaveBeforeProcess.
+                        const canProceed = await maybeSaveBeforeProcess({
+                          saveBeforeProcesses, isDirty, handleSave: hook.handleSave,
+                        });
+                        if (!canProceed) return;
                         dispatchProcessAction(p, processCtx);
                       }}
                       data-testid="Button__fa3275">
-                      {p.style === 'ghost-danger' && <Undo2 size={16} className="mr-1 text-[#D50B3E]" data-testid="Undo2__fa3275" />}
-                      {tMenu(resolveProcessLabel(p, data))}
+                      {isRunning
+                        ? (
+                          <>
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" data-testid="Loader2__process-running" />
+                            {ui('generating')}
+                          </>
+                        )
+                        : (
+                          <>
+                            {p.style === 'ghost-danger' && <Undo2 size={16} className="mr-1 text-[#D50B3E]" data-testid="Undo2__fa3275" />}
+                            {tMenu(resolveProcessLabel(p, data))}
+                          </>
+                        )}
                     </Button>
                   );
                 })}
@@ -3885,7 +3933,7 @@ export function DetailView({
                         {/* Form footer: inline content below form, above tabs */}
                         {formFooter && (
                           <div className={embedded ? 'pointer-events-none' : ''}>
-                            {React.createElement(formFooter, { data, entity, onChange: handleChangeWithCallout, onLocalChange: hook.handleChange, catalogs, api, token, apiBaseUrl, editing: hook.editing })}
+                            {React.createElement(formFooter, { data, entity, onChange: handleChangeWithCallout, onLocalChange: hook.handleChange, catalogs, api, token, apiBaseUrl, editing: hook.editing, registerFields: hook.registerFields, fieldErrors: hook.fieldErrors })}
                           </div>
                         )}
                       </>

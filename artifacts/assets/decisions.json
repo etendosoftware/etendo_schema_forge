@@ -150,6 +150,7 @@
         },
         "annualDepreciation": {
           "form": false,
+          "min": 1,
           "displayLogicJs": "(record.depreciate === true || record.depreciate === 'Y') && record.calculateType !== 'TI'",
           "businessCritical": true
         },
@@ -160,11 +161,15 @@
         },
         "usableLifeYears": {
           "form": false,
+          "min": 1,
+          "integer": true,
           "displayLogicJs": "(record.depreciate === true || record.depreciate === 'Y') && record.calculateType === 'TI' && record.amortize === 'YE'",
           "businessCritical": true
         },
         "usableLifeMonths": {
           "form": false,
+          "min": 1,
+          "integer": true,
           "displayLogicJs": "(record.depreciate === true || record.depreciate === 'Y') && record.calculateType === 'TI' && record.amortize !== 'YE'",
           "businessCritical": true
         },

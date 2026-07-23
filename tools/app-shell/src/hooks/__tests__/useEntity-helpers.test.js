@@ -129,7 +129,15 @@ const {
   reportMissingRequiredFields,
   showSaveSuccessToast,
   handleSaveErrorResponse,
+  getNumericFieldViolation,
+  reportInvalidFormatField,
 } = await import('../useEntity.js');
+
+// `sonner`'s `toast` export is a plain mutable object (Object.assign(basicToast,
+// {...})), so its methods can be monkeypatched for the duration of a test
+// without a module mock — no ESM mock loader is wired up for third-party
+// packages in this file (only `@/` workspace specifiers are intercepted).
+const { toast } = await import('sonner');
 
 describe('pickMessage', () => {
   it('returns the trimmed string for a string input', () => {
@@ -757,6 +765,149 @@ describe('showSaveSuccessToast', () => {
   it('does not throw when silent is false (existing record)', () => {
     const ui = (key) => key;
     assert.doesNotThrow(() => showSaveSuccessToast(false, false, ui));
+  });
+});
+
+describe('getNumericFieldViolation (ETP-4542 — generic min/integer save block)', () => {
+  // Assets usableLife contract: min 1, integer, conditional visibility.
+  const USABLE_LIFE_FIELDS = [
+    {
+      key: 'usableLifeMonths',
+      min: 1,
+      integer: true,
+      displayLogic: (record) => record.calculateType === 'TI' && record.amortize !== 'YE',
+    },
+    {
+      key: 'usableLifeYears',
+      min: 1,
+      integer: true,
+      displayLogic: (record) => record.calculateType === 'TI' && record.amortize === 'YE',
+    },
+  ];
+
+  it('blocks save with fieldMinValueError (min param) when a visible min-constrained field is zero', () => {
+    const editing = { calculateType: 'TI', amortize: 'MO', usableLifeMonths: 0 };
+    assert.deepEqual(getNumericFieldViolation(USABLE_LIFE_FIELDS, editing), {
+      key: 'usableLifeMonths', errorKey: 'fieldMinValueError', errorParams: { min: 1 },
+    });
+  });
+
+  it('blocks save with fieldMinValueError when the value is negative', () => {
+    const editing = { calculateType: 'TI', amortize: 'MO', usableLifeMonths: -3 };
+    assert.deepEqual(getNumericFieldViolation(USABLE_LIFE_FIELDS, editing), {
+      key: 'usableLifeMonths', errorKey: 'fieldMinValueError', errorParams: { min: 1 },
+    });
+  });
+
+  it('blocks save with fieldIntegerError (no params) when the value is decimal', () => {
+    const editing = { calculateType: 'TI', amortize: 'MO', usableLifeMonths: 5.5 };
+    assert.deepEqual(getNumericFieldViolation(USABLE_LIFE_FIELDS, editing), {
+      key: 'usableLifeMonths', errorKey: 'fieldIntegerError', errorParams: {},
+    });
+  });
+
+  it('blocks save on the years field when it is the visible one', () => {
+    const editing = { calculateType: 'TI', amortize: 'YE', usableLifeYears: 0 };
+    assert.deepEqual(getNumericFieldViolation(USABLE_LIFE_FIELDS, editing), {
+      key: 'usableLifeYears', errorKey: 'fieldMinValueError', errorParams: { min: 1 },
+    });
+  });
+
+  it('does NOT block on an empty value (required mechanism owns emptiness)', () => {
+    const editing = { calculateType: 'TI', amortize: 'MO', usableLifeMonths: '' };
+    assert.equal(getNumericFieldViolation(USABLE_LIFE_FIELDS, editing), null);
+  });
+
+  it('allows save when the value is a valid positive integer', () => {
+    const editing = { calculateType: 'TI', amortize: 'MO', usableLifeMonths: 12 };
+    assert.equal(getNumericFieldViolation(USABLE_LIFE_FIELDS, editing), null);
+  });
+
+  it('does NOT block when the invalid field is hidden by displayLogic', () => {
+    const editing = { calculateType: 'TI', amortize: 'MO', usableLifeMonths: 12, usableLifeYears: -1 };
+    assert.equal(getNumericFieldViolation(USABLE_LIFE_FIELDS, editing), null);
+  });
+
+  it('does NOT block when the field is read-only (completed document)', () => {
+    const fields = [{
+      key: 'usableLifeMonths',
+      min: 1,
+      integer: true,
+      readOnlyLogic: (record) => record.processed === true,
+      displayLogic: () => true,
+    }];
+    const editing = { processed: true, usableLifeMonths: -5 };
+    assert.equal(getNumericFieldViolation(fields, editing), null);
+  });
+
+  it('accepts a decimal on a field that declares min but NOT integer (default allows decimals)', () => {
+    const fields = [{ key: 'discount', min: 0, displayLogic: () => true }];
+    assert.equal(getNumericFieldViolation(fields, { discount: 2.5 }), null);
+  });
+
+  it('is a no-op for windows whose fields declare neither min nor integer', () => {
+    const fields = [{ key: 'businessPartner' }, { key: 'orderDate' }];
+    const editing = { businessPartner: '', orderDate: -5 };
+    assert.equal(getNumericFieldViolation(fields, editing), null);
+  });
+
+  it('is a no-op on an empty fields array', () => {
+    assert.equal(getNumericFieldViolation([], {}), null);
+  });
+});
+
+describe('reportInvalidFormatField (ETP-4542, bug 2/3 — toast dedup id)', () => {
+  const ui = (key, params = {}) => `${key}:${JSON.stringify(params)}`;
+  const noop = () => {};
+
+  // Monkeypatch toast.error around each test, restoring the original after —
+  // toast is a real sonner instance here (no mock loader for node_modules),
+  // and its methods are plain mutable object properties.
+  const withCapturedToastError = (fn) => {
+    const original = toast.error;
+    const calls = [];
+    toast.error = (...args) => calls.push(args);
+    try {
+      fn(calls);
+    } finally {
+      toast.error = original;
+    }
+  };
+
+  it('passes { id: toastId } to toast.error when a toastId is given', () => {
+    withCapturedToastError((calls) => {
+      reportInvalidFormatField('fieldMinValueError', ui, noop, noop, 'numeric-field-qty', { min: 1 });
+      assert.equal(calls.length, 1);
+      assert.deepEqual(calls[0], [ui('fieldMinValueError', { min: 1 }), { id: 'numeric-field-qty' }]);
+    });
+  });
+
+  it('calls toast.error with a single arg when no toastId is given (email/website/phone gates, unchanged)', () => {
+    withCapturedToastError((calls) => {
+      reportInvalidFormatField('sendModalInvalidEmail', ui, noop, noop);
+      assert.equal(calls.length, 1);
+      assert.deepEqual(calls[0], [ui('sendModalInvalidEmail', {})]);
+    });
+  });
+
+  it('returns null and flips isSaving to false regardless of toastId', () => {
+    const isSavingCalls = [];
+    let result;
+    withCapturedToastError(() => {
+      result = reportInvalidFormatField('fieldMinValueError', ui, noop, (v) => isSavingCalls.push(v), 'numeric-field-qty', { min: 1 });
+    });
+    assert.equal(result, null);
+    assert.deepEqual(isSavingCalls, [false]);
+  });
+
+  it('the id derived from getNumericFieldViolation.key matches EntityForm\'s numericFieldToastId for the same field', async () => {
+    // Cross-file contract: EntityForm's blur toast and this save-gate toast
+    // MUST compute the identical id for the same field key so sonner dedupes
+    // a near-simultaneous blur+click into a single toast instead of stacking.
+    const { numericFieldToastId } = await import('../../lib/numericValidation.js');
+    const fields = [{ key: 'usableLifeMonths', min: 1, integer: true, displayLogic: () => true }];
+    const violation = getNumericFieldViolation(fields, { usableLifeMonths: 0 });
+    assert.equal(numericFieldToastId(violation.key), 'numeric-field-usableLifeMonths');
   });
 });
 

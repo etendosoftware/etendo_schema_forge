@@ -86,10 +86,15 @@ export default function AssetsConfigPanel({ data, token, apiBaseUrl, catalogs, a
   const deprecFields = [
     { key: 'depreciationType', column: 'Amortizationtype', type: 'select', label: ui('assetsOptLinear'), required: true, section: 'other', options: [{ value: 'LI', label: ui('assetsOptLinear') }] },
     { key: 'calculateType', column: 'Amortizationcalctype', type: 'select', required: true, section: 'other', options: [{ value: 'PE', label: ui('assetsOptPercentage') }, { value: 'TI', label: ui('assetsOptTime') }] },
-    { key: 'annualDepreciation', column: 'Amortizationpercentage', type: 'number', label: ui('assetsAnnualDepreciationLabel'), section: 'other', displayLogic: (record) => isDepreciate(record) && record.calculateType !== 'TI' },
+    // Annual Depreciation % — positive values only, decimals allowed (percentage).
+    // Only `min: 1`, no `integer`. See AssetsDetailPanel.jsx for the full rationale. ETP-4542.
+    { key: 'annualDepreciation', column: 'Amortizationpercentage', type: 'number', label: ui('assetsAnnualDepreciationLabel'), section: 'other', min: 1, displayLogic: (record) => isDepreciate(record) && record.calculateType !== 'TI' },
     { key: 'amortize', column: 'Assetschedule', type: 'select', required: true, section: 'other', options: [{ value: 'MO', label: ui('assetsOptMonthly') }, { value: 'YE', label: ui('assetsOptYearly') }], displayLogic: (record) => isDepreciate(record) && record.calculateType === 'TI' },
-    { key: 'usableLifeYears', column: 'UseLifeYears', type: 'number', section: 'other', displayLogic: (record) => isDepreciate(record) && record.calculateType === 'TI' && record.amortize === 'YE' },
-    { key: 'usableLifeMonths', column: 'UseLifeMonths', type: 'number', section: 'other', displayLogic: (record) => isDepreciate(record) && record.calculateType === 'TI' && record.amortize !== 'YE' },
+    // min: 1 + integer: true → generic numeric validation (EntityForm blur toast +
+    // useEntity save-block gate). Backend "Create Amortization" rejects non-positive
+    // and decimal values. ETP-4542.
+    { key: 'usableLifeYears', column: 'UseLifeYears', type: 'number', section: 'other', min: 1, integer: true, displayLogic: (record) => isDepreciate(record) && record.calculateType === 'TI' && record.amortize === 'YE' },
+    { key: 'usableLifeMonths', column: 'UseLifeMonths', type: 'number', section: 'other', min: 1, integer: true, displayLogic: (record) => isDepreciate(record) && record.calculateType === 'TI' && record.amortize !== 'YE' },
   ];
 
   function makeDisplayLogic(fields) {

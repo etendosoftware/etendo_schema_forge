@@ -76,7 +76,7 @@ describe('InlineLinesPanel helpers (ETP-4005)', () => {
 
   describe('commit-time min-value enforcement', () => {
     it('fires the fieldMinValueError toast when a value violates the min rule', () => {
-      assert.match(src, /toast\.error\(ui\('fieldMinValueError'\)\)/);
+      assert.match(src, /toast\.error\(ui\('fieldMinValueError', \{ min: col\.min \}\)\)/);
     });
 
     it('flags the cell via setInvalidCell with the offending rowId and colKey', () => {

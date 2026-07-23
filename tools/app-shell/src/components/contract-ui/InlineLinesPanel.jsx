@@ -539,7 +539,9 @@ const InlineLinesPanel = forwardRef(function InlineLinesPanel({
     if (isValueBelowMin(col, value)) {
       hasValidationErrorRef.current = true;
       setInvalidCell({ rowId: row.id, colKey: col.key });
-      toast.error(ui('fieldMinValueError'));
+      // Interpolate the column's `min` so the toast states the actual threshold
+      // ("Value must be at least 1") instead of the imprecise negative wording.
+      toast.error(ui('fieldMinValueError', { min: col.min }));
       return;
     }
     // Format validation (email + phone) for inline cell edits — mirrors the below-min
