@@ -126,6 +126,8 @@ End-to-end wiring (all in `src/com/etendoerp/go/mcp/`):
 
 ## MCP code / config quirks
 
+- **2026-07-23 — ETP-4287 discovery read-only semantics:** `McpToolRouterSupport.buildEntitySummaryArray` already includes each entity's configured `methods` (`GET`, `GET_BY_ID`, `POST`, `PUT`, `PATCH`, `DELETE`). `buildDiscoverEntity` additionally emits the established camel-case `readOnly` flag. It is true only when at least one read method is enabled and all mutation methods are disabled; derive it from configuration, never from entity names. In local sourcedata `bp-stats` and `bp-trend` are GET-only, while all `tax` entities are writable and correctly report `readOnly: false`.
+
 - **2026-07-23 — ETP-4280 diagnostic trace:** `FinancialAccountHandler.normalizeType` preserves `"CA"` (Card), and `McpToolRouter.handleCreate` invokes the entity's `NeoHandler` pre-hook before generic persistence. A report that omits the literal request/response cannot establish a Card-type code bug: valid `CA` may coexist with an independent invalid currency, duplicate-name, RBAC, deployment, or environment failure. Apply the rubric before changing this handler.
 
 ---

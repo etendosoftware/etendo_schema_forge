@@ -37,6 +37,14 @@
 - Note to bot team: <concrete: "include X next time">
 -->
 
+### 2026-07-23 — ETP-4287 — GET-only entities were not explicitly identified in discovery
+- Tool/spec: `neo_discover`; entities `bp-stats`, `bp-trend`, and system-data `tax`.
+- Root-cause category: **code-bug** (category 1) — discovery already returned the configured `methods` array, but omitted the established MCP `readOnly` semantic flag.
+- Time-to-locate: **fast** — the ticket named the discovery builder, the relevant entity configuration columns, and the existing tests. The implementation could derive the flag generically from those configured methods.
+- Missing rubric fields: **#3** verbatim JSON-RPC request, **#4** verbatim discovery response, **#5** auth context, **#7** deployment version, **#8** environment/commit, **#10** minimal repro sequence, **#11** root-cause pre-classification.
+- Highest-value field that was missing: **#4 — the raw `neo_discover` entity entries.** It would have made the absent semantic flag and the actual `tax` method configuration immediately visible.
+- Note to bot team: attach the before/after entity JSON (including `methods`) whenever discovery metadata is the issue. Also distinguish an entity that is *expected* to be read-only from one that the deployed configuration actually makes read-only: local `tax` entries allow writes, so the correct evidence is `readOnly: false`, while the generic rule will label any future GET-only tax entity correctly.
+
 ### 2026-07-23 — ETP-4280 — Card financial-account creation reported without a reproducible failure
 - Tool/spec: `neo_create` on `financial-account` / `account`; intended minimum fields were `name`, `currency`, and `type: "CA"`.
 - Root-cause category: **validator-side / diagnostic gap** (category 5) — the report did not retain the failing request or response, while the deployed code path already accepts `CA`: `FinancialAccountHandler.normalizeType` preserves it and the MCP `neo_create` route invokes that handler before persistence (ETP-4239).
