@@ -514,10 +514,10 @@ export function ListModalWindow({
             type="button"
             onClick={openCreate}
             data-testid="list-modal-new"
-            className="group inline-flex h-10 items-center gap-1.5 rounded-lg bg-[hsl(var(--foreground))] px-3 text-sm font-medium leading-6 text-primary-foreground transition-colors hover:opacity-90"
+            className="group inline-flex h-10 items-center gap-1.5 rounded-lg bg-[hsl(var(--foreground))] px-3 text-sm font-medium leading-6 text-primary-foreground transition-colors hover:bg-[hsl(var(--accent-highlight))] hover:text-[hsl(var(--accent-highlight-foreground))]"
           >
             <Plus
-              className="h-4 w-4 text-primary-foreground/90"
+              className="h-4 w-4 text-primary-foreground/90 group-hover:text-[hsl(var(--accent-highlight-foreground))]"
               data-testid="Plus__19eda5" />
             {config?.newLabelKey ? ui(config.newLabelKey) : ui('newRecord')}
           </button>
@@ -680,7 +680,7 @@ function ModalFooter({ toggleField, toggleKey, toggleLabel, toggleChecked, onTog
         onClick={onSubmit}
         disabled={submitDisabled}
         data-testid="list-modal-submit"
-        className="inline-flex h-10 shrink-0 items-center justify-center rounded-full px-3 py-2 text-sm font-medium leading-6 text-primary-foreground transition-colors disabled:bg-[hsl(var(--border-control))] disabled:text-primary-foreground enabled:bg-[hsl(var(--foreground))] enabled:hover:opacity-90"
+        className="inline-flex h-10 shrink-0 items-center justify-center rounded-full px-3 py-2 text-sm font-medium leading-6 text-primary-foreground transition-colors disabled:bg-[hsl(var(--border-control))] disabled:text-primary-foreground enabled:bg-[hsl(var(--foreground))] enabled:hover:bg-[hsl(var(--accent-highlight))] enabled:hover:text-[hsl(var(--accent-highlight-foreground))]"
       >
         {submitting ? ui('saving') : submitLabel}
       </button>

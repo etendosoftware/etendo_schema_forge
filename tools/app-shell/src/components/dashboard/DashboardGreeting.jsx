@@ -81,7 +81,7 @@ export function DashboardGreeting({ username = '', onAskCopilot }) {
 
         <Button
           size="sm"
-          className="h-10 gap-1.5 bg-[hsl(var(--foreground))] text-primary-foreground hover:opacity-90"
+          className="h-10 gap-1.5 bg-[hsl(var(--foreground))] text-primary-foreground hover:bg-[hsl(var(--accent-highlight))] hover:text-[hsl(var(--accent-highlight-foreground))]"
           onClick={onAskCopilot}
           data-testid="Button__5bd498">
           <Sparkles className="h-3.5 w-3.5" data-testid="Sparkles__5bd498" />
