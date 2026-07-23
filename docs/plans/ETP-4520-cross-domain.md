@@ -2,7 +2,7 @@
 
 Handoff source: `santo_roles_handoff_phase5.md` (session root). Epic: ETP-3504. Design doc: [Roles y Usuarios](https://etendoproject.atlassian.net/wiki/spaces/PYPI/pages/5042438147/Roles+y+Usuarios) §4.2–§4.4. Test plan: Group 10 (TC-32–37).
 
-## Scope (dominios)
+## Scope (domains)
 
 This phase touches **three repos on the shared `feature/ETP-4520` branch convention** (mirrors `feature/ETP-XXXX` → `epic/ETP-3504` in all three — confirmed via `git branch -a` in `schema_forge_core`, which has its own `epic/ETP-3504`):
 
@@ -15,7 +15,7 @@ This phase touches **three repos on the shared `feature/ETP-4520` branch convent
 | Pilot application | `etendo_schema_forge` (this repo) | `visibleWhenCapability: "showAccountingFields"` on the `posted` field, both `sales-invoice` and `purchase-invoice` |
 | ETP-4530 — FA edit tabs (folded in) | `com.etendoerp.go` + `etendo_schema_forge` | Gate the *already-built* "Cuentas contables" tab in `EditAccountModal.jsx` behind the capability flag via `useHasCapability()` directly (custom window, not decisions.json-driven) — see the correction note in §5 below, the backend/tab themselves already exist |
 
-**Checkbox UI, corrected 2026-07-22:** the checkbox is **Classic-only for this MVP** — toggleable from the standard `AD_Role` window/tab in Etendo Classic only. There is no existing or planned GO-app screen to surface it in: ETP-4512 only assigns *which role a user has* (no role-attribute fields at all), and ETP-4513's "Roles" view is intentionally locked (no create/edit/delete, "próximamente" notice — a prior confirmed decision, see the Roles y usuarios Test Plan TC-23). Extending either would be new scope on a different ticket, not part of ETP-4520.
+**Checkbox UI, corrected 2026-07-22:** the checkbox is **Classic-only for this MVP** — toggleable from the standard `AD_Role` window/tab in Etendo Classic only. There is no existing or planned GO-app screen to surface it in: ETP-4512 only assigns *which role a user has* (no role-attribute fields at all), and ETP-4513's "Roles" view is intentionally locked (no create/edit/delete) — a prior confirmed decision to lock editing (shown as a "coming soon" notice in the UI, "próximamente" in Spanish), see the Roles y usuarios Test Plan TC-23. Extending either would be new scope on a different ticket, not part of ETP-4520.
 
 **Explicitly excluded from this flag:** ETP-4529 (dimension visibility) and ETP-4531 (accounting-date independence) — both apply to every user regardless of role, confirmed by the user; they are not touched by this phase.
 

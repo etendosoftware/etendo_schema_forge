@@ -87,7 +87,7 @@ the same primitives `DetailTabs.jsx` uses for the Movements/Reconciliation/State
   in local dev data: e.g. the "F&B US, Inc." and "Spain" organizations have no ledger configured,
   so their bank accounts — including the highest-traffic demo account, "Bank - Account 1" — cannot
   populate this tab until an admin sets one).
-- **Capability-gated Contabilidad tab (ETP-4520):** the tab is only reachable for a role granted
+- **Capability-gated Accounting tab (ETP-4520, UI label "Contabilidad"):** the tab is only reachable for a role granted
   the `showAccountingFields` capability. This window is `layoutType: "custom"`, so — unlike the
   invoice windows' `posted` field/status pill, which declares `"visibleWhenCapability":
   "showAccountingFields"` in `decisions.json` and is resolved generically by `isCapabilityVisible()`
