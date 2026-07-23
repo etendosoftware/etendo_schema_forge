@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ArrowLeft, MoreVertical, CircleCheckBig, CheckCircle, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { useUI, useLocaleSwitch } from '@/i18n';
@@ -24,6 +24,7 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
+import { ChipSelect } from '@/components/forms/fields';
 import { cn } from '@/lib/utils';
 import { getDateBounds, toDateParam } from '@/lib/dateRangeBounds';
 import { formatDate, formatSigned } from '@/lib/formatSigned';
@@ -211,18 +212,36 @@ function DateCell({ date, bcpLocale, cellClassName }) {
   );
 }
 
-/** Right-aligned money cell shared by both panels. */
-function MoneyCell({ value, currency, cellClassName, bold = false }) {
+/**
+ * Right-aligned money cell shared by both panels. When `secondaryValue` is given (a foreign
+ * candidate's account-currency equivalent), it renders as a smaller line underneath — the
+ * "show the EUR total alongside the other currency" requirement.
+ */
+function MoneyCell({ value, currency, cellClassName, bold = false, secondaryValue, secondaryCurrency }) {
   return (
     <TableCell
       className={cn('h-[62px] px-3 text-right align-middle', cellClassName)}
       data-testid="TableCell__d0f4d5">
-      <MoneyAmount
-        value={Number(value) || 0}
-        currency={currency}
-        tone="neutral"
-        className={cn('text-sm leading-5 text-[#121217]', bold ? 'font-semibold' : 'font-normal')}
-        data-testid="MoneyAmount__d0f4d5" />
+      <div className="flex flex-col items-end">
+        <MoneyAmount
+          value={Number(value) || 0}
+          currency={currency}
+          tone="neutral"
+          className={cn('text-sm leading-5 text-[#121217]', bold ? 'font-semibold' : 'font-normal')}
+          data-testid="MoneyAmount__d0f4d5" />
+        {secondaryValue != null ? (
+          // MoneyAmount doesn't forward extra props (no data-testid), so the testid goes on this
+          // wrapping span instead — MoneyAmount itself keeps its own internal testid.
+          <span data-testid="recon-cand-amount-base">
+            <MoneyAmount
+              value={Number(secondaryValue) || 0}
+              currency={secondaryCurrency}
+              tone="neutral"
+              className="text-xs leading-4 text-[#6C6C89]"
+              data-testid="MoneyAmount-secondary__d0f4d5" />
+          </span>
+        ) : null}
+      </div>
     </TableCell>
   );
 }
@@ -462,12 +481,16 @@ function CandidateOperationsPanel({
         value={cand.pendingBalance}
         currency={candCurrency}
         cellClassName="w-[121px]"
+        secondaryValue={candForeign ? cand.amountBase : undefined}
+        secondaryCurrency={cand.baseCurrency || currency}
         data-testid="MoneyCell__d0f4d5" />
       <MoneyCell
         value={cand.amount}
         currency={candCurrency}
         bold
         cellClassName="w-[121px]"
+        secondaryValue={candForeign ? cand.amountBase : undefined}
+        secondaryCurrency={cand.baseCurrency || currency}
         data-testid="MoneyCell__d0f4d5" />
     </TableRow>
     );
@@ -516,42 +539,20 @@ function CandidateOperationsPanel({
   );
 }
 
-/** Formats a derived conversion rate with up to 6 decimals, trimming trailing zeros. */
-function formatRate(rate) {
-  if (rate == null || !Number.isFinite(rate)) return '—';
-  return String(Number(rate.toFixed(6)));
-}
-
 /** Bottom action bar with the running totals and the reconcile / placeholder buttons. */
 function ReconciliationActionBar({
   currency, selectedSum, remaining, canReconcile, isReconciledLine, reconcileCount, busy,
-  onCancel, onReconcile, foreignReconcile = false, foreignRate = null, foreignCurrency,
-  foreignAmount = 0, lineAmount = 0,
+  onCancel, onReconcile,
 }) {
   const ui = useUI();
   return (
     <div className="border-t border-[#E8EAEF] bg-white px-0 pt-2 pb-1">
-      {/* Multi-currency: the "selected / remaining" arithmetic would mix two currencies, so replace
-          it with a derived-rate preview — invoice amount (settled), bank amount (booked), rate. */}
-      {!isReconciledLine && foreignReconcile && (
-        <div className="flex flex-col gap-1">
-          <div className="flex items-center justify-between px-3 text-sm leading-5">
-            <span className="font-medium text-[#121217]">{ui('financeReconcileBarInvoiceAmount')}</span>
-            <span className="font-semibold text-[#121217]">{formatSigned(Math.abs(foreignAmount), foreignCurrency)}</span>
-          </div>
-          <div className="flex items-center justify-between px-3 text-sm leading-5">
-            <span className="font-medium text-[#121217]">{ui('financeReconcileBarBankAmount')}</span>
-            <span className="font-semibold text-[#121217]">{formatSigned(Math.abs(lineAmount), currency)}</span>
-          </div>
-          <div className="flex items-center justify-between px-3 text-sm leading-5">
-            <span className="font-medium text-[#121217]">{ui('financeReconcileBarRate')}</span>
-            <span className="font-semibold text-[#0075AD]" data-testid="recon-derived-rate">{formatRate(foreignRate)}</span>
-          </div>
-        </div>
-      )}
-      {/* Selection totals only make sense while building a new same-currency reconciliation; a
-          reconciled line is already balanced, so the "selected / remaining" rows would mislead. */}
-      {!isReconciledLine && !foreignReconcile && (
+      {/* Selection totals only make sense while building a new reconciliation; a reconciled
+          line is already balanced, so the "selected / remaining" rows would be misleading.
+          Both totals are already in the account currency (foreign candidates contribute their
+          `amountBase` equivalent — see candidateBaseAmount), so this doubles as the EUR-style
+          total when the selection mixes currencies. */}
+      {!isReconciledLine && (
         <div className="flex flex-col gap-1">
           <div className="flex items-center justify-between px-3 text-sm leading-5">
             <span className="font-medium text-[#121217]">{ui('financeReconcileBarSelected')}</span>
@@ -606,7 +607,7 @@ function ReactivateConfirmDialog({ open, busy, onConfirm, onClose }) {
       open={open}
       onOpenChange={(v) => { if (!v) onClose(); }}
       data-testid="Dialog__recon-reactivate">
-      <DialogContent className="max-w-md" data-testid="recon-reactivate-dialog">
+      <DialogContent className="max-w-md bg-white" data-testid="recon-reactivate-dialog">
         <DialogHeader data-testid="DialogHeader__recon-reactivate">
           <DialogTitle data-testid="DialogTitle__recon-reactivate">
             {ui('financeReconcileConfirmReactivateTitle')}
@@ -620,6 +621,10 @@ function ReactivateConfirmDialog({ open, busy, onConfirm, onClose }) {
             variant="outline"
             onClick={onClose}
             disabled={busy}
+            // Matches the app's standard secondary-button formula (e.g. the "Cancelar" back
+            // button in list windows like Reglas de matcheo) instead of the shared Button's
+            // theme-token outline colors.
+            className="border-[#D1D4DB] bg-white text-[#121217] shadow-[0_1px_2px_rgba(18,18,23,0.05)] hover:bg-[#F5F7F9]"
             data-testid="recon-reactivate-cancel">
             {ui('financeReconcileActionCancel')}
           </Button>
@@ -637,6 +642,77 @@ function ReactivateConfirmDialog({ open, busy, onConfirm, onClose }) {
 }
 
 /**
+ * Invoice candidates are no longer filtered by payment method — every unpaid invoice is a valid
+ * candidate — so the method is chosen here, once, right before creating the payment(s), via the
+ * same chip selector used for other lookups in this window (e.g. "Concepto contable" in the New
+ * Movement modal — {@link ChipSelect} from `@/components/forms/fields`). A single method applies
+ * to every invoice in this reconcile action (an already-selected existing transaction keeps its
+ * own payment/method untouched, see {@link ReconciliationFlowSupport} on the backend). Methods are
+ * pre-filtered to the line's direction (payin for receipts, payout for payments) from the
+ * account's configured methods.
+ */
+function PaymentMethodModal({ open, methods, methodId, onSelect, busy, onConfirm, onClose }) {
+  const ui = useUI();
+  const selectedMethod = methods.find((m) => m.id === methodId) || null;
+  // ChipSelect expects a useLookup(query) hook (server-backed elsewhere); the method list is
+  // already loaded and short, so this just filters it locally — no round-trip needed.
+  const useMethodLookup = useCallback((query) => {
+    const q = query.trim().toLowerCase();
+    return { results: q ? methods.filter((m) => m.name.toLowerCase().includes(q)) : methods };
+  }, [methods]);
+
+  return (
+    <Dialog
+      open={open}
+      onOpenChange={(v) => { if (!v) onClose(); }}
+      data-testid="Dialog__recon-payment-method">
+      <DialogContent className="max-w-md bg-white" data-testid="recon-payment-method-dialog">
+        <DialogHeader data-testid="DialogHeader__recon-payment-method">
+          <DialogTitle data-testid="DialogTitle__recon-payment-method">
+            {ui('financeReconcileMethodModalTitle')}
+          </DialogTitle>
+          <DialogDescription data-testid="DialogDescription__recon-payment-method">
+            {ui('financeReconcileMethodModalBody')}
+          </DialogDescription>
+        </DialogHeader>
+        <div className="py-2">
+          <ChipSelect
+            value={selectedMethod}
+            onChange={(item) => onSelect(item?.id ?? '')}
+            useLookup={useMethodLookup}
+            placeholder={ui('cpPaymentMethod')}
+            testId="recon-payment-method"
+            data-testid="ChipSelect__recon-payment-method" />
+        </div>
+        <DialogFooter data-testid="DialogFooter__recon-payment-method">
+          <Button
+            variant="outline"
+            onClick={onClose}
+            disabled={busy}
+            // Matches the app's standard secondary-button formula (e.g. the "Cancelar" back
+            // button in list windows like Reglas de matcheo) instead of the shared Button's
+            // theme-token outline colors.
+            className="border-[#D1D4DB] bg-white text-[#121217] shadow-[0_1px_2px_rgba(18,18,23,0.05)] hover:bg-[#F5F7F9]"
+            data-testid="recon-payment-method-cancel">
+            {ui('financeReconcileActionCancel')}
+          </Button>
+          <Button
+            onClick={onConfirm}
+            disabled={busy || !methodId}
+            // Matches the primary-action hover elsewhere in the app (e.g. "Confirmar" in the New
+            // Movement modal) — the shared Button's default variant hovers to primary/90, not the
+            // Figma yellow.
+            className="bg-[#121217] text-white hover:bg-[#FFD500] hover:text-[#121217]"
+            data-testid="recon-payment-method-confirm">
+            {ui('financeReconcileMethodModalConfirm')}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/**
  * Manual bank reconciliation split panel (T6).
  *
  * Left: pending statement lines (single-select). Right: candidate operations for
@@ -646,9 +722,11 @@ function ReactivateConfirmDialog({ open, busy, onConfirm, onClose }) {
  * Composes the backend at /sws/neo/bank-reconciliation — it never reimplements
  * Etendo's reconciliation logic; the POST just hands the grouped ids over.
  *
- * @param {{ accountId: string|null, currency?: string, onBack?: () => void, onReconcileSuccess?: () => void }} props
+ * @param {{ accountId: string|null, currency?: string, paymentMethods?: Array<object>, onBack?: () => void, onReconcileSuccess?: () => void }} props
  */
-export function ReconciliationSplitPanel({ accountId, currency = 'EUR', onBack, onReconcileSuccess }) {
+export function ReconciliationSplitPanel({
+  accountId, currency = 'EUR', paymentMethods = [], onBack, onReconcileSuccess,
+}) {
   const ui = useUI();
   const { locale: appLocale } = useLocaleSwitch();
   const bcpLocale = (appLocale || 'es_ES').replace('_', '-');
@@ -661,6 +739,8 @@ export function ReconciliationSplitPanel({ accountId, currency = 'EUR', onBack, 
   const [rightSearch, setRightSearch] = useState('');
   const [selectedLine, setSelectedLine] = useState(null);
   const [selectedOpIds, setSelectedOpIds] = useState(() => new Set());
+  const [methodModalOpen, setMethodModalOpen] = useState(false);
+  const [selectedMethodId, setSelectedMethodId] = useState('');
 
   const leftBounds = useMemo(() => getDateBounds(leftDateRange), [leftDateRange]);
   const rightBounds = useMemo(() => getDateBounds(rightDateRange), [rightDateRange]);
@@ -692,28 +772,11 @@ export function ReconciliationSplitPanel({ accountId, currency = 'EUR', onBack, 
     setSelectedOpIds(new Set());
   };
 
-  // A candidate is "foreign" when its currency differs from the account's — multi-currency
-  // reconciliation is restricted to a single foreign invoice per line (full settlement), so a
-  // foreign selection is exclusive and never mixes with other rows (backend enforces the same).
-  const isForeignCand = (cand) => !!cand?.currency && cand.currency !== currency;
-
   const toggleOp = (id) => {
     setSelectedOpIds((prev) => {
       const next = new Set(prev);
-      if (next.has(id)) {
-        next.delete(id);
-        return next;
-      }
-      const cand = candidates.find((c) => c.id === id);
-      const selectingForeign = isForeignCand(cand);
-      const hadForeign = Array.from(prev).some((sid) =>
-        isForeignCand(candidates.find((c) => c.id === sid)));
-      // Selecting a foreign invoice, or adding to a selection that already holds one, collapses to
-      // just this row: currencies cannot be mixed under a single statement line.
-      if (selectingForeign || hadForeign) {
-        return new Set([id]);
-      }
-      next.add(id);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
       return next;
     });
   };
@@ -774,34 +837,33 @@ export function ReconciliationSplitPanel({ accountId, currency = 'EUR', onBack, 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedLine?.id, candLoading]);
 
-  const selectedSum = useMemo(
-    () => Number(
-      candidates
-        .filter((c) => selectedOpIds.has(c.id))
-        .reduce((acc, c) => acc + (Number(c.amount) || 0), 0)
-        .toFixed(2),
-    ),
-    [candidates, selectedOpIds],
-  );
+  // A foreign-currency candidate's amount/pendingBalance is in the INVOICE currency; the backend
+  // also emits `amountBase` (that same amount converted to the account currency, at the rate the
+  // invoice would actually reconcile with — see ReconciliationHandler.appendAccountEquivalent).
+  // Summing `amountBase` for foreign rows (and the plain amount for same-currency ones, which is
+  // already in the account currency) lets one statement line match several invoices of different
+  // currencies at once: the same greedy allocation the same-currency flow always used, generalized.
+  const candidateBaseAmount = (cand) => {
+    const isForeign = !!cand?.currency && cand.currency !== currency;
+    if (!isForeign) return Number(cand?.amount) || 0;
+    return cand?.amountBase != null ? Number(cand.amountBase) : null;
+  };
+
+  const selectedSum = useMemo(() => {
+    let sum = 0;
+    for (const c of candidates) {
+      if (!selectedOpIds.has(c.id)) continue;
+      const base = candidateBaseAmount(c);
+      if (base == null) continue; // unknown rate — excluded from the total, stays "remaining"
+      sum += base;
+    }
+    return Number(sum.toFixed(2));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [candidates, selectedOpIds, currency]);
 
   const lineAmount = Number(selectedLine?.amount) || 0;
   const remaining = Number((lineAmount - selectedSum).toFixed(2));
   const isReconciledLine = selectedLine?.status === 'reconciled';
-
-  // Multi-currency: the selected foreign invoice (if any). Its amount is in the invoice currency,
-  // so it can't be summed against the statement line (account currency) — the match is a single
-  // full settlement and the conversion rate is DERIVED from the two amounts (|line| ÷ |invoice|),
-  // which is exactly what the backend books. Shown as a read-only preview in the action bar.
-  const foreignInvoice = useMemo(() => {
-    if (!invoiceMode) return null;
-    return candidates.find((c) => selectedOpIds.has(c.id) && isForeignCand(c)) || null;
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [candidates, selectedOpIds, invoiceMode, currency]);
-  const isForeignReconcile = !!foreignInvoice;
-  const foreignInvoiceAmount = Math.abs(Number(foreignInvoice?.amount) || 0);
-  const derivedRate = isForeignReconcile && foreignInvoiceAmount > 0
-    ? Math.abs(lineAmount) / foreignInvoiceAmount
-    : null;
 
   // Invoices must COVER the line (payments are capped at the line amount). Transactions may match
   // PART of the line — the backend splits it and leaves a remainder — as long as they run in the
@@ -810,21 +872,20 @@ export function ReconciliationSplitPanel({ accountId, currency = 'EUR', onBack, 
   const sumSign = Math.sign(selectedSum);
   const sameDirection = sumSign === 0 || lineSign === 0 || sumSign === lineSign;
   const withinLine = Math.abs(selectedSum) <= Math.abs(lineAmount) + RECONCILE_TOLERANCE;
-  let balanced;
-  if (isForeignReconcile) {
-    // Single foreign invoice fully settled by the line: the match is definitional (currencies
-    // differ, nothing to sum), so it only needs one foreign invoice selected and a positive line.
-    balanced = selectedOpIds.size === 1 && foreignInvoiceAmount > 0 && Math.abs(lineAmount) > 0;
-  } else if (invoiceMode) {
-    balanced = Math.abs(selectedSum) + RECONCILE_TOLERANCE >= Math.abs(lineAmount);
-  } else {
-    balanced = sameDirection && withinLine;
-  }
+  const balanced = invoiceMode
+    ? Math.abs(selectedSum) + RECONCILE_TOLERANCE >= Math.abs(lineAmount)
+    : (sameDirection && withinLine);
   const canReconcile =
     !!selectedLine && selectedOpIds.size > 0 && balanced && !isReconciledLine;
 
-  const handleReconcile = async () => {
-    if (!canReconcile) return;
+  // Invoices are no longer filtered by payment method — the method is picked once, right before
+  // creating the payment(s), from the account's methods configured for the line's own direction.
+  const directionMethods = useMemo(() => {
+    const isReceiptDirection = lineAmount >= 0;
+    return paymentMethods.filter((m) => (isReceiptDirection ? m.payinAllow : m.payoutAllow));
+  }, [paymentMethods, lineAmount]);
+
+  const submitReconcile = async (methodId) => {
     try {
       const payload = {
         financialAccountId: accountId,
@@ -834,18 +895,39 @@ export function ReconciliationSplitPanel({ accountId, currency = 'EUR', onBack, 
         payload.invoices = candidates
           .filter((c) => selectedOpIds.has(c.id) && c.kind === 'invoice')
           .map((c) => ({ invoiceId: c.invoiceId, scheduleId: c.scheduleId }));
+        if (methodId) payload.paymentMethodId = methodId;
       } else {
+        // An already-existing transaction keeps its own payment and method untouched.
         payload.operationIds = Array.from(selectedOpIds);
       }
       await reconcile(payload);
       toast.success(ui('financeReconcileToastSuccess'));
       setSelectedLine(null);
       setSelectedOpIds(new Set());
+      setMethodModalOpen(false);
       reloadLines();
       onReconcileSuccess?.();
     } catch (err) {
       toast.error(err?.message || ui('financeReconcileToastError'));
     }
+  };
+
+  const handleReconcile = () => {
+    if (!canReconcile) return;
+    // A pure existing-transaction match needs no method (each transaction already has one); only
+    // creating new invoice payments requires picking one, and only when the account actually has
+    // methods configured for this direction — otherwise fall back to the backend's auto-resolve.
+    if (invoiceMode && directionMethods.length > 0) {
+      const preselected = directionMethods.find((m) => m.isDefault) || directionMethods[0];
+      setSelectedMethodId(preselected?.id || '');
+      setMethodModalOpen(true);
+      return;
+    }
+    submitReconcile(null);
+  };
+
+  const confirmMethodAndReconcile = () => {
+    submitReconcile(selectedMethodId);
   };
 
   // Reactivate (un-reconcile) is destructive — it undoes the reconciliation and deletes any
@@ -920,11 +1002,6 @@ export function ReconciliationSplitPanel({ accountId, currency = 'EUR', onBack, 
               busy={reconciling || reactivating}
               onCancel={cancelSelection}
               onReconcile={isReconciledLine ? handleReactivate : handleReconcile}
-              foreignReconcile={isForeignReconcile}
-              foreignRate={derivedRate}
-              foreignCurrency={foreignInvoice?.currency}
-              foreignAmount={Number(foreignInvoice?.amount) || 0}
-              lineAmount={lineAmount}
               data-testid="ReconciliationActionBar__d0f4d5" />
           ) : null}
           data-testid="CandidateOperationsPanel__d0f4d5" />
@@ -935,6 +1012,15 @@ export function ReconciliationSplitPanel({ accountId, currency = 'EUR', onBack, 
         onConfirm={confirmReactivate}
         onClose={() => setReactivateOpen(false)}
         data-testid="ReactivateConfirmDialog__d0f4d5" />
+      <PaymentMethodModal
+        open={methodModalOpen}
+        methods={directionMethods}
+        methodId={selectedMethodId}
+        onSelect={setSelectedMethodId}
+        busy={reconciling}
+        onConfirm={confirmMethodAndReconcile}
+        onClose={() => setMethodModalOpen(false)}
+        data-testid="PaymentMethodModal__d0f4d5" />
     </div>
   );
 }

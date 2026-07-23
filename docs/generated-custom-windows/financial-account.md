@@ -396,29 +396,42 @@ The Reconciliation tab renders `ReconciliationSplitPanel` (`tools/app-shell/src/
 
 #### Multi-currency reconciliation (ETP-4502)
 
-When a statement line (in the account currency) is reconciled against an invoice in a **different**
-currency, the flow settles the invoice in its own currency while booking the bank transaction in the
-account currency:
+When a statement line (in the account currency) is reconciled against one or more invoices, possibly
+in **different currencies from each other and from the account**, the flow settles each invoice in
+its own currency while booking the bank transaction(s) in the account currency:
 
-- **Invoice selector badge (AC5):** each invoice candidate now carries its `currency` (ISO), emitted
-  by `INVOICE_CANDIDATES_SQL`. When it differs from the account currency the row shows an amber
-  `CurrencyBadge` and its amounts render in the **invoice** currency, so foreign documents are easy
-  to spot. Same-currency candidates look unchanged.
-- **Scope:** a foreign settlement is restricted to **one invoice per statement line, fully settled**
-  (the panel makes a foreign selection exclusive; the backend `ReconciliationFlowSupport` rejects
-  more than one foreign invoice). Same-currency reconciliation keeps its multi-invoice / partial
-  behavior.
-- **Derived rate:** the conversion rate is **derived** from the two amounts —
-  `|statement line| ÷ |invoice outstanding|` — not looked up from `C_Conversion_Rate`. The statement
-  line is ground truth, so the `FIN_Payment` is created in the invoice currency (cancels the
-  outstanding) and the `FIN_Finacc_Transaction` is booked for the exact line amount in the account
-  currency with that rate — no exchange-difference residual. The action bar replaces the
-  selected/remaining totals with a read-only preview: invoice amount, bank amount, and the derived
-  rate (`data-testid="recon-derived-rate"`).
-- **Payment-method guard:** the resolved payment method must be multi-currency enabled for the
-  direction (`payin/payout_ismulticurrency`). A PSD2 bank-transfer method (disabled by ETP-4503) is
-  rejected with a clear error instead of a cryptic Core failure.
-- **Same currency (AC6):** unchanged — rate ONE, standard single-currency flow, no preview.
+- **Invoice selector badge:** each invoice candidate carries its `currency` (ISO), emitted by
+  `INVOICE_CANDIDATES_SQL`. When it differs from the account currency the row shows an amber
+  `CurrencyBadge`, its amounts render in the **invoice** currency, and a smaller secondary line
+  (`data-testid="recon-cand-amount-base"`) shows the account-currency (e.g. EUR) equivalent —
+  `amountBase`, emitted by `ReconciliationHandler.appendAccountEquivalent` using the same rate the
+  reconciliation itself would use. Same-currency candidates look unchanged.
+- **Scope:** one statement line can match **any mix of invoices in any currencies**, not just one —
+  `ReconciliationFlowSupport.createInvoicePayments` greedily allocates the line (in account currency)
+  across the selected invoices in order, same as the original same-currency flow, converting each
+  invoice's outstanding via its own rate first. A partial match on the last invoice is allowed, same
+  as same-currency partials always were. The panel's multi-select is no longer restricted to one
+  foreign invoice; `selectedSum`/`remaining` in the action bar sum each candidate's account-currency
+  equivalent (`candidateBaseAmount`), so the same bar now doubles as the EUR-style total.
+- **Rate source:** the conversion rate comes from the **invoice's own exchange rate**
+  (`PaymentCurrencyConverter.resolveInvoiceRate`: the invoice's `ConversionRateDoc` document rate,
+  falling back to the general `C_Conversion_Rate` for the invoice date), not from the statement line.
+  The `FIN_Payment` is created for `invoice amount` (invoice currency); the `FIN_Finacc_Transaction`
+  is booked for `invoice amount × rate` (account currency). If that doesn't exactly match what the
+  bank sent, the difference is **not** posted as an exchange difference — it simply stays unreconciled
+  on the statement line (the existing "partial match, remainder reported" behavior).
+- **Payment method modal:** invoices are no longer filtered by payment method — every unpaid invoice
+  is a valid candidate. Instead, clicking "Conciliar" with invoices selected opens `PaymentMethodModal`
+  (a radio list of the account's methods configured for the line's direction, defaulting to the
+  account's default method) before submitting; the chosen id travels as top-level `paymentMethodId`
+  in the `reconcileGroup` payload and applies to **every invoice payment this action creates** — an
+  already-selected existing transaction (`operationIds`) keeps its own payment/method untouched. If
+  the account has no methods configured for the direction, the modal is skipped and the backend
+  auto-resolves a default, same as before this iteration. A cross-currency settlement additionally
+  requires the resolved/chosen method to be multi-currency enabled (`payin/payout_ismulticurrency`);
+  a PSD2 bank-transfer method (disabled by ETP-4503) is rejected with a clear error instead of a
+  cryptic Core failure.
+- **Same currency:** unchanged — rate ONE, standard flow.
 
 ### Automatch engine (T7)
 
