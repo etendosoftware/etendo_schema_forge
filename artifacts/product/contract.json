@@ -1,8 +1,8 @@
 {
-  "version": "0.18.0",
+  "version": "0.19.1",
   "generatedAt": "2026-07-07T21:53:26.027Z",
-  "updatedAt": "2026-07-21T12:35:21.499Z",
-  "checksum": "04dacc6840efc846",
+  "updatedAt": "2026-07-23T12:09:48.857Z",
+  "checksum": "be0b5ac0489fd355",
   "frontendContract": {
     "window": {
       "id": "140",
@@ -201,6 +201,30 @@
             "sourceRequired": true,
             "section": "principal",
             "seq": 2,
+            "multiField": {
+              "subtitle": "searchKey",
+              "media": {
+                "field": "image",
+                "kind": "neoImage",
+                "fallback": "box"
+              },
+              "parts": [
+                {
+                  "field": "searchKey",
+                  "labels": {
+                    "en_US": "Identifier",
+                    "es_ES": "Identificador"
+                  }
+                },
+                {
+                  "field": "name",
+                  "labels": {
+                    "en_US": "Name",
+                    "es_ES": "Nombre"
+                  }
+                }
+              ]
+            },
             "validation": {
               "required": true,
               "maxLength": 60

@@ -120,6 +120,22 @@ Contract rules:
 
 ### 3.2 `decisions.json` shape (what the human declares)
 
+> **Implementation note (ETP-4603, Phase 3 — Design A):** This section originally
+> assumed a `window.listColumns` override array. That mechanism does **not** exist:
+> list columns are derived entirely from the contract's grid fields
+> (`generate-frontend.js` → `gridFields.map(...)`), and per-column behavior is set
+> with **per-grid-field decorators** (`badge`, `gridReadOnly`, `gridOrder`, …). The
+> `multiField` column was therefore implemented as a **per-grid-field decorator** on
+> a "host" grid field, consistent with the existing pattern — not as a new
+> `window.listColumns` key. The runtime shape (§3.1) is unchanged; only the
+> declaration differs. Canonical, up-to-date declaration reference:
+> `docs/decisions-reference.md` → "Composite list column (`multiField`)". The host
+> field's decorator absorbs the sibling columns it references (`subtitle`,
+> `media.field`, non-host `parts[].field`); their data still arrives because the
+> list fetch sends no field projection. Validator rule **F18** enforces the field
+> references and sort-part queryability. The `window.listColumns` block below is
+> retained only as the original design sketch.
+
 Extend `window.listColumns` to allow `multiField` entries. `part.field` references a contract
 field; the generator resolves `key/column/type` from the contract.
 

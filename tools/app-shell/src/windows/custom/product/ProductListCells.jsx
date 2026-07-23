@@ -1,7 +1,12 @@
 import { useState, useEffect } from 'react';
-import { useProductImage } from './useProductImage';
+import { BoxIcon } from '@/components/ui/box-icon';
 
 /* eslint-disable react/prop-types */
+
+// BoxIcon now lives in a shared util (@/components/ui/box-icon) so the
+// generic `multiField` renderer and Product cells share one glyph. Re-exported
+// here to keep existing importers (ProductGallery, tests) working unchanged.
+export { BoxIcon };
 
 /** Etendo CHAR(1)/string boolean → JS boolean. */
 function isTruthyFlag(v) {
@@ -108,37 +113,6 @@ function PriceText({ value, bold }) {
     <span className={`text-sm text-[#121217] whitespace-nowrap${bold ? ' font-semibold' : ''}`}>
       {value.toFixed(2)} €
     </span>
-  );
-}
-
-export function BoxIcon({ size = 24, color = '#828FA3' }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <path d="M21 8L12 3L3 8M21 8V16L12 21M21 8L12 13M3 8V16L12 21M3 8L12 13M12 21V13" stroke={color} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  );
-}
-
-export function ProductNameCell({ row, token, apiBaseUrl }) {
-  const imgSrc = useProductImage(row.image, token, apiBaseUrl);
-
-  return (
-    <div className="flex items-center gap-3">
-      <div className="w-10 h-10 rounded-lg bg-[#F5F7F9] flex items-center justify-center overflow-hidden flex-shrink-0">
-        {imgSrc
-          ? <img src={imgSrc} alt={row.name} className="w-full h-full object-cover" />
-          : <BoxIcon data-testid="BoxIcon__fed565" />
-        }
-      </div>
-      <div className="flex flex-col justify-center gap-0.5">
-        <span className="text-sm font-semibold text-[#121217] leading-5">{row.name}</span>
-        {row.searchKey && (
-          <span className="inline-flex items-center px-2 py-0.5 bg-[#F5F7F9] rounded-full text-xs text-[#3F3F50] leading-4 w-fit">
-            {row.searchKey}
-          </span>
-        )}
-      </div>
-    </div>
   );
 }
 

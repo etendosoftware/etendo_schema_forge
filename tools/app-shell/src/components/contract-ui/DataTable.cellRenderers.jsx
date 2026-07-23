@@ -1,6 +1,8 @@
 import { Switch } from '@/components/ui/switch';
 import { StatusTag } from '@/components/ui/status-tag';
 import { Tag } from '@/components/ui/tag';
+import { BoxIcon } from '@/components/ui/box-icon';
+import { useNeoImage } from '@/hooks/useNeoImage';
 import { formatAmount } from '@/lib/formatAmount.js';
 import { formatSignedDelta } from '@/lib/formatSigned.js';
 import { resolveColumnLabel } from '@/lib/resolveColumnLabel.js';
@@ -233,6 +235,58 @@ export function renderSignedDeltaCell({ row, col }) {
   );
 }
 
+/**
+ * Built-in `multiField` cell body: bold title + optional subtitle chip +
+ * optional authenticated media box. Renders purely from column config — no
+ * `render` function needed — and is pixel-identical to the legacy Product
+ * identity cell (`ProductNameCell`). Kept as a component (not an inline render)
+ * so `useNeoImage` is a valid hook call.
+ *
+ * Config consumed: `col.title` (row field → bold title), `col.subtitle` (row
+ * field → chip, only when present), `col.media` (`{ field, kind: 'neoImage',
+ * fallback: 'box' }`, optional). The hook runs unconditionally with a possibly
+ * undefined id (no media → no fetch) to keep the hook order stable.
+ */
+export function MultiFieldCell({ row, col, token, apiBaseUrl }) {
+  const media = col.media;
+  const imageId = media?.kind === 'neoImage' ? row[media.field] : undefined;
+  const imgSrc = useNeoImage(imageId, token, apiBaseUrl);
+  const titleValue = row[col.title];
+  const subtitleValue = col.subtitle ? row[col.subtitle] : undefined;
+
+  return (
+    <div className="flex items-center gap-3">
+      {media && (
+        <div className="w-10 h-10 rounded-lg bg-[#F5F7F9] flex items-center justify-center overflow-hidden flex-shrink-0">
+          {imgSrc
+            ? <img src={imgSrc} alt={titleValue} className="w-full h-full object-cover" />
+            : <BoxIcon data-testid="BoxIcon__fed565" />
+          }
+        </div>
+      )}
+      <div className="flex flex-col justify-center gap-0.5">
+        <span className="text-sm font-semibold text-[#121217] leading-5">{titleValue}</span>
+        {subtitleValue && (
+          <span className="inline-flex items-center px-2 py-0.5 bg-[#F5F7F9] rounded-full text-xs text-[#3F3F50] leading-4 w-fit">
+            {subtitleValue}
+          </span>
+        )}
+      </div>
+    </div>
+  );
+}
+
+export function renderMultiFieldCell({ row, col, token, apiBaseUrl }) {
+  return (
+    <MultiFieldCell
+      row={row}
+      col={col}
+      token={token}
+      apiBaseUrl={apiBaseUrl}
+      data-testid="MultiFieldCell__a91437" />
+  );
+}
+
 export function renderDefaultCell({ row, col, display, visibleColumns }) {
   if (isFirstVisibleStringColumn(col, visibleColumns)) {
     const pill = col.pill;
@@ -263,5 +317,6 @@ export const CELL_RENDERERS = {
   date: renderDateCell,
   amount: renderAmountCell,
   signedDelta: renderSignedDeltaCell,
+  multiField: renderMultiFieldCell,
   default: renderDefaultCell,
 };

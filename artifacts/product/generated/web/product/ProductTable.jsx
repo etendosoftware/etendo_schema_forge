@@ -3,8 +3,7 @@ import { DataTable, InlineLinesPanel } from '@/components/contract-ui';
 
 // @sf-generated-start columns:product
 const columns = [
-  { key: 'searchKey', column: 'Value', type: 'string', label: 'Search Key', required: true },
-  { key: 'name', column: 'Name', type: 'string', label: 'Name', required: true },
+  { key: 'name', column: 'Name', type: 'multiField', title: 'name', subtitle: 'searchKey', media: {"field":"image","kind":"neoImage","fallback":"box"}, parts: [{"key":"searchKey","column":"Value","type":"string","labels":{"en_US":"Identifier","es_ES":"Identificador"},"label":"Search Key"},{"key":"name","column":"Name","type":"string","labels":{"en_US":"Name","es_ES":"Nombre"},"label":"Name"}] },
   { key: 'uOM', column: 'C_UOM_ID', type: 'selector', label: 'UOM', required: true },
   { key: 'productCategory', column: 'M_Product_Category_ID', type: 'selector', label: 'Product Category', required: true },
   { key: 'productType', column: 'ProductType', type: 'enum', label: 'Product Type', enumLabels: { 'E': 'Expense type', 'I': 'Item', 'R': 'Resource', 'S': 'Service' }, enumVariants: {"I":"blue","S":"purple","R":"teal","E":"orange"}, required: true },

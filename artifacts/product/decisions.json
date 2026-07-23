@@ -87,7 +87,15 @@
           "grid": true,
           "searchable": true,
           "section": "principal",
-          "seq": 2
+          "seq": 2,
+          "multiField": {
+            "subtitle": "searchKey",
+            "media": { "field": "image", "kind": "neoImage", "fallback": "box" },
+            "parts": [
+              { "field": "searchKey", "labels": { "en_US": "Identifier", "es_ES": "Identificador" } },
+              { "field": "name", "labels": { "en_US": "Name", "es_ES": "Nombre" } }
+            ]
+          }
         },
         "description": {
           "type": "textarea",

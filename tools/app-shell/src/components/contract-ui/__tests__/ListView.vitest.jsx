@@ -47,8 +47,12 @@ vi.mock('../DocumentPrintDrawer.jsx', () => ({
   default: () => null,
   printDocuments: vi.fn(),
 }));
+let capturedFilterBarColumns = null;
 vi.mock('../ListFilterBar.jsx', () => ({
-  ListFilterBar: () => <div data-testid="list-filter-bar" />,
+  ListFilterBar: ({ columns }) => {
+    capturedFilterBarColumns = columns;
+    return <div data-testid="list-filter-bar" />;
+  },
 }));
 vi.mock('@/lib/gridQuery', () => ({
   buildAdvancedFilterCriteria: () => null,
@@ -272,6 +276,61 @@ describe('ListView', () => {
       expect(() => capturedRowQuickActions.onEdit({ id: 'r1' })).not.toThrow();
       // A row without an id must not navigate (row?.id short-circuit).
       expect(() => capturedRowQuickActions.onEdit({})).not.toThrow();
+    });
+  });
+
+  // ── expandMultiFieldColumns: filter-bar column expansion ───────────────
+  describe('multiField column expansion for the advanced filter', () => {
+    beforeEach(() => { capturedFilterBarColumns = null; });
+
+    const MF_COLUMNS = [
+      {
+        key: 'name',
+        type: 'multiField',
+        title: 'name',
+        subtitle: 'searchKey',
+        parts: [
+          { key: 'searchKey', type: 'string', label: 'Identifier' },
+          { key: 'name', type: 'string', label: 'Name' },
+        ],
+      },
+      { key: 'status', type: 'status', label: 'Status' },
+    ];
+
+    it('expands a multiField column into one filter field per part, dropping the parent', () => {
+      render(<ListView {...defaultProps} initialColumns={MF_COLUMNS} />);
+      const keys = capturedFilterBarColumns.map((c) => c.key);
+      expect(keys).toEqual(['searchKey', 'name', 'status']);
+      // The parent multiField column itself must not appear.
+      expect(capturedFilterBarColumns.some((c) => c.type === 'multiField')).toBe(false);
+    });
+
+    it('resolves the label from the part definition, not the AD column label', () => {
+      render(<ListView {...defaultProps} initialColumns={MF_COLUMNS} />);
+      const searchKeyField = capturedFilterBarColumns.find((c) => c.key === 'searchKey');
+      const nameField = capturedFilterBarColumns.find((c) => c.key === 'name');
+      expect(searchKeyField.label).toBe('Identifier');
+      expect(nameField.label).toBe('Name');
+    });
+
+    it('omits parts marked filterable: false', () => {
+      const cols = [
+        {
+          ...MF_COLUMNS[0],
+          parts: [
+            { key: 'searchKey', type: 'string', label: 'Identifier', filterable: false },
+            { key: 'name', type: 'string', label: 'Name' },
+          ],
+        },
+      ];
+      render(<ListView {...defaultProps} initialColumns={cols} />);
+      const keys = capturedFilterBarColumns.map((c) => c.key);
+      expect(keys).toEqual(['name']);
+    });
+
+    it('leaves non-multiField columns unchanged', () => {
+      render(<ListView {...defaultProps} initialColumns={[{ key: 'status', type: 'status', label: 'Status' }]} />);
+      expect(capturedFilterBarColumns).toEqual([{ key: 'status', type: 'status', label: 'Status' }]);
     });
   });
 });

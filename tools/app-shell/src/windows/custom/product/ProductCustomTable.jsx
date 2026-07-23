@@ -1,22 +1,25 @@
 import { forwardRef } from 'react';
 import { DataTable } from '@/components/contract-ui';
-import { ProductNameCell, ProductSalePriceCell, ProductPurchasePriceCell, ProductStockCell } from './ProductListCells';
+import { ProductSalePriceCell, ProductPurchasePriceCell, ProductStockCell } from './ProductListCells';
 
 /* eslint-disable react/prop-types */
 
+// Identity column now uses the generic `multiField` renderer (ETP-4603) instead
+// of the bespoke ProductNameCell: title (name) + subtitle chip (searchKey) +
+// authenticated media (image), with per-part sort headers. Mirrors exactly what
+// the generator emits for a `multiField` decorator, so it stays pipeline-parity.
 const columns = [
   {
-    key: 'nameAndSearchKey',
-    labels: { en_US: 'Identifier & Name', es_ES: 'Identificador & Nombre' },
-    type: 'custom',
-    sortable: false,
-    render: (row, { token, apiBaseUrl }) => (
-      <ProductNameCell
-        row={row}
-        token={token}
-        apiBaseUrl={apiBaseUrl}
-        data-testid="ProductNameCell__f45e24" />
-    ),
+    key: 'name',
+    column: 'Name',
+    type: 'multiField',
+    title: 'name',
+    subtitle: 'searchKey',
+    media: { field: 'image', kind: 'neoImage', fallback: 'box' },
+    parts: [
+      { key: 'searchKey', column: 'Value', type: 'string', labels: { en_US: 'Identifier', es_ES: 'Identificador' } },
+      { key: 'name', column: 'Name', type: 'string', labels: { en_US: 'Name', es_ES: 'Nombre' } },
+    ],
   },
   { key: 'productCategory', column: 'M_Product_Category_ID', type: 'selector', label: 'Product Category', required: true },
   { key: 'uOM',             column: 'C_UOM_ID',              type: 'selector', label: 'UOM',              required: true },

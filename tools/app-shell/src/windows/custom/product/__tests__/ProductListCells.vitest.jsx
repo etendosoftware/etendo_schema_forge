@@ -6,17 +6,9 @@ vi.mock('@/i18n', () => ({
   useMenuLabel: () => (key) => key,
 }));
 
-// Mock useProductImage so ProductNameCell does not make real fetch calls.
-// We expose a setter so individual tests can control whether an image src is returned.
-let _mockImgSrc = null;
-vi.mock('../useProductImage.js', () => ({
-  useProductImage: () => _mockImgSrc,
-}));
-
 import { render, screen, waitFor, renderHook, act } from '@testing-library/react';
 import {
   BoxIcon,
-  ProductNameCell,
   ProductSalePriceCell,
   ProductPurchasePriceCell,
   ProductStockCell,
@@ -564,47 +556,6 @@ describe('BoxIcon', () => {
     const { container } = render(<BoxIcon color="#FF0000" />);
     const path = container.querySelector('path');
     expect(path).toHaveAttribute('stroke', '#FF0000');
-  });
-});
-
-// ---------------------------------------------------------------------------
-// ProductNameCell
-// ---------------------------------------------------------------------------
-
-describe('ProductNameCell', () => {
-  beforeEach(() => {
-    _mockImgSrc = null;
-  });
-
-  it('renders the product name', () => {
-    render(<ProductNameCell row={DEFAULT_ROW} {...DEFAULT_PROPS} />);
-    expect(screen.getByText('Widget')).toBeInTheDocument();
-  });
-
-  it('renders the searchKey badge when searchKey is present', () => {
-    render(<ProductNameCell row={DEFAULT_ROW} {...DEFAULT_PROPS} />);
-    expect(screen.getByText('WGT')).toBeInTheDocument();
-  });
-
-  it('does not render a searchKey badge when searchKey is absent', () => {
-    render(<ProductNameCell row={{ ...DEFAULT_ROW, searchKey: null }} {...DEFAULT_PROPS} />);
-    expect(screen.queryByText('WGT')).not.toBeInTheDocument();
-  });
-
-  it('renders an img tag when imgSrc is available', () => {
-    _mockImgSrc = 'blob:http://localhost/test-image';
-    render(<ProductNameCell row={DEFAULT_ROW} {...DEFAULT_PROPS} />);
-    const img = screen.getByRole('img');
-    expect(img).toBeInTheDocument();
-    expect(img).toHaveAttribute('src', 'blob:http://localhost/test-image');
-    expect(img).toHaveAttribute('alt', 'Widget');
-  });
-
-  it('renders BoxIcon fallback (svg) when no imgSrc is available', () => {
-    _mockImgSrc = null;
-    const { container } = render(<ProductNameCell row={DEFAULT_ROW} {...DEFAULT_PROPS} />);
-    expect(screen.queryByRole('img')).not.toBeInTheDocument();
-    expect(container.querySelector('svg')).toBeInTheDocument();
   });
 });
 
