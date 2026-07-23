@@ -34,7 +34,6 @@
           "visibility": "readOnly",
           "grid": false,
           "form": true,
-          "required": false,
           "section": "principal",
           "seq": 2
         },

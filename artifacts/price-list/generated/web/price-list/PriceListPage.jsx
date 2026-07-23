@@ -42,7 +42,7 @@ const draftMode = null;
 // @sf-generated-end draftMode:priceList
 
 // @sf-generated-start requiredHeaderFields:priceList
-const requiredHeaderFields = ['name', 'salesPriceList', 'default', 'active'];
+const requiredHeaderFields = ['name', 'salesPriceList', 'default', 'active', 'currency'];
 // @sf-generated-end requiredHeaderFields:priceList
 
 // @sf-generated-start addLineFields:priceListVersion

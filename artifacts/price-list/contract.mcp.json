@@ -1,8 +1,8 @@
 {
-  "version": "0.11.0",
+  "version": "0.12.0",
   "generatedAt": "2026-04-29T18:12:11.134Z",
-  "updatedAt": "2026-07-23T11:52:17.508Z",
-  "contractChecksum": "0280754a018c0449",
+  "updatedAt": "2026-07-23T13:43:58.733Z",
+  "contractChecksum": "382886c1cf629dbd",
   "apiPrediction": {
     "specName": "price-list",
     "baseUrl": "/sws/neo/price-list",
@@ -174,7 +174,8 @@
             "required": true
           },
           "currency": {
-            "readOnly": true
+            "readOnly": true,
+            "required": true
           },
           "description": {}
         }
@@ -276,5 +277,5 @@
     "knownLimitations": [],
     "dangerousOperations": []
   },
-  "checksum": "892a40dcb05a382f"
+  "checksum": "16ee7c7f9668ffe4"
 }

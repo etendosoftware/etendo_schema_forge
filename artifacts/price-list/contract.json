@@ -1,8 +1,8 @@
 {
-  "version": "0.11.0",
+  "version": "0.12.0",
   "generatedAt": "2026-04-29T18:12:11.134Z",
-  "updatedAt": "2026-07-23T11:52:17.508Z",
-  "checksum": "0280754a018c0449",
+  "updatedAt": "2026-07-23T13:43:58.733Z",
+  "checksum": "382886c1cf629dbd",
   "frontendContract": {
     "window": {
       "id": "146",
@@ -200,7 +200,7 @@
             "type": "foreignKey",
             "tsType": "string",
             "visibility": "readOnly",
-            "required": false,
+            "required": true,
             "grid": false,
             "form": true,
             "sourceRequired": true,
@@ -209,6 +209,7 @@
             "section": "principal",
             "seq": 2,
             "validation": {
+              "required": true,
               "maxLength": 22
             }
           },
@@ -618,7 +619,7 @@
             "column": "C_Currency_ID",
             "type": "foreignKey",
             "visibility": "readOnly",
-            "required": false
+            "required": true
           },
           {
             "name": "description",
