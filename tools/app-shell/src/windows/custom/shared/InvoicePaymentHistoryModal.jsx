@@ -44,11 +44,11 @@ function PaymentStateTag({ status, processed, isSales, ui }) {
         style={{
           display: 'inline-flex', alignItems: 'center', gap: 6,
           padding: '2px 10px', borderRadius: 6,
-          background: '#E2F7EA', color: '#17663A',
+          background: 'var(--status-success-bg)', color: 'var(--status-success-fg)',
           fontSize: 12, fontWeight: 500, lineHeight: '18px', whiteSpace: 'nowrap',
         }}
       >
-        <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#2DCA72', flexShrink: 0 }} />
+        <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--status-success-fg)', flexShrink: 0 }} />
         {isSales ? ui('cobroDepositado') : ui('pagoDepositado')}
       </span>
     );
@@ -59,11 +59,11 @@ function PaymentStateTag({ status, processed, isSales, ui }) {
       style={{
         display: 'inline-flex', alignItems: 'center', gap: 6,
         padding: '2px 10px', borderRadius: 6,
-        background: '#F1F2F4', color: '#55556D',
+        background: 'hsl(var(--muted))', color: 'hsl(var(--muted-foreground))',
         fontSize: 12, fontWeight: 500, lineHeight: '18px', whiteSpace: 'nowrap',
       }}
     >
-      <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#A9A9BC', flexShrink: 0 }} />
+      <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'hsl(var(--text-disabled))', flexShrink: 0 }} />
       {ui('draft')}
     </span>
   );
@@ -79,7 +79,7 @@ const METHOD_ICONS = {
 function MethodIcon({ method }) {
   const key = (method || '').toLowerCase();
   const icon = METHOD_ICONS[key] || METHOD_ICONS.transfer;
-  return <span style={{ display: 'inline-flex', color: '#9CA3AF' }}>{icon}</span>;
+  return <span style={{ display: 'inline-flex', color: 'hsl(var(--text-disabled))' }}>{icon}</span>;
 }
 
 /** Trash icon button — only rendered for draft rows, stops propagation so it doesn't open edit. */
@@ -91,7 +91,7 @@ function DeleteDraftButton({ onClick, ui }) {
       aria-label={ui('cpDeleteDraft')}
       title={ui('cpDeleteDraft')}
       data-testid="InvoicePaymentHistoryModal__delete-btn"
-      style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 26, height: 26, borderRadius: 6, border: 'none', background: 'none', color: '#C5234A', cursor: 'pointer', flexShrink: 0 }}
+      style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 26, height: 26, borderRadius: 6, border: 'none', background: 'none', color: 'hsl(var(--destructive))', cursor: 'pointer', flexShrink: 0 }}
     >
       <svg width={15} height={15} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
         <polyline points="3 6 5 6 21 6" /><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
@@ -105,30 +105,30 @@ function DeleteDraftButton({ onClick, ui }) {
 function DeleteDraftConfirm({ payment, isSales, currency, deleting, error, onCancel, onConfirm, ui }) {
   return (
     <div
-      className="fixed inset-0 z-[60] flex items-center justify-center bg-black/30"
+      className="fixed inset-0 z-[60] flex items-center justify-center bg-foreground/30"
       onClick={onCancel}
       data-testid="InvoicePaymentHistoryModal__delete-confirm-backdrop"
     >
       <div
-        className="bg-white flex flex-col"
-        style={{ width: 380, maxWidth: '100%', borderRadius: 12, boxShadow: '0 20px 50px rgba(16,20,28,.18), 0 0 0 1px rgba(16,20,28,.06)', padding: 20, gap: 12, display: 'flex' }}
+        className="bg-card flex flex-col"
+        style={{ width: 380, maxWidth: '100%', borderRadius: 12, boxShadow: '0 20px 50px hsl(var(--foreground) / 0.18), 0 0 0 1px hsl(var(--foreground) / 0.06)', padding: 20, gap: 12, display: 'flex' }}
         onClick={e => e.stopPropagation()}
         data-testid="InvoicePaymentHistoryModal__delete-confirm-panel"
       >
-        <div style={{ fontSize: 16, lineHeight: '22px', fontWeight: 600, color: '#121217' }}>
+        <div style={{ fontSize: 16, lineHeight: '22px', fontWeight: 600, color: 'hsl(var(--foreground))' }}>
           {isSales ? ui('cpDeleteCollectionTitle') : ui('cpDeletePaymentTitle')}
         </div>
-        <div style={{ fontSize: 13, lineHeight: '19px', color: '#3F3F50' }}>
+        <div style={{ fontSize: 13, lineHeight: '19px', color: 'hsl(var(--muted-foreground))' }}>
           {ui('cpDeleteDraftConfirm', { doc: payment.documentNo || payment.id, amount: fmtAmount(payment.amount, currency) })}
         </div>
-        {error && <div style={{ fontSize: 12, color: '#C5234A' }}>{error}</div>}
+        {error && <div style={{ fontSize: 12, color: 'hsl(var(--destructive))' }}>{error}</div>}
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 4 }}>
           <button
             type="button"
             onClick={onCancel}
             disabled={deleting}
             data-testid="InvoicePaymentHistoryModal__delete-cancel-btn"
-            style={{ fontSize: 14, fontWeight: 500, padding: '8px 14px', borderRadius: 360, border: 'none', background: 'none', color: '#121217', cursor: deleting ? 'not-allowed' : 'pointer' }}
+            style={{ fontSize: 14, fontWeight: 500, padding: '8px 14px', borderRadius: 360, border: 'none', background: 'none', color: 'hsl(var(--foreground))', cursor: deleting ? 'not-allowed' : 'pointer' }}
           >
             {ui('cancel')}
           </button>
@@ -137,7 +137,7 @@ function DeleteDraftConfirm({ payment, isSales, currency, deleting, error, onCan
             onClick={onConfirm}
             disabled={deleting}
             data-testid="InvoicePaymentHistoryModal__delete-confirm-btn"
-            style={{ fontSize: 14, fontWeight: 500, padding: '8px 14px', borderRadius: 360, border: 'none', background: '#C5234A', color: '#fff', cursor: deleting ? 'not-allowed' : 'pointer', opacity: deleting ? 0.6 : 1 }}
+            style={{ fontSize: 14, fontWeight: 500, padding: '8px 14px', borderRadius: 360, border: 'none', background: 'hsl(var(--destructive))', color: 'hsl(var(--card))', cursor: deleting ? 'not-allowed' : 'pointer', opacity: deleting ? 0.6 : 1 }}
           >
             {deleting ? ui('loading') : ui('cpDeleteDraft')}
           </button>
@@ -173,8 +173,8 @@ function getRowAmountMeta({ isCreditInstrument, payment, isSales }) {
     return {
       rowValue: Math.abs(Number(payment.appliedToInvoice)),
       amountSign: '− ',
-      amountColor: '#C5234A',
-      amountClassName: 'text-[#C5234A]',
+      amountColor: 'hsl(var(--destructive))',
+      amountClassName: 'text-[hsl(var(--destructive))]',
     };
   }
 
@@ -182,24 +182,24 @@ function getRowAmountMeta({ isCreditInstrument, payment, isSales }) {
     return {
       rowValue: payment.amount,
       amountSign: '+ ',
-      amountColor: '#17663A',
-      amountClassName: 'text-[#17663A]',
+      amountColor: 'var(--status-success-fg)',
+      amountClassName: 'text-[var(--status-success-fg)]',
     };
   }
 
   return {
     rowValue: payment.amount,
     amountSign: '− ',
-    amountColor: '#C5234A',
-    amountClassName: 'text-[#C5234A]',
+    amountColor: 'hsl(var(--destructive))',
+    amountClassName: 'text-[hsl(var(--destructive))]',
   };
 }
 
 function getOutstandingClassName(isCreditInstrument, outstandingAmt) {
   if (isCreditInstrument) {
-    return 'text-[#6D28D9]';
+    return 'text-[hsl(var(--primary))]';
   }
-  return outstandingAmt > 0 ? 'text-[#C28800]' : 'text-[#17663A]';
+  return outstandingAmt > 0 ? 'text-[var(--status-warning-fg)]' : 'text-[var(--status-success-fg)]';
 }
 
 function PaymentHistoryBody({
@@ -217,7 +217,7 @@ function PaymentHistoryBody({
   if (loading) {
     return (
       <div data-testid="InvoicePaymentHistoryModal__skeleton">
-        <div style={{ display: 'grid', gridTemplateColumns: grid, gap: 12, padding: '8px 24px', borderBottom: '1px solid #E8EAEF' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: grid, gap: 12, padding: '8px 24px', borderBottom: '1px solid hsl(var(--border-subtle))' }}>
           <div style={headerCellStyle}>{ui('documentNo')}</div>
           <div style={headerCellStyle}>{ui('date')}</div>
           <div style={headerCellStyle}>{ui('paymentMethodCol')}</div>
@@ -229,7 +229,7 @@ function PaymentHistoryBody({
           {[0, 1, 2].map((i) => (
             <div
               key={i}
-              style={{ display: 'grid', gridTemplateColumns: grid, gap: 12, padding: '11px 24px', borderBottom: '1px solid #F1F2F4', alignItems: 'center', opacity: 1 - i * 0.2 }}
+              style={{ display: 'grid', gridTemplateColumns: grid, gap: 12, padding: '11px 24px', borderBottom: '1px solid hsl(var(--muted))', alignItems: 'center', opacity: 1 - i * 0.2 }}
             >
               <Skeleton className="h-4 w-20" data-testid="Skeleton__b82d4f" />
               <Skeleton className="h-4 w-16" data-testid="Skeleton__b82d4f" />
@@ -250,7 +250,7 @@ function PaymentHistoryBody({
         style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '36px 20px', gap: 10 }}
         data-testid="InvoicePaymentHistoryModal__empty"
       >
-        <div style={{ width: 48, height: 48, borderRadius: 8, background: '#F1F2F4', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#828FA3', flexShrink: 0 }}>
+        <div style={{ width: 48, height: 48, borderRadius: 8, background: 'hsl(var(--muted))', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'hsl(var(--text-disabled))', flexShrink: 0 }}>
           <svg width={24} height={24} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
             <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
             <polyline points="14 2 14 8 20 8" />
@@ -258,7 +258,7 @@ function PaymentHistoryBody({
             <line x1="8" y1="17" x2="16" y2="17" />
           </svg>
         </div>
-        <p style={{ fontSize: 13, color: '#6B7280', textAlign: 'center', margin: 0 }}>
+        <p style={{ fontSize: 13, color: 'hsl(var(--muted-foreground))', textAlign: 'center', margin: 0 }}>
           {isSales ? ui('noCobroYet') : ui('noPagoYet')}
         </p>
       </div>
@@ -267,7 +267,7 @@ function PaymentHistoryBody({
 
   return (
     <div>
-      <div style={{ display: 'grid', gridTemplateColumns: grid, gap: 12, padding: '8px 24px', borderBottom: '1px solid #E8EAEF' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: grid, gap: 12, padding: '8px 24px', borderBottom: '1px solid hsl(var(--border-subtle))' }}>
         <div style={headerCellStyle}>{ui('documentNo')}</div>
         <div style={headerCellStyle}>{ui('date')}</div>
         <div style={headerCellStyle}>{ui('paymentMethodCol')}</div>
@@ -290,17 +290,17 @@ function PaymentHistoryBody({
               key={payment.id}
               onClick={() => handleRowClick(payment)}
               className="hover-row"
-              style={{ display: 'grid', gridTemplateColumns: grid, gap: 12, padding: '11px 24px', borderBottom: '1px solid #F1F2F4', alignItems: 'center', cursor: 'pointer' }}
+              style={{ display: 'grid', gridTemplateColumns: grid, gap: 12, padding: '11px 24px', borderBottom: '1px solid hsl(var(--muted))', alignItems: 'center', cursor: 'pointer' }}
               data-testid="InvoicePaymentHistoryModal__row"
             >
-              <div style={{ fontSize: 14, fontWeight: 600, color: '#121217', fontFamily: 'JetBrains Mono, monospace', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              <div style={{ fontSize: 14, fontWeight: 600, color: 'hsl(var(--foreground))', fontFamily: 'JetBrains Mono, monospace', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                 {payment.documentNo || payment.id}
               </div>
-              <div className="tabular-nums" style={{ fontSize: 14, color: '#121217' }}>
+              <div className="tabular-nums" style={{ fontSize: 14, color: 'hsl(var(--foreground))' }}>
                 {fmtDate(payment.paymentDate)}
               </div>
               <div style={{ minWidth: 0, display: 'flex', alignItems: 'center' }}>
-                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, maxWidth: '100%', padding: '2px 8px', borderRadius: 360, background: '#F5F7F9', color: '#3F3F50', fontSize: 12, lineHeight: '16px' }}>
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, maxWidth: '100%', padding: '2px 8px', borderRadius: 360, background: 'hsl(var(--muted))', color: 'hsl(var(--muted-foreground))', fontSize: 12, lineHeight: '16px' }}>
                   <MethodIcon method={methodKey} data-testid="MethodIcon__b82d4f" />
                   <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{methodRaw || '—'}</span>
                 </span>
@@ -483,18 +483,18 @@ export default function InvoicePaymentHistoryModal({
   // Fixed columns: Fecha 110 + Método 170 + Estado 150 + Importe 110 + trash 28 = 568px.
   // 1fr (Nº documento) = 652 − 568 = 84px — enough for typical doc numbers.
   const GRID = '1fr 110px 170px 150px 110px 28px';
-  const HCELL = { fontSize: 12, lineHeight: '16px', fontWeight: 600, color: '#121217', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' };
+  const HCELL = { fontSize: 12, lineHeight: '16px', fontWeight: 600, color: 'hsl(var(--foreground))', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' };
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/30"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-foreground/30"
       style={{ padding: 24 }}
       onClick={handleClose}
       data-testid="InvoicePaymentHistoryModal__backdrop"
     >
       <div
-        className="bg-white flex flex-col"
-        style={{ width: 760, maxWidth: '100%', maxHeight: '100%', borderRadius: 12, boxShadow: '0 0 0 1px rgba(18,18,23,0.1), 0 24px 48px rgba(18,18,23,0.03), 0 10px 18px rgba(18,18,23,0.03), 0 5px 8px rgba(18,18,23,0.04), 0 2px 4px rgba(18,18,23,0.04)', overflow: 'hidden' }}
+        className="bg-card flex flex-col"
+        style={{ width: 760, maxWidth: '100%', maxHeight: '100%', borderRadius: 12, boxShadow: '0 0 0 1px hsl(var(--foreground) / 0.1), 0 24px 48px hsl(var(--foreground) / 0.03), 0 10px 18px hsl(var(--foreground) / 0.03), 0 5px 8px hsl(var(--foreground) / 0.04), 0 2px 4px hsl(var(--foreground) / 0.04)', overflow: 'hidden' }}
         onClick={e => e.stopPropagation()}
         data-testid="InvoicePaymentHistoryModal__panel"
       >
@@ -505,13 +505,13 @@ export default function InvoicePaymentHistoryModal({
             onClick={handleClose}
             aria-label={ui('close')}
             data-testid="InvoicePaymentHistoryModal__close"
-            style={{ position: 'absolute', top: 12, right: 12, width: 24, height: 24, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 360, border: 'none', outline: 'none', background: 'none', cursor: 'pointer', color: '#828FA3', fontSize: 20, lineHeight: 1 }}
+            style={{ position: 'absolute', top: 12, right: 12, width: 24, height: 24, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 360, border: 'none', outline: 'none', background: 'none', cursor: 'pointer', color: 'hsl(var(--text-disabled))', fontSize: 20, lineHeight: 1 }}
           >
             &times;
           </button>
-          <div style={{ fontSize: 20, lineHeight: '28px', fontWeight: 600, color: '#121217' }}>{title}</div>
+          <div style={{ fontSize: 20, lineHeight: '28px', fontWeight: 600, color: 'hsl(var(--foreground))' }}>{title}</div>
           {docNo && (
-            <span style={{ fontSize: 12, lineHeight: '16px', color: '#3F3F50', background: '#F5F7F9', borderRadius: 8, padding: '4px 8px', flexShrink: 0 }}>
+            <span style={{ fontSize: 12, lineHeight: '16px', color: 'hsl(var(--muted-foreground))', background: 'hsl(var(--muted))', borderRadius: 8, padding: '4px 8px', flexShrink: 0 }}>
               {docNo}
             </span>
           )}
@@ -519,19 +519,19 @@ export default function InvoicePaymentHistoryModal({
 
         {/* Summary widget — Cliente/Proveedor · Importe total · Saldo pendiente */}
         <div style={{ padding: '0 20px 12px', flexShrink: 0 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 20, border: '1px solid #E8EAEF', borderRadius: 8, padding: '8px 12px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 20, border: '1px solid hsl(var(--border-subtle))', borderRadius: 8, padding: '8px 12px' }}>
             <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontSize: 12, lineHeight: '16px', color: '#3F3F50' }}>{partyLabel}</div>
-              <div style={{ fontSize: 16, lineHeight: '24px', fontWeight: 500, color: '#121217', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{bpName || '—'}</div>
+              <div style={{ fontSize: 12, lineHeight: '16px', color: 'hsl(var(--muted-foreground))' }}>{partyLabel}</div>
+              <div style={{ fontSize: 16, lineHeight: '24px', fontWeight: 500, color: 'hsl(var(--foreground))', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{bpName || '—'}</div>
             </div>
             <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontSize: 12, lineHeight: '16px', color: '#3F3F50' }}>{ui('importeTotal')}</div>
+              <div style={{ fontSize: 12, lineHeight: '16px', color: 'hsl(var(--muted-foreground))' }}>{ui('importeTotal')}</div>
               <div className="tabular-nums" style={{ fontSize: 16, lineHeight: '24px', fontWeight: 500 }}>
                 <MoneyAmount value={grandTotal} currency={currency} tone="neutral" currencyDisplay="narrowSymbol" data-testid="MoneyAmount__cp-history-total" />
               </div>
             </div>
             <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontSize: 12, lineHeight: '16px', color: '#3F3F50' }}>
+              <div style={{ fontSize: 12, lineHeight: '16px', color: 'hsl(var(--muted-foreground))' }}>
                 {isCreditInstrument ? ui('cpFavorBadge') : ui('saldoPendiente')}
               </div>
               <div className="tabular-nums" style={{ fontSize: 16, lineHeight: '24px', fontWeight: 500 }}>
@@ -564,9 +564,9 @@ export default function InvoicePaymentHistoryModal({
         </div>
 
         {/* Footer */}
-        <div style={{ padding: '12px 20px', borderTop: '1px solid #E8EAEF', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
-          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 14, lineHeight: '20px', fontWeight: 600, color: '#3F3F50' }}>
-            <svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="#828FA3" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="6" width="20" height="12" rx="2"/><circle cx="12" cy="12" r="2.5"/><path d="M18 9v6"/></svg>
+        <div style={{ padding: '12px 20px', borderTop: '1px solid hsl(var(--border-subtle))', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 14, lineHeight: '20px', fontWeight: 600, color: 'hsl(var(--muted-foreground))' }}>
+            <svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="hsl(var(--text-disabled))" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="6" width="20" height="12" rx="2"/><circle cx="12" cy="12" r="2.5"/><path d="M18 9v6"/></svg>
             {payments.length} {getCountLabel(isSales, payments.length, ui)}
           </span>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -574,7 +574,7 @@ export default function InvoicePaymentHistoryModal({
               type="button"
               onClick={handleClose}
               data-testid="InvoicePaymentHistoryModal__cerrar-btn"
-              style={{ fontSize: 14, lineHeight: '24px', fontWeight: 500, padding: '8px 12px', borderRadius: 360, border: 'none', outline: 'none', background: 'none', color: '#121217', cursor: 'pointer' }}
+              style={{ fontSize: 14, lineHeight: '24px', fontWeight: 500, padding: '8px 12px', borderRadius: 360, border: 'none', outline: 'none', background: 'none', color: 'hsl(var(--foreground))', cursor: 'pointer' }}
             >
               {ui('cancel')}
             </button>
@@ -583,7 +583,7 @@ export default function InvoicePaymentHistoryModal({
                 type="button"
                 onClick={() => { setEditingPayment(null); setShowPaymentModal(true); }}
                 data-testid="InvoicePaymentHistoryModal__add-btn"
-                className="bg-[#121217] text-white hover:bg-[#FFD500] hover:text-[#121217] transition-colors"
+                className="bg-[hsl(var(--foreground))] text-primary-foreground hover:bg-[hsl(var(--primary))] hover:text-[hsl(var(--foreground))] transition-colors"
                 style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 14, lineHeight: '24px', fontWeight: 500, padding: '8px 14px', borderRadius: 360, border: 'none', outline: 'none', cursor: 'pointer' }}
               >
                 <svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 5v14M5 12h14"/></svg>

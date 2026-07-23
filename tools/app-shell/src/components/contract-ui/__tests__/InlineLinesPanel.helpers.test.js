@@ -18,8 +18,8 @@ describe('InlineLinesPanel helpers (ETP-4005)', () => {
       assert.match(src, /function editInputClassName\(isNumeric, isInvalid\)/);
     });
 
-    it('returns the red-border class when the cell is invalid', () => {
-      assert.match(src, /isInvalid\s*\?\s*'border-red-500 focus-visible:ring-red-500'/);
+    it('returns the destructive-border class when the cell is invalid', () => {
+      assert.match(src, /isInvalid\s*\?\s*'border-destructive focus-visible:ring-destructive'/);
     });
 
     it('returns the default border class when the cell is valid', () => {
@@ -76,7 +76,7 @@ describe('InlineLinesPanel helpers (ETP-4005)', () => {
 
   describe('commit-time min-value enforcement', () => {
     it('fires the fieldMinValueError toast when a value violates the min rule', () => {
-      assert.match(src, /toast\.error\(ui\('fieldMinValueError'\)\)/);
+      assert.match(src, /toast\.error\(ui\('fieldMinValueError', \{ min: col\.min \}\)\)/);
     });
 
     it('flags the cell via setInvalidCell with the offending rowId and colKey', () => {

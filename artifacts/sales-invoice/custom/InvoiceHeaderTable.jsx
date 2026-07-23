@@ -84,10 +84,10 @@ export default function InvoiceHeaderTable(props) {
         render: (row) => {
           const sub = getArSubtype(row);
           const cfg = sub === 'NC'
-            ? { color: '#6d28d9', bg: '#f5f3ff', label: t('creditNotesTab') }
+            ? { color: 'hsl(var(--primary))', bg: 'hsl(var(--foreground))', label: t('creditNotesTab') }
             : sub === 'DEV'
-              ? { color: '#9a3412', bg: '#fff7ed', label: t('returnsTab') }
-              : { color: '#1d4ed8', bg: '#eff6ff', label: t('invoicesTab') };
+              ? { color: 'hsl(var(--destructive))', bg: 'hsl(var(--foreground))', label: t('returnsTab') }
+              : { color: 'var(--status-info-fg)', bg: 'hsl(var(--foreground))', label: t('invoicesTab') };
           return (
             <span
               className="inline-block rounded-full px-2 py-0.5 text-xs font-medium"
@@ -132,7 +132,7 @@ export default function InvoiceHeaderTable(props) {
             const outstandingAbs = Math.abs(outstanding);
             if (outstandingAbs < 0.001) {
               return (
-                <span style={{display:'inline-flex',alignItems:'center',gap:5,font:'500 12px/18px Inter',padding:'3px 10px',borderRadius:999,background:'#E2F7EA',color:'#17663A'}}>
+                <span style={{display:'inline-flex',alignItems:'center',gap:5,font:'500 12px/18px Inter',padding:'3px 10px',borderRadius:999,background:'hsl(var(--card))',color:'var(--status-success-bg)'}}>
                   <Check size={12}/>Aplicada
                 </span>
               );
@@ -145,16 +145,16 @@ export default function InvoiceHeaderTable(props) {
               <button
                 type="button"
                 onClick={(e) => { e.stopPropagation(); setPaymentRow(row); }}
-                style={{display:'inline-flex',alignItems:'center',gap:7,font:'600 13px/1 Inter',padding:'6px 11px',borderRadius:8,background:'#F5F3FF',border:'1px solid #DDD6FE',color:'#6D28D9',cursor:'pointer',fontVariantNumeric:'tabular-nums'}}
+                style={{display:'inline-flex',alignItems:'center',gap:7,font:'600 13px/1 Inter',padding:'6px 11px',borderRadius:8,background:'hsl(var(--card))',border:'1px solid var(--status-info-bg)',color:'hsl(var(--primary))',cursor:'pointer',fontVariantNumeric:'tabular-nums'}}
               >
-                <span style={{width:8,height:8,borderRadius:'50%',background:'#7C3AED',flexShrink:0,display:'inline-block'}}/>
+                <span style={{width:8,height:8,borderRadius:'50%',background:'hsl(var(--primary))',flexShrink:0,display:'inline-block'}}/>
                 Saldo a favor · {fmtAmt(outstandingAbs, currency)}
               </button>
             );
           }
           if (outstanding <= 0) {
             return (
-              <span style={{display:'inline-flex',alignItems:'center',gap:5,font:'500 12px/18px Inter',padding:'3px 10px',borderRadius:999,background:'#E2F7EA',color:'#17663A'}}>
+              <span style={{display:'inline-flex',alignItems:'center',gap:5,font:'500 12px/18px Inter',padding:'3px 10px',borderRadius:999,background:'hsl(var(--card))',color:'var(--status-success-bg)'}}>
                 <Check size={12}/>{t('cobrada')}
               </span>
             );
@@ -164,11 +164,11 @@ export default function InvoiceHeaderTable(props) {
               type="button"
               onClick={(e) => { e.stopPropagation(); setPaymentRow(row); }}
               aria-label={t('addCobro')}
-              style={{display:'inline-flex',alignItems:'center',gap:7,font:'600 13px/1 Inter',padding:'6px 11px',borderRadius:8,background:'#FFF9EB',border:'1px solid #F2E2BC',color:'#8A6E25',cursor:'pointer',fontVariantNumeric:'tabular-nums'}}
+              style={{display:'inline-flex',alignItems:'center',gap:7,font:'600 13px/1 Inter',padding:'6px 11px',borderRadius:8,background:'hsl(var(--card))',border:'1px solid var(--status-warning-bg)',color:'var(--status-warning-bg)',cursor:'pointer',fontVariantNumeric:'tabular-nums'}}
             >
-              <span style={{width:8,height:8,borderRadius:'50%',background:'#F59E0B',flexShrink:0,display:'inline-block'}}/>
+              <span style={{width:8,height:8,borderRadius:'50%',background:'var(--status-warning-bg)',flexShrink:0,display:'inline-block'}}/>
               {fmtAmt(outstanding, currency)}
-              <span style={{display:'inline-flex',alignItems:'center',color:'#A37700'}}><Plus size={13}/></span>
+              <span style={{display:'inline-flex',alignItems:'center',color:'var(--status-warning-fg)'}}><Plus size={13}/></span>
             </button>
           );
         },

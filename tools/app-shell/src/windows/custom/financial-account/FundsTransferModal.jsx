@@ -48,8 +48,8 @@ function sanitizeNumeric(raw) {
 /** Field label — 12/16 semibold, optional red required asterisk. */
 function Label({ children, required }) {
   return (
-    <label className="flex items-center gap-1 text-xs font-semibold leading-4 text-[#3F3F50]">
-      {children}{required ? <span className="text-[#F3164E]">*</span> : null}
+    <label className="flex items-center gap-1 text-xs font-semibold leading-4 text-[hsl(var(--muted-foreground))]">
+      {children}{required ? <span className="text-[hsl(var(--destructive))]">*</span> : null}
     </label>
   );
 }
@@ -58,7 +58,7 @@ function Label({ children, required }) {
 function BankTile({ size = 34 }) {
   return (
     <span
-      className="flex flex-none items-center justify-center rounded-md bg-[#E8E8ED] text-[#55556D]"
+      className="flex flex-none items-center justify-center rounded-md bg-[hsl(var(--border-subtle))] text-[hsl(var(--muted-foreground))]"
       style={{ width: size, height: size }}
       data-testid="bank-tile"
     >
@@ -70,22 +70,22 @@ function BankTile({ size = 34 }) {
 function CurrencyBadge({ iso }) {
   if (!iso) return null;
   return (
-    <span className="flex-none rounded-full bg-[#E8E8ED] px-[7px] py-0.5 text-[11px] font-semibold leading-[14px] tracking-[0.02em] text-[#3F3F50]">
+    <span className="flex-none rounded-full bg-[hsl(var(--border-subtle))] px-[7px] py-0.5 text-[11px] font-semibold leading-[14px] tracking-[0.02em] text-[hsl(var(--muted-foreground))]">
       {iso}
     </span>
   );
 }
 
 /** Field wrapper that doubles as the chip host and the search-input box (border + focus ring). */
-const FIELD_WRAPPER_CLS = 'relative flex h-10 w-full items-center gap-1 rounded-md border border-[#D1D1DB] bg-white px-2 shadow-[0px_1px_2px_rgba(18,18,23,0.05)] focus-within:border-[#121217] focus-within:ring-[3px] focus-within:ring-black/[0.08]';
+const FIELD_WRAPPER_CLS = 'relative flex h-10 w-full items-center gap-1 rounded-md border border-[hsl(var(--border-control))] bg-card px-2 shadow-[0px_1px_2px_hsl(var(--foreground) / 0.05)] focus-within:border-[hsl(var(--foreground))] focus-within:ring-[3px] focus-within:ring-foreground/[0.08]';
 /** Borderless input used inside FIELD_WRAPPER_CLS. */
-const FIELD_INPUT_CLS = 'h-full min-w-0 flex-1 border-0 bg-transparent px-1 text-sm outline-none placeholder:text-[#A9A9BC]';
+const FIELD_INPUT_CLS = 'h-full min-w-0 flex-1 border-0 bg-transparent px-1 text-sm outline-none placeholder:text-[hsl(var(--text-disabled))]';
 
 /**
  * Floating list panel rendered inline (NOT portaled) so it scrolls with wheel/touchpad inside the
  * RemoveScroll-locked Dialog (a portaled popover would block wheel events outside the modal).
  */
-const DROPDOWN_PANEL_CLS = 'absolute left-0 right-0 top-[calc(100%+6px)] z-50 max-h-64 overflow-auto rounded-xl border border-[#E8E8ED] bg-white p-1.5 shadow-lg';
+const DROPDOWN_PANEL_CLS = 'absolute left-0 right-0 top-[calc(100%+6px)] z-50 max-h-64 overflow-auto rounded-xl border border-[hsl(var(--border-subtle))] bg-card p-1.5 shadow-lg';
 
 /** Closes the dropdown when a pointer-down lands outside the given ref. */
 function useCloseOnOutside(ref, open, close) {
@@ -142,12 +142,12 @@ function AccountSelect({ accounts, value, onChange, placeholder }) {
             onFocus={() => setOpen(true)}
             data-testid="transfer-dest-search" />
         )}
-        <ChevronDown className="ml-auto h-4 w-4 flex-none text-[#6E6E80]" data-testid="ChevronDown__tf-dest" />
+        <ChevronDown className="ml-auto h-4 w-4 flex-none text-[hsl(var(--muted-foreground))]" data-testid="ChevronDown__tf-dest" />
       </div>
       {open ? (
         <div className={DROPDOWN_PANEL_CLS} data-testid="transfer-dest-popover">
           {filtered.length === 0 ? (
-            <div className="px-2.5 py-3 text-sm text-[#A9A9BC]">—</div>
+            <div className="px-2.5 py-3 text-sm text-[hsl(var(--text-disabled))]">—</div>
           ) : null}
           {filtered.map((a) => (
             <button
@@ -155,17 +155,17 @@ function AccountSelect({ accounts, value, onChange, placeholder }) {
               type="button"
               onClick={() => { onChange(a.id); close(); }}
               data-testid={`transfer-dest-option-${a.id}`}
-              className={`flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-left hover:bg-[#F7F7F8] ${a.id === value ? 'bg-[#F7F7F8]' : ''}`}
+              className={`flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-left hover:bg-[hsl(var(--muted))] ${a.id === value ? 'bg-[hsl(var(--muted))]' : ''}`}
             >
               <BankTile size={34} data-testid="BankTile__7ff08b" />
               <span className="flex min-w-0 flex-col">
-                <span className="truncate text-sm font-medium leading-[18px] text-[#121217]">{a.name}</span>
-                <span className="truncate text-xs leading-4 tabular-nums text-[#6E6E80]">
+                <span className="truncate text-sm font-medium leading-[18px] text-[hsl(var(--foreground))]">{a.name}</span>
+                <span className="truncate text-xs leading-4 tabular-nums text-[hsl(var(--muted-foreground))]">
                   {a.iban || a.maskedPan || ''}
                 </span>
               </span>
               <CurrencyBadge iso={a.currencyIso} data-testid="CurrencyBadge__7ff08b" />
-              <span className="ml-auto text-[13px] font-medium leading-4 tabular-nums text-[#3F3F50]">
+              <span className="ml-auto text-[13px] font-medium leading-4 tabular-nums text-[hsl(var(--muted-foreground))]">
                 {formatCurrency(a.currencyIso, a.currentBalance)}
               </span>
             </button>
@@ -214,12 +214,12 @@ function GlSelect({ value, onChange, placeholder }) {
             onFocus={() => setOpen(true)}
             data-testid="transfer-gl-search" />
         )}
-        <ChevronDown className="ml-auto h-4 w-4 flex-none text-[#6E6E80]" data-testid="ChevronDown__tf-gl" />
+        <ChevronDown className="ml-auto h-4 w-4 flex-none text-[hsl(var(--muted-foreground))]" data-testid="ChevronDown__tf-gl" />
       </div>
       {open ? (
         <div className={DROPDOWN_PANEL_CLS} data-testid="transfer-gl-popover">
           {results.length === 0 ? (
-            <div className="px-2.5 py-3 text-sm text-[#A9A9BC]">—</div>
+            <div className="px-2.5 py-3 text-sm text-[hsl(var(--text-disabled))]">—</div>
           ) : null}
           {results.map((g) => (
             <button
@@ -227,7 +227,7 @@ function GlSelect({ value, onChange, placeholder }) {
               type="button"
               onClick={() => { onChange(g); close(); }}
               data-testid={`transfer-gl-option-${g.id}`}
-              className={`flex w-full items-center rounded-md px-2.5 py-2 text-left text-sm text-[#121217] hover:bg-[#F7F7F8] ${value?.id === g.id ? 'bg-[#F7F7F8]' : ''}`}
+              className={`flex w-full items-center rounded-md px-2.5 py-2 text-left text-sm text-[hsl(var(--foreground))] hover:bg-[hsl(var(--muted))] ${value?.id === g.id ? 'bg-[hsl(var(--muted))]' : ''}`}
             >
               {g.name}
             </button>
@@ -244,14 +244,14 @@ function AmountField({ value, onChange, currencyIso, testId }) {
   return (
     <div className="relative">
       <input
-        className="h-10 w-full rounded-md border border-[#D1D1DB] bg-white pr-9 pl-3 text-right text-sm leading-5 tabular-nums text-[#121217] placeholder:text-[#A9A9BC] focus:outline-none focus:border-[#121217] focus:ring-[3px] focus:ring-black/[0.08]"
+        className="h-10 w-full rounded-md border border-[hsl(var(--border-control))] bg-card pr-9 pl-3 text-right text-sm leading-5 tabular-nums text-[hsl(var(--foreground))] placeholder:text-[hsl(var(--text-disabled))] focus:outline-none focus:border-[hsl(var(--foreground))] focus:ring-[3px] focus:ring-foreground/[0.08]"
         placeholder={ui('financeAccountTransferAmountPlaceholder')}
         inputMode="decimal"
         value={value}
         onChange={(e) => onChange(sanitizeNumeric(e.target.value))}
         data-testid={testId}
       />
-      <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[13px] font-medium text-[#A9A9BC]">
+      <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[13px] font-medium text-[hsl(var(--text-disabled))]">
         {currencySymbol(currencyIso)}
       </span>
     </div>
@@ -344,21 +344,21 @@ export function FundsTransferModal({ sourceAccountId, onClose, onSuccess }) {
   return (
     <Dialog open onOpenChange={(v) => { if (!v) onClose?.(); }} data-testid="Dialog__transfer">
       <DialogContent
-        className="max-w-[600px] gap-0 overflow-hidden border-[#E8E8ED] bg-white p-0"
+        className="max-w-[600px] gap-0 overflow-hidden border-[hsl(var(--border-subtle))] bg-card p-0"
         onOpenAutoFocus={(e) => e.preventDefault()}
         data-testid="funds-transfer-modal"
       >
         {/* Header */}
         <div className="flex items-start justify-between px-6 pb-3.5 pt-[22px]">
           <div className="flex items-center gap-3">
-            <span className="flex h-9 w-9 flex-none items-center justify-center rounded-md bg-[#121217] text-white">
+            <span className="flex h-9 w-9 flex-none items-center justify-center rounded-md bg-[hsl(var(--foreground))] text-primary-foreground">
               <ArrowLeftRight className="h-[18px] w-[18px]" data-testid="ArrowLeftRight__tf-head" />
             </span>
             <div>
-              <h2 className="text-[18px] font-bold leading-6 tracking-[-0.01em] text-[#121217]">
+              <h2 className="text-[18px] font-bold leading-6 tracking-[-0.01em] text-[hsl(var(--foreground))]">
                 {ui('financeAccountTransferTitle')}
               </h2>
-              <p className="mt-0.5 text-[13px] leading-[18px] text-[#6E6E80]">
+              <p className="mt-0.5 text-[13px] leading-[18px] text-[hsl(var(--muted-foreground))]">
                 {ui('financeAccountTransferSubtitle')}
               </p>
             </div>
@@ -373,24 +373,24 @@ export function FundsTransferModal({ sourceAccountId, onClose, onSuccess }) {
         <div className="flex min-w-0 flex-col gap-4 px-6 pb-2 pt-1.5">
           {/* Source → destination flow */}
           <div className="flex flex-col">
-            <div className="flex items-center gap-3 rounded-xl border border-[#E8E8ED] bg-[#F7F7F8] px-4 py-3.5">
+            <div className="flex items-center gap-3 rounded-xl border border-[hsl(var(--border-subtle))] bg-[hsl(var(--muted))] px-4 py-3.5">
               <BankTile size={34} data-testid="BankTile__7ff08b" />
               <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-                <span className="text-[11px] font-semibold uppercase leading-[14px] tracking-[0.06em] text-[#A9A9BC]">
+                <span className="text-[11px] font-semibold uppercase leading-[14px] tracking-[0.06em] text-[hsl(var(--text-disabled))]">
                   {ui('financeAccountTransferSourceRole')}
                 </span>
-                <span className="flex items-center gap-2 text-sm font-semibold leading-5 text-[#121217]">
+                <span className="flex items-center gap-2 text-sm font-semibold leading-5 text-[hsl(var(--foreground))]">
                   {source?.name ?? ''}<CurrencyBadge iso={source?.currencyIso} data-testid="CurrencyBadge__7ff08b" />
                 </span>
-                <span className="text-xs leading-4 tabular-nums text-[#6E6E80]">
+                <span className="text-xs leading-4 tabular-nums text-[hsl(var(--muted-foreground))]">
                   {source?.iban || source?.maskedPan || ''}
                 </span>
               </div>
               <div className="flex-none text-right">
-                <div className="text-[11px] leading-[14px] text-[#A9A9BC]">
+                <div className="text-[11px] leading-[14px] text-[hsl(var(--text-disabled))]">
                   {ui('financeAccountTransferAvailable')}
                 </div>
-                <div className="text-[15px] font-semibold leading-5 tabular-nums text-[#121217]" data-testid="transfer-available">
+                <div className="text-[15px] font-semibold leading-5 tabular-nums text-[hsl(var(--foreground))]" data-testid="transfer-available">
                   {formatCurrency(source?.currencyIso, available)}
                 </div>
               </div>
@@ -398,7 +398,7 @@ export function FundsTransferModal({ sourceAccountId, onClose, onSuccess }) {
 
             {/* connector */}
             <div className="ml-[33px] my-0.5 flex h-[18px] items-center">
-              <span className="h-full w-0.5 rounded-sm bg-[#D1D1DB]" />
+              <span className="h-full w-0.5 rounded-sm bg-[hsl(var(--border-control))]" />
             </div>
 
             <div className="flex flex-col gap-1.5">
@@ -425,31 +425,31 @@ export function FundsTransferModal({ sourceAccountId, onClose, onSuccess }) {
 
           {/* Currency conversion (multi-currency only) */}
           {multiCurrency ? (
-            <div className="flex flex-col gap-3 rounded-xl border border-[#D1D1DB] bg-[#F7F7F8] px-4 py-3.5" data-testid="transfer-fx-block">
+            <div className="flex flex-col gap-3 rounded-xl border border-[hsl(var(--border-control))] bg-[hsl(var(--muted))] px-4 py-3.5" data-testid="transfer-fx-block">
               <div className="flex flex-col gap-1.5">
                 <div className="flex items-center justify-between">
                   <Label required data-testid="Label__7ff08b">{ui('financeAccountTransferRate')}</Label>
-                  <div className="flex items-center gap-2 text-[13px] font-semibold leading-[18px] text-[#121217]">
+                  <div className="flex items-center gap-2 text-[13px] font-semibold leading-[18px] text-[hsl(var(--foreground))]">
                     <CurrencyBadge iso={source?.currencyIso} data-testid="CurrencyBadge__7ff08b" />
-                    <ArrowRight className="h-[15px] w-[15px] text-[#A9A9BC]" data-testid="ArrowRight__tf" />
+                    <ArrowRight className="h-[15px] w-[15px] text-[hsl(var(--text-disabled))]" data-testid="ArrowRight__tf" />
                     <CurrencyBadge iso={dest?.currencyIso} data-testid="CurrencyBadge__7ff08b" />
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
                   <input
-                    className="h-10 min-w-0 flex-1 rounded-md border border-[#D1D1DB] bg-white px-3 text-right text-sm leading-5 tabular-nums text-[#121217] placeholder:text-[#A9A9BC] focus:outline-none focus:border-[#121217] focus:ring-[3px] focus:ring-black/[0.08]"
+                    className="h-10 min-w-0 flex-1 rounded-md border border-[hsl(var(--border-control))] bg-card px-3 text-right text-sm leading-5 tabular-nums text-[hsl(var(--foreground))] placeholder:text-[hsl(var(--text-disabled))] focus:outline-none focus:border-[hsl(var(--foreground))] focus:ring-[3px] focus:ring-foreground/[0.08]"
                     placeholder={ui('financeAccountTransferRatePlaceholder')}
                     inputMode="decimal"
                     value={conversionRate}
                     onChange={(e) => setConversionRate(sanitizeNumeric(e.target.value))}
                     data-testid="transfer-rate" />
                   <div
-                    className="flex h-10 min-w-0 flex-1 items-center gap-1 overflow-hidden rounded-md border border-[#D1D1DB] bg-[#EDEDF0] px-2.5 text-sm leading-5 tabular-nums text-[#121217]"
+                    className="flex h-10 min-w-0 flex-1 items-center gap-1 overflow-hidden rounded-md border border-[hsl(var(--border-control))] bg-[hsl(var(--muted))] px-2.5 text-sm leading-5 tabular-nums text-[hsl(var(--foreground))]"
                     title={`${ui('financeAccountTransferReceiveAmount')}: ${formatCurrency(dest?.currencyIso, receiveAmount)}`}
                     aria-label={`${ui('financeAccountTransferReceiveAmount')}: ${formatCurrency(dest?.currencyIso, receiveAmount)}`}
                     data-testid="transfer-receive-amount"
                   >
-                    <span className="flex-none text-[#6E6E80]">≈</span>
+                    <span className="flex-none text-[hsl(var(--muted-foreground))]">≈</span>
                     <span className="min-w-0 truncate">{formatCurrency(dest?.currencyIso, receiveAmount)}</span>
                   </div>
                 </div>
@@ -467,7 +467,7 @@ export function FundsTransferModal({ sourceAccountId, onClose, onSuccess }) {
               data-testid="GlSelect__7ff08b" />
           </div>
 
-          <div className="h-px bg-[#E8E8ED]" />
+          <div className="h-px bg-[hsl(var(--border-subtle))]" />
 
           {/* Bank fee — shared Checkbox primitive */}
           <div className="flex items-center gap-2.5">
@@ -478,7 +478,7 @@ export function FundsTransferModal({ sourceAccountId, onClose, onSuccess }) {
             <button
               type="button"
               onClick={() => setBankFee((v) => !v)}
-              className="text-sm font-medium leading-5 text-[#121217]"
+              className="text-sm font-medium leading-5 text-[hsl(var(--foreground))]"
             >
               {ui('financeAccountTransferBankFee')}
             </button>
@@ -511,24 +511,24 @@ export function FundsTransferModal({ sourceAccountId, onClose, onSuccess }) {
           <div className="flex flex-col gap-1.5">
             <Label data-testid="Label__7ff08b">{ui('financeAccountTransferDescription')}</Label>
             <input
-              className="h-10 w-full rounded-md border border-[#D1D1DB] bg-white px-3 text-sm leading-5 text-[#121217] focus:outline-none focus:border-[#121217] focus:ring-[3px] focus:ring-black/[0.08]"
+              className="h-10 w-full rounded-md border border-[hsl(var(--border-control))] bg-card px-3 text-sm leading-5 text-[hsl(var(--foreground))] focus:outline-none focus:border-[hsl(var(--foreground))] focus:ring-[3px] focus:ring-foreground/[0.08]"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               data-testid="transfer-description" />
           </div>
 
           {error ? (
-            <p className="text-sm text-[#D50B3E]" data-testid="transfer-error">{error}</p>
+            <p className="text-sm text-[hsl(var(--destructive))]" data-testid="transfer-error">{error}</p>
           ) : null}
         </div>
 
         {/* Footer */}
-        <div className="mt-2 flex items-center justify-end gap-2.5 border-t border-[#E8E8ED] px-6 pb-5 pt-4">
+        <div className="mt-2 flex items-center justify-end gap-2.5 border-t border-[hsl(var(--border-subtle))] px-6 pb-5 pt-4">
           <button
             type="button"
             onClick={() => onClose?.()}
             data-testid="transfer-cancel"
-            className="inline-flex h-10 items-center rounded-md border border-[#D1D1DB] bg-white px-[18px] text-sm font-semibold text-[#3F3F50] hover:bg-[#F7F7F8] hover:border-[#A9A9BC]"
+            className="inline-flex h-10 items-center rounded-md border border-[hsl(var(--border-control))] bg-card px-[18px] text-sm font-semibold text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--muted))] hover:border-[hsl(var(--text-disabled))]"
           >
             {ui('financeAccountTransferCancel')}
           </button>
@@ -537,7 +537,7 @@ export function FundsTransferModal({ sourceAccountId, onClose, onSuccess }) {
             onClick={handleConfirm}
             disabled={!canSubmit}
             data-testid="transfer-confirm"
-            className="inline-flex h-10 items-center gap-2 rounded-md bg-[#121217] px-[18px] text-sm font-semibold text-white transition-colors hover:bg-[#FFD500] hover:text-[#121217] disabled:cursor-not-allowed disabled:bg-[#D1D1DB] disabled:text-[#8A8AA3] disabled:hover:bg-[#D1D1DB] disabled:hover:text-[#8A8AA3]"
+            className="inline-flex h-10 items-center gap-2 rounded-md bg-[hsl(var(--foreground))] px-[18px] text-sm font-semibold text-primary-foreground transition-colors hover:bg-[hsl(var(--primary))] hover:text-[hsl(var(--foreground))] disabled:cursor-not-allowed disabled:bg-[hsl(var(--border-control))] disabled:text-[hsl(var(--text-disabled))] disabled:hover:bg-[hsl(var(--border-control))] disabled:hover:text-[hsl(var(--text-disabled))]"
           >
             <ArrowLeftRight className="h-4 w-4" data-testid="ArrowLeftRight__tf-confirm" />
             {ui('financeAccountTransferConfirm')}

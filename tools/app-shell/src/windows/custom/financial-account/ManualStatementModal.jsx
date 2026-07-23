@@ -224,7 +224,7 @@ const LINES_GRID =
 // Inline cell inputs: borderless until focused (spreadsheet feel), so the
 // editable row reads as plain text cells matching the read-only rows.
 const cellInput =
-  'h-9 w-full rounded-md border border-transparent bg-transparent px-2 text-sm text-[#121217] placeholder:text-[#A8AAB8] focus:border-[#D1D4DB] focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#121217]/15';
+  'h-9 w-full rounded-md border border-transparent bg-transparent px-2 text-sm text-[hsl(var(--foreground))] placeholder:text-[hsl(var(--text-disabled))] focus:border-[hsl(var(--border-control))] focus:bg-card focus:outline-none focus:ring-2 focus:ring-[hsl(var(--foreground))]/15';
 const cellAmount = cn(cellInput, 'text-right tabular-nums');
 
 // Column header styled like the invoices table in the New movement modal:
@@ -234,14 +234,14 @@ const cellAmount = cn(cellInput, 'text-right tabular-nums');
 function ColHead({ label, required, className }) {
   return (
     <span className={cn('truncate whitespace-nowrap', className)}>
-      {label}{required ? <span className="text-[#9A1B1B]"> *</span> : null}
+      {label}{required ? <span className="text-[hsl(var(--destructive))]"> *</span> : null}
     </span>
   );
 }
 
 function LinesHeader({ ui }) {
   return (
-    <div className={cn(LINES_GRID, 'items-center border-b border-[#E8EAEF] bg-white px-6 py-2.5 text-xs font-semibold tracking-normal text-[#121217]')}>
+    <div className={cn(LINES_GRID, 'items-center border-b border-[hsl(var(--border-subtle))] bg-card px-6 py-2.5 text-xs font-semibold tracking-normal text-[hsl(var(--foreground))]')}>
       <ColHead
         label={ui('financeAccountStatementsManualColDate')}
         required
@@ -285,13 +285,13 @@ function EditRow({ row, onChange, onRemove, ui, currencySym }) {
         type="text" inputMode="decimal" value={row[field]} onChange={set(field)}
         placeholder={ui('financeAccountAmountPlaceholder')}
         className={cn(cellAmount, 'pr-7')} data-testid={testId} />
-      <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-xs text-[#A8AAB8]">
+      <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-xs text-[hsl(var(--text-disabled))]">
         {currencySym}
       </span>
     </div>
   );
   return (
-    <div className={cn(LINES_GRID, 'group items-center bg-white px-6 py-1.5 hover:bg-[#FAFBFC]')} data-testid="manual-line-editrow">
+    <div className={cn(LINES_GRID, 'group items-center bg-card px-6 py-1.5 hover:bg-[hsl(var(--muted))]')} data-testid="manual-line-editrow">
       <DateField value={row.date} onChange={setVal('date')} data-testid="manual-line-date" className="w-full" />
       <input type="text" value={row.reference} onChange={set('reference')} className={cellInput} data-testid="manual-line-ref" />
       <input type="text" value={row.description} onChange={set('description')}
@@ -325,7 +325,7 @@ function EditRow({ row, onChange, onRemove, ui, currencySym }) {
       <span className="flex items-center justify-end">
         <button type="button" onClick={() => onRemove(row.id)}
           aria-label={ui('financeAccountStatementsManualRemoveLine')} data-testid="manual-line-remove"
-          className="flex h-8 w-8 items-center justify-center rounded-full text-[#D50B3E] opacity-0 transition-opacity hover:bg-[#FEF0F4] focus:opacity-100 group-hover:opacity-100">
+          className="flex h-8 w-8 items-center justify-center rounded-full text-[hsl(var(--destructive))] opacity-0 transition-opacity hover:bg-[var(--status-destructive-bg)] focus:opacity-100 group-hover:opacity-100">
           <Trash2 className="h-4 w-4" data-testid="Trash2__6b4086" />
         </button>
       </span>
@@ -336,13 +336,13 @@ function EditRow({ row, onChange, onRemove, ui, currencySym }) {
 // Inline hint shown under the row whose cell is being edited.
 function LineEditHint({ ui }) {
   return (
-    <div className="flex items-center justify-center gap-4 px-6 pb-2 text-xs text-[#6C6C89]">
+    <div className="flex items-center justify-center gap-4 px-6 pb-2 text-xs text-[hsl(var(--muted-foreground))]">
       <span className="inline-flex items-center gap-1.5">
-        <kbd className="rounded border border-[#D1D4DB] bg-[#F5F7F9] px-1.5 py-0.5 text-[11px] leading-none text-[#3F3F50]">↵</kbd>
+        <kbd className="rounded border border-[hsl(var(--border-control))] bg-[hsl(var(--muted))] px-1.5 py-0.5 text-[11px] leading-none text-[hsl(var(--muted-foreground))]">↵</kbd>
         {ui('financeAccountStatementsManualLineHintSave')}
       </span>
       <span className="inline-flex items-center gap-1.5">
-        <kbd className="rounded border border-[#D1D4DB] bg-[#F5F7F9] px-1.5 py-0.5 text-[11px] leading-none text-[#3F3F50]">
+        <kbd className="rounded border border-[hsl(var(--border-control))] bg-[hsl(var(--muted))] px-1.5 py-0.5 text-[11px] leading-none text-[hsl(var(--muted-foreground))]">
           {ui('financeAccountStatementsManualKeyEsc')}
         </kbd>
         {ui('financeAccountStatementsManualLineHintCancel')}
@@ -366,7 +366,7 @@ function EditableLines({ rows, setRows, ui, currencySym }) {
   return (
     <div className="-mx-6">
       <LinesHeader ui={ui} data-testid="LinesHeader__6b4086" />
-      <div className="divide-y divide-[#E8EAEF]">
+      <div className="divide-y divide-[hsl(var(--border-subtle))]">
         {rows.map((r) => (
           <div
             key={r.id}
@@ -399,7 +399,7 @@ function EditableLines({ rows, setRows, ui, currencySym }) {
           </div>
         ))}
       </div>
-      <div className="border-t border-[#E8EAEF] px-6 py-2">
+      <div className="border-t border-[hsl(var(--border-subtle))] px-6 py-2">
         <AddLineButton
           onClick={add}
           label={ui('financeAccountStatementsManualAddLine')}
@@ -418,7 +418,7 @@ function EditableLines({ rows, setRows, ui, currencySym }) {
 function StatementSummaryWidget({ rows, money, ui }) {
   const t = computeTotals(rows);
   return (
-    <div className="flex items-center gap-5 rounded-lg border border-[#E8EAEF] px-3 py-2">
+    <div className="flex items-center gap-5 rounded-lg border border-[hsl(var(--border-subtle))] px-3 py-2">
       <SummaryKpi
         label={ui('financeAccountStatementsManualTotalLines')}
         value={t.n}
@@ -426,12 +426,12 @@ function StatementSummaryWidget({ rows, money, ui }) {
       <SummaryKpi
         label={ui('financeAccountStatementsManualTotalIn')}
         value={`+${money(t.tin)}`}
-        valueClass="text-[#17663A]"
+        valueClass="text-[var(--status-success-fg)]"
         data-testid="SummaryKpi__6b4086" />
       <SummaryKpi
         label={ui('financeAccountStatementsManualTotalOut')}
         value={`−${money(t.tout)}`}
-        valueClass="text-[#AF0932]"
+        valueClass="text-[hsl(var(--destructive))]"
         data-testid="SummaryKpi__6b4086" />
       <SummaryKpi
         label={ui('financeAccountStatementsManualTotalBalance')}
@@ -441,10 +441,10 @@ function StatementSummaryWidget({ rows, money, ui }) {
   );
 }
 
-function SummaryKpi({ label, value, valueClass = 'text-[#121217]' }) {
+function SummaryKpi({ label, value, valueClass = 'text-[hsl(var(--foreground))]' }) {
   return (
     <div className="flex min-w-0 flex-1 flex-col">
-      <span className="text-xs leading-4 text-[#3F3F50]">{label}</span>
+      <span className="text-xs leading-4 text-[hsl(var(--muted-foreground))]">{label}</span>
       <span className={cn('truncate text-base font-medium leading-6 tabular-nums', valueClass)}>
         {value}
       </span>
@@ -455,13 +455,13 @@ function SummaryKpi({ label, value, valueClass = 'text-[#121217]' }) {
 // Single active "Líneas" tab with a count badge, sitting on a bottom border.
 function LinesTab({ count, ui }) {
   return (
-    <div className="-mx-6 flex items-center border-b border-[#E8EAEF] px-6">
-      <div className="-mb-px flex items-center gap-1.5 border-b-2 border-[#121217] pb-3 pr-3 pt-2">
-        <Layers className="h-4 w-4 text-[#121217]" data-testid="Layers__6b4086" />
-        <span className="text-sm font-medium text-[#121217]">
+    <div className="-mx-6 flex items-center border-b border-[hsl(var(--border-subtle))] px-6">
+      <div className="-mb-px flex items-center gap-1.5 border-b-2 border-[hsl(var(--foreground))] pb-3 pr-3 pt-2">
+        <Layers className="h-4 w-4 text-[hsl(var(--foreground))]" data-testid="Layers__6b4086" />
+        <span className="text-sm font-medium text-[hsl(var(--foreground))]">
           {ui('financeAccountStatementsManualSectionLines')}
         </span>
-        <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-[#F5F7F9] px-1.5 text-[11px] text-[#3F3F50]">
+        <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-[hsl(var(--muted))] px-1.5 text-[11px] text-[hsl(var(--muted-foreground))]">
           {count}
         </span>
       </div>
@@ -508,7 +508,7 @@ function SaveSplitButton({ creating, onProcess, onDraft, ui }) {
     };
   }, [open]);
 
-  const btnBase = 'inline-flex h-10 items-center bg-[#121217] text-white transition-colors hover:bg-[#FFD500] hover:text-[#121217] disabled:cursor-not-allowed disabled:opacity-50';
+  const btnBase = 'inline-flex h-10 items-center bg-[hsl(var(--foreground))] text-primary-foreground transition-colors hover:bg-[hsl(var(--primary))] hover:text-[hsl(var(--foreground))] disabled:cursor-not-allowed disabled:opacity-50';
 
   return (
     <div ref={wrapRef} className="relative flex items-stretch">
@@ -530,7 +530,7 @@ function SaveSplitButton({ creating, onProcess, onDraft, ui }) {
         aria-haspopup="menu"
         aria-expanded={open}
         data-testid="manual-statement-save-split"
-        className={cn(btnBase, 'w-9 justify-center rounded-r-lg border-l border-white/20')}
+        className={cn(btnBase, 'w-9 justify-center rounded-r-lg border-l border-inverse-border/20')}
       >
         <ChevronDown
           className={cn('h-4 w-4 transition-transform', open && 'rotate-180')}
@@ -541,19 +541,19 @@ function SaveSplitButton({ creating, onProcess, onDraft, ui }) {
           ref={menuRef}
           role="menu"
           style={{ position: 'fixed', top: pos.top, left: pos.left, width: 256, zIndex: 9999, pointerEvents: 'auto' }}
-          className="overflow-hidden rounded-lg border border-[#E8EAEF] bg-white shadow-lg"
+          className="overflow-hidden rounded-lg border border-[hsl(var(--border-subtle))] bg-card shadow-lg"
         >
           <button
             type="button"
             role="menuitem"
             data-testid="manual-statement-save-draft"
             onClick={() => { setOpen(false); onDraft(); }}
-            className="flex w-full items-center gap-3 px-3 py-2.5 text-left hover:bg-[#F5F7F9]"
+            className="flex w-full items-center gap-3 px-3 py-2.5 text-left hover:bg-[hsl(var(--muted))]"
           >
-            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[#F0F2F5] text-[#121217]">
+            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[hsl(var(--border-subtle))] text-[hsl(var(--foreground))]">
               <FileText className="h-4 w-4" data-testid="FileText__6b4086" />
             </span>
-            <span className="text-sm font-semibold text-[#121217]">
+            <span className="text-sm font-semibold text-[hsl(var(--foreground))]">
               {ui('financeAccountStatementsManualSaveDraft')}
             </span>
           </button>
@@ -718,20 +718,20 @@ export function ManualStatementModal({
         data-testid="Dialog__6b4086">
         <DialogContent
           className="w-[96vw] max-w-[1440px] overflow-hidden p-0"
-          style={{ background: 'var(--surface-overlay, #FFFFFF)' }}
+          style={{ background: 'var(--surface-overlay, hsl(var(--card)))' }}
           onPointerDownOutside={(e) => e.preventDefault()}
           onEscapeKeyDown={(e) => { e.preventDefault(); requestClose(); }}
           data-testid="DialogContent__6b4086">
-          <div className="bg-white px-6 pt-6">
-            <h2 className="text-xl font-semibold leading-7 text-[#121217]">
+          <div className="bg-card px-6 pt-6">
+            <h2 className="text-xl font-semibold leading-7 text-[hsl(var(--foreground))]">
               {ui(editing ? 'financeAccountStatementsManualEditTitle' : 'financeAccountStatementsManualTitle')}
             </h2>
-            <p className="mt-0.5 text-xs leading-4 text-[#6C6C89]">
+            <p className="mt-0.5 text-xs leading-4 text-[hsl(var(--muted-foreground))]">
               {ui(editing ? 'financeAccountStatementsManualEditSubtitle' : 'financeAccountStatementsManualSubtitle')}
             </p>
           </div>
 
-          <div className="max-h-[62vh] overflow-y-auto overflow-x-hidden bg-white px-6 py-4">
+          <div className="max-h-[62vh] overflow-y-auto overflow-x-hidden bg-card px-6 py-4">
             <div className="flex flex-col gap-5">
               <StatementSummaryWidget
                 rows={rows}
@@ -756,7 +756,7 @@ export function ManualStatementModal({
               data-testid="EditableLines__6b4086" />
           </div>
 
-          <div className="flex items-center justify-end border-t border-[#E8EAEF] bg-white px-6 py-4">
+          <div className="flex items-center justify-end border-t border-[hsl(var(--border-subtle))] bg-card px-6 py-4">
             <SaveSplitButton
               creating={saving}
               onProcess={() => handleSave(true)}
@@ -771,12 +771,12 @@ export function ManualStatementModal({
         open={confirmClose}
         onOpenChange={(v) => { if (!v) setConfirmClose(false); }}
         data-testid="Dialog__6b4086">
-        <DialogContent className="max-w-sm bg-white" data-testid="DialogContent__6b4086">
+        <DialogContent className="max-w-sm bg-card" data-testid="DialogContent__6b4086">
           <div data-testid="manual-discard-overlay">
-            <h3 className="text-base font-semibold text-[#121217]">
+            <h3 className="text-base font-semibold text-[hsl(var(--foreground))]">
               {ui('financeAccountStatementsManualDiscardTitle')}
             </h3>
-            <p className="mt-1 text-sm text-[#6C6C89]">
+            <p className="mt-1 text-sm text-[hsl(var(--muted-foreground))]">
               {ui('financeAccountStatementsManualDiscardBody')}
             </p>
             <div className="mt-5 flex justify-end gap-2">
@@ -784,7 +784,7 @@ export function ManualStatementModal({
                 type="button"
                 onClick={() => setConfirmClose(false)}
                 data-testid="manual-discard-keep"
-                className="inline-flex h-10 items-center rounded-lg border border-[#D1D4DB] bg-white px-3 text-sm font-medium text-[#121217] hover:bg-[#F5F7F9]"
+                className="inline-flex h-10 items-center rounded-lg border border-[hsl(var(--border-control))] bg-card px-3 text-sm font-medium text-[hsl(var(--foreground))] hover:bg-[hsl(var(--muted))]"
               >
                 {ui('financeAccountStatementsManualDiscardKeep')}
               </button>
@@ -792,7 +792,7 @@ export function ManualStatementModal({
                 type="button"
                 onClick={() => { setConfirmClose(false); onClose(); }}
                 data-testid="manual-discard-confirm"
-                className="inline-flex h-10 items-center rounded-lg bg-[#D50B3E] px-3 text-sm font-medium text-white hover:bg-[#B50934]"
+                className="inline-flex h-10 items-center rounded-lg bg-[hsl(var(--destructive))] px-3 text-sm font-medium text-primary-foreground hover:bg-[hsl(var(--destructive))]"
               >
                 {ui('financeAccountStatementsManualDiscardConfirm')}
               </button>

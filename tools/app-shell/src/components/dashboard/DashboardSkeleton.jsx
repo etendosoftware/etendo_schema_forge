@@ -1,6 +1,6 @@
 export function DashboardSkeleton() {
   return (
-    <div className="dashboard-scroll p-2 bg-white rounded-tl-2xl flex-1 overflow-y-auto animate-pulse space-y-4">
+    <div className="dashboard-scroll p-2 bg-card rounded-tl-2xl flex-1 overflow-y-auto animate-pulse space-y-4">
       {/* Greeting */}
       <div className="flex items-center justify-between" style={{ height: '48px' }}>
         <div className="flex items-center gap-3">
