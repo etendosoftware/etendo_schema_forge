@@ -368,6 +368,57 @@ describe('useEntity', () => {
       expect(result.current.selected).toEqual({ ...existing, name: 'Updated', serverValue: 'computed' });
     });
 
+    it('refetches children after a PATCH on an existing record with a childEntity (ETP-4512)', async () => {
+      // Guards against a real bug: a backend NeoHandler side effect on the header's
+      // own save (e.g. syncing a join table from a header field) is invisible to the
+      // frontend — nothing tells the already-loaded child list to refresh unless
+      // handleSave itself triggers it. Children must NOT go stale after a plain
+      // update, the same way the existing justSaved fast-path already covers create.
+      // The children endpoint returns DIFFERENT data on each call — role-a-row from
+      // handleSelect's own initial fetchChildren, then role-b-row — so this only
+      // passes if handleSave ALSO calls fetchChildren after the PATCH; if it doesn't,
+      // `children` would incorrectly stay stale at role-a-row.
+      const existing = { id: 'ex-1', name: 'Original', defaultRole: 'role-a' };
+      let childrenFetchCount = 0;
+      globalThis.fetch.mockImplementation(async (url, opts) => {
+        const urlStr = String(url);
+        if (urlStr.includes('/lines?parentId=ex-1')) {
+          childrenFetchCount += 1;
+          const row = childrenFetchCount === 1
+            ? { id: 'role-a-row', role: 'role-a' }
+            : { id: 'role-b-row', role: 'role-b' };
+          return { ok: true, json: async () => ({ response: { data: [row] } }) };
+        }
+        if (opts?.method === 'PATCH') {
+          return { ok: true, json: async () => ({ response: { data: [{ ...existing, defaultRole: 'role-b' }] } }) };
+        }
+        return { ok: true, json: async () => ({ response: { data: [] } }) };
+      });
+
+      const { result } = renderEntity('header', 'lines', { skipListFetch: true });
+
+      act(() => {
+        result.current.handleSelect(existing);
+      });
+
+      await waitFor(() => {
+        expect(result.current.children).toEqual([{ id: 'role-a-row', role: 'role-a' }]);
+      });
+
+      act(() => {
+        result.current.handleChange('defaultRole', 'role-b');
+      });
+
+      await act(async () => {
+        await result.current.handleSave();
+      });
+
+      await waitFor(() => {
+        expect(result.current.children).toEqual([{ id: 'role-b-row', role: 'role-b' }]);
+      });
+      expect(childrenFetchCount).toBe(2);
+    });
+
     it('returns null and sets error on non-ok response', async () => {
       let postCalled = false;
       globalThis.fetch.mockImplementation(async (url, opts) => {
