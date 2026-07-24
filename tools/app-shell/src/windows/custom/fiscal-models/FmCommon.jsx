@@ -13,30 +13,30 @@ export function KpiWidget({ icon, iconColor, label, badge, badgeBg, badgeColor, 
       style={{
         display: 'flex', flexDirection: 'row', alignItems: 'center',
         padding: '8px 8px 8px 12px', gap: 12, height: 68,
-        background: hovered ? '#F5F7F9' : '#FFF', border: '1px solid #E8EAEF',
-        boxShadow: '0px 1px 2px rgba(18,18,23,0.05)',
+        background: hovered ? 'hsl(var(--muted))' : 'hsl(var(--card))', border: '1px solid hsl(var(--border-subtle))',
+        boxShadow: '0px 1px 2px hsl(var(--foreground) / 0.05)',
         borderRadius: 8, flex: 1, minWidth: 0, cursor: 'default',
         transition: 'background .15s',
       }}>
       <div style={{
-        width: 40, height: 40, background: '#FFF',
-        border: '1px solid #D1D4DB',
-        boxShadow: '0px 1px 2px rgba(18,18,23,0.05)',
+        width: 40, height: 40, background: 'hsl(var(--card))',
+        border: '1px solid hsl(var(--border-control))',
+        boxShadow: '0px 1px 2px hsl(var(--foreground) / 0.05)',
         borderRadius: 8,
         display: 'flex', alignItems: 'center', justifyContent: 'center',
         flexShrink: 0,
       }}>
-        <span style={{ color: iconColor ?? '#828FA3', display: 'inline-flex' }}>{icon}</span>
+        <span style={{ color: iconColor ?? 'hsl(var(--text-disabled))', display: 'inline-flex' }}>{icon}</span>
       </div>
       <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', flex: 1, minWidth: 0 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
-          <span style={{ fontSize: 12, fontWeight: 400, lineHeight: '16px', color: '#3F3F50' }}>{label}</span>
+          <span style={{ fontSize: 12, fontWeight: 400, lineHeight: '16px', color: 'hsl(var(--muted-foreground))' }}>{label}</span>
           {badge != null && (
             <span style={{
               padding: '4px 8px', borderRadius: 360,
               fontSize: 12, fontWeight: 400, lineHeight: '16px',
-              background: badgeBg ?? '#F5F7F9',
-              color: badgeColor ?? '#828FA3',
+              background: badgeBg ?? 'hsl(var(--muted))',
+              color: badgeColor ?? 'hsl(var(--text-disabled))',
             }}>
               {badge}
             </span>
@@ -44,7 +44,7 @@ export function KpiWidget({ icon, iconColor, label, badge, badgeBg, badgeColor, 
         </div>
         <span style={{
           fontSize: 24, fontWeight: 500,
-          letterSpacing: '-0.01em', color: valueColor ?? '#121217', lineHeight: '36px',
+          letterSpacing: '-0.01em', color: valueColor ?? 'hsl(var(--foreground))', lineHeight: '36px',
           fontVariantNumeric: 'tabular-nums',
         }}>
           {value}

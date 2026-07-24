@@ -16,7 +16,7 @@ function getDateDotColor(dateValue) {
   const d = /^\d{4}-\d{2}-\d{2}$/.test(str) ? new Date(str + 'T00:00:00') : new Date(str);
   d.setHours(0, 0, 0, 0);
   if (d.getTime() === today.getTime()) return null;
-  return d > today ? 'bg-emerald-500' : 'bg-red-500';
+  return d > today ? 'bg-status-success' : 'bg-destructive';
 }
 
 function isTruthyBoolean(value) {
@@ -28,9 +28,9 @@ function isFalsyBoolean(value) {
 }
 
 function renderBooleanFallback(val, ui) {
-  if (isTruthyBoolean(val)) return <span className="text-emerald-600">{ui('yes')}</span>;
-  if (isFalsyBoolean(val)) return <span className="text-slate-400">{ui('no')}</span>;
-  return <span className="text-slate-300">&mdash;</span>;
+  if (isTruthyBoolean(val)) return <span className="text-status-success-foreground">{ui('yes')}</span>;
+  if (isFalsyBoolean(val)) return <span className="text-muted-foreground">{ui('no')}</span>;
+  return <span className="text-muted-foreground">&mdash;</span>;
 }
 
 function renderBooleanBadge(col, val, trueLabel, falseLabel) {
@@ -42,8 +42,8 @@ function renderBooleanBadge(col, val, trueLabel, falseLabel) {
 }
 
 function renderColoredBooleanBadge(col, val, trueLabel, falseLabel) {
-  const trueColor = col.badgeColors.true ?? 'bg-emerald-100 text-emerald-800';
-  const falseColor = col.badgeColors.false ?? 'bg-amber-100 text-amber-700';
+  const trueColor = col.badgeColors.true ?? 'bg-status-success text-status-success-foreground';
+  const falseColor = col.badgeColors.false ?? 'bg-status-warning text-status-warning-foreground';
   if (isTruthyBoolean(val)) return (
     <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${trueColor}`}>
       {trueLabel}
@@ -103,19 +103,19 @@ function getPercentCellPalette(row, col) {
   const pct = Number.isNaN(val) ? 0 : val;
   let color;
   if (pct >= 100) {
-    color = 'bg-emerald-500';
+    color = 'bg-status-success';
   } else if (pct > 0) {
-    color = 'bg-amber-400';
+    color = 'bg-status-warning';
   } else {
-    color = 'bg-slate-200';
+    color = 'bg-muted';
   }
   let textColor;
   if (pct >= 100) {
-    textColor = 'text-emerald-700';
+    textColor = 'text-status-success-foreground';
   } else if (pct > 0) {
-    textColor = 'text-amber-700';
+    textColor = 'text-status-warning-foreground';
   } else {
-    textColor = 'text-slate-400';
+    textColor = 'text-muted-foreground';
   }
   return { color, pct, textColor };
 }
@@ -158,7 +158,7 @@ export function renderPercentCell({ row, col }) {
   const { color, pct, textColor } = getPercentCellPalette(row, col);
   return (
     <div className="flex items-center gap-2">
-      <div className="w-16 h-1.5 bg-slate-100 rounded-full overflow-hidden">
+      <div className="w-16 h-1.5 bg-muted rounded-full overflow-hidden">
         <div className={`h-full rounded-full ${color}`} style={{ width: `${Math.min(pct, 100)}%` }} />
       </div>
       <span className={`text-xs tabular-nums ${textColor}`}>{pct}%</span>
@@ -218,9 +218,9 @@ export function renderAmountCell({ row, col }) {
 // formatSignedDelta so both grids render identical text/color for the same
 // `signedDelta` column type.
 const SIGNED_DELTA_TONE_COLOR = {
-  positive: '#1E874C',
-  negative: '#D50B3E',
-  neutral: '#121217',
+  positive: 'var(--status-success-fg)',
+  negative: 'hsl(var(--destructive))',
+  neutral: 'hsl(var(--foreground))',
 };
 
 export function renderSignedDeltaCell({ row, col }) {
@@ -295,7 +295,7 @@ export function renderDefaultCell({ row, col, display, visibleColumns }) {
       <span className="inline-flex items-center gap-2">
         <span>{display}</span>
         {pillLabel && (
-          <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full border ${pill.className || 'bg-gray-50 text-gray-600 border-gray-200'}`} style={{ borderWidth: '0.5px' }}>
+          <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full border ${pill.className || 'bg-muted text-muted-foreground border-border-subtle'}`} style={{ borderWidth: '0.5px' }}>
             {pillLabel}
           </span>
         )}

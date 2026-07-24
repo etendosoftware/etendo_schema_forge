@@ -1,8 +1,8 @@
 {
-  "version": "0.22.0",
+  "version": "0.24.0",
   "generatedAt": "2026-05-12T16:47:39.614Z",
-  "updatedAt": "2026-07-21T19:17:48.213Z",
-  "checksum": "11250808b7bb6a1a",
+  "updatedAt": "2026-07-22T14:17:46.384Z",
+  "checksum": "77f2b05c4b12ce37",
   "frontendContract": {
     "window": {
       "id": "143",
@@ -37,7 +37,8 @@
         "es_ES": {
           "C_BPartner_ID": "Contacto",
           "DeliveryStatus": "Estado de entrega",
-          "InvoiceStatus": "Estado de facturación"
+          "InvoiceStatus": "Estado de facturación",
+          "PriceList": "Precio"
         },
         "en_US": {
           "C_BPartner_ID": "Contact",
@@ -750,11 +751,9 @@
             "defaultValue": "1",
             "section": "principal",
             "gridOrder": 3,
-            "min": 0,
             "validation": {
               "required": true,
-              "maxLength": 10,
-              "minimum": 0
+              "maxLength": 10
             },
             "callout": {
               "className": "org.openbravo.erpCommon.ad_callouts.SL_Order_Amt"
@@ -781,11 +780,9 @@
             "columnType": "amount",
             "section": "principal",
             "gridOrder": 4,
-            "min": 0,
             "validation": {
               "required": true,
-              "maxLength": 22,
-              "minimum": 0
+              "maxLength": 22
             },
             "callout": {
               "className": "org.openbravo.erpCommon.ad_callouts.SL_Order_Amt"
@@ -1065,7 +1062,8 @@
         "es_ES": {
           "C_BPartner_ID": "Contacto",
           "DeliveryStatus": "Estado de entrega",
-          "InvoiceStatus": "Estado de facturación"
+          "InvoiceStatus": "Estado de facturación",
+          "PriceList": "Precio"
         },
         "en_US": {
           "C_BPartner_ID": "Contact",
@@ -2957,7 +2955,8 @@
       "es_ES": {
         "C_BPartner_ID": "Contacto",
         "DeliveryStatus": "Estado de entrega",
-        "InvoiceStatus": "Estado de facturación"
+        "InvoiceStatus": "Estado de facturación",
+        "PriceList": "Precio"
       },
       "en_US": {
         "C_BPartner_ID": "Contact",

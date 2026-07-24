@@ -105,8 +105,8 @@ export default function HrPage() {
                 {entry.direction && (
                   <div className={`mt-0.5 rounded-full p-1 ${
                     entry.direction === 'in'
-                      ? 'bg-emerald-100 text-emerald-600'
-                      : 'bg-blue-100 text-blue-600'
+                      ? 'bg-status-success text-status-success-foreground'
+                      : 'bg-status-info text-status-info-foreground'
                   }`}>
                     {entry.direction === 'in'
                       ? <ArrowUp className="h-3.5 w-3.5" data-testid="ArrowUp__7ba56e" />

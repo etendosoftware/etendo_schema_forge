@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { login } from '../helpers/auth.js';
+import { clickLastCheckbox } from '../helpers/selectors.js';
 
 /**
  * Purchase Invoice — Import from Goods Receipt (mocked).
@@ -291,7 +292,7 @@ test.describe('Purchase Invoice — Import from Goods Receipt (mocked)', () => {
     await expect(qtyInput).toHaveValue('2', { timeout: 5_000 });
 
     // ETP-4299: ImportLinesModal no longer auto-selects lines — click the checkbox.
-    await page.getByRole('checkbox').last().click();
+    await clickLastCheckbox(page);
 
     await clickImportSelected(page);
 

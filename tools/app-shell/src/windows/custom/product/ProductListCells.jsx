@@ -32,7 +32,7 @@ function PriceText({ value, bold }) {
     return <span className="text-muted-foreground text-sm">—</span>;
   }
   return (
-    <span className={`text-sm text-[#121217] whitespace-nowrap${bold ? ' font-semibold' : ''}`}>
+    <span className={`text-sm text-[hsl(var(--foreground))] whitespace-nowrap${bold ? ' font-semibold' : ''}`}>
       {value.toFixed(2)} €
     </span>
   );
@@ -49,5 +49,5 @@ export function ProductPurchasePriceCell({ row }) {
 export function ProductStockCell({ row }) {
   const stock = toNumberOrNull(row?.eTGOStock);
   if (stock === null) return <span className="text-muted-foreground text-sm">—</span>;
-  return <span className="text-sm text-[#121217]">{stock}</span>;
+  return <span className="text-sm text-[hsl(var(--foreground))]">{stock}</span>;
 }

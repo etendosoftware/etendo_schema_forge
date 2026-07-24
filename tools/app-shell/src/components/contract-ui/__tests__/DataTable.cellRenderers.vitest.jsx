@@ -179,7 +179,7 @@ describe('renderPercentCell', () => {
     }));
 
     expect(screen.getByText('45%')).toBeInTheDocument();
-    expect(container.querySelector('.bg-amber-400')).toBeTruthy();
+    expect(container.querySelector('.bg-status-warning')).toBeTruthy();
   });
 });
 
@@ -192,7 +192,7 @@ describe('renderBooleanCell', () => {
     }));
 
     expect(screen.getByText('yes')).toBeInTheDocument();
-    expect(container.querySelector('.text-emerald-600')).toBeTruthy();
+    expect(container.querySelector('.text-status-success-foreground')).toBeTruthy();
   });
 });
 
@@ -231,7 +231,7 @@ describe('renderSignedDeltaCell', () => {
 
     const cell = screen.getByText('-8');
     expect(cell).toBeInTheDocument();
-    expect(cell.style.color).toBe('rgb(213, 11, 62)'); // #D50B3E
+    expect(cell.style.color).toBe('hsl(var(--destructive))');
     expect(container.querySelector('span.text-right.tabular-nums')).toBeTruthy();
   });
 
@@ -244,7 +244,7 @@ describe('renderSignedDeltaCell', () => {
 
     const cell = screen.getByText('±0');
     expect(cell).toBeInTheDocument();
-    expect(cell.style.color).toBe('rgb(18, 18, 23)'); // #121217
+    expect(cell.style.color).toBe('hsl(var(--foreground))');
   });
 
   it('renders a positive value as "+N" with the positive color', () => {
@@ -256,7 +256,7 @@ describe('renderSignedDeltaCell', () => {
 
     const cell = screen.getByText('+2');
     expect(cell).toBeInTheDocument();
-    expect(cell.style.color).toBe('rgb(30, 135, 76)'); // #1E874C
+    expect(cell.style.color).toBe('var(--status-success-fg)');
   });
 
   it('renders the signed text with fontWeight 600', () => {

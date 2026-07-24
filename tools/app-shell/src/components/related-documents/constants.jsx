@@ -1,14 +1,14 @@
 export const STATUS_BADGE = {
-  CO: 'bg-emerald-50 text-emerald-700 border-emerald-200',
-  CL: 'bg-emerald-50 text-emerald-700 border-emerald-200',
-  RPPC: 'bg-emerald-50 text-emerald-700 border-emerald-200',
-  RPR: 'bg-blue-50 text-blue-700 border-blue-200',
-  RDNC: 'bg-blue-50 text-blue-700 border-blue-200',
-  PPM: 'bg-blue-50 text-blue-700 border-blue-200',
-  DR: 'bg-gray-50 text-gray-600 border-gray-200',
-  PWNC: 'bg-amber-50 text-amber-700 border-amber-200',
-  VO: 'bg-red-50 text-red-700 border-red-200',
-  CJ: 'bg-red-50 text-red-700 border-red-200',
+  CO: 'bg-status-success text-status-success-foreground border-status-success-border',
+  CL: 'bg-status-success text-status-success-foreground border-status-success-border',
+  RPPC: 'bg-status-success text-status-success-foreground border-status-success-border',
+  RPR: 'bg-status-info text-status-info-foreground focus:border-focus-ring',
+  RDNC: 'bg-status-info text-status-info-foreground focus:border-focus-ring',
+  PPM: 'bg-status-info text-status-info-foreground focus:border-focus-ring',
+  DR: 'bg-muted text-muted-foreground border-border-subtle',
+  PWNC: 'bg-status-warning text-status-warning-foreground border-status-warning-border',
+  VO: 'bg-destructive/10 text-destructive border-destructive',
+  CJ: 'bg-destructive/10 text-destructive border-destructive',
 };
 
 export const STATUS_KEYS = {
@@ -74,11 +74,11 @@ export const CHIP_ICONS = {
 };
 
 export const CHIP_COLORS = {
-  shipment: 'text-blue-600',
-  invoice: 'text-purple-600',
-  payment: 'text-emerald-600',
-  quotation: 'text-amber-600',
-  order: 'text-indigo-600',
-  receipt: 'text-teal-600',
-  returnDoc: 'text-orange-600',
+  shipment: 'text-status-info-foreground',
+  invoice: 'text-primary',
+  payment: 'text-status-success-foreground',
+  quotation: 'text-status-warning-foreground',
+  order: 'text-status-info-foreground',
+  receipt: 'text-status-info-foreground',
+  returnDoc: 'text-status-warning-foreground',
 };
