@@ -22,7 +22,7 @@ function ImportSplitButton({ ui, onImportClick, onManualClick }) {
         type="button"
         data-testid="statements-import-button"
         onClick={onImportClick}
-        className="inline-flex h-10 items-center gap-2 rounded-l-lg bg-[hsl(var(--foreground))] px-3 text-sm font-medium text-primary-foreground transition-colors hover:bg-[hsl(var(--primary))] hover:text-[hsl(var(--foreground))]"
+        className="inline-flex h-10 items-center gap-2 rounded-l-lg bg-[hsl(var(--foreground))] px-3 text-sm font-medium text-primary-foreground transition-colors hover:bg-[hsl(var(--accent-highlight))] hover:text-[hsl(var(--accent-highlight-foreground))]"
       >
         <Upload className="h-4 w-4" data-testid="Upload__8a428c" />
         {ui('financeAccountStatementsImport')}
@@ -34,7 +34,7 @@ function ImportSplitButton({ ui, onImportClick, onManualClick }) {
         aria-expanded={open}
         data-testid="statements-import-split"
         onClick={() => setOpen((o) => !o)}
-        className="inline-flex h-10 w-9 items-center justify-center rounded-r-lg border-l border-inverse-border/20 bg-[hsl(var(--foreground))] text-primary-foreground transition-colors hover:bg-[hsl(var(--primary))] hover:text-[hsl(var(--foreground))]"
+        className="inline-flex h-10 w-9 items-center justify-center rounded-r-lg border-l border-inverse-border/20 bg-[hsl(var(--foreground))] text-primary-foreground transition-colors hover:bg-[hsl(var(--accent-highlight))] hover:text-[hsl(var(--accent-highlight-foreground))]"
       >
         <ChevronDown
           className={`h-4 w-4 transition-transform ${open ? 'rotate-180' : ''}`}
@@ -75,7 +75,7 @@ function SyncStatementsButton({ ui, onClick, syncing }) {
       data-testid="statements-psd2-sync-button"
       onClick={onClick}
       disabled={syncing}
-      className="inline-flex h-10 items-center gap-2 rounded-lg bg-[hsl(var(--foreground))] px-3 text-sm font-medium text-primary-foreground transition-colors hover:bg-[hsl(var(--primary))] hover:text-[hsl(var(--foreground))] disabled:cursor-not-allowed disabled:opacity-60"
+      className="inline-flex h-10 items-center gap-2 rounded-lg bg-[hsl(var(--foreground))] px-3 text-sm font-medium text-primary-foreground transition-colors hover:bg-[hsl(var(--accent-highlight))] hover:text-[hsl(var(--accent-highlight-foreground))] disabled:cursor-not-allowed disabled:opacity-60"
     >
       <RefreshCw
         className={`h-4 w-4 ${syncing ? 'animate-spin' : ''}`}

@@ -434,7 +434,7 @@ export function AutoMatchSuggestionModal({
               className={cn(
                 'flex h-10 items-center gap-1 rounded-full px-3 text-sm font-medium transition-colors',
                 checkedGroups.length > 0 && !loading
-                  ? 'bg-[hsl(var(--foreground))] text-primary-foreground hover:bg-[hsl(var(--primary))] hover:text-[hsl(var(--foreground))]'
+                  ? 'bg-[hsl(var(--foreground))] text-primary-foreground hover:bg-[hsl(var(--accent-highlight))] hover:text-[hsl(var(--accent-highlight-foreground))]'
                   : 'cursor-not-allowed bg-[hsl(var(--border-control))] text-[hsl(var(--muted-foreground))]',
               )}
             >

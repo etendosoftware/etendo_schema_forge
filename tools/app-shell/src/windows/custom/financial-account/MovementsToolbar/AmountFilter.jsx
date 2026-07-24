@@ -180,7 +180,7 @@ export function AmountFilter({ value, onChange }) {
             type="button"
             onClick={handleApply}
             disabled={!canApply}
-            className="inline-flex h-9 items-center justify-center rounded-full bg-[hsl(var(--foreground))] px-3 text-sm font-medium text-primary-foreground transition-colors hover:bg-[hsl(var(--primary))] hover:text-[hsl(var(--foreground))] disabled:cursor-not-allowed disabled:opacity-40"
+            className="inline-flex h-9 items-center justify-center rounded-full bg-[hsl(var(--foreground))] px-3 text-sm font-medium text-primary-foreground transition-colors hover:bg-[hsl(var(--accent-highlight))] hover:text-[hsl(var(--accent-highlight-foreground))] disabled:cursor-not-allowed disabled:opacity-40"
           >
             {ui('dateRangeApply')}
           </button>
