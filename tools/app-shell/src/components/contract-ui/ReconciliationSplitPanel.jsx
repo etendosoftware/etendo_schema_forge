@@ -952,10 +952,12 @@ export function ReconciliationSplitPanel({
   // For a PARTIAL line, reconcile the REST against its pending remainder sub-line (which carries the
   // group id and no transaction) so the candidate list = available docs, not the already-matched
   // ones. A plain pending / fully-reconciled line uses its own id.
-  const candidateLineId = selectedLine
-    ? (selectedLine.reconcileStatus === 'PARTIAL' && selectedLine.remainderLineId
-        ? selectedLine.remainderLineId : selectedLine.id)
-    : null;
+  let candidateLineId = null;
+  if (selectedLine) {
+    candidateLineId = selectedLine.reconcileStatus === 'PARTIAL' && selectedLine.remainderLineId
+      ? selectedLine.remainderLineId
+      : selectedLine.id;
+  }
   const { candidates, counts: sourceCounts, loading: candLoading } = useCandidateOperations(
     accountId, candidateLineId, sourceMeta.docType,
     invoiceMode ? 'invoices' : null,
