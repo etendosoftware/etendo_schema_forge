@@ -141,7 +141,7 @@ export default function PurchaseInvoiceWindow(props) {
   // Checked once here, before either branch, so both list and detail are covered.
   const windowAccessTier = useWindowAccess('183');
   if (windowAccessTier === 'none') {
-    return <WindowAccessGuard windowId="183" />;
+    return <WindowAccessGuard windowId="183" data-testid="WindowAccessGuard__c20e53" />;
   }
 
   if (recordId) {

@@ -110,7 +110,7 @@ export default function PurchaseOrderWindow(props) {
   // Checked once here, before either branch, so both list and detail are covered.
   const windowAccessTier = useWindowAccess('181');
   if (windowAccessTier === 'none') {
-    return <WindowAccessGuard windowId="181" />;
+    return <WindowAccessGuard windowId="181" data-testid="WindowAccessGuard__b7ace5" />;
   }
 
   if (recordId) {

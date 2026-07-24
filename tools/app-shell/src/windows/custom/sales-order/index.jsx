@@ -91,7 +91,7 @@ export default function SalesOrderWindow({ windowName, recordId, token, apiBaseU
   // Checked once here, before either branch, so both list and detail are covered.
   const windowAccessTier = useWindowAccess('143');
   if (windowAccessTier === 'none') {
-    return <WindowAccessGuard windowId="143" />;
+    return <WindowAccessGuard windowId="143" data-testid="WindowAccessGuard__6339e4" />;
   }
 
   if (recordId) {

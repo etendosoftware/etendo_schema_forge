@@ -135,7 +135,7 @@ export default function SalesInvoiceWindow(props) {
   // Checked once here, before either branch, so both list and detail are covered.
   const windowAccessTier = useWindowAccess('167');
   if (windowAccessTier === 'none') {
-    return <WindowAccessGuard windowId="167" />;
+    return <WindowAccessGuard windowId="167" data-testid="WindowAccessGuard__c01c21" />;
   }
 
   if (recordId) {
