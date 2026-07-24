@@ -138,6 +138,15 @@ vi.mock('../FundsTransferModal.jsx', () => ({
   ),
 }));
 
+// ETP-4656 — MovementsTab now also calls useDeleteMovement() directly (bulk
+// "Delete selected" over the existing checkbox selection), which calls
+// useAuth() internally; stub it like the other auth-touching hooks above (no
+// AuthProvider needed). Its own outcome/toast wiring is covered separately by
+// useBatchDeleteDialog's and batchDelete.js's own tests.
+vi.mock('@/hooks/useCreateMovement', () => ({
+  useDeleteMovement: () => ({ deleteMovement: vi.fn(), deleting: false, error: null }),
+}));
+
 import { MovementsTab } from '../MovementsTab.jsx';
 
 // Date helper — choose dates relative to "today" so that the default last30

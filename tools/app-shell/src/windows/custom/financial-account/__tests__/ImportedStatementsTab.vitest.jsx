@@ -8,8 +8,13 @@ vi.mock('@/i18n', () => ({
 
 const toastSuccess = vi.fn();
 const toastError = vi.fn();
+const toastWarning = vi.fn();
 vi.mock('sonner', () => ({
-  toast: { success: (...a) => toastSuccess(...a), error: (...a) => toastError(...a) },
+  toast: {
+    success: (...a) => toastSuccess(...a),
+    error: (...a) => toastError(...a),
+    warning: (...a) => toastWarning(...a),
+  },
 }));
 
 const processStatement = vi.fn();
@@ -200,6 +205,7 @@ describe('ImportedStatementsTab', () => {
     psd2Sync.mockResolvedValue({ status: 'OK', message: 'done' });
     toastSuccess.mockReset();
     toastError.mockReset();
+    toastWarning.mockReset();
   });
 
   it('forwards psd2Synced=false for a non-connected account', () => {
@@ -414,5 +420,50 @@ describe('ImportedStatementsTab', () => {
     await user.click(screen.getByTestId('confirm-run'));
     await waitFor(() => expect(toastError).toHaveBeenCalledWith('financeAccountStatementsDeleteError'));
     expect(reloadFn).not.toHaveBeenCalled();
+  });
+
+  // ── ETP-4656 (Gap 3) — bulk "Delete selected" over the existing checkbox
+  // selection, via BulkDeleteSelectionBar + useBatchDeleteDialog (neither
+  // mocked here — the real components render) ────────────────────────────
+  describe('bulk delete selection bar', () => {
+    it('partial failure: reloads, fires ONE combined warning toast, and keeps only the failed statement selected', async () => {
+      deleteStatement.mockImplementation((id) => (
+        id === 's1' ? Promise.resolve() : Promise.reject(new Error('HTTP 400'))
+      ));
+      const user = userEvent.setup();
+      render(<ImportedStatementsTab account={ACCOUNT} />);
+
+      await user.click(screen.getByTestId('row-select-s1'));
+      await user.click(screen.getByTestId('row-select-s2'));
+      expect(screen.getByTestId('stub-table')).toHaveAttribute('data-selected', 's1,s2');
+
+      await user.click(screen.getByTestId('bulk-delete-selection-trigger'));
+      await user.click(screen.getByTestId('batch-delete-confirm'));
+
+      expect(deleteStatement).toHaveBeenCalledWith('s1');
+      expect(deleteStatement).toHaveBeenCalledWith('s2');
+      await waitFor(() => expect(toastWarning).toHaveBeenCalled());
+      expect(toastSuccess).not.toHaveBeenCalled();
+      expect(toastError).not.toHaveBeenCalled();
+      await waitFor(() => expect(reloadFn).toHaveBeenCalledTimes(1));
+      // Only the failed statement (s2) remains selected; s1 (succeeded) was dropped.
+      expect(screen.getByTestId('stub-table')).toHaveAttribute('data-selected', 's2');
+    });
+
+    it('all succeed: reloads and clears the selection entirely', async () => {
+      deleteStatement.mockResolvedValue(undefined);
+      const user = userEvent.setup();
+      render(<ImportedStatementsTab account={ACCOUNT} />);
+
+      await user.click(screen.getByTestId('row-select-s1'));
+      await user.click(screen.getByTestId('bulk-delete-selection-trigger'));
+      await user.click(screen.getByTestId('batch-delete-confirm'));
+
+      await waitFor(() => expect(toastSuccess).toHaveBeenCalled());
+      expect(toastWarning).not.toHaveBeenCalled();
+      expect(toastError).not.toHaveBeenCalled();
+      await waitFor(() => expect(reloadFn).toHaveBeenCalledTimes(1));
+      expect(screen.queryByTestId('bulk-delete-selection-bar')).not.toBeInTheDocument();
+    });
   });
 });
