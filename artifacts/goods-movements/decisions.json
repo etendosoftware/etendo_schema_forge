@@ -24,6 +24,7 @@
       }
     ],
     "statusField": "processed",
+    "hideDeleteWhenComplete": true,
     "processOverrides": {
       "processNow": {
         "requiresLines": true

@@ -100,6 +100,10 @@ Physical Inventory should let a warehouse user create an inventory count session
 - Added the "Generate lines automatically" feature: a new `GenerateLinesModal` (Product Category, Inventory Quantity, Set Book Quantity to zero) reachable from the lines empty-state and from the "+ Add line" dropdown, both wired through `PhysicalInventoryBottomPanel`.
 - Added the `inventory` NeoHandler (`InventoryHandler.java`, `@Named("inventory")`) that drives core AD Process 105 (`M_Inventory_ListCreate`) from NEO Headless — the first backend handler for this window's header entity.
 
+## Design changes — ETP-4656
+
+- Set `hideDeleteWhenComplete: true` in `decisions.json` so the Form-view toolbar delete icon is hidden once the record is processed ("Solo Borrador" per the delete-UX design doc). `statusField` here is `processed`, a **boolean** field (not a string status code) — the shared gate `isDeleteVisibleForRecord` (`tools/app-shell/src/utils/recordActions.js`) was extended to treat `false` as deletable and `true` as not when the status value is a JS boolean, ahead of the existing `DELETABLE_DOC_STATUSES` string-code check. Grid hover/multi-select delete is untouched by this change (no `RowQuickActions` wired for this window's list).
+
 ## Merge refresh notes
 - This guide was refreshed against `origin/develop` after the `epic/ETP-3504` merge by re-reading the current Physical Inventory window code rather than relying on older guide text.
 - The create-list and update-system-count flow comes from `e5876cec` (`Feature ETP-3585: Physical inventory - add actions to kebab menu`) plus the current `InventoryMenuContent.jsx` and `InventoryCreateListModal.jsx` on `origin/develop`.

@@ -1,14 +1,15 @@
 {
   "version": "0.33.0",
   "generatedAt": "2026-06-29T12:25:17.116Z",
-  "updatedAt": "2026-07-21T19:17:44.597Z",
-  "checksum": "9162cd8e06b5f1b3",
+  "updatedAt": "2026-07-24T12:56:47.087Z",
+  "checksum": "6a0f70ebd206e07b",
   "frontendContract": {
     "window": {
       "id": "168",
       "name": "Physical Inventory",
       "primaryEntity": "inventory",
       "category": "inventory",
+      "hideDeleteWhenComplete": true,
       "hidePrint": true,
       "hideLink": true,
       "customComponents": {
@@ -674,6 +675,7 @@
       "name": "Physical Inventory",
       "primaryEntity": "inventory",
       "category": "inventory",
+      "hideDeleteWhenComplete": true,
       "hidePrint": true,
       "hideLink": true,
       "customComponents": {
