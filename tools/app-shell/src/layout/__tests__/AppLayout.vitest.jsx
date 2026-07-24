@@ -1,7 +1,17 @@
 import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 
 vi.mock('@/i18n', () => ({
   useUI: () => (key) => key,
+}));
+
+// NoAccessScreen now renders a logout escape hatch (ETP-4514) via useLogout(),
+// which internally calls useAuth() from AuthContext. These tests never mount
+// an AuthProvider, so mock useLogout directly rather than pulling in the full
+// auth context just to satisfy this one hook call.
+const logoutMock = vi.fn();
+vi.mock('@/auth/useLogout.js', () => ({
+  useLogout: () => logoutMock,
 }));
 
 // Mock react-router-dom. useSearchParams is a vi.fn() (not a plain arrow) so
@@ -214,6 +224,19 @@ describe('AppLayout — no-access guard (ETP-4514)', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+  });
+
+  it('renders a logout button on the blocking screen and calls logout on click', async () => {
+    vi.mocked(useRoleMenu).mockReturnValueOnce(new Set());
+    const user = userEvent.setup();
+
+    render(<AppLayout {...defaultProps} />);
+
+    const logoutButton = screen.getByTestId('NoAccessScreenLogout__488148');
+    expect(logoutButton).toBeInTheDocument();
+
+    await user.click(logoutButton);
+    expect(logoutMock).toHaveBeenCalledTimes(1);
   });
 
   it('renders the blocking NoAccessScreen (and nothing else) when useRoleMenu resolves to a confirmed empty Set', () => {
