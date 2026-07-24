@@ -303,7 +303,7 @@ describe('renderMultiFieldCell', () => {
     }));
 
     const title = screen.getByText('Widget A');
-    expect(title.className).toBe('text-sm font-semibold text-[#121217] leading-5');
+    expect(title.className).toBe('text-sm font-semibold text-[hsl(var(--foreground))] leading-5');
     expect(container.querySelector('.flex.items-center.gap-3')).toBeTruthy();
   });
 
@@ -317,7 +317,7 @@ describe('renderMultiFieldCell', () => {
 
     const chip = screen.getByText('SKU-1');
     expect(chip.className).toBe(
-      'inline-flex items-center px-2 py-0.5 bg-[#F5F7F9] rounded-full text-xs text-[#3F3F50] leading-4 w-fit',
+      'inline-flex items-center px-2 py-0.5 bg-[hsl(var(--muted))] rounded-full text-xs text-[hsl(var(--muted-foreground))] leading-4 w-fit',
     );
   });
 
@@ -353,7 +353,7 @@ describe('renderMultiFieldCell', () => {
       apiBaseUrl: '/api',
     }));
 
-    const box = container.querySelector('.w-10.h-10.rounded-lg.bg-\\[\\#F5F7F9\\]');
+    const box = container.querySelector('.w-10.h-10.rounded-lg.bg-\\[hsl\\(var\\(--muted\\)\\)\\]');
     expect(box).toBeTruthy();
     const img = box.querySelector('img');
     expect(img).toHaveAttribute('src', 'blob:fake-url');
@@ -370,7 +370,7 @@ describe('renderMultiFieldCell', () => {
       apiBaseUrl: '/api',
     }));
 
-    const box = container.querySelector('.w-10.h-10.rounded-lg.bg-\\[\\#F5F7F9\\]');
+    const box = container.querySelector('.w-10.h-10.rounded-lg.bg-\\[hsl\\(var\\(--muted\\)\\)\\]');
     expect(box).toBeTruthy();
     expect(screen.getByTestId('box-icon')).toBeInTheDocument();
     expect(box.querySelector('img')).toBeNull();
