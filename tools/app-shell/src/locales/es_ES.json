@@ -16640,6 +16640,9 @@
     }
   },
   "genericLabels": {
+    "computedFreshnessQueued": "Este valor se calcula en segundo plano y puede tardar unos minutos en actualizarse.",
+    "computedFreshnessManual": "Este valor se calcula y se actualiza manualmente.",
+    "computedFreshnessAria": "Valor calculado — puede estar desactualizado",
     "balanced": "Cuadrado",
     "difference": "Diferencia",
     "journalUnbalancedSaveBlocked": "El debe y el haber deben ser iguales antes de guardar",

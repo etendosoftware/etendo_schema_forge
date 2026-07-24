@@ -38,6 +38,7 @@ function growColumnWidth(basisPx, fixedTotalPx, growCount) {
 }
 import { SelectorInput } from './SelectorInput.jsx';
 import { InlineSearchCombo } from './InlineSearchCombo.jsx';
+import { ComputedFreshnessHint } from './ComputedFreshnessHint.jsx';
 import { PillToggle } from '@/components/PillToggle';
 import RowQuickActions from './RowQuickActions.jsx';
 import { trackSearchResultSelected } from '@/lib/productUsageTelemetry.js';
@@ -1359,14 +1360,20 @@ function renderColumnHeaderCell(col, colIdx, { sortColumn, sortDirection, onSort
           className={`relative inline-block text-xs leading-4 font-semibold text-text-primary tracking-normal cursor-pointer select-none transition-colors bg-transparent border-0 p-0 ${NUMERIC_FIELD_TYPES.has(col.type) ? 'text-right' : 'text-left'}`}
           onClick={() => onSort(col.key)}
         >
-          {colLabel}
+          <span className="inline-flex items-center gap-1 align-middle">
+            {colLabel}
+            {col.computed?.mode === 'stored' && <ComputedFreshnessHint computed={col.computed} />}
+          </span>
           {isSorted && (
             <span className={`absolute top-1/2 -translate-y-1/2 text-primary/70 pointer-events-none ${sortArrowClass}`}>{sortDirection === 'asc' ? '\u25B2' : '\u25BC'}</span>
           )}
         </button>
       ) : (
         <span className={`relative inline-block text-xs leading-4 font-semibold text-text-primary tracking-normal${NUMERIC_FIELD_TYPES.has(col.type) ? ' text-right' : ''}`}>
-          {colLabel}
+          <span className="inline-flex items-center gap-1 align-middle">
+            {colLabel}
+            {col.computed?.mode === 'stored' && <ComputedFreshnessHint computed={col.computed} />}
+          </span>
           {isSorted && (
             <span className={`absolute top-1/2 -translate-y-1/2 text-primary/70 pointer-events-none ${sortArrowClass}`}>{sortDirection === 'asc' ? '\u25B2' : '\u25BC'}</span>
           )}
