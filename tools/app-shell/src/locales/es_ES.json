@@ -16686,6 +16686,7 @@
     "importErrorRequiredGeneric": "Falta un campo obligatorio.",
     "importErrorDuplicate": "Ya existe un registro con el mismo valor.",
     "importErrorDuplicateIdentifier": "Ya existe un registro con este identificador.",
+    "importErrorDuplicateUser": "Ya existe un usuario con este nombre para el contacto. Prueba con un nombre diferente.",
     "importErrorValueTooLong": "Un valor es demasiado largo para su campo.",
     "importErrorGeneric": "No se pudo importar esta fila. Abre los detalles para ver el informe técnico o contacta con soporte.",
     "importErrorCountryUnresolved": "No se pudo asociar el país \"{country}\" con un registro existente.",
