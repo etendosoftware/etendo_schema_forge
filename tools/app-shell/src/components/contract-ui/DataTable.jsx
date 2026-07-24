@@ -1364,7 +1364,7 @@ function renderColumnHeaderCell(col, colIdx, { sortColumn, sortDirection, onSort
         >
           <span className="inline-flex items-center gap-1 align-middle">
             {colLabel}
-            {col.computed?.mode === 'stored' && <ComputedFreshnessHint computed={col.computed} />}
+            {col.computed?.mode === 'stored' && <ComputedFreshnessHint computed={col.computed} data-testid="ComputedFreshnessHint__eb5261" />}
           </span>
           {isSorted && (
             <span className={`absolute top-1/2 -translate-y-1/2 text-primary/70 pointer-events-none ${sortArrowClass}`}>{sortDirection === 'asc' ? '\u25B2' : '\u25BC'}</span>
@@ -1374,7 +1374,7 @@ function renderColumnHeaderCell(col, colIdx, { sortColumn, sortDirection, onSort
         <span className={`relative inline-block text-xs leading-4 font-semibold text-text-primary tracking-normal${NUMERIC_FIELD_TYPES.has(col.type) ? ' text-right' : ''}`}>
           <span className="inline-flex items-center gap-1 align-middle">
             {colLabel}
-            {col.computed?.mode === 'stored' && <ComputedFreshnessHint computed={col.computed} />}
+            {col.computed?.mode === 'stored' && <ComputedFreshnessHint computed={col.computed} data-testid="ComputedFreshnessHint__eb5261" />}
           </span>
           {isSorted && (
             <span className={`absolute top-1/2 -translate-y-1/2 text-primary/70 pointer-events-none ${sortArrowClass}`}>{sortDirection === 'asc' ? '\u25B2' : '\u25BC'}</span>

@@ -29,18 +29,18 @@ export function ComputedFreshnessHint({ computed }) {
     ? 'computedFreshnessManual'
     : 'computedFreshnessQueued';
   return (
-    <TooltipProvider>
-      <Tooltip delayDuration={150}>
-        <TooltipTrigger asChild>
+    <TooltipProvider data-testid="TooltipProvider__2a800a">
+      <Tooltip delayDuration={150} data-testid="Tooltip__2a800a">
+        <TooltipTrigger asChild data-testid="TooltipTrigger__2a800a">
           <span
             tabIndex={0}
             aria-label={ui('computedFreshnessAria')}
             className="inline-flex items-center cursor-help text-muted-foreground"
           >
-            <Clock className="h-3.5 w-3.5" aria-hidden="true" />
+            <Clock className="h-3.5 w-3.5" aria-hidden="true" data-testid="Clock__2a800a" />
           </span>
         </TooltipTrigger>
-        <TooltipContent>{ui(key)}</TooltipContent>
+        <TooltipContent data-testid="TooltipContent__2a800a">{ui(key)}</TooltipContent>
       </Tooltip>
     </TooltipProvider>
   );
