@@ -52,11 +52,14 @@ describe('useCapabilitiesSafe', () => {
   it('rethrows an unrelated error instead of swallowing it', () => {
     // eslint-disable-next-line no-console -- expected React render-error log, silenced deliberately for this test
     console.error = vi.fn();
-    mockUseAuth.mockImplementation(() => {
-      throw new Error('some unrelated AuthContext bug');
-    });
-    expect(() => render(<Probe />)).toThrow('some unrelated AuthContext bug');
-    console.error = originalConsoleError;
+    try {
+      mockUseAuth.mockImplementation(() => {
+        throw new Error('some unrelated AuthContext bug');
+      });
+      expect(() => render(<Probe />)).toThrow('some unrelated AuthContext bug');
+    } finally {
+      console.error = originalConsoleError;
+    }
   });
 
   // ETP-4520 — referential stability: callers (e.g. DataTable.jsx) put the

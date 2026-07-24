@@ -13,16 +13,20 @@ export function createMockFetch(mockData, basePath, catalogData = {}) {
   const catalogStore = structuredClone(catalogData);
 
   return async function mockFetch(url, options = {}) {
-    if (isWindowAccessMapRequest(url)) {
+    // `url` may be a `Request` object (a valid `fetch` argument) rather than a
+    // string — normalize before any string-only method (`.includes`/`.startsWith`).
+    const urlStr = typeof url === 'string' ? url : url.url;
+
+    if (isWindowAccessMapRequest(urlStr)) {
       return handleWindowAccessMapRequest();
     }
 
-    if (!url.startsWith(basePath)) {
+    if (!urlStr.startsWith(basePath)) {
       return undefined;
     }
 
     const method = (options.method || 'GET').toUpperCase();
-    const path = url.slice(basePath.length);
+    const path = urlStr.slice(basePath.length);
     const segments = path.split('/').filter(Boolean);
 
     if (isEmailContractSend(method, segments)) {
@@ -34,7 +38,7 @@ export function createMockFetch(mockData, basePath, catalogData = {}) {
     }
 
     if (segments[0] === 'catalog') {
-      return handleCatalogRequest(catalogStore, method, url, segments, options);
+      return handleCatalogRequest(catalogStore, method, urlStr, segments, options);
     }
 
     const entity = segments[0];
