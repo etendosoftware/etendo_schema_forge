@@ -19519,6 +19519,7 @@
     "backendError.matchRuleRegexComplex": "The regular expression is too complex (possible catastrophic backtracking)",
     "backendError.matchRuleRegexInvalid": "Invalid regular expression",
     "backendError.matchRulePriorityConflict": "A rule with this priority already exists for the selected scope",
+    "backendError.priceListCannotDeactivateDefault": "A tariff marked as default cannot be deactivated.",
     "uomTypeArea": "Area",
     "uomTypeLength": "Length",
     "uomTypeTime": "Time",
