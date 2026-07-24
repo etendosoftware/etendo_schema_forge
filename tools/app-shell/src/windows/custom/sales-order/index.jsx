@@ -6,6 +6,7 @@ import OrderReactivateBulkAction from '@generated/sales-order/custom/OrderReacti
 import BulkOrderMoreMenu from '@generated/sales-order/custom/BulkOrderMoreMenu';
 import { ConfirmModal, ManageDocsLauncher } from '@generated/sales-order/custom/OrderCreateInvoice';
 import { ConfirmResultModal, ListView } from '@/components/contract-ui';
+import { useWindowAccess, WindowAccessGuard } from '@/auth/AuthContext.jsx';
 import CloneOrderModal from '@/components/contract-ui/CloneOrderModal';
 import { CreateContactContext } from '@/components/contract-ui/CreateContactContext.js';
 import { useCreateContactModal } from '@/components/contract-ui/useCreateContactModal.jsx';
@@ -84,6 +85,14 @@ export default function SalesOrderWindow({ windowName, recordId, token, apiBaseU
     usePdf: useOrderPdf,
     documentType: tMenu('Sales Order'),
   });
+
+  // ETP-4520 — this custom window's own hand-rolled list view (below) never delegated
+  // to GeneratedApp, so it never picked up the generated HeaderPage's access-tier guard.
+  // Checked once here, before either branch, so both list and detail are covered.
+  const windowAccessTier = useWindowAccess('143');
+  if (windowAccessTier === 'none') {
+    return <WindowAccessGuard windowId="143" />;
+  }
 
   if (recordId) {
     return (

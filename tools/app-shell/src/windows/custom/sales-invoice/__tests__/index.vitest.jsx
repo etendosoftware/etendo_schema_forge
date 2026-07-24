@@ -41,6 +41,8 @@ vi.mock('@/hooks/useBulkActionToast', () => ({
 // for the same @/auth/AuthContext.jsx + useFiscalConfig.js pair.
 vi.mock('@/auth/AuthContext.jsx', () => ({
   useAuth: () => ({ selectedOrg: { id: 'org-1' }, logout: vi.fn() }),
+  useWindowAccess: () => 'full',
+  WindowAccessGuard: () => <div data-testid="window-access-guard" />,
 }));
 
 let fiscalProfile = null;

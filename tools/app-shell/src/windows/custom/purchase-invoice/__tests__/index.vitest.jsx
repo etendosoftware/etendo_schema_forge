@@ -34,6 +34,12 @@ vi.mock('@/hooks/useBulkActionToast', () => ({
   useBulkActionToast: vi.fn(),
 }));
 
+// ETP-4520 — index.jsx now checks useWindowAccess() before either branch renders.
+vi.mock('@/auth/AuthContext.jsx', () => ({
+  useWindowAccess: () => 'full',
+  WindowAccessGuard: () => <div data-testid="window-access-guard" />,
+}));
+
 let rowDeleteConfig;
 const requestDeleteSpy = vi.fn();
 vi.mock('@/hooks/useRowDelete', () => ({

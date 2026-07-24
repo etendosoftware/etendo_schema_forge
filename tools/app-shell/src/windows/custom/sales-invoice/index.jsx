@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import { ListView } from '@/components/contract-ui';
 import { useUI, useMenuLabel } from '@/i18n';
-import { useAuth } from '@/auth/AuthContext.jsx';
+import { useAuth, useWindowAccess, WindowAccessGuard } from '@/auth/AuthContext.jsx';
 import BulkDocumentAction from '@/components/contract-ui/BulkDocumentAction';
 import { useBulkActionToast } from '@/hooks/useBulkActionToast';
 import { useRowDelete } from '@/hooks/useRowDelete';
@@ -129,6 +129,14 @@ export default function SalesInvoiceWindow(props) {
 
   const clearSavedRecord = useClearSavedRecord(setSavedRecord, location, navigate);
   const draftModeOverride = getInvoiceDraftMode(ui, { showVerifactuProcessingModal: showVerifactu });
+
+  // ETP-4520 — this custom window's own hand-rolled list view (below) never delegated
+  // to GeneratedApp, so it never picked up the generated HeaderPage's access-tier guard.
+  // Checked once here, before either branch, so both list and detail are covered.
+  const windowAccessTier = useWindowAccess('167');
+  if (windowAccessTier === 'none') {
+    return <WindowAccessGuard windowId="167" />;
+  }
 
   if (recordId) {
     return (

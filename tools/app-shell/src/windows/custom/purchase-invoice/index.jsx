@@ -2,6 +2,7 @@ import { useState, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import { ListView } from '@/components/contract-ui';
+import { useWindowAccess, WindowAccessGuard } from '@/auth/AuthContext.jsx';
 import { useUI, useMenuLabel } from '@/i18n';
 import BulkDocumentAction from '@/components/contract-ui/BulkDocumentAction';
 import { useBulkActionToast } from '@/hooks/useBulkActionToast';
@@ -134,6 +135,14 @@ export default function PurchaseInvoiceWindow(props) {
 
   const clearSavedRecord = useClearSavedRecord(setSavedRecord, location, navigate);
   const draftModeOverride = getInvoiceDraftMode(ui);
+
+  // ETP-4520 — this custom window's own hand-rolled list view (below) never delegated
+  // to GeneratedApp, so it never picked up the generated HeaderPage's access-tier guard.
+  // Checked once here, before either branch, so both list and detail are covered.
+  const windowAccessTier = useWindowAccess('183');
+  if (windowAccessTier === 'none') {
+    return <WindowAccessGuard windowId="183" />;
+  }
 
   if (recordId) {
     return (

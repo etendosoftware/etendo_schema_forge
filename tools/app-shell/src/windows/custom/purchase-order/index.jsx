@@ -6,6 +6,7 @@ import BulkDocumentAction, { buildInOutActions } from '@/components/contract-ui/
 import BulkPurchaseOrderMoreMenu from '@generated/purchase-order/custom/BulkPurchaseOrderMoreMenu';
 import { ConfirmModal as PoConfirmModal, PoConfirmResultModal, ManageDocsLauncher as PoManageDocsLauncher } from '@generated/purchase-order/custom/PurchaseOrderActions';
 import { ListView } from '@/components/contract-ui';
+import { useWindowAccess, WindowAccessGuard } from '@/auth/AuthContext.jsx';
 import CloneOrderModal from '@/components/contract-ui/CloneOrderModal';
 import { CreateContactContext } from '@/components/contract-ui/CreateContactContext.js';
 import { useCreateContactModal } from '@/components/contract-ui/useCreateContactModal.jsx';
@@ -103,6 +104,14 @@ export default function PurchaseOrderWindow(props) {
     usePdf: usePurchaseOrderPdf,
     documentType: tMenu('Purchase Order'),
   });
+
+  // ETP-4520 — this custom window's own hand-rolled list view (below) never delegated
+  // to GeneratedApp, so it never picked up the generated HeaderPage's access-tier guard.
+  // Checked once here, before either branch, so both list and detail are covered.
+  const windowAccessTier = useWindowAccess('181');
+  if (windowAccessTier === 'none') {
+    return <WindowAccessGuard windowId="181" />;
+  }
 
   if (recordId) {
     return (
