@@ -4,10 +4,10 @@ import { useUI } from '@/i18n';
 // ── Type config ───────────────────────────────────────────────────────────────
 
 const TYPE_CONFIG = {
-  facturaCompra: { iconBg: '#f3f0ff', iconColor: '#7c5cff', labelKey: 'confirmResultModal.docType.facturaCompra', viewKey: 'poViewInvoice',   Icon: InvoiceIcon },
-  facturaVenta:  { iconBg: '#f3f0ff', iconColor: '#7c5cff', labelKey: 'confirmResultModal.docType.facturaVenta',  viewKey: 'soViewInvoice',   Icon: InvoiceIcon },
-  salida:        { iconBg: '#eef5fe', iconColor: '#2f73d6', labelKey: 'confirmResultModal.docType.salida',        viewKey: 'soViewShipment',  Icon: SalidaIcon  },
-  entrada:       { iconBg: '#e9f7ee', iconColor: '#157a43', labelKey: 'confirmResultModal.docType.entrada',       viewKey: 'poViewReceipt',   Icon: EntradaIcon },
+  facturaCompra: { iconBg: 'var(--status-info-bg)', iconColor: 'var(--status-info-fg)', labelKey: 'confirmResultModal.docType.facturaCompra', viewKey: 'poViewInvoice',   Icon: InvoiceIcon },
+  facturaVenta:  { iconBg: 'var(--status-info-bg)', iconColor: 'var(--status-info-fg)', labelKey: 'confirmResultModal.docType.facturaVenta',  viewKey: 'soViewInvoice',   Icon: InvoiceIcon },
+  salida:        { iconBg: 'var(--status-info-bg)', iconColor: 'var(--status-info-fg)', labelKey: 'confirmResultModal.docType.salida',        viewKey: 'soViewShipment',  Icon: SalidaIcon  },
+  entrada:       { iconBg: 'var(--status-success-bg)', iconColor: 'var(--status-success-fg)', labelKey: 'confirmResultModal.docType.entrada',       viewKey: 'poViewReceipt',   Icon: EntradaIcon },
 };
 
 const fmtAmount = (v, cur) => {
@@ -32,13 +32,13 @@ function DocCard({ doc, currency, ui, navigate, onClose, onNavigate }) {
       onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleActivate(); } }}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
-      onFocus={e => { e.currentTarget.style.boxShadow = '0 0 0 3px rgba(47,115,214,.2)'; }}
+      onFocus={e => { e.currentTarget.style.boxShadow = '0 0 0 3px hsl(var(--focus-ring) / 0.2)'; }}
       onBlur={e => { e.currentTarget.style.boxShadow = 'none'; }}
       style={{
         display: 'flex', alignItems: 'center', gap: 12,
         padding: '12px 14px', borderRadius: 10, cursor: 'pointer',
-        border: `1px solid ${hovered ? '#cfe1fb' : '#e6e8ec'}`,
-        background: hovered ? '#fbfcfd' : '#fff',
+        border: `1px solid ${hovered ? 'var(--status-info-border)' : 'hsl(var(--border-subtle))'}`,
+        background: hovered ? 'hsl(var(--muted))' : 'hsl(var(--card))',
         transition: 'border-color .15s, background .15s',
         outline: 'none',
       }}
@@ -47,20 +47,20 @@ function DocCard({ doc, currency, ui, navigate, onClose, onNavigate }) {
         <Icon color={cfg.iconColor} data-testid="Icon__a46cc0" />
       </div>
       <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontSize: 10, fontWeight: 600, color: '#9aa1aa', textTransform: 'uppercase', letterSpacing: '.06em', lineHeight: 1 }}>
+        <div style={{ fontSize: 10, fontWeight: 600, color: 'hsl(var(--text-disabled))', textTransform: 'uppercase', letterSpacing: '.06em', lineHeight: 1 }}>
           {ui(cfg.labelKey)}
         </div>
         <div style={{ marginTop: 5, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-          <span style={{ fontSize: 13, fontWeight: 600, color: '#1d2530' }}>{doc.num}</span>
+          <span style={{ fontSize: 13, fontWeight: 600, color: 'hsl(var(--foreground))' }}>{doc.num}</span>
           {doc.amount != null && (
-            <span style={{ fontSize: 12, color: '#697079' }}>{fmtAmount(doc.amount, currency)}</span>
+            <span style={{ fontSize: 12, color: 'hsl(var(--muted-foreground))' }}>{fmtAmount(doc.amount, currency)}</span>
           )}
-          <span style={{ fontSize: 10, fontWeight: 500, padding: '2px 7px', borderRadius: 999, background: '#fdf2dd', color: '#9a6a1f', border: '1px solid #f1d9a6', whiteSpace: 'nowrap' }}>
+          <span style={{ fontSize: 10, fontWeight: 500, padding: '2px 7px', borderRadius: 999, background: 'var(--status-warning-bg)', color: 'var(--status-warning-fg)', border: '1px solid var(--status-warning-border)', whiteSpace: 'nowrap' }}>
             {doc.status || ui('statusDraft')}
           </span>
         </div>
       </div>
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={hovered ? '#2f73d6' : '#d0d4da'} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, transition: 'stroke .15s' }}>
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={hovered ? 'var(--status-info-fg)' : 'hsl(var(--text-disabled))'} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, transition: 'stroke .15s' }}>
         <path d="M9 18l6-6-6-6" />
       </svg>
     </div>
@@ -84,21 +84,21 @@ export function ConfirmResultModal({ title, docs = [], primary, navigate, curren
   else if (docs.length > 1) subtitle = ui('confirmResultModal.subtitleMany', { count: docs.length });
 
   return (
-    <div style={{ position: 'fixed', inset: 0, zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.3)' }}>
+    <div style={{ position: 'fixed', inset: 0, zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'hsl(var(--foreground) / 0.3)' }}>
       <div
         onClick={e => e.stopPropagation()}
-        style={{ width: 444, borderRadius: 16, background: '#fff', boxShadow: '0 8px 32px rgba(20,26,38,.18), 0 2px 8px rgba(20,26,38,.08)', overflow: 'hidden', fontFamily: 'system-ui, -apple-system, sans-serif', color: '#1d2530' }}
+        style={{ width: 444, borderRadius: 16, background: 'hsl(var(--card))', boxShadow: '0 8px 32px hsl(var(--foreground) / .18), 0 2px 8px hsl(var(--foreground) / .08)', overflow: 'hidden', fontFamily: 'system-ui, -apple-system, sans-serif', color: 'hsl(var(--foreground))' }}
       >
         {/* Header */}
         <div style={{ padding: '28px 24px 20px', textAlign: 'center' }}>
-          <div style={{ width: 56, height: 56, borderRadius: '50%', background: '#e9f7ee', border: '1.5px solid #bfe8cd', margin: '0 auto 14px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <svg width="26" height="22" viewBox="0 0 26 22" fill="none" stroke="#157a43" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+          <div style={{ width: 56, height: 56, borderRadius: '50%', background: 'var(--status-success-bg)', border: '1.5px solid var(--status-success-border)', margin: '0 auto 14px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <svg width="26" height="22" viewBox="0 0 26 22" fill="none" stroke="var(--status-success-fg)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
               <polyline points="1 11 9.5 19.5 25 2" />
             </svg>
           </div>
-          <div style={{ fontSize: 19, fontWeight: 700, color: '#1d2530', lineHeight: 1.25 }}>{title}</div>
+          <div style={{ fontSize: 19, fontWeight: 700, color: 'hsl(var(--foreground))', lineHeight: 1.25 }}>{title}</div>
           {subtitle && (
-            <div style={{ fontSize: 13, color: '#697079', marginTop: 6 }}>{subtitle}</div>
+            <div style={{ fontSize: 13, color: 'hsl(var(--muted-foreground))', marginTop: 6 }}>{subtitle}</div>
           )}
         </div>
 
@@ -120,12 +120,12 @@ export function ConfirmResultModal({ title, docs = [], primary, navigate, curren
         )}
 
         {/* Footer */}
-        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, padding: '12px 16px', background: '#fbfcfd', borderTop: '1px solid #eef0f2' }}>
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, padding: '12px 16px', background: 'hsl(var(--muted))', borderTop: '1px solid hsl(var(--border-subtle))' }}>
           <button
             type="button"
             onClick={onClose}
-            style={{ fontSize: 13, padding: '8px 16px', borderRadius: 8, border: '1px solid #e6e8ec', background: 'transparent', color: '#697079', cursor: 'pointer' }}
-            onMouseEnter={e => { e.currentTarget.style.background = '#f5f6f8'; }}
+            style={{ fontSize: 13, padding: '8px 16px', borderRadius: 8, border: '1px solid hsl(var(--border-subtle))', background: 'transparent', color: 'hsl(var(--muted-foreground))', cursor: 'pointer' }}
+            onMouseEnter={e => { e.currentTarget.style.background = 'hsl(var(--muted))'; }}
             onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}
           >
             {ui('soClose')}
@@ -135,9 +135,9 @@ export function ConfirmResultModal({ title, docs = [], primary, navigate, curren
             <button
               type="button"
               onClick={() => { (onNavigate ?? onClose)(); navigate(singleDoc.route); }}
-              style={{ fontSize: 13, fontWeight: 600, padding: '8px 16px', borderRadius: 8, border: 'none', background: '#2f73d6', color: '#fff', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6 }}
-              onMouseEnter={e => { e.currentTarget.style.background = '#2a67c2'; }}
-              onMouseLeave={e => { e.currentTarget.style.background = '#2f73d6'; }}
+              style={{ fontSize: 13, fontWeight: 600, padding: '8px 16px', borderRadius: 8, border: 'none', background: 'var(--status-info-fg)', color: 'hsl(var(--card))', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6 }}
+              onMouseEnter={e => { e.currentTarget.style.background = 'var(--status-info-fg)'; }}
+              onMouseLeave={e => { e.currentTarget.style.background = 'var(--status-info-fg)'; }}
             >
               {primaryLabel}
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">

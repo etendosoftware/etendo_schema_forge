@@ -4,13 +4,13 @@ import { DataTable, InlineLinesPanel } from '@/components/contract-ui';
 function renderDepreciationProgress(row) {
   const pct = row.etgoAmortizationStatus ?? null;
   if (pct == null) return null;
-  const color = pct === 100 ? '#10b981' : '#f59e0b';
+  const color = pct === 100 ? 'var(--status-success-fg)' : 'var(--status-warning-fg)';
   return (
     <div className="flex items-center gap-1.5" style={{ minWidth: 80 }}>
-      <div className="flex-1 h-1.5 bg-gray-200 rounded-full overflow-hidden">
+      <div className="flex-1 h-1.5 bg-muted rounded-full overflow-hidden">
         <div className="h-full rounded-full transition-all" style={{ width: `${pct}%`, background: color }} />
       </div>
-      <span className="text-xs tabular-nums w-8 text-right" style={{ color: '#6b7280' }}>{pct}%</span>
+      <span className="text-xs tabular-nums w-8 text-right text-muted-foreground">{pct}%</span>
     </div>
   );
 }

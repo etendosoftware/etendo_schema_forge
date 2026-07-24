@@ -546,11 +546,11 @@ export default function ProductPage({ windowName, recordId, ...props }) {
         compactSidebarPadding
         whiteFormBackground
         autoSaveOnBlur
-        sidebarClassName="w-[30%] shrink-0 overflow-y-auto pt-2 pl-0 pr-4 pb-5 border-l border-[#E8EAEF]"
+        sidebarClassName="w-[30%] shrink-0 overflow-y-auto pt-2 pl-0 pr-4 pb-5 border-l border-border-subtle"
         tabsBarPaddingX="px-2"
         primaryTabsVariant="pill"
         toolbarPaddingX="px-2"
-        contentBg="bg-white"
+        contentBg="bg-card"
         formCardPadding="px-2"
         customTabs={[{ key: 'pricing', labelKey: 'price', Component: ProductPriceBar, placement: 'tab' }, { key: 'attachments', labelKey: 'attachments', Component: AttachmentsTab, placement: 'tab', props: { tableName: "M_Product", config: {} } }]}
         requiredHeaderFields={requiredHeaderFields}

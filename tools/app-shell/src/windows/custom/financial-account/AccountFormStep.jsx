@@ -15,8 +15,8 @@ const EMPTY = { name: '', iban: '', swiftCode: '', currencyId: '' };
 // (e.g. 'cash') fall back to 'C'.
 const TYPE_BY_MODE = { bank: 'B', card: 'CA' };
 
-const FIELD_LABEL = 'text-sm font-medium leading-6 text-[#121217]';
-const FIELD_INPUT = 'bg-white shadow-[0_1px_2px_rgba(18,18,23,0.05)]';
+const FIELD_LABEL = 'text-sm font-medium leading-6 text-[hsl(var(--foreground))]';
+const FIELD_INPUT = 'bg-card shadow-[0_1px_2px_hsl(var(--foreground) / 0.05)]';
 
 /**
  * Reusable account form for the offline flow (ETP-4096). Used both by the New
@@ -89,10 +89,10 @@ export function AccountFormStep({
     <form onSubmit={handleSubmit} className="flex flex-col gap-3" data-testid="account-form">
       {isBank && bankName ? (
         <div className="flex items-center gap-2">
-          <span className="flex h-8 w-8 items-center justify-center rounded-full bg-[#E8EAEF] text-[#828FA3]">
+          <span className="flex h-8 w-8 items-center justify-center rounded-full bg-[hsl(var(--border-subtle))] text-[hsl(var(--text-disabled))]">
             <Landmark className="h-4 w-4" data-testid="Landmark__5e0d1d" />
           </span>
-          <span className="text-sm font-semibold leading-5 text-[#121217]">{bankName}</span>
+          <span className="text-sm font-semibold leading-5 text-[hsl(var(--foreground))]">{bankName}</span>
         </div>
       ) : null}
       <div className="flex flex-col gap-5">
@@ -101,7 +101,7 @@ export function AccountFormStep({
             htmlFor="account-form-name-input"
             className={FIELD_LABEL}
             data-testid="Label__5e0d1d">
-            {ui('financeAccountsNewFieldName')} <span className="text-[#F53D6B]">*</span>
+            {ui('financeAccountsNewFieldName')} <span className="text-[hsl(var(--destructive))]">*</span>
           </Label>
           <Input
             id="account-form-name-input"
@@ -134,7 +134,7 @@ export function AccountFormStep({
                 className={FIELD_INPUT}
               />
               {ibanInvalid && ibanTouched ? (
-                <p className="text-xs text-[#F53D6B]" data-testid="account-form-iban-error">
+                <p className="text-xs text-[hsl(var(--destructive))]" data-testid="account-form-iban-error">
                   {ui('financeAccountsNewIbanInvalid')}
                 </p>
               ) : null}
@@ -182,7 +182,7 @@ export function AccountFormStep({
         </div>
       </div>
       {error ? (
-        <p className="text-xs text-[#F53D6B]" data-testid="account-form-error">
+        <p className="text-xs text-[hsl(var(--destructive))]" data-testid="account-form-error">
           {error}
         </p>
       ) : null}
@@ -191,7 +191,7 @@ export function AccountFormStep({
           type="submit"
           disabled={!canSubmit}
           data-testid="account-form-submit"
-          className="h-10 rounded-full bg-[#121217] px-5 text-sm font-medium text-white transition-colors hover:bg-[#FFD500] hover:text-[#121217] disabled:bg-[#D1D4DB] disabled:text-white disabled:opacity-100"
+          className="h-10 rounded-full bg-[hsl(var(--foreground))] px-5 text-sm font-medium text-primary-foreground transition-colors hover:bg-[hsl(var(--accent-highlight))] hover:text-[hsl(var(--accent-highlight-foreground))] disabled:bg-[hsl(var(--border-control))] disabled:text-primary-foreground disabled:opacity-100"
         >
           {submitLabel || ui('financeAccountsNewSubmit')}
         </Button>

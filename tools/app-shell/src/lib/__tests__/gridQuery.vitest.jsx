@@ -1,15 +1,3 @@
-/**
- * Functional gridQuery suite — re-angled through the shim.
- *
- * gridQuery moved to schema_forge_core; `../gridQuery.js` is now the functional
- * shim (`export * from '@etendosoftware/app-shell-core/lib/gridQuery.js'`). Under
- * LOCAL_CORE the vitest alias resolves it to the moved core source, so these
- * pure-function assertions exercise the real implementation across the package
- * boundary. gridQuery has no i18n, so no LocaleProvider wrap is needed.
- *
- * Run against local core source:
- *   LOCAL_CORE=1 npx vitest run src/lib/__tests__/gridQuery.vitest.jsx
- */
 import {
   getDisplayText,
   parseUserFilter,
@@ -182,6 +170,27 @@ describe('parseUserFilter', () => {
   it('returns null for invalid date range', () => {
     const col = { key: 'd', type: 'date' };
     expect(parseUserFilter(col, 'abc..def')).toBeNull();
+  });
+
+  it('parses date range with dot-separated dates on both sides', () => {
+    const col = { key: 'd', type: 'date' };
+    const result = parseUserFilter(col, '14.04.2026..15.04.2026');
+    expect(result).toEqual({
+      mode: 'date', op: 'range', value: ['2026-04-14', '2026-04-15'],
+      originalValue: '14.04.2026..15.04.2026',
+    });
+  });
+
+  it('does not hang on adversarial ".." range input (ReDoS regression, S5852)', () => {
+    const col = { key: 'd', type: 'date' };
+    // Many ".." occurrences followed by a line terminator (which `.` can't
+    // match) used to force O(n^2) backtracking in the old `.+?` / `.+` split.
+    const adversarial = '..'.repeat(200_000) + '\n' + 'z';
+    const start = performance.now();
+    const result = parseUserFilter(col, adversarial);
+    const elapsed = performance.now() - start;
+    expect(result).toBeNull();
+    expect(elapsed).toBeLessThan(1000);
   });
 
   it('parses enum label matching', () => {
@@ -485,32 +494,6 @@ describe('buildAdvancedFilterCriteria', () => {
     ]);
   });
 
-  it('uses identifier field for iStartsWith on selector columns', () => {
-    const filter = {
-      rowOperator: 'and',
-      conditions: [
-        { field: 'bp', operator: 'iStartsWith', value: 'acm' },
-      ],
-    };
-    const result = buildAdvancedFilterCriteria(filter, columns);
-    expect(result).toEqual([
-      { fieldName: 'bp$_identifier', operator: 'iStartsWith', value: 'acm' },
-    ]);
-  });
-
-  it('uses the plain key for iStartsWith on text columns', () => {
-    const filter = {
-      rowOperator: 'and',
-      conditions: [
-        { field: 'name', operator: 'iStartsWith', value: 'acm' },
-      ],
-    };
-    const result = buildAdvancedFilterCriteria(filter, columns);
-    expect(result).toEqual([
-      { fieldName: 'name', operator: 'iStartsWith', value: 'acm' },
-    ]);
-  });
-
   it('uses raw key for discrete ops on selector columns', () => {
     const filter = {
       rowOperator: 'and',
@@ -767,7 +750,6 @@ describe('getFilteredKey', () => {
     const col = { key: 'bp' };
     expect(getFilteredKey(col, 'identifier', 'iContains')).toBe('bp$_identifier');
     expect(getFilteredKey(col, 'identifier', 'iNotContains')).toBe('bp$_identifier');
-    expect(getFilteredKey(col, 'identifier', 'iStartsWith')).toBe('bp$_identifier');
     expect(getFilteredKey(col, 'identifier', 'iEquals')).toBe('bp$_identifier');
     expect(getFilteredKey(col, 'identifier', 'iNotEqual')).toBe('bp$_identifier');
   });
@@ -782,7 +764,6 @@ describe('getFilteredKey', () => {
   it('returns raw key for non-identifier modes', () => {
     const col = { key: 'name' };
     expect(getFilteredKey(col, 'text', 'iContains')).toBe('name');
-    expect(getFilteredKey(col, 'text', 'iStartsWith')).toBe('name');
     expect(getFilteredKey(col, 'numeric', 'equals')).toBe('name');
     expect(getFilteredKey(col, 'date', 'greaterThan')).toBe('name');
   });

@@ -6,7 +6,7 @@ import InventoryCreateListModal from './InventoryCreateListModal';
 const itemStyle = {
   width: '100%', textAlign: 'left', padding: '6px 12px',
   fontSize: 13, background: 'none', border: 'none', cursor: 'pointer',
-  color: '#111827',
+  color: 'hsl(var(--foreground))',
 };
 
 export default function InventoryMenuContent({ data, recordId, token, apiBaseUrl, onClose }) {
@@ -44,7 +44,7 @@ export default function InventoryMenuContent({ data, recordId, token, apiBaseUrl
       <button
         type="button"
         style={itemStyle}
-        onMouseEnter={(e) => { e.currentTarget.style.background = '#F3F4F6'; }}
+        onMouseEnter={(e) => { e.currentTarget.style.background = 'hsl(var(--card))'; }}
         onMouseLeave={(e) => { e.currentTarget.style.background = 'none'; }}
         onClick={() => { onClose(); setShowModal(true); }}
       >
@@ -54,7 +54,7 @@ export default function InventoryMenuContent({ data, recordId, token, apiBaseUrl
         type="button"
         disabled={updating}
         style={{ ...itemStyle, opacity: updating ? 0.5 : 1, cursor: updating ? 'not-allowed' : 'pointer' }}
-        onMouseEnter={(e) => { if (!updating) e.currentTarget.style.background = '#F3F4F6'; }}
+        onMouseEnter={(e) => { if (!updating) e.currentTarget.style.background = 'hsl(var(--card))'; }}
         onMouseLeave={(e) => { e.currentTarget.style.background = 'none'; }}
         onClick={handleUpdateQuantities}
       >
