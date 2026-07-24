@@ -206,7 +206,7 @@ export const ImportedStatementsTab = forwardRef(function ImportedStatementsTab({
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
       {selectedIds.size > 0 && (
-        <div className="border-b border-[#E8EAEF] px-2 py-2">
+        <div className="border-b border-[hsl(var(--border-subtle))] px-2 py-2">
           <BulkDeleteSelectionBar
             count={selectedIds.size}
             deleting={bulkDeleting}

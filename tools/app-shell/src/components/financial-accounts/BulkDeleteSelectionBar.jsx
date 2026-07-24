@@ -26,9 +26,9 @@ export function BulkDeleteSelectionBar({ count, onDelete, onCancel, deleting = f
       data-testid="bulk-delete-selection-bar">
       <span
         role="status"
-        className="text-sm font-semibold text-[#121217]"
+        className="text-sm font-semibold text-[hsl(var(--foreground))]"
         data-testid="bulk-delete-selection-count">
-        {ui('selected').replace('{count}', count)}
+        {ui('selected', { count })}
       </span>
       <div className="flex items-center gap-2">
         <Button
