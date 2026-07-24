@@ -132,25 +132,25 @@ export default function VfSolveErrorModal({ open, onClose, rows, neoApiBase, onR
           {/* Single: error detail with collapsible full text */}
           {isSingle && (row.codeError || row.errorReason) && (
             <div style={{
-              borderRadius: 8, background: '#FEF2F2', border: '1px solid #FECACA',
+              borderRadius: 8, background: 'var(--status-destructive-bg)', border: '1px solid hsl(var(--destructive) / 0.3)',
               padding: '10px 12px', marginBottom: 14,
             }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
                 <AlertTriangle
                   size={13}
-                  style={{ color: '#DC2626', flexShrink: 0 }}
+                  style={{ color: 'hsl(var(--destructive))', flexShrink: 0 }}
                   data-testid="AlertTriangle__a6e471" />
-                <span style={{ fontSize: 12, fontWeight: 600, color: '#B91C1C' }}>Error</span>
+                <span style={{ fontSize: 12, fontWeight: 600, color: 'hsl(var(--destructive))' }}>Error</span>
               </div>
               {row.codeError && (
-                <p style={{ fontSize: 13, fontFamily: 'monospace', color: '#991B1B', margin: '0 0 4px' }}>
+                <p style={{ fontSize: 13, fontFamily: 'monospace', color: 'hsl(var(--destructive))', margin: '0 0 4px' }}>
                   [{row.codeError}]
                 </p>
               )}
               {row.errorReason && (
                 <>
                   <p style={{
-                    fontSize: 13, color: '#B91C1C', margin: 0, lineHeight: 1.5,
+                    fontSize: 13, color: 'hsl(var(--destructive))', margin: 0, lineHeight: 1.5,
                     overflowWrap: 'break-word', wordBreak: 'break-word',
                     ...(showDetail ? {} : {
                       display: '-webkit-box',
@@ -166,7 +166,7 @@ export default function VfSolveErrorModal({ open, onClose, rows, neoApiBase, onR
                       onClick={() => setShowDetail(v => !v)}
                       style={{
                         display: 'inline-flex', alignItems: 'center', gap: 4,
-                        fontSize: 12, color: '#DC2626', background: 'none', border: 'none',
+                        fontSize: 12, color: 'hsl(var(--destructive))', background: 'none', border: 'none',
                         cursor: 'pointer', padding: '4px 0', textDecoration: 'underline',
                       }}
                     >
@@ -182,12 +182,12 @@ export default function VfSolveErrorModal({ open, onClose, rows, neoApiBase, onR
           {/* Multi: list of invoices */}
           {!isSingle && (
             <div style={{
-              borderRadius: 8, background: '#F9FAFB', border: '1px solid #E5E7EB',
+              borderRadius: 8, background: 'hsl(var(--muted))', border: '1px solid hsl(var(--border-subtle))',
               padding: '10px 12px', marginBottom: 14, maxHeight: 160, overflowY: 'auto',
             }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
                 <StatusPill estado={pillStatus} data-testid="StatusPill__a6e471" />
-                <span style={{ fontSize: 12, fontWeight: 600, color: '#6B7280' }}>
+                <span style={{ fontSize: 12, fontWeight: 600, color: 'hsl(var(--muted-foreground))' }}>
                   {rows.length} {ui('vfSolveError.invoicesSelected')}
                 </span>
               </div>
@@ -196,7 +196,7 @@ export default function VfSolveErrorModal({ open, onClose, rows, neoApiBase, onR
                   ?? r['invoice$_identifier']?.split(/\s[–-]\s/)[0]?.trim()
                   ?? r.id;
                 return (
-                  <div key={r.id} style={{ padding: '2px 0', fontSize: 13, color: '#374151' }}>
+                  <div key={r.id} style={{ padding: '2px 0', fontSize: 13, color: 'hsl(var(--foreground))' }}>
                     {no}
                   </div>
                 );
@@ -206,7 +206,7 @@ export default function VfSolveErrorModal({ open, onClose, rows, neoApiBase, onR
 
           {/* Instructions */}
           {description && (
-            <p style={{ fontSize: 14, color: '#374151', lineHeight: 1.6, margin: 0 }}>
+            <p style={{ fontSize: 14, color: 'hsl(var(--foreground))', lineHeight: 1.6, margin: 0 }}>
               {description}
             </p>
           )}

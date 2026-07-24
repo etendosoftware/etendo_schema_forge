@@ -38,16 +38,16 @@ function NameCell({ account, ui, onConnect }) {
       <div className="flex h-full items-center">
         <div className="flex w-[44px] shrink-0 items-center justify-center opacity-0 transition-opacity group-hover:opacity-100">
           <GripVertical
-            className="h-5 w-5 text-[#828FA3]"
+            className="h-5 w-5 text-[hsl(var(--text-disabled))]"
             aria-hidden="true"
             data-testid="GripVertical__dc050f" />
         </div>
         <AccountLogoAvatar account={account} data-testid="AccountLogoAvatar__dc050f" />
         <div className="flex flex-1 flex-col justify-center gap-1 px-2 py-2">
           <div className="flex items-center gap-1">
-            <span className="text-sm font-semibold leading-5 text-[#121217]">{account.name}</span>
+            <span className="text-sm font-semibold leading-5 text-[hsl(var(--foreground))]">{account.name}</span>
             {isDisconnected ? (
-              <span className="inline-flex h-6 shrink-0 items-center whitespace-nowrap rounded-full bg-[#F5F7F9] px-2 py-1 text-xs font-normal leading-4 text-[#3F3F50]">
+              <span className="inline-flex h-6 shrink-0 items-center whitespace-nowrap rounded-full bg-[hsl(var(--muted))] px-2 py-1 text-xs font-normal leading-4 text-[hsl(var(--muted-foreground))]">
                 {ui('financeAccountsBadgeOffline')}
               </span>
             ) : null}
@@ -74,27 +74,27 @@ function TypeCell({ account, ui }) {
   return (
     <TableCell className="w-[340px] px-2 py-2" data-testid="TableCell__dc050f">
       <div className="flex flex-col justify-center">
-        <span className="text-sm font-normal leading-5 text-[#121217]">{typeLabel}</span>
+        <span className="text-sm font-normal leading-5 text-[hsl(var(--foreground))]">{typeLabel}</span>
         {account.iban && (
-          <span className="inline-flex items-center gap-1 text-xs leading-4 text-[#6C6C89]">
+          <span className="inline-flex items-center gap-1 text-xs leading-4 text-[hsl(var(--muted-foreground))]">
             {chunkIban(account.iban)}
             <button
               type="button"
               onClick={copyIban}
               aria-label={ui('financeAccountsCopyIban')}
               data-testid={`account-row-copy-iban-${account.id}`}
-              className="rounded-full p-0.5 text-[#828FA3] opacity-0 transition-opacity hover:bg-[#E8EAEF] group-hover:opacity-100"
+              className="rounded-full p-0.5 text-[hsl(var(--text-disabled))] opacity-0 transition-opacity hover:bg-[hsl(var(--border-subtle))] group-hover:opacity-100"
             >
               <Copy className="h-3.5 w-3.5" data-testid="Copy__dc050f" />
             </button>
           </span>
         )}
         {!account.iban && cardNumber && (
-          <span className="text-xs leading-4 text-[#6C6C89]" data-testid={`account-row-card-number-${account.id}`}>
+          <span className="text-xs leading-4 text-[hsl(var(--muted-foreground))]" data-testid={`account-row-card-number-${account.id}`}>
             {cardNumber}
           </span>
         )}
-        {!account.iban && !cardNumber && <span className="text-xs leading-4 text-[#6C6C89]">—</span>}
+        {!account.iban && !cardNumber && <span className="text-xs leading-4 text-[hsl(var(--muted-foreground))]">—</span>}
       </div>
     </TableCell>
   );
@@ -104,7 +104,7 @@ function BalanceCell({ account }) {
   const isNegative = Number(account.currentBalance) < 0;
   return (
     <TableCell className="w-[200px] px-2 text-right" data-testid="TableCell__dc050f">
-      <span className={cn('text-sm font-semibold leading-5 tabular-nums', isNegative ? 'text-[#D50B3E]' : 'text-[#121217]')}>
+      <span className={cn('text-sm font-semibold leading-5 tabular-nums', isNegative ? 'text-[hsl(var(--destructive))]' : 'text-[hsl(var(--foreground))]')}>
         {formatCurrency(account.currencyIso, account.currentBalance)}
       </span>
     </TableCell>

@@ -15,6 +15,7 @@ import { isInvoiceSpec, isOrderSpec } from '@/lib/surveys/surveys.js';
 import { useLogout } from '@/auth/useLogout.js';
 import { emitSurveyTrigger } from '@/lib/surveys/survey-engine.js';
 import { isEmailField, getEmailFieldError, getWebsiteFieldError, getPhoneFieldError } from '@/components/contract-ui/recipientEdits.js';
+import { getNumericFieldError, numericFieldToastId } from '@/lib/numericValidation.js';
 
 // Re-exported for back-compat: isEmailField lives in recipientEdits.js (the
 // dependency-light email util) so the grid components can reuse it without
@@ -157,6 +158,28 @@ export async function extractErrorMessage(res, ui) {
 
             if (/duplicate key value violates unique constraint/i.test(decoded)) {
                 return translate('validationDuplicateRecord', 'A record with the same value already exists.');
+            }
+
+            // ETP-4597: Etendo AD's backend core sometimes rewrites the raw Postgres
+            // unique-constraint violation into an already-translated sentence that
+            // names the AD entity's technical field group before it reaches the
+            // frontend, e.g. (Spanish) "Ya existe un/a Categoría del producto con el
+            // mismo (Entidad, Organización, Identificador). (Entidad, Organización,
+            // Identificador) debe ser único. Cambie los valores introducidos" — or the
+            // English equivalent naming (Client, Organization, Identifier). The regex
+            // above only matches the RAW Postgres wording, so this AD-translated
+            // sentence needs its own branch to avoid leaking technical field names.
+            // Gaps are bounded ({1,200}) rather than unbounded (.+) so the match can't
+            // be forced into super-linear backtracking on a pathological input
+            // (SonarQube javascript:S5852).
+            if (
+                /ya existe.{1,200}\(.{1,200}\).{1,200}debe ser único/i.test(decoded)
+                || /there is already.{1,200}\(.{1,200}\).{1,200}must be unique/i.test(decoded)
+            ) {
+                return translate(
+                    'validationDuplicateIdentifier',
+                    'A record with the same identifier already exists. Please enter a different one.'
+                );
             }
 
             const raw = decoded.replace(/\s+/g, ' ').trim();
@@ -471,14 +494,48 @@ export function getInvalidPhoneFields(fields, editing) {
     return getInvalidFormatFields(fields, editing, getPhoneFieldError);
 }
 
+// Generic numeric constraint gate (min / integer), declared per-field in the
+// contract. Unlike the format checks, it runs against ALL currently registered
+// fields (not just ones the user touched this session): the blur toast in
+// EntityForm fires independently of onChange, so a field the user never
+// "changed" per userChangedKeysRef can still be visibly invalid — that case must
+// still block save. Naturally a no-op for any window whose fields declare neither
+// `min` nor `integer` (getNumericFieldError returns null for them). ETP-4542.
+// Returns { key, errorKey, errorParams } for the first violating field, or null
+// when clean. `errorParams` carries the i18n interpolation values (e.g. { min })
+// so the toast can render "Value must be at least 1" rather than a generic text.
+export function getNumericFieldViolation(fields, editing) {
+    const isReadOnly = getReadOnly(editing);
+    const isVisible = getVisible(editing);
+    for (const f of fields) {
+        if (isReadOnly(f) || !isVisible(f)) continue;
+        const err = getNumericFieldError(f, editing?.[f.key]);
+        if (err) return { key: f.key, errorKey: err.key, errorParams: err.params };
+    }
+    return null;
+}
+
 // Block the save on a format-invalid field (email, website, …) and surface a
 // toast ONLY — unlike the required-field path, format errors deliberately do NOT
 // set an inline fieldError under the input (the toast is the single signal).
 // Empty stays valid (checked before this is called); the null return blocks save.
-export function reportInvalidFormatField(messageKey, ui, setSaveError, setIsSaving) {
-    const msg = ui(messageKey);
+// `toastId` is optional and backward-compatible: the email/website/phone
+// gates below don't pass it (they have no blur+click race to dedupe against,
+// since those fields don't fire a competing toast on blur), so they keep
+// stacking a fresh toast per call exactly as before. Only the numeric gate
+// passes a stable id, shared with EntityForm's blur toast for the same field.
+export function reportInvalidFormatField(messageKey, ui, setSaveError, setIsSaving, toastId, params = {}) {
+    const msg = ui(messageKey, params);
     setSaveError(msg);
-    toast.error(msg);
+    // Call with exactly one arg when there's no toastId — passing `undefined`
+    // explicitly as a second argument still counts as a 2-arg call to test
+    // spies (toHaveBeenCalledWith), which would break the existing
+    // email/website/phone assertions that expect the pre-ETP-4542 single-arg call.
+    if (toastId) {
+        toast.error(msg, { id: toastId });
+    } else {
+        toast.error(msg);
+    }
     setIsSaving(false);
     return null;
 }
@@ -665,6 +722,10 @@ export function useEntity(entity, childEntity, {
     const [loading, setLoading] = useState(false);
     const [loadingMore, setLoadingMore] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
+    // ETP-4542: identifier of the header process currently running (POST in flight),
+    // or null when idle. A per-process id (not a global boolean) gives per-button
+    // granularity so only the button that was clicked reflects the loading state.
+    const [runningProcess, setRunningProcess] = useState(null);
     const [hasMore, setHasMore] = useState(true);
     const [saveError, setSaveError] = useState(null);
     // ETP-3894: per-field error map. Set when handleSave fails because mandatory fields
@@ -1015,6 +1076,28 @@ export function useEntity(entity, childEntity, {
             }
             setFieldErrors({});
         }
+        // Generic numeric constraint (min / integer) hard save-block, checked against ALL
+        // currently registered fields for this form — not scoped to isNew or to fields the
+        // user "changed" this session. The EntityForm blur toast already warns on invalid
+        // values independently of onChange, so the save block must cover the same surface or
+        // the toast becomes purely cosmetic. No-op for every window whose fields declare
+        // neither `min` nor `integer`. ETP-4542.
+        const allFormFields = [...formFieldsRef.current.values()].flat();
+        const numericViolation = getNumericFieldViolation(allFormFields, editing);
+        if (numericViolation) {
+            // Same id as EntityForm's on-blur toast for this field (ETP-4542):
+            // when Save is clicked without leaving the input first, blur fires
+            // right before this onClick — sonner dedupes the two identical
+            // toasts into one instead of stacking them.
+            return reportInvalidFormatField(
+                numericViolation.errorKey,
+                ui,
+                setSaveError,
+                setIsSaving,
+                numericFieldToastId(numericViolation.key),
+                numericViolation.errorParams,
+            );
+        }
         // Format validation (email/website/phone) is scoped to fields the user
         // actually edited THIS session — never untouched legacy values on an
         // existing record (which would otherwise block an unrelated edit). On new
@@ -1226,6 +1309,12 @@ export function useEntity(entity, childEntity, {
 
     const handleProcess = useCallback(async (process, paramValues = {}) => {
         if (!selected?.id) return;
+        // ETP-4542: mark this process as running so consumers (DetailView) can show a
+        // loading state and block re-clicks. The id must match the one the button uses
+        // to render (columnName ?? name). Cleared in the finally block below on both
+        // success and error, so the button always returns to its normal state.
+        const processId = process.columnName ?? process.name;
+        setRunningProcess(processId);
         // Build field values: start with hidden params from process definition, then merge user-supplied values
         const fieldValues = {};
         for (const p of (process.params ?? [])) {
@@ -1267,6 +1356,8 @@ export function useEntity(entity, childEntity, {
             }
         } catch (err) {
             toast.error(err?.message || 'Network error');
+        } finally {
+            setRunningProcess(null);
         }
     }, [selected, entity, specName, apiBaseUrl, token, refresh, fetchById, ui]);
 
@@ -1283,6 +1374,7 @@ export function useEntity(entity, childEntity, {
 
     return {
         items, selected, editing, children, childDefaults, childrenLoading, loading, loadingMore, hasMore, saveError, isSaving,
+        runningProcess,
         isDirtyHeader,
         fieldErrors, registerFields,
         handleSelect, handleNew, handleChange, handleSave, handleSaveAndProcess, handleDelete, handleProcess,

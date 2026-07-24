@@ -9,7 +9,7 @@ import CreateRejectReasonModal from './CreateRejectReasonModal';
  * Visual spec follows the Figma frame "Rechazar Presupuesto":
  * 375px-wide compact card, Inter typography, header with title + document
  * subtitle, body with description + labelled typeahead, and a button row
- * mirroring the EntityCreationModal palette (#121217 enabled / #D1D4DB
+ * mirroring the EntityCreationModal palette (hsl(var(--foreground)) enabled / hsl(var(--card))
  * disabled, fully-rounded). The selector itself stays a typeahead so users
  * can search and inline-create reasons via the "+ Crear razón" affordance.
  *
@@ -148,7 +148,7 @@ export default function RejectQuotationModal({
           style={{ ...closeBtnStyle, opacity: loading ? 0.5 : 1, cursor: loading ? 'not-allowed' : 'pointer' }}
           aria-label={ui('cancel')}
         >
-          <svg viewBox="0 0 20 20" width="20" height="20" fill="none" stroke="#828FA3" strokeWidth="2"
+          <svg viewBox="0 0 20 20" width="20" height="20" fill="none" stroke="var(--status-info-bg)" strokeWidth="2"
                strokeLinecap="round" strokeLinejoin="round">
             <path d="M5 5l10 10M15 5l-10 10" />
           </svg>
@@ -194,7 +194,7 @@ export default function RejectQuotationModal({
                 autoComplete="off"
               />
               <svg style={chevronIconStyle} viewBox="0 0 24 24" width="24" height="24"
-                   fill="none" stroke="#828FA3" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                   fill="none" stroke="var(--status-info-bg)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M6 9l6 6 6-6" />
               </svg>
               {selected && !loading && (
@@ -277,7 +277,7 @@ export default function RejectQuotationModal({
           </button>
           <style>{`
             @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
-            #reject-reason-search::placeholder { color: #6C6C89; opacity: 1; font-family: Inter, sans-serif; font-size: 14px; line-height: 24px; font-weight: 400; }
+            #reject-reason-search::placeholder { color: var(--status-info-fg); opacity: 1; font-family: Inter, sans-serif; font-size: 14px; line-height: 24px; font-weight: 400; }
           `}</style>
         </div>
       </div>
@@ -305,14 +305,14 @@ export default function RejectQuotationModal({
 const overlayStyle = {
   position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 50,
   display: 'flex', alignItems: 'center', justifyContent: 'center',
-  backgroundColor: 'rgba(0,0,0,0.3)',
+  backgroundColor: 'hsl(var(--foreground) / 0.3)',
 };
 
 const cardStyle = {
   position: 'relative',
   width: 375, display: 'flex', flexDirection: 'column',
-  padding: '8px 0', backgroundColor: '#FFFFFF',
-  boxShadow: '0px 0px 0px 1px rgba(18,18,23,0.1), 0px 24px 48px rgba(18,18,23,0.03), 0px 10px 18px rgba(18,18,23,0.03), 0px 5px 8px rgba(18,18,23,0.04), 0px 2px 4px rgba(18,18,23,0.04)',
+  padding: '8px 0', backgroundColor: 'hsl(var(--card))',
+  boxShadow: '0px 0px 0px 1px hsl(var(--foreground) / 0.1), 0px 24px 48px hsl(var(--foreground) / 0.03), 0px 10px 18px hsl(var(--foreground) / 0.03), 0px 5px 8px hsl(var(--foreground) / 0.04), 0px 2px 4px hsl(var(--foreground) / 0.04)',
   borderRadius: 8,
   fontFamily: 'Inter, sans-serif',
 };
@@ -331,12 +331,12 @@ const headerStyle = {
 
 const titleStyle = {
   fontFamily: 'Inter, sans-serif', fontWeight: 600, fontSize: 20, lineHeight: '32px',
-  color: '#121217',
+  color: 'hsl(var(--foreground))',
 };
 
 const subtitleStyle = {
   fontFamily: 'Inter, sans-serif', fontWeight: 400, fontSize: 12, lineHeight: '16px',
-  color: '#121217',
+  color: 'hsl(var(--foreground))',
 };
 
 const bodyStyle = {
@@ -346,7 +346,7 @@ const bodyStyle = {
 
 const descriptionStyle = {
   fontFamily: 'Inter, sans-serif', fontWeight: 400, fontSize: 12, lineHeight: '16px',
-  color: '#121217', alignSelf: 'stretch',
+  color: 'hsl(var(--foreground))', alignSelf: 'stretch',
 };
 
 const fieldGroupStyle = {
@@ -361,26 +361,26 @@ const labelRowStyle = {
 
 const labelTextStyle = {
   fontFamily: 'Inter, sans-serif', fontWeight: 500, fontSize: 14, lineHeight: '24px',
-  color: '#121217',
+  color: 'hsl(var(--foreground))',
 };
 
 const asteriskStyle = {
   fontFamily: 'Inter, sans-serif', fontWeight: 400, fontSize: 14, lineHeight: '24px',
-  color: '#F53D6B',
+  color: 'hsl(var(--destructive))',
 };
 
-// Input matches Figma frame "Text Input": 335×40, border 1px #D1D4DB, radius 8.
+// Input matches Figma frame "Text Input": 335×40, border 1px hsl(var(--foreground)), radius 8.
 // Spec composes its inner layout as nested wraps (text wrap padding 0 8,
 // chevron wrap 28 wide padding 0 4 0 0, chevron 24×24). We collapse that
 // into explicit input padding so the visual placement of text and chevron
 // matches without nesting flex containers.
 const inputStyle = {
   width: '100%', boxSizing: 'border-box', height: 40,
-  fontFamily: 'Inter, sans-serif', fontSize: 14, lineHeight: '24px', color: '#121217',
-  border: '1px solid #D1D4DB', borderRadius: 8,
+  fontFamily: 'Inter, sans-serif', fontSize: 14, lineHeight: '24px', color: 'hsl(var(--foreground))',
+  border: '1px solid hsl(var(--foreground))', borderRadius: 8,
   padding: '8px 44px 8px 16px',
-  background: '#FFFFFF',
-  boxShadow: '0px 1px 2px rgba(18,18,23,0.05)',
+  background: 'hsl(var(--card))',
+  boxShadow: '0px 1px 2px hsl(var(--foreground) / 0.05)',
   outline: 'none',
 };
 
@@ -393,14 +393,14 @@ const chevronIconStyle = {
 const clearBtnStyle = {
   position: 'absolute', right: 40, top: '50%', transform: 'translateY(-50%)',
   width: 20, height: 20, borderRadius: '50%',
-  border: 'none', background: 'transparent', color: '#828FA3',
+  border: 'none', background: 'transparent', color: 'var(--status-info-bg)',
   cursor: 'pointer', fontSize: 16, lineHeight: 1,
 };
 
 const dropdownStyle = {
   position: 'absolute', left: 0, right: 0, top: '100%', marginTop: 4, zIndex: 51,
-  background: '#fff', border: '1px solid #D1D4DB', borderRadius: 8,
-  boxShadow: '0 4px 12px rgba(18,18,23,0.08)',
+  background: 'hsl(var(--card))', border: '1px solid hsl(var(--card))', borderRadius: 8,
+  boxShadow: '0 4px 12px hsl(var(--foreground) / 0.08)',
   maxHeight: 220, overflowY: 'auto',
 };
 
@@ -408,8 +408,8 @@ const createOptionStyle = {
   display: 'block', width: '100%', textAlign: 'left',
   padding: '8px 12px',
   fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, lineHeight: '24px',
-  color: '#121217', background: 'transparent',
-  border: 'none', borderBottom: '1px solid #E5E7EB',
+  color: 'hsl(var(--foreground))', background: 'transparent',
+  border: 'none', borderBottom: '1px solid hsl(var(--card))',
   cursor: 'pointer',
 };
 
@@ -417,19 +417,19 @@ const optionStyle = {
   display: 'block', width: '100%', textAlign: 'left',
   padding: '8px 12px',
   fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 400, lineHeight: '24px',
-  color: '#121217', background: 'transparent', border: 'none', cursor: 'pointer',
+  color: 'hsl(var(--foreground))', background: 'transparent', border: 'none', cursor: 'pointer',
 };
 
 const noResultsStyle = {
   padding: '8px 12px',
-  fontFamily: 'Inter, sans-serif', fontSize: 12, color: '#6C6C89',
+  fontFamily: 'Inter, sans-serif', fontSize: 12, color: 'var(--status-info-bg)',
 };
 
 const errorStyle = {
   padding: '8px 20px',
   fontFamily: 'Inter, sans-serif', fontSize: 12,
-  color: '#DC2626', background: '#FEF2F2',
-  borderTop: '0.5px solid #FECACA',
+  color: 'hsl(var(--destructive))', background: 'hsl(var(--card))',
+  borderTop: '0.5px solid hsl(var(--destructive))',
 };
 
 const buttonsRowStyle = {
@@ -445,20 +445,20 @@ const btnSecondary = {
   display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
   fontSize: 14, fontWeight: 500, lineHeight: '24px', padding: '8px 12px',
   borderRadius: 360, fontFamily: 'Inter, sans-serif',
-  border: '1px solid #D1D4DB', background: '#FFFFFF', color: '#121217',
-  boxShadow: '0px 1px 2px rgba(18,18,23,0.05)',
+  border: '1px solid hsl(var(--card))', background: 'hsl(var(--card))', color: 'hsl(var(--foreground))',
+  boxShadow: '0px 1px 2px hsl(var(--foreground) / 0.05)',
 };
 
 const btnPrimary = {
   width: 191, height: 40,
   fontSize: 14, fontWeight: 500, lineHeight: '24px', padding: '8px 12px',
   borderRadius: 360, fontFamily: 'Inter, sans-serif',
-  border: 'none', background: '#121217', color: '#FFFFFF',
+  border: 'none', background: 'hsl(var(--foreground))', color: 'hsl(var(--card))',
 };
 
 const btnPrimaryDisabled = {
   width: 191, height: 40,
   fontSize: 14, fontWeight: 500, lineHeight: '24px', padding: '8px 12px',
   borderRadius: 360, fontFamily: 'Inter, sans-serif',
-  border: 'none', background: '#D1D4DB', color: '#FFFFFF',
+  border: 'none', background: 'hsl(var(--card))', color: 'hsl(var(--card))',
 };

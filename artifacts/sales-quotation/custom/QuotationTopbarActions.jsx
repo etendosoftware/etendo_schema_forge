@@ -24,11 +24,11 @@ const btnCloneStyle = {
   justifyContent: 'center',
   padding: '7px',
   borderRadius: 6,
-  border: '1px solid #D1D4DB',
-  background: '#FFFFFF',
-  color: '#64748B',
+  border: '1px solid hsl(var(--card))',
+  background: 'hsl(var(--card))',
+  color: 'var(--status-info-bg)',
   cursor: 'pointer',
-  boxShadow: '0px 1px 2px 0px #1212170D',
+  boxShadow: '0px 1px 2px 0px hsl(var(--foreground) / 0.05)',
 };
 
 export default function QuotationTopbarActions({ data, recordId, token, apiBaseUrl, onSave }) {
@@ -79,7 +79,7 @@ export default function QuotationTopbarActions({ data, recordId, token, apiBaseU
 
   return (
     <>
-      <button type="button" data-testid="action-clone" onClick={() => setShowClone(true)} style={{...btnCloneStyle, background: isCloneHovered ? '#F1F5F9' : '#FFFFFF'}} title={ui('cloneOrderBtn')} onMouseEnter={() => setIsCloneHovered(true)} onMouseLeave={() => setIsCloneHovered(false)}>
+      <button type="button" data-testid="action-clone" onClick={() => setShowClone(true)} style={{...btnCloneStyle, background: isCloneHovered ? 'hsl(var(--card))' : 'hsl(var(--card))'}} title={ui('cloneOrderBtn')} onMouseEnter={() => setIsCloneHovered(true)} onMouseLeave={() => setIsCloneHovered(false)}>
         <CopyIcon />
       </button>
 

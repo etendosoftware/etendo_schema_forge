@@ -578,14 +578,18 @@ test.describe('Contacts Integration — Full journey', () => {
     // ═══════════════════════════════════════════════════════════════════════
 
     // Select Contact B
+    // Click the Checkbox__* testid (the label wrapping the input), not the
+    // input itself — the input is visually sr-only, so Playwright's click
+    // lands on the underlying decorative box and the sr-only input "intercepts
+    // pointer events" in reverse, causing flaky click timeouts.
     const rowBFinal = page.locator('tbody tr').filter({ hasText: CONTACT_B }).first();
-    await rowBFinal.locator('[role="checkbox"], input[type="checkbox"]').first().click();
+    await rowBFinal.getByTestId('Checkbox__eb5261').first().click();
 
     // Select Contact A by navigating to its detail URL and deleting, or find by timestamp
     // Contact A may have a different name after toggle — find by email which has the timestamp
     const rowAByEmail = page.locator('tbody tr').filter({ hasText: `e2e-${ts}@test.com` }).first();
     if (await rowAByEmail.isVisible({ timeout: 3_000 }).catch(() => false)) {
-      await rowAByEmail.locator('[role="checkbox"], input[type="checkbox"]').first().click();
+      await rowAByEmail.getByTestId('Checkbox__eb5261').first().click();
     }
 
     // Verify selection indicator shows selected count

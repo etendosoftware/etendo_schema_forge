@@ -42,8 +42,8 @@ export function StatementRowKebab({ statement: s, onProcess, onReactivate }) {
         data-testid={testid}
         onClick={enabled ? () => onClick(s) : undefined}
       >
-        <Icon className="h-5 w-5 text-[#828FA3]" data-testid="Icon__b97a5b" />
-        <span className="text-sm font-normal leading-6 text-[#121217]">{label}</span>
+        <Icon className="h-5 w-5 text-[hsl(var(--text-disabled))]" data-testid="Icon__b97a5b" />
+        <span className="text-sm font-normal leading-6 text-[hsl(var(--foreground))]">{label}</span>
       </DropdownMenuItem>
     );
     if (enabled) return item;
@@ -64,7 +64,7 @@ export function StatementRowKebab({ statement: s, onProcess, onReactivate }) {
             aria-label={ui('financeAccountStatementsRowActions')}
             data-testid={`statement-row-menu-${s.id}`}
             onClick={(e) => e.stopPropagation()}
-            className="inline-flex h-8 w-8 items-center justify-center rounded-full text-[#828FA3] opacity-0 transition-opacity group-hover:opacity-100 hover:bg-[#E8EAEF]"
+            className="inline-flex h-8 w-8 items-center justify-center rounded-full text-[hsl(var(--text-disabled))] opacity-0 transition-opacity group-hover:opacity-100 hover:bg-[hsl(var(--border-subtle))]"
           >
             <MoreVertical className="h-5 w-5" data-testid="MoreVertical__b97a5b" />
           </button>

@@ -337,7 +337,7 @@ describe('InlineLinesPanel', () => {
     );
     const cell = screen.getByText('-8');
     expect(cell).toBeInTheDocument();
-    expect(cell.style.color).toBe('rgb(213, 11, 62)'); // #D50B3E
+    expect(cell.style.color).toBe('hsl(var(--destructive))');
     expect(cell.style.fontWeight).toBe('600');
   });
 
@@ -365,7 +365,7 @@ describe('InlineLinesPanel', () => {
     );
     const cell = screen.getByText('±0');
     expect(cell).toBeInTheDocument();
-    expect(cell.style.color).toBe('rgb(18, 18, 23)'); // #121217
+    expect(cell.style.color).toBe('hsl(var(--foreground))');
   });
 
   it('renders signedDelta column in read mode: positive value with positive color', () => {
@@ -392,7 +392,7 @@ describe('InlineLinesPanel', () => {
     );
     const cell = screen.getByText('+5');
     expect(cell).toBeInTheDocument();
-    expect(cell.style.color).toBe('rgb(30, 135, 76)'); // #1E874C
+    expect(cell.style.color).toBe('var(--status-success-fg)');
   });
 
   it('commitField skips when value is unchanged (onUpdateRow NOT called)', async () => {
