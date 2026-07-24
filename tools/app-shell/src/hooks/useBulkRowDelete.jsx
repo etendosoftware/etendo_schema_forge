@@ -1,5 +1,4 @@
 import { useCallback, useState } from 'react';
-import { toast } from 'sonner';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogClose,
 } from '@/components/ui/dialog.jsx';
@@ -7,6 +6,7 @@ import { Button } from '@/components/ui/button.jsx';
 import { buildHeaders } from '@/auth/api';
 import { useUI } from '@/i18n';
 import { extractErrorMessage } from '@/hooks/useEntity';
+import { runBatchDelete, toastBatchDeleteOutcome } from '@/lib/batchDelete.js';
 
 /**
  * Grid multi-select bulk delete — same styled confirm modal `useRowDelete`
@@ -49,44 +49,21 @@ export function useBulkRowDelete({ apiBaseUrl, entity = 'header', token, onSucce
     if (!pendingRows?.length || !apiBaseUrl) return;
     setDeleting(true);
     try {
-      const results = await Promise.allSettled(
-        pendingRows.map((row) =>
-          fetch(`${apiBaseUrl}/${entity}/${row.id}`, {
-            method: 'DELETE',
-            headers: buildHeaders(token),
-          }).then(async (res) => {
-            if (!res.ok) throw new Error(await extractErrorMessage(res, ui));
-            return row;
-          })
-        )
+      // Shared triage (Promise.allSettled + succeeded/failed partition) and
+      // single-toast-per-outcome selection — see `batchDelete.js` (ETP-4656:
+      // extracted once Financial Accounts / Movements / Statements needed the
+      // same "select → confirm → batch delete → 3-outcome toast" pattern).
+      const { succeeded, failed } = await runBatchDelete(pendingRows, (row) =>
+        fetch(`${apiBaseUrl}/${entity}/${row.id}`, {
+          method: 'DELETE',
+          headers: buildHeaders(token),
+        }).then(async (res) => {
+          if (!res.ok) throw new Error(await extractErrorMessage(res, ui));
+          return row;
+        })
       );
 
-      const succeeded = [];
-      const failed = [];
-      results.forEach((result, idx) => {
-        if (result.status === 'fulfilled') succeeded.push(pendingRows[idx]);
-        else failed.push(pendingRows[idx]);
-      });
-
-      // ETP-4656 (Confluence design doc, grid bulk-delete outcomes) — exactly ONE
-      // toast per outcome, not two stacked ones (that was the line-level pattern
-      // copied from DetailView.jsx's onDelete, which is fine for that surface but
-      // not what the grid spec calls for):
-      //   all succeeded  -> success: "{count} deleted successfully."
-      //   partial        -> warning (single combined message): "X of Y deleted. Z could not be deleted."
-      //   all failed     -> error: "None of the X selected could be deleted."
-      const total = pendingRows.length;
-      if (failed.length === 0) {
-        toast.success(ui('bulkDeleteAllSucceeded', { count: succeeded.length }));
-      } else if (succeeded.length === 0) {
-        toast.error(ui('bulkDeleteAllFailed', { count: total }));
-      } else {
-        toast.warning(ui('bulkDeletePartialFailure', {
-          succeeded: succeeded.length,
-          total,
-          failed: failed.length,
-        }));
-      }
+      toastBatchDeleteOutcome(ui, { succeeded, failed, total: pendingRows.length });
 
       setPendingRows(null);
       onSuccess?.(succeeded, failed);
