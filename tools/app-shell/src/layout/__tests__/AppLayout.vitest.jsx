@@ -4,11 +4,13 @@ vi.mock('@/i18n', () => ({
   useUI: () => (key) => key,
 }));
 
-// Mock react-router-dom
+// Mock react-router-dom. useSearchParams is a vi.fn() (not a plain arrow) so
+// the embedded-mode test below can override it for a single render via
+// mockReturnValueOnce, the same pattern already used for useRoleMenu.
 vi.mock('react-router-dom', () => ({
   Outlet: () => <div data-testid="outlet">Outlet</div>,
   useLocation: () => ({ pathname: '/sales-order/123' }),
-  useSearchParams: () => [new URLSearchParams(), vi.fn()],
+  useSearchParams: vi.fn(() => [new URLSearchParams(), vi.fn()]),
 }));
 
 // AppLayout now calls useRoleMenu() (ETP-4598), which internally calls useAuth().
@@ -84,6 +86,7 @@ vi.mock('@/components/support/SupportChatWidget.jsx', () => ({
 }));
 
 import { useRoleMenu } from '@/hooks/useRoleMenu.js';
+import { useSearchParams } from 'react-router-dom';
 import AppLayout from '../AppLayout.jsx';
 
 describe('AppLayout — normal mode', () => {
@@ -256,5 +259,41 @@ describe('AppLayout — no-access guard (ETP-4514)', () => {
     expect(screen.queryByTestId('NoAccessScreen__488148')).not.toBeInTheDocument();
     expect(screen.getByTestId('outlet')).toBeInTheDocument();
     expect(screen.getByTestId('side-menu')).toBeInTheDocument();
+  });
+
+  it('still renders the blocking screen when embedded=1 (the guard is not suppressed by embedded mode)', () => {
+    // `embedded` only strips chrome (SideMenu/TopBar/CommandPalette/etc.) inside
+    // AppLayoutInner — the no-access guard in AppLayout sits above that branch
+    // entirely and returns NoAccessScreen unconditionally. This locks in that an
+    // embedded integration (e.g. an iframe pointed at a single window) still
+    // gets the block message instead of silently rendering nothing / the Outlet.
+    vi.mocked(useSearchParams).mockReturnValueOnce([new URLSearchParams('embedded=1'), vi.fn()]);
+    vi.mocked(useRoleMenu).mockReturnValueOnce(new Set());
+
+    render(<AppLayout {...defaultProps} />);
+
+    expect(screen.getByTestId('NoAccessScreen__488148')).toBeInTheDocument();
+    expect(screen.getByText('noAccessTitle')).toBeInTheDocument();
+    expect(screen.queryByTestId('outlet')).not.toBeInTheDocument();
+  });
+
+  it('switches to the blocking screen on a re-render where useRoleMenu goes from a non-empty Set to a confirmed empty Set (role revoked mid-session)', () => {
+    // useRoleMenu() only refetches on isAuthenticated changes (see useRoleMenu.js),
+    // but the guard itself is a plain conditional on the hook's current return
+    // value — so if ANY re-render sees the Set shrink to empty (revoked role,
+    // or a future refetch trigger), the block must replace the previous content
+    // rather than leaving stale sidebar/Outlet content mounted alongside it.
+    vi.mocked(useRoleMenu).mockReturnValueOnce(new Set(['800166']));
+
+    const { rerender } = render(<AppLayout {...defaultProps} />);
+    expect(screen.getByTestId('side-menu')).toBeInTheDocument();
+    expect(screen.queryByTestId('NoAccessScreen__488148')).not.toBeInTheDocument();
+
+    vi.mocked(useRoleMenu).mockReturnValueOnce(new Set());
+    rerender(<AppLayout {...defaultProps} />);
+
+    expect(screen.getByTestId('NoAccessScreen__488148')).toBeInTheDocument();
+    expect(screen.queryByTestId('side-menu')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('outlet')).not.toBeInTheDocument();
   });
 });
