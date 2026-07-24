@@ -20,6 +20,9 @@ const fields = [
   { key: 'brand', column: 'M_Brand_ID', type: 'selector', label: 'Brand', section: 'other', reference: 'Brand', inputMode: 'selector' },
   { key: 'returnable', column: 'Returnable', type: 'checkbox', label: 'Returnable', required: true, section: 'other', defaultValue: 'Y' },
   { key: 'mProductStatusID', column: 'M_Product_Status_ID', type: 'selector', label: 'Lifecycle Status', section: 'other', reference: 'ProductStatus', inputMode: 'selector' },
+  { key: 'eTGOPurchasePrice', column: 'EM_ETGO_Purchase_Price', type: 'number', label: 'EM_ETGO_Purchase_Price', readOnly: true, section: 'other' },
+  { key: 'eTGOSalePrice', column: 'EM_ETGO_Sale_Price', type: 'number', label: 'EM_ETGO_Sale_Price', readOnly: true, section: 'other' },
+  { key: 'eTGOStock', column: 'EM_ETGO_Stock', type: 'number', label: 'EM_ETGO_Stock', readOnly: true, section: 'other' },
 ];
 // @sf-generated-end fields:product
 

@@ -163,6 +163,21 @@
           "section": "other",
           "displayLogic": null
         },
+        "eTGOSalePrice": {
+          "visibility": "readOnly",
+          "grid": true,
+          "section": "other"
+        },
+        "eTGOPurchasePrice": {
+          "visibility": "readOnly",
+          "grid": true,
+          "section": "other"
+        },
+        "eTGOStock": {
+          "visibility": "readOnly",
+          "grid": true,
+          "section": "other"
+        },
         "stocked": {
           "section": "other",
           "readOnlyLogic": null,

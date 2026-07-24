@@ -1,8 +1,8 @@
 {
-  "version": "0.19.1",
+  "version": "0.21.0",
   "generatedAt": "2026-07-07T21:53:26.027Z",
-  "updatedAt": "2026-07-23T12:09:48.857Z",
-  "checksum": "be0b5ac0489fd355",
+  "updatedAt": "2026-07-23T19:47:36.897Z",
+  "checksum": "f16969c836fd39f6",
   "frontendContract": {
     "window": {
       "id": "140",
@@ -610,6 +610,54 @@
             "section": "other",
             "validation": {
               "maxLength": 32
+            }
+          },
+          {
+            "name": "eTGOPurchasePrice",
+            "apiKey": "eTGOPurchasePrice",
+            "column": "EM_ETGO_Purchase_Price",
+            "label": "EM_ETGO_Purchase_Price",
+            "type": "amount",
+            "tsType": "number",
+            "visibility": "readOnly",
+            "required": false,
+            "grid": true,
+            "form": true,
+            "section": "other",
+            "validation": {
+              "maxLength": 22
+            }
+          },
+          {
+            "name": "eTGOSalePrice",
+            "apiKey": "eTGOSalePrice",
+            "column": "EM_ETGO_Sale_Price",
+            "label": "EM_ETGO_Sale_Price",
+            "type": "amount",
+            "tsType": "number",
+            "visibility": "readOnly",
+            "required": false,
+            "grid": true,
+            "form": true,
+            "section": "other",
+            "validation": {
+              "maxLength": 22
+            }
+          },
+          {
+            "name": "eTGOStock",
+            "apiKey": "eTGOStock",
+            "column": "EM_ETGO_Stock",
+            "label": "EM_ETGO_Stock",
+            "type": "decimal",
+            "tsType": "number",
+            "visibility": "readOnly",
+            "required": false,
+            "grid": true,
+            "form": true,
+            "section": "other",
+            "validation": {
+              "maxLength": 22
             }
           }
         ],
@@ -3421,6 +3469,30 @@
             "type": "foreignKey",
             "visibility": "system",
             "required": true
+          },
+          {
+            "name": "eTGOPurchasePrice",
+            "apiKey": "eTGOPurchasePrice",
+            "column": "EM_ETGO_Purchase_Price",
+            "type": "amount",
+            "visibility": "readOnly",
+            "required": false
+          },
+          {
+            "name": "eTGOSalePrice",
+            "apiKey": "eTGOSalePrice",
+            "column": "EM_ETGO_Sale_Price",
+            "type": "amount",
+            "visibility": "readOnly",
+            "required": false
+          },
+          {
+            "name": "eTGOStock",
+            "apiKey": "eTGOStock",
+            "column": "EM_ETGO_Stock",
+            "type": "decimal",
+            "visibility": "readOnly",
+            "required": false
           },
           {
             "name": "updated",
@@ -6760,6 +6832,30 @@
         "description": "Field 'description' should be present in product"
       },
       {
+        "id": "t-field-presence-product-eTGOPurchasePrice",
+        "category": "field-presence",
+        "entity": "product",
+        "field": "eTGOPurchasePrice",
+        "runner": "node",
+        "description": "Field 'eTGOPurchasePrice' should be present in product"
+      },
+      {
+        "id": "t-field-presence-product-eTGOSalePrice",
+        "category": "field-presence",
+        "entity": "product",
+        "field": "eTGOSalePrice",
+        "runner": "node",
+        "description": "Field 'eTGOSalePrice' should be present in product"
+      },
+      {
+        "id": "t-field-presence-product-eTGOStock",
+        "category": "field-presence",
+        "entity": "product",
+        "field": "eTGOStock",
+        "runner": "node",
+        "description": "Field 'eTGOStock' should be present in product"
+      },
+      {
         "id": "t-field-presence-product-image",
         "category": "field-presence",
         "entity": "product",
@@ -7390,6 +7486,30 @@
         "field": "description",
         "runner": "node",
         "description": "Field 'description' should have type 'string' in product"
+      },
+      {
+        "id": "t-field-type-product-eTGOPurchasePrice",
+        "category": "field-type",
+        "entity": "product",
+        "field": "eTGOPurchasePrice",
+        "runner": "node",
+        "description": "Field 'eTGOPurchasePrice' should have type 'number' in product"
+      },
+      {
+        "id": "t-field-type-product-eTGOSalePrice",
+        "category": "field-type",
+        "entity": "product",
+        "field": "eTGOSalePrice",
+        "runner": "node",
+        "description": "Field 'eTGOSalePrice' should have type 'number' in product"
+      },
+      {
+        "id": "t-field-type-product-eTGOStock",
+        "category": "field-type",
+        "entity": "product",
+        "field": "eTGOStock",
+        "runner": "node",
+        "description": "Field 'eTGOStock' should have type 'number' in product"
       },
       {
         "id": "t-field-type-product-image",
@@ -11112,15 +11232,15 @@
       }
     ],
     "summary": {
-      "total": 656,
+      "total": 662,
       "byCategory": {
         "action-endpoint": 9,
         "crud-flags": 12,
         "default-value-type": 26,
         "displaylogic-evaluable": 5,
         "displaylogic-valid": 5,
-        "field-presence": 79,
-        "field-type": 79,
+        "field-presence": 82,
+        "field-type": 82,
         "readonlylogic-evaluable": 2,
         "readonlylogic-valid": 2,
         "rule-declared": 141,
@@ -11130,7 +11250,7 @@
         "visibility": 12
       },
       "byRunner": {
-        "node": 656,
+        "node": 662,
         "junit": 0
       }
     }

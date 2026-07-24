@@ -7,6 +7,9 @@ const columns = [
   { key: 'uOM', column: 'C_UOM_ID', type: 'selector', label: 'UOM', required: true },
   { key: 'productCategory', column: 'M_Product_Category_ID', type: 'selector', label: 'Product Category', required: true },
   { key: 'productType', column: 'ProductType', type: 'enum', label: 'Product Type', enumLabels: { 'E': 'Expense type', 'I': 'Item', 'R': 'Resource', 'S': 'Service' }, enumVariants: {"I":"blue","S":"purple","R":"teal","E":"orange"}, required: true },
+  { key: 'eTGOPurchasePrice', column: 'EM_ETGO_Purchase_Price', type: 'amount', label: 'EM_ETGO_Purchase_Price' },
+  { key: 'eTGOSalePrice', column: 'EM_ETGO_Sale_Price', type: 'amount', label: 'EM_ETGO_Sale_Price' },
+  { key: 'eTGOStock', column: 'EM_ETGO_Stock', type: 'number', label: 'EM_ETGO_Stock' },
 ];
 // @sf-generated-end columns:product
 

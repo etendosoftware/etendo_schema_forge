@@ -2,7 +2,7 @@
   "sql": "SELECT DISTINCT c.ad_table_id, c.ad_column_id, c.columnname, c.position FROM ad_column c JOIN ad_tab t ON t.ad_table_id = c.ad_table_id WHERE t.ad_window_id = $1 AND t.isactive = 'Y' AND c.isactive = 'Y' ORDER BY c.ad_table_id, c.position, c.columnname, c.ad_column_id",
   "versions": {
     "1e3e96b5dc79b4c7366315de5249e070d2a81279761af45c7ea30b5365d1ed85": {
-      "checksum": "8dd1dcdca1ea2248e09cfca510c615c360847a2f45b6266ce3b9a6a42ee11af3",
+      "checksum": "1864c281b44ef12d694bf1df133ac8467940d0acec39b76ec2b5d4c292f6b8ae",
       "params": [
         "144"
       ],
@@ -738,6 +738,24 @@
           "ad_table_id": "208",
           "columnname": "Copyservicemodifytaxconfig",
           "position": "128"
+        },
+        {
+          "ad_column_id": "E307979CE47A48BAAA63F411BDBD0A29",
+          "ad_table_id": "208",
+          "columnname": "EM_ETGO_Sale_Price",
+          "position": "990"
+        },
+        {
+          "ad_column_id": "4E5E594900C84D10B02E12D254388499",
+          "ad_table_id": "208",
+          "columnname": "EM_ETGO_Purchase_Price",
+          "position": "991"
+        },
+        {
+          "ad_column_id": "8FC9A2CD267543C994F4F8F8BF8A02CC",
+          "ad_table_id": "208",
+          "columnname": "EM_ETGO_Stock",
+          "position": "992"
         },
         {
           "ad_column_id": "2020",
@@ -25084,7 +25102,7 @@
       ]
     },
     "c0351cd0caf4edf2a56beaafd358fe05567a911a68c5ab90cd866d785e6a9dfc": {
-      "checksum": "50a22294cb954a339dfa045493a2f37fd31e9edbbff706a885c729b62b65e278",
+      "checksum": "661844af84cab59c035c5fde7fd88202736f86ea3307f14ab7dcf383d8c24872",
       "params": [
         "140"
       ],
@@ -25898,6 +25916,24 @@
           "ad_table_id": "208",
           "columnname": "Copyservicemodifytaxconfig",
           "position": "128"
+        },
+        {
+          "ad_column_id": "E307979CE47A48BAAA63F411BDBD0A29",
+          "ad_table_id": "208",
+          "columnname": "EM_ETGO_Sale_Price",
+          "position": "990"
+        },
+        {
+          "ad_column_id": "4E5E594900C84D10B02E12D254388499",
+          "ad_table_id": "208",
+          "columnname": "EM_ETGO_Purchase_Price",
+          "position": "991"
+        },
+        {
+          "ad_column_id": "8FC9A2CD267543C994F4F8F8BF8A02CC",
+          "ad_table_id": "208",
+          "columnname": "EM_ETGO_Stock",
+          "position": "992"
         },
         {
           "ad_column_id": "521F823119706C29E040007F01001B31",
