@@ -537,7 +537,7 @@ export function FundsTransferModal({ sourceAccountId, onClose, onSuccess }) {
             onClick={handleConfirm}
             disabled={!canSubmit}
             data-testid="transfer-confirm"
-            className="inline-flex h-10 items-center gap-2 rounded-md bg-[hsl(var(--foreground))] px-[18px] text-sm font-semibold text-primary-foreground transition-colors hover:bg-[hsl(var(--primary))] hover:text-[hsl(var(--foreground))] disabled:cursor-not-allowed disabled:bg-[hsl(var(--border-control))] disabled:text-[hsl(var(--text-disabled))] disabled:hover:bg-[hsl(var(--border-control))] disabled:hover:text-[hsl(var(--text-disabled))]"
+            className="inline-flex h-10 items-center gap-2 rounded-md bg-[hsl(var(--foreground))] px-[18px] text-sm font-semibold text-primary-foreground transition-colors hover:bg-[hsl(var(--accent-highlight))] hover:text-[hsl(var(--accent-highlight-foreground))] disabled:cursor-not-allowed disabled:bg-[hsl(var(--border-control))] disabled:text-[hsl(var(--text-disabled))] disabled:hover:bg-[hsl(var(--border-control))] disabled:hover:text-[hsl(var(--text-disabled))]"
           >
             <ArrowLeftRight className="h-4 w-4" data-testid="ArrowLeftRight__tf-confirm" />
             {ui('financeAccountTransferConfirm')}
