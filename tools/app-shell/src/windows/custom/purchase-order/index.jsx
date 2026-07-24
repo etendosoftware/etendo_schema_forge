@@ -109,15 +109,17 @@ export default function PurchaseOrderWindow(props) {
   // to GeneratedApp, so it never picked up the generated HeaderPage's access-tier guard.
   // Checked once here, before either branch, so both list and detail are covered.
   const windowAccessTier = useWindowAccess('181');
-  if (windowAccessTier === 'none') {
-    return <WindowAccessGuard windowId="181" data-testid="WindowAccessGuard__b7ace5" />;
-  }
   // ETP-4520 — mirrors buildWindowAccessWiring's effectiveWindow: the hand-rolled
   // ListView below never picked up the read-only tier either, unlike GeneratedApp
   // (which already forces window.readOnly internally for the detail branch).
+  // Computed unconditionally, before the early return below, so hook order stays
+  // stable across renders regardless of windowAccessTier.
   const effectiveWindow = useMemo(() => (
     windowAccessTier === 'read-only' ? { ...(props.window || {}), readOnly: true } : props.window
   ), [windowAccessTier, props.window]);
+  if (windowAccessTier === 'none') {
+    return <WindowAccessGuard windowId="181" data-testid="WindowAccessGuard__b7ace5" />;
+  }
 
   if (recordId) {
     return (
