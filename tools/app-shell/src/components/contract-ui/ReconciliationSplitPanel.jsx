@@ -578,92 +578,92 @@ function CandidateOperationsPanel({
     // Foreign candidate WITH a known account-currency equivalent → show EUR on top, foreign below.
     const hasBase = candForeign && cand.amountBase != null;
     return (
-    <TableRow
-      key={cand.id}
-      data-testid={`recon-cand-row-${cand.id}`}
-      className={cn(
-        'group relative h-[62px] border-b border-[hsl(var(--border-subtle))] bg-card transition-shadow',
-        selectedIds.has(cand.id)
-          ? `z-10 bg-[hsl(var(--muted))] ${ELEVATED_SHADOW}`
-          : 'hover:z-10 hover:bg-card hover:shadow-lg',
-        candidatesFrozen && 'opacity-50',
-      )}
-    >
-      <TableCell className="h-[62px] w-8 px-0 pl-2" data-testid="TableCell__d0f4d5">
-        {/* Checkbox shown for both pending (which docs to reconcile) and reconciled (which to
-            un-reconcile) lines; disabled only while the partial-line "conciliado" block is expanded. */}
-        <Checkbox
-          checked={selectedIds.has(cand.id)}
-          disabled={candidatesFrozen}
-          onChange={() => { if (!candidatesFrozen) onToggle(cand.id); }}
-          data-testid={`recon-cand-check-${cand.id}`}
-        />
-      </TableCell>
-      <DateCell
-        date={cand.date}
-        bcpLocale={bcpLocale}
-        cellClassName="w-[104px]"
-        data-testid="DateCell__d0f4d5" />
-      <TableCell
-        className="h-[62px] px-3 py-2 text-sm text-[hsl(var(--foreground))]"
-        data-testid="TableCell__d0f4d5">
-        <div className="flex flex-col items-start gap-0.5">
-          <div className="flex w-full items-center gap-1 overflow-hidden text-sm leading-5">
-            <span className="shrink-0 font-normal text-[hsl(var(--foreground))]">
-              {cand.documentNo || cand.description || '—'}
-            </span>
-            {cand.partnerName ? (
-              <span className="truncate text-xs font-medium leading-4 text-[hsl(var(--muted-foreground))]">{cand.partnerName}</span>
-            ) : null}
-            {candForeign ? <CurrencyBadge code={cand.currency} data-testid="CurrencyBadge__d0f4d5" /> : null}
-          </div>
-          <StatusBadge
-            kind={badgeKindFor(cand, readOnly)}
-            data-testid="StatusBadge__d0f4d5" />
-        </div>
-      </TableCell>
-      <MoneyCell
-        value={cand.pendingBalance}
-        currency={candCurrency}
-        cellClassName="w-[121px]"
-        secondaryValue={candForeign ? cand.amountBase : undefined}
-        secondaryCurrency={cand.baseCurrency || currency}
-        baseOnTop={hasBase}
-        data-testid="MoneyCell__d0f4d5" />
-      {reconciledMode ? (
-        // Reconciled line: amount + a per-row individual un-link ("−"). cand.id is the transaction id.
-        <TableCell className="h-[62px] w-[140px] px-3 text-right align-middle" data-testid="TableCell__d0f4d5">
-          <div className="flex items-center justify-end gap-2">
-            <MoneyAmount
-              value={Number(cand.amount) || 0}
-              currency={candCurrency}
-              tone="neutral"
-              className="text-sm font-semibold leading-5 text-[hsl(var(--foreground))]"
-              data-testid="MoneyAmount__d0f4d5" />
-            <button
-              type="button"
-              onClick={() => onRemoveOperation({ transactionId: cand.id })}
-              aria-label={ui('financeReconcileActionRemoveOne')}
-              title={ui('financeReconcileActionRemoveOne')}
-              data-testid={`recon-unlink-${cand.id}`}
-              className="flex h-[26px] w-[26px] flex-none items-center justify-center rounded-lg border border-border bg-card text-[hsl(var(--muted-foreground))] transition-colors hover:bg-[hsl(var(--muted))] hover:text-[hsl(var(--foreground))]"
-            >
-              <Minus className="h-4 w-4" data-testid="Minus__d0f4d5" />
-            </button>
+      <TableRow
+        key={cand.id}
+        data-testid={`recon-cand-row-${cand.id}`}
+        className={cn(
+          'group relative h-[62px] border-b border-[hsl(var(--border-subtle))] bg-card transition-shadow',
+          selectedIds.has(cand.id)
+            ? `z-10 bg-[hsl(var(--muted))] ${ELEVATED_SHADOW}`
+            : 'hover:z-10 hover:bg-card hover:shadow-lg',
+          candidatesFrozen && 'opacity-50',
+        )}
+      >
+        <TableCell className="h-[62px] w-8 px-0 pl-2" data-testid="TableCell__d0f4d5">
+          {/* Checkbox shown for both pending (which docs to reconcile) and reconciled (which to
+              un-reconcile) lines; disabled only while the partial-line "conciliado" block is expanded. */}
+          <Checkbox
+            checked={selectedIds.has(cand.id)}
+            disabled={candidatesFrozen}
+            onChange={() => { if (!candidatesFrozen) onToggle(cand.id); }}
+            data-testid={`recon-cand-check-${cand.id}`}
+          />
+        </TableCell>
+        <DateCell
+          date={cand.date}
+          bcpLocale={bcpLocale}
+          cellClassName="w-[104px]"
+          data-testid="DateCell__d0f4d5" />
+        <TableCell
+          className="h-[62px] px-3 py-2 text-sm text-[hsl(var(--foreground))]"
+          data-testid="TableCell__d0f4d5">
+          <div className="flex flex-col items-start gap-0.5">
+            <div className="flex w-full items-center gap-1 overflow-hidden text-sm leading-5">
+              <span className="shrink-0 font-normal text-[hsl(var(--foreground))]">
+                {cand.documentNo || cand.description || '—'}
+              </span>
+              {cand.partnerName ? (
+                <span className="truncate text-xs font-medium leading-4 text-[hsl(var(--muted-foreground))]">{cand.partnerName}</span>
+              ) : null}
+              {candForeign ? <CurrencyBadge code={cand.currency} data-testid="CurrencyBadge__d0f4d5" /> : null}
+            </div>
+            <StatusBadge
+              kind={badgeKindFor(cand, readOnly)}
+              data-testid="StatusBadge__d0f4d5" />
           </div>
         </TableCell>
-      ) : (
         <MoneyCell
-          value={cand.amount}
+          value={cand.pendingBalance}
           currency={candCurrency}
-          bold
           cellClassName="w-[121px]"
           secondaryValue={candForeign ? cand.amountBase : undefined}
           secondaryCurrency={cand.baseCurrency || currency}
           baseOnTop={hasBase}
           data-testid="MoneyCell__d0f4d5" />
-      )}
-    </TableRow>
+        {reconciledMode ? (
+          // Reconciled line: amount + a per-row individual un-link ("−"). cand.id is the transaction id.
+          (<TableCell className="h-[62px] w-[140px] px-3 text-right align-middle" data-testid="TableCell__d0f4d5">
+            <div className="flex items-center justify-end gap-2">
+              <MoneyAmount
+                value={Number(cand.amount) || 0}
+                currency={candCurrency}
+                tone="neutral"
+                className="text-sm font-semibold leading-5 text-[hsl(var(--foreground))]"
+                data-testid="MoneyAmount__d0f4d5" />
+              <button
+                type="button"
+                onClick={() => onRemoveOperation({ transactionId: cand.id })}
+                aria-label={ui('financeReconcileActionRemoveOne')}
+                title={ui('financeReconcileActionRemoveOne')}
+                data-testid={`recon-unlink-${cand.id}`}
+                className="flex h-[26px] w-[26px] flex-none items-center justify-center rounded-lg border border-border bg-card text-[hsl(var(--muted-foreground))] transition-colors hover:bg-[hsl(var(--muted))] hover:text-[hsl(var(--foreground))]"
+              >
+                <Minus className="h-4 w-4" data-testid="Minus__d0f4d5" />
+              </button>
+            </div>
+          </TableCell>)
+        ) : (
+          <MoneyCell
+            value={cand.amount}
+            currency={candCurrency}
+            bold
+            cellClassName="w-[121px]"
+            secondaryValue={candForeign ? cand.amountBase : undefined}
+            secondaryCurrency={cand.baseCurrency || currency}
+            baseOnTop={hasBase}
+            data-testid="MoneyCell__d0f4d5" />
+        )}
+      </TableRow>
     );
   };
 
