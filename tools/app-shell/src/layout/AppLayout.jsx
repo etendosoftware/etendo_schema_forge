@@ -28,8 +28,8 @@ function NoAccessScreen() {
       className="flex min-h-screen flex-col items-center justify-center gap-2 p-8 text-center"
       data-testid="NoAccessScreen__488148"
     >
-      <p className="text-base font-medium text-[#121217]">{ui('noAccessTitle')}</p>
-      <p className="text-sm text-[#6C6C89]">{ui('noAccessMessage')}</p>
+      <p className="text-base font-medium text-foreground">{ui('noAccessTitle')}</p>
+      <p className="text-sm text-muted-foreground">{ui('noAccessMessage')}</p>
     </div>
   );
 }
