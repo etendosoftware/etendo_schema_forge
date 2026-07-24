@@ -5,7 +5,7 @@ import { useAuth } from '@/auth/AuthContext.jsx';
 // (`useMemo`/`useCallback` deps, e.g. DataTable.jsx) see a stable reference
 // across renders instead of a fresh `{}` literal every time, which would
 // defeat that memoization even when nothing actually changed.
-const EMPTY_CAPABILITIES = {};
+const EMPTY_CAPABILITIES = Object.freeze({});
 
 // ETP-4520 — the exact message `useAuth()` throws (AuthContext.jsx in
 // schema_forge_core, ~line 126) when called with no `AuthProvider` ancestor.

@@ -1801,6 +1801,12 @@ export function DetailView({
   addLineFields = { entry: [], derived: [] },
   catalogs: staticCatalogs,
   api,
+  // ETP-4520 — the runtime per-tier window override (`useWindowAccess`'s 'read-only'
+  // tier forces `{ readOnly: true }` here — see buildWindowAccessWiring/effectiveWindow
+  // in generate-frontend.js and the equivalent hand-wired custom windows). Distinct from
+  // `api.window.readOnly` below, which is the static decisions.json-authored flag for a
+  // window that's ALWAYS view-only regardless of role. Either one forces read-only.
+  window: windowProp = null,
   entityLabel,
   detailLabel,
   detailTabIndex,
@@ -2152,10 +2158,11 @@ export function DetailView({
     } : null
   ), [_headerData, windowName, _detailTabTitle, hook.editing, _isFormEditing]);
   useRegisterWindowContext(_windowContextInfo);
-  // Window-level read-only (GO view-only windows, e.g. Conversion Rates): forces the
+  // Window-level read-only (GO view-only windows, e.g. Conversion Rates, OR the
+  // ETP-4520 runtime 'read-only' access tier via the `window` prop): forces the
   // whole detail read-only, reusing every isDocumentReadOnly gate (save, delete,
   // add-line, inline edits). Also passed to the header <Form> so its fields render RO.
-  const windowReadOnly = api?.window?.readOnly === true;
+  const windowReadOnly = api?.window?.readOnly === true || windowProp?.readOnly === true;
   const isDocumentReadOnly = getDocumentReadOnly(lockWhenProcessed, _headerData) || windowReadOnly;
   const isProcessed = _headerData?.processed === true || _headerData?.processed === 'Y';
   // When draftMode declares an explicit completedStatuses array, only those documentStatus

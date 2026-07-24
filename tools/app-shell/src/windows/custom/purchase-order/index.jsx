@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import GeneratedApp from '@generated/purchase-order/generated/web/purchase-order/index.jsx';
 import HeaderTable from '@generated/purchase-order/generated/web/purchase-order/HeaderTable';
@@ -112,6 +112,12 @@ export default function PurchaseOrderWindow(props) {
   if (windowAccessTier === 'none') {
     return <WindowAccessGuard windowId="181" data-testid="WindowAccessGuard__b7ace5" />;
   }
+  // ETP-4520 — mirrors buildWindowAccessWiring's effectiveWindow: the hand-rolled
+  // ListView below never picked up the read-only tier either, unlike GeneratedApp
+  // (which already forces window.readOnly internally for the detail branch).
+  const effectiveWindow = useMemo(() => (
+    windowAccessTier === 'read-only' ? { ...(props.window || {}), readOnly: true } : props.window
+  ), [windowAccessTier, props.window]);
 
   if (recordId) {
     return (
@@ -144,6 +150,7 @@ export default function PurchaseOrderWindow(props) {
         externalPreviewRow={effectiveRecord}
         onExternalPreviewClose={clearSavedRecord}
         {...props}
+        window={effectiveWindow}
         data-testid="ListView__b7ace5" />
       {deleteDialog}
       {cloneTargets && createPortal(

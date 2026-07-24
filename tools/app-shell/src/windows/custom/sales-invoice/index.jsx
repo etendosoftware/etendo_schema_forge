@@ -137,6 +137,12 @@ export default function SalesInvoiceWindow(props) {
   if (windowAccessTier === 'none') {
     return <WindowAccessGuard windowId="167" data-testid="WindowAccessGuard__c01c21" />;
   }
+  // ETP-4520 — mirrors buildWindowAccessWiring's effectiveWindow: the hand-rolled
+  // ListView below never picked up the read-only tier either, unlike GeneratedApp
+  // (which already forces window.readOnly internally for the detail branch).
+  const effectiveWindow = useMemo(() => (
+    windowAccessTier === 'read-only' ? { ...(props.window || {}), readOnly: true } : props.window
+  ), [windowAccessTier, props.window]);
 
   if (recordId) {
     return (
@@ -212,6 +218,7 @@ export default function SalesInvoiceWindow(props) {
         )}
         externalPreviewRow={effectiveRecord}
         onExternalPreviewClose={clearSavedRecord}
+        window={effectiveWindow}
         data-testid="ListView__c01c21" />
       {deleteDialog}
       {emailRow && createPortal(
