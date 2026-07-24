@@ -1,8 +1,8 @@
 {
   "version": "0.18.0",
   "generatedAt": "2026-07-07T21:53:26.027Z",
-  "updatedAt": "2026-07-22T01:48:00.432Z",
-  "checksum": "844ade3cf336735c",
+  "updatedAt": "2026-07-24T18:39:56.520Z",
+  "checksum": "e2f2e5d6ca3986b5",
   "frontendContract": {
     "window": {
       "id": "140",
@@ -75,6 +75,7 @@
         "enabled": true,
         "spec": "product",
         "entity": "product",
+        "descriptor": "product",
         "formats": [
           "csv",
           "txt"
@@ -121,41 +122,13 @@
             "type": "textarea"
           },
           {
-            "target": "uOM",
+            "required": false,
+            "type": "string",
+            "target": "price",
             "aliases": [
-              "unidad de medida",
-              "uom"
+              "precio"
             ],
-            "matchEntity": "UOM",
-            "label": "UOM",
-            "required": true,
-            "type": "foreignKey",
-            "reference": "UOM"
-          },
-          {
-            "target": "productCategory",
-            "aliases": [
-              "categoria",
-              "categoría"
-            ],
-            "matchEntity": "ProductCategory",
-            "label": "Product Category",
-            "required": true,
-            "type": "foreignKey",
-            "reference": "ProductCategory"
-          },
-          {
-            "target": "taxCategory",
-            "aliases": [
-              "categoria impositiva",
-              "categoría impositiva",
-              "impuesto"
-            ],
-            "matchEntity": "FinancialMgmtTaxCategory",
-            "label": "Tax Category",
-            "required": true,
-            "type": "foreignKey",
-            "reference": "TaxCategory"
+            "label": "Price"
           }
         ]
       },
@@ -2346,6 +2319,7 @@
         "enabled": true,
         "spec": "product",
         "entity": "product",
+        "descriptor": "product",
         "formats": [
           "csv",
           "txt"
@@ -2392,41 +2366,13 @@
             "type": "textarea"
           },
           {
-            "target": "uOM",
+            "required": false,
+            "type": "string",
+            "target": "price",
             "aliases": [
-              "unidad de medida",
-              "uom"
+              "precio"
             ],
-            "matchEntity": "UOM",
-            "label": "UOM",
-            "required": true,
-            "type": "foreignKey",
-            "reference": "UOM"
-          },
-          {
-            "target": "productCategory",
-            "aliases": [
-              "categoria",
-              "categoría"
-            ],
-            "matchEntity": "ProductCategory",
-            "label": "Product Category",
-            "required": true,
-            "type": "foreignKey",
-            "reference": "ProductCategory"
-          },
-          {
-            "target": "taxCategory",
-            "aliases": [
-              "categoria impositiva",
-              "categoría impositiva",
-              "impuesto"
-            ],
-            "matchEntity": "FinancialMgmtTaxCategory",
-            "label": "Tax Category",
-            "required": true,
-            "type": "foreignKey",
-            "reference": "TaxCategory"
+            "label": "Price"
           }
         ]
       },
