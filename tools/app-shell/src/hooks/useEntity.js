@@ -180,7 +180,10 @@ export async function extractErrorMessage(res, ui) {
             // / "(aún )?se hace referencia a la (llave|clave)" (ES) — the
             // insert/update side's DETAIL instead reads "is not present in table" /
             // "no está presente en la tabla", which never matches here.
-            if (/is\s+still\s+referenced\s+from\s+table|(a[uú]n\s+)?se\s+hace\s+referencia\s+a\s+la\s+(llave|clave)/i.test(decoded)) {
+            if (
+                /is\s+still\s+referenced\s+from\s+table/i.test(decoded)
+                || /(a[uú]n\s+)?se\s+hace\s+referencia\s+a\s+la\s+(llave|clave)/i.test(decoded)
+            ) {
                 return translate('deleteBlockedByReferences', 'This record cannot be deleted because it has associated records.');
             }
 
