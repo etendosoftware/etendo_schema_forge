@@ -516,6 +516,46 @@ can grow by one even though the visible (collapsed) row count doesn't change. Pr
 introduced by this iteration; not in scope here since the user's ask was specifically the
 line-level display inside a statement, not the parent list's fraction.
 
+#### Reconciliation tab: partial lines & per-item un-reconcile (ETP-4502 iteration 5)
+
+Brings the same partial model to the **Conciliación tab** (`ReconciliationSplitPanel`), per the
+"Opción A2" design handoff. A statement line stays **PENDING while less than 100 % of its amount is
+used** and only becomes **CONCILIADA at 100 %**; partial lines keep showing in the pending list.
+
+- **Left panel — "Progreso" column** (`ProgressCell`): a thin 4px bar = `reconciled / total`, shown
+  only when the line has something reconciled; hovering shows a tooltip "X € por conciliar" (the
+  remaining amount). No "% chip" on the row. Column order: Fecha · Descripción · Progreso · Importe.
+- **Right panel — "conciliado" block** (`ReconciledOperationsSection`, above the filters) renders
+  **only for a PARTIAL line**: a collapsible header (`% conciliado` + a short 90px bar + the
+  reconciled amount + chevron), starting **collapsed**, that expands to one row per matched document
+  (nº, contact, "Factura" tag, amount, per-row **"−"** unlink). Expanding **freezes the candidate
+  list below** (Holded parity). Below it, the candidate picker reconciles the **remaining** balance
+  (a PARTIAL line is NOT read-only; the picker fetches candidates for the pending remainder sub-line
+  — `remainderLineId` — and "Restante por conciliar" is computed on the pending amount). A FULLY
+  reconciled line does NOT show this block (the % header would be redundant).
+- **Un-reconcile — selection-based** (`removeOperation` action + `useRemoveOperation`), always behind
+  a confirm dialog (warns the invoice returns to unpaid for auto-created payments):
+  - **Fully-reconciled line ("Conciliado")**: its linked documents ARE the **bottom candidate list**
+    (`buildLinkedTransactions`, each candidate `id` = the finacc-transaction id), each row with a
+    **checkbox (all checked by default)** and a per-row **"−"**. The bottom action bar shows
+    **"Desconciliar (N)"** over the checked set. All checked → whole undo via `undoReconciliation` +
+    `normalizeReactivatedMatchGroup` (payment removal); a subset → loop
+    `ReconciliationRemovalUtil.removeTransactionFromReconciliation` + `PaymentRemovalUtil` per checked
+    txn (the rest stay reconciled). The old global **"Reactivar" button was removed**.
+  - **PARTIAL line ("Pendiente")**: un-link only **one at a time** via the per-row **"−"** in the
+    top block (no checkboxes/bulk). The bottom bar stays "Conciliar" for the remainder.
+  - `removeOperation` accepts `transactionIds[]` and branches on whether the selection covers the
+    whole reconciliation.
+- **Backend contract**: `ReconciliationHandler.buildPendingLines` now exposes, per merged line,
+  `reconcileStatus` (RECONCILED/PARTIAL/PENDING), `pendingAmount`, `reconciledAmount`,
+  `reconciledPct`, `txns[]` and `remainderLineId` — the same shape as `mapLineRow`. `pendingAmount`
+  comes from the persisted **`EM_ETGO_Pending_Amount`** column on `FIN_BankStatementLine`, maintained
+  by the `BankStatementLinePendingAmountHandler` EventHandler (`(txn==null) ? |cr−dr| : 0`), which is
+  the single source of truth shared with the imported-statements view. A PARTIAL line's `state`
+  folds into `pending` so it stays under the "Pendiente" filter.
+- All new UI uses semantic theme tokens (bar fill `--foreground`, track `--border`, tooltip/primary
+  `--text-primary`, "Factura" tag `--status-warning-*`) — no color literals.
+
 ### Automatch engine (T7)
 
 The Reconciliation surface gained the automatic matching engine (backend `MatchRuleEngine` + `AutoMatchSupport` inside `ReconciliationHandler`, `@Named("bankReconciliation")`):

@@ -15,7 +15,7 @@ vi.mock('sonner', () => ({
 const linesState = { lines: [], total: 0, counts: {}, loading: false, reload: vi.fn() };
 const candidatesState = { candidates: [], loading: false };
 const reconcileState = { reconcile: vi.fn().mockResolvedValue({ reconciliationId: 'R1' }), loading: false };
-const reactivateState = { reactivate: vi.fn().mockResolvedValue({ reactivated: true }), loading: false };
+const removeState = { removeOperation: vi.fn().mockResolvedValue({ removed: true }), loading: false };
 // Records the last (accountId, lineId, docType, kind) the component passed to
 // useCandidateOperations, so tests can assert the kind toggle flows through.
 const candidateCallArgs = { accountId: null, lineId: null, docType: null, kind: null };
@@ -36,7 +36,7 @@ vi.mock('@/hooks/useReconciliation', () => ({
     };
   },
   useReconcileGroup: () => reconcileState,
-  useReactivateReconciliation: () => reactivateState,
+  useRemoveOperation: () => removeState,
 }));
 
 import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
@@ -48,6 +48,56 @@ import { ReconciliationSplitPanel } from '@/components/contract-ui/Reconciliatio
 const LINE_A = { id: 'L1', date: '2026-05-10T00:00:00Z', description: 'Transfer ACME', status: 'pending', amount: -8.31 };
 const LINE_B = { id: 'L2', date: '2026-05-11T00:00:00Z', description: 'Payroll', status: 'pending', amount: 1200 };
 const LINE_RECONCILED = { id: 'L3', date: '2026-05-12T00:00:00Z', description: 'Done line', status: 'reconciled', amount: 50 };
+
+// ETP-4502 iteration 5 — a partially reconciled line: still `status: 'pending'` (backend only
+// flips status to 'reconciled' at 100%), carries `reconcileStatus: 'PARTIAL'`, the amount already
+// reconciled (`reconciledAmount`/`reconciledPct`), the still-pending remainder (`pendingAmount`)
+// and the pending sub-line id to reconcile the rest against (`remainderLineId`), plus the matched
+// documents (`txns`).
+const LINE_PARTIAL = {
+  id: 'LP1', date: '2026-05-13T00:00:00Z', description: 'Partial line',
+  status: 'pending', reconcileStatus: 'PARTIAL', amount: 100,
+  pendingAmount: 46.76, reconciledAmount: 53.24, reconciledPct: 53,
+  matchGroupId: 'G1', remainderLineId: 'LP1-rem',
+  txns: [{ transactionId: 'T1', documentNo: '1000034', contact: 'ACME', amount: 53.24, autoCreated: true }],
+};
+
+// A fully reconciled line (status 'reconciled') that also carries the matched-documents block —
+// the "conciliado" section renders here too, but with a NOT auto-created txn.
+const LINE_RECONCILED_TXNS = {
+  id: 'LR1', date: '2026-05-14T00:00:00Z', description: 'Fully reconciled',
+  status: 'reconciled', reconcileStatus: 'RECONCILED', amount: 50,
+  pendingAmount: 0, reconciledAmount: 50, reconciledPct: 100, matchGroupId: 'G2',
+  txns: [{ transactionId: 'T2', documentNo: '1000099', contact: 'Globex', amount: 50, autoCreated: false }],
+};
+
+// A fully reconciled line matched to TWO documents (bulk "Desconciliar" mode) — one auto-created,
+// one pre-existing. All checked by default → "Desconciliar (2)".
+const LINE_RECONCILED_MULTI = {
+  id: 'LR2', date: '2026-05-15T00:00:00Z', description: 'Fully reconciled (2 docs)',
+  status: 'reconciled', reconcileStatus: 'RECONCILED', amount: 90,
+  pendingAmount: 0, reconciledAmount: 90, reconciledPct: 100, matchGroupId: 'G3',
+  txns: [
+    { transactionId: 'T3', documentNo: '2000001', contact: 'ACME', amount: 50, autoCreated: true },
+    { transactionId: 'T4', documentNo: '2000002', contact: 'Globex', amount: 40, autoCreated: false },
+  ],
+};
+
+// Linked documents of a fully reconciled line, shaped as CANDIDATES (the new layout renders the
+// already-reconciled docs in the bottom candidate list, each candidate id === its transaction id,
+// `status: 'reconciled'`, `linked: true`). These pair with LINE_RECONCILED_TXNS / _MULTI's `txns`.
+const RECON_CAND_T2 = {
+  id: 'T2', date: '2026-06-01T00:00:00Z', documentNo: '1000099', partnerName: 'Globex',
+  amount: 50, pendingBalance: 50, status: 'reconciled', linked: true,
+};
+const RECON_CAND_T3 = {
+  id: 'T3', date: '2026-06-02T00:00:00Z', documentNo: '2000001', partnerName: 'ACME',
+  amount: 50, pendingBalance: 50, status: 'reconciled', linked: true,
+};
+const RECON_CAND_T4 = {
+  id: 'T4', date: '2026-06-03T00:00:00Z', documentNo: '2000002', partnerName: 'Globex',
+  amount: 40, pendingBalance: 40, status: 'reconciled', linked: true,
+};
 
 const CAND_MATCH = {
   id: 'C1', date: '2026-06-10T00:00:00Z', documentNo: 'INV-1', partnerName: 'ACME',
@@ -95,8 +145,8 @@ describe('ReconciliationSplitPanel', () => {
     candidatesState.loading = false;
     reconcileState.reconcile = vi.fn().mockResolvedValue({ reconciliationId: 'R1' });
     reconcileState.loading = false;
-    reactivateState.reactivate = vi.fn().mockResolvedValue({ reactivated: true });
-    reactivateState.loading = false;
+    removeState.removeOperation = vi.fn().mockResolvedValue({ removed: true });
+    removeState.loading = false;
     candidateCallArgs.accountId = null;
     candidateCallArgs.lineId = null;
     candidateCallArgs.docType = null;
@@ -213,18 +263,22 @@ describe('ReconciliationSplitPanel', () => {
     expect(screen.getByTestId('recon-right-empty')).toBeInTheDocument();
   });
 
-  it('shows an enabled "Reactivate" label and a read-only right panel for a reconciled line', () => {
-    setLines([LINE_RECONCILED]);
-    setCandidates([CAND_MATCH]);
+  it('shows the "Desconciliar (N)" bulk label and no source filter for a reconciled line', () => {
+    setLines([LINE_RECONCILED_TXNS]); // linked doc T2 → pre-checked by default → count 1
+    setCandidates([RECON_CAND_T2]);
     renderPanel();
-    fireEvent.click(screen.getByTestId('recon-line-radio-L3'));
+    fireEvent.click(screen.getByTestId('recon-line-radio-LR1'));
     const btn = screen.getByTestId('recon-action-reconcile');
-    expect(btn).toHaveTextContent('financeReconcileActionReactivate');
-    // The Reactivate button is live now (the un-reconcile action itself is a follow-up task).
+    // Bulk un-reconcile: "Desconciliar (N)", enabled while at least one linked doc is checked.
+    expect(btn).toHaveTextContent('financeReconcileActionRemoveCount');
     expect(btn).not.toBeDisabled();
-    // Read-only: the linked movement renders but exposes no selection checkbox.
-    expect(screen.getByTestId('recon-cand-row-C1')).toBeInTheDocument();
-    expect(screen.queryByTestId('recon-cand-check-C1')).not.toBeInTheDocument();
+    // The linked document renders in the candidate list WITH a (pre-checked) selection checkbox.
+    expect(screen.getByTestId('recon-cand-row-T2')).toBeInTheDocument();
+    expect(candidateCheckbox('T2')).toBeChecked();
+    // The top "conciliado" block is not used for a fully reconciled line.
+    expect(screen.queryByTestId('recon-matched-block')).not.toBeInTheDocument();
+    // Read-only: the source (transaction-type) filter stays hidden.
+    expect(screen.queryByText(/financeReconcileSourceReceipts/)).not.toBeInTheDocument();
   });
 
   // ── Suggested-candidate behavior (ETP-4100 / T6) ──────────────────────────────
@@ -557,80 +611,437 @@ describe('ReconciliationSplitPanel', () => {
     await waitFor(() => expect(props.onReconcileSuccess).toHaveBeenCalled());
   });
 
-  // ── Reactivate (un-reconcile) — T8 part 1 ─────────────────────────────────────
+  // ── Bulk un-reconcile ("Desconciliar N") on a fully reconciled line — ETP-4502 ─
+  // The linked documents now render in the bottom CANDIDATE list (each candidate id === its
+  // transaction id, pre-checked by default); the top "conciliado" block is no longer used here.
 
-  it('enables the "Reactivate" action only on a reconciled line', () => {
-    setLines([LINE_RECONCILED]);
-    setCandidates([CAND_MATCH]);
+  it('shows "Desconciliar (N)" on a reconciled line (all linked docs pre-checked by default)', () => {
+    setLines([LINE_RECONCILED_MULTI]); // 2 linked docs → count 2
+    setCandidates([RECON_CAND_T3, RECON_CAND_T4]);
     renderPanel();
-    fireEvent.click(screen.getByTestId('recon-line-radio-L3'));
+    fireEvent.click(screen.getByTestId('recon-line-radio-LR2'));
     const btn = screen.getByTestId('recon-action-reconcile');
-    expect(btn).toHaveTextContent('financeReconcileActionReactivate');
+    expect(btn).toHaveTextContent('financeReconcileActionRemoveCount');
+    expect(btn).not.toHaveTextContent('financeReconcileActionReactivate');
     expect(btn).not.toBeDisabled();
+    // Both linked docs pre-checked in the candidate list.
+    expect(candidateCheckbox('T3')).toBeChecked();
+    expect(candidateCheckbox('T4')).toBeChecked();
+    // No top "conciliado" block for a fully reconciled line.
+    expect(screen.queryByTestId('recon-matched-block')).not.toBeInTheDocument();
   });
 
-  it('does not show the "Reactivate" action for a pending line', () => {
+  it('does not show the un-reconcile ("Desconciliar") action for a pending line', () => {
     setLines([LINE_A]);
     setCandidates([CAND_MATCH]);
     renderPanel();
     fireEvent.click(screen.getByTestId('recon-line-radio-L1'));
     const btn = screen.getByTestId('recon-action-reconcile');
-    // A pending line shows the "Conciliar" (count) label, never "Reactivar".
-    expect(btn).not.toHaveTextContent('financeReconcileActionReactivate');
+    // A pending line shows the "Conciliar" (count) label, never the un-reconcile one.
+    expect(btn).toHaveTextContent('financeReconcileActionReconcileCount');
+    expect(btn).not.toHaveTextContent('financeReconcileActionRemoveCount');
   });
 
-  it('opens the confirm dialog when "Reactivate" is clicked, without calling the endpoint', () => {
-    setLines([LINE_RECONCILED]);
-    setCandidates([CAND_MATCH]);
+  it('opens the confirm dialog when "Desconciliar" is clicked, without calling the endpoint', () => {
+    setLines([LINE_RECONCILED_MULTI]);
+    setCandidates([RECON_CAND_T3, RECON_CAND_T4]);
     renderPanel();
-    fireEvent.click(screen.getByTestId('recon-line-radio-L3'));
+    fireEvent.click(screen.getByTestId('recon-line-radio-LR2'));
 
-    // Dialog is closed before the action.
-    expect(screen.queryByTestId('recon-reactivate-dialog')).not.toBeInTheDocument();
-
+    expect(screen.queryByTestId('recon-remove-dialog')).not.toBeInTheDocument();
     fireEvent.click(screen.getByTestId('recon-action-reconcile'));
 
     // Dialog opens; the endpoint is NOT called yet (it requires confirmation).
-    expect(screen.getByTestId('recon-reactivate-dialog')).toBeInTheDocument();
-    expect(reactivateState.reactivate).not.toHaveBeenCalled();
+    expect(screen.getByTestId('recon-remove-dialog')).toBeInTheDocument();
+    expect(removeState.removeOperation).not.toHaveBeenCalled();
   });
 
-  it('posts the correct reactivate payload on confirm and clears selection + reloads', async () => {
-    setLines([LINE_RECONCILED]);
-    setCandidates([CAND_MATCH]);
+  it('bulk-un-reconciles ALL linked docs (transactionIds[]) on confirm and reloads', async () => {
+    setLines([LINE_RECONCILED_MULTI]);
+    setCandidates([RECON_CAND_T3, RECON_CAND_T4]);
     const { props } = renderPanel();
-    fireEvent.click(screen.getByTestId('recon-line-radio-L3'));
+    fireEvent.click(screen.getByTestId('recon-line-radio-LR2'));
     fireEvent.click(screen.getByTestId('recon-action-reconcile'));
+    fireEvent.click(screen.getByTestId('recon-remove-confirm'));
 
-    fireEvent.click(screen.getByTestId('recon-reactivate-confirm'));
-
-    await waitFor(() => expect(reactivateState.reactivate).toHaveBeenCalledTimes(1));
-    expect(reactivateState.reactivate).toHaveBeenCalledWith({
-      financialAccountId: 'ACC-1',
-      statementLineId: 'L3',
-    });
-    // On success: selection cleared (right panel empty again), lines reloaded, caller notified.
-    await waitFor(() => expect(screen.getByTestId('recon-right-empty')).toBeInTheDocument());
+    await waitFor(() => expect(removeState.removeOperation).toHaveBeenCalledTimes(1));
+    const payload = removeState.removeOperation.mock.calls[0][0];
+    expect(payload.financialAccountId).toBe('ACC-1');
+    expect(payload.statementLineId).toBe('LR2');
+    // All linked docs were checked by default → both ids in the array (order-independent).
+    expect([...payload.transactionIds].sort()).toEqual(['T3', 'T4']);
+    expect(payload.transactionId).toBeUndefined();
+    await waitFor(() => expect(props.onReconcileSuccess).toHaveBeenCalled());
     expect(linesState.reload).toHaveBeenCalled();
-    expect(props.onReconcileSuccess).toHaveBeenCalled();
   });
 
-  it('does not call reactivate when the confirm dialog is cancelled', async () => {
-    setLines([LINE_RECONCILED]);
-    setCandidates([CAND_MATCH]);
+  it('does not call removeOperation when the confirm dialog is cancelled', async () => {
+    setLines([LINE_RECONCILED_MULTI]);
+    setCandidates([RECON_CAND_T3, RECON_CAND_T4]);
     renderPanel();
-    fireEvent.click(screen.getByTestId('recon-line-radio-L3'));
+    fireEvent.click(screen.getByTestId('recon-line-radio-LR2'));
     fireEvent.click(screen.getByTestId('recon-action-reconcile'));
 
-    expect(screen.getByTestId('recon-reactivate-dialog')).toBeInTheDocument();
-    fireEvent.click(screen.getByTestId('recon-reactivate-cancel'));
+    expect(screen.getByTestId('recon-remove-dialog')).toBeInTheDocument();
+    fireEvent.click(screen.getByTestId('recon-remove-cancel'));
 
-    // Dialog closes and the endpoint was never hit.
     await waitFor(() =>
-      expect(screen.queryByTestId('recon-reactivate-dialog')).not.toBeInTheDocument());
-    expect(reactivateState.reactivate).not.toHaveBeenCalled();
-    // The reconciled line stays selected (read-only right panel still shown).
-    expect(screen.getByTestId('recon-line-radio-L3')).toBeChecked();
+      expect(screen.queryByTestId('recon-remove-dialog')).not.toBeInTheDocument());
+    expect(removeState.removeOperation).not.toHaveBeenCalled();
+    // The reconciled line stays selected.
+    expect(screen.getByTestId('recon-line-radio-LR2')).toBeChecked();
+  });
+
+  it('renders a candidate checkbox + per-row unlink for each linked doc (all pre-checked)', () => {
+    setLines([LINE_RECONCILED_MULTI]);
+    setCandidates([RECON_CAND_T3, RECON_CAND_T4]);
+    renderPanel();
+    fireEvent.click(screen.getByTestId('recon-line-radio-LR2'));
+    // The linked docs render directly in the candidate list — no block to expand.
+    expect(candidateCheckbox('T3')).toBeChecked();
+    expect(candidateCheckbox('T4')).toBeChecked();
+    // Each row exposes an individual unlink ("−") whose id is the transaction id.
+    expect(screen.getByTestId('recon-unlink-T3')).toBeInTheDocument();
+    expect(screen.getByTestId('recon-unlink-T4')).toBeInTheDocument();
+  });
+
+  it('unchecking one linked doc drops the count to N-1 and narrows the payload', async () => {
+    setLines([LINE_RECONCILED_MULTI]);
+    setCandidates([RECON_CAND_T3, RECON_CAND_T4]);
+    renderPanel();
+    fireEvent.click(screen.getByTestId('recon-line-radio-LR2'));
+    // Uncheck T3 → only T4 stays selected.
+    fireEvent.click(screen.getByTestId('recon-cand-check-T3'));
+    expect(candidateCheckbox('T3')).not.toBeChecked();
+    expect(candidateCheckbox('T4')).toBeChecked();
+
+    fireEvent.click(screen.getByTestId('recon-action-reconcile'));
+    fireEvent.click(screen.getByTestId('recon-remove-confirm'));
+    await waitFor(() => expect(removeState.removeOperation).toHaveBeenCalledTimes(1));
+    expect(removeState.removeOperation.mock.calls[0][0].transactionIds).toEqual(['T4']);
+  });
+
+  it('per-row unlink un-reconciles just that doc (transactionIds:[thatId])', async () => {
+    setLines([LINE_RECONCILED_MULTI]);
+    setCandidates([RECON_CAND_T3, RECON_CAND_T4]);
+    renderPanel();
+    fireEvent.click(screen.getByTestId('recon-line-radio-LR2'));
+    fireEvent.click(screen.getByTestId('recon-unlink-T3'));
+    expect(screen.getByTestId('recon-remove-dialog')).toBeInTheDocument();
+    fireEvent.click(screen.getByTestId('recon-remove-confirm'));
+    await waitFor(() => expect(removeState.removeOperation).toHaveBeenCalledTimes(1));
+    expect(removeState.removeOperation.mock.calls[0][0].transactionIds).toEqual(['T3']);
+  });
+
+  it('disables the "Desconciliar" button when every linked doc is unchecked', () => {
+    setLines([LINE_RECONCILED_TXNS]); // single linked doc T2
+    setCandidates([RECON_CAND_T2]);
+    renderPanel();
+    fireEvent.click(screen.getByTestId('recon-line-radio-LR1'));
+    // Enabled with the default all-checked selection.
+    expect(screen.getByTestId('recon-action-reconcile')).not.toBeDisabled();
+    // Uncheck the only doc → count 0 → disabled.
+    fireEvent.click(screen.getByTestId('recon-cand-check-T2'));
+    expect(screen.getByTestId('recon-action-reconcile')).toBeDisabled();
+  });
+
+  it('a PARTIAL line keeps the top "conciliado" block (per-row unlink, no bulk checkbox)', () => {
+    setLines([LINE_PARTIAL]);
+    renderPanel();
+    fireEvent.click(screen.getByTestId('recon-line-radio-LP1'));
+    // The top block still renders for a PARTIAL line — expand it to see the matched rows.
+    expect(screen.getByTestId('recon-matched-block')).toBeInTheDocument();
+    fireEvent.click(screen.getByTestId('recon-matched-toggle'));
+    // Only the per-row "−" button, no bulk checkbox; bottom stays "Conciliar".
+    expect(screen.queryByTestId('recon-matched-check-T1')).not.toBeInTheDocument();
+    expect(screen.getByTestId('recon-unlink-T1')).toBeInTheDocument();
+    expect(screen.getByTestId('recon-action-reconcile'))
+      .toHaveTextContent('financeReconcileActionReconcileCount');
+  });
+
+  // ── Left-panel PROGRESO column (ProgressCell) — ETP-4502 iteration 5 ───────────
+
+  describe('ProgressCell (left-panel progress column)', () => {
+    it('renders the progress bar + tooltip for a partially reconciled line', () => {
+      setLines([LINE_PARTIAL]);
+      renderPanel();
+      expect(screen.getByTestId('recon-progress-LP1')).toBeInTheDocument();
+      const tip = screen.getByTestId('recon-progress-tip-LP1');
+      expect(tip).toBeInTheDocument();
+      // Tooltip text is the "X por conciliar" label (i18n mock returns the key).
+      expect(tip).toHaveTextContent('financeReconcilePendingLabel');
+    });
+
+    it('renders no progress bar/tooltip for a plain pending line (reconciledAmount == 0)', () => {
+      setLines([LINE_A]); // no reconciledAmount → cell is empty
+      renderPanel();
+      expect(screen.queryByTestId('recon-progress-L1')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('recon-progress-tip-L1')).not.toBeInTheDocument();
+    });
+
+    it('renders the "Progreso" column header', () => {
+      setLines([LINE_A]);
+      renderPanel();
+      expect(screen.getByText('financeReconcileColProgress')).toBeInTheDocument();
+    });
+  });
+
+  // ── Right-panel "conciliado" block (ReconciledOperationsSection) — it.5 ────────
+
+  describe('ReconciledOperationsSection (right "conciliado" block)', () => {
+    it('is hidden for a selected line with nothing reconciled (reconciledAmount == 0)', () => {
+      setLines([LINE_A]);
+      setCandidates([CAND_MATCH]);
+      renderPanel();
+      fireEvent.click(screen.getByTestId('recon-line-radio-L1'));
+      expect(screen.queryByTestId('recon-matched-block')).not.toBeInTheDocument();
+    });
+
+    it('renders COLLAPSED by default: pct header visible, matched rows hidden until expanded', () => {
+      setLines([LINE_PARTIAL]);
+      renderPanel();
+      fireEvent.click(screen.getByTestId('recon-line-radio-LP1'));
+      // The block + its always-visible header (pct text) render immediately...
+      expect(screen.getByTestId('recon-matched-block')).toBeInTheDocument();
+      expect(screen.getByTestId('recon-matched-toggle')).toHaveTextContent('financeReconcilePctConciliated');
+      // ...but the list/rows/unlink buttons stay out of the DOM while collapsed.
+      expect(screen.queryByTestId('recon-matched-list')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('recon-matched-row-T1')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('recon-unlink-T1')).not.toBeInTheDocument();
+    });
+
+    it('shows one row per txn (with its unlink button) once the header toggle expands the block', () => {
+      setLines([LINE_PARTIAL]);
+      renderPanel();
+      fireEvent.click(screen.getByTestId('recon-line-radio-LP1'));
+      // Expand.
+      fireEvent.click(screen.getByTestId('recon-matched-toggle'));
+      expect(screen.getByTestId('recon-matched-list')).toBeInTheDocument();
+      expect(screen.getByTestId('recon-matched-row-T1')).toBeInTheDocument();
+      // Each matched row exposes its unlink ("desvincular") button.
+      expect(screen.getByTestId('recon-unlink-T1')).toBeInTheDocument();
+    });
+
+    it('expands then re-collapses the matched list on successive header toggle clicks', () => {
+      setLines([LINE_PARTIAL]);
+      renderPanel();
+      fireEvent.click(screen.getByTestId('recon-line-radio-LP1'));
+      // Starts collapsed.
+      expect(screen.queryByTestId('recon-matched-list')).not.toBeInTheDocument();
+      // First click expands.
+      fireEvent.click(screen.getByTestId('recon-matched-toggle'));
+      expect(screen.getByTestId('recon-matched-list')).toBeInTheDocument();
+      // Second click collapses again.
+      fireEvent.click(screen.getByTestId('recon-matched-toggle'));
+      expect(screen.queryByTestId('recon-matched-list')).not.toBeInTheDocument();
+    });
+
+    it('is NOT rendered for a fully RECONCILED line (its docs go in the candidate list instead)', () => {
+      setLines([LINE_RECONCILED_TXNS]);
+      setCandidates([RECON_CAND_T2]);
+      renderPanel();
+      fireEvent.click(screen.getByTestId('recon-line-radio-LR1'));
+      // The top "conciliado" block is only for PARTIAL lines now.
+      expect(screen.queryByTestId('recon-matched-block')).not.toBeInTheDocument();
+      // The linked doc appears in the candidate list, pre-checked, with a per-row unlink.
+      expect(screen.getByTestId('recon-cand-row-T2')).toBeInTheDocument();
+      expect(candidateCheckbox('T2')).toBeChecked();
+      expect(screen.getByTestId('recon-unlink-T2')).toBeInTheDocument();
+    });
+  });
+
+  // ── Candidate freeze while the "conciliado" block is expanded (Holded parity) ──
+
+  describe('candidate selection freeze while the conciliado block is expanded', () => {
+    it('lets candidates be selected while collapsed, freezes them while expanded, thaws on collapse', () => {
+      // A PARTIAL line that has BOTH matched txns (the conciliado block) AND available
+      // candidates. The candidate is non-suggested so nothing is pre-selected on load.
+      const CAND = { ...CAND_OTHER, id: 'C2', suggested: false };
+      setLines([LINE_PARTIAL]);
+      setCandidates([CAND]);
+      renderPanel();
+      fireEvent.click(screen.getByTestId('recon-line-radio-LP1'));
+
+      // Block collapsed by default → the candidate is selectable.
+      expect(candidateCheckbox('C2')).not.toBeDisabled();
+      expect(candidateCheckbox('C2')).not.toBeChecked();
+      fireEvent.click(screen.getByTestId('recon-cand-check-C2'));
+      expect(candidateCheckbox('C2')).toBeChecked();
+
+      // Expand the conciliado block → the candidate list is frozen: the checkbox is disabled
+      // and the guarded onChange leaves the selection unchanged.
+      fireEvent.click(screen.getByTestId('recon-matched-toggle'));
+      expect(candidateCheckbox('C2')).toBeDisabled();
+      fireEvent.click(screen.getByTestId('recon-cand-check-C2'));
+      expect(candidateCheckbox('C2')).toBeChecked(); // still checked — the click was ignored
+
+      // Collapse again → selectable once more (the frozen click can now toggle it off).
+      fireEvent.click(screen.getByTestId('recon-matched-toggle'));
+      expect(candidateCheckbox('C2')).not.toBeDisabled();
+      fireEvent.click(screen.getByTestId('recon-cand-check-C2'));
+      expect(candidateCheckbox('C2')).not.toBeChecked();
+    });
+  });
+
+  // ── Unlink a single operation (removeOperation) — ETP-4502 iteration 5 ─────────
+
+  describe('Unlink single operation (removeOperation)', () => {
+    it('opens the confirm dialog on unlink click, without hitting the endpoint', () => {
+      setLines([LINE_PARTIAL]);
+      renderPanel();
+      fireEvent.click(screen.getByTestId('recon-line-radio-LP1'));
+      // The "conciliado" block starts collapsed — expand it to reach the unlink button.
+      fireEvent.click(screen.getByTestId('recon-matched-toggle'));
+      expect(screen.queryByTestId('recon-remove-dialog')).not.toBeInTheDocument();
+      fireEvent.click(screen.getByTestId('recon-unlink-T1'));
+      expect(screen.getByTestId('recon-remove-dialog')).toBeInTheDocument();
+      expect(removeState.removeOperation).not.toHaveBeenCalled();
+    });
+
+    it('appends the auto-created hint in the dialog body when the txn is auto-created', () => {
+      setLines([LINE_PARTIAL]); // T1 autoCreated: true
+      renderPanel();
+      fireEvent.click(screen.getByTestId('recon-line-radio-LP1'));
+      fireEvent.click(screen.getByTestId('recon-matched-toggle'));
+      fireEvent.click(screen.getByTestId('recon-unlink-T1'));
+      expect(screen.getByTestId('recon-remove-dialog')).toHaveTextContent('financeReconcileRemoveOneAutoHint');
+    });
+
+    it('omits the auto-created hint when the txn is not auto-created', () => {
+      setLines([LINE_RECONCILED_TXNS]); // T2 autoCreated: false (candidate-list per-row unlink)
+      setCandidates([RECON_CAND_T2]);
+      renderPanel();
+      fireEvent.click(screen.getByTestId('recon-line-radio-LR1'));
+      fireEvent.click(screen.getByTestId('recon-unlink-T2'));
+      expect(screen.getByTestId('recon-remove-dialog')).not.toHaveTextContent('financeReconcileRemoveOneAutoHint');
+    });
+
+    it('calls removeOperation with the right payload on confirm, then reloads and notifies', async () => {
+      setLines([LINE_PARTIAL]);
+      const { props } = renderPanel();
+      fireEvent.click(screen.getByTestId('recon-line-radio-LP1'));
+      fireEvent.click(screen.getByTestId('recon-matched-toggle'));
+      fireEvent.click(screen.getByTestId('recon-unlink-T1'));
+      fireEvent.click(screen.getByTestId('recon-remove-confirm'));
+
+      await waitFor(() => expect(removeState.removeOperation).toHaveBeenCalledTimes(1));
+      // The per-row "−" now sends a single-element transactionIds[] array (not transactionId).
+      expect(removeState.removeOperation).toHaveBeenCalledWith({
+        financialAccountId: 'ACC-1',
+        statementLineId: 'LP1',
+        transactionIds: ['T1'],
+      });
+      await waitFor(() => expect(props.onReconcileSuccess).toHaveBeenCalled());
+      expect(linesState.reload).toHaveBeenCalled();
+      // Dialog closes on success.
+      await waitFor(() => expect(screen.queryByTestId('recon-remove-dialog')).not.toBeInTheDocument());
+    });
+
+    it('does not call removeOperation when the dialog is cancelled', async () => {
+      setLines([LINE_PARTIAL]);
+      renderPanel();
+      fireEvent.click(screen.getByTestId('recon-line-radio-LP1'));
+      fireEvent.click(screen.getByTestId('recon-matched-toggle'));
+      fireEvent.click(screen.getByTestId('recon-unlink-T1'));
+      expect(screen.getByTestId('recon-remove-dialog')).toBeInTheDocument();
+      fireEvent.click(screen.getByTestId('recon-remove-cancel'));
+      await waitFor(() =>
+        expect(screen.queryByTestId('recon-remove-dialog')).not.toBeInTheDocument());
+      expect(removeState.removeOperation).not.toHaveBeenCalled();
+    });
+
+    it('uses the "one" body for a single-row unlink', () => {
+      setLines([LINE_RECONCILED_TXNS]); // per-row unlink of T2 → count 1
+      setCandidates([RECON_CAND_T2]);
+      renderPanel();
+      fireEvent.click(screen.getByTestId('recon-line-radio-LR1'));
+      fireEvent.click(screen.getByTestId('recon-unlink-T2'));
+      const dialog = screen.getByTestId('recon-remove-dialog');
+      expect(dialog).toHaveTextContent('financeReconcileConfirmRemoveOneBody');
+      expect(dialog).not.toHaveTextContent('financeReconcileConfirmRemoveManyBody');
+    });
+
+    it('uses the "many" body + auto hint for a bulk selection with an auto-created doc', () => {
+      setLines([LINE_RECONCILED_MULTI]); // 2 docs, T3 autoCreated → bulk "Desconciliar (2)"
+      setCandidates([RECON_CAND_T3, RECON_CAND_T4]);
+      renderPanel();
+      fireEvent.click(screen.getByTestId('recon-line-radio-LR2'));
+      fireEvent.click(screen.getByTestId('recon-action-reconcile'));
+      const dialog = screen.getByTestId('recon-remove-dialog');
+      expect(dialog).toHaveTextContent('financeReconcileConfirmRemoveManyBody');
+      expect(dialog).toHaveTextContent('financeReconcileRemoveOneAutoHint');
+    });
+  });
+
+  // ── PARTIAL line reconcile behavior — ETP-4502 iteration 5 ─────────────────────
+
+  describe('PARTIAL line reconcile behavior', () => {
+    it('is NOT read-only: shows candidate checkboxes and the Conciliar (count) action', () => {
+      setLines([LINE_PARTIAL]);
+      setCandidates([CAND_MATCH]);
+      renderPanel();
+      fireEvent.click(screen.getByTestId('recon-line-radio-LP1'));
+      expect(screen.getByTestId('recon-cand-check-C1')).toBeInTheDocument();
+      const btn = screen.getByTestId('recon-action-reconcile');
+      expect(btn).not.toHaveTextContent('financeReconcileActionReactivate');
+      expect(btn).toHaveTextContent('financeReconcileActionReconcileCount');
+    });
+
+    it('calls the candidate hook with the remainderLineId (not the merged line id)', () => {
+      setLines([LINE_PARTIAL]);
+      setCandidates([CAND_MATCH]);
+      renderPanel();
+      fireEvent.click(screen.getByTestId('recon-line-radio-LP1'));
+      // The candidate list must target the pending remainder sub-line.
+      expect(candidateCallArgs.lineId).toBe('LP1-rem');
+    });
+
+    it('reconciles against the remainder sub-line (statementLineId === remainderLineId, not the head)', async () => {
+      setLines([LINE_PARTIAL]); // head id 'LP1', remainderLineId 'LP1-rem'
+      const INV = {
+        id: 'INVR', date: '2026-06-01T00:00:00Z', documentNo: 'F-R', partnerName: 'ACME',
+        amount: 46.76, pendingBalance: 46.76, kind: 'invoice', invoiceId: 'INV-ID-R',
+        scheduleId: 'SCH-R', suggested: false,
+      };
+      setCandidates([INV]);
+      renderPanel(); // no paymentMethods → the method modal does not open
+      fireEvent.click(screen.getByTestId('recon-line-radio-LP1'));
+      // The candidate hook already targets the remainder sub-line.
+      expect(candidateCallArgs.lineId).toBe('LP1-rem');
+      // Switch to an invoice source, pick the covering invoice, reconcile.
+      fireEvent.click(screen.getByText(/financeReconcileSourceReceipts/));
+      fireEvent.click(screen.getByText(/financeReconcileSourceSalesInvoices/));
+      fireEvent.click(screen.getByTestId('recon-cand-check-INVR'));
+      fireEvent.click(screen.getByTestId('recon-action-reconcile'));
+
+      await waitFor(() => expect(reconcileState.reconcile).toHaveBeenCalledTimes(1));
+      const payload = reconcileState.reconcile.mock.calls[0][0];
+      // Posts the pending remainder sub-line, NOT the already-reconciled group head ('LP1').
+      expect(payload.statementLineId).toBe('LP1-rem');
+      expect(payload.invoices).toEqual([{ invoiceId: 'INV-ID-R', scheduleId: 'SCH-R' }]);
+    });
+
+    it('bases the action-bar balance on the pending remainder, not the full line amount', () => {
+      setLines([LINE_PARTIAL]); // amount 100, pendingAmount 46.76
+      // A candidate that balances the REMAINDER (46.76) — not the full 100.
+      const CAND_REM = { ...CAND_OTHER, id: 'CR', amount: 46.76, pendingBalance: 46.76, suggested: false };
+      setCandidates([CAND_REM]);
+      renderPanel();
+      fireEvent.click(screen.getByTestId('recon-line-radio-LP1'));
+      fireEvent.click(screen.getByTestId('recon-cand-check-CR'));
+      // 46.76 balances the pending remainder → reconcile enabled.
+      expect(screen.getByTestId('recon-action-reconcile')).not.toBeDisabled();
+    });
+
+    it('a fully RECONCILED line switches to the bulk "Desconciliar (N)" action', () => {
+      setLines([LINE_RECONCILED_TXNS]);
+      setCandidates([RECON_CAND_T2]);
+      renderPanel();
+      fireEvent.click(screen.getByTestId('recon-line-radio-LR1'));
+      const btn = screen.getByTestId('recon-action-reconcile');
+      expect(btn).toHaveTextContent('financeReconcileActionRemoveCount');
+      expect(btn).not.toHaveTextContent('financeReconcileActionReconcileCount');
+    });
   });
 
 });

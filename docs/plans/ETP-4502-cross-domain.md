@@ -164,3 +164,59 @@ match (exactly this case) has only one operation id, so it was never tagged.
 
 ### Rollback
 Same as the base ETP-4502 entry above — revert `feature/ETP-4502`, no DB/export changes.
+
+## Iteration 5 (reconciliation tab: partial lines stay pending + per-item un-reconcile)
+
+Brings the partial-reconciliation model to the **reconciliation tab** (not just imported-statements),
+per the "Opción A2" design handoff: a line is PENDING while <100 % is used, CONCILIADA at 100 %; a
+new **Progreso** column (thin bar + hover tooltip "X € por conciliar"); a collapsible **"conciliado"
+block** on the right listing already-matched documents, each **un-reconcilable individually**
+("desvincular"); and the ability to reconcile the pending remainder.
+
+| Domain | Files | Reason |
+|--------|-------|--------|
+| `backend:etendo-go` (DB, by the user) | `EM_ETGO_Pending_Amount` on `FIN_BankStatementLine` | New Amount column (per-sub-line amount still pending); AD_Column/element/field + export done by the user |
+| `backend:etendo-go` | `handlers/BankStatementLinePendingAmountHandler.java` (new) | EventHandler maintaining `EM_ETGO_Pending_Amount = (txn==null) ? |cr−dr| : 0` on every line NEW/UPDATE (incl. Core match/split/unmatch) via `setCurrentState` |
+| `backend:etendo-go` | `ReconciliationHandler.java` | `PENDING_LINES_SQL` + `buildPendingLines` now expose the same partial contract as `mapLineRow` (`pendingAmount` from the column, `reconcileStatus`, `txns[]`, `reconciledAmount`/`reconciledPct`, `remainderLineId`); `state` derived post-merge (PARTIAL folds into `pending`); `tagMatchGroup` reuse guard; **new `removeOperation` action** (per-item un-reconcile) |
+| `backend:etendo-go` | `BankStatementsSupport.java` | `buildLineTxns` +`autoCreated`; `mergeMatchGroups`/`mergeSubLineIntoHead` capture `remainderLineId`; `mapLineRow` reads the column |
+| `backend:etendo-go` | `ReactivationSupport.java` | `COL_PENDING_AMOUNT` constant |
+| `window:financial-account` | `ReconciliationSplitPanel.jsx` | `ProgressCell` + Progreso column (bar + tooltip, no % chip); `ReconciledOperationsSection` (collapsible matched block with per-item "Desvincular"); `RemoveOperationConfirmDialog` (always-confirm); PARTIAL line not read-only, candidate fetch by `remainderLineId`, action-bar balance on the pending amount; `selectedLine` re-resolved from live `lines` by match group |
+| `app-shell-core` | `useReconciliation.js` | `useRemoveOperation` hook (POST `removeOperation`) |
+| `app-shell-core` | `en_US`/`es_ES`/`es_AR` | `financeReconcileColProgress`, `financeReconcilePendingLabel`, `financeReconcilePctConciliated`, `financeReconcileActionRemoveOne`, `financeReconcileConfirmRemoveOne{Title,Body}`, `financeReconcileRemoveOneAutoHint`, `financeReconcileToastOperationRemoved` |
+
+### Key design decisions
+- **`removeOperation` reuses the module's per-op primitive** `ReconciliationRemovalUtil.removeTransactionFromReconciliation` (detach one txn, re-process, keep the document) + `PaymentRemovalUtil.reactivateAndRemove` for the auto-created payment (restores the invoice). The LAST operation delegates to the proven whole-line `undoReconciliation` + `normalizeReactivatedMatchGroup`.
+- **No physical collapse on unlink**: the freed sub-line keeps its group id and amount; the EventHandler re-sets its pending amount and `mergeMatchGroups` folds it back into the line's remaining on reload.
+- **`EM_ETGO_Pending_Amount` is a single source of truth** for both the reconciliation tab and imported-statements (`mapLineRow` reads it too), avoiding drift.
+- **Progreso column = bar + tooltip** (handoff), superseding the earlier text-only idea; the % chip on the row was dropped. All new UI uses semantic theme tokens (handoff grays → `--foreground`/`--border`/`--text-primary`; "Factura" tag → `--status-warning-*`).
+- **Confirm-always on unlink** (product decision); whole-line "Reactivar" kept alongside.
+
+### Tests
+- JUnit: `BankStatementLinePendingAmountHandler` (txn null → |cr−dr|, txn set → 0); `removeOperation`
+  (one-of-N auto-created → removeTransaction + PaymentRemoval; pre-existing → payment kept; last-op →
+  undoReconciliation+normalize; closed period → 409; unlinked/other-account → 4xx);
+  `mergeMatchGroups` `remainderLineId` + PARTIAL derivation.
+- Vitest: Progreso bar/tooltip only when partly reconciled; `ReconciledOperationsSection` visibility,
+  collapse, per-item unlink → confirm → `useRemoveOperation`; PARTIAL not read-only + candidate fetch
+  by `remainderLineId`. Theme test stays green (tokens only).
+
+### Rollback
+Revert `feature/ETP-4502`. The `EM_ETGO_Pending_Amount` column stays (harmless if unused); to fully
+revert, drop it from the AD + DB. No other DB/export changes.
+
+### Addendum — un-reconcile by selection (bulk desvincular)
+On top of the per-item unlink, un-reconcile became **selection-based** and the global **"Reactivar"
+button was removed**:
+- `removeOperation` now accepts **`transactionIds[]`** (single `transactionId` still accepted) and
+  branches on whether the selection covers the WHOLE reconciliation: **all** → `undoReconciliation`
+  (whole undo, payment removal); **subset** → loop `removeTransactionFromReconciliation` +
+  `PaymentRemovalUtil` per selected txn (rest stay reconciled). Rejects ids from different
+  reconciliations (400).
+- Frontend: the "conciliado" block shows a **checkbox per matched doc (all checked by default) only
+  on fully-reconciled lines** (bulk mode); the bottom action bar becomes **"Desconciliar (N)"** over
+  the checked set (i18n `financeReconcileActionRemoveCount`). The per-row "−" unlink stays in all
+  cases. A PARTIAL line (under "Pendiente") has NO checkboxes — un-links only one-by-one; bulk is
+  only for the "Conciliado" state. `ReconciliationActionBar` gained `removeCount`; the old
+  `ReactivateConfirmDialog`/`useReactivateReconciliation` were removed; the confirm dialog now takes
+  `count`/`hasAuto` (one/many body + auto-created hint). New i18n `financeReconcileActionRemoveCount`,
+  `financeReconcileConfirmRemoveManyBody`.

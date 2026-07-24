@@ -57,6 +57,7 @@ const linesState = { lines: [], total: 0, counts: {}, loading: false, reload: vi
 const candidatesState = { candidates: [], loading: false };
 const reconcileState = { reconcile: vi.fn().mockResolvedValue({ reconciliationId: 'R1' }), loading: false };
 const reactivateState = { reactivate: vi.fn().mockResolvedValue({ reactivated: true }), loading: false };
+const removeState = { removeOperation: vi.fn().mockResolvedValue({ removed: true }), loading: false };
 
 vi.mock('@/hooks/useReconciliation', () => ({
   usePendingStatementLines: () => linesState,
@@ -66,6 +67,7 @@ vi.mock('@/hooks/useReconciliation', () => ({
   }),
   useReconcileGroup: () => reconcileState,
   useReactivateReconciliation: () => reactivateState,
+  useRemoveOperation: () => removeState,
 }));
 
 import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
@@ -196,6 +198,8 @@ describe('ReconciliationSplitPanel — multi-currency (ETP-4502 iteration 2)', (
     reconcileState.loading = false;
     reactivateState.reactivate = vi.fn().mockResolvedValue({ reactivated: true });
     reactivateState.loading = false;
+    removeState.removeOperation = vi.fn().mockResolvedValue({ removed: true });
+    removeState.loading = false;
   });
 
   describe('CurrencyBadge', () => {

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { ArrowLeft, MoreVertical, CircleCheckBig, CheckCircle, X } from 'lucide-react';
+import { ArrowLeft, MoreVertical, CircleCheckBig, CheckCircle, X, ChevronDown, Minus } from 'lucide-react';
 import { toast } from 'sonner';
 import { useUI, useLocaleSwitch } from '@/i18n';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -28,11 +28,12 @@ import { ChipSelect } from '@/components/forms/fields';
 import { cn } from '@/lib/utils';
 import { getDateBounds, toDateParam } from '@/lib/dateRangeBounds';
 import { formatDate, formatSigned } from '@/lib/formatSigned';
+import { formatCurrency } from '@/lib/formatCurrency';
 import {
   usePendingStatementLines,
   useCandidateOperations,
   useReconcileGroup,
-  useReactivateReconciliation,
+  useRemoveOperation,
 } from '@/hooks/useReconciliation';
 
 // Amounts that differ by <= this absolute value are treated as balanced.
@@ -174,7 +175,7 @@ function renderRows({ loading, items, colSpan, emptyTitle, emptyHint, renderRow 
  * (the per-panel columns are passed as `headCells`) and the skeleton/empty/data
  * body produced by {@link renderRows}.
  */
-function PanelTable({ headCells, loading, items, renderRow }) {
+function PanelTable({ headCells, loading, items, renderRow, colSpan = 5 }) {
   const ui = useUI();
   return (
     <div className="flex-1 overflow-y-auto [&>div]:overflow-visible">
@@ -190,7 +191,7 @@ function PanelTable({ headCells, loading, items, renderRow }) {
           {renderRows({
             loading,
             items,
-            colSpan: 5,
+            colSpan,
             emptyTitle: ui('financeAccountMovementsEmpty'),
             emptyHint: null,
             renderRow,
@@ -217,30 +218,42 @@ function DateCell({ date, bcpLocale, cellClassName }) {
  * candidate's account-currency equivalent), it renders as a smaller line underneath — the
  * "show the EUR total alongside the other currency" requirement.
  */
-function MoneyCell({ value, currency, cellClassName, bold = false, secondaryValue, secondaryCurrency }) {
+function MoneyCell({
+  value, currency, cellClassName, bold = false, secondaryValue, secondaryCurrency, baseOnTop = false,
+}) {
+  const primaryCls = cn('text-sm leading-5 text-[hsl(var(--foreground))]', bold ? 'font-semibold' : 'font-normal');
+  const mutedCls = 'text-xs leading-4 text-[hsl(var(--muted-foreground))]';
+  const hasBase = secondaryValue != null;
+  // When `baseOnTop`, the account-currency (EUR) equivalent is shown ON TOP and prominent, with the
+  // invoice's own (foreign) currency small underneath — the account currency is what reconciles the
+  // line, so it leads. Otherwise the primary `value` leads and the base sits underneath (muted).
+  const foreignLine = (
+    <MoneyAmount
+      value={Number(value) || 0}
+      currency={currency}
+      tone="neutral"
+      className={baseOnTop && hasBase ? mutedCls : primaryCls}
+      data-testid="MoneyAmount__d0f4d5" />
+  );
+  // MoneyAmount doesn't forward extra props (no data-testid), so the base testid goes on this
+  // wrapping span (it always marks the account-currency amount, whichever position it's in).
+  const baseLine = hasBase ? (
+    <span data-testid="recon-cand-amount-base">
+      <MoneyAmount
+        value={Number(secondaryValue) || 0}
+        currency={secondaryCurrency}
+        tone="neutral"
+        className={baseOnTop ? primaryCls : mutedCls}
+        data-testid="MoneyAmount-secondary__d0f4d5" />
+    </span>
+  ) : null;
   return (
     <TableCell
       className={cn('h-[62px] px-3 text-right align-middle', cellClassName)}
       data-testid="TableCell__d0f4d5">
       <div className="flex flex-col items-end">
-        <MoneyAmount
-          value={Number(value) || 0}
-          currency={currency}
-          tone="neutral"
-          className={cn('text-sm leading-5 text-[hsl(var(--foreground))]', bold ? 'font-semibold' : 'font-normal')}
-          data-testid="MoneyAmount__d0f4d5" />
-        {secondaryValue != null ? (
-          // MoneyAmount doesn't forward extra props (no data-testid), so the testid goes on this
-          // wrapping span instead — MoneyAmount itself keeps its own internal testid.
-          (<span data-testid="recon-cand-amount-base">
-            <MoneyAmount
-              value={Number(secondaryValue) || 0}
-              currency={secondaryCurrency}
-              tone="neutral"
-              className="text-xs leading-4 text-[hsl(var(--muted-foreground))]"
-              data-testid="MoneyAmount-secondary__d0f4d5" />
-          </span>)
-        ) : null}
+        {baseOnTop && hasBase ? baseLine : foreignLine}
+        {baseOnTop && hasBase ? foreignLine : baseLine}
       </div>
     </TableCell>
   );
@@ -251,7 +264,7 @@ function MoneyCell({ value, currency, cellClassName, bold = false, secondaryValu
  * scrollable table and an optional footer. Keeps the two panels from repeating
  * the same structural scaffold.
  */
-function PanelShell({ className, toolbar, headCells, loading, items, renderRow, footer }) {
+function PanelShell({ className, toolbar, headCells, loading, items, renderRow, footer, colSpan = 5 }) {
   return (
     <div className={cn('flex min-w-[30%] flex-1 flex-col overflow-hidden', className)}>
       {toolbar}
@@ -260,6 +273,7 @@ function PanelShell({ className, toolbar, headCells, loading, items, renderRow, 
         loading={loading}
         items={items}
         renderRow={renderRow}
+        colSpan={colSpan}
         data-testid="PanelTable__d0f4d5" />
       {footer}
     </div>
@@ -270,6 +284,39 @@ function PanelShell({ className, toolbar, headCells, loading, items, renderRow, 
  * Left panel — pending statement lines with single-select radio rows, status
  * badge and a total footer.
  */
+/**
+ * "Progreso" cell (handoff Opción A2): a thin 4px bar = reconciled / total of a partially-reconciled
+ * line, with a hover tooltip showing the amount still pending ("X € por conciliar"). Rendered only
+ * when the line has something reconciled (`reconciledAmount != 0`); otherwise the cell is empty.
+ * No green, no "% chip" on the row — the bar carries the signal (ETP-4502 iteration 5).
+ */
+function ProgressCell({ line, currency, cellClassName }) {
+  const ui = useUI();
+  const reconciled = Number(line.reconciledAmount) || 0;
+  if (reconciled === 0) {
+    return <TableCell className={cn('h-[62px] w-[90px] px-3', cellClassName)} data-testid="TableCell__d0f4d5" />;
+  }
+  const pct = Math.min(100, Math.max(0, Number(line.reconciledPct) || 0));
+  const pending = Math.abs(Number(line.pendingAmount) || 0);
+  const tip = ui('financeReconcilePendingLabel', { amount: formatCurrency(currency, pending) });
+  return (
+    <TableCell className={cn('h-[62px] w-[90px] px-3', cellClassName)} data-testid="TableCell__d0f4d5">
+      <div className="group relative flex items-center" data-testid={`recon-progress-${line.id}`}>
+        <div className="h-1 w-full overflow-hidden rounded-[2px] bg-[hsl(var(--border))]">
+          <span className="block h-full bg-[hsl(var(--foreground))]" style={{ width: `${pct}%` }} />
+        </div>
+        <span
+          role="tooltip"
+          className="pointer-events-none absolute bottom-full left-1/2 z-10 mb-1.5 -translate-x-1/2 whitespace-nowrap rounded-[4px] bg-[hsl(var(--text-primary))] px-2 py-1 text-[11px] font-semibold leading-4 text-primary-foreground opacity-0 transition-opacity group-hover:opacity-100"
+          data-testid={`recon-progress-tip-${line.id}`}
+        >
+          {tip}
+        </span>
+      </div>
+    </TableCell>
+  );
+}
+
 function StatementLinesPanel({
   lines, total, loading, currency, bcpLocale, selectedLineId, onSelectLine, search, onSearchChange,
   status, onStatusChange, statusCounts, dateRange, onDateRangeChange, onBack,
@@ -322,6 +369,11 @@ function StatementLinesPanel({
             <StatusBadge kind={badgeKind} data-testid="StatusBadge__d0f4d5" />
           </div>
         </TableCell>
+        <ProgressCell
+          line={line}
+          currency={currency}
+          cellClassName={cellBg}
+          data-testid="ProgressCell__d0f4d5" />
         <MoneyCell
           value={line.amount}
           currency={currency}
@@ -381,11 +433,13 @@ function StatementLinesPanel({
       items={lines}
       renderRow={renderRow}
       footer={footer}
+      colSpan={6}
       headCells={(
         <>
           <TableHead className="w-8 px-0 pl-2" data-testid="TableHead__d0f4d5" />
           <TableHead className="w-[108px] px-3" data-testid="TableHead__d0f4d5">{ui('financeReconcileColDate')}</TableHead>
           <TableHead className="px-3" data-testid="TableHead__d0f4d5">{ui('financeReconcileColDescription')}</TableHead>
+          <TableHead className="w-[90px] px-3" data-testid="TableHead__d0f4d5">{ui('financeReconcileColProgress')}</TableHead>
           <TableHead className="w-[139px] px-3 text-left" data-testid="TableHead__d0f4d5">{ui('financeReconcileColAmount')}</TableHead>
           <TableHead className="w-9 px-0 pr-1" data-testid="TableHead__d0f4d5" />
         </>
@@ -409,11 +463,98 @@ function CurrencyBadge({ code }) {
   );
 }
 
+/**
+ * Right-panel "conciliado" block (handoff Opción A2): for a line that already has matched documents,
+ * a clickable header (% reconciled + a short 90px bar + reconciled amount + chevron) that
+ * collapses/expands the list of already-reconciled documents, each with an "unlink" (desvincular)
+ * button. Rendered above the candidate filters; the bar is neutral (no green). See ETP-4502 it.5.
+ */
+function ReconciledOperationsSection({ line, currency, onRemove, open, onToggle }) {
+  const ui = useUI();
+  const txns = line.txns || [];
+  if (txns.length === 0) {
+    return null;
+  }
+  const pct = Math.min(100, Math.max(0, Number(line.reconciledPct) || 0));
+  const reconciled = Math.abs(Number(line.reconciledAmount) || 0);
+  return (
+    <div className="border-b border-[hsl(var(--border-subtle))]" data-testid="recon-matched-block">
+      <button
+        type="button"
+        onClick={onToggle}
+        className={cn('flex w-full items-center justify-between gap-3 px-6', open ? 'py-3.5' : 'py-2.5')}
+        data-testid="recon-matched-toggle"
+      >
+        <div className="flex items-center gap-3">
+          <span className="text-[13px] font-bold text-[hsl(var(--foreground))]">
+            {ui('financeReconcilePctConciliated', { pct })}
+          </span>
+          <span className="h-1 w-[90px] overflow-hidden rounded-[2px] bg-[hsl(var(--border))]">
+            <span className="block h-full bg-[hsl(var(--foreground))]" style={{ width: `${pct}%` }} />
+          </span>
+        </div>
+        <div className="flex items-center gap-3">
+          <span className="text-sm font-bold tabular-nums text-[hsl(var(--foreground))]">
+            {formatCurrency(currency, reconciled)}
+          </span>
+          <ChevronDown
+            className={cn('h-4 w-4 text-[hsl(var(--muted-foreground))] transition-transform', open ? '' : '-rotate-90')}
+            data-testid="recon-matched-chevron" />
+        </div>
+      </button>
+      {open ? (
+        <div className="pb-3" data-testid="recon-matched-list">
+          {txns.map((t) => (
+            <div
+              key={t.transactionId || t.documentNo}
+              className="flex items-center justify-between gap-3 border-t border-[hsl(var(--border-subtle))] px-6 py-2.5"
+              data-testid={`recon-matched-row-${t.transactionId}`}
+            >
+              <div className="flex min-w-0 flex-col items-start gap-0.5">
+                <div className="flex min-w-0 items-center gap-1 text-sm leading-5">
+                  <span className="font-semibold text-[hsl(var(--foreground))]">{t.documentNo || '—'}</span>
+                  {t.contact ? (
+                    <span className="truncate text-[hsl(var(--muted-foreground))]">{t.contact}</span>
+                  ) : null}
+                </div>
+                <StatusBadge kind="invoice" data-testid="StatusBadge__matched" />
+              </div>
+              <div className="flex items-center gap-3">
+                <span className="text-[13px] font-semibold tabular-nums text-[hsl(var(--foreground))]">
+                  {formatCurrency(currency, Math.abs(Number(t.amount) || 0))}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => onRemove(t)}
+                  aria-label={ui('financeReconcileActionRemoveOne')}
+                  title={ui('financeReconcileActionRemoveOne')}
+                  data-testid={`recon-unlink-${t.transactionId}`}
+                  className="flex h-[26px] w-[26px] items-center justify-center rounded-lg border border-border bg-card text-[hsl(var(--muted-foreground))] transition-colors hover:bg-[hsl(var(--muted))] hover:text-[hsl(var(--foreground))]"
+                >
+                  <Minus className="h-4 w-4" data-testid="Minus__d0f4d5" />
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 function CandidateOperationsPanel({
   line, candidates, loading, currency, bcpLocale, selectedIds, onToggle, search, onSearchChange,
   source, onSourceChange, sourceCounts = {}, dateRange, onDateRangeChange, footer, readOnly = false,
+  onRemoveOperation, reconciledMode = false,
 }) {
   const ui = useUI();
+  // Holded parity: while the "conciliado" block is expanded, the candidate list below is frozen for
+  // selection (you're browsing/unlinking what's already matched, not picking new docs).
+  const [matchedExpanded, setMatchedExpanded] = useState(false);
+  useEffect(() => {
+    setMatchedExpanded(false);
+  }, [line?.id]);
+  const candidatesFrozen = matchedExpanded;
 
   if (!line) {
     return (
@@ -434,6 +575,8 @@ function CandidateOperationsPanel({
     // render them with that currency and flag the row with a badge (AC5).
     const candForeign = !!cand.currency && cand.currency !== currency;
     const candCurrency = cand.currency || currency;
+    // Foreign candidate WITH a known account-currency equivalent → show EUR on top, foreign below.
+    const hasBase = candForeign && cand.amountBase != null;
     return (
     <TableRow
       key={cand.id}
@@ -443,16 +586,18 @@ function CandidateOperationsPanel({
         selectedIds.has(cand.id)
           ? `z-10 bg-[hsl(var(--muted))] ${ELEVATED_SHADOW}`
           : 'hover:z-10 hover:bg-card hover:shadow-lg',
+        candidatesFrozen && 'opacity-50',
       )}
     >
       <TableCell className="h-[62px] w-8 px-0 pl-2" data-testid="TableCell__d0f4d5">
-        {readOnly ? null : (
-          <Checkbox
-            checked={selectedIds.has(cand.id)}
-            onChange={() => onToggle(cand.id)}
-            data-testid={`recon-cand-check-${cand.id}`}
-          />
-        )}
+        {/* Checkbox shown for both pending (which docs to reconcile) and reconciled (which to
+            un-reconcile) lines; disabled only while the partial-line "conciliado" block is expanded. */}
+        <Checkbox
+          checked={selectedIds.has(cand.id)}
+          disabled={candidatesFrozen}
+          onChange={() => { if (!candidatesFrozen) onToggle(cand.id); }}
+          data-testid={`recon-cand-check-${cand.id}`}
+        />
       </TableCell>
       <DateCell
         date={cand.date}
@@ -483,21 +628,60 @@ function CandidateOperationsPanel({
         cellClassName="w-[121px]"
         secondaryValue={candForeign ? cand.amountBase : undefined}
         secondaryCurrency={cand.baseCurrency || currency}
+        baseOnTop={hasBase}
         data-testid="MoneyCell__d0f4d5" />
-      <MoneyCell
-        value={cand.amount}
-        currency={candCurrency}
-        bold
-        cellClassName="w-[121px]"
-        secondaryValue={candForeign ? cand.amountBase : undefined}
-        secondaryCurrency={cand.baseCurrency || currency}
-        data-testid="MoneyCell__d0f4d5" />
+      {reconciledMode ? (
+        // Reconciled line: amount + a per-row individual un-link ("−"). cand.id is the transaction id.
+        <TableCell className="h-[62px] w-[140px] px-3 text-right align-middle" data-testid="TableCell__d0f4d5">
+          <div className="flex items-center justify-end gap-2">
+            <MoneyAmount
+              value={Number(cand.amount) || 0}
+              currency={candCurrency}
+              tone="neutral"
+              className="text-sm font-semibold leading-5 text-[hsl(var(--foreground))]"
+              data-testid="MoneyAmount__d0f4d5" />
+            <button
+              type="button"
+              onClick={() => onRemoveOperation({ transactionId: cand.id })}
+              aria-label={ui('financeReconcileActionRemoveOne')}
+              title={ui('financeReconcileActionRemoveOne')}
+              data-testid={`recon-unlink-${cand.id}`}
+              className="flex h-[26px] w-[26px] flex-none items-center justify-center rounded-lg border border-border bg-card text-[hsl(var(--muted-foreground))] transition-colors hover:bg-[hsl(var(--muted))] hover:text-[hsl(var(--foreground))]"
+            >
+              <Minus className="h-4 w-4" data-testid="Minus__d0f4d5" />
+            </button>
+          </div>
+        </TableCell>
+      ) : (
+        <MoneyCell
+          value={cand.amount}
+          currency={candCurrency}
+          bold
+          cellClassName="w-[121px]"
+          secondaryValue={candForeign ? cand.amountBase : undefined}
+          secondaryCurrency={cand.baseCurrency || currency}
+          baseOnTop={hasBase}
+          data-testid="MoneyCell__d0f4d5" />
+      )}
     </TableRow>
     );
   };
 
   const toolbar = (
-    <ToolbarShell
+    <>
+      {/* "Conciliado" block: matched documents of a PARTIAL line (with per-row unlink), above the
+          remainder candidates. A FULLY reconciled line does NOT use this block — its documents are
+          shown directly in the candidate list below, with checkboxes (no redundant % header). */}
+      {line.reconcileStatus === 'PARTIAL' && Number(line.reconciledAmount) ? (
+        <ReconciledOperationsSection
+          line={line}
+          currency={currency}
+          onRemove={onRemoveOperation}
+          open={matchedExpanded}
+          onToggle={() => setMatchedExpanded((v) => !v)}
+          data-testid="ReconciledOperationsSection__d0f4d5" />
+      ) : null}
+      <ToolbarShell
       search={search}
       onSearchChange={onSearchChange}
       testIdPrefix="recon-right"
@@ -516,7 +700,8 @@ function CandidateOperationsPanel({
         onChange={onDateRangeChange}
         placeholder={ui('financeReconcileFilterDate')}
         data-testid="DateRangePopover__d0f4d5" />
-    </ToolbarShell>
+      </ToolbarShell>
+    </>
   );
 
   return (
@@ -541,8 +726,8 @@ function CandidateOperationsPanel({
 
 /** Bottom action bar with the running totals and the reconcile / placeholder buttons. */
 function ReconciliationActionBar({
-  currency, selectedSum, remaining, canReconcile, isReconciledLine, reconcileCount, busy,
-  onCancel, onReconcile,
+  currency, selectedSum, remaining, canReconcile, isReconciledLine, reconcileCount, removeCount = 0,
+  busy, onCancel, onReconcile,
 }) {
   const ui = useUI();
   return (
@@ -579,15 +764,15 @@ function ReconciliationActionBar({
         <button
           type="button"
           onClick={onReconcile}
-          // A reconciled line shows an enabled "Reactivar" button (the action lands in a
-          // follow-up task); a pending line gates "Conciliar" on a balanced selection.
-          disabled={busy || (isReconciledLine ? false : !canReconcile)}
+          // A reconciled line shows "Desconciliar (N)" acting on the checked documents (N = checked
+          // count, disabled when none); a pending line gates "Conciliar" on a balanced selection.
+          disabled={busy || (isReconciledLine ? removeCount === 0 : !canReconcile)}
           data-testid="recon-action-reconcile"
           className="inline-flex h-8 items-center gap-1.5 rounded-full bg-[hsl(var(--foreground))] px-3 text-sm font-medium text-primary-foreground hover:bg-[hsl(var(--primary))] hover:text-[hsl(var(--foreground))] disabled:cursor-not-allowed disabled:bg-[hsl(var(--border-control))] disabled:text-primary-foreground disabled:hover:bg-[hsl(var(--border-control))] disabled:hover:text-primary-foreground"
         >
           <CheckCircle className="h-4 w-4" data-testid="CheckCircle__d0f4d5" />
           {isReconciledLine
-            ? ui('financeReconcileActionReactivate')
+            ? ui('financeReconcileActionRemoveCount', { count: removeCount })
             : ui('financeReconcileActionReconcileCount', { count: reconcileCount })}
         </button>
       </div>
@@ -595,47 +780,46 @@ function ReconciliationActionBar({
   );
 }
 
+
 /**
- * Confirmation dialog for the destructive "Reactivar" (un-reconcile) action.
- * Warns that the reconciliation will be undone and any auto-created payments
- * deleted before handing control back to the caller's {@code onConfirm}.
+ * Confirmation for un-reconciling documents ("desvincular") — one row or the bulk selection. Always
+ * shown (per product decision) because it is destructive; when the selection includes an
+ * auto-created invoice payment it also warns that the invoice returns to unpaid.
  */
-function ReactivateConfirmDialog({ open, busy, onConfirm, onClose }) {
+function RemoveOperationConfirmDialog({ open, count, hasAuto, busy, onConfirm, onClose }) {
   const ui = useUI();
   return (
     <Dialog
       open={open}
       onOpenChange={(v) => { if (!v) onClose(); }}
-      data-testid="Dialog__recon-reactivate">
-      <DialogContent className="max-w-md bg-card" data-testid="recon-reactivate-dialog">
-        <DialogHeader data-testid="DialogHeader__recon-reactivate">
-          <DialogTitle data-testid="DialogTitle__recon-reactivate">
-            {ui('financeReconcileConfirmReactivateTitle')}
+      data-testid="Dialog__recon-remove">
+      <DialogContent className="max-w-md bg-card" data-testid="recon-remove-dialog">
+        <DialogHeader data-testid="DialogHeader__recon-remove">
+          <DialogTitle data-testid="DialogTitle__recon-remove">
+            {ui('financeReconcileConfirmRemoveOneTitle')}
           </DialogTitle>
-          <DialogDescription data-testid="DialogDescription__recon-reactivate">
-            {ui('financeReconcileConfirmReactivateBody')}
+          <DialogDescription data-testid="DialogDescription__recon-remove">
+            {count > 1
+              ? ui('financeReconcileConfirmRemoveManyBody', { count })
+              : ui('financeReconcileConfirmRemoveOneBody')}
+            {hasAuto ? ` ${ui('financeReconcileRemoveOneAutoHint')}` : ''}
           </DialogDescription>
         </DialogHeader>
-        <DialogFooter data-testid="DialogFooter__recon-reactivate">
+        <DialogFooter data-testid="DialogFooter__recon-remove">
           <Button
             variant="outline"
             onClick={onClose}
             disabled={busy}
-            // Matches the app's standard secondary-button formula (e.g. the "Cancelar" back
-            // button in list windows like Reglas de matcheo) instead of the shared Button's
-            // theme-token outline colors.
             className="border-[hsl(var(--border-control))] bg-card text-[hsl(var(--foreground))] shadow-[0_1px_2px_rgba(18,18,23,0.05)] hover:bg-muted"
-            data-testid="recon-reactivate-cancel">
-            {/* Just closes this dialog (no selection to cancel) — the generic "Cancelar", not
-                the action bar's "Cancelar selección". */}
+            data-testid="recon-remove-cancel">
             {ui('cancel')}
           </Button>
           <Button
             variant="destructive"
             onClick={onConfirm}
             disabled={busy}
-            data-testid="recon-reactivate-confirm">
-            {ui('financeReconcileActionReactivate')}
+            data-testid="recon-remove-confirm">
+            {ui('financeReconcileActionRemoveOne')}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -741,7 +925,7 @@ export function ReconciliationSplitPanel({
   const [rightSource, setRightSource] = useState('receipts');
   const [rightDateRange, setRightDateRange] = useState({ presetId: 'last30' });
   const [rightSearch, setRightSearch] = useState('');
-  const [selectedLine, setSelectedLine] = useState(null);
+  const [selectedLineSel, setSelectedLineSel] = useState(null);
   const [selectedOpIds, setSelectedOpIds] = useState(() => new Set());
   const [methodModalOpen, setMethodModalOpen] = useState(false);
   const [selectedMethodId, setSelectedMethodId] = useState('');
@@ -754,18 +938,35 @@ export function ReconciliationSplitPanel({
       dateFrom: toDateParam(leftBounds.from),
       dateTo: toDateParam(leftBounds.to),
     });
+  // The selection stores identity (id + matchGroupId); the LIVE line data is re-resolved from the
+  // latest `lines` on every render, re-matched by group first so a head-id shift after a split /
+  // unlink doesn't lose the selection and the right panel always reflects fresh amounts/txns.
+  const selectedLine = useMemo(() => {
+    if (!selectedLineSel) return null;
+    return lines.find((l) => l.id === selectedLineSel.id
+        || (selectedLineSel.matchGroupId && l.matchGroupId === selectedLineSel.matchGroupId))
+      || selectedLineSel;
+  }, [lines, selectedLineSel]);
   const sourceMeta = SOURCE_META[rightSource] ?? SOURCE_META.receipts;
   const invoiceMode = sourceMeta.kind === 'invoices';
+  // For a PARTIAL line, reconcile the REST against its pending remainder sub-line (which carries the
+  // group id and no transaction) so the candidate list = available docs, not the already-matched
+  // ones. A plain pending / fully-reconciled line uses its own id.
+  const candidateLineId = selectedLine
+    ? (selectedLine.reconcileStatus === 'PARTIAL' && selectedLine.remainderLineId
+        ? selectedLine.remainderLineId : selectedLine.id)
+    : null;
   const { candidates, counts: sourceCounts, loading: candLoading } = useCandidateOperations(
-    accountId, selectedLine?.id ?? null, sourceMeta.docType,
+    accountId, candidateLineId, sourceMeta.docType,
     invoiceMode ? 'invoices' : null,
     toDateParam(rightBounds.from), toDateParam(rightBounds.to));
   const { reconcile, loading: reconciling } = useReconcileGroup();
-  const { reactivate, loading: reactivating } = useReactivateReconciliation();
-  const [reactivateOpen, setReactivateOpen] = useState(false);
+  const { removeOperation, loading: removing } = useRemoveOperation();
+  // Pending un-reconcile request (single row OR the bulk selection): { ids, hasAuto, count }.
+  const [removeRequest, setRemoveRequest] = useState(null);
 
   const selectLine = (line) => {
-    setSelectedLine(line);
+    setSelectedLineSel(line);
     setSelectedOpIds(new Set());
     // Default the type selector to the matching transaction direction for the line.
     setRightSource((Number(line?.amount) || 0) < 0 ? 'payments' : 'receipts');
@@ -786,7 +987,7 @@ export function ReconciliationSplitPanel({
   };
 
   const cancelSelection = () => {
-    setSelectedLine(null);
+    setSelectedLineSel(null);
     setSelectedOpIds(new Set());
   };
 
@@ -832,9 +1033,10 @@ export function ReconciliationSplitPanel({
   // array reference) to avoid an infinite loop when the hook returns a new array
   // reference on every render (common in tests and after background refreshes).
   useEffect(() => {
-    // A reconciled line is read-only — nothing is selectable, so never pre-select its rows.
+    // A fully-reconciled line's candidates ARE its linked documents (bulk un-reconcile) — pre-check
+    // them all by default. A pending/partial line pre-selects the algorithm's suggestions.
     if (selectedLine?.status === 'reconciled') {
-      setSelectedOpIds(new Set());
+      setSelectedOpIds(new Set(candidates.map((c) => c.id)));
       return;
     }
     setSelectedOpIds(new Set(candidates.filter((c) => c.suggested).map((c) => c.id)));
@@ -865,7 +1067,13 @@ export function ReconciliationSplitPanel({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [candidates, selectedOpIds, currency]);
 
-  const lineAmount = Number(selectedLine?.amount) || 0;
+  // For a PARTIAL line the user reconciles the REMAINDER, not the full line: base the balance /
+  // "restante por conciliar" on the pending amount (keeping the line's sign) instead of the total.
+  const lineFull = Number(selectedLine?.amount) || 0;
+  const isPartialLine = selectedLine?.reconcileStatus === 'PARTIAL';
+  const lineAmount = isPartialLine
+    ? Math.sign(lineFull) * Math.abs(Number(selectedLine?.pendingAmount) || 0)
+    : lineFull;
   const remaining = Number((lineAmount - selectedSum).toFixed(2));
   const isReconciledLine = selectedLine?.status === 'reconciled';
 
@@ -897,8 +1105,11 @@ export function ReconciliationSplitPanel({
   const submitReconcile = async (methodId) => {
     try {
       const payload = {
+        // For a PARTIAL line, reconcile the remainder against its pending sub-line
+        // (`candidateLineId` = remainderLineId), NOT the group head (which already has a
+        // transaction and would 409 "already reconciled").
         financialAccountId: accountId,
-        statementLineId: selectedLine.id,
+        statementLineId: candidateLineId,
       };
       if (invoiceMode) {
         payload.invoices = candidates
@@ -911,7 +1122,7 @@ export function ReconciliationSplitPanel({
       }
       await reconcile(payload);
       toast.success(ui('financeReconcileToastSuccess'));
-      setSelectedLine(null);
+      setSelectedLineSel(null);
       setSelectedOpIds(new Set());
       setMethodModalOpen(false);
       reloadLines();
@@ -939,24 +1150,40 @@ export function ReconciliationSplitPanel({
     submitReconcile(selectedMethodId);
   };
 
-  // Reactivate (un-reconcile) is destructive — it undoes the reconciliation and deletes any
-  // auto-created payments — so it goes through a confirmation dialog before hitting the backend.
-  const handleReactivate = () => {
-    if (!isReconciledLine || !selectedLine) return;
-    setReactivateOpen(true);
+  // Whether any of the given transaction ids is an auto-created payment (drives the confirm hint that
+  // the invoice returns to unpaid). Matched-doc auto-created flags live on selectedLine.txns.
+  const anyAutoCreated = (ids) => {
+    const set = new Set(ids);
+    return (selectedLine?.txns || []).some((t) => set.has(t.transactionId) && t.autoCreated);
   };
 
-  const confirmReactivate = async () => {
+  // Un-reconcile ("desvincular") — always confirmed (destructive: removes auto-created payments and
+  // returns invoices to unpaid). One row (per-row "−") OR the bulk checked selection (bottom button).
+  const requestRemoveOne = (txn) => {
+    const id = txn?.transactionId;
+    if (!selectedLine || !id) return;
+    setRemoveRequest({ ids: [id], hasAuto: anyAutoCreated([id]), count: 1 });
+  };
+
+  const requestRemoveSelected = () => {
     if (!selectedLine) return;
+    const ids = Array.from(selectedOpIds);
+    if (ids.length === 0) return;
+    setRemoveRequest({ ids, hasAuto: anyAutoCreated(ids), count: ids.length });
+  };
+
+  const confirmRemove = async () => {
+    if (!selectedLine || !removeRequest) return;
     try {
-      await reactivate({
+      await removeOperation({
         financialAccountId: accountId,
         statementLineId: selectedLine.id,
+        transactionIds: removeRequest.ids,
       });
-      setReactivateOpen(false);
-      toast.success(ui('financeReconcileToastReactivated'));
-      setSelectedLine(null);
+      setRemoveRequest(null);
+      toast.success(ui('financeReconcileToastOperationRemoved'));
       setSelectedOpIds(new Set());
+      // Keep the line selected (selectedLine re-resolves from the reloaded `lines` by match group).
       reloadLines();
       onReconcileSuccess?.();
     } catch (err) {
@@ -992,6 +1219,8 @@ export function ReconciliationSplitPanel({
           bcpLocale={bcpLocale}
           selectedIds={selectedOpIds}
           onToggle={toggleOp}
+          onRemoveOperation={requestRemoveOne}
+          reconciledMode={isReconciledLine}
           readOnly={isReconciledLine}
           source={rightSource}
           onSourceChange={changeSource}
@@ -1008,19 +1237,22 @@ export function ReconciliationSplitPanel({
               canReconcile={canReconcile}
               isReconciledLine={isReconciledLine}
               reconcileCount={selectedOpIds.size}
-              busy={reconciling || reactivating}
+              removeCount={selectedOpIds.size}
+              busy={reconciling || removing}
               onCancel={cancelSelection}
-              onReconcile={isReconciledLine ? handleReactivate : handleReconcile}
+              onReconcile={isReconciledLine ? requestRemoveSelected : handleReconcile}
               data-testid="ReconciliationActionBar__d0f4d5" />
           ) : null}
           data-testid="CandidateOperationsPanel__d0f4d5" />
       </div>
-      <ReactivateConfirmDialog
-        open={reactivateOpen}
-        busy={reactivating}
-        onConfirm={confirmReactivate}
-        onClose={() => setReactivateOpen(false)}
-        data-testid="ReactivateConfirmDialog__d0f4d5" />
+      <RemoveOperationConfirmDialog
+        open={!!removeRequest}
+        count={removeRequest?.count ?? 0}
+        hasAuto={!!removeRequest?.hasAuto}
+        busy={removing}
+        onConfirm={confirmRemove}
+        onClose={() => setRemoveRequest(null)}
+        data-testid="RemoveOperationConfirmDialog__d0f4d5" />
       <PaymentMethodModal
         open={methodModalOpen}
         methods={directionMethods}

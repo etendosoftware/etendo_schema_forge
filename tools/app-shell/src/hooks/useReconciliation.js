@@ -168,6 +168,19 @@ export function useReactivateReconciliation() {
 }
 
 /**
+ * Un-reconciles a SINGLE operation ("desvincular") from a statement line, leaving the rest of the
+ * line's reconciliation intact (POST). For an auto-created invoice payment it also reverses the
+ * payment and restores the invoice to unpaid.
+ * Payload shape: { financialAccountId, statementLineId, transactionId }.
+ *
+ * @returns {{ removeOperation: (payload: object) => Promise<object>, loading: boolean, error: Error|null }}
+ */
+export function useRemoveOperation() {
+  const { post, loading, error } = useNeoPost('removeOperation');
+  return { removeOperation: post, loading, error };
+}
+
+/**
  * Fetches an automatch preview for a financial account (GET, no mutations).
  *
  * @param {string|null} accountId
