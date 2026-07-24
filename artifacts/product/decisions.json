@@ -59,6 +59,7 @@
       "enabled": true,
       "spec": "product",
       "entity": "product",
+      "descriptor": "product",
       "formats": ["csv", "txt"],
       "limit": { "maxRows": 5000, "concurrency": 4 },
       "dedupe": { "scope": "file", "key": ["searchKey"] },
@@ -66,9 +67,7 @@
         { "target": "searchKey", "aliases": ["codigo", "código", "sku"] },
         { "target": "name", "aliases": ["nombre"] },
         { "target": "description", "aliases": ["descripcion", "descripción"] },
-        { "target": "uOM", "aliases": ["unidad de medida", "uom"], "matchEntity": "UOM" },
-        { "target": "productCategory", "aliases": ["categoria", "categoría"], "matchEntity": "ProductCategory" },
-        { "target": "taxCategory", "aliases": ["categoria impositiva", "categoría impositiva", "impuesto"], "matchEntity": "FinancialMgmtTaxCategory" }
+        { "target": "price", "aliases": ["precio"] }
       ]
     }
   },

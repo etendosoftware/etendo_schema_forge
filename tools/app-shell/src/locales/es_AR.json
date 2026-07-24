@@ -16656,6 +16656,8 @@
     "importErrorValueTooLong": "Un valor es demasiado largo para su campo.",
     "importErrorGeneric": "No se pudo importar esta fila. Abre los detalles para ver el informe técnico o contacta con soporte.",
     "importErrorCountryUnresolved": "No se pudo asociar el país \"{country}\" con un registro existente.",
+    "importErrorInvalidPrice": "El precio \"{value}\" no es un número válido.",
+    "importErrorNoPriceList": "No hay ninguna lista de precios de venta configurada, así que no se pudo importar el precio. Importa el producto sin precio o configura primero una lista de precios de venta.",
     "balanced": "Cuadrado",
     "difference": "Diferencia",
     "journalUnbalancedSaveBlocked": "El debe y el haber deben ser iguales antes de guardar",
