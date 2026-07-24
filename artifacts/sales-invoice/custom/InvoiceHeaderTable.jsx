@@ -87,7 +87,7 @@ export default function InvoiceHeaderTable(props) {
             ? { color: 'hsl(var(--primary))', bg: 'hsl(var(--foreground))', label: t('creditNotesTab') }
             : sub === 'DEV'
               ? { color: 'hsl(var(--destructive))', bg: 'hsl(var(--foreground))', label: t('returnsTab') }
-              : { color: 'var(--status-info-fg)', bg: 'hsl(var(--foreground))', label: t('invoicesTab') };
+              : { color: 'var(--status-info-fg)', bg: 'var(--status-info-bg)', label: t('invoicesTab') };
           return (
             <span
               className="inline-block rounded-full px-2 py-0.5 text-xs font-medium"
