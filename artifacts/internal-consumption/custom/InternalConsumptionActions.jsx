@@ -46,10 +46,10 @@ export default function InternalConsumptionActions({ data, recordId, token, apiB
         display: 'flex', alignItems: 'center', gap: 8, width: '100%',
         padding: '8px 12px', background: 'none', border: 'none',
         textAlign: 'left', cursor: processing ? 'not-allowed' : 'pointer',
-        fontSize: 13, color: processing ? '#9CA3AF' : '#111827',
+        fontSize: 13, color: processing ? 'hsl(var(--muted-foreground))' : 'hsl(var(--foreground))',
         opacity: processing ? 0.6 : 1,
       }}
-      onMouseEnter={e => { if (!processing) e.currentTarget.style.background = '#F3F4F6'; }}
+      onMouseEnter={e => { if (!processing) e.currentTarget.style.background = 'hsl(var(--card))'; }}
       onMouseLeave={e => { e.currentTarget.style.background = 'none'; }}
     >
       {processing ? ui('internalConsumptionVoiding') : ui('internalConsumptionVoid')}

@@ -56,7 +56,7 @@ function WarehouseProductCountCell({ row, token, apiBaseUrl }) {
   if (count === undefined || count === null) {
     return <span className="text-muted-foreground text-sm">—</span>;
   }
-  return <span className="text-sm text-[#121217]">{count}</span>;
+  return <span className="text-sm text-[hsl(var(--foreground))]">{count}</span>;
 }
 
 const columns = [
@@ -67,7 +67,7 @@ const columns = [
     type: 'custom',
     required: true,
     render: (row) => (
-      <span className="text-sm font-semibold text-[#121217]">{row.name}</span>
+      <span className="text-sm font-semibold text-[hsl(var(--foreground))]">{row.name}</span>
     ),
   },
   {
@@ -79,7 +79,7 @@ const columns = [
     render: (row) => {
       if (!row.searchKey) return <span className="text-muted-foreground text-sm">—</span>;
       return (
-        <span className="inline-flex items-center px-2 py-1 bg-[#F5F7F9] rounded-lg text-xs font-normal text-[#3F3F50] whitespace-nowrap">
+        <span className="inline-flex items-center px-2 py-1 bg-[hsl(var(--muted))] rounded-lg text-xs font-normal text-[hsl(var(--muted-foreground))] whitespace-nowrap">
           {row.searchKey}
         </span>
       );
@@ -93,7 +93,7 @@ const columns = [
     render: (row) => {
       const label = row['locationAddress$_identifier'] ?? row.locationAddress ?? null;
       if (!label) return <span className="text-muted-foreground text-sm">—</span>;
-      return <span className="text-sm text-[#121217]">{label}</span>;
+      return <span className="text-sm text-[hsl(var(--foreground))]">{label}</span>;
     },
   },
   {

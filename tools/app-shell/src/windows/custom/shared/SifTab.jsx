@@ -45,7 +45,7 @@ function CheckboxField({ id, checked, disabled, onToggle }) {
         disabled={disabled}
         onClick={() => !disabled && onToggle(!checked)}
         className={[
-          'h-5 w-5 shrink-0 rounded-sm border border-[#D1D4DB] shadow-[0px_1px_2px_rgba(18,18,23,0.05)]',
+          'h-5 w-5 shrink-0 rounded-sm border border-[hsl(var(--border-control))] shadow-[0px_1px_2px_hsl(var(--foreground) / 0.05)]',
           'flex items-center justify-center transition-colors',
           'focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring',
           'disabled:cursor-not-allowed disabled:opacity-50',
@@ -63,10 +63,10 @@ function CheckboxField({ id, checked, disabled, onToggle }) {
 }
 
 const PILL_CLS = {
-  pending: 'bg-yellow-50 text-yellow-800',
-  success: 'bg-green-50 text-green-700',
-  neutral: 'bg-[#F5F7F9] text-gray-700',
-  danger: 'bg-red-50 text-red-700',
+  pending: 'bg-status-warning text-status-warning-foreground',
+  success: 'bg-status-success text-status-success-foreground',
+  neutral: 'bg-[hsl(var(--muted))] text-foreground',
+  danger: 'bg-destructive text-destructive',
 };
 
 const SII_STATUS = {
@@ -263,7 +263,7 @@ export default function SifTab({ recordId, data, token, apiBaseUrl, onChange, on
 
   return (
     <div className="flex gap-2 p-2 h-full min-h-0">
-      <div className="w-56 shrink-0 flex flex-col gap-1 border border-border/40 rounded-lg bg-white p-2">
+      <div className="w-56 shrink-0 flex flex-col gap-1 border border-border/40 rounded-lg bg-card p-2">
         {railItems.map(item => {
           const active = effectiveTab === item.key;
           return (
@@ -272,7 +272,7 @@ export default function SifTab({ recordId, data, token, apiBaseUrl, onChange, on
               type="button"
               onClick={() => setActiveTab(item.key)}
               className={`flex flex-col items-start gap-0.5 px-3 py-2 rounded-md cursor-pointer text-left transition-colors ${
-                active ? 'bg-gray-50 border-l-2 border-primary' : 'hover:bg-gray-50/60'
+                active ? 'bg-muted border-l-2 border-primary' : 'hover:bg-muted/60'
               }`}
             >
               <span className={`text-xs font-semibold ${active ? 'text-primary' : 'text-foreground'}`}>
@@ -285,7 +285,7 @@ export default function SifTab({ recordId, data, token, apiBaseUrl, onChange, on
           );
         })}
       </div>
-      <div className="flex-1 border border-border/40 rounded-lg bg-white overflow-hidden flex flex-col min-h-0">
+      <div className="flex-1 border border-border/40 rounded-lg bg-card overflow-hidden flex flex-col min-h-0">
         {effectiveTab === 'sii' && showSii && (
           <Panel
             titleKey={PANEL_META.sii.titleKey}

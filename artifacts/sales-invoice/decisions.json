@@ -74,7 +74,8 @@
         "OutstandingAmt": "Pendiente de pago",
         "EM_Etgo_Due_Date": "Vencimiento",
         "em_etgo_delivery_status": "Estado de entrega",
-        "C_DocTypeTarget_ID": "Tipo de documento"
+        "C_DocTypeTarget_ID": "Tipo de documento",
+        "PriceList": "Precio"
       },
       "en_US": {
         "OutstandingAmt": "Pending Payment",
@@ -512,7 +513,7 @@
           "order": 3,
           "gridOrder": 3,
           "section": "principal",
-          "min": 0
+          "min": false
         },
         "uOM": {
           "visibility": "system"
@@ -526,7 +527,7 @@
           "gridOrder": 4,
           "section": "principal",
           "columnType": "amount",
-          "min": 0
+          "min": false
         },
         "etgoDiscount": {
           "visibility": "editable",

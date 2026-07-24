@@ -20,7 +20,7 @@ export default function ProductCategoryCustomForm({ entity, data, token, apiBase
   ];
 
   return (
-    <div className="flex flex-col gap-5 [&_input]:bg-white [&_textarea]:bg-white">
+    <div className="flex flex-col gap-5 [&_input]:bg-card [&_textarea]:bg-card">
       {/* Row 1: Name | Search Key | Configuration checkboxes */}
       <div className="flex flex-row items-end gap-5">
         <div className="w-[325px] shrink-0">

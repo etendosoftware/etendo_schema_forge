@@ -31,9 +31,9 @@ function formatTerritory(raw) {
 // Two-column section row wrapper
 function SectionRow({ label, children, labelExtra, boldLabel, noBorderTop }) {
   return (
-    <div className={`flex items-start py-6 gap-6 ${noBorderTop ? '' : 'border-t border-[#E8EAEF]'}`}>
+    <div className={`flex items-start py-6 gap-6 ${noBorderTop ? '' : 'border-t border-[hsl(var(--border-subtle))]'}`}>
       <div className="w-[160px] flex-shrink-0">
-        <span className={`text-sm text-[#121217] ${boldLabel ? 'font-semibold' : 'font-medium'}`}>{label}</span>
+        <span className={`text-sm text-[hsl(var(--foreground))] ${boldLabel ? 'font-semibold' : 'font-medium'}`}>{label}</span>
         {labelExtra && <div className="mt-0.5">{labelExtra}</div>}
       </div>
       <div className="flex-1 min-w-0">{children}</div>
@@ -104,9 +104,9 @@ const TbaiSection = forwardRef(function TbaiSection({ record, apiBaseUrl, orgId,
         </SectionRow>
       )}
       {/* Fecha acogida TBAI — top-level, no section name */}
-      <div className={`flex items-start py-6 gap-6 ${record?.etsgSifTerritory ? 'border-t border-[#E8EAEF]' : ''}`}>
+      <div className={`flex items-start py-6 gap-6 ${record?.etsgSifTerritory ? 'border-t border-[hsl(var(--border-subtle))]' : ''}`}>
         <div className="w-[160px] flex-shrink-0">
-          <span className="text-sm font-medium text-[#121217]">{ui('fiscal.tbai.field.enrollDate')}</span>
+          <span className="text-sm font-medium text-[hsl(var(--foreground))]">{ui('fiscal.tbai.field.enrollDate')}</span>
         </div>
         <div className="flex-1 min-w-0">
           <DateField
@@ -117,9 +117,9 @@ const TbaiSection = forwardRef(function TbaiSection({ record, apiBaseUrl, orgId,
         </div>
       </div>
       {/* Entorno producción — top-level */}
-      <div className="flex items-start py-6 gap-6 border-t border-[#E8EAEF]">
+      <div className="flex items-start py-6 gap-6 border-t border-[hsl(var(--border-subtle))]">
         <div className="w-[160px] flex-shrink-0">
-          <span className="text-sm font-medium text-[#121217]">{ui('fiscal.tbai.field.production')}</span>
+          <span className="text-sm font-medium text-[hsl(var(--foreground))]">{ui('fiscal.tbai.field.production')}</span>
         </div>
         <div className="flex-1 min-w-0">
           <Switch
@@ -136,21 +136,21 @@ const TbaiSection = forwardRef(function TbaiSection({ record, apiBaseUrl, orgId,
               checked={isEtendoTrue(form.uSEAsproductDesc)}
               onCheckedChange={v => set('uSEAsproductDesc', v ? 'Y' : 'N')}
               data-testid="Switch__f06d4b" />
-            <span className="text-sm text-[#121217]">{ui('fiscal.tbai.field.useAsProduct')}</span>
+            <span className="text-sm text-[hsl(var(--foreground))]">{ui('fiscal.tbai.field.useAsProduct')}</span>
           </div>
           <div className="flex items-center gap-2 pt-1 w-[376px]">
             <Switch
               checked={isEtendoTrue(form.autoSendInvoices)}
               onCheckedChange={v => set('autoSendInvoices', v ? 'Y' : 'N')}
               data-testid="Switch__f06d4b" />
-            <span className="text-sm text-[#121217]">{ui('fiscal.tbai.field.autoSend')}</span>
+            <span className="text-sm text-[hsl(var(--foreground))]">{ui('fiscal.tbai.field.autoSend')}</span>
           </div>
           <div className="space-y-1 w-[376px]">
             <Label data-testid="Label__f06d4b">{ui('fiscal.tbai.field.invoiceDesc')}</Label>
             <Input
               value={form.invoiceDescription}
               onChange={e => set('invoiceDescription', e.target.value)}
-              className="bg-white"
+              className="bg-card"
               data-testid="Input__f06d4b" />
           </div>
         </div>
@@ -164,7 +164,7 @@ const TbaiSection = forwardRef(function TbaiSection({ record, apiBaseUrl, orgId,
             checked={isEtendoTrue(form.validatePreviousInvoice)}
             onCheckedChange={v => set('validatePreviousInvoice', v ? 'Y' : 'N')}
             data-testid="Switch__f06d4b" />
-          <span className="text-sm text-[#121217]">{ui('fiscal.tbai.field.validatePrev')}</span>
+          <span className="text-sm text-[hsl(var(--foreground))]">{ui('fiscal.tbai.field.validatePrev')}</span>
         </div>
       </SectionRow>
       {/* Certificado digital */}
@@ -172,7 +172,7 @@ const TbaiSection = forwardRef(function TbaiSection({ record, apiBaseUrl, orgId,
         <SectionRow
           label={ui('fiscal.cert.section.legend')}
           boldLabel
-          labelExtra={<span className="text-xs text-[#121217] leading-tight">{ui('fiscal.cert.section.hint')}</span>}
+          labelExtra={<span className="text-xs text-[hsl(var(--foreground))] leading-tight">{ui('fiscal.cert.section.hint')}</span>}
           data-testid="SectionRow__f06d4b">
           <CertSection
             context="tbai"

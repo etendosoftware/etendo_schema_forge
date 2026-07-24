@@ -18,7 +18,8 @@
       "es_ES": {
         "C_BPartner_ID": "Contacto",
         "C_Reject_Reason_ID": "Razón de rechazo",
-        "DateOrdered": "Fecha de presupuesto"
+        "DateOrdered": "Fecha de presupuesto",
+        "PriceList": "Precio"
       },
       "en_US": {
         "C_BPartner_ID": "Contact",
@@ -325,7 +326,7 @@
           "inputMode": "number",
           "order": 3,
           "gridOrder": 3,
-          "min": 0
+          "min": false
         },
         "uOM": {
           "visibility": "system"
@@ -451,7 +452,7 @@
           "order": 4,
           "gridOrder": 4,
           "columnType": "amount",
-          "min": 0
+          "min": false
         },
         "grossListPrice": {
           "visibility": "discarded"

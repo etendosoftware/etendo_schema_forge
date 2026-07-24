@@ -27,9 +27,9 @@ function trxTypeLabel(trxType, ui) {
 function WidgetField({ label, value, children }) {
   return (
     <div className="flex min-w-0 flex-1 flex-col">
-      <span className="truncate text-xs leading-4 text-[#3F3F50]">{label}</span>
+      <span className="truncate text-xs leading-4 text-[hsl(var(--muted-foreground))]">{label}</span>
       {children ?? (
-        <span className="truncate text-base font-medium leading-6 text-[#121217]">{value}</span>
+        <span className="truncate text-base font-medium leading-6 text-[hsl(var(--foreground))]">{value}</span>
       )}
     </div>
   );
@@ -75,11 +75,11 @@ export function ReconciledTxnsModal({ line, currency = 'EUR', onClose }) {
 
   return (
     <Dialog open={open} onOpenChange={(v) => { if (!v) onClose(); }} data-testid="Dialog__2dbb84">
-      <DialogContent className="w-[92vw] max-w-[1080px] overflow-hidden rounded-xl bg-white p-0 shadow-[0px_0px_0px_1px_rgba(18,18,23,0.1),0px_24px_48px_rgba(18,18,23,0.08)]" data-testid="reconciled-txns-modal">
+      <DialogContent className="w-[92vw] max-w-[1080px] overflow-hidden rounded-xl bg-card p-0 shadow-[0px_0px_0px_1px_hsl(var(--foreground) / 0.1),0px_24px_48px_hsl(var(--foreground) / 0.08)]" data-testid="reconciled-txns-modal">
         {/* Header */}
         <div className="px-6 pb-2 pt-5">
           <DialogTitle
-            className="m-0 text-xl font-semibold leading-7 text-[#121217]"
+            className="m-0 text-xl font-semibold leading-7 text-[hsl(var(--foreground))]"
             data-testid="DialogTitle__2dbb84">
             {ui('financeAccountStatementLinesTxnModalTitle')}
           </DialogTitle>
@@ -88,7 +88,7 @@ export function ReconciledTxnsModal({ line, currency = 'EUR', onClose }) {
         {/* Statement-line summary widget */}
         {line ? (
           <div className="px-6 pb-1">
-            <div className="flex flex-wrap items-center gap-x-5 gap-y-2 rounded-lg border border-[#E8EAEF] px-3 py-2">
+            <div className="flex flex-wrap items-center gap-x-5 gap-y-2 rounded-lg border border-[hsl(var(--border-subtle))] px-3 py-2">
               <WidgetField
                 label={ui('financeAccountStatementLinesTxnModalLineLabel')}
                 value={line.description || contact || '—'}
@@ -99,11 +99,11 @@ export function ReconciledTxnsModal({ line, currency = 'EUR', onClose }) {
                 data-testid="WidgetField__2dbb84" />
               <WidgetField label={ui('financeAccountMovementsColContact')} data-testid="WidgetField__2dbb84">
                 {contact ? (
-                  <span className="inline-flex w-fit max-w-full truncate rounded-lg bg-[#F5F7F9] px-2 py-0.5 text-xs text-[#3F3F50]">
+                  <span className="inline-flex w-fit max-w-full truncate rounded-lg bg-[hsl(var(--muted))] px-2 py-0.5 text-xs text-[hsl(var(--muted-foreground))]">
                     {contact}
                   </span>
                 ) : (
-                  <span className="text-base font-medium leading-6 text-[#121217]">—</span>
+                  <span className="text-base font-medium leading-6 text-[hsl(var(--foreground))]">—</span>
                 )}
               </WidgetField>
               <WidgetField
@@ -128,12 +128,12 @@ export function ReconciledTxnsModal({ line, currency = 'EUR', onClose }) {
               </WidgetField>
               <WidgetField label={ui('financeAccountStatementLinesTxnReconciliation')} data-testid="WidgetField__2dbb84">
                 {balanced ? (
-                  <span className="inline-flex items-center gap-1 text-base font-medium leading-6 text-[#1E874C]">
+                  <span className="inline-flex items-center gap-1 text-base font-medium leading-6 text-[var(--status-success-fg)]">
                     <CheckCircle2 className="h-4 w-4" data-testid="CheckCircle2__2dbb84" />
                     {ui('financeAccountStatementLinesTxnBalancedShort')}
                   </span>
                 ) : (
-                  <span className="inline-flex items-center gap-1 text-sm font-medium leading-6 text-[#A8670B]">
+                  <span className="inline-flex items-center gap-1 text-sm font-medium leading-6 text-[var(--status-warning-fg)]">
                     <AlertTriangle className="h-4 w-4 flex-none" data-testid="AlertTriangle__2dbb84" />
                     {ui('financeAccountStatementLinesTxnDiff', { amount: formatSigned(diff, currency) })}
                   </span>
@@ -144,13 +144,13 @@ export function ReconciledTxnsModal({ line, currency = 'EUR', onClose }) {
         ) : null}
 
         {/* Tab strip */}
-        <div className="mt-2 flex items-center border-b border-[#E8EAEF] px-6">
-          <div className="-mb-px flex items-center gap-1.5 border-b-2 border-[#121217] pb-3 pr-3 pt-2">
-            <Link2 className="h-4 w-4 text-[#121217]" data-testid="Link2__2dbb84" />
-            <span className="text-sm font-medium text-[#121217]">
+        <div className="mt-2 flex items-center border-b border-[hsl(var(--border-subtle))] px-6">
+          <div className="-mb-px flex items-center gap-1.5 border-b-2 border-[hsl(var(--foreground))] pb-3 pr-3 pt-2">
+            <Link2 className="h-4 w-4 text-[hsl(var(--foreground))]" data-testid="Link2__2dbb84" />
+            <span className="text-sm font-medium text-[hsl(var(--foreground))]">
               {ui('financeAccountStatementLinesTxnModalAssociated')}
             </span>
-            <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-[#F5F7F9] px-1.5 text-[11px] text-[#3F3F50]">
+            <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-[hsl(var(--muted))] px-1.5 text-[11px] text-[hsl(var(--muted-foreground))]">
               {txns.length}
             </span>
           </div>
@@ -159,7 +159,7 @@ export function ReconciledTxnsModal({ line, currency = 'EUR', onClose }) {
         {/* Movements table (full-width separators) */}
         <div className="max-h-[56vh] overflow-y-auto overflow-x-hidden">
           {/* head */}
-          <div className={cn(TXN_GRID, 'min-h-[40px] border-b border-[#E8EAEF] px-6 text-xs font-semibold leading-4 text-[#121217]')}>
+          <div className={cn(TXN_GRID, 'min-h-[40px] border-b border-[hsl(var(--border-subtle))] px-6 text-xs font-semibold leading-4 text-[hsl(var(--foreground))]')}>
             <span>{ui('financeAccountMovementsColDate')}</span>
             <span>{ui('financeAccountMovementsColDocument')}</span>
             <span>{ui('financeAccountMovementsColContact')}</span>
@@ -173,12 +173,12 @@ export function ReconciledTxnsModal({ line, currency = 'EUR', onClose }) {
             <div
               key={t.transactionId || t.documentNo}
               data-testid={`reconciled-txn-row-${t.documentNo}`}
-              className={cn(TXN_GRID, 'min-h-[54px] border-b border-[#E8EAEF] px-6 text-sm text-[#121217] last:border-0 hover:bg-[#F8F9FB]')}
+              className={cn(TXN_GRID, 'min-h-[54px] border-b border-[hsl(var(--border-subtle))] px-6 text-sm text-[hsl(var(--foreground))] last:border-0 hover:bg-[hsl(var(--muted))]')}
             >
               <span>{formatDate(t.date, bcpLocale)}</span>
               <span className="font-semibold">{t.documentNo || '—'}</span>
-              <span className="truncate" title={t.contact || ''}>{t.contact || <span className="text-[#A8AAB8]">—</span>}</span>
-              <span className="truncate" title={t.description || ''}>{t.description || <span className="text-[#A8AAB8]">—</span>}</span>
+              <span className="truncate" title={t.contact || ''}>{t.contact || <span className="text-[hsl(var(--text-disabled))]">—</span>}</span>
+              <span className="truncate" title={t.description || ''}>{t.description || <span className="text-[hsl(var(--text-disabled))]">—</span>}</span>
               <span className="flex flex-col gap-0.5">
                 <span className="leading-[17px]">{trxTypeLabel(t.trxType, ui)}</span>
                 {/* NOTE: BankStatementsSupport#buildLineTxns does not return a `posted`
@@ -200,7 +200,7 @@ export function ReconciledTxnsModal({ line, currency = 'EUR', onClose }) {
                     aria-label={ui('financeAccountStatementLinesTxnGoToMovement')}
                     data-testid={`reconciled-txn-go-${t.documentNo}`}
                     onClick={() => goToMovement(t)}
-                    className="inline-flex h-[30px] w-[30px] items-center justify-center rounded-md border border-[#E8EAEF] bg-white text-[#6C6C89] hover:border-[#D1D4DB] hover:bg-[#F5F7F9] hover:text-[#121217]"
+                    className="inline-flex h-[30px] w-[30px] items-center justify-center rounded-md border border-[hsl(var(--border-subtle))] bg-card text-[hsl(var(--muted-foreground))] hover:border-[hsl(var(--border-control))] hover:bg-[hsl(var(--muted))] hover:text-[hsl(var(--foreground))]"
                   >
                     <ArrowUpRight className="h-3.5 w-3.5" data-testid="ArrowUpRight__2dbb84" />
                   </button>
@@ -211,12 +211,12 @@ export function ReconciledTxnsModal({ line, currency = 'EUR', onClose }) {
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-end border-t border-[#E8EAEF] px-6 py-3">
+        <div className="flex items-center justify-end border-t border-[hsl(var(--border-subtle))] px-6 py-3">
           <button
             type="button"
             onClick={onClose}
             data-testid="reconciled-txns-cancel"
-            className="inline-flex h-10 items-center justify-center rounded-full border border-[#D1D4DB] bg-white px-4 text-sm font-medium text-[#121217] shadow-[0_1px_2px_rgba(18,18,23,0.05)] hover:bg-[#F5F7F9]"
+            className="inline-flex h-10 items-center justify-center rounded-full border border-[hsl(var(--border-control))] bg-card px-4 text-sm font-medium text-[hsl(var(--foreground))] shadow-[0_1px_2px_hsl(var(--foreground) / 0.05)] hover:bg-[hsl(var(--muted))]"
           >
             {ui('financeAccountStatementLinesTxnCancel')}
           </button>
