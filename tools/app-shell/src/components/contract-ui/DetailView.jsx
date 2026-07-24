@@ -1801,11 +1801,8 @@ export function DetailView({
   addLineFields = { entry: [], derived: [] },
   catalogs: staticCatalogs,
   api,
-  // ETP-4520 — the runtime per-tier window override (`useWindowAccess`'s 'read-only'
-  // tier forces `{ readOnly: true }` here — see buildWindowAccessWiring/effectiveWindow
-  // in generate-frontend.js and the equivalent hand-wired custom windows). Distinct from
-  // `api.window.readOnly` below, which is the static decisions.json-authored flag for a
-  // window that's ALWAYS view-only regardless of role. Either one forces read-only.
+  // ETP-4520 — runtime per-tier window override; see ListView.jsx's identical
+  // `window` prop for the full rationale (buildWindowAccessWiring/effectiveWindow).
   window: windowProp = null,
   entityLabel,
   detailLabel,
