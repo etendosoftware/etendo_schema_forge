@@ -7,12 +7,14 @@ vi.mock('react-router-dom', () => ({
   NavLink: ({ children, ...props }) => <a {...props}>{children}</a>,
 }));
 
-// Mock i18n hooks
+// Mock i18n hooks. The active locale is read from a mutable holder so a test
+// can drive expandMultiFieldColumns's per-locale `labels` resolution (CHANGE 2).
+let currentLocale = 'en_US';
 vi.mock('@/i18n', () => ({
   useLabel: () => (key) => key,
   useMenuLabel: () => (key, { field } = {}) => field ? null : key,
   useUI: () => (key) => key,
-  useLocaleSwitch: () => ({ locale: 'en_US', setLocale: vi.fn() }),
+  useLocaleSwitch: () => ({ locale: currentLocale, setLocale: vi.fn() }),
 }));
 
 // Mock useEntity hook
@@ -281,7 +283,8 @@ describe('ListView', () => {
 
   // ── expandMultiFieldColumns: filter-bar column expansion ───────────────
   describe('multiField column expansion for the advanced filter', () => {
-    beforeEach(() => { capturedFilterBarColumns = null; });
+    beforeEach(() => { capturedFilterBarColumns = null; currentLocale = 'en_US'; });
+    afterEach(() => { currentLocale = 'en_US'; });
 
     const MF_COLUMNS = [
       {
@@ -331,6 +334,66 @@ describe('ListView', () => {
     it('leaves non-multiField columns unchanged', () => {
       render(<ListView {...defaultProps} initialColumns={[{ key: 'status', type: 'status', label: 'Status' }]} />);
       expect(capturedFilterBarColumns).toEqual([{ key: 'status', type: 'status', label: 'Status' }]);
+    });
+
+    // ── CHANGE 2: per-locale `labels` map → singular localized `label` ──────
+    // A plain (non-multiField) column carrying only a `labels` map (e.g. the
+    // product sale/purchase/stock custom cells) must be relabeled with the
+    // active-locale entry so the advanced-filter field picker shows the
+    // localized word instead of the lowercase key.
+    it('resolves a plain column label from labels[locale] when the locale entry exists', () => {
+      currentLocale = 'es_ES';
+      render(
+        <ListView
+          {...defaultProps}
+          initialColumns={[{ key: 'sale', type: 'custom', labels: { en_US: 'Sales', es_ES: 'Venta' } }]}
+        />,
+      );
+      const saleField = capturedFilterBarColumns.find((c) => c.key === 'sale');
+      expect(saleField.label).toBe('Venta');
+    });
+
+    it('falls back to labels.en_US when the active locale has no entry', () => {
+      currentLocale = 'fr_FR'; // no French entry in the labels map
+      render(
+        <ListView
+          {...defaultProps}
+          initialColumns={[{ key: 'sale', type: 'custom', labels: { en_US: 'Sales', es_ES: 'Venta' } }]}
+        />,
+      );
+      const saleField = capturedFilterBarColumns.find((c) => c.key === 'sale');
+      expect(saleField.label).toBe('Sales');
+    });
+
+    it('falls back to the key when neither the locale nor en_US is present in labels', () => {
+      currentLocale = 'fr_FR';
+      render(
+        <ListView
+          {...defaultProps}
+          initialColumns={[{ key: 'sale', type: 'custom', labels: { es_ES: 'Venta' } }]}
+        />,
+      );
+      const saleField = capturedFilterBarColumns.find((c) => c.key === 'sale');
+      expect(saleField.label).toBe('sale');
+    });
+
+    it('leaves a column that already has a singular label unchanged (labels guard requires !label)', () => {
+      currentLocale = 'es_ES';
+      const col = { key: 'sale', type: 'custom', label: 'Existing', labels: { es_ES: 'Venta' } };
+      render(<ListView {...defaultProps} initialColumns={[col]} />);
+      const saleField = capturedFilterBarColumns.find((c) => c.key === 'sale');
+      expect(saleField.label).toBe('Existing');
+    });
+
+    it('does not relabel a column that carries a `column` field even if it has labels', () => {
+      currentLocale = 'es_ES';
+      const col = { key: 'sale', type: 'custom', column: 'ETGO_SalePrice', labels: { es_ES: 'Venta' } };
+      render(<ListView {...defaultProps} initialColumns={[col]} />);
+      const saleField = capturedFilterBarColumns.find((c) => c.key === 'sale');
+      // The `!col.column` guard skips the labels branch: the column passes
+      // through untouched, so no `label` is injected.
+      expect(saleField).toEqual(col);
+      expect(saleField.label).toBeUndefined();
     });
   });
 });

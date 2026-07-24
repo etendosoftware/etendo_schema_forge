@@ -32,43 +32,52 @@ const columns = [
     enumVariants: { I: 'blue', S: 'purple', R: 'teal', E: 'orange' },
     required: true,
   },
+  // Sales / Purchase / Stock are stored computed columns (EPL-1807) materialized
+  // on M_Product and returned inline by the list fetch (`eTGOSalePrice` /
+  // `eTGOPurchasePrice` / `eTGOStock`). Because the values now travel with the
+  // row, sort and filter run server-side on the real entity property — hence:
+  //   - `sortable: true`
+  //   - `backendSortKey` / `backendFilterKey` map the display key to that property
+  //     (the column `key` stays 'sale'/'purchase'/'stock' for React + render)
+  //   - `filterMode: 'numeric'` so the advanced filter offers numeric operators
+  //     (greaterThan/between/…) and a number input instead of text `iContains`.
   {
     key: 'sale',
     labels: { en_US: 'Sales', es_ES: 'Venta' },
     type: 'custom',
-    sortable: false,
-    render: (row, { token, apiBaseUrl }) => (
-      <ProductSalePriceCell
-        row={row}
-        token={token}
-        apiBaseUrl={apiBaseUrl}
-        data-testid="ProductSalePriceCell__f45e24" />
+    sortable: true,
+    filterMode: 'numeric',
+    backendSortKey: 'eTGOSalePrice',
+    backendFilterKey: 'eTGOSalePrice',
+    render: (row) => (
+      <ProductSalePriceCell row={row} data-testid="ProductSalePriceCell__f45e24" />
     ),
   },
   {
     key: 'purchase',
     labels: { en_US: 'Purchase', es_ES: 'Compra' },
     type: 'custom',
-    sortable: false,
-    render: (row, { token, apiBaseUrl }) => (
-      <ProductPurchasePriceCell
-        row={row}
-        token={token}
-        apiBaseUrl={apiBaseUrl}
-        data-testid="ProductPurchasePriceCell__f45e24" />
+    sortable: true,
+    filterMode: 'numeric',
+    backendSortKey: 'eTGOPurchasePrice',
+    backendFilterKey: 'eTGOPurchasePrice',
+    render: (row) => (
+      <ProductPurchasePriceCell row={row} data-testid="ProductPurchasePriceCell__f45e24" />
     ),
   },
   {
     key: 'stock',
     labels: { en_US: 'Stock', es_ES: 'Stock' },
     type: 'custom',
-    sortable: false,
-    render: (row, { token, apiBaseUrl }) => (
-      <ProductStockCell
-        row={row}
-        token={token}
-        apiBaseUrl={apiBaseUrl}
-        data-testid="ProductStockCell__f45e24" />
+    sortable: true,
+    filterMode: 'numeric',
+    backendSortKey: 'eTGOStock',
+    backendFilterKey: 'eTGOStock',
+    // Stored computed column (EPL-1807): eTGOStock is refreshed by the async
+    // queue drain (~a few minutes), hence the 'queued' freshness wording.
+    computed: { mode: 'stored', refresh: 'queued' },
+    render: (row) => (
+      <ProductStockCell row={row} data-testid="ProductStockCell__f45e24" />
     ),
   },
 ];

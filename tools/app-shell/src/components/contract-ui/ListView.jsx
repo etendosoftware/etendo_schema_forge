@@ -85,6 +85,14 @@ function expandMultiFieldColumns(columns, locale) {
       }
       continue;
     }
+    // Plain columns that carry a per-locale `labels` map but no singular `label`
+    // (e.g. custom cells) would otherwise fall through to `col.key` in the
+    // advanced-filter field picker — a lowercase, unlocalized identifier. Resolve
+    // the localized label here so the builder shows "Venta"/"Compra"/"Stock".
+    if (col?.labels && !col.label && !col.column) {
+      out.push({ ...col, label: col.labels[locale] ?? col.labels.en_US ?? col.key });
+      continue;
+    }
     out.push(col);
   }
   return out;
