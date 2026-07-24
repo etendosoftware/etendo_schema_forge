@@ -18,11 +18,13 @@ vi.mock('@/components/layout/PageMetaContext', () => ({
 const toastError = vi.fn();
 const toastInfo = vi.fn();
 const toastSuccess = vi.fn();
+const toastWarning = vi.fn();
 vi.mock('sonner', () => ({
   toast: {
     error: (...a) => toastError(...a),
     info: (...a) => toastInfo(...a),
     success: (...a) => toastSuccess(...a),
+    warning: (...a) => toastWarning(...a),
   },
 }));
 
@@ -32,6 +34,18 @@ const mockUseFinancialAccounts = vi.fn(() => ({
 }));
 vi.mock('@/hooks/useFinancialAccounts.js', () => ({
   useFinancialAccounts: () => mockUseFinancialAccounts(),
+}));
+
+// ETP-4656 — the page now also calls useAccountMutations() (bulk "Delete selected"
+// reuses archiveAccount()), which calls useAuth() internally; stub it at the module
+// level like every other auth-touching hook in this suite (no AuthProvider needed).
+vi.mock('@/hooks/useAccountMutations.js', () => ({
+  useAccountMutations: () => ({
+    createAccount: vi.fn(),
+    updateAccount: vi.fn(),
+    archiveAccount: vi.fn(),
+    fetchDefaults: vi.fn().mockResolvedValue({ currencies: [], defaultCurrencyId: '' }),
+  }),
 }));
 
 const mockSync = vi.fn();

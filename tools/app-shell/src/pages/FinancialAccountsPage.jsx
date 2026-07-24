@@ -1,16 +1,19 @@
-import { useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { useSetPageMeta } from '@/components/layout/PageMetaContext';
 import { useUI } from '@/i18n';
 import { useFinancialAccounts } from '@/hooks/useFinancialAccounts.js';
+import { useAccountMutations } from '@/hooks/useAccountMutations.js';
 import { usePsd2Actions } from '@/hooks/usePsd2Actions.js';
 import { usePsd2ConnectFlow } from '@/hooks/usePsd2ConnectFlow.js';
+import { useBatchDeleteDialog } from '@/hooks/useBatchDeleteDialog.jsx';
 import {
   AccountsSidebar,
   AccountsToolbar,
   AccountsTable,
   AccountTypeFilter,
+  BulkDeleteSelectionBar,
 } from '@/components/financial-accounts';
 import { NewAccountWizard } from '@/windows/custom/financial-account/NewAccountWizard.jsx';
 import { EditAccountModal } from '@/windows/custom/financial-account/EditAccountModal.jsx';
@@ -54,6 +57,37 @@ export default function FinancialAccountsPage() {
   const [disconnecting, setDisconnecting] = useState(false);
   const { sync, disconnect } = usePsd2Actions();
   const psd2Flow = usePsd2ConnectFlow({ onDone: reload });
+  const { archiveAccount } = useAccountMutations();
+
+  // ETP-4656 (Gap 1) — bulk "Delete selected" for the accounts grid. There is no
+  // hard-delete endpoint for financial accounts: DELETE /financial-account/account/{id}
+  // already soft-archives (IsActive='N') — the exact same call the single-row
+  // "Archivar" kebab action already makes (see useAccountMutations.js). Bulk delete
+  // reuses that same call per selected account; the 3-outcome contract/toasts and
+  // "Delete selected" wording are identical to ListView's grid bulk delete (per the
+  // Confluence doc), even though under the hood this archives rather than hard-deletes.
+  const [selectedIds, setSelectedIds] = useState(new Set());
+  const handleSelectionChange = useCallback((id) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }, []);
+  const clearSelection = useCallback(() => setSelectedIds(new Set()), []);
+
+  const { requestBatchDelete, batchDeleteDialog, deleting: bulkDeleting } = useBatchDeleteDialog({
+    deleteOneFn: (account) => archiveAccount(account.id),
+    onOutcome: (succeeded, failed) => {
+      if (succeeded.length > 0) reload();
+      if (failed.length === 0) {
+        clearSelection();
+      } else {
+        setSelectedIds(new Set(failed.map((a) => a.id)));
+      }
+    },
+  });
 
   const handlePsd2Action = async (action, account) => {
     if (action === 'connect') {
@@ -135,14 +169,23 @@ export default function FinancialAccountsPage() {
   return (
     <div className="flex h-full min-h-0 flex-1 flex-col">
       <div className="border-b border-[#E8EAEF] p-2">
-        <AccountsToolbar
-          typeFilter={typeFilter}
-          onTypeFilterChange={setTypeFilter}
-          search={search}
-          onSearchChange={setSearch}
-          onNewAccount={() => setWizardOpen(true)}
-          onMatchingRules={() => navigate('/match-rule')}
-          data-testid="AccountsToolbar__7c3fbc" />
+        {selectedIds.size > 0 ? (
+          <BulkDeleteSelectionBar
+            count={selectedIds.size}
+            deleting={bulkDeleting}
+            onCancel={clearSelection}
+            onDelete={() => requestBatchDelete(visibleAccounts.filter((a) => selectedIds.has(a.id)))}
+            data-testid="BulkDeleteSelectionBar__7c3fbc" />
+        ) : (
+          <AccountsToolbar
+            typeFilter={typeFilter}
+            onTypeFilterChange={setTypeFilter}
+            search={search}
+            onSearchChange={setSearch}
+            onNewAccount={() => setWizardOpen(true)}
+            onMatchingRules={() => navigate('/match-rule')}
+            data-testid="AccountsToolbar__7c3fbc" />
+        )}
       </div>
       <div
         className="flex flex-1 overflow-hidden"
@@ -165,9 +208,12 @@ export default function FinancialAccountsPage() {
             onTransfer={setTransferSource}
             onNewMovement={handleNewMovement}
             onRetry={reload}
+            selectedIds={selectedIds}
+            onSelectionChange={handleSelectionChange}
             data-testid="AccountsTable__7c3fbc" />
         </div>
       </div>
+      {batchDeleteDialog}
       <NewAccountWizard
         open={wizardOpen}
         onClose={() => setWizardOpen(false)}

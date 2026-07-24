@@ -1,17 +1,29 @@
 import { TableHeader, TableRow, TableHead } from '@/components/ui/table';
+import { Checkbox } from '@/components/ui/checkbox';
 import { useUI } from '@/i18n';
 import { cn } from '@/lib/utils';
 import { ACCOUNT_COLUMNS, ACCOUNT_CELL_RENDERERS } from './accountColumns.jsx';
 
 const HEAD_BASE = 'text-xs font-semibold leading-4 text-[#121217]';
 
-export function AccountsTableHeader() {
+/**
+ * @param {{ allSelected?: boolean, someSelected?: boolean, onSelectAll?: () => void }} props
+ */
+export function AccountsTableHeader({ allSelected = false, someSelected = false, onSelectAll }) {
   const ui = useUI();
   return (
     <TableHeader data-testid="TableHeader__18040e">
       <TableRow
         className="h-10 border-b border-[#E8EAEF] bg-white hover:bg-white"
         data-testid="TableRow__18040e">
+        {/* ETP-4656 — select-all checkbox, same plumbing as MovementsTable/StatementsTable */}
+        <TableHead className="w-10 px-3" data-testid="TableHead__18040e">
+          <Checkbox
+            checked={allSelected}
+            indeterminate={someSelected}
+            onChange={onSelectAll}
+            data-testid="account-select-all" />
+        </TableHead>
         {/* Contract-driven data columns (decisions.json → contract.json) */}
         {ACCOUNT_COLUMNS.map((col) => {
           const meta = ACCOUNT_CELL_RENDERERS[col.name];

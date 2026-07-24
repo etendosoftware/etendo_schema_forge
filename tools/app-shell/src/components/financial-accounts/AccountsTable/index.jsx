@@ -5,9 +5,9 @@ import { AccountsTableHeader } from './AccountsTableHeader.jsx';
 import { AccountRow } from './AccountRow.jsx';
 import { ACCOUNT_COLUMNS, ACCOUNT_CELL_RENDERERS } from './accountColumns.jsx';
 
-// Total column count = contract data columns + Pending + menu, used for the
-// empty/error colSpan so it always matches the (possibly reconfigured) header.
-const TOTAL_COL_COUNT = ACCOUNT_COLUMNS.length + 2;
+// Total column count = checkbox + contract data columns + Pending + menu, used
+// for the empty/error colSpan so it always matches the (possibly reconfigured) header.
+const TOTAL_COL_COUNT = ACCOUNT_COLUMNS.length + 3;
 
 const SKELETON_ROW_KEYS = [
   'skeleton-row-1',
@@ -22,6 +22,7 @@ function LoadingRows() {
     <>
       {SKELETON_ROW_KEYS.map((rowKey) => (
         <TableRow key={rowKey} className="h-16" data-testid="TableRow__db8970">
+          <TableCell className="w-10 px-3" data-testid="TableCell__db8970" />
           {ACCOUNT_COLUMNS.map((col) => {
             const renderer = ACCOUNT_CELL_RENDERERS[col.name];
             const cellKey = `${rowKey}-${col.name}`;
@@ -86,9 +87,23 @@ export function AccountsTable({
   onTransfer,
   onNewMovement,
   onRetry,
+  // ETP-4656 — multi-select bulk delete (Gap 1). `selectedIds` is a Set<string>,
+  // same shape MovementsTable/StatementsTable already use.
+  selectedIds = new Set(),
+  onSelectionChange,
 }) {
   const ui = useUI();
   const rowCount = accounts?.length ?? 0;
+  const allSelected = rowCount > 0 && accounts.every((a) => selectedIds.has(a.id));
+  const someSelected = !allSelected && accounts.some((a) => selectedIds.has(a.id));
+
+  const handleSelectAll = () => {
+    if (allSelected) {
+      accounts.forEach((a) => onSelectionChange?.(a.id));
+    } else {
+      accounts.filter((a) => !selectedIds.has(a.id)).forEach((a) => onSelectionChange?.(a.id));
+    }
+  };
 
   const renderBody = () => {
     if (loading) {
@@ -117,6 +132,8 @@ export function AccountsTable({
         onPsd2Action={onPsd2Action}
         onTransfer={onTransfer}
         onNewMovement={onNewMovement}
+        selected={selectedIds.has(account.id)}
+        onSelectionChange={onSelectionChange}
         data-testid="AccountRow__db8970" />
     ));
   };
@@ -124,7 +141,11 @@ export function AccountsTable({
   return (
     <div className="flex h-full flex-col overflow-y-auto bg-white [&>div]:overflow-visible">
       <Table data-testid="Table__db8970">
-        <AccountsTableHeader data-testid="AccountsTableHeader__db8970" />
+        <AccountsTableHeader
+          allSelected={allSelected}
+          someSelected={someSelected}
+          onSelectAll={handleSelectAll}
+          data-testid="AccountsTableHeader__db8970" />
         <TableBody
           className="[&_tr:last-child]:border-b [&_tr:last-child]:border-[#E8EAEF]"
           data-testid="TableBody__db8970">
