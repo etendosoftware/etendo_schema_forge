@@ -93,29 +93,29 @@ describe('invoiceDueDate helpers', () => {
     });
   });
 
-  describe('color helpers (Etendo Figma tokens)', () => {
-    it('paid uses green-600 #26A95F dot, no override on text', () => {
-      assert.deepEqual(getDueDateDotStyle('paid'), { backgroundColor: '#26A95F' });
+  describe('color helpers (semantic theme tokens)', () => {
+    it('paid uses the success token, no override on text', () => {
+      assert.deepEqual(getDueDateDotStyle('paid'), { backgroundColor: 'var(--status-success-fg)' });
       assert.equal(getDueDateTextStyle('paid'), undefined);
     });
 
-    it('overdue uses red-500 #F53D6B dot, no override on text', () => {
-      assert.deepEqual(getDueDateDotStyle('overdue'), { backgroundColor: '#F53D6B' });
+    it('overdue uses the destructive token, no override on text', () => {
+      assert.deepEqual(getDueDateDotStyle('overdue'), { backgroundColor: 'hsl(var(--destructive))' });
       assert.equal(getDueDateTextStyle('overdue'), undefined);
     });
 
-    it('soon uses yellow-600 #FAAF00 dot, no override on text', () => {
-      assert.deepEqual(getDueDateDotStyle('soon'), { backgroundColor: '#FAAF00' });
+    it('soon uses the warning token, no override on text', () => {
+      assert.deepEqual(getDueDateDotStyle('soon'), { backgroundColor: 'var(--status-warning-fg)' });
       assert.equal(getDueDateTextStyle('soon'), undefined);
     });
 
-    it('ok uses gray-400 #8A8AA3 dot, no override on text', () => {
-      assert.deepEqual(getDueDateDotStyle('ok'), { backgroundColor: '#8A8AA3' });
+    it('ok uses the neutral token, no override on text', () => {
+      assert.deepEqual(getDueDateDotStyle('ok'), { backgroundColor: 'var(--status-neutral-fg)' });
       assert.equal(getDueDateTextStyle('ok'), undefined);
     });
 
-    it('falls back to gray dot for unknown state', () => {
-      assert.deepEqual(getDueDateDotStyle('weird'), { backgroundColor: '#8A8AA3' });
+    it('falls back to the neutral token for an unknown state', () => {
+      assert.deepEqual(getDueDateDotStyle('weird'), { backgroundColor: 'var(--status-neutral-fg)' });
     });
   });
 });

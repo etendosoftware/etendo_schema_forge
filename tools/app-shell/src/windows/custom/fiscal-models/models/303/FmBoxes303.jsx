@@ -9,12 +9,12 @@ const SECTION_ICON = {
   iva_devengado: <TrendingUp
     size={20}
     strokeWidth={1.75}
-    style={{ color: '#121217' }}
+    style={{ color: 'hsl(var(--foreground))' }}
     data-testid="TrendingUp__49d327" />,
   iva_deducible: <TrendingDown
     size={20}
     strokeWidth={1.75}
-    style={{ color: '#121217' }}
+    style={{ color: 'hsl(var(--foreground))' }}
     data-testid="TrendingDown__49d327" />,
 };
 
@@ -164,7 +164,7 @@ export default function FmBoxes303({ boxes, year, period, sectionIds, identifica
                     {displayFields.map(f => (
                       <div key={f.id} className="fm-aeat-ident-field">
                         <span className="fm-aeat-ident-field__label">{t(f.labelKey)}</span>
-                        <div className="fm-aeat-ident-field__value" style={{ color: '#9096AD' }}>
+                        <div className="fm-aeat-ident-field__value" style={{ color: 'hsl(var(--text-disabled))' }}>
                           {identification?.[f.id] ?? ''}
                         </div>
                       </div>

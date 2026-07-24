@@ -41,19 +41,19 @@ describe('QuotationStatusBadge', () => {
       });
     }
 
-    it('has CA recoloured with the success/emerald palette', () => {
-      assert.match(src, /CA:\s*\{[^}]*dot:\s*'#10B981'/);
-      assert.match(src, /CA:\s*\{[^}]*bg:\s*'#ECFDF5'/);
+    it('has CA mapped to the semantic success roles', () => {
+      assert.match(src, /CA:\s*\{[^}]*dot:\s*'var\(--status-success-fg\)'/);
+      assert.match(src, /CA:\s*\{[^}]*bg:\s*'var\(--status-success-bg\)'/);
     });
 
-    it('has ETGO_CI styled with the success/emerald palette', () => {
-      assert.match(src, /ETGO_CI:\s*\{[^}]*dot:\s*'#10B981'/);
-      assert.match(src, /ETGO_CI:\s*\{[^}]*bg:\s*'#ECFDF5'/);
+    it('has ETGO_CI mapped to the semantic success roles', () => {
+      assert.match(src, /ETGO_CI:\s*\{[^}]*dot:\s*'var\(--status-success-fg\)'/);
+      assert.match(src, /ETGO_CI:\s*\{[^}]*bg:\s*'var\(--status-success-bg\)'/);
     });
 
-    it('has CJ styled with the destructive/red palette', () => {
-      assert.match(src, /CJ:\s*\{[^}]*dot:\s*'#EF4444'/);
-      assert.match(src, /CJ:\s*\{[^}]*bg:\s*'#FEE2E2'/);
+    it('has CJ mapped to the semantic destructive role', () => {
+      assert.match(src, /CJ:\s*\{[^}]*dot:\s*'hsl\(var\(--destructive\)\)'/);
+      assert.match(src, /CJ:\s*\{[^}]*bg:\s*'hsl\(var\(--destructive\) \/ 0\.12\)'/);
     });
   });
 

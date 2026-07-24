@@ -109,3 +109,11 @@ Physical Inventory should let a warehouse user create an inventory count session
 - The create-list and update-system-count flow comes from `e5876cec` (`Feature ETP-3585: Physical inventory - add actions to kebab menu`) plus the current `InventoryMenuContent.jsx` and `InventoryCreateListModal.jsx` on `origin/develop`.
 - The line-required process visibility comes from `3766a7f5` (`Hotfix ETP-3585: Hide process button when no lines exist`) plus the current `DetailView.jsx` process filter on `origin/develop`.
 - The selector-context and saved-parent fixes come from `f26c171b` (`Feature ETP-3585: Fix physical inventory selector context`) plus the current `DetailView.jsx`, `InventoryPage.jsx`, and `InventoryLineForm.jsx` on `origin/develop`.
+
+## Theme roles
+
+The window's live artifact custom components use the shared semantic theme.
+Structural surfaces and controls consume background, card, foreground, muted, and
+border roles; operational feedback uses success, warning, information, neutral,
+and destructive roles. No local palette is used, so the active application theme
+controls the appearance.

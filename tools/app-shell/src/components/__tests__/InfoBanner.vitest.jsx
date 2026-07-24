@@ -11,27 +11,27 @@ describe('InfoBanner', () => {
 
   it('applies info tone by default', () => {
     const { container } = render(<InfoBanner>msg</InfoBanner>);
-    expect(container.firstChild.className).toContain('border-[#00ACFF]');
+    expect(container.firstChild.className).toContain('border-status-info-border');
   });
 
   it('applies warning tone', () => {
     const { container } = render(<InfoBanner tone="warning">msg</InfoBanner>);
-    expect(container.firstChild.className).toContain('border-[#F5A623]');
+    expect(container.firstChild.className).toContain('border-status-warning-border');
   });
 
   it('applies success tone', () => {
     const { container } = render(<InfoBanner tone="success">msg</InfoBanner>);
-    expect(container.firstChild.className).toContain('border-[#2BB673]');
+    expect(container.firstChild.className).toContain('border-status-success-border');
   });
 
   it('applies danger tone', () => {
     const { container } = render(<InfoBanner tone="danger">msg</InfoBanner>);
-    expect(container.firstChild.className).toContain('border-[#E5484D]');
+    expect(container.firstChild.className).toContain('border-destructive');
   });
 
   it('falls back to info tone for unknown tone value', () => {
     const { container } = render(<InfoBanner tone="unknown">msg</InfoBanner>);
-    expect(container.firstChild.className).toContain('border-[#00ACFF]');
+    expect(container.firstChild.className).toContain('border-status-info-border');
   });
 
   it('does not render dismiss button when dismissible is false', () => {

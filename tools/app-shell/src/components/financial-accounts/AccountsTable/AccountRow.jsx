@@ -29,7 +29,7 @@ export function AccountRow({
   return (
     <TableRow
       data-testid={`account-row-${account.id}`}
-      className="group relative h-16 cursor-pointer bg-white transition-shadow hover:z-10 hover:bg-white hover:shadow-lg"
+      className="group relative h-16 cursor-pointer bg-card transition-shadow hover:z-10 hover:bg-card hover:shadow-lg"
       onClick={() => onOpen?.(account)}
     >
       {/* ETP-4656 — selection checkbox, same plumbing as MovementsTable/StatementsTable */}
@@ -49,7 +49,7 @@ export function AccountRow({
           <Fragment key={col.name} data-testid="Fragment__90174f">
             {renderer
               ? renderer.renderCell(account, cellCtx)
-              : <TableCell className="px-2 text-sm text-[#121217]" data-testid="TableCell__90174f">{account[col.name] ?? '—'}</TableCell>}
+              : <TableCell className="px-2 text-sm text-[hsl(var(--foreground))]" data-testid="TableCell__90174f">{account[col.name] ?? '—'}</TableCell>}
           </Fragment>
         );
       })}
@@ -78,7 +78,7 @@ export function AccountRow({
                   aria-label={ui('financeAccountsMenuEdit')}
                   data-testid={`account-row-edit-${account.id}`}
                   onClick={() => onEdit?.(account)}
-                  className="inline-flex h-8 w-8 items-center justify-center rounded-full text-[#828FA3] hover:bg-[#E8EAEF]"
+                  className="inline-flex h-8 w-8 items-center justify-center rounded-full text-[hsl(var(--text-disabled))] hover:bg-[hsl(var(--border-subtle))]"
                 >
                   <Pencil className="h-5 w-5" data-testid="Pencil__90174f" />
                 </button>
@@ -95,7 +95,7 @@ export function AccountRow({
                     aria-label={ui('financeAccountsMenuSyncNow')}
                     data-testid={`account-row-refresh-${account.id}`}
                     onClick={() => onPsd2Action?.('syncNow', account)}
-                    className="inline-flex h-8 w-8 items-center justify-center rounded-full text-[#828FA3] hover:bg-[#E8EAEF]"
+                    className="inline-flex h-8 w-8 items-center justify-center rounded-full text-[hsl(var(--text-disabled))] hover:bg-[hsl(var(--border-subtle))]"
                   >
                     <RefreshCw className="h-5 w-5" data-testid="RefreshCw__90174f" />
                   </button>

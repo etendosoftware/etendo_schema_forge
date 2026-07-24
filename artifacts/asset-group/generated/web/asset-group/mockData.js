@@ -10,6 +10,7 @@ export const assetCategory = [
     "calculateType": "Sample calculateType",
     "annualDepreciation": 99.44,
     "amortize": "Sample amortize",
+    "usableLifeYears": 90,
     "usableLifeMonths": 90
   },
   {
@@ -21,6 +22,7 @@ export const assetCategory = [
     "calculateType": "Sample calculateType",
     "annualDepreciation": 96.94,
     "amortize": "Sample amortize",
+    "usableLifeYears": 93,
     "usableLifeMonths": 93
   },
   {
@@ -32,6 +34,7 @@ export const assetCategory = [
     "calculateType": "Sample calculateType",
     "annualDepreciation": 12.48,
     "amortize": "Sample amortize",
+    "usableLifeYears": 8,
     "usableLifeMonths": 8
   },
   {
@@ -43,6 +46,7 @@ export const assetCategory = [
     "calculateType": "Sample calculateType",
     "annualDepreciation": 96.31,
     "amortize": "Sample amortize",
+    "usableLifeYears": 91,
     "usableLifeMonths": 91
   },
   {
@@ -54,6 +58,7 @@ export const assetCategory = [
     "calculateType": "Sample calculateType",
     "annualDepreciation": 31.27,
     "amortize": "Sample amortize",
+    "usableLifeYears": 72,
     "usableLifeMonths": 72
   },
   {
@@ -65,6 +70,7 @@ export const assetCategory = [
     "calculateType": "Sample calculateType",
     "annualDepreciation": 76.52,
     "amortize": "Sample amortize",
+    "usableLifeYears": 78,
     "usableLifeMonths": 78
   },
   {
@@ -76,6 +82,7 @@ export const assetCategory = [
     "calculateType": "Sample calculateType",
     "annualDepreciation": 2.66,
     "amortize": "Sample amortize",
+    "usableLifeYears": 31,
     "usableLifeMonths": 31
   },
   {
@@ -87,6 +94,7 @@ export const assetCategory = [
     "calculateType": "Sample calculateType",
     "annualDepreciation": 10.03,
     "amortize": "Sample amortize",
+    "usableLifeYears": 97,
     "usableLifeMonths": 97
   },
   {
@@ -98,6 +106,7 @@ export const assetCategory = [
     "calculateType": "Sample calculateType",
     "annualDepreciation": 93.97,
     "amortize": "Sample amortize",
+    "usableLifeYears": 70,
     "usableLifeMonths": 70
   },
   {
@@ -109,6 +118,7 @@ export const assetCategory = [
     "calculateType": "Sample calculateType",
     "annualDepreciation": 1.1,
     "amortize": "Sample amortize",
+    "usableLifeYears": 77,
     "usableLifeMonths": 77
   },
   {
@@ -120,6 +130,7 @@ export const assetCategory = [
     "calculateType": "Sample calculateType",
     "annualDepreciation": 79.99,
     "amortize": "Sample amortize",
+    "usableLifeYears": 32,
     "usableLifeMonths": 32
   },
   {
@@ -131,6 +142,7 @@ export const assetCategory = [
     "calculateType": "Sample calculateType",
     "annualDepreciation": 53.61,
     "amortize": "Sample amortize",
+    "usableLifeYears": 26,
     "usableLifeMonths": 26
   }
 ];

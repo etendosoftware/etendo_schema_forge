@@ -4,7 +4,7 @@ import { useUI } from '@/i18n';
 import { cn } from '@/lib/utils';
 import { ACCOUNT_COLUMNS, ACCOUNT_CELL_RENDERERS } from './accountColumns.jsx';
 
-const HEAD_BASE = 'text-xs font-semibold leading-4 text-[#121217]';
+const HEAD_BASE = 'text-xs font-semibold leading-4 text-[hsl(var(--foreground))]';
 
 /**
  * @param {{ allSelected?: boolean, someSelected?: boolean, onSelectAll?: () => void }} props
@@ -14,7 +14,7 @@ export function AccountsTableHeader({ allSelected = false, someSelected = false,
   return (
     <TableHeader data-testid="TableHeader__18040e">
       <TableRow
-        className="h-10 border-b border-[#E8EAEF] bg-white hover:bg-white"
+        className="h-10 border-b border-[hsl(var(--border-subtle))] bg-card hover:bg-card"
         data-testid="TableRow__18040e">
         {/* ETP-4656 — select-all checkbox, same plumbing as MovementsTable/StatementsTable */}
         <TableHead className="w-10 px-3" data-testid="TableHead__18040e">

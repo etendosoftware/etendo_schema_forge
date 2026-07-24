@@ -32,7 +32,7 @@ export function SquareCheckbox({ label, checked, onChange, ...rest }) {
           </svg>
         )}
       </span>
-      <span className="text-sm font-medium text-[#121217]">{label}</span>
+      <span className="text-sm font-medium text-[hsl(var(--foreground))]">{label}</span>
       <input
         type="checkbox"
         checked={!!checked}

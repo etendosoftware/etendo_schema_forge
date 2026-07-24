@@ -1,14 +1,14 @@
 import { useUI } from '@/i18n';
 
 const STATUS_CONFIG = {
-  DR:      { key: 'statusDraft',           dot: '#9CA3AF', bg: '#F3F4F6', text: '#6B7280', border: '#E5E7EB' },
-  UE:      { key: 'statusUnderEvaluation', dot: '#F59E0B', bg: '#FEF3C7', text: '#92400E', border: '#FDE68A' },
-  CO:      { key: 'statusComplete',        dot: '#10B981', bg: '#ECFDF5', text: '#059669', border: '#A7F3D0' },
-  CA:      { key: 'statusOrderCreated',    dot: '#10B981', bg: '#ECFDF5', text: '#059669', border: '#A7F3D0' },
-  ETGO_CI: { key: 'statusInvoiceCreated',  dot: '#10B981', bg: '#ECFDF5', text: '#059669', border: '#A7F3D0' },
-  CL:      { key: 'statusClosed',          dot: '#8B5CF6', bg: '#F5F3FF', text: '#6D28D9', border: '#DDD6FE' },
-  CJ:      { key: 'statusRejected',        dot: '#EF4444', bg: '#FEE2E2', text: '#DC2626', border: '#FECACA' },
-  VO:      { key: 'statusVoid',            dot: '#EF4444', bg: '#FEE2E2', text: '#DC2626', border: '#FECACA' },
+  DR:      { key: 'statusDraft',           dot: 'var(--status-neutral-fg)', bg: 'var(--status-neutral-bg)', text: 'var(--status-neutral-fg)', border: 'var(--status-neutral-border)' },
+  UE:      { key: 'statusUnderEvaluation', dot: 'var(--status-warning-fg)', bg: 'var(--status-warning-bg)', text: 'var(--status-warning-fg)', border: 'var(--status-warning-border)' },
+  CO:      { key: 'statusComplete',        dot: 'var(--status-success-fg)', bg: 'var(--status-success-bg)', text: 'var(--status-success-fg)', border: 'var(--status-success-border)' },
+  CA:      { key: 'statusOrderCreated',    dot: 'var(--status-success-fg)', bg: 'var(--status-success-bg)', text: 'var(--status-success-fg)', border: 'var(--status-success-border)' },
+  ETGO_CI: { key: 'statusInvoiceCreated',  dot: 'var(--status-success-fg)', bg: 'var(--status-success-bg)', text: 'var(--status-success-fg)', border: 'var(--status-success-border)' },
+  CL:      { key: 'statusClosed',          dot: 'var(--status-neutral-fg)', bg: 'var(--status-neutral-bg)', text: 'var(--status-neutral-fg)', border: 'var(--status-neutral-border)' },
+  CJ:      { key: 'statusRejected',        dot: 'hsl(var(--destructive))', bg: 'hsl(var(--destructive) / 0.12)', text: 'hsl(var(--destructive))', border: 'hsl(var(--destructive) / 0.35)' },
+  VO:      { key: 'statusVoid',            dot: 'hsl(var(--destructive))', bg: 'hsl(var(--destructive) / 0.12)', text: 'hsl(var(--destructive))', border: 'hsl(var(--destructive) / 0.35)' },
 };
 
 export default function QuotationStatusBadge({ data }) {
