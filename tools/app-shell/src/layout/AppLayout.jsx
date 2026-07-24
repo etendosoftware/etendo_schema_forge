@@ -41,7 +41,7 @@ function NoAccessScreen() {
         onClick={logout}
         data-testid="NoAccessScreenLogout__488148"
       >
-        <LogOut className="h-4 w-4" data-testid="LogOut__488148" />
+        <LogOut className="h-4 w-4 mr-2" data-testid="LogOut__488148" />
         {ui('logout')}
       </Button>
     </div>
