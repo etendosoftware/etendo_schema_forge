@@ -2,6 +2,7 @@ import { Outlet, useLocation, useSearchParams } from 'react-router-dom';
 import SideMenu from '@/components/layout/SideMenu';
 import { filterMenuGroupsByAccess } from '@/windows/registry.js';
 import { useRoleMenu } from '@/hooks/useRoleMenu.js';
+import { useCapabilitiesSafe } from '@/hooks/useCapabilitiesSafe.js';
 import { SidebarProvider, useSidebar } from '@/components/layout/SidebarContext';
 import { FavoritesProvider } from '@/components/layout/FavoritesContext';
 import { PageMetaProvider, usePageMeta } from '@/components/layout/PageMetaContext';
@@ -87,6 +88,13 @@ export default function AppLayout({ menuGroups }) {
   // the note in App.jsx. That's why role-filtering is applied here rather than
   // where menuGroups is originally built.
   const allowedIds = useRoleMenu();
+  // ETP-4513 — the `SFWindowAccessMap` capabilities map (e.g.
+  // `isAdminOrClientAdmin`), used to gate menu.json entries that declare
+  // `"capability": "<key>"` (no backing AD_Window/AD_Process to check via
+  // allowedIds — e.g. "Configuración > Roles"). `useCapabilitiesSafe()`
+  // returns `{}` before the map has loaded, which `filterMenuGroupsByAccess`
+  // already treats as "hide" for any capability-gated item (fails closed).
+  const capabilities = useCapabilitiesSafe();
   // `undefined` = SFListMenu fetch still in flight — pass an empty Set so
   // filterMenuGroupsByAccess() fails closed for AD-backed items (any item
   // carrying a windowId/processId/obuiappProcessId is hidden until the real
@@ -97,7 +105,8 @@ export default function AppLayout({ menuGroups }) {
   // full undefined/null/Set contract).
   const filteredMenuGroups = filterMenuGroupsByAccess(
     menuGroups,
-    allowedIds === undefined ? new Set() : allowedIds
+    allowedIds === undefined ? new Set() : allowedIds,
+    capabilities
   );
 
   return (

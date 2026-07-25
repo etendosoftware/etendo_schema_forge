@@ -21,6 +21,10 @@ export function createMockFetch(mockData, basePath, catalogData = {}) {
       return handleWindowAccessMapRequest();
     }
 
+    if (isRolesOverviewRequest(urlStr)) {
+      return handleRolesOverviewRequest();
+    }
+
     if (!urlStr.startsWith(basePath)) {
       return undefined;
     }
@@ -82,7 +86,87 @@ const FULL_WINDOW_ACCESS = new Proxy({}, { get: () => 'full', has: () => true })
 function handleWindowAccessMapRequest() {
   return makeResponse(200, {
     windowAccess: FULL_WINDOW_ACCESS,
-    capabilities: { showAccountingFields: true },
+    // ETP-4513 — `isAdminOrClientAdmin: true` alongside the pre-existing
+    // `showAccountingFields`, so mock/demo mode also shows the
+    // "Configuración > Roles" menu entry by default (see menu.json's
+    // `roles` item and registry.js's `filterMenuGroupsByAccess`).
+    capabilities: { showAccountingFields: true, isAdminOrClientAdmin: true },
+  });
+}
+
+// ETP-4513 — SFRolesOverview lives under `/webhooks/`, same reasoning as
+// WINDOW_ACCESS_MAP_PATH above: it needs its own path check ahead of the
+// `basePath` guard, or the call falls through to a real network request
+// that doesn't exist in mock mode.
+const ROLES_OVERVIEW_PATH = '/webhooks/SFRolesOverview';
+
+function isRolesOverviewRequest(url) {
+  return url.includes(ROLES_OVERVIEW_PATH);
+}
+
+// Mirrors the real SFRolesOverview.java response shape for the 5 fixed GOClient roles, so
+// mock/demo mode and E2E tests can exercise the "Configuración > Roles" page without a live
+// Etendo backend. `rawDescription` intentionally mirrors the real boilerplate AD_Role text
+// (see SFRolesOverview.java's class javadoc) — the frontend never displays it directly.
+function handleRolesOverviewRequest() {
+  return makeResponse(200, {
+    roles: [
+      {
+        id: '9B8D736190724807AB256DC95F20EC5E',
+        name: 'GOClient Admin',
+        rawDescription: 'GOClient Admin',
+        userCount: 2,
+        windows: [
+          { id: '108', name: 'User', tier: 'full' },
+          { id: '146', name: 'Price List', tier: 'full' },
+          { id: '137', name: 'Tax', tier: 'full' },
+        ],
+      },
+      {
+        id: '127AE77FE2994067B7FE6495FC21D51E',
+        name: 'Finance',
+        rawDescription: '*** Please, do not edit this role. Use Copy Record instead ***',
+        userCount: 2,
+        windows: [
+          { id: 'mock-financial-account', name: 'Financial Account', tier: 'full' },
+          { id: 'mock-payment-in', name: 'Payment In', tier: 'full' },
+          { id: 'mock-payment-out', name: 'Payment Out', tier: 'full' },
+          { id: 'mock-sales-invoice', name: 'Sales Invoice', tier: 'read-only' },
+        ],
+      },
+      {
+        id: '2A159DF4F4B944A6AA903202AD35B545',
+        name: 'Sales',
+        rawDescription: '*** Please, do not edit this role. Use Copy Record instead ***',
+        userCount: 1,
+        windows: [
+          { id: 'mock-business-partner', name: 'Business Partner', tier: 'full' },
+          { id: 'mock-sales-order', name: 'Sales Order', tier: 'full' },
+          { id: 'mock-sales-quotation', name: 'Sales Quotation', tier: 'full' },
+        ],
+      },
+      {
+        id: 'A826430F723E4C1B9A53EBB0746A98C0',
+        name: 'Purchasing',
+        rawDescription: '*** Please, do not edit this role. Use Copy Record instead ***',
+        userCount: 0,
+        windows: [
+          { id: 'mock-purchase-order', name: 'Purchase Order', tier: 'full' },
+          { id: 'mock-purchase-invoice', name: 'Purchase Invoice', tier: 'full' },
+        ],
+      },
+      {
+        id: '55E05A4B43514A029D6FB6B8D94B49D4',
+        name: 'Inventory',
+        rawDescription: '*** Please, do not edit this role. Use Copy Record instead ***',
+        userCount: 0,
+        windows: [
+          { id: 'mock-goods-receipt', name: 'Goods Receipt', tier: 'full' },
+          { id: 'mock-goods-shipment', name: 'Goods Shipment', tier: 'full' },
+          { id: 'mock-warehouse', name: 'Warehouse and Storage Bins', tier: 'read-only' },
+        ],
+      },
+    ],
   });
 }
 
