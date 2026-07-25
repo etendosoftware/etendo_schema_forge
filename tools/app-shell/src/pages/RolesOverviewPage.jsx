@@ -29,6 +29,26 @@ import { fetchRolesOverview } from '@/lib/rolesApi.js';
  * the page from showing a blank description if the backend ever adds a 6th role before the
  * frontend catches up).
  */
+/**
+ * Shared centered "status" card wrapper for the error and no-access states below — both were
+ * a near-identical `<Card><CardContent className="flex flex-col items-center justify-center
+ * ... text-center">...</CardContent></Card>` shell that only differed in gap/padding and inner
+ * content, which is exactly the kind of same-file duplication SonarQube's CPD flags. Callers
+ * keep full control of their inner markup (icon, title, message, actions) and their own
+ * `data-testid` on the outer `Card` — this only owns the repeated wrapper classes.
+ */
+function StatusCard({ testId, className, children }) {
+  return (
+    <Card data-testid={testId}>
+      <CardContent
+        className={`flex flex-col items-center justify-center text-center ${className}`}
+        data-testid="CardContent__67e3bc">
+        {children}
+      </CardContent>
+    </Card>
+  );
+}
+
 const ROLE_I18N = {
   '9B8D736190724807AB256DC95F20EC5E': { nameKey: 'roleNameGoClientAdmin', descKey: 'roleDescGoClientAdmin' },
   '127AE77FE2994067B7FE6495FC21D51E': { nameKey: 'roleNameFinance', descKey: 'roleDescFinance' },
@@ -101,30 +121,28 @@ export default function RolesOverviewPage() {
 
         if (error) {
           return (
-            <Card data-testid="RolesOverviewPage__error">
-              <CardContent
-                className="flex flex-col items-center justify-center gap-3 py-12 text-center"
-                data-testid="CardContent__67e3bc">
-                <p className="text-sm text-muted-foreground">{ui('rolesLoadError')}</p>
-                <Button variant="outline" onClick={load} data-testid="RolesOverviewPage__retry">
-                  {ui('retry')}
-                </Button>
-              </CardContent>
-            </Card>
+            <StatusCard
+              testId="RolesOverviewPage__error"
+              className="gap-3 py-12"
+              data-testid="StatusCard__67e3bc">
+              <p className="text-sm text-muted-foreground">{ui('rolesLoadError')}</p>
+              <Button variant="outline" onClick={load} data-testid="RolesOverviewPage__retry">
+                {ui('retry')}
+              </Button>
+            </StatusCard>
           );
         }
 
         if (roles.length === 0) {
           return (
-            <Card data-testid="RolesOverviewPage__noAccess">
-              <CardContent
-                className="flex flex-col items-center justify-center gap-2 py-16 text-center"
-                data-testid="CardContent__67e3bc">
-                <ShieldAlert className="h-10 w-10 text-muted-foreground/40 mb-2" data-testid="ShieldAlert__rolesOverview" />
-                <h3 className="text-lg font-medium text-foreground">{ui('rolesNoAccessTitle')}</h3>
-                <p className="text-sm text-muted-foreground">{ui('rolesNoAccessMessage')}</p>
-              </CardContent>
-            </Card>
+            <StatusCard
+              testId="RolesOverviewPage__noAccess"
+              className="gap-2 py-16"
+              data-testid="StatusCard__67e3bc">
+              <ShieldAlert className="h-10 w-10 text-muted-foreground/40 mb-2" data-testid="ShieldAlert__rolesOverview" />
+              <h3 className="text-lg font-medium text-foreground">{ui('rolesNoAccessTitle')}</h3>
+              <p className="text-sm text-muted-foreground">{ui('rolesNoAccessMessage')}</p>
+            </StatusCard>
           );
         }
 

@@ -104,6 +104,24 @@ function isRolesOverviewRequest(url) {
   return url.includes(ROLES_OVERVIEW_PATH);
 }
 
+// The 4 non-admin GOClient roles all carry the same boilerplate AD_Role.description text (see
+// SFRolesOverview.java's class javadoc) — hoisted once instead of repeated per role literal.
+const ROLE_BOILERPLATE_DESCRIPTION = '*** Please, do not edit this role. Use Copy Record instead ***';
+
+// Builds one mock role entry. `windows` is a list of `[id, name, tier]` tuples rather than
+// object literals so the 5 roles below read as data, not 5 near-identical object shapes —
+// keeps this file's mock fixture from tripping SonarQube's copy-paste detector on structurally
+// repeated `{ id, name, tier }` / `{ id, name, rawDescription, userCount, windows }` blocks.
+function mockRole(id, name, rawDescription, userCount, windows) {
+  return {
+    id,
+    name,
+    rawDescription,
+    userCount,
+    windows: windows.map(([winId, winName, tier]) => ({ id: winId, name: winName, tier })),
+  };
+}
+
 // Mirrors the real SFRolesOverview.java response shape for the 5 fixed GOClient roles, so
 // mock/demo mode and E2E tests can exercise the "Configuración > Roles" page without a live
 // Etendo backend. `rawDescription` intentionally mirrors the real boilerplate AD_Role text
@@ -111,61 +129,31 @@ function isRolesOverviewRequest(url) {
 function handleRolesOverviewRequest() {
   return makeResponse(200, {
     roles: [
-      {
-        id: '9B8D736190724807AB256DC95F20EC5E',
-        name: 'GOClient Admin',
-        rawDescription: 'GOClient Admin',
-        userCount: 2,
-        windows: [
-          { id: '108', name: 'User', tier: 'full' },
-          { id: '146', name: 'Price List', tier: 'full' },
-          { id: '137', name: 'Tax', tier: 'full' },
-        ],
-      },
-      {
-        id: '127AE77FE2994067B7FE6495FC21D51E',
-        name: 'Finance',
-        rawDescription: '*** Please, do not edit this role. Use Copy Record instead ***',
-        userCount: 2,
-        windows: [
-          { id: 'mock-financial-account', name: 'Financial Account', tier: 'full' },
-          { id: 'mock-payment-in', name: 'Payment In', tier: 'full' },
-          { id: 'mock-payment-out', name: 'Payment Out', tier: 'full' },
-          { id: 'mock-sales-invoice', name: 'Sales Invoice', tier: 'read-only' },
-        ],
-      },
-      {
-        id: '2A159DF4F4B944A6AA903202AD35B545',
-        name: 'Sales',
-        rawDescription: '*** Please, do not edit this role. Use Copy Record instead ***',
-        userCount: 1,
-        windows: [
-          { id: 'mock-business-partner', name: 'Business Partner', tier: 'full' },
-          { id: 'mock-sales-order', name: 'Sales Order', tier: 'full' },
-          { id: 'mock-sales-quotation', name: 'Sales Quotation', tier: 'full' },
-        ],
-      },
-      {
-        id: 'A826430F723E4C1B9A53EBB0746A98C0',
-        name: 'Purchasing',
-        rawDescription: '*** Please, do not edit this role. Use Copy Record instead ***',
-        userCount: 0,
-        windows: [
-          { id: 'mock-purchase-order', name: 'Purchase Order', tier: 'full' },
-          { id: 'mock-purchase-invoice', name: 'Purchase Invoice', tier: 'full' },
-        ],
-      },
-      {
-        id: '55E05A4B43514A029D6FB6B8D94B49D4',
-        name: 'Inventory',
-        rawDescription: '*** Please, do not edit this role. Use Copy Record instead ***',
-        userCount: 0,
-        windows: [
-          { id: 'mock-goods-receipt', name: 'Goods Receipt', tier: 'full' },
-          { id: 'mock-goods-shipment', name: 'Goods Shipment', tier: 'full' },
-          { id: 'mock-warehouse', name: 'Warehouse and Storage Bins', tier: 'read-only' },
-        ],
-      },
+      mockRole('9B8D736190724807AB256DC95F20EC5E', 'GOClient Admin', 'GOClient Admin', 2, [
+        ['108', 'User', 'full'],
+        ['146', 'Price List', 'full'],
+        ['137', 'Tax', 'full'],
+      ]),
+      mockRole('127AE77FE2994067B7FE6495FC21D51E', 'Finance', ROLE_BOILERPLATE_DESCRIPTION, 2, [
+        ['mock-financial-account', 'Financial Account', 'full'],
+        ['mock-payment-in', 'Payment In', 'full'],
+        ['mock-payment-out', 'Payment Out', 'full'],
+        ['mock-sales-invoice', 'Sales Invoice', 'read-only'],
+      ]),
+      mockRole('2A159DF4F4B944A6AA903202AD35B545', 'Sales', ROLE_BOILERPLATE_DESCRIPTION, 1, [
+        ['mock-business-partner', 'Business Partner', 'full'],
+        ['mock-sales-order', 'Sales Order', 'full'],
+        ['mock-sales-quotation', 'Sales Quotation', 'full'],
+      ]),
+      mockRole('A826430F723E4C1B9A53EBB0746A98C0', 'Purchasing', ROLE_BOILERPLATE_DESCRIPTION, 0, [
+        ['mock-purchase-order', 'Purchase Order', 'full'],
+        ['mock-purchase-invoice', 'Purchase Invoice', 'full'],
+      ]),
+      mockRole('55E05A4B43514A029D6FB6B8D94B49D4', 'Inventory', ROLE_BOILERPLATE_DESCRIPTION, 0, [
+        ['mock-goods-receipt', 'Goods Receipt', 'full'],
+        ['mock-goods-shipment', 'Goods Shipment', 'full'],
+        ['mock-warehouse', 'Warehouse and Storage Bins', 'read-only'],
+      ]),
     ],
   });
 }
