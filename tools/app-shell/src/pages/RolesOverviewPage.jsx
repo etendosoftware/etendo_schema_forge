@@ -16,20 +16,6 @@ import { useUI } from '@/i18n';
 import { fetchRolesOverview } from '@/lib/rolesApi.js';
 
 /**
- * ETP-4513 — GOClient's 5 fixed roles: id -> {nameKey, descKey}. Mirrors the same 5 ids
- * hardcoded in `SFRolesOverview.java`'s `GOCLIENT_ROLE_IDS` and
- * `artifacts/user/decisions.json`'s `defaultRole.enumValues` — do not add/remove/reorder
- * entries here without updating those two in lockstep.
- *
- * The backend's `rawDescription` (raw `AD_Role.description`) is explicitly NOT display copy
- * (boilerplate "do not edit this role" text for 4 of the 5 roles today — see
- * `SFRolesOverview.java`'s class javadoc). These curated, i18n-keyed descriptions are what
- * actually renders; `rawDescription` is only used as a last-resort fallback for a role id this
- * map doesn't recognize (which should never happen for the 5 fixed GOClient roles, but keeps
- * the page from showing a blank description if the backend ever adds a 6th role before the
- * frontend catches up).
- */
-/**
  * Shared centered "status" card wrapper for the error and no-access states below — both were
  * a near-identical `<Card><CardContent className="flex flex-col items-center justify-center
  * ... text-center">...</CardContent></Card>` shell that only differed in gap/padding and inner
@@ -49,6 +35,20 @@ function StatusCard({ testId, className, children }) {
   );
 }
 
+/**
+ * ETP-4513 — GOClient's 5 fixed roles: id -> {nameKey, descKey}. Mirrors the same 5 ids
+ * hardcoded in `SFRolesOverview.java`'s `GOCLIENT_ROLE_IDS` and
+ * `artifacts/user/decisions.json`'s `defaultRole.enumValues` — do not add/remove/reorder
+ * entries here without updating those two in lockstep.
+ *
+ * The backend's `rawDescription` (raw `AD_Role.description`) is explicitly NOT display copy
+ * (boilerplate "do not edit this role" text for 4 of the 5 roles today — see
+ * `SFRolesOverview.java`'s class javadoc). These curated, i18n-keyed descriptions are what
+ * actually renders; `rawDescription` is only used as a last-resort fallback for a role id this
+ * map doesn't recognize (which should never happen for the 5 fixed GOClient roles, but keeps
+ * the page from showing a blank description if the backend ever adds a 6th role before the
+ * frontend catches up).
+ */
 const ROLE_I18N = {
   '9B8D736190724807AB256DC95F20EC5E': { nameKey: 'roleNameGoClientAdmin', descKey: 'roleDescGoClientAdmin' },
   '127AE77FE2994067B7FE6495FC21D51E': { nameKey: 'roleNameFinance', descKey: 'roleDescFinance' },
@@ -164,7 +164,10 @@ export default function RolesOverviewPage() {
                       <CardDescription data-testid="CardDescription__67e3bc">{displayDescription}</CardDescription>
                     </div>
                     <div className="flex shrink-0 items-center gap-3">
-                      <Badge variant="secondary" data-testid={`RolesOverviewPage__userCount-${role.id}`}>
+                      <Badge
+                        variant="secondary"
+                        title={ui('rolesColUsers')}
+                        data-testid={`RolesOverviewPage__userCount-${role.id}`}>
                         <Users className="mr-1 h-3 w-3" data-testid="Users__rolesOverview" />
                         {role.userCount}
                       </Badge>
