@@ -193,4 +193,21 @@ test.describe('Roles overview — non-admin', () => {
     await settingsTrigger.hover();
     await expect(page.getByTestId('menu-item-roles')).toHaveCount(0);
   });
+
+  // NOTE (QA, ETP-4513): a "direct navigation to /roles as a denied non-admin" deep-link test
+  // was attempted here and deliberately removed — see the QA report for why. In short:
+  // `mockFetch.js`'s `handleRolesOverviewRequest()` is checked unconditionally, ahead of any
+  // capability logic (unlike the real `SFRolesOverview.java`, which does branch on the caller's
+  // admin status), so it always serves the fixed 5-role fixture no matter what a test overrides
+  // via `page.route()` or an `addInitScript`-wrapped `window.fetch` — neither technique can win
+  // against it once `App.jsx`'s async mock-install effect has replaced `window.fetch` (which, for
+  // a fetch fired well after page load like `RolesOverviewPage`'s mount-time call, it reliably
+  // has by then). The real backend enforcement is proven instead by
+  // `SFRolesOverviewTest#testCallerIsAGoClientRoleButNotAdminIsStillDenied` (JUnit), and the
+  // frontend's handling of an empty `roles` array is proven by
+  // `RolesOverviewPage.vitest.jsx`'s "shows the no-access card when roles resolves to an empty
+  // array" test — both already cover this scenario's two halves individually. Wiring them
+  // together in a mocked E2E spec would need `handleRolesOverviewRequest()` to gain the same
+  // kind of admin-gate `handleWindowAccessMapRequest()` already has (a follow-up for whoever
+  // owns `mockFetch.js`, not a QA fix).
 });
