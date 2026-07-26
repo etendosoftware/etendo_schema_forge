@@ -218,6 +218,72 @@ describe('InlineSearchCombo — display sync', () => {
 });
 
 // ---------------------------------------------------------------------------
+// 6b. ETP-4600 — reopening a committed value shows an empty search box + full list
+// ---------------------------------------------------------------------------
+
+describe('InlineSearchCombo — ETP-4600 empty-search-on-open parity with the header selector', () => {
+  it('shows the committed label when closed, then an EMPTY input + full option list on focus', async () => {
+    const user = userEvent.setup();
+    const { input } = renderCombo({ value: 'iva10', options: OPTIONS });
+
+    // Closed: cell shows the committed value's label, not blank.
+    expect(input).toHaveValue('IVA 10%');
+
+    await user.click(input);
+
+    // Open: search box goes EMPTY (not pre-filled with "IVA 10%")...
+    await waitFor(() => expect(input).toHaveValue(''));
+    // ...and the full option list is shown, not pre-filtered down to the one match.
+    await waitFor(() => {
+      expect(screen.getByTestId('inline-add-option-tax-iva10')).toBeInTheDocument();
+      expect(screen.getByTestId('inline-add-option-tax-iva21')).toBeInTheDocument();
+      expect(screen.getByTestId('inline-add-option-tax-exento')).toBeInTheDocument();
+    });
+  });
+
+  it('retains the committed value and restores its label if closed without selecting', async () => {
+    const user = userEvent.setup();
+    const { input, onChange } = renderCombo({ value: 'iva10', options: OPTIONS, clearOnType: false });
+
+    await user.click(input);
+    await waitFor(() => expect(input).toHaveValue(''));
+
+    // Close without picking anything (blur).
+    await user.click(document.body);
+    await waitFor(() => expect(screen.queryByTestId('inline-add-options-tax')).not.toBeInTheDocument());
+
+    // No onChange('', '') should ever have been fired — the committed value survives.
+    expect(onChange).not.toHaveBeenCalled();
+    // Label is restored once the combo is closed again.
+    expect(input).toHaveValue('IVA 10%');
+  });
+
+  it('does not leak a previously typed search term into the next reopen', async () => {
+    const user = userEvent.setup();
+    const { input } = renderCombo({ value: 'iva10', options: OPTIONS, clearOnType: false });
+
+    await user.click(input);
+    await user.type(input, 'exen');
+    await waitFor(() => {
+      expect(screen.getByTestId('inline-add-option-tax-exento')).toBeInTheDocument();
+      expect(screen.queryByTestId('inline-add-option-tax-iva10')).not.toBeInTheDocument();
+    });
+
+    // Close without selecting.
+    await user.click(document.body);
+    await waitFor(() => expect(screen.queryByTestId('inline-add-options-tax')).not.toBeInTheDocument());
+
+    // Reopen: must show an empty box + full list again, not the stale "exen" filter.
+    await user.click(input);
+    await waitFor(() => expect(input).toHaveValue(''));
+    await waitFor(() => {
+      expect(screen.getByTestId('inline-add-option-tax-iva10')).toBeInTheDocument();
+      expect(screen.getByTestId('inline-add-option-tax-exento')).toBeInTheDocument();
+    });
+  });
+});
+
+// ---------------------------------------------------------------------------
 // 7. onWheel avoids double-scroll outside a Dialog (review fix)
 // ---------------------------------------------------------------------------
 
@@ -250,5 +316,34 @@ describe('InlineSearchCombo — onWheel avoids double-scroll outside a Dialog', 
     dispatchWheel(panel, { deltaY: 40, defaultPrevented: true });
 
     expect(panel.scrollTop).toBe(40);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 8. ETP-4600 Gap C — auto-width, non-truncating dropdown panel
+// ---------------------------------------------------------------------------
+//
+// JSDOM zeroes getBoundingClientRect/scrollWidth, so a precise "the panel grew
+// to fit its longest option" assertion isn't feasible here (see
+// CreatableSearchSelect's identical panel for the same constraint). This is a
+// lightweight shape-check instead: the open panel's inline style must describe
+// a content-sized box (`width: 'max-content'` + a `minWidth`/`maxWidth` pair),
+// never a fixed pixel `width`. That's the one invariant a revert to a fixed-width
+// dropdown would break, and it's enough to catch that regression.
+describe('InlineSearchCombo — ETP-4600 Gap C auto-width dropdown (shape check)', () => {
+  it('opens with width: max-content plus minWidth/maxWidth, never a fixed pixel width', async () => {
+    const user = userEvent.setup();
+    const { input } = renderCombo();
+    await user.click(input);
+
+    const panel = await waitFor(() => screen.getByTestId('inline-add-options-tax'));
+    const style = panel.style;
+
+    expect(style.width).toBe('max-content');
+    expect(style.minWidth).not.toBe('');
+    expect(style.maxWidth).not.toBe('');
+    // A plain numeric/px width (e.g. "240px") would mean the fixed-width dropdown
+    // regressed back in — the panel must never carry one alongside max-content.
+    expect(style.width).not.toMatch(/^\d/);
   });
 });

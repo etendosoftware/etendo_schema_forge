@@ -34,7 +34,7 @@ export function SelectorChip({ label, onClick, onClear, clearAriaLabel, testId, 
       type="button"
       onClick={onClick}
       data-testid={testId}
-      className="inline-flex items-center gap-1 max-w-full min-w-0 px-2 py-1 rounded-lg bg-[#F5F7F9] text-sm text-[#3F3F50] hover:brightness-95 transition cursor-text"
+      className="flex flex-1 self-stretch items-center gap-1 max-w-full min-w-0 text-sm text-[#3F3F50] cursor-text bg-transparent"
     >
       <span className="truncate">{label}</span>
       {clearable && (
@@ -44,7 +44,7 @@ export function SelectorChip({ label, onClick, onClear, clearAriaLabel, testId, 
           aria-label={clearAriaLabel}
           onMouseDown={triggerClear}
           onKeyDown={onClearKeyDown}
-          className="shrink-0 inline-flex items-center justify-center"
+          className="shrink-0 inline-flex items-center justify-center opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity"
         >
           <X
             className="h-4 w-4 text-[#828FA3] hover:text-foreground transition-colors"

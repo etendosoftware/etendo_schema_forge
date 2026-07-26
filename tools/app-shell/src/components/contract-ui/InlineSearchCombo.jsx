@@ -1,4 +1,4 @@
-import { useState, useMemo, useRef, useEffect, useCallback } from 'react';
+import { useState, useMemo, useRef, useEffect, useLayoutEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { ChevronDown } from 'lucide-react';
 import { buildUrlWithParams } from '@/lib/buildUrlWithParams.js';
@@ -9,16 +9,29 @@ import { buildUrlWithParams } from '@/lib/buildUrlWithParams.js';
  * Used by both DataTable's InlineAddRow and InlineLinesPanel's edit cells.
  */
 export function InlineSearchCombo({ field, value, options, onChange, onKeyDown, placeholder, inputRef, selectorUrl, selectorContext, token, displayLabel, excludeId = null, clearOnType = true }) {
+  // `query` is PURE search text (ETP-4600 Gap B parity with CreatableSearchSelect) — it must
+  // never be prefilled with the selected value's label. It always starts empty on open/focus so
+  // the full option list shows, and is reset to '' on close so a stale term never leaks into the
+  // next reopen. The COMMITTED value's label (shown when the cell is not being edited) comes from
+  // `resolvedLabel` below, never from `query`.
   const [query, setQuery] = useState('');
   const [open, setOpen] = useState(false);
   const [openUp, setOpenUp] = useState(false);
   const [dropdownStyle, setDropdownStyle] = useState(null);
   const [serverResults, setServerResults] = useState(null);
+  // ETP-4600: mirrors CreatableSearchSelect's horizontal anchor flip — when the panel's real
+  // content (measured after mount) would overflow the right viewport edge and there's more
+  // room on the left, anchor the panel's right edge to the trigger so it grows leftward
+  // instead of truncating/scrolling.
+  const [anchorRight, setAnchorRight] = useState(false);
   const rootRef = useRef(null);
   const dropdownRef = useRef(null);
-  const displayLabelRef = useRef(displayLabel);
-  displayLabelRef.current = displayLabel;
   const displayValue = options.find(o => o.id === value);
+  // Label shown when the combo is CLOSED (i.e. the cell is not actively being edited/searched).
+  // Falls back to the caller-provided displayLabel (e.g. locator/warehouse name set by
+  // auto-fill) when the value isn't present in the local `options` catalog yet.
+  const resolvedLabel = displayValue?.name || displayValue?.label || displayValue?._identifier || displayLabel || '';
+  const inputValue = open ? query : resolvedLabel;
 
   // Server-side search with debounce
   const fetchTimer = useRef(null);
@@ -63,22 +76,11 @@ export function InlineSearchCombo({ field, value, options, onChange, onKeyDown, 
   }, [query, options, serverResults, excludeId]);
 
   const handleSelect = (opt) => {
-    setQuery(opt.name || opt.label || opt._identifier || '');
     onChange(opt.id, opt.name || opt.label || opt._identifier || '', opt);
     setOpen(false);
+    setQuery('');
     setServerResults(null);
   };
-
-  // Sync display when value is set externally.
-  // If the value is found in static options, use that label.
-  // Otherwise fall back to displayLabel (e.g. locator/warehouse name set by auto-fill).
-  useEffect(() => {
-    if (displayValue) {
-      setQuery(displayValue.name || displayValue.label || displayValue._identifier || '');
-    } else if (displayLabelRef.current) {
-      setQuery(displayLabelRef.current);
-    }
-  }, [value]);
 
   const updateDropdownDirection = useCallback(() => {
     if (!rootRef.current || typeof window === 'undefined') {
@@ -91,25 +93,38 @@ export function InlineSearchCombo({ field, value, options, onChange, onKeyDown, 
 
     const shouldOpenUp = spaceBelow < 220 && spaceAbove > spaceBelow;
     const maxHeight = Math.max(120, (shouldOpenUp ? spaceAbove : spaceBelow) - 12);
+    // Auto-width, non-truncating panel (ETP-4600, ported from CreatableSearchSelect): the
+    // trigger cell stays a fixed width (rect.width) but the DROPDOWN grows to fit its longest
+    // option instead of truncating it, clamped to the viewport so it never overflows an edge.
+    const spaceRight = window.innerWidth - rect.left - 12;
+    const spaceLeft = rect.right - 12;
+    const maxWidth = anchorRight ? Math.max(rect.width, spaceLeft) : Math.max(rect.width, spaceRight);
+    const horizontalAnchor = anchorRight
+      ? { right: window.innerWidth - rect.right }
+      : { left: rect.left };
     const style = shouldOpenUp
       ? {
           position: 'fixed',
-          left: rect.left,
-          width: rect.width,
+          ...horizontalAnchor,
+          minWidth: rect.width,
+          width: 'max-content',
+          maxWidth,
           bottom: window.innerHeight - rect.top + 4,
           maxHeight,
           zIndex: 1000,
         }
       : {
           position: 'fixed',
-          left: rect.left,
-          width: rect.width,
+          ...horizontalAnchor,
+          minWidth: rect.width,
+          width: 'max-content',
+          maxWidth,
           top: rect.bottom + 4,
           maxHeight,
           zIndex: 1000,
         };
     setDropdownStyle(style);
-  }, []);
+  }, [anchorRight]);
 
   useEffect(() => {
     if (!open) return;
@@ -122,6 +137,31 @@ export function InlineSearchCombo({ field, value, options, onChange, onKeyDown, 
       window.removeEventListener('scroll', onReflow, true);
     };
   }, [open, updateDropdownDirection]);
+
+  // ETP-4600: measure the panel's real content width once it's in the DOM and decide the
+  // horizontal anchor — mirrors CreatableSearchSelect's identical effect. Measured off each
+  // option button's own scrollWidth (content width, independent of the panel's current
+  // maxWidth cap) rather than the panel itself, so this converges in at most one extra render.
+  useLayoutEffect(() => {
+    if (!open || !dropdownStyle || !rootRef.current || !dropdownRef.current) return;
+    const rect = rootRef.current.getBoundingClientRect();
+    const spaceRight = window.innerWidth - rect.left - 12;
+    const spaceLeft = rect.right - 12;
+    const buttons = dropdownRef.current.querySelectorAll('button');
+    let naturalWidth = rect.width;
+    buttons.forEach((btn) => {
+      if (btn.scrollWidth > naturalWidth) naturalWidth = btn.scrollWidth;
+    });
+    const overflowsRight = naturalWidth > spaceRight;
+    const shouldAnchorRight = overflowsRight && spaceLeft > spaceRight;
+    setAnchorRight((prev) => (prev === shouldAnchorRight ? prev : shouldAnchorRight));
+  }, [open, dropdownStyle, filtered]);
+
+  // Reset to the default left anchor on close so the next open always re-measures fresh
+  // instead of possibly flashing a stale right-anchored panel from a previous cell.
+  useEffect(() => {
+    if (!open) setAnchorRight(false);
+  }, [open]);
 
   useEffect(() => {
     if (!open) {
@@ -148,7 +188,7 @@ export function InlineSearchCombo({ field, value, options, onChange, onKeyDown, 
         data-testid={`inline-add-field-${field.key}`}
         ref={inputRef}
         type="text"
-        value={query}
+        value={inputValue}
         onChange={(e) => {
           setQuery(e.target.value);
           setOpen(true);
@@ -162,9 +202,19 @@ export function InlineSearchCombo({ field, value, options, onChange, onKeyDown, 
         onFocus={() => {
           updateDropdownDirection();
           setOpen(true);
-          fetchServerResults(query);
+          // ETP-4600: opening on a cell that already has a committed value must show an EMPTY
+          // search box + the full option list (matching CreatableSearchSelect's header behavior),
+          // never the previously-committed label pre-filtered down to one match.
+          setQuery('');
+          setServerResults(null);
+          fetchServerResults('');
         }}
-        onBlur={() => setTimeout(() => setOpen(false), 150)}
+        onBlur={() => setTimeout(() => {
+          setOpen(false);
+          // Discard the typed search term on close-without-selecting so a reopen never shows a
+          // stale filter; the committed `value` (and its label via resolvedLabel) is untouched.
+          setQuery('');
+        }, 150)}
         onKeyDown={(e) => {
           // Let Enter/Escape propagate to the row handler only if dropdown is closed
           if (e.key === 'Enter' && open && filtered.length > 0) {
@@ -187,11 +237,13 @@ export function InlineSearchCombo({ field, value, options, onChange, onKeyDown, 
           const nextOpen = !open;
           if (nextOpen) {
             updateDropdownDirection();
+            setQuery('');
+            setServerResults(null);
+            fetchServerResults('');
+          } else {
+            setQuery('');
           }
           setOpen(nextOpen);
-          if (nextOpen) {
-            fetchServerResults(query);
-          }
         }}
         aria-label={`Toggle ${placeholder} options`}
       >
@@ -218,17 +270,26 @@ export function InlineSearchCombo({ field, value, options, onChange, onKeyDown, 
             }
           }}
         >
-          {filtered.map(opt => (
-            <button
-              key={opt.id}
-              type="button"
-              data-testid={`inline-add-option-${field.key}-${opt.id}`}
-              className="w-full text-left px-2 py-1.5 text-sm hover:bg-blue-50 cursor-pointer whitespace-nowrap"
-              onMouseDown={(e) => { e.preventDefault(); handleSelect(opt); }}
-            >
-              {opt.name || opt.label || opt._identifier || opt.id}
-            </button>
-          ))}
+          {/* min-w-full w-max: sizes this inner wrapper to the widest option's natural content
+              width (at least the panel's own width). Rows below are `w-full block` — 100% of
+              THIS wrapper, not the outer portaled panel — so the hover background spans the
+              full width even when the panel scrolls horizontally. Must stay `block` (not
+              inline-block): a width:100% inline-block child under the panel's width:max-content
+              shrink-to-fit sizing inflates the panel to ~2x its content width in Chrome — see
+              CreatableSearchSelect's identical comment for the full root cause. */}
+          <div className="min-w-full w-max">
+            {filtered.map(opt => (
+              <button
+                key={opt.id}
+                type="button"
+                data-testid={`inline-add-option-${field.key}-${opt.id}`}
+                className="w-full block text-left px-2 py-1.5 text-sm hover:bg-blue-50 cursor-pointer whitespace-nowrap"
+                onMouseDown={(e) => { e.preventDefault(); handleSelect(opt); }}
+              >
+                {opt.name || opt.label || opt._identifier || opt.id}
+              </button>
+            ))}
+          </div>
         </div>,
         document.body,
       )}

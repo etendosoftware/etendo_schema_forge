@@ -39,13 +39,36 @@ async function openNewAsset(page) {
   await expect(page.getByTestId('detail-view')).toBeVisible();
 }
 
-/** Pick the real "Genérico" category in the Grupo activo selector. */
+/** Pick the real "Genérico" category in the Grupo activo selector.
+ *
+ * ETP-4600 unified this FK field onto CreatableSearchSelect: an empty field
+ * (new asset, no value yet) renders as the combobox input (`field-assetCategory`)
+ * directly; once a value is committed it re-renders as a Figma-style chip
+ * (`field-assetCategory-chip`), and the plain input is no longer in the DOM.
+ * Enter edit mode via whichever is currently present (chip → click to open;
+ * input → click to open) so this helper is reusable both for a brand-new
+ * empty field and for a field that already has a value (e.g. re-selecting). */
 async function selectGrupoActivoOtros(page) {
-  await page.getByTestId('field-assetCategory').click();
-  // Wait for selector options to load from the API before looking for the specific one.
-  await expect(page.locator('[role="option"]').first()).toBeVisible({ timeout: 10_000 });
+  const chip = page.getByTestId('field-assetCategory-chip');
+  const input = page.getByTestId('field-assetCategory');
+  // The chip/input transition is a re-render (clicking the chip unmounts it and
+  // mounts the combobox input in the same tick), so a bare click can hit a node
+  // mid-detach ("element was detached from the DOM"). Retry the whole
+  // open-and-wait-for-options sequence until it settles instead of a single click.
+  await expect(async () => {
+    if (await chip.isVisible({ timeout: 1_000 }).catch(() => false)) {
+      await chip.click({ timeout: 3_000 });
+    } else {
+      await input.click({ timeout: 3_000 });
+    }
+    await expect(page.locator('[role="option"]').first()).toBeVisible({ timeout: 3_000 });
+  }).toPass({ timeout: 15_000 });
+
   await page.getByRole('option', { name: /Gen[eé]rico|Otros|Others/i }).first().click();
-  await expect(page.getByTestId('field-assetCategory')).not.toContainText(/Seleccionar|Select/i);
+  // Original guarantee: a category is now selected. On the new DOM the field
+  // commits to a chip showing the selected label instead of the placeholder.
+  await expect(chip).toBeVisible({ timeout: 5_000 });
+  await expect(chip).toContainText(/Gen[eé]rico|Otros|Others/i);
 }
 
 /** Click "Guardar" and wait for the asset PATCH/PUT to actually land, so the

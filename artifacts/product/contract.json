@@ -1,8 +1,8 @@
 {
-  "version": "0.18.0",
+  "version": "0.22.0",
   "generatedAt": "2026-07-07T21:53:26.027Z",
-  "updatedAt": "2026-07-21T12:35:21.499Z",
-  "checksum": "04dacc6840efc846",
+  "updatedAt": "2026-07-24T14:13:56.729Z",
+  "checksum": "9c9b017985f6cbf2",
   "frontendContract": {
     "window": {
       "id": "140",
@@ -238,7 +238,6 @@
             "sourceRequired": true,
             "reference": "UOM",
             "inputMode": "search",
-            "clearable": false,
             "section": "principal",
             "seq": 5,
             "validation": {
