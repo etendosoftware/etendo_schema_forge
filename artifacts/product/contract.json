@@ -1,8 +1,8 @@
 {
   "version": "0.22.0",
   "generatedAt": "2026-07-07T21:53:26.027Z",
-  "updatedAt": "2026-07-24T14:13:56.729Z",
-  "checksum": "9c9b017985f6cbf2",
+  "updatedAt": "2026-07-26T17:38:34.638Z",
+  "checksum": "f2963aad95140256",
   "frontendContract": {
     "window": {
       "id": "140",
@@ -12,7 +12,7 @@
       "sidebarLayout": true,
       "hidePrint": true,
       "hideMoreMenu": true,
-      "contentBg": "bg-white",
+      "contentBg": "bg-card",
       "hideLink": true,
       "breadcrumb": "Inventory / Product",
       "secondaryTabs": {
@@ -55,7 +55,7 @@
       "toolbarBorderBottom": true,
       "compactSidebarPadding": true,
       "whiteFormBackground": true,
-      "sidebarClassName": "w-[30%] shrink-0 overflow-y-auto pt-2 pl-0 pr-4 pb-5 border-l border-[#E8EAEF]",
+      "sidebarClassName": "w-[30%] shrink-0 overflow-y-auto pt-2 pl-0 pr-4 pb-5 border-l border-border-subtle",
       "formCardPadding": "px-2",
       "tabsBarPaddingX": "px-2",
       "primaryTabsVariant": "pill",
@@ -2282,7 +2282,7 @@
       "sidebarLayout": true,
       "hidePrint": true,
       "hideMoreMenu": true,
-      "contentBg": "bg-white",
+      "contentBg": "bg-card",
       "hideLink": true,
       "breadcrumb": "Inventory / Product",
       "secondaryTabs": {
@@ -2325,7 +2325,7 @@
       "toolbarBorderBottom": true,
       "compactSidebarPadding": true,
       "whiteFormBackground": true,
-      "sidebarClassName": "w-[30%] shrink-0 overflow-y-auto pt-2 pl-0 pr-4 pb-5 border-l border-[#E8EAEF]",
+      "sidebarClassName": "w-[30%] shrink-0 overflow-y-auto pt-2 pl-0 pr-4 pb-5 border-l border-border-subtle",
       "formCardPadding": "px-2",
       "tabsBarPaddingX": "px-2",
       "primaryTabsVariant": "pill",
