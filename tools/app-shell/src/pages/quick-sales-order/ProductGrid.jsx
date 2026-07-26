@@ -77,7 +77,7 @@ export default function ProductGrid({ products, categories: categoriesProp, cate
   } else if (viewMode === 'list') {
     productDisplay = (
       /* List mode: compact rows */
-      (<div className="flex flex-col rounded-lg border border-border bg-white overflow-hidden">
+      (<div className="flex flex-col rounded-lg border border-border bg-card overflow-hidden">
         {sorted.map((product, idx) => {
           const isTop = showPriority && topSellerIds?.has(product.productId || product.id);
           return (
@@ -88,11 +88,11 @@ export default function ProductGrid({ products, categories: categoriesProp, cate
               onClick={() => onAddProduct(product)}
               className={`group flex items-center gap-3 px-3 py-2 text-left transition-colors hover:bg-muted/40 ${
                 idx > 0 ? 'border-t border-border' : ''
-              } ${isTop ? 'bg-amber-50/50' : ''}`}
+              } ${isTop ? 'bg-status-warning/50' : ''}`}
             >
               {/* Small avatar */}
               <div
-                className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-xs font-semibold text-white"
+                className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-xs font-semibold text-primary-foreground"
                 style={{ backgroundColor: getAvatarColor(product.name) }}
               >
                 {product.name.charAt(0)}
@@ -103,7 +103,7 @@ export default function ProductGrid({ products, categories: categoriesProp, cate
                   <span className="text-sm font-medium truncate">{product.name}</span>
                   {isTop && (
                     <Badge
-                      className="bg-amber-500 hover:bg-amber-500 text-white text-[9px] px-1 py-0 gap-0.5 shrink-0"
+                      className="bg-status-warning hover:bg-status-warning text-status-warning-foreground text-[9px] px-1 py-0 gap-0.5 shrink-0"
                       data-testid="Badge__ff9d59">
                       <TrendingUp className="h-2 w-2" data-testid="TrendingUp__ff9d59" />
                       {ui('qsoTopSeller')}
@@ -130,7 +130,7 @@ export default function ProductGrid({ products, categories: categoriesProp, cate
               )}
               {/* Add icon on hover */}
               <div className="opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
-                <div className="flex h-6 w-6 items-center justify-center rounded-full bg-primary text-white">
+                <div className="flex h-6 w-6 items-center justify-center rounded-full bg-primary text-primary-foreground">
                   <Plus className="h-3.5 w-3.5" data-testid="Plus__ff9d59" />
                 </div>
               </div>
@@ -151,9 +151,9 @@ export default function ProductGrid({ products, categories: categoriesProp, cate
               data-product-id={product.id}
               type="button"
               onClick={() => onAddProduct(product)}
-              className={`group relative flex flex-col items-start gap-2 rounded-lg border bg-white p-3 text-left hover:shadow-sm transition-[border-color,box-shadow,ring] ${
+              className={`group relative flex flex-col items-start gap-2 rounded-lg border bg-card p-3 text-left hover:shadow-sm transition-[border-color,box-shadow,ring] ${
                 isTop
-                  ? 'border-amber-300 ring-1 ring-amber-200/50'
+                  ? 'border-status-warning-border ring-1 ring-status-warning-border/50'
                   : 'border-border hover:border-primary/40'
               }`}
             >
@@ -161,7 +161,7 @@ export default function ProductGrid({ products, categories: categoriesProp, cate
               {isTop && (
                 <div className="absolute top-2 left-2 z-10">
                   <Badge
-                    className="bg-amber-500 hover:bg-amber-500 text-white text-[10px] px-1.5 py-0 gap-0.5"
+                    className="bg-status-warning hover:bg-status-warning text-status-warning-foreground text-[10px] px-1.5 py-0 gap-0.5"
                     data-testid="Badge__ff9d59">
                     <TrendingUp className="h-2.5 w-2.5" data-testid="TrendingUp__ff9d59" />
                     {ui('qsoTopSeller')}
@@ -171,7 +171,7 @@ export default function ProductGrid({ products, categories: categoriesProp, cate
               {/* Avatar */}
               <div className={`flex w-full items-center gap-2.5 ${isTop ? 'mt-4' : ''}`}>
                 <div
-                  className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-sm font-semibold text-white"
+                  className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-sm font-semibold text-primary-foreground"
                   style={{ backgroundColor: getAvatarColor(product.name) }}
                 >
                   {product.name.charAt(0)}
@@ -200,7 +200,7 @@ export default function ProductGrid({ products, categories: categoriesProp, cate
               </div>
               {/* Hover add icon */}
               <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                <div className="flex h-6 w-6 items-center justify-center rounded-full bg-primary text-white">
+                <div className="flex h-6 w-6 items-center justify-center rounded-full bg-primary text-primary-foreground">
                   <Plus className="h-3.5 w-3.5" data-testid="Plus__ff9d59" />
                 </div>
               </div>
@@ -222,7 +222,7 @@ export default function ProductGrid({ products, categories: categoriesProp, cate
               onClick={() => onCategoryChange(cat)}
               className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${
                 category === cat
-                  ? 'bg-foreground text-white'
+                  ? 'bg-foreground text-primary-foreground'
                   : 'bg-muted text-muted-foreground hover:bg-muted/80'
               }`}
             >
@@ -238,7 +238,7 @@ export default function ProductGrid({ products, categories: categoriesProp, cate
               title={ui('qsoGridView')}
               className={`flex h-7 w-7 items-center justify-center rounded-md transition-colors ${
                 viewMode === 'grid'
-                  ? 'bg-white text-foreground shadow-sm'
+                  ? 'bg-card text-foreground shadow-sm'
                   : 'text-muted-foreground hover:text-foreground'
               }`}
             >
@@ -250,7 +250,7 @@ export default function ProductGrid({ products, categories: categoriesProp, cate
               title={ui('qsoListView')}
               className={`flex h-7 w-7 items-center justify-center rounded-md transition-colors ${
                 viewMode === 'list'
-                  ? 'bg-white text-foreground shadow-sm'
+                  ? 'bg-card text-foreground shadow-sm'
                   : 'text-muted-foreground hover:text-foreground'
               }`}
             >

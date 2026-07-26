@@ -207,7 +207,7 @@ export function CurrencyRatePicker({
       </Label>
       {/* Trigger */}
       {editingRate ? (
-        <div className="w-full flex items-center gap-1 rounded-md border border-input bg-white dark:bg-background px-2 py-1.5 text-sm">
+        <div className="w-full flex items-center gap-1 rounded-md border border-input bg-card dark:bg-background px-2 py-1.5 text-sm">
           <span className="font-medium shrink-0">{displayIso} —</span>
           <input
             data-testid="currency-rate-input"
@@ -227,7 +227,7 @@ export function CurrencyRatePicker({
             data-testid="currency-rate-confirm"
             type="button"
             onClick={handleRateConfirm}
-            className="text-green-600 hover:text-green-700 p-0.5 rounded"
+            className="text-status-success-foreground hover:text-status-success-foreground p-0.5 rounded"
             title="Confirmar"
           >
             <Check className="h-3.5 w-3.5" data-testid={"Check__" + field.id} />
@@ -248,7 +248,7 @@ export function CurrencyRatePicker({
             data-testid="currency-rate-trigger"
             id={field.key}
             type="button"
-            className="flex-1 flex items-center justify-between rounded-md border border-input bg-white dark:bg-background px-3 py-2 text-sm hover:bg-muted/40 transition-colors"
+            className="flex-1 flex items-center justify-between rounded-md border border-input bg-card dark:bg-background px-3 py-2 text-sm hover:bg-muted/40 transition-colors"
             onClick={() => setOpen((v) => !v)}
           >
             {value ? (

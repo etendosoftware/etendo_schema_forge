@@ -156,8 +156,8 @@ function CreateAction({ field, createLabel, onCreateRequest, onCreate, query }) 
       // width:100% *block* child is correctly treated as indeterminate during that
       // calculation, so the panel collapses to the widest option's content width while the
       // row itself still stretches to fill the panel (bg-accent highlight spans edge-to-edge).
-      className="w-full block text-left px-3 py-2 text-sm font-medium hover:bg-blue-50 border-b border-border/40 transition-colors whitespace-nowrap"
-      style={{ color: '#202452' }}
+      className="w-full block text-left px-3 py-2 text-sm font-medium hover:bg-status-info border-b border-border/40 transition-colors whitespace-nowrap"
+      style={{ color: 'hsl(var(--foreground))' }}
       onMouseDown={(e) => { e.preventDefault(); onCreate(); }}
     >
       {typeof createLabel === 'function' ? createLabel(query.trim()) : createLabel}
@@ -717,7 +717,7 @@ export function CreatableSearchSelect({
     */
     <div
       ref={rootRef}
-      className={`group relative flex ${FIELD_HEIGHT} w-full min-w-0 items-center rounded-lg border border-[#D1D4DB] bg-white shadow-[0px_1px_2px_rgba(18,18,23,0.05)] pl-2 pr-2 gap-1 focus-within:ring-2 focus-within:ring-primary${showChip ? ' hover:bg-[#F5F7F9]' : ''}${isDisabled ? ' opacity-50 cursor-not-allowed' : ''}`}
+      className={`group relative flex ${FIELD_HEIGHT} w-full min-w-0 items-center rounded-lg border border-[hsl(var(--border-control))] shadow-[0px_1px_2px_hsl(var(--foreground) / 0.05)] pl-2 pr-2 gap-1 focus-within:ring-2 focus-within:ring-primary${isDisabled ? ' bg-muted text-text-disabled cursor-not-allowed' : ` bg-card${showChip ? ' hover:bg-[hsl(var(--muted))]' : ''}`}`}
       onClick={showChip && !isDisabled ? handleChipClick : undefined}
     >
       {showChip ? (
@@ -749,7 +749,7 @@ export function CreatableSearchSelect({
           disabled={isDisabled}
           required={field.required && !isDisabled}
           autoComplete="off"
-          className="flex-1 min-w-0 h-full bg-transparent border-0 outline-none py-2 text-sm placeholder:text-[#6C6C89] disabled:cursor-not-allowed"
+          className="flex-1 min-w-0 h-full bg-transparent border-0 outline-none py-2 text-sm placeholder:text-[hsl(var(--muted-foreground))] disabled:cursor-not-allowed"
           onChange={(e) => {
             isEditingRef.current = true;
             const newQuery = e.target.value;
@@ -790,7 +790,7 @@ export function CreatableSearchSelect({
       )}
       {loading ? (
         <Loader2
-          className="h-4 w-4 text-[#828FA3] animate-spin shrink-0 ml-auto"
+          className="h-4 w-4 text-[hsl(var(--text-disabled))] animate-spin shrink-0 ml-auto"
           data-testid={"Loader2__" + field.id} />
       ) : (
         <button
@@ -808,7 +808,7 @@ export function CreatableSearchSelect({
           className="shrink-0 ml-auto flex items-center"
         >
           <ChevronDown
-            className="h-4 w-4 text-[#828FA3]"
+            className="h-4 w-4 text-[hsl(var(--text-disabled))]"
             data-testid={"ChevronDown__" + field.id} />
         </button>
       )}
@@ -818,7 +818,7 @@ export function CreatableSearchSelect({
           id={`options-${field.key}`}
           role="listbox"
           data-testid={`options-${field.key}`}
-          className="bg-white border rounded-md shadow-lg overflow-auto"
+          className="bg-card border rounded-md shadow-lg overflow-auto"
           style={dropdownStyle}
           data-open-up={openUp ? 'true' : 'false'}
           // Radix Dialog (react-remove-scroll) locks body scroll while open by attaching a

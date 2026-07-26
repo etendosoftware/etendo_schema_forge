@@ -11,7 +11,8 @@ export function DirBadge({ dir, size = 36 }) {
     <div style={{
       width: size, height: size, borderRadius: 8, flexShrink: 0,
       display: 'flex', alignItems: 'center', justifyContent: 'center',
-      background: isIn ? '#E2F7EA' : '#FDE2E9', color: isIn ? '#17663A' : '#C5234A',
+      background: isIn ? 'var(--status-success-bg)' : 'var(--status-destructive-bg)',
+      color: isIn ? 'var(--status-success-fg)' : 'var(--status-destructive-fg)',
     }}>
       <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
         {isIn

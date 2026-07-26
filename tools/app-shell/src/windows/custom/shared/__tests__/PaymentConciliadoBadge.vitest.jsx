@@ -52,7 +52,7 @@ describe('PaymentConciliadoBadge', () => {
     render(<PaymentConciliadoBadge data={{ status: 'RPPC' }} />);
     const badge = screen.getByText('conciliado');
     expect(badge).toBeInTheDocument();
-    expect(badge).toHaveStyle({ background: '#EEFBF4', color: 'rgb(23, 102, 58)' });
+    expect(badge).toHaveStyle({ background: 'var(--status-success-bg)', color: 'var(--status-success-fg)' });
   });
 
   it('renders the checkmark svg icon alongside the label', () => {

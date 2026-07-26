@@ -34,25 +34,25 @@ function SidebarPeriodSelector({ period, onChangePeriod, ui, disabled = false })
         type="button"
         disabled={disabled}
         onClick={() => !disabled && setOpen(o => !o)}
-        className={`h-10 flex items-center gap-1 px-3 border border-[#D1D4DB] rounded-lg shadow-[0px_1px_2px_rgba(18,18,23,0.05)] text-sm font-medium transition-colors
-          ${disabled ? 'bg-[#F5F7F9] text-[#828FA3] cursor-not-allowed' : 'bg-white text-[#121217]'}`}
+        className={`h-10 flex items-center gap-1 px-3 border border-border-control rounded-lg shadow-[0px_1px_2px_hsl(var(--foreground) / 0.05)] text-sm font-medium transition-colors
+          ${disabled ? 'bg-muted text-disabled cursor-not-allowed' : 'bg-card text-foreground'}`}
       >
         <Calendar
-          className={`h-5 w-5 shrink-0 ${disabled ? 'text-[#C1C7D0]' : 'text-[#828FA3]'}`}
+          className={`h-5 w-5 shrink-0 ${disabled ? 'text-disabled' : 'text-muted-foreground'}`}
           data-testid="Calendar__59b33d" />
         <span className="flex-1 text-left mx-1">{ui(current.key)}</span>
         <ChevronDown
-          className={`h-5 w-5 shrink-0 ${disabled ? 'text-[#C1C7D0]' : 'text-[#828FA3]'}`}
+          className={`h-5 w-5 shrink-0 ${disabled ? 'text-disabled' : 'text-muted-foreground'}`}
           data-testid="ChevronDown__59b33d" />
       </button>
       {open && (
-        <div className="absolute top-11 left-0 z-50 min-w-full bg-white border border-[#D1D4DB] rounded-lg shadow-md overflow-hidden">
+        <div className="absolute top-11 left-0 z-50 min-w-full bg-card border border-border-control rounded-lg shadow-md overflow-hidden">
           {SIDEBAR_PERIOD_OPTIONS.map(opt => (
             <button
               key={opt.value}
               type="button"
               onClick={() => { onChangePeriod(opt.value); setOpen(false); }}
-              className={`w-full px-4 py-2.5 text-left text-sm hover:bg-[#F5F7F9] text-[#121217] whitespace-nowrap ${period === opt.value ? 'font-medium' : 'font-normal'}`}
+              className={`w-full px-4 py-2.5 text-left text-sm hover:bg-muted text-foreground whitespace-nowrap ${period === opt.value ? 'font-medium' : 'font-normal'}`}
             >
               {ui(opt.key)}
             </button>
@@ -66,19 +66,19 @@ function SidebarPeriodSelector({ period, onChangePeriod, ui, disabled = false })
 // Horizontal availability widget: icon box + label + locations badge + big number.
 function AvailabilityWidget({ label, value, badge }) {
   return (
-    <div className="flex-1 flex items-center gap-3 pl-3 pr-2 py-2 bg-white border border-[#E8EAEF] rounded-lg shadow-[0px_1px_2px_rgba(18,18,23,0.05)]">
-      <div className="w-10 h-10 shrink-0 flex items-center justify-center bg-white border border-[#D1D4DB] rounded-lg shadow-[0px_1px_2px_rgba(18,18,23,0.05)]">
-        <Box className="w-6 h-6 text-[#828FA3]" data-testid="Box__59b33d" />
+    <div className="flex-1 flex items-center gap-3 pl-3 pr-2 py-2 bg-card border border-border-subtle rounded-lg shadow-[0px_1px_2px_hsl(var(--foreground) / 0.05)]">
+      <div className="w-10 h-10 shrink-0 flex items-center justify-center bg-card border border-border-control rounded-lg shadow-[0px_1px_2px_hsl(var(--foreground) / 0.05)]">
+        <Box className="w-6 h-6 text-disabled" data-testid="Box__59b33d" />
       </div>
       <div className="flex-1 min-w-0 flex flex-col">
         <div className="flex items-center justify-between gap-2">
-          <span className="text-xs text-[#3F3F50]">{label}</span>
+          <span className="text-xs text-muted-foreground">{label}</span>
           {badge && (
-            <span className="px-2 py-1 rounded-full bg-[#F5F7F9] text-xs text-[#3F3F50] whitespace-nowrap">{badge}</span>
+            <span className="px-2 py-1 rounded-full bg-muted text-xs text-muted-foreground whitespace-nowrap">{badge}</span>
           )}
         </div>
-        <span className="text-2xl font-medium tracking-[-0.01em] text-[#121217] leading-9">
-          {value === null ? <span className="text-gray-300">—</span> : value}
+        <span className="text-2xl font-medium tracking-[-0.01em] text-foreground leading-9">
+          {value === null ? <span className="text-muted-foreground">—</span> : value}
         </span>
       </div>
     </div>
@@ -188,7 +188,7 @@ function ChartSVG({ months, values, series, W, H, PAD_X, PAD_Y, gradId, fontSize
 
   // Single-series (modal) vs multi-series (per-warehouse). Single keeps the original blue look.
   const multi = Array.isArray(series) && series.length > 0;
-  const seriesList = multi ? series : [{ name: null, color: '#3b82f6', values }];
+  const seriesList = multi ? series : [{ name: null, color: 'var(--status-info-fg)', values }];
   const pointCount = seriesList[0].values.length;
 
   // Global Y scale spanning every series. Baseline is always 0 (stock can't be negative);
@@ -283,10 +283,10 @@ function ChartSVG({ months, values, series, W, H, PAD_X, PAD_Y, gradId, fontSize
         ))}
       </defs>
       {yLabels.map((yl) => (
-        <line key={yl.v} x1={PAD_X} y1={toY(yl.v)} x2={W - PAD_R} y2={toY(yl.v)} stroke="#e5e7eb" strokeWidth="1" strokeDasharray="4,3" />
+        <line key={yl.v} x1={PAD_X} y1={toY(yl.v)} x2={W - PAD_R} y2={toY(yl.v)} stroke="hsl(var(--border-subtle))" strokeWidth="1" strokeDasharray="4,3" />
       ))}
       {yLabels.map((yl) => (
-        <text key={yl.label} x={PAD_X - 5} y={toY(yl.v) + 4} textAnchor="end" fontSize={fontSize} fill="#9ca3af">{yl.label}</text>
+        <text key={yl.label} x={PAD_X - 5} y={toY(yl.v) + 4} textAnchor="end" fontSize={fontSize} fill="hsl(var(--text-disabled))">{yl.label}</text>
       ))}
       {paths.map((p) => (
         <path key={`area-${p.idx}`} d={p.areaPath} fill={`url(#${gradId}-${p.idx})`} />
@@ -297,21 +297,21 @@ function ChartSVG({ months, values, series, W, H, PAD_X, PAD_Y, gradId, fontSize
       ))}
       {hoveredIdx !== null && !multi && (
         <>
-          <line x1={hx} y1={PAD_Y} x2={hx} y2={H} stroke="#94a3b8" strokeWidth="1" strokeDasharray="3,2" />
-          <circle cx={hx} cy={hy} r="5" fill="white" stroke="#3b82f6" strokeWidth="2" />
-          <rect x={tooltipX} y={tooltipY} width={TW} height={TH} rx={TR} fill="#1e293b" />
-          <text x={tooltipX + TW / 2} y={tooltipY + fontSize + 2} textAnchor="middle" fontSize={fontSize} fill="#94a3b8">{hMonth}</text>
+          <line x1={hx} y1={PAD_Y} x2={hx} y2={H} stroke="hsl(var(--text-disabled))" strokeWidth="1" strokeDasharray="3,2" />
+          <circle cx={hx} cy={hy} r="5" fill="white" stroke="var(--status-info-fg)" strokeWidth="2" />
+          <rect x={tooltipX} y={tooltipY} width={TW} height={TH} rx={TR} fill="hsl(var(--foreground))" />
+          <text x={tooltipX + TW / 2} y={tooltipY + fontSize + 2} textAnchor="middle" fontSize={fontSize} fill="hsl(var(--text-disabled))">{hMonth}</text>
           <text x={tooltipX + TW / 2} y={tooltipY + TH - 4} textAnchor="middle" fontSize={fontSize + 1} fontWeight="700" fill="white">{hVal}</text>
         </>
       )}
       {hoveredIdx !== null && multi && (
         <>
-          <line x1={hx} y1={PAD_Y} x2={hx} y2={H} stroke="#94a3b8" strokeWidth="1" strokeDasharray="3,2" />
+          <line x1={hx} y1={PAD_Y} x2={hx} y2={H} stroke="hsl(var(--text-disabled))" strokeWidth="1" strokeDasharray="3,2" />
           {seriesList.map((s) => (
             <circle key={s.name} cx={hx} cy={toY(s.values[hoveredIdx])} r="4" fill="white" stroke={s.color} strokeWidth="2" />
           ))}
-          <rect x={mTipX} y={mTipY} width={MTW} height={MTH} rx={4} fill="#1e293b" />
-          <text x={mTipX + 6} y={mTipY + fontSize + 2} fontSize={fontSize} fill="#94a3b8">{hMonth}</text>
+          <rect x={mTipX} y={mTipY} width={MTW} height={MTH} rx={4} fill="hsl(var(--foreground))" />
+          <text x={mTipX + 6} y={mTipY + fontSize + 2} fontSize={fontSize} fill="hsl(var(--text-disabled))">{hMonth}</text>
           {seriesList.map((s, idx) => (
             <g key={s.name}>
               <rect x={mTipX + 6} y={mTipY + rowH * (idx + 1) + 1} width={8} height={3} rx={1} fill={s.color} />
@@ -325,7 +325,7 @@ function ChartSVG({ months, values, series, W, H, PAD_X, PAD_Y, gradId, fontSize
       {xLabels.map((l, i) => l.text && (
         <text key={i} x={l.x} y={H + 14} textAnchor="middle"
           fontSize={l.bold ? fontSize + 1 : fontSize} fontWeight={l.bold ? '700' : '400'}
-          fill={l.bold ? '#4b5563' : '#9ca3af'}>{l.text}</text>
+          fill={l.bold ? 'hsl(var(--muted-foreground))' : 'hsl(var(--text-disabled))'}>{l.text}</text>
       ))}
     </svg>
   );
@@ -337,21 +337,21 @@ function StockEmptyState({ onAdjustStock, onReplenish }) {
   return (
     <div className="flex flex-col items-center justify-center gap-3 px-4 py-6">
       <div className="flex flex-col items-center gap-1">
-        <span className="text-xl font-semibold text-[#121217] text-center">{ui('noStockMovements')}</span>
-        <span className="text-xs font-normal text-[#282833] text-center">{ui('noStockMovementsDesc')}</span>
+        <span className="text-xl font-semibold text-foreground text-center">{ui('noStockMovements')}</span>
+        <span className="text-xs font-normal text-foreground text-center">{ui('noStockMovementsDesc')}</span>
       </div>
       <div className="flex flex-row items-center gap-3">
         <button
           type="button"
           onClick={onAdjustStock}
-          className="flex items-center justify-center px-2 py-1 h-8 bg-white border border-[#D1D4DB] shadow-[0px_1px_2px_rgba(18,18,23,0.05)] rounded-lg text-sm font-medium text-[#121217]"
+          className="flex items-center justify-center px-2 py-1 h-8 bg-card border border-border-control shadow-[0px_1px_2px_hsl(var(--foreground) / 0.05)] rounded-lg text-sm font-medium text-foreground"
         >
           {ui('adjustStock')}
         </button>
         <button
           type="button"
           onClick={onReplenish}
-          className="flex items-center justify-center px-2 py-1 h-8 bg-[#121217] rounded-lg text-sm font-medium text-white"
+          className="flex items-center justify-center px-2 py-1 h-8 bg-foreground rounded-lg text-sm font-medium text-primary-foreground"
         >
           {ui('replenishStock')}
         </button>
@@ -417,12 +417,12 @@ function StockChart({
       <div className="px-4 pt-2 pb-3 flex flex-col gap-2">
         {/* Title + Expandir */}
         <div className="flex items-center justify-between gap-1.5">
-          <span className="text-sm font-normal text-[#3F3F50] flex-1">{ui('stockMovement')}</span>
+          <span className="text-sm font-normal text-muted-foreground flex-1">{ui('stockMovement')}</span>
           <button
             onClick={() => setInternalOpen(true)}
-            className="inline-flex items-center gap-1 text-sm font-medium text-[#121217] underline underline-offset-2 shrink-0"
+            className="inline-flex items-center gap-1 text-sm font-medium text-foreground underline underline-offset-2 shrink-0"
           >
-            {ui('expand')} <ExternalLink size={16} className="text-[#828FA3]" data-testid="ExternalLink__59b33d" />
+            {ui('expand')} <ExternalLink size={16} className="text-disabled" data-testid="ExternalLink__59b33d" />
           </button>
         </div>
         {/* Warehouse legend */}
@@ -431,7 +431,7 @@ function StockChart({
             {sortedRows.map((b, i) => (
               <div key={b.binName} className="flex items-center gap-2">
                 <span className="flex-shrink-0 rounded-sm" style={{ width: 14, height: 4, backgroundColor: DOT_COLORS[i % DOT_COLORS.length] }} />
-                <span className="text-xs font-normal text-[#121217]">{b.binName}</span>
+                <span className="text-xs font-normal text-foreground">{b.binName}</span>
               </div>
             ))}
           </div>
@@ -462,10 +462,10 @@ function StockChart({
             <DialogTitle data-testid="DialogTitle__59b33d">
               <div className="flex items-center justify-between gap-4 pr-8">
                 <span>{ui('stockMovement')}</span>
-                <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-1">
+                <div className="flex items-center gap-1 bg-muted rounded-lg p-1">
                   {SIDEBAR_PERIOD_OPTIONS.map(opt => (
                     <button key={opt.value} onClick={() => setPeriod(opt.value)}
-                      className={`px-3 py-1 rounded-md text-sm font-medium transition-colors ${period === opt.value ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
+                      className={`px-3 py-1 rounded-md text-sm font-medium transition-colors ${period === opt.value ? 'bg-card text-status-info-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}>
                       {ui(opt.key)}
                     </button>
                   ))}
@@ -489,24 +489,24 @@ function StockChart({
             </div>
             {sortedRows.length > 0 && (
               <div className="w-56 flex-shrink-0 flex flex-col gap-2">
-                <div className="text-sm font-semibold text-[#121217]">{ui('stockByWarehouse')}</div>
+                <div className="text-sm font-semibold text-foreground">{ui('stockByWarehouse')}</div>
                 {sortedRows.map((b, i) => {
                   const isSelected = selectedWarehouse === b.binName;
                   const isDimmed = selectedWarehouse !== null && !isSelected;
                   return (
                     <button key={b.binName} onClick={() => handleWarehouseClick(b.binName)}
                       className={`w-full flex items-center justify-between gap-2 px-3 py-2.5 rounded-lg transition-colors text-left
-                        ${isSelected ? 'bg-blue-50 ring-1 ring-blue-200' : 'bg-[#F5F7F9] hover:bg-gray-100'}
+                        ${isSelected ? 'bg-status-info ring-1 focus:ring-focus-ring' : 'bg-muted hover:bg-muted'}
                         ${isDimmed ? 'opacity-40' : ''}`}>
                       <div className="flex items-center gap-2.5 min-w-0">
                         <span className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: DOT_COLORS[i % DOT_COLORS.length] }} />
-                        <span className="text-sm text-[#555B6D] truncate">{b.binName}</span>
+                        <span className="text-sm text-muted-foreground truncate">{b.binName}</span>
                       </div>
-                      <span className="text-sm font-semibold text-[#121217] flex-shrink-0">{b.quantityOnHand.toLocaleString()}</span>
+                      <span className="text-sm font-semibold text-foreground flex-shrink-0">{b.quantityOnHand.toLocaleString()}</span>
                     </button>
                   );
                 })}
-                <div className="text-xs text-[#828FA3] mt-auto pt-2">
+                <div className="text-xs text-disabled mt-auto pt-2">
                   {selectedWarehouse
                     ? `${locationRows.find(r => r.binName === selectedWarehouse)?.quantityOnHand?.toLocaleString() ?? 0} ${ui('units')}`
                     : `${ui('total')}: ${currentStock?.toLocaleString()} ${ui('units')}`}
@@ -591,7 +591,7 @@ export default function ProductSidebar({ recordId, data, token, apiBaseUrl }) {
 
         {/* Segmented tabs (pill) — full width, no title */}
         <div className="px-4 pt-2">
-          <div className="flex items-center gap-1 p-1 h-10 rounded-xl" style={{ background: '#F5F7F9' }}>
+          <div className="flex items-center gap-1 p-1 h-10 rounded-xl" style={{ background: 'hsl(var(--muted))' }}>
             {['summary', 'warehouses'].map(tab => (
               <button
                 key={tab}
@@ -599,9 +599,9 @@ export default function ProductSidebar({ recordId, data, token, apiBaseUrl }) {
                 className="flex-1 h-8 px-3 text-sm rounded-lg transition-all"
                 style={
                   activeTab === tab
-                    ? { background: '#FFFFFF', color: '#121217', fontWeight: 500,
+                    ? { background: 'hsl(var(--card))', color: 'hsl(var(--foreground))', fontWeight: 500,
                         boxShadow: '0px 1px 3px rgba(18,18,23,0.10), 0px 1px 2px rgba(18,18,23,0.06)' }
-                    : { color: '#121217', fontWeight: 400 }
+                    : { color: 'hsl(var(--foreground))', fontWeight: 400 }
                 }
               >
                 {tab === 'summary' ? ui('summary') : ui('warehouses')}
@@ -640,22 +640,22 @@ export default function ProductSidebar({ recordId, data, token, apiBaseUrl }) {
               {sortedRows.map((b, i) => {
                 const wAvailable = b.quantityOnHand - b.reservedQty;
                 return (
-                  <div key={b.binName} className="flex flex-col gap-3 bg-[#F5F7F9] rounded-lg p-3">
+                  <div key={b.binName} className="flex flex-col gap-3 bg-muted rounded-lg p-3">
                     <div className="flex items-center gap-1 h-6">
                       <span className="w-6 h-6 flex items-center justify-center flex-shrink-0">
                         <span className="w-2 h-2 rounded-full" style={{ backgroundColor: DOT_COLORS[i % DOT_COLORS.length] }} />
                       </span>
-                      <span className="text-xs font-semibold text-[#3F3F50] truncate">{b.binName}</span>
+                      <span className="text-xs font-semibold text-muted-foreground truncate">{b.binName}</span>
                     </div>
                     <div className="flex flex-col gap-2">
                       <div className="flex justify-between items-center">
-                        <span className="text-xs font-normal text-[#555B6D]">{ui('available')}</span>
-                        <span className="text-sm font-medium text-[#121217]">{fmt(wAvailable)}</span>
+                        <span className="text-xs font-normal text-muted-foreground">{ui('available')}</span>
+                        <span className="text-sm font-medium text-foreground">{fmt(wAvailable)}</span>
                       </div>
-                      <div className="border-t border-[rgba(18,18,23,0.05)]" />
+                      <div className="border-t border-[hsl(var(--foreground) / 0.05)]" />
                       <div className="flex justify-between items-center">
-                        <span className="text-xs font-normal text-[#555B6D]">{ui('reserved')}</span>
-                        <span className="text-sm font-medium text-[#121217]">{fmt(b.reservedQty)}</span>
+                        <span className="text-xs font-normal text-muted-foreground">{ui('reserved')}</span>
+                        <span className="text-sm font-medium text-foreground">{fmt(b.reservedQty)}</span>
                       </div>
                     </div>
                   </div>
@@ -668,7 +668,7 @@ export default function ProductSidebar({ recordId, data, token, apiBaseUrl }) {
       {/* ── Divider ── */}
       {(hasChart || transactions !== null) && (
         <div className="px-4">
-          <div className="border-t border-[#E8EAEF]" />
+          <div className="border-t border-border-subtle" />
         </div>
       )}
       {/* ── Stock movement or empty state ── */}

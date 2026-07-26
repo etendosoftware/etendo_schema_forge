@@ -62,7 +62,7 @@ describe('DashboardEmptyState', () => {
       />,
     );
     const button = screen.getByRole('button', { name: 'P' });
-    expect(button.style.background).toMatch(/#121217|rgb\(18, 18, 23\)/i);
+    expect(button.style.background).toMatch(/hsl\(var\(--foreground\)\)/i);
   });
 
   it('applies secondary variant styling (white background with border)', () => {
@@ -74,7 +74,7 @@ describe('DashboardEmptyState', () => {
       />,
     );
     const button = screen.getByRole('button', { name: 'S' });
-    expect(button.style.border).toMatch(/1px solid (#D1D4DB|rgb\(209, 212, 219\))/i);
+    expect(button.style.border).toMatch(/1px solid hsl\(var\(--border-control\)\)/i);
   });
 
   it('applies width prop when given', () => {

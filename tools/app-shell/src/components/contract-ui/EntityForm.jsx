@@ -7,7 +7,9 @@ import { Button } from '@/components/ui/button';
 import { FIELD_HEIGHT, ROW_GAP_Y, LABEL_GAP } from '@/components/ui/formDensity';
 import { PillToggle } from '@/components/PillToggle';
 import { ChevronDown, Loader2, Search } from 'lucide-react';
+import { toast } from 'sonner';
 import { useLabel, useLocaleSwitch, useMenuLabel, useUI } from '@/i18n';
+import { getNumericFieldError, numericFieldToastId } from '@/lib/numericValidation.js';
 import { buildHeaders } from '@/auth/api.js';
 import { buildUrlWithParams } from '@/lib/buildUrlWithParams.js';
 import { resolveIdentifier } from '@/lib/resolveIdentifier.js';
@@ -80,7 +82,7 @@ function PopupSearchInput({ field, value, displayValue, onChange, label, selecto
         type="button"
         onClick={() => setOpen(true)}
         data-testid={`field-${field.key}`}
-        className={`w-full ${FIELD_HEIGHT} text-sm rounded-lg border border-[#D1D4DB] bg-white p-2 text-left flex items-center gap-2 shadow-[0px_1px_2px_rgba(18,18,23,0.05)] hover:border-primary/50 focus:ring-2 focus:ring-primary focus:outline-none transition-colors`}
+        className={`w-full ${FIELD_HEIGHT} text-sm rounded-lg border border-[hsl(var(--border-control))] bg-card p-2 text-left flex items-center gap-2 shadow-[0px_1px_2px_hsl(var(--foreground) / 0.05)] hover:border-primary/50 focus:ring-2 focus:ring-primary focus:outline-none transition-colors`}
       >
         <Search
           className="h-4 w-4 text-muted-foreground shrink-0"
@@ -260,7 +262,7 @@ function LookupFormField({ field, value, displayValue, selectorUrl, selectorCont
         type="button"
         data-testid={`field-${field.key}`}
         onClick={() => setOpen(true)}
-        className={`w-full flex items-center gap-2 ${FIELD_HEIGHT} rounded-lg border border-[#D1D4DB] bg-white p-2 text-sm text-left shadow-[0px_1px_2px_rgba(18,18,23,0.05)] hover:border-primary/50 focus:ring-2 focus:ring-primary focus:outline-none transition-colors`}
+        className={`w-full flex items-center gap-2 ${FIELD_HEIGHT} rounded-lg border border-[hsl(var(--border-control))] bg-card p-2 text-sm text-left shadow-[0px_1px_2px_hsl(var(--foreground) / 0.05)] hover:border-primary/50 focus:ring-2 focus:ring-primary focus:outline-none transition-colors`}
       >
         <Search
           className="h-4 w-4 text-muted-foreground shrink-0"
@@ -317,7 +319,7 @@ function PopupSearchField(props) {
       <Label
         className="text-sm text-foreground font-medium"
         data-testid="Label__a8d626">
-        {props.label}{(props.f.required || props.f.requiredVisual) ? <span className="text-red-500 ml-0.5">*</span> : ""}
+        {props.label}{(props.f.required || props.f.requiredVisual) ? <span className="text-destructive ml-0.5">*</span> : ""}
       </Label>
       <PopupSearchInput
         field={props.f}
@@ -345,7 +347,7 @@ function getCheckboxStateClass(checked) {
 // display before the label is built), so no explicit isReadOnly gate is needed
 // here — see labelMarker/requiredAsteriskIfEditable for the gated equivalents.
 function requiredAsterisk(f) {
-  return (f.required || f.requiredVisual) ? <span className="text-red-500 ml-0.5">*</span> : '';
+  return (f.required || f.requiredVisual) ? <span className="text-destructive ml-0.5">*</span> : null;
 }
 
 /**
@@ -359,11 +361,11 @@ function requiredAsterisk(f) {
  * `required: true`.
  */
 function labelMarker(f, isReadOnly, optionalSuffix, ui) {
-  if ((f.required || f.requiredVisual) && !isReadOnly) return <span className="text-[#F53D6B] ml-0.5">*</span>;
+  if ((f.required || f.requiredVisual) && !isReadOnly) return <span className="text-[hsl(var(--destructive))] ml-0.5">*</span>;
   if (optionalSuffix && !isReadOnly) {
-    return <span className="ml-1 font-normal text-[#6C6C89]">({ui('optional')})</span>;
+    return <span className="ml-1 font-normal text-[hsl(var(--muted-foreground))]">({ui('optional')})</span>;
   }
-  return '';
+  return null;
 }
 
 /**
@@ -374,7 +376,7 @@ function labelMarker(f, isReadOnly, optionalSuffix, ui) {
 function FieldHelp({ field, ui }) {
   if (!field?.help) return null;
   const text = ui(field.help) ?? field.help;
-  return <p className="text-sm leading-6 text-[#6C6C89]" data-testid={`help-${field.key}`}>{text}</p>;
+  return <p className="text-sm leading-6 text-[hsl(var(--muted-foreground))]" data-testid={`help-${field.key}`}>{text}</p>;
 }
 
 function formatReadOnlyDisplayValue(f, isReadOnly, rawDisplayValue) {
@@ -395,11 +397,11 @@ function buildSearchSelectorUrl(apiBaseUrl, entity, f, apiSelectorEntry) {
 }
 
 function requiredAsteriskIfEditable(f, isReadOnly) {
-  return (f.required || f.requiredVisual) && !isReadOnly ? <span className="text-red-500 ml-0.5">*</span> : '';
+  return (f.required || f.requiredVisual) && !isReadOnly ? <span className="text-destructive ml-0.5">*</span> : null;
 }
 
 function getInputStateClass(isReadOnly) {
-  return isReadOnly ? 'bg-muted/50' : 'bg-white focus:ring-2 focus:ring-primary focus:outline-none';
+  return isReadOnly ? 'bg-muted/50' : 'bg-card focus:ring-2 focus:ring-focus-ring focus:outline-none';
 }
 
 function DependentFkField(props) {
@@ -490,7 +492,7 @@ function getFieldValue(isReadOnly, displayValue, data, f) {
 }
 
 function getReadOnlyBgClass(isReadOnly) {
-  return isReadOnly ? 'bg-muted/50 cursor-default' : 'bg-white';
+  return isReadOnly ? 'bg-muted/50 cursor-default' : 'bg-card';
 }
 
 /**
@@ -516,7 +518,7 @@ function getReadOnlyBgClass(isReadOnly) {
  * `committedValue` is the same `data?.[f.key] ?? ''` the default path reads, so the
  * value semantics are identical — only the commit TIMING differs.
  */
-function DeferredInput({ f, committedValue, onCommit, onFieldBlur, placeholder, className, required, disabled }) {
+function DeferredInput({ f, committedValue, onCommit, onFieldBlur, onValidateBlur, placeholder, className, required, disabled }) {
   const [buffer, setBuffer] = useState(committedValue);
   const focusedRef = useRef(false);
   // The last value the USER actually committed (or that arrived externally while the field
@@ -574,6 +576,9 @@ function DeferredInput({ f, committedValue, onCommit, onFieldBlur, placeholder, 
         const changed = !sameAsLast(v);
         lastUserValueRef.current = v;
         if (changed) onCommit?.(f.key, v, f.column);
+        // Validate the RAW value the user left (pre-'0' coercion) so a genuinely
+        // empty field is not reported as below-min. ETP-4542.
+        onValidateBlur?.(f, raw);
         onFieldBlur?.(f.key);
       }}
       placeholder={placeholder}
@@ -976,6 +981,18 @@ export function EntityForm({ entity, fields = [], data, onChange, catalogs, layo
   // both updates `editing` (so anything mirroring it, e.g. the Assets sidebar, defers too)
   // AND fires the callout in one shot. Fields without the flag keep the default fully
   // controlled path: every keystroke commits and fires the callout immediately.
+  // Generic on-blur numeric feedback (min / integer), driven by the field config.
+  // A no-op for fields that declare neither constraint (getNumericFieldError → null),
+  // so no existing window changes behaviour. ETP-4542.
+  const validateNumericOnBlur = (f, value) => {
+    const err = getNumericFieldError(f, value);
+    // Shared `id` with the useEntity.js save-gate toast for this same field: if
+    // the user clicks "Save" without leaving the input first, blur fires just
+    // before the click's onClick, and sonner dedupes the two same-id calls into
+    // one visible toast instead of stacking duplicates. ETP-4542.
+    if (err) toast.error(ui(err.key, err.params), { id: numericFieldToastId(f.key) });
+  };
+
   const renderInputField = (f, label, isReadOnly, displayValue) => {
     const calloutOnBlur = f.calloutOn === 'blur';
     return (
@@ -992,6 +1009,7 @@ export function EntityForm({ entity, fields = [], data, onChange, catalogs, layo
             committedValue={data?.[f.key] ?? ''}
             onCommit={onChange}
             onFieldBlur={onFieldBlur}
+            onValidateBlur={validateNumericOnBlur}
             placeholder={resolveUiKey(ui, f.placeholderKey)}
             className={getInputStateClass(isReadOnly)}
             required={f.required && !isReadOnly}
@@ -1005,7 +1023,12 @@ export function EntityForm({ entity, fields = [], data, onChange, catalogs, layo
             type={getInputType(f)}
             value={getFieldValue(isReadOnly, displayValue, data, f)}
             onChange={(e) => onChange?.(f.key, e.target.value, f.column)}
-            onBlur={() => onFieldBlur?.(f.key)}
+            onBlur={(e) => {
+              if (!isReadOnly) {
+                validateNumericOnBlur(f, e.target.value);
+              }
+              onFieldBlur?.(f.key);
+            }}
             placeholder={!isReadOnly ? resolveUiKey(ui, f.placeholderKey) : undefined}
             className={getInputStateClass(isReadOnly)}
             required={f.required && !isReadOnly}
@@ -1040,7 +1063,7 @@ export function EntityForm({ entity, fields = [], data, onChange, catalogs, layo
           placeholder={placeholder}
           disabled={isReadOnly}
           className={[
-            'flex w-full rounded-lg border border-[#D1D4DB] p-2 text-sm shadow-[0px_1px_2px_rgba(18,18,23,0.05)]',
+            'flex w-full rounded-lg border border-[hsl(var(--border-control))] p-2 text-sm shadow-[0px_1px_2px_hsl(var(--foreground) / 0.05)]',
             `placeholder:text-muted-foreground resize-none${minHeightClass}`,
             'focus:outline-none focus:ring-2 focus:ring-primary',
             'disabled:bg-muted/50 disabled:cursor-not-allowed',
@@ -1279,7 +1302,7 @@ export function EntityForm({ entity, fields = [], data, onChange, catalogs, layo
         existing,
         React.createElement(
           'p',
-          { key: '__err', role: 'alert', className: 'text-xs text-red-500 mt-0.5', 'data-testid': `error-${f.key}` },
+          { key: '__err', role: 'alert', className: 'text-xs text-destructive mt-0.5', 'data-testid': `error-${f.key}` },
           err
         )
       );

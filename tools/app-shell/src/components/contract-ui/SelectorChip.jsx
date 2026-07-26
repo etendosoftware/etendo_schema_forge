@@ -2,7 +2,7 @@ import { X } from 'lucide-react';
 
 /**
  * Figma chip used by FK pickers (Contacto, Tarifa, Dirección, etc.) when a
- * value is selected. Gray pill (`#F5F7F9`) with the display label and an
+ * value is selected. Gray pill (`hsl(var(--muted))`) with the display label and an
  * inline X to clear. Click on the body switches the host picker back to
  * typing mode.
  *
@@ -34,7 +34,7 @@ export function SelectorChip({ label, onClick, onClear, clearAriaLabel, testId, 
       type="button"
       onClick={onClick}
       data-testid={testId}
-      className="flex flex-1 self-stretch items-center gap-1 max-w-full min-w-0 text-sm text-[#3F3F50] cursor-text bg-transparent"
+      className="flex flex-1 self-stretch items-center gap-1 max-w-full min-w-0 text-sm text-[hsl(var(--muted-foreground))] cursor-text bg-transparent"
     >
       <span className="truncate">{label}</span>
       {clearable && (
@@ -47,7 +47,7 @@ export function SelectorChip({ label, onClick, onClear, clearAriaLabel, testId, 
           className="shrink-0 inline-flex items-center justify-center opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity"
         >
           <X
-            className="h-4 w-4 text-[#828FA3] hover:text-foreground transition-colors"
+            className="h-4 w-4 text-[hsl(var(--text-disabled))] hover:text-foreground transition-colors"
             data-testid="X__88e7eb" />
         </span>
       )}

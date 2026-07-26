@@ -63,14 +63,14 @@ function FilterDropdown({ label, value, options, onChange }) {
             role="option" aria-selected={value === 'all'}
             onClick={() => { onChange('all'); setOpen(false); }}
           >
-            <span style={{ fontSize: 14, color: '#121217', fontWeight: value === 'all' ? 500 : 400 }}>{label}</span>
+            <span style={{ fontSize: 14, color: 'hsl(var(--foreground))', fontWeight: value === 'all' ? 500 : 400 }}>{label}</span>
             {value === 'all' && <Check
               size={14}
               strokeWidth={2}
-              style={{ color: '#121217', flexShrink: 0 }}
+              style={{ color: 'hsl(var(--foreground))', flexShrink: 0 }}
               data-testid="Check__cb728e" />}
           </button>
-          <div style={{ height: 1, background: '#E8EAEF', margin: '2px 8px' }} />
+          <div style={{ height: 1, background: 'hsl(var(--border-subtle))', margin: '2px 8px' }} />
           {options.map(opt => {
             let optLabel;
             if (opt.badge) {
@@ -78,7 +78,7 @@ function FilterDropdown({ label, value, options, onChange }) {
             } else if (opt.statusStyle) {
               optLabel = <span style={{ display: 'inline-flex', alignItems: 'center', padding: '3px 12px', borderRadius: 20, fontSize: 13, fontWeight: 400, ...opt.statusStyle }}>{opt.label}</span>;
             } else {
-              optLabel = <span style={{ fontSize: 14, color: '#121217' }}>{opt.label}</span>;
+              optLabel = <span style={{ fontSize: 14, color: 'hsl(var(--foreground))' }}>{opt.label}</span>;
             }
             return (
               <button
@@ -92,7 +92,7 @@ function FilterDropdown({ label, value, options, onChange }) {
                 {value === opt.value && <Check
                   size={14}
                   strokeWidth={2}
-                  style={{ color: '#121217', flexShrink: 0 }}
+                  style={{ color: 'hsl(var(--foreground))', flexShrink: 0 }}
                   data-testid="Check__cb728e" />}
               </button>
             );
@@ -127,7 +127,7 @@ function RowKebab({ onDemo, onConfig, onCatalog, activeCount, t }) {
             <Play
               size={14}
               strokeWidth={1.75}
-              style={{ color: '#121217' }}
+              style={{ color: 'hsl(var(--foreground))' }}
               data-testid="Play__cb728e" />
             Demo
           </button>
@@ -135,7 +135,7 @@ function RowKebab({ onDemo, onConfig, onCatalog, activeCount, t }) {
             <Settings
               size={14}
               strokeWidth={1.75}
-              style={{ color: '#121217' }}
+              style={{ color: 'hsl(var(--foreground))' }}
               data-testid="Settings__cb728e" />
             {t('fm.config.title') ?? 'Configuración'}
           </button>
@@ -143,7 +143,7 @@ function RowKebab({ onDemo, onConfig, onCatalog, activeCount, t }) {
             <LayoutGrid
               size={14}
               strokeWidth={1.75}
-              style={{ color: '#121217' }}
+              style={{ color: 'hsl(var(--foreground))' }}
               data-testid="LayoutGrid__cb728e" />
             {t('fm.catalog.title') ?? 'Catálogo de modelos'} ({activeCount})
           </button>
@@ -161,21 +161,21 @@ const STATUS_PLAIN_LABEL = {
 const STATUS_GREEN = new Set(['ready', 'submitted', 'submitted_ext', 'submitted_ack']);
 
 const STATUS_DROPDOWN_STYLE = {
-  ready:         { background: '#EEFBF4', color: '#17663A' },
-  submitted:     { background: '#EEFBF4', color: '#17663A' },
-  submitted_ext: { background: '#EEFBF4', color: '#17663A' },
-  submitted_ack: { background: '#EEFBF4', color: '#17663A' },
-  pending:       { background: '#FFF9EB', color: '#8A6100' },
-  draft:         { background: '#F5F7F9', color: '#3F3F50' },
-  skipped:       { background: '#F5F7F9', color: '#3F3F50' },
+  ready:         { background: 'var(--status-success-bg)', color: 'var(--status-success-fg)' },
+  submitted:     { background: 'var(--status-success-bg)', color: 'var(--status-success-fg)' },
+  submitted_ext: { background: 'var(--status-success-bg)', color: 'var(--status-success-fg)' },
+  submitted_ack: { background: 'var(--status-success-bg)', color: 'var(--status-success-fg)' },
+  pending:       { background: 'var(--status-warning-bg)', color: 'var(--status-warning-fg)' },
+  draft:         { background: 'hsl(var(--muted))', color: 'hsl(var(--muted-foreground))' },
+  skipped:       { background: 'hsl(var(--muted))', color: 'hsl(var(--muted-foreground))' },
 };
 
 // Fixed status filter options (consolidated)
 const STATUS_FILTER_OPTIONS = [
-  { value: 'presentado', label: 'Presentado', statusStyle: { background: '#EEFBF4', color: '#17663A' } },
-  { value: 'pendiente',  label: 'Pendiente',  statusStyle: { background: '#FFF9EB', color: '#8A6100' } },
-  { value: 'borrador',   label: 'Borrador',   statusStyle: { background: '#F5F7F9', color: '#3F3F50' } },
-  { value: 'omitido',    label: 'Omitido',    statusStyle: { background: '#F5F7F9', color: '#3F3F50' } },
+  { value: 'presentado', label: 'Presentado', statusStyle: { background: 'var(--status-success-bg)', color: 'var(--status-success-fg)' } },
+  { value: 'pendiente',  label: 'Pendiente',  statusStyle: { background: 'var(--status-warning-bg)', color: 'var(--status-warning-fg)' } },
+  { value: 'borrador',   label: 'Borrador',   statusStyle: { background: 'hsl(var(--muted))', color: 'hsl(var(--muted-foreground))' } },
+  { value: 'omitido',    label: 'Omitido',    statusStyle: { background: 'hsl(var(--muted))', color: 'hsl(var(--muted-foreground))' } },
 ];
 
 const STATUS_FILTER_RAW = {
@@ -193,8 +193,8 @@ function StatusText({ status, t }) {
       display: 'inline-flex', alignItems: 'center',
       padding: '2px 8px', borderRadius: 6,
       fontSize: 12, fontWeight: 400, lineHeight: '16px',
-      background: isGreen ? '#EEFBF4' : '#F5F7F9',
-      color: isGreen ? '#17663A' : '#3F3F50',
+      background: isGreen ? 'var(--status-success-bg)' : 'hsl(var(--muted))',
+      color: isGreen ? 'var(--status-success-fg)' : 'hsl(var(--muted-foreground))',
     }}>
       {label}
     </span>
@@ -205,18 +205,18 @@ const RESULT_BADGE_STYLE = {
   display: 'inline-flex', alignItems: 'center',
   padding: '2px 8px', borderRadius: 6,
   fontSize: 12, fontWeight: 400, lineHeight: '16px',
-  background: '#F5F7F9', color: '#3F3F50',
+  background: 'hsl(var(--muted))', color: 'hsl(var(--muted-foreground))',
 };
 
 // Result as plain text — used in the list table
 function ResultText({ isComputing, error, result, t }) {
-  if (isComputing) return <span style={{ color: '#9ca3af', fontSize: 13 }}>…</span>;
+  if (isComputing) return <span style={{ color: 'hsl(var(--muted-foreground))', fontSize: 13 }}>…</span>;
   if (error) return <span style={RESULT_BADGE_STYLE}>{t('fm.status.error') ?? 'Error de cálculo'}</span>;
-  if (!result?.kind) return <span style={{ color: '#9ca3af' }}>—</span>;
+  if (!result?.kind) return <span style={{ color: 'hsl(var(--muted-foreground))' }}>—</span>;
   if (result.kind === 'N') return <span style={RESULT_BADGE_STYLE}>{t('fm.result.N') ?? 'Sin resultado'}</span>;
   if (result.kind === 'info') {
     return result.amount > 0
-      ? <span style={{ fontVariantNumeric: 'tabular-nums', fontSize: 14, color: '#121217' }}>{formatAmount(result.amount)}</span>
+      ? <span style={{ fontVariantNumeric: 'tabular-nums', fontSize: 14, color: 'hsl(var(--foreground))' }}>{formatAmount(result.amount)}</span>
       : <span style={RESULT_BADGE_STYLE}>{t('fm.result.info') ?? 'Informativa'}</span>;
   }
   const label = t(`fm.result.${result.kind}`) ?? result.kind;
@@ -224,7 +224,7 @@ function ResultText({ isComputing, error, result, t }) {
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
       <span style={RESULT_BADGE_STYLE}>{label}</span>
       {result.amount != null && (
-        <span style={{ fontVariantNumeric: 'tabular-nums', fontSize: 14, fontWeight: 500, color: '#121217' }}>
+        <span style={{ fontVariantNumeric: 'tabular-nums', fontSize: 14, fontWeight: 500, color: 'hsl(var(--foreground))' }}>
           {formatAmount(result.amount)}
         </span>
       )}
@@ -239,37 +239,37 @@ function KpiCardsRow({ decls, t }) {
   const incidentCount = useMemo(() => decls.filter(d => (d.incidents?.blocking ?? 0) + (d.incidents?.warning ?? 0) > 0).length, [decls]);
 
   return (
-    <div style={{ display: 'flex', gap: 12, padding: '0 16px 8px', background: '#fff', flexShrink: 0 }}>
+    <div style={{ display: 'flex', gap: 12, padding: '0 16px 8px', background: 'hsl(var(--card))', flexShrink: 0 }}>
       <div style={{ width: 360, flexShrink: 0 }}>
         <KpiWidget
           icon={<Calendar size={20} strokeWidth={1.75} data-testid="Calendar__cb728e" />}
-          iconColor="#828FA3"
+          iconColor="hsl(var(--muted-foreground))"
           label="Por vencer"
           badge="Esta semana"
-          badgeBg="#FFF9EB"
-          badgeColor="#8A6100"
+          badgeBg="var(--status-warning-bg)"
+          badgeColor="var(--status-warning-fg)"
           value={upcomingCount}
           data-testid="KpiWidget__cb728e" />
       </div>
       <div style={{ width: 360, flexShrink: 0 }}>
         <KpiWidget
           icon={<Clock size={20} strokeWidth={1.75} data-testid="Clock__cb728e" />}
-          iconColor="#828FA3"
+          iconColor="hsl(var(--muted-foreground))"
           label={t('fm.kpi.pending') ?? 'Pendientes'}
           badge="Sin presentar"
-          badgeBg="#F5F7F9"
-          badgeColor="#3F3F50"
+          badgeBg="hsl(var(--muted))"
+          badgeColor="hsl(var(--muted-foreground))"
           value={pendingCount}
           data-testid="KpiWidget__cb728e" />
       </div>
       <div style={{ width: 360, flexShrink: 0 }}>
         <KpiWidget
           icon={<TriangleAlert size={20} strokeWidth={1.75} data-testid="TriangleAlert__cb728e" />}
-          iconColor="#828FA3"
+          iconColor="hsl(var(--muted-foreground))"
           label="Incidencias"
           badge="Requiere revisión"
-          badgeBg="#FEF0F4"
-          badgeColor="#D50B3E"
+          badgeBg="var(--status-destructive-bg)"
+          badgeColor="hsl(var(--destructive))"
           value={incidentCount}
           data-testid="KpiWidget__cb728e" />
       </div>
@@ -342,10 +342,10 @@ function ModelBadge({ model }) {
 }
 
 function FileCell({ file, fileExternal }) {
-  if (!file && !fileExternal) return <span style={{ color: '#d1d5db' }}>—</span>;
+  if (!file && !fileExternal) return <span style={{ color: 'hsl(var(--text-disabled))' }}>—</span>;
   if (fileExternal) {
     return (
-      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, color: '#2563eb', textDecoration: 'underline', textUnderlineOffset: 2, cursor: 'pointer', fontSize: 12 }}>
+      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, color: 'hsl(var(--primary))', textDecoration: 'underline', textUnderlineOffset: 2, cursor: 'pointer', fontSize: 12 }}>
         <ArrowUpRight size={12} strokeWidth={2} data-testid="ArrowUpRight__cb728e" />Externa
               </span>
     );
@@ -354,14 +354,14 @@ function FileCell({ file, fileExternal }) {
 }
 
 function IncidentsCell({ blocking, warning, t }) {
-  if (!blocking && !warning) return <span style={{ color: '#121217', fontSize: 14 }}>{t('fm.incidents.none') ?? 'Sin incidencias'}</span>;
+  if (!blocking && !warning) return <span style={{ color: 'hsl(var(--foreground))', fontSize: 14 }}>{t('fm.incidents.none') ?? 'Sin incidencias'}</span>;
   return (
     <span style={{ display: 'inline-flex', gap: 5, alignItems: 'center' }}>
       {blocking > 0 && (
         <span style={{
           display: 'inline-flex', alignItems: 'center', gap: 4,
           padding: '2px 8px', borderRadius: 6, fontSize: 12, fontWeight: 500,
-          background: '#FEF0F4', color: '#D50B3E',
+          background: 'var(--status-destructive-bg)', color: 'hsl(var(--destructive))',
         }}>
           <OctagonAlert size={12} strokeWidth={1.75} data-testid="OctagonAlert__cb728e" /> {blocking}
         </span>
@@ -370,7 +370,7 @@ function IncidentsCell({ blocking, warning, t }) {
         <span style={{
           display: 'inline-flex', alignItems: 'center', gap: 4,
           padding: '2px 8px', borderRadius: 6, fontSize: 12, fontWeight: 500,
-          background: '#FFF9EB', color: '#8A6100',
+          background: 'var(--status-warning-bg)', color: 'var(--status-warning-fg)',
         }}>
           <TriangleAlert size={12} strokeWidth={1.75} data-testid="TriangleAlert__cb728e" /> {warning}
         </span>
@@ -384,20 +384,20 @@ const resultBadge = (text) => (
     display: 'inline-flex', alignItems: 'center',
     padding: '2px 8px', borderRadius: 6,
     fontSize: 12, fontWeight: 400, lineHeight: '16px',
-    background: '#F5F7F9', color: '#3F3F50',
+    background: 'hsl(var(--muted))', color: 'hsl(var(--muted-foreground))',
   }}>{text}</span>
 );
 
 function ResultCell({ isComputing, error, result, t }) {
-  if (isComputing) return <span style={{ color: '#6b7280', fontSize: 12 }}>…</span>;
+  if (isComputing) return <span style={{ color: 'hsl(var(--muted-foreground))', fontSize: 12 }}>…</span>;
   if (error) {
     return resultBadge(t('fm.status.error') ?? 'Error');
   }
-  if (!result?.kind) return <span style={{ color: '#9ca3af' }}>—</span>;
+  if (!result?.kind) return <span style={{ color: 'hsl(var(--muted-foreground))' }}>—</span>;
   if (result.kind === 'N') return resultBadge(t('fm.result.N') ?? 'Sin resultado');
   if (result.kind === 'info') {
     return result.amount > 0
-      ? <span style={{ fontVariantNumeric: 'tabular-nums', fontSize: 14, color: '#121217' }}>{formatAmount(result.amount)}</span>
+      ? <span style={{ fontVariantNumeric: 'tabular-nums', fontSize: 14, color: 'hsl(var(--foreground))' }}>{formatAmount(result.amount)}</span>
       : resultBadge(t('fm.result.info') ?? 'Informativa');
   }
   const label = t(`fm.result.${result.kind}`) ?? result.kind;
@@ -405,7 +405,7 @@ function ResultCell({ isComputing, error, result, t }) {
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 3 }}>
       {resultBadge(label)}
       {result.amount != null && (
-        <span style={{ fontVariantNumeric: 'tabular-nums', fontSize: 14, fontWeight: 500, color: '#121217' }}>
+        <span style={{ fontVariantNumeric: 'tabular-nums', fontSize: 14, fontWeight: 500, color: 'hsl(var(--foreground))' }}>
           {formatAmount(result.amount)}
         </span>
       )}
@@ -546,30 +546,30 @@ export default function FmListPage({ declarations: propDecls, onSelect, onStatus
   return (
     <div className="fm-page">
       {/* ── Title bar ────────────────────────────────────────────── */}
-      <div style={{ padding: '10px 20px', background: '#fff', flexShrink: 0 }}>
+      <div style={{ padding: '10px 20px', background: 'hsl(var(--card))', flexShrink: 0 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <span style={{ fontSize: 20, fontWeight: 600, color: '#121217' }}>
+          <span style={{ fontSize: 20, fontWeight: 600, color: 'hsl(var(--foreground))' }}>
             {t('fm.list.title') ?? 'Declaraciones'}
           </span>
           <span style={{
             display: 'inline-flex', alignItems: 'center',
             padding: '4px 8px', borderRadius: 8,
-            background: '#F5F7F9', border: '1px solid #D1D4DB',
-            fontSize: 12, color: '#3F3F50', fontWeight: 400, lineHeight: '16px',
+            background: 'hsl(var(--muted))', border: '1px solid hsl(var(--border-control))',
+            fontSize: 12, color: 'hsl(var(--muted-foreground))', fontWeight: 400, lineHeight: '16px',
           }}>{decls.length}</span>
           <button style={{
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             padding: 2, width: 24, height: 24,
-            background: '#F5F7F9', borderRadius: 8, border: 'none', cursor: 'pointer',
+            background: 'hsl(var(--muted))', borderRadius: 8, border: 'none', cursor: 'pointer',
           }}>
             <MoreVertical
               size={16}
               strokeWidth={1.75}
-              style={{ color: '#828FA3' }}
+              style={{ color: 'hsl(var(--muted-foreground))' }}
               data-testid="MoreVertical__cb728e" />
           </button>
         </div>
-        <div style={{ fontSize: 12, color: '#828FA3', marginTop: 2 }}>
+        <div style={{ fontSize: 12, color: 'hsl(var(--muted-foreground))', marginTop: 2 }}>
           Tesorería / {t('fm.list.title') ?? 'Declaraciones'}
         </div>
       </div>
