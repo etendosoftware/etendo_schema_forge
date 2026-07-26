@@ -28,6 +28,15 @@ function buildSelectPlaceholder(ui, label) {
   return `${ui('selectLabelPrefix')} ${label}...`;
 }
 
+// Static-select onChange value mapping: boolean-backed options may carry real
+// booleans OR string values from different sources, hence the `String(id)`
+// coercion before comparing to 'true'. Non-boolean fields pass the id through.
+function resolveEnumChangeValue(id, isBoolean) {
+  if (!isBoolean) return id;
+  if (id === '' || id === null || id === undefined) return '';
+  return String(id) === 'true';
+}
+
 function evalReadOnlyLogic(field, data) {
   if (typeof field?.readOnlyLogic !== 'function') return false;
   try {
@@ -943,7 +952,7 @@ export function EntityForm({ entity, fields = [], data, onChange, catalogs, layo
           field={f}
           value={selectValue}
           displayValue={selOpt ? staticSelectOptionLabel(selOpt) : ''}
-          onChange={(id) => onChange?.(f.key, isBoolean ? (id === '' || id === null || id === undefined ? '' : String(id) === 'true') : id, f.column)}
+          onChange={(id) => onChange?.(f.key, resolveEnumChangeValue(id, isBoolean), f.column)}
           resolvedLabel={label}
           staticOptions={staticOpts}
           emptyOptionLabel={emptyOptionLabel}

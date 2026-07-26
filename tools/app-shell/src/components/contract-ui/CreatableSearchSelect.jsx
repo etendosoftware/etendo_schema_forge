@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { ChevronDown, Loader2 } from 'lucide-react';
 import { useUI } from '@/i18n';
 import { buildUrlWithParams } from '@/lib/buildUrlWithParams.js';
+import { shouldAnchorDropdownRight } from '@/lib/dropdownAnchor.js';
 import { SelectorChip } from './SelectorChip.jsx';
 import { FIELD_HEIGHT } from '@/components/ui/formDensity';
 
@@ -690,16 +691,7 @@ export function CreatableSearchSelect({
   // most one extra render instead of oscillating between anchors.
   useLayoutEffect(() => {
     if (!showDropdown || !dropdownStyle || !rootRef.current || !dropdownRef.current) return;
-    const rect = rootRef.current.getBoundingClientRect();
-    const spaceRight = window.innerWidth - rect.left - 12;
-    const spaceLeft = rect.right - 12;
-    const buttons = dropdownRef.current.querySelectorAll('button');
-    let naturalWidth = rect.width;
-    buttons.forEach((btn) => {
-      if (btn.scrollWidth > naturalWidth) naturalWidth = btn.scrollWidth;
-    });
-    const overflowsRight = naturalWidth > spaceRight;
-    const shouldAnchorRight = overflowsRight && spaceLeft > spaceRight;
+    const shouldAnchorRight = shouldAnchorDropdownRight(rootRef.current, dropdownRef.current);
     setAnchorRight((prev) => (prev === shouldAnchorRight ? prev : shouldAnchorRight));
   }, [showDropdown, dropdownStyle, filteredOptions, query]);
 
@@ -709,6 +701,18 @@ export function CreatableSearchSelect({
     if (!showDropdown) setAnchorRight(false);
   }, [showDropdown]);
 
+  // State-dependent classes computed separately (rather than nested inline) so the
+  // className stays a single flat template literal below — same resulting string
+  // for each of the three states: disabled, enabled+chip, enabled+no-chip.
+  let stateClasses;
+  if (isDisabled) {
+    stateClasses = ' bg-muted text-text-disabled cursor-not-allowed';
+  } else if (showChip) {
+    stateClasses = ' bg-card hover:bg-[hsl(var(--muted))]';
+  } else {
+    stateClasses = ' bg-card';
+  }
+
   return (
     /*
       Single wrapper acts as the visual field box AND the popup anchor — same
@@ -717,7 +721,7 @@ export function CreatableSearchSelect({
     */
     <div
       ref={rootRef}
-      className={`group relative flex ${FIELD_HEIGHT} w-full min-w-0 items-center rounded-lg border border-[hsl(var(--border-control))] shadow-[0px_1px_2px_hsl(var(--foreground) / 0.05)] pl-2 pr-2 gap-1 focus-within:ring-2 focus-within:ring-primary${isDisabled ? ' bg-muted text-text-disabled cursor-not-allowed' : ` bg-card${showChip ? ' hover:bg-[hsl(var(--muted))]' : ''}`}`}
+      className={`group relative flex ${FIELD_HEIGHT} w-full min-w-0 items-center rounded-lg border border-[hsl(var(--border-control))] shadow-[0px_1px_2px_hsl(var(--foreground) / 0.05)] pl-2 pr-2 gap-1 focus-within:ring-2 focus-within:ring-primary${stateClasses}`}
       onClick={showChip && !isDisabled ? handleChipClick : undefined}
     >
       {showChip ? (

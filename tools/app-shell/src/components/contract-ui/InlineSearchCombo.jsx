@@ -2,6 +2,7 @@ import { useState, useMemo, useRef, useEffect, useLayoutEffect, useCallback } fr
 import { createPortal } from 'react-dom';
 import { ChevronDown } from 'lucide-react';
 import { buildUrlWithParams } from '@/lib/buildUrlWithParams.js';
+import { shouldAnchorDropdownRight } from '@/lib/dropdownAnchor.js';
 
 /**
  * Compact inline combobox for search-type FK fields in rapid line entry.
@@ -144,16 +145,7 @@ export function InlineSearchCombo({ field, value, options, onChange, onKeyDown, 
   // maxWidth cap) rather than the panel itself, so this converges in at most one extra render.
   useLayoutEffect(() => {
     if (!open || !dropdownStyle || !rootRef.current || !dropdownRef.current) return;
-    const rect = rootRef.current.getBoundingClientRect();
-    const spaceRight = window.innerWidth - rect.left - 12;
-    const spaceLeft = rect.right - 12;
-    const buttons = dropdownRef.current.querySelectorAll('button');
-    let naturalWidth = rect.width;
-    buttons.forEach((btn) => {
-      if (btn.scrollWidth > naturalWidth) naturalWidth = btn.scrollWidth;
-    });
-    const overflowsRight = naturalWidth > spaceRight;
-    const shouldAnchorRight = overflowsRight && spaceLeft > spaceRight;
+    const shouldAnchorRight = shouldAnchorDropdownRight(rootRef.current, dropdownRef.current);
     setAnchorRight((prev) => (prev === shouldAnchorRight ? prev : shouldAnchorRight));
   }, [open, dropdownStyle, filtered]);
 
