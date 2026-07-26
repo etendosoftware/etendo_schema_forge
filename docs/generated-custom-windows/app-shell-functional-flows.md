@@ -20,7 +20,7 @@ Automated coverage note: the current automated evidence is mostly source-shape, 
 | Area | Entry path | Current behavior | Evidence |
 |---|---|---|---|
 | Public access | `/onboarding`, `/login` | `/onboarding` is the only public entry page. `/login` redirects to `/onboarding`. | `tools/app-shell/src/App.jsx` |
-| Authenticated shell | `/dashboard`, `/first-steps`, `/sales`, `/inventory`, `/purchases`, `/accounting`, `/reports`, `/report-viewer`, `/crm`, `/hr`, `/projects`, `/smart-scan`, `/oauth2-clients`, `/authorize`, `/quick-sales-order`, `/quick-purchase-order`, `/preview`, `/artifacts`, `/artifacts/:windowName` | These routes render inside `AppLayout` and require `AuthGuard`. | `tools/app-shell/src/App.jsx`, `tools/app-shell/src/layout/AppLayout.jsx` |
+| Authenticated shell | `/dashboard`, `/first-steps`, `/sales`, `/inventory`, `/purchases`, `/accounting`, `/reports`, `/report-viewer`, `/crm`, `/hr`, `/projects`, `/smart-scan`, `/oauth2-clients`, `/roles`, `/authorize`, `/quick-sales-order`, `/quick-purchase-order`, `/preview`, `/artifacts`, `/artifacts/:windowName` | These routes render inside `AppLayout` and require `AuthGuard`. `/roles` (ETP-4513) is registered in `tools/app-shell/src/runtime-routes.jsx`, not `App.jsx`. | `tools/app-shell/src/App.jsx`, `tools/app-shell/src/runtime-routes.jsx`, `tools/app-shell/src/layout/AppLayout.jsx` |
 | Generated/custom windows | `/:windowName`, `/:windowName/:recordId` | Loads the matching generated or custom window and optionally passes a record context. | `tools/app-shell/src/windows/WindowLoader.jsx`, `tools/app-shell/src/windows/registry.js` |
 | Menu-driven report links | `/report-viewer?category=purchases\|inventory\|finance` | Menu items can override the route with `item.path`, so report entries navigate to the shared report viewer instead of the generic window route. | `tools/app-shell/src/menu.json`, `tools/app-shell/src/components/layout/SideMenu/SideMenu.jsx` |
 
@@ -184,6 +184,28 @@ Any authenticated route can also be opened with `?embedded=1`; in that mode the 
   2. Confirm either the empty state or the populated table appears.
   3. Create a client, regenerate its secret, and confirm the reveal dialog shows the new secret when the backend returns one.
   4. Use **Revoke Tokens** and **Delete** from the row menu and confirm the destructive confirmation copy matches the intended action.
+
+### 6b. Roles overview (Configuración > Roles)
+
+- **User goal / entry point:** View GOClient's 5 fixed roles, their assigned-user counts, and which Etendo GO windows each one can reach, at `/roles`.
+- **Main path behavior:**
+  - `RolesOverviewPage` fetches `GET /webhooks/SFRolesOverview` on mount and on manual refresh (`fetchRolesOverview` in `tools/app-shell/src/lib/rolesApi.js`).
+  - Each of the 5 roles renders as its own card: a curated, i18n-keyed name/description (`ROLE_I18N` map — `roleNameGoClientAdmin`/`roleDescGoClientAdmin`, etc., never the backend's raw `AD_Role.description`), a user-count badge, and a badge per reachable window (filled "full" tier vs. outlined "read-only" tier, per `w.tier`).
+  - A role with no reachable windows shows a placeholder dash instead of an empty chip row.
+  - "Edit" always opens a "coming soon" dialog — there is no create/delete affordance anywhere on the page; this is a read-only view.
+  - The menu entry that routes here (`menu.json`'s `roles` item, under "Configuración") is itself gated client-side by `"capability": "isAdminOrClientAdmin"`, resolved by `registry.js`'s `filterMenuGroupsByAccess` against the `SFWindowAccessMap` capability of the same name (`com.etendoerp.go/docs/neo-headless.md` §8b) — a non-admin role does not see the menu entry in normal navigation.
+- **Failure or edge behavior:**
+  - A non-array/missing `roles` field in the response is treated as empty, not a crash.
+  - An empty `roles` array (returned by the backend for a non-admin/no-role caller, or for direct/deep-link navigation around the menu gate) renders a dedicated no-access card — a defense-in-depth fallback, since `SFRolesOverview.java` is the actual enforcement point and always returns `{ roles: [] }` for a denied caller regardless of how the request reached it.
+  - A fetch rejection shows a dedicated error card with a retry action; retry re-invokes the fetch and can recover into the success state.
+- **Automated evidence:**
+  - `tools/app-shell/src/pages/__tests__/RolesOverviewPage.vitest.jsx` verifies rendering one card per role keyed by id, curated i18n name/description over raw backend fields, the user-count badge, a window chip per `role.windows` entry with tier-based badge variant, the no-windows placeholder dash, the Edit "coming soon" dialog open/close flow, absence of any create/delete affordance, the loading skeleton state, the error state with working retry, the empty/no-access state (including a non-array `roles` field), and the manual refresh action.
+- **Manual verification path:**
+  1. Open `/roles` while authenticated as a GOClient Admin (or other client-admin) role and confirm all 5 role cards render with curated names/descriptions.
+  2. Confirm each role's user-count badge and window chips match its actual `AD_User_Roles`/`AD_Window_Access` grants, and that tier styling (filled vs. outlined) matches full vs. read-only access.
+  3. Click **Edit** on any role and confirm the "coming soon" dialog appears and closes without side effects.
+  4. Log in as a non-admin role and confirm the "Configuración > Roles" menu entry is absent; navigating directly to `/roles` shows the no-access card.
+  5. Click the refresh icon and confirm the page re-fetches (e.g. after a role's window access changes elsewhere).
 
 ### 7. PWA update and recovery behavior
 

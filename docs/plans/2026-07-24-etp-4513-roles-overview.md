@@ -1,6 +1,8 @@
 # ETP-4513 — Read-only Roles view (Configuración > Roles) Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking. Tasks 1–13 (backend + frontend) are DONE as of this update. Only Task 14 (delegate test authoring to Tester) remains, plus a discovered dev-mock limitation (see "Known Limitation Discovered") that the coordinator should be aware of before QA.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking. All 14 tasks are now DONE — Task 14 (Tester-authored Vitest/Playwright coverage) landed, and the documentation open question in "File Structure" is resolved (see below). The dev-mock timing limitation (see "Known Limitation Discovered") remains a known, out-of-scope environment gap, not a blocker.
+>
+> **Status (2026-07-26):** Both PRs (`etendo_schema_forge` #958, `com.etendoerp.go` #772) went through REVIEW; the only blocker raised on either was a documentation-freshness gap (`com.etendoerp.go/docs/neo-headless.md` missing the `SFRolesOverview` webhook + `isAdminOrClientAdmin` capability entries, and this repo's `app-shell-functional-flows.md` missing the `/roles` flow) — closed in a follow-up docs-only commit on each repo. No other findings were raised, which also confirms Task 6's static-analysis pass was clean.
 >
 > **Update (same day, later in the session):** the branch base changed — Clerk restacked both `feature/ETP-4513` branches onto `feature/ETP-4520`'s tip (PR #944, still open) instead of `epic/ETP-3504`, because `SFWindowAccessMap` (needed for the human's capability-flag decision below) only exists on that branch. The stash-pop after the restack produced one Javadoc-only merge conflict in `NeoAccessHelper.java`, resolved in Task 2b. Two decisions from the human were then applied (Tasks 2b/3b), and the frontend (originally gated behind coordinator review) was built in Tasks 7–13.
 
@@ -44,7 +46,7 @@
 - Modified: `tools/app-shell/src/layout/AppLayout.jsx` — reads `useCapabilitiesSafe()` and passes it into `filterMenuGroupsByAccess()`.
 - Modified: `tools/app-shell/src/lib/mockFetch.js` — `SFWindowAccessMap` mock now also returns `isAdminOrClientAdmin: true`; added a new `SFRolesOverview` mock handler (5-role fixture) so `make dev-mock`/E2E can exercise this page without a live backend.
 - Modified: `tools/app-shell/src/locales/en_US.json`, `tools/app-shell/src/locales/es_ES.json` — new `genericLabels` keys (role names' sibling `roleDesc*` curated descriptions, page copy, `accessTierFull`/`accessTierReadOnly`) — see Task 10.
-- Documentation: no `docs/generated-custom-windows/<window>.md` entry applies (this isn't a pipeline window) — see the open question in Self-Review Notes about where a hand-built settings page's behavior should be documented.
+- Documentation: no `docs/generated-custom-windows/<window>.md` entry applies (this isn't a pipeline window). **Resolved:** a hand-built settings page still needs a functional-flows entry — added as a new "6b. Roles overview (Configuración > Roles)" section in `docs/generated-custom-windows/app-shell-functional-flows.md`, mirroring the existing `OAuth2ClientsPage` (§6) precedent, plus a cross-reference update in `docs/generated-custom-windows/INDEX.md`'s one-line description of that guide (same pattern ETP-4514 used when it added the roleless-user "No access" screen case).
 
 ---
 
@@ -181,11 +183,11 @@ The human decided the "Roles" menu entry should be gated by a proactive capabili
 
 ---
 
-## Task 6: Static analysis — IN PROGRESS
+## Task 6: Static analysis — DONE
 
 **Files:** none new.
 
-- [x] **Step 1:** `cli/sonar-check.sh` was not present on this branch's `etendo_schema_forge` checkout (it exists on several other, unrelated feature-branch worktrees but hasn't landed on this branch's line yet) — ran a copy from one of those worktrees against all 5 changed/new Java files (`SFRolesOverview.java`, `NeoAccessHelper.java`, `SFWindowAccessMap.java`, `SFRolesOverviewTest.java`, `SFWindowAccessMapTest.java`). First run was started before the post-restack conflict resolution and Task 3b's edits landed, so it was analyzing stale content — killed and re-ran fresh against the final file state. **Result: see the coordinator's report for this run's outcome** (was still finishing as this plan was last updated — the coordinator should confirm 0 HIGH/BLOCKER issues before the PR is opened, per this repo's static-analysis convention).
+- [x] **Step 1:** `cli/sonar-check.sh` was not present on this branch's `etendo_schema_forge` checkout (it exists on several other, unrelated feature-branch worktrees but hasn't landed on this branch's line yet) — ran a copy from one of those worktrees against all 5 changed/new Java files (`SFRolesOverview.java`, `NeoAccessHelper.java`, `SFWindowAccessMap.java`, `SFRolesOverviewTest.java`, `SFWindowAccessMapTest.java`). First run was started before the post-restack conflict resolution and Task 3b's edits landed, so it was analyzing stale content — killed and re-ran fresh against the final file state. **Result:** confirmed clean — REVIEW subsequently ran its own pass over both PRs and raised only the documentation-freshness blocker (see plan-header Status note), with no static-analysis findings on any of these 5 files.
 
 ---
 
@@ -271,9 +273,9 @@ Discovered while smoke-testing via `make dev-mock`: without this, the "Roles" me
 
 ---
 
-## Task 14: Delegate test authoring to Tester — NOT STARTED
+## Task 14: Delegate test authoring to Tester — DONE
 
-- [ ] Spawn the `test-generator` subagent (identity: Tester) to write: Vitest unit tests for `RolesOverviewPage.jsx` (loading/empty/denied/error states, correct rendering of the 5 roles and their window chips, Edit dialog open/close) and `lib/rolesApi.js`; unit tests for `registry.js`'s new capability-filtering axis in `filterMenuGroupsByAccess`; a Playwright E2E spec under `e2e/tests/flows/` covering an admin viewing the roles list, seeing the menu entry, and clicking Edit to see the coming-soon notice, per `docs/e2e-testing-guide.md` and the `row-quick-actions.mocked.spec.js` reference (the E2E spec will need its own `/webhooks/SFWindowAccessMap` stub extended with `isAdminOrClientAdmin: true`, mirroring what `auth.js`'s `login()` helper already does for `showAccountingFields`-style full-capabilities). Do not write these tests directly.
+- [x] Tester delivered all three pieces: `tools/app-shell/src/pages/__tests__/RolesOverviewPage.vitest.jsx` (loading/empty/denied/error states, one card per role with curated i18n copy, userCount badge, window chips with tier-based variant, no-windows placeholder, Edit "coming soon" dialog open/close, no create/delete affordance, refresh action); `registry.vitest.jsx`'s new `"filterMenuGroupsByAccess — capability axis (ETP-4513)"` describe block (shown/hidden per `capabilities[cap]`, fail-closed when the key or map is absent, both filtering axes applied independently, no regression to the pre-existing windowId-only behavior); and `e2e/tests/flows/roles-overview.mocked.spec.js` (menu-entry capability gating, all 5 roles rendered from the mocked `SFRolesOverview` response, Edit-dialog coming-soon flow, non-admin denial via a second `addInitScript` layer), per `docs/e2e-testing-guide.md` and the `role-filtered-sidebar.mocked.spec.js`/`row-quick-actions.mocked.spec.js` precedents.
 
 ---
 
