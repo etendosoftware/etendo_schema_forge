@@ -1,8 +1,8 @@
 {
-  "version": "0.5.0",
+  "version": "0.12.0",
   "generatedAt": "2026-04-29T18:12:11.134Z",
-  "updatedAt": "2026-07-14T00:44:18.756Z",
-  "contractChecksum": "f9b95228657ee15b",
+  "updatedAt": "2026-07-23T13:43:58.733Z",
+  "contractChecksum": "382886c1cf629dbd",
   "apiPrediction": {
     "specName": "price-list",
     "baseUrl": "/sws/neo/price-list",
@@ -145,6 +145,7 @@
       "es_ES": {
         "Name": "Nombre",
         "C_Currency_ID": "Moneda",
+        "IsSOPriceList": "Tarifa de venta",
         "Costbased": "Basado en coste",
         "IsTaxIncluded": "Precio incluye impuesto",
         "IsDefault": "Por defecto",
@@ -159,26 +160,24 @@
           "name": {
             "required": true
           },
-          "currency": {
-            "required": true
-          },
-          "description": {},
           "salesPriceList": {
-            "required": true
-          },
-          "costBasedPriceList": {
-            "required": true,
-            "defaultValue": "N"
-          },
-          "active": {
-            "required": true
-          },
-          "priceIncludesTax": {
             "required": true
           },
           "default": {
             "required": true
-          }
+          },
+          "etgoProductcount": {
+            "readOnly": true,
+            "defaultValue": "0"
+          },
+          "active": {
+            "required": true
+          },
+          "currency": {
+            "readOnly": true,
+            "required": true
+          },
+          "description": {}
         }
       },
       "priceListVersion": {
@@ -232,12 +231,9 @@
     "minimumCreate": {
       "headerFields": [
         "name",
-        "currency",
         "salesPriceList",
-        "costBasedPriceList",
-        "active",
-        "priceIncludesTax",
-        "default"
+        "default",
+        "active"
       ],
       "lineFields": [
         "name",
@@ -271,12 +267,9 @@
         "description": "Create a draft header with the minimum required editable fields.",
         "fields": [
           "name",
-          "currency",
           "salesPriceList",
-          "costBasedPriceList",
-          "active",
-          "priceIncludesTax",
-          "default"
+          "default",
+          "active"
         ]
       }
     ],
@@ -284,5 +277,5 @@
     "knownLimitations": [],
     "dangerousOperations": []
   },
-  "checksum": "c9e9dc805e191cc0"
+  "checksum": "16ee7c7f9668ffe4"
 }
