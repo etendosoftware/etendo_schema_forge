@@ -21,12 +21,12 @@ const LABEL_OVERRIDES = {
 };
 
 const COLUMNS = [
-  { key: 'movementDate', column: 'MovementDate', type: 'date', dot: false },
-  { key: 'documentNo', column: 'DocumentNo', type: 'string' },
-  { key: 'businessPartner', column: 'C_BPartner_ID', type: 'string' },
-  { key: 'documentStatus', column: 'DocStatus', type: 'status' },
-  { key: 'posted', column: 'Posted', type: 'boolean', badge: true, badgeLabels: { true: { en_US: 'Posted', es_ES: 'Contabilizado' }, false: { en_US: 'Not posted', es_ES: 'Sin contabilizar' } }, badgeVariants: { true: 'green', false: 'orange' } },
-  { key: 'warehouse', column: 'M_Warehouse_ID', type: 'string' },
+  { key: 'movementDate', column: 'MovementDate', type: 'date', dot: false, required: true },
+  { key: 'documentNo', column: 'DocumentNo', type: 'string', required: true },
+  { key: 'businessPartner', column: 'C_BPartner_ID', type: 'string', required: true },
+  { key: 'documentStatus', column: 'DocStatus', type: 'status', required: true },
+  { key: 'posted', column: 'Posted', type: 'boolean', required: true, badge: true, badgeLabels: { true: { en_US: 'Posted', es_ES: 'Contabilizado' }, false: { en_US: 'Not posted', es_ES: 'Sin contabilizar' } }, badgeVariants: { true: 'green', false: 'orange' } },
+  { key: 'warehouse', column: 'M_Warehouse_ID', type: 'string', required: true },
   { key: 'invoiceStatus', column: 'InvoiceStatus', type: 'percent' },
 ];
 
