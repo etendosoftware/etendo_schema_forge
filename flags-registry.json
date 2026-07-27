@@ -41,7 +41,7 @@
         ]
       },
       "$pathsComment": "Owned paths only — code that exists because this flag exists and is deleted with it. src/com/etendoerp/go/rest/EtendoGoJwtServlet.java is a touch point, not owned.",
-      "$knownGapComment": "USER-ACCEPTED VISIBLE DEBT (scorecard demo). src/com/etendoerp/go/payment/TenantPlanService.java (markProductive, resolvePlan) has no unit test and is not exercised by TenantPaywallServiceTest. The unit-level spec below is declared expected:true and is intentionally deferred, so this flag carries the tests penalty on purpose rather than reading as a clean sheet. Asserting the AD_Preference persistence itself stays integration scope and is NOT what the deferred unit spec would cover.",
+      "$knownGapComment": "USER-ACCEPTED VISIBLE DEBT (scorecard demo). src/com/etendoerp/go/payment/TenantPlanService.java. markProductive: zero coverage — the paid-plan marker is entirely unexercised. resolvePlan: only the exception-swallow path executes (returns 'free' on failure); every distinguishing path (preference found productive/other, null query, blank-clientId guard) is untested. The only covered branch is the one that hides failures — exactly how a paying tenant would silently appear free. Coverage arrives transitively, not deliberately: EtendoGoJwtDalHelper holds a static TenantPlanService (line 72), so EtendoGoJwtDalHelperTest.BuildEnvironmentJson calls resolvePlan, its unstubbed Preference query NPEs into the catch, and reportsFreePlanWithoutMarker asserts the resulting 'free'. The unit spec below is declared acceptedDebt and is intentionally not being written, so this flag carries a per-item tests penalty on purpose rather than reading as a clean sheet. Asserting the AD_Preference persistence itself stays integration scope and is NOT what the deferred unit spec would cover.",
       "deferredItems": [
         {
           "id": "targeting-key-divergence",
@@ -77,7 +77,7 @@
             "root": "backend",
             "path": "src-test/src/com/etendoerp/go/payment/TenantPlanServiceTest.java",
             "acceptedDebt": true,
-            "note": "user-accepted debt — unit test deliberately deferred, nobody is writing it"
+            "note": "user-accepted debt — markProductive unexercised; of resolvePlan only the failure-swallowing branch runs, transitively via EtendoGoJwtDalHelperTest"
           },
           {
             "root": "frontend",
