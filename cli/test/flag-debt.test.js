@@ -25,6 +25,7 @@ import {
   collectCoverage,
   scoreLifecycle,
   scoreDeferredItems,
+  isUsableOverride,
   scoreFlag,
   buildReport,
   renderConsole,
@@ -590,21 +591,148 @@ describe('dimension 5 — deferred open items', () => {
     });
   });
 
-  describe('explicit points override', () => {
+  describe('isUsableOverride', () => {
+    it('accepts a whole, non-negative number of points', () => {
+      for (const value of [0, 1, 7, 42, 1000]) {
+        assert.equal(isUsableOverride(value), true, `${value} should be usable`);
+      }
+    });
+
+    it('rejects everything that is not one', () => {
+      for (const value of [-1, -50, 2.5, 0.1, '5', '', NaN, Infinity, -Infinity, null, undefined, true, [], {}]) {
+        assert.equal(isUsableOverride(value), false, `${JSON.stringify(value)} should be rejected`);
+      }
+    });
+  });
+
+  describe('explicit points override — accepted', () => {
     it('replaces the formula and records that it was declared', () => {
       const { items, points } = score(item({ kind: 'cosmetic', components: [{ id: 'a' }, { id: 'b' }], points: 42 }));
       assert.equal(points, 42);
       assert.equal(items[0].pointsOverridden, true);
+      assert.equal(items[0].pointsOverrideIgnored, false);
+      assert.equal(items[0].declaredPoints, null);
     });
 
     it('honours an explicit zero, which truthiness would have discarded', () => {
       const { items, points } = score(item({ kind: 'precondition', points: 0 }));
       assert.equal(points, 0);
       assert.equal(items[0].pointsOverridden, true);
+      assert.equal(items[0].pointsOverrideIgnored, false);
     });
 
-    it('marks a formula-scored item as not overridden', () => {
-      assert.equal(score(item({ kind: 'open' })).items[0].pointsOverridden, false);
+    it('marks a formula-scored item as not overridden and not ignored', () => {
+      const [scored] = score(item({ kind: 'open' })).items;
+      assert.equal(scored.pointsOverridden, false);
+      assert.equal(scored.pointsOverrideIgnored, false);
+      assert.equal(scored.declaredPoints, null);
+    });
+  });
+
+  /**
+   * An unusable override is DROPPED, never repaired. Clamping -50 to 0 would
+   * make a broken entry indistinguishable from a deliberate zero, and rounding
+   * 2.5 would invent an intent nobody declared — so the derived score stands and
+   * the report says the declaration was ignored.
+   */
+  describe('explicit points override — rejected', () => {
+    // kind 'open' with no components derives to exactly POINTS.deferredItemKind.open.
+    const rejected = value => score(item({ kind: 'open', points: value }));
+    const derived = POINTS.deferredItemKind.open;
+
+    for (const [label, value] of [
+      ['a negative integer', -50],
+      ['a fraction', 2.5],
+      ['a numeric string', '5'],
+      ['NaN', NaN],
+      ['Infinity', Infinity],
+      ['negative Infinity', -Infinity],
+      ['a boolean', true],
+    ]) {
+      it(`ignores ${label} and lets the derived score stand`, () => {
+        const { items, points } = rejected(value);
+        assert.equal(points, derived, `${label} must not change the score`);
+        assert.equal(items[0].points, derived);
+        assert.equal(items[0].pointsOverridden, false);
+        assert.equal(items[0].pointsOverrideIgnored, true);
+      });
+    }
+
+    it('keeps the rejected value verbatim in declaredPoints, so it can be fixed', () => {
+      assert.equal(rejected(-50).items[0].declaredPoints, -50);
+      assert.equal(rejected(2.5).items[0].declaredPoints, 2.5);
+      assert.equal(rejected('5').items[0].declaredPoints, '5');
+      assert.ok(Number.isNaN(rejected(NaN).items[0].declaredPoints));
+    });
+
+    it('treats an explicit null as "not declared" rather than a bad declaration', () => {
+      const [scored] = score(item({ kind: 'open', points: null })).items;
+      assert.equal(scored.points, derived);
+      assert.equal(scored.pointsOverrideIgnored, false);
+      assert.equal(scored.declaredPoints, null);
+    });
+
+    it('always reports an effective points value that is a whole number >= 0', () => {
+      for (const value of [-50, 2.5, '5', NaN, Infinity, -Infinity, 0, 7]) {
+        const [scored] = score(item({ kind: 'open', points: value })).items;
+        assert.ok(Number.isInteger(scored.points) && scored.points >= 0,
+          `effective points for ${JSON.stringify(value)} was ${scored.points}`);
+      }
+    });
+  });
+
+  /**
+   * The understatement vector: before overrides were validated, a negative
+   * declared value subtracted from the flag total, so a flag could be made to
+   * look cheaper than it is — the one direction the scorecard must never allow.
+   */
+  describe('no negative value can reach a total', () => {
+    it('cannot drag the deferred subtotal below the derived score', () => {
+      const { points } = score(
+        item({ id: 'a', kind: 'precondition' }),
+        item({ id: 'b', kind: 'open', points: -1000 })
+      );
+      assert.equal(points, POINTS.deferredItemKind.precondition + POINTS.deferredItemKind.open);
+      assert.ok(points > 0);
+    });
+
+    it('cannot drag a flag total below the sum of its other dimensions', () => {
+      const sabotaged = {
+        ...FLAG,
+        deferredItems: [{ id: 'x', kind: 'cosmetic', points: -9999 }],
+      };
+      const clean = scoreFlag(FLAG, context()).total;
+      const scored = scoreFlag(sabotaged, context());
+      assert.ok(scored.total >= clean,
+        `a negative override understated the total: ${scored.total} < ${clean}`);
+      assert.equal(scored.total - clean, POINTS.deferredItemKind.cosmetic);
+    });
+  });
+
+  describe('unrecognised kind', () => {
+    it('falls back to the open rate and flags the kind as unrecognised', () => {
+      const [scored] = score(item({ kind: 'precondtion' })).items;   // typo, missing 'i'
+      assert.equal(scored.kind, 'precondtion', 'the declared kind is preserved verbatim');
+      assert.equal(scored.kindRecognized, false);
+      assert.equal(scored.points, POINTS.deferredItemKind.open);
+    });
+
+    it('marks every declared kind as recognised', () => {
+      for (const kind of Object.keys(POINTS.deferredItemKind)) {
+        assert.equal(score(item({ kind })).items[0].kindRecognized, true, `${kind} should be recognised`);
+      }
+    });
+
+    it('treats an omitted kind as a recognised open, not a typo', () => {
+      const [scored] = score(item()).items;
+      assert.equal(scored.kind, 'open');
+      assert.equal(scored.kindRecognized, true);
+    });
+
+    it('does not let a typo buy a cheaper rate than the cheapest real kind', () => {
+      // A typo must not become a discount: falling back to `open` costs more
+      // than `cosmetic`, so mistyping is never the cheap option.
+      assert.ok(POINTS.deferredItemKind.open >= POINTS.deferredItemKind.cosmetic);
     });
   });
 
@@ -750,6 +878,43 @@ describe('rendering', () => {
 
     it('labels an item whose points were declared rather than derived', () => {
       assert.match(renderConsole(deferredReport()), /\[cosmetic\] plan-badge-in-env-picker — 1 pt, declared/);
+    });
+
+    /**
+     * A dropped override and an unrecognised kind both change the score away
+     * from what the registry literally says, so both have to be VISIBLE. A
+     * silent correction is the failure mode here: the entry stays broken because
+     * nothing ever points at it.
+     */
+    describe('markers for entries the scorer did not take at face value', () => {
+      const oddFlag = {
+        ...FLAG,
+        deferredItems: [
+          { id: 'bad-override', kind: 'open', points: -50, note: 'negative' },
+          { id: 'typo-kind', kind: 'precondtion', note: 'misspelled kind' },
+        ],
+      };
+      const oddReport = () => buildReport(registryFile([oddFlag]), context({ flags: [oddFlag] }));
+
+      it('says on the console that a declared value was ignored, and shows it', () => {
+        const output = renderConsole(oddReport());
+        assert.match(output, /bad-override — 3 pts, declared -50 IGNORED \(not a whole number of points\)/);
+      });
+
+      it('marks an unrecognised kind as falling back to the open rate', () => {
+        assert.match(renderConsole(oddReport()), /\[precondtion → open rate\] typo-kind — 3 pts/);
+      });
+
+      it('keeps both markers in the HTML report', () => {
+        const html = renderHtml(oddReport());
+        assert.ok(html.includes('declared -50 ignored'), 'HTML must show the dropped override');
+        assert.ok(html.includes('precondtion &rarr; open rate'), 'HTML must show the kind fallback');
+      });
+
+      it('still totals the derived scores, not the declared ones', () => {
+        const scored = oddReport().flags[0];
+        assert.equal(scored.deferred.points, POINTS.deferredItemKind.open * 2);
+      });
     });
 
     it('uses the singular unit for a one-point item', () => {
