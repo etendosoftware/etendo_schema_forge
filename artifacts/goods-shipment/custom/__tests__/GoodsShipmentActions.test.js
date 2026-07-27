@@ -109,4 +109,36 @@ describe('GoodsShipmentActions', () => {
       assert.match(src, /from\s*['"]@\/i18n['"]/);
     });
   });
+
+  describe('ConfirmShipmentInvoicedModal — fmtAmount (real currency formatting)', () => {
+    // fmtAmount is not exported (internal to the modal, reachable only via a hard-to-
+    // stage UI state — a draft shipment that already has a linked invoice). Extract
+    // the real function source and eval it directly rather than skip coverage.
+    function extractFunctionSource(source, fnName) {
+      const startIdx = source.search(new RegExp(`const\\s+${fnName}\\s*=\\s*\\([^)]*\\)\\s*=>\\s*\\{`));
+      if (startIdx === -1) throw new Error(`${fnName} not found`);
+      const braceStart = source.indexOf('{', startIdx);
+      let depth = 0;
+      let i = braceStart;
+      for (; i < source.length; i++) {
+        if (source[i] === '{') depth++;
+        else if (source[i] === '}') {
+          depth--;
+          if (depth === 0) break;
+        }
+      }
+      return source.slice(startIdx, i + 1);
+    }
+
+    function getRealFmtAmount() {
+      const fnSource = extractFunctionSource(src, 'fmtAmount');
+      return new Function(`return ${fnSource};`)();
+    }
+
+    it('groups thousands and uses the real currency symbol, never the raw ISO code', () => {
+      const fmtAmount = getRealFmtAmount();
+      assert.equal(fmtAmount(1234.56, 'EUR'), '1.234,56 €');
+      assert.doesNotMatch(fmtAmount(1234.56, 'EUR'), /EUR/);
+    });
+  });
 });

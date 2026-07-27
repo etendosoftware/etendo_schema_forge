@@ -87,6 +87,19 @@ describe('StatementLinesInline', () => {
     expect(screen.getByTestId('statement-line-row-l2')).toBeInTheDocument();
   });
 
+  it('groups thousands in the line amount (1000-9999 range silently drops the separator without explicit useGrouping)', () => {
+    linesMock.mockReturnValue({
+      lines: [
+        { id: 'l1', date: '2026-05-06T00:00:00Z', description: 'foo', amount: 1500, matched: true },
+      ],
+      loading: false,
+    });
+    render(<StatementLinesInline statementId="s1" currency="EUR" />);
+    const row = screen.getByTestId('statement-line-row-l1');
+    expect(row.textContent).toContain('1.500,00');
+    expect(row.textContent).not.toContain('1500,00');
+  });
+
   it('renders a success-tone match pill for matched=true and an info one for matched=false', () => {
     linesMock.mockReturnValue({
       lines: [

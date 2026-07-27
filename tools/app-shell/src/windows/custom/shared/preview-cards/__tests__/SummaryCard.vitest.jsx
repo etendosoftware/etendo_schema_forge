@@ -229,10 +229,20 @@ describe('SummaryCard', () => {
       expect(screen.getByText('USD 304.92')).toBeInTheDocument();
     });
 
-    it('shows exchange rate note (in parentheses) when currencies differ', () => {
+    it('shows exchange rate note (in parentheses) formatted in es-ES (comma decimal), never dot', () => {
       render(<SummaryCard {...dualProps} />);
-      // rateNote is formatted to 4 decimal places — matches "(1.1647)" pattern
-      expect(screen.getByText(/\(1[.,]1647\)/)).toBeInTheDocument();
+      // Exact match — a tolerant [.,] regex would pass even with the unpinned-locale bug
+      // whenever the host machine's default locale happens to use comma decimals.
+      expect(screen.getByText('(1,1647)')).toBeInTheDocument();
+      expect(screen.queryByText('(1.1647)')).toBeNull();
+    });
+
+    it('pins the exchange rate note to the es-ES locale explicitly (not the unpinned host default)', () => {
+      const spy = vi.spyOn(Number.prototype, 'toLocaleString');
+      render(<SummaryCard {...dualProps} />);
+      const call = spy.mock.calls.find(([locale]) => locale === 'es-ES');
+      expect(call).toBeDefined();
+      spy.mockRestore();
     });
 
     it('shows only doc amount — no secondary row — when orgCurrencyCode equals currencyCode', () => {

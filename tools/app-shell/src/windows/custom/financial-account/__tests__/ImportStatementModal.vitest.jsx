@@ -192,6 +192,18 @@ describe('ImportStatementModal', () => {
     ).toBeInTheDocument();
   });
 
+  it('groups thousands in the preview summary totals (1000-9999 range silently drops the separator without explicit useGrouping)', async () => {
+    previewStatement.mockResolvedValue({ ...PREVIEW_DATA, totalIn: 1500, totalOut: 2500.5 });
+    const { container } = render(<ImportStatementModal {...defaultProps()} />);
+    const user = userEvent.setup();
+    await gotoPreview(user, container);
+
+    expect(screen.getByText(/\+1\.500,00/)).toBeInTheDocument();
+    expect(screen.getByText(/−2\.500,50/)).toBeInTheDocument();
+    expect(screen.queryByText(/1500,00/)).toBeNull();
+    expect(screen.queryByText(/2500,50/)).toBeNull();
+  });
+
   it('transitions to the "error" view when preview rejects', async () => {
     previewStatement.mockRejectedValue(new Error('bad format'));
     const { container } = render(<ImportStatementModal {...defaultProps()} />);

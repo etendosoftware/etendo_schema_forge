@@ -156,6 +156,18 @@ describe('PaymentHeaderTableBase — sidebar', () => {
     expect(sidebar.getByText(fmtAmt(30, 'EUR'))).toBeInTheDocument();
   });
 
+  it('groups thousands in the hero amount (1000-9999 range silently drops the separator without explicit useGrouping) — hardcoded literal, not the self-referential fmtAmt() helper', () => {
+    const rows = [
+      { id: 'p1', status: 'RPR', amount: '1500.5', paymentDate: thisMonthDate('05'), 'currency$_identifier': 'EUR' },
+    ];
+    render(<PaymentHeaderTableBase {...BASE_PROPS} dir="in" data={rows} onDataMutated={vi.fn()} />);
+    const sidebar = within(screen.getByTestId('PaymentSidebar__panel'));
+    // Hardcoded literal — the local fmtAmt() test helper above shares the SAME
+    // missing-useGrouping bug as production, so it can never catch this regression.
+    expect(sidebar.getByText('+ 1.500,50 €')).toBeInTheDocument();
+    expect(sidebar.queryByText('+ 1500,50 €')).not.toBeInTheDocument();
+  });
+
   it('uses the "pagado" hero label and no method breakdown for dir="out" with no deposited rows (zero amount renders without a sign)', () => {
     const rows = [{ id: 'p1', status: 'RPAP', amount: '40' }];
     render(<PaymentHeaderTableBase {...BASE_PROPS} specName="payment-out" dir="out" data={rows} onDataMutated={vi.fn()} />);

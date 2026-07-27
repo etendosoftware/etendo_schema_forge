@@ -245,6 +245,29 @@ describe('ImportLinesModal', () => {
     expect(screen.queryByText('amount')).not.toBeInTheDocument();
   });
 
+  it('formats docTotal, unitPrice and lineTotal in es-ES (comma decimal, grouped thousands), never dot', async () => {
+    defaultProps.fetchLines.mockResolvedValue([
+      { id: 'line-1', _productName: 'Widget A', _maxQty: 5, _alreadyImported: false, _unitPrice: 1234.56, _lineNetAmount: 2500 },
+    ]);
+    renderModal();
+
+    await waitFor(() => {
+      expect(defaultProps.fetchLines).toHaveBeenCalled();
+      expect(screen.queryByText('loading')).not.toBeInTheDocument();
+      expect(screen.getByText('INV-001')).toBeInTheDocument();
+    }, { timeout: 10000 });
+
+    // Collapsed docTotal (sum of line net amounts) shown next to the row.
+    expect(screen.getByText('2.500,00')).toBeInTheDocument();
+    expect(screen.queryByText('2500.00')).toBeNull();
+
+    fireEvent.click(screen.getByText('INV-001').closest('div[style]'));
+
+    await waitFor(() => expect(screen.getByText('Widget A')).toBeInTheDocument(), { timeout: 10000 });
+    expect(screen.getByText('1.234,56')).toBeInTheDocument();
+    expect(screen.queryByText('1234.56')).toBeNull();
+  });
+
   it('filters documents by search query', async () => {
     renderModal();
 

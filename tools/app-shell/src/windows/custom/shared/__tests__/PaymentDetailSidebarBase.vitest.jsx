@@ -6,7 +6,7 @@ vi.mock('@/i18n', () => ({
 
 // --- Import under test ---
 
-import { render, screen, act } from '@testing-library/react';
+import { render, screen, within, act } from '@testing-library/react';
 import PaymentDetailSidebarBase from '../PaymentDetailSidebarBase.jsx';
 
 function baseData(overrides = {}) {
@@ -26,6 +26,28 @@ function dispatchProcessSuccess({ recordId, columnName }) {
     }));
   });
 }
+
+describe('PaymentDetailSidebarBase — amount formatting', () => {
+  beforeEach(() => {
+    globalThis.fetch = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ response: { data: [] } }) });
+  });
+
+  it('resolves the real currency symbol from the record instead of hardcoding €', async () => {
+    const data = baseData({ amount: '100', 'currency$_identifier': 'USD' });
+    render(<PaymentDetailSidebarBase dir="in" specName="payment-in" data={data} token="t" apiBaseUrl="http://x" />);
+    const panel = within(screen.getByTestId('PaymentDetailSidebar__panel'));
+    expect(panel.getByText(/100,00\s\$/)).toBeInTheDocument();
+    expect(panel.queryByText(/100,00\s€/)).toBeNull();
+  });
+
+  it('groups thousands in the hero amount (1000-9999 range silently drops the separator without explicit useGrouping)', async () => {
+    const data = baseData({ amount: '1500.5', 'currency$_identifier': 'EUR' });
+    render(<PaymentDetailSidebarBase dir="in" specName="payment-in" data={data} token="t" apiBaseUrl="http://x" />);
+    const panel = within(screen.getByTestId('PaymentDetailSidebar__panel'));
+    expect(panel.getByText(/1\.500,50\s€/)).toBeInTheDocument();
+    expect(panel.queryByText(/1500,50\s€/)).toBeNull();
+  });
+});
 
 describe('PaymentDetailSidebarBase — activity history', () => {
   beforeEach(() => {
