@@ -11,12 +11,14 @@
 --
 -- H2 (new, this revision) -- a real Etendo Go tenant onboards with exactly ONE auto-created
 -- admin role. GOClient's Finance/Sales/Purchasing/Inventory roles are reference/sample data
--- unique to GOClient -- no onboarding step or prior data-fix has ever created their equivalents
+-- unique to GOClient -- no onboarding step or prior data-fix had ever created their equivalents
 -- for any other tenant. Phase 7's ETP-4515 (preventive, onboarding) / ETP-4516 (corrective, this
--- fix) were both scoped for exactly this, per santo_roles_handoff_phase7.md, but neither had
--- started. Without these 4 roles, an admin has nothing to assign via the ETP-4512 role picker
--- except their own admin role -- the whole "assign one of 5 predefined roles" model is broken
--- for every non-GOClient tenant today.
+-- fix) were both scoped for exactly this, per santo_roles_handoff_phase7.md. ETP-4516 is this
+-- file; ETP-4515 has SINCE been implemented too, folded into this same branch rather than a
+-- separate one -- see "Preventive twin" below. Without these 4 roles, an admin has nothing to
+-- assign via the ETP-4512 role picker except their own admin role -- the whole "assign one of 5
+-- predefined roles" model is broken for every tenant onboarded before ETP-4515's onboarding step
+-- actually lands (merged and live), not merely committed to this branch.
 --
 -- H1 (already fixed by this file, previous revision) -- SMFWHE_DEFINEDWEBHOOK_ROLE is the webhook
 -- dispatcher's own authorization gate: a role with no row for a given webhook gets a flat 404
@@ -58,10 +60,21 @@
 --
 -- Preventive twin (new tenants born correct -- no CUT bump)
 -- --------------------------------------------------------------------------------------------
--- Not yet built. ETP-4515 (onboarding: auto-provision the 5 roles + window access for new
--- tenants) remains unstarted -- see santo_roles_handoff_phase7.md, updated 2026-07-27 to record
--- this fix's scope. Until ETP-4515 ships, ONBOARDING_PROVISIONED_THROUGH is NOT bumped and every
--- newly onboarded tenant will need this same corrective fix re-run.
+-- Implemented (2026-07-27), folded into this SAME branch (feature/ETP-4520) rather than a
+-- separate ETP-4515 branch: com.etendoerp.go's OnboardingRoleProvisioningService, wired into
+-- EtendoGoJwtServlet's onboarding chain right after the existing ensureWebhookAccess step. Same
+-- GOClient-as-template logic as this file's three steps (role clone, AD_Window_Access backfill,
+-- webhook grant) -- a tenant onboarded from here on gets all of it natively, no corrective run
+-- needed. NOT YET compiled or run against a live onboarding flow as of this writing -- code exists
+-- on this branch, unverified -- see santo_roles_handoff_phase7.md for that status.
+--
+-- ONBOARDING_PROVISIONED_THROUGH (OnboardingBaselineService, currently 2026-07-08T10:00:00Z) is
+-- intentionally NOT bumped, same reasoning as R14 (20260716T120000Z__R14-payment-method-
+-- multicurrency.sql): this fix's own @check already resolves to SKIPPED_NOT_NEEDED for any tenant
+-- that already has the 4 roles + window access + webhook grants, whether it got them from
+-- OnboardingRoleProvisioningService or any other path -- the CUT would only save the runner the
+-- cost of evaluating that @check, not change correctness. Bump it only if the team later wants
+-- the baseline to explicitly reflect this capability being onboarding-native.
 
 -- @check
 -- Returns >=1 row when ANY of: a role name is missing, an existing role of that name is missing
