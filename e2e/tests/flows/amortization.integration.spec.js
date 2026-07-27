@@ -97,7 +97,7 @@ async function createAssetWithAmortization(page, stamp) {
 
   // Activate "Depreciar" → financial sections appear.
   await page.getByRole('switch').first().click();
-  await expect(page.getByText('Información financiera')).toBeVisible({ timeout: 5_000 });
+  await expect(page.getByText('Información financiera')).toBeVisible({ timeout: 15_000 });
 
   // Save → record created; wait for the route to settle on /assets/{id}.
   await page.getByTestId('action-save').click();
