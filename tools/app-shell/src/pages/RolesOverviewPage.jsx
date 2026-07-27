@@ -3,15 +3,7 @@ import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-  DialogFooter,
-} from '@/components/ui/dialog';
-import { Users, Pencil, RefreshCw, ShieldAlert } from 'lucide-react';
+import { Users, RefreshCw, ShieldAlert } from 'lucide-react';
 import { useUI } from '@/i18n';
 import { fetchRolesOverview } from '@/lib/rolesApi.js';
 
@@ -67,8 +59,9 @@ const ADMIN_I18N = { nameKey: 'roleNameAdmin', descKey: 'roleDescAdmin' };
 /**
  * Read-only "Configuración > Roles" page (ETP-4513). Lists the tenant's 5 fixed roles with a
  * curated description, assigned-user count, and the Etendo GO windows each role can reach
- * (from `GET /webhooks/SFRolesOverview`). No create/delete actions anywhere; "Edit" only ever
- * opens a "coming soon" notice.
+ * (from `GET /webhooks/SFRolesOverview`). No create/edit/delete actions anywhere — these 5
+ * roles are product-defined and not editable by any tenant user; only future user-created
+ * roles (out of scope for now) will ever be editable here.
  *
  * The menu entry that routes here is itself gated by the `isAdminOrClientAdmin` capability
  * (`SFWindowAccessMap`, see `menu.json`'s `roles` entry and `registry.js`'s
@@ -83,7 +76,6 @@ export default function RolesOverviewPage() {
   const [roles, setRoles] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [editingRole, setEditingRole] = useState(null);
 
   const load = useCallback(() => {
     setLoading(true);
@@ -178,15 +170,6 @@ export default function RolesOverviewPage() {
                         <Users className="mr-1 h-3 w-3" data-testid="Users__rolesOverview" />
                         {role.userCount}
                       </Badge>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8"
-                        onClick={() => setEditingRole(role)}
-                        data-testid={`RolesOverviewPage__edit-${role.id}`}
-                      >
-                        <Pencil className="h-4 w-4" data-testid="Pencil__rolesOverview" />
-                      </Button>
                     </div>
                   </CardHeader>
                   <CardContent data-testid="CardContent__67e3bc">
@@ -213,24 +196,6 @@ export default function RolesOverviewPage() {
           </div>
         );
       })()}
-      <Dialog
-        open={!!editingRole}
-        onOpenChange={(open) => {
-          if (!open) setEditingRole(null);
-        }}
-        data-testid="Dialog__67e3bc">
-        <DialogContent data-testid="RolesOverviewPage__editDialog">
-          <DialogHeader data-testid="DialogHeader__67e3bc">
-            <DialogTitle data-testid="DialogTitle__67e3bc">{ui('rolesEditComingSoonTitle')}</DialogTitle>
-            <DialogDescription data-testid="DialogDescription__67e3bc">{ui('rolesEditComingSoonMessage')}</DialogDescription>
-          </DialogHeader>
-          <DialogFooter data-testid="DialogFooter__67e3bc">
-            <Button onClick={() => setEditingRole(null)} data-testid="RolesOverviewPage__editDialogClose">
-              {ui('close')}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }

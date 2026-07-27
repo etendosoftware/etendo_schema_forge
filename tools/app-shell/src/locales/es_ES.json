@@ -17431,8 +17431,6 @@
     "rolesNoAccessTitle": "No tienes acceso a esta vista",
     "rolesNoAccessMessage": "Solo los administradores pueden ver el resumen de roles.",
     "rolesLoadError": "No se pudieron cargar los roles.",
-    "rolesEditComingSoonTitle": "Próximamente",
-    "rolesEditComingSoonMessage": "La edición de roles todavía no está disponible. Esta función estará disponible próximamente.",
     "accessTierFull": "Completo",
     "accessTierReadOnly": "Solo lectura",
     "supportTabChat": "Chat",

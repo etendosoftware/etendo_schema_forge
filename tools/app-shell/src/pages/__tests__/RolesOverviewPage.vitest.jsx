@@ -48,15 +48,6 @@ vi.mock('@/components/ui/skeleton', () => ({
   Skeleton: (props) => <div {...props} />,
 }));
 
-vi.mock('@/components/ui/dialog', () => ({
-  Dialog: ({ children, open }) => (open ? <div data-testid="dialog-root">{children}</div> : null),
-  DialogContent: ({ children, ...props }) => <div {...props}>{children}</div>,
-  DialogHeader: ({ children }) => <div>{children}</div>,
-  DialogTitle: ({ children }) => <h2>{children}</h2>,
-  DialogDescription: ({ children }) => <p>{children}</p>,
-  DialogFooter: ({ children }) => <div>{children}</div>,
-}));
-
 // ── Import under test ───────────────────────────────────────────────────────
 
 import { render, screen, waitFor } from '@testing-library/react';
@@ -214,78 +205,11 @@ describe('RolesOverviewPage', () => {
     });
   });
 
-  describe('Edit action — coming soon dialog', () => {
-    it('opens the "coming soon" dialog when Edit is clicked, with no navigation side effect', async () => {
-      fetchRolesOverview.mockResolvedValue({ roles: FIVE_ROLES });
-      const user = userEvent.setup();
-      render(<RolesOverviewPage />);
-      await waitFor(() => {
-        expect(screen.getByTestId(`RolesOverviewPage__edit-${FIVE_ROLES[0].id}`)).toBeTruthy();
-      });
-
-      expect(screen.queryByTestId('RolesOverviewPage__editDialog')).toBeNull();
-      await user.click(screen.getByTestId(`RolesOverviewPage__edit-${FIVE_ROLES[0].id}`));
-
-      const dialog = screen.getByTestId('RolesOverviewPage__editDialog');
-      expect(dialog).toBeTruthy();
-      expect(document.body.textContent).toContain('rolesEditComingSoonTitle');
-      expect(document.body.textContent).toContain('rolesEditComingSoonMessage');
-    });
-
-    it('closes the dialog via the close button, without changing which roles are rendered', async () => {
-      fetchRolesOverview.mockResolvedValue({ roles: FIVE_ROLES });
-      const user = userEvent.setup();
-      render(<RolesOverviewPage />);
-      await waitFor(() => {
-        expect(screen.getByTestId(`RolesOverviewPage__edit-${FIVE_ROLES[0].id}`)).toBeTruthy();
-      });
-
-      await user.click(screen.getByTestId(`RolesOverviewPage__edit-${FIVE_ROLES[0].id}`));
-      expect(screen.getByTestId('RolesOverviewPage__editDialog')).toBeTruthy();
-
-      await user.click(screen.getByTestId('RolesOverviewPage__editDialogClose'));
-      expect(screen.queryByTestId('RolesOverviewPage__editDialog')).toBeNull();
-
-      // Still shows all 5 roles — closing the dialog must not clear the list.
-      for (const role of FIVE_ROLES) {
-        expect(screen.getByTestId(`RolesOverviewPage__role-${role.id}`)).toBeTruthy();
-      }
-    });
-
-    it('the coming-soon dialog has no form, no input/textarea/select, and no second (save/submit) button — truly read-only', async () => {
-      // The "no create/delete actions" acceptance criterion must hold literally, not just
-      // visually: this asserts there is no <form> element to submit, no editable field of any
-      // kind, and exactly one button (the Close action) inside the dialog. A stray onSubmit
-      // handler or hidden save button would pass a purely visual/data-testid-based check but
-      // still let a change be persisted.
-      fetchRolesOverview.mockResolvedValue({ roles: FIVE_ROLES });
-      const user = userEvent.setup();
-      render(<RolesOverviewPage />);
-      await waitFor(() => {
-        expect(screen.getByTestId(`RolesOverviewPage__edit-${FIVE_ROLES[0].id}`)).toBeTruthy();
-      });
-
-      await user.click(screen.getByTestId(`RolesOverviewPage__edit-${FIVE_ROLES[0].id}`));
-      const dialog = screen.getByTestId('RolesOverviewPage__editDialog');
-      expect(dialog).toBeTruthy();
-
-      expect(dialog.querySelector('form')).toBeNull();
-      expect(dialog.querySelectorAll('input, textarea, select').length).toBe(0);
-
-      const buttons = Array.from(dialog.querySelectorAll('button'));
-      expect(buttons).toHaveLength(1);
-      expect(buttons[0].getAttribute('data-testid')).toBe('RolesOverviewPage__editDialogClose');
-
-      // Pressing Enter inside the dialog must not be intercepted by any submit handler — the
-      // dialog stays open and the underlying role list is untouched.
-      await user.keyboard('{Enter}');
-      expect(screen.getByTestId('RolesOverviewPage__editDialog')).toBeTruthy();
-      for (const role of FIVE_ROLES) {
-        expect(screen.getByTestId(`RolesOverviewPage__role-${role.id}`)).toBeTruthy();
-      }
-    });
-
-    it('exposes no create/delete affordance anywhere on the page', async () => {
+  describe('no create/edit/delete affordance', () => {
+    // These 5 roles are product-defined, not editable by any tenant user — only future
+    // user-created roles (out of scope for now) will ever be editable here. There is no
+    // Edit button, no dialog, and no create/delete affordance anywhere on the page.
+    it('exposes no edit/create/delete affordance anywhere on the page', async () => {
       fetchRolesOverview.mockResolvedValue({ roles: FIVE_ROLES });
       render(<RolesOverviewPage />);
       await waitFor(() => {
@@ -298,6 +222,8 @@ describe('RolesOverviewPage', () => {
       expect(allTestIds.some((id) => /delete/i.test(id))).toBe(false);
       expect(allTestIds.some((id) => /create/i.test(id))).toBe(false);
       expect(allTestIds.some((id) => /^RolesOverviewPage__new/i.test(id))).toBe(false);
+      expect(allTestIds.some((id) => /^RolesOverviewPage__edit/i.test(id))).toBe(false);
+      expect(document.querySelector('form')).toBeNull();
     });
   });
 

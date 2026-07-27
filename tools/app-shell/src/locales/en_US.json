@@ -17185,8 +17185,6 @@
     "rolesNoAccessTitle": "You don't have access to this view",
     "rolesNoAccessMessage": "Only administrators can view the roles overview.",
     "rolesLoadError": "Couldn't load roles.",
-    "rolesEditComingSoonTitle": "Coming soon",
-    "rolesEditComingSoonMessage": "Editing roles isn't available yet. This feature is coming soon.",
     "accessTierFull": "Full",
     "accessTierReadOnly": "Read-only",
     "supportTabChat": "Chat",
