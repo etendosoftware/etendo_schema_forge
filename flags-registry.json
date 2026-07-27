@@ -1,6 +1,6 @@
 {
-  "version": 1,
-  "$comment": "Source of truth for feature flag METADATA. Debt is always DERIVED from this file by cli/src/flag-debt.js — never stored here. See docs/flag-debt.md.",
+  "version": 2,
+  "$comment": "The FEATURE is the unit of accounting; the flag is a temporary attribute of it. Durable facts (paths, testSpecs, deferredItems, debt) live on the feature and survive flag retirement. Retiring a flag = delete its `flag` object (after removing the code per the playbook), never the feature entry. Previous $comment: Source of truth for feature flag METADATA. Debt is always DERIVED from this file by cli/src/flag-debt.js \u2014 never stored here. See docs/flag-debt.md.",
   "roots": {
     "frontend": ".",
     "backend": "etendo_core/modules/com.etendoerp.go"
@@ -10,27 +10,30 @@
       "tools/app-shell/src/lib/flags/",
       "com/etendoerp/go/featureflags/"
     ],
-    "$comment": "frameworkPaths belong to NO flag: they are shared infrastructure serving every flag, so they never count as owned code nor as touch points. Matched as path fragments, which is why the backend entry has no src/ prefix — it also covers src-test/."
+    "$comment": "frameworkPaths belong to NO flag: they are shared infrastructure serving every flag, so they never count as owned code nor as touch points. Matched as path fragments, which is why the backend entry has no src/ prefix \u2014 it also covers src-test/."
   },
-  "flags": [
+  "features": [
     {
-      "key": "tenant-upgrade",
+      "id": "paid-second-tenant",
       "description": "Gates the paid upgrade flow that turns a trial account into a second, productive tenant: the frontend entry point plus the backend paywall that authorises it.",
       "owner": "sebastianbarrozo",
       "jira": "ETP-4686",
       "created": "2026-07-27",
-      "ttl": "2026-10-25",
-      "ttlNote": "PLACEHOLDER — created + 90 days. Nobody has committed to this sunset date yet; the flag owner must replace it with the real removal target.",
-      "defaultValue": false,
-      "symbols": [
-        "tenant-upgrade",
-        "TENANT_UPGRADE",
-        "etendo.go.flags.tenant-upgrade",
-        "ETGO_FLAG_TENANT_UPGRADE",
-        "UpgradePage",
-        "lib/upgrade"
-      ],
-      "$symbolsComment": "Grep terms that find every reference to this flag. The last two are needed because a touch point may reach the flag's code without naming the flag: runtime-routes.jsx only lazy-imports UpgradePage.",
+      "flag": {
+        "key": "tenant-upgrade",
+        "defaultValue": false,
+        "ttl": "2026-10-25",
+        "ttlNote": "PLACEHOLDER \u2014 created + 90 days. Nobody has committed to this sunset date yet; the flag owner must replace it with the real removal target.",
+        "symbols": [
+          "tenant-upgrade",
+          "TENANT_UPGRADE",
+          "etendo.go.flags.tenant-upgrade",
+          "ETGO_FLAG_TENANT_UPGRADE",
+          "UpgradePage",
+          "lib/upgrade"
+        ],
+        "$symbolsComment": "Grep terms that find every reference to this flag. The last two are needed because a touch point may reach the flag's code without naming the flag: runtime-routes.jsx only lazy-imports UpgradePage."
+      },
       "paths": {
         "frontend": [
           "tools/app-shell/src/lib/upgrade/",
@@ -40,68 +43,68 @@
           "src/com/etendoerp/go/payment/"
         ]
       },
-      "$pathsComment": "Owned paths only — code that exists because this flag exists and is deleted with it. src/com/etendoerp/go/rest/EtendoGoJwtServlet.java is a touch point, not owned.",
-      "$knownGapComment": "USER-ACCEPTED VISIBLE DEBT (scorecard demo). src/com/etendoerp/go/payment/TenantPlanService.java. markProductive: zero coverage — the paid-plan marker is entirely unexercised. resolvePlan: only the exception-swallow path executes (returns 'free' on failure); every distinguishing path (preference found productive/other, null query, blank-clientId guard) is untested. The only covered branch is the one that hides failures — exactly how a paying tenant would silently appear free. Coverage arrives transitively, not deliberately: EtendoGoJwtDalHelper holds a static TenantPlanService (line 72), so EtendoGoJwtDalHelperTest.BuildEnvironmentJson calls resolvePlan, its unstubbed Preference query NPEs into the catch, and reportsFreePlanWithoutMarker asserts the resulting 'free'. The unit spec below is declared acceptedDebt and is intentionally not being written, so this flag carries a per-item tests penalty on purpose rather than reading as a clean sheet. Asserting the AD_Preference persistence itself stays integration scope and is NOT what the deferred unit spec would cover.",
+      "$pathsComment": "Owned paths only \u2014 code that exists because this flag exists and is deleted with it. src/com/etendoerp/go/rest/EtendoGoJwtServlet.java is a touch point, not owned.",
+      "$knownGapComment": "USER-ACCEPTED VISIBLE DEBT (scorecard demo). src/com/etendoerp/go/payment/TenantPlanService.java. markProductive: zero coverage \u2014 the paid-plan marker is entirely unexercised. resolvePlan: only the exception-swallow path executes (returns 'free' on failure); every distinguishing path (preference found productive/other, null query, blank-clientId guard) is untested. The only covered branch is the one that hides failures \u2014 exactly how a paying tenant would silently appear free. Coverage arrives transitively, not deliberately: EtendoGoJwtDalHelper holds a static TenantPlanService (line 72), so EtendoGoJwtDalHelperTest.BuildEnvironmentJson calls resolvePlan, its unstubbed Preference query NPEs into the catch, and reportsFreePlanWithoutMarker asserts the resulting 'free'. The unit spec below is declared acceptedDebt and is intentionally not being written, so this flag carries a per-item tests penalty on purpose rather than reading as a clean sheet. Asserting the AD_Preference persistence itself stays integration scope and is NOT what the deferred unit spec would cover.",
       "deferredItems": [
         {
           "id": "targeting-key-divergence",
           "kind": "precondition",
-          "note": "The two ends bucket users on different identities: the frontend sends localStorage.sf_auth_user (the ERP admin username) as OpenFeature's targetingKey, while the backend targets the account email. Harmless today because the local InMemoryProvider ignores the targeting key entirely, and a CORRECTNESS BLOCKER the moment a targeting-aware control plane lands — wiring Mixpanel first would bake per-user bucketing divergence into live rollouts, where it is invisible in aggregate. Must be closed BEFORE the swap, not after.",
+          "note": "The two ends bucket users on different identities: the frontend sends localStorage.sf_auth_user (the ERP admin username) as OpenFeature's targetingKey, while the backend targets the account email. Harmless today because the local InMemoryProvider ignores the targeting key entirely, and a CORRECTNESS BLOCKER the moment a targeting-aware control plane lands \u2014 wiring Mixpanel first would bake per-user bucketing divergence into live rollouts, where it is invisible in aggregate. Must be closed BEFORE the swap, not after.",
           "refs": [
-            "docs/feature-flags.md — 'Open: targeting keys do not match'",
-            "com.etendoerp.go docs/feature-flags-and-tenant-upgrade.md — section 'Targeting key — OPEN, must be settled before a targeting-aware provider lands', and Mixpanel migration checklist step 4 (commit bd068495)"
+            "docs/feature-flags.md \u2014 'Open: targeting keys do not match'",
+            "com.etendoerp.go docs/feature-flags-and-tenant-upgrade.md \u2014 section 'Targeting key \u2014 OPEN, must be settled before a targeting-aware provider lands', and Mixpanel migration checklist step 4 (commit bd068495)"
           ]
         },
         {
           "id": "real-payment-readiness",
           "kind": "precondition",
-          "note": "The paid flow is a mock: MockPaymentService checks the token's SHAPE, nothing is charged, and no gateway exists. The components split by TRIGGER. Gateway-triggered — gap-replay, gap-check-then-act, gap-payment-provisioning-atomicity, and qa-in-flight-submit-guard — are latent until money is real (the last one can already duplicate a tenant, but only by script; a human double-click cannot reach it). Flag-on — qa-navigation-guard, qa-clientname-unbounded and qa-session-expiry-reported-late — bite as soon as the flag is enabled for anyone, gateway or not: they are UX and validation defects in a flow users can complete today. Bundled because they share one owner decision and one review moment, not because they share a trigger. PROMOTION CONDITION (Alex, review of a7cb81333): if the flag ever pilots before a gateway exists, the three flag-on components must be promoted to their own deferredItem — at that point they are scheduled work, not part of the real-payments decision, and the bundle-a-theme-split-a-schedule rule applies.",
+          "note": "The paid flow is a mock: MockPaymentService checks the token's SHAPE, nothing is charged, and no gateway exists. The components split by TRIGGER. Gateway-triggered \u2014 gap-replay, gap-check-then-act, gap-payment-provisioning-atomicity, and qa-in-flight-submit-guard \u2014 are latent until money is real (the last one can already duplicate a tenant, but only by script; a human double-click cannot reach it). Flag-on \u2014 qa-navigation-guard, qa-clientname-unbounded and qa-session-expiry-reported-late \u2014 bite as soon as the flag is enabled for anyone, gateway or not: they are UX and validation defects in a flow users can complete today. Bundled because they share one owner decision and one review moment, not because they share a trigger. PROMOTION CONDITION (Alex, review of a7cb81333): if the flag ever pilots before a gateway exists, the three flag-on components must be promoted to their own deferredItem \u2014 at that point they are scheduled work, not part of the real-payments decision, and the bundle-a-theme-split-a-schedule rule applies.",
           "components": [
             {
               "id": "qa-in-flight-submit-guard",
-              "note": "QA #2 — no in-flight guard on submit: 8 scripted same-tick clicks produce 8 POSTs with 8 tokens. handleSubmit (UpgradePage.jsx:273) sets no submitting state and the button is never disabled. A human double-click cannot reproduce it; a real charge per POST would make it expensive.",
+              "note": "QA #2 \u2014 no in-flight guard on submit: 8 scripted same-tick clicks produce 8 POSTs with 8 tokens. handleSubmit (UpgradePage.jsx:273) sets no submitting state and the button is never disabled. A human double-click cannot reproduce it; a real charge per POST would make it expensive.",
               "ref": "tools/app-shell/src/pages/UpgradePage.jsx:273,371"
             },
             {
               "id": "qa-navigation-guard",
-              "note": "QA #3 — nothing guards navigation mid-provisioning: back or refresh is silent, with copy as the only mitigation. No beforeunload handler and no router blocker anywhere in the page.",
+              "note": "QA #3 \u2014 nothing guards navigation mid-provisioning: back or refresh is silent, with copy as the only mitigation. No beforeunload handler and no router blocker anywhere in the page.",
               "ref": "tools/app-shell/src/pages/UpgradePage.jsx"
             },
             {
               "id": "qa-clientname-unbounded",
-              "note": "QA #4 — clientName is unbounded on BOTH ends: no maxLength on the input, and parseOnboardingRequest rejects only the empty string. An oversized name passes the paywall and fails deep inside provisioning, i.e. after the point where a real charge would have been taken.",
+              "note": "QA #4 \u2014 clientName is unbounded on BOTH ends: no maxLength on the input, and parseOnboardingRequest rejects only the empty string. An oversized name passes the paywall and fails deep inside provisioning, i.e. after the point where a real charge would have been taken.",
               "ref": "tools/app-shell/src/pages/UpgradePage.jsx:238 + com.etendoerp.go EtendoGoJwtServlet.java:1352-1359"
             },
             {
               "id": "qa-session-expiry-reported-late",
-              "note": "QA #5 — session expiry is known at mount but reported only after the form is filled: the mount effect reads the platform token, yet on 'unavailable' the checkout is still rendered, so the user completes card details before being told the session is gone.",
+              "note": "QA #5 \u2014 session expiry is known at mount but reported only after the form is filled: the mount effect reads the platform token, yet on 'unavailable' the checkout is still rendered, so the user completes card details before being told the session is gone.",
               "ref": "tools/app-shell/src/pages/UpgradePage.jsx:188-201,223-224"
             },
             {
               "id": "gap-replay",
-              "note": "Module doc — the token is never consumed, so one approved payment can create N tenants. Needs the token marked spent or bound to a single tenant creation.",
+              "note": "Module doc \u2014 the token is never consumed, so one approved payment can create N tenants. Needs the token marked spent or bound to a single tenant creation.",
               "ref": "com.etendoerp.go docs/feature-flags-and-tenant-upgrade.md (named gaps, commit c45e4bbe)"
             },
             {
               "id": "gap-check-then-act",
-              "note": "Module doc — the paywall reads ownership and provisioning creates the client afterwards with no lock between: two concurrent POST /sws/go/onboarding calls both pass the gate. Needs an atomic check-and-create or a uniqueness constraint that catches the loser.",
+              "note": "Module doc \u2014 the paywall reads ownership and provisioning creates the client afterwards with no lock between: two concurrent POST /sws/go/onboarding calls both pass the gate. Needs an atomic check-and-create or a uniqueness constraint that catches the loser.",
               "ref": "com.etendoerp.go docs/feature-flags-and-tenant-upgrade.md (named gaps, commit c45e4bbe)"
             },
             {
               "id": "gap-payment-provisioning-atomicity",
-              "note": "Module doc — no atomicity between payment and provisioning: the paywall passes, provisioning then fails, its catch rolls back the DAL changes, and with a real gateway that is a captured charge with no tenant and no refund, retry-with-credit or idempotency path. Distinct from qa-clientname-unbounded, which is merely its easiest trigger: bounding the input closes the trigger, not the gap. Needs authorize-before-provision with capture on success, or a compensating refund.",
+              "note": "Module doc \u2014 no atomicity between payment and provisioning: the paywall passes, provisioning then fails, its catch rolls back the DAL changes, and with a real gateway that is a captured charge with no tenant and no refund, retry-with-credit or idempotency path. Distinct from qa-clientname-unbounded, which is merely its easiest trigger: bounding the input closes the trigger, not the gap. Needs authorize-before-provision with capture on success, or a compensating refund.",
               "ref": "com.etendoerp.go docs/feature-flags-and-tenant-upgrade.md (named gaps, commit c45e4bbe)"
             }
           ],
           "refs": [
-            "Sentinel QA report findings #2-#5 (relayed; no report file is committed in this repo — each component carries the code location instead)",
-            "com.etendoerp.go docs/feature-flags-and-tenant-upgrade.md — 'Taking real payments is therefore more than swapping this class'"
+            "Sentinel QA report findings #2-#5 (relayed; no report file is committed in this repo \u2014 each component carries the code location instead)",
+            "com.etendoerp.go docs/feature-flags-and-tenant-upgrade.md \u2014 'Taking real payments is therefore more than swapping this class'"
           ]
         },
         {
           "id": "plan-badge-in-env-picker",
           "kind": "cosmetic",
-          "note": "The environment picker does not show which plan a tenant is on. The backend already ships the data — GET /sws/go/environments returns a per-environment 'plan' field (EtendoGoJwtDalHelper.java:346, via TenantPlanService.resolvePlan). Rendering it needs a change in the @etendosoftware/etendo-go-core package plus a version bump here, which is why it is deferred rather than done inline.",
+          "note": "The environment picker does not show which plan a tenant is on. The backend already ships the data \u2014 GET /sws/go/environments returns a per-environment 'plan' field (EtendoGoJwtDalHelper.java:346, via TenantPlanService.resolvePlan). Rendering it needs a change in the @etendosoftware/etendo-go-core package plus a version bump here, which is why it is deferred rather than done inline.",
           "refs": [
             "com.etendoerp.go src/com/etendoerp/go/rest/EtendoGoJwtDalHelper.java:346",
             "npm @etendosoftware/etendo-go-core (env picker component)"
@@ -123,7 +126,7 @@
             "root": "backend",
             "path": "src-test/src/com/etendoerp/go/payment/TenantPlanServiceTest.java",
             "acceptedDebt": true,
-            "note": "user-accepted debt — markProductive unexercised; of resolvePlan only the failure-swallowing branch runs, transitively via EtendoGoJwtDalHelperTest"
+            "note": "user-accepted debt \u2014 markProductive unexercised; of resolvePlan only the failure-swallowing branch runs, transitively via EtendoGoJwtDalHelperTest"
           },
           {
             "root": "frontend",
