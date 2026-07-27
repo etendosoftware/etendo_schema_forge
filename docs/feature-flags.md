@@ -41,6 +41,18 @@ value changes. Provider startup is bounded by a timeout — inert for the
 in-memory provider, but it is what keeps this rule true when a network-backed
 provider is swapped in.
 
+Because startup is fire-and-forget, components routinely mount *before* a
+provider is registered, which makes the re-render the load-bearing half of this
+rule. `@openfeature/web-sdk` emits `PROVIDER_READY` one microtask before the new
+provider is installed for evaluation, so a subscriber that re-reads the value
+synchronously inside the handler sees the old one, concludes nothing changed and
+never re-renders — and no later event corrects it. `useFeatureFlag` therefore
+notifies both synchronously and on the next microtask, which is correct
+whichever side of that boundary the installation lands on. Keep that when
+touching the hook: without it a component that mounts first is pinned to its
+declared default for the whole session, and the failure is invisible because a
+flag reading `false` is indistinguishable from one that is genuinely off.
+
 ### 3. Frontend flags are visual gating only — never authorization
 
 A flag decides what the UI **shows**. It is not a security boundary: anyone can
