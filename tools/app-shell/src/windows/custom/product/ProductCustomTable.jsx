@@ -85,13 +85,23 @@ const filters = ['searchKey', 'name', 'productCategory', 'productType'];
 const hiddenColumns = ['name', 'searchKey'];
 
 const ProductCustomTable = forwardRef(function ProductCustomTable(props, ref) {
+  // ListView.jsx always forwards its own `hiddenColumns` prop (default `[]`)
+  // to whatever Table component the window wires in. Spreading `{...props}`
+  // after the local `hiddenColumns={hiddenColumns}` would let that incoming
+  // value silently clobber this module's intentional override, so pull it
+  // out of the spread and merge instead — union of the local intentional
+  // list with whatever the parent additionally asks to hide (ETP-4609).
+  const { hiddenColumns: incomingHiddenColumns, ...rest } = props;
+  const mergedHiddenColumns = incomingHiddenColumns?.length
+    ? [...new Set([...hiddenColumns, ...incomingHiddenColumns])]
+    : hiddenColumns;
   return (
     <DataTable
       ref={ref}
       columns={columns}
       filters={filters}
-      hiddenColumns={hiddenColumns}
-      {...props}
+      {...rest}
+      hiddenColumns={mergedHiddenColumns}
       data-testid="DataTable__f45e24" />
   );
 });
