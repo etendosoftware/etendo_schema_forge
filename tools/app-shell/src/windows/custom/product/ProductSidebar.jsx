@@ -584,6 +584,9 @@ export default function ProductSidebar({ recordId, data, token, apiBaseUrl }) {
     onExternalClose: () => setChartTrigger({ open: false, warehouse: null }),
   };
 
+  // Service-type products are not stockable — no stock section to show (ETP-4606).
+  if (data?.productType === 'S') return null;
+
   return (
     <div className="flex flex-col gap-3">
       {/* ── Inventory overview ── */}

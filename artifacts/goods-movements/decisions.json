@@ -170,6 +170,7 @@
     },
     "lines": {
       "name": "movementLine",
+      "javaQualifier": "goodsMovementLineHandler",
       "fields": {
         "lineNo": {
           "grid": false,
