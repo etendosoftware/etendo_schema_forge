@@ -26,6 +26,7 @@ const AuthorizePage = lazy(() => import('./pages/AuthorizePage.jsx'));
 const QuickSalesOrderPage = lazy(() => import('./pages/QuickSalesOrderPage.jsx'));
 const QuickPurchaseOrderPage = lazy(() => import('./pages/QuickPurchaseOrderPage.jsx'));
 const AppStorePage = lazy(() => import('./pages/AppStorePage.jsx'));
+const UpgradePage = lazy(() => import('./pages/UpgradePage.jsx'));
 
 const LOADING_FALLBACK = <div className="p-8 text-muted-foreground">Loading...</div>;
 
@@ -70,6 +71,9 @@ export function buildRuntimeRoutes({ windowMap, apiBaseUrl }) {
     lazyRoute('quick-sales-order', QuickSalesOrderPage, { apiBaseUrl }),
     lazyRoute('quick-purchase-order', QuickPurchaseOrderPage, { apiBaseUrl }),
     lazyRoute('app-store', AppStorePage),
+    // Registered unconditionally: the feature flag gates the visible entry
+    // point, not the route, and the backend enforces the paywall regardless.
+    lazyRoute('upgrade', UpgradePage),
     { path: 'artifacts', public: false, element: <ArtifactViewerPage data-testid="ArtifactViewerPage__e8c60d" /> },
     { path: 'artifacts/:windowName', public: false, element: <ArtifactViewerPage data-testid="ArtifactViewerPage__e8c60d" /> },
     { path: ':windowName/:recordId', public: false, element: (
