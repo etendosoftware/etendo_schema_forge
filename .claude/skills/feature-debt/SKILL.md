@@ -106,13 +106,32 @@ entry — do not soften the wording.
 
 ## Step 6 — Retiring a flag
 
-1. Delete the owned `paths`.
-2. Grep `symbols`; remove every touch point outside `paths` and `conventions.frameworkPaths`.
-3. Re-grep to confirm zero remaining matches.
-4. **Resolve each open item before deleting the registry entry** — deleting the entry
-   deletes the *accounting*, not the debt. Anything still true of surviving code must be
-   re-homed to a ticket or another flag's entry. Deletion is never closure.
-5. Remove the entry; update the docs and index rows in **both** repos.
+What expires at the TTL is the **ability to hide**, never the feature. Retiring is
+committing to one of two branches — decide which first, with the human:
+
+**Ship it (the usual branch):** the feature becomes unconditional.
+1. Grep the flag's `symbols`; unwrap every toggle point — the code inside the
+   conditional becomes plain code, the conditional goes.
+2. Delete the flag constant, its config entries, and its control-plane setting.
+3. Delete the **`flag` object** from the feature's registry entry — **never the
+   entry itself**. The feature keeps its paths, specs and open items, and keeps
+   scoring as `shipped`; deleting the entry would delete the *evidence*, not the
+   debt.
+4. Re-grep `symbols` to confirm zero remaining matches.
+
+**Kill it:** the feature goes with the flag.
+1. Delete the owned `paths` and every toggle point.
+2. **Re-home each open item before deleting the entry** — to a ticket or another
+   feature's entry. Anything still true of surviving code must land somewhere.
+   Deletion is never closure.
+3. Delete the whole feature entry; re-grep to confirm zero matches.
+
+Either way: update the docs and index rows in **both** repos.
+
+A permanent per-account condition (a plan, an entitlement, a permission) is **not
+a third branch** — it is backend business logic that was never a flag's job. If a
+flag seems to "need to live forever", the condition it guards belongs in the
+backend and the flag still retires.
 
 ---
 

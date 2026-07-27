@@ -434,21 +434,42 @@ they score at all.
 
 ### 4.4 Retiring a flag
 
-Retirement should be mechanical, and it is mechanical only if the layout rule was
-honoured throughout:
+What expires at the TTL is the **ability to hide** — never the feature, and never
+its measurement. Retirement is committing to one of two branches, and it is
+mechanical only if the layout rule was honoured throughout:
 
-1. **Delete the owned directories** — everything in `paths`. This is why `paths`
-   must be owned code only.
-2. **Grep the `symbols` and remove the touch points.** Every match outside
+**Ship it** — the feature becomes an unconditional part of the product:
+
+1. **Grep the `symbols` and unwrap the toggle points.** Every match outside
    `paths` and outside `conventions.frameworkPaths` is a shared file reaching into
-   the flag: a route registration, a menu entry, a backend enforcement point. Each
-   is a small, local deletion *if* rule 2 of the layout held and it carries no
-   business logic.
-3. **Re-grep to confirm zero matches** outside framework paths.
-4. **Remove the flag's entry** from `flags-registry.json`, and delete its specs
-   or fold them into the now-unconditional behaviour's suite.
-5. **Update the docs in both repos** — the flag section, the index rows, and any
-   `refs` pointing at them.
+   the flag: a route registration, a menu entry, a backend enforcement point. The
+   code the conditional guarded becomes plain code; the conditional goes. Each is
+   a small, local edit *if* rule 2 of the layout held and it carries no business
+   logic.
+2. **Delete the flag machinery** — the key constant, its config entries, its
+   control-plane setting.
+3. **Delete the `flag` object from the feature's registry entry — never the
+   entry itself.** The feature keeps its `paths`, `testSpecs` and `deferredItems`
+   and keeps scoring as `shipped`: touch points and lifecycle stop applying, the
+   durable debt does not. Deleting the entry would delete the *evidence*, not the
+   debt.
+4. **Re-grep to confirm zero matches** outside framework paths.
+
+**Kill it** — the feature goes with the flag:
+
+1. **Delete the owned directories** — everything in `paths` — and every toggle
+   point.
+2. **Re-home each open item first** (see 4.5), then delete the whole feature
+   entry.
+3. **Re-grep to confirm zero matches.**
+
+Either way, **update the docs in both repos** — the flag section, the index rows,
+and any `refs` pointing at them.
+
+A permanent per-account condition — a plan, an entitlement, a permission — is not
+a third branch. It is backend business logic that was never a flag's job: if a
+flag seems to need to live forever, the condition it guards belongs in the
+backend, and the flag still retires.
 
 Three touch-point files are free in the score because a flag legitimately needs
 about that many — a route registration, a menu entry, a backend enforcement point.
@@ -458,9 +479,12 @@ during the flag's life, not at its end.
 
 ### 4.5 What happens to accepted debt at retirement
 
-Deleting the flag deletes its registry entry, and with it every `acceptedDebt`
-spec and every `deferredItem`. **The debt does not disappear with them — only the
-accounting does.** So, before deleting the entry, resolve each item explicitly:
+On the **ship** branch nothing is at risk: the feature entry survives, and its
+`acceptedDebt` specs and `deferredItems` keep scoring on the shipped feature.
+The danger is the **kill** branch: deleting the feature entry deletes every
+`acceptedDebt` spec and every `deferredItem` with it. **The debt does not
+disappear with them — only the accounting does.** So, before deleting the entry,
+resolve each item explicitly:
 
 | The item was… | Do this |
 |---------------|---------|

@@ -224,20 +224,28 @@ would imply it belongs to one tool or is documentation; it is neither.
 
 ---
 
-## Registering a new flag
+## Registering a new feature (and its flag)
+
+**The feature is the unit of accounting; the flag is a temporary attribute of it.**
+Durable facts — owned paths, declared specs, deferred decisions, and therefore the
+debt — live on the feature and keep scoring after the flag is retired. What expires
+at the TTL is the *ability to hide*, never the feature or its measurement.
 
 Add an entry to `flags-registry.json`:
 
 ```jsonc
 {
-  "key": "my-flag",                       // matches the frontend constant and the backend property suffix
-  "description": "What it gates, in one sentence.",
+  "id": "my-feature",                     // durable — survives the flag
+  "description": "What the feature does, in one sentence.",
   "owner": "github-username",
   "jira": "ETP-1234",
   "created": "2026-07-27",                // ISO date
-  "ttl": "2026-10-25",                    // ISO date — when this flag should be gone
-  "defaultValue": false,
-  "symbols": ["my-flag", "MY_FLAG"],      // grep terms that find every reference
+  "flag": {                               // temporary — delete this object at retirement
+    "key": "my-flag",                     // matches the frontend constant and the backend property suffix
+    "defaultValue": false,
+    "ttl": "2026-10-25",                  // ISO date — when this flag should be gone
+    "symbols": ["my-flag", "MY_FLAG"]     // grep terms that find every reference
+  },
   "paths": {
     "frontend": ["tools/app-shell/src/lib/my-feature/"],
     "backend":  ["src/com/etendoerp/go/myfeature/"]
@@ -252,6 +260,12 @@ Add an entry to `flags-registry.json`:
   }
 }
 ```
+
+A feature with no `flag` object is a **shipped** feature: touch points and lifecycle
+stop applying (there is nothing to retire and no expiry to miss), while tests,
+coverage and open items keep scoring. Retiring a flag therefore lowers the score
+without deleting the accounting — deleting the whole entry would delete the
+*evidence*, not the debt.
 
 Three things are worth getting right:
 
