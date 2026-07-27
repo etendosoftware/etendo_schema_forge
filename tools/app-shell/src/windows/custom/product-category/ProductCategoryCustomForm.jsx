@@ -55,8 +55,8 @@ export default function ProductCategoryCustomForm({ entity, data, token, apiBase
           <CheckboxGroup
             label={ui('categoryConfiguration')}
             items={[
-              { key: 'default', column: 'IsDefault', label: ui('categoryDefault') },
-              { key: 'summaryLevel', column: 'Issummary', label: ui('categoryGroupable') },
+              { key: 'default', column: 'IsDefault', label: ui('categoryDefault'), required: true },
+              { key: 'summaryLevel', column: 'Issummary', label: ui('categoryGroupable'), required: true },
             ]}
             data={data}
             readOnly={readOnly}
