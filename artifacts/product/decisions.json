@@ -67,7 +67,7 @@
         { "target": "searchKey", "aliases": ["codigo", "código", "sku"] },
         { "target": "name", "aliases": ["nombre"] },
         { "target": "description", "aliases": ["descripcion", "descripción"] },
-        { "target": "price", "aliases": ["precio"] }
+        { "target": "price", "aliases": ["precio"], "label": "Price" }
       ]
     }
   },
