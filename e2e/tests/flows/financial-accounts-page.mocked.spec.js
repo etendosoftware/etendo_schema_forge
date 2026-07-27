@@ -177,3 +177,139 @@ test.describe('Financial Accounts page — Cuentas (T1)', () => {
     expect(page.url()).toBe(urlBefore);
   });
 });
+
+/**
+ * Bulk "Delete selected" — ETP-4656 (Gap 1), E2E smoke.
+ *
+ * FinancialAccountsPage.jsx has no hard-delete endpoint for financial
+ * accounts: bulk delete calls the exact same
+ * `DELETE /sws/neo/financial-account/account/{id}` the single-row "Archivar"
+ * kebab action already uses (soft-archive, IsActive='N') via
+ * `useAccountMutations().archiveAccount`. This is a smoke test proving the
+ * full stack (mocked network -> React render -> user clicks -> toast) works
+ * for the new BulkDeleteSelectionBar + useBatchDeleteDialog pattern — the
+ * exhaustive branch coverage (toolbar swap, selection toggle, cancel, all 3
+ * outcome branches) already lives in
+ * tools/app-shell/src/pages/__tests__/FinancialAccountsPage.handlers.vitest.jsx.
+ *
+ * The mock tracks archived ids in memory so the list mock and the DELETE mock
+ * stay consistent across a reload() triggered by the batch outcome.
+ */
+test.describe('Financial Accounts — bulk delete selection bar (ETP-4656)', () => {
+  /** @type {{ failIds: Set<string> }} */
+  let deleteState;
+  let archivedIds;
+
+  test.beforeEach(async ({ page }) => {
+    deleteState = { failIds: new Set() };
+    archivedIds = new Set();
+
+    await login(page);
+
+    // List endpoint — reflects archivedIds so a reload() after a successful
+    // delete actually drops the row, mirroring the real backend.
+    await page.route('**/sws/neo/financial-accounts-page', async (route) => {
+      const visible = ACCOUNTS.filter((a) => !archivedIds.has(a.id));
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          response: { data: { accounts: visible, summary: SUMMARY } },
+        }),
+      });
+    });
+
+    // DELETE /financial-account/account/{id} — the same soft-archive call the
+    // single-row "Archivar" action makes. Fails only for ids in failIds.
+    await page.route('**/sws/neo/financial-account/account/**', async (route) => {
+      const req = route.request();
+      if (req.method() !== 'DELETE') {
+        route.fallback();
+        return;
+      }
+      const m = req.url().match(/\/account\/([^/?]+)/);
+      const id = decodeURIComponent(m?.[1] ?? '');
+      if (deleteState.failIds.has(id)) {
+        await route.fulfill({
+          status: 500,
+          contentType: 'application/json',
+          body: JSON.stringify({ error: { message: 'boom' } }),
+        });
+        return;
+      }
+      archivedIds.add(id);
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ response: { data: [{ id }] } }),
+      });
+    });
+
+    await page.goto('/finance/accounts');
+    await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
+  });
+
+  test('selecting rows swaps the toolbar for the selection bar with the right count', async ({ page }) => {
+    await expect(page.getByTestId('cuentas-toolbar')).toBeVisible();
+    await expect(page.getByTestId('bulk-delete-selection-bar')).toHaveCount(0);
+
+    await page.getByTestId('account-select-acc-1').click();
+
+    await expect(page.getByTestId('bulk-delete-selection-bar')).toBeVisible();
+    await expect(page.getByTestId('cuentas-toolbar')).toHaveCount(0);
+    await expect(page.getByTestId('bulk-delete-selection-count')).toContainText('1');
+
+    await page.getByTestId('account-select-acc-2').click();
+    await expect(page.getByTestId('bulk-delete-selection-count')).toContainText('2');
+  });
+
+  test('cancel clears the selection and restores the normal toolbar', async ({ page }) => {
+    await page.getByTestId('account-select-acc-1').click();
+    await page.getByTestId('account-select-acc-2').click();
+    await expect(page.getByTestId('bulk-delete-selection-bar')).toBeVisible();
+
+    await page.getByTestId('bulk-delete-selection-cancel').click();
+
+    await expect(page.getByTestId('bulk-delete-selection-bar')).toHaveCount(0);
+    await expect(page.getByTestId('cuentas-toolbar')).toBeVisible();
+    // Checkboxes themselves reset to unchecked once selection state is cleared.
+    await expect(page.getByTestId('account-select-acc-1').locator('input')).not.toBeChecked();
+  });
+
+  test('partial failure: succeeded rows disappear, failed id stays selected, warning toast fires', async ({ page }) => {
+    deleteState.failIds.add('acc-2');
+
+    await page.getByTestId('account-select-acc-1').click();
+    await page.getByTestId('account-select-acc-2').click();
+    await page.getByTestId('bulk-delete-selection-trigger').click();
+
+    // useBatchDeleteDialog renders a confirm dialog before the actual batch runs.
+    await expect(page.getByTestId('DialogContent__batch-delete')).toBeVisible();
+    await page.getByTestId('batch-delete-confirm').click();
+
+    await expect(page.locator('[data-type="warning"]')).toBeVisible({ timeout: 5_000 });
+
+    // acc-1 succeeded -> its row is gone after the reload().
+    await expect(page.getByTestId('account-row-acc-1')).toHaveCount(0);
+    // acc-2 failed -> row stays, and stays selected (bar still shows, count 1).
+    await expect(page.getByTestId('account-row-acc-2')).toBeVisible();
+    await expect(page.getByTestId('bulk-delete-selection-bar')).toBeVisible();
+    await expect(page.getByTestId('bulk-delete-selection-count')).toContainText('1');
+  });
+
+  test('all succeed: selection fully clears, list reloads, success toast fires', async ({ page }) => {
+    await page.getByTestId('account-select-acc-1').click();
+    await page.getByTestId('account-select-acc-3').click();
+    await page.getByTestId('bulk-delete-selection-trigger').click();
+
+    await expect(page.getByTestId('DialogContent__batch-delete')).toBeVisible();
+    await page.getByTestId('batch-delete-confirm').click();
+
+    await expect(page.locator('[data-type="success"]')).toBeVisible({ timeout: 5_000 });
+
+    await expect(page.getByTestId('account-row-acc-1')).toHaveCount(0);
+    await expect(page.getByTestId('account-row-acc-3')).toHaveCount(0);
+    await expect(page.getByTestId('bulk-delete-selection-bar')).toHaveCount(0);
+    await expect(page.getByTestId('cuentas-toolbar')).toBeVisible();
+  });
+});
