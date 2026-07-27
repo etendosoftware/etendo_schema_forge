@@ -605,6 +605,15 @@ WHERE au.ad_client_id = '<NEW_CLIENT_ID>';
 
 ### H1 — Non-System-Administrator roles 404 on `SMFWHE_DEFINEDWEBHOOK_ROLE`-gated webhooks (ETP-4520)
 
+> **Superseded (2026-07-27, later same day):** the fixes below (referencedata seeding, the R16
+> data-fix's former Step 3, `OnboardingWebhookAccessService`/`OnboardingRoleProvisioningService`'s
+> former webhook-grant step) treated the symptom — they made sure a `SMFWHE_DEFINEDWEBHOOK_ROLE`
+> grant existed. The actual fix landed later: `SFListMenu`/`SFWindowAccessMap`/`SFRolesOverview`
+> are now reached through com.etendoerp.go's NEO pseudo-spec bridge (`/sws/neo/*`, see
+> `neo-headless.md` §4.10–4.11) instead of the Webhooks module, so no grant is needed at all — this
+> whole gap class cannot recur for these 3 webhooks. Left below for historical context; the
+> corrective/preventive code this section describes has since been removed as dead weight.
+
 **Symptom:** any authenticated role other than System Administrator (`AD_Role_ID = '0'`) gets a flat `404` from every Schema Forge webhook that requires a `SMFWHE_DEFINEDWEBHOOK_ROLE` grant — `SFListMenu`, `SFWindowAccessMap`, `SFRolesOverview`. Observable symptoms compound in a confusing way because the two callers fail in opposite directions: the sidebar shows the **full, unfiltered** menu (`useRoleMenu()`'s fetch fails → `AppLayout` fails **open** on a fetch error) while **every window** is denied (`fetchWindowAccess`'s fetch fails → `AuthContext`'s `windowAccess` map stays at its fail-**closed** `{}` default → `WindowAccessGuard` blocks everything).
 
 **Root cause:** `SMFWHE_DEFINEDWEBHOOK_ROLE` is the webhook dispatcher's own authorization gate — a role with no row for a given webhook is 404'd by `WebhookServiceHandler` before the webhook's own Java logic (e.g. `NeoAccessHelper.isAdminOrClientAdmin`) ever runs. The per-tenant grants for a client's non-admin roles live in `referencedata/sampledata/<Client>/SMFWHE_DEFINEDWEBHOOK_ROLE.xml` — **reference/sample data, applied only at initial tenant creation, never reapplied by `update.database`/`smartbuild` on an existing install.** Any tenant provisioned before a given webhook's role grants existed in that XML keeps whatever the module's own default seed shipped — observed as `ad_role_id = '0'` only.

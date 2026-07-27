@@ -2,7 +2,19 @@
 -- @gap: H2
 -- @risk: high
 -- @type: sql
--- @description: Clone GOClient's Finance/Sales/Purchasing/Inventory roles (AD_Role + AD_Window_Access) onto the tenant when missing, then grant every active role dispatch access to SFListMenu/SFWindowAccessMap/SFRolesOverview
+-- @description: Clone GOClient's Finance/Sales/Purchasing/Inventory roles (AD_Role + AD_Window_Access) onto the tenant when missing
+
+-- UPDATE (2026-07-27, later same day): this file's original Step 3 (grant every active role a
+-- SMFWHE_DEFINEDWEBHOOK_ROLE row for SFListMenu/SFWindowAccessMap/SFRolesOverview) is REMOVED.
+-- Those 3 webhooks are now reached through com.etendoerp.go's NEO pseudo-spec bridge
+-- (`/sws/neo/{listmenu,windowaccessmap,rolesoverview}`, see neo-headless.md §4.10-4.11) instead of
+-- the Webhooks module's `/webhooks/*` + SMFWHE_DEFINEDWEBHOOK_ROLE grant, so no per-role grant is
+-- needed at all anymore -- the whole H1 gap this file's Step 3 (and OnboardingRoleProvisioningService
+-- /OnboardingWebhookAccessService's onboarding-time equivalents, also removed) existed to paper over
+-- is now moot. Steps 1-2 (role clone + AD_Window_Access backfill, gap H2) are UNCHANGED and still
+-- needed -- that gap is unrelated to webhook transport. Grant rows inserted by a prior run of this
+-- file's old Step 3 are harmless leftovers (the Webhooks module dispatch path still exists and still
+-- honors them), not cleaned up retroactively.
 
 -- Background
 -- --------------------------------------------------------------------------------------------
@@ -26,9 +38,9 @@
 -- GOClient-only and never reapplied to an existing install (see this file's own git history for
 -- the full account of that gap).
 --
--- These are one fix, not two, because H2's role clone and H1's webhook grant compose in a single
--- transaction: once a role is created in Step 1, Step 3's already-tenant-wide (not role-specific)
--- webhook grant automatically covers it too -- no separate wiring needed per newly created role.
+-- These were originally one fix for two gaps, composed in a single transaction (H2's role clone
+-- and H1's webhook grant, the latter via a former Step 3 -- see the UPDATE note at the top of this
+-- file for why it was removed). Only H2 (role clone + AD_Window_Access backfill) remains here now.
 --
 -- Window ids are safe to copy verbatim: AD_Window is a system-level entity (ad_client_id = '0'
 -- for every row, verified directly against this DB), so a window id means the same thing on
@@ -51,35 +63,33 @@
 --
 -- Idempotency
 -- --------------------------------------------------------------------------------------------
--- @check returns >=1 row when the tenant is missing one of the 4 roles, missing an
--- AD_Window_Access row that role's GOClient counterpart has, or missing a webhook grant.
--- @apply's three steps are each independently NOT-EXISTS-guarded, so a re-run (or a tenant with a
--- partially-applied prior run) only inserts what's still missing. Step 2 and Step 3 both re-read
--- ad_role for :client_id AFTER Step 1, in the same transaction, so newly created roles are
--- immediately visible to them.
+-- @check returns >=1 row when the tenant is missing one of the 4 roles, or missing an
+-- AD_Window_Access row that role's GOClient counterpart has. @apply's two remaining steps are
+-- each independently NOT-EXISTS-guarded, so a re-run (or a tenant with a partially-applied prior
+-- run) only inserts what's still missing. Step 2 re-reads ad_role for :client_id AFTER Step 1, in
+-- the same transaction, so newly created roles are immediately visible to it.
 --
 -- Preventive twin (new tenants born correct -- no CUT bump)
 -- --------------------------------------------------------------------------------------------
--- Implemented (2026-07-27), folded into this SAME branch (feature/ETP-4520) rather than a
--- separate ETP-4515 branch: com.etendoerp.go's OnboardingRoleProvisioningService, wired into
--- EtendoGoJwtServlet's onboarding chain right after the existing ensureWebhookAccess step. Same
--- GOClient-as-template logic as this file's three steps (role clone, AD_Window_Access backfill,
--- webhook grant) -- a tenant onboarded from here on gets all of it natively, no corrective run
--- needed. NOT YET compiled or run against a live onboarding flow as of this writing -- code exists
--- on this branch, unverified -- see santo_roles_handoff_phase7.md for that status.
+-- com.etendoerp.go's OnboardingRoleProvisioningService, wired into EtendoGoJwtServlet's onboarding
+-- chain, clones the same 4 GOClient roles (+ AD_Window_Access) for every newly onboarded tenant --
+-- same GOClient-as-template logic as Steps 1-2 above, so a tenant onboarded from here on needs no
+-- corrective run for gap H2 at all. It no longer also grants webhook access (that step was removed
+-- along with this file's own former Step 3 -- see the UPDATE note at the top of this file).
 --
 -- ONBOARDING_PROVISIONED_THROUGH (OnboardingBaselineService, currently 2026-07-08T10:00:00Z) is
 -- intentionally NOT bumped, same reasoning as R14 (20260716T120000Z__R14-payment-method-
 -- multicurrency.sql): this fix's own @check already resolves to SKIPPED_NOT_NEEDED for any tenant
--- that already has the 4 roles + window access + webhook grants, whether it got them from
+-- that already has the 4 roles + window access, whether it got them from
 -- OnboardingRoleProvisioningService or any other path -- the CUT would only save the runner the
 -- cost of evaluating that @check, not change correctness. Bump it only if the team later wants
 -- the baseline to explicitly reflect this capability being onboarding-native.
 
 -- @check
--- Returns >=1 row when ANY of: a role name is missing, an existing role of that name is missing
--- an AD_Window_Access row its GOClient counterpart has, or an active role is missing a webhook
--- grant. 0 rows => SKIPPED_NOT_NEEDED, @apply never runs.
+-- Returns >=1 row when a role name is missing, or an existing role of that name is missing an
+-- AD_Window_Access row its GOClient counterpart has. 0 rows => SKIPPED_NOT_NEEDED, @apply never
+-- runs. (The former third clause, checking for a missing webhook grant, was removed along with
+-- Step 3 -- see the UPDATE note above.)
 SELECT 1
 FROM (VALUES ('Finance'), ('Sales'), ('Purchasing'), ('Inventory')) AS want(name)
 WHERE NOT EXISTS (
@@ -97,21 +107,6 @@ WHERE src.ad_client_id = '802509E12436405C86BA1FD5B1DF508C'
     WHERE x.ad_role_id = tgt.ad_role_id
       AND x.ad_window_id = swa.ad_window_id
       AND x.isactive = 'Y'
-  )
-UNION ALL
-SELECT 1
-FROM ad_role r
-CROSS JOIN smfwhe_definedwebhook w
-WHERE r.ad_client_id = :client_id
-  AND r.isactive = 'Y'
-  AND w.ad_client_id = '0'
-  AND w.name IN ('SFListMenu', 'SFWindowAccessMap', 'SFRolesOverview')
-  AND w.isactive = 'Y'
-  AND NOT EXISTS (
-    SELECT 1 FROM smfwhe_definedwebhook_role wr
-    WHERE wr.ad_role_id = r.ad_role_id
-      AND wr.smfwhe_definedwebhook_id = w.smfwhe_definedwebhook_id
-      AND wr.isactive = 'Y'
   )
 LIMIT 1;
 
@@ -158,31 +153,4 @@ WHERE src.ad_client_id = '802509E12436405C86BA1FD5B1DF508C'
     WHERE x.ad_role_id = tgt.ad_role_id
       AND x.ad_window_id = swa.ad_window_id
       AND x.isactive = 'Y'
-  );
-
--- Step 3 -- one SMFWHE_DEFINEDWEBHOOK_ROLE row per (active tenant role, webhook) pair still
--- missing, for EVERY active role of the tenant (not just the 4 above) -- covers the tenant's own
--- admin-equivalent role plus anything else it already had. PKs minted per row with get_uuid()
--- since the row count varies per tenant. ad_org_id '0' matches every existing row for this table.
-INSERT INTO smfwhe_definedwebhook_role (
-  smfwhe_definedwebhook_role_id, ad_client_id, ad_org_id, isactive,
-  created, createdby, updated, updatedby,
-  ad_role_id, smfwhe_definedwebhook_id, ad_module_id
-)
-SELECT
-  get_uuid(), :client_id, '0', 'Y',
-  now(), '0', now(), '0',
-  r.ad_role_id, w.smfwhe_definedwebhook_id, w.ad_module_id
-FROM ad_role r
-CROSS JOIN smfwhe_definedwebhook w
-WHERE r.ad_client_id = :client_id
-  AND r.isactive = 'Y'
-  AND w.ad_client_id = '0'
-  AND w.name IN ('SFListMenu', 'SFWindowAccessMap', 'SFRolesOverview')
-  AND w.isactive = 'Y'
-  AND NOT EXISTS (
-    SELECT 1 FROM smfwhe_definedwebhook_role wr
-    WHERE wr.ad_role_id = r.ad_role_id
-      AND wr.smfwhe_definedwebhook_id = w.smfwhe_definedwebhook_id
-      AND wr.isactive = 'Y'
   );

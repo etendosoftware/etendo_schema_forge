@@ -189,7 +189,7 @@ Any authenticated route can also be opened with `?embedded=1`; in that mode the 
 
 - **User goal / entry point:** View GOClient's 5 fixed roles, their assigned-user counts, and which Etendo GO windows each one can reach, at `/roles`.
 - **Main path behavior:**
-  - `RolesOverviewPage` fetches `GET /webhooks/SFRolesOverview` on mount and on manual refresh (`fetchRolesOverview` in `tools/app-shell/src/lib/rolesApi.js`).
+  - `RolesOverviewPage` fetches `GET /sws/neo/rolesoverview` (NEO pseudo-spec bridge — see `com.etendoerp.go/docs/neo-headless.md` §4.10) on mount and on manual refresh (`fetchRolesOverview` in `tools/app-shell/src/lib/rolesApi.js`).
   - Each of the 5 roles renders as its own card: a curated, i18n-keyed name/description (`ROLE_I18N` map — `roleNameGoClientAdmin`/`roleDescGoClientAdmin`, etc., never the backend's raw `AD_Role.description`), a user-count badge, and a badge per reachable window (filled "full" tier vs. outlined "read-only" tier, per `w.tier`).
   - A role with no reachable windows shows a placeholder dash instead of an empty chip row.
   - "Edit" always opens a "coming soon" dialog — there is no create/delete affordance anywhere on the page; this is a read-only view.
