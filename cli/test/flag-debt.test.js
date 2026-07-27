@@ -24,6 +24,7 @@ import {
   parseUncoveredLines,
   collectCoverage,
   scoreLifecycle,
+  scoreDeferredItems,
   scoreFlag,
   buildReport,
   renderConsole,
@@ -62,7 +63,7 @@ const FLAG = {
   ttl: '2026-10-25',
   defaultValue: false,
   symbols: ['tenant-upgrade', 'TENANT_UPGRADE'],
-  paths: { frontend: ['app/upgrade/'] },
+  paths: { frontend: ['app/upgrade/'], backend: ['src/payment/'] },
   testSpecs: {
     unit: [{ root: 'frontend', path: 'app/__tests__/upgrade.test.js' }],
     e2e: [{ root: 'frontend', path: 'e2e/upgrade.spec.js', expected: true }],
@@ -78,9 +79,14 @@ function registryFile(flags = [FLAG]) {
   };
 }
 
-function context({ flags = [FLAG], backend = null } = {}) {
+/**
+ * `backend` defaults to the NESTED module root, mirroring the real repo where
+ * the backend checkout sits inside the frontend one. Pass `{ backend: null }`
+ * for the cases that are specifically about an unavailable root.
+ */
+function context({ flags = [FLAG], backend = undefined } = {}) {
   return {
-    roots: { frontend: root, backend },
+    roots: { frontend: root, backend: backend === undefined ? join(root, 'modules/backend') : backend },
     frameworkPaths: registryFile(flags).conventions.frameworkPaths,
     repoRoot: root,
     now: NOW,
@@ -111,6 +117,10 @@ before(() => {
   write('node_modules/pkg/index.js', 'const x = "tenant-upgrade";\n');
   write('app/upgrade/generated/out.js', 'const x = "tenant-upgrade";\n');
   write('app/image.png', 'tenant-upgrade');
+
+  // A nested root: the backend module lives INSIDE the frontend root. Its own
+  // owned file must not be counted a second time as a frontend touch point.
+  write('modules/backend/src/payment/Paywall.java', '// tenant-upgrade paywall\n');
 
   writeFileSync(join(root, REGISTRY_FILENAME), JSON.stringify(registryFile(), null, 2));
 });
@@ -144,8 +154,15 @@ describe('resolveRoots', () => {
     assert.equal(resolveRoots(registryFile(), { repoRoot: root, env: {} }).frontend, root);
   });
 
-  it('reports a missing backend instead of failing', () => {
+  it('resolves a declared backend that exists on disk', () => {
     const resolved = resolveRoots(registryFile(), { repoRoot: root, env: {} });
+    assert.equal(resolved.backend, join(root, 'modules/backend'));
+    assert.equal(resolved.backendUnavailableReason, null);
+  });
+
+  it('reports a missing backend instead of failing', () => {
+    const absent = { ...registryFile(), roots: { frontend: '.', backend: 'modules/absent' } };
+    const resolved = resolveRoots(absent, { repoRoot: root, env: {} });
     assert.equal(resolved.backend, null);
     assert.match(resolved.backendUnavailableReason, /backend module not found/);
   });
@@ -172,6 +189,18 @@ describe('walkFiles', () => {
 
   it('returns nothing for a directory that does not exist', () => {
     assert.deepEqual([...walkFiles(join(root, 'nope'))], []);
+  });
+
+  it('blocks an absolute directory named in skipPaths', () => {
+    const nested = join(root, 'modules/backend');
+    assert.ok([...walkFiles(root)].some(f => f.includes('Paywall.java')),
+      'precondition: the nested file is walked by default');
+    assert.ok(![...walkFiles(root, { skipPaths: [nested] })].some(f => f.includes('Paywall.java')));
+  });
+
+  it('leaves everything outside skipPaths alone', () => {
+    const found = [...walkFiles(root, { skipPaths: [join(root, 'modules/backend')] })];
+    assert.ok(found.includes('app/routes.jsx'));
   });
 });
 
@@ -267,9 +296,26 @@ describe('dimension 1 — touch points', () => {
   });
 
   it('records which roots it could and could not scan', () => {
-    const touchPoints = collectTouchPoints(FLAG, context());
+    const touchPoints = collectTouchPoints(FLAG, context({ backend: null }));
     assert.deepEqual(touchPoints.scannedRoots, ['frontend']);
     assert.deepEqual(touchPoints.skippedRoots, ['backend']);
+  });
+
+  // Roots nest: the backend module sits inside the repo. Without the skip, its
+  // owned files are visited twice — once correctly under their own root, and
+  // once under the outer root where the backend's owned-path declarations do
+  // not apply, turning owned code into a phantom touch point.
+  it('does not charge a nested root\'s owned file as an outer-root touch point', () => {
+    const paths = collectTouchPoints(FLAG, context()).files.map(f => f.path);
+    assert.ok(!paths.some(p => p.includes('Paywall.java')),
+      `nested backend file leaked into the frontend touch points: ${paths.join(', ')}`);
+    assert.deepEqual(paths.sort(), ['app/menu.jsx', 'app/routes.jsx']);
+  });
+
+  it('does charge it when that root is not declared — the skip is what prevents it', () => {
+    const paths = collectTouchPoints(FLAG, context({ backend: null })).files.map(f => f.path);
+    assert.ok(paths.some(p => p.includes('Paywall.java')),
+      'expected the undeclared nested file to be walked as ordinary frontend source');
   });
 });
 
@@ -386,7 +432,7 @@ describe('dimension 2 — declared test specs', () => {
       ...FLAG,
       testSpecs: { unit: [{ root: 'backend', path: 'src-test/Foo.java' }], e2e: [] },
     };
-    const spec = checkTestSpecs(backendSpec, context()).kinds.unit.specs[0];
+    const spec = checkTestSpecs(backendSpec, context({ backend: null })).kinds.unit.specs[0];
     assert.equal(spec.unverifiable, true);
     assert.equal(spec.exists, false);
   });
@@ -487,13 +533,157 @@ describe('dimension 4 — lifecycle', () => {
   });
 });
 
+describe('dimension 5 — deferred open items', () => {
+  const item = (overrides = {}) => ({ id: 'an-item', ...overrides });
+  const score = (...items) => scoreDeferredItems({ ...FLAG, deferredItems: items });
+
+  describe('kind', () => {
+    it('charges each declared kind its own rate', () => {
+      assert.equal(score(item({ kind: 'precondition' })).points, POINTS.deferredItemKind.precondition);
+      assert.equal(score(item({ kind: 'open' })).points, POINTS.deferredItemKind.open);
+      assert.equal(score(item({ kind: 'cosmetic' })).points, POINTS.deferredItemKind.cosmetic);
+    });
+
+    it('keeps cosmetic non-zero, so it cannot become a free bucket', () => {
+      assert.ok(POINTS.deferredItemKind.cosmetic > 0);
+    });
+
+    it('anchors a precondition at the cost of one untested unit', () => {
+      assert.equal(POINTS.deferredItemKind.precondition, POINTS.missingUnitSpecs);
+    });
+
+    it('defaults an item with no kind to open, and labels it so', () => {
+      const { items, points } = score(item());
+      assert.equal(items[0].kind, 'open');
+      assert.equal(points, POINTS.deferredItemKind.open);
+    });
+
+    it('falls back to the open rate for an unrecognised kind', () => {
+      assert.equal(score(item({ kind: 'invented' })).points, POINTS.deferredItemKind.open);
+    });
+  });
+
+  describe('breadth', () => {
+    const components = n => Array.from({ length: n }, (_, i) => ({ id: `c${i}`, note: `note ${i}` }));
+
+    it('charges one point per component beyond the first', () => {
+      // The real-payment-readiness shape: a precondition bundling seven components.
+      const { points } = score(item({ kind: 'precondition', components: components(7) }));
+      assert.equal(points, POINTS.deferredItemKind.precondition + 6 * POINTS.perExtraDeferredComponent);
+      assert.equal(points, 11);
+    });
+
+    it('adds nothing for a single component', () => {
+      assert.equal(score(item({ kind: 'open', components: components(1) })).points,
+        POINTS.deferredItemKind.open);
+    });
+
+    it('adds nothing for no components at all', () => {
+      assert.equal(score(item({ kind: 'open', components: [] })).points, POINTS.deferredItemKind.open);
+      assert.equal(score(item({ kind: 'open' })).points, POINTS.deferredItemKind.open);
+    });
+
+    it('makes a bundle of eight cost more than a bundle of one', () => {
+      const one = score(item({ kind: 'open', components: components(1) })).points;
+      const eight = score(item({ kind: 'open', components: components(8) })).points;
+      assert.ok(eight > one, 'breadth must show up in the score');
+    });
+  });
+
+  describe('explicit points override', () => {
+    it('replaces the formula and records that it was declared', () => {
+      const { items, points } = score(item({ kind: 'cosmetic', components: [{ id: 'a' }, { id: 'b' }], points: 42 }));
+      assert.equal(points, 42);
+      assert.equal(items[0].pointsOverridden, true);
+    });
+
+    it('honours an explicit zero, which truthiness would have discarded', () => {
+      const { items, points } = score(item({ kind: 'precondition', points: 0 }));
+      assert.equal(points, 0);
+      assert.equal(items[0].pointsOverridden, true);
+    });
+
+    it('marks a formula-scored item as not overridden', () => {
+      assert.equal(score(item({ kind: 'open' })).items[0].pointsOverridden, false);
+    });
+  });
+
+  describe('normalisation', () => {
+    it('fills in the optional fields rather than leaving them undefined', () => {
+      const { items } = score(item({ components: [{ id: 'c1' }] }));
+      assert.deepEqual(items[0].components, [{ id: 'c1', note: '', ref: null }]);
+      assert.deepEqual(items[0].refs, []);
+      assert.equal(items[0].note, '');
+    });
+
+    it('preserves declared notes and refs', () => {
+      const { items } = score(item({
+        note: 'why it is deferred',
+        refs: ['docs/feature-flags.md'],
+        components: [{ id: 'c1', note: 'detail', ref: 'file.java:1' }],
+      }));
+      assert.equal(items[0].note, 'why it is deferred');
+      assert.deepEqual(items[0].refs, ['docs/feature-flags.md']);
+      assert.deepEqual(items[0].components[0], { id: 'c1', note: 'detail', ref: 'file.java:1' });
+    });
+  });
+
+  describe('totals', () => {
+    it('scores nothing when the flag declares no deferred items', () => {
+      assert.deepEqual(scoreDeferredItems({ ...FLAG, deferredItems: [] }), { items: [], points: 0 });
+      assert.deepEqual(scoreDeferredItems({ ...FLAG }), { items: [], points: 0 });
+    });
+
+    it('sums across items', () => {
+      // The live registry's shape: two preconditions (one bundling seven
+      // components) plus one cosmetic.
+      const { items, points } = score(
+        item({ id: 'targeting-key-divergence', kind: 'precondition' }),
+        item({
+          id: 'real-payment-readiness',
+          kind: 'precondition',
+          components: Array.from({ length: 7 }, (_, i) => ({ id: `c${i}` })),
+        }),
+        item({ id: 'plan-badge-in-env-picker', kind: 'cosmetic' })
+      );
+      assert.equal(items.length, 3);
+      assert.equal(points, 5 + 11 + 1);
+      assert.equal(points, 17);
+    });
+  });
+
+  it('is pure — it needs no context, no filesystem and no clock', () => {
+    // Called with the flag alone, so a caller cannot accidentally make the
+    // score depend on when or where it ran.
+    assert.equal(scoreDeferredItems.length, 1);
+    assert.deepEqual(score(item({ kind: 'open' })), score(item({ kind: 'open' })));
+  });
+});
+
 describe('scoreFlag and buildReport', () => {
-  it('sums every dimension into the total', () => {
+  it('sums every dimension into the total, deferred items included', () => {
     const score = scoreFlag(FLAG, context());
     assert.equal(
       score.total,
-      score.touchPoints.points + score.tests.points + score.coverage.points + score.lifecycle.points
+      score.touchPoints.points + score.tests.points + score.coverage.points
+        + score.lifecycle.points + score.deferred.points
     );
+  });
+
+  it('exposes deferred as a {items, points} object, not a bare array', () => {
+    const score = scoreFlag(FLAG, context());
+    assert.ok(!Array.isArray(score.deferred), 'deferred is the scored object now');
+    assert.deepEqual(Object.keys(score.deferred).sort(), ['items', 'points']);
+    assert.equal(score.deferredItems, undefined, 'the unscored deferredItems array is gone');
+  });
+
+  it('moves the total when a deferred item is added', () => {
+    const before = scoreFlag(FLAG, context()).total;
+    const after = scoreFlag(
+      { ...FLAG, deferredItems: [{ id: 'x', kind: 'precondition' }] },
+      context()
+    ).total;
+    assert.equal(after - before, POINTS.deferredItemKind.precondition);
   });
 
   it('carries the flag metadata through untouched', () => {
@@ -530,10 +720,73 @@ describe('rendering', () => {
 
   it('renders every dimension and a summary row in the console output', () => {
     const output = renderConsole(report);
-    for (const fragment of ['tenant-upgrade', 'touch points', 'tests', 'coverage', 'lifecycle', 'TOTAL']) {
+    for (const fragment of ['tenant-upgrade', 'touch points', 'tests', 'coverage', 'lifecycle', 'OPEN', 'TOTAL']) {
       assert.ok(output.includes(fragment), `expected the output to mention "${fragment}"`);
     }
     assert.ok(output.includes('Report only'), 'v0 must say it never fails a build');
+  });
+
+  describe('deferred open items', () => {
+    const DEFERRED = [
+      { id: 'targeting-key-divergence', kind: 'precondition', note: 'Bucketing differs.', refs: ['docs/feature-flags.md'] },
+      { id: 'real-payment-readiness', kind: 'precondition', components: [{ id: 'pci', note: 'PCI scope', ref: 'a.java:1' }, { id: 'refunds' }] },
+      { id: 'plan-badge-in-env-picker', kind: 'cosmetic', points: 1 },
+    ];
+    const deferredFlag = { ...FLAG, deferredItems: DEFERRED };
+    const deferredReport = () => buildReport(
+      registryFile([deferredFlag]),
+      context({ flags: [deferredFlag] })
+    );
+
+    it('attributes points per item rather than only in the total', () => {
+      const output = renderConsole(deferredReport());
+      assert.match(output, /open items/);
+      for (const { id } of DEFERRED) {
+        assert.ok(output.includes(id), `expected the breakdown to name "${id}"`);
+      }
+      assert.match(output, /\[precondition\] targeting-key-divergence — 5 pts/);
+      assert.match(output, /\[precondition\] real-payment-readiness — 6 pts/);
+    });
+
+    it('labels an item whose points were declared rather than derived', () => {
+      assert.match(renderConsole(deferredReport()), /\[cosmetic\] plan-badge-in-env-picker — 1 pt, declared/);
+    });
+
+    it('uses the singular unit for a one-point item', () => {
+      const output = renderConsole(deferredReport());
+      assert.ok(output.includes('1 pt,'), 'a single point should not read "1 pts"');
+    });
+
+    it('lists each component under its parent item', () => {
+      const output = renderConsole(deferredReport());
+      assert.ok(output.includes('· pci'));
+      assert.ok(output.includes('· refunds'));
+      assert.ok(output.includes('ref: a.java:1'));
+    });
+
+    it('omits the block entirely when a flag defers nothing', () => {
+      assert.ok(!renderConsole(report).includes('open items'));
+    });
+
+    it('shows the deferred points in the summary row and the total', () => {
+      const scored = deferredReport().flags[0];
+      assert.equal(scored.deferred.points, 5 + 6 + 1);
+      const output = renderConsole(deferredReport());
+      assert.ok(output.includes(String(scored.total)));
+    });
+
+    it('renders the items in the HTML report too', () => {
+      const html = renderHtml(deferredReport());
+      assert.ok(html.includes('Open items'));
+      assert.ok(html.includes('targeting-key-divergence'));
+    });
+
+    it('escapes a deferred note so it cannot inject markup', () => {
+      const hostile = { ...FLAG, deferredItems: [{ id: 'x', kind: 'open', note: '<img src=x onerror=alert(1)>' }] };
+      const html = renderHtml(buildReport(registryFile([hostile]), context({ flags: [hostile] })));
+      assert.ok(!html.includes('<img src=x'));
+      assert.ok(html.includes('&lt;img'));
+    });
   });
 
   it('names the missing spec so it can be acted on', () => {
