@@ -6,6 +6,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Users, RefreshCw, ShieldAlert } from 'lucide-react';
 import { useUI } from '@/i18n';
 import { fetchRolesOverview } from '@/lib/rolesApi.js';
+import { ROLE_NAME_I18N_KEYS, ADMIN_NAME_I18N_KEY } from '@/lib/roleNameI18n.js';
 
 /**
  * Shared centered "status" card wrapper for the error and no-access states below — both were
@@ -46,15 +47,21 @@ function StatusCard({ testId, className, children }) {
  * doesn't recognize (a name Etendo Go doesn't know about, which should never happen for the 4
  * fixed roles, but keeps the page from showing a blank description if that ever changes).
  */
-const ROLE_NAME_I18N = {
-  Finance: { nameKey: 'roleNameFinance', descKey: 'roleDescFinance' },
-  Sales: { nameKey: 'roleNameSales', descKey: 'roleDescSales' },
-  Purchasing: { nameKey: 'roleNamePurchasing', descKey: 'roleDescPurchasing' },
-  Inventory: { nameKey: 'roleNameInventory', descKey: 'roleDescInventory' },
+const ROLE_DESC_I18N_KEYS = {
+  Finance: 'roleDescFinance',
+  Sales: 'roleDescSales',
+  Purchasing: 'roleDescPurchasing',
+  Inventory: 'roleDescInventory',
 };
 
+const ROLE_NAME_I18N = Object.fromEntries(
+  Object.entries(ROLE_NAME_I18N_KEYS).map(([name, nameKey]) => (
+    [name, { nameKey, descKey: ROLE_DESC_I18N_KEYS[name] }]
+  ))
+);
+
 /** Generic copy for the client-admin role, identified by `role.isClientAdmin`, never its name. */
-const ADMIN_I18N = { nameKey: 'roleNameAdmin', descKey: 'roleDescAdmin' };
+const ADMIN_I18N = { nameKey: ADMIN_NAME_I18N_KEY, descKey: 'roleDescAdmin' };
 
 /**
  * Read-only "Configuración > Roles" page (ETP-4513). Lists the tenant's 5 fixed roles with a
@@ -91,7 +98,7 @@ export default function RolesOverviewPage() {
   }, [load]);
 
   return (
-    <div className="space-y-6 p-6" data-testid="RolesOverviewPage">
+    <div className="h-full overflow-y-auto space-y-6 p-6" data-testid="RolesOverviewPage">
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-2xl font-bold tracking-tight">{ui('rolesPageTitle')}</h2>
