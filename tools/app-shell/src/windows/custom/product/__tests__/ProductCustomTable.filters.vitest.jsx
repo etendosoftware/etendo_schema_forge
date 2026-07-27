@@ -56,4 +56,20 @@ describe('ProductCustomTable — Advanced Filter fields (ETP-4609)', () => {
     expect(combinedCol.column).toBeUndefined();
     expect(combinedCol.backendFilterKey).toBeUndefined();
   });
+
+  // ETP-4609 — regression: ListView.jsx declares its own `hiddenColumns = []`
+  // default prop and forwards it to whatever custom Table component the window
+  // wires in (here, ProductCustomTable — see ListView.jsx ~line 238 / ~line 930).
+  // ProductCustomTable spreads `{...props}` AFTER its own local
+  // `hiddenColumns={hiddenColumns}`, so ListView's empty-array default silently
+  // overwrites the intended `['name', 'searchKey']` override — the split
+  // name/searchKey filter columns end up rendered as visible grid columns,
+  // duplicating what the `nameAndSearchKey` avatar cell already shows.
+  it('keeps its own hiddenColumns override even when the parent (ListView) '
+    + 'forwards its own conflicting hiddenColumns prop', () => {
+    // Mimics exactly what ListView.jsx spreads into the Table component: an
+    // explicit (default) empty array, not an absent prop.
+    render(<ProductCustomTable data={[]} hiddenColumns={[]} />);
+    expect(capturedProps.hiddenColumns).toEqual(expect.arrayContaining(['name', 'searchKey']));
+  });
 });
