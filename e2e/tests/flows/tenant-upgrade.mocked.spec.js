@@ -1,0 +1,272 @@
+import { test, expect } from '@playwright/test';
+import { login } from '../helpers/auth.js';
+
+/**
+ * Tenant upgrade (`tenant-upgrade` flag) — smoke (mocked). ETP-4686.
+ *
+ * Covers the flag-gated menu entry, the mock checkout, the NDJSON provisioning
+ * stream and the two failure paths (client-side decline, backend 402 paywall).
+ *
+ * Mock mode only: every route here is installed on top of the generic `/sws/**`
+ * stub that `login()` seeds, so no backend is needed. Playwright matches routes
+ * in reverse registration order, so these specific routes win.
+ *
+ * ## Running this spec
+ *
+ * The flag is read from `import.meta.env.VITE_FEATURE_FLAGS`, which Vite bakes
+ * in when the dev server starts — it cannot be flipped per test. So the two
+ * flag-dependent tests are selected by `E2E_TENANT_UPGRADE_FLAG`, and the suite
+ * is run once per flag state against a matching dev server:
+ *
+ *   # flag off (default) — the regression guard
+ *   npx vite --port 3101
+ *   E2E_USE_MOCK=1 BASE_URL=http://localhost:3101 \
+ *     npx playwright test tests/flows/tenant-upgrade.mocked.spec.js --project=mocked
+ *
+ *   # flag on
+ *   VITE_FEATURE_FLAGS='{"tenant-upgrade":true}' npx vite --port 3102
+ *   E2E_USE_MOCK=1 BASE_URL=http://localhost:3102 E2E_TENANT_UPGRADE_FLAG=on \
+ *     npx playwright test tests/flows/tenant-upgrade.mocked.spec.js --project=mocked
+ *
+ * Everything except the menu entry runs in both states, because `/upgrade` is
+ * registered unconditionally — the flag gates the entry point, not the route
+ * (see `docs/feature-flags.md`, rule 3). Collapsing this to a single run needs a
+ * runtime override seam in `lib/flags/bootstrap.js`; see the spec's Jira notes.
+ */
+
+const FLAG_ON = process.env.E2E_TENANT_UPGRADE_FLAG === 'on';
+
+/** Matches `createMockPaymentToken()` — lowercase hex is part of the backend contract. */
+const PAID_TOKEN_PATTERN = /^mock-paid-[0-9a-f]+$/;
+
+const DECLINE_CARD = '4000000000000002';
+const GOOD_CARD = '4242424242424242';
+/** Well past today; a card is valid through the last day of its expiry month. */
+const FUTURE_EXPIRY = '12/30';
+
+const EXISTING_TENANT = 'Acme Trial';
+const EXISTING_ENVIRONMENTS = [
+  { clientName: EXISTING_TENANT, adminUserId: 'user-1', adminUserName: 'admin', plan: 'free' },
+];
+
+const PROVISIONING_STEPS = ['setup', 'client', 'organization', 'dataset', 'sequences', 'finalize'];
+
+/** Builds the NDJSON body the onboarding endpoint streams back. */
+function ndjsonBody({ success = true } = {}) {
+  const lines = [];
+  for (const step of PROVISIONING_STEPS) {
+    lines.push(JSON.stringify({ type: 'progress', step, status: 'in_progress' }));
+    lines.push(JSON.stringify({ type: 'progress', step, status: 'done', ms: 10 }));
+  }
+  lines.push(JSON.stringify({ type: 'result', success, clientName: 'Acme Productive' }));
+  return `${lines.join('\n')}\n`;
+}
+
+/**
+ * Seeds the account-level token `getPlatformToken()` reads. `login()` only seeds
+ * the ERP session token, and tenant creation authenticates with the platform one.
+ */
+async function seedPlatformToken(page) {
+  await page.addInitScript(() => {
+    localStorage.setItem('sf_platform_token', 'e2e-platform-token');
+  });
+}
+
+async function installEnvironmentsMock(page, environments) {
+  await page.route('**/sws/go/environments**', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ environments }),
+    });
+  });
+}
+
+/**
+ * Mocks the onboarding endpoint and records every request body it receives, so
+ * a test can assert both what was sent and that nothing was sent at all.
+ */
+async function installOnboardingMock(page, { status = 200, success = true } = {}) {
+  const requests = [];
+  await page.route('**/sws/go/onboarding**', async (route) => {
+    const request = route.request();
+    if (request.method() !== 'POST') return route.fallback();
+
+    requests.push(JSON.parse(request.postData() || '{}'));
+
+    if (status === 402) {
+      return route.fulfill({
+        status: 402,
+        contentType: 'application/json',
+        body: JSON.stringify({ error: 'payment_required', message: 'Payment is required' }),
+      });
+    }
+    return route.fulfill({
+      status: 200,
+      contentType: 'application/x-ndjson',
+      body: ndjsonBody({ success }),
+    });
+  });
+  return requests;
+}
+
+async function fillCheckout(page, { tenantName, cardNumber = GOOD_CARD }) {
+  await page.getByTestId('upgrade-tenant-name').fill(tenantName);
+  await page.getByTestId('upgrade-cardholder').fill('Ada Lovelace');
+  await page.getByTestId('upgrade-card-number').fill(cardNumber);
+  await page.getByTestId('upgrade-expiry').fill(FUTURE_EXPIRY);
+  await page.getByTestId('upgrade-cvc').fill('123');
+}
+
+async function gotoUpgrade(page) {
+  await page.goto('/upgrade');
+  await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
+}
+
+test.describe('Tenant upgrade — flag gating of the menu entry', () => {
+  test.beforeEach(async ({ page }) => {
+    await seedPlatformToken(page);
+    await login(page);
+  });
+
+  test('flag off: the user menu offers no upgrade entry', async ({ page }) => {
+    test.skip(FLAG_ON, 'Requires a dev server started without VITE_FEATURE_FLAGS');
+
+    await page.getByTestId('topbar-user-menu').click();
+    // Assert the menu actually opened, so an absent entry cannot be a false pass.
+    await expect(page.getByTestId('user-menu-logout')).toBeVisible();
+    await expect(page.getByTestId('menu-tenant-upgrade')).toHaveCount(0);
+  });
+
+  test('flag on: the entry is offered and opens the upgrade page', async ({ page }) => {
+    test.skip(!FLAG_ON, 'Requires a dev server started with VITE_FEATURE_FLAGS tenant-upgrade=true');
+
+    await page.getByTestId('topbar-user-menu').click();
+    await expect(page.getByTestId('user-menu-logout')).toBeVisible();
+
+    const entry = page.getByTestId('menu-tenant-upgrade');
+    await expect(entry).toBeVisible();
+    await entry.click();
+
+    await expect(page).toHaveURL(/\/upgrade$/);
+    await expect(page.getByTestId('upgrade-plan-productive')).toBeVisible();
+  });
+});
+
+test.describe('Tenant upgrade — checkout and provisioning', () => {
+  test.beforeEach(async ({ page }) => {
+    await seedPlatformToken(page);
+    await login(page);
+    await installEnvironmentsMock(page, EXISTING_ENVIRONMENTS);
+  });
+
+  test('happy path: checkout streams provisioning progress and reaches success', async ({ page }) => {
+    const requests = await installOnboardingMock(page);
+    await gotoUpgrade(page);
+
+    // Both plans are compared before any payment detail is asked for.
+    await expect(page.getByTestId('upgrade-plan-free')).toBeVisible();
+    await expect(page.getByTestId('upgrade-plan-productive')).toBeVisible();
+    await expect(page.getByTestId('upgrade-checkout')).toBeVisible();
+
+    await fillCheckout(page, { tenantName: 'Acme Productive' });
+    await page.getByTestId('upgrade-submit').click();
+
+    // Every streamed step is rendered, then the success panel replaces the form.
+    await expect(page.getByTestId('upgrade-progress-step-finalize')).toBeVisible();
+    await expect(page.getByTestId('upgrade-success')).toBeVisible();
+    await expect(page.getByTestId('upgrade-checkout')).toHaveCount(0);
+
+    // The mock charge minted a token in the shape the backend accepts.
+    expect(requests).toHaveLength(1);
+    expect(requests[0].clientName).toBe('Acme Productive');
+    expect(requests[0].paymentToken).toMatch(PAID_TOKEN_PATTERN);
+
+    // Tenant selection happens at sign-in, so success routes to /logout. That
+    // route signs the user out and hands off to its safeDestination
+    // (/onboarding), so assert the sign-out actually happened rather than just
+    // the intermediate URL, which the router never rests on.
+    await page.getByTestId('upgrade-success-continue').click();
+    await expect(page).toHaveURL(/\/onboarding$/);
+    await expect
+      .poll(() => page.evaluate(() => localStorage.getItem('sf_auth_token')))
+      .toBeNull();
+  });
+
+  test('declined test card fails client-side and never reaches the backend', async ({ page }) => {
+    const requests = await installOnboardingMock(page);
+    await gotoUpgrade(page);
+
+    await fillCheckout(page, { tenantName: 'Acme Productive', cardNumber: DECLINE_CARD });
+    await page.getByTestId('upgrade-submit').click();
+
+    await expect(page.getByTestId('upgrade-error')).toBeVisible();
+    // The whole point of the decline card is to exercise the error path without
+    // a request, so the checkout stays put and nothing was posted.
+    await expect(page.getByTestId('upgrade-checkout')).toBeVisible();
+    await expect(page.getByTestId('upgrade-progress')).toHaveCount(0);
+    expect(requests).toHaveLength(0);
+  });
+
+  test('backend 402 paywall surfaces an error and keeps the user on the checkout', async ({ page }) => {
+    const requests = await installOnboardingMock(page, { status: 402 });
+    await gotoUpgrade(page);
+
+    await fillCheckout(page, { tenantName: 'Acme Productive' });
+    await page.getByTestId('upgrade-submit').click();
+
+    await expect(page.getByTestId('upgrade-error')).toBeVisible();
+    await expect(page.getByTestId('upgrade-checkout')).toBeVisible();
+    await expect(page.getByTestId('upgrade-success')).toHaveCount(0);
+    // The request was made — this path is the backend refusing, not the client.
+    expect(requests).toHaveLength(1);
+  });
+
+  test('a tenant name the account already owns is rejected before paying', async ({ page }) => {
+    const requests = await installOnboardingMock(page);
+    await gotoUpgrade(page);
+
+    await fillCheckout(page, { tenantName: EXISTING_TENANT });
+    await page.getByTestId('upgrade-submit').click();
+
+    await expect(page.getByTestId('upgrade-tenant-name-error')).toBeVisible();
+    expect(requests).toHaveLength(0);
+  });
+
+  test('an invalid card is rejected field by field without posting', async ({ page }) => {
+    const requests = await installOnboardingMock(page);
+    await gotoUpgrade(page);
+
+    await page.getByTestId('upgrade-tenant-name').fill('Acme Productive');
+    await page.getByTestId('upgrade-cardholder').fill('Ada Lovelace');
+    await page.getByTestId('upgrade-card-number').fill('4242');
+    await page.getByTestId('upgrade-expiry').fill('01/20');
+    await page.getByTestId('upgrade-cvc').fill('1');
+    await page.getByTestId('upgrade-submit').click();
+
+    await expect(page.getByTestId('upgrade-card-number-error')).toBeVisible();
+    await expect(page.getByTestId('upgrade-expiry-error')).toBeVisible();
+    await expect(page.getByTestId('upgrade-cvc-error')).toBeVisible();
+    expect(requests).toHaveLength(0);
+  });
+});
+
+test.describe('Tenant upgrade — an account with no tenants yet', () => {
+  test.beforeEach(async ({ page }) => {
+    await seedPlatformToken(page);
+    await login(page);
+    await installEnvironmentsMock(page, []);
+  });
+
+  test('offers free onboarding instead of a checkout', async ({ page }) => {
+    const requests = await installOnboardingMock(page);
+    await gotoUpgrade(page);
+
+    await expect(page.getByTestId('upgrade-first-tenant-free')).toBeVisible();
+    await expect(page.getByTestId('upgrade-checkout')).toHaveCount(0);
+
+    await page.getByTestId('upgrade-first-tenant-free-continue').click();
+    await expect(page).toHaveURL(/\/onboarding$/);
+    expect(requests).toHaveLength(0);
+  });
+});
