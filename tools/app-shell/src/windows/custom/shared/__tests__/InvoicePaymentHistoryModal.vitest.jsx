@@ -1,6 +1,11 @@
 // Mocks must be hoisted before imports (Vitest hoisting)
+// NOTE (ETP-4314): the mock now interpolates params (rather than swallowing them)
+// so the delete-confirm message's fmtAmount() output actually reaches the DOM —
+// needed for the thousands-grouping regression below. Calls made with no params
+// still return the bare key, so every other `getByText('someKey')` exact-match
+// assertion in this file is unaffected.
 vi.mock('@/i18n', () => ({
-  useUI: () => (key) => key,
+  useUI: () => (key, params) => (params ? `${key} ${JSON.stringify(params)}` : key),
 }));
 
 vi.mock('@/auth/useApiFetch.js', () => ({
@@ -297,10 +302,10 @@ describe('InvoicePaymentHistoryModal', () => {
         onClose={vi.fn()}
       />,
     );
-    // en-US narrowSymbol formatting via the shared formatCurrency util: EUR renders
-    // the symbol after the amount → "1,500.50 €".
+    // es-ES narrowSymbol formatting via the shared formatCurrency util: EUR renders
+    // the symbol after the amount, comma decimal, period thousands → "1.500,50 €".
     await waitFor(() =>
-      expect(screen.getByText(/1,500\.50/)).toBeInTheDocument(),
+      expect(screen.getByText(/1\.500,50/)).toBeInTheDocument(),
     );
   });
 
@@ -314,8 +319,8 @@ describe('InvoicePaymentHistoryModal', () => {
         onClose={vi.fn()}
       />,
     );
-    // EUR grand total → "2,345.00 €" (en-US digits, symbol-after).
-    expect(screen.getByText(/2,345\.00/)).toBeInTheDocument();
+    // EUR grand total → "2.345,00 €" (es-ES digits, comma decimal, symbol-after).
+    expect(screen.getByText(/2\.345,00/)).toBeInTheDocument();
   });
 
   it('calls onPaymentAdded when payment is saved and modal is closed', async () => {
@@ -572,12 +577,12 @@ describe('InvoicePaymentHistoryModal', () => {
       />,
     );
 
-    // Initial state: 3 cobros registrados, Saldo pendiente = 136.10 € (en-US
+    // Initial state: 3 cobros registrados, Saldo pendiente = 136,10 € (es-ES
     // narrowSymbol format from the shared formatCurrency util).
     await waitFor(() =>
       expect(screen.getAllByTestId('InvoicePaymentHistoryModal__row')).toHaveLength(3),
     );
-    expect(screen.getByText(/136\.10/)).toBeInTheDocument();
+    expect(screen.getByText(/136,10/)).toBeInTheDocument();
     expect(screen.getByText((_, el) => el.tagName === 'SPAN' && /3\s*cobrosRegistrados/.test(el.textContent))).toBeInTheDocument();
 
     // Simulate registering a payment via the nested NewPaymentEntryModal.
@@ -586,13 +591,13 @@ describe('InvoicePaymentHistoryModal', () => {
     fireEvent.click(screen.getByText('Save entry'));
 
     // After handlePaymentRegistered → fetchData() re-run: 4 cobros registrados,
-    // and — the actual regression — Saldo pendiente must update to 116.10 €,
-    // not remain stuck at the stale 136.10 € snapshot.
+    // and — the actual regression — Saldo pendiente must update to 116,10 €,
+    // not remain stuck at the stale 136,10 € snapshot.
     await waitFor(() =>
       expect(screen.getAllByTestId('InvoicePaymentHistoryModal__row')).toHaveLength(4),
     );
-    await waitFor(() => expect(screen.getByText(/116\.10/)).toBeInTheDocument());
-    expect(screen.queryByText(/136\.10/)).toBeNull();
+    await waitFor(() => expect(screen.getByText(/116,10/)).toBeInTheDocument());
+    expect(screen.queryByText(/136,10/)).toBeNull();
     expect(screen.getByText((_, el) => el.tagName === 'SPAN' && /4\s*cobrosRegistrados/.test(el.textContent))).toBeInTheDocument();
 
     // The nested entry modal closed itself but the history modal is still mounted
@@ -668,7 +673,34 @@ describe('InvoicePaymentHistoryModal', () => {
       expect(screen.getByTestId('InvoicePaymentHistoryModal__delete-btn')).toBeInTheDocument(),
     );
     fireEvent.click(screen.getByTestId('InvoicePaymentHistoryModal__delete-btn'));
-    expect(screen.getByText('cpDeleteDraftConfirm')).toBeInTheDocument();
+    expect(screen.getByText(/^cpDeleteDraftConfirm/)).toBeInTheDocument();
+  });
+
+  // ETP-4314 regression: fmtAmount() in the delete-confirm dialog used a hand-rolled
+  // Intl.NumberFormat('es-ES', ...) call missing `useGrouping: true`, so a draft
+  // payment >= 1000 rendered its confirm-dialog amount WITHOUT the thousands
+  // separator (e.g. "1500,75 €" instead of "1.500,75 €"). Now delegates to the
+  // shared formatCurrency(), which sets useGrouping explicitly.
+  it('groups thousands in the delete-confirm dialog amount for a draft payment >= 1000', async () => {
+    useApiFetch.mockReturnValue(makeApiFetch([
+      { id: 'p1', documentNo: 'PAY-001', paymentDate: '2026-01-01', amount: '1500.75', status: 'DR' },
+    ]));
+    render(
+      <InvoicePaymentHistoryModal
+        invoiceId="42"
+        invoiceData={INVOICE_DATA}
+        specName="sales-invoice"
+        apiBaseUrl="http://host/sws/neo/sales-invoice"
+        onClose={vi.fn()}
+      />,
+    );
+    await waitFor(() =>
+      expect(screen.getByTestId('InvoicePaymentHistoryModal__delete-btn')).toBeInTheDocument(),
+    );
+    fireEvent.click(screen.getByTestId('InvoicePaymentHistoryModal__delete-btn'));
+    const message = screen.getByText(/^cpDeleteDraftConfirm/);
+    expect(message).toHaveTextContent(/1\.500,75/);
+    expect(message).toHaveTextContent('€');
   });
 
   it('renders the purchase-invoice delete-confirm title and falls back to payment.id/status when documentNo/status/amount are missing', async () => {
@@ -691,7 +723,7 @@ describe('InvoicePaymentHistoryModal', () => {
     );
     expect(screen.getByText('p-no-doc')).toBeInTheDocument();
     fireEvent.click(screen.getByTestId('InvoicePaymentHistoryModal__delete-btn'));
-    expect(screen.getByText('cpDeleteDraftConfirm')).toBeInTheDocument();
+    expect(screen.getByText(/^cpDeleteDraftConfirm/)).toBeInTheDocument();
   });
 
   it('falls back to defaults when invoiceData lacks currency, grandTotalAmount, documentNo, and outstandingAmount', async () => {
@@ -759,7 +791,7 @@ describe('InvoicePaymentHistoryModal', () => {
     fireEvent.click(screen.getByTestId('InvoicePaymentHistoryModal__delete-btn'));
     // The mocked ui() returns the key literally; reaching this assertion without
     // throwing proves fmtAmount(payment.amount, currency) handled the string amount.
-    expect(screen.getByText('cpDeleteDraftConfirm')).toBeInTheDocument();
+    expect(screen.getByText(/^cpDeleteDraftConfirm/)).toBeInTheDocument();
     expect(screen.getByTestId('InvoicePaymentHistoryModal__delete-confirm-panel')).toBeInTheDocument();
   });
 

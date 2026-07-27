@@ -19,10 +19,6 @@ vi.mock('@/i18n', () => ({
   useLocaleSwitch: () => ({ locale: 'en_US', setLocale: vi.fn() }),
 }));
 
-vi.mock('@/lib/formatAmount.js', () => ({
-  formatAmount: (v, cur) => (v != null ? `${Number(v).toFixed(2)}${cur ? ` ${cur}` : ''}` : '—'),
-}));
-
 vi.mock('@/lib/resolveIdentifier.js', () => ({
   resolveIdentifier: (row, key) => {
     const idKey = `${key}$_identifier`;
@@ -121,11 +117,12 @@ describe('InlineLinesPanel', () => {
     expect(screen.getByText('Gadget')).toBeInTheDocument();
   });
 
-  it('formats amount columns', () => {
+  it('formats amount columns in es-ES locale (comma decimal, no currency symbol)', () => {
     renderPanel();
-    // formatAmount mock returns "50.00" for lineNetAmount=50
-    expect(screen.getByText('50.00')).toBeInTheDocument();
-    expect(screen.getByText('60.00')).toBeInTheDocument();
+    // Real formatCurrency(undefined, value) — no currency code available at this column,
+    // falls back to plain es-ES number formatting: comma decimal, no symbol/code shown.
+    expect(screen.getByText('50,00')).toBeInTheDocument();
+    expect(screen.getByText('60,00')).toBeInTheDocument();
   });
 
   it('shows edit and delete actions on hover', async () => {
@@ -870,8 +867,8 @@ describe('InlineLinesPanel', () => {
         onDeleteRow={vi.fn().mockResolvedValue()}
       />,
     );
-    // formatAmount mock returns "99.10"
-    expect(screen.getByText('99.10')).toBeInTheDocument();
+    // es-ES comma decimal, no currency symbol (no currency code passed at this column).
+    expect(screen.getByText('99,10')).toBeInTheDocument();
   });
 
   it('selector column shows InlineSearchCombo in edit mode', async () => {
@@ -1061,7 +1058,7 @@ describe('InlineLinesPanel', () => {
         onDeleteRow={vi.fn().mockResolvedValue()}
       />,
     );
-    // formatAmount mock returns '—' for null
+    // formatCurrency mock returns '—' for null
     expect(screen.getByText('—')).toBeInTheDocument();
   });
 
@@ -1224,7 +1221,7 @@ describe('InlineLinesPanel', () => {
         token="test" apiBaseUrl="/api" selectorContext={{}}
         onSelectionChange={vi.fn()} onUpdateRow={vi.fn().mockResolvedValue()} onDeleteRow={vi.fn().mockResolvedValue()} />,
     );
-    expect(screen.getByText('100.00')).toBeInTheDocument();
+    expect(screen.getByText('100,00')).toBeInTheDocument();
   });
 
   it('readOnly column is not editable', () => {
@@ -1248,7 +1245,7 @@ describe('InlineLinesPanel', () => {
         token="test" apiBaseUrl="/api" selectorContext={{}}
         onSelectionChange={vi.fn()} onUpdateRow={vi.fn().mockResolvedValue()} onDeleteRow={vi.fn().mockResolvedValue()} />,
     );
-    expect(screen.getByText('50.00')).toBeInTheDocument();
+    expect(screen.getByText('50,00')).toBeInTheDocument();
   });
 
   it('column with custom render function uses it', () => {
@@ -1315,7 +1312,7 @@ describe('InlineLinesPanel', () => {
         onSelectionChange={vi.fn()} onUpdateRow={vi.fn().mockResolvedValue()} onDeleteRow={vi.fn().mockResolvedValue()}
         isDocumentReadOnly={true} />,
     );
-    expect(container.textContent).toContain('5.00');
+    expect(container.textContent).toContain('5,00');
   });
 
   it('renders multiple rows with alternating row IDs', () => {
@@ -1345,7 +1342,7 @@ describe('InlineLinesPanel', () => {
         token="test" apiBaseUrl="/api" selectorContext={{}}
         onSelectionChange={vi.fn()} onUpdateRow={vi.fn().mockResolvedValue()} onDeleteRow={vi.fn().mockResolvedValue()} />,
     );
-    expect(screen.getByText('250.00')).toBeInTheDocument();
+    expect(screen.getByText('250,00')).toBeInTheDocument();
   });
 
   it('renders string column with identifier fallback', () => {

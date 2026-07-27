@@ -1,4 +1,5 @@
 import { render, screen, fireEvent } from '@testing-library/react';
+import { formatCurrency } from '@/lib/formatCurrency.js';
 
 // --- Mocks ----------------------------------------------------------------
 
@@ -22,7 +23,14 @@ vi.mock('@/components/ui/dialog', () => ({
 }));
 
 vi.mock('@/components/ui/money-amount', () => ({
-  MoneyAmount: ({ value, className }) => <span className={className}>{value}</span>,
+  // Mirror the real MoneyAmount's currency-aware formatting (sign + formatCurrency) so tests can
+  // assert the statement-line side (left column) actually reflects the account's currency, the
+  // same way the real component does — instead of a currency-blind stub that would mask the
+  // "hardcoded €" regression this suite exists to catch.
+  MoneyAmount: ({ value, currency = 'EUR', className }) => {
+    const sign = value > 0 ? '+' : value < 0 ? '-' : '';
+    return <span className={className}>{sign}{formatCurrency(currency, Math.abs(value))}</span>;
+  },
 }));
 
 const applyMock = vi.fn();
@@ -55,6 +63,17 @@ const GROUP_RULE = {
   isNew: true,
   difference: 0,
   createPayment: { ruleId: 'r1', glItemId: 'GL-001', bpartnerId: '', amount: -894.2 },
+};
+
+// Statement-line amount and operation amount are deliberately different values so the two sides
+// can be asserted independently (not just because they happen to coincide).
+const GROUP_USD_MIXED = {
+  groupKey: 'line-3-txn-3',
+  statementLine: { id: 'line-3', description: 'USD wire transfer', amount: -750, date: '2026-05-07T00:00:00Z' },
+  operations: [{ id: 'txn-3', documentNo: 'F9000001', partnerName: 'Acme US Inc', amount: -300, isNew: false }],
+  origin: 'standard',
+  isNew: false,
+  difference: 0,
 };
 
 const KPIS = { pendingLines: 12, groupsFound: 6, opsToLink: 10, willCreate: 1 };
@@ -248,5 +267,51 @@ describe('AutoMatchSuggestionModal', () => {
     renderModal();
     // The cancel button uses ui('cancel') — the mock returns the key 'cancel'.
     expect(screen.getByTestId('automatch-modal-cancel')).toHaveTextContent('cancel');
+  });
+
+  // ── Currency correctness (ETP-4314 regression) ────────────────────────────────
+  // OperationRow's formatSignedAmount() used to hardcode a literal "€" regardless of the
+  // account's actual currency, while its sibling StatementContent (via <MoneyAmount>) already
+  // used the real account currency — for a USD account the statement side showed "$" and the
+  // operation side showed "€" in the very same dialog. Both sides must now agree.
+  //
+  // Note: `Intl.NumberFormat` (es-ES) inserts a non-breaking space (U+00A0) before the currency
+  // symbol; @testing-library's default text normalizer collapses it to a regular space when
+  // reading the DOM but does not touch the literal string passed to `getByText`, so expected
+  // strings built from `formatCurrency()` are run through the same normalization here.
+  const normalizeSpaces = (s) => s.replace(/ /g, ' ');
+
+  it('operation amount uses EUR by default (baseline, account currency defaults to EUR)', () => {
+    renderModal({ groups: [GROUP_STANDARD] }); // GROUP_STANDARD op amount is -500, default currency 'EUR'
+    // Both the statement line and the operation share the same -500 amount, so both sides render
+    // the identical EUR-formatted string.
+    const matches = screen.getAllByText(normalizeSpaces(`-${formatCurrency('EUR', 500)}`));
+    expect(matches.length).toBe(2);
+  });
+
+  it('operation amount uses the account currency (USD), not a hardcoded €, and agrees with the statement-line side', () => {
+    renderModal({ currency: 'USD', groups: [GROUP_STANDARD] });
+
+    // GROUP_STANDARD's statement line and operation are both -500, so both sides render the
+    // same USD-formatted string — proving the operation column no longer disagrees with the
+    // statement column on which currency symbol to use.
+    const expectedAmount = normalizeSpaces(`-${formatCurrency('USD', 500)}`);
+    const matches = screen.getAllByText(expectedAmount);
+    expect(matches.length).toBe(2); // one from StatementContent, one from OperationRow
+    matches.forEach((el) => {
+      expect(el.textContent).toContain('$');
+      expect(el.textContent).not.toContain('€');
+    });
+  });
+
+  it('statement line and operation row format independent amounts in USD, never falling back to €', () => {
+    renderModal({ currency: 'USD', groups: [GROUP_USD_MIXED] });
+
+    const expectedStatementAmount = normalizeSpaces(`-${formatCurrency('USD', 750)}`);
+    const expectedOperationAmount = normalizeSpaces(`-${formatCurrency('USD', 300)}`);
+    expect(screen.getByText(expectedStatementAmount)).toBeInTheDocument();
+    expect(screen.getByText(expectedOperationAmount)).toBeInTheDocument();
+    // No money amount anywhere in the dialog should render the EUR symbol for a USD account.
+    expect(document.body.textContent).not.toContain('€');
   });
 });

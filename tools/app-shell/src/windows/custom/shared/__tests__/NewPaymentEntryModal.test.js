@@ -19,6 +19,20 @@ describe('NewPaymentEntryModal (step 2 — Nuevo cobro/pago)', () => {
     assert.match(src, /usePaymentBalance\(\{\s*total,\s*dir,\s*sources,\s*usedSources:/s);
   });
 
+  // ETP-4314: fmtCur() (used for the read-only ExcessBand amount and the PIS
+  // alert's "dinero"/"credito" clauses) used to interpolate formatPlain() (a
+  // hand-rolled, en-US-style grouping helper backing the editable amount
+  // <input>) with a separately Intl-resolved currency symbol — mixing en-US
+  // digit grouping with an es-ES symbol. It must now delegate entirely to the
+  // shared formatCurrency() instead of hand-rolling any Intl/formatPlain calls.
+  it('delegates fmtCur entirely to the shared formatCurrency() (no more formatPlain/Intl mixing)', () => {
+    assert.match(src, /import \{ formatCurrency \} from '@\/lib\/formatCurrency\.js';/);
+    assert.match(
+      src,
+      /function fmtCur\(n, currency\) \{\s*\n\s*return formatCurrency\(currency, n\);\s*\n\s*\}/,
+    );
+  });
+
   it('renders the new-collection / new-payment title by direction', () => {
     assert.match(src, /ui\('cpNewCollection'\)/);
     assert.match(src, /ui\('cpNewPayment'\)/);

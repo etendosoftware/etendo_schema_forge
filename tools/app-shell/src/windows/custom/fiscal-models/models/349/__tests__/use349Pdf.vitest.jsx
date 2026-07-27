@@ -118,6 +118,58 @@ describe('use349Pdf — generatePdf', () => {
   });
 });
 
+describe('use349Pdf — HELPERS.fmtAmount (real Handlebars template helper)', () => {
+  // `renderPdf` is mocked above, but it's still invoked with the real, unmocked
+  // `HELPERS` template string built at module scope — so the mock call capture
+  // gives us the actual `fmtAmount` source the PDF renderer executes, not a
+  // stand-in. This is what actually runs at PDF-generation time; asserting only
+  // on the `data` object (as the other tests here do) would never catch a
+  // formatting bug inside the Handlebars helper itself.
+  function extractFunctionSource(source, fnName) {
+    const startIdx = source.indexOf(`function ${fnName}(`);
+    if (startIdx === -1) throw new Error(`${fnName} not found in HELPERS`);
+    const braceStart = source.indexOf('{', startIdx);
+    let depth = 0;
+    let i = braceStart;
+    for (; i < source.length; i++) {
+      if (source[i] === '{') depth++;
+      else if (source[i] === '}') {
+        depth--;
+        if (depth === 0) break;
+      }
+    }
+    return source.slice(startIdx, i + 1);
+  }
+
+  async function getRealFmtAmount() {
+    const mockBlob = new Blob(['pdf'], { type: 'application/pdf' });
+    renderPdf.mockResolvedValue(mockBlob);
+    const { result } = renderHook(() => use349Pdf());
+    await act(async () => {
+      await result.current.generatePdf({ year: 2026, period: 'T1' }, []);
+    });
+    const [, , helpers] = renderPdf.mock.calls[0];
+    const fnSource = extractFunctionSource(helpers, 'fmtAmount');
+    return new Function(`${fnSource}; return fmtAmount;`)();
+  }
+
+  it('returns "0,00" for null/undefined', async () => {
+    const fmtAmount = await getRealFmtAmount();
+    expect(fmtAmount(null)).toBe('0,00');
+    expect(fmtAmount(undefined)).toBe('0,00');
+  });
+
+  it('groups thousands for amounts in the 1000-9999 range (Intl silently drops it without useGrouping)', async () => {
+    const fmtAmount = await getRealFmtAmount();
+    expect(fmtAmount(1234.56)).toBe('1.234,56');
+  });
+
+  it('keeps grouping for amounts at/above 10000 (already correct even pre-fix)', async () => {
+    const fmtAmount = await getRealFmtAmount();
+    expect(fmtAmount(12345.67)).toBe('12.345,67');
+  });
+});
+
 describe('use349Pdf — clearPdf', () => {
   it('resets pdfUrl to null', async () => {
     const mockBlob = new Blob(['pdf'], { type: 'application/pdf' });

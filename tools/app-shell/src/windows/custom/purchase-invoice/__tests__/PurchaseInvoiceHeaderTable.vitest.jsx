@@ -59,8 +59,9 @@ vi.mock('@/lib/invoiceDueDate', () => ({
   getDueDateTextStyle: () => ({ color: 'red' }),
 }));
 
-vi.mock('@/lib/formatAmount.js', () => ({
-  formatAmount: (amount, currency) => `${amount}:${currency}`,
+vi.mock('@/lib/formatCurrency.js', () => ({
+  // Source calls `formatCurrency(currency, amount)` — currency first, amount second.
+  formatCurrency: (currency, amount) => `${amount}:${currency}`,
 }));
 
 // DataTable mock that calls each column's render with multiple representative rows
@@ -437,7 +438,7 @@ describe('PurchaseInvoiceHeaderTable — column render branches (inline)', () =>
     const renderFn = getColRender('grandTotalAmount');
     if (!renderFn) return;
     const { container } = render(<>{renderFn(NC_ROW)}</>);
-    // isNcOrReturn → -Math.abs(1000) = -1000, formatAmount mock: "-1000:EUR"
+    // isNcOrReturn → -Math.abs(1000) = -1000, formatCurrency mock: "-1000:EUR"
     expect(container.textContent).toContain('-1000');
   });
 
