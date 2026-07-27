@@ -95,31 +95,25 @@ describe('useFeatureFlag — GATE 2: flag on via VITE_FEATURE_FLAGS', () => {
   });
 
   /**
-   * KNOWN DEFECT — marked `.fails` so the suite stays green while the bug
-   * exists and turns red the moment it is fixed (remove `.fails` then).
+   * Regression guard for the provider-ready transition (fixed in f71c231f8).
    *
-   * `@openfeature/web-sdk@1.9.0` emits `PROVIDER_READY` one microtask BEFORE the
-   * new provider is installed for evaluation. Verified directly against the SDK:
-   *
-   *     before setProvider   : value=false
-   *     inside Ready handler : value=false     <-- event fires here
-   *     one microtask later  : value=true      <-- provider actually live
-   *
-   * `useSyncExternalStore` calls `getSnapshot` synchronously when the subscriber
-   * fires, so it reads the stale value, sees no change and does not re-render.
-   * No further event follows, so a component that mounted before the provider
-   * settled is pinned to the declared default for the rest of the session.
-   *
-   * This is reachable in production: `main.jsx` calls `initFeatureFlags()`
-   * fire-and-forget and renders immediately, so whether a flag is ever observed
-   * as `on` depends on which of the two wins the race.
+   * The SDK announces readiness before the provider is actually installed, so a
+   * subscriber that only re-reads synchronously observes the old value and the
+   * component never updates — see the ordering note in `useFeatureFlag.js`. The
+   * mount-first path is the one that breaks, so it is the one asserted here:
+   * mounting after the provider settles (the next test) passes either way and
+   * would not catch a regression.
    */
-  it.fails('re-renders an already-mounted component when the provider becomes ready', async () => {
+  it('re-renders an already-mounted component when the provider becomes ready', async () => {
     const { result } = renderHook(() => useFeatureFlag(TENANT_UPGRADE));
     expect(result.current).toBe(false);
 
     await act(async () => {
       await initFeatureFlags({ env: { VITE_FEATURE_FLAGS: FLAG_ON }, logger: silentLogger });
+      // The corrective notification is deliberately deferred by a microtask;
+      // drain it inside `act` so the re-render it causes is captured here rather
+      // than landing afterwards as an unwrapped update.
+      await Promise.resolve();
     });
 
     await waitFor(() => expect(result.current).toBe(true), { timeout: 1000 });
