@@ -41,6 +41,7 @@ const columns = [
     labels: { en_US: 'Sales', es_ES: 'Venta' },
     type: 'custom',
     sortable: false,
+    required: true,
     render: (row, { token, apiBaseUrl }) => (
       <ProductSalePriceCell
         row={row}
@@ -54,6 +55,7 @@ const columns = [
     labels: { en_US: 'Purchase', es_ES: 'Compra' },
     type: 'custom',
     sortable: false,
+    required: true,
     render: (row, { token, apiBaseUrl }) => (
       <ProductPurchasePriceCell
         row={row}
