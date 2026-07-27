@@ -1,4 +1,14 @@
 // Mocks BEFORE imports
+// The action bar's "Desconciliar / Reactivar" split button uses a Radix <DropdownMenu>, which
+// relies on Pointer Capture + scrollIntoView — neither implemented by jsdom. Polyfill them so the
+// menu can open (same pattern as EditAccountModal.vitest.jsx).
+beforeAll(() => {
+  Element.prototype.hasPointerCapture = vi.fn(() => false);
+  Element.prototype.setPointerCapture = vi.fn();
+  Element.prototype.releasePointerCapture = vi.fn();
+  Element.prototype.scrollIntoView = vi.fn();
+});
+
 // Records every (key, vars) pair passed to the i18n `ui(...)` function, so tests can verify the
 // exact interpolation values (e.g. removed/total/failed counts) a call site passed — the mock
 // below only echoes back the raw key for keys with no literal `{placeholder}` in their own name
@@ -18,10 +28,20 @@ vi.mock('sonner', () => ({
 }));
 
 // Hook mocks — overridable per test via the mutable state objects below.
-const linesState = { lines: [], total: 0, counts: {}, loading: false, reload: vi.fn() };
+// `draftReconciliationCount` = how many reconciliations of the account are already in draft
+// (server-computed, NOT derived from `lines`, which are date/status filtered). Drives the up-front
+// "another draft will be confirmed" warning in the Reactivar confirm dialog. Default 0.
+const linesState = {
+  lines: [], total: 0, counts: {}, loading: false, reload: vi.fn(), draftReconciliationCount: 0,
+};
 const candidatesState = { candidates: [], loading: false };
 const reconcileState = { reconcile: vi.fn().mockResolvedValue({ reconciliationId: 'R1' }), loading: false };
 const removeState = { removeOperation: vi.fn().mockResolvedValue({ removed: true }), loading: false };
+// "Reactivar" — the lighter un-reconcile (keeps the reconciliation as a draft with its
+// transactions still linked) exposed via the action bar's split-button dropdown.
+const reactivateSelectedState = {
+  reactivateSelected: vi.fn().mockResolvedValue({ reactivated: true }), loading: false,
+};
 // Records the last (accountId, lineId, docType, kind) the component passed to
 // useCandidateOperations, so tests can assert the kind toggle flows through.
 const candidateCallArgs = { accountId: null, lineId: null, docType: null, kind: null };
@@ -43,10 +63,12 @@ vi.mock('@/hooks/useReconciliation', () => ({
   },
   useReconcileGroup: () => reconcileState,
   useRemoveOperation: () => removeState,
+  useReactivateSelected: () => reactivateSelectedState,
 }));
 
 import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import userEvent from '@testing-library/user-event';
+import { describe, it, expect, vi, beforeAll, beforeEach } from 'vitest';
 import { toast } from 'sonner';
 import { ReconciliationSplitPanel } from '@/components/contract-ui/ReconciliationSplitPanel.jsx';
 
@@ -148,12 +170,15 @@ describe('ReconciliationSplitPanel', () => {
     linesState.counts = {};
     linesState.loading = false;
     linesState.reload = vi.fn();
+    linesState.draftReconciliationCount = 0;
     candidatesState.candidates = [];
     candidatesState.loading = false;
     reconcileState.reconcile = vi.fn().mockResolvedValue({ reconciliationId: 'R1' });
     reconcileState.loading = false;
     removeState.removeOperation = vi.fn().mockResolvedValue({ removed: true });
     removeState.loading = false;
+    reactivateSelectedState.reactivateSelected = vi.fn().mockResolvedValue({ reactivated: true });
+    reactivateSelectedState.loading = false;
     candidateCallArgs.accountId = null;
     candidateCallArgs.lineId = null;
     candidateCallArgs.docType = null;
@@ -659,11 +684,11 @@ describe('ReconciliationSplitPanel', () => {
     renderPanel();
     fireEvent.click(screen.getByTestId('recon-line-radio-LR2'));
 
-    expect(screen.queryByTestId('recon-remove-dialog')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('recon-remove-modal')).not.toBeInTheDocument();
     fireEvent.click(screen.getByTestId('recon-action-reconcile'));
 
     // Dialog opens; the endpoint is NOT called yet (it requires confirmation).
-    expect(screen.getByTestId('recon-remove-dialog')).toBeInTheDocument();
+    expect(screen.getByTestId('recon-remove-modal')).toBeInTheDocument();
     expect(removeState.removeOperation).not.toHaveBeenCalled();
   });
 
@@ -673,7 +698,7 @@ describe('ReconciliationSplitPanel', () => {
     const { props } = renderPanel();
     fireEvent.click(screen.getByTestId('recon-line-radio-LR2'));
     fireEvent.click(screen.getByTestId('recon-action-reconcile'));
-    fireEvent.click(screen.getByTestId('recon-remove-confirm'));
+    fireEvent.click(screen.getByTestId('recon-remove-accept'));
 
     await waitFor(() => expect(removeState.removeOperation).toHaveBeenCalledTimes(1));
     const payload = removeState.removeOperation.mock.calls[0][0];
@@ -693,11 +718,11 @@ describe('ReconciliationSplitPanel', () => {
     fireEvent.click(screen.getByTestId('recon-line-radio-LR2'));
     fireEvent.click(screen.getByTestId('recon-action-reconcile'));
 
-    expect(screen.getByTestId('recon-remove-dialog')).toBeInTheDocument();
+    expect(screen.getByTestId('recon-remove-modal')).toBeInTheDocument();
     fireEvent.click(screen.getByTestId('recon-remove-cancel'));
 
     await waitFor(() =>
-      expect(screen.queryByTestId('recon-remove-dialog')).not.toBeInTheDocument());
+      expect(screen.queryByTestId('recon-remove-modal')).not.toBeInTheDocument());
     expect(removeState.removeOperation).not.toHaveBeenCalled();
     // The reconciled line stays selected.
     expect(screen.getByTestId('recon-line-radio-LR2')).toBeChecked();
@@ -727,7 +752,7 @@ describe('ReconciliationSplitPanel', () => {
     expect(candidateCheckbox('T4')).toBeChecked();
 
     fireEvent.click(screen.getByTestId('recon-action-reconcile'));
-    fireEvent.click(screen.getByTestId('recon-remove-confirm'));
+    fireEvent.click(screen.getByTestId('recon-remove-accept'));
     await waitFor(() => expect(removeState.removeOperation).toHaveBeenCalledTimes(1));
     expect(removeState.removeOperation.mock.calls[0][0].transactionIds).toEqual(['T4']);
   });
@@ -738,8 +763,8 @@ describe('ReconciliationSplitPanel', () => {
     renderPanel();
     fireEvent.click(screen.getByTestId('recon-line-radio-LR2'));
     fireEvent.click(screen.getByTestId('recon-unlink-T3'));
-    expect(screen.getByTestId('recon-remove-dialog')).toBeInTheDocument();
-    fireEvent.click(screen.getByTestId('recon-remove-confirm'));
+    expect(screen.getByTestId('recon-remove-modal')).toBeInTheDocument();
+    fireEvent.click(screen.getByTestId('recon-remove-accept'));
     await waitFor(() => expect(removeState.removeOperation).toHaveBeenCalledTimes(1));
     expect(removeState.removeOperation.mock.calls[0][0].transactionIds).toEqual(['T3']);
   });
@@ -926,28 +951,34 @@ describe('ReconciliationSplitPanel', () => {
       fireEvent.click(screen.getByTestId('recon-line-radio-LP1'));
       // The "conciliado" block starts collapsed — expand it to reach the unlink button.
       fireEvent.click(screen.getByTestId('recon-matched-toggle'));
-      expect(screen.queryByTestId('recon-remove-dialog')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('recon-remove-modal')).not.toBeInTheDocument();
       fireEvent.click(screen.getByTestId('recon-unlink-T1'));
-      expect(screen.getByTestId('recon-remove-dialog')).toBeInTheDocument();
+      expect(screen.getByTestId('recon-remove-modal')).toBeInTheDocument();
       expect(removeState.removeOperation).not.toHaveBeenCalled();
     });
 
-    it('appends the auto-created hint in the dialog body when the txn is auto-created', () => {
+    // The auto-created effect is no longer a sentence appended to the body — it is its own
+    // consequence bullet ("Cobro creado: el pago generado se elimina…") in the shared cartel.
+    it('shows the created-payment bullet when the txn is auto-created', () => {
       setLines([LINE_PARTIAL]); // T1 autoCreated: true
       renderPanel();
       fireEvent.click(screen.getByTestId('recon-line-radio-LP1'));
       fireEvent.click(screen.getByTestId('recon-matched-toggle'));
       fireEvent.click(screen.getByTestId('recon-unlink-T1'));
-      expect(screen.getByTestId('recon-remove-dialog')).toHaveTextContent('financeReconcileRemoveOneAutoHint');
+      const modal = screen.getByTestId('recon-remove-modal');
+      expect(modal).toHaveTextContent('financeReconcileConfirmItemPaymentTitle');
+      expect(modal).toHaveTextContent('financeReconcileConfirmItemPaymentDesc');
     });
 
-    it('omits the auto-created hint when the txn is not auto-created', () => {
+    it('omits the created-payment bullet when the txn is not auto-created', () => {
       setLines([LINE_RECONCILED_TXNS]); // T2 autoCreated: false (candidate-list per-row unlink)
       setCandidates([RECON_CAND_T2]);
       renderPanel();
       fireEvent.click(screen.getByTestId('recon-line-radio-LR1'));
       fireEvent.click(screen.getByTestId('recon-unlink-T2'));
-      expect(screen.getByTestId('recon-remove-dialog')).not.toHaveTextContent('financeReconcileRemoveOneAutoHint');
+      const modal = screen.getByTestId('recon-remove-modal');
+      expect(modal).not.toHaveTextContent('financeReconcileConfirmItemPaymentTitle');
+      expect(modal).not.toHaveTextContent('financeReconcileConfirmItemPaymentDesc');
     });
 
     it('calls removeOperation with the right payload on confirm, then reloads and notifies', async () => {
@@ -956,7 +987,7 @@ describe('ReconciliationSplitPanel', () => {
       fireEvent.click(screen.getByTestId('recon-line-radio-LP1'));
       fireEvent.click(screen.getByTestId('recon-matched-toggle'));
       fireEvent.click(screen.getByTestId('recon-unlink-T1'));
-      fireEvent.click(screen.getByTestId('recon-remove-confirm'));
+      fireEvent.click(screen.getByTestId('recon-remove-accept'));
 
       await waitFor(() => expect(removeState.removeOperation).toHaveBeenCalledTimes(1));
       // The per-row "−" now sends a single-element transactionIds[] array (not transactionId).
@@ -968,7 +999,7 @@ describe('ReconciliationSplitPanel', () => {
       await waitFor(() => expect(props.onReconcileSuccess).toHaveBeenCalled());
       expect(linesState.reload).toHaveBeenCalled();
       // Dialog closes on success.
-      await waitFor(() => expect(screen.queryByTestId('recon-remove-dialog')).not.toBeInTheDocument());
+      await waitFor(() => expect(screen.queryByTestId('recon-remove-modal')).not.toBeInTheDocument());
     });
 
     it('does not call removeOperation when the dialog is cancelled', async () => {
@@ -977,10 +1008,10 @@ describe('ReconciliationSplitPanel', () => {
       fireEvent.click(screen.getByTestId('recon-line-radio-LP1'));
       fireEvent.click(screen.getByTestId('recon-matched-toggle'));
       fireEvent.click(screen.getByTestId('recon-unlink-T1'));
-      expect(screen.getByTestId('recon-remove-dialog')).toBeInTheDocument();
+      expect(screen.getByTestId('recon-remove-modal')).toBeInTheDocument();
       fireEvent.click(screen.getByTestId('recon-remove-cancel'));
       await waitFor(() =>
-        expect(screen.queryByTestId('recon-remove-dialog')).not.toBeInTheDocument());
+        expect(screen.queryByTestId('recon-remove-modal')).not.toBeInTheDocument());
       expect(removeState.removeOperation).not.toHaveBeenCalled();
     });
 
@@ -990,20 +1021,20 @@ describe('ReconciliationSplitPanel', () => {
       renderPanel();
       fireEvent.click(screen.getByTestId('recon-line-radio-LR1'));
       fireEvent.click(screen.getByTestId('recon-unlink-T2'));
-      const dialog = screen.getByTestId('recon-remove-dialog');
+      const dialog = screen.getByTestId('recon-remove-modal');
       expect(dialog).toHaveTextContent('financeReconcileConfirmRemoveOneBody');
       expect(dialog).not.toHaveTextContent('financeReconcileConfirmRemoveManyBody');
     });
 
-    it('uses the "many" body + auto hint for a bulk selection with an auto-created doc', () => {
+    it('uses the "many" body + created-payment bullet for a bulk selection with an auto-created doc', () => {
       setLines([LINE_RECONCILED_MULTI]); // 2 docs, T3 autoCreated → bulk "Desconciliar (2)"
       setCandidates([RECON_CAND_T3, RECON_CAND_T4]);
       renderPanel();
       fireEvent.click(screen.getByTestId('recon-line-radio-LR2'));
       fireEvent.click(screen.getByTestId('recon-action-reconcile'));
-      const dialog = screen.getByTestId('recon-remove-dialog');
+      const dialog = screen.getByTestId('recon-remove-modal');
       expect(dialog).toHaveTextContent('financeReconcileConfirmRemoveManyBody');
-      expect(dialog).toHaveTextContent('financeReconcileRemoveOneAutoHint');
+      expect(dialog).toHaveTextContent('financeReconcileConfirmItemPaymentTitle');
     });
   });
 
@@ -1027,7 +1058,7 @@ describe('ReconciliationSplitPanel', () => {
       expect(candidateCheckbox('C2')).toBeChecked();
       fireEvent.click(screen.getByTestId('recon-matched-toggle'));
       fireEvent.click(screen.getByTestId('recon-unlink-T1'));
-      fireEvent.click(screen.getByTestId('recon-remove-confirm'));
+      fireEvent.click(screen.getByTestId('recon-remove-accept'));
     }
 
     it('full success: toast.success + reload/selection-clear when nothing failed', async () => {
@@ -1041,7 +1072,7 @@ describe('ReconciliationSplitPanel', () => {
       expect(toast.error).not.toHaveBeenCalled();
       await waitFor(() => expect(linesState.reload).toHaveBeenCalled());
       await waitFor(() => expect(candidateCheckbox('C2')).not.toBeChecked());
-      await waitFor(() => expect(screen.queryByTestId('recon-remove-dialog')).not.toBeInTheDocument());
+      await waitFor(() => expect(screen.queryByTestId('recon-remove-modal')).not.toBeInTheDocument());
     });
 
     it('partial: toast.warning with the exact removed/total/failed counts, reload/selection-clear STILL run', async () => {
@@ -1075,7 +1106,7 @@ describe('ReconciliationSplitPanel', () => {
       // Still no exception, still a "resolved" flow — reload + selection-clear still happen.
       await waitFor(() => expect(linesState.reload).toHaveBeenCalled());
       await waitFor(() => expect(candidateCheckbox('C2')).not.toBeChecked());
-      await waitFor(() => expect(screen.queryByTestId('recon-remove-dialog')).not.toBeInTheDocument());
+      await waitFor(() => expect(screen.queryByTestId('recon-remove-modal')).not.toBeInTheDocument());
     });
 
     it('network/HTTP error (rejected promise): toast.error, but NO reload — nothing was attempted', async () => {
@@ -1088,13 +1119,475 @@ describe('ReconciliationSplitPanel', () => {
       // Unlike the three resolved cases above, a rejected promise never reaches the reload/
       // selection-clear code — nothing was attempted, so nothing should be assumed to have changed.
       expect(linesState.reload).not.toHaveBeenCalled();
-      // The dialog also stays open (setRemoveRequest(null) only runs on the success path) — which,
-      // correctly, aria-hides the rest of the page from the accessibility tree while it's open, so
-      // the checkbox's role query needs { hidden: true } to still reach it here.
-      expect(screen.getByTestId('recon-remove-dialog')).toBeInTheDocument();
-      const stillCheckedInput = within(screen.getByTestId('recon-cand-check-C2'))
-        .getByRole('checkbox', { hidden: true });
-      expect(stillCheckedInput).toBeChecked();
+      // The dialog also stays open (setRemoveRequest(null) only runs on the success path), and the
+      // candidate selection behind it is untouched.
+      expect(screen.getByTestId('recon-remove-modal')).toBeInTheDocument();
+      expect(candidateCheckbox('C2')).toBeChecked();
+    });
+  });
+
+  // ── "Reactivar" split-button action (lighter un-reconcile, keeps a draft) ──────
+  // Same checked selection as "Desconciliar (N)", but the reconciliation is REACTIVATED to draft
+  // (its pre-existing transactions stay linked and come back pre-selected) instead of deleted.
+  // Exposed as the dropdown item behind a chevron on the primary button.
+  describe('"Reactivar" split-button action', () => {
+    /** Opens the split button's dropdown menu (Radix — needs real pointer events). */
+    async function openMoreMenu() {
+      const user = userEvent.setup();
+      await user.click(screen.getByTestId('recon-action-reconcile-more'));
+      return user;
+    }
+
+    it('renders the chevron trigger only on a fully reconciled line', () => {
+      setLines([LINE_RECONCILED_MULTI]);
+      setCandidates([RECON_CAND_T3, RECON_CAND_T4]);
+      renderPanel();
+      fireEvent.click(screen.getByTestId('recon-line-radio-LR2'));
+      expect(screen.getByTestId('recon-action-reconcile-more')).toBeInTheDocument();
+    });
+
+    it('does NOT render the chevron trigger for a pending line (plain "Conciliar")', () => {
+      setLines([LINE_A]);
+      setCandidates([CAND_MATCH]);
+      renderPanel();
+      fireEvent.click(screen.getByTestId('recon-line-radio-L1'));
+      expect(screen.queryByTestId('recon-action-reconcile-more')).not.toBeInTheDocument();
+      expect(screen.getByTestId('recon-action-reconcile'))
+        .toHaveTextContent('financeReconcileActionReconcileCount');
+    });
+
+    it('does NOT render the chevron trigger for a PARTIAL line (still reconciling the remainder)', () => {
+      setLines([LINE_PARTIAL]);
+      setCandidates([CAND_MATCH]);
+      renderPanel();
+      fireEvent.click(screen.getByTestId('recon-line-radio-LP1'));
+      expect(screen.queryByTestId('recon-action-reconcile-more')).not.toBeInTheDocument();
+    });
+
+    it('disables the chevron trigger when nothing is checked (removeCount === 0)', () => {
+      setLines([LINE_RECONCILED_TXNS]); // single linked doc T2, pre-checked by default
+      setCandidates([RECON_CAND_T2]);
+      renderPanel();
+      fireEvent.click(screen.getByTestId('recon-line-radio-LR1'));
+      expect(screen.getByTestId('recon-action-reconcile-more')).not.toBeDisabled();
+      // Uncheck the only linked doc → count 0 → both the primary and the chevron go disabled.
+      fireEvent.click(screen.getByTestId('recon-cand-check-T2'));
+      expect(screen.getByTestId('recon-action-reconcile-more')).toBeDisabled();
+      expect(screen.getByTestId('recon-action-reconcile')).toBeDisabled();
+    });
+
+    it('opens the confirm dialog with the REACTIVATE copy (distinct from Desconciliar)', async () => {
+      setLines([LINE_RECONCILED_MULTI]); // 2 docs → "many" body
+      setCandidates([RECON_CAND_T3, RECON_CAND_T4]);
+      renderPanel();
+      fireEvent.click(screen.getByTestId('recon-line-radio-LR2'));
+
+      const user = await openMoreMenu();
+      await user.click(screen.getByTestId('recon-action-reactivate'));
+
+      const dialog = screen.getByTestId('recon-remove-modal');
+      expect(dialog).toHaveTextContent('financeReconcileConfirmReactivateTitle');
+      expect(dialog).toHaveTextContent('financeReconcileConfirmReactivateManyBody');
+      // The Desconciliar copy must NOT leak into the reactivate dialog.
+      expect(dialog).not.toHaveTextContent('financeReconcileConfirmRemoveOneTitle');
+      expect(dialog).not.toHaveTextContent('financeReconcileConfirmRemoveManyBody');
+      // Confirm button carries the Reactivar label, not the Desconciliar one.
+      expect(screen.getByTestId('recon-remove-accept'))
+        .toHaveTextContent('financeReconcileActionReactivateSelected');
+      // Nothing hits the backend until confirmation.
+      expect(reactivateSelectedState.reactivateSelected).not.toHaveBeenCalled();
+      expect(removeState.removeOperation).not.toHaveBeenCalled();
+    });
+
+    it('uses the "one" reactivate body for a single checked doc', async () => {
+      setLines([LINE_RECONCILED_TXNS]); // single linked doc → count 1
+      setCandidates([RECON_CAND_T2]);
+      renderPanel();
+      fireEvent.click(screen.getByTestId('recon-line-radio-LR1'));
+
+      const user = await openMoreMenu();
+      await user.click(screen.getByTestId('recon-action-reactivate'));
+
+      const dialog = screen.getByTestId('recon-remove-modal');
+      expect(dialog).toHaveTextContent('financeReconcileConfirmReactivateOneBody');
+      expect(dialog).not.toHaveTextContent('financeReconcileConfirmReactivateManyBody');
+    });
+
+    it('still shows the created-payment bullet when the selection contains an auto-created txn', async () => {
+      setLines([LINE_RECONCILED_MULTI]); // T3 autoCreated: true → the payment IS still deleted
+      setCandidates([RECON_CAND_T3, RECON_CAND_T4]);
+      renderPanel();
+      fireEvent.click(screen.getByTestId('recon-line-radio-LR2'));
+
+      const user = await openMoreMenu();
+      await user.click(screen.getByTestId('recon-action-reactivate'));
+
+      const modal = screen.getByTestId('recon-remove-modal');
+      expect(modal).toHaveTextContent('financeReconcileConfirmItemPaymentTitle');
+      expect(modal).toHaveTextContent('financeReconcileConfirmItemPaymentDesc');
+    });
+
+    it('omits the created-payment bullet when no checked doc is auto-created', async () => {
+      setLines([LINE_RECONCILED_TXNS]); // T2 autoCreated: false
+      setCandidates([RECON_CAND_T2]);
+      renderPanel();
+      fireEvent.click(screen.getByTestId('recon-line-radio-LR1'));
+
+      const user = await openMoreMenu();
+      await user.click(screen.getByTestId('recon-action-reactivate'));
+
+      const modal = screen.getByTestId('recon-remove-modal');
+      expect(modal).not.toHaveTextContent('financeReconcileConfirmItemPaymentTitle');
+      expect(modal).not.toHaveTextContent('financeReconcileConfirmItemPaymentDesc');
+    });
+
+    it('confirming calls reactivateSelected (NOT removeOperation) with the checked ids', async () => {
+      reactivateSelectedState.reactivateSelected = vi.fn().mockResolvedValue({
+        transactionIds: ['T3', 'T4'], failedTransactionIds: [],
+      });
+      setLines([LINE_RECONCILED_MULTI]);
+      setCandidates([RECON_CAND_T3, RECON_CAND_T4]);
+      const { props } = renderPanel();
+      fireEvent.click(screen.getByTestId('recon-line-radio-LR2'));
+
+      const user = await openMoreMenu();
+      await user.click(screen.getByTestId('recon-action-reactivate'));
+      await user.click(screen.getByTestId('recon-remove-accept'));
+
+      await waitFor(() =>
+        expect(reactivateSelectedState.reactivateSelected).toHaveBeenCalledTimes(1));
+      // The lighter endpoint is used — the destructive one is never touched.
+      expect(removeState.removeOperation).not.toHaveBeenCalled();
+      const payload = reactivateSelectedState.reactivateSelected.mock.calls[0][0];
+      expect(payload.financialAccountId).toBe('ACC-1');
+      expect(payload.statementLineId).toBe('LR2');
+      expect([...payload.transactionIds].sort()).toEqual(['T3', 'T4']);
+      // Reactivate-specific success toast, and the shared reload/selection-clear still run.
+      await waitFor(() => expect(toast.success)
+        .toHaveBeenCalledWith('financeReconcileToastOperationReactivated'));
+      expect(toast.success).not.toHaveBeenCalledWith('financeReconcileToastOperationRemoved');
+      await waitFor(() => expect(linesState.reload).toHaveBeenCalled());
+      await waitFor(() => expect(props.onReconcileSuccess).toHaveBeenCalled());
+      await waitFor(() =>
+        expect(screen.queryByTestId('recon-remove-modal')).not.toBeInTheDocument());
+    });
+
+    it('reuses the shared partial-outcome handling on the reactivate path', async () => {
+      // One reactivated, one still linked (e.g. Core refused: a draft already exists on the account).
+      reactivateSelectedState.reactivateSelected = vi.fn().mockResolvedValue({
+        transactionIds: ['T3'], failedTransactionIds: ['T4'],
+      });
+      setLines([LINE_RECONCILED_MULTI]);
+      setCandidates([RECON_CAND_T3, RECON_CAND_T4]);
+      renderPanel();
+      fireEvent.click(screen.getByTestId('recon-line-radio-LR2'));
+
+      const user = await openMoreMenu();
+      await user.click(screen.getByTestId('recon-action-reactivate'));
+      await user.click(screen.getByTestId('recon-remove-accept'));
+
+      await waitFor(() => expect(toast.warning)
+        .toHaveBeenCalledWith('financeReconcileToastOperationPartiallyRemoved'));
+      expect(toast.success).not.toHaveBeenCalled();
+      const call = uiCalls.find((c) => c.key === 'financeReconcileToastOperationPartiallyRemoved');
+      expect(call.vars).toEqual({ removed: 1, total: 2, failed: 1 });
+      // Always reload, even on a partial outcome.
+      await waitFor(() => expect(linesState.reload).toHaveBeenCalled());
+    });
+
+    // The "another draft will be confirmed" warning moved OUT of the result toast and INTO the
+    // confirm dialog (shown up front, before the user commits). The backend still returns
+    // `autoConfirmedDrafts`, but the frontend no longer reacts to it on the success path.
+    it('ignores autoConfirmedDrafts on the success path (the warning moved into the dialog)', async () => {
+      reactivateSelectedState.reactivateSelected = vi.fn().mockResolvedValue({
+        reactivated: true, transactionIds: ['T3', 'T4'], failedTransactionIds: [],
+        autoConfirmedDrafts: 2,
+      });
+      setLines([LINE_RECONCILED_MULTI]);
+      setCandidates([RECON_CAND_T3, RECON_CAND_T4]);
+      renderPanel();
+      fireEvent.click(screen.getByTestId('recon-line-radio-LR2'));
+
+      const user = await openMoreMenu();
+      await user.click(screen.getByTestId('recon-action-reactivate'));
+      await user.click(screen.getByTestId('recon-remove-accept'));
+
+      // Plain success even though autoConfirmedDrafts > 0 — no result-toast warning any more.
+      await waitFor(() => expect(toast.success)
+        .toHaveBeenCalledWith('financeReconcileToastOperationReactivated'));
+      expect(toast.warning).not.toHaveBeenCalled();
+      expect(toast.error).not.toHaveBeenCalled();
+      await waitFor(() => expect(linesState.reload).toHaveBeenCalled());
+      await waitFor(() => expect(candidateCheckbox('T3')).not.toBeChecked());
+    });
+
+    // ── Up-front dialog warning (driven by draftReconciliationCount from the lines hook) ──
+
+    // The warning has no testid of its own — it is the shared cartel's single yellow warning box,
+    // whose copy SWITCHES to the "otro borrador" variant (and gains a matching bullet) when another
+    // draft exists. So assert on the copy, not on a dedicated element.
+    it('warns in the Reactivar dialog when another reconciliation is already in draft', async () => {
+      linesState.draftReconciliationCount = 1;
+      setLines([LINE_RECONCILED_MULTI]);
+      setCandidates([RECON_CAND_T3, RECON_CAND_T4]);
+      renderPanel();
+      fireEvent.click(screen.getByTestId('recon-line-radio-LR2'));
+
+      const user = await openMoreMenu();
+      await user.click(screen.getByTestId('recon-action-reactivate'));
+
+      const modal = screen.getByTestId('recon-remove-modal');
+      expect(modal).toHaveTextContent('financeReconcileReactivateOtherDraftWarning');
+      // ...and the extra consequence bullet spelling out that the other draft gets confirmed.
+      expect(modal).toHaveTextContent('financeReconcileConfirmItemOtherDraftTitle');
+      expect(modal).toHaveTextContent('financeReconcileConfirmItemOtherDraftDesc');
+      // Shown BEFORE committing — nothing has been sent yet.
+      expect(reactivateSelectedState.reactivateSelected).not.toHaveBeenCalled();
+    });
+
+    it('does not warn in the Reactivar dialog when no other reconciliation is in draft', async () => {
+      linesState.draftReconciliationCount = 0;
+      setLines([LINE_RECONCILED_MULTI]);
+      setCandidates([RECON_CAND_T3, RECON_CAND_T4]);
+      renderPanel();
+      fireEvent.click(screen.getByTestId('recon-line-radio-LR2'));
+
+      const user = await openMoreMenu();
+      await user.click(screen.getByTestId('recon-action-reactivate'));
+
+      const modal = screen.getByTestId('recon-remove-modal');
+      expect(modal).toBeInTheDocument();
+      expect(modal).not.toHaveTextContent('financeReconcileReactivateOtherDraftWarning');
+      expect(modal).not.toHaveTextContent('financeReconcileConfirmItemOtherDraftTitle');
+      expect(modal).not.toHaveTextContent('financeReconcileConfirmItemOtherDraftDesc');
+      // The plain reactivate caveat takes the warning box instead.
+      expect(modal).toHaveTextContent('financeReconcileConfirmReactivateWarning');
+    });
+
+    it('does not warn in the Desconciliar dialog even when another draft exists', async () => {
+      // The warning is gated on `reactivate` too: deleting the reconciliation never confirms the
+      // other draft, so the caveat does not apply to that action.
+      linesState.draftReconciliationCount = 3;
+      setLines([LINE_RECONCILED_MULTI]);
+      setCandidates([RECON_CAND_T3, RECON_CAND_T4]);
+      renderPanel();
+      fireEvent.click(screen.getByTestId('recon-line-radio-LR2'));
+
+      // Primary button = Desconciliar (not the dropdown's Reactivar).
+      fireEvent.click(screen.getByTestId('recon-action-reconcile'));
+
+      const modal = screen.getByTestId('recon-remove-modal');
+      expect(modal).toBeInTheDocument();
+      expect(modal).not.toHaveTextContent('financeReconcileReactivateOtherDraftWarning');
+      expect(modal).not.toHaveTextContent('financeReconcileConfirmItemOtherDraftTitle');
+      expect(modal).not.toHaveTextContent('financeReconcileConfirmItemOtherDraftDesc');
+      // Desconciliar keeps its own warning copy.
+      expect(modal).toHaveTextContent('financeReconcileConfirmRemoveWarning');
+    });
+  });
+
+  // ── The un-reconcile confirm cartel (shared LifecycleConfirmModal) ─────────────
+  // Both Desconciliar and Reactivar now render the SAME cartel Movimientos and Cobros/Pagos use
+  // (`recon-remove-*` testids come from its `testIdPrefix`): red title + sub, one consequence bullet
+  // per effect that actually applies, a single yellow warning box, then Cancelar + the destructive
+  // confirm. These tests pin the content matrix (which bullet / which warning / which confirm label)
+  // for each combination of action × auto-created payment × another-draft-open.
+  describe('un-reconcile confirm cartel (shared LifecycleConfirmModal)', () => {
+    /** Selects the given reconciled line and opens the DESCONCILIAR cartel (primary button). */
+    function openRemoveDialog(line, candidates) {
+      setLines([line]);
+      setCandidates(candidates);
+      const rendered = renderPanel();
+      fireEvent.click(screen.getByTestId(`recon-line-radio-${line.id}`));
+      fireEvent.click(screen.getByTestId('recon-action-reconcile'));
+      return rendered;
+    }
+
+    /** Same, but opens the REACTIVAR cartel through the split button's dropdown item. */
+    async function openReactivateDialog(line, candidates) {
+      setLines([line]);
+      setCandidates(candidates);
+      const rendered = renderPanel();
+      fireEvent.click(screen.getByTestId(`recon-line-radio-${line.id}`));
+      const user = userEvent.setup();
+      await user.click(screen.getByTestId('recon-action-reconcile-more'));
+      await user.click(screen.getByTestId('recon-action-reactivate'));
+      return { ...rendered, user };
+    }
+
+    const modal = () => screen.getByTestId('recon-remove-modal');
+
+    it('renders nothing at all until an un-reconcile is requested', () => {
+      setLines([LINE_RECONCILED_MULTI]);
+      setCandidates([RECON_CAND_T3, RECON_CAND_T4]);
+      renderPanel();
+      fireEvent.click(screen.getByTestId('recon-line-radio-LR2'));
+      // The component returns null while closed — not even the buttons exist in the DOM.
+      expect(screen.queryByTestId('recon-remove-modal')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('recon-remove-accept')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('recon-remove-cancel')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('recon-remove-close')).not.toBeInTheDocument();
+    });
+
+    // ── Desconciliar content ────────────────────────────────────────────────────
+    it('Desconciliar: remove title/bullet/warning/confirm label, and no reactivate copy', () => {
+      openRemoveDialog(LINE_RECONCILED_TXNS, [RECON_CAND_T2]); // 1 doc, not auto-created
+      const m = modal();
+      // Title + sub.
+      expect(m).toHaveTextContent('financeReconcileConfirmRemoveOneTitle');
+      expect(m).toHaveTextContent('financeReconcileConfirmRemoveOneBody');
+      // Bullet 1 — the reconciliation itself, worded for the destructive action.
+      expect(m).toHaveTextContent('reactivarItem1Title');
+      expect(m).toHaveTextContent('financeReconcileConfirmItemRemoveDesc');
+      expect(m).not.toHaveTextContent('financeReconcileConfirmItemReactivateDesc');
+      // Warning box + confirm/cancel labels.
+      expect(m).toHaveTextContent('financeReconcileConfirmRemoveWarning');
+      expect(m).not.toHaveTextContent('financeReconcileConfirmReactivateWarning');
+      expect(screen.getByTestId('recon-remove-accept'))
+        .toHaveTextContent('financeReconcileActionRemoveOne');
+      expect(screen.getByTestId('recon-remove-cancel')).toHaveTextContent('cancel');
+      // No reactivate title leaks in.
+      expect(m).not.toHaveTextContent('financeReconcileConfirmReactivateTitle');
+    });
+
+    // ── Reactivar content ───────────────────────────────────────────────────────
+    it('Reactivar: reactivate title/bullet/warning/confirm label, and no remove copy', async () => {
+      linesState.draftReconciliationCount = 0;
+      await openReactivateDialog(LINE_RECONCILED_TXNS, [RECON_CAND_T2]);
+      const m = modal();
+      expect(m).toHaveTextContent('financeReconcileConfirmReactivateTitle');
+      expect(m).toHaveTextContent('financeReconcileConfirmReactivateOneBody');
+      // Bullet 1 — same title, draft-preserving description.
+      expect(m).toHaveTextContent('reactivarItem1Title');
+      expect(m).toHaveTextContent('financeReconcileConfirmItemReactivateDesc');
+      expect(m).not.toHaveTextContent('financeReconcileConfirmItemRemoveDesc');
+      // With no other draft open, the plain reactivate caveat fills the warning box.
+      expect(m).toHaveTextContent('financeReconcileConfirmReactivateWarning');
+      expect(m).not.toHaveTextContent('financeReconcileReactivateOtherDraftWarning');
+      expect(m).not.toHaveTextContent('financeReconcileConfirmRemoveWarning');
+      expect(screen.getByTestId('recon-remove-accept'))
+        .toHaveTextContent('financeReconcileActionReactivateSelected');
+      expect(screen.getByTestId('recon-remove-accept'))
+        .not.toHaveTextContent('financeReconcileActionRemoveOne');
+    });
+
+    // ── Another-draft-open bullet + warning switch (draftReconciliationCount) ───
+    it('Reactivar with another draft open: extra bullet AND the switched warning copy', async () => {
+      linesState.draftReconciliationCount = 1;
+      await openReactivateDialog(LINE_RECONCILED_TXNS, [RECON_CAND_T2]);
+      const m = modal();
+      expect(m).toHaveTextContent('financeReconcileConfirmItemOtherDraftTitle');
+      expect(m).toHaveTextContent('financeReconcileConfirmItemOtherDraftDesc');
+      // The warning box copy SWITCHES (it is not additive — there is only one box).
+      expect(m).toHaveTextContent('financeReconcileReactivateOtherDraftWarning');
+      expect(m).not.toHaveTextContent('financeReconcileConfirmReactivateWarning');
+    });
+
+    it('Desconciliar with another draft open: no extra bullet, warning unchanged', () => {
+      // Gated on `reactivate` too — deleting the reconciliation never confirms the other draft.
+      linesState.draftReconciliationCount = 1;
+      openRemoveDialog(LINE_RECONCILED_TXNS, [RECON_CAND_T2]);
+      const m = modal();
+      expect(m).not.toHaveTextContent('financeReconcileConfirmItemOtherDraftTitle');
+      expect(m).not.toHaveTextContent('financeReconcileConfirmItemOtherDraftDesc');
+      expect(m).not.toHaveTextContent('financeReconcileReactivateOtherDraftWarning');
+      expect(m).toHaveTextContent('financeReconcileConfirmRemoveWarning');
+    });
+
+    // ── Created-payment bullet (hasAuto), both actions ──────────────────────────
+    it('shows the created-payment bullet on BOTH actions when the selection has an auto-created txn', async () => {
+      // Desconciliar first (LINE_RECONCILED_MULTI: T3 autoCreated, T4 not — both pre-checked).
+      openRemoveDialog(LINE_RECONCILED_MULTI, [RECON_CAND_T3, RECON_CAND_T4]);
+      expect(modal()).toHaveTextContent('financeReconcileConfirmItemPaymentTitle');
+      expect(modal()).toHaveTextContent('financeReconcileConfirmItemPaymentDesc');
+      // Then the same selection through Reactivar — the payment is deleted in both cases.
+      fireEvent.click(screen.getByTestId('recon-remove-cancel'));
+      const user = userEvent.setup();
+      await user.click(screen.getByTestId('recon-action-reconcile-more'));
+      await user.click(screen.getByTestId('recon-action-reactivate'));
+      expect(modal()).toHaveTextContent('financeReconcileConfirmItemPaymentTitle');
+      expect(modal()).toHaveTextContent('financeReconcileConfirmItemPaymentDesc');
+    });
+
+    it('omits the created-payment bullet on BOTH actions when nothing was auto-created', async () => {
+      openRemoveDialog(LINE_RECONCILED_TXNS, [RECON_CAND_T2]); // T2 autoCreated: false
+      expect(modal()).not.toHaveTextContent('financeReconcileConfirmItemPaymentTitle');
+      fireEvent.click(screen.getByTestId('recon-remove-cancel'));
+      const user = userEvent.setup();
+      await user.click(screen.getByTestId('recon-action-reconcile-more'));
+      await user.click(screen.getByTestId('recon-action-reactivate'));
+      expect(modal()).not.toHaveTextContent('financeReconcileConfirmItemPaymentTitle');
+      expect(modal()).not.toHaveTextContent('financeReconcileConfirmItemPaymentDesc');
+    });
+
+    it('orders the bullets: reconciliation, then created payment, then other draft', async () => {
+      linesState.draftReconciliationCount = 2;
+      // T3 is auto-created → all three bullets apply at once on the reactivate path.
+      await openReactivateDialog(LINE_RECONCILED_MULTI, [RECON_CAND_T3, RECON_CAND_T4]);
+      const text = modal().textContent;
+      const first = text.indexOf('reactivarItem1Title');
+      const payment = text.indexOf('financeReconcileConfirmItemPaymentTitle');
+      const otherDraft = text.indexOf('financeReconcileConfirmItemOtherDraftTitle');
+      expect(first).toBeGreaterThan(-1);
+      expect(payment).toBeGreaterThan(first);
+      expect(otherDraft).toBeGreaterThan(payment);
+    });
+
+    // ── Dismissal (cancel / ×) never touches the backend ───────────────────────
+    it('Cancelar closes the Desconciliar cartel without calling either endpoint', async () => {
+      openRemoveDialog(LINE_RECONCILED_MULTI, [RECON_CAND_T3, RECON_CAND_T4]);
+      fireEvent.click(screen.getByTestId('recon-remove-cancel'));
+      await waitFor(() =>
+        expect(screen.queryByTestId('recon-remove-modal')).not.toBeInTheDocument());
+      expect(removeState.removeOperation).not.toHaveBeenCalled();
+      expect(reactivateSelectedState.reactivateSelected).not.toHaveBeenCalled();
+      // The line stays selected, so the action bar is still usable.
+      expect(screen.getByTestId('recon-line-radio-LR2')).toBeChecked();
+    });
+
+    it('the × button closes the Desconciliar cartel without calling either endpoint', async () => {
+      openRemoveDialog(LINE_RECONCILED_MULTI, [RECON_CAND_T3, RECON_CAND_T4]);
+      fireEvent.click(screen.getByTestId('recon-remove-close'));
+      await waitFor(() =>
+        expect(screen.queryByTestId('recon-remove-modal')).not.toBeInTheDocument());
+      expect(removeState.removeOperation).not.toHaveBeenCalled();
+      expect(reactivateSelectedState.reactivateSelected).not.toHaveBeenCalled();
+    });
+
+    it('the × button closes the Reactivar cartel without calling either endpoint', async () => {
+      await openReactivateDialog(LINE_RECONCILED_MULTI, [RECON_CAND_T3, RECON_CAND_T4]);
+      fireEvent.click(screen.getByTestId('recon-remove-close'));
+      await waitFor(() =>
+        expect(screen.queryByTestId('recon-remove-modal')).not.toBeInTheDocument());
+      expect(reactivateSelectedState.reactivateSelected).not.toHaveBeenCalled();
+      expect(removeState.removeOperation).not.toHaveBeenCalled();
+    });
+
+    it('Cancelar closes the Reactivar cartel without calling either endpoint', async () => {
+      await openReactivateDialog(LINE_RECONCILED_MULTI, [RECON_CAND_T3, RECON_CAND_T4]);
+      fireEvent.click(screen.getByTestId('recon-remove-cancel'));
+      await waitFor(() =>
+        expect(screen.queryByTestId('recon-remove-modal')).not.toBeInTheDocument());
+      expect(reactivateSelectedState.reactivateSelected).not.toHaveBeenCalled();
+      expect(removeState.removeOperation).not.toHaveBeenCalled();
+    });
+
+    // ── Confirm is a no-op while a request is already in flight (busy) ──────────
+    it('does not fire a second request when the cartel is confirmed twice', async () => {
+      // The cartel disables its own confirm while awaiting onConfirm, and the panel additionally
+      // passes a no-op onConfirm while `removing` — so a double click can never double-post.
+      let resolveRemove;
+      removeState.removeOperation = vi.fn(() => new Promise((res) => { resolveRemove = res; }));
+      openRemoveDialog(LINE_RECONCILED_MULTI, [RECON_CAND_T3, RECON_CAND_T4]);
+      const accept = screen.getByTestId('recon-remove-accept');
+      fireEvent.click(accept);
+      await waitFor(() => expect(removeState.removeOperation).toHaveBeenCalledTimes(1));
+      expect(accept).toBeDisabled();
+      fireEvent.click(accept);
+      expect(removeState.removeOperation).toHaveBeenCalledTimes(1);
+      resolveRemove({ transactionIds: ['T3', 'T4'], failedTransactionIds: [] });
+      await waitFor(() =>
+        expect(screen.queryByTestId('recon-remove-modal')).not.toBeInTheDocument());
     });
   });
 

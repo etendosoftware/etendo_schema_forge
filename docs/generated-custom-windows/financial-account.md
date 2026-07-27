@@ -549,6 +549,46 @@ used** and only becomes **CONCILIADA at 100 %**; partial lines keep showing in t
     top block (no checkboxes/bulk). The bottom bar stays "Conciliar" for the remainder.
   - `removeOperation` accepts `transactionIds[]` and branches on whether the selection covers the
     whole reconciliation.
+  - **"Reactivar" — the lightweight alternative** (ETP-4502, action `reactivateSelected`): the
+    "Desconciliar (N)" button is a **split button** (chevron → `recon-action-reactivate`, `RotateCcw`
+    icon, same checked selection). Where Desconciliar DELETES the `FIN_Reconciliation`, Reactivar
+    returns it to **draft and keeps it** via the `payment.removal` module's PLAIN
+    `ReconciliationRemovalUtil.reactivate(rec)` (not `reactivateAndRemoveReconciliation`).
+    - **Key insight** (verified against Core's `FIN_ReconciliationProcess` action `"R"`, which only
+      does `setProcessed(false)` + `setDocumentStatus("DR")`): reactivating touches **nothing else** —
+      the statement line keeps its `financialAccountTransaction`, the transaction keeps its
+      `reconciliation` and its cleared `RPPC` status. So **no marker column and no re-linking are
+      needed**; the whole state is derivable, and `ReconciliationHandler.draftReconciliationOf(line)`
+      (line → txn → rec with `!isProcessed()`) is the single detector.
+    - Consequences, all keyed off that one detector: `PENDING_LINES_SQL` reports such a line as
+      **pending** (its `line_status` now also checks `COALESCE(rec.processed,'N') = 'N'`) and exposes
+      `draftReconciliationId`; its `pendingAmount` is forced to the line's full amount (the stored
+      `EM_ETGO_Pending_Amount` is 0 while a txn is linked, which would render as 100 % reconciled);
+      `buildCandidates` skips the read-only `buildLinkedTransactions` path and instead returns the
+      editable list with the draft's own transactions **pre-selected** (`CANDIDATES_SQL` gained an
+      `OR ft.fin_reconciliation_id = ?` branch that also bypasses the `status <> 'RPPC'` filter, bound
+      as its FIRST param); and `compose()` runs `reprocessDraftIfAlreadyMatched` first, which — when
+      the confirmed selection equals the draft's transactions — just calls `processReconciliation` on
+      that SAME document (no `addNewDraftReconciliation`, no re-match), or discards the draft
+      (`reactivateAndRemoveReconciliation`) and composes fresh when the selection changed.
+    - **Three guards had to be widened**, all sharing the same wrong assumption that a linked
+      transaction implies "reconciled": `reconcileGroup`'s and `applyGroup`'s 409 "Statement line is
+      already reconciled", and `ReconciliationFlowSupport.validateOperations`' 409 "Operation is
+      already reconciled". Each now also requires the reconciliation to be **processed** (the latter
+      exempts only the line's OWN draft, so a transaction on a different/processed reconciliation is
+      still rejected). Without this the feature dead-ended: the UI showed the pre-selected candidates
+      and then 409'd on confirm.
+    - **Auto-created movements are still fully deleted** (same `PaymentRemovalUtil` /
+      `TransactionRemovalUtil` as Desconciliar) — a payment that only existed to back this
+      reconciliation has nothing worth preserving in a draft. A selection that is entirely
+      auto-created therefore falls back to the delete behavior.
+    - **Core allows only ONE editable (draft) reconciliation per account** (its reactivate rejects
+      with `@APRM_DraftReconciliationExists@`). So `reactivateToDraft` processes any pre-existing draft
+      first — the same ordering pre-step `undoReconciliation` already performed, and what the module's
+      own Classic "Reactivate Reconciliation" button does. Unavoidable consequence: **a line left
+      pending by an earlier Reactivar on that account becomes reconciled again**. The count of drafts
+      confirmed this way is returned as `autoConfirmedDrafts` and the UI warns about it
+      (`financeReconcileToastReactivatedOtherConfirmed`) rather than letting it happen silently.
   - **Bulk un-reconcile is NOT atomic at the DB level** — Core's own removal utilities
     (`PaymentRemovalUtil.reactivateAndRemove`) commit mid-flow (`SessionHandler.commitAndStart`), so
     a failure partway through a multi-id batch does not roll back what already persisted. Rather than
