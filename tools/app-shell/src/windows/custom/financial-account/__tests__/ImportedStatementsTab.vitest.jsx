@@ -465,5 +465,22 @@ describe('ImportedStatementsTab', () => {
       await waitFor(() => expect(reloadFn).toHaveBeenCalledTimes(1));
       expect(screen.queryByTestId('bulk-delete-selection-bar')).not.toBeInTheDocument();
     });
+
+    it('all fail: does not reload, fires a single error toast, and leaves the bar showing the same selection', async () => {
+      deleteStatement.mockRejectedValue(new Error('HTTP 400'));
+      const user = userEvent.setup();
+      render(<ImportedStatementsTab account={ACCOUNT} />);
+
+      await user.click(screen.getByTestId('row-select-s1'));
+      await user.click(screen.getByTestId('bulk-delete-selection-trigger'));
+      await user.click(screen.getByTestId('batch-delete-confirm'));
+
+      await waitFor(() => expect(toastError).toHaveBeenCalled());
+      expect(toastSuccess).not.toHaveBeenCalled();
+      expect(toastWarning).not.toHaveBeenCalled();
+      expect(reloadFn).not.toHaveBeenCalled();
+      expect(screen.getByTestId('bulk-delete-selection-bar')).toBeInTheDocument();
+      expect(screen.getByTestId('stub-table')).toHaveAttribute('data-selected', 's1');
+    });
   });
 });

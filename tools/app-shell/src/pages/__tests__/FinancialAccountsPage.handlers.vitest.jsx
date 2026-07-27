@@ -1,4 +1,4 @@
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 
 // This suite mocks the table + modals so the page's handler callbacks
@@ -6,7 +6,9 @@ import { MemoryRouter } from 'react-router-dom';
 // invoked directly — they are otherwise unreachable through the real table UI.
 
 vi.mock('@/i18n', () => ({
-  useUI: () => (key) => key,
+  // Params are appended (not dropped) so bulk-delete assertions below can
+  // verify the exact count passed through (e.g. `bulkDeleteConfirmMessage:{"count":2}`).
+  useUI: () => (key, params) => (params ? `${key}:${JSON.stringify(params)}` : key),
   useLocaleSwitch: () => ({ locale: 'es_ES', setLocale: vi.fn() }),
 }));
 
@@ -39,11 +41,15 @@ vi.mock('@/hooks/useFinancialAccounts.js', () => ({
 // ETP-4656 — the page now also calls useAccountMutations() (bulk "Delete selected"
 // reuses archiveAccount()), which calls useAuth() internally; stub it at the module
 // level like every other auth-touching hook in this suite (no AuthProvider needed).
+// `mockArchiveAccount` is hoisted to module scope (not re-created per render) so
+// bulk-delete tests below can configure per-item resolve/reject behavior and
+// still assert on the exact ids it was called with.
+const mockArchiveAccount = vi.fn();
 vi.mock('@/hooks/useAccountMutations.js', () => ({
   useAccountMutations: () => ({
     createAccount: vi.fn(),
     updateAccount: vi.fn(),
-    archiveAccount: vi.fn(),
+    archiveAccount: (...args) => mockArchiveAccount(...args),
     fetchDefaults: vi.fn().mockResolvedValue({ currencies: [], defaultCurrencyId: '' }),
   }),
 }));
@@ -74,6 +80,10 @@ vi.mock('@/components/financial-accounts', async () => {
       tableProps = props;
       return <div data-testid="table" />;
     },
+    // ETP-4656 — the real BulkDeleteSelectionBar is a thin presentational
+    // component (count/onDelete/onCancel/deleting), kept real (not stubbed)
+    // so the tests below can drive it exactly as a user would.
+    BulkDeleteSelectionBar: actual.BulkDeleteSelectionBar,
   };
 });
 
@@ -115,6 +125,7 @@ function renderPage(accounts = []) {
 }
 
 const ACC = { id: 'acc-1', name: 'BBVA', type: 'B', active: true };
+const ACC2 = { id: 'acc-2', name: 'Caja Tienda', type: 'C', active: true };
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -260,5 +271,135 @@ describe('FinancialAccountsPage — archive & transfer', () => {
     renderPage([ACC]);
     tableProps.onRetry();
     expect(mockReload).toHaveBeenCalled();
+  });
+});
+
+// ETP-4656 — bulk-delete wiring: handleSelectionChange (toggle Set<id>),
+// clearSelection, the conditional toolbar/BulkDeleteSelectionBar swap, and
+// requestBatchDelete's onOutcome branches (all-succeeded / partial-failure).
+describe('FinancialAccountsPage — bulk delete selection', () => {
+  it('shows the toolbar by default and swaps to the selection bar once a row is selected', () => {
+    renderPage([ACC, ACC2]);
+
+    expect(screen.getByTestId('toolbar')).toBeInTheDocument();
+    expect(screen.queryByTestId('bulk-delete-selection-bar')).not.toBeInTheDocument();
+
+    act(() => tableProps.onSelectionChange('acc-1'));
+
+    expect(screen.queryByTestId('toolbar')).not.toBeInTheDocument();
+    expect(screen.getByTestId('bulk-delete-selection-bar')).toBeInTheDocument();
+    expect(tableProps.selectedIds.has('acc-1')).toBe(true);
+  });
+
+  it('toggling the same account id a second time clears the selection (Set delete branch)', () => {
+    renderPage([ACC, ACC2]);
+
+    act(() => tableProps.onSelectionChange('acc-1'));
+    expect(tableProps.selectedIds.has('acc-1')).toBe(true);
+
+    act(() => tableProps.onSelectionChange('acc-1'));
+
+    expect(tableProps.selectedIds.has('acc-1')).toBe(false);
+    expect(screen.queryByTestId('bulk-delete-selection-bar')).not.toBeInTheDocument();
+    expect(screen.getByTestId('toolbar')).toBeInTheDocument();
+  });
+
+  it('selecting two rows keeps both independently selected', () => {
+    renderPage([ACC, ACC2]);
+
+    act(() => tableProps.onSelectionChange('acc-1'));
+    act(() => tableProps.onSelectionChange('acc-2'));
+
+    expect(tableProps.selectedIds.has('acc-1')).toBe(true);
+    expect(tableProps.selectedIds.has('acc-2')).toBe(true);
+    // The bar's count is only interpolated via the literal `({count})` next to
+    // the trigger label — `ui('selected', {count})` is a separate translated
+    // status span whose mock here just returns `selected:{"count":2}`.
+    expect(screen.getByTestId('bulk-delete-selection-trigger')).toHaveTextContent('(2)');
+  });
+
+  it('Cancel on the selection bar clears the selection and restores the toolbar', () => {
+    renderPage([ACC, ACC2]);
+
+    act(() => tableProps.onSelectionChange('acc-1'));
+    expect(screen.getByTestId('bulk-delete-selection-bar')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByTestId('bulk-delete-selection-cancel'));
+
+    expect(screen.queryByTestId('bulk-delete-selection-bar')).not.toBeInTheDocument();
+    expect(screen.getByTestId('toolbar')).toBeInTheDocument();
+    expect(tableProps.selectedIds.size).toBe(0);
+  });
+
+  it('clicking Delete on the selection bar opens the confirm dialog scoped to only the selected accounts', () => {
+    renderPage([ACC, ACC2]);
+
+    act(() => tableProps.onSelectionChange('acc-1'));
+    fireEvent.click(screen.getByTestId('bulk-delete-selection-trigger'));
+
+    // Dialog (Radix DialogPrimitive.Root) is a context provider, not a DOM
+    // node — DialogDescription (Radix's <p>) is the first real DOM element
+    // that actually renders once `open` is true.
+    expect(screen.getByTestId('DialogDescription__batch-delete')).toHaveTextContent(
+      'bulkDeleteConfirmMessage:{"count":1}',
+    );
+    expect(screen.getByTestId('batch-delete-confirm')).toBeInTheDocument();
+  });
+
+  it('all-succeeded outcome: reloads and clears the selection back to the toolbar', async () => {
+    mockArchiveAccount.mockResolvedValue(undefined);
+    renderPage([ACC, ACC2]);
+
+    act(() => tableProps.onSelectionChange('acc-1'));
+    act(() => tableProps.onSelectionChange('acc-2'));
+    fireEvent.click(screen.getByTestId('bulk-delete-selection-trigger'));
+    fireEvent.click(screen.getByTestId('batch-delete-confirm'));
+
+    await waitFor(() => expect(mockReload).toHaveBeenCalled());
+    expect(mockArchiveAccount).toHaveBeenCalledWith('acc-1');
+    expect(mockArchiveAccount).toHaveBeenCalledWith('acc-2');
+
+    await waitFor(() => {
+      expect(screen.queryByTestId('bulk-delete-selection-bar')).not.toBeInTheDocument();
+    });
+    expect(screen.getByTestId('toolbar')).toBeInTheDocument();
+    expect(tableProps.selectedIds.size).toBe(0);
+  });
+
+  it('partial-failure outcome: reloads (since at least one succeeded) and keeps only the failed account selected', async () => {
+    mockArchiveAccount.mockImplementation((id) =>
+      id === 'acc-2' ? Promise.reject(new Error('locked')) : Promise.resolve(undefined),
+    );
+    renderPage([ACC, ACC2]);
+
+    act(() => tableProps.onSelectionChange('acc-1'));
+    act(() => tableProps.onSelectionChange('acc-2'));
+    fireEvent.click(screen.getByTestId('bulk-delete-selection-trigger'));
+    fireEvent.click(screen.getByTestId('batch-delete-confirm'));
+
+    await waitFor(() => expect(mockReload).toHaveBeenCalled());
+
+    // Selection is narrowed down to just the failed account — the bar stays
+    // visible (selectedIds is non-empty) but now scoped to 'acc-2' only.
+    await waitFor(() => {
+      expect(screen.getByTestId('bulk-delete-selection-trigger')).toHaveTextContent('(1)');
+    });
+    expect(tableProps.selectedIds.has('acc-2')).toBe(true);
+    expect(tableProps.selectedIds.has('acc-1')).toBe(false);
+  });
+
+  it('all-failed outcome: does not reload and leaves the selection untouched', async () => {
+    mockArchiveAccount.mockRejectedValue(new Error('locked'));
+    renderPage([ACC, ACC2]);
+
+    act(() => tableProps.onSelectionChange('acc-1'));
+    fireEvent.click(screen.getByTestId('bulk-delete-selection-trigger'));
+    fireEvent.click(screen.getByTestId('batch-delete-confirm'));
+
+    await waitFor(() => expect(toastError).toHaveBeenCalled());
+
+    expect(mockReload).not.toHaveBeenCalled();
+    expect(screen.getByTestId('bulk-delete-selection-bar')).toBeInTheDocument();
+    expect(tableProps.selectedIds.has('acc-1')).toBe(true);
   });
 });
