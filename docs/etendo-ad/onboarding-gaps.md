@@ -601,6 +601,33 @@ WHERE au.ad_client_id = '<NEW_CLIENT_ID>';
 
 ---
 
+## H — NEO Headless / Webhook Access
+
+### H1 — Non-System-Administrator roles 404 on `SMFWHE_DEFINEDWEBHOOK_ROLE`-gated webhooks (ETP-4520)
+
+**Symptom:** any authenticated role other than System Administrator (`AD_Role_ID = '0'`) gets a flat `404` from every Schema Forge webhook that requires a `SMFWHE_DEFINEDWEBHOOK_ROLE` grant — `SFListMenu`, `SFWindowAccessMap`, `SFRolesOverview`. Observable symptoms compound in a confusing way because the two callers fail in opposite directions: the sidebar shows the **full, unfiltered** menu (`useRoleMenu()`'s fetch fails → `AppLayout` fails **open** on a fetch error) while **every window** is denied (`fetchWindowAccess`'s fetch fails → `AuthContext`'s `windowAccess` map stays at its fail-**closed** `{}` default → `WindowAccessGuard` blocks everything).
+
+**Root cause:** `SMFWHE_DEFINEDWEBHOOK_ROLE` is the webhook dispatcher's own authorization gate — a role with no row for a given webhook is 404'd by `WebhookServiceHandler` before the webhook's own Java logic (e.g. `NeoAccessHelper.isAdminOrClientAdmin`) ever runs. The per-tenant grants for a client's non-admin roles live in `referencedata/sampledata/<Client>/SMFWHE_DEFINEDWEBHOOK_ROLE.xml` — **reference/sample data, applied only at initial tenant creation, never reapplied by `update.database`/`smartbuild` on an existing install.** Any tenant provisioned before a given webhook's role grants existed in that XML keeps whatever the module's own default seed shipped — observed as `ad_role_id = '0'` only.
+
+**Quick verification:**
+
+```sql
+SELECT w.name AS webhook, r.name AS role_name
+FROM smfwhe_definedwebhook_role wr
+JOIN smfwhe_definedwebhook w ON w.smfwhe_definedwebhook_id = wr.smfwhe_definedwebhook_id
+LEFT JOIN ad_role r ON r.ad_role_id = wr.ad_role_id
+WHERE wr.ad_client_id = '<CLIENT_ID>'
+  AND w.name IN ('SFListMenu', 'SFWindowAccessMap', 'SFRolesOverview')
+ORDER BY w.name, r.name;
+-- If only 'System Administrator' rows appear for a webhook, that gap is present for this tenant.
+```
+
+**Corrective fix:** `cli/src/data-fixes/sql/20260727T114306Z__R16-webhook-role-access.sql` — grants every ACTIVE role of `:client_id` a row for all 3 webhooks (not a hardcoded role list, so it covers any tenant's own admin-equivalent role plus every other role it has).
+
+**Preventive fix:** `referencedata/sampledata/GOClient/SMFWHE_DEFINEDWEBHOOK_ROLE.xml` (in `com.etendoerp.go`) now grants all 3 webhooks (previously only `SFListMenu`/`SFWindowAccessMap`) to GOClient's 6 roles, so a fresh GOClient install is born correct. Any other client's own sample-data (if it ships an equivalent file) should follow the same 3-webhook pattern.
+
+---
+
 ## Recommended Order of Operations
 
 Consolidated from the field checklist; covers A1–C2. D1 and E1 are addressed inside the Initial Client Setup process itself.
