@@ -5874,7 +5874,7 @@
       ]
     },
     "4cdbb6a1d5f88ee0967c42ec50f1ebf974918f41cfdc927579046b33fad8d0bc": {
-      "checksum": "f037d953bab410f4463d1a1da01e7ca76f2239c9ec80db3a798a3abd19166169",
+      "checksum": "c90da1c47335db0bb95ff092a88a9ef4d22d4c54791a4aded426ac1cd1431edf",
       "params": [
         "800026"
       ],
@@ -5913,7 +5913,7 @@
         },
         {
           "columnname": "AD_Org_ID",
-          "displaylogic": null,
+          "displaylogic": "@ACCT_DIMENSION_DISPLAY@",
           "displaylogic_server": null,
           "displaylogicgrid": null,
           "name": "Organization",
@@ -6009,7 +6009,7 @@
         },
         {
           "columnname": "C_Costcenter_ID",
-          "displaylogic": null,
+          "displaylogic": "@ACCT_DIMENSION_DISPLAY@",
           "displaylogic_server": null,
           "displaylogicgrid": null,
           "name": "Cost Center",
@@ -6081,7 +6081,7 @@
         },
         {
           "columnname": "EM_Etadas_C_Activity_ID",
-          "displaylogic": null,
+          "displaylogic": "@$Element_AY@='Y'",
           "displaylogic_server": null,
           "displaylogicgrid": null,
           "name": "Activity",
@@ -6089,7 +6089,7 @@
         },
         {
           "columnname": "EM_Etadas_C_Bpartner_ID",
-          "displaylogic": null,
+          "displaylogic": "@$Element_BP@='Y'",
           "displaylogic_server": null,
           "displaylogicgrid": null,
           "name": "Business Partner",
@@ -6097,7 +6097,7 @@
         },
         {
           "columnname": "EM_Etadas_Campaign_ID",
-          "displaylogic": null,
+          "displaylogic": "@$Element_MC@='Y'",
           "displaylogic_server": null,
           "displaylogicgrid": null,
           "name": "Sales Campaign",
@@ -6105,7 +6105,7 @@
         },
         {
           "columnname": "EM_Etadas_Salesregion_ID",
-          "displaylogic": null,
+          "displaylogic": "@$Element_SR@='Y'",
           "displaylogic_server": null,
           "displaylogicgrid": null,
           "name": "Sales Region",
@@ -6193,7 +6193,7 @@
         },
         {
           "columnname": "User1_ID",
-          "displaylogic": null,
+          "displaylogic": "@ACCT_DIMENSION_DISPLAY@",
           "displaylogic_server": null,
           "displaylogicgrid": null,
           "name": "1st Dimension",
@@ -6233,7 +6233,7 @@
         },
         {
           "columnname": "User2_ID",
-          "displaylogic": null,
+          "displaylogic": "@ACCT_DIMENSION_DISPLAY@",
           "displaylogic_server": null,
           "displaylogicgrid": null,
           "name": "2nd Dimension",
@@ -15115,7 +15115,7 @@
       "rows": []
     },
     "f96633ac204ea54d299e732b9b90d118784f1968476b98b9d9df3e7c10b7da59": {
-      "checksum": "b1dd1773018c4910a6ef0f328946037590cf9b619676b070b87f09c4302aea23",
+      "checksum": "825dbf1b86f228aeed455a10c2360ee7202103e2feeccf3dc07b76b51c302ec6",
       "params": [
         "800027"
       ],
@@ -15370,7 +15370,7 @@
         },
         {
           "columnname": "EM_Etadas_C_Activity_ID",
-          "displaylogic": "@$Element_PJ@='Y' & @IsDepreciated@='Y'",
+          "displaylogic": "@$Element_AY@='Y' & @IsDepreciated@='Y'",
           "displaylogic_server": null,
           "displaylogicgrid": null,
           "name": "Activity",
@@ -15378,7 +15378,7 @@
         },
         {
           "columnname": "EM_Etadas_Campaign_ID",
-          "displaylogic": "@$Element_PJ@='Y' & @IsDepreciated@='Y'",
+          "displaylogic": "@$Element_MC@='Y' & @IsDepreciated@='Y'",
           "displaylogic_server": null,
           "displaylogicgrid": null,
           "name": "Sales Campaign",
@@ -15386,7 +15386,7 @@
         },
         {
           "columnname": "EM_Etadas_Costcenter_ID",
-          "displaylogic": "@$Element_PJ@='Y' & @IsDepreciated@='Y'",
+          "displaylogic": "@$Element_CC@='Y' & @IsDepreciated@='Y'",
           "displaylogic_server": null,
           "displaylogicgrid": null,
           "name": "Cost Center",
@@ -15394,7 +15394,7 @@
         },
         {
           "columnname": "EM_Etadas_Salesregion_ID",
-          "displaylogic": "@$Element_PJ@='Y' & @IsDepreciated@='Y'",
+          "displaylogic": "@$Element_SR@='Y' & @IsDepreciated@='Y'",
           "displaylogic_server": null,
           "displaylogicgrid": null,
           "name": "Sales Region",
@@ -15402,7 +15402,7 @@
         },
         {
           "columnname": "EM_Etadas_User1_ID",
-          "displaylogic": "@$Element_PJ@='Y' & @IsDepreciated@='Y'",
+          "displaylogic": "@$Element_U1@='Y' & @IsDepreciated@='Y'",
           "displaylogic_server": null,
           "displaylogicgrid": null,
           "name": "1st Dimension",
@@ -15410,7 +15410,7 @@
         },
         {
           "columnname": "EM_Etadas_User2_ID",
-          "displaylogic": "@$Element_PJ@='Y' & @IsDepreciated@='Y'",
+          "displaylogic": "@$Element_U2@='Y' & @IsDepreciated@='Y'",
           "displaylogic_server": null,
           "displaylogicgrid": null,
           "name": "2nd Dimension",

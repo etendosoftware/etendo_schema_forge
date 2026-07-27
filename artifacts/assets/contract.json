@@ -1,8 +1,8 @@
 {
-  "version": "0.42.0",
+  "version": "0.43.0",
   "generatedAt": "2026-04-29T19:06:30.936Z",
-  "updatedAt": "2026-07-23T16:39:42.243Z",
-  "checksum": "48cbc477153ab315",
+  "updatedAt": "2026-07-27T17:25:04.749Z",
+  "checksum": "bccdcdc7e56f1dcc",
   "frontendContract": {
     "window": {
       "id": "800027",
@@ -799,7 +799,7 @@
               "maxLength": 32
             },
             "displayLogic": {
-              "raw": "@$Element_PJ@='Y' & @IsDepreciated@='Y'",
+              "raw": "@$Element_CC@='Y' & @IsDepreciated@='Y'",
               "evaluable": false,
               "reason": "accounting-dimension",
               "js": null
