@@ -580,11 +580,14 @@ describe('AdvancedFilterBuilder', () => {
 // custom-column exclusion from filterableColumns
 //
 // Both behaviors are documented in docs/list-filters.md ("Operators per
-// column type" / "Which columns are offered") but are NOT implemented yet:
-//   - isFilterableColumn() does not check col.type === 'custom'.
-//   - the operator list building code never reads col.required.
-// These tests are expected to FAIL until a developer implements the fix —
-// they exist to pin down the exact contract before that change lands.
+// column type" / "Which columns are offered"):
+//   - isFilterableColumn() excludes col.type === 'custom' columns with no
+//     `column`/`backendFilterKey` (unless `filterable: true` opts back in).
+//   - the operator list building code drops isNull/isNotNull for
+//     col.required === true columns.
+// These started as TDD placeholders (written red, before the fix existed) —
+// the regression tests for the fix landed in ad3a38787, so everything below
+// is green now and guards against a future regression.
 // ============================================================
 
 describe('required-field operator exclusion (ETP-4609)', () => {
@@ -654,5 +657,23 @@ describe('custom-column exclusion from filterableColumns (ETP-4609)', () => {
       .map((o) => o.value);
 
     expect(fieldOptionValues).toContain('nameAndSearchKey');
+  });
+
+  it('includes a type:"custom" column that declares a `backendFilterKey`, even without explicit filterable: true', () => {
+    // A custom column can map to a real queryable field via `backendFilterKey`
+    // instead of `column` — isFilterableColumn() must treat that as "has a
+    // real backend property to filter against" and include it by default,
+    // the same way `filterable: true` does.
+    const cols = [
+      { key: 'computedTotal', label: 'Computed Total', type: 'custom', backendFilterKey: 'grandTotal' },
+    ];
+    render(<AdvancedFilterBuilder columns={cols} />);
+
+    const [fieldSelect] = screen.getAllByTestId('select-control');
+    const fieldOptionValues = within(fieldSelect)
+      .getAllByRole('option')
+      .map((o) => o.value);
+
+    expect(fieldOptionValues).toContain('computedTotal');
   });
 });

@@ -72,4 +72,18 @@ describe('ProductCustomTable — Advanced Filter fields (ETP-4609)', () => {
     render(<ProductCustomTable data={[]} hiddenColumns={[]} />);
     expect(capturedProps.hiddenColumns).toEqual(expect.arrayContaining(['name', 'searchKey']));
   });
+
+  it('unions a non-empty incoming hiddenColumns with its own local override '
+    + '(nothing dropped from either side, deduped)', () => {
+    // A parent forwarding a real, DIFFERENT hiddenColumns array (not just the
+    // empty-array bug-reproduction case) must still get BOTH sets merged —
+    // ProductCustomTable.jsx's own ['name', 'searchKey'] plus whatever the
+    // parent additionally asks to hide.
+    render(<ProductCustomTable data={[]} hiddenColumns={['someOtherColumn']} />);
+    expect(capturedProps.hiddenColumns).toEqual(
+      expect.arrayContaining(['name', 'searchKey', 'someOtherColumn']),
+    );
+    // Exactly 3 entries — proves no duplication and nothing extra sneaked in.
+    expect(capturedProps.hiddenColumns).toHaveLength(3);
+  });
 });
