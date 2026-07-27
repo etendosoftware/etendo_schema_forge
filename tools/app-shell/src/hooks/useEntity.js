@@ -909,7 +909,7 @@ export function useEntity(entity, childEntity, {
         loadList(false);
     }, [loadList, skipListFetch]);
 
-    const fetchChildren = useCallback((parentId, { silent = false } = {}) => {
+    const fetchChildren = useCallback((parentId, { silent = false, force = false } = {}) => {
         if (!childEntity || !parentId) {
             setChildren([]);
             if (!silent) setChildrenLoading(false);
@@ -936,7 +936,7 @@ export function useEntity(entity, childEntity, {
                 return res.json();
             })
             .then(data => normalizeRows(data?.response?.data ?? (Array.isArray(data) ? data : []), childEntity));
-        runQuery(key, fetcher)
+        runQuery(key, fetcher, { force })
             .then(rows => setChildren(rows))
             // Silent refreshes must not blank a table the user is already looking
             // at just because one background request failed transiently (ETP-4512).
@@ -977,7 +977,7 @@ export function useEntity(entity, childEntity, {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [apiBaseUrl, childEntity, token]);
 
-    const fetchById = useCallback((id) => {
+    const fetchById = useCallback((id, { force = false } = {}) => {
         if (!id) return;
         setLoading(true);
         const seqAtStart = opSeqRef.current;
@@ -990,7 +990,7 @@ export function useEntity(entity, childEntity, {
                 return res.json();
             })
             .then(data => normalizeRecord(data?.response?.data?.[0] ?? data, entity));
-        runQuery(key, fetcher)
+        runQuery(key, fetcher, { force })
             .then(row => {
                 // A mutation superseded this read while it was in flight: drop the
                 // (now stale) result and evict the cache entry it just populated.
@@ -1431,6 +1431,7 @@ export function useEntity(entity, childEntity, {
                         operation: 'complete',
                     });
                 }
+                invalidateEntityCache();
                 fetchById(selected.id);
                 refresh();
             } else {
@@ -1442,7 +1443,7 @@ export function useEntity(entity, childEntity, {
         } finally {
             setRunningProcess(null);
         }
-    }, [selected, entity, specName, apiBaseUrl, token, refresh, fetchById, ui]);
+    }, [selected, entity, specName, apiBaseUrl, token, refresh, fetchById, ui, invalidateEntityCache]);
 
     // Prime the hook state with a freshly-saved record so consumers (DetailView) can
     // navigate /new → /:id without triggering a redundant GET /<entity>/:id. The POST
