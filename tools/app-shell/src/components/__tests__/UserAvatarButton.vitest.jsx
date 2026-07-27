@@ -4,12 +4,15 @@ import userEvent from '@testing-library/user-event';
 const logoutMock = vi.fn();
 const setLocaleMock = vi.fn();
 
+let authOverrides = {};
+
 vi.mock('@/auth/AuthContext.jsx', () => ({
   useAuth: () => ({
     username: 'x',
     logout: logoutMock,
     selectedRole: null,
     selectedOrg: null,
+    ...authOverrides,
   }),
 }));
 
@@ -54,6 +57,7 @@ describe('UserAvatarButton', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     localStorage.clear();
+    authOverrides = {};
   });
 
   it('shows the Change Password menu item when a platform token exists and the auth method is password', () => {
@@ -125,5 +129,19 @@ describe('UserAvatarButton', () => {
     await user.click(screen.getByRole('button', { name: /Español/ }));
 
     expect(setLocaleMock).toHaveBeenCalledWith('es_ES');
+  });
+
+  it('exposes the full role and organization names via title when truncated', () => {
+    const longRole = 'A Very Long Role Name That Overflows The Container';
+    const longOrg = 'A Very Long Organization Name That Also Overflows';
+    authOverrides = {
+      selectedRole: { name: longRole },
+      selectedOrg: { name: longOrg },
+    };
+
+    render(<UserAvatarButton />);
+
+    expect(screen.getByText(`role: ${longRole}`)).toHaveAttribute('title', longRole);
+    expect(screen.getByText(`organization: ${longOrg}`)).toHaveAttribute('title', longOrg);
   });
 });
