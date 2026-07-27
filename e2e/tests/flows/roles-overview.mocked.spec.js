@@ -155,28 +155,22 @@ test.describe('Roles overview — admin/client-admin', () => {
     await expect(page.locator('body')).not.toContainText('Please, do not edit this role');
   });
 
-  test('clicking Edit shows the coming-soon notice without any create/delete UI', async ({ page }) => {
+  test('exposes no edit/create/delete affordance anywhere on the page', async ({ page }) => {
+    // These 5 roles are product-defined, not editable by any tenant user (2026-07-27 decision —
+    // only future user-created roles, out of scope for now, will ever be editable here). The
+    // "coming soon" Edit dialog this test used to click through was removed entirely, not just
+    // disabled — there is no `RolesOverviewPage__edit-*` testid anywhere on the page anymore.
     await page.goto('/roles');
     await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
 
     const firstRole = ROLES_FIXTURE[0];
-    const dialog = page.getByTestId('RolesOverviewPage__editDialog');
-    await expect(dialog).toHaveCount(0);
+    await expect(page.getByTestId(`RolesOverviewPage__role-${firstRole.id}`)).toBeVisible();
 
-    await page.getByTestId(`RolesOverviewPage__edit-${firstRole.id}`).click();
-    await expect(dialog).toBeVisible();
-
-    // No create/delete affordance anywhere on the page — this is a read-only
-    // aggregate view (see decisions in docs/plans/2026-07-24-etp-4513-roles-overview.md).
+    await expect(page.getByTestId('RolesOverviewPage__editDialog')).toHaveCount(0);
+    await expect(page.getByTestId(/^RolesOverviewPage__edit/i)).toHaveCount(0);
     await expect(page.getByTestId(/delete/i)).toHaveCount(0);
     await expect(page.getByTestId(/create/i)).toHaveCount(0);
     await expect(page.getByTestId(/^RolesOverviewPage__new/i)).toHaveCount(0);
-
-    await page.getByTestId('RolesOverviewPage__editDialogClose').click();
-    await expect(dialog).toBeHidden();
-
-    // Still on the roles list — no navigation happened as a side effect of Edit.
-    await expect(page).toHaveURL(/\/roles$/);
   });
 });
 
