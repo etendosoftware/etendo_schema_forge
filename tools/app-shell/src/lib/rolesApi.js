@@ -5,14 +5,21 @@ function detectBase() {
 }
 
 const BASE = detectBase();
-const WEBHOOK_BASE = `${BASE}/webhooks`;
+const NEO_BASE = `${BASE}/sws/neo`;
 
 function getToken() {
   return localStorage.getItem('sf_auth_token');
 }
 
 /**
- * Fetches the GOClient roles overview from `GET /webhooks/SFRolesOverview` (ETP-4513).
+ * Fetches the GOClient roles overview from `GET /sws/neo/rolesoverview` (ETP-4513).
+ *
+ * Reached via NEO Headless's own JWT auth, not the Webhooks module's `/webhooks/SFRolesOverview`
+ * — that path additionally requires a per-(webhook, role) grant row in
+ * `SMFWHE_DEFINEDWEBHOOK_ROLE`, which `update.database` wipes back to its XML baseline. See
+ * `NeoGoWebhookBridge`'s class javadoc in `com.etendoerp.go` for the full rationale. Same
+ * backend Java class (`SFRolesOverview`) and response shape either way, only the transport
+ * changed.
  *
  * Same fetch conventions as `lib/menuTree.js`'s `callMenuWebhook` — this must run as the
  * CURRENT logged-in user's own role (`sf_auth_token`), not an admin token, since the backend
@@ -38,7 +45,7 @@ export async function fetchRolesOverview() {
   const headers = {};
   if (token) headers['Authorization'] = `Bearer ${token}`;
 
-  const res = await fetch(`${WEBHOOK_BASE}/SFRolesOverview`, { headers });
+  const res = await fetch(`${NEO_BASE}/rolesoverview`, { headers });
   const text = await res.text();
   let data;
   let parsed = true;

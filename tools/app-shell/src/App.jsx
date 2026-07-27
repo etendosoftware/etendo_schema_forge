@@ -67,7 +67,14 @@ function looksLikeWindowAccessPayload(value) {
 
 export async function fetchWindowAccess(session) {
   try {
-    const res = await fetch(`${apiBase}/webhooks/SFWindowAccessMap`, {
+    // Reached via `/sws/neo/windowaccessmap` (NEO Headless's own JWT auth), not
+    // `/webhooks/SFWindowAccessMap` — the Webhooks module additionally requires a
+    // per-(webhook, role) grant row in SMFWHE_DEFINEDWEBHOOK_ROLE, which
+    // `update.database` wipes back to its XML baseline. See NeoGoWebhookBridge's
+    // class javadoc in com.etendoerp.go for the full rationale. Same backend
+    // Java class (SFWindowAccessMap) and response shape either way, only the
+    // transport changed.
+    const res = await fetch(`${apiBase}/sws/neo/windowaccessmap`, {
       method: 'GET',
       credentials: 'include',
       headers: session?.token ? { Authorization: `Bearer ${session.token}` } : {},

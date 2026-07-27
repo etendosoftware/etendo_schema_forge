@@ -29,14 +29,14 @@ describe('createMockFetch', () => {
   describe('SFWindowAccessMap webhook (ETP-4520)', () => {
     it('is intercepted even though it lives outside basePath', async () => {
       const fetch = createMockFetch(mockData, basePath);
-      const res = await fetch('/webhooks/SFWindowAccessMap');
+      const res = await fetch('/sws/neo/windowaccessmap');
       expect(res.ok).toBe(true);
       expect(res.status).toBe(200);
     });
 
     it('grants full access to any window id', async () => {
       const fetch = createMockFetch(mockData, basePath);
-      const res = await fetch('/webhooks/SFWindowAccessMap');
+      const res = await fetch('/sws/neo/windowaccessmap');
       const data = await res.json();
       expect(data.windowAccess['some-window-id']).toBe('full');
       expect(data.windowAccess['some-other-window-id']).toBe('full');
@@ -44,7 +44,7 @@ describe('createMockFetch', () => {
 
     it('grants the showAccountingFields capability', async () => {
       const fetch = createMockFetch(mockData, basePath);
-      const res = await fetch('/webhooks/SFWindowAccessMap');
+      const res = await fetch('/sws/neo/windowaccessmap');
       const data = await res.json();
       expect(data.capabilities.showAccountingFields).toBe(true);
     });

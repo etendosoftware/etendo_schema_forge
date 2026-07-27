@@ -59,7 +59,7 @@ const ADMIN_I18N = { nameKey: 'roleNameAdmin', descKey: 'roleDescAdmin' };
 /**
  * Read-only "Configuración > Roles" page (ETP-4513). Lists the tenant's 5 fixed roles with a
  * curated description, assigned-user count, and the Etendo GO windows each role can reach
- * (from `GET /webhooks/SFRolesOverview`). No create/edit/delete actions anywhere — these 5
+ * (from `GET /sws/neo/rolesoverview`). No create/edit/delete actions anywhere — these 5
  * roles are product-defined and not editable by any tenant user; only future user-created
  * roles (out of scope for now) will ever be editable here.
  *

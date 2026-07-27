@@ -127,7 +127,7 @@ describe('rolesApi', () => {
       await expect(fetchRolesOverview()).rejects.toThrow('SFRolesOverview error: 500');
     });
 
-    it('requests the SFRolesOverview webhook path', async () => {
+    it('requests the SFRolesOverview endpoint path via NEO Headless', async () => {
       globalThis.fetch.mockResolvedValue({
         ok: true,
         status: 200,
@@ -137,7 +137,7 @@ describe('rolesApi', () => {
       await fetchRolesOverview();
 
       const [url] = globalThis.fetch.mock.calls[0];
-      expect(url).toContain('/webhooks/SFRolesOverview');
+      expect(url).toContain('/sws/neo/rolesoverview');
     });
 
     it('wires the Authorization header from sf_auth_token when a token is present', async () => {

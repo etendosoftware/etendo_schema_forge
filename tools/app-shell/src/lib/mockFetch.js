@@ -63,14 +63,16 @@ export function createMockFetch(mockData, basePath, catalogData = {}) {
   };
 }
 
-// ETP-4520 — the SFWindowAccessMap webhook lives under `/webhooks/`, not under
-// the entity API `basePath` this file otherwise intercepts (see `App.jsx`'s
-// `fetchWindowAccess`), so it needs its own path check ahead of the
+// ETP-4520 — the SFWindowAccessMap endpoint lives under `/sws/neo/windowaccessmap`
+// (NEO's own auth, not the Webhooks module's `/webhooks/*` — see App.jsx's
+// `fetchWindowAccess` and NeoGoWebhookBridge's class javadoc in
+// com.etendoerp.go for why), not under the entity API `basePath` this file
+// otherwise intercepts, so it needs its own path check ahead of the
 // `basePath` guard above rather than falling through it. Without this, the
 // call bypasses the mock override entirely, hits a real network request that
 // doesn't exist in mock mode, and fails closed — `AuthProvider` then treats
 // every window/field as access-denied, which is not the intent of mock mode.
-const WINDOW_ACCESS_MAP_PATH = '/webhooks/SFWindowAccessMap';
+const WINDOW_ACCESS_MAP_PATH = '/sws/neo/windowaccessmap';
 
 function isWindowAccessMapRequest(url) {
   return url.includes(WINDOW_ACCESS_MAP_PATH);
@@ -94,11 +96,11 @@ function handleWindowAccessMapRequest() {
   });
 }
 
-// ETP-4513 — SFRolesOverview lives under `/webhooks/`, same reasoning as
-// WINDOW_ACCESS_MAP_PATH above: it needs its own path check ahead of the
-// `basePath` guard, or the call falls through to a real network request
-// that doesn't exist in mock mode.
-const ROLES_OVERVIEW_PATH = '/webhooks/SFRolesOverview';
+// ETP-4513 — SFRolesOverview lives under `/sws/neo/rolesoverview`, same
+// reasoning as WINDOW_ACCESS_MAP_PATH above: it needs its own path check
+// ahead of the `basePath` guard, or the call falls through to a real network
+// request that doesn't exist in mock mode.
+const ROLES_OVERVIEW_PATH = '/sws/neo/rolesoverview';
 
 function isRolesOverviewRequest(url) {
   return url.includes(ROLES_OVERVIEW_PATH);
