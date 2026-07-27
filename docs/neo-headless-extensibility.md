@@ -89,6 +89,72 @@ FK selectors are auto-detected from AD_Reference types (TableDir `19`, Table `18
 - `@AD_Org_ID@`, `@AD_Client_ID@`, `@AD_User_ID@`, `@AD_Role_ID@` — resolved from session
 - Any other `@param@` — passed as query parameters from the frontend
 
+### 1.5 Process Precondition Validation
+
+Some legacy processes (PL/pgSQL / classic) only validate their requirements **after** they start running, returning late, opaque errors. Example: "Create Amortization" (AD_Process `800125`, `Processed` button on `A_Asset`) fails inside `A_ASSET_POST` with `Period not defined.` (missing usable life) or `The Currency field must be defined...` (missing currency), without telling you which field to fix.
+
+**Precondition Validation** is a **generic, declarative** choke-point in `NeoProcessService.executeProcess` that runs right after `validateMandatoryParams` and **before** the process executes. If any precondition is unmet it returns a structured `400` **before** firing the legacy process, listing the missing NEO fields.
+
+**There is no per-window logic in Java** — everything is declared as data in `ETGO_SF_ENTITY.PRECONDITIONS`. The validator (`NeoProcessPreconditionValidator`) is static and pure; the condition evaluator (`PreconditionConditionEvaluator`) is a dedicated server-side evaluator (NOT the browser's `DynamicExpressionParser`, which emits JavaScript).
+
+#### JSON shape (`ETGO_SF_ENTITY.PRECONDITIONS`)
+
+Keyed by `AD_Process_ID`. Each rule: `field` (required), `requiredWhen` (optional), `message` (optional).
+
+```json
+{
+  "800125": [
+    { "field": "usableLifeMonths", "requiredWhen": "@calculateType@ != 'PE' && @amortize@ != 'YE'" },
+    { "field": "usableLifeYears",  "requiredWhen": "@amortize@ == 'YE'" },
+    { "field": "currency" }
+  ]
+}
+```
+
+- `field` — NEO field identifier (camelCase DAL property), not the raw DB column.
+- `requiredWhen` — optional condition; if absent the precondition is unconditional; if present and it evaluates to `false`, the rule is skipped.
+- `message` — **reserved / not yet surfaced.** Accepted for forward-compatibility but the runtime returns only a single generic `"Preconditions not met"` message plus the `missing` field list; this per-rule value is not read or emitted.
+
+> **Assets mapping (verified against `Asset.java`):** `@amortize@` = DB `Assetschedule` (values `YE`/`MO`, "Amortize"). It is NOT `depreciationType` (that is a different column, `Amortizationtype`). `@calculateType@` = DB `amortizationcalctype` (values `PE`/`TI`).
+
+#### `requiredWhen` syntax
+
+References record fields with `@prop@`, quoted literals, and operators `==`, `!=`, `&&`/`&` (AND), `||` (OR). String-based comparison; a null field is never equal to a non-null literal.
+
+#### Response when preconditions are unmet
+
+```json
+{
+  "error": {
+    "code": "PRECONDITIONS_UNMET",
+    "status": 400,
+    "message": "Preconditions not met",
+    "missing": ["usableLifeMonths", "currency"]
+  }
+}
+```
+
+#### Behavior (no-op / fail-open)
+
+- No tab context (`inpTabId`), no `SFEntity` matching that tab, or no resolvable record → **no-op** (continues; standalone process-specs already use `validateMandatoryParams`).
+- The record is resolved by `params.recordId` / `inpRecordId` / the table's key column.
+- Any unexpected validator error is swallowed (**fail-open**): the process runs and the legacy guards remain the backstop — execution is never blocked by a validator bug.
+
+#### How it is declared (reusable)
+
+The declaration is written to the column via the Schema Forge pipeline (`decisions.json` → `push-to-neo.js`), so any window can declare preconditions without touching Java. Assets is the **first consumer**, not a special case in code.
+
+#### When to declare preconditions (scope)
+
+Preconditions fit a **narrow** case: a field that is **conditionally required but NOT AD-mandatory** — the record saves fine without it, yet a specific process needs it (e.g. an asset's `usableLifeMonths` / `currency` for Create Amortization). Do **not** use them for:
+
+- **AD-mandatory fields** — they can never reach the process null, so there is nothing to check.
+- **Failures that are not about a missing record field** — `no lines`, `already processed`, `period closed`, `business partner blocked`, org/doctype config, stock. These are line/state/environment checks **outside** this model.
+
+A review of the NEO-exposed PL processes (Process Order / Invoice / Shipment, period open-close, movements, amortization posting, BOM explode) found that **Create Amortization is essentially the only good fit** — every other process fails on the out-of-model conditions above. Surfacing those up front would require extending the model with new check types (child-rows-exist, document-status, related-state), which is not implemented.
+
+> **Cross-reference:** for genuinely custom process logic (beyond validating declarative preconditions) use the `NeoHandler` pattern (`@Named` qualifier on `ETGO_SF_ENTITY.JAVA_QUALIFIER`) described in [§2. NeoHandler: CDI Hook System](#2-neohandler-cdi-hook-system).
+
 ---
 
 ## 2. NeoHandler: CDI Hook System
@@ -360,6 +426,47 @@ public NeoResponse afterHandle(NeoContext ctx) {
   return null;
 }
 ```
+
+### Post-hook: Sync a Related Entity from a Parent Field
+
+**Trigger condition:** suspect this problem whenever a single-value column on the saved entity
+is meant to drive rows in a *different* table that real backend logic actually reads (login,
+access checks, reporting), but the Go SPA can only sensibly expose a single-select control for
+it — the target table's own selector may be unusable for populating that control (e.g.
+restricted to values that already exist, useless for assigning a *new* one).
+
+**Example (ETP-4512):** `AD_User.Default_Ad_Role_ID` is the only column the Go SPA's
+single-role-per-user dropdown can write to, but real login/window-access checks read
+`AD_User_Roles`, not `Default_Ad_Role_ID`. `UserRoleAssignmentHandler` (`@Named("user")`)
+deletes any existing `AD_User_Roles` row(s) for the saved user and inserts exactly one new row
+for the role currently in `Default_Ad_Role_ID`, keeping the two in sync and enforcing at most
+one active role:
+
+```java
+@Override
+public NeoResponse afterHandle(NeoContext context) {
+  if (context.getEndpointType() != NeoEndpointType.CRUD) return null;
+  String method = context.getHttpMethod();
+  if (!"PUT".equalsIgnoreCase(method) && !"PATCH".equalsIgnoreCase(method)) return null;
+  String userId = context.getRecordId();
+  if (userId == null) return null;
+  try {
+    OBContext.setAdminMode(true);
+    try {
+      syncUserRole(userId); // delete existing AD_User_Roles rows, insert one for defaultRole
+    } finally {
+      OBContext.restorePreviousMode();
+    }
+  } catch (Exception e) {
+    log.warn("sync error for user {}: {}", userId, e.getMessage(), e);
+  }
+  return null; // side effect only, never replaces the response
+}
+```
+
+Real implementation: `UserRoleAssignmentHandler` (ETP-4512, `AD_User_Roles` from
+`Default_Ad_Role_ID`). Never fail the parent request over this side effect — log and swallow,
+same as `TbaiConfigSequenceHandler`'s sequence-assignment pattern.
 
 ### Post-hook: Guard a Field Against Callout Cross-Updates
 

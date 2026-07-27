@@ -2,11 +2,11 @@ import { useState, useEffect } from 'react';
 import { useNeoFetch } from './useDiscovery';
 
 const METHOD_COLORS = {
-  GET: 'bg-green-600 hover:bg-green-700',
-  POST: 'bg-blue-600 hover:bg-blue-700',
-  PUT: 'bg-amber-600 hover:bg-amber-700',
-  PATCH: 'bg-orange-600 hover:bg-orange-700',
-  DELETE: 'bg-red-600 hover:bg-red-700',
+  GET: 'bg-status-success hover:bg-status-success',
+  POST: 'bg-status-info hover:bg-status-info',
+  PUT: 'bg-status-warning hover:bg-status-warning',
+  PATCH: 'bg-status-warning hover:bg-status-warning',
+  DELETE: 'bg-destructive hover:bg-destructive',
 };
 
 export default function RequestBuilder({ specName, entity, onResponse }) {
@@ -78,7 +78,7 @@ export default function RequestBuilder({ specName, entity, onResponse }) {
         <select
           value={method}
           onChange={e => setMethod(e.target.value)}
-          className="bg-zinc-800 text-zinc-200 border border-zinc-700 rounded px-2 py-2 text-sm font-mono font-semibold focus:outline-none focus:ring-1 focus:ring-blue-500"
+          className="bg-inverse-muted text-inverse-foreground border border-inverse-border rounded px-2 py-2 text-sm font-mono font-semibold focus:outline-none focus:ring-1 focus:ring-focus-ring"
         >
           {methods.map(m => (
             <option key={m} value={m}>{m}</option>
@@ -87,13 +87,13 @@ export default function RequestBuilder({ specName, entity, onResponse }) {
         <input
           value={path}
           onChange={e => setPath(e.target.value)}
-          className="flex-1 bg-zinc-800 text-zinc-200 border border-zinc-700 rounded px-3 py-2 text-sm font-mono focus:outline-none focus:ring-1 focus:ring-blue-500"
+          className="flex-1 bg-inverse-muted text-inverse-foreground border border-inverse-border rounded px-3 py-2 text-sm font-mono focus:outline-none focus:ring-1 focus:ring-focus-ring"
           placeholder="/specName/entityName"
         />
         <button
           onClick={send}
           disabled={sending || !path}
-          className={`px-4 py-2 rounded text-sm font-semibold text-white transition-colors disabled:opacity-50 ${METHOD_COLORS[method] || 'bg-zinc-600'}`}
+          className={`px-4 py-2 rounded text-sm font-semibold text-primary-foreground transition-colors disabled:opacity-50 ${METHOD_COLORS[method] || 'bg-inverse-muted'}`}
         >
           {sending ? '...' : 'Send'}
         </button>
@@ -102,8 +102,8 @@ export default function RequestBuilder({ specName, entity, onResponse }) {
       {/* Query params */}
       <div>
         <div className="flex items-center justify-between mb-1">
-          <span className="text-xs text-zinc-500 font-medium">Query Params</span>
-          <button onClick={addParam} className="text-xs text-blue-400 hover:text-blue-300">+ Add</button>
+          <span className="text-xs text-inverse-muted font-medium">Query Params</span>
+          <button onClick={addParam} className="text-xs text-status-info-foreground hover:text-status-info-foreground">+ Add</button>
         </div>
         {params.map((p, i) => (
           <div key={i} className="flex gap-2 mb-1">
@@ -111,15 +111,15 @@ export default function RequestBuilder({ specName, entity, onResponse }) {
               value={p.key}
               onChange={e => updateParam(i, 'key', e.target.value)}
               placeholder="key"
-              className="w-1/3 bg-zinc-800 text-zinc-300 border border-zinc-700 rounded px-2 py-1 text-xs font-mono focus:outline-none"
+              className="w-1/3 bg-inverse-muted text-inverse-foreground border border-inverse-border rounded px-2 py-1 text-xs font-mono focus:outline-none"
             />
             <input
               value={p.value}
               onChange={e => updateParam(i, 'value', e.target.value)}
               placeholder="value"
-              className="flex-1 bg-zinc-800 text-zinc-300 border border-zinc-700 rounded px-2 py-1 text-xs font-mono focus:outline-none"
+              className="flex-1 bg-inverse-muted text-inverse-foreground border border-inverse-border rounded px-2 py-1 text-xs font-mono focus:outline-none"
             />
-            <button onClick={() => removeParam(i)} className="text-xs text-zinc-500 hover:text-red-400">x</button>
+            <button onClick={() => removeParam(i)} className="text-xs text-inverse-muted hover:text-destructive">x</button>
           </div>
         ))}
       </div>
@@ -127,12 +127,12 @@ export default function RequestBuilder({ specName, entity, onResponse }) {
       {/* Request body */}
       {showBody && (
         <div>
-          <span className="text-xs text-zinc-500 font-medium block mb-1">Body (JSON)</span>
+          <span className="text-xs text-inverse-muted font-medium block mb-1">Body (JSON)</span>
           <textarea
             value={body}
             onChange={e => setBody(e.target.value)}
             rows={10}
-            className="w-full bg-zinc-800 text-zinc-300 border border-zinc-700 rounded px-3 py-2 text-xs font-mono focus:outline-none focus:ring-1 focus:ring-blue-500 resize-y"
+            className="w-full bg-inverse-muted text-inverse-foreground border border-inverse-border rounded px-3 py-2 text-xs font-mono focus:outline-none focus:ring-1 focus:ring-focus-ring resize-y"
           />
         </div>
       )}

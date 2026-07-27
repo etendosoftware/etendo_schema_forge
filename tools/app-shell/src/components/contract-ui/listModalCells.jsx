@@ -28,15 +28,15 @@ import { resolveIdentifier } from '@/lib/resolveIdentifier.js';
  */
 
 const PILL_BASE =
-  'inline-flex items-center bg-[#F5F7F9] border border-[#D1D4DB] px-2 py-1 text-[#3F3F50]';
+  'inline-flex items-center bg-[hsl(var(--muted))] border border-[hsl(var(--border-control))] px-2 py-1 text-[hsl(var(--muted-foreground))]';
 
 // Tailwind classes per declared tone. Falls back to the neutral pill styling.
 const TONE_CLASSES = {
   neutral: '',
-  blue: 'bg-[#F0FAFF] border-[#BFE9FF] text-[#0075AD]',
-  green: 'bg-[#ECFDF3] border-[#ABEFC6] text-[#067647]',
-  amber: 'bg-[#FFFAEB] border-[#FEDF89] text-[#B54708]',
-  red: 'bg-[#FEF3F2] border-[#FECDCA] text-[#B42318]',
+  blue: 'bg-[var(--status-info-bg)] border-[var(--status-info-border)] text-[var(--status-info-fg)]',
+  green: 'bg-[var(--status-success-bg)] border-[var(--status-success-border)] text-[var(--status-success-fg)]',
+  amber: 'bg-[var(--status-warning-bg)] border-[var(--status-warning-border)] text-[var(--status-warning-fg)]',
+  red: 'bg-[var(--status-destructive-bg)] border-[hsl(var(--destructive) / 0.3)] text-[hsl(var(--destructive))]',
 };
 
 function rawValue(row, key) {
@@ -51,7 +51,7 @@ function enumLabel(col, value, tMenu) {
 
 function PriorityPill({ row, col }) {
   const value = rawValue(row, col.key);
-  if (value == null || value === '') return <span className="text-[#828FA3]">&mdash;</span>;
+  if (value == null || value === '') return <span className="text-[hsl(var(--text-disabled))]">&mdash;</span>;
   return (
     <span className={`${PILL_BASE} rounded-lg text-sm leading-5`}>{value}</span>
   );
@@ -66,11 +66,11 @@ function NameWithSubline({ row, col, ui }) {
   const subline = resolved || fallback;
   return (
     <div className="flex flex-col">
-      <span className="text-sm font-semibold leading-5 text-[#121217]">
+      <span className="text-sm font-semibold leading-5 text-[hsl(var(--foreground))]">
         {name ?? '—'}
       </span>
       {subline ? (
-        <span className="text-xs leading-4 text-[#6C6C89]">
+        <span className="text-xs leading-4 text-[hsl(var(--muted-foreground))]">
           {col.subPrefix ?? '→ '}{subline}
         </span>
       ) : null}
@@ -87,11 +87,11 @@ function ConditionChip({ row, col, tMenu }) {
     const rawKindLabel = col.kindLabels[kindValue];
     kindLabel = tMenu ? tMenu(rawKindLabel) : rawKindLabel;
   }
-  if (!pattern && !kindLabel) return <span className="text-[#828FA3]">&mdash;</span>;
+  if (!pattern && !kindLabel) return <span className="text-[hsl(var(--text-disabled))]">&mdash;</span>;
   const text = kindLabel ? `${kindLabel}: "${pattern ?? ''}"` : String(pattern ?? '');
-  // Figma "Información" badge: gray fill, rounded-lg, NO border, 12px/16px #3F3F50.
+  // Figma "Información" badge: gray fill, rounded-lg, NO border, 12px/16px hsl(var(--muted-foreground)).
   return (
-    <span className="inline-flex items-center max-w-full rounded-lg bg-[#F5F7F9] px-2 py-1 text-xs leading-4 text-[#3F3F50]">
+    <span className="inline-flex items-center max-w-full rounded-lg bg-[hsl(var(--muted))] px-2 py-1 text-xs leading-4 text-[hsl(var(--muted-foreground))]">
       <span className="truncate">{text}</span>
     </span>
   );
@@ -100,7 +100,7 @@ function ConditionChip({ row, col, tMenu }) {
 function TypePill({ row, col, tMenu }) {
   const value = rawValue(row, col.key);
   const label = enumLabel(col, value, tMenu);
-  if (!label) return <span className="text-[#828FA3]">&mdash;</span>;
+  if (!label) return <span className="text-[hsl(var(--text-disabled))]">&mdash;</span>;
   const tone = col.tones?.[value] ?? 'neutral';
   const toneClass = TONE_CLASSES[tone] ?? '';
   return (
@@ -112,8 +112,8 @@ function TypePill({ row, col, tMenu }) {
 
 function PercentCell({ row, col }) {
   const value = rawValue(row, col.key);
-  if (value == null || value === '') return <span className="text-[#121217]">0%</span>;
-  return <span className="text-sm leading-5 text-[#121217]">{value}%</span>;
+  if (value == null || value === '') return <span className="text-[hsl(var(--foreground))]">0%</span>;
+  return <span className="text-sm leading-5 text-[hsl(var(--foreground))]">{value}%</span>;
 }
 
 function ToggleCell({ row, col, onToggle, saving }) {
@@ -139,8 +139,8 @@ function ToggleCell({ row, col, onToggle, saving }) {
 
 function BoldTextCell({ row, col }) {
   const value = rawValue(row, col.key);
-  if (value == null || value === '') return <span className="text-[#828FA3]">&mdash;</span>;
-  return <span className="text-sm font-semibold leading-5 text-[#121217]">{value}</span>;
+  if (value == null || value === '') return <span className="text-[hsl(var(--text-disabled))]">&mdash;</span>;
+  return <span className="text-sm font-semibold leading-5 text-[hsl(var(--foreground))]">{value}</span>;
 }
 
 function DefaultCell({ row, col, tMenu }) {
@@ -152,8 +152,8 @@ function DefaultCell({ row, col, tMenu }) {
   } else {
     value = rawValue(row, col.key);
   }
-  if (value == null || value === '') return <span className="text-[#828FA3]">&mdash;</span>;
-  return <span className="text-sm leading-5 text-[#121217]">{value}</span>;
+  if (value == null || value === '') return <span className="text-[hsl(var(--text-disabled))]">&mdash;</span>;
+  return <span className="text-sm leading-5 text-[hsl(var(--foreground))]">{value}</span>;
 }
 
 /**

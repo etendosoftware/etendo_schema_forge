@@ -8,6 +8,12 @@ import { formatDashboardAmount, formatDashboardNumber, localeFromUi } from '@/li
 import { DASHBOARD_KPI_IDS, trackDashboardKpi } from '@/lib/dashboardKpiTelemetry.js';
 import { DashboardCard, DashboardEmptyState, DashboardRowChevron } from './_shared';
 
+function trendPillStyle(isFlat, isUp) {
+  if (isFlat) return { backgroundColor: 'hsl(var(--muted))', color: 'hsl(var(--muted-foreground))' };
+  if (isUp) return { backgroundColor: 'var(--status-success-bg)', color: 'var(--status-success-fg)' };
+  return { backgroundColor: 'var(--status-destructive-bg)', color: 'hsl(var(--destructive))' };
+}
+
 function TrendPill({ pct }) {
   if (pct === null || pct === undefined) return null;
   const isUp = pct > 0;
@@ -16,11 +22,7 @@ function TrendPill({ pct }) {
   return (
     <span
       className="inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-xs font-medium"
-      style={isFlat
-        ? { backgroundColor: '#F5F7F9', color: '#6C6C89' }
-        : isUp
-          ? { backgroundColor: '#EEFBF4', color: '#17663A' }
-          : { backgroundColor: '#FEF0F4', color: '#D50B3E' }}
+      style={trendPillStyle(isFlat, isUp)}
     >
       <Icon className="h-3 w-3" data-testid="Icon__4d53b7" />
       {isUp ? '+' : ''}{pct}%
@@ -28,23 +30,23 @@ function TrendPill({ pct }) {
   );
 }
 
-const BTN_SHADOW = '0px 1px 3px rgba(18, 18, 23, 0.1), 0px 1px 2px rgba(18, 18, 23, 0.06)';
+const BTN_SHADOW = '0px 1px 3px hsl(var(--foreground) / 0.1), 0px 1px 2px hsl(var(--foreground) / 0.06)';
 
 function ViewToggle({ viewMode, onToggle, ui }) {
   const isQty = viewMode === 'quantity';
   const isRev = viewMode === 'revenue';
   return (
-    <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', padding: '4px', gap: '4px', width: '175.33px', height: '40px', background: '#F5F7F9', borderRadius: '12px', flex: 'none', order: 1, flexGrow: 0 }}>
-      <button type="button" onClick={() => onToggle('quantity')} style={{ boxSizing: 'border-box', display: 'flex', flexDirection: 'row', justifyContent: 'center', alignItems: 'center', padding: '4px 8px', width: '81.33px', height: '32px', background: isQty ? '#FFFFFF' : 'transparent', boxShadow: isQty ? BTN_SHADOW : 'none', borderRadius: '8px', flex: 'none', order: 0, flexGrow: 0, border: 'none', cursor: 'pointer' }}>
+    <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', padding: '4px', gap: '4px', width: '175.33px', height: '40px', background: 'hsl(var(--muted))', borderRadius: '12px', flex: 'none', order: 1, flexGrow: 0 }}>
+      <button type="button" onClick={() => onToggle('quantity')} style={{ boxSizing: 'border-box', display: 'flex', flexDirection: 'row', justifyContent: 'center', alignItems: 'center', padding: '4px 8px', width: '81.33px', height: '32px', background: isQty ? 'hsl(var(--card))' : 'transparent', boxShadow: isQty ? BTN_SHADOW : 'none', borderRadius: '8px', flex: 'none', order: 0, flexGrow: 0, border: 'none', cursor: 'pointer' }}>
         <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'flex-start', padding: '0px 4px', width: '72px', height: '24px', flex: 'none', order: 1, flexGrow: 0 }}>
-          <span style={{ width: '64px', height: '24px', fontFamily: 'Inter', fontStyle: 'normal', fontWeight: 500, fontSize: '14px', lineHeight: '24px', color: isQty ? '#121217' : '#6C6C89', flex: 'none', order: 0, flexGrow: 0 }}>
+          <span style={{ width: '64px', height: '24px', fontFamily: 'Inter', fontStyle: 'normal', fontWeight: 500, fontSize: '14px', lineHeight: '24px', color: isQty ? 'hsl(var(--foreground))' : 'hsl(var(--muted-foreground))', flex: 'none', order: 0, flexGrow: 0 }}>
             {ui('bestProductsToggleUnits')}
           </span>
         </div>
       </button>
-      <button type="button" onClick={() => onToggle('revenue')} style={{ display: 'flex', flexDirection: 'row', justifyContent: 'center', alignItems: 'center', padding: '4px 8px', width: '82px', height: '32px', background: isRev ? '#FFFFFF' : 'transparent', boxShadow: isRev ? BTN_SHADOW : 'none', borderRadius: '8px', flex: 'none', order: 1, flexGrow: 0, border: 'none', cursor: 'pointer' }}>
+      <button type="button" onClick={() => onToggle('revenue')} style={{ display: 'flex', flexDirection: 'row', justifyContent: 'center', alignItems: 'center', padding: '4px 8px', width: '82px', height: '32px', background: isRev ? 'hsl(var(--card))' : 'transparent', boxShadow: isRev ? BTN_SHADOW : 'none', borderRadius: '8px', flex: 'none', order: 1, flexGrow: 0, border: 'none', cursor: 'pointer' }}>
         <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'flex-start', padding: '0px 4px', width: '66px', height: '24px', flex: 'none', order: 1, flexGrow: 0 }}>
-          <span style={{ width: '58px', height: '24px', fontFamily: 'Inter', fontStyle: 'normal', fontWeight: 500, fontSize: '14px', lineHeight: '24px', color: isRev ? '#121217' : '#6C6C89', flex: 'none', order: 0, flexGrow: 0 }}>
+          <span style={{ width: '58px', height: '24px', fontFamily: 'Inter', fontStyle: 'normal', fontWeight: 500, fontSize: '14px', lineHeight: '24px', color: isRev ? 'hsl(var(--foreground))' : 'hsl(var(--muted-foreground))', flex: 'none', order: 0, flexGrow: 0 }}>
             {ui('bestProductsToggleRevenue')}
           </span>
         </div>
@@ -97,20 +99,20 @@ export function BestProductsList({ sellers = [], products = [], currencyLabel = 
       >
         <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', gap: '8px', height: '24px' }}>
           {hasPositiveTrend && (
-            <div className="flex items-center gap-2 text-xs" style={{ color: '#1E874C' }}>
-              <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', width: '20px', height: '20px', background: '#EEFBF4', borderRadius: '10px', flexShrink: 0 }}>
+            <div className="flex items-center gap-2 text-xs" style={{ color: 'var(--status-success-fg)' }}>
+              <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', width: '20px', height: '20px', background: 'var(--status-success-bg)', borderRadius: '10px', flexShrink: 0 }}>
                 <Check
-                  style={{ width: '12.5px', height: '12.5px', color: '#17663A' }}
+                  style={{ width: '12.5px', height: '12.5px', color: 'var(--status-success-fg)' }}
                   data-testid="Check__4d53b7" />
               </div>
               <span>{ui('bestProductsTrendPositive')}</span>
             </div>
           )}
           {hasNegativeTrend && (
-            <div className="flex items-center gap-2 text-xs" style={{ color: '#D50B3E' }}>
-              <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', width: '20px', height: '20px', background: '#FEF0F4', borderRadius: '10px', flexShrink: 0 }}>
+            <div className="flex items-center gap-2 text-xs" style={{ color: 'hsl(var(--destructive))' }}>
+              <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', width: '20px', height: '20px', background: 'var(--status-destructive-bg)', borderRadius: '10px', flexShrink: 0 }}>
                 <TrendingDown
-                  style={{ width: '12.5px', height: '12.5px', color: '#D50B3E' }}
+                  style={{ width: '12.5px', height: '12.5px', color: 'hsl(var(--destructive))' }}
                   data-testid="TrendingDown__4d53b7" />
               </div>
               <span>{ui('bestProductsTrendNegative')}</span>
@@ -142,7 +144,7 @@ export function BestProductsList({ sellers = [], products = [], currencyLabel = 
         }}
       >
         {rows.length === 0 ? (
-          <p className="text-sm" style={{ color: '#828FA3', padding: '0 12px' }}>{ui('noDataAvailable')}</p>
+          <p className="text-sm" style={{ color: 'hsl(var(--text-disabled))', padding: '0 12px' }}>{ui('noDataAvailable')}</p>
         ) : (
           rows.map((row, i) => {
             const value = viewMode === 'quantity'
@@ -197,7 +199,7 @@ export function BestProductsList({ sellers = [], products = [], currencyLabel = 
                       fontWeight: 400,
                       fontSize: '14px',
                       lineHeight: '24px',
-                      color: '#121217',
+                      color: 'hsl(var(--foreground))',
                       overflow: 'hidden',
                       textOverflow: 'ellipsis',
                       whiteSpace: 'nowrap',
@@ -239,7 +241,7 @@ export function BestProductsList({ sellers = [], products = [], currencyLabel = 
                       alignItems: 'center',
                       padding: '0px 8px',
                       height: '24px',
-                      border: '1px solid #D1D4DB',
+                      border: '1px solid hsl(var(--border-control))',
                       borderRadius: '360px',
                     }}
                   >
@@ -248,7 +250,7 @@ export function BestProductsList({ sellers = [], products = [], currencyLabel = 
                         fontSize: '12px',
                         fontWeight: 400,
                         lineHeight: '24px',
-                        color: '#6C6C89',
+                        color: 'hsl(var(--muted-foreground))',
                         whiteSpace: 'nowrap',
                       }}
                     >

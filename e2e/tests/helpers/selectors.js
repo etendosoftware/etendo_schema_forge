@@ -110,3 +110,17 @@ export const option = (fieldKey, optionId) => `option-${fieldKey}-${optionId}`;
 export function byTestId(page, testId) {
   return page.getByTestId(testId);
 }
+
+/**
+ * Click the last checkbox on the page via a genuine DOM `.click()` call.
+ *
+ * ImportLinesModal's Checkbox renders a sr-only native `<input>` (role=checkbox)
+ * behind a 1x1px clip-rect (Semantic Theme Contract DOM refactor) — too small
+ * for Playwright's mouse-based click to reliably hit (both a direct click and
+ * a force:true click on it silently no-op). A genuine DOM `.click()` call
+ * fires the same native change/click events a real click would, without
+ * depending on hit-testing a 1px target.
+ */
+export async function clickLastCheckbox(page) {
+  await page.getByRole('checkbox').last().evaluate((el) => el.click());
+}

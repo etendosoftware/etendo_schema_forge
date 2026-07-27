@@ -18,7 +18,7 @@ import { login } from '../helpers/auth.js';
  * collide and the filter isolates exactly the one created.
  */
 
-const DISABLED_HINT = 'La depreciación está desactivada';
+const DISABLED_HINT = 'La amortización está desactivada';
 
 // Toast 'El campo "<label>" es obligatorio.' for a field label.
 const requiredToast = (label) => new RegExp(`El campo\\s*"?${label}"?\\s*es obligatorio`, 'i');
@@ -69,16 +69,16 @@ function parseCurrency(text) {
   return cleaned ? parseFloat(cleaned) : 0;
 }
 
-/** With Depreciar ON, the "Resumen de depreciación" sidebar mirrors the live
+/** With Depreciar ON, the "Resumen de amortización" sidebar mirrors the live
  *  editing state: Valor del activo / Valor residual in the form must equal
  *  Valor actual / Valor residual del activo in the sidebar. Run after each
  *  financial-field change and after creating the amortization. */
 async function verifySidebarSync(page) {
   // Scope to the sidebar's card container (no testids in the app): the
-  // "Resumen de depreciación" heading → its card grid is the next sibling.
+  // "Resumen de amortización" heading → its card grid is the next sibling.
   // Each card is <div>{label}</div><div>{value}</div>, so the value is the
   // label's following sibling. Scoping avoids the form's identical residual label.
-  const cards = page.getByText('Resumen de depreciación', { exact: true })
+  const cards = page.getByText('Resumen de amortización', { exact: true })
     .locator('xpath=ancestor::div[1]/following-sibling::div[1]');
   const sidebarValue = (label) =>
     cards.getByText(label, { exact: true }).locator('xpath=following-sibling::div[1]').innerText();
@@ -203,20 +203,20 @@ async function reactivateAmortization(page, amortizationUrl) {
   await expect(page.getByText('Borrador').first()).toBeVisible({ timeout: 10_000 });
 }
 
-/** The sidebar "Depreciado" (Resumen de depreciación) percentage, as a number. */
+/** The sidebar "Amortizado" (Resumen de amortización) percentage, as a number. */
 async function depreciatedSidebarPct(page) {
-  const cards = page.getByText('Resumen de depreciación', { exact: true })
+  const cards = page.getByText('Resumen de amortización', { exact: true })
     .locator('xpath=ancestor::div[1]/following-sibling::div[1]');
-  const text = await cards.getByText('Depreciado', { exact: true })
+  const text = await cards.getByText('Amortizado', { exact: true })
     .locator('xpath=following-sibling::div[1]').innerText();
   return parseCurrency(text);
 }
 
 /** After confirming, on the asset detail: the "Confirmado" plan line percentage
- *  must equal the sidebar "Depreciado" percentage. Reads the sidebar (form view)
+ *  must equal the sidebar "Amortizado" percentage. Reads the sidebar (form view)
  *  first, then opens the plan tab to read the confirmed line. */
 async function verifyConfirmedLineMatchesSidebar(page) {
-  // Runs AFTER the confirm. The sidebar "Depreciado" reflects only CONFIRMED
+  // Runs AFTER the confirm. The sidebar "Amortizado" reflects only CONFIRMED
   // lines, so it recalculates with the confirm we just did: two pending 50% lines
   // read 0%, and confirming one moves it to 50%. On reopen the recalc can lag, so
   // wait until the sidebar reports the (non-zero) confirmed value before comparing.
@@ -251,7 +251,7 @@ async function verifyGridAmortizationBar(page, expectedPct) {
   await expect(row).toContainText(expectedPct != null ? `${expectedPct}%` : '%');
 }
 
-/** Wait until the sidebar "Depreciado" (Resumen de depreciación) reports the
+/** Wait until the sidebar "Amortizado" (Resumen de amortización) reports the
  *  expected percentage (it recalculates after each confirm, with refetch lag). */
 async function verifyDepreciatedSidebar(page, expectedPct) {
   await expect(async () => {
@@ -474,13 +474,13 @@ test.describe('Assets (real backend)', () => {
     await expect(page.getByTestId('field-depreciationType')).toContainText('Lineal');
     await expect(page.getByTestId('field-amortize')).toContainText('Mensual');
 
-    // Attempt 4: by-time mode → Vida útil - Meses required (empty / 0 / negative
-    // all give the same "no puede estar vacío, ser cero o negativo" error).
+    // Attempt 4: by-time mode → Vida útil - Meses required. Empty is caught by the
+    // backend; 0/negative are intercepted first by the client-side min validation.
     await saveThenProcess(page, /Vida útil - Meses no puede estar vac/i);
     await page.getByTestId('field-usableLifeMonths').fill('0');
-    await saveThenProcess(page, /Vida útil - Meses no puede estar vac/i);
+    await saveThenProcess(page, /debe ser al menos 1/i);
     await page.getByTestId('field-usableLifeMonths').fill('-1');
-    await saveThenProcess(page, /Vida útil - Meses no puede estar vac/i);
+    await saveThenProcess(page, /debe ser al menos 1/i);
     await page.getByTestId('field-usableLifeMonths').fill('2');
 
     // All required data present → amortization created.
@@ -515,7 +515,7 @@ test.describe('Assets (real backend)', () => {
     // Select the asset's line + confirm → doc "Procesado", Moneda read-only.
     await confirmAmortizationForAsset(page, amortizationUrl, name);
 
-    // Point 2: the "Confirmado" plan line % equals the sidebar "Depreciado" %.
+    // Point 2: the "Confirmado" plan line % equals the sidebar "Amortizado" %.
     await gotoDeepLink(page, assetUrl);
     await verifyConfirmedLineMatchesSidebar(page);
 
@@ -571,12 +571,13 @@ test.describe('Assets (real backend)', () => {
     await expect(page.getByTestId('field-usableLifeYears')).toBeVisible();
     await expect(page.getByTestId('field-usableLifeMonths')).toHaveCount(0);
 
-    // Attempt 4: Vida útil - Años required (empty / 0 / negative → same error).
+    // Attempt 4: Vida útil - Años required. Empty is caught by the backend;
+    // 0/negative are intercepted first by the client-side min validation.
     await saveThenProcess(page, /Vida útil - Años no puede estar vac/i);
     await page.getByTestId('field-usableLifeYears').fill('0');
-    await saveThenProcess(page, /Vida útil - Años no puede estar vac/i);
+    await saveThenProcess(page, /debe ser al menos 1/i);
     await page.getByTestId('field-usableLifeYears').fill('-1');
-    await saveThenProcess(page, /Vida útil - Años no puede estar vac/i);
+    await saveThenProcess(page, /debe ser al menos 1/i);
     await page.getByTestId('field-usableLifeYears').fill('2');
 
     // All required data present → amortization created.
@@ -609,7 +610,7 @@ test.describe('Assets (real backend)', () => {
     const amortizationUrl = headerUrls[0];
     await confirmAmortizationForAsset(page, amortizationUrl, name);
 
-    // Point 2: the "Confirmado" plan line % equals the sidebar "Depreciado" %.
+    // Point 2: the "Confirmado" plan line % equals the sidebar "Amortizado" %.
     await gotoDeepLink(page, assetUrl);
     await verifyConfirmedLineMatchesSidebar(page);
 
@@ -656,11 +657,11 @@ test.describe('Assets (real backend)', () => {
     await expect(page.getByTestId('field-amortize')).toHaveCount(0);
     await expect(page.getByTestId('field-usableLifeMonths')).toHaveCount(0);
     await expect(page.getByTestId('field-annualDepreciation')).toBeVisible();
-    // Zero and negative give the same "no puede estar vacío, ser cero o negativo" error.
+    // Zero and negative are intercepted first by the client-side min validation.
     await page.getByTestId('field-annualDepreciation').fill('0');
-    await saveThenProcess(page, /Amortización Anual no puede estar vac/i);
+    await saveThenProcess(page, /debe ser al menos 1/i);
     await page.getByTestId('field-annualDepreciation').fill('-1');
-    await saveThenProcess(page, /Amortización Anual no puede estar vac/i);
+    await saveThenProcess(page, /debe ser al menos 1/i);
     // Above 100% → a client-side guard blocks the process with a clear message.
     await page.getByTestId('field-annualDepreciation').fill('150');
     await saveThenProcess(page, /no puede ser superior al 100%/i);
@@ -696,7 +697,7 @@ test.describe('Assets (real backend)', () => {
     const amortizationUrl = headerUrls[0];
     await confirmAmortizationForAsset(page, amortizationUrl, name);
 
-    // Point 2: the "Confirmado" plan line % equals the sidebar "Depreciado" %.
+    // Point 2: the "Confirmado" plan line % equals the sidebar "Amortizado" %.
     await gotoDeepLink(page, assetUrl);
     await verifyConfirmedLineMatchesSidebar(page);
 
@@ -739,9 +740,10 @@ test.describe('Assets (real backend)', () => {
     await expect(page.getByTestId('field-amortize')).toContainText('Mensual');
     await saveThenProcess(page, /Vida útil - Meses no puede estar vac/i);
     await page.getByTestId('field-usableLifeMonths').fill('0');
-    await saveThenProcess(page, /Vida útil - Meses no puede estar vac/i);
+    // Client-side numeric validation (min: 1) intercepts before the backend.
+    await saveThenProcess(page, /debe ser al menos 1/i);
     await page.getByTestId('field-usableLifeMonths').fill('-1');
-    await saveThenProcess(page, /Vida útil - Meses no puede estar vac/i);
+    await saveThenProcess(page, /debe ser al menos 1/i);
     await page.getByTestId('field-usableLifeMonths').fill('2');
 
     // NEW: edit Descripción and Valor residual (negative / 0 / below / above), saving each.
@@ -796,9 +798,10 @@ test.describe('Assets (real backend)', () => {
     await expect(page.getByTestId('field-usableLifeMonths')).toHaveCount(0);
     await saveThenProcess(page, /Vida útil - Años no puede estar vac/i);
     await page.getByTestId('field-usableLifeYears').fill('0');
-    await saveThenProcess(page, /Vida útil - Años no puede estar vac/i);
+    // Client-side numeric validation (min: 1) intercepts before the backend.
+    await saveThenProcess(page, /debe ser al menos 1/i);
     await page.getByTestId('field-usableLifeYears').fill('-1');
-    await saveThenProcess(page, /Vida útil - Años no puede estar vac/i);
+    await saveThenProcess(page, /debe ser al menos 1/i);
     await page.getByTestId('field-usableLifeYears').fill('2');
 
     await editDescriptionInPlace(page, stamp);
@@ -846,9 +849,10 @@ test.describe('Assets (real backend)', () => {
     await expect(page.getByTestId('field-usableLifeMonths')).toHaveCount(0);
     await expect(page.getByTestId('field-annualDepreciation')).toBeVisible();
     await page.getByTestId('field-annualDepreciation').fill('0');
-    await saveThenProcess(page, /Amortización Anual no puede estar vac/i);
+    // Client-side numeric validation (min: 1) intercepts before the backend.
+    await saveThenProcess(page, /debe ser al menos 1/i);
     await page.getByTestId('field-annualDepreciation').fill('-1');
-    await saveThenProcess(page, /Amortización Anual no puede estar vac/i);
+    await saveThenProcess(page, /debe ser al menos 1/i);
     // Above 100% → a client-side guard blocks the process with a clear message.
     await page.getByTestId('field-annualDepreciation').fill('150');
     await saveThenProcess(page, /no puede ser superior al 100%/i);
@@ -883,7 +887,7 @@ test.describe('Assets (real backend)', () => {
 
   // Cases 10/11/12 — copies of 2/3/4 but CONFIRM every amortization line of the
   // plan (not just one). With all lines confirmed the asset is 100% depreciated:
-  // the sidebar "Depreciado" and the grid bar both show 100%. Then full cleanup.
+  // the sidebar "Amortizado" and the grid bar both show 100%. Then full cleanup.
   for (const { n, mode, periods, label, blocked } of [
     { n: 10, mode: 'monthly', periods: ['06-2026', '07-2026'], label: 'by time (monthly)', blocked: true },
     { n: 11, mode: 'annual', periods: ['2026', '2027'], label: 'by time (yearly)', blocked: true },
@@ -946,7 +950,7 @@ test.describe('Assets (real backend)', () => {
     // Activate → financial + accounting-dimensions sections appear.
     await depreciarToggle.click();
     await expect(page.getByText('Información financiera')).toBeVisible({ timeout: 5_000 });
-    await expect(page.getByText('Configuración de depreciación')).toBeVisible();
+    await expect(page.getByText('Configuración de amortización')).toBeVisible();
     await expect(page.getByText('Fechas', { exact: true })).toBeVisible();
     await expect(page.getByText('Dimensiones contables')).toBeVisible();
     await expect(page.getByTestId('field-assetValue')).toBeVisible();
