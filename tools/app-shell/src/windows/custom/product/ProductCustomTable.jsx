@@ -23,8 +23,8 @@ const columns = [
   // here — hidden from the grid via `hiddenColumns` below — purely so the
   // Advanced Filter panel can offer them as separate, correctly labeled,
   // working filter fields instead of the synthetic combined column (ETP-4609).
-  { key: 'name', column: 'Name', type: 'string' },
-  { key: 'searchKey', column: 'Value', type: 'string' },
+  { key: 'name', column: 'Name', type: 'string', required: true },
+  { key: 'searchKey', column: 'Value', type: 'string', required: true },
   { key: 'productCategory', column: 'M_Product_Category_ID', type: 'selector', label: 'Product Category', required: true },
   { key: 'uOM',             column: 'C_UOM_ID',              type: 'selector', label: 'UOM',              required: true },
   {
