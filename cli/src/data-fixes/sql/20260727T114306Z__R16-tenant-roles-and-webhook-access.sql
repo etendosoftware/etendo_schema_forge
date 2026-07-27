@@ -1,63 +1,88 @@
--- @id: R16-webhook-role-access
--- @gap: H1
+-- @id: R16-tenant-roles-and-webhook-access
+-- @gap: H2
 -- @risk: high
 -- @type: sql
--- @description: Grant every one of the tenant's active AD_Role rows dispatch access to the SFListMenu / SFWindowAccessMap / SFRolesOverview webhooks, so non-System-Administrator roles aren't 404'd out of every window
+-- @description: Clone GOClient's Finance/Sales/Purchasing/Inventory roles (AD_Role + AD_Window_Access) onto the tenant when missing, then grant every active role dispatch access to SFListMenu/SFWindowAccessMap/SFRolesOverview
 
 -- Background
 -- --------------------------------------------------------------------------------------------
--- SMFWHE_DEFINEDWEBHOOK_ROLE is the webhook dispatcher's own authorization gate: a role that has
--- no row for a given webhook gets a flat 404 from WebhookServiceHandler before the webhook's own
--- Java logic ever runs (NeoAccessHelper.isAdminOrClientAdmin / per-window AD_Window_Access checks
--- never get a chance to execute). Discovered 2026-07-27 while manually testing ETP-4513/4514/4520
--- together: GOClient Admin (a real client-admin role, ad_role.is_client_admin='Y') saw a fully
--- unfiltered sidebar (SFListMenu 404s -> useRoleMenu() fails -> AppLayout's deliberate fail-OPEN
--- on fetch failure shows everything) yet EVERY window denied (SFWindowAccessMap 404s ->
--- fetchWindowAccess fails -> AuthContext's fail-CLOSED {} default -> WindowAccessGuard blocks
--- everything). Confirmed via `docker logs`/Tomcat access log: both endpoints returned 404, not
--- an error from the Java handler.
+-- This closes two layered gaps together, both surfaced 2026-07-27 manually testing ETP-4513/
+-- 4514/4520 together (see H1/H2 in docs/etendo-ad/onboarding-gaps.md):
 --
--- ETP-4520's own GOClient sample-data seed (referencedata/sampledata/GOClient/
--- SMFWHE_DEFINEDWEBHOOK_ROLE.xml) already grants all 6 of GOClient's roles access to SFListMenu
--- and SFWindowAccessMap, and this fix's own preventive twin (see below) extends it to
--- SFRolesOverview too -- but referencedata is sample/reference data, only ever applied at
--- initial/fresh tenant creation, never reapplied by update.database/smartbuild on an existing
--- install. Every tenant provisioned before this row set existed keeps whatever
--- SMFWHE_DEFINEDWEBHOOK_ROLE rows its module-level default seed shipped -- observed here as
--- ad_role_id = '0' (System Administrator) ONLY. The moment ETP-4520's WindowAccessGuard goes
--- live on any such tenant, every non-system-admin role loses access to every window at once --
--- exactly the "will break all roles access" risk this fix exists to close before that merge
--- lands, not deferred to a later phase.
+-- H2 (new, this revision) -- a real Etendo Go tenant onboards with exactly ONE auto-created
+-- admin role. GOClient's Finance/Sales/Purchasing/Inventory roles are reference/sample data
+-- unique to GOClient -- no onboarding step or prior data-fix has ever created their equivalents
+-- for any other tenant. Phase 7's ETP-4515 (preventive, onboarding) / ETP-4516 (corrective, this
+-- fix) were both scoped for exactly this, per santo_roles_handoff_phase7.md, but neither had
+-- started. Without these 4 roles, an admin has nothing to assign via the ETP-4512 role picker
+-- except their own admin role -- the whole "assign one of 5 predefined roles" model is broken
+-- for every non-GOClient tenant today.
 --
--- Scope: every ACTIVE role of the tenant, not a hardcoded role-name/id list. Different tenants
--- have their own AD_Role rows (different ids than GOClient's), and ALL of them need SFListMenu +
--- SFWindowAccessMap to load a menu/window-access map at all; SFRolesOverview is safe to grant
--- broadly too since its OWN Java logic (not this table) already restricts the actual payload to
--- admin/client-admin callers, returning {"roles": []} for everyone else.
+-- H1 (already fixed by this file, previous revision) -- SMFWHE_DEFINEDWEBHOOK_ROLE is the webhook
+-- dispatcher's own authorization gate: a role with no row for a given webhook gets a flat 404
+-- before the webhook's own Java logic ever runs. Referencedata granting these webhooks is
+-- GOClient-only and never reapplied to an existing install (see this file's own git history for
+-- the full account of that gap).
 --
--- The 3 webhook ids below are fixed, system-level (ad_client_id = '0') rows from
--- com.etendoerp.go's own module seed (src-db/database/sourcedata/SMFWHE_DEFINEDWEBHOOK.xml) --
--- identical across every Etendo GO installation, safe to hardcode.
+-- These are one fix, not two, because H2's role clone and H1's webhook grant compose in a single
+-- transaction: once a role is created in Step 1, Step 3's already-tenant-wide (not role-specific)
+-- webhook grant automatically covers it too -- no separate wiring needed per newly created role.
+--
+-- Window ids are safe to copy verbatim: AD_Window is a system-level entity (ad_client_id = '0'
+-- for every row, verified directly against this DB), so a window id means the same thing on
+-- every tenant. Only AD_Window_Access (the role's grant for that window) is client-scoped.
+--
+-- Template source: GOClient (ad_client_id 802509E12436405C86BA1FD5B1DF508C), hardcoded -- it is
+-- the fixed reference client throughout this epic (see santo_roles_handoff_phase7.md).
+--
+-- NOTE on EM_ETGO_Show_Acct_Fields: copied verbatim from the source role (Step 1), per this fix's
+-- own "mirror GOClient exactly" principle. As of this writing GOClient's own Finance/Sales/
+-- Purchasing/Inventory rows are ALL 'N' (verified directly against ad_role and against
+-- referencedata/sampledata/GOClient/AD_ROLE.xml, which does not set the column at all -- it
+-- rides the table's own 'N' default). This contradicts santo_roles_handoff_phase7.md's claim
+-- that "every GOClient role already carries the correct Y/N value" -- flagging as a discrepancy
+-- to resolve at the reference-data level (a product decision on which roles should see accounting
+-- fields), not something this data-fix should silently override.
 --
 -- Idempotency
 -- --------------------------------------------------------------------------------------------
--- @check returns >=1 row while any active role of the tenant is missing a row for any of the 3
--- webhooks. @apply is guarded the same way (NOT EXISTS per role x webhook pair), so a re-run
--- (or a tenant that already has a partial grant) matches only what's still missing.
+-- @check returns >=1 row when the tenant is missing one of the 4 roles, missing an
+-- AD_Window_Access row that role's GOClient counterpart has, or missing a webhook grant.
+-- @apply's three steps are each independently NOT-EXISTS-guarded, so a re-run (or a tenant with a
+-- partially-applied prior run) only inserts what's still missing. Step 2 and Step 3 both re-read
+-- ad_role for :client_id AFTER Step 1, in the same transaction, so newly created roles are
+-- immediately visible to them.
 --
 -- Preventive twin (new tenants born correct -- no CUT bump)
 -- --------------------------------------------------------------------------------------------
--- Static: referencedata/sampledata/GOClient/SMFWHE_DEFINEDWEBHOOK_ROLE.xml now also grants
--- SFRolesOverview to GOClient's 6 roles (it previously only covered SFListMenu/SFWindowAccessMap
--- -- a gap in ETP-4513's own seed data, closed alongside this fix). A fresh GOClient install is
--- therefore already fully covered for all 3 webhooks; this .sql only repairs tenants (GOClient's
--- own local dev copy included) provisioned before that seed existed.
--- ONBOARDING_PROVISIONED_THROUGH is intentionally NOT bumped: this .sql only repairs existing
--- tenants; new tenants are born correct via the sampledata above.
+-- Not yet built. ETP-4515 (onboarding: auto-provision the 5 roles + window access for new
+-- tenants) remains unstarted -- see santo_roles_handoff_phase7.md, updated 2026-07-27 to record
+-- this fix's scope. Until ETP-4515 ships, ONBOARDING_PROVISIONED_THROUGH is NOT bumped and every
+-- newly onboarded tenant will need this same corrective fix re-run.
 
 -- @check
--- Returns >=1 row when at least one active role of the tenant is missing a grant for at least
--- one of the 3 webhooks. 0 rows => SKIPPED_NOT_NEEDED, @apply never runs.
+-- Returns >=1 row when ANY of: a role name is missing, an existing role of that name is missing
+-- an AD_Window_Access row its GOClient counterpart has, or an active role is missing a webhook
+-- grant. 0 rows => SKIPPED_NOT_NEEDED, @apply never runs.
+SELECT 1
+FROM (VALUES ('Finance'), ('Sales'), ('Purchasing'), ('Inventory')) AS want(name)
+WHERE NOT EXISTS (
+  SELECT 1 FROM ad_role r WHERE r.ad_client_id = :client_id AND r.name = want.name
+)
+UNION ALL
+SELECT 1
+FROM ad_role src
+JOIN ad_window_access swa ON swa.ad_role_id = src.ad_role_id AND swa.isactive = 'Y'
+JOIN ad_role tgt ON tgt.ad_client_id = :client_id AND tgt.name = src.name
+WHERE src.ad_client_id = '802509E12436405C86BA1FD5B1DF508C'
+  AND src.name IN ('Finance', 'Sales', 'Purchasing', 'Inventory')
+  AND NOT EXISTS (
+    SELECT 1 FROM ad_window_access x
+    WHERE x.ad_role_id = tgt.ad_role_id
+      AND x.ad_window_id = swa.ad_window_id
+      AND x.isactive = 'Y'
+  )
+UNION ALL
 SELECT 1
 FROM ad_role r
 CROSS JOIN smfwhe_definedwebhook w
@@ -75,9 +100,54 @@ WHERE r.ad_client_id = :client_id
 LIMIT 1;
 
 -- @apply
--- One SMFWHE_DEFINEDWEBHOOK_ROLE row per (active tenant role, webhook) pair still missing.
--- ad_org_id '0' matches every existing row for this table (webhook grants are client-wide, not
--- org-scoped). PKs minted per row with get_uuid() since the row count varies per tenant.
+-- Step 1 -- clone missing roles from GOClient (attributes verified against the live schema: no
+-- FK to another client's data survives the copy, ad_org_id/c_currency_id/amtapproval/
+-- ad_tree_menu_id are uniform '0'/NULL/0/NULL across all 4 GOClient source roles).
+INSERT INTO ad_role (
+  ad_role_id, ad_client_id, ad_org_id, isactive, created, createdby, updated, updatedby,
+  name, description, userlevel, c_currency_id, amtapproval, ad_tree_menu_id, ismanual,
+  processing, is_client_admin, isadvanced, isrestrictbackend, isportal, isportaladmin,
+  iswebserviceenabled, istemplate, recalculatepermissions, em_etgo_show_acct_fields
+)
+SELECT
+  get_uuid(), :client_id, src.ad_org_id, 'Y', now(), '0', now(), '0',
+  src.name, src.description, src.userlevel, src.c_currency_id, src.amtapproval,
+  src.ad_tree_menu_id, src.ismanual, src.processing, src.is_client_admin, src.isadvanced,
+  src.isrestrictbackend, src.isportal, src.isportaladmin, src.iswebserviceenabled,
+  src.istemplate, src.recalculatepermissions, src.em_etgo_show_acct_fields
+FROM ad_role src
+WHERE src.ad_client_id = '802509E12436405C86BA1FD5B1DF508C'
+  AND src.name IN ('Finance', 'Sales', 'Purchasing', 'Inventory')
+  AND NOT EXISTS (
+    SELECT 1 FROM ad_role tgt WHERE tgt.ad_client_id = :client_id AND tgt.name = src.name
+  );
+
+-- Step 2 -- backfill AD_Window_Access rows to match each role's GOClient counterpart. Window ids
+-- are copied as-is (AD_Window is system-level, ad_client_id = '0' for every row). Re-reads ad_role
+-- for :client_id so roles created by Step 1 above are included.
+INSERT INTO ad_window_access (
+  ad_window_access_id, ad_window_id, ad_role_id, ad_client_id, ad_org_id, isactive,
+  created, createdby, updated, updatedby, isreadwrite
+)
+SELECT
+  get_uuid(), swa.ad_window_id, tgt.ad_role_id, :client_id, tgt.ad_org_id, 'Y',
+  now(), '0', now(), '0', swa.isreadwrite
+FROM ad_role src
+JOIN ad_window_access swa ON swa.ad_role_id = src.ad_role_id AND swa.isactive = 'Y'
+JOIN ad_role tgt ON tgt.ad_client_id = :client_id AND tgt.name = src.name
+WHERE src.ad_client_id = '802509E12436405C86BA1FD5B1DF508C'
+  AND src.name IN ('Finance', 'Sales', 'Purchasing', 'Inventory')
+  AND NOT EXISTS (
+    SELECT 1 FROM ad_window_access x
+    WHERE x.ad_role_id = tgt.ad_role_id
+      AND x.ad_window_id = swa.ad_window_id
+      AND x.isactive = 'Y'
+  );
+
+-- Step 3 -- one SMFWHE_DEFINEDWEBHOOK_ROLE row per (active tenant role, webhook) pair still
+-- missing, for EVERY active role of the tenant (not just the 4 above) -- covers the tenant's own
+-- admin-equivalent role plus anything else it already had. PKs minted per row with get_uuid()
+-- since the row count varies per tenant. ad_org_id '0' matches every existing row for this table.
 INSERT INTO smfwhe_definedwebhook_role (
   smfwhe_definedwebhook_role_id, ad_client_id, ad_org_id, isactive,
   created, createdby, updated, updatedby,

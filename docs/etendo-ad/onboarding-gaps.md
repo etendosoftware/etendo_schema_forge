@@ -622,9 +622,28 @@ ORDER BY w.name, r.name;
 -- If only 'System Administrator' rows appear for a webhook, that gap is present for this tenant.
 ```
 
-**Corrective fix:** `cli/src/data-fixes/sql/20260727T114306Z__R16-webhook-role-access.sql` — grants every ACTIVE role of `:client_id` a row for all 3 webhooks (not a hardcoded role list, so it covers any tenant's own admin-equivalent role plus every other role it has).
+**Corrective fix:** `cli/src/data-fixes/sql/20260727T114306Z__R16-tenant-roles-and-webhook-access.sql` (Step 3) — grants every ACTIVE role of `:client_id` a row for all 3 webhooks (not a hardcoded role list, so it covers any tenant's own admin-equivalent role plus every other role it has, including any created by Step 1/2 of the same fix — see H2 below).
 
-**Preventive fix:** `referencedata/sampledata/GOClient/SMFWHE_DEFINEDWEBHOOK_ROLE.xml` (in `com.etendoerp.go`) now grants all 3 webhooks (previously only `SFListMenu`/`SFWindowAccessMap`) to GOClient's 6 roles, so a fresh GOClient install is born correct. Any other client's own sample-data (if it ships an equivalent file) should follow the same 3-webhook pattern.
+**Preventive fix:** `referencedata/sampledata/GOClient/SMFWHE_DEFINEDWEBHOOK_ROLE.xml` (in `com.etendoerp.go`) now grants all 3 webhooks (previously only `SFListMenu`/`SFWindowAccessMap`) to GOClient's 6 roles, so a fresh GOClient install is born correct. Any other client's own sample-data (if it ships an equivalent file) should follow the same 3-webhook pattern. **ETP-4515 (Phase 7) — onboarding auto-provisioning for new tenants — has not been built**, so every tenant onboarded before that ships still needs the corrective fix above.
+
+### H2 — Real tenants never get GOClient's Finance/Sales/Purchasing/Inventory roles (ETP-4515/4516, Phase 7)
+
+**Symptom:** a real onboarded Etendo Go tenant has exactly ONE role (its auto-created admin role). The ETP-4512 "assign one of 5 predefined roles" UI has nothing to offer besides that admin role — Finance/Sales/Purchasing/Inventory don't exist for the tenant at all, so role-based access segmentation is impossible.
+
+**Root cause:** GOClient's 4 non-admin roles are reference/sample data unique to GOClient (`referencedata/sampledata/GOClient/AD_ROLE.xml` + `AD_WINDOW_ACCESS.xml`). Nothing in the real onboarding flow (`EtendoGoJwtServlet.handleOnboarding()`'s `ensureX`/`wireX` chain) creates equivalents for a new tenant, and no data-fix existed to backfill them for tenants onboarded before this was even scoped. This is exactly Phase 7's planned work (`santo_roles_handoff_phase7.md`): ETP-4515 (preventive, onboarding) and ETP-4516 (corrective, data-fix) — both were still unstarted as of 2026-07-23.
+
+**Quick verification:**
+
+```sql
+SELECT name FROM ad_role WHERE ad_client_id = '<CLIENT_ID>' AND isactive = 'Y';
+-- If Finance/Sales/Purchasing/Inventory are absent, this gap is present for this tenant.
+```
+
+**Corrective fix (ETP-4516's scope, implemented ahead of schedule 2026-07-27):** `cli/src/data-fixes/sql/20260727T114306Z__R16-tenant-roles-and-webhook-access.sql` (Steps 1–2) — clones any of the 4 missing roles from GOClient (`AD_Role` attributes verbatim, including `EM_ETGO_Show_Acct_Fields`) and backfills `AD_Window_Access` to match GOClient's per-role window grants exactly (window ids are safe to copy as-is — `AD_Window` is system-level, `ad_client_id = '0'` for every row). Validated end-to-end in a rolled-back transaction against a real existing tenant ("QA Testing"): produced exactly the same `AD_Window_Access` row counts per role as GOClient's own (Finance 9, Inventory 6, Purchasing 5, Sales 6).
+
+**Discrepancy found while building this fix:** this doc's Phase 7 handoff (`santo_roles_handoff_phase7.md`) claimed GOClient's roles "already carry the correct `EM_ETGO_Show_Acct_Fields` Y/N value (Y for the roles meant to see accounting-sensitive fields, N for the rest)". Direct inspection of both the live DB and `AD_ROLE.xml` shows all 4 non-admin GOClient roles at `N` — the XML never sets the column at all, so every role rides the table's `N` default. Whether e.g. Finance *should* be `Y` is a product decision, not something this data-fix resolves on its own — it only mirrors GOClient's actual current value.
+
+**Preventive fix:** **not yet built** — ETP-4515 (auto-provision the 5 roles + window access at onboarding time, following the same `ensureX`/`wireX` pattern as `OnboardingWebhookAccessService`) remains unstarted. Until it ships, every newly onboarded tenant needs the corrective fix above re-run.
 
 ---
 
