@@ -54,7 +54,7 @@ function formatCurrency(value) {
   if (value == null) return '';
   var num = Number(value);
   if (isNaN(num)) return String(value);
-  return new Intl.NumberFormat('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(num);
+  return new Intl.NumberFormat('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2, useGrouping: true }).format(num);
 }
 function formatBoolean(value) { return value ? 'Yes' : 'No'; }
 function ifCond(v1, operator, v2, options) {

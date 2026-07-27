@@ -11,7 +11,7 @@ import { readFileSync, readdirSync, existsSync } from 'node:fs';
 import { createRequire } from 'node:module';
 const _require = createRequire(import.meta.url);
 import { resolve, join } from 'node:path';
-import { registerReportHelpers } from '../../../templates/reports/helpers/report-html-helpers.js';
+import { registerReportHelpers, buildJsreportHelpersString } from '../../../templates/reports/helpers/report-html-helpers.js';
 
 const ARTIFACTS_DIR = resolve(import.meta.dirname, '../../../artifacts');
 const ROOT = resolve(ARTIFACTS_DIR, '..');
@@ -613,8 +613,14 @@ export default function reportApiPlugin() {
               return;
             }
 
+            // Serialize the same canonical helpers used above for the HTML preview,
+            // plus only this report's specific extras (e.g. qrCode) — a single
+            // source of truth for both render paths instead of a hand-maintained
+            // copy per report. See buildJsreportHelpersString() for why jsreport
+            // (a separate Docker container, reachable only over HTTP) can't just
+            // import formatCurrency()/this module directly.
             const payload = {
-              template: { content: templateContent, engine: 'handlebars', recipe, helpers: helpersCode },
+              template: { content: templateContent, engine: 'handlebars', recipe, helpers: buildJsreportHelpersString(helpersCode) },
               data: templateData,
             };
 

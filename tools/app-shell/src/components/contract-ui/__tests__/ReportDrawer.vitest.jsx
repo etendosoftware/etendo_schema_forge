@@ -150,3 +150,22 @@ describe('ReportDrawer', () => {
     }
   });
 });
+
+describe('ReportDrawer — embedded jsreport HELPERS_CODE formatCurrency', () => {
+  // HELPERS_CODE is a self-contained Handlebars-helpers string sent directly to
+  // jsreport (same cross-process constraint as templates/reports/helpers — see
+  // buildJsreportHelpersString()'s doc comment), not exported for direct import.
+  // Source-text assertion, matching this repo's convention for such cases.
+  it('uses the es-ES locale with explicit useGrouping, never the old en-US copy', async () => {
+    const { readFileSync } = await import('node:fs');
+    const { join, dirname } = await import('node:path');
+    const { fileURLToPath } = await import('node:url');
+    const __dirname = dirname(fileURLToPath(import.meta.url));
+    const src = readFileSync(join(__dirname, '..', 'ReportDrawer.jsx'), 'utf8');
+    const fnMatch = src.match(/function formatCurrency\(value\) \{[\s\S]*?\n\}/);
+    expect(fnMatch).toBeTruthy();
+    expect(fnMatch[0]).toContain(`Intl.NumberFormat('es-ES'`);
+    expect(fnMatch[0]).toContain('useGrouping: true');
+    expect(fnMatch[0]).not.toContain('en-US');
+  });
+});

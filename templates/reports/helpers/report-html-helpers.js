@@ -54,7 +54,7 @@ export function createReportHelpers({ numberFormat } = {}) {
     if (value == null) return '';
     var num = Number(value);
     if (isNaN(num)) return String(value);
-    return new Intl.NumberFormat('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(num);
+    return new Intl.NumberFormat('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2, useGrouping: true }).format(num);
   }
 
   function formatBoolean(value) {
@@ -65,7 +65,7 @@ export function createReportHelpers({ numberFormat } = {}) {
     if (value == null) return '';
     var num = Number(value);
     if (isNaN(num)) return String(value);
-    return new Intl.NumberFormat('en-US', numberFormat || undefined).format(num);
+    return new Intl.NumberFormat('es-ES', Object.assign({ useGrouping: true }, numberFormat || undefined)).format(num);
   }
 
   function ifCond(v1, operator, v2, options) {
@@ -160,4 +160,93 @@ export function registerReportHelpers(handlebars, helpersCode) {
     if (typeof fn === 'function') handlebars.registerHelper(name, fn);
   });
   return helpers;
+}
+
+// Helper names covered by the canonical set — anything else found in a report's
+// raw helpers.js (e.g. `qrCode`) is report-specific and must be preserved verbatim.
+const CANONICAL_HELPER_NAMES = new Set([
+  'isGroupBreak', 'resetGroupTracking', 'formatDate', 'formatCurrency',
+  'formatBoolean', 'formatNumber', 'ifCond', 'eq', 'sumField',
+  'formatDateDisplay', 'sumRowsByCategory',
+]);
+
+function extractBraceBlock(source, startIdx) {
+  const braceStart = source.indexOf('{', startIdx);
+  let depth = 0;
+  let i = braceStart;
+  for (; i < source.length; i++) {
+    if (source[i] === '{') depth++;
+    else if (source[i] === '}') {
+      depth--;
+      if (depth === 0) break;
+    }
+  }
+  return source.slice(startIdx, i + 1);
+}
+
+function extractTopLevelFunctions(source) {
+  const results = [];
+  const re = /function\s+(\w+)\s*\(/g;
+  let m;
+  while ((m = re.exec(source))) {
+    const fnSource = extractBraceBlock(source, m.index);
+    results.push({ name: m[1], source: fnSource });
+    re.lastIndex = m.index + fnSource.length;
+  }
+  return results;
+}
+
+function extractRequireLines(source) {
+  const matches = source.match(/^[ \t]*(?:var|const|let)\s+\w+\s*=\s*require\([^)]*\)\s*;?[ \t]*$/gm);
+  return matches ? matches.join('\n') : '';
+}
+
+/**
+ * Builds the `helpers` string sent to jsreport for the PDF/XLSX render path —
+ * the real centralization point for that path (see docs/... ETP-4314 plan).
+ *
+ * jsreport runs in a separate Docker container reachable only over HTTP, with
+ * no shared module system with this repo — so it can never `import`
+ * formatCurrency() or this module directly. Instead, this function serializes
+ * (via `fn.toString()`) the SAME canonical functions `createReportHelpers()`
+ * already uses for the on-screen HTML preview, and appends only the
+ * report-SPECIFIC extras (e.g. `qrCode` + its `require`) extracted from the
+ * report's raw `artifacts/<id>/helpers.js`. The result is the single source of
+ * truth for both render paths — not a second, hand-maintained copy per report.
+ *
+ * `formatNumber` cannot be serialized via a plain `fn.toString()`: its
+ * canonical definition closes over the `numberFormat` parameter, which would
+ * become an undeclared free variable once the function body is lifted out to
+ * a standalone string. It is rebuilt from a template with the resolved options
+ * literal inlined instead. `isGroupBreak`/`resetGroupTracking` have the same
+ * closure-variable issue (`_prevGroupValues`) — solved by declaring that
+ * variable at the top of the combined string rather than templating the whole
+ * function (their bodies don't reference anything else external).
+ *
+ * @param {string} [helpersCode] Raw contents of `artifacts/<id>/helpers.js`.
+ * @returns {string} Combined JS source to send as jsreport's `helpers` field.
+ */
+export function buildJsreportHelpersString(helpersCode) {
+  const numberFormat = extractNumberFormatOptions(helpersCode);
+  const helpers = createReportHelpers({ numberFormat });
+
+  const stateSrc = 'var _prevGroupValues = {};';
+  const formatNumberSrc = `function formatNumber(value) {
+  if (value == null) return '';
+  var num = Number(value);
+  if (isNaN(num)) return String(value);
+  return new Intl.NumberFormat('es-ES', ${JSON.stringify(Object.assign({ useGrouping: true }, numberFormat || undefined))}).format(num);
+}`;
+
+  const canonicalSrc = Object.entries(helpers)
+    .filter(([name, fn]) => typeof fn === 'function' && name !== 'formatNumber')
+    .map(([, fn]) => fn.toString())
+    .concat(formatNumberSrc)
+    .join('\n\n');
+
+  const extras = helpersCode ? extractTopLevelFunctions(helpersCode).filter((f) => !CANONICAL_HELPER_NAMES.has(f.name)) : [];
+  const requireLines = helpersCode ? extractRequireLines(helpersCode) : '';
+  const extrasSrc = extras.map((f) => f.source).join('\n\n');
+
+  return [requireLines, stateSrc, canonicalSrc, extrasSrc].filter(Boolean).join('\n\n');
 }
