@@ -12,7 +12,7 @@ import {
 import { useFiscalConfig } from '@/windows/custom/fiscal-config/useFiscalConfig.js';
 import { getInvoiceFiscalTargets } from '@/windows/custom/shared/fiscalTargets.js';
 import { FiscalStatusBadge } from '@/windows/custom/shared/FiscalStatusBadge.jsx';
-import { formatAmount } from '@/lib/formatAmount.js';
+import { formatCurrency } from '@/lib/formatCurrency.js';
 import InvoicePaymentHistoryModal from '@/windows/custom/shared/InvoicePaymentHistoryModal.jsx';
 
 /* eslint-disable react/prop-types */
@@ -114,7 +114,7 @@ export default function PurchaseInvoiceHeaderTable(props) {
           const raw = row.grandTotalAmount;
           const currency = row['currency$_identifier'];
           const amount = isNcOrReturn(row) ? -Math.abs(Number(raw)) : Number(raw);
-          return <span className="tabular-nums">{formatAmount(amount, currency)}</span>;
+          return <span className="tabular-nums">{formatCurrency(currency, amount)}</span>;
         },
       },
       {
@@ -146,7 +146,7 @@ export default function PurchaseInvoiceHeaderTable(props) {
                 style={{display:'inline-flex',alignItems:'center',gap:7,font:'600 13px/1 Inter',padding:'6px 11px',borderRadius:8,background:'#F5F3FF',border:'1px solid #DDD6FE',color:'#6D28D9',cursor:'pointer',fontVariantNumeric:'tabular-nums'}}
               >
                 <span style={{width:8,height:8,borderRadius:'50%',background:'#7C3AED',flexShrink:0,display:'inline-block'}}/>
-                Saldo a favor · {formatAmount(outstandingAbs, currency)}
+                Saldo a favor · {formatCurrency(currency, outstandingAbs)}
               </button>
             );
           }
@@ -165,7 +165,7 @@ export default function PurchaseInvoiceHeaderTable(props) {
               style={{display:'inline-flex',alignItems:'center',gap:7,font:'600 13px/1 Inter',padding:'6px 11px',borderRadius:8,background:'#FFF9EB',border:'1px solid #F2E2BC',color:'#8A6E25',cursor:'pointer',fontVariantNumeric:'tabular-nums'}}
             >
               <span style={{width:8,height:8,borderRadius:'50%',background:'#F59E0B',flexShrink:0,display:'inline-block'}}/>
-              {formatAmount(outstanding, currency)}
+              {formatCurrency(currency, outstanding)}
               <span style={{display:'inline-flex',alignItems:'center',color:'#A37700'}}><Plus size={13} data-testid="Plus__6b7cdb" /></span>
             </button>
           );

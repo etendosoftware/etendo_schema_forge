@@ -17,7 +17,7 @@ export function ReconciliationTab({ account, onReconcileSuccess }) {
     <div className="flex flex-1 flex-col overflow-hidden">
       <ReconciliationSplitPanel
         accountId={account?.id}
-        currency={account?.currency}
+        currency={account?.currencyIso}
         onBack={() => navigate(-1)}
         onReconcileSuccess={onReconcileSuccess}
         data-testid="ReconciliationSplitPanel__46a213" />

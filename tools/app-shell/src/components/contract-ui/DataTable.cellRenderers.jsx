@@ -1,7 +1,7 @@
 import { Switch } from '@/components/ui/switch';
 import { StatusTag } from '@/components/ui/status-tag';
 import { Tag } from '@/components/ui/tag';
-import { formatAmount } from '@/lib/formatAmount.js';
+import { formatCurrency } from '@/lib/formatCurrency.js';
 import { formatSignedDelta } from '@/lib/formatSigned.js';
 import { resolveColumnLabel } from '@/lib/resolveColumnLabel.js';
 import { getStatusDotColor, getStatusTone, statusLabel } from '@/lib/statusBadge.js';
@@ -208,7 +208,7 @@ export function renderDateCell({ row, col, dateFormatter }) {
 }
 
 export function renderAmountCell({ row, col }) {
-  return <span className="tabular-nums">{formatAmount(row[col.key], row['currency$_identifier'])}</span>;
+  return <span className="tabular-nums">{formatCurrency(row['currency$_identifier'], row[col.key])}</span>;
 }
 
 // Mirrors TONE_CLASS in components/ui/money-amount.jsx and the sibling

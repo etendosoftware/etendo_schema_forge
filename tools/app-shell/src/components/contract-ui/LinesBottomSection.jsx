@@ -1,11 +1,13 @@
 import { useUI } from '@/i18n';
 import { resolveTotalDiscountPct } from '@/lib/documentTotals';
+import { formatCurrency } from '@/lib/formatCurrency.js';
 import DocumentTotalsPanel from './DocumentTotalsPanel.jsx';
 
+// `DocumentTotalsPanel`/`BalanceFooterPanel` call their `formatAmount` prop as
+// (value, currency) — keep that signature here and delegate to the shared
+// formatCurrency(currencyCode, value) util, whose argument order is reversed.
 function fmt(val, curr) {
-  const n = typeof val === 'string' ? parseFloat(val) : (val ?? 0);
-  const s = n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  return curr ? `${s} ${curr}` : s;
+  return formatCurrency(curr, val);
 }
 
 /**

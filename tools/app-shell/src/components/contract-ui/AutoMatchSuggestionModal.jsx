@@ -4,6 +4,7 @@ import { toast } from 'sonner';
 import { useUI } from '@/i18n';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import { MoneyAmount } from '@/components/ui/money-amount';
+import { formatCurrency } from '@/lib/formatCurrency.js';
 import { useApplySuggestions } from '@/hooks/useReconciliation';
 import { cn } from '@/lib/utils';
 
@@ -40,10 +41,10 @@ function ariaCheckedValue(dash, checked) {
   return checked ? 'true' : 'false';
 }
 
-function formatSignedAmount(amount) {
+function formatSignedAmount(amount, currency) {
   if (amount === 0) return '—';
   const sign = amount < 0 ? '-' : '+';
-  return `${sign}${Math.abs(amount).toFixed(2).replace('.', ',')} €`;
+  return `${sign}${formatCurrency(currency, Math.abs(amount))}`;
 }
 
 /**
@@ -125,7 +126,7 @@ function StatementContent({ group, currency }) {
   );
 }
 
-function OperationRow({ op, isLast }) {
+function OperationRow({ op, isLast, currency }) {
   const ui = useUI();
   const amount = Number(op.amount ?? 0);
   const isNew = op.isNew;
@@ -158,7 +159,7 @@ function OperationRow({ op, isLast }) {
           'text-sm font-semibold leading-5',
           amount < 0 ? 'text-[#D50B3E]' : 'text-[#1E874C]',
         )}>
-          {formatSignedAmount(amount)}
+          {formatSignedAmount(amount, currency)}
         </div>
         {op.date && (
           <div className="text-xs font-medium leading-4 text-[#6C6C89]">{formatLineDate(op.date)}</div>
@@ -208,6 +209,7 @@ function GroupRow({ group, checked, onToggle, currency }) {
               key={op.id ?? i}
               op={op}
               isLast={i === ops.length - 1}
+              currency={currency}
               data-testid="OperationRow__a89979" />
           ))
         )}

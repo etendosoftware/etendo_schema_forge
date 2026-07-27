@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { ClipboardList, FileText } from 'lucide-react';
 import { useUI } from '@/i18n';
 import { fetchOptionalJson } from '@/windows/custom/shared/pdfUtils.js';
+import { formatCurrency } from '@/lib/formatCurrency.js';
 
 /**
  * Confirmation modal for Sales Quotation in Under Evaluation (UE) state.
@@ -30,11 +31,6 @@ export default function QuotationConfirmModal({
   }), [token]);
 
   const [freshData, setFreshData] = useState(null);
-
-  const fmtNum = (v) =>
-    v != null && v !== ''
-      ? Number(v).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-      : '-';
 
   // Fetch fresh record + line count on mount
   useEffect(() => {
@@ -163,7 +159,7 @@ export default function QuotationConfirmModal({
             setCreatedDoc({
               type: 'order', id: order.id,
               documentNo: order.documentNo,
-              total: `${fmtNum(order.grandTotalAmount ?? order.grandTotal)} ${currency}`,
+              total: formatCurrency(currency, order.grandTotalAmount ?? order.grandTotal),
               status,
             });
             return;
@@ -187,7 +183,7 @@ export default function QuotationConfirmModal({
           type: 'invoice',
           id: doc?.id ?? null,
           documentNo: doc?.documentNo ?? '',
-          total: `${fmtNum(doc?.grandTotalAmount ?? grandTotal)} ${currency}`,
+          total: formatCurrency(currency, doc?.grandTotalAmount ?? grandTotal),
           status: 'Draft',
         });
       }
@@ -302,10 +298,10 @@ export default function QuotationConfirmModal({
               {bpName}
             </div>
             <div data-testid="confirm-summary-total" style={{ fontSize: 28, fontWeight: 500, color: '#042C53', lineHeight: 1, marginTop: 4, marginBottom: 6 }}>
-              {fmtNum(grandTotal)} {currency}
+              {formatCurrency(currency, grandTotal)}
             </div>
             <div style={{ fontSize: 11, color: '#185FA5' }}>
-              {lineCount != null ? ui('soLines', { count: lineCount }) : '...'} <span style={{ color: '#85B7EB' }}>·</span> {ui('soSubtotal')} <span data-testid="confirm-summary-subtotal" style={{ fontWeight: 500, color: '#042C53' }}>{fmtNum(totalLines)} {currency}</span>
+              {lineCount != null ? ui('soLines', { count: lineCount }) : '...'} <span style={{ color: '#85B7EB' }}>·</span> {ui('soSubtotal')} <span data-testid="confirm-summary-subtotal" style={{ fontWeight: 500, color: '#042C53' }}>{formatCurrency(currency, totalLines)}</span>
             </div>
           </div>
         </div>

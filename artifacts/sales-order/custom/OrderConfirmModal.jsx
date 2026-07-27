@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Truck, FileText } from 'lucide-react';
 import { useUI } from '@/i18n';
+import { formatCurrency } from '@/lib/formatCurrency.js';
 
 /**
  * Confirmation modal for Sales Order.
@@ -38,10 +39,6 @@ export default function OrderConfirmModal({
     'Content-Type': 'application/json',
   }), [token]);
 
-  const fmtNum = (v) =>
-    v != null && v !== ''
-      ? Number(v).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-      : '-';
 
   // Fetch fresh record + line count on mount
   useEffect(() => {
@@ -136,7 +133,7 @@ export default function OrderConfirmModal({
         result.shipment = {
           id:         shipment?.id ?? null,
           documentNo: shipment?.documentNo || '',
-          total:      shipment?.grandTotal != null ? `${fmtNum(shipment.grandTotal)} ${currency}`.trim() : '',
+          total:      shipment?.grandTotal != null ? formatCurrency(currency, shipment.grandTotal) : '',
         };
       }
 
@@ -159,7 +156,7 @@ export default function OrderConfirmModal({
         result.invoice = {
           id:         invoice?.id ?? null,
           documentNo: invoice?.documentNo || '',
-          total:      invoice?.grandTotal != null ? `${fmtNum(invoice.grandTotal)} ${currency}`.trim() : '',
+          total:      invoice?.grandTotal != null ? formatCurrency(currency, invoice.grandTotal) : '',
         };
       }
 
@@ -298,14 +295,14 @@ export default function OrderConfirmModal({
               {bpName}
             </div>
             <div style={{ fontSize: 28, fontWeight: 500, color: '#042C53', lineHeight: 1, marginTop: 4, marginBottom: 6 }}>
-              {fmtNum(grandTotal)}{currency ? ` ${currency}` : ''}
+              {formatCurrency(currency, grandTotal)}
             </div>
             <div style={{ fontSize: 11, color: '#185FA5' }}>
               {lineCount != null ? ui('soLines', { count: lineCount }) : '...'}
               {' '}<span style={{ color: '#85B7EB' }}>·</span>{' '}
               {ui('soSubtotal')}{' '}
               <span style={{ fontWeight: 500, color: '#042C53' }}>
-                {fmtNum(totalLines)}{currency ? ` ${currency}` : ''}
+                {formatCurrency(currency, totalLines)}
               </span>
             </div>
           </div>

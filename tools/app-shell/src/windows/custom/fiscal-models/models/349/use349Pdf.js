@@ -6,7 +6,7 @@ function fmtAmount(v) {
   if (v == null) return '0,00';
   var n = Number(v);
   if (isNaN(n)) return String(v);
-  return new Intl.NumberFormat('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n);
+  return new Intl.NumberFormat('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2, useGrouping: true }).format(n);
 }
 function fmtInt(v) { return v == null ? '0' : String(parseInt(v, 10) || 0); }
 ` + COMMON_HANDLEBARS_HELPERS;

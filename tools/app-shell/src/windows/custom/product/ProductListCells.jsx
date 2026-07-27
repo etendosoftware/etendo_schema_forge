@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useProductImage } from './useProductImage';
+import { formatCurrency } from '@/lib/formatCurrency.js';
 
 /* eslint-disable react/prop-types */
 
@@ -71,10 +72,10 @@ function fetchProductPrices(productId, token, apiBaseUrl) {
 
 /**
  * Fetch a product's price rows once and derive the sale and purchase unit prices
- * (standardPrice of the chosen row per side). Returns `undefined` values while
- * loading, `null` when the side has no price.
+ * (standardPrice + real currency of the chosen row per side). Returns `undefined`
+ * values while loading, `null` when the side has no price.
  *
- * @returns {{ sale: number|null|undefined, purchase: number|null|undefined }}
+ * @returns {{ sale: {value: number, currency: string}|null|undefined, purchase: {value: number, currency: string}|null|undefined }}
  */
 export function useProductPrices(productId, token, apiBaseUrl) {
   const [prices, setPrices] = useState({ sale: undefined, purchase: undefined });
@@ -90,8 +91,8 @@ export function useProductPrices(productId, token, apiBaseUrl) {
       const sale = selectPriceRow(rows, { sales: true });
       const purchase = selectPriceRow(rows, { sales: false });
       setPrices({
-        sale: sale ? Number(sale.standardPrice) || 0 : null,
-        purchase: purchase ? Number(purchase.standardPrice) || 0 : null,
+        sale: sale ? { value: Number(sale.standardPrice) || 0, currency: sale.currencyIso } : null,
+        purchase: purchase ? { value: Number(purchase.standardPrice) || 0, currency: purchase.currencyIso } : null,
       });
     });
     return () => { active = false; };
@@ -100,13 +101,13 @@ export function useProductPrices(productId, token, apiBaseUrl) {
   return prices;
 }
 
-function PriceText({ value, bold }) {
-  if (value === undefined || value === null) {
+function PriceText({ price, bold }) {
+  if (price === undefined || price === null) {
     return <span className="text-muted-foreground text-sm">—</span>;
   }
   return (
     <span className={`text-sm text-[#121217] whitespace-nowrap${bold ? ' font-semibold' : ''}`}>
-      {value.toFixed(2)} €
+      {formatCurrency(price.currency, price.value)}
     </span>
   );
 }
@@ -144,12 +145,12 @@ export function ProductNameCell({ row, token, apiBaseUrl }) {
 
 export function ProductSalePriceCell({ row, token, apiBaseUrl }) {
   const { sale } = useProductPrices(row.id, token, apiBaseUrl);
-  return <PriceText value={sale} bold data-testid="PriceText__fed565" />;
+  return <PriceText price={sale} bold data-testid="PriceText__fed565" />;
 }
 
 export function ProductPurchasePriceCell({ row, token, apiBaseUrl }) {
   const { purchase } = useProductPrices(row.id, token, apiBaseUrl);
-  return <PriceText value={purchase} data-testid="PriceText__fed565" />;
+  return <PriceText price={purchase} data-testid="PriceText__fed565" />;
 }
 
 export function ProductStockCell({ row, token, apiBaseUrl }) {

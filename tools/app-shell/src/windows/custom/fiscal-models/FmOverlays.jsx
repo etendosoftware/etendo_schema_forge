@@ -4,6 +4,7 @@ import { SUPPORTED_YEARS } from './models/303/fm303Layouts';
 import { neoBase } from '@/components/related-documents/helpers.js';
 import { Star, Play, ArrowUpRight, Info, OctagonAlert, TriangleAlert, X, Check } from 'lucide-react';
 import { Checkbox } from '@/components/ui/checkbox';
+import { formatCurrency } from '@/lib/formatCurrency.js';
 import './fiscal-models.css';
 
 function parseCityLine(cityLine) {
@@ -671,7 +672,6 @@ const T1_2026_BOXES = { 7:3248, 27:682.08, 45:3498.39, 46:-2816.31 };
 export function CompareDrawer({ decl, prevDecl, onClose }) {
   const ui = useUI();
   const t = ui;
-  const fmt = (n) => new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR' }).format(n);
 
   const boxes    = decl.boxes    ?? {};
   const summary  = decl.summary  ?? {};
@@ -727,8 +727,8 @@ export function CompareDrawer({ decl, prevDecl, onClose }) {
             return (
               <div key={r.label} style={{ display: 'grid', gridTemplateColumns: '1fr auto auto auto', gap: 8, padding: '10px 0', borderBottom: r.separator ? '2px solid #E8EAEF' : '1px solid #F5F7F9', fontSize: 14, alignItems: 'center' }}>
                 <span style={{ color: '#121217' }}>{r.label}</span>
-                <span style={{ textAlign: 'right', minWidth: 100, color: '#121217', fontVariantNumeric: 'tabular-nums' }}>{fmt(r.prev)}</span>
-                <span style={{ textAlign: 'right', minWidth: 100, color: '#121217', fontVariantNumeric: 'tabular-nums' }}>{fmt(r.curr)}</span>
+                <span style={{ textAlign: 'right', minWidth: 100, color: '#121217', fontVariantNumeric: 'tabular-nums' }}>{formatCurrency('EUR', r.prev)}</span>
+                <span style={{ textAlign: 'right', minWidth: 100, color: '#121217', fontVariantNumeric: 'tabular-nums' }}>{formatCurrency('EUR', r.curr)}</span>
                 <span style={{ textAlign: 'right', minWidth: 72, color: deltaColor, fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>
                   {deltaText}
                 </span>

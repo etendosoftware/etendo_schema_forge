@@ -9,6 +9,7 @@ import { useAuth } from '@/auth/AuthContext.jsx';
 import { useUI } from '@/i18n';
 import { isValidIban, normalizeIban } from '@/lib/validateIban.js';
 import { usePaymentBalance, formatPlain, round2 } from './usePaymentBalance.js';
+import { formatCurrency } from '@/lib/formatCurrency.js';
 import { useConversionRate } from './useConversionRate.js';
 import { useDocumentCurrency } from './useDocumentCurrency.js';
 
@@ -120,6 +121,7 @@ function buildPisPaymentFields(template, creditorValues) {
  * Resolves a currency's real symbol via Intl (no hardcoded currency→symbol map). es-ES 'symbol'
  * mode falls back to the raw ISO code for some currencies (e.g. GBP), so 'narrowSymbol' is used
  * to get a distinct symbol for every currency actually in use here (USD "$", EUR "€", GBP "£").
+ * Used standalone as a suffix span next to the raw editable amount input.
  */
 function currencySymbol(currency) {
   if (!currency) return '';
@@ -133,9 +135,10 @@ function curSuffix(currency) {
   return currencySymbol(currency);
 }
 /** Formats an amount with its currency symbol in es-ES grouping ("6.420,00 €"), for the spots
- *  that need a plain string rather than JSX (e.g. interpolated into a ui() translation). */
+ *  that need a plain string rather than JSX (e.g. interpolated into a ui() translation).
+ *  Delegates entirely to the shared formatCurrency() — do not hand-roll Intl calls here. */
 function fmtCur(n, currency) {
-  return `${formatPlain(n)} ${curSuffix(currency)}`.trim();
+  return formatCurrency(currency, n);
 }
 
 /** Label for the balance delta (excess / missing / exact). */

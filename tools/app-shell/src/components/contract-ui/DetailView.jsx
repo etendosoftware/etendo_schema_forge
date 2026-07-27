@@ -77,7 +77,14 @@ import {
   resolveSnapshotIdentifiers,
 } from '@/lib/lineFieldChange.js';
 import { getCatalogOptions } from '@/lib/selectorCatalog.js';
-import { formatAmount } from '@/lib/formatAmount.js';
+import { formatCurrency } from '@/lib/formatCurrency.js';
+
+// DocumentTotalsPanel/BalanceFooterPanel call their `formatAmount` prop as
+// (value, currency) — keep that signature here, delegating to the shared
+// formatCurrency(currencyCode, value) util, whose argument order is reversed.
+function formatAmount(val, curr) {
+  return formatCurrency(curr, val);
+}
 import { useRegisterWindowContext } from '@/components/CurrentWindowContext';
 import { matchOcrDocType } from '@/components/copilot/ocr/ocrDocTypes';
 import { isDeleteVisibleForRecord } from '@/utils/recordActions.js';
@@ -849,9 +856,8 @@ export function getSelectedLinesTotalLabel(bottomSection, selectedChildRows, lin
       const v = parseFloat(String(row?.[lineConfig.grossField] ?? row?.lineGrossAmount ?? 0));
       return acc + (Number.isFinite(v) ? v : 0);
     }, 0);
-    const formatted = total.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
     const curr = data?.['currency$_identifier'] || '';
-    return curr ? `${formatted} ${curr}` : formatted;
+    return curr ? formatCurrency(curr, total) : total.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2, useGrouping: true });
   })() : null;
 }
 

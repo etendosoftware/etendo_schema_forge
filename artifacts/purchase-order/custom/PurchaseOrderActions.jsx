@@ -8,6 +8,7 @@ import { incrementSurveyCounter } from '@/lib/surveys/survey-state.js';
 import { emitSurveyTrigger } from '@/lib/surveys/survey-engine.js';
 import { usePurchaseOrderPdf } from '@/windows/custom/shared/usePurchaseOrderPdf.js';
 import { trackTransactionPosted, trackDocumentCreated } from '@/lib/observability/health-events.js';
+import { formatCurrency } from '@/lib/formatCurrency.js';
 
 export { ConfirmResultModal as PoConfirmResultModal };
 
@@ -464,14 +465,14 @@ export function ConfirmModal({ orderId, data, apiBaseUrl, headers, onClose, onCo
               </div>
             )}
             <div style={{ fontSize: 28, fontWeight: 500, color: '#042C53', lineHeight: 1, marginTop: 4, marginBottom: 6 }}>
-              {grandTotal > 0 ? `${fmtNum(grandTotal)}${currency ? ` ${currency}` : ''}` : '0,00'}
+              {grandTotal > 0 ? formatCurrency(currency, grandTotal) : '0,00'}
             </div>
             <div style={{ fontSize: 11, color: '#185FA5', marginBottom: 10 }}>
               {lineCount != null ? (lineCount === 1 ? ui('soLine') : ui('soLines', { count: lineCount })) : '…'}
               {' '}<span style={{ color: '#85B7EB' }}>·</span>{' '}
               {ui('soSubtotal')}{' '}
               <span style={{ fontWeight: 500, color: '#042C53' }}>
-                {fmtNum(totalLines)}{currency ? ` ${currency}` : ''}
+                {formatCurrency(currency, totalLines)}
               </span>
             </div>
             <div style={{ borderRadius: 6, background: '#FFFBEB', border: '1px solid #FDE68A', padding: '8px 12px', display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -600,8 +601,8 @@ export function CreateDocsModal({ orderId, data, base, headers, currency, derive
 
   const invoiceSubtitle = totalOrder > 0
     ? (totalInvoiced > 0
-        ? ui('poAmountInvoicedOf', { invoiced: `${fmtNum(totalInvoiced)}${currency ? ` ${currency}` : ''}`, pending: `${fmtNum(totalPending)}${currency ? ` ${currency}` : ''}` })
-        : `${fmtNum(totalPending)}${currency ? ` ${currency}` : ''} ${ui('poPendingInvoice')}`)
+        ? ui('poAmountInvoicedOf', { invoiced: formatCurrency(currency, totalInvoiced), pending: formatCurrency(currency, totalPending) })
+        : `${formatCurrency(currency, totalPending)} ${ui('poPendingInvoice')}`)
     : ui('poCreateInvoiceCheckDesc');
 
   const handleCreate = async () => {
@@ -668,7 +669,7 @@ export function CreateDocsModal({ orderId, data, base, headers, currency, derive
               </div>
             )}
             <div style={{ fontSize: 28, fontWeight: 500, color: '#042C53', lineHeight: 1, marginTop: 4 }}>
-              {grandTotal > 0 ? `${fmtNum(grandTotal)}${currency ? ` ${currency}` : ''}` : '0,00'}
+              {grandTotal > 0 ? formatCurrency(currency, grandTotal) : '0,00'}
             </div>
           </div>
         </div>
@@ -764,7 +765,7 @@ function CloneModal({ orderId, data, apiBaseUrl, headers, onClose, onCloned }) {
   const lineCount   = lines?.length ?? null;
   const productLine = lineCount === null
     ? '…'
-    : `${lineCount === 1 ? ui('soLine') : ui('soLines', { count: lineCount })}  ·  ${currency} ${fmtNum(total)}`;
+    : `${lineCount === 1 ? ui('soLine') : ui('soLines', { count: lineCount })}  ·  ${formatCurrency(currency, total)}`;
 
   const handleClone = async () => {
     setLoading(true);
