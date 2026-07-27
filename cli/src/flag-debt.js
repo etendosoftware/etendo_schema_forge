@@ -278,8 +278,13 @@ export function collectTouchPoints(flag, { roots, frameworkPaths }) {
 
 /** Normalises both spec shapes (a bare string or an object) into objects. */
 export function normalizeSpec(spec) {
-  if (typeof spec === 'string') return { path: spec, root: 'frontend', expected: false };
-  return { path: spec.path, root: spec.root || 'frontend', expected: Boolean(spec.expected) };
+  if (typeof spec === 'string') return { path: spec, root: 'frontend', expected: false, note: null };
+  return {
+    path: spec.path,
+    root: spec.root || 'frontend',
+    expected: Boolean(spec.expected),
+    note: spec.note || null,
+  };
 }
 
 function allSpecs(flag) {
@@ -300,7 +305,9 @@ export function checkTestSpecs(flag, { roots }) {
         ...spec,
         exists,
         unverifiable: !rootDir,
-        note: exists ? null : (spec.expected ? 'pending Tester' : 'missing'),
+        // A declared note wins: not every unwritten spec is merely queued, and
+        // "pending Tester" would misdescribe one that was deliberately deferred.
+        note: exists ? null : (spec.note || (spec.expected ? 'pending Tester' : 'missing')),
       };
     });
     const missing = checked.filter((spec) => !spec.exists);

@@ -41,7 +41,7 @@
         ]
       },
       "$pathsComment": "Owned paths only — code that exists because this flag exists and is deleted with it. src/com/etendoerp/go/rest/EtendoGoJwtServlet.java is a touch point, not owned.",
-      "$knownGapComment": "src/com/etendoerp/go/payment/TenantPlanService.java (markProductive, resolvePlan) has no unit test and is not exercised by TenantPaywallServiceTest. A spec for it was deliberately NOT declared: the team decided none will be written, and an expected:true entry nobody intends to satisfy pins the tests score forever. The gap is real and only the coverage dimension can surface it, which needs SONAR_TOKEN.",
+      "$knownGapComment": "USER-ACCEPTED VISIBLE DEBT (scorecard demo). src/com/etendoerp/go/payment/TenantPlanService.java (markProductive, resolvePlan) has no unit test and is not exercised by TenantPaywallServiceTest. The unit-level spec below is declared expected:true and is intentionally deferred, so this flag carries the tests penalty on purpose rather than reading as a clean sheet. Asserting the AD_Preference persistence itself stays integration scope and is NOT what the deferred unit spec would cover.",
       "testSpecs": {
         "unit": [
           {
@@ -51,6 +51,12 @@
           {
             "root": "backend",
             "path": "src-test/src/com/etendoerp/go/payment/TenantPaywallServiceTest.java"
+          },
+          {
+            "root": "backend",
+            "path": "src-test/src/com/etendoerp/go/payment/TenantPlanServiceTest.java",
+            "expected": true,
+            "note": "accepted debt — unit test deliberately deferred"
           },
           {
             "root": "frontend",

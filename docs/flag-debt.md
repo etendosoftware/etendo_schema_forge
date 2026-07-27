@@ -44,7 +44,10 @@ enforcement point. The fourth shared file is where smearing starts.
 
 Each path in `testSpecs` is checked for existence on disk. Entries marked
 `expected: true` are agreed-but-unwritten specs; they count as missing and are
-labelled *pending Tester*, so an empty promise never scores as a kept one.
+labelled *pending Tester*, so an empty promise never scores as a kept one. An
+optional `note` on a spec overrides that label — use it when a spec is not
+merely queued, e.g. `"note": "accepted debt — unit test deliberately deferred"`
+for a gap the team has decided to carry visibly rather than close.
 
 **Points:** `+5 if any unit spec is missing`, `+8 if any e2e spec is missing`.
 Flat per list, not per file — the signal is "this flag's suite has a hole",
