@@ -63,7 +63,11 @@ import { cn } from '@/lib/utils.js';
 import { useMenuLabel, useUI, useLocaleSwitch } from '@/i18n';
 import { useFavorites } from '@/components/layout/FavoritesContext';
 import { Loader2 } from 'lucide-react';
-import { useFeatureFlag, TENANT_UPGRADE } from '@/lib/flags';
+import {
+  useFeatureFlag,
+  PROOF_OF_CONCEPT_MENU,
+  TENANT_UPGRADE,
+} from '@/lib/flags';
 import { useEnvironmentSwitch } from '@/hooks/useEnvironmentSwitch.js';
 import menuConfig from '@/menu.json';
 
@@ -283,6 +287,7 @@ function ExpandedGroupSection({
           type="button"
           onClick={onToggle}
           aria-expanded={!!isOpen}
+          data-testid={`menu-group-${group.group.replace(/\s+/g, '-').toLowerCase()}`}
           className={cn(
             'flex w-full items-center gap-2.5 px-3 py-1.5 text-sm transition-colors border-l-[3px]',
             getGroupHeaderClass(isGroupActive, isOpen)
@@ -473,6 +478,9 @@ export default function SideMenu({
   // than one, so the switcher rides the same flag as the upgrade flow. With the
   // flag off this renders exactly what it did before: the current company alone.
   const multiTenantEnabled = useFeatureFlag(TENANT_UPGRADE);
+  // This is visual gating only. The windows remain protected by normal AD role
+  // filtering; the flag merely stops offering this internal menu section.
+  const showProofOfConceptMenu = useFeatureFlag(PROOF_OF_CONCEPT_MENU);
   const { environments, switchTo, switching, currentClientId } = useEnvironmentSwitch({
     enabled: multiTenantEnabled,
   });
@@ -488,10 +496,12 @@ export default function SideMenu({
     return map;
   }, []);
 
-  const resolvedMenuGroups = menuGroups.map((g) => {
-    if (g.group !== 'Favorites') return g;
-    return { ...g, items: favorites };
-  });
+  const resolvedMenuGroups = menuGroups
+    .filter(g => g.group !== 'Proof of Concept' || showProofOfConceptMenu)
+    .map((g) => {
+      if (g.group !== 'Favorites') return g;
+      return { ...g, items: favorites };
+    });
 
   const activeGroup = findActiveGroup(resolvedMenuGroups, location.pathname, location.search);
   const tMenu = useMenuLabel();

@@ -381,3 +381,21 @@ the core package.
 fields (so it would silently drop `paymentToken`) and starts reading the
 response body without checking the status (so a 402 would surface as a generic
 "no result" failure instead of a payment error).
+
+## Proof of Concept menu (`proof-of-concept-menu`)
+
+This is a frontend-only, temporary reveal for the internal **Proof of Concept**
+section in the side menu. It defaults to `false`, so an unavailable provider or
+an environment with no configuration keeps the section hidden. The flag only
+changes menu visibility: the windows behind it continue to rely on their normal
+AD role filtering.
+
+Use a local override while developing or testing it:
+
+```bash
+VITE_FEATURE_FLAGS='{"proof-of-concept-menu":true}' make dev
+```
+
+The current removal target and the unit/E2E specs are recorded in
+[`flags-registry.json`](../flags-registry.json); the shared `SideMenu` is a
+toggle point, not code owned by this flag.

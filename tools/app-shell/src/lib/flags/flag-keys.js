@@ -11,8 +11,12 @@
 /** Gates the paid upgrade flow that creates a second, productive tenant. */
 export const TENANT_UPGRADE = 'tenant-upgrade';
 
+/** Reveals the internal Proof of Concept section in the side menu. */
+export const PROOF_OF_CONCEPT_MENU = 'proof-of-concept-menu';
+
 export const FLAG_DEFAULTS = Object.freeze({
   [TENANT_UPGRADE]: false,
+  [PROOF_OF_CONCEPT_MENU]: false,
 });
 
 /**

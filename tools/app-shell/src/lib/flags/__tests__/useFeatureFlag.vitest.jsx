@@ -28,7 +28,12 @@ import {
   buildEvaluationContext,
   readSessionContext,
 } from '../bootstrap.js';
-import { TENANT_UPGRADE, FLAG_DEFAULTS, defaultForFlag } from '../flag-keys.js';
+import {
+  PROOF_OF_CONCEPT_MENU,
+  TENANT_UPGRADE,
+  FLAG_DEFAULTS,
+  defaultForFlag,
+} from '../flag-keys.js';
 import { resetExposureCache } from '../flag-exposure.js';
 
 const FLAG_ON = JSON.stringify({ [TENANT_UPGRADE]: true });
@@ -60,6 +65,10 @@ describe('flag-keys — declared defaults', () => {
     expect(FLAG_DEFAULTS[TENANT_UPGRADE]).toBe(false);
   });
 
+  it('declares proof-of-concept-menu as off, hiding internal tooling by default', () => {
+    expect(FLAG_DEFAULTS[PROOF_OF_CONCEPT_MENU]).toBe(false);
+  });
+
   it('resolves an unknown key to false so a typo hides the feature', () => {
     expect(defaultForFlag('no-such-flag')).toBe(false);
   });
@@ -68,6 +77,11 @@ describe('flag-keys — declared defaults', () => {
 describe('useFeatureFlag — GATE 1: default with the flag unset', () => {
   it('returns false when no provider has been registered', () => {
     const { result } = renderHook(() => useFeatureFlag(TENANT_UPGRADE));
+    expect(result.current).toBe(false);
+  });
+
+  it('hides the Proof of Concept menu when no provider has been registered', () => {
+    const { result } = renderHook(() => useFeatureFlag(PROOF_OF_CONCEPT_MENU));
     expect(result.current).toBe(false);
   });
 
@@ -144,6 +158,18 @@ describe('useFeatureFlag — GATE 3: provider down or unconfigured', () => {
     expect(logger.warn).toHaveBeenCalled();
 
     const { result } = renderHook(() => useFeatureFlag(TENANT_UPGRADE));
+    expect(result.current).toBe(false);
+  });
+
+  it('keeps the Proof of Concept menu hidden when provider startup fails', async () => {
+    vi.spyOn(OpenFeature, 'setProviderAndWait').mockRejectedValue(new Error('control plane unreachable'));
+
+    await initFeatureFlags({
+      env: { VITE_FEATURE_FLAGS: JSON.stringify({ [PROOF_OF_CONCEPT_MENU]: true }) },
+      logger: { warn: vi.fn() },
+    });
+
+    const { result } = renderHook(() => useFeatureFlag(PROOF_OF_CONCEPT_MENU));
     expect(result.current).toBe(false);
   });
 

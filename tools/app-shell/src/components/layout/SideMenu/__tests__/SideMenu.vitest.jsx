@@ -1,6 +1,10 @@
 import { render, screen, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
+const { mockUseFeatureFlag } = vi.hoisted(() => ({
+  mockUseFeatureFlag: vi.fn(() => false),
+}));
+
 // Mock react-router-dom — useLocation wrapped in a vi.fn() so individual
 // tests can override the current path (e.g. the ETP-4598 openGroups-race
 // regression test below needs a non-'/dashboard' route).
@@ -33,6 +37,12 @@ vi.mock('@/auth/AuthContext.jsx', () => ({
 const mockUseFavorites = vi.fn(() => ({ favorites: [] }));
 vi.mock('@/components/layout/FavoritesContext', () => ({
   useFavorites: () => mockUseFavorites(),
+}));
+
+vi.mock('@/lib/flags', () => ({
+  useFeatureFlag: (...args) => mockUseFeatureFlag(...args),
+  TENANT_UPGRADE: 'tenant-upgrade',
+  PROOF_OF_CONCEPT_MENU: 'proof-of-concept-menu',
 }));
 
 // Mock menu.json — includes a couple of extra entries (a "Favorites" group and
@@ -166,6 +176,15 @@ const MENU_GROUPS = [
       { name: 'sales-invoice', label: 'Sales Invoice' },
     ],
   },
+  {
+    group: 'Proof of Concept',
+    icon: 'FlaskConical',
+    section: 'System',
+    items: [
+      { name: 'quick-sales-order', label: 'Quick Sales Order' },
+      { name: 'quick-purchase-order', label: 'Quick Purchase Order' },
+    ],
+  },
 ];
 
 describe('SideMenu', () => {
@@ -254,6 +273,8 @@ describe('SideMenu', () => {
       mockUseFavorites.mockReturnValue({ favorites: [] });
       mockUseLocation.mockReturnValue({ pathname: '/dashboard', search: '' });
       delete import.meta.env.VITE_SHOW_ARTIFACTS;
+      mockUseFeatureFlag.mockReset();
+      mockUseFeatureFlag.mockReturnValue(false);
     });
 
     // A group whose currentPath ('dashboard') matches one of two items, so the
@@ -467,6 +488,24 @@ describe('SideMenu', () => {
       const link = screen.getByTestId('NavLink__247c75');
       expect(link).toHaveAttribute('href', '/artifacts');
       expect(screen.getByText('Artifacts')).toBeInTheDocument();
+    });
+
+    it('hides the Proof of Concept section while its flag is off', () => {
+      render(<SideMenu {...defaultProps} />);
+      expect(screen.queryByText('Proof of Concept')).not.toBeInTheDocument();
+    });
+
+    it('shows the Proof of Concept section when its flag is on', () => {
+      mockUseFeatureFlag.mockImplementation(key => key === 'proof-of-concept-menu');
+      render(<SideMenu {...defaultProps} />);
+      expect(screen.getByText('Proof of Concept')).toBeInTheDocument();
+    });
+
+    it('keeps the Proof of Concept section hidden when the provider falls back', () => {
+      // A failed provider resolves useFeatureFlag to the declared false default.
+      mockUseFeatureFlag.mockReturnValue(false);
+      render(<SideMenu {...defaultProps} />);
+      expect(screen.queryByText('Proof of Concept')).not.toBeInTheDocument();
     });
 
     it('renders the Artifacts link as an icon-only tooltip trigger in collapsed mode', () => {
