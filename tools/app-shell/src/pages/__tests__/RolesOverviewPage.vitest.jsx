@@ -9,8 +9,22 @@ import React from 'react';
 
 // ── Mocks ────────────────────────────────────────────────────────────────────
 
+// ETP-4513 window-name i18n fix: RolesOverviewPage now also calls
+// useMenuLabel() to translate each assigned-window badge (previously
+// rendered the raw AD_Window English `name` untranslated, e.g. "Business
+// Partner" / "Sales Invoice" instead of "Terceros" / "Factura (Cliente)").
+// This mock mirrors useMenuLabel's REAL contract (see
+// `node_modules/@etendosoftware/app-shell-core/src/i18n/useMenuLabel.js`):
+// a lookup keyed by the raw name, falling back to the raw name unchanged
+// when no dictionary entry exists — NOT a different/invented contract.
+const MENU_LABELS = {
+  'Business Partner': 'Terceros',
+  'Sales Invoice': 'Factura (Cliente)',
+};
+
 vi.mock('@/i18n', () => ({
   useUI: () => (key) => key,
+  useMenuLabel: () => (key) => MENU_LABELS[key] ?? key,
 }));
 
 vi.mock('@/lib/rolesApi.js', () => ({
@@ -195,7 +209,7 @@ describe('RolesOverviewPage', () => {
         for (const role of FIVE_ROLES) {
           for (const w of role.windows) {
             const chip = screen.getByTestId(`RolesOverviewPage__window-${role.id}-${w.id}`);
-            expect(chip.textContent).toBe(w.name);
+            expect(chip.textContent).toBe(MENU_LABELS[w.name] ?? w.name);
           }
         }
       });
@@ -218,6 +232,48 @@ describe('RolesOverviewPage', () => {
       render(<RolesOverviewPage />);
       await waitFor(() => {
         expect(screen.getByTestId(`RolesOverviewPage__windows-${roleWithNoWindows.id}`).textContent).toContain('—');
+      });
+    });
+  });
+
+  describe('window badge i18n (ETP-4513)', () => {
+    // Regression: the "Ventanas asignadas" badges used to render the raw
+    // AD_Window English `name` verbatim (untranslated even in Spanish
+    // locale). The page must now pass every window name through
+    // useMenuLabel() before rendering it.
+    const roleWithTranslatableWindows = {
+      ...FIVE_ROLES[1],
+      id: 'role-i18n-windows',
+      windows: [
+        { id: 'w-bp', name: 'Business Partner', tier: 'full' },
+        { id: 'w-si', name: 'Sales Invoice', tier: 'read-only' },
+      ],
+    };
+
+    it('renders the translated (mapped) window name, not the raw AD_Window name', async () => {
+      fetchRolesOverview.mockResolvedValue({ roles: [roleWithTranslatableWindows] });
+      render(<RolesOverviewPage />);
+      await waitFor(() => {
+        const bpChip = screen.getByTestId(`RolesOverviewPage__window-${roleWithTranslatableWindows.id}-w-bp`);
+        expect(bpChip.textContent).toBe('Terceros');
+        expect(bpChip.textContent).not.toBe('Business Partner');
+      });
+      const siChip = screen.getByTestId(`RolesOverviewPage__window-${roleWithTranslatableWindows.id}-w-si`);
+      expect(siChip.textContent).toBe('Factura (Cliente)');
+      expect(siChip.textContent).not.toBe('Sales Invoice');
+    });
+
+    it('falls back to the raw window name when no dictionary entry exists (matches useMenuLabel default)', async () => {
+      const roleWithUnknownWindow = {
+        ...FIVE_ROLES[2],
+        id: 'role-i18n-unknown-window',
+        windows: [{ id: 'w-unknown', name: 'Some Untranslated Window', tier: 'full' }],
+      };
+      fetchRolesOverview.mockResolvedValue({ roles: [roleWithUnknownWindow] });
+      render(<RolesOverviewPage />);
+      await waitFor(() => {
+        const chip = screen.getByTestId(`RolesOverviewPage__window-${roleWithUnknownWindow.id}-w-unknown`);
+        expect(chip.textContent).toBe('Some Untranslated Window');
       });
     });
   });
