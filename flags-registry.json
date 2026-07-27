@@ -1,0 +1,86 @@
+{
+  "version": 1,
+  "$comment": "Source of truth for feature flag METADATA. Debt is always DERIVED from this file by cli/src/flag-debt.js — never stored here. See docs/flag-debt.md.",
+  "roots": {
+    "frontend": ".",
+    "backend": "etendo_core/modules/com.etendoerp.go"
+  },
+  "conventions": {
+    "frameworkPaths": [
+      "tools/app-shell/src/lib/flags/",
+      "com/etendoerp/go/featureflags/"
+    ],
+    "$comment": "frameworkPaths belong to NO flag: they are shared infrastructure serving every flag, so they never count as owned code nor as touch points. Matched as path fragments, which is why the backend entry has no src/ prefix — it also covers src-test/."
+  },
+  "flags": [
+    {
+      "key": "tenant-upgrade",
+      "description": "Gates the paid upgrade flow that turns a trial account into a second, productive tenant: the frontend entry point plus the backend paywall that authorises it.",
+      "owner": "sebastianbarrozo",
+      "jira": "ETP-4686",
+      "created": "2026-07-27",
+      "ttl": "2026-10-25",
+      "ttlNote": "PLACEHOLDER — created + 90 days. Nobody has committed to this sunset date yet; the flag owner must replace it with the real removal target.",
+      "defaultValue": false,
+      "symbols": [
+        "tenant-upgrade",
+        "TENANT_UPGRADE",
+        "etendo.go.flags.tenant-upgrade",
+        "ETGO_FLAG_TENANT_UPGRADE",
+        "UpgradePage",
+        "lib/upgrade"
+      ],
+      "$symbolsComment": "Grep terms that find every reference to this flag. The last two are needed because a touch point may reach the flag's code without naming the flag: runtime-routes.jsx only lazy-imports UpgradePage.",
+      "paths": {
+        "frontend": [
+          "tools/app-shell/src/lib/upgrade/",
+          "tools/app-shell/src/pages/UpgradePage.jsx"
+        ],
+        "backend": [
+          "src/com/etendoerp/go/payment/"
+        ]
+      },
+      "$pathsComment": "Owned paths only — code that exists because this flag exists and is deleted with it. src/com/etendoerp/go/rest/EtendoGoJwtServlet.java is a touch point, not owned.",
+      "testSpecs": {
+        "unit": [
+          {
+            "root": "backend",
+            "path": "src-test/src/com/etendoerp/go/payment/MockPaymentServiceTest.java"
+          },
+          {
+            "root": "backend",
+            "path": "src-test/src/com/etendoerp/go/payment/TenantPaywallServiceTest.java"
+          },
+          {
+            "root": "backend",
+            "path": "src-test/src/com/etendoerp/go/payment/TenantPlanServiceTest.java",
+            "expected": true
+          },
+          {
+            "root": "frontend",
+            "path": "tools/app-shell/src/lib/__tests__/upgrade-api.test.js",
+            "expected": true
+          },
+          {
+            "root": "frontend",
+            "path": "tools/app-shell/src/lib/__tests__/upgrade-mockPayment.test.js",
+            "expected": true
+          },
+          {
+            "root": "frontend",
+            "path": "tools/app-shell/src/pages/__tests__/UpgradePage.vitest.jsx",
+            "expected": true
+          }
+        ],
+        "e2e": [
+          {
+            "root": "frontend",
+            "path": "e2e/tests/flows/tenant-upgrade.mocked.spec.js",
+            "expected": true
+          }
+        ]
+      },
+      "$testSpecsComment": "expected:true means the spec is agreed but not written yet (pending Tester). Those paths are a contract: they are where the specs are expected to land, following each suite's existing naming convention."
+    }
+  ]
+}
