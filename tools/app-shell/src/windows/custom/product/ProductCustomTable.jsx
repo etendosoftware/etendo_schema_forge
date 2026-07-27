@@ -21,6 +21,13 @@ const columns = [
       { key: 'name', column: 'Name', type: 'string', labels: { en_US: 'Name', es_ES: 'Nombre' } },
     ],
   },
+  // `name` and `searchKey` are real backend fields (AD columns Name / Value)
+  // already rendered inside the nameAndSearchKey cell above. They are added
+  // here — hidden from the grid via `hiddenColumns` below — purely so the
+  // Advanced Filter panel can offer them as separate, correctly labeled,
+  // working filter fields instead of the synthetic combined column (ETP-4609).
+  { key: 'name', column: 'Name', type: 'string' },
+  { key: 'searchKey', column: 'Value', type: 'string' },
   { key: 'productCategory', column: 'M_Product_Category_ID', type: 'selector', label: 'Product Category', required: true },
   { key: 'uOM',             column: 'C_UOM_ID',              type: 'selector', label: 'UOM',              required: true },
   {
@@ -84,12 +91,18 @@ const columns = [
 
 const filters = ['searchKey', 'name', 'productCategory', 'productType'];
 
+// `name` / `searchKey` carry the Advanced Filter entries (see columns above)
+// but must not render as their own grid columns — they're already shown
+// together inside the nameAndSearchKey cell.
+const hiddenColumns = ['name', 'searchKey'];
+
 const ProductCustomTable = forwardRef(function ProductCustomTable(props, ref) {
   return (
     <DataTable
       ref={ref}
       columns={columns}
       filters={filters}
+      hiddenColumns={hiddenColumns}
       {...props}
       data-testid="DataTable__f45e24" />
   );
