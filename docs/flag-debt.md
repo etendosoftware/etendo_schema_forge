@@ -66,10 +66,6 @@ it does not disappear when the rest of the suite lands. That is deliberate — a
 accepted gap should still be visible on the scorecard once everything else is
 green, which is exactly when it would otherwise be forgotten.
 
-**Points:** `+5 if any unit spec is missing`, `+8 if any e2e spec is missing`.
-Flat per list, not per file — the signal is "this flag's suite has a hole",
-and e2e costs more because a flag most often breaks in the wiring, not the unit.
-
 ### 3. Coverage — how much of the owned code is untested?
 
 If `SONAR_TOKEN` is set, every owned source file is passed to

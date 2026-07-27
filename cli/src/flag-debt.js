@@ -70,6 +70,10 @@ const SKIP_DIR_NAMES = new Set([
   // Sonar report is not a touch point, and counting it charges real debt
   // points for having run a scan.
   'sonar-reports', '.quality-gate-cache', 'logs', 'tmp',
+  // A separate, git-ignored checkout (.gitignore line 1) that happens to sit
+  // inside this repo. It is not frontend source, and walking it charges the
+  // backend module's own owned files as unowned frontend touch points.
+  'etendo_core', 'etendo_core_ar',
 ]);
 
 /** Files that describe the scorecard rather than participate in it. */
@@ -141,8 +145,19 @@ function isFile(target) {
 
 // ── Scanning ────────────────────────────────────────────────────────────────
 
-/** Yields every scannable file under `root`, as a path relative to `root`. */
-export function* walkFiles(root, { skipDirNames = SKIP_DIR_NAMES, extensions = SOURCE_EXTENSIONS } = {}) {
+/**
+ * Yields every scannable file under `root`, as a path relative to `root`.
+ *
+ * `skipPaths` blocks specific absolute directories. Roots can nest — the
+ * backend module lives inside the repo — and without this a file under the
+ * inner root is visited twice: once correctly, and once under the outer root
+ * where its owned-path declarations do not apply, turning owned code into a
+ * phantom touch point.
+ */
+export function* walkFiles(root, {
+  skipDirNames = SKIP_DIR_NAMES, extensions = SOURCE_EXTENSIONS, skipPaths = [],
+} = {}) {
+  const blocked = new Set(skipPaths.map((target) => path.resolve(target)));
   const stack = [''];
   while (stack.length > 0) {
     const relativeDir = stack.pop();
@@ -155,7 +170,9 @@ export function* walkFiles(root, { skipDirNames = SKIP_DIR_NAMES, extensions = S
     for (const entry of entries) {
       const relative = relativeDir ? path.join(relativeDir, entry.name) : entry.name;
       if (entry.isDirectory()) {
-        if (!skipDirNames.has(entry.name)) stack.push(relative);
+        if (skipDirNames.has(entry.name)) continue;
+        if (blocked.has(path.resolve(root, relative))) continue;
+        stack.push(relative);
       } else if (entry.isFile()) {
         if (SKIP_FILE_NAMES.has(entry.name)) continue;
         if (extensions.has(path.extname(entry.name))) yield relative;
@@ -257,7 +274,11 @@ export function collectTouchPoints(flag, { roots, frameworkPaths }) {
       .filter((spec) => spec.root === rootName)
       .map((spec) => spec.path);
 
-    for (const relative of walkFiles(rootDir)) {
+    const nestedRoots = Object.entries(roots)
+      .filter(([name, dir]) => name !== rootName && dir)
+      .map(([, dir]) => dir);
+
+    for (const relative of walkFiles(rootDir, { skipPaths: nestedRoots })) {
       const hits = findSymbolHits(path.join(rootDir, relative), flag.symbols || [flag.key]);
       if (hits.length === 0) continue;
       const bucket = classifyReference(relative, { ownedPaths, frameworkPaths, specPaths });
