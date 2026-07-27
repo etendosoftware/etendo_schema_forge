@@ -225,13 +225,19 @@ test.describe('Product grid — Advanced Filter (ETP-4609)', () => {
     await expect(page.getByRole('option', { name: 'Está vacío', exact: true })).toHaveCount(0);
     await expect(page.getByRole('option', { name: 'No está vacío', exact: true })).toHaveCount(0);
 
-    // Dismiss the operator dropdown (click a neutral spot still inside the
-    // popover) without closing the whole funnel panel.
-    await popover.getByText('Donde').click();
+    // Dismiss the operator dropdown. Radix's Select runs in modal mode by
+    // default, which sets `pointer-events: none` on the rest of the document
+    // while open — clicking a "neutral" spot elsewhere in the popover is not
+    // reliable (the click never reaches it). Escape is the correct way to
+    // close it without touching the outer funnel panel.
+    await page.keyboard.press('Escape');
+    await expect(page.getByRole('option', { name: 'Es', exact: true })).toHaveCount(0);
 
     // ── Step 3: already-shipped case-insensitive inSet filter (ETP-4609) ──
     await fieldSelect.click();
-    await page.getByRole('option', { name: /tipo de producto/i }).click();
+    // Field label is the short AD field label ("Tipo"), not the column's
+    // internal English key/name — match the actual rendered option text.
+    await page.getByRole('option', { name: 'Tipo', exact: true }).click();
 
     await opSelect.click();
     await page.getByRole('option', { name: 'Es cualquiera de', exact: true }).click();
