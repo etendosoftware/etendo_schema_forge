@@ -164,9 +164,9 @@ describe('createMockFetch', () => {
 
   it('GET SFWindowAccessMap returns full access regardless of basePath', async () => {
     const mockFetch = createMockFetch(mockData, basePath);
-    // This webhook lives under /webhooks/, not under `basePath` — it must be
+    // This endpoint lives under /sws/neo/, not under `basePath` — it must be
     // intercepted anyway (see ETP-4520 App.jsx `fetchWindowAccess`).
-    const res = await mockFetch('/etendo_sf/webhooks/SFWindowAccessMap');
+    const res = await mockFetch('/etendo_sf/sws/neo/windowaccessmap');
     assert.equal(res.ok, true);
     assert.equal(res.status, 200);
     const data = await res.json();

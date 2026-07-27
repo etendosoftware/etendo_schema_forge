@@ -8,7 +8,7 @@ This folder is the entry point for documentation that describes how generated an
 
 | File | Description |
 |------|-------------|
-| [app-shell-functional-flows.md](app-shell-functional-flows.md) | Cross-window functional guide for app-shell routes, generated/custom window loading, shared entity behavior, OAuth2 screens, PWA update/recovery flows, and role-based menu filtering + the roleless-user "No access" blocking screen (ETP-4514) |
+| [app-shell-functional-flows.md](app-shell-functional-flows.md) | Cross-window functional guide for app-shell routes, generated/custom window loading, shared entity behavior, OAuth2 screens, PWA update/recovery flows, role-based menu filtering + the roleless-user "No access" blocking screen (ETP-4514), and the admin-only Roles overview at `/roles` (ETP-4513) |
 
 | [2026-04-23-epic-etp-3504-merge-changelog.md](2026-04-23-epic-etp-3504-merge-changelog.md) | Window-level change log for the `epic/ETP-3504` -> `develop` merge, focused on user-visible generated/custom window deltas |
 
