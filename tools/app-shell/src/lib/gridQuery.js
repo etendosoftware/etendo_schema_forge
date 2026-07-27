@@ -522,16 +522,7 @@ function createNullCriteria(fieldName, op) {
 
 function generateInSetCriteria(val, fieldName) {
   const items = processInput(val);
-  let result;
-  if (items.length === 0) {
-    result = null;
-
-  } else if (items.length === 1) {
-    result = [{ fieldName, operator: 'equals', value: items[0] }];
-  } else {
-    result = [{ fieldName, operator: 'inSet', value: items.join(',') }];
-  }
-  return result;
+  return buildOrCriteria(items, fieldName, 'iEquals');
 }
 
 function buildOrCriteria(val, fieldName, op) {
