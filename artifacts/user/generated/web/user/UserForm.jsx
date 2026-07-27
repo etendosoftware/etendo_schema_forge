@@ -15,7 +15,6 @@ const fields = [
   { key: 'position', column: 'Title', type: 'text', label: 'Position', section: 'details' },
   { key: 'phone', column: 'Phone', type: 'text', label: 'Phone', section: 'details' },
   { key: 'supervisor', column: 'Supervisor_ID', type: 'search', label: 'Supervisor', section: 'details', reference: 'User', inputMode: 'search' },
-  { key: 'defaultRole', column: 'Default_Ad_Role_ID', type: 'selector', label: 'Default Role', section: 'defaults', reference: 'Role', inputMode: 'selector' },
   { key: 'defaultLanguage', column: 'Default_Ad_Language', type: 'selector', label: 'Default Language', section: 'defaults', reference: 'Language', inputMode: 'selector' },
   { key: 'defaultClient', column: 'Default_Ad_Client_ID', type: 'dependent', label: 'Default Client', section: 'defaults', reference: 'Client', inputMode: 'dependent', dependsOn: { field: 'defaultRole', filterKey: 'Default_AD_Role_ID' } },
   { key: 'defaultOrganization', column: 'Default_Ad_Org_ID', type: 'dependent', label: 'Default Organization', section: 'defaults', reference: 'Organization', inputMode: 'dependent', dependsOn: { field: 'defaultRole', filterKey: 'Default_AD_Role_ID' } },

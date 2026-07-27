@@ -16,9 +16,9 @@ function fmtDate(raw) {
 }
 
 const BADGE = {
-  paid:    { bg: '#d1fae5', color: '#065f46' },
-  pending: { bg: '#fef3c7', color: '#78350f' },
-  partial: { bg: '#dbeafe', color: '#1e3a5f' },
+  paid:    { bg: 'var(--status-success-bg)', color: 'var(--status-success-fg)' },
+  pending: { bg: 'var(--status-warning-bg)', color: 'var(--status-warning-fg)' },
+  partial: { bg: 'var(--status-info-bg)', color: 'var(--status-info-fg)' },
 };
 
 export default function PaymentPlanBlock({ recordId, data, token, apiBaseUrl }) {
@@ -60,10 +60,10 @@ export default function PaymentPlanBlock({ recordId, data, token, apiBaseUrl }) 
 
   return (
     <div style={{ marginBottom: 12 }}>
-      <span style={{ display: 'block', fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#9ca3af', marginBottom: 6 }}>
+      <span style={{ display: 'block', fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'hsl(var(--muted-foreground))', marginBottom: 6 }}>
         {ui('paymentPlan')}
       </span>
-      <div style={{ border: '0.5px solid #d1d5db', borderRadius: 10, overflow: 'hidden' }}>
+      <div style={{ border: '0.5px solid hsl(var(--foreground))', borderRadius: 10, overflow: 'hidden' }}>
         {sorted.map((inst, idx) => {
           const amount = parseFloat(inst.amount) || 0;
           const outstanding = parseFloat(inst.outstandingAmount) || 0;
@@ -77,15 +77,15 @@ export default function PaymentPlanBlock({ recordId, data, token, apiBaseUrl }) 
               style={{
                 display: 'flex', alignItems: 'center', justifyContent: 'space-between',
                 padding: '10px 14px',
-                borderBottom: idx < sorted.length - 1 ? '0.5px solid #d1d5db' : 'none',
+                borderBottom: idx < sorted.length - 1 ? '0.5px solid hsl(var(--card))' : 'none',
               }}
             >
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                <span style={{ fontSize: 13, color: '#6B7280' }}>{ui('installment')} {idx + 1}</span>
-                <span className="tabular-nums" style={{ fontSize: 13, fontWeight: 500, color: '#111827' }}>{fmt(amount, currency)}</span>
+                <span style={{ fontSize: 13, color: 'hsl(var(--muted-foreground))' }}>{ui('installment')} {idx + 1}</span>
+                <span className="tabular-nums" style={{ fontSize: 13, fontWeight: 500, color: 'hsl(var(--foreground))' }}>{fmt(amount, currency)}</span>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                <span className="tabular-nums" style={{ fontSize: 12, color: '#6B7280' }}>{ui('dueShort')} {fmtDate(inst.dueDate)}</span>
+                <span className="tabular-nums" style={{ fontSize: 12, color: 'hsl(var(--muted-foreground))' }}>{ui('dueShort')} {fmtDate(inst.dueDate)}</span>
                 <span style={{ fontSize: 10, fontWeight: 500, padding: '1px 8px', borderRadius: 9999, backgroundColor: badge.bg, color: badge.color }}>
                   {status.charAt(0).toUpperCase() + status.slice(1)}
                 </span>

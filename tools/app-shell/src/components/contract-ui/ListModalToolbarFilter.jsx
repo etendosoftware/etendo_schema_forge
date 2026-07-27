@@ -33,7 +33,7 @@ export function ListModalToolbarFilter({ filter, value, onChange, ui }) {
         <button
           type="button"
           data-testid={`list-modal-filter-${filter.key}`}
-          className="inline-flex h-10 items-center justify-between gap-2 rounded-lg border border-[#D1D4DB] bg-white px-3 text-sm font-normal leading-6 text-muted-foreground shadow-[0_1px_2px_rgba(18,18,23,0.05)] transition-colors hover:bg-[#F5F7F9]"
+          className="inline-flex h-10 items-center justify-between gap-2 rounded-lg border border-[hsl(var(--border-control))] bg-card px-3 text-sm font-normal leading-6 text-muted-foreground shadow-[0_1px_2px_hsl(var(--foreground) / 0.05)] transition-colors hover:bg-[hsl(var(--muted))]"
         >
           <span className="truncate text-left">{active.label}</span>
           <ChevronDown
@@ -53,13 +53,13 @@ export function ListModalToolbarFilter({ filter, value, onChange, ui }) {
                 aria-selected={selected}
                 onClick={() => onChange?.(opt.value)}
                 className={cn(
-                  'flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-sm hover:bg-[#F5F7F9]',
-                  selected ? 'font-semibold text-[#121217]' : 'text-[#3F3F50]',
+                  'flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-sm hover:bg-[hsl(var(--muted))]',
+                  selected ? 'font-semibold text-[hsl(var(--foreground))]' : 'text-[hsl(var(--muted-foreground))]',
                 )}
                 data-testid={`list-modal-filter-${filter.key}-option-${String(opt.value ?? 'all')}`}
               >
                 <span className="flex-1 text-left">{opt.label}</span>
-                {selected ? <Check className="h-4 w-4 text-[#121217]" data-testid="Check__a4c11d" /> : null}
+                {selected ? <Check className="h-4 w-4 text-[hsl(var(--foreground))]" data-testid="Check__a4c11d" /> : null}
               </button>
             );
           })}

@@ -56,13 +56,13 @@ export default function WarehouseProductsTab({ parentId, token, apiBaseUrl, onCo
       <tbody>
         {products.map((p) => (
           <tr key={p.id} className="border-b border-border/30 hover:bg-muted/30 transition-colors">
-            <td className="py-3 pr-4 font-medium text-[#121217]">{p.label}</td>
+            <td className="py-3 pr-4 font-medium text-[hsl(var(--foreground))]">{p.label}</td>
             <td className="py-3 pr-4 text-muted-foreground">{p.uom || '—'}</td>
-            <td className="py-3 pr-4 text-right tabular-nums text-[#121217]">{fmtQty(p.qty)}</td>
-            <td className="py-3 pr-4 text-right tabular-nums text-[#121217]">
+            <td className="py-3 pr-4 text-right tabular-nums text-[hsl(var(--foreground))]">{fmtQty(p.qty)}</td>
+            <td className="py-3 pr-4 text-right tabular-nums text-[hsl(var(--foreground))]">
               {p.cost ? formatCurrency(currencyCode, p.cost) : '—'}
             </td>
-            <td className="py-3 text-right tabular-nums text-[#121217]">
+            <td className="py-3 text-right tabular-nums text-[hsl(var(--foreground))]">
               {p.valuation ? formatCurrency(currencyCode, p.valuation) : '—'}
             </td>
           </tr>

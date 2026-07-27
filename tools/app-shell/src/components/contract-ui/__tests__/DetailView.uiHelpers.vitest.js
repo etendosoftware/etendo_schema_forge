@@ -186,7 +186,7 @@ describe('getSelectedLinesTotalLabel', () => {
 
 describe('getAddLineWrapperClassName', () => {
   it('returns the sticky class for inlineEditable layout', () => {
-    expect(getAddLineWrapperClassName('inlineEditable')).toBe('sticky bottom-0 bg-white z-10');
+    expect(getAddLineWrapperClassName('inlineEditable')).toBe('sticky bottom-0 bg-card z-10');
   });
 
   it('returns the relative class for other layouts', () => {
@@ -210,7 +210,7 @@ describe('getAddLineWrapperStyle', () => {
 
   it('includes the top border divider by default (primary header-lines path)', () => {
     expect(getAddLineWrapperStyle('inlineEditable').borderTop).toBe(
-      '0.5px solid var(--color-border-tertiary, #e5e7eb)'
+      '0.5px solid var(--color-border-tertiary, hsl(var(--border-subtle)))'
     );
   });
 

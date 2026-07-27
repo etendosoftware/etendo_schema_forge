@@ -35,7 +35,7 @@ export default function BulkInvoiceFromShipment({ selectedRows, clearSelection, 
 
   return (
     <>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, borderLeft: '1px solid #e5e7eb', paddingLeft: 8, marginLeft: 4 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, borderLeft: '1px solid hsl(var(--card))', paddingLeft: 8, marginLeft: 4 }}>
         <button
           type="button"
           disabled={!canCreate}
@@ -44,9 +44,9 @@ export default function BulkInvoiceFromShipment({ selectedRows, clearSelection, 
           className="inline-flex items-center gap-1.5 text-[13px] font-medium transition-colors"
           style={{
             padding: '4px 12px', borderRadius: 6,
-            border: canCreate ? '1px solid #93c5fd' : '1px solid #e5e7eb',
-            background: canCreate ? '#eff6ff' : 'transparent',
-            color: canCreate ? '#2563eb' : '#9ca3af',
+            border: canCreate ? '1px solid var(--status-info-bg)' : '1px solid hsl(var(--card))',
+            background: canCreate ? 'hsl(var(--card))' : 'transparent',
+            color: canCreate ? 'var(--status-info-bg)' : 'hsl(var(--muted-foreground))',
             cursor: canCreate ? 'pointer' : 'not-allowed',
             opacity: canCreate ? 1 : 0.5,
           }}
@@ -237,9 +237,9 @@ function BulkInvoiceModal({ shipments, bpName, token, apiBaseUrl, onClose, onSuc
         const bp = window.location.pathname.replace(/\/goods-shipment\/.*$/, '').replace(/\/goods-shipment\/?$/, '');
         const invoiceUrl = `${bp}/sales-invoice/${invoiceId}`;
         toast.custom((t) => (
-          <div style={{ background: '#16a34a', color: '#fff', borderRadius: 10, padding: '14px 18px', display: 'flex', alignItems: 'center', gap: 14, boxShadow: '0 8px 30px rgba(0,0,0,0.18)', minWidth: 380 }}>
-            <div style={{ width: 32, height: 32, borderRadius: '50%', background: 'rgba(255,255,255,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
+          <div style={{ background: 'var(--status-success-bg)', color: 'hsl(var(--card))', borderRadius: 10, padding: '14px 18px', display: 'flex', alignItems: 'center', gap: 14, boxShadow: '0 8px 30px hsl(var(--foreground) / 0.18)', minWidth: 380 }}>
+            <div style={{ width: 32, height: 32, borderRadius: '50%', background: 'hsl(var(--foreground) / 0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="hsl(var(--card))" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
             </div>
             <div style={{ flex: 1 }}>
               <div style={{ fontSize: 14, fontWeight: 600, whiteSpace: 'nowrap' }}>{`${ui('invoiceRef')}${docNo} ${ui('createdAsDraft')}`}</div>
@@ -247,7 +247,7 @@ function BulkInvoiceModal({ shipments, bpName, token, apiBaseUrl, onClose, onSuc
             </div>
             <button
               onClick={() => { toast.dismiss(t); window.location.href = invoiceUrl; }}
-              style={{ border: '1px solid rgba(255,255,255,0.4)', borderRadius: 6, padding: '6px 14px', fontSize: 13, fontWeight: 500, color: '#fff', background: 'rgba(255,255,255,0.15)', cursor: 'pointer', whiteSpace: 'nowrap' }}
+              style={{ border: '1px solid hsl(var(--foreground) / 0.4)', borderRadius: 6, padding: '6px 14px', fontSize: 13, fontWeight: 500, color: 'hsl(var(--foreground))', background: 'hsl(var(--foreground) / 0.15)', cursor: 'pointer', whiteSpace: 'nowrap' }}
             >{ui('viewInvoice')}</button>
           </div>
         ), { duration: 10000 });
@@ -269,31 +269,31 @@ function BulkInvoiceModal({ shipments, bpName, token, apiBaseUrl, onClose, onSuc
   };
 
   return (
-    <div onClick={onClose} className="fixed inset-0 z-50 flex items-center justify-center bg-black/30">
-      <div onClick={e => e.stopPropagation()} style={{ width: 600, minWidth: 560, maxHeight: '80vh', display: 'flex', flexDirection: 'column', overflow: 'hidden', borderRadius: 12, backgroundColor: '#fff', boxShadow: '0 8px 30px rgba(0,0,0,0.12)', border: '0.5px solid #E5E7EB' }}>
+    <div onClick={onClose} className="fixed inset-0 z-50 flex items-center justify-center bg-foreground/30">
+      <div onClick={e => e.stopPropagation()} style={{ width: 600, minWidth: 560, maxHeight: '80vh', display: 'flex', flexDirection: 'column', overflow: 'hidden', borderRadius: 12, backgroundColor: 'hsl(var(--card))', boxShadow: '0 8px 30px hsl(var(--foreground) / 0.12)', border: '0.5px solid hsl(var(--card))' }}>
 
         {/* Header — fixed */}
-        <div style={{ padding: '14px 16px', background: '#F4F5F7', borderBottom: '1px solid #E5E7EB', flexShrink: 0 }}>
+        <div style={{ padding: '14px 16px', background: 'hsl(var(--card))', borderBottom: '1px solid hsl(var(--card))', flexShrink: 0 }}>
           <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
             <div>
-              <div style={{ fontSize: 15, fontWeight: 600, color: '#111827' }}>{ui('createInvoiceBtn')}</div>
-              <div style={{ fontSize: 13, color: '#6B7280', marginTop: 3 }}>
+              <div style={{ fontSize: 15, fontWeight: 600, color: 'hsl(var(--foreground))' }}>{ui('createInvoiceBtn')}</div>
+              <div style={{ fontSize: 13, color: 'hsl(var(--muted-foreground))', marginTop: 3 }}>
                 {shipments.length} {ui('shipment')}{shipments.length !== 1 ? 's' : ''} · {bpName}
               </div>
             </div>
-            <button type="button" onClick={onClose} style={{ fontSize: 18, lineHeight: 1, padding: '2px 6px', borderRadius: 4, background: 'none', border: 'none', cursor: 'pointer', color: '#9ca3af' }}>&times;</button>
+            <button type="button" onClick={onClose} style={{ fontSize: 18, lineHeight: 1, padding: '2px 6px', borderRadius: 4, background: 'none', border: 'none', cursor: 'pointer', color: 'hsl(var(--muted-foreground))' }}>&times;</button>
           </div>
         </div>
 
         {existingDraft && !dismissedWarning && (
-          <div style={{ padding: '12px 20px', background: '#FAEEDA', borderBottom: '0.5px solid #EF9F27', display: 'flex', gap: 10, flexShrink: 0 }}>
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#854F0B" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, marginTop: 1 }}><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+          <div style={{ padding: '12px 20px', background: 'var(--status-warning-bg)', borderBottom: '0.5px solid var(--status-warning-bg)', display: 'flex', gap: 10, flexShrink: 0 }}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--status-warning-bg)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, marginTop: 1 }}><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
             <div>
-              <div style={{ fontSize: 13, fontWeight: 500, color: '#633806' }}>{ui('draftInvoiceExistsForShipments')}</div>
+              <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--status-warning-fg)' }}>{ui('draftInvoiceExistsForShipments')}</div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 4 }}>
-                <button type="button" onClick={() => navToInvoice(existingDraft.id)} style={{ fontSize: 12, color: '#185FA5', background: 'none', border: 'none', padding: 0, cursor: 'pointer', textDecoration: 'underline' }}>{ui('viewExistingInvoice')}</button>
-                <span style={{ color: '#854F0B', fontSize: 12 }}>·</span>
-                <button type="button" onClick={() => setDismissedWarning(true)} style={{ fontSize: 12, color: '#854F0B', background: 'none', border: 'none', padding: 0, cursor: 'pointer', textDecoration: 'underline' }}>{ui('createAnotherAnyway')}</button>
+                <button type="button" onClick={() => navToInvoice(existingDraft.id)} style={{ fontSize: 12, color: 'var(--status-info-fg)', background: 'none', border: 'none', padding: 0, cursor: 'pointer', textDecoration: 'underline' }}>{ui('viewExistingInvoice')}</button>
+                <span style={{ color: 'var(--status-warning-bg)', fontSize: 12 }}>·</span>
+                <button type="button" onClick={() => setDismissedWarning(true)} style={{ fontSize: 12, color: 'var(--status-warning-fg)', background: 'none', border: 'none', padding: 0, cursor: 'pointer', textDecoration: 'underline' }}>{ui('createAnotherAnyway')}</button>
               </div>
             </div>
           </div>
@@ -302,9 +302,9 @@ function BulkInvoiceModal({ shipments, bpName, token, apiBaseUrl, onClose, onSuc
         {/* Body — scrollable */}
         <div style={{ flex: 1, overflowY: 'auto', maxHeight: 380, padding: 0 }}>
           {loadingLines ? (
-            <p style={{ fontSize: 13, color: '#9ca3af', padding: '24px 0', textAlign: 'center' }}>{ui('loadingShipmentLines')}</p>
+            <p style={{ fontSize: 13, color: 'hsl(var(--muted-foreground))', padding: '24px 0', textAlign: 'center' }}>{ui('loadingShipmentLines')}</p>
           ) : shipmentSummaries.every(s => s.enrichedLines.length === 0) ? (
-            <p style={{ fontSize: 13, color: '#9ca3af', padding: '24px 0', textAlign: 'center' }}>{ui('noLinesInSelectedShipments')}</p>
+            <p style={{ fontSize: 13, color: 'hsl(var(--muted-foreground))', padding: '24px 0', textAlign: 'center' }}>{ui('noLinesInSelectedShipments')}</p>
           ) : (
             shipmentSummaries.map((shipment) => {
               const isExpanded = !collapsed[shipment.id];
@@ -317,23 +317,23 @@ function BulkInvoiceModal({ shipments, bpName, token, apiBaseUrl, onClose, onSuc
                     onClick={() => toggleCollapse(shipment.id)}
                     style={{
                       display: 'flex', alignItems: 'center', gap: 6,
-                      padding: '9px 16px', background: '#F4F5F7', borderBottom: '0.5px solid #E5E7EB',
-                      borderLeft: isExpanded ? '3px solid #378ADD' : '3px solid transparent',
+                      padding: '9px 16px', background: 'hsl(var(--card))', borderBottom: '0.5px solid hsl(var(--card))',
+                      borderLeft: isExpanded ? '3px solid var(--status-info-bg)' : '3px solid transparent',
                       cursor: 'pointer', userSelect: 'none',
                     }}
                   >
-                    <span style={{ fontSize: 11, color: '#9ca3af', width: 14, textAlign: 'center', transition: 'transform 0.2s ease', transform: isExpanded ? 'rotate(90deg)' : 'rotate(0deg)', flexShrink: 0 }}>▶</span>
+                    <span style={{ fontSize: 11, color: 'hsl(var(--muted-foreground))', width: 14, textAlign: 'center', transition: 'transform 0.2s ease', transform: isExpanded ? 'rotate(90deg)' : 'rotate(0deg)', flexShrink: 0 }}>▶</span>
                     <input
                       type="checkbox"
                       checked={allLinesSel}
                       ref={el => { if (el) el.indeterminate = someLinesSel; }}
                       onChange={(e) => { e.stopPropagation(); toggleShipmentLines(shipment.id); }}
                       onClick={(e) => e.stopPropagation()}
-                      style={{ accentColor: '#3b82f6', cursor: 'pointer', flexShrink: 0 }}
+                      style={{ accentColor: 'var(--status-info-border)', cursor: 'pointer', flexShrink: 0 }}
                     />
-                    <span style={{ fontSize: 13, fontWeight: 600, color: '#374151' }}>{ui('shipmentRef')}{shipment.documentNo}</span>
-                    <span style={{ fontSize: 12, color: '#9ca3af' }}>· {fmtDate(shipment.movementDate)} · {shipment.enrichedLines.length} {ui('line')}{shipment.enrichedLines.length !== 1 ? 's' : ''}</span>
-                    <span style={{ marginLeft: 'auto', fontSize: 13, color: '#374151', fontVariantNumeric: 'tabular-nums', fontWeight: 500, flexShrink: 0 }}>
+                    <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--status-info-fg)' }}>{ui('shipmentRef')}{shipment.documentNo}</span>
+                    <span style={{ fontSize: 12, color: 'hsl(var(--muted-foreground))' }}>· {fmtDate(shipment.movementDate)} · {shipment.enrichedLines.length} {ui('line')}{shipment.enrichedLines.length !== 1 ? 's' : ''}</span>
+                    <span style={{ marginLeft: 'auto', fontSize: 13, color: 'var(--status-info-fg)', fontVariantNumeric: 'tabular-nums', fontWeight: 500, flexShrink: 0 }}>
                       {fmtNum(shipment.total)}
                     </span>
                   </div>
@@ -341,7 +341,7 @@ function BulkInvoiceModal({ shipments, bpName, token, apiBaseUrl, onClose, onSuc
                   {/* Lines */}
                   {isExpanded && (
                     <>
-                      <div style={{ display: 'flex', padding: '4px 16px 4px 54px', fontSize: 11, fontWeight: 600, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.5px', borderBottom: '0.5px solid #E5E7EB' }}>
+                      <div style={{ display: 'flex', padding: '4px 16px 4px 54px', fontSize: 11, fontWeight: 600, color: 'hsl(var(--muted-foreground))', textTransform: 'uppercase', letterSpacing: '0.5px', borderBottom: '0.5px solid hsl(var(--foreground))' }}>
                         <span style={{ flex: 1 }}>{ui('product')}</span>
                         <span style={{ width: 70, textAlign: 'right' }}>{ui('qty')}</span>
                         <span style={{ width: 70, textAlign: 'right' }}>{ui('price')}</span>
@@ -354,8 +354,8 @@ function BulkInvoiceModal({ shipments, bpName, token, apiBaseUrl, onClose, onSuc
                             key={line.id}
                             onClick={() => toggleLine(line.id)}
                             style={{
-                              display: 'flex', alignItems: 'center', padding: '5px 16px 5px 38px', borderBottom: '0.5px solid #F3F4F6', cursor: 'pointer',
-                              background: line.isSelected ? '#eff6ff' : 'transparent',
+                              display: 'flex', alignItems: 'center', padding: '5px 16px 5px 38px', borderBottom: '0.5px solid hsl(var(--card))', cursor: 'pointer',
+                              background: line.isSelected ? 'hsl(var(--card))' : 'transparent',
                               opacity: line.isSelected ? 1 : 0.5,
                             }}
                           >
@@ -364,9 +364,9 @@ function BulkInvoiceModal({ shipments, bpName, token, apiBaseUrl, onClose, onSuc
                               checked={line.isSelected}
                               onChange={() => toggleLine(line.id)}
                               onClick={e => e.stopPropagation()}
-                              style={{ accentColor: '#3b82f6', cursor: 'pointer', marginRight: 8, flexShrink: 0 }}
+                              style={{ accentColor: 'var(--status-info-border)', cursor: 'pointer', marginRight: 8, flexShrink: 0 }}
                             />
-                            <span style={{ flex: 1, fontSize: 13, color: line.isSelected ? '#2563eb' : '#111827', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontWeight: line.isSelected ? 500 : 400 }}>
+                            <span style={{ flex: 1, fontSize: 13, color: line.isSelected ? 'var(--status-info-border)' : 'hsl(var(--foreground))', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontWeight: line.isSelected ? 500 : 400 }}>
                               {line.productName}
                             </span>
                             <span style={{ width: 70, textAlign: 'right' }} onClick={e => e.stopPropagation()}>
@@ -382,15 +382,15 @@ function BulkInvoiceModal({ shipments, bpName, token, apiBaseUrl, onClose, onSuc
                                 style={{
                                   width: 56, fontSize: 12, padding: '2px 4px', borderRadius: 4, textAlign: 'center',
                                   fontVariantNumeric: 'tabular-nums', outline: 'none',
-                                  border: qtyEdited ? '1px solid #f59e0b' : '0.5px solid #d1d5db',
-                                  background: qtyEdited ? '#fffbeb' : '#fff',
+                                  border: qtyEdited ? '1px solid var(--status-warning-border)' : '0.5px solid hsl(var(--card))',
+                                  background: qtyEdited ? 'hsl(var(--card))' : 'hsl(var(--card))',
                                 }}
                               />
                             </span>
-                            <span style={{ width: 70, fontSize: 12, color: '#6B7280', fontVariantNumeric: 'tabular-nums', textAlign: 'right' }}>
+                            <span style={{ width: 70, fontSize: 12, color: 'hsl(var(--muted-foreground))', fontVariantNumeric: 'tabular-nums', textAlign: 'right' }}>
                               {fmtNum(line.unitPrice)}
                             </span>
-                            <span style={{ width: 80, fontSize: 13, color: '#111827', fontVariantNumeric: 'tabular-nums', textAlign: 'right', fontWeight: 500 }}>
+                            <span style={{ width: 80, fontSize: 13, color: 'hsl(var(--foreground))', fontVariantNumeric: 'tabular-nums', textAlign: 'right', fontWeight: 500 }}>
                               {line.isSelected ? fmtNum(line.lineTotal) : '-'}
                             </span>
                           </div>
@@ -405,22 +405,22 @@ function BulkInvoiceModal({ shipments, bpName, token, apiBaseUrl, onClose, onSuc
         </div>
 
         {/* Footer — fixed */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: '#F4F5F7', borderTop: '1px solid #E5E7EB', padding: '10px 16px', flexShrink: 0 }}>
-          <span style={{ fontSize: 13, color: '#6B7280', fontVariantNumeric: 'tabular-nums' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'hsl(var(--card))', borderTop: '1px solid hsl(var(--card))', padding: '10px 16px', flexShrink: 0 }}>
+          <span style={{ fontSize: 13, color: 'hsl(var(--muted))', fontVariantNumeric: 'tabular-nums' }}>
             {totalSelectedLines > 0 ? (
               <>
                 {totalSelectedLines} {ui('line')}{totalSelectedLines !== 1 ? 's' : ''} {ui('from')} {shipments.length} {ui('shipment')}{shipments.length !== 1 ? 's' : ''}
-                {' · '}<span style={{ fontWeight: 500, color: '#2563eb' }}>{ui('total')}: {fmtNum(grandTotal)}</span>
+                {' · '}<span style={{ fontWeight: 500, color: 'var(--status-info-border)' }}>{ui('total')}: {fmtNum(grandTotal)}</span>
               </>
             ) : ui('selectLinesToInvoice')}
           </span>
           <div style={{ display: 'flex', gap: 8 }}>
-            <button type="button" onClick={onClose} style={{ fontSize: 13, padding: '6px 14px', borderRadius: 6, border: '1px solid #E5E7EB', background: 'transparent', color: '#6B7280', cursor: 'pointer' }}>{ui('cancel')}</button>
+            <button type="button" onClick={onClose} style={{ fontSize: 13, padding: '6px 14px', borderRadius: 6, border: '1px solid hsl(var(--card))', background: 'transparent', color: 'hsl(var(--muted))', cursor: 'pointer' }}>{ui('cancel')}</button>
             <button
               type="button"
               onClick={handleCreate}
               disabled={totalSelectedLines === 0 || creating}
-              style={{ fontSize: 13, fontWeight: 500, padding: '6px 14px', borderRadius: 6, border: 'none', background: '#18181b', color: '#fff', cursor: (totalSelectedLines === 0 || creating) ? 'not-allowed' : 'pointer', opacity: (totalSelectedLines === 0 || creating) ? 0.4 : 1 }}
+              style={{ fontSize: 13, fontWeight: 500, padding: '6px 14px', borderRadius: 6, border: 'none', background: 'hsl(var(--foreground))', color: 'hsl(var(--card))', cursor: (totalSelectedLines === 0 || creating) ? 'not-allowed' : 'pointer', opacity: (totalSelectedLines === 0 || creating) ? 0.4 : 1 }}
             >{creating ? ui('creating') : ui('createInvoiceBtn')}</button>
           </div>
         </div>

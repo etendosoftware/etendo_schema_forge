@@ -4,8 +4,10 @@ import { DataTable, InlineLinesPanel } from '@/components/contract-ui';
 // @sf-generated-start columns:priceList
 const columns = [
   { key: 'name', column: 'Name', type: 'string', label: 'Name', required: true },
-  { key: 'currency', column: 'C_Currency_ID', type: 'selector', label: 'Currency', required: true },
   { key: 'salesPriceList', column: 'IsSOPriceList', type: 'boolean', labels: {"es_ES":"Tipo","en_US":"Type"}, label: 'Sales Price List', badge: true, badgeLabels: {"true":{"es_ES":"Venta","en_US":"Sales"},"false":{"es_ES":"Compra","en_US":"Purchase"}}, badgeVariants: {"true":"blue","false":"purple"}, required: true },
+  { key: 'default', column: 'IsDefault', type: 'boolean', labels: {"es_ES":"Por defecto","en_US":"Default"}, label: 'Default', badge: true, badgeLabels: {"true":{"es_ES":"Sí","en_US":"Yes"},"false":{"es_ES":"No","en_US":"No"}}, required: true },
+  { key: 'etgoProductcount', column: 'EM_Etgo_Productcount', type: 'number', labels: {"es_ES":"Nº de productos","en_US":"Product Count"}, label: 'Product Count' },
+  { key: 'active', column: 'IsActive', type: 'boolean', labels: {"es_ES":"Activo","en_US":"Active"}, label: 'Active', badge: true, badgeLabels: {"true":{"es_ES":"Sí","en_US":"Yes"},"false":{"es_ES":"No","en_US":"No"}}, required: true },
 ];
 // @sf-generated-end columns:priceList
 

@@ -52,7 +52,7 @@ export function formatSigned(amount, currency) {
  * @returns {{ text: string, tone: 'positive'|'negative'|'neutral' }}
  *   `text` is `±0` for exactly zero, `+N` for positive, `-N` for negative.
  *   `tone` maps 1:1 to the TONE_CLASS keys in components/ui/money-amount.jsx
- *   (positive #1E874C, negative #d50b3e, neutral #121217).
+ *   (positive/negative/neutral semantic theme roles).
  */
 export function formatSignedDelta(value) {
   const num = Number(value) || 0;

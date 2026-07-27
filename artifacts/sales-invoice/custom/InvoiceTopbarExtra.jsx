@@ -25,10 +25,10 @@ function classifyInstallment(inst) {
 }
 
 const BADGE_STYLES = {
-  paid:    { bg: '#d1fae5', color: '#065f46', dot: '#10b981', accent: '#10b981' },
-  partial: { bg: '#dbeafe', color: '#1e3a5f', dot: '#3b82f6', accent: '#3b82f6' },
-  overdue: { bg: '#fee2e2', color: '#991b1b', dot: '#ef4444', accent: '#ef4444' },
-  pending: { bg: '#fef3c7', color: '#78350f', dot: '#f59e0b', accent: '#f59e0b' },
+  paid:    { bg: 'var(--status-success-bg)', color: 'var(--status-success-fg)', dot: 'var(--status-success-fg)', accent: 'var(--status-success-fg)' },
+  partial: { bg: 'var(--status-info-bg)', color: 'var(--status-info-fg)', dot: 'var(--status-info-border)', accent: 'var(--status-info-border)' },
+  overdue: { bg: 'hsl(var(--destructive))', color: 'hsl(var(--destructive))', dot: 'hsl(var(--destructive))', accent: 'hsl(var(--destructive))' },
+  pending: { bg: 'var(--status-warning-bg)', color: 'var(--status-warning-fg)', dot: 'var(--status-warning-border)', accent: 'var(--status-warning-border)' },
 };
 
 /**
@@ -251,7 +251,7 @@ export default function InvoiceTopbarExtra({ data, recordId, token, apiBaseUrl, 
       return (
         <span
           className="inline-flex items-center gap-1.5 text-[13px] font-medium h-9"
-          style={{ padding: '0 12px', borderRadius: '8px', backgroundColor: '#E2F7EA', color: '#17663A' }}
+          style={{ padding: '0 12px', borderRadius: '8px', backgroundColor: 'hsl(var(--card))', color: 'var(--status-success-bg)' }}
         >
           {ui('cpCreditFullyApplied')}
         </span>
@@ -264,9 +264,9 @@ export default function InvoiceTopbarExtra({ data, recordId, token, apiBaseUrl, 
           data-testid="payment-status-badge"
           onClick={() => setShowPaymentsModal(true)}
           className="inline-flex items-center gap-1.5 text-[13px] font-semibold hover:opacity-80 cursor-pointer h-9"
-          style={{ padding: '0 12px', borderRadius: '8px', backgroundColor: '#F5F3FF', border: '1px solid #DDD6FE', color: '#6D28D9', fontVariantNumeric: 'tabular-nums' }}
+          style={{ padding: '0 12px', borderRadius: '8px', backgroundColor: 'hsl(var(--card))', border: '1px solid var(--status-info-bg)', color: 'hsl(var(--primary))', fontVariantNumeric: 'tabular-nums' }}
         >
-          <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: '#7C3AED' }} />
+          <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: 'hsl(var(--primary))' }} />
           {ui('cpFavorBadge')} · {fmt(outstandingAbs, currency)}
         </button>
         {showPaymentsModal && (
@@ -397,21 +397,21 @@ export default function InvoiceTopbarExtra({ data, recordId, token, apiBaseUrl, 
       {/* "¿Gestionar envío?" dialog — offered after confirming a standard invoice */}
       {showShipmentDialog && (
         <div
-          style={{ position: 'fixed', inset: 0, zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.3)' }}
+          style={{ position: 'fixed', inset: 0, zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'hsl(var(--foreground) / 0.3)' }}
           onClick={() => !shipmentCreating && setShowShipmentDialog(false)}
         >
           <div
-            style={{ background: '#fff', borderRadius: 12, padding: '28px 32px', maxWidth: 360, width: '90%', boxShadow: '0 8px 32px rgba(0,0,0,0.18)' }}
+            style={{ background: 'hsl(var(--card))', borderRadius: 12, padding: '28px 32px', maxWidth: 360, width: '90%', boxShadow: '0 8px 32px hsl(var(--foreground) / 0.18)' }}
             onClick={e => e.stopPropagation()}
           >
-            <p style={{ fontSize: 16, fontWeight: 600, color: '#111827', marginBottom: 8 }}>{ui('manageShipment')}</p>
-            <p style={{ fontSize: 13, color: '#6b7280', marginBottom: 24 }}>{ui('createShipmentDraftHint')}</p>
+            <p style={{ fontSize: 16, fontWeight: 600, color: 'hsl(var(--foreground))', marginBottom: 8 }}>{ui('manageShipment')}</p>
+            <p style={{ fontSize: 13, color: 'hsl(var(--muted-foreground))', marginBottom: 24 }}>{ui('createShipmentDraftHint')}</p>
             <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
               <button
                 type="button"
                 disabled={shipmentCreating}
                 onClick={() => setShowShipmentDialog(false)}
-                style={{ padding: '8px 16px', borderRadius: 8, border: '0.5px solid #d1d5db', background: 'transparent', fontSize: 13, fontWeight: 500, color: '#374151', cursor: 'pointer' }}
+                style={{ padding: '8px 16px', borderRadius: 8, border: '0.5px solid hsl(var(--card))', background: 'transparent', fontSize: 13, fontWeight: 500, color: 'var(--status-info-bg)', cursor: 'pointer' }}
               >
                 {ui('skipShipment')}
               </button>
@@ -419,7 +419,7 @@ export default function InvoiceTopbarExtra({ data, recordId, token, apiBaseUrl, 
                 type="button"
                 disabled={shipmentCreating}
                 onClick={handleCreateShipment}
-                style={{ padding: '8px 20px', borderRadius: 8, border: 'none', background: '#18181b', fontSize: 13, fontWeight: 500, color: '#fff', cursor: shipmentCreating ? 'not-allowed' : 'pointer', opacity: shipmentCreating ? 0.7 : 1 }}
+                style={{ padding: '8px 20px', borderRadius: 8, border: 'none', background: 'hsl(var(--foreground))', fontSize: 13, fontWeight: 500, color: 'hsl(var(--card))', cursor: shipmentCreating ? 'not-allowed' : 'pointer', opacity: shipmentCreating ? 0.7 : 1 }}
               >
                 {shipmentCreating ? ui('creating') : ui('createShipmentDraft')}
               </button>

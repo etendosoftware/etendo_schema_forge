@@ -14,32 +14,32 @@ import { useConversionRate } from './useConversionRate.js';
 import { useDocumentCurrency } from './useDocumentCurrency.js';
 
 // ─── design tokens (Etendo Design System — cobros/pagos Figma handoff) ────────
-const INK = '#121217';
-const BORDER1 = '#E8EAEF';
-const BORDER2 = '#D1D4DB';
-const FG2 = '#3F3F50';
-const FG3 = '#6C6C89';
-const FG4 = '#828FA3';
-const WIDGET_BG = '#F5F7F9';
-const GREEN_FG = '#17663A';
-const GREEN_BG = '#EEFBF4';
-const RED_FG = '#C5234A';
-const RED_BG = '#FDE2E9';
-const AMBER = '#C28800';
+const INK = 'hsl(var(--foreground))';
+const BORDER1 = 'hsl(var(--border-subtle))';
+const BORDER2 = 'hsl(var(--border-control))';
+const FG2 = 'hsl(var(--muted-foreground))';
+const FG3 = 'hsl(var(--muted-foreground))';
+const FG4 = 'hsl(var(--text-disabled))';
+const WIDGET_BG = 'hsl(var(--muted))';
+const GREEN_FG = 'var(--status-success-fg)';
+const GREEN_BG = 'var(--status-success-bg)';
+const RED_FG = 'hsl(var(--destructive))';
+const RED_BG = 'var(--status-destructive-bg)';
+const AMBER = 'var(--status-warning-fg)';
 // Stable reference for "no used sources" (create mode / no credit consumed) — a fresh []
 // literal on every render would change identity each time and loop usePaymentBalance's seed
 // effect (same failure mode as the apiFetch dependency fixed earlier).
 const EMPTY_USED_SOURCES = [];
-const EXCESS_BG = '#F5F7F9';
-const EXCESS_BORDER = '#D1D4DB';
-const EXCESS_FG = '#3F3F50';
+const EXCESS_BG = 'hsl(var(--muted))';
+const EXCESS_BORDER = 'hsl(var(--border-control))';
+const EXCESS_FG = 'hsl(var(--muted-foreground))';
 // A foreign-currency payment with a rate of exactly 1 is rejected by the backend
 // (compareTo(ONE)==0). Mirror that with a tight tolerance so the FE gate matches (ETP-4504).
 const RATE_ONE_TOLERANCE = 1e-9;
 
 // Per-source-kind row accents. credit → purple, abono (saldo a favor) → green.
 const BADGE = {
-  credit: { bg: '#F4F1FD', fg: '#4316CA' },
+  credit: { bg: 'var(--status-info-bg)', fg: 'var(--status-info-fg)' },
   abono: { bg: GREEN_BG, fg: GREEN_FG },
 };
 
@@ -52,8 +52,8 @@ const PIS_IBAN_FIELD = { key: 'pisIban', id: 'pisIban', required: true };
 const PIS_TEMPLATE_FIELD = { key: 'pisTemplate', id: 'pisTemplate', required: true };
 
 // ─── PIS (bank transfer via Salt Edge) — ETP-4406 ─────────────────────────────
-const PIS_AMBER_TEXT = '#8A6100';
-const PIS_ALERT_BG = '#FFF9EB';
+const PIS_AMBER_TEXT = 'var(--status-warning-fg)';
+const PIS_ALERT_BG = 'var(--status-warning-bg)';
 const PIS_ELIGIBLE_CURRENCIES = new Set(['EUR', 'GBP']);
 // 'initiated' is a real Salt Edge PIS status (seen for "connect"-flow payments) that isn't in the
 // PSD2_PIS_PAYMENT ref-list's documented set (requested/authorizing/authorized/processing/executed/
@@ -333,11 +333,11 @@ function Check({ checked, size = 18 }) {
   return (
     <div style={{
       width: size, height: size, borderRadius: 4, flexShrink: 0,
-      border: `1.5px solid ${checked ? INK : '#A9A9BC'}`, background: checked ? INK : '#fff',
+      border: `1.5px solid ${checked ? INK : 'hsl(var(--text-disabled))'}`, background: checked ? INK : 'hsl(var(--card))',
       display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
     }}>
       {checked && (
-        <svg width={Math.round(size * 0.6)} height={Math.round(size * 0.6)} viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3.2" strokeLinecap="round" strokeLinejoin="round">
+        <svg width={Math.round(size * 0.6)} height={Math.round(size * 0.6)} viewBox="0 0 24 24" fill="none" stroke="hsl(var(--card))" strokeWidth="3.2" strokeLinecap="round" strokeLinejoin="round">
           <polyline points="20 6 9 17 4 12" />
         </svg>
       )}
@@ -349,7 +349,7 @@ function Radio({ checked }) {
   return (
     <div style={{
       width: 20, height: 20, borderRadius: '50%', flexShrink: 0,
-      border: `1.5px solid ${checked ? INK : BORDER2}`, background: '#fff',
+      border: `1.5px solid ${checked ? INK : BORDER2}`, background: 'hsl(var(--card))',
       display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
     }}>
       {checked && <div style={{ width: 8, height: 8, borderRadius: '50%', background: INK }} />}
@@ -401,7 +401,7 @@ function CreditRow({ l, currency, ui, onToggle, onUseChange, onUseBlur }) {
       </div>
       <div style={{ display: 'flex', justifyContent: 'flex-end' }} onClick={e => e.stopPropagation()}>
         {l.sel ? (
-          <div style={{ display: 'flex', alignItems: 'center', height: 40, border: `1px solid ${BORDER2}`, borderRadius: 8, background: '#fff', boxShadow: '0 1px 2px rgba(18,18,23,.05)', padding: '0 12px', gap: 4, minWidth: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', height: 40, border: `1px solid ${BORDER2}`, borderRadius: 8, background: 'hsl(var(--card))', boxShadow: '0 1px 2px hsl(var(--foreground) / .05)', padding: '0 12px', gap: 4, minWidth: 0 }}>
             <input
               type="text" inputMode="decimal" value={l.useStr}
               onChange={e => onUseChange(e.target.value)}
@@ -422,7 +422,7 @@ function CreditSection({ rows, currency, ui, balance }) {
   if (!rows.length) return null;
   const used = rows.reduce((acc, l) => acc + (l.sel ? l.use : 0), 0);
   return (
-    <div style={{ border: `1px solid ${BORDER1}`, borderRadius: 8, background: '#fff', boxShadow: '0 1px 2px rgba(18,18,23,.05)', overflow: 'hidden' }}>
+    <div style={{ border: `1px solid ${BORDER1}`, borderRadius: 8, background: 'hsl(var(--card))', boxShadow: '0 1px 2px hsl(var(--foreground) / .05)', overflow: 'hidden' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '12px' }}>
         <span style={{ font: '600 12px/16px Inter', color: INK }}>{ui('cpCreditSectionTitle')}</span>
         <span style={{ font: '400 12px/16px Inter', color: FG3 }}>· {ui('cpCreditSectionHint')}</span>
@@ -473,11 +473,11 @@ function ExcessBand({ balance, currency, ui, canLeaveCredit }) {
       type="button"
       data-testid={testid}
       onClick={() => balance.setExcessMode(mode)}
-      style={{ flex: 1, display: 'flex', alignItems: 'flex-start', gap: 12, padding: 16, borderRadius: 12, border: `${balance.excessMode === mode ? 2 : 1}px solid ${balance.excessMode === mode ? INK : BORDER1}`, outline: 'none', background: '#fff', cursor: 'pointer', textAlign: 'left', boxShadow: balance.excessMode === mode ? '0 10px 15px -3px rgba(18,18,23,.08), 0 4px 6px -2px rgba(18,18,23,.05)' : '0 1px 2px rgba(18,18,23,.05)' }}
+      style={{ flex: 1, display: 'flex', alignItems: 'flex-start', gap: 12, padding: 16, borderRadius: 12, border: `${balance.excessMode === mode ? 2 : 1}px solid ${balance.excessMode === mode ? INK : BORDER1}`, outline: 'none', background: 'hsl(var(--card))', cursor: 'pointer', textAlign: 'left', boxShadow: balance.excessMode === mode ? '0 10px 15px -3px hsl(var(--foreground) / .08), 0 4px 6px -2px hsl(var(--foreground) / .05)' : '0 1px 2px hsl(var(--foreground) / .05)' }}
     >
       <div style={{ flex: 1 }}>
         <div style={{ font: '500 14px/20px Inter', color: INK }}>{title}</div>
-        <div style={{ font: '400 14px/20px Inter', color: '#555B6D', marginTop: 2 }}>{hint}</div>
+        <div style={{ font: '400 14px/20px Inter', color: 'hsl(var(--muted-foreground))', marginTop: 2 }}>{hint}</div>
       </div>
       <Radio checked={balance.excessMode === mode} data-testid="Radio__7727b3" />
     </button>
@@ -501,7 +501,7 @@ function ExcessBand({ balance, currency, ui, canLeaveCredit }) {
 function PisTextField({ label, value, onChange, placeholder, testid }) {
   return (
     <Field label={label} required data-testid={`Field__${testid}`}>
-      <div style={{ display: 'flex', alignItems: 'center', height: 40, border: `1px solid ${BORDER2}`, borderRadius: 8, background: '#fff', boxShadow: '0 1px 2px rgba(18,18,23,.05)', padding: '0 12px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', height: 40, border: `1px solid ${BORDER2}`, borderRadius: 8, background: 'hsl(var(--card))', boxShadow: '0 1px 2px hsl(var(--foreground) / .05)', padding: '0 12px' }}>
         <input
           type="text" value={value} placeholder={placeholder}
           onChange={e => onChange(e.target.value)}
@@ -570,7 +570,7 @@ function PisTransferSection({
           <Field label={ui('cpPisTemplateLabel')} required data-testid="Field__pis-template">
             {/* White wrapper: CreatableSearchSelect is bg-transparent, so on the grey PIS card it
                 would read grey — this keeps it white like the BBAN/account-number text inputs. */}
-            <div style={{ background: '#fff', borderRadius: 8 }}>
+            <div style={{ background: 'hsl(var(--card))', borderRadius: 8 }}>
             <CreatableSearchSelect
               // CreatableSearchSelect seeds its options from staticOptions only on mount; the
               // ref-list loads async, so remount once it arrives to pick the options up.
@@ -589,7 +589,7 @@ function PisTransferSection({
           <div style={{ flex: '1 1 45%', minWidth: 0 }}>
             <Field label={ui('cpPisIbanLabel')} required data-testid="Field__pis-iban">
               {/* White wrapper — see the template select above. */}
-              <div style={{ background: '#fff', borderRadius: 8 }}>
+              <div style={{ background: 'hsl(var(--card))', borderRadius: 8 }}>
               <CreatableSearchSelect
                 // Same async-options remount as the template select above (supplier IBANs load async).
                 key={ibanOptions.length ? 'pis-iban-loaded' : 'pis-iban-loading'}
@@ -659,7 +659,7 @@ function PaymentModalFooter({
   saveDisabled, confirmDisabled, loading, confirmLabel, onSaveDraft, onConfirm, floppy,
 }) {
   return (
-    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 20px', borderTop: `1px solid ${BORDER1}`, background: '#fff', flexShrink: 0 }}>
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 20px', borderTop: `1px solid ${BORDER1}`, background: 'hsl(var(--card))', flexShrink: 0 }}>
       <button type="button" onClick={requestClose} disabled={saving} style={{ height: 40, padding: '8px 12px', borderRadius: 360, border: 'none', outline: 'none', background: 'transparent', color: INK, font: '500 14px/24px Inter', cursor: 'pointer' }}>{ui('cancel')}</button>
       {pisPolling ? (
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }} data-testid="cp-pis-waiting">
@@ -671,7 +671,7 @@ function PaymentModalFooter({
             <button
               type="button" data-testid="cp-pis-reopen"
               onClick={onReopenPis}
-              className="bg-[#121217] text-white"
+              className="bg-[hsl(var(--foreground))] text-primary-foreground"
               style={{ height: 32, padding: '0 12px', borderRadius: 360, border: 'none', outline: 'none', font: '500 14px/24px Inter', cursor: 'pointer' }}
             >
               {ui('cpPisReopen')}
@@ -680,17 +680,17 @@ function PaymentModalFooter({
           <button
             type="button" data-testid="cp-pis-cancel-wait"
             onClick={cancelPisWait}
-            style={{ height: 32, padding: '0 12px', borderRadius: 360, border: `1px solid ${BORDER2}`, outline: 'none', background: '#fff', color: INK, font: '500 14px/24px Inter', cursor: 'pointer' }}
+            style={{ height: 32, padding: '0 12px', borderRadius: 360, border: `1px solid ${BORDER2}`, outline: 'none', background: 'hsl(var(--card))', color: INK, font: '500 14px/24px Inter', cursor: 'pointer' }}
           >
             {ui('cpPisCancelWait')}
           </button>
         </div>
       ) : (
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <button type="button" data-testid="cp-save-draft" onClick={onSaveDraft} disabled={saveDisabled} style={{ height: 40, padding: '8px 12px', borderRadius: 360, border: `1px solid ${BORDER2}`, outline: 'none', background: '#fff', boxShadow: '0 1px 2px rgba(18,18,23,.05)', color: INK, font: '500 14px/24px Inter', display: 'inline-flex', alignItems: 'center', gap: 8, cursor: saveDisabled ? 'not-allowed' : 'pointer', opacity: saveDisabled ? 0.5 : 1 }}>
+          <button type="button" data-testid="cp-save-draft" onClick={onSaveDraft} disabled={saveDisabled} style={{ height: 40, padding: '8px 12px', borderRadius: 360, border: `1px solid ${BORDER2}`, outline: 'none', background: 'hsl(var(--card))', boxShadow: '0 1px 2px hsl(var(--foreground) / .05)', color: INK, font: '500 14px/24px Inter', display: 'inline-flex', alignItems: 'center', gap: 8, cursor: saveDisabled ? 'not-allowed' : 'pointer', opacity: saveDisabled ? 0.5 : 1 }}>
             {floppy}{ui('save')}
           </button>
-          <button type="button" data-testid="cp-confirm" onClick={onConfirm} disabled={confirmDisabled || loading} className="bg-[#121217] text-white hover:bg-[#FFD500] hover:text-[#121217] transition-colors" style={{ height: 40, padding: '8px 12px', borderRadius: 360, border: 'none', outline: 'none', font: '500 14px/24px Inter', display: 'inline-flex', alignItems: 'center', gap: 8, cursor: confirmDisabled ? 'not-allowed' : 'pointer', opacity: confirmDisabled ? 0.45 : 1 }}>
+          <button type="button" data-testid="cp-confirm" onClick={onConfirm} disabled={confirmDisabled || loading} className="bg-[hsl(var(--foreground))] text-primary-foreground hover:bg-[hsl(var(--accent-highlight))] hover:text-[hsl(var(--accent-highlight-foreground))] transition-colors" style={{ height: 40, padding: '8px 12px', borderRadius: 360, border: 'none', outline: 'none', font: '500 14px/24px Inter', display: 'inline-flex', alignItems: 'center', gap: 8, cursor: confirmDisabled ? 'not-allowed' : 'pointer', opacity: confirmDisabled ? 0.45 : 1 }}>
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
             {confirmLabel}
           </button>
@@ -1118,11 +1118,11 @@ export default function NewPaymentEntryModal({
 
   return (
     <div
-      style={{ position: 'fixed', inset: 0, zIndex: 50, background: 'rgba(16,20,28,.46)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}
+      style={{ position: 'fixed', inset: 0, zIndex: 50, background: 'hsl(var(--foreground) / 0.46)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}
       onClick={requestClose}
     >
       <div
-        style={{ width: 940, maxWidth: '100%', maxHeight: '100%', background: '#fff', borderRadius: 8, boxShadow: '0 0 0 1px rgba(18,18,23,.1), 0 24px 48px rgba(18,18,23,.03), 0 10px 18px rgba(18,18,23,.03), 0 5px 8px rgba(18,18,23,.04), 0 2px 4px rgba(18,18,23,.04)', display: 'flex', flexDirection: 'column', overflow: 'hidden', position: 'relative' }}
+        style={{ width: 940, maxWidth: '100%', maxHeight: '100%', background: 'hsl(var(--card))', borderRadius: 8, boxShadow: '0 0 0 1px hsl(var(--foreground) / .1), 0 24px 48px hsl(var(--foreground) / .03), 0 10px 18px hsl(var(--foreground) / .03), 0 5px 8px hsl(var(--foreground) / .04), 0 2px 4px hsl(var(--foreground) / .04)', display: 'flex', flexDirection: 'column', overflow: 'hidden', position: 'relative' }}
         data-testid="cp-new-payment-modal"
         onClick={e => e.stopPropagation()}
       >
@@ -1136,11 +1136,11 @@ export default function NewPaymentEntryModal({
         >×</button>
 
         {/* body */}
-        <div style={{ padding: '0 0 8px', display: 'flex', flexDirection: 'column', gap: 12, background: '#fff', flex: 1, minHeight: 0, overflow: 'auto' }}>
+        <div style={{ padding: '0 0 8px', display: 'flex', flexDirection: 'column', gap: 12, background: 'hsl(var(--card))', flex: 1, minHeight: 0, overflow: 'auto' }}>
 
           {/* invoice-context widget */}
           <div style={{ padding: '0 20px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 20, padding: '8px 12px', border: `1px solid ${BORDER1}`, borderRadius: 8, background: '#fff' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 20, padding: '8px 12px', border: `1px solid ${BORDER1}`, borderRadius: 8, background: 'hsl(var(--card))' }}>
               <WidgetCell label={isReceipt ? ui('customer') : ui('vendor')} data-testid="WidgetCell__client">{party || '—'}</WidgetCell>
               <WidgetCell label={ui('invoice')} data-testid="WidgetCell__invoice">
                 <span style={{ fontFamily: '"JetBrains Mono", monospace' }}>{docNo || '—'}</span>
@@ -1150,7 +1150,7 @@ export default function NewPaymentEntryModal({
                 <span style={{ display: 'inline-flex', alignItems: 'center', width: 'fit-content', font: '400 12px/16px Inter', padding: '4px 8px', borderRadius: 360, background: WIDGET_BG, color: FG2, marginTop: 2 }}>{ui('cpStatusDraft')}</span>
               </div>
               <WidgetCell label={ui('cpPendingPrefix')} valueColor={AMBER} data-testid="WidgetCell__pending">
-                <MoneyAmount value={total} currency={currency} tone="neutral" className="text-[#C28800]" currencyDisplay="narrowSymbol" data-testid="MoneyAmount__cp-pending" />
+                <MoneyAmount value={total} currency={currency} tone="neutral" className="text-[var(--status-warning-fg)]" currencyDisplay="narrowSymbol" data-testid="MoneyAmount__cp-pending" />
               </WidgetCell>
             </div>
           </div>
@@ -1158,7 +1158,7 @@ export default function NewPaymentEntryModal({
           {/* 4 compact fields */}
           <div style={{ display: 'grid', gridTemplateColumns: '0.85fr 0.85fr 1.15fr 1.15fr', gap: 20, padding: '0 20px' }}>
             <Field label={ui('cpAmount')} required data-testid="Field__7727b3">
-              <div style={{ display: 'flex', alignItems: 'center', height: 40, border: `1px solid ${BORDER2}`, borderRadius: 8, background: '#fff', boxShadow: '0 1px 2px rgba(18,18,23,.05)', minWidth: 0, padding: '0 12px', gap: 4 }}>
+              <div style={{ display: 'flex', alignItems: 'center', height: 40, border: `1px solid ${BORDER2}`, borderRadius: 8, background: 'hsl(var(--card))', boxShadow: '0 1px 2px hsl(var(--foreground) / .05)', minWidth: 0, padding: '0 12px', gap: 4 }}>
                 <input
                   type="text" inputMode="decimal" value={balance.amountStr}
                   onChange={e => balance.onAmountChange(e.target.value)}
@@ -1173,7 +1173,7 @@ export default function NewPaymentEntryModal({
               <DateField
                 value={date}
                 onChange={(v) => { setDate(v); if (dateInvalid) setDateInvalid(false); }}
-                className={dateInvalid ? 'border-red-500 focus-within:ring-red-500' : ''}
+                className={dateInvalid ? 'border-destructive focus-within:ring-destructive' : ''}
                 data-testid="DateField__7727b3" />
             </Field>
             <Field label={ui('cpPaymentMethod')} required data-testid="Field__7727b3">
@@ -1212,7 +1212,7 @@ export default function NewPaymentEntryModal({
           {isForeign && (
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20, padding: '0 20px' }} data-testid="cp-conversion-fields">
               <Field label={ui('cpConversionRate')} required data-testid="Field__conversion-rate">
-                <div style={{ display: 'flex', alignItems: 'center', height: 40, border: `1px solid ${BORDER2}`, borderRadius: 8, background: '#fff', boxShadow: '0 1px 2px rgba(18,18,23,.05)', minWidth: 0, padding: '0 12px', gap: 4 }}>
+                <div style={{ display: 'flex', alignItems: 'center', height: 40, border: `1px solid ${BORDER2}`, borderRadius: 8, background: 'hsl(var(--card))', boxShadow: '0 1px 2px hsl(var(--foreground) / .05)', minWidth: 0, padding: '0 12px', gap: 4 }}>
                   <input
                     type="text" inputMode="decimal" value={rateStr}
                     onChange={e => setRateStr(e.target.value)}
@@ -1256,13 +1256,13 @@ export default function NewPaymentEntryModal({
               <div><div style={{ font: '400 12px/16px Inter', color: FG2 }}>{ui('cpMoney')}</div><div style={{ font: '500 14px/20px Inter' }}><MoneyAmount value={balance.amount} currency={currency} tone="neutral" currencyDisplay="narrowSymbol" data-testid="MoneyAmount__cp-money" /></div></div>
               {balance.usedCredit > 0 && (<>
                 <span style={{ color: FG2, font: '400 12px/16px Inter' }}>+</span>
-                <div><div style={{ font: '400 12px/16px Inter', color: '#8D6CEF' }}>{ui('cpFavorBadge')}</div><div style={{ font: '500 14px/20px Inter' }}><MoneyAmount value={balance.usedCredit} currency={currency} tone="neutral" className="text-[#7047EB]" currencyDisplay="narrowSymbol" data-testid="MoneyAmount__cp-credit" /></div></div>
+                <div><div style={{ font: '400 12px/16px Inter', color: 'hsl(var(--primary))' }}>{ui('cpFavorBadge')}</div><div style={{ font: '500 14px/20px Inter' }}><MoneyAmount value={balance.usedCredit} currency={currency} tone="neutral" className="text-[hsl(var(--primary))]" currencyDisplay="narrowSymbol" data-testid="MoneyAmount__cp-credit" /></div></div>
               </>)}
               <span style={{ color: FG2, font: '400 12px/16px Inter' }}>=</span>
               <div><div style={{ font: '400 12px/16px Inter', color: FG2 }}>{ui('cpApplied')}</div><div style={{ font: '500 14px/20px Inter' }}><MoneyAmount value={balance.funds} currency={currency} tone="neutral" currencyDisplay="narrowSymbol" data-testid="MoneyAmount__cp-applied" /></div></div>
               <div style={{ flex: 1 }} />
-              <div style={{ textAlign: 'right' }}><div style={{ font: '400 12px/16px Inter', color: FG2 }}>{deltaLabel}</div><div style={{ font: '600 14px/20px Inter' }}><MoneyAmount value={Math.abs(balance.diff)} currency={currency} tone="neutral" className={balance.isPartial ? 'text-[#C5234A]' : 'text-[#17663A]'} currencyDisplay="narrowSymbol" data-testid="MoneyAmount__cp-delta" /></div></div>
-              <button type="button" data-testid="cp-equalize" onClick={balance.equalize} style={{ height: 32, padding: '0 12px', borderRadius: 8, border: `1px solid ${BORDER2}`, outline: 'none', background: '#fff', boxShadow: '0 1px 2px rgba(18,18,23,.05)', cursor: 'pointer', color: INK, font: '500 14px/24px Inter' }}>{ui('cpEqualize')}</button>
+              <div style={{ textAlign: 'right' }}><div style={{ font: '400 12px/16px Inter', color: FG2 }}>{deltaLabel}</div><div style={{ font: '600 14px/20px Inter' }}><MoneyAmount value={Math.abs(balance.diff)} currency={currency} tone="neutral" className={balance.isPartial ? 'text-[hsl(var(--destructive))]' : 'text-[var(--status-success-fg)]'} currencyDisplay="narrowSymbol" data-testid="MoneyAmount__cp-delta" /></div></div>
+              <button type="button" data-testid="cp-equalize" onClick={balance.equalize} style={{ height: 32, padding: '0 12px', borderRadius: 8, border: `1px solid ${BORDER2}`, outline: 'none', background: 'hsl(var(--card))', boxShadow: '0 1px 2px hsl(var(--foreground) / .05)', cursor: 'pointer', color: INK, font: '500 14px/24px Inter' }}>{ui('cpEqualize')}</button>
             </div>
           </div>
 

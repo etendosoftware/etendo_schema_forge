@@ -25,15 +25,15 @@ import {
 import { buildInvoiceFilterColumns, applyInvoiceAdvancedFilter } from './paymentInvoiceFilter';
 
 function DueDot({ d, date }) {
-  let cls = 'bg-[#A9A9BC]';
+  let cls = 'bg-muted';
   let title = 'Al día';
-  if (d < 0) { cls = 'bg-[#F3164E]'; title = `Vencida hace ${Math.abs(d)} día(s)`; }
-  else if (d === 0) { cls = 'bg-[#FAAF00]'; title = 'Vence hoy'; }
-  else if (d <= 7) { cls = 'bg-[#FAAF00]'; title = `Vence en ${d} día(s)`; }
+  if (d < 0) { cls = 'bg-destructive'; title = `Vencida hace ${Math.abs(d)} día(s)`; }
+  else if (d === 0) { cls = 'bg-status-warning'; title = 'Vence hoy'; }
+  else if (d <= 7) { cls = 'bg-status-warning'; title = `Vence en ${d} día(s)`; }
   return (
     <span className="inline-flex items-center gap-2 whitespace-nowrap" title={title}>
       <span className={`h-[9px] w-[9px] shrink-0 rounded-full ${cls}`} />
-      {date ? <span className="text-sm tabular-nums text-[#121217]">{date}</span> : null}
+      {date ? <span className="text-sm tabular-nums text-foreground">{date}</span> : null}
     </span>
   );
 }
@@ -59,11 +59,11 @@ function InvoiceFilter({ q, setQ, advFilter, setAdvFilter, rows }) {
       {expanded ? (
         <div className="relative">
           <Search
-            className="pointer-events-none absolute left-2.5 top-1/2 h-[15px] w-[15px] -translate-y-1/2 text-[#8A8AA3]"
+            className="pointer-events-none absolute left-2.5 top-1/2 h-[15px] w-[15px] -translate-y-1/2 text-disabled"
             data-testid="Search__bca0e2" />
           <input
             ref={inputRef}
-            className="h-[34px] w-[230px] box-border rounded-lg border border-[#D1D4DB] bg-white pl-8 pr-8 text-[13px] leading-[18px] text-[#121217] placeholder:text-[#8A8AA3] focus:outline-none focus:border-[#121217] focus:ring-2 focus:ring-[#121217]/20"
+            className="h-[34px] w-[230px] box-border rounded-lg border border-border-control bg-card pl-8 pr-8 text-[13px] leading-[18px] text-foreground placeholder:text-disabled focus:outline-none focus:border-focus-ring focus:ring-2 focus:ring-focus-ring/20"
             placeholder="Buscar…"
             value={q}
             onChange={(e) => setQ(e.target.value)}
@@ -73,7 +73,7 @@ function InvoiceFilter({ q, setQ, advFilter, setAdvFilter, rows }) {
             type="button"
             onClick={collapseSearch}
             title="Cerrar búsqueda"
-            className="absolute right-2 top-1/2 grid h-5 w-5 -translate-y-1/2 place-items-center rounded text-[#8A8AA3] hover:text-[#121217]"
+            className="absolute right-2 top-1/2 grid h-5 w-5 -translate-y-1/2 place-items-center rounded text-disabled hover:text-foreground"
           >
             <X className="h-3.5 w-3.5" data-testid="X__bca0e2" />
           </button>
@@ -83,7 +83,7 @@ function InvoiceFilter({ q, setQ, advFilter, setAdvFilter, rows }) {
           type="button"
           title="Buscar"
           onClick={() => setSearchOpen(true)}
-          className="inline-flex h-[34px] w-[34px] items-center justify-center rounded-lg border border-[#D1D4DB] bg-white text-[#3F3F50] hover:bg-[#F5F7F9]"
+          className="inline-flex h-[34px] w-[34px] items-center justify-center rounded-lg border border-border-control bg-card text-muted-foreground hover:bg-muted"
         >
           <Search className="h-4 w-4" data-testid="Search__bca0e2" />
         </button>
@@ -93,11 +93,11 @@ function InvoiceFilter({ q, setQ, advFilter, setAdvFilter, rows }) {
           <button
             type="button"
             title="Filtro por condiciones"
-            className="relative inline-flex h-[34px] w-[34px] items-center justify-center rounded-lg border border-[#D1D4DB] bg-white text-[#3F3F50] hover:bg-[#F5F7F9]"
+            className="relative inline-flex h-[34px] w-[34px] items-center justify-center rounded-lg border border-border-control bg-card text-muted-foreground hover:bg-muted"
           >
             <Filter className="h-4 w-4" data-testid="Filter__bca0e2" />
             {count ? (
-              <span className="absolute -top-1.5 -right-1.5 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-[#121217] px-1 text-[10px] font-semibold leading-none text-white">{count}</span>
+              <span className="absolute -top-1.5 -right-1.5 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-foreground px-1 text-[10px] font-semibold leading-none text-primary-foreground">{count}</span>
             ) : null}
           </button>
         </PopoverTrigger>
@@ -155,9 +155,9 @@ function PaymentFields({
   };
 
   return (
-    <div className="flex flex-col gap-4 rounded-xl border border-[#E8EAEF] bg-white p-[18px]">
+    <div className="flex flex-col gap-4 rounded-xl border border-border-subtle bg-card p-[18px]">
       <div className="flex items-center gap-3">
-        <span className="flex items-center gap-2 text-sm font-semibold text-[#121217]">
+        <span className="flex items-center gap-2 text-sm font-semibold text-foreground">
           <Wallet className="h-4 w-4" data-testid="Wallet__bca0e2" /> Datos del pago
         </span>
       </div>
@@ -224,12 +224,12 @@ function InvoiceTable({ invoices, sel, toggle, setAmt, exp, setExp, wo, setWo, q
   // Header + amount styling mirrors the Sales Invoice list (DataTable): dark
   // semibold labels (no uppercase), white background, and amounts via the shared
   // formatAmount() helper so currency reads identically across the app.
-  const TH = 'sticky top-0 z-10 border-b border-[#E8EAEF] bg-white px-2 py-2 text-left text-xs leading-4 font-semibold tracking-normal text-text-primary whitespace-nowrap';
-  const TD = 'border-b border-[#E8EAEF] px-2 py-2 text-[13px] text-[#121217] align-middle';
+  const TH = 'sticky top-0 z-10 border-b border-border-subtle bg-card px-2 py-2 text-left text-xs leading-4 font-semibold tracking-normal text-text-primary whitespace-nowrap';
+  const TD = 'border-b border-border-subtle px-2 py-2 text-[13px] text-foreground align-middle';
   const AMT = 'tabular-nums text-right whitespace-nowrap';
   return (
-    <div className="overflow-hidden rounded-xl border border-[#E8EAEF] bg-white">
-      <div className="flex flex-wrap items-center gap-2.5 border-b border-[#E8EAEF] px-3.5 py-3">
+    <div className="overflow-hidden rounded-xl border border-border-subtle bg-card">
+      <div className="flex flex-wrap items-center gap-2.5 border-b border-border-subtle px-3.5 py-3">
         <InvoiceFilter
           q={q}
           setQ={setQ}
@@ -237,12 +237,12 @@ function InvoiceTable({ invoices, sel, toggle, setAmt, exp, setExp, wo, setWo, q
           setAdvFilter={setAdvFilter}
           rows={filterRows ?? invoices}
           data-testid="InvoiceFilter__bca0e2" />
-        <span className="ml-auto flex items-center gap-2 whitespace-nowrap text-sm font-semibold text-[#121217]">
+        <span className="ml-auto flex items-center gap-2 whitespace-nowrap text-sm font-semibold text-foreground">
           <FileText className="h-4 w-4" data-testid="FileText__bca0e2" /> Facturas
           {Object.keys(sel).length ? (
-            <span className="whitespace-nowrap rounded-full bg-[#121217] px-2 py-0.5 text-[11px] font-semibold text-white">{Object.keys(sel).length} sel.</span>
+            <span className="whitespace-nowrap rounded-full bg-foreground px-2 py-0.5 text-[11px] font-semibold text-primary-foreground">{Object.keys(sel).length} sel.</span>
           ) : null}
-          <span className="text-xs font-medium text-[#8A8AA3]">· {rows.length} de {invoices.length}</span>
+          <span className="text-xs font-medium text-disabled">· {rows.length} de {invoices.length}</span>
         </span>
       </div>
       {/* ~10 rows tall, then scroll; header stays pinned (sticky). */}
@@ -267,7 +267,7 @@ function InvoiceTable({ invoices, sel, toggle, setAmt, exp, setExp, wo, setWo, q
             {rows.map((r) => {
               const on = sel[r.id] != null;
               const op = exp[r.id];
-              const bg = on ? 'bg-[#F5F7F9]' : '';
+              const bg = on ? 'bg-muted' : '';
               return (
                 <Fragment key={r.id} data-testid="Fragment__bca0e2">
                   <tr>
@@ -275,15 +275,15 @@ function InvoiceTable({ invoices, sel, toggle, setAmt, exp, setExp, wo, setWo, q
                       <button
                         type="button"
                         onClick={() => toggle(r)}
-                        className={`grid h-[18px] w-[18px] place-items-center rounded-[5px] border-[1.5px] ${on ? 'border-[#121217] bg-[#121217] text-white' : 'border-[#A9A9BC] bg-white text-transparent'}`}
+                        className={`grid h-[18px] w-[18px] place-items-center rounded-[5px] border-[1.5px] ${on ? 'border-foreground bg-foreground text-primary-foreground' : 'border-border-control bg-card text-transparent'}`}
                       >
                         <Check className="h-3 w-3" data-testid="Check__bca0e2" />
                       </button>
                     </td>
                     <td className={`${TD} ${bg} whitespace-nowrap`}>
-                      <span className="block max-w-[160px] font-semibold text-[#121217]">
+                      <span className="block max-w-[160px] font-semibold text-foreground">
                         {r.no}
-                        {r.desc ? <small className="block truncate text-[11px] font-normal text-[#8A8AA3]" title={r.desc}>{r.desc}</small> : null}
+                        {r.desc ? <small className="block truncate text-[11px] font-normal text-disabled" title={r.desc}>{r.desc}</small> : null}
                       </span>
                     </td>
                     <td className={`${TD} ${bg} whitespace-nowrap`}>{r.metodo}</td>
@@ -294,7 +294,7 @@ function InvoiceTable({ invoices, sel, toggle, setAmt, exp, setExp, wo, setWo, q
                     <td className={`${TD} ${bg} ${AMT}`}>{formatAmount(r.pend, r.mon)}</td>
                     <td className={`${TD} ${bg} text-right`}>
                       <MoneyInput
-                        className="h-[30px] w-[104px] box-border rounded-md border border-[#D1D4DB] bg-white px-2 text-right text-[13px] font-medium tabular-nums text-[#121217] focus:outline-none focus:border-[#121217] focus:ring-2 focus:ring-[#121217]/20 disabled:cursor-not-allowed disabled:text-[#8A8AA3]"
+                        className="h-[30px] w-[104px] box-border rounded-md border border-border-control bg-card px-2 text-right text-[13px] font-medium tabular-nums text-foreground focus:outline-none focus:border-focus-ring focus:ring-2 focus:ring-focus-ring/20 disabled:cursor-not-allowed disabled:text-disabled"
                         disabled={!on}
                         value={on ? fmtAmount(sel[r.id]) : ''}
                         placeholder="0.00"
@@ -306,7 +306,7 @@ function InvoiceTable({ invoices, sel, toggle, setAmt, exp, setExp, wo, setWo, q
                         type="button"
                         onClick={() => setWo((w) => ({ ...w, [r.id]: !w[r.id] }))}
                         title={wo[r.id] ? 'Con descuento' : 'Sin descuento'}
-                        className={`inline-flex w-[42px] items-center justify-center rounded-md border px-2 py-0.5 text-[11px] font-semibold ${wo[r.id] ? 'border-[#121217] bg-[#121217] text-white' : 'border-[#D1D4DB] bg-white text-[#8A8AA3] hover:border-[#A9A9BC]'}`}
+                        className={`inline-flex w-[42px] items-center justify-center rounded-md border px-2 py-0.5 text-[11px] font-semibold ${wo[r.id] ? 'border-foreground bg-foreground text-primary-foreground' : 'border-border-control bg-card text-disabled hover:border-border-control'}`}
                       >
                         {wo[r.id] ? 'Sí' : 'No'}
                       </button>
@@ -315,7 +315,7 @@ function InvoiceTable({ invoices, sel, toggle, setAmt, exp, setExp, wo, setWo, q
                       <button
                         type="button"
                         onClick={() => setExp((s) => ({ ...s, [r.id]: !s[r.id] }))}
-                        className={`grid h-7 w-7 place-items-center rounded-md text-[#6C6C89] transition-transform hover:bg-[#EDEFF3] hover:text-[#121217] ${op ? 'rotate-90' : ''}`}
+                        className={`grid h-7 w-7 place-items-center rounded-md text-muted-foreground transition-transform hover:bg-muted hover:text-foreground ${op ? 'rotate-90' : ''}`}
                       >
                         <ChevronRight className="h-4 w-4" data-testid="ChevronRight__bca0e2" />
                       </button>
@@ -323,14 +323,14 @@ function InvoiceTable({ invoices, sel, toggle, setAmt, exp, setExp, wo, setWo, q
                   </tr>
                   {op ? (
                     <tr>
-                      <td colSpan={NCOLS} className="bg-[#F5F7F9] p-0">
+                      <td colSpan={NCOLS} className="bg-muted p-0">
                         <div className="grid grid-cols-4 gap-x-6 gap-y-3 px-[18px] pb-4 pt-3.5 pl-14">
                           {[
                             ['Fecha de factura', r.fecha], ['Nº de orden', r.orderNo || '—'],
                           ].map(([k, v]) => (
                             <div className="flex flex-col gap-0.5" key={k}>
-                              <span className="text-[11px] font-medium uppercase tracking-[0.03em] text-[#8A8AA3]">{k}</span>
-                              <span className="text-[13px] text-[#121217]">{v}</span>
+                              <span className="text-[11px] font-medium uppercase tracking-[0.03em] text-disabled">{k}</span>
+                              <span className="text-[13px] text-foreground">{v}</span>
                             </div>
                           ))}
                         </div>
@@ -342,7 +342,7 @@ function InvoiceTable({ invoices, sel, toggle, setAmt, exp, setExp, wo, setWo, q
             })}
             {rows.length === 0 ? (
               <tr>
-                <td colSpan={NCOLS} className="px-3.5 py-[22px] text-center text-[13px] text-[#8A8AA3]">
+                <td colSpan={NCOLS} className="px-3.5 py-[22px] text-center text-[13px] text-disabled">
                   {invoiceEmptyMessage(loading, invoices.length, emptyHint)}
                 </td>
               </tr>
@@ -357,7 +357,7 @@ function InvoiceTable({ invoices, sel, toggle, setAmt, exp, setExp, wo, setWo, q
 // Commissions / G/L concepts — mirrors Classic's "GL Items" grid: only three
 // columns (G/L Item, Received In, Paid Out) plus delete / add.
 const GL_GRID = { gridTemplateColumns: '1fr 150px 150px 34px' };
-const GL_AMT = 'h-[34px] w-full box-border rounded-lg border border-[#D1D4DB] bg-white pl-2.5 pr-7 text-right text-[13px] tabular-nums text-[#121217] focus:outline-none focus:border-[#121217] focus:ring-2 focus:ring-[#121217]/20';
+const GL_AMT = 'h-[34px] w-full box-border rounded-lg border border-border-control bg-card pl-2.5 pr-7 text-right text-[13px] tabular-nums text-foreground focus:outline-none focus:border-focus-ring focus:ring-2 focus:ring-focus-ring/20';
 
 function Commissions({ gl, addGl, delGl, setGlField }) {
   if (gl.length === 0) {
@@ -365,34 +365,34 @@ function Commissions({ gl, addGl, delGl, setGlField }) {
       <button
         type="button"
         onClick={addGl}
-        className="flex w-full items-center gap-3 rounded-xl border border-dashed border-[#D1D4DB] bg-[#F5F7F9] px-4 py-3.5 text-left hover:border-[#A9A9BC]"
+        className="flex w-full items-center gap-3 rounded-xl border border-dashed border-border-control bg-muted px-4 py-3.5 text-left hover:border-border-control"
       >
-        <span className="grid h-8 w-8 shrink-0 place-items-center rounded-md bg-[#121217] text-white"><Plus className="h-[18px] w-[18px]" data-testid="Plus__bca0e2" /></span>
+        <span className="grid h-8 w-8 shrink-0 place-items-center rounded-md bg-foreground text-primary-foreground"><Plus className="h-[18px] w-[18px]" data-testid="Plus__bca0e2" /></span>
         <span className="flex flex-col gap-px">
-          <span className="text-sm font-semibold text-[#121217]">Añadir comisiones y conceptos (GL)</span>
-          <span className="text-xs text-[#6C6C89]">Opcional · comisiones bancarias y otros conceptos contables</span>
+          <span className="text-sm font-semibold text-foreground">Añadir comisiones y conceptos (GL)</span>
+          <span className="text-xs text-muted-foreground">Opcional · comisiones bancarias y otros conceptos contables</span>
         </span>
       </button>
     );
   }
   return (
-    <div className="overflow-hidden rounded-xl border border-[#E8EAEF] bg-white">
-      <div className="flex items-center gap-3 border-b border-[#E8EAEF] px-3.5 py-3">
-        <span className="flex items-center gap-2 text-sm font-semibold text-[#121217]">
+    <div className="overflow-hidden rounded-xl border border-border-subtle bg-card">
+      <div className="flex items-center gap-3 border-b border-border-subtle px-3.5 py-3">
+        <span className="flex items-center gap-2 text-sm font-semibold text-foreground">
           <Percent className="h-4 w-4" data-testid="Percent__bca0e2" /> Comisiones y conceptos (GL)
-          <span className="whitespace-nowrap rounded-full bg-[#121217] px-2 py-0.5 text-[11px] font-semibold text-white">
+          <span className="whitespace-nowrap rounded-full bg-foreground px-2 py-0.5 text-[11px] font-semibold text-primary-foreground">
             {gl.length}
           </span>
         </span>
       </div>
-      <div className="grid items-center gap-2.5 border-b border-[#E8EAEF] px-3.5 py-2 text-[11px] font-semibold uppercase tracking-[0.04em] text-[#6C6C89]" style={GL_GRID}>
+      <div className="grid items-center gap-2.5 border-b border-border-subtle px-3.5 py-2 text-[11px] font-semibold uppercase tracking-[0.04em] text-muted-foreground" style={GL_GRID}>
         <span>Concepto G/L</span>
         <span className="text-right">Recibido</span>
         <span className="text-right">Pagado</span>
         <span />
       </div>
       {gl.map((g) => (
-        <div key={g.id} className="grid items-center gap-2.5 border-b border-[#E8EAEF] px-3.5 py-3 last:border-b-0" style={GL_GRID}>
+        <div key={g.id} className="grid items-center gap-2.5 border-b border-border-subtle px-3.5 py-3 last:border-b-0" style={GL_GRID}>
           <LookupPicker
             value={g.item}
             onChange={(v) => setGlField(g.id, { item: v })}
@@ -405,7 +405,7 @@ function Commissions({ gl, addGl, delGl, setGlField }) {
               value={fmtAmount(g.receivedIn)}
               onChange={(e) => setGlField(g.id, { receivedIn: parseAmount(e.target.value) })}
               data-testid="MoneyInput__bca0e2" />
-            <span className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-[13px] text-[#8A8AA3]">€</span>
+            <span className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-[13px] text-disabled">€</span>
           </div>
           <div className="relative">
             <MoneyInput
@@ -413,12 +413,12 @@ function Commissions({ gl, addGl, delGl, setGlField }) {
               value={fmtAmount(g.paidOut)}
               onChange={(e) => setGlField(g.id, { paidOut: parseAmount(e.target.value) })}
               data-testid="MoneyInput__bca0e2" />
-            <span className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-[13px] text-[#8A8AA3]">€</span>
+            <span className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-[13px] text-disabled">€</span>
           </div>
-          <button type="button" onClick={() => delGl(g.id)} title="Eliminar" className="grid h-[34px] w-[34px] place-items-center rounded-lg border border-[#D1D4DB] bg-white text-[#8A8AA3] hover:border-[#FBB1C4] hover:bg-[#FEF0F4] hover:text-[#D50B3E]"><Trash2 className="h-[15px] w-[15px]" data-testid="Trash2__bca0e2" /></button>
+          <button type="button" onClick={() => delGl(g.id)} title="Eliminar" className="grid h-[34px] w-[34px] place-items-center rounded-lg border border-border-control bg-card text-disabled hover:border-destructive hover:bg-destructive/10 hover:text-destructive"><Trash2 className="h-[15px] w-[15px]" data-testid="Trash2__bca0e2" /></button>
         </div>
       ))}
-      <button type="button" onClick={addGl} className="m-3.5 inline-flex items-center gap-1.5 rounded-lg border border-dashed border-[#A9A9BC] px-3 py-2 text-[13px] font-semibold text-[#121217] hover:border-[#121217] hover:bg-[#F5F7F9]">
+      <button type="button" onClick={addGl} className="m-3.5 inline-flex items-center gap-1.5 rounded-lg border border-dashed border-border-control px-3 py-2 text-[13px] font-semibold text-foreground hover:border-foreground hover:bg-muted">
         <Plus className="h-3.5 w-3.5" data-testid="Plus__bca0e2" /> Añadir concepto
       </button>
     </div>
@@ -429,12 +429,12 @@ export function TotalsBar({ totF, totGL, total, pago, diff, cuadra }) {
   const glSign = totGL < 0 ? '−' : '';
   const diffText = `${diff < 0 ? '−' : ''}${fmtAmount(Math.abs(diff))} €`;
   return (
-    <div className="flex items-center gap-0 rounded-xl border border-[#E8EAEF] bg-white px-1.5">
-      <span className="flex items-baseline gap-1.5 whitespace-nowrap px-[11px] py-[11px] text-xs text-[#6C6C89]">Facturas <b className="text-[13px] font-semibold tabular-nums text-[#121217]">{fmtAmount(totF)} €</b></span>
-      <span className="flex items-baseline gap-1.5 whitespace-nowrap px-[11px] py-[11px] text-xs text-[#6C6C89]">Comisiones <b className={`text-[13px] font-semibold tabular-nums ${totGL < 0 ? 'text-[#D50B3E]' : 'text-[#121217]'}`}>{glSign}{fmtAmount(Math.abs(totGL))} €</b></span>
-      <span className="flex items-baseline gap-1.5 whitespace-nowrap px-[11px] py-[11px] text-xs text-[#6C6C89]">Total <b className="text-[13px] font-semibold tabular-nums text-[#121217]">{fmtAmount(total)} €</b></span>
-      <span className="flex items-baseline gap-1.5 whitespace-nowrap px-[11px] py-[11px] text-xs text-[#6C6C89]">Pago <b className="text-[13px] font-semibold tabular-nums text-[#121217]">{fmtAmount(pago)} €</b></span>
-      <span className={`my-[7px] ml-auto inline-flex items-center gap-1.5 whitespace-nowrap rounded-md border px-3 py-1.5 text-xs font-semibold ${cuadra ? 'border-[#B2EECC] bg-[#EEFBF4] text-[#17663A]' : 'border-[#FBB1C4] bg-[#FEF0F4] text-[#D50B3E]'}`}>
+    <div className="flex items-center gap-0 rounded-xl border border-border-subtle bg-card px-1.5">
+      <span className="flex items-baseline gap-1.5 whitespace-nowrap px-[11px] py-[11px] text-xs text-muted-foreground">Facturas <b className="text-[13px] font-semibold tabular-nums text-foreground">{fmtAmount(totF)} €</b></span>
+      <span className="flex items-baseline gap-1.5 whitespace-nowrap px-[11px] py-[11px] text-xs text-muted-foreground">Comisiones <b className={`text-[13px] font-semibold tabular-nums ${totGL < 0 ? 'text-destructive' : 'text-foreground'}`}>{glSign}{fmtAmount(Math.abs(totGL))} €</b></span>
+      <span className="flex items-baseline gap-1.5 whitespace-nowrap px-[11px] py-[11px] text-xs text-muted-foreground">Total <b className="text-[13px] font-semibold tabular-nums text-foreground">{fmtAmount(total)} €</b></span>
+      <span className="flex items-baseline gap-1.5 whitespace-nowrap px-[11px] py-[11px] text-xs text-muted-foreground">Pago <b className="text-[13px] font-semibold tabular-nums text-foreground">{fmtAmount(pago)} €</b></span>
+      <span className={`my-[7px] ml-auto inline-flex items-center gap-1.5 whitespace-nowrap rounded-md border px-3 py-1.5 text-xs font-semibold ${cuadra ? 'border-status-success-border bg-status-success text-status-success-foreground' : 'border-destructive bg-destructive/10 text-destructive'}`}>
         {cuadra ? '✓ Cuadra' : <>Dif. <span className="tabular-nums">{diffText}</span></>}
       </span>
     </div>

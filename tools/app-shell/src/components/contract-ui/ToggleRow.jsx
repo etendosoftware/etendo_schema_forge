@@ -31,15 +31,15 @@ export function ToggleRow({
 }) {
   return (
     <div
-      className="flex items-center justify-between gap-4 py-3 border-b border-[#F0F1F3] last:border-b-0"
+      className="flex items-center justify-between gap-4 py-3 border-b border-[hsl(var(--muted))] last:border-b-0"
       data-testid={dataTestId}
     >
       <div className="min-w-0">
         <div className="flex items-center gap-2">
-          <span className="text-sm font-medium text-[#121217]">{label}</span>
+          <span className="text-sm font-medium text-[hsl(var(--foreground))]">{label}</span>
           {hint}
         </div>
-        {caption && <p className="text-xs text-[#9A9DA8] mt-0.5">{caption}</p>}
+        {caption && <p className="text-xs text-[hsl(var(--text-disabled))] mt-0.5">{caption}</p>}
       </div>
       <Switch
         checked={checked}

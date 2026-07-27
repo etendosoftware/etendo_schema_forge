@@ -8,7 +8,7 @@ import { getStatusBadgeProps } from '@/lib/statusBadge.js';
 
 export function CardShell({ children }) {
   return (
-    <div className="mx-4 mt-4 bg-white rounded-xl border border-gray-200 overflow-hidden">
+    <div className="mx-4 mt-4 bg-card rounded-xl border border-border-subtle overflow-hidden">
       {children}
     </div>
   );
@@ -16,12 +16,12 @@ export function CardShell({ children }) {
 
 function CardHeader({ title, amount, badge }) {
   return (
-    <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
-      <span className="font-bold text-gray-900 text-sm">{title}</span>
+    <div className="flex items-center justify-between px-4 py-3 border-b border-border-subtle">
+      <span className="font-bold text-foreground text-sm">{title}</span>
       <div className="flex items-center gap-1.5">
-        <span className="font-bold text-base tabular-nums text-gray-900">{amount}</span>
+        <span className="font-bold text-base tabular-nums text-foreground">{amount}</span>
         {badge && (
-          <span className="text-[11px] font-medium text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded">
+          <span className="text-[11px] font-medium text-muted-foreground bg-muted px-1.5 py-0.5 rounded">
             {badge}
           </span>
         )}
@@ -33,9 +33,9 @@ function CardHeader({ title, amount, badge }) {
 export function InfoRow({ label, value, underline, children }) {
   return (
     <div className="flex justify-between items-center py-1.5 text-sm">
-      <span className="text-gray-400">{label}</span>
+      <span className="text-muted-foreground">{label}</span>
       {children ?? (
-        <span className={`text-gray-900 font-medium text-right max-w-[55%] truncate${underline ? ' underline decoration-gray-400' : ''}`}>
+        <span className={`text-foreground font-medium text-right max-w-[55%] truncate${underline ? ' underline decoration-gray-400' : ''}`}>
           {value ?? '—'}
         </span>
       )}
@@ -46,16 +46,16 @@ export function InfoRow({ label, value, underline, children }) {
 export function PercentBar({ value }) {
   const pct = isNaN(Number(value)) ? 0 : Math.min(Number(value), 100);
   let trackColor;
-  if (pct >= 100) trackColor = 'bg-emerald-500';
-  else if (pct > 0) trackColor = 'bg-amber-400';
-  else trackColor = 'bg-slate-200';
+  if (pct >= 100) trackColor = 'bg-status-success';
+  else if (pct > 0) trackColor = 'bg-status-warning';
+  else trackColor = 'bg-muted';
   let textColor;
-  if (pct >= 100) textColor = 'text-emerald-700';
-  else if (pct > 0) textColor = 'text-amber-700';
-  else textColor = 'text-slate-400';
+  if (pct >= 100) textColor = 'text-status-success-foreground';
+  else if (pct > 0) textColor = 'text-status-warning-foreground';
+  else textColor = 'text-muted-foreground';
   return (
     <div className="flex items-center gap-2">
-      <div className="w-16 h-1.5 bg-slate-100 rounded-full overflow-hidden">
+      <div className="w-16 h-1.5 bg-muted rounded-full overflow-hidden">
         <div className={`h-full rounded-full ${trackColor}`} style={{ width: `${pct}%` }} />
       </div>
       <span className={`text-xs tabular-nums ${textColor}`}>{pct}%</span>
@@ -73,8 +73,8 @@ export function PercentBar({ value }) {
 export function MovementSummaryCard({ title, rows, statusRowLabel, statusLabel, statusBadgeClass, children }) {
   return (
     <CardShell data-testid="CardShell__a696d7">
-      <div className="px-4 py-3 border-b border-gray-100">
-        <span className="font-bold text-gray-900 text-sm">{title}</span>
+      <div className="px-4 py-3 border-b border-border-subtle">
+        <span className="font-bold text-foreground text-sm">{title}</span>
       </div>
       <div className="px-4 py-2">
         {rows.map(({ label, value }) => (
@@ -156,8 +156,8 @@ export default function SummaryCard({
       <CardHeader title={ui('previewCardTotal')} amount={primaryAmount} badge={showOrgTotal ? currencyCode : null} data-testid="CardHeader__a696d7" />
       {showOrgTotal && (
         <div className="flex items-center justify-end gap-1.5 px-4 pb-1 tabular-nums">
-          {rateNote && <span className="text-xs text-gray-500 font-bold">{rateNote}</span>}
-          {docAmountStr && <span className="text-sm text-gray-900 font-bold">{docAmountStr}</span>}
+          {rateNote && <span className="text-xs text-muted-foreground font-bold">{rateNote}</span>}
+          {docAmountStr && <span className="text-sm text-foreground font-bold">{docAmountStr}</span>}
         </div>
       )}
       <div className="px-4 py-2">

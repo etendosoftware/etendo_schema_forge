@@ -97,41 +97,41 @@ export default function SendToEvaluationModal({
             style={{
               position: 'absolute', top: 10, right: 12,
               fontSize: 18, lineHeight: 1, padding: '2px 6px', borderRadius: 4,
-              background: 'none', border: 'none', cursor: 'pointer', color: '#9CA3AF',
+              background: 'none', border: 'none', cursor: 'pointer', color: 'hsl(var(--muted-foreground))',
             }}
           >
             &times;
           </button>
-          <div style={{ fontSize: 10, color: '#9CA3AF', letterSpacing: '0.04em', marginBottom: 8 }}>
+          <div style={{ fontSize: 10, color: 'hsl(var(--muted-foreground))', letterSpacing: '0.04em', marginBottom: 8 }}>
             {ui('quotationDocumentLabel')} #{documentNo}
           </div>
           <div style={{
-            background: '#E6F1FB', border: '0.5px solid #B5D4F4', borderRadius: 10,
+            background: 'hsl(var(--card))', border: '0.5px solid var(--status-info-bg)', borderRadius: 10,
             padding: '14px 16px', marginBottom: 14,
           }}>
-            <div style={{ fontSize: 11, color: '#185FA5' }}>
+            <div style={{ fontSize: 11, color: 'var(--status-info-border)' }}>
               {bpName}
             </div>
-            <div data-testid="confirm-summary-total" style={{ fontSize: 28, fontWeight: 500, color: '#042C53', lineHeight: 1, marginTop: 4, marginBottom: 6 }}>
+            <div data-testid="confirm-summary-total" style={{ fontSize: 28, fontWeight: 500, color: 'var(--status-info-fg)', lineHeight: 1, marginTop: 4, marginBottom: 6 }}>
               {formatCurrency(currency, grandTotal)}
             </div>
-            <div style={{ fontSize: 11, color: '#185FA5' }}>
-              {lineCount != null ? ui('soLines', { count: lineCount }) : '...'} <span style={{ color: '#85B7EB' }}>·</span> {ui('soSubtotal')} <span data-testid="confirm-summary-subtotal" style={{ fontWeight: 500, color: '#042C53' }}>{formatCurrency(currency, totalLines)}</span>
+            <div style={{ fontSize: 11, color: 'var(--status-info-fg)' }}>
+              {lineCount != null ? ui('soLines', { count: lineCount }) : '...'} <span style={{ color: 'var(--status-info-bg)' }}>·</span> {ui('soSubtotal')} <span data-testid="confirm-summary-subtotal" style={{ fontWeight: 500, color: 'var(--status-info-fg)' }}>{formatCurrency(currency, totalLines)}</span>
             </div>
           </div>
         </div>
 
-        <div style={{ padding: '0 16px 14px', borderBottom: '0.5px solid #E5E7EB' }}>
-          <div style={{ fontSize: 14, fontWeight: 500, color: '#111827', marginBottom: 4 }}>
+        <div style={{ padding: '0 16px 14px', borderBottom: '0.5px solid hsl(var(--card))' }}>
+          <div style={{ fontSize: 14, fontWeight: 500, color: 'hsl(var(--foreground))', marginBottom: 4 }}>
             {ui('sqSendToEvalTitle')}
           </div>
-          <div style={{ fontSize: 12, color: '#6B7280', lineHeight: 1.5 }}>
+          <div style={{ fontSize: 12, color: 'hsl(var(--muted-foreground))', lineHeight: 1.5 }}>
             {ui('sqSendToEvalDesc')}
           </div>
         </div>
 
         {error && (
-          <div style={{ padding: '8px 16px', fontSize: 12, color: '#DC2626', background: '#FEF2F2', borderTop: '0.5px solid #FECACA' }}>
+          <div style={{ padding: '8px 16px', fontSize: 12, color: 'hsl(var(--destructive))', background: 'hsl(var(--card))', borderTop: '0.5px solid hsl(var(--destructive))' }}>
             {error}
           </div>
         )}
@@ -165,21 +165,21 @@ export default function SendToEvaluationModal({
 const overlayStyle = {
   position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 50,
   display: 'flex', alignItems: 'center', justifyContent: 'center',
-  backgroundColor: 'rgba(0,0,0,0.3)',
+  backgroundColor: 'hsl(var(--foreground) / 0.3)',
 };
 
 const cardStyle = {
   width: 460, maxHeight: '80vh', display: 'flex', flexDirection: 'column',
-  overflow: 'hidden', borderRadius: 12, backgroundColor: '#fff',
-  boxShadow: '0 8px 30px rgba(0,0,0,0.12)', border: '0.5px solid #E5E7EB',
+  overflow: 'hidden', borderRadius: 12, backgroundColor: 'hsl(var(--card))',
+  boxShadow: '0 8px 30px hsl(var(--foreground) / 0.12)', border: '0.5px solid hsl(var(--card))',
 };
 
 const btnSecondary = {
   fontSize: 12, padding: '7px 14px', borderRadius: 6,
-  border: '1px solid #D1D5DB', background: 'transparent', color: '#6B7280', cursor: 'pointer',
+  border: '1px solid hsl(var(--card))', background: 'transparent', color: 'hsl(var(--muted))', cursor: 'pointer',
 };
 
 const btnPrimary = {
   fontSize: 12, fontWeight: 500, padding: '7px 16px', borderRadius: 6,
-  border: 'none', background: '#185FA5', color: '#fff', cursor: 'pointer',
+  border: 'none', background: 'var(--status-info-bg)', color: 'hsl(var(--card))', cursor: 'pointer',
 };

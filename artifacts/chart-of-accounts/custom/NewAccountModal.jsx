@@ -37,13 +37,13 @@ import { ACCOUNT_TYPE_UI_KEYS } from './accountTypeLabels';
  */
 
 const INPUT_CLS =
-  'w-full h-10 rounded-lg border border-[#D1D4DB] bg-white px-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#121217] focus:border-transparent';
+  'w-full h-10 rounded-lg border border-[hsl(var(--card))] bg-card px-3 text-sm focus:outline-none focus:ring-2 focus:ring-[hsl(var(--foreground))] focus:border-transparent';
 
 const SELECT_CLS =
-  'w-full h-10 rounded-lg border border-[#D1D4DB] bg-white px-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#121217] focus:border-transparent cursor-pointer';
+  'w-full h-10 rounded-lg border border-[hsl(var(--card))] bg-card px-3 text-sm focus:outline-none focus:ring-2 focus:ring-[hsl(var(--foreground))] focus:border-transparent cursor-pointer';
 
-const FIELD_LABEL_CLS = 'block text-sm font-medium text-[#121217] mb-1.5';
-const ERROR_CLS = 'mt-1 text-xs text-red-500';
+const FIELD_LABEL_CLS = 'block text-sm font-medium text-[hsl(var(--foreground))] mb-1.5';
+const ERROR_CLS = 'mt-1 text-xs text-destructive-foreground';
 
 /**
  * Derive the nearest 4-digit summary-account parent from the selected record.
@@ -263,7 +263,7 @@ export default function NewAccountModal({
       >
         <DialogHeader data-testid="DialogHeader__2c756f">
           <DialogTitle
-            className="text-lg font-semibold text-[#121217]"
+            className="text-lg font-semibold text-[hsl(var(--foreground))]"
             data-testid="DialogTitle__2c756f">
             {ui('newSubAccount')}
           </DialogTitle>
@@ -274,7 +274,7 @@ export default function NewAccountModal({
           <div>
             <label htmlFor="nam-parent" className={FIELD_LABEL_CLS}>
               {ui('parentAccount')}
-              <span className="ml-1 text-red-500 select-none">*</span>
+              <span className="ml-1 text-destructive-foreground select-none">*</span>
             </label>
             <select
               id="nam-parent"
@@ -301,7 +301,7 @@ export default function NewAccountModal({
           <div>
             <label htmlFor="nam-name" className={FIELD_LABEL_CLS}>
               {ui('name')}
-              <span className="ml-1 text-red-500 select-none">*</span>
+              <span className="ml-1 text-destructive-foreground select-none">*</span>
             </label>
             <input
               id="nam-name"
@@ -324,7 +324,7 @@ export default function NewAccountModal({
           <div>
             <label className={FIELD_LABEL_CLS}>
               {ui('accountCode')}
-              <span className="ml-1 text-red-500 select-none">*</span>
+              <span className="ml-1 text-destructive-foreground select-none">*</span>
             </label>
             <div data-testid="new-account-modal-code">
               <AccountCodeField
@@ -346,7 +346,7 @@ export default function NewAccountModal({
           <div>
             <label htmlFor="nam-account-type" className={FIELD_LABEL_CLS}>
               {ui('accountTreeFilterType')}
-              <span className="ml-1 text-red-500 select-none">*</span>
+              <span className="ml-1 text-destructive-foreground select-none">*</span>
             </label>
             <select
               id="nam-account-type"
@@ -375,7 +375,7 @@ export default function NewAccountModal({
             data-testid="new-account-modal-cancel"
             onClick={onClose}
             disabled={saving}
-            className="px-4 py-2 text-sm font-medium text-[#121217] bg-white border border-[#D1D4DB] rounded-full shadow-sm hover:bg-[#F9FAFB] disabled:opacity-50 transition-colors"
+            className="px-4 py-2 text-sm font-medium text-[hsl(var(--foreground))] bg-card border border-[hsl(var(--card))] rounded-full shadow-sm hover:bg-[hsl(var(--card))] disabled:opacity-50 transition-colors"
           >
             {ui('cancel')}
           </button>
@@ -384,7 +384,7 @@ export default function NewAccountModal({
             data-testid="new-account-modal-save"
             onClick={handleSave}
             disabled={saving}
-            className="px-5 py-2 text-sm font-medium text-white bg-[#121217] rounded-full hover:bg-[#28282F] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            className="px-5 py-2 text-sm font-medium text-primary-foreground bg-[hsl(var(--foreground))] rounded-full hover:bg-[hsl(var(--foreground))] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
             {saving ? ui('loading') : ui('save')}
           </button>

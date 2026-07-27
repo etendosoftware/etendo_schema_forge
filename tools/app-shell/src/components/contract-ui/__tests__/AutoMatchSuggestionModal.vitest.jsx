@@ -237,19 +237,17 @@ describe('AutoMatchSuggestionModal', () => {
 
   // ── Amount color rendering (T7) ───────────────────────────────────────────────
 
-  it('operation with positive amount renders with green color class', () => {
+  it('operation with positive amount renders with a semantic success color class', () => {
     const positiveOp = { ...GROUP_STANDARD.operations[0], amount: 500 };
     const positiveGroup = { ...GROUP_STANDARD, operations: [positiveOp] };
     renderModal({ groups: [positiveGroup] });
     // MoneyAmount mock renders the value directly; the color class is on the wrapper div.
-    // The OperationRow applies text-[#1E874C] for positive amounts.
-    expect(document.querySelector('.text-\\[\\#1E874C\\]')).toBeTruthy();
+    expect(document.querySelector('.text-\\[var\\(--status-success-fg\\)\\]')).toBeTruthy();
   });
 
-  it('operation with negative amount renders with red color class', () => {
+  it('operation with negative amount renders with a semantic destructive color class', () => {
     renderModal({ groups: [GROUP_STANDARD] }); // GROUP_STANDARD has amount: -500
-    // OperationRow applies text-[#D50B3E] for negative amounts.
-    expect(document.querySelector('.text-\\[\\#D50B3E\\]')).toBeTruthy();
+    expect(document.querySelector('.text-\\[hsl\\(var\\(--destructive\\)\\)\\]')).toBeTruthy();
   });
 
   // ── Rule group subtitle (T7) ──────────────────────────────────────────────────

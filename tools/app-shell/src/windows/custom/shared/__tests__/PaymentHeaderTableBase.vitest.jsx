@@ -271,31 +271,31 @@ describe('PaymentHeaderTableBase — columns', () => {
     expect(statusCol.enumLabels.RPAE).toBe('pagoDepositado');
   });
 
-  it('renders the amount column with a + sign and green color for a deposited row (dir="in")', () => {
+  it('renders the amount column with a + sign and semantic success color for a deposited row (dir="in")', () => {
     const rows = [{ id: 'p1', status: 'RPR', amount: '50', 'currency$_identifier': 'EUR' }];
     render(<PaymentHeaderTableBase {...BASE_PROPS} dir="in" data={rows} onDataMutated={vi.fn()} />);
     const cell = screen.getByTestId('col-amount-p1');
     expect(cell).toHaveTextContent(`+ ${fmtAmt(50, 'EUR')}`);
-    expect(cell.querySelector('span')).toHaveStyle({ color: 'rgb(23, 102, 58)' });
+    expect(cell.querySelector('span')).toHaveStyle({ color: 'var(--status-success-fg)' });
   });
 
-  it('renders the amount column with a + sign and green color for an RPAE (Awaiting Execution) row (dir="in")', () => {
+  it('renders the amount column with a + sign and semantic success color for an RPAE (Awaiting Execution) row (dir="in")', () => {
     // Regression test: RPAE was previously treated as NOT deposited (amber),
     // creating an inconsistency with the "Cobro depositado" DB label. It must
-    // now render exactly like RPR — green amount, deposited status.
+    // now render exactly like RPR — semantic success amount, deposited status.
     const rows = [{ id: 'p12', status: 'RPAE', amount: '50', 'currency$_identifier': 'EUR' }];
     render(<PaymentHeaderTableBase {...BASE_PROPS} dir="in" data={rows} onDataMutated={vi.fn()} />);
     const cell = screen.getByTestId('col-amount-p12');
     expect(cell).toHaveTextContent(`+ ${fmtAmt(50, 'EUR')}`);
-    expect(cell.querySelector('span')).toHaveStyle({ color: 'rgb(23, 102, 58)' });
+    expect(cell.querySelector('span')).toHaveStyle({ color: 'var(--status-success-fg)' });
   });
 
-  it('renders the amount column with a − sign and dark color for a non-deposited row (dir="out")', () => {
+  it('renders the amount column with a − sign and semantic foreground color for a non-deposited row (dir="out")', () => {
     const rows = [{ id: 'p2', status: 'RPAP', amount: '20', 'currency$_identifier': 'EUR' }];
     render(<PaymentHeaderTableBase {...BASE_PROPS} specName="payment-out" dir="out" data={rows} onDataMutated={vi.fn()} />);
     const cell = screen.getByTestId('col-amount-p2');
     expect(cell).toHaveTextContent(`− ${fmtAmt(20, 'EUR')}`);
-    expect(cell.querySelector('span')).toHaveStyle({ color: 'rgb(18, 18, 23)' });
+    expect(cell.querySelector('span')).toHaveStyle({ color: 'hsl(var(--foreground))' });
   });
 
   it('renders the amount column with a single sign (not a doubled "− -") for a negative amount (dir="out")', () => {

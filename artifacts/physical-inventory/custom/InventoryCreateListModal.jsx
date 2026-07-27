@@ -63,18 +63,18 @@ export default function InventoryCreateListModal({ inventoryId, warehouseId, api
     width: '100%',
     fontSize: 13,
     padding: '7px 10px',
-    border: '0.5px solid #E5E7EB',
+    border: '0.5px solid hsl(var(--card))',
     borderRadius: 6,
     outline: 'none',
-    color: '#111827',
-    background: '#fff',
+    color: 'hsl(var(--foreground))',
+    background: 'hsl(var(--card))',
     boxSizing: 'border-box',
   };
 
   const labelStyle = {
     fontSize: 13,
     fontWeight: 500,
-    color: '#374151',
+    color: 'var(--status-info-bg)',
     marginBottom: 6,
     display: 'block',
   };
@@ -87,7 +87,7 @@ export default function InventoryCreateListModal({ inventoryId, warehouseId, api
       style={{
         position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 50,
         display: 'flex', alignItems: 'center', justifyContent: 'center',
-        backgroundColor: 'rgba(0,0,0,0.3)',
+        backgroundColor: 'hsl(var(--foreground) / 0.3)',
       }}
     >
       <div
@@ -97,22 +97,22 @@ export default function InventoryCreateListModal({ inventoryId, warehouseId, api
           display: 'flex',
           flexDirection: 'column',
           borderRadius: 12,
-          backgroundColor: '#fff',
-          boxShadow: '0 8px 30px rgba(0,0,0,0.12)',
-          border: '0.5px solid #E5E7EB',
+          backgroundColor: 'hsl(var(--card))',
+          boxShadow: '0 8px 30px hsl(var(--foreground) / 0.12)',
+          border: '0.5px solid hsl(var(--card))',
           overflow: 'hidden',
         }}
       >
         {/* Header */}
-        <div style={{ padding: '14px 16px', borderBottom: '1px solid #E5E7EB', background: '#F9FAFB' }}>
+        <div style={{ padding: '14px 16px', borderBottom: '1px solid hsl(var(--card))', background: 'hsl(var(--card))' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <span style={{ fontSize: 14, fontWeight: 600, color: '#111827' }}>
+            <span style={{ fontSize: 14, fontWeight: 600, color: 'hsl(var(--foreground))' }}>
               {ui('createInventoryCountList')}
             </span>
             <button
               type="button"
               onClick={onClose}
-              style={{ fontSize: 18, lineHeight: 1, padding: '2px 6px', borderRadius: 4, background: 'none', border: 'none', cursor: 'pointer', color: '#9ca3af' }}
+              style={{ fontSize: 18, lineHeight: 1, padding: '2px 6px', borderRadius: 4, background: 'none', border: 'none', cursor: 'pointer', color: 'hsl(var(--muted-foreground))' }}
             >
               &times;
             </button>
@@ -171,7 +171,7 @@ export default function InventoryCreateListModal({ inventoryId, warehouseId, api
         <div
           style={{
             display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 8,
-            background: '#F8F9FA', borderTop: '1px solid #E5E7EB', padding: '10px 16px',
+            background: 'hsl(var(--card))', borderTop: '1px solid hsl(var(--card))', padding: '10px 16px',
           }}
         >
           <button
@@ -179,8 +179,8 @@ export default function InventoryCreateListModal({ inventoryId, warehouseId, api
             onClick={onClose}
             style={{
               fontSize: 13, padding: '6px 14px', borderRadius: 6,
-              border: '1px solid #E5E7EB', background: 'transparent',
-              color: '#6B7280', cursor: 'pointer',
+              border: '1px solid hsl(var(--card))', background: 'transparent',
+              color: 'hsl(var(--muted))', cursor: 'pointer',
             }}
           >
             {ui('cancel')}
@@ -191,7 +191,7 @@ export default function InventoryCreateListModal({ inventoryId, warehouseId, api
             disabled={submitting}
             style={{
               fontSize: 13, fontWeight: 500, padding: '6px 14px', borderRadius: 6,
-              border: 'none', background: '#18181b', color: '#fff',
+              border: 'none', background: 'hsl(var(--foreground))', color: 'hsl(var(--card))',
               cursor: submitting ? 'not-allowed' : 'pointer',
               opacity: submitting ? 0.5 : 1,
             }}

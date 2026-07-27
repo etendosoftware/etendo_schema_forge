@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { ChevronDown } from 'lucide-react';
 
-const ORG_COLORS = ['bg-red-500', 'bg-blue-500', 'bg-green-600', 'bg-orange-500', 'bg-purple-500', 'bg-teal-500'];
+const ORG_COLORS = ['bg-destructive', 'bg-status-info', 'bg-status-success', 'bg-status-warning', 'bg-primary', 'bg-status-info'];
 
 function orgAvatarColor(name) {
   return ORG_COLORS[(name?.charCodeAt(0) ?? 0) % ORG_COLORS.length];
@@ -32,7 +32,7 @@ export default function FiscalOrgDropdown({ selectedOrg, orgList, onSelect }) {
         className={`flex items-center gap-2 px-2.5 py-1.5 rounded-lg border border-border transition-colors
           ${canSwitch ? 'hover:bg-muted/40 cursor-pointer' : 'cursor-default'}`}
       >
-        <span className={`w-5 h-5 rounded-full ${avatarColor} text-white text-[10px] font-bold flex items-center justify-center flex-shrink-0`}>
+        <span className={`w-5 h-5 rounded-full ${avatarColor} text-primary-foreground text-[10px] font-bold flex items-center justify-center flex-shrink-0`}>
           {initial}
         </span>
         <span className="text-sm font-medium">{selectedOrg.name}</span>
@@ -51,7 +51,7 @@ export default function FiscalOrgDropdown({ selectedOrg, orgList, onSelect }) {
               className={`flex items-center gap-2.5 w-full px-3 py-2 text-sm hover:bg-muted/40 text-left transition-colors
                 ${org.id === selectedOrg.id ? 'font-semibold' : ''}`}
             >
-              <span className={`w-5 h-5 rounded-full ${orgAvatarColor(org.name)} text-white text-[10px] font-bold flex items-center justify-center flex-shrink-0`}>
+              <span className={`w-5 h-5 rounded-full ${orgAvatarColor(org.name)} text-primary-foreground text-[10px] font-bold flex items-center justify-center flex-shrink-0`}>
                 {org.name[0]?.toUpperCase()}
               </span>
               {org.name}

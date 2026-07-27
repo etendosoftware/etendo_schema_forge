@@ -22,7 +22,7 @@ function ImportSplitButton({ ui, onImportClick, onManualClick }) {
         type="button"
         data-testid="statements-import-button"
         onClick={onImportClick}
-        className="inline-flex h-10 items-center gap-2 rounded-l-lg bg-[#121217] px-3 text-sm font-medium text-white transition-colors hover:bg-[#FFD500] hover:text-[#121217]"
+        className="inline-flex h-10 items-center gap-2 rounded-l-lg bg-[hsl(var(--foreground))] px-3 text-sm font-medium text-primary-foreground transition-colors hover:bg-[hsl(var(--accent-highlight))] hover:text-[hsl(var(--accent-highlight-foreground))]"
       >
         <Upload className="h-4 w-4" data-testid="Upload__8a428c" />
         {ui('financeAccountStatementsImport')}
@@ -34,7 +34,7 @@ function ImportSplitButton({ ui, onImportClick, onManualClick }) {
         aria-expanded={open}
         data-testid="statements-import-split"
         onClick={() => setOpen((o) => !o)}
-        className="inline-flex h-10 w-9 items-center justify-center rounded-r-lg border-l border-white/20 bg-[#121217] text-white transition-colors hover:bg-[#FFD500] hover:text-[#121217]"
+        className="inline-flex h-10 w-9 items-center justify-center rounded-r-lg border-l border-inverse-border/20 bg-[hsl(var(--foreground))] text-primary-foreground transition-colors hover:bg-[hsl(var(--accent-highlight))] hover:text-[hsl(var(--accent-highlight-foreground))]"
       >
         <ChevronDown
           className={`h-4 w-4 transition-transform ${open ? 'rotate-180' : ''}`}
@@ -43,17 +43,17 @@ function ImportSplitButton({ ui, onImportClick, onManualClick }) {
       {open ? (
         <div
           role="menu"
-          className="absolute right-0 top-11 z-50 w-[229px] overflow-hidden rounded-lg border border-[#E8EAEF] bg-white py-2 shadow-lg"
+          className="absolute right-0 top-11 z-50 w-[229px] overflow-hidden rounded-lg border border-[hsl(var(--border-subtle))] bg-card py-2 shadow-lg"
         >
           <button
             type="button"
             role="menuitem"
             data-testid="statements-manual-create"
             onClick={() => { setOpen(false); onManualClick(); }}
-            className="flex w-full items-center gap-2 px-2 py-1 text-left hover:bg-[#F5F7F9]"
+            className="flex w-full items-center gap-2 px-2 py-1 text-left hover:bg-[hsl(var(--muted))]"
           >
-            <Plus className="h-6 w-6 shrink-0 text-[#828FA3]" data-testid="Plus__8a428c" />
-            <span className="text-sm text-[#121217]">
+            <Plus className="h-6 w-6 shrink-0 text-[hsl(var(--text-disabled))]" data-testid="Plus__8a428c" />
+            <span className="text-sm text-[hsl(var(--foreground))]">
               {ui('financeAccountStatementsManualMenuItem')}
             </span>
           </button>
@@ -75,7 +75,7 @@ function SyncStatementsButton({ ui, onClick, syncing }) {
       data-testid="statements-psd2-sync-button"
       onClick={onClick}
       disabled={syncing}
-      className="inline-flex h-10 items-center gap-2 rounded-lg bg-[#121217] px-3 text-sm font-medium text-white transition-colors hover:bg-[#FFD500] hover:text-[#121217] disabled:cursor-not-allowed disabled:opacity-60"
+      className="inline-flex h-10 items-center gap-2 rounded-lg bg-[hsl(var(--foreground))] px-3 text-sm font-medium text-primary-foreground transition-colors hover:bg-[hsl(var(--accent-highlight))] hover:text-[hsl(var(--accent-highlight-foreground))] disabled:cursor-not-allowed disabled:opacity-60"
     >
       <RefreshCw
         className={`h-4 w-4 ${syncing ? 'animate-spin' : ''}`}
@@ -133,7 +133,7 @@ export function StatementsToolbar({
         aria-label={ui('financeAccountDetailBack')}
         data-testid="statements-toolbar-back"
         onClick={() => navigate(-1)}
-        className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-border bg-white text-muted-foreground transition-colors hover:bg-[#F5F7F9] hover:text-foreground"
+        className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-border bg-card text-muted-foreground transition-colors hover:bg-[hsl(var(--muted))] hover:text-foreground"
       >
         <ArrowLeft className="h-4 w-4" data-testid="ArrowLeft__8a428c" />
       </button>
@@ -166,7 +166,7 @@ export function StatementsToolbar({
           value={search}
           onChange={(e) => onSearchChange(e.target.value)}
           data-testid="statements-search-input"
-          className="h-10 w-48 rounded-lg border border-[#D1D4DB] bg-white px-3 text-sm text-[#121217] placeholder:text-[#8a8aa3] shadow-[0_1px_2px_rgba(18,18,23,0.05)] focus:outline-none focus:ring-2 focus:ring-[#121217] focus:ring-offset-1"
+          className="h-10 w-48 rounded-lg border border-[hsl(var(--border-control))] bg-card px-3 text-sm text-[hsl(var(--foreground))] placeholder:text-[hsl(var(--text-disabled))] shadow-[0_1px_2px_hsl(var(--foreground) / 0.05)] focus:outline-none focus:ring-2 focus:ring-[hsl(var(--foreground))] focus:ring-offset-1"
         />
       </div>
       {/* PSD2-synced accounts: a single "sync statements" action (Salt Edge fetch) replaces the

@@ -53,7 +53,7 @@ Any authenticated route can also be opened with `?embedded=1`; in that mode the 
   - Password-change failures keep the user on the current setup view without clearing the existing platform token.
   - Environment login failures currently surface browser `alert()` messages.
 - **Automated evidence:**
-  - `tools/app-shell/src/pages/onboarding/__tests__/onboardingApi.test.js` verifies register/login, forgot/reset/change password API calls, bearer handling, and that auth flows do not send provider payload fields.
+  - `../schema_forge_core/packages/etendo-go-core/test/onboardingOwnership.test.js` verifies the Core-owned API, state, SSO, password-policy, draft, and stream contracts. Schema Forge retains product composition coverage in `tools/app-shell/src/pages/__tests__/OnboardingPage.vitest.jsx`.
   - `tools/app-shell/src/pages/__tests__/OnboardingPage.vitest.jsx` verifies forgot-password, reset-password, invalid reset link, change-password success, token refresh, and current-password failure states.
   - `tools/app-shell/test/pwa.test.js` verifies that `OnboardingPage.jsx` clears caches on environment login.
   - Route protection and onboarding branching are code-backed in `tools/app-shell/src/App.jsx` and `tools/app-shell/src/pages/OnboardingPage.jsx`, but are not covered by a full browser test.
@@ -78,14 +78,17 @@ Any authenticated route can also be opened with `?embedded=1`; in that mode the 
 - **Failure or edge behavior:**
   - `?embedded=1` removes shell chrome and left-margin spacing while still rendering the current route content.
   - Hidden groups/items from `menu.json` are filtered out of the visible menu.
+  - The visible menu is additionally filtered to the current role's actual window/process access: `AppLayout` calls `useRoleMenu()` (`tools/app-shell/src/hooks/useRoleMenu.js`), which fetches the `SFListMenu` webhook's role-pruned tree once per authenticated session and reduces it to an allowed-id `Set` via `collectAllowedIds()` (`tools/app-shell/src/lib/menuTree.js`). `registry.js`'s `filterMenuGroupsByAccess()` drops any menu item whose `windowId`/`processId`/`obuiappProcessId` is not in that set, and drops any group left empty (except `Favorites`); items carrying none of those ids (dashboard, custom pages, installed SDK apps) are never filtered. While the fetch is in flight, AD-backed items (anything carrying a `windowId`/`processId`/`obuiappProcessId`) are hidden rather than briefly showing the unfiltered full menu; items with none of those ids and the `Favorites` group are never filtered and stay visible throughout.
 - **Automated evidence:**
-  - `tools/app-shell/src/windows/__tests__/registry.test.js` verifies that menu groups are built from `menu.json` and that items keep the expected name/label shape.
-  - The shell chrome itself is code-backed in `tools/app-shell/src/layout/AppLayout.jsx` and `tools/app-shell/src/components/layout/SideMenu/SideMenu.jsx`; there is no browser automation for the layout behavior.
+  - `tools/app-shell/src/windows/__tests__/registry.test.js` and `registry.vitest.jsx` verify that menu groups are built from `menu.json`, keep the expected name/label shape, and are correctly reduced by `filterMenuGroupsByAccess()`/the optional `allowedIds` argument to `buildMenuGroups()`.
+  - `tools/app-shell/src/hooks/__tests__/useRoleMenu.vitest.jsx` and `tools/app-shell/src/lib/__tests__/menuTree.vitest.js` cover the role-menu fetch/collection behavior, including the unauthenticated and fetch-failure fallbacks.
+  - The shell chrome itself is code-backed in `tools/app-shell/src/layout/AppLayout.jsx` and `tools/app-shell/src/components/layout/SideMenu/SideMenu.jsx`; there is no browser automation for the layout behavior beyond the mocked E2E spec covering role-filtered menu rendering.
 - **Manual verification path:**
   1. Sign in and open `/dashboard`.
   2. Confirm the side menu, top bar, command palette, and copilot widget are visible.
   3. Use the menu entry that targets `/report-viewer?category=purchases` and confirm the URL keeps the query string.
   4. Re-open the same route with `?embedded=1` and confirm the shell chrome is hidden while the routed page still renders.
+  5. Sign in as a role with restricted `AD_Window_Access`/`AD_Process_Access` grants and confirm the sidebar shows visibly fewer items than a role with full access (e.g. GOClient Admin).
 
 ### 3. Generated/custom window loading
 

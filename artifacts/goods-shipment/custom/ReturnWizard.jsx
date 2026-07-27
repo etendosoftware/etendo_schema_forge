@@ -26,8 +26,8 @@ function MiniCheck({ checked, onChange }) {
         width: 14,
         height: 14,
         borderRadius: 3,
-        border: checked ? 'none' : '1px solid #D1D5DB',
-        backgroundColor: checked ? '#f59e0b' : '#fff',
+        border: checked ? 'none' : '1px solid hsl(var(--card))',
+        backgroundColor: checked ? 'var(--status-warning-bg)' : 'hsl(var(--card))',
         cursor: 'pointer',
         flexShrink: 0,
         transition: 'background-color 150ms, border-color 150ms',
@@ -35,7 +35,7 @@ function MiniCheck({ checked, onChange }) {
     >
       {checked && (
         <svg width="10" height="10" viewBox="0 0 12 12" fill="none">
-          <path d="M2.5 6L5 8.5L9.5 3.5" stroke="#fff" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+          <path d="M2.5 6L5 8.5L9.5 3.5" stroke="hsl(var(--card))" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
         </svg>
       )}
     </span>
@@ -60,7 +60,7 @@ function StepIndicator({ current, total }) {
         <span
           key={i}
           className="w-2 h-2 rounded-full"
-          style={{ backgroundColor: i + 1 === current ? '#f59e0b' : 'rgba(156,163,175,0.3)' }}
+          style={{ backgroundColor: i + 1 === current ? 'var(--status-warning-bg)' : 'hsl(var(--foreground) / 0.3)' }}
         />
       ))}
       <span className="ml-1">{ui('stepOf').replace('{step}', current).replace('{total}', total)}</span>
@@ -202,7 +202,7 @@ export default function ReturnWizard({
         style={{ border: '0.5px solid hsl(var(--border))', boxShadow: 'none' }}
       >
         {/* Header */}
-        <div className="px-6 pt-5 pb-4" style={{ backgroundColor: '#F8F9FA', borderBottom: '1px solid #E5E7EB', borderTopLeftRadius: 12, borderTopRightRadius: 12 }}>
+        <div className="px-6 pt-5 pb-4" style={{ backgroundColor: 'hsl(var(--card))', borderBottom: '1px solid hsl(var(--card))', borderTopLeftRadius: 12, borderTopRightRadius: 12 }}>
           <StepIndicator current={step} total={2} />
           <DialogHeader>
             <DialogTitle className="text-base font-semibold">{ui('createReturnFromShipment')}</DialogTitle>
@@ -225,16 +225,16 @@ export default function ReturnWizard({
                   <col style={{ width: '25%' }} />
                 </colgroup>
                 <thead>
-                  <tr style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', color: '#6B7280', letterSpacing: '0.05em' }}>
-                    <th className="text-left px-1" style={{ paddingTop: 6, paddingBottom: 6, borderBottom: '1px solid #E5E7EB' }}>
+                  <tr style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', color: 'hsl(var(--muted-foreground))', letterSpacing: '0.05em' }}>
+                    <th className="text-left px-1" style={{ paddingTop: 6, paddingBottom: 6, borderBottom: '1px solid hsl(var(--foreground))' }}>
                       <MiniCheck
                         checked={selected.size === lines.length && lines.length > 0}
                         onChange={() => { selected.size === lines.length ? deselectAll() : selectAll(); }}
                       />
                     </th>
-                    <th className="text-left px-2" style={{ paddingTop: 6, paddingBottom: 6, borderBottom: '1px solid #E5E7EB' }}>{ui('product')}</th>
-                    <th className="text-right px-2" style={{ paddingTop: 6, paddingBottom: 6, borderBottom: '1px solid #E5E7EB' }}>{ui('delivered')}</th>
-                    <th className="text-right px-2" style={{ paddingTop: 6, paddingBottom: 6, borderBottom: '1px solid #E5E7EB' }}>{ui('returnQty')}</th>
+                    <th className="text-left px-2" style={{ paddingTop: 6, paddingBottom: 6, borderBottom: '1px solid hsl(var(--card))' }}>{ui('product')}</th>
+                    <th className="text-right px-2" style={{ paddingTop: 6, paddingBottom: 6, borderBottom: '1px solid hsl(var(--card))' }}>{ui('delivered')}</th>
+                    <th className="text-right px-2" style={{ paddingTop: 6, paddingBottom: 6, borderBottom: '1px solid hsl(var(--card))' }}>{ui('returnQty')}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -263,7 +263,7 @@ export default function ReturnWizard({
                             value={quantities[line.id] ?? 0}
                             onChange={(e) => setQty(line.id, e.target.value, maxQty)}
                             disabled={!isSelected}
-                            className="border border-border rounded tabular-nums bg-muted/20 focus:bg-white focus:outline-none focus:ring-1 focus:ring-primary/30 disabled:opacity-30 disabled:bg-transparent"
+                            className="border border-border rounded tabular-nums bg-muted/20 focus:bg-card focus:outline-none focus:ring-1 focus:ring-primary/30 disabled:opacity-30 disabled:bg-transparent"
                             style={{ width: 70, textAlign: 'center', borderWidth: '0.5px', borderRadius: 4, fontSize: 13, paddingTop: 4, paddingBottom: 4, paddingLeft: 4, paddingRight: 4, marginLeft: 'auto', display: 'block' }}
                           />
                         </td>
@@ -300,10 +300,10 @@ export default function ReturnWizard({
             <div className="flex flex-col mb-5" style={{ gap: 8 }}>
               <div
                 className="flex items-center gap-3"
-                style={{ border: '1px solid #E5E7EB', borderRadius: 8, padding: 12 }}
+                style={{ border: '1px solid hsl(var(--card))', borderRadius: 8, padding: 12 }}
               >
-                <span className="shrink-0 flex items-center justify-center" style={{ width: 32, height: 32, borderRadius: 8, backgroundColor: '#EFF6FF' }}>
-                  <span className="text-blue-600">{ICONS.returnReceipt}</span>
+                <span className="shrink-0 flex items-center justify-center" style={{ width: 32, height: 32, borderRadius: 8, backgroundColor: 'hsl(var(--card))' }}>
+                  <span className="text-status-info-foreground">{ICONS.returnReceipt}</span>
                 </span>
                 <div>
                   <p className="text-sm font-medium text-foreground">{ui('returnReceipt')}</p>
@@ -318,10 +318,10 @@ export default function ReturnWizard({
             <div className="max-h-[180px] overflow-y-auto">
               <table className="w-full text-sm">
                 <thead>
-                  <tr style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', color: '#6B7280', letterSpacing: '0.05em' }}>
-                    <th className="text-left px-2" style={{ paddingTop: 6, paddingBottom: 6, borderBottom: '1px solid #E5E7EB' }}>{ui('product')}</th>
-                    <th className="text-right px-2 w-20" style={{ paddingTop: 6, paddingBottom: 6, borderBottom: '1px solid #E5E7EB' }}>{ui('qty')}</th>
-                    <th className="text-right px-2 w-32" style={{ paddingTop: 6, paddingBottom: 6, borderBottom: '1px solid #E5E7EB' }}>{ui('amount')}</th>
+                  <tr style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', color: 'hsl(var(--muted-foreground))', letterSpacing: '0.05em' }}>
+                    <th className="text-left px-2" style={{ paddingTop: 6, paddingBottom: 6, borderBottom: '1px solid hsl(var(--foreground))' }}>{ui('product')}</th>
+                    <th className="text-right px-2 w-20" style={{ paddingTop: 6, paddingBottom: 6, borderBottom: '1px solid hsl(var(--card))' }}>{ui('qty')}</th>
+                    <th className="text-right px-2 w-32" style={{ paddingTop: 6, paddingBottom: 6, borderBottom: '1px solid hsl(var(--card))' }}>{ui('amount')}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -358,13 +358,13 @@ export default function ReturnWizard({
         )}
 
         {/* Footer */}
-        <DialogFooter className="px-6 pt-5 pb-4" style={{ backgroundColor: '#F8F9FA', borderTop: '1px solid #E5E7EB' }}>
+        <DialogFooter className="px-6 pt-5 pb-4" style={{ backgroundColor: 'hsl(var(--card))', borderTop: '1px solid hsl(var(--card))' }}>
           {step === 1 && (
             <>
               <Button variant="ghost" size="sm" onClick={onClose}>
                 {ui('cancel')}
               </Button>
-              <Button size="sm" className="bg-amber-400 text-black hover:bg-amber-500 border-transparent font-medium" disabled={!canProceed} onClick={() => setStep(2)}>
+              <Button size="sm" className="bg-status-warning text-foreground hover:bg-status-warning border-transparent font-medium" disabled={!canProceed} onClick={() => setStep(2)}>
                 {ui('next')}
               </Button>
             </>
@@ -374,7 +374,7 @@ export default function ReturnWizard({
               <Button variant="ghost" size="sm" onClick={() => setStep(1)}>
                 {ui('back')}
               </Button>
-              <Button size="sm" className="bg-amber-400 text-black hover:bg-amber-500 border-transparent font-medium" onClick={handleConfirm} disabled={loading}>
+              <Button size="sm" className="bg-status-warning text-foreground hover:bg-status-warning border-transparent font-medium" onClick={handleConfirm} disabled={loading}>
                 {loading ? ui('creating') : ui('createReturn')}
               </Button>
             </>
