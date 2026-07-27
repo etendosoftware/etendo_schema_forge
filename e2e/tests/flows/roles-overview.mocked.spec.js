@@ -8,7 +8,10 @@ import { login } from '../helpers/auth.js';
  * gated by the `isAdminOrClientAdmin` capability from `SFWindowAccessMap`
  * (see registry.js's `filterMenuGroupsByAccess` capability axis and
  * AppLayout.jsx's `useCapabilitiesSafe()` wiring), the page lists all 5 fixed
- * GOClient roles from `GET /webhooks/SFRolesOverview`, and Edit only ever
+ * GOClient roles from `GET /sws/neo/rolesoverview` (ETP-4513 — moved off the
+ * Webhooks module's `/webhooks/SFRolesOverview`, which required a per-role
+ * grant row wiped by `update.database`, onto NEO Headless's own
+ * JWT-authenticated bridge), and Edit only ever
  * opens a "coming soon" notice — no create/delete UI anywhere.
  *
  * Mock mode only: this spec installs its own route/fetch overrides on top of
@@ -17,7 +20,7 @@ import { login } from '../helpers/auth.js';
  * via a webhook-backed signal, and `row-quick-actions.mocked.spec.js` for the
  * overall list/dialog interaction shape.
  *
- * `login()`'s own addInitScript already stubs `/webhooks/SFWindowAccessMap`
+ * `login()`'s own addInitScript already stubs `/sws/neo/windowaccessmap`
  * with a Proxy that resolves every capability key to `true` (full access) —
  * see `e2e/tests/helpers/auth.js`. That covers the admin/client-admin
  * scenario below for free. The non-admin scenario needs to downgrade that
@@ -73,7 +76,7 @@ const ROLES_FIXTURE = [
 ];
 
 async function installRolesOverviewMock(page) {
-  await page.route('**/webhooks/SFRolesOverview**', async (route) => {
+  await page.route('**/sws/neo/rolesoverview**', async (route) => {
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
@@ -95,7 +98,7 @@ async function installNonAdminCapabilities(page) {
     const adminFetch = window.fetch.bind(window);
     window.fetch = (input, init) => {
       const url = typeof input === 'string' ? input : input?.url;
-      if (url && url.includes('/webhooks/SFWindowAccessMap')) {
+      if (url && url.includes('/sws/neo/windowaccessmap')) {
         return Promise.resolve({
           ok: true,
           status: 200,

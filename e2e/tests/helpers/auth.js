@@ -38,17 +38,22 @@ export async function login(page, {
       // closed to "none" and block rendering entirely (blank page).
       localStorage.setItem('sf_auth_selected_role', JSON.stringify({ id: 'e2e-mock-role', name: 'Administrator' }));
 
-      // Stub the SFWindowAccessMap webhook itself. It lives under `/webhooks/`,
-      // not `/sws/`, so the page.route('**/sws/**') interception below never
-      // sees it — and unlike that route, a JSON-serialized response can't
-      // grant "full access to every window" without enumerating every window
-      // id up front. A real JS Proxy constructed here (in-browser, not sent
-      // over the wire) can, mirroring the same trick used by the app's own
-      // dev-mode mockFetch.js for this identical webhook.
+      // Stub the SFWindowAccessMap endpoint itself. It's reached via NEO
+      // Headless's own `/sws/neo/windowaccessmap` bridge (ETP-4513 — moved off
+      // the Webhooks module's `/webhooks/SFWindowAccessMap`, which required a
+      // per-role grant row wiped by `update.database`), which WOULD be caught
+      // by the generic page.route('**/sws/**') interception below — but unlike
+      // that route, a JSON-serialized response can't grant "full access to
+      // every window" without enumerating every window id up front. A real JS
+      // Proxy constructed here (in-browser, not sent over the wire) can,
+      // mirroring the same trick used by the app's own dev-mode mockFetch.js
+      // for this identical endpoint. Intercepting at the window.fetch layer
+      // (rather than page.route) also sidesteps any LIFO route-registration
+      // ordering concerns with the generic /sws/** catch-all below.
       const realFetch = window.fetch.bind(window);
       window.fetch = (input, init) => {
         const url = typeof input === 'string' ? input : input?.url;
-        if (url && url.includes('/webhooks/SFWindowAccessMap')) {
+        if (url && url.includes('/sws/neo/windowaccessmap')) {
           return Promise.resolve({
             ok: true,
             status: 200,
