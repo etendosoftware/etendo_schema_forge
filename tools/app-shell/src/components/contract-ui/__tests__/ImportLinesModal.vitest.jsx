@@ -257,8 +257,9 @@ describe('ImportLinesModal', () => {
       expect(screen.getByText('INV-001')).toBeInTheDocument();
     }, { timeout: 10000 });
 
-    // Collapsed docTotal (sum of line net amounts) shown next to the row.
-    expect(screen.getByText('2.500,00')).toBeInTheDocument();
+    // Collapsed docTotal (sum of line net amounts) shown next to each row — both
+    // docs share the same mocked lines, so it's expected to appear more than once.
+    expect(screen.getAllByText('2.500,00').length).toBeGreaterThan(0);
     expect(screen.queryByText('2500.00')).toBeNull();
 
     fireEvent.click(screen.getByText('INV-001').closest('div[style]'));

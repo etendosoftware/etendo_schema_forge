@@ -45,18 +45,16 @@ describe('AmortizationConfirmModal — amount formatting', () => {
     expect(screen.queryByText(/1500,50/)).toBeNull();
   });
 
-  it('pins the total to the es-ES locale explicitly (not the unpinned host default)', async () => {
+  it('formats the total for a non-EUR currency (USD) in es-ES style, with the real resolved symbol', async () => {
     globalThis.fetch = mockFetchSequence({
       header: { name: 'AM-2', 'currency$_identifier': 'USD' },
       lines: [{ amortizationAmount: 250, amortizationPercentage: 10 }],
     });
-    const spy = vi.spyOn(Number.prototype, 'toLocaleString');
 
     render(<AmortizationConfirmModal {...BASE_PROPS} recordId="amort-2" />);
     await waitFor(() => expect(screen.getByText('AM-2')).toBeInTheDocument());
 
-    const call = spy.mock.calls.find(([locale]) => locale === 'es-ES');
-    expect(call).toBeDefined();
-    spy.mockRestore();
+    expect(screen.getByText(/250,00\s\$/)).toBeInTheDocument();
+    expect(screen.queryByText(/USD/)).toBeNull();
   });
 });

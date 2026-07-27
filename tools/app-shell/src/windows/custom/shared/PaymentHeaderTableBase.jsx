@@ -62,7 +62,7 @@ function currencySymbol(curr) {
   }
 }
 
-const AMOUNT_FMT = new Intl.NumberFormat('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const AMOUNT_FMT = new Intl.NumberFormat('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2, useGrouping: true });
 function fmtAmt(val, curr) {
   const n = typeof val === 'string' ? parseFloat(val) : (val ?? 0);
   return (n < 0 ? '-' : '') + AMOUNT_FMT.format(Math.abs(n)) + ' ' + currencySymbol(curr);

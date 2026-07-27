@@ -1,6 +1,7 @@
 import { useNavigate } from 'react-router-dom';
 import { useUI } from '@/i18n';
 import { formatCalendarDate } from '@/lib/dateOnly';
+import { formatCurrency } from '@/lib/formatCurrency.js';
 
 // Processed APRM statuses. PWNC ("Withdrawn not Cleared") and RPAE ("Awaiting
 // Execution") are the processed states for payments-out / deferred accounts.
@@ -8,21 +9,6 @@ const PAID_STATUSES = new Set(['RPR', 'RPPC', 'RDNC', 'PPM', 'PWNC', 'RPAE']);
 
 function fmtPayDate(raw) {
   return formatCalendarDate(raw, 'es-ES', { day: 'numeric', month: 'short', year: 'numeric' });
-}
-
-function addThousandDots(s) {
-  let out = '';
-  for (let i = 0; i < s.length; i++) {
-    if (i > 0 && (s.length - i) % 3 === 0) out += '.';
-    out += s[i];
-  }
-  return out;
-}
-
-function fmt(val) {
-  const n = typeof val === 'string' ? parseFloat(val) : (val ?? 0);
-  const abs = Math.abs(n).toFixed(2).split('.');
-  return (n < 0 ? '-' : '') + addThousandDots(abs[0]) + ',' + abs[1];
 }
 
 function SectionCard({ title, titleRight, children }) {
@@ -210,7 +196,7 @@ export default function PaymentsCard({
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 3, flexShrink: 0 }}>
                 <span className="tabular-nums" style={{ font: '600 13px/17px Inter', color: amtColor, whiteSpace: 'nowrap' }}>
-                  {amtSign}{fmt(p.amount)} {currency}
+                  {amtSign}{formatCurrency(currency, p.amount)}
                 </span>
                 <StateTag status={p.status || ''} processed={p.processed} ui={ui} data-testid="StateTag__c6fe34" />
               </div>
@@ -221,7 +207,7 @@ export default function PaymentsCard({
           <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 14px', borderTop: '0.5px solid #F3F4F6', background: '#FFFBEB' }}>
             <span style={{ fontSize: 12, color: '#92400E' }}>{ui('invoicePendingPayment')}</span>
             <span className="tabular-nums" style={{ fontSize: 12, fontWeight: 600, color: '#92400E' }}>
-              {fmt(totalOutstanding)} {currencyCode}
+              {formatCurrency(currencyCode, totalOutstanding)}
             </span>
           </div>
         )}

@@ -148,7 +148,7 @@ export default function SummaryCard({
     ? formatCurrency(currencyCode || undefined, grandTotal ?? 0)
     : null;
   const rateNote = showOrgTotal && exchangeRate
-    ? `(${exchangeRate.toLocaleString(undefined, { minimumFractionDigits: ratePrecision, maximumFractionDigits: ratePrecision })})`
+    ? `(${exchangeRate.toLocaleString('es-ES', { minimumFractionDigits: ratePrecision, maximumFractionDigits: ratePrecision })})`
     : null;
 
   return (

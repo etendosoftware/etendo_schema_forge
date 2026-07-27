@@ -982,7 +982,9 @@ function formatDerivedCellValue(identVal, rawVal, isTwoDecimalDerived) {
   let displayVal = identVal || rawVal;
   if (isTwoDecimalDerived && displayVal != null && displayVal !== '') {
     const n = typeof displayVal === 'string' ? Number.parseFloat(displayVal) : displayVal;
-    if (Number.isFinite(n)) displayVal = n.toFixed(2);
+    if (Number.isFinite(n)) {
+      displayVal = n.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2, useGrouping: true });
+    }
   }
   return displayVal;
 }

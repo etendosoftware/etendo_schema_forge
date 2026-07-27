@@ -519,7 +519,7 @@ export default function AmortizationLinesTable({
                       ) : (
                         <td className="px-3 text-sm text-right tabular-nums font-semibold text-foreground align-middle">
                           {line.amortizationAmount != null
-                            ? `${Number(line.amortizationAmount).toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${line['currency$_identifier'] ?? ''}`
+                            ? formatCurrency(orgCurrency, line.amortizationAmount)
                             : '—'}
                         </td>
                       )}

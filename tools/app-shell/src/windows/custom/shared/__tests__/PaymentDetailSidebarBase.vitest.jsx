@@ -36,7 +36,9 @@ describe('PaymentDetailSidebarBase — amount formatting', () => {
     const data = baseData({ amount: '100', 'currency$_identifier': 'USD' });
     render(<PaymentDetailSidebarBase dir="in" specName="payment-in" data={data} token="t" apiBaseUrl="http://x" />);
     const panel = within(screen.getByTestId('PaymentDetailSidebar__panel'));
-    expect(panel.getByText(/100,00\s\$/)).toBeInTheDocument();
+    // The hero and the "Total"/"Unallocated" breakdown rows all show the same
+    // amount when no lines are applied yet — assert at least one match.
+    expect(panel.getAllByText(/100,00\s\$/).length).toBeGreaterThan(0);
     expect(panel.queryByText(/100,00\s€/)).toBeNull();
   });
 
@@ -44,7 +46,7 @@ describe('PaymentDetailSidebarBase — amount formatting', () => {
     const data = baseData({ amount: '1500.5', 'currency$_identifier': 'EUR' });
     render(<PaymentDetailSidebarBase dir="in" specName="payment-in" data={data} token="t" apiBaseUrl="http://x" />);
     const panel = within(screen.getByTestId('PaymentDetailSidebar__panel'));
-    expect(panel.getByText(/1\.500,50\s€/)).toBeInTheDocument();
+    expect(panel.getAllByText(/1\.500,50\s€/).length).toBeGreaterThan(0);
     expect(panel.queryByText(/1500,50\s€/)).toBeNull();
   });
 });

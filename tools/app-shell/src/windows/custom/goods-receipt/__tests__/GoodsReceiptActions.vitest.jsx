@@ -67,6 +67,7 @@ import { readFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { usePreviewAttachment } from '@/windows/custom/shared/usePreviewAttachment.js';
+import { formatCurrency } from '@/lib/formatCurrency.js';
 import GoodsReceiptActions from '@generated/goods-receipt/custom/GoodsReceiptActions';
 
 const defaultProps = {
@@ -282,12 +283,15 @@ describe('ConfirmReceiptInvoicedModal — fmtAmount (real currency formatting)',
 
   function getRealFmtAmount() {
     const fnSource = extractFunctionSource(src, 'fmtAmount');
-    return new Function(`return ${fnSource};`)();
+    // fmtAmount now delegates to the real, imported formatCurrency() — inject it
+    // into the eval'd scope so the extracted source can still call it.
+    const fn = new Function('formatCurrency', `${fnSource}; return fmtAmount;`);
+    return fn(formatCurrency);
   }
 
   it('groups thousands and uses the real currency symbol, never the raw ISO code', () => {
     const fmtAmount = getRealFmtAmount();
-    expect(fmtAmount(1234.56, 'EUR')).toBe('1.234,56 €');
+    expect(fmtAmount(1234.56, 'EUR')).toBe('1.234,56 €');
     expect(fmtAmount(1234.56, 'EUR')).not.toMatch(/EUR/);
   });
 });

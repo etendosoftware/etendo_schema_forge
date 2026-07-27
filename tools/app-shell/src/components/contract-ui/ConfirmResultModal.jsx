@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useUI } from '@/i18n';
+import { formatCurrency } from '@/lib/formatCurrency.js';
 
 // ── Type config ───────────────────────────────────────────────────────────────
 
@@ -10,10 +11,9 @@ const TYPE_CONFIG = {
   entrada:       { iconBg: '#e9f7ee', iconColor: '#157a43', labelKey: 'confirmResultModal.docType.entrada',       viewKey: 'poViewReceipt',   Icon: EntradaIcon },
 };
 
-const fmtAmount = (v, cur) => {
-  const formatted = Number(v).toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  return cur ? `${formatted} ${cur}` : formatted;
-};
+const fmtAmount = (v, cur) => (cur
+  ? formatCurrency(cur, v)
+  : Number(v).toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2, useGrouping: true }));
 
 // ── Doc card ──────────────────────────────────────────────────────────────────
 

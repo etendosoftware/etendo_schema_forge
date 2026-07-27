@@ -144,7 +144,7 @@ function makeMoneyFormatter(currency, bcpLocale) {
   return (amount) => {
     try {
       return new Intl.NumberFormat(bcpLocale, {
-        style: 'currency', currency, minimumFractionDigits: 2, maximumFractionDigits: 2,
+        style: 'currency', currency, minimumFractionDigits: 2, maximumFractionDigits: 2, useGrouping: true,
       }).format(Number(amount) || 0);
     } catch {
       return `${(Number(amount) || 0).toFixed(2)} ${currency}`;

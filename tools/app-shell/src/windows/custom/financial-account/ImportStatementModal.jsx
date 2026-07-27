@@ -32,7 +32,7 @@ function formatMoney(amount, currency, bcpLocale) {
   try {
     return new Intl.NumberFormat(bcpLocale, {
       style: 'currency', currency,
-      minimumFractionDigits: 2, maximumFractionDigits: 2,
+      minimumFractionDigits: 2, maximumFractionDigits: 2, useGrouping: true,
     }).format(Number(amount));
   } catch {
     return `${Number(amount).toFixed(2)} ${currency}`;

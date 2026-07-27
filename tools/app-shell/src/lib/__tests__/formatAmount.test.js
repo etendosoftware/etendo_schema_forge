@@ -11,16 +11,16 @@ import { formatAmount } from '../formatAmount.js';
 
 describe('formatAmount', () => {
   it('uses the es-ES locale (comma decimal), never en-US (dot decimal)', () => {
-    assert.equal(formatAmount(1234.5, 'EUR'), '1.234,50 €');
+    assert.equal(formatAmount(1234.5, 'EUR'), '1.234,50 €');
     assert.notEqual(formatAmount(1234.5, 'EUR'), '1,234.50 €');
   });
 
   it('groups thousands in the 1000-9999 range', () => {
-    assert.equal(formatAmount(1355.2, 'EUR'), '1.355,20 €');
+    assert.equal(formatAmount(1355.2, 'EUR'), '1.355,20 €');
   });
 
   it('resolves the real symbol for a non-EUR currency (USD), matching formatCurrency\'s placement (symbol after amount)', () => {
-    assert.equal(formatAmount(304.92, 'USD'), '304,92 $');
+    assert.equal(formatAmount(304.92, 'USD'), '304,92 $');
   });
 
   it('falls back to plain es-ES formatting (no symbol) when no currency code is given', () => {
@@ -33,6 +33,6 @@ describe('formatAmount', () => {
   });
 
   it('keeps the sign before the amount for negative values (symbol still after)', () => {
-    assert.equal(formatAmount(-99.9, 'EUR'), '-99,90 €');
+    assert.equal(formatAmount(-99.9, 'EUR'), '-99,90 €');
   });
 });
