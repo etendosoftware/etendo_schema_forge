@@ -183,13 +183,13 @@ describe('GeneralLedgerConfigPage — save success', () => {
     });
     expect(save).toHaveBeenCalledTimes(1);
     // savedOk toggles the green class on the button.
-    expect(btn.className).toContain('bg-green-600');
+    expect(btn.className).toContain('bg-status-success');
 
     // After the 2500ms timeout the green state clears.
     await act(async () => {
       vi.advanceTimersByTime(2600);
     });
-    expect(btn.className).not.toContain('bg-green-600');
+    expect(btn.className).not.toContain('bg-status-success');
     vi.useRealTimers();
   });
 });

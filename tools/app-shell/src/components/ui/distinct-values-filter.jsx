@@ -59,7 +59,7 @@ export function DistinctValuesFilter({
       <PopoverTrigger asChild data-testid="PopoverTrigger__cd3aa9">
         <button
           type="button"
-          className="inline-flex h-9 items-center justify-between gap-1.5 rounded-lg border border-border bg-white px-3 text-sm font-normal leading-6 text-muted-foreground transition-colors hover:bg-[#F5F7F9]"
+          className="inline-flex h-9 items-center justify-between gap-1.5 rounded-lg border border-border bg-card px-3 text-sm font-normal leading-6 text-muted-foreground transition-colors hover:bg-[hsl(var(--muted))]"
         >
           <span className="truncate text-left">{triggerLabel}</span>
           <ChevronDown

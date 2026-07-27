@@ -19,18 +19,16 @@ describe('FiscalStatusBadge — SII status codes', () => {
     });
   }
 
-  it('BA uses a neutral grey colour (not red — it is not an error state)', () => {
+  it('BA uses a neutral semantic tone (not destructive — it is not an error state)', () => {
     const baBlock = src.match(/BA:\s*\{([^}]+)\}/)?.[1] ?? '';
-    assert.ok(baBlock.includes('#4b5563') || baBlock.includes('#f3f4f6'),
-      'BA should use neutral grey (#4b5563 / #f3f4f6), not error red');
-    assert.ok(!baBlock.includes('#b91c1c'), 'BA must not use error red (#b91c1c)');
+    assert.ok(baBlock.includes("tone: 'neutral'"), 'BA should use the neutral semantic tone');
+    assert.ok(!baBlock.includes("tone: 'destructive'"), 'BA must not use a destructive tone');
   });
 
-  it('NR uses a neutral grey colour', () => {
+  it('NR uses a neutral semantic tone', () => {
     const nrBlock = src.match(/NR:\s*\{([^}]+)\}/)?.[1] ?? '';
-    assert.ok(nrBlock.includes('#6b7280') || nrBlock.includes('#f9fafb'),
-      'NR should use neutral grey (#6b7280 / #f9fafb)');
-    assert.ok(!nrBlock.includes('#b91c1c'), 'NR must not use error red (#b91c1c)');
+    assert.ok(nrBlock.includes("tone: 'neutral'"), 'NR should use the neutral semantic tone');
+    assert.ok(!nrBlock.includes("tone: 'destructive'"), 'NR must not use a destructive tone');
   });
 });
 

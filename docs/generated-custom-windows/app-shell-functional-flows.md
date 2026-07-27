@@ -53,7 +53,7 @@ Any authenticated route can also be opened with `?embedded=1`; in that mode the 
   - Password-change failures keep the user on the current setup view without clearing the existing platform token.
   - Environment login failures currently surface browser `alert()` messages.
 - **Automated evidence:**
-  - `tools/app-shell/src/pages/onboarding/__tests__/onboardingApi.test.js` verifies register/login, forgot/reset/change password API calls, bearer handling, and that auth flows do not send provider payload fields.
+  - `../schema_forge_core/packages/etendo-go-core/test/onboardingOwnership.test.js` verifies the Core-owned API, state, SSO, password-policy, draft, and stream contracts. Schema Forge retains product composition coverage in `tools/app-shell/src/pages/__tests__/OnboardingPage.vitest.jsx`.
   - `tools/app-shell/src/pages/__tests__/OnboardingPage.vitest.jsx` verifies forgot-password, reset-password, invalid reset link, change-password success, token refresh, and current-password failure states.
   - `tools/app-shell/test/pwa.test.js` verifies that `OnboardingPage.jsx` clears caches on environment login.
   - Route protection and onboarding branching are code-backed in `tools/app-shell/src/App.jsx` and `tools/app-shell/src/pages/OnboardingPage.jsx`, but are not covered by a full browser test.

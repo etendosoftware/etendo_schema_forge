@@ -64,8 +64,19 @@ The funnel button on the far right opens a **conditional-filter builder**. Each 
   - number / amount: `=`, `≠`, `>`, `≥`, `<`, `≤`, `Entre`, `Está vacío`, `No está vacío`
   - date: `Es`, `Antes de`, `Después de`, `Entre`, `Está vacío`, `No está vacío`
   - boolean: `Es` (value picker uses the column's `badgeLabels`)
-- Value input adapts to the column type: text/number/date input; enum dropdown using `enumLabels`; boolean dropdown using `badgeLabels`; `Entre` renders two inputs; `Es cualquiera de` takes a comma-separated list of codes.
+- **`Está vacío` / `No está vacío` are dropped for any column with `required: true`** (ETP-4609) — a mandatory field can never legitimately be empty, so those two operators are filtered out of the list regardless of mode. This applies to every column in every window; `required` is read straight off the column object (same one DataTable renders), not from a separate config.
+- `Es cualquiera de` (inSet) is **only ever offered for `enum`/status-mode columns** — it is not a general "any field" operator. A text or selector column will never show it in the operator list; that's by design, not a bug (see `docs/generated-custom-windows/` guides for which columns of a given window are enum-typed).
+- Value input adapts to the column type: text/number/date input; enum dropdown using `enumLabels`; boolean dropdown using `badgeLabels`; `Entre` renders two inputs; `Es cualquiera de` takes a comma-separated list of **raw codes** (not translated labels) via a plain text box, matched **case-insensitively** (ETP-4609) — `i,s` matches the same rows as `I,S`. Internally each code is sent as a separate `iEquals` criterion OR-composed together (`buildRowCriteria` → `generateInSetCriteria` in `lib/gridQuery.js`), since the backend's plain `inSet`/`equals` operators are case-sensitive and there is no native case-insensitive "in" operator.
 - The funnel button turns primary-tinted whenever **any** filter is active (column header row *or* advanced).
+
+### Which columns are offered
+
+`AdvancedFilterBuilder` filters the `columns` array it receives (`isFilterableColumn` in
+`AdvancedFilterBuilder.jsx`) before building the field dropdown:
+
+- `type: 'discarded'` / `type: 'system'` and `filterable: false` are excluded (unchanged).
+- **`type: 'custom'` columns with no `column` (AD field) and no `backendFilterKey` are excluded by default** (ETP-4609). A purely client-rendered cell (e.g. a composite avatar combining two fields, a computed badge) has no real backend property to filter against — offering it showed the column's raw internal `key` as the label (nothing else to fall back to) and silently matched nothing when applied. Opt back in with `filterable: true` only if the custom column genuinely maps to a queryable field via a custom `buildCriteria`.
+- If a window needs to filter by a field that is only *shown* merged into a custom cell (e.g. Product's `nameAndSearchKey` avatar shows both `name` and `searchKey`), declare the real fields as separate column entries (`{ key: 'name', column: 'Name', type: 'string' }`) and hide them from the rendered grid via the `hiddenColumns` prop on `DataTable` — they stay reported to `ListFilterBar` (which reads the full `columns` prop, not the rendered subset) so they appear as correctly labeled, working filters. See `tools/app-shell/src/windows/custom/product/ProductCustomTable.jsx` for a worked example.
 
 ### Backend criteria shape
 
