@@ -237,17 +237,39 @@ tenant selection happens at sign-in and there is no in-app tenant switcher in v1
 | An account's **first tenant is never charged**, even with the flag on | The page loads the account's environments and, when there are none, shows "your first tenant is free" and a link to onboarding instead of the checkout. |
 | Re-submitting a `clientName` the account already owns **resumes** that tenant and is not charged | The page rejects a name that matches an existing tenant, so a "success" never silently hands back an existing tenant. |
 | The backend re-evaluates `tenant-upgrade` and is **authoritative** | The frontend flag is presentation only, consistent with rule 3 above. |
-| Backend targeting key is the **account email** | See the caveat below — the frontend does not currently have that value. |
+| Backend targeting key is the **account email**, now returned as `accountEmail` at the top level of `GET /sws/go/environments` | Not consumed yet — see below. |
 | `GET /sws/go/environments` items now carry `plan: "free" \| "productive"`; treat a missing field as `"free"` | Not consumed yet — see below. |
 
 **Open: targeting keys do not match.** The backend buckets on the account
 email. The frontend uses `localStorage.sf_auth_user`, which
 `buildEnvironmentSessionStorage` sets to `env.adminUserName || env.adminUser` —
-the ERP admin username of the environment, not the account email, and the email
-is not persisted anywhere client-side (it is only available from
-`GET /sws/go/me`). This is inert today because the local `InMemoryProvider`
-ignores the targeting key entirely, but it must be resolved **before** Mixpanel
-is wired, or the two ends will bucket the same user differently.
+the environment's ERP admin username, not the account email. This is inert today
+because the local `InMemoryProvider` ignores the targeting key entirely, but it
+must be resolved **before** Mixpanel is wired, or the two ends will bucket the
+same user differently.
+
+The backend now exposes `accountEmail` on `GET /sws/go/environments`, but
+adopting it is not a one-line change, for three reasons:
+
+1. **The core helper drops it.** `fetchEnvironments` in
+   `@etendosoftware/etendo-go-core` returns `data.environments || []`, discarding
+   the top-level field. Reading `accountEmail` needs a direct fetch in app-shell
+   (the same reason `lib/upgrade/api.js` calls the onboarding endpoint directly).
+2. **Scope.** The evaluation context must be set app-wide at startup, before any
+   gated UI renders — the flag decides whether the `/upgrade` link is even shown.
+   Reusing the `/upgrade` page's existing call would set it only for users who
+   reach that page, so the same user would bucket differently depending on where
+   they had navigated. Inconsistent targeting is worse than uniformly wrong
+   targeting, because it is invisible in aggregate.
+3. **Availability.** The call needs `sf_platform_token`, which is not guaranteed
+   in every app-shell session — it is not part of `ENVIRONMENT_SESSION_KEYS`, and
+   `UpgradePage` already handles its absence. Bucketing on email only when the
+   token happens to be present reintroduces the same inconsistency.
+
+The clean fix is to decide on one identity the frontend can know for **every**
+session — for example persisting the account email at login, which is core-owned
+code — and to set it once during flag bootstrap. That is a design decision, not
+a local edit, so it is recorded here rather than half-applied.
 
 **Open: `plan` is not shown anywhere.** The natural place to badge it is the
 environment picker, which lives in `@etendosoftware/etendo-go-core`
