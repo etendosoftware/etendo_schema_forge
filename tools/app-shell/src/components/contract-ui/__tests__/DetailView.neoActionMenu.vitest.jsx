@@ -183,7 +183,9 @@ describe('DetailView — neoAction menu branch (ETP-4298)', () => {
     await user.click(screen.getByTestId('menu-action-post'));
 
     expect(neoExecuteMock).toHaveBeenCalledWith('123', 'post');
-    expect(mockHook.fetchById).toHaveBeenCalledWith('123');
+    // ETP-4563 cache fix: the post-neoAction refresh must bypass the read cache
+    // (force a network read), otherwise the record shows stale data after the action.
+    expect(mockHook.fetchById).toHaveBeenCalledWith('123', { force: true });
     expect(toast.success).toHaveBeenCalled();
     expect(toast.error).not.toHaveBeenCalled();
   });
