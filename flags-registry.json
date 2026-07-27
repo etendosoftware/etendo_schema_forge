@@ -55,7 +55,7 @@
         {
           "id": "real-payment-readiness",
           "kind": "precondition",
-          "note": "The paid flow is a mock: MockPaymentService checks the token's SHAPE, nothing is charged, and no gateway exists. Everything below becomes mandatory the moment a real gateway lands — until then the flag ships a paywall that takes no money, which is safe only because none of it is real. Bundled as one item because these share a single trigger (a real gateway) and one owner decision; promote any component to its own deferredItem once it is scheduled independently.",
+          "note": "The paid flow is a mock: MockPaymentService checks the token's SHAPE, nothing is charged, and no gateway exists. The components split by TRIGGER. Gateway-triggered — gap-replay, gap-check-then-act, gap-payment-provisioning-atomicity, and qa-in-flight-submit-guard — are latent until money is real (the last one can already duplicate a tenant, but only by script; a human double-click cannot reach it). Flag-on — qa-navigation-guard, qa-clientname-unbounded and qa-session-expiry-reported-late — bite as soon as the flag is enabled for anyone, gateway or not: they are UX and validation defects in a flow users can complete today. Bundled because they share one owner decision and one review moment, not because they share a trigger. PROMOTION CONDITION (Alex, review of a7cb81333): if the flag ever pilots before a gateway exists, the three flag-on components must be promoted to their own deferredItem — at that point they are scheduled work, not part of the real-payments decision, and the bundle-a-theme-split-a-schedule rule applies.",
           "components": [
             {
               "id": "qa-in-flight-submit-guard",

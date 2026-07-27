@@ -76,7 +76,7 @@ General findings about how the Etendo Application Dictionary works. Not window-s
 | Path | Description |
 |------|-------------|
 | [feature-flags.md](feature-flags.md) | **Feature flag reference**: OpenFeature as the app API over a local provider (Mixpanel planned), `useFeatureFlag`, safe defaults, the "visual gating only, never authorization" rule, `VITE_FEATURE_FLAGS`, the single swap point for changing control plane, exposure events, the flag code layout rule, and the tenant upgrade flow |
-| [flag-debt.md](flag-debt.md) | **Flag debt scorecard** (`make flag-debt`): scores per-flag technical debt — touch points, missing tests, coverage, TTL overrun — derived from `flags-registry.json`, which is canonical for per-flag paths. Report-only in v0 |
+| [flag-debt.md](flag-debt.md) | **Flag debt scorecard** (`make flag-debt`): scores per-flag technical debt — touch points, missing tests, coverage, TTL overrun, and open items (deferred decisions the flag still carries) — derived from `flags-registry.json`, which is canonical for per-flag paths. Report-only in v0 |
 
 ## Generated/custom windows
 

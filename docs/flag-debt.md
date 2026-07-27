@@ -97,8 +97,20 @@ them *before* starting the work they block, not during it.
 
 **Points:** per item, by kind — `precondition: 5`, `open: 3`, `cosmetic: 1`.
 A bundled item (one theme, several `components`) adds `1 per component beyond the
-first`. An explicit `points` on an item overrides the formula and is labelled
-*declared* in the report.
+first`.
+
+An explicit `points` on an item overrides the formula, but only as a **whole,
+non-negative number** — it is labelled *declared* in the report. Anything else
+(negative, fractional, non-numeric) is **ignored**, the derived score stands, and
+the report says the override was dropped. Debt cannot be negative and the scale
+has no halves, so there is no honest guess at the intent; clamping `-50` to `0`
+would repair it into something that reads exactly like a deliberate zero, which
+is a value someone may legitimately want. A `points: 0` therefore means zero on
+purpose, and a rejected override is always visible rather than silently absorbed.
+
+An unrecognised `kind` falls back to the `open` rate rather than suppressing the
+item — a typo must never hide debt — and renders as `[preconditon → open rate]`
+so the fallback is not mistaken for a valid kind.
 
 `precondition` is anchored to the missing-unit-spec penalty: one decision that
 blocks the next step costs the same as one untested unit. `cosmetic` is

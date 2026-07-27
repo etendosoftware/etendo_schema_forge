@@ -547,24 +547,46 @@ export function scoreLifecycle(flag, now = new Date()) {
 export function scoreDeferredItems(flag) {
   const items = (flag.deferredItems || []).map((item) => {
     const kind = item.kind || 'open';
+    const kindRecognized = Object.hasOwn(POINTS.deferredItemKind, kind);
     const components = (item.components || []).map((component) => ({
       id: component.id,
       note: component.note || '',
       ref: component.ref || null,
     }));
-    const base = POINTS.deferredItemKind[kind] ?? POINTS.deferredItemKind.open;
+    const base = kindRecognized
+      ? POINTS.deferredItemKind[kind]
+      : POINTS.deferredItemKind.open;
     const breadth = Math.max(0, components.length - 1) * POINTS.perExtraDeferredComponent;
+    const derived = base + breadth;
+
+    const declared = item.points;
+    const hasDeclared = declared !== undefined && declared !== null;
+    const declaredUsable = isUsableOverride(declared);
+
     return {
       id: item.id,
       kind,
+      kindRecognized,
       note: item.note || '',
       refs: item.refs || [],
       components,
-      points: typeof item.points === 'number' ? item.points : base + breadth,
-      pointsOverridden: typeof item.points === 'number',
+      points: declaredUsable ? declared : derived,
+      pointsOverridden: declaredUsable,
+      // A declared value that is not a whole number of points is dropped, not
+      // repaired. Debt cannot be negative and the scale has no halves, so there
+      // is no honest guess at the intent — and clamping -50 to 0 would make a
+      // broken entry indistinguishable from a deliberate zero. The derived
+      // score stands instead, and the report says the override was ignored.
+      pointsOverrideIgnored: hasDeclared && !declaredUsable,
+      declaredPoints: hasDeclared && !declaredUsable ? declared : null,
     };
   });
   return { items, points: items.reduce((total, item) => total + item.points, 0) };
+}
+
+/** An override is honoured only as a whole, non-negative number of points. */
+export function isUsableOverride(value) {
+  return Number.isInteger(value) && value >= 0;
 }
 
 // ── Report ──────────────────────────────────────────────────────────────────
@@ -713,10 +735,14 @@ export function renderConsole(report) {
         + `${flag.deferred.items.length} deferred`);
       for (const item of flag.deferred.items) {
         const unit = item.points === 1 ? 'pt' : 'pts';
-        const breakdown = item.pointsOverridden
-          ? `${item.points} ${unit}, declared`
-          : `${item.points} ${unit}`;
-        lines.push(`        [${item.kind}] ${item.id} — ${breakdown}`);
+        let breakdown = `${item.points} ${unit}`;
+        if (item.pointsOverridden) breakdown += ', declared';
+        if (item.pointsOverrideIgnored) {
+          breakdown += `, declared ${JSON.stringify(item.declaredPoints)} IGNORED `
+            + '(not a whole number of points)';
+        }
+        const label = item.kindRecognized ? item.kind : `${item.kind} → open rate`;
+        lines.push(`        [${label}] ${item.id} — ${breakdown}`);
         lines.push(...wrapText(item.note, 92, '          '));
         for (const component of item.components) {
           lines.push(`          · ${component.id}`);
@@ -804,9 +830,13 @@ function htmlFlagCard(flag) {
   const deferred = flag.deferred.items.length === 0 ? '' : `
   <div class="deferred">
     <h3>Open items <span class="muted">— ${flag.deferred.items.length} deferred, ${flag.deferred.points} pts</span></h3>
-    <ul>${flag.deferred.items.map((item) => `<li><span class="tag">${escapeHtml(item.kind)}</span> `
+    <ul>${flag.deferred.items.map((item) => `<li><span class="tag">${escapeHtml(item.kind)}`
+      + `${item.kindRecognized ? '' : ' &rarr; open rate'}</span> `
       + `<code>${escapeHtml(item.id)}</code> <span class="pts-inline">${item.points} pts`
-      + `${item.pointsOverridden ? ', declared' : ''}</span>`
+      + `${item.pointsOverridden ? ', declared' : ''}`
+      + `${item.pointsOverrideIgnored
+        ? `, declared ${escapeHtml(JSON.stringify(item.declaredPoints))} ignored`
+        : ''}</span>`
       + `<p>${escapeHtml(item.note)}</p>`
       + (item.components.length > 0
         ? `<ul class="components">${item.components.map((component) =>
