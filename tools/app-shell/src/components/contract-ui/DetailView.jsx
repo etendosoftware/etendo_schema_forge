@@ -1498,6 +1498,8 @@ function renderDraftModeSaveActions({
         if (saved?.id && isNew) {
           hook.primeSaved?.(saved);
           navigate(`/${windowName}/${saved.id}`, { replace: true, state: { justSaved: saved } });
+        } else {
+          reportUnnavigableSave({ saved, isNew, windowName, ui });
         }
       }}>
         {hook.isSaving ? <Loader2 className="h-3.5 w-3.5 animate-spin" data-testid="Loader2__fa3275" /> : <Save className="h-3.5 w-3.5" color="hsl(var(--muted-foreground))" data-testid="Save__fa3275" />}
@@ -1519,6 +1521,8 @@ function renderDraftModeSaveActions({
               navigate(`/${windowName}/${saved.id}`, { replace: true, state: { justSaved: saved } });
             } else if (saved.id) {
               hook.fetchById?.(saved.id);
+            } else {
+              reportUnnavigableSave({ saved, isNew, windowName, ui });
             }
           }
         } finally {
@@ -1532,7 +1536,25 @@ function renderDraftModeSaveActions({
   );
 }
 
-export async function handlePostSaveNavigation(saved, { isNew, onAfterCreate, onAfterSave, navigate, windowName, token, apiBaseUrl, hook }) {
+const UNNAVIGABLE_SAVE_MESSAGE_KEY = 'savedButCannotOpenRecord';
+
+/**
+ * A NEW record that saves OK but whose response yields no derivable id (see
+ * deriveRecordId in useEntity) used to skip the redirect with no signal at all,
+ * leaving the user on /window/new. Surface it instead of failing silently.
+ * Returns true when the failure was reported.
+ */
+export function reportUnnavigableSave({ saved, isNew, windowName, ui }) {
+  if (!isNew || !saved || saved.id) return false;
+  console.error(
+    `[DetailView] Save succeeded for '${windowName}' but the response has no derivable record id — redirect skipped`,
+    saved,
+  );
+  toast.error(ui?.(UNNAVIGABLE_SAVE_MESSAGE_KEY) || UNNAVIGABLE_SAVE_MESSAGE_KEY);
+  return true;
+}
+
+export async function handlePostSaveNavigation(saved, { isNew, onAfterCreate, onAfterSave, navigate, windowName, token, apiBaseUrl, hook, ui }) {
   if (!saved) return;
   if (isNew && onAfterCreate) await onAfterCreate(saved, { token, apiBaseUrl });
   if (onAfterSave) {
@@ -1540,6 +1562,8 @@ export async function handlePostSaveNavigation(saved, { isNew, onAfterCreate, on
   } else if (saved.id && isNew) {
     hook.primeSaved?.(saved);
     navigate(`/${windowName}/${saved.id}`, { replace: true, state: { justSaved: saved } });
+  } else {
+    reportUnnavigableSave({ saved, isNew, windowName, ui });
   }
 }
 
@@ -1562,6 +1586,8 @@ function renderNewRecordSaveActions({
           if (onAfterCreate) await onAfterCreate(saved, { token, apiBaseUrl });
           hook.primeSaved?.(saved);
           navigate(`/${windowName}/${saved.id}`, { replace: true, state: { justSaved: saved } });
+        } else {
+          reportUnnavigableSave({ saved, isNew, windowName, ui });
         }
       }}>
         {hook.isSaving ? <Loader2 className="h-3.5 w-3.5 animate-spin" data-testid="Loader2__fa3275" /> : <Save className="h-3.5 w-3.5" data-testid="Save__fa3275" />}
@@ -1571,7 +1597,7 @@ function renderNewRecordSaveActions({
         <Button size="default" className={saveBtnCls} data-testid="action-complete" disabled={hook.isSaving || blockCompleteForBalance} title={blockCompleteForBalance ? ui('journalUnbalancedCompleteBlocked') : undefined} onClick={async () => {
           if (!(await flushPendingLines())) return;
           const saved = await hook.handleSaveAndProcess(draftMode);
-          await handlePostSaveNavigation(saved, { isNew, onAfterCreate, onAfterSave, navigate, windowName, token, apiBaseUrl, hook });
+          await handlePostSaveNavigation(saved, { isNew, onAfterCreate, onAfterSave, navigate, windowName, token, apiBaseUrl, hook, ui });
         }}>
           {hook.isSaving ? <Loader2 className="h-3.5 w-3.5 animate-spin" data-testid="Loader2__fa3275" /> : <Check className="h-3.5 w-3.5" data-testid="Check__fa3275" />}
           {ui(draftMode.label) || tMenu(draftMode.label) || ui('process')}
@@ -1595,7 +1621,7 @@ function renderExistingRecordSaveAction({
     <Button variant="outline" size="default" className={`${saveBtnCls} bg-card border-[hsl(var(--border-control))] text-[hsl(var(--foreground))]`} data-testid="action-save" disabled={isDocumentReadOnly || hook.isSaving || !isDirty || blockSaveForBalance} title={blockSaveForBalance ? ui('journalUnbalancedSaveBlocked') : undefined} onClick={async () => {
       if (!(await flushPendingLines())) return;
       const saved = await hook.handleSave(data);
-      await handlePostSaveNavigation(saved, { isNew, onAfterCreate, onAfterSave, navigate, windowName, token, apiBaseUrl, hook });
+      await handlePostSaveNavigation(saved, { isNew, onAfterCreate, onAfterSave, navigate, windowName, token, apiBaseUrl, hook, ui });
     }}>
       {hook.isSaving ? <Loader2 className="h-3.5 w-3.5 animate-spin" data-testid="Loader2__fa3275" /> : <Save className="h-3.5 w-3.5" color="hsl(var(--muted-foreground))" data-testid="Save__fa3275" />}
       {ui('save')}
@@ -3801,6 +3827,8 @@ export function DetailView({
                     const saved = await flushAndSave(data);
                     if (saved?.id && isNew) {
                       hook.primeSaved?.(saved);
+                    } else {
+                      reportUnnavigableSave({ saved, isNew, windowName, ui });
                     }
                     return saved;
                   },
@@ -4515,6 +4543,8 @@ export function DetailView({
                                 if (saved?.id && isNew) {
                                   hook.primeSaved?.(saved);
                                   navigate(`/${windowName}/${saved.id}`, { replace: true, state: { openAddLine: true } });
+                                } else {
+                                  reportUnnavigableSave({ saved, isNew, windowName, ui });
                                 }
                                 return saved;
                               }}

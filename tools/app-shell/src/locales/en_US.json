@@ -19505,6 +19505,7 @@
     "recordsCouldNotBeDeleted": "{count} record(s) could not be deleted",
     "noConversionRateError": "No conversion rate defined between the current and the selected currency for date {date}. Currency change cancelled.",
     "networkError": "Network error",
+    "savedButCannotOpenRecord": "The record was saved but could not be opened. Please refresh the list.",
     "backendError.ibanRequired": "Using IBAN for generating the Displayed Account requires to introduce the IBAN",
     "backendError.genericAccountRequired": "Using the Generic Account No. for generating the Displayed Account requires to introduce a Generic Account Number",
     "backendError.countryIban": "Country needed in an IBAN account.",
