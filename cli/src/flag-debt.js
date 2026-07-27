@@ -34,9 +34,14 @@ export const POINTS = {
   freeTouchPoints: 3,
   /** Cost of every touch-point file beyond the free ones. */
   perExtraTouchPoint: 2,
-  /** Flat cost when the unit spec list has any missing entry. */
+  /**
+   * Flat cost when a spec list has any PENDING entry (missing, but someone is
+   * expected to write it). Flat, because the signal is "this suite has a hole".
+   * Accepted-debt specs are charged the same amount but PER ITEM — a standing
+   * decision not to test something is owned individually and does not go away
+   * when the rest of the suite lands.
+   */
   missingUnitSpecs: 5,
-  /** Flat cost when the e2e spec list has any missing entry. */
   missingE2eSpecs: 8,
   /** Uncovered lines that cost one point. */
   uncoveredLinesPerPoint: 10,
@@ -278,14 +283,41 @@ export function collectTouchPoints(flag, { roots, frameworkPaths }) {
 
 /** Normalises both spec shapes (a bare string or an object) into objects. */
 export function normalizeSpec(spec) {
-  if (typeof spec === 'string') return { path: spec, root: 'frontend', expected: false, note: null };
+  if (typeof spec === 'string') {
+    return { path: spec, root: 'frontend', expected: false, acceptedDebt: false, note: null };
+  }
   return {
     path: spec.path,
     root: spec.root || 'frontend',
     expected: Boolean(spec.expected),
+    acceptedDebt: Boolean(spec.acceptedDebt),
     note: spec.note || null,
   };
 }
+
+/**
+ * A spec is one of four things, and the difference is the whole point:
+ *
+ *   present      — on disk
+ *   pending      — missing, someone is expected to write it (transient)
+ *   accepted-debt— missing, the team decided not to write it (standing)
+ *   missing      — missing with no declared intent either way
+ *
+ * `acceptedDebt` wins over `expected`: overloading "expected" to mean both
+ * "queued" and "deliberately deferred" is how a registry stops being trusted.
+ */
+export function specStatus(spec, exists) {
+  if (exists) return 'present';
+  if (spec.acceptedDebt) return 'accepted-debt';
+  if (spec.expected) return 'pending';
+  return 'missing';
+}
+
+const DEFAULT_SPEC_NOTE = {
+  'accepted-debt': 'accepted debt — deliberately not written',
+  pending: 'pending Tester',
+  missing: 'missing',
+};
 
 function allSpecs(flag) {
   const specs = flag.testSpecs || {};
@@ -301,18 +333,28 @@ export function checkTestSpecs(flag, { roots }) {
     const checked = specs.map((spec) => {
       const rootDir = roots[spec.root];
       const exists = rootDir ? isFile(path.join(rootDir, spec.path)) : false;
+      const status = specStatus(spec, exists);
       return {
         ...spec,
         exists,
+        status,
         unverifiable: !rootDir,
-        // A declared note wins: not every unwritten spec is merely queued, and
-        // "pending Tester" would misdescribe one that was deliberately deferred.
-        note: exists ? null : (spec.note || (spec.expected ? 'pending Tester' : 'missing')),
+        // A declared note wins over the status default.
+        note: exists ? null : (spec.note || DEFAULT_SPEC_NOTE[status]),
       };
     });
     const missing = checked.filter((spec) => !spec.exists);
-    const points = missing.length > 0 ? penalty : 0;
-    result.kinds[kind] = { specs: checked, missing, declared: checked.length, points };
+    const acceptedDebt = missing.filter((spec) => spec.status === 'accepted-debt');
+    const pending = missing.filter((spec) => spec.status !== 'accepted-debt');
+
+    const flatPoints = pending.length > 0 ? penalty : 0;
+    const acceptedDebtPoints = acceptedDebt.length * penalty;
+    const points = flatPoints + acceptedDebtPoints;
+
+    result.kinds[kind] = {
+      specs: checked, missing, pending, acceptedDebt,
+      declared: checked.length, flatPoints, acceptedDebtPoints, points,
+    };
     result.points += points;
   }
   return result;
@@ -501,9 +543,19 @@ function renderSpecLines(tests) {
   const lines = [];
   for (const [kind, result] of Object.entries(tests.kinds)) {
     const present = result.declared - result.missing.length;
-    lines.push(`      ${kind}: ${present}/${result.declared} present`);
-    for (const spec of result.missing) {
-      lines.push(`        missing — ${spec.root}: ${spec.path} (${spec.note})`);
+    const summary = [`${present}/${result.declared} present`];
+    if (result.pending.length > 0) {
+      summary.push(`${result.pending.length} pending (+${result.flatPoints})`);
+    }
+    if (result.acceptedDebt.length > 0) {
+      summary.push(`${result.acceptedDebt.length} accepted debt (+${result.acceptedDebtPoints})`);
+    }
+    lines.push(`      ${kind}: ${summary.join(' · ')}`);
+    for (const spec of result.pending) {
+      lines.push(`        pending — ${spec.root}: ${spec.path} (${spec.note})`);
+    }
+    for (const spec of result.acceptedDebt) {
+      lines.push(`        accepted debt — ${spec.root}: ${spec.path} (${spec.note})`);
     }
   }
   return lines;
@@ -594,13 +646,20 @@ function htmlFlagCard(flag) {
       ? `<p class="muted">${tp.testReferences.length} test reference(s), not scored</p>` : '',
   ].join('');
 
+  const specList = (specs, label) => (specs.length === 0 ? '' : `<ul>${specs.map((spec) =>
+    `<li><span class="tag">${escapeHtml(label)}</span> <code>${escapeHtml(spec.root)}: ${escapeHtml(spec.path)}</code>`
+    + ` <span class="muted">${escapeHtml(spec.note)}</span></li>`).join('')}</ul>`);
+
   const testDetail = Object.entries(flag.tests.kinds).map(([kind, result]) => {
     const present = result.declared - result.missing.length;
-    const missing = result.missing.length > 0
-      ? `<ul>${result.missing.map((spec) => `<li><code>${escapeHtml(spec.root)}: ${escapeHtml(spec.path)}</code>`
-        + ` <span class="muted">${escapeHtml(spec.note)}</span></li>`).join('')}</ul>`
-      : '';
-    return `<p><strong>${escapeHtml(kind)}</strong>: ${present}/${result.declared} present</p>${missing}`;
+    const summary = [`${present}/${result.declared} present`];
+    if (result.pending.length > 0) summary.push(`${result.pending.length} pending (+${result.flatPoints})`);
+    if (result.acceptedDebt.length > 0) {
+      summary.push(`${result.acceptedDebt.length} accepted debt (+${result.acceptedDebtPoints})`);
+    }
+    return `<p><strong>${escapeHtml(kind)}</strong>: ${escapeHtml(summary.join(' · '))}</p>`
+      + specList(result.pending, 'pending')
+      + specList(result.acceptedDebt, 'accepted debt');
   }).join('');
 
   const cov = flag.coverage;
@@ -665,6 +724,8 @@ export function renderHtml(report) {
   thead th { border-top: 0; font-size: .8rem; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
   .pts { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
   ul { margin: .35rem 0; padding-left: 1.1rem; }
+  .tag { display: inline-block; font-size: .72rem; text-transform: uppercase; letter-spacing: .04em;
+         border: 1px solid var(--line); border-radius: 4px; padding: 0 .3rem; color: var(--muted); }
   li { margin: .15rem 0; }
   p { margin: .35rem 0; }
   footer { color: var(--muted); font-size: .85em; margin-top: 2rem; }

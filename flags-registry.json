@@ -55,8 +55,8 @@
           {
             "root": "backend",
             "path": "src-test/src/com/etendoerp/go/payment/TenantPlanServiceTest.java",
-            "expected": true,
-            "note": "accepted debt — unit test deliberately deferred"
+            "acceptedDebt": true,
+            "note": "user-accepted debt — unit test deliberately deferred, nobody is writing it"
           },
           {
             "root": "frontend",

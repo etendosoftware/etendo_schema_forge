@@ -42,12 +42,29 @@ enforcement point. The fourth shared file is where smearing starts.
 
 ### 2. Tests — is the flagged behaviour actually pinned?
 
-Each path in `testSpecs` is checked for existence on disk. Entries marked
-`expected: true` are agreed-but-unwritten specs; they count as missing and are
-labelled *pending Tester*, so an empty promise never scores as a kept one. An
-optional `note` on a spec overrides that label — use it when a spec is not
-merely queued, e.g. `"note": "accepted debt — unit test deliberately deferred"`
-for a gap the team has decided to carry visibly rather than close.
+Each path in `testSpecs` is checked for existence on disk, and every spec is in
+one of four states. The distinction between the last two is the point:
+
+| State | Declared as | Meaning |
+|-------|-------------|---------|
+| **present** | — | On disk. |
+| **pending** | `expected: true` | Missing, and someone is expected to write it. Transient. |
+| **accepted-debt** | `acceptedDebt: true` | Missing, and the team decided **not** to write it. Standing. |
+| **missing** | neither marker | Missing with no declared intent either way. |
+
+An empty promise never scores as a kept one, and `acceptedDebt` wins over
+`expected` if both are set — overloading "expected" to mean both *queued* and
+*deliberately deferred* is how a registry stops being trusted. An optional
+`note` on any spec overrides the default label in the report.
+
+**Points:** `+5 if any unit spec is pending`, `+8 if any e2e spec is pending` —
+flat per list, because the signal is "this flag's suite has a hole", and e2e
+costs more because a flag most often breaks in the wiring, not the unit.
+Accepted-debt specs are charged the same amount but **per item**: a standing
+decision not to test something is owned individually, and unlike a pending spec
+it does not disappear when the rest of the suite lands. That is deliberate — an
+accepted gap should still be visible on the scorecard once everything else is
+green, which is exactly when it would otherwise be forgotten.
 
 **Points:** `+5 if any unit spec is missing`, `+8 if any e2e spec is missing`.
 Flat per list, not per file — the signal is "this flag's suite has a hole",
@@ -80,8 +97,10 @@ past. A flag a day overdue costs 3; a flag eight days overdue costs 6.
 | Dimension | Rule | Points |
 |-----------|------|--------|
 | Touch points | per code file beyond the first 3 | 2 |
-| Tests | any unit spec missing | 5 |
-| Tests | any e2e spec missing | 8 |
+| Tests | any unit spec pending (flat) | 5 |
+| Tests | any e2e spec pending (flat) | 8 |
+| Tests | per accepted-debt unit spec | 5 |
+| Tests | per accepted-debt e2e spec | 8 |
 | Coverage | per 10 uncovered lines in an owned file | 1 |
 | Lifecycle | per started week past TTL | 3 |
 
@@ -149,7 +168,11 @@ Add an entry to `flags-registry.json`:
     "backend":  ["src/com/etendoerp/go/myfeature/"]
   },
   "testSpecs": {
-    "unit": [{ "root": "frontend", "path": "…/__tests__/my-feature.test.js", "expected": true }],
+    "unit": [
+      { "root": "frontend", "path": "…/__tests__/my-feature.test.js", "expected": true },
+      { "root": "backend",  "path": "…/SomeServiceTest.java",
+        "acceptedDebt": true, "note": "why the team chose to carry this" }
+    ],
     "e2e":  [{ "root": "frontend", "path": "e2e/tests/flows/my-flag.mocked.spec.js", "expected": true }]
   }
 }
