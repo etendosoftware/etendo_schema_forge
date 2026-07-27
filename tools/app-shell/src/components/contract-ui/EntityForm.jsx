@@ -298,6 +298,14 @@ function LookupFormField({ field, value, displayValue, selectorUrl, selectorCont
   );
 }
 
+// Only two shapes of `auxData` are a real aux contract: the `standardPrice` price-list
+// mapping (below) and the nested `_aux` object (e.g. `product_PSTD`, `_PLIM`, `_UOM`,
+// `_CURR` — suffixes that already start with `_`, so `f.key + auxSuffix` composes a valid
+// field name). Every OTHER top-level key on `auxData` is just a raw field the selector's
+// server item happened to carry (id, name, active, searchKey, ...) — NOT a suffix to
+// concatenate onto `f.key`. Treating it as one produced bogus field names like
+// `assetCategoryid` (f.key + 'id', no separator) that then slipped past the callout
+// ignore-guard and fired spurious duplicate callouts (ETP-4600 regression).
 function applyLookupAuxData(auxData, isGross, onChange, f) {
   for (const [suffix, auxVal] of Object.entries(auxData)) {
     // Price from the document's price list. Mapping depends on price list type:
@@ -316,9 +324,9 @@ function applyLookupAuxData(auxData, isGross, onChange, f) {
       for (const [auxSuffix, auxSuffixVal] of Object.entries(auxVal)) {
         onChange?.(f.key + auxSuffix, auxSuffixVal);
       }
-    } else {
-      onChange?.(f.key + suffix, auxVal);
     }
+    // Any other key (id, name, active, searchKey, isTaxIncluded, ...) is intentionally
+    // ignored — it is a raw selector-item field, not an aux suffix.
   }
 }
 
@@ -467,17 +475,19 @@ function buildEntitySelectorUrl(apiBaseUrl, entity, f, api) {
   return entry?.url?.includes('?') ? `${base}?${entry.url.split('?')[1]}` : base;
 }
 
-// Propagate a selector's aux payload onto sibling form fields. `_aux` nests an
-// object of extra suffix→value pairs; any other key is a direct suffix write.
+// Propagate a selector's aux payload onto sibling form fields. `_aux` is the ONLY known
+// aux contract here: a nested object of suffix→value pairs whose suffixes already start
+// with `_` (e.g. `_PSTD`, `_PLIM`, `_UOM`), so `f.key + auxSuffix` composes a valid field
+// name. `auxData` itself is the raw selector-item object (CreatableSearchSelect's
+// `handleSelect` passes the whole `opt`), so every OTHER top-level key (id, name, active,
+// searchKey, ...) must be ignored — treating them as suffixes produced bogus concatenated
+// field names (e.g. `assetCategoryid`) that slipped past the callout ignore-guard and
+// fired spurious duplicate callouts (ETP-4600 regression).
 function applySelectorAuxData(auxData, onChange, f) {
-  for (const [suffix, auxVal] of Object.entries(auxData)) {
-    if (suffix === '_aux' && auxVal && typeof auxVal === 'object') {
-      for (const [auxSuffix, auxSuffixVal] of Object.entries(auxVal)) {
-        onChange?.(f.key + auxSuffix, auxSuffixVal);
-      }
-    } else {
-      onChange?.(f.key + suffix, auxVal);
-    }
+  const auxObj = auxData?._aux;
+  if (!auxObj || typeof auxObj !== 'object') return;
+  for (const [auxSuffix, auxSuffixVal] of Object.entries(auxObj)) {
+    onChange?.(f.key + auxSuffix, auxSuffixVal);
   }
 }
 
@@ -767,16 +777,31 @@ export function EntityForm({ entity, fields = [], data, onChange, catalogs, layo
     // field — explicit `searchSelect: true` AND, as of ETP-4600, the plain default case —
     // renders the shared searchable component instead of the plain dropdown.
     const needsOptionTranslator = f.reference === 'DocumentType';
-    if (f.searchSelect || !needsOptionTranslator) {
+    // Explicit per-field OPT-OUT: `searchSelect: false` (not merely absent) forces the
+    // field back onto the old plain SelectorInput below, bypassing the ETP-4600 default.
+    // TEMPORARY carve-out for Assets' `assetCategory` (see AssetsDetailPanel.jsx) — the
+    // unified CreatableSearchSelect's interaction timing exposes a pre-existing DetailView
+    // save→refetch/callout race (`pendingEditingRef`/fresh-callout snapshot) that silently
+    // reverts `depreciate` to false on save, so the "Crear Amortización" button never
+    // renders. Remove this opt-out once that race has its own fix (tracked separately from
+    // ETP-4600). Absent/`true` still routes to the unified component — no behavior change
+    // for any other field.
+    const explicitOptOut = f.searchSelect === false;
+    if (!explicitOptOut && (f.searchSelect || !needsOptionTranslator)) {
       return renderSearchSelectField(f, label, selectorOnChange, selectorUrl);
     }
-    const optionTranslator = (name) => {
-      const lower = name.toLowerCase();
-      if (lower.includes('reversed')) return null;
-      if (lower.includes('credit') || lower.includes('memo')) return ui('creditNotesTab');
-      if (lower.includes('return') || lower.includes('devoluci')) return ui('returnsTab');
-      return ui('invoicesTab');
-    };
+    // Only the DocumentType carve-out needs option renaming — the explicit `searchSelect:
+    // false` opt-out (e.g. Assets' assetCategory) just wants the plain SelectorInput with
+    // its options unchanged, so it must NOT get the DocumentType-specific translator.
+    const optionTranslator = needsOptionTranslator
+      ? (name) => {
+        const lower = name.toLowerCase();
+        if (lower.includes('reversed')) return null;
+        if (lower.includes('credit') || lower.includes('memo')) return ui('creditNotesTab');
+        if (lower.includes('return') || lower.includes('devoluci')) return ui('returnsTab');
+        return ui('invoicesTab');
+      }
+      : undefined;
     return (
       <div key={f.key} className={LABEL_GAP}>
         <Label

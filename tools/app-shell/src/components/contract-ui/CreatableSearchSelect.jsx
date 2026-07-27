@@ -306,15 +306,21 @@ export function CreatableSearchSelect({
   const filterKey = field.dependsOn?.filterKey;
   const parentValue = formData?.[parentKey];
 
-  // Clears the search text AND, in serverSearch mode, discards the cached server page.
-  // Every place that clears `query` back to '' on close/reopen MUST go through this —
-  // otherwise `serverOptions` keeps the last typed filter's results, and the `onFocus`
-  // lazy-load guard (`serverOptions === null`) never fires on reopen: the dropdown shows a
-  // stale filtered list next to an empty search box (ETP-4600 serverSearch stale-page bug).
+  // Clears the visible search text. Cheap and synchronous-ish — safe to call from the
+  // close/blur path (see the input's onBlur below).
+  //
+  // IMPORTANT: this does NOT touch `serverOptions` anymore. It used to also null out the
+  // cached server page here, but every call site that mattered for that was on the
+  // CLOSE/BLUR path (the input's onBlur fires this from inside a 200ms setTimeout). That
+  // deferred write landed *after* the user had already moved on — e.g. toggled another
+  // field and hit Save — and raced the save (ETP-4600 regression: an asset's `depreciate`
+  // flag reverted to `false` on save because a state update scheduled at blur time fired
+  // ~200ms later, after the user had already left the selector). `serverOptions`
+  // invalidation now happens at OPEN time instead (see the input's onFocus below), which is
+  // always synchronous with a real user gesture and never fires after the fact.
   const resetSearchState = useCallback(() => {
     setQuery('');
-    if (serverSearch) setServerOptions(null);
-  }, [serverSearch]);
+  }, []);
 
   // Re-sync local options whenever the caller passes a NEW staticOptions array — e.g. a catalog
   // fetched asynchronously after mount (starts as `[]`, then populated once the request resolves).
@@ -769,9 +775,16 @@ export function CreatableSearchSelect({
           onFocus={() => {
             setOpen(true);
             if (serverSearch) {
-              // Lazy-load the initial page once per reset — `serverOptions === null` means
-              // no fetch has landed yet for the current parent/reset cycle.
-              if (serverOptions === null) triggerServerSearch(query);
+              // Always invalidate the cached page and fetch a fresh one on OPEN —
+              // guarantees an unfiltered, up-to-date list every time the user opens the
+              // selector (ETP-4600), regardless of how they got here (chip click, chevron
+              // toggle, or a plain focus/tab). This replaced a blur-time (close path)
+              // invalidation that used to fire ~200ms after the user left the field via a
+              // setTimeout — see the resetSearchState comment above for why that raced
+              // saves. One fetch per real focus event: not a loop, since focus only fires
+              // once per open gesture.
+              setServerOptions(null);
+              triggerServerSearch(query);
               return;
             }
             // Lazy-load: if options for the current parent are not yet fetched, trigger fetch

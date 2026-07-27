@@ -2512,6 +2512,29 @@ export function DetailView({
     activeCurrencyConversionRef.current = null;
   }, [recordId]);
 
+  // Mirrors hook.editing but updated SYNCHRONOUSLY on every handleChangeWithCallout call,
+  // instead of waiting for the async setState React batches inside hook.handleChange.
+  // Without this, fireCallout's `formState` snapshot (read from hook.editing) is always
+  // one render behind for the very field that triggered it — e.g. selecting an FK posts
+  // formState with that FK still at its previous (often empty) value, which can make the
+  // backend callout respond based on stale data and clobber other fields the user just set
+  // (regression: toggling "Depreciar" on a new asset, saving, and the persisted record
+  // coming back with depreciate=false — traced to the assetCategory callout's stale
+  // formState.assetCategory === "" causing the backend to reset depreciate to false).
+  // Kept in sync with hook.editing on every render (covers external updates: saves,
+  // callout responses, record switches) and updated inline for changes fired within the
+  // same synchronous batch (e.g. a selector setting field + field$_identifier + aux fields
+  // back-to-back before React re-renders).
+  //
+  // ORDERING ASSUMPTION: the render-time overwrite below and the inline merge in
+  // handleChangeWithCallout agree only because React does not re-render synchronously in
+  // the middle of an event handler — the inline merge always runs before the next render's
+  // overwrite. That holds with current batching; if this ever moves to a mode where a
+  // setState can flush mid-handler, the overwrite could clobber the merge and the callout
+  // would go back to seeing stale state.
+  const pendingEditingRef = useRef(hook.editing || {});
+  pendingEditingRef.current = hook.editing || {};
+
   // Sync activeCurrencyConversionRef with the SAVED state of the order: whenever
   // hook.selected.currency changes (typically after a save), re-evaluate whether
   // conversion is needed. Lines added afterwards inherit this rate via
@@ -2959,8 +2982,11 @@ export function DetailView({
       }
     }
 
-    // Trigger callout — the backend returns empty if no callout is registered
-    executeCallout(field, value, hook.editing);
+    // Trigger callout — the backend returns empty if no callout is registered.
+    // Use the synchronously-updated snapshot (pendingEditingRef), not hook.editing: the
+    // latter is a stale closure captured before this render's hook.handleChange commits,
+    // so it always lags one change behind for the field that just triggered the callout.
+    executeCallout(field, value, pendingEditingRef.current);
   }, [hook.handleChange, hook.editing, hook.selected, executeCallout, apiBaseUrl, token, ui, documentDateField]);
 
   // Wrapped onChange that updates local form state and triggers the callout synchronously.
@@ -2971,15 +2997,34 @@ export function DetailView({
     // Capture the previous currency BEFORE hook.handleChange updates state, so we can
     // revert the dropdown if the rate check fails. The closure preserves the old
     // hook.editing reference, but capturing explicitly keeps intent clear.
+    //
+    // This one deliberately reads hook.editing, NOT pendingEditingRef: here we WANT the
+    // last-committed value (the currency to revert TO if the rate lookup fails). Switching
+    // it to the fresh ref would capture the value the user just picked, making the revert a
+    // no-op. Do not "fix" this for consistency with the ref used below.
     const previousCurrency = field === 'currency' ? hook.editing?.currency : null;
 
     hook.handleChange(field, value);
+    // Keep the synchronous snapshot current immediately — hook.handleChange's setEditing
+    // is async/batched, so without this, a same-tick chain of onChange calls (e.g. a
+    // selector setting field, field$_identifier, and aux fields back-to-back) would each
+    // see the pre-change value. This mirrors the write into the ref so fireCallout (called
+    // right below, and by any sibling onChange in the same batch) sees the fresh value.
+    pendingEditingRef.current = { ...pendingEditingRef.current, [field]: value };
 
     fireCallout(field, value, previousCurrency);
   }, [hook.handleChange, hook.editing, fireCallout]);
 
   // Execute callout for child entity (line-level) fields and apply results via callback.
   // Merges parent header data into formState so callouts have full context (e.g., priceList).
+  //
+  // KNOWN GAP (deliberately not fixed here): the header context below still reads
+  // hook.editing directly, so it carries the same one-render-stale hazard that
+  // pendingEditingRef fixes for HEADER field changes in handleChangeWithCallout above. It
+  // only bites if a line callout fires in the same synchronous batch as a header change
+  // (header edits and line edits are normally separate user gestures, which is why it was
+  // not in the failure path of the bug that motivated the ref). If a line callout is ever
+  // seen acting on stale header values, thread pendingEditingRef.current through here too.
   const handleLineFieldChange = useCallback(async (field, value, rowValues, applyUpdates) => {
     if (!field || (value == null || value === '') || !token || !apiBaseUrl || !detailEntity) return;
     if (field.includes('$_identifier') || /^[a-zA-Z]+_[A-Z]{2,4}$/.test(field)) return;
