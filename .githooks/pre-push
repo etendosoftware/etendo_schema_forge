@@ -56,6 +56,10 @@ SPIN_FRAMES=('⠋' '⠙' '⠹' '⠸' '⠼' '⠴' '⠦' '⠧' '⠇' '⠏')
 
 # Per-step duration cache (used as ETA baseline across runs).
 DURATIONS_FILE="$REPO_DIR/tmp/pre-push/durations"
+
+# Content-addressed step cache (inert unless PRE_PUSH_CACHE=1 — see the file).
+# shellcheck source=lib/step-cache.sh
+. "$SCRIPT_DIR/lib/step-cache.sh"
 LAST_DURATION=0
 
 # Look up the last recorded duration (seconds) for a step key, or 0.
@@ -180,7 +184,16 @@ run_step() {
   local run_dir="$3"
   local log_file="$4"
   local cmd="$5"
+  local cache_key="${6:-}"
   local abs_log="$REPO_DIR/$log_file"
+
+  # A hit means every input this step reads is byte-identical to the last time it
+  # passed. Announced loudly and never silently: a quiet skip is how "it passed
+  # locally" turns into a lie.
+  if step_cache_lookup "$step_num" "$cache_key"; then
+    echo "==> [$step_num/5] $step_name... CACHED (inputs unchanged since it last passed)"
+    return 0
+  fi
 
   echo "==> [$step_num/5] $step_name..."
 
@@ -192,10 +205,12 @@ run_step() {
 
   if [ $exit_status -eq 0 ]; then
     echo "==> [$step_num/5] $step_name... SUCCESS ✅ (${LAST_DURATION}s)"
+    step_cache_store "$step_num" "$cache_key"
     [ "$step_num" = "$LAST_FAILED_STEP" ] && rm -f "$LAST_FAILED_FILE"
     true
   else
     echo "==> [$step_num/5] $step_name... FAILED ❌ (${LAST_DURATION}s)"
+    step_cache_invalidate "$step_num"
     fail_with_log "$step_name" "$exit_status" "$abs_log" "$step_num"
   fi
 }
@@ -473,12 +488,18 @@ check_base_conflicts
 # caused entirely by a stale core-package pin that only `npm ci` — not a
 # stale local install — would have caught).
 run_step_0() {
-  run_step "0" "Syncing npm dependencies with package-lock.json (npm ci)" "$REPO_DIR" "tmp/pre-push/npm-ci.log" "npm ci || npm install"
+  # npm ci is a pure function of the lockfile and the node major it installs for.
+  local key
+  key="$(step_cache_compute "node-${NODE_MAJOR}" package.json package-lock.json)"
+  run_step "0" "Syncing npm dependencies with package-lock.json (npm ci)" "$REPO_DIR" "tmp/pre-push/npm-ci.log" "npm ci || npm install" "$key"
 }
 
 # 1. Run data-testid check (fast, runs before expensive checks)
 run_step_1() {
-  run_step "1" "Running data-testid check" "$REPO_DIR" "tmp/pre-push/data-testid-check.log" "npm run check:data-testid"
+  # The checker only ever reads the app-shell sources it scans, plus its own script.
+  local key
+  key="$(step_cache_compute "node-${NODE_MAJOR}" tools/app-shell/src scripts/check-add-data-testid.sh)"
+  run_step "1" "Running data-testid check" "$REPO_DIR" "tmp/pre-push/data-testid-check.log" "npm run check:data-testid" "$key"
 }
 
 # Domain boundary check disabled: repos are now split at the repo level
@@ -534,7 +555,12 @@ process.stdout.write(r.windows.filter(w=>{\
     && require('fs').existsSync('artifacts/'+w.name+'/contract.json')}catch(e){return false}\
 }).map(w=>w.name).join(','))")
   regen_all_cmd="make regen ONLY=$all_windows FROM_CACHE=1"
-  run_step "3" "Regenerating all windows from cache (UI / contract drift check)" "$REPO_DIR" "tmp/pre-push/regen-all.log" "$regen_all_cmd"
+  # Everything the offline regeneration reads: the artifacts it regenerates (which
+  # also hold its outputs, so drift is covered), the committed AD snapshot, the
+  # window registry, and the lockfile that pins the generator itself.
+  local key
+  key="$(step_cache_compute "node-${NODE_MAJOR}" artifacts cli/cache cli/config/regen-windows.json package-lock.json)"
+  run_step "3" "Regenerating all windows from cache (UI / contract drift check)" "$REPO_DIR" "tmp/pre-push/regen-all.log" "$regen_all_cmd" "$key"
 
   echo "==> Verifying no UI / contract drift (git status after regen)..."
   if [ -n "$(git status --porcelain)" ]; then
@@ -570,7 +596,10 @@ run_step_4() {
   if [ -d "etendo_core/modules/com.etendoerp.go/src-db/database/sourcedata" ]; then
     check_go_module_push_sync
     local regen_cmd="make regen-check FROM_CACHE=1 REGEN_CHECK_PREV_XML_DIR=etendo_core/modules/com.etendoerp.go/src-db/database/sourcedata"
-    run_step "4" "Comparing ETGO_SF_*.xml against com.etendoerp.go" "$REPO_DIR" "tmp/pre-push/offline-regen-check.log" "$regen_cmd"
+    local key
+    key="$(step_cache_compute "node-${NODE_MAJOR}" artifacts cli/cache cli/config/regen-windows.json package-lock.json \
+      "$REPO_DIR/etendo_core/modules/com.etendoerp.go|src-db/database/sourcedata")"
+    run_step "4" "Comparing ETGO_SF_*.xml against com.etendoerp.go" "$REPO_DIR" "tmp/pre-push/offline-regen-check.log" "$regen_cmd" "$key"
   else
     echo "==> [4/5] Comparing ETGO_SF_*.xml against com.etendoerp.go... SKIPPED ⚠️ (sourcedata not found — UI/contract drift above was still checked)"
   fi
