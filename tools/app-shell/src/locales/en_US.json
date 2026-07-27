@@ -16398,6 +16398,8 @@
     }
   },
   "genericLabels": {
+    "noAccessTitle": "No access",
+    "noAccessMessage": "Contact your administrator to get access.",
     "windowAccessDenied": "You don't have access to this window",
     "balanced": "Balanced",
     "difference": "Difference",

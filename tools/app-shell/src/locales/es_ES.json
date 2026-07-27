@@ -16640,6 +16640,8 @@
     }
   },
   "genericLabels": {
+    "noAccessTitle": "Sin acceso",
+    "noAccessMessage": "Contacta a tu administrador para obtener acceso.",
     "windowAccessDenied": "No tienes acceso a esta ventana",
     "balanced": "Cuadrado",
     "difference": "Diferencia",
