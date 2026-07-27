@@ -90,6 +90,7 @@ const columns = [
     labels: { en_US: 'Location', es_ES: 'Ubicación' },
     type: 'custom',
     sortable: false,
+    required: true,
     render: (row) => {
       const label = row['locationAddress$_identifier'] ?? row.locationAddress ?? null;
       if (!label) return <span className="text-muted-foreground text-sm">—</span>;
