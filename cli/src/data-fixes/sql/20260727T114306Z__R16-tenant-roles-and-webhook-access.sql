@@ -35,14 +35,17 @@
 -- Template source: GOClient (ad_client_id 802509E12436405C86BA1FD5B1DF508C), hardcoded -- it is
 -- the fixed reference client throughout this epic (see santo_roles_handoff_phase7.md).
 --
--- NOTE on EM_ETGO_Show_Acct_Fields: copied verbatim from the source role (Step 1), per this fix's
--- own "mirror GOClient exactly" principle. As of this writing GOClient's own Finance/Sales/
--- Purchasing/Inventory rows are ALL 'N' (verified directly against ad_role and against
--- referencedata/sampledata/GOClient/AD_ROLE.xml, which does not set the column at all -- it
--- rides the table's own 'N' default). This contradicts santo_roles_handoff_phase7.md's claim
--- that "every GOClient role already carries the correct Y/N value" -- flagging as a discrepancy
--- to resolve at the reference-data level (a product decision on which roles should see accounting
--- fields), not something this data-fix should silently override.
+-- NOTE on EM_ETGO_Show_Acct_Fields: copied verbatim from the source role (Step 1). Correct
+-- reference values (confirmed 2026-07-27): 'Y' for Finance and GOClient Admin, 'N' for
+-- Sales/Purchasing/Inventory/GOuser. referencedata/sampledata/GOClient/AD_ROLE.xml already ships
+-- these correctly -- an earlier check of this file mis-grepped the tag's actual (all-caps)
+-- name, EM_ETGO_SHOW_ACCT_FIELDS, and wrongly concluded the XML never set it. The real gap was
+-- this local dev DB's live ad_role rows being stale relative to that already-correct XML (Finance
+-- and GOClient Admin both showed 'N' live) -- same "referencedata not reapplied to an existing
+-- install" pattern as H1, just for this column instead of webhook grants. Corrected directly for
+-- this DB; since Step 1 always reads GOClient's LIVE row (not the XML), any other environment
+-- whose GOClient copy is similarly stale would clone the wrong value until its own live data is
+-- corrected the same way.
 --
 -- Idempotency
 -- --------------------------------------------------------------------------------------------
