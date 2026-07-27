@@ -2,6 +2,7 @@ import { Outlet, useLocation, useSearchParams } from 'react-router-dom';
 import SideMenu from '@/components/layout/SideMenu';
 import { filterMenuGroupsByAccess } from '@/windows/registry.js';
 import { useRoleMenu } from '@/hooks/useRoleMenu.js';
+import { useAccountIdentity } from '@/lib/flags/useAccountIdentity.js';
 import { SidebarProvider, useSidebar } from '@/components/layout/SidebarContext';
 import { FavoritesProvider } from '@/components/layout/FavoritesContext';
 import { PageMetaProvider, usePageMeta } from '@/components/layout/PageMetaContext';
@@ -87,6 +88,9 @@ export default function AppLayout({ menuGroups }) {
   // the note in App.jsx. That's why role-filtering is applied here rather than
   // where menuGroups is originally built.
   const allowedIds = useRoleMenu();
+  // Same reason: this is the first component inside AuthProvider that has the
+  // token, and flag targeting needs the account identity behind it.
+  useAccountIdentity();
   // `undefined` = SFListMenu fetch still in flight — pass an empty Set so
   // filterMenuGroupsByAccess() fails closed for AD-backed items (any item
   // carrying a windowId/processId/obuiappProcessId is hidden until the real

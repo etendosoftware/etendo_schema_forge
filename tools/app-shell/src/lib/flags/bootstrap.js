@@ -29,6 +29,14 @@ import { createFlagExposureHook } from './flag-exposure.js';
 const PROVIDER_READY_TIMEOUT_MS = 5000;
 
 /**
+ * Where the account identity is cached between loads. It arrives from
+ * `/sws/neo/session`, which needs a token, so caching it lets the first
+ * evaluation after a reload target correctly instead of waiting for the fetch.
+ */
+const ACCOUNT_ID_KEY = 'sf_account_id';
+const ACCOUNT_EMAIL_KEY = 'sf_account_email';
+
+/**
  * Reads the identity flags are evaluated against.
  *
  * `sf_auth_user` / `sf_auth_client_id` are the same keys the observability
@@ -39,17 +47,37 @@ export function readSessionContext(storage = globalThis.localStorage) {
     return {
       username: storage?.getItem('sf_auth_user') || undefined,
       clientId: storage?.getItem('sf_auth_client_id') || undefined,
+      accountId: storage?.getItem(ACCOUNT_ID_KEY) || undefined,
+      accountEmail: storage?.getItem(ACCOUNT_EMAIL_KEY) || undefined,
     };
   } catch {
     return {};
   }
 }
 
-/** Builds the OpenFeature evaluation context. */
-export function buildEvaluationContext({ username, clientId } = {}) {
+/**
+ * Builds the OpenFeature evaluation context.
+ *
+ * `accountId` is the ETGO_ACCOUNT the backend also targets on, so it takes the
+ * targeting key when present; `username` (the environment's ERP admin name)
+ * only stands in until the session exposes an account. `email` is the
+ * attribute ConfigCat's `User.Email` rules read.
+ *
+ * `account_id` is the AD_Client — a different identity that predates this and
+ * is what the observability layer groups by. Do not conflate it with
+ * `accountId`.
+ */
+export function buildEvaluationContext({ username, clientId, accountId, accountEmail } = {}) {
   const context = {};
-  if (username) {
-    context.targetingKey = username;
+  const targetingKey = accountId || username;
+  if (targetingKey) {
+    context.targetingKey = targetingKey;
+  }
+  if (accountId) {
+    context.accountId = accountId;
+  }
+  if (accountEmail) {
+    context.email = accountEmail;
   }
   if (clientId) {
     context.account_id = clientId;
@@ -181,11 +209,73 @@ export async function initFeatureFlags({
 /**
  * Re-targets flag evaluation after the user signs in, so bucketing follows the
  * real identity instead of the anonymous one captured at startup.
+ *
+ * The cached account identity is merged in, so a reload targets correctly
+ * before `refreshAccountIdentity` has answered.
  */
-export async function setFeatureFlagContext({ username, clientId } = {}, logger = console) {
+export async function setFeatureFlagContext(
+  { username, clientId, accountId, accountEmail } = {},
+  logger = console,
+  storage = globalThis.localStorage
+) {
   try {
-    await OpenFeature.setContext(buildEvaluationContext({ username, clientId }));
+    const cached = readSessionContext(storage);
+    await OpenFeature.setContext(
+      buildEvaluationContext({
+        username,
+        clientId,
+        accountId: accountId || cached.accountId,
+        accountEmail: accountEmail || cached.accountEmail,
+      })
+    );
   } catch (error) {
     logger.warn('[flags] Could not update evaluation context', error);
+  }
+}
+
+/**
+ * Fetches the account identity the backend targets on and re-targets flags with
+ * it, so a rule written against an account evaluates the same on both ends.
+ *
+ * Until this resolves, targeting falls back to the environment's ERP admin
+ * username, which the backend never sees — rules keyed on the account only
+ * become reliable once this has run. Fire-and-forget: a failure leaves the
+ * previous context in place rather than dropping the user out of their bucket.
+ */
+export async function refreshAccountIdentity(
+  { token, apiBase = '', fetchImpl = globalThis.fetch, logger = console, storage = globalThis.localStorage } = {}
+) {
+  if (!token || typeof fetchImpl !== 'function') return undefined;
+  try {
+    const res = await fetchImpl(`${apiBase}/sws/neo/session`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!res?.ok) return undefined;
+    const session = await res.json();
+    const accountId = session?.accountId || undefined;
+    const accountEmail = session?.accountEmail || undefined;
+    if (!accountId && !accountEmail) return undefined;
+
+    try {
+      if (accountId) storage?.setItem(ACCOUNT_ID_KEY, accountId);
+      if (accountEmail) storage?.setItem(ACCOUNT_EMAIL_KEY, accountEmail);
+    } catch {
+      // A storage failure only costs the cache, not the targeting below.
+    }
+
+    await setFeatureFlagContext(
+      {
+        username: storage?.getItem('sf_auth_user') || undefined,
+        clientId: storage?.getItem('sf_auth_client_id') || undefined,
+        accountId,
+        accountEmail,
+      },
+      logger,
+      storage
+    );
+    return { accountId, accountEmail };
+  } catch (error) {
+    logger.warn('[flags] Could not resolve the account identity for targeting', error);
+    return undefined;
   }
 }
