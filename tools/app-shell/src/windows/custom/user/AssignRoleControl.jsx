@@ -69,12 +69,12 @@ export default function AssignRoleControl(props) {
 
   return (
     <div className="flex flex-col gap-2 max-w-[320px]">
-      <label className="text-sm font-medium text-[#121217]" htmlFor="assign-role-select">
+      <label className="text-sm font-medium text-foreground" htmlFor="assign-role-select">
         {ui('assignedRole')}
       </label>
       <select
         id="assign-role-select"
-        className="h-10 w-full rounded-lg border border-[#D1D4DB] bg-white px-3 text-sm disabled:cursor-not-allowed"
+        className="h-10 w-full rounded-lg border border-input bg-card px-3 text-sm disabled:cursor-not-allowed"
         value={currentRoleId ?? ''}
         onChange={handleChange}
         disabled={loading}
