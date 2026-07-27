@@ -778,8 +778,12 @@ const escapeHtml = (value) => String(value)
   .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
   .replace(/"/g, '&quot;');
 
-function htmlRow(label, points, detail) {
-  return `<tr><th>${escapeHtml(label)}</th><td class="pts">${escapeHtml(points)}</td>`
+function htmlRow(label, points, detail, slot) {
+  // The swatch is what ties a row to its segment in the composition bar; the
+  // label carries the identity, so the colour is never the only cue.
+  const swatch = slot ? `<span class="dot s${slot}"></span>` : '';
+  const zero = points === 0 ? ' class="zero"' : '';
+  return `<tr><th>${swatch}${escapeHtml(label)}</th><td class="pts"${zero}>${escapeHtml(points)}</td>`
     + `<td>${detail}</td></tr>`;
 }
 
@@ -830,7 +834,7 @@ function htmlFlagCard(flag) {
   const deferred = flag.deferred.items.length === 0 ? '' : `
   <div class="deferred">
     <h3>Open items <span class="muted">— ${flag.deferred.items.length} deferred, ${flag.deferred.points} pts</span></h3>
-    <ul>${flag.deferred.items.map((item) => `<li><span class="tag">${escapeHtml(item.kind)}`
+    <ul>${flag.deferred.items.map((item) => `<li><span class="tag ${escapeHtml(item.kind)}">${escapeHtml(item.kind)}`
       + `${item.kindRecognized ? '' : ' &rarr; open rate'}</span> `
       + `<code>${escapeHtml(item.id)}</code> <span class="pts-inline">${item.points} pts`
       + `${item.pointsOverridden ? ', declared' : ''}`
@@ -850,20 +854,59 @@ function htmlFlagCard(flag) {
       + '</li>').join('')}</ul>
   </div>`;
 
+  // The total is the sum of its dimensions, so a part-to-whole bar is the honest
+  // form: it reads as one magnitude and decomposes without a second chart. Each
+  // segment is directly labelled, which is also what discharges the light-mode
+  // contrast relief the palette validator asks for.
+  const dimensions = [
+    { slot: 1, label: 'Touch points', points: tp.points },
+    { slot: 2, label: 'Tests', points: flag.tests.points },
+    { slot: 3, label: 'Coverage', points: cov.points },
+    { slot: 4, label: 'Lifecycle', points: life.points },
+    { slot: 5, label: 'Open items', points: flag.deferred.points },
+  ];
+  const carried = dimensions.filter((dimension) => dimension.points > 0);
+
+  const composition = carried.length === 0
+    ? '<p class="empty">No debt recorded against this flag.</p>'
+    : `<div class="bar" role="img" aria-label="${escapeHtml(
+      carried.map((d) => `${d.label} ${d.points} points`).join(', ')
+    )}">${carried.map((d) =>
+      `<span class="seg s${d.slot}" style="flex:${d.points}"></span>`).join('')}</div>
+    <ul class="legend">${carried.map((d) =>
+      `<li><span class="dot s${d.slot}"></span>${escapeHtml(d.label)}`
+      + ` <span class="legend-pts">${d.points}</span></li>`).join('')}</ul>`;
+
   return `<section class="card">
   <header>
-    <h2><code>${escapeHtml(flag.key)}</code></h2>
-    <span class="total">${flag.total} pts</span>
+    <div class="ident">
+      <h2><code>${escapeHtml(flag.key)}</code></h2>
+      <p class="desc">${escapeHtml(flag.description)}</p>
+    </div>
+    <div class="score">
+      <span class="score-num">${flag.total}</span>
+      <span class="score-unit">pts</span>
+    </div>
   </header>
-  <p class="desc">${escapeHtml(flag.description)}</p>
-  <p class="muted">${escapeHtml(flag.jira || 'no Jira')} · owner ${escapeHtml(flag.owner)} · default ${escapeHtml(flag.defaultValue)} · created ${escapeHtml(flag.created || 'unknown')}</p>
+  <ul class="meta">
+    <li>${escapeHtml(flag.jira || 'no Jira')}</li>
+    <li>owner ${escapeHtml(flag.owner)}</li>
+    <li>default ${escapeHtml(flag.defaultValue)}</li>
+    <li>created ${escapeHtml(flag.created || 'unknown')}</li>
+    <li>${life.ttl === null
+      ? 'no TTL'
+      : (life.daysRemaining >= 0
+        ? `TTL in ${life.daysRemaining}d`
+        : `TTL ${-life.daysRemaining}d overdue`)}</li>
+  </ul>
+  ${composition}
   <table>
     <thead><tr><th>Dimension</th><th class="pts">Points</th><th>Detail</th></tr></thead>
     <tbody>
-      ${htmlRow('Touch points', tp.points, touchDetail)}
-      ${htmlRow('Tests', flag.tests.points, testDetail)}
-      ${htmlRow('Coverage', cov.points, covDetail)}
-      ${htmlRow('Lifecycle', life.points, lifeDetail)}
+      ${htmlRow('Touch points', tp.points, touchDetail, 1)}
+      ${htmlRow('Tests', flag.tests.points, testDetail, 2)}
+      ${htmlRow('Coverage', cov.points, covDetail, 3)}
+      ${htmlRow('Lifecycle', life.points, lifeDetail, 4)}
     </tbody>
   </table>${deferred}
 </section>`;
@@ -877,31 +920,80 @@ export function renderHtml(report) {
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Flag debt scorecard</title>
 <style>
-  :root { color-scheme: light dark; --bg: #fbfbfd; --fg: #16181d; --muted: #666c78; --line: #d9dde5; --card: #fff; }
-  @media (prefers-color-scheme: dark) {
-    :root { --bg: #14161a; --fg: #e7e9ee; --muted: #9aa2b1; --line: #2c313a; --card: #1b1e24; }
+  /* Categorical slots are assigned in fixed order and never cycled; dark is the
+     same hues re-stepped for the dark surface, not an automatic flip. Both
+     orderings pass the CVD and normal-vision floors. */
+  :root {
+    color-scheme: light dark;
+    --bg: #fcfcfb; --fg: #16181d; --muted: #666c78; --line: #dcdcd8; --card: #fff;
+    --s1: #2a78d6; --s2: #eb6834; --s3: #1baf7a; --s4: #eda100; --s5: #4a3aa7;
+    --serious: #ec835a; --critical: #d03b3b;
   }
-  body { margin: 0; padding: 2rem 1rem; background: var(--bg); color: var(--fg);
-         font: 15px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
-  main { max-width: 60rem; margin: 0 auto; }
-  h1 { font-size: 1.4rem; margin: 0 0 .25rem; }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #1a1a19; --fg: #e7e9ee; --muted: #9aa2b1; --line: #2f2f2d; --card: #212120;
+      --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500; --s5: #9085e9;
+      --serious: #ec835a; --critical: #e26a6a;
+    }
+  }
+  body { margin: 0; padding: 2.5rem 1rem 4rem; background: var(--bg); color: var(--fg);
+         font: 15px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+         -webkit-font-smoothing: antialiased; }
+  main { max-width: 64rem; margin: 0 auto; }
+  h1 { font-size: 1.5rem; letter-spacing: -.01em; margin: 0 0 .25rem; }
   code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .9em; }
   .muted { color: var(--muted); font-size: .9em; }
-  .card { background: var(--card); border: 1px solid var(--line); border-radius: 10px;
-          padding: 1rem 1.25rem; margin: 1.25rem 0; }
-  .card header { display: flex; align-items: baseline; justify-content: space-between; gap: 1rem; }
-  .card h2 { font-size: 1.1rem; margin: 0; }
-  .total { font-weight: 700; font-size: 1.1rem; }
-  .desc { margin: .5rem 0; }
-  table { width: 100%; border-collapse: collapse; margin-top: .75rem; }
-  th, td { text-align: left; vertical-align: top; padding: .5rem .6rem; border-top: 1px solid var(--line); }
-  thead th { border-top: 0; font-size: .8rem; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
-  .pts { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 12px;
+          padding: 1.4rem 1.5rem; margin: 1.5rem 0; }
+  .card header { display: flex; align-items: flex-start; justify-content: space-between; gap: 1.5rem; }
+  .ident { min-width: 0; }
+  .card h2 { font-size: 1.05rem; margin: 0; }
+  .desc { margin: .4rem 0 0; max-width: 46rem; }
+
+  /* Hero number: the headline reads before any decomposition. */
+  .score { display: flex; align-items: baseline; gap: .2rem; flex-shrink: 0;
+           font-variant-numeric: tabular-nums; }
+  .score-num { font-size: 2.6rem; font-weight: 650; letter-spacing: -.03em; line-height: 1; }
+  .score-unit { font-size: .8rem; color: var(--muted); }
+
+  .meta { display: flex; flex-wrap: wrap; gap: .4rem; list-style: none;
+          margin: 1rem 0 1.1rem; padding: 0; }
+  .meta li { font-size: .78rem; color: var(--muted); border: 1px solid var(--line);
+             border-radius: 999px; padding: .1rem .55rem; }
+
+  /* Part-to-whole bar: 2px surface gaps keep adjacent fills legible, and the
+     rounded ends read as one mark rather than four. */
+  .bar { display: flex; gap: 2px; height: 10px; border-radius: 5px; overflow: hidden; }
+  .seg { min-width: 3px; }
+  .empty { color: var(--muted); font-size: .9em; margin: .25rem 0 0; }
+  .legend { display: flex; flex-wrap: wrap; gap: .1rem 1.1rem; list-style: none;
+            margin: .7rem 0 0; padding: 0; font-size: .85rem; }
+  .legend li { display: flex; align-items: center; gap: .4rem; color: var(--muted); }
+  .legend-pts { color: var(--fg); font-weight: 600; font-variant-numeric: tabular-nums; }
+  .dot { width: 9px; height: 9px; border-radius: 3px; flex-shrink: 0; display: inline-block; }
+  .s1, .dot.s1 { background: var(--s1); }
+  .s2, .dot.s2 { background: var(--s2); }
+  .s3, .dot.s3 { background: var(--s3); }
+  .s4, .dot.s4 { background: var(--s4); }
+  .s5, .dot.s5 { background: var(--s5); }
+  .zero { color: var(--muted); }
+  table { width: 100%; border-collapse: collapse; margin-top: 1.2rem; }
+  th, td { text-align: left; vertical-align: top; padding: .6rem .6rem; border-top: 1px solid var(--line); }
+  tbody th { font-weight: 600; white-space: nowrap; }
+  tbody th .dot { margin-right: .5rem; vertical-align: baseline; }
+  thead th { border-top: 0; font-size: .72rem; text-transform: uppercase; letter-spacing: .06em;
+             color: var(--muted); font-weight: 600; padding-bottom: .35rem; }
+  .pts { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; font-weight: 600; }
   ul { margin: .35rem 0; padding-left: 1.1rem; }
-  .tag { display: inline-block; font-size: .72rem; text-transform: uppercase; letter-spacing: .04em;
-         border: 1px solid var(--line); border-radius: 4px; padding: 0 .3rem; color: var(--muted); }
-  .deferred { margin-top: 1rem; border-top: 1px solid var(--line); padding-top: .75rem; }
-  .deferred h3 { font-size: .95rem; margin: 0 0 .25rem; }
+  .tag { display: inline-block; font-size: .7rem; text-transform: uppercase; letter-spacing: .05em;
+         border: 1px solid var(--line); border-radius: 4px; padding: 0 .32rem; color: var(--muted);
+         white-space: nowrap; }
+  /* Status colours are reserved and always ship with the label beside them. */
+  .tag.precondition { border-color: var(--serious); color: var(--serious); }
+  .tag.cosmetic { opacity: .8; }
+  .deferred { margin-top: 1.3rem; border-top: 1px solid var(--line); padding-top: 1rem; }
+  .deferred h3 { font-size: .82rem; text-transform: uppercase; letter-spacing: .06em;
+                 color: var(--muted); font-weight: 600; margin: 0 0 .5rem; }
   .deferred > ul { list-style: none; padding-left: 0; }
   .deferred > ul > li { margin: .6rem 0; }
   .pts-inline { font-variant-numeric: tabular-nums; font-weight: 600; font-size: .85em; }
