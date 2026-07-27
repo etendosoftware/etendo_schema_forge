@@ -115,6 +115,23 @@ describe('RolesOverviewPage', () => {
     vi.clearAllMocks();
   });
 
+  // Regression for ETP-4513's scroll bug: the page's root sits inside
+  // AppLayout's `overflow-hidden` content wrapper, so it must own its own
+  // scroll container (`h-full overflow-y-auto`, the same pattern used by
+  // DashboardPage/ContactsPage) or content taller than the viewport (5 role
+  // cards) gets silently clipped instead of scrolling.
+  it('makes its own root container scrollable (h-full overflow-y-auto)', async () => {
+    fetchRolesOverview.mockResolvedValue({ roles: FIVE_ROLES });
+    render(<RolesOverviewPage />);
+    await waitFor(() => {
+      expect(screen.getByTestId(`RolesOverviewPage__role-${FIVE_ROLES[0].id}`)).toBeTruthy();
+    });
+
+    const root = screen.getByTestId('RolesOverviewPage');
+    expect(root.className).toContain('overflow-y-auto');
+    expect(root.className).toContain('h-full');
+  });
+
   describe('rendering all 5 roles', () => {
     it('renders one card per role, keyed by role id', async () => {
       fetchRolesOverview.mockResolvedValue({ roles: FIVE_ROLES });
