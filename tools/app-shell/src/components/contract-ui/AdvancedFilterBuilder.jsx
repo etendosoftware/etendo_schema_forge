@@ -91,7 +91,15 @@ function ensureRowKeys(conditions) {
 function isFilterableColumn(col) {
   if (!col?.key) return false;
   if (col.type === 'discarded' || col.type === 'system') return false;
-  return col.filterable !== false;
+  if (col.filterable === false) return false;
+  // A purely client-rendered `custom` column (e.g. a composite avatar cell)
+  // has no real backend property to filter against unless it declares one
+  // via `column` (AD field) or `backendFilterKey`. Explicit `filterable: true`
+  // opts a custom column back in (ETP-4609).
+  if (col.type === 'custom' && col.filterable !== true && !col.column && !col.backendFilterKey) {
+    return false;
+  }
+  return true;
 }
 
 function isRowComplete(row, col) {
@@ -286,7 +294,10 @@ export function AdvancedFilterBuilder({
         {draft.conditions.map((row, idx) => {
           const col = columnByKey[row.field] || null;
           const mode = col ? resolveFilterMode(col) : null;
-          const ops = mode ? (OPERATORS_BY_MODE[mode] ?? OPERATORS_BY_MODE.text) : [];
+          const baseOps = mode ? (OPERATORS_BY_MODE[mode] ?? OPERATORS_BY_MODE.text) : [];
+          // A required column can never legitimately be empty, so the
+          // empty/not-empty operators never make sense for it (ETP-4609).
+          const ops = col?.required ? baseOps.filter((op) => !NULLISH_OPS.has(op)) : baseOps;
           const opLabels = mode === 'date' ? OP_LABEL_KEY_DATE : OP_LABEL_KEY;
           const showValue = !!row.operator && !NULLISH_OPS.has(row.operator);
 
