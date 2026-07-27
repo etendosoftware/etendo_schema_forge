@@ -281,6 +281,16 @@ session — for example persisting the account email at login, which is core-own
 code — and to set it once during flag bootstrap. That is a design decision, not
 a local edit, so it is recorded here rather than half-applied.
 
+There is a second option, should changing core login code prove awkward: the
+account email is recoverable server-side from an authenticated `AD_User`, so a
+JWT-authenticated endpoint could serve it for precisely the sessions that hold
+an Etendo JWT but no `sf_platform_token` — the gap described above. Whoever
+builds it must resolve against the `ETGO_ACCOUNT` record rather than derive the
+email by string manipulation: onboarding composes the environment username from
+the account email, but `+` is legal in an address, so splitting on it would
+mangle plus-addressed users and surface as a rare unexplained mismatch instead
+of an obvious failure. Both options are open; neither is chosen.
+
 **Open: `plan` is not shown anywhere.** The natural place to badge it is the
 environment picker, which lives in `@etendosoftware/etendo-go-core`
 (`onboarding/steps/EnvSelectStep.jsx`), not in this repo. It needs a change in
