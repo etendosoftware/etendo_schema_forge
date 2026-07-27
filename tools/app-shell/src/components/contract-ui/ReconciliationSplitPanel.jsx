@@ -65,6 +65,7 @@ function StatusBadge({ kind }) {
     reconciled: { labelKey: 'financeReconcileBadgeReconciled', cls: 'bg-[var(--status-success-bg)] text-[var(--status-success-fg)]' },
     pending: { labelKey: 'financeReconcileBadgePending', cls: 'bg-[hsl(var(--muted))] text-[hsl(var(--muted-foreground))]' },
     invoice: { labelKey: 'financeReconcileBadgeInvoice', cls: 'bg-[var(--status-warning-bg)] text-[var(--status-warning-fg)]' },
+    partial: { labelKey: 'financeReconcileBadgePartial', cls: 'bg-[var(--status-warning-bg)] text-[var(--status-warning-fg)]' },
   };
   const cfg = map[kind] ?? map.pending;
   return (
@@ -366,7 +367,12 @@ function StatementLinesPanel({
             <span className={cn('w-full truncate leading-5', selected ? 'font-semibold' : 'font-normal')}>
               {line.description || line.partnerName || line.referenceNo || '—'}
             </span>
-            <StatusBadge kind={badgeKind} data-testid="StatusBadge__d0f4d5" />
+            <div className="flex items-center gap-1">
+              <StatusBadge kind={badgeKind} data-testid="StatusBadge__d0f4d5" />
+              {line.partial ? (
+                <StatusBadge kind="partial" data-testid="StatusBadge-partial__d0f4d5" />
+              ) : null}
+            </div>
           </div>
         </TableCell>
         <ProgressCell
@@ -1177,15 +1183,32 @@ export function ReconciliationSplitPanel({
   const confirmRemove = async () => {
     if (!selectedLine || !removeRequest) return;
     try {
-      await removeOperation({
+      const result = await removeOperation({
         financialAccountId: accountId,
         statementLineId: selectedLine.id,
         transactionIds: removeRequest.ids,
       });
       setRemoveRequest(null);
-      toast.success(ui('financeReconcileToastOperationRemoved'));
+      // Core's own removal utilities commit mid-flow, so a batch of several ids can genuinely
+      // partially succeed — the backend reports the real per-transaction outcome (never an
+      // all-or-nothing throw), so surface it instead of assuming the whole request succeeded.
+      const failedCount = result?.failedTransactionIds?.length ?? 0;
+      const removedCount = result?.transactionIds?.length ?? 0;
+      if (failedCount > 0 && removedCount > 0) {
+        toast.warning(ui('financeReconcileToastOperationPartiallyRemoved', {
+          removed: removedCount,
+          total: removedCount + failedCount,
+          failed: failedCount,
+        }));
+      } else if (failedCount > 0) {
+        toast.error(ui('financeReconcileToastError'));
+      } else {
+        toast.success(ui('financeReconcileToastOperationRemoved'));
+      }
       setSelectedOpIds(new Set());
       // Keep the line selected (selectedLine re-resolves from the reloaded `lines` by match group).
+      // Always reload — even on partial/total failure — so the UI reflects the true DB state rather
+      // than assuming nothing happened.
       reloadLines();
       onReconcileSuccess?.();
     } catch (err) {

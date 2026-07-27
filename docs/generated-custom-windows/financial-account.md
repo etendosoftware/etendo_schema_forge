@@ -525,6 +525,9 @@ used** and only becomes **CONCILIADA at 100 %**; partial lines keep showing in t
 - **Left panel — "Progreso" column** (`ProgressCell`): a thin 4px bar = `reconciled / total`, shown
   only when the line has something reconciled; hovering shows a tooltip "X € por conciliar" (the
   remaining amount). No "% chip" on the row. Column order: Fecha · Descripción · Progreso · Importe.
+  A PARTIAL line also shows a second **"Parcial"** status badge next to "Pendiente" (`line.partial`
+  → `StatusBadge kind="partial"`, same warning tone as "Factura"/"Por regla") — otherwise a partial
+  line was indistinguishable from a fully-untouched pending one in that column.
 - **Right panel — "conciliado" block** (`ReconciledOperationsSection`, above the filters) renders
   **only for a PARTIAL line**: a collapsible header (`% conciliado` + a short 90px bar + the
   reconciled amount + chevron), starting **collapsed**, that expands to one row per matched document
@@ -546,6 +549,19 @@ used** and only becomes **CONCILIADA at 100 %**; partial lines keep showing in t
     top block (no checkboxes/bulk). The bottom bar stays "Conciliar" for the remainder.
   - `removeOperation` accepts `transactionIds[]` and branches on whether the selection covers the
     whole reconciliation.
+  - **Bulk un-reconcile is NOT atomic at the DB level** — Core's own removal utilities
+    (`PaymentRemovalUtil.reactivateAndRemove`) commit mid-flow (`SessionHandler.commitAndStart`), so
+    a failure partway through a multi-id batch does not roll back what already persisted. Rather than
+    fight that (shared module, other consumers depend on its semantics), every removal loop
+    (`detachSelected`, `undoWholeReconciliation`, and `undoReconciliation`'s own per-transaction
+    reversal loop via `reverseMatchedTransaction`) now catches-and-logs a per-item failure instead of
+    aborting the rest of the batch, and `removeOperation` re-checks the REAL post-state of every
+    requested transaction id (`getReconciliation() == null` → actually removed) instead of trusting
+    "no exception was thrown". The response carries `transactionIds` (what actually got removed) and
+    a new `failedTransactionIds` (what didn't); `removed` is `true` only when nothing failed. The
+    frontend (`confirmRemove`) shows a distinct toast for full success, partial
+    (`financeReconcileToastOperationPartiallyRemoved`), and total failure, and always reloads the
+    lines afterward so the UI never shows a stale "still reconciled" state after a partial success.
 - **Backend contract**: `ReconciliationHandler.buildPendingLines` now exposes, per merged line,
   `reconcileStatus` (RECONCILED/PARTIAL/PENDING), `pendingAmount`, `reconciledAmount`,
   `reconciledPct`, `txns[]` and `remainderLineId` — the same shape as `mapLineRow`. `pendingAmount`

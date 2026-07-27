@@ -1,6 +1,12 @@
 // Mocks BEFORE imports
+// Records every (key, vars) pair passed to the i18n `ui(...)` function, so tests can verify the
+// exact interpolation values (e.g. removed/total/failed counts) a call site passed — the mock
+// below only echoes back the raw key for keys with no literal `{placeholder}` in their own name
+// (true for all real keys here), so this capture is the only way to assert on `vars`.
+const uiCalls = [];
 vi.mock('@/i18n', () => ({
   useUI: () => (key, vars) => {
+    uiCalls.push({ key, vars });
     if (vars) return key.replace(/\{(\w+)\}/g, (_, k) => (vars[k] ?? `{${k}}`));
     return key;
   },
@@ -8,7 +14,7 @@ vi.mock('@/i18n', () => ({
 }));
 
 vi.mock('sonner', () => ({
-  toast: Object.assign(vi.fn(), { success: vi.fn(), error: vi.fn() }),
+  toast: Object.assign(vi.fn(), { success: vi.fn(), error: vi.fn(), warning: vi.fn() }),
 }));
 
 // Hook mocks — overridable per test via the mutable state objects below.
@@ -41,6 +47,7 @@ vi.mock('@/hooks/useReconciliation', () => ({
 
 import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { toast } from 'sonner';
 import { ReconciliationSplitPanel } from '@/components/contract-ui/ReconciliationSplitPanel.jsx';
 
 // ── Fixtures ───────────────────────────────────────────────────────────────────
@@ -58,7 +65,7 @@ const LINE_PARTIAL = {
   id: 'LP1', date: '2026-05-13T00:00:00Z', description: 'Partial line',
   status: 'pending', reconcileStatus: 'PARTIAL', amount: 100,
   pendingAmount: 46.76, reconciledAmount: 53.24, reconciledPct: 53,
-  matchGroupId: 'G1', remainderLineId: 'LP1-rem',
+  matchGroupId: 'G1', remainderLineId: 'LP1-rem', partial: true,
   txns: [{ transactionId: 'T1', documentNo: '1000034', contact: 'ACME', amount: 53.24, autoCreated: true }],
 };
 
@@ -151,6 +158,10 @@ describe('ReconciliationSplitPanel', () => {
     candidateCallArgs.lineId = null;
     candidateCallArgs.docType = null;
     candidateCallArgs.kind = null;
+    uiCalls.length = 0;
+    toast.success.mockClear();
+    toast.error.mockClear();
+    toast.warning.mockClear();
   });
 
   it('renders the left panel with the pending statement lines', () => {
@@ -786,6 +797,29 @@ describe('ReconciliationSplitPanel', () => {
     });
   });
 
+  // ── Left-panel "Parcial" status badge (second badge next to the primary one) ──
+
+  describe('left-panel "Parcial" status badge', () => {
+    // StatusBadge doesn't forward `data-testid` to the DOM (it only destructures `{ kind }`), so —
+    // matching how every other StatusBadge assertion in this file works — query by its rendered
+    // text (the i18n mock echoes the raw key), scoped to the row to disambiguate the two badges.
+    it('renders BOTH the primary badge and the "Parcial" badge for a line with partial: true', () => {
+      setLines([LINE_PARTIAL]); // status: 'pending', no `state` → primary badge is "pending"
+      renderPanel();
+      const row = within(screen.getByTestId('recon-line-row-LP1'));
+      expect(row.getByText('financeReconcileBadgePending')).toBeInTheDocument();
+      expect(row.getByText('financeReconcileBadgePartial')).toBeInTheDocument();
+    });
+
+    it('does not render the "Parcial" badge for a non-partial line', () => {
+      setLines([LINE_A]); // plain pending line, no `partial` flag
+      renderPanel();
+      const row = within(screen.getByTestId('recon-line-row-L1'));
+      expect(row.getByText('financeReconcileBadgePending')).toBeInTheDocument();
+      expect(row.queryByText('financeReconcileBadgePartial')).not.toBeInTheDocument();
+    });
+  });
+
   // ── Right-panel "conciliado" block (ReconciledOperationsSection) — it.5 ────────
 
   describe('ReconciledOperationsSection (right "conciliado" block)', () => {
@@ -970,6 +1004,97 @@ describe('ReconciliationSplitPanel', () => {
       const dialog = screen.getByTestId('recon-remove-dialog');
       expect(dialog).toHaveTextContent('financeReconcileConfirmRemoveManyBody');
       expect(dialog).toHaveTextContent('financeReconcileRemoveOneAutoHint');
+    });
+  });
+
+  // ── confirmRemove outcome reporting (partial-commit fix, ETP-4502) ─────────────
+  // Core's own removal utilities commit mid-flow, so a batch can genuinely partially succeed; the
+  // backend now reports the real per-transaction outcome via `transactionIds` (removed) /
+  // `failedTransactionIds` (still reconciled) instead of an implicit all-or-nothing success. These
+  // tests drive confirmRemove through the per-row unlink of a PARTIAL line (T1) — the toast branch
+  // and the reload/selection-clear side effects depend only on the MOCKED RESOLVED VALUE of
+  // `removeOperation`, not on what was actually requested.
+  describe('confirmRemove outcome reporting (partial-commit fix)', () => {
+    // A non-suggested remainder candidate — pre-checking it (independent of the matched-block
+    // unlink) gives an observable proxy for `setSelectedOpIds(new Set())`: if it gets cleared after
+    // confirming, the "always reset the selection" side effect ran.
+    function setUpPartialLineWithCandidate() {
+      setLines([LINE_PARTIAL]);
+      setCandidates([CAND_OTHER]);
+      renderPanel();
+      fireEvent.click(screen.getByTestId('recon-line-radio-LP1'));
+      fireEvent.click(screen.getByTestId('recon-cand-check-C2'));
+      expect(candidateCheckbox('C2')).toBeChecked();
+      fireEvent.click(screen.getByTestId('recon-matched-toggle'));
+      fireEvent.click(screen.getByTestId('recon-unlink-T1'));
+      fireEvent.click(screen.getByTestId('recon-remove-confirm'));
+    }
+
+    it('full success: toast.success + reload/selection-clear when nothing failed', async () => {
+      removeState.removeOperation = vi.fn().mockResolvedValue({
+        transactionIds: ['T1'], failedTransactionIds: [],
+      });
+      setUpPartialLineWithCandidate();
+
+      await waitFor(() => expect(toast.success).toHaveBeenCalledWith('financeReconcileToastOperationRemoved'));
+      expect(toast.warning).not.toHaveBeenCalled();
+      expect(toast.error).not.toHaveBeenCalled();
+      await waitFor(() => expect(linesState.reload).toHaveBeenCalled());
+      await waitFor(() => expect(candidateCheckbox('C2')).not.toBeChecked());
+      await waitFor(() => expect(screen.queryByTestId('recon-remove-dialog')).not.toBeInTheDocument());
+    });
+
+    it('partial: toast.warning with the exact removed/total/failed counts, reload/selection-clear STILL run', async () => {
+      removeState.removeOperation = vi.fn().mockResolvedValue({
+        transactionIds: ['A'], failedTransactionIds: ['B'],
+      });
+      setUpPartialLineWithCandidate();
+
+      await waitFor(() => expect(toast.warning)
+        .toHaveBeenCalledWith('financeReconcileToastOperationPartiallyRemoved'));
+      expect(toast.success).not.toHaveBeenCalled();
+      expect(toast.error).not.toHaveBeenCalled();
+      // Verify the EXACT interpolation values the component computed from the resolved result.
+      const call = uiCalls.find((c) => c.key === 'financeReconcileToastOperationPartiallyRemoved');
+      expect(call).toBeTruthy();
+      expect(call.vars).toEqual({ removed: 1, total: 2, failed: 1 });
+      // The critical fix: reload + selection-clear still happen on a partial outcome.
+      await waitFor(() => expect(linesState.reload).toHaveBeenCalled());
+      await waitFor(() => expect(candidateCheckbox('C2')).not.toBeChecked());
+    });
+
+    it('total failure (successful HTTP, everything failed): toast.error, reload/selection-clear STILL run', async () => {
+      removeState.removeOperation = vi.fn().mockResolvedValue({
+        transactionIds: [], failedTransactionIds: ['A', 'B'],
+      });
+      setUpPartialLineWithCandidate();
+
+      await waitFor(() => expect(toast.error).toHaveBeenCalledWith('financeReconcileToastError'));
+      expect(toast.success).not.toHaveBeenCalled();
+      expect(toast.warning).not.toHaveBeenCalled();
+      // Still no exception, still a "resolved" flow — reload + selection-clear still happen.
+      await waitFor(() => expect(linesState.reload).toHaveBeenCalled());
+      await waitFor(() => expect(candidateCheckbox('C2')).not.toBeChecked());
+      await waitFor(() => expect(screen.queryByTestId('recon-remove-dialog')).not.toBeInTheDocument());
+    });
+
+    it('network/HTTP error (rejected promise): toast.error, but NO reload — nothing was attempted', async () => {
+      removeState.removeOperation = vi.fn().mockRejectedValue(new Error('Network error'));
+      setUpPartialLineWithCandidate();
+
+      await waitFor(() => expect(toast.error).toHaveBeenCalledWith('Network error'));
+      expect(toast.success).not.toHaveBeenCalled();
+      expect(toast.warning).not.toHaveBeenCalled();
+      // Unlike the three resolved cases above, a rejected promise never reaches the reload/
+      // selection-clear code — nothing was attempted, so nothing should be assumed to have changed.
+      expect(linesState.reload).not.toHaveBeenCalled();
+      // The dialog also stays open (setRemoveRequest(null) only runs on the success path) — which,
+      // correctly, aria-hides the rest of the page from the accessibility tree while it's open, so
+      // the checkbox's role query needs { hidden: true } to still reach it here.
+      expect(screen.getByTestId('recon-remove-dialog')).toBeInTheDocument();
+      const stillCheckedInput = within(screen.getByTestId('recon-cand-check-C2'))
+        .getByRole('checkbox', { hidden: true });
+      expect(stillCheckedInput).toBeChecked();
     });
   });
 
