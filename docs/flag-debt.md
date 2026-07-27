@@ -172,7 +172,7 @@ not just a filename. A reference nobody can follow is the same as no reference.
 | Open items | per bundled component beyond the first | 1 |
 
 All of it lives in the `POINTS` object at the top of
-[`cli/src/flag-debt.js`](../cli/src/flag-debt.js) — one place to tune the scale.
+`cli/src/flag-debt.js` in the `schema_forge_core` repo — one place to tune the scale.
 
 ---
 
@@ -183,8 +183,16 @@ make flag-debt                      # every registered flag, console report
 make flag-debt FLAG=tenant-upgrade  # one flag
 make flag-debt JSON=1               # also write flag-debt.json
 make flag-debt HTML=1               # also write flag-debt.html (the per-flag panel)
-node cli/src/flag-debt.js --help    # full flag list
+npx sf-flag-debt --help             # full flag list
+make flag-debt LOCAL_CORE=1         # run the core CLI from sibling source
 ```
+
+The scorer is **code owned by `schema_forge_core`** and published in
+`@etendosoftware/schema-forge-cli` as the `sf-flag-debt` bin; the registry it reads is
+**data owned by this repo**. `make` bridges the two with `SF_ROOT`, which is why the
+CLI scores this working tree rather than core's. That split is deliberate: the scale
+belongs to one place, the flags belong to whoever declares them. See
+[`repo-topology.md`](repo-topology.md) for the two dev profiles.
 
 Environment:
 

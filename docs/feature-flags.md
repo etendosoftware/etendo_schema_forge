@@ -120,7 +120,7 @@ serving every flag, and is excluded from per-flag attribution.
 ### Where the per-flag paths live
 
 **`flags-registry.json` in the repo root is canonical** for which paths belong to
-which flag. It is read by `cli/src/flag-debt.js`, so the scorer and the rule
+which flag. It is read by the `sf-flag-debt` CLI, so the scorer and the rule
 cannot disagree — a flag's owned paths are `flags.paths`, and the shared
 infrastructure excluded from every flag is `conventions.frameworkPaths`. See
 [flag-debt.md](flag-debt.md).

@@ -603,7 +603,7 @@ sonar-coverage: ## Run all tests with coverage then SonarQube analysis
 # --- Feature Flag Debt ---
 
 flag-debt: ## Score per-flag technical debt from flags-registry.json (FLAG=<key>, JSON=1, HTML=1)
-	@node cli/src/flag-debt.js $(if $(FLAG),--flag $(FLAG)) $(if $(JSON),--json) $(if $(HTML),--html)
+	@$(SF) sf-flag-debt $(if $(FLAG),--flag $(FLAG)) $(if $(JSON),--json) $(if $(HTML),--html)
 
 # --- XML Regeneration Check ---
 

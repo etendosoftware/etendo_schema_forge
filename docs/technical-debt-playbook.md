@@ -85,7 +85,7 @@ this system.
 | A precise, branch-level claim about *why* something is weak | `$knownGapComment` in the registry | no — it is evidence, not a score |
 | The reasoning, the trade-off, the alternatives considered | a `docs/` document | no |
 
-Everything scored is derived from the working tree by `cli/src/flag-debt.js`
+Everything scored is derived from the working tree by the `sf-flag-debt` CLI
 reading `flags-registry.json`. **The score is never stored.** A stored score is a
 stale score; see [`flag-debt.md`](flag-debt.md) → *Where debt lives*.
 
@@ -501,7 +501,7 @@ like a clean bill of health, and must never block the report either.
 | 5. Open items | What is the flag still holding? | 5 / 3 / 1 by kind, +1 per bundled component beyond the first |
 
 The full scale lives in the `POINTS` object at the top of
-[`cli/src/flag-debt.js`](../cli/src/flag-debt.js) — one place to tune it.
+`cli/src/flag-debt.js` in the `schema_forge_core` repo — one place to tune it.
 
 **Before you deliver anything touching a flag:**
 
