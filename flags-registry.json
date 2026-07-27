@@ -42,6 +42,27 @@
       },
       "$pathsComment": "Owned paths only — code that exists because this flag exists and is deleted with it. src/com/etendoerp/go/rest/EtendoGoJwtServlet.java is a touch point, not owned.",
       "$knownGapComment": "USER-ACCEPTED VISIBLE DEBT (scorecard demo). src/com/etendoerp/go/payment/TenantPlanService.java (markProductive, resolvePlan) has no unit test and is not exercised by TenantPaywallServiceTest. The unit-level spec below is declared expected:true and is intentionally deferred, so this flag carries the tests penalty on purpose rather than reading as a clean sheet. Asserting the AD_Preference persistence itself stays integration scope and is NOT what the deferred unit spec would cover.",
+      "deferredItems": [
+        {
+          "id": "targeting-key-divergence",
+          "kind": "precondition",
+          "note": "The two ends bucket users on different identities: the frontend sends localStorage.sf_auth_user (the ERP admin username) as OpenFeature's targetingKey, while the backend targets the account email. Harmless today because the local InMemoryProvider ignores the targeting key entirely, and a CORRECTNESS BLOCKER the moment a targeting-aware control plane lands — wiring Mixpanel first would bake per-user bucketing divergence into live rollouts, where it is invisible in aggregate. Must be closed BEFORE the swap, not after.",
+          "refs": [
+            "docs/feature-flags.md — 'Open: targeting keys do not match'",
+            "com.etendoerp.go docs/feature-flags-and-tenant-upgrade.md — section 'Targeting key — OPEN, must be settled before a targeting-aware provider lands', and Mixpanel migration checklist step 4 (commit bd068495)"
+          ]
+        },
+        {
+          "id": "plan-badge-in-env-picker",
+          "kind": "cosmetic",
+          "note": "The environment picker does not show which plan a tenant is on. The backend already ships the data — GET /sws/go/environments returns a per-environment 'plan' field (EtendoGoJwtDalHelper.java:346, via TenantPlanService.resolvePlan). Rendering it needs a change in the @etendosoftware/etendo-go-core package plus a version bump here, which is why it is deferred rather than done inline.",
+          "refs": [
+            "com.etendoerp.go src/com/etendoerp/go/rest/EtendoGoJwtDalHelper.java:346",
+            "npm @etendosoftware/etendo-go-core (env picker component)"
+          ]
+        }
+      ],
+      "$deferredItemsComment": "Open items this flag carries that are NOT test gaps: unscored in v0, but rendered on the flag's card so the TTL surfaces them before the control-plane swap starts rather than during it.",
       "testSpecs": {
         "unit": [
           {

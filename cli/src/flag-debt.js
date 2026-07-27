@@ -66,6 +66,10 @@ const SKIP_DIR_NAMES = new Set([
   'node_modules', '.git', '.gradle', '.worktrees', '.scannerwork', '.idea',
   'dist', 'build', 'coverage', 'generated', 'locales',
   'test-results', 'playwright-report', 'e2e-report',
+  // Tool output that mentions source it analysed. A flag key echoed inside a
+  // Sonar report is not a touch point, and counting it charges real debt
+  // points for having run a scan.
+  'sonar-reports', '.quality-gate-cache', 'logs', 'tmp',
 ]);
 
 /** Files that describe the scorecard rather than participate in it. */
@@ -498,6 +502,14 @@ export function scoreFlag(flag, context) {
     created: flag.created || null,
     defaultValue: flag.defaultValue,
     ttlNote: flag.ttlNote || null,
+    // Unscored in v0: open items that are not test gaps. Carried so the TTL
+    // surfaces them before the work they block starts, not during it.
+    deferredItems: (flag.deferredItems || []).map((item) => ({
+      id: item.id,
+      kind: item.kind || 'open',
+      note: item.note || '',
+      refs: item.refs || [],
+    })),
     touchPoints,
     tests,
     coverage,
@@ -523,6 +535,24 @@ export function buildReport(registry, context) {
 
 const pad = (value, width) => String(value).padEnd(width);
 const padStart = (value, width) => String(value).padStart(width);
+
+/** Word-wraps `text` to `width`, prefixing every line with `indent`. */
+export function wrapText(text, width, indent = '') {
+  const words = String(text || '').split(/\s+/).filter(Boolean);
+  if (words.length === 0) return [];
+  const lines = [];
+  let current = words[0];
+  for (const word of words.slice(1)) {
+    if (`${current} ${word}`.length > width) {
+      lines.push(indent + current);
+      current = word;
+    } else {
+      current += ` ${word}`;
+    }
+  }
+  lines.push(indent + current);
+  return lines;
+}
 
 function renderTouchPointLines(touchPoints) {
   const lines = [];
@@ -602,6 +632,16 @@ export function renderConsole(report) {
         : `ttl ${life.ttl} · ${-life.daysRemaining} day(s) overdue (${life.weeksOverdue} week(s))`);
     lines.push(`  ${pad('lifecycle', 14)} ${padStart(`${life.points} pts`, 8)}  ${lifeSummary}`);
     if (flag.ttlNote) lines.push(`        note: ${flag.ttlNote}`);
+
+    if (flag.deferredItems.length > 0) {
+      lines.push(`  ${pad('open items', 14)} ${padStart('unscored', 8)}  `
+        + `${flag.deferredItems.length} deferred`);
+      for (const item of flag.deferredItems) {
+        lines.push(`        [${item.kind}] ${item.id}`);
+        lines.push(...wrapText(item.note, 92, '          '));
+        for (const ref of item.refs) lines.push(`          ref: ${ref}`);
+      }
+    }
     lines.push('');
     lines.push(`  ${pad('TOTAL', 14)} ${padStart(`${flag.total} pts`, 8)}`);
     lines.push('');
@@ -676,6 +716,17 @@ function htmlFlagCard(flag) {
       : `TTL ${escapeHtml(life.ttl)} — ${-life.daysRemaining} day(s) overdue`)
       + (flag.ttlNote ? `<p class="muted">${escapeHtml(flag.ttlNote)}</p>` : '');
 
+  const deferred = flag.deferredItems.length === 0 ? '' : `
+  <div class="deferred">
+    <h3>Open items <span class="muted">— ${flag.deferredItems.length} deferred, unscored in v0</span></h3>
+    <ul>${flag.deferredItems.map((item) => `<li><span class="tag">${escapeHtml(item.kind)}</span> `
+      + `<code>${escapeHtml(item.id)}</code><p>${escapeHtml(item.note)}</p>`
+      + (item.refs.length > 0
+        ? `<p class="muted">${item.refs.map((ref) => escapeHtml(ref)).join('<br>')}</p>`
+        : '')
+      + '</li>').join('')}</ul>
+  </div>`;
+
   return `<section class="card">
   <header>
     <h2><code>${escapeHtml(flag.key)}</code></h2>
@@ -691,7 +742,7 @@ function htmlFlagCard(flag) {
       ${htmlRow('Coverage', cov.points, covDetail)}
       ${htmlRow('Lifecycle', life.points, lifeDetail)}
     </tbody>
-  </table>
+  </table>${deferred}
 </section>`;
 }
 
@@ -726,6 +777,10 @@ export function renderHtml(report) {
   ul { margin: .35rem 0; padding-left: 1.1rem; }
   .tag { display: inline-block; font-size: .72rem; text-transform: uppercase; letter-spacing: .04em;
          border: 1px solid var(--line); border-radius: 4px; padding: 0 .3rem; color: var(--muted); }
+  .deferred { margin-top: 1rem; border-top: 1px solid var(--line); padding-top: .75rem; }
+  .deferred h3 { font-size: .95rem; margin: 0 0 .25rem; }
+  .deferred > ul { list-style: none; padding-left: 0; }
+  .deferred > ul > li { margin: .6rem 0; }
   li { margin: .15rem 0; }
   p { margin: .35rem 0; }
   footer { color: var(--muted); font-size: .85em; margin-top: 2rem; }

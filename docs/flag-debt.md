@@ -90,6 +90,29 @@ like a clean bill of health, but it must not block the report either.
 **Points:** `0` while the TTL is in the future; `3 per started week` once it is
 past. A flag a day overdue costs 3; a flag eight days overdue costs 6.
 
+### Open items (`deferredItems`) — carried, not scored
+
+Not every liability a flag carries is a test gap or a stray reference. A flag can
+also be holding open decisions: a correctness precondition that blocks the next
+step, a cosmetic follow-up parked behind a package bump. Those live in
+`deferredItems` and are **unscored in v0** — they are rendered on the flag's card
+in both the console report and the HTML so that when the TTL fires, whoever picks
+up the removal sees them *before* starting the work they block, not during it.
+
+```jsonc
+"deferredItems": [
+  {
+    "id": "targeting-key-divergence",
+    "kind": "precondition",              // precondition | cosmetic | open
+    "note": "What is open, and what it blocks.",
+    "refs": ["docs/feature-flags.md — 'Open: targeting keys do not match'"]
+  }
+]
+```
+
+Keep `refs` specific enough to navigate to — a document plus the section or line,
+not just a filename. A reference nobody can follow is the same as no reference.
+
 ---
 
 ## The points scale
