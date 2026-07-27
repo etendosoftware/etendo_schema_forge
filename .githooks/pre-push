@@ -615,6 +615,21 @@ run_step_4() {
 LAST_FAILED_STEP=""
 [ -f "$LAST_FAILED_FILE" ] && LAST_FAILED_STEP="$(cat "$LAST_FAILED_FILE" 2>/dev/null || echo "")"
 
+# The quick re-check exists to reach the previously-failed step without paying for
+# the earlier ones again. The step cache does that better AND correctly: with it on,
+# the earlier steps are hits and the full pipeline reaches the failed step almost
+# immediately, so the re-check only duplicates work.
+#
+# Measured: it ran step 2 twice, 208s + 227s of a 445s push.
+#
+# Skipping the step in the FULL run instead would be wrong — the re-check runs
+# BEFORE steps 0..N-1, so an `npm ci` or a regen afterwards can invalidate its
+# result. Dropping the re-check keeps the full pipeline authoritative.
+if step_cache_enabled && [ -n "$LAST_FAILED_STEP" ]; then
+  echo "==> Previous push failed at step $LAST_FAILED_STEP — step cache is on, going straight to the full pipeline."
+  LAST_FAILED_STEP=""
+fi
+
 if [ -n "$LAST_FAILED_STEP" ]; then
   case "$LAST_FAILED_STEP" in
     0|1|2|3|4)
