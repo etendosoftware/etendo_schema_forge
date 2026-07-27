@@ -8,8 +8,9 @@
 | Layer | What it is | Why |
 |-------|-----------|-----|
 | **Application API** | [OpenFeature](https://openfeature.dev) — `@openfeature/web-sdk` | Vendor-neutral. Changing the control plane never touches component code. |
-| **Control plane (today)** | Local — OpenFeature's `InMemoryProvider`, seeded from the `VITE_FEATURE_FLAGS` env var | Ships the flag capability without taking on a vendor integration before it is needed. |
-| **Control plane (planned)** | Mixpanel Feature Flags, per team plan §5.6 | Remote flag management and targeting, alongside the product analytics already in use. |
+| **Control plane (hosted)** | ConfigCat, via the official `@openfeature/config-cat-web-provider` — **pilot** (ETP-4691) | Remote toggling without a redeploy, polled so a change reaches a running tab. |
+| **Control plane (local)** | OpenFeature's `InMemoryProvider`, seeded from `VITE_FEATURE_FLAGS` or the declared defaults | Keeps dev, CI and e2e deterministic and independent of any shared remote project. |
+| **Control plane (evaluated)** | Mixpanel Feature Flags, per team plan §5.6 | Still the longer-term option; not wired. See the swap notes below. |
 
 Components only ever see the OpenFeature API through the `useFeatureFlag` hook.
 Adopting Mixpanel later changes **one function** — see [Swapping the control plane](#swapping-the-control-plane).
@@ -147,15 +148,40 @@ that is the floor for rendering a menu item, and it stays greppable through the
 | Variable | Effect |
 |----------|--------|
 | `VITE_FEATURE_FLAGS` | JSON map of flag key to boolean. Unset, empty or malformed values fall back to the declared defaults. |
+| `VITE_CONFIGCAT_SDK_KEY` | ConfigCat SDK key. When set (and no `VITE_FEATURE_FLAGS`), flags come from ConfigCat. |
+| `VITE_CONFIGCAT_POLL_SECONDS` | Auto-poll interval in seconds. Defaults to 60; a non-positive or non-numeric value warns and falls back. |
 
 ```bash
-# Turn the upgrade flow on locally
+# Turn the upgrade flow on locally, without any remote control plane
 VITE_FEATURE_FLAGS='{"tenant-upgrade":true}' make dev
 ```
 
-One variable holds every flag, so adding a flag needs no new environment
-plumbing and there is no kebab-case-to-SCREAMING_SNAKE naming convention to keep
-in sync. Non-boolean values are ignored.
+`VITE_FEATURE_FLAGS` holds every flag in one variable, so adding a flag needs no
+new environment plumbing and there is no kebab-case-to-SCREAMING_SNAKE naming
+convention to keep in sync. Non-boolean values are ignored.
+
+Keep the SDK key out of version control: it belongs in
+`tools/app-shell/.env.development.local`, which is gitignored.
+
+### Provider precedence
+
+`createFlagProvider()` picks exactly one provider, highest priority first:
+
+| # | Condition | Provider |
+|---|-----------|----------|
+| 1 | `VITE_FEATURE_FLAGS` names at least one boolean flag | `InMemoryProvider` with those overrides |
+| 2 | `VITE_CONFIGCAT_SDK_KEY` is set | `ConfigCatWebProvider` (auto-poll) |
+| 3 | neither | `InMemoryProvider` with the declared defaults |
+
+**A local override deliberately beats the remote control plane.** Dev and e2e
+runs must not depend on the current state of a shared ConfigCat project, and a
+developer debugging a flag should not have their machine changed by someone
+toggling a dashboard. The order also makes the escape hatch obvious: set
+`VITE_FEATURE_FLAGS` and the remote plane is out of the picture entirely.
+
+The ConfigCat SDK is imported lazily, so its ~83 KB lands in its own chunk and
+only on builds that configure a key — a build without one is byte-identical in
+the main bundle.
 
 ## Evaluation context
 
@@ -170,11 +196,53 @@ Set at startup from `localStorage`, then re-applied on sign-in by
 ## Swapping the control plane
 
 `createFlagProvider()` in `lib/flags/bootstrap.js` is the **only** function that
-knows which control plane backs the flags. Replacing the local provider means
+knows which control plane backs the flags. Adding or replacing one means
 changing that function and nothing else — `initFeatureFlags`, the
 `useFeatureFlag` hook, the exposure hook and every call site stay as they are.
 
-To move to Mixpanel:
+### Worked example: ConfigCat (ETP-4691)
+
+The pilot is what the swap point looks like in practice — the entire integration
+is one branch inside `createFlagProvider()`:
+
+| Package | Version | Note |
+|---------|---------|------|
+| `@openfeature/config-cat-web-provider` | `^0.2.0` | Published under the **`@openfeature`** scope, not `@configcat` |
+| `@configcat/sdk` | `^1.1.0` | Its peer dependency — **not** the older `configcat-js` package |
+
+`ConfigCatWebProvider.create(sdkKey, { pollIntervalSeconds })` returns a
+ready-to-register provider. Two behaviours matter downstream:
+
+- It emits `PROVIDER_READY` from its **own** emitter once the client has flag
+  data, and `PROVIDER_CONFIGURATION_CHANGED` on every poll that changes config.
+  The hook already subscribes to both, so a dashboard toggle reaches a mounted
+  component without a reload.
+- `initialize()` **throws** when the client reaches ready state with no flag
+  data, because ConfigCat can be "ready" while still unable to evaluate. That
+  surfaces as a rejected registration, which `initFeatureFlags` catches and
+  degrades to the declared defaults — the safe-default rule holds.
+
+#### Targeting rules will not match: the frontend sends no email
+
+The `tenant-upgrade` setting in ConfigCat carries a targeting rule on
+`User.Email`, and the SDK says so at runtime:
+
+```
+ConfigCat - WARN - [3003] Cannot evaluate condition (User.Email IS ONE OF [...])
+for setting 'tenant-upgrade' (the User.Email attribute is missing).
+```
+
+The evaluation context sends `targetingKey` (the ERP username) and
+`account_id`, never an email — the frontend does not have one, which is the
+same open item recorded under the tenant upgrade flow below. So **only the
+setting's fallback ("To all users") value has any effect**; a rule targeting
+specific emails silently matches nobody and the flag stays at its fallback.
+
+This matters when testing a toggle: flipping the *targeting rule* changes
+nothing observable, while flipping the *fallback value* works. Anyone who
+wants real email targeting has to close the account-email item first.
+
+To move to Mixpanel instead:
 
 1. `npm install @mixpanel/openfeature-web-provider` (peer-depends on
    `@openfeature/web-sdk` and `mixpanel-browser`, both already present).

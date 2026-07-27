@@ -94,21 +94,53 @@ export function buildInMemoryConfiguration(overrides = {}) {
   );
 }
 
+/** Poll interval used when `VITE_CONFIGCAT_POLL_SECONDS` is unset or unusable. */
+const DEFAULT_POLL_SECONDS = 60;
+
+/** Reads the poll interval, falling back rather than passing NaN to the SDK. */
+export function resolvePollSeconds(raw, logger = console) {
+  if (raw == null || raw === '') return DEFAULT_POLL_SECONDS;
+  const seconds = Number(raw);
+  if (!Number.isFinite(seconds) || seconds <= 0) {
+    logger.warn('[flags] VITE_CONFIGCAT_POLL_SECONDS is not a positive number — using the default');
+    return DEFAULT_POLL_SECONDS;
+  }
+  return seconds;
+}
+
 /**
  * THE SWAP POINT — the only function that knows which control plane backs the
- * flags. Moving to Mixpanel means changing this function and nothing else:
- * `initFeatureFlags`, the `useFeatureFlag` hook, the exposure hook and every
- * call site stay exactly as they are.
+ * flags. `initFeatureFlags`, the `useFeatureFlag` hook, the exposure hook and
+ * every call site are unaware of which provider wins.
  *
- * When wiring `@mixpanel/openfeature-web-provider`, note that Mixpanel's flags
- * API buckets on `distinct_id` in the flag context, *not* on OpenFeature's
- * `targetingKey`. `buildEvaluationContext` must then also set
- * `distinct_id: username`, otherwise every user is bucketed as a separate
- * anonymous visitor.
+ * Precedence, highest first:
+ *
+ * 1. **`VITE_FEATURE_FLAGS`** — a local override beats the remote control plane
+ *    on purpose, so dev and e2e stay deterministic and no test depends on the
+ *    state of a shared ConfigCat project.
+ * 2. **ConfigCat**, when `VITE_CONFIGCAT_SDK_KEY` is set. Auto-polling, so a
+ *    toggle in the dashboard reaches a running tab without a reload.
+ * 3. **In-memory defaults** — the declared safe defaults, unchanged.
+ *
+ * The ConfigCat SDK is imported lazily so its bundle cost lands only on builds
+ * that actually configure it.
  */
-export function createFlagProvider({ env = import.meta.env, logger = console } = {}) {
-  const config = buildInMemoryConfiguration(parseFlagConfig(env.VITE_FEATURE_FLAGS, logger));
-  return new InMemoryProvider(config);
+export async function createFlagProvider({ env = import.meta.env, logger = console } = {}) {
+  const overrides = parseFlagConfig(env.VITE_FEATURE_FLAGS, logger);
+  if (Object.keys(overrides).length > 0) {
+    logger.warn('[flags] VITE_FEATURE_FLAGS is set — using local overrides, not the remote control plane');
+    return new InMemoryProvider(buildInMemoryConfiguration(overrides));
+  }
+
+  const sdkKey = env.VITE_CONFIGCAT_SDK_KEY;
+  if (sdkKey) {
+    const { ConfigCatWebProvider } = await import('@openfeature/config-cat-web-provider');
+    return ConfigCatWebProvider.create(sdkKey, {
+      pollIntervalSeconds: resolvePollSeconds(env.VITE_CONFIGCAT_POLL_SECONDS, logger),
+    });
+  }
+
+  return new InMemoryProvider(buildInMemoryConfiguration());
 }
 
 function withTimeout(promise, ms) {
@@ -133,7 +165,11 @@ export async function initFeatureFlags({
     // Registered before the provider so the earliest evaluations are counted.
     OpenFeature.addHooks(createFlagExposureHook());
 
-    const provider = createFlagProvider({ env, logger });
+    // Awaited because the ConfigCat branch lazy-imports its SDK. This resolves
+    // from a bundled chunk, and a failure lands in the catch below as a
+    // fallback to declared defaults — it never blocks rendering, which already
+    // happened before this fire-and-forget call resolves.
+    const provider = await createFlagProvider({ env, logger });
     await withTimeout(OpenFeature.setProviderAndWait(provider), PROVIDER_READY_TIMEOUT_MS);
     return provider.metadata?.name ?? 'unknown';
   } catch (error) {
