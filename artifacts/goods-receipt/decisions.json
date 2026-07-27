@@ -92,7 +92,7 @@
           "searchable": true,
           "section": "principal",
           "seq": 30,
-          "defaultValue": "@Today@",
+          "defaultValue": "@#Date@",
           "readOnlyLogic": "@Processed@='Y'"
         },
         "orderReference": {
