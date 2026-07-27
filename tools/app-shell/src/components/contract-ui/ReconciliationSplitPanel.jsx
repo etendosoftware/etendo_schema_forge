@@ -819,39 +819,75 @@ function ReconciliationActionBar({
 }
 
 
-/**
- * Confirmation for un-reconciling documents — one row or the bulk selection, Desconciliar or the
- * lighter Reactivar. Always shown (per product decision) because both are destructive to some degree.
- *
- * <p>Reuses the SAME cartel Movimientos and Cobros/Pagos already show for their reactivate/delete
- * actions ({@link LifecycleConfirmModal}), so every lifecycle confirmation across the app looks
- * identical: red title + sub, one bullet per real consequence, a yellow warning box, and a
- * destructive confirm button. The consequences are passed as an explicit {@code items} list because
- * they don't map onto that component's Conciliación/Transacción/Asiento triad.
+/*
+ * ── Copy matrix for the un-reconcile cartel ────────────────────────────────────────────────────
+ * The two un-reconcile actions (Desconciliar / the lighter Reactivar) share one cartel and differ
+ * only in wording, so every string is resolved from a lookup keyed by the action instead of being
+ * branched inline — the same pattern `MovementLifecycleConfirmModal` uses for its own two actions
+ * (`SUB_KEY_BY_ACTION` / `TITLE_KEY_BY_ACTION`). Keeps {@link RemoveOperationConfirmDialog} a thin
+ * render with no copy logic in it.
  */
-function RemoveOperationConfirmDialog({
-  open, count, hasAuto, reactivate, warnOtherDraft, busy, onConfirm, onClose,
-}) {
-  const ui = useUI();
-  if (!open) return null;
 
-  let sub;
-  if (reactivate) {
-    sub = count > 1
-      ? ui('financeReconcileConfirmReactivateManyBody', { count })
-      : ui('financeReconcileConfirmReactivateOneBody');
-  } else {
-    sub = count > 1
-      ? ui('financeReconcileConfirmRemoveManyBody', { count })
-      : ui('financeReconcileConfirmRemoveOneBody');
-  }
+/** `reactivate` (a boolean prop, for the caller's convenience) → the key used by every map below. */
+const REMOVE_ACTION = { reactivate: 'reactivate', remove: 'remove' };
 
-  // One bullet per effect that actually applies to this selection.
+/** Bulk selections name the count; a single document doesn't. */
+const SUB_KEY_BY_ACTION = {
+  reactivate: {
+    one: 'financeReconcileConfirmReactivateOneBody',
+    many: 'financeReconcileConfirmReactivateManyBody',
+  },
+  remove: {
+    one: 'financeReconcileConfirmRemoveOneBody',
+    many: 'financeReconcileConfirmRemoveManyBody',
+  },
+};
+
+const TITLE_KEY_BY_ACTION = {
+  reactivate: 'financeReconcileConfirmReactivateTitle',
+  remove: 'financeReconcileConfirmRemoveOneTitle',
+};
+
+const CONFIRM_LABEL_KEY_BY_ACTION = {
+  reactivate: 'financeReconcileActionReactivateSelected',
+  remove: 'financeReconcileActionRemoveOne',
+};
+
+/** First bullet is always the reconciliation itself — only its description changes per action. */
+const ITEM_RECONCILIATION_DESC_KEY_BY_ACTION = {
+  reactivate: 'financeReconcileConfirmItemReactivateDesc',
+  remove: 'financeReconcileConfirmItemRemoveDesc',
+};
+
+/**
+ * Only Reactivar's warning varies with another draft being open — Desconciliar has a single wording
+ * (it never confirms the other draft), so both of its entries deliberately point at the same key.
+ */
+const WARNING_KEY_BY_ACTION = {
+  reactivate: {
+    otherDraft: 'financeReconcileReactivateOtherDraftWarning',
+    default: 'financeReconcileConfirmReactivateWarning',
+  },
+  remove: {
+    otherDraft: 'financeReconcileConfirmRemoveWarning',
+    default: 'financeReconcileConfirmRemoveWarning',
+  },
+};
+
+/** Icon + its testid travel together so the rendered markup is identical for either action. */
+const CONFIRM_ICON_BY_ACTION = {
+  reactivate: { Icon: RotateCcw, testId: 'RotateCcw__recon-remove' },
+  remove: { Icon: Minus, testId: 'Minus__recon-remove' },
+};
+
+/** Stable no-op used to swallow the confirm while a request is already in flight. */
+const NOOP = () => {};
+
+/** One bullet per effect that actually applies to this selection. Order is part of the contract. */
+function resolveUnreconcileItems(ui, action, { hasAuto, reactivate, warnOtherDraft }) {
   const items = [[
     ui('reactivarItem1Title'),
-    ui(reactivate
-      ? 'financeReconcileConfirmItemReactivateDesc'
-      : 'financeReconcileConfirmItemRemoveDesc'),
+    ui(ITEM_RECONCILIATION_DESC_KEY_BY_ACTION[action]),
   ]];
   if (hasAuto) {
     items.push([
@@ -868,32 +904,65 @@ function RemoveOperationConfirmDialog({
       ui('financeReconcileConfirmItemOtherDraftDesc'),
     ]);
   }
+  return items;
+}
 
-  let warning;
-  if (reactivate) {
-    warning = warnOtherDraft
-      ? ui('financeReconcileReactivateOtherDraftWarning')
-      : ui('financeReconcileConfirmReactivateWarning');
-  } else {
-    warning = ui('financeReconcileConfirmRemoveWarning');
-  }
+/**
+ * Resolves every string the un-reconcile cartel shows, for one action × selection.
+ *
+ * @param {(key: string, params?: object) => string} ui translator from `useUI()`
+ * @param {{ count: number, hasAuto: boolean, reactivate: boolean, warnOtherDraft: boolean }} state
+ * @returns {{ title: string, sub: string, items: Array<[string, string]>, warning: string,
+ *   confirmLabel: string, confirmIcon: { Icon: Function, testId: string } }}
+ */
+function resolveUnreconcileDialogCopy(ui, { count, hasAuto, reactivate, warnOtherDraft }) {
+  const action = reactivate ? REMOVE_ACTION.reactivate : REMOVE_ACTION.remove;
+  const subKeys = SUB_KEY_BY_ACTION[action];
+  return {
+    title: ui(TITLE_KEY_BY_ACTION[action]),
+    sub: count > 1 ? ui(subKeys.many, { count }) : ui(subKeys.one),
+    items: resolveUnreconcileItems(ui, action, { hasAuto, reactivate, warnOtherDraft }),
+    warning: ui(WARNING_KEY_BY_ACTION[action][warnOtherDraft ? 'otherDraft' : 'default']),
+    confirmLabel: ui(CONFIRM_LABEL_KEY_BY_ACTION[action]),
+    confirmIcon: CONFIRM_ICON_BY_ACTION[action],
+  };
+}
+
+/**
+ * Confirmation for un-reconciling documents — one row or the bulk selection, Desconciliar or the
+ * lighter Reactivar. Always shown (per product decision) because both are destructive to some degree.
+ *
+ * <p>Reuses the SAME cartel Movimientos and Cobros/Pagos already show for their reactivate/delete
+ * actions ({@link LifecycleConfirmModal}), so every lifecycle confirmation across the app looks
+ * identical: red title + sub, one bullet per real consequence, a yellow warning box, and a
+ * destructive confirm button. The consequences are passed as an explicit {@code items} list because
+ * they don't map onto that component's Conciliación/Transacción/Asiento triad. All wording comes
+ * from {@link resolveUnreconcileDialogCopy}.
+ */
+function RemoveOperationConfirmDialog({
+  open, count, hasAuto, reactivate, warnOtherDraft, busy, onConfirm, onClose,
+}) {
+  const ui = useUI();
+  if (!open) return null;
+
+  const { title, sub, items, warning, confirmLabel, confirmIcon } =
+    resolveUnreconcileDialogCopy(ui, { count, hasAuto, reactivate, warnOtherDraft });
+  const { Icon: ConfirmIcon, testId: confirmIconTestId } = confirmIcon;
 
   return (
     <LifecycleConfirmModal
-      title={ui(reactivate
-        ? 'financeReconcileConfirmReactivateTitle'
-        : 'financeReconcileConfirmRemoveOneTitle')}
+      title={title}
       sub={sub}
       items={items}
       warning={warning}
-      confirmLabel={ui(reactivate
-        ? 'financeReconcileActionReactivateSelected'
-        : 'financeReconcileActionRemoveOne')}
+      confirmLabel={confirmLabel}
       cancelLabel={ui('cancel')}
-      confirmIcon={reactivate
-        ? <RotateCcw width={15} height={15} strokeWidth={2.2} data-testid="RotateCcw__recon-remove" />
-        : <Minus width={15} height={15} strokeWidth={2.2} data-testid="Minus__recon-remove" />}
-      onConfirm={busy ? () => {} : onConfirm}
+      confirmIcon={<ConfirmIcon
+        width={15}
+        height={15}
+        strokeWidth={2.2}
+        data-testid={confirmIconTestId} />}
+      onConfirm={busy ? NOOP : onConfirm}
       onClose={onClose}
       testIdPrefix="recon-remove"
       data-testid="LifecycleConfirmModal__recon-remove" />
