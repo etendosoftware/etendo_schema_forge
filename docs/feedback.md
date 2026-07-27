@@ -282,4 +282,22 @@ Owner: whoever next touches the goods-shipment window.
 
 **Java-side counterpart (separate change, tracked by a companion task, not this repo):** the `blockCalloutFieldUpdate` guard in `com.etendoerp.go` that stripped the cascade is being removed, so the native classic-AD `documentDate → accountingDate` callout cascade is now intentionally allowed to flow through unmodified on save.
 
+---
+
+## [2026-07-27] ETP-4609 (QA finding, DOCS write-up) — Latent `hiddenColumns` Clobbering Bug in Dead `ContactsTable.jsx`
+
+**Note:** this is NOT an active bug — it documents a landmine found in dead code so it isn't silently rediscovered (and re-diagnosed from scratch) if the file is ever revived. No fix was applied.
+
+**Component:** `tools/app-shell/src/windows/custom/contacts/ContactsTable.jsx`
+
+**Status: dead code, confirmed unreachable.** `contacts/index.jsx` renders the generated `BusinessPartnerPage` and does not import `ContactsTable.jsx`. A repo-wide search found no other import of the component either (only its own test file references it). Nothing currently mounts this component.
+
+**The bug (same shape as the real ETP-4609 fix in `ProductCustomTable.jsx`):** `ContactsTable.jsx` declares `const HIDDEN_COLS = ['__contactType']`, passes `hiddenColumns={HIDDEN_COLS}` to `DataTable`, and then spreads `{...rest}` (containing whatever the caller passed in) *after* that prop, e.g. `hiddenColumns={HIDDEN_COLS} ... {...rest}`. `ListView.jsx` unconditionally forwards its own `hiddenColumns` prop (default `[]`) to whatever `Table` component a window wires in. Because the spread lands after the local assignment, a live caller's `hiddenColumns={[]}` (or any other value) would silently clobber `HIDDEN_COLS`, and `__contactType` would render as a visible grid column instead of staying hidden. This is exactly the bug ETP-4609 fixed in `ProductCustomTable.jsx` by destructuring the incoming prop and merging (`[...new Set([...local, ...incoming])]`) instead of relying on spread order.
+
+**Why it wasn't fixed here:** out of scope for ETP-4609 (that ticket's QA pass found this only as a cross-window regression check while verifying the real fix, and the bug predates ETP-4609). Since the file is currently unreachable from any live window, there is no user-facing impact today.
+
+**Evidence:** `tools/app-shell/src/windows/custom/contacts/__tests__/ContactsTable.vitest.jsx` has a corresponding `it.skip(...)` test (`'keeps HIDDEN_COLS even when the parent forwards its own hiddenColumns=[] (ListView default)'`) that reproduces the clobbering and is skipped rather than deleted, precisely so it stays discoverable.
+
+**If `ContactsTable.jsx` is ever un-deadened (imported/mounted again):** apply the same destructure-and-merge fix used in `ProductCustomTable.jsx` before shipping, and un-skip the test above (or delete both the component and the test if the file is instead removed as confirmed dead code during cleanup).
+
 **Lesson:** when a ticket's scope reverses mid-implementation, don't just overwrite the old work silently — leave a dated trail (here + the affected window docs) explaining that the earlier "independence" behavior was intentional, correct-at-the-time, and has been superseded by an explicit redefinition, not reverted because it was wrong. Also: `visibility: readOnly` + `form: false` and `visibility: system` can look functionally equivalent in the rendered UI (both fully suppressed from form and grid), but only `system` fully excludes the field from `frontendContract.entities.*.fields` — prefer `system` for "never shown, never independently editable" fields over the readOnly+form:false combination, to avoid two different-looking representations of the same "fully hidden" intent across sibling windows.
