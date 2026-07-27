@@ -77,6 +77,49 @@ Hiding the route would imply the flag was protecting something, which it is not.
 Flag keys are kebab-case, which is also the Mixpanel convention — so keys carry
 over unchanged when the control plane moves.
 
+## Architecture: flag code layout
+
+Where flagged code lives is a rule, not a preference.
+
+**1. Each flag owns its files.** All logic a flag gates lives in modules and
+directories belonging to that flag. For `tenant-upgrade` that is `lib/upgrade/`
+and `pages/UpgradePage.jsx`.
+
+**2. Shared files hold toggle points only.** A shared file may contain the
+minimum needed to reach the flag's own code — a route registration, a menu
+entry — ideally a single greppable line naming the flag constant. Never business
+logic. If a shared file starts branching on a flag beyond "show this / route
+there", the logic belongs in the flag's own module.
+
+**3. Framework files belong to no flag.** `lib/flags/` is shared infrastructure
+serving every flag, and is excluded from per-flag attribution.
+
+**Why.** Two things depend on this layout:
+
+- *Per-flag debt scorecard.* Coverage and issues are measured over a flag's
+  owned paths, which only works if those paths contain the flag's code and
+  nothing else. Touch points in shared files are counted separately, as
+  removal-cost debt.
+- *Cheap removal at TTL.* Retiring a flag should be exactly: delete the owned
+  directories, then remove the touch points a grep for the flag constant finds.
+  Anything smeared across shared files turns that into an archaeology exercise.
+
+### ETP-4686 (`tenant-upgrade`) attribution
+
+| Kind | Path |
+|------|------|
+| Owned | `lib/upgrade/` (`api.js`, `mockPayment.js`) |
+| Owned | `pages/UpgradePage.jsx` |
+| Touch point | `runtime-routes.jsx` — lazy import plus one `lazyRoute('upgrade', …)` line |
+| Touch point | `components/UserAvatarButton.jsx` — flag import, one `useFeatureFlag(TENANT_UPGRADE)` call, and the menu item it guards |
+| Framework (unattributed) | `lib/flags/` |
+
+This complies with the rule. The two touch points carry no business logic: the
+route only registers a lazily-loaded page, and the menu entry only decides
+whether to render a link. `UserAvatarButton.jsx` needs an import, a hook call
+and a small JSX block rather than a literal single line — that is the floor for
+rendering a menu item, and `grep TENANT_UPGRADE` still finds all of it.
+
 ## Configuration
 
 | Variable | Effect |
