@@ -1,4 +1,5 @@
 import { registerImportDescriptor } from '@etendosoftware/app-shell-core/lib/import/buildOperations.js';
+import { parseBoolean } from '@/lib/parseBoolean.js';
 
 // The simplified Products CSV import supports exactly 4 columns: searchKey (código),
 // name (nombre), description (descripción) and price (precio). uOM/productCategory/
@@ -35,22 +36,9 @@ function pick(row, targets) {
   return body;
 }
 
-// Reused verbatim from ProductPriceBar.jsx's own salesPriceList flag detection so the
-// import resolves the SAME price list version a human would land on in the Price tab.
-function parseBoolean(value) {
-  if (typeof value === 'boolean') return value;
-  if (typeof value === 'number') {
-    if (value === 1) return true;
-    if (value === 0) return false;
-    return null;
-  }
-  if (typeof value !== 'string') return null;
-  const normalized = value.trim().toLowerCase();
-  if (['true', 'y', 'yes', '1'].includes(normalized)) return true;
-  if (['false', 'n', 'no', '0'].includes(normalized)) return false;
-  return null;
-}
-
+// Uses the shared parseBoolean() (see ProductPriceBar.jsx's own salesPriceList flag
+// detection) so the import resolves the SAME price list version a human would land
+// on in the Price tab.
 function getSalesFlag(item) {
   if (!item || typeof item !== 'object') return null;
   for (const [key, value] of Object.entries(item)) {
