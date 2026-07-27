@@ -104,21 +104,31 @@ serving every flag, and is excluded from per-flag attribution.
   directories, then remove the touch points a grep for the flag constant finds.
   Anything smeared across shared files turns that into an archaeology exercise.
 
-### ETP-4686 (`tenant-upgrade`) attribution
+### Where the per-flag paths live
 
-| Kind | Path |
-|------|------|
-| Owned | `lib/upgrade/` (`api.js`, `mockPayment.js`) |
-| Owned | `pages/UpgradePage.jsx` |
-| Touch point | `runtime-routes.jsx` — lazy import plus one `lazyRoute('upgrade', …)` line |
-| Touch point | `components/UserAvatarButton.jsx` — flag import, one `useFeatureFlag(TENANT_UPGRADE)` call, and the menu item it guards |
-| Framework (unattributed) | `lib/flags/` |
+**`flags-registry.json` in the repo root is canonical** for which paths belong to
+which flag. It is read by `cli/src/flag-debt.js`, so the scorer and the rule
+cannot disagree — a flag's owned paths are `flags.paths`, and the shared
+infrastructure excluded from every flag is `conventions.frameworkPaths`. See
+[flag-debt.md](flag-debt.md).
 
-This complies with the rule. The two touch points carry no business logic: the
-route only registers a lazily-loaded page, and the menu entry only decides
-whether to render a link. `UserAvatarButton.jsx` needs an import, a hook call
-and a small JSX block rather than a literal single line — that is the floor for
-rendering a menu item, and `grep TENANT_UPGRADE` still finds all of it.
+This document owns the *rule and the reasoning*; the registry owns the *facts*.
+When a flag gains a file or a touch point moves, update the registry — not a
+list here. Restating paths in prose would create a second copy that drifts
+silently, and a scorecard measuring stale paths produces numbers that look
+plausible and are wrong.
+
+*Illustrative snapshot, not a source — read the registry for current values.* At
+the time of writing, `tenant-upgrade` owns `tools/app-shell/src/lib/upgrade/` and
+`tools/app-shell/src/pages/UpgradePage.jsx`, with `tools/app-shell/src/lib/flags/`
+excluded as framework.
+
+Its two frontend touch points, `runtime-routes.jsx` and `UserAvatarButton.jsx`,
+carry no business logic: the route only registers a lazily-loaded page, and the
+menu entry only decides whether to render a link. `UserAvatarButton.jsx` needs an
+import, a hook call and a small JSX block rather than a literal single line —
+that is the floor for rendering a menu item, and it stays greppable through the
+`symbols` the registry lists for the flag.
 
 ## Configuration
 
