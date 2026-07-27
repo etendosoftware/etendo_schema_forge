@@ -13819,6 +13819,9 @@
     "Transaction code": {
       "label": "Clave de operación (IVA)"
     },
+    "Transaction Type": {
+      "label": "Tipo de transacción"
+    },
     "Invoice Register Book Setup": {
       "label": "Configuración de Libro de Facturas"
     },
@@ -13864,6 +13867,9 @@
     "Conversion Rates": {
       "label": "Rangos de conversión"
     },
+    "Conversion Rate Downloader Log": {
+      "label": "Registro de descarga de tipos de cambio"
+    },
     "Dimensions Mapping": {
       "label": "Mapeo de dimensiones"
     },
@@ -13886,8 +13892,8 @@
       "label": "País, provincia y ciudad"
     },
     "Business Partner": {
-      "label": "Terceros",
-      "newLabel": "Nuevo tercero"
+      "label": "Contactos",
+      "newLabel": "Nuevo contacto"
     },
     "Return Material Receipt": {
       "label": "Albarán de devolución",

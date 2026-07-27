@@ -13675,6 +13675,9 @@
     "Conversion Rates": {
       "label": "Conversion Rates"
     },
+    "Conversion Rate Downloader Log": {
+      "label": "Conversion Rate Downloader Log"
+    },
     "Fiscal Calendar": {
       "label": "Calendar"
     },
@@ -13688,8 +13691,8 @@
       "label": "Country and Region"
     },
     "Business Partner": {
-      "label": "Business Partner",
-      "newLabel": "New business partner"
+      "label": "Contacts",
+      "newLabel": "New contact"
     },
     "General Ledger Configuration": {
       "label": "General Ledger Configuration"
@@ -14540,6 +14543,9 @@
     },
     "Transaction code": {
       "label": "Transaction code"
+    },
+    "Transaction Type": {
+      "label": "Transaction Type"
     },
     "SII Monitor": {
       "label": "SII Monitor"
