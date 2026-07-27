@@ -16453,8 +16453,8 @@
     "upgradeStepSequences": "Configuring document sequences",
     "upgradeStepFinalize": "Finishing up",
     "upgradeSuccessTitle": "Your productive tenant is ready",
-    "upgradeSuccessBody": "Sign out and sign back in to pick the new tenant when choosing an environment.",
-    "upgradeSuccessAction": "Sign out to continue",
+    "upgradeSuccessBody": "Your new environment is ready to work in. You can switch between environments at any time from the company selector.",
+    "upgradeSuccessAction": "Enter the new environment",
     "balanced": "Balanced",
     "difference": "Difference",
     "journalUnbalancedSaveBlocked": "Debit and credit must be equal before saving",
@@ -18421,7 +18421,6 @@
     "financeAccountMovementsDimUser2": "Second dimension",
     "financeAccountMovementsPosted": "Posted",
     "financeAccountMovementsNotPosted": "Not posted",
-    "financeAccountMovementsStatusDraft": "Draft",
     "financeAccountMovementsStatusVoided": "Voided",
     "financeAccountMovementsStatusInTransit": "In transit",
     "financeAccountMovementsStatusCompleted": "Completed",
@@ -21176,7 +21175,8 @@
     "fm.m349.rectif.col.declared_period": "Declared period",
     "fm.m349.rectif.col.base_products": "Base · Products",
     "fm.m349.rectif.col.base_services": "Base · Services",
-    "fm.col.date": "Date"
+    "fm.col.date": "Date",
+    "upgradeEnterFailed": "We could not enter it automatically. Sign out and sign back in to reach your new environment."
   },
   "menus": {
     "Currency": {

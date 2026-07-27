@@ -20,6 +20,7 @@ import {
   validateCheckout,
 } from '@/lib/upgrade/mockPayment.js';
 import { createProductiveTenant, getPlatformToken, UPGRADE_ERROR_CODES } from '@/lib/upgrade/api.js';
+import { useEnvironmentSwitch } from '@/hooks/useEnvironmentSwitch.js';
 
 /**
  * Placeholder price for the mock checkout. Real pricing is a product decision
@@ -154,7 +155,7 @@ function FirstTenantFreePanel({ ui, onContinue }) {
   );
 }
 
-function SuccessPanel({ ui, onContinue }) {
+function SuccessPanel({ ui, onContinue, entering, enterError }) {
   return (
     <Card data-testid="upgrade-success">
       <CardHeader data-testid="CardHeader__58bad7">
@@ -167,9 +168,18 @@ function SuccessPanel({ ui, onContinue }) {
       </CardHeader>
       <CardContent className="space-y-4" data-testid="CardContent__58bad7">
         <p className="text-sm text-muted-foreground">{ui('upgradeSuccessBody')}</p>
-        <Button onClick={onContinue} data-testid="upgrade-success-continue">
-          {ui('upgradeSuccessAction')}
-          <ArrowRight className="h-4 w-4" data-testid="ArrowRight__58bad7" />
+        {enterError && (
+          <p className="text-sm text-destructive" data-testid="upgrade-enter-error">
+            {ui('upgradeEnterFailed')}
+          </p>
+        )}
+        <Button onClick={onContinue} disabled={entering} data-testid="upgrade-success-continue">
+          {entering
+            ? <Loader2 className="h-4 w-4 animate-spin" data-testid="Loader2__58bad7" />
+            : <>
+              {ui('upgradeSuccessAction')}
+              <ArrowRight className="h-4 w-4" data-testid="ArrowRight__58bad7" />
+            </>}
         </Button>
       </CardContent>
     </Card>
@@ -190,6 +200,9 @@ export default function UpgradePage() {
   // legitimate upgrade.
   const [accountState, setAccountState] = useState('loading');
   const [environments, setEnvironments] = useState([]);
+  const { enterByClientName } = useEnvironmentSwitch({ enabled: false });
+  const [entering, setEntering] = useState(false);
+  const [enterError, setEnterError] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -338,7 +351,21 @@ export default function UpgradePage() {
       {phase === 'running' && <ProgressPanel steps={steps} ui={ui} data-testid="ProgressPanel__58bad7" />}
       {phase === 'success' && <SuccessPanel
         ui={ui}
-        onContinue={() => navigate('/logout')}
+        entering={entering}
+        enterError={enterError}
+        // Enter the tenant that was just provisioned. Signing out is the
+        // fallback, not the route: it only happens when the new environment
+        // cannot be reached, which is also the only case where re-authenticating
+        // would help.
+        onContinue={async () => {
+          setEnterError(false);
+          setEntering(true);
+          const entered = await enterByClientName(form.tenantName);
+          if (!entered) {
+            setEntering(false);
+            setEnterError(true);
+          }
+        }}
         data-testid="SuccessPanel__58bad7" />}
       {showAccountLoading && (
         <Card data-testid="upgrade-account-loading">

@@ -62,6 +62,9 @@ import {
 import { cn } from '@/lib/utils.js';
 import { useMenuLabel, useUI, useLocaleSwitch } from '@/i18n';
 import { useFavorites } from '@/components/layout/FavoritesContext';
+import { Loader2 } from 'lucide-react';
+import { useFeatureFlag, TENANT_UPGRADE } from '@/lib/flags';
+import { useEnvironmentSwitch } from '@/hooks/useEnvironmentSwitch.js';
 import menuConfig from '@/menu.json';
 
 const ICON_MAP = {
@@ -466,6 +469,13 @@ export default function SideMenu({
   const location = useLocation();
   const currentPath = location.pathname.replace(/^\//, '');
   const { favorites } = useFavorites();
+  // Switching between tenants only means something once an account can own more
+  // than one, so the switcher rides the same flag as the upgrade flow. With the
+  // flag off this renders exactly what it did before: the current company alone.
+  const multiTenantEnabled = useFeatureFlag(TENANT_UPGRADE);
+  const { environments, switchTo, switching, currentClientId } = useEnvironmentSwitch({
+    enabled: multiTenantEnabled,
+  });
 
   const favNameMap = useMemo(() => {
     const map = {};
@@ -559,16 +569,44 @@ export default function SideMenu({
               <DropdownMenuContent align="start" className="w-56" data-testid="DropdownMenuContent__247c75">
                 <DropdownMenuLabel data-testid="DropdownMenuLabel__247c75">{ui('switchCompany')}</DropdownMenuLabel>
                 <DropdownMenuSeparator data-testid="DropdownMenuSeparator__247c75" />
-                <DropdownMenuItem disabled data-testid="DropdownMenuItem__247c75">
-                  <img
-                    src={logoSrc}
-                    alt=""
-                    className="h-5 w-5 mr-2 rounded-full"
-                  />
-                  <span className="flex-1 truncate">
-                    {selectedOrg?.name || ui('yourCompany')}
-                  </span>
-                </DropdownMenuItem>
+                {environments.length > 0 ? (
+                  environments.map((env) => {
+                    const isCurrent = env.clientId === currentClientId;
+                    return (
+                      <DropdownMenuItem
+                        key={env.clientId}
+                        disabled={isCurrent || switching !== null}
+                        onSelect={() => { if (!isCurrent) void switchTo(env); }}
+                        data-testid={`company-option-${env.clientId}`}
+                      >
+                        <img
+                          src={logoSrc}
+                          alt=""
+                          className="h-5 w-5 mr-2 rounded-full"
+                        />
+                        <span className="flex-1 truncate">
+                          {env.clientName || env.orgName || ui('yourCompany')}
+                        </span>
+                        {switching === env.clientId && (
+                          <Loader2 className="h-3.5 w-3.5 ml-2 shrink-0 animate-spin" />
+                        )}
+                      </DropdownMenuItem>
+                    );
+                  })
+                ) : (
+                  // No platform token, or the list could not be read: showing the
+                  // current company alone beats an empty menu.
+                  <DropdownMenuItem disabled data-testid="DropdownMenuItem__247c75">
+                    <img
+                      src={logoSrc}
+                      alt=""
+                      className="h-5 w-5 mr-2 rounded-full"
+                    />
+                    <span className="flex-1 truncate">
+                      {selectedOrg?.name || ui('yourCompany')}
+                    </span>
+                  </DropdownMenuItem>
+                )}
               </DropdownMenuContent>
             </DropdownMenu>
             <button

@@ -245,8 +245,10 @@ describe('UpgradePage — successful provisioning', () => {
     expect(JSON.stringify(onboardingCall[1].headers)).not.toContain('erp-session-token');
   });
 
-  it('routes to /logout, because tenant selection happens at sign-in', async () => {
+  it('surfaces an error when the new environment cannot be entered', async () => {
     const user = userEvent.setup();
+    // The environments list never grows to include the new tenant, which is what
+    // a provisioning that reported success but did not register looks like.
     installFetch({ environments: [{ clientName: EXISTING_TENANT }] });
     await renderUpgradePage();
 
@@ -255,7 +257,9 @@ describe('UpgradePage — successful provisioning', () => {
     await screen.findByTestId('upgrade-success');
 
     await user.click(screen.getByTestId('upgrade-success-continue'));
-    expect(navigateMock).toHaveBeenCalledWith('/logout');
+    // Signing out is offered as the recovery, not performed silently.
+    await screen.findByTestId('upgrade-enter-error');
+    expect(navigateMock).not.toHaveBeenCalledWith('/logout');
   });
 
   it('falls back to the form when the stream reports failure', async () => {

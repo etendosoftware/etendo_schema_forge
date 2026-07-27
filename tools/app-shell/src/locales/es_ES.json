@@ -16695,8 +16695,8 @@
     "upgradeStepSequences": "Configurando las secuencias de documentos",
     "upgradeStepFinalize": "Finalizando",
     "upgradeSuccessTitle": "Tu entorno productivo está listo",
-    "upgradeSuccessBody": "Cierra sesión y vuelve a entrar para elegir el nuevo entorno al seleccionar el entorno de trabajo.",
-    "upgradeSuccessAction": "Cerrar sesión para continuar",
+    "upgradeSuccessBody": "Ya puedes empezar a trabajar en tu nuevo entorno. También puedes cambiar de entorno cuando quieras desde el selector de empresa.",
+    "upgradeSuccessAction": "Entrar al nuevo entorno",
     "balanced": "Cuadrado",
     "difference": "Diferencia",
     "journalUnbalancedSaveBlocked": "El debe y el haber deben ser iguales antes de guardar",
@@ -18671,7 +18671,6 @@
     "financeAccountMovementsDimUser2": "Segunda dimensión",
     "financeAccountMovementsPosted": "Contabilizado",
     "financeAccountMovementsNotPosted": "Sin contabilizar",
-    "financeAccountMovementsStatusDraft": "Borrador",
     "financeAccountMovementsStatusVoided": "Anulado",
     "financeAccountMovementsStatusInTransit": "En tránsito",
     "financeAccountMovementsStatusCompleted": "Completado",
@@ -21442,7 +21441,8 @@
     "fm.m349.rectif.col.declared_period": "Periodo declarado",
     "fm.m349.rectif.col.base_products": "Base · Productos",
     "fm.m349.rectif.col.base_services": "Base · Servicios",
-    "fm.col.date": "Fecha"
+    "fm.col.date": "Fecha",
+    "upgradeEnterFailed": "No hemos podido entrar automáticamente. Cierra sesión y vuelve a entrar para acceder a tu nuevo entorno."
   },
   "menus": {
     "Goods Movement": {
