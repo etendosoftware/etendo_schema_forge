@@ -1,7 +1,11 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowRight, Check, CircleAlert, CreditCard, Loader2, Rocket } from 'lucide-react';
-import { initialSetupSteps, applyProgressMessage } from '@etendosoftware/etendo-go-core/onboarding';
+import {
+  initialSetupSteps,
+  applyProgressMessage,
+  fetchEnvironments,
+} from '@etendosoftware/etendo-go-core/onboarding';
 import { useUI, getStoredLocale } from '@/i18n';
 import { detectBaseUrl } from '@/auth/api.js';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -127,6 +131,29 @@ function ProgressPanel({ steps, ui }) {
   );
 }
 
+/**
+ * An account's first tenant is always free, even with the flag on, so charging
+ * for it would be wrong. Shown instead of the checkout when the account owns no
+ * environments — reachable only by opening /upgrade directly, since the menu
+ * entry lives inside a tenant.
+ */
+function FirstTenantFreePanel({ ui, onContinue }) {
+  return (
+    <Card data-testid="upgrade-first-tenant-free">
+      <CardHeader data-testid="CardHeader__58bad7">
+        <CardTitle className="text-base" data-testid="CardTitle__58bad7">{ui('upgradeFirstTenantFreeTitle')}</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-4" data-testid="CardContent__58bad7">
+        <p className="text-sm text-muted-foreground">{ui('upgradeFirstTenantFreeBody')}</p>
+        <Button onClick={onContinue} data-testid="upgrade-first-tenant-free-continue">
+          {ui('upgradeFirstTenantFreeAction')}
+          <ArrowRight className="h-4 w-4" data-testid="ArrowRight__58bad7" />
+        </Button>
+      </CardContent>
+    </Card>
+  );
+}
+
 function SuccessPanel({ ui, onContinue }) {
   return (
     <Card data-testid="upgrade-success">
@@ -158,6 +185,34 @@ export default function UpgradePage() {
   const [errors, setErrors] = useState({});
   const [formError, setFormError] = useState(null);
   const [steps, setSteps] = useState(() => initialSetupSteps());
+  // 'loading' | 'ready' | 'unavailable'. On 'unavailable' the checkout is shown
+  // anyway: the backend is authoritative, so a failed lookup must not block a
+  // legitimate upgrade.
+  const [accountState, setAccountState] = useState('loading');
+  const [environments, setEnvironments] = useState([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const token = getPlatformToken();
+    if (!token) {
+      setAccountState('unavailable');
+      return undefined;
+    }
+
+    fetchEnvironments(fetch, detectBaseUrl(), token)
+      .then(list => {
+        if (cancelled) return;
+        setEnvironments(Array.isArray(list) ? list : []);
+        setAccountState('ready');
+      })
+      .catch(() => {
+        if (!cancelled) setAccountState('unavailable');
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const update = (field, value) => {
     setForm(prev => ({ ...prev, [field]: value }));
@@ -207,11 +262,32 @@ export default function UpgradePage() {
     }
   };
 
+  // An account with no tenants yet gets its first one free, so it is offered the
+  // onboarding flow instead of a checkout. A failed lookup falls through to the
+  // checkout rather than blocking, since the backend decides either way.
+  const hasNoTenants = accountState === 'ready' && environments.length === 0;
+  const showAccountLoading = phase === 'form' && accountState === 'loading';
+  const showFirstTenantFree = phase === 'form' && hasNoTenants;
+  const showCheckout = phase === 'form' && accountState !== 'loading' && !hasNoTenants;
+
   const handleSubmit = event => {
     event.preventDefault();
     setFormError(null);
 
     const validation = validateCheckout(form);
+
+    // Submitting a name the account already owns is treated by the backend as
+    // resuming that tenant, not creating a new one — no charge, but also no new
+    // tenant. Catch it here so the user renames instead of seeing a "success"
+    // that hands back their existing tenant.
+    const requested = form.tenantName.trim().toLowerCase();
+    const alreadyOwned = environments.some(
+      env => String(env?.clientName ?? '').trim().toLowerCase() === requested
+    );
+    if (requested && alreadyOwned) {
+      validation.tenantName = 'upgradeTenantNameTaken';
+    }
+
     if (Object.keys(validation).length > 0) {
       setErrors(validation);
       return;
@@ -264,7 +340,23 @@ export default function UpgradePage() {
         ui={ui}
         onContinue={() => navigate('/logout')}
         data-testid="SuccessPanel__58bad7" />}
-      {phase === 'form' && (
+      {showAccountLoading && (
+        <Card data-testid="upgrade-account-loading">
+          <CardContent
+            className="flex items-center gap-2 py-6 text-sm text-muted-foreground"
+            data-testid="CardContent__58bad7">
+            <Loader2 className="h-4 w-4 animate-spin" data-testid="Loader2__58bad7" />
+            {ui('upgradeCheckingAccount')}
+          </CardContent>
+        </Card>
+      )}
+      {showFirstTenantFree && (
+        <FirstTenantFreePanel
+          ui={ui}
+          onContinue={() => navigate('/onboarding')}
+          data-testid="FirstTenantFreePanel__58bad7" />
+      )}
+      {showCheckout && (
         <Card data-testid="upgrade-checkout">
           <CardHeader data-testid="CardHeader__58bad7">
             <div className="flex items-center gap-2">

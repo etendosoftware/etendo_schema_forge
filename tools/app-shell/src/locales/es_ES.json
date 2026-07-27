@@ -16640,6 +16640,11 @@
     }
   },
   "genericLabels": {
+    "upgradeCheckingAccount": "Comprobando tu cuenta...",
+    "upgradeFirstTenantFreeTitle": "Tu primer entorno es gratuito",
+    "upgradeFirstTenantFreeBody": "Todavía no tienes ningún entorno, y el primero no tiene coste. El pago solo se aplica a los entornos adicionales.",
+    "upgradeFirstTenantFreeAction": "Crear mi primer entorno",
+    "upgradeTenantNameTaken": "Ya tienes un entorno con este nombre. Elige un nombre distinto para crear uno nuevo.",
     "upgradeMenuAction": "Crear entorno productivo",
     "upgradeTitle": "Crear un entorno productivo",
     "upgradeSubtitle": "Conserva tu entorno gratuito actual y añade un segundo entorno real donde trabajar con tus propios contactos y productos.",

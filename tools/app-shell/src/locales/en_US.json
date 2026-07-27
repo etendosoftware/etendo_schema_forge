@@ -16398,6 +16398,11 @@
     }
   },
   "genericLabels": {
+    "upgradeCheckingAccount": "Checking your account...",
+    "upgradeFirstTenantFreeTitle": "Your first tenant is free",
+    "upgradeFirstTenantFreeBody": "You do not have a tenant yet, and the first one costs nothing. Payment only applies to additional tenants.",
+    "upgradeFirstTenantFreeAction": "Create my first tenant",
+    "upgradeTenantNameTaken": "You already have a tenant with this name. Choose a different name to create a new one.",
     "upgradeMenuAction": "Create productive tenant",
     "upgradeTitle": "Create a productive tenant",
     "upgradeSubtitle": "Keep your current free tenant and add a second, real one where you can work with your own contacts and products.",

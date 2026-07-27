@@ -181,11 +181,35 @@ always simulates a decline and never reaches the network. Any other valid
 16-digit card mints a `mock-paid-<hex>` token.
 
 That token is sent as `paymentToken` to `POST /sws/go/onboarding`, which streams
-NDJSON progress messages. The backend enforces the paywall — it rejects an
-invalid or missing token with **HTTP 402** `{"error":"payment_required"}`, and
-only applies the paywall when the account already owns at least one tenant and
-the flag is on. On success the user is routed to `/logout`, because tenant
-selection happens at sign-in and there is no in-app tenant switcher in v1.
+NDJSON progress messages. On success the user is routed to `/logout`, because
+tenant selection happens at sign-in and there is no in-app tenant switcher in v1.
+
+### Backend contract (confirmed with the Etendo Go side)
+
+| Rule | Consequence for the frontend |
+|------|------------------------------|
+| Accepted token shape is `/^mock-paid-[0-9a-f]+$/` — **lowercase** hex | `createMockPaymentToken()` builds it with `toString(16)`, which is lowercase. Uppercase or non-hex would be declined. |
+| Refusal is **HTTP 402** with a plain JSON body, *not* the NDJSON stream — the gate runs before the stream opens | `lib/upgrade/api.js` checks the status before touching `response.body`, so a 402 never reaches the stream reader. |
+| Missing token and declined token both return `error: "payment_required"` and differ only in `message` | The UI does not branch on the code. A decline is caught client-side before any request; a 402 is reported as a generic payment-required error. |
+| An account's **first tenant is never charged**, even with the flag on | The page loads the account's environments and, when there are none, shows "your first tenant is free" and a link to onboarding instead of the checkout. |
+| Re-submitting a `clientName` the account already owns **resumes** that tenant and is not charged | The page rejects a name that matches an existing tenant, so a "success" never silently hands back an existing tenant. |
+| The backend re-evaluates `tenant-upgrade` and is **authoritative** | The frontend flag is presentation only, consistent with rule 3 above. |
+| Backend targeting key is the **account email** | See the caveat below — the frontend does not currently have that value. |
+| `GET /sws/go/environments` items now carry `plan: "free" \| "productive"`; treat a missing field as `"free"` | Not consumed yet — see below. |
+
+**Open: targeting keys do not match.** The backend buckets on the account
+email. The frontend uses `localStorage.sf_auth_user`, which
+`buildEnvironmentSessionStorage` sets to `env.adminUserName || env.adminUser` —
+the ERP admin username of the environment, not the account email, and the email
+is not persisted anywhere client-side (it is only available from
+`GET /sws/go/me`). This is inert today because the local `InMemoryProvider`
+ignores the targeting key entirely, but it must be resolved **before** Mixpanel
+is wired, or the two ends will bucket the same user differently.
+
+**Open: `plan` is not shown anywhere.** The natural place to badge it is the
+environment picker, which lives in `@etendosoftware/etendo-go-core`
+(`onboarding/steps/EnvSelectStep.jsx`), not in this repo. It needs a change in
+the core package.
 
 `lib/upgrade/api.js` deliberately does not reuse `runOnboardingStream` from
 `@etendosoftware/etendo-go-core`: that helper serialises a fixed allowlist of
