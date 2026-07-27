@@ -253,7 +253,7 @@ tenant selection happens at sign-in and there is no in-app tenant switcher in v1
 
 | Rule | Consequence for the frontend |
 |------|------------------------------|
-| Accepted token shape is `/^mock-paid-[0-9a-f]+$/` — **lowercase** hex | `createMockPaymentToken()` builds it with `toString(16)`, which is lowercase. Uppercase or non-hex would be declined. |
+| Accepted token shape is `/^mock-paid-[0-9a-f]+$/` — **lowercase** hex. Shape only: the backend does not confirm a charge occurred, so any well-formed token is provisioned | `createMockPaymentToken()` builds it with `toString(16)`, which is lowercase. Uppercase or non-hex would be declined. The gate is a placeholder for the flow, not a payment control. |
 | Refusal is **HTTP 402** with a plain JSON body, *not* the NDJSON stream — the gate runs before the stream opens | `lib/upgrade/api.js` checks the status before touching `response.body`, so a 402 never reaches the stream reader. |
 | Missing token and declined token both return `error: "payment_required"` and differ only in `message` | The UI does not branch on the code. A decline is caught client-side before any request; a 402 is reported as a generic payment-required error. |
 | An account's **first tenant is never charged**, even with the flag on | The page loads the account's environments and, when there are none, shows "your first tenant is free" and a link to onboarding instead of the checkout. |
