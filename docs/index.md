@@ -75,7 +75,7 @@ General findings about how the Etendo Application Dictionary works. Not window-s
 
 | Path | Description |
 |------|-------------|
-| [feature-flags.md](feature-flags.md) | **Feature flag reference**: OpenFeature as the app API with Mixpanel as the control plane, `useFeatureFlag`, safe defaults, the "visual gating only, never authorization" rule, local overrides, and the tenant upgrade flow |
+| [feature-flags.md](feature-flags.md) | **Feature flag reference**: OpenFeature as the app API over a local provider (Mixpanel planned), `useFeatureFlag`, safe defaults, the "visual gating only, never authorization" rule, `VITE_FEATURE_FLAGS`, the single swap point for changing control plane, exposure events, and the tenant upgrade flow |
 
 ## Generated/custom windows
 
