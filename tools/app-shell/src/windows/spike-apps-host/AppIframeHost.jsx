@@ -40,8 +40,8 @@ export default function AppIframeHost({ appUrl, appId, token }) {
     })();
   }, [appUrl, appId, token]);
 
-  if (error) return <div className="p-8 text-red-600">App token error: {error}</div>;
-  if (!src) return <div className="p-8 text-gray-500">Loading app…</div>;
+  if (error) return <div className="p-8 text-destructive">App token error: {error}</div>;
+  if (!src) return <div className="p-8 text-muted-foreground">Loading app…</div>;
 
   return (
     <iframe

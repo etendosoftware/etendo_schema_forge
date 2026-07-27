@@ -5,9 +5,9 @@ function InvoiceStatusPill({ label, value }) {
   const pct = Math.round(n);
   const full = pct >= 100;
   const partial = pct > 0 && !full;
-  const bg = full ? '#d1fae5' : partial ? '#fef3c7' : '#f3f4f6';
-  const color = full ? '#065f46' : partial ? '#92400e' : '#374151';
-  const dot = full ? '#10b981' : partial ? '#f59e0b' : '#9ca3af';
+  const bg = full ? 'var(--status-success-bg)' : partial ? 'var(--status-warning-bg)' : 'hsl(var(--card))';
+  const color = full ? 'var(--status-success-fg)' : partial ? 'var(--status-warning-fg)' : 'var(--status-info-fg)';
+  const dot = full ? 'var(--status-success-fg)' : partial ? 'var(--status-warning-border)' : 'hsl(var(--muted-foreground))';
 
   return (
     <span

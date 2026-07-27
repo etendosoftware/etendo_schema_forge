@@ -23,18 +23,18 @@ export function Psd2ConnectFlowUI({ flow }) {
     <>
       <Dialog open={connecting} data-testid="Dialog__psd2flow">
         <DialogContent
-          className="max-w-sm bg-white"
+          className="max-w-sm bg-card"
           onPointerDownOutside={(e) => e.preventDefault()}
           onEscapeKeyDown={(e) => e.preventDefault()}
           data-testid="psd2-connecting-overlay"
         >
           <DialogHeader data-testid="DialogHeader__psd2flow">
             <DialogTitle className="flex items-center justify-center gap-2 text-center" data-testid="DialogTitle__psd2flow">
-              <Loader2 className="h-5 w-5 animate-spin text-[#004ACA]" data-testid="Loader2__psd2flow" />
+              <Loader2 className="h-5 w-5 animate-spin text-[var(--status-info-fg)]" data-testid="Loader2__psd2flow" />
               {ui('financeAccountsPsd2Connecting')}
             </DialogTitle>
           </DialogHeader>
-          <p className="text-center text-xs text-[#6C6C89]">{ui('financeAccountsPsd2ConnectingHint')}</p>
+          <p className="text-center text-xs text-[hsl(var(--muted-foreground))]">{ui('financeAccountsPsd2ConnectingHint')}</p>
         </DialogContent>
       </Dialog>
       <Psd2AccountSelectModal
@@ -60,14 +60,14 @@ function Psd2AccountSelectModal({ selection, onConfirm, onCancel }) {
       open={open}
       onOpenChange={(value) => { if (!value) onCancel?.(); }}
       data-testid="Dialog__psd2select">
-      <DialogContent className="bg-white" data-testid="psd2-account-select-modal">
+      <DialogContent className="bg-card" data-testid="psd2-account-select-modal">
         <DialogHeader data-testid="DialogHeader__psd2select">
           <DialogTitle className="flex items-center gap-2" data-testid="DialogTitle__psd2select">
             {providerLogoUrl ? (
               <img
                 src={providerLogoUrl}
                 alt=""
-                className="h-6 w-6 rounded border border-[#E8EAEF] bg-white object-contain p-0.5"
+                className="h-6 w-6 rounded border border-[hsl(var(--border-subtle))] bg-card object-contain p-0.5"
               />
             ) : null}
             <span>
@@ -77,7 +77,7 @@ function Psd2AccountSelectModal({ selection, onConfirm, onCancel }) {
             </span>
           </DialogTitle>
         </DialogHeader>
-        <p className="text-sm text-[#6C6C89]">{ui('financeAccountsPsd2SelectHint')}</p>
+        <p className="text-sm text-[hsl(var(--muted-foreground))]">{ui('financeAccountsPsd2SelectHint')}</p>
         <div className="mt-2 flex flex-col gap-2">
           {accounts.map((acc) => {
             const isSelected = selected === acc.saltEdgeAccountId;
@@ -89,18 +89,18 @@ function Psd2AccountSelectModal({ selection, onConfirm, onCancel }) {
                 data-testid={`psd2-account-option-${acc.saltEdgeAccountId}`}
                 className={`flex items-center gap-3 rounded-lg border p-3 text-left transition-colors ${
                   isSelected
-                    ? 'border-[#004ACA] bg-[#EEF3FF]'
-                    : 'border-[#E8EAEF] hover:bg-[#F5F7F9]'
+                    ? 'border-[var(--status-info-fg)] bg-[var(--status-info-bg)]'
+                    : 'border-[hsl(var(--border-subtle))] hover:bg-[hsl(var(--muted))]'
                 }`}
               >
                 <Landmark
-                  className="h-5 w-5 flex-none text-[#6E6E80]"
+                  className="h-5 w-5 flex-none text-[hsl(var(--muted-foreground))]"
                   data-testid="Landmark__5f0f32" />
                 <span className="min-w-0 flex-1">
-                  <span className="block truncate text-sm font-medium text-[#121217]">
+                  <span className="block truncate text-sm font-medium text-[hsl(var(--foreground))]">
                     {acc.name || acc.iban || acc.saltEdgeAccountId}
                   </span>
-                  <span className="block truncate text-xs text-[#6C6C89]">
+                  <span className="block truncate text-xs text-[hsl(var(--muted-foreground))]">
                     {[acc.iban, acc.currency].filter(Boolean).join(' · ')}
                   </span>
                 </span>
@@ -113,7 +113,7 @@ function Psd2AccountSelectModal({ selection, onConfirm, onCancel }) {
             type="button"
             onClick={onCancel}
             data-testid="psd2-account-select-cancel"
-            className="rounded-lg border border-[#E8EAEF] px-4 py-2 text-sm font-medium text-[#121217] hover:bg-[#F5F7F9]"
+            className="rounded-lg border border-[hsl(var(--border-subtle))] px-4 py-2 text-sm font-medium text-[hsl(var(--foreground))] hover:bg-[hsl(var(--muted))]"
           >
             {ui('cancel')}
           </button>
@@ -122,7 +122,7 @@ function Psd2AccountSelectModal({ selection, onConfirm, onCancel }) {
             disabled={!selected}
             onClick={() => onConfirm?.(selected)}
             data-testid="psd2-account-select-confirm"
-            className="rounded-lg bg-[#121217] px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-[#FFD500] hover:text-[#121217] disabled:bg-[#D1D4DB] disabled:text-white disabled:hover:bg-[#D1D4DB] disabled:hover:text-white"
+            className="rounded-lg bg-[hsl(var(--foreground))] px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-[hsl(var(--accent-highlight))] hover:text-[hsl(var(--accent-highlight-foreground))] disabled:bg-[hsl(var(--border-control))] disabled:text-primary-foreground disabled:hover:bg-[hsl(var(--border-control))] disabled:hover:text-primary-foreground"
           >
             {ui('financeAccountsPsd2SelectConfirm')}
           </button>

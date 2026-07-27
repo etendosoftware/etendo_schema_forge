@@ -3,54 +3,54 @@
    they're available inside the component tree. */
 
 :root {
-  --fm-gray-50:  #F7F7F8;
-  --fm-gray-100: #E8E8ED;
-  --fm-gray-200: #D1D1DB;
-  --fm-gray-300: #A9A9BC;
-  --fm-gray-400: #8A8AA3;
-  --fm-gray-500: #6C6C89;
-  --fm-gray-600: #55556D;
-  --fm-gray-700: #3F3F50;
-  --fm-gray-800: #282833;
-  --fm-gray-900: #121217;
-  --fm-purple-600: #5423E7;
-  --fm-blue-700:   #0075AD;
-  --fm-green-50:   #EEFBF4;
-  --fm-green-200:  #B2EECC;
-  --fm-green-500:  #2DCA72;
-  --fm-green-700:  #17663A;
-  --fm-yellow-50:  #FFF9EB;
-  --fm-yellow-200: #FFE7AD;
-  --fm-yellow-700: #C28800;
-  --fm-red-50:     #FEF0F4;
-  --fm-red-200:    #FBB1C4;
-  --fm-red-700:    #D50B3E;
-  --fm-orange-50:  #FFF2EE;
-  --fm-orange-200: #FFCDBD;
-  --fm-orange-500: #FF7D52;
-  --fm-orange-700: #EB3A00;
-  --fm-blue-50:    #F0FAFF;
-  --fm-blue-200:   #ADE4FF;
-  --fm-blue-700f:  #0075AD;
+  --fm-gray-50:  hsl(var(--muted));
+  --fm-gray-100: hsl(var(--border-subtle));
+  --fm-gray-200: hsl(var(--border-control));
+  --fm-gray-300: hsl(var(--muted-foreground));
+  --fm-gray-400: hsl(var(--text-disabled));
+  --fm-gray-500: hsl(var(--muted-foreground));
+  --fm-gray-600: hsl(var(--muted-foreground));
+  --fm-gray-700: hsl(var(--muted-foreground));
+  --fm-gray-800: hsl(var(--foreground));
+  --fm-gray-900: hsl(var(--foreground));
+  --fm-purple-600: hsl(var(--primary));
+  --fm-blue-700:   var(--status-info-fg);
+  --fm-green-50:   var(--status-success-bg);
+  --fm-green-200:  var(--status-success-border);
+  --fm-green-500:  var(--status-success-fg);
+  --fm-green-700:  var(--status-success-fg);
+  --fm-yellow-50:  var(--status-warning-bg);
+  --fm-yellow-200: var(--status-warning-border);
+  --fm-yellow-700: var(--status-warning-fg);
+  --fm-red-50:     var(--status-destructive-bg);
+  --fm-red-200:    hsl(var(--destructive) / 0.3);
+  --fm-red-700:    hsl(var(--destructive));
+  --fm-orange-50:  var(--status-warning-bg);
+  --fm-orange-200: var(--status-warning-border);
+  --fm-orange-500: var(--status-warning-fg);
+  --fm-orange-700: var(--status-warning-fg);
+  --fm-blue-50:    var(--status-info-bg);
+  --fm-blue-200:   var(--status-info-border);
+  --fm-blue-700f:  var(--status-info-fg);
   --fm-font-sans: 'Inter', ui-sans-serif, system-ui, -apple-system, sans-serif;
   --fm-font-mono: ui-monospace, 'SF Mono', Menlo, monospace;
-  --fm-bg-page:   #FFFFFF;
+  --fm-bg-page:   hsl(var(--card));
   --fm-bg-subtle: var(--fm-gray-50);
-  --fm-bg-card:   #FFFFFF;
+  --fm-bg-card:   hsl(var(--card));
   --fm-fg-1: var(--fm-gray-900);
   --fm-fg-2: var(--fm-gray-700);
   --fm-fg-3: var(--fm-gray-500);
   --fm-fg-4: var(--fm-gray-400);
   --fm-border-1: var(--fm-gray-100);
   --fm-border-2: var(--fm-gray-200);
-  --fm-shadow-xs: 0 1px 1px rgba(18,18,23,.03);
-  --fm-shadow-sm: 0 1px 2px rgba(18,18,23,.04), 0 0 0 1px rgba(18,18,23,.03);
-  --fm-success-bg: var(--fm-green-50);  --fm-success-border: var(--fm-green-200); --fm-success-fg: #17663A;
-  --fm-warning-bg: var(--fm-yellow-50); --fm-warning-border: var(--fm-yellow-200);--fm-warning-fg: #8A6100;
-  --fm-danger-bg:  var(--fm-red-50);    --fm-danger-border:  var(--fm-red-200);   --fm-danger-fg:  #D50B3E;
-  --fm-pending-bg: var(--fm-yellow-50); --fm-pending-border: var(--fm-yellow-200);--fm-pending-fg: #8A6100;
+  --fm-shadow-xs: 0 1px 1px hsl(var(--foreground) / .03);
+  --fm-shadow-sm: 0 1px 2px hsl(var(--foreground) / .04), 0 0 0 1px hsl(var(--foreground) / .03);
+  --fm-success-bg: var(--fm-green-50);  --fm-success-border: var(--fm-green-200); --fm-success-fg: var(--status-success-fg);
+  --fm-warning-bg: var(--fm-yellow-50); --fm-warning-border: var(--fm-yellow-200);--fm-warning-fg: var(--status-warning-fg);
+  --fm-danger-bg:  var(--fm-red-50);    --fm-danger-border:  var(--fm-red-200);   --fm-danger-fg:  hsl(var(--destructive));
+  --fm-pending-bg: var(--fm-yellow-50); --fm-pending-border: var(--fm-yellow-200);--fm-pending-fg: var(--status-warning-fg);
   --fm-info-bg:    var(--fm-blue-50);   --fm-info-border:    var(--fm-blue-200);  --fm-info-fg:    var(--fm-blue-700f);
-  --fm-error-detail-fg: #AF0932;
+  --fm-error-detail-fg: hsl(var(--destructive));
 }
 
 /* ── Page wrap ─────────────────────────────────────────────────────────────── */
@@ -70,7 +70,7 @@
 .fm-orglead .r { display: flex; align-items: center; gap: 8px; color: var(--fm-fg-3); font: 500 12px/16px var(--fm-font-sans); }
 .fm-orglead .syncdot {
   width: 6px; height: 6px; border-radius: 50%;
-  background: var(--fm-green-500); box-shadow: 0 0 0 4px rgba(45,202,114,.12);
+  background: var(--fm-green-500); box-shadow: 0 0 0 4px hsl(var(--status-success-fg) / .12);
   flex-shrink: 0;
 }
 
@@ -105,7 +105,7 @@
   cursor: pointer; transition: border-color .12s ease, background .12s ease;
   position: relative;
 }
-.fm-kpi:hover { border-color: var(--fm-border-2); background: #fff; }
+.fm-kpi:hover { border-color: var(--fm-border-2); background: hsl(var(--card)); }
 .fm-kpi.active { border-color: var(--fm-gray-900); }
 .fm-kpi .row1 { display: flex; align-items: center; justify-content: space-between; }
 .fm-kpi .label { font: 500 12px/16px var(--fm-font-sans); color: var(--fm-fg-3); }
@@ -144,7 +144,7 @@
 .fm-section-head .badge-system {
   display: inline-flex; align-items: center;
   padding: 3px 8px; border-radius: 6px;
-  background: var(--fm-gray-900); color: #fff;
+  background: var(--fm-gray-900); color: hsl(var(--card));
   font: 600 10px/14px var(--fm-font-sans); letter-spacing: .08em; text-transform: uppercase;
 }
 .fm-section-head .badge-system.tbai     { background: var(--fm-purple-600); }
@@ -161,7 +161,7 @@
 .fm-tabs {
   display: flex; align-items: center;
   padding: 0 8px; border-bottom: 1px solid var(--fm-border-1);
-  background: #fff; gap: 0;
+  background: hsl(var(--card)); gap: 0;
 }
 .fm-tabs .tab {
   display: inline-flex; align-items: center; gap: 6px;
@@ -176,24 +176,24 @@
 .fm-tabs .tab .tab-count {
   display: inline-flex; align-items: center; justify-content: center;
   min-width: 20px; padding: 1px 6px; border-radius: 999px;
-  background: #F1F3F5; color: var(--fm-fg-2);
+  background: hsl(var(--muted)); color: var(--fm-fg-2);
   font: 400 11px/15px var(--fm-font-sans);
 }
-.fm-tabs .tab.active .tab-count { background: #EAECEF; color: var(--fm-fg-1); }
+.fm-tabs .tab.active .tab-count { background: hsl(var(--border-subtle)); color: var(--fm-fg-1); }
 
 /* Count bubble inside filter pills */
 .fm-filter-pill .pill-count {
   display: inline-flex; align-items: center; justify-content: center;
   min-width: 18px; padding: 1px 6px; border-radius: 999px;
-  background: rgba(18,18,23,0.07); color: inherit;
+  background: hsl(var(--foreground) / 0.07); color: inherit;
   font: 400 11px/16px var(--fm-font-sans);
 }
 .fm-filter-pill.active .pill-count {
-  background: rgba(18,18,23,0.1);
+  background: hsl(var(--foreground) / 0.1);
 }
 .fm-tabs .dotcolor { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
 .fm-tabs .dotcolor.success { background: var(--fm-green-500); }
-.fm-tabs .dotcolor.warn    { background: #FAAF00; }
+.fm-tabs .dotcolor.warn    { background: var(--status-warning-fg); }
 .fm-tabs .dotcolor.danger  { background: var(--fm-red-700); }
 .fm-tabs .dotcolor.pending { background: var(--fm-orange-500); }
 .fm-tabs .spacer { flex: 1; }
@@ -209,7 +209,7 @@
   border: 0; background: transparent; cursor: pointer;
 }
 .fm-segmented .seg.active {
-  background: #fff; color: var(--fm-fg-1); font-weight: 600;
+  background: hsl(var(--card)); color: var(--fm-fg-1); font-weight: 600;
   box-shadow: var(--fm-shadow-xs);
 }
 .fm-segmented .seg:hover:not(.active) { color: var(--fm-fg-1); }
@@ -218,22 +218,22 @@
 .fm-subtoolbar {
   display: flex; align-items: center; gap: 8px;
   padding: 10px 12px; border-bottom: 1px solid var(--fm-border-1);
-  background: #fff; flex-wrap: wrap;
+  background: hsl(var(--card)); flex-wrap: wrap;
 }
 .fm-subtoolbar .spacer { flex: 1; }
 .fm-subtoolbar .meta { font: 400 12px/16px var(--fm-font-sans); color: var(--fm-fg-3); }
 
 /* ── Table ─────────────────────────────────────────────────────────────────── */
 /* ── Table — exact match to DataTable / TableHead / TableCell ───────────────── */
-/* Header: text-xs (12px) font-semibold text-text-primary (≈#121217)            */
-/* Cell:   text-sm (14px) text-foreground (hsl(222 47% 11%)) px-3 py-2.5        */
+/* Header: text-xs (12px) font-semibold text-text-primary (≈hsl(var(--foreground)))            */
+/* Cell:   text-sm (14px) text-foreground px-3 py-2.5                           */
 .fm-tablecard .fm-table {
   width: 100%; border-collapse: collapse;
   font: 400 14px/20px var(--fm-font-sans);
   color: hsl(var(--foreground));
 }
 .fm-tablecard .fm-table thead tr {
-  border-bottom: 1px solid #E8EAEF;
+  border-bottom: 1px solid hsl(var(--border-subtle));
   background: transparent;
 }
 .fm-tablecard .fm-table th {
@@ -244,11 +244,11 @@
 }
 .fm-tablecard .fm-table th.num { text-align: right; }
 .fm-tablecard .fm-table td {
-  padding: 10px 12px; border-bottom: 1px solid #E8EAEF;
+  padding: 10px 12px; border-bottom: 1px solid hsl(var(--border-subtle));
   font-size: 14px; line-height: 20px;
 }
 .fm-tablecard .fm-table tr:last-child td { border-bottom: 0; }
-.fm-tablecard .fm-table tr:hover td { background: hsl(210 40% 96% / 0.5); }
+.fm-tablecard .fm-table tr:hover td { background: hsl(var(--muted) / 0.5); }
 .fm-tablecard .fm-table td.num { text-align: right; font-variant-numeric: tabular-nums; }
 .fm-tablecard .fm-table td.strong { font-weight: 500; }
 .fm-tablecard .fm-table td.mono {
@@ -265,7 +265,7 @@
 }
 .fm-num-factura-link:hover { color: var(--fm-purple-600); }
 .fm-num-factura-arrow {
-  color: hsl(215 16% 47%); flex-shrink: 0;
+  color: hsl(var(--muted-foreground)); flex-shrink: 0;
   transition: color .12s ease;
 }
 .fm-num-factura-link:hover .fm-num-factura-arrow { color: var(--fm-purple-600); }
@@ -293,7 +293,7 @@
 .fm-pill.danger  { background: var(--fm-danger-bg);  color: var(--fm-danger-fg); }
 .fm-pill.pending { background: var(--fm-pending-bg); color: var(--fm-pending-fg); }
 .fm-pill.info    { background: var(--fm-info-bg);    color: var(--fm-info-fg); }
-.fm-pill.neutral { background: #F0F0F5; color: #6C6C89; }
+.fm-pill.neutral { background: hsl(var(--muted)); color: hsl(var(--muted-foreground)); }
 
 /* Pager removed — infinite scroll is used instead (matches ListView.jsx pattern) */
 
@@ -331,7 +331,7 @@
 }
 .fm-action-btn:hover { background: var(--fm-gray-100); }
 .fm-action-btn.primary {
-  background: var(--fm-gray-900); color: #fff; border-color: var(--fm-gray-900);
+  background: var(--fm-gray-900); color: hsl(var(--card)); border-color: var(--fm-gray-900);
 }
 .fm-action-btn.primary:hover { background: var(--fm-gray-800); }
 
@@ -357,7 +357,7 @@
   padding: 8px;
 }
 .fm-filter-pills {
-  background: #F5F7F9; border-radius: 12px; padding: 4px;
+  background: hsl(var(--muted)); border-radius: 12px; padding: 4px;
   display: flex; flex-direction: row; align-items: center; gap: 4px;
 }
 .fm-filter-pill {
@@ -365,14 +365,14 @@
   padding: 5px 14px; border-radius: 8px;
   font: 400 14px/20px var(--fm-font-sans);
   border: none;
-  background: transparent; color: #121217;
+  background: transparent; color: hsl(var(--foreground));
   cursor: pointer; white-space: nowrap;
 }
-.fm-filter-pill:hover:not(.active) { background: rgba(18,18,23,0.05); }
+.fm-filter-pill:hover:not(.active) { background: hsl(var(--foreground) / 0.05); }
 .fm-filter-pill.active {
-  background: #FFFFFF;
-  box-shadow: 0px 1px 3px rgba(18,18,23,0.1), 0px 1px 2px rgba(18,18,23,0.06);
-  border-radius: 8px; color: #121217; font-weight: 500; border: none;
+  background: hsl(var(--card));
+  box-shadow: 0px 1px 3px hsl(var(--foreground) / 0.1), 0px 1px 2px hsl(var(--foreground) / 0.06);
+  border-radius: 8px; color: hsl(var(--foreground)); font-weight: 500; border: none;
 }
 
 /* ── Invoice-type chips (compact SII mode — individual bordered buttons) ────── */
@@ -387,9 +387,9 @@
   cursor: pointer; white-space: nowrap;
 }
 .fm-chip.active {
-  background: #FFFFFF; color: var(--fm-fg-1); font-weight: 600;
+  background: hsl(var(--card)); color: var(--fm-fg-1); font-weight: 600;
   border-color: var(--fm-border-1);
-  box-shadow: 0 1px 3px rgba(18,18,23,.1), 0 1px 2px rgba(18,18,23,.06);
+  box-shadow: 0 1px 3px hsl(var(--foreground) / .1), 0 1px 2px hsl(var(--foreground) / .06);
 }
 .fm-chip:hover:not(.active) { background: var(--fm-bg-subtle); }
 
@@ -405,16 +405,16 @@
 .fm-export-btn:hover { background: var(--fm-bg-subtle); border-color: var(--fm-border-2); }
 .fm-export-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 .fm-export-btn--primary {
-  background: var(--fm-gray-900); color: #fff;
+  background: var(--fm-gray-900); color: hsl(var(--card));
   border-color: var(--fm-gray-900); font-weight: 600;
 }
-.fm-export-btn--primary:hover:not(:disabled) { background: #FFD500; border-color: #FFD500; color: #121217; }
+.fm-export-btn--primary:hover:not(:disabled) { background: hsl(var(--primary)); border-color: hsl(var(--primary)); color: hsl(var(--foreground)); }
 
 /* ── System tabs (SII + TBAI combined view) ─────────────────────────────────── */
 .fm-system-tabs {
   display: flex; align-items: center;
   padding: 0 8px; border-bottom: 1px solid var(--fm-border-1);
-  background: #fff; gap: 4px;
+  background: hsl(var(--card)); gap: 4px;
 }
 .fm-system-tab {
   display: inline-flex; align-items: center; gap: 6px;
@@ -424,15 +424,15 @@
   background: transparent; cursor: pointer; margin-bottom: -1px;
 }
 .fm-system-tab:hover { color: var(--fm-fg-1); }
-.fm-system-tab.active { color: var(--fm-fg-1); font-weight: 600; border-bottom-color: #121217; }
+.fm-system-tab.active { color: var(--fm-fg-1); font-weight: 600; border-bottom-color: hsl(var(--foreground)); }
 .fm-system-tab .tab-count {
   display: inline-flex; align-items: center; justify-content: center;
   min-width: 20px; padding: 1px 6px; border-radius: 999px;
-  background: #F1F3F5; color: var(--fm-fg-2);
+  background: hsl(var(--muted)); color: var(--fm-fg-2);
   font: 400 11px/15px var(--fm-font-sans);
 }
 .fm-system-tab.active .tab-count {
-  background: #EAECEF; color: var(--fm-fg-1);
+  background: hsl(var(--border-subtle)); color: var(--fm-fg-1);
 }
 
 /* ── Period dropdown (SII compact mode) ─────────────────────────────────────── */
@@ -446,8 +446,8 @@
 .fm-period-btn:hover { background: var(--fm-bg-subtle); }
 .fm-period-menu {
   position: absolute; top: calc(100% + 4px); left: 0; z-index: 20;
-  background: #fff; border: 1px solid var(--fm-border-2); border-radius: 8px;
-  box-shadow: 0 4px 12px rgba(18,18,23,.08); min-width: 180px; overflow: hidden;
+  background: hsl(var(--card)); border: 1px solid var(--fm-border-2); border-radius: 8px;
+  box-shadow: 0 4px 12px hsl(var(--foreground) / .08); min-width: 180px; overflow: hidden;
 }
 .fm-period-menu button {
   display: block; width: 100%; text-align: left;

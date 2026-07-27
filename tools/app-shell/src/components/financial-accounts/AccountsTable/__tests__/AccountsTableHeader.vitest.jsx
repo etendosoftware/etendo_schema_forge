@@ -37,7 +37,7 @@ describe('AccountsTableHeader', () => {
     const cuenta = screen.getByText('Cuenta');
     expect(cuenta.className).toMatch(/text-xs/);
     expect(cuenta.className).toMatch(/font-semibold/);
-    expect(cuenta.className).toMatch(/text-\[#121217\]/);
+    expect(cuenta.className).toMatch(/text-\[hsl\(var\(--foreground\)\)\]/);
   });
 
   it('left-pads the Cuenta header so the label aligns with the body avatar', () => {

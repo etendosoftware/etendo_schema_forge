@@ -16,13 +16,13 @@ function Toggle({ checked, onChange, disabled }) {
       onClick={() => !disabled && onChange(!checked)}
       className={[
         'relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors',
-        checked ? 'bg-gray-900' : 'bg-gray-300',
+        checked ? 'bg-foreground' : 'bg-muted',
         disabled ? 'cursor-not-allowed opacity-60' : 'cursor-pointer',
       ].join(' ')}
     >
       <span
         className={[
-          'inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform',
+          'inline-block h-5 w-5 transform rounded-full bg-card shadow transition-transform',
           checked ? 'translate-x-5' : 'translate-x-0.5',
         ].join(' ')}
       />
@@ -34,7 +34,7 @@ function FieldRow({ labelText, valueText, checked, onToggle, toggleDisabled, exp
   return (
     <div className="rounded-xl">
       <div className="flex items-center justify-between gap-3 py-2">
-        <div className="min-w-0 flex-1 text-sm text-gray-900">
+        <div className="min-w-0 flex-1 text-sm text-foreground">
           {labelText}: {valueText ? <span className="font-semibold">{valueText}</span> : null}
         </div>
         <Toggle
@@ -126,18 +126,18 @@ export default function OcrReviewModal({
   });
 
   return (
-    <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/30 p-4">
-      <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl">
+    <div className="fixed inset-0 z-40 flex items-center justify-center bg-foreground/30 p-4">
+      <div className="w-full max-w-md rounded-2xl bg-card p-6 shadow-2xl">
         <div className="mb-4 flex items-start justify-between gap-4">
           <div>
-            <h2 className="text-lg font-semibold text-gray-900">{ui('ocrReviewTitle')}</h2>
-            <p className="mt-1 text-sm text-gray-500">{ui('ocrReviewSubtitle')}</p>
+            <h2 className="text-lg font-semibold text-foreground">{ui('ocrReviewTitle')}</h2>
+            <p className="mt-1 text-sm text-muted-foreground">{ui('ocrReviewSubtitle')}</p>
           </div>
           <button
             type="button"
             onClick={onCancel}
             aria-label={ui('ocrReviewCancel')}
-            className="text-gray-400 hover:text-gray-600"
+            className="text-muted-foreground hover:text-muted-foreground"
           >
             <X size={18} data-testid="X__80a87a" />
           </button>
@@ -180,7 +180,7 @@ export default function OcrReviewModal({
           <button
             type="button"
             onClick={onCancel}
-            className="rounded-full border border-gray-300 bg-white px-5 py-2 text-sm font-medium text-gray-800 hover:bg-gray-50"
+            className="rounded-full border border-border-control bg-card px-5 py-2 text-sm font-medium text-foreground hover:bg-muted"
           >
             {ui('ocrReviewCancel')}
           </button>
@@ -188,7 +188,7 @@ export default function OcrReviewModal({
             type="button"
             onClick={handleSubmit}
             disabled={!canSubmit}
-            className="rounded-full bg-gray-900 px-5 py-2 text-sm font-medium text-white hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-50"
+            className="rounded-full bg-foreground px-5 py-2 text-sm font-medium text-primary-foreground hover:bg-foreground disabled:cursor-not-allowed disabled:opacity-50"
           >
             {ui('ocrReviewContinue')}
           </button>

@@ -5,7 +5,7 @@
  * confirmation modal without being forced into the "danger" visual style
  * (red border + undo icon) that 'ghost-danger' also carries.
  */
-import { dispatchProcessAction } from '../DetailView.jsx';
+import { dispatchProcessAction, maybeSaveBeforeProcess } from '../DetailView.jsx';
 
 // Mock all the heavy dependencies DetailView imports
 vi.mock('react-router-dom', () => ({
@@ -94,5 +94,38 @@ describe('dispatchProcessAction', () => {
     const process = { style: 'positive', params: [{ hidden: true }] };
     dispatchProcessAction(process, cb);
     expect(cb.handleProcess).toHaveBeenCalledWith(process);
+  });
+});
+
+// ETP-4542: opt-in "save before process" gate. Covers the four behaviors the
+// toolbar process-button onClick relies on before calling dispatchProcessAction.
+describe('maybeSaveBeforeProcess', () => {
+  it('dirty + successful save → saves silently and allows the process to run', async () => {
+    const handleSave = vi.fn().mockResolvedValue({ id: 'A1' });
+    const proceed = await maybeSaveBeforeProcess({ saveBeforeProcesses: true, isDirty: true, handleSave });
+    expect(handleSave).toHaveBeenCalledWith({ silent: true });
+    expect(proceed).toBe(true);
+  });
+
+  it('dirty + failed save → aborts the process (returns false)', async () => {
+    // handleSave returns null on validation/required/numeric/backend failure.
+    const handleSave = vi.fn().mockResolvedValue(null);
+    const proceed = await maybeSaveBeforeProcess({ saveBeforeProcesses: true, isDirty: true, handleSave });
+    expect(handleSave).toHaveBeenCalledWith({ silent: true });
+    expect(proceed).toBe(false);
+  });
+
+  it('not dirty → runs the process directly without saving', async () => {
+    const handleSave = vi.fn();
+    const proceed = await maybeSaveBeforeProcess({ saveBeforeProcesses: true, isDirty: false, handleSave });
+    expect(handleSave).not.toHaveBeenCalled();
+    expect(proceed).toBe(true);
+  });
+
+  it('without the saveBeforeProcesses flag → never saves, even when dirty', async () => {
+    const handleSave = vi.fn();
+    const proceed = await maybeSaveBeforeProcess({ saveBeforeProcesses: false, isDirty: true, handleSave });
+    expect(handleSave).not.toHaveBeenCalled();
+    expect(proceed).toBe(true);
   });
 });

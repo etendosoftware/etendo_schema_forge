@@ -12,7 +12,7 @@ export function AccountBadge({ code, className = '' }) {
   if (!code) return null;
   return (
     <span
-      className={`inline-flex items-center rounded-md bg-[#F0F1F3] px-1.5 py-0.5 text-xs font-medium text-[#5A5E6B] ${className}`}
+      className={`inline-flex items-center rounded-md bg-[hsl(var(--muted))] px-1.5 py-0.5 text-xs font-medium text-[hsl(var(--muted-foreground))] ${className}`}
     >
       {code}
     </span>
@@ -63,17 +63,17 @@ export function AccountBadgeSelect({
   const triggerInner = selected ? (
     <span className="flex items-center gap-2 min-w-0">
       <AccountBadge code={selected.code} data-testid="AccountBadge__2082a8" />
-      <span className="truncate text-[#121217]">{selected.name}</span>
+      <span className="truncate text-[hsl(var(--foreground))]">{selected.name}</span>
     </span>
   ) : (
-    <span className="text-[#9A9DA8]">{ph}</span>
+    <span className="text-[hsl(var(--text-disabled))]">{ph}</span>
   );
 
   const labelRow = label ? (
-    <span className="flex items-center gap-1 text-sm font-medium text-[#121217] mb-1.5">
+    <span className="flex items-center gap-1 text-sm font-medium text-[hsl(var(--foreground))] mb-1.5">
       <span>
         {label}
-        {required && <span className="text-[#D7373F] ml-0.5">*</span>}
+        {required && <span className="text-[hsl(var(--destructive))] ml-0.5">*</span>}
       </span>
       {labelHint}
     </span>
@@ -83,14 +83,14 @@ export function AccountBadgeSelect({
     return (
       <div data-testid={dataTestId}>
         {labelRow}
-        <div className="flex items-center gap-2 min-w-0 h-9 px-3 rounded-lg border border-[#E8EAEF] bg-[#F8F9FB] text-sm">
+        <div className="flex items-center gap-2 min-w-0 h-9 px-3 rounded-lg border border-[hsl(var(--border-subtle))] bg-[hsl(var(--muted))] text-sm">
           {triggerInner}
         </div>
       </div>
     );
   }
 
-  const borderClass = error ? 'border-[#D7373F]' : 'border-[#E8EAEF]';
+  const borderClass = error ? 'border-[hsl(var(--destructive))]' : 'border-[hsl(var(--border-subtle))]';
 
   return (
     <div data-testid={dataTestId}>
@@ -99,12 +99,12 @@ export function AccountBadgeSelect({
         <PopoverTrigger asChild data-testid="PopoverTrigger__2082a8">
           <button
             type="button"
-            className={`flex w-full items-center justify-between gap-2 h-9 px-3 rounded-lg border ${borderClass} bg-white text-sm hover:border-[#C4C7D0] focus:outline-none focus:ring-2 focus:ring-primary transition-colors`}
+            className={`flex w-full items-center justify-between gap-2 h-9 px-3 rounded-lg border ${borderClass} bg-card text-sm hover:border-[hsl(var(--border-control))] focus:outline-none focus:ring-2 focus:ring-primary transition-colors`}
           >
             <span className="flex items-center gap-2 min-w-0">{triggerInner}</span>
             <ChevronDown
               size={16}
-              className="shrink-0 text-[#9A9DA8]"
+              className="shrink-0 text-[hsl(var(--text-disabled))]"
               data-testid="ChevronDown__2082a8" />
           </button>
         </PopoverTrigger>
@@ -137,7 +137,7 @@ export function AccountBadgeSelect({
           </Command>
         </PopoverContent>
       </Popover>
-      {error && <p className="mt-1 text-xs text-[#D7373F]">{error}</p>}
+      {error && <p className="mt-1 text-xs text-[hsl(var(--destructive))]">{error}</p>}
     </div>
   );
 }

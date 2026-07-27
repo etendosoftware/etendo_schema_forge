@@ -90,7 +90,7 @@ export function DateRangePopoverContent({ value, onChange, onClose }) {
   return (
     <div className="flex">
       {/* Preset list */}
-      <div className="flex w-[193px] flex-col border-r border-[#E8EAEF] py-1">
+      <div className="flex w-[193px] flex-col border-r border-border-subtle py-1">
         {datePresets.map((preset) => {
           const active =
             preset.id === 'allTime'
@@ -102,8 +102,8 @@ export function DateRangePopoverContent({ value, onChange, onClose }) {
               type="button"
               onClick={() => handlePresetSelect(preset.id)}
               className={cn(
-                'relative flex h-8 items-center px-2 text-left text-sm leading-6 text-[#121217] transition-colors',
-                active ? 'bg-[rgba(18,18,23,0.05)]' : 'hover:bg-[rgba(18,18,23,0.05)]',
+                'relative flex h-8 items-center px-2 text-left text-sm leading-6 text-foreground transition-colors',
+                active ? 'bg-muted' : 'hover:bg-muted',
               )}
             >
               <span className="flex-1">{preset.label}</span>
@@ -115,8 +115,8 @@ export function DateRangePopoverContent({ value, onChange, onClose }) {
           type="button"
           onClick={() => setCustomMode(true)}
           className={cn(
-            'relative flex h-8 items-center px-2 text-left text-sm leading-6 text-[#121217] transition-colors',
-            customMode ? 'bg-[rgba(18,18,23,0.05)]' : 'hover:bg-[rgba(18,18,23,0.05)]',
+            'relative flex h-8 items-center px-2 text-left text-sm leading-6 text-foreground transition-colors',
+            customMode ? 'bg-muted' : 'hover:bg-muted',
           )}
         >
           <span className="flex-1">{ui('dateRangeCustom')}</span>
@@ -125,32 +125,32 @@ export function DateRangePopoverContent({ value, onChange, onClose }) {
       </div>
       {/* Calendars + footer */}
       <div className="flex flex-col">
-        <div className="flex border-b border-[#E8EAEF]">
+        <div className="flex border-b border-border-subtle">
           <CalendarWithPicker
             month={leftMonth}
             onMonthChange={setLeftMonth}
             selected={fromDate ?? undefined}
             onSelect={(d) => { setFromDate(d || null); setCustomMode(true); }}
             modifiers={inRangeModifier ? { inRange: inRangeModifier } : undefined}
-            modifiersClassNames={{ inRange: 'bg-[#F5F7F9] [&>button]:rounded-none' }}
+            modifiersClassNames={{ inRange: 'bg-muted [&>button]:rounded-none' }}
             data-testid="CalendarWithPicker__482ed1" />
-          <div className="border-l border-[#E8EAEF]" />
+          <div className="border-l border-border-subtle" />
           <CalendarWithPicker
             month={rightMonth}
             onMonthChange={setRightMonth}
             selected={toDate ?? undefined}
             onSelect={(d) => { setToDate(d || null); setCustomMode(true); }}
             modifiers={inRangeModifier ? { inRange: inRangeModifier } : undefined}
-            modifiersClassNames={{ inRange: 'bg-[#F5F7F9] [&>button]:rounded-none' }}
+            modifiersClassNames={{ inRange: 'bg-muted [&>button]:rounded-none' }}
             data-testid="CalendarWithPicker__482ed1" />
         </div>
         <div className="flex h-16 items-center justify-between gap-2 px-5 py-3">
-          <span className="text-sm font-medium text-[#3F3F50]">{rangeSummary}</span>
+          <span className="text-sm font-medium text-muted-foreground">{rangeSummary}</span>
           <div className="flex items-center gap-2">
             <button
               type="button"
               onClick={onClose}
-              className="inline-flex h-10 items-center justify-center rounded-full border border-[#D1D4DB] bg-white px-3 text-sm font-medium text-[#121217] shadow-[0px_1px_2px_rgba(18,18,23,0.05)] transition-colors hover:bg-[rgba(18,18,23,0.05)]"
+              className="inline-flex h-10 items-center justify-center rounded-full border border-border-control bg-card px-3 text-sm font-medium text-foreground shadow-[0px_1px_2px_hsl(var(--foreground) / 0.05)] transition-colors hover:bg-muted"
             >
               {ui('dateRangeCancel')}
             </button>
@@ -158,7 +158,7 @@ export function DateRangePopoverContent({ value, onChange, onClose }) {
               type="button"
               onClick={handleApplyCustom}
               disabled={!canApplyCustom}
-              className="inline-flex h-10 items-center justify-center rounded-full bg-[#121217] px-3 text-sm font-medium text-white transition-colors hover:bg-[#FFD500] hover:text-[#121217] disabled:cursor-not-allowed disabled:opacity-40"
+              className="inline-flex h-10 items-center justify-center rounded-full bg-foreground px-3 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
             >
               {ui('dateRangeApply')}
             </button>
@@ -195,7 +195,7 @@ export function DateRangePopover({ value, onChange, placeholder }) {
       <PopoverTrigger asChild data-testid="PopoverTrigger__482ed1">
         <button
           type="button"
-          className="inline-flex h-9 items-center justify-between gap-1.5 rounded-lg border border-border bg-white px-3 text-sm font-normal leading-6 text-muted-foreground transition-colors hover:bg-[#F5F7F9]"
+          className="inline-flex h-9 items-center justify-between gap-1.5 rounded-lg border border-border bg-card px-3 text-sm font-normal leading-6 text-muted-foreground transition-colors hover:bg-muted"
         >
           <CalendarDays
             className="h-3.5 w-3.5 shrink-0 text-muted-foreground"
@@ -246,7 +246,7 @@ function FilterNavBtn({ onClick, children }) {
     <button
       type="button"
       onClick={onClick}
-      className="inline-flex h-6 w-6 items-center justify-center rounded-full border border-[#D1D4DB] bg-white shadow-[0px_1px_2px_rgba(18,18,23,0.05)] transition-colors hover:bg-[rgba(18,18,23,0.05)]"
+      className="inline-flex h-6 w-6 items-center justify-center rounded-full border border-border-control bg-card shadow-[0px_1px_2px_hsl(var(--foreground) / 0.05)] transition-colors hover:bg-muted"
     >
       {children}
     </button>
@@ -331,24 +331,24 @@ function CalendarWithPicker({ month, onMonthChange, selected, onSelect, modifier
         <button
           type="button"
           onClick={view === 'calendar' ? openPicker : () => setView('calendar')}
-          className="inline-flex items-center gap-2 rounded-md px-2 py-1 text-sm font-medium capitalize text-[#121217] hover:bg-[rgba(18,18,23,0.05)]"
+          className="inline-flex items-center gap-2 rounded-md px-2 py-1 text-sm font-medium capitalize text-foreground hover:bg-muted"
         >
           <span>{headerLabel}</span>
           <ChevronDown
-            className="h-3.5 w-3.5 text-[#6B7280]"
+            className="h-3.5 w-3.5 text-muted-foreground"
             aria-hidden="true"
             data-testid="ChevronDown__482ed1" />
         </button>
         <div className="flex items-center gap-2">
           <FilterNavBtn onClick={navPrev} data-testid="FilterNavBtn__482ed1">
             <ChevronLeft
-              className="h-4 w-4 text-[#828FA3]"
+              className="h-4 w-4 text-disabled"
               aria-hidden="true"
               data-testid="ChevronLeft__482ed1" />
           </FilterNavBtn>
           <FilterNavBtn onClick={navNext} data-testid="FilterNavBtn__482ed1">
             <ChevronRight
-              className="h-4 w-4 text-[#828FA3]"
+              className="h-4 w-4 text-disabled"
               aria-hidden="true"
               data-testid="ChevronRight__482ed1" />
           </FilterNavBtn>
@@ -375,7 +375,7 @@ function CalendarWithPicker({ month, onMonthChange, selected, onSelect, modifier
             data-testid="Calendar__482ed1" />
         ) : (
           <div className="space-y-2 px-2 pt-1">
-            <div className="flex h-10 gap-1 rounded-xl bg-[#F5F7F9] p-1">
+            <div className="flex h-10 gap-1 rounded-xl bg-muted p-1">
               {[
                 { key: 'month', label: ui('datePickerMonth') },
                 { key: 'year',  label: ui('datePickerYear') },
@@ -387,8 +387,8 @@ function CalendarWithPicker({ month, onMonthChange, selected, onSelect, modifier
                   className={cn(
                     'h-8 flex-1 rounded-lg px-2 text-sm font-medium transition-colors',
                     pickerTab === tab.key
-                      ? 'bg-white text-[#121217] shadow-[0px_1px_3px_rgba(18,18,23,0.1),0px_1px_2px_rgba(18,18,23,0.06)]'
-                      : 'text-[#121217] hover:bg-[rgba(18,18,23,0.05)]',
+                      ? 'bg-card text-foreground shadow-[0px_1px_3px_hsl(var(--foreground) / 0.1),0px_1px_2px_hsl(var(--foreground) / 0.06)]'
+                      : 'text-foreground hover:bg-muted',
                   )}
                 >
                   {tab.label}
@@ -416,8 +416,8 @@ function CalendarWithPicker({ month, onMonthChange, selected, onSelect, modifier
                     className={cn(
                       'h-8 rounded-lg px-2 text-sm font-medium transition-colors',
                       isSelected
-                        ? 'bg-[#121217] text-white hover:bg-[#FFD500] hover:text-[#121217]'
-                        : 'text-[#121217] hover:bg-[rgba(18,18,23,0.05)]',
+                        ? 'bg-foreground text-primary-foreground hover:bg-primary hover:text-foreground'
+                        : 'text-foreground hover:bg-muted',
                     )}
                   >
                     {item.label}

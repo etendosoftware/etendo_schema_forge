@@ -11,10 +11,10 @@ const TONE_ICON = {
 };
 
 const TONE_ICON_COLOR = {
-  success: '#17663A',
-  warning: '#C28800',
-  destructive: '#D50B3E',
-  neutral: '#3F3F50',
+  success: 'var(--status-success-fg)',
+  warning: 'var(--status-warning-fg)',
+  destructive: 'hsl(var(--destructive))',
+  neutral: 'hsl(var(--muted-foreground))',
 };
 
 const PILL_STYLE = {

@@ -47,7 +47,7 @@ describe('FiscalStepItem — active state', () => {
       <FiscalStepItem n={2} label="Details" done={false} active={true} isFirst={false} />
     );
     const numberSpan = screen.getByText('2');
-    expect(numberSpan.style.background).toBe('rgb(18, 18, 23)');
+    expect(numberSpan.style.background).toBe('hsl(var(--foreground))');
   });
 
   it('applies bold font weight to label when active', () => {

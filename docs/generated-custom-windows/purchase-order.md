@@ -4,6 +4,15 @@
 
 This window should let a buyer prepare a supplier order, maintain its commercial header and line details, confirm it, and then follow the downstream procurement flow through receipts, purchase invoices, and payments.
 
+## Theme roles
+
+Purchase-order actions, confirmation dialogs, document-result feedback and
+selection controls consume the shared semantic theme. Structural surfaces use
+the active foreground, card and border roles; receipt/invoice outcomes use
+success, warning, information and destructive roles. The window does not
+declare a local palette, so appearance remains consistent when the app theme
+changes.
+
 The current evidence shows a purchase-order-specific experience rather than a generic generated order screen: the list is narrowed to purchasing signals, the detail page keeps the generated master-child layout, and the top bar adds procurement actions and follow-up status cues.
 
 ## What this window should allow
@@ -99,7 +108,12 @@ The current evidence shows a purchase-order-specific experience rather than a ge
 
 ### Inline line validation (min: 0 constraint)
 
-Fields with a `min: 0` constraint — `orderedQuantity` and `discount` — now show a red border when the user types a negative value during inline edit. The row remains open and the save/confirm path for that row is blocked until the value is corrected or the edit is cancelled. The constraint is enforced client-side by `InlineLinesPanel` using the `min` metadata from the contract field definition.
+The `discount` field keeps a `min: 0` constraint and shows a red border when the user types a negative value during inline edit; the row remains open and the save/confirm path for that row is blocked until the value is corrected or the edit is cancelled. The constraint is enforced client-side by `InlineLinesPanel` using the `min` metadata from the contract field definition.
+
+### Negative quantity/price and price-list label — ETP-4567
+
+- `orderedQuantity` and `listPrice` no longer declare `min: 0` in `decisions.json`. Both the add-line row and inline grid edit now accept negative values — needed for returns and credit adjustments modeled as negative-quantity or negative-price order lines. `discount` is unaffected and keeps its `min: 0, max: 100` range.
+- The `listPrice` (AD `PriceList` column) label is now overridden to **"Precio"** in Spanish via `window.labelOverrides.es_ES.PriceList` in `decisions.json` (English label unchanged). Same declarative mechanism already used for `C_BPartner_ID`, `DatePromised`, `DeliveryStatusPurchase`, and `InvoiceStatus` on this window.
 
 See [Shared validation & UX changes — ETP-4005](app-shell-functional-flows.md#shared-validation--ux-changes--etp-4005) for behaviors common to all document windows (required field validation, single confirmation toast, callout message sanitization).
 

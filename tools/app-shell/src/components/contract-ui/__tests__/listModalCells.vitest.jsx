@@ -121,8 +121,8 @@ describe('ListModalCell — typePill', () => {
 
   it('applies the tone class declared for the value', () => {
     render(<ListModalCell row={{ type: 'A' }} col={col} tMenu={tMenu} />);
-    // green tone → border-[#ABEFC6] in TONE_CLASSES.
-    expect(screen.getByText('typeAuto').className).toContain('#ABEFC6');
+    // green tone → border-[var(--status-success-border)] in TONE_CLASSES.
+    expect(screen.getByText('typeAuto').className).toContain('var(--status-success-border)');
   });
 
   it('renders an em-dash when the value is empty', () => {

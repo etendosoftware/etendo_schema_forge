@@ -35,7 +35,7 @@ function buildColumns(dir, ui, locale) {
           sign = dir === 'in' ? '+ ' : '− ';
         }
         return (
-          <span className="tabular-nums" style={{ color: isDeposited ? '#17663A' : '#121217', fontWeight: 600, whiteSpace: 'nowrap' }}>
+          <span className="tabular-nums" style={{ color: isDeposited ? 'var(--status-success-fg)' : 'hsl(var(--foreground))', fontWeight: 600, whiteSpace: 'nowrap' }}>
             {sign}{fmtAmt(amt, curr)}
           </span>
         );
@@ -74,7 +74,7 @@ function SidebarSkeleton() {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
       {[90, 70, 60].map((w) => (
-        <div key={w} style={{ height: 14, borderRadius: 6, background: '#F1F2F4', width: `${w}%` }} />
+        <div key={w} style={{ height: 14, borderRadius: 6, background: 'hsl(var(--muted))', width: `${w}%` }} />
       ))}
     </div>
   );
@@ -108,20 +108,20 @@ const METHOD_ICONS = {
 // ─── Sidebar icons ────────────────────────────────────────────────────────────
 
 const IC_CLOCK = (
-  <svg width={24} height={24} viewBox="0 0 24 24" fill="none" stroke="#828FA3" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+  <svg width={24} height={24} viewBox="0 0 24 24" fill="none" stroke="hsl(var(--text-disabled))" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
     <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
   </svg>
 );
 
 const IC_WARNING = (
-  <svg width={24} height={24} viewBox="0 0 24 24" fill="none" stroke="#828FA3" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+  <svg width={24} height={24} viewBox="0 0 24 24" fill="none" stroke="hsl(var(--text-disabled))" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
     <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
     <line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
   </svg>
 );
 
 const IC_CALENDAR = (
-  <svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="#6C6C89" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+  <svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="hsl(var(--muted-foreground))" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
     <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/>
     <line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>
   </svg>
@@ -140,9 +140,9 @@ function WidgetCard({ iconSlot, label, badgeText, badgeStyle, count, countStyle 
       gap: 12,
       width: '100%',
       height: 68,
-      background: '#FFFFFF',
-      border: '1px solid #E8EAEF',
-      boxShadow: '0px 1px 2px rgba(18,18,23,0.05)',
+      background: 'hsl(var(--card))',
+      border: '1px solid hsl(var(--border-subtle))',
+      boxShadow: '0px 1px 2px hsl(var(--foreground) / 0.05)',
       borderRadius: 8,
     }}>
       {/* Icon box */}
@@ -154,9 +154,9 @@ function WidgetCard({ iconSlot, label, badgeText, badgeStyle, count, countStyle 
         padding: 8,
         width: 40,
         height: 40,
-        background: '#FFFFFF',
-        border: '1px solid #D1D4DB',
-        boxShadow: '0px 1px 2px rgba(18,18,23,0.05)',
+        background: 'hsl(var(--card))',
+        border: '1px solid hsl(var(--border-control))',
+        boxShadow: '0px 1px 2px hsl(var(--foreground) / 0.05)',
         borderRadius: 8,
         flexShrink: 0,
       }}>
@@ -185,7 +185,7 @@ function WidgetCard({ iconSlot, label, badgeText, badgeStyle, count, countStyle 
           alignSelf: 'stretch',
           height: 24,
         }}>
-          <span style={{ fontFamily: 'Inter', fontWeight: 400, fontSize: 12, lineHeight: '16px', color: '#3F3F50', flexGrow: 1, minWidth: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{label}</span>
+          <span style={{ fontFamily: 'Inter', fontWeight: 400, fontSize: 12, lineHeight: '16px', color: 'hsl(var(--muted-foreground))', flexGrow: 1, minWidth: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{label}</span>
           <span style={{ display: 'inline-flex', alignItems: 'center', padding: '4px 8px', borderRadius: 360, flexShrink: 0, ...badgeStyle }}>
             <span style={{ fontFamily: 'Inter', fontWeight: 400, fontSize: 12, lineHeight: '16px', whiteSpace: 'nowrap' }}>{badgeText}</span>
           </span>
@@ -258,7 +258,7 @@ function PaymentSidebar({ dir, data, ui }) {
     [data]
   );
 
-  const heroColor = isIn ? '#17663A' : '#19191D';
+  const heroColor = isIn ? 'var(--status-success-fg)' : 'hsl(var(--foreground))';
   const heroLabel = isIn ? ui('cobradoEsteMes') : ui('pagadoEsteMes');
   const heroSign = isIn ? '+' : '−';
 
@@ -271,7 +271,7 @@ function PaymentSidebar({ dir, data, ui }) {
         alignItems: 'flex-start',
         width: 292,
         minHeight: 577,
-        borderRight: '1px solid #E8EAEF',
+        borderRight: '1px solid hsl(var(--border-subtle))',
         flexShrink: 0,
         alignSelf: 'stretch',
         overflowY: 'auto',
@@ -290,11 +290,11 @@ function PaymentSidebar({ dir, data, ui }) {
         alignSelf: 'stretch',
       }}>
         <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', gap: 2, height: 28 }}>
-          <span style={{ fontFamily: 'Inter', fontWeight: 600, fontSize: 20, lineHeight: '28px', color: '#121217' }}>{heroLabel}</span>
+          <span style={{ fontFamily: 'Inter', fontWeight: 600, fontSize: 20, lineHeight: '28px', color: 'hsl(var(--foreground))' }}>{heroLabel}</span>
         </div>
         <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', gap: 4, height: 16 }}>
           {IC_CALENDAR}
-          <span style={{ fontFamily: 'Inter', fontWeight: 400, fontSize: 12, lineHeight: '16px', color: '#555B6D' }}>
+          <span style={{ fontFamily: 'Inter', fontWeight: 400, fontSize: 12, lineHeight: '16px', color: 'hsl(var(--muted-foreground))' }}>
             {data ? fmtMonthSub(thisMonthCount, isIn, ui) : '—'}
           </span>
         </div>
@@ -315,37 +315,37 @@ function PaymentSidebar({ dir, data, ui }) {
           iconSlot={IC_CLOCK}
           label={ui('sinDepositar')}
           badgeText={data === null ? '—' : `${pendingCount} ${ui('porVencer')}`}
-          badgeStyle={{ background: '#FFF9EB', color: '#8A6100' }}
+          badgeStyle={{ background: 'var(--status-warning-bg)', color: 'var(--status-warning-fg)' }}
           count={data === null ? '—' : fmtAmt(pending, currency)}
-          countStyle={{ color: '#C28800' }}
+          countStyle={{ color: 'var(--status-warning-fg)' }}
           data-testid="WidgetCard__743b1b" />
         <WidgetCard
           iconSlot={IC_WARNING}
           label={ui('sinConfirmar')}
           badgeText={ui('borrador')}
-          badgeStyle={{ background: '#F5F7F9', color: '#3F3F50' }}
+          badgeStyle={{ background: 'hsl(var(--muted))', color: 'hsl(var(--muted-foreground))' }}
           count={data === null ? '—' : draftCount}
-          countStyle={{ color: '#121217' }}
+          countStyle={{ color: 'hsl(var(--foreground))' }}
           data-testid="WidgetCard__743b1b" />
       </div>
       {/* Desglose por método de pago */}
       {methods.length > 0 && (
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', padding: '0 12px 12px', gap: 10, alignSelf: 'stretch' }}>
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', padding: 12, gap: 12, background: '#F5F7F9', borderRadius: 8, alignSelf: 'stretch' }}>
-            <span style={{ fontFamily: 'Inter', fontWeight: 600, fontSize: 12, lineHeight: '16px', color: '#3F3F50', alignSelf: 'stretch' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', padding: 12, gap: 12, background: 'hsl(var(--muted))', borderRadius: 8, alignSelf: 'stretch' }}>
+            <span style={{ fontFamily: 'Inter', fontWeight: 600, fontSize: 12, lineHeight: '16px', color: 'hsl(var(--muted-foreground))', alignSelf: 'stretch' }}>
               {ui('porMetodo')}
             </span>
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 8, alignSelf: 'stretch' }}>
               {methods.map((m, i) => (
                 <div key={m.label} style={{ width: '100%' }}>
                   <div style={{ display: 'flex', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 10, alignSelf: 'stretch', height: 20 }}>
-                    <span style={{ fontFamily: 'Inter', fontWeight: 400, fontSize: 12, lineHeight: '16px', color: '#555B6D' }}>{m.label}</span>
-                    <span className="tabular-nums" style={{ fontFamily: 'Inter', fontWeight: 500, fontSize: 14, lineHeight: '20px', color: '#121217', fontVariantNumeric: 'tabular-nums' }}>
+                    <span style={{ fontFamily: 'Inter', fontWeight: 400, fontSize: 12, lineHeight: '16px', color: 'hsl(var(--muted-foreground))' }}>{m.label}</span>
+                    <span className="tabular-nums" style={{ fontFamily: 'Inter', fontWeight: 500, fontSize: 14, lineHeight: '20px', color: 'hsl(var(--foreground))', fontVariantNumeric: 'tabular-nums' }}>
                       {fmtAmt(m.amount || 0, currency)}
                     </span>
                   </div>
                   {i < methods.length - 1 && (
-                    <div style={{ marginTop: 8, width: '100%', height: 0, border: '1px solid rgba(18,18,23,0.05)' }} />
+                    <div style={{ marginTop: 8, width: '100%', height: 0, border: '1px solid hsl(var(--foreground) / 0.05)' }} />
                   )}
                 </div>
               ))}

@@ -42,12 +42,12 @@ describe('PaymentConciliadoBadge', () => {
 
   // ── Color token ────────────────────────────────────────────────────────────
 
-  it('uses green background color token for visual differentiation', () => {
-    assert.match(src, /#EEFBF4/);
+  it('uses the semantic success background role for visual differentiation', () => {
+    assert.match(src, /var\(--status-success-bg\)/);
   });
 
-  it('uses green text color token #17663A', () => {
-    assert.match(src, /#17663A/);
+  it('uses the semantic success foreground role', () => {
+    assert.match(src, /var\(--status-success-fg\)/);
   });
 
   // ── Checkmark icon ─────────────────────────────────────────────────────────

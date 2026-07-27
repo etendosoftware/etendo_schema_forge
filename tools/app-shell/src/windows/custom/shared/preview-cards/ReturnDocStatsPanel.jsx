@@ -5,7 +5,7 @@ import { MovementSummaryCard, InfoRow, PercentBar } from './SummaryCard.jsx';
 export default function ReturnDocStatsPanel({ doc, partnerName, movementDate, token, apiBaseUrl, ui, specs }) {
   const docStatus = doc.documentStatus;
   const statusLabel = ui(STATUS_KEYS[docStatus]) || doc['documentStatus$_identifier'] || docStatus || '—';
-  const statusBadgeClass = STATUS_BADGE[docStatus] || 'bg-gray-50 text-gray-600 border-gray-200';
+  const statusBadgeClass = STATUS_BADGE[docStatus] || 'bg-muted text-muted-foreground border-border-subtle';
   const invoicePercent = doc.invoiceStatus != null ? Number(doc.invoiceStatus) : null;
 
   const rows = [

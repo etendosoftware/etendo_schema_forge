@@ -30,7 +30,7 @@ export default function ReturnMaterialReceiptBottomPanel(props) {
             display: 'flex',
             flexDirection: 'column',
             gap: 6,
-            borderTop: '0.5px solid var(--color-border-tertiary, #e5e7eb)',
+            borderTop: '0.5px solid var(--color-border-tertiary, hsl(var(--foreground)))',
             padding: '10px 16px',
           }}
         >
@@ -79,7 +79,7 @@ function ReturnReceiptLinesEmptyState({ data, onAddLine, recordId, token, apiBas
       type="button"
       data-testid="action-import-shipment-empty-state"
       onClick={handleImportClick}
-      style={{ display: 'inline-flex', alignItems: 'center', gap: 5, border: '0.5px solid #888', borderRadius: 8, padding: '6px 14px', fontSize: 13, fontWeight: 500, color: 'var(--color-text-secondary)', background: 'transparent', cursor: 'pointer' }}
+      style={{ display: 'inline-flex', alignItems: 'center', gap: 5, border: '0.5px solid hsl(var(--muted-foreground))', borderRadius: 8, padding: '6px 14px', fontSize: 13, fontWeight: 500, color: 'var(--color-text-secondary)', background: 'transparent', cursor: 'pointer' }}
     >
       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
         <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
@@ -150,7 +150,7 @@ const ReturnReceiptLineActions = forwardRef(function ReturnReceiptLineActions(
           onClick={handleImportClick}
           // Same look as the empty state's import button; alignSelf keeps the
           // bordered pill compact inside the flex-column with-lines wrapper.
-          style={{ display: 'inline-flex', alignItems: 'center', alignSelf: 'flex-start', gap: 5, border: '0.5px solid #888', borderRadius: 8, padding: '6px 14px', fontSize: 13, fontWeight: 500, color: 'var(--color-text-secondary)', background: 'transparent', cursor: 'pointer' }}
+          style={{ display: 'inline-flex', alignItems: 'center', alignSelf: 'flex-start', gap: 5, border: '0.5px solid hsl(var(--muted-foreground))', borderRadius: 8, padding: '6px 14px', fontSize: 13, fontWeight: 500, color: 'var(--color-text-secondary)', background: 'transparent', cursor: 'pointer' }}
         >
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
             <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />

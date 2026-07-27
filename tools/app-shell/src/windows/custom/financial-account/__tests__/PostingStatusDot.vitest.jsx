@@ -11,14 +11,14 @@ describe('PostingStatusDot', () => {
     const { container } = render(<PostingStatusDot posted="Y" />);
     expect(screen.getByText('financeAccountMovementsPosted')).toBeInTheDocument();
     const dot = container.querySelector('span > span');
-    expect(dot.className).toContain('bg-[#26a95f]');
+    expect(dot.className).toContain('bg-[var(--status-success-fg)]');
   });
 
   it('renders the "not posted" label and an orange dot for posted === "N"', () => {
     const { container } = render(<PostingStatusDot posted="N" />);
     expect(screen.getByText('financeAccountMovementsNotPosted')).toBeInTheDocument();
     const dot = container.querySelector('span > span');
-    expect(dot.className).toContain('bg-[#E68A00]');
+    expect(dot.className).toContain('bg-[var(--status-warning-fg)]');
   });
 
   it('treats missing posted as "not posted"', () => {

@@ -18,7 +18,7 @@ describe('AccountRowMenu', () => {
     render(<AccountRowMenu account={baseAccount} />);
     const trigger = screen.getByTestId('account-row-menu-trigger-acc-1');
     expect(trigger.className).toMatch(/rounded-full/);
-    expect(trigger.className).toMatch(/text-\[#828FA3\]/);
+    expect(trigger.className).toMatch(/text-\[hsl\(var\(--text-disabled\)\)\]/);
   });
 
   it('renders an aria-label on the trigger for accessibility', () => {

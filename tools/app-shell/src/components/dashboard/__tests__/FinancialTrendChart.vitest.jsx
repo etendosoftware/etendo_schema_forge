@@ -332,7 +332,7 @@ describe('FinancialTrendChart — renderTooltipBox tooltip content', () => {
     if (rects.length > 0) {
       fireEvent.mouseEnter(rects[0]);
       // With expenses, TooltipBox should render at least one <rect> for the box background
-      const tooltipRects = container.querySelectorAll('svg rect[fill="#121217"]');
+      const tooltipRects = container.querySelectorAll('[data-testid="financial-trend-tooltip"]');
       expect(tooltipRects.length).toBeGreaterThan(0);
       fireEvent.mouseLeave(rects[0]);
     }
@@ -355,7 +355,7 @@ describe('FinancialTrendChart — renderTooltipBox tooltip content', () => {
     if (barGroups.length > 0) {
       fireEvent.mouseEnter(barGroups[0]);
       // TooltipBox <rect> should be present (dark background)
-      const tooltipRects = container.querySelectorAll('svg rect[fill="#121217"]');
+      const tooltipRects = container.querySelectorAll('[data-testid="financial-trend-tooltip"]');
       expect(tooltipRects.length).toBeGreaterThan(0);
       fireEvent.mouseLeave(barGroups[0]);
     }

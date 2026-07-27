@@ -7,12 +7,12 @@ export function QuickActionsList({ actions = [] }) {
   const ui = useUI();
 
   return (
-    <div className="rounded-xl border overflow-hidden bg-white flex flex-col h-full" style={{ borderColor: '#E8EAEF' }}>
+    <div className="rounded-xl border overflow-hidden bg-card flex flex-col h-full" style={{ borderColor: 'hsl(var(--border-subtle))' }}>
       <div
         className="flex items-center border-b"
-        style={{ backgroundColor: '#F5F7F9', borderBottomColor: '#E8EAEF', padding: '8px 12px', minHeight: '48px' }}
+        style={{ backgroundColor: 'hsl(var(--muted))', borderBottomColor: 'hsl(var(--border-subtle))', padding: '8px 12px', minHeight: '48px' }}
       >
-        <span className="text-xs font-medium uppercase" style={{ color: '#282833', letterSpacing: 0 }}>
+        <span className="text-xs font-medium uppercase" style={{ color: 'hsl(var(--foreground))', letterSpacing: 0 }}>
           {ui('quickActionsTitle')}
         </span>
       </div>
@@ -37,7 +37,7 @@ export function QuickActionsList({ actions = [] }) {
                 alignSelf: 'flex-start',
                 padding: '4px 8px',
                 height: '28px',
-                backgroundColor: '#F5F7F9',
+                backgroundColor: 'hsl(var(--muted))',
                 borderRadius: '8px',
                 gap: '8px',
                 textDecoration: 'none',
@@ -45,14 +45,14 @@ export function QuickActionsList({ actions = [] }) {
               className="hover:brightness-95 transition-all"
             >
               <Icon
-                style={{ width: '16px', height: '16px', flexShrink: 0, color: '#828FA3' }}
+                style={{ width: '16px', height: '16px', flexShrink: 0, color: 'hsl(var(--text-disabled))' }}
                 data-testid="Icon__961429" />
               <span style={{
                 fontFamily: 'Inter, sans-serif',
                 fontWeight: 400,
                 fontSize: '14px',
                 lineHeight: '20px',
-                color: '#3F3F50',
+                color: 'hsl(var(--muted-foreground))',
                 whiteSpace: 'nowrap',
                 overflow: 'hidden',
                 textOverflow: 'ellipsis',

@@ -223,7 +223,7 @@ describe('AddressSection', () => {
     fireEvent.click(countryBtn);
     // Spain should have blue highlight — use getAllByText since Spain appears in picker button + list
     const spainItems = screen.getAllByText('Spain');
-    const spainRow = spainItems.find(el => el.closest('button')?.className?.includes('bg-blue-50'));
+    const spainRow = spainItems.find(el => el.closest('button')?.className?.includes('bg-status-info'));
     expect(spainRow).toBeTruthy();
   });
 });

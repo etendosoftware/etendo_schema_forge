@@ -255,8 +255,8 @@ function AccountTreeRow({ item, isExpanded, isSelected, onToggle, onRowClick, ui
       aria-selected={isSelected}
       className={[
         'flex items-center gap-3 px-4 py-2 cursor-pointer text-sm select-none transition-colors',
-        isSelected ? 'bg-[#F4F5FF]' : 'hover:bg-[#F9FAFB]',
-        isSummary ? 'font-semibold text-[#121217]' : 'font-normal text-[#3C3C4D]',
+        isSelected ? 'bg-[var(--status-info-bg)]' : 'hover:bg-[hsl(var(--muted))]',
+        isSummary ? 'font-semibold text-[hsl(var(--foreground))]' : 'font-normal text-[hsl(var(--muted-foreground))]',
       ].join(' ')}
       onClick={() => onRowClick(item)}
     >
@@ -273,7 +273,7 @@ function AccountTreeRow({ item, isExpanded, isSelected, onToggle, onRowClick, ui
               e.stopPropagation();
               onToggle(item.id);
             }}
-            className="flex items-center justify-center w-4 h-4 text-[#6C6C89] hover:text-[#121217] transition-colors"
+            className="flex items-center justify-center w-4 h-4 text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))] transition-colors"
             aria-expanded={isExpanded}
             aria-label={isExpanded ? ui('collapse') : ui('expand')}
           >
@@ -285,7 +285,7 @@ function AccountTreeRow({ item, isExpanded, isSelected, onToggle, onRowClick, ui
       </span>
 
       {/* Account code — monospace, fixed width */}
-      <span className="shrink-0 w-24 font-mono text-xs text-[#6C6C89] tabular-nums">
+      <span className="shrink-0 w-24 font-mono text-xs text-[hsl(var(--muted-foreground))] tabular-nums">
         {item.searchKey}
       </span>
 
@@ -295,7 +295,7 @@ function AccountTreeRow({ item, isExpanded, isSelected, onToggle, onRowClick, ui
         {isProtected && (
           <Lock
             size={12}
-            className="shrink-0 text-[#9A9AAE]"
+            className="shrink-0 text-[hsl(var(--text-disabled))]"
             data-testid={`account-tree-locked-${item.id}`}
             role="img"
             aria-label={ui('accountTreeReadOnlyPlaceholder')}
@@ -304,7 +304,7 @@ function AccountTreeRow({ item, isExpanded, isSelected, onToggle, onRowClick, ui
       </span>
 
       {/* Account type */}
-      <span className="shrink-0 w-40 truncate text-[#3C3C4D]">
+      <span className="shrink-0 w-40 truncate text-[hsl(var(--muted-foreground))]">
         {accountTypeLabel(ui, item.accountType)}
       </span>
     </div>
@@ -477,20 +477,20 @@ export default function AccountTreeView({
   return (
     <div data-testid="account-tree" role="grid" {...rest}>
       {/* ── Toolbar ── */}
-      <div className="flex items-center justify-between px-4 py-2.5 border-b border-[#E8EAEF] bg-white">
+      <div className="flex items-center justify-between px-4 py-2.5 border-b border-[hsl(var(--border-subtle))] bg-card">
         <div className="flex items-center gap-3">
           <button
             type="button"
             onClick={expandAll}
-            className="text-xs text-[#6C6C89] hover:text-[#121217] transition-colors"
+            className="text-xs text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))] transition-colors"
           >
             {ui('expand')}
           </button>
-          <span className="text-[#D1D4DB] select-none">|</span>
+          <span className="text-[hsl(var(--border-control))] select-none">|</span>
           <button
             type="button"
             onClick={collapseAll}
-            className="text-xs text-[#6C6C89] hover:text-[#121217] transition-colors"
+            className="text-xs text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))] transition-colors"
           >
             {ui('collapse')}
           </button>
@@ -505,7 +505,7 @@ export default function AccountTreeView({
         <button
           type="button"
           onClick={() => setIsModalOpen(true)}
-          className="flex items-center gap-1 text-xs font-medium px-3 py-1.5 bg-[#121217] text-white rounded-full hover:bg-[#28282F] transition-colors"
+          className="flex items-center gap-1 text-xs font-medium px-3 py-1.5 bg-[hsl(var(--foreground))] text-primary-foreground rounded-full hover:bg-[hsl(var(--foreground))] transition-colors"
         >
           + {ui('newSubAccount')}
         </button>
@@ -520,23 +520,23 @@ export default function AccountTreeView({
           {/* ── Column headers ── */}
           <div
             role="row"
-            className="flex items-center gap-3 px-4 py-2 border-b border-[#E8EAEF] bg-[#FAFAFA]"
+            className="flex items-center gap-3 px-4 py-2 border-b border-[hsl(var(--border-subtle))] bg-[hsl(var(--muted))]"
           >
             {/* Spacer for toggle column */}
             <span className="w-4 shrink-0" />
-            <span className="shrink-0 w-24 text-xs font-medium text-[#6C6C89] uppercase tracking-wide">
+            <span className="shrink-0 w-24 text-xs font-medium text-[hsl(var(--muted-foreground))] uppercase tracking-wide">
               {ui('accountTreeCode')}
             </span>
-            <span className="flex-1 min-w-0 text-xs font-medium text-[#6C6C89] uppercase tracking-wide">
+            <span className="flex-1 min-w-0 text-xs font-medium text-[hsl(var(--muted-foreground))] uppercase tracking-wide">
               {ui('name')}
             </span>
-            <span className="shrink-0 w-40 text-xs font-medium text-[#6C6C89] uppercase tracking-wide">
+            <span className="shrink-0 w-40 text-xs font-medium text-[hsl(var(--muted-foreground))] uppercase tracking-wide">
               {ui('accountTreeFilterType')}
             </span>
           </div>
 
           {/* ── Tree rows ── */}
-          <div role="rowgroup" className="divide-y divide-[#F4F5F7]">
+          <div role="rowgroup" className="divide-y divide-[hsl(var(--border-subtle))]">
             {visibleRows.map((item) => (
               <AccountTreeRow
                 key={item.id}

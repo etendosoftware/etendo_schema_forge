@@ -139,10 +139,10 @@ export default function FiscalConfigPage({ token, apiBaseUrl }) {
   else saveLabel = ui('fiscal.save');
 
   const orgBar = (
-    <div className="flex-shrink-0 border-b border-[#E8EAEF]">
+    <div className="flex-shrink-0 border-b border-[hsl(var(--border-subtle))]">
       <div className="flex items-center justify-between px-6 h-[56px]">
         <div className="flex items-center gap-2">
-          <span className="text-sm font-medium text-[#121217]">{ui('fiscal.onboarding.org.label')}</span>
+          <span className="text-sm font-medium text-[hsl(var(--foreground))]">{ui('fiscal.onboarding.org.label')}</span>
           <OrgDropdown
             selectedOrg={selectedOrg}
             orgList={orgList}
@@ -160,7 +160,7 @@ export default function FiscalConfigPage({ token, apiBaseUrl }) {
           <Button
             onClick={handleSave}
             disabled={saving || !orgId}
-            className={savedOk ? 'bg-green-600 hover:bg-green-700 border-green-600' : ''}
+            className={savedOk ? 'bg-status-success hover:bg-status-success border-status-success-border' : ''}
             data-testid="Button__310303">
             <Save size={14} className="mr-1.5" data-testid="Save__310303" />
             {saveLabel}

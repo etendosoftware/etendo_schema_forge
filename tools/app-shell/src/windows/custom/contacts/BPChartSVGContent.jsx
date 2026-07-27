@@ -63,8 +63,8 @@ export function BPChartSVGContent({
     >
       <defs>
         <linearGradient id={revGradId} x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor="#10b981" stopOpacity="0.3" />
-          <stop offset="100%" stopColor="#10b981" stopOpacity="0.02" />
+          <stop offset="0%" stopColor="var(--status-success-fg)" stopOpacity="0.3" />
+          <stop offset="100%" stopColor="var(--status-success-fg)" stopOpacity="0.02" />
         </linearGradient>
         <linearGradient id={expGradId} x1="0" y1="0" x2="0" y2="1">
           <stop offset="0%" stopColor="hsl(var(--destructive))" stopOpacity="0.2" />
@@ -96,10 +96,10 @@ export function BPChartSVGContent({
 
       <path d={toBezierFillPath(revPts, baseY)} fill={`url(#${revGradId})`} />
       <path d={toBezierPath(revPts)} fill="none"
-        stroke="#10b981" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+        stroke="var(--status-success-fg)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
       {hoveredIdx !== null && revPts[hoveredIdx] && (
         <circle cx={revPts[hoveredIdx].x} cy={revPts[hoveredIdx].y}
-          r={4} fill="hsl(var(--background))" stroke="#10b981" strokeWidth="1.5" />
+          r={4} fill="hsl(var(--background))" stroke="var(--status-success-fg)" strokeWidth="1.5" />
       )}
 
       {labels.map((lbl, i) => {
@@ -120,20 +120,20 @@ export function BPChartSVGContent({
       {hoveredIdx !== null && hx !== null && (
         <>
           <line x1={hx} y1={PY} x2={hx} y2={PY + plotH}
-            stroke="#94a3b8" strokeWidth="1" strokeDasharray="3 2" />
-          <rect x={tooltipX} y={tooltipY} width={TW} height={TH} rx={TR} fill="#1e293b" opacity="0.95" />
+            stroke="hsl(var(--muted-foreground))" strokeWidth="1" strokeDasharray="3 2" />
+          <rect x={tooltipX} y={tooltipY} width={TW} height={TH} rx={TR} fill="hsl(var(--foreground))" opacity="0.95" />
           <text x={tooltipX + TW / 2} y={tooltipY + fontSize + 2}
-            textAnchor="middle" fontSize={fontSize} fill="#94a3b8">
+            textAnchor="middle" fontSize={fontSize} fill="hsl(var(--muted-foreground))">
             {labels[hoveredIdx]}
           </text>
-          <circle cx={tooltipX + 8} cy={tooltipY + fontSize * 2.6} r={fontSize * 0.4} fill="#10b981" />
+          <circle cx={tooltipX + 8} cy={tooltipY + fontSize * 2.6} r={fontSize * 0.4} fill="var(--status-success-fg)" />
           <text x={tooltipX + 15} y={tooltipY + fontSize * 2.6 + fontSize * 0.38}
-            fontSize={fontSize} fontWeight="600" fill="white">
+            fontSize={fontSize} fontWeight="600" fill="hsl(var(--background))">
             {formatCurrency(orgCurrency, revenue[hoveredIdx] ?? 0)}
           </text>
-          <circle cx={tooltipX + 8} cy={tooltipY + fontSize * 4.2} r={fontSize * 0.4} fill="#ef4444" />
+          <circle cx={tooltipX + 8} cy={tooltipY + fontSize * 4.2} r={fontSize * 0.4} fill="hsl(var(--destructive))" />
           <text x={tooltipX + 15} y={tooltipY + fontSize * 4.2 + fontSize * 0.38}
-            fontSize={fontSize} fontWeight="600" fill="white">
+            fontSize={fontSize} fontWeight="600" fill="hsl(var(--background))">
             {formatCurrency(orgCurrency, expenses[hoveredIdx] ?? 0)}
           </text>
         </>

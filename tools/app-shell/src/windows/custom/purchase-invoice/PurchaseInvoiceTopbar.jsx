@@ -89,7 +89,7 @@ export default function PurchaseInvoiceTopbar({ data, recordId, token, apiBaseUr
             return (
               <span
                 className="inline-flex items-center gap-1.5 text-[13px] font-medium"
-                style={{ padding: '4px 12px', borderRadius: '6px', backgroundColor: '#d1fae5', color: '#065f46' }}
+                style={{ padding: '4px 12px', borderRadius: '6px', backgroundColor: 'var(--status-success-bg)', color: 'var(--status-success-fg)' }}
               >
                 {ui('cpCreditFullyApplied')}
               </span>
@@ -98,11 +98,11 @@ export default function PurchaseInvoiceTopbar({ data, recordId, token, apiBaseUr
           return (
             <span
               className="inline-flex items-center gap-1.5 text-[13px] font-medium"
-              style={{ padding: '4px 12px', borderRadius: '6px', backgroundColor: '#ede9fe', color: '#4c1d95', cursor: 'pointer' }}
+              style={{ padding: '4px 12px', borderRadius: '6px', backgroundColor: 'var(--status-info-bg)', color: 'var(--status-info-fg)', cursor: 'pointer' }}
               data-testid="payment-status-badge"
               onClick={handleBadgeClick}
             >
-              <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: '#7c3aed' }} />
+              <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: 'var(--status-info-fg)' }} />
               {ui('cpFavorBadge')}
               <span style={{ opacity: 0.4 }}>&middot;</span>
               <span className="font-semibold tabular-nums">{formatCurrency(currency || 'USD', outstandingAbs)}</span>
@@ -113,11 +113,11 @@ export default function PurchaseInvoiceTopbar({ data, recordId, token, apiBaseUr
           return (
             <span
               className="inline-flex items-center gap-1.5 text-[13px] font-medium"
-              style={{ padding: '4px 12px', borderRadius: '6px', backgroundColor: '#d1fae5', color: '#065f46', cursor: 'pointer' }}
+              style={{ padding: '4px 12px', borderRadius: '6px', backgroundColor: 'var(--status-success-bg)', color: 'var(--status-success-fg)', cursor: 'pointer' }}
               data-testid="payment-status-badge"
             onClick={handleBadgeClick}
             >
-              <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: '#10b981' }} />
+              <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: 'var(--status-success-fg)' }} />
               {ui('statusPaid')}
               <span style={{ opacity: 0.4 }}>&middot;</span>
               <span className="font-semibold tabular-nums">{formatCurrency(currency || 'USD', totalPaid)}</span>
@@ -127,11 +127,11 @@ export default function PurchaseInvoiceTopbar({ data, recordId, token, apiBaseUr
         return (
           <span
             className="inline-flex items-center gap-1.5 text-[13px] font-medium"
-            style={{ padding: '4px 12px', borderRadius: '6px', backgroundColor: '#fef3c7', color: '#78350f', cursor: 'pointer' }}
+            style={{ padding: '4px 12px', borderRadius: '6px', backgroundColor: 'var(--status-warning-bg)', color: 'var(--status-warning-fg)', cursor: 'pointer' }}
             data-testid="payment-status-badge"
             onClick={handleBadgeClick}
           >
-            <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: '#f59e0b' }} />
+            <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: 'var(--status-warning-fg)' }} />
             {ui('statusPending')}
             <span style={{ opacity: 0.4 }}>&middot;</span>
             <span className="font-semibold tabular-nums">{formatCurrency(currency || 'USD', outstanding)}</span>

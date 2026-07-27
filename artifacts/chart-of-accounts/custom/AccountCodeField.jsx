@@ -48,7 +48,7 @@ export default function AccountCodeField({ value = '', onChange, record, readOnl
     return (
       <div
         data-testid="account-code-readonly"
-        className="flex h-10 items-center rounded-lg border border-[#D1D4DB] bg-muted/50 px-3 text-sm text-foreground"
+        className="flex h-10 items-center rounded-lg border border-[hsl(var(--card))] bg-muted/50 px-3 text-sm text-foreground"
       >
         {value}
       </div>
@@ -86,7 +86,7 @@ export default function AccountCodeField({ value = '', onChange, record, readOnl
       <div className="flex items-center">
         <span
           data-testid="account-code-prefix"
-          className="inline-flex items-center h-10 px-3 text-sm border border-r-0 rounded-l-lg border-[#D1D4DB] bg-muted/50 text-[#6C6C89] select-none whitespace-nowrap"
+          className="inline-flex items-center h-10 px-3 text-sm border border-r-0 rounded-l-lg border-[hsl(var(--card))] bg-muted/50 text-[var(--status-info-border)] select-none whitespace-nowrap"
         >
           {derivedPrefix}
         </span>
@@ -99,12 +99,12 @@ export default function AccountCodeField({ value = '', onChange, record, readOnl
           onBlur={handleBlur}
           maxLength={4}
           placeholder={ui('codeSuffixPlaceholder')}
-          className="h-10 flex-1 rounded-r-lg border border-[#D1D4DB] bg-white px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+          className="h-10 flex-1 rounded-r-lg border border-[hsl(var(--card))] bg-card px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
         />
       </div>
       {error && (
         <p
-          className="text-xs text-red-500 mt-1"
+          className="text-xs text-destructive-foreground mt-1"
           data-testid="account-code-error"
           role="alert"
         >

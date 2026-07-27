@@ -41,14 +41,14 @@ export default function AddPaymentModal({ invoice, outstanding, onClose, onSave 
   const docNo = invoice?.documentNo || '';
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/30 flex items-center justify-center">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6">
+    <div className="fixed inset-0 z-50 bg-foreground/30 flex items-center justify-center">
+      <div className="bg-card rounded-2xl shadow-2xl w-full max-w-sm p-6">
         {/* Header */}
         <div className="flex items-start justify-between mb-1">
-          <h2 className="text-lg font-semibold text-gray-900">{ui('newPayment')}</h2>
+          <h2 className="text-lg font-semibold text-foreground">{ui('newPayment')}</h2>
           <button
             onClick={onClose}
-            className="text-gray-400 hover:text-gray-600 transition-colors"
+            className="text-muted-foreground hover:text-muted-foreground transition-colors"
             aria-label={ui('close')}
           >
             <X size={18} data-testid="X__4f30ab" />
@@ -56,7 +56,7 @@ export default function AddPaymentModal({ invoice, outstanding, onClose, onSave 
         </div>
 
         {partnerName && (
-          <p className="text-sm text-gray-500 mb-5">
+          <p className="text-sm text-muted-foreground mb-5">
             {partnerName}{docNo ? ` • ${ui('invoiceDoc', { number: docNo })}` : ''}
           </p>
         )}
@@ -64,14 +64,14 @@ export default function AddPaymentModal({ invoice, outstanding, onClose, onSave 
         <div className="space-y-4">
           {/* Amount */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block text-sm font-medium text-foreground mb-1">
               {ui('amount')}
             </label>
             <input
               type="number"
               value={amount}
               onChange={(e) => setAmount(e.target.value)}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full border border-border-control rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-focus-ring"
               min="0"
               step="0.01"
             />
@@ -79,7 +79,7 @@ export default function AddPaymentModal({ invoice, outstanding, onClose, onSave 
 
           {/* Date */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block text-sm font-medium text-foreground mb-1">
               {ui('date')}
             </label>
             <DateField value={date} onChange={setDate} data-testid="DateField__4f30ab" />
@@ -87,13 +87,13 @@ export default function AddPaymentModal({ invoice, outstanding, onClose, onSave 
 
           {/* Account */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block text-sm font-medium text-foreground mb-1">
               {ui('account')}
             </label>
             <select
               value={account}
               onChange={(e) => setAccount(e.target.value)}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+              className="w-full border border-border-control rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-focus-ring bg-card"
             >
               {ACCOUNT_OPTIONS.map((opt) => (
                 <option key={opt.value} value={opt.value}>{ui(opt.labelKey)}</option>

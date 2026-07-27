@@ -20,8 +20,8 @@ describe('AssetsTable — renderDepreciationProgress', () => {
     assert.doesNotMatch(src, /row\.depreciatedPlan/);
   });
 
-  it('renders 100% in green only when pct === 100', () => {
-    assert.match(src, /pct === 100.*#10b981/);
+  it('renders 100% with the semantic success role only when pct === 100', () => {
+    assert.match(src, /pct === 100.*var\(--status-success-fg\)/);
   });
 
   // Skipped: schema_forge_core regression (ETP-4439) reintroduced the "hide bar
@@ -35,4 +35,3 @@ describe('AssetsTable — renderDepreciationProgress', () => {
     assert.match(src, /pct == null/);
   });
 });
-

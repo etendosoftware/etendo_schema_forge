@@ -241,7 +241,7 @@ export default function FinancialAccountWindow({ recordId }) {
       <div className="flex h-full flex-col overflow-hidden">
 
         {/* Tab strip + Edit / Export button */}
-        <div className="flex items-center justify-between border-b border-[#E8EAEF] pl-0 pr-2">
+        <div className="flex items-center justify-between border-b border-[hsl(var(--border-subtle))] pl-0 pr-2">
           <DetailTabs
             value={activeTab}
             onValueChange={handleTabChange}
@@ -254,9 +254,9 @@ export default function FinancialAccountWindow({ recordId }) {
               type="button"
               data-testid="financial-account-edit"
               onClick={() => setEditOpen(true)}
-              className="inline-flex h-10 items-center gap-1 rounded-lg border border-[#D1D4DB] bg-white px-3 text-sm font-medium leading-6 text-[#121217] shadow-[0_1px_2px_rgba(18,18,23,0.05)] hover:bg-[#F5F7F9]"
+              className="inline-flex h-10 items-center gap-1 rounded-lg border border-[hsl(var(--border-control))] bg-card px-3 text-sm font-medium leading-6 text-[hsl(var(--foreground))] shadow-[0_1px_2px_hsl(var(--foreground) / 0.05)] hover:bg-[hsl(var(--muted))]"
             >
-              <Pencil className="h-5 w-5 text-[#828FA3]" data-testid="Pencil__f7dbb3" />
+              <Pencil className="h-5 w-5 text-[hsl(var(--text-disabled))]" data-testid="Pencil__f7dbb3" />
               <span className="px-1">{ui('financeAccountsMenuEdit')}</span>
             </button>
             {activeTab === 'reconciliation' ? (
@@ -264,9 +264,9 @@ export default function FinancialAccountWindow({ recordId }) {
                 type="button"
                 data-testid="financial-account-automatch"
                 onClick={() => setAutoMatchOpen(true)}
-                className="inline-flex h-10 items-center gap-1 rounded-lg border border-[#D1D4DB] bg-white px-3 text-sm font-medium leading-6 text-[#121217] shadow-[0_1px_2px_rgba(18,18,23,0.05)] hover:bg-[#F5F7F9]"
+                className="inline-flex h-10 items-center gap-1 rounded-lg border border-[hsl(var(--border-control))] bg-card px-3 text-sm font-medium leading-6 text-[hsl(var(--foreground))] shadow-[0_1px_2px_hsl(var(--foreground) / 0.05)] hover:bg-[hsl(var(--muted))]"
               >
-                <Sparkles className="h-5 w-5 text-[#828FA3]" data-testid="Sparkles__f7dbb3" />
+                <Sparkles className="h-5 w-5 text-[hsl(var(--text-disabled))]" data-testid="Sparkles__f7dbb3" />
                 <span className="px-1">{ui('financeReconcileActionAutomatch')}</span>
               </button>
             ) : (
@@ -274,9 +274,9 @@ export default function FinancialAccountWindow({ recordId }) {
                 type="button"
                 data-testid="financial-account-export"
                 onClick={handleExport}
-                className="inline-flex h-10 items-center gap-1 rounded-lg border border-[#D1D4DB] bg-white px-3 text-sm font-medium leading-6 text-[#121217] shadow-[0_1px_2px_rgba(18,18,23,0.05)] hover:bg-[#F5F7F9]"
+                className="inline-flex h-10 items-center gap-1 rounded-lg border border-[hsl(var(--border-control))] bg-card px-3 text-sm font-medium leading-6 text-[hsl(var(--foreground))] shadow-[0_1px_2px_hsl(var(--foreground) / 0.05)] hover:bg-[hsl(var(--muted))]"
               >
-                <Upload className="h-6 w-6 text-[#828FA3]" data-testid="Upload__f7dbb3" />
+                <Upload className="h-6 w-6 text-[hsl(var(--text-disabled))]" data-testid="Upload__f7dbb3" />
                 <span className="px-1">{ui('financeAccountDetailExport')}</span>
               </button>
             )}

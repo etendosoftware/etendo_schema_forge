@@ -6,6 +6,13 @@ Use this window to observe the real-time submission status of electronic invoice
 
 The window is read-only. It does not create or modify invoice records; it only displays the status reported by AEAT or Hacienda Foral after submission.
 
+## Theme roles
+
+The monitor cards, tabs, filters and contact/error dialogs consume the shared
+semantic theme. Structural roles control surfaces and input chrome, while
+submission outcomes use success, warning, information, neutral and destructive
+roles. The developer debug panel remains outside this UI-theme scope.
+
 ## What this window should allow
 
 - Detect the active fiscal profile for the current organization and render only the relevant section(s).

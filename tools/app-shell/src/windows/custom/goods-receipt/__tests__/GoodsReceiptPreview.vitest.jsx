@@ -403,7 +403,7 @@ describe('ReceiptStatsPanel — statusBadgeClass', () => {
   it('uses fallback class when STATUS_BADGE has no entry for docStatus', () => {
     // The mock has STATUS_BADGE = {} so unknown statuses get the fallback
     renderPreview({ receipt: { ...defaultReceipt, documentStatus: 'UNKNOWN' } });
-    const badge = document.querySelector('.bg-gray-50.text-gray-600.border-gray-200');
+    const badge = document.querySelector('.bg-muted.text-muted-foreground.border-border-subtle');
     expect(badge).not.toBeNull();
   });
 });

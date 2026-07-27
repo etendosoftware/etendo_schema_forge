@@ -204,10 +204,10 @@ describe('PurchaseOrderActions', () => {
       assert.match(src, /onClick=\{disabled\s*\?\s*undefined\s*:\s*onChange\}/);
     });
 
-    it('switches border and background to a green/done palette when disabled', () => {
-      assert.match(src, /disabled\s*\?\s*'2px solid #10B981'/);
-      assert.match(src, /disabled\s*\?\s*'#ECFDF5'/);
-      assert.match(src, /disabled\s*\?\s*'#10B981'/);
+    it('switches to semantic success roles when disabled', () => {
+      assert.match(src, /disabled\s*\?\s*'2px solid var\(--status-success-border\)'/);
+      assert.match(src, /background:\s*disabled\s*\?\s*'hsl\(var\(--card\)\)'/);
+      assert.match(src, /color:\s*disabled\s*\?\s*'var\(--status-success-fg\)'/);
     });
 
     it('renders the checkmark for both checked and disabled states', () => {

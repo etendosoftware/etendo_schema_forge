@@ -18,13 +18,13 @@ function fmtDate(raw) {
 }
 
 const CalendarIcon = () => (
-  <svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="#6C6C89" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+  <svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="var(--status-info-bg)" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
     <rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/>
   </svg>
 );
 
 const TransferIcon = () => (
-  <svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="#6C6C89" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+  <svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="var(--status-info-bg)" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
     <path d="M3 7h18M3 7l4-4M3 7l4 4M21 17H3M21 17l-4-4M21 17l-4 4"/>
   </svg>
 );
@@ -41,17 +41,17 @@ function resolveMethodKey(name) {
 const METHOD_ICONS = {
   transfer: <TransferIcon />,
   card: (
-    <svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="#6C6C89" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+    <svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="var(--status-info-bg)" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
       <rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20"/>
     </svg>
   ),
   cash: (
-    <svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="#6C6C89" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+    <svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="var(--status-info-bg)" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
       <rect x="2" y="6" width="20" height="12" rx="2"/><circle cx="12" cy="12" r="2.5"/>
     </svg>
   ),
   direct: (
-    <svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="#6C6C89" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+    <svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="var(--status-info-bg)" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
       <path d="M4 4v16M4 8h12a3 3 0 0 1 0 6H4M14 14l4 4M14 14l4-4"/>
     </svg>
   ),
@@ -60,11 +60,11 @@ const METHOD_ICONS = {
 function FieldItem({ label, children, icon }) {
   return (
     <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 0 }}>
-      <span style={{ font: '400 12px/16px Inter', color: '#555B6D' }}>{label}</span>
+      <span style={{ font: '400 12px/16px Inter', color: 'var(--status-info-fg)' }}>{label}</span>
       <div style={{ display: 'flex', alignItems: 'center', gap: 2, marginTop: 0 }}>
         {icon && <span style={{ display: 'flex', alignItems: 'center' }}>{icon}</span>}
-        <span style={{ font: '600 16px/24px Inter', color: '#121217', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-          {children || <span style={{ color: '#A9AEBC' }}>—</span>}
+        <span style={{ font: '600 16px/24px Inter', color: 'hsl(var(--foreground))', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          {children || <span style={{ color: 'hsl(var(--muted-foreground))' }}>—</span>}
         </span>
       </div>
     </div>
@@ -77,8 +77,8 @@ function DatosSection({ data, ui }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'flex-start', padding: '8px 20px 12px', gap: 44 }}>
       <div style={{ width: 148, flexShrink: 0 }}>
-        <div style={{ font: '600 14px/20px Inter', color: '#121217' }}>{ui('paymentInDataTitle')}</div>
-        <div style={{ font: '400 12px/16px Inter', color: '#282833', marginTop: 4 }}>{ui('paymentInDataSub')}</div>
+        <div style={{ font: '600 14px/20px Inter', color: 'hsl(var(--foreground))' }}>{ui('paymentInDataTitle')}</div>
+        <div style={{ font: '400 12px/16px Inter', color: 'hsl(var(--foreground))', marginTop: 4 }}>{ui('paymentInDataSub')}</div>
       </div>
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 20 }}>
         <div style={{ display: 'flex', flexDirection: 'row', gap: 20 }}>
@@ -119,7 +119,7 @@ function LineasSection({ data, token, apiBaseUrl, ui }) {
     return () => { cancelled = true; };
   }, [data?.id, token, apiBaseUrl]);
 
-  const thStyle = { font: '600 12px/16px Inter', color: '#121217' };
+  const thStyle = { font: '600 12px/16px Inter', color: 'hsl(var(--foreground))' };
   const thRStyle = { ...thStyle, textAlign: 'right' };
   const noLines = !data?.id || (lines !== null && lines.length === 0);
   const totalImporte = (lines || []).reduce((s, r) => s + (parseFloat(r.expected) || 0), 0);
@@ -129,23 +129,23 @@ function LineasSection({ data, token, apiBaseUrl, ui }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', padding: '8px 20px 12px', gap: 16 }}>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-        <div style={{ font: '600 14px/20px Inter', color: '#121217' }}>{ui('paymentInLinesTitle')}</div>
-        <div style={{ font: '400 12px/16px Inter', color: '#282833' }}>{ui('paymentInLinesSub')}</div>
+        <div style={{ font: '600 14px/20px Inter', color: 'hsl(var(--foreground))' }}>{ui('paymentInLinesTitle')}</div>
+        <div style={{ font: '400 12px/16px Inter', color: 'hsl(var(--foreground))' }}>{ui('paymentInLinesSub')}</div>
       </div>
 
       {lines === null ? (
-        <div style={{ font: '400 13px/18px Inter', color: '#828FA3' }}>{ui('loading')}</div>
+        <div style={{ font: '400 13px/18px Inter', color: 'var(--status-info-border)' }}>{ui('loading')}</div>
       ) : noLines ? (
-        <div style={{ font: '400 13px/18px Inter', color: '#828FA3' }}>{ui('paymentInNoLines')}</div>
+        <div style={{ font: '400 13px/18px Inter', color: 'var(--status-info-border)' }}>{ui('paymentInNoLines')}</div>
       ) : (
-        <div style={{ border: '1px solid #E8EAEF', borderRadius: 8, overflow: 'hidden', boxShadow: '0px 1px 2px rgba(18,18,23,0.05)' }}>
+        <div style={{ border: '1px solid hsl(var(--foreground))', borderRadius: 8, overflow: 'hidden', boxShadow: '0px 1px 2px hsl(var(--foreground) / 0.05)' }}>
           <div style={{ display: 'grid', gridTemplateColumns: DET_COLS, alignItems: 'center', height: 40 }}>
             <div style={{ padding: '0 12px', ...thStyle }}>{ui('invoice')}</div>
             <div style={{ padding: '0 12px', ...thRStyle }}>{ui('amount')}</div>
             <div style={{ padding: '0 12px', ...thRStyle }}>{ui('applied')}</div>
             <div style={{ padding: '0 12px', ...thRStyle }}>{ui('pending')}</div>
           </div>
-          <div style={{ borderTop: '1px solid #E8EAEF' }} />
+          <div style={{ borderTop: '1px solid hsl(var(--card))' }} />
 
           {lines.map((row, i) => {
             const applied = parseFloat(row.amount) || 0;
@@ -155,26 +155,26 @@ function LineasSection({ data, token, apiBaseUrl, ui }) {
             const dueLabel = row.invoiceDocumentNo ? fmtDate(row.dueDate) : null;
             return (
               <div key={row.id || i}>
-                <div style={{ display: 'grid', gridTemplateColumns: DET_COLS, alignItems: 'center', height: 56, background: '#FFFFFF' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: DET_COLS, alignItems: 'center', height: 56, background: 'hsl(var(--card))' }}>
                   <div style={{ padding: '0 12px', display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 2, minWidth: 0 }}>
-                    <div style={{ font: '600 14px/20px Inter', color: '#121217', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{invoiceNo}</div>
-                    {dueLabel && <div style={{ font: '500 12px/16px Inter', color: '#6C6C89' }}>{dueLabel}</div>}
+                    <div style={{ font: '600 14px/20px Inter', color: 'hsl(var(--foreground))', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{invoiceNo}</div>
+                    {dueLabel && <div style={{ font: '500 12px/16px Inter', color: 'var(--status-info-fg)' }}>{dueLabel}</div>}
                   </div>
-                  <div style={{ padding: '0 12px', textAlign: 'right', font: '400 14px/20px Inter', color: '#121217', fontVariantNumeric: 'tabular-nums' }}>{importe > 0 ? fmtAmt(importe) : '—'}</div>
-                  <div style={{ padding: '0 12px', textAlign: 'right', font: '600 14px/20px Inter', color: '#17663A', fontVariantNumeric: 'tabular-nums' }}>{fmtAmt(applied)}</div>
-                  <div style={{ padding: '0 12px', textAlign: 'right', font: '400 14px/20px Inter', color: '#121217', fontVariantNumeric: 'tabular-nums' }}>{fmtAmt(pendiente)}</div>
+                  <div style={{ padding: '0 12px', textAlign: 'right', font: '400 14px/20px Inter', color: 'hsl(var(--foreground))', fontVariantNumeric: 'tabular-nums' }}>{importe > 0 ? fmtAmt(importe) : '—'}</div>
+                  <div style={{ padding: '0 12px', textAlign: 'right', font: '600 14px/20px Inter', color: 'var(--status-success-fg)', fontVariantNumeric: 'tabular-nums' }}>{fmtAmt(applied)}</div>
+                  <div style={{ padding: '0 12px', textAlign: 'right', font: '400 14px/20px Inter', color: 'hsl(var(--foreground))', fontVariantNumeric: 'tabular-nums' }}>{fmtAmt(pendiente)}</div>
                 </div>
-                {i < lines.length - 1 && <div style={{ borderTop: '1px solid #E8EAEF' }} />}
+                {i < lines.length - 1 && <div style={{ borderTop: '1px solid hsl(var(--card))' }} />}
               </div>
             );
           })}
 
-          <div style={{ borderTop: '1px solid #E8EAEF' }} />
+          <div style={{ borderTop: '1px solid hsl(var(--card))' }} />
           <div style={{ display: 'grid', gridTemplateColumns: DET_COLS, alignItems: 'center', height: 40 }}>
-            <div style={{ padding: '0 12px', font: '600 12px/16px Inter', color: '#121217' }}>{ui('totalApplied')}</div>
-            <div style={{ padding: '0 12px', textAlign: 'right', font: '400 14px/20px Inter', color: '#121217', fontVariantNumeric: 'tabular-nums' }}>{fmtAmt(totalImporte)}</div>
-            <div style={{ padding: '0 12px', textAlign: 'right', font: '600 14px/20px Inter', color: '#17663A', fontVariantNumeric: 'tabular-nums' }}>{fmtAmt(totalApplied)}</div>
-            <div style={{ padding: '0 12px', textAlign: 'right', font: '400 14px/20px Inter', color: '#121217', fontVariantNumeric: 'tabular-nums' }}>{fmtAmt(totalPendiente)}</div>
+            <div style={{ padding: '0 12px', font: '600 12px/16px Inter', color: 'hsl(var(--foreground))' }}>{ui('totalApplied')}</div>
+            <div style={{ padding: '0 12px', textAlign: 'right', font: '400 14px/20px Inter', color: 'hsl(var(--foreground))', fontVariantNumeric: 'tabular-nums' }}>{fmtAmt(totalImporte)}</div>
+            <div style={{ padding: '0 12px', textAlign: 'right', font: '600 14px/20px Inter', color: 'var(--status-success-fg)', fontVariantNumeric: 'tabular-nums' }}>{fmtAmt(totalApplied)}</div>
+            <div style={{ padding: '0 12px', textAlign: 'right', font: '400 14px/20px Inter', color: 'hsl(var(--foreground))', fontVariantNumeric: 'tabular-nums' }}>{fmtAmt(totalPendiente)}</div>
           </div>
         </div>
       )}
@@ -188,7 +188,7 @@ export default function PaymentBottomPanel({ data, token, apiBaseUrl }) {
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
       <PaymentDraftBanner data={data} />
       <DatosSection data={data} ui={ui} />
-      <div style={{ margin: '0 20px', borderTop: '1px solid #E8EAEF' }} />
+      <div style={{ margin: '0 20px', borderTop: '1px solid hsl(var(--card))' }} />
       <LineasSection data={data} token={token} apiBaseUrl={apiBaseUrl} ui={ui} />
     </div>
   );

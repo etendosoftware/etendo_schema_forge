@@ -22,9 +22,9 @@ import { formatCurrency } from '@/lib/formatCurrency.js';
  */
 
 const TONE_CLASS = {
-  positive: 'text-[#1E874C]',
-  negative: 'text-[#d50b3e]',
-  neutral:  'text-[#121217]',
+  positive: 'text-[var(--status-success-fg)]',
+  negative: 'text-[hsl(var(--destructive))]',
+  neutral:  'text-[hsl(var(--foreground))]',
 };
 
 function resolveTone(tone, value) {

@@ -11,7 +11,7 @@ import { extractApiErrorMessage } from '@/lib/apiError';
 
 const filters = ['searchKey', 'name', 'etgoFirstname', 'etgoLastname'];
 
-const INPUT_CLS = 'w-full h-7 px-2 text-sm rounded border border-[#E8EAEF] bg-white text-[#121217] focus:outline-none focus:ring-1 focus:ring-[#121217] focus:border-transparent';
+const INPUT_CLS = 'w-full h-7 px-2 text-sm rounded border border-border-control bg-card text-text-primary focus:outline-none focus:ring-1 focus:ring-focus-ring focus:border-transparent';
 
 const HIDDEN_COLS = ['__contactType'];
 

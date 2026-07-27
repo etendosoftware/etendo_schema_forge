@@ -4,7 +4,7 @@ import { Search } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const DEFAULT_INPUT_CLASS =
-  'h-10 w-full rounded-lg border border-[#D1D4DB] bg-white px-3 text-sm text-[#121217] placeholder:text-[#8a8aa3] shadow-[0_1px_2px_rgba(18,18,23,0.05)] focus:outline-none focus:ring-2 focus:ring-[#121217] focus:ring-offset-1';
+  'h-10 w-full rounded-lg border border-[hsl(var(--border-control))] bg-card px-3 text-sm text-[hsl(var(--foreground))] placeholder:text-[hsl(var(--text-disabled))] shadow-[0_1px_2px_hsl(var(--foreground) / 0.05)] focus:outline-none focus:ring-2 focus:ring-[hsl(var(--foreground))] focus:ring-offset-1';
 
 const DROPDOWN_MAX_H = 224; // matches max-h-56
 
@@ -72,7 +72,7 @@ export function LookupPicker({ value, onSelect, onClear, placeholder, useLookup,
     <div ref={wrapRef} className="relative">
       {search ? (
         <Search
-          className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-[#8a8aa3]"
+          className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-[hsl(var(--text-disabled))]"
           data-testid="Search__12d6c3" />
       ) : null}
       <input
@@ -105,17 +105,17 @@ export function LookupPicker({ value, onSelect, onClear, placeholder, useLookup,
             pointerEvents: 'auto',
             overscrollBehavior: 'contain',
           }}
-          className="max-h-56 overflow-auto rounded-lg border border-[#D1D4DB] bg-white shadow-lg"
+          className="max-h-56 overflow-auto rounded-lg border border-[hsl(var(--border-control))] bg-card shadow-lg"
         >
           {loading && results.length === 0 ? (
-            <div className="px-3 py-2 text-sm text-[#6c6c89]">…</div>
+            <div className="px-3 py-2 text-sm text-[hsl(var(--muted-foreground))]">…</div>
           ) : null}
           {results.map((r) => (
             <button
               key={r.id}
               type="button"
               onMouseDown={(e) => { e.preventDefault(); onSelect(r); setOpen(false); }}
-              className="block w-full px-3 py-2 text-left text-sm text-[#121217] hover:bg-[#F5F7F9]"
+              className="block w-full px-3 py-2 text-left text-sm text-[hsl(var(--foreground))] hover:bg-[hsl(var(--muted))]"
             >
               {r.name}
             </button>

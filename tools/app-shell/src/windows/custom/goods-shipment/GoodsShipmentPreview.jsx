@@ -15,7 +15,7 @@ import RelatedDocumentsCard from '../shared/preview-cards/RelatedDocumentsCard.j
 
 function EmptyPanel({ icon, text }) {
   return (
-    <div className="flex flex-col items-center justify-center h-full gap-3 text-gray-400 py-20">
+    <div className="flex flex-col items-center justify-center h-full gap-3 text-muted-foreground py-20">
       <span className="text-3xl">{icon}</span>
       <p className="text-sm">{text}</p>
     </div>
@@ -29,12 +29,12 @@ function ShipmentStatsPanel({ shipment, partnerName, movementDate, ui }) {
   const warehouseLabel = shipment['warehouse$_identifier'] || '—';
   const docStatus = shipment.documentStatus;
   const statusLabel = ui(STATUS_KEYS[docStatus]) || shipment['documentStatus$_identifier'] || docStatus || '—';
-  const statusBadgeClass = STATUS_BADGE[docStatus] || 'bg-gray-50 text-gray-600 border-gray-200';
+  const statusBadgeClass = STATUS_BADGE[docStatus] || 'bg-muted text-muted-foreground border-border-subtle';
 
   return (
     <CardShell data-testid="CardShell__5d626b">
-      <div className="px-4 py-3 border-b border-gray-100">
-        <span className="font-bold text-gray-900 text-sm">{ui('shipmentPreviewStatus')}</span>
+      <div className="px-4 py-3 border-b border-border-subtle">
+        <span className="font-bold text-foreground text-sm">{ui('shipmentPreviewStatus')}</span>
       </div>
       <div className="px-4 py-2">
         <InfoRow
@@ -151,7 +151,7 @@ export default function GoodsShipmentPreview({ shipment, token, apiBaseUrl, wind
     <>
       <Button
         size="sm"
-        className="gap-1 px-2 py-1 h-8 rounded-lg text-sm font-medium bg-[#121217] hover:bg-[#2a2a30] text-white [&_svg]:size-5"
+        className="gap-1 px-2 py-1 h-8 rounded-lg text-sm font-medium bg-[hsl(var(--foreground))] hover:bg-[hsl(var(--foreground))] text-primary-foreground [&_svg]:size-5"
         onClick={openEmailModal}
         data-testid="Button__5d626b">
         <Mail data-testid="Mail__5d626b" />
@@ -160,20 +160,20 @@ export default function GoodsShipmentPreview({ shipment, token, apiBaseUrl, wind
       <Button
         size="sm"
         variant="outline"
-        className="gap-1 px-2 py-1 h-8 rounded-lg text-sm font-medium bg-white border-[#D1D4DB] shadow-sm text-[#121217] disabled:opacity-40 disabled:cursor-not-allowed [&_svg]:size-5"
+        className="gap-1 px-2 py-1 h-8 rounded-lg text-sm font-medium bg-card border-[hsl(var(--border-control))] shadow-sm text-[hsl(var(--foreground))] disabled:opacity-40 disabled:cursor-not-allowed [&_svg]:size-5"
         disabled={!pdfBlob}
         onClick={pdfBlob ? handleDownload : undefined}
         data-testid="Button__5d626b">
-        <Download className="text-[#828FA3]" data-testid="Download__5d626b" />
+        <Download className="text-[hsl(var(--text-disabled))]" data-testid="Download__5d626b" />
         {ui('invoicePreviewDownloadPdf')}
       </Button>
       <Button
         size="sm"
         variant="outline"
-        className="gap-1 px-2 py-1 h-8 rounded-lg text-sm font-medium bg-white border-[#D1D4DB] shadow-sm text-[#121217] [&_svg]:size-5"
+        className="gap-1 px-2 py-1 h-8 rounded-lg text-sm font-medium bg-card border-[hsl(var(--border-control))] shadow-sm text-[hsl(var(--foreground))] [&_svg]:size-5"
         onClick={() => modalRef.current?.triggerEdit?.()}
         data-testid="Button__5d626b">
-        <Edit2 className="text-[#828FA3]" data-testid="Edit2__5d626b" />
+        <Edit2 className="text-[hsl(var(--text-disabled))]" data-testid="Edit2__5d626b" />
         {ui('invoicePreviewEdit')}
       </Button>
     </>

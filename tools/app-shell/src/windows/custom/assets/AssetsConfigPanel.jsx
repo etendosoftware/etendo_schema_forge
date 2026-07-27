@@ -4,10 +4,10 @@ import { useUI } from '@/i18n';
 
 function SectionCard({ title, description, children }) {
   return (
-    <div className="rounded-xl border border-gray-200 bg-white p-5">
+    <div className="rounded-xl border border-border-subtle bg-card p-5">
       <div className="mb-4">
-        {title && <div className="text-sm font-semibold text-gray-800">{title}</div>}
-        {description && <div className={`text-xs text-gray-400${title ? ' mt-0.5' : ''}`}>{description}</div>}
+        {title && <div className="text-sm font-semibold text-foreground">{title}</div>}
+        {description && <div className={`text-xs text-muted-foreground${title ? ' mt-0.5' : ''}`}>{description}</div>}
       </div>
       {children}
     </div>
@@ -23,23 +23,23 @@ function ToggleCard({ label, description, fieldKey, value, onChange, editing }) 
   }
 
   return (
-    <div className="flex items-center justify-between rounded-xl border border-gray-200 bg-white p-4">
+    <div className="flex items-center justify-between rounded-xl border border-border-subtle bg-card p-4">
       <div>
-        <div className="text-sm font-medium text-gray-800">{label}</div>
-        {description && <div className="text-xs text-gray-400 mt-0.5">{description}</div>}
+        <div className="text-sm font-medium text-foreground">{label}</div>
+        {description && <div className="text-xs text-muted-foreground mt-0.5">{description}</div>}
       </div>
       <button
         type="button"
         onClick={handleToggle}
         disabled={!editing}
         className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none
-          ${isOn ? 'bg-gray-900' : 'bg-gray-200'}
+          ${isOn ? 'bg-foreground' : 'bg-muted'}
           ${!editing ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer'}`}
         aria-checked={isOn}
         role="switch"
       >
         <span
-          className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform
+          className={`inline-block h-4 w-4 transform rounded-full bg-card shadow transition-transform
             ${isOn ? 'translate-x-6' : 'translate-x-1'}`}
         />
       </button>
@@ -86,10 +86,15 @@ export default function AssetsConfigPanel({ data, token, apiBaseUrl, catalogs, a
   const deprecFields = [
     { key: 'depreciationType', column: 'Amortizationtype', type: 'select', label: ui('assetsOptLinear'), required: true, section: 'other', options: [{ value: 'LI', label: ui('assetsOptLinear') }] },
     { key: 'calculateType', column: 'Amortizationcalctype', type: 'select', required: true, section: 'other', options: [{ value: 'PE', label: ui('assetsOptPercentage') }, { value: 'TI', label: ui('assetsOptTime') }] },
-    { key: 'annualDepreciation', column: 'Amortizationpercentage', type: 'number', label: ui('assetsAnnualDepreciationLabel'), section: 'other', displayLogic: (record) => isDepreciate(record) && record.calculateType !== 'TI' },
+    // Annual Depreciation % — positive values only, decimals allowed (percentage).
+    // Only `min: 1`, no `integer`. See AssetsDetailPanel.jsx for the full rationale. ETP-4542.
+    { key: 'annualDepreciation', column: 'Amortizationpercentage', type: 'number', label: ui('assetsAnnualDepreciationLabel'), section: 'other', min: 1, displayLogic: (record) => isDepreciate(record) && record.calculateType !== 'TI' },
     { key: 'amortize', column: 'Assetschedule', type: 'select', required: true, section: 'other', options: [{ value: 'MO', label: ui('assetsOptMonthly') }, { value: 'YE', label: ui('assetsOptYearly') }], displayLogic: (record) => isDepreciate(record) && record.calculateType === 'TI' },
-    { key: 'usableLifeYears', column: 'UseLifeYears', type: 'number', section: 'other', displayLogic: (record) => isDepreciate(record) && record.calculateType === 'TI' && record.amortize === 'YE' },
-    { key: 'usableLifeMonths', column: 'UseLifeMonths', type: 'number', section: 'other', displayLogic: (record) => isDepreciate(record) && record.calculateType === 'TI' && record.amortize !== 'YE' },
+    // min: 1 + integer: true → generic numeric validation (EntityForm blur toast +
+    // useEntity save-block gate). Backend "Create Amortization" rejects non-positive
+    // and decimal values. ETP-4542.
+    { key: 'usableLifeYears', column: 'UseLifeYears', type: 'number', section: 'other', min: 1, integer: true, displayLogic: (record) => isDepreciate(record) && record.calculateType === 'TI' && record.amortize === 'YE' },
+    { key: 'usableLifeMonths', column: 'UseLifeMonths', type: 'number', section: 'other', min: 1, integer: true, displayLogic: (record) => isDepreciate(record) && record.calculateType === 'TI' && record.amortize !== 'YE' },
   ];
 
   function makeDisplayLogic(fields) {
@@ -108,7 +113,7 @@ export default function AssetsConfigPanel({ data, token, apiBaseUrl, catalogs, a
   const common = { data: d, onChange, catalogs, api, token, apiBaseUrl, entity: 'assets', layout: 'horizontal' };
 
   return (
-    <div className="space-y-4 pb-6 bg-white [&_input]:bg-white [&_textarea]:bg-white [&_textarea:disabled]:!bg-white [&_textarea:disabled]:opacity-50">
+    <div className="space-y-4 pb-6 bg-card [&_input]:bg-card [&_textarea]:bg-card [&_textarea:disabled]:!bg-card [&_textarea:disabled]:opacity-50">
       <SectionCard
         title={null}
         description={ui('assetsConfigDesc')}

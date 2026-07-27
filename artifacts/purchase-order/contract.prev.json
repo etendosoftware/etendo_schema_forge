@@ -1,8 +1,8 @@
 {
-  "version": "0.40.0",
+  "version": "0.42.0",
   "generatedAt": "2026-04-30T15:42:46.497Z",
-  "updatedAt": "2026-07-21T19:17:46.806Z",
-  "checksum": "97965f9f07e1b828",
+  "updatedAt": "2026-07-22T14:17:46.004Z",
+  "checksum": "33db276aa6af6feb",
   "frontendContract": {
     "window": {
       "id": "181",
@@ -31,7 +31,8 @@
           "C_BPartner_ID": "Contacto",
           "DatePromised": "Fecha de entrega esperada",
           "DeliveryStatusPurchase": "Estado de recepción",
-          "InvoiceStatus": "Estado de facturación"
+          "InvoiceStatus": "Estado de facturación",
+          "PriceList": "Precio"
         },
         "en_US": {
           "C_BPartner_ID": "Contact",
@@ -1383,11 +1384,9 @@
             "defaultValue": "1",
             "section": "principal",
             "gridOrder": 3,
-            "min": 0,
             "validation": {
               "required": true,
-              "maxLength": 10,
-              "minimum": 0
+              "maxLength": 10
             },
             "callout": {
               "className": "org.openbravo.erpCommon.ad_callouts.SL_Order_Amt"
@@ -1414,11 +1413,9 @@
             "columnType": "amount",
             "section": "principal",
             "gridOrder": 4,
-            "min": 0,
             "validation": {
               "required": true,
-              "maxLength": 22,
-              "minimum": 0
+              "maxLength": 22
             },
             "callout": {
               "className": "org.openbravo.erpCommon.ad_callouts.SL_Order_Amt"
@@ -2718,7 +2715,8 @@
           "C_BPartner_ID": "Contacto",
           "DatePromised": "Fecha de entrega esperada",
           "DeliveryStatusPurchase": "Estado de recepción",
-          "InvoiceStatus": "Estado de facturación"
+          "InvoiceStatus": "Estado de facturación",
+          "PriceList": "Precio"
         },
         "en_US": {
           "C_BPartner_ID": "Contact",
@@ -5570,7 +5568,8 @@
         "C_BPartner_ID": "Contacto",
         "DatePromised": "Fecha de entrega esperada",
         "DeliveryStatusPurchase": "Estado de recepción",
-        "InvoiceStatus": "Estado de facturación"
+        "InvoiceStatus": "Estado de facturación",
+        "PriceList": "Precio"
       },
       "en_US": {
         "C_BPartner_ID": "Contact",

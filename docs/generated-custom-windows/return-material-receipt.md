@@ -70,3 +70,11 @@ Receive material back into stock after a sales-side return flow. The window is o
 - `artifacts/return-material-receipt/decisions.json` sets `window.maxDetailLines: 0`, and the generated `ReturnMaterialReceiptPage.jsx` passes `addLineGuard={(_, children) => children.length < 0}` to `DetailView` — the source-level evidence for the import-only lines behavior (ETP-4462). The import-only empty-state description key `linesImportOnlyFromShipment` exists in `en_US`, `es_ES`, and `es_AR` locale files. `ReturnMaterialReceiptBottomPanel.jsx` re-renders `ReturnReceiptLineActions` above `LinesBottomSection` when `props.lines.length > 0` on a draft with a business partner, keeping the import trigger available once lines exist (panel-rendered; refreshes via `window.location.reload()`).
 - I did not find dedicated browser automation for this specific window; shared route and generated-window loading evidence is documented in `docs/generated-custom-windows/app-shell-functional-flows.md`.
 - The generated `ReturnMaterialReceiptPage.jsx` includes `AttachmentsTab` in its `customTabs` prop, wired to the `M_InOut` AD table.- **ETP-3995 — Related Documents tab i18n**: The generated page file now uses `labelKey: 'relatedDocuments'` in the `customTabs` prop instead of a hardcoded `label: 'Related Documents'` string, so the tab title renders via the active UI language (e.g. "Documentos relacionados" in Spanish) regardless of the browser locale.
+
+## Theme roles
+
+The window's live artifact custom components use the shared semantic theme.
+Structural surfaces and controls consume background, card, foreground, muted, and
+border roles; operational feedback uses success, warning, information, neutral,
+and destructive roles. No local palette is used, so the active application theme
+controls the appearance.

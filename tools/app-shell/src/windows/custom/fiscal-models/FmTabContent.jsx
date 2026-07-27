@@ -58,7 +58,7 @@ export function SourcesTab({ decl, t }) {
       )}
       {sources.length === 0 ? (
         <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <span style={{ fontSize: 16, fontWeight: 600, color: '#121217' }}>
+          <span style={{ fontSize: 16, fontWeight: 600, color: 'hsl(var(--foreground))' }}>
             {t('fm.sources.empty') ?? 'Sin facturas'}
           </span>
         </div>
@@ -80,7 +80,7 @@ export function SourcesTab({ decl, t }) {
             </thead>
             <tbody>
               {visible.length === 0 && (
-                <tr><td colSpan={9} style={{ textAlign:'center', color:'#9ca3af', padding:'24px 0', fontSize:13 }}>{t('fm.incidents.empty') ?? 'Sin incidencias'}</td></tr>
+                <tr><td colSpan={9} style={{ textAlign:'center', color:'hsl(var(--text-disabled))', padding:'24px 0', fontSize:13 }}>{t('fm.incidents.empty') ?? 'Sin incidencias'}</td></tr>
               )}
               {visible.map((r) => {
                 const incs = rowIncidents(r);
@@ -131,7 +131,7 @@ export function IncidentsTab({ decl, blocking, warning, t, onGoToSources }) {
   if (blocking === 0 && warning === 0) {
     return (
       <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-        <span style={{ fontSize: 16, fontWeight: 600, color: '#121217' }}>
+        <span style={{ fontSize: 16, fontWeight: 600, color: 'hsl(var(--foreground))' }}>
           {t('fm.incidents.empty') ?? 'Sin incidencias'}
         </span>
       </div>
@@ -147,12 +147,12 @@ export function IncidentsTab({ decl, blocking, warning, t, onGoToSources }) {
       <div style={{
         display: 'flex', alignItems: 'center', gap: 10,
         padding: '12px 24px', marginBottom: 0,
-        background: '#FFF9EB', borderTop: '1px solid #FFE7AD',
+        background: 'var(--status-warning-bg)', borderTop: '1px solid var(--status-warning-border)',
         fontSize: 14,
       }}>
-        <span style={{ display:'inline-flex', alignItems:'center', justifyContent:'center', width:18, height:18, borderRadius:'50%', background:'#FFC233', fontSize:11, fontWeight:700, color:'#fff', fontStyle:'normal', flexShrink:0 }}>i</span>
-        <span style={{ flex: 1, color: '#8A6100' }}>{t('fm.incidents.block_sub') ?? 'Resuélvelas antes de generar el fichero'}</span>
-        <button style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#828FA3', fontSize: 18, padding: 0, lineHeight: 1 }}>×</button>
+        <span style={{ display:'inline-flex', alignItems:'center', justifyContent:'center', width:18, height:18, borderRadius:'50%', background:'var(--status-warning-fg)', fontSize:11, fontWeight:700, color:'hsl(var(--card))', fontStyle:'normal', flexShrink:0 }}>i</span>
+        <span style={{ flex: 1, color: 'var(--status-warning-fg)' }}>{t('fm.incidents.block_sub') ?? 'Resuélvelas antes de generar el fichero'}</span>
+        <button style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'hsl(var(--text-disabled))', fontSize: 18, padding: 0, lineHeight: 1 }}>×</button>
       </div>
       {sorted.length > 0 ? (
         <div className="fm-table-wrap">
@@ -171,8 +171,8 @@ export function IncidentsTab({ decl, blocking, warning, t, onGoToSources }) {
                 <tr key={`${inc.origin ?? ''}-${inc.message}`}>
                   <td>
                     {inc.severity === 'block'
-                      ? <span style={{ fontSize: 12, fontWeight: 400, color: '#dc2626', background: '#fee2e2', borderRadius: 4, padding: '2px 6px' }}>{t('fm.incidents.severity.block')}</span>
-                      : <span style={{ fontSize: 12, fontWeight: 400, color: '#8A6100', background: '#FFF9EB', borderRadius: 4, padding: '2px 6px' }}>{t('fm.incidents.severity.warn')}</span>
+                      ? <span style={{ fontSize: 12, fontWeight: 400, color: 'hsl(var(--destructive))', background: 'var(--status-destructive-bg)', borderRadius: 4, padding: '2px 6px' }}>{t('fm.incidents.severity.block')}</span>
+                      : <span style={{ fontSize: 12, fontWeight: 400, color: 'var(--status-warning-fg)', background: 'var(--status-warning-bg)', borderRadius: 4, padding: '2px 6px' }}>{t('fm.incidents.severity.warn')}</span>
                     }
                   </td>
                   <td>{inc.origin ?? '—'}</td>
@@ -182,7 +182,7 @@ export function IncidentsTab({ decl, blocking, warning, t, onGoToSources }) {
                     {inc.origin?.match(/Casilla\s+\d+/i) && onGoToSources && (
                       <button
                         onClick={() => onGoToSources()}
-                        style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontSize: 14, color: '#121217', display: 'inline-flex', alignItems: 'center', gap: 2, textDecoration: 'underline' }}
+                        style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontSize: 14, color: 'hsl(var(--foreground))', display: 'inline-flex', alignItems: 'center', gap: 2, textDecoration: 'underline' }}
                       >
                         {t('fm.sources.title')} <ChevronRight size={13} strokeWidth={2} data-testid="ChevronRight__931756" />
                       </button>
@@ -211,15 +211,15 @@ export function FilesTab({ decl, t, onGenerate, fileBlocked, genLabel }) {
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
       {file ? (
         <div style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 12 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px', border: '1px solid #d1fae5', borderRadius: 8, background: '#f0fdf4' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px', border: '1px solid var(--status-success-border)', borderRadius: 8, background: 'var(--status-success-bg)' }}>
             <CircleCheck
               size={20}
               strokeWidth={1.75}
-              style={{ color: '#16a34a', flexShrink: 0 }}
+              style={{ color: 'var(--status-success-fg)', flexShrink: 0 }}
               data-testid="CircleCheck__931756" />
             <div style={{ flex: 1 }}>
-              <div style={{ fontSize: 13, fontWeight: 600, color: '#111827' }}>{file.name}</div>
-              <div style={{ fontSize: 11, color: '#6b7280', marginTop: 2 }}>
+              <div style={{ fontSize: 13, fontWeight: 600, color: 'hsl(var(--foreground))' }}>{file.name}</div>
+              <div style={{ fontSize: 11, color: 'hsl(var(--muted-foreground))', marginTop: 2 }}>
                 {file.size} · {file.generatedAt}
               </div>
             </div>
@@ -240,10 +240,10 @@ export function FilesTab({ decl, t, onGenerate, fileBlocked, genLabel }) {
         </div>
       ) : (
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 12 }}>
-          <span style={{ fontSize: 16, fontWeight: 600, color: '#121217' }}>
+          <span style={{ fontSize: 16, fontWeight: 600, color: 'hsl(var(--foreground))' }}>
             {t('fm.files.empty') ?? 'Sin fichero generado'}
           </span>
-          <span style={{ fontSize: 14, fontWeight: 400, color: '#3F3F50' }}>
+          <span style={{ fontSize: 14, fontWeight: 400, color: 'hsl(var(--muted-foreground))' }}>
             {t('fm.files.empty_sub') ?? 'Genera el fichero de declaración para subir a la sede AEAT'}
           </span>
           <button
@@ -266,7 +266,7 @@ export function HistoryTab({ decl, t }) {
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
       {history.length === 0 ? (
         <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <span style={{ fontSize: 16, fontWeight: 600, color: '#121217' }}>
+          <span style={{ fontSize: 16, fontWeight: 600, color: 'hsl(var(--foreground))' }}>
             {t('fm.list.empty') ?? 'No se encontraron declaraciones'}
           </span>
         </div>

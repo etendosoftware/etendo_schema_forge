@@ -143,7 +143,7 @@ describe('EntityPanel', () => {
     });
     render(<EntityPanel specName="sales-order" selectedEntity={entity} onSelectEntity={vi.fn()} />);
     const button = screen.getByRole('button', { name: /header/ });
-    expect(button.className).toContain('bg-zinc-800');
+    expect(button.className).toContain('bg-inverse-muted');
   });
 
   it('handles entity without methods array', () => {

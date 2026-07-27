@@ -1,8 +1,8 @@
 {
-  "version": "0.62.0",
+  "version": "0.64.0",
   "generatedAt": "2026-04-30T15:42:46.582Z",
-  "updatedAt": "2026-07-21T19:17:47.858Z",
-  "checksum": "5265d041bbe1a0fe",
+  "updatedAt": "2026-07-22T14:17:46.190Z",
+  "checksum": "0490298455d4040f",
   "frontendContract": {
     "window": {
       "id": "167",
@@ -54,7 +54,8 @@
           "OutstandingAmt": "Pendiente de pago",
           "EM_Etgo_Due_Date": "Vencimiento",
           "em_etgo_delivery_status": "Estado de entrega",
-          "C_DocTypeTarget_ID": "Tipo de documento"
+          "C_DocTypeTarget_ID": "Tipo de documento",
+          "PriceList": "Precio"
         },
         "en_US": {
           "OutstandingAmt": "Pending Payment",
@@ -1622,11 +1623,9 @@
             "defaultValue": "1",
             "section": "principal",
             "gridOrder": 3,
-            "min": 0,
             "validation": {
               "required": true,
-              "maxLength": 10,
-              "minimum": 0
+              "maxLength": 10
             },
             "callout": {
               "className": "org.openbravo.erpCommon.ad_callouts.SL_Invoice_Amt"
@@ -1652,11 +1651,9 @@
             "columnType": "amount",
             "section": "principal",
             "gridOrder": 4,
-            "min": 0,
             "validation": {
               "required": true,
-              "maxLength": 22,
-              "minimum": 0
+              "maxLength": 22
             },
             "displayLogic": {
               "raw": "@GROSSPRICE@='N'",
@@ -2524,7 +2521,8 @@
           "OutstandingAmt": "Pendiente de pago",
           "EM_Etgo_Due_Date": "Vencimiento",
           "em_etgo_delivery_status": "Estado de entrega",
-          "C_DocTypeTarget_ID": "Tipo de documento"
+          "C_DocTypeTarget_ID": "Tipo de documento",
+          "PriceList": "Precio"
         },
         "en_US": {
           "OutstandingAmt": "Pending Payment",
@@ -5538,7 +5536,8 @@
         "OutstandingAmt": "Pendiente de pago",
         "EM_Etgo_Due_Date": "Vencimiento",
         "em_etgo_delivery_status": "Estado de entrega",
-        "C_DocTypeTarget_ID": "Tipo de documento"
+        "C_DocTypeTarget_ID": "Tipo de documento",
+        "PriceList": "Precio"
       },
       "en_US": {
         "OutstandingAmt": "Pending Payment",

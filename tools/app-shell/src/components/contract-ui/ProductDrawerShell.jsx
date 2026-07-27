@@ -98,7 +98,7 @@ export default function ProductDrawerShell({
 
   return (
     <>
-      <div className="fixed inset-0 z-50 bg-black/30" onClick={onClose} />
+      <div className="fixed inset-0 z-50 bg-foreground/30" onClick={onClose} />
       <div className="fixed inset-0 z-50 flex items-start justify-center pt-[12vh]" onClick={onClose}>
         <div
           data-testid="product-search-drawer"

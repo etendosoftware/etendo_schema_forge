@@ -165,11 +165,11 @@ export function ImageField({ imageId, onChange, token, apiBaseUrl, readOnly = fa
     <>
       <div data-testid={`field-${fieldKey}`} className={stretch ? 'h-full' : ''}>
         {stretch ? (
-          <div className="h-full flex flex-col bg-white border border-[#E8EAEF] rounded-xl p-1">
+          <div className="h-full flex flex-col bg-card border border-[hsl(var(--border-subtle))] rounded-xl p-1">
             {/* Label */}
             {label && (
               <div className="px-3 h-8 flex items-center flex-shrink-0">
-                <span className="text-sm font-medium text-[#121217] leading-6">{label}</span>
+                <span className="text-sm font-medium text-[hsl(var(--foreground))] leading-6">{label}</span>
               </div>
             )}
 
@@ -178,20 +178,20 @@ export function ImageField({ imageId, onChange, token, apiBaseUrl, readOnly = fa
                 {/* Image area — grows to fill available height */}
                 <div className="flex-1 min-h-[180px] px-3">
                   <div
-                    className="group relative w-full h-full rounded-lg overflow-hidden bg-white cursor-zoom-in"
+                    className="group relative w-full h-full rounded-lg overflow-hidden bg-card cursor-zoom-in"
                     onClick={handlePreviewClick}
                   >
                     <img src={blobUrl} alt="Product" className="absolute inset-0 w-full h-full object-contain rounded-lg" />
-                    {/* Hover overlay — rgba(18,18,23,0.05) per Figma */}
-                    <div className="absolute inset-0 bg-[rgba(18,18,23,0.05)] opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none rounded-lg" />
+                    {/* Hover overlay — hsl(var(--foreground) / 0.05) per Figma */}
+                    <div className="absolute inset-0 bg-[hsl(var(--foreground) / 0.05)] opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none rounded-lg" />
                     {!readOnly && (
                       <button
                         type="button"
                         onClick={(e) => { e.stopPropagation(); onChange?.(''); }}
-                        className="absolute top-1 right-1 w-6 h-6 flex items-center justify-center bg-white border border-[#D1D4DB] shadow-[0px_1px_2px_rgba(18,18,23,0.05)] rounded-full opacity-0 group-hover:opacity-100 hover:bg-[#F5F7F9] transition-all"
+                        className="absolute top-1 right-1 w-6 h-6 flex items-center justify-center bg-card border border-[hsl(var(--border-control))] shadow-[0px_1px_2px_hsl(var(--foreground) / 0.05)] rounded-full opacity-0 group-hover:opacity-100 hover:bg-[hsl(var(--muted))] transition-all"
                         aria-label="Remove image"
                       >
-                        <TrashIcon className="w-4 h-4 text-[#828FA3]" data-testid="TrashIcon__266d2c" />
+                        <TrashIcon className="w-4 h-4 text-[hsl(var(--text-disabled))]" data-testid="TrashIcon__266d2c" />
                       </button>
                     )}
                   </div>
@@ -203,10 +203,10 @@ export function ImageField({ imageId, onChange, token, apiBaseUrl, readOnly = fa
                       type="button"
                       onClick={openFilePicker}
                       disabled={uploading}
-                      className="h-12 w-12 border border-dashed border-[#D1D4DB] rounded-lg flex items-center justify-center hover:border-[#828FA3] hover:bg-[#F5F7F9] transition-colors disabled:opacity-50"
+                      className="h-12 w-12 border border-dashed border-[hsl(var(--border-control))] rounded-lg flex items-center justify-center hover:border-[hsl(var(--text-disabled))] hover:bg-[hsl(var(--muted))] transition-colors disabled:opacity-50"
                       aria-label={ui('uploadImage')}
                     >
-                      <Upload className="h-5 w-5 text-[#828FA3]" data-testid="Upload__266d2c" />
+                      <Upload className="h-5 w-5 text-[hsl(var(--text-disabled))]" data-testid="Upload__266d2c" />
                     </button>
                   </div>
                 )}
@@ -217,7 +217,7 @@ export function ImageField({ imageId, onChange, token, apiBaseUrl, readOnly = fa
                 <div
                   className={`flex-1 flex flex-col items-center justify-center gap-2 px-5 py-5 border border-dashed rounded-lg transition-colors
                     ${!readOnly ? 'cursor-pointer' : ''}
-                    ${isDragging ? 'border-[#828FA3] bg-[#F5F7F9]' : 'border-[#D1D4DB]'}`}
+                    ${isDragging ? 'border-[hsl(var(--text-disabled))] bg-[hsl(var(--muted))]' : 'border-[hsl(var(--border-control))]'}`}
                   onClick={() => { if (!readOnly && !uploading) openFilePicker(); }}
                   onDragEnter={handleDragEnter}
                   onDragOver={handleDragOver}
@@ -231,14 +231,14 @@ export function ImageField({ imageId, onChange, token, apiBaseUrl, readOnly = fa
                   ) : (
                     <>
                       <span
-                        className="w-8 h-8 flex items-center justify-center bg-white border border-[#D1D4DB] shadow-[0px_1px_2px_rgba(18,18,23,0.05)] rounded-lg"
+                        className="w-8 h-8 flex items-center justify-center bg-card border border-[hsl(var(--border-control))] shadow-[0px_1px_2px_hsl(var(--foreground) / 0.05)] rounded-lg"
                         aria-hidden="true"
                       >
-                        <Upload className="h-5 w-5 text-[#828FA3]" data-testid="Upload__266d2c" />
+                        <Upload className="h-5 w-5 text-[hsl(var(--text-disabled))]" data-testid="Upload__266d2c" />
                       </span>
                       <div className="flex flex-col items-center gap-1">
-                        <span className="text-sm font-normal text-[#121217] text-center">{ui('imageDropTitle')}</span>
-                        <span className="text-xs font-normal text-[#6C6C89] text-center">
+                        <span className="text-sm font-normal text-[hsl(var(--foreground))] text-center">{ui('imageDropTitle')}</span>
+                        <span className="text-xs font-normal text-[hsl(var(--muted-foreground))] text-center">
                           {ui('imageDropSubtitle', { max: IMAGE_MAX_SIZE_MB, w: IMAGE_MAX_WIDTH, h: IMAGE_MAX_HEIGHT })}
                         </span>
                       </div>
@@ -293,8 +293,8 @@ function useEscapeKey(active, onEscape) {
 /** Build the className for the preview box, including stretch and cursor affordances. */
 function buildPreviewClass(stretch, readOnly, blobUrl) {
   return [
-    `${stretch ? 'absolute inset-0' : 'relative w-full h-44'} rounded-2xl border border-gray-200/70 bg-gray-50/50 flex flex-col items-center justify-center overflow-hidden group`,
-    !readOnly && !blobUrl ? 'cursor-pointer hover:border-gray-400 transition-colors' : '',
+    `${stretch ? 'absolute inset-0' : 'relative w-full h-44'} rounded-2xl border border-border-subtle/70 bg-muted/50 flex flex-col items-center justify-center overflow-hidden group`,
+    !readOnly && !blobUrl ? 'cursor-pointer hover:border-border-control transition-colors' : '',
     blobUrl ? 'cursor-zoom-in' : '',
   ].join(' ');
 }
@@ -306,9 +306,9 @@ function ImagePreview({ blobUrl, imageId, uploading, readOnly, ui, onRemove, onU
       <>
         <img src={blobUrl} alt="Product" className="max-w-full max-h-full object-contain" />
         {/* Hover overlay */}
-        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors pointer-events-none flex items-center justify-center">
+        <div className="absolute inset-0 bg-foreground/0 group-hover:bg-foreground/20 transition-colors pointer-events-none flex items-center justify-center">
           <ZoomIn
-            className="h-7 w-7 text-white opacity-0 group-hover:opacity-100 transition-opacity drop-shadow"
+            className="h-7 w-7 text-primary-foreground opacity-0 group-hover:opacity-100 transition-opacity drop-shadow"
             data-testid="ZoomIn__266d2c" />
         </div>
         {!readOnly && (
@@ -316,7 +316,7 @@ function ImagePreview({ blobUrl, imageId, uploading, readOnly, ui, onRemove, onU
             <button
               type="button"
               onClick={(e) => { e.stopPropagation(); onRemove(); }}
-              className="absolute top-1.5 right-1.5 h-6 w-6 rounded-full bg-black/50 text-white flex items-center justify-center hover:bg-black/70 opacity-0 group-hover:opacity-100 transition-opacity"
+              className="absolute top-1.5 right-1.5 h-6 w-6 rounded-full bg-foreground/50 text-primary-foreground flex items-center justify-center hover:bg-foreground/70 opacity-0 group-hover:opacity-100 transition-opacity"
               aria-label="Remove image"
             >
               <X className="h-3.5 w-3.5" data-testid="X__266d2c" />
@@ -325,7 +325,7 @@ function ImagePreview({ blobUrl, imageId, uploading, readOnly, ui, onRemove, onU
               type="button"
               disabled={uploading}
               onClick={(e) => { e.stopPropagation(); onUpload(); }}
-              className="absolute bottom-2 left-1/2 -translate-x-1/2 inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-black/50 text-white text-xs font-medium hover:bg-black/70 disabled:opacity-50 opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap"
+              className="absolute bottom-2 left-1/2 -translate-x-1/2 inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-foreground/50 text-primary-foreground text-xs font-medium hover:bg-foreground/70 disabled:opacity-50 opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap"
             >
               {uploading ? <Loader2 className="h-3 w-3 animate-spin" data-testid="Loader2__266d2c" /> : <Upload className="h-3 w-3" data-testid="Upload__266d2c" />}
               {ui('uploadImage')}
@@ -343,7 +343,7 @@ function ImagePreview({ blobUrl, imageId, uploading, readOnly, ui, onRemove, onU
       }
       <span className="text-xs">{imageId ? 'Loading…' : ui('noImage')}</span>
       {!readOnly && !uploading && (
-        <span className="inline-flex items-center gap-1 text-xs font-medium text-gray-500 group-hover:text-gray-700 mt-1">
+        <span className="inline-flex items-center gap-1 text-xs font-medium text-muted-foreground group-hover:text-foreground mt-1">
           <Upload className="h-3.5 w-3.5" data-testid="Upload__266d2c" />
           {ui('uploadImage')}
         </span>
@@ -356,13 +356,13 @@ function ImagePreview({ blobUrl, imageId, uploading, readOnly, ui, onRemove, onU
 function ImageLightbox({ blobUrl, onClose }) {
   return createPortal(
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/70"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-foreground/70"
       onClick={onClose}
     >
       <button
         type="button"
         onClick={onClose}
-        className="absolute top-4 right-4 h-9 w-9 rounded-full bg-white/20 text-white flex items-center justify-center hover:bg-white/30 transition-colors"
+        className="absolute top-4 right-4 h-9 w-9 rounded-full bg-card/20 text-primary-foreground flex items-center justify-center hover:bg-card/30 transition-colors"
         aria-label="Close"
       >
         <X className="h-5 w-5" data-testid="X__266d2c" />

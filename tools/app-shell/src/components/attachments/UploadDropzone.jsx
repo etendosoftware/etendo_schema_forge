@@ -114,7 +114,7 @@ export default function UploadDropzone({ onFiles, config = {}, disabled = false 
         type="button"
         onClick={handleBrowseClick}
         disabled={disabled}
-        className="flex items-center justify-center w-8 h-8 bg-white border border-border rounded-lg shadow-[0_1px_2px_rgba(18,18,23,0.05)] hover:bg-muted/50 transition-colors disabled:opacity-50"
+        className="flex items-center justify-center w-8 h-8 bg-card border border-border rounded-lg shadow-[0_1px_2px_rgba(18,18,23,0.05)] hover:bg-muted/50 transition-colors disabled:opacity-50"
       >
         <UploadIcon
           className="w-5 h-5 text-muted-foreground"

@@ -140,7 +140,7 @@ export default function AttachmentsTable({
                     type="button"
                     data-testid="attachments-delete-all"
                     onClick={onDeleteAll}
-                    className="flex items-center gap-1.5 text-xs font-medium text-[#D50B3E] hover:text-[#b00834] transition-colors whitespace-nowrap"
+                    className="flex items-center gap-1.5 text-xs font-medium text-[hsl(var(--destructive))] hover:text-[hsl(var(--destructive))] transition-colors whitespace-nowrap"
                   >
                     <Trash2 className="h-3.5 w-3.5" data-testid="Trash2__e868a0" />
                     {ui('attachmentsDeleteAll')}
@@ -213,7 +213,7 @@ export default function AttachmentsTable({
                     type="button"
                     data-testid={`attachment-download-${item.id}`}
                     onClick={() => onDownload?.(item)}
-                    className="h-8 w-8 flex items-center justify-center rounded-full text-[#828FA3] hover:bg-[#F5F7F9] transition-all"
+                    className="h-8 w-8 flex items-center justify-center rounded-full text-[hsl(var(--text-disabled))] hover:bg-[hsl(var(--muted))] transition-all"
                     aria-label={ui('attachmentsDownload')}
                     title={ui('attachmentsDownload')}
                   >
@@ -223,7 +223,7 @@ export default function AttachmentsTable({
                     type="button"
                     data-testid={`attachment-delete-${item.id}`}
                     onClick={() => onDelete?.(item)}
-                    className="h-8 w-8 flex items-center justify-center rounded-full text-[#D50B3E] hover:bg-[#FEF0F4] transition-all"
+                    className="h-8 w-8 flex items-center justify-center rounded-full text-[hsl(var(--destructive))] hover:bg-[var(--status-destructive-bg)] transition-all"
                     aria-label={ui('delete')}
                     title={ui('delete')}
                   >

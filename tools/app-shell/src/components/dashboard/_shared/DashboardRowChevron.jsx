@@ -13,7 +13,7 @@ const WRAPPER_STYLE = {
 const ICON_STYLE = {
   width: '16px',
   height: '16px',
-  color: '#828FA3',
+  color: 'hsl(var(--text-disabled))',
 };
 
 export function DashboardRowChevron() {

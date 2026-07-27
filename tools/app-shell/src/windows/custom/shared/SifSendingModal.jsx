@@ -85,32 +85,32 @@ export default function SifSendingModal({
       aria-labelledby={titleId}
       style={{
         position: 'fixed', inset: 0, zIndex,
-        background: 'rgba(0,0,0,0.4)',
+        background: 'hsl(var(--foreground) / 0.4)',
         display: 'flex', alignItems: 'center', justifyContent: 'center',
       }}
     >
-      <div style={{ background: '#fff', borderRadius: '12px', padding: '24px', minWidth: '320px', maxWidth: '480px', width: '100%' }}>
+      <div style={{ background: 'hsl(var(--card))', borderRadius: '12px', padding: '24px', minWidth: '320px', maxWidth: '480px', width: '100%' }}>
         <h3 id={titleId} style={{ fontSize: '16px', fontWeight: 600, marginBottom: '12px' }}>
           {ui('sendToSifTitle')}
         </h3>
 
         {phase === 'confirm' && (
           <>
-            <p style={{ fontSize: '14px', color: '#374151', marginBottom: '20px' }}>
+            <p style={{ fontSize: '14px', color: 'hsl(var(--foreground))', marginBottom: '20px' }}>
               {ui(bodyKey)}
             </p>
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
               <button
                 type="button"
                 onClick={handleClose}
-                style={{ padding: '8px 16px', borderRadius: '8px', border: '1px solid #e2e8f0', cursor: 'pointer', background: '#fff' }}
+                style={{ padding: '8px 16px', borderRadius: '8px', border: '1px solid hsl(var(--border-subtle))', cursor: 'pointer', background: 'hsl(var(--card))' }}
               >
                 {ui('cancel')}
               </button>
               <button
                 type="button"
                 onClick={handleSend}
-                style={{ padding: '8px 16px', borderRadius: '8px', background: '#1d4ed8', color: '#fff', border: 'none', cursor: 'pointer' }}
+                style={{ padding: '8px 16px', borderRadius: '8px', background: 'var(--status-info-fg)', color: 'hsl(var(--card))', border: 'none', cursor: 'pointer' }}
               >
                 {ui('sendToSifConfirm')}
               </button>
@@ -120,19 +120,19 @@ export default function SifSendingModal({
 
         {phase === 'sending' && (
           <div style={{ padding: '8px 0 4px' }}>
-            <p style={{ fontSize: '14px', color: '#374151', marginBottom: '16px' }}>
+            <p style={{ fontSize: '14px', color: 'hsl(var(--foreground))', marginBottom: '16px' }}>
               {ui('sendToSifSending')}
             </p>
-            <div style={{ background: '#f3f4f6', borderRadius: 999, height: 6, overflow: 'hidden' }}>
+            <div style={{ background: 'hsl(var(--muted))', borderRadius: 999, height: 6, overflow: 'hidden' }}>
               <div style={{
                 height: '100%',
                 width: `${progress}%`,
-                background: 'linear-gradient(90deg, #3b82f6, #1d4ed8)',
+                background: 'linear-gradient(90deg, var(--status-info-fg), var(--status-info-fg))',
                 borderRadius: 999,
                 transition: 'width 150ms ease-out',
               }} />
             </div>
-            <p style={{ fontSize: '12px', color: '#9ca3af', marginTop: '6px', textAlign: 'right' }}>
+            <p style={{ fontSize: '12px', color: 'hsl(var(--text-disabled))', marginTop: '6px', textAlign: 'right' }}>
               {Math.round(progress)}%
             </p>
           </div>
@@ -143,7 +143,7 @@ export default function SifSendingModal({
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '20px' }}>
               {results.sii && (
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '14px' }}>
-                  <span style={{ color: results.sii.ok ? '#10b981' : '#ef4444', fontWeight: 600 }}>
+                  <span style={{ color: results.sii.ok ? 'var(--status-success-fg)' : 'hsl(var(--destructive))', fontWeight: 600 }}>
                     {results.sii.ok ? '✓' : '✗'}
                   </span>
                   <span>
@@ -153,7 +153,7 @@ export default function SifSendingModal({
               )}
               {results.tbai && (
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '14px' }}>
-                  <span style={{ color: results.tbai.ok ? '#10b981' : '#ef4444', fontWeight: 600 }}>
+                  <span style={{ color: results.tbai.ok ? 'var(--status-success-fg)' : 'hsl(var(--destructive))', fontWeight: 600 }}>
                     {results.tbai.ok ? '✓' : '✗'}
                   </span>
                   <span>
@@ -166,7 +166,7 @@ export default function SifSendingModal({
               <button
                 type="button"
                 onClick={handleClose}
-                style={{ padding: '8px 16px', borderRadius: '8px', border: '1px solid #e2e8f0', cursor: 'pointer', background: '#fff' }}
+                style={{ padding: '8px 16px', borderRadius: '8px', border: '1px solid hsl(var(--border-subtle))', cursor: 'pointer', background: 'hsl(var(--card))' }}
               >
                 {ui('close')}
               </button>

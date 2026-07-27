@@ -20,10 +20,10 @@ import { useUI } from '@/i18n';
  *  - className:     extra classes merged onto the container (e.g. margins)
  */
 const TONES = {
-  info: { container: 'border-[#00ACFF] bg-[#F0FAFF]', icon: 'text-[#00ACFF]', text: 'text-[#0075AD]', dismiss: 'text-[#0075AD] hover:bg-[#00ACFF]/10' },
-  warning: { container: 'border-[#F5A623] bg-[#FFF8EC]', icon: 'text-[#F5A623]', text: 'text-[#9A6700]', dismiss: 'text-[#9A6700] hover:bg-[#F5A623]/10' },
-  success: { container: 'border-[#2BB673] bg-[#EEFBF4]', icon: 'text-[#2BB673]', text: 'text-[#1A7F4B]', dismiss: 'text-[#1A7F4B] hover:bg-[#2BB673]/10' },
-  danger: { container: 'border-[#E5484D] bg-[#FFF0F0]', icon: 'text-[#E5484D]', text: 'text-[#C62828]', dismiss: 'text-[#C62828] hover:bg-[#E5484D]/10' },
+  info: { container: 'border-status-info-border bg-status-info', icon: 'text-status-info-foreground', text: 'text-status-info-foreground', dismiss: 'text-status-info-foreground hover:bg-status-info-border/20' },
+  warning: { container: 'border-status-warning-border bg-status-warning', icon: 'text-status-warning-foreground', text: 'text-status-warning-foreground', dismiss: 'text-status-warning-foreground hover:bg-status-warning-border/20' },
+  success: { container: 'border-status-success-border bg-status-success', icon: 'text-status-success-foreground', text: 'text-status-success-foreground', dismiss: 'text-status-success-foreground hover:bg-status-success-border/20' },
+  danger: { container: 'border-destructive bg-destructive/10', icon: 'text-destructive', text: 'text-destructive', dismiss: 'text-destructive hover:bg-destructive/10' },
 };
 
 export function InfoBanner({

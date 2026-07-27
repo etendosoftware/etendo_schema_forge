@@ -82,9 +82,8 @@ describe('SifSendingModal — progress bar', () => {
     assert.match(src, /setProgress\(100\)/);
   });
 
-  it('renders the progress bar with a blue gradient fill', () => {
-    assert.match(src, /#3b82f6/);
-    assert.match(src, /#1d4ed8/);
+  it('renders the progress bar with the semantic info role', () => {
+    assert.match(src, /linear-gradient\(90deg, var\(--status-info-fg\), var\(--status-info-fg\)\)/);
   });
 
   it('displays the integer percentage label', () => {

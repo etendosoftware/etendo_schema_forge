@@ -10,11 +10,11 @@ function classifyTrend(pct) {
   return 'down';
 }
 
-// Figma palette used by TrendPill per direction.
+// Semantic roles used by TrendPill per direction.
 const TREND_STYLES = {
-  up:   { backgroundColor: '#EEFBF4', color: '#17663A' },
-  flat: { backgroundColor: '#F5F7F9', color: '#6C6C89' },
-  down: { backgroundColor: '#FEF0F4', color: '#D50B3E' },
+  up:   { backgroundColor: 'var(--status-success-bg)', color: 'var(--status-success-fg)' },
+  flat: { backgroundColor: 'hsl(var(--muted))', color: 'hsl(var(--muted-foreground))' },
+  down: { backgroundColor: 'var(--status-destructive-bg)', color: 'hsl(var(--destructive))' },
 };
 
 describe('BestProductsList — TrendPill trend classification', () => {
@@ -47,20 +47,20 @@ describe('BestProductsList — TrendPill trend classification', () => {
   });
 });
 
-describe('BestProductsList — TrendPill Figma palette', () => {
-  it('up uses green palette (#EEFBF4 / #17663A)', () => {
-    assert.equal(TREND_STYLES.up.backgroundColor, '#EEFBF4');
-    assert.equal(TREND_STYLES.up.color, '#17663A');
+describe('BestProductsList — TrendPill semantic roles', () => {
+  it('up uses success roles', () => {
+    assert.equal(TREND_STYLES.up.backgroundColor, 'var(--status-success-bg)');
+    assert.equal(TREND_STYLES.up.color, 'var(--status-success-fg)');
   });
 
-  it('flat uses neutral gray palette (#F5F7F9 / #6C6C89)', () => {
-    assert.equal(TREND_STYLES.flat.backgroundColor, '#F5F7F9');
-    assert.equal(TREND_STYLES.flat.color, '#6C6C89');
+  it('flat uses muted roles', () => {
+    assert.equal(TREND_STYLES.flat.backgroundColor, 'hsl(var(--muted))');
+    assert.equal(TREND_STYLES.flat.color, 'hsl(var(--muted-foreground))');
   });
 
-  it('down uses red palette (#FEF0F4 / #D50B3E)', () => {
-    assert.equal(TREND_STYLES.down.backgroundColor, '#FEF0F4');
-    assert.equal(TREND_STYLES.down.color, '#D50B3E');
+  it('down uses destructive roles', () => {
+    assert.equal(TREND_STYLES.down.backgroundColor, 'var(--status-destructive-bg)');
+    assert.equal(TREND_STYLES.down.color, 'hsl(var(--destructive))');
   });
 
   it('up and down colors are distinct (no palette confusion)', () => {

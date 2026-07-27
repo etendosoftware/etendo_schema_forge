@@ -12,12 +12,12 @@
 export default function SectionShell({ title, subtitle, first = false, children, 'data-testid': dataTestId }) {
   return (
     <section
-      className={`grid grid-cols-1 lg:grid-cols-[260px_1fr] gap-x-8 gap-y-4 py-6 ${first ? '' : 'border-t border-[#E8EAEF]'}`}
+      className={`grid grid-cols-1 lg:grid-cols-[260px_1fr] gap-x-8 gap-y-4 py-6 ${first ? '' : 'border-t border-[hsl(var(--border-subtle))]'}`}
       data-testid={dataTestId}
     >
       <div className="lg:pr-4">
-        <h3 className="text-sm font-semibold text-[#121217]">{title}</h3>
-        {subtitle && <p className="text-xs text-[#9A9DA8] mt-1 leading-relaxed">{subtitle}</p>}
+        <h3 className="text-sm font-semibold text-[hsl(var(--foreground))]">{title}</h3>
+        {subtitle && <p className="text-xs text-[hsl(var(--text-disabled))] mt-1 leading-relaxed">{subtitle}</p>}
       </div>
       <div>{children}</div>
     </section>

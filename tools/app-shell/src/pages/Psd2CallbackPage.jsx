@@ -35,8 +35,8 @@ export default function Psd2CallbackPage() {
 
   return (
     <div className="flex min-h-screen flex-col items-center justify-center gap-2 p-8 text-center">
-      <p className="text-base font-medium text-[#121217]">{ui('financeAccountsPsd2CallbackDone')}</p>
-      <p className="text-sm text-[#6C6C89]">{ui('financeAccountsPsd2CallbackClose')}</p>
+      <p className="text-base font-medium text-[hsl(var(--foreground))]">{ui('financeAccountsPsd2CallbackDone')}</p>
+      <p className="text-sm text-[hsl(var(--muted-foreground))]">{ui('financeAccountsPsd2CallbackClose')}</p>
     </div>
   );
 }
