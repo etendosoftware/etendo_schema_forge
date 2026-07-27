@@ -17,7 +17,7 @@ argue about what it should be.
 
 ## What it measures
 
-Four dimensions, summed into one score.
+Five dimensions, summed into one score.
 
 ### 1. Touch points — how expensive is removal?
 
@@ -86,14 +86,32 @@ like a clean bill of health, but it must not block the report either.
 **Points:** `0` while the TTL is in the future; `3 per started week` once it is
 past. A flag a day overdue costs 3; a flag eight days overdue costs 6.
 
-### Open items (`deferredItems`) — carried, not scored
+### 5. Open items — what the flag is still holding
 
 Not every liability a flag carries is a test gap or a stray reference. A flag can
 also be holding open decisions: a correctness precondition that blocks the next
 step, a cosmetic follow-up parked behind a package bump. Those live in
-`deferredItems` and are **unscored in v0** — they are rendered on the flag's card
-in both the console report and the HTML so that when the TTL fires, whoever picks
-up the removal sees them *before* starting the work they block, not during it.
+`deferredItems`, and they are rendered on the flag's card in both the console
+report and the HTML so that when the TTL fires, whoever picks up the removal sees
+them *before* starting the work they block, not during it.
+
+**Points:** per item, by kind — `precondition: 5`, `open: 3`, `cosmetic: 1`.
+A bundled item (one theme, several `components`) adds `1 per component beyond the
+first`. An explicit `points` on an item overrides the formula and is labelled
+*declared* in the report.
+
+`precondition` is anchored to the missing-unit-spec penalty: one decision that
+blocks the next step costs the same as one untested unit. `cosmetic` is
+deliberately non-zero, because a free bucket is the bucket everything gets
+labelled into.
+
+> **Why these score at all** (they did not, at first). The scale already charges
+> accepted-debt specs *per item*, on the grounds that a standing decision is owned
+> individually and does not evaporate when other work lands. A deferred item is
+> exactly that kind of decision — someone chose not to do this yet, and the flag
+> carries the consequence until they do. Recording it on the card while leaving it
+> out of the number made the number describe less than the card did, which is the
+> failure mode this scorecard exists to prevent.
 
 ```jsonc
 "deferredItems": [
@@ -102,9 +120,23 @@ up the removal sees them *before* starting the work they block, not during it.
     "kind": "precondition",              // precondition | cosmetic | open
     "note": "What is open, and what it blocks.",
     "refs": ["docs/feature-flags.md — 'Open: targeting keys do not match'"]
+  },
+  {
+    "id": "real-payment-readiness",
+    "kind": "precondition",
+    "note": "One theme, several distinct fixes.",
+    "components": [                      // 5 + 1 per component beyond the first
+      { "id": "gap-replay", "note": "What it is.", "ref": "where to look" }
+    ]
   }
 ]
 ```
+
+**Bundle a theme, split a schedule.** Use `components` when several fixes share
+one trigger and one owner decision — they are one decision with several parts, and
+a card with eight sibling entries is a card nobody reads. The moment a component
+gets scheduled on its own, promote it to its own item: it has stopped being part
+of one decision, and it should carry its own points and its own closure.
 
 Keep `refs` specific enough to navigate to — a document plus the section or line,
 not just a filename. A reference nobody can follow is the same as no reference.
@@ -122,6 +154,10 @@ not just a filename. A reference nobody can follow is the same as no reference.
 | Tests | per accepted-debt e2e spec | 8 |
 | Coverage | per 10 uncovered lines in an owned file | 1 |
 | Lifecycle | per started week past TTL | 3 |
+| Open items | per deferred item of kind `precondition` | 5 |
+| Open items | per deferred item of kind `open` | 3 |
+| Open items | per deferred item of kind `cosmetic` | 1 |
+| Open items | per bundled component beyond the first | 1 |
 
 All of it lives in the `POINTS` object at the top of
 [`cli/src/flag-debt.js`](../cli/src/flag-debt.js) — one place to tune the scale.

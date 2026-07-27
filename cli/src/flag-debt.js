@@ -6,7 +6,7 @@
  * each flag from the working tree. Nothing is written back to the registry:
  * the score is always recomputed, never stored.
  *
- * Four dimensions, summed into one score (higher = more debt):
+ * Five dimensions, summed into one score (higher = more debt):
  *
  *   1. touch points — references to the flag outside its own files. Cheap to
  *      remove while there are a few, an archaeology exercise once they spread.
@@ -14,6 +14,7 @@
  *   3. coverage     — uncovered lines in the flag's owned files, read from an
  *      existing SonarQube analysis. Skipped (0 pts) when unavailable.
  *   4. lifecycle    — how far past its TTL the flag is.
+ *   5. open items   — decisions the flag is still holding, scored per item.
  *
  * v0 is report-only: the process always exits 0. Thresholds and CI gating are
  * deliberately out of scope. See docs/flag-debt.md.
@@ -47,6 +48,22 @@ export const POINTS = {
   uncoveredLinesPerPoint: 10,
   /** Cost per started week past the TTL. */
   perWeekOverdue: 3,
+  /**
+   * Cost of a deferred open item, by kind. A deferred decision is a standing
+   * decision, exactly like an accepted-debt spec, so it is charged per item.
+   *
+   * `precondition` is anchored at the missing-unit-spec penalty: one decision
+   * that blocks the next step costs the same as one untested unit. `cosmetic`
+   * is deliberately non-zero — a free bucket is a bucket everything gets
+   * labelled into — but small enough not to distort the total.
+   */
+  deferredItemKind: { precondition: 5, open: 3, cosmetic: 1 },
+  /**
+   * Added per component beyond the first on a bundled item. Bundling keeps the
+   * card readable; this keeps the score honest about breadth, so a bundle of
+   * eight does not cost the same as a bundle of one.
+   */
+  perExtraDeferredComponent: 1,
 };
 
 const SOURCE_EXTENSIONS = new Set([
@@ -508,6 +525,48 @@ export function scoreLifecycle(flag, now = new Date()) {
   };
 }
 
+// ── Dimension 5: deferred open items ────────────────────────────────────────
+
+/**
+ * Scores the open decisions a flag is carrying that are not test gaps.
+ *
+ * These used to be recorded and left unscored, which was the wrong call: the
+ * scale already charges accepted-debt specs per item on the grounds that a
+ * standing decision is owned individually, and a deferred item is exactly that
+ * — someone decided not to do this yet, and the flag carries the consequence
+ * until they do. Recording it on the card but leaving it out of the number made
+ * the number describe less than the card did.
+ *
+ * A bundled item (one theme, several components) costs its kind plus one per
+ * component beyond the first, so breadth shows up without one theme swamping
+ * the total. Promote a component to its own item once it is scheduled
+ * separately — at that point it stops being part of one decision.
+ *
+ * Pure: no filesystem, no clock. `points` on an item overrides the formula.
+ */
+export function scoreDeferredItems(flag) {
+  const items = (flag.deferredItems || []).map((item) => {
+    const kind = item.kind || 'open';
+    const components = (item.components || []).map((component) => ({
+      id: component.id,
+      note: component.note || '',
+      ref: component.ref || null,
+    }));
+    const base = POINTS.deferredItemKind[kind] ?? POINTS.deferredItemKind.open;
+    const breadth = Math.max(0, components.length - 1) * POINTS.perExtraDeferredComponent;
+    return {
+      id: item.id,
+      kind,
+      note: item.note || '',
+      refs: item.refs || [],
+      components,
+      points: typeof item.points === 'number' ? item.points : base + breadth,
+      pointsOverridden: typeof item.points === 'number',
+    };
+  });
+  return { items, points: items.reduce((total, item) => total + item.points, 0) };
+}
+
 // ── Report ──────────────────────────────────────────────────────────────────
 
 export function scoreFlag(flag, context) {
@@ -515,6 +574,7 @@ export function scoreFlag(flag, context) {
   const tests = checkTestSpecs(flag, context);
   const coverage = collectCoverage(flag, context);
   const lifecycle = scoreLifecycle(flag, context.now);
+  const deferred = scoreDeferredItems(flag);
   return {
     key: flag.key,
     description: flag.description || '',
@@ -523,19 +583,13 @@ export function scoreFlag(flag, context) {
     created: flag.created || null,
     defaultValue: flag.defaultValue,
     ttlNote: flag.ttlNote || null,
-    // Unscored in v0: open items that are not test gaps. Carried so the TTL
-    // surfaces them before the work they block starts, not during it.
-    deferredItems: (flag.deferredItems || []).map((item) => ({
-      id: item.id,
-      kind: item.kind || 'open',
-      note: item.note || '',
-      refs: item.refs || [],
-    })),
+    deferred,
     touchPoints,
     tests,
     coverage,
     lifecycle,
-    total: touchPoints.points + tests.points + coverage.points + lifecycle.points,
+    total: touchPoints.points + tests.points + coverage.points
+      + lifecycle.points + deferred.points,
   };
 }
 
@@ -654,12 +708,21 @@ export function renderConsole(report) {
     lines.push(`  ${pad('lifecycle', 14)} ${padStart(`${life.points} pts`, 8)}  ${lifeSummary}`);
     if (flag.ttlNote) lines.push(`        note: ${flag.ttlNote}`);
 
-    if (flag.deferredItems.length > 0) {
-      lines.push(`  ${pad('open items', 14)} ${padStart('unscored', 8)}  `
-        + `${flag.deferredItems.length} deferred`);
-      for (const item of flag.deferredItems) {
-        lines.push(`        [${item.kind}] ${item.id}`);
+    if (flag.deferred.items.length > 0) {
+      lines.push(`  ${pad('open items', 14)} ${padStart(`${flag.deferred.points} pts`, 8)}  `
+        + `${flag.deferred.items.length} deferred`);
+      for (const item of flag.deferred.items) {
+        const unit = item.points === 1 ? 'pt' : 'pts';
+        const breakdown = item.pointsOverridden
+          ? `${item.points} ${unit}, declared`
+          : `${item.points} ${unit}`;
+        lines.push(`        [${item.kind}] ${item.id} — ${breakdown}`);
         lines.push(...wrapText(item.note, 92, '          '));
+        for (const component of item.components) {
+          lines.push(`          · ${component.id}`);
+          lines.push(...wrapText(component.note, 88, '              '));
+          if (component.ref) lines.push(`              ref: ${component.ref}`);
+        }
         for (const ref of item.refs) lines.push(`          ref: ${ref}`);
       }
     }
@@ -670,11 +733,12 @@ export function renderConsole(report) {
 
   const width = Math.max(4, ...report.flags.map((flag) => flag.key.length));
   lines.push(`  ${pad('FLAG', width)}  ${padStart('TOUCH', 6)}  ${padStart('TESTS', 6)}  `
-    + `${padStart('COV', 5)}  ${padStart('LIFE', 5)}  ${padStart('TOTAL', 6)}`);
+    + `${padStart('COV', 5)}  ${padStart('LIFE', 5)}  ${padStart('OPEN', 5)}  ${padStart('TOTAL', 6)}`);
   for (const flag of report.flags) {
     lines.push(`  ${pad(flag.key, width)}  ${padStart(flag.touchPoints.points, 6)}  `
       + `${padStart(flag.tests.points, 6)}  ${padStart(flag.coverage.points, 5)}  `
-      + `${padStart(flag.lifecycle.points, 5)}  ${padStart(flag.total, 6)}`);
+      + `${padStart(flag.lifecycle.points, 5)}  ${padStart(flag.deferred.points, 5)}  `
+      + `${padStart(flag.total, 6)}`);
   }
   lines.push('');
   lines.push('  Report only — v0 never fails a build. Scale: docs/flag-debt.md');
@@ -737,11 +801,19 @@ function htmlFlagCard(flag) {
       : `TTL ${escapeHtml(life.ttl)} — ${-life.daysRemaining} day(s) overdue`)
       + (flag.ttlNote ? `<p class="muted">${escapeHtml(flag.ttlNote)}</p>` : '');
 
-  const deferred = flag.deferredItems.length === 0 ? '' : `
+  const deferred = flag.deferred.items.length === 0 ? '' : `
   <div class="deferred">
-    <h3>Open items <span class="muted">— ${flag.deferredItems.length} deferred, unscored in v0</span></h3>
-    <ul>${flag.deferredItems.map((item) => `<li><span class="tag">${escapeHtml(item.kind)}</span> `
-      + `<code>${escapeHtml(item.id)}</code><p>${escapeHtml(item.note)}</p>`
+    <h3>Open items <span class="muted">— ${flag.deferred.items.length} deferred, ${flag.deferred.points} pts</span></h3>
+    <ul>${flag.deferred.items.map((item) => `<li><span class="tag">${escapeHtml(item.kind)}</span> `
+      + `<code>${escapeHtml(item.id)}</code> <span class="pts-inline">${item.points} pts`
+      + `${item.pointsOverridden ? ', declared' : ''}</span>`
+      + `<p>${escapeHtml(item.note)}</p>`
+      + (item.components.length > 0
+        ? `<ul class="components">${item.components.map((component) =>
+          `<li><code>${escapeHtml(component.id)}</code> ${escapeHtml(component.note)}`
+          + (component.ref ? ` <span class="muted">${escapeHtml(component.ref)}</span>` : '')
+          + '</li>').join('')}</ul>`
+        : '')
       + (item.refs.length > 0
         ? `<p class="muted">${item.refs.map((ref) => escapeHtml(ref)).join('<br>')}</p>`
         : '')
@@ -802,6 +874,9 @@ export function renderHtml(report) {
   .deferred h3 { font-size: .95rem; margin: 0 0 .25rem; }
   .deferred > ul { list-style: none; padding-left: 0; }
   .deferred > ul > li { margin: .6rem 0; }
+  .pts-inline { font-variant-numeric: tabular-nums; font-weight: 600; font-size: .85em; }
+  .components { margin: .35rem 0 .35rem .25rem; padding-left: 1rem; border-left: 2px solid var(--line); }
+  .components li { margin: .25rem 0; }
   li { margin: .15rem 0; }
   p { margin: .35rem 0; }
   footer { color: var(--muted); font-size: .85em; margin-top: 2rem; }

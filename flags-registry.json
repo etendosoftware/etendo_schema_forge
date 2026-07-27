@@ -53,6 +53,52 @@
           ]
         },
         {
+          "id": "real-payment-readiness",
+          "kind": "precondition",
+          "note": "The paid flow is a mock: MockPaymentService checks the token's SHAPE, nothing is charged, and no gateway exists. Everything below becomes mandatory the moment a real gateway lands — until then the flag ships a paywall that takes no money, which is safe only because none of it is real. Bundled as one item because these share a single trigger (a real gateway) and one owner decision; promote any component to its own deferredItem once it is scheduled independently.",
+          "components": [
+            {
+              "id": "qa-in-flight-submit-guard",
+              "note": "QA #2 — no in-flight guard on submit: 8 scripted same-tick clicks produce 8 POSTs with 8 tokens. handleSubmit (UpgradePage.jsx:273) sets no submitting state and the button is never disabled. A human double-click cannot reproduce it; a real charge per POST would make it expensive.",
+              "ref": "tools/app-shell/src/pages/UpgradePage.jsx:273,371"
+            },
+            {
+              "id": "qa-navigation-guard",
+              "note": "QA #3 — nothing guards navigation mid-provisioning: back or refresh is silent, with copy as the only mitigation. No beforeunload handler and no router blocker anywhere in the page.",
+              "ref": "tools/app-shell/src/pages/UpgradePage.jsx"
+            },
+            {
+              "id": "qa-clientname-unbounded",
+              "note": "QA #4 — clientName is unbounded on BOTH ends: no maxLength on the input, and parseOnboardingRequest rejects only the empty string. An oversized name passes the paywall and fails deep inside provisioning, i.e. after the point where a real charge would have been taken.",
+              "ref": "tools/app-shell/src/pages/UpgradePage.jsx:238 + com.etendoerp.go EtendoGoJwtServlet.java:1352-1359"
+            },
+            {
+              "id": "qa-session-expiry-reported-late",
+              "note": "QA #5 — session expiry is known at mount but reported only after the form is filled: the mount effect reads the platform token, yet on 'unavailable' the checkout is still rendered, so the user completes card details before being told the session is gone.",
+              "ref": "tools/app-shell/src/pages/UpgradePage.jsx:188-201,223-224"
+            },
+            {
+              "id": "gap-replay",
+              "note": "Module doc — the token is never consumed, so one approved payment can create N tenants. Needs the token marked spent or bound to a single tenant creation.",
+              "ref": "com.etendoerp.go docs/feature-flags-and-tenant-upgrade.md (named gaps, commit c45e4bbe)"
+            },
+            {
+              "id": "gap-check-then-act",
+              "note": "Module doc — the paywall reads ownership and provisioning creates the client afterwards with no lock between: two concurrent POST /sws/go/onboarding calls both pass the gate. Needs an atomic check-and-create or a uniqueness constraint that catches the loser.",
+              "ref": "com.etendoerp.go docs/feature-flags-and-tenant-upgrade.md (named gaps, commit c45e4bbe)"
+            },
+            {
+              "id": "gap-payment-provisioning-atomicity",
+              "note": "Module doc — no atomicity between payment and provisioning: the paywall passes, provisioning then fails, its catch rolls back the DAL changes, and with a real gateway that is a captured charge with no tenant and no refund, retry-with-credit or idempotency path. Distinct from qa-clientname-unbounded, which is merely its easiest trigger: bounding the input closes the trigger, not the gap. Needs authorize-before-provision with capture on success, or a compensating refund.",
+              "ref": "com.etendoerp.go docs/feature-flags-and-tenant-upgrade.md (named gaps, commit c45e4bbe)"
+            }
+          ],
+          "refs": [
+            "Sentinel QA report findings #2-#5 (relayed; no report file is committed in this repo — each component carries the code location instead)",
+            "com.etendoerp.go docs/feature-flags-and-tenant-upgrade.md — 'Taking real payments is therefore more than swapping this class'"
+          ]
+        },
+        {
           "id": "plan-badge-in-env-picker",
           "kind": "cosmetic",
           "note": "The environment picker does not show which plan a tenant is on. The backend already ships the data — GET /sws/go/environments returns a per-environment 'plan' field (EtendoGoJwtDalHelper.java:346, via TenantPlanService.resolvePlan). Rendering it needs a change in the @etendosoftware/etendo-go-core package plus a version bump here, which is why it is deferred rather than done inline.",
@@ -62,7 +108,7 @@
           ]
         }
       ],
-      "$deferredItemsComment": "Open items this flag carries that are NOT test gaps: unscored in v0, but rendered on the flag's card so the TTL surfaces them before the control-plane swap starts rather than during it.",
+      "$deferredItemsComment": "Open items this flag carries that are NOT test gaps. Scored per item by kind (a deferred decision is a standing decision, same reasoning as an accepted-debt spec) and rendered on the flag's card, so the TTL surfaces them before the work they block starts rather than during it. A bundled item costs its kind plus one per component beyond the first; promote a component to its own item once it gets scheduled separately.",
       "testSpecs": {
         "unit": [
           {
