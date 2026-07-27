@@ -1,8 +1,8 @@
 {
-  "version": "0.19.0",
+  "version": "0.21.0",
   "generatedAt": "2026-06-26T16:40:04.731Z",
-  "updatedAt": "2026-07-21T12:35:23.463Z",
-  "checksum": "f882a2d77675bb35",
+  "updatedAt": "2026-07-22T14:17:46.583Z",
+  "checksum": "4e7169ecd227e775",
   "frontendContract": {
     "window": {
       "id": "6CB5B67ED33F47DFA334079D3EA2340E",
@@ -58,7 +58,8 @@
         "es_ES": {
           "C_BPartner_ID": "Contacto",
           "C_Reject_Reason_ID": "Razón de rechazo",
-          "DateOrdered": "Fecha de presupuesto"
+          "DateOrdered": "Fecha de presupuesto",
+          "PriceList": "Precio"
         },
         "en_US": {
           "C_BPartner_ID": "Contact",
@@ -771,11 +772,9 @@
             },
             "defaultValue": "1",
             "gridOrder": 3,
-            "min": 0,
             "validation": {
               "required": true,
-              "maxLength": 10,
-              "minimum": 0
+              "maxLength": 10
             },
             "callout": {
               "className": "org.openbravo.erpCommon.ad_callouts.SL_Order_Amt"
@@ -801,11 +800,9 @@
             "sourceRequired": true,
             "columnType": "amount",
             "gridOrder": 4,
-            "min": 0,
             "validation": {
               "required": true,
-              "maxLength": 22,
-              "minimum": 0
+              "maxLength": 22
             },
             "callout": {
               "className": "org.openbravo.erpCommon.ad_callouts.SL_Order_Amt"
@@ -1059,7 +1056,8 @@
         "es_ES": {
           "C_BPartner_ID": "Contacto",
           "C_Reject_Reason_ID": "Razón de rechazo",
-          "DateOrdered": "Fecha de presupuesto"
+          "DateOrdered": "Fecha de presupuesto",
+          "PriceList": "Precio"
         },
         "en_US": {
           "C_BPartner_ID": "Contact",
@@ -2947,7 +2945,8 @@
       "es_ES": {
         "C_BPartner_ID": "Contacto",
         "C_Reject_Reason_ID": "Razón de rechazo",
-        "DateOrdered": "Fecha de presupuesto"
+        "DateOrdered": "Fecha de presupuesto",
+        "PriceList": "Precio"
       },
       "en_US": {
         "C_BPartner_ID": "Contact",

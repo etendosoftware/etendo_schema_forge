@@ -112,8 +112,8 @@ describe('VfSolveErrorModal — UI structure', () => {
     assert.match(src, /row\.codeError \|\| row\.errorReason/);
   });
 
-  it('error detail section uses inline red background style', () => {
-    assert.match(src, /background: '#FEF2F2'/);
+  it('error detail section uses the semantic destructive background style', () => {
+    assert.match(src, /background: 'var\(--status-destructive-bg\)'/);
   });
 
   it('shows action button only when canResolve is true', () => {

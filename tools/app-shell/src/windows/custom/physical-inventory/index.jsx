@@ -14,7 +14,7 @@ const COLUMNS = [
       const label = row['warehouse$_identifier'] ?? row.warehouse ?? null;
       if (!label) return <span className="text-muted-foreground text-sm">—</span>;
       return (
-        <span className="inline-flex items-center px-2 py-1 bg-[#F5F7F9] rounded-lg text-xs font-normal text-[#3F3F50] whitespace-nowrap">
+        <span className="inline-flex items-center px-2 py-1 bg-[hsl(var(--muted))] rounded-lg text-xs font-normal text-[hsl(var(--muted-foreground))] whitespace-nowrap">
           {label}
         </span>
       );

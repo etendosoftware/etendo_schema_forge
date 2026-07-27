@@ -294,7 +294,10 @@ test.describe('Assets — AmortizationPlan row navigation', () => {
       .filter({ hasText: '08-04-2026' })
       .first();
     await expect(amortRow).toBeVisible({ timeout: 5_000 });
-    await amortRow.locator('button').nth(1).click(); // nth(0) is the checkbox, nth(1) is PeriodLink
+    // The row's Checkbox is a <label> wrapping a visually-hidden native
+    // <input>, not a <button> (Semantic Theme Contract DOM refactor), so the
+    // row's only real <button> is PeriodLink itself — nth(0), not nth(1).
+    await amortRow.locator('button').nth(0).click(); // PeriodLink
 
     // URL must change to /amortization/mock-amort-001
     await expect(page).toHaveURL(

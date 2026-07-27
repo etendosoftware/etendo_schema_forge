@@ -27,6 +27,11 @@ those live in `schema_forge_core` and arrive as published packages:
 | `@etendosoftware/schema-forge-cli`   | The `sf-*` CLI bins (`sf-regen-all`, `sf-push-neo`, …) |
 | `@etendosoftware/schema-forge-core`  | Core library used by the CLI |
 
+The app-shell Tailwind configuration consumes the public
+`@etendosoftware/app-shell-core/tailwind-preset`. Product code may extend that
+preset, but must not duplicate its semantic theme palette; accessibility tokens
+and contrast policy remain owned by the core package.
+
 ## Two developer profiles
 
 The difference is simply **whether you have `schema_forge_core` cloned as a sibling**.

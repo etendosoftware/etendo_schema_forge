@@ -20,6 +20,9 @@ const BACKEND_ERROR_MAP = {
   'The regular expression is too complex (possible catastrophic backtracking)': 'backendError.matchRuleRegexComplex',
   'Invalid regular expression': 'backendError.matchRuleRegexInvalid',
   'A rule with this priority already exists for the selected scope': 'backendError.matchRulePriorityConflict',
+  // Price list (PriceListHeaderHandler) validation messages
+  'A tariff marked as default cannot be deactivated.': 'backendError.priceListCannotDeactivateDefault',
+  'There is already an asset category with this name.': 'backendError.assetGroupNameDuplicate',
 };
 
 export function translateBackendError(msg, t) {

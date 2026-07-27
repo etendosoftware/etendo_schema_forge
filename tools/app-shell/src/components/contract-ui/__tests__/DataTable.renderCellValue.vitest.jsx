@@ -216,22 +216,22 @@ describe('renderCellValue — status-cell', () => {
 describe('renderCellValue — percent-cell', () => {
   const columns = [{ key: 'progress', label: 'Progress', type: 'percent' }];
 
-  it('renders 0% for value 0 with slate styling', () => {
+  it('renders 0% for value 0 with semantic muted styling', () => {
     const { container } = renderTable(columns, [{ id: '1', progress: 0 }]);
     expect(screen.getByText('0%')).toBeInTheDocument();
-    expect(container.querySelector('.bg-slate-200')).toBeTruthy();
+    expect(container.querySelector('.bg-muted')).toBeTruthy();
   });
 
-  it('renders partial values with amber styling', () => {
+  it('renders partial values with semantic warning styling', () => {
     const { container } = renderTable(columns, [{ id: '1', progress: 45 }]);
     expect(screen.getByText('45%')).toBeInTheDocument();
-    expect(container.querySelector('.bg-amber-400')).toBeTruthy();
+    expect(container.querySelector('.bg-status-warning')).toBeTruthy();
   });
 
-  it('renders >= 100 with emerald styling', () => {
+  it('renders >= 100 with semantic success styling', () => {
     const { container } = renderTable(columns, [{ id: '1', progress: 120 }]);
     expect(screen.getByText('120%')).toBeInTheDocument();
-    expect(container.querySelector('.bg-emerald-500')).toBeTruthy();
+    expect(container.querySelector('.bg-status-success')).toBeTruthy();
   });
 
   it('treats NaN as 0', () => {
@@ -315,16 +315,16 @@ describe('renderCellValue — boolean-cell (badge with variants)', () => {
 describe('renderCellValue — boolean-cell (fallback yes/no/em-dash)', () => {
   const columns = [{ key: 'active', label: 'Active', type: 'boolean' }];
 
-  it('renders "yes" with emerald color for truthy', () => {
+  it('renders "yes" with semantic success color for truthy', () => {
     const { container } = renderTable(columns, [{ id: '1', active: true }]);
     expect(screen.getByText('yes')).toBeInTheDocument();
-    expect(container.querySelector('.text-emerald-600')).toBeTruthy();
+    expect(container.querySelector('.text-status-success-foreground')).toBeTruthy();
   });
 
-  it('renders "no" with slate color for falsy', () => {
+  it('renders "no" with semantic muted color for falsy', () => {
     const { container } = renderTable(columns, [{ id: '1', active: false }]);
     expect(screen.getByText('no')).toBeInTheDocument();
-    expect(container.querySelector('.text-slate-400')).toBeTruthy();
+    expect(container.querySelector('.text-muted-foreground')).toBeTruthy();
   });
 
   it('renders em-dash for null / undefined / unrecognized values', () => {

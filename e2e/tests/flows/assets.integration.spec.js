@@ -474,13 +474,13 @@ test.describe('Assets (real backend)', () => {
     await expect(page.getByTestId('field-depreciationType')).toContainText('Lineal');
     await expect(page.getByTestId('field-amortize')).toContainText('Mensual');
 
-    // Attempt 4: by-time mode → Vida útil - Meses required (empty / 0 / negative
-    // all give the same "no puede estar vacío, ser cero o negativo" error).
+    // Attempt 4: by-time mode → Vida útil - Meses required. Empty is caught by the
+    // backend; 0/negative are intercepted first by the client-side min validation.
     await saveThenProcess(page, /Vida útil - Meses no puede estar vac/i);
     await page.getByTestId('field-usableLifeMonths').fill('0');
-    await saveThenProcess(page, /Vida útil - Meses no puede estar vac/i);
+    await saveThenProcess(page, /debe ser al menos 1/i);
     await page.getByTestId('field-usableLifeMonths').fill('-1');
-    await saveThenProcess(page, /Vida útil - Meses no puede estar vac/i);
+    await saveThenProcess(page, /debe ser al menos 1/i);
     await page.getByTestId('field-usableLifeMonths').fill('2');
 
     // All required data present → amortization created.
@@ -571,12 +571,13 @@ test.describe('Assets (real backend)', () => {
     await expect(page.getByTestId('field-usableLifeYears')).toBeVisible();
     await expect(page.getByTestId('field-usableLifeMonths')).toHaveCount(0);
 
-    // Attempt 4: Vida útil - Años required (empty / 0 / negative → same error).
+    // Attempt 4: Vida útil - Años required. Empty is caught by the backend;
+    // 0/negative are intercepted first by the client-side min validation.
     await saveThenProcess(page, /Vida útil - Años no puede estar vac/i);
     await page.getByTestId('field-usableLifeYears').fill('0');
-    await saveThenProcess(page, /Vida útil - Años no puede estar vac/i);
+    await saveThenProcess(page, /debe ser al menos 1/i);
     await page.getByTestId('field-usableLifeYears').fill('-1');
-    await saveThenProcess(page, /Vida útil - Años no puede estar vac/i);
+    await saveThenProcess(page, /debe ser al menos 1/i);
     await page.getByTestId('field-usableLifeYears').fill('2');
 
     // All required data present → amortization created.
@@ -656,11 +657,11 @@ test.describe('Assets (real backend)', () => {
     await expect(page.getByTestId('field-amortize')).toHaveCount(0);
     await expect(page.getByTestId('field-usableLifeMonths')).toHaveCount(0);
     await expect(page.getByTestId('field-annualDepreciation')).toBeVisible();
-    // Zero and negative give the same "no puede estar vacío, ser cero o negativo" error.
+    // Zero and negative are intercepted first by the client-side min validation.
     await page.getByTestId('field-annualDepreciation').fill('0');
-    await saveThenProcess(page, /Amortización Anual no puede estar vac/i);
+    await saveThenProcess(page, /debe ser al menos 1/i);
     await page.getByTestId('field-annualDepreciation').fill('-1');
-    await saveThenProcess(page, /Amortización Anual no puede estar vac/i);
+    await saveThenProcess(page, /debe ser al menos 1/i);
     // Above 100% → a client-side guard blocks the process with a clear message.
     await page.getByTestId('field-annualDepreciation').fill('150');
     await saveThenProcess(page, /no puede ser superior al 100%/i);
@@ -739,9 +740,10 @@ test.describe('Assets (real backend)', () => {
     await expect(page.getByTestId('field-amortize')).toContainText('Mensual');
     await saveThenProcess(page, /Vida útil - Meses no puede estar vac/i);
     await page.getByTestId('field-usableLifeMonths').fill('0');
-    await saveThenProcess(page, /Vida útil - Meses no puede estar vac/i);
+    // Client-side numeric validation (min: 1) intercepts before the backend.
+    await saveThenProcess(page, /debe ser al menos 1/i);
     await page.getByTestId('field-usableLifeMonths').fill('-1');
-    await saveThenProcess(page, /Vida útil - Meses no puede estar vac/i);
+    await saveThenProcess(page, /debe ser al menos 1/i);
     await page.getByTestId('field-usableLifeMonths').fill('2');
 
     // NEW: edit Descripción and Valor residual (negative / 0 / below / above), saving each.
@@ -796,9 +798,10 @@ test.describe('Assets (real backend)', () => {
     await expect(page.getByTestId('field-usableLifeMonths')).toHaveCount(0);
     await saveThenProcess(page, /Vida útil - Años no puede estar vac/i);
     await page.getByTestId('field-usableLifeYears').fill('0');
-    await saveThenProcess(page, /Vida útil - Años no puede estar vac/i);
+    // Client-side numeric validation (min: 1) intercepts before the backend.
+    await saveThenProcess(page, /debe ser al menos 1/i);
     await page.getByTestId('field-usableLifeYears').fill('-1');
-    await saveThenProcess(page, /Vida útil - Años no puede estar vac/i);
+    await saveThenProcess(page, /debe ser al menos 1/i);
     await page.getByTestId('field-usableLifeYears').fill('2');
 
     await editDescriptionInPlace(page, stamp);
@@ -846,9 +849,10 @@ test.describe('Assets (real backend)', () => {
     await expect(page.getByTestId('field-usableLifeMonths')).toHaveCount(0);
     await expect(page.getByTestId('field-annualDepreciation')).toBeVisible();
     await page.getByTestId('field-annualDepreciation').fill('0');
-    await saveThenProcess(page, /Amortización Anual no puede estar vac/i);
+    // Client-side numeric validation (min: 1) intercepts before the backend.
+    await saveThenProcess(page, /debe ser al menos 1/i);
     await page.getByTestId('field-annualDepreciation').fill('-1');
-    await saveThenProcess(page, /Amortización Anual no puede estar vac/i);
+    await saveThenProcess(page, /debe ser al menos 1/i);
     // Above 100% → a client-side guard blocks the process with a clear message.
     await page.getByTestId('field-annualDepreciation').fill('150');
     await saveThenProcess(page, /no puede ser superior al 100%/i);

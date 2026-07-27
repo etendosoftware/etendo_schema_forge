@@ -82,18 +82,18 @@ describe('PercentBar', () => {
     expect(screen.getByText('0%')).toBeInTheDocument();
   });
 
-  it('renders a mid-value (50%) with amber color classes', () => {
+  it('renders a mid-value (50%) with semantic warning color classes', () => {
     render(<PercentBar value={50} />);
     expect(screen.getByText('50%')).toBeInTheDocument();
     const text = screen.getByText('50%');
-    expect(text.className).toContain('amber');
+    expect(text.className).toContain('status-warning');
   });
 
-  it('renders 100% with emerald color classes', () => {
+  it('renders 100% with semantic success color classes', () => {
     render(<PercentBar value={100} />);
     expect(screen.getByText('100%')).toBeInTheDocument();
     const text = screen.getByText('100%');
-    expect(text.className).toContain('emerald');
+    expect(text.className).toContain('status-success');
   });
 
   it('clamps values above 100 to 100', () => {

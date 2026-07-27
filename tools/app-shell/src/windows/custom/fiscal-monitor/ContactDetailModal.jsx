@@ -24,19 +24,19 @@ const SII_TIPO_OPTIONS_PURCHASE = [
 
 const INPUT_ST = {
   width: '100%', fontSize: 14, padding: '8px 12px',
-  border: '1px solid #D1D4DB', borderRadius: 8, height: 40,
-  boxSizing: 'border-box', color: '#121217', outline: 'none',
-  background: '#fff',
+  border: '1px solid hsl(var(--border-control))', borderRadius: 8, height: 40,
+  boxSizing: 'border-box', color: 'hsl(var(--foreground))', outline: 'none',
+  background: 'hsl(var(--card))',
 };
 
-const INPUT_ERR_ST = { ...INPUT_ST, border: '1px solid #D50B3E', background: '#FEF0F4' };
+const INPUT_ERR_ST = { ...INPUT_ST, border: '1px solid hsl(var(--destructive))', background: 'var(--status-destructive-bg)' };
 
 function CfgField({ label, children, required }) {
   return (
     <div>
-      <div style={{ fontSize: 14, color: '#121217', fontWeight: 400, marginBottom: 6 }}>
+      <div style={{ fontSize: 14, color: 'hsl(var(--foreground))', fontWeight: 400, marginBottom: 6 }}>
         {label}
-        {required && <span style={{ color: '#D50B3E', marginLeft: 2 }}>*</span>}
+        {required && <span style={{ color: 'hsl(var(--destructive))', marginLeft: 2 }}>*</span>}
       </div>
       {children}
     </div>
@@ -133,7 +133,7 @@ function OptionPicker({ options, value, onChange, loading, ariaLabel, ui, error 
 
   if (loading) {
     return (
-      <div style={{ ...INPUT_ST, display: 'flex', alignItems: 'center', gap: 8, color: '#828FA3', background: '#F5F7F9' }}>
+      <div style={{ ...INPUT_ST, display: 'flex', alignItems: 'center', gap: 8, color: 'hsl(var(--text-disabled))', background: 'hsl(var(--muted))' }}>
         <Loader2
           size={13}
           style={{ animation: 'spin 1s linear infinite' }}
@@ -155,16 +155,16 @@ function OptionPicker({ options, value, onChange, loading, ariaLabel, ui, error 
           ...INPUT_ST,
           display: 'flex', alignItems: 'center', justifyContent: 'space-between',
           cursor: 'pointer', gap: 8,
-          border: error ? '1px solid #D50B3E' : '1px solid #D1D4DB',
-          background: error ? '#FEF0F4' : '#fff',
+          border: error ? '1px solid hsl(var(--destructive))' : '1px solid hsl(var(--border-control))',
+          background: error ? 'var(--status-destructive-bg)' : 'hsl(var(--card))',
         }}
       >
-        <span style={{ flex: 1, textAlign: 'left', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: selected ? '#121217' : '#828FA3' }}>
+        <span style={{ flex: 1, textAlign: 'left', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: selected ? 'hsl(var(--foreground))' : 'hsl(var(--text-disabled))' }}>
           {selected?.label ?? '—'}
         </span>
         <ChevronDown
           size={15}
-          style={{ color: '#828FA3', flexShrink: 0, transform: open ? 'rotate(180deg)' : 'none', transition: 'transform .15s' }}
+          style={{ color: 'hsl(var(--text-disabled))', flexShrink: 0, transform: open ? 'rotate(180deg)' : 'none', transition: 'transform .15s' }}
           data-testid="ChevronDown__3fe37d" />
       </button>
       {open && (
@@ -179,10 +179,10 @@ function OptionPicker({ options, value, onChange, loading, ariaLabel, ui, error 
               left: dropPos.left,
               width: dropPos.width,
               zIndex: 201,
-              background: '#fff',
-              border: '1px solid #E8EAEF',
+              background: 'hsl(var(--card))',
+              border: '1px solid hsl(var(--border-subtle))',
               borderRadius: 12,
-              boxShadow: '0 8px 24px rgba(18,18,23,.15)',
+              boxShadow: '0 8px 24px hsl(var(--foreground) / .15)',
               padding: '4px 0',
               maxHeight: 240,
               overflowY: 'auto',
@@ -202,8 +202,8 @@ function OptionPicker({ options, value, onChange, loading, ariaLabel, ui, error 
                     width: '100%', display: 'flex', alignItems: 'center', gap: 8,
                     padding: '10px 14px', fontSize: 14, textAlign: 'left',
                     border: 'none', cursor: 'pointer',
-                    background: opt.id === value ? '#F5F7F9' : '#fff',
-                    color: opt.id === value ? '#121217' : '#374151',
+                    background: opt.id === value ? 'hsl(var(--muted))' : 'hsl(var(--card))',
+                    color: opt.id === value ? 'hsl(var(--foreground))' : 'hsl(var(--muted-foreground))',
                     fontWeight: opt.id === value ? 600 : 400,
                   }}
                 >
@@ -215,7 +215,7 @@ function OptionPicker({ options, value, onChange, loading, ariaLabel, ui, error 
               </li>
             ))}
             {options.length === 0 && (
-              <li style={{ padding: '12px 16px', fontSize: 14, color: '#828FA3', textAlign: 'center' }}>{ui('noResults')}</li>
+              <li style={{ padding: '12px 16px', fontSize: 14, color: 'hsl(var(--text-disabled))', textAlign: 'center' }}>{ui('noResults')}</li>
             )}
           </ul>
         </>
@@ -353,10 +353,10 @@ export default function ContactDetailModal({ open, onClose, bpId, contactsApiBas
 
   const tabStyle = (id) => ({
     flex: 1, textAlign: 'center', padding: '5px 16px', fontSize: 14,
-    fontWeight: activeTab === id ? 500 : 400, color: '#121217',
-    background: activeTab === id ? '#fff' : 'transparent',
+    fontWeight: activeTab === id ? 500 : 400, color: 'hsl(var(--foreground))',
+    background: activeTab === id ? 'hsl(var(--card))' : 'transparent',
     border: 'none', borderRadius: 8, cursor: 'pointer',
-    boxShadow: activeTab === id ? '0px 1px 3px rgba(18,18,23,0.1), 0px 1px 2px rgba(18,18,23,0.06)' : 'none',
+    boxShadow: activeTab === id ? '0px 1px 3px hsl(var(--foreground) / 0.1), 0px 1px 2px hsl(var(--foreground) / 0.06)' : 'none',
     transition: 'all 0.1s', whiteSpace: 'nowrap',
   });
 
@@ -388,22 +388,22 @@ export default function ContactDetailModal({ open, onClose, bpId, contactsApiBas
 
           {/* Error banner */}
           {(errorCode || errorMessage) && (
-            <div style={{ margin: '12px 20px 0', padding: '10px 14px', background: '#FEF0F4', borderRadius: 10, border: '1px solid #FBC8D4' }}>
-              <div style={{ fontSize: 12, fontWeight: 600, color: '#D50B3E', marginBottom: 2 }}>{ui('solveError.errorDetail')}</div>
-              {errorCode && <div style={{ fontSize: 13, fontFamily: 'monospace', color: '#9B1239' }}>[{errorCode}]</div>}
-              {errorMessage && <div style={{ fontSize: 13, color: '#9B1239', marginTop: 2 }}>{errorMessage}</div>}
+            <div style={{ margin: '12px 20px 0', padding: '10px 14px', background: 'var(--status-destructive-bg)', borderRadius: 10, border: '1px solid hsl(var(--destructive) / 0.3)' }}>
+              <div style={{ fontSize: 12, fontWeight: 600, color: 'hsl(var(--destructive))', marginBottom: 2 }}>{ui('solveError.errorDetail')}</div>
+              {errorCode && <div style={{ fontSize: 13, fontFamily: 'monospace', color: 'hsl(var(--destructive))' }}>[{errorCode}]</div>}
+              {errorMessage && <div style={{ fontSize: 13, color: 'hsl(var(--destructive))', marginTop: 2 }}>{errorMessage}</div>}
             </div>
           )}
 
           {/* Tabs */}
           {TABS && (
             <div style={{ padding: '12px 20px 0' }}>
-              <div style={{ display: 'flex', gap: 4, padding: 4, borderRadius: 12, background: '#F5F7F9' }}>
+              <div style={{ display: 'flex', gap: 4, padding: 4, borderRadius: 12, background: 'hsl(var(--muted))' }}>
                 {TABS.map(tab => (
                   <button key={tab.id} style={tabStyle(tab.id)} onClick={() => setActiveTab(tab.id)}>
                     {tab.label}
                     {tab.id === 'invoice' && descError && (
-                      <span style={{ marginLeft: 6, width: 6, height: 6, borderRadius: '50%', background: '#D50B3E', display: 'inline-block', verticalAlign: 'middle' }} />
+                      <span style={{ marginLeft: 6, width: 6, height: 6, borderRadius: '50%', background: 'hsl(var(--destructive))', display: 'inline-block', verticalAlign: 'middle' }} />
                     )}
                   </button>
                 ))}
@@ -418,7 +418,7 @@ export default function ContactDetailModal({ open, onClose, bpId, contactsApiBas
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '48px 0' }}>
                 <Loader2
                   size={20}
-                  style={{ animation: 'spin 1s linear infinite', color: '#828FA3' }}
+                  style={{ animation: 'spin 1s linear infinite', color: 'hsl(var(--text-disabled))' }}
                   data-testid="Loader2__3fe37d" />
               </div>
             )}
@@ -462,7 +462,7 @@ export default function ContactDetailModal({ open, onClose, bpId, contactsApiBas
                     {/* Dirección */}
                     <CfgField label={ui('contactDetail.location')} data-testid="CfgField__3fe37d">
                       <div style={{ display: 'flex', gap: 8 }}>
-                        <div style={{ ...INPUT_ST, flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: addressText ? '#121217' : '#828FA3', background: '#F5F7F9', display: 'flex', alignItems: 'center' }}>
+                        <div style={{ ...INPUT_ST, flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: addressText ? 'hsl(var(--foreground))' : 'hsl(var(--text-disabled))', background: 'hsl(var(--muted))', display: 'flex', alignItems: 'center' }}>
                           {addressText ?? '—'}
                         </div>
                         <button
@@ -470,12 +470,12 @@ export default function ContactDetailModal({ open, onClose, bpId, contactsApiBas
                           onClick={() => setLocationModalOpen(true)}
                           style={{
                             flexShrink: 0, height: 40, padding: '0 14px',
-                            fontSize: 14, fontWeight: 500, color: '#121217',
-                            border: '1px solid #D1D4DB', borderRadius: 8,
-                            background: '#fff', cursor: 'pointer',
+                            fontSize: 14, fontWeight: 500, color: 'hsl(var(--foreground))',
+                            border: '1px solid hsl(var(--border-control))', borderRadius: 8,
+                            background: 'hsl(var(--card))', cursor: 'pointer',
                             display: 'flex', alignItems: 'center', gap: 6,
                             whiteSpace: 'nowrap',
-                            boxShadow: '0px 1px 2px rgba(18,18,23,0.05)',
+                            boxShadow: '0px 1px 2px hsl(var(--foreground) / 0.05)',
                           }}
                         >
                           <MapPin size={13} data-testid="MapPin__3fe37d" />
@@ -512,7 +512,7 @@ export default function ContactDetailModal({ open, onClose, bpId, contactsApiBas
                         style={descError ? INPUT_ERR_ST : INPUT_ST}
                       />
                       {descError && (
-                        <div style={{ fontSize: 12, color: '#D50B3E', marginTop: 4 }}>
+                        <div style={{ fontSize: 12, color: 'hsl(var(--destructive))', marginTop: 4 }}>
                           {ui('contactDetail.siiDescriptionRequired')}
                         </div>
                       )}

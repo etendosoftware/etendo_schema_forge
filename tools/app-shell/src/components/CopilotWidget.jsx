@@ -325,7 +325,7 @@ export function CopilotWidget({ hideTrigger = false }) {
           <span className="relative">
             <Bot className="h-5 w-5" data-testid="Bot__bbc4ba" />
             <Sparkles
-              className="absolute -top-1 -right-1 h-3 w-3 text-yellow-300 animate-spin [animation-duration:3s]"
+              className="absolute -top-1 -right-1 h-3 w-3 text-status-warning-foreground animate-spin [animation-duration:3s]"
               data-testid="Sparkles__bbc4ba" />
           </span>
         )}

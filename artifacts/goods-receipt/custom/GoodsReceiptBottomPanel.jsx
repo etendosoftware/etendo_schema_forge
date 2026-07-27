@@ -41,7 +41,7 @@ function GoodsReceiptLinesEmptyState({ data, onAddLine, canAddLine = true, recor
   return (
     <div style={{ margin: '24px 16px', padding: '32px 24px', background: 'var(--color-background-secondary)', borderRadius: 'var(--border-radius-lg)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
       <div style={{ width: 40, height: 40, borderRadius: 'var(--border-radius-md)', background: 'var(--color-background-tertiary)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 12 }}>
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="hsl(var(--muted-foreground))" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
           <rect x="2" y="7" width="20" height="14" rx="2" />
           <path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2" />
         </svg>
@@ -50,11 +50,11 @@ function GoodsReceiptLinesEmptyState({ data, onAddLine, canAddLine = true, recor
       <span style={{ fontSize: 13, color: 'var(--color-text-secondary)', marginBottom: 20 }}>{ui('addLinesManuallyOrImportFromPurchaseOrderOrInvoice')}</span>
       {canAddLine && (
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'center' }}>
-          <button type="button" onClick={onAddLine} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, borderRadius: 8, padding: '6px 14px', fontSize: 13, fontWeight: 500, background: '#18181b', color: '#fff', border: 'none', cursor: 'pointer' }}>
+          <button type="button" onClick={onAddLine} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, borderRadius: 8, padding: '6px 14px', fontSize: 13, fontWeight: 500, background: 'hsl(var(--foreground))', color: 'hsl(var(--card))', border: 'none', cursor: 'pointer' }}>
             + {ui('addLines')}
           </button>
           {bpId && (
-            <button type="button" onClick={() => handleImportClick(setShowImportOrderModal, 'order')} onMouseDown={(e) => e.stopPropagation()} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, border: '0.5px solid #888', borderRadius: 8, padding: '6px 14px', fontSize: 13, fontWeight: 500, color: 'var(--color-text-secondary)', background: 'transparent', cursor: 'pointer' }}>
+            <button type="button" onClick={() => handleImportClick(setShowImportOrderModal, 'order')} onMouseDown={(e) => e.stopPropagation()} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, border: '0.5px solid hsl(var(--muted-foreground))', borderRadius: 8, padding: '6px 14px', fontSize: 13, fontWeight: 500, color: 'var(--color-text-secondary)', background: 'transparent', cursor: 'pointer' }}>
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
                 <polyline points="17 8 12 3 7 8" />
@@ -64,7 +64,7 @@ function GoodsReceiptLinesEmptyState({ data, onAddLine, canAddLine = true, recor
             </button>
           )}
           {bpId && (
-            <button type="button" onClick={() => handleImportClick(setShowImportInvoiceModal, 'invoice')} onMouseDown={(e) => e.stopPropagation()} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, border: '0.5px solid #888', borderRadius: 8, padding: '6px 14px', fontSize: 13, fontWeight: 500, color: 'var(--color-text-secondary)', background: 'transparent', cursor: 'pointer' }}>
+            <button type="button" onClick={() => handleImportClick(setShowImportInvoiceModal, 'invoice')} onMouseDown={(e) => e.stopPropagation()} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, border: '0.5px solid hsl(var(--muted-foreground))', borderRadius: 8, padding: '6px 14px', fontSize: 13, fontWeight: 500, color: 'var(--color-text-secondary)', background: 'transparent', cursor: 'pointer' }}>
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" />
                 <polyline points="14 2 14 8 20 8" />
@@ -151,7 +151,7 @@ const GoodsReceiptLineActions = forwardRef(function GoodsReceiptLineActions(
             type="button"
             onClick={openOrderModal}
             onMouseDown={(e) => e.stopPropagation()}
-            style={{ all: 'unset', display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 12, color: 'var(--color-text-secondary, #6b7280)', cursor: 'pointer' }}
+            style={{ all: 'unset', display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 12, color: 'var(--color-text-secondary, hsl(var(--muted-foreground)))', cursor: 'pointer' }}
           >
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
               <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
@@ -164,7 +164,7 @@ const GoodsReceiptLineActions = forwardRef(function GoodsReceiptLineActions(
             type="button"
             onClick={openInvoiceModal}
             onMouseDown={(e) => e.stopPropagation()}
-            style={{ all: 'unset', display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 12, color: 'var(--color-text-secondary, #6b7280)', cursor: 'pointer' }}
+            style={{ all: 'unset', display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 12, color: 'var(--color-text-secondary, hsl(var(--muted-foreground)))', cursor: 'pointer' }}
           >
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
               <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" />

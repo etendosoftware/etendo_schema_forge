@@ -99,9 +99,14 @@ This window should let a user create, review, confirm, and manage sales orders f
 
 ### Inline line validation (min: 0 constraint)
 
-Fields with a `min: 0` constraint — `orderedQuantity` and `discount` — now show a red border when the user types a negative value during inline edit. The row remains open and the save/confirm path for that row is blocked until the value is corrected or the edit is cancelled. The constraint is enforced client-side by `InlineLinesPanel` using the `min` metadata from the contract field definition.
+The `discount` field keeps a `min: 0` constraint and shows a red border when the user types a negative value during inline edit; the row remains open and the save/confirm path for that row is blocked until the value is corrected or the edit is cancelled. The constraint is enforced client-side by `InlineLinesPanel` using the `min` metadata from the contract field definition.
 
 See [Shared validation & UX changes — ETP-4005](app-shell-functional-flows.md#shared-validation--ux-changes--etp-4005) for behaviors common to all document windows (required field validation, single confirmation toast, callout message sanitization).
+
+### Negative quantity/price and price-list label — ETP-4567
+
+- `orderedQuantity` and `listPrice` no longer declare `min: 0` in `decisions.json`. Both the add-line row and inline grid edit now accept negative values — needed for returns and credit adjustments modeled as negative-quantity or negative-price order lines. `discount` is unaffected and keeps its `min: 0, max: 100` range.
+- The `listPrice` (AD `PriceList` column) label is now overridden to **"Precio"** in Spanish via `window.labelOverrides.es_ES.PriceList` in `decisions.json` (English label unchanged: "Net List Price" / whatever the AD default resolves to). This follows the same declarative `labelOverrides` mechanism already used for `C_BPartner_ID`, `DeliveryStatus`, and `InvoiceStatus` on this window.
 
 ## Automated evidence
 
@@ -233,3 +238,11 @@ The line's `currency` field is configured in `artifacts/sales-order/decisions.js
 - `modules/com.etendoerp.go/src/com/etendoerp/go/schemaforge/NeoExchangeRateService.java` — exchange rate endpoint with inverse fallback.
 - `modules/com.etendoerp.go/src/com/etendoerp/go/schemaforge/NeoSessionService.java` — `/session` endpoint returning both `currencyCode` and `currencyId` (added in ETP-4027).
 - `etendo_core_pg/src-db/database/model/triggers/C_ORDER_CHK_RESTRINCTIONS_TRG.xml` — trigger with `C_Currency_ID` clause removed (Phase 0 / ETP-4027).
+
+## Theme roles
+
+The window's live artifact custom components use the shared semantic theme.
+Structural surfaces and controls consume background, card, foreground, muted, and
+border roles; operational feedback uses success, warning, information, neutral,
+and destructive roles. No local palette is used, so the active application theme
+controls the appearance.

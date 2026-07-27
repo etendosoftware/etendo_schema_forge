@@ -341,8 +341,8 @@ export default function QuickPurchaseOrderPage({ apiBaseUrl }) {
                 title={lastScan ? `${ui('qpoScanDetected')}: ${lastScan}` : ui('qpoScanDetected')}
                 className={`flex h-[42px] w-[42px] shrink-0 items-center justify-center rounded-lg border transition-all duration-300 ${
                   scanFlash
-                    ? 'border-green-400 bg-green-50 text-green-600 scale-110'
-                    : 'border-border bg-white text-muted-foreground/40'
+                    ? 'border-status-success-border bg-status-success text-status-success-foreground scale-110'
+                    : 'border-border bg-card text-muted-foreground/40'
                 }`}
               >
                 <ScanBarcode className="h-4 w-4" data-testid="ScanBarcode__835b99" />
@@ -352,8 +352,8 @@ export default function QuickPurchaseOrderPage({ apiBaseUrl }) {
                 title={ui('qpoPriority')}
                 className={`flex h-[42px] w-[42px] shrink-0 items-center justify-center rounded-lg border transition-colors ${
                   showPriority
-                    ? 'border-amber-400 bg-amber-50 text-amber-600'
-                    : 'border-border bg-white text-muted-foreground hover:bg-muted/30'
+                    ? 'border-status-warning-border bg-status-warning text-status-warning-foreground'
+                    : 'border-border bg-card text-muted-foreground hover:bg-muted/30'
                 }`}
               >
                 <TrendingUp className="h-4 w-4" data-testid="TrendingUp__835b99" />

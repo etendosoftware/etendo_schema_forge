@@ -41,7 +41,7 @@ vi.mock('@/components/ui/label', () => ({
 }));
 
 const changePassword = vi.fn();
-vi.mock('../../pages/onboarding/onboardingApi.js', () => ({
+vi.mock('@etendosoftware/etendo-go-core/onboarding/api', () => ({
   changePassword: (...a) => changePassword(...a),
 }));
 vi.mock('../copilot/copilotApi.js', () => ({

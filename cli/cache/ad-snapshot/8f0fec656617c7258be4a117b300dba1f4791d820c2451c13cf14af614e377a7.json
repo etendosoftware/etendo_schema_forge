@@ -28214,7 +28214,7 @@
       ]
     },
     "d762ff016bca659cec9b3ea6091e7975b8e08865bfb35fdd621af88fa1f69d14": {
-      "checksum": "cb0856ffef88ea4d03b581423f32e7891354d25eba5a8c596a2a6eb0decaa9fd",
+      "checksum": "7acb52d683512f4725b1dea971a7ca9bae795a00ed2700ed9aa72c2af9003007",
       "params": [
         "146"
       ],
@@ -28410,6 +28410,12 @@
           "ad_table_id": "255",
           "columnname": "Costbased",
           "position": "17"
+        },
+        {
+          "ad_column_id": "DC10157FBF74473F8ABE3281AB85301D",
+          "ad_table_id": "255",
+          "columnname": "EM_Etgo_Productcount",
+          "position": "19"
         },
         {
           "ad_column_id": "2987",

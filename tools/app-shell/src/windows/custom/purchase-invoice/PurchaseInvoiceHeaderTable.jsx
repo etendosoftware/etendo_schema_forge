@@ -22,10 +22,10 @@ const filters = ['documentNo', 'invoiceDate', 'businessPartner', 'orderReference
 const NC_RETURN_TYPES = new Set(['AP CreditMemo', 'Return Material Purchase Invoice', 'Reversed Purchase Invoice']);
 
 const DOC_TYPE_BADGE = {
-  'AP Invoice':                         { color: '#1d4ed8', bg: '#eff6ff', label: 'invoicesTab' },
-  'AP CreditMemo':                      { color: '#92400e', bg: '#fffbeb', label: 'creditNotesTab' },
-  'Return Material Purchase Invoice':   { color: '#9a3412', bg: '#fff7ed', label: 'returnInvoiceTab' },
-  'Reversed Purchase Invoice':          { color: '#9a3412', bg: '#fff7ed', label: 'returnInvoiceTab' },
+  'AP Invoice':                         { color: 'var(--status-info-fg)', bg: 'var(--status-info-bg)', label: 'invoicesTab' },
+  'AP CreditMemo':                      { color: 'var(--status-warning-fg)', bg: 'var(--status-warning-bg)', label: 'creditNotesTab' },
+  'Return Material Purchase Invoice':   { color: 'var(--status-warning-fg)', bg: 'var(--status-warning-bg)', label: 'returnInvoiceTab' },
+  'Reversed Purchase Invoice':          { color: 'var(--status-warning-fg)', bg: 'var(--status-warning-bg)', label: 'returnInvoiceTab' },
 };
 
 function isNcOrReturn(row) {
@@ -130,7 +130,7 @@ export default function PurchaseInvoiceHeaderTable(props) {
             const outstandingAbs = Math.abs(outstanding);
             if (outstandingAbs < 0.001) {
               return (
-                <span style={{display:'inline-flex',alignItems:'center',gap:5,font:'500 12px/18px Inter',padding:'3px 10px',borderRadius:999,background:'#E2F7EA',color:'#17663A'}}>
+                <span style={{display:'inline-flex',alignItems:'center',gap:5,font:'500 12px/18px Inter',padding:'3px 10px',borderRadius:999,background:'var(--status-success-bg)',color:'var(--status-success-fg)'}}>
                   <Check size={12} data-testid="Check__6b7cdb" />Aplicada
                                   </span>
               );
@@ -143,16 +143,16 @@ export default function PurchaseInvoiceHeaderTable(props) {
               <button
                 type="button"
                 onClick={(e) => { e.stopPropagation(); setPaymentRow(row); }}
-                style={{display:'inline-flex',alignItems:'center',gap:7,font:'600 13px/1 Inter',padding:'6px 11px',borderRadius:8,background:'#F5F3FF',border:'1px solid #DDD6FE',color:'#6D28D9',cursor:'pointer',fontVariantNumeric:'tabular-nums'}}
+                style={{display:'inline-flex',alignItems:'center',gap:7,font:'600 13px/1 Inter',padding:'6px 11px',borderRadius:8,background:'var(--status-info-bg)',border:'1px solid var(--status-info-border)',color:'var(--status-info-fg)',cursor:'pointer',fontVariantNumeric:'tabular-nums'}}
               >
-                <span style={{width:8,height:8,borderRadius:'50%',background:'#7C3AED',flexShrink:0,display:'inline-block'}}/>
+                <span style={{width:8,height:8,borderRadius:'50%',background:'var(--status-info-fg)',flexShrink:0,display:'inline-block'}}/>
                 Saldo a favor · {formatAmount(outstandingAbs, currency)}
               </button>
             );
           }
           if (outstanding <= 0) {
             return (
-              <span style={{display:'inline-flex',alignItems:'center',gap:5,font:'500 12px/18px Inter',padding:'3px 10px',borderRadius:999,background:'#E2F7EA',color:'#17663A'}}>
+              <span style={{display:'inline-flex',alignItems:'center',gap:5,font:'500 12px/18px Inter',padding:'3px 10px',borderRadius:999,background:'var(--status-success-bg)',color:'var(--status-success-fg)'}}>
                 <Check size={12} data-testid="Check__6b7cdb" />{t('pagada')}
               </span>
             );
@@ -162,11 +162,11 @@ export default function PurchaseInvoiceHeaderTable(props) {
               type="button"
               onClick={(e) => { e.stopPropagation(); setPaymentRow(row); }}
               aria-label={t('addPago')}
-              style={{display:'inline-flex',alignItems:'center',gap:7,font:'600 13px/1 Inter',padding:'6px 11px',borderRadius:8,background:'#FFF9EB',border:'1px solid #F2E2BC',color:'#8A6E25',cursor:'pointer',fontVariantNumeric:'tabular-nums'}}
+              style={{display:'inline-flex',alignItems:'center',gap:7,font:'600 13px/1 Inter',padding:'6px 11px',borderRadius:8,background:'var(--status-warning-bg)',border:'1px solid var(--status-warning-border)',color:'var(--status-warning-fg)',cursor:'pointer',fontVariantNumeric:'tabular-nums'}}
             >
-              <span style={{width:8,height:8,borderRadius:'50%',background:'#F59E0B',flexShrink:0,display:'inline-block'}}/>
+              <span style={{width:8,height:8,borderRadius:'50%',background:'var(--status-warning-fg)',flexShrink:0,display:'inline-block'}}/>
               {formatAmount(outstanding, currency)}
-              <span style={{display:'inline-flex',alignItems:'center',color:'#A37700'}}><Plus size={13} data-testid="Plus__6b7cdb" /></span>
+              <span style={{display:'inline-flex',alignItems:'center',color:'var(--status-warning-fg)'}}><Plus size={13} data-testid="Plus__6b7cdb" /></span>
             </button>
           );
         },

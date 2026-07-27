@@ -26,7 +26,8 @@
         "C_BPartner_ID": "Contacto",
         "DatePromised": "Fecha de entrega esperada",
         "DeliveryStatusPurchase": "Estado de recepción",
-        "InvoiceStatus": "Estado de facturación"
+        "InvoiceStatus": "Estado de facturación",
+        "PriceList": "Precio"
       },
       "en_US": {
         "C_BPartner_ID": "Contact",
@@ -363,7 +364,7 @@
           "order": 3,
           "gridOrder": 3,
           "readOnlyLogic": null,
-          "min": 0
+          "min": false
         },
         "uOM": {
           "grid": false,
@@ -414,9 +415,9 @@
           "order": 4,
           "gridOrder": 4,
           "readOnlyLogic": null,
+          "min": false,
           "displayLogic": null,
-          "columnType": "amount",
-          "min": 0
+          "columnType": "amount"
         },
         "grossListPrice": {
           "form": false,

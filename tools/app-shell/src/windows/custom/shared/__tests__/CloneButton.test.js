@@ -26,20 +26,20 @@ describe('CloneButton', () => {
     assert.match(src, /useState\(false\)/);
   });
 
-  it('sets hover background to #F1F5F9 on mouseenter', () => {
-    assert.match(src, /#F1F5F9/);
+  it('sets hover background to the semantic muted role on mouseenter', () => {
+    assert.match(src, /hovered \? 'hsl\(var\(--muted\)\)'/);
     assert.match(src, /onMouseEnter/);
     assert.match(src, /onMouseLeave/);
   });
 
   // ── Secondary Outline style ────────────────────────────────────────────────
 
-  it('uses Secondary Outline border token #D1D4DB', () => {
-    assert.match(src, /#D1D4DB/);
+  it('uses the semantic control-border role', () => {
+    assert.match(src, /hsl\(var\(--border-control\)\)/);
   });
 
-  it('uses muted icon color #64748B', () => {
-    assert.match(src, /#64748B/);
+  it('uses the semantic muted foreground role', () => {
+    assert.match(src, /hsl\(var\(--muted-foreground\)\)/);
   });
 
   it('renders a button with type="button"', () => {

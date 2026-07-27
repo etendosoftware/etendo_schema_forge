@@ -16,13 +16,13 @@ function CountBadge({ count }) {
         minWidth: '27px',
         height: '24px',
         padding: '0 8px',
-        background: '#F5F7F9',
+        background: 'hsl(var(--muted))',
         borderRadius: '8px',
         fontFamily: 'Inter',
         fontWeight: 400,
         fontSize: '12px',
         lineHeight: '16px',
-        color: '#3F3F50',
+        color: 'hsl(var(--muted-foreground))',
         whiteSpace: 'nowrap',
       }}
     >
@@ -104,7 +104,7 @@ export function CollectionsPaymentsCard({ pendingAmounts = {}, currencyLabel = '
                 lineHeight: '20px',
                 display: 'flex',
                 alignItems: 'center',
-                color: '#17663A',
+                color: 'var(--status-success-fg)',
               }}
             >
               {ui('toCollectLabel')}
@@ -120,8 +120,8 @@ export function CollectionsPaymentsCard({ pendingAmounts = {}, currencyLabel = '
               padding: '4px 8px',
               width: 'max-content',
               height: '28px',
-              background: '#EEFBF4',
-              border: '1px solid #B2EECC',
+              background: 'var(--status-success-bg)',
+              border: '1px solid var(--status-success-border)',
               borderRadius: '8px',
               flex: 'none',
               order: 1,
@@ -151,7 +151,7 @@ export function CollectionsPaymentsCard({ pendingAmounts = {}, currencyLabel = '
                   fontWeight: 400,
                   fontSize: '14px',
                   lineHeight: '20px',
-                  color: '#17663A',
+                  color: 'var(--status-success-fg)',
                   whiteSpace: 'nowrap',
                   flex: 'none',
                   order: 0,
@@ -179,7 +179,7 @@ export function CollectionsPaymentsCard({ pendingAmounts = {}, currencyLabel = '
             style={{
               width: '100%',
               height: '0px',
-              borderTop: '1px solid #E8EAEF',
+              borderTop: '1px solid hsl(var(--border-subtle))',
             }}
           />
         </div>
@@ -220,7 +220,7 @@ export function CollectionsPaymentsCard({ pendingAmounts = {}, currencyLabel = '
                 lineHeight: '20px',
                 display: 'flex',
                 alignItems: 'center',
-                color: '#AF0932',
+                color: 'hsl(var(--destructive))',
               }}
             >
               {ui('toPayLabel')}
@@ -236,8 +236,8 @@ export function CollectionsPaymentsCard({ pendingAmounts = {}, currencyLabel = '
               padding: '4px 8px',
               width: 'max-content',
               height: '28px',
-              background: '#FEF0F4',
-              border: '1px solid #FBB1C4',
+              background: 'var(--status-destructive-bg)',
+              border: '1px solid hsl(var(--destructive) / 0.3)',
               borderRadius: '8px',
               flex: 'none',
               order: 1,
@@ -267,7 +267,7 @@ export function CollectionsPaymentsCard({ pendingAmounts = {}, currencyLabel = '
                   fontWeight: 400,
                   fontSize: '14px',
                   lineHeight: '20px',
-                  color: '#D50B3E',
+                  color: 'hsl(var(--destructive))',
                   whiteSpace: 'nowrap',
                   flex: 'none',
                   order: 0,

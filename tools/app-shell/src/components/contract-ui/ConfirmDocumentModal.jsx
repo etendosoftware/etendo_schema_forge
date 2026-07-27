@@ -19,20 +19,20 @@ export function Spinner() {
 }
 
 function cardBorder(disabled, checked) {
-  if (disabled) return '2px solid #10B981';
-  return checked ? '2px solid #3B82F6' : '1px solid #E5E7EB';
+  if (disabled) return '2px solid var(--status-success-fg)';
+  return checked ? '2px solid var(--status-info-fg)' : '1px solid hsl(var(--border-subtle))';
 }
 function cardBg(disabled, checked) {
-  if (disabled) return '#ECFDF5';
-  return checked ? '#EFF6FF' : '#fff';
+  if (disabled) return 'var(--status-success-bg)';
+  return checked ? 'var(--status-info-bg)' : 'hsl(var(--card))';
 }
 function titleColor(disabled, checked) {
-  if (disabled) return '#059669';
-  return checked ? '#2563EB' : '#111827';
+  if (disabled) return 'var(--status-success-fg)';
+  return checked ? 'var(--status-info-fg)' : 'hsl(var(--foreground))';
 }
 function checkboxBg(disabled, checked) {
-  if (disabled) return '#10B981';
-  return checked ? '#3B82F6' : '#fff';
+  if (disabled) return 'var(--status-success-fg)';
+  return checked ? 'var(--status-info-fg)' : 'hsl(var(--card))';
 }
 
 export function CheckboxCard({ checked, onChange, icon, title, subtitle, disabled }) {
@@ -54,19 +54,19 @@ export function CheckboxCard({ checked, onChange, icon, title, subtitle, disable
         <div style={{ fontSize: 13, fontWeight: 500, color: titleColor(disabled, checked) }}>
           {title}
         </div>
-        <div style={{ fontSize: 12, color: '#9CA3AF', marginTop: 3, lineHeight: 1.4 }}>
+        <div style={{ fontSize: 12, color: 'hsl(var(--text-disabled))', marginTop: 3, lineHeight: 1.4 }}>
           {subtitle}
         </div>
       </div>
       <div style={{
         width: 18, height: 18, borderRadius: 4, flexShrink: 0,
-        border: (checked || disabled) ? 'none' : '1.5px solid #D1D5DB',
+        border: (checked || disabled) ? 'none' : '1.5px solid hsl(var(--text-disabled))',
         background: checkboxBg(disabled, checked),
         display: 'flex', alignItems: 'center', justifyContent: 'center',
         transition: 'background 0.15s',
       }}>
         {(checked || disabled) && (
-          <svg width="11" height="9" viewBox="0 0 11 9" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <svg width="11" height="9" viewBox="0 0 11 9" fill="none" stroke="hsl(var(--card))" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <polyline points="1 4 4 7.5 10 1" />
           </svg>
         )}
@@ -78,29 +78,29 @@ export function CheckboxCard({ checked, onChange, icon, title, subtitle, disable
 export const overlayStyle = {
   position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 50,
   display: 'flex', alignItems: 'center', justifyContent: 'center',
-  backgroundColor: 'rgba(0,0,0,0.3)',
+  backgroundColor: 'hsl(var(--foreground) / 0.3)',
 };
 
 export const cardStyle = {
   maxHeight: '85vh', display: 'flex', flexDirection: 'column',
-  overflow: 'hidden', borderRadius: 12, backgroundColor: '#fff',
-  boxShadow: '0 8px 30px rgba(0,0,0,0.12)', border: '0.5px solid #E5E7EB',
+  overflow: 'hidden', borderRadius: 12, backgroundColor: 'hsl(var(--card))',
+  boxShadow: '0 8px 30px hsl(var(--foreground) / 0.12)', border: '0.5px solid hsl(var(--border-subtle))',
 };
 
 export const btnPrimaryStyle = {
   padding: '5px 14px', borderRadius: 6, border: 'none',
-  background: '#185FA5', color: '#fff', fontWeight: 500, fontSize: 13,
+  background: 'var(--status-info-fg)', color: 'hsl(var(--card))', fontWeight: 500, fontSize: 13,
   cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 5,
 };
 
 export const btnSecondaryStyle = {
   fontSize: 12, padding: '7px 14px', borderRadius: 6,
-  border: '1px solid #D1D5DB', background: 'transparent', color: '#6B7280', cursor: 'pointer',
+  border: '1px solid hsl(var(--text-disabled))', background: 'transparent', color: 'hsl(var(--muted-foreground))', cursor: 'pointer',
 };
 
 export const closeBtnStyle = {
   fontSize: 18, lineHeight: 1, padding: '2px 6px', borderRadius: 4,
-  background: 'none', border: 'none', cursor: 'pointer', color: '#9CA3AF',
+  background: 'none', border: 'none', cursor: 'pointer', color: 'hsl(var(--text-disabled))',
 };
 
 // ── ConfirmDocumentModal ───────────────────────────────────────────────────────
@@ -187,8 +187,8 @@ export default function ConfirmDocumentModal({
     <div onClick={onClose} style={overlayStyle}>
       <div onClick={e => e.stopPropagation()} style={{ ...cardStyle, width: 460 }}>
 
-        <div style={{ padding: '16px 20px 14px', borderBottom: '0.5px solid #E5E7EB', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <div style={{ fontSize: 15, fontWeight: 600, color: '#111827' }}>
+        <div style={{ padding: '16px 20px 14px', borderBottom: '0.5px solid hsl(var(--border-subtle))', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <div style={{ fontSize: 15, fontWeight: 600, color: 'hsl(var(--foreground))' }}>
             {ui(titleKey)}
           </div>
           <button type="button" onClick={onClose} style={closeBtnStyle}>&times;</button>
@@ -197,20 +197,20 @@ export default function ConfirmDocumentModal({
         {docInfo && (docInfo.bpName || docInfo.documentNo) && (
           <div style={{ padding: '12px 20px 0', display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
             {docInfo.documentNo && (
-              <span style={{ fontSize: 12, fontWeight: 600, color: '#374151' }}>{docInfo.documentNo}</span>
+              <span style={{ fontSize: 12, fontWeight: 600, color: 'hsl(var(--foreground))' }}>{docInfo.documentNo}</span>
             )}
             {docInfo.documentNo && docInfo.bpName && (
-              <span style={{ fontSize: 12, color: '#D1D5DB' }}>·</span>
+              <span style={{ fontSize: 12, color: 'hsl(var(--text-disabled))' }}>·</span>
             )}
             {docInfo.bpName && (
-              <span style={{ fontSize: 12, color: '#6B7280' }}>{docInfo.bpName}</span>
+              <span style={{ fontSize: 12, color: 'hsl(var(--muted-foreground))' }}>{docInfo.bpName}</span>
             )}
           </div>
         )}
 
         {subtitleKey && invoiceAction && (
           <div style={{ padding: '12px 20px 8px' }}>
-            <p style={{ fontSize: 13, color: '#6B7280', lineHeight: 1.5, margin: 0 }}>
+            <p style={{ fontSize: 13, color: 'hsl(var(--muted-foreground))', lineHeight: 1.5, margin: 0 }}>
               {ui(subtitleKey)}
             </p>
           </div>
@@ -229,12 +229,12 @@ export default function ConfirmDocumentModal({
         )}
 
         {error && (
-          <div style={{ padding: '8px 20px', fontSize: 12, color: '#DC2626', background: '#FEF2F2', borderTop: '0.5px solid #FECACA' }}>
+          <div style={{ padding: '8px 20px', fontSize: 12, color: 'hsl(var(--destructive))', background: 'var(--status-destructive-bg)', borderTop: '0.5px solid hsl(var(--destructive) / 0.3)' }}>
             {error}
           </div>
         )}
 
-        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, padding: '12px 20px', borderTop: '0.5px solid #E5E7EB' }}>
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, padding: '12px 20px', borderTop: '0.5px solid hsl(var(--border-subtle))' }}>
           <button type="button" onClick={onClose} disabled={loading} style={{ ...btnSecondaryStyle, opacity: loading ? 0.5 : 1 }}>
             {ui('cancel')}
           </button>

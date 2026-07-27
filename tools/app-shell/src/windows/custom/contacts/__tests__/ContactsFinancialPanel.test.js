@@ -47,6 +47,13 @@ describe('CreditLimitStepper — YesNoRadio layout', () => {
 describe('ContactsFinancialPanel — separator', () => {
   it('renders hr separator between credit and billing sections', () => {
     assert.match(src, /<hr/);
-    assert.match(src, /border-\[#E8EAEF\]/);
+    assert.match(src, /border-border-structural/);
+  });
+
+  it('uses semantic control, focus, and explicit disabled tokens', () => {
+    assert.match(src, /border-border-control/);
+    assert.match(src, /focus-within:ring-focus-ring/);
+    assert.match(src, /disabled:text-text-disabled/);
+    assert.doesNotMatch(src, /disabled:opacity/);
   });
 });

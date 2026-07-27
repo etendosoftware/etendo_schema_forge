@@ -7,7 +7,7 @@ export default function DocChip({ icon, iconColor, title, amount, currency, stat
     <Tag
       type={onClick ? 'button' : undefined}
       onClick={onClick}
-      className={`inline-flex items-center gap-1.5 px-2.5 py-1 border border-border/40 rounded-full bg-white transition-colors text-sm${onClick ? ' hover:bg-muted/30 cursor-pointer' : ''}`}
+      className={`inline-flex items-center gap-1.5 px-2.5 py-1 border border-border/40 rounded-full bg-card transition-colors text-sm${onClick ? ' hover:bg-muted/30 cursor-pointer' : ''}`}
       style={{ borderWidth: '0.5px' }}
       data-testid="Tag__a9a774">
       <span className={`shrink-0 ${iconColor}`}>{icon}</span>

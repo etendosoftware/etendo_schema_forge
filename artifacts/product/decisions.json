@@ -9,7 +9,7 @@
     "hidePrint": true,
     "hideMoreMenu": true,
     "hideLink": true,
-    "contentBg": "bg-white",
+    "contentBg": "bg-card",
     "listbarPaddingX": "px-2",
     "tablePaddingX": "px-2",
     "formCardPadding": "px-2",
@@ -21,7 +21,7 @@
     "autoSaveOnBlur": true,
     "noHeaderBorder": true,
     "whiteFormBackground": true,
-    "sidebarClassName": "w-[30%] shrink-0 overflow-y-auto pt-2 pl-0 pr-4 pb-5 border-l border-[#E8EAEF]",
+    "sidebarClassName": "w-[30%] shrink-0 overflow-y-auto pt-2 pl-0 pr-4 pb-5 border-l border-border-subtle",
     "attachments": true,
     "detailEntity": null,
     "customPanelTabs": [

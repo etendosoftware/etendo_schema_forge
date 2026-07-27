@@ -6,6 +6,13 @@ Use this window to configure the electronic invoicing system for an organization
 
 The window serves two distinct phases: onboarding (first-time setup via a guided wizard) and ongoing configuration maintenance (editing the records created during onboarding).
 
+## Theme roles
+
+The configuration forms, certificate workflow, expiry banner and onboarding
+steps use the shared semantic theme. Structural UI resolves from shared surface
+and control roles; certificate state and validation feedback use success,
+warning, information, neutral and destructive roles.
+
 ## What this window should allow
 
 - Guide new organizations through fiscal territory selection and system assignment via a 6-screen onboarding wizard.

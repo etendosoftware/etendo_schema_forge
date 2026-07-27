@@ -4,8 +4,10 @@ const windowMeta = { category: 'finance', name: 'Assets' };
 
 // Custom wrapper for the Assets window. Mirrors the generated index.jsx but
 // passes `saveBeforeProcesses` so the Save button renders before the process
-// buttons (e.g. "Create Amortization") in the toolbar. This is an Assets-only
-// concern, kept out of the global generator vocabulary.
+// buttons (e.g. "Create Amortization") in the toolbar, and `showProcessLoadingState`
+// (ETP-4542 Block 2, Bug 6) so those process buttons show a spinner + "Generating..."
+// and stay disabled while the backend process runs. Both are Assets-only concerns,
+// kept out of the global generator vocabulary.
 export default function App({ windowName, recordId, token, apiBaseUrl, window, ...rest }) {
   return (
     <AssetsPage
@@ -16,6 +18,7 @@ export default function App({ windowName, recordId, token, apiBaseUrl, window, .
       window={window || windowMeta}
       api={api}
       saveBeforeProcesses
+      showProcessLoadingState
       {...rest}
       data-testid="AssetsPage__1e4ba5" />
   );

@@ -7,7 +7,7 @@ export function isCheckedYN(v) {
 export default function CheckboxGroup({ label, items, data, readOnly, onChange }) {
   return (
     <div className="flex flex-col gap-2">
-      <p className="text-sm font-medium text-[#121217]">{label}</p>
+      <p className="text-sm font-medium text-[hsl(var(--foreground))]">{label}</p>
       <div className="flex items-center gap-5 h-10">
         {items.map(item => {
           const checked = isCheckedYN(data?.[item.key]);

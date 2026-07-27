@@ -88,11 +88,11 @@ describe('CertExpiryBanner — i18n keys', () => {
 });
 
 describe('CertExpiryBanner — color scheme', () => {
-  it('applies amber colours in the warning state', () => {
-    assert.match(src, /#fffbeb/);
+  it('applies semantic warning roles in the warning state', () => {
+    assert.match(src, /var\(--status-warning-bg\)/);
   });
 
-  it('applies red colours in the critical state', () => {
-    assert.match(src, /#fef2f2/);
+  it('applies semantic destructive roles in the critical state', () => {
+    assert.match(src, /var\(--status-destructive-bg\)/);
   });
 });

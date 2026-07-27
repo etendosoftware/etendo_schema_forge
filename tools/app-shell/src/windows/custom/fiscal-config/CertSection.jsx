@@ -70,16 +70,16 @@ export default function CertSection({ context, orgId, apiBaseUrl }) {
         className={`rounded-xl border border-dashed cursor-pointer py-5 px-8 text-center transition-all
           ${drag
             ? 'border-foreground bg-muted/40'
-            : 'border-[#D1D4DB] hover:border-foreground/40 hover:bg-muted/20'}`}
+            : 'border-[hsl(var(--border-control))] hover:border-foreground/40 hover:bg-muted/20'}`}
       >
-        <div className="mx-auto mb-2 w-9 h-9 rounded-xl border border-[#E8EAEF] bg-white flex items-center justify-center shadow-[0_1px_2px_rgba(18,18,23,0.05)]">
+        <div className="mx-auto mb-2 w-9 h-9 rounded-xl border border-[hsl(var(--border-subtle))] bg-card flex items-center justify-center shadow-[0_1px_2px_hsl(var(--foreground) / 0.05)]">
           <Upload
             size={16}
             strokeWidth={1.75}
-            className="text-[#8A94A6]"
+            className="text-[hsl(var(--text-disabled))]"
             data-testid="Upload__e7cbc5" />
         </div>
-        <p className="text-sm font-medium text-[#121217]">{ui('fiscal.cert.dropzone.drag')}</p>
+        <p className="text-sm font-medium text-[hsl(var(--foreground))]">{ui('fiscal.cert.dropzone.drag')}</p>
         <p className="text-xs text-muted-foreground mt-0.5">{ui('fiscal.cert.dropzone.formats')}</p>
       </div>
       {open && (

@@ -5,41 +5,35 @@
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
-vi.mock('sonner', () => ({
-  toast: { success: vi.fn(), error: vi.fn(), info: vi.fn(), warning: vi.fn() },
-}));
-
 vi.mock('@/i18n', () => ({
   useUI: () => (key, params) => {
     if (params) return `${key}:${JSON.stringify(params)}`;
     return key;
   },
   useLabel: () => (key) => key,
-  useMenuLabel: () => (key) => key,
 }));
 
-// Stub DataTable — heavy component with its own tests
+// Stub InlineLinesPanel — heavy component with its own tests.
 vi.mock('@/components/contract-ui', () => ({
-  DataTable: (props) => (
-    <div data-testid="data-table" data-entity={props.entity} data-loading={props.loading}>
+  InlineLinesPanel: (props) => (
+    <div
+      data-testid="inline-lines-panel"
+      data-entity={props.entity}
+      data-readonly={props.isDocumentReadOnly}
+      data-has-delete-handler={String(!!props.onDeleteRow)}
+    >
       {props.data?.map((row) => (
-        <div key={row.id} data-testid={`row-${row.id}`} onClick={() => props.onRowClick?.(row)}>
+        <div key={row.id} data-testid={`row-${row.id}`} data-list-price={row.listPrice}>
           {row['product$_identifier'] || row.product}
+          <button
+            data-testid={`edit-listPrice-${row.id}`}
+            onClick={() => props.onUpdateRow(row, 'listPrice', '99')}
+          >
+            edit
+          </button>
         </div>
       ))}
-      {props.addRow?.active && (
-        <div data-testid="add-row-form">add row form</div>
-      )}
     </div>
-  ),
-}));
-
-// Stub AddLineButton
-vi.mock('@/components/ui/add-line-button', () => ({
-  AddLineButton: ({ onClick, label }) => (
-    <button data-testid="add-line-button" onClick={onClick}>
-      {label}
-    </button>
   ),
 }));
 
@@ -76,7 +70,7 @@ describe('PriceListProductPrices', () => {
   it('renders without crashing', async () => {
     render(<PriceListProductPrices {...defaultProps} />);
     await waitFor(() => {
-      expect(screen.getByTestId('data-table')).toBeInTheDocument();
+      expect(screen.getByTestId('inline-lines-panel')).toBeInTheDocument();
     });
   });
 
@@ -100,7 +94,7 @@ describe('PriceListProductPrices', () => {
     expect(urls.some(u => u.includes('productPrice'))).toBe(true);
   });
 
-  it('renders DataTable with loaded lines', async () => {
+  it('renders InlineLinesPanel with loaded lines', async () => {
     render(<PriceListProductPrices {...defaultProps} />);
     await waitFor(() => {
       expect(screen.getByText('Widget')).toBeInTheDocument();
@@ -120,30 +114,55 @@ describe('PriceListProductPrices', () => {
     });
   });
 
-  it('renders add line button when editing and versionId exists', async () => {
-    render(<PriceListProductPrices {...defaultProps} />);
-    await waitFor(() => {
-      expect(screen.getByTestId('add-line-button')).toBeInTheDocument();
-    });
-  });
-
-  it('does not render add line button when not editing', async () => {
+  it('marks InlineLinesPanel read-only when not editing', async () => {
     render(<PriceListProductPrices {...defaultProps} editing={false} />);
     await waitFor(() => {
-      expect(screen.getByTestId('data-table')).toBeInTheDocument();
+      expect(screen.getByTestId('inline-lines-panel')).toHaveAttribute('data-readonly', 'true');
     });
-    expect(screen.queryByTestId('add-line-button')).toBeNull();
   });
 
-  it('opens side panel when a row is clicked', async () => {
+  it('autosaves an inline field edit via PATCH', async () => {
     const user = userEvent.setup();
     render(<PriceListProductPrices {...defaultProps} />);
     await waitFor(() => {
-      expect(screen.getByTestId('row-pp-1')).toBeInTheDocument();
+      expect(screen.getByTestId('edit-listPrice-pp-1')).toBeInTheDocument();
     });
-    await user.click(screen.getByTestId('row-pp-1'));
-    // Side panel shows product label, unit price and list price labels
-    expect(screen.getByText('priceDetail')).toBeInTheDocument();
+    await user.click(screen.getByTestId('edit-listPrice-pp-1'));
+    await waitFor(() => {
+      const patchCall = globalThis.fetch.mock.calls.find(c => c[1]?.method === 'PATCH');
+      expect(patchCall).toBeTruthy();
+      expect(patchCall[0]).toContain('/productPrice/pp-1');
+      expect(JSON.parse(patchCall[1].body)).toEqual({ listPrice: 99 });
+    });
+  });
+
+  // The server response wins over the client-typed value (NEO Headless may
+  // round/normalize the stored amount) — mirrors DetailView's inline-edit handler.
+  it('uses the server-returned value over the client-typed one after a PATCH', async () => {
+    const user = userEvent.setup();
+    globalThis.fetch = vi.fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          response: {
+            data: [
+              { id: 'pp-1', product: 'prod-1', 'product$_identifier': 'Widget', standardPrice: 10, listPrice: 12 },
+            ],
+          },
+        }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ response: { data: [{ id: 'pp-1', listPrice: 99.5 }] } }),
+      });
+    render(<PriceListProductPrices {...defaultProps} />);
+    await waitFor(() => {
+      expect(screen.getByTestId('edit-listPrice-pp-1')).toBeInTheDocument();
+    });
+    await user.click(screen.getByTestId('edit-listPrice-pp-1'));
+    await waitFor(() => {
+      expect(screen.getByTestId('row-pp-1')).toHaveAttribute('data-list-price', '99.5');
+    });
   });
 
   it('shows error message when fetch fails', async () => {
@@ -171,20 +190,34 @@ describe('PriceListProductPrices', () => {
     });
   });
 
-  it('shows confirm delete modal when delete button is clicked', async () => {
-    const user = userEvent.setup();
+  // ETP-4592: lines cannot be deleted from this tab (products are added to a
+  // tariff from the product record itself, not removed here).
+  it('does not wire a delete handler into InlineLinesPanel', async () => {
     render(<PriceListProductPrices {...defaultProps} />);
     await waitFor(() => {
-      expect(screen.getByTestId('row-pp-1')).toBeInTheDocument();
+      expect(screen.getByTestId('inline-lines-panel')).toHaveAttribute('data-has-delete-handler', 'false');
     });
-    // Click row to open side panel
-    await user.click(screen.getByTestId('row-pp-1'));
-    // Find and click delete button
-    const deleteButtons = screen.getAllByText('delete');
-    const deleteBtn = deleteButtons[deleteButtons.length - 1];
-    await user.click(deleteBtn);
-    // Confirm modal should appear
-    expect(screen.getByText('deleteRecord')).toBeInTheDocument();
-    expect(screen.getByText('deleteConfirmMessage')).toBeInTheDocument();
+  });
+
+  it('renders a scoped style hiding InlineLinesPanel\'s row-delete icon', async () => {
+    const { container } = render(<PriceListProductPrices {...defaultProps} />);
+    await waitFor(() => {
+      expect(screen.getByTestId('inline-lines-panel')).toBeInTheDocument();
+    });
+    const styleTag = container.querySelector('style');
+    expect(styleTag).toBeTruthy();
+    expect(styleTag.textContent).toContain('.price-list-lines');
+    expect(styleTag.textContent).toContain('display: none');
+  });
+
+  // ETP-4592: products are added to a tariff from the product record itself —
+  // there is no "add product" action from this tab anymore.
+  it('does not render an add-product button', async () => {
+    render(<PriceListProductPrices {...defaultProps} />);
+    await waitFor(() => {
+      expect(screen.getByTestId('inline-lines-panel')).toBeInTheDocument();
+    });
+    expect(screen.queryByTestId('add-line-button')).toBeNull();
+    expect(screen.queryByTestId('data-table')).toBeNull();
   });
 });

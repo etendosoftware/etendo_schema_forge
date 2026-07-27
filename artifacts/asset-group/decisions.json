@@ -56,6 +56,7 @@
           "visibility": "editable",
           "form": true,
           "section": "principal",
+          "min": 1,
           "displayLogicJs": "(record.depreciate === true || record.depreciate === 'Y') && record.calculateType === 'PE'"
         },
         "amortize": {
@@ -65,12 +66,21 @@
           "required": true,
           "displayLogicJs": "(record.depreciate === true || record.depreciate === 'Y') && record.calculateType === 'TI'"
         },
-        "usableLifeYears": { "visibility": "system" },
+        "usableLifeYears": {
+          "visibility": "editable",
+          "form": true,
+          "section": "principal",
+          "min": 1,
+          "integer": true,
+          "displayLogicJs": "(record.depreciate === true || record.depreciate === 'Y') && record.calculateType === 'TI' && record.amortize === 'YE'"
+        },
         "usableLifeMonths": {
           "visibility": "editable",
           "form": true,
           "section": "principal",
-          "displayLogicJs": "(record.depreciate === true || record.depreciate === 'Y') && record.calculateType === 'TI'"
+          "min": 1,
+          "integer": true,
+          "displayLogicJs": "(record.depreciate === true || record.depreciate === 'Y') && record.calculateType === 'TI' && record.amortize !== 'YE'"
         },
         "everyMonthIs30Days": { "visibility": "system" },
         "owned": { "visibility": "system" },

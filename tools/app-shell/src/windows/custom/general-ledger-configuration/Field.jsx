@@ -16,10 +16,10 @@ import UnbackedHint from './UnbackedHint.jsx';
  */
 function FieldLabel({ label, required }) {
   return (
-    <span className="flex items-center gap-1.5 text-sm font-medium text-[#121217] mb-1.5">
+    <span className="flex items-center gap-1.5 text-sm font-medium text-[hsl(var(--foreground))] mb-1.5">
       <span>
         {label}
-        {required && <span className="text-[#D7373F] ml-0.5">*</span>}
+        {required && <span className="text-[hsl(var(--destructive))] ml-0.5">*</span>}
       </span>
     </span>
   );
@@ -40,16 +40,16 @@ export default function Field({
   'data-testid': dataTestId,
 }) {
   const ui = useUI();
-  const borderClass = error ? 'border-[#D7373F]' : 'border-[#E8EAEF]';
+  const borderClass = error ? 'border-[hsl(var(--destructive))]' : 'border-[hsl(var(--border-subtle))]';
 
   if (readOnly) {
     return (
       <div data-testid={dataTestId}>
         <FieldLabel label={label} required={required} data-testid="FieldLabel__39edc8" />
-        <div className="flex items-center h-9 px-3 rounded-lg border border-[#E8EAEF] bg-[#F8F9FB] text-sm text-[#121217]">
+        <div className="flex items-center h-9 px-3 rounded-lg border border-[hsl(var(--border-subtle))] bg-[hsl(var(--muted))] text-sm text-[hsl(var(--foreground))]">
           {value || '—'}
         </div>
-        {caption && <p className="mt-1 text-xs text-[#9A9DA8]">{caption}</p>}
+        {caption && <p className="mt-1 text-xs text-[hsl(var(--text-disabled))]">{caption}</p>}
       </div>
     );
   }
@@ -62,11 +62,11 @@ export default function Field({
     return (
       <div data-testid={dataTestId}>
         <FieldLabel label={label} required={required} data-testid="FieldLabel__39edc8" />
-        <div className="flex items-center justify-between gap-2 h-9 px-3 rounded-lg border border-dashed border-[#E8D6A8] bg-[#FFFCF5] text-sm text-[#7A7E8A] cursor-not-allowed">
+        <div className="flex items-center justify-between gap-2 h-9 px-3 rounded-lg border border-dashed border-[var(--status-warning-border)] bg-[var(--status-warning-bg)] text-sm text-[hsl(var(--muted-foreground))] cursor-not-allowed">
           <span className="truncate">{value || placeholder || '—'}</span>
           <UnbackedHint data-testid="UnbackedHint__39edc8" />
         </div>
-        <p className="mt-1 text-xs text-[#9A9DA8]">{ui('glc.unbacked.label')}</p>
+        <p className="mt-1 text-xs text-[hsl(var(--text-disabled))]">{ui('glc.unbacked.label')}</p>
       </div>
     );
   }
@@ -80,7 +80,7 @@ export default function Field({
           onValueChange={onChange}
           data-testid="Select__39edc8">
           <SelectTrigger
-            className={`h-9 bg-white ${borderClass} focus:ring-2 focus:ring-primary`}
+            className={`h-9 bg-card ${borderClass} focus:ring-2 focus:ring-primary`}
             data-testid="SelectTrigger__39edc8">
             <SelectValue placeholder={placeholder} data-testid="SelectValue__39edc8" />
           </SelectTrigger>
@@ -90,7 +90,7 @@ export default function Field({
             ))}
           </SelectContent>
         </Select>
-        {error && <p className="mt-1 text-xs text-[#D7373F]">{error}</p>}
+        {error && <p className="mt-1 text-xs text-[hsl(var(--destructive))]">{error}</p>}
       </div>
     );
   }
@@ -102,9 +102,9 @@ export default function Field({
         value={value ?? ''}
         onChange={(e) => onChange?.(e.target.value)}
         placeholder={placeholder}
-        className={`h-9 bg-white ${borderClass} focus:ring-2 focus:ring-primary`}
+        className={`h-9 bg-card ${borderClass} focus:ring-2 focus:ring-primary`}
         data-testid="Input__39edc8" />
-      {error && <p className="mt-1 text-xs text-[#D7373F]">{error}</p>}
+      {error && <p className="mt-1 text-xs text-[hsl(var(--destructive))]">{error}</p>}
     </div>
   );
 }

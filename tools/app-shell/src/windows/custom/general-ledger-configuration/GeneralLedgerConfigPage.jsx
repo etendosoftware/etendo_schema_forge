@@ -86,7 +86,7 @@ export default function GeneralLedgerConfigPage({ apiBaseUrl }) {
   return (
     <div className="relative h-full flex flex-col overflow-hidden">
       {/* Tab row: tabs left, dirty-state save button right */}
-      <div className="flex-shrink-0 flex items-center justify-between border-b border-[#E8EAEF] pr-6">
+      <div className="flex-shrink-0 flex items-center justify-between border-b border-[hsl(var(--border-subtle))] pr-6">
         <TabBar
           tabs={tabs}
           active={activeTab}
@@ -95,7 +95,7 @@ export default function GeneralLedgerConfigPage({ apiBaseUrl }) {
         <Button
           onClick={handleSave}
           disabled={!selectedOrg?.id || !isDirty || saving || loading}
-          className={savedOk ? 'bg-green-600 hover:bg-green-700 border-green-600' : ''}
+          className={savedOk ? 'bg-status-success hover:bg-status-success border-status-success-border' : ''}
           data-testid="glc-save"
         >
           <Check size={14} className="mr-1.5" data-testid="Check__79cd86" />
@@ -105,7 +105,7 @@ export default function GeneralLedgerConfigPage({ apiBaseUrl }) {
       <div className="flex-1 overflow-y-auto">
         <div className="max-w-[1100px] mx-auto px-6 py-2">
           {!selectedOrg?.id && (
-            <div className="rounded-xl border border-dashed border-[#E8D6A8] bg-[#FFFCF5] px-4 py-3 text-sm text-[#7A7E8A] mb-4" data-testid="glc-org-required-note">
+            <div className="rounded-xl border border-dashed border-[var(--status-warning-border)] bg-[var(--status-warning-bg)] px-4 py-3 text-sm text-[hsl(var(--muted-foreground))] mb-4" data-testid="glc-org-required-note">
               {ui('glc.validation.organizationRequired')}
             </div>
           )}

@@ -8,7 +8,7 @@ export default function SectionSaveButton({ error, hideSave, locked, save, savin
             type="button"
             onClick={save}
             disabled={saving}
-            className="px-4 py-2 rounded-lg bg-[#121217] text-white text-sm font-medium hover:bg-[#121217]/90 disabled:opacity-50 transition-colors"
+            className="px-4 py-2 rounded-lg bg-[hsl(var(--foreground))] text-primary-foreground text-sm font-medium hover:bg-[hsl(var(--foreground))]/90 disabled:opacity-50 transition-colors"
           >
             {saving ? ui(savingKey) : ui('fiscal.save')}
           </button>

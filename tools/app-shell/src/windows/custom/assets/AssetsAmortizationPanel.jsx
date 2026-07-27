@@ -13,12 +13,12 @@ function PeriodLink({ label, onClick }) {
     <button
       type="button"
       onClick={onClick}
-      className="group inline-flex items-center gap-1 text-sm font-medium text-[#121217]"
+      className="group inline-flex items-center gap-1 text-sm font-medium text-[hsl(var(--foreground))]"
     >
-      <span className="border-b border-[#828FA3] group-hover:border-[#121217] transition-colors leading-6">
+      <span className="border-b border-[hsl(var(--text-disabled))] group-hover:border-[hsl(var(--foreground))] transition-colors leading-6">
         {label}
       </span>
-      <ArrowUpRight className="h-4 w-4 text-[#121217]" data-testid="ArrowUpRight__34159c" />
+      <ArrowUpRight className="h-4 w-4 text-[hsl(var(--foreground))]" data-testid="ArrowUpRight__34159c" />
     </button>
   );
 }
@@ -182,7 +182,7 @@ export default function AssetsAmortizationPanel({ data, recordId: recordIdProp, 
   const renderBody = () => {
     if (loading) {
       return (
-        <div className="text-xs text-gray-400 py-4 text-center inline-flex items-center gap-1.5 justify-center w-full">
+        <div className="text-xs text-muted-foreground py-4 text-center inline-flex items-center gap-1.5 justify-center w-full">
           <Loader2 className="h-3.5 w-3.5 animate-spin" data-testid="Loader2__34159c" />
           {ui('assetsLoading')}
         </div>
@@ -191,7 +191,7 @@ export default function AssetsAmortizationPanel({ data, recordId: recordIdProp, 
 
     if (lines.length === 0) {
       return (
-        <div className="text-xs text-gray-400 py-6 text-center border border-dashed border-gray-200 rounded-lg">
+        <div className="text-xs text-muted-foreground py-6 text-center border border-dashed border-border-subtle rounded-lg">
           {ui('assetsNoAmortizationLines')}
         </div>
       );
@@ -265,7 +265,7 @@ export default function AssetsAmortizationPanel({ data, recordId: recordIdProp, 
                 <td className="py-3 pr-4" />
                 <td
                   className={`py-3 pr-4 ${
-                    amortizationTotalMismatch ? 'text-red-500' : 'text-foreground'
+                    amortizationTotalMismatch ? 'text-destructive' : 'text-foreground'
                   }`}
                 >
                   {formatCurrency(orgCurrency, totalAmortizationAmount)}

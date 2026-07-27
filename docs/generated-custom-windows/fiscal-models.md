@@ -6,6 +6,15 @@ Use this window to manage Spanish tax declarations (modelos fiscales) — creati
 
 The window fetches declarations from the NEO Headless fiscal API and auto-computes fiscal boxes in the background by polling for invoice changes.
 
+## Theme roles
+
+The declaration list, detail pages, filters, KPI cards and overlays consume the
+shared semantic theme. Structural UI uses shared surface and control roles;
+calculation, validation and filing outcomes use success, warning, information,
+neutral and destructive roles. Generated PDF output and the developer debug
+panel remain outside this UI-theme scope because they preserve document and
+debug contracts.
+
 ## What this window should allow
 
 - Fetch all declarations from `GET /fiscal303/declarations` and keep status changes in sync via `PUT /fiscal303/declarations?id=`.

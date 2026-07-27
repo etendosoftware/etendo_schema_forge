@@ -16,8 +16,8 @@ export default function CertExpiryBanner({ daysLeft, variant = 'prominent' }) {
 
   if (dismissed) return null;
 
-  const amber = { bg: '#fffbeb', border: '#fde68a', fg: '#92400e', dot: '#d97706' };
-  const red   = { bg: '#fef2f2', border: '#fca5a5', fg: '#991b1b', dot: '#dc2626' };
+  const amber = { bg: 'var(--status-warning-bg)', border: 'var(--status-warning-border)', fg: 'var(--status-warning-fg)', dot: 'var(--status-warning-fg)' };
+  const red   = { bg: 'var(--status-destructive-bg)', border: 'hsl(var(--destructive) / 0.3)', fg: 'hsl(var(--destructive))', dot: 'hsl(var(--destructive))' };
   const c = isCritical ? red : amber;
 
   if (variant === 'subtle') {

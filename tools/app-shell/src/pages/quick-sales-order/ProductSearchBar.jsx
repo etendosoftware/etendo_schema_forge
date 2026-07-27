@@ -23,7 +23,7 @@ export default function ProductSearchBar({ query, onChange, inputRef, onEnter })
         onChange={(e) => onChange(e.target.value)}
         onKeyDown={handleKeyDown}
         placeholder={ui('qsoSearchProducts')}
-        className="w-full rounded-lg border border-border bg-white pl-10 pr-10 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/40 transition-colors"
+        className="w-full rounded-lg border border-border bg-card pl-10 pr-10 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/40 transition-colors"
       />
       {query && (
         <button

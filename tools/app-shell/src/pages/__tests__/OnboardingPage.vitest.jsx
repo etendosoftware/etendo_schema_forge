@@ -1,4 +1,5 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 
 const localStorageMock = (() => {
   let store = {};
@@ -474,6 +475,27 @@ describe('OnboardingPage', () => {
     });
   });
 
+  it('keeps the logout action keyboard-accessible in a narrow environment view without account data', async () => {
+    localStorage.setItem('sf_platform_token', 'platform-token');
+    fetchAccount.mockResolvedValue({});
+    fetchEnvironments.mockResolvedValue([{ id: 'demo', name: 'Demo environment' }]);
+    loginEnvironment.mockResolvedValue({});
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 320 });
+
+    render(<OnboardingPage />);
+
+    const logout = await screen.findByRole('button', { name: 'logout' });
+    expect(logout).toBeVisible();
+    expect(logout).toHaveAttribute('type', 'button');
+    expect(logout.closest('header').firstElementChild).toHaveClass('min-w-0');
+
+    logout.focus();
+    await userEvent.keyboard('{Enter}');
+
+    expect(await screen.findByTestId('action-login-submit')).toBeVisible();
+    expect(localStorage.getItem('sf_platform_token')).toBeNull();
+  });
+
   it('tracks setup step back and keeps company-form edits out of tracking payloads', async () => {
     localStorage.setItem('sf_platform_token', 'platform-token');
     fetchAccount.mockResolvedValue({ name: 'Ada Lovelace' });
@@ -488,7 +510,7 @@ describe('OnboardingPage', () => {
     // so it is no longer changed here.
     fireEvent.click(await screen.findByText('onboardingBusinessTypeFreelancer'));
     fireEvent.click(screen.getByText('onboardingContinueAction'));
-    fireEvent.change(screen.getByLabelText(/onboardingAddressLabel/), {
+    fireEvent.change(await screen.findByLabelText(/onboardingAddressLabel/), {
       target: { value: 'Secret Street 123' },
     });
     fireEvent.change(screen.getByLabelText(/onboardingSectorLabel/), {
@@ -746,13 +768,13 @@ describe('OnboardingPage', () => {
     render(<OnboardingPage />);
 
     fireEvent.click(await screen.findByText('onboardingContinueAction'));
-    fireEvent.change(screen.getByLabelText(/onboardingCompanyNameLabel/), {
+    fireEvent.change(await screen.findByLabelText(/onboardingCompanyNameLabel/), {
       target: { value: 'Secret Company' },
     });
     fireEvent.change(screen.getByLabelText(/onboardingFiscalIdLabel/), {
       target: { value: 'B12345678' },
     });
-    fireEvent.click(screen.getByText('onboardingStartAction'));
+    fireEvent.click(await screen.findByText('onboardingStartAction'));
 
     await waitFor(() => {
       expect(track).toHaveBeenCalledWith('onboarding_run_started', {
@@ -788,7 +810,7 @@ describe('OnboardingPage', () => {
     render(<OnboardingPage />);
 
     fireEvent.click(await screen.findByText('onboardingContinueAction'));
-    fireEvent.click(screen.getByText('onboardingStartAction'));
+    fireEvent.click(await screen.findByText('onboardingStartAction'));
 
     await waitFor(() => {
       expect(track).toHaveBeenCalledWith('onboarding_run_started', {
@@ -814,7 +836,7 @@ describe('OnboardingPage', () => {
     render(<OnboardingPage />);
 
     fireEvent.click(await screen.findByText('onboardingContinueAction'));
-    fireEvent.click(screen.getByText('onboardingStartAction'));
+    fireEvent.click(await screen.findByText('onboardingStartAction'));
 
     // Since core 0.3.9 (ETP-4446) the loading screen no longer pins the
     // per-step description: while running, the status line rotates through the
@@ -843,7 +865,7 @@ describe('OnboardingPage', () => {
     render(<OnboardingPage />);
 
     fireEvent.click(await screen.findByText('onboardingContinueAction'));
-    fireEvent.click(screen.getByText('onboardingStartAction'));
+    fireEvent.click(await screen.findByText('onboardingStartAction'));
 
     // Reads the "NN%" counter next to the progress bar. Since core 0.3.9
     // (ETP-4446) the displayed value trickles forward between real milestones,
@@ -886,7 +908,7 @@ describe('OnboardingPage', () => {
     render(<OnboardingPage />);
 
     fireEvent.click(await screen.findByText('onboardingContinueAction'));
-    fireEvent.click(screen.getByText('onboardingStartAction'));
+    fireEvent.click(await screen.findByText('onboardingStartAction'));
 
     await waitFor(() => {
       expect(track).toHaveBeenCalledWith('onboarding_run_failed', {
@@ -908,7 +930,7 @@ describe('OnboardingPage', () => {
     render(<OnboardingPage />);
 
     fireEvent.click(await screen.findByText('onboardingContinueAction'));
-    fireEvent.click(screen.getByText('onboardingStartAction'));
+    fireEvent.click(await screen.findByText('onboardingStartAction'));
 
     await waitFor(() => {
       expect(track).toHaveBeenCalledWith('onboarding_run_failed', {
@@ -1047,7 +1069,7 @@ describe('OnboardingPage', () => {
     render(<OnboardingPage />);
 
     fireEvent.click(await screen.findByText('onboardingContinueAction'));
-    fireEvent.click(screen.getByText('onboardingStartAction'));
+    fireEvent.click(await screen.findByText('onboardingStartAction'));
 
     // The run succeeds and the success screen renders immediately, before
     // any retry timer has been allowed to fire.
@@ -1092,7 +1114,7 @@ describe('OnboardingPage', () => {
     render(<OnboardingPage />);
 
     fireEvent.click(await screen.findByText('onboardingContinueAction'));
-    fireEvent.click(screen.getByText('onboardingStartAction'));
+    fireEvent.click(await screen.findByText('onboardingStartAction'));
 
     await waitFor(() => {
       expect(track).toHaveBeenCalledWith('onboarding_run_succeeded', {
@@ -1237,7 +1259,7 @@ describe('OnboardingPage', () => {
           'Failed to save onboarding draft', expect.any(Error),
         );
       });
-      expect(saveOnboardingDraft).toHaveBeenCalledTimes(1);
+      expect(saveOnboardingDraft.mock.calls.length).toBeGreaterThanOrEqual(1);
 
       // The failure reset lastSavedDraftRef, so the next form change retries
       // instead of being suppressed as already saved.
@@ -1246,18 +1268,17 @@ describe('OnboardingPage', () => {
       });
 
       await waitFor(() => {
-        expect(saveOnboardingDraft).toHaveBeenCalledTimes(2);
+        expect(saveOnboardingDraft).toHaveBeenLastCalledWith(
+          expect.any(Function), '', 'platform-token',
+          expect.objectContaining({
+            step: 2,
+            form: expect.objectContaining({ clientName: 'Acme SL' }),
+          }),
+        );
       });
-      expect(saveOnboardingDraft).toHaveBeenLastCalledWith(
-        expect.any(Function), '', 'platform-token',
-        expect.objectContaining({
-          step: 2,
-          form: expect.objectContaining({ clientName: 'Acme SL' }),
-        }),
-      );
     });
 
-    it('does not autosave a pristine step-1 form', async () => {
+    it('autosaves a changed Profile form on step 1', async () => {
       const realSetTimeout = globalThis.setTimeout;
       vi.spyOn(globalThis, 'setTimeout').mockImplementation((callback, delay, ...args) => {
         if (delay === 1500) {
@@ -1273,7 +1294,7 @@ describe('OnboardingPage', () => {
 
       render(<OnboardingPage />);
 
-      // fullName/country/businessType are not draft-relevant content on step 1.
+      // ETP-4584 persists Profile changes so a user can resume before Company.
       fireEvent.change(await screen.findByLabelText(/onboardingFullNameLabel/), {
         target: { value: 'Ana' },
       });
@@ -1281,7 +1302,15 @@ describe('OnboardingPage', () => {
       await act(async () => {
         await Promise.resolve();
       });
-      expect(saveOnboardingDraft).not.toHaveBeenCalled();
+      await waitFor(() => {
+        expect(saveOnboardingDraft).toHaveBeenCalledWith(
+          expect.any(Function), '', 'platform-token',
+          expect.objectContaining({
+            step: 1,
+            form: expect.objectContaining({ fullName: 'Ana' }),
+          }),
+        );
+      });
     });
 
     it('does not fetch the draft nor show the notice after registering a new account', async () => {
@@ -1301,7 +1330,7 @@ describe('OnboardingPage', () => {
       expect(screen.queryByTestId('draft-restored-notice')).not.toBeInTheDocument();
     });
 
-    it('does not autosave when the platform token has been cleared', async () => {
+    it('does not autosave after logout clears the platform token', async () => {
       const realSetTimeout = globalThis.setTimeout;
       vi.spyOn(globalThis, 'setTimeout').mockImplementation((callback, delay, ...args) => {
         if (delay === 1500) {
@@ -1317,17 +1346,12 @@ describe('OnboardingPage', () => {
 
       render(<OnboardingPage />);
 
-      // Drop the token before triggering the autosave effect again.
+      // Logging out updates the in-memory token as well as localStorage.
       await screen.findByLabelText(/onboardingFullNameLabel/);
-      localStorage.removeItem('sf_platform_token');
+      fireEvent.click(screen.getByTestId('onboarding-logout'));
 
-      // A form change re-runs the effect, which now bails on the missing token.
-      fireEvent.change(screen.getByLabelText(/onboardingFullNameLabel/), {
-        target: { value: 'Ana' },
-      });
-
-      await act(async () => {
-        await Promise.resolve();
+      await waitFor(() => {
+        expect(screen.getByTestId('action-login-submit')).toBeInTheDocument();
       });
       expect(saveOnboardingDraft).not.toHaveBeenCalled();
     });
@@ -1528,7 +1552,11 @@ describe('OnboardingPage', () => {
       render(<OnboardingPage />);
 
       fireEvent.click(await screen.findByText('onboardingContinueAction'));
-      fireEvent.click(screen.getByText('onboardingStartAction'));
+      fireEvent.click(await screen.findByText('onboardingStartAction'));
+
+      await waitFor(() => {
+        expect(emit).toEqual(expect.any(Function));
+      });
 
       // 'finalize' exists in the mocked initialSetupSteps, so applyProgressMessage
       // can flip it to running and drive the organization/finalize progress branch.

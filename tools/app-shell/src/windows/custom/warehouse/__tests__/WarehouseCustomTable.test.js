@@ -19,8 +19,8 @@ describe('WarehouseCustomTable — columns', () => {
     assert.match(src, /font-semibold.*\{row\.name\}/s);
   });
 
-  it('searchKey column renders a badge with #F5F7F9 background', () => {
-    assert.match(src, /bg-\[#F5F7F9\]/);
+  it('searchKey column renders a badge with semantic muted background', () => {
+    assert.match(src, /bg-\[hsl\(var\(--muted\)\)\]/);
   });
 
   it('locationAddress resolves locationAddress\$_identifier before raw value', () => {

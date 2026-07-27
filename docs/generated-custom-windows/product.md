@@ -5,6 +5,13 @@ Product lets a user maintain the commercial and inventory identity of an item, t
 
 On `origin/develop`, the visible product page is still a generated route with custom surfaces embedded into it: a gallery list, a grouped `Additional Info` panel, a pricing tab, and a product-specific inventory sidebar.
 
+## Theme roles
+
+The product form, pricing controls and inventory sidebar use the shared
+semantic theme for surfaces, controls and state feedback. The stock chart's
+per-warehouse `DOT_COLORS` palette is intentionally excluded: it encodes the
+identity of separate data series and is not a UI status or theme role.
+
 ## What this window should allow
 - Browse products from the Inventory menu and recognize them quickly by image, name, search key, and category.
 - Create or update the core product definition, including search key, name, description, product type, category, UOM, image, tax category, sale/purchase flags, stocked flag, weight, UOM for weight, attribute set, brand, lifecycle status, returnable flag, and UPC/EAN.

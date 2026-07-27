@@ -364,8 +364,8 @@ export default function PeriodsExpandablePanel({ parentId, token, apiBaseUrl }) 
                 expanded (only the expanded/pinned period, always rendered first per the
                 array-reordering fix above, has a long document list worth pinning against —
                 collapsed rows never need it and must never compete for the same top-0 slot).
-                `bg-white` prevents the scrolling document rows from showing through underneath. */}
-            <div className={isExpanded ? 'sticky top-0 z-10 bg-white' : undefined}>
+                `bg-card` prevents the scrolling document rows from showing through underneath. */}
+            <div className={isExpanded ? 'sticky top-0 z-10 bg-card' : undefined}>
               <div className="flex items-center gap-2 py-2 px-3">
                 <button
                   type="button"

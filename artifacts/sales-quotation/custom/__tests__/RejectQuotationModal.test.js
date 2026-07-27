@@ -114,13 +114,13 @@ describe('RejectQuotationModal', () => {
       assert.match(src, /width:\s*375\b/);
     });
 
-    it('renders a required-field asterisk in #F53D6B next to the reason label', () => {
+    it('renders a required-field asterisk with the semantic destructive role', () => {
       assert.match(src, /asteriskStyle/);
-      assert.match(src, /#F53D6B/);
+      assert.match(src, /color:\s*'hsl\(var\(--destructive\)\)'/);
     });
 
-    it('borders the typeahead input with #D1D4DB at 8px radius (matches Figma)', () => {
-      assert.match(src, /border:\s*['"]1px solid #D1D4DB['"]/);
+    it('borders the typeahead input with a semantic foreground role at 8px radius', () => {
+      assert.match(src, /border:\s*['"]1px solid hsl\(var\(--foreground\)\)['"]/);
       assert.match(src, /borderRadius:\s*8\b/);
     });
 
@@ -129,9 +129,9 @@ describe('RejectQuotationModal', () => {
       assert.doesNotMatch(src, /searchIconStyle/);
     });
 
-    it('uses the EntityCreationModal button palette (#121217 enabled / #D1D4DB disabled, 360 radius)', () => {
-      assert.match(src, /background:\s*['"]#121217['"]/);
-      assert.match(src, /background:\s*['"]#D1D4DB['"]/);
+    it('uses semantic foreground/card button roles with a 360 radius', () => {
+      assert.match(src, /background:\s*['"]hsl\(var\(--foreground\)\)['"]/);
+      assert.match(src, /background:\s*['"]hsl\(var\(--card\)\)['"]/);
       assert.match(src, /borderRadius:\s*360\b/);
     });
 

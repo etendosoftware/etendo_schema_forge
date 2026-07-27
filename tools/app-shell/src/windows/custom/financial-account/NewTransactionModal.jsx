@@ -20,11 +20,11 @@ import { Field, DateInput, AmountInput, ChipSelect } from '@/components/forms/fi
 import { eur, parseEur, todayISO } from './NewMovementWizard/movementWizardData';
 
 const BTN_PRIMARY =
-  'inline-flex h-9 items-center gap-2 rounded-lg bg-[#121217] px-[18px] text-sm font-semibold text-white transition-colors hover:bg-[#FFD500] hover:text-[#121217] disabled:opacity-45 disabled:pointer-events-none';
+  'inline-flex h-9 items-center gap-2 rounded-lg bg-[hsl(var(--text-primary))] px-[18px] text-sm font-semibold text-primary-foreground transition-colors hover:bg-accent-highlight hover:text-accent-highlight-foreground disabled:opacity-45 disabled:pointer-events-none';
 const BTN_SECONDARY =
-  'inline-flex h-9 items-center gap-2 rounded-lg border border-[#D1D4DB] bg-white px-[18px] text-sm font-semibold text-[#3F3F50] transition-colors hover:bg-[#F5F7F9] disabled:opacity-45 disabled:pointer-events-none';
+  'inline-flex h-9 items-center gap-2 rounded-lg border border-[hsl(var(--border-control))] bg-card px-[18px] text-sm font-semibold text-[hsl(var(--text-secondary))] transition-colors hover:bg-[hsl(var(--page-bg))] disabled:opacity-45 disabled:pointer-events-none';
 const BTN_GHOST =
-  'inline-flex h-9 items-center gap-2 rounded-lg px-[18px] text-sm font-semibold text-[#3F3F50] hover:bg-[#F5F7F9]';
+  'inline-flex h-9 items-center gap-2 rounded-lg px-[18px] text-sm font-semibold text-[hsl(var(--text-secondary))] hover:bg-[hsl(var(--page-bg))]';
 
 // Per-dimension lookup hooks. Defined at module scope (function declarations are
 // hoisted) so each is a valid custom hook — a dimension's `useLookup` can then be
@@ -46,11 +46,11 @@ const OPTIONAL_DIMS = [
 function DirectionToggle({ value, onChange, disabled }) {
   const ui = useUI();
   const options = [
-    { id: 'in', label: ui('financeAccountTxNewTypeIn'), Icon: ArrowDown, active: 'bg-[#17663A]' },
-    { id: 'out', label: ui('financeAccountTxNewTypeOut'), Icon: ArrowUp, active: 'bg-[#C5234A]' },
+    { id: 'in', label: ui('financeAccountTxNewTypeIn'), Icon: ArrowDown, active: 'bg-[var(--status-success-fg)]' },
+    { id: 'out', label: ui('financeAccountTxNewTypeOut'), Icon: ArrowUp, active: 'bg-[var(--status-destructive-fg)]' },
   ];
   return (
-    <div className={`inline-flex h-[42px] w-full gap-[3px] rounded-[9px] bg-[#F7F7F8] p-[3px] ${disabled ? 'opacity-60' : ''}`}>
+    <div className={`inline-flex h-[42px] w-full gap-[3px] rounded-[9px] bg-[hsl(var(--page-bg))] p-[3px] ${disabled ? 'opacity-60' : ''}`}>
       {options.map((o) => {
         const on = value === o.id;
         return (
@@ -63,7 +63,7 @@ function DirectionToggle({ value, onChange, disabled }) {
             className={`inline-flex flex-1 items-center justify-center gap-[7px] rounded-[7px] text-[13px] ${
               disabled ? 'cursor-not-allowed' : ''
             } ${
-              on ? `${o.active} font-bold text-white` : 'font-medium text-[#3F3F50]'
+              on ? `${o.active} font-bold text-primary-foreground` : 'font-medium text-[hsl(var(--text-secondary))]'
             }`}
           >
             <o.Icon className="h-[13px] w-[13px]" strokeWidth={2.4} data-testid={`tx-dir-icon-${o.id}`} />
@@ -209,18 +209,18 @@ export function NewTransactionModal({ open, accountId, accountName = '', account
   return (
     <Dialog open={open} onOpenChange={(v) => { if (!v) onClose(); }} data-testid="Dialog__tx">
       <DialogContent
-        className="flex w-[820px] max-w-[96vw] max-h-[90vh] flex-col gap-0 overflow-hidden rounded-2xl border border-[#E8E8ED] bg-white p-0 [&>button]:hidden"
+        className="flex w-[820px] max-w-[96vw] max-h-[90vh] flex-col gap-0 overflow-hidden rounded-2xl border border-[hsl(var(--border-subtle))] bg-card p-0 [&>button]:hidden"
         data-testid="tx-new-modal">
         {/* Header */}
-        <div className="flex shrink-0 items-start justify-between border-b border-[#E8E8ED] px-6 pb-4 pt-[18px]">
+        <div className="flex shrink-0 items-start justify-between border-b border-[hsl(var(--border-subtle))] px-6 pb-4 pt-[18px]">
           <div className="min-w-0">
             <DialogTitle asChild data-testid="DialogTitle__tx">
-              <h2 className="m-0 text-[17px] font-bold leading-[22px] tracking-[-0.01em] text-[#121217]">
+              <h2 className="m-0 text-[17px] font-bold leading-[22px] tracking-[-0.01em] text-[hsl(var(--text-primary))]">
                 {ui(isEdit ? 'financeAccountTxEditTitle' : 'financeAccountTxNewTitle')}
               </h2>
             </DialogTitle>
             <DialogDescription asChild data-testid="DialogDescription__tx">
-              <p className="mt-[3px] text-xs leading-4 text-[#6C6C89]">{subtitle}</p>
+              <p className="mt-[3px] text-xs leading-4 text-[hsl(var(--text-secondary))]">{subtitle}</p>
             </DialogDescription>
           </div>
           <button
@@ -228,7 +228,7 @@ export function NewTransactionModal({ open, accountId, accountName = '', account
             onClick={onClose}
             aria-label={ui('financeAccountTxNewCancel')}
             data-testid="tx-new-close"
-            className="mt-0.5 text-[#6C6C89] hover:text-[#121217]">
+            className="mt-0.5 text-[hsl(var(--text-secondary))] hover:text-[hsl(var(--text-primary))]">
             <X className="h-5 w-5" data-testid="X__tx" />
           </button>
         </div>
@@ -272,7 +272,7 @@ export function NewTransactionModal({ open, accountId, accountName = '', account
 
           <Field label={ui('financeAccountTxNewDescription')} data-testid="tx-desc-field">
             <textarea
-              className="min-h-16 w-full resize-y rounded-lg border border-[#D1D1DB] bg-white px-3 py-2.5 text-sm leading-[1.4] text-[#121217] placeholder:text-[#8A8AA3] focus:border-[#121217] focus:outline-none"
+              className="min-h-16 w-full resize-y rounded-lg border border-[hsl(var(--border-control))] bg-card px-3 py-2.5 text-sm leading-[1.4] text-[hsl(var(--text-primary))] placeholder:text-[hsl(var(--muted-foreground))] focus:border-[hsl(var(--text-primary))] focus:outline-none"
               placeholder={ui('financeAccountTxNewDescriptionPlaceholder')}
               value={form.description}
               onChange={(e) => set({ description: e.target.value })}
@@ -280,11 +280,11 @@ export function NewTransactionModal({ open, accountId, accountName = '', account
           </Field>
 
           {/* Accounting dimensions — Contacto always, the rest conditionally */}
-          <div className="border-t border-[#E8E8ED] pt-4">
+          <div className="border-t border-[hsl(var(--border-subtle))] pt-4">
             <div className="mb-3.5 flex items-center gap-2">
-              <BarChart3 className="h-[15px] w-[15px] text-[#3F3F50]" data-testid="BarChart3__tx" />
-              <span className="text-sm font-semibold leading-[19px] text-[#121217]">{ui('financeAccountTxNewDimensionsTitle')}</span>
-              <span className="text-xs leading-4 text-[#8A8AA3]">{ui('financeAccountTxNewDimensionsOptional')}</span>
+              <BarChart3 className="h-[15px] w-[15px] text-[hsl(var(--text-secondary))]" data-testid="BarChart3__tx" />
+              <span className="text-sm font-semibold leading-[19px] text-[hsl(var(--text-primary))]">{ui('financeAccountTxNewDimensionsTitle')}</span>
+              <span className="text-xs leading-4 text-[hsl(var(--muted-foreground))]">{ui('financeAccountTxNewDimensionsOptional')}</span>
             </div>
             <div className="grid grid-cols-3 gap-x-4 gap-y-3.5">
               <Field label={ui('financeAccountTxNewDimContact')} data-testid="tx-contact-field">
@@ -312,7 +312,7 @@ export function NewTransactionModal({ open, accountId, accountName = '', account
         </div>
 
         {/* Footer — Guardar (Draft) + Confirmar (create/update + process) */}
-        <div className="flex shrink-0 items-center justify-end gap-2.5 border-t border-[#E8E8ED] bg-[#FAFAFB] px-6 py-3.5">
+        <div className="flex shrink-0 items-center justify-end gap-2.5 border-t border-[hsl(var(--border-subtle))] bg-[hsl(var(--muted))] px-6 py-3.5">
           <button type="button" className={BTN_GHOST} onClick={onClose} data-testid="tx-new-cancel">
             {ui('financeAccountTxNewCancel')}
           </button>

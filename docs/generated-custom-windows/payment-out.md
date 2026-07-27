@@ -77,3 +77,11 @@ PSD2 module ships an actual `AD_Field`, so it surfaces in the contract as an
 `/sws/neo/payment-out/header/{id}/action/psd2GenerateBankPayment` and display
 logic. Contract regenerated when the PSD2 dependency was added. Full rationale:
 [`docs/plans/psd2-dependency-cross-domain.md`](../plans/psd2-dependency-cross-domain.md).
+
+## Theme roles
+
+The window's live artifact custom components use the shared semantic theme.
+Structural surfaces and controls consume background, card, foreground, muted, and
+border roles; operational feedback uses success, warning, information, neutral,
+and destructive roles. No local palette is used, so the active application theme
+controls the appearance.

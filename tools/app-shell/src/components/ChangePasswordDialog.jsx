@@ -12,7 +12,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog.jsx';
-import { changePassword } from '../pages/onboarding/onboardingApi.js';
+import { changePassword } from '@etendosoftware/etendo-go-core/onboarding/api';
 import { detectBaseUrl } from './copilot/copilotApi.js';
 
 const EMPTY_FORM = { currentPassword: '', newPassword: '', confirmPassword: '' };
@@ -115,7 +115,7 @@ export function ChangePasswordDialog({ open, onOpenChange, onSuccess }) {
           </div>
 
           {error && (
-            <div className="rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-sm font-medium text-rose-600">
+            <div className="rounded-md border border-destructive bg-destructive px-3 py-2 text-sm font-medium text-destructive">
               {error}
             </div>
           )}

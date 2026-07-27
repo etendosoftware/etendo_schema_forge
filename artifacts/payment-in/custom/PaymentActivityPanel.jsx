@@ -218,7 +218,7 @@ export default function PaymentActivityPanel({ data, recordId, token, apiBaseUrl
       {/* Section title */}
       <span
         className="block text-[11px] font-medium uppercase tracking-wide mb-4"
-        style={{ color: '#111827', flexShrink: 0 }}
+        style={{ color: 'hsl(var(--foreground))', flexShrink: 0 }}
       >
         {ui('activity')}
       </span>
@@ -235,7 +235,7 @@ export default function PaymentActivityPanel({ data, recordId, token, apiBaseUrl
                 top: 6,
                 bottom: allEntries.length > 1 ? 6 : '100%',
                 width: 2,
-                backgroundColor: '#e5e7eb',
+                backgroundColor: 'hsl(var(--card))',
               }}
             />
 
@@ -254,7 +254,7 @@ export default function PaymentActivityPanel({ data, recordId, token, apiBaseUrl
                     width: 10,
                     height: 10,
                     borderRadius: '50%',
-                    backgroundColor: ev.isNote ? '#f59e0b' : '#6b7280',
+                    backgroundColor: ev.isNote ? 'var(--status-warning-bg)' : 'hsl(var(--muted))',
                     flexShrink: 0,
                   }}
                 />
@@ -262,12 +262,12 @@ export default function PaymentActivityPanel({ data, recordId, token, apiBaseUrl
                 <div className="min-w-0">
                   <div
                     className="text-sm leading-snug"
-                    style={{ color: '#111827', fontWeight: 500 }}
+                    style={{ color: 'hsl(var(--foreground))', fontWeight: 500 }}
                   >
                     {ev.text}
                   </div>
                   {ev.date && (
-                    <div style={{ color: '#9ca3af', fontSize: 12, marginTop: 3 }}>
+                    <div style={{ color: 'hsl(var(--muted-foreground))', fontSize: 12, marginTop: 3 }}>
                       {ev.date}
                     </div>
                   )}
@@ -276,14 +276,14 @@ export default function PaymentActivityPanel({ data, recordId, token, apiBaseUrl
             ))}
           </div>
         ) : (
-          <span className="text-sm" style={{ color: '#d1d5db' }}>{ui('noActivityYet')}</span>
+          <span className="text-sm" style={{ color: 'hsl(var(--foreground))' }}>{ui('noActivityYet')}</span>
         )}
       </div>
 
       {/* Add a note — pushed to bottom of flex column */}
       <div
         className="mt-auto pt-4 flex gap-2 items-center shrink-0"
-        style={{ borderTop: '1px solid #e5e7eb' }}
+        style={{ borderTop: '1px solid hsl(var(--card))' }}
       >
         <input
           type="text"
@@ -292,7 +292,7 @@ export default function PaymentActivityPanel({ data, recordId, token, apiBaseUrl
           onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleAddNote(); } }}
           placeholder={ui('addNote')}
           disabled={saving}
-          className="flex-1 rounded-lg border border-border bg-white px-3 py-2 text-sm text-gray-700 placeholder:text-gray-400 focus:outline-none focus:ring-1 focus:ring-primary/30 disabled:opacity-60"
+          className="flex-1 rounded-lg border border-border bg-card px-3 py-2 text-sm text-muted-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary/30 disabled:opacity-60"
         />
         <button
           type="button"
@@ -303,8 +303,8 @@ export default function PaymentActivityPanel({ data, recordId, token, apiBaseUrl
             width: 32,
             height: 32,
             border: 'none',
-            backgroundColor: noteText.trim() ? '#f59e0b' : '#e5e7eb',
-            color: noteText.trim() ? '#ffffff' : '#9ca3af',
+            backgroundColor: noteText.trim() ? 'var(--status-warning-bg)' : 'hsl(var(--card))',
+            color: noteText.trim() ? 'hsl(var(--card))' : 'hsl(var(--muted-foreground))',
             cursor: noteText.trim() && !saving ? 'pointer' : 'default',
           }}
         >

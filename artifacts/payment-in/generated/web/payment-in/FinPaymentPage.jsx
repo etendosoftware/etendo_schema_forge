@@ -272,7 +272,7 @@ export default function FinPaymentPage({ windowName, recordId, ...props }) {
         bottomSection={PaymentBottomPanel}
         topbarExtra={PaymentConciliadoBadge}
         sidePanel={PaymentDetailSidebar}
-        sidePanelStyle={{"order":-1,"borderLeft":"none","borderRight":"1px solid #E8EAEF","padding":0}}
+        sidePanelStyle={{"order":-1,"borderLeft":"none","borderRight":"1px solid hsl(var(--border-subtle))","padding":0}}
         processConfirmModal={ReactivarConfirmModal}
         statusEnumLabels={{"RPAP":"statusDraft","RPR":"cobroDepositado","RDNC":"cobroDepositado","RPPC":"cobroDepositado","PPM":"cobroDepositado","PWNC":"cobroDepositado"}}
         statusFieldLabel="statusColumnLabel"

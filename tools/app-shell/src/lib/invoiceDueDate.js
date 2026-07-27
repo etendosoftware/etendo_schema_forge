@@ -12,10 +12,10 @@ const SOON_DAYS_THRESHOLD = 7;
 
 // Etendo Figma tokens — see Due Date — Final spec.
 const DOT_COLOR = {
-  paid: '#26A95F',     // green-600
-  overdue: '#F53D6B',  // red-500
-  soon: '#FAAF00',     // yellow-600
-  ok: '#8A8AA3',       // gray-400
+  paid: 'var(--status-success-fg)',
+  overdue: 'hsl(var(--destructive))',
+  soon: 'var(--status-warning-fg)',
+  ok: 'var(--status-neutral-fg)',
 };
 
 const TEXT_COLOR = {};
