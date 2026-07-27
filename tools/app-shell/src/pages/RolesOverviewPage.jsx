@@ -4,7 +4,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Users, RefreshCw, ShieldAlert } from 'lucide-react';
-import { useUI } from '@/i18n';
+import { useUI, useMenuLabel } from '@/i18n';
 import { fetchRolesOverview } from '@/lib/rolesApi.js';
 import { ROLE_NAME_I18N_KEYS, ADMIN_NAME_I18N_KEY } from '@/lib/roleNameI18n.js';
 
@@ -80,6 +80,7 @@ const ADMIN_I18N = { nameKey: ADMIN_NAME_I18N_KEY, descKey: 'roleDescAdmin' };
  */
 export default function RolesOverviewPage() {
   const ui = useUI();
+  const tMenu = useMenuLabel();
   const [roles, setRoles] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -192,7 +193,7 @@ export default function RolesOverviewPage() {
                           title={w.tier === 'full' ? ui('accessTierFull') : ui('accessTierReadOnly')}
                           data-testid={`RolesOverviewPage__window-${role.id}-${w.id}`}
                         >
-                          {w.name}
+                          {tMenu(w.name)}
                         </Badge>
                       ))}
                     </div>
