@@ -1,9 +1,18 @@
 /**
  * Mock payment for the tenant upgrade flow.
  *
- * No real payment processor is involved: the card is validated in the browser
- * and a synthetic token is minted. The backend still verifies the token before
- * provisioning, so a forged token buys nothing.
+ * No real payment processor is involved. The card is validated in the browser
+ * and the token below is minted client-side.
+ *
+ * **This is not a payment control, and nothing downstream makes it one.** The
+ * backend checks only that the token *matches the expected shape*
+ * (`^mock-paid-[0-9a-f]+$`) — it does not verify that any charge occurred, so
+ * anyone who can reach the endpoint can hand-write `mock-paid-deadbeef` and be
+ * provisioned a tenant. Treat the whole gate as a placeholder for the flow, not
+ * as something that protects revenue.
+ *
+ * Replacing it with real payment means the backend must validate a
+ * processor-issued token against the processor, out of band from the client.
  */
 
 /** Test card that always simulates an issuer decline. */
