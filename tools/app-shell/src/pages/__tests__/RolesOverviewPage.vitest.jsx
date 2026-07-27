@@ -72,9 +72,14 @@ const RAW_JUNK_DESCRIPTION = '*** Please, do not edit this role. Use Copy Record
 
 const FIVE_ROLES = [
   {
-    id: '9B8D736190724807AB256DC95F20EC5E',
-    name: 'GOClient Admin',
-    rawDescription: 'GOClient Admin',
+    // Deliberately a tenant-specific admin name (not "GOClient Admin") with
+    // isClientAdmin: true — proves the page identifies the admin role via
+    // the flag, never via role.name, and always renders the generic
+    // roleNameAdmin/roleDescAdmin copy regardless of the literal name.
+    id: 'tenant-admin-role',
+    name: 'RolesPresa Admin',
+    isClientAdmin: true,
+    rawDescription: 'RolesPresa Admin',
     userCount: 2,
     windows: [
       { id: '108', name: 'User', tier: 'full' },
@@ -134,11 +139,22 @@ describe('RolesOverviewPage', () => {
       fetchRolesOverview.mockResolvedValue({ roles: FIVE_ROLES });
       render(<RolesOverviewPage />);
       await waitFor(() => {
-        expect(document.body.textContent).toContain('roleNameGoClientAdmin');
-        expect(document.body.textContent).toContain('roleDescGoClientAdmin');
+        expect(document.body.textContent).toContain('roleNameAdmin');
+        expect(document.body.textContent).toContain('roleDescAdmin');
         expect(document.body.textContent).toContain('roleNameFinance');
         expect(document.body.textContent).toContain('roleDescFinance');
       });
+    });
+
+    it('identifies the admin role via isClientAdmin, never via its literal name', async () => {
+      fetchRolesOverview.mockResolvedValue({ roles: FIVE_ROLES });
+      render(<RolesOverviewPage />);
+      await waitFor(() => {
+        expect(screen.getByTestId(`RolesOverviewPage__role-${FIVE_ROLES[0].id}`)).toBeTruthy();
+      });
+      // The fixture's literal role.name ("RolesPresa Admin") must never leak into the page —
+      // only the generic roleNameAdmin/roleDescAdmin i18n keys represent the admin role.
+      expect(document.body.textContent).not.toContain('RolesPresa Admin');
     });
 
     // This is the central "no raw junk text" assertion the task calls out

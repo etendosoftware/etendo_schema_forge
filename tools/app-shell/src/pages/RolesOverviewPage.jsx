@@ -36,29 +36,36 @@ function StatusCard({ testId, className, children }) {
 }
 
 /**
- * ETP-4513 — GOClient's 5 fixed roles: id -> {nameKey, descKey}. Mirrors the same 5 ids
- * hardcoded in `SFRolesOverview.java`'s `GOCLIENT_ROLE_IDS` and
- * `artifacts/user/decisions.json`'s `defaultRole.enumValues` — do not add/remove/reorder
- * entries here without updating those two in lockstep.
+ * ETP-4513 — the tenant's 4 fixed non-admin roles: NAME -> {nameKey, descKey}. Matched by the
+ * role's own NAME (consistent across every tenant, since `OnboardingRoleProvisioningService` /
+ * `R16-tenant-roles-and-webhook-access.sql` clone these 4 names verbatim onto every client), NOT
+ * by a hardcoded per-client role id — a hardcoded-GOClient-id map is exactly the bug fixed
+ * 2026-07-27 (see `SFRolesOverview.java`'s class javadoc for the live RolesPresa symptom: every
+ * OTHER tenant's admin saw GOClient's role names with empty user counts/windows). The 5th role
+ * (client-admin) is NOT in this map — its NAME varies per tenant ("RolesPresa Admin" vs
+ * "GOClient Admin" vs any future tenant's own), so it's identified by the backend's
+ * `isClientAdmin` flag instead and always rendered with the generic `roleNameAdmin`/
+ * `roleDescAdmin` copy, never its literal AD_Role.name.
  *
  * The backend's `rawDescription` (raw `AD_Role.description`) is explicitly NOT display copy
  * (boilerplate "do not edit this role" text for 4 of the 5 roles today — see
  * `SFRolesOverview.java`'s class javadoc). These curated, i18n-keyed descriptions are what
- * actually renders; `rawDescription` is only used as a last-resort fallback for a role id this
- * map doesn't recognize (which should never happen for the 5 fixed GOClient roles, but keeps
- * the page from showing a blank description if the backend ever adds a 6th role before the
- * frontend catches up).
+ * actually renders; `rawDescription` is only used as a last-resort fallback for a role this map
+ * doesn't recognize (a name Etendo Go doesn't know about, which should never happen for the 4
+ * fixed roles, but keeps the page from showing a blank description if that ever changes).
  */
-const ROLE_I18N = {
-  '9B8D736190724807AB256DC95F20EC5E': { nameKey: 'roleNameGoClientAdmin', descKey: 'roleDescGoClientAdmin' },
-  '127AE77FE2994067B7FE6495FC21D51E': { nameKey: 'roleNameFinance', descKey: 'roleDescFinance' },
-  '2A159DF4F4B944A6AA903202AD35B545': { nameKey: 'roleNameSales', descKey: 'roleDescSales' },
-  'A826430F723E4C1B9A53EBB0746A98C0': { nameKey: 'roleNamePurchasing', descKey: 'roleDescPurchasing' },
-  '55E05A4B43514A029D6FB6B8D94B49D4': { nameKey: 'roleNameInventory', descKey: 'roleDescInventory' },
+const ROLE_NAME_I18N = {
+  Finance: { nameKey: 'roleNameFinance', descKey: 'roleDescFinance' },
+  Sales: { nameKey: 'roleNameSales', descKey: 'roleDescSales' },
+  Purchasing: { nameKey: 'roleNamePurchasing', descKey: 'roleDescPurchasing' },
+  Inventory: { nameKey: 'roleNameInventory', descKey: 'roleDescInventory' },
 };
 
+/** Generic copy for the client-admin role, identified by `role.isClientAdmin`, never its name. */
+const ADMIN_I18N = { nameKey: 'roleNameAdmin', descKey: 'roleDescAdmin' };
+
 /**
- * Read-only "Configuración > Roles" page (ETP-4513). Lists GOClient's 5 fixed roles with a
+ * Read-only "Configuración > Roles" page (ETP-4513). Lists the tenant's 5 fixed roles with a
  * curated description, assigned-user count, and the Etendo GO windows each role can reach
  * (from `GET /webhooks/SFRolesOverview`). No create/delete actions anywhere; "Edit" only ever
  * opens a "coming soon" notice.
@@ -149,7 +156,7 @@ export default function RolesOverviewPage() {
         return (
           <div className="space-y-4" data-testid="RolesOverviewPage__list">
             {roles.map((role) => {
-              const i18nKeys = ROLE_I18N[role.id];
+              const i18nKeys = role.isClientAdmin ? ADMIN_I18N : ROLE_NAME_I18N[role.name];
               const displayName = i18nKeys ? ui(i18nKeys.nameKey) : role.name;
               const displayDescription = i18nKeys ? ui(i18nKeys.descKey) : role.rawDescription;
               const windows = Array.isArray(role.windows) ? role.windows : [];
