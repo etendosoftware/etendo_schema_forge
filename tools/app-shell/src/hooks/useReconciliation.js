@@ -168,7 +168,7 @@ export function useReactivateReconciliation() {
 }
 
 /**
- * Un-reconciles a SINGLE operation ("desvincular") from a statement line, leaving the rest of the
+ * Un-reconciles a SINGLE operation ("desconciliar") from a statement line, leaving the rest of the
  * line's reconciliation intact (POST). For an auto-created invoice payment it also reverses the
  * payment and restores the invoice to unpaid.
  * Payload shape: { financialAccountId, statementLineId, transactionId }.

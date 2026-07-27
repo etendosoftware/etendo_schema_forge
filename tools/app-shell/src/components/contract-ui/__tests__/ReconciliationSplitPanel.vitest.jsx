@@ -852,7 +852,7 @@ describe('ReconciliationSplitPanel', () => {
       fireEvent.click(screen.getByTestId('recon-matched-toggle'));
       expect(screen.getByTestId('recon-matched-list')).toBeInTheDocument();
       expect(screen.getByTestId('recon-matched-row-T1')).toBeInTheDocument();
-      // Each matched row exposes its unlink ("desvincular") button.
+      // Each matched row exposes its unlink ("desconciliar") button.
       expect(screen.getByTestId('recon-unlink-T1')).toBeInTheDocument();
     });
 

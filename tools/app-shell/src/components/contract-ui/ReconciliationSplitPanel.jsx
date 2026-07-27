@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { ArrowLeft, MoreVertical, CircleCheckBig, CheckCircle, X, ChevronDown, Minus } from 'lucide-react';
+import { ArrowLeft, CircleCheckBig, CheckCircle, X, ChevronDown, Minus } from 'lucide-react';
 import { toast } from 'sonner';
 import { useUI, useLocaleSwitch } from '@/i18n';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -386,21 +386,6 @@ function StatementLinesPanel({
           bold
           cellClassName={cn('w-[139px]', cellBg)}
           data-testid="MoneyCell__d0f4d5" />
-        <TableCell
-          className={cn('h-[62px] w-9 px-0 pr-1', cellBg)}
-          data-testid="TableCell__d0f4d5">
-          <button
-            type="button"
-            tabIndex={-1}
-            aria-hidden="true"
-            className={cn(
-              'flex h-8 w-8 items-center justify-center rounded-full text-[hsl(var(--text-disabled))] transition-opacity hover:bg-[hsl(var(--muted))]',
-              selected ? 'opacity-100' : 'opacity-0 group-hover:opacity-100',
-            )}
-          >
-            <MoreVertical className="h-5 w-5" data-testid="MoreVertical__d0f4d5" />
-          </button>
-        </TableCell>
       </TableRow>
     );
   };
@@ -439,7 +424,7 @@ function StatementLinesPanel({
       items={lines}
       renderRow={renderRow}
       footer={footer}
-      colSpan={6}
+      colSpan={5}
       headCells={(
         <>
           <TableHead className="w-8 px-0 pl-2" data-testid="TableHead__d0f4d5" />
@@ -447,7 +432,6 @@ function StatementLinesPanel({
           <TableHead className="px-3" data-testid="TableHead__d0f4d5">{ui('financeReconcileColDescription')}</TableHead>
           <TableHead className="w-[90px] px-3" data-testid="TableHead__d0f4d5">{ui('financeReconcileColProgress')}</TableHead>
           <TableHead className="w-[139px] px-3 text-left" data-testid="TableHead__d0f4d5">{ui('financeReconcileColAmount')}</TableHead>
-          <TableHead className="w-9 px-0 pr-1" data-testid="TableHead__d0f4d5" />
         </>
       )}
       data-testid="PanelShell__d0f4d5" />
@@ -788,7 +772,7 @@ function ReconciliationActionBar({
 
 
 /**
- * Confirmation for un-reconciling documents ("desvincular") — one row or the bulk selection. Always
+ * Confirmation for un-reconciling documents ("desconciliar") — one row or the bulk selection. Always
  * shown (per product decision) because it is destructive; when the selection includes an
  * auto-created invoice payment it also warns that the invoice returns to unpaid.
  */
