@@ -19087,6 +19087,8 @@
     "onboardingNamePlaceholder": "Your name",
     "onboardingEmailLabel": "Email",
     "onboardingEmailPlaceholder": "you@email.com",
+    "onboardingEmailRequired": "Email is required.",
+    "onboardingPasswordRequired": "Password is required.",
     "onboardingPasswordLabel": "Password",
     "onboardingPasswordPlaceholder": "********",
     "onboardingShowPassword": "Show password",
