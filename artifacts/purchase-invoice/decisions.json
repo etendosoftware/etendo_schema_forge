@@ -371,6 +371,7 @@
           "grid": true,
           "gridOrder": 5,
           "badge": true,
+          "visibleWhenCapability": "showAccountingFields",
           "badgeLabels": {
             "true": {
               "en_US": "Posted",
