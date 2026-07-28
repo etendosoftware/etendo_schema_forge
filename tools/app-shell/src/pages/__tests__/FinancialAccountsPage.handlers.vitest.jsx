@@ -217,6 +217,15 @@ describe('FinancialAccountsPage — PSD2 disconnect action', () => {
     fireEvent.click(await screen.findByText('financeAccountsPsd2DisconnectAction'));
     await waitFor(() => expect(toastError).toHaveBeenCalledWith('fail'));
   });
+
+  it('cancel dismisses the confirm dialog without disconnecting', async () => {
+    renderPage([ACC]);
+    await tableProps.onPsd2Action('disconnect', ACC);
+    await screen.findByText('financeAccountsPsd2DisconnectAction');
+    fireEvent.click(screen.getByText('cancel'));
+    await waitFor(() => expect(screen.queryByText('financeAccountsPsd2DisconnectAction')).not.toBeInTheDocument());
+    expect(mockDisconnect).not.toHaveBeenCalled();
+  });
 });
 
 describe('FinancialAccountsPage — edit modal', () => {
@@ -247,6 +256,14 @@ describe('FinancialAccountsPage — edit modal', () => {
     editModalProps.onConnect(ACC);
     await waitFor(() => expect(mockStartConnect).toHaveBeenCalledWith(ACC));
   });
+
+  it('edit modal onClose clears the edit target', async () => {
+    renderPage([ACC]);
+    tableProps.onEdit(ACC);
+    await waitFor(() => expect(screen.getByTestId('edit-modal')).toHaveAttribute('data-open', 'true'));
+    editModalProps.onClose();
+    await waitFor(() => expect(screen.getByTestId('edit-modal')).toHaveAttribute('data-open', 'false'));
+  });
 });
 
 describe('FinancialAccountsPage — archive & transfer', () => {
@@ -256,6 +273,14 @@ describe('FinancialAccountsPage — archive & transfer', () => {
     await waitFor(() => {
       expect(screen.getByTestId('archive-dialog')).toHaveAttribute('data-open', 'true');
     });
+  });
+
+  it('archive dialog onClose clears the archive target', async () => {
+    renderPage([ACC]);
+    tableProps.onArchive(ACC);
+    await waitFor(() => expect(screen.getByTestId('archive-dialog')).toHaveAttribute('data-open', 'true'));
+    archiveDialogProps.onClose();
+    await waitFor(() => expect(screen.getByTestId('archive-dialog')).toHaveAttribute('data-open', 'false'));
   });
 
   it('renders the transfer modal only after a transfer source is set', async () => {
