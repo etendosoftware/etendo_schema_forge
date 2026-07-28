@@ -34,6 +34,13 @@ vi.mock('@/hooks/useBulkActionToast', () => ({
   useBulkActionToast: vi.fn(),
 }));
 
+// ETP-4520 — index.jsx now checks useWindowAccess() before either branch renders.
+let currentWindowAccessTier = 'full';
+vi.mock('@/auth/AuthContext.jsx', () => ({
+  useWindowAccess: () => currentWindowAccessTier,
+  WindowAccessGuard: () => <div data-testid="window-access-guard" />,
+}));
+
 let rowDeleteConfig;
 const requestDeleteSpy = vi.fn();
 vi.mock('@/hooks/useRowDelete', () => ({
@@ -140,6 +147,25 @@ describe('PurchaseInvoiceWindow — render smoke tests', () => {
     lastListViewProps = null;
     lastHeaderPageProps = null;
     rowDeleteConfig = null;
+    currentWindowAccessTier = 'full';
+  });
+
+  // ETP-4520 — the hand-rolled ListView below only picks up the runtime
+  // per-tier access restriction if this wrapper passes it through; verifies
+  // the effectiveWindow wiring added alongside the WindowAccessGuard check.
+  it('passes a read-only effectiveWindow to ListView when the access tier is read-only', () => {
+    currentWindowAccessTier = 'read-only';
+    render(<PurchaseInvoiceWindow windowName="purchase-invoice" apiBaseUrl="/api" token="tkn" />);
+
+    expect(lastListViewProps.window).toMatchObject({ readOnly: true });
+  });
+
+  it('renders the WindowAccessGuard instead of ListView when the access tier is none', () => {
+    currentWindowAccessTier = 'none';
+    render(<PurchaseInvoiceWindow windowName="purchase-invoice" apiBaseUrl="/api" token="tkn" />);
+
+    expect(screen.getByTestId('window-access-guard')).toBeInTheDocument();
+    expect(screen.queryByTestId('list-view')).not.toBeInTheDocument();
   });
 
   it('renders the list view (ListView) when no recordId is present', () => {

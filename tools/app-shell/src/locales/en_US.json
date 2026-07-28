@@ -13675,6 +13675,9 @@
     "Conversion Rates": {
       "label": "Conversion Rates"
     },
+    "Conversion Rate Downloader Log": {
+      "label": "Conversion Rate Downloader Log"
+    },
     "Fiscal Calendar": {
       "label": "Calendar"
     },
@@ -13688,8 +13691,8 @@
       "label": "Country and Region"
     },
     "Business Partner": {
-      "label": "Business Partner",
-      "newLabel": "New business partner"
+      "label": "Contacts",
+      "newLabel": "New contact"
     },
     "General Ledger Configuration": {
       "label": "General Ledger Configuration"
@@ -14540,6 +14543,9 @@
     },
     "Transaction code": {
       "label": "Transaction code"
+    },
+    "Transaction Type": {
+      "label": "Transaction Type"
     },
     "SII Monitor": {
       "label": "SII Monitor"
@@ -16398,6 +16404,9 @@
     }
   },
   "genericLabels": {
+    "noAccessTitle": "No access",
+    "noAccessMessage": "Contact your administrator to get access.",
+    "windowAccessDenied": "You don't have access to this window",
     "balanced": "Balanced",
     "difference": "Difference",
     "journalUnbalancedSaveBlocked": "Debit and credit must be equal before saving",
@@ -17167,11 +17176,26 @@
     "helpComingSoon": "Help & Support is coming soon.",
     "assignedRole": "Assigned Role",
     "noRoleAssigned": "No role assigned",
-    "roleNameGoClientAdmin": "GOClient Admin",
+    "roleNameAdmin": "Administrator",
     "roleNameFinance": "Finance",
     "roleNameSales": "Sales",
     "roleNamePurchasing": "Purchasing",
     "roleNameInventory": "Inventory",
+    "roleDescAdmin": "Full administrative access to every Etendo GO window and setting.",
+    "roleDescFinance": "Manages accounting, financial accounts, payments, invoices and tax configuration.",
+    "roleDescSales": "Manages customers, price lists, sales quotations, orders and invoices.",
+    "roleDescPurchasing": "Manages suppliers, purchase orders and purchase invoices.",
+    "roleDescInventory": "Manages stock movements, goods receipts and shipments, warehouses and physical inventory counts.",
+    "Roles": "Roles",
+    "rolesPageTitle": "Roles",
+    "rolesPageSubtitle": "The 5 fixed roles, their assigned windows, and user counts.",
+    "rolesColUsers": "Users",
+    "rolesColWindows": "Assigned windows",
+    "rolesNoAccessTitle": "You don't have access to this view",
+    "rolesNoAccessMessage": "Only administrators can view the roles overview.",
+    "rolesLoadError": "Couldn't load roles.",
+    "accessTierFull": "Full",
+    "accessTierReadOnly": "Read-only",
     "supportTabChat": "Chat",
     "supportTabTickets": "My tickets",
     "supportNewConversation": "New conversation",
