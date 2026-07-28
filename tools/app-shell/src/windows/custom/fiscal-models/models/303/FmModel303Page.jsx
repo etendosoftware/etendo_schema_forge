@@ -4,14 +4,21 @@ import {
   Settings, Download,
   OctagonAlert, TriangleAlert, CircleCheck, ArrowLeftRight,
   Calculator, Loader2, MoreVertical, TrendingUp, TrendingDown, Clock,
-  ClipboardCheck, ReceiptText, Folder,
+  ClipboardCheck, ReceiptText, Folder, FileCheck,
 } from 'lucide-react';
 import { Tabs, KpiWidget } from '../../FmCommon.jsx';
 import { SourcesTab, IncidentsTab, FilesTab, HistoryTab } from '../../FmTabContent.jsx';
 import FmBoxes303 from './FmBoxes303.jsx';
 import { PresentModal, FileGenModal303, ConfigDrawer, CompareDrawer } from '../../FmOverlays.jsx';
+import AeatSubmitFlow from './AeatSubmitFlow.jsx';
 import { neoBase } from '@/components/related-documents/helpers.js';
 import { formatAmount, formatPeriod, computeBoxes303, generate303File } from '../../fiscalModelsUtils.js';
+import { AttachmentsTab, useAttachments } from '@/components/attachments';
+
+// AD table name backing the AEAT justificante attachments store — both the
+// server-side auto-attach on a successful telematic submission and the
+// manual "Presentación con Acuse de recibo" upload persist here.
+const FISCAL_DECL_TABLE = 'ETGO_Fiscal_Decl';
 
 const STEPPER_INDEX = {
   draft: 0, ready: 1,
@@ -251,6 +258,7 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, token, ap
   const [status, setStatus] = useState(decl.status);
   const [activeTab, setActiveTab] = useState('boxes');
   const [showPresent, setShowPresent] = useState(false);
+  const [showAeatFlow, setShowAeatFlow] = useState(false);
   const [showFilegen, setShowFilegen] = useState(false);
   const [showConfig, setShowConfig] = useState(false);
   const [showCompare, setShowCompare] = useState(false);
@@ -265,6 +273,17 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, token, ap
   };
   const [liveBoxes,      setLiveBoxes]      = useState(decl._precomputed?.boxes   ?? null);
   const [manualOverrides, setManualOverrides] = useState({});
+
+  // Only used to grab `upload()` for the manual acuse-de-recibo path below —
+  // isActive: false keeps it from eagerly listing/fetching attachments on
+  // mount (that eager fetch is owned by the "receipt" tab's own AttachmentsTab).
+  const { upload: uploadReceipt } = useAttachments({
+    tableName: FISCAL_DECL_TABLE,
+    recordId: decl.id,
+    token,
+    apiBaseUrl,
+    isActive: false,
+  });
 
   function handleBoxChange(boxNum, rawValue) {
     const value = parseBoxInput(rawValue);
@@ -305,7 +324,34 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, token, ap
     onStatusChange?.(decl.id, newStatus);
   }
 
-  function handlePresent({ status: newStatus }) {
+  // Bumped by AeatSubmitFlow's onAttached whenever the backend reports a
+  // PDF was returned for the submission — including TEST_SUCCESS, which
+  // deliberately does NOT go through handleStatusChange (test mode must
+  // never change the declaration's status). Combined into the "Justificante"
+  // tab's remount key below so a test-mode success also refreshes the tab,
+  // without misusing the status-change path for it.
+  const [receiptRefreshTick, setReceiptRefreshTick] = useState(0);
+  function handleAeatAttached() {
+    setReceiptRefreshTick(t => t + 1);
+  }
+
+  function handlePresent({ status: newStatus, acuseFile }) {
+    // 'aeat_telematic' is a sentinel from PresentModal's 4th path, never a
+    // real declaration status — it means "open the AEAT submission flow",
+    // not "change the status directly" like the other 3 manual paths.
+    if (newStatus === 'aeat_telematic') {
+      setShowPresent(false);
+      setShowAeatFlow(true);
+      return;
+    }
+    // Manual "Presentación con Acuse de recibo" path: persist the uploaded
+    // receipt to the same attachments store the "Justificante" tab reads
+    // from. Fire-and-forget — useAttachments.upload() already toasts its
+    // own errors and never rethrows, so a failed upload must not block the
+    // status change the user explicitly confirmed.
+    if (newStatus === 'submitted_ack' && acuseFile) {
+      uploadReceipt(acuseFile);
+    }
     handleStatusChange(newStatus);
   }
 
@@ -345,6 +391,8 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, token, ap
     { id: 'files',     label: t('fm.tab.files') ?? 'Ficheros',
       badge: decl.file ? 1 : null,
       icon: <Folder size={16} strokeWidth={1.75} data-testid="Folder__4f6c0d" /> },
+    { id: 'receipt',   label: t('fm.tab.receipt') ?? 'Justificante',
+      icon: <FileCheck size={16} strokeWidth={1.75} data-testid="FileCheck__4f6c0d" /> },
     { id: 'history',   label: t('fm.tab.history') ?? 'Historial',
       icon: <Clock size={16} strokeWidth={1.75} data-testid="Clock__4f6c0d" /> },
   ];
@@ -550,6 +598,27 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, token, ap
               genLabel={t('fm.action.gen303') ?? 'Generar fichero 303'}
               data-testid="FilesTab__4f6c0d" />
           )}
+          {activeTab === 'receipt' && (
+            // key={`${status}-${receiptRefreshTick}`}: `status` changes when a
+            // production submission succeeds (handleStatusChange) — AEAT's own
+            // auto-attach on a successful telematic submission happens
+            // server-side and is invisible to this component, so remounting
+            // AttachmentsTab (and its useAttachments instance) on a status
+            // change is how this tab notices the new file. `receiptRefreshTick`
+            // covers the case `status` can't: a TEST_SUCCESS submission also
+            // gets a PDF attached server-side now, but test mode must never
+            // change the declaration's status, so it can't ride the status-key
+            // remount — AeatSubmitFlow's onAttached bumps the tick instead.
+            (<AttachmentsTab
+              tableName={FISCAL_DECL_TABLE}
+              recordId={decl.id}
+              token={token}
+              apiBaseUrl={apiBaseUrl}
+              isActive={activeTab === 'receipt'}
+              config={{ allowedMimeTypes: ['application/pdf'] }}
+              key={`${status}-${receiptRefreshTick}`}
+              data-testid="AttachmentsTab__303receipt" />)
+          )}
           {activeTab === 'history' && (
             <HistoryTab decl={decl} t={t} data-testid="HistoryTab__4f6c0d" />
           )}
@@ -560,7 +629,21 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, token, ap
           decl={decl}
           onConfirm={handlePresent}
           onClose={() => setShowPresent(false)}
+          showAeatPath
           data-testid="PresentModal__4f6c0d" />
+      )}
+      {showAeatFlow && (
+        <AeatSubmitFlow
+          decl={decl}
+          orgIdent={orgIdent}
+          identChecks={identChecks}
+          summary={summary}
+          token={token}
+          apiBaseUrl={apiBaseUrl}
+          onSuccess={(newStatus) => handleStatusChange(newStatus)}
+          onAttached={handleAeatAttached}
+          onClose={() => setShowAeatFlow(false)}
+          data-testid="AeatSubmitFlow__4f6c0d" />
       )}
       {showFilegen && (
         <FileGenModal303

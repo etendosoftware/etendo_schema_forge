@@ -50,6 +50,11 @@ const IDENT_PARAM_MAP = [
   ['baja_domiciliacion', 'Cancel_Modify_Debit'],
 ];
 
+// Declaration types (tipo_declaracion) for which AEAT303Report2014 hard-requires
+// an IBAN param downstream. Shared by generate303File and AeatSubmitFlow — both
+// must guard the same set before hitting the network.
+export const IBAN_REQUIRED_TIPOS = ['D', 'G', 'I', 'V', 'U', 'X'];
+
 // Maps editable box numbers (from manualOverrides / liveBoxes) to AEAT HTTP param names.
 // Only boxes that the AEAT module reads from inputParams (not computed from DB) are listed.
 const BOX_PARAM_MAP = {
@@ -82,7 +87,7 @@ function applyRectificativaParams(params, identChecks) {
     params.set('AdministrativeDiscrepancyRectifyingReason', 'Y');
 }
 
-function applyIdentParams(params, identChecks) {
+export function applyIdentParams(params, identChecks) {
   for (const [field, paramName] of IDENT_PARAM_MAP) {
     const v = identChecks[field];
     if (v) params.set(paramName, paramName === 'IBAN' ? v.replace(/\s/g, '') : v);
@@ -116,7 +121,7 @@ function parseServerMessage(raw) {
   } catch (_) { return undefined; }
 }
 
-function triggerDownload(blob, downloadName) {
+export function triggerDownload(blob, downloadName) {
   const objectUrl = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = objectUrl;
@@ -127,11 +132,31 @@ function triggerDownload(blob, downloadName) {
   URL.revokeObjectURL(objectUrl);
 }
 
+/**
+ * Decodes a base64 string (no `data:` URI prefix) into a Blob. Mirrors the
+ * atob → Uint8Array pattern already used by usePreviewAttachment.js for
+ * base64-encoded attachment payloads, so both call sites agree on the same
+ * decoding convention.
+ */
+export function base64ToBlob(base64, mimeType = 'application/pdf') {
+  const bytes = Uint8Array.from(atob(base64), (c) => c.charCodeAt(0));
+  return new Blob([bytes], { type: mimeType });
+}
+
+/**
+ * Decodes a base64 payload (e.g. `pdfBase64` from POST /fiscal303/submit)
+ * and triggers a browser download — for endpoints that return the file
+ * inline in a JSON response rather than as a fetch Response blob.
+ */
+export function triggerBase64Download(base64, downloadName, mimeType = 'application/pdf') {
+  if (!base64) return;
+  triggerDownload(base64ToBlob(base64, mimeType), downloadName);
+}
+
 export async function generate303File(decl, { token, apiBaseUrl, identChecks, manualOverrides, filename } = {}) {
   if (!token || !apiBaseUrl) return { ok: false, error: 'no_token' };
 
   const tipo = identChecks?.tipo_declaracion ?? decl.result?.kind ?? 'N';
-  const IBAN_REQUIRED_TIPOS = ['D', 'G', 'I', 'V', 'U', 'X'];
 
   if (IBAN_REQUIRED_TIPOS.includes(tipo) && !identChecks?.bank_iban?.trim()) {
     return { ok: false, error: 'iban_required' };
@@ -152,6 +177,28 @@ export async function generate303File(decl, { token, apiBaseUrl, identChecks, ma
     }
     const blob = await res.blob();
     triggerDownload(blob, filename ?? `303_${decl.period}_${decl.year}.txt`);
+    return { ok: true };
+  } catch (_) {
+    return { ok: false, error: 'network' };
+  }
+}
+
+/**
+ * Calls PUT /neo/fiscal303/declarations?id=... to persist a manual status
+ * change. Despite the URL, this endpoint is generic across fiscal models —
+ * both 303 and 349 declarations live in the same backend table.
+ * Returns { ok: true } on success, or { ok: false, error: string } on failure.
+ */
+export async function persistDeclarationStatus(id, newStatus, { token, apiBaseUrl } = {}) {
+  if (!token || !apiBaseUrl) return { ok: false, error: 'no_token' };
+  try {
+    const base = apiBaseUrl.replace(/\/[^/]+$/, '');
+    const res = await fetch(`${base}/fiscal303/declarations?id=${encodeURIComponent(id)}`, {
+      method: 'PUT',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: newStatus }),
+    });
+    if (!res.ok) return { ok: false, error: `http_${res.status}` };
     return { ok: true };
   } catch (_) {
     return { ok: false, error: 'network' };
