@@ -484,6 +484,11 @@ least one visible dimension field; the expand-chevron column is unchanged. Label
 ("Añadir dimensiones" → "Editar dimensiones" once the line has a dimension value set). See
 `docs/ui-customization.md` §14b/§14c and `docs/feedback.md`'s ETP-4610 entry.
 
+Regenerated cleanly (`make regen ONLY=sales-invoice,purchase-invoice SKIP_EXTRACT=1 LOCAL_CORE=1`,
+`sf-validate-pipeline` clean, committed) as part of validating this window's `dimensionsPanel`
+flags — see `docs/feedback.md`'s ETP-4610 entry for the full regen log across all five in-scope
+windows.
+
 ## Multi-currency support in the Cobros/Pagos modal — ETP-4504
 
 The two-step Cobros/Pagos modal (`NewPaymentEntryModal.jsx`) was originally single-currency.

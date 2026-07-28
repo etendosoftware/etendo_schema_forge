@@ -143,8 +143,9 @@ in the ETP-4610 pass** — attempting
 it hit the already-documented `AD_Ref_List_Trl` es_ES translation-stripping sandbox issue (see
 `docs/feedback.md`'s "`make regen` Silently Strips es_ES Enum Labels..." entry) on this window's
 `etblkpAccountingstatus` field, so the regen was reverted rather than committed with a translation
-regression. `goods-receipt` and `simple-g-l-journal` were regenerated and confirmed clean instead
-(see `docs/feedback.md`'s ETP-4610 entry) — this window's `decisions.json` flags are correct, but a
+regression (tried twice, on two separate passes — both hit the same symptom). `goods-receipt`,
+`simple-g-l-journal`, `sales-invoice`, and `purchase-invoice` were all regenerated and confirmed
+clean instead (see `docs/feedback.md`'s ETP-4610 entry) — this window's `decisions.json` flags are correct, but a
 future regen (once the sandbox's `AD_Ref_List_Trl` gap is backfilled, or using the label-restore
 workaround already documented) is still needed to confirm live.
 
