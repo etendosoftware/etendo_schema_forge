@@ -1,5 +1,6 @@
-import { useEffect } from 'react';
+import { useMemo, useEffect } from 'react';
 import { ListView, DetailView } from '@/components/contract-ui';
+import { useWindowAccess, WindowAccessGuard } from '@/auth/AuthContext.jsx';
 import PeriodControlTable from './PeriodControlTable';
 import PeriodControlForm from './PeriodControlForm';
 import DocumentsTable from './DocumentsTable';
@@ -178,6 +179,13 @@ export const api = {
 const labelOverrides = api.labelOverrides;
 // @sf-generated-start component:PeriodControlPage
 export default function PeriodControlPage({ windowName, recordId, ...props }) {
+  const windowAccessTier = useWindowAccess('E66E701CCBA14B8BA480CBDE37C50D7A');
+  const effectiveWindow = useMemo(() => (
+    windowAccessTier === 'read-only' ? { ...(props.window || {}), readOnly: true } : props.window
+  ), [windowAccessTier, props.window]);
+  if (windowAccessTier === 'none') {
+    return <WindowAccessGuard windowId="E66E701CCBA14B8BA480CBDE37C50D7A" />;
+  }
   if (recordId) {
     return (
       <>
@@ -204,7 +212,7 @@ export default function PeriodControlPage({ windowName, recordId, ...props }) {
         requiredHeaderFields={requiredHeaderFields}
         statusEnumLabels={{"O":"All Opened","N":"All Never Opened","C":"All Closed","P":"All Permanently Closed","M":"Mixed"}}
         labelOverrides={labelOverrides}
-        {...props}
+        {...props} window={effectiveWindow}
       />
       </>
     );
@@ -223,7 +231,7 @@ export default function PeriodControlPage({ windowName, recordId, ...props }) {
       labelOverrides={labelOverrides}
       rowQuickActions={{}}
       listSortBy="periodNo asc"
-      {...props}
+      {...props} window={effectiveWindow}
     />
   );
 }

@@ -1,6 +1,6 @@
 import GLJournalPage, { api } from './GLJournalPage';
 
-const windowMeta = { category: 'finance', name: 'Simple G/L Journal' };
+const windowMeta = { category: 'finance', name: 'Simple G/L Journal', id: 'B917E8A7B0864ACEA9D941E3B7494E53' };
 
 // @sf-generated-start component:App
 export default function App({ windowName, recordId, token, apiBaseUrl, window, ...rest }) {
