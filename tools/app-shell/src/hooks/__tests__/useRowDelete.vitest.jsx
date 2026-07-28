@@ -199,6 +199,60 @@ describe('useRowDelete', () => {
     expect(screen.queryByTestId('row-quick-action-delete-confirm')).not.toBeInTheDocument();
   });
 
+  it('cancel button closes the dialog without deleting', async () => {
+    function TestComponent() {
+      const { requestDelete, deleteDialog } = useRowDelete(defaultOpts);
+      return (
+        <>
+          <button onClick={() => requestDelete({ id: '111' })}>Del</button>
+          {deleteDialog}
+        </>
+      );
+    }
+
+    render(<TestComponent />);
+    const user = userEvent.setup();
+
+    await act(async () => { await user.click(screen.getByText('Del')); });
+    expect(screen.getByText('Confirm Delete')).toBeInTheDocument();
+
+    await act(async () => { await user.click(screen.getByText('Cancel')); });
+
+    expect(screen.queryByText('Confirm Delete')).not.toBeInTheDocument();
+    expect(globalThis.fetch).not.toHaveBeenCalled();
+    expect(defaultOpts.onSuccess).not.toHaveBeenCalled();
+  });
+
+  it('shows the server error message and closes the dialog when the plain DELETE responds not-ok', async () => {
+    const { toast } = await import('sonner');
+    globalThis.fetch.mockResolvedValue({
+      ok: false,
+      status: 409,
+      statusText: 'Conflict',
+      json: async () => ({ message: 'Referenced by an existing invoice' }),
+    });
+
+    function TestComponent() {
+      const { requestDelete, deleteDialog } = useRowDelete(defaultOpts);
+      return (
+        <>
+          <button onClick={() => requestDelete({ id: '222' })}>Del</button>
+          {deleteDialog}
+        </>
+      );
+    }
+
+    render(<TestComponent />);
+    const user = userEvent.setup();
+
+    await act(async () => { await user.click(screen.getByText('Del')); });
+    await act(async () => { await user.click(screen.getByTestId('row-quick-action-delete-confirm')); });
+
+    expect(toast.error).toHaveBeenCalledWith('Referenced by an existing invoice');
+    expect(screen.queryByText('Confirm Delete')).not.toBeInTheDocument();
+    expect(defaultOpts.onSuccess).not.toHaveBeenCalled();
+  });
+
   it('closes the confirm dialog and calls onSuccess on a successful delete (regression)', async () => {
     globalThis.fetch.mockResolvedValue({ ok: true });
 
