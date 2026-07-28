@@ -138,16 +138,19 @@ Same intent as `sales-invoice.md`/`purchase-invoice.md`: `InlineLinesPanel` no l
 `dimensionsPanel` type as a grid column at all — "Añadir dimensiones" is now a hover action next
 to Edit/Delete, gated on at least one visible dimension field, with the expand-chevron column
 unchanged. The label/icon is adaptive: "Añadir dimensiones" while the line has no dimension values,
-"Editar dimensiones" once at least one is set. **Not re-validated via `make regen` on this window
-in the ETP-4610 pass** — attempting
-it hit the already-documented `AD_Ref_List_Trl` es_ES translation-stripping sandbox issue (see
+"Editar dimensiones" once at least one is set.
+
+**Regen history on this window:** two `make regen` attempts against the local sandbox's LIVE DB
+both hit the already-documented `AD_Ref_List_Trl` es_ES translation-stripping issue (see
 `docs/feedback.md`'s "`make regen` Silently Strips es_ES Enum Labels..." entry) on this window's
-`etblkpAccountingstatus` field, so the regen was reverted rather than committed with a translation
-regression (tried twice, on two separate passes — both hit the same symptom). `goods-receipt`,
-`simple-g-l-journal`, `sales-invoice`, and `purchase-invoice` were all regenerated and confirmed
-clean instead (see `docs/feedback.md`'s ETP-4610 entry) — this window's `decisions.json` flags are correct, but a
-future regen (once the sandbox's `AD_Ref_List_Trl` gap is backfilled, or using the label-restore
-workaround already documented) is still needed to confirm live.
+`etblkpAccountingstatus` field, and were reverted rather than committed with a translation
+regression. The window was ultimately regenerated cleanly by the **pre-push hook's own
+offline/cached-AD-snapshot pipeline run** (the CI-parity "UI / contract drift" check, which
+regenerates from a frozen cached snapshot rather than the incomplete local sandbox DB) —
+that run hit no translation loss at all, confirming the earlier failures were purely a local-DB
+data gap, not a real blocker. `contract.json`, `contract.mcp.json`, and
+`GoodsShipmentLineTable.jsx` are now regenerated and validated (`sf-validate-pipeline`: OK) —
+see `docs/feedback.md`'s ETP-4610 entry for the full trail.
 
 ## Theme roles
 
