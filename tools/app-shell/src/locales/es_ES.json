@@ -13819,6 +13819,9 @@
     "Transaction code": {
       "label": "Clave de operación (IVA)"
     },
+    "Transaction Type": {
+      "label": "Tipo de transacción"
+    },
     "Invoice Register Book Setup": {
       "label": "Configuración de Libro de Facturas"
     },
@@ -13864,6 +13867,9 @@
     "Conversion Rates": {
       "label": "Rangos de conversión"
     },
+    "Conversion Rate Downloader Log": {
+      "label": "Registro de descarga de tipos de cambio"
+    },
     "Dimensions Mapping": {
       "label": "Mapeo de dimensiones"
     },
@@ -13886,8 +13892,8 @@
       "label": "País, provincia y ciudad"
     },
     "Business Partner": {
-      "label": "Terceros",
-      "newLabel": "Nuevo tercero"
+      "label": "Contactos",
+      "newLabel": "Nuevo contacto"
     },
     "Return Material Receipt": {
       "label": "Albarán de devolución",
@@ -16640,6 +16646,9 @@
     }
   },
   "genericLabels": {
+    "noAccessTitle": "Sin acceso",
+    "noAccessMessage": "Contacta a tu administrador para obtener acceso.",
+    "windowAccessDenied": "No tienes acceso a esta ventana",
     "balanced": "Cuadrado",
     "difference": "Diferencia",
     "journalUnbalancedSaveBlocked": "El debe y el haber deben ser iguales antes de guardar",
@@ -17419,11 +17428,26 @@
     "helpComingSoon": "La ayuda y soporte estará disponible pronto.",
     "assignedRole": "Rol asignado",
     "noRoleAssigned": "Sin rol asignado",
-    "roleNameGoClientAdmin": "Administrador de GOClient",
+    "roleNameAdmin": "Administrador",
     "roleNameFinance": "Finanzas",
     "roleNameSales": "Ventas",
     "roleNamePurchasing": "Compras",
     "roleNameInventory": "Inventario",
+    "roleDescAdmin": "Acceso administrativo completo a todas las ventanas y configuraciones de Etendo GO.",
+    "roleDescFinance": "Gestiona la contabilidad, cuentas financieras, pagos, facturas y configuración de impuestos.",
+    "roleDescSales": "Gestiona clientes, listas de precios, presupuestos, pedidos y facturas de venta.",
+    "roleDescPurchasing": "Gestiona proveedores, pedidos de compra y facturas de compra.",
+    "roleDescInventory": "Gestiona movimientos de stock, recepciones y envíos de mercancías, almacenes y conteos de inventario físico.",
+    "Roles": "Roles",
+    "rolesPageTitle": "Roles",
+    "rolesPageSubtitle": "Los 5 roles fijos, sus ventanas asignadas y el número de usuarios.",
+    "rolesColUsers": "Usuarios",
+    "rolesColWindows": "Ventanas asignadas",
+    "rolesNoAccessTitle": "No tienes acceso a esta vista",
+    "rolesNoAccessMessage": "Solo los administradores pueden ver el resumen de roles.",
+    "rolesLoadError": "No se pudieron cargar los roles.",
+    "accessTierFull": "Completo",
+    "accessTierReadOnly": "Solo lectura",
     "supportTabChat": "Chat",
     "supportTabTickets": "Mis tickets",
     "supportNewConversation": "Nueva conversación",
