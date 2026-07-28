@@ -15,6 +15,7 @@ import { renderHook, act, waitFor } from '@testing-library/react';
 import { AuthProvider, createMemoryAuthStorage } from '@etendosoftware/app-shell-core/auth';
 import { DataProvider } from '@etendosoftware/app-shell-core/data';
 import { createQueryCache } from '@etendosoftware/app-shell-core/data';
+import { toast } from 'sonner';
 import { useEntity } from '../useEntity';
 
 vi.mock('sonner', () => ({
@@ -252,5 +253,104 @@ describe('useEntity — shared cache integration (ETP-4563)', () => {
     await waitFor(() => expect(a.result.current.loading).toBe(false));
     expect(a.result.current.items).toEqual([]);   // error path clears items, no throw
     expect(a.result.current.hasMore).toBe(false);
+  });
+
+  // --- ETP-4563 regression: `force` bypasses freshness, process invalidates cache ---
+  // These guard the cache-refresh fix: a stale read could be served from a fresh
+  // cache entry after a mutation. The fix added `{ force }` to fetchById/fetchChildren
+  // and made handleProcess invalidate the entity cache before re-reading.
+
+  it('11. fetchById with { force: true } refetches even when the record is still fresh', async () => {
+    const { fetchMock, counts } = makeFetch();
+    globalThis.fetch = fetchMock;
+
+    const a = renderHook(() => useEntity('header', 'lines', opts({ skipListFetch: true })), { wrapper });
+    await act(async () => { a.result.current.fetchById('42'); });
+    await waitFor(() => expect(a.result.current.selected?.id).toBe('42'));
+    expect(counts.record).toBe(1);
+
+    // Contrast: a plain re-read within the freshness window reuses the cache.
+    await act(async () => { a.result.current.fetchById('42'); });
+    await waitFor(() => expect(a.result.current.selected?.id).toBe('42'));
+    expect(counts.record).toBe(1);
+
+    // force: true bypasses freshness → a brand-new network round-trip.
+    await act(async () => { a.result.current.fetchById('42', { force: true }); });
+    await waitFor(() => expect(counts.record).toBe(2));
+  });
+
+  it('12. fetchChildren with { force: true } refetches even when children are still fresh', async () => {
+    const { fetchMock, counts } = makeFetch();
+    globalThis.fetch = fetchMock;
+
+    const a = renderHook(() => useEntity('header', 'lines', opts({ skipListFetch: true })), { wrapper });
+    await act(async () => { a.result.current.fetchChildren('p1'); });
+    await waitFor(() => expect(counts.children).toBe(1));
+
+    // Contrast: a plain re-read within the freshness window reuses the cache.
+    await act(async () => { a.result.current.fetchChildren('p1'); });
+    await waitFor(() => expect(counts.children).toBe(1));
+
+    // force: true bypasses freshness → a brand-new network round-trip.
+    await act(async () => { a.result.current.fetchChildren('p1', { force: true }); });
+    await waitFor(() => expect(counts.children).toBe(2));
+  });
+
+  it('13. a successful handleProcess invalidates the entity cache so the next read refetches', async () => {
+    const { fetchMock, counts } = makeFetch({
+      handler: ({ method, path }) => (method === 'POST' && /\/header\/[^/]+\/action\//.test(path)
+        ? { ok: true, status: 200, _label: 'process', json: async () => ({}) }
+        : null),
+    });
+    globalThis.fetch = fetchMock;
+    const invalidateSpy = vi.spyOn(cache, 'invalidate');
+
+    const a = renderHook(() => useEntity('header', 'lines', opts({ skipListFetch: true })), { wrapper });
+    await act(async () => { a.result.current.fetchById('99'); });
+    await waitFor(() => expect(a.result.current.selected?.id).toBe('99'));
+    expect(counts.record).toBe(1);
+
+    // A hidden param exercises the process-param fan-out; the action succeeds.
+    await act(async () => {
+      await a.result.current.handleProcess({
+        columnName: 'DOC_ACTION',
+        label: 'Complete',
+        params: [{ key: 'documentAction', value: 'CO', hidden: true }],
+      });
+    });
+    expect(counts.process).toBe(1);
+
+    // The success path invalidated this entity's cached lists and records...
+    expect(invalidateSpy).toHaveBeenCalledWith(expect.objectContaining({ entity: 'header' }));
+    // ...so handleProcess's own post-process re-read reaches the network again
+    // instead of serving the now-stale cache entry.
+    await waitFor(() => expect(counts.record).toBe(2));
+  });
+
+  it('14. a failed handleProcess does NOT invalidate the cache and surfaces an error toast', async () => {
+    const { fetchMock, counts } = makeFetch({
+      handler: ({ method, path }) => (method === 'POST' && /\/header\/[^/]+\/action\//.test(path)
+        ? { ok: false, status: 400, _label: 'process', json: async () => ({ error: { message: 'process failed' } }) }
+        : null),
+    });
+    globalThis.fetch = fetchMock;
+
+    const a = renderHook(() => useEntity('header', 'lines', opts({ skipListFetch: true })), { wrapper });
+    await act(async () => { a.result.current.fetchById('77'); });
+    await waitFor(() => expect(a.result.current.selected?.id).toBe('77'));
+    expect(counts.record).toBe(1);
+
+    const invalidateSpy = vi.spyOn(cache, 'invalidate');
+    toast.error.mockClear();
+    await act(async () => { await a.result.current.handleProcess({ columnName: 'DOC_ACTION' }); });
+    expect(counts.process).toBe(1);
+
+    // Failure keeps the cache intact and reports the error via a toast.
+    expect(invalidateSpy).not.toHaveBeenCalled();
+    expect(toast.error).toHaveBeenCalled();
+
+    // The record entry stays fresh → a subsequent read is served from cache.
+    await act(async () => { a.result.current.fetchById('77'); });
+    await waitFor(() => expect(counts.record).toBe(1));
   });
 });
