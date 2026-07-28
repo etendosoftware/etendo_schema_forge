@@ -248,19 +248,22 @@
           "name": "financial-accounts",
           "label": "Accounts",
           "favname": "Accounts",
-          "path": "finance/accounts"
+          "path": "finance/accounts",
+          "windowId": "94EAA455D2644E04AB25D93BE5157B6D"
         },
         {
           "name": "financial-account",
           "label": "Account Detail",
           "favname": "Account Detail",
-          "hidden": true
+          "hidden": true,
+          "windowId": "94EAA455D2644E04AB25D93BE5157B6D"
         },
         {
           "name": "match-rule",
           "label": "Match Rule",
           "favname": "Match Rule",
-          "hidden": true
+          "hidden": true,
+          "windowId": "24963D64E83B4543A7F6BD248CF944EE"
         },
         {
           "name": "chart-of-accounts",

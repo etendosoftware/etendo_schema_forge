@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { useSetPageMeta } from '@/components/layout/PageMetaContext';
 import { useUI } from '@/i18n';
+import { useWindowAccess, WindowAccessGuard } from '@/auth/AuthContext.jsx';
 import { useFinancialAccounts } from '@/hooks/useFinancialAccounts.js';
 import { usePsd2Actions } from '@/hooks/usePsd2Actions.js';
 import { usePsd2ConnectFlow } from '@/hooks/usePsd2ConnectFlow.js';
@@ -116,6 +117,15 @@ export default function FinancialAccountsPage() {
     () => filterAccounts(accounts, typeFilter, search),
     [accounts, typeFilter, search],
   );
+
+  // ETP-4658 — this hand-written list page (the /finance/accounts entry point) never
+  // delegated to a generated component either, so like custom/financial-account/index.jsx
+  // it never picked up the ETP-4520 access-tier guard. Checked here, after every other
+  // hook, so hook order stays stable across renders regardless of the tier.
+  const windowAccessTier = useWindowAccess('94EAA455D2644E04AB25D93BE5157B6D');
+  if (windowAccessTier === 'none') {
+    return <WindowAccessGuard windowId="94EAA455D2644E04AB25D93BE5157B6D" data-testid="WindowAccessGuard__financial-accounts-page" />;
+  }
 
   const handleOpenAccount = (account) => {
     navigate(`/financial-account/${account.id}`);

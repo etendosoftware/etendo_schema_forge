@@ -4,6 +4,7 @@ import { Sparkles, Upload, Pencil } from 'lucide-react';
 import { toast } from 'sonner';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { useUI } from '@/i18n';
+import { useWindowAccess, WindowAccessGuard } from '@/auth/AuthContext.jsx';
 import { useSetPageMeta } from '@/components/layout/PageMetaContext';
 import { useFinancialAccount } from '@/hooks/useFinancialAccount';
 import { useAccountMovements } from '@/hooks/useAccountMovements';
@@ -235,6 +236,19 @@ export default function FinancialAccountWindow({ recordId }) {
     },
     [accountName, account?.type, account?.psd2Connected, account?.psd2Pending],
   );
+
+  // ETP-4658 — this custom window never delegated to the generated AccountPage.jsx
+  // (registry.js loads this file for "financial-account", not @generated/...), so it
+  // never picked up the ETP-4520 access-tier guard despite the contract carrying a
+  // real window.id. Checked here, after every other hook, so hook order stays stable
+  // across renders regardless of the tier (mirrors custom/sales-invoice/index.jsx).
+  // Only the "none" tier is gated — propagating "read-only" would require threading
+  // it through every mutation hook in this window (useAccountMutations,
+  // useReconciliation, PSD2 actions, ...), out of scope here.
+  const windowAccessTier = useWindowAccess('94EAA455D2644E04AB25D93BE5157B6D');
+  if (windowAccessTier === 'none') {
+    return <WindowAccessGuard windowId="94EAA455D2644E04AB25D93BE5157B6D" data-testid="WindowAccessGuard__financial-account" />;
+  }
 
   return (
     <TooltipProvider data-testid="TooltipProvider__f7dbb3">
