@@ -195,6 +195,52 @@
           }
         ]
       }
+    },
+    {
+      "id": "flag-debt-scorer",
+      "description": "Per-flag technical debt scorer: the flags-registry contract, the sf-flag-debt CLI and the feature-debt workflow that make debt visible per feature.",
+      "owner": "sebastianbarrozo",
+      "jira": "ETP-4686",
+      "created": "2026-07-28",
+      "paths": {
+        "frontend": [],
+        "backend": []
+      },
+      "$pathsComment": "Deliberately empty: the scorer's owned code (cli/src/flag-debt.js and cli/test/flag-debt.test.js) lives in schema_forge_core, which no registry root can reach — evidence #1 for the multi-repo-registry-split item below. ETP-4697 is also what lets this entry declare its real paths and specs.",
+      "deferredItems": [
+        {
+          "id": "multi-repo-registry-split",
+          "kind": "precondition",
+          "note": "The registry model is single-repo plus vendored backend: schema_forge_core code cannot register flags at all, the score is checkout-dependent (resolveRoots silently counts backend specs as pending when the module checkout is absent — same commit, different score), and SONAR_PROJECT_BY_ROOT hardcodes two Sonar projects. Therefore any core feature ships with unmeasured debt and worktree scores cannot be trusted until the split lands. Fix: three per-repo registries (header/contribution) + sf-flag-debt --rollup with merge-then-score semantics. User-accepted 2026-07-28 (kickoff proceeds on the v2 format; migration is mechanical). PROMOTION CONDITION: the moment any component is scheduled as its own task, it becomes its own deferredItem.",
+          "components": [
+            {
+              "id": "per-repo-registries-plus-rollup",
+              "note": "Three autonomous registries with a header/contribution split; --rollup merges by feature id then scores (flat spec penalties must not multiply per repo); orphan-contribution and duplicate-header detection.",
+              "ref": "schema_forge_core cli/src/flag-debt.js — resolveRoots (the checkout-dependent search this removes)"
+            },
+            {
+              "id": "sonar-project-generalization",
+              "note": "sonarProject declared per registry replaces the hardcoded table; sonar-coverage.sh whitelist accepts schema-forge-core (its sonar-project.properties already exists).",
+              "ref": "schema_forge_core cli/src/flag-debt.js — SONAR_PROJECT_BY_ROOT + cli/sonar-coverage.sh project whitelist"
+            },
+            {
+              "id": "js-key-sync-check",
+              "note": "Vitest test comparing FLAG_DEFAULTS with the registry in both directions — exact only once each registry describes its own repo.",
+              "ref": "tools/app-shell/src/lib/flags/flag-keys.js — FLAG_DEFAULTS"
+            },
+            {
+              "id": "java-key-sync-check",
+              "note": "JUnit test comparing GoFeatureFlags.FLAG_* constants with the registry and etendo.go.flags.* properties, plus a literal-regex backstop on isEnabled( call sites. Constants already exist; no mirror class needed.",
+              "ref": "com.etendoerp.go src/com/etendoerp/go/featureflags/GoFeatureFlags.java — FLAG_TENANT_UPGRADE"
+            }
+          ],
+          "refs": [
+            "ETP-4697 — Split flags-registry into per-repo registries (header/contribution) with rollup scoring",
+            "docs/flag-debt.md"
+          ]
+        }
+      ],
+      "$deferredItemsComment": "This entry is the scorer scoring itself: a shipped feature (no flag object — 'shipped — no flag' state) whose standing debt is the single-repo registry model. ETP-4697 closes it."
     }
   ]
 }
