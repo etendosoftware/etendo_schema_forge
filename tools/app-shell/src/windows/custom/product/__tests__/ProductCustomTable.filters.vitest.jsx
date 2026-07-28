@@ -7,10 +7,14 @@
 // This regression-guards:
 //   - the identity cell is the generic `multiField` (key `name`, column `Name`),
 //     exposing `name`->Name and `searchKey`->Value parts;
-//   - the split `name` / `searchKey` filter columns still exist with the correct
-//     AD field mapping (ETP-4609) and stay hidden from the rendered grid (already
-//     shown inside the combined identity cell);
-//   - the obsolete `nameAndSearchKey` column no longer exists.
+//   - there is exactly ONE column per key: the split `name` / `searchKey` filter
+//     columns added by ETP-4609 are gone, because `expandMultiFieldColumns` now
+//     derives a filterable pseudo-column from each `part`. Re-adding them made
+//     "Nombre"/"Identificador" appear twice in the Advanced Filter field picker
+//     and rendered two extra grid columns;
+//   - the obsolete `nameAndSearchKey` column no longer exists;
+//   - `{...props}` is spread BEFORE the local column set, so ListView's generic
+//     table props (notably `hiddenColumns`) cannot override this table's columns.
 
 // --- Mocks (before imports) ---
 
@@ -38,36 +42,10 @@ describe('ProductCustomTable — identity cell & Advanced Filter fields (ETP-460
   it('renders the identity cell via the generic `multiField` decorator mapped to '
     + 'the AD field Name', () => {
     render(<ProductCustomTable data={[]} />);
-    // First `key === 'name'` match is the multiField identity cell.
     const identityCell = capturedProps.columns.find((c) => c.key === 'name');
     expect(identityCell).toBeDefined();
     expect(identityCell.type).toBe('multiField');
     expect(identityCell.column).toBe('Name');
-  });
-
-  it('declares a `name` split filter column mapped to the AD field Name', () => {
-    render(<ProductCustomTable data={[]} />);
-    // Two columns share key `name`: the multiField cell and the string filter
-    // column. The split filter column is the `type: 'string'` one.
-    const nameFilterCol = capturedProps.columns.find(
-      (c) => c.key === 'name' && c.type === 'string',
-    );
-    expect(nameFilterCol).toBeDefined();
-    expect(nameFilterCol.column).toBe('Name');
-  });
-
-  it('declares a `searchKey` filter column mapped to the AD field Value', () => {
-    render(<ProductCustomTable data={[]} />);
-    const searchKeyCol = capturedProps.columns.find((c) => c.key === 'searchKey');
-    expect(searchKeyCol).toBeDefined();
-    expect(searchKeyCol.column).toBe('Value');
-  });
-
-  it('hides the split name/searchKey columns from the rendered grid', () => {
-    render(<ProductCustomTable data={[]} />);
-    expect(capturedProps.hiddenColumns).toEqual(
-      expect.arrayContaining(['name', 'searchKey']),
-    );
   });
 
   it('exposes both name->Name and searchKey->Value parts on the multiField '
@@ -76,8 +54,6 @@ describe('ProductCustomTable — identity cell & Advanced Filter fields (ETP-460
     render(<ProductCustomTable data={[]} />);
 
     const identityCell = capturedProps.columns.find((c) => c.key === 'name');
-    expect(identityCell.type).toBe('multiField');
-    expect(identityCell.column).toBe('Name');
     expect(Array.isArray(identityCell.parts)).toBe(true);
 
     const namePart = identityCell.parts.find((p) => p.key === 'name');
@@ -91,5 +67,32 @@ describe('ProductCustomTable — identity cell & Advanced Filter fields (ETP-460
     // The synthetic combined column is gone — replaced by the multiField cell.
     const combinedCol = capturedProps.columns.find((c) => c.key === 'nameAndSearchKey');
     expect(combinedCol).toBeUndefined();
+  });
+
+  it('declares no standalone `searchKey` column — the multiField part supplies it', () => {
+    render(<ProductCustomTable data={[]} />);
+    const searchKeyCol = capturedProps.columns.find((c) => c.key === 'searchKey');
+    expect(searchKeyCol).toBeUndefined();
+  });
+
+  it('declares each column key exactly once, so the Advanced Filter field picker '
+    + 'lists no duplicate entry', () => {
+    render(<ProductCustomTable data={[]} />);
+    const keys = capturedProps.columns.map((c) => c.key);
+    expect(keys).toEqual([...new Set(keys)]);
+  });
+
+  it('keeps searchKey and name as quick-search keys', () => {
+    render(<ProductCustomTable data={[]} />);
+    expect(capturedProps.filters).toEqual(
+      expect.arrayContaining(['searchKey', 'name']),
+    );
+  });
+
+  it('lets its own columns win over any `columns` / `hiddenColumns` passed in by '
+    + 'ListView', () => {
+    render(<ProductCustomTable data={[]} columns={[{ key: 'injected' }]} hiddenColumns={['name']} />);
+    expect(capturedProps.columns.map((c) => c.key)).not.toContain('injected');
+    expect(capturedProps.columns.find((c) => c.key === 'name')).toBeDefined();
   });
 });

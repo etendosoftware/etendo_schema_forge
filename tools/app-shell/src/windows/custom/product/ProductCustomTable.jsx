@@ -21,13 +21,12 @@ const columns = [
       { key: 'name', column: 'Name', type: 'string', labels: { en_US: 'Name', es_ES: 'Nombre' } },
     ],
   },
-  // `name` and `searchKey` are real backend fields (AD columns Name / Value)
-  // already rendered inside the nameAndSearchKey cell above. They are added
-  // here — hidden from the grid via `hiddenColumns` below — purely so the
-  // Advanced Filter panel can offer them as separate, correctly labeled,
-  // working filter fields instead of the synthetic combined column (ETP-4609).
-  { key: 'name', column: 'Name', type: 'string' },
-  { key: 'searchKey', column: 'Value', type: 'string' },
+  // NOTE: no split `name` / `searchKey` filter columns here. ETP-4609 needed them
+  // because the old identity cell was the synthetic `nameAndSearchKey` column,
+  // which had no backend field the Advanced Filter could target. The `multiField`
+  // above (ETP-4603) supersedes them: `expandMultiFieldColumns` turns each entry
+  // of `parts` into its own filterable pseudo-column, so re-adding them here
+  // duplicates every entry in the field picker (and in the grid header).
   { key: 'productCategory', column: 'M_Product_Category_ID', type: 'selector', label: 'Product Category', required: true },
   { key: 'uOM',             column: 'C_UOM_ID',              type: 'selector', label: 'UOM',              required: true },
   {
@@ -89,21 +88,20 @@ const columns = [
   },
 ];
 
+// Quick-search keys, matched against the row via `resolveIdentifier` — these are
+// row fields, not grid columns, so they need no column declaration above.
 const filters = ['searchKey', 'name', 'productCategory', 'productType'];
-
-// `name` / `searchKey` carry the Advanced Filter entries (see columns above)
-// but must not render as their own grid columns — they're already shown
-// together inside the nameAndSearchKey cell.
-const hiddenColumns = ['name', 'searchKey'];
 
 const ProductCustomTable = forwardRef(function ProductCustomTable(props, ref) {
   return (
     <DataTable
       ref={ref}
+      // `{...props}` FIRST, so this table's own column set always wins: ListView
+      // passes its generic table props (including `hiddenColumns`) down here, and
+      // spreading them last would silently override the definitions below.
+      {...props}
       columns={columns}
       filters={filters}
-      hiddenColumns={hiddenColumns}
-      {...props}
       data-testid="DataTable__f45e24" />
   );
 });
