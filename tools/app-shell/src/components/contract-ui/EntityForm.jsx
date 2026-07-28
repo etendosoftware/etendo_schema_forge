@@ -1371,7 +1371,30 @@ export function EntityForm({ entity, fields = [], data, onChange, catalogs, layo
           disabled={isReadOnly}
           id={f.key}
           data-testid={`field-${f.key}`}
-          onClick={() => !isReadOnly && onChange?.(f.key, !checked, f.column)}
+          onClick={() => {
+            if (isReadOnly) return;
+            onChange?.(f.key, !checked, f.column);
+            // Checkboxes have no native blur event to hang autosave off of
+            // (unlike text/selector fields, whose onBlur already drives
+            // autoSaveOnBlur — see DetailView's handleFieldBlur). Firing
+            // onFieldBlur right after onChange gives checkbox/toggle fields
+            // the same immediate-save + error-toast + revert-on-failure
+            // behavior. No-op when the window doesn't pass onFieldBlur
+            // (autoSaveOnBlur off). ETP-4670.
+            //
+            // MUST be deferred to a macrotask (setTimeout 0), not called
+            // synchronously: onChange schedules a React state update that
+            // hasn't committed yet when this handler runs, so DetailView's
+            // handleFieldBlurRef still holds the closure from the PREVIOUS
+            // render — hasUnsavedEdits(oldEditing, selected) sees no diff
+            // (the flip hasn't landed in `editing` yet) and handleSave()
+            // never fires. React flushes the re-render before a setTimeout(0)
+            // callback runs, so by then the ref has the fresh closure with
+            // the flipped value already in `editing`. A queueMicrotask does
+            // NOT work here — microtasks run before the browser yields to
+            // paint/commit, still ahead of the DOM-effect timing React needs.
+            setTimeout(() => onFieldBlur?.(f.key), 0);
+          }}
           className={[
             'peer h-4 w-4 shrink-0 rounded-sm border border-primary shadow',
             'flex items-center justify-center',
@@ -1414,7 +1437,16 @@ export function EntityForm({ entity, fields = [], data, onChange, catalogs, layo
         <PillToggle
           checked={checked}
           disabled={isReadOnly}
-          onCheckedChange={(next) => !isReadOnly && onChange?.(f.key, next, f.column)}
+          onCheckedChange={(next) => {
+            if (isReadOnly) return;
+            onChange?.(f.key, next, f.column);
+            // See renderCheckboxField above (ETP-4670): toggles have no blur
+            // event either, so fire onFieldBlur right after onChange — but
+            // deferred to setTimeout(0), not synchronously (same stale-ref
+            // race as the checkbox: onChange's state update hasn't committed
+            // when this handler runs).
+            setTimeout(() => onFieldBlur?.(f.key), 0);
+          }}
           id={f.key}
           data-testid={`field-${f.key}`} />
         <Label

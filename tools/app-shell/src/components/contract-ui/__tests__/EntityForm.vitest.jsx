@@ -139,6 +139,42 @@ describe('EntityForm', () => {
     expect(checkbox).toHaveAttribute('aria-checked', 'true');
   });
 
+  // ETP-4670: checkboxes (and toggles) have no native blur event, so the
+  // autoSaveOnBlur mechanism (DetailView's handleFieldBlur) would otherwise
+  // never fire for a lone checkbox click. onFieldBlur must be invoked right
+  // after onChange so the change autosaves immediately, matching the
+  // click-to-persist expectation windows like price-list already show.
+  it('fires onFieldBlur right after onChange when a checkbox is clicked', async () => {
+    const user = userEvent.setup();
+    const onChange = vi.fn();
+    const onFieldBlur = vi.fn();
+    const fields = [
+      { key: 'default', label: 'Default', type: 'checkbox', column: 'IsDefault' },
+    ];
+    render(
+      <EntityForm fields={fields} data={{ default: false }} onChange={onChange} onFieldBlur={onFieldBlur} />
+    );
+    await user.click(screen.getByTestId('field-default'));
+    expect(onChange).toHaveBeenCalledWith('default', true, 'IsDefault');
+    expect(onFieldBlur).toHaveBeenCalledWith('default');
+    expect(onChange.mock.invocationCallOrder[0]).toBeLessThan(onFieldBlur.mock.invocationCallOrder[0]);
+  });
+
+  it('does not call onFieldBlur for a checkbox click when the window has no autosave wired', async () => {
+    const user = userEvent.setup();
+    const onChange = vi.fn();
+    const fields = [
+      { key: 'active', label: 'Active', type: 'checkbox', column: 'Active' },
+    ];
+    render(
+      <EntityForm fields={fields} data={{ active: false }} onChange={onChange} />
+    );
+    await user.click(screen.getByTestId('field-active'));
+    expect(onChange).toHaveBeenCalledWith('active', true, 'Active');
+    // No assertion needed on onFieldBlur — it wasn't passed, this just proves
+    // the click doesn't throw when the prop is absent.
+  });
+
   it('renders required marker for required fields', () => {
     const fields = [
       { key: 'name', label: 'Name', type: 'text', column: 'Name', required: true },
