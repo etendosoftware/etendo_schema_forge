@@ -1,8 +1,8 @@
 {
-  "version": "0.31.0",
+  "version": "0.33.0",
   "generatedAt": "2026-06-29T12:25:17.116Z",
-  "updatedAt": "2026-07-16T14:28:23.756Z",
-  "contractChecksum": "20435ffcaf8823d0",
+  "updatedAt": "2026-07-21T12:35:20.949Z",
+  "contractChecksum": "9162cd8e06b5f1b3",
   "apiPrediction": {
     "specName": "physical-inventory",
     "baseUrl": "/sws/neo/physical-inventory",
@@ -49,14 +49,6 @@
         "reference": "Project",
         "inputMode": "search",
         "url": "/sws/neo/physical-inventory/inventory/selectors/project"
-      },
-      {
-        "entity": "inventory",
-        "field": "costCenter",
-        "column": "C_Costcenter_ID",
-        "reference": "Costcenter",
-        "inputMode": "selector",
-        "url": "/sws/neo/physical-inventory/inventory/selectors/costCenter"
       },
       {
         "entity": "inventoryLine",
@@ -276,9 +268,6 @@
           "project": {
             "readOnlyLogic": "@Posted@='Y'"
           },
-          "costCenter": {
-            "readOnlyLogic": "@Posted@='Y'"
-          },
           "processed": {
             "readOnly": true,
             "required": true
@@ -321,6 +310,10 @@
           },
           "cost": {
             "readOnlyLogic": "@Processed@='Y'"
+          },
+          "etgoQtydiff": {
+            "readOnly": true,
+            "defaultValue": "0"
           }
         }
       }
@@ -418,5 +411,5 @@
     "knownLimitations": [],
     "dangerousOperations": []
   },
-  "checksum": "a6da4d0e2bc5c10e"
+  "checksum": "780301f8e6433092"
 }

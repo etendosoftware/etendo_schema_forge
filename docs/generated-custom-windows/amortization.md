@@ -40,6 +40,7 @@ Records are typically created from the **Assets** window via the **Create Amorti
 ## Reactive behavior and dependencies
 
 - **Header field locking**: Name, Accounting Date, Starting Date, and Currency are classified `readOnly` in `decisions.json`, so they are locked in every state (not just once processed). Description stays editable in draft and locks when the document is processed. The header **Delete** button is hidden in all states via `window.hideDeleteButton`.
+- **Independent accounting date (ETP-4531)**: scope was explicitly confirmed to keep `accountingDate` fully read-only here — no change made. Verified against live AD metadata: `A_Amortization` has zero `AD_Column.AD_Callout_ID` entries on any column (no callouts wired at all), so no field edit — in Classic or in `com.etendoerp.go`'s callout cascade — can ever write into `accountingDate`. Combined with its `readOnly` visibility, this field is immutable by construction; nothing else in this window can recalculate it.
 - **Line lock**: all line fields carry `readOnlyLogic: @Processed@='Y'` and become read-only once the document is processed.
 - **Confirmar button**: wired via `draftMode.processField: "Processed"`. Only visible while draft; disabled when no lines; opens the confirm modal. The modal fetches the record and line count independently, calculates the total from line amounts (not from the stored header field), shows a warning, and submits `POST /action/Processed`. On success, the detail view refetches the header.
 - **Reactivar menu action**: appears in the three-dot menu only when `processed='Y'`, regardless of the accounting `posted` value. It uses `preUnpost: true`, so posted records first call `/action/unpost` and then `/action/Processed`; unposted records skip the unpost step and only call `/action/Processed`. After success, the page reloads. The independent **Descontabilizar** menu action is intentionally not exposed for amortizations.
@@ -352,3 +353,11 @@ keys through as explicit props).
 - The three-dot menu no longer exposes the independent **Descontabilizar** (`unpost`) action for amortization documents.
 - **Reactivar** is visible whenever the document is processed (`processed='Y'`), including records whose accounting status is posted (`posted='Y'`). For posted records, `preUnpost: true` makes the UI call the existing unpost endpoint before triggering the `Processed` action; for unposted records, only the `Processed` action runs. This matches the Etendo Go document lifecycle rule: reactivation is the single user action and accounting reversal is part of that flow.
 - Role-based access restrictions for **Reactivar** are deferred until the role permissions model exists.
+
+## Theme roles
+
+The window's live artifact custom components use the shared semantic theme.
+Structural surfaces and controls consume background, card, foreground, muted, and
+border roles; operational feedback uses success, warning, information, neutral,
+and destructive roles. No local palette is used, so the active application theme
+controls the appearance.

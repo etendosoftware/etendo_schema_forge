@@ -1,8 +1,8 @@
 {
-  "version": "0.59.0",
+  "version": "0.64.0",
   "generatedAt": "2026-04-30T15:42:46.582Z",
-  "updatedAt": "2026-07-18T23:21:20.130Z",
-  "checksum": "ddbad933fb2e8980",
+  "updatedAt": "2026-07-23T18:17:10.225Z",
+  "checksum": "18b27a7548841c85",
   "frontendContract": {
     "window": {
       "id": "167",
@@ -43,16 +43,8 @@
         "exchangeRates": {
           "label": "Exchange Rates",
           "tabOrder": 50,
-          "addLineFields": [
-            "toCurrency",
-            "rate",
-            "foreignAmount"
-          ],
           "requireSavedRecord": true,
-          "readOnlyLogic": "@DocumentStatus@!='DR'",
-          "addLineFieldExclusions": {
-            "toCurrency": "currency"
-          }
+          "readOnlyLogic": "@Posted@='Y' | @HASREVERSEDINVOICESO@='Y' | @HASREVERSEDINVOICEPO@='Y'"
         }
       },
       "salesTheme": true,
@@ -62,7 +54,8 @@
           "OutstandingAmt": "Pendiente de pago",
           "EM_Etgo_Due_Date": "Vencimiento",
           "em_etgo_delivery_status": "Estado de entrega",
-          "C_DocTypeTarget_ID": "Tipo de documento"
+          "C_DocTypeTarget_ID": "Tipo de documento",
+          "PriceList": "Precio"
         },
         "en_US": {
           "OutstandingAmt": "Pending Payment",
@@ -144,6 +137,10 @@
             "reference": "Org",
             "inputMode": "selector",
             "defaultValue": "@#AD_Org_ID@",
+            "validation": {
+              "required": true,
+              "maxLength": 22
+            },
             "validationRule": {
               "code": "AD_ORG_ID <> '0'",
               "contextParams": [],
@@ -183,6 +180,10 @@
             "section": "principal",
             "seq": 20,
             "gridOrder": 2,
+            "validation": {
+              "required": true,
+              "maxLength": 30
+            },
             "readOnlyLogic": {
               "raw": "@Processed@='Y'",
               "evaluable": true,
@@ -209,6 +210,10 @@
             "section": "principal",
             "seq": 30,
             "gridOrder": 1,
+            "validation": {
+              "required": true,
+              "maxLength": 10
+            },
             "callout": {
               "className": "com.etendoerp.sif.general.callouts.SifInvoiceOperationDateCallout"
             },
@@ -235,6 +240,10 @@
             "section": "principal",
             "seq": 10,
             "gridOrder": 3,
+            "validation": {
+              "required": true,
+              "maxLength": 60
+            },
             "callout": {
               "className": "org.openbravo.erpCommon.ad_callouts.SE_Invoice_BPartner"
             },
@@ -264,6 +273,10 @@
             },
             "section": "principal",
             "seq": 40,
+            "validation": {
+              "required": true,
+              "maxLength": 22
+            },
             "validationRule": {
               "code": "C_BPartner_Location.C_BPartner_ID=@C_BPartner_ID@ AND C_BPartner_Location.IsBillTo='Y' AND C_BPartner_Location.IsActive='Y'",
               "contextParams": [],
@@ -290,7 +303,10 @@
             "visibility": "editable",
             "required": false,
             "grid": false,
-            "form": false
+            "form": false,
+            "validation": {
+              "maxLength": 255
+            }
           },
           {
             "name": "paymentTerms",
@@ -308,6 +324,10 @@
             "inputMode": "selector",
             "section": "principal",
             "seq": 60,
+            "validation": {
+              "required": true,
+              "maxLength": 22
+            },
             "readOnlyLogic": {
               "raw": "@Processed@='Y'",
               "evaluable": true,
@@ -330,6 +350,10 @@
             "inputMode": "selector",
             "section": "principal",
             "seq": 50,
+            "validation": {
+              "required": true,
+              "maxLength": 32
+            },
             "validationRule": {
               "code": "EXISTS (SELECT 1 FROM FIN_FinAcc_PaymentMethod fapm WHERE FIN_PaymentMethod.FIN_PaymentMethod_ID=fapm.FIN_PaymentMethod_ID\nAND fapm.Payin_Allow = (SELECT CASE WHEN '@IsSOTrx@'='Y' THEN 'Y' ELSE fapm.Payin_Allow END FROM DUAL)\nAND fapm.Payout_Allow = (SELECT CASE WHEN '@IsSOTrx@'='N' THEN 'Y' ELSE fapm.Payout_Allow END FROM DUAL))",
               "contextParams": [],
@@ -435,7 +459,11 @@
               }
             ],
             "defaultValue": "DR",
-            "gridOrder": 4
+            "gridOrder": 4,
+            "validation": {
+              "required": true,
+              "maxLength": 60
+            }
           },
           {
             "name": "grandTotalAmount",
@@ -450,7 +478,11 @@
             "form": true,
             "sourceRequired": true,
             "section": "summary",
-            "gridOrder": 6
+            "gridOrder": 6,
+            "validation": {
+              "required": true,
+              "maxLength": 22
+            }
           },
           {
             "name": "summedLineAmount",
@@ -464,7 +496,11 @@
             "grid": false,
             "form": true,
             "sourceRequired": true,
-            "section": "summary"
+            "section": "summary",
+            "validation": {
+              "required": true,
+              "maxLength": 22
+            }
           },
           {
             "name": "currency",
@@ -486,6 +522,10 @@
             "inputMode": "selector",
             "defaultValue": "@C_Currency_ID@",
             "section": "principal",
+            "validation": {
+              "required": true,
+              "maxLength": 22
+            },
             "readOnlyLogic": {
               "raw": "@Processed@='Y'",
               "evaluable": true,
@@ -509,6 +549,10 @@
               "source": "N"
             },
             "defaultValue": "N",
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            },
             "displayLogic": {
               "raw": "@Processed@='Y'",
               "evaluable": true
@@ -533,6 +577,7 @@
             "defaultValue": "N",
             "explicitType": true,
             "badge": true,
+            "visibleWhenCapability": "showAccountingFields",
             "badgeLabels": {
               "true": {
                 "en_US": "Posted",
@@ -548,6 +593,10 @@
               "false": "orange"
             },
             "gridOrder": 5,
+            "validation": {
+              "required": true,
+              "maxLength": 60
+            },
             "displayLogic": {
               "raw": "@Processed@='Y' & @#ShowAcct@='Y'",
               "evaluable": false,
@@ -574,6 +623,10 @@
             "defaultValue": "0",
             "section": "summary",
             "gridOrder": 7,
+            "validation": {
+              "required": true,
+              "maxLength": 10
+            },
             "displayLogic": {
               "raw": "@Processed@='Y' & @Ispaid@='N'",
               "evaluable": true
@@ -594,6 +647,10 @@
             "reference": "PriceList",
             "inputMode": "selector",
             "section": "principal",
+            "validation": {
+              "required": true,
+              "maxLength": 22
+            },
             "validationRule": {
               "code": "M_PriceList.issopricelist = @isSOTrx@",
               "contextParams": [],
@@ -608,70 +665,6 @@
               "raw": "@Processed@='Y'",
               "evaluable": true,
               "js": "record['processed'] === true"
-            }
-          },
-          {
-            "name": "project",
-            "apiKey": "project",
-            "column": "C_Project_ID",
-            "label": "Project",
-            "type": "foreignKey",
-            "tsType": "string",
-            "visibility": "editable",
-            "required": false,
-            "grid": false,
-            "form": true,
-            "reference": "Project",
-            "inputMode": "search",
-            "section": "principal",
-            "validationRule": {
-              "code": "C_Project.projectstatus in ('OP', 'OR') and (C_Project.c_bpartner_id=@C_BPartner_ID@ or '@IsSOTrx@'='N') or C_Project.c_project_id = @c_project_id@",
-              "contextParams": [],
-              "cascadeParams": [
-                "C_BPartner_ID",
-                "IsSOTrx",
-                "c_project_id"
-              ]
-            },
-            "callout": {
-              "className": "org.openbravo.erpCommon.ad_callouts.SE_Invoice_Project"
-            },
-            "displayLogic": {
-              "raw": "@ACCT_DIMENSION_DISPLAY@",
-              "evaluable": false,
-              "reason": "server-macro",
-              "js": null
-            },
-            "readOnlyLogic": {
-              "raw": "@Posted@='Y'",
-              "evaluable": true,
-              "js": "record['posted'] === true"
-            }
-          },
-          {
-            "name": "costcenter",
-            "apiKey": "costcenter",
-            "column": "C_Costcenter_ID",
-            "label": "Cost Center",
-            "type": "foreignKey",
-            "tsType": "string",
-            "visibility": "editable",
-            "required": false,
-            "grid": false,
-            "form": true,
-            "reference": "Costcenter",
-            "inputMode": "selector",
-            "section": "principal",
-            "displayLogic": {
-              "raw": "@ACCT_DIMENSION_DISPLAY@",
-              "evaluable": false,
-              "reason": "server-macro",
-              "js": null
-            },
-            "readOnlyLogic": {
-              "raw": "@Posted@='Y'",
-              "evaluable": true,
-              "js": "record['posted'] === true"
             }
           },
           {
@@ -690,6 +683,9 @@
               "source": "context.dateInvoiced"
             },
             "defaultValue": "@DateInvoiced@",
+            "validation": {
+              "maxLength": 19
+            },
             "displayLogic": {
               "raw": "@etvfac_has_configuration@='Y' | @TBAI_ExistTBAIConfig@=1 | @AEATSII_AcogidaSII@='Y'",
               "evaluable": true
@@ -733,6 +729,9 @@
                 "name": "Rechazada"
               }
             ],
+            "validation": {
+              "maxLength": 60
+            },
             "displayLogic": {
               "raw": "@etvfac_has_configuration@='Y'",
               "evaluable": true
@@ -793,6 +792,9 @@
               }
             ],
             "defaultValue": "F1",
+            "validation": {
+              "maxLength": 60
+            },
             "displayLogic": {
               "raw": "@etvfac_has_configuration@='Y'",
               "evaluable": true
@@ -814,6 +816,9 @@
             "required": false,
             "grid": false,
             "form": false,
+            "validation": {
+              "maxLength": 500
+            },
             "displayLogic": {
               "raw": "@etvfac_has_configuration@='Y'",
               "evaluable": true
@@ -845,6 +850,9 @@
                 "name": "Por Sustitución"
               }
             ],
+            "validation": {
+              "maxLength": 60
+            },
             "displayLogic": {
               "raw": "@etvfac_has_configuration@='Y' & @EM_Etvfac_Inv_Type@='R1' | @EM_Etvfac_Inv_Type@='R2' | @EM_Etvfac_Inv_Type@='R3' | @EM_Etvfac_Inv_Type@='R4' | @EM_Etvfac_Inv_Type@='R5'",
               "evaluable": true
@@ -872,6 +880,10 @@
               "source": "N"
             },
             "defaultValue": "N",
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            },
             "displayLogic": {
               "raw": "@etvfac_has_configuration@='Y' & @EM_Etvfac_Inv_Type@!'R5' & @EM_Etvfac_Inv_Type@!'F2' ",
               "evaluable": true
@@ -899,6 +911,10 @@
               "source": "N"
             },
             "defaultValue": "N",
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            },
             "displayLogic": {
               "raw": "@etvfac_has_configuration@='Y' & (@EM_Etvfac_Inv_Type@='R5' | @EM_Etvfac_Inv_Type@='F2')",
               "evaluable": true
@@ -926,6 +942,10 @@
               "source": "N"
             },
             "defaultValue": "N",
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            },
             "displayLogic": {
               "raw": "@AEATSII_AcogidaSII@='Y'",
               "evaluable": true
@@ -982,6 +1002,9 @@
               }
             ],
             "defaultValue": "@SQL=SELECT CASE WHEN ((SELECT c.insiisystem FROM aeatsii_config c WHERE c.ad_org_id = (SELECT ad_get_org_le_bu(@AD_Org_ID@,'LE') FROM dual))='Y') THEN 'F1' ELSE null END FROM dual",
+            "validation": {
+              "maxLength": 60
+            },
             "displayLogic": {
               "raw": "@AEATSII_AcogidaSII@='Y'",
               "evaluable": true
@@ -1010,6 +1033,9 @@
             "reference": "aeatsii_description",
             "inputMode": "selector",
             "defaultValue": "@SQL=\n\tSELECT\n\t\tCASE\n\t\t\tWHEN\n\t\t\t\t(\n\t\t\t\t\t(\n\t\t\t\t\t\tSELECT c.insiisystem\n\t\t\t\t\t\tFROM aeatsii_config c\n\t\t\t\t\t\tWHERE c.ad_org_id = (\n\t\t\t\t\t\t\tSELECT ad_get_org_le_bu(@AD_Org_ID@,'LE')\n\t\t\t\t\t\t\tFROM dual\n\t\t\t\t\t\t)\n\t\t\t\t\t)='Y'\n\t\t\t\t)\n\t\t\tTHEN\n\t\t\t\t(\n\t\t\t\t\tSELECT\n\t\t\t\t\t\t(\n\t\t\t\t\t\t\tCASE\n\t\t\t\t\t\t\t\tWHEN ('Y' = 'Y')\n\t\t\t\t\t\t\t\tTHEN (\n\t\t\t\t\t\t\t\t\tSELECT aeatsii_description_id\n\t\t\t\t\t\t\t\t\tFROM aeatsii_description\n\t\t\t\t\t\t\t\t\tWHERE isdefault = 'Y'\n\t\t\t\t\t\t\t\t\tAND issales = 'Y'\n\t\t\t\t\t\t\t\t\tAND ad_org_id = @AD_Org_ID@\n\t\t\t\t\t\t\t\t\tAND ad_client_id = @ad_client_id@\n\t\t\t\t\t\t\t\t) ELSE (null)\n\t\t\t\t\t\t\tEND\n\t\t\t\t\t\t)\n\t\t\t\t\tFROM dual\n\t\t\t\t)\n\t\t\tELSE null\n\t\tEND\n\tFROM dual",
+            "validation": {
+              "maxLength": 32
+            },
             "callout": {
               "className": "org.openbravo.module.sii.callouts.SiiDescriptionCallout"
             },
@@ -1039,6 +1065,9 @@
               "source": "\n\tSELECT\n\t\tCASE\n\t\t\tWHEN\n\t\t\t\t(\n\t\t\t\t\t(\n\t\t\t\t\t\tSELECT c.insiisystem\n\t\t\t\t\t\tFROM aeatsii_config c\n\t\t\t\t\t\tWHERE c.ad_org_id = (\n\t\t\t\t\t\t\tSELECT ad_get_org_le_bu(@AD_Org_ID@,'LE')\n\t\t\t\t\t\t\tFROM dual\n\t\t\t\t\t\t)\n\t\t\t\t\t)='Y'\n\t\t\t\t)\n\t\t\tTHEN\n\t\t\t\t(\n\t\t\t\t\tSELECT\n\t\t\t\t\t\t(\n\t\t\t\t\t\t\tCASE\n\t\t\t\t\t\t\t\tWHEN(@issotrx@ = 'Y')\n\t\t\t\t\t\t\t\tTHEN (\n\t\t\t\t\t\t\t\t\tSELECT description\n\t\t\t\t\t\t\t\t\tFROM aeatsii_description\n\t\t\t\t\t\t\t\t\tWHERE isdefault = 'Y'\n\t\t\t\t\t\t\t\t\tAND issales = 'Y'\n\t\t\t\t\t\t\t\t\tAND ad_org_id = @AD_Org_ID@\n\t\t\t\t\t\t\t\t\tAND ad_client_id = @ad_client_id@\n\t\t\t\t\t\t\t\t) ELSE (\n\t\t\t\t\t\t\t\t\tSELECT description\n\t\t\t\t\t\t\t\t\tFROM aeatsii_description\n\t\t\t\t\t\t\t\t\tWHERE isdefault = 'Y'\n\t\t\t\t\t\t\t\t\tAND ispurchase = 'Y'\n\t\t\t\t\t\t\t\t\tAND ad_org_id = @AD_Org_ID@\n\t\t\t\t\t\t\t\t\tAND ad_client_id = @ad_client_id@\n\t\t\t\t\t\t\t\t)\n\t\t\t\t\t\t\tEND\n\t\t\t\t\t\t)\n\t\t\t\t\tFROM dual\n\t\t\t\t)\n\t\t\tELSE null\n\t\tEND\n\tFROM dual"
             },
             "defaultValue": "@SQL=\n\tSELECT\n\t\tCASE\n\t\t\tWHEN\n\t\t\t\t(\n\t\t\t\t\t(\n\t\t\t\t\t\tSELECT c.insiisystem\n\t\t\t\t\t\tFROM aeatsii_config c\n\t\t\t\t\t\tWHERE c.ad_org_id = (\n\t\t\t\t\t\t\tSELECT ad_get_org_le_bu(@AD_Org_ID@,'LE')\n\t\t\t\t\t\t\tFROM dual\n\t\t\t\t\t\t)\n\t\t\t\t\t)='Y'\n\t\t\t\t)\n\t\t\tTHEN\n\t\t\t\t(\n\t\t\t\t\tSELECT\n\t\t\t\t\t\t(\n\t\t\t\t\t\t\tCASE\n\t\t\t\t\t\t\t\tWHEN(@issotrx@ = 'Y')\n\t\t\t\t\t\t\t\tTHEN (\n\t\t\t\t\t\t\t\t\tSELECT description\n\t\t\t\t\t\t\t\t\tFROM aeatsii_description\n\t\t\t\t\t\t\t\t\tWHERE isdefault = 'Y'\n\t\t\t\t\t\t\t\t\tAND issales = 'Y'\n\t\t\t\t\t\t\t\t\tAND ad_org_id = @AD_Org_ID@\n\t\t\t\t\t\t\t\t\tAND ad_client_id = @ad_client_id@\n\t\t\t\t\t\t\t\t) ELSE (\n\t\t\t\t\t\t\t\t\tSELECT description\n\t\t\t\t\t\t\t\t\tFROM aeatsii_description\n\t\t\t\t\t\t\t\t\tWHERE isdefault = 'Y'\n\t\t\t\t\t\t\t\t\tAND ispurchase = 'Y'\n\t\t\t\t\t\t\t\t\tAND ad_org_id = @AD_Org_ID@\n\t\t\t\t\t\t\t\t\tAND ad_client_id = @ad_client_id@\n\t\t\t\t\t\t\t\t)\n\t\t\t\t\t\t\tEND\n\t\t\t\t\t\t)\n\t\t\t\t\tFROM dual\n\t\t\t\t)\n\t\t\tELSE null\n\t\tEND\n\tFROM dual",
+            "validation": {
+              "maxLength": 500
+            },
             "displayLogic": {
               "raw": "@AEATSII_AcogidaSII@='Y'",
               "evaluable": true
@@ -1123,6 +1152,9 @@
               }
             ],
             "defaultValue": "@SQL=SELECT CASE WHEN ((SELECT c.insiisystem FROM aeatsii_config c WHERE c.ad_org_id = (SELECT ad_get_org_le_bu(@AD_Org_ID@,'LE') FROM dual))='Y') THEN 'PE' ELSE null END FROM dual",
+            "validation": {
+              "maxLength": 60
+            },
             "displayLogic": {
               "raw": "@AEATSII_AcogidaSII@='Y'",
               "evaluable": true
@@ -1144,6 +1176,9 @@
             "required": false,
             "grid": false,
             "form": false,
+            "validation": {
+              "maxLength": 4
+            },
             "displayLogic": {
               "raw": "@AEATSII_AcogidaSII@='Y'",
               "evaluable": true
@@ -1165,6 +1200,9 @@
             "required": false,
             "grid": false,
             "form": false,
+            "validation": {
+              "maxLength": 2
+            },
             "displayLogic": {
               "raw": "@AEATSII_AcogidaSII@='Y'",
               "evaluable": true
@@ -1188,6 +1226,9 @@
             "form": false,
             "reference": "aeatsii_cause_exemption",
             "inputMode": "selector",
+            "validation": {
+              "maxLength": 32
+            },
             "displayLogic": {
               "raw": "@AEATSII_AcogidaSII@='Y'",
               "evaluable": true
@@ -1210,6 +1251,10 @@
               "source": "N"
             },
             "defaultValue": "N",
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            },
             "callout": {
               "className": "org.openbravo.module.sii.callouts.SiiAuthorizationCallout"
             },
@@ -1233,6 +1278,10 @@
             "derivation": {
               "type": "computed",
               "source": "false"
+            },
+            "validation": {
+              "required": true,
+              "maxLength": 1
             }
           },
           {
@@ -1245,7 +1294,10 @@
             "visibility": "editable",
             "required": false,
             "grid": false,
-            "form": false
+            "form": false,
+            "validation": {
+              "maxLength": 22
+            }
           },
           {
             "name": "eTGODueDate",
@@ -1258,7 +1310,10 @@
             "required": false,
             "grid": true,
             "form": false,
-            "gridOrder": 8
+            "gridOrder": 8,
+            "validation": {
+              "maxLength": 0
+            }
           },
           {
             "name": "eTGODeliveryStatus",
@@ -1271,7 +1326,10 @@
             "required": false,
             "grid": true,
             "form": false,
-            "gridOrder": 9
+            "gridOrder": 9,
+            "validation": {
+              "maxLength": 4
+            }
           },
           {
             "name": "transactionDocument",
@@ -1293,6 +1351,10 @@
             "inputMode": "selector",
             "section": "principal",
             "seq": 15,
+            "validation": {
+              "required": true,
+              "maxLength": 22
+            },
             "validationRule": {
               "code": "C_DocType.DocBaseType IN ('ARI', 'API','ARC','APC','ARI_RM') AND C_DocType.IsSOTrx='@IsSOTrx@' AND (AD_ISORGINCLUDED(@AD_Org_ID@,C_DocType.AD_Org_ID, @#AD_Client_ID@) <> '-1' OR COALESCE(@AD_Org_ID@,'-1')='-1')",
               "contextParams": [
@@ -1322,7 +1384,10 @@
             "visibility": "editable",
             "required": false,
             "grid": false,
-            "form": false
+            "form": false,
+            "validation": {
+              "maxLength": 22
+            }
           }
         ],
         "searchableFields": [
@@ -1511,6 +1576,9 @@
             ],
             "section": "principal",
             "gridOrder": 1,
+            "validation": {
+              "maxLength": 60
+            },
             "callout": {
               "className": "org.openbravo.erpCommon.ad_callouts.SL_Invoice_Product"
             },
@@ -1532,7 +1600,10 @@
             "grid": true,
             "form": true,
             "section": "principal",
-            "gridOrder": 2
+            "gridOrder": 2,
+            "validation": {
+              "maxLength": 2000
+            }
           },
           {
             "name": "invoicedQuantity",
@@ -1553,7 +1624,10 @@
             "defaultValue": "1",
             "section": "principal",
             "gridOrder": 3,
-            "min": 0,
+            "validation": {
+              "required": true,
+              "maxLength": 10
+            },
             "callout": {
               "className": "org.openbravo.erpCommon.ad_callouts.SL_Invoice_Amt"
             },
@@ -1578,7 +1652,10 @@
             "columnType": "amount",
             "section": "principal",
             "gridOrder": 4,
-            "min": 0,
+            "validation": {
+              "required": true,
+              "maxLength": 22
+            },
             "displayLogic": {
               "raw": "@GROSSPRICE@='N'",
               "evaluable": true
@@ -1605,6 +1682,11 @@
             "gridOrder": 5,
             "min": 0,
             "max": 100,
+            "validation": {
+              "maxLength": 22,
+              "minimum": 0,
+              "maximum": 100
+            },
             "readOnlyLogic": {
               "raw": "@Processed@='Y'",
               "evaluable": true,
@@ -1629,6 +1711,9 @@
             ],
             "section": "principal",
             "gridOrder": 6,
+            "validation": {
+              "maxLength": 22
+            },
             "validationRule": {
               "code": "C_TAX.VALIDFROM<=COALESCE(@DateInvoiced@,@DateOrdered@) AND (C_TAX.SOPOTYPE =(CASE WHEN @IsSOTrx@ = 'Y' THEN 'S' ELSE 'P' END) OR C_TAX.SOPOTYPE = 'B') AND C_TAX.AD_CLIENT_ID IN (@AD_CLIENT_ID@, '0') AND C_TAX.C_TAX_ID=(CASE WHEN @IsSOTrx@ = 'Y' AND EXISTS(SELECT 1 FROM AD_ORGINFO WHERE ISTAXUNDEDUCTABLE='Y' AND AD_ORG_ID=@AD_ORG_ID@) THEN (SELECT C_TAX_ID FROM AD_ORGINFO WHERE ISTAXUNDEDUCTABLE='Y' AND AD_ORG_ID=@AD_ORG_ID@) ELSE C_TAX.C_TAX_ID END)",
               "contextParams": [],
@@ -1661,6 +1746,10 @@
             "grid": false,
             "form": false,
             "sourceRequired": true,
+            "validation": {
+              "required": true,
+              "maxLength": 22
+            },
             "callout": {
               "className": "org.openbravo.erpCommon.ad_callouts.SL_Invoice_Amt"
             },
@@ -1686,6 +1775,9 @@
               "source": "0"
             },
             "defaultValue": "0",
+            "validation": {
+              "maxLength": 12
+            },
             "callout": {
               "className": "org.openbravo.erpCommon.ad_callouts.SL_Invoice_Amt"
             },
@@ -1716,58 +1808,9 @@
             },
             "defaultValue": "0",
             "section": "principal",
-            "gridOrder": 7
-          },
-          {
-            "name": "project",
-            "apiKey": "project",
-            "column": "C_Project_ID",
-            "label": "Project",
-            "type": "foreignKey",
-            "tsType": "string",
-            "visibility": "editable",
-            "required": false,
-            "grid": false,
-            "form": true,
-            "reference": "Project",
-            "inputMode": "search",
-            "dimensionsPanel": true,
-            "displayLogic": {
-              "raw": "@ACCT_DIMENSION_DISPLAY@",
-              "evaluable": false,
-              "reason": "server-macro",
-              "js": null
-            },
-            "readOnlyLogic": {
-              "raw": "@Posted@='Y'",
-              "evaluable": true,
-              "js": "record['posted'] === true"
-            }
-          },
-          {
-            "name": "costcenter",
-            "apiKey": "costcenter",
-            "column": "C_Costcenter_ID",
-            "label": "Cost Center",
-            "type": "foreignKey",
-            "tsType": "string",
-            "visibility": "editable",
-            "required": false,
-            "grid": false,
-            "form": true,
-            "reference": "Costcenter",
-            "inputMode": "selector",
-            "dimensionsPanel": true,
-            "displayLogic": {
-              "raw": "@ACCT_DIMENSION_DISPLAY@",
-              "evaluable": false,
-              "reason": "server-macro",
-              "js": null
-            },
-            "readOnlyLogic": {
-              "raw": "@Posted@='Y'",
-              "evaluable": true,
-              "js": "record['posted'] === true"
+            "gridOrder": 7,
+            "validation": {
+              "maxLength": 12
             }
           }
         ],
@@ -1816,7 +1859,11 @@
             "required": true,
             "grid": false,
             "form": true,
-            "sourceRequired": true
+            "sourceRequired": true,
+            "validation": {
+              "required": true,
+              "maxLength": 19
+            }
           },
           {
             "name": "expectedDate",
@@ -1829,7 +1876,11 @@
             "required": true,
             "grid": false,
             "form": true,
-            "sourceRequired": true
+            "sourceRequired": true,
+            "validation": {
+              "required": true,
+              "maxLength": 19
+            }
           },
           {
             "name": "finPaymentmethodID",
@@ -1844,7 +1895,11 @@
             "form": true,
             "sourceRequired": true,
             "reference": "Paymentmethod",
-            "inputMode": "selector"
+            "inputMode": "selector",
+            "validation": {
+              "required": true,
+              "maxLength": 32
+            }
           },
           {
             "name": "amount",
@@ -1862,7 +1917,11 @@
               "type": "computed",
               "source": "0"
             },
-            "defaultValue": "0"
+            "defaultValue": "0",
+            "validation": {
+              "required": true,
+              "maxLength": 22
+            }
           },
           {
             "name": "paidAmount",
@@ -1880,7 +1939,11 @@
               "type": "computed",
               "source": "0"
             },
-            "defaultValue": "0"
+            "defaultValue": "0",
+            "validation": {
+              "required": true,
+              "maxLength": 22
+            }
           },
           {
             "name": "outstandingAmount",
@@ -1898,7 +1961,11 @@
               "type": "computed",
               "source": "0"
             },
-            "defaultValue": "0"
+            "defaultValue": "0",
+            "validation": {
+              "required": true,
+              "maxLength": 22
+            }
           },
           {
             "name": "currency",
@@ -1913,7 +1980,11 @@
             "form": true,
             "sourceRequired": true,
             "reference": "Currency",
-            "inputMode": "selector"
+            "inputMode": "selector",
+            "validation": {
+              "required": true,
+              "maxLength": 32
+            }
           },
           {
             "name": "lastPaymentDate",
@@ -1925,7 +1996,10 @@
             "visibility": "readOnly",
             "required": false,
             "grid": false,
-            "form": true
+            "form": true,
+            "validation": {
+              "maxLength": 10
+            }
           },
           {
             "name": "daysOverdue",
@@ -1937,7 +2011,10 @@
             "visibility": "readOnly",
             "required": false,
             "grid": false,
-            "form": true
+            "form": true,
+            "validation": {
+              "maxLength": 10
+            }
           },
           {
             "name": "numberOfPayments",
@@ -1949,7 +2026,10 @@
             "visibility": "readOnly",
             "required": false,
             "grid": false,
-            "form": true
+            "form": true,
+            "validation": {
+              "maxLength": 10
+            }
           },
           {
             "name": "description",
@@ -1961,7 +2041,10 @@
             "visibility": "editable",
             "required": false,
             "grid": false,
-            "form": true
+            "form": true,
+            "validation": {
+              "maxLength": 255
+            }
           },
           {
             "name": "totalDebtAmount",
@@ -1978,7 +2061,10 @@
               "type": "computed",
               "source": "0"
             },
-            "defaultValue": "0"
+            "defaultValue": "0",
+            "validation": {
+              "maxLength": 32
+            }
           }
         ],
         "searchableFields": [],
@@ -2035,6 +2121,10 @@
             "inputMode": "search",
             "lookup": true,
             "gridOrder": 1,
+            "validation": {
+              "required": true,
+              "maxLength": 32
+            },
             "callout": {
               "className": "com.etendoerp.verifactu.ad_callouts.PaymentWarning"
             },
@@ -2056,6 +2146,9 @@
             "grid": true,
             "form": true,
             "gridOrder": 5,
+            "validation": {
+              "maxLength": 1
+            },
             "readOnlyLogic": {
               "raw": "@Processed@='Y' & @DocStatus@!='VO'",
               "evaluable": true,
@@ -2076,6 +2169,9 @@
             "reference": "Year",
             "inputMode": "search",
             "gridOrder": 10,
+            "validation": {
+              "maxLength": 32
+            },
             "displayLogic": {
               "raw": "@aEAT349IsCorrective@='Y'",
               "evaluable": true
@@ -2168,6 +2264,9 @@
               }
             ],
             "gridOrder": 20,
+            "validation": {
+              "maxLength": 60
+            },
             "displayLogic": {
               "raw": "@aEAT349IsCorrective@='Y'",
               "evaluable": true
@@ -2190,6 +2289,9 @@
             "grid": true,
             "form": true,
             "gridOrder": 30,
+            "validation": {
+              "maxLength": 22
+            },
             "displayLogic": {
               "raw": "@aEAT349IsCorrective@='Y'",
               "evaluable": true
@@ -2212,6 +2314,9 @@
             "grid": true,
             "form": true,
             "gridOrder": 40,
+            "validation": {
+              "maxLength": 22
+            },
             "displayLogic": {
               "raw": "@aEAT349IsCorrective@='Y'",
               "evaluable": true
@@ -2246,6 +2351,11 @@
             "sourceRequired": true,
             "reference": "Currency",
             "inputMode": "selector",
+            "gridReadOnly": true,
+            "validation": {
+              "required": true,
+              "maxLength": 32
+            },
             "validationRule": {
               "code": "C_Currency.C_Currency_id = \nCASE WHEN @C_Invoice_ID@ is not null THEN (SELECT C_Currency_ID FROM C_Invoice WHERE C_Invoice_ID = COALESCE(@C_Invoice_ID@,'---'))\nWHEN @APRM_Finacc_Transaction_V_ID@ is not null THEN (SELECT c_currency_id FROM aprm_finacc_transaction_v WHERE aprm_finacc_transaction_v_id = COALESCE(@APRM_Finacc_Transaction_V_ID@, '---')) \nWHEN @FIN_Finacc_Transaction_ID@ is not null THEN (SELECT c_currency_id FROM fin_finacc_transaction WHERE fin_finacc_transaction_id = COALESCE(@FIN_Finacc_Transaction_ID@, '---'))\nWHEN @GL_Journal_ID@ is not null THEN (SELECT c_currency_id FROM gl_journal WHERE gl_journal_id = COALESCE(@GL_Journal_ID@, '---'))\nELSE (SELECT C_Currency_ID FROM FIN_Payment WHERE FIN_Payment_ID = COALESCE(@FIN_Payment_ID@, '---')) END",
               "contextParams": [],
@@ -2270,13 +2380,18 @@
             "label": "To Currency",
             "type": "foreignKey",
             "tsType": "string",
-            "visibility": "editable",
+            "visibility": "readOnly",
             "required": true,
             "grid": true,
             "form": true,
             "sourceRequired": true,
             "reference": "Currency",
             "inputMode": "search",
+            "gridReadOnly": true,
+            "validation": {
+              "required": true,
+              "maxLength": 32
+            },
             "validationRule": {
               "code": "C_Currency.C_Currency_id in (SELECT C_Currency_ID FROM C_Acctschema)",
               "contextParams": [],
@@ -2299,6 +2414,9 @@
             "required": false,
             "grid": true,
             "form": true,
+            "validation": {
+              "maxLength": 10
+            },
             "callout": {
               "className": "org.openbravo.erpCommon.ad_callouts.SE_CalculateExchangeRate"
             },
@@ -2325,6 +2443,10 @@
               "source": "0"
             },
             "defaultValue": "0",
+            "validation": {
+              "required": true,
+              "maxLength": 15
+            },
             "callout": {
               "className": "org.openbravo.erpCommon.ad_callouts.SE_CalculateExchangeRate"
             },
@@ -2389,16 +2511,8 @@
         "exchangeRates": {
           "label": "Exchange Rates",
           "tabOrder": 50,
-          "addLineFields": [
-            "toCurrency",
-            "rate",
-            "foreignAmount"
-          ],
           "requireSavedRecord": true,
-          "readOnlyLogic": "@DocumentStatus@!='DR'",
-          "addLineFieldExclusions": {
-            "toCurrency": "currency"
-          }
+          "readOnlyLogic": "@Posted@='Y' | @HASREVERSEDINVOICESO@='Y' | @HASREVERSEDINVOICEPO@='Y'"
         }
       },
       "salesTheme": true,
@@ -2408,7 +2522,8 @@
           "OutstandingAmt": "Pendiente de pago",
           "EM_Etgo_Due_Date": "Vencimiento",
           "em_etgo_delivery_status": "Estado de entrega",
-          "C_DocTypeTarget_ID": "Tipo de documento"
+          "C_DocTypeTarget_ID": "Tipo de documento",
+          "PriceList": "Precio"
         },
         "en_US": {
           "OutstandingAmt": "Pending Payment",
@@ -2826,7 +2941,7 @@
             "apiKey": "project",
             "column": "C_Project_ID",
             "type": "foreignKey",
-            "visibility": "editable",
+            "visibility": "discarded",
             "required": false
           },
           {
@@ -2834,7 +2949,7 @@
             "apiKey": "costcenter",
             "column": "C_Costcenter_ID",
             "type": "foreignKey",
-            "visibility": "editable",
+            "visibility": "discarded",
             "required": false
           },
           {
@@ -3795,7 +3910,8 @@
             "column": "M_Product_ID",
             "type": "foreignKey",
             "visibility": "editable",
-            "required": false
+            "required": false,
+            "order": 1
           },
           {
             "name": "description",
@@ -3803,7 +3919,8 @@
             "column": "Description",
             "type": "text",
             "visibility": "editable",
-            "required": false
+            "required": false,
+            "order": 2
           },
           {
             "name": "invoicedQuantity",
@@ -3811,7 +3928,8 @@
             "column": "QtyInvoiced",
             "type": "quantity",
             "visibility": "editable",
-            "required": true
+            "required": true,
+            "order": 3
           },
           {
             "name": "listPrice",
@@ -3819,7 +3937,8 @@
             "column": "PriceList",
             "type": "price",
             "visibility": "editable",
-            "required": true
+            "required": true,
+            "order": 4
           },
           {
             "name": "etgoDiscount",
@@ -3827,7 +3946,8 @@
             "column": "EM_Etgo_Discount",
             "type": "decimal",
             "visibility": "editable",
-            "required": false
+            "required": false,
+            "order": 5
           },
           {
             "name": "tax",
@@ -3835,7 +3955,8 @@
             "column": "C_Tax_ID",
             "type": "foreignKey",
             "visibility": "editable",
-            "required": false
+            "required": false,
+            "order": 6
           },
           {
             "name": "lineNo",
@@ -4042,7 +4163,7 @@
             "apiKey": "project",
             "column": "C_Project_ID",
             "type": "foreignKey",
-            "visibility": "editable",
+            "visibility": "discarded",
             "required": false
           },
           {
@@ -4050,7 +4171,7 @@
             "apiKey": "costcenter",
             "column": "C_Costcenter_ID",
             "type": "foreignKey",
-            "visibility": "editable",
+            "visibility": "discarded",
             "required": false
           },
           {
@@ -4648,7 +4769,7 @@
             "apiKey": "toCurrency",
             "column": "C_Currency_Id_To",
             "type": "foreignKey",
-            "visibility": "editable",
+            "visibility": "readOnly",
             "required": true
           },
           {
@@ -5073,35 +5194,6 @@
       },
       {
         "entity": "header",
-        "field": "project",
-        "column": "C_Project_ID",
-        "reference": "Project",
-        "inputMode": "search",
-        "url": "/sws/neo/sales-invoice/header/selectors/project",
-        "context": {
-          "required": [
-            {
-              "param": "IsSOTrx",
-              "source": "windowCategory"
-            },
-            {
-              "param": "C_BPartner_ID",
-              "source": "field",
-              "field": "businessPartner"
-            }
-          ]
-        }
-      },
-      {
-        "entity": "header",
-        "field": "costcenter",
-        "column": "C_Costcenter_ID",
-        "reference": "Costcenter",
-        "inputMode": "selector",
-        "url": "/sws/neo/sales-invoice/header/selectors/costcenter"
-      },
-      {
-        "entity": "header",
         "field": "aeatsiiDescription",
         "column": "EM_Aeatsii_Description_ID",
         "reference": "aeatsii_description",
@@ -5166,22 +5258,6 @@
             }
           ]
         }
-      },
-      {
-        "entity": "lines",
-        "field": "project",
-        "column": "C_Project_ID",
-        "reference": "Project",
-        "inputMode": "search",
-        "url": "/sws/neo/sales-invoice/lines/selectors/project"
-      },
-      {
-        "entity": "lines",
-        "field": "costcenter",
-        "column": "C_Costcenter_ID",
-        "reference": "Costcenter",
-        "inputMode": "selector",
-        "url": "/sws/neo/sales-invoice/lines/selectors/costcenter"
       },
       {
         "entity": "paymentPlan",
@@ -5461,7 +5537,8 @@
         "OutstandingAmt": "Pendiente de pago",
         "EM_Etgo_Due_Date": "Vencimiento",
         "em_etgo_delivery_status": "Estado de entrega",
-        "C_DocTypeTarget_ID": "Tipo de documento"
+        "C_DocTypeTarget_ID": "Tipo de documento",
+        "PriceList": "Precio"
       },
       "en_US": {
         "OutstandingAmt": "Pending Payment",
@@ -6005,14 +6082,6 @@
         "description": "Display logic for 'aeatsiiPeriodo' in header should have evaluable flag"
       },
       {
-        "id": "t-displaylogic-evaluable-header-costcenter",
-        "category": "displaylogic-evaluable",
-        "entity": "header",
-        "field": "costcenter",
-        "runner": "node",
-        "description": "Display logic for 'costcenter' in header should have evaluable flag"
-      },
-      {
         "id": "t-displaylogic-evaluable-header-etsgDateOperation",
         "category": "displaylogic-evaluable",
         "entity": "header",
@@ -6093,22 +6162,6 @@
         "description": "Display logic for 'posted' in header should have evaluable flag"
       },
       {
-        "id": "t-displaylogic-evaluable-header-project",
-        "category": "displaylogic-evaluable",
-        "entity": "header",
-        "field": "project",
-        "runner": "node",
-        "description": "Display logic for 'project' in header should have evaluable flag"
-      },
-      {
-        "id": "t-displaylogic-evaluable-lines-costcenter",
-        "category": "displaylogic-evaluable",
-        "entity": "lines",
-        "field": "costcenter",
-        "runner": "node",
-        "description": "Display logic for 'costcenter' in lines should have evaluable flag"
-      },
-      {
         "id": "t-displaylogic-evaluable-lines-grossUnitPrice",
         "category": "displaylogic-evaluable",
         "entity": "lines",
@@ -6123,14 +6176,6 @@
         "field": "listPrice",
         "runner": "node",
         "description": "Display logic for 'listPrice' in lines should have evaluable flag"
-      },
-      {
-        "id": "t-displaylogic-evaluable-lines-project",
-        "category": "displaylogic-evaluable",
-        "entity": "lines",
-        "field": "project",
-        "runner": "node",
-        "description": "Display logic for 'project' in lines should have evaluable flag"
       },
       {
         "id": "t-displaylogic-evaluable-reversedInvoices-aEAT349BPBaseAmount",
@@ -6245,14 +6290,6 @@
         "description": "Display logic for 'aeatsiiPeriodo' in header should be valid JS"
       },
       {
-        "id": "t-displaylogic-valid-header-costcenter",
-        "category": "displaylogic-valid",
-        "entity": "header",
-        "field": "costcenter",
-        "runner": "node",
-        "description": "Display logic for 'costcenter' in header should be valid JS"
-      },
-      {
         "id": "t-displaylogic-valid-header-etsgDateOperation",
         "category": "displaylogic-valid",
         "entity": "header",
@@ -6333,22 +6370,6 @@
         "description": "Display logic for 'posted' in header should be valid JS"
       },
       {
-        "id": "t-displaylogic-valid-header-project",
-        "category": "displaylogic-valid",
-        "entity": "header",
-        "field": "project",
-        "runner": "node",
-        "description": "Display logic for 'project' in header should be valid JS"
-      },
-      {
-        "id": "t-displaylogic-valid-lines-costcenter",
-        "category": "displaylogic-valid",
-        "entity": "lines",
-        "field": "costcenter",
-        "runner": "node",
-        "description": "Display logic for 'costcenter' in lines should be valid JS"
-      },
-      {
         "id": "t-displaylogic-valid-lines-grossUnitPrice",
         "category": "displaylogic-valid",
         "entity": "lines",
@@ -6363,14 +6384,6 @@
         "field": "listPrice",
         "runner": "node",
         "description": "Display logic for 'listPrice' in lines should be valid JS"
-      },
-      {
-        "id": "t-displaylogic-valid-lines-project",
-        "category": "displaylogic-valid",
-        "entity": "lines",
-        "field": "project",
-        "runner": "node",
-        "description": "Display logic for 'project' in lines should be valid JS"
       },
       {
         "id": "t-displaylogic-valid-reversedInvoices-aEAT349BPBaseAmount",
@@ -6523,14 +6536,6 @@
         "field": "businessPartner",
         "runner": "node",
         "description": "Field 'businessPartner' should be present in header"
-      },
-      {
-        "id": "t-field-presence-header-costcenter",
-        "category": "field-presence",
-        "entity": "header",
-        "field": "costcenter",
-        "runner": "node",
-        "description": "Field 'costcenter' should be present in header"
       },
       {
         "id": "t-field-presence-header-currency",
@@ -6733,14 +6738,6 @@
         "description": "Field 'processed' should be present in header"
       },
       {
-        "id": "t-field-presence-header-project",
-        "category": "field-presence",
-        "entity": "header",
-        "field": "project",
-        "runner": "node",
-        "description": "Field 'project' should be present in header"
-      },
-      {
         "id": "t-field-presence-header-summedLineAmount",
         "category": "field-presence",
         "entity": "header",
@@ -6755,14 +6752,6 @@
         "field": "transactionDocument",
         "runner": "node",
         "description": "Field 'transactionDocument' should be present in header"
-      },
-      {
-        "id": "t-field-presence-lines-costcenter",
-        "category": "field-presence",
-        "entity": "lines",
-        "field": "costcenter",
-        "runner": "node",
-        "description": "Field 'costcenter' should be present in lines"
       },
       {
         "id": "t-field-presence-lines-description",
@@ -6819,14 +6808,6 @@
         "field": "product",
         "runner": "node",
         "description": "Field 'product' should be present in lines"
-      },
-      {
-        "id": "t-field-presence-lines-project",
-        "category": "field-presence",
-        "entity": "lines",
-        "field": "project",
-        "runner": "node",
-        "description": "Field 'project' should be present in lines"
       },
       {
         "id": "t-field-presence-lines-tax",
@@ -7109,14 +7090,6 @@
         "description": "Field 'businessPartner' should have type 'string' in header"
       },
       {
-        "id": "t-field-type-header-costcenter",
-        "category": "field-type",
-        "entity": "header",
-        "field": "costcenter",
-        "runner": "node",
-        "description": "Field 'costcenter' should have type 'string' in header"
-      },
-      {
         "id": "t-field-type-header-currency",
         "category": "field-type",
         "entity": "header",
@@ -7317,14 +7290,6 @@
         "description": "Field 'processed' should have type 'boolean' in header"
       },
       {
-        "id": "t-field-type-header-project",
-        "category": "field-type",
-        "entity": "header",
-        "field": "project",
-        "runner": "node",
-        "description": "Field 'project' should have type 'string' in header"
-      },
-      {
         "id": "t-field-type-header-summedLineAmount",
         "category": "field-type",
         "entity": "header",
@@ -7339,14 +7304,6 @@
         "field": "transactionDocument",
         "runner": "node",
         "description": "Field 'transactionDocument' should have type 'string' in header"
-      },
-      {
-        "id": "t-field-type-lines-costcenter",
-        "category": "field-type",
-        "entity": "lines",
-        "field": "costcenter",
-        "runner": "node",
-        "description": "Field 'costcenter' should have type 'string' in lines"
       },
       {
         "id": "t-field-type-lines-description",
@@ -7403,14 +7360,6 @@
         "field": "product",
         "runner": "node",
         "description": "Field 'product' should have type 'string' in lines"
-      },
-      {
-        "id": "t-field-type-lines-project",
-        "category": "field-type",
-        "entity": "lines",
-        "field": "project",
-        "runner": "node",
-        "description": "Field 'project' should have type 'string' in lines"
       },
       {
         "id": "t-field-type-lines-tax",
@@ -7677,14 +7626,6 @@
         "description": "Read-only logic for 'businessPartner' in header should have evaluable flag"
       },
       {
-        "id": "t-readonlylogic-evaluable-header-costcenter",
-        "category": "readonlylogic-evaluable",
-        "entity": "header",
-        "field": "costcenter",
-        "runner": "node",
-        "description": "Read-only logic for 'costcenter' in header should have evaluable flag"
-      },
-      {
         "id": "t-readonlylogic-evaluable-header-currency",
         "category": "readonlylogic-evaluable",
         "entity": "header",
@@ -7797,28 +7738,12 @@
         "description": "Read-only logic for 'priceList' in header should have evaluable flag"
       },
       {
-        "id": "t-readonlylogic-evaluable-header-project",
-        "category": "readonlylogic-evaluable",
-        "entity": "header",
-        "field": "project",
-        "runner": "node",
-        "description": "Read-only logic for 'project' in header should have evaluable flag"
-      },
-      {
         "id": "t-readonlylogic-evaluable-header-transactionDocument",
         "category": "readonlylogic-evaluable",
         "entity": "header",
         "field": "transactionDocument",
         "runner": "node",
         "description": "Read-only logic for 'transactionDocument' in header should have evaluable flag"
-      },
-      {
-        "id": "t-readonlylogic-evaluable-lines-costcenter",
-        "category": "readonlylogic-evaluable",
-        "entity": "lines",
-        "field": "costcenter",
-        "runner": "node",
-        "description": "Read-only logic for 'costcenter' in lines should have evaluable flag"
       },
       {
         "id": "t-readonlylogic-evaluable-lines-etgoDiscount",
@@ -7859,14 +7784,6 @@
         "field": "product",
         "runner": "node",
         "description": "Read-only logic for 'product' in lines should have evaluable flag"
-      },
-      {
-        "id": "t-readonlylogic-evaluable-lines-project",
-        "category": "readonlylogic-evaluable",
-        "entity": "lines",
-        "field": "project",
-        "runner": "node",
-        "description": "Read-only logic for 'project' in lines should have evaluable flag"
       },
       {
         "id": "t-readonlylogic-evaluable-lines-tax",
@@ -8037,14 +7954,6 @@
         "description": "Read-only logic for 'businessPartner' in header should be valid JS"
       },
       {
-        "id": "t-readonlylogic-valid-header-costcenter",
-        "category": "readonlylogic-valid",
-        "entity": "header",
-        "field": "costcenter",
-        "runner": "node",
-        "description": "Read-only logic for 'costcenter' in header should be valid JS"
-      },
-      {
         "id": "t-readonlylogic-valid-header-currency",
         "category": "readonlylogic-valid",
         "entity": "header",
@@ -8157,28 +8066,12 @@
         "description": "Read-only logic for 'priceList' in header should be valid JS"
       },
       {
-        "id": "t-readonlylogic-valid-header-project",
-        "category": "readonlylogic-valid",
-        "entity": "header",
-        "field": "project",
-        "runner": "node",
-        "description": "Read-only logic for 'project' in header should be valid JS"
-      },
-      {
         "id": "t-readonlylogic-valid-header-transactionDocument",
         "category": "readonlylogic-valid",
         "entity": "header",
         "field": "transactionDocument",
         "runner": "node",
         "description": "Read-only logic for 'transactionDocument' in header should be valid JS"
-      },
-      {
-        "id": "t-readonlylogic-valid-lines-costcenter",
-        "category": "readonlylogic-valid",
-        "entity": "lines",
-        "field": "costcenter",
-        "runner": "node",
-        "description": "Read-only logic for 'costcenter' in lines should be valid JS"
       },
       {
         "id": "t-readonlylogic-valid-lines-etgoDiscount",
@@ -8219,14 +8112,6 @@
         "field": "product",
         "runner": "node",
         "description": "Read-only logic for 'product' in lines should be valid JS"
-      },
-      {
-        "id": "t-readonlylogic-valid-lines-project",
-        "category": "readonlylogic-valid",
-        "entity": "lines",
-        "field": "project",
-        "runner": "node",
-        "description": "Read-only logic for 'project' in lines should be valid JS"
       },
       {
         "id": "t-readonlylogic-valid-lines-tax",
@@ -8342,11 +8227,25 @@
         "description": "Rule 'Product_AutoFill_Price' (callout) should be declared"
       },
       {
+        "id": "t-rule-declared-READONLY-Posted-AccountingDate",
+        "category": "rule-declared",
+        "rule": "READONLY_Posted_AccountingDate",
+        "runner": "node",
+        "description": "Rule 'READONLY_Posted_AccountingDate' (readOnlyLogic) should be declared"
+      },
+      {
         "id": "t-rule-declared-ReadOnly-When-Processed",
         "category": "rule-declared",
         "rule": "ReadOnly_When_Processed",
         "runner": "node",
         "description": "Rule 'ReadOnly_When_Processed' (displayLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-SE-Invoice-TaxDate",
+        "category": "rule-declared",
+        "rule": "SE_Invoice_TaxDate",
+        "runner": "node",
+        "description": "Rule 'SE_Invoice_TaxDate' (callout) should be declared"
       },
       {
         "id": "t-searchable-filters-header-businessPartner",
@@ -8445,14 +8344,6 @@
         "description": "Selector endpoint for 'businessPartner' in header should exist"
       },
       {
-        "id": "t-selector-endpoint-header-costcenter",
-        "category": "selector-endpoint",
-        "entity": "header",
-        "field": "costcenter",
-        "runner": "node",
-        "description": "Selector endpoint for 'costcenter' in header should exist"
-      },
-      {
         "id": "t-selector-endpoint-header-currency",
         "category": "selector-endpoint",
         "entity": "header",
@@ -8493,14 +8384,6 @@
         "description": "Selector endpoint for 'priceList' in header should exist"
       },
       {
-        "id": "t-selector-endpoint-header-project",
-        "category": "selector-endpoint",
-        "entity": "header",
-        "field": "project",
-        "runner": "node",
-        "description": "Selector endpoint for 'project' in header should exist"
-      },
-      {
         "id": "t-selector-endpoint-header-transactionDocument",
         "category": "selector-endpoint",
         "entity": "header",
@@ -8509,28 +8392,12 @@
         "description": "Selector endpoint for 'transactionDocument' in header should exist"
       },
       {
-        "id": "t-selector-endpoint-lines-costcenter",
-        "category": "selector-endpoint",
-        "entity": "lines",
-        "field": "costcenter",
-        "runner": "node",
-        "description": "Selector endpoint for 'costcenter' in lines should exist"
-      },
-      {
         "id": "t-selector-endpoint-lines-product",
         "category": "selector-endpoint",
         "entity": "lines",
         "field": "product",
         "runner": "node",
         "description": "Selector endpoint for 'product' in lines should exist"
-      },
-      {
-        "id": "t-selector-endpoint-lines-project",
-        "category": "selector-endpoint",
-        "entity": "lines",
-        "field": "project",
-        "runner": "node",
-        "description": "Selector endpoint for 'project' in lines should exist"
       },
       {
         "id": "t-selector-endpoint-lines-tax",
@@ -8955,6 +8822,14 @@
         "field": "copyFrom",
         "runner": "node",
         "description": "System field 'copyFrom' should exist in backend but not frontend for header"
+      },
+      {
+        "id": "t-system-field-header-costcenter",
+        "category": "system-field",
+        "entity": "header",
+        "field": "costcenter",
+        "runner": "node",
+        "description": "System field 'costcenter' should exist in backend but not frontend for header"
       },
       {
         "id": "t-system-field-header-created",
@@ -9437,6 +9312,14 @@
         "description": "System field 'processNow' should exist in backend but not frontend for header"
       },
       {
+        "id": "t-system-field-header-project",
+        "category": "system-field",
+        "entity": "header",
+        "field": "project",
+        "runner": "node",
+        "description": "System field 'project' should exist in backend but not frontend for header"
+      },
+      {
         "id": "t-system-field-header-psd2GenerateBankPayment",
         "category": "system-field",
         "entity": "header",
@@ -9773,6 +9656,14 @@
         "description": "System field 'cInvoiceId' should exist in backend but not frontend for lines"
       },
       {
+        "id": "t-system-field-lines-costcenter",
+        "category": "system-field",
+        "entity": "lines",
+        "field": "costcenter",
+        "runner": "node",
+        "description": "System field 'costcenter' should exist in backend but not frontend for lines"
+      },
+      {
         "id": "t-system-field-lines-createdBy",
         "category": "system-field",
         "entity": "lines",
@@ -9971,6 +9862,14 @@
         "field": "priceLimit",
         "runner": "node",
         "description": "System field 'priceLimit' should exist in backend but not frontend for lines"
+      },
+      {
+        "id": "t-system-field-lines-project",
+        "category": "system-field",
+        "entity": "lines",
+        "field": "project",
+        "runner": "node",
+        "description": "System field 'project' should exist in backend but not frontend for lines"
       },
       {
         "id": "t-system-field-lines-projectLine",
@@ -10281,25 +10180,25 @@
       }
     ],
     "summary": {
-      "total": 603,
+      "total": 581,
       "byCategory": {
         "action-endpoint": 26,
         "crud-flags": 5,
         "default-value-type": 26,
-        "displaylogic-evaluable": 30,
-        "displaylogic-valid": 30,
-        "field-presence": 73,
-        "field-type": 73,
-        "readonlylogic-evaluable": 45,
-        "readonlylogic-valid": 45,
-        "rule-declared": 8,
+        "displaylogic-evaluable": 26,
+        "displaylogic-valid": 26,
+        "field-presence": 69,
+        "field-type": 69,
+        "readonlylogic-evaluable": 41,
+        "readonlylogic-valid": 41,
+        "rule-declared": 10,
         "searchable-filters": 6,
-        "selector-endpoint": 22,
-        "system-field": 209,
+        "selector-endpoint": 18,
+        "system-field": 213,
         "visibility": 5
       },
       "byRunner": {
-        "node": 603,
+        "node": 581,
         "junit": 0
       }
     }

@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import { useUI } from '@/i18n';
 import { useCurrency } from '@/hooks/useCurrency';
 import { formatCurrency } from '@/lib/formatCurrency';
@@ -10,9 +11,12 @@ function fmtNum(val) {
 export default function WarehouseSummary({ data, token, apiBaseUrl }) {
   const ui = useUI();
   const currencyCode = useCurrency() ?? 'USD';
-  const { loading, error, products } = useWarehouseStock(data?.id, token, apiBaseUrl);
+  const { loading, error, products: allProducts } = useWarehouseStock(data?.id, token, apiBaseUrl);
 
-  // products are already filtered to qty > 0 by aggregateProducts, so this is the in-stock count.
+  // KPI "in stock > 0" is intentionally strict-positive — excludes zero AND negative
+  // (shrinkage/loss) quantities. Do not change this to `!== 0`; the badge label below
+  // (warehouseProductsWithStockBadge) explicitly promises "> 0".
+  const products = useMemo(() => allProducts.filter(p => p.qty > 0), [allProducts]);
   const totalProducts = products.length;
   const totalValuation = products.reduce((sum, p) => sum + (Number(p.valuation) || 0), 0);
 
@@ -21,19 +25,19 @@ export default function WarehouseSummary({ data, token, apiBaseUrl }) {
 
   return (
     <div className="flex flex-col gap-4">
-      <h3 className="text-base font-semibold text-[#121217]">{ui('warehouseStockDataTitle')}</h3>
+      <h3 className="text-base font-semibold text-[hsl(var(--foreground))]">{ui('warehouseStockDataTitle')}</h3>
       <div className="grid grid-cols-2 gap-4">
         <div>
           <p className="text-xs text-muted-foreground mb-1">{ui('warehouseTotalValuation')}</p>
           <p className="text-2xl font-light tabular-nums mb-2">{formatCurrency(currencyCode, totalValuation)}</p>
-          <span className="inline-block bg-[#F5F7F9] rounded-lg px-2 py-1 text-xs text-[#3F3F50]">
+          <span className="inline-block bg-[hsl(var(--muted))] rounded-lg px-2 py-1 text-xs text-[hsl(var(--muted-foreground))]">
             {ui('warehouseValuationBadge')}
           </span>
         </div>
         <div>
           <p className="text-xs text-muted-foreground mb-1">{ui('warehouseProductsWithStock')}</p>
           <p className="text-2xl font-light tabular-nums mb-2">{fmtNum(totalProducts)}</p>
-          <span className="inline-block bg-emerald-50 rounded-lg px-2 py-1 text-xs text-emerald-700">
+          <span className="inline-block bg-status-success rounded-lg px-2 py-1 text-xs text-status-success-foreground">
             {ui('warehouseProductsWithStockBadge')}
           </span>
         </div>

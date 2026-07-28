@@ -109,7 +109,8 @@
           "seq": 50
         },
         "accountingDate": {
-          "visibility": "system"
+          "visibility": "system",
+          "_note": "ETP-4531 (redefined 2026-07-17): accounting date is now hidden and unified with the document date internally; the Java-side guard that used to block this cascade has been removed so the native document-date→accounting-date coupling flows through untouched."
         },
         "orderReference": {
           "visibility": "discarded"
@@ -395,6 +396,20 @@
       "entity": "goodsShipment",
       "decision": "Keep",
       "description": "Lock all editable fields when shipment status is Completed or Voided"
+    },
+    "SL_InOut_AccountingDate": {
+      "type": "callout",
+      "entity": "goodsShipment",
+      "decision": "Keep",
+      "description": "ETP-4531 (redefined 2026-07-17): M_InOut.MovementDate carries AD_Column.AD_Callout_ID = org.openbravo.erpCommon.ad_callouts.SL_InOut_AccountingDate, which auto-fills dateAcct from movementDate. This is the same M_InOut table as Goods Receipt, and com.etendoerp.go's NeoCalloutService executes this callout server-side, so it fires in the GO SPA for shipments too. accountingDate is now hidden (visibility: system) and unified with movementDate — the native cascade is intentionally kept as-is. GoodsShipmentHeaderHandler#handle calls mirrorAccountingDate on every CRUD write (POST/PUT/PATCH), an explicit server-side mirror of movementDate into accountingDate that is the primary mechanism keeping the two in sync (this callout is a secondary path, e.g. classic-UI edits).",
+      "impactIfOmitted": "If mirrorAccountingDate were removed, this callout alone would not reliably keep accountingDate in sync (the live React UI always sends PATCH for edits, and NeoCalloutService's cascade doesn't cover every write path)."
+    },
+    "READONLY_Posted_AccountingDate": {
+      "type": "readOnlyLogic",
+      "entity": "goodsShipment",
+      "decision": "Keep",
+      "description": "Accounting date becomes read-only when document is posted (Posted=Y). Mirrors Goods Receipt.",
+      "impactIfOmitted": "Users could change accounting date on posted documents."
     },
     "BP_AutoFill_Address": {
       "type": "callout",

@@ -16,6 +16,8 @@ import { columnMinWidthPx, columnFlex } from '@/lib/linesColumnWidth.js';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { CELL_RENDERERS } from './DataTable.cellRenderers.jsx';
 import { getEmailFieldError, getPhoneFieldError } from './recipientEdits.js';
+import { isCapabilityVisible } from '@/lib/capabilityVisibility.js';
+import { useCapabilitiesSafe } from '@/hooks/useCapabilitiesSafe.js';
 
 // Extracts grow flag and basis (px) from a columnFlex() shorthand string.
 function flexSpec(col, idx) {
@@ -377,7 +379,7 @@ function renderSelectorCell({
             onKeyDown={(e) => {
               if (e.key === 'Escape') handleKeyDown(e);
             }}
-            className="w-full h-8 text-sm bg-white focus:ring-2 focus:ring-primary"
+            className="w-full h-8 text-sm bg-card focus:ring-2 focus:ring-primary"
         >
           <SelectValue placeholder={fieldLabel} data-testid={"SelectValue__" + field.id} />
         </SelectTrigger>
@@ -452,7 +454,7 @@ function renderInputCell({
         onKeyDown={handleKeyDown}
         placeholder={fieldLabel}
         required={field.required}
-        className={`w-full h-8 text-sm rounded-md border bg-white px-2 focus:ring-2 focus:outline-none${isNumeric ? ' text-right tabular-nums' : ''}${invalidFields.has(field.key) ? ' border-red-500 focus:ring-red-500' : ' border-input focus:ring-primary'}`}
+        className={`w-full h-8 text-sm rounded-md border bg-card px-2 focus:ring-2 focus:outline-none${isNumeric ? ' text-right tabular-nums' : ''}${invalidFields.has(field.key) ? ' border-destructive focus:ring-destructive' : ' border-input focus:ring-primary'}`}
       />
     </TableCell>
   );
@@ -547,7 +549,7 @@ function renderInlineAddFieldControl(col, field, isFirst, fieldLabel, {
             ref={isFirst ? firstInputRef : undefined}
             data-testid={`inline-add-field-${field.key}`}
             onKeyDown={(e) => { if (e.key === 'Escape') handleKeyDown(e); }}
-            className="w-full h-8 text-sm bg-white focus:ring-2 focus:ring-primary"
+            className="w-full h-8 text-sm bg-card focus:ring-2 focus:ring-primary"
           >
             <SelectValue placeholder={field.label ?? field.key} data-testid="SelectValue__eb5261" />
           </SelectTrigger>
@@ -611,7 +613,7 @@ function renderInlineAddCell(col, ctx) {
 // make buildEmpty's effect re-run, wiping in-progress input. Share one frozen ref.
 const EMPTY_SEED = {};
 
-const InlineAddRow = forwardRef(function InlineAddRow({ columns, fields, onAdd, onCancel, data, catalogs, onFieldChange, onValuesChange, selectable, hasDeleteColumn, hasCloneColumn, hoverRowActions, hoverRowHasDelete, hasQuickActionsColumn, token, apiBaseUrl, entity, selectorContext, seedValues = EMPTY_SEED, resolvedDefaults = EMPTY_SEED, ilpHasNoAmountCol = false, ilpTrailing = false, labelOverrides }, ref) {
+const InlineAddRow = forwardRef(function InlineAddRow({ columns, fields, onAdd, onCancel, data, catalogs, onFieldChange, onValuesChange, selectable, hasDeleteColumn, hasCloneColumn, hoverRowActions, hoverRowHasDelete, hasQuickActionsColumn, token, apiBaseUrl, entity, selectorContext, seedValues = EMPTY_SEED, resolvedDefaults = EMPTY_SEED, ilpHasNoAmountCol = false, ilpTrailing = false, labelOverrides, convertOptimisticPrice }, ref) {
   const t = useLabel(labelOverrides);
   const ui = useUI();
   const { locale } = useLocaleSwitch();
@@ -724,7 +726,9 @@ const InlineAddRow = forwardRef(function InlineAddRow({ columns, fields, onAdd, 
     const belowMin = fields.filter(f => isBelowMin(f, valuesRef));
     if (belowMin.length > 0) {
       setInvalidFields(new Set(belowMin.map(f => f.key)));
-      toast.error(ui('fieldMinValueError'));
+      // Interpolate the offending field's `min` so the message is precise
+      // ("Value must be at least 1") rather than the imprecise negative wording.
+      toast.error(ui('fieldMinValueError', { min: belowMin[0].min }));
       const firstInvalid = belowMin[0];
       const inputEl = document.querySelector(`[data-testid="field-${firstInvalid.key}"]`);
       inputEl?.focus?.({ preventScroll: true });
@@ -896,7 +900,7 @@ const InlineAddRow = forwardRef(function InlineAddRow({ columns, fields, onAdd, 
     // Also fire top-level display fields from selectedItem (mirrors EntityForm behavior).
     // Skips structural/object fields; fires e.g. product_uOM = "Unit" for identifier resolution.
     if (selectedItem && typeof selectedItem === 'object') {
-      updateSnapshotWithSelectedItem(selectedItem, snapshot, handleChange, touchedFieldsRef, key);
+      updateSnapshotWithSelectedItem(selectedItem, snapshot, handleChange, touchedFieldsRef, key, convertOptimisticPrice);
     }
     // Notify parent for callout execution — pass computed snapshot (not stale React state).
     // applyUpdates updates valuesRef synchronously so submitLine always reads the latest
@@ -916,7 +920,7 @@ const InlineAddRow = forwardRef(function InlineAddRow({ columns, fields, onAdd, 
         pendingCalloutsRef.current = pendingCalloutsRef.current.filter(p => p !== calloutPromise);
       });
     }
-  }, [handleChange, onFieldChange, values, fieldMap]);
+  }, [handleChange, onFieldChange, values, fieldMap, convertOptimisticPrice]);
 
   const handleKeyDown = (e) => {
     if (e.key === 'Enter') {
@@ -933,7 +937,7 @@ const InlineAddRow = forwardRef(function InlineAddRow({ columns, fields, onAdd, 
   const firstInputCtx = { assigned: false };
 
   return (
-    <TableRow ref={rowRef} data-testid="inline-add-row" className="bg-blue-50/50 border-t-2 border-primary/20">
+    <TableRow ref={rowRef} data-testid="inline-add-row" className="bg-status-info/50 border-t-2 border-primary/20">
       {/* Saving spinner — aligned with selection checkbox column (empty when idle). */}
       {selectable && (
         <TableCell className="w-10 px-1" data-testid="TableCell__eb5261">
@@ -987,7 +991,7 @@ function formatDerivedCellValue(identVal, rawVal, isTwoDecimalDerived) {
   return displayVal;
 }
 
-function updateSnapshotWithSelectedItem(selectedItem, snapshot, handleChange, touchedFieldsRef, key) {
+function updateSnapshotWithSelectedItem(selectedItem, snapshot, handleChange, touchedFieldsRef, key, convertOptimisticPrice) {
   for (const [topField, topVal] of Object.entries(selectedItem)) {
     if (topField === 'id' || topField === '_aux' || topField === 'label'
       || topField === 'name' || topField === 'searchKey'
@@ -998,19 +1002,22 @@ function updateSnapshotWithSelectedItem(selectedItem, snapshot, handleChange, to
     // Mark the target field as touched so the callout does not overwrite it (some callouts
     // look up the price themselves and may return a different value from another price list).
     if (topField === 'standardPrice' && topVal != null) {
+      // Apply the header's currency conversion (if any) up front so the price never
+      // renders in the org base currency for a beat before the callout corrects it.
+      const priceVal = convertOptimisticPrice ? convertOptimisticPrice(topVal) : topVal;
       const isGross = selectedItem?.isTaxIncluded !== false;
       if (isGross) {
-        snapshot['grossUnitPrice'] = topVal;
-        handleChange('grossUnitPrice', topVal);
-        snapshot['grossListPrice'] = topVal;
-        handleChange('grossListPrice', topVal);
+        snapshot['grossUnitPrice'] = priceVal;
+        handleChange('grossUnitPrice', priceVal);
+        snapshot['grossListPrice'] = priceVal;
+        handleChange('grossListPrice', priceVal);
         touchedFieldsRef.current.add('grossUnitPrice');
         touchedFieldsRef.current.add('grossListPrice');
       } else {
-        snapshot['unitPrice'] = topVal;
-        handleChange('unitPrice', topVal);
-        snapshot['listPrice'] = topVal;
-        handleChange('listPrice', topVal);
+        snapshot['unitPrice'] = priceVal;
+        handleChange('unitPrice', priceVal);
+        snapshot['listPrice'] = priceVal;
+        handleChange('listPrice', priceVal);
         touchedFieldsRef.current.add('unitPrice');
         touchedFieldsRef.current.add('listPrice');
       }
@@ -1076,7 +1083,7 @@ function LookupField({ value, fieldKey, placeholder, selectorUrl, selectorContex
           if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setOpen(true); }
           else if (onKeyDown) onKeyDown(e);
         }}
-        className={`w-full h-8 text-sm rounded-md border bg-white px-2 text-left flex items-center gap-2 focus:ring-2 focus:outline-none transition-colors${isInvalid ? ' border-red-500 focus:ring-red-500' : ' border-input hover:border-primary/50 focus:ring-primary'}`}
+        className={`w-full h-8 text-sm rounded-md border bg-card px-2 text-left flex items-center gap-2 focus:ring-2 focus:outline-none transition-colors${isInvalid ? ' border-destructive focus:ring-destructive' : ' border-input hover:border-primary/50 focus:ring-primary'}`}
       >
         <Search
           className="h-3.5 w-3.5 text-muted-foreground shrink-0"
@@ -1186,7 +1193,7 @@ function isQuickActionsEnabled(rowQuickActions) {
 function getRowClassName(onRowClick, onNavigate, isChecked, selectedRowBg, selectedId, row, isSelectedLine) {
   let hoverClass;
   if (isSelectedLine) {
-    hoverClass = 'hover:bg-slate-300/80';
+    hoverClass = 'hover:bg-muted';
   } else {
     hoverClass = (onRowClick || onNavigate) ? 'hover:bg-muted/50' : '';
   }
@@ -1195,7 +1202,7 @@ function getRowClassName(onRowClick, onNavigate, isChecked, selectedRowBg, selec
     (onRowClick || onNavigate) ? 'cursor-pointer' : 'cursor-default',
     isChecked ? selectedRowBg : '',
     selectedId != null && row.id === selectedId ? 'bg-primary/10' : '',
-    isSelectedLine ? 'bg-slate-200/90 ring-1 ring-slate-300' : '',
+    isSelectedLine ? 'bg-muted ring-1 ring-focus-ring' : '',
     hoverClass,
   ].filter(Boolean).join(' ');
 }
@@ -1425,7 +1432,7 @@ function TableDataRow({
               <button
                 type="button"
                 onClick={(e) => { e.stopPropagation(); onSaveRow?.(); }}
-                className="h-8 w-8 flex items-center justify-center rounded-full text-[#17663A] hover:bg-[#EEFBF4] transition-all"
+                className="h-8 w-8 flex items-center justify-center rounded-full text-[var(--status-success-fg)] hover:bg-[var(--status-success-bg)] transition-all"
                 aria-label={ui('save')}
               >
                 <Check className="h-5 w-5" aria-hidden="true" data-testid="Check__eb5261" />
@@ -1438,7 +1445,7 @@ function TableDataRow({
                   if (onEditRow) { onEditRow(row); }
                   else { handleRowActivation(row, idx); }
                 }}
-                className="opacity-0 group-hover/row:opacity-100 focus-visible:opacity-100 h-8 w-8 flex items-center justify-center rounded-full text-[#828FA3] hover:bg-[#F5F7F9] transition-all"
+                className="opacity-0 group-hover/row:opacity-100 focus-visible:opacity-100 h-8 w-8 flex items-center justify-center rounded-full text-[hsl(var(--text-disabled))] hover:bg-[hsl(var(--muted))] transition-all"
                 aria-label={ui('edit')}
               >
                 <Pencil className="h-5 w-5" aria-hidden="true" data-testid="Pencil__eb5261" />
@@ -1454,7 +1461,7 @@ function TableDataRow({
                 <button
                   type="button"
                   onClick={(e) => { e.stopPropagation(); onCancelEdit?.(); }}
-                  className="h-8 w-8 flex items-center justify-center rounded-full text-[#828FA3] hover:bg-[#F5F7F9] transition-all"
+                  className="h-8 w-8 flex items-center justify-center rounded-full text-[hsl(var(--text-disabled))] hover:bg-[hsl(var(--muted))] transition-all"
                   aria-label={ui('cancel')}
                 >
                   <X className="h-5 w-5" aria-hidden="true" data-testid="X__eb5261" />
@@ -1467,7 +1474,7 @@ function TableDataRow({
                     e.stopPropagation();
                     await handleDeleteRowClick(row, onDeleteRow, setDeletingRows);
                   }}
-                  className="opacity-0 group-hover/row:opacity-100 focus-visible:opacity-100 h-8 w-8 flex items-center justify-center rounded-full text-[#D50B3E] hover:bg-[#FEF0F4] transition-all"
+                  className="opacity-0 group-hover/row:opacity-100 focus-visible:opacity-100 h-8 w-8 flex items-center justify-center rounded-full text-[hsl(var(--destructive))] hover:bg-[var(--status-destructive-bg)] transition-all"
                   aria-label={ui('deleteRowTooltip')}
                   data-testid={`row-delete-${row.id}`}
                 >
@@ -1516,13 +1523,13 @@ function TableDataRow({
                 <button
                   type="button"
                   onClick={() => onCloneRow(row)}
-                  className="opacity-0 group-hover/row:opacity-100 focus-visible:opacity-100 flex items-center justify-center rounded border border-border bg-white text-muted-foreground hover:text-foreground hover:border-border/80 transition-all"
+                  className="opacity-0 group-hover/row:opacity-100 focus-visible:opacity-100 flex items-center justify-center rounded border border-border bg-card text-muted-foreground hover:text-foreground hover:border-border/80 transition-all"
                   style={{ width: 26, height: 26 }}
                   aria-label={ui('cloneOrderBtn')}
                 >
                   <Copy className="h-3.5 w-3.5" aria-hidden="true" data-testid="Copy__eb5261" />
                 </button>
-                <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 px-2 py-1 text-xs font-medium text-white bg-gray-800 rounded whitespace-nowrap opacity-0 group-hover/clonebtn:opacity-100 pointer-events-none transition-opacity z-10">
+                <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 px-2 py-1 text-xs font-medium text-primary-foreground bg-foreground rounded whitespace-nowrap opacity-0 group-hover/clonebtn:opacity-100 pointer-events-none transition-opacity z-10">
                   {ui('cloneOrderBtn')}
                 </div>
               </div>
@@ -1545,6 +1552,7 @@ function TableDataRow({
             menuActions={rowQuickActions.menuActions}
             hideDeleteWhenComplete={rowQuickActions.hideDeleteWhenComplete}
             hideDeleteButton={rowQuickActions.hideDeleteButton}
+            readOnly={rowQuickActions.readOnly}
             statusField={rowQuickActions.statusField}
             onEdit={rowQuickActions.onEdit}
             onClone={rowQuickActions.onClone}
@@ -1720,6 +1728,8 @@ export function DataTable({
   const ui = useUI();
   const dictionary = useLocale();
   const { locale } = useLocaleSwitch();
+  // ETP-4520 — capability map for visibleWhenCapability-gated columns (below).
+  const capabilities = useCapabilitiesSafe();
   const dateFormatter = useMemo(
     () => new Intl.DateTimeFormat(locale.replace('_', '-'), { year: 'numeric', month: '2-digit', day: '2-digit' }),
     [locale]
@@ -1791,8 +1801,12 @@ export function DataTable({
         return anyDataRow || addRowActive;
       });
     }
+    // ETP-4520 — drop columns gated by a capability the current role doesn't
+    // hold (e.g. `posted` on sales-invoice/purchase-invoice, restricted to
+    // "showAccountingFields"). Absent visibleWhenCapability ⇒ always kept.
+    base = base.filter(col => isCapabilityVisible(capabilities, col.visibleWhenCapability));
     return base;
-  }, [columns, hiddenColumns, displayIfControllers, data, addRowValues]);
+  }, [columns, hiddenColumns, displayIfControllers, data, addRowValues, capabilities]);
 
   const amountColumns = useMemo(
     () => visibleColumns.filter(col => col.type === 'amount'),
@@ -1916,7 +1930,7 @@ export function DataTable({
   const quickActionsCol = oneIfTrue(quickActionsEnabled);
   const actionCols = hoverRowActions ? 1 + deleteCol : deleteCol + cloneCol;
   const colSpan = visibleColumns.length + oneIfTrue(selectable) + actionCols + quickActionsCol;
-  const selectedRowBg = hoverRowActions ? 'bg-[#F5F7F9]' : 'bg-primary/5';
+  const selectedRowBg = hoverRowActions ? 'bg-[hsl(var(--muted))]' : 'bg-primary/5';
 
   // In inlineEditable add-row mode (hideHeader=true), the DataTable only renders
   // the new-line form while InlineLinesPanel owns the existing rows. InlineLinesPanel
@@ -1950,7 +1964,7 @@ export function DataTable({
             quickActionsEnabled, ilpHasNoAmountCol,
           })}
           <TableHeader
-            className={linesLayout === 'inlineEditable' ? 'sticky top-0 z-20 bg-white' : ''}
+            className={linesLayout === 'inlineEditable' ? 'sticky top-0 z-20 bg-card' : ''}
             aria-hidden={hideHeader || undefined}
             style={hideHeader ? { display: 'none' } : undefined}
             data-testid="TableHeader__eb5261">
@@ -1995,6 +2009,7 @@ export function DataTable({
                 onValuesChange={(vals) => { setAddRowValues(vals ?? {}); addRow.onValuesChange?.(vals); }}
                 seedValues={addRow.seedValues}
                 resolvedDefaults={addRow.resolvedDefaults}
+                convertOptimisticPrice={addRow.convertOptimisticPrice}
                 selectable={selectable}
                 hasDeleteColumn={!hoverRowActions && legacyDeleteEnabled}
                 hasCloneColumn={!hoverRowActions && !!onCloneRow && !quickActionsEnabled}

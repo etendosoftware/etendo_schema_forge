@@ -12,6 +12,9 @@ import { useCurrencyPrecision } from '@/hooks/useCurrencyPrecision.js';
  *
  * An inline pencil icon allows the user to override the displayed rate. The override is
  * staged via `onChange('eTGOCurrencyRate', rate)` and saved with the normal form save.
+ * The pencil is hidden when the selected currency IS the org's own currency (rate 1.0,
+ * always returned that way by the currencyOptions action) — there is no conversion to
+ * override in that case.
  *
  * Falls back to the recordId-less state (no rate fetching) for new records.
  *
@@ -204,7 +207,7 @@ export function CurrencyRatePicker({
       </Label>
       {/* Trigger */}
       {editingRate ? (
-        <div className="w-full flex items-center gap-1 rounded-md border border-input bg-white dark:bg-background px-2 py-1.5 text-sm">
+        <div className="w-full flex items-center gap-1 rounded-md border border-input bg-card dark:bg-background px-2 py-1.5 text-sm">
           <span className="font-medium shrink-0">{displayIso} —</span>
           <input
             data-testid="currency-rate-input"
@@ -224,7 +227,7 @@ export function CurrencyRatePicker({
             data-testid="currency-rate-confirm"
             type="button"
             onClick={handleRateConfirm}
-            className="text-green-600 hover:text-green-700 p-0.5 rounded"
+            className="text-status-success-foreground hover:text-status-success-foreground p-0.5 rounded"
             title="Confirmar"
           >
             <Check className="h-3.5 w-3.5" data-testid={"Check__" + field.id} />
@@ -245,7 +248,7 @@ export function CurrencyRatePicker({
             data-testid="currency-rate-trigger"
             id={field.key}
             type="button"
-            className="flex-1 flex items-center justify-between rounded-md border border-input bg-white dark:bg-background px-3 py-2 text-sm hover:bg-muted/40 transition-colors"
+            className="flex-1 flex items-center justify-between rounded-md border border-input bg-card dark:bg-background px-3 py-2 text-sm hover:bg-muted/40 transition-colors"
             onClick={() => setOpen((v) => !v)}
           >
             {value ? (
@@ -266,7 +269,14 @@ export function CurrencyRatePicker({
               className="h-4 w-4 opacity-50 shrink-0 ml-1"
               data-testid={"ChevronDown__" + field.id} />
           </button>
-          {value && hasRecord && (
+          {/* The org's own currency is always returned by the currencyOptions action with
+              rate exactly 1.0 (hardcoded server-side — see CurrencyOptionsHandler.java —
+              never a queried conversion rate), so it doubles as an org-currency marker
+              without a separate lookup. There is no conversion to override when the
+              header currency IS the org currency, so the pencil has no effect there —
+              hide it rather than let the user "edit" a rate that never applies to
+              anything (ETP-4029). */}
+          {value && hasRecord && selectedOption?.rate !== 1 && (
             <button
               data-testid="currency-rate-pencil"
               type="button"

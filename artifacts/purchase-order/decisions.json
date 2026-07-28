@@ -26,7 +26,8 @@
         "C_BPartner_ID": "Contacto",
         "DatePromised": "Fecha de entrega esperada",
         "DeliveryStatusPurchase": "Estado de recepción",
-        "InvoiceStatus": "Estado de facturación"
+        "InvoiceStatus": "Estado de facturación",
+        "PriceList": "Precio"
       },
       "en_US": {
         "C_BPartner_ID": "Contact",
@@ -223,9 +224,8 @@
           "inputMode": null
         },
         "accountingDate": {
-          "visibility": "readOnly",
-          "form": false,
-          "section": "other"
+          "visibility": "system",
+          "_note": "ETP-4531 (redefined 2026-07-17): previously readOnly+form:false, which suppresses rendering but still leaves the field present in frontendContract.fields. Switched to system to fully exclude it from the frontend contract, matching sales-order's accountingDate (raw AD visibility already system, no override) and the invoice/shipment/receipt windows touched by this ticket."
         },
         "incoterms": {
           "visibility": "editable",
@@ -364,7 +364,7 @@
           "order": 3,
           "gridOrder": 3,
           "readOnlyLogic": null,
-          "min": 0
+          "min": false
         },
         "uOM": {
           "grid": false,
@@ -415,9 +415,9 @@
           "order": 4,
           "gridOrder": 4,
           "readOnlyLogic": null,
+          "min": false,
           "displayLogic": null,
-          "columnType": "amount",
-          "min": 0
+          "columnType": "amount"
         },
         "grossListPrice": {
           "form": false,
@@ -475,7 +475,7 @@
           "displayLogic": null
         },
         "currency": {
-          "visibility": "editable",
+          "visibility": "readOnly",
           "grid": false,
           "form": false,
           "reference": "Currency",

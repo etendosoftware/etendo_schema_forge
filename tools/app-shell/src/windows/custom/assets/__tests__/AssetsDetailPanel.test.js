@@ -104,10 +104,16 @@ describe('AssetsDetailPanel — field definitions', () => {
     assert.match(src, /'depreciationAmt'/);
   });
 
-  it('currency field has readOnlyLogic when amortization lines exist', () => {
-    assert.match(src, /depreciatedPlan/);
-    assert.match(src, /depreciatedValue/);
-    assert.match(src, /readOnlyLogic/);
+  it('currency field is always readOnly via readOnlyLogic (ETP-4539), independent of depreciatedPlan/depreciatedValue', () => {
+    // Currency is unconditionally read-only now — no dependency on amortization
+    // lines existing.
+    assert.doesNotMatch(src, /depreciatedPlan/);
+    assert.doesNotMatch(src, /depreciatedValue/);
+    // Must use a `readOnlyLogic` FUNCTION (always returning true), not a static
+    // `readOnly: true` — EntityForm's horizontal-layout render path strips fields
+    // with a truthy static `readOnly` entirely instead of just disabling them.
+    assert.match(src, /key: 'currency'[\s\S]*?readOnlyLogic: \(\) => true/);
+    assert.doesNotMatch(src, /key: 'currency'[\s\S]*?readOnly: true/);
   });
 
   it('defines only Project as a dimension field candidate (ETP-4529)', () => {
@@ -169,10 +175,10 @@ describe('AssetsDetailPanel — accounting dimensions section', () => {
 });
 
 describe('AssetsDetailPanel — visual style', () => {
-  it('applies white background with white input/textarea overrides', () => {
-    assert.match(src, /bg-white/);
-    assert.match(src, /\[&_input\]:bg-white/);
-    assert.match(src, /\[&_textarea\]:bg-white/);
+  it('applies semantic card backgrounds with matching input/textarea overrides', () => {
+    assert.match(src, /bg-card/);
+    assert.match(src, /\[&_input\]:bg-card/);
+    assert.match(src, /\[&_textarea\]:bg-card/);
   });
 
   it('applies p-2 padding to root container', () => {

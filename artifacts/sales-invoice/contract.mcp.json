@@ -1,8 +1,8 @@
 {
-  "version": "0.59.0",
+  "version": "0.64.0",
   "generatedAt": "2026-04-30T15:42:46.582Z",
-  "updatedAt": "2026-07-18T23:21:20.130Z",
-  "contractChecksum": "ddbad933fb2e8980",
+  "updatedAt": "2026-07-23T18:17:10.225Z",
+  "contractChecksum": "18b27a7548841c85",
   "apiPrediction": {
     "specName": "sales-invoice",
     "baseUrl": "/sws/neo/sales-invoice",
@@ -155,35 +155,6 @@
       },
       {
         "entity": "header",
-        "field": "project",
-        "column": "C_Project_ID",
-        "reference": "Project",
-        "inputMode": "search",
-        "url": "/sws/neo/sales-invoice/header/selectors/project",
-        "context": {
-          "required": [
-            {
-              "param": "IsSOTrx",
-              "source": "windowCategory"
-            },
-            {
-              "param": "C_BPartner_ID",
-              "source": "field",
-              "field": "businessPartner"
-            }
-          ]
-        }
-      },
-      {
-        "entity": "header",
-        "field": "costcenter",
-        "column": "C_Costcenter_ID",
-        "reference": "Costcenter",
-        "inputMode": "selector",
-        "url": "/sws/neo/sales-invoice/header/selectors/costcenter"
-      },
-      {
-        "entity": "header",
         "field": "aeatsiiDescription",
         "column": "EM_Aeatsii_Description_ID",
         "reference": "aeatsii_description",
@@ -248,22 +219,6 @@
             }
           ]
         }
-      },
-      {
-        "entity": "lines",
-        "field": "project",
-        "column": "C_Project_ID",
-        "reference": "Project",
-        "inputMode": "search",
-        "url": "/sws/neo/sales-invoice/lines/selectors/project"
-      },
-      {
-        "entity": "lines",
-        "field": "costcenter",
-        "column": "C_Costcenter_ID",
-        "reference": "Costcenter",
-        "inputMode": "selector",
-        "url": "/sws/neo/sales-invoice/lines/selectors/costcenter"
       },
       {
         "entity": "paymentPlan",
@@ -993,7 +948,8 @@
         "OutstandingAmt": "Pendiente de pago",
         "EM_Etgo_Due_Date": "Vencimiento",
         "em_etgo_delivery_status": "Estado de entrega",
-        "C_DocTypeTarget_ID": "Tipo de documento"
+        "C_DocTypeTarget_ID": "Tipo de documento",
+        "PriceList": "Precio"
       },
       "en_US": {
         "OutstandingAmt": "Pending Payment",
@@ -1076,12 +1032,6 @@
           "priceList": {
             "required": true,
             "readOnlyLogic": "@Processed@='Y'"
-          },
-          "project": {
-            "readOnlyLogic": "@Posted@='Y'"
-          },
-          "costcenter": {
-            "readOnlyLogic": "@Posted@='Y'"
           },
           "etsgDateOperation": {
             "readOnlyLogic": "@processed@='Y'",
@@ -1199,12 +1149,6 @@
           "grossAmount": {
             "readOnly": true,
             "defaultValue": "0"
-          },
-          "project": {
-            "readOnlyLogic": "@Posted@='Y'"
-          },
-          "costcenter": {
-            "readOnlyLogic": "@Posted@='Y'"
           }
         }
       },
@@ -1287,6 +1231,7 @@
             "readOnlyLogic": "@HASREVERSEDINVOICESO@='Y' | @HASREVERSEDINVOICEPO@='Y' | @Posted@='Y'"
           },
           "toCurrency": {
+            "readOnly": true,
             "required": true,
             "readOnlyLogic": "@HASREVERSEDINVOICESO@='Y' | @HASREVERSEDINVOICEPO@='Y' | @Posted@='Y'"
           },
@@ -1331,7 +1276,6 @@
         "unitPrice",
         "expectedDate",
         "reversedInvoice",
-        "toCurrency",
         "foreignAmount"
       ],
       "recommendedOrder": [
@@ -1373,23 +1317,6 @@
             {
               "param": "isSOTrx",
               "source": "windowCategory"
-            }
-          ]
-        }
-      },
-      {
-        "entity": "header",
-        "field": "project",
-        "context": {
-          "required": [
-            {
-              "param": "IsSOTrx",
-              "source": "windowCategory"
-            },
-            {
-              "param": "C_BPartner_ID",
-              "source": "field",
-              "field": "businessPartner"
             }
           ]
         }
@@ -1488,7 +1415,6 @@
           "unitPrice",
           "expectedDate",
           "reversedInvoice",
-          "toCurrency",
           "foreignAmount"
         ]
       },
@@ -1504,5 +1430,5 @@
       "tbaiVoidxmlgenerator"
     ]
   },
-  "checksum": "f5388e326e1fa9fd"
+  "checksum": "9fc4adfc034b9902"
 }

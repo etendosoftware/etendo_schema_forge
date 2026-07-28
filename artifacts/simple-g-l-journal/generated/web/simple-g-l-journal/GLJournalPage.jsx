@@ -1,5 +1,6 @@
-import { useEffect } from 'react';
+import { useMemo, useEffect } from 'react';
 import { ListView, DetailView } from '@/components/contract-ui';
+import { useWindowAccess, WindowAccessGuard } from '@/auth/AuthContext.jsx';
 import { toast } from 'sonner';
 import GLJournalTable from './GLJournalTable';
 import GLJournalForm from './GLJournalForm';
@@ -248,6 +249,13 @@ export const api = {
 
 // @sf-generated-start component:GLJournalPage
 export default function GLJournalPage({ windowName, recordId, ...props }) {
+  const windowAccessTier = useWindowAccess('B917E8A7B0864ACEA9D941E3B7494E53');
+  const effectiveWindow = useMemo(() => (
+    windowAccessTier === 'read-only' ? { ...(props.window || {}), readOnly: true } : props.window
+  ), [windowAccessTier, props.window]);
+  if (windowAccessTier === 'none') {
+    return <WindowAccessGuard windowId="B917E8A7B0864ACEA9D941E3B7494E53" />;
+  }
   if (recordId) {
     return (
       <>
@@ -277,7 +285,7 @@ export default function GLJournalPage({ windowName, recordId, ...props }) {
         draftMode={draftMode}
         requiredHeaderFields={requiredHeaderFields}
         balanceFooter={{"debitField":"foreignCurrencyDebit","creditField":"foreignCurrencyCredit"}}
-        {...props}
+        {...props} window={effectiveWindow}
       />
       </>
     );
@@ -292,7 +300,7 @@ export default function GLJournalPage({ windowName, recordId, ...props }) {
       breadcrumb={breadcrumb}
       api={api}
       rowQuickActions={{}}
-      {...props}
+      {...props} window={effectiveWindow}
     />
   );
 }

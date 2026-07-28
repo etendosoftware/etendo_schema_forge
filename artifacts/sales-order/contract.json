@@ -1,8 +1,8 @@
 {
-  "version": "0.17.0",
+  "version": "0.24.0",
   "generatedAt": "2026-05-12T16:47:39.614Z",
-  "updatedAt": "2026-07-06T13:19:15.554Z",
-  "checksum": "1c6dd74023a8d0a7",
+  "updatedAt": "2026-07-22T14:17:46.384Z",
+  "checksum": "77f2b05c4b12ce37",
   "frontendContract": {
     "window": {
       "id": "143",
@@ -37,7 +37,8 @@
         "es_ES": {
           "C_BPartner_ID": "Contacto",
           "DeliveryStatus": "Estado de entrega",
-          "InvoiceStatus": "Estado de facturación"
+          "InvoiceStatus": "Estado de facturación",
+          "PriceList": "Precio"
         },
         "en_US": {
           "C_BPartner_ID": "Contact",
@@ -77,6 +78,10 @@
             "section": "principal",
             "seq": 2,
             "gridOrder": 2,
+            "validation": {
+              "required": true,
+              "maxLength": 30
+            },
             "readOnlyLogic": {
               "raw": "@Processed@='Y' | @DocStatus@='TMP'",
               "evaluable": true,
@@ -103,6 +108,10 @@
             "section": "principal",
             "seq": 3,
             "gridOrder": 1,
+            "validation": {
+              "required": true,
+              "maxLength": 10
+            },
             "callout": {
               "className": "org.openbravo.erpCommon.ad_callouts.SL_Order_UpdateLinesDate"
             },
@@ -129,6 +138,10 @@
             "section": "principal",
             "seq": 1,
             "gridOrder": 3,
+            "validation": {
+              "required": true,
+              "maxLength": 60
+            },
             "callout": {
               "className": "org.openbravo.erpCommon.ad_callouts.SE_Order_BPartner"
             },
@@ -158,6 +171,10 @@
             },
             "section": "principal",
             "seq": 4,
+            "validation": {
+              "required": true,
+              "maxLength": 22
+            },
             "validationRule": {
               "code": "C_BPartner_Location.C_BPartner_ID=@C_BPartner_ID@ AND C_BPartner_Location.IsShipTo='Y' AND C_BPartner_Location.IsActive='Y'",
               "contextParams": [],
@@ -190,6 +207,10 @@
             "inputMode": "selector",
             "section": "principal",
             "seq": 6,
+            "validation": {
+              "required": true,
+              "maxLength": 22
+            },
             "validationRule": {
               "code": "M_PriceList.issopricelist = @isSOTrx@",
               "contextParams": [],
@@ -220,6 +241,9 @@
             "reference": "PaymentMethod",
             "inputMode": "selector",
             "section": "principal",
+            "validation": {
+              "maxLength": 32
+            },
             "validationRule": {
               "code": "EXISTS (SELECT 1 FROM FIN_FinAcc_PaymentMethod fapm WHERE FIN_PaymentMethod.FIN_PaymentMethod_ID=fapm.FIN_PaymentMethod_ID\nAND fapm.Payin_Allow = (SELECT CASE WHEN '@IsSOTrx@'='Y' THEN 'Y' ELSE fapm.Payin_Allow END FROM DUAL)\nAND fapm.Payout_Allow = (SELECT CASE WHEN '@IsSOTrx@'='N' THEN 'Y' ELSE fapm.Payout_Allow END FROM DUAL))",
               "contextParams": [],
@@ -248,6 +272,10 @@
             "reference": "PaymentTerm",
             "inputMode": "selector",
             "section": "principal",
+            "validation": {
+              "required": true,
+              "maxLength": 22
+            },
             "readOnlyLogic": {
               "raw": "@Processed@='Y'",
               "evaluable": true,
@@ -268,6 +296,10 @@
             "sourceRequired": true,
             "reference": "Warehouse",
             "inputMode": "search",
+            "validation": {
+              "required": true,
+              "maxLength": 22
+            },
             "readOnlyLogic": {
               "raw": "@Processed@='Y'",
               "evaluable": true,
@@ -412,7 +444,11 @@
               }
             ],
             "defaultValue": "DR",
-            "gridOrder": 4
+            "gridOrder": 4,
+            "validation": {
+              "required": true,
+              "maxLength": 60
+            }
           },
           {
             "name": "grandTotalAmount",
@@ -427,7 +463,11 @@
             "form": true,
             "sourceRequired": true,
             "section": "summary",
-            "gridOrder": 5
+            "gridOrder": 5,
+            "validation": {
+              "required": true,
+              "maxLength": 22
+            }
           },
           {
             "name": "summedLineAmount",
@@ -441,7 +481,11 @@
             "grid": false,
             "form": true,
             "sourceRequired": true,
-            "section": "summary"
+            "section": "summary",
+            "validation": {
+              "required": true,
+              "maxLength": 22
+            }
           },
           {
             "name": "currency",
@@ -460,6 +504,10 @@
             "defaultValue": "@C_Currency_ID@",
             "section": "principal",
             "seq": 5,
+            "validation": {
+              "required": true,
+              "maxLength": 22
+            },
             "readOnlyLogic": {
               "raw": "@Processed@='Y'",
               "evaluable": true,
@@ -476,7 +524,10 @@
             "visibility": "editable",
             "required": false,
             "grid": false,
-            "form": false
+            "form": false,
+            "validation": {
+              "maxLength": 255
+            }
           },
           {
             "name": "deliveryStatus",
@@ -490,7 +541,10 @@
             "grid": true,
             "form": false,
             "columnType": "percent",
-            "gridOrder": 7
+            "gridOrder": 7,
+            "validation": {
+              "maxLength": 4
+            }
           },
           {
             "name": "invoiceStatus",
@@ -504,7 +558,10 @@
             "grid": true,
             "form": false,
             "columnType": "percent",
-            "gridOrder": 6
+            "gridOrder": 6,
+            "validation": {
+              "maxLength": 4
+            }
           },
           {
             "name": "etgoTotalDiscount",
@@ -521,7 +578,10 @@
               "type": "computed",
               "source": "0"
             },
-            "defaultValue": "0"
+            "defaultValue": "0",
+            "validation": {
+              "maxLength": 22
+            }
           },
           {
             "name": "processed",
@@ -538,6 +598,10 @@
             "derivation": {
               "type": "computed",
               "source": "false"
+            },
+            "validation": {
+              "required": true,
+              "maxLength": 1
             }
           },
           {
@@ -550,7 +614,10 @@
             "visibility": "editable",
             "required": false,
             "grid": false,
-            "form": false
+            "form": false,
+            "validation": {
+              "maxLength": 22
+            }
           }
         ],
         "searchableFields": [
@@ -635,6 +702,10 @@
             ],
             "section": "principal",
             "gridOrder": 1,
+            "validation": {
+              "required": true,
+              "maxLength": 60
+            },
             "callout": {
               "className": "org.openbravo.erpCommon.ad_callouts.SL_Order_Product"
             },
@@ -656,7 +727,10 @@
             "grid": true,
             "form": true,
             "section": "principal",
-            "gridOrder": 2
+            "gridOrder": 2,
+            "validation": {
+              "maxLength": 2000
+            }
           },
           {
             "name": "orderedQuantity",
@@ -677,7 +751,10 @@
             "defaultValue": "1",
             "section": "principal",
             "gridOrder": 3,
-            "min": 0,
+            "validation": {
+              "required": true,
+              "maxLength": 10
+            },
             "callout": {
               "className": "org.openbravo.erpCommon.ad_callouts.SL_Order_Amt"
             },
@@ -703,7 +780,10 @@
             "columnType": "amount",
             "section": "principal",
             "gridOrder": 4,
-            "min": 0,
+            "validation": {
+              "required": true,
+              "maxLength": 22
+            },
             "callout": {
               "className": "org.openbravo.erpCommon.ad_callouts.SL_Order_Amt"
             },
@@ -737,6 +817,11 @@
             "gridOrder": 5,
             "min": 0,
             "max": 100,
+            "validation": {
+              "maxLength": 22,
+              "minimum": 0,
+              "maximum": 100
+            },
             "callout": {
               "className": "org.openbravo.erpCommon.ad_callouts.SL_Order_Amt"
             },
@@ -767,6 +852,10 @@
             ],
             "section": "principal",
             "gridOrder": 6,
+            "validation": {
+              "required": true,
+              "maxLength": 22
+            },
             "validationRule": {
               "code": "C_TAX.VALIDFROM<=COALESCE(@DateInvoiced@,@DateOrdered@) AND (C_TAX.SOPOTYPE =(CASE WHEN @IsSOTrx@ = 'Y' THEN 'S' ELSE 'P' END) OR C_TAX.SOPOTYPE = 'B') AND C_TAX.AD_CLIENT_ID IN (@AD_CLIENT_ID@, '0') AND C_TAX.C_TAX_ID=(CASE WHEN @IsSOTrx@ = 'Y' AND EXISTS(SELECT 1 FROM AD_ORGINFO WHERE ISTAXUNDEDUCTABLE='Y' AND AD_ORG_ID=@AD_ORG_ID@) THEN (SELECT C_TAX_ID FROM AD_ORGINFO WHERE ISTAXUNDEDUCTABLE='Y' AND AD_ORG_ID=@AD_ORG_ID@) ELSE C_TAX.C_TAX_ID END)",
               "contextParams": [],
@@ -805,6 +894,9 @@
             "defaultValue": "0",
             "section": "principal",
             "gridOrder": 7,
+            "validation": {
+              "maxLength": 2
+            },
             "displayLogic": {
               "raw": "@GROSSPRICE@='Y'",
               "evaluable": true
@@ -822,6 +914,10 @@
             "grid": false,
             "form": false,
             "sourceRequired": true,
+            "validation": {
+              "required": true,
+              "maxLength": 22
+            },
             "callout": {
               "className": "org.openbravo.erpCommon.ad_callouts.SL_Order_Amt"
             },
@@ -847,6 +943,9 @@
               "source": "0"
             },
             "defaultValue": "0",
+            "validation": {
+              "maxLength": 2
+            },
             "callout": {
               "className": "org.openbravo.erpCommon.ad_callouts.SL_Order_Amt"
             },
@@ -867,7 +966,7 @@
             "label": "Currency",
             "type": "foreignKey",
             "tsType": "string",
-            "visibility": "editable",
+            "visibility": "readOnly",
             "required": true,
             "grid": false,
             "form": false,
@@ -878,7 +977,11 @@
             },
             "reference": "Currency",
             "inputMode": "selector",
-            "defaultValue": "@C_Currency_ID@"
+            "defaultValue": "@C_Currency_ID@",
+            "validation": {
+              "required": true,
+              "maxLength": 22
+            }
           }
         ],
         "searchableFields": [
@@ -959,7 +1062,8 @@
         "es_ES": {
           "C_BPartner_ID": "Contacto",
           "DeliveryStatus": "Estado de entrega",
-          "InvoiceStatus": "Estado de facturación"
+          "InvoiceStatus": "Estado de facturación",
+          "PriceList": "Precio"
         },
         "en_US": {
           "C_BPartner_ID": "Contact",
@@ -1824,7 +1928,8 @@
             "column": "M_Product_ID",
             "type": "foreignKey",
             "visibility": "editable",
-            "required": true
+            "required": true,
+            "order": 1
           },
           {
             "name": "description",
@@ -1832,7 +1937,8 @@
             "column": "Description",
             "type": "text",
             "visibility": "editable",
-            "required": false
+            "required": false,
+            "order": 2
           },
           {
             "name": "orderedQuantity",
@@ -1840,7 +1946,8 @@
             "column": "QtyOrdered",
             "type": "quantity",
             "visibility": "editable",
-            "required": true
+            "required": true,
+            "order": 3
           },
           {
             "name": "listPrice",
@@ -1848,7 +1955,8 @@
             "column": "PriceList",
             "type": "price",
             "visibility": "editable",
-            "required": true
+            "required": true,
+            "order": 4
           },
           {
             "name": "discount",
@@ -1856,7 +1964,8 @@
             "column": "Discount",
             "type": "decimal",
             "visibility": "editable",
-            "required": false
+            "required": false,
+            "order": 5
           },
           {
             "name": "tax",
@@ -1864,7 +1973,8 @@
             "column": "C_Tax_ID",
             "type": "foreignKey",
             "visibility": "editable",
-            "required": true
+            "required": true,
+            "order": 6
           },
           {
             "name": "lineGrossAmount",
@@ -1872,7 +1982,8 @@
             "column": "Line_Gross_Amount",
             "type": "amount",
             "visibility": "readOnly",
-            "required": false
+            "required": false,
+            "order": 7
           },
           {
             "name": "lineNo",
@@ -2295,7 +2406,7 @@
             "apiKey": "currency",
             "column": "C_Currency_ID",
             "type": "foreignKey",
-            "visibility": "editable",
+            "visibility": "readOnly",
             "required": true
           },
           {
@@ -2844,7 +2955,8 @@
       "es_ES": {
         "C_BPartner_ID": "Contacto",
         "DeliveryStatus": "Estado de entrega",
-        "InvoiceStatus": "Estado de facturación"
+        "InvoiceStatus": "Estado de facturación",
+        "PriceList": "Precio"
       },
       "en_US": {
         "C_BPartner_ID": "Contact",

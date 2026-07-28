@@ -106,8 +106,8 @@ function CreateAction({ field, createLabel, onCreateRequest, onCreate, query }) 
     <button
       type="button"
       data-testid={`action-create-${field.key}`}
-      className="w-full text-left px-3 py-2 text-sm font-medium hover:bg-blue-50 border-b border-border/40 transition-colors"
-      style={{ color: '#202452' }}
+      className="w-full text-left px-3 py-2 text-sm font-medium hover:bg-status-info border-b border-border/40 transition-colors"
+      style={{ color: 'hsl(var(--foreground))' }}
       onMouseDown={(e) => { e.preventDefault(); onCreate(); }}
     >
       {typeof createLabel === 'function' ? createLabel(query.trim()) : createLabel}
@@ -217,6 +217,30 @@ export function CreatableSearchSelect({
       setQuery(displayValue || '');
     }
   }, [displayValue]);
+
+  // Re-sync local options whenever the caller passes a NEW staticOptions array — e.g. a catalog
+  // fetched asynchronously after mount (starts as `[]`, then populated once the request resolves).
+  // The initial `useState(staticOptions ?? [])` above only covers the first render, so without this
+  // effect a caller that loads its options after the component mounts would see an empty dropdown
+  // forever (ETP-4530). Callers passing a stable array (e.g. a module-level constant) are unaffected.
+  //
+  // staticOptions is compared BY CONTENT (not by reference) against the last value this effect
+  // actually synced from: many callers pass an inline-mapped array (a new reference every render),
+  // and syncing unconditionally on every reference change would (a) trigger an extra render per
+  // parent render, resetting dropdown/scroll state while open, and (b) clobber a locally-created
+  // option (`handleCreate` below adds it into `options` immutably via `setOptions(prev => ...)`)
+  // the moment the parent next re-renders with a content-identical-but-new-reference array.
+  const lastSyncedStaticOptionsRef = useRef(undefined);
+  useEffect(() => {
+    if (!staticOptions) return;
+    const lastSynced = lastSyncedStaticOptionsRef.current;
+    const unchanged = lastSynced
+      && lastSynced.length === staticOptions.length
+      && lastSynced.every((opt, i) => opt.id === staticOptions[i]?.id && opt.name === staticOptions[i]?.name);
+    if (unchanged) return;
+    lastSyncedStaticOptionsRef.current = staticOptions;
+    setOptions(staticOptions);
+  }, [staticOptions]);
 
   // Fetch options whenever the parent value changes or after a forced refresh (refreshKey)
   useEffect(() => {
@@ -390,7 +414,19 @@ export function CreatableSearchSelect({
   useEffect(() => {
     if (!showDropdown) return;
     updateDropdownDirection();
-    const onReflow = () => updateDropdownDirection();
+    const onReflow = (e) => {
+      // 'scroll' is captured at the window level (capture=true) so the panel stays glued
+      // to its trigger when an ANCESTOR scrolls (e.g. the modal body). But capture-phase
+      // listeners on window also see the dropdown's OWN internal scroll (scrolling the
+      // options list itself), which re-triggers this on every scroll tick — fighting the
+      // user's own scroll gesture inside a long options list (e.g. a full chart of
+      // accounts). Skip recompute when the scroll originated from inside the dropdown.
+      // Only 'scroll' events carry a Node target here — a 'resize' event's target is
+      // `window` itself, which Node.contains() throws on, so gate the containment check
+      // to 'scroll' and always recompute on 'resize'.
+      if (e.type === 'scroll' && dropdownRef.current?.contains(e.target)) return;
+      updateDropdownDirection();
+    };
     window.addEventListener('resize', onReflow);
     window.addEventListener('scroll', onReflow, true);
     return () => {
@@ -407,7 +443,7 @@ export function CreatableSearchSelect({
     */
     <div
       ref={rootRef}
-      className={`relative flex ${FIELD_HEIGHT} w-full items-center rounded-lg border border-[#D1D4DB] bg-transparent shadow-[0px_1px_2px_rgba(18,18,23,0.05)] pl-2 pr-2 gap-1 focus-within:ring-2 focus-within:ring-primary${isDisabled ? ' opacity-50 cursor-not-allowed' : ''}`}
+      className={`relative flex ${FIELD_HEIGHT} w-full items-center rounded-lg border border-[hsl(var(--border-control))] shadow-[0px_1px_2px_hsl(var(--foreground) / 0.05)] pl-2 pr-2 gap-1 focus-within:ring-2 focus-within:ring-primary${isDisabled ? ' bg-muted text-text-disabled cursor-not-allowed' : ' bg-transparent'}`}
       onClick={showChip && !isDisabled ? handleChipClick : undefined}
     >
       {showChip ? (
@@ -430,7 +466,7 @@ export function CreatableSearchSelect({
           disabled={isDisabled}
           required={field.required && !isDisabled}
           autoComplete="off"
-          className="flex-1 min-w-0 h-full bg-transparent border-0 outline-none py-2 text-sm placeholder:text-[#6C6C89] disabled:cursor-not-allowed"
+          className="flex-1 min-w-0 h-full bg-transparent border-0 outline-none py-2 text-sm placeholder:text-[hsl(var(--muted-foreground))] disabled:cursor-not-allowed"
           onChange={(e) => {
             isEditingRef.current = true;
             setQuery(e.target.value);
@@ -456,7 +492,7 @@ export function CreatableSearchSelect({
       )}
       {loading ? (
         <Loader2
-          className="h-4 w-4 text-[#828FA3] animate-spin shrink-0 ml-auto"
+          className="h-4 w-4 text-[hsl(var(--text-disabled))] animate-spin shrink-0 ml-auto"
           data-testid={"Loader2__" + field.id} />
       ) : (
         <button
@@ -474,7 +510,7 @@ export function CreatableSearchSelect({
           className="shrink-0 ml-auto flex items-center"
         >
           <ChevronDown
-            className="h-4 w-4 text-[#828FA3]"
+            className="h-4 w-4 text-[hsl(var(--text-disabled))]"
             data-testid={"ChevronDown__" + field.id} />
         </button>
       )}
@@ -482,9 +518,33 @@ export function CreatableSearchSelect({
         <div
           ref={dropdownRef}
           data-testid={`options-${field.key}`}
-          className="bg-white border rounded-md shadow-lg overflow-auto"
+          className="bg-card border rounded-md shadow-lg overflow-auto"
           style={dropdownStyle}
           data-open-up={openUp ? 'true' : 'false'}
+          // Radix Dialog (react-remove-scroll) locks body scroll while open by attaching a
+          // global, capture-phase wheel listener that calls preventDefault() on any wheel
+          // event outside the dialog's own DOM subtree — it only recognizes elements nested
+          // inside Dialog.Content as scrollable exceptions. This panel is portaled to
+          // document.body as a SIBLING of the dialog content (so it can be positioned
+          // relative to the viewport instead of the modal, see the comment on
+          // updateDropdownDirection above), so react-remove-scroll never allowlists it: the
+          // browser's native wheel-to-scroll translation gets cancelled before it can move
+          // this element's scrollTop, even though overflow:auto and a real maxHeight are
+          // correctly set (confirmed live: scrollTop stayed 0 after a wheel event, but a
+          // direct `el.scrollTop = x` assignment worked fine — only the NATIVE scroll
+          // mechanism is blocked). Bypass it manually, matching the same fix already used by
+          // LookupPicker.jsx for the identical scenario. Only do the manual adjustment when
+          // e.defaultPrevented is already true — react-remove-scroll's capture-phase listener
+          // runs before this bubble-phase handler, so that flag tells us whether native scroll
+          // was actually blocked. When this component is used OUTSIDE a Dialog (no
+          // react-remove-scroll active), native scrolling works normally and adding deltaY on
+          // top of it here would double-scroll the panel.
+          onWheel={(e) => {
+            e.stopPropagation();
+            if (e.defaultPrevented) {
+              e.currentTarget.scrollTop += e.deltaY;
+            }
+          }}
         >
           <SearchSelectOptionsPanel
             field={field}

@@ -81,7 +81,7 @@ describe('DataTable — inline-add-row validation (ETP-4005)', () => {
   it('keeps the inline-add row open on below-min and toasts fieldMinValueError', () => {
     const block = src.slice(src.indexOf('const belowMin = fields.filter'), src.indexOf('setIsSaving(true);'));
     assert.match(block, /setInvalidFields\(new Set\(belowMin\.map\(f => f\.key\)\)\)/);
-    assert.match(block, /toast\.error\(ui\('fieldMinValueError'\)\)/);
+    assert.match(block, /toast\.error\(ui\('fieldMinValueError', \{ min: belowMin\[0\]\.min \}\)\)/);
     assert.match(block, /return Promise\.resolve\(false\);/);
   });
 
@@ -93,7 +93,8 @@ describe('DataTable — inline-add-row validation (ETP-4005)', () => {
 
   it('uses i18n hooks (no hardcoded English) for both validation messages', () => {
     assert.match(src, /ui\('requiredFieldsMissing'\)/);
-    assert.match(src, /ui\('fieldMinValueError'\)/);
+    // The min value is interpolated so the message reads "Value must be at least N".
+    assert.match(src, /ui\('fieldMinValueError', \{ min: belowMin\[0\]\.min \}\)/);
     assert.doesNotMatch(src, /toast\.error\(['"`]Required fields are missing/);
     assert.doesNotMatch(src, /toast\.error\(['"`]Value cannot be negative/);
   });

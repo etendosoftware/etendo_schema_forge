@@ -7,6 +7,7 @@ import { AddLineButton } from '@/components/ui/add-line-button.jsx';
 import { X, MoreVertical, Check, Save, List, Printer, Mail, Trash2, Loader2, Shield, Lock, Undo2 } from 'lucide-react';
 import { AttachmentIcon } from '@/components/attachments/AttachmentIcon';
 import { PricingIcon, WarehouseProductsIcon } from '@/components/ui/custom-icons';
+import PaymentLifecycleConfirmModal from '@/windows/custom/shared/PaymentLifecycleConfirmModal';
 
 const TAB_ICONS = {
   'custom:attachments': AttachmentIcon,
@@ -68,6 +69,7 @@ import BalanceFooterPanel from './BalanceFooterPanel.jsx';
 import { resolveTotalDiscountPct } from '@/lib/documentTotals';
 import { computeBalance } from '@/lib/balanceTotals';
 import LinesSelectionBar from './LinesSelectionBar.jsx';
+import { evalTabReadOnly } from './evalTabReadOnly.js';
 import { resolveIdentifier } from '@/lib/resolveIdentifier.js';
 import {
   buildCalloutFormState, extractAuxValues, normalizeCalloutQty,
@@ -80,6 +82,8 @@ import { useRegisterWindowContext } from '@/components/CurrentWindowContext';
 import { matchOcrDocType } from '@/components/copilot/ocr/ocrDocTypes';
 import { isDeleteVisibleForRecord } from '@/utils/recordActions.js';
 import { buildHeaderSelectorContext, buildLineSelectorContext } from '@/lib/selectorContext.js';
+import { isCapabilityVisible } from '@/lib/capabilityVisibility.js';
+import { useCapabilitiesSafe } from '@/hooks/useCapabilitiesSafe.js';
 import DocumentStatusPill from './DocumentStatusPill.jsx';
 
 const LazyOcrInlineUploader = lazy(() => import('@/components/copilot/ocr/OcrInlineUploader.jsx'));
@@ -397,8 +401,8 @@ export function getSecondarySelectionChangeHandler(linesLayout, setSecondarySele
 }
 
 export function getSecondaryRowUpdateHandler(st, linesLayout, ctx) {
-  const { api, apiBaseUrl, secondaryHooks, stIdx, token, ui, extractErrorMessage } = ctx;
-  return !st.customAddModal && linesLayout === 'inlineEditable' ? async (row, fieldKey, value, opts) => {
+  const { api, apiBaseUrl, secondaryHooks, stIdx, token, ui, extractErrorMessage, isDocumentReadOnly, hook } = ctx;
+  return !st.customAddModal && linesLayout === 'inlineEditable' && !isDocumentReadOnly ? async (row, fieldKey, value, opts) => {
     const childUrl = api?.crud?.[st.key]?.detailUrl?.replace('{id}', row.id)
         || `${apiBaseUrl}/${st.key}/${row.id}`;
     const includesIdentifier = opts?.identifier !== undefined;
@@ -429,6 +433,28 @@ export function getSecondaryRowUpdateHandler(st, linesLayout, ctx) {
       // NEO wraps the saved record in {response:{data:[...]}}.
       const serverRow = updated?.response?.data?.[0] ?? null;
       if (serverRow) secondaryHooks[stIdx]?.handleUpdateChild?.(row.id, serverRow);
+      // ETP-4029: editing rate/foreignAmount here also updates the invoice
+      // header's hidden eTGOCurrencyRate on the backend (reverse sync — see
+      // InvoiceExchangeRateHandler). Without this, the header's currency-rate
+      // picker keeps showing the stale value until a manual reload.
+      // refreshHeaderTotals is the same lightweight, non-disruptive header
+      // refresh already used after primary-line edits — it re-GETs the header
+      // and merges in only the fields the user hasn't touched, so any of the
+      // user's own in-progress unsaved header edits survive untouched.
+      //
+      // clearUserChangedKey('eTGOCurrencyRate') runs first, and ONLY for this
+      // one field: if the user had earlier edited the rate via the header's
+      // own CurrencyRatePicker in this same visit (already saved), that edit
+      // permanently marks eTGOCurrencyRate as "user changed" for the rest of
+      // the session (see useEntity.handleChange) — refreshHeaderTotals would
+      // then refuse to overwrite it, leaving the header stuck on the old
+      // value even though the tab's edit just persisted a newer one. This is
+      // a narrow, deliberate exception for this specific cross-surface sync;
+      // see the full rationale on clearUserChangedKey's definition.
+      if (st.key === 'exchangeRates' && hook?.selected?.id) {
+        hook.clearUserChangedKey('eTGOCurrencyRate');
+        hook.refreshHeaderTotals(hook.selected.id);
+      }
     } else {
       secondaryHooks[stIdx]?.handleUpdateChild?.(row.id, previous);
       const msg = await extractErrorMessage(res);
@@ -607,7 +633,7 @@ function secondaryTabEmptyState({ ui, onAddLineClick, addLineLabel }) {
   return (
     <div style={{ margin: '24px 16px', padding: '32px 24px', background: 'var(--color-background-secondary)', borderRadius: 'var(--border-radius-lg)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }} data-testid="secondary-tab-empty-state">
       <div style={{ width: 40, height: 40, borderRadius: 'var(--border-radius-md)', background: 'var(--color-background-tertiary)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 12 }}>
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="hsl(var(--muted-foreground))" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
           <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
           <polyline points="14 2 14 8 20 8" />
           <line x1="8" y1="13" x2="16" y2="13" />
@@ -616,7 +642,7 @@ function secondaryTabEmptyState({ ui, onAddLineClick, addLineLabel }) {
       </div>
       <span style={{ fontSize: 14, fontWeight: 500, color: 'var(--color-text-primary)', marginBottom: 4 }}>{ui('noRecordsYet')}</span>
       <span style={{ fontSize: 13, color: 'var(--color-text-secondary)', marginBottom: 20 }}>{ui('createNewRecord')}</span>
-      <button type="button" onClick={onAddLineClick} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, borderRadius: 8, padding: '6px 14px', fontSize: 13, fontWeight: 500, background: '#18181b', color: '#fff', border: 'none', cursor: 'pointer' }}>
+      <button type="button" onClick={onAddLineClick} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, borderRadius: 8, padding: '6px 14px', fontSize: 13, fontWeight: 500, background: 'hsl(var(--foreground))', color: 'hsl(var(--background))', border: 'none', cursor: 'pointer' }}>
         + {addLineLabel}
       </button>
     </div>
@@ -742,11 +768,16 @@ function secondaryAddLineBar(props) {
 }
 
 export function SecondaryTableTab(props) {
+  // Evaluates the tab's own readOnlyLogic (if declared) against the current
+  // header record — independent of the document-wide isDocumentReadOnly, which
+  // only governs the primary lines table. Most tabs declare no readOnlyLogic
+  // and this stays false, preserving today's behavior everywhere else.
+  const tabReadOnly = evalTabReadOnly(props.st, props.hook.selected);
   const secondaryChildren = props.secondaryHooks[props.stIdx]?.children ?? [];
   const isAddingThis = props.addingSecondaryLine?.[props.st.key] ?? false;
   const hasAddFields = (props.st.addLineFields?.entry?.length ?? 0) > 0;
   const showEmptyState = secondaryChildren.length === 0 && !isAddingThis
-    && props.hook.editing && hasAddFields && !props.st.customAddModal;
+    && props.hook.editing && hasAddFields && !props.st.customAddModal && !tabReadOnly;
   if (showEmptyState) {
     return secondaryTabEmptyState({ ui: props.ui, onAddLineClick: props.onAddLineClick, addLineLabel: props.addLineLabel });
   }
@@ -763,6 +794,7 @@ export function SecondaryTableTab(props) {
               labelOverrides={props.labelOverrides}
               selectorContext={props.selectorContextByEntity[props.st.key]}
               linesLayout={props.linesLayout}
+              isDocumentReadOnly={tabReadOnly}
               onRowClick={resolveSecondaryRowClickHandler(props.st, {
                 openCustomModal: props.openCustomModal,
                 openSecondaryLine: props.openSecondaryLine,
@@ -773,7 +805,7 @@ export function SecondaryTableTab(props) {
               onEditRow={getSecondaryEditRowHandler(props.st, props.setCustomModalState)}
               selectedRowId={props.selectedSecondaryLine?._tabKey === props.st.key ? props.selectedSecondaryLine?.id : undefined}
               onSelectionChange={getSecondarySelectionChangeHandler(props.linesLayout, props.setSecondarySelectedRows, props.st)}
-              onDeleteRow={(props.enableSecondaryRowDelete || (props.linesLayout === 'inlineEditable' && !props.st.customAddModal)) && (props.crud?.[props.st.key]?.delete ?? true) ? props.onDeleteRow : undefined}
+              onDeleteRow={(props.enableSecondaryRowDelete || (props.linesLayout === 'inlineEditable' && !props.st.customAddModal)) && !tabReadOnly && (props.crud?.[props.st.key]?.delete ?? true) ? props.onDeleteRow : undefined}
               // Inline edit save for secondary-tab rows. Fires when a
               // cell loses focus while in edit mode. Optimistic flow:
               // we update the local cache FIRST so the Radix Select
@@ -787,8 +819,10 @@ export function SecondaryTableTab(props) {
                 token: props.token,
                 ui: props.ui,
                 extractErrorMessage: props.extractErrorMessage,
+                isDocumentReadOnly: tabReadOnly,
+                hook: props.hook,
               })}
-              addRow={props.st.addLineFields?.entry?.length > 0 ? {
+              addRow={props.st.addLineFields?.entry?.length > 0 && !tabReadOnly ? {
                 ref: props.secondaryAddRowRef,
                 active: props.addingSecondaryLine[props.st.key] ?? false,
                 fields: props.st.addLineFields.entry,
@@ -802,7 +836,7 @@ export function SecondaryTableTab(props) {
         </div>
         {secondaryDetailSidebar(props)}
       </div>
-      {secondaryAddLineBar(props)}
+      {!tabReadOnly && secondaryAddLineBar(props)}
     </>
   );
 }
@@ -828,7 +862,7 @@ export function getChildSaveButtonLabel(savingChild, ui) {
 }
 
 export function getAddLineWrapperClassName(linesLayout) {
-  return linesLayout === 'inlineEditable' ? 'sticky bottom-0 bg-white z-10' : 'relative';
+  return linesLayout === 'inlineEditable' ? 'sticky bottom-0 bg-card z-10' : 'relative';
 }
 
 export function getAddLineWrapperStyle(linesLayout, { withBorder = true, noTopPadding = false } = {}) {
@@ -854,7 +888,7 @@ export function getAddLineWrapperStyle(linesLayout, { withBorder = true, noTopPa
     // The top border separates the lines from the add-button in the primary
     // header-lines path. Secondary/child tabs already have the table's own
     // bottom border, so they pass withBorder:false to avoid a double divider.
-    ...(withBorder ? { borderTop: '0.5px solid var(--color-border-tertiary, #e5e7eb)' } : {}),
+    ...(withBorder ? { borderTop: '0.5px solid var(--color-border-tertiary, hsl(var(--border-subtle)))' } : {}),
     padding
   };
 }
@@ -939,7 +973,7 @@ function getSidebarSlideClassName(isClosingLine) {
 }
 
 function getLinesToolbarClassName(linesLayout, toolbarPaddingX, toolbarBorderBottom) {
-  return `flex items-center justify-between ${linesLayout === 'inlineEditable' ? 'p-2' : toolbarPaddingX + ' py-2'}${toolbarBorderBottom || linesLayout === 'inlineEditable' ? ' border-b border-[#E8EAEF]' : ''}`;
+  return `flex items-center justify-between ${linesLayout === 'inlineEditable' ? 'p-2' : toolbarPaddingX + ' py-2'}${toolbarBorderBottom || linesLayout === 'inlineEditable' ? ' border-b border-[hsl(var(--border-subtle))]' : ''}`;
 }
 
 function getLineMenuActionsRef(getLineMenuActions, extraActionsRef) {
@@ -1059,6 +1093,14 @@ export function buildInlineRowUpdateHandler({ linesLayout, isDocumentReadOnly, a
     });
     if (res.ok) {
       applyLocalChildRowUpdate(derivedUpdates, fieldKey, payloadValue, fieldValues, opts, hook, row);
+      // Server response wins over the optimistic cache when present —
+      // picks up trigger-computed fields (e.g. etgoQtydiff) that only
+      // exist after the DB flush, mirroring the secondary-tab handler
+      // above (line ~425). NEO wraps the saved record in
+      // {response:{data:[...]}}.
+      const updated = await res.json().catch(() => null);
+      const serverRow = updated?.response?.data?.[0] ?? null;
+      if (serverRow) hook.handleUpdateChild?.(row.id, serverRow);
     } else {
       const msg = await extractErrorMessage(res);
       toast.error(msg || ui('networkError'));
@@ -1337,6 +1379,14 @@ const WINDOW_DELETE_ACTIONS = {
 // scope for a same-key allowlist fix.
 const DIMENSION_MACRO_KEYS = new Set(['project', 'costcenter', 'costCenter', 'businessPartner']);
 
+// ETP-4500 — same rationale/hardcoding constraint as WINDOW_DELETE_ACTIONS above: these
+// windows show the rich Reactivar/Eliminar cartel (conditional Conciliación/Asiento items)
+// instead of the generic delete confirmation Dialog. `dir` feeds the cobro/pago wording.
+const WINDOW_DELETE_CONFIRM_MODALS = {
+  'payment-in': { Component: PaymentLifecycleConfirmModal, dir: 'in' },
+  'payment-out': { Component: PaymentLifecycleConfirmModal, dir: 'out' },
+};
+
 export function isDeleteButtonVisible({
   isNew,
   recordId,
@@ -1366,21 +1416,14 @@ export function isDeleteButtonVisible({
 
 export function renderPrimaryTabButtons(primaryTabsVariant, primaryTabs, setActivePrimaryTab, activePrimaryTab, tMenu) {
   return primaryTabsVariant === 'pill' ? (
-      <div className="inline-flex items-center gap-1 p-1 h-10 rounded-xl" style={{background: '#F5F7F9'}}>
+      <div className="inline-flex items-center gap-1 p-1 h-10 rounded-xl bg-muted">
         {primaryTabs.map(tab => (
             <button
                 key={tab.key}
                 onClick={() => setActivePrimaryTab(tab.key)}
-                className="h-8 px-4 text-sm font-medium rounded-lg transition-all"
-                style={
-                  activePrimaryTab === tab.key
-                      ? {
-                        background: '#FFFFFF',
-                        color: '#121217',
-                        boxShadow: '0px 1px 3px rgba(18,18,23,0.10), 0px 1px 2px rgba(18,18,23,0.06)'
-                      }
-                      : {color: '#121217'}
-                }
+                className={activePrimaryTab === tab.key
+                  ? 'h-8 px-4 text-sm font-medium rounded-lg transition-all bg-card text-text-primary shadow-sm'
+                  : 'h-8 px-4 text-sm font-medium rounded-lg transition-all text-text-secondary'}
             >
               {tMenu(tab.label)}
             </button>
@@ -1394,8 +1437,8 @@ export function renderPrimaryTabButtons(primaryTabsVariant, primaryTabs, setActi
               className={[
                 'relative px-4 py-1.5 text-sm font-medium rounded-lg transition-colors border',
                 activePrimaryTab === tab.key
-                    ? 'bg-white border-gray-200 shadow-sm text-foreground'
-                    : 'border-transparent text-muted-foreground hover:text-foreground',
+                    ? 'bg-card border-border-control shadow-sm text-text-primary'
+                    : 'border-transparent text-text-secondary hover:text-text-primary',
               ].join(' ')}
           >
             {tMenu(tab.label)}
@@ -1476,7 +1519,7 @@ function renderDraftModeSaveActions({
 }) {
   return (
     <>
-      <Button variant="outline" size="default" className={`${saveBtnCls} bg-white border-[#D1D4DB] text-[#121217]`} data-testid="action-save-draft" disabled={hook.isSaving || !isDirty || blockSaveForBalance} title={blockSaveForBalance ? ui('journalUnbalancedSaveBlocked') : undefined} onClick={async () => {
+      <Button variant="outline" size="default" className={`${saveBtnCls} bg-card border-[hsl(var(--border-control))] text-[hsl(var(--foreground))]`} data-testid="action-save-draft" disabled={hook.isSaving || !isDirty || blockSaveForBalance} title={blockSaveForBalance ? ui('journalUnbalancedSaveBlocked') : undefined} onClick={async () => {
         if (!(await flushPendingLines())) return;
         const saved = await hook.handleSave(data);
         if (saved?.id && isNew) {
@@ -1484,7 +1527,7 @@ function renderDraftModeSaveActions({
           navigate(`/${windowName}/${saved.id}`, { replace: true, state: { justSaved: saved } });
         }
       }}>
-        {hook.isSaving ? <Loader2 className="h-3.5 w-3.5 animate-spin" data-testid="Loader2__fa3275" /> : <Save className="h-3.5 w-3.5" color="#64748B" data-testid="Save__fa3275" />}
+        {hook.isSaving ? <Loader2 className="h-3.5 w-3.5 animate-spin" data-testid="Loader2__fa3275" /> : <Save className="h-3.5 w-3.5" color="hsl(var(--muted-foreground))" data-testid="Save__fa3275" />}
         {ui('save')}
       </Button>
       <Button size="default" className={saveBtnCls} data-testid="action-save" disabled={hook.isSaving || blockCompleteForBalance || (draftMode.disableWhenEmpty === true && !hook.childrenLoading && hook.children.length === 0)} title={blockCompleteForBalance ? ui('journalUnbalancedCompleteBlocked') : undefined} onClick={async () => {
@@ -1576,12 +1619,12 @@ function renderExistingRecordSaveAction({
   isDocumentReadOnly, blockSaveForBalance,
 }) {
   return (
-    <Button variant="outline" size="default" className={`${saveBtnCls} bg-white border-[#D1D4DB] text-[#121217]`} data-testid="action-save" disabled={isDocumentReadOnly || hook.isSaving || !isDirty || blockSaveForBalance} title={blockSaveForBalance ? ui('journalUnbalancedSaveBlocked') : undefined} onClick={async () => {
+    <Button variant="outline" size="default" className={`${saveBtnCls} bg-card border-[hsl(var(--border-control))] text-[hsl(var(--foreground))]`} data-testid="action-save" disabled={isDocumentReadOnly || hook.isSaving || !isDirty || blockSaveForBalance} title={blockSaveForBalance ? ui('journalUnbalancedSaveBlocked') : undefined} onClick={async () => {
       if (!(await flushPendingLines())) return;
       const saved = await hook.handleSave(data);
       await handlePostSaveNavigation(saved, { isNew, onAfterCreate, onAfterSave, navigate, windowName, token, apiBaseUrl, hook });
     }}>
-      {hook.isSaving ? <Loader2 className="h-3.5 w-3.5 animate-spin" data-testid="Loader2__fa3275" /> : <Save className="h-3.5 w-3.5" color="#64748B" data-testid="Save__fa3275" />}
+      {hook.isSaving ? <Loader2 className="h-3.5 w-3.5 animate-spin" data-testid="Loader2__fa3275" /> : <Save className="h-3.5 w-3.5" color="hsl(var(--muted-foreground))" data-testid="Save__fa3275" />}
       {ui('save')}
     </Button>
   );
@@ -1734,6 +1777,25 @@ export function dispatchProcessAction(p, { processConfirmModal, setConfirmProces
   else { handleProcess?.(p); }
 }
 
+/**
+ * ETP-4542: opt-in "save before running a process" gate. Only windows that pass
+ * `saveBeforeProcesses` participate; every other window keeps the previous behavior
+ * (returns true immediately, no save). When the form has pending changes (`isDirty`,
+ * the same signal that drives the Save button), the changes are persisted silently
+ * (`{ silent: true }` suppresses the success toast) BEFORE the process flow opens, so
+ * the process runs on fresh data. On save failure — required missing, ETP-4542 numeric
+ * violation, or a backend error — `handleSave` has already surfaced the error and returns
+ * a record without an id; this returns false so the caller aborts without opening the
+ * confirm modal, param dialog, or firing the process POST.
+ *
+ * @returns {Promise<boolean>} true → proceed with the process; false → abort silently.
+ */
+export async function maybeSaveBeforeProcess({ saveBeforeProcesses, isDirty, handleSave }) {
+  if (!saveBeforeProcesses || !isDirty) return true;
+  const saved = await handleSave?.({ silent: true });
+  return !!saved?.id;
+}
+
 export function resolveProcessLabel(p, data) {
   if (p.labelToggle && data?.[p.labelToggle.field] === p.labelToggle.equals) {
     return p.labelToggle.label;
@@ -1741,9 +1803,9 @@ export function resolveProcessLabel(p, data) {
   return p.label;
 }
 
-function renderProcessConfirmModal(process, Modal, onConfirm, onClose) {
+function renderProcessConfirmModal(process, Modal, onConfirm, onClose, record) {
   if (!process || !Modal) return null;
-  return React.createElement(Modal, { process, onConfirm, onClose });
+  return React.createElement(Modal, { process, onConfirm, onClose, record });
 }
 
 function resolveStatusPrefix(key, translate) {
@@ -1764,6 +1826,9 @@ export function DetailView({
   addLineFields = { entry: [], derived: [] },
   catalogs: staticCatalogs,
   api,
+  // ETP-4520 — runtime per-tier window override; see ListView.jsx's identical
+  // `window` prop for the full rationale (buildWindowAccessWiring/effectiveWindow).
+  window: windowProp = null,
   entityLabel,
   detailLabel,
   detailTabIndex,
@@ -1834,7 +1899,7 @@ export function DetailView({
   sidebarContent = null,
   othersLabel = null,
   primaryTabs = null,
-  contentBg = 'bg-white',
+  contentBg = 'bg-card',
   lineConfig = ORDER_LINE_CONFIG,
   lockWhenProcessed = true,
   addLineGuard = null,
@@ -1860,6 +1925,11 @@ export function DetailView({
   secondaryTabsShowHoverLine = false,
   tabsSeparator = false,
   saveBeforeProcesses = false,
+  // ETP-4542: opt-in per window. When true, a header process button whose action is
+  // currently running shows a spinner + "Generating..." label and is disabled to
+  // prevent duplicate executions. Windows that don't pass it keep the current behavior
+  // (no spinner, no extra disabled state). Distinct from saveBeforeProcesses on purpose.
+  showProcessLoadingState = false,
   hideAddLineChevron = false,
   addLineButtonPaddingX = '',
   formScrollPaddingB = 'pb-6',
@@ -2049,12 +2119,16 @@ export function DetailView({
   // ETP-4479 — fall back to the per-window default when the caller didn't
   // explicitly pass `deleteAction` (see WINDOW_DELETE_ACTIONS above).
   const effectiveDeleteAction = deleteAction ?? WINDOW_DELETE_ACTIONS[windowName] ?? null;
+  // ETP-4500 — per-window rich delete cartel (see WINDOW_DELETE_CONFIRM_MODALS above).
+  const deleteConfirmModal = WINDOW_DELETE_CONFIRM_MODALS[windowName] ?? null;
   const navigate = useNavigate();
   const location = useLocation();
   const [searchParams] = useSearchParams();
   const embedded = searchParams.get('embedded') === '1';
   const tMenu = useMenuLabel();
   const ui = useUI();
+  // ETP-4520 — capability map for visibleWhenCapability-gated status pills (below).
+  const capabilities = useCapabilitiesSafe();
   const [addingLine, setAddingLine] = useState(false);
   // Live snapshot of the in-progress add-row values — updated on every keystroke
   // so DocumentTotalsPanel can compute real-time totals before the line is saved.
@@ -2147,7 +2221,12 @@ export function DetailView({
     } : null
   ), [_headerData, windowName, _detailTabTitle, hook.editing, _isFormEditing]);
   useRegisterWindowContext(_windowContextInfo);
-  const isDocumentReadOnly = getDocumentReadOnly(lockWhenProcessed, _headerData);
+  // Window-level read-only (GO view-only windows, e.g. Conversion Rates, OR the
+  // ETP-4520 runtime 'read-only' access tier via the `window` prop): forces the
+  // whole detail read-only, reusing every isDocumentReadOnly gate (save, delete,
+  // add-line, inline edits). Also passed to the header <Form> so its fields render RO.
+  const windowReadOnly = api?.window?.readOnly === true || windowProp?.readOnly === true;
+  const isDocumentReadOnly = getDocumentReadOnly(lockWhenProcessed, _headerData) || windowReadOnly;
   const isProcessed = _headerData?.processed === true || _headerData?.processed === 'Y';
   // When draftMode declares an explicit completedStatuses array, only those documentStatus
   // values hide the Save/Confirm pair. This lets windows like sales-quotation keep the
@@ -2160,6 +2239,38 @@ export function DetailView({
   const [confirmProcess, setConfirmProcess] = useState(null);
   // showNotes state removed — notes panel is always visible in side-by-side layout
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  // Shared by both the generic delete Dialog and the rich per-window cartel
+  // (WINDOW_DELETE_CONFIRM_MODALS) below — same eTPRRemovePayment / handleDelete
+  // routing either way; only the confirmation UI differs. Named distinctly from
+  // the line-level `confirmDelete` (a Promise-based prompt declared further down)
+  // since this one deletes the HEADER record.
+  const confirmHeaderDelete = async () => {
+    setShowDeleteConfirm(false);
+    // ETP-4479 — deleteAction-backed windows go through the same
+    // `neoAction.execute(recordId, actionName)` mechanism the
+    // detail-view "more" menu already uses for NEO actions
+    // (see runNeoMenuAction above), mirroring the URL convention
+    // PaymentHeaderTableBase's row-level delete relies on
+    // (POST {apiBaseUrl}/{entity}/{id}/action/{actionName}).
+    if (effectiveDeleteAction) {
+      const currentId = data?.id || recordId;
+      const result = await neoAction.execute(currentId, effectiveDeleteAction);
+      if (result.success) {
+        // Reuse the per-action i18n key convention (`${action}Completed`,
+        // e.g. eTPRRemovePaymentCompleted) when translated; otherwise
+        // fall back to the generic delete-success message.
+        const key = `${effectiveDeleteAction}Completed`;
+        const msg = ui(key);
+        toast.success(msg !== key ? msg : ui('recordDeleted'));
+        navigate(`/${windowName}`);
+      } else {
+        toast.error(result.message || ui('actionFailed'));
+      }
+      return;
+    }
+    await hook.handleDelete();
+    navigate(`/${windowName}`);
+  };
   // Non-dismissible loading modal shown while a draftMode confirm action with
   // draftMode.processingModal is in flight (e.g. Verifactu's ~8s GenerateRF).
   const [showProcessingModal, setShowProcessingModal] = useState(false);
@@ -2808,6 +2919,29 @@ export function DetailView({
     });
   }, [hook.selected?.id]);
 
+  // ETP-4029: the Exchange Rates tab caches its own row (rate/foreignAmount)
+  // independently of the header. Saving a new header currency rate updates
+  // that row on the backend (AbstractInvoiceHeaderHandler), but the effect
+  // above only re-syncs on a record ID change, not on same-record field
+  // changes — so this tab would keep showing the previously-fetched values
+  // until a manual reload. Scoped to exchangeRates only: no other secondary
+  // tab is known to depend on the header's currency/rate.
+  //
+  // grandTotalAmount is also a trigger: adding/editing/deleting a primary
+  // invoice line never touches currency/eTGOCurrencyRate, but it does change
+  // grandTotalAmount (refreshed into hook.selected by handleAddChild/
+  // handleUpdateChild/handleDeleteChild's refreshHeaderTotals call), and the
+  // backend recomputes this row's foreignAmount from grandTotalAmount on
+  // every line save (InvoiceLineHandler#syncConversionRateDocumentAfterLineSave)
+  // — so this tab needs the same refetch whenever that total changes.
+  useEffect(() => {
+    if (!hook.selected?.id) return;
+    const exchangeRatesIdx = secondaryTabs.findIndex(st => st.key === 'exchangeRates');
+    if (exchangeRatesIdx < 0) return;
+    secondaryHooks[exchangeRatesIdx]?.fetchChildren(hook.selected.id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hook.selected?.currency, hook.selected?.eTGOCurrencyRate, hook.selected?.grandTotalAmount]);
+
   // Apply callout results to the form when they arrive
   useEffect(() => {
     if (!calloutResult) return;
@@ -3156,6 +3290,9 @@ export function DetailView({
   // trueKey declared) hide on the false value — the generator emits the missing
   // side as the literal string 'undefined', which must never reach the screen.
   const renderStatusPillBadge = (b) => {
+    // ETP-4520 — omit the pill entirely when gated by a capability the current
+    // role doesn't hold (e.g. `posted` on sales-invoice/purchase-invoice).
+    if (!isCapabilityVisible(capabilities, b.visibleWhenCapability)) return null;
     const val = data[b.key];
     if (val == null) return null;
     const isTrue = val === true || val === 'Y' || val === 'true';
@@ -3176,8 +3313,8 @@ export function DetailView({
     if (!show) return null;
     if (b.hideWhenStatus?.includes(data[statusField])) return null;
     const cls = b.style === 'warning'
-      ? 'ml-1 border-amber-300 bg-amber-50 text-amber-700'
-      : 'ml-1 bg-blue-600 hover:bg-blue-700 border-transparent text-white';
+      ? 'ml-1 border-status-warning-border bg-status-warning text-status-warning-foreground'
+      : 'ml-1 bg-status-info hover:bg-status-info border-transparent text-primary-foreground';
     return (
       <Badge
         key={`${b.key}-${when}`}
@@ -3313,7 +3450,7 @@ export function DetailView({
         <div className={getLinesToolbarClassName(linesLayout, toolbarPaddingX, toolbarBorderBottom)}>
           <div className="flex items-center gap-3">
             <Button
-              className="h-10 px-3 rounded-lg bg-white border border-[#D1D4DB] shadow-[0px_1px_2px_rgba(18,18,23,0.05)] text-[#121217] text-sm font-medium hover:bg-[#F5F7F9] transition-colors"
+              className="h-10 px-3 rounded-lg bg-card border border-[hsl(var(--border-control))] shadow-[0px_1px_2px_hsl(var(--foreground) / 0.05)] text-[hsl(var(--foreground))] text-sm font-medium hover:bg-[hsl(var(--muted))] transition-colors"
               data-testid="action-cancel"
               onClick={() => navigate(`/${windowName}`)}
             >
@@ -3369,7 +3506,7 @@ export function DetailView({
               {documentPreview && !isNew && recordId && (
                 <button
                   onClick={() => setShowPrint(true)}
-                  className="flex items-center justify-center p-[7px] rounded-md bg-white border border-[#D1D4DB] shadow-[0px_1px_2px_0px_#1212170D] text-muted-foreground hover:bg-[#F1F5F9] hover:text-foreground transition-colors"
+                  className="flex items-center justify-center p-[7px] rounded-md bg-card border border-[hsl(var(--border-control))] shadow-[0px_1px_2px_0px_hsl(var(--foreground))0D] text-muted-foreground hover:bg-[hsl(var(--muted))] hover:text-foreground transition-colors"
                   title={ui('sendPreview')}
                   data-testid="action-document-preview"
                 >
@@ -3395,11 +3532,14 @@ export function DetailView({
                 hideDeleteWhenComplete,
                 isProcessed,
                 deleteAction: effectiveDeleteAction,
-                hideDeleteButton,
+                // View-only window (window.readOnly): never show the toolbar Delete.
+                // Reuses the existing unconditional opt-out so no other window's
+                // processed-document delete behavior changes.
+                hideDeleteButton: hideDeleteButton || windowReadOnly,
               }) && (
                 <button
                   onClick={() => setShowDeleteConfirm(true)}
-                  className={`${sqBtnSize} flex items-center justify-center rounded-lg border border-red-200 text-red-500 hover:bg-red-50 hover:text-red-600 transition-colors`}
+                  className={`${sqBtnSize} flex items-center justify-center rounded-lg border border-destructive text-destructive hover:bg-destructive hover:text-destructive transition-colors`}
                   title={ui('delete')}
                   data-testid="action-delete"
                 >
@@ -3450,7 +3590,7 @@ export function DetailView({
                     <button
                       data-testid="action-more"
                       onClick={() => setShowMoreMenu(v => !v)}
-                      className={`${sqBtnSize} flex items-center justify-center rounded-md bg-white border border-[#D1D4DB] shadow-[0px_1px_2px_0px_#1212170D] text-muted-foreground hover:bg-[#F1F5F9] hover:text-foreground transition-colors`}
+                      className={`${sqBtnSize} flex items-center justify-center rounded-md bg-card border border-[hsl(var(--border-control))] shadow-[0px_1px_2px_0px_hsl(var(--foreground))0D] text-muted-foreground hover:bg-[hsl(var(--muted))] hover:text-foreground transition-colors`}
                     >
                       <MoreVertical className="h-[15px] w-[15px]" data-testid="MoreVertical__fa3275" />
                     </button>
@@ -3471,11 +3611,11 @@ export function DetailView({
                     })()}
                     {showMoreMenu && (
                     <div
-                      className="absolute right-0 top-full mt-1 z-50 bg-white py-2 min-w-[148px]"
+                      className="absolute right-0 top-full mt-1 z-50 bg-card py-2 min-w-[148px]"
                       style={{
                         borderRadius: '8px',
                         boxShadow:
-                          '0px 0px 0px 1px rgba(18,18,23,0.1), 0px 24px 48px rgba(18,18,23,0.03), 0px 10px 18px rgba(18,18,23,0.03), 0px 5px 8px rgba(18,18,23,0.04), 0px 2px 4px rgba(18,18,23,0.04)',
+                          '0px 0px 0px 1px hsl(var(--foreground) / 0.1), 0px 24px 48px hsl(var(--foreground) / 0.03), 0px 10px 18px hsl(var(--foreground) / 0.03), 0px 5px 8px hsl(var(--foreground) / 0.04), 0px 2px 4px hsl(var(--foreground) / 0.04)',
                       }}
                     >
                       {visibleActions.map((action, i) => {
@@ -3510,7 +3650,7 @@ export function DetailView({
                               }
                             }}
                             className={`w-full text-left px-2 py-1 text-sm leading-6 transition-colors flex items-center gap-2 ${action.destructive
-                              ? 'text-red-600 hover:bg-red-50'
+                              ? 'text-destructive hover:bg-destructive'
                               : 'text-foreground hover:bg-secondary'
                               } ${docAction.loading || neoAction.loading ? 'opacity-50 cursor-not-allowed' : ''}`}
                             style={{ fontFamily: 'Inter, sans-serif', fontWeight: 400 }}
@@ -3518,7 +3658,7 @@ export function DetailView({
                             {ActionIcon && (
                               <ActionIcon
                                 className="h-4 w-4 flex-shrink-0 ml-1"
-                                style={{ color: action.destructive ? undefined : '#828FA3' }}
+                                style={{ color: action.destructive ? undefined : 'hsl(var(--text-disabled))' }}
                                 data-testid="ActionIcon__fa3275" />
                             )}
                             <span className={ActionIcon ? 'pl-1' : ''}>
@@ -3560,13 +3700,19 @@ export function DetailView({
                   const isPrimary = p.style === 'positive';
                   const btnClass = getButtonClass(salesTheme, p, isPrimary);
                   const processCtx = { processConfirmModal, setConfirmProcess, setParamDialogProcess, handleProcess: hook.handleProcess };
+                  // ETP-4542: match the running-process id (columnName ?? name) set by the
+                  // hook. Only reflect the loading state when the window opted in.
+                  const isRunning = showProcessLoadingState
+                    && hook.runningProcess != null
+                    && hook.runningProcess === (p.columnName ?? p.name);
                   return (
                     <Button
                       key={p.name}
                       variant={isPrimary ? 'default' : 'outline'}
                       size="default"
                       className={`${btnClass} ${saveBtnCls}`.trim()}
-                      onClick={() => {
+                      disabled={isRunning}
+                      onClick={async () => {
                         for (const g of (p.requiresFieldMax ?? [])) {
                           const condOk = !g.conditionalOnField || data?.[g.conditionalOnField] === g.conditionalValue;
                           if (condOk && Number(data?.[g.field] ?? 0) > Number(g.max)) {
@@ -3574,11 +3720,29 @@ export function DetailView({
                             return;
                           }
                         }
+                        // ETP-4542: opt-in per window (saveBeforeProcesses). Persist pending
+                        // changes silently before running the process; abort if that save fails
+                        // (handleSave already surfaced the error). See maybeSaveBeforeProcess.
+                        const canProceed = await maybeSaveBeforeProcess({
+                          saveBeforeProcesses, isDirty, handleSave: hook.handleSave,
+                        });
+                        if (!canProceed) return;
                         dispatchProcessAction(p, processCtx);
                       }}
                       data-testid="Button__fa3275">
-                      {p.style === 'ghost-danger' && <Undo2 size={16} className="mr-1 text-[#D50B3E]" data-testid="Undo2__fa3275" />}
-                      {tMenu(resolveProcessLabel(p, data))}
+                      {isRunning
+                        ? (
+                          <>
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" data-testid="Loader2__process-running" />
+                            {ui('generating')}
+                          </>
+                        )
+                        : (
+                          <>
+                            {p.style === 'ghost-danger' && <Undo2 size={16} className="mr-1 text-[hsl(var(--destructive))]" data-testid="Undo2__fa3275" />}
+                            {tMenu(resolveProcessLabel(p, data))}
+                          </>
+                        )}
                     </Button>
                   );
                 })}
@@ -3641,6 +3805,7 @@ export function DetailView({
           processConfirmModal,
           async () => { await hook.handleProcess?.(confirmProcess); setConfirmProcess(null); },
           () => setConfirmProcess(null),
+          data,
         )}
 
         {/* Scrollable content + optional sidebarContent (full-height independent column) */}
@@ -3654,7 +3819,7 @@ export function DetailView({
                 style={getTabsBarStyle(tabsBarRight, tabsBarRightDivider)}
               >
                 {tabsBarRightDivider && (
-                  <div className="absolute top-0 bottom-0 w-px bg-[#E8EAEF] pointer-events-none" style={{ left: `calc(100% - ${tabsBarRightDivider})` }} />
+                  <div className="absolute top-0 bottom-0 w-px bg-[hsl(var(--border-subtle))] pointer-events-none" style={{ left: `calc(100% - ${tabsBarRightDivider})` }} />
                 )}
                 {renderPrimaryTabButtons(primaryTabsVariant, primaryTabs, setActivePrimaryTab, activePrimaryTab, tMenu)}
                 {tabsBarAfter && (() => {
@@ -3751,23 +3916,23 @@ export function DetailView({
                     const formSection = (
                       <>
                         {/* Principal + collapsed fields wrapped in a card */}
-                        <div className={`${hideFormCard ? 'hidden' : ''}${noHeaderBorder ? '' : ' rounded-2xl border border-gray-200/70 bg-white shadow-sm'}${whiteFormBackground ? ' bg-white [&_input]:bg-white [&_textarea]:bg-white [&_textarea:disabled]:!bg-white [&_textarea:disabled]:opacity-50' : ''}${embedded ? ' pointer-events-none' : ''}`}>
+                        <div className={`${hideFormCard ? 'hidden' : ''}${noHeaderBorder ? '' : ' rounded-2xl border border-border-subtle/70 bg-card shadow-sm'}${whiteFormBackground ? ' bg-card [&_input]:bg-card [&_textarea]:bg-card [&_textarea:disabled]:!bg-card [&_textarea:disabled]:opacity-50' : ''}${embedded ? ' pointer-events-none' : ''}`}>
                           <div className={linesLayout === 'inlineEditable' ? 'p-2' : formCardPadding}>
                             {lockedAlert && isProcessed && (
                               <div
                                 className="flex flex-row items-center gap-1 rounded-lg mb-3"
-                                style={{ padding: '8px', background: '#F5F7F9' }}
+                                style={{ padding: '8px', background: 'hsl(var(--muted))' }}
                                 data-testid="locked-alert"
                               >
                                 <span className="flex items-start pl-1 shrink-0">
-                                  <Lock className="h-6 w-6" style={{ color: '#828FA3' }} data-testid="Lock__fa3275" />
+                                  <Lock className="h-6 w-6" style={{ color: 'hsl(var(--text-disabled))' }} data-testid="Lock__fa3275" />
                                 </span>
                                 <div className="flex flex-1 flex-row items-center min-w-0">
                                   <div className="flex flex-1 items-center gap-2 px-2 min-w-0">
-                                    <span className="text-sm font-medium leading-6 shrink-0" style={{ color: '#121217' }}>
+                                    <span className="text-sm font-medium leading-6 shrink-0" style={{ color: 'hsl(var(--foreground))' }}>
                                       {ui(lockedAlert.title)}
                                     </span>
-                                    <span className="text-sm font-normal leading-6 truncate" style={{ color: '#6C6C89' }}>
+                                    <span className="text-sm font-normal leading-6 truncate" style={{ color: 'hsl(var(--muted-foreground))' }}>
                                       {ui(lockedAlert.message)}
                                     </span>
                                   </div>
@@ -3777,7 +3942,7 @@ export function DetailView({
                                         type="button"
                                         onClick={() => navigate(lockedAlert.navigateTo)}
                                         className="text-sm font-medium leading-6 underline whitespace-nowrap"
-                                        style={{ color: '#121217' }}
+                                        style={{ color: 'hsl(var(--foreground))' }}
                                         data-testid="locked-alert-action"
                                       >
                                         {ui(lockedAlert.actionLabel)}
@@ -3794,6 +3959,7 @@ export function DetailView({
                               catalogs={catalogs}
                               layout="horizontal"
                               section="principal"
+                              readOnly={windowReadOnly}
                               displayLogic={displayLogic}
                               api={api}
                               token={token}
@@ -3817,6 +3983,7 @@ export function DetailView({
                                   catalogs={catalogs}
                                   layout="horizontal"
                                   section="collapsed"
+                                  readOnly={windowReadOnly}
                                   excludeFields={notesField ? [notesField] : []}
                                   displayLogic={displayLogic}
                                   api={api}
@@ -3836,14 +4003,14 @@ export function DetailView({
                         {/* Form footer: inline content below form, above tabs */}
                         {formFooter && (
                           <div className={embedded ? 'pointer-events-none' : ''}>
-                            {React.createElement(formFooter, { data, entity, onChange: handleChangeWithCallout, onLocalChange: hook.handleChange, catalogs, api, token, apiBaseUrl, editing: hook.editing })}
+                            {React.createElement(formFooter, { data, entity, onChange: handleChangeWithCallout, onLocalChange: hook.handleChange, catalogs, api, token, apiBaseUrl, editing: hook.editing, registerFields: hook.registerFields, fieldErrors: hook.fieldErrors })}
                           </div>
                         )}
                       </>
                     );
                     if (sidebarAboveTabsOnly && sidebarContent) {
                       return (
-                        <div className={`flex items-stretch${tabsSeparator ? ' border-b border-[#E8EAEF]' : ''}`}>
+                        <div className={`flex items-stretch${tabsSeparator ? ' border-b border-[hsl(var(--border-subtle))]' : ''}`}>
                           <div className="flex-1 min-w-0 space-y-2">{formSection}</div>
                           <div className={sidebarClassName}>{sidebarContent(data)}</div>
                         </div>
@@ -4064,6 +4231,19 @@ export function DetailView({
                                     catalogs,
                                     onFieldChange: handleLineFieldChange,
                                     onValuesChange: setPendingLineValues,
+                                    // Convert the price-list price synchronously, at selection time,
+                                    // instead of letting the raw (org base currency) amount render
+                                    // first and get overwritten once the callout's currency-converted
+                                    // value lands — that gap is what caused the price to visibly
+                                    // flash from e.g. 12 (EUR) to 13.92 (USD).
+                                    convertOptimisticPrice: (rawPrice) => {
+                                      const conversion = activeCurrencyConversionRef.current;
+                                      if (!conversion) return rawPrice;
+                                      const { rate } = conversion;
+                                      const n = parseFloat(String(rawPrice ?? 0));
+                                      if (Number.isNaN(n) || n <= 0 || rate === 1) return rawPrice;
+                                      return parseFloat((n * rate).toFixed(2));
+                                    },
                                   }}
                                   data-testid="DetailTable__fa3275" />
 
@@ -4683,7 +4863,7 @@ export function DetailView({
                             {notesField && (
                               <div className={getNotesRowClassName(embedded)}>
                                 <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider pt-1.5 shrink-0 w-24">{ui('notes')}</span>
-                                <div data-testid="notes-textarea" className={`flex-1 flex flex-col border border-border/40 rounded bg-white transition-all py-1.5`} style={{ borderWidth: '0.5px' }}>
+                                <div data-testid="notes-textarea" className={`flex-1 flex flex-col border border-border/40 rounded bg-card transition-all py-1.5`} style={{ borderWidth: '0.5px' }}>
                                   {renderNotesField(notesFocused, data, notesField, handleChangeWithCallout, handleNotesSave, setNotesFocused, ui)}
                                 </div>
                               </div>
@@ -4722,7 +4902,7 @@ export function DetailView({
                 </div>
                 {sidePanel && (
                   <div
-                    className="w-full max-w-full shrink-0 self-stretch border-t lg:border-t-0 lg:w-[292px] lg:border-l border-gray-200 pt-3 lg:pt-0 pl-0 lg:pl-3 pr-0 lg:pr-3"
+                    className="w-full max-w-full shrink-0 self-stretch border-t lg:border-t-0 lg:w-[292px] lg:border-l border-border-subtle pt-3 lg:pt-0 pl-0 lg:pl-3 pr-0 lg:pr-3"
                     style={sidePanelStyle}
                   >
                     {renderSidePanel(sidePanel, data, recordId, token, apiBaseUrl, api, isNew)}
@@ -4745,58 +4925,44 @@ export function DetailView({
         documentIds={getDocumentIds(recordId)}
         token={token}
         data-testid="DocumentPrintDrawer__fa3275" />
-      <Dialog
-        open={showDeleteConfirm}
-        onOpenChange={setShowDeleteConfirm}
-        data-testid="Dialog__fa3275">
-        <DialogContent className="max-w-sm" data-testid="DialogContent__fa3275">
-          <DialogHeader data-testid="DialogHeader__fa3275">
-            <DialogTitle data-testid="DialogTitle__fa3275">{ui('deleteConfirmTitle')}</DialogTitle>
-            <DialogDescription data-testid="DialogDescription__fa3275">
-              {ui('deleteConfirmMessage')}
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter data-testid="DialogFooter__fa3275">
-            <DialogClose asChild data-testid="DialogClose__fa3275">
-              <Button variant="outline" size="sm" data-testid="Button__fa3275">{ui('cancel')}</Button>
-            </DialogClose>
-            <Button
-              variant="destructive"
-              size="sm"
-              data-testid="action-delete-confirm"
-              onClick={async () => {
-                setShowDeleteConfirm(false);
-                // ETP-4479 — deleteAction-backed windows go through the same
-                // `neoAction.execute(recordId, actionName)` mechanism the
-                // detail-view "more" menu already uses for NEO actions
-                // (see runNeoMenuAction above), mirroring the URL convention
-                // PaymentHeaderTableBase's row-level delete relies on
-                // (POST {apiBaseUrl}/{entity}/{id}/action/{actionName}).
-                if (effectiveDeleteAction) {
-                  const currentId = data?.id || recordId;
-                  const result = await neoAction.execute(currentId, effectiveDeleteAction);
-                  if (result.success) {
-                    // Reuse the per-action i18n key convention (`${action}Completed`,
-                    // e.g. eTPRRemovePaymentCompleted) when translated; otherwise
-                    // fall back to the generic delete-success message.
-                    const key = `${effectiveDeleteAction}Completed`;
-                    const msg = ui(key);
-                    toast.success(msg !== key ? msg : ui('recordDeleted'));
-                    navigate(`/${windowName}`);
-                  } else {
-                    toast.error(result.message || ui('actionFailed'));
-                  }
-                  return;
-                }
-                await hook.handleDelete();
-                navigate(`/${windowName}`);
-              }}
-            >
-              {ui('delete')}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {deleteConfirmModal ? (
+        showDeleteConfirm && (
+          <deleteConfirmModal.Component
+            dir={deleteConfirmModal.dir}
+            action="delete"
+            data={data}
+            onConfirm={confirmHeaderDelete}
+            onClose={() => setShowDeleteConfirm(false)}
+          />
+        )
+      ) : (
+        <Dialog
+          open={showDeleteConfirm}
+          onOpenChange={setShowDeleteConfirm}
+          data-testid="Dialog__fa3275">
+          <DialogContent className="max-w-sm" data-testid="DialogContent__fa3275">
+            <DialogHeader data-testid="DialogHeader__fa3275">
+              <DialogTitle data-testid="DialogTitle__fa3275">{ui('deleteConfirmTitle')}</DialogTitle>
+              <DialogDescription data-testid="DialogDescription__fa3275">
+                {ui('deleteConfirmMessage')}
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter data-testid="DialogFooter__fa3275">
+              <DialogClose asChild data-testid="DialogClose__fa3275">
+                <Button variant="outline" size="sm" data-testid="Button__fa3275">{ui('cancel')}</Button>
+              </DialogClose>
+              <Button
+                variant="destructive"
+                size="sm"
+                data-testid="action-delete-confirm"
+                onClick={confirmHeaderDelete}
+              >
+                {ui('delete')}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
       <Dialog
         open={Boolean(secondaryDeleteConfirm)}
         onOpenChange={(open) => { if (!open) setSecondaryDeleteConfirm(null); }}
@@ -5049,16 +5215,16 @@ function populateIdentifierFields(api, result, detailEntity, catalogs) {
 
 function getButtonClass(salesTheme, p, isPrimary) {
   if (p.style === 'ghost-danger') {
-    return 'bg-white border-[#FBB1C4] text-[#D50B3E] hover:bg-[#FFF0F3]';
+    return 'bg-card border-[hsl(var(--destructive) / 0.3)] text-[hsl(var(--destructive))] hover:bg-[var(--status-destructive-bg)]';
   }
   if (salesTheme) {
     if (p.style === 'destructive') {
-      return 'border-amber-300 bg-amber-50 text-amber-700 hover:bg-amber-100';
+      return 'border-status-warning-border bg-status-warning text-status-warning-foreground hover:bg-status-warning';
     } else {
       if (isPrimary) {
-        return 'bg-amber-400 text-black hover:bg-amber-500 border-transparent font-medium';
+        return 'bg-status-warning text-foreground hover:bg-status-warning border-transparent font-medium';
       } else {
-        return 'border-emerald-300 bg-emerald-50 text-emerald-700 hover:bg-emerald-100';
+        return 'border-status-success-border bg-status-success text-status-success-foreground hover:bg-status-success';
       }
     }
   } else {

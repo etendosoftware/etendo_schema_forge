@@ -1,5 +1,13 @@
 # Assets
 
+## Theme roles
+
+The generated page, depreciation-progress cell, and artifact custom components
+use shared semantic roles. Structural layout consumes card and subtle-border
+roles; amortization progress uses success or warning foreground roles. The
+window does not declare a local palette, so its appearance follows the active
+application theme.
+
 ## Intent
 
 The Assets window should let a finance user register fixed assets, define how each asset will depreciate or amortize over time, review the resulting amortization schedule, and inspect the accounting mappings that support depreciation posting and reporting.
@@ -358,6 +366,8 @@ all windows; everything else is scoped to Assets via `decisions.json` or a custo
 - `tools/app-shell/src/components/contract-ui/DetailView.jsx` — new `saveBeforeProcesses`
   prop (default `false`). When set, `renderSaveActions` is rendered before the process-button
   block instead of after it. Default-off, so no behavioral change for any other window.
+  (ETP-4542 Bloque 2 later extended this same flag to also silently save before running a
+  process — see the "ETP-4542 (Bloque 2)" section below.)
 
 ## ETP-4335 — Amortization status bar fix, plan tab row selection, and Search Key list column (feature/ETP-4335)
 
@@ -563,3 +573,301 @@ does not join the "Dimensiones contables" panel at all — it is now always show
 - No backend change needed: `product`'s raw AD field already carries the
   `SL_Asset_Product` callout, so selecting a value fires the standard `/assets/callout`
   round-trip like any other field, same as before it was discarded.
+
+## ETP-4542 — Generic declarative numeric validation (min + integer), applied to Usable Life
+
+Bug: `usableLifeMonths` ("Vida útil - Meses") and `usableLifeYears` ("Vida útil - Años")
+accepted zero, negative or decimal values in the form. The **Create Amortization** process
+already rejected these server-side, but the user only found out after completing the whole
+form and running the process.
+
+This iteration **replaced the earlier Assets-specific hack** (`isInvalidUsableLife` /
+`USABLE_LIFE_ERROR_KEYS` / `handleUsableLifeBlur` / the key-based `getInvalidUsableLifeField`
+gate) with a **generic, declarative mechanism usable by ANY window**. A numeric field now
+opts into validation purely through two field-config properties (see
+`docs/decisions-reference.md`):
+
+- `min` — value must be `>= min`.
+- `integer: true` — decimals are rejected. **Default (flag absent) accepts decimals**, so
+  every other window is unaffected. Only whole-number fields declare it.
+
+Assets declares `"min": 1, "integer": true` on both `usableLifeYears` and `usableLifeMonths`
+(in `artifacts/assets/decisions.json`, and mirrored on the hardcoded field configs in
+`AssetsDetailPanel.jsx` / `AssetsConfigPanel.jsx` since those panels build their own field
+arrays rather than reading them from the contract).
+
+**How the generic mechanism works:**
+
+- `getNumericFieldError(field, value)` (`tools/app-shell/src/lib/numericValidation.js`) is a
+  pure function returning the first failing i18n descriptor `{ key, params }`
+  (`fieldMinValueError` with `params: { min }`, or `fieldIntegerError` with `params: {}`) or
+  `null`. Returning the interpolation params — not a bare key — lets the caller render a precise
+  message: `fieldMinValueError` is `"Value must be at least {min}"`, so a `0` on a `min: 1`
+  field reads "Value must be at least 1" instead of the old, inaccurate "Value cannot be
+  negative" (0 is not negative). An empty/null value is always `null` — emptiness stays the
+  responsibility of the existing `required` mechanism, never mixed in here.
+- **Inline blur feedback** lives in the shared `EntityForm.jsx`: on blur of any numeric field
+  (both the default `Input` path and the `DeferredInput`/`calloutOn: 'blur'` path) it calls
+  `getNumericFieldError` and, on a hit, `toast.error(ui(err.key, err.params))`. Fields declaring
+  neither `min` nor `integer` produce `null` → no toast, so the behaviour is fully
+  backwards-compatible.
+- **Hard save block** lives in the shared `useEntity.js` `handleSave`: `getNumericFieldViolation(fields, editing)`
+  scans ALL currently registered fields (not just ones the user "changed" this session),
+  skips read-only / hidden fields, and returns `{ key, errorKey, errorParams }` for the first
+  violation. On a hit `handleSave` calls `reportInvalidFormatField(errorKey, ui, ..., errorParams)`
+  (same helper as the email/website/phone gates, extended with an optional `params` argument so
+  the `{min}` interpolates) and returns before the network request, so the save is blocked.
+- The same interpolation is applied in the two grid/inline call sites that reimplement the
+  below-min guard: `DataTable.jsx` (`ui('fieldMinValueError', { min: belowMin[0].min })`) and
+  `InlineLinesPanel.jsx` (`ui('fieldMinValueError', { min: col.min })`).
+- The registration wiring landed previously (Bug 2/3 follow-up) is unchanged: `DetailView.jsx`
+  passes `registerFields`/`fieldErrors` into the `formFooter` slot, and `AssetsDetailPanel.jsx`
+  forwards them into every internal `EntityForm`, so the `deprecFields` reach `formFieldsRef`.
+- The backend validation in the "Create Amortization" process is unchanged and remains the
+  authoritative safety net.
+
+**Design note — emptiness:** the Usable Life fields are `requiredVisual` (conditional
+obligation), not hard `required`, so under the generic mechanism an *empty* value no longer
+raises a client toast (it did under the old hack). This is deliberate: numeric validation
+does not duplicate required semantics. The backend still rejects an empty value on process.
+
+**Pipeline (`integer` passthrough):** the new `integer` property travels the full chain —
+`decisions.json` → `resolve-curated.js` (`if (fieldDecision.integer !== undefined) field.integer = ...`)
+→ `generate-contract.js` `applyFieldUIHints` (`if (f.integer !== undefined) mapped.integer = ...`)
+→ `contract.json`. Verified in `artifacts/assets/contract.json`: `usableLifeMonths` and
+`usableLifeYears` now carry `min: 1, integer: true`.
+
+- **Files changed:**
+  - `schema_forge_core/cli/src/resolve-curated.js` (+`integer` passthrough) + test
+  - `schema_forge_core/cli/src/generate-contract.js` (+`integer` passthrough in `applyFieldUIHints`) + test
+  - `tools/app-shell/src/lib/numericValidation.js` (new — generic `getNumericFieldError`; replaces the deleted `lib/usableLife.js`)
+  - `tools/app-shell/src/components/contract-ui/EntityForm.jsx` (generic on-blur numeric validation, both input paths)
+  - `tools/app-shell/src/hooks/useEntity.js` (generic `getNumericFieldViolation` gate replaces `getInvalidUsableLifeField`)
+  - `tools/app-shell/src/windows/custom/assets/AssetsDetailPanel.jsx` (removed the ad-hoc helper/blur handler; `usableLife*` now declare `min: 1, integer: true`)
+  - `tools/app-shell/src/windows/custom/assets/AssetsConfigPanel.jsx` (`usableLife*` declare `min: 1, integer: true`)
+  - `artifacts/assets/decisions.json` (`usableLifeYears`/`usableLifeMonths` → `min: 1, integer: true`)
+  - `tools/app-shell/src/locales/{en_US,es_ES,es_AR}.json` (new `fieldIntegerError` key; `fieldMinValueError` reworded to the interpolated `"Value must be at least {min}"` / `"El valor debe ser al menos {min}"`)
+  - `tools/app-shell/src/components/contract-ui/{DataTable,InlineLinesPanel}.jsx` (below-min toasts now interpolate `{min}`)
+  - tests: `lib/__tests__/numericValidation.test.js` (new), `hooks/__tests__/useEntity-helpers.test.js` (rewritten gate coverage), `components/contract-ui/__tests__/EntityForm.numericBlur.vitest.jsx` (new, window-agnostic), `windows/custom/assets/__tests__/AssetsDetailPanel.{usableLifeValidation,registerFieldsWiring}.vitest.jsx` (rewritten to the generic mechanism)
+
+### Manual verification (ETP-4542)
+
+1. Open an asset with **Depreciate** enabled, **Calculation type** = "Time" (`TI`), and
+   **Amortize** = "Monthly" so **Usable Life - Months** is visible.
+2. Type `0`, a negative number, or a decimal like `5.5`, then click away (blur). Confirm a
+   toast error appears — "Value must be at least 1" for below-min (the message names the actual
+   threshold; `0` is NOT reported as "negative"), "Value must be a whole number" for decimals
+   (or the Spanish equivalents under `es_ES`).
+3. Click **Save** with the field still invalid — confirm the save is blocked (the toast
+   reappears, no network request is sent, the form stays in edit mode).
+4. Type a valid positive integer (e.g. `12`), blur — confirm no toast appears — then Save.
+   Confirm the save succeeds.
+5. Repeat steps 1–4 with **Amortize** = "Yearly" for **Usable Life - Years**.
+
+## ETP-4542 (Bloque 1) — extended to Annual Depreciation %
+
+Same generic mechanism, extended to `annualDepreciation` ("Annual Depreciation %" /
+`Amortizationpercentage`), visible when **Depreciate** is on and **Calculate Type** =
+"Percentage" (`PE`). Unlike Usable Life, this field declares **only `min: 1`** —
+**no `integer: true`** — because it is a percentage and decimals are valid business input
+(e.g. `12.5%`). It rejects empty/zero/negative but accepts any positive decimal.
+
+Changed in `annualDepreciation`'s field config in three places, mirroring the Usable Life
+pattern: `artifacts/assets/decisions.json` (documentation source of truth, field renders via
+`headerExtra.customForm` so this entry is `form: false` + `min: 1`), and the hardcoded field
+arrays in `AssetsDetailPanel.jsx` (`deprecFields`, principal section) and
+`AssetsConfigPanel.jsx` (`deprecFields`, other section) — both custom panels build their own
+field arrays rather than reading them from the contract.
+
+**Files changed:**
+- `artifacts/assets/decisions.json` (`annualDepreciation` → `min: 1`)
+- `tools/app-shell/src/windows/custom/assets/AssetsDetailPanel.jsx` (`annualDepreciation` → `min: 1`)
+- `tools/app-shell/src/windows/custom/assets/AssetsConfigPanel.jsx` (`annualDepreciation` → `min: 1`)
+- test: `tools/app-shell/src/windows/custom/assets/__tests__/AssetsDetailPanel.annualDepreciationValidation.vitest.jsx` (new)
+
+### Manual verification (ETP-4542, Bloque 1)
+
+1. Open an asset with **Depreciate** enabled and **Calculate Type** = "Percentage" (`PE`) so
+   **Annual Depreciation %** is visible.
+2. Type `0` or a negative number, then blur. Confirm the "Value must be at least 1" toast
+   appears (or the Spanish equivalent).
+3. Type a decimal like `12.5`, blur — confirm **no** toast appears (decimals are valid for a
+   percentage) — then Save. Confirm the save succeeds.
+4. Type a valid positive integer (e.g. `20`), blur — confirm no toast appears — then Save.
+   Confirm the save succeeds.
+
+## ETP-4542 (Bloque 2) — auto-save before running a process
+
+`saveBeforeProcesses` (documented above as an Assets-only toolbar preference that reorders the
+**Save** button before the process buttons) now **also drives a silent save gate** in front of
+every toolbar process button (e.g. **Create Amortization**). The flag stays opt-in — only
+windows that pass it participate; every other window's process buttons behave exactly as before.
+
+Behavior when the flag is set and a process button is clicked:
+
+1. **Form dirty + save succeeds** → the pending changes are persisted silently (no "Record
+   saved" toast) and the process then runs on the fresh data.
+2. **Form dirty + save fails** (required empty, ETP-4542 numeric violation, or backend error)
+   → the process is **aborted**; no confirm modal, no param dialog, no process POST.
+   `handleSave` has already shown the validation/error toast, so nothing extra is surfaced.
+3. **Form not dirty** → the process runs directly, no save step.
+
+**Interception point & rationale:** the save gate runs in the toolbar process-button `onClick`
+in `DetailView.jsx`, **before** `dispatchProcessAction` — i.e. before any confirm modal or
+param dialog opens. Saving first means the process always operates on persisted data, and a
+failed save never opens a modal the user would then have to dismiss. The dirty signal reused is
+the same `isDirty` (`computeIsDirty`) that drives the **Save** button, so the two never diverge
+(header edits, line edits, and `additionalDirtyState` all count). The logic is extracted into
+the exported, unit-tested `maybeSaveBeforeProcess({ saveBeforeProcesses, isDirty, handleSave })`
+helper, which returns `true` to proceed or `false` to abort.
+
+**Files changed:**
+- `tools/app-shell/src/components/contract-ui/DetailView.jsx` — new exported
+  `maybeSaveBeforeProcess` helper + process-button `onClick` now awaits it before dispatching.
+  Additive: no-op for any window that does not pass `saveBeforeProcesses`.
+- test: `tools/app-shell/src/components/contract-ui/__tests__/DetailView.dispatchProcessAction.vitest.jsx`
+  (four new cases: dirty+ok → runs, dirty+fail → aborts, not dirty → runs, no flag → never saves)
+
+### Manual verification (ETP-4542, Bloque 2)
+
+1. Open an existing asset, edit a header field so the form is dirty, then click
+   **Create Amortization**. Confirm the record is saved (no success toast) and the process runs.
+2. Clear a required field (or enter an invalid numeric value), then click **Create Amortization**.
+   Confirm the validation error toast appears and the process does **not** run.
+3. Open an asset without editing anything and click **Create Amortization**. Confirm the process
+   runs immediately with no extra save.
+4. On any window that does **not** set `saveBeforeProcesses` (e.g. sales-order), confirm process
+   buttons still run with no save-first step.
+
+## ETP-4542 (Bloque 2, Bug 6) — process button loading state
+
+While a header process is running in the backend (e.g. **Create Amortization**), its toolbar
+button now shows a spinner + a **"Generating…"** label (`ui('generating')`, already present in
+`en_US` / `es_ES` / `es_AR` as "Generating…" / "Generando…") and is **disabled** so the user
+cannot fire the same process twice. When the process finishes — **success or error** — the button
+returns to its normal label and enabled state.
+
+This is a **separate opt-in flag** from `saveBeforeProcesses` (the two behaviors are distinct and
+were deliberately not conflated). The Assets wrapper passes both.
+
+**How it works:**
+- `useEntity.js` tracks a `runningProcess` state holding the id of the header process whose POST
+  is in flight (`process.columnName ?? process.name`), or `null` when idle. It is set at the start
+  of `handleProcess` and cleared in a `finally` block, so both the success and error paths reset it.
+  Using a per-process id (not a global boolean) gives per-button granularity: only the clicked
+  button reflects the loading state, not every process button in the toolbar. Exposed on the hook
+  return alongside `isSaving`.
+- `DetailView.jsx` gained a new opt-in prop **`showProcessLoadingState`** (default `false`). Only
+  when it is set does a header process button whose `columnName ?? name` matches `hook.runningProcess`
+  render the spinner (`Loader2`, `data-testid="Loader2__process-running"`) + `ui('generating')` and
+  become `disabled`. Windows that don't pass the flag are completely unchanged (normal label, no
+  extra disabled state) — the running state is still tracked in the hook (harmless) but never shown.
+- The spinner turns on when the real POST starts inside `handleProcess`, not when the click opens a
+  confirm modal or param dialog. If the user **cancels** a confirm/param modal, `handleProcess` never
+  runs, so `runningProcess` never gets set — the button never gets stuck in the loading state.
+
+**Files changed:**
+- `tools/app-shell/src/hooks/useEntity.js` — new `runningProcess` state, set/cleared in
+  `handleProcess` (set at start, cleared in `finally`), exposed on the hook return.
+- `tools/app-shell/src/components/contract-ui/DetailView.jsx` — new opt-in `showProcessLoadingState`
+  prop; header process button conditionally renders spinner + "Generating…" + `disabled` while its
+  process runs. Additive: no-op for any window that does not pass the flag.
+- `tools/app-shell/src/windows/custom/assets/index.jsx` — passes `showProcessLoadingState` next to
+  `saveBeforeProcesses`.
+- test: `tools/app-shell/src/components/contract-ui/__tests__/DetailView.processLoadingState.vitest.jsx`
+  (flag on + running → disabled + spinner + "generating"; finished → normal; flag off → never shows;
+  double-click blocked; different running process → button stays normal).
+- i18n: reuses the existing `generating` key (`Generating…` / `Generando…`) in all three locales — no
+  new key added.
+
+### Manual verification (ETP-4542, Bloque 2, Bug 6)
+
+1. Open an existing asset and click **Create Amortization**. While the backend runs, confirm the
+   button shows the spinner + "Generando…" and is greyed out / not clickable.
+2. On success, confirm the button returns to "Create Amortization" and is clickable again.
+3. Force an error (e.g. backend rejects), confirm the button also returns to normal (not stuck).
+4. Rapidly double-click **Create Amortization**; confirm only one process request is sent.
+5. Cancel the confirm/param modal (if the process has one) and confirm the button never enters the
+   loading state.
+6. On any window that does **not** set `showProcessLoadingState` (e.g. sales-order), confirm process
+   buttons show no spinner and behave exactly as before.
+
+## ETP-4539 — "Amortizar" toggle rename, header-level Asset Value, currency always read-only
+
+### Depreciate toggle renamed to "Amortizar" / "Amortize"
+
+The main depreciation toggle in the **Depreciación** group previously read "Depreciar" / "Depreciate" (description: "Habilitar la depreciación para este activo." / "Enable depreciation for this asset."). It now reads **"Amortizar" / "Amortize"** (description: "Habilitar la amortización para este activo." / "Enable amortization for this asset."). Only the i18n label/description changed — the underlying field key (`depreciate`, column `IsDepreciated`) is untouched.
+
+- **Files changed:** `tools/app-shell/src/locales/en_US.json`, `es_ES.json`, `es_AR.json` — `assetsDepreciateLabel` / `assetsDepreciateDesc` keys.
+
+### "Valor del activo" moved to the main header section
+
+`assetValue` (column `AssetValueAmt`) previously lived in the **Información financiera** group, visible only when **Amortizar** is enabled. It is now part of **Group 1 (Asset Info)** in `AssetsDetailPanel.jsx`, rendered right after **Description**, and is therefore always visible regardless of the depreciation toggle.
+
+- `artifacts/assets/decisions.json` — `assetValue` no longer carries `displayLogicJs` (it was gating visibility to `record.depreciate === true || record.depreciate === 'Y'`); the field's `grid`/`summable`/`businessCritical` flags are unchanged.
+- `tools/app-shell/src/windows/custom/assets/AssetsDetailPanel.jsx` — `assetValue`'s field descriptor moved from `group2Fields` to `group1Fields`. The Group 1 `EntityForm` now uses `onChange={handleAmountChange}` (previously only Group 2 did) so the ETP-4333 local-recompute arithmetic (`computeAssetAmounts`) still fires correctly when the field is edited from its new position; `handleAmountChange` already forwards non-amount fields to the plain `onChange` untouched, so `searchKey`/`name`/`assetCategory`/`description` are unaffected.
+- The field's grid column position and summable behavior in the list view are unchanged — only its position/visibility inside the detail form moved.
+
+### Currency is always read-only
+
+`currency` (column `C_Currency_ID`) was previously read-only only *after* amortization progress existed (`depreciatedPlan` or `depreciatedValue` > 0) — editable otherwise. It is now **always** read-only, in every document state.
+
+- `artifacts/assets/decisions.json` — `currency` gains `"visibility": "readOnly"` (maps to `isReadOnly: 'Y'` unconditionally in `push-to-neo.js`'s `mapVisibility`, so the backend rejects writes regardless of state), the field-level `readOnlyLogic` is explicitly set to `null` to neutralize the raw AD expression (`@existAmortizationLines@ = 'Y'`), and it no longer carries `readOnlyLogicJs`. The rule catalog entry was renamed to `readOnlyLogic_Currency_alwaysReadOnly` (previously `readOnlyLogic_Currency_existAmortizationLines`) and its description updated, since the old name implied the field is still conditional on amortization progress.
+- `tools/app-shell/src/windows/custom/assets/AssetsDetailPanel.jsx` — the `currency` field descriptor's conditional `readOnlyLogic: (record) => Number(record.depreciatedPlan || 0) > 0 || Number(record.depreciatedValue || 0) > 0` was replaced with **`readOnlyLogic: () => true`** (a function, not a static `readOnly: true` boolean). This distinction matters: `EntityForm`'s horizontal-layout-without-`section` render path filters `displayFields = visibleBaseFields.filter(f => !f.readOnly)` — any field with a truthy *static* `f.readOnly` is stripped from the form entirely, not just disabled. A static `readOnly: true` on `currency` would have made **Moneda** disappear from the form altogether instead of rendering as a disabled input. `readOnlyLogic` is not checked by that filter — it only feeds `evalReadOnlyLogic()`, which correctly disables the input (see `isReadOnly` in `renderField`) while keeping the field visible. See the inline comment at `AssetsDetailPanel.jsx` lines ~184-192 for the full rationale. Do not replace this with a static `readOnly: true` in future changes.
+- The currency default-echo `useEffect` (ETP-4333, `currencyEchoedRef`) is unaffected — new records still get `@C_Currency_ID@` defaulted and registered in the form's change tracking; the field is simply never editable afterward.
+
+### Known follow-up — unit tests updated as part of this change
+
+Three assertions in the existing test suite encoded the previous behavior and were updated (as part of this change, following review feedback) to match the new intended behavior:
+
+- `tools/app-shell/src/windows/custom/assets/__tests__/AssetsDetailPanel.vitest.jsx` — "hides financial... fields when depreciate is off" asserted `assetValue` is absent from any rendered form when `depreciate: 'N'`; it now asserts `assetValue` renders unconditionally in Group 1.
+- `tools/app-shell/src/windows/custom/assets/__tests__/AssetsDetailPanel.test.js` — "currency field has readOnlyLogic when amortization lines exist" asserted the source contains `depreciatedPlan`/`depreciatedValue`/`readOnlyLogic` for the currency field descriptor; it now asserts `readOnlyLogic: () => true` (unconditional) is present instead.
+- Any snapshot/manual-verification step in this doc's earlier sections that describes "Depreciar" as the toggle label, or describes `assetValue` as conditional on depreciation, should be read in light of this section going forward.
+
+### Manual verification (ETP-4539)
+
+1. Open an asset and confirm the toggle previously labeled "Depreciar" now reads **"Amortizar"** (with description "Habilitar la amortización para este activo."), in both `es_ES` and `en_US` locales.
+2. Open a new or existing asset with **Amortizar** off and confirm **"Valor del activo"** is visible in the main section, right after **Descripción** — not hidden, not inside a Depreciation-only group.
+3. Toggle **Amortizar** on and off and confirm **"Valor del activo"** remains visible and editable in both states, at the same position.
+4. Confirm the **Moneda** field is read-only (not editable) on a brand-new asset record (before any amortization progress exists), and remains read-only after amortization lines are generated.
+
+## ETP-4276 — MCP advertises `usableLifeMonths`/`currency` as conditionally required for amortization
+
+### Problem
+
+`usableLifeMonths` (or `usableLifeYears`) and `currency` are required to generate the amortization plan, but they are **not** mandatory in the AD schema (`AD_Column.isMandatory()` is false — the requirement is conditional on `calculateType`/`amortize`, enforced late by the "Create Amortization" PL/SQL). Because they were not surfaced as required in the MCP schema, an agent had to guess — the validation bot invented `usableLifeMonths = 60`. ETP-4275 already added a reactive gate that rejects the process with a structured `PRECONDITIONS_UNMET` at execution time; this change adds the **proactive** signal so the agent knows upfront.
+
+### What changed (MCP-only, derived from `preconditions`)
+
+`neo_schema` now derives a per-field `userRequired` signal from the **same** `ETGO_SF_ENTITY.preconditions` declaration that the runtime gate enforces (single source of truth — no separate `decisions.json` flag, no duplication). When a field is named in the entity's `preconditions`, the schema emits:
+
+- `userRequired: true`
+- `requiredWhen: "<expr>"` — only when the rule is conditional, so the agent knows the requirement depends on other field values (e.g. `usableLifeMonths` is `@calculateType@ != 'PE' && @amortize@ != 'YE'`; `usableLifeYears` is `@amortize@ == 'YE'`; `currency` is unconditional, so no `requiredWhen`).
+
+- **Files changed (`com.etendoerp.go`):** `src/com/etendoerp/go/mcp/McpSchemaFieldBuilder.java` (`loadPreconditionRequirements` + `applyPreconditionRequirement`, applied in `buildSchemaField` after `addVisibility`), `src/com/etendoerp/go/mcp/McpToolRouter.java` (loads the map and passes it to `buildSchemaFieldsArray`), and the test `src-test/src/com/etendoerp/go/mcp/McpSchemaFieldBuilderTest.java`.
+- **No `decisions.json` change** — the requirement already lives in `preconditions` (ETP-4275). This is intentionally MCP-only: the UI keeps its own cosmetic required-asterisk (`requiredVisual`, see **ETP-4336**), and the reactive gate remains the enforcement backstop.
+
+### Two layers, one declaration
+
+| Layer | Where | When | Behavior |
+|-------|-------|------|----------|
+| Proactive hint (this change) | `neo_schema` → `userRequired`/`requiredWhen` | at schema discovery | advisory — tells the agent to fill the field |
+| Reactive gate (ETP-4275) | `NeoProcessPreconditionValidator` | at process execution | enforcing — returns `PRECONDITIONS_UNMET` (400) |
+
+Both read `ETGO_SF_ENTITY.preconditions`. The hint is best-effort (the condition is dynamic and the client may ignore it); the gate is the guarantee. The proactive hint does **not** make the gate obsolete.
+
+### Create → amortization flow (agent-facing)
+
+1. **schema** — `neo_schema` for the assets window now flags `usableLifeMonths`/`usableLifeYears` + `currency` as `userRequired` (with `requiredWhen` where conditional).
+2. **defaults** — `neo_defaults` resolves server-side defaults (e.g. `currency` from `@C_Currency_ID@`).
+3. **selectors** — resolve foreign keys via the per-field selector endpoints (e.g. asset category, product, accounting dimensions).
+4. **create** — `neo_create` the asset with `depreciate` on and the depreciation setup filled.
+5. **verify state / callouts** — re-read the record: the asset-category callout may change `calculateType`, which flips whether `usableLifeMonths` vs `usableLifeYears` applies (mirrors the reactive-behavior section above).
+6. **action `Processed`** — invoke the "Create Amortization" action. If a precondition is still unmet, the gate returns `PRECONDITIONS_UNMET` with the missing field names instead of an opaque PL/SQL error.
+7. **list `amortizationLine`** — read the generated schedule (child amortization lines, sorted by `sEQNoAsset asc`).
+
+### Manual verification (ETP-4276)
+
+1. Call `neo_schema` for the assets window and confirm `usableLifeMonths`, `usableLifeYears` and `currency` carry `userRequired: true`; confirm `usableLifeMonths`/`usableLifeYears` also carry `requiredWhen` and `currency` does not.
+2. Confirm a field **not** listed in `preconditions` carries no `userRequired` from this path (unchanged behavior).
+3. End-to-end: create an asset omitting `usableLifeMonths` with a Time/non-yearly setup, invoke Create Amortization, and confirm the gate still returns `PRECONDITIONS_UNMET` (the proactive hint does not replace enforcement).

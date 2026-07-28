@@ -1,9 +1,11 @@
-import { useEffect } from 'react';
+import { useMemo, useEffect } from 'react';
 import { ListView, DetailView } from '@/components/contract-ui';
+import { useWindowAccess, WindowAccessGuard } from '@/auth/AuthContext.jsx';
 import UserTable from './UserTable';
 import UserForm from './UserForm';
 import UserRolesTable from './UserRolesTable';
 import UserRolesForm from './UserRolesForm';
+import AssignRoleControl from '@/windows/custom/user/AssignRoleControl';
 import { AttachmentsTab } from '@/components/attachments';
 import catalogs from './mockCatalogs';
 
@@ -44,8 +46,7 @@ const requiredHeaderFields = ['name', 'username', 'locked', 'lastPasswordUpdate'
 // @sf-generated-start addLineFields:userRoles
 const addLineFields = {
   entry: [
-    { key: 'role', column: 'AD_Role_ID', type: 'selector', required: true, label: 'Role', reference: 'Role', inputMode: 'selector' },
-    { key: 'roleAdmin', column: 'Is_Role_Admin', type: 'checkbox', required: true, label: 'Role Administrator' },
+
   ],
   derived: [
 
@@ -81,7 +82,7 @@ export const api = {
       "post": true,
       "put": true,
       "patch": true,
-      "delete": true,
+      "delete": false,
       "listUrl": "/sws/neo/user/userRoles",
       "detailUrl": "/sws/neo/user/userRoles/{id}",
       "supportedFilters": [
@@ -124,7 +125,7 @@ export const api = {
       "field": "defaultRole",
       "column": "Default_Ad_Role_ID",
       "reference": "Role",
-      "inputMode": "selector",
+      "inputMode": "search",
       "url": "/sws/neo/user/user/selectors/defaultRole"
     },
     {
@@ -239,6 +240,13 @@ export const api = {
 
 // @sf-generated-start component:UserPage
 export default function UserPage({ windowName, recordId, ...props }) {
+  const windowAccessTier = useWindowAccess('108');
+  const effectiveWindow = useMemo(() => (
+    windowAccessTier === 'read-only' ? { ...(props.window || {}), readOnly: true } : props.window
+  ), [windowAccessTier, props.window]);
+  if (windowAccessTier === 'none') {
+    return <WindowAccessGuard windowId="108" />;
+  }
   if (recordId) {
     return (
       <>
@@ -260,9 +268,10 @@ export default function UserPage({ windowName, recordId, ...props }) {
         recordId={recordId}
         breadcrumb={breadcrumb}
       api={api}
+        formFooter={AssignRoleControl}
         customTabs={[{ key: 'attachments', labelKey: 'attachments', Component: AttachmentsTab, placement: 'tab', props: { tableName: "AD_User", config: {} } }]}
         requiredHeaderFields={requiredHeaderFields}
-        {...props}
+        {...props} window={effectiveWindow}
       />
       </>
     );
@@ -277,7 +286,7 @@ export default function UserPage({ windowName, recordId, ...props }) {
       breadcrumb={breadcrumb}
       api={api}
       rowQuickActions={{}}
-      {...props}
+      {...props} window={effectiveWindow}
     />
   );
 }

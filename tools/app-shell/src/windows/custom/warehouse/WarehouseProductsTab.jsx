@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useMemo } from 'react';
 import { Loader2 } from 'lucide-react';
 import { useUI } from '@/i18n';
 import { useCurrency } from '@/hooks/useCurrency';
@@ -14,7 +14,10 @@ function fmtQty(val) {
 export default function WarehouseProductsTab({ parentId, token, apiBaseUrl, onCount }) {
   const ui = useUI();
   const currencyCode = useCurrency();
-  const { loading, error, products } = useWarehouseStock(parentId, token, apiBaseUrl);
+  const { loading, error, products: allProducts } = useWarehouseStock(parentId, token, apiBaseUrl);
+
+  // Products list: show any non-zero stock (negative shrinkage/loss included), hide exact zero.
+  const products = useMemo(() => allProducts.filter(p => p.qty !== 0), [allProducts]);
 
   useEffect(() => {
     if (!loading && !error) {
@@ -53,13 +56,13 @@ export default function WarehouseProductsTab({ parentId, token, apiBaseUrl, onCo
       <tbody>
         {products.map((p) => (
           <tr key={p.id} className="border-b border-border/30 hover:bg-muted/30 transition-colors">
-            <td className="py-3 pr-4 font-medium text-[#121217]">{p.label}</td>
+            <td className="py-3 pr-4 font-medium text-[hsl(var(--foreground))]">{p.label}</td>
             <td className="py-3 pr-4 text-muted-foreground">{p.uom || '—'}</td>
-            <td className="py-3 pr-4 text-right tabular-nums text-[#121217]">{fmtQty(p.qty)}</td>
-            <td className="py-3 pr-4 text-right tabular-nums text-[#121217]">
+            <td className="py-3 pr-4 text-right tabular-nums text-[hsl(var(--foreground))]">{fmtQty(p.qty)}</td>
+            <td className="py-3 pr-4 text-right tabular-nums text-[hsl(var(--foreground))]">
               {p.cost ? formatCurrency(currencyCode, p.cost) : '—'}
             </td>
-            <td className="py-3 text-right tabular-nums text-[#121217]">
+            <td className="py-3 text-right tabular-nums text-[hsl(var(--foreground))]">
               {p.valuation ? formatCurrency(currencyCode, p.valuation) : '—'}
             </td>
           </tr>

@@ -50,6 +50,64 @@ const API_BASE_URL = import.meta.env.VITE_MOCK === 'true'
   ? `${apiBase}/api`
   : `${apiBase}/sws/neo`;
 
+// ETP-4520 — resolves the per-window access tier + named capability flags for
+// the current session via the SFWindowAccessMap webhook. Passed into
+// AuthProvider (via the `auth` prop bag below) as `fetchWindowAccess`, which
+// calls it every time a role is selected (see AuthContext.jsx in
+// @etendosoftware/app-shell-core). Fails closed on any error — returning
+// `null` leaves AuthProvider's existing ({}) windowAccess/capabilities maps in
+// place, which useWindowAccess/useHasCapability both treat as "no access".
+// A valid access-map payload always carries at least one of these two keys
+// (see SFWindowAccessMap.java — both are always present together, but this
+// only requires one so a future partial/evolving shape isn't rejected).
+function looksLikeWindowAccessPayload(value) {
+  return !!value && typeof value === 'object' && !Array.isArray(value)
+    && ('windowAccess' in value || 'capabilities' in value);
+}
+
+export async function fetchWindowAccess(session) {
+  try {
+    // Reached via `/sws/neo/windowaccessmap` (NEO Headless's own JWT auth), not
+    // `/webhooks/SFWindowAccessMap` — the Webhooks module additionally requires a
+    // per-(webhook, role) grant row in SMFWHE_DEFINEDWEBHOOK_ROLE, which
+    // `update.database` wipes back to its XML baseline. See NeoGoWebhookBridge's
+    // class javadoc in com.etendoerp.go for the full rationale. Same backend
+    // Java class (SFWindowAccessMap) and response shape either way, only the
+    // transport changed.
+    const res = await fetch(`${apiBase}/sws/neo/windowaccessmap`, {
+      method: 'GET',
+      credentials: 'include',
+      headers: session?.token ? { Authorization: `Bearer ${session.token}` } : {},
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    // Webhook responses in this app are inconsistent about wrapping the
+    // payload — some (the `?name=`-style POST webhooks, e.g. SFListMenu) nest
+    // it as a JSON string under `data.result`; this GET webhook may or may not.
+    // Handle all shapes defensively rather than assuming one:
+    //  - `data.result` is a JSON string  -> parse it (today's real shape,
+    //    see SFWindowAccessMap.java's `responseVars.put("result", ...)`).
+    //  - `data.result` is already a plain object -> use it directly.
+    //  - no `result` key -> `data` itself may already be the unwrapped
+    //    `{windowAccess, capabilities}` payload; use it only if it looks
+    //    right, otherwise fail closed (return `null`) rather than handing
+    //    AuthProvider the wrong shape (e.g. the outer `{result: ...}`
+    //    wrapper itself, which would silently deny every window/field).
+    if (typeof data?.result === 'string') {
+      try { return JSON.parse(data.result); } catch { return null; }
+    }
+    if (data?.result && typeof data.result === 'object' && !Array.isArray(data.result)) {
+      return data.result;
+    }
+    if (looksLikeWindowAccessPayload(data)) {
+      return data;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
 async function loadAllMockData() {
   const modules = await Promise.all([
     import('@generated/sales-order/custom/mockData.js'),
@@ -162,6 +220,12 @@ function SurveyManager() {
 export default function App() {
   const installedApps = useInstalledApps();
   const appStoreUnlocked = useAppStoreUnlock();
+  // NOTE: role-based filtering is NOT applied here. `App` itself renders above
+  // `AppShellRuntime`'s internal AuthProvider (see main.jsx / this component's own
+  // JSX below), so `useAuth()` — and anything built on it, like useRoleMenu() —
+  // cannot be called at this level. It's applied one level down in AppLayout.jsx,
+  // which IS inside that provider (same place SideMenu already safely calls
+  // useAuth() today).
   const menuGroups = buildMenuGroups(installedApps, { appStoreUnlocked });
   const [windowMap] = useState(() => buildWindowMap());
   const [locale, setLocale] = useLocaleState();
@@ -207,7 +271,7 @@ export default function App() {
         menuGroups={menuGroups}
         routes={routes}
         layout={AppLayout}
-        auth={{ loginPath: '/login', unauthenticatedFallback: <UnauthenticatedRedirect data-testid="UnauthenticatedRedirect__ecaf3f" /> }}
+        auth={{ loginPath: '/login', unauthenticatedFallback: <UnauthenticatedRedirect data-testid="UnauthenticatedRedirect__ecaf3f" />, fetchWindowAccess }}
         locale={locale}
         setLocale={setLocale}
         dictionaries={dictionaries}

@@ -20,7 +20,7 @@ Automated coverage note: the current automated evidence is mostly source-shape, 
 | Area | Entry path | Current behavior | Evidence |
 |---|---|---|---|
 | Public access | `/onboarding`, `/login` | `/onboarding` is the only public entry page. `/login` redirects to `/onboarding`. | `tools/app-shell/src/App.jsx` |
-| Authenticated shell | `/dashboard`, `/first-steps`, `/sales`, `/inventory`, `/purchases`, `/accounting`, `/reports`, `/report-viewer`, `/crm`, `/hr`, `/projects`, `/smart-scan`, `/oauth2-clients`, `/authorize`, `/quick-sales-order`, `/quick-purchase-order`, `/preview`, `/artifacts`, `/artifacts/:windowName` | These routes render inside `AppLayout` and require `AuthGuard`. | `tools/app-shell/src/App.jsx`, `tools/app-shell/src/layout/AppLayout.jsx` |
+| Authenticated shell | `/dashboard`, `/first-steps`, `/sales`, `/inventory`, `/purchases`, `/accounting`, `/reports`, `/report-viewer`, `/crm`, `/hr`, `/projects`, `/smart-scan`, `/oauth2-clients`, `/roles`, `/authorize`, `/quick-sales-order`, `/quick-purchase-order`, `/preview`, `/artifacts`, `/artifacts/:windowName` | These routes render inside `AppLayout` and require `AuthGuard`. `/roles` (ETP-4513) is registered in `tools/app-shell/src/runtime-routes.jsx`, not `App.jsx`. | `tools/app-shell/src/App.jsx`, `tools/app-shell/src/runtime-routes.jsx`, `tools/app-shell/src/layout/AppLayout.jsx` |
 | Generated/custom windows | `/:windowName`, `/:windowName/:recordId` | Loads the matching generated or custom window and optionally passes a record context. | `tools/app-shell/src/windows/WindowLoader.jsx`, `tools/app-shell/src/windows/registry.js` |
 | Menu-driven report links | `/report-viewer?category=purchases\|inventory\|finance` | Menu items can override the route with `item.path`, so report entries navigate to the shared report viewer instead of the generic window route. | `tools/app-shell/src/menu.json`, `tools/app-shell/src/components/layout/SideMenu/SideMenu.jsx` |
 
@@ -53,7 +53,7 @@ Any authenticated route can also be opened with `?embedded=1`; in that mode the 
   - Password-change failures keep the user on the current setup view without clearing the existing platform token.
   - Environment login failures currently surface browser `alert()` messages.
 - **Automated evidence:**
-  - `tools/app-shell/src/pages/onboarding/__tests__/onboardingApi.test.js` verifies register/login, forgot/reset/change password API calls, bearer handling, and that auth flows do not send provider payload fields.
+  - `../schema_forge_core/packages/etendo-go-core/test/onboardingOwnership.test.js` verifies the Core-owned API, state, SSO, password-policy, draft, and stream contracts. Schema Forge retains product composition coverage in `tools/app-shell/src/pages/__tests__/OnboardingPage.vitest.jsx`.
   - `tools/app-shell/src/pages/__tests__/OnboardingPage.vitest.jsx` verifies forgot-password, reset-password, invalid reset link, change-password success, token refresh, and current-password failure states.
   - `tools/app-shell/test/pwa.test.js` verifies that `OnboardingPage.jsx` clears caches on environment login.
   - Route protection and onboarding branching are code-backed in `tools/app-shell/src/App.jsx` and `tools/app-shell/src/pages/OnboardingPage.jsx`, but are not covered by a full browser test.
@@ -78,14 +78,22 @@ Any authenticated route can also be opened with `?embedded=1`; in that mode the 
 - **Failure or edge behavior:**
   - `?embedded=1` removes shell chrome and left-margin spacing while still rendering the current route content.
   - Hidden groups/items from `menu.json` are filtered out of the visible menu.
+  - The visible menu is additionally filtered to the current role's actual window/process access: `AppLayout` calls `useRoleMenu()` (`tools/app-shell/src/hooks/useRoleMenu.js`), which fetches the `SFListMenu` webhook's role-pruned tree once per authenticated session and reduces it to an allowed-id `Set` via `collectAllowedIds()` (`tools/app-shell/src/lib/menuTree.js`). `registry.js`'s `filterMenuGroupsByAccess()` drops any menu item whose `windowId`/`processId`/`obuiappProcessId` is not in that set, and drops any group left empty (except `Favorites`); items carrying none of those ids (dashboard, custom pages, installed SDK apps) are never filtered. While the fetch is in flight, AD-backed items (anything carrying a `windowId`/`processId`/`obuiappProcessId`) are hidden rather than briefly showing the unfiltered full menu; items with none of those ids and the `Favorites` group are never filtered and stay visible throughout.
+  - **No-access blocking screen (ETP-4514):** if `allowedIds` resolves to a confirmed empty `Set` — the authenticated user's role (or lack of one) grants zero `AD_Window_Access`/`AD_Process_Access` — `AppLayout` renders `NoAccessScreen` instead of the sidebar/top bar/`Outlet`, so no menu item and no direct window route is reachable. This only fires on the resolved-empty-Set case: `undefined` (fetch in flight) and `null` (unauthenticated, or a fetch failure — deliberately fail-open so a backend outage doesn't lock everyone out) never trigger it. The guard sits above the `embedded` branch in `AppLayout`, so it is **not suppressed by `?embedded=1`** — an embedded integration (e.g. an iframe pointed at a single window) still gets the blocking screen instead of silently rendering nothing or the bare `Outlet`. The check also re-evaluates on every render rather than only at mount: if `useRoleMenu()`'s Set goes from non-empty to a confirmed-empty Set on a later render (e.g. an admin revokes the user's role mid-session and a subsequent fetch reflects it), the blocking screen replaces the previously mounted sidebar/`Outlet` instead of leaving both mounted together.
 - **Automated evidence:**
-  - `tools/app-shell/src/windows/__tests__/registry.test.js` verifies that menu groups are built from `menu.json` and that items keep the expected name/label shape.
-  - The shell chrome itself is code-backed in `tools/app-shell/src/layout/AppLayout.jsx` and `tools/app-shell/src/components/layout/SideMenu/SideMenu.jsx`; there is no browser automation for the layout behavior.
+  - `tools/app-shell/src/windows/__tests__/registry.test.js` and `registry.vitest.jsx` verify that menu groups are built from `menu.json`, keep the expected name/label shape, and are correctly reduced by `filterMenuGroupsByAccess()`/the optional `allowedIds` argument to `buildMenuGroups()`.
+  - `tools/app-shell/src/hooks/__tests__/useRoleMenu.vitest.jsx` and `tools/app-shell/src/lib/__tests__/menuTree.vitest.js` cover the role-menu fetch/collection behavior, including the unauthenticated and fetch-failure fallbacks.
+  - `tools/app-shell/src/layout/__tests__/AppLayout.vitest.jsx` covers the `NoAccessScreen` guard: the empty-Set-only trigger (excluding `null`/`undefined`), that the guard still renders under `?embedded=1` (not suppressed by the chrome-hiding logic), and that a re-render where the Set shrinks from non-empty to confirmed-empty (role revoked mid-session) swaps the sidebar/`Outlet` for the blocking screen rather than leaving both mounted.
+  - The shell chrome itself is code-backed in `tools/app-shell/src/layout/AppLayout.jsx` and `tools/app-shell/src/components/layout/SideMenu/SideMenu.jsx`; there is no browser automation for the layout behavior beyond the mocked E2E spec covering role-filtered menu rendering and the no-access blocking screen.
 - **Manual verification path:**
   1. Sign in and open `/dashboard`.
   2. Confirm the side menu, top bar, command palette, and copilot widget are visible.
   3. Use the menu entry that targets `/report-viewer?category=purchases` and confirm the URL keeps the query string.
   4. Re-open the same route with `?embedded=1` and confirm the shell chrome is hidden while the routed page still renders.
+  5. Sign in as a role with restricted `AD_Window_Access`/`AD_Process_Access` grants and confirm the sidebar shows visibly fewer items than a role with full access (e.g. GOClient Admin).
+  6. Sign in as a user with no role assigned (or a role with zero window/process access) and confirm the "No access" screen renders instead of the sidebar, and that navigating directly to a known window URL (e.g. `/sales-order`) also lands on the blocking screen rather than the window.
+  7. Repeat step 6 with `?embedded=1` appended to the URL and confirm the blocking screen still renders (not the bare routed page or a blank frame).
+  8. While signed in as a user with an assigned role and visible sidebar, have an administrator revoke that role (or drop it to zero window/process access) in another session, then trigger a fresh role-menu fetch (e.g. reload or navigate) and confirm the sidebar is replaced by the blocking screen rather than staying visible alongside it.
 
 ### 3. Generated/custom window loading
 
@@ -145,7 +153,9 @@ Any authenticated route can also be opened with `?embedded=1`; in that mode the 
 - **Main path behavior:**
   - With `client_id`, `redirect_uri`, `code_challenge`, and `response_type=code`, the page renders a consent screen.
   - Missing `scope` defaults to `neo:read neo:write`.
-  - Approve posts to `/oauth2/authorize` with the bearer token and PKCE parameters, then redirects to the returned `redirect_url`.
+  - The consent screen includes an **Access duration** selector (`oauthTokenValidity`) that lets the user choose the issued access token's validity period. Presets: **1 day** (default), **1 week**, **1 month**, and **No expiration** (labels `oauthValidity1Day` / `oauthValidity1Week` / `oauthValidity1Month` / `oauthValidityNever`). A live expiry preview shows the resulting expiration timestamp, or "No expiration" when that option is selected.
+  - Approve posts to `/oauth2/authorize` with the bearer token, the PKCE parameters, and `validity_seconds` (the selected duration in seconds; `0` for "No expiration"), then redirects to the returned `redirect_url`.
+  - **Backend contract:** the server normalizes `validity_seconds` before issuing the token — absent/non-numeric falls back to the 1-day default, values are clamped to a MIN of 300s (5 min) and a MAX of 2,592,000s (30 days), and `0` is preserved as a never-expiring token. The granted validity is persisted and reused on `refresh_token` grants, so a never-expiring token stays never-expiring. Full backend rules: `com.etendoerp.go/docs/package-architecture.md` → "Authorize-grant token validity policy".
   - Without a full OAuth request, the page shows the generic connection landing screen and the derived MCP server URL.
 - **Failure or edge behavior:**
   - Deny redirects back to `redirect_uri` with `error=access_denied` and preserves `state` when present.
@@ -157,7 +167,8 @@ Any authenticated route can also be opened with `?embedded=1`; in that mode the 
   1. Open `/authorize` with no query string and confirm the connection landing screen appears.
   2. Open `/authorize?client_id=test-client&redirect_uri=https://example.test/cb&code_challenge=abc&response_type=code&state=xyz` while authenticated.
   3. Click **Deny** and confirm the browser redirects to the callback URL with `error=access_denied` and `state=xyz`.
-  4. Repeat and click **Authorize** against a live backend to confirm redirect to the backend-provided `redirect_url`.
+  4. Change the **Access duration** selector across the presets and confirm the expiry preview updates (and shows "No expiration" for the never-expiring option).
+  5. Repeat and click **Authorize** against a live backend to confirm redirect to the backend-provided `redirect_url`; verify the issued token's expiry matches the selected duration (and that a "No expiration" grant returns a token response with no `expires_in`).
 
 ### 6. OAuth2 client administration
 
@@ -178,6 +189,28 @@ Any authenticated route can also be opened with `?embedded=1`; in that mode the 
   2. Confirm either the empty state or the populated table appears.
   3. Create a client, regenerate its secret, and confirm the reveal dialog shows the new secret when the backend returns one.
   4. Use **Revoke Tokens** and **Delete** from the row menu and confirm the destructive confirmation copy matches the intended action.
+
+### 6b. Roles overview (Configuración > Roles)
+
+- **User goal / entry point:** View GOClient's 5 fixed roles, their assigned-user counts, and which Etendo GO windows each one can reach, at `/roles`.
+- **Main path behavior:**
+  - `RolesOverviewPage` fetches `GET /sws/neo/rolesoverview` (NEO pseudo-spec bridge — see `com.etendoerp.go/docs/neo-headless.md` §4.10) on mount and on manual refresh (`fetchRolesOverview` in `tools/app-shell/src/lib/rolesApi.js`).
+  - Each of the 5 roles renders as its own card: a curated, i18n-keyed name/description (`ROLE_I18N` map — `roleNameGoClientAdmin`/`roleDescGoClientAdmin`, etc., never the backend's raw `AD_Role.description`), a user-count badge, and a badge per reachable window (filled "full" tier vs. outlined "read-only" tier, per `w.tier`).
+  - A role with no reachable windows shows a placeholder dash instead of an empty chip row.
+  - "Edit" always opens a "coming soon" dialog — there is no create/delete affordance anywhere on the page; this is a read-only view.
+  - The menu entry that routes here (`menu.json`'s `roles` item, under "Configuración") is itself gated client-side by `"capability": "isAdminOrClientAdmin"`, resolved by `registry.js`'s `filterMenuGroupsByAccess` against the `SFWindowAccessMap` capability of the same name (`com.etendoerp.go/docs/neo-headless.md` §8b) — a non-admin role does not see the menu entry in normal navigation.
+- **Failure or edge behavior:**
+  - A non-array/missing `roles` field in the response is treated as empty, not a crash.
+  - An empty `roles` array (returned by the backend for a non-admin/no-role caller, or for direct/deep-link navigation around the menu gate) renders a dedicated no-access card — a defense-in-depth fallback, since `SFRolesOverview.java` is the actual enforcement point and always returns `{ roles: [] }` for a denied caller regardless of how the request reached it.
+  - A fetch rejection shows a dedicated error card with a retry action; retry re-invokes the fetch and can recover into the success state.
+- **Automated evidence:**
+  - `tools/app-shell/src/pages/__tests__/RolesOverviewPage.vitest.jsx` verifies rendering one card per role keyed by id, curated i18n name/description over raw backend fields, the user-count badge, a window chip per `role.windows` entry with tier-based badge variant, the no-windows placeholder dash, the Edit "coming soon" dialog open/close flow, absence of any create/delete affordance, the loading skeleton state, the error state with working retry, the empty/no-access state (including a non-array `roles` field), and the manual refresh action. A dedicated test also asserts the "coming soon" Edit dialog is truly read-only, not just visually so: no `<form>` element, zero `input`/`textarea`/`select` elements, exactly one button (Close), and pressing Enter inside the dialog neither closes it nor mutates the underlying role list — a literal, stronger verification of the "no create/delete" acceptance criterion than a data-testid/visual check alone would give.
+- **Manual verification path:**
+  1. Open `/roles` while authenticated as a GOClient Admin (or other client-admin) role and confirm all 5 role cards render with curated names/descriptions.
+  2. Confirm each role's user-count badge and window chips match its actual `AD_User_Roles`/`AD_Window_Access` grants, and that tier styling (filled vs. outlined) matches full vs. read-only access.
+  3. Click **Edit** on any role and confirm the "coming soon" dialog appears and closes without side effects.
+  4. Log in as a non-admin role and confirm the "Configuración > Roles" menu entry is absent; navigating directly to `/roles` shows the no-access card.
+  5. Click the refresh icon and confirm the page re-fetches (e.g. after a role's window access changes elsewhere).
 
 ### 7. PWA update and recovery behavior
 

@@ -60,6 +60,24 @@ vi.mock('@/hooks/usePsd2ConnectFlow.js', () => ({
   }),
 }));
 
+// ETP-4530: EditAccountModal's Tab Contabilidad also calls useAuth internally via this hook.
+vi.mock('@/hooks/useFinancialAccountAccounting.js', () => ({
+  useFinancialAccountAccounting: () => ({
+    fetchAccountingConfiguration: vi.fn().mockResolvedValue({
+      id: null, fINAssetAcct: null, fINTransitoryAcct: null,
+      ledgerConfigured: true, catalogs: { accounts: [] },
+    }),
+    saveAccountingConfiguration: vi.fn(),
+  }),
+}));
+
+// ETP-4530: EditAccountModal's Accounting tab is gated by the showAccountingFields capability —
+// grant it by default so this page's own suite (which doesn't exercise the gate itself) keeps
+// exercising the modal exactly as before.
+vi.mock('@/auth/AuthContext.jsx', () => ({
+  useHasCapability: () => true,
+}));
+
 const mockNavigate = vi.fn();
 vi.mock('react-router-dom', async () => {
   const actual = await vi.importActual('react-router-dom');

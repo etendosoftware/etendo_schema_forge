@@ -1,6 +1,6 @@
 import { useRef, useState, useCallback, useEffect } from 'react';
-import { useSearchParams } from 'react-router-dom';
-import { Sparkles, Upload } from 'lucide-react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import { Sparkles, Upload, Pencil } from 'lucide-react';
 import { toast } from 'sonner';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { useUI } from '@/i18n';
@@ -13,6 +13,10 @@ import { DetailTabs } from './DetailTabs';
 import { MovementsTab } from './MovementsTab';
 import { ReconciliationTab } from './ReconciliationTab';
 import { ImportedStatementsTab } from './ImportedStatementsTab';
+import { EditAccountModal } from './EditAccountModal.jsx';
+import { ArchiveAccountDialog } from './ArchiveAccountDialog.jsx';
+import { Psd2ConnectFlowUI } from './Psd2ConnectFlowUI.jsx';
+import { usePsd2ConnectFlow } from '@/hooks/usePsd2ConnectFlow';
 import { AutoMatchSuggestionModal } from '@/components/contract-ui/AutoMatchSuggestionModal';
 import { useAutoMatch } from '@/hooks/useReconciliation';
 import { SyncStatusInline } from '@/components/financial-accounts/SyncStatusInline';
@@ -80,8 +84,12 @@ const LINE_CSV_COLUMNS = [
  */
 export default function FinancialAccountWindow({ recordId }) {
   const ui = useUI();
+  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const [activeTab, setActiveTab] = useState(() => searchParams.get('tab') ?? 'movements');
+  // Edit modal (ETP-4530): reachable from the detail view too, not just the accounts-list kebab.
+  const [editOpen, setEditOpen] = useState(false);
+  const [archiveTarget, setArchiveTarget] = useState(null);
   // The automatch modal opens whenever the user enters the Reconciliation tab — either via the
   // accounts-list pill (autoMatch=true), a deep link to the tab, or by clicking the tab here.
   const [autoMatchOpen, setAutoMatchOpen] = useState(
@@ -119,6 +127,9 @@ export default function FinancialAccountWindow({ recordId }) {
     setSearchParams({}, { replace: true });
   }, [searchParams, setSearchParams]);
   const { account, reload: reloadAccount } = useFinancialAccount(recordId);
+  // ETP-4530: powers the Edit modal's "Connect to PSD2" button from this entry point too — same
+  // flow/UI as the accounts list (FinancialAccountsPage.jsx), just reloading the account instead.
+  const psd2Flow = usePsd2ConnectFlow({ onDone: reloadAccount });
   const { groups: autoMatchGroups, kpis: autoMatchKpis, reload: reloadAutoMatch } = useAutoMatch(
     autoMatchOpen ? recordId : null,
   );
@@ -229,8 +240,8 @@ export default function FinancialAccountWindow({ recordId }) {
     <TooltipProvider data-testid="TooltipProvider__f7dbb3">
       <div className="flex h-full flex-col overflow-hidden">
 
-        {/* Tab strip + Export button */}
-        <div className="flex items-center justify-between border-b border-[#E8EAEF] pl-0 pr-2">
+        {/* Tab strip + Edit / Export button */}
+        <div className="flex items-center justify-between border-b border-[hsl(var(--border-subtle))] pl-0 pr-2">
           <DetailTabs
             value={activeTab}
             onValueChange={handleTabChange}
@@ -238,27 +249,38 @@ export default function FinancialAccountWindow({ recordId }) {
             reconciliationCount={account?.pendingCount ?? 0}
             statementsCount={statements.length}
             data-testid="DetailTabs__f7dbb3" />
-          {activeTab === 'reconciliation' ? (
+          <div className="flex items-center gap-2">
             <button
               type="button"
-              data-testid="financial-account-automatch"
-              onClick={() => setAutoMatchOpen(true)}
-              className="inline-flex h-10 items-center gap-1 rounded-lg border border-[#D1D4DB] bg-white px-3 text-sm font-medium leading-6 text-[#121217] shadow-[0_1px_2px_rgba(18,18,23,0.05)] hover:bg-[#F5F7F9]"
+              data-testid="financial-account-edit"
+              onClick={() => setEditOpen(true)}
+              className="inline-flex h-10 items-center gap-1 rounded-lg border border-[hsl(var(--border-control))] bg-card px-3 text-sm font-medium leading-6 text-[hsl(var(--foreground))] shadow-[0_1px_2px_hsl(var(--foreground) / 0.05)] hover:bg-[hsl(var(--muted))]"
             >
-              <Sparkles className="h-5 w-5 text-[#828FA3]" data-testid="Sparkles__f7dbb3" />
-              <span className="px-1">{ui('financeReconcileActionAutomatch')}</span>
+              <Pencil className="h-5 w-5 text-[hsl(var(--text-disabled))]" data-testid="Pencil__f7dbb3" />
+              <span className="px-1">{ui('financeAccountsMenuEdit')}</span>
             </button>
-          ) : (
-            <button
-              type="button"
-              data-testid="financial-account-export"
-              onClick={handleExport}
-              className="inline-flex h-10 items-center gap-1 rounded-lg border border-[#D1D4DB] bg-white px-3 text-sm font-medium leading-6 text-[#121217] shadow-[0_1px_2px_rgba(18,18,23,0.05)] hover:bg-[#F5F7F9]"
-            >
-              <Upload className="h-6 w-6 text-[#828FA3]" data-testid="Upload__f7dbb3" />
-              <span className="px-1">{ui('financeAccountDetailExport')}</span>
-            </button>
-          )}
+            {activeTab === 'reconciliation' ? (
+              <button
+                type="button"
+                data-testid="financial-account-automatch"
+                onClick={() => setAutoMatchOpen(true)}
+                className="inline-flex h-10 items-center gap-1 rounded-lg border border-[hsl(var(--border-control))] bg-card px-3 text-sm font-medium leading-6 text-[hsl(var(--foreground))] shadow-[0_1px_2px_hsl(var(--foreground) / 0.05)] hover:bg-[hsl(var(--muted))]"
+              >
+                <Sparkles className="h-5 w-5 text-[hsl(var(--text-disabled))]" data-testid="Sparkles__f7dbb3" />
+                <span className="px-1">{ui('financeReconcileActionAutomatch')}</span>
+              </button>
+            ) : (
+              <button
+                type="button"
+                data-testid="financial-account-export"
+                onClick={handleExport}
+                className="inline-flex h-10 items-center gap-1 rounded-lg border border-[hsl(var(--border-control))] bg-card px-3 text-sm font-medium leading-6 text-[hsl(var(--foreground))] shadow-[0_1px_2px_hsl(var(--foreground) / 0.05)] hover:bg-[hsl(var(--muted))]"
+              >
+                <Upload className="h-6 w-6 text-[hsl(var(--text-disabled))]" data-testid="Upload__f7dbb3" />
+                <span className="px-1">{ui('financeAccountDetailExport')}</span>
+              </button>
+            )}
+          </div>
         </div>
 
         {/* Tab content */}
@@ -305,6 +327,21 @@ export default function FinancialAccountWindow({ recordId }) {
         onClose={() => setAutoMatchOpen(false)}
         onSuccess={handleAutoMatchSuccess}
         data-testid="AutoMatchSuggestionModal__f7dbb3" />
+      <EditAccountModal
+        open={editOpen}
+        account={account}
+        onClose={() => setEditOpen(false)}
+        onSaved={reloadAccount}
+        onArchive={(acc) => { setEditOpen(false); setArchiveTarget(acc); }}
+        onConnect={(acc) => { setEditOpen(false); psd2Flow.startConnect(acc); }}
+        data-testid="EditAccountModal__f7dbb3" />
+      <ArchiveAccountDialog
+        open={!!archiveTarget}
+        account={archiveTarget}
+        onClose={() => setArchiveTarget(null)}
+        onArchived={() => { setArchiveTarget(null); navigate('/finance/accounts'); }}
+        data-testid="ArchiveAccountDialog__f7dbb3" />
+      <Psd2ConnectFlowUI flow={psd2Flow} data-testid="Psd2ConnectFlowUI__f7dbb3" />
     </TooltipProvider>
   );
 }

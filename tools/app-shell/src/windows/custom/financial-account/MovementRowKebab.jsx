@@ -12,7 +12,7 @@ import {
   DropdownMenuItem,
   DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu';
-import MovementConfirmModal from './MovementConfirmModal';
+import MovementLifecycleConfirmModal from './MovementLifecycleConfirmModal';
 
 // Post (contabilizar) / Unpost (descontabilizar) go through the financial-account spec's
 // document-posting action (Java_Qualifier `document-posting` on the transaction entity).
@@ -150,7 +150,7 @@ export function MovementRowKebab({ movement, onReload, onEdit }) {
             type="button"
             aria-label={ui('financeAccountMovementsRowActions')}
             data-testid={`movement-row-menu-${movement.id}`}
-            className="inline-flex h-8 w-8 items-center justify-center rounded-full text-[#828FA3] opacity-0 transition-opacity group-hover:opacity-100 hover:bg-[#E8EAEF]"
+            className="inline-flex h-8 w-8 items-center justify-center rounded-full text-[hsl(var(--text-disabled))] opacity-0 transition-opacity group-hover:opacity-100 hover:bg-[hsl(var(--border-subtle))]"
           >
             <MoreVertical className="h-5 w-5" data-testid="MoreVertical__64eff3" />
           </button>
@@ -165,8 +165,8 @@ export function MovementRowKebab({ movement, onReload, onEdit }) {
               onClick={() => onEdit?.(movement)}
               disabled={busy}
               data-testid="movement-row-edit">
-              <Pencil className="h-5 w-5 text-[#828FA3]" data-testid="Pencil__64eff3" />
-              <span className="text-sm font-normal leading-6 text-[#121217]">
+              <Pencil className="h-5 w-5 text-[hsl(var(--text-disabled))]" data-testid="Pencil__64eff3" />
+              <span className="text-sm font-normal leading-6 text-[hsl(var(--foreground))]">
                 {ui('financeAccountTxRowEdit')}
               </span>
             </DropdownMenuItem>
@@ -178,8 +178,8 @@ export function MovementRowKebab({ movement, onReload, onEdit }) {
               onClick={() => runLifecycle(processMovement, 'financeAccountTxRowProcessSuccess', 'financeAccountTxRowProcessError')}
               disabled={busy}
               data-testid="movement-row-process">
-              <CheckCircle2 className="h-5 w-5 text-[#828FA3]" data-testid="CheckCircle2__64eff3" />
-              <span className="text-sm font-normal leading-6 text-[#121217]">
+              <CheckCircle2 className="h-5 w-5 text-[hsl(var(--text-disabled))]" data-testid="CheckCircle2__64eff3" />
+              <span className="text-sm font-normal leading-6 text-[hsl(var(--foreground))]">
                 {processing ? ui('financeAccountTxRowProcessing') : ui('financeAccountTxRowProcess')}
               </span>
             </DropdownMenuItem>
@@ -191,8 +191,8 @@ export function MovementRowKebab({ movement, onReload, onEdit }) {
               onClick={handlePost}
               disabled={busy}
               data-testid="movement-row-post">
-              <BookOpen className="h-5 w-5 text-[#828FA3]" data-testid="BookOpen__64eff3" />
-              <span className="text-sm font-normal leading-6 text-[#121217]">
+              <BookOpen className="h-5 w-5 text-[hsl(var(--text-disabled))]" data-testid="BookOpen__64eff3" />
+              <span className="text-sm font-normal leading-6 text-[hsl(var(--foreground))]">
                 {posting ? ui('financeAccountMovementsRowPosting') : ui('financeAccountMovementsRowPost')}
               </span>
             </DropdownMenuItem>
@@ -205,8 +205,8 @@ export function MovementRowKebab({ movement, onReload, onEdit }) {
               onClick={handleUnpost}
               disabled={busy}
               data-testid="movement-row-unpost">
-              <BookX className="h-5 w-5 text-[#828FA3]" data-testid="BookX__64eff3" />
-              <span className="text-sm font-normal leading-6 text-[#121217]">
+              <BookX className="h-5 w-5 text-[hsl(var(--text-disabled))]" data-testid="BookX__64eff3" />
+              <span className="text-sm font-normal leading-6 text-[hsl(var(--foreground))]">
                 {unposting ? ui('financeAccountMovementsRowUnposting') : ui('financeAccountMovementsRowUnpost')}
               </span>
             </DropdownMenuItem>
@@ -220,8 +220,8 @@ export function MovementRowKebab({ movement, onReload, onEdit }) {
                 : runLifecycle(reactivateMovement, 'financeAccountTxRowReactivateSuccess', 'financeAccountTxRowReactivateError'))}
               disabled={busy}
               data-testid="movement-row-reactivate">
-              <RotateCcw className="h-5 w-5 text-[#828FA3]" data-testid="RotateCcw__64eff3" />
-              <span className="text-sm font-normal leading-6 text-[#121217]">
+              <RotateCcw className="h-5 w-5 text-[hsl(var(--text-disabled))]" data-testid="RotateCcw__64eff3" />
+              <span className="text-sm font-normal leading-6 text-[hsl(var(--foreground))]">
                 {reactivating ? ui('financeAccountTxRowReactivating') : ui('financeAccountTxRowReactivate')}
               </span>
             </DropdownMenuItem>
@@ -237,8 +237,8 @@ export function MovementRowKebab({ movement, onReload, onEdit }) {
                   : runLifecycle(deleteMovement, 'financeAccountTxRowDeleteSuccess', 'financeAccountTxRowDeleteError'))}
                 disabled={busy}
                 data-testid="movement-row-delete">
-                <Trash2 className="h-5 w-5 text-[#D50B3E]" data-testid="Trash2__64eff3" />
-                <span className="text-sm font-normal leading-6 text-[#D50B3E]">
+                <Trash2 className="h-5 w-5 text-[hsl(var(--destructive))]" data-testid="Trash2__64eff3" />
+                <span className="text-sm font-normal leading-6 text-[hsl(var(--destructive))]">
                   {deleting ? ui('financeAccountTxRowDeleting') : ui('financeAccountTxRowDelete')}
                 </span>
               </DropdownMenuItem>
@@ -247,13 +247,13 @@ export function MovementRowKebab({ movement, onReload, onEdit }) {
         </DropdownMenuContent>
       </DropdownMenu>
       {confirm && (
-        <MovementConfirmModal
+        <MovementLifecycleConfirmModal
           action={confirm}
           reconciled={isReconciled}
           posted={isPosted}
           onConfirm={runConfirmed}
           onClose={() => setConfirm(null)}
-          data-testid="MovementConfirmModal__64eff3" />
+          data-testid="MovementLifecycleConfirmModal__64eff3" />
       )}
     </>
   );

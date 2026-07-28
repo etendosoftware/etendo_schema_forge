@@ -46,6 +46,7 @@ This window should let a user create, review, confirm, and manage sales orders f
 - `netUnitPrice` derivation for gross price lists: when a callout returns `grossUnitPrice` without a corresponding `netUnitPrice`, `DetailView.jsx` derives `netUnitPrice = grossUnitPrice / (1 + taxRate/100)` using three sources in priority order: (A) `taxRate` injected as a synthetic field in the same callout result by `NeoCalloutService.injectTaxRateIfPresent`, (B) `taxRateCacheRef` populated from previous callout responses, (C) the ratio `lineGrossAmount/lineNetAmount` from an existing line with the same tax. This ensures `lineGrossAmount` is correct in the add-line preview for both net and gross price lists.
 - Backend price list handling (`OrderLineHandler.java`): a `NeoHandler` CDI bean registered as `orderLineHandler` intercepts order-line CRUD requests. On POST (new line), it resets `grossUnitPrice` to `0` for net price lists (`isPriceIncludesTax=N`) before the CRUD runs, preventing the DB trigger `c_orderline_trg` from mistakenly using the product's `standardPrice` (a net price) as a gross price. On PATCH (unit price edit), it detects when the trigger on a gross price list (`isPriceIncludesTax=Y`) produced the wrong `priceActual`, recomputes `grossUnitPrice = sentUnitPrice × (1 + taxRate/100)`, and flushes the correction within the same transaction so the trigger recalculates correctly.
 - Defaulting: new headers default `orderDate` to the current date and start in draft status; new lines default ordered quantity to `1` and discount to `0`. Currency is derived from configuration in the contract, but it is not exposed as an editable field in the generated form.
+- Unified document/accounting date (ETP-4531, redefined 2026-07-17 — confirmed already compliant): `accountingDate` has no `decisions.json` override in this window; the raw AD classification is already `system`, so it was never present in `frontendContract.entities.header.fields` and never rendered. `orderDate` is the single visible date field. No change was needed here — verified against `contract.json` and the generated `HeaderForm.jsx`/`HeaderPage.jsx` when `purchase-order`'s equivalent field was aligned to the same `system` visibility.
 - Save behavior observed in the inspected tests is explicit rather than implicit: new records expose both `Save` and `Save draft`, and `Cancel` returns the user to the list without persisting the draft.
 - Status-driven actions: draft orders show confirm and send actions. Confirming can optionally create shipment and/or draft invoice documents. Completed orders switch to management actions that decide whether shipment and/or invoice work is still pending by comparing delivered quantities and invoiced totals against the order lines and header total.
 - ETP-4006 — Confirm modal preview and invoice discount carry-over (IV-11): `ConfirmModal` (in `OrderCreateInvoice.jsx`) and `OrderConfirmModal.jsx` apply `discountFactor = (1 − etgoTotalDiscount/100)` to the previewed `grandTotalAmount` and `summedLineAmount` ONLY while `documentStatus === 'DR'`. Once the order transitions to `CO`, `TotalDiscountService.recalculate` materializes the `ETGO_DTO` discount line and the server-side totals already include the discount, so the modal renders them as-is — re-multiplying would subtract the discount twice and produce a lower number than `DocumentTotalsPanel` shows behind the modal. The `createDraftInvoice` action invoked from the same modal is updated in `com.etendoerp.go` (`CreateDraftInvoiceHandler`, `NeoCommercialDocumentFactory`): `OrderLine.discount` is copied per line into `InvoiceLine.etgoDiscount`, `etgoTotalDiscount` is copied from order to invoice header, `TotalDiscountService.recalculate` materializes the matching ETGO_DTO line on the new invoice, and `InvoiceTax` taxable bases / amounts plus `summedLineAmount` / `grandTotalAmount` are updated in place from a JDBC aggregate of the current line set so the invoice total matches the source order.
@@ -98,9 +99,14 @@ This window should let a user create, review, confirm, and manage sales orders f
 
 ### Inline line validation (min: 0 constraint)
 
-Fields with a `min: 0` constraint — `orderedQuantity` and `discount` — now show a red border when the user types a negative value during inline edit. The row remains open and the save/confirm path for that row is blocked until the value is corrected or the edit is cancelled. The constraint is enforced client-side by `InlineLinesPanel` using the `min` metadata from the contract field definition.
+The `discount` field keeps a `min: 0` constraint and shows a red border when the user types a negative value during inline edit; the row remains open and the save/confirm path for that row is blocked until the value is corrected or the edit is cancelled. The constraint is enforced client-side by `InlineLinesPanel` using the `min` metadata from the contract field definition.
 
 See [Shared validation & UX changes — ETP-4005](app-shell-functional-flows.md#shared-validation--ux-changes--etp-4005) for behaviors common to all document windows (required field validation, single confirmation toast, callout message sanitization).
+
+### Negative quantity/price and price-list label — ETP-4567
+
+- `orderedQuantity` and `listPrice` no longer declare `min: 0` in `decisions.json`. Both the add-line row and inline grid edit now accept negative values — needed for returns and credit adjustments modeled as negative-quantity or negative-price order lines. `discount` is unaffected and keeps its `min: 0, max: 100` range.
+- The `listPrice` (AD `PriceList` column) label is now overridden to **"Precio"** in Spanish via `window.labelOverrides.es_ES.PriceList` in `decisions.json` (English label unchanged: "Net List Price" / whatever the AD default resolves to). This follows the same declarative `labelOverrides` mechanism already used for `C_BPartner_ID`, `DeliveryStatus`, and `InvoiceStatus` on this window.
 
 ## Automated evidence
 
@@ -232,3 +238,11 @@ The line's `currency` field is configured in `artifacts/sales-order/decisions.js
 - `modules/com.etendoerp.go/src/com/etendoerp/go/schemaforge/NeoExchangeRateService.java` — exchange rate endpoint with inverse fallback.
 - `modules/com.etendoerp.go/src/com/etendoerp/go/schemaforge/NeoSessionService.java` — `/session` endpoint returning both `currencyCode` and `currencyId` (added in ETP-4027).
 - `etendo_core_pg/src-db/database/model/triggers/C_ORDER_CHK_RESTRINCTIONS_TRG.xml` — trigger with `C_Currency_ID` clause removed (Phase 0 / ETP-4027).
+
+## Theme roles
+
+The window's live artifact custom components use the shared semantic theme.
+Structural surfaces and controls consume background, card, foreground, muted, and
+border roles; operational feedback uses success, warning, information, neutral,
+and destructive roles. No local palette is used, so the active application theme
+controls the appearance.

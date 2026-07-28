@@ -29,12 +29,12 @@ import SelectorInput from './SelectorInput';
  */
 
 // Badge with "Label: Value" format, matching the UX spec
-// (bg #F5F7F9, radius 8px, padding 4px 8px, label #3F3F50, Inter 14px/20px).
+// (bg hsl(var(--muted)), radius 8px, padding 4px 8px, label hsl(var(--muted-foreground)), Inter 14px/20px).
 export function DimBadge({ label, value }) {
   return (
-    <span className="inline-flex items-center px-2 py-1 rounded-lg bg-[#F5F7F9] text-sm leading-5 whitespace-nowrap max-w-full">
-      <span className="text-[#3F3F50]">{label}:</span>
-      <span className="ml-1 font-medium text-[#121217] truncate">{value}</span>
+    <span className="inline-flex items-center px-2 py-1 rounded-lg bg-[hsl(var(--muted))] text-sm leading-5 whitespace-nowrap max-w-full">
+      <span className="text-[hsl(var(--muted-foreground))]">{label}:</span>
+      <span className="ml-1 font-medium text-[hsl(var(--foreground))] truncate">{value}</span>
     </span>
   );
 }
@@ -81,7 +81,7 @@ export function DimSummary({ line, onClick, processed, labelOverrides, fields, e
     return (
       <button
         onClick={onClick}
-        className="inline-flex items-center gap-1 h-7 px-2.5 rounded-lg border border-dashed border-[#D1D4DB] text-xs font-medium text-muted-foreground hover:text-foreground hover:border-[#828FA3] transition-colors"
+        className="inline-flex items-center gap-1 h-7 px-2.5 rounded-lg border border-dashed border-[hsl(var(--border-control))] text-xs font-medium text-muted-foreground hover:text-foreground hover:border-[hsl(var(--text-disabled))] transition-colors"
       >
         <Plus className="h-3 w-3" data-testid="Plus__DimensionsPanel" />
         {emptyLabel ?? ui('dimensionsPanelEmpty')}
@@ -100,7 +100,7 @@ export function DimSummary({ line, onClick, processed, labelOverrides, fields, e
         value={b.value}
         data-testid="DimBadge__DimensionsPanel" />)}
       {extra > 0 && (
-        <span className="px-2 py-1 rounded-lg bg-[#F5F7F9] text-sm leading-5 font-medium text-[#3F3F50]">+{extra}</span>
+        <span className="px-2 py-1 rounded-lg bg-[hsl(var(--muted))] text-sm leading-5 font-medium text-[hsl(var(--muted-foreground))]">+{extra}</span>
       )}
     </button>
   );
@@ -119,7 +119,7 @@ export function DimensionGrid({ fields, data, onChange, onFieldSave, apiBaseUrl,
   const t = useLabel(labelOverrides);
   return (
     <div
-      className={`[&_button[role=combobox]]:!bg-white [&_button[role=combobox]:hover]:!bg-[#F5F7F9] [&_input]:!bg-white${isCompleted ? '' : ' [&_input:disabled]:!opacity-100'}`}
+      className={`[&_button[role=combobox]]:!bg-card [&_button[role=combobox]:hover]:!bg-[hsl(var(--muted))] [&_input]:!bg-card${isCompleted ? '' : ' [&_input:disabled]:!opacity-100'}`}
       style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16 }}
     >
       {fields.filter(f => !f.hidden).map(f => {
@@ -132,7 +132,7 @@ export function DimensionGrid({ fields, data, onChange, onFieldSave, apiBaseUrl,
             <label className="text-sm text-foreground font-medium block">{label}</label>
             {readOnly ? (
               <input
-                className="flex h-10 w-full rounded-lg border border-[#D1D4DB] bg-white p-2 text-sm disabled:cursor-not-allowed disabled:opacity-50"
+                className="flex h-10 w-full rounded-lg border border-[hsl(var(--border-control))] bg-card p-2 text-sm disabled:cursor-not-allowed disabled:opacity-50"
                 value={displayValue || value || ''}
                 disabled
                 readOnly

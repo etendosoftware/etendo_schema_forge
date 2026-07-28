@@ -103,6 +103,6 @@ describe('AccountRow', () => {
   it('renders negative balances in the red treatment', () => {
     renderRow({ account: { ...baseAccount, currentBalance: -42.5 } });
     const balanceCell = screen.getByText(/-?€42\.50|-€42\.50|-42,50 €|-42\.50 €/);
-    expect(balanceCell.className).toMatch(/text-\[#D50B3E\]/i);
+    expect(balanceCell.className).toMatch(/text-\[hsl\(var\(--destructive\)\)\]/i);
   });
 });

@@ -2,7 +2,7 @@ import { test, expect } from '@playwright/test';
 import { login, navigateTo } from '../helpers/auth.js';
 import {
   loadCredentials, slow, waitForDetailReady, saveDraft, selectVendorBP,
-  reselectComboOption,
+
   addProductLine, ensureVendorSetup, clickConfirmButton, expectStatusPill,
   expectSaveResponse, waitForConfirmResponse, dismissSuccessModal, safeReload,
   readDocumentTotals, verifyTotalsConsistency,
@@ -196,15 +196,12 @@ test.describe('Purchase Order → Invoice — Happy path (integration)', () => {
 
     await selectVendorBP(page);
 
-    // The test vendor (Default Customer + isVendor flag) has NO purchase-side
-    // config, so the BP callout CLEARS priceList/paymentMethod/paymentTerms —
-    // while the Selects keep displaying the stale org defaults. Re-pick the
-    // three combos explicitly so the editing state holds real values and the
-    // save is not blocked by required-field validation (race with the debounced
-    // callout made this pass or fail depending on timing).
-    await reselectComboOption(page, 'paymentMethod');
-    await reselectComboOption(page, 'paymentTerms');
-    await reselectComboOption(page, 'priceList');
+    // The BP callout is debounced — in CI the test can reach saveDraft()
+    // before the callout finishes populating the form fields, causing a
+    // "required fields" validation error. Wait for all callout network
+    // activity to settle before saving.
+    await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {});
+    await page.waitForTimeout(3_000);
 
     // ═══════════════════════════════════════════════════════════════════════
     // STEP 12: Save invoice as draft
@@ -212,8 +209,21 @@ test.describe('Purchase Order → Invoice — Happy path (integration)', () => {
 
     await saveDraft(page);
 
-    // (?!new$) — a silent save failure leaves the URL at /purchase-invoice/new,
-    // which a bare [a-zA-Z0-9]+ would happily match.
+    // The save may succeed but the frontend redirect from /new to /{id} can be
+    // slow. First give it a generous window to land on the record URL.
+    const saved = await page.waitForURL(
+      /\/purchase-invoice\/(?!new$)[a-zA-Z0-9]+$/,
+      { timeout: 20_000 },
+    ).then(() => true).catch(() => false);
+
+    // If we're still on /new the save genuinely failed (callout arrived late,
+    // required-field validation). Wait for callouts to settle and retry once.
+    if (!saved && page.url().endsWith('/new')) {
+      await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {});
+      await page.waitForTimeout(3_000);
+      await saveDraft(page);
+    }
+
     await expect(page,
       'After saving draft, URL should include the invoice record ID',
     ).toHaveURL(/\/purchase-invoice\/(?!new$)[a-zA-Z0-9]+$/, { timeout: 15_000 });

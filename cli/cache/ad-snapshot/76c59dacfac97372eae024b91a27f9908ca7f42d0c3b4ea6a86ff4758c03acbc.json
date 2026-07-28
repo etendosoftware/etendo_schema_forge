@@ -1,459 +1,8 @@
 {
   "sql": "SELECT rl.AD_Reference_ID, rl.Value, rl.Name, rlt_es.Name AS name_es FROM AD_Ref_List rl LEFT JOIN AD_Ref_List_Trl rlt_es ON rlt_es.AD_Ref_List_ID = rl.AD_Ref_List_ID AND rlt_es.AD_Language = 'es_ES' WHERE rl.AD_Reference_ID = ANY($1) AND rl.IsActive = 'Y' ORDER BY rl.SeqNo NULLS LAST, rl.Name COLLATE \"C\", rl.Value COLLATE \"C\"",
   "versions": {
-    "0720fc3ff9d21e526d0730a5434960d5e5f779d55523fbcbb21faa702a00e63d": {
-      "checksum": "fcd537f7ecf4741a4bd1b930318a8db3e437654bdab1ad916d60b9cd872d9275",
-      "params": [
-        [
-          "FF80818130217A350130218D802B0011",
-          "152",
-          "154",
-          "153",
-          "150",
-          "151",
-          "195",
-          "575BCB88A4694C27BC013DE9C73E6FE7",
-          "C3C19DE8AB3B42E78748E20D986FBBC9",
-          "1852D69AB3FD453F8F031813501B26F0"
-        ]
-      ],
-      "rows": [
-        {
-          "ad_reference_id": "575BCB88A4694C27BC013DE9C73E6FE7",
-          "name": "Awaiting Payment",
-          "name_es": "A Pagar",
-          "value": "RPAP"
-        },
-        {
-          "ad_reference_id": "575BCB88A4694C27BC013DE9C73E6FE7",
-          "name": "Awaiting Execution",
-          "name_es": "A Ejecutar",
-          "value": "RPAE"
-        },
-        {
-          "ad_reference_id": "575BCB88A4694C27BC013DE9C73E6FE7",
-          "name": "Void",
-          "name_es": "Anulado",
-          "value": "RPVOID"
-        },
-        {
-          "ad_reference_id": "575BCB88A4694C27BC013DE9C73E6FE7",
-          "name": "Payment Made",
-          "name_es": "Pagado",
-          "value": "PPM"
-        },
-        {
-          "ad_reference_id": "575BCB88A4694C27BC013DE9C73E6FE7",
-          "name": "Payment Received",
-          "name_es": "Cobrado",
-          "value": "RPR"
-        },
-        {
-          "ad_reference_id": "575BCB88A4694C27BC013DE9C73E6FE7",
-          "name": "Deposited not Cleared",
-          "name_es": "Cobro depositado",
-          "value": "RDNC"
-        },
-        {
-          "ad_reference_id": "575BCB88A4694C27BC013DE9C73E6FE7",
-          "name": "Withdrawn not Cleared",
-          "name_es": "Pago reintegrado",
-          "value": "PWNC"
-        },
-        {
-          "ad_reference_id": "575BCB88A4694C27BC013DE9C73E6FE7",
-          "name": "Payment Cleared",
-          "name_es": "Conciliado",
-          "value": "RPPC"
-        },
-        {
-          "ad_reference_id": "150",
-          "name": "After Delivery",
-          "name_es": "Después de entregado",
-          "value": "D"
-        },
-        {
-          "ad_reference_id": "150",
-          "name": "After Order Delivered",
-          "name_es": "Pedido completamente entregado",
-          "value": "O"
-        },
-        {
-          "ad_reference_id": "151",
-          "name": "After Receipt",
-          "name_es": "Después de cobrado",
-          "value": "R"
-        },
-        {
-          "ad_reference_id": "1852D69AB3FD453F8F031813501B26F0",
-          "name": "Automatic",
-          "name_es": "Automático",
-          "value": "CRP"
-        },
-        {
-          "ad_reference_id": "FF80818130217A350130218D802B0011",
-          "name": "Automatic Evaluation",
-          "name_es": "Evaluación Automática",
-          "value": "AE"
-        },
-        {
-          "ad_reference_id": "151",
-          "name": "Availability",
-          "name_es": "Si hay disponible",
-          "value": "A"
-        },
-        {
-          "ad_reference_id": "195",
-          "name": "Bank Deposit",
-          "name_es": "Ingreso por banco",
-          "value": "5"
-        },
-        {
-          "ad_reference_id": "195",
-          "name": "Bank Remittance",
-          "name_es": "Remesa bancaria",
-          "value": "R"
-        },
-        {
-          "ad_reference_id": "FF80818130217A350130218D802B0011",
-          "name": "Booked",
-          "name_es": "Registrado",
-          "value": "CO"
-        },
-        {
-          "ad_reference_id": "153",
-          "name": "Calculated",
-          "name_es": "Calculado",
-          "value": "C"
-        },
-        {
-          "ad_reference_id": "195",
-          "name": "Cash",
-          "name_es": "Efectivo",
-          "value": "B"
-        },
-        {
-          "ad_reference_id": "195",
-          "name": "Cash on Delivery",
-          "name_es": "Contado albarán",
-          "value": "C"
-        },
-        {
-          "ad_reference_id": "195",
-          "name": "Check",
-          "name_es": "Cheque",
-          "value": "2"
-        },
-        {
-          "ad_reference_id": "195",
-          "name": "Cheque bancario",
-          "name_es": "Cheque bancario",
-          "value": "SDFP_Cheque bancario"
-        },
-        {
-          "ad_reference_id": "195",
-          "name": "Cheque conformado",
-          "name_es": "Cheque conformado",
-          "value": "SDFP_Cheque conformado"
-        },
-        {
-          "ad_reference_id": "FF80818130217A350130218D802B0011",
-          "name": "Closed",
-          "name_es": "Cerrado",
-          "value": "CL"
-        },
-        {
-          "ad_reference_id": "FF80818130217A350130218D802B0011",
-          "name": "Closed - Invoice Created",
-          "name_es": "Closed - Invoice Created",
-          "value": "ETGO_CI"
-        },
-        {
-          "ad_reference_id": "FF80818130217A350130218D802B0011",
-          "name": "Closed - Order Created",
-          "name_es": "Cerrado - Pedido creado",
-          "value": "CA"
-        },
-        {
-          "ad_reference_id": "FF80818130217A350130218D802B0011",
-          "name": "Closed - Rejected",
-          "name_es": "Cerrado - Rechazado",
-          "value": "CJ"
-        },
-        {
-          "ad_reference_id": "195",
-          "name": "Compensación",
-          "name_es": "Compensación",
-          "value": "SDFP_Compensación"
-        },
-        {
-          "ad_reference_id": "151",
-          "name": "Complete Line",
-          "name_es": "Línea completa",
-          "value": "L"
-        },
-        {
-          "ad_reference_id": "151",
-          "name": "Complete Order",
-          "name_es": "Pedido completo",
-          "value": "O"
-        },
-        {
-          "ad_reference_id": "C3C19DE8AB3B42E78748E20D986FBBC9",
-          "name": "Completely Reserved",
-          "name_es": "Reservado completamente",
-          "value": "CR"
-        },
-        {
-          "ad_reference_id": "195",
-          "name": "Contrato Adjudicación",
-          "name_es": "Contrato Adjudicación",
-          "value": "SDFP_Contrato Adjudicación"
-        },
-        {
-          "ad_reference_id": "195",
-          "name": "Credit Card",
-          "name_es": "Tarjeta de crédito",
-          "value": "K"
-        },
-        {
-          "ad_reference_id": "195",
-          "name": "Crédito Documentario",
-          "name_es": "Crédito Documentario",
-          "value": "SDFP_Crédito Documentario"
-        },
-        {
-          "ad_reference_id": "150",
-          "name": "Customer Schedule After Delivery",
-          "name_es": "Periódico después de entregado",
-          "value": "S"
-        },
-        {
-          "ad_reference_id": "152",
-          "name": "Delivery",
-          "name_es": "Entrega",
-          "value": "D"
-        },
-        {
-          "ad_reference_id": "150",
-          "name": "Do Not Invoice",
-          "name_es": "No facturar",
-          "value": "N"
-        },
-        {
-          "ad_reference_id": "FF80818130217A350130218D802B0011",
-          "name": "Draft",
-          "name_es": "Borrador",
-          "value": "DR"
-        },
-        {
-          "ad_reference_id": "195",
-          "name": "Especiales",
-          "name_es": "Especiales",
-          "value": "SDFP_Especiales"
-        },
-        {
-          "ad_reference_id": "153",
-          "name": "Freight included",
-          "name_es": "Gastos incluidos",
-          "value": "I"
-        },
-        {
-          "ad_reference_id": "195",
-          "name": "Giro postal",
-          "name_es": "Giro postal",
-          "value": "SDFP_Giro postal"
-        },
-        {
-          "ad_reference_id": "154",
-          "name": "High",
-          "name_es": "Alta",
-          "value": "3"
-        },
-        {
-          "ad_reference_id": "150",
-          "name": "Immediate",
-          "name_es": "Inmediato",
-          "value": "I"
-        },
-        {
-          "ad_reference_id": "195",
-          "name": "Letra Aceptada",
-          "name_es": "Letra Aceptada",
-          "value": "SDFP_Letra Aceptada"
-        },
-        {
-          "ad_reference_id": "195",
-          "name": "Letra de cambio",
-          "name_es": "Letra de cambio",
-          "value": "SDFP_Letra de cambio"
-        },
-        {
-          "ad_reference_id": "154",
-          "name": "Low",
-          "name_es": "Baja",
-          "value": "7"
-        },
-        {
-          "ad_reference_id": "1852D69AB3FD453F8F031813501B26F0",
-          "name": "Manual",
-          "name_es": "Manual",
-          "value": "CR"
-        },
-        {
-          "ad_reference_id": "FF80818130217A350130218D802B0011",
-          "name": "Manual Evaluation",
-          "name_es": "Evaluación Manual",
-          "value": "ME"
-        },
-        {
-          "ad_reference_id": "154",
-          "name": "Medium",
-          "name_es": "Media",
-          "value": "5"
-        },
-        {
-          "ad_reference_id": "195",
-          "name": "Money Order",
-          "name_es": "Giro bancario",
-          "value": "4"
-        },
-        {
-          "ad_reference_id": "FF80818130217A350130218D802B0011",
-          "name": "Not Accepted",
-          "name_es": "No aprobado",
-          "value": "NA"
-        },
-        {
-          "ad_reference_id": "FF80818130217A350130218D802B0011",
-          "name": "Not Confirmed",
-          "name_es": "No Confirmado",
-          "value": "NC"
-        },
-        {
-          "ad_reference_id": "FF80818130217A350130218D802B0011",
-          "name": "Not Paid",
-          "name_es": "Pendiente de Pago",
-          "value": "WP"
-        },
-        {
-          "ad_reference_id": "C3C19DE8AB3B42E78748E20D986FBBC9",
-          "name": "Not Reserved",
-          "name_es": "No reservado",
-          "value": "NR"
-        },
-        {
-          "ad_reference_id": "195",
-          "name": "On Credit",
-          "name_es": "A la vista",
-          "value": "P"
-        },
-        {
-          "ad_reference_id": "195",
-          "name": "Pagaré No a la orden",
-          "name_es": "Pagaré No a la orden",
-          "value": "SDFP_Pagaré No a la orden"
-        },
-        {
-          "ad_reference_id": "195",
-          "name": "Pagaré a la orden",
-          "name_es": "Pagaré a la orden",
-          "value": "SDFP_Pagaré a la orden"
-        },
-        {
-          "ad_reference_id": "C3C19DE8AB3B42E78748E20D986FBBC9",
-          "name": "Partially Reserved",
-          "name_es": "Reservado parcialmente",
-          "value": "PR"
-        },
-        {
-          "ad_reference_id": "152",
-          "name": "Pickup",
-          "name_es": "Recogida",
-          "value": "P"
-        },
-        {
-          "ad_reference_id": "195",
-          "name": "Promissory Note",
-          "name_es": "Pagaré",
-          "value": "3"
-        },
-        {
-          "ad_reference_id": "FF80818130217A350130218D802B0011",
-          "name": "Re-Opened",
-          "name_es": "Reabierto",
-          "value": "RE"
-        },
-        {
-          "ad_reference_id": "195",
-          "name": "Recibo",
-          "name_es": "Recibo",
-          "value": "SDFP_Recibo"
-        },
-        {
-          "ad_reference_id": "195",
-          "name": "Recibo domiciliado",
-          "name_es": "Recibo domiciliado",
-          "value": "SDFP_Recibo domiciliado"
-        },
-        {
-          "ad_reference_id": "195",
-          "name": "Reposición",
-          "name_es": "Reposición",
-          "value": "SDFP_Reposición"
-        },
-        {
-          "ad_reference_id": "152",
-          "name": "Shipper",
-          "name_es": "Transportista",
-          "value": "S"
-        },
-        {
-          "ad_reference_id": "FF80818130217A350130218D802B0011",
-          "name": "Temporal",
-          "name_es": "Temporal",
-          "value": "TMP"
-        },
-        {
-          "ad_reference_id": "FF80818130217A350130218D802B0011",
-          "name": "Under Evaluation",
-          "name_es": "Bajo evaluación",
-          "value": "UE"
-        },
-        {
-          "ad_reference_id": "FF80818130217A350130218D802B0011",
-          "name": "Under Way",
-          "name_es": "En curso",
-          "value": "IP"
-        },
-        {
-          "ad_reference_id": "FF80818130217A350130218D802B0011",
-          "name": "Unknown",
-          "name_es": "Desconocido",
-          "value": "??"
-        },
-        {
-          "ad_reference_id": "FF80818130217A350130218D802B0011",
-          "name": "Voided",
-          "name_es": "Anulado",
-          "value": "VO"
-        },
-        {
-          "ad_reference_id": "195",
-          "name": "Wire Transfer",
-          "name_es": "Transferencia",
-          "value": "1"
-        },
-        {
-          "ad_reference_id": "195",
-          "name": "Withholding",
-          "name_es": "Retención",
-          "value": "W"
-        }
-      ]
-    },
     "09137cda8a4710d11b3c7b8733f2f71bb965ecd27a302829e4ddfa8900e06af4": {
-      "checksum": "8a438d617ecfe822293c442f55434f996b1dd133131d9f1cd71362313dc11c9a",
+      "checksum": "f3e38ba6023b143c9bab3c10c31b41d037129df912fd52a35481b2a7a54db492",
       "params": [
         [
           "150",
@@ -1864,6 +1413,1348 @@
           "name": "Withholding",
           "name_es": "Retención",
           "value": "W"
+        }
+      ]
+    },
+    "292dffcc06f348c4ec0075d2f5a2480c447ec36ea06e3e8b7460e3e1d5ce8fed": {
+      "checksum": "842b629aa0cbc2cbf2c4af6fab7817902e49b8109e7e2538c2784b2cd79ab26d",
+      "params": [
+        [
+          "131",
+          "B3942E6F63F54EBCAD7B794E3508E7AF",
+          "D431058F6B7345598D1E0709DFF3B5DD",
+          "C546C9F1F3DE437994F70A6EE12E909C",
+          "D7CF99470E8B49B59D7486947F01D7A7",
+          "73625A8F22EF4CD7808603156BA606D7",
+          "50B2316F6940472CA3BE95DE1E64B3A9",
+          "DC555AA9FAC54BBCB02486F7D628690B",
+          "8CF7102AA0944DF9938A84EB20452018",
+          "B68BC73DBFA34485AD6236A31BC34BCE",
+          "575BCB88A4694C27BC013DE9C73E6FE7",
+          "882685CC8C44444BB088A582991D804E",
+          "125",
+          "DBCF65339D0F4403822A8A7928533D6B",
+          "43849191A4CB4C2D995C594F102B4A57",
+          "5417FDEDA5F740AF9DC30BB494BBF9D4",
+          "19D2097A8A3C4F31968B38CD962EE300",
+          "6D7BCE35E0874C0DAF16663D0346ADF8",
+          "8AFF78B838244DC4BCB9B0A77121EB19",
+          "D590DB8117C5434DB96EBB85B5E19893",
+          "BC847B422918488E9D3AB5CCCD389016",
+          "30AE961D90684216999B8003C702A056",
+          "89C6433F71584D23B95140DE86EDC726",
+          "6E28A33291454412B2129FDC072B6FD9",
+          "664ED76CAD75421AB1C012B536C2F580"
+        ]
+      ],
+      "rows": [
+        {
+          "ad_reference_id": "882685CC8C44444BB088A582991D804E",
+          "name": "0A - Anual",
+          "name_es": null,
+          "value": "0A"
+        },
+        {
+          "ad_reference_id": "882685CC8C44444BB088A582991D804E",
+          "name": "1T - Primer Trimestre",
+          "name_es": null,
+          "value": "1T"
+        },
+        {
+          "ad_reference_id": "882685CC8C44444BB088A582991D804E",
+          "name": "2T - Segundo Trimestre",
+          "name_es": null,
+          "value": "2T"
+        },
+        {
+          "ad_reference_id": "882685CC8C44444BB088A582991D804E",
+          "name": "3T - Tercer Trimestre",
+          "name_es": null,
+          "value": "3T"
+        },
+        {
+          "ad_reference_id": "882685CC8C44444BB088A582991D804E",
+          "name": "4T - Cuarto Trimestre",
+          "name_es": null,
+          "value": "4T"
+        },
+        {
+          "ad_reference_id": "575BCB88A4694C27BC013DE9C73E6FE7",
+          "name": "Awaiting Payment",
+          "name_es": "A Pagar",
+          "value": "RPAP"
+        },
+        {
+          "ad_reference_id": "73625A8F22EF4CD7808603156BA606D7",
+          "name": "Monthly",
+          "name_es": "Mensual",
+          "value": "M"
+        },
+        {
+          "ad_reference_id": "6E28A33291454412B2129FDC072B6FD9",
+          "name": "Por sustitución",
+          "name_es": null,
+          "value": "S"
+        },
+        {
+          "ad_reference_id": "575BCB88A4694C27BC013DE9C73E6FE7",
+          "name": "Awaiting Execution",
+          "name_es": "A Ejecutar",
+          "value": "RPAE"
+        },
+        {
+          "ad_reference_id": "6E28A33291454412B2129FDC072B6FD9",
+          "name": "Por diferencias",
+          "name_es": null,
+          "value": "I"
+        },
+        {
+          "ad_reference_id": "575BCB88A4694C27BC013DE9C73E6FE7",
+          "name": "Void",
+          "name_es": "Anulado",
+          "value": "RPVOID"
+        },
+        {
+          "ad_reference_id": "575BCB88A4694C27BC013DE9C73E6FE7",
+          "name": "Payment Made",
+          "name_es": "Pagado",
+          "value": "PPM"
+        },
+        {
+          "ad_reference_id": "575BCB88A4694C27BC013DE9C73E6FE7",
+          "name": "Payment Received",
+          "name_es": "Cobrado",
+          "value": "RPR"
+        },
+        {
+          "ad_reference_id": "575BCB88A4694C27BC013DE9C73E6FE7",
+          "name": "Deposited not Cleared",
+          "name_es": "Cobro depositado",
+          "value": "RDNC"
+        },
+        {
+          "ad_reference_id": "575BCB88A4694C27BC013DE9C73E6FE7",
+          "name": "Withdrawn not Cleared",
+          "name_es": "Pago reintegrado",
+          "value": "PWNC"
+        },
+        {
+          "ad_reference_id": "575BCB88A4694C27BC013DE9C73E6FE7",
+          "name": "Payment Cleared",
+          "name_es": "Conciliado",
+          "value": "RPPC"
+        },
+        {
+          "ad_reference_id": "882685CC8C44444BB088A582991D804E",
+          "name": "01 - Enero",
+          "name_es": null,
+          "value": "01"
+        },
+        {
+          "ad_reference_id": "882685CC8C44444BB088A582991D804E",
+          "name": "02 - Febrero",
+          "name_es": null,
+          "value": "02"
+        },
+        {
+          "ad_reference_id": "882685CC8C44444BB088A582991D804E",
+          "name": "03 - Marzo",
+          "name_es": null,
+          "value": "03"
+        },
+        {
+          "ad_reference_id": "882685CC8C44444BB088A582991D804E",
+          "name": "04 - Abril",
+          "name_es": null,
+          "value": "04"
+        },
+        {
+          "ad_reference_id": "882685CC8C44444BB088A582991D804E",
+          "name": "05 - Mayo",
+          "name_es": null,
+          "value": "05"
+        },
+        {
+          "ad_reference_id": "882685CC8C44444BB088A582991D804E",
+          "name": "06 - Junio",
+          "name_es": null,
+          "value": "06"
+        },
+        {
+          "ad_reference_id": "882685CC8C44444BB088A582991D804E",
+          "name": "07 - Julio",
+          "name_es": null,
+          "value": "07"
+        },
+        {
+          "ad_reference_id": "882685CC8C44444BB088A582991D804E",
+          "name": "08 - Agosto",
+          "name_es": null,
+          "value": "08"
+        },
+        {
+          "ad_reference_id": "882685CC8C44444BB088A582991D804E",
+          "name": "09 - Septiembre",
+          "name_es": null,
+          "value": "09"
+        },
+        {
+          "ad_reference_id": "5417FDEDA5F740AF9DC30BB494BBF9D4",
+          "name": "1 - Not contrastable",
+          "name_es": "1 - No contrastable",
+          "value": "1"
+        },
+        {
+          "ad_reference_id": "882685CC8C44444BB088A582991D804E",
+          "name": "10 - Octubre",
+          "name_es": null,
+          "value": "10"
+        },
+        {
+          "ad_reference_id": "882685CC8C44444BB088A582991D804E",
+          "name": "11 - Noviembre",
+          "name_es": null,
+          "value": "11"
+        },
+        {
+          "ad_reference_id": "882685CC8C44444BB088A582991D804E",
+          "name": "12 - Diciembre",
+          "name_es": null,
+          "value": "12"
+        },
+        {
+          "ad_reference_id": "5417FDEDA5F740AF9DC30BB494BBF9D4",
+          "name": "2 - In contrasting process",
+          "name_es": "2 - En proceso de contraste",
+          "value": "2"
+        },
+        {
+          "ad_reference_id": "5417FDEDA5F740AF9DC30BB494BBF9D4",
+          "name": "3 - Not contrasted",
+          "name_es": "3 - No contrastada",
+          "value": "3"
+        },
+        {
+          "ad_reference_id": "5417FDEDA5F740AF9DC30BB494BBF9D4",
+          "name": "4 - Partially contrasted",
+          "name_es": "4 - Parcialmente constrastada",
+          "value": "4"
+        },
+        {
+          "ad_reference_id": "5417FDEDA5F740AF9DC30BB494BBF9D4",
+          "name": "5 - Contrasted",
+          "name_es": "5 - Contrastada",
+          "value": "5"
+        },
+        {
+          "ad_reference_id": "8CF7102AA0944DF9938A84EB20452018",
+          "name": "ALAVA AEROPUERTO",
+          "name_es": "ALAVA AEROPUERTO",
+          "value": "INTRES_0101"
+        },
+        {
+          "ad_reference_id": "8CF7102AA0944DF9938A84EB20452018",
+          "name": "ALCUDIA MARITIMA",
+          "name_es": "ALCUDIA MARITIMA",
+          "value": "INTRES_0717"
+        },
+        {
+          "ad_reference_id": "8CF7102AA0944DF9938A84EB20452018",
+          "name": "ALGECIRAS MARITIMA",
+          "name_es": "ALGECIRAS MARITIMA",
+          "value": "INTRES_1131"
+        },
+        {
+          "ad_reference_id": "8CF7102AA0944DF9938A84EB20452018",
+          "name": "ALICANTE AEROPUERTO",
+          "name_es": "ALICANTE AEROPUERTO",
+          "value": "INTRES_0301"
+        },
+        {
+          "ad_reference_id": "8CF7102AA0944DF9938A84EB20452018",
+          "name": "ALICANTE MARITIMA",
+          "name_es": "ALICANTE MARITIMA",
+          "value": "INTRES_0311"
+        },
+        {
+          "ad_reference_id": "8CF7102AA0944DF9938A84EB20452018",
+          "name": "ALMERIA AEROPUERTO",
+          "name_es": "ALMERIA AEROPUERTO",
+          "value": "INTRES_0401"
+        },
+        {
+          "ad_reference_id": "8CF7102AA0944DF9938A84EB20452018",
+          "name": "ALMERIA MARITIMA",
+          "name_es": "ALMERIA MARITIMA",
+          "value": "INTRES_0411"
+        },
+        {
+          "ad_reference_id": "8CF7102AA0944DF9938A84EB20452018",
+          "name": "ASTURIAS AEROPUERTO",
+          "name_es": "ASTURIAS AEROPUERTO",
+          "value": "INTRES_3301"
+        },
+        {
+          "ad_reference_id": "8CF7102AA0944DF9938A84EB20452018",
+          "name": "AVILES MARITIMA",
+          "name_es": "AVILES MARITIMA",
+          "value": "INTRES_3331"
+        },
+        {
+          "ad_reference_id": "D7CF99470E8B49B59D7486947F01D7A7",
+          "name": "Accepted with errors",
+          "name_es": "Aceptado con errores",
+          "value": "AE"
+        },
+        {
+          "ad_reference_id": "C546C9F1F3DE437994F70A6EE12E909C",
+          "name": "Accounting document",
+          "name_es": "Justificante contable",
+          "value": "F6"
+        },
+        {
+          "ad_reference_id": "BC847B422918488E9D3AB5CCCD389016",
+          "name": "Aceptada",
+          "name_es": null,
+          "value": "AC"
+        },
+        {
+          "ad_reference_id": "BC847B422918488E9D3AB5CCCD389016",
+          "name": "Aceptada con Errores",
+          "name_es": null,
+          "value": "AE"
+        },
+        {
+          "ad_reference_id": "125",
+          "name": "Actual",
+          "name_es": "Real",
+          "value": "A"
+        },
+        {
+          "ad_reference_id": "C546C9F1F3DE437994F70A6EE12E909C",
+          "name": "Aduanas - Liquidación complementaria",
+          "name_es": "Aduanas - Liquidación complementaria",
+          "value": "LC"
+        },
+        {
+          "ad_reference_id": "DC555AA9FAC54BBCB02486F7D628690B",
+          "name": "Air transport",
+          "name_es": "Transporte Aéreo",
+          "value": "4"
+        },
+        {
+          "ad_reference_id": "43849191A4CB4C2D995C594F102B4A57",
+          "name": "Alta en SII (A0)",
+          "name_es": "Alta en SII (A0)",
+          "value": "A0"
+        },
+        {
+          "ad_reference_id": "D7CF99470E8B49B59D7486947F01D7A7",
+          "name": "Annulled",
+          "name_es": "Anulado",
+          "value": "AN"
+        },
+        {
+          "ad_reference_id": "50B2316F6940472CA3BE95DE1E64B3A9",
+          "name": "Arrendamiento financiero (alquiler­compra)",
+          "name_es": "Arrendamiento financiero (alquiler­compra)",
+          "value": "INTRES_15"
+        },
+        {
+          "ad_reference_id": "8CF7102AA0944DF9938A84EB20452018",
+          "name": "BARCELONA AEROPUERTO",
+          "name_es": "BARCELONA AEROPUERTO",
+          "value": "INTRES_0801"
+        },
+        {
+          "ad_reference_id": "8CF7102AA0944DF9938A84EB20452018",
+          "name": "BARCELONA MARITIMA EXP",
+          "name_es": "BARCELONA MARITIMA EXP",
+          "value": "INTRES_812"
+        },
+        {
+          "ad_reference_id": "8CF7102AA0944DF9938A84EB20452018",
+          "name": "BARCELONA MARITIMA IMP",
+          "name_es": "BARCELONA MARITIMA IMP",
+          "value": "INTRES_0811"
+        },
+        {
+          "ad_reference_id": "8CF7102AA0944DF9938A84EB20452018",
+          "name": "BILBAO AEROPUERTO",
+          "name_es": "BILBAO AEROPUERTO",
+          "value": "INTRES_4801"
+        },
+        {
+          "ad_reference_id": "8CF7102AA0944DF9938A84EB20452018",
+          "name": "BILBAO MARITIMA",
+          "name_es": "BILBAO MARITIMA",
+          "value": "INTRES_4811"
+        },
+        {
+          "ad_reference_id": "125",
+          "name": "Budget",
+          "name_es": "Presupuesto",
+          "value": "B"
+        },
+        {
+          "ad_reference_id": "664ED76CAD75421AB1C012B536C2F580",
+          "name": "C",
+          "name_es": "C",
+          "value": "C"
+        },
+        {
+          "ad_reference_id": "8CF7102AA0944DF9938A84EB20452018",
+          "name": "CADIZ MARITIMA",
+          "name_es": "CADIZ MARITIMA",
+          "value": "INTRES_1111"
+        },
+        {
+          "ad_reference_id": "8CF7102AA0944DF9938A84EB20452018",
+          "name": "CARTAGENA MARITIMA",
+          "name_es": "CARTAGENA MARITIMA",
+          "value": "INTRES_3011"
+        },
+        {
+          "ad_reference_id": "8CF7102AA0944DF9938A84EB20452018",
+          "name": "CASTELLON MARIMA",
+          "name_es": "CASTELLON MARIMA",
+          "value": "INTRES_1211"
+        },
+        {
+          "ad_reference_id": "131",
+          "name": "Closed",
+          "name_es": "Cerrado",
+          "value": "CL"
+        },
+        {
+          "ad_reference_id": "DBCF65339D0F4403822A8A7928533D6B",
+          "name": "Closing Entry",
+          "name_es": "Asiento de cierre",
+          "value": "C"
+        },
+        {
+          "ad_reference_id": "131",
+          "name": "Completed",
+          "name_es": "Completado",
+          "value": "CO"
+        },
+        {
+          "ad_reference_id": "50B2316F6940472CA3BE95DE1E64B3A9",
+          "name": "Compra/venta en firme",
+          "name_es": "Compra/venta en firme",
+          "value": "INTRES_11"
+        },
+        {
+          "ad_reference_id": "50B2316F6940472CA3BE95DE1E64B3A9",
+          "name": "Compras por particulares",
+          "name_es": "Compras por particulares",
+          "value": "INTRES_14"
+        },
+        {
+          "ad_reference_id": "B68BC73DBFA34485AD6236A31BC34BCE",
+          "name": "Comunitarias destino final Estado miembro introducción",
+          "name_es": "Comunitarias destino final Estado miembro introducción",
+          "value": "INTRES_Acq_1"
+        },
+        {
+          "ad_reference_id": "B68BC73DBFA34485AD6236A31BC34BCE",
+          "name": "Comunitarias devueltas al mismo estado expedidas",
+          "name_es": "Comunitarias devueltas al mismo estado expedidas",
+          "value": "INTRES_Acq_4"
+        },
+        {
+          "ad_reference_id": "B68BC73DBFA34485AD6236A31BC34BCE",
+          "name": "Comunitarias devueltas transformadas",
+          "name_es": "Comunitarias devueltas transformadas",
+          "value": "INTRES_Acq_5"
+        },
+        {
+          "ad_reference_id": "19D2097A8A3C4F31968B38CD962EE300",
+          "name": "Corrective invoice",
+          "name_es": "Factura rectificativa",
+          "value": "R"
+        },
+        {
+          "ad_reference_id": "D431058F6B7345598D1E0709DFF3B5DD",
+          "name": "Cost Not Calculated",
+          "name_es": null,
+          "value": "NC"
+        },
+        {
+          "ad_reference_id": "664ED76CAD75421AB1C012B536C2F580",
+          "name": "D",
+          "name_es": "D",
+          "value": "D"
+        },
+        {
+          "ad_reference_id": "50B2316F6940472CA3BE95DE1E64B3A9",
+          "name": "Devolución de mercancías,",
+          "name_es": "Devolución de mercancías,",
+          "value": "INTRES_21"
+        },
+        {
+          "ad_reference_id": "8AFF78B838244DC4BCB9B0A77121EB19",
+          "name": "Differences",
+          "name_es": "Por diferencias",
+          "value": "I"
+        },
+        {
+          "ad_reference_id": "D431058F6B7345598D1E0709DFF3B5DD",
+          "name": "Disabled For Background",
+          "name_es": null,
+          "value": "d"
+        },
+        {
+          "ad_reference_id": "DBCF65339D0F4403822A8A7928533D6B",
+          "name": "Divide Up",
+          "name_es": "Reparto de reservas",
+          "value": "D"
+        },
+        {
+          "ad_reference_id": "D431058F6B7345598D1E0709DFF3B5DD",
+          "name": "Document Disabled",
+          "name_es": null,
+          "value": "D"
+        },
+        {
+          "ad_reference_id": "D431058F6B7345598D1E0709DFF3B5DD",
+          "name": "Document Locked",
+          "name_es": null,
+          "value": "L"
+        },
+        {
+          "ad_reference_id": "131",
+          "name": "Draft",
+          "name_es": "Borrador",
+          "value": "DR"
+        },
+        {
+          "ad_reference_id": "8CF7102AA0944DF9938A84EB20452018",
+          "name": "EL FERROL MARITIMA",
+          "name_es": "EL FERROL MARITIMA",
+          "value": "INTRES_1521"
+        },
+        {
+          "ad_reference_id": "125",
+          "name": "Encumbrance",
+          "name_es": "Gravamen",
+          "value": "E"
+        },
+        {
+          "ad_reference_id": "50B2316F6940472CA3BE95DE1E64B3A9",
+          "name": "Entrega para venta a la vista o de prueba",
+          "name_es": "Entrega para venta a la vista o de prueba",
+          "value": "INTRES_12"
+        },
+        {
+          "ad_reference_id": "D431058F6B7345598D1E0709DFF3B5DD",
+          "name": "Error",
+          "name_es": null,
+          "value": "E"
+        },
+        {
+          "ad_reference_id": "D431058F6B7345598D1E0709DFF3B5DD",
+          "name": "Error, No cost",
+          "name_es": null,
+          "value": "C"
+        },
+        {
+          "ad_reference_id": "D590DB8117C5434DB96EBB85B5E19893",
+          "name": "F1 - Factura (art. 6, 7.2 y 7.3 del RD 1619/2012)",
+          "name_es": null,
+          "value": "F1"
+        },
+        {
+          "ad_reference_id": "D590DB8117C5434DB96EBB85B5E19893",
+          "name": "F2 - Factura Simplificada/sin identificación destinatario",
+          "name_es": null,
+          "value": "F2"
+        },
+        {
+          "ad_reference_id": "D590DB8117C5434DB96EBB85B5E19893",
+          "name": "F3 - Factura emitida en sustitución de simplificadas",
+          "name_es": null,
+          "value": "F3"
+        },
+        {
+          "ad_reference_id": "89C6433F71584D23B95140DE86EDC726",
+          "name": "Factura rectificativa en facturas simplificadas.",
+          "name_es": null,
+          "value": "R5"
+        },
+        {
+          "ad_reference_id": "89C6433F71584D23B95140DE86EDC726",
+          "name": "Factura rectificativa: Resto.",
+          "name_es": null,
+          "value": "R4"
+        },
+        {
+          "ad_reference_id": "89C6433F71584D23B95140DE86EDC726",
+          "name": "Factura rectificativa: artículo 80 Cuatro de la Ley del IVA.",
+          "name_es": null,
+          "value": "R3"
+        },
+        {
+          "ad_reference_id": "89C6433F71584D23B95140DE86EDC726",
+          "name": "Factura rectificativa: artículo 80 Tres de la Ley del IVA.",
+          "name_es": null,
+          "value": "R2"
+        },
+        {
+          "ad_reference_id": "89C6433F71584D23B95140DE86EDC726",
+          "name": "Factura rectificativa: error fundado en derecho",
+          "name_es": null,
+          "value": "R1"
+        },
+        {
+          "ad_reference_id": "DC555AA9FAC54BBCB02486F7D628690B",
+          "name": "Fixed transport installations",
+          "name_es": "Instalaciones fijas de transporte",
+          "value": "7"
+        },
+        {
+          "ad_reference_id": "8CF7102AA0944DF9938A84EB20452018",
+          "name": "GANDIA MARITIMA",
+          "name_es": "GANDIA MARITIMA",
+          "value": "INTRES_4631"
+        },
+        {
+          "ad_reference_id": "8CF7102AA0944DF9938A84EB20452018",
+          "name": "GERONA AEROPUERTO",
+          "name_es": "GERONA AEROPUERTO",
+          "value": "INTRES_1701"
+        },
+        {
+          "ad_reference_id": "8CF7102AA0944DF9938A84EB20452018",
+          "name": "GIJON MARITIMA",
+          "name_es": "GIJON MARITIMA",
+          "value": "INTRES_3311"
+        },
+        {
+          "ad_reference_id": "8CF7102AA0944DF9938A84EB20452018",
+          "name": "GRANDA AEROPUERTO",
+          "name_es": "GRANDA AEROPUERTO",
+          "value": "INTRES_1801"
+        },
+        {
+          "ad_reference_id": "8CF7102AA0944DF9938A84EB20452018",
+          "name": "GUIPUZCOA AEROPUERTO",
+          "name_es": "GUIPUZCOA AEROPUERTO",
+          "value": "INTRES_2001"
+        },
+        {
+          "ad_reference_id": "8CF7102AA0944DF9938A84EB20452018",
+          "name": "HUELVA MARITIMA",
+          "name_es": "HUELVA MARITIMA",
+          "value": "INTRES_2111"
+        },
+        {
+          "ad_reference_id": "664ED76CAD75421AB1C012B536C2F580",
+          "name": "I",
+          "name_es": "I",
+          "value": "I"
+        },
+        {
+          "ad_reference_id": "8CF7102AA0944DF9938A84EB20452018",
+          "name": "IBIZA AEROPUERTO",
+          "name_es": "IBIZA AEROPUERTO",
+          "value": "INTRES_0707"
+        },
+        {
+          "ad_reference_id": "8CF7102AA0944DF9938A84EB20452018",
+          "name": "IBIZA MARITIMA",
+          "name_es": "IBIZA MARITIMA",
+          "value": "INTRES_0721"
+        },
+        {
+          "ad_reference_id": "C546C9F1F3DE437994F70A6EE12E909C",
+          "name": "Import (DUA)",
+          "name_es": "Importación (DUA)",
+          "value": "F5"
+        },
+        {
+          "ad_reference_id": "DBCF65339D0F4403822A8A7928533D6B",
+          "name": "Income Statement",
+          "name_es": "Entrada de regularización",
+          "value": "R"
+        },
+        {
+          "ad_reference_id": "D7CF99470E8B49B59D7486947F01D7A7",
+          "name": "Incorrect",
+          "name_es": "Incorrecto",
+          "value": "IN"
+        },
+        {
+          "ad_reference_id": "DC555AA9FAC54BBCB02486F7D628690B",
+          "name": "Inland waterway transport",
+          "name_es": "Transporte de navegación interior",
+          "value": "8"
+        },
+        {
+          "ad_reference_id": "D431058F6B7345598D1E0709DFF3B5DD",
+          "name": "Invalid Account",
+          "name_es": null,
+          "value": "i"
+        },
+        {
+          "ad_reference_id": "C546C9F1F3DE437994F70A6EE12E909C",
+          "name": "Invoice",
+          "name_es": "Factura",
+          "value": "F1"
+        },
+        {
+          "ad_reference_id": "19D2097A8A3C4F31968B38CD962EE300",
+          "name": "Invoice",
+          "name_es": "Factura",
+          "value": "F1"
+        },
+        {
+          "ad_reference_id": "BC847B422918488E9D3AB5CCCD389016",
+          "name": "Inválida",
+          "name_es": null,
+          "value": "IN"
+        },
+        {
+          "ad_reference_id": "8CF7102AA0944DF9938A84EB20452018",
+          "name": "JEREZ AEROPUERTO",
+          "name_es": "JEREZ AEROPUERTO",
+          "value": "INTRES_1101"
+        },
+        {
+          "ad_reference_id": "664ED76CAD75421AB1C012B536C2F580",
+          "name": "K",
+          "name_es": "K",
+          "value": "K"
+        },
+        {
+          "ad_reference_id": "8CF7102AA0944DF9938A84EB20452018",
+          "name": "LA CORUNA AEROPUERTO",
+          "name_es": "LA CORUNA AEROPUERTO",
+          "value": "INTRES_1501"
+        },
+        {
+          "ad_reference_id": "8CF7102AA0944DF9938A84EB20452018",
+          "name": "LA CORUNA MARITIMA",
+          "name_es": "LA CORUNA MARITIMA",
+          "value": "INTRES_1511"
+        },
+        {
+          "ad_reference_id": "8CF7102AA0944DF9938A84EB20452018",
+          "name": "MADRID AEROPUERTO",
+          "name_es": "MADRID AEROPUERTO",
+          "value": "INTRES_2801"
+        },
+        {
+          "ad_reference_id": "8CF7102AA0944DF9938A84EB20452018",
+          "name": "MALAGA AEROPUERTO",
+          "name_es": "MALAGA AEROPUERTO",
+          "value": "INTRES_2901"
+        },
+        {
+          "ad_reference_id": "8CF7102AA0944DF9938A84EB20452018",
+          "name": "MALAGA MARITIMA",
+          "name_es": "MALAGA MARITIMA",
+          "value": "INTRES_2911"
+        },
+        {
+          "ad_reference_id": "8CF7102AA0944DF9938A84EB20452018",
+          "name": "MARTIN MARITIMA",
+          "name_es": "MARTIN MARITIMA",
+          "value": "INTRES_3621"
+        },
+        {
+          "ad_reference_id": "8CF7102AA0944DF9938A84EB20452018",
+          "name": "MOHAN AEROPUERTO",
+          "name_es": "MOHAN AEROPUERTO",
+          "value": "INTRES_0708"
+        },
+        {
+          "ad_reference_id": "8CF7102AA0944DF9938A84EB20452018",
+          "name": "MOHAN MARITIMA",
+          "name_es": "MOHAN MARITIMA",
+          "value": "INTRES_0731"
+        },
+        {
+          "ad_reference_id": "8CF7102AA0944DF9938A84EB20452018",
+          "name": "MORIL MARIMA",
+          "name_es": "MORIL MARIMA",
+          "value": "INTRES_1811"
+        },
+        {
+          "ad_reference_id": "8CF7102AA0944DF9938A84EB20452018",
+          "name": "MURCIA AEROPUERTO",
+          "name_es": "MURCIA AEROPUERTO",
+          "value": "INTRES_3001"
+        },
+        {
+          "ad_reference_id": "50B2316F6940472CA3BE95DE1E64B3A9",
+          "name": "Mercancías suministradas financiados CE",
+          "name_es": "Mercancías suministradas financiados CE",
+          "value": "INTRES_31"
+        },
+        {
+          "ad_reference_id": "43849191A4CB4C2D995C594F102B4A57",
+          "name": "Modification to SII (A1)",
+          "name_es": "Modificación a SII (A1)",
+          "value": "A1"
+        },
+        {
+          "ad_reference_id": "D431058F6B7345598D1E0709DFF3B5DD",
+          "name": "No Accounting Date",
+          "name_es": null,
+          "value": "AD"
+        },
+        {
+          "ad_reference_id": "D431058F6B7345598D1E0709DFF3B5DD",
+          "name": "No Document Type",
+          "name_es": null,
+          "value": "DT"
+        },
+        {
+          "ad_reference_id": "D431058F6B7345598D1E0709DFF3B5DD",
+          "name": "No Related PO",
+          "name_es": null,
+          "value": "NO"
+        },
+        {
+          "ad_reference_id": "131",
+          "name": "Not Accepted",
+          "name_es": "No aprobado",
+          "value": "NA"
+        },
+        {
+          "ad_reference_id": "D431058F6B7345598D1E0709DFF3B5DD",
+          "name": "Not Balanced",
+          "name_es": null,
+          "value": "b"
+        },
+        {
+          "ad_reference_id": "D431058F6B7345598D1E0709DFF3B5DD",
+          "name": "Not Convertible (no rate)",
+          "name_es": null,
+          "value": "c"
+        },
+        {
+          "ad_reference_id": "131",
+          "name": "Not Paid",
+          "name_es": "Pendiente de Pago",
+          "value": "WP"
+        },
+        {
+          "ad_reference_id": "D7CF99470E8B49B59D7486947F01D7A7",
+          "name": "Not Registrable to SII",
+          "name_es": "No Declarable en SII",
+          "value": "NR"
+        },
+        {
+          "ad_reference_id": "B3942E6F63F54EBCAD7B794E3508E7AF",
+          "name": "Ok",
+          "name_es": "Ok",
+          "value": "OK"
+        },
+        {
+          "ad_reference_id": "DBCF65339D0F4403822A8A7928533D6B",
+          "name": "Opening Entry",
+          "name_es": "Asiento de apertura",
+          "value": "O"
+        },
+        {
+          "ad_reference_id": "50B2316F6940472CA3BE95DE1E64B3A9",
+          "name": "Operaciones con miras al trabajo por encargo",
+          "name_es": "Operaciones con miras al trabajo por encargo",
+          "value": "INTRES_40"
+        },
+        {
+          "ad_reference_id": "50B2316F6940472CA3BE95DE1E64B3A9",
+          "name": "Operaciones en programas comunes de defensa/intergubernament",
+          "name_es": "Operaciones en programas comunes de defensa/intergubernament",
+          "value": "INTRES_70"
+        },
+        {
+          "ad_reference_id": "50B2316F6940472CA3BE95DE1E64B3A9",
+          "name": "Operaciones tras el trabajo por encargo",
+          "name_es": "Operaciones tras el trabajo por encargo",
+          "value": "INTRES_50"
+        },
+        {
+          "ad_reference_id": "50B2316F6940472CA3BE95DE1E64B3A9",
+          "name": "Otras entregas de ayuda (particulares, orgs. no gubernamenta",
+          "name_es": "Otras entregas de ayuda (particulares, orgs. no gubernamenta",
+          "value": "INTRES_33"
+        },
+        {
+          "ad_reference_id": "50B2316F6940472CA3BE95DE1E64B3A9",
+          "name": "Otras entregas de ayuda gubernamental",
+          "name_es": "Otras entregas de ayuda gubernamental",
+          "value": "INTRES_32"
+        },
+        {
+          "ad_reference_id": "50B2316F6940472CA3BE95DE1E64B3A9",
+          "name": "Otras transacciones",
+          "name_es": "Otras transacciones",
+          "value": "INTRES_90"
+        },
+        {
+          "ad_reference_id": "50B2316F6940472CA3BE95DE1E64B3A9",
+          "name": "Otros",
+          "name_es": "Otros",
+          "value": "INTRES_34"
+        },
+        {
+          "ad_reference_id": "DC555AA9FAC54BBCB02486F7D628690B",
+          "name": "Own propulsion",
+          "name_es": "Autopropulsión",
+          "value": "9"
+        },
+        {
+          "ad_reference_id": "8CF7102AA0944DF9938A84EB20452018",
+          "name": "P . MALLORCA MARITIMA",
+          "name_es": "P . MALLORCA MARITIMA",
+          "value": "INTRES_0711"
+        },
+        {
+          "ad_reference_id": "8CF7102AA0944DF9938A84EB20452018",
+          "name": "P. MALLORCA AEROPUERTO",
+          "name_es": "P. MALLORCA AEROPUERTO",
+          "value": "INTRES_0701"
+        },
+        {
+          "ad_reference_id": "8CF7102AA0944DF9938A84EB20452018",
+          "name": "PALAMOS MARITIMA",
+          "name_es": "PALAMOS MARITIMA",
+          "value": "INTRES_1711"
+        },
+        {
+          "ad_reference_id": "8CF7102AA0944DF9938A84EB20452018",
+          "name": "PASAJES MARITIMA",
+          "name_es": "PASAJES MARITIMA",
+          "value": "INTRES_2011"
+        },
+        {
+          "ad_reference_id": "8CF7102AA0944DF9938A84EB20452018",
+          "name": "PUERTO DE SANTA MARIA",
+          "name_es": "PUERTO DE SANTA MARIA",
+          "value": "INTRES_1121"
+        },
+        {
+          "ad_reference_id": "BC847B422918488E9D3AB5CCCD389016",
+          "name": "Pendiente",
+          "name_es": null,
+          "value": "PE"
+        },
+        {
+          "ad_reference_id": "D431058F6B7345598D1E0709DFF3B5DD",
+          "name": "Pending Refresh",
+          "name_es": null,
+          "value": "l"
+        },
+        {
+          "ad_reference_id": "D7CF99470E8B49B59D7486947F01D7A7",
+          "name": "Pending to send to SII",
+          "name_es": "Pendiente de enviar a SII",
+          "value": "PE"
+        },
+        {
+          "ad_reference_id": "D431058F6B7345598D1E0709DFF3B5DD",
+          "name": "Period Closed",
+          "name_es": null,
+          "value": "p"
+        },
+        {
+          "ad_reference_id": "30AE961D90684216999B8003C702A056",
+          "name": "Por Diferencias",
+          "name_es": null,
+          "value": "I"
+        },
+        {
+          "ad_reference_id": "30AE961D90684216999B8003C702A056",
+          "name": "Por Sustitución",
+          "name_es": null,
+          "value": "S"
+        },
+        {
+          "ad_reference_id": "D431058F6B7345598D1E0709DFF3B5DD",
+          "name": "Post Prepared",
+          "name_es": null,
+          "value": "y"
+        },
+        {
+          "ad_reference_id": "DC555AA9FAC54BBCB02486F7D628690B",
+          "name": "Postal consignment",
+          "name_es": "Envíos postales",
+          "value": "5"
+        },
+        {
+          "ad_reference_id": "D431058F6B7345598D1E0709DFF3B5DD",
+          "name": "Posted",
+          "name_es": null,
+          "value": "Y"
+        },
+        {
+          "ad_reference_id": "664ED76CAD75421AB1C012B536C2F580",
+          "name": "R",
+          "name_es": "R",
+          "value": "R"
+        },
+        {
+          "ad_reference_id": "D590DB8117C5434DB96EBB85B5E19893",
+          "name": "R1 - Factura Rectificativa (Art 80.1, 80.2 y 80.6)",
+          "name_es": null,
+          "value": "R1"
+        },
+        {
+          "ad_reference_id": "6D7BCE35E0874C0DAF16663D0346ADF8",
+          "name": "R1 - Founded error",
+          "name_es": "R1 - Error fundado",
+          "value": "R1"
+        },
+        {
+          "ad_reference_id": "6D7BCE35E0874C0DAF16663D0346ADF8",
+          "name": "R2 - Competition",
+          "name_es": "R2 - Concurso",
+          "value": "R2"
+        },
+        {
+          "ad_reference_id": "D590DB8117C5434DB96EBB85B5E19893",
+          "name": "R2 - Factura Rectificativa (Art. 80.3)",
+          "name_es": null,
+          "value": "R2"
+        },
+        {
+          "ad_reference_id": "6D7BCE35E0874C0DAF16663D0346ADF8",
+          "name": "R3 - Bad debt",
+          "name_es": "R3 - Deuda incobrable",
+          "value": "R3"
+        },
+        {
+          "ad_reference_id": "D590DB8117C5434DB96EBB85B5E19893",
+          "name": "R3 - Factura Rectificativa (Art. 80.4)",
+          "name_es": null,
+          "value": "R3"
+        },
+        {
+          "ad_reference_id": "D590DB8117C5434DB96EBB85B5E19893",
+          "name": "R4 - Factura Rectificativa (Resto)",
+          "name_es": null,
+          "value": "R4"
+        },
+        {
+          "ad_reference_id": "6D7BCE35E0874C0DAF16663D0346ADF8",
+          "name": "R4 - Rest",
+          "name_es": "R4 - Resto",
+          "value": "R4"
+        },
+        {
+          "ad_reference_id": "D590DB8117C5434DB96EBB85B5E19893",
+          "name": "R5 - Factura Rectificativa en facturas simplificadas",
+          "name_es": null,
+          "value": "R5"
+        },
+        {
+          "ad_reference_id": "6D7BCE35E0874C0DAF16663D0346ADF8",
+          "name": "R5 - Simplified invoice",
+          "name_es": "R5 - Factura simplificada",
+          "value": "R5"
+        },
+        {
+          "ad_reference_id": "8CF7102AA0944DF9938A84EB20452018",
+          "name": "RIBADEO MARITIMA",
+          "name_es": "RIBADEO MARITIMA",
+          "value": "INTRES_2711"
+        },
+        {
+          "ad_reference_id": "DC555AA9FAC54BBCB02486F7D628690B",
+          "name": "Rail transport",
+          "name_es": "Transporte por ferrocaril",
+          "value": "2"
+        },
+        {
+          "ad_reference_id": "131",
+          "name": "Re-Opened",
+          "name_es": "Reabierto",
+          "value": "RE"
+        },
+        {
+          "ad_reference_id": "BC847B422918488E9D3AB5CCCD389016",
+          "name": "Rechazada",
+          "name_es": null,
+          "value": "ER"
+        },
+        {
+          "ad_reference_id": "DBCF65339D0F4403822A8A7928533D6B",
+          "name": "Regular Entry",
+          "name_es": "Asiento normal",
+          "value": "N"
+        },
+        {
+          "ad_reference_id": "B3942E6F63F54EBCAD7B794E3508E7AF",
+          "name": "Requires manual review",
+          "name_es": "Requires manual review",
+          "value": "REQ"
+        },
+        {
+          "ad_reference_id": "8AFF78B838244DC4BCB9B0A77121EB19",
+          "name": "Revise",
+          "name_es": "Por sustitución",
+          "value": "S"
+        },
+        {
+          "ad_reference_id": "D7CF99470E8B49B59D7486947F01D7A7",
+          "name": "Right",
+          "name_es": "Correcto",
+          "value": "CO"
+        },
+        {
+          "ad_reference_id": "DC555AA9FAC54BBCB02486F7D628690B",
+          "name": "Road transport",
+          "name_es": "Transporte por Carretera",
+          "value": "3"
+        },
+        {
+          "ad_reference_id": "8CF7102AA0944DF9938A84EB20452018",
+          "name": "SAGUNTO MARITIMA",
+          "name_es": "SAGUNTO MARITIMA",
+          "value": "INTRES_4621"
+        },
+        {
+          "ad_reference_id": "8CF7102AA0944DF9938A84EB20452018",
+          "name": "SAN CARLOS MARITIMA",
+          "name_es": "SAN CARLOS MARITIMA",
+          "value": "INTRES_4321"
+        },
+        {
+          "ad_reference_id": "8CF7102AA0944DF9938A84EB20452018",
+          "name": "SANTANDER AUEROPUERTO",
+          "name_es": "SANTANDER AUEROPUERTO",
+          "value": "INTRES_3901"
+        },
+        {
+          "ad_reference_id": "8CF7102AA0944DF9938A84EB20452018",
+          "name": "SANTANDER MARITIMA",
+          "name_es": "SANTANDER MARITIMA",
+          "value": "INTRES_3911"
+        },
+        {
+          "ad_reference_id": "8CF7102AA0944DF9938A84EB20452018",
+          "name": "SANTIAGO AEROPUERTO",
+          "name_es": "SANTIAGO AEROPUERTO",
+          "value": "INTRES_1507"
+        },
+        {
+          "ad_reference_id": "8CF7102AA0944DF9938A84EB20452018",
+          "name": "SEVILLA AEROPUERTO",
+          "name_es": "SEVILLA AEROPUERTO",
+          "value": "INTRES_4101"
+        },
+        {
+          "ad_reference_id": "8CF7102AA0944DF9938A84EB20452018",
+          "name": "SEVILLA MARITIMA",
+          "name_es": "SEVILLA MARITIMA",
+          "value": "INTRES_4111"
+        },
+        {
+          "ad_reference_id": "43849191A4CB4C2D995C594F102B4A57",
+          "name": "SII Query",
+          "name_es": "Consulta SII",
+          "value": "Q"
+        },
+        {
+          "ad_reference_id": "B68BC73DBFA34485AD6236A31BC34BCE",
+          "name": "Salida de mercancías tras transformación",
+          "name_es": "Salida de mercancías tras transformación",
+          "value": "INTRES_Del_5"
+        },
+        {
+          "ad_reference_id": "B68BC73DBFA34485AD6236A31BC34BCE",
+          "name": "Salida mercancías a estado miembro",
+          "name_es": "Salida mercancías a estado miembro",
+          "value": "INTRES_Del_1"
+        },
+        {
+          "ad_reference_id": "B68BC73DBFA34485AD6236A31BC34BCE",
+          "name": "Salida para devolución de mercancías",
+          "name_es": "Salida para devolución de mercancías",
+          "value": "INTRES_Del_4"
+        },
+        {
+          "ad_reference_id": "B68BC73DBFA34485AD6236A31BC34BCE",
+          "name": "Salida temporal para reintroducir en el mismo estado",
+          "name_es": "Salida temporal para reintroducir en el mismo estado",
+          "value": "INTRES_Del_2"
+        },
+        {
+          "ad_reference_id": "B68BC73DBFA34485AD6236A31BC34BCE",
+          "name": "Salida temporal para reintroducir tras transformación",
+          "name_es": "Salida temporal para reintroducir tras transformación",
+          "value": "INTRES_Del_3"
+        },
+        {
+          "ad_reference_id": "DC555AA9FAC54BBCB02486F7D628690B",
+          "name": "Sea transport",
+          "name_es": "Transporte marítimo",
+          "value": "1"
+        },
+        {
+          "ad_reference_id": "D7CF99470E8B49B59D7486947F01D7A7",
+          "name": "Sending error",
+          "name_es": "Error al enviar",
+          "value": "EE"
+        },
+        {
+          "ad_reference_id": "19D2097A8A3C4F31968B38CD962EE300",
+          "name": "Simplified invoice",
+          "name_es": "Factura simplificada",
+          "value": "F2"
+        },
+        {
+          "ad_reference_id": "19D2097A8A3C4F31968B38CD962EE300",
+          "name": "Simplified invoices summary",
+          "name_es": "Asiento resumen facturas simplificadas",
+          "value": "F4"
+        },
+        {
+          "ad_reference_id": "125",
+          "name": "Statistical",
+          "name_es": "Estadística",
+          "value": "S"
+        },
+        {
+          "ad_reference_id": "50B2316F6940472CA3BE95DE1E64B3A9",
+          "name": "Suministro de materiales de construcción y maquinaria",
+          "name_es": "Suministro de materiales de construcción y maquinaria",
+          "value": "INTRES_80"
+        },
+        {
+          "ad_reference_id": "50B2316F6940472CA3BE95DE1E64B3A9",
+          "name": "Sustitución de mercancías devueltas",
+          "name_es": "Sustitución de mercancías devueltas",
+          "value": "INTRES_22"
+        },
+        {
+          "ad_reference_id": "50B2316F6940472CA3BE95DE1E64B3A9",
+          "name": "Sustitución de mercancías no devueltas,",
+          "name_es": "Sustitución de mercancías no devueltas,",
+          "value": "INTRES_23"
+        },
+        {
+          "ad_reference_id": "8CF7102AA0944DF9938A84EB20452018",
+          "name": "TARRAGONA AEROPUERTO",
+          "name_es": "TARRAGONA AEROPUERTO",
+          "value": "INTRES_4301"
+        },
+        {
+          "ad_reference_id": "8CF7102AA0944DF9938A84EB20452018",
+          "name": "TARRAGONA MARITIMA",
+          "name_es": "TARRAGONA MARITIMA",
+          "value": "INTRES_4311"
+        },
+        {
+          "ad_reference_id": "D431058F6B7345598D1E0709DFF3B5DD",
+          "name": "Table Disabled",
+          "name_es": null,
+          "value": "T"
+        },
+        {
+          "ad_reference_id": "131",
+          "name": "Temporal",
+          "name_es": "Temporal",
+          "value": "TEMP"
+        },
+        {
+          "ad_reference_id": "B68BC73DBFA34485AD6236A31BC34BCE",
+          "name": "Temporales a otro Estado miembro con transformación",
+          "name_es": "Temporales a otro Estado miembro con transformación",
+          "value": "INTRES_Acq_3"
+        },
+        {
+          "ad_reference_id": "B68BC73DBFA34485AD6236A31BC34BCE",
+          "name": "Temporales para ser reexpedidas a un Estado miembro",
+          "name_es": "Temporales para ser reexpedidas a un Estado miembro",
+          "value": "INTRES_Acq_2"
+        },
+        {
+          "ad_reference_id": "50B2316F6940472CA3BE95DE1E64B3A9",
+          "name": "Trueque (compensación en especie)",
+          "name_es": "Trueque (compensación en especie)",
+          "value": "INTRES_13"
+        },
+        {
+          "ad_reference_id": "131",
+          "name": "Under Way",
+          "name_es": "En curso",
+          "value": "IP"
+        },
+        {
+          "ad_reference_id": "131",
+          "name": "Unknown",
+          "name_es": "Desconocido",
+          "value": "??"
+        },
+        {
+          "ad_reference_id": "D431058F6B7345598D1E0709DFF3B5DD",
+          "name": "Unposted",
+          "name_es": null,
+          "value": "N"
+        },
+        {
+          "ad_reference_id": "D7CF99470E8B49B59D7486947F01D7A7",
+          "name": "Unsubscribed",
+          "name_es": "Baja",
+          "value": "BA"
+        },
+        {
+          "ad_reference_id": "8CF7102AA0944DF9938A84EB20452018",
+          "name": "VALENCIA AEROPUERTO",
+          "name_es": "VALENCIA AEROPUERTO",
+          "value": "INTRES_4601"
+        },
+        {
+          "ad_reference_id": "8CF7102AA0944DF9938A84EB20452018",
+          "name": "VALENCIA MARITIMA",
+          "name_es": "VALENCIA MARITIMA",
+          "value": "INTRES_4611"
+        },
+        {
+          "ad_reference_id": "8CF7102AA0944DF9938A84EB20452018",
+          "name": "VALLADOLID AEROPUERTO",
+          "name_es": "VALLADOLID AEROPUERTO",
+          "value": "INTRES_4701"
+        },
+        {
+          "ad_reference_id": "8CF7102AA0944DF9938A84EB20452018",
+          "name": "VIGO AEROPUERTO",
+          "name_es": "VIGO AEROPUERTO",
+          "value": "INTRES_3601"
+        },
+        {
+          "ad_reference_id": "8CF7102AA0944DF9938A84EB20452018",
+          "name": "VIGO MARITIMA",
+          "name_es": "VIGO MARITIMA",
+          "value": "INTRES_3611"
+        },
+        {
+          "ad_reference_id": "8CF7102AA0944DF9938A84EB20452018",
+          "name": "VILLAGARCIA MARITIMA",
+          "name_es": "VILLAGARCIA MARITIMA",
+          "value": "INTRES_3631"
+        },
+        {
+          "ad_reference_id": "131",
+          "name": "Voided",
+          "name_es": "Anulado",
+          "value": "VO"
+        },
+        {
+          "ad_reference_id": "664ED76CAD75421AB1C012B536C2F580",
+          "name": "Z",
+          "name_es": "Z",
+          "value": "Z"
+        },
+        {
+          "ad_reference_id": "8CF7102AA0944DF9938A84EB20452018",
+          "name": "ZARAGOZA AEROPUERTO",
+          "name_es": "ZARAGOZA AEROPUERTO",
+          "value": "INTRES_5001"
         }
       ]
     },
@@ -3289,7 +4180,7 @@
       ]
     },
     "518bc71f3c5600c82be1f355a91bf2aa0a5ee50531e8abd1f9f73ba244952ddb": {
-      "checksum": "df92662fa39b9f2ab276ccb83487c7b421472c355ed458833200c34202b93a2d",
+      "checksum": "40225a3f9da3157e373f567a5443a6c14fafa5a4c80dbece91b95909f01738db",
       "params": [
         [
           "131",
@@ -3762,7 +4653,7 @@
         {
           "ad_reference_id": "D431058F6B7345598D1E0709DFF3B5DD",
           "name": "Cost Not Calculated",
-          "name_es": "Coste No Calculado",
+          "name_es": null,
           "value": "NC"
         },
         {
@@ -3786,7 +4677,7 @@
         {
           "ad_reference_id": "D431058F6B7345598D1E0709DFF3B5DD",
           "name": "Disabled For Background",
-          "name_es": "Deshabilitado Para Background",
+          "name_es": null,
           "value": "d"
         },
         {
@@ -3798,13 +4689,13 @@
         {
           "ad_reference_id": "D431058F6B7345598D1E0709DFF3B5DD",
           "name": "Document Disabled",
-          "name_es": "Documento Deshabilitado",
+          "name_es": null,
           "value": "D"
         },
         {
           "ad_reference_id": "D431058F6B7345598D1E0709DFF3B5DD",
           "name": "Document Locked",
-          "name_es": "Documento Bloqueado",
+          "name_es": null,
           "value": "L"
         },
         {
@@ -3834,13 +4725,13 @@
         {
           "ad_reference_id": "D431058F6B7345598D1E0709DFF3B5DD",
           "name": "Error",
-          "name_es": "Error",
+          "name_es": null,
           "value": "E"
         },
         {
           "ad_reference_id": "D431058F6B7345598D1E0709DFF3B5DD",
           "name": "Error, No cost",
-          "name_es": "Error, No hay coste",
+          "name_es": null,
           "value": "C"
         },
         {
@@ -3978,7 +4869,7 @@
         {
           "ad_reference_id": "D431058F6B7345598D1E0709DFF3B5DD",
           "name": "Invalid Account",
-          "name_es": "Cuenta No Válida",
+          "name_es": null,
           "value": "i"
         },
         {
@@ -4086,19 +4977,19 @@
         {
           "ad_reference_id": "D431058F6B7345598D1E0709DFF3B5DD",
           "name": "No Accounting Date",
-          "name_es": "Sin Fecha Contable",
+          "name_es": null,
           "value": "AD"
         },
         {
           "ad_reference_id": "D431058F6B7345598D1E0709DFF3B5DD",
           "name": "No Document Type",
-          "name_es": "Sin tipo de Documento",
+          "name_es": null,
           "value": "DT"
         },
         {
           "ad_reference_id": "D431058F6B7345598D1E0709DFF3B5DD",
           "name": "No Related PO",
-          "name_es": "Sin PO Relacionada",
+          "name_es": null,
           "value": "NO"
         },
         {
@@ -4110,13 +5001,13 @@
         {
           "ad_reference_id": "D431058F6B7345598D1E0709DFF3B5DD",
           "name": "Not Balanced",
-          "name_es": "No Balanceado",
+          "name_es": null,
           "value": "b"
         },
         {
           "ad_reference_id": "D431058F6B7345598D1E0709DFF3B5DD",
           "name": "Not Convertible (no rate)",
-          "name_es": "No Convertible (no hay rango)",
+          "name_es": null,
           "value": "c"
         },
         {
@@ -4230,7 +5121,7 @@
         {
           "ad_reference_id": "D431058F6B7345598D1E0709DFF3B5DD",
           "name": "Pending Refresh",
-          "name_es": "Pendiente de Actualización",
+          "name_es": null,
           "value": "l"
         },
         {
@@ -4242,7 +5133,7 @@
         {
           "ad_reference_id": "D431058F6B7345598D1E0709DFF3B5DD",
           "name": "Period Closed",
-          "name_es": "Periodo Cerrado",
+          "name_es": null,
           "value": "p"
         },
         {
@@ -4260,7 +5151,7 @@
         {
           "ad_reference_id": "D431058F6B7345598D1E0709DFF3B5DD",
           "name": "Post Prepared",
-          "name_es": "Contabilidad Preparada",
+          "name_es": null,
           "value": "y"
         },
         {
@@ -4272,7 +5163,7 @@
         {
           "ad_reference_id": "D431058F6B7345598D1E0709DFF3B5DD",
           "name": "Posted",
-          "name_es": "Contabilizado",
+          "name_es": null,
           "value": "Y"
         },
         {
@@ -4536,7 +5427,7 @@
         {
           "ad_reference_id": "D431058F6B7345598D1E0709DFF3B5DD",
           "name": "Table Disabled",
-          "name_es": "Tabla Deshabilitada",
+          "name_es": null,
           "value": "T"
         },
         {
@@ -4578,7 +5469,7 @@
         {
           "ad_reference_id": "D431058F6B7345598D1E0709DFF3B5DD",
           "name": "Unposted",
-          "name_es": "No Contabilizado",
+          "name_es": null,
           "value": "N"
         },
         {
@@ -8365,6 +9256,34 @@
         }
       ]
     },
+    "a94c8fd13642419e183f465b6bfd06c018e362595b475af945efdf6ff6ac88a4": {
+      "checksum": "65c1ff439d154d420f09d24289b4bfe09a2ca79dfa12474418d6b8e74c1bad5b",
+      "params": [
+        [
+          "8F75B92DFD4D47BBBFC61FA1B08E6D8D"
+        ]
+      ],
+      "rows": [
+        {
+          "ad_reference_id": "8F75B92DFD4D47BBBFC61FA1B08E6D8D",
+          "name": "FAILED",
+          "name_es": "FAILED",
+          "value": "FAILED"
+        },
+        {
+          "ad_reference_id": "8F75B92DFD4D47BBBFC61FA1B08E6D8D",
+          "name": "PARTIAL",
+          "name_es": "PARTIAL",
+          "value": "PARTIAL"
+        },
+        {
+          "ad_reference_id": "8F75B92DFD4D47BBBFC61FA1B08E6D8D",
+          "name": "SUCCESS",
+          "name_es": "SUCCESS",
+          "value": "SUCCESS"
+        }
+      ]
+    },
     "b08cc8fe3fd8ddfaf45e2325b7e0c6476be43fd3ce3f6a6c707fe93c1a3ffe18": {
       "checksum": "191b5a4c7106e8724e63c166be229585e80dcf014c27f3cebb2684c5ef0c667d",
       "params": [
@@ -8390,457 +9309,6 @@
           "name": "SSL",
           "name_es": "SSL",
           "value": "SSL"
-        }
-      ]
-    },
-    "b83227cdb56506f42ceac50f48dd6c5d8404190277a41e197d9f06c92a0c25eb": {
-      "checksum": "fcd537f7ecf4741a4bd1b930318a8db3e437654bdab1ad916d60b9cd872d9275",
-      "params": [
-        [
-          "FF80818130217A350130218D802B0011",
-          "150",
-          "152",
-          "154",
-          "151",
-          "153",
-          "195",
-          "575BCB88A4694C27BC013DE9C73E6FE7",
-          "C3C19DE8AB3B42E78748E20D986FBBC9",
-          "1852D69AB3FD453F8F031813501B26F0"
-        ]
-      ],
-      "rows": [
-        {
-          "ad_reference_id": "575BCB88A4694C27BC013DE9C73E6FE7",
-          "name": "Awaiting Payment",
-          "name_es": "A Pagar",
-          "value": "RPAP"
-        },
-        {
-          "ad_reference_id": "575BCB88A4694C27BC013DE9C73E6FE7",
-          "name": "Awaiting Execution",
-          "name_es": "A Ejecutar",
-          "value": "RPAE"
-        },
-        {
-          "ad_reference_id": "575BCB88A4694C27BC013DE9C73E6FE7",
-          "name": "Void",
-          "name_es": "Anulado",
-          "value": "RPVOID"
-        },
-        {
-          "ad_reference_id": "575BCB88A4694C27BC013DE9C73E6FE7",
-          "name": "Payment Made",
-          "name_es": "Pagado",
-          "value": "PPM"
-        },
-        {
-          "ad_reference_id": "575BCB88A4694C27BC013DE9C73E6FE7",
-          "name": "Payment Received",
-          "name_es": "Cobrado",
-          "value": "RPR"
-        },
-        {
-          "ad_reference_id": "575BCB88A4694C27BC013DE9C73E6FE7",
-          "name": "Deposited not Cleared",
-          "name_es": "Cobro depositado",
-          "value": "RDNC"
-        },
-        {
-          "ad_reference_id": "575BCB88A4694C27BC013DE9C73E6FE7",
-          "name": "Withdrawn not Cleared",
-          "name_es": "Pago reintegrado",
-          "value": "PWNC"
-        },
-        {
-          "ad_reference_id": "575BCB88A4694C27BC013DE9C73E6FE7",
-          "name": "Payment Cleared",
-          "name_es": "Conciliado",
-          "value": "RPPC"
-        },
-        {
-          "ad_reference_id": "150",
-          "name": "After Delivery",
-          "name_es": "Después de entregado",
-          "value": "D"
-        },
-        {
-          "ad_reference_id": "150",
-          "name": "After Order Delivered",
-          "name_es": "Pedido completamente entregado",
-          "value": "O"
-        },
-        {
-          "ad_reference_id": "151",
-          "name": "After Receipt",
-          "name_es": "Después de cobrado",
-          "value": "R"
-        },
-        {
-          "ad_reference_id": "1852D69AB3FD453F8F031813501B26F0",
-          "name": "Automatic",
-          "name_es": "Automático",
-          "value": "CRP"
-        },
-        {
-          "ad_reference_id": "FF80818130217A350130218D802B0011",
-          "name": "Automatic Evaluation",
-          "name_es": "Evaluación Automática",
-          "value": "AE"
-        },
-        {
-          "ad_reference_id": "151",
-          "name": "Availability",
-          "name_es": "Si hay disponible",
-          "value": "A"
-        },
-        {
-          "ad_reference_id": "195",
-          "name": "Bank Deposit",
-          "name_es": "Ingreso por banco",
-          "value": "5"
-        },
-        {
-          "ad_reference_id": "195",
-          "name": "Bank Remittance",
-          "name_es": "Remesa bancaria",
-          "value": "R"
-        },
-        {
-          "ad_reference_id": "FF80818130217A350130218D802B0011",
-          "name": "Booked",
-          "name_es": "Registrado",
-          "value": "CO"
-        },
-        {
-          "ad_reference_id": "153",
-          "name": "Calculated",
-          "name_es": "Calculado",
-          "value": "C"
-        },
-        {
-          "ad_reference_id": "195",
-          "name": "Cash",
-          "name_es": "Efectivo",
-          "value": "B"
-        },
-        {
-          "ad_reference_id": "195",
-          "name": "Cash on Delivery",
-          "name_es": "Contado albarán",
-          "value": "C"
-        },
-        {
-          "ad_reference_id": "195",
-          "name": "Check",
-          "name_es": "Cheque",
-          "value": "2"
-        },
-        {
-          "ad_reference_id": "195",
-          "name": "Cheque bancario",
-          "name_es": "Cheque bancario",
-          "value": "SDFP_Cheque bancario"
-        },
-        {
-          "ad_reference_id": "195",
-          "name": "Cheque conformado",
-          "name_es": "Cheque conformado",
-          "value": "SDFP_Cheque conformado"
-        },
-        {
-          "ad_reference_id": "FF80818130217A350130218D802B0011",
-          "name": "Closed",
-          "name_es": "Cerrado",
-          "value": "CL"
-        },
-        {
-          "ad_reference_id": "FF80818130217A350130218D802B0011",
-          "name": "Closed - Invoice Created",
-          "name_es": "Closed - Invoice Created",
-          "value": "ETGO_CI"
-        },
-        {
-          "ad_reference_id": "FF80818130217A350130218D802B0011",
-          "name": "Closed - Order Created",
-          "name_es": "Cerrado - Pedido creado",
-          "value": "CA"
-        },
-        {
-          "ad_reference_id": "FF80818130217A350130218D802B0011",
-          "name": "Closed - Rejected",
-          "name_es": "Cerrado - Rechazado",
-          "value": "CJ"
-        },
-        {
-          "ad_reference_id": "195",
-          "name": "Compensación",
-          "name_es": "Compensación",
-          "value": "SDFP_Compensación"
-        },
-        {
-          "ad_reference_id": "151",
-          "name": "Complete Line",
-          "name_es": "Línea completa",
-          "value": "L"
-        },
-        {
-          "ad_reference_id": "151",
-          "name": "Complete Order",
-          "name_es": "Pedido completo",
-          "value": "O"
-        },
-        {
-          "ad_reference_id": "C3C19DE8AB3B42E78748E20D986FBBC9",
-          "name": "Completely Reserved",
-          "name_es": "Reservado completamente",
-          "value": "CR"
-        },
-        {
-          "ad_reference_id": "195",
-          "name": "Contrato Adjudicación",
-          "name_es": "Contrato Adjudicación",
-          "value": "SDFP_Contrato Adjudicación"
-        },
-        {
-          "ad_reference_id": "195",
-          "name": "Credit Card",
-          "name_es": "Tarjeta de crédito",
-          "value": "K"
-        },
-        {
-          "ad_reference_id": "195",
-          "name": "Crédito Documentario",
-          "name_es": "Crédito Documentario",
-          "value": "SDFP_Crédito Documentario"
-        },
-        {
-          "ad_reference_id": "150",
-          "name": "Customer Schedule After Delivery",
-          "name_es": "Periódico después de entregado",
-          "value": "S"
-        },
-        {
-          "ad_reference_id": "152",
-          "name": "Delivery",
-          "name_es": "Entrega",
-          "value": "D"
-        },
-        {
-          "ad_reference_id": "150",
-          "name": "Do Not Invoice",
-          "name_es": "No facturar",
-          "value": "N"
-        },
-        {
-          "ad_reference_id": "FF80818130217A350130218D802B0011",
-          "name": "Draft",
-          "name_es": "Borrador",
-          "value": "DR"
-        },
-        {
-          "ad_reference_id": "195",
-          "name": "Especiales",
-          "name_es": "Especiales",
-          "value": "SDFP_Especiales"
-        },
-        {
-          "ad_reference_id": "153",
-          "name": "Freight included",
-          "name_es": "Gastos incluidos",
-          "value": "I"
-        },
-        {
-          "ad_reference_id": "195",
-          "name": "Giro postal",
-          "name_es": "Giro postal",
-          "value": "SDFP_Giro postal"
-        },
-        {
-          "ad_reference_id": "154",
-          "name": "High",
-          "name_es": "Alta",
-          "value": "3"
-        },
-        {
-          "ad_reference_id": "150",
-          "name": "Immediate",
-          "name_es": "Inmediato",
-          "value": "I"
-        },
-        {
-          "ad_reference_id": "195",
-          "name": "Letra Aceptada",
-          "name_es": "Letra Aceptada",
-          "value": "SDFP_Letra Aceptada"
-        },
-        {
-          "ad_reference_id": "195",
-          "name": "Letra de cambio",
-          "name_es": "Letra de cambio",
-          "value": "SDFP_Letra de cambio"
-        },
-        {
-          "ad_reference_id": "154",
-          "name": "Low",
-          "name_es": "Baja",
-          "value": "7"
-        },
-        {
-          "ad_reference_id": "1852D69AB3FD453F8F031813501B26F0",
-          "name": "Manual",
-          "name_es": "Manual",
-          "value": "CR"
-        },
-        {
-          "ad_reference_id": "FF80818130217A350130218D802B0011",
-          "name": "Manual Evaluation",
-          "name_es": "Evaluación Manual",
-          "value": "ME"
-        },
-        {
-          "ad_reference_id": "154",
-          "name": "Medium",
-          "name_es": "Media",
-          "value": "5"
-        },
-        {
-          "ad_reference_id": "195",
-          "name": "Money Order",
-          "name_es": "Giro bancario",
-          "value": "4"
-        },
-        {
-          "ad_reference_id": "FF80818130217A350130218D802B0011",
-          "name": "Not Accepted",
-          "name_es": "No aprobado",
-          "value": "NA"
-        },
-        {
-          "ad_reference_id": "FF80818130217A350130218D802B0011",
-          "name": "Not Confirmed",
-          "name_es": "No Confirmado",
-          "value": "NC"
-        },
-        {
-          "ad_reference_id": "FF80818130217A350130218D802B0011",
-          "name": "Not Paid",
-          "name_es": "Pendiente de Pago",
-          "value": "WP"
-        },
-        {
-          "ad_reference_id": "C3C19DE8AB3B42E78748E20D986FBBC9",
-          "name": "Not Reserved",
-          "name_es": "No reservado",
-          "value": "NR"
-        },
-        {
-          "ad_reference_id": "195",
-          "name": "On Credit",
-          "name_es": "A la vista",
-          "value": "P"
-        },
-        {
-          "ad_reference_id": "195",
-          "name": "Pagaré No a la orden",
-          "name_es": "Pagaré No a la orden",
-          "value": "SDFP_Pagaré No a la orden"
-        },
-        {
-          "ad_reference_id": "195",
-          "name": "Pagaré a la orden",
-          "name_es": "Pagaré a la orden",
-          "value": "SDFP_Pagaré a la orden"
-        },
-        {
-          "ad_reference_id": "C3C19DE8AB3B42E78748E20D986FBBC9",
-          "name": "Partially Reserved",
-          "name_es": "Reservado parcialmente",
-          "value": "PR"
-        },
-        {
-          "ad_reference_id": "152",
-          "name": "Pickup",
-          "name_es": "Recogida",
-          "value": "P"
-        },
-        {
-          "ad_reference_id": "195",
-          "name": "Promissory Note",
-          "name_es": "Pagaré",
-          "value": "3"
-        },
-        {
-          "ad_reference_id": "FF80818130217A350130218D802B0011",
-          "name": "Re-Opened",
-          "name_es": "Reabierto",
-          "value": "RE"
-        },
-        {
-          "ad_reference_id": "195",
-          "name": "Recibo",
-          "name_es": "Recibo",
-          "value": "SDFP_Recibo"
-        },
-        {
-          "ad_reference_id": "195",
-          "name": "Recibo domiciliado",
-          "name_es": "Recibo domiciliado",
-          "value": "SDFP_Recibo domiciliado"
-        },
-        {
-          "ad_reference_id": "195",
-          "name": "Reposición",
-          "name_es": "Reposición",
-          "value": "SDFP_Reposición"
-        },
-        {
-          "ad_reference_id": "152",
-          "name": "Shipper",
-          "name_es": "Transportista",
-          "value": "S"
-        },
-        {
-          "ad_reference_id": "FF80818130217A350130218D802B0011",
-          "name": "Temporal",
-          "name_es": "Temporal",
-          "value": "TMP"
-        },
-        {
-          "ad_reference_id": "FF80818130217A350130218D802B0011",
-          "name": "Under Evaluation",
-          "name_es": "Bajo evaluación",
-          "value": "UE"
-        },
-        {
-          "ad_reference_id": "FF80818130217A350130218D802B0011",
-          "name": "Under Way",
-          "name_es": "En curso",
-          "value": "IP"
-        },
-        {
-          "ad_reference_id": "FF80818130217A350130218D802B0011",
-          "name": "Unknown",
-          "name_es": "Desconocido",
-          "value": "??"
-        },
-        {
-          "ad_reference_id": "FF80818130217A350130218D802B0011",
-          "name": "Voided",
-          "name_es": "Anulado",
-          "value": "VO"
-        },
-        {
-          "ad_reference_id": "195",
-          "name": "Wire Transfer",
-          "name_es": "Transferencia",
-          "value": "1"
-        },
-        {
-          "ad_reference_id": "195",
-          "name": "Withholding",
-          "name_es": "Retención",
-          "value": "W"
         }
       ]
     },
@@ -11716,6 +12184,64 @@
           "name": "Work Requirement",
           "name_es": "Orden de fabricación",
           "value": "WRE"
+        }
+      ]
+    },
+    "d6cf1a69019f2c522e1e974f636e51c825ca6b7a6f98bb69a511910993097d55": {
+      "checksum": "7e1c00065d16f3e098ed26bd0ad0fc4347c3971004c3ed40edb0aebaaa387285",
+      "params": [
+        [
+          "111"
+        ]
+      ],
+      "rows": [
+        {
+          "ad_reference_id": "111",
+          "name": "Average",
+          "name_es": "Promedio",
+          "value": "A"
+        },
+        {
+          "ad_reference_id": "111",
+          "name": "Company",
+          "name_es": "Empresa",
+          "value": "C"
+        },
+        {
+          "ad_reference_id": "111",
+          "name": "Fixed",
+          "name_es": "Fijo",
+          "value": "F"
+        },
+        {
+          "ad_reference_id": "111",
+          "name": "Manual Rate",
+          "name_es": "Porcentaje manual",
+          "value": "M"
+        },
+        {
+          "ad_reference_id": "111",
+          "name": "None",
+          "name_es": "Ninguno",
+          "value": "N"
+        },
+        {
+          "ad_reference_id": "111",
+          "name": "Period End",
+          "name_es": "Fin periodo",
+          "value": "P"
+        },
+        {
+          "ad_reference_id": "111",
+          "name": "Spot",
+          "name_es": "Punto",
+          "value": "S"
+        },
+        {
+          "ad_reference_id": "111",
+          "name": "User Type",
+          "name_es": "Definido por el usuario",
+          "value": "U"
         }
       ]
     },

@@ -33,7 +33,8 @@
       "es_ES": {
         "C_BPartner_ID": "Contacto",
         "DeliveryStatus": "Estado de entrega",
-        "InvoiceStatus": "Estado de facturación"
+        "InvoiceStatus": "Estado de facturación",
+        "PriceList": "Precio"
       },
       "en_US": {
         "C_BPartner_ID": "Contact",
@@ -330,7 +331,7 @@
           "section": "principal",
           "order": 3,
           "gridOrder": 3,
-          "min": 0
+          "min": false
         },
         "operativeQuantity": {
           "visibility": "discarded"
@@ -378,7 +379,7 @@
           "order": 4,
           "gridOrder": 4,
           "columnType": "amount",
-          "min": 0
+          "min": false
         },
         "discount": {
           "grid": true,
@@ -478,7 +479,7 @@
           "visibility": "discarded"
         },
         "currency": {
-          "visibility": "editable",
+          "visibility": "readOnly",
           "grid": false,
           "form": false
         }

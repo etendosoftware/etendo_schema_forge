@@ -1,8 +1,8 @@
 {
-  "version": "0.19.0",
+  "version": "0.17.0",
   "generatedAt": "2026-06-11T01:47:08.755Z",
-  "updatedAt": "2026-07-19T03:18:18.042Z",
-  "checksum": "4b05b0ed5cd6eafc",
+  "updatedAt": "2026-07-21T12:35:19.261Z",
+  "checksum": "effb38fa7ad6cf67",
   "frontendContract": {
     "window": {
       "id": "94EAA455D2644E04AB25D93BE5157B6D",
@@ -30,7 +30,11 @@
             "grid": true,
             "form": true,
             "sourceRequired": true,
-            "gridOrder": 1
+            "gridOrder": 1,
+            "validation": {
+              "required": true,
+              "maxLength": 60
+            }
           },
           {
             "name": "currency",
@@ -46,6 +50,10 @@
             "sourceRequired": true,
             "reference": "Currency",
             "inputMode": "selector",
+            "validation": {
+              "required": true,
+              "maxLength": 32
+            },
             "readOnlyLogic": {
               "raw": "@HasTransaction@>0",
               "evaluable": true,
@@ -92,7 +100,11 @@
               }
             ],
             "defaultValue": "B",
-            "gridOrder": 2
+            "gridOrder": 2,
+            "validation": {
+              "required": true,
+              "maxLength": 60
+            }
           },
           {
             "name": "description",
@@ -104,7 +116,10 @@
             "visibility": "editable",
             "required": false,
             "grid": false,
-            "form": true
+            "form": true,
+            "validation": {
+              "maxLength": 255
+            }
           },
           {
             "name": "active",
@@ -121,7 +136,10 @@
               "type": "computed",
               "source": "Y"
             },
-            "defaultValue": "Y"
+            "defaultValue": "Y",
+            "validation": {
+              "maxLength": 1
+            }
           },
           {
             "name": "currentBalance",
@@ -140,7 +158,11 @@
               "source": "0"
             },
             "defaultValue": "0",
-            "gridOrder": 3
+            "gridOrder": 3,
+            "validation": {
+              "required": true,
+              "maxLength": 12
+            }
           },
           {
             "name": "iBAN",
@@ -153,6 +175,9 @@
             "required": false,
             "grid": false,
             "form": true,
+            "validation": {
+              "maxLength": 34
+            },
             "displayLogic": {
               "raw": "@Type@='B'",
               "evaluable": true
@@ -169,6 +194,9 @@
             "required": false,
             "grid": false,
             "form": true,
+            "validation": {
+              "maxLength": 20
+            },
             "displayLogic": {
               "raw": "@Type@='B'",
               "evaluable": true
@@ -185,6 +213,9 @@
             "required": false,
             "grid": false,
             "form": true,
+            "validation": {
+              "maxLength": 1
+            },
             "displayLogic": {
               "raw": "@Type@='B'&@FIN_Matching_Algorithm_ID@!''",
               "evaluable": true
@@ -201,6 +232,9 @@
             "required": false,
             "grid": false,
             "form": true,
+            "validation": {
+              "maxLength": 1
+            },
             "displayLogic": {
               "raw": "@Type@='B'&@FIN_Matching_Algorithm_ID@!''&(@LASTRECON@=@DRAFTRECONCILIATION@|@DRAFTRECONCILIATION@='')",
               "evaluable": true
@@ -217,6 +251,9 @@
             "required": false,
             "grid": false,
             "form": true,
+            "validation": {
+              "maxLength": 1
+            },
             "displayLogic": {
               "raw": "@Type@='B'&@FIN_Matching_Algorithm_ID@!''&(@LASTRECON@!@DRAFTRECONCILIATION@&@DRAFTRECONCILIATION@!'')",
               "evaluable": true
@@ -233,6 +270,9 @@
             "required": false,
             "grid": false,
             "form": true,
+            "validation": {
+              "maxLength": 1
+            },
             "displayLogic": {
               "raw": "@Type@='C'|@FIN_Matching_Algorithm_ID@=''",
               "evaluable": true
@@ -253,7 +293,10 @@
               "type": "computed",
               "source": "N"
             },
-            "defaultValue": "N"
+            "defaultValue": "N",
+            "validation": {
+              "maxLength": 1
+            }
           },
           {
             "name": "bankCode",
@@ -266,6 +309,9 @@
             "required": false,
             "grid": false,
             "form": true,
+            "validation": {
+              "maxLength": 4
+            },
             "displayLogic": {
               "raw": "(@Type@='B' & @BankFormat@='SPANISH') | @CodeBank@ ! ''",
               "evaluable": true
@@ -282,6 +328,9 @@
             "required": false,
             "grid": false,
             "form": true,
+            "validation": {
+              "maxLength": 4
+            },
             "displayLogic": {
               "raw": "(@Type@='B'  & @BankFormat@='SPANISH') | @CodeBranch@ ! ''",
               "evaluable": true
@@ -298,6 +347,9 @@
             "required": false,
             "grid": false,
             "form": true,
+            "validation": {
+              "maxLength": 10
+            },
             "displayLogic": {
               "raw": "(@Type@='B'  & @BankFormat@='SPANISH') | @Codeaccount@ ! ''",
               "evaluable": true
@@ -314,6 +366,9 @@
             "required": false,
             "grid": false,
             "form": true,
+            "validation": {
+              "maxLength": 120
+            },
             "displayLogic": {
               "raw": "@Type@='B'",
               "evaluable": true
@@ -330,6 +385,9 @@
             "required": false,
             "grid": false,
             "form": true,
+            "validation": {
+              "maxLength": 1
+            },
             "displayLogic": {
               "raw": "false",
               "evaluable": true,
@@ -347,6 +405,9 @@
             "required": false,
             "grid": false,
             "form": true,
+            "validation": {
+              "maxLength": 1
+            },
             "displayLogic": {
               "raw": "false",
               "evaluable": true,
@@ -364,6 +425,9 @@
             "required": false,
             "grid": false,
             "form": true,
+            "validation": {
+              "maxLength": 1
+            },
             "displayLogic": {
               "raw": "@EM_Aprm_Isfundstrans_Enabled@='Y'",
               "evaluable": true
@@ -382,6 +446,9 @@
             "form": true,
             "reference": "PSD2_Provider",
             "inputMode": "search",
+            "validation": {
+              "maxLength": 32
+            },
             "displayLogic": {
               "raw": "@PSD2_ClientHasApiKey@=1 & @Type@!'C'",
               "evaluable": true
@@ -403,6 +470,9 @@
             "required": false,
             "grid": false,
             "form": true,
+            "validation": {
+              "maxLength": 19
+            },
             "displayLogic": {
               "raw": "@PSD2_ClientHasApiKey@=1 & @Type@!'C'",
               "evaluable": true
@@ -419,6 +489,9 @@
             "required": false,
             "grid": false,
             "form": true,
+            "validation": {
+              "maxLength": 19
+            },
             "displayLogic": {
               "raw": "@PSD2_ClientHasApiKey@=1 & @Type@!'C'",
               "evaluable": true
@@ -470,6 +543,9 @@
               }
             ],
             "defaultValue": "1BD",
+            "validation": {
+              "maxLength": 10
+            },
             "displayLogic": {
               "raw": "@PSD2_ClientHasApiKey@=1 & @Type@!'C'",
               "evaluable": true
@@ -486,6 +562,9 @@
             "required": false,
             "grid": false,
             "form": true,
+            "validation": {
+              "maxLength": 1
+            },
             "displayLogic": {
               "raw": "@PSD2_ClientHasApiKey@=1 & @PSD2_HasConnections@=0 & @Type@!'C'",
               "evaluable": true
@@ -502,6 +581,9 @@
             "required": false,
             "grid": false,
             "form": true,
+            "validation": {
+              "maxLength": 1
+            },
             "displayLogic": {
               "raw": "@PSD2_ClientHasApiKey@=1 & @PSD2_HasActiveConnections@>=1 & @Type@!'C'",
               "evaluable": true
@@ -518,6 +600,9 @@
             "required": false,
             "grid": false,
             "form": true,
+            "validation": {
+              "maxLength": 255
+            },
             "displayLogic": {
               "raw": "@PSD2_ClientHasApiKey@=1 & @Type@!'C'",
               "evaluable": true
@@ -534,6 +619,9 @@
             "required": false,
             "grid": false,
             "form": true,
+            "validation": {
+              "maxLength": 20
+            },
             "displayLogic": {
               "raw": "@Type@='CA'",
               "evaluable": true
@@ -571,6 +659,9 @@
               }
             ],
             "defaultValue": "DC",
+            "validation": {
+              "maxLength": 60
+            },
             "displayLogic": {
               "raw": "@Type@!'C'",
               "evaluable": true
@@ -587,6 +678,9 @@
             "required": false,
             "grid": false,
             "form": true,
+            "validation": {
+              "maxLength": 1
+            },
             "displayLogic": {
               "raw": "@PSD2_ClientHasApiKey@=1 & @PSD2_HasInactiveConnections@>0 & @Type@!'C'",
               "evaluable": true
@@ -607,7 +701,10 @@
               "type": "computed",
               "source": "0"
             },
-            "defaultValue": "0"
+            "defaultValue": "0",
+            "validation": {
+              "maxLength": 12
+            }
           },
           {
             "name": "eTGODateTolerance",
@@ -624,7 +721,10 @@
               "type": "computed",
               "source": "3"
             },
-            "defaultValue": "3"
+            "defaultValue": "3",
+            "validation": {
+              "maxLength": 12
+            }
           }
         ],
         "searchableFields": [],
@@ -735,6 +835,10 @@
             ],
             "defaultValue": "BPD",
             "gridOrder": 6,
+            "validation": {
+              "required": true,
+              "maxLength": 60
+            },
             "callout": {
               "className": "org.openbravo.erpCommon.ad_callouts.SE_Trxtype_Transaction"
             },
@@ -820,6 +924,10 @@
             ],
             "defaultValue": "'RPAP'",
             "gridOrder": 5,
+            "validation": {
+              "required": true,
+              "maxLength": 40
+            },
             "validationRule": {
               "code": "Value IN ('RPAP','RDNC','RPPC','PWNC')",
               "contextParams": [],
@@ -848,6 +956,10 @@
             },
             "defaultValue": "@#Date@",
             "gridOrder": 1,
+            "validation": {
+              "required": true,
+              "maxLength": 19
+            },
             "callout": {
               "className": "org.openbravo.erpCommon.ad_callouts.SE_StatementDate_Transaction"
             },
@@ -878,6 +990,10 @@
               "source": "documentType.sequence"
             },
             "gridOrder": 2,
+            "validation": {
+              "required": true,
+              "maxLength": 30
+            },
             "readOnlyLogic": {
               "raw": "@Processed@='Y'",
               "evaluable": true,
@@ -898,6 +1014,9 @@
             "reference": "Glitem",
             "inputMode": "selector",
             "gridOrder": 7,
+            "validation": {
+              "maxLength": 32
+            },
             "callout": {
               "className": "org.openbravo.erpCommon.ad_callouts.SE_GLItem_Transaction"
             },
@@ -923,6 +1042,9 @@
             "grid": true,
             "form": true,
             "gridOrder": 4,
+            "validation": {
+              "maxLength": 255
+            },
             "displayLogic": {
               "raw": "@Trxtype@!''",
               "evaluable": true
@@ -945,6 +1067,10 @@
               "source": "0"
             },
             "defaultValue": "0",
+            "validation": {
+              "required": true,
+              "maxLength": 22
+            },
             "callout": {
               "className": "org.openbravo.erpCommon.ad_callouts.SE_Amount_Transaction"
             },
@@ -975,6 +1101,10 @@
               "source": "0"
             },
             "defaultValue": "0",
+            "validation": {
+              "required": true,
+              "maxLength": 22
+            },
             "callout": {
               "className": "org.openbravo.erpCommon.ad_callouts.SE_Amount_Transaction"
             },
@@ -1021,6 +1151,10 @@
               "true": "green",
               "false": "orange"
             },
+            "validation": {
+              "required": true,
+              "maxLength": 60
+            },
             "displayLogic": {
               "raw": "@Processed@='Y' & @#ShowAcct@='Y'",
               "evaluable": false,
@@ -1047,6 +1181,10 @@
             "reference": "Org",
             "inputMode": "selector",
             "defaultValue": "@AD_Org_ID@",
+            "validation": {
+              "required": true,
+              "maxLength": 32
+            },
             "validationRule": {
               "code": "AD_ISORGINCLUDED(ad_org.ad_org_id, CASE WHEN (@Parent_AD_Org@ IS NULL OR @Parent_AD_Org@ = '') THEN @AD_ORG_ID@ ELSE @Parent_AD_Org@ END, ad_org.ad_client_id)<>-1 AND IsReady='Y'",
               "contextParams": [],
@@ -1081,10 +1219,14 @@
             "reference": "BPartner",
             "inputMode": "search",
             "gridOrder": 3,
+            "validation": {
+              "maxLength": 32
+            },
             "displayLogic": {
-              "raw": "@Trxtype@!''",
-              "evaluable": true,
-              "js": "record['transactionType'] !== ''"
+              "raw": "@ACCT_DIMENSION_DISPLAY@ & @Trxtype@!''",
+              "evaluable": false,
+              "reason": "server-macro",
+              "js": null
             },
             "readOnlyLogic": {
               "raw": "@Posted@='Y' | @Fin_Payment_ID@!''",
@@ -1105,6 +1247,9 @@
             "form": true,
             "reference": "Project",
             "inputMode": "selector",
+            "validation": {
+              "maxLength": 32
+            },
             "displayLogic": {
               "raw": "@ACCT_DIMENSION_DISPLAY@ & @Trxtype@!''",
               "evaluable": false,
@@ -1130,6 +1275,9 @@
             "form": true,
             "reference": "Costcenter",
             "inputMode": "selector",
+            "validation": {
+              "maxLength": 32
+            },
             "displayLogic": {
               "raw": "@ACCT_DIMENSION_DISPLAY@ & @Trxtype@!''",
               "evaluable": false,
@@ -1155,6 +1303,9 @@
             "form": true,
             "reference": "Campaign",
             "inputMode": "selector",
+            "validation": {
+              "maxLength": 32
+            },
             "displayLogic": {
               "raw": "@$Element_MC@='Y' & @Trxtype@!''",
               "evaluable": false,
@@ -1180,6 +1331,9 @@
             "form": true,
             "reference": "Activity",
             "inputMode": "selector",
+            "validation": {
+              "maxLength": 32
+            },
             "displayLogic": {
               "raw": "@$Element_AY@='Y' & @Trxtype@!''",
               "evaluable": false,
@@ -1205,6 +1359,9 @@
             "form": true,
             "reference": "Salesregion",
             "inputMode": "selector",
+            "validation": {
+              "maxLength": 32
+            },
             "displayLogic": {
               "raw": "@$Element_SR@='Y' & @Trxtype@!''",
               "evaluable": false,
@@ -1230,6 +1387,9 @@
             "form": true,
             "reference": "User1",
             "inputMode": "selector",
+            "validation": {
+              "maxLength": 32
+            },
             "displayLogic": {
               "raw": "@ACCT_DIMENSION_DISPLAY@ & @Trxtype@!''",
               "evaluable": false,
@@ -1255,6 +1415,9 @@
             "form": true,
             "reference": "User2",
             "inputMode": "selector",
+            "validation": {
+              "maxLength": 32
+            },
             "displayLogic": {
               "raw": "@ACCT_DIMENSION_DISPLAY@ & @Trxtype@!''",
               "evaluable": false,
@@ -1411,7 +1574,11 @@
                 }
               }
             ],
-            "defaultValue": "N"
+            "defaultValue": "N",
+            "validation": {
+              "required": true,
+              "maxLength": 60
+            }
           },
           {
             "name": "etblkpBulkposting",
@@ -1430,6 +1597,10 @@
               "source": "N"
             },
             "defaultValue": "N",
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            },
             "displayLogic": {
               "raw": "@Processed@='Y' & @#ShowAcct@='Y'",
               "evaluable": false,
@@ -1454,6 +1625,10 @@
               "source": "N"
             },
             "defaultValue": "N",
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            },
             "displayLogic": {
               "raw": "@processed@='Y'",
               "evaluable": true
@@ -1476,6 +1651,10 @@
               "source": "N"
             },
             "defaultValue": "N",
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            },
             "displayLogic": {
               "raw": "@processed@='Y'",
               "evaluable": true
@@ -1571,6 +1750,63 @@
         ],
         "javaQualifier": "document-posting"
       },
+      "accountingConfiguration": {
+        "tableName": "FIN_Financial_Account_Acct",
+        "tabId": "8391062D5C6A47EA94A83A304AD720BE",
+        "tabName": "Accounting Configuration",
+        "uiPattern": "STD",
+        "fields": [
+          {
+            "name": "fINAssetAcct",
+            "apiKey": "fINAssetAcct",
+            "column": "FIN_Asset_Acct",
+            "label": "Bank Asset Account",
+            "type": "foreignKey",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": true,
+            "grid": false,
+            "form": true,
+            "reference": "ValidCombination",
+            "inputMode": "selector",
+            "validation": {
+              "required": true,
+              "maxLength": 32
+            },
+            "displayLogic": {
+              "raw": "@EnableBankStatement@='Y'",
+              "evaluable": true
+            }
+          },
+          {
+            "name": "fINTransitoryAcct",
+            "apiKey": "fINTransitoryAcct",
+            "column": "FIN_Transitory_Acct",
+            "label": "Bank Transitory Account",
+            "type": "foreignKey",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": false,
+            "grid": false,
+            "form": true,
+            "reference": "ValidCombination",
+            "inputMode": "selector",
+            "validation": {
+              "maxLength": 32
+            },
+            "callout": {
+              "className": "org.openbravo.erpCommon.ad_callouts.SE_FinancialAccount_BSAccounts"
+            },
+            "displayLogic": {
+              "raw": "@EnableBankStatement@='Y'",
+              "evaluable": true
+            }
+          }
+        ],
+        "searchableFields": [],
+        "computedFields": [],
+        "javaQualifier": "financialAccountAccountingHandler"
+      },
       "importedBankStatements": {
         "tableName": "FIN_BankStatement",
         "tabId": "C56E698100314ABBBBD3A89626CA551C",
@@ -1594,6 +1830,10 @@
               "source": "documentType.sequence"
             },
             "gridOrder": 1,
+            "validation": {
+              "required": true,
+              "maxLength": 30
+            },
             "callout": {
               "className": "org.openbravo.erpCommon.ad_callouts.SL_AdvPayment_Document"
             },
@@ -1616,6 +1856,10 @@
             "form": true,
             "sourceRequired": true,
             "gridOrder": 2,
+            "validation": {
+              "required": true,
+              "maxLength": 60
+            },
             "readOnlyLogic": {
               "raw": "@Processed@='Y'",
               "evaluable": true,
@@ -1638,6 +1882,9 @@
               "source": "Y"
             },
             "defaultValue": "Y",
+            "validation": {
+              "maxLength": 1
+            },
             "readOnlyLogic": {
               "raw": "@Processed@='Y'",
               "evaluable": true,
@@ -1662,6 +1909,10 @@
             },
             "defaultValue": "@#Date@",
             "gridOrder": 5,
+            "validation": {
+              "required": true,
+              "maxLength": 19
+            },
             "readOnlyLogic": {
               "raw": "@Processed@='Y'",
               "evaluable": true,
@@ -1686,6 +1937,10 @@
             },
             "defaultValue": "@#Date@",
             "gridOrder": 6,
+            "validation": {
+              "required": true,
+              "maxLength": 19
+            },
             "readOnlyLogic": {
               "raw": "@Processed@='Y'",
               "evaluable": true,
@@ -1704,6 +1959,9 @@
             "grid": true,
             "form": true,
             "gridOrder": 3,
+            "validation": {
+              "maxLength": 255
+            },
             "readOnlyLogic": {
               "raw": "@Processed@='Y'",
               "evaluable": true,
@@ -1721,7 +1979,10 @@
             "required": false,
             "grid": true,
             "form": true,
-            "gridOrder": 4
+            "gridOrder": 4,
+            "validation": {
+              "maxLength": 255
+            }
           },
           {
             "name": "etblkpAccountingstatus",
@@ -1867,7 +2128,11 @@
                 }
               }
             ],
-            "defaultValue": "N"
+            "defaultValue": "N",
+            "validation": {
+              "required": true,
+              "maxLength": 60
+            }
           },
           {
             "name": "etblkpBulkposting",
@@ -1886,6 +2151,10 @@
               "source": "N"
             },
             "defaultValue": "N",
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            },
             "displayLogic": {
               "raw": "@Processed@='Y' & @#ShowAcct@='Y'",
               "evaluable": false,
@@ -1962,6 +2231,9 @@
               "source": "Y"
             },
             "defaultValue": "Y",
+            "validation": {
+              "maxLength": 1
+            },
             "readOnlyLogic": {
               "raw": "@APRM_BSProcessed@='Y'",
               "evaluable": false,
@@ -1987,6 +2259,10 @@
             },
             "defaultValue": "@#Date@",
             "gridOrder": 1,
+            "validation": {
+              "required": true,
+              "maxLength": 19
+            },
             "readOnlyLogic": {
               "raw": "@APRM_BSProcessed@='Y'",
               "evaluable": false,
@@ -2007,6 +2283,10 @@
             "form": true,
             "sourceRequired": true,
             "gridOrder": 6,
+            "validation": {
+              "required": true,
+              "maxLength": 30
+            },
             "readOnlyLogic": {
               "raw": "@APRM_BSProcessed@='Y'",
               "evaluable": false,
@@ -2026,6 +2306,9 @@
             "grid": true,
             "form": true,
             "gridOrder": 3,
+            "validation": {
+              "maxLength": 60
+            },
             "readOnlyLogic": {
               "raw": "@APRM_BSProcessed@='Y'",
               "evaluable": false,
@@ -2046,7 +2329,10 @@
             "form": true,
             "reference": "BPartner",
             "inputMode": "selector",
-            "gridOrder": 4
+            "gridOrder": 4,
+            "validation": {
+              "maxLength": 32
+            }
           },
           {
             "name": "gLItem",
@@ -2061,7 +2347,10 @@
             "form": true,
             "reference": "Glitem",
             "inputMode": "selector",
-            "gridOrder": 5
+            "gridOrder": 5,
+            "validation": {
+              "maxLength": 32
+            }
           },
           {
             "name": "dramount",
@@ -2081,6 +2370,10 @@
             },
             "defaultValue": "0",
             "gridOrder": 7,
+            "validation": {
+              "required": true,
+              "maxLength": 12
+            },
             "readOnlyLogic": {
               "raw": "@APRM_BSProcessed@='Y'",
               "evaluable": false,
@@ -2106,6 +2399,10 @@
             },
             "defaultValue": "0",
             "gridOrder": 8,
+            "validation": {
+              "required": true,
+              "maxLength": 12
+            },
             "readOnlyLogic": {
               "raw": "@APRM_BSProcessed@='Y'",
               "evaluable": false,
@@ -2124,7 +2421,10 @@
             "required": false,
             "grid": true,
             "form": true,
-            "gridOrder": 2
+            "gridOrder": 2,
+            "validation": {
+              "maxLength": 2000
+            }
           }
         ],
         "searchableFields": [],
@@ -3026,6 +3326,222 @@
         ],
         "javaQualifier": "document-posting"
       },
+      "accountingConfiguration": {
+        "tableName": "FIN_Financial_Account_Acct",
+        "tabId": "8391062D5C6A47EA94A83A304AD720BE",
+        "tabName": "Accounting Configuration",
+        "fields": [
+          {
+            "name": "accountingSchema",
+            "apiKey": "accountingSchema",
+            "column": "C_Acctschema_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "active",
+            "apiKey": "active",
+            "column": "Isactive",
+            "type": "boolean",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "fINBankrevaluationgainAcct",
+            "apiKey": "fINBankrevaluationgainAcct",
+            "column": "FIN_Bankrevaluationgain_Acct",
+            "type": "foreignKey",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "fINBankrevaluationlossAcct",
+            "apiKey": "fINBankrevaluationlossAcct",
+            "column": "FIN_Bankrevaluationloss_Acct",
+            "type": "foreignKey",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "fINBankfeeAcct",
+            "apiKey": "fINBankfeeAcct",
+            "column": "FIN_Bankfee_Acct",
+            "type": "foreignKey",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "enablebankstatement",
+            "apiKey": "enablebankstatement",
+            "column": "EnableBankStatement",
+            "type": "boolean",
+            "visibility": "discarded",
+            "required": true
+          },
+          {
+            "name": "fINAssetAcct",
+            "apiKey": "fINAssetAcct",
+            "column": "FIN_Asset_Acct",
+            "type": "foreignKey",
+            "visibility": "editable",
+            "required": true
+          },
+          {
+            "name": "fINTransitoryAcct",
+            "apiKey": "fINTransitoryAcct",
+            "column": "FIN_Transitory_Acct",
+            "type": "foreignKey",
+            "visibility": "editable",
+            "required": false
+          },
+          {
+            "name": "inTransitPaymentAccountIN",
+            "apiKey": "inTransitPaymentAccountIN",
+            "column": "FIN_In_Intransit_Acct",
+            "type": "foreignKey",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "depositAccount",
+            "apiKey": "depositAccount",
+            "column": "FIN_Deposit_Acct",
+            "type": "foreignKey",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "clearedPaymentAccount",
+            "apiKey": "clearedPaymentAccount",
+            "column": "FIN_In_Clear_Acct",
+            "type": "foreignKey",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "fINOutIntransitAcct",
+            "apiKey": "fINOutIntransitAcct",
+            "column": "FIN_Out_Intransit_Acct",
+            "type": "foreignKey",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "withdrawalAccount",
+            "apiKey": "withdrawalAccount",
+            "column": "FIN_Withdrawal_Acct",
+            "type": "foreignKey",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "clearedPaymentAccountOUT",
+            "apiKey": "clearedPaymentAccountOUT",
+            "column": "FIN_Out_Clear_Acct",
+            "type": "foreignKey",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "id",
+            "apiKey": "id",
+            "column": "FIN_Financial_Account_Acct_ID",
+            "type": "id",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "organization",
+            "apiKey": "organization",
+            "column": "AD_Org_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "client",
+            "apiKey": "client",
+            "column": "AD_Client_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "receivePaymentAccount",
+            "apiKey": "receivePaymentAccount",
+            "column": "FIN_Receivepayment_Acct",
+            "type": "foreignKey",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "makePaymentAccount",
+            "apiKey": "makePaymentAccount",
+            "column": "FIN_Makepayment_Acct",
+            "type": "foreignKey",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "account",
+            "apiKey": "account",
+            "column": "FIN_Financial_Account_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "creditAccount",
+            "apiKey": "creditAccount",
+            "column": "FIN_Credit_Acct",
+            "type": "foreignKey",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "debitAccount",
+            "apiKey": "debitAccount",
+            "column": "FIN_Debit_Acct",
+            "type": "foreignKey",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "creationDate",
+            "apiKey": "creationDate",
+            "column": "Created",
+            "type": "dateTime",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "createdBy",
+            "apiKey": "createdBy",
+            "column": "Createdby",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "updated",
+            "apiKey": "updated",
+            "column": "Updated",
+            "type": "dateTime",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "updatedBy",
+            "apiKey": "updatedBy",
+            "column": "Updatedby",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          }
+        ],
+        "javaQualifier": "financialAccountAccountingHandler"
+      },
       "importedBankStatements": {
         "tableName": "FIN_BankStatement",
         "tabId": "C56E698100314ABBBBD3A89626CA551C",
@@ -3536,6 +4052,36 @@
       },
       {
         "method": "GET",
+        "path": "/accountingConfiguration",
+        "entity": "accountingConfiguration",
+        "supportedFilters": []
+      },
+      {
+        "method": "GET",
+        "path": "/accountingConfiguration/:id",
+        "entity": "accountingConfiguration",
+        "supportedFilters": []
+      },
+      {
+        "method": "POST",
+        "path": "/accountingConfiguration",
+        "entity": "accountingConfiguration",
+        "supportedFilters": []
+      },
+      {
+        "method": "PUT",
+        "path": "/accountingConfiguration/:id",
+        "entity": "accountingConfiguration",
+        "supportedFilters": []
+      },
+      {
+        "method": "DELETE",
+        "path": "/accountingConfiguration/:id",
+        "entity": "accountingConfiguration",
+        "supportedFilters": []
+      },
+      {
+        "method": "GET",
         "path": "/importedBankStatements",
         "entity": "importedBankStatements",
         "supportedFilters": []
@@ -3621,6 +4167,17 @@
         "delete": true,
         "listUrl": "/sws/neo/financial-account-detail/transaction",
         "detailUrl": "/sws/neo/financial-account-detail/transaction/{id}",
+        "supportedFilters": []
+      },
+      "accountingConfiguration": {
+        "get": true,
+        "getById": true,
+        "post": true,
+        "put": true,
+        "patch": true,
+        "delete": true,
+        "listUrl": "/sws/neo/financial-account-detail/accountingConfiguration",
+        "detailUrl": "/sws/neo/financial-account-detail/accountingConfiguration/{id}",
         "supportedFilters": []
       },
       "importedBankStatements": {
@@ -3742,6 +4299,22 @@
         "reference": "User2",
         "inputMode": "selector",
         "url": "/sws/neo/financial-account-detail/transaction/selectors/ndDimension"
+      },
+      {
+        "entity": "accountingConfiguration",
+        "field": "fINAssetAcct",
+        "column": "FIN_Asset_Acct",
+        "reference": "ValidCombination",
+        "inputMode": "selector",
+        "url": "/sws/neo/financial-account-detail/accountingConfiguration/selectors/fINAssetAcct"
+      },
+      {
+        "entity": "accountingConfiguration",
+        "field": "fINTransitoryAcct",
+        "column": "FIN_Transitory_Acct",
+        "reference": "ValidCombination",
+        "inputMode": "selector",
+        "url": "/sws/neo/financial-account-detail/accountingConfiguration/selectors/fINTransitoryAcct"
       },
       {
         "entity": "bankStatementLines",
@@ -4121,6 +4694,13 @@
         "entity": "account",
         "runner": "node",
         "description": "CRUD flags for 'account' should all be booleans"
+      },
+      {
+        "id": "t-crud-flags-accountingConfiguration",
+        "category": "crud-flags",
+        "entity": "accountingConfiguration",
+        "runner": "node",
+        "description": "CRUD flags for 'accountingConfiguration' should all be booleans"
       },
       {
         "id": "t-crud-flags-bankStatementLines",
@@ -4552,6 +5132,22 @@
         "description": "Display logic for 'swiftCode' in account should have evaluable flag"
       },
       {
+        "id": "t-displaylogic-evaluable-accountingConfiguration-fINAssetAcct",
+        "category": "displaylogic-evaluable",
+        "entity": "accountingConfiguration",
+        "field": "fINAssetAcct",
+        "runner": "node",
+        "description": "Display logic for 'fINAssetAcct' in accountingConfiguration should have evaluable flag"
+      },
+      {
+        "id": "t-displaylogic-evaluable-accountingConfiguration-fINTransitoryAcct",
+        "category": "displaylogic-evaluable",
+        "entity": "accountingConfiguration",
+        "field": "fINTransitoryAcct",
+        "runner": "node",
+        "description": "Display logic for 'fINTransitoryAcct' in accountingConfiguration should have evaluable flag"
+      },
+      {
         "id": "t-displaylogic-evaluable-importedBankStatements-etblkpBulkposting",
         "category": "displaylogic-evaluable",
         "entity": "importedBankStatements",
@@ -4894,6 +5490,22 @@
         "field": "swiftCode",
         "runner": "node",
         "description": "Display logic for 'swiftCode' in account should be valid JS"
+      },
+      {
+        "id": "t-displaylogic-valid-accountingConfiguration-fINAssetAcct",
+        "category": "displaylogic-valid",
+        "entity": "accountingConfiguration",
+        "field": "fINAssetAcct",
+        "runner": "node",
+        "description": "Display logic for 'fINAssetAcct' in accountingConfiguration should be valid JS"
+      },
+      {
+        "id": "t-displaylogic-valid-accountingConfiguration-fINTransitoryAcct",
+        "category": "displaylogic-valid",
+        "entity": "accountingConfiguration",
+        "field": "fINTransitoryAcct",
+        "runner": "node",
+        "description": "Display logic for 'fINTransitoryAcct' in accountingConfiguration should be valid JS"
       },
       {
         "id": "t-displaylogic-valid-importedBankStatements-etblkpBulkposting",
@@ -5310,6 +5922,22 @@
         "field": "type",
         "runner": "node",
         "description": "Field 'type' should be present in account"
+      },
+      {
+        "id": "t-field-presence-accountingConfiguration-fINAssetAcct",
+        "category": "field-presence",
+        "entity": "accountingConfiguration",
+        "field": "fINAssetAcct",
+        "runner": "node",
+        "description": "Field 'fINAssetAcct' should be present in accountingConfiguration"
+      },
+      {
+        "id": "t-field-presence-accountingConfiguration-fINTransitoryAcct",
+        "category": "field-presence",
+        "entity": "accountingConfiguration",
+        "field": "fINTransitoryAcct",
+        "runner": "node",
+        "description": "Field 'fINTransitoryAcct' should be present in accountingConfiguration"
       },
       {
         "id": "t-field-presence-bankStatementLines-active",
@@ -5886,6 +6514,22 @@
         "field": "type",
         "runner": "node",
         "description": "Field 'type' should have type 'string' in account"
+      },
+      {
+        "id": "t-field-type-accountingConfiguration-fINAssetAcct",
+        "category": "field-type",
+        "entity": "accountingConfiguration",
+        "field": "fINAssetAcct",
+        "runner": "node",
+        "description": "Field 'fINAssetAcct' should have type 'string' in accountingConfiguration"
+      },
+      {
+        "id": "t-field-type-accountingConfiguration-fINTransitoryAcct",
+        "category": "field-type",
+        "entity": "accountingConfiguration",
+        "field": "fINTransitoryAcct",
+        "runner": "node",
+        "description": "Field 'fINTransitoryAcct' should have type 'string' in accountingConfiguration"
       },
       {
         "id": "t-field-type-bankStatementLines-active",
@@ -8263,6 +8907,22 @@
         "description": "Selector endpoint for 'psd2Provider' in account should exist"
       },
       {
+        "id": "t-selector-endpoint-accountingConfiguration-fINAssetAcct",
+        "category": "selector-endpoint",
+        "entity": "accountingConfiguration",
+        "field": "fINAssetAcct",
+        "runner": "node",
+        "description": "Selector endpoint for 'fINAssetAcct' in accountingConfiguration should exist"
+      },
+      {
+        "id": "t-selector-endpoint-accountingConfiguration-fINTransitoryAcct",
+        "category": "selector-endpoint",
+        "entity": "accountingConfiguration",
+        "field": "fINTransitoryAcct",
+        "runner": "node",
+        "description": "Selector endpoint for 'fINTransitoryAcct' in accountingConfiguration should exist"
+      },
+      {
         "id": "t-selector-endpoint-bankStatementLines-businessPartner",
         "category": "selector-endpoint",
         "entity": "bankStatementLines",
@@ -8581,6 +9241,198 @@
         "field": "writeofflimit",
         "runner": "node",
         "description": "System field 'writeofflimit' should exist in backend but not frontend for account"
+      },
+      {
+        "id": "t-system-field-accountingConfiguration-account",
+        "category": "system-field",
+        "entity": "accountingConfiguration",
+        "field": "account",
+        "runner": "node",
+        "description": "System field 'account' should exist in backend but not frontend for accountingConfiguration"
+      },
+      {
+        "id": "t-system-field-accountingConfiguration-accountingSchema",
+        "category": "system-field",
+        "entity": "accountingConfiguration",
+        "field": "accountingSchema",
+        "runner": "node",
+        "description": "System field 'accountingSchema' should exist in backend but not frontend for accountingConfiguration"
+      },
+      {
+        "id": "t-system-field-accountingConfiguration-active",
+        "category": "system-field",
+        "entity": "accountingConfiguration",
+        "field": "active",
+        "runner": "node",
+        "description": "System field 'active' should exist in backend but not frontend for accountingConfiguration"
+      },
+      {
+        "id": "t-system-field-accountingConfiguration-clearedPaymentAccount",
+        "category": "system-field",
+        "entity": "accountingConfiguration",
+        "field": "clearedPaymentAccount",
+        "runner": "node",
+        "description": "System field 'clearedPaymentAccount' should exist in backend but not frontend for accountingConfiguration"
+      },
+      {
+        "id": "t-system-field-accountingConfiguration-clearedPaymentAccountOUT",
+        "category": "system-field",
+        "entity": "accountingConfiguration",
+        "field": "clearedPaymentAccountOUT",
+        "runner": "node",
+        "description": "System field 'clearedPaymentAccountOUT' should exist in backend but not frontend for accountingConfiguration"
+      },
+      {
+        "id": "t-system-field-accountingConfiguration-client",
+        "category": "system-field",
+        "entity": "accountingConfiguration",
+        "field": "client",
+        "runner": "node",
+        "description": "System field 'client' should exist in backend but not frontend for accountingConfiguration"
+      },
+      {
+        "id": "t-system-field-accountingConfiguration-createdBy",
+        "category": "system-field",
+        "entity": "accountingConfiguration",
+        "field": "createdBy",
+        "runner": "node",
+        "description": "System field 'createdBy' should exist in backend but not frontend for accountingConfiguration"
+      },
+      {
+        "id": "t-system-field-accountingConfiguration-creationDate",
+        "category": "system-field",
+        "entity": "accountingConfiguration",
+        "field": "creationDate",
+        "runner": "node",
+        "description": "System field 'creationDate' should exist in backend but not frontend for accountingConfiguration"
+      },
+      {
+        "id": "t-system-field-accountingConfiguration-creditAccount",
+        "category": "system-field",
+        "entity": "accountingConfiguration",
+        "field": "creditAccount",
+        "runner": "node",
+        "description": "System field 'creditAccount' should exist in backend but not frontend for accountingConfiguration"
+      },
+      {
+        "id": "t-system-field-accountingConfiguration-debitAccount",
+        "category": "system-field",
+        "entity": "accountingConfiguration",
+        "field": "debitAccount",
+        "runner": "node",
+        "description": "System field 'debitAccount' should exist in backend but not frontend for accountingConfiguration"
+      },
+      {
+        "id": "t-system-field-accountingConfiguration-depositAccount",
+        "category": "system-field",
+        "entity": "accountingConfiguration",
+        "field": "depositAccount",
+        "runner": "node",
+        "description": "System field 'depositAccount' should exist in backend but not frontend for accountingConfiguration"
+      },
+      {
+        "id": "t-system-field-accountingConfiguration-enablebankstatement",
+        "category": "system-field",
+        "entity": "accountingConfiguration",
+        "field": "enablebankstatement",
+        "runner": "node",
+        "description": "System field 'enablebankstatement' should exist in backend but not frontend for accountingConfiguration"
+      },
+      {
+        "id": "t-system-field-accountingConfiguration-fINBankfeeAcct",
+        "category": "system-field",
+        "entity": "accountingConfiguration",
+        "field": "fINBankfeeAcct",
+        "runner": "node",
+        "description": "System field 'fINBankfeeAcct' should exist in backend but not frontend for accountingConfiguration"
+      },
+      {
+        "id": "t-system-field-accountingConfiguration-fINBankrevaluationgainAcct",
+        "category": "system-field",
+        "entity": "accountingConfiguration",
+        "field": "fINBankrevaluationgainAcct",
+        "runner": "node",
+        "description": "System field 'fINBankrevaluationgainAcct' should exist in backend but not frontend for accountingConfiguration"
+      },
+      {
+        "id": "t-system-field-accountingConfiguration-fINBankrevaluationlossAcct",
+        "category": "system-field",
+        "entity": "accountingConfiguration",
+        "field": "fINBankrevaluationlossAcct",
+        "runner": "node",
+        "description": "System field 'fINBankrevaluationlossAcct' should exist in backend but not frontend for accountingConfiguration"
+      },
+      {
+        "id": "t-system-field-accountingConfiguration-fINOutIntransitAcct",
+        "category": "system-field",
+        "entity": "accountingConfiguration",
+        "field": "fINOutIntransitAcct",
+        "runner": "node",
+        "description": "System field 'fINOutIntransitAcct' should exist in backend but not frontend for accountingConfiguration"
+      },
+      {
+        "id": "t-system-field-accountingConfiguration-id",
+        "category": "system-field",
+        "entity": "accountingConfiguration",
+        "field": "id",
+        "runner": "node",
+        "description": "System field 'id' should exist in backend but not frontend for accountingConfiguration"
+      },
+      {
+        "id": "t-system-field-accountingConfiguration-inTransitPaymentAccountIN",
+        "category": "system-field",
+        "entity": "accountingConfiguration",
+        "field": "inTransitPaymentAccountIN",
+        "runner": "node",
+        "description": "System field 'inTransitPaymentAccountIN' should exist in backend but not frontend for accountingConfiguration"
+      },
+      {
+        "id": "t-system-field-accountingConfiguration-makePaymentAccount",
+        "category": "system-field",
+        "entity": "accountingConfiguration",
+        "field": "makePaymentAccount",
+        "runner": "node",
+        "description": "System field 'makePaymentAccount' should exist in backend but not frontend for accountingConfiguration"
+      },
+      {
+        "id": "t-system-field-accountingConfiguration-organization",
+        "category": "system-field",
+        "entity": "accountingConfiguration",
+        "field": "organization",
+        "runner": "node",
+        "description": "System field 'organization' should exist in backend but not frontend for accountingConfiguration"
+      },
+      {
+        "id": "t-system-field-accountingConfiguration-receivePaymentAccount",
+        "category": "system-field",
+        "entity": "accountingConfiguration",
+        "field": "receivePaymentAccount",
+        "runner": "node",
+        "description": "System field 'receivePaymentAccount' should exist in backend but not frontend for accountingConfiguration"
+      },
+      {
+        "id": "t-system-field-accountingConfiguration-updated",
+        "category": "system-field",
+        "entity": "accountingConfiguration",
+        "field": "updated",
+        "runner": "node",
+        "description": "System field 'updated' should exist in backend but not frontend for accountingConfiguration"
+      },
+      {
+        "id": "t-system-field-accountingConfiguration-updatedBy",
+        "category": "system-field",
+        "entity": "accountingConfiguration",
+        "field": "updatedBy",
+        "runner": "node",
+        "description": "System field 'updatedBy' should exist in backend but not frontend for accountingConfiguration"
+      },
+      {
+        "id": "t-system-field-accountingConfiguration-withdrawalAccount",
+        "category": "system-field",
+        "entity": "accountingConfiguration",
+        "field": "withdrawalAccount",
+        "runner": "node",
+        "description": "System field 'withdrawalAccount' should exist in backend but not frontend for accountingConfiguration"
       },
       {
         "id": "t-system-field-bankStatementLines-bankStatement",
@@ -9062,6 +9914,13 @@
         "description": "Entity 'account' should only expose visible fields in frontend"
       },
       {
+        "id": "t-visibility-accountingConfiguration",
+        "category": "visibility",
+        "entity": "accountingConfiguration",
+        "runner": "node",
+        "description": "Entity 'accountingConfiguration' should only expose visible fields in frontend"
+      },
+      {
         "id": "t-visibility-bankStatementLines",
         "category": "visibility",
         "entity": "bankStatementLines",
@@ -9084,24 +9943,24 @@
       }
     ],
     "summary": {
-      "total": 671,
+      "total": 707,
       "byCategory": {
         "action-endpoint": 21,
-        "crud-flags": 4,
+        "crud-flags": 5,
         "default-value-type": 28,
-        "displaylogic-evaluable": 43,
-        "displaylogic-valid": 43,
-        "field-presence": 72,
-        "field-type": 72,
+        "displaylogic-evaluable": 45,
+        "displaylogic-valid": 45,
+        "field-presence": 74,
+        "field-type": 74,
         "readonlylogic-evaluable": 29,
         "readonlylogic-valid": 29,
         "rule-declared": 225,
-        "selector-endpoint": 14,
-        "system-field": 87,
-        "visibility": 4
+        "selector-endpoint": 16,
+        "system-field": 111,
+        "visibility": 5
       },
       "byRunner": {
-        "node": 671,
+        "node": 707,
         "junit": 0
       }
     }

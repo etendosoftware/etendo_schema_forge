@@ -1,8 +1,8 @@
 {
-  "version": "0.22.0",
+  "version": "0.23.0",
   "generatedAt": "2026-04-29T19:05:20.719Z",
-  "updatedAt": "2026-07-16T14:28:23.517Z",
-  "contractChecksum": "5a24e0c40e0a88ca",
+  "updatedAt": "2026-07-17T18:04:55.296Z",
+  "contractChecksum": "5c7b44d77827859f",
   "apiPrediction": {
     "specName": "goods-receipt",
     "baseUrl": "/sws/neo/goods-receipt",
@@ -192,6 +192,14 @@
         "reference": "OrderLine",
         "inputMode": "search",
         "url": "/sws/neo/goods-receipt/goodsReceiptLine/selectors/salesOrderLine"
+      },
+      {
+        "entity": "goodsReceiptLine",
+        "field": "businessPartner",
+        "column": "C_Bpartner_ID",
+        "reference": "BusinessPartner",
+        "inputMode": "search",
+        "url": "/sws/neo/goods-receipt/goodsReceiptLine/selectors/businessPartner"
       },
       {
         "entity": "goodsReceiptLine",
@@ -581,11 +589,6 @@
             "readOnlyLogic": "@Processed@='Y'",
             "defaultValue": "@#Date@"
           },
-          "accountingDate": {
-            "required": true,
-            "readOnlyLogic": "@Posted@='Y'",
-            "defaultValue": "@#Date@"
-          },
           "salesOrder": {},
           "orderReference": {
             "readOnlyLogic": "@Processed@='Y'"
@@ -667,6 +670,9 @@
             "readOnly": true,
             "readOnlyLogic": "@Processed@='Y'"
           },
+          "businessPartner": {
+            "readOnlyLogic": "@Posted@='Y'"
+          },
           "project": {
             "readOnlyLogic": "@Posted@='Y'"
           },
@@ -705,8 +711,7 @@
         "warehouse",
         "businessPartner",
         "partnerAddress",
-        "movementDate",
-        "accountingDate"
+        "movementDate"
       ],
       "lineFields": [
         "lineNo",
@@ -814,8 +819,7 @@
           "warehouse",
           "businessPartner",
           "partnerAddress",
-          "movementDate",
-          "accountingDate"
+          "movementDate"
         ]
       },
       {
@@ -837,5 +841,5 @@
     "knownLimitations": [],
     "dangerousOperations": []
   },
-  "checksum": "0fa316837eff9892"
+  "checksum": "1c995a622aee03fb"
 }

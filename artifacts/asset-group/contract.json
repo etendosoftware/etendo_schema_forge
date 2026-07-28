@@ -1,8 +1,8 @@
 {
-  "version": "0.9.0",
+  "version": "0.15.0",
   "generatedAt": "2026-06-29T17:22:42.125Z",
-  "updatedAt": "2026-07-02T18:35:39.424Z",
-  "checksum": "6ab52b7bec26b4d4",
+  "updatedAt": "2026-07-22T14:46:22.094Z",
+  "checksum": "d38438032c817d5d",
   "frontendContract": {
     "window": {
       "id": "252",
@@ -42,7 +42,11 @@
             "grid": true,
             "form": true,
             "sourceRequired": true,
-            "gridOrder": 1
+            "gridOrder": 1,
+            "validation": {
+              "required": true,
+              "maxLength": 60
+            }
           },
           {
             "name": "description",
@@ -57,7 +61,10 @@
             "form": true,
             "span": 2,
             "rows": 1,
-            "gridOrder": 2
+            "gridOrder": 2,
+            "validation": {
+              "maxLength": 255
+            }
           },
           {
             "name": "depreciate",
@@ -71,7 +78,11 @@
             "grid": false,
             "form": true,
             "sourceRequired": true,
-            "section": "principal"
+            "section": "principal",
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            }
           },
           {
             "name": "depreciationType",
@@ -95,6 +106,10 @@
               }
             ],
             "section": "principal",
+            "validation": {
+              "required": true,
+              "maxLength": 60
+            },
             "displayLogic": {
               "raw": "@IsDepreciated@='Y'",
               "evaluable": true,
@@ -130,6 +145,10 @@
               }
             ],
             "section": "principal",
+            "validation": {
+              "required": true,
+              "maxLength": 60
+            },
             "displayLogic": {
               "raw": "@IsDepreciated@='Y'",
               "evaluable": true,
@@ -148,6 +167,11 @@
             "grid": false,
             "form": true,
             "section": "principal",
+            "min": 1,
+            "validation": {
+              "maxLength": 12,
+              "minimum": 1
+            },
             "displayLogic": {
               "raw": "@IsDepreciated@='Y' & @Amortizationcalctype@!'TI'",
               "evaluable": true,
@@ -183,10 +207,38 @@
               }
             ],
             "section": "principal",
+            "validation": {
+              "required": true,
+              "maxLength": 60
+            },
             "displayLogic": {
               "raw": "@IsDepreciated@='Y' & @Amortizationcalctype@='TI'",
               "evaluable": true,
               "js": "(record.depreciate === true || record.depreciate === 'Y') && record.calculateType === 'TI'"
+            }
+          },
+          {
+            "name": "usableLifeYears",
+            "apiKey": "usableLifeYears",
+            "column": "UseLifeYears",
+            "label": "Usable Life - Years",
+            "type": "integer",
+            "tsType": "number",
+            "visibility": "editable",
+            "required": false,
+            "grid": false,
+            "form": true,
+            "section": "principal",
+            "min": 1,
+            "integer": true,
+            "validation": {
+              "maxLength": 10,
+              "minimum": 1
+            },
+            "displayLogic": {
+              "raw": "@IsDepreciated@='Y'  & @Amortizationcalctype@ = 'TI' & @Assetschedule@='YE'",
+              "evaluable": true,
+              "js": "(record.depreciate === true || record.depreciate === 'Y') && record.calculateType === 'TI' && record.amortize === 'YE'"
             }
           },
           {
@@ -201,10 +253,16 @@
             "grid": false,
             "form": true,
             "section": "principal",
+            "min": 1,
+            "integer": true,
+            "validation": {
+              "maxLength": 12,
+              "minimum": 1
+            },
             "displayLogic": {
               "raw": "@IsDepreciated@='Y' & @Amortizationcalctype@='TI' & @Assetschedule@='MO'",
               "evaluable": true,
-              "js": "(record.depreciate === true || record.depreciate === 'Y') && record.calculateType === 'TI'"
+              "js": "(record.depreciate === true || record.depreciate === 'Y') && record.calculateType === 'TI' && record.amortize !== 'YE'"
             }
           }
         ],
@@ -233,7 +291,11 @@
             "inputMode": "selector",
             "lookup": true,
             "gridOrder": 1,
-            "grow": true
+            "grow": true,
+            "validation": {
+              "required": true,
+              "maxLength": 32
+            }
           },
           {
             "name": "depreciation",
@@ -251,7 +313,11 @@
             "inputMode": "selector",
             "lookup": true,
             "gridOrder": 2,
-            "grow": true
+            "grow": true,
+            "validation": {
+              "required": true,
+              "maxLength": 32
+            }
           }
         ],
         "searchableFields": [],
@@ -369,7 +435,7 @@
             "apiKey": "usableLifeYears",
             "column": "UseLifeYears",
             "type": "integer",
-            "visibility": "system",
+            "visibility": "editable",
             "required": false
           },
           {
@@ -775,6 +841,14 @@
         "description": "Display logic for 'usableLifeMonths' in assetCategory should have evaluable flag"
       },
       {
+        "id": "t-displaylogic-evaluable-assetCategory-usableLifeYears",
+        "category": "displaylogic-evaluable",
+        "entity": "assetCategory",
+        "field": "usableLifeYears",
+        "runner": "node",
+        "description": "Display logic for 'usableLifeYears' in assetCategory should have evaluable flag"
+      },
+      {
         "id": "t-displaylogic-valid-assetCategory-amortize",
         "category": "displaylogic-valid",
         "entity": "assetCategory",
@@ -813,6 +887,14 @@
         "field": "usableLifeMonths",
         "runner": "node",
         "description": "Display logic for 'usableLifeMonths' in assetCategory should be valid JS"
+      },
+      {
+        "id": "t-displaylogic-valid-assetCategory-usableLifeYears",
+        "category": "displaylogic-valid",
+        "entity": "assetCategory",
+        "field": "usableLifeYears",
+        "runner": "node",
+        "description": "Display logic for 'usableLifeYears' in assetCategory should be valid JS"
       },
       {
         "id": "t-field-presence-accounting-accumulatedDepreciation",
@@ -895,6 +977,14 @@
         "description": "Field 'usableLifeMonths' should be present in assetCategory"
       },
       {
+        "id": "t-field-presence-assetCategory-usableLifeYears",
+        "category": "field-presence",
+        "entity": "assetCategory",
+        "field": "usableLifeYears",
+        "runner": "node",
+        "description": "Field 'usableLifeYears' should be present in assetCategory"
+      },
+      {
         "id": "t-field-type-accounting-accumulatedDepreciation",
         "category": "field-type",
         "entity": "accounting",
@@ -973,6 +1063,14 @@
         "field": "usableLifeMonths",
         "runner": "node",
         "description": "Field 'usableLifeMonths' should have type 'number' in assetCategory"
+      },
+      {
+        "id": "t-field-type-assetCategory-usableLifeYears",
+        "category": "field-type",
+        "entity": "assetCategory",
+        "field": "usableLifeYears",
+        "runner": "node",
+        "description": "Field 'usableLifeYears' should have type 'number' in assetCategory"
       },
       {
         "id": "t-rule-declared-asset-group-Accounting-A-Disposal-Gain-displayLogic",
@@ -1253,14 +1351,6 @@
         "description": "System field 'updatedBy' should exist in backend but not frontend for assetCategory"
       },
       {
-        "id": "t-system-field-assetCategory-usableLifeYears",
-        "category": "system-field",
-        "entity": "assetCategory",
-        "field": "usableLifeYears",
-        "runner": "node",
-        "description": "System field 'usableLifeYears' should exist in backend but not frontend for assetCategory"
-      },
-      {
         "id": "t-visibility-accounting",
         "category": "visibility",
         "entity": "accounting",
@@ -1276,21 +1366,21 @@
       }
     ],
     "summary": {
-      "total": 72,
+      "total": 75,
       "byCategory": {
         "action-endpoint": 1,
         "crud-flags": 2,
-        "displaylogic-evaluable": 5,
-        "displaylogic-valid": 5,
-        "field-presence": 10,
-        "field-type": 10,
+        "displaylogic-evaluable": 6,
+        "displaylogic-valid": 6,
+        "field-presence": 11,
+        "field-type": 11,
         "rule-declared": 10,
         "selector-endpoint": 2,
-        "system-field": 25,
+        "system-field": 24,
         "visibility": 2
       },
       "byRunner": {
-        "node": 72,
+        "node": 75,
         "junit": 0
       }
     }

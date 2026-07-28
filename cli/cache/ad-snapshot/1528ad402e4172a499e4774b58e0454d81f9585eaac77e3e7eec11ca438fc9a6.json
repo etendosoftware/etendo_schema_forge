@@ -1202,63 +1202,6 @@
         }
       ]
     },
-    "815e23e49d7d45ef28d64a769100a5fa1e1aec24b8c6f25a101070342ebeaeb1": {
-      "checksum": "5bb0a5477ed8bb7fcfdf2722f0e4838fbb94ff66bd7a748b1cacdd759afd42f1",
-      "params": [
-        "C50A8AEE6F044825B5EF54FAAE76826F"
-      ],
-      "rows": [
-        {
-          "ad_auxiliarinput_id": "A5153957017944A08E6A504455417843",
-          "ad_tab_id": "5A5CCFC8359B4D79BA705DC487FE8173",
-          "name": "DOCBASETYPE",
-          "tab_name": "Header",
-          "validation_code": "POO"
-        },
-        {
-          "ad_auxiliarinput_id": "D8E241A6762D4BB48CB3172F447D6306",
-          "ad_tab_id": "5A5CCFC8359B4D79BA705DC487FE8173",
-          "name": "GROSSPRICE",
-          "tab_name": "Header",
-          "validation_code": "@SQL=SELECT istaxincluded from m_pricelist where m_pricelist_id = @M_PRICELIST_ID@"
-        },
-        {
-          "ad_auxiliarinput_id": "899F094C236E4AF5B513A7CAD103F6F6",
-          "ad_tab_id": "5A5CCFC8359B4D79BA705DC487FE8173",
-          "name": "isReturnMaterial",
-          "tab_name": "Header",
-          "validation_code": "Y"
-        },
-        {
-          "ad_auxiliarinput_id": "5AAE4963790D4418AE8A4E37F7FEA891",
-          "ad_tab_id": "5A5CCFC8359B4D79BA705DC487FE8173",
-          "name": "orphanlinesnumber",
-          "tab_name": "Header",
-          "validation_code": "@SQL= select count(c_orderline_id) from c_orderline ol where ol.c_order_id = @c_order_id@  and ol.m_inoutline_id is null"
-        },
-        {
-          "ad_auxiliarinput_id": "CB11DE3DAD9D40B4A404A8E6DFF6F8EC",
-          "ad_tab_id": "387B6179438D4C4CB40769A77F4C304C",
-          "name": "DOCBASETYPE",
-          "tab_name": "Lines",
-          "validation_code": "POO"
-        },
-        {
-          "ad_auxiliarinput_id": "42599C834F074611AF7AF4B638D73342",
-          "ad_tab_id": "387B6179438D4C4CB40769A77F4C304C",
-          "name": "GROSSPRICE",
-          "tab_name": "Lines",
-          "validation_code": "@SQL=SELECT istaxincluded from m_pricelist where m_pricelist_id = @M_PRICELIST_ID@"
-        },
-        {
-          "ad_auxiliarinput_id": "81794550492E4699947B45AD551AC7BB",
-          "ad_tab_id": "387B6179438D4C4CB40769A77F4C304C",
-          "name": "Parent_AD_Org",
-          "tab_name": "Lines",
-          "validation_code": "@SQL= SELECT AD_ORG_ID\nFROM C_ORDER\nWHERE C_ORDER_ID = @C_ORDER_ID@"
-        }
-      ]
-    },
     "81933096771953c6cf094e465f86e91738157acf5f9d32e9a078c92c5281ca5e": {
       "checksum": "5ca7ef048f63629db7cecd3fd5ffc515ecdbb5ad0bf34d6978c76f096a44068f",
       "params": [
@@ -1324,6 +1267,13 @@
         }
       ]
     },
+    "88ad8a1f069401e3146d7f655acfc6a28ca92062200daae9b33395feed8061f1": {
+      "checksum": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "params": [
+        "116"
+      ],
+      "rows": []
+    },
     "8b543deb8e44e185e72cf9d4fc98b17a1b417138b8b2e25b139459d68e0bc945": {
       "checksum": "8ac3b2a74d9bcd55d1e82d3daf8b0c6ebd5fb188b8114c94bcdec6751c51da10",
       "params": [
@@ -1381,6 +1331,13 @@
           "validation_code": "@SQL= SELECT AD_ORG_ID\nFROM C_ORDER\nWHERE C_ORDER_ID = @C_ORDER_ID@"
         }
       ]
+    },
+    "99c77d72fc6f49da80e9db85826999d4bdb48df40b9db4d4c619f80ac282732a": {
+      "checksum": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "params": [
+        "6FEBA130CDE24CC09041FFA6117ADFA9"
+      ],
+      "rows": []
     },
     "9af6c3647465867cc635696d802fced95ce307fa9ce43e002d8fff078398bc28": {
       "checksum": "0f36663f49346c08071b7a03aab4acb7dd46f71be3f5496337c524a90f9f2833",
@@ -1651,140 +1608,6 @@
           "name": "ATTRSETVALUETYPE",
           "tab_name": "Bin Contents",
           "validation_code": "@SQL=SELECT ATTRSETVALUETYPE FROM M_PRODUCT WHERE M_PRODUCT_ID=@M_Product_ID@"
-        }
-      ]
-    },
-    "dc3625edf6e3b3ba3d373862af247d21be277872e900727c4a4025b968fa702b": {
-      "checksum": "74fbc6318ce93cbcd6879909aaf258eac351e3353885afb628bc1e0110c4a28c",
-      "params": [
-        "FF808081330213E60133021822E40007"
-      ],
-      "rows": [
-        {
-          "ad_auxiliarinput_id": "1B9CB458E11D48F3B8B48B4BA8051ACB",
-          "ad_tab_id": "AF4090093CFF1431E040007F010048A5",
-          "name": "DOCBASETYPE",
-          "tab_name": "Header",
-          "validation_code": "SOO"
-        },
-        {
-          "ad_auxiliarinput_id": "FF8080813302598D01330269965E0016",
-          "ad_tab_id": "AF4090093CFF1431E040007F010048A5",
-          "name": "isReturnMaterial",
-          "tab_name": "Header",
-          "validation_code": "Y"
-        },
-        {
-          "ad_auxiliarinput_id": "2D63067CABB647F08A0EBE14281A4DB8",
-          "ad_tab_id": "AF4090093CFF1431E040007F010048A5",
-          "name": "ORDERTYPE",
-          "tab_name": "Header",
-          "validation_code": "@SQL=SELECT DOCSUBTYPESO FROM C_DOCTYPE WHERE C_DOCTYPE_ID = @C_DOCTYPETARGET_ID@"
-        },
-        {
-          "ad_auxiliarinput_id": "15881B450C7B49BE863EB74EA921E3A1",
-          "ad_tab_id": "AF4090093CFF1431E040007F010048A5",
-          "name": "OriginalOrderInvoiced",
-          "tab_name": "Header",
-          "validation_code": "@SQL=SELECT count(*)\nFROM c_orderline ol\n     JOIN m_inoutline il ON ol.m_inoutline_id = il.m_inoutline_id\n     JOIN c_orderline ol2 ON il.c_orderline_id = ol2.c_orderline_id AND ol2.qtyinvoiced != 0\nAND ol.c_order_id = @C_Order_ID@"
-        },
-        {
-          "ad_auxiliarinput_id": "66407108B92F49CBB40135E149FC3B46",
-          "ad_tab_id": "AF4090093CFF1431E040007F010048A5",
-          "name": "orphanlinesnumber",
-          "tab_name": "Header",
-          "validation_code": "@SQL= select count(c_orderline_id) from c_orderline ol where ol.c_order_id = @c_order_id@  and ol.m_inoutline_id is null"
-        },
-        {
-          "ad_auxiliarinput_id": "73DECB6E080A4D44AD634276A3C895DE",
-          "ad_tab_id": "AF4090093CFF1431E040007F010048A5",
-          "name": "PendingToInvoice",
-          "tab_name": "Header",
-          "validation_code": "@SQL=SELECT (sum(abs(qtyordered)) - sum(abs(qtyinvoiced))) FROM c_orderline WHERE c_order_id = @C_Order_ID@"
-        },
-        {
-          "ad_auxiliarinput_id": "FF808081333532150133359445FD009D",
-          "ad_tab_id": "AF4090093D471431E040007F010048A5",
-          "name": "ATTRIBUTESET",
-          "tab_name": "Lines",
-          "validation_code": "@SQL=SELECT M_ATTRIBUTESET_ID FROM M_PRODUCT WHERE M_PRODUCT_ID=@M_Product_ID@"
-        },
-        {
-          "ad_auxiliarinput_id": "FF808081333532150133359866C200AA",
-          "ad_tab_id": "AF4090093D471431E040007F010048A5",
-          "name": "ATTRSETVALUETYPE",
-          "tab_name": "Lines",
-          "validation_code": "@SQL=SELECT ATTRSETVALUETYPE FROM M_PRODUCT WHERE M_PRODUCT_ID=@M_Product_ID@"
-        },
-        {
-          "ad_auxiliarinput_id": "246613E973C240C584E821D02A64AB16",
-          "ad_tab_id": "AF4090093D471431E040007F010048A5",
-          "name": "DOCBASETYPE",
-          "tab_name": "Lines",
-          "validation_code": "SOO"
-        },
-        {
-          "ad_auxiliarinput_id": "64B5403DA08E44018D9D1DE253AE087D",
-          "ad_tab_id": "AF4090093D471431E040007F010048A5",
-          "name": "GROSSPRICE",
-          "tab_name": "Lines",
-          "validation_code": "@SQL=SELECT istaxincluded from m_pricelist where m_pricelist_id = @M_PRICELIST_ID@"
-        },
-        {
-          "ad_auxiliarinput_id": "1DA03AB4BC0641FB80801C36DC4A6F3D",
-          "ad_tab_id": "AF4090093D471431E040007F010048A5",
-          "name": "HASRELATEDPRODUCTS",
-          "tab_name": "Lines",
-          "validation_code": "@SQL=SELECT CASE WHEN COUNT(1) = 1 THEN 'Y' ELSE 'N' END FROM DUAL WHERE EXISTS (SELECT 1 FROM C_ORDERLINE_SERVICERELATION WHERE C_ORDERLINE_ID =  @C_ORDERLINE_ID@)"
-        },
-        {
-          "ad_auxiliarinput_id": "A00CCBF0466D45C2B69906329F3D7643",
-          "ad_tab_id": "AF4090093D471431E040007F010048A5",
-          "name": "HASRELATEDSERVICE",
-          "tab_name": "Lines",
-          "validation_code": "@SQL=SELECT CASE WHEN COUNT(1) = 1 THEN 'Y' ELSE 'N' END FROM DUAL WHERE EXISTS (SELECT 1 FROM C_ORDERLINE_SERVICERELATION WHERE C_ORDERLINE_RELATED_ID =  @C_ORDERLINE_ID@)"
-        },
-        {
-          "ad_auxiliarinput_id": "DFF46A578028408197B00C18152A35EC",
-          "ad_tab_id": "AF4090093D471431E040007F010048A5",
-          "name": "LINKEDTOPRODUCT",
-          "tab_name": "Lines",
-          "validation_code": "@SQL=SELECT CASE WHEN PRODUCTTYPE = 'S' AND ISLINKEDTOPRODUCT = 'Y' THEN 'Y' ELSE 'N' END FROM M_PRODUCT WHERE M_PRODUCT_ID = @M_PRODUCT_ID@"
-        },
-        {
-          "ad_auxiliarinput_id": "673BD8C168B649618C4A5CB466CD7913",
-          "ad_tab_id": "AF4090093D471431E040007F010048A5",
-          "name": "Parent_AD_Org",
-          "tab_name": "Lines",
-          "validation_code": "@SQL= SELECT AD_ORG_ID\nFROM C_ORDER\nWHERE C_ORDER_ID = @C_ORDER_ID@"
-        },
-        {
-          "ad_auxiliarinput_id": "FF8080813335321501333594EB1400A0",
-          "ad_tab_id": "AF4090093D471431E040007F010048A5",
-          "name": "Processed",
-          "tab_name": "Lines",
-          "validation_code": "@SQL=SELECT PROCESSED FROM C_ORDER WHERE C_ORDER_ID = @C_ORDER_ID@"
-        },
-        {
-          "ad_auxiliarinput_id": "FF808081333532150133359310990098",
-          "ad_tab_id": "AF4090093D471431E040007F010048A5",
-          "name": "UsesAlternate",
-          "tab_name": "Lines",
-          "validation_code": "@SQL=SELECT CASE WHEN COUNT(C_TAX_ID)>0 THEN 'Y' ELSE 'N' END AS ISUSED FROM C_TAX WHERE C_TAX_ISMEMBER(@C_TAX_ID@, C_TAX_ID)=1 AND BASEAMOUNT IN ('TBA', 'TBATAX')"
-        },
-        {
-          "ad_auxiliarinput_id": "FF8080813335321501333595D5E400A4",
-          "ad_tab_id": "AF4090093DAF1431E040007F010048A5",
-          "name": "Processed",
-          "tab_name": "Line Tax",
-          "validation_code": "@SQL=SELECT PROCESSED FROM C_ORDER WHERE C_ORDER_ID = @C_ORDER_ID@"
-        },
-        {
-          "ad_auxiliarinput_id": "FF808081333532150133359556A600A2",
-          "ad_tab_id": "AF4090093DA61431E040007F010048A5",
-          "name": "Processed",
-          "tab_name": "Basic Discounts",
-          "validation_code": "@SQL=SELECT PROCESSED FROM C_ORDER WHERE C_ORDER_ID = @C_ORDER_ID@"
         }
       ]
     },

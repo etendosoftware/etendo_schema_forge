@@ -1,8 +1,7 @@
 {
   "version": "0.37.0",
   "generatedAt": "2026-07-14T13:57:24.059Z",
-  "updatedAt": "2026-07-17T18:53:33.025Z",
-  "contractChecksum": "137fa2479fc7434e",
+  "contractChecksum": "3d1d2f26e1ccec6a",
   "apiPrediction": {
     "specName": "amortization",
     "baseUrl": "/sws/neo/amortization",
@@ -42,14 +41,6 @@
         "reference": "Currency",
         "inputMode": "selector",
         "url": "/sws/neo/amortization/header/selectors/currency"
-      },
-      {
-        "entity": "header",
-        "field": "project",
-        "column": "C_Project_ID",
-        "reference": "Project",
-        "inputMode": "selector",
-        "url": "/sws/neo/amortization/header/selectors/project"
       },
       {
         "entity": "lines",
@@ -253,9 +244,6 @@
             "readOnly": true,
             "required": true,
             "defaultValue": "N"
-          },
-          "project": {
-            "readOnlyLogic": "@Posted@='Y'"
           }
         }
       },
@@ -355,5 +343,5 @@
     "knownLimitations": [],
     "dangerousOperations": []
   },
-  "checksum": "529e7738358a78f8"
+  "checksum": "7531ad36bbfed58a"
 }

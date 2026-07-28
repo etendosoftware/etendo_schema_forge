@@ -15,11 +15,11 @@ export function PostingStatusDot({ posted, className }) {
   const isPosted = posted === 'Y';
 
   return (
-    <span className={cn('inline-flex items-center gap-1 text-xs leading-4 text-[#121217]', className)}>
+    <span className={cn('inline-flex items-center gap-1 text-xs leading-4 text-[hsl(var(--foreground))]', className)}>
       <span
         className={cn(
           'h-1.5 w-1.5 rounded-full',
-          isPosted ? 'bg-[#26a95f]' : 'bg-[#E68A00]',
+          isPosted ? 'bg-[var(--status-success-fg)]' : 'bg-[var(--status-warning-fg)]',
         )}
       />
       {isPosted ? ui('financeAccountMovementsPosted') : ui('financeAccountMovementsNotPosted')}

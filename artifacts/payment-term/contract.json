@@ -1,8 +1,8 @@
 {
-  "version": "0.3.0",
+  "version": "0.4.0",
   "generatedAt": "2026-04-29T19:06:55.269Z",
-  "updatedAt": "2026-05-19T17:03:46.080Z",
-  "checksum": "c656cd8e9116704f",
+  "updatedAt": "2026-07-21T12:35:20.747Z",
+  "checksum": "7747449adb3281d4",
   "frontendContract": {
     "window": {
       "id": "141",
@@ -45,7 +45,11 @@
             "form": true,
             "sourceRequired": true,
             "section": "principal",
-            "seq": 1
+            "seq": 1,
+            "validation": {
+              "required": true,
+              "maxLength": 40
+            }
           },
           {
             "name": "name",
@@ -60,7 +64,11 @@
             "form": true,
             "sourceRequired": true,
             "section": "principal",
-            "seq": 2
+            "seq": 2,
+            "validation": {
+              "required": true,
+              "maxLength": 60
+            }
           },
           {
             "name": "offsetMonthDue",
@@ -75,7 +83,11 @@
             "form": true,
             "sourceRequired": true,
             "section": "principal",
-            "seq": 4
+            "seq": 4,
+            "validation": {
+              "required": true,
+              "maxLength": 10
+            }
           },
           {
             "name": "overduePaymentDaysRule",
@@ -90,7 +102,11 @@
             "form": true,
             "sourceRequired": true,
             "section": "principal",
-            "seq": 5
+            "seq": 5,
+            "validation": {
+              "required": true,
+              "maxLength": 10
+            }
           },
           {
             "name": "default",
@@ -119,6 +135,9 @@
             "labels": {
               "es_ES": "Por defecto",
               "en_US": "Default"
+            },
+            "validation": {
+              "maxLength": 1
             }
           }
         ],

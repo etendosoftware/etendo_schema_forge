@@ -1,8 +1,8 @@
 {
   "version": "0.42.0",
   "generatedAt": "2026-04-29T19:06:30.936Z",
-  "updatedAt": "2026-07-18T22:08:53.759Z",
-  "contractChecksum": "bb1d1b6768ece566",
+  "updatedAt": "2026-07-22T14:46:22.227Z",
+  "contractChecksum": "48cbc477153ab315",
   "apiPrediction": {
     "specName": "assets",
     "baseUrl": "/sws/neo/assets",
@@ -78,6 +78,22 @@
         "reference": "Project",
         "inputMode": "search",
         "url": "/sws/neo/assets/assets/selectors/project"
+      },
+      {
+        "entity": "assets",
+        "field": "businessPartner",
+        "column": "C_BPartner_ID",
+        "reference": "BPartner",
+        "inputMode": "search",
+        "url": "/sws/neo/assets/assets/selectors/businessPartner"
+      },
+      {
+        "entity": "assets",
+        "field": "eTADASCostCenter",
+        "column": "EM_Etadas_Costcenter_ID",
+        "reference": "Costcenter",
+        "inputMode": "selector",
+        "url": "/sws/neo/assets/assets/selectors/eTADASCostCenter"
       },
       {
         "entity": "amortizationLine",
@@ -224,6 +240,7 @@
           },
           "description": {},
           "currency": {
+            "readOnly": true,
             "readOnlyLogic": "@existAmortizationLines@ = 'Y'",
             "defaultValue": "@C_Currency_ID@"
           },
@@ -274,6 +291,8 @@
             "required": true,
             "defaultValue": "N"
           },
+          "businessPartner": {},
+          "eTADASCostCenter": {},
           "etgoAmortizationStatus": {
             "readOnly": true,
             "defaultValue": "0"
@@ -391,5 +410,5 @@
     "knownLimitations": [],
     "dangerousOperations": []
   },
-  "checksum": "946c9b872cb1ae55"
+  "checksum": "0d8887e3e81d710b"
 }

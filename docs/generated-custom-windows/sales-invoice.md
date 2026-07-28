@@ -41,11 +41,13 @@ A user should be able to:
 - Discount panel in sales invoice: the `InvoiceBottomPanel` bottom-right column hosts the `DocumentTotalsPanel`. The `etgoDiscount` column is always visible in the lines grid and the add-row — there is no toggle. "Subtotal sin descuento" and "Descuento por producto" rows auto-appear when `discountAmt > 0` (at least one line carries a non-zero discount); both are read-only computed rows. A `+ Añadir descuento total` button appears below the totals when no total discount is active and at least one line exists; clicking it opens an interactive "Descuento total" section (checkbox + computed amount + percentage input). Unchecking the checkbox collapses the section. On `onBlur`, `DetailView` fires `handleTotalDiscountChange(pct)` → `PATCH { etgoTotalDiscount: N }` → persists in `EM_Etgo_Total_Discount` on the `C_Invoice` header (best-effort, no reload). When the invoice is completed (`documentAction=CO`), `SalesInvoiceHeaderHandler` calls `TotalDiscountService.recalculate(headerId, isInvoice=true)` before the action reaches the CRUD layer: it deletes any existing `ETGO_DTO` discount lines, then creates one negative line per tax group (`GROUP BY c_tax_id`), proportional to each group's net subtotal — mirroring Classic `C_INVOICE_POST`. `InvoiceLineHandler` filters `ETGO_DTO` lines from all GET responses so they are never visible in the frontend. When the invoice is read-only (completed), `DocumentTotalsPanel` shows a static "Descuento total (X%) −Y€" row instead of the interactive panel.
 - Line tax selector: the line `tax` field is now a dropdown selector (Radix Select) instead of a free-text search input. The list of available taxes is loaded server-side via `GET /sws/neo/sales-invoice/lines/selectors/C_Tax_ID` and is filtered by `IsSOTrx=Y` (sales taxes) and by the `VAL_Tax_IsSOTrx_Date` validation rule, which keeps only taxes whose `VALIDFROM` is on or before the invoice date (`COALESCE(@DateInvoiced@, @DateOrdered@)`). Previously this field rendered as a text search that always returned "Sin resultados" because the validation rule context was not populated.
 - Defaulting: the header defaults `invoiceDate` to the current date and `documentStatus` to draft. New line quantity defaults to `1`, and several monetary fields default to `0`. Currency is editable on the header (see "Currency and exchange rate — ETP-4029" below); it is no longer read-only.
+- Unified document/accounting date (ETP-4531, redefined 2026-07-17): `accountingDate` (`DateAcct`) is `visibility: system` — fully hidden from the UI, not present in `frontendContract.entities.header.fields` at all. `invoiceDate` is the single visible date field. Per classic AD metadata, `C_Invoice.DateInvoiced` carries `AD_Column.AD_Callout_ID = com.etendoerp.sif.general.callouts.SifInvoiceOperationDateCallout`, which extends `org.openbravo.erpCommon.ad_callouts.SE_Invoice_AccountingDate` and auto-fills `dateAcct` from `dateInvoiced`. This cascade is now intentionally allowed to flow through untouched — the earlier `SalesInvoiceHeaderHandler#afterCallout` guard that stripped it (ETP-4531's original, now-superseded scope; see `docs/feedback.md`) has been removed on the `com.etendoerp.go` side, so saving the invoice writes the same date to both `invoiceDate` and `accountingDate` internally, and the accounting facts generated on posting reflect that unified value as the journal entry's accounting date.
 - Payment-plan reactions: the custom top bar fetches `paymentPlan` installments and classifies the invoice as paid, partial, overdue, or pending based on installment `paidAmount`, `outstandingAmount`, and `daysOverdue`. The badge label changes from total paid to outstanding balance depending on installment state, and clicking the badge is the entry point to the payment modal. Each installment card in the modal shows the installment label, scheduled amount, due date, and status badge (Paid / Partial / Pending). The installment-weight percentage — previously displayed next to the amount — was removed because it represented the installment's share of the invoice total, not the amount collected; users consistently misread it as a payment-completion indicator, and the modal header already surfaces the aggregated paid and outstanding totals.
 - Payment-state and payment registration dependencies: the shared invoice payment modal fetches both installment schedules and recorded payments. For sales invoices, payment registration uses `registerPayment` and available `invoiceAccounts` actions under the invoice header, so the invoice view depends on those backend actions to turn an outstanding installment into an actual `payment-in` event.
-- Two-step Cobros flow (ETP-4331/ETP-4342): clicking the payment-status badge opens the history popup **"Cobros de la factura"** (`InvoicePaymentHistoryModal.jsx`, the unified component shared between sales and purchase invoice). The popup shows: title + document-number badge header, a single stats row with three columns (Cliente · Importe total · Saldo pendiente), a table with columns Nº documento / Fecha / Método (pill with icon) / Estado (deposited green or draft grey badge) / Importe (right-aligned, green +), and a footer with the registered-count label and **"+ Añadir cobro"** pill button (visible only while `CO` with outstanding > 0). `InvoicePaymentModal.jsx` was removed — `InvoicePaymentHistoryModal.jsx` is now the single canonical component for both directions. Clicking **"+ Añadir cobro"** opens the **"Nuevo cobro"** modal (`NewPaymentEntryModal.jsx`, step 2): editable *Cantidad* (es-ES), *Fecha*, *Método de pago*, *Cuenta*; a conditional **"Saldo a favor y crédito disponible"** section (rendered only when the BP has consumable credit/abono sources); a real-time balance summary (`Total factura · Dinero [+ Saldo a favor] = Aplicado · Falta/Sobra/Diferencia [Igualar]`); and an excess band offering **Dejar a crédito / Dar vuelto**. **Guardar** creates the payment in Borrador (draft, not processed); **Confirmar** processes it to Depositado. On save/confirm the modal returns to the history popup, which refreshes. The balance/cuadre logic lives in the testable hook `usePaymentBalance.js`. The *Fecha* field is required (ETP-4005): clearing it disables **Confirmar**, and saving with an empty date surfaces the `paymentDateRequired` error and a red border on the field.
-- New backend actions on the invoice header (handled by `RegisterPaymentHandler` → `PaymentRegistrationService`): `invoicePaymentMethods` (list valid methods), `invoiceCreditSources` (list consumable credit/abono of the BP), `registerPayment` extended with `fin_paymentmethod_id` + `process: 'draft'|'confirm'` + `creditSources[]` + `overpaymentAction: 'leave-credit'|'refund'`, and `confirmPayment` (process a saved draft). The legacy single-step `registerPayment` (4 base fields) still works for other callers. Each `invoicePayments` row also carries `appliedToInvoice` — the net amount that payment applies against THIS invoice's schedules (negative when the payment consumed it as a credit note).
+- Two-step Cobros flow (ETP-4331/ETP-4342): clicking the payment-status badge opens the history popup **"Cobros de la factura"** (`InvoicePaymentHistoryModal.jsx`, the unified component shared between sales and purchase invoice). The popup shows: title + document-number badge header, a single stats row with three columns (Cliente · Importe total · Saldo pendiente), a table with columns Nº documento / Fecha / Método (pill with icon) / Estado (deposited green or draft grey badge) / Importe (right-aligned, green +), and a footer with the registered-count label and **"+ Añadir cobro"** pill button (visible only while `CO` with outstanding > 0). `InvoicePaymentModal.jsx` was removed — `InvoicePaymentHistoryModal.jsx` is now the single canonical component for both directions. Clicking **"+ Añadir cobro"** opens the **"Nuevo cobro"** modal (`NewPaymentEntryModal.jsx`, step 2): editable *Cantidad* (es-ES), *Fecha*, *Método de pago*, *Cuenta*; a conditional **"Saldo a favor y crédito disponible"** section (rendered only when the BP has consumable credit/abono sources); a real-time balance summary (`Total factura · Dinero [+ Saldo a favor] = Aplicado · Falta/Sobra/Diferencia [Igualar]`); and an excess band. As of ETP-4504 the excess band offers a single resolution — **Generar crédito a favor** (leave-credit) — and only when the invoice is in the organization currency; the former **"Dar vuelto"** / refund option was removed entirely. On a foreign-currency collection the only excess resolution is **Ajustar importe** (the *Igualar* action). ETP-4504 also adds two conditional conversion fields (**Tasa de conversión** + **Importe en moneda de la cuenta**) shown only when the invoice currency differs from the selected account currency. See "Multi-currency support in the Cobros/Pagos modal — ETP-4504" below for the full behavior. **Guardar** creates the payment in Borrador (draft, not processed); **Confirmar** processes it to Depositado. On save/confirm the modal returns to the history popup, which refreshes. The balance/cuadre logic lives in the testable hook `usePaymentBalance.js`. The *Fecha* field is required (ETP-4005): clearing it disables **Confirmar**, and saving with an empty date surfaces the `paymentDateRequired` error and a red border on the field.
+- New backend actions on the invoice header (handled by `RegisterPaymentHandler` → `PaymentRegistrationService`): `invoicePaymentMethods` (list valid methods), `invoiceCreditSources` (list consumable credit/abono of the BP), `registerPayment` extended with `fin_paymentmethod_id` + `process: 'draft'|'confirm'` + `creditSources[]` + `overpaymentAction: 'leave-credit'` (the former `'refund'`/"Dar vuelto" value was retired in ETP-4504) + `conversionRate` (sent only on a foreign-currency payment; ETP-4504), and `confirmPayment` (process a saved draft). The legacy single-step `registerPayment` (4 base fields) still works for other callers. Each `invoicePayments` row also carries `appliedToInvoice` — the net amount that payment applies against THIS invoice's schedules (negative when the payment consumed it as a credit note).
 - Credit notes / returns (NC / DEV, negative totals): the detail topbar badge mirrors the grid's "Pendiente de pago" cell — green **"Aplicada"** once the note is fully consumed, else a purple clickable **"Saldo a favor · remaining"** badge that opens the same history popup as the grid (previously it was a static non-clickable "Crédito aplicado · total" pill). Inside the popup, the pending widget relabels to **"Saldo a favor"** with the remaining balance, each row shows how much of the note that payment consumed (`− appliedToInvoice`, e.g. a €38.40 payment that drew €10 from the note reads "− 10,00 €"), and the **"+ Añadir cobro"** button is hidden (a note's balance is consumed from other payments, never paid into).
+- **Capability-gated `posted` field/status pill (ETP-4520):** the header `posted` field (rendered as a `Posted`/`Not posted` status pill on the detail header and as a `Posted` boolean badge column in the grid) carries `"visibleWhenCapability": "showAccountingFields"` in `artifacts/sales-invoice/decisions.json`. This is resolved against `capabilities.showAccountingFields`, fetched once at role-selection via `GET /sws/neo/windowaccessmap` (NEO pseudo-spec bridge) and exposed through `useAuth().capabilities` (see `docs/generated-custom-windows/app-shell-functional-flows.md` and `App.jsx`'s `fetchWindowAccess`). The field backs the `AD_Role.EM_ETGO_Show_Acct_Fields` ("Show Accounting Fields") checkbox — Etendo Classic-only for this MVP, no GO-app UI to toggle it — and the server resolves it with an Administrator bypass. Unlike a plain readOnly/disabled field, a role without the capability never sees the column or the pill at all: `DataTable.jsx` filters the column out of `visibleColumns` and `DetailView.jsx` returns `null` for the status pill before it renders, both via the shared `isCapabilityVisible()` helper (`tools/app-shell/src/lib/capabilityVisibility.js`) fed by `useCapabilitiesSafe()`. Administrator sessions always see the field regardless of the checkbox.
 - Fiscal submission dependency: the custom `Send to SIF` topbar action calls the legacy sales-invoice button endpoints `POST /sws/neo/sales-invoice/header/{id}/action/Em_aeatsii_send` (SII) and `POST /sws/neo/sales-invoice/header/{id}/action/Em_Tbai_Xmlgenerator` (TBAI). In Etendo GO these requests are intercepted by the sales-invoice header `NeoHandler`: SII is routed to the server-side SII action handler `org.openbravo.module.sii.process.MultiEnvioFactura`, while TBAI is routed to `com.smf.ticketbai.process.XMLConvertionFromInvoice`.
 - Fiscal target matrix for invoices is spec-specific. For sales invoices, `sii` and `sii-navarra` send only to SII, `tbai` sends only to TBAI, `sii+tbai` sends to both SII and TBAI, and `verifactu` shows only Verifactu status because sending is automatic on completion.
 - Upstream/downstream document dependencies: the related-documents tab resolves the linked quotation or sales order from `salesOrder`, and, for credit notes, fetches sibling/original invoices from that same order. Linked shipments/returns are NOT derived from `salesOrder` — a DEV (return) invoice's `salesOrder` (when set) still points at the original order, whose own shipments are outgoing deliveries, not the return. Instead, the panel reads `data.linkedShipments`, injected server-side by `SalesInvoiceHeaderHandler#enrichLinkedShipments` from each invoice line's own `goodsShipmentLine` (M_InOutLine_ID); each entry's `isReturn` (a boolean derived server-side from a `C_DocType.IsReturn` join, exposed alongside the raw `movementType`) decides whether the chip renders as a Goods Shipment (`/goods-shipment/{id}`) or a Return Material Receipt (`/return-material-receipt/{id}`). When present, `data.sourceInvoice` (from `#enrichSourceInvoice`, only set when the return line carries `Canceled_Inoutline_ID`) adds a further chip for the original invoice this return-invoice reverses. (ETP-4534 — previously the panel fetched shipments via `goods-shipment` filtered by `salesOrder`, which is server-side scoped to `documentType.return=false` and could never resolve a return, so return invoices showed a misleading "Envío" chip linking to the wrong document. A follow-up ETP-4534 fix then replaced the `movementType === 'C+'` discriminator with `isReturn`, since `M_InOut.MovementType` — per the DB trigger `M_INOUT_TRG_PROV.xml` — only ever takes `'C-'` for every sales-side movement, shipments and returns alike, or `'V+'` for purchase-side, and can never distinguish a return; `'C+'` never occurs, so the original discriminator was always false and every linked document fell through to the "Envío" chip.)
@@ -134,7 +136,12 @@ i18n keys added: `invoicePdfSubtotalNoDiscount`, `invoicePdfProductDiscount`, `i
 
 ## Validation & Error Handling — ETP-4005
 
-See [Shared validation & UX changes — ETP-4005](app-shell-functional-flows.md#shared-validation--ux-changes--etp-4005) for the full list: inline line min-value enforcement, payment modal date validation, single confirmation toast, and callout message sanitization.
+See [Shared validation & UX changes — ETP-4005](app-shell-functional-flows.md#shared-validation--ux-changes--etp-4005) for the full list: inline line min-value enforcement, payment modal date validation, single confirmation toast, and callout message sanitization. `etgoDiscount` keeps its `min: 0, max: 100` range.
+
+## Negative quantity/price and price-list label — ETP-4567
+
+- `invoicedQuantity` and `listPrice` no longer declare `min: 0` in `decisions.json`. Both the add-line row and inline grid edit now accept negative values — needed for credit/return-style adjustments modeled as negative-quantity or negative-price lines (see the negative-`invoicedQuantity` return-invoice flow described above). `etgoDiscount` is unaffected and keeps its `min: 0, max: 100` range.
+- The `listPrice` (AD `PriceList` column) label is now overridden to **"Precio"** in Spanish via `window.labelOverrides.es_ES.PriceList` in `decisions.json` (English label unchanged). Same declarative mechanism already used for `OutstandingAmt`, `EM_Etgo_Due_Date`, `em_etgo_delivery_status`, and `C_DocTypeTarget_ID` on this window.
 
 ## Automated evidence
 
@@ -146,6 +153,7 @@ See [Shared validation & UX changes — ETP-4005](app-shell-functional-flows.md#
 - `tools/app-shell/src/windows/custom/shared/InvoicePreview.jsx` and `tools/app-shell/src/windows/custom/shared/useInvoicePreview.js` prove that sales invoices use the shared invoice preview shell with a PDF preview, `General | Messages | History` tabs, payment-plan fetching, payment-history fetching, edit/send actions, and placeholder `Messages`/`History` states. `GenericPreviewModal` manages the left panel: for completed invoices it auto-caches the generated PDF on first open (`autoFetch=true`, `storeCondition=isCompleted`) and serves it from `ETGO_PREVIEW_FILE` on subsequent opens; for draft invoices it passes the live PDF viewer through without caching (`storeCondition=false`).
 - `tools/app-shell/src/windows/custom/shared/useInvoicePdf.js`, `tools/app-shell/src/lib/locationAddress.js`, `tools/app-shell/src/windows/custom/shared/__tests__/useInvoicePdf.test.js`, and `tools/app-shell/src/lib/__tests__/locationAddress.test.js` prove that the embedded PDF expands the billing contact address from the full contact location record instead of rendering only the summarized location identifier string. The hook now computes discount breakdown fields (`grossAmount`, `discountPerProduct`, `etgoTotalDiscount`, `totalDiscountAmt`) from raw line data, passing `null` for each when no discount is present so the shared `documentPdf.js` template conditionally renders discount rows only when needed.
 - `artifacts/sales-invoice/contract.json` proves the default-layout invoice contract, `relatedDocuments: true`, required header fields, dependent `partnerAddress`, default values, summary fields, line-level `SL_Invoice_Amt` callouts, and the presence of the `paymentPlan` child entity plus payment-plan action endpoints.
+- **ETP-4520** — `artifacts/sales-invoice/decisions.json`, `artifacts/sales-invoice/contract.json`, and the generated `HeaderPage.jsx`/`HeaderTable.jsx` all carry `"visibleWhenCapability": "showAccountingFields"` on the `posted` field. `tools/app-shell/src/lib/capabilityVisibility.js`, `tools/app-shell/src/hooks/useCapabilitiesSafe.js`, `tools/app-shell/src/components/contract-ui/DataTable.jsx`, and `tools/app-shell/src/components/contract-ui/DetailView.jsx` prove the shared omit-not-disable gating mechanism, with source-reading coverage in `tools/app-shell/src/lib/__tests__/capabilityVisibility.test.js`, `tools/app-shell/src/hooks/__tests__/useCapabilitiesSafe.vitest.jsx`, `tools/app-shell/src/components/contract-ui/__tests__/DataTable.capabilityVisibility.vitest.jsx`, and `tools/app-shell/src/components/contract-ui/__tests__/DetailView.capabilityVisibility.vitest.jsx`.
 - `artifacts/sales-invoice/custom/InvoiceBottomPanel.jsx` proves the combined docs/notes/totals footer, derived tax display, and shipment-import affordances on draft invoices.
 - `artifacts/sales-invoice/custom/InvoiceTopbarExtra.jsx` proves installment-aware payment-status classification, the badge-to-payment-modal entry flow, the four-state badge derivation (paid / partial / overdue / pending), and the fallback badge path when no installment data is available. The badge click opens the shared `InvoicePaymentModal` (with `specName="sales-invoice"` and `onPaymentAdded={fetchInstallments}` so the badge refreshes after a payment is registered); the component no longer contains a local `PaymentRegisterForm` or `ViewPaymentsModal`.
 - `tools/app-shell/src/windows/custom/shared/InvoicePaymentModal.jsx` proves the shared installment payment modal used across sales-invoice and purchase-invoice flows: per-installment card rendering with label, amount, due date, and status badge; payment history per installment; payment registration form with amount validation, date picker, financial account selection, and the generic `DateField` component (`tools/app-shell/src/components/ui/date-field.jsx`); authenticated API calls through `useApiFetch()` rather than token props; and payment-direction routing to `payment-in` for sales and `payment-out` for purchases.
@@ -506,3 +514,100 @@ ANY pipeline-generated lines table. `lines.project.dimensionsPanel` and
 generated `LinesTable.jsx` now declares the synthetic column, so the "Dimensiones contables"
 panel renders for real on this window regardless of the `InvoiceLinesTable.jsx` gap above. See
 `docs/decisions-reference.md` (`dimensionsPanel`) and `docs/ui-customization.md` §14b.
+
+## Multi-currency support in the Cobros/Pagos modal — ETP-4504
+
+The two-step Cobros/Pagos modal (`NewPaymentEntryModal.jsx`, launched from the invoice
+payment-history popup) was originally **single-currency**: it assumed the payment amount was
+in the invoice currency and never reconciled it against the financial account's currency.
+ETP-4504 lifts that restriction for collections (`dir='in'`, sales invoice) and payments
+(`dir='out'`, purchase invoice). This section documents the sales-invoice (collection) side;
+the payment side is documented identically in
+[`purchase-invoice.md`](purchase-invoice.md#multi-currency-support-in-the-cobrospagos-modal--etp-4504).
+
+### F1 — Conversion fields (invoice currency ≠ account currency)
+
+When the invoice currency differs from the currency of the selected financial account, the
+**"Nuevo cobro"** modal reveals two extra fields, rendered below the amount/method/account row
+and before the credit section:
+
+| Field | i18n key | Behavior |
+|-------|----------|----------|
+| **Tasa de conversión** (Conversion rate) | `cpConversionRate` | Editable numeric input. Prefilled from the system exchange rate for the *invoice → account* currency pair via the `GET {base}/validate-exchange-rate` endpoint, wrapped by the new `useConversionRate` hook (`tools/app-shell/src/windows/custom/shared/useConversionRate.js`). Accepts `0.92` or `0,92`. |
+| **Importe en moneda de la cuenta** (Amount in account currency) | `cpAmountInAccount` | Read-only. Computed as `amount × rate` and recomputed live whenever the amount or the rate changes. Rendered with `formatCurrency(accountCurrency, …)` so the account currency shows next to the value. |
+
+Both fields are **hidden whenever the currencies match** (the common case), so single-currency
+collections are visually unchanged. The prefilled rate field is cleared automatically when the
+user switches to an account whose currency pair has no stored DB rate, so a stale rate never
+silently carries across currency pairs; the user can then type a rate manually.
+
+**Foreign-currency guard.** On a foreign-currency collection a **positive rate ≠ 1 is
+required**: a blank/non-positive rate, or a rate of exactly `1`, disables both **Guardar** and
+**Confirmar**. A blank/non-positive rate additionally surfaces the `cpConversionRateRequired`
+inline error under the field (`cpConversionRateInvalid` is the "must differ from 1" copy).
+This mirrors the backend,
+which rejects a foreign payment carrying a `1:1` rate (it would otherwise silently post the wrong
+ledger amount). The rate is sent to the backend as `conversionRate` on the `registerPayment`
+body; the backend recomputes the account-currency amount authoritatively from it.
+
+### F2 — Credit filtered by invoice currency
+
+The **"Saldo a favor y crédito disponible"** section now lists only credit notes / returns /
+accumulated credit **in the invoice's currency**. This is enforced server-side (an HQL currency
+predicate in `PaymentCreditSourcesService`, keyed to the invoice being collected); the frontend
+renders whatever the backend returns, so no client-side filtering was added.
+
+### F3 — Credit-generation restriction on excess
+
+When a collection exceeds the outstanding amount, the excess band's behavior now depends on the
+invoice currency (org currency resolved via `useDocumentCurrency`):
+
+- **Invoice in the organization currency** → the excess band offers **Generar crédito a favor**
+  (leave the excess as customer credit). This is the only radio; selecting it resolves the
+  excess and enables **Confirmar**.
+- **Foreign-currency invoice** → **no credit-generation option is offered**. The band shows the
+  red inline "Exceso: …" guidance and the only resolution is **Ajustar importe** (the *Igualar*
+  action, which sets the cash amount so cash + credit exactly covers the invoice). The excess
+  blocks **Confirmar** until adjusted.
+
+The former **"Dar vuelto"** / refund excess option has been **removed entirely** for both
+currencies. In `usePaymentBalance.js` the excess mode collapses to `'credit' | null`, and
+`overpaymentActionFor` returns only `'leave-credit'` (or `undefined`). Payments (`dir='out'`)
+never generate credit — any payment excess blocks confirmation and must be adjusted (unchanged
+from the two-step flow's original behavior).
+
+> **Product decision pending functional confirmation.** The removal of the "Dar vuelto" / refund
+> path is a product decision made when implementing ETP-4504 (the functional spec's excess table
+> lists only "Generar crédito a favor" + "Ajustar importe"). It drops a previously available
+> resolution and should be confirmed by the functional team as intended and not a regression.
+
+### Known display-only limitation
+
+The **Importe en moneda de la cuenta** value is rounded to **2 decimals in the UI**
+(`round2(amount × rate)`), while the backend books the financial-transaction amount at the
+**account currency's own precision**. For currencies whose standard precision is not 2 decimals
+(e.g. JPY, which has 0), the amount shown in the modal can differ from the amount actually
+posted. This is a display-only discrepancy — the backend recomputes and books authoritatively
+from the submitted `conversionRate`.
+
+### Evidence
+
+- `tools/app-shell/src/windows/custom/shared/NewPaymentEntryModal.jsx` — conversion fields,
+  `isForeign` gating, `rateMissing`/`rateIsOne` guard, `conversionRate` on the submit body,
+  currency-gated `ExcessBand` (`canLeaveCredit = isReceipt && invoiceInOrgCurrency`).
+- `tools/app-shell/src/windows/custom/shared/useConversionRate.js` — exchange-rate prefill hook.
+- `tools/app-shell/src/windows/custom/shared/usePaymentBalance.js` — `canLeaveCredit` gating of
+  `excessUnresolved`/`canConfirm`; refund path removed.
+- Backend (`com.etendoerp.go`): `PaymentRegistrationService` (rate threading, currency-match
+  restriction lifted) and `PaymentCreditSourcesService` (F2 currency filter) — documented in that
+  repo's own `docs/`.
+- i18n keys `cpConversionRate` / `cpAmountInAccount` / `cpConversionRateRequired` added under
+  `genericLabels` in `en_US.json`, `es_ES.json`, and `es_AR.json`.
+
+## Theme roles
+
+The window's live artifact custom components use the shared semantic theme.
+Structural surfaces and controls consume background, card, foreground, muted, and
+border roles; operational feedback uses success, warning, information, neutral,
+and destructive roles. No local palette is used, so the active application theme
+controls the appearance.

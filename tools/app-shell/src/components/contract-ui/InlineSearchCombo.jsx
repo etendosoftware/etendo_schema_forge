@@ -176,7 +176,7 @@ export function InlineSearchCombo({ field, value, options, onChange, onKeyDown, 
           onKeyDown?.(e);
         }}
         placeholder={placeholder}
-        className="w-full h-8 text-sm rounded-md border border-input bg-white px-2 pr-6 focus:ring-2 focus:ring-primary focus:outline-none"
+        className="w-full h-8 text-sm rounded-md border border-input bg-card px-2 pr-6 focus:ring-2 focus:ring-primary focus:outline-none"
       />
       <button
         type="button"
@@ -201,17 +201,29 @@ export function InlineSearchCombo({ field, value, options, onChange, onKeyDown, 
         <div
           ref={dropdownRef}
           data-testid={`inline-add-options-${field.key}`}
-          className="bg-white border rounded-md shadow-lg overflow-auto"
+          className="bg-card border rounded-md shadow-lg overflow-auto"
           style={dropdownStyle}
           data-open-up={openUp ? 'true' : 'false'}
           data-inline-add-portal="true"
+          // Same fix as CreatableSearchSelect's identical panel (and LookupPicker.jsx) — see
+          // CreatableSearchSelect's onWheel comment for the full root cause (Radix Dialog's
+          // react-remove-scroll blocks the native wheel-to-scroll translation for anything
+          // portaled outside the dialog's own DOM subtree). Bypass it manually, but only when
+          // e.defaultPrevented (native scroll was actually blocked) — outside a Dialog, native
+          // scrolling works normally and adding deltaY on top of it would double-scroll.
+          onWheel={(e) => {
+            e.stopPropagation();
+            if (e.defaultPrevented) {
+              e.currentTarget.scrollTop += e.deltaY;
+            }
+          }}
         >
           {filtered.map(opt => (
             <button
               key={opt.id}
               type="button"
               data-testid={`inline-add-option-${field.key}-${opt.id}`}
-              className="w-full text-left px-2 py-1.5 text-sm hover:bg-blue-50 cursor-pointer whitespace-nowrap"
+              className="w-full text-left px-2 py-1.5 text-sm hover:bg-status-info cursor-pointer whitespace-nowrap"
               onMouseDown={(e) => { e.preventDefault(); handleSelect(opt); }}
             >
               {opt.name || opt.label || opt._identifier || opt.id}

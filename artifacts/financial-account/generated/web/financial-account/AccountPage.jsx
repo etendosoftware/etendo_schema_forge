@@ -1,5 +1,6 @@
-import { useEffect } from 'react';
+import { useMemo, useEffect } from 'react';
 import { ListView, DetailView } from '@/components/contract-ui';
+import { useWindowAccess, WindowAccessGuard } from '@/auth/AuthContext.jsx';
 import AccountTable from './AccountTable';
 import AccountForm from './AccountForm';
 import TransactionTable from './TransactionTable';
@@ -110,6 +111,17 @@ export const api = {
       "delete": true,
       "listUrl": "/sws/neo/financial-account-detail/transaction",
       "detailUrl": "/sws/neo/financial-account-detail/transaction/{id}",
+      "supportedFilters": []
+    },
+    "accountingConfiguration": {
+      "get": true,
+      "getById": true,
+      "post": true,
+      "put": true,
+      "patch": true,
+      "delete": true,
+      "listUrl": "/sws/neo/financial-account-detail/accountingConfiguration",
+      "detailUrl": "/sws/neo/financial-account-detail/accountingConfiguration/{id}",
       "supportedFilters": []
     },
     "importedBankStatements": {
@@ -231,6 +243,22 @@ export const api = {
       "reference": "User2",
       "inputMode": "selector",
       "url": "/sws/neo/financial-account-detail/transaction/selectors/ndDimension"
+    },
+    {
+      "entity": "accountingConfiguration",
+      "field": "fINAssetAcct",
+      "column": "FIN_Asset_Acct",
+      "reference": "ValidCombination",
+      "inputMode": "selector",
+      "url": "/sws/neo/financial-account-detail/accountingConfiguration/selectors/fINAssetAcct"
+    },
+    {
+      "entity": "accountingConfiguration",
+      "field": "fINTransitoryAcct",
+      "column": "FIN_Transitory_Acct",
+      "reference": "ValidCombination",
+      "inputMode": "selector",
+      "url": "/sws/neo/financial-account-detail/accountingConfiguration/selectors/fINTransitoryAcct"
     },
     {
       "entity": "bankStatementLines",
@@ -437,6 +465,13 @@ export const api = {
 
 // @sf-generated-start component:AccountPage
 export default function AccountPage({ windowName, recordId, ...props }) {
+  const windowAccessTier = useWindowAccess('94EAA455D2644E04AB25D93BE5157B6D');
+  const effectiveWindow = useMemo(() => (
+    windowAccessTier === 'read-only' ? { ...(props.window || {}), readOnly: true } : props.window
+  ), [windowAccessTier, props.window]);
+  if (windowAccessTier === 'none') {
+    return <WindowAccessGuard windowId="94EAA455D2644E04AB25D93BE5157B6D" />;
+  }
   if (recordId) {
     return (
       <>
@@ -460,7 +495,7 @@ export default function AccountPage({ windowName, recordId, ...props }) {
         breadcrumb={breadcrumb}
       api={api}
         requiredHeaderFields={requiredHeaderFields}
-        {...props}
+        {...props} window={effectiveWindow}
       />
       </>
     );
@@ -475,7 +510,7 @@ export default function AccountPage({ windowName, recordId, ...props }) {
       breadcrumb={breadcrumb}
       api={api}
       rowQuickActions={{}}
-      {...props}
+      {...props} window={effectiveWindow}
     />
   );
 }

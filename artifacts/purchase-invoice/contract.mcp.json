@@ -1,8 +1,8 @@
 {
-  "version": "0.72.0",
+  "version": "0.77.0",
   "generatedAt": "2026-04-30T15:42:46.722Z",
-  "updatedAt": "2026-07-18T23:21:19.897Z",
-  "contractChecksum": "00fb6aefcd7bcb94",
+  "updatedAt": "2026-07-23T18:17:09.851Z",
+  "contractChecksum": "9fa2e7433dfbc95a",
   "apiPrediction": {
     "specName": "purchase-invoice",
     "baseUrl": "/sws/neo/purchase-invoice",
@@ -309,14 +309,6 @@
             }
           ]
         }
-      },
-      {
-        "entity": "header",
-        "field": "costcenter",
-        "column": "C_Costcenter_ID",
-        "reference": "CostCenter",
-        "inputMode": "selector",
-        "url": "/sws/neo/purchase-invoice/header/selectors/costcenter"
       },
       {
         "entity": "header",
@@ -1345,7 +1337,8 @@
         "OutstandingAmt": "Pendiente de pago",
         "EM_Etgo_Due_Date": "Vencimiento",
         "em_etgo_delivery_status": "Estado de recepción",
-        "C_DocTypeTarget_ID": "Tipo de documento"
+        "C_DocTypeTarget_ID": "Tipo de documento",
+        "PriceList": "Precio"
       },
       "en_US": {
         "POReference": "Document No.",
@@ -1385,11 +1378,6 @@
           "priceList": {
             "required": true,
             "readOnlyLogic": "@Processed@='Y'"
-          },
-          "accountingDate": {
-            "required": true,
-            "readOnlyLogic": "@Posted@='Y'",
-            "defaultValue": "@#Date@"
           },
           "paymentTerms": {
             "required": true,
@@ -1458,9 +1446,6 @@
             "defaultValue": "N"
           },
           "project": {
-            "readOnlyLogic": "@Posted@='Y'"
-          },
-          "costcenter": {
             "readOnlyLogic": "@Posted@='Y'"
           },
           "prepaymentAmount": {
@@ -1838,6 +1823,7 @@
             "readOnlyLogic": "@HASREVERSEDINVOICESO@='Y' | @HASREVERSEDINVOICEPO@='Y' | @Posted@='Y'"
           },
           "toCurrency": {
+            "readOnly": true,
             "required": true,
             "readOnlyLogic": "@HASREVERSEDINVOICESO@='Y' | @HASREVERSEDINVOICEPO@='Y' | @Posted@='Y'"
           },
@@ -1961,7 +1947,6 @@
         "businessPartner",
         "partnerAddress",
         "priceList",
-        "accountingDate",
         "paymentTerms",
         "paymentMethod",
         "currency",
@@ -1978,7 +1963,6 @@
         "expectedDate",
         "amount2",
         "reversedInvoice",
-        "toCurrency",
         "foreignAmount",
         "estadoRegistro",
         "active"
@@ -2146,7 +2130,6 @@
           "businessPartner",
           "partnerAddress",
           "priceList",
-          "accountingDate",
           "paymentTerms",
           "paymentMethod",
           "currency",
@@ -2167,7 +2150,6 @@
           "expectedDate",
           "amount2",
           "reversedInvoice",
-          "toCurrency",
           "foreignAmount",
           "estadoRegistro",
           "active"
@@ -2185,5 +2167,5 @@
       "tbaiVoidxmlgenerator"
     ]
   },
-  "checksum": "8d020bc5c5034641"
+  "checksum": "634ee0cbfee5b46a"
 }

@@ -46,7 +46,7 @@ beforeEach(() => {
 });
 
 describe('AssetsDetailPanel — depreciation off', () => {
-  it('hides financial, depreciation fields, dates and dimensions when depreciate is off', () => {
+  it('hides financial (except assetValue), depreciation fields, dates and dimensions when depreciate is off', () => {
     const { container } = render(
       <AssetsDetailPanel {...BASE_PROPS} data={{ id: 'a1', depreciate: 'N' }} />,
     );
@@ -59,9 +59,23 @@ describe('AssetsDetailPanel — depreciation off', () => {
     // No dimensions / dates / financial forms.
     expect(forms.some(f => f.includes('project'))).toBe(false);
     expect(forms.some(f => f.includes('purchaseDate'))).toBe(false);
-    expect(forms.some(f => f.includes('assetValue'))).toBe(false);
+    // assetValue moved to the always-visible main group (ETP-4539) — present even
+    // when depreciate is off.
+    expect(forms.some(f => f.includes('assetValue'))).toBe(true);
     // Disabled hint shown.
     expect(screen.getByText('assetsDepreciationDisabledHint')).toBeInTheDocument();
+  });
+
+  it('keeps assetValue visible regardless of the depreciate flag (ETP-4539)', () => {
+    const { container: containerOff } = render(
+      <AssetsDetailPanel {...BASE_PROPS} data={{ id: 'a1', depreciate: 'N' }} />,
+    );
+    expect(formsByFields(containerOff).some(f => f.includes('assetValue'))).toBe(true);
+
+    const { container: containerOn } = render(
+      <AssetsDetailPanel {...BASE_PROPS} data={{ id: 'a1', depreciate: 'Y' }} />,
+    );
+    expect(formsByFields(containerOn).some(f => f.includes('assetValue'))).toBe(true);
   });
 });
 

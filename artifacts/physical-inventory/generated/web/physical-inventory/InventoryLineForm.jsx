@@ -10,6 +10,7 @@ const fields = [
   { key: 'uOM', column: 'C_UOM_ID', type: 'selector', label: 'UOM', required: true, readOnly: true, section: 'other', reference: 'UOM', inputMode: 'selector' },
   { key: 'bookQuantity', column: 'QtyBook', type: 'number', label: 'System Count', required: true, readOnly: true, section: 'other' },
   { key: 'cost', column: 'Cost', type: 'number', label: 'Cost', section: 'other', readOnlyLogic: (record) => record['processed'] === true },
+  { key: 'etgoQtydiff', column: 'EM_Etgo_Qtydiff', type: 'number', label: 'Difference', readOnly: true, section: 'other', defaultValue: '0' },
 ];
 // @sf-generated-end fields:inventoryLine
 

@@ -1,8 +1,8 @@
 {
-  "version": "0.22.0",
+  "version": "0.23.0",
   "generatedAt": "2026-04-29T19:05:20.719Z",
-  "updatedAt": "2026-07-17T14:42:04.871Z",
-  "checksum": "5a24e0c40e0a88ca",
+  "updatedAt": "2026-07-21T12:35:19.573Z",
+  "checksum": "5c7b44d77827859f",
   "frontendContract": {
     "window": {
       "id": "184",
@@ -76,6 +76,10 @@
               "type": "sequence",
               "source": "documentType.sequence"
             },
+            "validation": {
+              "required": true,
+              "maxLength": 30
+            },
             "readOnlyLogic": {
               "raw": "@Processed@='Y'",
               "evaluable": true,
@@ -98,6 +102,10 @@
             "inputMode": "selector",
             "section": "principal",
             "seq": 40,
+            "validation": {
+              "required": true,
+              "maxLength": 22
+            },
             "callout": {
               "className": "org.openbravo.erpCommon.ad_callouts.SE_InOut_Warehouse"
             },
@@ -123,6 +131,10 @@
             "inputMode": "search",
             "section": "principal",
             "seq": 10,
+            "validation": {
+              "required": true,
+              "maxLength": 60
+            },
             "callout": {
               "className": "org.openbravo.erpCommon.ad_callouts.SL_InOut_BPartner"
             },
@@ -149,6 +161,10 @@
             "dependsOn": {
               "field": "businessPartner",
               "filterKey": "C_BPartner_ID"
+            },
+            "validation": {
+              "required": true,
+              "maxLength": 22
             },
             "validationRule": {
               "code": "C_BPartner_Location.C_BPartner_ID=@C_BPartner_ID@ AND C_BPartner_Location.IsShipTo='Y' AND C_BPartner_Location.IsActive='Y'",
@@ -182,6 +198,10 @@
             "defaultValue": "@#Date@",
             "section": "principal",
             "seq": 30,
+            "validation": {
+              "required": true,
+              "maxLength": 10
+            },
             "callout": {
               "className": "org.openbravo.erpCommon.ad_callouts.SL_InOut_AccountingDate"
             },
@@ -189,29 +209,6 @@
               "raw": "@Processed@='Y'",
               "evaluable": true,
               "js": "record['processed'] === true"
-            }
-          },
-          {
-            "name": "accountingDate",
-            "apiKey": "accountingDate",
-            "column": "DateAcct",
-            "label": "Accounting Date",
-            "type": "date",
-            "tsType": "string",
-            "visibility": "editable",
-            "required": true,
-            "grid": false,
-            "form": false,
-            "sourceRequired": true,
-            "derivation": {
-              "type": "computed",
-              "source": "@#Date@"
-            },
-            "defaultValue": "@#Date@",
-            "readOnlyLogic": {
-              "raw": "@Posted@='Y'",
-              "evaluable": true,
-              "js": "record['posted'] === true"
             }
           },
           {
@@ -226,7 +223,10 @@
             "grid": false,
             "form": false,
             "reference": "Order",
-            "inputMode": "search"
+            "inputMode": "search",
+            "validation": {
+              "maxLength": 60
+            }
           },
           {
             "name": "orderReference",
@@ -241,6 +241,9 @@
             "form": true,
             "section": "principal",
             "seq": 20,
+            "validation": {
+              "maxLength": 20
+            },
             "readOnlyLogic": {
               "raw": "@Processed@='Y'",
               "evaluable": true,
@@ -260,6 +263,9 @@
             "form": true,
             "section": "collapsed",
             "seq": 70,
+            "validation": {
+              "maxLength": 255
+            },
             "readOnlyLogic": {
               "raw": "@Processed@='Y'",
               "evaluable": true,
@@ -354,7 +360,11 @@
                 }
               }
             ],
-            "defaultValue": "DR"
+            "defaultValue": "DR",
+            "validation": {
+              "required": true,
+              "maxLength": 60
+            }
           },
           {
             "name": "posted",
@@ -389,6 +399,10 @@
               "true": "green",
               "false": "orange"
             },
+            "validation": {
+              "required": true,
+              "maxLength": 60
+            },
             "displayLogic": {
               "raw": "@Processed@='Y' & @#ShowAcct@='Y'",
               "evaluable": false,
@@ -406,10 +420,12 @@
             "visibility": "editable",
             "required": false,
             "grid": false,
-            "form": true,
+            "form": false,
             "reference": "Project",
             "inputMode": "search",
-            "section": "principal",
+            "validation": {
+              "maxLength": 60
+            },
             "validationRule": {
               "code": "C_Project.projectstatus in ('OP', 'OR') and (C_Project.c_bpartner_id=@C_BPartner_ID@ or '@IsSOTrx@'='N') or C_Project.c_project_id = @c_project_id@",
               "contextParams": [],
@@ -418,12 +434,6 @@
                 "IsSOTrx",
                 "c_project_id"
               ]
-            },
-            "displayLogic": {
-              "raw": "@ACCT_DIMENSION_DISPLAY@",
-              "evaluable": false,
-              "reason": "server-macro",
-              "js": null
             },
             "readOnlyLogic": {
               "raw": "@Posted@='Y'",
@@ -441,15 +451,11 @@
             "visibility": "editable",
             "required": false,
             "grid": false,
-            "form": true,
+            "form": false,
             "reference": "CostCenter",
             "inputMode": "selector",
-            "section": "principal",
-            "displayLogic": {
-              "raw": "@ACCT_DIMENSION_DISPLAY@",
-              "evaluable": false,
-              "reason": "server-macro",
-              "js": null
+            "validation": {
+              "maxLength": 32
             },
             "readOnlyLogic": {
               "raw": "@Posted@='Y'",
@@ -470,6 +476,9 @@
             "form": false,
             "reference": "Asset",
             "inputMode": "selector",
+            "validation": {
+              "maxLength": 32
+            },
             "readOnlyLogic": {
               "raw": "@Posted@='Y'",
               "evaluable": true,
@@ -489,6 +498,9 @@
             "form": false,
             "reference": "UserDimension1",
             "inputMode": "selector",
+            "validation": {
+              "maxLength": 32
+            },
             "readOnlyLogic": {
               "raw": "@Posted@='Y'",
               "evaluable": true,
@@ -508,6 +520,9 @@
             "form": false,
             "reference": "UserDimension2",
             "inputMode": "selector",
+            "validation": {
+              "maxLength": 32
+            },
             "readOnlyLogic": {
               "raw": "@Posted@='Y'",
               "evaluable": true,
@@ -524,7 +539,10 @@
             "visibility": "readOnly",
             "required": false,
             "grid": true,
-            "form": false
+            "form": false,
+            "validation": {
+              "maxLength": 4
+            }
           },
           {
             "name": "processed",
@@ -537,7 +555,11 @@
             "required": true,
             "grid": false,
             "form": false,
-            "sourceRequired": true
+            "sourceRequired": true,
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            }
           }
         ],
         "searchableFields": [
@@ -557,13 +579,6 @@
           },
           {
             "name": "movementDate",
-            "derivation": {
-              "type": "computed",
-              "source": "@#Date@"
-            }
-          },
-          {
-            "name": "accountingDate",
             "derivation": {
               "type": "computed",
               "source": "@#Date@"
@@ -615,6 +630,10 @@
               "source": "SELECT COALESCE(MAX(Line),0)+10 AS DefaultValue FROM M_InOutLine WHERE M_InOut_ID=@M_InOut_ID@"
             },
             "defaultValue": "@SQL=SELECT COALESCE(MAX(Line),0)+10 AS DefaultValue FROM M_InOutLine WHERE M_InOut_ID=@M_InOut_ID@",
+            "validation": {
+              "required": true,
+              "maxLength": 10
+            },
             "readOnlyLogic": {
               "raw": "@Processed@='Y'",
               "evaluable": true,
@@ -636,6 +655,10 @@
             "inputMode": "search",
             "section": "principal",
             "seq": 10,
+            "validation": {
+              "required": true,
+              "maxLength": 60
+            },
             "callout": {
               "className": "org.openbravo.erpCommon.ad_callouts.SL_InOutLine_Product"
             },
@@ -656,6 +679,9 @@
             "required": false,
             "grid": false,
             "form": false,
+            "validation": {
+              "maxLength": 22
+            },
             "readOnlyLogic": {
               "raw": "@Processed@='Y'",
               "evaluable": true,
@@ -673,6 +699,9 @@
             "required": false,
             "grid": false,
             "form": false,
+            "validation": {
+              "maxLength": 2
+            },
             "callout": {
               "className": "org.openbravo.erpCommon.ad_callouts.OperativeQuantity_To_BaseQuantity"
             },
@@ -695,6 +724,9 @@
             "form": false,
             "reference": "UOM",
             "inputMode": "selector",
+            "validation": {
+              "maxLength": 32
+            },
             "validationRule": {
               "code": "td0.c_uom_id IN(select p.c_uom_id from m_product p where p.m_product_id = @M_Product_ID@) or td0.c_uom_id IN(select a.c_uom_id from m_product_aum a where a.m_product_id = @M_Product_ID@ and ((@IsSOTrx@ = 'Y' and a.sales <> 'NA') OR (@IsSOTrx@ <> 'Y' and a.purchase <> 'NA')))",
               "contextParams": [],
@@ -731,6 +763,10 @@
             "defaultValue": "0",
             "section": "principal",
             "seq": 20,
+            "validation": {
+              "required": true,
+              "maxLength": 10
+            },
             "readOnlyLogic": {
               "raw": "@Processed@='Y' | @UomManagement@='Y'",
               "evaluable": true,
@@ -751,6 +787,10 @@
             "sourceRequired": true,
             "reference": "UOM",
             "inputMode": "selector",
+            "validation": {
+              "required": true,
+              "maxLength": 22
+            },
             "readOnlyLogic": {
               "raw": "@UomManagement@='Y'",
               "evaluable": true,
@@ -775,6 +815,9 @@
             "reference": "Locator",
             "inputMode": "selector",
             "defaultValue": "@OnHandLocatorDefault@",
+            "validation": {
+              "maxLength": 60
+            },
             "validationRule": {
               "code": "M_Locator.M_Warehouse_ID=@M_Warehouse_ID@",
               "contextParams": [],
@@ -798,7 +841,10 @@
             "visibility": "editable",
             "required": false,
             "grid": false,
-            "form": false
+            "form": false,
+            "validation": {
+              "maxLength": 2000
+            }
           },
           {
             "name": "salesOrderLine",
@@ -812,7 +858,10 @@
             "grid": false,
             "form": false,
             "reference": "OrderLine",
-            "inputMode": "search"
+            "inputMode": "search",
+            "validation": {
+              "maxLength": 60
+            }
           },
           {
             "name": "orderQuantity",
@@ -827,6 +876,9 @@
             "form": true,
             "section": "principal",
             "seq": 30,
+            "validation": {
+              "maxLength": 10
+            },
             "callout": {
               "className": "org.openbravo.erpCommon.ad_callouts.SL_InOut_Conversion"
             },
@@ -841,6 +893,28 @@
             }
           },
           {
+            "name": "businessPartner",
+            "apiKey": "businessPartner",
+            "column": "C_Bpartner_ID",
+            "label": "Business Partner",
+            "type": "foreignKey",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": false,
+            "grid": false,
+            "form": false,
+            "reference": "BusinessPartner",
+            "inputMode": "search",
+            "validation": {
+              "maxLength": 32
+            },
+            "readOnlyLogic": {
+              "raw": "@Posted@='Y'",
+              "evaluable": true,
+              "js": "record['posted'] === true"
+            }
+          },
+          {
             "name": "project",
             "apiKey": "project",
             "column": "C_Project_ID",
@@ -850,15 +924,11 @@
             "visibility": "editable",
             "required": false,
             "grid": false,
-            "form": true,
+            "form": false,
             "reference": "Project",
             "inputMode": "search",
-            "dimensionsPanel": true,
-            "displayLogic": {
-              "raw": "@ACCT_DIMENSION_DISPLAY@",
-              "evaluable": false,
-              "reason": "server-macro",
-              "js": null
+            "validation": {
+              "maxLength": 32
             },
             "readOnlyLogic": {
               "raw": "@Posted@='Y'",
@@ -876,15 +946,11 @@
             "visibility": "editable",
             "required": false,
             "grid": false,
-            "form": true,
+            "form": false,
             "reference": "CostCenter",
             "inputMode": "selector",
-            "dimensionsPanel": true,
-            "displayLogic": {
-              "raw": "@ACCT_DIMENSION_DISPLAY@",
-              "evaluable": false,
-              "reason": "server-macro",
-              "js": null
+            "validation": {
+              "maxLength": 32
             },
             "readOnlyLogic": {
               "raw": "@Posted@='Y'",
@@ -905,6 +971,9 @@
             "form": false,
             "reference": "Asset",
             "inputMode": "selector",
+            "validation": {
+              "maxLength": 32
+            },
             "readOnlyLogic": {
               "raw": "@Posted@='Y'",
               "evaluable": true,
@@ -924,6 +993,9 @@
             "form": false,
             "reference": "UserDimension1",
             "inputMode": "selector",
+            "validation": {
+              "maxLength": 32
+            },
             "readOnlyLogic": {
               "raw": "@Posted@='Y'",
               "evaluable": true,
@@ -943,6 +1015,9 @@
             "form": false,
             "reference": "UserDimension2",
             "inputMode": "selector",
+            "validation": {
+              "maxLength": 32
+            },
             "readOnlyLogic": {
               "raw": "@Posted@='Y'",
               "evaluable": true,
@@ -965,7 +1040,11 @@
               "type": "computed",
               "source": "0"
             },
-            "defaultValue": "0"
+            "defaultValue": "0",
+            "validation": {
+              "required": true,
+              "maxLength": 10
+            }
           }
         ],
         "searchableFields": [],
@@ -1127,7 +1206,7 @@
             "apiKey": "accountingDate",
             "column": "DateAcct",
             "type": "date",
-            "visibility": "editable",
+            "visibility": "system",
             "required": true
           },
           {
@@ -1759,7 +1838,7 @@
             "apiKey": "businessPartner",
             "column": "C_Bpartner_ID",
             "type": "foreignKey",
-            "visibility": "discarded",
+            "visibility": "editable",
             "required": false
           },
           {
@@ -2172,6 +2251,14 @@
       },
       {
         "entity": "goodsReceiptLine",
+        "field": "businessPartner",
+        "column": "C_Bpartner_ID",
+        "reference": "BusinessPartner",
+        "inputMode": "search",
+        "url": "/sws/neo/goods-receipt/goodsReceiptLine/selectors/businessPartner"
+      },
+      {
+        "entity": "goodsReceiptLine",
         "field": "project",
         "column": "C_Project_ID",
         "reference": "Project",
@@ -2437,14 +2524,6 @@
         "description": "CRUD flags for 'goodsReceiptLine' should all be booleans"
       },
       {
-        "id": "t-default-value-type-goodsReceipt-accountingDate",
-        "category": "default-value-type",
-        "entity": "goodsReceipt",
-        "field": "accountingDate",
-        "runner": "node",
-        "description": "Default value for 'accountingDate' in goodsReceipt should be a string"
-      },
-      {
         "id": "t-default-value-type-goodsReceipt-documentStatus",
         "category": "default-value-type",
         "entity": "goodsReceipt",
@@ -2501,36 +2580,12 @@
         "description": "Default value for 'storageBin' in goodsReceiptLine should be a string"
       },
       {
-        "id": "t-displaylogic-evaluable-goodsReceipt-costcenter",
-        "category": "displaylogic-evaluable",
-        "entity": "goodsReceipt",
-        "field": "costcenter",
-        "runner": "node",
-        "description": "Display logic for 'costcenter' in goodsReceipt should have evaluable flag"
-      },
-      {
         "id": "t-displaylogic-evaluable-goodsReceipt-posted",
         "category": "displaylogic-evaluable",
         "entity": "goodsReceipt",
         "field": "posted",
         "runner": "node",
         "description": "Display logic for 'posted' in goodsReceipt should have evaluable flag"
-      },
-      {
-        "id": "t-displaylogic-evaluable-goodsReceipt-project",
-        "category": "displaylogic-evaluable",
-        "entity": "goodsReceipt",
-        "field": "project",
-        "runner": "node",
-        "description": "Display logic for 'project' in goodsReceipt should have evaluable flag"
-      },
-      {
-        "id": "t-displaylogic-evaluable-goodsReceiptLine-costcenter",
-        "category": "displaylogic-evaluable",
-        "entity": "goodsReceiptLine",
-        "field": "costcenter",
-        "runner": "node",
-        "description": "Display logic for 'costcenter' in goodsReceiptLine should have evaluable flag"
       },
       {
         "id": "t-displaylogic-evaluable-goodsReceiptLine-orderQuantity",
@@ -2541,22 +2596,6 @@
         "description": "Display logic for 'orderQuantity' in goodsReceiptLine should have evaluable flag"
       },
       {
-        "id": "t-displaylogic-evaluable-goodsReceiptLine-project",
-        "category": "displaylogic-evaluable",
-        "entity": "goodsReceiptLine",
-        "field": "project",
-        "runner": "node",
-        "description": "Display logic for 'project' in goodsReceiptLine should have evaluable flag"
-      },
-      {
-        "id": "t-displaylogic-valid-goodsReceipt-costcenter",
-        "category": "displaylogic-valid",
-        "entity": "goodsReceipt",
-        "field": "costcenter",
-        "runner": "node",
-        "description": "Display logic for 'costcenter' in goodsReceipt should be valid JS"
-      },
-      {
         "id": "t-displaylogic-valid-goodsReceipt-posted",
         "category": "displaylogic-valid",
         "entity": "goodsReceipt",
@@ -2565,44 +2604,12 @@
         "description": "Display logic for 'posted' in goodsReceipt should be valid JS"
       },
       {
-        "id": "t-displaylogic-valid-goodsReceipt-project",
-        "category": "displaylogic-valid",
-        "entity": "goodsReceipt",
-        "field": "project",
-        "runner": "node",
-        "description": "Display logic for 'project' in goodsReceipt should be valid JS"
-      },
-      {
-        "id": "t-displaylogic-valid-goodsReceiptLine-costcenter",
-        "category": "displaylogic-valid",
-        "entity": "goodsReceiptLine",
-        "field": "costcenter",
-        "runner": "node",
-        "description": "Display logic for 'costcenter' in goodsReceiptLine should be valid JS"
-      },
-      {
         "id": "t-displaylogic-valid-goodsReceiptLine-orderQuantity",
         "category": "displaylogic-valid",
         "entity": "goodsReceiptLine",
         "field": "orderQuantity",
         "runner": "node",
         "description": "Display logic for 'orderQuantity' in goodsReceiptLine should be valid JS"
-      },
-      {
-        "id": "t-displaylogic-valid-goodsReceiptLine-project",
-        "category": "displaylogic-valid",
-        "entity": "goodsReceiptLine",
-        "field": "project",
-        "runner": "node",
-        "description": "Display logic for 'project' in goodsReceiptLine should be valid JS"
-      },
-      {
-        "id": "t-field-presence-goodsReceipt-accountingDate",
-        "category": "field-presence",
-        "entity": "goodsReceipt",
-        "field": "accountingDate",
-        "runner": "node",
-        "description": "Field 'accountingDate' should be present in goodsReceipt"
       },
       {
         "id": "t-field-presence-goodsReceipt-asset",
@@ -2757,6 +2764,14 @@
         "description": "Field 'attributeSetValue' should be present in goodsReceiptLine"
       },
       {
+        "id": "t-field-presence-goodsReceiptLine-businessPartner",
+        "category": "field-presence",
+        "entity": "goodsReceiptLine",
+        "field": "businessPartner",
+        "runner": "node",
+        "description": "Field 'businessPartner' should be present in goodsReceiptLine"
+      },
+      {
         "id": "t-field-presence-goodsReceiptLine-costcenter",
         "category": "field-presence",
         "entity": "goodsReceiptLine",
@@ -2875,14 +2890,6 @@
         "field": "uOM",
         "runner": "node",
         "description": "Field 'uOM' should be present in goodsReceiptLine"
-      },
-      {
-        "id": "t-field-type-goodsReceipt-accountingDate",
-        "category": "field-type",
-        "entity": "goodsReceipt",
-        "field": "accountingDate",
-        "runner": "node",
-        "description": "Field 'accountingDate' should have type 'string' in goodsReceipt"
       },
       {
         "id": "t-field-type-goodsReceipt-asset",
@@ -3037,6 +3044,14 @@
         "description": "Field 'attributeSetValue' should have type 'string' in goodsReceiptLine"
       },
       {
+        "id": "t-field-type-goodsReceiptLine-businessPartner",
+        "category": "field-type",
+        "entity": "goodsReceiptLine",
+        "field": "businessPartner",
+        "runner": "node",
+        "description": "Field 'businessPartner' should have type 'string' in goodsReceiptLine"
+      },
+      {
         "id": "t-field-type-goodsReceiptLine-costcenter",
         "category": "field-type",
         "entity": "goodsReceiptLine",
@@ -3157,14 +3172,6 @@
         "description": "Field 'uOM' should have type 'string' in goodsReceiptLine"
       },
       {
-        "id": "t-readonlylogic-evaluable-goodsReceipt-accountingDate",
-        "category": "readonlylogic-evaluable",
-        "entity": "goodsReceipt",
-        "field": "accountingDate",
-        "runner": "node",
-        "description": "Read-only logic for 'accountingDate' in goodsReceipt should have evaluable flag"
-      },
-      {
         "id": "t-readonlylogic-evaluable-goodsReceipt-asset",
         "category": "readonlylogic-evaluable",
         "entity": "goodsReceipt",
@@ -3277,6 +3284,14 @@
         "description": "Read-only logic for 'attributeSetValue' in goodsReceiptLine should have evaluable flag"
       },
       {
+        "id": "t-readonlylogic-evaluable-goodsReceiptLine-businessPartner",
+        "category": "readonlylogic-evaluable",
+        "entity": "goodsReceiptLine",
+        "field": "businessPartner",
+        "runner": "node",
+        "description": "Read-only logic for 'businessPartner' in goodsReceiptLine should have evaluable flag"
+      },
+      {
         "id": "t-readonlylogic-evaluable-goodsReceiptLine-costcenter",
         "category": "readonlylogic-evaluable",
         "entity": "goodsReceiptLine",
@@ -3371,14 +3386,6 @@
         "field": "uOM",
         "runner": "node",
         "description": "Read-only logic for 'uOM' in goodsReceiptLine should have evaluable flag"
-      },
-      {
-        "id": "t-readonlylogic-valid-goodsReceipt-accountingDate",
-        "category": "readonlylogic-valid",
-        "entity": "goodsReceipt",
-        "field": "accountingDate",
-        "runner": "node",
-        "description": "Read-only logic for 'accountingDate' in goodsReceipt should be valid JS"
       },
       {
         "id": "t-readonlylogic-valid-goodsReceipt-asset",
@@ -3491,6 +3498,14 @@
         "field": "attributeSetValue",
         "runner": "node",
         "description": "Read-only logic for 'attributeSetValue' in goodsReceiptLine should be valid JS"
+      },
+      {
+        "id": "t-readonlylogic-valid-goodsReceiptLine-businessPartner",
+        "category": "readonlylogic-valid",
+        "entity": "goodsReceiptLine",
+        "field": "businessPartner",
+        "runner": "node",
+        "description": "Read-only logic for 'businessPartner' in goodsReceiptLine should be valid JS"
       },
       {
         "id": "t-readonlylogic-valid-goodsReceiptLine-costcenter",
@@ -3975,6 +3990,14 @@
         "description": "Selector endpoint for 'asset' in goodsReceiptLine should exist"
       },
       {
+        "id": "t-selector-endpoint-goodsReceiptLine-businessPartner",
+        "category": "selector-endpoint",
+        "entity": "goodsReceiptLine",
+        "field": "businessPartner",
+        "runner": "node",
+        "description": "Selector endpoint for 'businessPartner' in goodsReceiptLine should exist"
+      },
+      {
         "id": "t-selector-endpoint-goodsReceiptLine-costcenter",
         "category": "selector-endpoint",
         "entity": "goodsReceiptLine",
@@ -4045,6 +4068,14 @@
         "field": "uOM",
         "runner": "node",
         "description": "Selector endpoint for 'uOM' in goodsReceiptLine should exist"
+      },
+      {
+        "id": "t-system-field-goodsReceipt-accountingDate",
+        "category": "system-field",
+        "entity": "goodsReceipt",
+        "field": "accountingDate",
+        "runner": "node",
+        "description": "System field 'accountingDate' should exist in backend but not frontend for goodsReceipt"
       },
       {
         "id": "t-system-field-goodsReceipt-active",
@@ -4479,14 +4510,6 @@
         "description": "System field 'bOMParentID' should exist in backend but not frontend for goodsReceiptLine"
       },
       {
-        "id": "t-system-field-goodsReceiptLine-businessPartner",
-        "category": "system-field",
-        "entity": "goodsReceiptLine",
-        "field": "businessPartner",
-        "runner": "node",
-        "description": "System field 'businessPartner' should exist in backend but not frontend for goodsReceiptLine"
-      },
-      {
         "id": "t-system-field-goodsReceiptLine-canceledInoutLine",
         "category": "system-field",
         "entity": "goodsReceiptLine",
@@ -4622,25 +4645,25 @@
       }
     ],
     "summary": {
-      "total": 292,
+      "total": 284,
       "byCategory": {
         "action-endpoint": 12,
         "crud-flags": 2,
-        "default-value-type": 8,
-        "displaylogic-evaluable": 6,
-        "displaylogic-valid": 6,
+        "default-value-type": 7,
+        "displaylogic-evaluable": 2,
+        "displaylogic-valid": 2,
         "field-presence": 35,
         "field-type": 35,
         "readonlylogic-evaluable": 27,
         "readonlylogic-valid": 27,
         "rule-declared": 38,
         "searchable-filters": 5,
-        "selector-endpoint": 19,
+        "selector-endpoint": 20,
         "system-field": 70,
         "visibility": 2
       },
       "byRunner": {
-        "node": 292,
+        "node": 284,
         "junit": 0
       }
     }
