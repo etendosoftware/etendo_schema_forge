@@ -1,8 +1,8 @@
 {
-  "version": "0.17.0",
+  "version": "0.18.0",
   "generatedAt": "2026-06-11T01:47:08.755Z",
-  "updatedAt": "2026-07-21T12:35:19.261Z",
-  "checksum": "effb38fa7ad6cf67",
+  "updatedAt": "2026-07-28T13:29:08.990Z",
+  "checksum": "163c39cb2f214919",
   "frontendContract": {
     "window": {
       "id": "94EAA455D2644E04AB25D93BE5157B6D",
@@ -1223,10 +1223,9 @@
               "maxLength": 32
             },
             "displayLogic": {
-              "raw": "@ACCT_DIMENSION_DISPLAY@ & @Trxtype@!''",
-              "evaluable": false,
-              "reason": "server-macro",
-              "js": null
+              "raw": "@Trxtype@!''",
+              "evaluable": true,
+              "js": "record['transactionType'] !== ''"
             },
             "readOnlyLogic": {
               "raw": "@Posted@='Y' | @Fin_Payment_ID@!''",

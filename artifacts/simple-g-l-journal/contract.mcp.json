@@ -1,8 +1,8 @@
 {
-  "version": "0.16.0",
+  "version": "0.17.0",
   "generatedAt": "2026-06-16T16:34:09.049Z",
-  "updatedAt": "2026-06-24T20:46:49.776Z",
-  "contractChecksum": "19e80ebf3f7692bf",
+  "updatedAt": "2026-07-28T13:29:09.489Z",
+  "contractChecksum": "c1b0fb70e64265b7",
   "apiPrediction": {
     "specName": "simple-g-l-journal",
     "baseUrl": "/sws/neo/simple-g-l-journal",
@@ -48,6 +48,38 @@
         "reference": "Currency",
         "inputMode": "selector",
         "url": "/sws/neo/simple-g-l-journal/gLJournal/selectors/currency"
+      },
+      {
+        "entity": "gLJournal",
+        "field": "businessPartner",
+        "column": "C_Bpartner_ID",
+        "reference": "BPartner",
+        "inputMode": "search",
+        "url": "/sws/neo/simple-g-l-journal/gLJournal/selectors/businessPartner"
+      },
+      {
+        "entity": "gLJournal",
+        "field": "product",
+        "column": "M_Product_ID",
+        "reference": "Product",
+        "inputMode": "search",
+        "url": "/sws/neo/simple-g-l-journal/gLJournal/selectors/product"
+      },
+      {
+        "entity": "gLJournal",
+        "field": "project",
+        "column": "C_Project_ID",
+        "reference": "Project",
+        "inputMode": "selector",
+        "url": "/sws/neo/simple-g-l-journal/gLJournal/selectors/project"
+      },
+      {
+        "entity": "gLJournal",
+        "field": "costCenter",
+        "column": "C_Costcenter_ID",
+        "reference": "Costcenter",
+        "inputMode": "selector",
+        "url": "/sws/neo/simple-g-l-journal/gLJournal/selectors/costCenter"
       },
       {
         "entity": "gLJournalLine",
@@ -293,6 +325,18 @@
             "readOnly": true,
             "required": true,
             "defaultValue": "N"
+          },
+          "businessPartner": {
+            "readOnlyLogic": "@Posted@='Y'"
+          },
+          "product": {
+            "readOnlyLogic": "@Posted@='Y'"
+          },
+          "project": {
+            "readOnlyLogic": "@Posted@='Y'"
+          },
+          "costCenter": {
+            "readOnlyLogic": "@Posted@='Y'"
           }
         }
       },
@@ -425,5 +469,5 @@
     "knownLimitations": [],
     "dangerousOperations": []
   },
-  "checksum": "f001a0c221f215e9"
+  "checksum": "452c18b9a9a63447"
 }

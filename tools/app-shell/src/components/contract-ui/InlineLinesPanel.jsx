@@ -158,12 +158,12 @@ function renderDimensionsSubRow({
 }) {
   if (!isRowExpanded) return null;
   return (
-    <div className="border-b bg-white px-10 pb-5 pt-3" style={{ borderColor: TOKENS.separator }} data-testid={`dimensions-panel-${row.id}`}>
+    <div className="border-b bg-card px-10 pb-5 pt-3" style={{ borderColor: TOKENS.separator }} data-testid={`dimensions-panel-${row.id}`}>
       {row['organization$_identifier'] && (
         <div className="mb-4 grid grid-cols-4 gap-4">
           <div>
             <label className="block text-xs font-medium text-muted-foreground mb-1">{ui('organization')} *</label>
-            <div className="h-10 flex items-center px-3 rounded-lg border border-[#D1D4DB] bg-white text-sm text-foreground">{row['organization$_identifier']}</div>
+            <div className="h-10 flex items-center px-3 rounded-lg border border-[hsl(var(--border-control))] bg-card text-sm text-foreground">{row['organization$_identifier']}</div>
           </div>
         </div>
       )}
@@ -1013,7 +1013,7 @@ const InlineLinesPanel = forwardRef(function InlineLinesPanel({
                 <button
                   type="button"
                   onClick={() => setExpandedRowId(isRowExpanded ? null : row.id)}
-                  className="flex h-7 w-7 items-center justify-center rounded-full border border-[#D1D4DB] bg-white text-[#6C6C89] transition-transform hover:bg-[#F5F7F9] hover:text-[#121217]"
+                  className="flex h-7 w-7 items-center justify-center rounded-full border border-[hsl(var(--border-control))] bg-card text-[hsl(var(--muted-foreground))] transition-transform hover:bg-[hsl(var(--muted))] hover:text-[hsl(var(--foreground))]"
                   style={{ transform: isRowExpanded ? 'rotate(180deg)' : undefined }}
                   aria-label={ui(isRowExpanded ? 'collapse' : 'expand')}
                   aria-expanded={isRowExpanded}
