@@ -16,7 +16,7 @@ vi.mock('@/i18n', () => ({
       financeAccountsTypeCash: 'Caja',
       financeAccountsTypeCard: 'Tarjeta',
       financeAccountsBadgeOffline: 'Sin conexión',
-      financeAccountsConnectPsd2: 'Conectar PSD2',
+      financeAccountsConnectBank: 'Conectar banco',
       financeAccountsCopyIban: 'Copiar IBAN',
       financeAccountsRowRefresh: 'Sincronizar',
       financeAccountsRowMenuLabel: 'Acciones',
@@ -41,7 +41,7 @@ const accounts = [
     currentBalance: 1500,
     currencyIso: 'EUR',
     pendingCount: 0,
-    psd2Connected: true,
+    bankConnected: true,
   },
   {
     id: 'acc-2',

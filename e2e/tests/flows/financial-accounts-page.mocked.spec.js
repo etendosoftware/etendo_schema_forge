@@ -24,7 +24,7 @@ const ACCOUNTS = [
     iban: 'ES1212340000000000000001',
     isDefault: true,
     pendingCount: 12,
-    psd2Connected: true,
+    bankConnected: true,
   },
   {
     id: 'acc-2',
@@ -36,7 +36,7 @@ const ACCOUNTS = [
     iban: 'ES1212340000000000000002',
     isDefault: false,
     pendingCount: 1,
-    psd2Connected: true,
+    bankConnected: true,
   },
   {
     id: 'acc-3',
@@ -48,7 +48,7 @@ const ACCOUNTS = [
     iban: 'ES1212340000000000000003',
     isDefault: false,
     pendingCount: 5,
-    psd2Connected: false,
+    bankConnected: false,
   },
   {
     id: 'acc-4',

@@ -12,11 +12,11 @@ import { ReconcilePill } from '../ReconcilePill.jsx';
 import { AccountRowMenu } from '../AccountRowMenu.jsx';
 import { ACCOUNT_COLUMNS, ACCOUNT_CELL_RENDERERS } from './accountColumns.jsx';
 
-export function AccountRow({ account, onOpen, onReconcile, onEdit, onArchive, onPsd2Action, onTransfer, onNewMovement }) {
+export function AccountRow({ account, onOpen, onReconcile, onEdit, onArchive, onBankConnectionAction, onTransfer, onNewMovement }) {
   const ui = useUI();
   const cellCtx = {
     ui,
-    onConnect: onPsd2Action ? (acc) => onPsd2Action('connect', acc) : undefined,
+    onConnect: onBankConnectionAction ? (acc) => onBankConnectionAction('connect', acc) : undefined,
   };
 
   return (
@@ -68,16 +68,16 @@ export function AccountRow({ account, onOpen, onReconcile, onEdit, onArchive, on
               </TooltipTrigger>
               <TooltipContent data-testid="TooltipContent__90174f">{ui('financeAccountsMenuEdit')}</TooltipContent>
             </Tooltip>
-            {/* Sync is only meaningful for PSD2-connected accounts — same statement fetch as the
+            {/* Sync is only meaningful for bank-connected accounts — same statement fetch as the
                 kebab's "Sincronizar ahora" / the statements tab's "Sincronizar extractos". */}
-            {account.psd2Connected === true ? (
+            {account.bankConnected === true ? (
               <Tooltip delayDuration={0} data-testid="Tooltip__90174f">
                 <TooltipTrigger asChild data-testid="TooltipTrigger__90174f">
                   <button
                     type="button"
                     aria-label={ui('financeAccountsMenuSyncNow')}
                     data-testid={`account-row-refresh-${account.id}`}
-                    onClick={() => onPsd2Action?.('syncNow', account)}
+                    onClick={() => onBankConnectionAction?.('syncNow', account)}
                     className="inline-flex h-8 w-8 items-center justify-center rounded-full text-[hsl(var(--text-disabled))] hover:bg-[hsl(var(--border-subtle))]"
                   >
                     <RefreshCw className="h-5 w-5" data-testid="RefreshCw__90174f" />
@@ -91,7 +91,7 @@ export function AccountRow({ account, onOpen, onReconcile, onEdit, onArchive, on
               onOpen={onOpen}
               onEdit={onEdit}
               onArchive={onArchive}
-              onPsd2Action={onPsd2Action}
+              onBankConnectionAction={onBankConnectionAction}
               onTransfer={onTransfer}
               onNewMovement={onNewMovement}
               data-testid="AccountRowMenu__90174f" />

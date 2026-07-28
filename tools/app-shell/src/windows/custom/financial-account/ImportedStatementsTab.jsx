@@ -3,7 +3,7 @@ import { toast } from 'sonner';
 import { useUI } from '@/i18n';
 import { useBankStatements } from '@/hooks/useBankStatements';
 import { useStatementActions } from '@/hooks/useStatementActions';
-import { usePsd2Actions } from '@/hooks/usePsd2Actions';
+import { useBankConnectionActions } from '@/hooks/useBankConnectionActions';
 import { StatementsToolbar } from './StatementsToolbar';
 import { StatementsTable } from './StatementsTable';
 import { StatementLinesView } from './StatementLinesView';
@@ -30,14 +30,14 @@ export const ImportedStatementsTab = forwardRef(function ImportedStatementsTab({
   const ui = useUI();
   const accountId = account?.id ?? null;
   const currency = account?.currencyIso ?? 'EUR';
-  // PSD2-synced accounts get their statements only from Salt Edge, so manual import / manual
+  // bank-synced accounts get their statements only from Salt Edge, so manual import / manual
   // line creation are not offered: the import split-button is replaced by a single "sync
-  // statements" action that runs the PSD2 fetch (Classic's "Get Bank Statement" equivalent).
-  const psd2Synced = account?.psd2Connected === true;
+  // statements" action that runs the bank fetch (Classic's "Get Bank Statement" equivalent).
+  const bankConnectionSynced = account?.bankConnected === true;
 
   const { statements, loading, reload } = useBankStatements(accountId);
   const { processStatement, reactivateStatement, deleteStatement, busy } = useStatementActions();
-  const { sync } = usePsd2Actions();
+  const { sync } = useBankConnectionActions();
   const [syncing, setSyncing] = useState(false);
 
   const [selectedStatementId, setSelectedStatementId] = useState(null);
@@ -75,7 +75,7 @@ export const ImportedStatementsTab = forwardRef(function ImportedStatementsTab({
 
   const closeConfirm = () => setConfirm({ variant: null, statement: null });
 
-  // Runs the PSD2 statement fetch for this account (same backend action behind the kebab's
+  // Runs the bank statement fetch for this account (same backend action behind the kebab's
   // "Sync now"). The bridge mirrors Classic's "Get Bank Statement": it returns a status
   // (Success/WARNING/ERROR) plus the localized process message rather than throwing.
   const handleSyncStatements = async () => {
@@ -86,14 +86,14 @@ export const ImportedStatementsTab = forwardRef(function ImportedStatementsTab({
       reload();
       const msg = res?.message;
       if (res?.status === 'ERROR') {
-        toast.error(msg || ui('financeAccountsPsd2SyncError'));
+        toast.error(msg || ui('financeAccountsBankConnectionSyncError'));
       } else if (res?.status === 'WARNING') {
-        toast.info(msg || ui('financeAccountsPsd2SyncDone'));
+        toast.info(msg || ui('financeAccountsBankConnectionSyncDone'));
       } else {
-        toast.success(msg || ui('financeAccountsPsd2SyncDone'));
+        toast.success(msg || ui('financeAccountsBankConnectionSyncDone'));
       }
     } catch (err) {
-      toast.error(err?.message || ui('financeAccountsPsd2SyncError'));
+      toast.error(err?.message || ui('financeAccountsBankConnectionSyncError'));
     } finally {
       setSyncing(false);
     }
@@ -196,7 +196,7 @@ export const ImportedStatementsTab = forwardRef(function ImportedStatementsTab({
         rows={statements}
         onImportClick={() => setImportOpen(true)}
         onManualClick={() => setManualOpen(true)}
-        psd2Synced={psd2Synced}
+        bankConnectionSynced={bankConnectionSynced}
         onSyncClick={handleSyncStatements}
         syncing={syncing}
         data-testid="StatementsToolbar__6f147a" />

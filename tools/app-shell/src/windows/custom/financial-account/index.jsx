@@ -15,8 +15,8 @@ import { ReconciliationTab } from './ReconciliationTab';
 import { ImportedStatementsTab } from './ImportedStatementsTab';
 import { EditAccountModal } from './EditAccountModal.jsx';
 import { ArchiveAccountDialog } from './ArchiveAccountDialog.jsx';
-import { Psd2ConnectFlowUI } from './Psd2ConnectFlowUI.jsx';
-import { usePsd2ConnectFlow } from '@/hooks/usePsd2ConnectFlow';
+import { BankConnectionFlowUI } from './BankConnectionFlowUI.jsx';
+import { useBankConnectionFlow } from '@/hooks/useBankConnectionFlow';
 import { AutoMatchSuggestionModal } from '@/components/contract-ui/AutoMatchSuggestionModal';
 import { useAutoMatch } from '@/hooks/useReconciliation';
 import { SyncStatusInline } from '@/components/financial-accounts/SyncStatusInline';
@@ -127,9 +127,9 @@ export default function FinancialAccountWindow({ recordId }) {
     setSearchParams({}, { replace: true });
   }, [searchParams, setSearchParams]);
   const { account, reload: reloadAccount } = useFinancialAccount(recordId);
-  // ETP-4530: powers the Edit modal's "Connect to PSD2" button from this entry point too — same
+  // ETP-4530: powers the Edit modal's "Connect bank" button from this entry point too — same
   // flow/UI as the accounts list (FinancialAccountsPage.jsx), just reloading the account instead.
-  const psd2Flow = usePsd2ConnectFlow({ onDone: reloadAccount });
+  const bankConnectionFlow = useBankConnectionFlow({ onDone: reloadAccount });
   const { groups: autoMatchGroups, kpis: autoMatchKpis, reload: reloadAutoMatch } = useAutoMatch(
     autoMatchOpen ? recordId : null,
   );
@@ -233,7 +233,7 @@ export default function FinancialAccountWindow({ recordId }) {
       titleExtra: account ? <SyncStatusInline account={account} data-testid="SyncStatusInline__f7dbb3" /> : null,
       breadcrumb: `${ui('financeMenuLabel')} / ${ui('financeAccountsPageTitle')} / ${accountName}`,
     },
-    [accountName, account?.type, account?.psd2Connected, account?.psd2Pending],
+    [accountName, account?.type, account?.bankConnected, account?.bankConnectionPending],
   );
 
   return (
@@ -333,7 +333,7 @@ export default function FinancialAccountWindow({ recordId }) {
         onClose={() => setEditOpen(false)}
         onSaved={reloadAccount}
         onArchive={(acc) => { setEditOpen(false); setArchiveTarget(acc); }}
-        onConnect={(acc) => { setEditOpen(false); psd2Flow.startConnect(acc); }}
+        onConnect={(acc) => { setEditOpen(false); bankConnectionFlow.startConnect(acc); }}
         data-testid="EditAccountModal__f7dbb3" />
       <ArchiveAccountDialog
         open={!!archiveTarget}
@@ -341,7 +341,7 @@ export default function FinancialAccountWindow({ recordId }) {
         onClose={() => setArchiveTarget(null)}
         onArchived={() => { setArchiveTarget(null); navigate('/finance/accounts'); }}
         data-testid="ArchiveAccountDialog__f7dbb3" />
-      <Psd2ConnectFlowUI flow={psd2Flow} data-testid="Psd2ConnectFlowUI__f7dbb3" />
+      <BankConnectionFlowUI flow={bankConnectionFlow} data-testid="BankConnectionFlowUI__f7dbb3" />
     </TooltipProvider>
   );
 }

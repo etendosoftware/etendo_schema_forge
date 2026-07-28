@@ -374,7 +374,7 @@ footer, only when **all** hold (mirrors the backend's own eligibility check, so 
 heuristic, not exhaustive):
 
 - direction is **payment out** (`dir === 'out'` — purchase invoice), and
-- the selected financial account is **PSD2-connected** (`psd2Connected`, sourced from the
+- the selected financial account is **bank-connected** (`bankConnected`, sourced from the
   enriched `invoiceAccounts` action — same `EM_PSD2_Connection_Status='CO'` check as
   `FinancialAccountsPageHandler`), and
 - the payment method looks like a transfer (name contains "transfer"/"transferencia"), and
@@ -392,8 +392,8 @@ On confirm with `pis: true`, the `registerPayment` action creates and links the 
 and **processes it to status `PPM`** ("Payment Made") — applied to the invoice but with **no
 `FIN_Finacc_Transaction` yet**. The bank transaction is created only once Salt Edge confirms
 execution, by the PSD2 module's own `PisPaymentCallback` → `PISTransactionUtils` (idempotent).
-To keep config and runtime aligned, connecting an account to PSD2 **from Etendo Go** clears the
-transfer method's **Automatic Withdrawn** flag (`FinancialAccountPsd2Handler`) — Payment OUT
+To keep config and runtime aligned, connecting an account to its bank **from Etendo Go** clears the
+transfer method's **Automatic Withdrawn** flag (`FinancialAccountBankConnectionHandler`) — Payment OUT
 only; Automatic Deposit is left untouched, since PIS only initiates outbound transfers.
 
 The response carries `pisPaymentUrl` + `pisPaymentId`; the modal opens the Salt Edge SCA widget
@@ -406,7 +406,7 @@ reactivates + removes the unauthorized payment). The non-PIS path is byte-for-by
 
 ### Payment history badge
 
-Payments that have a linked `PSD2_PIS_PAYMENT` row show a **"Realizado vía PSD2"** badge
+Payments that have a linked `PSD2_PIS_PAYMENT` row show a **"Realizado vía banco"** badge
 (`cpPisViaLabel`) in the history modal. The flag comes from a direct `OBCriteria<PisPayment>`
 query in the GO module (`PisPaymentService.hasLinkedPisPayment`), not a new PSD2-module method.
 

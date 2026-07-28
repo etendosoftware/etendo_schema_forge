@@ -11,7 +11,7 @@ vi.mock('@/i18n', () => ({
       financeAccountsTypeCard: 'Tarjeta',
       financeAccountsBadgeOffline: 'Sin conexión',
       financeAccountsCopyIban: 'Copiar IBAN',
-      financeAccountsConnectPsd2: 'Conectar PSD2',
+      financeAccountsConnectBank: 'Conectar banco',
       financeAccountsSyncedJustNow: 'Sincronizado',
       financeAccountsRowMenuLabel: 'Acciones',
       financeAccountsMenuOpen: 'Abrir cuenta',
@@ -45,7 +45,7 @@ const baseAccount = {
   currencyIso: 'EUR',
   iban: 'ES1200001234567890123456',
   pendingCount: 0,
-  psd2Connected: false,
+  bankConnected: false,
 };
 
 describe('AccountRow', () => {
@@ -86,7 +86,7 @@ describe('AccountRow', () => {
     expect(screen.getByText(/ES12 0000 1234 5678 9012 3456/)).toBeInTheDocument();
   });
 
-  it('renders the PSD2 masked card number for card accounts (no IBAN)', () => {
+  it('renders the masked card number for card accounts (no IBAN)', () => {
     renderRow({
       account: {
         ...baseAccount, type: 'CA', iban: '', maskedPan: '**** **** **** 1234',
