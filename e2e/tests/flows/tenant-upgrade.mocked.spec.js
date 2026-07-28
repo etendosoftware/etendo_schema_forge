@@ -85,14 +85,25 @@ async function installEnvironmentsMock(page, environments) {
 /**
  * Mocks the onboarding endpoint and records every request body it receives, so
  * a test can assert both what was sent and that nothing was sent at all.
+ *
+ * `route.fulfill` always delivers its `body` as a single complete response —
+ * it cannot stream a chunked/NDJSON body incrementally, so this mock never
+ * reproduces genuine per-step streaming. `delayMs` (default 0, so the other
+ * tests using this mock are unaffected) only holds the fulfilled response
+ * back by a fixed amount, giving a test a deterministic window in which
+ * UpgradePage's `running` phase is mounted before the response resolves.
  */
-async function installOnboardingMock(page, { status = 200, success = true } = {}) {
+async function installOnboardingMock(page, { status = 200, success = true, delayMs = 0 } = {}) {
   const requests = [];
   await page.route('**/sws/go/onboarding**', async (route) => {
     const request = route.request();
     if (request.method() !== 'POST') return route.fallback();
 
     requests.push(JSON.parse(request.postData() || '{}'));
+
+    if (delayMs > 0) {
+      await new Promise(resolve => setTimeout(resolve, delayMs));
+    }
 
     if (status === 402) {
       return route.fulfill({
@@ -161,7 +172,13 @@ test.describe('Tenant upgrade — checkout and provisioning', () => {
   });
 
   test('happy path: checkout streams provisioning progress and reaches success', async ({ page }) => {
-    const requests = await installOnboardingMock(page);
+    // installOnboardingMock cannot stream the NDJSON body incrementally (see
+    // its doc comment), so this delay is what makes the intermediate
+    // `running` phase observable at all: without it, the mock resolves
+    // faster than Playwright's first poll and the progress panel is
+    // sometimes never caught mounted (the original flake behind ETP-4686).
+    const RUNNING_PHASE_DELAY_MS = 750;
+    const requests = await installOnboardingMock(page, { delayMs: RUNNING_PHASE_DELAY_MS });
     await gotoUpgrade(page);
 
     // Both plans are compared before any payment detail is asked for.
@@ -172,8 +189,17 @@ test.describe('Tenant upgrade — checkout and provisioning', () => {
     await fillCheckout(page, { tenantName: 'Acme Productive' });
     await page.getByTestId('upgrade-submit').click();
 
-    // Every streamed step is rendered, then the success panel replaces the form.
+    // The progress panel mounts with all steps seeded (UpgradePage sets phase
+    // to 'running' before awaiting the request), and the mock is still
+    // holding the response back, so success has not happened yet. This does
+    // NOT verify that steps update one by one as they stream in — the mock
+    // cannot deliver a chunked body, so per-step progression is unobservable
+    // here — only that the running phase renders before success replaces it.
+    await expect(page.getByTestId('upgrade-progress')).toBeVisible();
     await expect(page.getByTestId('upgrade-progress-step-finalize')).toBeVisible();
+    await expect(page.getByTestId('upgrade-success')).toHaveCount(0);
+
+    // Once the delayed mock resolves, the success panel replaces the form.
     await expect(page.getByTestId('upgrade-success')).toBeVisible();
     await expect(page.getByTestId('upgrade-checkout')).toHaveCount(0);
 
