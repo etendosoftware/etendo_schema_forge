@@ -440,3 +440,15 @@ public class InternalConsumptionLineHandler implements NeoHandler {
 - Place handlers in: `{etendo_root}/modules/com.etendoerp.go/src/com/etendoerp/go/schemaforge/handlers/`
 
 Full reference: `docs/neo-headless-extensibility.md`
+
+## Adding a New Etendo GO Webhook — NEO Pseudo-Spec Bridge Pattern (com.etendoerp.go)
+
+**A different extension point from `NeoHandler` above** — for a brand-new, standalone
+Etendo-GO-authored webhook (e.g. `SFListMenu`, `SFWindowAccessMap`, `SFRolesOverview`), default to
+routing it through the **NEO pseudo-spec bridge** (`NeoGoWebhookBridge`, wired in `NeoServlet`)
+instead of exposing it only via the Webhooks module's `/webhooks/*` + `SMFWHE_DEFINEDWEBHOOK_ROLE`
+grant. That grant table is reset to its XML-only baseline by `update.database`, silently wiping any
+tenant-specific grant — the NEO bridge needs only a valid NEO bearer token, no per-role grant. No
+security is weakened: each webhook's own access rule inside `get()` is unchanged either way.
+
+Full reference: `{etendo_root}/modules/com.etendoerp.go/docs/neo-headless.md` §4.10–4.11.
