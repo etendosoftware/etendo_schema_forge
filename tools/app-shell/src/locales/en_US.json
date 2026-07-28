@@ -16645,6 +16645,7 @@
     "dimensionsPanelTitle": "Accounting dimensions",
     "dimensionsPanelEmpty": "Add dimensions",
     "addDimensionsTooltip": "Add dimensions",
+    "editDimensionsTooltip": "Edit dimensions",
     "editLine": "Edit line",
     "noLines": "No lines",
     "backendError.amortizationCurrencyRequired": "Currency field cannot be empty",

@@ -16886,6 +16886,7 @@
     "dimensionsPanelTitle": "Dimensiones contables",
     "dimensionsPanelEmpty": "Añadir dimensiones",
     "addDimensionsTooltip": "Añadir dimensiones",
+    "editDimensionsTooltip": "Editar dimensiones",
     "editLine": "Editar línea",
     "noLines": "Sin líneas",
     "backendError.amortizationCurrencyRequired": "El campo Moneda no puede estar vacío.",

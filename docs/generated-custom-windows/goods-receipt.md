@@ -178,8 +178,9 @@ already regenerated. Re-ran `make regen ONLY=goods-receipt SKIP_EXTRACT=1 LOCAL_
 clean (`sf-validate-pipeline`, 0 violations, additive version bump). Separately, `InlineLinesPanel`
 no longer renders the `dimensionsPanel` type as a grid column at all — "Añadir dimensiones" is now
 a hover action next to Edit/Delete, gated on at least one visible dimension field, with the
-expand-chevron column unchanged. See `docs/ui-customization.md` §14b/§14c and `docs/feedback.md`'s
-ETP-4610 entry.
+expand-chevron column unchanged. The label/icon is adaptive: "Añadir dimensiones" while the line has
+no dimension values, "Editar dimensiones" once at least one is set. See `docs/ui-customization.md`
+§14b/§14c and `docs/feedback.md`'s ETP-4610 entry.
 
 ## Theme roles
 

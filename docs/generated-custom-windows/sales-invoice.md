@@ -521,7 +521,9 @@ The "Dimensiones contables" grid column described above no longer renders at all
 filters the `dimensionsPanel` column type out of the grid unconditionally. The "Añadir dimensiones"
 trigger moved into the line's hover-action strip (next to Edit/Delete), shown only when at least one
 dimension field is currently visible; the leading expand-chevron column is unchanged and still opens
-the same expand-row. See `docs/ui-customization.md` §14b/§14c and `docs/feedback.md`'s ETP-4610 entry.
+the same expand-row. The label/icon is adaptive: "Añadir dimensiones" while the line has no dimension
+values set, "Editar dimensiones" once at least one is filled. See `docs/ui-customization.md` §14b/§14c
+and `docs/feedback.md`'s ETP-4610 entry.
 
 ## Multi-currency support in the Cobros/Pagos modal — ETP-4504
 

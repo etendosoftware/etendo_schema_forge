@@ -626,7 +626,7 @@ Fields flagged `dimensionsPanel: true` (any number, on any inline-editable-layou
 }
 ```
 
-`InlineLinesPanel` never renders this column type in the grid itself (ETP-4610 — no header cell, no width, no per-row badges). Instead it drives two things: a leading expand-chevron column (unchanged since ETP-4529) and an "Add dimensions" entry in the row's hover-action strip, next to the Edit/Delete icons, shown only when at least one `dimensionFields` candidate is currently visible. Clicking either the chevron or the hover action expands the same full-width sub-row of selectors below the data row — see `docs/ui-customization.md` §14b for the full UX and the shared `DimensionsPanel.jsx` building blocks (still used for the expanded `DimensionGrid`; the collapsed `DimSummary` badge/trigger is no longer used by `InlineLinesPanel`).
+`InlineLinesPanel` never renders this column type in the grid itself (ETP-4610 — no header cell, no width, no per-row badges). Instead it drives two things: a leading expand-chevron column (unchanged since ETP-4529) and an adaptive "Add dimensions"/"Edit dimensions" entry in the row's hover-action strip, next to the Edit/Delete icons, shown only when at least one `dimensionFields` candidate is currently visible. Clicking either the chevron or the hover action expands the same full-width sub-row of selectors below the data row — see `docs/ui-customization.md` §14b for the full UX and the shared `DimensionsPanel.jsx` building blocks (still used for the expanded `DimensionGrid`; the collapsed `DimSummary` badge/trigger is no longer used by `InlineLinesPanel`).
 
 **Rules:**
 

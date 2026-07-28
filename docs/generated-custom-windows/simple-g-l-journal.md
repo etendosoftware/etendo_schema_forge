@@ -174,7 +174,9 @@ ETP-4610) — likely lost across the `epic/ETP-3504` merges preceding this branc
 (`sf-validate-pipeline`, 0 violations, additive version bump, no unrelated translation drift).
 Separately, `InlineLinesPanel` no longer renders the `dimensionsPanel` type as a grid column in
 its own `inlineEditable` layout — "Añadir dimensiones" is now a hover action next to Edit/Delete,
-gated on at least one visible dimension field, with the expand-chevron column unchanged. (The
+gated on at least one visible dimension field, with the expand-chevron column unchanged. The
+label/icon is adaptive: "Añadir dimensiones" while the line has no dimension values, "Editar
+dimensiones" once at least one is set. (The
 `DataTable`-driven classic-grid path this window also uses does not render `dimensionsPanel` at
 all — pre-existing behavior, unrelated to and unchanged by ETP-4610.) See
 `docs/ui-customization.md` §14b/§14c and `docs/feedback.md`'s ETP-4610 entry.

@@ -480,7 +480,8 @@ generated `LinesTable.jsx` declares the synthetic column, so the panel renders f
 
 Same change as `sales-invoice.md`: the "Dimensiones contables" grid column no longer renders.
 "Añadir dimensiones" moved into the line's hover-action strip next to Edit/Delete, gated on at
-least one visible dimension field; the expand-chevron column is unchanged. See
+least one visible dimension field; the expand-chevron column is unchanged. Label/icon is adaptive
+("Añadir dimensiones" → "Editar dimensiones" once the line has a dimension value set). See
 `docs/ui-customization.md` §14b/§14c and `docs/feedback.md`'s ETP-4610 entry.
 
 ## Multi-currency support in the Cobros/Pagos modal — ETP-4504

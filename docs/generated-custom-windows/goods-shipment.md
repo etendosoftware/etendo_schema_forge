@@ -137,7 +137,9 @@ rows. See `docs/decisions-reference.md` (`dimensionsPanel`) and `docs/ui-customi
 Same intent as `sales-invoice.md`/`purchase-invoice.md`: `InlineLinesPanel` no longer renders the
 `dimensionsPanel` type as a grid column at all — "Añadir dimensiones" is now a hover action next
 to Edit/Delete, gated on at least one visible dimension field, with the expand-chevron column
-unchanged. **Not re-validated via `make regen` on this window in the ETP-4610 pass** — attempting
+unchanged. The label/icon is adaptive: "Añadir dimensiones" while the line has no dimension values,
+"Editar dimensiones" once at least one is set. **Not re-validated via `make regen` on this window
+in the ETP-4610 pass** — attempting
 it hit the already-documented `AD_Ref_List_Trl` es_ES translation-stripping sandbox issue (see
 `docs/feedback.md`'s "`make regen` Silently Strips es_ES Enum Labels..." entry) on this window's
 `etblkpAccountingstatus` field, so the regen was reverted rather than committed with a translation

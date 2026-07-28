@@ -633,7 +633,7 @@ Default: `"classic"`. Validator F12 enforces the enum (`"classic"` | `"inlineEdi
 
 **ETP-4610 update — no longer a fixed grid column.** `InlineLinesPanel` filters this column type out of `visibleColumns` unconditionally: no header cell, no width reservation, no per-row badges/trigger rendered inline in the grid. Its `dimensionFields` metadata still drives two things:
 - the pre-existing leading expand-chevron column (unchanged since ETP-4529) — expands/collapses the full-width sub-row of selectors below the data row;
-- an **"Add dimensions" hover-action icon** (`Plus`, tooltip via the `addDimensionsTooltip` i18n key) rendered next to Edit/Delete in the row's hover strip, through the generic `rowActions` extension slot (§14c below) — shown only when at least one `dimensionFields` candidate is currently visible for that entity.
+- an **adaptive hover-action icon** rendered next to Edit/Delete in the row's hover strip, through the generic `rowActions` extension slot (§14c below) — shown only when at least one `dimensionFields` candidate is currently visible for that entity. It reads **"Add dimensions"** (`Plus` icon, `addDimensionsTooltip` i18n key) while every visible candidate field is empty on that line, and switches to **"Edit dimensions"** (`Pencil` icon, `editDimensionsTooltip` i18n key) once at least one already has a value — computed per-row by `hasFilledDimensionValues()` (`tools/app-shell/src/lib/hasFilledDimensionValues.js`), which resolves each candidate field's value the same way `resolveIdentifier()` does elsewhere in the component.
 
 Clicking either the chevron or the hover action toggles the same expand state — there is exactly one way the panel opens, just two entry points into it now. The previously-permanent "Dimensiones contables" column text and the collapsed `DimSummary` badges/dashed trigger are gone; discoverability now relies on the icon + tooltip, matching how the pre-existing Edit/Delete icons are already discovered (hover + tooltip, no permanent label).
 
@@ -654,7 +654,7 @@ Clicking either the chevron or the hover action toggles the same expand state �
 ```
 `dimensionFields` entries are ordinary column-shaped objects (`key`/`column`/`type`/`label`) — `InlineLinesPanel` reuses the same `commitField` path every other inline edit uses to persist a dimension-field change, so no special save wiring is needed. Drop the column entirely (don't include it in `columns`) when every candidate would be hidden — `InvoiceLinesTable.jsx` does this via `dimensionFields.length > 0 ? [...] : []`.
 
-**Fully additive/opt-in:** a table that never declares a `dimensionsPanel` column renders byte-for-byte the same as before this feature shipped — no leading chevron column, no expand state, no "Add dimensions" hover action. Verified against the full existing `InlineLinesPanel` test suite.
+**Fully additive/opt-in:** a table that never declares a `dimensionsPanel` column renders byte-for-byte the same as before this feature shipped — no leading chevron column, no expand state, no "Add dimensions"/"Edit dimensions" hover action. Verified against the full existing `InlineLinesPanel` test suite.
 
 **Shared building blocks:** `tools/app-shell/src/components/contract-ui/DimensionsPanel.jsx` exports `DimBadge`, `DimSummary`, `DimensionGrid`. `InlineLinesPanel` only uses `DimensionGrid` now (the expanded content); `DimSummary`/`DimBadge` remain in use by `AmortizationLinesTable.jsx`, a fully hand-built table outside this ticket's scope.
 

@@ -16,6 +16,7 @@ import { useLabel, useLocaleSwitch, useUI } from '@/i18n';
 import { formatAmount } from '@/lib/formatAmount.js';
 import { formatSignedDelta } from '@/lib/formatSigned.js';
 import { resolveIdentifier } from '@/lib/resolveIdentifier.js';
+import { hasFilledDimensionValues } from '@/lib/hasFilledDimensionValues.js';
 import { resolveColumnLabel } from '@/lib/resolveColumnLabel.js';
 import { InlineSearchCombo } from './InlineSearchCombo.jsx';
 import { SelectorInput } from './SelectorInput.jsx';
@@ -1019,6 +1020,10 @@ const InlineLinesPanel = forwardRef(function InlineLinesPanel({
         // every table that doesn't declare a `dimensionsPanel` column.
         const isRowExpanded = hasDimensionsPanel && expandedRowId === row.id;
         const dimRowData = pendingDimEdits[row.id] ? { ...row, ...pendingDimEdits[row.id] } : row;
+        // ETP-4610 — adaptive hover-action label/icon: "Edit dimensions" once the
+        // line already has at least one dimension value set, "Add dimensions" while
+        // every candidate field is still empty.
+        const rowHasDimensionValues = hasDimensionsPanel && hasFilledDimensionValues(dimRowData, visibleDimensionFields);
 
         return (
           <React.Fragment key={row.id}>
@@ -1080,8 +1085,8 @@ const InlineLinesPanel = forwardRef(function InlineLinesPanel({
               extraActions: [
                 ...(hasDimensionsPanel ? [{
                   key: 'dimensions',
-                  icon: Plus,
-                  tooltip: ui('addDimensionsTooltip'),
+                  icon: rowHasDimensionValues ? Pencil : Plus,
+                  tooltip: ui(rowHasDimensionValues ? 'editDimensionsTooltip' : 'addDimensionsTooltip'),
                   onClick: () => setExpandedRowId(isRowExpanded ? null : row.id),
                   testId: 'line-action-add-dimensions',
                 }] : []),
