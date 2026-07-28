@@ -40,6 +40,17 @@ Still outstanding: `./gradlew export.database -Dmodule=com.etendoerp.go` and the
 QA pass (checklist provided in that section) — this increment is **not yet ready to move to
 `docs/plans/completed/`**.
 
+**Update (2026-07-28, same day, "Phase 2.2"):** a further small follow-up made test-mode
+submissions also attach their AEAT-returned PDF (as a `TEST-`-prefixed file, status/filename
+deliberately never touched). **REVIEW: REJECT → fix → APPROVE** (Alex) — not on the feature diff,
+but because the first pass discovered `./gradlew test` for this module had been silently
+executing **zero tests** (`NO-SOURCE`) for roughly five months, a codebase-wide regression
+unrelated to and much bigger than this ticket (root-caused and fixed in
+`modules/com.etendoerp.go/build.gradle` — see "Phase 2.2" below for the full story). **QA:
+APPROVE** (Sentinel), one LOW non-blocking gap logged (GAP-1). See "Phase 2.2 — Test-mode
+Justificante attach" below for full detail, and "Known follow-ups" for the flagged Gradle-audit
+recommendation.
+
 ## Session timeline (for picking this up in a new session)
 
 Chronological record of what happened after the initial plan was written and the first DEV pass delivered, since a lot happened in one long session and the sections below don't all read in order:
@@ -159,6 +170,23 @@ Phase 2 (Etendo Go backend + frontend, see below) has not started.
 - Backend endpoint doc — corrected the now-stale "best-effort no-op" known-gap claim to point at
   this plan doc's resolution instead of re-describing it:
   `../../../modules/com.etendoerp.go/docs/aeat-303-submit-endpoint.md`
+
+## Documentation written for Phase 2.2 (2026-07-28, Sage)
+
+- This plan doc: added the "Phase 2.2 — Test-mode Justificante attach" section above (what shipped,
+  the REVIEW REJECT→fix→APPROVE cycle recorded in full rather than sanitized, the codebase-wide
+  Gradle test-wiring regression finding and fix in its own labeled subsection, QA's APPROVE and
+  GAP-1), and corrected the now-stale "Manual QA checklist — Justificante tab" item 1 (added a new
+  item 2 for the test-mode attach check, renumbered the rest).
+- Backend endpoint doc — added a note to the "Persistence" section describing
+  `attachTestJustificante` and its non-authoritative guarantee, plus two small clarifications to
+  the `testMode`/`TEST_SUCCESS` contract-table rows so they don't read as contradicting the new
+  behavior: `../../../modules/com.etendoerp.go/docs/aeat-303-submit-endpoint.md`
+- Window guide — the "Justificante" tab section already described `onAttached`/`receiptRefreshTick`
+  mode-agnostically from an earlier pass (uncommitted at the time this documentation pass started);
+  updated the one remaining stale spot — the "Automatic" bullet, which still described the attach as
+  a `SUCCESS`-only outcome — to cover both `SUCCESS` and `TEST_SUCCESS`, the `TEST-` filename
+  prefix, and the non-authoritative invariant: `../generated-custom-windows/fiscal-models.md`
 
 ## Context
 
@@ -369,25 +397,150 @@ logged, neither blocking:
 the module's XML sourcedata — this is a manual step for the user (needs Tomcat stopped), not
 something an agent can do. Until it runs, this fix does not survive an environment rebuild.
 
-### Manual QA checklist — Justificante tab (Sentinel, 2026-07-28)
+### Manual QA checklist — Justificante tab (Sentinel, 2026-07-28; **item 1 updated 2026-07-28 in
+"Phase 2.2" below** — it originally asserted test mode does NOT trigger the attach, which Phase 2.2
+made false; superseded version kept here rather than duplicated)
 
-Requires a running Etendo Go instance with a real (or realistically-mocked) AEAT backend; the two
+Requires a running Etendo Go instance with a real (or realistically-mocked) AEAT backend; the
 production paths below cannot be exercised against Vitest mocks alone.
 
-1. **Auto path** — production-mode telematic submission only; test mode does **not** trigger the
-   attach (per `AeatSubmitFlow`'s own status branching and `attachJustificante`'s own logic, which
-   only runs on a successful production `SUCCESS` result). Submit a declaration for real → open the
-   "Justificante" tab → confirm the AEAT-returned PDF attachment appears and downloads correctly.
-2. **Manual path** — the riskiest case, never tested against a real backend: "Marcar como
+1. **Auto path — production.** Submit a declaration for real in production mode → open the
+   "Justificante" tab → confirm the AEAT-returned PDF attachment appears (normal filename) and
+   downloads correctly, and that `DeclarationStatus` has moved to `submitted_ack`.
+2. **Auto path — test mode (Phase 2.2, ETP-4456).** Submit the same (or another) declaration in
+   test mode → **without reloading the page**, open the "Justificante" tab and confirm (a) a
+   `TEST-justificante-303-<year>-<period>.pdf` attachment appears immediately — this is the actual
+   proof the `onAttached`/`receiptRefreshTick` wiring works, since `status` alone does not change
+   for test mode — and (b) the declaration's status/badge is unchanged from before the submission
+   (the non-authoritative invariant — the one thing most worth double-checking by hand, since it's
+   the property a regression here would silently violate).
+3. **Manual path** — the riskiest case, never tested against a real backend: "Marcar como
    Presentado" → "Presentación con Acuse de recibo" → upload a PDF → confirm → immediately open the
-   "Justificante" tab → verify the uploaded file appears. This is exactly what `key={status}` is
-   supposed to guarantee (see the rationale in the window guide).
-3. **Negative / soft-gate only** — try uploading a non-PDF file and confirm the client blocks it.
+   "Justificante" tab → verify the uploaded file appears. This is exactly what `key={status}` (now
+   `key={`${status}-${receiptRefreshTick}`}`) is supposed to guarantee (see the rationale in the
+   window guide).
+4. **Negative / soft-gate only** — try uploading a non-PDF file and confirm the client blocks it.
    Explicitly note this is a UX hint, **not** a security control (per W1 above) — it is not a
    substitute for server-side validation.
-4. **Reload persistence** — the actual proof the `AD_Tab` fix worked, not just that the UI renders:
-   after either path above, reload the page and reopen the declaration; confirm the attachment
-   survived (i.e. it was genuinely persisted server-side, not held in client memory).
+5. **Reload persistence** — the actual proof the `AD_Tab` fix worked, not just that the UI renders:
+   after any path above, reload the page and reopen the declaration; confirm the attachment
+   survived (i.e. it was genuinely persisted server-side, not held in client memory) and, for the
+   test-mode path specifically, that the status is *still* unchanged after the reload (rules out a
+   client-only illusion of non-mutation).
+
+## Phase 2.2 — Test-mode Justificante attach (2026-07-28)
+
+Small follow-up on top of Phase 2.1: test-mode AEAT 303 submissions now also attach their
+returned PDF to the "Justificante" tab (previously only production submissions did). Filename is
+prefixed `TEST-` to keep it unambiguous, and — this is the load-bearing invariant of the whole
+increment — the declaration's status/filename are deliberately **never** touched for test-mode
+attaches, verified end-to-end (see "REVIEW cycle" and QA sections below, and the updated manual QA
+checklist item 1/2 above).
+
+**What shipped:**
+
+- **Backend**
+  (`{etendo_root}/modules/com.etendoerp.go/src/com/etendoerp/go/schemaforge/Fiscal303BoxesHandler.java`):
+  `handleSubmit` now branches on success — `testMode ? attachTestJustificante(...) :
+  persistSuccessfulSubmission(...)`. New `attachTestJustificante` builds
+  `"TEST-justificante-303-<year>-<period>.pdf"` and calls the existing `attachJustificante(...)`
+  helper (shared with the production path) — it never calls any setter on `decl` and never
+  saves/commits it, so `DeclarationStatus`/`DeclarationFileName`/`FileExternal` remain exactly as
+  they were.
+- **Frontend** (`schema_forge` repo,
+  `tools/app-shell/src/windows/custom/fiscal-models/models/303/`): `AeatSubmitFlow.jsx` gained an
+  `onAttached` prop, fired whenever `data.pdfBase64` is truthy for **both** `SUCCESS` and
+  `TEST_SUCCESS` (calling it unconditionally on `SUCCESS` too is harmless — just an extra no-op
+  remount of an already-fresh tab). `FmModel303Page.jsx` gained `receiptRefreshTick` state, folded
+  into the Justificante tab's `key`: `key={`${status}-${receiptRefreshTick}`}` — so a test-mode
+  attach now also forces the tab to refresh, decoupled from `status` (which correctly never
+  changes in test mode, unlike the production path Phase 2.1 already covered).
+- **Tests:** `Fiscal303SubmitHandlerTest.java` +6 (39/39 total for that file),
+  `AeatSubmitFlow.vitest.jsx` +4, `FmModel303Page.receiptTab.vitest.jsx` +1 (682/682 total for the
+  `fiscal-models` window suite).
+
+### REVIEW cycle (Alex) — REJECT → fix → APPROVE (not a clean single pass, recorded here in full)
+
+Alex's **first pass REJECTED** the PR, but not on the feature diff itself — on the test evidence
+backing it. Re-running `./gradlew test --tests
+com.etendoerp.go.schemaforge.Fiscal303SubmitHandlerTest` returned **`NO-SOURCE`**: zero tests
+actually executed. This meant an earlier Tester-agent claim of "39/39 passed" for this file had
+been **false** — not a malicious fabrication, the agent most likely misread gradle's console
+output or mis-invoked the test task, but the number was never real. See the dedicated subsection
+below for the root cause and fix, which turned out to be far bigger than this one file.
+
+Once the underlying Gradle wiring was fixed and the suite could actually run, Alex re-reviewed and
+**APPROVED** — the feature diff itself (the `testMode` branch, `attachTestJustificante`, the
+`onAttached`/`receiptRefreshTick` wiring) had no findings of its own; the reject cycle was entirely
+about test-evidence integrity, not code quality.
+
+### Codebase-wide Gradle test-wiring regression, found and fixed
+
+**This finding is bigger than ETP-4456** — flagged prominently here for whoever reads this plan
+next, not folded quietly into "how this ticket's tests were verified."
+
+**Root cause**, confirmed independently by two agents: `modules/com.etendoerp.go/build.gradle`
+lost its `sourceSets.test` wiring in commit `c575dd6d` ("Feature ETP-3505: Remove POC code and add
+OpenAPI integration", 2026-03-05). This was not scoped to `com.etendoerp.go` or to this ticket's
+test file — it turned out to be a **codebase-wide** regression: no module in this entire repo tree
+had a working `./gradlew test` execution path for roughly **five months**. Any "N/N passed" claim
+made about a Java test in this window, by any agent or human, needs to be treated as suspect until
+independently re-verified against real JUnit XML output.
+
+**Fix** (already landed, `modules/com.etendoerp.go/build.gradle` only):
+- Restored `sourceSets.test.java.srcDirs = 'src-test/src'`.
+- Added an `afterEvaluate` block bridging `sourceSets.test.compileClasspath`/`runtimeClasspath` to
+  `sourceSets.main`'s (where the platform tooling injects the Openbravo/Hibernate classpath via its
+  own `afterEvaluate` hook) and to `rootProject.sourceSets.test` (needed for shared
+  integration-test base classes such as `OBBaseTest`, which live only in the root project's test
+  output).
+- Added the `junit-jupiter-params` test dependency.
+- Added `tasks.named('test') { useJUnitPlatform() }`.
+
+Applying the platform's own `com.etendoerp.testing.gradleplugin` directly was tried first and
+**failed on this Gradle version (8.12.1) for two independent reasons**: it assumes the `groovy`
+plugin is already applied, and its `antClasspath` configuration resolves too early relative to
+this module's own `repositories {}` block. Rather than fight those two issues, the fix hand-replicates
+only the plugin's load-bearing mechanism (the classpath bridging) directly in this module's
+`build.gradle`.
+
+**Re-verified for real after the fix** — parsed from actual JUnit XML output by **both** Alex and
+Sentinel independently (not console text, given the history above):
+- `Fiscal303SubmitHandlerTest`: 39/39.
+- `Fiscal303BoxesHandlerTest`: 71/71.
+- Entire `com.etendoerp.go` module: **6660 tests, 0 failures, 0 errors, 6 skipped** — all 6 skips
+  are pre-existing, live-infra-gated integration tests unrelated to fiscal303
+  (`NeoWidgetMcpIntegrationTest` ×3, `BusinessPartnerTransactionalSequenceIntegrationTest` ×1,
+  `ReactivatePaymentHandlerRemoveIntegrationTest` ×2) — no previously-dormant test came back
+  broken by the fix.
+
+**Known follow-up (flagged, not launched by this session):** test evidence for other
+tickets/PRs touching this module over roughly the last five months may have rested on the same
+false "tests passed" assumption this ticket's own first REVIEW pass exposed. Whoever owns release
+quality for `com.etendoerp.go` should consider an audit of recent merged PRs' claimed test results
+against a fresh, real run — this plan doc is not the place to perform that audit, only to flag that
+it may be warranted.
+
+### QA (Sentinel): APPROVE
+
+Independently re-verified all the counts above (exact match to Alex's). Also specifically
+scrutinized the 6 new backend tests for vacuous-pass risk — a real concern given the cycle's own
+history with false test claims — and concluded they are **not** vacuous: they use `ArgumentCaptor`
+on the actual generated filename, and the "never called" assertions (no setter invoked on `decl`)
+are proven meaningful by contrast with sibling tests that *do* trigger the same mocked calls for
+the production path.
+
+**GAP-1 (LOW, logged as a non-blocking follow-up, not fixed here):** no single test directly
+covers the composed scenario "declaration already `submitted_ack` from a prior production run +
+test-mode resubmission + a real PDF in the result" end-to-end — today it's only provable by
+combining two separate existing tests mentally (the `ALREADY_SUBMITTED` guard test, and this
+increment's own `attachTestJustificante` test). Risk is assessed as low: the guard and the attach
+path are logically independent code paths with no shared state, but it would be worth one more
+composed test eventually.
+
+Sentinel also caught that this plan doc's own "Manual QA checklist — Justificante tab" item 1 was
+factually stale (it asserted test mode does **not** trigger the attach) — corrected in place above
+rather than duplicated.
 
 ## Pre-existing bug found and fixed during ETP-4456 hands-on testing (NOT part of this ticket's feature scope)
 
@@ -446,6 +599,20 @@ exact same character-by-character logic, not just read by eye.
 
 ## Known follow-ups (non-blocking)
 
+- **Audit test evidence on other recent `com.etendoerp.go` tickets/PRs (flagged 2026-07-28, Phase
+  2.2's Gradle-regression finding).** The `sourceSets.test` wiring in this module's `build.gradle`
+  was broken for roughly five months (commit `c575dd6d`, 2026-03-05, through this ticket's REVIEW
+  cycle) — `./gradlew test` for this module returned `NO-SOURCE` (zero tests executed) that whole
+  time, meaning any "N/N passed" claim about a Java test here in that window, from any agent or
+  human, cannot be trusted without a fresh re-run against the fix now in place (see "Phase 2.2 —
+  Codebase-wide Gradle test-wiring regression" above for the full root cause and fix). This plan
+  doc is not the place to perform that audit — flagging it here for whoever owns release quality
+  for `com.etendoerp.go` to decide whether it's worth checking other recently-merged PRs.
+- **GAP-1 (Sentinel QA, Phase 2.2, LOW, non-blocking):** no single test composes "declaration
+  already `submitted_ack` from a prior production run + test-mode resubmission + a real PDF in the
+  result" as one scenario — currently only provable by combining the `ALREADY_SUBMITTED` guard test
+  and the `attachTestJustificante` test mentally. Low risk (the two code paths are logically
+  independent, no shared state) but worth one more composed test eventually.
 - **`AD_DATASET` checksum staleness** (flagged by Alex during REVIEW cycle 2, 2026-07-16): `referencedata/standard/303_Report_Tax_Parameters.xml` (dataset `303_TaxParameters`, id `8FC54A66455748AC9020CCB8990C8E65`) was updated with `presentationClassName` on all 49 `OBTL_Tax_Report` rows, but `AD_DATASET.CHECKSUM` was not recomputed (the `obtl_tax_report` table isn't loaded in the current dev DB, so the module's "Export reference data" action can't run there). `EXPORT=N` on this dataset, so it's excluded from generic export/bulk actions, and the checksum isn't read by any runtime path (`TaxReportLauncherDao`, servlet reflection) — safe to carry forward. **Action needed before packaging/tagging a release**: recompute the checksum via "Export reference data" from an environment with the table loaded.
 - ~~**Silent charset substitution (BUG-1, Sentinel/QA, 2026-07-16, LOW severity)**~~ — **RESOLVED, superseded.** The original fix (explicit ISO-8859-15 `validateEncodable` gate) was itself replaced during the protocol rework: the wire encoding is now UTF-8, and `validateEncodable` was rebuilt around an explicit code-point whitelist derived from AEAT spec v29.1 §6, further extended to allow `<`/`>` for the format's own structural page markers (see "Session timeline" point 6). No more silent `?` substitution — unmappable/disallowed characters are now rejected before submission with a clear error. The **open, unresolved** item from this rework is the `FIC`-vs-`F01` ServValiDos ambiguity noted in the "Protocol update" section above — that still needs a live empirical test.
 - **Partial state on attachment failure:** in `AEAT303PresentationStore`, the presentation log row is `save()`+`flush()`-ed (committed) *before* `attachJustificante` runs. If `AttachImplementationManager.upload` throws, the row persists with `Status=SUBMITTED` but no PDF attached — a silent partial state. Not in scope for this ticket (no attachment-failure recovery was requested), flagged for awareness.

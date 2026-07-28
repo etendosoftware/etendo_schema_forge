@@ -170,10 +170,17 @@ generic `AttachmentsTab` (`@/components/attachments`) bound to `tableName="ETGO_
 `recordId={decl.id}`, restricted to `allowedMimeTypes: ['application/pdf']`. It surfaces **both**
 kinds of AEAT justificante a declaration can end up with:
 
-- **Automatic** — on a successful telematic submission (`AeatSubmitFlow`, `SUCCESS` result), AEAT
-  returns the justificante PDF inline as base64 (`pdfBase64`) and the backend attaches it to the
-  `ETGO_Fiscal_Decl` record server-side. This happens invisibly to `FmModel303Page` — there is no
-  client-side signal when it occurs, only the fact that a status change just succeeded.
+- **Automatic** — on a successful telematic submission (`AeatSubmitFlow`), AEAT returns the
+  justificante PDF inline as base64 (`pdfBase64`) and the backend attaches it to the
+  `ETGO_Fiscal_Decl` record server-side, for **both** `SUCCESS` (production) and `TEST_SUCCESS`
+  (test mode) results. Production attaches under the normal justificante filename and also moves
+  `DeclarationStatus` → `submitted_ack` (visible as a status change). Test mode attaches under a
+  `TEST-`-prefixed filename (`TEST-justificante-303-<year>-<period>.pdf`) so it's unambiguous in
+  the file list, and — per the hard non-authoritative invariant for test submissions — **never**
+  touches `DeclarationStatus` or `DeclarationFileName`; no setter is called on the declaration and
+  it is never saved. Because production signals via the status change but test mode has no such
+  signal, the client can't rely on "a status change just succeeded" alone to know when to refresh
+  — see `onAttached`/`receiptRefreshTick` below for how the tab actually detects both cases.
 - **Manual** — `PresentModal`'s "Presentación con Acuse de recibo" path (`submitted_ack`) lets the
   user upload their own acuse-de-recibo file. Previously this `acuseFile` was accepted by the UI but
   silently discarded (`FmModel303Page.handlePresent` only destructured `{ status: newStatus }` from
@@ -222,6 +229,15 @@ consumers. Flagged as a follow-up for whoever owns
 informational):** opening the "Justificante" tab fires its own GET on top of the always-mounted
 `isActive: false` instance's discarded one — i.e. two GETs per detail-page visit where one is
 expected, pure amplification of the same root cause above, not a separate bug.
+
+**Refresh decoupled from `status` for test-mode successes.** The tab's `AttachmentsTab` remounts
+(forcing a fresh fetch) on `key={`${status}-${receiptRefreshTick}`}` instead of `key={status}`
+alone. `status` still covers production successes (`handleStatusChange`). `receiptRefreshTick` is a
+counter bumped by `handleAeatAttached` (`FmModel303Page.jsx`), which `AeatSubmitFlow` calls via a new
+`onAttached` prop whenever the backend response carries `pdfBase64` — for both `SUCCESS` and
+`TEST_SUCCESS`. This lets a test-mode submission (which now also gets a PDF attached server-side)
+refresh the Justificante tab without changing the declaration's status, preserving the hard
+invariant that test mode never alters `status`.
 
 **Other accepted, non-blocking findings from this increment's REVIEW/QA:**
 - **Client-side MIME gate is a UX hint only (Alex REVIEW, W1).** `config={{ allowedMimeTypes:
