@@ -8,7 +8,7 @@ import { EmptyState, KpiWidget } from './FmCommon.jsx';
 import { Checkbox } from '@/components/ui/checkbox';
 import { ConfigDrawer, NewDeclModal } from './FmOverlays.jsx';
 import FmCatalogPage from './FmCatalogPage.jsx';
-import { formatAmount, STATUS_COLOR, computeUpcomingDeadlines, checkModified303, checkModified349, compute349Operators } from './fiscalModelsUtils.js';
+import { formatAmount, STATUS_COLOR, computeUpcomingDeadlines, checkModified303, checkModified349, compute349Operators, persistDeclarationStatus } from './fiscalModelsUtils.js';
 import useFiscalAutoCompute from './useFiscalAutoCompute.js';
 
 // Real-mode only: throws on fetch failure instead of falling back to mock data.
@@ -482,22 +482,16 @@ export default function FmListPage({ declarations: propDecls, onSelect, onStatus
 
   const handleStatusChange = useCallback((id, newStatus) => {
     if (token && apiBaseUrl) {
-      const base = apiBaseUrl.replace(/\/[^/]+$/, '');
-      fetch(`${base}/fiscal303/declarations?id=${encodeURIComponent(id)}`, {
-        method: 'PUT',
-        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: newStatus }),
-      })
-        .then(r => {
-          if (!r.ok) throw new Error(r.status);
+      persistDeclarationStatus(id, newStatus, { token, apiBaseUrl })
+        .then(result => {
+          if (!result.ok) return;
           setDecls(ds =>
             ds.map(d => d.id === id
               ? { ...d, status: newStatus, updatedAt: new Date().toLocaleDateString('es-ES') }
               : d)
           );
           onStatusChange?.(id, newStatus);
-        })
-        .catch(() => {});
+        });
     }
   }, [onStatusChange, token, apiBaseUrl]);
 
