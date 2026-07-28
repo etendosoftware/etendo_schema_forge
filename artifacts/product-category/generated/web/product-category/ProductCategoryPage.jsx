@@ -1,5 +1,6 @@
-import { useEffect } from 'react';
+import { useMemo, useEffect } from 'react';
 import { ListView, DetailView } from '@/components/contract-ui';
+import { useWindowAccess, WindowAccessGuard } from '@/auth/AuthContext.jsx';
 import ProductCategoryTable from './ProductCategoryTable';
 import ProductCategoryForm from './ProductCategoryForm';
 import AccountingTable from './AccountingTable';
@@ -150,6 +151,13 @@ export const api = {
 
 // @sf-generated-start component:ProductCategoryPage
 export default function ProductCategoryPage({ windowName, recordId, ...props }) {
+  const windowAccessTier = useWindowAccess('144');
+  const effectiveWindow = useMemo(() => (
+    windowAccessTier === 'read-only' ? { ...(props.window || {}), readOnly: true } : props.window
+  ), [windowAccessTier, props.window]);
+  if (windowAccessTier === 'none') {
+    return <WindowAccessGuard windowId="144" />;
+  }
   if (recordId) {
     return (
       <>
@@ -184,7 +192,7 @@ export default function ProductCategoryPage({ windowName, recordId, ...props }) 
         requiredHeaderFields={requiredHeaderFields}
         addLineGuard={(_, children) => children.length < 1}
         linesLayout="inlineEditable"
-        {...props}
+        {...props} window={effectiveWindow}
       />
       </>
     );
@@ -203,7 +211,7 @@ export default function ProductCategoryPage({ windowName, recordId, ...props }) 
       hidePrint
       hideLink
       rowQuickActions={{}}
-      {...props}
+      {...props} window={effectiveWindow}
     />
   );
 }

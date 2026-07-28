@@ -71,6 +71,13 @@ vi.mock('@/hooks/useFinancialAccountAccounting.js', () => ({
   }),
 }));
 
+// ETP-4530: EditAccountModal's Accounting tab is gated by the showAccountingFields capability —
+// grant it by default so this page's own suite (which doesn't exercise the gate itself) keeps
+// exercising the modal exactly as before.
+vi.mock('@/auth/AuthContext.jsx', () => ({
+  useHasCapability: () => true,
+}));
+
 const mockNavigate = vi.fn();
 vi.mock('react-router-dom', async () => {
   const actual = await vi.importActual('react-router-dom');

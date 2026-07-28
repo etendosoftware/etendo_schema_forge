@@ -18,6 +18,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ConfirmDialog } from '@/components/OAuth2ClientDialog';
 import { useUI, useLocaleSwitch } from '@/i18n';
+import { useHasCapability } from '@/auth/AuthContext.jsx';
 import { useAccountMutations } from '@/hooks/useAccountMutations.js';
 import { useBankConnectionActions, launchSaltEdgePopup } from '@/hooks/useBankConnectionActions';
 import { useFinancialAccountAccounting } from '@/hooks/useFinancialAccountAccounting.js';
@@ -512,7 +513,11 @@ function AccountingConfigurationSection({ ui, accounting }) {
  *   account.
  * - **Accounting**: the accounting accounts used when generating transaction journal entries —
  *   asset account (required) and transitory account (optional). Backed by the
- *   `accountingConfiguration` entity / `FinancialAccountAccountingHandler` (ETP-4530).
+ *   `accountingConfiguration` entity / `FinancialAccountAccountingHandler` (ETP-4530). Gated by
+ *   the `showAccountingFields` capability (`useHasCapability`, ETP-4520/ETP-4530): the trigger
+ *   and panel are both omitted entirely (not disabled) for a role without it, and the modal
+ *   falls back to General if it was sitting on Accounting when the capability turns off (e.g. a
+ *   role switch mid-session).
  *
  * Field editability in the top section:
  * - **Name** is always editable. **Type** is always read-only. Cash accounts have no IBAN.
@@ -551,6 +556,11 @@ export function EditAccountModal({ open, onClose, onSaved, account, onArchive, o
   const bankConnection = useBankConnection(open, account, bankConnected, onSaved, onClose);
   const recon = useReconciliationSettings(open, account);
   const accounting = useAccountingConfiguration(open, account);
+  // ETP-4530 — the Accounting tab is only reachable for roles granted this capability (resolved
+  // server-side, admin roles always pass). Fails closed to `false` until the capabilities map
+  // loads, so it can flip false → true shortly after the modal mounts, or true → false mid-session
+  // on a role switch — both handled by the reset effect below.
+  const canSeeAccounting = useHasCapability('showAccountingFields');
   // Initialize from account?.type (not a fixed EDIT_TAB_GENERAL default) so the very first
   // render is already consistent for cash accounts — the General tab's trigger/content are
   // not rendered for them, so an unconditional EDIT_TAB_GENERAL default would leave the first
@@ -567,6 +577,19 @@ export function EditAccountModal({ open, onClose, onSaved, account, onArchive, o
   useEffect(() => {
     if (open) setEditTab(initialEditTab(isCash));
   }, [open, account?.id, isCash]);
+
+  // ETP-4530 — showAccountingFields capability gate. Kept as its own effect (rather than folded
+  // into the reset-on-open effect above) so it reacts purely to the Accounting tab becoming
+  // unreachable — it must NOT re-run the general open/account-id reset logic, which would
+  // incorrectly force non-cash accounts back to General any time the capability flag changes
+  // while the user is legitimately on that tab. Only corrects the one broken case: the modal is
+  // currently showing the Accounting tab (last-used tab, or just-completed reset above) and the
+  // capability has since resolved/changed to false, e.g. the role was switched mid-session.
+  useEffect(() => {
+    if (editTab === EDIT_TAB_ACCOUNTING && !canSeeAccounting) {
+      setEditTab(EDIT_TAB_GENERAL);
+    }
+  }, [editTab, canSeeAccounting]);
 
   if (!account) return null;
 
@@ -649,9 +672,13 @@ export function EditAccountModal({ open, onClose, onSaved, account, onArchive, o
                 {ui('financeAccountsEditTabGeneral')}
               </TabsTrigger>
             ) : null}
-            <TabsTrigger value={EDIT_TAB_ACCOUNTING} icon={Calculator} data-testid="edit-account-tab-accounting">
-              {ui('financeAccountsEditTabAccounting')}
-            </TabsTrigger>
+            {/* ETP-4530 — the Accounting tab trigger itself must not render at all for a role
+                without the showAccountingFields capability (not just disabled/hidden via CSS). */}
+            {canSeeAccounting ? (
+              <TabsTrigger value={EDIT_TAB_ACCOUNTING} icon={Calculator} data-testid="edit-account-tab-accounting">
+                {ui('financeAccountsEditTabAccounting')}
+              </TabsTrigger>
+            ) : null}
           </TabsList>
 
           {!isCash ? (
@@ -672,12 +699,16 @@ export function EditAccountModal({ open, onClose, onSaved, account, onArchive, o
             </TabsContent>
           ) : null}
 
-          <TabsContent value={EDIT_TAB_ACCOUNTING} className="pt-4" data-testid="edit-account-tabpanel-accounting">
-            <AccountingConfigurationSection
-              ui={ui}
-              accounting={accounting}
-              data-testid="AccountingConfigurationSection__73027d" />
-          </TabsContent>
+          {/* ETP-4530 — panel is gated the same as its trigger, so it's never mounted for a
+              role without the showAccountingFields capability. */}
+          {canSeeAccounting ? (
+            <TabsContent value={EDIT_TAB_ACCOUNTING} className="pt-4" data-testid="edit-account-tabpanel-accounting">
+              <AccountingConfigurationSection
+                ui={ui}
+                accounting={accounting}
+                data-testid="AccountingConfigurationSection__73027d" />
+            </TabsContent>
+          ) : null}
         </Tabs>
 
         {/* The bank account's asset account is validated on the Accounting tab, but Save is
