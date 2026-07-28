@@ -24,6 +24,13 @@ import { render, screen } from '@testing-library/react';
 // per-entity-aware useDisplayLogic mock (see DetailView.principalDisplayLogic.
 // vitest.jsx for the header-entity precedent) so the header call and the
 // lines call can be driven independently.
+//
+// ETP-4610 additions (below, after the ETP-4530 test): the `dimensionsPanelFieldKeys`
+// prop lets a SPECIFIC window instance widen which keys `lineHiddenColumns` trusts as
+// dimension macros, beyond the global `DIMENSION_MACRO_KEYS` allowlist in DetailView.jsx.
+// One test proves the fix (simple-g-l-journal can now config-hide 'product'), a separate
+// test proves the ETP-4530 non-regression still holds (sales-invoice-shaped instances
+// never declare 'product' in that prop, so it stays protected).
 
 vi.mock('react-router-dom', () => ({
   useNavigate: () => vi.fn(),
@@ -310,40 +317,64 @@ describe('DetailView — lineHiddenColumns forwarded to the line grid (ETP-4543)
     expect(detailTableProps.current.hiddenColumns).toContain('costCenter');
   });
 
-  // KNOWN, DELIBERATE GAP — flagged by a GitHub Copilot review on PR 975 (ETP-4610).
-  // `simple-g-l-journal`'s `dimensionsPanel` field list (see
-  // artifacts/simple-g-l-journal/decisions.json) includes `product` as a real
-  // `@ACCT_DIMENSION_DISPLAY@`-gated accounting dimension — unlike sales-invoice/
-  // purchase-invoice, where `product` is a genuine per-line AD field with its own
-  // record-dependent `displayLogic` (`@Financial_Invoice_Line@='N'`, see the ETP-4530
-  // test above). Because `DIMENSION_MACRO_KEYS` is a single GLOBAL allowlist shared by
-  // every window through this one component, and `product` must stay excluded from it
-  // to avoid reintroducing the ETP-4530 regression for sales-invoice/purchase-invoice,
-  // `simple-g-l-journal` cannot currently have its `product` dimension config-hidden via
-  // this mechanism either — it fails safe (never hidden) rather than trusting the noisy
-  // per-record evaluator, exactly like sales-invoice's product does, just for the wrong
-  // reason in this window's case.
-  //
-  // The real fix needs a per-window signal DetailView does not currently receive: the
-  // CONTRACT's `dimensionsPanel` field list for the current window (available at build
-  // time via `generate-frontend.js`'s `buildDimensionsPanelColumn`, but not threaded
-  // through to DetailView/InlineLinesPanel at runtime). That's a generator change in
-  // schema_forge_core (new prop, e.g. `dimensionPanelFieldKeys`) plus a functional-repo
-  // version bump and a full regen/validation pass across every window using DetailView —
-  // out of scope for this PR. Tracked as a follow-up; this test documents the gap so a
-  // future change to DIMENSION_MACRO_KEYS doesn't accidentally "fix" it by reintroducing
-  // ETP-4530, and so removing this test is a deliberate signal that the follow-up landed.
-  it('KNOWN GAP: does NOT hide product for simple-g-l-journal even though it is declared a dimensionsPanel field there (ETP-4610 Copilot finding, deferred)', () => {
+  // FIX — ETP-4610 (originally flagged as a gap by a GitHub Copilot review on PR 975,
+  // then closed within the same ticket). `simple-g-l-journal`'s generated HeaderPage now
+  // forwards `dimensionsPanelFieldKeys={['businessPartner', 'product', 'project',
+  // 'costCenter']}` — the same field keys its `decisions.json` flags `dimensionsPanel:
+  // true` for the lines entity (see artifacts/simple-g-l-journal/decisions.json and
+  // schema_forge_core's `generate-frontend.js` `dimensionsPanelFieldKeys` computation).
+  // DetailView's `trustedDimensionKeys` widens the dimension-macro allowlist with this
+  // prop SCOPED TO THIS WINDOW INSTANCE ONLY, so 'product' is now trusted here even
+  // though it stays out of the global `DIMENSION_MACRO_KEYS` constant.
+  it('closes the gap: hides product for simple-g-l-journal when dimensionsPanelFieldKeys declares it (ETP-4610 fix)', () => {
     displayLogicByEntity.current[DETAIL_ENTITY] = {
       readOnly: {},
       visibility: { product: false, project: false },
     };
-    render(<DetailView {...BASE_PROPS} windowName="simple-g-l-journal" />);
+    render(
+      <DetailView
+        {...BASE_PROPS}
+        windowName="simple-g-l-journal"
+        dimensionsPanelFieldKeys={['businessPartner', 'product', 'project', 'costCenter']}
+      />
+    );
 
-    // The global allowlist still filters 'product' out everywhere, including here —
-    // this assertion is the gap, not the fix.
-    expect(detailTableProps.current.hiddenColumns).not.toContain('product');
-    // Sibling dimension keys that ARE in the global allowlist still work correctly.
+    expect(detailTableProps.current.hiddenColumns).toContain('product');
+    // Sibling dimension keys already covered by the global allowlist keep working too.
     expect(detailTableProps.current.hiddenColumns).toContain('project');
+  });
+
+  // NON-REGRESSION — ETP-4530 must stay fixed even with `dimensionsPanelFieldKeys` wired
+  // in. sales-invoice/purchase-invoice never declare 'product' in that prop — it isn't a
+  // dimensionsPanel field there, it's a real per-line AD field with its own genuine
+  // record-dependent displayLogic (`@Financial_Invoice_Line@='N'`, see the ETP-4530 test
+  // above) — so the window-scoped widening must not leak 'product' hiding into this
+  // window's grid, even when the generator DOES forward the prop for its real dimension
+  // fields (project/costcenter).
+  it('does NOT hide product for a sales-invoice-shaped instance even when dimensionsPanelFieldKeys is passed for its real dimension fields (ETP-4530 non-regression)', () => {
+    displayLogicByEntity.current[DETAIL_ENTITY] = {
+      readOnly: {},
+      visibility: {
+        product: false,
+        listPrice: false,
+        grossAmount: false,
+        project: false,
+        costcenter: false,
+      },
+    };
+    render(
+      <DetailView
+        {...BASE_PROPS}
+        windowName="sales-invoice"
+        dimensionsPanelFieldKeys={['project', 'costcenter']}
+      />
+    );
+
+    expect(detailTableProps.current.hiddenColumns).not.toContain('product');
+    expect(detailTableProps.current.hiddenColumns).not.toContain('listPrice');
+    expect(detailTableProps.current.hiddenColumns).not.toContain('grossAmount');
+    expect(detailTableProps.current.hiddenColumns).toEqual(
+      expect.arrayContaining(['project', 'costcenter']),
+    );
   });
 });

@@ -637,6 +637,12 @@ Fields flagged `dimensionsPanel: true` (any number, on any inline-editable-layou
 - Only affects the **grid/table** rendering. A field flagged `dimensionsPanel: true` still appears as its own field in the lines entity's `addLineFields` (the add-new-row form) if `form: true` — the add-row flow is a separate, flat-form UX not covered by this flag.
 - A field with `grid: true` AND `dimensionsPanel: true` is collected into the panel only — it is excluded from `gridFieldsRaw` regardless of its own `grid` value.
 
+**`dimensionsPanelFieldKeys` — per-window dimension-macro trust (ETP-4610):**
+
+`generatePageComponent` (`schema_forge_core`'s `generate-frontend.js`) also collects the same `dimensionsPanel: true` field keys for the lines entity and forwards them to the generated `<DetailView dimensionsPanelFieldKeys={[...]} />` prop — omitted entirely when the entity has none, so this is purely additive. `DetailView.jsx` uses it to widen, **scoped to that one window instance**, which keys its `lineHiddenColumns` computation (and the expanded-row `DetailForm`'s `displayLogic`) is willing to trust as config-driven "dimension macro" visibility: a key is trusted if it's in the component's small global `DIMENSION_MACRO_KEYS` allowlist (`project`/`costcenter`/`costCenter`/`businessPartner`) **or** it's listed in this prop.
+
+This exists because `product` cannot be added to the global allowlist: in `sales-invoice`/`purchase-invoice` it's a real per-line field with its own record-dependent AD `displayLogic` (`@Financial_Invoice_Line@='N'`), and trusting it globally would reintroduce the ETP-4530 regression (product/listPrice/grossAmount silently vanishing from those windows' grids). `simple-g-l-journal`, however, genuinely flags `product` `dimensionsPanel: true` as an `@ACCT_DIMENSION_DISPLAY@` accounting dimension — so its generated page passes `dimensionsPanelFieldKeys={['businessPartner', 'product', 'project', 'costCenter']}`, and only *that* window instance trusts `product`'s config-hide signal. Windows that never flag any lines field `dimensionsPanel: true` get no prop at all and see no behavior change. See `DetailView.lineHiddenColumns.vitest.jsx` for both the fix proof (simple-g-l-journal) and the non-regression proof (sales-invoice-shaped instances).
+
 **Real example** (`sales-invoice`, `purchase-invoice`, `goods-shipment`, `goods-receipt` — `lines.project`/`lines.costcenter`):
 
 ```json

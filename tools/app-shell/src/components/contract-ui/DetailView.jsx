@@ -1365,20 +1365,29 @@ const WINDOW_DELETE_ACTIONS = {
 // casings are included so the macro is recognized (cacheable, filterable) regardless of
 // which one a given generated entity actually uses.
 //
-// 'product' is deliberately NOT included, despite simple-g-l-journal's dimensionsPanel
+// 'product' is deliberately NOT included here, despite simple-g-l-journal's dimensionsPanel
 // listing it alongside project/costCenter/businessPartner as an @ACCT_DIMENSION_DISPLAY@
 // candidate there: in sales-invoice/purchase-invoice, `product` is a real per-line field
 // with its OWN record-dependent raw AD displayLogic (`@Financial_Invoice_Line@='N'`, see
 // the ETP-4530 regression note below on `lineHiddenColumns`) — the exact "false noise"
-// this allowlist exists to filter out. Trusting 'product' here would fix the cache-seed
-// gap for simple-g-l-journal but silently reintroduce that already-fixed regression for
-// every OTHER window that shares this component and has a real, per-record 'product'
-// field. This constant is global across all generated windows; safely special-casing
-// simple-g-l-journal's product-as-dimension usage needs a per-window signal (e.g. a
-// dimensionsPanel-derived prop) that DetailView does not currently receive — out of
-// scope for a same-key allowlist fix. Confirmed still open, deferred, and covered by
-// a documenting regression test in DetailView.lineHiddenColumns.vitest.jsx ("KNOWN GAP")
-// per a GitHub Copilot review on PR 975 (ETP-4610) — see that test before changing this set.
+// this allowlist exists to filter out. Trusting 'product' unconditionally here would fix
+// the gap for simple-g-l-journal but silently reintroduce that already-fixed regression
+// for every OTHER window that shares this component and has a real, per-record 'product'
+// field. This constant stays GLOBAL and unconditional on purpose.
+//
+// ETP-4610 (originally flagged by a GitHub Copilot review on PR 975, then fixed as part
+// of the same ticket) — the real per-window signal this comment used to call "out of
+// scope" now exists: `dimensionsPanelFieldKeys`, a prop generated from this window's own
+// decisions.json `dimensionsPanel: true` fields (see `buildDimensionsPanelColumn` /
+// `dimensionsPanelFieldKeys` in schema_forge_core's generate-frontend.js, and the
+// `dimensionsPanelFieldKeys` prop + `trustedDimensionKeys` memo below). `lineHiddenColumns`
+// and the expanded-row DetailForm's `displayLogic` both trust `DIMENSION_MACRO_KEYS UNION
+// dimensionsPanelFieldKeys`, scoped to the current DetailView instance — so
+// simple-g-l-journal can trust 'product' as a dimension macro without this global constant
+// ever needing to include it, and sales-invoice/purchase-invoice (which never pass
+// 'product' in that prop) are unaffected. See DetailView.lineHiddenColumns.vitest.jsx for
+// both the fix proof (simple-g-l-journal) and the non-regression proof (sales-invoice-shaped
+// instances).
 const DIMENSION_MACRO_KEYS = new Set(['project', 'costcenter', 'costCenter', 'businessPartner']);
 
 // ETP-4500 — same rationale/hardcoding constraint as WINDOW_DELETE_ACTIONS above: these
@@ -1940,6 +1949,15 @@ export function DetailView({
   lockedAlert = null,
   selectorPriceCurrency = null,
   processConfirmModal = null,
+  // ETP-4610 — this window's own `dimensionsPanel: true` field keys on the lines
+  // entity (generated from decisions.json by `generate-frontend.js`'s
+  // `buildDimensionsPanelColumn`/`dimensionsPanelFieldKeys` — see
+  // docs/decisions-reference.md's "Accounting dimensions panel" section). Widens
+  // which keys `lineHiddenColumns` (and the expanded-row DetailForm's
+  // `displayLogic`) are willing to trust as config-driven dimension-macro
+  // visibility, SCOPED TO THIS WINDOW INSTANCE ONLY — see `DIMENSION_MACRO_KEYS`
+  // above for why the global allowlist itself must never include 'product'.
+  dimensionsPanelFieldKeys = [],
 }) {
   // DetailView never needs the parent list: on `/new` there is no record to match, and on
   // `/:id` the currentItem shortcut only helps when we arrived from ListView (items already
@@ -2109,11 +2127,25 @@ export function DetailView({
   // built for (see docs/generated-custom-windows/sales-invoice.md, ETP-4529 matrix) — any
   // other key's `false` is untrustworthy noise from this evaluator's known limitation,
   // not a real hide decision.
+  // ETP-4610 — window-scoped extension of DIMENSION_MACRO_KEYS: a key is trusted as a
+  // config-driven dimension macro if it's in the GLOBAL allowlist above OR THIS WINDOW
+  // INSTANCE itself declared it via `dimensionsPanelFieldKeys` (the lines entity's
+  // decisions.json `dimensionsPanel: true` fields, forwarded by generate-frontend.js —
+  // see the prop comment on `dimensionsPanelFieldKeys` above). This is what lets
+  // simple-g-l-journal trust 'product' as a dimension macro without reintroducing the
+  // ETP-4530 regression for sales-invoice/purchase-invoice, whose generated pages never
+  // pass 'product' in this prop. Stringified for the memo dep since `dimensionsPanelFieldKeys`
+  // defaults to a fresh `[]` reference on every render when the caller omits it.
+  const dimensionsPanelFieldKeysStr = (dimensionsPanelFieldKeys ?? []).join('|');
+  const trustedDimensionKeys = useMemo(
+    () => new Set([...DIMENSION_MACRO_KEYS, ...dimensionsPanelFieldKeysStr.split('|').filter(Boolean)]),
+    [dimensionsPanelFieldKeysStr]
+  );
   const lineHiddenColumns = useMemo(
     () => Object.entries(lineDisplayLogic?.visibility ?? {})
-      .filter(([key, visible]) => visible === false && DIMENSION_MACRO_KEYS.has(key))
+      .filter(([key, visible]) => visible === false && trustedDimensionKeys.has(key))
       .map(([key]) => key),
-    [lineDisplayLogic?.visibility]
+    [lineDisplayLogic?.visibility, trustedDimensionKeys]
   );
   const { calloutResult, calloutLoading, executeCallout } = useCallout(entity, { token, apiBaseUrl });
   const docAction = useDocumentAction({ apiBaseUrl, entity, token });
@@ -4474,11 +4506,15 @@ export function DetailView({
                                     // doesn't reflect this line's real state. `readOnly` stays {} so
                                     // each field's own readOnlyLogic (evaluated against the actual line)
                                     // keeps controlling per-row read-only state.
+                                    // ETP-4610 — trustedDimensionKeys (not the bare global
+                                    // DIMENSION_MACRO_KEYS) so this stays consistent with
+                                    // lineHiddenColumns above for windows that widen the trusted
+                                    // set via `dimensionsPanelFieldKeys`.
                                     displayLogic={{
                                       readOnly: {},
                                       visibility: Object.fromEntries(
                                         Object.entries(lineDisplayLogic?.visibility ?? {})
-                                          .filter(([key]) => DIMENSION_MACRO_KEYS.has(key))
+                                          .filter(([key]) => trustedDimensionKeys.has(key))
                                       ),
                                     }}
                                     data-testid="DetailForm__fa3275" />
