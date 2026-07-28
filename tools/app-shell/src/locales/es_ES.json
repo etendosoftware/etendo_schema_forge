@@ -21440,6 +21440,7 @@
     "upgradeCardholderPlaceholder": "Nombre tal como aparece en la tarjeta",
     "upgradeCardholderRequired": "Introduce el titular de la tarjeta",
     "upgradeCardNumberLabel": "Número de tarjeta",
+    "upgradeCardNumberPlaceholder": "4242 4242 4242 4242",
     "upgradeCardNumberInvalid": "Introduce un número de tarjeta de 16 dígitos",
     "upgradeExpiryLabel": "Fecha de caducidad",
     "upgradeExpiryPlaceholder": "MM/AA",

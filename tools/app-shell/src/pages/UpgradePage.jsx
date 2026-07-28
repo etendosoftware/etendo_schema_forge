@@ -424,7 +424,7 @@ export default function UpgradePage() {
                 id="upgrade-card-number"
                 data-testid="upgrade-card-number"
                 label={ui('upgradeCardNumberLabel')}
-                placeholder="4242 4242 4242 4242"
+                placeholder={ui('upgradeCardNumberPlaceholder')}
                 inputMode="numeric"
                 autoComplete="cc-number"
                 value={form.cardNumber}

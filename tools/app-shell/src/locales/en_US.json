@@ -21174,6 +21174,7 @@
     "upgradeCardholderPlaceholder": "Name as printed on the card",
     "upgradeCardholderRequired": "Enter the cardholder name",
     "upgradeCardNumberLabel": "Card number",
+    "upgradeCardNumberPlaceholder": "4242 4242 4242 4242",
     "upgradeCardNumberInvalid": "Enter a 16-digit card number",
     "upgradeExpiryLabel": "Expiry date",
     "upgradeExpiryPlaceholder": "MM/YY",
