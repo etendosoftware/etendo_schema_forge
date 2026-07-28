@@ -8,7 +8,7 @@ import { EmptyState, KpiWidget } from './FmCommon.jsx';
 import { Checkbox } from '@/components/ui/checkbox';
 import { ConfigDrawer, NewDeclModal } from './FmOverlays.jsx';
 import FmCatalogPage from './FmCatalogPage.jsx';
-import { formatAmount, STATUS_COLOR, computeUpcomingDeadlines, checkModified303, checkModified349, compute349Operators, persistDeclarationStatus } from './fiscalModelsUtils.js';
+import { formatAmount, computeUpcomingDeadlines, checkModified303, checkModified349, compute349Operators, persistDeclarationStatus } from './fiscalModelsUtils.js';
 import useFiscalAutoCompute from './useFiscalAutoCompute.js';
 
 // Real-mode only: throws on fetch failure instead of falling back to mock data.

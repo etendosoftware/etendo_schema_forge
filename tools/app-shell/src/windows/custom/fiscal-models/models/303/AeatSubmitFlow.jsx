@@ -79,6 +79,13 @@ const DECL_TYPE_LABEL_KEY = {
   X: 'fm.ident.decl.dev_transferencia_ext',
 };
 
+function resolveDeclTypeLabel(declarationType, t) {
+  if (!declarationType) return null;
+  const key = DECL_TYPE_LABEL_KEY[declarationType];
+  if (key) return t(key);
+  return declarationType;
+}
+
 const INPUT_ST = {
   width: 376, height: 40, fontSize: 14, padding: '8px 12px',
   border: '1px solid #D1D4DB', borderRadius: 8,
@@ -235,11 +242,7 @@ export default function AeatSubmitFlow({ decl, orgIdent, identChecks, summary, t
                   data-testid="InfoRow__fc2aac" />
                 <InfoRow
                   label={t('fm.aeat.confirm.decl_type') ?? 'Declaration type'}
-                  value={localData.declarationType
-                    ? (DECL_TYPE_LABEL_KEY[localData.declarationType]
-                      ? t(DECL_TYPE_LABEL_KEY[localData.declarationType])
-                      : localData.declarationType)
-                    : null}
+                  value={resolveDeclTypeLabel(localData.declarationType, t)}
                   data-testid="InfoRow__fc2aac" />
                 <InfoRow
                   label={t('fm.aeat.confirm.result') ?? 'Result'}
@@ -367,7 +370,7 @@ export default function AeatSubmitFlow({ decl, orgIdent, identChecks, summary, t
                 <div style={{ marginTop: 16, fontSize: 13, color: '#828FA3' }}>
                   <div style={{ fontWeight: 600, marginBottom: 4 }}>{t('fm.aeat.warnings.title') ?? 'Warnings'}</div>
                   <ul style={{ margin: 0, paddingLeft: 18 }}>
-                    {response.warnings.map((w, i) => <li key={i}>{w}</li>)}
+                    {response.warnings.map(w => <li key={w}>{w}</li>)}
                   </ul>
                 </div>
               )}
@@ -402,6 +405,18 @@ export default function AeatSubmitFlow({ decl, orgIdent, identChecks, summary, t
           {step === 'result' && outcome === 'error' && (() => {
             const specificKey = resolveErrorCodeKey(response?.errorCode);
             const isNoCertificate = response?.errorCode === 'NO_CERTIFICATE';
+            let errorBody;
+            if (specificKey) {
+              errorBody = <div style={{ marginTop: 4 }}>{t(specificKey) ?? specificKey}</div>;
+            } else if (response?.errors?.length > 0) {
+              errorBody = (
+                <ul style={{ margin: '6px 0 0', paddingLeft: 18 }}>
+                  {response.errors.map(e => <li key={e}>{e}</li>)}
+                </ul>
+              );
+            } else {
+              errorBody = <div style={{ marginTop: 4 }}>{t('fm.aeat.error.generic') ?? 'Unknown error. Please try again.'}</div>;
+            }
             return (
               <>
                 <Banner
@@ -409,15 +424,7 @@ export default function AeatSubmitFlow({ decl, orgIdent, identChecks, summary, t
                   icon={<OctagonAlert size={18} data-testid="OctagonAlert__aeatError" />}
                   title={t('fm.aeat.result.error.title') ?? 'The submission could not be completed'}
                   data-testid="Banner__aeatError">
-                  {specificKey ? (
-                    <div style={{ marginTop: 4 }}>{t(specificKey) ?? specificKey}</div>
-                  ) : response?.errors?.length > 0 ? (
-                    <ul style={{ margin: '6px 0 0', paddingLeft: 18 }}>
-                      {response.errors.map((e, i) => <li key={i}>{e}</li>)}
-                    </ul>
-                  ) : (
-                    <div style={{ marginTop: 4 }}>{t('fm.aeat.error.generic') ?? 'Unknown error. Please try again.'}</div>
-                  )}
+                  {errorBody}
                 </Banner>
                 {isNoCertificate && (
                   <button
