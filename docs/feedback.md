@@ -426,3 +426,40 @@ actually surfaced this gap.
 started in this environment. Verified via the full `make test` suite (531 vitest files / 9739 tests
 passed, 1 pre-existing unrelated skip; all 4 `node --test` groups green) plus manual review of the
 DOM structure and gating conditions.
+
+---
+
+## [2026-07-28] ETP-4610 — Amortización hover-action strip was transparent, overlapping the Amount column
+
+**Component:** `tools/app-shell/src/windows/custom/amortization/AmortizationLinesTable.jsx`
+
+**Symptom:** reported by the user against the deployed build — the row hover-action strip (Layers/
+Pencil/Trash) rendered with visible overlap onto the Amount column's text, and the strip itself
+looked "totally transparent."
+
+**Root cause:** the strip's wrapper `<div>` (`position: absolute`, faded in via
+`opacity-0 group-hover/row:opacity-100`) had **no background of its own** — only the icon glyphs
+were opaque, each button only getting a background on its own individual `:hover`. With the
+original 2 buttons (Pencil/Trash) this was invisible: they fit entirely inside their own dedicated,
+otherwise-empty actions column (`w-20` = 80px), so there was nothing behind them to bleed through.
+Adding a 3rd button (Layers, for "Edit dimensions" — see the entry above) pushed the strip's actual
+rendered width past 80px; because the wrapper is `position: absolute`, it does not influence the
+table's own column-width layout, so on hover it visually spilled into the neighboring Amount
+column and — being transparent — let that column's text show through underneath the icons.
+
+**Fix:** gave the wrapper a solid `bg-card` pill background (+ `shadow-sm ring-1 ring-border/40`,
+matching the codebase's existing `QUICK_ACTIONS_PILL_CLASS` convention in
+`quickActionsStyle.js`, even though that specific flag is currently disabled elsewhere) so the
+strip occludes whatever is behind it instead of being see-through, AND widened the actions column
+from `w-20` (80px) to `w-32` (128px) so the 3-button pill fits inside its own column without
+needing to spill over at all — the background is now a safeguard, not the only thing hiding the
+overlap.
+
+**Lesson:** an absolutely-positioned hover overlay with a transparent background is only safe when
+its rendered footprint is guaranteed smaller than its reserved column — that guarantee silently
+breaks the moment a new button is added to the strip, and the resulting bug (see-through overlap)
+is easy to miss in code review because nothing in the diff itself looks wrong; it only becomes
+visible when someone actually hovers a row in a running instance. When adding a button to any
+`position: absolute` hover strip, always re-check (a) whether the strip still fits inside its
+reserved column at the new width, and (b) whether the strip has an opaque background as a
+second line of defense in case it doesn't.

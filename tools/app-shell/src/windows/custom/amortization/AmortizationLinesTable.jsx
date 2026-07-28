@@ -324,8 +324,11 @@ export default function AmortizationLinesTable({
             {/* ETP-4610 — the "Accounting dimensions" column header was removed:
                 the summary/entry point moved into the hover-action strip below
                 (Layers icon, "Edit dimensions" tooltip), matching InlineLinesPanel's
-                generic dimensionsPanel mechanism used by the other 5 windows. */}
-            <th className="h-10 w-20 px-2" />
+                generic dimensionsPanel mechanism used by the other 5 windows.
+                Widened from w-20 (80px) to w-32 (128px): the strip now holds up to
+                3 buttons (was 2) and needs the extra room so it stays inside its
+                own column instead of spilling over the Amount column on hover. */}
+            <th className="h-10 w-32 px-2" />
           </tr>
         </thead>
 
@@ -451,10 +454,16 @@ export default function AmortizationLinesTable({
                           dimensions on a read-only/processed document still works via the
                           always-visible chevron toggle at the start of the row — this hover
                           shortcut, like Pencil/Trash, is only offered while the document (and
-                          therefore the row) is editable. */}
+                          therefore the row) is editable.
+                          Fix: the strip had NO background at all — only the icon glyphs were
+                          opaque — so at 3 buttons wide it visually overlapped/bled into the
+                          Amount column's text on hover instead of occluding it. Added a solid
+                          `bg-card` pill (+ shadow/ring, matching the app's established
+                          floating-action-pill look) so the strip reads as a distinct control
+                          sitting on top of the row, not a see-through overlay. */}
                       <td className="relative px-2 align-middle" onClick={e => e.stopPropagation()}>
                         {!isReadOnly && (
-                          <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-0.5 opacity-0 group-hover/row:opacity-100 transition-opacity z-10">
+                          <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-0.5 h-9 px-1.5 rounded-full bg-card shadow-sm ring-1 ring-border/40 opacity-0 group-hover/row:opacity-100 transition-opacity z-10">
                             {dimensionFields.length > 0 && (
                               <button
                                 onClick={() => setExpandedId(isExpanded ? null : line.id)}

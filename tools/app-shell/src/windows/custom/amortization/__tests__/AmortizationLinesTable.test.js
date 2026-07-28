@@ -169,6 +169,23 @@ describe('AmortizationLinesTable — dimensions', () => {
     assert.match(src, /ui\('editDimensionsTooltip'\)/);
     assert.match(src, /<Layers/);
   });
+
+  // Regression guard: the hover strip originally had no background at all — only
+  // the icon glyphs were opaque — which was invisible with 2 buttons (they fit
+  // inside their own empty actions column) but became a visible see-through
+  // overlap into the Amount column once a 3rd button (Layers) was added. The
+  // strip must carry an opaque background, and the actions column must be wide
+  // enough to hold 3 buttons without spilling into the neighboring column.
+  it('renders the hover-action strip with an opaque background (not a transparent overlay)', () => {
+    const stripBlock = src.match(/<div className="absolute right-2[^"]*"/);
+    assert.ok(stripBlock, 'hover-action strip wrapper div not found');
+    assert.match(stripBlock[0], /bg-card/);
+  });
+
+  it('widened the actions column to fit 3 hover buttons without overlapping the Amount column', () => {
+    assert.doesNotMatch(src, /<th className="h-10 w-20 px-2" \/>/);
+    assert.match(src, /<th className="h-10 w-32 px-2" \/>/);
+  });
 });
 
 describe('AmortizationLinesTable — add and delete lines', () => {

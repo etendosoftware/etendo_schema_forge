@@ -443,6 +443,37 @@ hover-action mechanism.
 was started in this environment. Verified via the full automated suite plus manual review of the
 DOM structure (colSpan/column-count parity, hover-strip button order and gating conditions).
 
+### Live-UX-review follow-up — hover strip was transparent and overlapped the Amount column
+
+**Found by the user against the deployed build, same session.** The hover-action strip
+(`<div className="absolute right-3 ...">` wrapping Layers/Pencil/Trash) had **no background at
+all** — only the icon glyphs themselves were opaque, and each button only gained a background on
+its own individual `:hover`. With 2 buttons (Pencil/Trash, pre-ETP-4610) this was invisible because
+they fit entirely inside their own dedicated, otherwise-empty actions column (`w-20` = 80px) — there
+was nothing behind them to show through. Adding the 3rd (Layers) button pushed the strip's actual
+rendered width (~100px+) past that 80px column: since the wrapper is `position: absolute`, it does
+not affect the table's column-width layout, so on hover it visually spilled left into the **Amount**
+column and — being transparent — let the amount text bleed through underneath the icons, reading as
+a broken overlap.
+
+**Fix**, both in `AmortizationLinesTable.jsx`:
+1. Gave the strip a solid `bg-card` pill background (+ `shadow-sm ring-1 ring-border/40`, the same
+   visual language as the codebase's existing (currently-disabled-elsewhere)
+   `QUICK_ACTIONS_PILL_CLASS` convention) so it visually occludes whatever is behind it instead of
+   being a see-through overlay.
+2. Widened the actions column header from `w-20` (80px) to `w-32` (128px) so the 3-button pill
+   (~112px including its own padding) fits entirely within its own column and no longer needs to
+   overlap the Amount column at all — the opaque background is now a belt-and-braces safeguard, not
+   the only thing preventing the overlap from being visible.
+
+**Test coverage added:** two new assertions in `AmortizationLinesTable.test.js` — the hover-strip
+wrapper carries `bg-card`, and the actions `<th>` is `w-32` (not the old `w-20`) — so a future
+button addition that regresses either the background or the column width fails fast instead of
+requiring another live-UX bug report.
+
+**Still not visually verified in a real browser** — same environment constraint as above. The user
+will confirm the actual pixel result against the deployed instance.
+
 ## Theme roles
 
 The window's live artifact custom components use the shared semantic theme.
