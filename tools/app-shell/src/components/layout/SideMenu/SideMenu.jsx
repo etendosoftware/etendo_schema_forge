@@ -598,7 +598,9 @@ export default function SideMenu({
                           {env.clientName || env.orgName || ui('yourCompany')}
                         </span>
                         {switching === env.clientId && (
-                          <Loader2 className="h-3.5 w-3.5 ml-2 shrink-0 animate-spin" />
+                          <Loader2
+                            className="h-3.5 w-3.5 ml-2 shrink-0 animate-spin"
+                            data-testid="Loader2__247c75" />
                         )}
                       </DropdownMenuItem>
                     );
@@ -606,7 +608,7 @@ export default function SideMenu({
                 ) : (
                   // No platform token, or the list could not be read: showing the
                   // current company alone beats an empty menu.
-                  <DropdownMenuItem disabled data-testid="DropdownMenuItem__247c75">
+                  (<DropdownMenuItem disabled data-testid="DropdownMenuItem__247c75">
                     <img
                       src={logoSrc}
                       alt=""
@@ -615,7 +617,7 @@ export default function SideMenu({
                     <span className="flex-1 truncate">
                       {selectedOrg?.name || ui('yourCompany')}
                     </span>
-                  </DropdownMenuItem>
+                  </DropdownMenuItem>)
                 )}
               </DropdownMenuContent>
             </DropdownMenu>
