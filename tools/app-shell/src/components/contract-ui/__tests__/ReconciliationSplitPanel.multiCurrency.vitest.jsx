@@ -32,26 +32,39 @@ vi.mock('sonner', () => ({
 // Movement modal) → lightweight stub exposing the REAL options from useLookup('') as buttons, so
 // a test can pick a SPECIFIC method by id (mirrors the stub style already used for ChipSelect in
 // NewTransactionModal.vitest.jsx, minus its synthetic-id shortcut — here the id matters).
-vi.mock('@/components/forms/fields', () => ({
-  ChipSelect: ({ value, onChange, useLookup, testId }) => {
-    const { results } = useLookup('');
-    return (
-      <div>
-        <span data-testid={`${testId}-value`}>{value?.id ?? ''}</span>
-        {results.map((r) => (
-          <button
-            key={r.id}
-            type="button"
-            data-testid={`${testId}-option-${r.id}`}
-            onClick={() => onChange(r)}
-          >
-            {r.name}
-          </button>
-        ))}
-      </div>
-    );
-  },
-}));
+// The stub also mirrors the real ChipSelect's typeahead: the query it holds is threaded into
+// useLookup, so a test can exercise the hook's filtering branch (not just its unfiltered list).
+// The initial query is '' — exactly what the previous stub passed — so every other test that only
+// reads the options is unaffected.
+vi.mock('@/components/forms/fields', async () => {
+  const { useState } = await import('react');
+  return {
+    ChipSelect: ({ value, onChange, useLookup, testId }) => {
+      const [query, setQuery] = useState('');
+      const { results } = useLookup(query);
+      return (
+        <div>
+          <span data-testid={`${testId}-value`}>{value?.id ?? ''}</span>
+          <input
+            data-testid={`${testId}-search`}
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+          />
+          {results.map((r) => (
+            <button
+              key={r.id}
+              type="button"
+              data-testid={`${testId}-option-${r.id}`}
+              onClick={() => onChange(r)}
+            >
+              {r.name}
+            </button>
+          ))}
+        </div>
+      );
+    },
+  };
+});
 
 const linesState = { lines: [], total: 0, counts: {}, loading: false, reload: vi.fn() };
 const candidatesState = { candidates: [], loading: false };
@@ -435,6 +448,39 @@ describe('ReconciliationSplitPanel — multi-currency (ETP-4502 iteration 2)', (
       // for a receipt) is excluded from the options entirely.
       expect(screen.getByTestId('recon-payment-method-option-pm-2')).toBeInTheDocument();
       expect(screen.queryByTestId('recon-payment-method-option-pm-3')).not.toBeInTheDocument();
+    });
+
+    it('filters the offered methods as the user types, and restores them on a blank query', () => {
+      setLines([LINE_POS]);
+      setCandidates([CAND_INVOICE_COVERING]);
+      renderPanel({
+        currency: 'EUR', paymentMethods: [PM_RECEIPT_DEFAULT, PM_RECEIPT_OTHER, PM_PAYOUT_ONLY],
+      });
+      selectLine('LP');
+      switchToSalesInvoices();
+      fireEvent.click(screen.getByTestId('recon-cand-check-CI'));
+      fireEvent.click(screen.getByTestId('recon-action-reconcile'));
+
+      const search = screen.getByTestId('recon-payment-method-search');
+      // Both direction-matching methods are offered up front ("Wire" pm-1, "Cash" pm-2).
+      expect(screen.getByTestId('recon-payment-method-option-pm-1')).toBeInTheDocument();
+      expect(screen.getByTestId('recon-payment-method-option-pm-2')).toBeInTheDocument();
+
+      // Typing narrows the list by name, case-insensitively ("cAs" → "Cash").
+      fireEvent.change(search, { target: { value: 'cAs' } });
+      expect(screen.queryByTestId('recon-payment-method-option-pm-1')).not.toBeInTheDocument();
+      expect(screen.getByTestId('recon-payment-method-option-pm-2')).toBeInTheDocument();
+
+      // A query matching nothing empties the list (and never reaches the excluded payout method).
+      fireEvent.change(search, { target: { value: 'zzz' } });
+      expect(screen.queryByTestId('recon-payment-method-option-pm-1')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('recon-payment-method-option-pm-2')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('recon-payment-method-option-pm-3')).not.toBeInTheDocument();
+
+      // A whitespace-only query is treated as empty → the full direction-filtered list is back.
+      fireEvent.change(search, { target: { value: '   ' } });
+      expect(screen.getByTestId('recon-payment-method-option-pm-1')).toBeInTheDocument();
+      expect(screen.getByTestId('recon-payment-method-option-pm-2')).toBeInTheDocument();
     });
 
     it('preselects the first direction-matching method when none is isDefault', () => {

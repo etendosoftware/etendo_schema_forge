@@ -856,6 +856,19 @@ describe('ReconciliationSplitPanel', () => {
       expect(screen.queryByTestId('recon-matched-block')).not.toBeInTheDocument();
     });
 
+    it('renders nothing when the line claims a reconciled amount but carries no txns', () => {
+      // The outer condition (PARTIAL + a non-zero reconciledAmount) holds, so the section IS
+      // mounted — but a payload without the matched-documents array has nothing to list, so the
+      // section renders null rather than an empty pct header with no rows behind it.
+      setLines([{ ...LINE_PARTIAL, txns: [] }]);
+      renderPanel();
+      fireEvent.click(screen.getByTestId('recon-line-radio-LP1'));
+      expect(screen.queryByTestId('recon-matched-block')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('recon-matched-toggle')).not.toBeInTheDocument();
+      // The rest of the right panel still renders (only the conciliado block is skipped).
+      expect(screen.getByTestId('recon-right-search')).toBeInTheDocument();
+    });
+
     it('renders COLLAPSED by default: pct header visible, matched rows hidden until expanded', () => {
       setLines([LINE_PARTIAL]);
       renderPanel();
@@ -954,6 +967,27 @@ describe('ReconciliationSplitPanel', () => {
       expect(screen.queryByTestId('recon-remove-modal')).not.toBeInTheDocument();
       fireEvent.click(screen.getByTestId('recon-unlink-T1'));
       expect(screen.getByTestId('recon-remove-modal')).toBeInTheDocument();
+      expect(removeState.removeOperation).not.toHaveBeenCalled();
+    });
+
+    it('ignores the unlink click for a matched doc that carries no transactionId', () => {
+      // A matched doc is keyed by `transactionId || documentNo`, i.e. the block deliberately
+      // renders documents whose transaction id is missing from the payload. Unlinking is
+      // meaningless without that id (there is nothing to send to removeOperation), so the click
+      // must be a no-op: no confirm dialog, no request.
+      setLines([{
+        ...LINE_PARTIAL,
+        txns: [{ documentNo: '1000034', contact: 'ACME', amount: 53.24, autoCreated: true }],
+      }]);
+      renderPanel();
+      fireEvent.click(screen.getByTestId('recon-line-radio-LP1'));
+      fireEvent.click(screen.getByTestId('recon-matched-toggle'));
+      // The row still renders (keyed by documentNo), just without a usable transaction id.
+      expect(screen.getByText('1000034')).toBeInTheDocument();
+
+      fireEvent.click(screen.getByTestId('recon-unlink-undefined'));
+
+      expect(screen.queryByTestId('recon-remove-modal')).not.toBeInTheDocument();
       expect(removeState.removeOperation).not.toHaveBeenCalled();
     });
 

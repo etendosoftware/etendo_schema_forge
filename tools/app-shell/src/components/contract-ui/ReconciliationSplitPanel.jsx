@@ -1280,8 +1280,10 @@ export function ReconciliationSplitPanel({
     }
   };
 
+  // Only ever bound to the "Conciliar" button, whose `disabled` is exactly `busy || !canReconcile`
+  // (see the non-reconciled branch of ReconciliationActionBar) — so by the time this runs,
+  // `canReconcile` is already guaranteed true; a runtime re-check here was unreachable dead code.
   const handleReconcile = () => {
-    if (!canReconcile) return;
     // A pure existing-transaction match needs no method (each transaction already has one); only
     // creating new invoice payments requires picking one, and only when the account actually has
     // methods configured for this direction — otherwise fall back to the backend's auto-resolve.
@@ -1313,28 +1315,31 @@ export function ReconciliationSplitPanel({
     setRemoveRequest({ ids: [id], hasAuto: anyAutoCreated([id]), count: 1 });
   };
 
+  // Only bound to the "Desconciliar (N)" button, disabled whenever `removeCount` (= this same
+  // `selectedOpIds.size`) is 0 — so `ids` is already guaranteed non-empty here.
   const requestRemoveSelected = () => {
-    if (!selectedLine) return;
     const ids = Array.from(selectedOpIds);
-    if (ids.length === 0) return;
     setRemoveRequest({ ids, hasAuto: anyAutoCreated(ids), count: ids.length });
   };
 
   /**
    * "Reactivar" — the lighter alternative behind the primary button's chevron. Same checked
-   * selection as Desconciliar; only the confirm copy and the endpoint differ.
+   * selection as Desconciliar; only the confirm copy and the endpoint differ. Only reachable from
+   * the `recon-action-reactivate` dropdown item, which only exists once a line is selected and its
+   * trigger is disabled whenever `selectedOpIds` is empty — so `selectedLine` and a non-empty `ids`
+   * are already guaranteed here.
    */
   const requestReactivateSelected = () => {
-    if (!selectedLine) return;
     const ids = Array.from(selectedOpIds);
-    if (ids.length === 0) return;
     setRemoveRequest({
       ids, hasAuto: anyAutoCreated(ids), count: ids.length, mode: 'reactivate',
     });
   };
 
+  // Only wired to RemoveOperationConfirmDialog's confirm button, itself only rendered while
+  // `open={!!removeRequest}` — so `removeRequest` (and, transitively, `selectedLine`, which every
+  // setter of it already required) is already guaranteed non-null here.
   const confirmRemove = async () => {
-    if (!selectedLine || !removeRequest) return;
     // Named for the ACTION being confirmed — distinct from the outer `reactivating` (its request is
     // in flight), which would otherwise be shadowed here.
     const isReactivateAction = removeRequest.mode === 'reactivate';
