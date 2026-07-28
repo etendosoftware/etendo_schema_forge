@@ -37,6 +37,7 @@ import {
   ChevronDown,
   Headphones,
   FileJson,
+  Loader2,
 } from 'lucide-react';
 import {
   ClipboardText as ClipboardCheck,
@@ -62,7 +63,6 @@ import {
 import { cn } from '@/lib/utils.js';
 import { useMenuLabel, useUI, useLocaleSwitch } from '@/i18n';
 import { useFavorites } from '@/components/layout/FavoritesContext';
-import { Loader2 } from 'lucide-react';
 import {
   useFeatureFlag,
   PROOF_OF_CONCEPT_MENU,
@@ -586,7 +586,7 @@ export default function SideMenu({
                       <DropdownMenuItem
                         key={env.clientId}
                         disabled={isCurrent || switching !== null}
-                        onSelect={() => { if (!isCurrent) void switchTo(env); }}
+                        onSelect={() => { if (!isCurrent) switchTo(env); }}
                         data-testid={`company-option-${env.clientId}`}
                       >
                         <img

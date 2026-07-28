@@ -17,6 +17,7 @@ export function useAccountIdentity() {
 
   useEffect(() => {
     if (!token) return;
-    void refreshAccountIdentity({ token, apiBase: getApiBase() });
+    // Not awaited: it handles its own failures and must not delay the shell.
+    refreshAccountIdentity({ token, apiBase: getApiBase() });
   }, [token]);
 }

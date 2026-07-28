@@ -87,16 +87,23 @@ export function validateCheckout({ cardholder, cardNumber, expiry, cvc, tenantNa
   return errors;
 }
 
+/**
+ * Random hex from the platform CSPRNG.
+ *
+ * There is deliberately no `Math.random()` fallback. Token values are not a
+ * security boundary today — the backend checks their shape, not their
+ * provenance — but a token generator that silently downgrades to weak
+ * randomness is exactly the shape that survives into the version where it does
+ * matter. Every browser and Node runtime this ships on has `getRandomValues`;
+ * one that does not should fail loudly rather than mint guessable tokens.
+ */
 function randomHex(bytes = 8) {
-  const buffer = new Uint8Array(bytes);
   const cryptoApi = globalThis.crypto;
-  if (cryptoApi?.getRandomValues) {
-    cryptoApi.getRandomValues(buffer);
-  } else {
-    for (let i = 0; i < buffer.length; i += 1) {
-      buffer[i] = Math.floor(Math.random() * 256);
-    }
+  if (!cryptoApi?.getRandomValues) {
+    throw new Error('A secure random source is required to mint a payment token');
   }
+  const buffer = new Uint8Array(bytes);
+  cryptoApi.getRandomValues(buffer);
   return Array.from(buffer, byte => byte.toString(16).padStart(2, '0')).join('');
 }
 

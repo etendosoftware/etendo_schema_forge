@@ -50,6 +50,33 @@ async function readJsonSafely(response) {
   }
 }
 
+/**
+ * Parses one NDJSON line, or returns null when it cannot be read.
+ *
+ * A malformed line must not abort a provisioning run already underway: the
+ * tenant is being created server-side regardless of what the client can parse.
+ */
+function parseStreamLine(line) {
+  if (!line.trim()) return null;
+  try {
+    return JSON.parse(line);
+  } catch {
+    return null;
+  }
+}
+
+/** Forwards every complete message in a chunk, returning the last result seen. */
+function drainLines(lines, onMessage) {
+  let result = null;
+  for (const line of lines) {
+    const message = parseStreamLine(line);
+    if (!message) continue;
+    onMessage?.(message);
+    if (message.type === 'result') result = message;
+  }
+  return result;
+}
+
 /** Consumes an NDJSON body, forwarding each message and keeping the final result. */
 export async function readNdjsonStream(reader, onMessage) {
   const decoder = new TextDecoder();
@@ -65,18 +92,7 @@ export async function readNdjsonStream(reader, onMessage) {
     // Keep the trailing partial line until more bytes arrive.
     buffer = done ? '' : lines.pop();
 
-    for (const line of lines) {
-      if (!line.trim()) continue;
-      let message;
-      try {
-        message = JSON.parse(line);
-      } catch {
-        // A malformed line should not abort a provisioning run already underway.
-        continue;
-      }
-      onMessage?.(message);
-      if (message.type === 'result') finalResult = message;
-    }
+    finalResult = drainLines(lines, onMessage) ?? finalResult;
 
     if (done) break;
   }

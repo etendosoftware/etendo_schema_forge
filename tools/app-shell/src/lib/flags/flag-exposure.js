@@ -60,7 +60,7 @@ export function createFlagExposureHook({ trackImpl = track } = {}) {
         );
         // Fire-and-forget: an unresolved or rejected track must not surface
         // inside flag resolution.
-        void Promise.resolve(trackImpl(event.name, event.properties)).catch(() => {});
+        Promise.resolve(trackImpl(event.name, event.properties)).catch(() => {});
       } catch {
         // Reporting is best-effort; evaluation continues regardless.
       }

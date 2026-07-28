@@ -314,7 +314,8 @@ export default function UpgradePage() {
       return;
     }
 
-    void runUpgrade(createMockPaymentToken());
+    // Not awaited: runUpgrade drives its own phase/error state and never rejects.
+    runUpgrade(createMockPaymentToken());
   };
 
   return (

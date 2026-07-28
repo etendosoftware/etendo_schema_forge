@@ -25,7 +25,7 @@ function getSessionContext() {
 export async function trackSessionStarted({ username, clientId, clientName } = {}) {
   // Re-target feature flags on the signed-in identity so bucketing matches the
   // Mixpanel user this session reports as.
-  void setFeatureFlagContext({ username, clientId });
+  setFeatureFlagContext({ username, clientId });
   if (username) {
     await identify(username);
   }
