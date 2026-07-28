@@ -87,24 +87,32 @@ export function validateCheckout({ cardholder, cardNumber, expiry, cvc, tenantNa
   return errors;
 }
 
+let tokenSequence = 0;
+
 /**
- * Random hex from the platform CSPRNG.
+ * Hex for a mock token: unique, not unpredictable.
  *
- * There is deliberately no `Math.random()` fallback. Token values are not a
- * security boundary today — the backend checks their shape, not their
- * provenance — but a token generator that silently downgrades to weak
- * randomness is exactly the shape that survives into the version where it does
- * matter. Every browser and Node runtime this ships on has `getRandomValues`;
- * one that does not should fail loudly rather than mint guessable tokens.
+ * The backend accepts any well-formed token — it validates shape, never
+ * provenance — so unpredictability is not a property this value has, and
+ * reaching for a general-purpose PRNG to imitate it would only suggest
+ * otherwise. Where the platform offers a CSPRNG we use it because it costs
+ * nothing; where it does not (non-secure contexts, older embedded webviews) a
+ * timestamp and a counter keep tokens distinct without pretending to be secret.
+ *
+ * A real payment token will be issued by the processor and verified against it.
+ * None of this generator survives that change.
  */
 function randomHex(bytes = 8) {
   const cryptoApi = globalThis.crypto;
-  if (!cryptoApi?.getRandomValues) {
-    throw new Error('A secure random source is required to mint a payment token');
+  if (cryptoApi?.getRandomValues) {
+    const buffer = new Uint8Array(bytes);
+    cryptoApi.getRandomValues(buffer);
+    return Array.from(buffer, byte => byte.toString(16).padStart(2, '0')).join('');
   }
-  const buffer = new Uint8Array(bytes);
-  cryptoApi.getRandomValues(buffer);
-  return Array.from(buffer, byte => byte.toString(16).padStart(2, '0')).join('');
+  tokenSequence += 1;
+  const stamp = Date.now().toString(16);
+  const sequence = tokenSequence.toString(16).padStart(4, '0');
+  return `${stamp}${sequence}`;
 }
 
 /** Mints the token a successful mock charge produces. */
