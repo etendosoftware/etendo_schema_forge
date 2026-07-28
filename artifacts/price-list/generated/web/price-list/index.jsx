@@ -1,6 +1,6 @@
 import PriceListPage, { api } from './PriceListPage';
 
-const windowMeta = { category: 'settings', name: 'Price List' };
+const windowMeta = { category: 'settings', name: 'Price List', id: '146' };
 
 // @sf-generated-start component:App
 export default function App({ windowName, recordId, token, apiBaseUrl, window, ...rest }) {

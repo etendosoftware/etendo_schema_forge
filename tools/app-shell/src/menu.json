@@ -407,6 +407,12 @@
           "windowId": "108"
         },
         {
+          "name": "roles",
+          "label": "Roles",
+          "favname": "Roles",
+          "capability": "isAdminOrClientAdmin"
+        },
+        {
           "name": "smart-scan",
           "label": "Smart Scan",
           "favname": "Smart Scan"
