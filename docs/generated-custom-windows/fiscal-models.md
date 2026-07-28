@@ -82,6 +82,7 @@ Three steps (0-based index):
 | Sources | Invoice rows that feed the boxes, filterable by incidents |
 | Files | Generated `.txt` file download |
 | Incidents | Blocking and warning validation messages |
+| Justificante (ETP-4456) | Generic `AttachmentsTab` bound to the `ETGO_Fiscal_Decl` record — see below |
 
 ### Identification section (`tipo_declaracion` + bank data)
 
@@ -105,6 +106,136 @@ When in real mode, `FmModel303Page` reads `liveBoxes` / `liveSummary` from the `
 ### Organization identity
 
 A `GET /session` call on mount populates the NIF/nombre fields used in the generated `.txt` header when `token` and `apiBaseUrl` are provided.
+
+### AEAT electronic submission (`AeatSubmitFlow`) — ETP-4456
+
+`PresentModal` (`FmOverlays.jsx`) gained a 4th, opt-in path (`showAeatPath` prop, only passed by `FmModel303Page`): **"Presentación telemática AEAT"**. It reports the sentinel status `aeat_telematic` — never a real declaration status — which `FmModel303Page.handlePresent` intercepts to open `models/303/AeatSubmitFlow.jsx` instead of changing the status directly (the other 3 manual paths still call `handleStatusChange` as before).
+
+**Flow (single dedicated component, not folded into `PresentModal`** — the multi-step submit/result logic and the real API call make it noticeably heavier than the 3 simple manual paths, so keeping it in its own file avoids bloating `FmOverlays.jsx` further):
+
+**Trigger path (and the REVIEW-cycle bug fixed in it):** the AEAT path is a card inside
+`PresentModal`, not a separate button — the user opens "Mark submitted" (`PresentModal`), picks the
+4th card ("Presentación telemática AEAT" / `aeat_telematic`), and confirms. `handlePresent` in
+`FmModel303Page.jsx` intercepts that sentinel status and opens `AeatSubmitFlow` **instead of**
+changing the status directly, like the other 3 manual paths do. Alex's REVIEW (cycle 1) found a
+real blocker here: the original code opened `AeatSubmitFlow` but never called
+`setShowPresent(false)`, so `PresentModal` stayed mounted underneath it — closing `AeatSubmitFlow`
+resurfaced the stale path-selection screen instead of returning to the main page. Fixed by adding
+`setShowPresent(false)` alongside `setShowAeatFlow(true)`; a regression-guard test assertion
+(`FmOverlays.test.js`) now checks the sentinel/gating wiring stays in place.
+
+1. **Confirm screen** — shows NIF / business name / fiscal year-period / declaration type / result / IBAN, all read from data already available client-side (`orgIdent` + `identChecks` + the current computed `summary`/`liveBoxes` — no extra API round-trip just to populate this screen). Editable presenter NIF/name (defaulted from `orgIdent`, in case the certificate holder differs from the declarant) and an optional NRC field. A **Test mode** checkbox (unchecked by default) shows a warning banner when checked.
+2. **Submit** — `POST /fiscal303/submit?year=&period=&tipo=&id=` via `useApiFetch`. No separate "check certificate" pre-flight call is made — the endpoint is called directly and `errorCode: NO_CERTIFICATE` in the response is what triggers the "no certificate" message (simpler than a `GET /neo/certificate` probe beforehand, and the backend already has the definitive answer). Full request/response contract, all `errorCode` values, and the backend-side idempotency guard: `../../../modules/com.etendoerp.go/docs/aeat-303-submit-endpoint.md`.
+3. **Result screen**, branching on `response.status`:
+   - `SUCCESS` — CSV, presentation date, registry/justificante numbers; a PDF download button decodes `pdfBase64` client-side (`triggerBase64Download`, new export in `fiscalModelsUtils.js`) and triggers a browser download. If `pdfDownloadFailed` is true, a distinct message is shown instead ("submitted OK, PDF fetch failed") — never implying the submission itself failed. Also calls `onSuccess('submitted_ack')`, which flows through the same `handleStatusChange` the 3 manual paths use (one extra, harmless PUT to `/fiscal303/declarations` re-asserting the status the backend already set server-side, kept for consistency with the existing list-sync mechanism).
+   - `TEST_SUCCESS` — prominent "Envío de prueba — declaración NO presentada" banner; still offers the draft PDF if present. Declaration status is **not** changed.
+   - `ERROR` — renders `errors[]` as a list, except for three `errorCode` values that get a specific, actionable message instead (`resolveErrorCodeKey` in `AeatSubmitFlow.jsx`):
+     - `MISSING_PRESENTER` (`fm.aeat.error.missingPresenter`) — production submission missing presenter NIF/name.
+     - `NO_CERTIFICATE` (`fm.aeat.error.noCertificate`) — the only one of the three that also renders a shortcut button to `/fiscal-config` (via `useNavigate`).
+     - `ALREADY_SUBMITTED` (`fm.aeat.error.alreadySubmitted`) — **added with the QA BUG-1 fix**: the declaration was already accepted by the AEAT in a prior production submission; the backend now blocks a silent resubmission (`409`, see the backend doc linked above for the full guard semantics — test-mode resubmission is still allowed and does not hit this branch). No "go to fiscal-config" button here — a certificate is not what's missing.
+
+**Gap (not addressed, flagged rather than guessed):** the response's own `declarationData` (server-parsed NIF/businessName/etc.) is returned but not re-displayed on the result screen — the confirm screen already shows the equivalent client-known data, so this was a deliberate scope trim, not an oversight.
+
+### Base64 PDF download helpers (`fiscalModelsUtils.js`)
+
+`base64ToBlob(base64, mimeType = 'application/pdf')` and `triggerBase64Download(base64, downloadName, mimeType)`
+were added for this flow (`fiscalModelsUtils.js`) — both `AeatSubmitFlow`'s success and test-success
+PDF-download buttons use `triggerBase64Download` to decode the inline `pdfBase64` field and trigger a
+browser download, since `/fiscal303/submit`'s response carries the PDF as base64-in-JSON rather than as
+a downloadable `Response` blob (unlike `/fiscal303/generate`, which streams a file directly and uses the
+pre-existing `triggerDownload`, now exported for reuse). The decoding mirrors the existing
+`atob`-based pattern already used by `usePreviewAttachment.js` for attachment previews, so both call
+sites agree on the same convention.
+
+**Known gap (Sentinel QA, BUG-3, LOW severity, accepted as-is):** `base64ToBlob` has no `try/catch`
+around `atob(...)`, and neither does the `onClick` handler that calls `triggerBase64Download` in
+`AeatSubmitFlow`. A malformed/truncated `pdfBase64` (any non-base64-alphabet character) throws
+uncaught — the user gets no feedback at all (no error banner, no toast), just a console error and a
+download that silently never happens. Accepted because the probability is very low: the backend
+(`Fiscal303BoxesHandler.buildSubmissionResultJson`) always encodes clean bytes via
+`Base64.getEncoder().encodeToString(pdf)` — there is no code path today that could hand the frontend
+a genuinely corrupted base64 string. Covered by dedicated tests documenting the gap rather than
+silently accepting it: `__tests__/fiscalModelsUtils.download.vitest.js`.
+
+### i18n namespace
+
+All new strings for this flow live under the `fm.aeat.*` namespace (`en_US.json`/`es_ES.json`,
+parity verified — 36 keys each), plus 2 new `fm.present.path.aeat`/`aeat_desc` keys for the
+`PresentModal` card and one `fm.action.continue` reused for the card's confirm-button label.
+
+### "Justificante" tab — AEAT receipt storage (ETP-4456)
+
+A 6th tab (`receipt`, labeled via `fm.tab.receipt`) sits between Files and History and shows a
+generic `AttachmentsTab` (`@/components/attachments`) bound to `tableName="ETGO_Fiscal_Decl"` /
+`recordId={decl.id}`, restricted to `allowedMimeTypes: ['application/pdf']`. It surfaces **both**
+kinds of AEAT justificante a declaration can end up with:
+
+- **Automatic** — on a successful telematic submission (`AeatSubmitFlow`, `SUCCESS` result), AEAT
+  returns the justificante PDF inline as base64 (`pdfBase64`) and the backend attaches it to the
+  `ETGO_Fiscal_Decl` record server-side. This happens invisibly to `FmModel303Page` — there is no
+  client-side signal when it occurs, only the fact that a status change just succeeded.
+- **Manual** — `PresentModal`'s "Presentación con Acuse de recibo" path (`submitted_ack`) lets the
+  user upload their own acuse-de-recibo file. Previously this `acuseFile` was accepted by the UI but
+  silently discarded (`FmModel303Page.handlePresent` only destructured `{ status: newStatus }` from
+  `onConfirm`'s payload, never the file). Fixed: `handlePresent` now also destructures `acuseFile`
+  and, when `newStatus === 'submitted_ack' && acuseFile`, uploads it to the same `ETGO_Fiscal_Decl`
+  attachments store via `useAttachments({ tableName: 'ETGO_Fiscal_Decl', recordId: decl.id, ...,
+  isActive: false }).upload(acuseFile)` before proceeding with the normal `handleStatusChange`. The
+  upload is fire-and-forget — `useAttachments.upload()` already toasts its own errors and never
+  rethrows, so a failed upload does not block the status change the user just confirmed.
+
+**AD metadata dependency — now resolved.** Both attach paths rely on
+`NeoAttachmentsHelper.resolveTabId()` server-side, which previously no-op'd because
+`ETGO_Fiscal_Decl` had no `AD_Tab` registered at all (documented as a "best-effort no-op" gap in
+Phase 2 — see the plan doc referenced below). This increment closes that gap with a new `AD_Window`
+("Fiscal Declarations NEO Support", id `64D940BC436346329DD4DED863FFA40B`) + `AD_Tab` ("ETGO Fiscal
+Decl Header", id `E052B8C136F341209A967DF53CAF6EB8`, `UIPattern=STD`) bound to the `ETGO_Fiscal_Decl`
+table, created via `/etendo:window` webhooks — no Java changes required. **Still outstanding:** this
+metadata exists only in the local dev DB; `./gradlew export.database -Dmodule=com.etendoerp.go`
+has not yet run (blocked on Tomcat being stopped), so the fix does not yet survive an environment
+rebuild. Full increment writeup, REVIEW/QA verdicts, and the manual QA checklist proving the fix
+end-to-end: the dated section in
+`../plans/2026-07-15-ETP-4456-aeat-303-electronic-submission.md`.
+
+**Why `key={status}` on the tab's `AttachmentsTab`:** `status` is local state that changes on
+`handleStatusChange` (i.e. exactly when a submission succeeds). Since the automatic AEAT attach is
+invisible server-side, remounting the tab (and its internal `useAttachments` fetch) on every status
+change is the only way for the tab to notice the new file without inventing a separate manual-refresh
+mechanism. **Known accepted edge case (Alex REVIEW, W3):** if `status` changes concurrently from
+somewhere else while an upload through this tab is still in flight, the remount can drop the
+in-progress upload's own completion toast — the file still lands server-side (the upload request
+itself is unaffected by the remount), only the UI feedback for that one upload is lost. Narrow and
+accepted as-is; not fixed in this increment.
+
+**Known limitation, verified while implementing this (contradicts the original assumption):** the
+`useAttachments` hook accepts an `isActive` parameter but does **not** currently gate its eager
+`list()` fetch on it — `isActive` is destructured in the signature but never read in the effect that
+triggers the initial GET (`src/components/attachments/useAttachments.js`). This means the
+`isActive: false` instance `FmModel303Page` keeps mounted purely to grab `upload()` for the manual
+path still fires a (discarded) GET to `/sws/neo/attachments/ETGO_Fiscal_Decl/{recordId}` on every
+detail-page mount, in addition to the "Justificante" tab's own fetch when that tab is opened. This is
+extra, wasted network traffic, not a correctness bug (uploads still work), and is a pre-existing gap
+in the shared hook — not fixed here since `useAttachments` is consumed by several other windows
+(including `goods-receipt`) and changing its gating semantics needs its own audit across all
+consumers. Flagged as a follow-up for whoever owns
+`tools/app-shell/src/components/attachments/`. **Amplification noted by Sentinel QA (LOW,
+informational):** opening the "Justificante" tab fires its own GET on top of the always-mounted
+`isActive: false` instance's discarded one — i.e. two GETs per detail-page visit where one is
+expected, pure amplification of the same root cause above, not a separate bug.
+
+**Other accepted, non-blocking findings from this increment's REVIEW/QA:**
+- **Client-side MIME gate is a UX hint only (Alex REVIEW, W1).** `config={{ allowedMimeTypes:
+  ['application/pdf'] }}` only steers the file picker and shows a client-side rejection message —
+  there is no server-side MIME/magic-byte enforcement anywhere in the shared attachments stack. This
+  is a pre-existing, cross-cutting gap (not introduced by this change) and is **not a security
+  control** — do not rely on it to keep non-PDF files out of this store.
+- **No defensive test for `decl.id` falsy on mount (Sentinel QA, LOW).** Confirmed unreachable via
+  every current call site into `FmModel303Page` (a declaration always has an id by the time this
+  page renders), so left uncovered rather than adding a test for an unreachable branch.
+- **No badge/count on the "Justificante" tab (Alex REVIEW, cosmetic suggestion, not applied).**
+  Unlike Files (`decl.file ? 1 : null`) or Incidents, the tab has no attachment-count indicator.
+  Deferred — would need a lightweight count endpoint or a client-side list call just to render the
+  badge, judged not worth it for this increment.
 
 ## Modelo 349 detail page (`FmModel349Page`)
 
@@ -153,9 +284,10 @@ Four cards (Operadores, Total operaciones, Rectificaciones, Pendientes VIES) sou
 | `models/303/FmModel303Page.jsx` | Modelo 303 detail — boxes, sources, stepper, file gen |
 | `models/303/FmBoxes303.jsx` | Box grid renderer |
 | `models/303/fm303Layouts.js` | Box layout definition (sections, rows, labels) |
+| `models/303/AeatSubmitFlow.jsx` | AEAT electronic submission flow (ETP-4456) — confirm/submit/result, `POST /fiscal303/submit` |
 | `models/349/FmModel349Page.jsx` | Modelo 349 detail |
 | `FmCommon.jsx` | Shared components: `NumberedStepper`, `ResultPill`, `StatusPillMenu`, `SummaryCard` |
-| `FmOverlays.jsx` | Modals and drawers: `PresentModal`, `FileGenModal`, `ConfigDrawer`, `CompareDrawer` |
+| `FmOverlays.jsx` | Modals and drawers: `PresentModal` (3 manual paths + opt-in `aeat_telematic` sentinel path), `FileGenModal`, `ConfigDrawer`, `CompareDrawer` |
 | `FmDebugPanel.jsx` | Developer panel (keystroke-activated) for testing with fixture data |
 
 ## NEO Headless endpoints
@@ -167,6 +299,7 @@ Four cards (Operadores, Total operaciones, Rectificaciones, Pendientes VIES) sou
 | `GET` | `/fiscal303/boxes?year=&period=` | `computeBoxes303` |
 | `GET` | `/fiscal303/modified?year=&period=&since=` | `checkModified303` |
 | `GET` | `/fiscal303/generate?year=&period=&tipo=` | `generate303File` |
+| `POST` | `/fiscal303/submit?year=&period=&tipo=&id=` (body: testMode, idi, nrc, presenterNif, presenterName) | `AeatSubmitFlow` — AEAT electronic submission (ETP-4456) |
 | `GET` | `/session` | FmModel303Page — org NIF/nombre for file header |
 | `GET` | `/fiscal349/operators?year=&period=` | `compute349Operators` — returns operators + invoices + orgNif/orgName |
 | `GET` | `/fiscal349/modified?year=&period=&since=` | `checkModified349` |
