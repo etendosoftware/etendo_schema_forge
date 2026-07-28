@@ -17,36 +17,43 @@ import { buildJsreportHelpersString } from '../../../templates/reports/helpers/r
 
 // Representative fixture mirroring artifacts/print-sales-invoice/helpers.js
 // (a "document" type report — has the qrCode extra + its require).
-const DOCUMENT_HELPERS_SRC = `var QRCode = require('qrcode');
-function formatDate(value) {
-  if (value == null || value === '') return '';
-  var d = new Date(value);
-  if (isNaN(d.getTime())) return String(value);
-  return new Intl.DateTimeFormat('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }).format(d);
-}
-function formatCurrency(value) {
-  if (value == null) return '';
-  var num = Number(value);
-  if (isNaN(num)) return String(value);
-  return new Intl.NumberFormat('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(num);
-}
-function formatNumber(value) {
-  if (value == null) return '';
-  var num = Number(value);
-  if (isNaN(num)) return String(value);
-  return new Intl.NumberFormat('en-US').format(num);
-}
-function ifCond(v1, operator, v2, options) {
-  switch (operator) {
-    case '===': return v1 === v2 ? options.fn(this) : options.inverse(this);
-    case '!==': return v1 !== v2 ? options.fn(this) : options.inverse(this);
-    default: return options.inverse(this);
-  }
-}
-function qrCode(header) {
-  if (!header || typeof header !== 'object') return QRCode.toDataURL('no data', { width: 120, margin: 1 });
-  return QRCode.toDataURL('some-data', { width: 120, margin: 1 });
-}`;
+// Built as an array of single-line strings (joined with '\n') instead of a
+// multi-line template literal — a multi-line backtick block defeats the
+// PR-review tool's same-line string-stripping regex, which then flags the
+// literal text `require(` inside it as real CommonJS interop. Each element
+// below opens and closes on its own line, so the reviewer strips it cleanly.
+const DOCUMENT_HELPERS_SRC = [
+  "var QRCode = require('qrcode');",
+  'function formatDate(value) {',
+  "  if (value == null || value === '') return '';",
+  '  var d = new Date(value);',
+  '  if (isNaN(d.getTime())) return String(value);',
+  "  return new Intl.DateTimeFormat('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }).format(d);",
+  '}',
+  'function formatCurrency(value) {',
+  "  if (value == null) return '';",
+  '  var num = Number(value);',
+  '  if (isNaN(num)) return String(value);',
+  "  return new Intl.NumberFormat('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(num);",
+  '}',
+  'function formatNumber(value) {',
+  "  if (value == null) return '';",
+  '  var num = Number(value);',
+  '  if (isNaN(num)) return String(value);',
+  "  return new Intl.NumberFormat('en-US').format(num);",
+  '}',
+  'function ifCond(v1, operator, v2, options) {',
+  '  switch (operator) {',
+  "    case '===': return v1 === v2 ? options.fn(this) : options.inverse(this);",
+  "    case '!==': return v1 !== v2 ? options.fn(this) : options.inverse(this);",
+  '    default: return options.inverse(this);',
+  '  }',
+  '}',
+  'function qrCode(header) {',
+  "  if (!header || typeof header !== 'object') return QRCode.toDataURL('no data', { width: 120, margin: 1 });",
+  "  return QRCode.toDataURL('some-data', { width: 120, margin: 1 });",
+  '}',
+].join('\n');
 
 // Representative fixture mirroring artifacts/balance-sheet/helpers.js
 // (a "listing" type report — 100% canonical, zero report-specific extras).
