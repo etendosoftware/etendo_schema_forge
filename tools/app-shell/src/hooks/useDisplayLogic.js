@@ -10,16 +10,32 @@ import { useState, useEffect, useCallback, useRef } from 'react';
  */
 const lastKnownCache = new Map();
 
-function readCache(cacheKey) {
+// Filters the cached entry down to only the keys THIS caller's `cacheableKeys` declares
+// safe to reuse — the module-level map is shared by `${apiBaseUrl}/${entity}` across every
+// hook instance for that pair, so a broader caller's previously-cached keys must never leak
+// into a narrower caller's first paint just because they happen to share a cache key.
+function readCache(cacheKey, cacheKeySet) {
   const cached = cacheKey ? lastKnownCache.get(cacheKey) : null;
-  return cached
-    ? { readOnly: { ...cached.readOnly }, visibility: { ...cached.visibility } }
-    : { readOnly: {}, visibility: {} };
+  if (!cached || !cacheKeySet || cacheKeySet.size === 0) return { readOnly: {}, visibility: {} };
+  const result = { readOnly: {}, visibility: {} };
+  for (const key of cacheKeySet) {
+    if (Object.prototype.hasOwnProperty.call(cached.readOnly, key)) result.readOnly[key] = cached.readOnly[key];
+    if (Object.prototype.hasOwnProperty.call(cached.visibility, key)) result.visibility[key] = cached.visibility[key];
+  }
+  return result;
 }
 
+// Merges (rather than replaces) so a narrower caller's write never evicts keys a previous,
+// broader caller already proved safe — each writer only ever contributes the keys ITS OWN
+// `cacheableKeys` declares, so merging can never introduce an undeclared key into the map;
+// it just lets independent hook instances cooperatively build up the shared safe cache.
 function writeCache(cacheKey, cacheableKeys, data) {
   if (!cacheKey || !cacheableKeys || cacheableKeys.size === 0) return;
-  const entry = { readOnly: {}, visibility: {} };
+  const existing = lastKnownCache.get(cacheKey);
+  const entry = {
+    readOnly: { ...(existing ? existing.readOnly : {}) },
+    visibility: { ...(existing ? existing.visibility : {}) },
+  };
   for (const key of cacheableKeys) {
     if (Object.prototype.hasOwnProperty.call(data.readOnly, key)) entry.readOnly[key] = data.readOnly[key];
     if (Object.prototype.hasOwnProperty.call(data.visibility, key)) entry.visibility[key] = data.visibility[key];
@@ -57,7 +73,7 @@ export function useDisplayLogic(entity, fieldValues, { token, apiBaseUrl, cachea
   const cacheKeySet = cacheableKeys ? new Set(cacheableKeys) : null;
   const cacheKey = apiBaseUrl && entity ? `${apiBaseUrl}/${entity}` : null;
 
-  const [displayState, setDisplayState] = useState(() => readCache(cacheKey));
+  const [displayState, setDisplayState] = useState(() => readCache(cacheKey, cacheKeySet));
   const debounceRef = useRef(null);
 
   // `evaluate` is memoized on [entity, token, apiBaseUrl] only — NOT on cacheKeySet — so that

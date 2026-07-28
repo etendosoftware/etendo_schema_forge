@@ -394,6 +394,38 @@ describe('useDisplayLogic', () => {
       vi.useFakeTimers();
     });
 
+    it('does not pre-seed a key the current caller did not declare cacheable, even when a broader previous caller cached it for the same entity/apiBaseUrl', async () => {
+      vi.useRealTimers();
+      globalThis.fetch.mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          readOnly: {},
+          // A broader hook instance (e.g. a different window sharing the same entity name)
+          // declares BOTH keys cacheable and caches both.
+          visibility: { project: false, costcenter: true },
+        }),
+      });
+
+      const broad = renderHook(() =>
+        useDisplayLogic('header', { id: '1' }, { ...opts, cacheableKeys: ['project', 'costcenter'] })
+      );
+      await waitFor(() => expect(broad.result.current.visibility.costcenter).toBe(true));
+      broad.unmount();
+
+      // A narrower hook instance only declares `project` as safe to reuse. It must NOT
+      // be pre-seeded with `costcenter`, which it never declared cacheable — even though
+      // both share the same `${apiBaseUrl}/${entity}` cache key.
+      globalThis.fetch.mockImplementation(() => new Promise(() => {})); // never resolves
+      const narrow = renderHook(() =>
+        useDisplayLogic('header', { id: '2' }, { ...opts, cacheableKeys: ['project'] })
+      );
+
+      expect(narrow.result.current.visibility.project).toBe(false);
+      expect(narrow.result.current.visibility.costcenter).toBeUndefined();
+
+      vi.useFakeTimers();
+    });
+
     it('keeps separate caches for different entities on the same window', async () => {
       vi.useRealTimers();
       globalThis.fetch.mockResolvedValue({
