@@ -158,6 +158,99 @@ describe('CreatableSearchSelect — keyboard navigation (ETP-4600 Gap A)', () =>
   });
 });
 
+describe('CreatableSearchSelect — ArrowDown/ArrowUp open a closed dropdown without moving the highlight', () => {
+  const field = { key: 'contact', required: false };
+
+  it('ArrowDown on a closed dropdown opens it and does not select any option yet', () => {
+    render(
+      <CreatableSearchSelect
+        {...baseProps}
+        field={field}
+        value=""
+        displayValue=""
+        staticOptions={OPTIONS}
+        onChange={vi.fn()}
+      />
+    );
+    const input = screen.getByTestId('field-contact');
+    expect(screen.queryByTestId('options-contact')).not.toBeInTheDocument();
+
+    fireEvent.keyDown(input, { key: 'ArrowDown' });
+
+    expect(screen.getByTestId('options-contact')).toBeInTheDocument();
+    expect(screen.getByTestId('option-contact-1')).toHaveAttribute('aria-selected', 'false');
+  });
+
+  it('ArrowUp on a closed dropdown also just opens it', () => {
+    render(
+      <CreatableSearchSelect
+        {...baseProps}
+        field={field}
+        value=""
+        displayValue=""
+        staticOptions={OPTIONS}
+        onChange={vi.fn()}
+      />
+    );
+    const input = screen.getByTestId('field-contact');
+    expect(screen.queryByTestId('options-contact')).not.toBeInTheDocument();
+
+    fireEvent.keyDown(input, { key: 'ArrowUp' });
+
+    expect(screen.getByTestId('options-contact')).toBeInTheDocument();
+    expect(screen.getByTestId('option-contact-1')).toHaveAttribute('aria-selected', 'false');
+  });
+});
+
+describe('CreatableSearchSelect — Home/End jump to the ends of the options list', () => {
+  const field = { key: 'contact', required: false };
+
+  it('End highlights the last option, then Home highlights the first', () => {
+    render(
+      <CreatableSearchSelect
+        {...baseProps}
+        field={field}
+        value=""
+        displayValue=""
+        staticOptions={OPTIONS}
+        onChange={vi.fn()}
+      />
+    );
+    const input = screen.getByTestId('field-contact');
+    fireEvent.focus(input);
+
+    fireEvent.keyDown(input, { key: 'End' });
+    expect(screen.getByTestId('option-contact-3')).toHaveAttribute('aria-selected', 'true');
+
+    fireEvent.keyDown(input, { key: 'Home' });
+    expect(screen.getByTestId('option-contact-1')).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByTestId('option-contact-3')).toHaveAttribute('aria-selected', 'false');
+  });
+});
+
+describe('CreatableSearchSelect — disabled state classes (dependsOn parent unset)', () => {
+  it('applies the disabled visual classes when a dependent field has no parent value', () => {
+    const field = { key: 'location', required: false, dependsOn: { field: 'partner', filterKey: 'bpartner' } };
+    render(
+      <CreatableSearchSelect
+        {...baseProps}
+        field={field}
+        value=""
+        displayValue=""
+        formData={{}}
+        staticOptions={[]}
+        onChange={vi.fn()}
+      />
+    );
+    const input = screen.getByTestId('field-location');
+    const wrapper = input.closest('div');
+    expect(wrapper.className).toMatch(/bg-muted/);
+    expect(wrapper.className).toMatch(/text-text-disabled/);
+    expect(wrapper.className).toMatch(/cursor-not-allowed/);
+    expect(input).toBeDisabled();
+  });
+});
+
 describe('CreatableSearchSelect — decoupled search text (ETP-4600 Gap B)', () => {
   const field = { key: 'contact', required: false };
 

@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 vi.mock('lucide-react', () => ({ ChevronDown: () => <span data-testid="chevron" /> }));
@@ -345,5 +345,28 @@ describe('InlineSearchCombo — ETP-4600 Gap C auto-width dropdown (shape check)
     // A plain numeric/px width (e.g. "240px") would mean the fixed-width dropdown
     // regressed back in — the panel must never carry one alongside max-content.
     expect(style.width).not.toMatch(/^\d/);
+  });
+});
+
+describe('InlineSearchCombo — toggle button clears query on close (ETP-4600)', () => {
+  it('clears the typed query immediately when closing via the toggle, without waiting for blur', async () => {
+    const { input } = renderCombo();
+    const toggle = screen.getByTestId('inline-add-field-tax-toggle');
+
+    // Open via the toggle.
+    fireEvent.click(toggle);
+    await waitFor(() => expect(screen.getByTestId('inline-add-options-tax')).toBeInTheDocument());
+
+    // Type a query without selecting anything.
+    fireEvent.change(input, { target: { value: 'IVA' } });
+    expect(input.value).toBe('IVA');
+
+    // Close via the toggle (the `else` branch) — its onMouseDown preventDefault keeps focus
+    // on the input, so no blur/blur-timeout fires from this click; only the toggle's own
+    // setQuery('') can explain an immediate reset.
+    fireEvent.click(toggle);
+
+    expect(screen.queryByTestId('inline-add-options-tax')).not.toBeInTheDocument();
+    expect(input.value).toBe('');
   });
 });

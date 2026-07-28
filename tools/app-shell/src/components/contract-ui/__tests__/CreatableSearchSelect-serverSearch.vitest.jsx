@@ -194,6 +194,29 @@ describe('CreatableSearchSelect — serverSearch mode (ETP-4600 Phase 2a)', () =
     expect(screen.getByText('Juan Perez')).toBeInTheDocument();
   });
 
+  it('clears serverOptions to an empty array when the search request rejects/fails, discarding the stale prior page', async () => {
+    // First load succeeds with results; the SECOND (typed) search rejects. If the `.catch`
+    // handler did nothing (instead of `setServerOptions([])`), the stale first-page options
+    // would remain visible — asserting they disappear proves the catch handler actually ran.
+    global.fetch = vi.fn()
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ items: [{ id: '10', label: 'Acme Corp' }] }) })
+      .mockRejectedValueOnce(new Error('network down'));
+
+    render(<CreatableSearchSelect {...baseProps} field={field} value="" displayValue="" onChange={vi.fn()} />);
+    const input = screen.getByTestId('field-partner');
+
+    fireEvent.focus(input);
+    await waitFor(() => expect(screen.getByText('Acme Corp')).toBeInTheDocument());
+
+    fireEvent.change(input, { target: { value: 'Ac' } });
+    await waitFor(() => expect(global.fetch).toHaveBeenCalledTimes(2), { timeout: 1000, interval: 50 });
+
+    // Loading must have resolved (not stuck) and the previously-shown option is gone.
+    await waitFor(() => expect(screen.queryByText('loading')).not.toBeInTheDocument());
+    await waitFor(() => expect(screen.queryByText('Acme Corp')).not.toBeInTheDocument());
+    expect(screen.queryAllByRole('option')).toHaveLength(0);
+  });
+
   it('serverSearch=false path is unchanged: local filter runs, no q= param is ever sent (regression)', async () => {
     global.fetch = mockFetchOnce([{ id: '1', label: 'Alpha' }, { id: '2', label: 'Bravo' }]);
 

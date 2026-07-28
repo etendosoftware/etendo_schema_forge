@@ -124,4 +124,15 @@ describe('DataTable inline add-row — selector cell + outside click still valid
 
     document.body.removeChild(outside);
   });
+
+  it('renders an empty placeholder cell (no combobox) when a selector field has no catalog options and no selectorUrl', () => {
+    // Target: DataTable.jsx renderSelectorCell's `options.length === 0 && !selectorUrl` branch.
+    // No apiBaseUrl is passed to DataTable, so buildSelectorUrl() resolves selectorUrl to null;
+    // testOptions is intentionally omitted so getCatalogOptions() returns [].
+    const fields = [{ key: 'tax', label: 'Tax', type: 'selector' }];
+    renderAddRow(fields, vi.fn());
+
+    expect(screen.queryByTestId('inline-add-field-tax')).not.toBeInTheDocument();
+    expect(screen.queryByRole('combobox')).not.toBeInTheDocument();
+  });
 });
