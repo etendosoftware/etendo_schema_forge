@@ -11,18 +11,22 @@ import { login } from '../helpers/auth.js';
  * confirmed, real empty `Set` — i.e. SFListMenu answered with an empty tree,
  * not still loading (`undefined`) and not the fail-open `null` case.
  *
- * Mock mode only: intercepts the SFListMenu webhook with an empty tree, so
- * `collectAllowedIds()` resolves to `new Set()` and the guard in
- * AppLayout.jsx fires.
+ * Mock mode only: intercepts `/sws/neo/listmenu` (ETP-4513 — moved off the
+ * Webhooks module's `/webhooks/SFListMenu`, see menuTree.js and auth.js) with
+ * an empty tree, so `collectAllowedIds()` resolves to `new Set()` and the
+ * guard in AppLayout.jsx fires.
  */
 
 async function installEmptyMenuTreeMock(page) {
-  // Registered BEFORE login(), same reasoning as role-filtered-sidebar.mocked.spec.js:
-  // this URL never matches login()'s generic /sws/** catch-all, so there is no
-  // LIFO ordering concern, but registering before navigation guarantees this
-  // route is already active for the first SFListMenu fetch useRoleMenu() fires
-  // right after the page mounts.
-  await page.route('**/webhooks/SFListMenu**', async (route) => {
+  // Registered AFTER login() — login()'s own generic /sws/** catch-all
+  // explicitly aborts /sws/neo/listmenu (to reproduce the real "webhook
+  // unreachable" fail-open fallback that most other suites rely on), and
+  // Playwright matches routes in reverse registration order, so this route
+  // must be registered later to win over that abort. See the page.reload()
+  // below for why the initial useRoleMenu() fetch (fired during login()'s own
+  // page.goto('/dashboard'), before this route exists) needs a fresh
+  // navigation to actually observe this mock.
+  await page.route('**/sws/neo/listmenu**', async (route) => {
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
@@ -33,8 +37,13 @@ async function installEmptyMenuTreeMock(page) {
 
 test.describe('No-access blocking screen', () => {
   test.beforeEach(async ({ page }) => {
-    await installEmptyMenuTreeMock(page);
     await login(page);
+    await installEmptyMenuTreeMock(page);
+    // useRoleMenu()'s effect only depends on `isAuthenticated`, so it already
+    // fired (and was aborted by login()'s generic /sws/** catch-all) during
+    // login()'s own navigation. Reload to force a fresh mount/fetch that this
+    // now-registered, higher-priority route is active for.
+    await page.reload();
     await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
   });
 
