@@ -659,6 +659,31 @@ describe('useEntity — coverage paths', () => {
 
       expect(toast.error).toHaveBeenCalledWith('Network error');
     });
+
+    // ETP-4656 — same FK/RESTRICT normalization `useEntity-delete-errors.test.js`
+    // exercises via extractErrorMessage directly, but routed through the real
+    // handleDelete → normalizeServerError path (this file's Vitest/v8 instrumentation
+    // can attribute coverage back to useEntity.js, unlike that file's custom
+    // Node ESM loader hook — see its own header comment for why).
+    it('maps a raw Postgres FK/RESTRICT delete error to the standardized message', async () => {
+      globalThis.fetch.mockImplementation(async (url, opts) => {
+        if (opts?.method === 'DELETE') {
+          return {
+            ok: false, status: 500,
+            clone: () => ({ json: async () => ({ error: { message: 'is still referenced from table "m_inout_line"' } }) }),
+            json: async () => ({ error: { message: 'is still referenced from table "m_inout_line"' } }),
+          };
+        }
+        return mockFetchOk([]);
+      });
+
+      const { result } = renderEntity('header', null, { skipListFetch: true });
+      act(() => { result.current.handleSelect({ id: 'd1' }); });
+
+      await act(async () => { await result.current.handleDelete(); });
+
+      expect(toast.error).toHaveBeenCalledWith('This record cannot be deleted because it has associated records.');
+    });
   });
 
   // ---------------------------------------------------------------------------
