@@ -32,6 +32,39 @@ export async function login(page, {
     await page.addInitScript(() => {
       localStorage.setItem('sf_auth_token', 'e2e-mock-token');
       localStorage.setItem('sf_auth_user', 'admin');
+      // ETP-4520 — also seed a selected role: AuthProvider's hydration effect
+      // only fetches window access when `session.selectedRole` is present, so
+      // without this every generated window's WindowAccessGuard would fail
+      // closed to "none" and block rendering entirely (blank page).
+      localStorage.setItem('sf_auth_selected_role', JSON.stringify({ id: 'e2e-mock-role', name: 'Administrator' }));
+
+      // Stub the SFWindowAccessMap endpoint itself. It's reached via NEO
+      // Headless's own `/sws/neo/windowaccessmap` bridge (ETP-4513 — moved off
+      // the Webhooks module's `/webhooks/SFWindowAccessMap`, which required a
+      // per-role grant row wiped by `update.database`), which WOULD be caught
+      // by the generic page.route('**/sws/**') interception below — but unlike
+      // that route, a JSON-serialized response can't grant "full access to
+      // every window" without enumerating every window id up front. A real JS
+      // Proxy constructed here (in-browser, not sent over the wire) can,
+      // mirroring the same trick used by the app's own dev-mode mockFetch.js
+      // for this identical endpoint. Intercepting at the window.fetch layer
+      // (rather than page.route) also sidesteps any LIFO route-registration
+      // ordering concerns with the generic /sws/** catch-all below.
+      const realFetch = window.fetch.bind(window);
+      window.fetch = (input, init) => {
+        const url = typeof input === 'string' ? input : input?.url;
+        if (url && url.includes('/sws/neo/windowaccessmap')) {
+          return Promise.resolve({
+            ok: true,
+            status: 200,
+            json: () => Promise.resolve({
+              windowAccess: new Proxy({}, { get: () => 'full' }),
+              capabilities: new Proxy({}, { get: () => true }),
+            }),
+          });
+        }
+        return realFetch(input, init);
+      };
     });
 
     // Intercept /sws/* to prevent the real Etendo backend receiving our fake
@@ -43,7 +76,19 @@ export async function login(page, {
     await page.route('**/sws/**', (route) => {
       const url = route.request().url();
       const method = route.request().method();
-      if (url.includes('/sws/neo/session')) {
+      // SFListMenu is reached via `/sws/neo/listmenu` now (ETP-4513 — moved off the Webhooks
+      // module's `/webhooks/SFListMenu`). Before that move, this generic `/sws/**` catch-all
+      // never matched the old `/webhooks/*` path at all, so the fetch failed unmocked and
+      // useRoleMenu() fell back to its documented `null` ("webhook unreachable" → don't filter,
+      // show the full unfiltered sidebar) — the behavior every test in this suite that doesn't
+      // explicitly mock listmenu (see role-filtered-sidebar.mocked.spec.js for the one that does)
+      // was actually written against. Aborting here reproduces that same fallback instead of
+      // silently "succeeding" with an empty/malformed tree, which would resolve to an empty
+      // allowed-id Set and filter every AD-backed menu item out — see menuTree.js's own comment
+      // on this exact failure mode for why a well-formed-but-wrong-shape 200 isn't safe either.
+      if (url.includes('/sws/neo/listmenu')) {
+        route.abort();
+      } else if (url.includes('/sws/neo/session')) {
         route.fulfill({
           status: 200,
           contentType: 'application/json',
