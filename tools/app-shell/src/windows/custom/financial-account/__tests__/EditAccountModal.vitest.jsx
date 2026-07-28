@@ -59,6 +59,14 @@ vi.mock('@/hooks/useFinancialAccountAccounting.js', () => ({
   useFinancialAccountAccounting: () => ({ fetchAccountingConfiguration, saveAccountingConfiguration }),
 }));
 
+// ETP-4530: showAccountingFields capability gate — defaults to `true` so every existing suite
+// (written before the gate existed) keeps seeing the Accounting tab without modification. Tests
+// that specifically exercise the gate override this per-test.
+const hasCapability = vi.fn(() => true);
+vi.mock('@/auth/AuthContext.jsx', () => ({
+  useHasCapability: (key) => hasCapability(key),
+}));
+
 import { EditAccountModal, initialEditTab } from '../EditAccountModal.jsx';
 
 const BANK_ACCOUNT = {
@@ -141,6 +149,9 @@ describe('EditAccountModal', () => {
       catalogs: { accounts: [] },
     });
     saveAccountingConfiguration.mockReset();
+    // Reset the capability gate back to its "visible" default before every test.
+    hasCapability.mockReset();
+    hasCapability.mockReturnValue(true);
   });
 
   it('returns null (renders nothing) when no account is given', () => {
@@ -846,6 +857,72 @@ describe('EditAccountModal', () => {
       expect(within(grid).getByTestId('edit-account-iban')).toBeInTheDocument();
       expect(within(grid).getByTestId('edit-account-type')).toBeInTheDocument();
       expect(within(grid).getByTestId('edit-account-currency')).toBeInTheDocument();
+    });
+  });
+
+  // ── ETP-4530: showAccountingFields capability gate ────────────────────────
+  // The Accounting tab trigger AND its panel must be entirely absent (not disabled, not
+  // CSS-hidden) for a role without the `showAccountingFields` capability, and the modal must
+  // never end up sitting on a blank Accounting tab if the capability turns off mid-session.
+  describe('showAccountingFields capability gate (ETP-4530)', () => {
+    it('shows the Accounting tab and its panel when the capability is granted', async () => {
+      const user = userEvent.setup();
+      renderModal();
+
+      expect(getTab('financeAccountsEditTabAccounting')).toBeInTheDocument();
+      await user.click(getTab('financeAccountsEditTabAccounting'));
+      expect(getTab('financeAccountsEditTabAccounting')).toHaveAttribute('aria-selected', 'true');
+      expect(await screen.findByTestId('accounting-configuration-section')).toBeInTheDocument();
+    });
+
+    it('omits the Accounting tab trigger and panel entirely when the capability is denied', () => {
+      hasCapability.mockReturnValue(false);
+      renderModal();
+
+      expect(screen.queryByTestId('edit-account-tab-accounting')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('edit-account-tabpanel-accounting')).not.toBeInTheDocument();
+      // A non-cash account still has General available and active.
+      expect(getTab('financeAccountsEditTabGeneral')).toHaveAttribute('aria-selected', 'true');
+    });
+
+    it('falls back to General without erroring if the capability turns off while Accounting is active', async () => {
+      const user = userEvent.setup();
+      const { rerender } = renderModal();
+
+      await user.click(getTab('financeAccountsEditTabAccounting'));
+      expect(getTab('financeAccountsEditTabAccounting')).toHaveAttribute('aria-selected', 'true');
+
+      // Simulate a role switch mid-session that revokes the capability while the modal stays open.
+      hasCapability.mockReturnValue(false);
+      rerender(
+        <EditAccountModal
+          open
+          account={BANK_ACCOUNT}
+          onClose={vi.fn()}
+          onSaved={vi.fn()}
+          onArchive={vi.fn()}
+          onConnect={vi.fn()}
+        />,
+      );
+
+      expect(screen.queryByTestId('edit-account-tab-accounting')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('edit-account-tabpanel-accounting')).not.toBeInTheDocument();
+      expect(getTab('financeAccountsEditTabGeneral')).toHaveAttribute('aria-selected', 'true');
+    });
+
+    it('does not crash for a cash account when the capability is denied (both tabs unavailable)', () => {
+      // Edge case: a cash account has no General tab (no PSD2/reconciliation) and, here, no
+      // Accounting tab either (capability denied) — there is genuinely nothing to show, but the
+      // modal itself must still render cleanly and editTab must settle on General internally
+      // rather than staying stuck pointing at the hidden Accounting tab.
+      hasCapability.mockReturnValue(false);
+      renderModal({
+        account: { id: 'acc-cash-nocap', name: 'Caja', type: 'C', currencyId: '102', psd2Connected: false },
+      });
+
+      expect(screen.getByTestId('edit-account-modal')).toBeInTheDocument();
+      expect(screen.queryByTestId('edit-account-tab-general')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('edit-account-tab-accounting')).not.toBeInTheDocument();
     });
   });
 });

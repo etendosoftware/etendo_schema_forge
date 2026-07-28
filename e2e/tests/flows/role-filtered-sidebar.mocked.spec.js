@@ -6,23 +6,27 @@ import { login } from '../helpers/auth.js';
  *
  * Validates ETP-4598: the sidebar filters menu.json-driven items down to what
  * SFListMenu reports the current role can reach. useRoleMenu() fetches
- * `${BASE}/webhooks/SFListMenu` once per authenticated session and
- * AppLayout.jsx passes the resulting allowed-id Set into
- * filterMenuGroupsByAccess() before rendering SideMenu.
+ * `${BASE}/sws/neo/listmenu` (ETP-4513 — moved off the Webhooks module's
+ * `/webhooks/SFListMenu`, which required a per-role grant row wiped by
+ * `update.database`, onto NEO Headless's own JWT-authenticated bridge) once
+ * per authenticated session, and AppLayout.jsx passes the resulting
+ * allowed-id Set into filterMenuGroupsByAccess() before rendering SideMenu.
  *
- * Mock mode only: intercepts the SFListMenu webhook with a tree that carries
+ * Mock mode only: intercepts the listmenu endpoint with a tree that carries
  * only the "user" window's id (108, per tools/app-shell/src/menu.json), so
  * every other AD-window-backed item (e.g. "Purchase Order", windowId 181)
  * must disappear from the rendered sidebar.
  */
 
 async function installMenuTreeMock(page) {
-  // Registered BEFORE login() (unlike the /sws/** override pattern in the
-  // e2e guide) because this URL never matches login()'s generic /sws/**
-  // catch-all, so there is no LIFO ordering concern — but registering before
-  // navigation guarantees this route is already active for the first
-  // SFListMenu fetch useRoleMenu() fires right after the page mounts.
-  await page.route('**/webhooks/SFListMenu**', async (route) => {
+  // Registered AFTER login() — unlike the old `/webhooks/SFListMenu` path,
+  // `/sws/neo/listmenu` DOES match login()'s generic page.route('**/sws/**')
+  // catch-all, and Playwright matches routes in reverse registration order,
+  // so this needs to be registered later to win. See the `page.reload()` in
+  // beforeEach below for why the initial useRoleMenu() fetch (fired during
+  // login()'s own page.goto('/dashboard'), before this route exists) needs a
+  // fresh navigation to actually observe this mock.
+  await page.route('**/sws/neo/listmenu**', async (route) => {
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
@@ -38,8 +42,13 @@ async function installMenuTreeMock(page) {
 
 test.describe('Role-filtered sidebar', () => {
   test.beforeEach(async ({ page }) => {
-    await installMenuTreeMock(page);
     await login(page);
+    await installMenuTreeMock(page);
+    // useRoleMenu()'s effect only depends on `isAuthenticated`, so it already
+    // fired (and was served by login()'s generic /sws/** catch-all) during
+    // login()'s own navigation. Reload to force a fresh mount/fetch that this
+    // now-registered, higher-priority route is active for.
+    await page.reload();
     await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
   });
 

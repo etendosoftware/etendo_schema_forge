@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useUI } from '@/i18n';
+import { resolveRoleDisplayName } from '@/lib/roleNameI18n.js';
 
 function resolveId(value) {
   if (value == null || value === '') return null;
@@ -82,7 +83,7 @@ export default function AssignRoleControl(props) {
       >
         <option value="">{ui('noRoleAssigned')}</option>
         {options.map((o) => (
-          <option key={o.id} value={o.id}>{o.label}</option>
+          <option key={o.id} value={o.id}>{resolveRoleDisplayName(ui, o.label)}</option>
         ))}
       </select>
     </div>

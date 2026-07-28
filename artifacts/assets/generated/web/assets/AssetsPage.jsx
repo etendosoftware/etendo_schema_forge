@@ -1,5 +1,6 @@
-import { useEffect } from 'react';
+import { useMemo, useEffect } from 'react';
 import { ListView, DetailView } from '@/components/contract-ui';
+import { useWindowAccess, WindowAccessGuard } from '@/auth/AuthContext.jsx';
 import AssetsTable from './AssetsTable';
 import AssetsForm from './AssetsForm';
 import AssetAcctTable from './AssetAcctTable';
@@ -244,6 +245,13 @@ export const api = {
 const labelOverrides = api.labelOverrides;
 // @sf-generated-start component:AssetsPage
 export default function AssetsPage({ windowName, recordId, ...props }) {
+  const windowAccessTier = useWindowAccess('800027');
+  const effectiveWindow = useMemo(() => (
+    windowAccessTier === 'read-only' ? { ...(props.window || {}), readOnly: true } : props.window
+  ), [windowAccessTier, props.window]);
+  if (windowAccessTier === 'none') {
+    return <WindowAccessGuard windowId="800027" />;
+  }
   if (recordId) {
     return (
       <>
@@ -287,7 +295,7 @@ export default function AssetsPage({ windowName, recordId, ...props }) {
         titleField="name"
         lockWhenProcessed={false}
         labelOverrides={labelOverrides}
-        {...props}
+        {...props} window={effectiveWindow}
         sidebarContent={(data) => (
           <AssetsSidebar
             recordId={recordId}
@@ -317,7 +325,7 @@ export default function AssetsPage({ windowName, recordId, ...props }) {
       hideEyeCount
       labelOverrides={labelOverrides}
       rowQuickActions={{}}
-      {...props}
+      {...props} window={effectiveWindow}
     />
   );
 }
