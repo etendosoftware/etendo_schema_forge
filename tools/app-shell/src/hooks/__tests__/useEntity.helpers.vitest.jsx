@@ -12,7 +12,6 @@ import {
   pickMessage,
   pickMessageFromObject,
   extractErrorMessage,
-  applyContactNameDefaults,
   parseCriteriaInto,
   normalizeDefaultValue,
   shouldSkipPayloadField,
@@ -298,59 +297,6 @@ describe('useEntity helpers', () => {
   });
 
   // -------------------------------------------------------------------
-  // applyContactNameDefaults
-  // -------------------------------------------------------------------
-  describe('applyContactNameDefaults', () => {
-    it('derives name from firstName + lastName', () => {
-      const payload = { firstName: 'John', lastName: 'Doe' };
-      applyContactNameDefaults(payload, {});
-      expect(payload.name).toBe('John Doe');
-    });
-
-    it('derives name from source when payload has no firstName/lastName', () => {
-      const payload = {};
-      applyContactNameDefaults(payload, { firstName: 'Jane', lastName: 'Smith' });
-      expect(payload.name).toBe('Jane Smith');
-    });
-
-    it('does not overwrite existing name', () => {
-      const payload = { name: 'Already Set', firstName: 'John', lastName: 'Doe' };
-      applyContactNameDefaults(payload, {});
-      expect(payload.name).toBe('Already Set');
-    });
-
-    it('sets username to name when username is empty', () => {
-      const payload = { firstName: 'John', lastName: 'Doe' };
-      applyContactNameDefaults(payload, {});
-      expect(payload.username).toBe('John Doe');
-    });
-
-    it('does not set username when name is empty', () => {
-      const payload = {};
-      applyContactNameDefaults(payload, {});
-      expect(payload.username).toBeUndefined();
-    });
-
-    it('handles only firstName (no lastName)', () => {
-      const payload = { firstName: 'Solo' };
-      applyContactNameDefaults(payload, {});
-      expect(payload.name).toBe('Solo');
-    });
-
-    it('handles only lastName (no firstName)', () => {
-      const payload = { lastName: 'Only' };
-      applyContactNameDefaults(payload, {});
-      expect(payload.name).toBe('Only');
-    });
-
-    it('truncates name to 60 chars', () => {
-      const payload = { firstName: 'A'.repeat(40), lastName: 'B'.repeat(40) };
-      applyContactNameDefaults(payload, {});
-      expect(payload.name.length).toBe(60);
-    });
-  });
-
-  // -------------------------------------------------------------------
   // parseCriteriaInto
   // -------------------------------------------------------------------
   describe('parseCriteriaInto', () => {
@@ -570,19 +516,19 @@ describe('useEntity helpers', () => {
     it('includes only changed fields', () => {
       const editing = { id: '1', name: 'New Name', status: 'DR' };
       const selected = { id: '1', name: 'Old Name', status: 'DR' };
-      const payload = buildPatchPayload(editing, selected, 'order');
+      const payload = buildPatchPayload(editing, selected);
       expect(payload).toEqual({ name: 'New Name' });
     });
 
     it('returns empty object when nothing changed', () => {
       const record = { id: '1', name: 'Same' };
-      expect(buildPatchPayload(record, record, 'order')).toEqual({});
+      expect(buildPatchPayload(record, record)).toEqual({});
     });
 
     it('skips id field', () => {
       const editing = { id: '2', name: 'X' };
       const selected = { id: '1', name: 'X' };
-      const payload = buildPatchPayload(editing, selected, 'order');
+      const payload = buildPatchPayload(editing, selected);
       expect(payload.id).toBeUndefined();
     });
   });
@@ -714,51 +660,6 @@ describe('useEntity helpers', () => {
       toast.success.mockClear();
       showSaveSuccessToast(false, false, (k) => k);
       expect(toast.success).toHaveBeenCalledWith('recordSaved');
-    });
-  });
-
-  // -------------------------------------------------------------------
-  // applyContactNameDefaults — additional branches
-  // -------------------------------------------------------------------
-  describe('applyContactNameDefaults — edge cases', () => {
-    it('derives name from source firstName only', () => {
-      const payload = {};
-      applyContactNameDefaults(payload, { firstName: 'Jane' });
-      expect(payload.name).toBe('Jane');
-      expect(payload.username).toBe('Jane');
-    });
-
-    it('derives name from source lastName only', () => {
-      const payload = {};
-      applyContactNameDefaults(payload, { lastName: 'Doe' });
-      expect(payload.name).toBe('Doe');
-      expect(payload.username).toBe('Doe');
-    });
-
-    it('does not set username when existing name is present', () => {
-      const payload = { name: 'Existing', username: 'ExistingUser' };
-      applyContactNameDefaults(payload, { firstName: 'A', lastName: 'B' });
-      expect(payload.name).toBe('Existing');
-      expect(payload.username).toBe('ExistingUser');
-    });
-
-    it('does nothing when neither payload nor source have names', () => {
-      const payload = {};
-      applyContactNameDefaults(payload, {});
-      expect(payload.name).toBeUndefined();
-      expect(payload.username).toBeUndefined();
-    });
-
-    it('uses payload firstName with source lastName when payload has no lastName', () => {
-      const payload = { firstName: 'PayloadFirst' };
-      applyContactNameDefaults(payload, { firstName: 'SourceFirst', lastName: 'SourceLast' });
-      expect(payload.name).toBe('PayloadFirst SourceLast');
-    });
-
-    it('mixes payload firstName with source lastName', () => {
-      const payload = { firstName: 'John' };
-      applyContactNameDefaults(payload, { lastName: 'Smith' });
-      expect(payload.name).toBe('John Smith');
     });
   });
 
@@ -1121,28 +1022,28 @@ describe('useEntity helpers', () => {
     it('detects changes in boolean values', () => {
       const editing = { id: '1', active: false };
       const selected = { id: '1', active: true };
-      const payload = buildPatchPayload(editing, selected, 'order');
+      const payload = buildPatchPayload(editing, selected);
       expect(payload).toEqual({ active: false });
     });
 
     it('detects changes from null to value', () => {
       const editing = { id: '1', name: 'New' };
       const selected = { id: '1', name: null };
-      const payload = buildPatchPayload(editing, selected, 'order');
+      const payload = buildPatchPayload(editing, selected);
       expect(payload).toEqual({ name: 'New' });
     });
 
     it('detects changes from value to null', () => {
       const editing = { id: '1', name: null };
       const selected = { id: '1', name: 'Old' };
-      const payload = buildPatchPayload(editing, selected, 'order');
+      const payload = buildPatchPayload(editing, selected);
       expect(payload).toEqual({ name: null });
     });
 
     it('includes multiple changed fields', () => {
       const editing = { id: '1', name: 'New', status: 'CO', amount: 100 };
       const selected = { id: '1', name: 'Old', status: 'DR', amount: 100 };
-      const payload = buildPatchPayload(editing, selected, 'order');
+      const payload = buildPatchPayload(editing, selected);
       expect(payload).toEqual({ name: 'New', status: 'CO' });
     });
   });

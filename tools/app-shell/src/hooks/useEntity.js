@@ -225,46 +225,11 @@ const CONTACTS_PRECREATE_BILLING_FIELDS = new Set([
     'vendorBlocking',
 ]);
 
-function derivePersonName(firstName, lastName) {
-    const first = String(firstName ?? '').trim();
-    const last = String(lastName ?? '').trim();
-    return [first, last].filter(Boolean).join(' ').slice(0, 60);
-}
-
-export function applyContactNameDefaults(payload, source) {
-    if (!payload.name) {
-        const derivedName = derivePersonName(
-            payload.firstName ?? source.firstName,
-            payload.lastName ?? source.lastName
-        );
-        if (derivedName) payload.name = derivedName;
-    }
-    if (!payload.username && payload.name) {
-        payload.username = String(payload.name).slice(0, 60);
-    }
-}
-
-export function applyContactsRequiredFields(entity, payload, source = {}) {
-    if (!payload || typeof payload !== 'object') return payload;
-
-    if (entity === 'contact' || entity === 'adUser' || entity === 'user') {
-        applyContactNameDefaults(payload, source);
-    }
-
-    if (entity === 'businessPartner' || entity === 'bpartner') {
-        if (!payload.name && source.name) payload.name = source.name;
-        if (!payload.searchKey) {
-            const fallback = source.searchKey || source.name || payload.name;
-            // C_BPartner.Value (searchKey) is AD-constrained to 40 chars — reproduced via a
-            // real create with a long commercial name ("Value too long. Length 48, maximum
-            // allowed 40"). Name itself has more headroom (60, same as derivePersonName
-            // above), so only this fallback needs truncating.
-            if (fallback) payload.searchKey = String(fallback).slice(0, 40);
-        }
-    }
-
-    return payload;
-}
+// ETP-4156: the per-entity `name` / `username` / `searchKey` derivations that used to live
+// here (applyContactsRequiredFields, branching on the hardcoded entity names contact /
+// adUser / user / businessPartner / bpartner) now run server-side, where they are not tied
+// to a window: BusinessPartnerHandler + ContactNameSyncHandler for C_BPartner, and
+// ContactHandler for AD_User. See docs/neo-headless-extensibility.md.
 
 /**
  * Resolve the backend sort key for a given column.
@@ -553,13 +518,12 @@ export function getMethod(isNew) {
     return isNew ? 'POST' : 'PATCH';
 }
 
-export function buildPatchPayload(editing, selected, entity) {
+export function buildPatchPayload(editing, selected) {
     const payload = {};
     for (const [key, value] of Object.entries(editing)) {
         if (key === 'id') continue;
         if (value !== selected[key]) payload[key] = value;
     }
-    applyContactsRequiredFields(entity, payload, editing);
     return payload;
 }
 
@@ -574,7 +538,7 @@ export function buildSavePayload({
     formFieldsRef,
 }) {
     if (!isNew && selected) {
-        return buildPatchPayload(editing, selected, entity);
+        return buildPatchPayload(editing, selected);
     }
 
     const payload = {};
@@ -592,7 +556,6 @@ export function buildSavePayload({
         isContactsBusinessPartnerCreate,
         payload,
     );
-    applyContactsRequiredFields(entity, payload, editing);
     return payload;
 }
 
@@ -1210,8 +1173,6 @@ export function useEntity(entity, childEntity, {
                 if (val === '' || val == null) continue;
                 body[key] = val;
             }
-
-            applyContactsRequiredFields(childEntity, body, childData);
 
             // Include parentId in the body — the backend resolves it to the correct FK field name
             // and uses it to load parent record values for @FieldName@ defaults (generic, no hardcoding).

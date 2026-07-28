@@ -41,7 +41,7 @@ describe('contacts import descriptor', () => {
     assert.equal(contact.body.name, 'Lucia Fernandez');
   });
 
-  it('regression: derives contact.name (AD_User.Name) from the contact-level firstName/lastName when both are present, mirroring useEntity.js\'s applyContactNameDefaults', async () => {
+  it('regression: derives contact.name (AD_User.Name) from the contact-level firstName/lastName when both are present, mirroring the server-side ContactHandler derivation', async () => {
     const row = { name: 'Acme Corp', etgoFirstname: 'Lucia', etgoLastname: 'Fernandez', etgoEmail: 'lucia@x.com', firstName: 'Andres', lastName: 'Rojaz' };
     const ops = await buildOperations(row, { spec: 'contacts', descriptorName: 'contacts', token: 't' });
     const contact = ops.find((op) => op.entity === 'contact');
