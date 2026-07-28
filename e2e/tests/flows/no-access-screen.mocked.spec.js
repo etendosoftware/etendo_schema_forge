@@ -43,7 +43,21 @@ test.describe('No-access blocking screen', () => {
     // fired (and was aborted by login()'s generic /sws/** catch-all) during
     // login()'s own navigation. Reload to force a fresh mount/fetch that this
     // now-registered, higher-priority route is active for.
+    //
+    // Wait for the actual mocked response, not just `networkidle` — proves
+    // the post-reload useRoleMenu() fetch really landed on our route and got
+    // the empty-tree body, instead of assuming it from an idle heuristic. If
+    // this ever times out, the failure points straight at the route/reload
+    // wiring instead of surfacing later as a confusing "NoAccessScreen not
+    // found" (the guard needs a resolved, real empty Set — see AppLayout.jsx —
+    // so any request that errors/aborts here falls into useRoleMenu()'s
+    // fail-open `null` branch and never renders the blocking screen at all).
+    const listMenuResponse = page.waitForResponse(
+      (res) => res.url().includes('/sws/neo/listmenu') && res.status() === 200,
+      { timeout: 10_000 },
+    );
     await page.reload();
+    await listMenuResponse;
     await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
   });
 
