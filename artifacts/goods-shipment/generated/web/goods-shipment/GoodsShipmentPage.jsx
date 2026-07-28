@@ -338,6 +338,7 @@ export default function GoodsShipmentPage({ windowName, recordId, ...props }) {
         hidePrint
         noHeaderBorder
         notesField="description"
+        dimensionsPanelFieldKeys={["project","costcenter"]}
         customTabs={[{ key: 'related', labelKey: 'relatedDocuments', Component: RelatedDocuments }, { key: 'attachments', labelKey: 'attachments', Component: AttachmentsTab, placement: 'tab', props: { tableName: "M_InOut", config: {} } }]}
         bottomSection={GoodsShipmentBottomPanel}
         topbarRight={GoodsShipmentActions}

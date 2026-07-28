@@ -446,6 +446,7 @@ export default function GoodsReceiptPage({ windowName, recordId, ...props }) {
         hideDeleteWhenComplete
         hidePrint
         noHeaderBorder
+        dimensionsPanelFieldKeys={["project","costcenter"]}
         customTabs={[{ key: 'related', labelKey: 'relatedDocuments', Component: RelatedDocuments }, { key: 'attachments', labelKey: 'attachments', Component: AttachmentsTab, placement: 'tab', props: { tableName: "M_InOut", config: {} } }]}
         bottomSection={GoodsReceiptBottomPanel}
         topbarRight={GoodsReceiptActions}
