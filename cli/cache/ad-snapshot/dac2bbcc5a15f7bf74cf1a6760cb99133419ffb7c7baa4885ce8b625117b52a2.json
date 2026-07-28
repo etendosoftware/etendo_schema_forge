@@ -1,6 +1,13 @@
 {
   "sql": "SELECT f.Name, f.DisplayLogic, c.ReadOnlyLogic, c.ColumnName, t.Name AS tab_name, t.AD_Tab_ID AS tab_id, tbl.TableName AS table_name, tbl.AD_Table_ID AS table_id, c.AD_Column_ID AS column_id, f.AD_Field_ID AS field_id FROM AD_Field f JOIN AD_Column c ON f.AD_Column_ID = c.AD_Column_ID JOIN AD_Tab t ON f.AD_Tab_ID = t.AD_Tab_ID JOIN AD_Table tbl ON c.AD_Table_ID = tbl.AD_Table_ID WHERE t.AD_Window_ID = $1 AND (f.DisplayLogic IS NOT NULL OR c.ReadOnlyLogic IS NOT NULL) ORDER BY t.SeqNo, t.AD_Tab_ID, f.SeqNo, f.AD_Field_ID, c.AD_Column_ID",
   "versions": {
+    "013cce9e3c48ab662237129c6c414b996ab7bf601feb890df423b973bf47bb4b": {
+      "checksum": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "params": [
+        "24963D64E83B4543A7F6BD248CF944EE"
+      ],
+      "rows": []
+    },
     "1e3e96b5dc79b4c7366315de5249e070d2a81279761af45c7ea30b5365d1ed85": {
       "checksum": "17463f0e68220754143f5030a303e98abc16c1b352d5723d78d018797ad34ac1",
       "params": [
@@ -21399,6 +21406,13 @@
           "table_name": "M_InventoryLine"
         }
       ]
+    },
+    "f1f32f0509feee773effdbb65862db430528059f21afea44318bba93be395333": {
+      "checksum": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "params": [
+        "82922976BB524D1BAA3CF8462B9219FE"
+      ],
+      "rows": []
     },
     "f580e813ff8670c80a14ff6eade856a95ce0d0f578526fc32592db9cba3c7f76": {
       "checksum": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
