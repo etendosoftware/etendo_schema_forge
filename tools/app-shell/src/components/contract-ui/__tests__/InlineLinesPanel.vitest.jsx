@@ -55,7 +55,27 @@ vi.mock('../SelectorInput.jsx', () => ({
   // DimensionsPanel.jsx's DimensionGrid imports this as a default export — needed
   // once a test actually expands the dimensions sub-row (see the "Add dimensions"
   // hover-action tests below), not just checks the collapsed summary/toggle.
-  default: () => <span data-testid="selector-input" />,
+  // ETP-4610 live-transition tests drive real field edits through this stub's
+  // "set"/"clear" buttons, which call `onChange` exactly like a real selector
+  // picking (or clearing) a value would.
+  default: ({ field, onChange }) => (
+    <div data-testid={`dimension-field-${field.key}`}>
+      <button
+        type="button"
+        data-testid={`dimension-field-${field.key}-set`}
+        onClick={() => onChange('NEWVAL', 'New Value')}
+      >
+        set
+      </button>
+      <button
+        type="button"
+        data-testid={`dimension-field-${field.key}-clear`}
+        onClick={() => onChange('', '')}
+      >
+        clear
+      </button>
+    </div>
+  ),
 }));
 vi.mock('../ProductSearchDrawer.jsx', () => ({
   default: () => null,
@@ -1764,6 +1784,77 @@ describe('InlineLinesPanel', () => {
       const row = screen.getByTestId('line-row-L2');
       await act(async () => { await userEvent.hover(row); });
       const action = within(row).getByTestId('line-action-add-dimensions');
+      expect(action).toHaveAttribute('title', 'addDimensionsTooltip');
+    });
+
+    // ETP-4610 follow-up — live transition. The static before/after tests above only
+    // check the tooltip on rows that already start filled or empty; these confirm the
+    // tooltip flips the moment the user actually fills/clears a value through the real
+    // expand sub-row (DimensionGrid → SelectorInput), without re-hovering or
+    // collapsing/re-expanding the row.
+    it('flips from addDimensionsTooltip to editDimensionsTooltip once a dimension value is filled in', async () => {
+      const emptyRows = [{ id: 'L3' }];
+      render(
+        <InlineLinesPanel
+          columns={dimensionColumns}
+          data={emptyRows}
+          hiddenColumns={[]}
+          entity="lines"
+          token="test"
+          apiBaseUrl="/api"
+          selectorContext={{}}
+          onSelectionChange={vi.fn()}
+          onUpdateRow={vi.fn().mockResolvedValue()}
+          onDeleteRow={vi.fn().mockResolvedValue()}
+        />,
+      );
+      const row = screen.getByTestId('line-row-L3');
+      await act(async () => { await userEvent.hover(row); });
+      let action = within(row).getByTestId('line-action-add-dimensions');
+      expect(action).toHaveAttribute('title', 'addDimensionsTooltip');
+
+      await act(async () => { await userEvent.click(action); });
+      const subRow = screen.getByTestId('dimensions-panel-L3');
+      await act(async () => {
+        await userEvent.click(within(subRow).getByTestId('dimension-field-project-set'));
+      });
+
+      action = within(row).getByTestId('line-action-add-dimensions');
+      expect(action).toHaveAttribute('title', 'editDimensionsTooltip');
+      expect(action).toHaveAttribute('aria-label', 'editDimensionsTooltip');
+    });
+
+    it('flips back from editDimensionsTooltip to addDimensionsTooltip once the dimension value is cleared', async () => {
+      const filledRows = [{
+        id: 'L4',
+        project: 'PRJ1', 'project$_identifier': 'Project Alpha',
+      }];
+      render(
+        <InlineLinesPanel
+          columns={dimensionColumns}
+          data={filledRows}
+          hiddenColumns={[]}
+          entity="lines"
+          token="test"
+          apiBaseUrl="/api"
+          selectorContext={{}}
+          onSelectionChange={vi.fn()}
+          onUpdateRow={vi.fn().mockResolvedValue()}
+          onDeleteRow={vi.fn().mockResolvedValue()}
+        />,
+      );
+      const row = screen.getByTestId('line-row-L4');
+      await act(async () => { await userEvent.hover(row); });
+      let action = within(row).getByTestId('line-action-add-dimensions');
+      expect(action).toHaveAttribute('title', 'editDimensionsTooltip');
+
+      await act(async () => { await userEvent.click(action); });
+      const subRow = screen.getByTestId('dimensions-panel-L4');
+      await act(async () => {
+        await userEvent.click(within(subRow).getByTestId('dimension-field-project-clear'));
+      });
+
+      action = within(row).getByTestId('line-action-add-dimensions');
       expect(action).toHaveAttribute('title', 'addDimensionsTooltip');
     });
   });
