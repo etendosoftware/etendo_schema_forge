@@ -1,4 +1,28 @@
+import { getCurrencyFormatConfig } from './currencyFormatConfig.js';
+
 const DEFAULT_LOCALE = 'es-ES';
+
+/**
+ * Manual grouping algorithm (no `Intl.NumberFormat`), parameterized by the
+ * instance-wide separators from `currencyFormatConfig.js`. Mirrors the same
+ * approach used server-side for the jsreport payload (`__groupEsEs` in
+ * `templates/reports/helpers/report-html-helpers.js`) — both sides read from
+ * one config instead of hardcoding separators independently (ETP-4314).
+ */
+function groupWithSeparators(num, minFrac, maxFrac, thousandsSeparator, decimalSeparator) {
+  // `num < 0` is false for -0 (it's numerically equal to 0) — Intl.NumberFormat
+  // renders -0 with a minus sign regardless, so check for it explicitly too.
+  const sign = (num < 0 || Object.is(num, -0)) ? '-' : '';
+  const abs = Math.abs(num);
+  const fixed = abs.toFixed(maxFrac);
+  const [intRaw, decRaw = ''] = fixed.split('.');
+  const intPart = intRaw.replace(/\B(?=(\d{3})+(?!\d))/g, thousandsSeparator);
+  let decPart = decRaw;
+  while (decPart.length > minFrac && decPart.endsWith('0')) {
+    decPart = decPart.slice(0, -1);
+  }
+  return decPart ? `${sign}${intPart}${decimalSeparator}${decPart}` : `${sign}${intPart}`;
+}
 
 /**
  * Format a numeric value as a currency string using an ISO 4217 currency code.
@@ -58,25 +82,51 @@ export function formatCurrency(currencyCode, value, { compact = false } = {}) {
   if (value == null || !Number.isFinite(Number(value))) return '—';
 
   const amount = Number(value);
-  const notation = compact ? 'compact' : 'standard';
 
-  try {
-    const formatter = new Intl.NumberFormat(DEFAULT_LOCALE, {
-      style: 'currency',
-      currency: currencyCode,
-      currencyDisplay: 'narrowSymbol',
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-      useGrouping: true,
-      notation,
-    });
-
-    return formatter.format(amount);
-  } catch {
-    return amount.toLocaleString(DEFAULT_LOCALE, {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-      useGrouping: true,
-    });
+  if (compact) {
+    // Deliberately still Intl-driven, es-ES fixed — compact notation (magnitude
+    // detection + "mil"/"M"/"B" style suffixes) has exactly one real caller today
+    // (NewPaymentEntryModal.jsx via MoneyAmount); reimplementing that logic by
+    // hand for a single call site is out of scope for the separator-config work
+    // (ETP-4314). The standard (non-compact) path below is the one that matters.
+    try {
+      const formatter = new Intl.NumberFormat(DEFAULT_LOCALE, {
+        style: 'currency',
+        currency: currencyCode,
+        currencyDisplay: 'narrowSymbol',
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+        useGrouping: true,
+        notation: 'compact',
+      });
+      return formatter.format(amount);
+    } catch {
+      return amount.toLocaleString(DEFAULT_LOCALE, {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+        useGrouping: true,
+      });
+    }
   }
+
+  const { thousandsSeparator, decimalSeparator } = getCurrencyFormatConfig();
+  const formattedNumber = groupWithSeparators(amount, 2, 2, thousandsSeparator, decimalSeparator);
+
+  // Validate currencyCode the same way the old single combined Intl.NumberFormat
+  // call did — an invalid/missing code throws here (e.g. undefined, or a
+  // malformed string), matching the original fallback (plain grouped number,
+  // no symbol at all). getCurrencySymbol() has its OWN separate fallback (the
+  // raw code as text) which only kicks in for a well-formed-but-unrecognized
+  // code — the two must not be conflated.
+  try {
+    // eslint-disable-next-line no-new -- validity check only, result unused
+    new Intl.NumberFormat(DEFAULT_LOCALE, { style: 'currency', currency: currencyCode });
+  } catch {
+    return formattedNumber;
+  }
+
+  const symbol = getCurrencySymbol(currencyCode);
+  // NBSP (U+00A0), not a plain space — matches what Intl's `currencyDisplay:
+  // 'narrowSymbol'` always inserted between amount and symbol under es-ES.
+  return symbol ? `${formattedNumber} ${symbol}` : formattedNumber;
 }

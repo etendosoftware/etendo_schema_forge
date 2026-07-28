@@ -17,6 +17,25 @@ const ARTIFACTS_DIR = resolve(import.meta.dirname, '../../../artifacts');
 const ROOT = resolve(ARTIFACTS_DIR, '..');
 const JSREPORT_URL = process.env.JSREPORT_URL || 'http://localhost:5488';
 
+// ETP-4314 — instance-wide currency separators, fetched once from the same
+// NEO Headless config endpoint the browser reads (currencyFormatConfig.js),
+// so both sides of the jsreport helper string bake in the same values instead
+// of hardcoding them independently. Fails soft to '.'/',' — a config outage
+// must never break report rendering.
+let currencySeparatorsPromise = null;
+async function getReportCurrencySeparators() {
+  if (currencySeparatorsPromise) return currencySeparatorsPromise;
+  const etendoBase = process.env.ETENDO_URL || 'http://localhost:8080/etendo';
+  currencySeparatorsPromise = fetch(`${etendoBase}/sws/neo/currency-format`)
+    .then((res) => (res.ok ? res.json() : Promise.reject(new Error(`status ${res.status}`))))
+    .then((data) => ({
+      thousandsSeparator: typeof data?.thousandsSeparator === 'string' ? data.thousandsSeparator : '.',
+      decimalSeparator: typeof data?.decimalSeparator === 'string' ? data.decimalSeparator : ',',
+    }))
+    .catch(() => ({ thousandsSeparator: '.', decimalSeparator: ',' }));
+  return currencySeparatorsPromise;
+}
+
 // Decode JWT payload (no verification needed — dev proxy only) to extract Etendo claims.
 function getClientIdFromRequest(req) {
   try {
@@ -635,8 +654,9 @@ export default function reportApiPlugin() {
             // copy per report. See buildJsreportHelpersString() for why jsreport
             // (a separate Docker container, reachable only over HTTP) can't just
             // import formatCurrency()/this module directly.
+            const separators = await getReportCurrencySeparators();
             const payload = {
-              template: { content: templateContent, engine: 'handlebars', recipe, helpers: buildJsreportHelpersString(helpersCode) },
+              template: { content: templateContent, engine: 'handlebars', recipe, helpers: buildJsreportHelpersString(helpersCode, undefined, separators) },
               data: templateData,
             };
 

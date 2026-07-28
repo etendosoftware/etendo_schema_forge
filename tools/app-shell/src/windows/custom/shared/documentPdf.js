@@ -3,6 +3,7 @@ import { buildLocationAddressLines } from '@/lib/locationAddress.js';
 import { computeDocumentTotals } from '@/lib/documentTotals';
 import { ORDER_LINE_CONFIG } from '@/hooks/useLineGrossAmount';
 import { buildJsreportHelpersString } from '../../../../../../templates/reports/helpers/report-html-helpers.js';
+import { getCurrencyFormatConfig } from '@/lib/currencyFormatConfig.js';
 import {
   COMMON_HANDLEBARS_HELPERS,
   fetchJson,
@@ -338,7 +339,7 @@ export async function renderDocumentPdf(data) {
   // rateDecimals is only meaningful when exchangeRate is present, but it's
   // harmless to bake it into formatNumber's precision unconditionally.
   const rateDecimals = (typeof data.rateDecimals === 'number' && data.rateDecimals >= 0) ? data.rateDecimals : 4;
-  const helpers = buildJsreportHelpersString('', { minimumFractionDigits: rateDecimals, maximumFractionDigits: rateDecimals })
+  const helpers = buildJsreportHelpersString('', { minimumFractionDigits: rateDecimals, maximumFractionDigits: rateDecimals }, getCurrencyFormatConfig())
     + '\n\n' + COMMON_HANDLEBARS_HELPERS;
   return renderPdf(DOCUMENT_TEMPLATE, DOCUMENT_CSS, helpers, data);
 }

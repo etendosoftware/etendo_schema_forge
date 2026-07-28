@@ -5,6 +5,7 @@ import { statusLabel } from '@/lib/statusBadge.js';
 import { useAnimatedOpen } from '@/lib/useAnimatedOpen.js';
 import { useUI } from '@/i18n';
 import { buildJsreportHelpersString } from '../../../../../templates/reports/helpers/report-html-helpers.js';
+import { getCurrencyFormatConfig } from '@/lib/currencyFormatConfig.js';
 
 // ---------------------------------------------------------------------------
 // jsreport recipe ↔ format mapping
@@ -51,7 +52,10 @@ const REPORT_CSS = `
 // (MM/DD/YYYY) format, unrelated to the currency-centralization this ticket
 // is about — a later `function formatDate` declaration in the same combined
 // string simply wins over the canonical one (plain last-declaration-wins).
-const HELPERS_CODE = buildJsreportHelpersString() + `
+// Built at call time (not module load) so it picks up whatever the currency-format
+// fetch has resolved to by the time a report is actually rendered (ETP-4314).
+function buildHelpersCode() {
+  return buildJsreportHelpersString(undefined, undefined, getCurrencyFormatConfig()) + `
 function formatDate(value) {
   if (value == null || value === '') return '';
   var d = new Date(value);
@@ -59,6 +63,7 @@ function formatDate(value) {
   return new Intl.DateTimeFormat('en-US', { year: 'numeric', month: '2-digit', day: '2-digit' }).format(d);
 }
 `;
+}
 
 // Handlebars template for listing reports
 const LISTING_TEMPLATE = `<!DOCTYPE html>
@@ -154,7 +159,7 @@ async function renderViaJsreport(recipe, title, columns, rows, filters) {
       content: isCSV ? CSV_TEMPLATE : LISTING_TEMPLATE,
       engine: 'handlebars',
       recipe,
-      helpers: HELPERS_CODE,
+      helpers: buildHelpersCode(),
     },
     data: {
       css: REPORT_CSS,

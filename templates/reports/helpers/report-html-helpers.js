@@ -236,11 +236,18 @@ function extractRequireLines(source) {
  *        know it as a plain JS value (e.g. a document PDF's exchange-rate
  *        precision) instead of one recoverable by regex from a raw
  *        `helpers.js` string. Takes precedence over `extractNumberFormatOptions`.
+ * @param {{ thousandsSeparator?: string, decimalSeparator?: string }} [separators]
+ *        Instance-wide separators (from the same `/sws/neo/currency-format`
+ *        config `formatCurrency.js` reads in the browser — ETP-4314). Baked
+ *        into the generated `__groupEsEs` source as literals, since jsreport
+ *        can never fetch this config itself. Defaults to `.`/`,`.
  * @returns {string} Combined JS source to send as jsreport's `helpers` field.
  */
-export function buildJsreportHelpersString(helpersCode, numberFormatOverride) {
+export function buildJsreportHelpersString(helpersCode, numberFormatOverride, separators) {
   const numberFormat = numberFormatOverride || extractNumberFormatOptions(helpersCode);
   const helpers = createReportHelpers({ numberFormat });
+  const thousandsSeparator = (separators && separators.thousandsSeparator) || '.';
+  const decimalSeparator = (separators && separators.decimalSeparator) || ',';
 
   const stateSrc = 'var _prevGroupValues = {};';
 
@@ -249,12 +256,12 @@ export function buildJsreportHelpersString(helpersCode, numberFormatOverride) {
   var abs = Math.abs(num);
   var fixed = abs.toFixed(maxFrac);
   var parts = fixed.split('.');
-  var intPart = parts[0].replace(/\\B(?=(\\d{3})+(?!\\d))/g, '.');
+  var intPart = parts[0].replace(/\\B(?=(\\d{3})+(?!\\d))/g, ${JSON.stringify(thousandsSeparator)});
   var decPart = parts[1] || '';
   while (decPart.length > minFrac && decPart.charAt(decPart.length - 1) === '0') {
     decPart = decPart.slice(0, -1);
   }
-  return decPart ? sign + intPart + ',' + decPart : sign + intPart;
+  return decPart ? sign + intPart + ${JSON.stringify(decimalSeparator)} + decPart : sign + intPart;
 }`;
 
   const formatCurrencySrc = `function formatCurrency(value) {

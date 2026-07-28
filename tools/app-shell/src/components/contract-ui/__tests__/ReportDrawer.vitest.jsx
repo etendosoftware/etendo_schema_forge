@@ -159,14 +159,17 @@ describe('ReportDrawer — embedded jsreport HELPERS_CODE formatCurrency', () =>
   // every Category D report and document PDF uses — no more per-file copy to
   // drift out of sync. Source-text assertion (not exported for direct import),
   // matching this repo's convention for such cases.
-  it('builds HELPERS_CODE from the canonical buildJsreportHelpersString() — no hand-rolled formatCurrency duplicate', async () => {
+  it('builds helpers from the canonical buildJsreportHelpersString() — no hand-rolled formatCurrency duplicate', async () => {
     const { readFileSync } = await import('node:fs');
     const { join, dirname } = await import('node:path');
     const { fileURLToPath } = await import('node:url');
     const __dirname = dirname(fileURLToPath(import.meta.url));
     const src = readFileSync(join(__dirname, '..', 'ReportDrawer.jsx'), 'utf8');
     expect(src).toMatch(/import\s*\{\s*buildJsreportHelpersString\s*\}\s*from\s*['"][^'"]*report-html-helpers\.js['"]/);
-    expect(src).toMatch(/const HELPERS_CODE = buildJsreportHelpersString\(\)/);
+    expect(src).toMatch(/import\s*\{\s*getCurrencyFormatConfig\s*\}\s*from\s*['"][^'"]*currencyFormatConfig\.js['"]/);
+    expect(src).toMatch(/function buildHelpersCode\(\)\s*\{/);
+    expect(src).toMatch(/buildJsreportHelpersString\(undefined,\s*undefined,\s*getCurrencyFormatConfig\(\)\)/);
+    expect(src).toMatch(/helpers:\s*buildHelpersCode\(\)/);
     expect(src).not.toMatch(/function formatCurrency\(/);
   });
 

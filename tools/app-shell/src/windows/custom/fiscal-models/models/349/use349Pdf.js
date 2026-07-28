@@ -1,10 +1,15 @@
 import React, { useState } from 'react';
 import { renderPdf, COMMON_HANDLEBARS_HELPERS } from '../../../shared/pdfUtils.js';
 import { buildJsreportHelpersString } from '../../../../../../../../templates/reports/helpers/report-html-helpers.js';
+import { getCurrencyFormatConfig } from '@/lib/currencyFormatConfig.js';
 
-const HELPERS = buildJsreportHelpersString() + `
+// Built at call time (not module load) so it picks up whatever the currency-format
+// fetch has resolved to by the time a PDF is actually generated (ETP-4314).
+function buildHelpers() {
+  return buildJsreportHelpersString(undefined, undefined, getCurrencyFormatConfig()) + `
 function fmtInt(v) { return v == null ? '0' : String(parseInt(v, 10) || 0); }
 ` + COMMON_HANDLEBARS_HELPERS;
+}
 
 const CSS = `
 @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Inter:wght@400;500;600;700&display=swap');
@@ -260,7 +265,7 @@ export function use349Pdf() {
         totalRectifAmount: 0,
         operators,
       };
-      const blob = await renderPdf(HTML, CSS, HELPERS, data);
+      const blob = await renderPdf(HTML, CSS, buildHelpers(), data);
       const url = URL.createObjectURL(blob);
       if (pdfUrl) URL.revokeObjectURL(pdfUrl);
       setPdfUrl(url);
