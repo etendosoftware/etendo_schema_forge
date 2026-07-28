@@ -742,11 +742,9 @@ const InlineLinesPanel = forwardRef(function InlineLinesPanel({
   // leading expand-chevron column and the "Add dimensions" hover action — see
   // `hasDimensionsPanel` below.
   const visibleColumns = useMemo(
-    () => (columns || []).filter(c => {
-      if (c.type === 'dimensionsPanel') return false;
-      if (c.hidden || hiddenColumns.includes(c.key)) return false;
-      return true;
-    }),
+    () => (columns || []).filter(c => (
+      c.type !== 'dimensionsPanel' && !c.hidden && !hiddenColumns.includes(c.key)
+    )),
     [columns, hiddenColumns]
   );
   // The last "amount" column is the one that disappears on hover to make room
