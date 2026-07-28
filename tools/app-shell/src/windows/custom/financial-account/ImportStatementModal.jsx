@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { AlertTriangle, ArrowRight, Check, ChevronDown, FileText, UploadCloud, X } from 'lucide-react';
 import { useUI, useLocaleSwitch } from '@/i18n';
+import { formatCurrency } from '@/lib/formatCurrency.js';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
 import { useStatementImport } from '@/hooks/useStatementImport';
@@ -27,16 +28,9 @@ function formatDate(iso, bcpLocale) {
   }).format(d);
 }
 
-function formatMoney(amount, currency, bcpLocale) {
+function formatMoney(amount, currency) {
   if (amount == null) return '—';
-  try {
-    return new Intl.NumberFormat(bcpLocale, {
-      style: 'currency', currency,
-      minimumFractionDigits: 2, maximumFractionDigits: 2, useGrouping: true,
-    }).format(Number(amount));
-  } catch {
-    return `${Number(amount).toFixed(2)} ${currency}`;
-  }
+  return formatCurrency(currency, amount);
 }
 
 function fileToBase64(file) {
@@ -311,18 +305,18 @@ function WidgetKpi({ label, value, tone }) {
 }
 
 /** Step 2 summary strip: inline Líneas / Abonos / Cargos / Periodo. */
-function SummaryWidget({ count, totalIn, totalOut, period, currency, bcpLocale, ui }) {
+function SummaryWidget({ count, totalIn, totalOut, period, currency, ui }) {
   return (
     <div className="flex items-center gap-5 rounded-lg border border-[hsl(var(--border-subtle))] px-3 py-2">
       <WidgetKpi label={ui('financeAccountStatementsImportKpiLines')} value={count} data-testid="WidgetKpi__de9647" />
       <WidgetKpi
         label={ui('financeAccountStatementsImportKpiCredits')}
-        value={`+${formatMoney(totalIn, currency, bcpLocale)}`}
+        value={`+${formatMoney(totalIn, currency)}`}
         tone="pos"
         data-testid="WidgetKpi__de9647" />
       <WidgetKpi
         label={ui('financeAccountStatementsImportKpiDebits')}
-        value={`−${formatMoney(totalOut, currency, bcpLocale)}`}
+        value={`−${formatMoney(totalOut, currency)}`}
         tone="neg"
         data-testid="WidgetKpi__de9647" />
       <WidgetKpi
@@ -339,9 +333,9 @@ function SummaryWidget({ count, totalIn, totalOut, period, currency, bcpLocale, 
 
 const PREV_GRID = 'grid grid-cols-[88px_minmax(160px,1fr)_104px_104px] items-center gap-2 px-3';
 
-function AmountCell({ value, sign, toneClass, currency, bcpLocale }) {
+function AmountCell({ value, sign, toneClass, currency }) {
   if (value > 0) {
-    return <span className={toneClass}>{sign}{formatMoney(value, currency, bcpLocale)}</span>;
+    return <span className={toneClass}>{sign}{formatMoney(value, currency)}</span>;
   }
   return <span className="text-[hsl(var(--text-disabled))]">—</span>;
 }
@@ -389,7 +383,6 @@ function PreviewLines({ lines, max = 5, currency, bcpLocale, ui }) {
                   sign="−"
                   toneClass="text-[hsl(var(--destructive))]"
                   currency={currency}
-                  bcpLocale={bcpLocale}
                   data-testid="AmountCell__de9647" />
               </span>
               <span className="text-right text-sm font-semibold tabular-nums">
@@ -398,7 +391,6 @@ function PreviewLines({ lines, max = 5, currency, bcpLocale, ui }) {
                   sign="+"
                   toneClass="text-[var(--status-success-fg)]"
                   currency={currency}
-                  bcpLocale={bcpLocale}
                   data-testid="AmountCell__de9647" />
               </span>
             </div>
@@ -516,7 +508,6 @@ function PreviewBody({ previewData, accountCurrency, bcpLocale, ui }) {
         totalOut={totalOut}
         period={formatPeriod(previewData.periodFrom, previewData.periodTo, bcpLocale)}
         currency={accountCurrency}
-        bcpLocale={bcpLocale}
         ui={ui}
         data-testid="SummaryWidget__de9647" />
       <PreviewLines

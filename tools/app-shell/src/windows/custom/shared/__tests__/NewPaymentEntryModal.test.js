@@ -26,7 +26,7 @@ describe('NewPaymentEntryModal (step 2 — Nuevo cobro/pago)', () => {
   // digit grouping with an es-ES symbol. It must now delegate entirely to the
   // shared formatCurrency() instead of hand-rolling any Intl/formatPlain calls.
   it('delegates fmtCur entirely to the shared formatCurrency() (no more formatPlain/Intl mixing)', () => {
-    assert.match(src, /import \{ formatCurrency \} from '@\/lib\/formatCurrency\.js';/);
+    assert.match(src, /import\s*\{[^}]*\bformatCurrency\b[^}]*\}\s*from\s*'@\/lib\/formatCurrency\.js';/);
     assert.match(
       src,
       /function fmtCur\(n, currency\) \{\s*\n\s*return formatCurrency\(currency, n\);\s*\n\s*\}/,

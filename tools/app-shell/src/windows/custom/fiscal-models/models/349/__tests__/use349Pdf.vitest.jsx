@@ -118,13 +118,19 @@ describe('use349Pdf — generatePdf', () => {
   });
 });
 
-describe('use349Pdf — HELPERS.fmtAmount (real Handlebars template helper)', () => {
+describe('use349Pdf — HELPERS.formatCurrency (real Handlebars template helper)', () => {
   // `renderPdf` is mocked above, but it's still invoked with the real, unmocked
   // `HELPERS` template string built at module scope — so the mock call capture
-  // gives us the actual `fmtAmount` source the PDF renderer executes, not a
-  // stand-in. This is what actually runs at PDF-generation time; asserting only
-  // on the `data` object (as the other tests here do) would never catch a
+  // gives us the actual `formatCurrency` source the PDF renderer executes, not
+  // a stand-in. This is what actually runs at PDF-generation time; asserting
+  // only on the `data` object (as the other tests here do) would never catch a
   // formatting bug inside the Handlebars helper itself.
+  //
+  // `formatCurrency` now comes from the centralized `buildJsreportHelpersString`
+  // (templates/reports/helpers/report-html-helpers.js) — the same source every
+  // other jsreport-rendered document/report uses — instead of a 349-only
+  // hand-rolled `fmtAmount`. It needs its own `__groupEsEs` helper to be present
+  // in the extracted source too (that's what the manual grouping delegates to).
   function extractFunctionSource(source, fnName) {
     const startIdx = source.indexOf(`function ${fnName}(`);
     if (startIdx === -1) throw new Error(`${fnName} not found in HELPERS`);
@@ -141,7 +147,7 @@ describe('use349Pdf — HELPERS.fmtAmount (real Handlebars template helper)', ()
     return source.slice(startIdx, i + 1);
   }
 
-  async function getRealFmtAmount() {
+  async function getRealFormatCurrency() {
     const mockBlob = new Blob(['pdf'], { type: 'application/pdf' });
     renderPdf.mockResolvedValue(mockBlob);
     const { result } = renderHook(() => use349Pdf());
@@ -149,24 +155,37 @@ describe('use349Pdf — HELPERS.fmtAmount (real Handlebars template helper)', ()
       await result.current.generatePdf({ year: 2026, period: 'T1' }, []);
     });
     const [, , helpers] = renderPdf.mock.calls[0];
-    const fnSource = extractFunctionSource(helpers, 'fmtAmount');
-    return new Function(`${fnSource}; return fmtAmount;`)();
+    const groupSrc = extractFunctionSource(helpers, '__groupEsEs');
+    const fnSource = extractFunctionSource(helpers, 'formatCurrency');
+    return new Function(`${groupSrc}\n${fnSource}; return formatCurrency;`)();
   }
 
-  it('returns "0,00" for null/undefined', async () => {
-    const fmtAmount = await getRealFmtAmount();
-    expect(fmtAmount(null)).toBe('0,00');
-    expect(fmtAmount(undefined)).toBe('0,00');
+  it('returns "" for null/undefined (canonical formatCurrency contract)', async () => {
+    const formatCurrency = await getRealFormatCurrency();
+    expect(formatCurrency(null)).toBe('');
+    expect(formatCurrency(undefined)).toBe('');
   });
 
   it('groups thousands for amounts in the 1000-9999 range (Intl silently drops it without useGrouping)', async () => {
-    const fmtAmount = await getRealFmtAmount();
-    expect(fmtAmount(1234.56)).toBe('1.234,56');
+    const formatCurrency = await getRealFormatCurrency();
+    expect(formatCurrency(1234.56)).toBe('1.234,56');
   });
 
   it('keeps grouping for amounts at/above 10000 (already correct even pre-fix)', async () => {
-    const fmtAmount = await getRealFmtAmount();
-    expect(fmtAmount(12345.67)).toBe('12.345,67');
+    const formatCurrency = await getRealFormatCurrency();
+    expect(formatCurrency(12345.67)).toBe('12.345,67');
+  });
+
+  it('never relies on Intl.NumberFormat — immune to the jsreport container Node/ICU version', async () => {
+    const mockBlob = new Blob(['pdf'], { type: 'application/pdf' });
+    renderPdf.mockResolvedValue(mockBlob);
+    const { result } = renderHook(() => use349Pdf());
+    await act(async () => {
+      await result.current.generatePdf({ year: 2026, period: 'T1' }, []);
+    });
+    const [, , helpers] = renderPdf.mock.calls[0];
+    const fnSource = extractFunctionSource(helpers, 'formatCurrency');
+    expect(fnSource).not.toMatch(/Intl\.NumberFormat/);
   });
 });
 

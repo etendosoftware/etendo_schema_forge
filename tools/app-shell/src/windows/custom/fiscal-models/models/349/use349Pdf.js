@@ -1,13 +1,8 @@
 import React, { useState } from 'react';
 import { renderPdf, COMMON_HANDLEBARS_HELPERS } from '../../../shared/pdfUtils.js';
+import { buildJsreportHelpersString } from '../../../../../../../../templates/reports/helpers/report-html-helpers.js';
 
-const HELPERS = `
-function fmtAmount(v) {
-  if (v == null) return '0,00';
-  var n = Number(v);
-  if (isNaN(n)) return String(v);
-  return new Intl.NumberFormat('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2, useGrouping: true }).format(n);
-}
+const HELPERS = buildJsreportHelpersString() + `
 function fmtInt(v) { return v == null ? '0' : String(parseInt(v, 10) || 0); }
 ` + COMMON_HANDLEBARS_HELPERS;
 
@@ -163,7 +158,7 @@ const HTML = `
       <div class="summary-row">
         <div class="summary-label">Importe de las operaciones intracomunitarias</div>
         <div class="summary-casilla">02</div>
-        <div class="summary-value">{{fmtAmount totalAmount}}</div>
+        <div class="summary-value">{{formatCurrency totalAmount}}</div>
       </div>
       <div class="summary-row">
         <div class="summary-label">Número total de operadores intracomunitarios con rectificaciones</div>
@@ -173,7 +168,7 @@ const HTML = `
       <div class="summary-row">
         <div class="summary-label">Importe de las rectificaciones</div>
         <div class="summary-casilla">04</div>
-        <div class="summary-value">{{fmtAmount totalRectifAmount}}</div>
+        <div class="summary-value">{{formatCurrency totalRectifAmount}}</div>
       </div>
     </div>
   </div>
@@ -198,7 +193,7 @@ const HTML = `
             <td class="mono">{{this.nif}}</td>
             <td>{{this.name}}</td>
             <td><span class="key-badge">{{this.key}}</span></td>
-            <td class="mono right">{{fmtAmount this.base}}</td>
+            <td class="mono right">{{formatCurrency this.base}}</td>
           </tr>
           {{/each}}
         </tbody>

@@ -214,34 +214,69 @@ function extractRequireLines(source) {
  * report's raw `artifacts/<id>/helpers.js`. The result is the single source of
  * truth for both render paths — not a second, hand-maintained copy per report.
  *
- * `formatNumber` cannot be serialized via a plain `fn.toString()`: its
- * canonical definition closes over the `numberFormat` parameter, which would
- * become an undeclared free variable once the function body is lifted out to
- * a standalone string. It is rebuilt from a template with the resolved options
- * literal inlined instead. `isGroupBreak`/`resetGroupTracking` have the same
- * closure-variable issue (`_prevGroupValues`) — solved by declaring that
- * variable at the top of the combined string rather than templating the whole
- * function (their bodies don't reference anything else external).
+ * `formatCurrency`/`formatNumber` cannot rely on `Intl.NumberFormat` in the
+ * serialized string: jsreport runs its own separate Node process (see module
+ * docstring above), and the Node/ICU build the `etendo-jsreport` Docker image
+ * ships (Node 18.20.4 / ICU 74.2 / CLDR 44.1, confirmed via `docker exec`)
+ * silently drops the thousands separator for the `es-ES` locale specifically
+ * in the 1000-9999 range — the exact bug this ticket exists to fix. Node ≥20
+ * (ICU ≥78/CLDR ≥48) does not have this data bug, but we can't control which
+ * Node build ends up running jsreport (that lives in a separate repo/image).
+ * `__groupEsEs` sidesteps the whole class of problem: a manual, locale-data-
+ * free grouping algorithm gives the same result on any Node/ICU version.
+ *
+ * `isGroupBreak`/`resetGroupTracking` have their own closure-variable issue
+ * (`_prevGroupValues`) — solved by declaring that variable at the top of the
+ * combined string rather than templating the whole function (their bodies
+ * don't reference anything else external).
  *
  * @param {string} [helpersCode] Raw contents of `artifacts/<id>/helpers.js`.
+ * @param {Intl.NumberFormatOptions} [numberFormatOverride] Explicit
+ *        `formatNumber` decimal-precision override for callers that already
+ *        know it as a plain JS value (e.g. a document PDF's exchange-rate
+ *        precision) instead of one recoverable by regex from a raw
+ *        `helpers.js` string. Takes precedence over `extractNumberFormatOptions`.
  * @returns {string} Combined JS source to send as jsreport's `helpers` field.
  */
-export function buildJsreportHelpersString(helpersCode) {
-  const numberFormat = extractNumberFormatOptions(helpersCode);
+export function buildJsreportHelpersString(helpersCode, numberFormatOverride) {
+  const numberFormat = numberFormatOverride || extractNumberFormatOptions(helpersCode);
   const helpers = createReportHelpers({ numberFormat });
 
   const stateSrc = 'var _prevGroupValues = {};';
+
+  const groupEsEsSrc = `function __groupEsEs(num, minFrac, maxFrac) {
+  var sign = num < 0 ? '-' : '';
+  var abs = Math.abs(num);
+  var fixed = abs.toFixed(maxFrac);
+  var parts = fixed.split('.');
+  var intPart = parts[0].replace(/\\B(?=(\\d{3})+(?!\\d))/g, '.');
+  var decPart = parts[1] || '';
+  while (decPart.length > minFrac && decPart.charAt(decPart.length - 1) === '0') {
+    decPart = decPart.slice(0, -1);
+  }
+  return decPart ? sign + intPart + ',' + decPart : sign + intPart;
+}`;
+
+  const formatCurrencySrc = `function formatCurrency(value) {
+  if (value == null) return '';
+  var num = Number(value);
+  if (isNaN(num)) return String(value);
+  return __groupEsEs(num, 2, 2);
+}`;
+
+  const minFrac = (numberFormat && numberFormat.minimumFractionDigits != null) ? numberFormat.minimumFractionDigits : 0;
+  const maxFrac = (numberFormat && numberFormat.maximumFractionDigits != null) ? numberFormat.maximumFractionDigits : 3;
   const formatNumberSrc = `function formatNumber(value) {
   if (value == null) return '';
   var num = Number(value);
   if (isNaN(num)) return String(value);
-  return new Intl.NumberFormat('es-ES', ${JSON.stringify(Object.assign({ useGrouping: true }, numberFormat || undefined))}).format(num);
+  return __groupEsEs(num, ${minFrac}, ${maxFrac});
 }`;
 
   const canonicalSrc = Object.entries(helpers)
-    .filter(([name, fn]) => typeof fn === 'function' && name !== 'formatNumber')
+    .filter(([name, fn]) => typeof fn === 'function' && name !== 'formatNumber' && name !== 'formatCurrency')
     .map(([, fn]) => fn.toString())
-    .concat(formatNumberSrc)
+    .concat(groupEsEsSrc, formatCurrencySrc, formatNumberSrc)
     .join('\n\n');
 
   const extras = helpersCode ? extractTopLevelFunctions(helpersCode).filter((f) => !CANONICAL_HELPER_NAMES.has(f.name)) : [];

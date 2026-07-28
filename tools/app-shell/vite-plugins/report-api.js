@@ -601,10 +601,26 @@ export default function reportApiPlugin() {
 
               // Register the trusted in-repo helper set — no dynamic code execution.
               // helpersCode is read (not executed) only to preserve a report's
-              // formatNumber decimals. Report-specific helpers (e.g. qrCode) are only
-              // needed by the jsreport PDF/XLSX path below, which consumes the artifact
-              // helpers.js string directly.
+              // formatNumber decimals.
               registerReportHelpers(Handlebars, helpersCode);
+
+              // qrCode is report-specific (only document-type reports reference it)
+              // and async (QRCode.toDataURL returns a Promise) — Handlebars.compile()
+              // is synchronous, so it can't be registered as a per-report extra like
+              // the jsreport path does below. Precompute it once here (generic content
+              // — doc type/number/partner/status — good enough for an on-screen
+              // preview) and register a plain sync helper returning the resolved value.
+              if (documentData?.header) {
+                const QRCode = _require('qrcode');
+                const header = documentData.header;
+                const parts = [];
+                if (header.doc_type) parts.push('T:' + header.doc_type);
+                if (header.documentno) parts.push('N:' + header.documentno);
+                if (header.bp_name) parts.push('BP:' + header.bp_name);
+                if (header.status) parts.push('S:' + header.status);
+                const qrDataUrl = await QRCode.toDataURL(parts.length ? parts.join('|') : 'empty', { width: 120, margin: 1 });
+                Handlebars.registerHelper('qrCode', () => qrDataUrl);
+              }
 
               const template = Handlebars.compile(templateContent);
               const html = template(templateData);

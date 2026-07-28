@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { toast } from 'sonner';
 import { Check, ChevronDown, FileText, Layers, Trash2 } from 'lucide-react';
 import { useUI, useLocaleSwitch } from '@/i18n';
+import { formatCurrency, getCurrencySymbol } from '@/lib/formatCurrency.js';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { DateField } from '@/components/ui/date-field';
 import { cn } from '@/lib/utils';
@@ -129,27 +130,8 @@ function computeTotals(rows) {
   return { tin, tout, bal: tin - tout, n };
 }
 
-/** Narrow currency symbol (e.g. "€") for the amount-input suffix. */
-function currencySymbol(iso) {
-  if (!iso) return '';
-  try {
-    return new Intl.NumberFormat('en-US', { style: 'currency', currency: iso, currencyDisplay: 'narrowSymbol' })
-      .formatToParts(0).find((p) => p.type === 'currency')?.value ?? iso;
-  } catch {
-    return iso;
-  }
-}
-
-function makeMoneyFormatter(currency, bcpLocale) {
-  return (amount) => {
-    try {
-      return new Intl.NumberFormat(bcpLocale, {
-        style: 'currency', currency, minimumFractionDigits: 2, maximumFractionDigits: 2, useGrouping: true,
-      }).format(Number(amount) || 0);
-    } catch {
-      return `${(Number(amount) || 0).toFixed(2)} ${currency}`;
-    }
-  };
+function makeMoneyFormatter(currency) {
+  return (amount) => formatCurrency(currency, Number(amount) || 0);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -593,8 +575,8 @@ export function ManualStatementModal({
   const ui = useUI();
   const { locale: appLocale } = useLocaleSwitch();
   const bcpLocale = (appLocale || 'es_ES').replace('_', '-');
-  const money = useMemo(() => makeMoneyFormatter(accountCurrency, bcpLocale), [accountCurrency, bcpLocale]);
-  const currencySym = useMemo(() => currencySymbol(accountCurrency), [accountCurrency]);
+  const money = useMemo(() => makeMoneyFormatter(accountCurrency), [accountCurrency, bcpLocale]);
+  const currencySym = useMemo(() => getCurrencySymbol(accountCurrency), [accountCurrency]);
 
   const editing = !!statement;
   const { createStatement, creating } = useCreateStatement();

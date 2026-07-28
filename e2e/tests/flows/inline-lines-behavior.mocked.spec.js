@@ -435,7 +435,7 @@ test.describe('Tanda 3 — cell renderers', () => {
     await expect(optionBtn).toBeVisible({ timeout: 5_000 });
 
     // Assert the EUR-formatted price is visible somewhere inside the option.
-    await expect(optionBtn).toContainText('12.00 €');
+    await expect(optionBtn).toContainText('12,00 €');
   });
 
   test.fixme('enum/select cell: renders native <select> for enum columns and commits on change', async ({ page }) => {

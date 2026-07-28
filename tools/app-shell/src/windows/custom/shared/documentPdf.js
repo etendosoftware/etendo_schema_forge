@@ -2,6 +2,7 @@ import { useRef } from 'react';
 import { buildLocationAddressLines } from '@/lib/locationAddress.js';
 import { computeDocumentTotals } from '@/lib/documentTotals';
 import { ORDER_LINE_CONFIG } from '@/hooks/useLineGrossAmount';
+import { buildJsreportHelpersString } from '../../../../../../templates/reports/helpers/report-html-helpers.js';
 import {
   COMMON_HANDLEBARS_HELPERS,
   fetchJson,
@@ -14,19 +15,6 @@ import {
 } from './pdfUtils.js';
 
 export { fetchJson, fetchAll, fetchOptionalJson, fetchLocationAddress, blobToDataUrl, fetchImageDataUrl } from './pdfUtils.js';
-
-// ---------------------------------------------------------------------------
-// Handlebars helpers (CommonJS for jsreport context)
-// ---------------------------------------------------------------------------
-export const DOCUMENT_HELPERS = `
-function fmt(v) {
-  if (v == null || v === '') return '0.00';
-  var n = Number(v);
-  if (isNaN(n)) return String(v);
-  return new Intl.NumberFormat('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n);
-}
-function add(a, b) { return (Number(a)||0) + (Number(b)||0); }
-` + COMMON_HANDLEBARS_HELPERS;
 
 // ---------------------------------------------------------------------------
 // CSS
@@ -196,11 +184,11 @@ export const DOCUMENT_TEMPLATE = `<!DOCTYPE html>
       <tr>
         <td class="code">{{this.lineNo}}</td>
         <td class="desc">{{this.productName}}</td>
-        <td class="num">{{fmt this.quantity}}</td>
-        <td class="num">{{fmt this.unitPrice}}</td>
+        <td class="num">{{formatCurrency this.quantity}}</td>
+        <td class="num">{{formatCurrency this.unitPrice}}</td>
         <td class="num">{{#if this.discount}}{{this.discount}}%{{else}}–{{/if}}</td>
         <td><span class="iva-pill">{{this.taxName}}</span></td>
-        <td class="num">{{fmt this.lineTotal}}</td>
+        <td class="num">{{formatCurrency this.lineTotal}}</td>
       </tr>
       {{/each}}
     </tbody>
@@ -210,17 +198,17 @@ export const DOCUMENT_TEMPLATE = `<!DOCTYPE html>
   <div class="inv-totals">
     <div class="inv-totals-inner">
       {{#if grossAmount}}
-      <div class="row"><span>{{labels.subtotalWithoutDiscount}}</span><span>{{fmt grossAmount}}</span></div>
-      <div class="row discount"><span>{{labels.discountPerProduct}}</span><span>−{{fmt discountPerProduct}}</span></div>
+      <div class="row"><span>{{labels.subtotalWithoutDiscount}}</span><span>{{formatCurrency grossAmount}}</span></div>
+      <div class="row discount"><span>{{labels.discountPerProduct}}</span><span>−{{formatCurrency discountPerProduct}}</span></div>
       {{/if}}
       {{#if totalDiscountAmt}}
-      <div class="row discount"><span>{{labels.totalDiscount}} ({{etgoTotalDiscount}}%)</span><span>−{{fmt totalDiscountAmt}}</span></div>
+      <div class="row discount"><span>{{labels.totalDiscount}} ({{etgoTotalDiscount}}%)</span><span>−{{formatCurrency totalDiscountAmt}}</span></div>
       {{/if}}
-      <div class="row"><span>{{labels.subtotal}}</span><span>{{fmt netAmount}}</span></div>
-      <div class="row"><span>{{labels.tax}}</span><span>{{fmt taxAmount}}</span></div>
-      <div class="row grand"><span>{{labels.grandTotal}}</span><span>{{fmt grandTotal}}</span></div>
+      <div class="row"><span>{{labels.subtotal}}</span><span>{{formatCurrency netAmount}}</span></div>
+      <div class="row"><span>{{labels.tax}}</span><span>{{formatCurrency taxAmount}}</span></div>
+      <div class="row grand"><span>{{labels.grandTotal}}</span><span>{{formatCurrency grandTotal}}</span></div>
       {{#if exchangeRate}}
-      <div class="row conversion-row"><span>{{orgCurrencyCode}}</span><span>{{fmt orgGrandTotal}} <span class="rate-note">({{fmtRate exchangeRate rateDecimals}})</span></span></div>
+      <div class="row conversion-row"><span>{{orgCurrencyCode}}</span><span>{{formatCurrency orgGrandTotal}} <span class="rate-note">({{formatNumber exchangeRate}})</span></span></div>
       {{/if}}
     </div>
   </div>
@@ -347,7 +335,12 @@ export async function buildOrderData(spec, orderId, base, token, currencyData = 
 // Render via jsreport (delegates to shared renderPdf in pdfUtils.js)
 // ---------------------------------------------------------------------------
 export async function renderDocumentPdf(data) {
-  return renderPdf(DOCUMENT_TEMPLATE, DOCUMENT_CSS, DOCUMENT_HELPERS, data);
+  // rateDecimals is only meaningful when exchangeRate is present, but it's
+  // harmless to bake it into formatNumber's precision unconditionally.
+  const rateDecimals = (typeof data.rateDecimals === 'number' && data.rateDecimals >= 0) ? data.rateDecimals : 4;
+  const helpers = buildJsreportHelpersString('', { minimumFractionDigits: rateDecimals, maximumFractionDigits: rateDecimals })
+    + '\n\n' + COMMON_HANDLEBARS_HELPERS;
+  return renderPdf(DOCUMENT_TEMPLATE, DOCUMENT_CSS, helpers, data);
 }
 
 // ---------------------------------------------------------------------------

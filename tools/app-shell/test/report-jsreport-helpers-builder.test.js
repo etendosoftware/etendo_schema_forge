@@ -109,8 +109,9 @@ function extractFunctionSource(source, fnName) {
 describe('buildJsreportHelpersString', () => {
   it('uses the canonical es-ES formatCurrency (never the report-specific en-US copy)', () => {
     const built = buildJsreportHelpersString(DOCUMENT_HELPERS_SRC);
+    const groupSrc = extractFunctionSource(built, '__groupEsEs');
     const fnSource = extractFunctionSource(built, 'formatCurrency');
-    const formatCurrency = new Function(`${fnSource}; return formatCurrency;`)();
+    const formatCurrency = new Function(`${groupSrc}\n${fnSource}; return formatCurrency;`)();
     assert.equal(formatCurrency(1355.2), '1.355,20');
   });
 
@@ -144,8 +145,46 @@ describe('buildJsreportHelpersString', () => {
 
   it('uses the canonical, grouped formatNumber (not the report-specific en-US copy)', () => {
     const built = buildJsreportHelpersString(LISTING_HELPERS_SRC);
+    const groupSrc = extractFunctionSource(built, '__groupEsEs');
     const fnSource = extractFunctionSource(built, 'formatNumber');
-    const formatNumber = new Function(`${fnSource}; return formatNumber;`)();
+    const formatNumber = new Function(`${groupSrc}\n${fnSource}; return formatNumber;`)();
     assert.equal(formatNumber(1355), '1.355');
+  });
+
+  // ── ETP-4314 follow-up: jsreport container ICU/CLDR grouping bug ──────────
+  // Confirmed via `docker exec` against the actual etendo-jsreport image
+  // (Node 18.20.4 / ICU 74.2 / CLDR 44.1): Intl.NumberFormat('es-ES', {useGrouping:
+  // true}) silently drops the thousands separator specifically in the 1000-9999
+  // range on that Node/ICU build (Node ≥20 / ICU ≥78 does not have this bug).
+  // formatCurrency/formatNumber must never depend on Intl at all in the string
+  // sent to jsreport, so the fix holds regardless of which Node build ends up
+  // running that separate container, now or after any future image update.
+  it('formatCurrency never calls Intl.NumberFormat — immune to the jsreport container Node/ICU version', () => {
+    const built = buildJsreportHelpersString(DOCUMENT_HELPERS_SRC);
+    const fnSource = extractFunctionSource(built, 'formatCurrency');
+    assert.doesNotMatch(fnSource, /Intl\.NumberFormat/);
+  });
+
+  it('formatNumber never calls Intl.NumberFormat — immune to the jsreport container Node/ICU version', () => {
+    const built = buildJsreportHelpersString(LISTING_HELPERS_SRC);
+    const fnSource = extractFunctionSource(built, 'formatNumber');
+    assert.doesNotMatch(fnSource, /Intl\.NumberFormat/);
+  });
+
+  it('groups thousands for formatCurrency in the exact 1000-9999 range that used to be buggy', () => {
+    const built = buildJsreportHelpersString(DOCUMENT_HELPERS_SRC);
+    const groupSrc = extractFunctionSource(built, '__groupEsEs');
+    const fnSource = extractFunctionSource(built, 'formatCurrency');
+    const formatCurrency = new Function(`${groupSrc}\n${fnSource}; return formatCurrency;`)();
+    assert.equal(formatCurrency(1232), '1.232,00');
+    assert.equal(formatCurrency(1000), '1.000,00');
+  });
+
+  it('accepts an explicit numberFormat override as a 2nd param — for callers with a known JS value (not a helpers.js string to regex-extract from)', () => {
+    const built = buildJsreportHelpersString('', { minimumFractionDigits: 4, maximumFractionDigits: 4 });
+    const groupSrc = extractFunctionSource(built, '__groupEsEs');
+    const fnSource = extractFunctionSource(built, 'formatNumber');
+    const formatNumber = new Function(`${groupSrc}\n${fnSource}; return formatNumber;`)();
+    assert.equal(formatNumber(1.2), '1,2000');
   });
 });
