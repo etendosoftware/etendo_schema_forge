@@ -72,12 +72,35 @@ async function seedPlatformToken(page) {
   });
 }
 
+/**
+ * Reads `environments` at fulfill time, not at registration time — so a test
+ * that keeps the same array reference and pushes into it later (e.g. once a
+ * new tenant has been "provisioned") sees a route that stays in sync with
+ * that mutation, without re-registering the route.
+ */
 async function installEnvironmentsMock(page, environments) {
   await page.route('**/sws/go/environments**', async (route) => {
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
       body: JSON.stringify({ environments }),
+    });
+  });
+}
+
+/**
+ * Mocks entering an already-provisioned environment. `switchTo`
+ * (`useEnvironmentSwitch.js`) calls `GET /sws/go/login?userId=...` and only
+ * proceeds with its hard `window.location.href = '/'` navigation if the
+ * response includes a `token` — without one it silently no-ops.
+ */
+async function installEnvironmentLoginMock(page, { token, roleList } = {}) {
+  await page.route('**/sws/go/login**', async (route) => {
+    if (route.request().method() !== 'GET') return route.fallback();
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ token, roleList }),
     });
   });
 }
@@ -171,7 +194,18 @@ test.describe('Tenant upgrade — checkout and provisioning', () => {
     await installEnvironmentsMock(page, EXISTING_ENVIRONMENTS);
   });
 
-  test('happy path: checkout streams provisioning progress and reaches success', async ({ page }) => {
+  test('happy path: checkout streams provisioning progress, auto-enters the new environment', async ({ page }) => {
+    // A private copy: the beforeEach mock above already wired the ambient
+    // EXISTING_ENVIRONMENTS array to the environments route, but this test
+    // needs to grow that list once provisioning succeeds (see below) without
+    // leaking the newly "provisioned" tenant into any other test in this
+    // file. Re-registering the same route pattern here shadows the beforeEach
+    // one (Playwright resolves same-pattern routes in reverse registration
+    // order), and installEnvironmentsMock reads the array at fulfill time, so
+    // a later push() is picked up without a second registration.
+    const environments = [...EXISTING_ENVIRONMENTS];
+    await installEnvironmentsMock(page, environments);
+
     // installOnboardingMock cannot stream the NDJSON body incrementally (see
     // its doc comment), so this delay is what makes the intermediate
     // `running` phase observable at all: without it, the mock resolves
@@ -179,6 +213,16 @@ test.describe('Tenant upgrade — checkout and provisioning', () => {
     // sometimes never caught mounted (the original flake behind ETP-4686).
     const RUNNING_PHASE_DELAY_MS = 750;
     const requests = await installOnboardingMock(page, { delayMs: RUNNING_PHASE_DELAY_MS });
+
+    // enterByClientName (useEnvironmentSwitch.js) re-fetches /environments to
+    // find the tenant by name, then switchTo() logs into it via this route —
+    // both need a response, or the auto-enter after success silently fails.
+    const NEW_ENV_TOKEN = 'e2e-new-env-token';
+    await installEnvironmentLoginMock(page, {
+      token: NEW_ENV_TOKEN,
+      roleList: [{ id: 'role-productive', name: 'Administrator', orgList: [{ id: 'org-productive', name: 'Acme Productive HQ' }] }],
+    });
+
     await gotoUpgrade(page);
 
     // Both plans are compared before any payment detail is asked for.
@@ -208,15 +252,34 @@ test.describe('Tenant upgrade — checkout and provisioning', () => {
     expect(requests[0].clientName).toBe('Acme Productive');
     expect(requests[0].paymentToken).toMatch(PAID_TOKEN_PATTERN);
 
-    // Tenant selection happens at sign-in, so success routes to /logout. That
-    // route signs the user out and hands off to its safeDestination
-    // (/onboarding), so assert the sign-out actually happened rather than just
-    // the intermediate URL, which the router never rests on.
+    // The freshly provisioned tenant only becomes enterable once it exists —
+    // mirrors what a real backend would do (a client created by this very
+    // request would already be in a follow-up /environments list).
+    environments.push({
+      clientName: 'Acme Productive',
+      adminUserId: 'user-2',
+      clientId: 'client-2',
+      adminUserName: 'admin',
+      plan: 'productive',
+    });
+
+    // "Continue" enters the tenant that was just provisioned (ETP-4686,
+    // commit 45be6bf36 replaced an earlier sign-out-first design with this
+    // auto-enter). enterByClientName finds the match above, then switchTo
+    // logs in and does a hard `window.location.href = '/'` — a real
+    // navigation, so the app re-boots and lands wherever an authenticated
+    // session resolves to (the same place login() itself waits for).
     await page.getByTestId('upgrade-success-continue').click();
-    await expect(page).toHaveURL(/\/onboarding$/);
+    await page.waitForURL('**/dashboard', { timeout: 15_000 });
+
+    // sf_auth_client_name is written by buildEnvironmentSessionStorage and
+    // not touched by login()'s init script (unlike sf_auth_token, which that
+    // script reseeds on every new document — see auth.js), so it is the
+    // reliable signal that the session landed in the new tenant rather than
+    // merely surviving the reload with the old one.
     await expect
-      .poll(() => page.evaluate(() => localStorage.getItem('sf_auth_token')))
-      .toBeNull();
+      .poll(() => page.evaluate(() => localStorage.getItem('sf_auth_client_name')))
+      .toBe('Acme Productive');
   });
 
   test('declined test card fails client-side and never reaches the backend', async ({ page }) => {
