@@ -1,6 +1,6 @@
 import PeriodControlPage, { api } from './PeriodControlPage';
 
-const windowMeta = { category: 'finance', name: 'Open/Close Period Control' };
+const windowMeta = { category: 'finance', name: 'Open/Close Period Control', id: 'E66E701CCBA14B8BA480CBDE37C50D7A' };
 
 // @sf-generated-start component:App
 export default function App({ windowName, recordId, token, apiBaseUrl, window, ...rest }) {

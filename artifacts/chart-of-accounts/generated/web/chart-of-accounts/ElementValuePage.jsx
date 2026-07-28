@@ -1,5 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { ListView, DetailView } from '@/components/contract-ui';
+import { useWindowAccess, WindowAccessGuard } from '@/auth/AuthContext.jsx';
 import { toast } from 'sonner';
 import ElementValueTable from '../../../custom/AccountTreeView';
 import ElementValueForm from './ElementValueForm';
@@ -79,8 +80,15 @@ export const api = {
 
 // @sf-generated-start component:ElementValuePage
 export default function ElementValuePage({ windowName, recordId, ...props }) {
+  const windowAccessTier = useWindowAccess('118');
+  const effectiveWindow = useMemo(() => (
+    windowAccessTier === 'read-only' ? { ...(props.window || {}), readOnly: true } : props.window
+  ), [windowAccessTier, props.window]);
   const [showNewSubAccountMenuModal, setNewSubAccountMenuModal] = useState(false);
   const [newSubAccountMenuContext, setNewSubAccountMenuContext] = useState(null);
+  if (windowAccessTier === 'none') {
+    return <WindowAccessGuard windowId="118" />;
+  }
   if (recordId) {
     return (
       <>
@@ -103,7 +111,7 @@ export default function ElementValuePage({ windowName, recordId, ...props }) {
         ]}
         requiredHeaderFields={requiredHeaderFields}
         titleField="searchKey"
-        {...props}
+        {...props} window={effectiveWindow}
       />
       {showNewSubAccountMenuModal && <NewAccountModal isOpen={showNewSubAccountMenuModal} token={props.token} apiBaseUrl={api.baseUrl} currentRecord={newSubAccountMenuContext} onClose={() => setNewSubAccountMenuModal(false)} onSaved={() => { setNewSubAccountMenuModal(false); window.location.reload(); }} />}      </>
     );
@@ -119,7 +127,7 @@ export default function ElementValuePage({ windowName, recordId, ...props }) {
       api={api}
       hideCreate
       rowQuickActions={{}}
-      {...props}
+      {...props} window={effectiveWindow}
     />
   );
 }

@@ -30,4 +30,11 @@ describe('PurchaseOrderWindow — legacy pendingDelivery filter removed (ETP-400
     assert.match(src, /import GeneratedApp from.*purchase-order.*index\.jsx/,
       'must still import GeneratedApp from the generated purchase-order window');
   });
+
+  // ETP-4520 — the hand-rolled ListView bypasses GeneratedApp, so it must
+  // separately receive the runtime per-tier read-only override.
+  it('passes the runtime read-only effectiveWindow through to ListView', () => {
+    assert.match(src, /windowAccessTier === 'read-only'/);
+    assert.match(src, /window=\{effectiveWindow\}/);
+  });
 });

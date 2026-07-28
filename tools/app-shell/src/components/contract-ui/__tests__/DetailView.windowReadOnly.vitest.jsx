@@ -164,4 +164,12 @@ describe('DetailView — window.readOnly toolbar Delete gate (ETP-4474)', () => 
     renderDetailView({ api: {} });
     expect(screen.getByTestId('action-delete')).toBeTruthy();
   });
+
+  // ETP-4520 — the runtime per-tier override passed via the `window` prop
+  // (buildWindowAccessWiring's effectiveWindow / the hand-wired custom windows'
+  // equivalent), distinct from the static api.window.readOnly case above.
+  it('hides the toolbar Delete button on an existing record when window.readOnly is true', () => {
+    renderDetailView({ api: {}, window: { readOnly: true } });
+    expect(screen.queryByTestId('action-delete')).toBeNull();
+  });
 });

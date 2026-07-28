@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import GeneratedApp from '@generated/sales-order/generated/web/sales-order/index.jsx';
 import HeaderTable from '@generated/sales-order/generated/web/sales-order/HeaderTable';
@@ -6,6 +6,7 @@ import OrderReactivateBulkAction from '@generated/sales-order/custom/OrderReacti
 import BulkOrderMoreMenu from '@generated/sales-order/custom/BulkOrderMoreMenu';
 import { ConfirmModal, ManageDocsLauncher } from '@generated/sales-order/custom/OrderCreateInvoice';
 import { ConfirmResultModal, ListView } from '@/components/contract-ui';
+import { useWindowAccess, WindowAccessGuard } from '@/auth/AuthContext.jsx';
 import CloneOrderModal from '@/components/contract-ui/CloneOrderModal';
 import { CreateContactContext } from '@/components/contract-ui/CreateContactContext.js';
 import { useCreateContactModal } from '@/components/contract-ui/useCreateContactModal.jsx';
@@ -85,6 +86,22 @@ export default function SalesOrderWindow({ windowName, recordId, token, apiBaseU
     documentType: tMenu('Sales Order'),
   });
 
+  // ETP-4520 — this custom window's own hand-rolled list view (below) never delegated
+  // to GeneratedApp, so it never picked up the generated HeaderPage's access-tier guard.
+  // Checked once here, before either branch, so both list and detail are covered.
+  const windowAccessTier = useWindowAccess('143');
+  // ETP-4520 — mirrors buildWindowAccessWiring's effectiveWindow: the hand-rolled
+  // ListView below never picked up the read-only tier either, unlike GeneratedApp
+  // (which already forces window.readOnly internally for the detail branch).
+  // Computed unconditionally, before the early return below, so hook order stays
+  // stable across renders regardless of windowAccessTier.
+  const effectiveWindow = useMemo(() => (
+    windowAccessTier === 'read-only' ? { ...(rest.window || {}), readOnly: true } : rest.window
+  ), [windowAccessTier, rest.window]);
+  if (windowAccessTier === 'none') {
+    return <WindowAccessGuard windowId="143" data-testid="WindowAccessGuard__6339e4" />;
+  }
+
   if (recordId) {
     return (
       <CreateContactContext.Provider value={createContactCtxValue}>
@@ -128,6 +145,7 @@ export default function SalesOrderWindow({ windowName, recordId, token, apiBaseU
         externalPreviewRow={effectiveRecord}
         onExternalPreviewClose={clearSavedRecord}
         {...rest}
+        window={effectiveWindow}
         data-testid="ListView__6339e4" />
       {deleteDialog}
       {cloneTargets && createPortal(

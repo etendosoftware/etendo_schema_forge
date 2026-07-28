@@ -1,6 +1,6 @@
 import ProductCategoryPage, { api } from './ProductCategoryPage';
 
-const windowMeta = { category: 'inventory', name: 'Product Category' };
+const windowMeta = { category: 'inventory', name: 'Product Category', id: '144' };
 
 // @sf-generated-start component:App
 export default function App({ windowName, recordId, token, apiBaseUrl, window, ...rest }) {

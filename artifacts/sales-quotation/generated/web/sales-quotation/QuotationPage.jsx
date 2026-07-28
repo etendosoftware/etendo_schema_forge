@@ -1,5 +1,6 @@
-import { useEffect } from 'react';
+import { useMemo, useEffect } from 'react';
 import { ListView, DetailView } from '@/components/contract-ui';
+import { useWindowAccess, WindowAccessGuard } from '@/auth/AuthContext.jsx';
 import { toast } from 'sonner';
 import QuotationTable from './QuotationTable';
 import QuotationForm from './QuotationForm';
@@ -444,6 +445,13 @@ export const api = {
 const labelOverrides = api.labelOverrides;
 // @sf-generated-start component:QuotationPage
 export default function QuotationPage({ windowName, recordId, ...props }) {
+  const windowAccessTier = useWindowAccess('6CB5B67ED33F47DFA334079D3EA2340E');
+  const effectiveWindow = useMemo(() => (
+    windowAccessTier === 'read-only' ? { ...(props.window || {}), readOnly: true } : props.window
+  ), [windowAccessTier, props.window]);
+  if (windowAccessTier === 'none') {
+    return <WindowAccessGuard windowId="6CB5B67ED33F47DFA334079D3EA2340E" />;
+  }
   if (recordId) {
     return (
       <>
@@ -484,7 +492,7 @@ export default function QuotationPage({ windowName, recordId, ...props }) {
         linesLayout="inlineEditable"
         sendDocument
         selectorPriceCurrency="org"
-        {...props}
+        {...props} window={effectiveWindow}
       />
       </>
     );
@@ -503,7 +511,7 @@ export default function QuotationPage({ windowName, recordId, ...props }) {
       labelOverrides={labelOverrides}
       rowQuickActions={{}}
       sendDocument
-      {...props}
+      {...props} window={effectiveWindow}
     />
   );
 }

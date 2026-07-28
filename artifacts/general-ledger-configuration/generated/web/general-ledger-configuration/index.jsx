@@ -1,6 +1,6 @@
 import GeneralPage, { api } from './GeneralPage';
 
-const windowMeta = { category: 'accounting', name: 'General Ledger Configuration' };
+const windowMeta = { category: 'accounting', name: 'General Ledger Configuration', id: '125' };
 
 // @sf-generated-start component:App
 export default function App({ windowName, recordId, token, apiBaseUrl, window, ...rest }) {

@@ -1,5 +1,6 @@
-import { useEffect } from 'react';
+import { useMemo, useEffect } from 'react';
 import { ListView, DetailView } from '@/components/contract-ui';
+import { useWindowAccess, WindowAccessGuard } from '@/auth/AuthContext.jsx';
 import PriceListTable from './PriceListTable';
 import PriceListForm from './PriceListForm';
 import PriceListVersionTable from './PriceListVersionTable';
@@ -189,6 +190,13 @@ export const api = {
 const labelOverrides = api.labelOverrides;
 // @sf-generated-start component:PriceListPage
 export default function PriceListPage({ windowName, recordId, ...props }) {
+  const windowAccessTier = useWindowAccess('146');
+  const effectiveWindow = useMemo(() => (
+    windowAccessTier === 'read-only' ? { ...(props.window || {}), readOnly: true } : props.window
+  ), [windowAccessTier, props.window]);
+  if (windowAccessTier === 'none') {
+    return <WindowAccessGuard windowId="146" />;
+  }
   if (recordId) {
     return (
       <>
@@ -216,7 +224,7 @@ export default function PriceListPage({ windowName, recordId, ...props }) {
         customTabs={[{ key: 'attachments', labelKey: 'attachments', Component: AttachmentsTab, placement: 'tab', props: { tableName: "M_PriceList", config: {} } }]}
         requiredHeaderFields={requiredHeaderFields}
         labelOverrides={labelOverrides}
-        {...props}
+        {...props} window={effectiveWindow}
       />
       </>
     );
@@ -234,7 +242,7 @@ export default function PriceListPage({ windowName, recordId, ...props }) {
       hideMoreMenu
       labelOverrides={labelOverrides}
       rowQuickActions={{}}
-      {...props}
+      {...props} window={effectiveWindow}
     />
   );
 }

@@ -1,8 +1,8 @@
 {
   "version": "0.77.0",
   "generatedAt": "2026-04-30T15:42:46.722Z",
-  "updatedAt": "2026-07-22T14:17:45.787Z",
-  "checksum": "5b370065df2a3d4d",
+  "updatedAt": "2026-07-23T18:17:09.851Z",
+  "checksum": "9fa2e7433dfbc95a",
   "frontendContract": {
     "window": {
       "id": "183",
@@ -813,6 +813,7 @@
             "defaultValue": "N",
             "explicitType": true,
             "badge": true,
+            "visibleWhenCapability": "showAccountingFields",
             "badgeLabels": {
               "true": {
                 "en_US": "Posted",

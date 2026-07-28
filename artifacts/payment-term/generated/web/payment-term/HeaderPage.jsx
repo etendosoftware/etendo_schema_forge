@@ -1,5 +1,6 @@
-import { useEffect } from 'react';
+import { useMemo, useEffect } from 'react';
 import { ListView, DetailView } from '@/components/contract-ui';
+import { useWindowAccess, WindowAccessGuard } from '@/auth/AuthContext.jsx';
 import HeaderTable from './HeaderTable';
 import HeaderForm from './HeaderForm';
 import { AttachmentsTab } from '@/components/attachments';
@@ -93,6 +94,13 @@ export const api = {
 const labelOverrides = api.labelOverrides;
 // @sf-generated-start component:HeaderPage
 export default function HeaderPage({ windowName, recordId, ...props }) {
+  const windowAccessTier = useWindowAccess('141');
+  const effectiveWindow = useMemo(() => (
+    windowAccessTier === 'read-only' ? { ...(props.window || {}), readOnly: true } : props.window
+  ), [windowAccessTier, props.window]);
+  if (windowAccessTier === 'none') {
+    return <WindowAccessGuard windowId="141" />;
+  }
   if (recordId) {
     return (
       <>
@@ -114,7 +122,7 @@ export default function HeaderPage({ windowName, recordId, ...props }) {
         customTabs={[{ key: 'attachments', labelKey: 'attachments', Component: AttachmentsTab, placement: 'tab', props: { tableName: "C_PaymentTerm", config: {} } }]}
         requiredHeaderFields={requiredHeaderFields}
         labelOverrides={labelOverrides}
-        {...props}
+        {...props} window={effectiveWindow}
       />
       </>
     );
@@ -132,7 +140,7 @@ export default function HeaderPage({ windowName, recordId, ...props }) {
       hideMoreMenu
       labelOverrides={labelOverrides}
       rowQuickActions={{}}
-      {...props}
+      {...props} window={effectiveWindow}
     />
   );
 }

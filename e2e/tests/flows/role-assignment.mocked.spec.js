@@ -1,6 +1,5 @@
 import { test, expect } from '@playwright/test';
 import { login } from '../helpers/auth.js';
-import { t } from '../helpers/i18n.js';
 
 /**
  * Role Assignment — ETP-4512 (mocked).
@@ -148,12 +147,21 @@ test.describe('Role Assignment — user', () => {
     ]);
     expect(saveResponse.ok()).toBe(true);
 
-    // Back on the list, the assigned role now renders as a status badge.
+    // Back on the list, the assigned role now renders as a badge showing the role's own
+    // identifier (raw AD_Role.Name, e.g. "Purchasing") — not a translated i18n label. The
+    // field used to render via a hardcoded GOClient-only role-id -> i18n-key map
+    // (columnType: "status" + enumValues in artifacts/user/decisions.json), which broke for
+    // any other tenant (showed the raw role UUID instead). That map was removed (2026-07-27);
+    // the column now falls back to the default foreignKey renderer, which resolves the raw
+    // identifier correctly for every tenant, at the cost of this one field not being
+    // translated for now. See defaultRole's own "reason" in artifacts/user/decisions.json
+    // for the full rationale; translating this specific badge (reusing roleNameI18n.js's
+    // map, same as AssignRoleControl's dropdown) is a small follow-up, not done here.
     await page.goto('/user');
     await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
     const refreshedRow = page.locator('tbody tr').filter({ hasText: 'jane.roe' }).first();
     await expect(refreshedRow).toBeVisible();
-    await expect(refreshedRow.getByText(t('roleNamePurchasing'))).toBeVisible();
+    await expect(refreshedRow.getByText('Purchasing')).toBeVisible();
   });
 
   test('the assign-role select is enabled once options load', async ({ page }) => {

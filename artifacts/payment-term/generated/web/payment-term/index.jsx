@@ -1,6 +1,6 @@
 import HeaderPage, { api } from './HeaderPage';
 
-const windowMeta = { category: 'settings', name: 'Payment Term' };
+const windowMeta = { category: 'settings', name: 'Payment Term', id: '141' };
 
 // @sf-generated-start component:App
 export default function App({ windowName, recordId, token, apiBaseUrl, window, ...rest }) {
