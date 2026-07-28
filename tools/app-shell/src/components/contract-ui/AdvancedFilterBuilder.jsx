@@ -96,10 +96,7 @@ function isFilterableColumn(col) {
   // has no real backend property to filter against unless it declares one
   // via `column` (AD field) or `backendFilterKey`. Explicit `filterable: true`
   // opts a custom column back in (ETP-4609).
-  if (col.type === 'custom' && col.filterable !== true && !col.column && !col.backendFilterKey) {
-    return false;
-  }
-  return true;
+  return !(col.type === 'custom' && col.filterable !== true && !col.column && !col.backendFilterKey);
 }
 
 function isRowComplete(row, col) {
