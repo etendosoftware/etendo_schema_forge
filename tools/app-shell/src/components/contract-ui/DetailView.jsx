@@ -1376,7 +1376,9 @@ const WINDOW_DELETE_ACTIONS = {
 // field. This constant is global across all generated windows; safely special-casing
 // simple-g-l-journal's product-as-dimension usage needs a per-window signal (e.g. a
 // dimensionsPanel-derived prop) that DetailView does not currently receive — out of
-// scope for a same-key allowlist fix.
+// scope for a same-key allowlist fix. Confirmed still open, deferred, and covered by
+// a documenting regression test in DetailView.lineHiddenColumns.vitest.jsx ("KNOWN GAP")
+// per a GitHub Copilot review on PR 975 (ETP-4610) — see that test before changing this set.
 const DIMENSION_MACRO_KEYS = new Set(['project', 'costcenter', 'costCenter', 'businessPartner']);
 
 // ETP-4500 — same rationale/hardcoding constraint as WINDOW_DELETE_ACTIONS above: these

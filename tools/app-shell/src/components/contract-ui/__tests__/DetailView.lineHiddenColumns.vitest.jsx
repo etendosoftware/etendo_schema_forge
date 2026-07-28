@@ -309,4 +309,41 @@ describe('DetailView — lineHiddenColumns forwarded to the line grid (ETP-4543)
 
     expect(detailTableProps.current.hiddenColumns).toContain('costCenter');
   });
+
+  // KNOWN, DELIBERATE GAP — flagged by a GitHub Copilot review on PR 975 (ETP-4610).
+  // `simple-g-l-journal`'s `dimensionsPanel` field list (see
+  // artifacts/simple-g-l-journal/decisions.json) includes `product` as a real
+  // `@ACCT_DIMENSION_DISPLAY@`-gated accounting dimension — unlike sales-invoice/
+  // purchase-invoice, where `product` is a genuine per-line AD field with its own
+  // record-dependent `displayLogic` (`@Financial_Invoice_Line@='N'`, see the ETP-4530
+  // test above). Because `DIMENSION_MACRO_KEYS` is a single GLOBAL allowlist shared by
+  // every window through this one component, and `product` must stay excluded from it
+  // to avoid reintroducing the ETP-4530 regression for sales-invoice/purchase-invoice,
+  // `simple-g-l-journal` cannot currently have its `product` dimension config-hidden via
+  // this mechanism either — it fails safe (never hidden) rather than trusting the noisy
+  // per-record evaluator, exactly like sales-invoice's product does, just for the wrong
+  // reason in this window's case.
+  //
+  // The real fix needs a per-window signal DetailView does not currently receive: the
+  // CONTRACT's `dimensionsPanel` field list for the current window (available at build
+  // time via `generate-frontend.js`'s `buildDimensionsPanelColumn`, but not threaded
+  // through to DetailView/InlineLinesPanel at runtime). That's a generator change in
+  // schema_forge_core (new prop, e.g. `dimensionPanelFieldKeys`) plus a functional-repo
+  // version bump and a full regen/validation pass across every window using DetailView —
+  // out of scope for this PR. Tracked as a follow-up; this test documents the gap so a
+  // future change to DIMENSION_MACRO_KEYS doesn't accidentally "fix" it by reintroducing
+  // ETP-4530, and so removing this test is a deliberate signal that the follow-up landed.
+  it('KNOWN GAP: does NOT hide product for simple-g-l-journal even though it is declared a dimensionsPanel field there (ETP-4610 Copilot finding, deferred)', () => {
+    displayLogicByEntity.current[DETAIL_ENTITY] = {
+      readOnly: {},
+      visibility: { product: false, project: false },
+    };
+    render(<DetailView {...BASE_PROPS} windowName="simple-g-l-journal" />);
+
+    // The global allowlist still filters 'product' out everywhere, including here —
+    // this assertion is the gap, not the fix.
+    expect(detailTableProps.current.hiddenColumns).not.toContain('product');
+    // Sibling dimension keys that ARE in the global allowlist still work correctly.
+    expect(detailTableProps.current.hiddenColumns).toContain('project');
+  });
 });
