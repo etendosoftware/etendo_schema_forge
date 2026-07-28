@@ -64,6 +64,89 @@ describe('registry', () => {
     });
   });
 
+  // ETP-4513 — the "Configuración > Roles" menu entry has no backing
+  // AD_Window/AD_Process, so it can't be gated by the windowId/processId/
+  // obuiappProcessId axis above. filterMenuGroupsByAccess() gained a second,
+  // independent `capabilities` axis for items that declare
+  // `"capability": "<key>"` in menu.json (see AppLayout.jsx's
+  // useCapabilitiesSafe() wiring). These tests cover that axis directly with
+  // synthetic groups, and also re-confirm the pre-existing windowId axis is
+  // untouched by its addition (no regression).
+  describe('filterMenuGroupsByAccess — capability axis (ETP-4513)', () => {
+    it('shows a capability-gated item when capabilities[cap] === true', () => {
+      const groups = [{ group: 'Settings', items: [{ name: 'roles', capability: 'isAdminOrClientAdmin' }] }];
+      const result = filterMenuGroupsByAccess(groups, null, { isAdminOrClientAdmin: true });
+      const settings = result.find(g => g.group === 'Settings');
+      expect(settings).toBeDefined();
+      expect(settings.items.map(i => i.name)).toContain('roles');
+    });
+
+    it('hides a capability-gated item when capabilities[cap] === false', () => {
+      const groups = [{ group: 'Settings', items: [{ name: 'roles', capability: 'isAdminOrClientAdmin' }] }];
+      const result = filterMenuGroupsByAccess(groups, null, { isAdminOrClientAdmin: false });
+      expect(result.find(g => g.group === 'Settings')).toBeUndefined();
+    });
+
+    it('hides a capability-gated item when the capability key is absent from the map (fails closed)', () => {
+      const groups = [{ group: 'Settings', items: [{ name: 'roles', capability: 'isAdminOrClientAdmin' }] }];
+      const result = filterMenuGroupsByAccess(groups, null, {}); // loaded, but key never came back true
+      expect(result.find(g => g.group === 'Settings')).toBeUndefined();
+    });
+
+    it('hides a capability-gated item when capabilities is null/not yet loaded, even though allowedIds is already set', () => {
+      // Mirrors AppLayout.jsx's real early-render state: SFListMenu may
+      // resolve before SFWindowAccessMap does, so allowedIds can be a
+      // populated Set while capabilities is still the pre-load `{}`/null.
+      const groups = [{ group: 'Settings', items: [{ name: 'roles', capability: 'isAdminOrClientAdmin' }] }];
+      const result = filterMenuGroupsByAccess(groups, new Set(['999']), null);
+      expect(result.find(g => g.group === 'Settings')).toBeUndefined();
+    });
+
+    it('does not require allowedIds at all — a capability-gated item can be shown with allowedIds=null when capabilities says yes', () => {
+      const groups = [{ group: 'Settings', items: [{ name: 'roles', capability: 'isAdminOrClientAdmin' }] }];
+      const result = filterMenuGroupsByAccess(groups, null, { isAdminOrClientAdmin: true });
+      const settings = result.find(g => g.group === 'Settings');
+      expect(settings.items.map(i => i.name)).toContain('roles');
+    });
+
+    it('does NOT regress windowId-based filtering: an item with no capability key is filtered purely by allowedIds, regardless of the capabilities map', () => {
+      const groups = [{
+        group: 'Settings',
+        items: [
+          { name: 'user', windowId: '108' },
+          { name: 'price-list', windowId: '146' },
+        ],
+      }];
+      const result = filterMenuGroupsByAccess(groups, new Set(['108']), { isAdminOrClientAdmin: false });
+      const settings = result.find(g => g.group === 'Settings');
+      expect(settings.items.map(i => i.name)).toContain('user');
+      expect(settings.items.map(i => i.name)).not.toContain('price-list');
+    });
+
+    it('applies both axes independently on a mixed group: keeps the allowed windowId item AND the capability-true item, drops the rest', () => {
+      const groups = [{
+        group: 'Settings',
+        items: [
+          { name: 'user', windowId: '108' },
+          { name: 'price-list', windowId: '146' },
+          { name: 'roles', capability: 'isAdminOrClientAdmin' },
+        ],
+      }];
+      const result = filterMenuGroupsByAccess(groups, new Set(['108']), { isAdminOrClientAdmin: true });
+      const settings = result.find(g => g.group === 'Settings');
+      expect(settings.items.map(i => i.name)).toEqual(expect.arrayContaining(['user', 'roles']));
+      expect(settings.items.map(i => i.name)).not.toContain('price-list');
+    });
+
+    it('back-compat: still returns groups unchanged when both allowedIds and capabilities are falsy (capabilities omitted entirely)', () => {
+      const groups = [{ group: 'Settings', items: [{ name: 'roles', capability: 'isAdminOrClientAdmin' }] }];
+      const result = filterMenuGroupsByAccess(groups, null); // 2-arg call, same as pre-ETP-4513 signature
+      const settings = result.find(g => g.group === 'Settings');
+      expect(settings).toBeDefined();
+      expect(settings.items.map(i => i.name)).toContain('roles');
+    });
+  });
+
   describe('buildMenuGroups', () => {
     it('returns an array of menu groups', () => {
       const groups = buildMenuGroups();
