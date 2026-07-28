@@ -417,7 +417,7 @@
       ]
     },
     "372af9720002cd00d7ab60cf2919961286c4022d7cae4da33f0586eff52202ca": {
-      "checksum": "7a6689d661835c8f5f541df716bf1511497b39e5223f31c83bad7177d5f2cbbf",
+      "checksum": "4c49b0536635c745c76e5ef82fbe4c88a73a906bcb18c325ef23e2c389d0b51b",
       "params": [
         "167"
       ],
@@ -472,7 +472,7 @@
         },
         {
           "classname": null,
-          "column_name": "DocAction",
+          "column_name": "Processing",
           "mechanism": "classic_process",
           "name": "Process Invoice",
           "obuiapp_process_id": null,
@@ -480,7 +480,7 @@
         },
         {
           "classname": null,
-          "column_name": "Processing",
+          "column_name": "DocAction",
           "mechanism": "classic_process",
           "name": "Process Invoice",
           "obuiapp_process_id": null,

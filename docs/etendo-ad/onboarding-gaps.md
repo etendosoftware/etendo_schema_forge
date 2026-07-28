@@ -601,6 +601,61 @@ WHERE au.ad_client_id = '<NEW_CLIENT_ID>';
 
 ---
 
+## H — NEO Headless / Webhook Access
+
+### H1 — Non-System-Administrator roles 404 on `SMFWHE_DEFINEDWEBHOOK_ROLE`-gated webhooks (ETP-4520)
+
+> **Superseded (2026-07-27, later same day):** the fixes below (referencedata seeding, the R16
+> data-fix's former Step 3, `OnboardingWebhookAccessService`/`OnboardingRoleProvisioningService`'s
+> former webhook-grant step) treated the symptom — they made sure a `SMFWHE_DEFINEDWEBHOOK_ROLE`
+> grant existed. The actual fix landed later: `SFListMenu`/`SFWindowAccessMap`/`SFRolesOverview`
+> are now reached through com.etendoerp.go's NEO pseudo-spec bridge (`/sws/neo/*`, see
+> `neo-headless.md` §4.10–4.11) instead of the Webhooks module, so no grant is needed at all — this
+> whole gap class cannot recur for these 3 webhooks. Left below for historical context; the
+> corrective/preventive code this section describes has since been removed as dead weight.
+
+**Symptom:** any authenticated role other than System Administrator (`AD_Role_ID = '0'`) gets a flat `404` from every Schema Forge webhook that requires a `SMFWHE_DEFINEDWEBHOOK_ROLE` grant — `SFListMenu`, `SFWindowAccessMap`, `SFRolesOverview`. Observable symptoms compound in a confusing way because the two callers fail in opposite directions: the sidebar shows the **full, unfiltered** menu (`useRoleMenu()`'s fetch fails → `AppLayout` fails **open** on a fetch error) while **every window** is denied (`fetchWindowAccess`'s fetch fails → `AuthContext`'s `windowAccess` map stays at its fail-**closed** `{}` default → `WindowAccessGuard` blocks everything).
+
+**Root cause:** `SMFWHE_DEFINEDWEBHOOK_ROLE` is the webhook dispatcher's own authorization gate — a role with no row for a given webhook is 404'd by `WebhookServiceHandler` before the webhook's own Java logic (e.g. `NeoAccessHelper.isAdminOrClientAdmin`) ever runs. The per-tenant grants for a client's non-admin roles live in `referencedata/sampledata/<Client>/SMFWHE_DEFINEDWEBHOOK_ROLE.xml` — **reference/sample data, applied only at initial tenant creation, never reapplied by `update.database`/`smartbuild` on an existing install.** Any tenant provisioned before a given webhook's role grants existed in that XML keeps whatever the module's own default seed shipped — observed as `ad_role_id = '0'` only.
+
+**Quick verification:**
+
+```sql
+SELECT w.name AS webhook, r.name AS role_name
+FROM smfwhe_definedwebhook_role wr
+JOIN smfwhe_definedwebhook w ON w.smfwhe_definedwebhook_id = wr.smfwhe_definedwebhook_id
+LEFT JOIN ad_role r ON r.ad_role_id = wr.ad_role_id
+WHERE wr.ad_client_id = '<CLIENT_ID>'
+  AND w.name IN ('SFListMenu', 'SFWindowAccessMap', 'SFRolesOverview')
+ORDER BY w.name, r.name;
+-- If only 'System Administrator' rows appear for a webhook, that gap is present for this tenant.
+```
+
+**Corrective fix:** `cli/src/data-fixes/sql/20260727T114306Z__R16-tenant-roles-and-webhook-access.sql` (Step 3) — grants every ACTIVE role of `:client_id` a row for all 3 webhooks (not a hardcoded role list, so it covers any tenant's own admin-equivalent role plus every other role it has, including any created by Step 1/2 of the same fix — see H2 below).
+
+**Preventive fix:** `referencedata/sampledata/GOClient/SMFWHE_DEFINEDWEBHOOK_ROLE.xml` (in `com.etendoerp.go`) now grants all 3 webhooks (previously only `SFListMenu`/`SFWindowAccessMap`) to GOClient's 6 roles, so a fresh GOClient install is born correct. Any other client's own sample-data (if it ships an equivalent file) should follow the same 3-webhook pattern. **ETP-4515 (Phase 7) — onboarding auto-provisioning for new tenants — has not been built**, so every tenant onboarded before that ships still needs the corrective fix above.
+
+### H2 — Real tenants never get GOClient's Finance/Sales/Purchasing/Inventory roles (ETP-4515/4516, Phase 7)
+
+**Symptom:** a real onboarded Etendo Go tenant has exactly ONE role (its auto-created admin role). The ETP-4512 "assign one of 5 predefined roles" UI has nothing to offer besides that admin role — Finance/Sales/Purchasing/Inventory don't exist for the tenant at all, so role-based access segmentation is impossible.
+
+**Root cause:** GOClient's 4 non-admin roles are reference/sample data unique to GOClient (`referencedata/sampledata/GOClient/AD_ROLE.xml` + `AD_WINDOW_ACCESS.xml`). Nothing in the real onboarding flow (`EtendoGoJwtServlet.handleOnboarding()`'s `ensureX`/`wireX` chain) creates equivalents for a new tenant, and no data-fix existed to backfill them for tenants onboarded before this was even scoped. This is exactly Phase 7's planned work (`santo_roles_handoff_phase7.md`): ETP-4515 (preventive, onboarding) and ETP-4516 (corrective, data-fix) — both were still unstarted as of 2026-07-23.
+
+**Quick verification:**
+
+```sql
+SELECT name FROM ad_role WHERE ad_client_id = '<CLIENT_ID>' AND isactive = 'Y';
+-- If Finance/Sales/Purchasing/Inventory are absent, this gap is present for this tenant.
+```
+
+**Corrective fix (ETP-4516's scope, implemented ahead of schedule 2026-07-27):** `cli/src/data-fixes/sql/20260727T114306Z__R16-tenant-roles-and-webhook-access.sql` (Steps 1–2) — clones any of the 4 missing roles from GOClient (`AD_Role` attributes verbatim, including `EM_ETGO_Show_Acct_Fields`) and backfills `AD_Window_Access` to match GOClient's per-role window grants exactly (window ids are safe to copy as-is — `AD_Window` is system-level, `ad_client_id = '0'` for every row). Validated end-to-end in a rolled-back transaction against a real existing tenant ("QA Testing"): produced exactly the same `AD_Window_Access` row counts per role as GOClient's own (Finance 9, Inventory 6, Purchasing 5, Sales 6).
+
+**Live-DB staleness found and fixed while building this fix (2026-07-27):** correct reference values are `Y` for Finance and GOClient Admin, `N` for Sales/Purchasing/Inventory/GOuser — confirmed with the user. `referencedata/sampledata/GOClient/AD_ROLE.xml` already ships these correctly (a first check mis-grepped the tag's actual all-caps name, `EM_ETGO_SHOW_ACCT_FIELDS`, and wrongly concluded the XML never set it). The real gap was this local dev DB's live `ad_role` rows being stale relative to that already-correct XML — Finance and GOClient Admin both showed `N` live, same "referencedata not reapplied to an existing install" pattern as H1, just for this column instead of webhook grants. Corrected directly (`UPDATE ad_role SET em_etgo_show_acct_fields='Y' ...`) for this DB. Since Step 1 of the corrective fix always reads GOClient's *live* row (not the XML), any other environment whose GOClient copy is similarly stale would clone the wrong value until its own live data is corrected the same way.
+
+**Preventive fix (ETP-4515, implemented 2026-07-27, same day as the corrective fix):** `com.etendoerp.go/src/com/etendoerp/go/onboarding/OnboardingRoleProvisioningService.java`, wired into `EtendoGoJwtServlet`'s onboarding chain right after the existing `ensureWebhookAccess` step (both are client-wide, neither needs the organization to exist yet). Same GOClient-as-template logic as the corrective data-fix above. Written and manually cross-checked against the real DAL model classes, but not compiled/run against a live onboarding flow in this session — needs that verification before being trusted end-to-end.
+
+---
+
 ## Recommended Order of Operations
 
 Consolidated from the field checklist; covers A1–C2. D1 and E1 are addressed inside the Initial Client Setup process itself.
