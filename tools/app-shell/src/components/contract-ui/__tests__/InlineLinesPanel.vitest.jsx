@@ -1716,6 +1716,33 @@ describe('InlineLinesPanel', () => {
       expect(screen.getByTestId('dimensions-panel-toggle')).toBeInTheDocument();
     });
 
+    // Live-UX-review follow-up (ETP-4610): the chevron previously sat flush against the
+    // row's left border. It now gets the same `px-2` breathing room the selection
+    // checkbox column already has, in a widened 44px column (28px button + 8px padding
+    // each side) instead of the old bare 32px.
+    it('gives the chevron column the same left padding convention as the checkbox column', () => {
+      renderDimensionsPanel(['costcenter']);
+      const toggle = screen.getByTestId('dimensions-panel-toggle');
+      const chevronColumn = toggle.parentElement;
+      expect(chevronColumn).toHaveClass('px-2');
+      expect(chevronColumn.style.width).toBe('44px');
+    });
+
+    // Live-UX-review follow-up (ETP-4610): the expanded dimensions sub-row's first field
+    // must start at the same x position as the first real grid column above it (chevron
+    // column + checkbox column + the first cell's own leading padding), not the flat
+    // 40px it used before.
+    it('indents the dimensions sub-row so its first field aligns with the first grid column', async () => {
+      renderDimensionsPanel(['costcenter']);
+      const row = screen.getByTestId('line-row-L1');
+      await act(async () => {
+        await userEvent.click(within(row).getByTestId('dimensions-panel-toggle'));
+      });
+      const subRow = screen.getByTestId('dimensions-panel-L1');
+      // 44px chevron column + 40px checkbox column + 12px first-cell padding.
+      expect(subRow.style.paddingLeft).toBe('96px');
+    });
+
     it('drops the expand chevron entirely when every candidate is hidden', () => {
       renderDimensionsPanel(['project', 'costcenter']);
       expect(screen.queryByTestId('dimensions-panel-toggle')).toBeNull();

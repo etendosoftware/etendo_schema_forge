@@ -42,6 +42,19 @@ const TOKENS = {
   cellFontWeight: 400,
 };
 
+// Leading row columns, in order: [expand chevron?] [selection checkbox] [first data cell].
+// CHECKBOX_COLUMN_WIDTH mirrors its own `px-2` (8px each side) padding, already applied
+// consistently at both the header and body checkbox cells. CHEVRON_COLUMN_WIDTH follows
+// the same pattern (`px-2` around the 28px/h-7 w-7 toggle button = 44px total) so the
+// chevron gets the same breathing room from the row's left border that every other
+// leading column already has — it previously had none, sitting flush against the edge.
+const CHECKBOX_COLUMN_WIDTH = 40;
+const CHEVRON_COLUMN_WIDTH = 44;
+// Left indent for the dimensions expand sub-row so its first field aligns with the first
+// real grid column above it: chevron column + checkbox column + the first cell's own
+// leading `cellPaddingX`.
+const DIMENSIONS_ROW_INDENT = CHEVRON_COLUMN_WIDTH + CHECKBOX_COLUMN_WIDTH + TOKENS.cellPaddingX;
+
 const NUMERIC_TYPES = new Set(['number', 'amount', 'integer', 'percent', 'decimal', 'price', 'quantity', 'signedDelta']);
 
 // Maps formatSignedDelta's tone key to the semantic theme role — mirrors TONE_CLASS
@@ -184,7 +197,11 @@ function renderDimensionsSubRow({
 }) {
   if (!isRowExpanded) return null;
   return (
-    <div className="border-b bg-card px-10 pb-5 pt-3" style={{ borderColor: TOKENS.separator }} data-testid={`dimensions-panel-${row.id}`}>
+    <div
+      className="border-b bg-card pb-5 pt-3 pr-10"
+      style={{ borderColor: TOKENS.separator, paddingLeft: DIMENSIONS_ROW_INDENT }}
+      data-testid={`dimensions-panel-${row.id}`}
+    >
       {row['organization$_identifier'] && (
         <div className="mb-4 grid grid-cols-4 gap-4">
           <div>
@@ -969,9 +986,9 @@ const InlineLinesPanel = forwardRef(function InlineLinesPanel({
             `dimensionsPanel` column is declared (keeps header cells aligned
             with the body rows' own chevron column below). */}
         {hasDimensionsPanel && (
-          <div style={{ width: 32, flexShrink: 0 }} aria-hidden="true" />
+          <div style={{ width: CHEVRON_COLUMN_WIDTH, flexShrink: 0 }} aria-hidden="true" />
         )}
-        <div className="flex items-center justify-center px-2" style={{ width: 40, flexShrink: 0 }}>
+        <div className="flex items-center justify-center px-2" style={{ width: CHECKBOX_COLUMN_WIDTH, flexShrink: 0 }}>
           <Checkbox
             aria-label={ui('selectAll')}
             checked={allSelected}
@@ -1032,7 +1049,7 @@ const InlineLinesPanel = forwardRef(function InlineLinesPanel({
             {/* ETP-4529 — expand toggle for the dimensions sub-row, mirroring
                 AmortizationLinesTable's chevron button (rotates 180deg when expanded). */}
             {hasDimensionsPanel && (
-              <div className="flex items-center justify-center" style={{ width: 32, flexShrink: 0 }} onClick={e => e.stopPropagation()}>
+              <div className="flex items-center justify-center px-2" style={{ width: CHEVRON_COLUMN_WIDTH, flexShrink: 0 }} onClick={e => e.stopPropagation()}>
                 <button
                   type="button"
                   onClick={() => setExpandedRowId(isRowExpanded ? null : row.id)}
@@ -1047,7 +1064,7 @@ const InlineLinesPanel = forwardRef(function InlineLinesPanel({
               </div>
             )}
             {/* Selection checkbox */}
-            <div className="flex items-center justify-center px-2" style={{ width: 40, flexShrink: 0 }}>
+            <div className="flex items-center justify-center px-2" style={{ width: CHECKBOX_COLUMN_WIDTH, flexShrink: 0 }}>
               <Checkbox
                 aria-label={ui('selectRow') ?? 'Select row'}
                 checked={isSelected}
