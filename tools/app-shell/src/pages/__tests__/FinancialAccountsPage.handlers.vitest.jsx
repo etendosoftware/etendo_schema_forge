@@ -69,13 +69,14 @@ vi.mock('@/hooks/usePsd2ConnectFlow.js', () => ({
 
 // Capture the props the page hands to the table so we can drive its callbacks.
 let tableProps = null;
+let toolbarProps = null;
 vi.mock('@/components/financial-accounts', async () => {
   const actual = await vi.importActual('@/components/financial-accounts');
   return {
     // AccountTypeFilter is a real enum consumed by filterAccounts — keep it.
     AccountTypeFilter: actual.AccountTypeFilter,
     AccountsSidebar: () => <div data-testid="sidebar" />,
-    AccountsToolbar: () => <div data-testid="toolbar" />,
+    AccountsToolbar: (props) => { toolbarProps = props; return <div data-testid="toolbar" />; },
     AccountsTable: (props) => {
       tableProps = props;
       return <div data-testid="table" />;
@@ -130,6 +131,7 @@ const ACC2 = { id: 'acc-2', name: 'Caja Tienda', type: 'C', active: true };
 beforeEach(() => {
   vi.clearAllMocks();
   tableProps = null;
+  toolbarProps = null;
   editModalProps = null;
   archiveDialogProps = null;
 });
@@ -296,6 +298,12 @@ describe('FinancialAccountsPage — archive & transfer', () => {
     renderPage([ACC]);
     tableProps.onRetry();
     expect(mockReload).toHaveBeenCalled();
+  });
+
+  it('toolbar "Matching rules" navigates to /match-rule', () => {
+    renderPage([ACC]);
+    toolbarProps.onMatchingRules();
+    expect(mockNavigate).toHaveBeenCalledWith('/match-rule');
   });
 });
 

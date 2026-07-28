@@ -684,6 +684,46 @@ describe('useEntity — coverage paths', () => {
 
       expect(toast.error).toHaveBeenCalledWith('This record cannot be deleted because it has associated records.');
     });
+
+    it('maps the Spanish Postgres FK/RESTRICT wording ("se hace referencia a la llave")', async () => {
+      globalThis.fetch.mockImplementation(async (url, opts) => {
+        if (opts?.method === 'DELETE') {
+          return {
+            ok: false, status: 500,
+            clone: () => ({ json: async () => ({ error: { message: 'aún se hace referencia a la llave "m_product_id"' } }) }),
+            json: async () => ({ error: { message: 'aún se hace referencia a la llave "m_product_id"' } }),
+          };
+        }
+        return mockFetchOk([]);
+      });
+
+      const { result } = renderEntity('header', null, { skipListFetch: true });
+      act(() => { result.current.handleSelect({ id: 'd1' }); });
+
+      await act(async () => { await result.current.handleDelete(); });
+
+      expect(toast.error).toHaveBeenCalledWith('This record cannot be deleted because it has associated records.');
+    });
+
+    it('maps the classic Etendo AD_Message ForeignKeyViolation (Spanish variant)', async () => {
+      globalThis.fetch.mockImplementation(async (url, opts) => {
+        if (opts?.method === 'DELETE') {
+          return {
+            ok: false, status: 500,
+            clone: () => ({ json: async () => ({ error: { message: 'No se puede eliminar este registro porque está relacionado con otros elementos existentes.' } }) }),
+            json: async () => ({ error: { message: 'No se puede eliminar este registro porque está relacionado con otros elementos existentes.' } }),
+          };
+        }
+        return mockFetchOk([]);
+      });
+
+      const { result } = renderEntity('header', null, { skipListFetch: true });
+      act(() => { result.current.handleSelect({ id: 'd1' }); });
+
+      await act(async () => { await result.current.handleDelete(); });
+
+      expect(toast.error).toHaveBeenCalledWith('This record cannot be deleted because it has associated records.');
+    });
   });
 
   // ---------------------------------------------------------------------------
