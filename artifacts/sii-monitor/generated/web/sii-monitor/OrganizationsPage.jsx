@@ -1,5 +1,6 @@
-import { useEffect } from 'react';
+import { useMemo, useEffect } from 'react';
 import { ListView, DetailView } from '@/components/contract-ui';
+import { useWindowAccess, WindowAccessGuard } from '@/auth/AuthContext.jsx';
 import OrganizationsTable from './OrganizationsTable';
 import OrganizationsForm from './OrganizationsForm';
 import IssuedInvoicesTable from './IssuedInvoicesTable';
@@ -1211,6 +1212,13 @@ export const api = {
 
 // @sf-generated-start component:OrganizationsPage
 export default function OrganizationsPage({ windowName, recordId, ...props }) {
+  const windowAccessTier = useWindowAccess('FEF76C3E0F104F06A89AAD15A4A4A35C');
+  const effectiveWindow = useMemo(() => (
+    windowAccessTier === 'read-only' ? { ...(props.window || {}), readOnly: true } : props.window
+  ), [windowAccessTier, props.window]);
+  if (windowAccessTier === 'none') {
+    return <WindowAccessGuard windowId="FEF76C3E0F104F06A89AAD15A4A4A35C" />;
+  }
   if (recordId) {
     return (
       <>
@@ -1234,7 +1242,7 @@ export default function OrganizationsPage({ windowName, recordId, ...props }) {
         breadcrumb={breadcrumb}
       api={api}
         requiredHeaderFields={requiredHeaderFields}
-        {...props}
+        {...props} window={effectiveWindow}
       />
       </>
     );
@@ -1249,7 +1257,7 @@ export default function OrganizationsPage({ windowName, recordId, ...props }) {
       breadcrumb={breadcrumb}
       api={api}
       rowQuickActions={{}}
-      {...props}
+      {...props} window={effectiveWindow}
     />
   );
 }

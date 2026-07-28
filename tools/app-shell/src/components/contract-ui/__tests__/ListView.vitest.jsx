@@ -279,6 +279,33 @@ describe('ListView', () => {
       // A row without an id must not navigate (row?.id short-circuit).
       expect(() => capturedRowQuickActions.onEdit({})).not.toThrow();
     });
+
+    // ETP-4520 — the runtime per-tier override passed via the `window` prop
+    // (buildWindowAccessWiring's effectiveWindow / the hand-wired custom windows'
+    // equivalent), distinct from the static api.window.readOnly case above.
+    it('marks rowQuickActions readOnly and drops the write handlers when window.readOnly is true', () => {
+      render(
+        <ListView
+          {...defaultProps}
+          Table={CapturingMockTable}
+          window={{ readOnly: true }}
+          rowQuickActions={{}}
+        />,
+      );
+      expect(capturedRowQuickActions.readOnly).toBe(true);
+      expect(capturedRowQuickActions.onEdit).toBeUndefined();
+      expect(capturedRowQuickActions.onDelete).toBeUndefined();
+    });
+
+    it('hides the new record button when window.readOnly is true', () => {
+      render(<ListView {...defaultProps} window={{ readOnly: true }} />);
+      expect(screen.queryByTestId('action-new')).not.toBeInTheDocument();
+    });
+
+    it('hides the new record button when api.window.readOnly is true', () => {
+      render(<ListView {...defaultProps} api={{ window: { readOnly: true } }} />);
+      expect(screen.queryByTestId('action-new')).not.toBeInTheDocument();
+    });
   });
 
   // ── expandMultiFieldColumns: filter-bar column expansion ───────────────

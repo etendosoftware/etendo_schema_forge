@@ -97,15 +97,7 @@
           "grid": true,
           "form": false,
           "section": "defaults",
-          "columnType": "status",
-          "enumValues": [
-            { "value": "9B8D736190724807AB256DC95F20EC5E", "name": "roleNameGoClientAdmin" },
-            { "value": "127AE77FE2994067B7FE6495FC21D51E", "name": "roleNameFinance" },
-            { "value": "2A159DF4F4B944A6AA903202AD35B545", "name": "roleNameSales" },
-            { "value": "A826430F723E4C1B9A53EBB0746A98C0", "name": "roleNamePurchasing" },
-            { "value": "55E05A4B43514A029D6FB6B8D94B49D4", "name": "roleNameInventory" }
-          ],
-          "reason": "Editing moved to the AssignRoleControl headerExtra (ETP-4512), which writes this same field but sources its dropdown options from the unrestricted userRoles.role selector instead of this field's own EXISTS-restricted native selector (which only lists roles the user already has, useless for assigning a NEW one). Shown here as a read-only grid badge only; the AssignRoleControl.jsx headerExtra is the only editing surface. Still cascades defaultClient/defaultOrganization via dependsOn below, unaffected by this change."
+          "reason": "Editing moved to the AssignRoleControl headerExtra (ETP-4512), which writes this same field but sources its dropdown options from the unrestricted userRoles.role selector instead of this field's own EXISTS-restricted native selector (which only lists roles the user already has, useless for assigning a NEW one). Shown here as a read-only grid badge only; the AssignRoleControl.jsx headerExtra is the only editing surface. Still cascades defaultClient/defaultOrganization via dependsOn below, unaffected by this change. No columnType/enumValues override: a hardcoded value->name map assumed every tenant reuses GOClient's exact role ids (fixed 2026-07-27 — showed the raw AD_Role_ID for any other tenant's users, see SFRolesOverview.java's javadoc for the same class of bug). The default foreignKey grid renderer already resolves this field's own `$_identifier` companion value (the role's real, per-tenant name) via resolveIdentifier(), which is correct for every tenant without a static map."
         },
         "defaultLanguage": {
           "visibility": "editable",

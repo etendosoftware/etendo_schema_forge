@@ -607,6 +607,7 @@ Applied to fields with `grid: true` to control how the list cell renders.
 | `grow` | boolean | `false` | Let the column grow to fill available width. |
 | `cellType` | string | `null` | Selects a cell renderer from the registry (see below). Generic to any grid; the `list-modal` layout ships a styled set. |
 | `multiField` | object | `null` | Compose this "host" grid field with sibling fields into **one** composite column: bold title + optional subtitle chip + optional authenticated media image. See below. |
+| `visibleWhenCapability` | string | `null` | Names a capability key (e.g. `"showAccountingFields"`) from the `capabilities` map returned by the `GET /sws/neo/windowaccessmap` webhook (NEO pseudo-spec bridge — see `com.etendoerp.go/docs/neo-headless.md` §4.10). Opt-in — absent means always visible. Gates both the grid column and any `window.statusPills` entry referencing this field; the field is omitted entirely (not disabled) when the capability resolves `false`. Full mechanics (generator wiring, fail-closed behavior): `schema_forge_core`'s `docs/decisions-reference.md`. Shipped example: `posted` on `sales-invoice`/`purchase-invoice` — see those windows' `docs/generated-custom-windows/*.md` guides. |
 
 #### Composite list column (`multiField`)
 

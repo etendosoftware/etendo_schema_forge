@@ -1,8 +1,8 @@
 {
-  "version": "0.17.0",
+  "version": "0.18.0",
   "generatedAt": "2026-04-29T18:12:34.035Z",
-  "updatedAt": "2026-07-27T17:40:03.794Z",
-  "checksum": "a8a9053ffa574082",
+  "updatedAt": "2026-07-28T12:25:33.114Z",
+  "checksum": "89f16e235abaf513",
   "frontendContract": {
     "window": {
       "id": "108",
@@ -269,30 +269,7 @@
             "required": false,
             "grid": true,
             "form": false,
-            "columnType": "status",
             "reference": "Role",
-            "enumValues": [
-              {
-                "value": "9B8D736190724807AB256DC95F20EC5E",
-                "name": "roleNameGoClientAdmin"
-              },
-              {
-                "value": "127AE77FE2994067B7FE6495FC21D51E",
-                "name": "roleNameFinance"
-              },
-              {
-                "value": "2A159DF4F4B944A6AA903202AD35B545",
-                "name": "roleNameSales"
-              },
-              {
-                "value": "A826430F723E4C1B9A53EBB0746A98C0",
-                "name": "roleNamePurchasing"
-              },
-              {
-                "value": "55E05A4B43514A029D6FB6B8D94B49D4",
-                "name": "roleNameInventory"
-              }
-            ],
             "inputMode": "search",
             "section": "defaults",
             "validation": {
