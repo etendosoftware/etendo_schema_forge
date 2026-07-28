@@ -13,12 +13,24 @@ export function createMockFetch(mockData, basePath, catalogData = {}) {
   const catalogStore = structuredClone(catalogData);
 
   return async function mockFetch(url, options = {}) {
-    if (!url.startsWith(basePath)) {
+    // `url` may be a `Request` object (a valid `fetch` argument) rather than a
+    // string — normalize before any string-only method (`.includes`/`.startsWith`).
+    const urlStr = typeof url === 'string' ? url : url.url;
+
+    if (isWindowAccessMapRequest(urlStr)) {
+      return handleWindowAccessMapRequest();
+    }
+
+    if (isRolesOverviewRequest(urlStr)) {
+      return handleRolesOverviewRequest();
+    }
+
+    if (!urlStr.startsWith(basePath)) {
       return undefined;
     }
 
     const method = (options.method || 'GET').toUpperCase();
-    const path = url.slice(basePath.length);
+    const path = urlStr.slice(basePath.length);
     const segments = path.split('/').filter(Boolean);
 
     if (isEmailContractSend(method, segments)) {
@@ -30,7 +42,7 @@ export function createMockFetch(mockData, basePath, catalogData = {}) {
     }
 
     if (segments[0] === 'catalog') {
-      return handleCatalogRequest(catalogStore, method, url, segments, options);
+      return handleCatalogRequest(catalogStore, method, urlStr, segments, options);
     }
 
     const entity = segments[0];
@@ -49,6 +61,103 @@ export function createMockFetch(mockData, basePath, catalogData = {}) {
 
     return makeResponse(404, { error: 'Not found' });
   };
+}
+
+// ETP-4520 — the SFWindowAccessMap endpoint lives under `/sws/neo/windowaccessmap`
+// (NEO's own auth, not the Webhooks module's `/webhooks/*` — see App.jsx's
+// `fetchWindowAccess` and NeoGoWebhookBridge's class javadoc in
+// com.etendoerp.go for why), not under the entity API `basePath` this file
+// otherwise intercepts, so it needs its own path check ahead of the
+// `basePath` guard above rather than falling through it. Without this, the
+// call bypasses the mock override entirely, hits a real network request that
+// doesn't exist in mock mode, and fails closed — `AuthProvider` then treats
+// every window/field as access-denied, which is not the intent of mock mode.
+const WINDOW_ACCESS_MAP_PATH = '/sws/neo/windowaccessmap';
+
+function isWindowAccessMapRequest(url) {
+  return url.includes(WINDOW_ACCESS_MAP_PATH);
+}
+
+// Grants full access to every window plus the accounting capability, so mock/
+// demo mode is fully usable by default. `windowAccess` is a Proxy (rather
+// than a fixed window-id list) so it resolves `"full"` for any window id
+// looked up (`useWindowAccess`'s `windowAccess?.[windowId]`) without needing
+// to hardcode or keep in sync a list of window ids here.
+const FULL_WINDOW_ACCESS = new Proxy({}, { get: () => 'full', has: () => true });
+
+function handleWindowAccessMapRequest() {
+  return makeResponse(200, {
+    windowAccess: FULL_WINDOW_ACCESS,
+    // ETP-4513 — `isAdminOrClientAdmin: true` alongside the pre-existing
+    // `showAccountingFields`, so mock/demo mode also shows the
+    // "Configuración > Roles" menu entry by default (see menu.json's
+    // `roles` item and registry.js's `filterMenuGroupsByAccess`).
+    capabilities: { showAccountingFields: true, isAdminOrClientAdmin: true },
+  });
+}
+
+// ETP-4513 — SFRolesOverview lives under `/sws/neo/rolesoverview`, same
+// reasoning as WINDOW_ACCESS_MAP_PATH above: it needs its own path check
+// ahead of the `basePath` guard, or the call falls through to a real network
+// request that doesn't exist in mock mode.
+const ROLES_OVERVIEW_PATH = '/sws/neo/rolesoverview';
+
+function isRolesOverviewRequest(url) {
+  return url.includes(ROLES_OVERVIEW_PATH);
+}
+
+// The 4 non-admin GOClient roles all carry the same boilerplate AD_Role.description text (see
+// SFRolesOverview.java's class javadoc) — hoisted once instead of repeated per role literal.
+const ROLE_BOILERPLATE_DESCRIPTION = '*** Please, do not edit this role. Use Copy Record instead ***';
+
+// Builds one mock role entry. `windows` is a list of `[id, name, tier]` tuples rather than
+// object literals so the 5 roles below read as data, not 5 near-identical object shapes —
+// keeps this file's mock fixture from tripping SonarQube's copy-paste detector on structurally
+// repeated `{ id, name, tier }` / `{ id, name, rawDescription, userCount, windows }` blocks.
+function mockRole(id, name, rawDescription, userCount, windows) {
+  return {
+    id,
+    name,
+    rawDescription,
+    userCount,
+    windows: windows.map(([winId, winName, tier]) => ({ id: winId, name: winName, tier })),
+  };
+}
+
+// Mirrors the real SFRolesOverview.java response shape for the 5 fixed GOClient roles, so
+// mock/demo mode and E2E tests can exercise the "Configuración > Roles" page without a live
+// Etendo backend. `rawDescription` intentionally mirrors the real boilerplate AD_Role text
+// (see SFRolesOverview.java's class javadoc) — the frontend never displays it directly.
+function handleRolesOverviewRequest() {
+  return makeResponse(200, {
+    roles: [
+      mockRole('9B8D736190724807AB256DC95F20EC5E', 'GOClient Admin', 'GOClient Admin', 2, [
+        ['108', 'User', 'full'],
+        ['146', 'Price List', 'full'],
+        ['137', 'Tax', 'full'],
+      ]),
+      mockRole('127AE77FE2994067B7FE6495FC21D51E', 'Finance', ROLE_BOILERPLATE_DESCRIPTION, 2, [
+        ['mock-financial-account', 'Financial Account', 'full'],
+        ['mock-payment-in', 'Payment In', 'full'],
+        ['mock-payment-out', 'Payment Out', 'full'],
+        ['mock-sales-invoice', 'Sales Invoice', 'read-only'],
+      ]),
+      mockRole('2A159DF4F4B944A6AA903202AD35B545', 'Sales', ROLE_BOILERPLATE_DESCRIPTION, 1, [
+        ['mock-business-partner', 'Business Partner', 'full'],
+        ['mock-sales-order', 'Sales Order', 'full'],
+        ['mock-sales-quotation', 'Sales Quotation', 'full'],
+      ]),
+      mockRole('A826430F723E4C1B9A53EBB0746A98C0', 'Purchasing', ROLE_BOILERPLATE_DESCRIPTION, 0, [
+        ['mock-purchase-order', 'Purchase Order', 'full'],
+        ['mock-purchase-invoice', 'Purchase Invoice', 'full'],
+      ]),
+      mockRole('55E05A4B43514A029D6FB6B8D94B49D4', 'Inventory', ROLE_BOILERPLATE_DESCRIPTION, 0, [
+        ['mock-goods-receipt', 'Goods Receipt', 'full'],
+        ['mock-goods-shipment', 'Goods Shipment', 'full'],
+        ['mock-warehouse', 'Warehouse and Storage Bins', 'read-only'],
+      ]),
+    ],
+  });
 }
 
 function isEmailContractSend(method, segments) {

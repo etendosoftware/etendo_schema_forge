@@ -1,5 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { ListView, DetailView } from '@/components/contract-ui';
+import { useWindowAccess, WindowAccessGuard } from '@/auth/AuthContext.jsx';
 import { toast } from 'sonner';
 import YearTable from './YearTable';
 import YearForm from './YearForm';
@@ -117,10 +118,17 @@ export const api = {
 const labelOverrides = api.labelOverrides;
 // @sf-generated-start component:YearPage
 export default function YearPage({ windowName, recordId, ...props }) {
+  const windowAccessTier = useWindowAccess('117');
+  const effectiveWindow = useMemo(() => (
+    windowAccessTier === 'read-only' ? { ...(props.window || {}), readOnly: true } : props.window
+  ), [windowAccessTier, props.window]);
   const [showCloseYearMenuModal, setCloseYearMenuModal] = useState(false);
   const [closeYearMenuContext, setCloseYearMenuContext] = useState(null);
   const [showUndoCloseYearMenuModal, setUndoCloseYearMenuModal] = useState(false);
   const [undoCloseYearMenuContext, setUndoCloseYearMenuContext] = useState(null);
+  if (windowAccessTier === 'none') {
+    return <WindowAccessGuard windowId="117" />;
+  }
   if (recordId) {
     return (
       <>
@@ -144,7 +152,7 @@ export default function YearPage({ windowName, recordId, ...props }) {
         ]}
         requiredHeaderFields={requiredHeaderFields}
         labelOverrides={labelOverrides}
-        {...props}
+        {...props} window={effectiveWindow}
       />
       {showCloseYearMenuModal && <CloseYearModal isOpen={showCloseYearMenuModal} token={props.token} apiBaseUrl={api.baseUrl} currentRecord={closeYearMenuContext} onClose={() => setCloseYearMenuModal(false)} onSaved={() => { setCloseYearMenuModal(false); window.location.reload(); }} />}
       {showUndoCloseYearMenuModal && <UndoCloseYearModal isOpen={showUndoCloseYearMenuModal} token={props.token} apiBaseUrl={api.baseUrl} currentRecord={undoCloseYearMenuContext} onClose={() => setUndoCloseYearMenuModal(false)} onSaved={() => { setUndoCloseYearMenuModal(false); window.location.reload(); }} />}      </>
@@ -162,7 +170,7 @@ export default function YearPage({ windowName, recordId, ...props }) {
       labelOverrides={labelOverrides}
       rowQuickActions={{}}
       listSortBy="fiscalYear desc"
-      {...props}
+      {...props} window={effectiveWindow}
     />
   );
 }

@@ -1,5 +1,6 @@
-import { useEffect } from 'react';
+import { useMemo, useEffect } from 'react';
 import { ListView, DetailView } from '@/components/contract-ui';
+import { useWindowAccess, WindowAccessGuard } from '@/auth/AuthContext.jsx';
 import { toast } from 'sonner';
 import GoodsReceiptTable from './GoodsReceiptTable';
 import GoodsReceiptForm from './GoodsReceiptForm';
@@ -420,6 +421,13 @@ export const api = {
 
 // @sf-generated-start component:GoodsReceiptPage
 export default function GoodsReceiptPage({ windowName, recordId, ...props }) {
+  const windowAccessTier = useWindowAccess('184');
+  const effectiveWindow = useMemo(() => (
+    windowAccessTier === 'read-only' ? { ...(props.window || {}), readOnly: true } : props.window
+  ), [windowAccessTier, props.window]);
+  if (windowAccessTier === 'none') {
+    return <WindowAccessGuard windowId="184" />;
+  }
   if (recordId) {
     return (
       <>
@@ -456,7 +464,7 @@ export default function GoodsReceiptPage({ windowName, recordId, ...props }) {
         requiredHeaderFields={requiredHeaderFields}
         linesLayout="inlineEditable"
         sendDocument={{"enabled":false}}
-        {...props}
+        {...props} window={effectiveWindow}
       />
       </>
     );
@@ -474,7 +482,7 @@ export default function GoodsReceiptPage({ windowName, recordId, ...props }) {
       hidePrint
       rowQuickActions={{}}
       sendDocument={{"enabled":false}}
-      {...props}
+      {...props} window={effectiveWindow}
     />
   );
 }

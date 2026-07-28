@@ -129,7 +129,7 @@ describe('menuTree', () => {
     });
 
     // A 200 with a non-JSON body — e.g. a SPA-fallback index.html served when
-    // /webhooks/SFListMenu isn't actually backed by anything (no dev proxy, no
+    // /sws/neo/listmenu isn't actually backed by anything (no dev proxy, no
     // real backend, as in most E2E test environments) — must reject rather than
     // silently "succeed" with a raw string. Without this guard,
     // collectAllowedIds(rawString?.tree) resolves to an empty-but-valid Set,

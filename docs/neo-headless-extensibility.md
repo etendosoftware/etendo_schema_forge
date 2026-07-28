@@ -10,6 +10,8 @@ How to extend, customize, and hook into NEO Headless endpoints without modifying
 
 NEO Headless is metadata-driven: three DB tables (`ETGO_SF_SPEC`, `ETGO_SF_ENTITY`, `ETGO_SF_FIELD`) control what is exposed and how. For most use cases, configuration alone is enough. When configuration isn't sufficient, the **NeoHandler CDI hook** system lets you inject custom Java logic at any endpoint.
 
+**Not what you're looking for?** This guide covers hooking into *existing* CRUD/process/report specs (pre/post-hooks on entities already backed by `ETGO_SF_SPEC`). If you're instead adding a brand-new, standalone Etendo-GO-authored webhook (like `SFListMenu`/`SFWindowAccessMap`/`SFRolesOverview`), see `com.etendoerp.go/docs/neo-headless.md` §4.10–4.11 for the **NEO pseudo-spec bridge** pattern — a different extension point, unrelated to `NeoHandler`, that avoids the Webhooks module's `SMFWHE_DEFINEDWEBHOOK_ROLE` grant table (wiped by `update.database`).
+
 ```
 Configuration-only          Code-based
 (zero Java)                 (NeoHandler)

@@ -1,6 +1,6 @@
 import HeaderPage, { api } from './HeaderPage';
 
-const windowMeta = { category: 'configuration', name: 'TBAI Config' };
+const windowMeta = { category: 'configuration', name: 'TBAI Config', id: 'C327DE215AC945F69363905840118177' };
 
 // @sf-generated-start component:App
 export default function App({ windowName, recordId, token, apiBaseUrl, window, ...rest }) {

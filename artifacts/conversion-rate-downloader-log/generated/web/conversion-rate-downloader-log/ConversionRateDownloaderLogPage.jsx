@@ -1,5 +1,6 @@
-import { useEffect } from 'react';
+import { useMemo, useEffect } from 'react';
 import { ListView, DetailView } from '@/components/contract-ui';
+import { useWindowAccess, WindowAccessGuard } from '@/auth/AuthContext.jsx';
 import ConversionRateDownloaderLogTable from './ConversionRateDownloaderLogTable';
 import ConversionRateDownloaderLogForm from './ConversionRateDownloaderLogForm';
 import { AttachmentsTab } from '@/components/attachments';
@@ -86,6 +87,13 @@ export const api = {
 
 // @sf-generated-start component:ConversionRateDownloaderLogPage
 export default function ConversionRateDownloaderLogPage({ windowName, recordId, ...props }) {
+  const windowAccessTier = useWindowAccess('6FEBA130CDE24CC09041FFA6117ADFA9');
+  const effectiveWindow = useMemo(() => (
+    windowAccessTier === 'read-only' ? { ...(props.window || {}), readOnly: true } : props.window
+  ), [windowAccessTier, props.window]);
+  if (windowAccessTier === 'none') {
+    return <WindowAccessGuard windowId="6FEBA130CDE24CC09041FFA6117ADFA9" />;
+  }
   if (recordId) {
     return (
       <>
@@ -104,7 +112,7 @@ export default function ConversionRateDownloaderLogPage({ windowName, recordId, 
       api={api}
         customTabs={[{ key: 'attachments', labelKey: 'attachments', Component: AttachmentsTab, placement: 'tab', props: { tableName: "SMFCR_Sync_Log", config: {} } }]}
         requiredHeaderFields={requiredHeaderFields}
-        {...props}
+        {...props} window={effectiveWindow}
       />
       </>
     );
@@ -120,7 +128,7 @@ export default function ConversionRateDownloaderLogPage({ windowName, recordId, 
       api={api}
       hideCreate
       rowQuickActions={{}}
-      {...props}
+      {...props} window={effectiveWindow}
     />
   );
 }

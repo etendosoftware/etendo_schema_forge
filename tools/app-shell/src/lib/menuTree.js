@@ -5,7 +5,7 @@ function detectBase() {
 }
 
 const BASE = detectBase();
-const WEBHOOK_BASE = `${BASE}/webhooks`;
+const NEO_BASE = `${BASE}/sws/neo`;
 
 function getToken() {
   return localStorage.getItem('sf_auth_token');
@@ -20,8 +20,16 @@ function getToken() {
 // tooling, not routed in the shipped app) inherits this same-user-token
 // behavior via the re-export in `explorer/useDiscovery.js` — harmless today
 // since that tool isn't reachable, but worth revisiting if it ever is.
+//
+// Reached via `/sws/neo/listmenu` (NEO Headless's own JWT auth), not
+// `/webhooks/SFListMenu` — the Webhooks module additionally requires a
+// per-(webhook, role) grant row in SMFWHE_DEFINEDWEBHOOK_ROLE, which
+// `update.database` wipes back to its XML baseline. See NeoGoWebhookBridge's
+// class javadoc in com.etendoerp.go for the full rationale. Same backend
+// Java class (SFListMenu) and response shape either way, only the transport
+// changed.
 async function callMenuWebhook(params) {
-  const url = `${WEBHOOK_BASE}/SFListMenu`;
+  const url = `${NEO_BASE}/listmenu`;
   const token = getToken();
   // No Content-Type: this is a GET with no body, and application/json isn't a
   // CORS-safelisted value — setting it unnecessarily triggers a preflight

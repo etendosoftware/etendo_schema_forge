@@ -1,5 +1,6 @@
-import { useEffect } from 'react';
+import { useMemo, useEffect } from 'react';
 import { ListView, DetailView } from '@/components/contract-ui';
+import { useWindowAccess, WindowAccessGuard } from '@/auth/AuthContext.jsx';
 import BusinessPartnerTable from '@/windows/custom/contacts/ContactsTable';
 import BusinessPartnerForm from './BusinessPartnerForm';
 import ContactTable from './ContactTable';
@@ -651,6 +652,13 @@ export const api = {
 const labelOverrides = api.labelOverrides;
 // @sf-generated-start component:BusinessPartnerPage
 export default function BusinessPartnerPage({ windowName, recordId, ...props }) {
+  const windowAccessTier = useWindowAccess('123');
+  const effectiveWindow = useMemo(() => (
+    windowAccessTier === 'read-only' ? { ...(props.window || {}), readOnly: true } : props.window
+  ), [windowAccessTier, props.window]);
+  if (windowAccessTier === 'none') {
+    return <WindowAccessGuard windowId="123" />;
+  }
   if (recordId) {
     return (
       <>
@@ -704,7 +712,7 @@ export default function BusinessPartnerPage({ windowName, recordId, ...props }) 
         requiredHeaderFields={requiredHeaderFields}
         labelOverrides={labelOverrides}
         linesLayout="inlineEditable"
-        {...props}
+        {...props} window={effectiveWindow}
       />
       </>
     );
@@ -726,7 +734,7 @@ export default function BusinessPartnerPage({ windowName, recordId, ...props }) 
       labelOverrides={labelOverrides}
       rowQuickActions={{}}
       import={{"enabled":true,"spec":"contacts","entity":"businessPartner","formats":["csv","txt"],"limit":{"maxRows":5000,"concurrency":4},"dedupe":{"scope":"file","key":["etgoEmail"]},"descriptor":"contacts","fields":[{"target":"name","aliases":["nombre comercial","razon social"],"label":"Commercial Name","required":true,"type":"string"},{"target":"etgoFirstname","aliases":["nombre"],"label":"First Name (Company)","required":true,"type":"string"},{"target":"etgoLastname","aliases":["apellido","apellidos"],"label":"Last Name (Company)","required":true,"type":"string"},{"target":"etgoEmail","aliases":["email","correo","e-mail"],"isEmail":true,"label":"Email (Company)","required":false,"type":"string"},{"target":"etgoPhone","aliases":["telefono","teléfono"],"label":"Phone (Company)","required":false,"type":"string"},{"target":"email","aliases":["email de contacto"],"isEmail":true,"label":"Email (Contact)","required":false,"type":"string"},{"target":"firstName","aliases":["nombre de contacto"],"label":"First Name (Contact)","required":false,"type":"string"},{"target":"lastName","aliases":["apellido de contacto"],"label":"Last Name (Contact)","required":false,"type":"string"},{"target":"phone","aliases":["telefono de contacto"],"label":"Phone (Contact)","required":false,"type":"string"},{"target":"position","aliases":["cargo"],"label":"Position","required":false,"type":"string"},{"required":false,"type":"string","target":"address","aliases":["direccion","dirección"],"label":"Address"},{"required":false,"type":"string","target":"city","aliases":["ciudad"],"label":"City"},{"required":false,"type":"string","target":"postal","aliases":["codigo postal","código postal","cp"],"label":"Postal Code"},{"target":"country","aliases":["pais","país"],"label":"Country","matchEntity":"Country","required":false,"type":"foreignKey","reference":"Country"},{"required":false,"type":"string","target":"region","aliases":["provincia","region","región"],"label":"Region"}]}}
-      {...props}
+      {...props} window={effectiveWindow}
     />
   );
 }
