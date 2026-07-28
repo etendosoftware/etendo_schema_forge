@@ -372,3 +372,57 @@ Regression coverage: `tools/app-shell/src/components/contract-ui/__tests__/Detai
 **3. Dimension sub-row's first field ("Proyecto") didn't line up with the first grid column ("Producto") above it.** The expand sub-row (`renderDimensionsSubRow` → `DimensionGrid`) used a flat `px-10` (40px) left padding, unrelated to where the actual first data column starts (chevron column + checkbox column + the first cell's own `cellPaddingX`). Replaced the hardcoded `px-10` with a computed `DIMENSIONS_ROW_INDENT = CHEVRON_COLUMN_WIDTH + CHECKBOX_COLUMN_WIDTH + TOKENS.cellPaddingX` (= 96px with the widened chevron column from fix 2), applied via inline `paddingLeft` (right padding kept at the original 40px via `pr-10`). This ties the sub-row's indent to the same layout constants the leading columns use, so it stays correct if either column's width changes later instead of silently drifting back out of alignment.
 
 **Not visually verified in a real browser** in this pass (no local Etendo/dev-server instance available in this environment) — verified via the full `make test` suite plus a manual review of the computed offsets against the DOM structure (chevron 44px + checkbox 40px + cellPaddingX 12px = 96px, matching the first grid column's text start). The user has a live deployed instance and will confirm the actual pixel result.
+
+---
+
+## [2026-07-28] ETP-4610 — Amortización lines: dimensions moved from a fixed column to a hover action (bringing it in line with the other 5 windows)
+
+**Component:** `tools/app-shell/src/windows/custom/amortization/AmortizationLinesTable.jsx`
+
+**Gap:** the earlier ETP-4610 passes (see the two entries above) moved the "Add dimensions"
+trigger into the hover-action strip for the 5 pipeline-generated windows that render their lines
+through `InlineLinesPanel`'s generic `rowActions`/`dimensionsPanel` mechanism. `AmortizationLinesTable`
+was missed because it is a fully hand-built `customLinesComponent` (its own `<table>`, its own
+fetch/PUT/POST/DELETE, its own multi-select and inline add-row draft-line flow) that never used
+`InlineLinesPanel` at all — it still had a permanent "Accounting dimensions" grid column rendering
+`DimSummary` badges/the dashed "+ Añadir dimensiones" affordance, the exact pre-ETP-4610 pattern
+the other 5 windows originated from and then moved away from.
+
+**Investigated wrapping `InlineLinesPanel` first (the preferred, DRY-er option) — rejected as
+disproportionate.** `InvoiceLinesTable.jsx`/`SalesInvoiceLinesTable.jsx` (the thin adapters the
+other 5 windows use) work because `DetailView` already owns line CRUD, the add-row flow, and
+selection state, and just forwards them as props. `AmortizationLinesTable` owns all of that itself
+with no equivalent host — `InlineLinesPanel` has no built-in inline-add-draft-row mechanism at all
+(that lives entirely outside it in the generated-window wiring this component never had), and its
+DOM is a flex-row grid, not a `<table>`. Rewriting the component around `InlineLinesPanel` would
+mean re-deriving the add-row/selection-bar/CRUD wiring from scratch and rewriting both existing
+regression-test suites (which assert on `<table>`/`<tr>`/`<td>` DOM) — a full rewrite disproportionate
+to relocating one hover UI element. **Fix (hand-patch instead):** removed the "Accounting dimensions"
+`<th>`/`<td>` column and its `DimSummary` usage; added a third hover-action button (`Layers` icon,
+static "Edit dimensions" tooltip via the existing `editDimensionsTooltip` i18n key — no adaptive
+variant, matching the already-established decision from the entry above) ahead of Pencil/Trash,
+gated on `dimensionFields.length > 0` and on `!isReadOnly` (same gating as Pencil/Trash); it toggles
+the same `expandedId` state the existing circular chevron already drove, so clicking either opens
+the identical `DimensionGrid` expand row. `colSpan` on the loading/expand rows dropped from `7` to
+`6`; the add-line draft row's now-orphaned placeholder `<td>` for the removed column was also
+dropped.
+
+**Test helper fallout:** `AmortizationLinesTable.vitest.jsx`'s `getPencilButton`/`getTrashButton`
+helpers picked buttons by fixed array index (`buttons[0]`/`buttons[1]`) in the hover strip — adding
+a button ahead of Pencil shifted those indices. Fixed by giving Pencil/Trash explicit `title`/
+`aria-label` attributes (they had neither before) and switching the helpers to attribute-based
+lookups (`[title="editLineTooltip"]`/`[title="deleteRowTooltip"]`), which is robust regardless of
+how many buttons precede them.
+
+**Lesson:** when a UX/UI convention is generalized into a shared mechanism (here:
+`InlineLinesPanel`'s hover-action dimensions entry point), grep for *other* components implementing
+the same visible pattern independently — `customLinesComponent`/hand-built tables are easy to miss
+because they don't import the shared component at all, so a search for `InlineLinesPanel` usage
+alone won't surface them. A search for the shared i18n keys or visual pattern name (here:
+`amortizationDimensionsTitle`/`DimSummary`) across the whole `tools/app-shell/src` tree is what
+actually surfaced this gap.
+
+**Not visually verified in a real browser** in this pass — no local Etendo/dev-server instance was
+started in this environment. Verified via the full `make test` suite (531 vitest files / 9739 tests
+passed, 1 pre-existing unrelated skip; all 4 `node --test` groups green) plus manual review of the
+DOM structure and gating conditions.

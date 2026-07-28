@@ -97,22 +97,29 @@ const BASE_PROPS = {
   catalogs: {},
 };
 
-// Helper: find the pencil button in the actions (last) td of a row.
-// The last td holds [pencil, trash] in a flex container.
+// Helper: find the pencil/trash/dimensions buttons in the actions (last) td of a
+// row. ETP-4610 — the hover strip may now also hold a leading "Edit dimensions"
+// (Layers) button when the entity has dimension fields configured, so these can
+// no longer be found by a fixed positional index; select by their title/testid
+// instead (identity i18n mock returns the raw key as the title/aria-label).
 function getPencilButton(container, rowId) {
   const row = container.querySelector(`[data-row-id="${rowId}"]`);
   const lastTd = row.querySelector('td:last-child');
-  const buttons = lastTd.querySelectorAll('button');
-  // First button in the last td is the pencil (edit toggle).
-  return buttons[0];
+  return lastTd.querySelector('[title="editLineTooltip"]');
 }
 
 function getTrashButton(container, rowId) {
   const row = container.querySelector(`[data-row-id="${rowId}"]`);
   const lastTd = row.querySelector('td:last-child');
-  const buttons = lastTd.querySelectorAll('button');
-  // Second button in the last td is the trash.
-  return buttons[1];
+  return lastTd.querySelector('[title="deleteRowTooltip"]');
+}
+
+// ETP-4610 — the "Edit dimensions" hover action replacing the old fixed
+// DimSummary grid column.
+function getDimensionsButton(container, rowId) {
+  const row = container.querySelector(`[data-row-id="${rowId}"]`);
+  const lastTd = row.querySelector('td:last-child');
+  return lastTd.querySelector('[data-testid="line-action-add-dimensions"]');
 }
 
 const renderInRouter = (ui, options) =>
@@ -153,55 +160,66 @@ describe('AmortizationLinesTable — fetch + render', () => {
   });
 });
 
-describe('AmortizationLinesTable — dimension summary', () => {
-  it('shows filled-dimension badges for a line with dimensions', async () => {
+// ETP-4610 — the permanent "Dimensiones contables" grid column (DimSummary badges /
+// "+ Add dimensions" affordance) was removed. The entry point into the dimensions
+// expand panel is now a static "Edit dimensions" hover action (Layers icon), shown
+// whenever the entity has at least one visible dimension field — regardless of
+// whether the specific line already has values set (no adaptive Add/Edit variant,
+// matching InlineLinesPanel's generic dimensionsPanel mechanism / docs/feedback.md).
+describe('AmortizationLinesTable — "Edit dimensions" hover action', () => {
+  it('shows the hover action for a line with dimension values already set', async () => {
+    const { container } = renderInRouter(<AmortizationLinesTable {...BASE_PROPS} />);
+    await waitFor(() => expect(screen.getByText('AS_Module')).toBeInTheDocument());
+    expect(getDimensionsButton(container, 'line-1')).toBeInTheDocument();
+  });
+
+  it('shows the hover action for a line without dimension values (no adaptive variant)', async () => {
+    const { container } = renderInRouter(<AmortizationLinesTable {...BASE_PROPS} />);
+    await waitFor(() => expect(screen.getByText('Mobiliario')).toBeInTheDocument());
+    expect(getDimensionsButton(container, 'line-2')).toBeInTheDocument();
+  });
+
+  it('uses the static "Edit dimensions" tooltip (editDimensionsTooltip i18n key) on every line', async () => {
+    const { container } = renderInRouter(<AmortizationLinesTable {...BASE_PROPS} />);
+    await waitFor(() => expect(screen.getByText('AS_Module')).toBeInTheDocument());
+    expect(getDimensionsButton(container, 'line-1')).toHaveAttribute('title', 'editDimensionsTooltip');
+    expect(getDimensionsButton(container, 'line-2')).toHaveAttribute('title', 'editDimensionsTooltip');
+  });
+
+  it('clicking the hover action expands the dimensions panel, same as the chevron toggle', async () => {
+    const { container } = renderInRouter(<AmortizationLinesTable {...BASE_PROPS} />);
+    await waitFor(() => expect(screen.getByText('AS_Module')).toBeInTheDocument());
+
+    fireEvent.click(getDimensionsButton(container, 'line-1'));
+
+    await waitFor(() => expect(screen.getByTestId('selector-costcenter')).toBeInTheDocument());
+  });
+
+  it('hides the hover action (and Pencil/Trash) when the document is read-only', async () => {
+    const { container } = renderInRouter(
+      <AmortizationLinesTable {...BASE_PROPS} data={{ id: 'amort-1', processed: 'Y' }} editing={false} />,
+    );
+    await waitFor(() => expect(screen.getByText('AS_Module')).toBeInTheDocument());
+    expect(getDimensionsButton(container, 'line-1')).not.toBeInTheDocument();
+    expect(getPencilButton(container, 'line-1')).not.toBeInTheDocument();
+  });
+
+  it('hides the hover action entirely when every dimension candidate resolves to not-visible', async () => {
+    useDisplayLogic.mockReturnValue({
+      readOnly: {},
+      visibility: { project: false, costcenter: false, eTADASBpartner: false },
+    });
+    const { container } = renderInRouter(<AmortizationLinesTable {...BASE_PROPS} />);
+    await waitFor(() => expect(screen.getByText('AS_Module')).toBeInTheDocument());
+    expect(getDimensionsButton(container, 'line-1')).not.toBeInTheDocument();
+    // Pencil/Trash remain — only the dimensions action is config-gated.
+    expect(getPencilButton(container, 'line-1')).toBeInTheDocument();
+  });
+
+  it('no longer renders a permanent "Accounting dimensions" column header', async () => {
     renderInRouter(<AmortizationLinesTable {...BASE_PROPS} />);
-    await waitFor(() => expect(screen.getByText('Juan Perez')).toBeInTheDocument());
-    // The redesigned summary shows "Label: Value" badges instead of the old n/7 counter.
-    // Organization always leads (label = i18n key 'organization', value = 'GOOrg').
-    // BPartner badge appears next (label = column key, value = 'Juan Perez').
-    expect(screen.getAllByText('GOOrg').length).toBeGreaterThanOrEqual(1);
-  });
-
-  it('shows the empty "add dimensions" affordance for a line without dimensions', async () => {
-    renderInRouter(<AmortizationLinesTable {...BASE_PROPS} />);
-    await waitFor(() => expect(screen.getByText('Mobiliario')).toBeInTheDocument());
-    expect(screen.getAllByText('amortizationDimensionsEmpty').length).toBeGreaterThan(0);
-  });
-});
-
-// The "+ Add dimensions" trigger visibility across the 4 draft/processed states.
-describe('AmortizationLinesTable — add-dimensions trigger visibility', () => {
-  // Case 1: draft + no dimensions → show the "+ Add dimensions" trigger.
-  it('case 1: draft + no dimensions shows the "+ Add dimensions" trigger', async () => {
-    global.fetch = mockFetchReturning([LINE_EMPTY]);
-    renderInRouter(<AmortizationLinesTable {...BASE_PROPS} data={{ id: 'amort-1', processed: 'N' }} />);
-    await waitFor(() => expect(screen.getByText('Mobiliario')).toBeInTheDocument());
-    expect(screen.getAllByText('amortizationDimensionsEmpty').length).toBeGreaterThan(0);
-  });
-
-  // Case 2: draft + has a dimension → show the editable chip/badge (not the trigger).
-  it('case 2: draft + has a dimension shows the chip and not the empty trigger', async () => {
-    global.fetch = mockFetchReturning([LINE_FILLED]);
-    renderInRouter(<AmortizationLinesTable {...BASE_PROPS} data={{ id: 'amort-1', processed: 'N' }} />);
-    await waitFor(() => expect(screen.getByText('Juan Perez')).toBeInTheDocument());
-    expect(screen.queryByText('amortizationDimensionsEmpty')).not.toBeInTheDocument();
-  });
-
-  // Case 3 (NEW): processed + no dimensions → hide the "+ Add dimensions" trigger entirely.
-  it('case 3: processed + no dimensions hides the "+ Add dimensions" trigger entirely', async () => {
-    global.fetch = mockFetchReturning([LINE_EMPTY]);
-    renderInRouter(<AmortizationLinesTable {...BASE_PROPS} data={{ id: 'amort-1', processed: 'Y' }} editing={false} />);
-    await waitFor(() => expect(screen.getByText('Mobiliario')).toBeInTheDocument());
-    expect(screen.queryByText('amortizationDimensionsEmpty')).not.toBeInTheDocument();
-  });
-
-  // Case 4: processed + has a dimension → show the chip read-only.
-  it('case 4: processed + has a dimension shows the chip read-only', async () => {
-    global.fetch = mockFetchReturning([LINE_FILLED]);
-    renderInRouter(<AmortizationLinesTable {...BASE_PROPS} data={{ id: 'amort-1', processed: 'Y' }} editing={false} />);
-    await waitFor(() => expect(screen.getByText('Juan Perez')).toBeInTheDocument());
-    expect(screen.queryByText('amortizationDimensionsEmpty')).not.toBeInTheDocument();
+    await waitFor(() => expect(screen.getByText('A_Asset_ID')).toBeInTheDocument());
+    expect(screen.queryByText('amortizationDimensionsTitle')).not.toBeInTheDocument();
   });
 });
 
@@ -212,13 +230,9 @@ describe('AmortizationLinesTable — dimension expand', () => {
 
     fireEvent.click(screen.getByText('AS_Module'));
 
-    // Section title appears in the expanded panel.
-    await waitFor(() =>
-      expect(screen.getAllByText('amortizationDimensionsTitle').length).toBeGreaterThan(0),
-    );
-    // GOOrg now appears in both the dimension summary badge AND the expanded panel's
-    // read-only Organization field — use getAllByText to handle multiple occurrences.
-    expect(screen.getAllByText('GOOrg').length).toBeGreaterThanOrEqual(1);
+    // ETP-4610 — no more section title/badge column; the expand panel now shows
+    // only the read-only Organization field + the dimension selectors.
+    await waitFor(() => expect(screen.getByText('GOOrg')).toBeInTheDocument());
   });
 });
 

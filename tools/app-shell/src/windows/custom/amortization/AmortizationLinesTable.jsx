@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { ChevronDown, Loader2, Pencil, Trash2 } from 'lucide-react';
+import { ChevronDown, Layers, Loader2, Pencil, Trash2 } from 'lucide-react';
 import { useUI, useLabel } from '@/i18n';
 import { useCurrency } from '@/hooks/useCurrency';
 import { useAccountingDimensionFields } from '@/hooks/useAccountingDimensionFields';
@@ -13,15 +13,16 @@ import LinesSelectionBar from '@/components/contract-ui/LinesSelectionBar';
 // badge/summary/expand-grid pattern this file originated) were extracted to the
 // shared tools/app-shell/src/components/contract-ui/DimensionsPanel.jsx, so
 // InlineLinesPanel's new `dimensionsPanel` column type (and any future custom lines
-// table) can reuse the exact same UX instead of re-implementing it. This is a pure
-// extraction — no behavior change here. DimSummary caps visible badges via its
-// internal MAX_BADGES=2 constant and falls back to the generic `dimensionsPanelEmpty`
-// i18n key unless an explicit `emptyLabel` prop is passed — kept as
-// 'amortizationDimensionsEmpty' below for continuity with this window's existing
-// translations. DimensionGrid still renders each SelectorInput with resolvedLabel=""
-// so the placeholder text stays controlled locally instead of by the selector's own
-// default.
-import { DimSummary, DimensionGrid } from '@/components/contract-ui/DimensionsPanel';
+// table) can reuse the exact same UX instead of re-implementing it. DimensionGrid
+// still renders each SelectorInput with resolvedLabel="" so the placeholder text
+// stays controlled locally instead of by the selector's own default.
+// ETP-4610 — DimSummary (the permanent "Dimensiones contables" grid column) is no
+// longer used here: the entry point moved into the row hover-action strip (the
+// Layers/"Edit dimensions" button below), mirroring the mechanism InlineLinesPanel
+// already uses for the other 5 generated windows (sales-invoice, purchase-invoice,
+// goods-shipment, goods-receipt, simple-g-l-journal). See docs/feedback.md and
+// docs/ui-customization.md §14b for the generic pattern this now matches.
+import { DimensionGrid } from '@/components/contract-ui/DimensionsPanel';
 
 // ── field definitions ────────────────────────────────────────────────
 const CORE_FIELDS = [
@@ -320,9 +321,10 @@ export default function AmortizationLinesTable({
             <th className="h-10 w-36 px-3 text-right align-middle text-xs leading-4 font-semibold text-text-primary tracking-normal">
               {t('Amortizationamt')}
             </th>
-            <th className="h-10 w-96 px-3 text-left align-middle text-xs leading-4 font-semibold text-text-primary tracking-normal">
-              {ui('amortizationDimensionsTitle')}
-            </th>
+            {/* ETP-4610 — the "Accounting dimensions" column header was removed:
+                the summary/entry point moved into the hover-action strip below
+                (Layers icon, "Edit dimensions" tooltip), matching InlineLinesPanel's
+                generic dimensionsPanel mechanism used by the other 5 windows. */}
             <th className="h-10 w-20 px-2" />
           </tr>
         </thead>
@@ -330,7 +332,7 @@ export default function AmortizationLinesTable({
         <tbody>
           {loading ? (
             <tr>
-              <td colSpan={7} className="py-10 text-center text-sm text-muted-foreground">
+              <td colSpan={6} className="py-10 text-center text-sm text-muted-foreground">
                 <Loader2
                   className="h-4 w-4 animate-spin inline mr-1.5"
                   data-testid="Loader2__fecdcf" />
@@ -441,24 +443,33 @@ export default function AmortizationLinesTable({
                         </td>
                       )}
 
-                      {/* dimension summary */}
-                      <td className="px-3 align-middle" onClick={e => e.stopPropagation()}>
-                        <DimSummary
-                          line={line}
-                          onClick={() => setExpandedId(isExpanded ? null : line.id)}
-                          processed={processed}
-                          labelOverrides={api?.labelOverrides}
-                          fields={dimensionFields}
-                          emptyLabel={ui('amortizationDimensionsEmpty')}
-                          data-testid="DimSummary__fecdcf" />
-                      </td>
-
-                      {/* quick actions — always pencil + trash on hover */}
+                      {/* quick actions — dimensions (when applicable) + pencil + trash on hover.
+                          ETP-4610 — the "Add dimensions"/DimSummary column was removed; the
+                          entry point into the dimensions expand panel is now this hover action,
+                          matching InlineLinesPanel's generic dimensionsPanel mechanism (static
+                          Layers icon + "Edit dimensions" tooltip, no adaptive variant). Reading
+                          dimensions on a read-only/processed document still works via the
+                          always-visible chevron toggle at the start of the row — this hover
+                          shortcut, like Pencil/Trash, is only offered while the document (and
+                          therefore the row) is editable. */}
                       <td className="relative px-2 align-middle" onClick={e => e.stopPropagation()}>
                         {!isReadOnly && (
                           <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-0.5 opacity-0 group-hover/row:opacity-100 transition-opacity z-10">
+                            {dimensionFields.length > 0 && (
+                              <button
+                                onClick={() => setExpandedId(isExpanded ? null : line.id)}
+                                aria-label={ui('editDimensionsTooltip')}
+                                title={ui('editDimensionsTooltip')}
+                                className="h-8 w-8 p-0 flex items-center justify-center rounded-full text-[hsl(var(--text-disabled))] hover:text-foreground hover:bg-muted/60 transition-colors"
+                                data-testid="line-action-add-dimensions"
+                              >
+                                <Layers className="h-4 w-4" data-testid="Layers__fecdcf" />
+                              </button>
+                            )}
                             <button
                               onClick={() => setEditingLineId(isEditing ? null : line.id)}
+                              aria-label={ui('editLineTooltip')}
+                              title={ui('editLineTooltip')}
                               className={`h-8 w-8 p-0 flex items-center justify-center rounded-full transition-colors ${isEditing ? 'text-primary hover:bg-primary/10' : 'text-[hsl(var(--text-disabled))] hover:text-foreground hover:bg-muted/60'}`}
                             >
                               <Pencil className="h-4 w-4" data-testid="Pencil__fecdcf" />
@@ -466,6 +477,8 @@ export default function AmortizationLinesTable({
                             <button
                               onClick={() => deleteLine(line.id)}
                               disabled={deleting === line.id}
+                              aria-label={ui('deleteRowTooltip')}
+                              title={ui('deleteRowTooltip')}
                               className="h-8 w-8 p-0 flex items-center justify-center rounded-full text-[hsl(var(--destructive))] hover:text-destructive hover:bg-destructive transition-colors disabled:opacity-50"
                             >
                               {deleting === line.id ? <Loader2 className="h-4 w-4 animate-spin" data-testid="Loader2__fecdcf" /> : <Trash2 className="h-4 w-4" data-testid="Trash2__fecdcf" />}
@@ -477,7 +490,7 @@ export default function AmortizationLinesTable({
                     {/* ── dimension expand ── */}
                     {isExpanded && (
                       <tr className="border-b border-border/30">
-                        <td colSpan={7} className="bg-card px-10 pb-5 pt-3">
+                        <td colSpan={6} className="bg-card px-10 pb-5 pt-3">
                           {line['organization$_identifier'] && (
                             <div className="mb-4 grid grid-cols-4 gap-4">
                               <div>
@@ -546,7 +559,6 @@ export default function AmortizationLinesTable({
                       onKeyDown={onDraftKeyDown}
                     />
                   </td>
-                  <td className="px-3 text-sm text-muted-foreground align-middle">—</td>
                   <td className="px-2 text-center text-muted-foreground align-middle">
                     {saving === 'new' ? <Loader2 className="h-4 w-4 animate-spin inline" data-testid="Loader2__fecdcf" /> : '—'}
                   </td>

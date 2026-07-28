@@ -142,16 +142,6 @@ describe('AmortizationLinesTable — dimensions', () => {
     assert.match(src, /fields=\{dimensionFields\}/);
   });
 
-  it('renders DimSummary with Label:Value badges (no n/TOTAL_DIMS counter)', () => {
-    assert.match(src, /DimSummary/);
-    assert.match(src, /DimBadge/);
-    assert.match(src, /MAX_BADGES/);
-  });
-
-  it('DimSummary shows empty state with amortizationDimensionsEmpty label', () => {
-    assert.match(src, /amortizationDimensionsEmpty/);
-  });
-
   it('DimensionGrid renders selectors with empty resolvedLabel for generic placeholder', () => {
     assert.match(src, /DimensionGrid/);
     assert.match(src, /resolvedLabel=""/);
@@ -161,12 +151,23 @@ describe('AmortizationLinesTable — dimensions', () => {
     assert.match(src, /onFieldSave/);
   });
 
-  it('uses amortizationDimensionsTitle i18n key for section header', () => {
-    assert.match(src, /amortizationDimensionsTitle/);
+  // ETP-4610 — the permanent "Dimensiones contables" grid column (DimSummary/DimBadge/
+  // MAX_BADGES, amortizationDimensionsTitle/amortizationDimensionsEmpty) was removed.
+  // The entry point into the dimensions expand panel moved into the row hover-action
+  // strip (Layers icon + "Edit dimensions" tooltip), matching InlineLinesPanel's generic
+  // dimensionsPanel mechanism used by the other 5 pipeline-generated windows.
+  it('no longer renders the standalone DimSummary column component', () => {
+    assert.doesNotMatch(src, /<DimSummary/);
+    assert.doesNotMatch(src, /import \{ DimSummary/);
+    assert.doesNotMatch(src, /ui\('amortizationDimensionsTitle'\)/);
+    assert.doesNotMatch(src, /ui\('amortizationDimensionsEmpty'\)/);
   });
 
-  it('shows empty state via amortizationDimensionsEmpty when no badges', () => {
-    assert.match(src, /amortizationDimensionsEmpty/);
+  it('exposes an "Edit dimensions" hover action (Layers icon) gated on dimensionFields.length', () => {
+    assert.match(src, /import \{ ChevronDown, Layers, Loader2, Pencil, Trash2 \} from 'lucide-react'/);
+    assert.match(src, /dimensionFields\.length > 0/);
+    assert.match(src, /ui\('editDimensionsTooltip'\)/);
+    assert.match(src, /<Layers/);
   });
 });
 

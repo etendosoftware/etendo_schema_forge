@@ -31,7 +31,7 @@ Records are typically created from the **Assets** window via the **Create Amorti
 - Implementation type: generated window with confirm modal (`AmortizationConfirmModal`). No sidebar — status shown as a `DocumentStatusPill` in the toolbar next to Cancel; total shown as a footer in the lines table.
 - Window shape: master-detail. Header (`A_Amortization`) + lines (`A_Amortizationline`). Accounting tab (Fact_Acct) excluded.
 - Detail layout: full-width form (no sidebar); **Adjuntos** tab in the tab strip.
-- Lines layout: `inlineEditable` — existing rows use InlineLinesPanel (flex), new rows use a DataTable add-row form. Hovering a row reveals pencil/trash icons in a dedicated 160px action slot (not a trailing-column swap, because `amortizationAmount` has `noTrailing: true`).
+- Lines layout: `inlineEditable`, but rendered by the custom `AmortizationLinesTable` (a hand-built `<table>`, not `InlineLinesPanel`) — see `customLinesComponent` below. Hovering a row reveals the hover-action strip (Edit dimensions when applicable, then pencil/trash) on the right.
 - Confirm button: black primary button on the far right, disabled when no lines exist. Opens `AmortizationConfirmModal` rather than executing directly.
 - List toolbar: Print, Link, and the create button are hidden (`hidePrint: true`, `hideLink: true`, `hideCreate: true`). Only the status dropdown and funnel are shown — there is no "New amortization" button.
 - Delete action fully suppressed: `hideDeleteButton: true` hides the delete (red trash) icon in the list grid rows and in the detail toolbar, regardless of the document's processed state. This is stronger than `hideDeleteWhenComplete` (which only hides delete once the document is processed). Deleting individual **lines** while in draft is unaffected and still available.
@@ -67,12 +67,12 @@ Records are typically created from the **Assets** window via the **Create Amorti
 2. From Assets, trigger **Create Amortization** on a depreciation-enabled asset. Open the new record in `/amortization`.
 3. Confirm the record is in draft:
    - Header fields Name, Accounting Date, Starting Date, and Currency are displayed read-only; only **Description** is editable. The header trash/Delete button is absent.
-   - Lines render in the custom `AmortizationLinesTable` — columns: Asset | Amortization % | Amount | Accounting dimensions.
+   - Lines render in the custom `AmortizationLinesTable` — columns: Asset | Amortization % | Amount. There is no permanent "Accounting dimensions" column (see the ETP-4610 section below).
    - Toolbar shows a grey "Borrador" pill next to the Cancel button (no sidebar).
    - Below the lines table a right-aligned footer shows "Amortización total: X €".
    - **Confirmar** button is black/primary on the far right; **Guardar** is grey.
 4. Click the pencil icon on an existing line and confirm the Asset, %, and Amount fields become editable inline within the same row. Edit the amount and click outside (blur) — confirm the value saves without pressing a confirm button. Verify the sidebar total updates to reflect the new sum.
-4a. Click the circular chevron button on a line row — confirm it rotates and a white panel expands below (no section title, no filled-count counter). The panel shows the Organisation field (read-only) and 3 dimension selectors: **Project**, **Cost Center**, and **Contact**. Hover a selector — confirm the background changes to `#F5F7F9`. Select a value in one selector (e.g., Cost Center) and confirm it auto-saves immediately without a Save button. Collapse the panel and verify the Accounting dimensions column now shows a "Label: Value" badge for the filled dimension. On a processed document, verify a line with no dimensions shows no "+ Añadir dimensiones" affordance, while a line that already has dimensions still renders its value chips as read-only.
+4a. Hover a line row and confirm a `Layers` icon ("Edit dimensions" tooltip) appears in the hover-action strip, ahead of the pencil/trash icons, whenever the entity has at least one visible dimension field — the same icon and tooltip regardless of whether the line already has dimension values set. Click it (or the circular chevron at the start of the row — both open the same panel) — confirm it rotates and a white panel expands below (no section title, no filled-count counter). The panel shows the Organisation field (read-only) and 3 dimension selectors: **Project**, **Cost Center**, and **Contact**. Hover a selector — confirm the background changes to `#F5F7F9`. Select a value in one selector (e.g., Cost Center) and confirm it auto-saves immediately without a Save button. On a processed document, confirm the hover-action strip (Edit dimensions, pencil, trash) is entirely hidden — dimensions are still viewable via the always-visible chevron, read-only.
 4b. Select one or more rows using the row checkboxes — confirm the shared `LinesSelectionBar` appears at the bottom with the count and a red trash button. Click × to clear the selection. In processed/read-only state, confirm the checkboxes are visible but disabled.
 4c. Click "+ Añadir línea" — confirm an inline draft row appears aligned to the table columns (asset buscador, % and amount inputs with column-name placeholders). The "+ Añadir línea" button must remain visible. Type a value, press Enter — confirm the line saves and the draft row stays open. Press Esc — confirm the draft row closes. Click outside with a value entered — confirm it saves and closes.
 4d. Add the first line to a new draft record and confirm the **Confirmar** button becomes enabled immediately (without page reload).
@@ -139,14 +139,14 @@ Changes landed in `feature/ETP-4103`. Covers visual polish, sidebar simplificati
 ### Lines tab — custom AmortizationLinesTable
 
 - `customLinesComponent: "AmortizationLinesTable"` in `decisions.json` — the standard InlineLinesPanel is replaced by a custom component at `tools/app-shell/src/windows/custom/amortization/AmortizationLinesTable.jsx`.
-- Table shows columns: Asset | Amortization % | Amount | Accounting dimensions.
+- Table shows columns: Asset | Amortization % | Amount | Accounting dimensions. _(Superseded by ETP-4610: the "Accounting dimensions" column was removed — see the ETP-4610 section below.)_
 - **Multi-select checkboxes**: every row has a checkbox; the header has a select-all checkbox (indeterminate when partially selected). In read-only/processed mode checkboxes remain visible but are disabled (matching Sales Order behaviour). Selecting ≥1 row shows the shared `LinesSelectionBar` (same as Sales Order) — a floating bottom bar with the selection count, a red trash/delete button, and an × cancel button. Bulk delete issues concurrent DELETE requests via `Promise.all`.
-- **Circular expand toggle**: each row has a circular icon button (24 px, border `#D1D4DB`, rounded-full, shadow xs, `ChevronDown #828FA3`) that toggles the accounting dimensions panel. Rotates 180° when expanded.
+- **Circular expand toggle**: each row has a circular icon button (24 px, border `#D1D4DB`, rounded-full, shadow xs, `ChevronDown #828FA3`) that toggles the accounting dimensions panel. Rotates 180° when expanded. _(Still current — ETP-4610 added a second, equivalent entry point next to it; see below.)_
 - **Inline editing** (pencil icon): clicking the pencil on a row makes the 3 core fields (Asset, %, Amount) editable inline within the same row. Save happens on blur — no confirm button needed. Same pattern as Sales Order.
 - **Expandable dimensions panel**: expanding a row reveals a white-background panel (no section title, no filled-count counter) with a read-only Organisation field and dimension selectors. Selectors have a hover background (`#F5F7F9`) on pointer-over. _(Superseded by ETP-4429: the selector set was trimmed to Project, Cost Center, and Contact — see the ETP-4429 section below.)_
 - Dimension selectors auto-save on `onChange` — immediate PUT per field, no Save button required.
 - When the document is **processed** (`processed='Y'`), dimension selectors are rendered as disabled `<input>` elements with `opacity-50` and `cursor-not-allowed` — visually greyed out to signal that no editing is possible. In draft mode, read-only inputs retain full opacity (`!opacity-100`) to stay visually neutral. This is controlled via the `isCompleted` prop on `DimensionGrid`, passed as `processed` from the parent component.
-- **Accounting dimensions column summary**: badges in "Label: Value" format (`#F5F7F9` background, 8px radius, `#3F3F50` label text). Organisation always leads when filled. Up to 2 badges shown; remaining are collapsed into a `+N` badge. Empty rows show a dashed "+ Añadir dimensiones" button.
+- **Accounting dimensions column summary**: badges in "Label: Value" format (`#F5F7F9` background, 8px radius, `#3F3F50` label text). Organisation always leads when filled. Up to 2 badges shown; remaining are collapsed into a `+N` badge. Empty rows show a dashed "+ Añadir dimensiones" button. _(Superseded by ETP-4610: this fixed grid column and its badges/dashed-button affordance were removed entirely — see the ETP-4610 section below.)_
 - **Add line — inline draft row** (Sales Order pattern): clicking "+ Añadir línea" inserts an inline editable row aligned to the table columns. Field placeholders are the column labels (e.g. "Activo", "Amortization %", "Amortization Amount"). Enter saves and keeps the row open for rapid entry; Esc cancels; clicking outside saves (or cancels if empty). The "+ Añadir línea" button stays visible while the draft row is open. The hint "Enter o clic fuera para guardar · Esc para cancelar" (`inlineAddHint`) appears below the table while the draft row is active.
 - After any line mutation (create, delete, bulk delete), the component calls `onRefresh()` to trigger `hook.fetchChildren()` in the parent DetailView — this keeps the **Confirmar** button state in sync without a page reload (`hook.children.length > 0` enables the button).
 - Delete individual line via trash icon on row hover.
@@ -353,6 +353,95 @@ keys through as explicit props).
 - The three-dot menu no longer exposes the independent **Descontabilizar** (`unpost`) action for amortization documents.
 - **Reactivar** is visible whenever the document is processed (`processed='Y'`), including records whose accounting status is posted (`posted='Y'`). For posted records, `preUnpost: true` makes the UI call the existing unpost endpoint before triggering the `Processed` action; for unposted records, only the `Processed` action runs. This matches the Etendo Go document lifecycle rule: reactivation is the single user action and accounting reversal is part of that flow.
 - Role-based access restrictions for **Reactivar** are deferred until the role permissions model exists.
+
+## ETP-4610 — "Add dimensions" moved from a fixed grid column to a hover action
+
+**Scope addition to ETP-4610**, aligning `AmortizationLinesTable` with the 5 pipeline-generated
+windows (sales-invoice, purchase-invoice, goods-shipment, goods-receipt, simple-g-l-journal)
+that already moved their "Add dimensions"/dimensions-summary entry point out of a permanent grid
+column and into the row hover-action strip via `InlineLinesPanel`'s generic `rowActions`/
+`dimensionsPanel` mechanism (see `docs/ui-customization.md` §14b/§14c and the corresponding
+`docs/feedback.md` entries).
+
+**Investigated first: wrap `InlineLinesPanel` instead of hand-patching?** `AmortizationLinesTable`
+is a fully self-contained `customLinesComponent` (`decisions.json`) — unlike
+`InvoiceLinesTable.jsx`/`SalesInvoiceLinesTable.jsx`, which are thin adapters that just forward
+`DetailView`'s own line-management props (`onUpdateRow`, `onDeleteRow`, `addRow`, hidden-column
+visibility, selection state) into `InlineLinesPanel`. `AmortizationLinesTable` instead owns *all*
+of that machinery itself: its own `fetch`/PUT/POST/DELETE calls straight to
+`{apiBaseUrl}/lines[/…]`, its own multi-select + `LinesSelectionBar` wiring, and — critically — its
+own inline "add line" draft row (Sales-Order-style: Enter-to-save-and-reopen, Esc-to-cancel,
+click-outside-to-save), a flow `InlineLinesPanel` has no equivalent for at all (that pattern lives
+entirely outside the component, in the generated-window wiring). Rebuilding all of that around
+`InlineLinesPanel`'s flex-row DOM (this component renders a `<table>`) and its externally-owned
+add-row/selection-bar contract would be a full rewrite disproportionate to this ticket's actual
+gap (just relocating one UI element into the hover strip), and would force rewriting both existing
+regression-test suites (`AmortizationLinesTable.test.js`, `AmortizationLinesTable.vitest.jsx`) from
+scratch since they assert on `<table>`/`<tr>`/`<td>` DOM semantics. **Decision: hand-patch**,
+keeping the component's own table structure and CRUD wiring, and mirroring only the *visible*
+hover-action mechanism.
+
+### What changed
+
+- The permanent "Accounting dimensions" `<th>` column (and its per-row `DimSummary` badge/"+
+  Añadir dimensiones" cell) was removed entirely — no more grid column, no header, no per-row
+  `<td>`. `colSpan` on the loading and expand-panel rows dropped from `7` to `6` to match.
+- A third hover-action button was added to the existing pencil/trash strip, positioned first:
+  `Layers` icon (lucide-react), tooltip/`aria-label` from the shared `editDimensionsTooltip` i18n
+  key (already used by `InlineLinesPanel`'s equivalent action — no new key introduced). It is
+  static — no adaptive Add/Edit variant, matching the generic mechanism's already-established
+  decision (see the ETP-4610 entries in `docs/feedback.md`: an earlier adaptive icon/label was
+  tried and dropped there because the "filled" state's `Pencil` icon collided visually with the
+  row's own Edit action).
+- Visible only when `dimensionFields.length > 0` — i.e. when at least one of `project`/
+  `costcenter`/`eTADASBpartner` is currently visible per the client's accounting-dimension
+  configuration (`useAccountingDimensionFields`, unchanged). Like Pencil/Trash, it only renders
+  while the row is editable (`!isReadOnly`); on a processed/read-only document, dimensions are
+  still viewable through the always-visible circular chevron at the start of the row — clicking
+  either the chevron or (while editable) the new hover button toggles the exact same
+  `expandedId` state and reveals the same `DimensionGrid` expand row as before.
+- The `DimSummary`/`amortizationDimensionsTitle`/`amortizationDimensionsEmpty` i18n usages and the
+  now-unused `DimSummary` import were removed from `AmortizationLinesTable.jsx`. `DimSummary`
+  itself is untouched and still exported from the shared `DimensionsPanel.jsx` (no other current
+  consumer, but left in place as a reusable building block).
+- The inline add-line draft row's now-orphaned placeholder `<td>` for the removed dimensions
+  column was also removed, keeping the draft row's cell count in sync with the header (6 cells).
+
+### Manual verification (ETP-4610)
+
+1. Open a draft amortization line row — confirm there is no "Accounting dimensions" column header
+   and no permanent badge/dashed-button cell in any row.
+2. Hover a line row — confirm a `Layers` icon with "Edit dimensions" tooltip appears first in the
+   hover strip, ahead of the pencil and trash icons, on both a line with dimension values already
+   set and one without.
+3. Click the `Layers` hover icon — confirm it expands the same dimensions panel the circular
+   chevron toggles (Organisation read-only field + Project/Cost Center/Contact selectors).
+4. On a processed document, confirm the entire hover strip (dimensions, pencil, trash) is hidden;
+   confirm the chevron toggle still opens the panel with all fields read-only.
+5. If the client's accounting-dimension config hides all three candidate fields, confirm the
+   `Layers` hover action does not render at all, while pencil/trash remain.
+
+### Tests
+
+- `AmortizationLinesTable.test.js`: replaced the source-string assertions tied to
+  `DimSummary`/`DimBadge`/`MAX_BADGES`/`amortizationDimensionsTitle`/`amortizationDimensionsEmpty`
+  with assertions confirming those are gone and that the `Layers`/`editDimensionsTooltip` hover
+  action, gated on `dimensionFields.length > 0`, is present.
+- `AmortizationLinesTable.vitest.jsx`: replaced the "dimension summary"/"add-dimensions trigger
+  visibility" describe blocks (which asserted on per-line badge text) with an `"Edit dimensions"
+  hover action` describe block asserting the button's presence/absence (filled line, empty line,
+  read-only document, all-candidates-hidden) and that clicking it opens the same expand panel.
+  `getPencilButton`/`getTrashButton` test helpers were changed from positional (`buttons[0]`/
+  `buttons[1]`) to attribute-based lookups (`[title="editLineTooltip"]` /
+  `[title="deleteRowTooltip"]`), since the new leading dimensions button shifts array positions;
+  `AmortizationLinesTable.jsx`'s Pencil/Trash buttons gained matching `title`/`aria-label`
+  attributes to support this (previously they had neither). Full suite: `make test` — 531 vitest
+  files / 9739 tests passed (1 pre-existing unrelated skip), plus the 4 `node --test` groups
+  (cli/test, tools/app-shell/src, tools/app-shell/test, artifacts) all green.
+
+**Not visually verified in a real browser** in this pass — no local Etendo/dev-server instance
+was started in this environment. Verified via the full automated suite plus manual review of the
+DOM structure (colSpan/column-count parity, hover-strip button order and gating conditions).
 
 ## Theme roles
 
