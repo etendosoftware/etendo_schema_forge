@@ -1753,19 +1753,21 @@ describe('InlineLinesPanel', () => {
       expect(screen.getByTestId('dimensions-panel-L1')).toBeInTheDocument();
     });
 
-    // ETP-4610 follow-up — adaptive label: "Edit dimensions" once the line already
-    // carries a value on any visible dimension field, "Add dimensions" while every
-    // candidate is still empty. Same hover action, tooltip/aria-label only.
-    it('shows "editDimensionsTooltip" when the line already has dimension values set', async () => {
-      renderDimensionsPanel([]); // dimensionRows[0] has both project and costcenter filled
-      const row = screen.getByTestId('line-row-L1');
-      await act(async () => { await userEvent.hover(row); });
-      const action = within(row).getByTestId('line-action-add-dimensions');
-      expect(action).toHaveAttribute('title', 'editDimensionsTooltip');
-      expect(action).toHaveAttribute('aria-label', 'editDimensionsTooltip');
-    });
+    // ETP-4610 follow-up — the hover action's icon/tooltip are static (always `Layers` /
+    // "Edit dimensions"), regardless of whether the line already has dimension values
+    // set. An earlier adaptive Add/Edit variant swapped icon+tooltip based on
+    // `hasFilledDimensionValues()`, but its "edit" state (Pencil icon) sat right next to
+    // the row's own Edit action and read as a duplicate button — dropped in favor of one
+    // unconditional icon/tooltip (see docs/feedback.md).
+    it('always shows the "editDimensionsTooltip" tooltip, whether the line is filled or empty', async () => {
+      // dimensionRows[0] has both project and costcenter filled.
+      renderDimensionsPanel([]);
+      const filledRow = screen.getByTestId('line-row-L1');
+      await act(async () => { await userEvent.hover(filledRow); });
+      const filledAction = within(filledRow).getByTestId('line-action-add-dimensions');
+      expect(filledAction).toHaveAttribute('title', 'editDimensionsTooltip');
+      expect(filledAction).toHaveAttribute('aria-label', 'editDimensionsTooltip');
 
-    it('shows "addDimensionsTooltip" when every visible dimension field is empty on the line', async () => {
       const emptyRows = [{ id: 'L2' }];
       render(
         <InlineLinesPanel
@@ -1781,81 +1783,10 @@ describe('InlineLinesPanel', () => {
           onDeleteRow={vi.fn().mockResolvedValue()}
         />,
       );
-      const row = screen.getByTestId('line-row-L2');
-      await act(async () => { await userEvent.hover(row); });
-      const action = within(row).getByTestId('line-action-add-dimensions');
-      expect(action).toHaveAttribute('title', 'addDimensionsTooltip');
-    });
-
-    // ETP-4610 follow-up — live transition. The static before/after tests above only
-    // check the tooltip on rows that already start filled or empty; these confirm the
-    // tooltip flips the moment the user actually fills/clears a value through the real
-    // expand sub-row (DimensionGrid → SelectorInput), without re-hovering or
-    // collapsing/re-expanding the row.
-    it('flips from addDimensionsTooltip to editDimensionsTooltip once a dimension value is filled in', async () => {
-      const emptyRows = [{ id: 'L3' }];
-      render(
-        <InlineLinesPanel
-          columns={dimensionColumns}
-          data={emptyRows}
-          hiddenColumns={[]}
-          entity="lines"
-          token="test"
-          apiBaseUrl="/api"
-          selectorContext={{}}
-          onSelectionChange={vi.fn()}
-          onUpdateRow={vi.fn().mockResolvedValue()}
-          onDeleteRow={vi.fn().mockResolvedValue()}
-        />,
-      );
-      const row = screen.getByTestId('line-row-L3');
-      await act(async () => { await userEvent.hover(row); });
-      let action = within(row).getByTestId('line-action-add-dimensions');
-      expect(action).toHaveAttribute('title', 'addDimensionsTooltip');
-
-      await act(async () => { await userEvent.click(action); });
-      const subRow = screen.getByTestId('dimensions-panel-L3');
-      await act(async () => {
-        await userEvent.click(within(subRow).getByTestId('dimension-field-project-set'));
-      });
-
-      action = within(row).getByTestId('line-action-add-dimensions');
-      expect(action).toHaveAttribute('title', 'editDimensionsTooltip');
-      expect(action).toHaveAttribute('aria-label', 'editDimensionsTooltip');
-    });
-
-    it('flips back from editDimensionsTooltip to addDimensionsTooltip once the dimension value is cleared', async () => {
-      const filledRows = [{
-        id: 'L4',
-        project: 'PRJ1', 'project$_identifier': 'Project Alpha',
-      }];
-      render(
-        <InlineLinesPanel
-          columns={dimensionColumns}
-          data={filledRows}
-          hiddenColumns={[]}
-          entity="lines"
-          token="test"
-          apiBaseUrl="/api"
-          selectorContext={{}}
-          onSelectionChange={vi.fn()}
-          onUpdateRow={vi.fn().mockResolvedValue()}
-          onDeleteRow={vi.fn().mockResolvedValue()}
-        />,
-      );
-      const row = screen.getByTestId('line-row-L4');
-      await act(async () => { await userEvent.hover(row); });
-      let action = within(row).getByTestId('line-action-add-dimensions');
-      expect(action).toHaveAttribute('title', 'editDimensionsTooltip');
-
-      await act(async () => { await userEvent.click(action); });
-      const subRow = screen.getByTestId('dimensions-panel-L4');
-      await act(async () => {
-        await userEvent.click(within(subRow).getByTestId('dimension-field-project-clear'));
-      });
-
-      action = within(row).getByTestId('line-action-add-dimensions');
-      expect(action).toHaveAttribute('title', 'addDimensionsTooltip');
+      const emptyRow = screen.getByTestId('line-row-L2');
+      await act(async () => { await userEvent.hover(emptyRow); });
+      const emptyAction = within(emptyRow).getByTestId('line-action-add-dimensions');
+      expect(emptyAction).toHaveAttribute('title', 'editDimensionsTooltip');
     });
   });
 

@@ -7,7 +7,7 @@ import React, {
   useRef,
   useState,
 } from 'react';
-import { ChevronDown, Pencil, Plus, Search, Trash2 } from 'lucide-react';
+import { ChevronDown, Layers, Pencil, Search, Trash2 } from 'lucide-react';
 import { QUICK_ACTIONS_PILL_CLASS } from './quickActionsStyle.js';
 import { toast } from 'sonner';
 import { Input } from '@/components/ui/input';
@@ -16,7 +16,6 @@ import { useLabel, useLocaleSwitch, useUI } from '@/i18n';
 import { formatAmount } from '@/lib/formatAmount.js';
 import { formatSignedDelta } from '@/lib/formatSigned.js';
 import { resolveIdentifier } from '@/lib/resolveIdentifier.js';
-import { hasFilledDimensionValues } from '@/lib/hasFilledDimensionValues.js';
 import { resolveColumnLabel } from '@/lib/resolveColumnLabel.js';
 import { InlineSearchCombo } from './InlineSearchCombo.jsx';
 import { SelectorInput } from './SelectorInput.jsx';
@@ -1018,10 +1017,6 @@ const InlineLinesPanel = forwardRef(function InlineLinesPanel({
         // every table that doesn't declare a `dimensionsPanel` column.
         const isRowExpanded = hasDimensionsPanel && expandedRowId === row.id;
         const dimRowData = pendingDimEdits[row.id] ? { ...row, ...pendingDimEdits[row.id] } : row;
-        // ETP-4610 — adaptive hover-action label/icon: "Edit dimensions" once the
-        // line already has at least one dimension value set, "Add dimensions" while
-        // every candidate field is still empty.
-        const rowHasDimensionValues = hasDimensionsPanel && hasFilledDimensionValues(dimRowData, visibleDimensionFields);
 
         return (
           <React.Fragment key={row.id}>
@@ -1070,12 +1065,17 @@ const InlineLinesPanel = forwardRef(function InlineLinesPanel({
             {/* Hover / edit action strip. When `reserveActionSlot` is true
                 (no amount column), the slot is rendered in every row so cells
                 don't reflow on hover — only the icons inside fade in.
-                ETP-4610 — `extraActions` merges the built-in "Add dimensions"
+                ETP-4610 — `extraActions` merges the built-in "Edit dimensions"
                 trigger (replacing the old fixed grid column, only when the
                 entity has dimensions configured) with any caller-supplied
                 `rowActions`, each filtered by its own per-row `show`. Both
                 render through the exact same generic slot in
-                `renderRowActionStrip`. */}
+                `renderRowActionStrip`. The icon/tooltip are static (always
+                `Layers` / "Edit dimensions") regardless of whether the row
+                already has values set — an earlier adaptive Add/Edit variant
+                was dropped because its "edit" state (Pencil icon) sat right
+                next to the row's own Edit action and read as a duplicate
+                button (see docs/feedback.md). */}
             {renderRowActionStrip({
               showActions, reserveActionSlot, actionStripFlex, isEditing, isDeleting, ui,
               onEdit: () => handleEditClick(row),
@@ -1083,8 +1083,8 @@ const InlineLinesPanel = forwardRef(function InlineLinesPanel({
               extraActions: [
                 ...(hasDimensionsPanel ? [{
                   key: 'dimensions',
-                  icon: rowHasDimensionValues ? Pencil : Plus,
-                  tooltip: ui(rowHasDimensionValues ? 'editDimensionsTooltip' : 'addDimensionsTooltip'),
+                  icon: Layers,
+                  tooltip: ui('editDimensionsTooltip'),
                   onClick: () => setExpandedRowId(isRowExpanded ? null : row.id),
                   testId: 'line-action-add-dimensions',
                 }] : []),
