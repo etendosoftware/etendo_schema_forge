@@ -7,7 +7,7 @@ import React, {
   useRef,
   useState,
 } from 'react';
-import { ChevronDown, Pencil, Search, Trash2 } from 'lucide-react';
+import { ChevronDown, Pencil, Plus, Search, Trash2 } from 'lucide-react';
 import { QUICK_ACTIONS_PILL_CLASS } from './quickActionsStyle.js';
 import { toast } from 'sonner';
 import { Input } from '@/components/ui/input';
@@ -25,8 +25,10 @@ import { resolveLookupDrawer } from './lookupDrawers.js';
 import { columnFlex } from '@/lib/linesColumnWidth.js';
 import { getEmailFieldError, getPhoneFieldError } from './recipientEdits.js';
 // ETP-4529 — shared "Dimensiones contables" expand-row UX (extracted from
-// AmortizationLinesTable.jsx), reused here by the opt-in `dimensionsPanel` column type.
-import { DimSummary, DimensionGrid } from './DimensionsPanel.jsx';
+// AmortizationLinesTable.jsx). ETP-4610 moved the per-row entry point from a fixed
+// grid column (DimSummary, no longer used here) to a hover action + the existing
+// expand chevron — DimensionGrid (the expanded content) is still reused as-is.
+import { DimensionGrid } from './DimensionsPanel.jsx';
 
 // Figma tokens — extracted from /home/agustin/Desktop/newlines.css.
 const TOKENS = {
@@ -106,11 +108,22 @@ function computeRowClassName(isHighlighted, isEditing, hasRowClick) {
   ].join(' ');
 }
 
-/** Hover/edit action strip (pencil + trash) shown to the right of each row —
- *  extracted alongside renderLineCell to keep the row callback's own cognitive
- *  complexity under Sonar's threshold. */
+/**
+ * Hover/edit action strip shown to the right of each row — extracted alongside
+ * renderLineCell to keep the row callback's own cognitive complexity under
+ * Sonar's threshold.
+ *
+ * ETP-4610 — `extraActions` is a generic extension slot: any number of extra
+ * icon buttons can be rendered ahead of the built-in Pencil/Trash pair. Each
+ * entry is `{ key, icon: LucideIcon, tooltip, onClick, testId? }` — the same
+ * shape InlineLinesPanel's own `rowActions` prop accepts (see below), so a
+ * caller-provided action and an internally-computed one (e.g. the
+ * "Add dimensions" trigger) render through the exact same code path. Defaults
+ * to `[]` so every existing caller renders byte-for-byte the same as before
+ * this slot existed.
+ */
 function renderRowActionStrip({
-  showActions, reserveActionSlot, actionStripFlex, isEditing, isDeleting, ui, onEdit, onDelete,
+  showActions, reserveActionSlot, actionStripFlex, isEditing, isDeleting, ui, onEdit, onDelete, extraActions = [],
 }) {
   if (!showActions && !reserveActionSlot) return null;
   return (
@@ -121,6 +134,19 @@ function renderRowActionStrip({
     >
       {showActions && (
         <div className={`flex items-center gap-2 h-10 px-3 ${QUICK_ACTIONS_PILL_CLASS}`.trim()}>
+          {extraActions.map(({ key, icon: Icon, tooltip, onClick, testId }) => (
+            <button
+              key={key}
+              type="button"
+              aria-label={tooltip}
+              title={tooltip}
+              onClick={onClick}
+              className="p-1 rounded-full text-muted-foreground hover:bg-muted hover:text-foreground"
+              data-testid={testId ?? `line-action-${key}`}
+            >
+              <Icon className="h-4 w-4" data-testid={`${key}Icon__3b7ec2`} />
+            </button>
+          ))}
           <button
             type="button"
             aria-label={ui('editLineTooltip') ?? 'Edit line'}
@@ -186,37 +212,20 @@ function renderDimensionsSubRow({
 /**
  * Renders a single body cell for a line row — extracted out of the row-map callback
  * (Sonar S3776: nesting this inside both the row `.map` and the column `.map` pushed
- * cognitive complexity past the threshold). Handles the three cell shapes: the shared
- * `dimensionsPanel` summary, a suppressed trailing amount column (hover actions take its
- * space), and the normal edit/read cell.
+ * cognitive complexity past the threshold). Handles the two cell shapes: a suppressed
+ * trailing amount column (hover actions take its space), and the normal edit/read cell.
+ *
+ * ETP-4610 — the `dimensionsPanel` column type is never passed here: `visibleColumns`
+ * (see below) filters it out before the cell map runs, since it no longer renders as a
+ * grid column at all (see `hasDimensionsPanel` / the hover action + expand chevron it
+ * replaced the column with).
  */
 function renderLineCell({
-  col, idx, row, dimRowData, isEditing, showActions, trailingColumn, isDocumentReadOnly,
-  visibleColumns, visibleDimensionFields, labelOverrides, onToggleExpand, hasRowClick,
+  col, idx, row, isEditing, showActions, trailingColumn, isDocumentReadOnly,
+  visibleColumns, hasRowClick,
   entity, token, apiBaseUrl, selectorContext, invalidCell, focusColIdx,
   locale, t, ui, onCommit, onCellClick,
 }) {
-  if (col.type === 'dimensionsPanel') {
-    return (
-      <div
-        key={col.key}
-        className="flex items-center"
-        style={{ padding: `0 ${TOKENS.cellPaddingX}px`, flex: columnFlex(col, idx), minWidth: 0 }}
-        data-cell-key={col.key}
-        onClick={e => e.stopPropagation()}
-      >
-        <DimSummary
-          line={dimRowData}
-          onClick={onToggleExpand}
-          processed={isDocumentReadOnly}
-          labelOverrides={labelOverrides}
-          fields={visibleDimensionFields}
-          emptyLabel={col.emptyLabel}
-          data-testid="DimSummary__3b7ec2" />
-      </div>
-    );
-  }
-
   const isTrailing = col === trailingColumn;
   // The trailing column is hidden when the action strip is showing,
   // so the icons can take its space. Other amount columns stay visible.
@@ -607,6 +616,17 @@ const InlineLinesPanel = forwardRef(function InlineLinesPanel({
   // Pairs with `onEditRow` for modal-style flows.
   onRowClick,
   labelOverrides,
+  // ETP-4610 — generic per-row hover-action extension slot. Additional actions
+  // rendered in the hover strip ahead of the built-in Edit/Delete icons (see
+  // `renderRowActionStrip`'s `extraActions`). Each entry:
+  //   { key, icon: LucideIcon, tooltip, onClick(row), show?: boolean | (row) => boolean, testId? }
+  // `show` defaults to visible; pass a function to condition visibility per row
+  // (e.g. only on rows meeting some business condition). Purely additive — no
+  // caller passes this today, so omitting it renders identically to before this
+  // slot existed. The built-in "Add dimensions" action (below) is merged in
+  // through the exact same mechanism, so it and any future caller-supplied
+  // action share one code path.
+  rowActions = [],
 }, ref) {
   const ui = useUI();
   const t = useLabel(labelOverrides);
@@ -674,7 +694,7 @@ const InlineLinesPanel = forwardRef(function InlineLinesPanel({
   const [invalidCell, setInvalidCell] = useState(null);
 
   // ETP-4529 — row-expand state for the opt-in `dimensionsPanel` column type (see
-  // `dimensionsColumn` below). At most one row is expanded at a time, mirroring
+  // `hasDimensionsPanel` below). At most one row is expanded at a time, mirroring
   // AmortizationLinesTable's original `expandedId` state that this generalizes.
   // Both stay unused (and inert) for every table that doesn't declare that column.
   const [expandedRowId, setExpandedRowId] = useState(null);
@@ -713,16 +733,20 @@ const InlineLinesPanel = forwardRef(function InlineLinesPanel({
   );
 
   // Visible columns: respect col.hidden flag (static) and hiddenColumns (dynamic,
-  // e.g. displayLogic-driven) — mirrors DataTable's hiddenColumns filter exactly. The
-  // dimensionsPanel column additionally drops out entirely once every one of its nested
-  // fields is hidden (no dead expand-chevron for a row with nothing left to show).
+  // e.g. displayLogic-driven) — mirrors DataTable's hiddenColumns filter exactly.
+  //
+  // ETP-4610 — the `dimensionsPanel` column type is ALWAYS excluded here: it is no
+  // longer rendered as a fixed grid column (no header cell, no width). Its metadata
+  // (`rawDimensionsColumn`/`visibleDimensionFields` above) is still used to drive the
+  // leading expand-chevron column and the "Add dimensions" hover action — see
+  // `hasDimensionsPanel` below.
   const visibleColumns = useMemo(
     () => (columns || []).filter(c => {
+      if (c.type === 'dimensionsPanel') return false;
       if (c.hidden || hiddenColumns.includes(c.key)) return false;
-      if (c.type === 'dimensionsPanel') return visibleDimensionFields.length > 0;
       return true;
     }),
-    [columns, hiddenColumns, visibleDimensionFields]
+    [columns, hiddenColumns]
   );
   // The last "amount" column is the one that disappears on hover to make room
   // for the action strip — its 160px width matches the strip so the swap is
@@ -742,15 +766,16 @@ const InlineLinesPanel = forwardRef(function InlineLinesPanel({
     : '0 0 160px';
 
   // ETP-4529 — at most one column may declare `type: 'dimensionsPanel'` (see
-  // InvoiceLinesTable.jsx for a caller example). When present, an extra leading
-  // expand-chevron column and a full-width sub-row (the shared DimensionGrid) render
-  // for whichever row is expanded. Fully additive: `dimensionsColumn` is `null` for
-  // every table that doesn't declare this column type, and every render branch below
-  // is gated on it, so behavior for those tables is byte-for-byte unchanged.
-  const dimensionsColumn = useMemo(
-    () => visibleColumns.find(c => c.type === 'dimensionsPanel') ?? null,
-    [visibleColumns]
-  );
+  // InvoiceLinesTable.jsx for a caller example). When present (and at least one
+  // candidate field is visible), an extra leading expand-chevron column and a
+  // full-width sub-row (the shared DimensionGrid) render for whichever row is
+  // expanded. ETP-4610 replaced the fixed-column entry point (badges / "+ Add
+  // dimensions" trigger) with a hover action next to Edit/Delete — see
+  // `dimensionsRowAction` below — but the chevron + expand-row mechanism is
+  // unchanged. Fully additive: `hasDimensionsPanel` is `false` for every table
+  // that doesn't declare this column type (or has every candidate hidden), so
+  // behavior for those tables is byte-for-byte unchanged.
+  const hasDimensionsPanel = visibleDimensionFields.length > 0;
   const dimensionFieldByKey = useMemo(
     () => Object.fromEntries(visibleDimensionFields.map(f => [f.key, f])),
     [visibleDimensionFields]
@@ -945,7 +970,7 @@ const InlineLinesPanel = forwardRef(function InlineLinesPanel({
         {/* ETP-4529 — leading expand-chevron placeholder, only when a
             `dimensionsPanel` column is declared (keeps header cells aligned
             with the body rows' own chevron column below). */}
-        {dimensionsColumn && (
+        {hasDimensionsPanel && (
           <div style={{ width: 32, flexShrink: 0 }} aria-hidden="true" />
         )}
         <div className="flex items-center justify-center px-2" style={{ width: 40, flexShrink: 0 }}>
@@ -990,9 +1015,9 @@ const InlineLinesPanel = forwardRef(function InlineLinesPanel({
         const isHighlighted = selectedRowId === row.id;
         const isDeleting = pendingDelete === row.id;
         const showActions = (isHovered || isEditing) && !isDocumentReadOnly;
-        // ETP-4529 — see `dimensionsColumn` above: both stay `false`/unused for
+        // ETP-4529 — see `hasDimensionsPanel` above: stays `false`/unused for
         // every table that doesn't declare a `dimensionsPanel` column.
-        const isRowExpanded = Boolean(dimensionsColumn) && expandedRowId === row.id;
+        const isRowExpanded = hasDimensionsPanel && expandedRowId === row.id;
         const dimRowData = pendingDimEdits[row.id] ? { ...row, ...pendingDimEdits[row.id] } : row;
 
         return (
@@ -1008,7 +1033,7 @@ const InlineLinesPanel = forwardRef(function InlineLinesPanel({
           >
             {/* ETP-4529 — expand toggle for the dimensions sub-row, mirroring
                 AmortizationLinesTable's chevron button (rotates 180deg when expanded). */}
-            {dimensionsColumn && (
+            {hasDimensionsPanel && (
               <div className="flex items-center justify-center" style={{ width: 32, flexShrink: 0 }} onClick={e => e.stopPropagation()}>
                 <button
                   type="button"
@@ -1034,20 +1059,36 @@ const InlineLinesPanel = forwardRef(function InlineLinesPanel({
             </div>
             {/* Cells */}
             {visibleColumns.map((col, idx) => renderLineCell({
-              col, idx, row, dimRowData, isEditing, showActions, trailingColumn, isDocumentReadOnly,
-              visibleColumns, visibleDimensionFields, labelOverrides,
-              onToggleExpand: () => setExpandedRowId(isRowExpanded ? null : row.id),
-              hasRowClick: Boolean(onRowClick),
+              col, idx, row, isEditing, showActions, trailingColumn, isDocumentReadOnly,
+              visibleColumns, hasRowClick: Boolean(onRowClick),
               entity, token, apiBaseUrl, selectorContext, invalidCell, focusColIdx,
               locale, t, ui, onCommit: commitField, onCellClick: handleCellClick,
             }))}
             {/* Hover / edit action strip. When `reserveActionSlot` is true
                 (no amount column), the slot is rendered in every row so cells
-                don't reflow on hover — only the icons inside fade in. */}
+                don't reflow on hover — only the icons inside fade in.
+                ETP-4610 — `extraActions` merges the built-in "Add dimensions"
+                trigger (replacing the old fixed grid column, only when the
+                entity has dimensions configured) with any caller-supplied
+                `rowActions`, each filtered by its own per-row `show`. Both
+                render through the exact same generic slot in
+                `renderRowActionStrip`. */}
             {renderRowActionStrip({
               showActions, reserveActionSlot, actionStripFlex, isEditing, isDeleting, ui,
               onEdit: () => handleEditClick(row),
               onDelete: () => handleDeleteClick(row),
+              extraActions: [
+                ...(hasDimensionsPanel ? [{
+                  key: 'dimensions',
+                  icon: Plus,
+                  tooltip: ui('addDimensionsTooltip'),
+                  onClick: () => setExpandedRowId(isRowExpanded ? null : row.id),
+                  testId: 'line-action-add-dimensions',
+                }] : []),
+                ...rowActions
+                  .filter(action => (typeof action.show === 'function' ? action.show(row) : action.show !== false))
+                  .map(action => ({ ...action, onClick: () => action.onClick(row) })),
+              ],
             })}
             <div style={{ width: 48, flexShrink: 0 }} aria-hidden="true" />
           </div>

@@ -1026,5 +1026,16 @@
     ],
     "author": "pipeline",
     "date": "2026-07-28"
+  },
+  {
+    "from": "0.24.0",
+    "to": "0.25.0",
+    "level": "additive",
+    "reasons": [
+      "Field \"project\" property \"dimensionsPanel\" changed from \"undefined\" to \"true\" in frontend (additive)",
+      "Field \"costcenter\" property \"dimensionsPanel\" changed from \"undefined\" to \"true\" in frontend (additive)"
+    ],
+    "author": "pipeline",
+    "date": "2026-07-28"
   }
 ]

@@ -164,3 +164,17 @@ as `dimensionFields`. This column definition is passed to both `InlineLinesPanel
 `DataTable`, so the expand-row "Dimensiones contables" panel renders in the lines grid for this
 window's classic grid + side-panel layout too — in addition to (not instead of) the existing
 side-panel editor, which still separately gates `asset` behind the Open Items checkbox.
+
+### Regen gap re-closed + "Añadir dimensiones" moved to a hover action (ETP-4610)
+
+The regeneration described above had not actually landed in the committed `contract.json`/
+`GLJournalLineTable.jsx` (zero `dimensionsPanel` references found there while validating
+ETP-4610) — likely lost across the `epic/ETP-3504` merges preceding this branch. Re-ran
+`make regen ONLY=simple-g-l-journal SKIP_EXTRACT=1 LOCAL_CORE=1`; confirmed clean
+(`sf-validate-pipeline`, 0 violations, additive version bump, no unrelated translation drift).
+Separately, `InlineLinesPanel` no longer renders the `dimensionsPanel` type as a grid column in
+its own `inlineEditable` layout — "Añadir dimensiones" is now a hover action next to Edit/Delete,
+gated on at least one visible dimension field, with the expand-chevron column unchanged. (The
+`DataTable`-driven classic-grid path this window also uses does not render `dimensionsPanel` at
+all — pre-existing behavior, unrelated to and unchanged by ETP-4610.) See
+`docs/ui-customization.md` §14b/§14c and `docs/feedback.md`'s ETP-4610 entry.

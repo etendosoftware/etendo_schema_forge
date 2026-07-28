@@ -629,32 +629,71 @@ Default: `"classic"`. Validator F12 enforces the enum (`"classic"` | `"inlineEdi
 
 ### 14b. `dimensionsPanel` — expand-row accounting-dimension panel (`InlineLinesPanel` column type)
 
-**What it does:** an opt-in column `type` for `InlineLinesPanel`, either declared directly in a hand-written `columns` array (e.g. `InvoiceLinesTable.jsx`) or generated automatically from a `"dimensionsPanel": true` flag on a field in `decisions.json` (see "Pipeline-generator support" below). Renders the shared "Dimensiones contables" UX Amortización originated: a per-row cell showing up to 2 "Label: Value" badges + a "+N" overflow, or a dashed "+ Add dimensions" trigger when every candidate field is empty. Clicking it (or the leftmost chevron, also added only when this column type is present) expands a full-width sub-row directly below the data row with a 4-column grid of selectors — one per visible dimension field.
+**What it does:** an opt-in column `type` for `InlineLinesPanel`, either declared directly in a hand-written `columns` array (e.g. `InvoiceLinesTable.jsx`) or generated automatically from a `"dimensionsPanel": true` flag on a field in `decisions.json` (see "Pipeline-generator support" below).
 
-**Why it exists (ETP-4529):** supersedes ETP-4543's plain, always-rendered `project`/`costcenter` grid columns (see `docs/feedback.md`) — a permanently-visible column reads as a field the client always has, even with no accounting-dimension config at all. The expand panel only invites the user in when there's something to show or fill, matching the pattern Amortización already shipped.
+**ETP-4610 update — no longer a fixed grid column.** `InlineLinesPanel` filters this column type out of `visibleColumns` unconditionally: no header cell, no width reservation, no per-row badges/trigger rendered inline in the grid. Its `dimensionFields` metadata still drives two things:
+- the pre-existing leading expand-chevron column (unchanged since ETP-4529) — expands/collapses the full-width sub-row of selectors below the data row;
+- an **"Add dimensions" hover-action icon** (`Plus`, tooltip via the `addDimensionsTooltip` i18n key) rendered next to Edit/Delete in the row's hover strip, through the generic `rowActions` extension slot (§14c below) — shown only when at least one `dimensionFields` candidate is currently visible for that entity.
 
-**Column shape:**
+Clicking either the chevron or the hover action toggles the same expand state — there is exactly one way the panel opens, just two entry points into it now. The previously-permanent "Dimensiones contables" column text and the collapsed `DimSummary` badges/dashed trigger are gone; discoverability now relies on the icon + tooltip, matching how the pre-existing Edit/Delete icons are already discovered (hover + tooltip, no permanent label).
+
+**Why it exists (ETP-4529, updated by ETP-4610):** ETP-4529 superseded ETP-4543's plain, always-rendered `project`/`costcenter` grid columns (see `docs/feedback.md`) — a permanently-visible column reads as a field the client always has, even with no accounting-dimension config at all. ETP-4610 went one step further: even the expand-row's own summary column read as a permanent grid column once dimensions were configured. Moving the "add" affordance into the hover strip (alongside the row's other actions, which are also hover-only) keeps the grid free of a column whose only job was inviting the user into an action, not displaying data the user scans regularly.
+
+**Column shape (unchanged by ETP-4610 — this is generator/metadata surface, not the render decision):**
 ```js
 {
   key: 'dimensions',           // any unique key, like any other column
   type: 'dimensionsPanel',
-  label: ui('dimensionsPanelTitle'),   // column header label, resolved like any other column
+  label: ui('dimensionsPanelTitle'),   // metadata only — never rendered as a header now
   dimensionFields: [                    // candidate fields, already visibility-filtered by the caller
     { key: 'project', column: 'C_Project_ID', type: 'selector', label: t('C_Project_ID'), lookup: true },
     { key: 'costcenter', column: 'C_Costcenter_ID', type: 'selector', label: t('C_Costcenter_ID') },
   ],
-  emptyLabel: undefined,        // optional: override the "+ Add dimensions" trigger text (defaults to the generic `dimensionsPanelEmpty` i18n key)
+  emptyLabel: undefined,        // vestigial — DimSummary (the only reader) is no longer used by InlineLinesPanel
 }
 ```
 `dimensionFields` entries are ordinary column-shaped objects (`key`/`column`/`type`/`label`) — `InlineLinesPanel` reuses the same `commitField` path every other inline edit uses to persist a dimension-field change, so no special save wiring is needed. Drop the column entirely (don't include it in `columns`) when every candidate would be hidden — `InvoiceLinesTable.jsx` does this via `dimensionFields.length > 0 ? [...] : []`.
 
-**Fully additive/opt-in:** a table that never declares a `dimensionsPanel` column renders byte-for-byte the same as before this feature shipped — no leading chevron column, no expand state, zero behavior change. Verified against the full existing `InlineLinesPanel` test suite.
+**Fully additive/opt-in:** a table that never declares a `dimensionsPanel` column renders byte-for-byte the same as before this feature shipped — no leading chevron column, no expand state, no "Add dimensions" hover action. Verified against the full existing `InlineLinesPanel` test suite.
 
-**Shared building blocks:** `tools/app-shell/src/components/contract-ui/DimensionsPanel.jsx` exports `DimBadge`, `DimSummary`, `DimensionGrid` — generic, reusable by any lines table (`InlineLinesPanel`'s column type, or a fully hand-built table like `AmortizationLinesTable.jsx`, which was refactored to import from here instead of defining them locally).
+**Shared building blocks:** `tools/app-shell/src/components/contract-ui/DimensionsPanel.jsx` exports `DimBadge`, `DimSummary`, `DimensionGrid`. `InlineLinesPanel` only uses `DimensionGrid` now (the expanded content); `DimSummary`/`DimBadge` remain in use by `AmortizationLinesTable.jsx`, a fully hand-built table outside this ticket's scope.
 
-**Pipeline-generator support (resolved):** `generateTableComponent` (`schema_forge_core`'s `cli/src/generate-frontend.js`) now emits this column type directly from `decisions.json` — no custom component required. Flag a field `"dimensionsPanel": true` (any `grid` value; see `docs/decisions-reference.md`) and the generator collects it into the synthetic column automatically for the pipeline-generated `<Window>LineTable.jsx`/`LinesTable.jsx`/`GoodsShipmentLineTable.jsx`/`GoodsReceiptLineTable.jsx` files. Fully additive — an entity with zero `dimensionsPanel: true` fields generates byte-for-byte the same `columns` array as before. This supersedes the earlier limitation (see `docs/feedback.md`, "ETP-4543" supersession note): `sales-invoice`, `purchase-invoice`, `goods-shipment`, and `goods-receipt` all now declare `lines.project.dimensionsPanel`/`lines.costcenter.dimensionsPanel` in `decisions.json` and render the panel via the generated table, not a hand-written override.
+**Pipeline-generator support (unchanged by ETP-4610):** `generateTableComponent` (`schema_forge_core`'s `cli/src/generate-frontend.js`) still emits this column type directly from `decisions.json` — no generator change was needed for the column-hiding requirement, since `InlineLinesPanel` (a generic component owned entirely by this functional repo, not part of `@etendosoftware/app-shell-core`) decides how the metadata renders, not the generator. Flag a field `"dimensionsPanel": true` (any `grid` value; see `docs/decisions-reference.md`) and the generator collects it into the synthetic column automatically for the pipeline-generated `<Window>LineTable.jsx`/`LinesTable.jsx`/`GoodsShipmentLineTable.jsx`/`GoodsReceiptLineTable.jsx` files. Fully additive — an entity with zero `dimensionsPanel: true` fields generates byte-for-byte the same `columns` array as before.
 
-**Real example:** the generated `LinesTable.jsx` (sales-invoice, purchase-invoice) and `GoodsShipmentLineTable.jsx`/`GoodsReceiptLineTable.jsx` (goods-shipment, goods-receipt) — all driven purely by `decisions.json`. Also `InvoiceLinesTable.jsx` (hand-written, **not currently reachable from the running app** — see `docs/feedback.md`) and `AmortizationLinesTable.jsx` (post-extraction, via the shared components directly rather than the column type — it is a wholly custom `<table>`, not an `InlineLinesPanel` consumer).
+**Real example:** the generated `LinesTable.jsx` (sales-invoice, purchase-invoice), `GoodsShipmentLineTable.jsx`/`GoodsReceiptLineTable.jsx` (goods-shipment, goods-receipt), and `GLJournalLineTable.jsx` (simple-g-l-journal) — all driven purely by `decisions.json`; `goods-receipt` and `simple-g-l-journal` were regenerated as part of ETP-4610 to pick up dimension flags that predated this change (see `docs/feedback.md`). Also `InvoiceLinesTable.jsx` (hand-written, **not currently reachable from the running app** — see `docs/feedback.md`) and `AmortizationLinesTable.jsx` (via the shared components directly rather than the column type — it is a wholly custom `<table>`, not an `InlineLinesPanel` consumer, and keeps its own fixed-column-free hover strip unaffected by this ticket).
+
+---
+
+### 14c. `InlineLinesPanel` row hover-action extension slot (`rowActions` prop)
+
+**What it does:** a generic extension point on `InlineLinesPanel` for adding extra icon buttons to a row's hover-action strip, alongside the built-in Edit (pencil) / Delete (trash) icons. Added by ETP-4610 to move the "Add dimensions" trigger there without hardcoding it — any future action (window-specific or generic) can reuse the exact same mechanism instead of re-implementing the strip.
+
+**Before this ticket:** the hover strip (`renderRowActionStrip` in `InlineLinesPanel.jsx`) rendered exactly two hardcoded buttons (Pencil → edit, Trash2 → delete) with no extension point. There was no mechanism for conditional-per-row visibility beyond the two existing handlers' own `isDocumentReadOnly` gate.
+
+**Prop shape:**
+```jsx
+<InlineLinesPanel
+  columns={columns}
+  data={data}
+  // ...
+  rowActions={[
+    {
+      key: 'archive',            // unique key — also the default data-testid suffix
+      icon: ArchiveIcon,         // any lucide-react icon component
+      tooltip: ui('archiveLineTooltip'),   // aria-label + title — the icon's only label, matches Pencil/Trash's own pattern
+      onClick: (row) => handleArchive(row),
+      show: (row) => row.status !== 'archived',  // optional: boolean OR (row) => boolean, defaults to visible
+      testId: 'line-action-archive',  // optional override; defaults to `line-action-${key}`
+    },
+  ]}
+/>
+```
+- `show` supports both a static boolean (hide/show for every row identically) and a per-row function, satisfying conditional-per-line visibility generically — not hardcoded to any one action's business rule.
+- Extra actions render **before** Pencil/Trash, in the order declared in the array.
+- The built-in "Add dimensions" action (§14b) is computed internally by `InlineLinesPanel` from its own `dimensionFields` metadata and merged into the same list ahead of any caller-supplied `rowActions` — both render through the identical `renderRowActionStrip({ extraActions })` code path, so there is only one hover-action rendering mechanism in the component, not two.
+- Purely additive: omitting `rowActions` (every existing caller today) renders byte-for-byte the same strip as before this slot existed.
+
+**Real example:** the internal "Add dimensions" action is the only current consumer; no external caller passes `rowActions` yet. See `tools/app-shell/src/components/contract-ui/__tests__/InlineLinesPanel.vitest.jsx`'s `rowActions — generic hover-action extension slot` describe block for the mechanism's own regression tests (rendering, static `show: false`, per-row `show` function, declared-order rendering).
 
 ---
 

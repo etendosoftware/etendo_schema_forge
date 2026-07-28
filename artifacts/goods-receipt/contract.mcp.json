@@ -2,7 +2,7 @@
   "version": "0.24.0",
   "generatedAt": "2026-04-29T19:05:20.719Z",
   "updatedAt": "2026-07-28T13:29:09.120Z",
-  "contractChecksum": "40b2dfb302a47613",
+  "contractChecksum": "e6a4fcbfb6949388",
   "apiPrediction": {
     "specName": "goods-receipt",
     "baseUrl": "/sws/neo/goods-receipt",

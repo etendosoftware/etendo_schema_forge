@@ -1,4 +1,5 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, within, act } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 
 // ETP-4543 (superseded by ETP-4529) — this test originally covered two
 // ALWAYS-declared plain grid columns, 'project' and 'costcenter', toggled
@@ -71,6 +72,9 @@ vi.mock('@/components/contract-ui/InlineSearchCombo.jsx', () => ({
 }));
 vi.mock('@/components/contract-ui/SelectorInput.jsx', () => ({
   SelectorInput: () => <span data-testid="selector-input-stub" />,
+  // DimensionsPanel.jsx's DimensionGrid imports this as a default export — needed
+  // now that a test actually expands the dimensions sub-row.
+  default: () => <span data-testid="selector-input-stub" />,
 }));
 vi.mock('@/components/contract-ui/ProductSearchDrawer.jsx', () => ({
   default: () => null,
@@ -116,32 +120,45 @@ function renderTable(props = {}) {
   );
 }
 
+// ETP-4610 — the `dimensionsPanel` column no longer renders as a fixed grid column
+// (no header, no badges) in ANY case below: the entry point moved to the "Add
+// dimensions" hover action + the pre-existing expand chevron. These tests now assert
+// the chevron's/hover-action's presence instead of the removed column header/badges.
 describe('InvoiceLinesTable — dimensionsPanel column visibility (ETP-4529, superseding ETP-4543)', () => {
-  it('renders the dimensions column by default, with both project and costcenter represented in it', () => {
+  it('never renders a dimensions column header, with candidates configured', () => {
     renderTable();
-    expect(screen.getByTestId('column-header-dimensions')).toBeInTheDocument();
-    // Evidence both candidates are part of the panel: their identifiers surface
-    // in the collapsed DimSummary badges (see DimensionsPanel.jsx's DimBadge).
-    expect(screen.getByText('Project Alpha')).toBeInTheDocument();
-    expect(screen.getByText('HQ')).toBeInTheDocument();
+    expect(screen.queryByTestId('column-header-dimensions')).toBeNull();
   });
 
-  it('excludes project from the dimensions panel when hiddenColumns includes "project", keeping costcenter', () => {
+  it('keeps the expand chevron when at least one candidate is visible, dropping only the hidden one', async () => {
     renderTable({ hiddenColumns: ['project'] });
-    // The column itself is still declared — costcenter remains a live candidate.
-    expect(screen.getByTestId('column-header-dimensions')).toBeInTheDocument();
-    expect(screen.queryByText('Project Alpha')).toBeNull();
-    expect(screen.getByText('HQ')).toBeInTheDocument();
+    expect(screen.getByTestId('dimensions-panel-toggle')).toBeInTheDocument();
+    // Expanding the sub-row surfaces only the still-visible candidate — the
+    // SelectorInput stub doesn't forward field identity into its own text, so
+    // the field count is the observable proxy for "which candidates survived".
+    const row = screen.getByTestId('line-row-L1');
+    await act(async () => {
+      await userEvent.click(within(row).getByTestId('dimensions-panel-toggle'));
+    });
+    expect(screen.getAllByTestId('selector-input-stub')).toHaveLength(1);
   });
 
-  it('omits the dimensions column entirely when hiddenColumns hides every candidate', () => {
+  it('omits the expand chevron and the "Add dimensions" hover action when hiddenColumns hides every candidate', async () => {
     renderTable({ hiddenColumns: ['project', 'costcenter'] });
     // dimensionFields.length === 0 → the column (and its expand chevron) is
     // dropped from `columns` altogether — not just emptied.
     expect(screen.queryByTestId('column-header-dimensions')).toBeNull();
     expect(screen.queryByTestId('dimensions-panel-toggle')).toBeNull();
-    expect(screen.queryByText('Project Alpha')).toBeNull();
-    expect(screen.queryByText('HQ')).toBeNull();
+    const row = screen.getByTestId('line-row-L1');
+    await act(async () => { await userEvent.hover(row); });
+    expect(within(row).queryByTestId('line-action-add-dimensions')).toBeNull();
+  });
+
+  it('shows the "Add dimensions" hover action when at least one candidate is configured (positive case)', async () => {
+    renderTable();
+    const row = screen.getByTestId('line-row-L1');
+    await act(async () => { await userEvent.hover(row); });
+    expect(within(row).getByTestId('line-action-add-dimensions')).toBeInTheDocument();
   });
 
   it('uses DataTable when linesLayout is not inlineEditable', () => {

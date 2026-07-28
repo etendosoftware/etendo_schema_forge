@@ -169,6 +169,18 @@ supersession note.
 `GoodsReceiptLineTable.jsx` renders the expand-row "Dimensiones contables" panel for existing
 rows. See `docs/decisions-reference.md` (`dimensionsPanel`) and `docs/ui-customization.md` §14b.
 
+### Regen gap closed + "Añadir dimensiones" moved to a hover action (ETP-4610)
+
+While validating ETP-4610, `contract.json`/`GoodsReceiptLineTable.jsx` were found to have **never
+actually picked up** the `dimensionsPanel: true` flags above — likely lost across the
+`epic/ETP-3504` merges preceding this branch, despite the ETP-4529 note claiming this window was
+already regenerated. Re-ran `make regen ONLY=goods-receipt SKIP_EXTRACT=1 LOCAL_CORE=1`; confirmed
+clean (`sf-validate-pipeline`, 0 violations, additive version bump). Separately, `InlineLinesPanel`
+no longer renders the `dimensionsPanel` type as a grid column at all — "Añadir dimensiones" is now
+a hover action next to Edit/Delete, gated on at least one visible dimension field, with the
+expand-chevron column unchanged. See `docs/ui-customization.md` §14b/§14c and `docs/feedback.md`'s
+ETP-4610 entry.
+
 ## Theme roles
 
 The window's live artifact custom components use the shared semantic theme.

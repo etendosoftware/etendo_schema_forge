@@ -32,11 +32,10 @@ const ELASTIC_BASIS_PX = {
   enum: 224,
   select: 224,
   date: 130,
-  // ETP-4529 — the dimensionsPanel column (badges + "+N"/"Add dimensions"
-  // trigger) needs more room than a plain selector cell; mirrors
-  // Amortización's w-96 (384px) column, elastic so it still absorbs the row's
-  // surplus width.
-  dimensionsPanel: 320,
+  // ETP-4610 — the `dimensionsPanel` type used to reserve 320px here (badges +
+  // "+N"/"Add dimensions" trigger). It no longer renders as a grid column at all
+  // (InlineLinesPanel filters it out of `visibleColumns` before any width lookup
+  // happens — see `hasDimensionsPanel` there), so no basis entry is needed.
 };
 
 const SELECTOR_TYPES = new Set(['selector', 'search', 'foreignKey']);

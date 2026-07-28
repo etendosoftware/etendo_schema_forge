@@ -52,6 +52,10 @@ vi.mock('../InlineSearchCombo.jsx', () => ({
 }));
 vi.mock('../SelectorInput.jsx', () => ({
   SelectorInput: () => <span data-testid="selector-input" />,
+  // DimensionsPanel.jsx's DimensionGrid imports this as a default export — needed
+  // once a test actually expands the dimensions sub-row (see the "Add dimensions"
+  // hover-action tests below), not just checks the collapsed summary/toggle.
+  default: () => <span data-testid="selector-input" />,
 }));
 vi.mock('../ProductSearchDrawer.jsx', () => ({
   default: () => null,
@@ -1639,6 +1643,11 @@ describe('InlineLinesPanel', () => {
   // deactivated but still shown in the sales-invoice lines expand panel) and confirms the
   // fix: dimensionFields is now filtered by hiddenColumns too, and the whole column drops
   // out when every candidate ends up hidden.
+  //
+  // ETP-4610 — the `dimensionsPanel` column NEVER renders as a fixed grid column anymore
+  // (no `column-header-dimensions`, no badges in the row). The entry point moved to a
+  // hover action ("Add dimensions") next to Pencil/Trash, plus the existing leading
+  // expand-chevron. Both are still gated on `hiddenColumns` filtering out every candidate.
   describe('dimensionsPanel column — hiddenColumns filters nested dimensionFields', () => {
     const dimensionColumns = [
       {
@@ -1657,7 +1666,7 @@ describe('InlineLinesPanel', () => {
       costcenter: 'CC1', 'costcenter$_identifier': 'HQ',
     }];
 
-    function renderDimensionsPanel(hiddenColumns) {
+    function renderDimensionsPanel(hiddenColumns, extraProps = {}) {
       return render(
         <InlineLinesPanel
           columns={dimensionColumns}
@@ -1670,29 +1679,122 @@ describe('InlineLinesPanel', () => {
           onSelectionChange={vi.fn()}
           onUpdateRow={vi.fn().mockResolvedValue()}
           onDeleteRow={vi.fn().mockResolvedValue()}
+          {...extraProps}
         />,
       );
     }
 
-    it('shows every candidate when nothing is hidden', () => {
+    it('never renders the dimensions column header, regardless of hiddenColumns', () => {
       renderDimensionsPanel([]);
-      expect(screen.getByTestId('column-header-dimensions')).toBeInTheDocument();
-      expect(screen.getByText('Project Alpha')).toBeInTheDocument();
-      expect(screen.getByText('HQ')).toBeInTheDocument();
-    });
-
-    it('hides only the disabled dimension, keeping the column and the other candidate', () => {
-      renderDimensionsPanel(['costcenter']);
-      expect(screen.getByTestId('column-header-dimensions')).toBeInTheDocument();
-      expect(screen.getByText('Project Alpha')).toBeInTheDocument();
-      expect(screen.queryByText('HQ')).toBeNull();
-    });
-
-    it('drops the whole column when every candidate is hidden', () => {
-      renderDimensionsPanel(['project', 'costcenter']);
       expect(screen.queryByTestId('column-header-dimensions')).toBeNull();
-      expect(screen.queryByText('Project Alpha')).toBeNull();
-      expect(screen.queryByText('HQ')).toBeNull();
+      renderDimensionsPanel(['costcenter']);
+      expect(screen.queryByTestId('column-header-dimensions')).toBeNull();
+    });
+
+    it('keeps the expand chevron when at least one candidate is visible', () => {
+      renderDimensionsPanel(['costcenter']);
+      expect(screen.getByTestId('dimensions-panel-toggle')).toBeInTheDocument();
+    });
+
+    it('drops the expand chevron entirely when every candidate is hidden', () => {
+      renderDimensionsPanel(['project', 'costcenter']);
+      expect(screen.queryByTestId('dimensions-panel-toggle')).toBeNull();
+    });
+
+    it('shows the "Add dimensions" hover action only when at least one candidate is visible', async () => {
+      renderDimensionsPanel(['costcenter']);
+      const row = screen.getByTestId('line-row-L1');
+      await act(async () => { await userEvent.hover(row); });
+      expect(within(row).getByTestId('line-action-add-dimensions')).toBeInTheDocument();
+    });
+
+    it('hides the "Add dimensions" hover action when every candidate is hidden (negative case)', async () => {
+      renderDimensionsPanel(['project', 'costcenter']);
+      const row = screen.getByTestId('line-row-L1');
+      await act(async () => { await userEvent.hover(row); });
+      expect(within(row).queryByTestId('line-action-add-dimensions')).toBeNull();
+    });
+
+    it('hides the "Add dimensions" hover action for a table with no dimensionsPanel column at all', async () => {
+      renderPanel();
+      const row = screen.getByTestId('line-row-L1');
+      await act(async () => { await userEvent.hover(row); });
+      expect(within(row).queryByTestId('line-action-add-dimensions')).toBeNull();
+    });
+
+    it('clicking the "Add dimensions" hover action expands the same sub-row the chevron toggles', async () => {
+      renderDimensionsPanel(['costcenter']);
+      const row = screen.getByTestId('line-row-L1');
+      await act(async () => { await userEvent.hover(row); });
+      expect(screen.queryByTestId('dimensions-panel-L1')).toBeNull();
+      await act(async () => {
+        await userEvent.click(within(row).getByTestId('line-action-add-dimensions'));
+      });
+      expect(screen.getByTestId('dimensions-panel-L1')).toBeInTheDocument();
+    });
+  });
+
+  // ETP-4610 — generic hover-action extension slot (`rowActions` prop). Verifies the
+  // mechanism itself (not the dimensions use case): any caller can inject extra hover
+  // actions, each with its own per-row conditional visibility, through the exact same
+  // `renderRowActionStrip` code path the built-in "Add dimensions" action uses.
+  describe('rowActions — generic hover-action extension slot', () => {
+    it('renders a caller-supplied action in the hover strip', async () => {
+      const onClick = vi.fn();
+      renderPanel({
+        rowActions: [{ key: 'archive', icon: () => <span />, tooltip: 'Archive', onClick, testId: 'line-action-archive' }],
+      });
+      const row = screen.getByTestId('line-row-L1');
+      await act(async () => { await userEvent.hover(row); });
+      const btn = within(row).getByTestId('line-action-archive');
+      expect(btn).toBeInTheDocument();
+      await act(async () => { await userEvent.click(btn); });
+      expect(onClick).toHaveBeenCalledWith(expect.objectContaining({ id: 'L1' }));
+    });
+
+    it('supports a boolean `show` to hide an action unconditionally', async () => {
+      renderPanel({
+        rowActions: [{ key: 'archive', icon: () => <span />, tooltip: 'Archive', onClick: vi.fn(), show: false }],
+      });
+      const row = screen.getByTestId('line-row-L1');
+      await act(async () => { await userEvent.hover(row); });
+      expect(within(row).queryByTestId('line-action-archive')).toBeNull();
+    });
+
+    it('supports a per-row `show` function so the action can condition its own visibility', async () => {
+      renderPanel({
+        rowActions: [{
+          key: 'archive',
+          icon: () => <span />,
+          tooltip: 'Archive',
+          onClick: vi.fn(),
+          show: (row) => row.id === 'L2',
+        }],
+      });
+      const rowL1 = screen.getByTestId('line-row-L1');
+      const rowL2 = screen.getByTestId('line-row-L2');
+      await act(async () => { await userEvent.hover(rowL1); });
+      expect(within(rowL1).queryByTestId('line-action-archive')).toBeNull();
+      await act(async () => { await userEvent.hover(rowL2); });
+      expect(within(rowL2).getByTestId('line-action-archive')).toBeInTheDocument();
+    });
+
+    it('renders multiple extra actions ahead of the built-in Pencil/Trash pair', async () => {
+      renderPanel({
+        rowActions: [
+          { key: 'first', icon: () => <span />, tooltip: 'First', onClick: vi.fn() },
+          { key: 'second', icon: () => <span />, tooltip: 'Second', onClick: vi.fn() },
+        ],
+      });
+      const row = screen.getByTestId('line-row-L1');
+      await act(async () => { await userEvent.hover(row); });
+      const actions = within(row).getByTestId('line-actions');
+      const buttons = within(actions).getAllByRole('button');
+      // The two extra actions render first, in declared order, ahead of the
+      // built-in Pencil/Trash pair (4 buttons total).
+      expect(buttons).toHaveLength(4);
+      expect(buttons[0]).toHaveAttribute('data-testid', 'line-action-first');
+      expect(buttons[1]).toHaveAttribute('data-testid', 'line-action-second');
     });
   });
 });
