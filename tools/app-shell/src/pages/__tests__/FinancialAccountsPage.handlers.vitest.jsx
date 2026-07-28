@@ -81,6 +81,13 @@ vi.mock('@/windows/custom/financial-account/FundsTransferModal.jsx', () => ({
   FundsTransferModal: (props) => <div data-testid="transfer-modal" data-source={props.sourceAccountId} />,
 }));
 
+// ETP-4658: FinancialAccountsPage is now gated by useWindowAccess — default to 'full' so this
+// suite's handler-wiring tests keep exercising the page as before.
+vi.mock('@/auth/AuthContext.jsx', () => ({
+  useWindowAccess: () => 'full',
+  WindowAccessGuard: () => <div data-testid="window-access-guard" />,
+}));
+
 const mockNavigate = vi.fn();
 vi.mock('react-router-dom', async () => {
   const actual = await vi.importActual('react-router-dom');

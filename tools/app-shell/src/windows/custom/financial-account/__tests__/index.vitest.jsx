@@ -109,6 +109,14 @@ vi.mock('@/hooks/usePsd2ConnectFlow', () => ({
   }),
 }));
 
+// ETP-4658: FinancialAccountWindow is now gated by useWindowAccess — default to 'full' so this
+// suite keeps exercising the window as before.
+let currentWindowAccessTier = 'full';
+vi.mock('@/auth/AuthContext.jsx', () => ({
+  useWindowAccess: () => currentWindowAccessTier,
+  WindowAccessGuard: () => <div data-testid="window-access-guard" />,
+}));
+
 import FinancialAccountWindow from '../index.jsx';
 
 function setHooks({ account = { id: 'acc-1', name: 'BBVA', pendingCount: 4 }, movements = [], totals = { balance: 0, inflows: 0, outflows: 0, currency: 'EUR' }, loading = false, statements = [] } = {}) {

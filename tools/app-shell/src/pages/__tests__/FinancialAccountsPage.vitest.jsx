@@ -74,8 +74,14 @@ vi.mock('@/hooks/useFinancialAccountAccounting.js', () => ({
 // ETP-4530: EditAccountModal's Accounting tab is gated by the showAccountingFields capability —
 // grant it by default so this page's own suite (which doesn't exercise the gate itself) keeps
 // exercising the modal exactly as before.
+// ETP-4658: FinancialAccountsPage itself is now gated by useWindowAccess (the /finance/accounts
+// entry point never delegated to a generated component, so it never picked up the ETP-4520
+// route guard) — default to 'full' so this page's own suite keeps exercising the page as before.
+let currentWindowAccessTier = 'full';
 vi.mock('@/auth/AuthContext.jsx', () => ({
   useHasCapability: () => true,
+  useWindowAccess: () => currentWindowAccessTier,
+  WindowAccessGuard: () => <div data-testid="window-access-guard" />,
 }));
 
 const mockNavigate = vi.fn();
