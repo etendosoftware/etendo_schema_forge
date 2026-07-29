@@ -19876,6 +19876,7 @@
     "backendError.matchRuleRegexInvalid": "Expresión regular no válida",
     "backendError.matchRulePriorityConflict": "Ya existe una regla con esta prioridad para el ámbito seleccionado",
     "backendError.priceListCannotDeactivateDefault": "No es posible desactivar una tarifa marcada como por defecto.",
+    "backendError.productCategoryCannotSetMultipleDefault": "Solo una categoría de producto puede estar marcada como valor por defecto.",
     "uomTypeArea": "Área",
     "uomTypeLength": "Longitud",
     "uomTypeTime": "Tiempo",

@@ -2015,8 +2015,20 @@ export function DetailView({
   // Ref updated on every render so the callback always reads the latest hook state,
   // even when called from a setTimeout scheduled before the React re-render committed.
   const handleFieldBlurRef = useRef(null);
-  handleFieldBlurRef.current = () => {
-    hasUnsavedEdits(hook.editing, hook.selected) && hook.handleSave();
+  handleFieldBlurRef.current = async () => {
+    if (!hasUnsavedEdits(hook.editing, hook.selected)) return;
+    // handleSave() resolves to the saved record on success, or null on any
+    // failure (validation block, non-2xx PATCH, network error) — see
+    // useEntity.js. A checkbox/toggle field autosaves immediately (ETP-4670:
+    // EntityForm fires onFieldBlur right after onChange for those types), so
+    // on failure the optimistic local flip must be rolled back — otherwise the
+    // control stays visually checked even though the backend rejected it and
+    // showed a toast (handleSave already surfaces the translated error via
+    // handleSaveErrorResponse). handleSelect(hook.selected) resets `editing`
+    // back to the last successfully-persisted record, discarding the rejected
+    // in-flight edit.
+    const saved = await hook.handleSave();
+    if (!saved) hook.handleSelect(hook.selected);
   };
   const handleFieldBlur = useCallback(() => {
     handleFieldBlurRef.current?.();

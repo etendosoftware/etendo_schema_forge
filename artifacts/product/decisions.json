@@ -74,6 +74,7 @@
   "entities": {
     "intrastat": { "exclude": true },
     "product": {
+      "javaQualifier": "productDefaultsHandler",
       "formCols": 3,
       "fields": {
         "searchKey": {
@@ -91,7 +92,7 @@
         "description": {
           "type": "textarea",
           "section": "principal",
-          "seq": 6,
+          "seq": 7,
           "span": 3
         },
         "productType": {
@@ -126,7 +127,7 @@
           "type": "image",
           "inline": false,
           "section": "principal",
-          "seq": 7
+          "seq": 8
         },
         "taxCategory": {
           "section": "other",
@@ -164,6 +165,14 @@
         },
         "returnable": {
           "section": "other",
+          "displayLogic": null
+        },
+        "active": {
+          "visibility": "editable",
+          "grid": false,
+          "section": "principal",
+          "seq": 6,
+          "readOnlyLogic": null,
           "displayLogic": null
         },
         "characteristicDescription": {

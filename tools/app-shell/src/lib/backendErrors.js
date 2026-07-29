@@ -25,6 +25,8 @@ const BACKEND_ERROR_MAP = {
   'There is already an asset category with this name.': 'backendError.assetGroupNameDuplicate',
   // Goods Movements line (GoodsMovementLineHandler) validation messages
   'This product is of type Service and cannot be used in inventory movements.': 'backendError.productNotStockable',
+  // Product category (ProductCategoryDefaultHandler) validation messages
+  'Only one product category can be marked as default.': 'backendError.productCategoryCannotSetMultipleDefault',
 };
 
 export function translateBackendError(msg, t) {

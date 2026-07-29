@@ -40,7 +40,7 @@ const draftMode = null;
 // @sf-generated-end draftMode:product
 
 // @sf-generated-start requiredHeaderFields:product
-const requiredHeaderFields = ['searchKey', 'name', 'uOM', 'productCategory', 'taxCategory', 'purchase', 'sale', 'productType', 'stocked', 'returnable'];
+const requiredHeaderFields = ['searchKey', 'name', 'uOM', 'productCategory', 'taxCategory', 'purchase', 'sale', 'productType', 'stocked', 'active', 'returnable'];
 // @sf-generated-end requiredHeaderFields:product
 
 
