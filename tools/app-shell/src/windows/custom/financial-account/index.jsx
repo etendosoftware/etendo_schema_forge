@@ -306,6 +306,7 @@ export default function FinancialAccountWindow({ recordId }) {
             <ReconciliationTab
               key={reconciliationRefreshKey}
               account={account}
+              paymentMethods={paymentMethods}
               onReconcileSuccess={() => { reloadAccount(); reloadMovements(); reloadAutoMatch(); }}
               data-testid="ReconciliationTab__f7dbb3" />
           )}

@@ -1,7 +1,10 @@
 import { render, screen } from '@testing-library/react';
 
+// Echoes the raw key, and appends the interpolation values when the call site passes any — the
+// pending-amount caption is the only such call here, so this is what makes the money string it
+// formats (and therefore formatMoney's output) assertable in the DOM.
 vi.mock('@/i18n', () => ({
-  useUI: () => (key) => key,
+  useUI: () => (key, vars) => (vars ? `${key}:${Object.values(vars).join('|')}` : key),
   useLocaleSwitch: () => ({ locale: 'es_ES' }),
 }));
 
@@ -77,13 +80,87 @@ describe('StatementLinesTable', () => {
     expect(screen.getByTestId('money-1000-EUR-auto')).toBeInTheDocument();
   });
 
-  it('exposes the matched aria-label for each line', () => {
+  it('renders a reconciled/unmatched StatusTag pill for each line (falls back to `matched`)', () => {
+    // Neither LINES fixture sets `reconcileStatus`, so this exercises the plain-`matched`
+    // fallback path in statusEntryFor — the StatusTag renders the i18n label as its visible
+    // (and therefore accessible) text, replacing the old boolean dot + aria-label.
     render(<StatementLinesTable lines={LINES} loading={false} />);
     expect(
-      screen.getByLabelText('financeAccountStatementLinesMatchedYes'),
+      screen.getByText('financeAccountStatementLinesStatusReconciled'),
     ).toBeInTheDocument();
     expect(
-      screen.getByLabelText('financeAccountStatementLinesMatchedNo'),
+      screen.getByText('financeAccountStatementLinesStatusUnmatched'),
     ).toBeInTheDocument();
+    expect(screen.queryByTestId('statement-line-pending-amount')).not.toBeInTheDocument();
+  });
+
+  describe('PARTIAL reconcileStatus (ETP-4502 iteration 4)', () => {
+    it('renders the "Parcial" pill and the pending-amount caption for a PARTIAL line', () => {
+      const lines = [{
+        id: 'l1', lineNo: 1, date: '2026-05-06T12:00:00.000Z',
+        description: '', reference: '', bpartnerName: '',
+        amount: 100, matched: false, reconcileStatus: 'PARTIAL', pendingAmount: 46.76,
+      }];
+      render(<StatementLinesTable lines={lines} loading={false} />);
+      expect(
+        screen.getByText('financeAccountStatementLinesStatusPartial'),
+      ).toBeInTheDocument();
+      expect(screen.getByTestId('statement-line-pending-amount')).toBeInTheDocument();
+    });
+
+    it('renders the "unmatched" pill and no caption for a PENDING line', () => {
+      const lines = [{
+        id: 'l1', lineNo: 1, date: '2026-05-06T12:00:00.000Z',
+        description: '', reference: '', bpartnerName: '',
+        amount: 100, matched: false, reconcileStatus: 'PENDING', pendingAmount: 100,
+      }];
+      render(<StatementLinesTable lines={lines} loading={false} />);
+      expect(
+        screen.getByText('financeAccountStatementLinesStatusUnmatched'),
+      ).toBeInTheDocument();
+      expect(screen.queryByTestId('statement-line-pending-amount')).not.toBeInTheDocument();
+    });
+
+    it('formats the pending amount with the currency symbol for a valid ISO code', () => {
+      const lines = [{
+        id: 'l1', lineNo: 1, date: '2026-05-06T12:00:00.000Z',
+        description: '', reference: '', bpartnerName: '',
+        amount: 100, matched: false, reconcileStatus: 'PARTIAL', pendingAmount: 46.76,
+      }];
+      render(<StatementLinesTable lines={lines} loading={false} currency="EUR" />);
+      // Intl formats it (es-ES → comma decimal separator + € symbol), i.e. NOT the plain
+      // "<amount> <CODE>" fallback below.
+      const caption = screen.getByTestId('statement-line-pending-amount');
+      expect(caption.textContent).toContain('46,76');
+      expect(caption.textContent).toContain('€');
+      expect(caption.textContent).not.toContain('46.76 EUR');
+    });
+
+    it('falls back to plain "<amount> <CODE>" when Intl rejects the currency code', () => {
+      // Intl.NumberFormat throws a RangeError for a non-ISO-4217 currency code, so formatMoney's
+      // catch branch degrades to a plain amount + raw code string instead of blowing up the row.
+      const lines = [{
+        id: 'l1', lineNo: 1, date: '2026-05-06T12:00:00.000Z',
+        description: '', reference: '', bpartnerName: '',
+        amount: 100, matched: false, reconcileStatus: 'PARTIAL', pendingAmount: 46.76,
+      }];
+      render(<StatementLinesTable lines={lines} loading={false} currency="NOTACURRENCY" />);
+      const caption = screen.getByTestId('statement-line-pending-amount');
+      expect(caption.textContent).toContain('46.76 NOTACURRENCY');
+      expect(caption.textContent).not.toContain('46,76');
+    });
+
+    it('falls back to the reconciled pill (no caption) when only the legacy `matched` boolean is set', () => {
+      const lines = [{
+        id: 'l1', lineNo: 1, date: '2026-05-06T12:00:00.000Z',
+        description: '', reference: '', bpartnerName: '',
+        amount: 100, matched: true,
+      }];
+      render(<StatementLinesTable lines={lines} loading={false} />);
+      expect(
+        screen.getByText('financeAccountStatementLinesStatusReconciled'),
+      ).toBeInTheDocument();
+      expect(screen.queryByTestId('statement-line-pending-amount')).not.toBeInTheDocument();
+    });
   });
 });
