@@ -25,6 +25,21 @@ function createFetchByEndpoint(responses) {
   return fetchImpl;
 }
 
+// ETP-4576: readiness probes ride on the server-side `__Host-` session cookie.
+// Every request must opt into credentials and must never carry a bearer token.
+function expectCookieSessionRequest([url, options]) {
+  expect(options, `readiness request to ${url} must pass fetch options`).toBeTruthy();
+  expect(options.credentials, `readiness request to ${url}`).toBe('include');
+
+  const headerNames = Object.keys(options.headers ?? {}).map((name) => name.toLowerCase());
+  expect(headerNames, `readiness request to ${url}`).not.toContain('authorization');
+
+  expect(
+    /bearer/i.test(JSON.stringify(options)),
+    `readiness request to ${url} must not mention a bearer token in its fetch options`,
+  ).toBe(false);
+}
+
 const readyReadinessResponses = [
   { includes: READINESS_ENDPOINTS.session, ok: true, status: 200, body: { user: 'qa' } },
   { includes: READINESS_ENDPOINTS.defaults, ok: true, status: 200, body: { values: { documentType: 'DOC_TYPE_1' } } },
@@ -36,14 +51,33 @@ describe('onboarding readiness helpers', () => {
   it('passes when all readiness endpoints return usable data', async () => {
     const fetchImpl = createFetchByEndpoint(readyReadinessResponses);
 
-    const result = await checkSalesInvoiceReadiness(fetchImpl, '/etendo', 'env-token');
+    const result = await checkSalesInvoiceReadiness(fetchImpl, '/etendo');
 
     expect(result.ready).toBe(true);
     expect(result.failures).toEqual([]);
     expect(fetchImpl).toHaveBeenCalledTimes(4);
-    expect(fetchImpl).toHaveBeenCalledWith(expect.stringContaining('/etendo/sws/neo/session'), {
-      headers: { Authorization: 'Bearer env-token' },
+    expect(fetchImpl).toHaveBeenCalledWith(
+      expect.stringContaining('/etendo/sws/neo/session'),
+      expect.objectContaining({ credentials: 'include' }),
+    );
+  });
+
+  it('sends the session cookie and no Authorization header on all four readiness requests', async () => {
+    const fetchImpl = createFetchByEndpoint(readyReadinessResponses);
+
+    await checkSalesInvoiceReadiness(fetchImpl, '/etendo');
+
+    expect(fetchImpl).toHaveBeenCalledTimes(4);
+    fetchImpl.mock.calls.forEach(expectCookieSessionRequest);
+
+    const requestedUrls = fetchImpl.mock.calls.map(([url]) => url);
+    Object.values(READINESS_ENDPOINTS).forEach((endpoint) => {
+      expect(requestedUrls.some((url) => url.includes(endpoint))).toBe(true);
     });
+  });
+
+  it('drops the token parameter from the public readiness signature', () => {
+    expect(checkSalesInvoiceReadiness).toHaveLength(2);
   });
 
   it('reports failed readiness endpoints, empty selectors, invalid JSON, and missing document type', async () => {
@@ -54,7 +88,7 @@ describe('onboarding readiness helpers', () => {
       { includes: READINESS_ENDPOINTS.customers, ok: true, status: 200, body: { items: [] } },
     ]);
 
-    const result = await checkSalesInvoiceReadiness(fetchImpl, '', 'env-token');
+    const result = await checkSalesInvoiceReadiness(fetchImpl, '');
 
     expect(result.ready).toBe(false);
     expect(result.failures).toEqual([
@@ -71,14 +105,14 @@ describe('onboarding readiness helpers', () => {
       { includes: READINESS_ENDPOINTS.defaults, ok: true, status: 200, body: { data: { documentType: 'DOC_TYPE_2' } } },
       readyReadinessResponses[2],
       readyReadinessResponses[3],
-    ]), '', 'env-token')).resolves.toMatchObject({ ready: true });
+    ]), '')).resolves.toMatchObject({ ready: true });
 
     const zeroResult = await checkSalesInvoiceReadiness(createFetchByEndpoint([
       readyReadinessResponses[0],
       { includes: READINESS_ENDPOINTS.defaults, ok: true, status: 200, body: { defaults: { documentType: '0' } } },
       readyReadinessResponses[2],
       readyReadinessResponses[3],
-    ]), '', 'env-token');
+    ]), '');
 
     expect(zeroResult.failures).toContainEqual({
       key: READINESS_FAILURE_KEYS.documentType,
