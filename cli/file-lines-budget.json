@@ -1,11 +1,11 @@
 {
-  "_comment": "Line-count ratchet for the files that concentrate churn. Fails ONLY IF a tracked file GROWS past its baseline; it never fails just for being big today. This is T01 of docs/reports/contract-ui-churn-analysis.md (the 'max-lines that fails CI if they grow' guardrail) implemented as a ratchet instead of a fixed ESLint threshold, which would either block every PR today or sit so high it permits the growth it should stop. Pay debt down by extracting sub-components (§9.2, target: no file over ~600 lines), then run `npx sf-file-lines-budget --update` to lock in the lower number (`make file-lines-budget` checks, `--list` enumerates). `baseline` counts physical lines, comments and blanks included — the metric only has to be consistent and monotonic.",
+  "_comment": "Line-count ratchet for the files that concentrate churn. Fails ONLY IF a tracked file GROWS past its baseline; it never fails just for being big today. This is T01 of docs/reports/contract-ui-churn-analysis.md (the 'max-lines that fails CI if they grow' guardrail) implemented as a ratchet instead of a fixed ESLint threshold, which would either block every PR today or sit so high it permits the growth it should stop. Pay debt down by extracting sub-components (\u00a79.2, target: no file over ~600 lines), then run `npx sf-file-lines-budget --update` to lock in the lower number (`make file-lines-budget` checks, `--list` enumerates). `baseline` counts physical lines, comments and blanks included \u2014 the metric only has to be consistent and monotonic.",
   "files": [
     {
       "label": "DetailView.jsx",
       "path": "tools/app-shell/src/components/contract-ui/DetailView.jsx",
-      "baseline": 3458,
-      "note": "God component of the generic contract-ui. Report §9.1 measured ~3.914 lines; it has since grown by ~1.242 with no guard in place — exactly the gap this ratchet closes."
+      "baseline": 3404,
+      "note": "God component of the generic contract-ui. Report \u00a79.1 measured ~3.914 lines; it has since grown by ~1.242 with no guard in place \u2014 exactly the gap this ratchet closes."
     },
     {
       "label": "DataTable.jsx",
@@ -17,7 +17,13 @@
       "label": "detailViewHelpers.jsx",
       "path": "tools/app-shell/src/components/contract-ui/detailViewHelpers.jsx",
       "baseline": 1743,
-      "note": "Destination of T31's extraction out of DetailView.jsx. Tracked from the same commit that created it: an extraction must not read as payment. Without this entry the 1.568 lines moved out of DetailView would leave the ratchet reporting a win while the code simply relocated to somewhere unwatched — the same false-zero the leak scanner produced when the tab strip moved to TabStrip.jsx (see §9.3 of the churn report)."
+      "note": "Destination of T31's extraction out of DetailView.jsx. Tracked from the same commit that created it: an extraction must not read as payment. Without this entry the 1.568 lines moved out of DetailView would leave the ratchet reporting a win while the code simply relocated to somewhere unwatched \u2014 the same false-zero the leak scanner produced when the tab strip moved to TabStrip.jsx (see \u00a79.3 of the churn report)."
+    },
+    {
+      "label": "ChildRowInlineEditor.jsx",
+      "path": "tools/app-shell/src/components/contract-ui/ChildRowInlineEditor.jsx",
+      "baseline": 88,
+      "note": "First Ola 3 component extracted out of DetailView.jsx. Tracked from the commit that created it, so the extraction cannot read as payment."
     }
   ]
 }

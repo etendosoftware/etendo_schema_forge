@@ -69,6 +69,7 @@ import {
   resolveProcessLabel, resolveSidebarContent, resolveStatusPrefix, runAddLineAction, shouldShowDetailFormSidebar, shouldShowInlineDeleteSelectionBar,
   shouldShowLineActionButtons, shouldShowLinesEmptyState, sidePanelWrapperCls,
 } from './detailViewHelpers.jsx';
+import { ChildRowInlineEditor } from './ChildRowInlineEditor.jsx';
 
 // Re-exported for the test suites that import these from '../DetailView.jsx'.
 // Behavioural coverage is unchanged; only the definition site moved (T31).
@@ -2496,75 +2497,20 @@ export function DetailView({
 
                                 {/* Inline edit form for selected child row (when no DetailForm) */}
                                 {!DetailForm && editingChild && editableChildFields.length > 0 && (
-                                  <div className="mt-3 p-4 border rounded-lg bg-muted/20">
-                                    <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 mb-3">
-                                      {editableChildFields.map(f => (
-                                        <div key={f.key} className="flex flex-col gap-1">
-                                          <label className="text-xs font-medium text-muted-foreground">{f.label || f.key}</label>
-                                          <input
-                                            type="number"
-                                            step="0.01"
-                                            value={editingChild[f.key] ?? ''}
-                                            onChange={e => setEditingChild(prev => ({ ...prev, [f.key]: e.target.value }))}
-                                            className="h-8 rounded-md border border-input bg-background px-2 text-sm"
-                                          />
-                                        </div>
-                                      ))}
-                                    </div>
-                                    <div className="flex gap-2">
-                                      <button
-                                        disabled={savingChild}
-                                        onClick={async () => {
-                                          setSavingChild(true);
-                                          try {
-                                            const childUrl = api?.crud?.[detailEntity]?.detailUrl?.replace('{id}', editingChild.id)
-                                              || `${apiBaseUrl}/${detailEntity}/${editingChild.id}`;
-                                            const fieldValues = {};
-                                            for (const f of editableChildFields) {
-                                              fieldValues[f.column] = editingChild[f.key];
-                                            }
-                                            const res = await fetch(childUrl, {
-                                              method: 'PATCH',
-                                              headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
-                                              body: JSON.stringify({ fieldValues }),
-                                            });
-                                            if (res.ok) {
-                                              hook.handleUpdateChild(editingChild.id, editableChildFields.reduce((acc, f) => ({ ...acc, [f.key]: editingChild[f.key] }), {}));
-                                              setEditingChild(null);
-                                            }
-                                          } finally { setSavingChild(false); }
-                                        }}
-                                        className="inline-flex items-center gap-1 px-3 py-1.5 text-sm font-medium rounded-md bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
-                                      >
-                                        {getChildSaveButtonLabel(savingChild, ui)}
-                                      </button>
-                                      <button
-                                        onClick={() => setEditingChild(null)}
-                                        className="inline-flex items-center gap-1 px-3 py-1.5 text-sm font-medium rounded-md border hover:bg-accent"
-                                      >
-                                        {ui('cancel')}
-                                      </button>
-                                      <button
-                                        disabled={savingChild}
-                                        onClick={async () => {
-                                          if (!(await confirmDelete())) return;
-                                          setSavingChild(true);
-                                          try {
-                                            const childUrl = api?.crud?.[detailEntity]?.detailUrl?.replace('{id}', editingChild.id)
-                                              || `${apiBaseUrl}/${detailEntity}/${editingChild.id}`;
-                                            const res = await fetch(childUrl, {
-                                              method: 'DELETE',
-                                              headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) },
-                                            });
-                                            if (res.ok) { hook.handleDeleteChild(editingChild.id); setEditingChild(null); }
-                                          } finally { setSavingChild(false); }
-                                        }}
-                                        className="inline-flex items-center gap-1 px-3 py-1.5 text-sm font-medium rounded-md border border-destructive text-destructive hover:bg-destructive/10 disabled:opacity-50 ml-auto"
-                                      >
-                                        {ui('delete')}
-                                      </button>
-                                    </div>
-                                  </div>
+                                  <ChildRowInlineEditor
+                                    editingChild={editingChild}
+                                    setEditingChild={setEditingChild}
+                                    editableChildFields={editableChildFields}
+                                    savingChild={savingChild}
+                                    setSavingChild={setSavingChild}
+                                    api={api}
+                                    apiBaseUrl={apiBaseUrl}
+                                    detailEntity={detailEntity}
+                                    token={token}
+                                    hook={hook}
+                                    confirmDelete={confirmDelete}
+                                    ui={ui}
+                                  />
                                 )}
 
                                 {canShowAddLineArea(hook, isDocumentReadOnly, allEntryFields, DetailExtraActions, canAddLines) && (
