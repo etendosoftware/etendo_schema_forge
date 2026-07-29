@@ -1,5 +1,5 @@
 {
-  "_comment": "Ratchet for window/entity-specific literals leaking into GENERIC contract-ui components. Fails ONLY IF the count grows; the target is 0, reached gradually. Pay debt down by declarativizing leaks (see docs/reports/contract-ui-churn-analysis.md §8), then run `node cli/src/window-leak-budget.js --update`. Comments are ignored; string/JSX literals are scanned. Baseline 7 maps to L1 (custom: icons ×3 — attachments, sif, pricing) and L3 (field === 'product' ×4) — all remaining leaks live in DetailView.jsx; DataTable.jsx scans at zero. L2 (=== 'contact' ×1) was paid off in ETP-4708 by declaring secondaryTabs.contact.excludeFields; L4 (internal-consumption-product ×1) was paid off by ETP-4525, which moved the registry to lib/lookupDrawers.js.",
+  "_comment": "Ratchet for window/entity-specific literals leaking into GENERIC contract-ui components. Fails ONLY IF the count grows; the target is 0, reached gradually. Pay debt down by declarativizing leaks (see docs/reports/contract-ui-churn-analysis.md §8), then run `node cli/src/window-leak-budget.js --update`. Comments are ignored; string/JSX literals are scanned. Baseline 7 maps to L1 (custom: icons ×3 — attachments, sif, pricing) and L3 (field === 'product' ×4) — all remaining leaks live in DetailView.jsx; DataTable.jsx scans at zero. L2 (=== 'contact' ×1) was paid off in ETP-4708 by declaring secondaryTabs.contact.excludeFields; L4 (internal-consumption-product ×1) was paid off by ETP-4525, which moved the registry to components/contract-ui/lookupDrawers.js. BASELINE 7 -> 8 IS A DETECTION IMPROVEMENT, NOT NEW DEBT: the fourth pattern (quoted window/entity name used as an object KEY) was added because the scanner could not see TAB_ICONS' `'products': WarehouseProductsIcon` entry — a bare key matches neither the `===` comparison patterns nor the `custom:` prefix. No code changed; one pre-existing leak simply became visible, so the true L1 count is 4, not 3. A ratchet that undercounts is worse than one with a high baseline, because it silently blesses the leaks it cannot see.",
   "paths": [
     "tools/app-shell/src/components/contract-ui/DetailView.jsx",
     "tools/app-shell/src/components/contract-ui/DataTable.jsx"
@@ -11,7 +11,8 @@
   "patterns": [
     "(===|!==)\\s*['\"](contact|product|order|invoice|sif|internalConsumption|internal-consumption|asset|amortization|attachments)\\b",
     "['\"]custom:[a-zA-Z]+['\"]",
-    "['\"]internal-consumption[a-z-]*['\"]"
+    "['\"]internal-consumption[a-z-]*['\"]",
+    "['\"](contact|products?|orders?|invoices?|sif|internalConsumption|assets?|amortization|attachments)['\"]\\s*:"
   ],
-  "baseline": 7
+  "baseline": 8
 }
