@@ -1,8 +1,8 @@
 {
-  "version": "0.17.0",
+  "version": "0.18.0",
   "generatedAt": "2026-06-11T01:47:08.755Z",
-  "updatedAt": "2026-07-16T14:16:24.181Z",
-  "contractChecksum": "effb38fa7ad6cf67",
+  "updatedAt": "2026-07-29T19:06:11.455Z",
+  "contractChecksum": "b156a5d4c6d8e838",
   "apiPrediction": {
     "specName": "financial-account-detail",
     "baseUrl": "/sws/neo/financial-account-detail",
@@ -1106,7 +1106,8 @@
     "knownLimitations": [],
     "dangerousOperations": [
       "etprReactivateTransaction"
-    ]
+    ],
+    "agentPrompt": "Company financial accounts (Etendo table FIN_Financial_Account): the bank, cash and card accounts owned by the company itself, together with their transactions, imported bank statements and reconciliations. The `account` entity represents the company's OWN accounts (required fields: name, currency, type). These are NOT a contact's bank details (a contact is the adopted term for what Etendo classic calls a business partner / BP). To store a contact's bank account (C_BP_BankAccount) use the `contacts` spec (bankAccount entity) instead."
   },
-  "checksum": "b8e07b667fffdbeb"
+  "checksum": "8c51c7d4d85de13c"
 }

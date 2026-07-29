@@ -1,14 +1,15 @@
 {
-  "version": "0.17.0",
+  "version": "0.18.0",
   "generatedAt": "2026-06-11T01:47:08.755Z",
-  "updatedAt": "2026-07-21T12:35:19.261Z",
-  "checksum": "effb38fa7ad6cf67",
+  "updatedAt": "2026-07-29T19:06:11.455Z",
+  "checksum": "b156a5d4c6d8e838",
   "frontendContract": {
     "window": {
       "id": "94EAA455D2644E04AB25D93BE5157B6D",
       "name": "Financial Account Detail",
       "primaryEntity": "account",
       "category": "finance",
+      "agentPrompt": "Company financial accounts (Etendo table FIN_Financial_Account): the bank, cash and card accounts owned by the company itself, together with their transactions, imported bank statements and reconciliations. The `account` entity represents the company's OWN accounts (required fields: name, currency, type). These are NOT a contact's bank details (a contact is the adopted term for what Etendo classic calls a business partner / BP). To store a contact's bank account (C_BP_BankAccount) use the `contacts` spec (bankAccount entity) instead.",
       "layoutType": "custom"
     },
     "entities": {
@@ -2467,6 +2468,7 @@
       "name": "Financial Account Detail",
       "primaryEntity": "account",
       "category": "finance",
+      "agentPrompt": "Company financial accounts (Etendo table FIN_Financial_Account): the bank, cash and card accounts owned by the company itself, together with their transactions, imported bank statements and reconciliations. The `account` entity represents the company's OWN accounts (required fields: name, currency, type). These are NOT a contact's bank details (a contact is the adopted term for what Etendo classic calls a business partner / BP). To store a contact's bank account (C_BP_BankAccount) use the `contacts` spec (bankAccount entity) instead.",
       "layoutType": "custom"
     },
     "entities": {
@@ -3983,6 +3985,14 @@
             "apiKey": "id",
             "column": "FIN_Bankstatementline_ID",
             "type": "id",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "eTGOPendingAmount",
+            "apiKey": "eTGOPendingAmount",
+            "column": "EM_ETGO_Pending_Amount",
+            "type": "amount",
             "visibility": "system",
             "required": true
           }
@@ -9483,6 +9493,14 @@
         "description": "System field 'eTGOMatchGroup' should exist in backend but not frontend for bankStatementLines"
       },
       {
+        "id": "t-system-field-bankStatementLines-eTGOPendingAmount",
+        "category": "system-field",
+        "entity": "bankStatementLines",
+        "field": "eTGOPendingAmount",
+        "runner": "node",
+        "description": "System field 'eTGOPendingAmount' should exist in backend but not frontend for bankStatementLines"
+      },
+      {
         "id": "t-system-field-bankStatementLines-financialAccountTransaction",
         "category": "system-field",
         "entity": "bankStatementLines",
@@ -9943,7 +9961,7 @@
       }
     ],
     "summary": {
-      "total": 707,
+      "total": 708,
       "byCategory": {
         "action-endpoint": 21,
         "crud-flags": 5,
@@ -9956,11 +9974,11 @@
         "readonlylogic-valid": 29,
         "rule-declared": 225,
         "selector-endpoint": 16,
-        "system-field": 111,
+        "system-field": 112,
         "visibility": 5
       },
       "byRunner": {
-        "node": 707,
+        "node": 708,
         "junit": 0
       }
     }

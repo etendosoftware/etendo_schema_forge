@@ -1,14 +1,15 @@
 {
-  "version": "0.44.0",
+  "version": "0.45.0",
   "generatedAt": "2026-07-07T21:53:25.883Z",
-  "updatedAt": "2026-07-21T12:35:19.014Z",
-  "checksum": "8552f5c48c448cb9",
+  "updatedAt": "2026-07-29T19:06:11.271Z",
+  "checksum": "46873d0379b8aeaa",
   "frontendContract": {
     "window": {
       "id": "123",
       "name": "Contacts",
       "primaryEntity": "businessPartner",
       "category": "contact",
+      "agentPrompt": "Master data for contacts (the adopted term for what Etendo classic calls a business partner, also referred to as BP): customers, vendors and employees, with their contact people, locations, discounts and bank accounts. The `bankAccount` entity holds a contact's (business partner / BP) OWN bank accounts (Etendo table C_BP_BankAccount), used to store the contact's payment/bank details. These are NOT the company's own financial accounts. For the company's cash/bank/card accounts (FIN_Financial_Account) use the `financial-account` spec instead.",
       "hidePrint": true,
       "hideMoreMenu": true,
       "breadcrumb": "Contact",
@@ -534,6 +535,10 @@
             "required": false,
             "grid": false,
             "form": true,
+            "derivation": {
+              "type": "computed",
+              "source": "P"
+            },
             "enumValues": [
               {
                 "value": "P",
@@ -557,9 +562,10 @@
                 }
               }
             ],
+            "defaultValue": "P",
             "section": "principal",
             "validation": {
-              "maxLength": 10
+              "maxLength": 60
             },
             "displayLogic": {
               "raw": "record.oBTIKTaxIDKey === '2'",
@@ -1298,6 +1304,13 @@
             "derivation": {
               "type": "computed",
               "source": "'1'"
+            }
+          },
+          {
+            "name": "oBTIKVIESStatus",
+            "derivation": {
+              "type": "computed",
+              "source": "P"
             }
           },
           {
@@ -4983,6 +4996,7 @@
       "name": "Contacts",
       "primaryEntity": "businessPartner",
       "category": "contact",
+      "agentPrompt": "Master data for contacts (the adopted term for what Etendo classic calls a business partner, also referred to as BP): customers, vendors and employees, with their contact people, locations, discounts and bank accounts. The `bankAccount` entity holds a contact's (business partner / BP) OWN bank accounts (Etendo table C_BP_BankAccount), used to store the contact's payment/bank details. These are NOT the company's own financial accounts. For the company's cash/bank/card accounts (FIN_Financial_Account) use the `financial-account` spec instead.",
       "hidePrint": true,
       "hideMoreMenu": true,
       "breadcrumb": "Contact",
@@ -12014,6 +12028,14 @@
         "field": "oBTIKTaxIDKey",
         "runner": "node",
         "description": "Default value for 'oBTIKTaxIDKey' in businessPartner should be a string"
+      },
+      {
+        "id": "t-default-value-type-businessPartner-oBTIKVIESStatus",
+        "category": "default-value-type",
+        "entity": "businessPartner",
+        "field": "oBTIKVIESStatus",
+        "runner": "node",
+        "description": "Default value for 'oBTIKVIESStatus' in businessPartner should be a string"
       },
       {
         "id": "t-default-value-type-businessPartner-operator",
@@ -20778,11 +20800,11 @@
       }
     ],
     "summary": {
-      "total": 1146,
+      "total": 1147,
       "byCategory": {
         "action-endpoint": 6,
         "crud-flags": 15,
-        "default-value-type": 46,
+        "default-value-type": 47,
         "displaylogic-evaluable": 58,
         "displaylogic-valid": 58,
         "field-presence": 141,
@@ -20794,7 +20816,7 @@
         "visibility": 15
       },
       "byRunner": {
-        "node": 1146,
+        "node": 1147,
         "junit": 0
       }
     }
