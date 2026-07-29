@@ -16,6 +16,8 @@ import { columnMinWidthPx, columnFlex } from '@/lib/linesColumnWidth.js';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { CELL_RENDERERS } from './DataTable.cellRenderers.jsx';
 import { getEmailFieldError, getPhoneFieldError } from './recipientEdits.js';
+import { isCapabilityVisible } from '@/lib/capabilityVisibility.js';
+import { useCapabilitiesSafe } from '@/hooks/useCapabilitiesSafe.js';
 
 // Extracts grow flag and basis (px) from a columnFlex() shorthand string.
 function flexSpec(col, idx) {
@@ -1726,6 +1728,8 @@ export function DataTable({
   const ui = useUI();
   const dictionary = useLocale();
   const { locale } = useLocaleSwitch();
+  // ETP-4520 — capability map for visibleWhenCapability-gated columns (below).
+  const capabilities = useCapabilitiesSafe();
   const dateFormatter = useMemo(
     () => new Intl.DateTimeFormat(locale.replace('_', '-'), { year: 'numeric', month: '2-digit', day: '2-digit' }),
     [locale]
@@ -1797,8 +1801,12 @@ export function DataTable({
         return anyDataRow || addRowActive;
       });
     }
+    // ETP-4520 — drop columns gated by a capability the current role doesn't
+    // hold (e.g. `posted` on sales-invoice/purchase-invoice, restricted to
+    // "showAccountingFields"). Absent visibleWhenCapability ⇒ always kept.
+    base = base.filter(col => isCapabilityVisible(capabilities, col.visibleWhenCapability));
     return base;
-  }, [columns, hiddenColumns, displayIfControllers, data, addRowValues]);
+  }, [columns, hiddenColumns, displayIfControllers, data, addRowValues, capabilities]);
 
   const amountColumns = useMemo(
     () => visibleColumns.filter(col => col.type === 'amount'),
