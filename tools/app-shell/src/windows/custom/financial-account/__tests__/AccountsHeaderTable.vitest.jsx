@@ -10,7 +10,8 @@
  * The list/filter half of the retired page's suite is re-homed here (default view hides
  * archived accounts, "Inactivas" shows only archived across types, search inside the
  * inactive view, missing `active` flag counts as active) plus the new surface the slot
- * owns: the contract-driven data columns, the two synthetic columns, and the
+ * owns: the contract-driven data columns (headers from `gridLabelKey`, cell bodies bound
+ * through `cellType` → ACCOUNT_CELL_TYPES), the one hand-appended actions column, and the
  * stopPropagation guards that keep the pill / row actions from triggering row navigation.
  *
  * The component lives in the artifact (`artifacts/financial-account/custom/`), which
@@ -179,11 +180,36 @@ describe('AccountsHeaderTable — layout', () => {
     expect(screen.getByTestId('row-acc-3')).toBeInTheDocument();
   });
 
-  it('suppresses the grid\'s own filter row and footer totals', () => {
+  // Only two suppressions are still expressed as DataTable props, and each is
+  // load-bearing: totalling `amount` columns would sum balances across currencies
+  // without conversion, and DataTable defaults `selectable` to true, which would add
+  // a checkbox column that is not part of this design.
+  it('suppresses bulk selection and footer totals on the grid', () => {
     renderTable();
 
-    expect(tableProps.filters).toEqual([]);
+    expect(tableProps.selectable).toBe(false);
     expect(tableProps.showFooterTotals).toBe(false);
+  });
+
+  // `filters={[]}` was inert (ListView supplies `onFilterChange`, which wins), and
+  // `rowQuickActions` / `hoverRowActions` are now declarative or already the default.
+  // Passing them anyway hid where the real switch lives.
+  // The retired page lifted the hovered row with a drop shadow instead of tinting it
+  // (`hover:z-10 hover:shadow-lg` on AccountRow's <tr>). Moving onto the generic DataTable
+  // lost that reading, so it is now an opt-in prop — behaviour covered by
+  // tools/app-shell/src/components/contract-ui/__tests__/DataTable.rowHoverStyle.vitest.jsx
+  it('asks DataTable for the elevated (card-like) row hover', () => {
+    renderTable();
+
+    expect(tableProps.rowHoverStyle).toBe('elevated');
+  });
+
+  it('passes no inert filter / quick-action overrides to the grid', () => {
+    renderTable();
+
+    expect(tableProps.filters).toBeUndefined();
+    expect(tableProps.rowQuickActions).toBeUndefined();
+    expect(tableProps.hoverRowActions).toBeUndefined();
   });
 
   it('forwards onDataMutated so the modals can refresh the list', () => {
@@ -212,31 +238,68 @@ describe('AccountsHeaderTable — columns', () => {
   it('takes the data columns from the contract grid definition, in gridOrder', () => {
     renderTable();
 
-    // contract.json → entities.account: name(1), type(2), currentBalance(3).
-    const dataKeys = tableProps.columns.map((c) => c.key).slice(0, 3);
-    expect(dataKeys).toEqual(['name', 'type', 'currentBalance']);
+    // contract.json → entities.account: name(1), type(2), currentBalance(3) and the
+    // `virtualFields[]` entry pendingCount(4).
+    const dataKeys = tableProps.columns.map((c) => c.key).slice(0, 4);
+    expect(dataKeys).toEqual(['name', 'type', 'currentBalance', 'pendingCount']);
   });
 
-  it('appends exactly the two synthetic columns after the contract ones', () => {
+  it('appends exactly one synthetic column after the contract ones', () => {
     renderTable();
 
+    // Only `_rowActions` is hand-written: its declarative equivalent
+    // (`window.rowQuickActions`) renders an absolute hover overlay, not a column.
     expect(tableProps.columns.map((c) => c.key)).toEqual([
       'name', 'type', 'currentBalance', 'pendingCount', '_rowActions',
     ]);
   });
 
-  it('labels every column through the i18n key overrides for the active locale', () => {
+  it('carries the contract AD column name through to DataTable', () => {
     renderTable();
 
-    const labels = Object.fromEntries(
-      tableProps.columns.map((c) => [c.key, c.labels.es_ES]),
-    );
-    expect(labels.name).toBe('financeAccountsColAccount');
-    expect(labels.type).toBe('financeAccountsColType');
-    expect(labels.currentBalance).toBe('financeAccountsColBalance');
-    expect(labels.pendingCount).toBe('financeAccountsColPending');
+    const byKey = Object.fromEntries(tableProps.columns.map((c) => [c.key, c]));
+    // `column` is what resolveColumnLabel feeds the AD dictionary and what
+    // ListView's ReportDrawer maps on; it used to arrive undefined.
+    expect(byKey.name.column).toBe('Name');
+    expect(byKey.type.column).toBe('Type');
+    expect(byKey.currentBalance.column).toBe('Currentbalance');
+  });
+
+  // Labels come off the contract (`gridLabelKey`), not from a hardcoded map: relabelling
+  // a header is a decisions.json edit + regen. `labels[locale]` is resolveColumnLabel's
+  // top-priority branch, so a declared key wins over the AD dictionary.
+  it('labels the columns that declare a gridLabelKey through i18n for the active locale', () => {
+    renderTable();
+
+    const byKey = Object.fromEntries(tableProps.columns.map((c) => [c.key, c]));
+    expect(byKey.name.labels).toEqual({ es_ES: 'financeAccountsColAccount' });
+    expect(byKey.type.labels).toEqual({ es_ES: 'financeAccountsColType' });
+    expect(byKey.currentBalance.labels).toEqual({ es_ES: 'financeAccountsColBalance' });
     // The actions column is deliberately unlabelled.
-    expect(labels._rowActions).toBe('');
+    expect(byKey._rowActions.labels).toEqual({ es_ES: '' });
+  });
+
+  // The other branch: a virtual field cannot declare `gridLabelKey` (appendVirtualFields
+  // copies a closed whitelist), so it must NOT get a `labels` override — an empty one
+  // would blank the header. It falls back to `label` / `column`, i.e. the AD dictionary.
+  it('leaves a column without a gridLabelKey to the label / column fallbacks', () => {
+    renderTable();
+
+    const pending = tableProps.columns.find((c) => c.key === 'pendingCount');
+    expect(pending.labels).toBeUndefined();
+    expect(pending.label).toBeTruthy();
+    expect(pending.column).toBe('pendingCount');
+  });
+
+  // The binding column → renderer is what `cellType` makes declarative; the cell
+  // components themselves stay hand-written. Unit coverage for the registry itself:
+  // tools/app-shell/src/components/financial-accounts/__tests__/accountCellTypes.vitest.jsx
+  it('binds a renderer to every contract column through the cellType registry', () => {
+    renderTable();
+
+    for (const col of tableProps.columns) {
+      expect(typeof col.render, `${col.key} must resolve a cell renderer`).toBe('function');
+    }
   });
 
   it('marks every column as non-sortable (the grid is filtered client-side)', () => {
@@ -255,9 +318,24 @@ describe('AccountsHeaderTable — columns', () => {
     expect(byKey.name.headClass).toContain('pl-[84px]');
     expect(byKey.name.cellClass).toContain('w-[480px]');
     expect(byKey.type.headClass).toContain('w-[340px]');
-    expect(byKey.currentBalance.cellClass).toContain('text-right');
+    expect(byKey.currentBalance.headClass).toContain('w-[200px]');
+    expect(byKey.currentBalance.cellClass).toContain('w-[200px]');
     expect(byKey.pendingCount.headClass).toContain('w-[280px]');
+    expect(byKey.pendingCount.cellClass).toContain('w-[280px]');
     expect(byKey._rowActions.cellClass).toContain('min-w-[90px]');
+  });
+
+  // DataTable already appends `text-right tabular-nums` for every numeric column type
+  // (DataTable.jsx:1423, covered by DataTable.columnChrome.vitest.jsx). Repeating it in
+  // the chrome duplicated the class, so the chrome now carries widths only and the
+  // alignment rides on the contract `type: 'amount'` reaching DataTable.
+  it('leaves numeric alignment to DataTable instead of restating it in the chrome', () => {
+    renderTable();
+
+    const byKey = Object.fromEntries(tableProps.columns.map((c) => [c.key, c]));
+    expect(byKey.currentBalance.type).toBe('amount');
+    expect(byKey.currentBalance.cellClass).not.toContain('text-right');
+    expect(byKey.currentBalance.headClass).not.toContain('text-right');
   });
 
   it('renders the rich cell bodies for the three contract columns', () => {

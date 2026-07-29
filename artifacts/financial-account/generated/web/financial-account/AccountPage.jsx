@@ -486,7 +486,6 @@ export default function AccountPage({ windowName, recordId, ...props }) {
       hideCreate
       hideMoreMenu
       hideListFilters
-      rowQuickActions={{}}
       {...props} window={effectiveWindow}
     />
   );

@@ -35,7 +35,8 @@ export const account = [
     "pSD2ConnectionStatus": "DR",
     "psd2ReconnectFa": "Sample psd2ReconnectFa",
     "eTGOAmountTolerance": 99.44,
-    "eTGODateTolerance": 90
+    "eTGODateTolerance": 90,
+    "pendingCount": 90
   },
   {
     "id": "mock-account-002",
@@ -71,7 +72,8 @@ export const account = [
     "pSD2ConnectionStatus": "CO",
     "psd2ReconnectFa": "Sample psd2ReconnectFa",
     "eTGOAmountTolerance": 96.94,
-    "eTGODateTolerance": 93
+    "eTGODateTolerance": 93,
+    "pendingCount": 93
   },
   {
     "id": "mock-account-003",
@@ -107,7 +109,8 @@ export const account = [
     "pSD2ConnectionStatus": "VO",
     "psd2ReconnectFa": "Sample psd2ReconnectFa",
     "eTGOAmountTolerance": 12.48,
-    "eTGODateTolerance": 8
+    "eTGODateTolerance": 8,
+    "pendingCount": 8
   },
   {
     "id": "mock-account-004",
@@ -143,7 +146,8 @@ export const account = [
     "pSD2ConnectionStatus": "IP",
     "psd2ReconnectFa": "Sample psd2ReconnectFa",
     "eTGOAmountTolerance": 96.31,
-    "eTGODateTolerance": 91
+    "eTGODateTolerance": 91,
+    "pendingCount": 91
   },
   {
     "id": "mock-account-005",
@@ -179,7 +183,8 @@ export const account = [
     "pSD2ConnectionStatus": "DR",
     "psd2ReconnectFa": "Sample psd2ReconnectFa",
     "eTGOAmountTolerance": 31.27,
-    "eTGODateTolerance": 72
+    "eTGODateTolerance": 72,
+    "pendingCount": 72
   },
   {
     "id": "mock-account-006",
@@ -215,7 +220,8 @@ export const account = [
     "pSD2ConnectionStatus": "CO",
     "psd2ReconnectFa": "Sample psd2ReconnectFa",
     "eTGOAmountTolerance": 76.52,
-    "eTGODateTolerance": 78
+    "eTGODateTolerance": 78,
+    "pendingCount": 78
   },
   {
     "id": "mock-account-007",
@@ -251,7 +257,8 @@ export const account = [
     "pSD2ConnectionStatus": "VO",
     "psd2ReconnectFa": "Sample psd2ReconnectFa",
     "eTGOAmountTolerance": 2.66,
-    "eTGODateTolerance": 31
+    "eTGODateTolerance": 31,
+    "pendingCount": 31
   },
   {
     "id": "mock-account-008",
@@ -287,7 +294,8 @@ export const account = [
     "pSD2ConnectionStatus": "IP",
     "psd2ReconnectFa": "Sample psd2ReconnectFa",
     "eTGOAmountTolerance": 10.03,
-    "eTGODateTolerance": 97
+    "eTGODateTolerance": 97,
+    "pendingCount": 97
   },
   {
     "id": "mock-account-009",
@@ -323,7 +331,8 @@ export const account = [
     "pSD2ConnectionStatus": "DR",
     "psd2ReconnectFa": "Sample psd2ReconnectFa",
     "eTGOAmountTolerance": 93.97,
-    "eTGODateTolerance": 70
+    "eTGODateTolerance": 70,
+    "pendingCount": 70
   },
   {
     "id": "mock-account-010",
@@ -359,7 +368,8 @@ export const account = [
     "pSD2ConnectionStatus": "CO",
     "psd2ReconnectFa": "Sample psd2ReconnectFa",
     "eTGOAmountTolerance": 1.1,
-    "eTGODateTolerance": 77
+    "eTGODateTolerance": 77,
+    "pendingCount": 77
   },
   {
     "id": "mock-account-011",
@@ -395,7 +405,8 @@ export const account = [
     "pSD2ConnectionStatus": "VO",
     "psd2ReconnectFa": "Sample psd2ReconnectFa",
     "eTGOAmountTolerance": 79.99,
-    "eTGODateTolerance": 32
+    "eTGODateTolerance": 32,
+    "pendingCount": 32
   },
   {
     "id": "mock-account-012",
@@ -431,7 +442,8 @@ export const account = [
     "pSD2ConnectionStatus": "IP",
     "psd2ReconnectFa": "Sample psd2ReconnectFa",
     "eTGOAmountTolerance": 53.61,
-    "eTGODateTolerance": 26
+    "eTGODateTolerance": 26,
+    "pendingCount": 26
   }
 ];
 

@@ -8,8 +8,11 @@
  * deep links); only the host moved from the page to this `headerTable` slot.
  *
  * The handlers used to be reachable through the page's `AccountsTable` props. They now
- * live inside the synthetic `pendingCount` / `_rowActions` columns handed to the generic
- * DataTable, so this suite stubs DataTable with a renderer that invokes `col.render` for
+ * reach the cells through the `cellCtx` the slot builds: `pendingCount` renders through
+ * the `reconcilePill` entry of ACCOUNT_CELL_TYPES (a contract column since the
+ * `virtualFields[]` declaration), `_rowActions` is the one hand-appended column. Both are
+ * handed to the generic DataTable, so this suite stubs it with a renderer that calls
+ * `col.render` for
  * every row — the real `ReconcilePill` / `AccountRowActions` then drive the handlers
  * exactly as they do in the browser.
  */

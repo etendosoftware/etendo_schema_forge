@@ -1190,16 +1190,40 @@ function isQuickActionsEnabled(rowQuickActions) {
   return !!rowQuickActions && rowQuickActions.enabled !== false;
 }
 
-function getRowClassName(onRowClick, onNavigate, isChecked, selectedRowBg, selectedId, row, isSelectedLine) {
+/**
+ * `rowHoverStyle` picks how a clickable row reacts to hover:
+ *   - `tint` (default) tints the background, the behaviour every grid has today.
+ *   - `elevated` lifts the row instead — an opaque background plus a drop shadow
+ *     and `z-10`, so the shadow spills over the neighbouring row separators. Used
+ *     by card-like lists (Accounts) where the row reads as a raised surface.
+ * Selection always wins over hover, in both styles.
+ */
+function getRowClassName({
+  onRowClick, onNavigate, isChecked, selectedRowBg, selectedId, row, isSelectedLine,
+  rowHoverStyle = 'tint',
+}) {
+  const clickable = onRowClick || onNavigate;
+  const elevated = rowHoverStyle === 'elevated';
+  // `bg-card` is what makes the drop shadow readable, but it competes with the
+  // selection backgrounds below on the same CSS property (Tailwind resolves that
+  // by stylesheet order, not by class order), so only opt in when no selection
+  // state is painting the row.
+  const selectionPainted = isChecked || isSelectedLine || (selectedId != null && row.id === selectedId);
   let hoverClass;
   if (isSelectedLine) {
     hoverClass = 'hover:bg-muted';
+  } else if (!clickable) {
+    hoverClass = '';
+  } else if (elevated) {
+    hoverClass = 'hover:z-10 hover:bg-card hover:shadow-lg';
   } else {
-    hoverClass = (onRowClick || onNavigate) ? 'hover:bg-muted/50' : '';
+    hoverClass = 'hover:bg-muted/50';
   }
   return [
-    'transition-colors h-12 group/row',
-    (onRowClick || onNavigate) ? 'cursor-pointer' : 'cursor-default',
+    'h-12 group/row',
+    elevated ? 'relative transition-shadow' : 'transition-colors',
+    elevated && !selectionPainted ? 'bg-card' : '',
+    clickable ? 'cursor-pointer' : 'cursor-default',
     isChecked ? selectedRowBg : '',
     selectedId != null && row.id === selectedId ? 'bg-primary/10' : '',
     isSelectedLine ? 'bg-muted ring-1 ring-focus-ring' : '',
@@ -1366,6 +1390,7 @@ function TableDataRow({
   selectedRowBg,
   selectedId,
   selectedRowId,
+  rowHoverStyle,
   editingRowId,
   handleRowActivation,
   hoverRowActions,
@@ -1396,7 +1421,9 @@ function TableDataRow({
         if (editingRowId === row.id) return;
         handleRowActivation(row, idx);
       }}
-      className={getRowClassName(onRowClick, onNavigate, isChecked, selectedRowBg, selectedId, row, isSelectedLine)}
+      className={getRowClassName({
+        onRowClick, onNavigate, isChecked, selectedRowBg, selectedId, row, isSelectedLine, rowHoverStyle,
+      })}
     >
       {selectable && (
         <TableCell
@@ -1677,6 +1704,7 @@ export function DataTable({
   onRowClick,
   selectedRowId,
   selectedId,
+  rowHoverStyle = 'tint',
   compact,
   loading,
   addRow,
@@ -1969,7 +1997,20 @@ export function DataTable({
 
   return (
     <div className="space-y-0">
-      <div className={linesLayout === 'inlineEditable' ? '[&>div]:!overflow-visible' : 'overflow-x-auto overflow-y-visible'}>
+      {/*
+        `overflow-y-visible` next to `overflow-x-auto` is computed as `auto` by the CSS
+        spec, so this wrapper does clip vertically. With `rowHoverStyle="elevated"` the
+        hovered row's `shadow-lg` reaches ~22px below it (10px offset + 15px blur - 3px
+        spread); for the LAST row that lands past the table and got clipped away, which
+        read as "hover doesn't work on the last row". Overflow clips at the PADDING box,
+        so 24px of bottom padding gives the shadow room inside the visible area.
+      */}
+      <div
+        className={[
+          linesLayout === 'inlineEditable' ? '[&>div]:!overflow-visible' : 'overflow-x-auto overflow-y-visible',
+          rowHoverStyle === 'elevated' ? 'pb-6' : '',
+        ].filter(Boolean).join(' ')}
+      >
         <Table style={getTableContainerStyle(hideHeader)} data-testid="Table__eb5261">
           {/* When hideHeader is true (add-row-only mode), a <colgroup> drives column
               widths — see renderLinesColgroup() above for the full rationale. */}
@@ -2007,6 +2048,7 @@ export function DataTable({
               hideDataRows, filteredData, addRow, colSpan, hasActiveFilter, data, selectedRows,
               selectable, isRowSelectable, toggleRow, visibleColumns, trailingHoverColumn,
               renderCellValue, onRowClick, onNavigate, selectedRowBg, selectedId, selectedRowId,
+              rowHoverStyle,
               editingRowId, handleRowActivation, hoverRowActions, onSaveRow, onCancelEdit,
               onEditRow, onDeleteRow, deletingRows, setDeletingRows, ui, legacyDeleteEnabled,
               onCloneRow, quickActionsEnabled, rowQuickActions, entity, apiBaseUrl, token,

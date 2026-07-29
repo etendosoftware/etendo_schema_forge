@@ -1,8 +1,8 @@
 {
-  "version": "0.18.0",
+  "version": "0.20.0",
   "generatedAt": "2026-06-11T01:47:08.755Z",
-  "updatedAt": "2026-07-28T19:49:33.978Z",
-  "contractChecksum": "1c71fae4081aa99a",
+  "updatedAt": "2026-07-29T11:37:59.839Z",
+  "contractChecksum": "61ab07c7a7f4851c",
   "apiPrediction": {
     "specName": "accounts",
     "baseUrl": "/sws/neo/accounts",
@@ -826,6 +826,9 @@
           },
           "eTGODateTolerance": {
             "defaultValue": "3"
+          },
+          "pendingCount": {
+            "readOnly": true
           }
         }
       },
@@ -1113,5 +1116,5 @@
       "etprReactivateTransaction"
     ]
   },
-  "checksum": "02c08e3bb3abb6d3"
+  "checksum": "bf23e7e786de98e7"
 }

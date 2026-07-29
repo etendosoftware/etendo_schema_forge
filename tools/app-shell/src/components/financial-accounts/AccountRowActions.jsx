@@ -1,10 +1,9 @@
 // Hover row actions for the Cuentas list: edit, PSD2 sync (connected accounts
 // only) and the kebab menu.
 //
-// Extracted from AccountRow so the same actions can be rendered by the generic
-// DataTable (via a `col.render` synthetic column in AccountsHeaderTable) and by
-// the legacy hand-rolled AccountsTable, with one definition of the testids and
-// the sync-visibility rule.
+// Extracted from the retired AccountRow (ETP-4658) so the testids and the
+// sync-visibility rule have a single definition; the generic DataTable renders them
+// through a `col.render` synthetic column in AccountsHeaderTable.
 import { Pencil, RefreshCw } from 'lucide-react';
 import {
   Tooltip,
@@ -28,10 +27,11 @@ export function AccountRowActions({
 
   return (
     <TooltipProvider data-testid="TooltipProvider__acctactions">
-      {/* Two hover groups on purpose: the legacy AccountsTable marks its row with a
-          plain `group`, while the generic DataTable uses the NAMED `group/row`
-          (DataTable.jsx:1201). Without the named variant the actions stayed invisible
-          in the generated list. */}
+      {/* The named variant is the load-bearing one: DataTable marks its row as
+          `group/row` (DataTable.jsx:1201) and `group-hover:` does not match a named
+          group, so without it these actions stay invisible. The unnamed variant is kept
+          as insurance for a host that marks rows as a plain `group` — same reasoning as
+          in AccountsTable/accountColumns.jsx. */}
       <div className="flex items-center justify-end gap-0.5 opacity-0 transition-opacity group-hover:opacity-100 group-hover/row:opacity-100">
         <Tooltip delayDuration={0} data-testid="Tooltip__acctactions">
           <TooltipTrigger asChild data-testid="TooltipTrigger__acctactions">

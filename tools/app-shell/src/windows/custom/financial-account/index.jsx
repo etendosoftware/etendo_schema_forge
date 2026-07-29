@@ -391,6 +391,11 @@ export default function FinancialAccountWindow(props) {
     <AccountPage
       {...props}
       recordId={undefined}
+      // ListView pads the table region horizontally by default (`px-2`). This slot draws
+      // its own full-bleed rules — under the toolbar and between the KPI panel and the
+      // rows — which the padding would inset from both edges. The slot handles its own
+      // inner spacing instead.
+      tablePaddingX=""
       listViewOptions={{
         ...(props.listViewOptions || {}),
         hideListBar: true,

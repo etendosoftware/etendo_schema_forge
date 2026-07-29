@@ -1,21 +1,20 @@
-// Contract-driven column definitions for the Cuentas list (AccountsTable).
+// The rich cell bodies of the Cuentas list: bank logo + name, type + IBAN, balance.
 //
-// Which data columns appear, their order and visibility come from the window
-// contract (entity `account`, fields with grid:true + gridOrder) — editing
-// decisions.json + regen hides/reorders a column with no JSX change. The rich
-// per-cell rendering (logo, IBAN, sync, balance colouring) stays here in a
-// renderer registry. The synthetic "Por conciliar" pill and the row menu are
-// NOT contract columns (computed aggregates / structural) — they stay fixed in
-// AccountsTableHeader / AccountRow.
+// WHICH columns appear, in what order and under what label is not decided here —
+// that comes from the window contract (`decisions.json` → `grid`/`gridOrder`/
+// `gridLabelKey`, read through `contractColumns.js`). This file only owns HOW a cell
+// paints, and the binding column → renderer lives in `accountCellTypes.jsx`.
+//
+// ETP-4658 removed the hand-rolled `AccountsTable` host (header/row/table) that used
+// to consume these through an `ACCOUNT_CELL_RENDERERS` registry; the generic
+// `DataTable` now supplies its own `<TableCell>` around whatever `col.render` returns,
+// which is why these are exported as bare bodies with no wrapper of their own.
 import { Copy, GripVertical } from 'lucide-react';
-import { TableCell } from '@/components/ui/table';
-import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
 import { formatCurrency } from '@/lib/formatCurrency.js';
 import { ACCOUNT_TYPE } from '../tokens';
 import { AccountLogoAvatar } from '../AccountLogoAvatar.jsx';
 import { SyncStatusInline } from '../SyncStatusInline.jsx';
-import { getContractGridColumns } from '../contractColumns';
 
 const TYPE_LABEL_KEY = {
   [ACCOUNT_TYPE.BANK]: 'financeAccountsTypeBank',
@@ -28,10 +27,14 @@ function chunkIban(iban) {
   return iban.replace(/\s+/g, '').replace(/(.{4})/g, '$1 ').trim();
 }
 
-// The three cell bodies below are exported WITHOUT their <TableCell> wrapper so
-// both table hosts can share them: the legacy hand-rolled AccountsTable wraps
-// them itself (see ACCOUNT_CELL_RENDERERS), while the generic DataTable supplies
-// its own <TableCell> around whatever `col.render` returns.
+// Reveal-on-row-hover affordances (the drag grip, the copy-IBAN button) carry BOTH
+// Tailwind group variants on purpose. The host in production, `DataTable`, marks its
+// row as a NAMED group (`group/row`, DataTable.jsx:1201), and `group-hover:` does not
+// match `.group/row` — carrying only the unnamed variant is exactly what made both
+// affordances silently invisible when the list moved onto DataTable. The unnamed one
+// is kept as cheap insurance for any future host that marks rows as a plain `group`:
+// one dead class token costs nothing, whereas dropping it reintroduces a bug that
+// jsdom cannot catch (no Tailwind, no computed opacity).
 export function NameCell({ account, ui, onConnect }) {
   const isCashLike = account.type === ACCOUNT_TYPE.CASH;
   // In T1 the PSD2 column is not yet populated, so anything not explicitly
@@ -39,7 +42,7 @@ export function NameCell({ account, ui, onConnect }) {
   const isDisconnected = !isCashLike && account.psd2Connected !== true;
   return (
     <div className="flex h-full items-center">
-        <div className="flex w-[44px] shrink-0 items-center justify-center opacity-0 transition-opacity group-hover:opacity-100">
+        <div className="flex w-[44px] shrink-0 items-center justify-center opacity-0 transition-opacity group-hover:opacity-100 group-hover/row:opacity-100">
           <GripVertical
             className="h-5 w-5 text-[hsl(var(--text-disabled))]"
             aria-hidden="true"
@@ -84,7 +87,7 @@ export function TypeCell({ account, ui }) {
               onClick={copyIban}
               aria-label={ui('financeAccountsCopyIban')}
               data-testid={`account-row-copy-iban-${account.id}`}
-              className="rounded-full p-0.5 text-[hsl(var(--text-disabled))] opacity-0 transition-opacity hover:bg-[hsl(var(--border-subtle))] group-hover:opacity-100"
+              className="rounded-full p-0.5 text-[hsl(var(--text-disabled))] opacity-0 transition-opacity hover:bg-[hsl(var(--border-subtle))] group-hover:opacity-100 group-hover/row:opacity-100"
             >
               <Copy className="h-3.5 w-3.5" data-testid="Copy__dc050f" />
             </button>
@@ -108,64 +111,3 @@ export function BalanceCell({ account }) {
     </span>
   );
 }
-
-// Contract field name → header meta + cell/skeleton renderers.
-export const ACCOUNT_CELL_RENDERERS = {
-  name: {
-    headClass: 'w-[480px] pl-[84px] pr-2',
-    labelKey: 'financeAccountsColAccount',
-    renderCell: (account, ctx) => (
-      <TableCell className="w-[480px] p-0" data-testid="TableCell__dc050f">
-        <NameCell account={account} ui={ctx.ui} onConnect={ctx.onConnect} data-testid="NameCell__dc050f" />
-      </TableCell>
-    ),
-    renderSkeleton: (key) => (
-      <TableCell key={key} className="w-[480px] p-0" data-testid="TableCell__dc050f">
-        <div className="flex items-center">
-          <div className="w-[44px]" />
-          <Skeleton className="h-8 w-8 rounded-full" data-testid="Skeleton__dc050f" />
-          <div className="flex flex-1 flex-col gap-1 px-3">
-            <Skeleton className="h-4 w-32" data-testid="Skeleton__dc050f" />
-            <Skeleton className="h-3 w-24" data-testid="Skeleton__dc050f" />
-          </div>
-        </div>
-      </TableCell>
-    ),
-  },
-  type: {
-    headClass: 'w-[340px] px-2',
-    labelKey: 'financeAccountsColType',
-    renderCell: (account, ctx) => (
-      <TableCell className="w-[340px] px-2 py-2" data-testid="TableCell__dc050f">
-        <TypeCell account={account} ui={ctx.ui} data-testid="TypeCell__dc050f" />
-      </TableCell>
-    ),
-    renderSkeleton: (key) => (
-      <TableCell key={key} className="w-[340px]" data-testid="TableCell__dc050f">
-        <div className="flex flex-col gap-1">
-          <Skeleton className="h-4 w-16" data-testid="Skeleton__dc050f" />
-          <Skeleton className="h-3 w-40" data-testid="Skeleton__dc050f" />
-        </div>
-      </TableCell>
-    ),
-  },
-  currentBalance: {
-    headClass: 'w-[200px] px-2',
-    labelKey: 'financeAccountsColBalance',
-    renderCell: (account) => (
-      <TableCell className="w-[200px] px-2 text-right" data-testid="TableCell__dc050f">
-        <BalanceCell account={account} data-testid="BalanceCell__dc050f" />
-      </TableCell>
-    ),
-    renderSkeleton: (key) => (
-      <TableCell
-        key={key}
-        className="w-[200px] text-right"
-        data-testid="TableCell__dc050f">
-        <Skeleton className="ml-auto h-4 w-24" data-testid="Skeleton__dc050f" />
-      </TableCell>
-    ),
-  },
-};
-
-export const ACCOUNT_COLUMNS = getContractGridColumns('account');

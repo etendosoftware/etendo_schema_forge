@@ -32,11 +32,9 @@ import {
   AccountTypeFilter,
 } from '@/components/financial-accounts';
 import {
-  NameCell,
-  TypeCell,
-  BalanceCell,
-} from '@/components/financial-accounts/AccountsTable/accountColumns.jsx';
-import { ReconcilePill } from '@/components/financial-accounts/ReconcilePill.jsx';
+  ACCOUNT_CELL_TYPES,
+  resolveCellType,
+} from '@/components/financial-accounts/accountCellTypes.jsx';
 import { AccountRowActions } from '@/components/financial-accounts/AccountRowActions.jsx';
 import { getContractGridColumns } from '@/components/financial-accounts/contractColumns.js';
 import { NewAccountWizard } from '@/windows/custom/financial-account/NewAccountWizard.jsx';
@@ -51,60 +49,58 @@ import { ConfirmDialog } from '@/components/OAuth2ClientDialog';
 // Per-column presentation the contract cannot express: the Figma layout pins these
 // widths, and `pl-[84px]` aligns the "Cuenta" header with the row avatar. Consumed
 // through DataTable's `col.headClass` / `col.cellClass`.
+// Stays in code, not in decisions.json, for three reasons: decisions is a semantic
+// contract rather than a stylesheet; Tailwind arbitrary values must be static in
+// source, so a runtime `w-[${n}px]` would never be compiled; and `pl-[84px]` is not
+// a width at all — it mirrors NameCell's 44px grip + 32px avatar + 8px padding, so
+// it is coupled to that cell body and has to move with it.
 const COLUMN_CHROME = {
   name: { headClass: 'w-[480px] pl-[84px] pr-2', cellClass: 'w-[480px] p-0' },
   type: { headClass: 'w-[340px] px-2', cellClass: 'w-[340px] px-2 py-2' },
-  currentBalance: { headClass: 'w-[200px] px-2', cellClass: 'w-[200px] px-2 text-right' },
-};
-
-const CELL_BODIES = {
-  name: (row, { ui, onConnect }) => <NameCell account={row} ui={ui} onConnect={onConnect} />,
-  type: (row, { ui }) => <TypeCell account={row} ui={ui} />,
-  currentBalance: (row) => <BalanceCell account={row} />,
-};
-
-const COLUMN_LABEL_KEY = {
-  name: 'financeAccountsColAccount',
-  type: 'financeAccountsColType',
-  currentBalance: 'financeAccountsColBalance',
+  currentBalance: { headClass: 'w-[200px] px-2', cellClass: 'w-[200px] px-2' },
+  pendingCount: { headClass: 'w-[280px] px-2', cellClass: 'w-[280px] px-2' },
 };
 
 /**
- * Contract-driven data columns plus the two synthetic ones ("Por conciliar" and the
- * hover actions), in DataTable's `columns` shape. Which data columns appear and in
- * what order still comes from the contract via getContractGridColumns('account').
+ * The list's columns in DataTable's `columns` shape.
+ *
+ * Everything about the DATA columns is declared in
+ * `artifacts/financial-account/decisions.json` and read back off the contract:
+ * which ones appear (`grid`), their order (`gridOrder`), their header
+ * (`gridLabelKey`) and their renderer (`cellType`, resolved through
+ * ACCOUNT_CELL_TYPES). "Por conciliar" is a `virtualFields[]` entry — the handler
+ * injects `pendingCount` in afterHandle, there is no AD column behind it.
+ *
+ * Only the trailing actions column is appended here: its declarative equivalent
+ * (`rowQuickActions`) renders an absolute hover overlay rather than a column, and
+ * every action opens a local modal.
  */
 function buildColumns(ui, locale, handlers) {
-  const cellCtx = { ui, onConnect: (account) => handlers.onPsd2Action('connect', account) };
+  const cellCtx = {
+    ui,
+    onConnect: (account) => handlers.onPsd2Action('connect', account),
+    onReconcile: handlers.onReconcile,
+  };
 
-  const dataColumns = getContractGridColumns('account').map((col) => ({
-    key: col.name,
-    column: col.column,
-    type: col.type,
-    // `labels[locale]` wins over the AD dictionary, so the Figma header text is kept.
-    labels: { [locale]: ui(COLUMN_LABEL_KEY[col.name] ?? col.name) },
-    sortable: false,
-    ...(COLUMN_CHROME[col.name] ?? {}),
-    render: CELL_BODIES[col.name]
-      ? (row) => CELL_BODIES[col.name](row, cellCtx)
-      : undefined,
-  }));
+  const dataColumns = getContractGridColumns('account').map((col) => {
+    const renderer = ACCOUNT_CELL_TYPES[resolveCellType(col)];
+    return {
+      key: col.name,
+      column: col.column,
+      type: col.type,
+      // `labels[locale]` is resolveColumnLabel's top-priority branch, so a declared
+      // gridLabelKey wins over the AD dictionary. Without one, `column` lets the
+      // dictionary resolve it rather than falling through to the raw field name.
+      labels: col.gridLabelKey ? { [locale]: ui(col.gridLabelKey) } : undefined,
+      label: col.label,
+      sortable: false,
+      ...(COLUMN_CHROME[col.name] ?? {}),
+      render: renderer ? (row) => renderer(row, cellCtx) : undefined,
+    };
+  });
 
   return [
     ...dataColumns,
-    {
-      key: 'pendingCount',
-      labels: { [locale]: ui('financeAccountsColPending') },
-      sortable: false,
-      headClass: 'w-[280px] px-2',
-      cellClass: 'w-[280px] px-2',
-      // The whole row navigates, so the pill swallows its own click.
-      render: (row) => (
-        <span onClick={(e) => e.stopPropagation()} role="presentation" className="inline-flex">
-          <ReconcilePill pendingCount={row.pendingCount} onClick={() => handlers.onReconcile(row)} />
-        </span>
-      ),
-    },
     {
       key: '_rowActions',
       labels: { [locale]: '' },
@@ -272,25 +268,31 @@ export default function AccountsHeaderTable({ data, meta, onDataMutated, ...prop
 
         {/* Vertical rule between the KPI panel and the rows, as in the original page */}
         <div className="w-px self-stretch bg-[hsl(var(--border-subtle))]" aria-hidden="true" />
-        {/* The only scrolling region */}
+        {/* The only scrolling region. The room the elevated hover shadow needs under the
+            last row is reserved by DataTable itself, not here. */}
         <div style={{ flex: 1, minWidth: 0, overflowY: 'auto', overflowX: 'auto' }}>
           <DataTable
             {...props}
             data={visibleAccounts}
             columns={columns}
-            filters={[]}
             // DataTable calls this with the whole ROW, not an id (DataTable.jsx:1902,
             // `onNavigate(row)`). Taking it as an id produced /financial-account/[object Object].
             onNavigate={(row) => handlers.onOpen(row)}
             onDataMutated={onDataMutated}
+            // Load-bearing: DataTable totals every `amount` column, and summing
+            // balances across currencies without conversion is a wrong number.
             showFooterTotals={false}
-            // This list has no bulk operations and owns its own hover actions
-            // (AccountRowActions, in the trailing synthetic column), so DataTable's
-            // defaults would add a selection checkbox column and a generic
-            // delete/quick-actions overlay that are not part of this design.
+            // No bulk operations here. DataTable defaults selectable to true, which
+            // would add a checkbox column that is not part of this design. The
+            // quick-actions overlay is suppressed declaratively instead
+            // (`window.rowQuickActions.enabled: false` in decisions.json), since this
+            // list owns its actions through the trailing AccountRowActions column.
             selectable={false}
-            rowQuickActions={null}
-            hoverRowActions={false}
+            // The retired page lifted the hovered row with a drop shadow instead of
+            // tinting it (`hover:z-10 hover:shadow-lg` on AccountRow's <tr>). Keeping
+            // that reading — the row as a raised card — is why DataTable takes a
+            // hover style rather than this slot restyling rows on its own.
+            rowHoverStyle="elevated"
             data-testid="DataTable__accthdr" />
         </div>
       </div>

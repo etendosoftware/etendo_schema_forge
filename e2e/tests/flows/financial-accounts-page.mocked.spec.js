@@ -158,9 +158,10 @@ test.describe('Financial Accounts list — Cuentas', () => {
     await expect(page.getByTestId('row-acc-5')).toHaveCount(0);
   });
 
-  test('renders the contract-driven columns plus the two synthetic ones', async ({ page }) => {
-    // Data columns come from contract.json (entity `account`, grid + gridOrder);
-    // "Por conciliar" and the row actions are synthetic columns added by the slot.
+  test('renders the contract-driven columns plus the synthetic actions one', async ({ page }) => {
+    // All four data columns come from contract.json (entity `account`, grid + gridOrder) —
+    // "Por conciliar" among them, as an `entities.account.virtualFields[]` declaration whose
+    // value the NeoHandler injects in afterHandle. Only the row actions are added by the slot.
     for (const key of ['name', 'type', 'currentBalance', 'pendingCount', '_rowActions']) {
       await expect(page.getByTestId(`column-header-${key}`)).toHaveCount(1);
     }
