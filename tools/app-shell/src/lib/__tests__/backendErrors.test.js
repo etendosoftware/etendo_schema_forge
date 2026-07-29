@@ -220,3 +220,32 @@ describe('translateBackendError — parameterized "Account could not be found" (
     assert.equal(translateBackendError(raw, t), 'Se necesita el País para una cuenta IBAN.');
   });
 });
+
+// ── ETP-4706: costing engine "@product@" placeholder never resolves ──────────────
+//
+// Core Etendo's `NotCalculatedCostWithTransaction` AD_MESSAGE
+// ("The cost of the product @product@ has not been calculated.") is returned by
+// OBMessageUtils.parseTranslation() with its own embedded `@product@` placeholder
+// left literally unsubstituted — parseTranslation resolves the outer message token
+// in a single pass and does not recursively re-parse the resolved text for nested
+// placeholders. This happens deterministically every time this specific failure
+// occurs, so the raw string (with the literal `@product@`) is a stable exact-match
+// candidate for BACKEND_ERROR_MAP — no dynamic value is ever actually available to
+// capture, unlike the parameterized "Account could not be found" case above.
+describe('translateBackendError — cost not calculated exact match (ETP-4706)', () => {
+  const RAW = 'The cost of the product @product@ has not been calculated.';
+
+  it('translates the raw (broken, literal @product@) message to en_US', () => {
+    const t = (k) => (k === 'backendError.costNotCalculated'
+      ? 'The cost of the product could not be calculated.'
+      : k);
+    assert.equal(translateBackendError(RAW, t), 'The cost of the product could not be calculated.');
+  });
+
+  it('translates the raw (broken, literal @product@) message to es_ES', () => {
+    const t = (k) => (k === 'backendError.costNotCalculated'
+      ? 'No se pudo calcular el costo del producto.'
+      : k);
+    assert.equal(translateBackendError(RAW, t), 'No se pudo calcular el costo del producto.');
+  });
+});
