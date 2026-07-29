@@ -252,6 +252,64 @@ invariant that test mode never alters `status`.
   Deferred — would need a lightweight count endpoint or a client-side list call just to render the
   badge, judged not worth it for this increment.
 
+### "Incidencias" tab — persisted AEAT validation errors (ETP-4456)
+
+Previously the "Incidencias" tab (`IncidentsTab`, `FmTabContent.jsx`) only ever read
+`decl.incidents` as passed down from whatever loaded the declaration — for a real backend that was
+always the all-zero shape (`{blocking: 0, warning: 0}`, no `items`), since nothing persisted AEAT's
+response errors; only the mocked `DEMO_DECLARATIONS` in `FmListPage.jsx` carried fake incident
+data. The one-off AEAT error list shown in `AeatSubmitFlow`'s result screen (`response.errors[]`,
+still there, unchanged) was the only place a user could ever see these messages, and it vanished
+the moment the modal closed.
+
+**Backend persistence (`com.etendoerp.go`).** A new child table, `ETGO_Fiscal_Decl_Incident`
+(FK `fiscalDeclaration` → `ETGO_Fiscal_Decl`, columns `CODE` VARCHAR + `MESSAGE` — sized for AEAT's
+free-text error strings), stores one row per AEAT error. `Fiscal303BoxesHandler#handleSubmit`
+calls `replaceIncidents(decl, result.getErrors())` (via the new
+`AbstractFiscalHandler#replaceIncidents` → `FiscalDeclCrudHandler#replaceIncidents`) on **every**
+submission attempt — test mode and production alike, success or failure — right after the AEAT
+result is obtained. `replaceIncidents` always deletes every existing incident row for the
+declaration first, then inserts one row per entry in `AEAT303SubmissionResult#getErrors()` (a raw
+`"CODE - message"` string per error, e.g. `"35068 - El resultado a ingresar..."` or
+`"E010124 - Para periodo mensual..."`, split via `FiscalDeclCrudHandler#splitAeatError`, a simple
+`^(\S+)\s*-\s*(.+)$` regex with the whole string falling back into `message` when it doesn't
+match). A successful submission has an empty error list, so the delete-then-noop-insert leaves the
+declaration with zero incident rows — no separate success-path code needed. Persistence is
+best-effort: a failure here is logged and never masks the actual submission response already
+computed.
+
+**Read path.** `GET /fiscal303/incidents?id=<declId>` (new entity route in
+`AbstractFiscalHandler#handle`, alongside the existing `declarations`/`modified` ones — requires
+only `id`, no `year`/`period`) returns `{"data":[{"code","message"}, ...]}` for a declaration,
+ownership-checked the same way as the `declarations` CRUD endpoints. Generic across models (the
+same `ETGO_Fiscal_Decl_Incident` table backs both `/fiscal303/incidents` and `/fiscal349/incidents`
+for free), even though only the 303 telematic flow writes to it today.
+
+**Frontend wiring (`fiscalModelsUtils.js` + `FmModel303Page.jsx`).** A new
+`fetchDeclarationIncidents(id, { token, apiBaseUrl })` calls the endpoint above and maps the
+backend's generic `{code, message}` rows into the shape `IncidentsTab`/`SourcesTab` already expect:
+`origin` = code, `message` = message, `severity` = `'block'` — AEAT itself draws no
+warning/blocking distinction, and `'block'` is the only sensible single default since every row
+represents a failed/invalid submission attempt that must be resolved (matches how `IncidentsTab`
+already renders any non-`'block'` severity as a plain warning). `FmModel303Page` keeps a local
+`incidents` state (seeded from `decl.incidents`, so the demo/mock path in `FmListPage.jsx` is
+unaffected when no `token`/`apiBaseUrl` is configured) and:
+- fetches it once on mount (only when `token`/`apiBaseUrl` are present — real backend mode);
+- re-fetches it via a new `onIncidentsChanged` callback passed to `AeatSubmitFlow`, fired after
+  **every** submission attempt (`SUCCESS`/`TEST_SUCCESS`/`ERROR` alike — i.e. whenever the backend
+  returned a structured `data.status`), so the tab shows the latest result live without a page
+  reload, including for test-mode attempts.
+
+Because these AEAT errors never carry a casilla number, the existing "ir a Casilla X" button in
+`IncidentsTab` (matched via `inc.origin?.match(/Casilla\s+\d+/i)` against the origin field, which
+now holds the AEAT code) naturally never renders for them — left untouched, it belongs to a
+separate, not-yet-built casilla-level validation feature.
+
+**Semantics to remember:** incidents are **replaced, never appended** — a second submission
+attempt with different AEAT errors fully replaces the first attempt's rows, it does not
+accumulate them. A **successful** submission (test or production) leaves the tab **empty**, not
+stale from a prior failed attempt.
+
 ## Modelo 349 detail page (`FmModel349Page`)
 
 Full intra-EU recapitulative declaration view. Auto-compute runs via `useFiscalAutoCompute` (same hook as 303) using `compute349Operators` / `checkModified349`.
@@ -295,7 +353,7 @@ Four cards (Operadores, Total operaciones, Rectificaciones, Pendientes VIES) sou
 | `FiscalModelsPage.jsx` | Root — routes between list and per-model detail |
 | `FmListPage.jsx` | Declaration table, toolbar, auto-compute wiring |
 | `useFiscalAutoCompute.js` | Background compute + polling hook |
-| `fiscalModelsUtils.js` | `computeBoxes303`, `checkModified303`, `generate303File`, formatters, deadline logic |
+| `fiscalModelsUtils.js` | `computeBoxes303`, `checkModified303`, `generate303File`, `fetchDeclarationIncidents` (ETP-4456), formatters, deadline logic |
 | `models/303/FmModel303Page.jsx` | Modelo 303 detail — boxes, sources, stepper, file gen |
 | `models/303/FmBoxes303.jsx` | Box grid renderer |
 | `models/303/fm303Layouts.js` | Box layout definition (sections, rows, labels) |
@@ -315,6 +373,7 @@ Four cards (Operadores, Total operaciones, Rectificaciones, Pendientes VIES) sou
 | `GET` | `/fiscal303/modified?year=&period=&since=` | `checkModified303` |
 | `GET` | `/fiscal303/generate?year=&period=&tipo=` | `generate303File` |
 | `POST` | `/fiscal303/submit?year=&period=&tipo=&id=` (body: testMode, idi, nrc, presenterNif, presenterName) | `AeatSubmitFlow` — AEAT electronic submission (ETP-4456) |
+| `GET` | `/fiscal303/incidents?id=` | `fetchDeclarationIncidents` — persisted AEAT validation errors for the "Incidencias" tab (ETP-4456) |
 | `GET` | `/session` | FmModel303Page — org NIF/nombre for file header |
 | `GET` | `/fiscal349/operators?year=&period=` | `compute349Operators` — returns operators + invoices + orgNif/orgName |
 | `GET` | `/fiscal349/modified?year=&period=&since=` | `checkModified349` |

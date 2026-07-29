@@ -141,8 +141,13 @@ function Banner({ tone, icon, title, body, children }) {
 //             caller refresh the "Justificante" attachments tab even for a test-mode success,
 //             which deliberately does NOT go through onSuccess/handleStatusChange (test mode
 //             must never change the declaration's status).
+// onIncidentsChanged: called (no args) whenever the backend returned a structured submission
+//             result (SUCCESS/TEST_SUCCESS/ERROR — i.e. any `data.status`), regardless of outcome.
+//             The backend replaces the declaration's persisted AEAT incidents on EVERY submission
+//             attempt (test mode included), so the "Incidencias" tab must re-fetch after every
+//             attempt, not just on success — see ETP-4456, `Fiscal303BoxesHandler#handleSubmit`.
 // onClose:    called to dismiss the flow (any step)
-export default function AeatSubmitFlow({ decl, orgIdent, identChecks, summary, token, apiBaseUrl, onSuccess, onAttached, onClose }) {
+export default function AeatSubmitFlow({ decl, orgIdent, identChecks, summary, token, apiBaseUrl, onSuccess, onAttached, onIncidentsChanged, onClose }) {
   const ui = useUI();
   const t = ui;
   const navigate = useNavigate();
@@ -191,6 +196,10 @@ export default function AeatSubmitFlow({ decl, orgIdent, identChecks, summary, t
       }
       setResponse(data);
       setStep('result');
+      // Fired for SUCCESS, TEST_SUCCESS and ERROR alike — the backend replaces the persisted
+      // AEAT incidents on every attempt (delete-then-reinsert, empty on success), so the
+      // "Incidencias" tab needs a fresh fetch regardless of outcome, not just on success.
+      onIncidentsChanged?.();
       if (data.status === 'SUCCESS') onSuccess?.('submitted_ack');
       // Fired for both SUCCESS and TEST_SUCCESS — the backend now attaches the
       // receipt PDF to the declaration's attachments in either case. Calling

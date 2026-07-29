@@ -434,6 +434,66 @@ describe('AeatSubmitFlow — onAttached (Justificante tab refresh, ETP-4456 test
   });
 });
 
+describe('AeatSubmitFlow — onIncidentsChanged (Incidencias tab refresh, ETP-4456)', () => {
+  beforeEach(() => { vi.clearAllMocks(); });
+
+  it('calls onIncidentsChanged for a SUCCESS response', async () => {
+    const onIncidentsChanged = vi.fn();
+    stableApiFetch.mockReturnValueOnce(jsonResponse({ status: 'SUCCESS' }));
+    renderFlow({ onIncidentsChanged });
+    fireEvent.click(screen.getByText('fm.aeat.action.submit'));
+
+    await waitFor(() => expect(screen.getByText('fm.aeat.result.success.title')).toBeInTheDocument());
+    expect(onIncidentsChanged).toHaveBeenCalledTimes(1);
+  });
+
+  it('calls onIncidentsChanged for a TEST_SUCCESS response', async () => {
+    const onIncidentsChanged = vi.fn();
+    stableApiFetch.mockReturnValueOnce(jsonResponse({ status: 'TEST_SUCCESS' }));
+    renderFlow({ onIncidentsChanged });
+    fireEvent.click(screen.getByText('fm.aeat.action.submit'));
+
+    await waitFor(() => expect(screen.getByText('fm.aeat.result.test.title')).toBeInTheDocument());
+    expect(onIncidentsChanged).toHaveBeenCalledTimes(1);
+  });
+
+  it('calls onIncidentsChanged for an ERROR response — incidents are persisted on failed submissions too', async () => {
+    const onIncidentsChanged = vi.fn();
+    stableApiFetch.mockReturnValueOnce(jsonResponse({
+      status: 'ERROR', errorCode: 'SUBMISSION_FAILED',
+      errors: ['E0100803 - Razón social del Declarante'],
+    }));
+    renderFlow({ onIncidentsChanged });
+    fireEvent.click(screen.getByText('fm.aeat.action.submit'));
+
+    await waitFor(() => expect(screen.getByText('fm.aeat.result.error.title')).toBeInTheDocument());
+    expect(onIncidentsChanged).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not call onIncidentsChanged when the response is malformed (connection-error path)', async () => {
+    const onIncidentsChanged = vi.fn();
+    stableApiFetch.mockReturnValueOnce(Promise.resolve({ ok: false, json: async () => { throw new Error('bad json'); } }));
+    renderFlow({ onIncidentsChanged });
+    fireEvent.click(screen.getByText('fm.aeat.action.submit'));
+
+    await waitFor(() => expect(screen.getByText('fm.aeat.error.connection')).toBeInTheDocument());
+    expect(onIncidentsChanged).not.toHaveBeenCalled();
+  });
+
+  it('still calls onIncidentsChanged for a test-mode (testMode: true) submission', async () => {
+    const onIncidentsChanged = vi.fn();
+    stableApiFetch.mockReturnValueOnce(jsonResponse({ status: 'TEST_SUCCESS' }));
+    renderFlow({ onIncidentsChanged });
+    fireEvent.click(screen.getByTestId('AeatSubmitFlow__testMode'));
+    fireEvent.click(screen.getByText('fm.aeat.action.submit'));
+
+    await waitFor(() => expect(stableApiFetch).toHaveBeenCalledTimes(1));
+    expect(JSON.parse(stableApiFetch.mock.calls[0][1].body).testMode).toBe(true);
+    await waitFor(() => expect(screen.getByText('fm.aeat.result.test.title')).toBeInTheDocument());
+    expect(onIncidentsChanged).toHaveBeenCalledTimes(1);
+  });
+});
+
 describe('AeatSubmitFlow — double-submit protection (Sentinel QA, ETP-4456)', () => {
   beforeEach(() => { vi.clearAllMocks(); });
 

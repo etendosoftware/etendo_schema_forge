@@ -12,7 +12,7 @@ import FmBoxes303 from './FmBoxes303.jsx';
 import { PresentModal, FileGenModal303, ConfigDrawer, CompareDrawer } from '../../FmOverlays.jsx';
 import AeatSubmitFlow from './AeatSubmitFlow.jsx';
 import { neoBase } from '@/components/related-documents/helpers.js';
-import { formatAmount, formatPeriod, computeBoxes303, generate303File } from '../../fiscalModelsUtils.js';
+import { formatAmount, formatPeriod, computeBoxes303, generate303File, fetchDeclarationIncidents } from '../../fiscalModelsUtils.js';
 import { AttachmentsTab, useAttachments } from '@/components/attachments';
 
 // AD table name backing the AEAT justificante attachments store — both the
@@ -299,6 +299,26 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, token, ap
   const [generating,  setGenerating]  = useState(false);
   const [genError,    setGenError]    = useState(null);
 
+  // AEAT validation-error incidents (ETP-4456) — starts from whatever `decl.incidents` already
+  // carries (list-load snapshot, or the demo mock in `FmListPage.jsx`'s DEMO_DECLARATIONS when no
+  // token/apiBaseUrl is configured) and is refreshed from the real backend on mount and after
+  // every AEAT submission attempt (test or production — both replace the persisted rows server
+  // side, see `Fiscal303BoxesHandler#handleSubmit`).
+  const [incidents, setIncidents] = useState(decl.incidents ?? { blocking: 0, warning: 0, items: [] });
+
+  async function refreshIncidents() {
+    const fresh = await fetchDeclarationIncidents(decl.id, { token, apiBaseUrl });
+    setIncidents(fresh);
+  }
+
+  useEffect(() => {
+    // No token/apiBaseUrl means demo/mock mode — keep the mocked `decl.incidents` as-is instead
+    // of overwriting it with the all-zero empty shape `fetchDeclarationIncidents` would return.
+    if (!token || !apiBaseUrl) return;
+    refreshIncidents();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [decl.id, token, apiBaseUrl]);
+
   async function handleCompute() {
     setComputing(true);
     try {
@@ -355,8 +375,8 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, token, ap
     handleStatusChange(newStatus);
   }
 
-  const blocking = decl.incidents?.blocking ?? 0;
-  const warning = decl.incidents?.warning ?? 0;
+  const blocking = incidents?.blocking ?? 0;
+  const warning = incidents?.warning ?? 0;
   const incidentCount = blocking + warning;
   const isSubmitted = ['submitted', 'submitted_ext', 'submitted_ack'].includes(status);
   const fileBlocked = blocking > 0;
@@ -576,13 +596,13 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, token, ap
         <div className="fm-page__body" style={{ display: 'flex', flexDirection: 'column', overflowY: 'hidden', ...(activeTab === 'sources' || activeTab === 'incidents' ? { padding: 0 } : {}) }}>
           {activeTab === 'sources' && (
             <SourcesTab
-              decl={{ ...decl, sources: liveSources ?? decl.sources }}
+              decl={{ ...decl, sources: liveSources ?? decl.sources, incidents }}
               t={t}
               data-testid="SourcesTab__4f6c0d" />
           )}
           {activeTab === 'incidents' && (
             <IncidentsTab
-              decl={decl}
+              decl={{ ...decl, incidents }}
               blocking={blocking}
               warning={warning}
               t={t}
@@ -642,6 +662,7 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, token, ap
           apiBaseUrl={apiBaseUrl}
           onSuccess={(newStatus) => handleStatusChange(newStatus)}
           onAttached={handleAeatAttached}
+          onIncidentsChanged={refreshIncidents}
           onClose={() => setShowAeatFlow(false)}
           data-testid="AeatSubmitFlow__4f6c0d" />
       )}
