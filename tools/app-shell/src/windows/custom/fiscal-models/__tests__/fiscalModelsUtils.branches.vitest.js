@@ -336,13 +336,23 @@ describe('generate303File', () => {
     expect(url).toContain('tipo=N');
   });
 
-  it('returns { ok: false, error: iban_required } when tipo=I and no IBAN', async () => {
+  it('returns { ok: false, error: iban_required } when tipo=U and no IBAN', async () => {
     const result = await generate303File(
-      { year: 2026, period: 'T2', result: { kind: 'I' } },
+      { year: 2026, period: 'T2', result: { kind: 'U' } },
       { token: 'tok', apiBaseUrl: 'http://test/neo/spec' },
     );
     expect(result).toEqual({ ok: false, error: 'iban_required' });
     expect(globalThis.fetch).not.toHaveBeenCalled();
+  });
+
+  it('does not gate tipo=I on IBAN (EDID065 fix — I is no longer IBAN-required)', async () => {
+    globalThis.fetch.mockResolvedValue({ ok: false, text: () => Promise.resolve('') });
+    const result = await generate303File(
+      { year: 2026, period: 'T2', result: { kind: 'I' } },
+      { token: 'tok', apiBaseUrl: 'http://test/neo/spec' },
+    );
+    expect(result.error).not.toBe('iban_required');
+    expect(globalThis.fetch).toHaveBeenCalled();
   });
 });
 

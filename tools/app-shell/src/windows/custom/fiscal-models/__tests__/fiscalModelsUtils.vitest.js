@@ -1013,7 +1013,8 @@ describe('generate303File', () => {
 
   it('builds the correct URL with URLSearchParams', async () => {
     mockFetchOk();
-    // tipo=I requires IBAN — pass via identChecks (form state)
+    // tipo=I no longer requires IBAN (EDID065 fix) — identChecks is optional here,
+    // kept to also cover the "extra IBAN param" pass-through path.
     await generate303File(DECL, { token: TOKEN, apiBaseUrl: API_BASE, identChecks: { bank_iban: 'ES9121000418450200051332' } });
     const calledUrl = vi.mocked(fetch).mock.calls[0][0];
     expect(calledUrl).toContain('/fiscal303/generate?');
@@ -1036,14 +1037,12 @@ describe('generate303File', () => {
 
   it('sends Authorization header', async () => {
     mockFetchOk();
-    // tipo=I requires IBAN — pass via identChecks (form state)
     await generate303File(DECL, { token: TOKEN, apiBaseUrl: API_BASE, identChecks: { bank_iban: 'ES9121000418450200051332' } });
     expect(vi.mocked(fetch).mock.calls[0][1].headers.Authorization).toBe(`Bearer ${TOKEN}`);
   });
 
   it('returns { ok: true } and triggers download on success', async () => {
     const { anchor } = mockFetchOk();
-    // tipo=I requires IBAN — pass via identChecks (form state)
     const result = await generate303File(DECL, { token: TOKEN, apiBaseUrl: API_BASE, identChecks: { bank_iban: 'ES9121000418450200051332' } });
     expect(result.ok).toBe(true);
     expect(anchor.download).toBe('303_T2_2026.txt');
@@ -1064,7 +1063,17 @@ describe('generate303File', () => {
   });
 
   it('returns { ok: false, error: iban_required } when tipo needs IBAN and none provided', async () => {
-    const result = await generate303File(DECL, { token: TOKEN, apiBaseUrl: API_BASE });
+    // Only U (Domiciliación), D (Devolución) and X (Devolución transferencia
+    // extranjero) require IBAN per AEAT error EDID065 — tipo=I no longer does.
+    const result = await generate303File({ ...DECL, result: { kind: 'D' } }, { token: TOKEN, apiBaseUrl: API_BASE });
     expect(result).toEqual({ ok: false, error: 'iban_required' });
+  });
+
+  it('does not require IBAN for tipo=I, G or V (EDID065 fix — no longer in IBAN_REQUIRED_TIPOS)', async () => {
+    for (const kind of ['I', 'G', 'V']) {
+      mockFetchOk();
+      const result = await generate303File({ ...DECL, result: { kind } }, { token: TOKEN, apiBaseUrl: API_BASE });
+      expect(result.ok).toBe(true);
+    }
   });
 });

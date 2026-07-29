@@ -50,10 +50,12 @@ const IDENT_PARAM_MAP = [
   ['baja_domiciliacion', 'Cancel_Modify_Debit'],
 ];
 
-// Declaration types (tipo_declaracion) for which AEAT303Report2014 hard-requires
-// an IBAN param downstream. Shared by generate303File and AeatSubmitFlow — both
-// must guard the same set before hitting the network.
-export const IBAN_REQUIRED_TIPOS = ['D', 'G', 'I', 'V', 'U', 'X'];
+// Declaration types (tipo_declaracion) for which AEAT actually allows/requires an
+// IBAN: Domiciliación (U), Devolución (D), and Devolución transferencia extranjero
+// (X). For any other tipo, AEAT rejects the submission with error EDID065 if IBAN
+// is present. Shared by generate303File and AeatSubmitFlow — both must guard the
+// same set before hitting the network.
+export const IBAN_REQUIRED_TIPOS = ['U', 'D', 'X'];
 
 // Maps editable box numbers (from manualOverrides / liveBoxes) to AEAT HTTP param names.
 // Only boxes that the AEAT module reads from inputParams (not computed from DB) are listed.

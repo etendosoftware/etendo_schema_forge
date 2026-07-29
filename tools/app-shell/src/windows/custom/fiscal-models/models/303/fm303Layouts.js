@@ -26,6 +26,9 @@ const IVA_DED_COLS = [
 // ── Shared field definitions (declared before BASE to avoid TDZ) ─────
 
 // visibleWhen shared by bank fields that only apply to devolucion/transferencia (not domiciliacion U).
+// NOTE: 'V' is now dead code — the whole datos_bancarios section is gated to {U, D, X}
+// (EDID065 fix), so V can never reach this visibleWhen. Left as-is pending a separate
+// decision on whether V should show these extended bank fields at all.
 const _BANK_DVX_VW = { field: 'tipo_declaracion', in: ['D', 'V', 'X'] };
 
 const TIPO_DECLARACION_FIELD = {
@@ -69,11 +72,12 @@ const BASE = {
       sectionType: 'identificacion',
       titleKeyFrom: 'tipo_declaracion',
       titleKeyMap: {
-        D: 'fm.section.devolucion', V: 'fm.section.devolucion', X: 'fm.section.devolucion',
-        G: 'fm.section.devolucion',
-        I: 'fm.section.domiciliacion', U: 'fm.section.domiciliacion',
+        D: 'fm.section.devolucion', X: 'fm.section.devolucion',
+        U: 'fm.section.domiciliacion',
       },
-      sectionVisibleWhen: { field: 'tipo_declaracion', in: ['D', 'G', 'I', 'V', 'X', 'U'] },
+      // Only U (Domiciliación), D (Devolución) and X (Devolución transferencia
+      // extranjero) may carry IBAN per AEAT error EDID065 — see IBAN_REQUIRED_TIPOS.
+      sectionVisibleWhen: { field: 'tipo_declaracion', in: ['U', 'D', 'X'] },
       fieldLayout: 'aligned',
       colHeaderKeys: [],
       fields: [

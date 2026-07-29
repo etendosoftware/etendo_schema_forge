@@ -90,14 +90,13 @@ The top of the Boxes tab shows the declaration type selector and, conditionally,
 
 **`tipo_declaracion` options:** `C` (Complementaria), `D` (Devolución), `I` (Ingreso), `U` (Cuota cero), `N` (Sin resultado), `V` (Domiciliación — IVA), `X` (Domiciliación — extranjero).
 
-**`datos_bancarios` visibility** (`sectionVisibleWhen`): shown when `tipo_declaracion ∈ {D, G, I, V, X, U}`. Hidden for `N` and `C`.
+**`datos_bancarios` visibility** (`sectionVisibleWhen`): shown only when `tipo_declaracion ∈ {U, D, X}` — the only types AEAT allows an IBAN for (error `EDID065` rejects the submission if IBAN is present for any other tipo, e.g. `I`). Hidden for `C`, `G`, `I`, `N`, `V`.
 
 **Section title** varies by tipo:
-- `D` → "Devolución"
-- `G`, `I`, `V`, `U` → "Domiciliación"
-- `X` → "Domiciliación (extranjero)"
+- `D`, `X` → "Devolución"
+- `U` → "Domiciliación"
 
-**SWIFT/BIC field** is only shown when `tipo ∈ {D, V, X}`.
+**SWIFT/BIC field** is only shown when `tipo ∈ {D, V, X}` (`_BANK_DVX_VW`) — note `V` can never actually reach this since the whole section is now gated to `{U, D, X}`; left as dead code pending a separate decision on `V`'s bank-field requirements.
 
 ### Live data
 

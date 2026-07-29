@@ -528,6 +528,34 @@ describe('SUPPORTED_YEARS', () => {
   });
 });
 
+// ── datos_bancarios section (EDID065 fix — AEAT rejects IBAN for tipos other
+// than U/D/X) ──────────────────────────────────────────────────────────────
+
+describe('getLayout303 — datos_bancarios section visibility (EDID065 fix)', () => {
+  const layout = getLayout303(2026, 1);
+  const sec = layout.sections.find(s => s.id === 'datos_bancarios');
+
+  it('sectionVisibleWhen only allows tipo_declaracion U, D, X (not G, I, V)', () => {
+    expect(sec.sectionVisibleWhen).toEqual({ field: 'tipo_declaracion', in: ['U', 'D', 'X'] });
+  });
+
+  it('titleKeyMap only maps D, X (devolucion) and U (domiciliacion) — no G, I, V entries', () => {
+    expect(sec.titleKeyMap).toEqual({
+      D: 'fm.section.devolucion',
+      X: 'fm.section.devolucion',
+      U: 'fm.section.domiciliacion',
+    });
+    expect(sec.titleKeyMap).not.toHaveProperty('G');
+    expect(sec.titleKeyMap).not.toHaveProperty('I');
+    expect(sec.titleKeyMap).not.toHaveProperty('V');
+  });
+
+  it('is still returned by getLayout303 (titleKeyMap alone satisfies the titleKey||titleKeyMap filter)', () => {
+    expect(sec).toBeTruthy();
+    expect(sec.titleKeyFrom).toBe('tipo_declaracion');
+  });
+});
+
 // ── sin_actividad section ─────────────────────────────────────────────────────
 
 describe('getLayout303 — sin_actividad section', () => {

@@ -196,9 +196,10 @@ describe('AeatSubmitFlow — submit request shape', () => {
 
     await waitFor(() => expect(stableApiFetch).toHaveBeenCalledTimes(1));
     const [path, options] = stableApiFetch.mock.calls[0];
-    // The default fixture's tipo ('I') is IBAN-required and its identChecks.bank_iban is
-    // present, so applyIdentParams appends IBAN after the base {year,period,tipo,id} params
-    // (URLSearchParams preserves insertion order).
+    // The default fixture's identChecks.bank_iban is present, so applyIdentParams appends
+    // IBAN after the base {year,period,tipo,id} params (URLSearchParams preserves insertion
+    // order) — this happens regardless of whether tipo 'I' is IBAN-required (it is not, per
+    // EDID065 / IBAN_REQUIRED_TIPOS: only U/D/X are).
     expect(path).toBe('/fiscal303/submit?year=2026&period=T2&tipo=I&id=decl-1&IBAN=ES7620770024003102575766');
     expect(options.method).toBe('POST');
     expect(JSON.parse(options.body)).toEqual({
@@ -233,7 +234,7 @@ describe('AeatSubmitFlow — IBAN pre-flight guard (ETP-4456, submit-flow parity
   });
 
   it('does not call apiFetch and shows a client-side error when an IBAN-required tipo has no bank_iban', async () => {
-    renderFlow({ identChecks: { tipo_declaracion: 'I', bank_iban: '' } });
+    renderFlow({ identChecks: { tipo_declaracion: 'D', bank_iban: '' } });
     fireEvent.click(screen.getByText('fm.aeat.action.submit'));
 
     await waitFor(() => expect(screen.getByText('fm.aeat.error.ibanRequired')).toBeInTheDocument());
@@ -243,7 +244,7 @@ describe('AeatSubmitFlow — IBAN pre-flight guard (ETP-4456, submit-flow parity
   });
 
   it('also blocks when bank_iban is only whitespace', async () => {
-    renderFlow({ identChecks: { tipo_declaracion: 'V', bank_iban: '   ' } });
+    renderFlow({ identChecks: { tipo_declaracion: 'X', bank_iban: '   ' } });
     fireEvent.click(screen.getByText('fm.aeat.action.submit'));
 
     await waitFor(() => expect(screen.getByText('fm.aeat.error.ibanRequired')).toBeInTheDocument());
@@ -258,6 +259,26 @@ describe('AeatSubmitFlow — IBAN pre-flight guard (ETP-4456, submit-flow parity
     await waitFor(() => expect(stableApiFetch).toHaveBeenCalledTimes(1));
     const [path] = stableApiFetch.mock.calls[0];
     expect(path).not.toContain('IBAN=');
+  });
+
+  it('no longer blocks tipo=I on IBAN (EDID065 fix — I removed from IBAN_REQUIRED_TIPOS)', async () => {
+    stableApiFetch.mockReturnValueOnce(jsonResponse({ status: 'SUCCESS' }));
+    renderFlow({ identChecks: { tipo_declaracion: 'I', bank_iban: '' } });
+    fireEvent.click(screen.getByText('fm.aeat.action.submit'));
+
+    await waitFor(() => expect(stableApiFetch).toHaveBeenCalledTimes(1));
+    expect(screen.queryByText('fm.aeat.error.ibanRequired')).not.toBeInTheDocument();
+    const [path] = stableApiFetch.mock.calls[0];
+    expect(path).not.toContain('IBAN=');
+  });
+
+  it('no longer blocks tipo=V on IBAN (EDID065 fix — V removed from IBAN_REQUIRED_TIPOS)', async () => {
+    stableApiFetch.mockReturnValueOnce(jsonResponse({ status: 'SUCCESS' }));
+    renderFlow({ identChecks: { tipo_declaracion: 'V', bank_iban: '   ' } });
+    fireEvent.click(screen.getByText('fm.aeat.action.submit'));
+
+    await waitFor(() => expect(stableApiFetch).toHaveBeenCalledTimes(1));
+    expect(screen.queryByText('fm.aeat.error.ibanRequired')).not.toBeInTheDocument();
   });
 });
 
