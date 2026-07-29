@@ -262,53 +262,66 @@ data. The one-off AEAT error list shown in `AeatSubmitFlow`'s result screen (`re
 still there, unchanged) was the only place a user could ever see these messages, and it vanished
 the moment the modal closed.
 
-**Backend persistence (`com.etendoerp.go`).** A new child table, `ETGO_Fiscal_Decl_Incident`
+**Backend persistence (`com.etendoerp.go`).** A child table, `ETGO_Fiscal_Decl_Incident`
 (FK `fiscalDeclaration` → `ETGO_Fiscal_Decl`, columns `CODE` VARCHAR + `MESSAGE` — sized for AEAT's
-free-text error strings), stores one row per AEAT error. `Fiscal303BoxesHandler#handleSubmit`
-calls `replaceIncidents(decl, result.getErrors())` (via the new
+free-text strings — plus `SEVERITY` VARCHAR(200), added in this increment), stores one row per AEAT
+error **or warning**. `Fiscal303BoxesHandler#handleSubmit` calls
+`replaceIncidents(decl, result.getErrors(), result.getWarnings())` (via
 `AbstractFiscalHandler#replaceIncidents` → `FiscalDeclCrudHandler#replaceIncidents`) on **every**
 submission attempt — test mode and production alike, success or failure — right after the AEAT
 result is obtained. `replaceIncidents` always deletes every existing incident row for the
-declaration first, then inserts one row per entry in `AEAT303SubmissionResult#getErrors()` (a raw
-`"CODE - message"` string per error, e.g. `"35068 - El resultado a ingresar..."` or
-`"E010124 - Para periodo mensual..."`, split via `FiscalDeclCrudHandler#splitAeatError`, a simple
-`^(\S+)\s*-\s*(.+)$` regex with the whole string falling back into `message` when it doesn't
-match). A successful submission has an empty error list, so the delete-then-noop-insert leaves the
-declaration with zero incident rows — no separate success-path code needed. Persistence is
-best-effort: a failure here is logged and never masks the actual submission response already
-computed.
+declaration first, then inserts one row per entry in `AEAT303SubmissionResult#getErrors()` (tagged
+`severity = "block"`) followed by one row per entry in `AEAT303SubmissionResult#getWarnings()`
+(tagged `severity = "warn"`) — both raw `"CODE - message"` strings, e.g.
+`"35068 - El resultado a ingresar..."` or `"E010124 - Para periodo mensual..."`, split via
+`FiscalDeclCrudHandler#splitAeatError`, a simple `^(\S+)\s*-\s*(.+)$` regex with the whole string
+falling back into `message` when it doesn't match. Deduplication (order-preserving
+`LinkedHashSet`) is applied **independently per severity group** — an error and a warning that
+happen to share the exact same raw text are persisted as two distinct rows, never collapsed into
+one. A submission with no errors AND no warnings has both lists empty, so the delete-then-noop-
+insert leaves the declaration with zero incident rows — no separate success-path code needed.
+Persistence is best-effort: a failure here is logged and never masks the actual submission
+response already computed.
 
-**Read path.** `GET /fiscal303/incidents?id=<declId>` (new entity route in
+**Read path.** `GET /fiscal303/incidents?id=<declId>` (entity route in
 `AbstractFiscalHandler#handle`, alongside the existing `declarations`/`modified` ones — requires
-only `id`, no `year`/`period`) returns `{"data":[{"code","message"}, ...]}` for a declaration,
-ownership-checked the same way as the `declarations` CRUD endpoints. Generic across models (the
-same `ETGO_Fiscal_Decl_Incident` table backs both `/fiscal303/incidents` and `/fiscal349/incidents`
-for free), even though only the 303 telematic flow writes to it today.
+only `id`, no `year`/`period`) returns `{"data":[{"code","message","severity"}, ...]}` for a
+declaration, ownership-checked the same way as the `declarations` CRUD endpoints. `severity` is
+either `"block"` (AEAT error) or `"warn"` (AEAT warning/aviso); a row persisted before this column
+existed (or with a blank value) defaults to `"block"` server-side
+(`FiscalDeclCrudHandler#resolveSeverity`), preserving the pre-existing "every row is an error"
+assumption for old data. Generic across models (the same `ETGO_Fiscal_Decl_Incident` table backs
+both `/fiscal303/incidents` and `/fiscal349/incidents` for free), even though only the 303
+telematic flow writes to it today.
 
 **Frontend wiring (`fiscalModelsUtils.js` + `FmModel303Page.jsx`).** A new
 `fetchDeclarationIncidents(id, { token, apiBaseUrl })` calls the endpoint above and maps the
-backend's generic `{code, message}` rows into the shape `IncidentsTab`/`SourcesTab` already expect:
-`origin` = code, `message` = message, `severity` = `'block'` — AEAT itself draws no
-warning/blocking distinction, and `'block'` is the only sensible single default since every row
-represents a failed/invalid submission attempt that must be resolved (matches how `IncidentsTab`
-already renders any non-`'block'` severity as a plain warning). `FmModel303Page` keeps a local
-`incidents` state (seeded from `decl.incidents`, so the demo/mock path in `FmListPage.jsx` is
-unaffected when no `token`/`apiBaseUrl` is configured) and:
+backend's generic `{code, message, severity}` rows into the shape `IncidentsTab`/`SourcesTab`
+already expect: `origin` = code, `message` = message, `severity` = the backend's own `severity`
+value (`'block'`/`'warn'`), with any row missing/blank `severity` defaulting to `'block'` on the
+frontend too, matching the backend's own default. `blocking`/`warning` are the actual counts of
+each severity across the returned rows — no longer an assumed all-blocking shape (`{ blocking:
+items.length, warning: 0 }`) now that AEAT warnings are actually persisted and surfaced.
+`IncidentsTab` already rendered `'block'` vs any-other-severity distinctly (different badge
+colors/labels, blocking sorted first); this closes the gap where that distinction had no real data
+to display. `FmModel303Page` keeps a local `incidents` state (seeded from `decl.incidents`, so the
+demo/mock path in `FmListPage.jsx` is unaffected when no `token`/`apiBaseUrl` is configured) and:
 - fetches it once on mount (only when `token`/`apiBaseUrl` are present — real backend mode);
 - re-fetches it via a new `onIncidentsChanged` callback passed to `AeatSubmitFlow`, fired after
   **every** submission attempt (`SUCCESS`/`TEST_SUCCESS`/`ERROR` alike — i.e. whenever the backend
   returned a structured `data.status`), so the tab shows the latest result live without a page
   reload, including for test-mode attempts.
 
-Because these AEAT errors never carry a casilla number, the existing "ir a Casilla X" button in
+Because these AEAT rows never carry a casilla number, the existing "ir a Casilla X" button in
 `IncidentsTab` (matched via `inc.origin?.match(/Casilla\s+\d+/i)` against the origin field, which
-now holds the AEAT code) naturally never renders for them — left untouched, it belongs to a
+holds the AEAT code) naturally never renders for them — left untouched, it belongs to a
 separate, not-yet-built casilla-level validation feature.
 
 **Semantics to remember:** incidents are **replaced, never appended** — a second submission
-attempt with different AEAT errors fully replaces the first attempt's rows, it does not
-accumulate them. A **successful** submission (test or production) leaves the tab **empty**, not
-stale from a prior failed attempt.
+attempt with different AEAT errors/warnings fully replaces the first attempt's rows, it does not
+accumulate them, and this applies to both severities together (a clean submission clears stale
+`block` AND stale `warn` rows alike). A **successful** submission with no errors and no warnings
+(test or production) leaves the tab **empty**, not stale from a prior attempt.
 
 ## Modelo 349 detail page (`FmModel349Page`)
 

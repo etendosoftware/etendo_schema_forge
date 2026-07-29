@@ -113,4 +113,103 @@ describe('fetchDeclarationIncidents', () => {
     const result = await fetchDeclarationIncidents('303-2026-T2', OPTS);
     expect(result).toEqual(EMPTY);
   });
+
+  it('computes blocking/warning as the actual mix of severities and preserves each row severity', async () => {
+    fetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        data: [
+          { code: 'EDID065', message: 'IBAN not allowed for this declaration type', severity: 'block' },
+          { code: 'AVISO01', message: 'Possible mismatch in box 88', severity: 'warn' },
+          { code: 'E0100803', message: 'Business name error', severity: 'block' },
+          { code: 'AVISO02', message: 'Late submission warning', severity: 'warn' },
+        ],
+      }),
+    });
+
+    const result = await fetchDeclarationIncidents('303-2026-T2', OPTS);
+
+    expect(result).toEqual({
+      blocking: 2,
+      warning: 2,
+      items: [
+        { origin: 'EDID065', message: 'IBAN not allowed for this declaration type', severity: 'block' },
+        { origin: 'AVISO01', message: 'Possible mismatch in box 88', severity: 'warn' },
+        { origin: 'E0100803', message: 'Business name error', severity: 'block' },
+        { origin: 'AVISO02', message: 'Late submission warning', severity: 'warn' },
+      ],
+    });
+  });
+
+  it('returns blocking:0 and warning:items.length when every row is severity "warn"', async () => {
+    fetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        data: [
+          { code: 'AVISO01', message: 'Warning one', severity: 'warn' },
+          { code: 'AVISO02', message: 'Warning two', severity: 'warn' },
+          { code: 'AVISO03', message: 'Warning three', severity: 'warn' },
+        ],
+      }),
+    });
+
+    const result = await fetchDeclarationIncidents('303-2026-T2', OPTS);
+
+    expect(result.blocking).toBe(0);
+    expect(result.warning).toBe(3);
+    expect(result.items).toHaveLength(3);
+    expect(result.items.every(i => i.severity === 'warn')).toBe(true);
+  });
+
+  it('defaults an unexpected/garbage severity value to "block" (defensive fallback)', async () => {
+    fetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        data: [
+          { code: 'BAD01', message: 'Unknown severity value', severity: 'info' },
+          { code: 'BAD02', message: 'Empty string severity', severity: '' },
+          { code: 'BAD03', message: 'Null severity', severity: null },
+          { code: 'BAD04', message: 'Severity key entirely absent' },
+        ],
+      }),
+    });
+
+    const result = await fetchDeclarationIncidents('303-2026-T2', OPTS);
+
+    expect(result).toEqual({
+      blocking: 4,
+      warning: 0,
+      items: [
+        { origin: 'BAD01', message: 'Unknown severity value', severity: 'block' },
+        { origin: 'BAD02', message: 'Empty string severity', severity: 'block' },
+        { origin: 'BAD03', message: 'Null severity', severity: 'block' },
+        { origin: 'BAD04', message: 'Severity key entirely absent', severity: 'block' },
+      ],
+    });
+  });
+
+  it('counts legacy rows (no severity key, pre-ETP-4456 data) as blocking alongside new warn rows', async () => {
+    fetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        data: [
+          { code: 'LEGACY01', message: 'Old incident persisted before severity column existed' },
+          { code: 'LEGACY02', message: 'Another pre-existing row' },
+          { code: 'AVISO01', message: 'New AEAT warning', severity: 'warn' },
+        ],
+      }),
+    });
+
+    const result = await fetchDeclarationIncidents('303-2026-T2', OPTS);
+
+    expect(result).toEqual({
+      blocking: 2,
+      warning: 1,
+      items: [
+        { origin: 'LEGACY01', message: 'Old incident persisted before severity column existed', severity: 'block' },
+        { origin: 'LEGACY02', message: 'Another pre-existing row', severity: 'block' },
+        { origin: 'AVISO01', message: 'New AEAT warning', severity: 'warn' },
+      ],
+    });
+  });
 });

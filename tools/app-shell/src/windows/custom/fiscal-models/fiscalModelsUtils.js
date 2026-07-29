@@ -221,20 +221,22 @@ export async function persistDeclarationStatus(id, newStatus, { token, apiBaseUr
 const EMPTY_INCIDENTS = { blocking: 0, warning: 0, items: [] };
 
 /**
- * Calls GET /neo/fiscal303/incidents?id=... to fetch the AEAT validation errors persisted for a
+ * Calls GET /neo/fiscal303/incidents?id=... to fetch the AEAT validation rows persisted for a
  * declaration — replaced (not appended) on every telematic submission attempt, test mode and
  * production alike (see ETP-4456, `Fiscal303BoxesHandler#handleSubmit` +
- * `FiscalDeclCrudHandler#replaceIncidents`). Maps the backend's generic `{code, message}` rows
- * into the shape `IncidentsTab`/`SourcesTab` (`FmTabContent.jsx`) already expect from the demo
+ * `FiscalDeclCrudHandler#replaceIncidents`). Maps the backend's generic `{code, message, severity}`
+ * rows into the shape `IncidentsTab`/`SourcesTab` (`FmTabContent.jsx`) already expect from the demo
  * mock data (`DEMO_DECLARATIONS` in `FmListPage.jsx`): `origin` = code, `message` = message,
- * `severity` = 'block' — AEAT submission errors always represent a failed/invalid submission that
- * must be resolved, and AEAT itself draws no warning/blocking distinction, so 'block' is the only
- * sensible single default (matches how `IncidentsTab` already renders any non-'block' severity as
- * a plain warning). These errors never carry a casilla number, so the existing "ir a Casilla X"
- * button in `IncidentsTab` (matched via `inc.origin?.match(/Casilla\s+\d+/i)`) naturally never
- * renders for them — left untouched, it's for a separate, not-yet-built casilla-validation
- * feature.
- * Returns `{ blocking, warning: 0, items }` on success, or the all-zero empty shape when
+ * `severity` = the backend's own `severity` value (`'block'` for AEAT errors, `'warn'` for AEAT
+ * warnings/avisos — added in ETP-4456's `severity` column on `ETGO_Fiscal_Decl_Incident`, so no
+ * mapping/translation is needed here beyond a defensive fallback). Any row missing/blank `severity`
+ * (e.g. data persisted before this column existed) defaults to `'block'`, matching the backend's
+ * own default for legacy rows (`FiscalDeclCrudHandler#resolveSeverity`). `blocking`/`warning` are
+ * now the actual counts of each severity in the response, rather than an assumed all-blocking
+ * shape. These rows never carry a casilla number, so the existing "ir a Casilla X" button in
+ * `IncidentsTab` (matched via `inc.origin?.match(/Casilla\s+\d+/i)`) naturally never renders for
+ * them — left untouched, it's for a separate, not-yet-built casilla-validation feature.
+ * Returns `{ blocking, warning, items }` on success, or the all-zero empty shape when
  * token/apiBaseUrl/id are missing or the request fails — safe to always destructure.
  */
 export async function fetchDeclarationIncidents(id, { token, apiBaseUrl } = {}) {
@@ -247,8 +249,14 @@ export async function fetchDeclarationIncidents(id, { token, apiBaseUrl } = {}) 
     if (!res.ok) return EMPTY_INCIDENTS;
     const body = await res.json().catch(() => null);
     const rows = Array.isArray(body?.data) ? body.data : [];
-    const items = rows.map(r => ({ origin: r.code ?? '', message: r.message ?? '', severity: 'block' }));
-    return { blocking: items.length, warning: 0, items };
+    const items = rows.map(r => ({
+      origin: r.code ?? '',
+      message: r.message ?? '',
+      severity: r.severity === 'warn' ? 'warn' : 'block',
+    }));
+    const blocking = items.filter(i => i.severity === 'block').length;
+    const warning = items.filter(i => i.severity === 'warn').length;
+    return { blocking, warning, items };
   } catch (_) {
     return EMPTY_INCIDENTS;
   }
