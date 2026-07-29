@@ -1,3 +1,12 @@
+/**
+ * CANONICAL currency/amount formatter for the whole app-shell — this is the ONLY
+ * approved way to display a monetary value. Do not write a new `Intl.NumberFormat`
+ * or `toLocaleString()` for money anywhere else; import `formatCurrency`/
+ * `getCurrencySymbol` from here instead. See CLAUDE.md § Currency & Amount
+ * Formatting (MANDATORY) — a duplicate formatter is treated as a regression,
+ * since a hardcoded locale or missing `useGrouping` silently drops the thousands
+ * separator or renders the wrong decimal comma (ETP-4314).
+ */
 import { getCurrencyFormatConfig } from './currencyFormatConfig.js';
 
 const DEFAULT_LOCALE = 'es-ES';

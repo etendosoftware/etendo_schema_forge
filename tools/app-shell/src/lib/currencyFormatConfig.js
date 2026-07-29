@@ -1,6 +1,10 @@
 /**
  * Instance-wide currency number-formatting configuration (thousands/decimal separators).
  *
+ * Part of the CANONICAL currency-formatting path (see `formatCurrency.js`'s banner
+ * comment / CLAUDE.md § Currency & Amount Formatting). Never fetch this endpoint or
+ * hardcode separators anywhere else — consume `getCurrencyFormatConfig()` instead.
+ *
  * Fetched once from NEO Headless (`GET /sws/neo/currency-format`) and cached in memory
  * for the rest of the session — this is the single source of truth for `formatCurrency()`'s
  * grouping/decimal separators, mirroring the same config `report-api.js` fetches server-side

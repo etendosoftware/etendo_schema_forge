@@ -5,6 +5,8 @@ import { getCurrencyFormatConfig } from '@/lib/currencyFormatConfig.js';
 
 // Built at call time (not module load) so it picks up whatever the currency-format
 // fetch has resolved to by the time a PDF is actually generated (ETP-4314).
+// `{{formatAmount}}` in the template MUST come from this helper string — never
+// add a local formatter (see CLAUDE.md § Currency & Amount Formatting).
 function buildHelpers() {
   return buildJsreportHelpersString(undefined, undefined, getCurrencyFormatConfig()) + `
 function fmtInt(v) { return v == null ? '0' : String(parseInt(v, 10) || 0); }

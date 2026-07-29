@@ -1,6 +1,12 @@
 /**
  * Canonical Handlebars helpers for LOCAL HTML rendering of reports.
  *
+ * This is the ONLY approved source for jsreport's `formatCurrency`/`formatNumber`
+ * helpers — never write a second currency/number Handlebars helper by hand in a
+ * per-report `helpers.js` or inline in `report-api.js`. See CLAUDE.md § Currency
+ * & Amount Formatting (MANDATORY); the browser-side equivalent is
+ * `tools/app-shell/src/lib/formatCurrency.js` (ETP-4314).
+ *
  * These mirror — verbatim — the generated `artifacts/<id>/helpers.js` functions
  * that the report HTML render path historically registered (the fixed whitelist:
  * isGroupBreak, resetGroupTracking, formatDate, formatCurrency, formatBoolean,

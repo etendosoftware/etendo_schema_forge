@@ -54,6 +54,8 @@ const REPORT_CSS = `
 // string simply wins over the canonical one (plain last-declaration-wins).
 // Built at call time (not module load) so it picks up whatever the currency-format
 // fetch has resolved to by the time a report is actually rendered (ETP-4314).
+// Never add a second currency/number Handlebars helper here — see CLAUDE.md
+// § Currency & Amount Formatting.
 function buildHelpersCode() {
   return buildJsreportHelpersString(undefined, undefined, getCurrencyFormatConfig()) + `
 function formatDate(value) {

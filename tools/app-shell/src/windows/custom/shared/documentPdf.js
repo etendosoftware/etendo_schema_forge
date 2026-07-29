@@ -336,6 +336,9 @@ export async function buildOrderData(spec, orderId, base, token, currencyData = 
 // Render via jsreport (delegates to shared renderPdf in pdfUtils.js)
 // ---------------------------------------------------------------------------
 export async function renderDocumentPdf(data) {
+  // Currency/amount formatting in DOCUMENT_TEMPLATE MUST go through the
+  // {{formatCurrency}} helper built below — never add a template-local
+  // formatter (see CLAUDE.md § Currency & Amount Formatting).
   // rateDecimals is only meaningful when exchangeRate is present, but it's
   // harmless to bake it into formatNumber's precision unconditionally.
   const rateDecimals = (typeof data.rateDecimals === 'number' && data.rateDecimals >= 0) ? data.rateDecimals : 4;

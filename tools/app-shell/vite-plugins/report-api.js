@@ -653,7 +653,8 @@ export default function reportApiPlugin() {
             // source of truth for both render paths instead of a hand-maintained
             // copy per report. See buildJsreportHelpersString() for why jsreport
             // (a separate Docker container, reachable only over HTTP) can't just
-            // import formatCurrency()/this module directly.
+            // import formatCurrency()/this module directly. Never inline a second
+            // currency formatter here — see CLAUDE.md § Currency & Amount Formatting.
             const separators = await getReportCurrencySeparators();
             const payload = {
               template: { content: templateContent, engine: 'handlebars', recipe, helpers: buildJsreportHelpersString(helpersCode, undefined, separators) },
