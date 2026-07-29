@@ -135,3 +135,88 @@ describe('translateBackendError', () => {
     assert.equal(result, raw);
   });
 });
+
+// ── ETP-4706: parameterized "Account could not be found" enrichment ──────────────
+//
+// Core Etendo's `@InvalidAccount@` message ("Account could not be found.") is
+// enriched server-side (DocumentPostingService#enrichWithFailingEntity) with the
+// transaction's Business Partner / BP Group name via the en_US-only
+// ETGO_InvalidAccountBpAndGroup / ETGO_InvalidAccountBpOnly AD_MESSAGE catalog
+// entries. These two skeletons carry a dynamic name, so they can't be an exact-match
+// BACKEND_ERROR_MAP entry — they need a regex match + re-interpolation instead.
+// A fake `t(key, params)` mimics useUI()'s interpolation ({param} substitution).
+function fakeUiTranslator(dictionary) {
+  return (key, params = {}) => {
+    let text = dictionary[key] ?? key;
+    Object.keys(params).forEach((p) => {
+      text = text.replace(`{${p}}`, params[p]);
+    });
+    return text;
+  };
+}
+
+describe('translateBackendError — parameterized "Account could not be found" (ETP-4706)', () => {
+  const en = fakeUiTranslator({
+    'backendError.invalidAccountBpAndGroup': 'Account could not be found. (Contact: {bp}, Business Partner Category: {group})',
+    'backendError.invalidAccountBpOnly': 'Account could not be found. (Contact: {bp})',
+  });
+  const es = fakeUiTranslator({
+    'backendError.invalidAccountBpAndGroup': 'No se pudo encontrar la cuenta. (Contacto: {bp}, Grupos de terceros: {group})',
+    'backendError.invalidAccountBpOnly': 'No se pudo encontrar la cuenta. (Contacto: {bp})',
+  });
+
+  it('translates the BP + BP Group skeleton to en_US, interpolating both names', () => {
+    const raw = 'Account could not be found. (Business Partner: Acme Corp, BP Group: Suppliers)';
+    assert.equal(
+      translateBackendError(raw, en),
+      'Account could not be found. (Contact: Acme Corp, Business Partner Category: Suppliers)',
+    );
+  });
+
+  it('translates the BP + BP Group skeleton to es_ES, interpolating both names', () => {
+    const raw = 'Account could not be found. (Business Partner: Acme Corp, BP Group: Suppliers)';
+    assert.equal(
+      translateBackendError(raw, es),
+      'No se pudo encontrar la cuenta. (Contacto: Acme Corp, Grupos de terceros: Suppliers)',
+    );
+  });
+
+  it('translates the BP-only skeleton to en_US, interpolating the name', () => {
+    const raw = 'Account could not be found. (Business Partner: Acme Corp)';
+    assert.equal(
+      translateBackendError(raw, en),
+      'Account could not be found. (Contact: Acme Corp)',
+    );
+  });
+
+  it('translates the BP-only skeleton to es_ES, interpolating the name', () => {
+    const raw = 'Account could not be found. (Business Partner: Acme Corp)';
+    assert.equal(
+      translateBackendError(raw, es),
+      'No se pudo encontrar la cuenta. (Contacto: Acme Corp)',
+    );
+  });
+
+  it('does not confuse the BP-only pattern when a BP Group is also present (matches BP+Group first)', () => {
+    const raw = 'Account could not be found. (Business Partner: Jane Doe, BP Group: Retail)';
+    const result = translateBackendError(raw, en);
+    assert.equal(result, 'Account could not be found. (Contact: Jane Doe, Business Partner Category: Retail)');
+  });
+
+  it('returns the original message unchanged when the translation key is missing (guard)', () => {
+    const raw = 'Account could not be found. (Business Partner: Acme Corp)';
+    const missingT = (k) => k; // echoes the key back — simulates an unmapped locale
+    assert.equal(translateBackendError(raw, missingT), raw);
+  });
+
+  it('leaves unrelated messages without a "(Business Partner: ...)" suffix untouched', () => {
+    const raw = 'Account could not be found.';
+    assert.equal(translateBackendError(raw, en), raw);
+  });
+
+  it('does not affect existing exact-match BACKEND_ERROR_MAP entries', () => {
+    const raw = 'Country needed in an IBAN account.';
+    const t = (k) => (k === 'backendError.countryIban' ? 'Se necesita el País para una cuenta IBAN.' : k);
+    assert.equal(translateBackendError(raw, t), 'Se necesita el País para una cuenta IBAN.');
+  });
+});
