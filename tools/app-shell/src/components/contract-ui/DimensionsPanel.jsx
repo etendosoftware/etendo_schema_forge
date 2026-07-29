@@ -129,10 +129,10 @@ export function DimensionGrid({ fields, data, onChange, onFieldSave, apiBaseUrl,
         const selectorUrl = apiBaseUrl ? `${apiBaseUrl}/${entityName}/selectors/${f.column}` : null;
         return (
           <div key={f.key} className="space-y-1.5">
-            <label className="text-sm text-foreground font-medium block">{label}</label>
+            <label className="text-xs font-medium text-muted-foreground block">{label}</label>
             {readOnly ? (
               <input
-                className="flex h-10 w-full rounded-lg border border-[hsl(var(--border-control))] bg-card p-2 text-sm disabled:cursor-not-allowed disabled:opacity-50"
+                className="flex h-8 w-full rounded-lg border border-[hsl(var(--border-control))] bg-card p-2 text-sm disabled:cursor-not-allowed disabled:opacity-50"
                 value={displayValue || value || ''}
                 disabled
                 readOnly
@@ -152,6 +152,7 @@ export function DimensionGrid({ fields, data, onChange, onFieldSave, apiBaseUrl,
                 resolvedLabel=""
                 selectorUrl={selectorUrl}
                 token={token}
+                triggerClassName="w-full h-8 text-sm bg-card focus:ring-2 focus:ring-primary"
                 data-testid="SelectorInput__DimensionsPanel" />
             )}
           </div>
