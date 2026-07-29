@@ -3084,7 +3084,7 @@ export function DetailView({
       // No other window or field is affected unless it declares forceCalloutFields.
       const triggerFieldDef = (addLineFields?.entry ?? []).find(f => f.key === field);
       const forceFields = new Set(triggerFieldDef?.forceCalloutFields ?? []);
-      if (field === 'product' && lineConfig.discountField) forceFields.add(lineConfig.discountField);
+      if (field === priceTriggerFieldOf(lineConfig) && lineConfig.discountField) forceFields.add(lineConfig.discountField);
       // Apply active currency conversion: converts prices added after a header currency
       // change so each new line reflects the order header's currency, not the pricelist's.
       applyProductCurrencyConversion(
@@ -5060,8 +5060,12 @@ function handleEntryIdentifierChange(entry, hook, key, api, catalogs) {
   }
 }
 
+// Line field that triggers the price/callout chain. Named in the lineConfig preset
+// (useLineGrossAmount.js) so this component holds no window field name (report §8.2 L3).
+function priceTriggerFieldOf(lineConfig) { return lineConfig?.priceTriggerField ?? 'product'; }
+
 function applyProductCalloutPriceAdjustments(field, result, lineConfig) {
-  if (field !== 'product') return;
+  if (field !== priceTriggerFieldOf(lineConfig)) return;
   if (result.standardPrice != null && (result.listPrice == null || Number(result.listPrice) === 0)) {
     result.listPrice = result.standardPrice;
   }
@@ -5071,7 +5075,7 @@ function applyProductCalloutPriceAdjustments(field, result, lineConfig) {
 }
 
 function applyProductCurrencyConversion(field, result, rowValues, lineConfig, activeCurrencyConversion, currencyIdentifier, computeLineGrossAmount) {
-  if (field !== 'product' || !activeCurrencyConversion) return;
+  if (field !== priceTriggerFieldOf(lineConfig) || !activeCurrencyConversion) return;
   const { rate, toCurrency } = activeCurrencyConversion;
   result.currency = toCurrency;
   if (currencyIdentifier) {
@@ -5111,7 +5115,7 @@ function resolveTaxIdentifier(result, rowValues, hook) {
 }
 
 function calculateLineNetAmount(result, field, lineConfig, value, rowValues) {
-  if (result.lineNetAmount == null && (field === lineConfig.qtyField || field === lineConfig.priceField || field === 'product')) {
+  if (result.lineNetAmount == null && (field === lineConfig.qtyField || field === lineConfig.priceField || field === priceTriggerFieldOf(lineConfig))) {
     const qty = field === lineConfig.qtyField ? (parseFloat(value) || 0)
       : (parseFloat(String(rowValues[lineConfig.qtyField] ?? '')) || 0);
     const price = field === lineConfig.priceField ? (parseFloat(value) || 0)
