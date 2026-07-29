@@ -617,10 +617,29 @@ const InlineAddRow = forwardRef(function InlineAddRow({ columns, fields, onAdd, 
     // Fill-empties-only: never override a literal default, the client lineNo, a
     // display seed, or a field opted out via skipDefault.
     for (const [key, val] of Object.entries(resolvedDefaults)) {
+      if (key.endsWith('$_identifier')) continue; // handled in the pass below
       const f = fieldMap[key];
       if (!f || f.skipDefault) continue;
       const cur = empty[key];
       if ((cur == null || cur === '') && val != null && val !== '') {
+        empty[key] = val;
+      }
+    }
+    // Companion `<key>$_identifier` labels (e.g. country$_identifier: "Spain") have no
+    // entry in `fieldMap` — they're display text for a selector field, not a field of
+    // their own — so the loop above always skipped them. Without this, a selector/search
+    // field resolved from resolvedDefaults (e.g. country: "106") renders a chip with a
+    // working Clear button but an EMPTY label, because InlineSearchCombo's `displayLabel`
+    // reads `values[field.key + '$_identifier']` and finds nothing. Only seed the
+    // identifier when its base field actually received ITS value from resolvedDefaults
+    // (not from a literal decisions.json defaultValue or a seeded display column) so a
+    // stale label never gets attached to an unrelated value.
+    for (const [key, val] of Object.entries(resolvedDefaults)) {
+      if (!key.endsWith('$_identifier')) continue;
+      const baseKey = key.slice(0, -'$_identifier'.length);
+      const f = fieldMap[baseKey];
+      if (!f || f.skipDefault) continue;
+      if (empty[baseKey] === resolvedDefaults[baseKey] && val != null && val !== '') {
         empty[key] = val;
       }
     }
@@ -734,31 +753,17 @@ const InlineAddRow = forwardRef(function InlineAddRow({ columns, fields, onAdd, 
           onCancel();
           return true;
         }
-        // Reset for next rapid entry — recompute lineNo
+        // Reset for next rapid entry — recompute lineNo. Reuses buildEmpty() (single
+        // source of truth for the macro-defaultValue guard, resolvedDefaults fill and
+        // its $_identifier companion pass) instead of re-deriving field defaults here —
+        // a prior duplicated loop applied `f.defaultValue` unconditionally, so an
+        // unresolved AD macro token (e.g. '@COUNTRYDEF@') on a selector/search field
+        // would leak into the next line's value, and resolvedDefaults (with its
+        // identifier labels) was never reapplied at all.
         const nums = [...(data || []).map(r => Number(r.lineNo) || 0), Number(valuesRef.current.lineNo) || 0];
         const nextLineNo = Math.max(...nums) + 10;
-        const next = {};
-        for (const f of fields) {
-          if (f.key === 'lineNo') {
-            next[f.key] = nextLineNo;
-          } else if (f.defaultValue === undefined) {
-            next[f.key] = '';
-          } else {
-            next[f.key] = f.defaultValue;
-          }
-        }
-        // Clear any $_identifier companion values
-        for (const key of Object.keys(valuesRef.current)) {
-          if (key.includes('$_identifier') && !(key in next)) {
-            next[key] = '';
-          }
-        }
-        // Re-apply seeded display values so a parent-derived column (e.g. currency)
-        // stays populated for the next rapid entry instead of resetting to "—".
-        // Runs after the $_identifier clearing loop so seeded identifiers survive.
-        for (const [key, val] of Object.entries(seedValues)) {
-          if (!fieldMap[key]) next[key] = val;
-        }
+        const next = buildEmpty();
+        next.lineNo = nextLineNo;
 
         valuesRef.current = next;
         setValues(next);
@@ -773,7 +778,7 @@ const InlineAddRow = forwardRef(function InlineAddRow({ columns, fields, onAdd, 
     })();
     inflightRef.current = run;
     return run;
-  }, [data, fields, onAdd, onCancel, ui, seedValues, fieldMap]);
+  }, [data, fields, onAdd, onCancel, ui, buildEmpty]);
 
   // Enter → confirm without closing (rapid entry). Outside-click / parent flush close.
   const handleConfirm = useCallback(() => submitLine({ closeAfterSave: false }), [submitLine]);
