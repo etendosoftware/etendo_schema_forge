@@ -8,6 +8,8 @@ import {
   usePendingStatementLines,
   useCandidateOperations,
   useReconcileGroup,
+  useRemoveOperation,
+  useReactivateSelected,
   useAutoMatch,
   useApplySuggestions,
 } from '../useReconciliation.js';
@@ -295,6 +297,171 @@ describe('useReconcileGroup (POST via useNeoPost)', () => {
 
     await act(async () => {
       await expect(result.current.reconcile({})).rejects.toThrow('Network down');
+    });
+    expect(result.current.error).toBeInstanceOf(Error);
+    expect(result.current.loading).toBe(false);
+  });
+});
+
+// Payload shared by the two un-reconcile actions below — both take the same
+// { financialAccountId, statementLineId, transactionIds } shape and differ only in the action they
+// POST to (and therefore in the backend effect: delete the reconciliation vs. leave it in draft).
+const UNRECONCILE_PAYLOAD = {
+  financialAccountId: 'acc-1',
+  statementLineId: 'l1',
+  transactionIds: ['t1'],
+};
+
+describe('useRemoveOperation (POST via useNeoPost)', () => {
+  it('posts the removeOperation action with the payload and returns response.data', async () => {
+    globalThis.fetch.mockResolvedValue(postResponse({ transactionIds: ['t1'] }));
+
+    const { result } = renderHook(() => useRemoveOperation());
+    expect(result.current.loading).toBe(false);
+
+    let returned;
+    await act(async () => {
+      returned = await result.current.removeOperation(UNRECONCILE_PAYLOAD);
+    });
+
+    const [url, init] = globalThis.fetch.mock.calls[0];
+    expect(url).toBe(`/etendo${BASE}?action=removeOperation`);
+    expect(init.method).toBe('POST');
+    expect(init.headers.Authorization).toBe('Bearer test-token');
+    expect(JSON.parse(init.body)).toEqual(UNRECONCILE_PAYLOAD);
+    expect(returned).toEqual({ transactionIds: ['t1'] });
+    expect(result.current.error).toBeNull();
+    expect(result.current.loading).toBe(false);
+  });
+
+  it('returns {} when response.data is absent', async () => {
+    globalThis.fetch.mockResolvedValue({ ok: true, json: async () => ({}) });
+
+    const { result } = renderHook(() => useRemoveOperation());
+    let returned;
+    await act(async () => {
+      returned = await result.current.removeOperation({});
+    });
+    expect(returned).toEqual({});
+  });
+
+  it('throws and sets error with the server message on a non-ok response', async () => {
+    globalThis.fetch.mockResolvedValue({
+      ok: false,
+      status: 422,
+      json: async () => ({ error: { message: 'Transaction not linked', status: 'CONFLICT' } }),
+    });
+
+    const { result } = renderHook(() => useRemoveOperation());
+
+    await act(async () => {
+      await expect(result.current.removeOperation({})).rejects.toThrow('Transaction not linked');
+    });
+    expect(result.current.error).toBeInstanceOf(Error);
+    expect(result.current.error.status).toBe('CONFLICT');
+    expect(result.current.loading).toBe(false);
+  });
+
+  it('falls back to "HTTP <status>" when the error body cannot be parsed', async () => {
+    globalThis.fetch.mockResolvedValue({
+      ok: false,
+      status: 500,
+      json: async () => { throw new Error('not json'); },
+    });
+
+    const { result } = renderHook(() => useRemoveOperation());
+
+    await act(async () => {
+      await expect(result.current.removeOperation({})).rejects.toThrow('HTTP 500');
+    });
+    expect(result.current.error.status).toBe(500);
+  });
+
+  it('throws and sets error when the network rejects', async () => {
+    globalThis.fetch.mockRejectedValue(new Error('Network down'));
+
+    const { result } = renderHook(() => useRemoveOperation());
+
+    await act(async () => {
+      await expect(result.current.removeOperation({})).rejects.toThrow('Network down');
+    });
+    expect(result.current.error).toBeInstanceOf(Error);
+    expect(result.current.loading).toBe(false);
+  });
+});
+
+describe('useReactivateSelected (POST via useNeoPost)', () => {
+  it('posts the reactivateSelected action with the payload and returns response.data', async () => {
+    globalThis.fetch.mockResolvedValue(postResponse({ reactivated: true }));
+
+    const { result } = renderHook(() => useReactivateSelected());
+    expect(result.current.loading).toBe(false);
+
+    let returned;
+    await act(async () => {
+      returned = await result.current.reactivateSelected(UNRECONCILE_PAYLOAD);
+    });
+
+    const [url, init] = globalThis.fetch.mock.calls[0];
+    expect(url).toBe(`/etendo${BASE}?action=reactivateSelected`);
+    expect(init.method).toBe('POST');
+    expect(init.headers.Authorization).toBe('Bearer test-token');
+    expect(JSON.parse(init.body)).toEqual(UNRECONCILE_PAYLOAD);
+    expect(returned).toEqual({ reactivated: true });
+    expect(result.current.error).toBeNull();
+    expect(result.current.loading).toBe(false);
+  });
+
+  it('returns {} when response.data is absent', async () => {
+    globalThis.fetch.mockResolvedValue({ ok: true, json: async () => ({}) });
+
+    const { result } = renderHook(() => useReactivateSelected());
+    let returned;
+    await act(async () => {
+      returned = await result.current.reactivateSelected({});
+    });
+    expect(returned).toEqual({});
+  });
+
+  it('throws and sets error with the server message on a non-ok response', async () => {
+    globalThis.fetch.mockResolvedValue({
+      ok: false,
+      status: 422,
+      json: async () => ({ error: { message: 'Already in draft', status: 'CONFLICT' } }),
+    });
+
+    const { result } = renderHook(() => useReactivateSelected());
+
+    await act(async () => {
+      await expect(result.current.reactivateSelected({})).rejects.toThrow('Already in draft');
+    });
+    expect(result.current.error).toBeInstanceOf(Error);
+    expect(result.current.error.status).toBe('CONFLICT');
+    expect(result.current.loading).toBe(false);
+  });
+
+  it('falls back to "HTTP <status>" when the error body cannot be parsed', async () => {
+    globalThis.fetch.mockResolvedValue({
+      ok: false,
+      status: 500,
+      json: async () => { throw new Error('not json'); },
+    });
+
+    const { result } = renderHook(() => useReactivateSelected());
+
+    await act(async () => {
+      await expect(result.current.reactivateSelected({})).rejects.toThrow('HTTP 500');
+    });
+    expect(result.current.error.status).toBe(500);
+  });
+
+  it('throws and sets error when the network rejects', async () => {
+    globalThis.fetch.mockRejectedValue(new Error('Network down'));
+
+    const { result } = renderHook(() => useReactivateSelected());
+
+    await act(async () => {
+      await expect(result.current.reactivateSelected({})).rejects.toThrow('Network down');
     });
     expect(result.current.error).toBeInstanceOf(Error);
     expect(result.current.loading).toBe(false);
