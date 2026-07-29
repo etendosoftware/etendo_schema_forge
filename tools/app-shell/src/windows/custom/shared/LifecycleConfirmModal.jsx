@@ -18,18 +18,23 @@ import { createPortal } from 'react-dom';
  * Cobros/Pagos passes it (reactivating/deleting a deposited payment reverts
  * its own separate, associated financial-account movement).
  *
+ * <p>Callers whose effects don't map onto the Conciliación/Transacción/Asiento triad (e.g. the
+ * bank-reconciliation Desconciliar / Reactivar dialog) can pass the ready-made {@code items} list
+ * instead and skip the flags entirely; it takes precedence when provided.
+ *
  * @param {{
- *   reconciled: boolean,
- *   posted: boolean,
+ *   reconciled?: boolean,
+ *   posted?: boolean,
  *   hasTransaction?: boolean,
  *   title: string,
  *   sub: string,
  *   confirmLabel: string,
  *   cancelLabel: string,
  *   warning: string,
- *   itemConciliacion: [string, string],
- *   itemAsiento: [string, string],
+ *   itemConciliacion?: [string, string],
+ *   itemAsiento?: [string, string],
  *   itemTransaccion?: [string, string],
+ *   items?: Array<[string, string]>,
  *   confirmIcon?: import('react').ReactNode,
  *   onConfirm: () => Promise<void> | void,
  *   onClose: () => void,
@@ -38,8 +43,8 @@ import { createPortal } from 'react-dom';
  */
 export default function LifecycleConfirmModal({
   reconciled, posted, hasTransaction, title, sub, confirmLabel, cancelLabel, warning,
-  itemConciliacion, itemAsiento, itemTransaccion, confirmIcon = null, onConfirm, onClose,
-  testIdPrefix = 'lifecycle-confirm',
+  itemConciliacion, itemAsiento, itemTransaccion, items: explicitItems, confirmIcon = null,
+  onConfirm, onClose, testIdPrefix = 'lifecycle-confirm',
 }) {
   const [loading, setLoading] = useState(false);
 
@@ -53,10 +58,13 @@ export default function LifecycleConfirmModal({
     }
   };
 
-  const items = [];
-  if (reconciled && itemConciliacion) items.push(itemConciliacion);
-  if (hasTransaction && itemTransaccion) items.push(itemTransaccion);
-  if (posted && itemAsiento) items.push(itemAsiento);
+  let items = explicitItems;
+  if (!items) {
+    items = [];
+    if (reconciled && itemConciliacion) items.push(itemConciliacion);
+    if (hasTransaction && itemTransaccion) items.push(itemTransaccion);
+    if (posted && itemAsiento) items.push(itemAsiento);
+  }
 
   // Portal to <body> so the fixed overlay covers the whole viewport (incl. the left sidebar),
   // escaping any transformed/overflow ancestor that would otherwise clip a `position: fixed` layer.
