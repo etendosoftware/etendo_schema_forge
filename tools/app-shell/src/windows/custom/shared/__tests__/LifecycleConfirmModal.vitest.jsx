@@ -314,6 +314,91 @@ describe('LifecycleConfirmModal — hasTransaction / itemTransaccion', () => {
   });
 });
 
+// The explicit `items` list (ETP-4502) lets callers whose consequences don't map onto the
+// Conciliación/Transacción/Asiento triad — e.g. the bank-reconciliation Desconciliar / Reactivar
+// cartel — pass a ready-made bullet list instead of the flags.
+describe('LifecycleConfirmModal — explicit items list', () => {
+  const FLAGGED_PROPS = {
+    ...BASE_PROPS,
+    itemConciliacion: ['ItemConciliacion', 'descConciliacion'],
+    itemTransaccion: ['ItemTransaccion', 'descTransaccion'],
+    itemAsiento: ['ItemAsiento', 'descAsiento'],
+  };
+
+  it('renders exactly the given items, in the given order', () => {
+    render(
+      <LifecycleConfirmModal
+        {...BASE_PROPS}
+        items={[['First', 'first desc'], ['Second', 'second desc'], ['Third', 'third desc']]}
+        onConfirm={vi.fn()}
+        onClose={vi.fn()}
+      />,
+    );
+    expect(screen.getByText('First.')).toBeInTheDocument();
+    expect(screen.getByText('first desc')).toBeInTheDocument();
+    expect(screen.getByText('Second.')).toBeInTheDocument();
+    expect(screen.getByText('Third.')).toBeInTheDocument();
+
+    const text = screen.getByTestId('lifecycle-confirm-modal').textContent;
+    expect(text.indexOf('First')).toBeLessThan(text.indexOf('Second'));
+    expect(text.indexOf('Second')).toBeLessThan(text.indexOf('Third'));
+  });
+
+  it('takes precedence over the reconciled/hasTransaction/posted flag-driven items', () => {
+    render(
+      <LifecycleConfirmModal
+        {...FLAGGED_PROPS}
+        reconciled
+        hasTransaction
+        posted
+        items={[['Only this one', 'only desc']]}
+        onConfirm={vi.fn()}
+        onClose={vi.fn()}
+      />,
+    );
+    expect(screen.getByText('Only this one.')).toBeInTheDocument();
+    // Every flag is on, yet none of the triad slots is rendered.
+    expect(screen.queryByText('ItemConciliacion.')).not.toBeInTheDocument();
+    expect(screen.queryByText('ItemTransaccion.')).not.toBeInTheDocument();
+    expect(screen.queryByText('ItemAsiento.')).not.toBeInTheDocument();
+  });
+
+  it('renders no bullets for an explicit empty list, even with the flags on', () => {
+    render(
+      <LifecycleConfirmModal
+        {...FLAGGED_PROPS}
+        reconciled
+        hasTransaction
+        posted
+        items={[]}
+        onConfirm={vi.fn()}
+        onClose={vi.fn()}
+      />,
+    );
+    expect(screen.queryByText('ItemConciliacion.')).not.toBeInTheDocument();
+    expect(screen.queryByText('ItemTransaccion.')).not.toBeInTheDocument();
+    expect(screen.queryByText('ItemAsiento.')).not.toBeInTheDocument();
+    // Title / sub / warning / buttons are unaffected by an empty bullet list.
+    expect(screen.getByText('Some title')).toBeInTheDocument();
+    expect(screen.getByText('Be careful')).toBeInTheDocument();
+    expect(screen.getByTestId('lifecycle-confirm-accept')).toBeInTheDocument();
+  });
+
+  it('falls back to the flag-driven items when `items` is omitted (2 existing callers unaffected)', () => {
+    render(
+      <LifecycleConfirmModal
+        {...FLAGGED_PROPS}
+        reconciled
+        posted
+        onConfirm={vi.fn()}
+        onClose={vi.fn()}
+      />,
+    );
+    expect(screen.getByText('ItemConciliacion.')).toBeInTheDocument();
+    expect(screen.getByText('ItemAsiento.')).toBeInTheDocument();
+  });
+});
+
 describe('LifecycleConfirmModal — confirmIcon', () => {
   it('renders nothing extra in the accept button when confirmIcon is omitted (defaults to null)', () => {
     render(
