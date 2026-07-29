@@ -4,7 +4,7 @@
     {
       "label": "DetailView.jsx",
       "path": "tools/app-shell/src/components/contract-ui/DetailView.jsx",
-      "baseline": 5131,
+      "baseline": 3563,
       "note": "God component of the generic contract-ui. Report §9.1 measured ~3.914 lines; it has since grown by ~1.242 with no guard in place — exactly the gap this ratchet closes."
     },
     {
@@ -12,6 +12,12 @@
       "path": "tools/app-shell/src/components/contract-ui/DataTable.jsx",
       "baseline": 2058,
       "note": "Generic list/table component, second most-churned file of contract-ui."
+    },
+    {
+      "label": "detailViewHelpers.jsx",
+      "path": "tools/app-shell/src/components/contract-ui/detailViewHelpers.jsx",
+      "baseline": 1743,
+      "note": "Destination of T31's extraction out of DetailView.jsx. Tracked from the same commit that created it: an extraction must not read as payment. Without this entry the 1.568 lines moved out of DetailView would leave the ratchet reporting a win while the code simply relocated to somewhere unwatched — the same false-zero the leak scanner produced when the tab strip moved to TabStrip.jsx (see §9.3 of the churn report)."
     }
   ]
 }
