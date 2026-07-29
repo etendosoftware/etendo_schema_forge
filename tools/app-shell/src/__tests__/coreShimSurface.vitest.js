@@ -48,7 +48,6 @@ const CORE_PKG_DIR = resolve(CORE_REPO, 'packages/app-shell-core');
 const CORE_EXPORTS = JSON.parse(readFileSync(resolve(CORE_PKG_DIR, 'package.json'), 'utf8')).exports;
 
 const SOURCES = import.meta.glob('../**/*.{js,jsx}', { query: '?raw', import: 'default', eager: true });
-const LOADERS = import.meta.glob('../**/*.{js,jsx}');
 
 const RE_EXPORT_ALL = new RegExp(`^export \\* from '(${PACKAGE}[^']*)';$`);
 const RE_EXPORT_DEFAULT = new RegExp(`^export \\{ default \\} from '(${PACKAGE}[^']*)';$`);
@@ -136,12 +135,20 @@ describe('core re-export shims forward their module\'s default export', () => {
 
     if (!coreHasDefaultExport(corePath)) return;   // nothing for `export *` to drop
 
-    const shim = await LOADERS[shimInfo.path]();
+    // Core has a default, so the shim needs an explicit re-export line. Decided from
+    // source rather than by importing both modules and diffing their namespaces.
+    //
+    // The importing version was written first and removed deliberately: importing the
+    // `calendar` / `date-field` shims drags in react-day-picker's ~87 per-locale
+    // wrappers, which under full-suite contention intermittently blew a 5s timeout and
+    // still flaked at 30s. A guard that fails at random is worse than no guard, because
+    // the first response to a flaky test is to stop believing it. Source is the right
+    // oracle here anyway: `export *` either has a companion `export { default }` line
+    // or it does not, and that text IS the invariant.
     expect(
-      Object.keys(shim),
+      shimInfo.forwardsDefault,
       `${name}: ${shimInfo.target} has a default export but the shim does not forward it — `
         + "`export *` does not re-export a default; add `export { default } from '…'`",
-    ).toContain('default');
-    expect(shim.default, `${name}: shim forwards a default that resolves to undefined`).toBeDefined();
+    ).toBe(true);
   });
 });
