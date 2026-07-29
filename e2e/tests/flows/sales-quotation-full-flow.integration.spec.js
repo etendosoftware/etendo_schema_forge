@@ -154,6 +154,35 @@ async function findNegativeLineRow(page, qtyFieldKey) {
 }
 
 /**
+ * Wait for the "Líneas N" summary button to show the expected count and
+ * REMAIN showing it — mirrors purchase-helpers.js's waitForLinesSettled().
+ * Guards against a transient reload flash observed right after navigating
+ * into a freshly-created document (e.g. via a "Ver factura"/"Ver pedido"
+ * result-modal link): a related panel (the "Documentos" related-records
+ * panel) can finish its own async load right after the header/lines data
+ * first renders, momentarily resetting the detail view back to a loading
+ * state (0 lines, totals at 0.00) before the real data repopulates. A single
+ * toBeVisible() check on the lines button can pass DURING that in-between
+ * flash, so line-row assertions that run immediately after would read
+ * stale/reset DOM instead of the settled data.
+ */
+async function waitForLinesSettled(page, count, message) {
+  const linesPattern = new RegExp(`l[ií]neas\\s+${count}|lines\\s+${count}`, 'i');
+  const linesBtn = page.getByRole('button', { name: linesPattern });
+  await expect(linesBtn,
+    message || `Lines count should reach ${count}`,
+  ).toBeVisible({ timeout: 15_000 });
+
+  const spinner = page.getByText(/cargando|loading/i);
+  await spinner.waitFor({ state: 'hidden', timeout: 15_000 }).catch(() => {});
+  await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
+
+  await expect(linesBtn,
+    `Lines count should still read ${count} after related panels finish loading (no reload flash)`,
+  ).toBeVisible({ timeout: 15_000 });
+}
+
+/**
  * Add a product line to the quotation's inline-add row (shared component
  * across every document window — mirrors purchase-helpers.js's
  * addProductLine, adapted to the quotation's "orderedQuantity" field key).
@@ -523,11 +552,13 @@ test.describe('Sales Quotation — Full flow to invoice with a negative-quantity
     // price label survived the Shipment → Invoice conversion
     // ═══════════════════════════════════════════════════════════════════════
 
-    // Row-count-aware wait before touching line rows — same race guard used
-    // throughout purchase-order-full-flow.integration.spec.js.
-    await expect(page.getByRole('button', { name: /líneas\s+2|lines\s+2/i }),
-      'Invoice should have 2 lines inherited from the shipment',
-    ).toBeVisible({ timeout: 10_000 });
+    // Wait for the lines count to settle, not just become momentarily
+    // visible — right after a "Ver factura" navigation the "Documentos"
+    // related-records panel can finish loading a moment later and briefly
+    // reset the detail view to a 0-lines state before it repopulates. A
+    // plain toBeVisible() here can pass during that flash and let
+    // findNegativeLineRow() below read stale/reset DOM.
+    await waitForLinesSettled(page, 2, 'Invoice should have 2 lines inherited from the shipment');
 
     await expect(page.getByTestId('column-header-listPrice'),
       '[ETP-4567] Invoice lines price column should read "Precio"',

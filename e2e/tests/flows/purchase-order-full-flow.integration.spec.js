@@ -4,7 +4,7 @@ import {
   loadCredentials, slow, waitForDetailReady, saveDraft, selectVendorBP,
   addProductLine, ensureVendorSetup, openDraftRow, clickConfirmButton,
   waitForConfirmResponse, dismissSuccessModal, expectStatusPill, safeReload,
-  readDocumentTotals, verifyTotalsConsistency, parseAmount,
+  readDocumentTotals, verifyTotalsConsistency, parseAmount, waitForLinesSettled,
 } from '../helpers/purchase-helpers.js';
 
 /**
@@ -570,9 +570,14 @@ test.describe('Purchase Order — Full flow with receipt and invoice (integratio
     await expect(page).toHaveURL(/\/purchase-invoice\//, { timeout: 15_000 });
     await waitForDetailReady(page);
     await expectStatusPill(page, /borrador|draft/i, 'Invoice should be in Draft status');
-    await expect(page.getByRole('button', { name: /líneas\s+2|lines\s+2/i }),
-      'Invoice should have 2 lines inherited from the receipt',
-    ).toBeVisible({ timeout: 10_000 });
+
+    // Wait for the lines count to settle, not just become momentarily
+    // visible — right after a "Ver factura" navigation the "Documentos"
+    // related-records panel can finish loading a moment later and briefly
+    // reset the detail view to a 0-lines state before it repopulates. A
+    // plain toBeVisible() here can pass during that flash and let
+    // findNegativeLineRow() below read stale/reset DOM.
+    await waitForLinesSettled(page, 2, 'Invoice should have 2 lines inherited from the receipt');
 
     // [ETP-4567 check #4] Price label on the invoice lines grid.
     await expect(page.getByTestId('column-header-listPrice'),
