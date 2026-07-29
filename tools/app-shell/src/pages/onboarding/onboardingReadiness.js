@@ -13,9 +13,13 @@ export const READINESS_FAILURE_KEYS = {
   documentType: 'onboardingReadinessDocumentType',
 };
 
-async function fetchJson(fetchImpl, baseUrl, token, endpoint, label) {
+// ETP-4576 — the probes authenticate with the server-side `__Host-` session
+// cookie (NeoAuthenticator accepts it on /sws/neo/*), so they opt into
+// credentials and never carry a bearer token: the new session contract does not
+// hand one out at all.
+async function fetchJson(fetchImpl, baseUrl, endpoint, label) {
   const response = await fetchImpl(`${baseUrl}${endpoint}`, {
-    headers: token ? { Authorization: `Bearer ${token}` } : {},
+    credentials: 'include',
   });
 
   let body = null;
@@ -41,12 +45,12 @@ function readDocumentType(defaultsBody) {
     || null;
 }
 
-export async function checkSalesInvoiceReadiness(fetchImpl, baseUrl, token) {
+export async function checkSalesInvoiceReadiness(fetchImpl, baseUrl) {
   const [session, defaults, paymentTerms, customers] = await Promise.all([
-    fetchJson(fetchImpl, baseUrl, token, READINESS_ENDPOINTS.session, 'session'),
-    fetchJson(fetchImpl, baseUrl, token, READINESS_ENDPOINTS.defaults, 'sales invoice defaults'),
-    fetchJson(fetchImpl, baseUrl, token, READINESS_ENDPOINTS.paymentTerms, 'payment terms'),
-    fetchJson(fetchImpl, baseUrl, token, READINESS_ENDPOINTS.customers, 'customers'),
+    fetchJson(fetchImpl, baseUrl, READINESS_ENDPOINTS.session, 'session'),
+    fetchJson(fetchImpl, baseUrl, READINESS_ENDPOINTS.defaults, 'sales invoice defaults'),
+    fetchJson(fetchImpl, baseUrl, READINESS_ENDPOINTS.paymentTerms, 'payment terms'),
+    fetchJson(fetchImpl, baseUrl, READINESS_ENDPOINTS.customers, 'customers'),
   ]);
 
   const failures = [];

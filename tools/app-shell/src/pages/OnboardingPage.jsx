@@ -31,8 +31,8 @@ export default function OnboardingPage() {
       address: '',
       sector: 'technology',
     },
-    checkReadiness: (fetchImpl, apiBase, token) => {
-      return checkSalesInvoiceReadiness(fetchImpl, apiBase, token);
+    checkReadiness: (fetchImpl, apiBase) => {
+      return checkSalesInvoiceReadiness(fetchImpl, apiBase);
     },
     track: (eventDefinition, properties) => {
       const event = buildObservabilityEvent(eventDefinition, properties);
