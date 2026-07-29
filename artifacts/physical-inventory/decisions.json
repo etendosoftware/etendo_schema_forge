@@ -113,7 +113,9 @@
           ]
         },
         "project": {
-          "form": false
+          "visibility": "editable",
+          "section": "principal",
+          "reason": "ETP-4529 — accounting dimension, config-gated (@ACCT_DIMENSION_DISPLAY@). Moved from \"other\" to \"principal\" — the config-gated header dimension fields were rendering in the secondary/collapsed area instead of the main visible form."
         },
         "processNow": {
           "visibility": "system"
@@ -128,7 +130,9 @@
           "visibility": "discarded"
         },
         "costCenter": {
-          "visibility": "discarded"
+          "visibility": "editable",
+          "section": "principal",
+          "reason": "ETP-4529 — accounting dimension, config-gated (@ACCT_DIMENSION_DISPLAY@). Moved from \"other\" to \"principal\", same rationale as header.project above."
         },
         "posted": {
           "visibility": "readOnly",

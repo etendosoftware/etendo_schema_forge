@@ -114,6 +114,14 @@ export const api = {
       "url": "/sws/neo/physical-inventory/inventory/selectors/project"
     },
     {
+      "entity": "inventory",
+      "field": "costCenter",
+      "column": "C_Costcenter_ID",
+      "reference": "Costcenter",
+      "inputMode": "selector",
+      "url": "/sws/neo/physical-inventory/inventory/selectors/costCenter"
+    },
+    {
       "entity": "inventoryLine",
       "field": "product",
       "column": "M_Product_ID",

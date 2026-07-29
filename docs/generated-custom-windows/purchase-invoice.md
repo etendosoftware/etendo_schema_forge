@@ -424,6 +424,71 @@ query in the GO module (`PisPaymentService.hasLinkedPisPayment`), not a new PSD2
 Scope v1: purchase invoices only, EUR (SEPA) / GBP (FPS). Out of scope: receipts, batch/multi-invoice
 PIS, other currencies, scheduled payments.
 
+## Accounting dimension visibility per section — ETP-4529
+
+| Field | Header | Lines |
+| --- | --- | --- |
+| `businessPartner` | **Siempre** — `displayLogic: null` override | **Nunca** — discarded |
+| `product` | *(no such field on the header)* | **Siempre** — no dimension gating |
+| `project` | **Por config** — raw AD `@ACCT_DIMENSION_DISPLAY@` passthrough (`section: "other"`) | **Por config** — same passthrough |
+| `costcenter` | **Por config** — raw AD `@ACCT_DIMENSION_DISPLAY@` passthrough (`section: "other"`) | **Por config** — same passthrough |
+
+**Fixed a pre-existing gap:** `header.project`, `header.costcenter`, `lines.project`, and
+`lines.costcenter` previously carried `"form": false, "readOnlyLogic": null, "displayLogic": null`
+in `decisions.json`, which both hid the fields unconditionally AND silenced their raw
+`@Posted@='Y'` read-only rule. Both are now restored: the fields render (gated by the
+accounting-dimension macro) and are correctly locked once the invoice is posted.
+
+**Runtime evaluator — fixed (ETP-4529 follow-up).**
+Three generic bugs (the `EntityForm.jsx` visibility filter never actually consulting the
+evaluate-display result, the `principal` section hardcoding empty visibility, and no
+lines-scoped `useDisplayLogic` call existing at all) were found and fixed — full write-up in
+`sales-invoice.md`. `header.project`/`header.costcenter` are now genuinely config-gated at
+runtime.
+
+**Non-grid line fields under inlineEditable — resolved (ETP-4543).** `lines.project`/
+`lines.costcenter` carry correct contract metadata and are correctly evaluated, but this
+window uses `window.linesLayout = "inlineEditable"`, under which `LinesForm.jsx` (the sidebar
+that would otherwise render them) never mounts — so the two fields had no UI surface at all,
+evaluator fix notwithstanding (Jira ETP-4543 / GitHub `etendosoftware/etendo_schema_forge#895`).
+Fixed by adding `project`/`costcenter` as columns to `InvoiceLinesTable.jsx` (the shared,
+hand-written line table used by both `sales-invoice` and `purchase-invoice`) and wiring
+dynamic column visibility through `InlineLinesPanel.jsx`'s new `hiddenColumns` prop and
+`DetailView.jsx`'s memoized `lineHiddenColumns`. With the client's Proyecto/Centro de costo
+dimension toggles OFF, the columns do not render; with them ON, they do. See `sales-invoice.md`
+for the full write-up (including the verified list of which windows actually hit this gap).
+
+### Header section placement fix + expand-panel supersession (ETP-4529 follow-up)
+
+`header.project`/`header.costcenter` moved from `"section": "other"` to `"section": "principal"`
+so they render in the main visible form area instead of the secondary/collapsed one — same fix
+as `sales-invoice.md`. Separately, the plain `project`/`costcenter` grid columns added above
+were superseded by a single `type: 'dimensionsPanel'` column on `InvoiceLinesTable.jsx` (the
+same shared component both windows use) — full write-up, including a wiring gap discovered
+while doing this (`InvoiceLinesTable.jsx` is not currently reachable from either window's
+running app), in `sales-invoice.md` and `docs/feedback.md`'s ETP-4543 supersession note.
+
+**Resolved (ETP-4529 generator support):** since `InvoiceLinesTable.jsx` doesn't actually render
+for this window either, `generate-frontend.js`'s `generateTableComponent` (`schema_forge_core`)
+now emits the `dimensionsPanel` column directly from `decisions.json`. `lines.project.dimensionsPanel`
+and `lines.costcenter.dimensionsPanel` are `true` (grid stays `false`); the actually-rendered
+generated `LinesTable.jsx` declares the synthetic column, so the panel renders for real — see
+`sales-invoice.md`'s matching note, `docs/decisions-reference.md` (`dimensionsPanel`), and
+`docs/ui-customization.md` §14b.
+
+### "Añadir dimensiones" moved to a hover action, column no longer shown (ETP-4610)
+
+Same change as `sales-invoice.md`: the "Dimensiones contables" grid column no longer renders.
+"Añadir dimensiones" moved into the line's hover-action strip next to Edit/Delete, gated on at
+least one visible dimension field; the expand-chevron column is unchanged. Label/icon is adaptive
+("Añadir dimensiones" → "Editar dimensiones" once the line has a dimension value set). See
+`docs/ui-customization.md` §14b/§14c and `docs/feedback.md`'s ETP-4610 entry.
+
+Regenerated cleanly (`make regen ONLY=sales-invoice,purchase-invoice SKIP_EXTRACT=1 LOCAL_CORE=1`,
+`sf-validate-pipeline` clean, committed) as part of validating this window's `dimensionsPanel`
+flags — see `docs/feedback.md`'s ETP-4610 entry for the full regen log across all five in-scope
+windows.
+
 ## Multi-currency support in the Cobros/Pagos modal — ETP-4504
 
 The two-step Cobros/Pagos modal (`NewPaymentEntryModal.jsx`) was originally single-currency.

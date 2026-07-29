@@ -55,6 +55,8 @@ const addLineFields = {
   entry: [
     { key: 'product', column: 'M_Product_ID', type: 'search', required: true, lookup: true, label: 'Product', reference: 'Product', inputMode: 'search' },
     { key: 'movementQuantity', column: 'MovementQty', type: 'number', required: true, label: 'Movement Quantity', defaultValue: 1 },
+    { key: 'project', column: 'C_Project_ID', type: 'search', label: 'Project', reference: 'Project', inputMode: 'search' },
+    { key: 'costcenter', column: 'C_Costcenter_ID', type: 'selector', label: 'Cost Center', reference: 'CostCenter', inputMode: 'selector' },
   ],
   derived: [
 
@@ -258,14 +260,6 @@ export const api = {
     },
     {
       "entity": "goodsReceiptLine",
-      "field": "businessPartner",
-      "column": "C_Bpartner_ID",
-      "reference": "BusinessPartner",
-      "inputMode": "search",
-      "url": "/sws/neo/goods-receipt/goodsReceiptLine/selectors/businessPartner"
-    },
-    {
-      "entity": "goodsReceiptLine",
       "field": "project",
       "column": "C_Project_ID",
       "reference": "Project",
@@ -452,6 +446,7 @@ export default function GoodsReceiptPage({ windowName, recordId, ...props }) {
         hideDeleteWhenComplete
         hidePrint
         noHeaderBorder
+        dimensionsPanelFieldKeys={["project","costcenter"]}
         customTabs={[{ key: 'related', labelKey: 'relatedDocuments', Component: RelatedDocuments }, { key: 'attachments', labelKey: 'attachments', Component: AttachmentsTab, placement: 'tab', props: { tableName: "M_InOut", config: {} } }]}
         bottomSection={GoodsReceiptBottomPanel}
         topbarRight={GoodsReceiptActions}

@@ -110,6 +110,35 @@ Physical Inventory should let a warehouse user create an inventory count session
 - The line-required process visibility comes from `3766a7f5` (`Hotfix ETP-3585: Hide process button when no lines exist`) plus the current `DetailView.jsx` process filter on `origin/develop`.
 - The selector-context and saved-parent fixes come from `f26c171b` (`Feature ETP-3585: Fix physical inventory selector context`) plus the current `DetailView.jsx`, `InventoryPage.jsx`, and `InventoryLineForm.jsx` on `origin/develop`.
 
+## Accounting dimension visibility per section — ETP-4529
+
+| Field | Header | Lines |
+| --- | --- | --- |
+| `businessPartner` (Contacto) | **Nunca** — no such field on the header | **Nunca** — no such field on the lines tab |
+| `product` | *(no such field on the header)* | **Siempre** — core line field, no dimension gating |
+| `project` | **Por config** — raw AD `@ACCT_DIMENSION_DISPLAY@` passthrough (`section: "other"`, previously `form: false`) | **N/A** — `M_InventoryLine` has no `project` column; the matrix's "Por config" cell cannot be implemented via `decisions.json` (would require an AD Application Dictionary change to expose the column on this tab) |
+| `costCenter` | **Por config** — same fix as `project` (previously discarded) | **N/A** — same AD-level limitation as `project` |
+
+**Runtime evaluator — fixed (ETP-4529 follow-up).** Three generic bugs (the `EntityForm.jsx`
+visibility filter never actually consulting the evaluate-display result, the `principal` section
+hardcoding empty visibility, and no lines-scoped `useDisplayLogic` call existing at all) were
+found and fixed — full write-up in `sales-invoice.md`. `header.project`/`header.costCenter` are
+now genuinely config-gated at runtime. This window has no dimension fields on the lines tab at
+all, so the lines-scoped part of the fix and the ETP-4543 fix (non-grid line fields invisible
+under `inlineEditable` line layout, resolved for `sales-invoice`/`purchase-invoice`/
+`goods-shipment`/`goods-receipt` — see `sales-invoice.md`, Jira ETP-4543 / GitHub
+`etendosoftware/etendo_schema_forge#895`) don't apply here — there is no such field in this
+window's `lines` entity for that fix to affect in the first place (see the "N/A" cells above),
+so the header fix is the whole story for this window.
+
+### Header section placement fix (ETP-4529 follow-up)
+
+`header.project` and `header.costCenter` (both already present and config-gated, confirmed —
+no AD-level gap) had `"section": "other"` instead of `"section": "principal"`, making them
+render in the secondary/collapsed area instead of the main visible form. Fixed by changing
+`section` to `"principal"` for both fields in `decisions.json` and regenerating; confirmed in
+`contract.json` (`section: "principal"`) and in the generated `InventoryForm.jsx`.
+
 ## Theme roles
 
 The window's live artifact custom components use the shared semantic theme.

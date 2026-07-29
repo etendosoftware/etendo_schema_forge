@@ -606,7 +606,57 @@ Applied to fields with `grid: true` to control how the list cell renders.
 | `gridReadOnly` | boolean | `false` | Make an otherwise-editable column read-only in the grid. |
 | `grow` | boolean | `false` | Let the column grow to fill available width. |
 | `cellType` | string | `null` | Selects a cell renderer from the registry (see below). Generic to any grid; the `list-modal` layout ships a styled set. |
+| `dimensionsPanel` | boolean | `false` | Collect this field into the ONE synthetic `type: 'dimensionsPanel'` grid column instead of its own column — see below. Read regardless of the field's own `grid` value (typically `grid: false`, since the field renders inside the expand-row panel, not as a standalone column). |
 | `visibleWhenCapability` | string | `null` | Names a capability key (e.g. `"showAccountingFields"`) from the `capabilities` map returned by the `GET /sws/neo/windowaccessmap` webhook (NEO pseudo-spec bridge — see `com.etendoerp.go/docs/neo-headless.md` §4.10). Opt-in — absent means always visible. Gates both the grid column and any `window.statusPills` entry referencing this field; the field is omitted entirely (not disabled) when the capability resolves `false`. Full mechanics (generator wiring, fail-closed behavior): `schema_forge_core`'s `docs/decisions-reference.md`. Shipped example: `posted` on `sales-invoice`/`purchase-invoice` — see those windows' `docs/generated-custom-windows/*.md` guides. |
+
+#### Accounting dimensions panel (`dimensionsPanel`)
+
+Fields flagged `dimensionsPanel: true` (any number, on any inline-editable-layout entity) are collected by `generateTableComponent` into ONE synthetic column instead of individual grid columns:
+
+```js
+{
+  key: 'dimensions',
+  type: 'dimensionsPanel',
+  label: 'Accounting dimensions',
+  labels: { en_US: 'Accounting dimensions', es_ES: 'Dimensiones contables' },
+  dimensionFields: [
+    { key: 'project', column: 'C_Project_ID', type: 'selector', label: 'Project', reference: 'Project', inputMode: 'search' },
+    { key: 'costcenter', column: 'C_Costcenter_ID', type: 'selector', label: 'Cost Center', reference: 'Costcenter', inputMode: 'selector' },
+  ],
+}
+```
+
+`InlineLinesPanel` never renders this column type in the grid itself (ETP-4610 — no header cell, no width, no per-row badges). Instead it drives two things: a leading expand-chevron column (unchanged since ETP-4529) and an adaptive "Add dimensions"/"Edit dimensions" entry in the row's hover-action strip, next to the Edit/Delete icons, shown only when at least one `dimensionFields` candidate is currently visible. Clicking either the chevron or the hover action expands the same full-width sub-row of selectors below the data row — see `docs/ui-customization.md` §14b for the full UX and the shared `DimensionsPanel.jsx` building blocks (still used for the expanded `DimensionGrid`; the collapsed `DimSummary` badge/trigger is no longer used by `InlineLinesPanel`).
+
+**Rules:**
+
+- Emitted **only** when at least one field on the entity has `dimensionsPanel: true`; otherwise the entity's `columns` array is byte-for-byte the same as before this feature existed (fully additive).
+- Always emitted **last** in the `columns` array — `gridOrder` does not apply to it (it only reorders normal grid columns).
+- Each `dimensionFields` entry reuses the same per-field extraction as a normal grid column (`mapFieldType` for `type`, static baked `label`, FK `reference`/`inputMode`, `required`/`lookup`/`popup`) — trimmed to what `DimensionsPanel.jsx` (`DimSummary`/`DimensionGrid`), `SelectorInput`, and `selectorCatalog.js` actually read.
+- The panel's own `label`/`labels` are baked by the generator (not translated via `useUI()` — the `columns` array is module-scope code, so it cannot call a hook); `emptyLabel` is left unset so the empty-state trigger falls back to the generic `dimensionsPanelEmpty` i18n key at render time.
+- Only affects the **grid/table** rendering. A field flagged `dimensionsPanel: true` still appears as its own field in the lines entity's `addLineFields` (the add-new-row form) if `form: true` — the add-row flow is a separate, flat-form UX not covered by this flag.
+- A field with `grid: true` AND `dimensionsPanel: true` is collected into the panel only — it is excluded from `gridFieldsRaw` regardless of its own `grid` value.
+
+**`dimensionsPanelFieldKeys` — per-window dimension-macro trust (ETP-4610):**
+
+`generatePageComponent` (`schema_forge_core`'s `generate-frontend.js`) also collects the same `dimensionsPanel: true` field keys for the lines entity and forwards them to the generated `<DetailView dimensionsPanelFieldKeys={[...]} />` prop — omitted entirely when the entity has none, so this is purely additive. `DetailView.jsx` uses it to widen, **scoped to that one window instance**, which keys its `lineHiddenColumns` computation (and the expanded-row `DetailForm`'s `displayLogic`) is willing to trust as config-driven "dimension macro" visibility: a key is trusted if it's in the component's small global `DIMENSION_MACRO_KEYS` allowlist (`project`/`costcenter`/`costCenter`/`businessPartner`) **or** it's listed in this prop.
+
+This exists because `product` cannot be added to the global allowlist: in `sales-invoice`/`purchase-invoice` it's a real per-line field with its own record-dependent AD `displayLogic` (`@Financial_Invoice_Line@='N'`), and trusting it globally would reintroduce the ETP-4530 regression (product/listPrice/grossAmount silently vanishing from those windows' grids). `simple-g-l-journal`, however, genuinely flags `product` `dimensionsPanel: true` as an `@ACCT_DIMENSION_DISPLAY@` accounting dimension — so its generated page passes `dimensionsPanelFieldKeys={['businessPartner', 'product', 'project', 'costCenter']}`, and only *that* window instance trusts `product`'s config-hide signal. Windows that never flag any lines field `dimensionsPanel: true` get no prop at all and see no behavior change. See `DetailView.lineHiddenColumns.vitest.jsx` for both the fix proof (simple-g-l-journal) and the non-regression proof (sales-invoice-shaped instances).
+
+**Real example** (`sales-invoice`, `purchase-invoice`, `goods-shipment`, `goods-receipt` — `lines.project`/`lines.costcenter`):
+
+```json
+"project": {
+  "visibility": "editable",
+  "grid": false,
+  "dimensionsPanel": true
+},
+"costcenter": {
+  "visibility": "editable",
+  "grid": false,
+  "dimensionsPanel": true
+}
+```
 
 #### Status column rendering (`columnType` and `enumValues`)
 

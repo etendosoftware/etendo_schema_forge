@@ -1371,6 +1371,42 @@ const WINDOW_DELETE_ACTIONS = {
   'payment-out': 'eTPRRemovePayment',
 };
 
+// ETP-4530 — field keys for which `lineHiddenColumns` (below) is allowed to trust the
+// lines-entity `evaluate-display` visibility map, computed against a REPRESENTATIVE
+// (header) record rather than the actual line row. Valid only for
+// `@ACCT_DIMENSION_DISPLAY@`-gated accounting dimensions, whose expansion
+// (`DimensionDisplayUtility.computeAccountingDimensionDisplayLogic()`) depends solely on
+// the client's dimension config, never on record field values — see the `lineHiddenColumns`
+// comment for the full incident writeup (product/listPrice/grossAmount regression).
+// Some windows' extractors emit 'costcenter', others the camelCase 'costCenter' — both
+// casings are included so the macro is recognized (cacheable, filterable) regardless of
+// which one a given generated entity actually uses.
+//
+// 'product' is deliberately NOT included here, despite simple-g-l-journal's dimensionsPanel
+// listing it alongside project/costCenter/businessPartner as an @ACCT_DIMENSION_DISPLAY@
+// candidate there: in sales-invoice/purchase-invoice, `product` is a real per-line field
+// with its OWN record-dependent raw AD displayLogic (`@Financial_Invoice_Line@='N'`, see
+// the ETP-4530 regression note below on `lineHiddenColumns`) — the exact "false noise"
+// this allowlist exists to filter out. Trusting 'product' unconditionally here would fix
+// the gap for simple-g-l-journal but silently reintroduce that already-fixed regression
+// for every OTHER window that shares this component and has a real, per-record 'product'
+// field. This constant stays GLOBAL and unconditional on purpose.
+//
+// ETP-4610 (originally flagged by a GitHub Copilot review on PR 975, then fixed as part
+// of the same ticket) — the real per-window signal this comment used to call "out of
+// scope" now exists: `dimensionsPanelFieldKeys`, a prop generated from this window's own
+// decisions.json `dimensionsPanel: true` fields (see `buildDimensionsPanelColumn` /
+// `dimensionsPanelFieldKeys` in schema_forge_core's generate-frontend.js, and the
+// `dimensionsPanelFieldKeys` prop + `trustedDimensionKeys` memo below). `lineHiddenColumns`
+// and the expanded-row DetailForm's `displayLogic` both trust `DIMENSION_MACRO_KEYS UNION
+// dimensionsPanelFieldKeys`, scoped to the current DetailView instance — so
+// simple-g-l-journal can trust 'product' as a dimension macro without this global constant
+// ever needing to include it, and sales-invoice/purchase-invoice (which never pass
+// 'product' in that prop) are unaffected. See DetailView.lineHiddenColumns.vitest.jsx for
+// both the fix proof (simple-g-l-journal) and the non-regression proof (sales-invoice-shaped
+// instances).
+const DIMENSION_MACRO_KEYS = new Set(['project', 'costcenter', 'costCenter', 'businessPartner']);
+
 // ETP-4500 — same rationale/hardcoding constraint as WINDOW_DELETE_ACTIONS above: these
 // windows show the rich Reactivar/Eliminar cartel (conditional Conciliación/Asiento items)
 // instead of the generic delete confirmation Dialog. `dir` feeds the cobro/pago wording.
@@ -1956,6 +1992,15 @@ export function DetailView({
   lockedAlert = null,
   selectorPriceCurrency = null,
   processConfirmModal = null,
+  // ETP-4610 — this window's own `dimensionsPanel: true` field keys on the lines
+  // entity (generated from decisions.json by `generate-frontend.js`'s
+  // `buildDimensionsPanelColumn`/`dimensionsPanelFieldKeys` — see
+  // docs/decisions-reference.md's "Accounting dimensions panel" section). Widens
+  // which keys `lineHiddenColumns` (and the expanded-row DetailForm's
+  // `displayLogic`) are willing to trust as config-driven dimension-macro
+  // visibility, SCOPED TO THIS WINDOW INSTANCE ONLY — see `DIMENSION_MACRO_KEYS`
+  // above for why the global allowlist itself must never include 'product'.
+  dimensionsPanelFieldKeys = [],
 }) {
   // DetailView never needs the parent list: on `/new` there is no record to match, and on
   // `/:id` the currentItem shortcut only helps when we arrived from ListView (items already
@@ -2101,7 +2146,62 @@ export function DetailView({
     return next;
   }, [entity, detailEntity, parentRecordId, secondaryTabKeysStr, priceListId, api, hook.selected, hook.editing, sessionCurrencyCode, selectorPriceCurrency]);
   const { catalogs, catalogsLoaded } = useCatalogs(api, token, apiBaseUrl, staticCatalogs);
-  const displayLogic = useDisplayLogic(entity, hook.editing, { token, apiBaseUrl });
+  // cacheableKeys: only the dimension-macro fields are safe to pre-seed from a previous
+  // record's resolution — everything else in this window's header (e.g. Posted-based
+  // readOnly) is genuinely per-record and must never carry over between mounts.
+  const displayLogic = useDisplayLogic(entity, hook.editing, { token, apiBaseUrl, cacheableKeys: DIMENSION_MACRO_KEYS });
+  // ETP-4529 — mirror the header evaluate-display call for the lines/detail entity.
+  // There is no single "current line record" to evaluate against (many rows share one
+  // entity), and dimension-macro visibility (@ACCT_DIMENSION_DISPLAY@ and friends) is
+  // config-driven, not record-driven, so reusing the header record as the fieldValues
+  // payload is a safe, representative context (it also satisfies useDisplayLogic's
+  // "skip when !values.id" guard once the header record is saved). Only `visibility` is
+  // consumed downstream — `readOnly` stays per-line via each field's own readOnlyLogic.
+  const lineDisplayLogic = useDisplayLogic(detailEntity, hook.editing, { token, apiBaseUrl, cacheableKeys: DIMENSION_MACRO_KEYS });
+  // ETP-4543 — dynamic column visibility for the primary lines grid (InlineLinesPanel /
+  // DataTable), derived from lineDisplayLogic.visibility. Fail-open: a key that is absent
+  // from the map, or explicitly `true`, is NOT hidden — only an explicit `false` (e.g. the
+  // config-gated @ACCT_DIMENSION_DISPLAY@ toggle for project/costcenter) hides the column.
+  //
+  // ETP-4530 regression fix — this evaluate-display call is scoped to `detailEntity` but
+  // evaluated against `hook.editing` (the HEADER record snapshot), not any specific line
+  // row (see the comment on `lineDisplayLogic` above: "one evaluate-display call... using
+  // the header record as a representative context"). That trick is only valid for
+  // `@ACCT_DIMENSION_DISPLAY@` — a config-only macro expanded server-side independent of
+  // any record's field values. NeoDisplayLogicHandler (com.etendoerp.go), however,
+  // evaluates EVERY active AD_Field's raw displayLogic for the lines tab, not just the
+  // dimension ones. Real AD fields with genuine per-row/aux-input-dependent displayLogic —
+  // e.g. sales-invoice's Product (`@Financial_Invoice_Line@='N'`, a sibling per-line field)
+  // and List Price / Line Gross Amount (`@GROSSPRICE@='Y'|'N'`, an SQL auxiliary input) —
+  // reference tokens the header snapshot never carries, which silently resolve to
+  // `undefined` and make the comparison evaluate `false`. That `false` looked identical
+  // to a legitimate "hide this column" signal, so it blast-radiused into hiding
+  // product/listPrice/grossAmount for every line, even though decisions.json explicitly
+  // marks product/grossAmount `displayLogic: null` ("Siempre") in this window's contract.
+  // Restrict this map to the field keys the representative-context trick was actually
+  // built for (see docs/generated-custom-windows/sales-invoice.md, ETP-4529 matrix) — any
+  // other key's `false` is untrustworthy noise from this evaluator's known limitation,
+  // not a real hide decision.
+  // ETP-4610 — window-scoped extension of DIMENSION_MACRO_KEYS: a key is trusted as a
+  // config-driven dimension macro if it's in the GLOBAL allowlist above OR THIS WINDOW
+  // INSTANCE itself declared it via `dimensionsPanelFieldKeys` (the lines entity's
+  // decisions.json `dimensionsPanel: true` fields, forwarded by generate-frontend.js —
+  // see the prop comment on `dimensionsPanelFieldKeys` above). This is what lets
+  // simple-g-l-journal trust 'product' as a dimension macro without reintroducing the
+  // ETP-4530 regression for sales-invoice/purchase-invoice, whose generated pages never
+  // pass 'product' in this prop. Stringified for the memo dep since `dimensionsPanelFieldKeys`
+  // defaults to a fresh `[]` reference on every render when the caller omits it.
+  const dimensionsPanelFieldKeysStr = (dimensionsPanelFieldKeys ?? []).join('|');
+  const trustedDimensionKeys = useMemo(
+    () => new Set([...DIMENSION_MACRO_KEYS, ...dimensionsPanelFieldKeysStr.split('|').filter(Boolean)]),
+    [dimensionsPanelFieldKeysStr]
+  );
+  const lineHiddenColumns = useMemo(
+    () => Object.entries(lineDisplayLogic?.visibility ?? {})
+      .filter(([key, visible]) => visible === false && trustedDimensionKeys.has(key))
+      .map(([key]) => key),
+    [lineDisplayLogic?.visibility, trustedDimensionKeys]
+  );
   const { calloutResult, calloutLoading, executeCallout } = useCallout(entity, { token, apiBaseUrl });
   const docAction = useDocumentAction({ apiBaseUrl, entity, token });
   const neoAction = useNeoAction({ specName: windowName, entityName: entity, apiBaseUrl, token });
@@ -3996,7 +4096,7 @@ export function DetailView({
                               layout="horizontal"
                               section="principal"
                               readOnly={windowReadOnly}
-                              displayLogic={{ readOnly: displayLogic?.readOnly ?? {}, visibility: {} }}
+                              displayLogic={displayLogic}
                               api={api}
                               token={token}
                               apiBaseUrl={apiBaseUrl}
@@ -4216,7 +4316,7 @@ export function DetailView({
                                   onSelectionChange={setSelectedChildRows}
                                   showFooterTotals={showDetailFooterTotals ?? !summary.some(f => f.type === 'amount')}
                                   selectorContext={selectorContextByEntity[detailEntity]}
-                                  hiddenColumns={[]}
+                                  hiddenColumns={lineHiddenColumns}
                                   onUpdateRow={buildInlineRowUpdateHandler({ linesLayout, isDocumentReadOnly, api, detailEntity, apiBaseUrl, hook, handleLineFieldChange, prepareLineForPost, token, extractErrorMessage, ui })}
                                   onDeleteRow={buildDeleteRowHandler({ api, detailEntity, isDocumentReadOnly, confirmDelete, apiBaseUrl, token, hook, selectedLine, setSelectedLine, ui, extractErrorMessage })}
                                   addRow={{
@@ -4499,6 +4599,25 @@ export function DetailView({
                                     apiBaseUrl={apiBaseUrl}
                                     selectorContext={selectorContextByEntity[detailEntity]}
                                     labelOverrides={labelOverrides}
+                                    // ETP-4529 — only `visibility` is forwarded, and only for the
+                                    // config-only dimension macro keys: lineDisplayLogic is evaluated
+                                    // against the header (representative context), not the actual
+                                    // selected line, so any OTHER key's visibility (e.g. product,
+                                    // listPrice, grossAmount) can resolve to false noise here that
+                                    // doesn't reflect this line's real state. `readOnly` stays {} so
+                                    // each field's own readOnlyLogic (evaluated against the actual line)
+                                    // keeps controlling per-row read-only state.
+                                    // ETP-4610 — trustedDimensionKeys (not the bare global
+                                    // DIMENSION_MACRO_KEYS) so this stays consistent with
+                                    // lineHiddenColumns above for windows that widen the trusted
+                                    // set via `dimensionsPanelFieldKeys`.
+                                    displayLogic={{
+                                      readOnly: {},
+                                      visibility: Object.fromEntries(
+                                        Object.entries(lineDisplayLogic?.visibility ?? {})
+                                          .filter(([key]) => trustedDimensionKeys.has(key))
+                                      ),
+                                    }}
                                     data-testid="DetailForm__fa3275" />
                                   {shouldShowLineActionButtons(hook, lineEdits, selectedLine) && (
                                     <div className="flex gap-2 mt-4">

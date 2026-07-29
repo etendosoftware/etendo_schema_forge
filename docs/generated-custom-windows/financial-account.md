@@ -919,3 +919,31 @@ The window stays **custom** (`layoutType: "custom"`, bespoke React structure), b
 - **Row kebab visible on hover only** — appears via CSS `opacity-0 group-hover:opacity-100`. Figma shows it always-visible.
 - **Posting status sub-label** is derived provisionally from `paymentStatus` (RPPC → "Contabilizado" / green dot, else → "Sin contabilizar" / orange dot). Will be replaced by the real `ETBR_PostStatus` field once it exists.
 - **Bank logo** is the generic `AccountLogoAvatar` (icon by account type). Real brand logos (Santander/BBVA/etc.) are a future enhancement.
+
+## Accounting dimension visibility per section — ETP-4529
+
+The matrix's `Transacciones Cuentas Financieras` row (no header/lines split — a single
+`transaction` entity): Contacto=**Siempre**, Producto=**Nunca**, Proyecto=**Por config**,
+Centro de costo=**Por config**.
+
+| Field | State |
+| --- | --- |
+| `businessPartner` (Contacto) | **Siempre** (revised per REVIEW/user follow-up). Raw AD `displayLogic` is the compound `@ACCT_DIMENSION_DISPLAY@ & @Trxtype@!''`. The initial pass set a blanket `displayLogic: null`, which correctly stripped `@ACCT_DIMENSION_DISPLAY@` (per scope decision #2) but also incidentally dropped the unrelated `@Trxtype@!=''` condition. Fixed: `decisions.json` now sets `displayLogic: "@Trxtype@!''"` + `displayLogicJs: "record['transactionType'] !== ''"` — only the accounting-dimension macro is stripped; the Trxtype condition survives as a plain client-evaluable function. Since it's `evaluable: true` with real `.js`, `generate-frontend.js` emits it as `displayLogic: (record) => record['transactionType'] !== ''` on the generated field — a function-based displayLogic that `EntityForm.jsx` always evaluates client-side, completely independent of the server evaluate-display / accounting-dimension config. Net effect: the field is immune to the global dimension toggle (true "Siempre") but still respects Trxtype. `Trxtype` (Transaction Type — BP Deposit / BP Withdrawal / Bank fee) is a mandatory column with a default value, so in practice this only hides the field for the brief instant before a type is set on a brand-new record. |
+| `product` | **Nunca** — already `visibility: "discarded"`, no change needed |
+| `project` | **Por config** — already correct: no override, raw `@ACCT_DIMENSION_DISPLAY@ & @Trxtype@!''` passes through as-is |
+| `costCenter` | **Por config** — same as `project`, already correct |
+
+`project`/`costCenter` retain the `@Trxtype@!''` condition ANDed with the dimension macro — this
+is consistent with "Por config" (still config-gated) and preserves an existing, unrelated
+UX-sequencing rule (don't show the field before a transaction type is picked).
+
+**Correction:** `transaction` is not the header-equivalent entity here — the generated
+`AccountPage.jsx` wires `DetailView` with `entity="account"` and `detailEntity="transaction"`,
+i.e. `transaction` is the **lines/detail** entity relative to `account`. That means the
+ETP-4529 follow-up fix that adds a lines-scoped `useDisplayLogic(detailEntity, ...)` call (see
+`sales-invoice.md`) is exactly what covers `transaction`, not the header-scoped one. This window
+has no `window.linesLayout` override (defaults to classic), so `LinesForm.jsx`'s sidebar should
+mount normally and the fix should be fully effective — unlike the inlineEditable windows. This
+window also uses `window.layoutType: "custom"`, so verify against a live/dev environment that
+the generated `AccountPage.jsx`/`DetailView` flow (rather than a custom wrapper bypassing it) is
+actually what renders the transaction detail before relying on the config gating in production.
