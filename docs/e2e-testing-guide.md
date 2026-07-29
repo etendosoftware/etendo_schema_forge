@@ -762,6 +762,18 @@ being unset*, so setting `BASE_URL` would otherwise switch it to real-backend mo
 If you need local core sources, that server also needs `LOCAL_CORE=1` and
 `SCHEMA_FORGE_CORE=<path>` — see `docs/repo-topology.md`.
 
+**`make dev-mock` is the wrong server for the mocked Playwright suite**, despite
+its Makefile help text. `VITE_MOCK=true` is a *different, incompatible* mocking
+mechanism: it repoints `API_BASE_URL` from `/sws/neo` to `/api` and patches
+`window.fetch` in the browser (`App.jsx`). Every `.mocked.spec.js` routes
+`**/sws/neo/**`, so against a `VITE_MOCK` server none of those routes ever match
+and the specs fail — slowly, on timeouts, which reads like flakiness rather than
+a wrong server. Verified: `line-callout-chain.mocked.spec.js` is 4/4 green against
+a plain `vite` server and 0/4 against the same server with `VITE_MOCK=true`.
+
+Use plain `make dev` (or `npx vite`). `VITE_MOCK` is for manual browsing with
+canned data, not for E2E.
+
 **A blank page with a postcss `ENOENT` overlay is a stale Tailwind glob, not a
 test failure.** `tailwind.config.js` scans
 `node_modules/@etendosoftware/app-shell-core/src/**`. Tailwind resolves that glob

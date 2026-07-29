@@ -516,7 +516,7 @@ dev-local-core: ensure-locale ## Start dev server resolving @etendosoftware/app-
 	@echo ">> LOCAL_CORE dev mode: app-shell-core resolves to ../schema_forge_core (published package bypassed)"
 	cd tools/app-shell && LOCAL_CORE=1 npm run dev
 
-dev-mock: ensure-locale ## Start app-shell dev server with mock data — required for E2E tests
+dev-mock: ensure-locale ## Start app-shell dev server with canned in-browser data (manual browsing only — NOT for E2E; see docs/e2e-testing-guide.md)
 	cd tools/app-shell && npm run dev:mock
 
 build: ## Build app-shell for production
