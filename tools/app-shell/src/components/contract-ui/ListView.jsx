@@ -194,6 +194,12 @@ export function ListView({
   hideEyeCount = false,
   headerContent = null,
   api = null,
+  // ETP-4520 — the runtime per-tier window override (`useWindowAccess`'s 'read-only'
+  // tier forces `{ readOnly: true }` here — see buildWindowAccessWiring/effectiveWindow
+  // in generate-frontend.js and the equivalent hand-wired custom windows). Distinct from
+  // `api.window.readOnly` below, which is the static decisions.json-authored flag for a
+  // window that's ALWAYS view-only regardless of role. Either one forces read-only.
+  window: windowProp = null,
   bulkActions = null,
   isRowSelectable = null,
   listViewOptions = {},
@@ -479,10 +485,11 @@ export function ListView({
   const sendDocumentEnabled = !!effectiveSendDocument && effectiveSendDocument.enabled !== false;
   const allowEmail = effectiveSendDocument?.allowEmail !== false;
 
-  // View-only window (decisions.json → window.readOnly): suppress the write quick
+  // View-only window (decisions.json → window.readOnly, OR the ETP-4520 runtime
+  // 'read-only' access tier via the `window` prop): suppress the write quick
   // actions and don't wire their default handlers. Row click still opens the
   // (read-only) detail, so viewing is preserved. Complements DetailView's own gate.
-  const windowReadOnly = api?.window?.readOnly === true;
+  const windowReadOnly = api?.window?.readOnly === true || windowProp?.readOnly === true;
 
   const effectiveRowQuickActions = useMemo(() => {
     if (!quickActionsEnabled) return rowQuickActions;
@@ -822,7 +829,7 @@ export function ListView({
                   </Button>
                 )}
                 {/* Split "New" button */}
-                {!hideCreate && (
+                {!hideCreate && !windowReadOnly && (
                   <div className="inline-flex items-stretch rounded-lg overflow-hidden shadow-sm ml-3">
                     <Button
                       className="rounded-none rounded-l-lg gap-1.5 px-4 hover:bg-[hsl(var(--accent-highlight))] hover:text-[hsl(var(--accent-highlight-foreground))] transition-colors"

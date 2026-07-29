@@ -1,5 +1,6 @@
-import { useEffect } from 'react';
+import { useMemo, useEffect } from 'react';
 import { ListView, DetailView } from '@/components/contract-ui';
+import { useWindowAccess, WindowAccessGuard } from '@/auth/AuthContext.jsx';
 import WarehouseTable from './WarehouseTable';
 import WarehouseForm from './WarehouseForm';
 import WarehouseTransactionsTable from '@/windows/custom/warehouse/WarehouseTransactionsTable';
@@ -228,6 +229,13 @@ export const api = {
 
 // @sf-generated-start component:WarehousePage
 export default function WarehousePage({ windowName, recordId, ...props }) {
+  const windowAccessTier = useWindowAccess('139');
+  const effectiveWindow = useMemo(() => (
+    windowAccessTier === 'read-only' ? { ...(props.window || {}), readOnly: true } : props.window
+  ), [windowAccessTier, props.window]);
+  if (windowAccessTier === 'none') {
+    return <WindowAccessGuard windowId="139" />;
+  }
   if (recordId) {
     return (
       <>
@@ -250,7 +258,7 @@ export default function WarehousePage({ windowName, recordId, ...props }) {
         hidePrint
         customTabs={[{ key: 'attachments', labelKey: 'attachments', Component: AttachmentsTab, placement: 'tab', props: { tableName: "M_Warehouse", config: {} } }]}
         requiredHeaderFields={requiredHeaderFields}
-        {...props}
+        {...props} window={effectiveWindow}
       />
       </>
     );
@@ -269,7 +277,7 @@ export default function WarehousePage({ windowName, recordId, ...props }) {
       hidePrint
       hideLink
       rowQuickActions={{}}
-      {...props}
+      {...props} window={effectiveWindow}
     />
   );
 }

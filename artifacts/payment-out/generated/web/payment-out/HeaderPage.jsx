@@ -1,5 +1,6 @@
-import { useEffect } from 'react';
+import { useMemo, useEffect } from 'react';
 import { ListView, DetailView } from '@/components/contract-ui';
+import { useWindowAccess, WindowAccessGuard } from '@/auth/AuthContext.jsx';
 import HeaderTable from '../../../custom/PaymentHeaderTable';
 import HeaderForm from './HeaderForm';
 import PaymentOutBottomPanel from '../../../custom/PaymentOutBottomPanel';
@@ -415,6 +416,13 @@ export const api = {
 
 // @sf-generated-start component:HeaderPage
 export default function HeaderPage({ windowName, recordId, ...props }) {
+  const windowAccessTier = useWindowAccess('6F8F913FA60F4CBD93DC1D3AA696E76E');
+  const effectiveWindow = useMemo(() => (
+    windowAccessTier === 'read-only' ? { ...(props.window || {}), readOnly: true } : props.window
+  ), [windowAccessTier, props.window]);
+  if (windowAccessTier === 'none') {
+    return <WindowAccessGuard windowId="6F8F913FA60F4CBD93DC1D3AA696E76E" />;
+  }
   if (recordId) {
     return (
       <>
@@ -446,7 +454,7 @@ export default function HeaderPage({ windowName, recordId, ...props }) {
         statusEnumLabels={{"RPAP":"statusDraft","RPR":"pagoDepositado","RDNC":"pagoDepositado","RPPC":"pagoDepositado","PPM":"pagoDepositado","PWNC":"pagoDepositado"}}
         statusFieldLabel="statusColumnLabel"
         sendDocument
-        {...props}
+        {...props} window={effectiveWindow}
       />
       </>
     );
@@ -465,7 +473,7 @@ export default function HeaderPage({ windowName, recordId, ...props }) {
       hideCreate
       rowQuickActions={{}}
       sendDocument
-      {...props}
+      {...props} window={effectiveWindow}
     />
   );
 }
