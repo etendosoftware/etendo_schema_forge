@@ -462,18 +462,22 @@ Para cada tarea del plan (Sección 10):
 
 ### 11.4 Cobertura: qué ya está y qué falta crear
 
-| Tarea(s) | ¿Golden master existente? | Acción de test |
-|---|---|---|
-| T04–T05 (L4 drawer) | ✅ `internal-consumption-line-entry` | Reusar; correr antes/después |
-| T06–T09 (L2 contact) | ✅ `contacts-bank-account-add-row` | Reusar; añadir aserción de campos excluidos |
-| T10–T13 (L1 sif icon) | ⚠️ parcial (`attachments`) | **Crear** spec mocked para tab SIF (icono visible) |
-| T14–T17 (L3 product) | ✅ `order-to-invoice-discount`, `product-pricing` | Reusar (cubren la cadena de callouts) |
-| T18 (negocio→lib) | ✅ Vitest de helpers | Reusar/ampliar Vitest |
-| T19–T20 (red→hooks) | ✅ `inline-lines-behavior` + Vitest | Reusar; ampliar Vitest del hook |
-| T22–T28 (sub-comp. hoja) | ✅ Vitest de `DetailView` | Reusar (refactor puro) |
-| T29 (`LinesSection`) | ✅ `inline-lines-*` | Reusar E2E + Vitest del nuevo componente |
-| T30 (`SecondaryTabsSection`) | ⚠️ parcial | **Crear/ampliar** E2E de tabs secundarios (sales-order + contact) |
-| T32–T34 (S7 slots) | ❌ | **Crear** suite de paridad por ventana antes de migrar |
+> ⚠️ **Reauditada el 2026-07-29 (ETP-4708) — la tabla original sobrevaloraba la cobertura.** Los grados `✅` de la versión anterior se asignaron **por nombre de spec**, sin abrir los ficheros. Al verificarlos uno a uno, **3 de 10 filas eran falsas** y 2 más optimistas: el spec acreditado existe, pero ejercita **otra** ruta de código. Esto importa porque el protocolo R1 (§11.3) exige un golden master que pase antes y después; si el spec acreditado no toca la ruta que se cambia, el candado no está puesto aunque el spec esté verde. La tabla de abajo sustituye a la anterior y cada fila lleva **qué ejercita realmente** el spec, verificado abriéndolo.
+
+| Tarea(s) | Grado anterior | Qué ejercita realmente el spec acreditado | Grado real | Acción de test |
+|---|---|---|---|---|
+| T04–T05 (L4 drawer) | ✅ | `internal-consumption-line-entry` verifica el drawer IC vía `lookupDrawer` + `onSelectMappings` — es exactamente L4 | ✅ **correcto** | Reusar. (La tarea es moot: L4 ya se pagó en ETP-4525.) |
+| T06–T09 (L2 contact) | ✅ | `contacts-bank-account-add-row` conduce el tab **Cuenta Bancaria**, no el tab **Persona**. `contact` sólo aparece como ruta mockeada. **Ningún** spec del repo abre el sidebar de detalle de Persona ni asevera campos excluidos | ❌ **falso** | El candado real fue `DetailView.lineCalloutFlow`/suite vitest (2.510 tests). **Crear** spec mocked del tab Persona si se quiere capa E |
+| T10–T13 (L1 sif icon) | ⚠️ parcial | `attachments.mocked` cubre el tab en 3 ventanas pero tiene **0 aserciones de icono** — y el icono es justamente L1. El único spec SIF (`sif-buttons-fiscal-config.spec.js`) **no es mocked**: requiere backend | ❌ **para el icono** | **Crear** spec mocked que asevere el icono del tab |
+| T14–T17 (L3 product) | ✅ | `product-pricing` cubre `ProductPriceBar` (alta de tarifas/price list) en la ventana *product*; `order-to-invoice-discount` cubre un fix de **backend** (`InvoiceFromOrderSupport`) sobre totales order→invoice. **Ninguno toca la cadena de callouts de línea** | ❌ **falso** | Red real: `DetailView.lineCalloutFlow.vitest.jsx` (9 tests, cubre los 4 sitios). **Crear** el E2E de la cadena de callouts antes de tocar T16 |
+| T18 (negocio→lib) | ✅ | `deriveTaxRateFromGross` aparece **sólo** en `DetailView.jsx`: ningún test lo referencia. `calculateNetUnitPrice` sí tiene cobertura conductual vía `lineCalloutFlow`. La capa E acreditada (`product-pricing`) es la misma mala atribución que T14–T17 | ❌ **falso** para `deriveTaxRateFromGross` | **Crear** unit tests del helper al extraerlo a `lib/` |
+| T19–T20 (red→hooks) | ✅ | `inline-lines-behavior` cubre de verdad autosave PATCH, doc read-only, teclado, barra de selección, totales y `flushPendingEdits` → sirve para T19. Para T20, `contacts-bank-account-add-row` tiene **0** ocurrencias de delete: no cubre borrado ni rollback | ✅ T19 / ⚠️ T20 | Reusar para T19; **ampliar** para delete+rollback de líneas secundarias |
+| T22–T28 (sub-comp. hoja) | ✅ | 33 ficheros vitest de `DetailView`; la suite contract-ui completa da 112 ficheros / 2.510 tests en verde bajo `LOCAL_CORE=1` | ✅ **correcto** | Reusar (refactor puro) |
+| T29 (`LinesSection`) | ✅ | `inline-lines-behavior` + `inline-lines-min-value` existen y el primero es profundo | ✅ **correcto** | Reusar E2E + Vitest del nuevo componente |
+| T30 (`SecondaryTabsSection`) | ⚠️ parcial | Sólo hay cobertura del tab Cuenta Bancaria; no se encontró spec de tabs secundarios de sales-order | ⚠️ **correcto** (si acaso optimista) | **Crear/ampliar** E2E de tabs secundarios |
+| T32–T34 (S7 slots) | ❌ | Nada acreditado | ✅ **correcto** | **Crear** suite de paridad por ventana antes de migrar |
+
+**Regla que se deriva de esta auditoría:** antes de apoyarse en una fila de esta tabla, **abrir el spec y confirmar que ejercita la ruta que se va a cambiar**. Un spec verde cuyo nombre suena relacionado no es un golden master; los tres falsos positivos de arriba se llamaban todos de forma plausible. Verificar cuesta minutos; descubrirlo después de un refactor de un componente que renderizan 66 ventanas, no.
 
 ### 11.5 Reglas del proyecto (obligatorias al escribir tests)
 
