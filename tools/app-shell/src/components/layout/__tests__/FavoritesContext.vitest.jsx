@@ -1,10 +1,20 @@
+/**
+ * ETP-4708 — FavoritesContext now lives in `@etendosoftware/app-shell-core`;
+ * `../FavoritesContext.jsx` is the functional shim, so this file exercises the
+ * package boundary (shim + exports map + version pin) rather than local source.
+ * The auth mocks target the package subpaths because vitest matches `vi.mock`
+ * by RESOLVED module id, and those subpaths are the same files the core
+ * provider imports as `../../auth/*`. The old `@/auth/*` mocks no longer
+ * intercept anything — the core provider never goes through this repo's alias.
+ */
+
 // --- Mocks (before imports) ---
 
-vi.mock('@/auth/AuthContext.jsx', () => ({
+vi.mock('@etendosoftware/app-shell-core/auth/AuthContext.jsx', () => ({
   useAuth: () => ({ username: 'testuser', token: 'test-token' }),
 }));
 
-vi.mock('@/auth/api.js', () => ({
+vi.mock('@etendosoftware/app-shell-core/auth/api.js', () => ({
   buildHeaders: (token) => ({ Authorization: `Bearer ${token}` }),
   detectBaseUrl: () => 'http://localhost',
 }));
