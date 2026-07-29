@@ -368,6 +368,15 @@ single guarded `UPDATE`, scoped to `:client_id`, backfilling `notinvoicedreceipt
 Verified live in a rolled-back transaction on GOClient (`BEFORE: NULL` → `AFTER:
 6E9DA718417A48A290FE376448A12BF6`; re-check matches 0 rows).
 
+**Related hygiene fix (different repo, same stale row):** the static
+`referencedata/sampledata/GOClient/C_BP_GROUP_ACCT.xml` dump in `com.etendoerp.go` carried this exact
+row (`C_BP_GROUP_ACCT_ID 69081038A3AC421AB8DB93A096D58D57`) with `NOTINVOICEDRECEIPTS_ACCT` missing
+entirely — a byte-for-byte mirror of the live NULL above. Fixed for hygiene only in that repo's
+`feature/ETP-4706` (element added, value `6E9DA718417A48A290FE376448A12BF6`); the table is not in
+`OnboardingDatasetDefinition.INCLUDED_TABLES`, so this has no runtime/onboarding effect — it just
+prevents the stale value from resurfacing if the file is ever regenerated or the table is later
+added to the included set. If you independently find this XML stale, it's already handled.
+
 ---
 
 ### A5 — `C_Element` tree missing its root `AD_TreeNode` (blocks new top-level accounts, 2026-07-08)
