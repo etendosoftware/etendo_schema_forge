@@ -19631,6 +19631,8 @@
     "backendError.countryIban": "Country needed in an IBAN account.",
     "backendError.ibanInvalid": "IBAN code entered is not correct. Please review the IBAN code and the country defined for the bank",
     "backendError.swiftRequired": "Using the SWIFT Code for generating the Displayed Account requires to introduce a SWIFT Code and the Generic Account No.",
+    "backendError.invalidAccountBpAndGroup": "Account could not be found. (Contact: {bp}, Business Partner Category: {group})",
+    "backendError.invalidAccountBpOnly": "Account could not be found. (Contact: {bp})",
     "backendError.matchRuleNameRequired": "Name is required",
     "backendError.matchRuleNameTooLong": "Name is too long",
     "backendError.matchRuleTextConditionInvalid": "The condition must be Contains, Starts with or Regex",

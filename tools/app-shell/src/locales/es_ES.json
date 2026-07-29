@@ -19881,6 +19881,8 @@
     "backendError.countryIban": "Se necesita el País para una cuenta IBAN.",
     "backendError.ibanInvalid": "El código IBAN introducido no es correcto. Por favor revise el código IBAN y el país definido para el banco",
     "backendError.swiftRequired": "Para generar la Cuenta Mostrada con Código SWIFT es necesario introducir un Código SWIFT y el Número de Cuenta Genérica",
+    "backendError.invalidAccountBpAndGroup": "No se pudo encontrar la cuenta. (Contacto: {bp}, Grupos de terceros: {group})",
+    "backendError.invalidAccountBpOnly": "No se pudo encontrar la cuenta. (Contacto: {bp})",
     "backendError.matchRuleNameRequired": "El nombre es obligatorio",
     "backendError.matchRuleNameTooLong": "El nombre es demasiado largo",
     "backendError.matchRuleTextConditionInvalid": "La condición debe ser Contiene, Empieza con o Expresión regular",
