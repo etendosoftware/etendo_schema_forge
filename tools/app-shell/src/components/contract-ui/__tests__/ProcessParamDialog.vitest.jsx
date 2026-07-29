@@ -5,15 +5,23 @@
  * It pre-populates the first option for each select-type param on open,
  * disables Confirm until all required params have a value, and passes
  * the collected values to onConfirm.
+ *
+ * ETP-4708 — the dialog now lives in `@etendosoftware/app-shell-core`;
+ * `../ProcessParamDialog.jsx` is the functional shim, so this file exercises
+ * the package boundary (shim + exports map + version pin) rather than local
+ * source. The mocks target the package subpaths instead of this repo's `@/`
+ * aliases: vitest matches `vi.mock` by RESOLVED module id, and those subpaths
+ * are the same files the core component imports as `../ui/*.jsx` and
+ * `../../i18n/index.js`. The old `@/`-path mocks no longer intercept anything.
  */
 
 // --- MOCKS BEFORE IMPORTS ---
 
-vi.mock('@/i18n', () => ({
+vi.mock('@etendosoftware/app-shell-core/i18n', () => ({
   useUI: () => (key) => key,
 }));
 
-vi.mock('@/components/ui/dialog.jsx', () => ({
+vi.mock('@etendosoftware/app-shell-core/components/ui/dialog.jsx', () => ({
   Dialog: ({ children, open }) =>
     open ? <div data-testid="dialog">{children}</div> : null,
   DialogContent: ({ children }) => <div>{children}</div>,
@@ -24,7 +32,7 @@ vi.mock('@/components/ui/dialog.jsx', () => ({
   DialogFooter: ({ children }) => <div>{children}</div>,
 }));
 
-vi.mock('@/components/ui/button', () => ({
+vi.mock('@etendosoftware/app-shell-core/components/ui/button.jsx', () => ({
   Button: ({ children, onClick, disabled, ...props }) => (
     <button onClick={onClick} disabled={disabled} {...props}>
       {children}
@@ -32,13 +40,13 @@ vi.mock('@/components/ui/button', () => ({
   ),
 }));
 
-vi.mock('@/components/ui/label', () => ({
+vi.mock('@etendosoftware/app-shell-core/components/ui/label.jsx', () => ({
   Label: ({ children, ...props }) => <label {...props}>{children}</label>,
 }));
 
 // Radix Select cannot run in JSDOM — replace with a native <select> that
 // honours value/onValueChange and renders options via SelectItem.
-vi.mock('@/components/ui/select', () => ({
+vi.mock('@etendosoftware/app-shell-core/components/ui/select.jsx', () => ({
   Select: ({ children, value, onValueChange }) => (
     <div>
       <select
