@@ -512,6 +512,79 @@ export function ListView({
   const tMenu = useMenuLabel();
   const t = useLabel(labelOverrides);
   const ui = useUI();
+  // ETP-4669: the import flow (ImportDialog + every child) previously rendered its hardcoded
+  // English DEFAULT_LABELS regardless of locale, because no `labels` was ever passed. Build
+  // the nested `labels` object ImportDialog forwards to each child (shape documented in
+  // app-shell-core's ImportDialog.jsx) and pass `translate={ui}` so the send pipeline
+  // localizes backend errors too. Templated strings (mappedSummary/{mapped}/{total},
+  // tooltips, bulkApply/{count}/{raw}/{value}) keep their {placeholders} — the child fills
+  // them at render time; the (n) => string labels interpolate here. `save`/`cancel`/`retry`/
+  // `close` reuse existing generic keys per the i18n guide's "reuse before adding" rule.
+  const importLabels = useMemo(() => ({
+    title: ui('importDialogTitle'),
+    revalidating: ui('importRevalidating'),
+    downloadTemplate: ui('importDownloadTemplate'),
+    importButton: (n) => ui('importButtonCount', { n }),
+    dropzone: {
+      dropHere: ui('importDropHere'),
+      dropHint: ui('importDropHint'),
+    },
+    progress: {
+      title: ui('importProgressTitle'),
+      subtitle: ui('importProgressSubtitle'),
+    },
+    mapping: {
+      notImported: ui('importNotImported'),
+      mappedSummary: ui('importMappedSummary'),
+      editMatch: ui('importEditMatch'),
+      editTitle: ui('importEditColumnTitle'),
+      save: ui('save'),
+      cancel: ui('cancel'),
+    },
+    confirm: {
+      title: ui('importConfirmTitle'),
+      willImport: (n) => ui('importWillImport', { n }),
+      willSkip: (n) => ui('importWillSkip', { n }),
+      cancel: ui('cancel'),
+      confirm: ui('importConfirmButton'),
+    },
+    fileError: {
+      title: ui('importFileErrorTitle'),
+      cancel: ui('cancel'),
+      retry: ui('retry'),
+    },
+    reviewQueue: {
+      filterAll: ui('importFilterAll'),
+      filterOk: ui('importFilterOk'),
+      filterError: ui('importFilterError'),
+      skip: ui('importSkip'),
+      skipped: ui('importSkipped'),
+      unskip: ui('importUnskip'),
+      downloadErrors: ui('importDownloadErrors'),
+      status: ui('importStatus'),
+      statusOk: ui('importStatusOk'),
+      statusError: ui('importStatusError'),
+      fieldErrorsTooltip: ui('importFieldErrorsTooltip'),
+      bulkApplyTitle: ui('importBulkApplyTitle'),
+      bulkApplyDescription: ui('importBulkApplyDescription'),
+      bulkApplyOnlyThis: ui('importBulkApplyOnlyThis'),
+      bulkApplyAll: ui('importBulkApplyAll'),
+      retry: ui('retry'),
+    },
+    systemError: {
+      title: ui('importSystemErrorTitle'),
+      subtitle: ui('importSystemErrorSubtitle'),
+      copy: ui('importSystemErrorCopy'),
+      copied: ui('importSystemErrorCopied'),
+      copyFailed: ui('importSystemErrorCopyFailed'),
+      close: ui('close'),
+      showReport: ui('importSystemErrorShowReport'),
+      hideReport: ui('importSystemErrorHideReport'),
+      rowData: ui('importSystemErrorRowData'),
+      requestSent: ui('importSystemErrorRequestSent'),
+      serverResponse: ui('importSystemErrorServerResponse'),
+    },
+  }), [ui]);
   const label = tMenu(entityLabel) || entityLabel || entity;
   const { toggleFavorite, isFavorite } = useFavorites();
   const favKey = windowName || entity || '';
@@ -998,6 +1071,8 @@ export function ListView({
             token={token}
             postBatch={runBatch}
             simSearchFn={simSearch}
+            labels={importLabels}
+            translate={ui}
             onImported={({ failedCount }) => {
               // Refresh unconditionally — some rows may have committed even when others
               // failed. Only auto-close when there is nothing left to review: closing
