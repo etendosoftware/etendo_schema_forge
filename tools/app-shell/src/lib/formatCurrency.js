@@ -9,6 +9,19 @@ const DEFAULT_LOCALE = 'es-ES';
  * `templates/reports/helpers/report-html-helpers.js`) — both sides read from
  * one config instead of hardcoding separators independently (ETP-4314).
  */
+// Plain loop instead of a regex — avoids the backtracking-prone
+// `/\B(?=(\d{3})+(?!\d))/g` grouping pattern entirely (SonarQube javascript:S5852).
+function groupThousands(digits, separator) {
+  let result = '';
+  for (let i = 0; i < digits.length; i += 1) {
+    if (i > 0 && (digits.length - i) % 3 === 0) {
+      result += separator;
+    }
+    result += digits[i];
+  }
+  return result;
+}
+
 function groupWithSeparators(num, minFrac, maxFrac, thousandsSeparator, decimalSeparator) {
   // `num < 0` is false for -0 (it's numerically equal to 0) — Intl.NumberFormat
   // renders -0 with a minus sign regardless, so check for it explicitly too.
@@ -16,7 +29,7 @@ function groupWithSeparators(num, minFrac, maxFrac, thousandsSeparator, decimalS
   const abs = Math.abs(num);
   const fixed = abs.toFixed(maxFrac);
   const [intRaw, decRaw = ''] = fixed.split('.');
-  const intPart = intRaw.replace(/\B(?=(\d{3})+(?!\d))/g, thousandsSeparator);
+  const intPart = groupThousands(intRaw, thousandsSeparator);
   let decPart = decRaw;
   while (decPart.length > minFrac && decPart.endsWith('0')) {
     decPart = decPart.slice(0, -1);
