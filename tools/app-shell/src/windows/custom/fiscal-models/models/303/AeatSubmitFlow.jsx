@@ -4,7 +4,7 @@ import { useUI } from '@/i18n';
 import { useApiFetch } from '@/auth/useApiFetch.js';
 import { neoBase } from '@/components/related-documents/helpers.js';
 import { Loader2, TriangleAlert, OctagonAlert, CircleCheck, Download, Landmark } from 'lucide-react';
-import { formatAmount, formatPeriod, triggerBase64Download, applyIdentParams, IBAN_REQUIRED_TIPOS } from '../../fiscalModelsUtils.js';
+import { formatAmount, formatPeriod, triggerBase64Download, applyIdentParams, IBAN_REQUIRED_TIPOS, DECLARATION_TYPE_INGRESO } from '../../fiscalModelsUtils.js';
 
 // ── Pure helpers (exported for unit testing — no DOM/React involved) ──────────
 
@@ -287,17 +287,19 @@ export default function AeatSubmitFlow({ decl, orgIdent, identChecks, summary, t
                     style={INPUT_ST}
                     data-testid="AeatSubmitFlow__presenterName" />
                 </Field>
-                <Field
-                  label={t('fm.aeat.nrc.label') ?? 'NRC (optional)'}
-                  data-testid="Field__fc2aac">
-                  <input
-                    type="text"
-                    value={nrc}
-                    onChange={e => setNrc(e.target.value)}
-                    placeholder={t('fm.aeat.nrc.placeholder') ?? 'Complete Reference Number'}
-                    style={{ ...INPUT_ST, fontFamily: 'monospace' }}
-                    data-testid="AeatSubmitFlow__nrc" />
-                </Field>
+                {localData.declarationType === DECLARATION_TYPE_INGRESO && (
+                  <Field
+                    label={t('fm.aeat.nrc.label') ?? 'NRC (optional)'}
+                    data-testid="Field__fc2aac">
+                    <input
+                      type="text"
+                      value={nrc}
+                      onChange={e => setNrc(e.target.value)}
+                      placeholder={t('fm.aeat.nrc.placeholder') ?? 'Complete Reference Number'}
+                      style={{ ...INPUT_ST, fontFamily: 'monospace' }}
+                      data-testid="AeatSubmitFlow__nrc" />
+                  </Field>
+                )}
               </div>
 
               <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 14, color: '#121217', cursor: 'pointer', marginBottom: testMode ? 12 : 0 }}>

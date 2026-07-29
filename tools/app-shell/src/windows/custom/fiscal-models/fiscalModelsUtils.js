@@ -57,6 +57,17 @@ const IDENT_PARAM_MAP = [
 // same set before hitting the network.
 export const IBAN_REQUIRED_TIPOS = ['U', 'D', 'X'];
 
+// Declaration type (tipo_declaracion) for which AEAT's NRC (Número de Referencia Completo)
+// field actually applies: Ingreso (I) only, per AEAT's own bundled Modelo 303 spec. The backend
+// already discards any NRC value for every other tipo before it reaches AEAT
+// (`Fiscal303BoxesHandler#resolveNrcForSubmission`, mirroring Classic's
+// `AEAT303PresentationServlet`) — this constant mirrors the Java side's
+// `DECLARATION_TYPE_INGRESO` 1:1 so both layers agree on the same literal. UI-only visibility
+// gate: NRC is NOT mandatory even for tipo I (no AEAT "required" rule found — a real AEAT flow,
+// "reconocimiento de deuda", lets you submit an Ingreso declaration without one), so this must
+// never be paired with a required/blocking validation.
+export const DECLARATION_TYPE_INGRESO = 'I';
+
 // Maps editable box numbers (from manualOverrides / liveBoxes) to AEAT HTTP param names.
 // Only boxes that the AEAT module reads from inputParams (not computed from DB) are listed.
 const BOX_PARAM_MAP = {

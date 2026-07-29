@@ -184,6 +184,47 @@ describe('AeatSubmitFlow — confirm screen', () => {
   });
 });
 
+describe('AeatSubmitFlow — NRC visibility (ETP-4456, NRC only applies to tipo I / Ingreso)', () => {
+  beforeEach(() => { vi.clearAllMocks(); });
+
+  it('renders the NRC input for tipo I (Ingreso), the default fixture', () => {
+    renderFlow();
+    expect(screen.getByTestId('AeatSubmitFlow__nrc')).toBeInTheDocument();
+  });
+
+  it('does not render the NRC input for tipo U (Domiciliación)', () => {
+    renderFlow({ identChecks: { tipo_declaracion: 'U', bank_iban: 'ES7620770024003102575766' } });
+    expect(screen.queryByTestId('AeatSubmitFlow__nrc')).not.toBeInTheDocument();
+  });
+
+  it('does not render the NRC input for tipo D (Devolución)', () => {
+    renderFlow({ identChecks: { tipo_declaracion: 'D', bank_iban: 'ES7620770024003102575766' } });
+    expect(screen.queryByTestId('AeatSubmitFlow__nrc')).not.toBeInTheDocument();
+  });
+
+  it('does not render the NRC input for tipo N (Sin actividad / resultado cero)', () => {
+    renderFlow({ identChecks: { tipo_declaracion: 'N' } });
+    expect(screen.queryByTestId('AeatSubmitFlow__nrc')).not.toBeInTheDocument();
+  });
+
+  it('still submits successfully for a non-I tipo where NRC is hidden, sending nrc: "" in the body', async () => {
+    stableApiFetch.mockReturnValueOnce(jsonResponse({ status: 'SUCCESS' }));
+    renderFlow({ identChecks: { tipo_declaracion: 'N' } });
+
+    // NRC input is not present, so it can't be typed into — the local nrc state stays at its
+    // default '' — but submission must still succeed and produce a well-formed body.
+    expect(screen.queryByTestId('AeatSubmitFlow__nrc')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByText('fm.aeat.action.submit'));
+
+    await waitFor(() => expect(stableApiFetch).toHaveBeenCalledTimes(1));
+    const [, options] = stableApiFetch.mock.calls[0];
+    expect(JSON.parse(options.body)).toEqual({
+      testMode: false, idi: 'ES', nrc: '',
+      presenterNif: 'B20868352', presenterName: 'F&B España, S.A',
+    });
+  });
+});
+
 describe('AeatSubmitFlow — submit request shape', () => {
   beforeEach(() => { vi.clearAllMocks(); });
 
