@@ -7,6 +7,11 @@ name: Ratchet Guards
 # - window-leak-budget: window/entity-specific literals leaking into the GENERIC
 #   contract-ui components (DetailView.jsx, DataTable.jsx). Files live in THIS repo,
 #   so this is the real enforcement point for the contract-ui churn problem.
+# - file-lines-budget: the SIZE of those same two files (T01 of the report). Requires
+#   the core preview pin published from this branch: `sf-file-lines-budget` is a NEW bin
+#   in @etendosoftware/schema-forge-cli, so `npx` only resolves it once package.json
+#   pins a core version that ships it. Until then this job fails to resolve the bin —
+#   bump the pin in the same PR that merges this workflow.
 #
 # The method-budget ratchet (NeoDefaultsService.java) is NOT enforced here: that file
 # lives in com.etendoerp.go and only changes via that repo's PRs, so it must be wired
@@ -39,3 +44,24 @@ jobs:
 
       - name: Window-specific leak ratchet (fail only if it grew)
         run: npx sf-window-leak-budget --list
+
+  file-lines-budget:
+    name: file-lines-budget (contract-ui)
+    runs-on: ubuntu-latest
+    env:
+      SF_ROOT: ${{ github.workspace }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          registry-url: https://npm.pkg.github.com
+
+      - run: npm install
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: File line-count ratchet (fail only if a tracked file grew)
+        run: npx sf-file-lines-budget --list
