@@ -451,7 +451,47 @@ Recomendación: hacer pasos 1–3 ya (baratos, inocuos, y el contexto del paso 3
 | [ ] | T16 | **L3** — Reemplazar los 4 `field === 'product'` (L2172/2177/2204/3841) por la metadata | M | 🟠 | app-shell | **V:** helpers de callout usan el campo declarado (no literal) · **E:** `product-pricing` | T15 |
 | [ ] | T17 | **L3** — Regenerar order+invoice y validar cadena de callouts (R1, máximo riesgo) | S | 🔴 | test | **V:** n/a · **E:** `order-to-invoice-discount` + `product-pricing` tras regen | T16 |
 
-### Ola 2 — Sacar red y negocio del componente (interno; no toca generador)
+#### Two corrections to how Ola 1's delivered work should be read
+
+> *(In English per the `CLAUDE.md` language policy; see R4's note on the pending
+> translation. Both verified against the tree at `ef7d71b8a`.)*
+
+**T06–T09 — the `excludeFields` declaration is inert in the live UI.** The declaration
+landed and is correct, but the code path that consumes it is currently unreachable, so
+this row should not be read as a shipped user-visible change.
+
+- `secondaryDetailSidebar()` is the only consumer: `excludeFields={props.st.excludeFields ?? []}` (`DetailView.jsx:636`).
+- It renders only when `selectedSecondaryLine._tabKey === st.key` (`:611`).
+- `selectedSecondaryLine` is set for a tab row from exactly one place — the `openSecondaryLine` prop (`:4582`) — and that prop is only handed out by `resolveSecondaryRowClickHandler`, which returns it **only if `linesLayout !== 'inlineEditable'`** (`:146-149`).
+- `artifacts/contacts/decisions.json` sets `window.linesLayout: "inlineEditable"`, so the Person tab's row click resolves to `undefined` and the sidebar never opens.
+- `contacts` is the **only** window in the repo declaring `excludeFields`.
+
+**R1 holds regardless, and this is not a regression:** the hardcoded branch it replaced
+(`props.st.key === "contact" ? ["active"] : []`) sat at the *same* line inside the *same*
+unreachable function (`e09209223`), so behavior is byte-identical — unreachable before,
+unreachable after. What actually changed is that the generic component no longer names a
+window. That is the real win, and it is worth having on its own.
+
+This also explains §11.4's T06–T09 verdict (no spec opens the Person detail sidebar or
+asserts excluded fields): the missing coverage was not an oversight, the flow is not
+reachable to cover. Whether the sidebar *should* open for an inline-editable tab is a
+product question, and a separate ticket from L2.
+
+**T04 — part of the leak ratchet's 8 → 4 improvement is relocation, not payment.** The
+`cli/window-leak-budget.json` comment credits ETP-4525 with paying off L4 "by moving the
+registry to `components/contract-ui/lookupDrawers.js`". The literal was moved, not
+removed: `lookupDrawers.js:23` still carries `'internal-consumption-product':
+ProductStockSearchDrawer` (plus `'goods-movements-product'`), kept deliberately as legacy
+aliases, and asserted by `lookupDrawers.vitest.jsx`. That file is **not** in the ratchet's
+`paths`, so the leak scores 0 while still being in the codebase.
+
+The intent of T04 is genuinely met — `DataTable.jsx` imports no single-window component and
+both aliases now point at a shared generic drawer, so nothing here needs undoing. But the
+accounting is wrong in a way that matters for the target of 0: the ratchet's `paths` array
+is a hand-authored scope (R4), and §9.3.6 already states the rule this violates — an
+extraction that carries literals must add its destination file to `paths` in the same
+commit. Adding `lookupDrawers.js` to `paths` would restate L4 honestly as *aliased to a
+generic component* rather than *gone*.
 
 | ✅ | # | Tarea atómica | Compl. | Impacto | Pipeline | Step de test (V / E) | Dep. |
 |----|----|----|----|----|----|----|----|
