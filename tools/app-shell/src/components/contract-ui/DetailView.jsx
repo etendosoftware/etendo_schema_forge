@@ -4,71 +4,9 @@ import { useNavigate, useSearchParams, useLocation } from 'react-router-dom';
 import { Button } from '@/components/ui/button.jsx';
 import { Badge } from '@/components/ui/badge.jsx';
 import { AddLineButton } from '@/components/ui/add-line-button.jsx';
-import { X, MoreVertical, Check, Save, List, Printer, Mail, Trash2, Loader2, Shield, Lock, Undo2 } from 'lucide-react';
-import { AttachmentIcon } from '@/components/attachments/AttachmentIcon';
-import { PricingIcon, WarehouseProductsIcon } from '@/components/ui/custom-icons';
+import { X, MoreVertical, Check, Save, Printer, Mail, Trash2, Loader2, Lock, Undo2 } from 'lucide-react';
 import PaymentLifecycleConfirmModal from '@/windows/custom/shared/PaymentLifecycleConfirmModal';
-
-const TAB_ICONS = {
-  'custom:attachments': AttachmentIcon,
-  'custom:sif': Shield,
-  'custom:pricing': PricingIcon,
-  'products': WarehouseProductsIcon,
-};
-
-// The identity attributes live on a wrapper rather than on the icon itself
-// because the non-lucide icons (AttachmentIcon, PricingIcon, WarehouseProductsIcon)
-// accept only `className` and drop any other prop, so a data-* passed through
-// createElement would silently vanish for exactly the tabs worth asserting.
-// `data-icon` names the resolved component: the unmapped case falls back to List
-// without throwing, so only the name distinguishes "no icon configured" from
-// "icon lookup broken".
-function TabStripIcon({ iconKey }) {
-  const Icon = TAB_ICONS[iconKey] ?? List;
-  return (
-    <span
-      className="inline-flex"
-      data-testid={`tab-icon-${iconKey}`}
-      data-icon={Icon.displayName ?? Icon.name ?? 'unknown'}
-    >
-      <Icon className="h-4 w-4" />
-    </span>
-  );
-}
-
-function TabStripButton({
-  iconKey, label, count, isActive, onClick,
-  paddingY = 'py-2.5', showHoverLine = false, indicatorCls, tMenu, testId,
-}) {
-  const defaultCls = 'absolute bottom-0 left-2 right-2 h-0.5 bg-foreground rounded-full';
-  return (
-    <button
-      onClick={onClick}
-      data-testid={testId}
-      data-active={isActive ? 'true' : 'false'}
-      className={[
-        `${showHoverLine ? 'group ' : ''}flex items-center gap-2 px-4 ${paddingY} text-sm font-medium transition-colors relative`,
-        isActive ? 'text-foreground' : 'text-muted-foreground hover:text-foreground',
-      ].join(' ')}
-    >
-      <TabStripIcon iconKey={iconKey} />
-      {tMenu(label)}
-      {count != null && (
-        <span className="inline-flex items-center justify-center h-5 min-w-[1.25rem] px-1 text-xs rounded-full bg-muted text-muted-foreground">
-          {count}
-        </span>
-      )}
-      {showHoverLine ? (
-        <span className={[
-          'absolute bottom-0 left-2 right-2 h-0.5 rounded-full transition-colors',
-          isActive ? 'bg-foreground' : 'bg-transparent group-hover:bg-muted-foreground/30',
-        ].join(' ')} />
-      ) : (
-        isActive && <span className={indicatorCls || defaultCls} />
-      )}
-    </button>
-  );
-}
+import { TabStripButton } from './TabStrip.jsx';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogClose,
 } from '@/components/ui/dialog.jsx';
