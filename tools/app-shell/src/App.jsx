@@ -108,6 +108,35 @@ export async function fetchWindowAccess(session) {
   }
 }
 
+// ETP-4576 — restores the backend-managed session on boot. Passed into
+// AuthProvider (via the `auth` prop bag below) as `restoreSession`, which calls
+// it once on mount: a resolved payload ({account, environment, roleList,
+// csrfToken}) becomes the authenticated session, anything falsy means "no
+// session" and the shell drops to `anonymous`.
+//
+// The security point of the task (SEC-10): the browser never holds a bearer
+// token, so this authenticates purely with the `__Host-` session cookie —
+// `credentials: 'include'` and NO Authorization header. Fails closed (null) on
+// the 401 for "no session", a network error, or an unparsable body, matching
+// fetchWindowAccess's convention above.
+//
+// NOTE: etendo-go-core's onboarding api.js has its own `fetchSession` doing the
+// same call for the (pre-session) onboarding flow. Consolidating both into
+// app-shell-core is a natural follow-up; kept separate here to avoid making the
+// shell depend on the onboarding package for a platform-level auth concern.
+export async function restoreSession() {
+  try {
+    const res = await fetch(`${apiBase}/sws/go/session`, {
+      method: 'GET',
+      credentials: 'include',
+    });
+    if (!res.ok) return null;
+    return await res.json();
+  } catch {
+    return null;
+  }
+}
+
 async function loadAllMockData() {
   const modules = await Promise.all([
     import('@generated/sales-order/custom/mockData.js'),
@@ -271,7 +300,17 @@ export default function App() {
         menuGroups={menuGroups}
         routes={routes}
         layout={AppLayout}
-        auth={{ loginPath: '/login', unauthenticatedFallback: <UnauthenticatedRedirect data-testid="UnauthenticatedRedirect__ecaf3f" />, fetchWindowAccess }}
+        auth={{
+          loginPath: '/login',
+          unauthenticatedFallback: <UnauthenticatedRedirect data-testid="UnauthenticatedRedirect__ecaf3f" />,
+          fetchWindowAccess,
+          restoreSession,
+          // ETP-4576 — with `restoreSession` wired, boot is asynchronous: AuthGate
+          // renders this while `status === 'booting'`. Without it the prop defaults
+          // to null and every page load flashes a blank screen until
+          // GET /sws/go/session answers. Same treatment as `notFoundElement` below.
+          bootingFallback: <div className="p-8 text-muted-foreground">Loading...</div>,
+        }}
         locale={locale}
         setLocale={setLocale}
         dictionaries={dictionaries}
