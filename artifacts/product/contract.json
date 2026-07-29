@@ -1,8 +1,8 @@
 {
-  "version": "0.24.0",
+  "version": "0.25.0",
   "generatedAt": "2026-07-07T21:53:26.027Z",
-  "updatedAt": "2026-07-28T11:50:47.838Z",
-  "checksum": "59b72223ca681e3e",
+  "updatedAt": "2026-07-29T15:55:50.605Z",
+  "checksum": "8af9b3b7c3d0e43e",
   "frontendContract": {
     "window": {
       "id": "140",
@@ -3390,6 +3390,30 @@
             "type": "foreignKey",
             "visibility": "system",
             "required": true
+          },
+          {
+            "name": "eTGOPurchasePrice",
+            "apiKey": "eTGOPurchasePrice",
+            "column": "EM_ETGO_Purchase_Price",
+            "type": "amount",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "eTGOSalePrice",
+            "apiKey": "eTGOSalePrice",
+            "column": "EM_ETGO_Sale_Price",
+            "type": "amount",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "eTGOStock",
+            "apiKey": "eTGOStock",
+            "column": "EM_ETGO_Stock",
+            "type": "decimal",
+            "visibility": "system",
+            "required": false
           }
         ],
         "javaQualifier": "productDefaultsHandler"
@@ -10021,6 +10045,30 @@
         "description": "System field 'enforceAttribute' should exist in backend but not frontend for product"
       },
       {
+        "id": "t-system-field-product-eTGOPurchasePrice",
+        "category": "system-field",
+        "entity": "product",
+        "field": "eTGOPurchasePrice",
+        "runner": "node",
+        "description": "System field 'eTGOPurchasePrice' should exist in backend but not frontend for product"
+      },
+      {
+        "id": "t-system-field-product-eTGOSalePrice",
+        "category": "system-field",
+        "entity": "product",
+        "field": "eTGOSalePrice",
+        "runner": "node",
+        "description": "System field 'eTGOSalePrice' should exist in backend but not frontend for product"
+      },
+      {
+        "id": "t-system-field-product-eTGOStock",
+        "category": "system-field",
+        "entity": "product",
+        "field": "eTGOStock",
+        "runner": "node",
+        "description": "System field 'eTGOStock' should exist in backend but not frontend for product"
+      },
+      {
         "id": "t-system-field-product-expenseType",
         "category": "system-field",
         "entity": "product",
@@ -11082,7 +11130,7 @@
       }
     ],
     "summary": {
-      "total": 658,
+      "total": 661,
       "byCategory": {
         "action-endpoint": 9,
         "crud-flags": 12,
@@ -11096,11 +11144,11 @@
         "rule-declared": 141,
         "searchable-filters": 5,
         "selector-endpoint": 27,
-        "system-field": 251,
+        "system-field": 254,
         "visibility": 12
       },
       "byRunner": {
-        "node": 658,
+        "node": 661,
         "junit": 0
       }
     }
