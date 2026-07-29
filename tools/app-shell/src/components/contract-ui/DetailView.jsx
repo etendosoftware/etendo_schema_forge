@@ -4876,9 +4876,12 @@ export function DetailView({
             </div>
           </div>{/* end content column wrapper */}
           {sidebarContent && !sidebarAboveTabsOnly && (
-            <div className={sidebarClassName}>
+            // empty:hidden collapses this column when the custom sidebar component
+            // renders null (e.g. no stock section for Service-type products, ETP-4606) —
+            // the parent can't know that ahead of render, so detection happens via CSS.
+            (<div className={`${sidebarClassName} empty:hidden`}>
               {resolveSidebarContent(sidebarContent, data)}
-            </div>
+            </div>)
           )}
         </div>
       </div>

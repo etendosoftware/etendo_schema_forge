@@ -23,6 +23,8 @@ const BACKEND_ERROR_MAP = {
   // Price list (PriceListHeaderHandler) validation messages
   'A tariff marked as default cannot be deactivated.': 'backendError.priceListCannotDeactivateDefault',
   'There is already an asset category with this name.': 'backendError.assetGroupNameDuplicate',
+  // Goods Movements line (GoodsMovementLineHandler) validation messages
+  'This product is of type Service and cannot be used in inventory movements.': 'backendError.productNotStockable',
 };
 
 export function translateBackendError(msg, t) {
