@@ -88,6 +88,38 @@ Every existing import keeps resolving to the same function; only the definition
 site moved. Derive that re-export list from the AST — deriving it by grep is
 exactly what produced the 16-vs-76 miss.
 
+## Beware: source-text pins make a file un-extractable
+
+Some suites here read a component **as text** and regex its source:
+
+```js
+const src = readFileSync(join(__dirname, '..', 'DetailView.jsx'), 'utf8');
+assert.match(src, /\{showMoreMenu\s*&&\s*\(/);
+```
+
+Those assertions pin **where code lives**, not what it does. Move the matching
+code to another file and they fail — behaviour identical, test red, R1 violated.
+`DetailView.jsx` alone carries **85 such assertions across 12 files**.
+
+Count them before promising an extraction:
+
+```bash
+grep -l "readFileSync" __tests__/*.js | xargs grep -l "<Component>.jsx" \
+  | xargs grep -cE "assert\.(match|ok)\(|toMatch\(|toContain\("
+```
+
+If the region you want to move is pinned, the extraction is not innocuous by
+R1's letter, and you have three honest options — pick one deliberately, don't
+discover it halfway:
+
+1. **Convert the pins to behavioural assertions first**, as a declared change of
+   its own, then extract. This is the route ETP-4708 took for a currency-conversion
+   pin: a separate commit, mutation-proven, before the refactor touched anything.
+2. **Re-export won't save you.** It preserves *imports*, not *source text*. A pin
+   reads the file; nothing you export changes what the file contains.
+3. **Leave the region and extract elsewhere.** Cheapest when the pinned region
+   isn't the bulk.
+
 ## Beware: moving into a mocked module is test-visible
 
 If any spec does `vi.mock('<destination>')`, moving a function there changes what
