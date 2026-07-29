@@ -131,12 +131,19 @@ Injects custom components into specific structural slots of `DetailView`. Each k
 | `sidePanel` | `sidePanel={X}` | Right-side panel alongside the detail form | `recordId`, `data`, `token`, `apiBaseUrl` |
 | `sidePanelStyle` | `sidePanelStyle={…}` | CSS style for the side panel container | — (style object, not a component) |
 | `headerTable` | replaces `{Entity}Table` import | List table in the master list view | Standard table props |
+| `deleteConfirmModal` | `deleteConfirmModal={X}` | Replaces the generic delete confirmation `Dialog` when deleting the header record | `action="delete"`, `data`, `onConfirm`, `onClose`, plus everything in `deleteConfirmModalProps` |
+| `deleteConfirmModalProps` | `deleteConfirmModalProps={…}` | Extra props forwarded to `deleteConfirmModal` (e.g. `{ "dir": "in" }`) | — (plain object, not a component) |
 
 **Real examples:**
 - `topbarRight`: `goods-shipment` (`GoodsShipmentActions`), `sales-invoice` (`InvoiceTopbarExtra`)
 - `bottomSection`: `payment-in` (`PaymentBottomPanel`), `sales-invoice` (`InvoiceBottomPanel`)
 - `sidePanel`: `payment-in` (`PaymentActivityPanel`)
 - `headerTable`: `sales-invoice` (`InvoiceHeaderTable`)
+- `deleteConfirmModal`: intended for `payment-in` / `payment-out` (`PaymentLifecycleConfirmModal`, from the shared `windows/custom/shared/` directory — this slot resolves shared components too, not just per-window ones)
+
+**Two paired-key rules worth knowing** (both follow the same pattern): `sidePanelStyle` is only emitted when `sidePanel` is declared, and `deleteConfirmModalProps` is only emitted when `deleteConfirmModal` is declared. A payload without its component is silently dropped rather than emitted as a dangling prop, so declaring only the `…Props` half does nothing.
+
+> ⚠️ **`deleteConfirmModal` / `deleteConfirmModalProps` are emitted by the generator but not yet consumed.** `DetailView` still resolves the delete cartel from an internal per-window table; the props take precedence over that table once the component half of ETP-4708 lands. Declaring them today is harmless but has no visible effect.
 
 ---
 
