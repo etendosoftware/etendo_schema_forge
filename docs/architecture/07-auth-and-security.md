@@ -20,27 +20,42 @@ User  -->  OnboardingPage.jsx  -->  POST /sws/go/onboarding  (new environment)
                                   setup catalogs such as BP groups and payment terms
                                               |
                                               v
-                                  OnboardingPage.jsx  -->  GET /sws/go/login?userId=...
+                                  OnboardingPage.jsx  -->  POST /sws/go/session/environment
+                                              |               { userId, roleId?, orgId? }
+                                              v
+                                  Backend rotates the session and returns
+                                  { status, environment, roleList, csrfToken }
+                                  plus a refreshed __Host- session cookie.
+                                  No token is ever returned to JavaScript.
                                               |
                                               v
-                                  NEO returns { token, roleList, ... }
+                                  Full-page redirect into the app. The cookie
+                                  survives the navigation on its own, so nothing
+                                  is handed off through localStorage.
                                               |
                                               v
-                                  OnboardingPage stores token, role, and org in localStorage
-                                  AuthContext restores token from localStorage
-                                  Subsequent API calls include:
-                                    Authorization: Bearer <token>
+                                  AuthProvider restores on mount:
+                                    GET /sws/go/session  (credentials: 'include')
+                                  Unsafe methods carry the CSRF proof:
+                                    X-Go-CSRF: <csrfToken>
                                   401 response  -->  onUnauthorized() clears auth state and throws
                                                       Protected routes redirect to /onboarding on the next render
 ```
 
+> **ETP-4576.** The session is a backend-managed opaque `__Host-` cookie
+> (`Secure; HttpOnly; Path=/; SameSite=Lax`), so no credential is reachable from
+> JavaScript. See ADR-0001 in `com.etendoerp.go` for the full endpoint contract.
+> The legacy `GET /sws/go/login?userId=` + `Authorization: Bearer` path it
+> replaced is gone from the frontend.
+
 **Key files:**
 - `src/auth/api.js` -- `createApiFetch()` with auto-401 handling, `buildHeaders()`
-- `src/auth/AuthContext.jsx` -- React context providing `token`, `username`, `isAuthenticated`, `logout()`
-- `src/auth/useLogout.js` -- `useLogout()` hook: the single logout choke point (clears session-scoped UI state, then calls the core `logout()`). See [Logout Choke Point](#logout-choke-point-uselogout).
-- `src/pages/OnboardingPage.jsx` -- Onboarding and environment login UI
-- `src/pages/onboarding/onboardingApi.js` -- API helpers for platform login, environment login, and onboarding stream
-- `src/pages/onboarding/onboardingSso.js` -- Provider-agnostic SSO frontend adapter; Google Identity Services is the first provider implementation
+- `src/auth/AuthContext.jsx` -- re-export shim over `@etendosoftware/app-shell-core/auth`, whose context provides `csrfToken`, `status` (`booting`/`authenticated`/`anonymous`), `username`, `isAuthenticated`, `logout()`
+- `src/auth/useLogout.js` -- `useLogout()` hook: the single logout choke point (clears session-scoped UI state, then calls the core `logout()`, which revokes server-side). See [Logout Choke Point](#logout-choke-point-uselogout).
+- `src/pages/OnboardingPage.jsx` -- host wiring for the onboarding flow (config + telemetry); the flow itself is `@etendosoftware/etendo-go-core/onboarding`
+- `src/pages/onboarding/onboardingReadiness.js` -- post-onboarding readiness probes against `/sws/neo/*`
+- `@etendosoftware/etendo-go-core/onboarding/api` -- session/login/SSO/environment/onboarding-stream API helpers (moved to the core package in the repo split)
+- `@etendosoftware/etendo-go-core/onboarding` (`sso.js`) -- provider-agnostic SSO frontend adapter; Google Identity Services is the first provider implementation
 - `com.etendoerp.go.onboarding.OnboardingSequenceGeneratorService` -- backend service that runs sequence generation during onboarding with explicit client admin context
 
 ### Base URL Detection
@@ -54,14 +69,23 @@ return import.meta.env.VITE_API_BASE || '';
 
 When deployed under Etendo (e.g., `/etendo_sf/web/app-shell/`), the base URL is extracted as `/etendo_sf`. In standalone dev mode, `VITE_API_BASE` overrides it.
 
-### Token Storage
+### Session Storage
 
 | Storage | What | Lifetime | Risk |
 |---------|------|----------|------|
-| React state (`useState`) | `token`, `username` | Until page refresh or tab close | None (memory only) |
-| `localStorage` | `sf_auth_token`, `sf_auth_user`, `sf_auth_rolelist`, `sf_auth_selected_role`, `sf_auth_selected_org`, `sf_platform_token` | Persistent across sessions | XSS can read it (see Security Considerations) |
+| `__Host-` cookie (`HttpOnly`) | The opaque session id, plus a one-time refresh id | Server-side expiry; revoked on logout | Unreachable from JavaScript — XSS cannot read or replay it |
+| React state (`useState`) | `csrfToken`, `username`, `clientId`, `roleList`, `selectedRole`, `selectedOrg` | Until page refresh or tab close | Memory only. The CSRF token is a same-origin proof, not a credential: it is useless without the cookie |
+| `localStorage` | *nothing session-related* | — | — |
 
-On mount, `AuthContext` reads the Etendo auth token from localStorage to restore the protected session. On logout, it clears both the Etendo session keys and the onboarding platform token (`sf_platform_token`) so the user returns to a fully signed-out state.
+**No session credential or context is persisted client-side.** `AuthProvider` restores
+on mount from `GET /sws/go/session` and derives the role/org selection from that
+response, so there is nothing to hydrate from the browser. Its storage abstraction
+defaults to memory; a host can still inject its own (`createLocalAuthStorage` remains
+exported for migration and tests), but nothing in the app does.
+
+On mount the provider also purges the legacy keys (`sf_auth_*`, `sf_platform_*`) that a
+pre-ETP-4576 browser may still hold. On logout it calls `DELETE /sws/go/session`, so the
+session is invalidated server-side rather than merely forgotten locally.
 
 ### Session-Scoped UI State
 
@@ -126,20 +150,21 @@ After a successful platform login or registration, `routeByEnvironments()` decid
 
 The app-shell keeps SSO provider-specific behavior outside the account flow:
 
-- `loginWithSsoProvider(fetchImpl, baseUrl, provider, payload)` posts to `POST /sws/go/sso/{provider}`.
+- `loginWithSsoProvider(fetchImpl, baseUrl, provider, payload)` posts to `POST /sws/go/session/sso/{provider}`.
 - Provider payloads are allowlisted per implementation. The Google Identity Services callback implementation sends only `credential`; browser code must not send account authority fields such as `email`, `name`, or `subject`.
 - `onboardingSso.js` resolves configured providers and renders provider-specific buttons. Google uses Google Identity Services with FedCM enabled for the button flow.
-- SSO success stores the same `sf_platform_token` used by local login and then routes through the existing environment-selection/onboarding logic.
+- SSO success establishes the same `__Host-` cookie session as local login (the response carries only `{ account, csrfToken }`, never a token) and then routes through the existing environment-selection/onboarding logic.
 
 Google requires a public Web OAuth client id in `VITE_GOOGLE_CLIENT_ID`. This is a client identifier, not a secret. Google client secrets, provider API keys, signing secrets, and backend SSO policy configuration must never be exposed in the frontend bundle.
 
 ### API Call Authentication
 
 `createApiFetch()` wraps `fetch()` with:
-1. Automatic `Authorization: Bearer <token>` header injection
-2. Automatic 401 detection -- calls `onUnauthorized()` callback (typically triggers logout + redirect)
+1. `credentials: 'include'`, so the `__Host-` session cookie travels with every request
+2. The `X-Go-CSRF` header on unsafe methods only (POST/PUT/PATCH/DELETE) — safe methods are CSRF-exempt
+3. Automatic 401 detection -- calls `onUnauthorized()` callback (typically triggers logout + redirect)
 
-React components should access it through `useApiFetch(baseUrl)`, which reads the token from `AuthContext` and wires unauthorized responses to `logout()`. New or migrated custom components should not construct `Authorization` headers locally. Some generated contracts still forward `token` to legacy contract-ui and custom component surfaces for compatibility; remove those props only when the receiving component is migrated to `useApiFetch`.
+React components should access it through `useApiFetch(baseUrl)`, which reads the `csrfToken` from `AuthContext` and wires unauthorized responses to `logout()`. **No component should construct an `Authorization` header**: there is no client-held credential to put in one. Some generated contracts still forward a `token` prop to legacy contract-ui and custom component surfaces for compatibility; it now carries the CSRF token, and the props are removed as each receiving component migrates to `useApiFetch`.
 
 ### Session Defaults Endpoint
 
@@ -255,12 +280,12 @@ React escapes content by default in JSX expressions. The primary risk is:
 **Mitigation**: Audit all components for `dangerouslySetInnerHTML`. Use React's built-in escaping. Apply CSP headers (see below).
 
 **CSRF (Cross-Site Request Forgery)**
-The current auth model uses Bearer tokens in the `Authorization` header (not cookies), which provides inherent CSRF protection -- browsers do not automatically attach custom headers to cross-origin requests.
-
-If the auth model changes to cookie-based sessions:
-- Cookies must use `SameSite=Strict` or `SameSite=Lax`
-- A CSRF token must be included in state-changing requests
-- The backend must validate the CSRF token
+The auth model is cookie-based (ETP-4576), so CSRF is an active threat that is defended
+explicitly rather than incidentally:
+- The session cookie is `SameSite=Lax` — defense in depth, not the only control
+- Every unsafe method carries a session-bound `X-Go-CSRF` header, issued in the session response
+- The backend validates that token **and** the request `Origin` (with a `Referer` fallback), failing closed
+- Same-origin routing only; no credentialed CORS. Any cross-origin deployment needs a separate review
 
 **SQL/HQL Injection**
 RequestHandlers receive filter parameters from the frontend. All query parameters MUST be parameterized:
@@ -286,9 +311,14 @@ If the SPA and API are on different origins, overly permissive CORS headers (`Ac
 No API keys, database credentials, internal URLs, service tokens, Google client secrets, or provider signing secrets should appear in the JavaScript bundle. Acceptable frontend variables are `VITE_API_BASE` (a relative path), `VITE_MOCK` (a boolean flag), and public provider client identifiers such as `VITE_GOOGLE_CLIENT_ID`.
 - **Mitigation**: Audit the build output (`dist/`) for sensitive strings. Vite only exposes variables prefixed with `VITE_`.
 
-**Token in localStorage**
-Storing the JWT in localStorage makes it accessible to any JavaScript running on the page. An XSS vulnerability would expose the token.
-- **Mitigation**: Strict Content Security Policy. Consider migrating to `httpOnly` cookies for token storage (requires backend changes). Short-lived tokens with refresh rotation.
+**Token in localStorage — RESOLVED (SEC-10, ETP-4575 + ETP-4576)**
+The session JWT and the whole auth context used to live in `localStorage`, readable by any
+JavaScript on the origin: one XSS meant full session theft.
+- **Resolution**: the session is now a backend-managed opaque `__Host-` cookie
+  (`Secure; HttpOnly`), so no credential is reachable from JavaScript at all. Nothing
+  session-related is persisted client-side, legacy keys are purged on mount, and logout
+  revokes server-side. CSP remains valuable defense in depth, but it is no longer what
+  stands between an XSS and the session.
 
 **Rate Limiting**
 No built-in protection against brute force login attempts.
