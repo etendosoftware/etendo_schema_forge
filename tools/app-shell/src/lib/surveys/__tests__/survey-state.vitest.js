@@ -1,16 +1,17 @@
+// Behavioral coverage for survey-state lives in schema_forge_core:
+// packages/app-shell-core/src/lib/surveys/__tests__/survey-state.vitest.js.
+// This is a SHIM SMOKE TEST. The functional module is a re-export of the core
+// module, so this file only verifies that the re-export RESOLVES and that the
+// helpers EXECUTE through the real `@/` → package → core import chain. It does
+// not re-test behavior: the core copy was byte-identical to this one, so every
+// assertion it holds is already running there against the same code. What the
+// core copy cannot cover is this resolution path — that is what this file adds.
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import {
   readSurveyState,
-  writeSurveyState,
-  markFirstLogin,
   markOnboardingCompleted,
-  markSurveyShown,
-  markSurveyResponded,
-  markSurveyDismissed,
   incrementSurveyCounter,
 } from '../survey-state.js';
-
-const STORAGE_KEY = 'sf_survey_v1';
 
 function makeStorage() {
   const store = {};
@@ -18,247 +19,33 @@ function makeStorage() {
     getItem: (k) => store[k] ?? null,
     setItem: (k, v) => { store[k] = v; },
     removeItem: (k) => { delete store[k]; },
-    clear: () => { Object.keys(store).forEach(k => delete store[k]); },
+    clear: () => { Object.keys(store).forEach((k) => delete store[k]); },
   };
 }
 
-describe('survey-state', () => {
-  let mockStorage;
-  const NOW = new Date('2026-01-15T10:00:00.000Z').getTime();
-
+describe('survey-state shim', () => {
   beforeEach(() => {
-    mockStorage = makeStorage();
-    vi.stubGlobal('window', { localStorage: mockStorage });
+    vi.stubGlobal('window', { localStorage: makeStorage() });
   });
 
   afterEach(() => {
     vi.unstubAllGlobals();
   });
 
-  describe('readSurveyState', () => {
-    it('returns defaults when storage is empty', () => {
-      const state = readSurveyState();
-      expect(state.firstLoginAt).toBeNull();
-      expect(state.lastLoginAt).toBeNull();
-      expect(state.onboardingCompleted).toBe(false);
-      expect(state.onboardingShown).toBe(false);
-      // Counters start empty: the shared module seeds no domain counter names.
-      // Every read is `?? 0` guarded, so an absent key reads the same as 0.
-      expect(state.counters).toEqual({});
-      expect(state.shownThisMonth).toEqual({});
-      expect(state.respondedCounts).toEqual({});
-      expect(state.respondedAt).toEqual({});
-      expect(state.respondedCountAt).toEqual({});
-      expect(state.dismissals).toEqual({});
-    });
-
-    it('merges stored data with defaults', () => {
-      mockStorage.setItem(STORAGE_KEY, JSON.stringify({
-        firstLoginAt: '2026-01-01T00:00:00.000Z',
-        onboardingCompleted: true,
-        counters: { invoicing: 3, order: 0 },
-      }));
-      const state = readSurveyState();
-      expect(state.firstLoginAt).toBe('2026-01-01T00:00:00.000Z');
-      expect(state.onboardingCompleted).toBe(true);
-      expect(state.counters.invoicing).toBe(3);
-      expect(state.shownThisMonth).toEqual({});
-    });
-
-    it('returns defaults on corrupted JSON', () => {
-      mockStorage.setItem(STORAGE_KEY, 'not-json');
-      const state = readSurveyState();
-      expect(state.firstLoginAt).toBeNull();
-    });
+  it('re-exports the helpers its consumers import', () => {
+    // surveys.js and useSurveyEngine import these three from this module.
+    expect(typeof readSurveyState).toBe('function');
+    expect(typeof markOnboardingCompleted).toBe('function');
+    expect(typeof incrementSurveyCounter).toBe('function');
   });
 
-  describe('markFirstLogin', () => {
-    it('sets firstLoginAt and lastLoginAt on first call', () => {
-      markFirstLogin(NOW);
-      const state = readSurveyState();
-      expect(state.firstLoginAt).toBe(new Date(NOW).toISOString());
-      expect(state.lastLoginAt).toBe(new Date(NOW).toISOString());
-    });
+  it('executes a read/write round trip through the real core import graph', () => {
+    expect(readSurveyState().onboardingCompleted).toBe(false);
 
-    it('does not overwrite firstLoginAt but updates lastLoginAt', () => {
-      const earlier = new Date('2025-06-01').getTime();
-      markFirstLogin(earlier);
-      markFirstLogin(NOW);
-      const state = readSurveyState();
-      expect(state.firstLoginAt).toBe(new Date(earlier).toISOString());
-      expect(state.lastLoginAt).toBe(new Date(NOW).toISOString());
-    });
-  });
+    markOnboardingCompleted();
+    expect(readSurveyState().onboardingCompleted).toBe(true);
 
-  describe('markOnboardingCompleted', () => {
-    it('sets onboardingCompleted to true', () => {
-      markOnboardingCompleted();
-      expect(readSurveyState().onboardingCompleted).toBe(true);
-    });
-  });
-
-  describe('markSurveyShown', () => {
-    it('updates lastShownAt and increments monthly counter', () => {
-      markSurveyShown('nps', NOW);
-      const state = readSurveyState();
-      expect(state.lastShownAt).toBe(new Date(NOW).toISOString());
-      expect(state.shownThisMonth['2026-01']).toBe(1);
-    });
-
-    // Which survey is "the onboarding one" is now the caller's declaration, not
-    // an id the shared module recognises — hence the flag rather than the id.
-    it('sets onboardingShown when the caller flags the survey as onboarding', () => {
-      markSurveyShown('csat_onboarding', NOW, { isOnboarding: true });
-      expect(readSurveyState().onboardingShown).toBe(true);
-    });
-
-    it('does not set onboardingShown for other surveys', () => {
-      markSurveyShown('nps', NOW);
-      expect(readSurveyState().onboardingShown).toBe(false);
-    });
-  });
-
-  describe('markSurveyResponded', () => {
-    it('increments respondedCounts and sets respondedAt', () => {
-      markSurveyResponded('nps', NOW);
-      const state = readSurveyState();
-      expect(state.respondedCounts['nps']).toBe(1);
-      expect(state.respondedAt['nps']).toBe(new Date(NOW).toISOString());
-    });
-
-    it('accumulates multiple responses', () => {
-      markSurveyResponded('nps', NOW);
-      markSurveyResponded('nps', NOW + 1000);
-      expect(readSurveyState().respondedCounts['nps']).toBe(2);
-    });
-
-    it('snapshots invoicing counter into respondedCountAt for csat_invoicing', () => {
-      mockStorage.setItem(STORAGE_KEY, JSON.stringify({ counters: { invoicing: 7, order: 0 } }));
-      markSurveyResponded('csat_invoicing', NOW, { counterKey: 'invoicing' });
-      expect(readSurveyState().respondedCountAt['csat_invoicing']).toBe(7);
-    });
-
-    it('snapshots order counter into respondedCountAt for csat_order', () => {
-      mockStorage.setItem(STORAGE_KEY, JSON.stringify({ counters: { invoicing: 0, order: 12 } }));
-      markSurveyResponded('csat_order', NOW, { counterKey: 'order' });
-      expect(readSurveyState().respondedCountAt['csat_order']).toBe(12);
-    });
-  });
-
-  describe('markSurveyDismissed', () => {
-    it('sets dismissal timestamp for the survey', () => {
-      markSurveyDismissed('csat_invoicing', NOW);
-      const state = readSurveyState();
-      expect(state.lastDismissedAt).toBe(new Date(NOW).toISOString());
-      expect(state.dismissals['csat_invoicing']).toBe(new Date(NOW).toISOString());
-    });
-  });
-
-  describe('incrementSurveyCounter', () => {
-    it('increments from zero', () => {
-      const result = incrementSurveyCounter('invoicing');
-      expect(result).toBe(1);
-      expect(readSurveyState().counters.invoicing).toBe(1);
-    });
-
-    it('increments existing value', () => {
-      incrementSurveyCounter('invoicing');
-      incrementSurveyCounter('invoicing');
-      const result = incrementSurveyCounter('invoicing');
-      expect(result).toBe(3);
-    });
-
-    it('increments order independently from invoicing', () => {
-      incrementSurveyCounter('invoicing');
-      incrementSurveyCounter('invoicing');
-      incrementSurveyCounter('order');
-      const state = readSurveyState();
-      expect(state.counters.invoicing).toBe(2);
-      expect(state.counters.order).toBe(1);
-    });
-
-    // QA edge case: unknown counter key should create it without throwing
-    it('creates a new key for an unknown counter without throwing', () => {
-      const result = incrementSurveyCounter('foo');
-      expect(result).toBe(1);
-      expect(readSurveyState().counters['foo']).toBe(1);
-      // Counters no longer come pre-seeded, so "other keys are unaffected" is
-      // only a real assertion against a counter that actually exists. Establish
-      // one first, then check incrementing an unknown key leaves it alone.
-      incrementSurveyCounter('invoicing');
-      incrementSurveyCounter('bar');
-      const state = readSurveyState();
-      expect(state.counters.invoicing).toBe(1);
-      expect(state.counters['bar']).toBe(1);
-      expect(state.counters['foo']).toBe(1);
-    });
-  });
-
-  // -------------------------------------------------------------------------
-  // QA edge case: localStorage unavailable (getStorage returns null)
-  // -------------------------------------------------------------------------
-
-  describe('readSurveyState with no localStorage', () => {
-    it('returns clean defaults when window has no localStorage (SSR/private mode)', () => {
-      vi.stubGlobal('window', {}); // localStorage is undefined
-      const state = readSurveyState();
-      expect(state.firstLoginAt).toBeNull();
-      expect(state.counters).toEqual({});
-      expect(state.shownThisMonth).toEqual({});
-      expect(state.respondedCounts).toEqual({});
-      expect(state.dismissals).toEqual({});
-    });
-
-    it('returns clean defaults when window is undefined (non-browser)', () => {
-      vi.stubGlobal('window', undefined);
-      const state = readSurveyState();
-      expect(state.firstLoginAt).toBeNull();
-      expect(state.counters).toEqual({});
-    });
-  });
-
-  describe('writeSurveyState with no localStorage', () => {
-    it('fails silently when localStorage is unavailable', () => {
-      vi.stubGlobal('window', {}); // no localStorage
-      expect(() => writeSurveyState({ firstLoginAt: 'x' })).not.toThrow();
-    });
-  });
-
-  // -------------------------------------------------------------------------
-  // QA edge case: backward compat — respondedCountAt absent in old stored data
-  // -------------------------------------------------------------------------
-
-  describe('readSurveyState backward compat (old data without respondedCountAt)', () => {
-    it('provides empty respondedCountAt when key is missing from stored data', () => {
-      mockStorage.setItem(STORAGE_KEY, JSON.stringify({
-        firstLoginAt: '2025-01-01T00:00:00.000Z',
-        counters: { invoicing: 10, order: 0 },
-        respondedCounts: { csat_invoicing: 1 },
-        respondedAt: { csat_invoicing: '2025-03-01T00:00:00.000Z' },
-        // respondedCountAt intentionally absent (old format)
-      }));
-      const state = readSurveyState();
-      expect(state.respondedCountAt).toEqual({});
-    });
-  });
-
-  // -------------------------------------------------------------------------
-  // QA edge case: markSurveyResponded with a non-CSAT survey id (e.g. 'nps')
-  // -------------------------------------------------------------------------
-
-  describe('markSurveyResponded with non-CSAT survey id', () => {
-    it('does not write respondedCountAt for non-CSAT surveys (nps has no counter)', () => {
-      mockStorage.setItem(STORAGE_KEY, JSON.stringify({
-        counters: { invoicing: 5, order: 3 },
-      }));
-      markSurveyResponded('nps', NOW);
-      const state = readSurveyState();
-      expect(state.respondedCountAt['nps']).toBeUndefined();
-    });
-
-    it('increments respondedCounts for nps', () => {
-      markSurveyResponded('nps', NOW);
-      expect(readSurveyState().respondedCounts['nps']).toBe(1);
-    });
+    expect(incrementSurveyCounter('invoicing')).toBe(1);
+    expect(readSurveyState().counters.invoicing).toBe(1);
   });
 });
