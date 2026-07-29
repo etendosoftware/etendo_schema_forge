@@ -825,6 +825,9 @@ I need to customize the UI of a window
 │   ├─ Replace the master list table
 │   │   └─ → window.customComponents.headerTable
 │   │
+│   ├─ Richer confirmation than the generic dialog when deleting a record
+│   │   └─ → window.customComponents.deleteConfirmModal (+ deleteConfirmModalProps)
+│   │
 │   └─ Secondary document actions (cancel, reverse, duplicate)
 │       └─ → window.menuActions
 │
