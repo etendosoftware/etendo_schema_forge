@@ -300,7 +300,7 @@ function LineRow({ line, ui, currency, bcpLocale, onOpenTxns }) {
   const cellCtx = { ui, currency, bcpLocale };
   const pendingAmountLabel = matchKind === 'partial'
     ? ui('financeAccountStatementLinesPendingAmount', {
-      amount: formatMoney(Math.abs(Number(line.pendingAmount) || 0), currency, bcpLocale),
+      amount: formatMoney(Math.abs(Number(line.pendingAmount) || 0), currency),
     })
     : null;
   return (
