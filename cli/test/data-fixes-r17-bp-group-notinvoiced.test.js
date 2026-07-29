@@ -127,7 +127,7 @@ describe('R17 data-fix — resolution join matches AcctServer.selectNotInvoicedR
   });
 
   it('sources the replacement value from C_AcctSchema_Default.notinvoicedreceipts_acct, scoped to the same schema', () => {
-    assert.match(normApply, /d\.c_acctschema_id = a\.c_acctschema_id/i);
+    assert.match(normApply, /a\.c_acctschema_id = d\.c_acctschema_id|d\.c_acctschema_id = a\.c_acctschema_id/i);
     assert.match(normApply, /d\.notinvoicedreceipts_acct/i);
   });
 });
