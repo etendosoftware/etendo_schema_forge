@@ -13675,6 +13675,9 @@
     "Conversion Rates": {
       "label": "Conversion Rates"
     },
+    "Conversion Rate Downloader Log": {
+      "label": "Conversion Rate Downloader Log"
+    },
     "Fiscal Calendar": {
       "label": "Calendar"
     },
@@ -13688,8 +13691,8 @@
       "label": "Country and Region"
     },
     "Business Partner": {
-      "label": "Business Partner",
-      "newLabel": "New business partner"
+      "label": "Contacts",
+      "newLabel": "New contact"
     },
     "General Ledger Configuration": {
       "label": "General Ledger Configuration"
@@ -14540,6 +14543,9 @@
     },
     "Transaction code": {
       "label": "Transaction code"
+    },
+    "Transaction Type": {
+      "label": "Transaction Type"
     },
     "SII Monitor": {
       "label": "SII Monitor"
@@ -16398,6 +16404,9 @@
     }
   },
   "genericLabels": {
+    "noAccessTitle": "No access",
+    "noAccessMessage": "Contact your administrator to get access.",
+    "windowAccessDenied": "You don't have access to this window",
     "balanced": "Balanced",
     "difference": "Difference",
     "journalUnbalancedSaveBlocked": "Debit and credit must be equal before saving",
@@ -16641,6 +16650,7 @@
     "backendError.amortizationUsableLifeMonthsRequired": "Usable Life - Months field cannot be empty, zero or negative.",
     "backendError.amortizationDepreciationAmountRequired": "Depreciation Amount field cannot be empty, zero or negative.",
     "backendError.amortizationStartDateRequired": "The start date field is mandatory",
+    "backendError.assetGroupNameDuplicate": "There is already an asset category with this name.",
     "processAssetCompleted": "Create Amortization completed",
     "reactivated": "Document reactivated",
     "post": "Post",
@@ -17165,11 +17175,26 @@
     "helpComingSoon": "Help & Support is coming soon.",
     "assignedRole": "Assigned Role",
     "noRoleAssigned": "No role assigned",
-    "roleNameGoClientAdmin": "GOClient Admin",
+    "roleNameAdmin": "Administrator",
     "roleNameFinance": "Finance",
     "roleNameSales": "Sales",
     "roleNamePurchasing": "Purchasing",
     "roleNameInventory": "Inventory",
+    "roleDescAdmin": "Full administrative access to every Etendo GO window and setting.",
+    "roleDescFinance": "Manages accounting, financial accounts, payments, invoices and tax configuration.",
+    "roleDescSales": "Manages customers, price lists, sales quotations, orders and invoices.",
+    "roleDescPurchasing": "Manages suppliers, purchase orders and purchase invoices.",
+    "roleDescInventory": "Manages stock movements, goods receipts and shipments, warehouses and physical inventory counts.",
+    "Roles": "Roles",
+    "rolesPageTitle": "Roles",
+    "rolesPageSubtitle": "The 5 fixed roles, their assigned windows, and user counts.",
+    "rolesColUsers": "Users",
+    "rolesColWindows": "Assigned windows",
+    "rolesNoAccessTitle": "You don't have access to this view",
+    "rolesNoAccessMessage": "Only administrators can view the roles overview.",
+    "rolesLoadError": "Couldn't load roles.",
+    "accessTierFull": "Full",
+    "accessTierReadOnly": "Read-only",
     "supportTabChat": "Chat",
     "supportTabTickets": "My tickets",
     "supportNewConversation": "New conversation",
@@ -19054,6 +19079,7 @@
     "changePasswordLogoutNotice": "After changing your password you'll be signed out and need to log in again.",
     "onboardingPasswordChangedNotice": "Your password has been changed successfully. Sign in with your new password.",
     "onboardingDraftRestoredNotice": "We restored your saved setup progress so you can pick up where you left off.",
+    "onboardingDraftSaveWarning": "We couldn't save your setup progress. Your changes will remain on this device; please try again.",
     "onboardingCurrentPasswordLabel": "Current password",
     "onboardingCredentialChangeSuccess": "Password updated.",
     "onboardingCredentialChangeFailed": "Could not change the password.",
@@ -19270,7 +19296,8 @@
     "sqNoLinesError": "The quotation cannot be confirmed because it has no lines",
     "soNoLinesError": "The order cannot be confirmed because it has no lines",
     "invNoLinesError": "The invoice cannot be confirmed because it has no lines",
-    "fieldMinValueError": "Value cannot be negative",
+    "fieldMinValueError": "Value must be at least {min}",
+    "fieldIntegerError": "Value must be a whole number",
     "sqOrderConfirmedInvoiceError": "Quotation confirmed, but invoice could not be created. ",
     "rejectQuotation": "Reject",
     "rejectQuotationTitle": "Reject quotation",
@@ -19516,6 +19543,7 @@
     "backendError.matchRuleRegexComplex": "The regular expression is too complex (possible catastrophic backtracking)",
     "backendError.matchRuleRegexInvalid": "Invalid regular expression",
     "backendError.matchRulePriorityConflict": "A rule with this priority already exists for the selected scope",
+    "backendError.priceListCannotDeactivateDefault": "A tariff marked as default cannot be deactivated.",
     "uomTypeArea": "Area",
     "uomTypeLength": "Length",
     "uomTypeTime": "Time",

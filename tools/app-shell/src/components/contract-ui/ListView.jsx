@@ -130,20 +130,20 @@ function TableRowsIcon({ size = 24, color = 'currentColor' }) {
 function ViewToggle({ galleryRenderer, onSelectList, onSelectGallery, viewMode }) {
   if (!galleryRenderer) return null;
   return (
-    <div data-testid="view-toggle" className="flex flex-row items-center p-1 gap-1 h-10 w-[108px] bg-[#F5F7F9] rounded-xl">
+    <div data-testid="view-toggle" className="flex flex-row items-center p-1 gap-1 h-10 w-[108px] bg-[hsl(var(--muted))] rounded-xl">
       <button
         onClick={onSelectList}
-        className={`flex items-center justify-center w-12 h-8 rounded-lg transition-all ${viewMode === "list" ? "bg-white shadow-sm" : ""}`}
+        className={`flex items-center justify-center w-12 h-8 rounded-lg transition-all ${viewMode === "list" ? "bg-card shadow-sm" : ""}`}
       >
-        <TableRowsIcon size={24} color="#828FA3" data-testid="TableRowsIcon__620cbc" />
+        <TableRowsIcon size={24} color="hsl(var(--text-disabled))" data-testid="TableRowsIcon__620cbc" />
       </button>
       <button
         onClick={onSelectGallery}
-        className={`flex items-center justify-center w-12 h-8 rounded-lg transition-all ${viewMode === "gallery" ? "bg-white shadow-sm" : ""}`}
+        className={`flex items-center justify-center w-12 h-8 rounded-lg transition-all ${viewMode === "gallery" ? "bg-card shadow-sm" : ""}`}
       >
         <LayoutGrid
           className="h-6 w-6"
-          style={{ color: '#828FA3' }}
+          style={{ color: 'hsl(var(--text-disabled))' }}
           data-testid="LayoutGrid__620cbc" />
       </button>
     </div>
@@ -194,6 +194,12 @@ export function ListView({
   hideEyeCount = false,
   headerContent = null,
   api = null,
+  // ETP-4520 — the runtime per-tier window override (`useWindowAccess`'s 'read-only'
+  // tier forces `{ readOnly: true }` here — see buildWindowAccessWiring/effectiveWindow
+  // in generate-frontend.js and the equivalent hand-wired custom windows). Distinct from
+  // `api.window.readOnly` below, which is the static decisions.json-authored flag for a
+  // window that's ALWAYS view-only regardless of role. Either one forces read-only.
+  window: windowProp = null,
   bulkActions = null,
   isRowSelectable = null,
   listViewOptions = {},
@@ -479,10 +485,11 @@ export function ListView({
   const sendDocumentEnabled = !!effectiveSendDocument && effectiveSendDocument.enabled !== false;
   const allowEmail = effectiveSendDocument?.allowEmail !== false;
 
-  // View-only window (decisions.json → window.readOnly): suppress the write quick
+  // View-only window (decisions.json → window.readOnly, OR the ETP-4520 runtime
+  // 'read-only' access tier via the `window` prop): suppress the write quick
   // actions and don't wire their default handlers. Row click still opens the
   // (read-only) detail, so viewing is preserved. Complements DetailView's own gate.
-  const windowReadOnly = api?.window?.readOnly === true;
+  const windowReadOnly = api?.window?.readOnly === true || windowProp?.readOnly === true;
 
   const effectiveRowQuickActions = useMemo(() => {
     if (!quickActionsEnabled) return rowQuickActions;
@@ -619,7 +626,7 @@ export function ListView({
     <>
       <div className="flex-1 min-h-0 flex flex-col" data-testid="list-view">
         {/* White content card with rounded top-left corner */}
-        <div className="flex-1 flex flex-col bg-white rounded-tl-2xl overflow-hidden min-h-0">
+        <div className="flex-1 flex flex-col bg-card rounded-tl-2xl overflow-hidden min-h-0">
           {/* Selection bar or filter bar */}
           {selectedRows.length > 0 ? (
             <div className={`flex items-center justify-between ${listbarPaddingX} ${listbarPaddingY} border-b border-border/30`}>
@@ -673,17 +680,17 @@ export function ListView({
             <div className={`flex items-center justify-between ${listbarPaddingX} ${listbarPaddingY}`}>
               <div className="flex items-center gap-2">
                 {subsetFilters && (
-                  <div role="group" aria-label="Filters" className="inline-flex items-center gap-1 rounded-xl bg-[#F5F7F9] p-1 h-10">
+                  <div role="group" aria-label="Filters" className="inline-flex items-center gap-1 rounded-xl bg-[hsl(var(--muted))] p-1 h-10">
                     {subsetFilters.map((sf, i) => (
                       <button
                         key={i}
                         onClick={() => selectSubset(i)}
                         data-testid={`filter-${sf.key || sf.label?.toLowerCase()}`}
                         className={[
-                          'h-8 px-3 text-sm font-medium text-[#121217] rounded-lg transition-all whitespace-nowrap',
+                          'h-8 px-3 text-sm font-medium text-[hsl(var(--foreground))] rounded-lg transition-all whitespace-nowrap',
                           activeSubsetIndex === i
-                            ? 'bg-white shadow-sm'
-                            : 'bg-[#F5F7F9] hover:brightness-95',
+                            ? 'bg-card shadow-sm'
+                            : 'bg-[hsl(var(--muted))] hover:brightness-95',
                         ].join(' ')}
                       >
                         {ui(sf.label)}
@@ -699,7 +706,7 @@ export function ListView({
                         onClick={() => toggleQuickFilter(i)}
                         data-testid={`quick-filter-${qf.key || qf.label?.toLowerCase()}`}
                         className={[
-                          'h-9 px-3 text-xs rounded-lg border bg-white transition-colors',
+                          'h-9 px-3 text-xs rounded-lg border bg-card transition-colors',
                           activeFilterIndices.has(i)
                             ? 'border-primary text-primary bg-primary/5 font-medium'
                             : 'border-border text-muted-foreground hover:text-foreground',
@@ -801,7 +808,7 @@ export function ListView({
                   <Button
                     variant="outline"
                     size="sm"
-                    className="gap-1.5 text-muted-foreground font-normal h-9 px-3 rounded-lg bg-white"
+                    className="gap-1.5 text-muted-foreground font-normal h-9 px-3 rounded-lg bg-card"
                     onClick={() => setShowImportDialog(true)}
                     aria-label={ui('import')}
                     title={ui('import')}
@@ -814,7 +821,7 @@ export function ListView({
                   <Button
                     variant="outline"
                     size="sm"
-                    className="gap-1.5 text-muted-foreground font-normal h-9 px-3 rounded-lg bg-white"
+                    className="gap-1.5 text-muted-foreground font-normal h-9 px-3 rounded-lg bg-card"
                     onClick={() => setShowReport(true)}
                     data-testid="Button__620cbc">
                     <Printer className="h-3.5 w-3.5" data-testid="Printer__620cbc" />
@@ -822,10 +829,10 @@ export function ListView({
                   </Button>
                 )}
                 {/* Split "New" button */}
-                {!hideCreate && (
+                {!hideCreate && !windowReadOnly && (
                   <div className="inline-flex items-stretch rounded-lg overflow-hidden shadow-sm ml-3">
                     <Button
-                      className="rounded-none rounded-l-lg gap-1.5 px-4 hover:bg-[#FFD500] hover:text-[#121217] transition-colors"
+                      className="rounded-none rounded-l-lg gap-1.5 px-4 hover:bg-[hsl(var(--accent-highlight))] hover:text-[hsl(var(--accent-highlight-foreground))] transition-colors"
                       data-testid="action-new"
                       onClick={() => onNew ? onNew() : navigate(`/${windowName}/new`)}
                     >
@@ -838,7 +845,7 @@ export function ListView({
                         <DropdownMenu data-testid="DropdownMenu__620cbc">
                           <DropdownMenuTrigger asChild data-testid="DropdownMenuTrigger__620cbc">
                             <Button
-                              className="rounded-none rounded-r-lg px-2 hover:bg-[#FFD500] hover:text-[#121217] transition-colors"
+                              className="rounded-none rounded-r-lg px-2 hover:bg-[hsl(var(--accent-highlight))] hover:text-[hsl(var(--accent-highlight-foreground))] transition-colors"
                               data-testid="action-new-more">
                               <ChevronDown className="h-3.5 w-3.5" data-testid="ChevronDown__620cbc" />
                             </Button>

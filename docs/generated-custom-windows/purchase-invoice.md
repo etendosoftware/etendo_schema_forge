@@ -29,6 +29,7 @@ Use this window to register supplier invoices, keep the payable document aligned
 ## Reactive behavior and dependencies
 
 - Header defaults are visible in the contract for invoice date and accounting date (`@#Date@`), document status (`DR`), currency, and zeroed payable amounts such as total paid and outstanding amount. Currency is editable on the header via the `CurrencyRatePicker` component (see "Currency and exchange rate — ETP-4029" below), not a read-only defaulted value.
+- **Capability-gated `posted` field/status pill (ETP-4520):** the header `posted` field (rendered as a `Posted`/`Not posted` status pill on the detail header and as a `Posted` boolean badge column in the grid) carries `"visibleWhenCapability": "showAccountingFields"` in `artifacts/purchase-invoice/decisions.json`, mirroring the sales-invoice implementation. This is resolved against `capabilities.showAccountingFields`, fetched once at role-selection via `GET /sws/neo/windowaccessmap` (NEO pseudo-spec bridge) and exposed through `useAuth().capabilities`. The field backs the `AD_Role.EM_ETGO_Show_Acct_Fields` ("Show Accounting Fields") checkbox — Etendo Classic-only for this MVP, no GO-app UI to toggle it — and the server resolves it with an Administrator bypass. A role without the capability never sees the column or the pill at all (the field is omitted, not disabled/hidden): `DataTable.jsx` filters the column out of `visibleColumns` and `DetailView.jsx` returns `null` for the status pill before it renders, both via the shared `isCapabilityVisible()` helper (`tools/app-shell/src/lib/capabilityVisibility.js`) fed by `useCapabilitiesSafe()`. Administrator sessions always see the field regardless of the checkbox.
 - Unified document/accounting date (ETP-4531, redefined 2026-07-17): `accountingDate` (`DateAcct`) is `visibility: system` — fully hidden from the UI, not present in `frontendContract.entities.header.fields` at all. `invoiceDate` is the single visible date field. Per classic AD metadata, `C_Invoice.DateInvoiced` carries `AD_Column.AD_Callout_ID = com.etendoerp.sif.general.callouts.SifInvoiceOperationDateCallout`, which extends `org.openbravo.erpCommon.ad_callouts.SE_Invoice_AccountingDate` and auto-fills `dateAcct` from `dateInvoiced`. This cascade is now intentionally allowed to flow through untouched — the earlier `PurchaseInvoiceHeaderHandler#afterCallout` guard that stripped it (ETP-4531's original, now-superseded scope; see `docs/feedback.md`) has been removed on the `com.etendoerp.go` side, so saving the invoice writes the same date to both `invoiceDate` and `accountingDate` internally, and the accounting facts generated on posting reflect that unified value as the journal entry's accounting date.
 - The `date` field in `AddPaymentModal.jsx` (the "New payment" popup triggered from the invoice detail) uses the generic `DateField` component (`tools/app-shell/src/components/ui/date-field.jsx`) — Figma-aligned calendar popover with always-visible calendar icon, month/year picker, and Etendo yellow hover on filled-black elements. These defaults matter because a new payable document starts as draft and incomplete before lines and payment activity exist.
 - Partner address is a dependent selector filtered by the selected business partner. The business partner also drives header callouts, and the custom page blocks line creation until a business partner is present.
@@ -85,6 +86,7 @@ Use this window to register supplier invoices, keep the payable document aligned
 - `tools/app-shell/src/components/contract-ui/BulkDocumentAction.jsx` provides the bulk-action component mounted in the purchase-invoice list selection bar, mounted with `labelKey="confirmBulk"` so the button renders as "Confirmar" / "Confirm". The `menuActions` array in `artifacts/purchase-invoice/decisions.json` is empty — no kebab document actions (including `Reactivate`) are declared for this window. Reactivation is not supported in the purchase-invoice detail view.
 - `tools/app-shell/src/lib/__tests__/dateOnly.test.js`, `tools/app-shell/src/lib/__tests__/invoiceDueDate.test.js`, and `tools/app-shell/src/windows/custom/purchase-invoice/__tests__/PurchaseInvoiceHeaderTable.test.js` provide source-level and helper-level regression coverage for due-date calendar normalization, locale formatting, max-installment selection, and the paid/overdue/soon/ok state derivation that drives the dot color and the red-text reinforcement on overdue rows in the purchase-invoice list.
 - Shared shell and entity-loading behavior is documented in `docs/generated-custom-windows/app-shell-functional-flows.md`.
+- **ETP-4520** — `artifacts/purchase-invoice/decisions.json`, `artifacts/purchase-invoice/contract.json`, and the generated `HeaderPage.jsx`/`HeaderTable.jsx` all carry `"visibleWhenCapability": "showAccountingFields"` on the `posted` field. `tools/app-shell/src/lib/capabilityVisibility.js`, `tools/app-shell/src/hooks/useCapabilitiesSafe.js`, `tools/app-shell/src/components/contract-ui/DataTable.jsx`, and `tools/app-shell/src/components/contract-ui/DetailView.jsx` prove the shared omit-not-disable gating mechanism, with source-reading coverage in `tools/app-shell/src/lib/__tests__/capabilityVisibility.test.js`, `tools/app-shell/src/hooks/__tests__/useCapabilitiesSafe.vitest.jsx`, `tools/app-shell/src/components/contract-ui/__tests__/DataTable.capabilityVisibility.vitest.jsx`, and `tools/app-shell/src/components/contract-ui/__tests__/DetailView.capabilityVisibility.vitest.jsx`.
 - Contract and UI evidence reviewed for this rewrite:
   - `tools/app-shell/src/menu.json`
   - `tools/app-shell/src/windows/registry.js`
@@ -108,7 +110,12 @@ Use this window to register supplier invoices, keep the payable document aligned
 
 ## Validation & Error Handling — ETP-4005
 
-See [Shared validation & UX changes — ETP-4005](app-shell-functional-flows.md#shared-validation--ux-changes--etp-4005) for the full list: inline line min-value enforcement, payment modal date validation, single confirmation toast, and callout message sanitization.
+See [Shared validation & UX changes — ETP-4005](app-shell-functional-flows.md#shared-validation--ux-changes--etp-4005) for the full list: inline line min-value enforcement, payment modal date validation, single confirmation toast, and callout message sanitization. `etgoDiscount` keeps its `min: 0, max: 100` range.
+
+## Negative quantity/price and price-list label — ETP-4567
+
+- `invoicedQuantity` and `listPrice` no longer declare `min: 0` in `decisions.json`. Both the add-line row and inline grid edit now accept negative values — needed for credit/return-style adjustments modeled as negative-quantity or negative-price lines. `etgoDiscount` is unaffected and keeps its `min: 0, max: 100` range.
+- The `listPrice` (AD `PriceList` column) label is now overridden to **"Precio"** in Spanish via `window.labelOverrides.es_ES.PriceList` in `decisions.json` (English label unchanged). Same declarative mechanism already used for `POReference`, `OutstandingAmt`, `EM_Etgo_Due_Date`, `em_etgo_delivery_status`, and `C_DocTypeTarget_ID` on this window.
 
 ## Pipeline regeneration — ETP-3908
 
@@ -474,3 +481,11 @@ submitted `conversionRate`.
 - `tools/app-shell/src/windows/custom/shared/usePaymentBalance.js` — excess gating; refund removed.
 - i18n keys `cpConversionRate` / `cpAmountInAccount` / `cpConversionRateRequired` /
   `cpConversionRateInvalid` present in `en_US.json`, `es_ES.json`, and `es_AR.json`.
+
+## Theme roles
+
+The window's live artifact custom components use the shared semantic theme.
+Structural surfaces and controls consume background, card, foreground, muted, and
+border roles; operational feedback uses success, warning, information, neutral,
+and destructive roles. No local palette is used, so the active application theme
+controls the appearance.

@@ -19,12 +19,12 @@ const CATEGORY_MAP = {
 };
 
 const STATUS_BADGE_STYLES = {
-  sales:       { backgroundColor: '#FEF0F4', color: '#D50B3E', borderColor: '#FBB1C4' },
-  collections: { backgroundColor: '#FFF9EB', color: '#8A6100', borderColor: '#FFDA85' },
-  payments:    { backgroundColor: '#FFF9EB', color: '#8A6100', borderColor: '#FFDA85' },
-  purchases:   { backgroundColor: '#EFF6FF', color: '#1D4ED8', borderColor: '#BFDBFE' },
-  stock:       { backgroundColor: '#FFF7ED', color: '#C2410C', borderColor: '#FED7AA' },
-  other:       { backgroundColor: '#F5F7F9', color: '#6C6C89', borderColor: '#E8EAEF' },
+  sales:       { backgroundColor: 'var(--status-destructive-bg)', color: 'hsl(var(--destructive))', borderColor: 'hsl(var(--destructive) / 0.3)' },
+  collections: { backgroundColor: 'var(--status-warning-bg)', color: 'var(--status-warning-fg)', borderColor: 'var(--status-warning-border)' },
+  payments:    { backgroundColor: 'var(--status-warning-bg)', color: 'var(--status-warning-fg)', borderColor: 'var(--status-warning-border)' },
+  purchases:   { backgroundColor: 'var(--status-info-bg)', color: 'var(--status-info-fg)', borderColor: 'var(--status-info-border)' },
+  stock:       { backgroundColor: 'var(--status-warning-bg)', color: 'var(--status-warning-fg)', borderColor: 'var(--status-warning-border)' },
+  other:       { backgroundColor: 'hsl(var(--muted))', color: 'hsl(var(--muted-foreground))', borderColor: 'hsl(var(--border-subtle))' },
 };
 
 function resolveTaskMeta(task) {
@@ -106,7 +106,7 @@ describe('PendingTasksRail — resolveTaskMeta fallback', () => {
   });
 });
 
-describe('PendingTasksRail — STATUS_BADGE_STYLES Figma palette', () => {
+describe('PendingTasksRail — STATUS_BADGE_STYLES semantic roles', () => {
   const EXPECTED_CATEGORIES = ['sales', 'collections', 'payments', 'purchases', 'stock', 'other'];
 
   it('has all 6 required category styles', () => {
@@ -123,37 +123,37 @@ describe('PendingTasksRail — STATUS_BADGE_STYLES Figma palette', () => {
     }
   });
 
-  it('sales uses Figma red palette (#FEF0F4 / #D50B3E / #FBB1C4)', () => {
-    assert.equal(STATUS_BADGE_STYLES.sales.backgroundColor, '#FEF0F4');
-    assert.equal(STATUS_BADGE_STYLES.sales.color, '#D50B3E');
-    assert.equal(STATUS_BADGE_STYLES.sales.borderColor, '#FBB1C4');
+  it('sales uses destructive roles', () => {
+    assert.equal(STATUS_BADGE_STYLES.sales.backgroundColor, 'var(--status-destructive-bg)');
+    assert.equal(STATUS_BADGE_STYLES.sales.color, 'hsl(var(--destructive))');
+    assert.equal(STATUS_BADGE_STYLES.sales.borderColor, 'hsl(var(--destructive) / 0.3)');
   });
 
-  it('collections uses Figma amber palette (#FFF9EB / #8A6100 / #FFDA85)', () => {
-    assert.equal(STATUS_BADGE_STYLES.collections.backgroundColor, '#FFF9EB');
-    assert.equal(STATUS_BADGE_STYLES.collections.color, '#8A6100');
-    assert.equal(STATUS_BADGE_STYLES.collections.borderColor, '#FFDA85');
+  it('collections uses warning roles', () => {
+    assert.equal(STATUS_BADGE_STYLES.collections.backgroundColor, 'var(--status-warning-bg)');
+    assert.equal(STATUS_BADGE_STYLES.collections.color, 'var(--status-warning-fg)');
+    assert.equal(STATUS_BADGE_STYLES.collections.borderColor, 'var(--status-warning-border)');
   });
 
   it('payments shares the same palette as collections', () => {
     assert.deepStrictEqual(STATUS_BADGE_STYLES.payments, STATUS_BADGE_STYLES.collections);
   });
 
-  it('purchases uses Figma blue palette (#EFF6FF / #1D4ED8 / #BFDBFE)', () => {
-    assert.equal(STATUS_BADGE_STYLES.purchases.backgroundColor, '#EFF6FF');
-    assert.equal(STATUS_BADGE_STYLES.purchases.color, '#1D4ED8');
-    assert.equal(STATUS_BADGE_STYLES.purchases.borderColor, '#BFDBFE');
+  it('purchases uses info roles', () => {
+    assert.equal(STATUS_BADGE_STYLES.purchases.backgroundColor, 'var(--status-info-bg)');
+    assert.equal(STATUS_BADGE_STYLES.purchases.color, 'var(--status-info-fg)');
+    assert.equal(STATUS_BADGE_STYLES.purchases.borderColor, 'var(--status-info-border)');
   });
 
-  it('stock uses Figma orange palette (#FFF7ED / #C2410C / #FED7AA)', () => {
-    assert.equal(STATUS_BADGE_STYLES.stock.backgroundColor, '#FFF7ED');
-    assert.equal(STATUS_BADGE_STYLES.stock.color, '#C2410C');
-    assert.equal(STATUS_BADGE_STYLES.stock.borderColor, '#FED7AA');
+  it('stock uses warning roles', () => {
+    assert.equal(STATUS_BADGE_STYLES.stock.backgroundColor, 'var(--status-warning-bg)');
+    assert.equal(STATUS_BADGE_STYLES.stock.color, 'var(--status-warning-fg)');
+    assert.equal(STATUS_BADGE_STYLES.stock.borderColor, 'var(--status-warning-border)');
   });
 
-  it('other (fallback) uses Figma gray palette (#F5F7F9 / #6C6C89 / #E8EAEF)', () => {
-    assert.equal(STATUS_BADGE_STYLES.other.backgroundColor, '#F5F7F9');
-    assert.equal(STATUS_BADGE_STYLES.other.color, '#6C6C89');
-    assert.equal(STATUS_BADGE_STYLES.other.borderColor, '#E8EAEF');
+  it('other (fallback) uses muted roles', () => {
+    assert.equal(STATUS_BADGE_STYLES.other.backgroundColor, 'hsl(var(--muted))');
+    assert.equal(STATUS_BADGE_STYLES.other.color, 'hsl(var(--muted-foreground))');
+    assert.equal(STATUS_BADGE_STYLES.other.borderColor, 'hsl(var(--border-subtle))');
   });
 });

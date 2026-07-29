@@ -44,7 +44,7 @@ function EmptyState({ message }) {
     <TableRow data-testid="TableRow__db8970">
       <TableCell
         colSpan={TOTAL_COL_COUNT}
-        className="py-12 text-center text-sm text-[#6c6c89]"
+        className="py-12 text-center text-sm text-[hsl(var(--muted-foreground))]"
         data-testid="TableCell__db8970">
         {message}
       </TableCell>
@@ -59,12 +59,12 @@ function ErrorState({ message, onRetry, retryLabel }) {
         colSpan={TOTAL_COL_COUNT}
         className="py-12 text-center"
         data-testid="TableCell__db8970">
-        <p className="text-sm text-[#d50b3e]">{message}</p>
+        <p className="text-sm text-[hsl(var(--destructive))]">{message}</p>
         {onRetry ? (
           <button
             type="button"
             onClick={onRetry}
-            className="mt-2 text-xs font-medium text-[#121217] underline underline-offset-4"
+            className="mt-2 text-xs font-medium text-[hsl(var(--foreground))] underline underline-offset-4"
           >
             {retryLabel}
           </button>
@@ -122,11 +122,11 @@ export function AccountsTable({
   };
 
   return (
-    <div className="flex h-full flex-col overflow-y-auto bg-white [&>div]:overflow-visible">
+    <div className="flex h-full flex-col overflow-y-auto bg-card [&>div]:overflow-visible">
       <Table data-testid="Table__db8970">
         <AccountsTableHeader data-testid="AccountsTableHeader__db8970" />
         <TableBody
-          className="[&_tr:last-child]:border-b [&_tr:last-child]:border-[#E8EAEF]"
+          className="[&_tr:last-child]:border-b [&_tr:last-child]:border-[hsl(var(--border-subtle))]"
           data-testid="TableBody__db8970">
           {renderBody()}
         </TableBody>

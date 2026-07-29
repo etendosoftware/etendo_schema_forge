@@ -18,6 +18,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ConfirmDialog } from '@/components/OAuth2ClientDialog';
 import { useUI, useLocaleSwitch } from '@/i18n';
+import { useHasCapability } from '@/auth/AuthContext.jsx';
 import { useAccountMutations } from '@/hooks/useAccountMutations.js';
 import { usePsd2Actions, launchSaltEdgePopup } from '@/hooks/usePsd2Actions';
 import { useFinancialAccountAccounting } from '@/hooks/useFinancialAccountAccounting.js';
@@ -31,7 +32,7 @@ const EDIT_TAB_GENERAL = 'general';
 const EDIT_TAB_ACCOUNTING = 'accounting';
 
 const GROUPING_OPTIONS = ['1BD', '1BW', '1BM', '1BE'];
-const FIELD_INPUT = 'bg-white shadow-[0_1px_2px_rgba(18,18,23,0.05)]';
+const FIELD_INPUT = 'bg-card shadow-[0_1px_2px_hsl(var(--foreground) / 0.05)]';
 
 // ---------------------------------------------------------------------------
 // Pure helpers (kept top-level so the component/hooks stay simple)
@@ -318,8 +319,8 @@ function useReconciliationSettings(open, account) {
 
 function ReconciliationSettingsSection({ ui, recon }) {
   return (
-    <div className="mt-6 border-b border-[#E8EAEF] pb-4" data-testid="reconciliation-settings-section">
-      <p className="text-sm font-medium text-[#1E1E2C] mb-3">
+    <div className="mt-6 border-b border-[hsl(var(--border-subtle))] pb-4" data-testid="reconciliation-settings-section">
+      <p className="text-sm font-medium text-[hsl(var(--foreground))] mb-3">
         {ui('financeAccountsReconciliationSection')}
       </p>
       <div className="grid grid-cols-2 gap-4">
@@ -439,7 +440,7 @@ function AccountingConfigurationSection({ ui, accounting }) {
 
   if (accounting.loading) {
     return (
-      <p className="text-xs text-[#6C6C89]" data-testid="accounting-configuration-loading">
+      <p className="text-xs text-muted-foreground" data-testid="accounting-configuration-loading">
         {ui('financeAccountsAccountingLoading')}
       </p>
     );
@@ -447,7 +448,7 @@ function AccountingConfigurationSection({ ui, accounting }) {
 
   if (!accounting.ledgerConfigured) {
     return (
-      <p className="text-xs text-[#6C6C89]" data-testid="accounting-configuration-unconfigured">
+      <p className="text-xs text-muted-foreground" data-testid="accounting-configuration-unconfigured">
         {ui('financeAccountsAccountingNoLedger')}
       </p>
     );
@@ -470,7 +471,7 @@ function AccountingConfigurationSection({ ui, accounting }) {
             staticOptions={accounting.catalog}
             data-testid="edit-account-asset-acct" />
           {accounting.assetAcctMissing ? (
-            <p className="text-xs text-[#F53D6B]" data-testid="edit-account-asset-acct-error">
+            <p className="text-xs text-destructive" data-testid="edit-account-asset-acct-error">
               {ui('financeAccountsAccountingBankAssetRequired')}
             </p>
           ) : null}
@@ -512,7 +513,11 @@ function AccountingConfigurationSection({ ui, accounting }) {
  *   account.
  * - **Accounting**: the accounting accounts used when generating transaction journal entries —
  *   asset account (required) and transitory account (optional). Backed by the
- *   `accountingConfiguration` entity / `FinancialAccountAccountingHandler` (ETP-4530).
+ *   `accountingConfiguration` entity / `FinancialAccountAccountingHandler` (ETP-4530). Gated by
+ *   the `showAccountingFields` capability (`useHasCapability`, ETP-4520/ETP-4530): the trigger
+ *   and panel are both omitted entirely (not disabled) for a role without it, and the modal
+ *   falls back to General if it was sitting on Accounting when the capability turns off (e.g. a
+ *   role switch mid-session).
  *
  * Field editability in the top section:
  * - **Name** is always editable. **Type** is always read-only. Cash accounts have no IBAN.
@@ -551,6 +556,11 @@ export function EditAccountModal({ open, onClose, onSaved, account, onArchive, o
   const psd2 = usePsd2Connection(open, account, psd2Connected, onSaved, onClose);
   const recon = useReconciliationSettings(open, account);
   const accounting = useAccountingConfiguration(open, account);
+  // ETP-4530 — the Accounting tab is only reachable for roles granted this capability (resolved
+  // server-side, admin roles always pass). Fails closed to `false` until the capabilities map
+  // loads, so it can flip false → true shortly after the modal mounts, or true → false mid-session
+  // on a role switch — both handled by the reset effect below.
+  const canSeeAccounting = useHasCapability('showAccountingFields');
   // Initialize from account?.type (not a fixed EDIT_TAB_GENERAL default) so the very first
   // render is already consistent for cash accounts — the General tab's trigger/content are
   // not rendered for them, so an unconditional EDIT_TAB_GENERAL default would leave the first
@@ -567,6 +577,19 @@ export function EditAccountModal({ open, onClose, onSaved, account, onArchive, o
   useEffect(() => {
     if (open) setEditTab(initialEditTab(isCash));
   }, [open, account?.id, isCash]);
+
+  // ETP-4530 — showAccountingFields capability gate. Kept as its own effect (rather than folded
+  // into the reset-on-open effect above) so it reacts purely to the Accounting tab becoming
+  // unreachable — it must NOT re-run the general open/account-id reset logic, which would
+  // incorrectly force non-cash accounts back to General any time the capability flag changes
+  // while the user is legitimately on that tab. Only corrects the one broken case: the modal is
+  // currently showing the Accounting tab (last-used tab, or just-completed reset above) and the
+  // capability has since resolved/changed to false, e.g. the role was switched mid-session.
+  useEffect(() => {
+    if (editTab === EDIT_TAB_ACCOUNTING && !canSeeAccounting) {
+      setEditTab(EDIT_TAB_GENERAL);
+    }
+  }, [editTab, canSeeAccounting]);
 
   if (!account) return null;
 
@@ -617,7 +640,7 @@ export function EditAccountModal({ open, onClose, onSaved, account, onArchive, o
       open={open}
       onOpenChange={(value) => { if (!value) onClose?.(); }}
       data-testid="Dialog__73027d">
-      <DialogContent className="max-w-[1020px] bg-white" data-testid="edit-account-modal">
+      <DialogContent className="max-w-[1020px] bg-card" data-testid="edit-account-modal">
         <DialogHeader data-testid="DialogHeader__73027d">
           <div className="flex items-center justify-between gap-6 pr-8">
             <DialogTitle data-testid="DialogTitle__73027d">{ui('financeAccountsEditTitle')}</DialogTitle>
@@ -640,7 +663,7 @@ export function EditAccountModal({ open, onClose, onSaved, account, onArchive, o
           data-testid="AccountFieldsGrid__73027d" />
 
         <Tabs value={editTab} onValueChange={setEditTab} className="-mt-3" data-testid="EditAccountTabs__73027d">
-          <TabsList className="w-full border-b border-[#E8EAEF]" data-testid="EditAccountTabsList__73027d">
+          <TabsList className="w-full border-b border-border-subtle" data-testid="EditAccountTabsList__73027d">
             {/* Cash accounts have no bank connection and no statement reconciliation, so the
                 General tab (PSD2 + reconciliation config) has nothing to show for them — hide the
                 tab itself rather than rendering it with empty content. */}
@@ -649,9 +672,13 @@ export function EditAccountModal({ open, onClose, onSaved, account, onArchive, o
                 {ui('financeAccountsEditTabGeneral')}
               </TabsTrigger>
             ) : null}
-            <TabsTrigger value={EDIT_TAB_ACCOUNTING} icon={Calculator} data-testid="edit-account-tab-accounting">
-              {ui('financeAccountsEditTabAccounting')}
-            </TabsTrigger>
+            {/* ETP-4530 — the Accounting tab trigger itself must not render at all for a role
+                without the showAccountingFields capability (not just disabled/hidden via CSS). */}
+            {canSeeAccounting ? (
+              <TabsTrigger value={EDIT_TAB_ACCOUNTING} icon={Calculator} data-testid="edit-account-tab-accounting">
+                {ui('financeAccountsEditTabAccounting')}
+              </TabsTrigger>
+            ) : null}
           </TabsList>
 
           {!isCash ? (
@@ -672,12 +699,16 @@ export function EditAccountModal({ open, onClose, onSaved, account, onArchive, o
             </TabsContent>
           ) : null}
 
-          <TabsContent value={EDIT_TAB_ACCOUNTING} className="pt-4" data-testid="edit-account-tabpanel-accounting">
-            <AccountingConfigurationSection
-              ui={ui}
-              accounting={accounting}
-              data-testid="AccountingConfigurationSection__73027d" />
-          </TabsContent>
+          {/* ETP-4530 — panel is gated the same as its trigger, so it's never mounted for a
+              role without the showAccountingFields capability. */}
+          {canSeeAccounting ? (
+            <TabsContent value={EDIT_TAB_ACCOUNTING} className="pt-4" data-testid="edit-account-tabpanel-accounting">
+              <AccountingConfigurationSection
+                ui={ui}
+                accounting={accounting}
+                data-testid="AccountingConfigurationSection__73027d" />
+            </TabsContent>
+          ) : null}
         </Tabs>
 
         {/* The bank account's asset account is validated on the Accounting tab, but Save is
@@ -686,13 +717,13 @@ export function EditAccountModal({ open, onClose, onSaved, account, onArchive, o
             AccountingConfigurationSection already covers the Accounting tab itself, so this is
             skipped there to avoid a duplicate message, ETP-4530 / BUG-1). */}
         {accounting.assetAcctMissing && editTab !== EDIT_TAB_ACCOUNTING ? (
-          <p className="text-xs text-[#F53D6B]" data-testid="edit-account-accounting-error-summary">
+          <p className="text-xs text-destructive" data-testid="edit-account-accounting-error-summary">
             {ui('financeAccountsAccountingBankAssetRequiredSummary')}
           </p>
         ) : null}
 
         {error ? (
-          <p className="text-xs text-[#F53D6B]" data-testid="edit-account-error">{error}</p>
+          <p className="text-xs text-[hsl(var(--destructive))]" data-testid="edit-account-error">{error}</p>
         ) : null}
 
         <EditFooter
@@ -764,7 +795,7 @@ function AccountFieldsGrid({ ui, account, isCash, psd2Connected, fields }) {
             className={FIELD_INPUT}
           />
           {fields.ibanInvalid && fields.ibanTouched ? (
-            <p className="text-xs text-[#F53D6B]" data-testid="edit-account-iban-error">
+            <p className="text-xs text-[hsl(var(--destructive))]" data-testid="edit-account-iban-error">
               {ui('financeAccountsNewIbanInvalid')}
             </p>
           ) : null}
@@ -778,7 +809,7 @@ function AccountFieldsGrid({ ui, account, isCash, psd2Connected, fields }) {
           label={ui('financeAccountsPsd2FieldType')}
           data-testid="EditField__73027d">
           <Select value={fields.type} onValueChange={fields.setType} data-testid="Select__73027d">
-            <SelectTrigger data-testid="edit-account-type" className="bg-white">
+            <SelectTrigger data-testid="edit-account-type" className="bg-card">
               <SelectValue
                 placeholder={ui('financeAccountsPsd2FieldType')}
                 data-testid="SelectValue__73027d" />
@@ -802,7 +833,7 @@ function AccountFieldsGrid({ ui, account, isCash, psd2Connected, fields }) {
           label={ui('financeAccountsPsd2FieldCurrency')}
           data-testid="EditField__73027d">
           <Select value={fields.currencyId} onValueChange={fields.setCurrencyId} data-testid="Select__73027d">
-            <SelectTrigger data-testid="edit-account-currency" className="bg-white">
+            <SelectTrigger data-testid="edit-account-currency" className="bg-card">
               <SelectValue
                 placeholder={ui('financeAccountsNewFieldCurrencyPlaceholder')}
                 data-testid="SelectValue__73027d" />
@@ -832,7 +863,7 @@ function AccountStatusInfo({ ui, account, typeLabel }) {
       <StatusItem
         label={ui('financeAccountsPsd2FieldType')}
         data-testid="StatusItem__73027d">
-        <span className="text-sm font-semibold leading-6 text-[#121217]" data-testid="edit-account-type-info">
+        <span className="text-sm font-semibold leading-6 text-foreground" data-testid="edit-account-type-info">
           {typeLabel || '—'}
         </span>
       </StatusItem>
@@ -840,7 +871,7 @@ function AccountStatusInfo({ ui, account, typeLabel }) {
         label={ui('financeAccountsPsd2FieldCurrency')}
         data-testid="StatusItem__73027d">
         <span
-          className="inline-flex h-6 w-fit items-center rounded-md bg-[#F2F3F5] px-2 text-sm font-medium text-[#121217]"
+          className="inline-flex h-6 w-fit items-center rounded-md bg-muted px-2 text-sm font-medium text-foreground"
           data-testid="edit-account-currency-info">
           {account.currencyIso || '—'}
         </span>
@@ -853,7 +884,7 @@ function AccountStatusInfo({ ui, account, typeLabel }) {
 function StatusItem({ label, children }) {
   return (
     <div className="flex flex-col gap-1">
-      <span className="text-xs font-medium uppercase tracking-wide text-[#6C6C89]">{label}</span>
+      <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{label}</span>
       {children}
     </div>
   );
@@ -864,12 +895,12 @@ function Psd2ConnectionSection({ ui, psd2Connected, psd2, busy, reauthMessage, o
     <div className="flex flex-col gap-3">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <p className="text-sm font-semibold leading-5 text-[#121217]">{ui('financeAccountsEditConnectionSection')}</p>
+          <p className="text-sm font-semibold leading-5 text-[hsl(var(--foreground))]">{ui('financeAccountsEditConnectionSection')}</p>
           <div className="mt-1 flex items-center gap-2">
-            <span className="text-xs text-[#282833]">{ui('financeAccountsPsd2AutoSyncSubtitle')}</span>
+            <span className="text-xs text-[hsl(var(--foreground))]">{ui('financeAccountsPsd2AutoSyncSubtitle')}</span>
             {psd2Connected ? (
               <span className={`rounded-full px-2 py-0.5 text-xs font-normal ${
-                psd2.connected ? 'bg-[#EEFBF4] text-[#17663A]' : 'bg-[#F5F7F9] text-[#6C6C89]'
+                psd2.connected ? 'bg-[var(--status-success-bg)] text-[var(--status-success-fg)]' : 'bg-[hsl(var(--muted))] text-[hsl(var(--muted-foreground))]'
               }`}>
                 {psd2.connected ? `✓ ${ui('financeAccountsPsd2StatusConnected')}` : ui('financeAccountsPsd2StatusDisconnected')}
               </span>
@@ -881,7 +912,7 @@ function Psd2ConnectionSection({ ui, psd2Connected, psd2, busy, reauthMessage, o
             type="button"
             onClick={onConnect}
             data-testid="edit-account-connect-psd2"
-            className="inline-flex shrink-0 items-center gap-2 rounded-full bg-[#121217] px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-[#FFD500] hover:text-[#121217]"
+            className="inline-flex shrink-0 items-center gap-2 rounded-full bg-[hsl(var(--foreground))] px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-[hsl(var(--accent-highlight))] hover:text-[hsl(var(--accent-highlight-foreground))]"
           >
             <Plug className="h-4 w-4" data-testid="Plug__73027d" />
             {ui('financeAccountsMenuConnect')}
@@ -889,7 +920,7 @@ function Psd2ConnectionSection({ ui, psd2Connected, psd2, busy, reauthMessage, o
         ) : null}
       </div>
       {psd2Connected && psd2.loading ? (
-        <p className="text-xs text-[#6C6C89]">{ui('financeAccountsPsd2Loading')}</p>
+        <p className="text-xs text-[hsl(var(--muted-foreground))]">{ui('financeAccountsPsd2Loading')}</p>
       ) : null}
       {psd2Connected && !psd2.loading ? (
         <Psd2Panel
@@ -905,9 +936,9 @@ function Psd2ConnectionSection({ ui, psd2Connected, psd2, busy, reauthMessage, o
 
 function Psd2Panel({ ui, psd2, busy, reauthMessage }) {
   return (
-    <div className="flex flex-col gap-3 rounded-lg bg-[#F5F7F9] p-3">
+    <div className="flex flex-col gap-3 rounded-lg bg-[hsl(var(--muted))] p-3">
       <div className="flex items-center justify-between gap-2">
-        <span className="text-sm font-semibold text-[#121217]">
+        <span className="text-sm font-semibold text-[hsl(var(--foreground))]">
           {psd2.status?.providerName || ui('financeAccountsPsd2StatusConnected')}
         </span>
         <button
@@ -915,9 +946,9 @@ function Psd2Panel({ ui, psd2, busy, reauthMessage }) {
           disabled={busy || !psd2.connected}
           onClick={psd2.handleSync}
           data-testid="psd2-edit-sync"
-          className="inline-flex items-center gap-1.5 rounded-lg border border-[#D1D4DB] bg-white px-3 py-1.5 text-sm font-medium text-[#121217] shadow-[0_1px_2px_rgba(18,18,23,0.05)] hover:bg-[#F5F7F9] disabled:opacity-50"
+          className="inline-flex items-center gap-1.5 rounded-lg border border-[hsl(var(--border-control))] bg-card px-3 py-1.5 text-sm font-medium text-[hsl(var(--foreground))] shadow-[0_1px_2px_hsl(var(--foreground) / 0.05)] hover:bg-[hsl(var(--muted))] disabled:opacity-50"
         >
-          <RefreshCw className="h-4 w-4 text-[#828FA3]" data-testid="RefreshCw__73027d" />
+          <RefreshCw className="h-4 w-4 text-[hsl(var(--text-disabled))]" data-testid="RefreshCw__73027d" />
           {ui('financeAccountsMenuSyncNow')}
         </button>
       </div>
@@ -938,7 +969,7 @@ function Psd2Panel({ ui, psd2, busy, reauthMessage }) {
         <Field label={ui('financeAccountsPsd2Grouping')} data-testid="Field__73027d">
           {/* White wrapper: the picker's box is bg-transparent (built for white cards),
               so on this gray card it blends in — the white backing makes it stand out. */}
-          <div className="rounded-lg bg-white">
+          <div className="rounded-lg bg-card">
             <CreatableSearchSelect
               field={{ name: 'statementGrouping' }}
               value={psd2.form.statementGrouping || ''}
@@ -957,10 +988,10 @@ function Psd2Panel({ ui, psd2, busy, reauthMessage }) {
       </div>
 
       {reauthMessage ? (
-        <div className="flex items-center justify-between gap-2 rounded-lg bg-[#FFF9EB] px-3 py-3" data-testid="psd2-edit-reauth-banner">
-          <span className="flex items-center gap-2 text-sm font-medium text-[#8A6100]">
+        <div className="flex items-center justify-between gap-2 rounded-lg bg-[var(--status-warning-bg)] px-3 py-3" data-testid="psd2-edit-reauth-banner">
+          <span className="flex items-center gap-2 text-sm font-medium text-[var(--status-warning-fg)]">
             <AlertTriangle
-              className="h-4 w-4 shrink-0 text-[#C28800]"
+              className="h-4 w-4 shrink-0 text-[var(--status-warning-fg)]"
               data-testid="AlertTriangle__73027d" />
             {reauthMessage}
           </span>
@@ -969,7 +1000,7 @@ function Psd2Panel({ ui, psd2, busy, reauthMessage }) {
             disabled={busy}
             onClick={psd2.handleReconnect}
             data-testid="psd2-edit-reauth-link"
-            className="shrink-0 text-sm font-medium text-[#8A6100] underline disabled:opacity-50"
+            className="shrink-0 text-sm font-medium text-[var(--status-warning-fg)] underline disabled:opacity-50"
           >
             {ui('financeAccountsPsd2Reauth')}
           </button>
@@ -1004,7 +1035,7 @@ function EditFooter({ ui, account, psd2Connected, connected, busy, canSave, onAr
           type="button"
           onClick={onCancel}
           data-testid="edit-account-cancel"
-          className="rounded-full border border-[#D1D4DB] bg-white px-4 py-2 text-sm font-medium text-[#121217] shadow-[0_1px_2px_rgba(18,18,23,0.05)] hover:bg-[#F5F7F9]"
+          className="rounded-full border border-[hsl(var(--border-control))] bg-card px-4 py-2 text-sm font-medium text-[hsl(var(--foreground))] shadow-[0_1px_2px_hsl(var(--foreground) / 0.05)] hover:bg-[hsl(var(--muted))]"
         >
           {ui('cancel')}
         </button>
@@ -1013,7 +1044,7 @@ function EditFooter({ ui, account, psd2Connected, connected, busy, canSave, onAr
           disabled={!canSave}
           onClick={onSave}
           data-testid="edit-account-save"
-          className="rounded-full bg-[#121217] px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-[#FFD500] hover:text-[#121217] disabled:bg-[#D1D4DB] disabled:text-white disabled:hover:bg-[#D1D4DB] disabled:hover:text-white"
+          className="rounded-full bg-[hsl(var(--foreground))] px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-[hsl(var(--accent-highlight))] hover:text-[hsl(var(--accent-highlight-foreground))] disabled:bg-[hsl(var(--border-control))] disabled:text-primary-foreground disabled:hover:bg-[hsl(var(--border-control))] disabled:hover:text-primary-foreground"
         >
           {ui('financeAccountsEditSave')}
         </button>
@@ -1025,7 +1056,7 @@ function EditFooter({ ui, account, psd2Connected, connected, busy, canSave, onAr
 function EditField({ label, children }) {
   return (
     <div className="flex flex-col gap-2">
-      <span className="text-sm font-medium leading-6 text-[#121217]">{label}</span>
+      <span className="text-sm font-medium leading-6 text-[hsl(var(--foreground))]">{label}</span>
       {children}
     </div>
   );
@@ -1034,15 +1065,15 @@ function EditField({ label, children }) {
 function ReadField({ label, value, onCopy, copyLabel }) {
   return (
     <div className="flex flex-col gap-2">
-      <span className="text-sm font-medium leading-6 text-[#121217]">{label}</span>
+      <span className="text-sm font-medium leading-6 text-[hsl(var(--foreground))]">{label}</span>
       {/* bg-muted/50 + cursor-default matches the read-only styling EntityForm.jsx already
           uses everywhere else in the app (contract-ui's generic pipeline-generated forms) —
           this custom modal's ReadField had been left visually identical to an editable Input
-          (bg-white), giving no visual cue that Tipo de cuenta/Moneda aren't editable. */}
-      <div className="flex h-10 cursor-default items-center gap-2 rounded-lg border border-[#D1D4DB] bg-muted/50 px-3 shadow-[0_1px_2px_rgba(18,18,23,0.05)]">
-        <span className="min-w-0 flex-1 truncate text-sm text-[#6C6C89]">{value || '—'}</span>
+          (a plain surface background), giving no visual cue that Tipo de cuenta/Moneda aren't editable. */}
+      <div className="flex h-10 cursor-default items-center gap-2 rounded-lg border border-[hsl(var(--border-control))] bg-muted/50 px-3 shadow-[0_1px_2px_hsl(var(--foreground) / 0.05)]">
+        <span className="min-w-0 flex-1 truncate text-sm text-muted-foreground">{value || '—'}</span>
         {onCopy ? (
-          <button type="button" onClick={onCopy} aria-label={copyLabel} className="text-[#828FA3] hover:text-[#121217]">
+          <button type="button" onClick={onCopy} aria-label={copyLabel} className="text-[hsl(var(--text-disabled))] hover:text-[hsl(var(--foreground))]">
             <Copy className="h-4 w-4" data-testid="Copy__73027d" />
           </button>
         ) : null}
@@ -1057,12 +1088,12 @@ function FooterButton({ icon: Icon, label, onClick, disabled, danger }) {
       type="button"
       onClick={onClick}
       disabled={disabled}
-      className={`inline-flex items-center gap-2 rounded-full border bg-white px-3 py-2 text-sm font-medium shadow-[0_1px_2px_rgba(18,18,23,0.05)] disabled:opacity-50 ${
-        danger ? 'border-[#FBB1C4] text-[#D50B3E] hover:bg-[#FDEEF2]' : 'border-[#D1D4DB] text-[#121217] hover:bg-[#F5F7F9]'
+      className={`inline-flex items-center gap-2 rounded-full border bg-card px-3 py-2 text-sm font-medium shadow-[0_1px_2px_hsl(var(--foreground) / 0.05)] disabled:opacity-50 ${
+        danger ? 'border-[hsl(var(--destructive) / 0.3)] text-[hsl(var(--destructive))] hover:bg-[var(--status-destructive-bg)]' : 'border-[hsl(var(--border-control))] text-[hsl(var(--foreground))] hover:bg-[hsl(var(--muted))]'
       }`}
     >
       <Icon
-        className={`h-5 w-5 ${danger ? 'text-[#D50B3E]' : 'text-[#828FA3]'}`}
+        className={`h-5 w-5 ${danger ? 'text-[hsl(var(--destructive))]' : 'text-[hsl(var(--text-disabled))]'}`}
         data-testid="Icon__73027d" />
       {label}
     </button>

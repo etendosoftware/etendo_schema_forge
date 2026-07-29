@@ -1,5 +1,6 @@
 import { Suspense, lazy } from 'react';
 import { Navigate } from 'react-router-dom';
+import { LogoutRoute } from '@etendosoftware/app-shell-core/auth';
 import WindowLoader from './windows/WindowLoader.jsx';
 import PreviewPage from './preview/PreviewPage.jsx';
 import DashboardPage from './pages/DashboardPage.jsx';
@@ -21,6 +22,7 @@ import ArtifactViewerPage from './pages/ArtifactViewerPage.jsx';
 const OnboardingPage = lazy(() => import('./pages/OnboardingPage.jsx'));
 const SmartScanPage = lazy(() => import('./pages/SmartScanPage.jsx'));
 const OAuth2ClientsPage = lazy(() => import('./pages/OAuth2ClientsPage.jsx'));
+const RolesOverviewPage = lazy(() => import('./pages/RolesOverviewPage.jsx'));
 const AuthorizePage = lazy(() => import('./pages/AuthorizePage.jsx'));
 const QuickSalesOrderPage = lazy(() => import('./pages/QuickSalesOrderPage.jsx'));
 const QuickPurchaseOrderPage = lazy(() => import('./pages/QuickPurchaseOrderPage.jsx'));
@@ -47,6 +49,7 @@ export function buildRuntimeRoutes({ windowMap, apiBaseUrl }) {
         <Suspense fallback={LOADING_FALLBACK} data-testid="Suspense__e8c60d"><OnboardingPage data-testid="OnboardingPage__e8c60d" /></Suspense>
       ) },
     { path: 'login', public: true, element: <Navigate to="/onboarding" replace data-testid="Navigate__e8c60d" /> },
+    { path: 'logout', public: true, element: <LogoutRoute safeDestination="/onboarding" data-testid="LogoutRoute__e8c60d" /> },
     { path: 'financial-account/psd2-callback', public: true, element: <Psd2CallbackPage data-testid="Psd2CallbackPage__e8c60d" /> },
     { path: 'financial-account/pis-callback', public: true, element: <PisCallbackPage data-testid="PisCallbackPage__e8c60d" /> },
     { path: 'dashboard', public: false, element: <DashboardPage apiBaseUrl={apiBaseUrl} data-testid="DashboardPage__e8c60d" /> },
@@ -64,6 +67,7 @@ export function buildRuntimeRoutes({ windowMap, apiBaseUrl }) {
     { path: 'projects', public: false, element: <ProjectsPage data-testid="ProjectsPage__e8c60d" /> },
     lazyRoute('smart-scan', SmartScanPage),
     lazyRoute('oauth2-clients', OAuth2ClientsPage),
+    lazyRoute('roles', RolesOverviewPage),
     lazyRoute('authorize', AuthorizePage),
     lazyRoute('quick-sales-order', QuickSalesOrderPage, { apiBaseUrl }),
     lazyRoute('quick-purchase-order', QuickPurchaseOrderPage, { apiBaseUrl }),

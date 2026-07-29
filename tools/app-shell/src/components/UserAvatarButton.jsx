@@ -76,7 +76,7 @@ export function UserAvatarButton({ expanded = false }) {
       className="relative h-10 w-10 flex items-center justify-center rounded-lg bg-page-bg text-muted-foreground hover:text-foreground transition-colors"
       title={username}
     >
-      <div className="flex h-6 w-6 items-center justify-center rounded-full text-xs font-semibold bg-[#E8EAEF] text-foreground transition-colors">
+      <div className="flex h-6 w-6 items-center justify-center rounded-full text-xs font-semibold bg-[hsl(var(--border-subtle))] text-foreground transition-colors">
         {initial}
       </div>
       {roleInitial && (
@@ -157,7 +157,7 @@ export function UserAvatarButton({ expanded = false }) {
             )}
             <DropdownMenuItem
               onClick={logout}
-              className="text-red-500 focus:text-red-600 focus:bg-red-50 dark:focus:bg-red-950/20"
+              className="text-destructive focus:text-destructive focus:bg-destructive dark:focus:bg-destructive/20"
               data-testid="user-menu-logout">
               <LogOut className="h-3.5 w-3.5 mr-2" data-testid="LogOut__9f3744" />
               {ui('logout')}

@@ -1,5 +1,6 @@
-import { useEffect } from 'react';
+import { useMemo, useEffect } from 'react';
 import { ListView, DetailView } from '@/components/contract-ui';
+import { useWindowAccess, WindowAccessGuard } from '@/auth/AuthContext.jsx';
 import AccountTable from './AccountTable';
 import AccountForm from './AccountForm';
 import TransactionTable from './TransactionTable';
@@ -464,6 +465,13 @@ export const api = {
 
 // @sf-generated-start component:AccountPage
 export default function AccountPage({ windowName, recordId, ...props }) {
+  const windowAccessTier = useWindowAccess('94EAA455D2644E04AB25D93BE5157B6D');
+  const effectiveWindow = useMemo(() => (
+    windowAccessTier === 'read-only' ? { ...(props.window || {}), readOnly: true } : props.window
+  ), [windowAccessTier, props.window]);
+  if (windowAccessTier === 'none') {
+    return <WindowAccessGuard windowId="94EAA455D2644E04AB25D93BE5157B6D" />;
+  }
   if (recordId) {
     return (
       <>
@@ -487,7 +495,7 @@ export default function AccountPage({ windowName, recordId, ...props }) {
         breadcrumb={breadcrumb}
       api={api}
         requiredHeaderFields={requiredHeaderFields}
-        {...props}
+        {...props} window={effectiveWindow}
       />
       </>
     );
@@ -502,7 +510,7 @@ export default function AccountPage({ windowName, recordId, ...props }) {
       breadcrumb={breadcrumb}
       api={api}
       rowQuickActions={{}}
-      {...props}
+      {...props} window={effectiveWindow}
     />
   );
 }

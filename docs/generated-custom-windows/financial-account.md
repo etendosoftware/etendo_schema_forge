@@ -47,8 +47,16 @@ else to `B`; the frontend `ACCOUNT_TYPE.CARD` is `'CA'`.
 - Bank mode fields: Name (required), IBAN (optional, validated with `validateIban`), BIC/SWIFT (optional), Currency (required, populated from `fetchDefaults()` — restricted server-side to EUR/USD/GBP, see "Currencies" below). The currency field is `CreatableSearchSelect` (`@/components/contract-ui/CreatableSearchSelect`) with `staticOptions`, the same chip-style FK picker used across the app (Contacto, Tarifa, Dirección) and already used by `EditAccountModal.jsx`'s `statementGrouping` field: searchable text input while unselected, a removable `SelectorChip` (ISO code + ×) once a currency is chosen, click the chip to search again.
 - Cash mode fields: Name (required), Currency (required, same chip picker). No IBAN / BIC.
 - This chip picker is scoped to **account creation** (`AccountFormStep.jsx`, used only by `NewAccountWizard.jsx`). `EditAccountModal.jsx` keeps its own separate, unrelated currency `<Select>` (line ~523) — out of scope for this fix.
-- Form layout: `gap-5` (20 px) between fields; `gap-2` (8 px) between label and input; white inputs (`bg-white`) with `shadow-[0_1px_2px_rgba(18,18,23,0.05)]`.
-- Submit button: pill-shaped (`rounded-full`), black background, yellow hover, `#D1D4DB` when disabled.
+- Form layout: `gap-5` (20 px) between fields; `gap-2` (8 px) between label and input; card-surface inputs with a semantic foreground shadow.
+- Submit button: pill-shaped (`rounded-full`) and uses the active theme primary/foreground/control roles, including its disabled state.
+
+### Theme roles
+
+The account-management window does not own a palette. Its modals, tables,
+forms, movement indicators and import flow consume the app-shell semantic
+theme: structural roles for surfaces and controls, and success, warning,
+information, neutral and destructive roles for business state. This keeps the
+window consistent when the active theme changes.
 - Submit calls `createAccount(payload)` from `useAccountMutations`. On 409 the duplicate-name error shows as an inline validation message (not a toast).
 
 ## Edit Account Modal (unified, ETP-4097 / T3; tabs added ETP-4530)
@@ -79,6 +87,30 @@ the same primitives `DetailTabs.jsx` uses for the Movements/Reconciliation/State
   in local dev data: e.g. the "F&B US, Inc." and "Spain" organizations have no ledger configured,
   so their bank accounts — including the highest-traffic demo account, "Bank - Account 1" — cannot
   populate this tab until an admin sets one).
+- **Capability-gated Accounting tab (ETP-4520, UI label "Contabilidad"):** the tab is only reachable for a role granted
+  the `showAccountingFields` capability. This window is `layoutType: "custom"`, so — unlike the
+  invoice windows' `posted` field/status pill, which declares `"visibleWhenCapability":
+  "showAccountingFields"` in `decisions.json` and is resolved generically by `isCapabilityVisible()`
+  inside `DataTable.jsx`/`DetailView.jsx` (see `sales-invoice.md`/`purchase-invoice.md`, "Reactive
+  behavior and dependencies") — there is no generated contract to declare the gate in.
+  `EditAccountModal.jsx` instead calls `useHasCapability('showAccountingFields')`
+  (`@/auth/AuthContext.jsx`) directly and holds the result in `canSeeAccounting`. Both the
+  `TabsTrigger value={EDIT_TAB_ACCOUNTING}` and its `TabsContent` are wrapped in
+  `canSeeAccounting ? (...) : null` — omitted from the DOM entirely (not disabled, not
+  CSS-hidden) when the capability resolves false, the same "omit, don't disable" contract as the
+  invoice windows, just enforced by the component itself rather than the shared helper. A
+  dedicated effect (kept separate from the open/account-id tab-reset effect so it doesn't also
+  force non-cash accounts back to General on every unrelated render) watches `canSeeAccounting`
+  and resets `editTab` to General the moment it turns false while Accounting is the active tab —
+  covering a role switch mid-session that revokes the capability while the modal stays open. For
+  a cash account with the capability denied, neither tab has anything to show; the modal still
+  renders cleanly with `editTab` settled on General internally, just with no trigger visible for
+  either tab.
+  Automated evidence: `tools/app-shell/src/windows/custom/financial-account/__tests__/EditAccountModal.vitest.jsx`,
+  describe block `"showAccountingFields capability gate (ETP-4530)"` (test source predates the
+  ETP-4520/ETP-4530 scope split — the gate itself is ETP-4520) — covers tab+panel shown when
+  granted, both entirely absent when denied, the fallback to General on a mid-session capability
+  revoke, and the cash-account-with-no-capability edge case.
 
 Field editability in the top section:
 

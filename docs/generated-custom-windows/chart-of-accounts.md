@@ -65,3 +65,11 @@ Maintain the account master used by finance users and provide a quick, read-only
 - `modules/com.etendoerp.go/src/com/etendoerp/go/schemaforge/handlers/ChartOfAccountsHandler.java` — `loadTreeData`/`buildAncestorChain` walk `AD_TreeNode` for the client's `"<ClientName> Element Value"` tree and inject `ancestors` + `elementLevel` per leaf in `applyHierarchyMetadata`.
 - `tools/app-shell/src/windows/custom/chart-of-accounts/__tests__/AccountTreeView.vitest.jsx` covers both the legacy 2-level grouping and the full ancestor-chain nested tree, the `0000`-suffix lock-icon rule (locked, not locked, and virtual-folder-never-locked cases), expand/collapse persistence across unmount/remount (including a corrupt-`localStorage` fallback), and the full-dataset self-fetch (fetch fired with the correct URL/headers, all 4 roots rendered from the fetched data even when the paginated `data` prop only carries 2, self-fetch skipped when `apiBaseUrl` is absent, graceful fallback + error toast on fetch failure, and refetch-after-save).
 - `modules/com.etendoerp.go/src-test/src/com/etendoerp/go/schemaforge/handlers/ChartOfAccountsHandlerTest.java` covers `buildAncestorChain` (root node, node-exclusion, six-level PGC example, circular-reference cap, and JSON-null fallback for missing values).
+
+## Theme roles
+
+The window's live artifact custom components use the shared semantic theme.
+Structural surfaces and controls consume background, card, foreground, muted, and
+border roles; operational feedback uses success, warning, information, neutral,
+and destructive roles. No local palette is used, so the active application theme
+controls the appearance.

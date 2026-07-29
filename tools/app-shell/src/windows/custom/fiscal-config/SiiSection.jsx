@@ -15,9 +15,9 @@ const SII_ENTITY = 'siiConfiguration';
 // Two-column section row wrapper
 function SectionRow({ label, children, labelExtra, noBorderTop, boldLabel }) {
   return (
-    <div className={`flex items-start py-6 gap-6 ${noBorderTop ? '' : 'border-t border-[#E8EAEF]'}`}>
+    <div className={`flex items-start py-6 gap-6 ${noBorderTop ? '' : 'border-t border-[hsl(var(--border-subtle))]'}`}>
       <div className="w-[160px] flex-shrink-0">
-        <span className={`text-sm text-[#121217] ${boldLabel ? 'font-semibold' : 'font-medium'}`}>{label}</span>
+        <span className={`text-sm text-[hsl(var(--foreground))] ${boldLabel ? 'font-semibold' : 'font-medium'}`}>{label}</span>
         {labelExtra && <div className="mt-0.5">{labelExtra}</div>}
       </div>
       <div className="flex-1 min-w-0">{children}</div>
@@ -97,7 +97,7 @@ const SiiSection = forwardRef(function SiiSection({ record, apiBaseUrl, orgId, o
               checked={isEtendoTrue(form.acogidaAlSII)}
               onCheckedChange={v => set('acogidaAlSII', v ? 'Y' : 'N')}
               data-testid="Switch__fcb159" />
-            <span className="text-sm text-[#121217]">{ui('fiscal.sii.field.enrolled')}</span>
+            <span className="text-sm text-[hsl(var(--foreground))]">{ui('fiscal.sii.field.enrolled')}</span>
           </div>
         </div>
       </SectionRow>
@@ -109,14 +109,14 @@ const SiiSection = forwardRef(function SiiSection({ record, apiBaseUrl, orgId, o
               checked={isEtendoTrue(form.entornoDeProduccin)}
               onCheckedChange={v => set('entornoDeProduccin', v ? 'Y' : 'N')}
               data-testid="Switch__fcb159" />
-            <span className="text-sm text-[#121217]">{ui('fiscal.sii.field.production')}</span>
+            <span className="text-sm text-[hsl(var(--foreground))]">{ui('fiscal.sii.field.production')}</span>
           </div>
           <div className="flex items-center gap-2 w-[376px]">
             <Switch
               checked={isEtendoTrue(form.adjuntarArchivosXML)}
               onCheckedChange={v => set('adjuntarArchivosXML', v ? 'Y' : 'N')}
               data-testid="Switch__fcb159" />
-            <span className="text-sm text-[#121217]">{ui('fiscal.sii.field.attachXml')}</span>
+            <span className="text-sm text-[hsl(var(--foreground))]">{ui('fiscal.sii.field.attachXml')}</span>
           </div>
         </div>
       </SectionRow>
@@ -132,19 +132,19 @@ const SiiSection = forwardRef(function SiiSection({ record, apiBaseUrl, orgId, o
                   min={0}
                   value={form.plazoLmiteDeEnvoASII}
                   onChange={e => set('plazoLmiteDeEnvoASII', e.target.value)}
-                  className="flex-1 min-w-0 h-10 rounded-l-lg border border-[#D1D4DB] px-3 text-sm bg-white [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                  className="flex-1 min-w-0 h-10 rounded-l-lg border border-[hsl(var(--border-control))] px-3 text-sm bg-card [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                 />
                 <button
                   type="button"
                   onClick={() => set('plazoLmiteDeEnvoASII', Math.max(0, +form.plazoLmiteDeEnvoASII - 1))}
-                  className="h-10 w-9 border border-l-0 border-[#D1D4DB] flex items-center justify-center text-sm hover:bg-muted/40 transition-colors"
+                  className="h-10 w-9 border border-l-0 border-[hsl(var(--border-control))] flex items-center justify-center text-sm hover:bg-muted/40 transition-colors"
                 >
                   −
                 </button>
                 <button
                   type="button"
                   onClick={() => set('plazoLmiteDeEnvoASII', +form.plazoLmiteDeEnvoASII + 1)}
-                  className="h-10 w-9 rounded-r-lg border border-l-0 border-[#D1D4DB] flex items-center justify-center text-sm hover:bg-muted/40 transition-colors"
+                  className="h-10 w-9 rounded-r-lg border border-l-0 border-[hsl(var(--border-control))] flex items-center justify-center text-sm hover:bg-muted/40 transition-colors"
                 >
                   +
                 </button>
@@ -157,7 +157,7 @@ const SiiSection = forwardRef(function SiiSection({ record, apiBaseUrl, orgId, o
                 min={0}
                 value={form.cadenciaEnvoFacturasVentaASII}
                 onChange={e => set('cadenciaEnvoFacturasVentaASII', e.target.value)}
-                className="bg-white"
+                className="bg-card"
                 data-testid="Input__fcb159" />
             </div>
             <div className="space-y-1 w-[376px]">
@@ -167,7 +167,7 @@ const SiiSection = forwardRef(function SiiSection({ record, apiBaseUrl, orgId, o
                 min={0}
                 value={form.cadenciaEnvoFacturasCompraASII}
                 onChange={e => set('cadenciaEnvoFacturasCompraASII', e.target.value)}
-                className="bg-white"
+                className="bg-card"
                 data-testid="Input__fcb159" />
             </div>
           </div>
@@ -176,7 +176,7 @@ const SiiSection = forwardRef(function SiiSection({ record, apiBaseUrl, orgId, o
               checked={isEtendoTrue(form.postedInvoices)}
               onCheckedChange={v => set('postedInvoices', v ? 'Y' : 'N')}
               data-testid="Switch__fcb159" />
-            <span className="text-sm text-[#121217]">{ui('fiscal.sii.field.postedOnly')}</span>
+            <span className="text-sm text-[hsl(var(--foreground))]">{ui('fiscal.sii.field.postedOnly')}</span>
           </div>
         </div>
       </SectionRow>
@@ -188,21 +188,21 @@ const SiiSection = forwardRef(function SiiSection({ record, apiBaseUrl, orgId, o
               checked={isEtendoTrue(form.recc)}
               onCheckedChange={v => set('recc', v ? 'Y' : 'N')}
               data-testid="Switch__fcb159" />
-            <span className="text-sm text-[#121217]">{ui('fiscal.sii.field.recc')}</span>
+            <span className="text-sm text-[hsl(var(--foreground))]">{ui('fiscal.sii.field.recc')}</span>
           </div>
           <div className="flex items-center gap-2 pt-1 w-[376px]">
             <Switch
               checked={isEtendoTrue(form.redeme)}
               onCheckedChange={v => set('redeme', v ? 'Y' : 'N')}
               data-testid="Switch__fcb159" />
-            <span className="text-sm text-[#121217]">{ui('fiscal.sii.field.redeme')}</span>
+            <span className="text-sm text-[hsl(var(--foreground))]">{ui('fiscal.sii.field.redeme')}</span>
           </div>
           <div className="space-y-1 w-[376px]">
             <Label data-testid="Label__fcb159">{ui('fiscal.sii.field.authno')}</Label>
             <Input
               value={form.authorizationno}
               onChange={e => set('authorizationno', e.target.value)}
-              className="bg-white"
+              className="bg-card"
               data-testid="Input__fcb159" />
           </div>
         </div>
@@ -212,7 +212,7 @@ const SiiSection = forwardRef(function SiiSection({ record, apiBaseUrl, orgId, o
         <SectionRow
           label={ui('fiscal.cert.section.legend')}
           boldLabel
-          labelExtra={<span className="text-xs text-[#121217] leading-tight">{ui('fiscal.cert.section.hint')}</span>}
+          labelExtra={<span className="text-xs text-[hsl(var(--foreground))] leading-tight">{ui('fiscal.cert.section.hint')}</span>}
           data-testid="SectionRow__fcb159">
           <CertSection
             context="sii"

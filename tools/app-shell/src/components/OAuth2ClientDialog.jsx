@@ -283,7 +283,7 @@ export function SecretRevealDialog({ open, onClose, clientId, clientSecret }) {
         </DialogHeader>
 
         <div className="space-y-4 py-4">
-          <div className="flex items-center gap-2 rounded-md bg-amber-500/10 border border-amber-500/30 px-3 py-2 text-sm text-amber-600 dark:text-amber-400">
+          <div className="flex items-center gap-2 rounded-md bg-status-warning/10 border border-status-warning-border/30 px-3 py-2 text-sm text-status-warning-foreground dark:text-status-warning-foreground">
             <AlertTriangle className="h-4 w-4 shrink-0" data-testid="AlertTriangle__4aea7f" />
             <span>This secret will not be shown again. Copy it now.</span>
           </div>

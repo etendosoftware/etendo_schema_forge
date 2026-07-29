@@ -1,5 +1,6 @@
-import { useEffect } from 'react';
+import { useMemo, useEffect } from 'react';
 import { ListView, DetailView } from '@/components/contract-ui';
+import { useWindowAccess, WindowAccessGuard } from '@/auth/AuthContext.jsx';
 import ProductTable from './ProductTable';
 import ProductForm from './ProductForm';
 import AccountingTable from './AccountingTable';
@@ -511,6 +512,13 @@ export const api = {
 const labelOverrides = api.labelOverrides;
 // @sf-generated-start component:ProductPage
 export default function ProductPage({ windowName, recordId, ...props }) {
+  const windowAccessTier = useWindowAccess('140');
+  const effectiveWindow = useMemo(() => (
+    windowAccessTier === 'read-only' ? { ...(props.window || {}), readOnly: true } : props.window
+  ), [windowAccessTier, props.window]);
+  if (windowAccessTier === 'none') {
+    return <WindowAccessGuard windowId="140" />;
+  }
   if (recordId) {
     return (
       <>
@@ -546,16 +554,16 @@ export default function ProductPage({ windowName, recordId, ...props }) {
         compactSidebarPadding
         whiteFormBackground
         autoSaveOnBlur
-        sidebarClassName="w-[30%] shrink-0 overflow-y-auto pt-2 pl-0 pr-4 pb-5 border-l border-[#E8EAEF]"
+        sidebarClassName="w-[30%] shrink-0 overflow-y-auto pt-2 pl-0 pr-4 pb-5 border-l border-border-subtle"
         tabsBarPaddingX="px-2"
         primaryTabsVariant="pill"
         toolbarPaddingX="px-2"
-        contentBg="bg-white"
+        contentBg="bg-card"
         formCardPadding="px-2"
         customTabs={[{ key: 'pricing', labelKey: 'price', Component: ProductPriceBar, placement: 'tab' }, { key: 'attachments', labelKey: 'attachments', Component: AttachmentsTab, placement: 'tab', props: { tableName: "M_Product", config: {} } }]}
         requiredHeaderFields={requiredHeaderFields}
         labelOverrides={labelOverrides}
-        {...props}
+        {...props} window={effectiveWindow}
         sidebarContent={(data) => (
           <ProductSidebar
             recordId={recordId}
@@ -586,7 +594,7 @@ export default function ProductPage({ windowName, recordId, ...props }) {
       labelOverrides={labelOverrides}
       rowQuickActions={{}}
       import={{"enabled":true,"spec":"product","entity":"product","formats":["csv","txt"],"limit":{"maxRows":5000,"concurrency":4},"dedupe":{"scope":"file","key":["searchKey"]},"fields":[{"target":"searchKey","aliases":["codigo","código","sku"],"label":"Search Key","required":true,"type":"string"},{"target":"name","aliases":["nombre"],"label":"Name","required":true,"type":"string"},{"target":"description","aliases":["descripcion","descripción"],"label":"Description","required":false,"type":"textarea"},{"target":"uOM","aliases":["unidad de medida","uom"],"matchEntity":"UOM","label":"UOM","required":true,"type":"foreignKey","reference":"UOM"},{"target":"productCategory","aliases":["categoria","categoría"],"matchEntity":"ProductCategory","label":"Product Category","required":true,"type":"foreignKey","reference":"ProductCategory"},{"target":"taxCategory","aliases":["categoria impositiva","categoría impositiva","impuesto"],"matchEntity":"FinancialMgmtTaxCategory","label":"Tax Category","required":true,"type":"foreignKey","reference":"TaxCategory"}]}}
-      {...props}
+      {...props} window={effectiveWindow}
     />
   );
 }

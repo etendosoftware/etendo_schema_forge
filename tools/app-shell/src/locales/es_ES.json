@@ -13819,6 +13819,9 @@
     "Transaction code": {
       "label": "Clave de operación (IVA)"
     },
+    "Transaction Type": {
+      "label": "Tipo de transacción"
+    },
     "Invoice Register Book Setup": {
       "label": "Configuración de Libro de Facturas"
     },
@@ -13864,6 +13867,9 @@
     "Conversion Rates": {
       "label": "Rangos de conversión"
     },
+    "Conversion Rate Downloader Log": {
+      "label": "Registro de descarga de tipos de cambio"
+    },
     "Dimensions Mapping": {
       "label": "Mapeo de dimensiones"
     },
@@ -13886,8 +13892,8 @@
       "label": "País, provincia y ciudad"
     },
     "Business Partner": {
-      "label": "Terceros",
-      "newLabel": "Nuevo tercero"
+      "label": "Contactos",
+      "newLabel": "Nuevo contacto"
     },
     "Return Material Receipt": {
       "label": "Albarán de devolución",
@@ -16640,6 +16646,9 @@
     }
   },
   "genericLabels": {
+    "noAccessTitle": "Sin acceso",
+    "noAccessMessage": "Contacta a tu administrador para obtener acceso.",
+    "windowAccessDenied": "No tienes acceso a esta ventana",
     "balanced": "Cuadrado",
     "difference": "Diferencia",
     "journalUnbalancedSaveBlocked": "El debe y el haber deben ser iguales antes de guardar",
@@ -16882,6 +16891,7 @@
     "backendError.amortizationUsableLifeMonthsRequired": "El campo Vida útil - Meses no puede estar vacío, ser cero o negativo.",
     "backendError.amortizationDepreciationAmountRequired": "El campo Valor a amortizar no puede estar vacío, ser cero o negativo.",
     "backendError.amortizationStartDateRequired": "El campo fecha inicio es obligatorio.",
+    "backendError.assetGroupNameDuplicate": "Ya existe una categoría de activo con este nombre.",
     "processAssetCompleted": "Amortización creada",
     "reactivated": "Documento reactivado",
     "post": "Contabilizar",
@@ -17411,11 +17421,26 @@
     "helpComingSoon": "La ayuda y soporte estará disponible pronto.",
     "assignedRole": "Rol asignado",
     "noRoleAssigned": "Sin rol asignado",
-    "roleNameGoClientAdmin": "Administrador de GOClient",
+    "roleNameAdmin": "Administrador",
     "roleNameFinance": "Finanzas",
     "roleNameSales": "Ventas",
     "roleNamePurchasing": "Compras",
     "roleNameInventory": "Inventario",
+    "roleDescAdmin": "Acceso administrativo completo a todas las ventanas y configuraciones de Etendo GO.",
+    "roleDescFinance": "Gestiona la contabilidad, cuentas financieras, pagos, facturas y configuración de impuestos.",
+    "roleDescSales": "Gestiona clientes, listas de precios, presupuestos, pedidos y facturas de venta.",
+    "roleDescPurchasing": "Gestiona proveedores, pedidos de compra y facturas de compra.",
+    "roleDescInventory": "Gestiona movimientos de stock, recepciones y envíos de mercancías, almacenes y conteos de inventario físico.",
+    "Roles": "Roles",
+    "rolesPageTitle": "Roles",
+    "rolesPageSubtitle": "Los 5 roles fijos, sus ventanas asignadas y el número de usuarios.",
+    "rolesColUsers": "Usuarios",
+    "rolesColWindows": "Ventanas asignadas",
+    "rolesNoAccessTitle": "No tienes acceso a esta vista",
+    "rolesNoAccessMessage": "Solo los administradores pueden ver el resumen de roles.",
+    "rolesLoadError": "No se pudieron cargar los roles.",
+    "accessTierFull": "Completo",
+    "accessTierReadOnly": "Solo lectura",
     "supportTabChat": "Chat",
     "supportTabTickets": "Mis tickets",
     "supportNewConversation": "Nueva conversación",
@@ -19304,6 +19329,7 @@
     "changePasswordLogoutNotice": "Después de cambiar tu contraseña se cerrará la sesión y deberás iniciar sesión nuevamente.",
     "onboardingPasswordChangedNotice": "Tu contraseña se cambió correctamente. Iniciá sesión con tu nueva contraseña.",
     "onboardingDraftRestoredNotice": "Recuperamos tu progreso guardado para que continúes donde lo dejaste.",
+    "onboardingDraftSaveWarning": "No se pudo guardar el progreso de configuración. Tus cambios se conservarán en este dispositivo; inténtalo de nuevo.",
     "onboardingCurrentPasswordLabel": "Contraseña actual",
     "onboardingCredentialChangeSuccess": "Contraseña actualizada.",
     "onboardingCredentialChangeFailed": "No se pudo cambiar la contraseña.",
@@ -19520,7 +19546,8 @@
     "sqNoLinesError": "El presupuesto no puede confirmarse porque no tiene líneas",
     "soNoLinesError": "El pedido no puede confirmarse porque no tiene líneas",
     "invNoLinesError": "La factura no puede confirmarse porque no tiene líneas",
-    "fieldMinValueError": "El valor no puede ser negativo",
+    "fieldMinValueError": "El valor debe ser al menos {min}",
+    "fieldIntegerError": "El valor debe ser un número entero",
     "sqOrderConfirmedInvoiceError": "El presupuesto fue procesado pero no se pudo crear la factura. ",
     "rejectQuotation": "Rechazar",
     "rejectQuotationTitle": "Rechazar Presupuesto",
@@ -19766,6 +19793,7 @@
     "backendError.matchRuleRegexComplex": "La expresión regular es demasiado compleja (posible backtracking catastrófico)",
     "backendError.matchRuleRegexInvalid": "Expresión regular no válida",
     "backendError.matchRulePriorityConflict": "Ya existe una regla con esta prioridad para el ámbito seleccionado",
+    "backendError.priceListCannotDeactivateDefault": "No es posible desactivar una tarifa marcada como por defecto.",
     "uomTypeArea": "Área",
     "uomTypeLength": "Longitud",
     "uomTypeTime": "Tiempo",
