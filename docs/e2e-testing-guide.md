@@ -70,6 +70,21 @@ Each run creates a unique user (random suffix), so the test is repeatable withou
 
 ---
 
+## Product Category Duplicate Identifier Integration Smoke
+
+`e2e/tests/flows/product-category-duplicate-identifier.integration.spec.js` proves the ETP-4597 fix (`normalizeServerError` in `tools/app-shell/src/hooks/useEntity.js`) against a REAL backend response, not a mocked one. `useEntity-helpers.test.js` already covers the string-transform logic with a mocked AD error string; this spec exercises the same transform end to end: it logs in, navigates to `/product-category`, creates a Product Category with a random Search Key, then immediately tries to create a second one with the same Search Key. It asserts the resulting error toast (`[data-type="error"]`) shows the friendly `validationDuplicateIdentifier` copy ("Ya existe un registro con este identificador..." / "A record with this identifier already exists...") and never leaks the technical AD field-group fingerprint (the parenthesized listing, e.g. "(Entidad, Organización, Identificador)" / "(Client, Organization, Identifier)", or "Categoría del producto con el mismo"). It is skipped by default because it requires a live Etendo backend — it is **not run by any CI job**; it is manual/on-demand only.
+
+Like `contacts-integration.spec.js`, it reuses the credentials created by `onboarding-register.integration.spec.js` (read from `.auth-credentials.json`) when available, falling back to `E2E_PASSWORD`/`E2E_USER`. Run it explicitly:
+
+```bash
+cd e2e
+E2E_USE_MOCK=0 E2E_PASSWORD=<password> npx playwright test tests/flows/product-category-duplicate-identifier.integration.spec.js
+```
+
+Each run creates a unique category (random Search Key suffix), so the test is repeatable without manual cleanup and never depends on a specific seeded record (e.g. "Bebidas") continuing to exist.
+
+---
+
 ## Deployed MCP OAuth2 Smoke
 
 `e2e/tests/flows/mcp-oauth-pkce.smoke.spec.js` validates the public MCP/OAuth integration after deploy. It models the browser flow started by `opencode mcp auth etendo`: clean session, OAuth authorize URL, login, requested permissions, explicit authorization, local callback, and PKCE token exchange. The UI preserves the original `/authorize?...` URL through onboarding with a local-only `returnTo` parameter, then resumes the authorization screen after environment login. It is skipped by default because it targets a deployed environment, uses real smoke credentials, can create an OAuth client through DCR, and binds a local callback server.
