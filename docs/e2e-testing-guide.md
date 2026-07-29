@@ -470,7 +470,8 @@ await login(page, {
 
 ## Writing a New Test: Step by Step
 
-1. **Start the dev server** — `make dev` (keep it running)
+1. **Start the dev server** — `make dev` (keep it running). Needed only for
+   *discovery* in step 2; the test run in step 6 starts its own server.
 2. **Discover** — Use `agent-browser` to navigate, find selectors, understand the flow
 3. **Create test file** — `e2e/tests/flows/{window-name}.spec.js`
 4. **Update selectors** — Add discovered selectors to `selectors.js`
@@ -746,21 +747,41 @@ await page.route('**/sws/neo/session**', (route) => route.fulfill({
 }));
 ```
 
-**Ports 3100/3101 may belong to someone else's dev server.** `BASE_URL` defaults
-to `http://localhost:3100`. If another checkout (or another agent) is already
-serving there, your run tests *their* application and passes or fails against the
-wrong code — it never errors. When it matters which source tree you are
-measuring, start your own server on a free port and point at it explicitly:
+**The suite used to test whichever app answered the port — this is the purest
+member of this list, because it did not fail at all.** Playwright had no
+`webServer` block, so it never started the app; it used whatever was serving on
+`:3100`. When that was a different checkout, the run passed or failed against
+code that was not under test, invisibly in both directions: a green run proved
+nothing, and a red one sent people hunting a regression that did not exist.
+Measured on this branch's own specs: **21/36 against a stale `:3100`, 36/36
+against a server started from the worktree** — and the 15 failures were
+deterministic and plausible-looking (a real tab button with no `data-active`
+attribute, because that attribute did not exist on the older commit).
 
-```bash
-cd tools/app-shell && npx vite --port 3111 --strictPort
-cd e2e && E2E_USE_MOCK=1 BASE_URL=http://localhost:3111 npx playwright test ...
-```
+Fixed: `playwright.config.js` now declares a `webServer` that starts vite from
+this checkout on a dedicated port (`3200`, override with `E2E_PORT`) with
+`reuseExistingServer: false`, so Playwright owns the server and **never adopts
+one it did not start**. A busy port is now a loud error instead of a silent
+wrong-app run. `make dev` on `:3100` and an E2E run can coexist.
 
-`E2E_USE_MOCK=1` is required here: `login()` picks mock mode from *`BASE_URL`
-being unset*, so setting `BASE_URL` would otherwise switch it to real-backend mode.
-If you need local core sources, that server also needs `LOCAL_CORE=1` and
-`SCHEMA_FORGE_CORE=<path>` — see `docs/repo-topology.md`.
+Two consequences worth knowing:
+
+- Setting `BASE_URL` still points the suite at an external target and suppresses
+  the managed server — that is the deployed-Etendo mode. But `BASE_URL` also
+  switches `login()` out of mock mode, so pair it with `E2E_USE_MOCK=1` if you
+  are aiming a *mocked* spec at a server you started yourself.
+- `LOCAL_CORE` / `SCHEMA_FORGE_CORE` are inherited by the managed server rather
+  than forced, keeping local-core resolution opt-in (see `docs/repo-topology.md`).
+  Export them before running if you need core from source.
+
+**`make test-e2e` could not run the mocked suite at all**, for a related reason
+worth recognising elsewhere: the Makefile defines `BASE_URL` for the
+*email-stress harness* (it feeds `ETENDO_BASE_URL`), and a bare `export`
+directive exports every variable to every recipe. Playwright therefore saw an
+Etendo URL as an external target and put `login()` into real-backend mode, where
+every mocked spec died on `Set E2E_PASSWORD`. The E2E targets now run under
+`env -u BASE_URL`. The general lesson: in a Makefile with a bare `export`, any
+variable name that a tool also reads from the environment is a landmine.
 
 **`make dev-mock` is the wrong server for the mocked Playwright suite**, despite
 its Makefile help text. `VITE_MOCK=true` is a *different, incompatible* mocking

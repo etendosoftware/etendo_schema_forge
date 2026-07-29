@@ -197,17 +197,23 @@ domain-boundary-check: ## Check changed files against monorepo intent/domain bou
 # Caveat: all workers share the single dev server on :3100 — too many may cause flaky timeouts.
 WORKERS ?= 5
 
+# `env -u BASE_URL` is load-bearing. BASE_URL above belongs to the email-stress
+# harness (it feeds ETENDO_BASE_URL), but the bare `export` further down exports
+# every variable, so Playwright saw it as an external target: it pointed the
+# suite at Etendo and put login() into real-backend mode, where every mocked spec
+# died on "Set E2E_PASSWORD". Unsetting it here lets playwright.config.js start
+# and own a dev server from this checkout.
 test-e2e: ## Run E2E tests with visible browser (override parallelism with WORKERS=N)
-	cd e2e && npx playwright test --headed --workers=$(WORKERS)
+	cd e2e && env -u BASE_URL npx playwright test --headed --workers=$(WORKERS)
 
 test-e2e-headless: ## Run E2E tests headless (CI mode; override parallelism with WORKERS=N)
-	cd e2e && CI=true npx playwright test --workers=$(WORKERS)
+	cd e2e && env -u BASE_URL CI=true npx playwright test --workers=$(WORKERS)
 
 test-e2e-debug: ## Run E2E tests in debug mode (step by step)
-	cd e2e && npx playwright test --debug
+	cd e2e && env -u BASE_URL npx playwright test --debug
 
 test-e2e-ui: ## Open Playwright UI for interactive test running
-	cd e2e && npx playwright test --ui
+	cd e2e && env -u BASE_URL npx playwright test --ui
 
 test-e2e-report: ## Show last E2E test report in browser
 	cd e2e && npx playwright show-report ../artifacts/e2e-report

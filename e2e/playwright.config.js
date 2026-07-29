@@ -1,12 +1,32 @@
 import { defineConfig, devices } from '@playwright/test';
+import { fileURLToPath } from 'node:url';
+import { dirname, resolve } from 'node:path';
 
 /**
  * Playwright configuration for Schema Forge E2E tests.
  *
  * Two modes:
- *   1. Dev server (default):  make dev → http://localhost:3100
- *   2. Deployed (Etendo):     BASE_URL=http://localhost:8080/etendo/web/com.etendoerp.go make test-e2e
+ *   1. Local (default):   Playwright starts and owns a dev server from THIS
+ *                         checkout — see `webServer` below.
+ *   2. External target:   BASE_URL=http://localhost:8080/etendo/web/com.etendoerp.go
+ *                         npx playwright test   (no server is started)
+ *
+ * Why Playwright owns the server: without a `webServer` block it simply uses
+ * whatever answers the port, so a run could silently exercise a different
+ * checkout's app — passing or failing against code that is not under test. That
+ * is the worst failure mode a golden master can have, because it is invisible in
+ * both directions. See "Pitfalls that fail silently" in docs/e2e-testing-guide.md.
  */
+const __dirname = dirname(fileURLToPath(import.meta.url));
+
+// An explicit external target disables the managed server entirely.
+const EXTERNAL_TARGET = process.env.BASE_URL || null;
+// Dedicated E2E port, deliberately NOT the 3100 dev port: `make dev` and an E2E
+// run must be able to coexist, and two checkouts must not silently share one
+// server. Override with E2E_PORT when running several suites at once.
+const E2E_PORT = Number(process.env.E2E_PORT || 3200);
+const LOCAL_TARGET = `http://localhost:${E2E_PORT}`;
+
 export default defineConfig({
   testDir: './tests',
   fullyParallel: true,
@@ -19,8 +39,29 @@ export default defineConfig({
   ],
   timeout: 60_000,
 
+  // Start the app from THIS worktree, unless an external target was named.
+  // Omitted (undefined) rather than disabled so an external run spawns nothing.
+  webServer: EXTERNAL_TARGET ? undefined : {
+    // `cwd` is what actually pins the run to this checkout — the whole point.
+    command: `npx vite --port ${E2E_PORT} --strictPort`,
+    cwd: resolve(__dirname, '../tools/app-shell'),
+    url: LOCAL_TARGET,
+    // Never adopt a server this config did not start. Reusing one would
+    // reintroduce exactly the bug this block exists to prevent, so a busy port
+    // is a loud error rather than a silent wrong-app run.
+    reuseExistingServer: false,
+    // Cold vite compiles the whole module graph on first boot (~35s locally,
+    // slower on CI hardware).
+    timeout: 180_000,
+    stderr: 'pipe',
+    // LOCAL_CORE / SCHEMA_FORGE_CORE are inherited from the ambient environment
+    // rather than forced: resolving core from local source is opt-in by design
+    // (see docs/repo-topology.md), and hardcoding it here would break CI and
+    // functional-only devs, who have no core checkout to resolve against.
+  },
+
   use: {
-    baseURL: process.env.BASE_URL || 'http://localhost:3100',
+    baseURL: EXTERNAL_TARGET || LOCAL_TARGET,
     trace: 'on-first-retry',
     screenshot: 'only-on-failure',
     video: process.env.E2E_VIDEO ? 'on' : 'on-first-retry',
