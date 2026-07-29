@@ -34,22 +34,28 @@ vi.mock('@/components/ui/tag', () => ({
 // primitives are mocked with plain HTML equivalents, exactly like ProcessParamDialog.vitest.jsx
 // does. process-param-* testids/values (not translated label text) drive the interaction below,
 // so these tests don't depend on a LocaleProvider being present.
-vi.mock('@/components/ui/dialog.jsx', () => ({
+//
+// ETP-4708 — ProcessParamDialog moved to @etendosoftware/app-shell-core, where it imports
+// these primitives as '../ui/*.jsx' rather than through this repo's '@/' alias, so the mocks
+// must name the package subpaths to intercept it (vitest matches vi.mock by RESOLVED module
+// id). This still covers PeriodsExpandablePanel's own '@/components/ui/button' import: that
+// path is itself a shim that re-exports the package module, so it re-exports the mock too.
+vi.mock('@etendosoftware/app-shell-core/components/ui/dialog.jsx', () => ({
   Dialog: ({ children, open }) => (open ? <div data-testid="dialog">{children}</div> : null),
   DialogContent: ({ children }) => <div>{children}</div>,
   DialogHeader: ({ children }) => <div>{children}</div>,
   DialogTitle: ({ children }) => <h2 data-testid="process-param-dialog-title">{children}</h2>,
   DialogFooter: ({ children }) => <div>{children}</div>,
 }));
-vi.mock('@/components/ui/button', () => ({
+vi.mock('@etendosoftware/app-shell-core/components/ui/button.jsx', () => ({
   Button: ({ children, onClick, disabled, ...props }) => (
     <button onClick={onClick} disabled={disabled} {...props}>{children}</button>
   ),
 }));
-vi.mock('@/components/ui/label', () => ({
+vi.mock('@etendosoftware/app-shell-core/components/ui/label.jsx', () => ({
   Label: ({ children, ...props }) => <label {...props}>{children}</label>,
 }));
-vi.mock('@/components/ui/select', () => ({
+vi.mock('@etendosoftware/app-shell-core/components/ui/select.jsx', () => ({
   Select: ({ children, value, onValueChange }) => (
     <select value={value ?? ''} onChange={(e) => onValueChange?.(e.target.value)} data-testid="select-control">
       {children}
