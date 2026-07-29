@@ -40,9 +40,13 @@ describe('applyProductCurrencyConversion (source-reading)', () => {
 
   const fnBody = extractFunctionBody(src, 'applyProductCurrencyConversion');
 
-  it('only applies when field is "product" and a currency conversion is active', () => {
-    assert.match(fnBody, /if \(field !== 'product' \|\| !activeCurrencyConversion\) return;/);
-  });
+  // The guard "only converts when the field is the price-trigger field AND a
+  // conversion is active" used to be pinned here by regex-matching the literal
+  // `if (field !== 'product' || !activeCurrencyConversion) return;`. That pinned
+  // syntax rather than behaviour and blocked making the trigger field
+  // configurable, so it now lives as a real behavioural assertion in
+  // DetailView.currencyConversionBehavior.vitest.jsx, which drives the component's
+  // callout flow and fails if either half of the guard is dropped.
 
   it('guards the price conversion on rate !== 1 (no-op conversion is skipped)', () => {
     assert.match(fnBody, /if \(rawPrice > 0 && rate !== 1\)/);
