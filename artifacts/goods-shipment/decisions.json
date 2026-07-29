@@ -275,7 +275,6 @@
           "required": true,
           "inputMode": "number",
           "section": "principal",
-          "defaultValue": "1",
           "seq": 20
         },
         "uOM": {
