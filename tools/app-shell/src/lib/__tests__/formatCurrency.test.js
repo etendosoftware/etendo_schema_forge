@@ -169,9 +169,12 @@ describe('formatCurrency', () => {
 
     it('USD: formats millions in compact notation using Spanish wording ("M")', () => {
       // Unlike "mil" (thousands), es-ES's CLDR compact-currency pattern for the "M"
-      // (millions) tier has no separator between the suffix and the symbol —
-      // confirmed via Intl.NumberFormat.formatToParts, consistent across USD/EUR.
-      assert.equal(formatCurrency('USD', 1_500_000, { compact: true }), `1,50${NBSP}M$`);
+      // (millions) tier's separator between the suffix and the symbol is itself
+      // ICU-data-version-dependent (confirmed empirically: Node 23 emits "M$" with
+      // none, Node 24 emits "M $" with one) — this compact path is deliberately
+      // still Intl-driven (out of scope for ETP-4314's separator centralization,
+      // single caller), so tolerate either rather than pinning to one Node's ICU.
+      assert.match(formatCurrency('USD', 1_500_000, { compact: true }), new RegExp(`^1,50${NBSP}M${NBSP}?\\$$`));
     });
 
     it('EUR: formats compact notation with the symbol after the amount', () => {
