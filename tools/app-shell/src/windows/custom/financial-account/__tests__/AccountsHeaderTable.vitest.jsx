@@ -1,0 +1,516 @@
+/**
+ * AccountsHeaderTable — rendering, contract-driven columns and filtering.
+ *
+ * ETP-4658: this slot component replaced `pages/FinancialAccountsPage.jsx` (the
+ * hand-assembled page that lived on the hardcoded `finance/accounts` route). It is
+ * mounted by the generated `AccountPage` through `window.customComponents.headerTable`,
+ * so the rows now arrive as ListView's `data` prop and the sidebar aggregates as
+ * `meta.summary` instead of coming from `useFinancialAccounts()`.
+ *
+ * The list/filter half of the retired page's suite is re-homed here (default view hides
+ * archived accounts, "Inactivas" shows only archived across types, search inside the
+ * inactive view, missing `active` flag counts as active) plus the new surface the slot
+ * owns: the contract-driven data columns, the two synthetic columns, and the
+ * stopPropagation guards that keep the pill / row actions from triggering row navigation.
+ *
+ * The component lives in the artifact (`artifacts/financial-account/custom/`), which
+ * vitest's `include` (`src/**`) does not collect — hence this file sits under the
+ * app-shell window folder and imports through the `@generated` alias, the same
+ * convention the other artifact custom components follow.
+ */
+import { render, screen, fireEvent } from '@testing-library/react';
+
+vi.mock('@/i18n', () => ({
+  useUI: () => (key, params = {}) => {
+    if (key === 'financeAccountsReconcilePending') return `Conciliar (${params.count})`;
+    return key;
+  },
+  useLocaleSwitch: () => ({ locale: 'es_ES', setLocale: vi.fn() }),
+}));
+
+vi.mock('sonner', () => ({
+  toast: { success: vi.fn(), error: vi.fn(), info: vi.fn() },
+}));
+
+// PSD2 hooks reach useAuth internally — stub at the module level (no AuthProvider needed).
+vi.mock('@/hooks/usePsd2Actions.js', () => ({
+  usePsd2Actions: () => ({ sync: vi.fn(), disconnect: vi.fn() }),
+  launchSaltEdgePopup: vi.fn(),
+}));
+vi.mock('@/hooks/usePsd2ConnectFlow.js', () => ({
+  usePsd2ConnectFlow: () => ({ startConnect: vi.fn(), startCreate: vi.fn() }),
+}));
+
+// Modals are covered by their own suites; stub them so this file stays focused on the slot.
+vi.mock('@/windows/custom/financial-account/NewAccountWizard.jsx', () => ({
+  NewAccountWizard: ({ open }) => <div data-testid="wizard" data-open={String(open)} />,
+}));
+vi.mock('@/windows/custom/financial-account/EditAccountModal.jsx', () => ({
+  EditAccountModal: ({ open }) => <div data-testid="edit-modal" data-open={String(open)} />,
+}));
+vi.mock('@/windows/custom/financial-account/ArchiveAccountDialog.jsx', () => ({
+  ArchiveAccountDialog: ({ open }) => <div data-testid="archive-dialog" data-open={String(open)} />,
+}));
+vi.mock('@/windows/custom/financial-account/Psd2ConnectFlowUI.jsx', () => ({
+  Psd2ConnectFlowUI: () => <div data-testid="psd2-flow" />,
+}));
+vi.mock('@/windows/custom/financial-account/FundsTransferModal.jsx', () => ({
+  FundsTransferModal: (props) => <div data-testid="transfer-modal" data-source={props.sourceAccountId} />,
+}));
+
+/**
+ * Faithful-but-minimal DataTable stub: it reproduces the three behaviours this suite
+ * depends on — the generic `row-{id}` testid (DataTable.jsx emits exactly that and it
+ * is not overridable from `columns`), the `cell-{rowId}-{colKey}` cell testids, and a
+ * row-level click that calls `onNavigate(row)` with the WHOLE ROW (DataTable.jsx ~1902:
+ * `else if (onNavigate) onNavigate(row);`) — while still invoking the real `col.render`
+ * callbacks so the actual cell components (NameCell / TypeCell / BalanceCell /
+ * ReconcilePill / AccountRowActions) render. Rendering the real DataTable here would
+ * drag in filters, sorting and inline-add, none of which this slot configures.
+ */
+let tableProps = null;
+vi.mock('@/components/contract-ui', () => ({
+  DataTable: (props) => {
+    tableProps = props;
+    const { columns, data, onNavigate } = props;
+    return (
+      <div data-testid="data-table">
+        {(data ?? []).map((row) => (
+          <div
+            key={row.id}
+            data-testid={`row-${row.id}`}
+            role="presentation"
+            onClick={() => onNavigate?.(row)}
+          >
+            {columns.map((col) => (
+              <span key={col.key} data-testid={`cell-${col.key}-${row.id}`}>
+                {col.render ? col.render(row) : String(row[col.key] ?? '')}
+              </span>
+            ))}
+          </div>
+        ))}
+      </div>
+    );
+  },
+}));
+
+const mockNavigate = vi.fn();
+vi.mock('react-router-dom', () => ({
+  useNavigate: () => mockNavigate,
+}));
+
+import AccountsHeaderTable, { filterAccounts } from '@generated/financial-account/custom/AccountsHeaderTable.jsx';
+import { AccountTypeFilter } from '@/components/financial-accounts';
+
+const BASE_ACCOUNTS = [
+  {
+    id: 'acc-1',
+    name: 'BBVA Principal',
+    type: 'B',
+    currentBalance: 1000,
+    currencyIso: 'EUR',
+    iban: 'ES1212340000000000000001',
+    pendingCount: 3,
+    psd2Connected: true,
+    active: true,
+  },
+  {
+    id: 'acc-2',
+    name: 'Caja Tienda',
+    type: 'C',
+    currentBalance: 50,
+    currencyIso: 'EUR',
+    pendingCount: 0,
+    active: true,
+  },
+  {
+    id: 'acc-3',
+    name: 'Visa Corporate',
+    type: 'CA',
+    currentBalance: -120,
+    currencyIso: 'USD',
+    maskedPan: '**** 4321',
+    pendingCount: 1,
+    psd2Connected: false,
+    active: true,
+  },
+];
+
+// A mix that includes archived (inactive) accounts of different types.
+const MIXED_ACCOUNTS = [
+  ...BASE_ACCOUNTS,
+  { id: 'acc-4', name: 'Santander Cerrada', type: 'B', currentBalance: 0, currencyIso: 'EUR', pendingCount: 0, active: false },
+  { id: 'acc-5', name: 'Caja Antigua', type: 'C', currentBalance: 0, currencyIso: 'EUR', pendingCount: 0, active: false },
+];
+
+const SUMMARY = {
+  totalBalance: 930,
+  byCurrency: [
+    { currencyIso: 'EUR', total: 1050 },
+    { currencyIso: 'USD', total: -120 },
+  ],
+  pending: { accountsWithPending: 2, suggestionsReady: 0, byRule: 0 },
+};
+
+function renderTable({ data = BASE_ACCOUNTS, meta = { summary: SUMMARY }, ...rest } = {}) {
+  return render(<AccountsHeaderTable data={data} meta={meta} {...rest} />);
+}
+
+beforeEach(() => {
+  vi.clearAllMocks();
+  tableProps = null;
+});
+
+describe('AccountsHeaderTable — layout', () => {
+  it('renders the toolbar, the KPI sidebar and the grid inside the card container', () => {
+    renderTable();
+
+    expect(screen.getByTestId('cuentas-card')).toBeInTheDocument();
+    expect(screen.getByTestId('cuentas-toolbar')).toBeInTheDocument();
+    expect(screen.getByTestId('cuentas-sidebar')).toBeInTheDocument();
+    expect(screen.getByTestId('data-table')).toBeInTheDocument();
+  });
+
+  it('renders one grid row per visible account using DataTable\'s generic row testid', () => {
+    renderTable();
+
+    expect(screen.getByTestId('row-acc-1')).toBeInTheDocument();
+    expect(screen.getByTestId('row-acc-2')).toBeInTheDocument();
+    expect(screen.getByTestId('row-acc-3')).toBeInTheDocument();
+  });
+
+  it('suppresses the grid\'s own filter row and footer totals', () => {
+    renderTable();
+
+    expect(tableProps.filters).toEqual([]);
+    expect(tableProps.showFooterTotals).toBe(false);
+  });
+
+  it('forwards onDataMutated so the modals can refresh the list', () => {
+    const onDataMutated = vi.fn();
+    renderTable({ onDataMutated });
+
+    expect(tableProps.onDataMutated).toBe(onDataMutated);
+  });
+
+  it('renders with no rows and no crash when data is null', () => {
+    renderTable({ data: null });
+
+    expect(screen.getByTestId('data-table')).toBeInTheDocument();
+    expect(screen.queryByTestId('row-acc-1')).not.toBeInTheDocument();
+  });
+
+  it('renders with no rows and no crash when neither data nor meta are supplied', () => {
+    render(<AccountsHeaderTable data-testid="bare" />);
+
+    expect(screen.getByTestId('cuentas-card')).toBeInTheDocument();
+    expect(screen.getByTestId('data-table')).toBeInTheDocument();
+  });
+});
+
+describe('AccountsHeaderTable — columns', () => {
+  it('takes the data columns from the contract grid definition, in gridOrder', () => {
+    renderTable();
+
+    // contract.json → entities.account: name(1), type(2), currentBalance(3).
+    const dataKeys = tableProps.columns.map((c) => c.key).slice(0, 3);
+    expect(dataKeys).toEqual(['name', 'type', 'currentBalance']);
+  });
+
+  it('appends exactly the two synthetic columns after the contract ones', () => {
+    renderTable();
+
+    expect(tableProps.columns.map((c) => c.key)).toEqual([
+      'name', 'type', 'currentBalance', 'pendingCount', '_rowActions',
+    ]);
+  });
+
+  it('labels every column through the i18n key overrides for the active locale', () => {
+    renderTable();
+
+    const labels = Object.fromEntries(
+      tableProps.columns.map((c) => [c.key, c.labels.es_ES]),
+    );
+    expect(labels.name).toBe('financeAccountsColAccount');
+    expect(labels.type).toBe('financeAccountsColType');
+    expect(labels.currentBalance).toBe('financeAccountsColBalance');
+    expect(labels.pendingCount).toBe('financeAccountsColPending');
+    // The actions column is deliberately unlabelled.
+    expect(labels._rowActions).toBe('');
+  });
+
+  it('marks every column as non-sortable (the grid is filtered client-side)', () => {
+    renderTable();
+
+    for (const col of tableProps.columns) {
+      expect(col.sortable).toBe(false);
+    }
+  });
+
+  it('pins the Figma column widths through headClass / cellClass', () => {
+    renderTable();
+
+    const byKey = Object.fromEntries(tableProps.columns.map((c) => [c.key, c]));
+    expect(byKey.name.headClass).toContain('w-[480px]');
+    expect(byKey.name.headClass).toContain('pl-[84px]');
+    expect(byKey.name.cellClass).toContain('w-[480px]');
+    expect(byKey.type.headClass).toContain('w-[340px]');
+    expect(byKey.currentBalance.cellClass).toContain('text-right');
+    expect(byKey.pendingCount.headClass).toContain('w-[280px]');
+    expect(byKey._rowActions.cellClass).toContain('min-w-[90px]');
+  });
+
+  it('renders the rich cell bodies for the three contract columns', () => {
+    renderTable();
+
+    // NameCell — account name + the "offline" badge for a non-connected card account.
+    expect(screen.getByTestId('cell-name-acc-1')).toHaveTextContent('BBVA Principal');
+    expect(screen.getByTestId('cell-name-acc-3')).toHaveTextContent('financeAccountsBadgeOffline');
+    // TypeCell — translated type label + the chunked IBAN.
+    expect(screen.getByTestId('cell-type-acc-2')).toHaveTextContent('financeAccountsTypeCash');
+    expect(screen.getByTestId('cell-type-acc-1')).toHaveTextContent('ES12 1234 0000 0000 0000 0001');
+    // BalanceCell — currency-formatted amount.
+    expect(screen.getByTestId('cell-currentBalance-acc-1')).toHaveTextContent('1,000.00');
+  });
+});
+
+describe('AccountsHeaderTable — "Por conciliar" pill column', () => {
+  it('renders the pending pill with the count and the reconciled pill at zero', () => {
+    renderTable();
+
+    const pending = screen.getByTestId('cell-pendingCount-acc-1');
+    expect(pending).toHaveTextContent('Conciliar (3)');
+    expect(screen.getByTestId('cell-pendingCount-acc-2'))
+      .toContainElement(screen.getByTestId('reconcile-status-reconciled'));
+  });
+
+  it('navigates to the reconciliation tab with autoMatch when the pill is clicked', () => {
+    renderTable();
+
+    fireEvent.click(
+      screen.getByTestId('cell-pendingCount-acc-1').querySelector('[data-testid="reconcile-status-pending"]'),
+    );
+
+    expect(mockNavigate).toHaveBeenCalledWith(
+      '/financial-account/acc-1?tab=reconciliation&autoMatch=true',
+    );
+  });
+
+  it('swallows the pill click so the row does not also navigate to the detail', () => {
+    renderTable();
+
+    fireEvent.click(
+      screen.getByTestId('cell-pendingCount-acc-1').querySelector('[data-testid="reconcile-status-pending"]'),
+    );
+
+    expect(mockNavigate).toHaveBeenCalledTimes(1);
+    expect(mockNavigate).not.toHaveBeenCalledWith('/financial-account/acc-1');
+  });
+});
+
+describe('AccountsHeaderTable — row actions column', () => {
+  it('renders the hover actions with their stable per-row testids', () => {
+    renderTable();
+
+    expect(screen.getByTestId('account-row-edit-acc-1')).toBeInTheDocument();
+    expect(screen.getByTestId('account-row-menu-trigger-acc-1')).toBeInTheDocument();
+  });
+
+  it('shows the sync button only for PSD2-connected accounts', () => {
+    renderTable();
+
+    expect(screen.getByTestId('account-row-refresh-acc-1')).toBeInTheDocument();
+    expect(screen.queryByTestId('account-row-refresh-acc-3')).not.toBeInTheDocument();
+  });
+
+  it('swallows action clicks so the row does not navigate underneath them', () => {
+    renderTable();
+
+    fireEvent.click(screen.getByTestId('account-row-edit-acc-1'));
+
+    expect(mockNavigate).not.toHaveBeenCalled();
+  });
+});
+
+describe('AccountsHeaderTable — row navigation', () => {
+  it('overrides ListView\'s handler with its own row-click navigation', () => {
+    renderTable();
+
+    expect(typeof tableProps.onNavigate).toBe('function');
+  });
+
+  // Regression guard: DataTable invokes `onNavigate` with the WHOLE ROW, not an id
+  // (`else if (onNavigate) onNavigate(row);`, DataTable.jsx ~1902). The handler first
+  // named its argument `id`, so a row click landed on `/financial-account/[object Object]`.
+  // Covered end-to-end too — `e2e/tests/flows/financial-accounts-page.mocked.spec.js`.
+  it('navigates to the detail route when a row is clicked', () => {
+    renderTable();
+
+    fireEvent.click(screen.getByTestId('row-acc-1'));
+
+    expect(mockNavigate).toHaveBeenCalledWith('/financial-account/acc-1');
+  });
+
+  it('never stringifies the row object into the route', () => {
+    renderTable();
+
+    fireEvent.click(screen.getByTestId('row-acc-1'));
+
+    expect(mockNavigate).not.toHaveBeenCalledWith(expect.stringContaining('[object Object]'));
+  });
+});
+
+describe('AccountsHeaderTable — sidebar aggregates', () => {
+  it('feeds the sidebar from meta.summary (the sibling of response.data)', () => {
+    renderTable();
+
+    expect(screen.getByTestId('balance-card')).toHaveTextContent('930.00');
+    expect(screen.getByTestId('balance-by-currency-EUR')).toBeInTheDocument();
+    expect(screen.getByTestId('balance-by-currency-USD')).toBeInTheDocument();
+    expect(screen.getByTestId('pending-reconcile-card')).toBeInTheDocument();
+  });
+
+  it('renders the sidebar without aggregates when the response carried no meta', () => {
+    renderTable({ meta: null });
+
+    expect(screen.getByTestId('cuentas-sidebar')).toBeInTheDocument();
+    expect(screen.getByTestId('balance-card')).toBeInTheDocument();
+  });
+
+  it('renders the sidebar when meta exists but has no summary sibling', () => {
+    renderTable({ meta: { totalRows: 3 } });
+
+    expect(screen.getByTestId('cuentas-sidebar')).toBeInTheDocument();
+  });
+});
+
+describe('AccountsHeaderTable — toolbar filtering', () => {
+  it('filters the grid by the selected account type', () => {
+    renderTable();
+
+    fireEvent.click(screen.getByTestId('account-type-filter-trigger'));
+    fireEvent.click(screen.getByTestId('account-type-filter-option-c'));
+
+    expect(screen.queryByTestId('row-acc-1')).not.toBeInTheDocument();
+    expect(screen.getByTestId('row-acc-2')).toBeInTheDocument();
+    expect(screen.queryByTestId('row-acc-3')).not.toBeInTheDocument();
+  });
+
+  it('filters the grid by the search term against the account name', () => {
+    renderTable();
+
+    fireEvent.change(screen.getByTestId('cuentas-search-input'), { target: { value: 'visa' } });
+
+    expect(screen.queryByTestId('row-acc-1')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('row-acc-2')).not.toBeInTheDocument();
+    expect(screen.getByTestId('row-acc-3')).toBeInTheDocument();
+  });
+
+  it('hides archived (inactive) accounts in the default view', () => {
+    renderTable({ data: MIXED_ACCOUNTS });
+
+    expect(screen.getByTestId('row-acc-1')).toBeInTheDocument();
+    expect(screen.getByTestId('row-acc-2')).toBeInTheDocument();
+    expect(screen.getByTestId('row-acc-3')).toBeInTheDocument();
+    expect(screen.queryByTestId('row-acc-4')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('row-acc-5')).not.toBeInTheDocument();
+  });
+
+  it('shows only archived accounts, regardless of type, in the Inactivas view', () => {
+    renderTable({ data: MIXED_ACCOUNTS });
+
+    fireEvent.click(screen.getByTestId('account-type-filter-trigger'));
+    fireEvent.click(screen.getByTestId('account-type-filter-option-inactive'));
+
+    expect(screen.queryByTestId('row-acc-1')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('row-acc-2')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('row-acc-3')).not.toBeInTheDocument();
+    expect(screen.getByTestId('row-acc-4')).toBeInTheDocument();
+    expect(screen.getByTestId('row-acc-5')).toBeInTheDocument();
+  });
+
+  it('still applies the search term inside the Inactivas view', () => {
+    renderTable({ data: MIXED_ACCOUNTS });
+
+    fireEvent.click(screen.getByTestId('account-type-filter-trigger'));
+    fireEvent.click(screen.getByTestId('account-type-filter-option-inactive'));
+    fireEvent.change(screen.getByTestId('cuentas-search-input'), { target: { value: 'antigua' } });
+
+    expect(screen.queryByTestId('row-acc-4')).not.toBeInTheDocument();
+    expect(screen.getByTestId('row-acc-5')).toBeInTheDocument();
+  });
+
+  it('treats an account with no active flag as active', () => {
+    renderTable({
+      data: [{ id: 'acc-x', name: 'Sin Flag', type: 'B', currentBalance: 10, currencyIso: 'EUR', pendingCount: 0 }],
+    });
+
+    expect(screen.getByTestId('row-acc-x')).toBeInTheDocument();
+  });
+
+  it('opens the New Account wizard from the toolbar without navigating', () => {
+    renderTable();
+
+    const button = screen.getByTestId('cuentas-new-account-button');
+    expect(button).toBeEnabled();
+    fireEvent.click(button);
+
+    expect(screen.getByTestId('wizard')).toHaveAttribute('data-open', 'true');
+    expect(mockNavigate).not.toHaveBeenCalled();
+  });
+
+  it('navigates to the match-rule window from the matching-rules button', () => {
+    renderTable();
+
+    fireEvent.click(screen.getByTestId('cuentas-matching-rules-button'));
+
+    expect(mockNavigate).toHaveBeenCalledWith('/match-rule');
+  });
+});
+
+describe('filterAccounts', () => {
+  it('returns an empty array for a non-array input', () => {
+    expect(filterAccounts(null, null, '')).toEqual([]);
+    expect(filterAccounts(undefined, null, '')).toEqual([]);
+    expect(filterAccounts({}, null, '')).toEqual([]);
+  });
+
+  it('keeps every active account when no type and no search are set', () => {
+    expect(filterAccounts(MIXED_ACCOUNTS, null, '').map((a) => a.id))
+      .toEqual(['acc-1', 'acc-2', 'acc-3']);
+  });
+
+  it('filters by type inside the active views', () => {
+    expect(filterAccounts(MIXED_ACCOUNTS, 'B', '').map((a) => a.id)).toEqual(['acc-1']);
+  });
+
+  it('returns only archived accounts for the INACTIVE view, ignoring the type', () => {
+    expect(filterAccounts(MIXED_ACCOUNTS, AccountTypeFilter.INACTIVE, '').map((a) => a.id))
+      .toEqual(['acc-4', 'acc-5']);
+  });
+
+  it('matches the search term against name, iban and currency ISO', () => {
+    expect(filterAccounts(BASE_ACCOUNTS, null, 'bbva').map((a) => a.id)).toEqual(['acc-1']);
+    expect(filterAccounts(BASE_ACCOUNTS, null, '0000000001').map((a) => a.id)).toEqual(['acc-1']);
+    expect(filterAccounts(BASE_ACCOUNTS, null, 'usd').map((a) => a.id)).toEqual(['acc-3']);
+  });
+
+  it('is case-insensitive and trims the search term', () => {
+    expect(filterAccounts(BASE_ACCOUNTS, null, '  ViSa  ').map((a) => a.id)).toEqual(['acc-3']);
+  });
+
+  it('treats a nullish search term as no search', () => {
+    expect(filterAccounts(BASE_ACCOUNTS, null, undefined)).toHaveLength(3);
+    expect(filterAccounts(BASE_ACCOUNTS, null, null)).toHaveLength(3);
+  });
+
+  it('returns nothing when the type and the search term disagree', () => {
+    expect(filterAccounts(BASE_ACCOUNTS, 'C', 'visa')).toEqual([]);
+  });
+
+  it('ignores rows whose searchable fields are all missing', () => {
+    const bare = [{ id: 'acc-bare', type: 'B' }];
+    expect(filterAccounts(bare, null, 'anything')).toEqual([]);
+    expect(filterAccounts(bare, null, '')).toHaveLength(1);
+  });
+});

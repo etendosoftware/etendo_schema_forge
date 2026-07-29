@@ -14,7 +14,6 @@ import CrmPage from './pages/CrmPage.jsx';
 import HrPage from './pages/HrPage.jsx';
 import ProjectsPage from './pages/ProjectsPage.jsx';
 import ReportViewerPage from './pages/ReportViewerPage.jsx';
-import FinancialAccountsPage from './pages/FinancialAccountsPage.jsx';
 import Psd2CallbackPage from './pages/Psd2CallbackPage.jsx';
 import PisCallbackPage from './pages/PisCallbackPage.jsx';
 import ArtifactViewerPage from './pages/ArtifactViewerPage.jsx';
@@ -59,7 +58,11 @@ export function buildRuntimeRoutes({ windowMap, apiBaseUrl }) {
     { path: 'inventory', public: false, element: <InventoryPage data-testid="InventoryPage__e8c60d" /> },
     { path: 'purchases', public: false, element: <PurchasesPage data-testid="PurchasesPage__e8c60d" /> },
     { path: 'accounting', public: false, element: <AccountingPage data-testid="AccountingPage__e8c60d" /> },
-    { path: 'finance/accounts', public: false, element: <FinancialAccountsPage data-testid="FinancialAccountsPage__e8c60d" /> },
+    // The accounts list is now the `financial-account` window's own list branch
+    // (generated ListView + the AccountsHeaderTable slot), reached through the
+    // standard `:windowName` route. This legacy path is kept as a redirect so
+    // bookmarks, the archive-dialog return and existing E2E gotos keep working.
+    { path: 'finance/accounts', public: false, element: <Navigate to="/financial-account" replace data-testid="Navigate__accounts" /> },
     { path: 'reports', public: false, element: <ReportsPage data-testid="ReportsPage__e8c60d" /> },
     { path: 'report-viewer', public: false, element: <ReportViewerPage data-testid="ReportViewerPage__e8c60d" /> },
     { path: 'crm', public: false, element: <CrmPage data-testid="CrmPage__e8c60d" /> },

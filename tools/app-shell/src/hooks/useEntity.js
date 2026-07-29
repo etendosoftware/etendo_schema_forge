@@ -302,6 +302,22 @@ function normalizeRows(rows, entityName) {
     return Array.isArray(rows) ? rows.map(row => normalizeRecord(row, entityName)) : [];
 }
 
+/**
+ * Everything the list response carried alongside the rows.
+ *
+ * NEO writes a handler's response body verbatim (no output schema, no key
+ * whitelist), and `NeoFieldFilter` only ever rewrites `response.data[i]` — so a
+ * NeoHandler's `afterHandle` can legitimately attach collection-level aggregates
+ * (e.g. a `summary` with balance totals) next to `data`. Returns null when the
+ * payload is a bare array or has no siblings worth surfacing.
+ */
+function extractResponseMeta(data) {
+    const envelope = data?.response;
+    if (!envelope || typeof envelope !== 'object') return null;
+    const { data: _rows, ...rest } = envelope;
+    return Object.keys(rest).length > 0 ? rest : null;
+}
+
 const EMPTY_FILTERS = {};
 const EMPTY_DEFS = {};
 
@@ -714,6 +730,12 @@ export function useEntity(entity, childEntity, {
     const logout = useLogout();
     const ui = useUI();
     const [items, setItems] = useState([]);
+    // The list response envelope minus the rows — i.e. any sibling of `response.data`
+    // the backend chose to send (`totalRows`, `hasMore`, and notably aggregates like
+    // `summary`). NEO serializes handler responses verbatim, so a NeoHandler can attach
+    // collection-level aggregates in its afterHandle; without this they were parsed and
+    // dropped. Consumers read it through ListView's `headerContent({ meta })`.
+    const [meta, setMeta] = useState(null);
     const [selected, setSelected] = useState(null);
     const [editing, setEditing] = useState(null);
     const [children, setChildren] = useState([]);
@@ -787,6 +809,7 @@ export function useEntity(entity, childEntity, {
             .then(data => {
                 const rows = normalizeRows(data?.response?.data ?? (Array.isArray(data) ? data : []), entity);
                 setItems(rows);
+                setMeta(extractResponseMeta(data));
                 startRowRef.current = rows.length;
                 if (rows.length < BATCH_SIZE) setHasMore(false);
                 setLoading(false);
@@ -794,6 +817,7 @@ export function useEntity(entity, childEntity, {
             .catch((e) => {
                 console.error('refresh error', e);
                 setItems([]);
+                setMeta(null);
                 setHasMore(false);
                 setLoading(false);
             });
@@ -826,6 +850,10 @@ export function useEntity(entity, childEntity, {
             .then(data => {
                 const rows = normalizeRows(data?.response?.data ?? (Array.isArray(data) ? data : []), entity);
                 setItems(prev => [...prev, ...rows]);
+                // Aggregates are computed over the whole collection server-side, so each
+                // page repeats the same values — refreshing keeps them in sync if the
+                // backend ever recomputes, and never mixes page-scoped with total-scoped.
+                setMeta(extractResponseMeta(data));
                 startRowRef.current = start + rows.length;
                 if (rows.length < BATCH_SIZE) setHasMore(false);
                 setLoadingMore(false);
@@ -1373,7 +1401,7 @@ export function useEntity(entity, childEntity, {
     }, []);
 
     return {
-        items, selected, editing, children, childDefaults, childrenLoading, loading, loadingMore, hasMore, saveError, isSaving,
+        items, meta, selected, editing, children, childDefaults, childrenLoading, loading, loadingMore, hasMore, saveError, isSaving,
         runningProcess,
         isDirtyHeader,
         fieldErrors, registerFields,

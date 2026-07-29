@@ -1291,7 +1291,15 @@ function renderColumnHeaderCell(col, colIdx, { sortColumn, sortDirection, onSort
     <TableHead
       key={col.key}
       data-testid={`column-header-${col.key}`}
-      className={['align-middle', NUMERIC_FIELD_TYPES.has(col.type) ? 'text-right' : ''].filter(Boolean).join(' ')}
+      className={[
+        'align-middle',
+        NUMERIC_FIELD_TYPES.has(col.type) ? 'text-right' : '',
+        // Opt-in fixed-width / per-column header styling. Needed by list windows
+        // whose design pins column widths (e.g. financial-account's Figma layout,
+        // where the "Cuenta" header must align with the row avatar). Absent =
+        // unchanged auto layout, so every existing window is unaffected.
+        col.headClass || '',
+      ].filter(Boolean).join(' ')}
       style={headStyle}
     >
       {onSort && isSortable ? (
@@ -1410,7 +1418,14 @@ function TableDataRow({
             key={col.key}
             data-testid={`cell-${row.id ?? idx}-${col.key}`}
             data-value={row[col.key] ?? ''}
-            className={['text-sm', NUMERIC_FIELD_TYPES.has(col.type) ? 'text-right tabular-nums' : ''].filter(Boolean).join(' ')}
+            className={[
+              'text-sm',
+              NUMERIC_FIELD_TYPES.has(col.type) ? 'text-right tabular-nums' : '',
+              // Opt-in per-column cell styling, the body-side counterpart of
+              // `col.headClass` (see renderColumnHeaderCell). Lets a window pin a
+              // column's width so header and cells stay aligned. Absent = unchanged.
+              col.cellClass || '',
+            ].filter(Boolean).join(' ')}
           >
             {isTrailingHover ? (
               <span className="block transition-opacity group-hover/row:opacity-0 group-focus-within/row:opacity-0">

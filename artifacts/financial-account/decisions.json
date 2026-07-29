@@ -2,8 +2,15 @@
   "$schema": "decisions-v2",
   "window": {
     "category": "finance",
-    "name": "Financial Account Detail",
-    "layoutType": "custom"
+    "name": "Accounts",
+    "detailEntity": null,
+    "customComponents": {
+      "headerTable": "AccountsHeaderTable"
+    },
+    "hideCreate": true,
+    "hidePrint": true,
+    "hideMoreMenu": true,
+    "hideListFilters": true
   },
   "entities": {
     "account": {
@@ -25,7 +32,7 @@
         "initialBalance": { "visibility": "system" },
         "creditLimit": { "visibility": "discarded" },
         "locationAddress": { "visibility": "discarded" },
-        "default": { "visibility": "discarded" },
+        "default": { "visibility": "readOnly", "grid": false },
         "genericAccountNo": { "visibility": "discarded" },
         "iNENo": { "visibility": "discarded" },
         "country": { "visibility": "system" },

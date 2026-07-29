@@ -245,17 +245,9 @@
           "windowId": "6F8F913FA60F4CBD93DC1D3AA696E76E"
         },
         {
-          "name": "financial-accounts",
+          "name": "financial-account",
           "label": "Accounts",
           "favname": "Accounts",
-          "path": "finance/accounts",
-          "windowId": "94EAA455D2644E04AB25D93BE5157B6D"
-        },
-        {
-          "name": "financial-account",
-          "label": "Account Detail",
-          "favname": "Account Detail",
-          "hidden": true,
           "windowId": "94EAA455D2644E04AB25D93BE5157B6D"
         },
         {

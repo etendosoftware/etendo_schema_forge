@@ -190,6 +190,16 @@ export function ListView({
   hidePrint = false,
   hideMoreMenu = false,
   hideListFilters = false,
+  // Drops the whole list bar (filters + sort/refresh/link/print/New) instead of
+  // just its individual controls. For windows whose headerTable renders its own
+  // complete toolbar — without this, `hideCreate`/`hidePrint`/`hideListFilters`
+  // still leave an empty padded strip with the sort/refresh icons, which have no
+  // flag of their own. Also settable through `listViewOptions.hideListBar`.
+  hideListBar = false,
+  // The Table scrolls one of its own regions: render it in a bounded flex box
+  // instead of ListView's ScrollPane (see the Table block below for the rationale).
+  // Also settable through `listViewOptions.tableOwnsScroll`.
+  tableOwnsScroll = false,
   hideLink = false,
   hideEyeCount = false,
   headerContent = null,
@@ -628,7 +638,7 @@ export function ListView({
         {/* White content card with rounded top-left corner */}
         <div className="flex-1 flex flex-col bg-card rounded-tl-2xl overflow-hidden min-h-0">
           {/* Selection bar or filter bar */}
-          {selectedRows.length > 0 ? (
+          {(listViewOptions?.hideListBar ?? hideListBar) ? null : selectedRows.length > 0 ? (
             <div className={`flex items-center justify-between ${listbarPaddingX} ${listbarPaddingY} border-b border-border/30`}>
               <div className="flex items-center gap-3 h-10">
                 <span role="status" className="text-sm font-semibold" data-testid="selection-count">{ui('selected').replace('{count}', selectedRows.length)}</span>
@@ -874,7 +884,7 @@ export function ListView({
           {headerContent && (
             <div className="px-6 pt-4">
               {typeof headerContent === 'function'
-                ? headerContent({ api, token, apiBaseUrl, items: hook.items, loading: hook.loading })
+                ? headerContent({ api, token, apiBaseUrl, items: hook.items, loading: hook.loading, meta: hook.meta })
                 : headerContent}
             </div>
           )}
@@ -892,7 +902,50 @@ export function ListView({
             </>
           )}
 
-          {/* Table */}
+          {/* Table.
+              `tableOwnsScroll`: skip the ScrollPane entirely and hand the Table a
+              bounded flex box instead, for a custom headerTable that scrolls one of
+              its own regions (e.g. financial-account keeps its toolbar and KPI panel
+              pinned and scrolls only the rows). Wrapping such a table in the
+              ScrollPane gives it a SECOND, outer scroll that drags the pinned parts
+              away, plus ScrollPane's always-visible shadow scrollbar. Infinite scroll
+              (`onReachBottom`) belongs to the ScrollPane, so it is inert in this mode —
+              the table owns paging if it needs it. */}
+          {(listViewOptions?.tableOwnsScroll ?? tableOwnsScroll) ? (
+            <div className={`flex min-h-0 flex-1 flex-col ${tablePaddingX}`} data-testid="list-table-region">
+              <div className={tableOpacityClass(hook)} style={{ display: 'flex', minHeight: 0, flex: 1, flexDirection: 'column' }}>
+                <Table
+                  entity={entity}
+                  specName={windowName}
+                  data={hook.items}
+                  meta={hook.meta}
+                  onNavigate={buildRowNavigateHandler(renderPreview, setPreviewRow, navigate, windowName)}
+                  onSelectionChange={setSelectedRows}
+                  onDataMutated={hook.refresh}
+                  isRowSelectable={isRowSelectable}
+                  compact={false}
+                  sortColumn={hook.sortColumn}
+                  sortDirection={hook.sortDirection}
+                  onSort={handleColumnSort}
+                  onColumnsReady={setTableColumns}
+                  api={api}
+                  token={token}
+                  apiBaseUrl={apiBaseUrl}
+                  labelOverrides={labelOverrides}
+                  onFilterChange={handleFilterChange}
+                  onClearAllFilters={handleClearAllFilters}
+                  columnFilters={columnFilters}
+                  onCloneRow={onCloneRow}
+                  rowFilter={effectiveRowFilter}
+                  hoverRowActions={hoverRowActions}
+                  clearSelectionTrigger={clearSelectionCounter}
+                  rowQuickActions={effectiveRowQuickActions}
+                  hiddenColumns={hiddenColumns}
+                  loading={hook.loading}
+                  data-testid="Table__620cbc" />
+              </div>
+            </div>
+          ) : (
           <ScrollPane
             onReachBottom={handleReachBottom}
             className={`${tablePaddingX} ${tablePaddingBottom}`}
@@ -913,6 +966,11 @@ export function ListView({
                       entity={entity}
                       specName={windowName}
                       data={hook.items}
+                      // Same list-response envelope `headerContent` gets. A custom
+                      // headerTable that renders its own aggregate panel (e.g.
+                      // financial-account's balance sidebar) needs it here, since the
+                      // panel lives inside the table slot rather than above it.
+                      meta={hook.meta}
                       onNavigate={buildRowNavigateHandler(renderPreview, setPreviewRow, navigate, windowName)}
                       onSelectionChange={setSelectedRows}
                       onDataMutated={hook.refresh}
@@ -950,6 +1008,7 @@ export function ListView({
               </div>
             )}
           </ScrollPane>
+          )}
         </div>
         <ReportDrawer
           open={showReport}

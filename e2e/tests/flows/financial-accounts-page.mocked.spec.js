@@ -2,15 +2,30 @@ import { test, expect } from '@playwright/test';
 import { login } from '../helpers/auth.js';
 
 /**
- * Financial Accounts page (Cuentas) — landing smoke (mocked).
+ * Financial Accounts list (Cuentas) — landing smoke (mocked).
  *
- * Validates the ETP-4095 T1 landing page that lists FIN_Financial_Account rows
- * with the right-hand "Saldo" sidebar (balance + currency breakdown + pending
- * reconciliation card) and the toolbar (type filter, search, matching-rules
- * button, new-account button).
+ * Validates the accounts list: the FIN_Financial_Account rows, the left "Saldo" sidebar
+ * (balance + currency breakdown + pending reconciliation card) and the toolbar (type filter,
+ * search, matching-rules button, new-account button).
  *
- * Mock mode only: installs a /sws/neo/financial-accounts-page route AFTER the
- * generic /sws/** catch-all that login() seeds, so it wins (Playwright LIFO).
+ * ETP-4658 moved this screen off the hand-assembled `pages/FinancialAccountsPage.jsx` (which
+ * lived on a hardcoded `finance/accounts` route, outside the window system) and onto the
+ * `financial-account` window's own list branch: the generated `AccountPage` renders `ListView`
+ * with the `AccountsHeaderTable` slot. Three consequences for this spec:
+ *
+ *   1. Entry point is `/financial-account`. `finance/accounts` is kept as a redirect (asserted
+ *      below) so bookmarks and the archive-dialog return keep working.
+ *   2. Rows come from the standard W spec — `GET /sws/neo/financial-account/account` — with the
+ *      list-only derived fields (`pendingCount`, `psd2Connected`, `currencyIso`, `iban`,
+ *      `active`, …) injected by FinancialAccountHandler.afterHandle, and the sidebar aggregates
+ *      as a `summary` SIBLING of `response.data` on that same request. The bespoke
+ *      `financial-accounts-page` R spec no longer feeds this screen.
+ *   3. Rows carry the generic DataTable testids — `row-{id}` and `cell-{id}-{column}` — not the
+ *      old hand-rolled `account-row-{id}`. The action/toolbar/sidebar testids are unchanged
+ *      because those components were kept.
+ *
+ * Mock mode only: the account route is installed AFTER login() so it wins over the generic
+ * /sws/** stub (Playwright matches routes in reverse registration order).
  */
 
 const ACCOUNTS = [
@@ -25,6 +40,7 @@ const ACCOUNTS = [
     isDefault: true,
     pendingCount: 12,
     psd2Connected: true,
+    active: true,
   },
   {
     id: 'acc-2',
@@ -37,6 +53,7 @@ const ACCOUNTS = [
     isDefault: false,
     pendingCount: 1,
     psd2Connected: true,
+    active: true,
   },
   {
     id: 'acc-3',
@@ -49,6 +66,7 @@ const ACCOUNTS = [
     isDefault: false,
     pendingCount: 5,
     psd2Connected: false,
+    active: true,
   },
   {
     id: 'acc-4',
@@ -60,6 +78,20 @@ const ACCOUNTS = [
     iban: '',
     isDefault: false,
     pendingCount: 0,
+    active: true,
+  },
+  // Archived — must never show in the default view (only under the "Inactivas" filter).
+  {
+    id: 'acc-5',
+    name: 'Caja Antigua',
+    type: 'C',
+    currentBalance: 0,
+    currencyId: '102',
+    currencyIso: 'EUR',
+    iban: '',
+    isDefault: false,
+    pendingCount: 0,
+    active: false,
   },
 ];
 
@@ -73,52 +105,86 @@ const SUMMARY = {
 };
 
 /**
- * Install the financial-accounts-page endpoint mock. Must run AFTER login()
- * so this specific handler wins over the generic /sws/** stub.
+ * Install the `account` entity mock of the financial-account W spec. Must run AFTER login()
+ * so this specific handler wins over the generic /sws/** stub. The list GET answers with the
+ * rows plus the `summary` sibling; a detail GET (`/account/{id}`) falls through so the detail
+ * view keeps using its own hooks.
  */
 async function installAccountsMock(page) {
-  await page.route('**/sws/neo/financial-accounts-page', async (route) => {
-    await route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      body: JSON.stringify({
-        response: { data: { accounts: ACCOUNTS, summary: SUMMARY } },
-      }),
-    });
+  await page.route('**/sws/neo/financial-account/account**', async (route) => {
+    const req = route.request();
+    if (req.method() === 'GET' && !/\/account\/[^/?]+/.test(req.url())) {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          response: { data: ACCOUNTS, totalRows: ACCOUNTS.length, summary: SUMMARY },
+        }),
+      });
+      return;
+    }
+    await route.fallback();
   });
 }
 
-test.describe('Financial Accounts page — Cuentas (T1)', () => {
+test.describe('Financial Accounts list — Cuentas', () => {
   test.beforeEach(async ({ page }) => {
     await login(page);
     await installAccountsMock(page);
-    await page.goto('/finance/accounts');
+    await page.goto('/financial-account');
     await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
   });
 
-  test('renders the page with breadcrumb, all account rows, and sidebar widgets', async ({ page }) => {
-    // Breadcrumb appears in the topbar. Use a regex to be tolerant to whitespace.
-    await expect(page.getByText(/Finanzas\s*\/\s*Cuentas/)).toBeVisible();
+  test('the legacy /finance/accounts path redirects to the window list', async ({ page }) => {
+    await page.goto('/finance/accounts');
 
-    // All four account rows present
-    for (const acc of ACCOUNTS) {
-      await expect(page.getByTestId(`account-row-${acc.id}`)).toBeVisible();
-    }
+    await expect(page).toHaveURL(/\/financial-account$/);
+    await expect(page.getByTestId('cuentas-card')).toBeVisible();
+  });
 
-    // Sidebar widgets
+  test('renders the list through the window ListView with the toolbar and sidebar', async ({ page }) => {
+    await expect(page.getByTestId('list-view')).toBeVisible();
+    await expect(page.getByTestId('cuentas-card')).toBeVisible();
+    await expect(page.getByTestId('cuentas-toolbar')).toBeVisible();
     await expect(page.getByTestId('cuentas-sidebar')).toBeVisible();
     await expect(page.getByTestId('balance-card')).toBeVisible();
     await expect(page.getByTestId('pending-reconcile-card')).toBeVisible();
   });
 
-  test('sidebar aggregate values match the summary mock', async ({ page }) => {
-    // formatCurrency uses en-US locale + EUR (symbol-after): "273,853.46 €"
-    const balance = page.getByTestId('balance-card');
-    await expect(balance).toBeVisible();
-    await expect(balance).toContainText('273,853.46');
-    await expect(balance).toContainText('€'); // €
+  test('renders every active account row and hides the archived one', async ({ page }) => {
+    for (const acc of ACCOUNTS.filter((a) => a.active !== false)) {
+      await expect(page.getByTestId(`row-${acc.id}`)).toBeVisible();
+    }
+    await expect(page.getByTestId('row-acc-5')).toHaveCount(0);
+  });
 
-    // EUR row visible inside the sidebar
+  test('renders the contract-driven columns plus the two synthetic ones', async ({ page }) => {
+    // Data columns come from contract.json (entity `account`, grid + gridOrder);
+    // "Por conciliar" and the row actions are synthetic columns added by the slot.
+    for (const key of ['name', 'type', 'currentBalance', 'pendingCount', '_rowActions']) {
+      await expect(page.getByTestId(`column-header-${key}`)).toHaveCount(1);
+    }
+  });
+
+  test('renders the rich cell bodies inside the generic grid cells', async ({ page }) => {
+    await expect(page.getByTestId('cell-acc-1-name')).toContainText('Santander');
+    // IBAN is chunked in groups of four by the shared TypeCell.
+    await expect(page.getByTestId('cell-acc-1-type')).toContainText('ES12 1234 0000 0000 0000 0001');
+    await expect(page.getByTestId('cell-acc-1-currentBalance')).toContainText('211,841.01');
+  });
+
+  // The sidebar is fed by the `summary` the backend attaches next to `response.data` on the
+  // SAME list request: `useEntity` exposes it as `meta`, and ListView now forwards `meta` to
+  // the `Table` slot as well as to `headerContent` — `customComponents.headerTable` is
+  // generated as `Table`, and AccountsHeaderTable reads `meta?.summary`. Before that the
+  // sidebar rendered 0.00 no matter what the backend sent (unit coverage:
+  // `tools/app-shell/src/components/contract-ui/__tests__/ListView.headerContentMeta.vitest.jsx`).
+  test('sidebar aggregate values match the summary sibling of response.data', async ({ page }) => {
+    // formatCurrency uses en-US grouping + EUR symbol-after: "273,853.46 €"
+    const balance = page.getByTestId('balance-card');
+    await expect(balance).toContainText('273,853.46');
+    await expect(balance).toContainText('€');
+
     await expect(page.getByTestId('balance-by-currency-EUR')).toBeVisible();
     await expect(page.getByTestId('balance-by-currency-USD')).toBeVisible();
   });
@@ -127,53 +193,127 @@ test.describe('Financial Accounts page — Cuentas (T1)', () => {
     await page.getByTestId('account-type-filter-trigger').click();
     await page.getByTestId('account-type-filter-option-ca').click();
 
-    // Only the Tarjeta row (acc-2) remains
-    await expect(page.getByTestId('account-row-acc-2')).toBeVisible();
-    await expect(page.getByTestId('account-row-acc-1')).toHaveCount(0);
-    await expect(page.getByTestId('account-row-acc-3')).toHaveCount(0);
-    await expect(page.getByTestId('account-row-acc-4')).toHaveCount(0);
+    await expect(page.getByTestId('row-acc-2')).toBeVisible();
+    await expect(page.getByTestId('row-acc-1')).toHaveCount(0);
+    await expect(page.getByTestId('row-acc-3')).toHaveCount(0);
+    await expect(page.getByTestId('row-acc-4')).toHaveCount(0);
+  });
+
+  test('the Inactivas filter shows only the archived account', async ({ page }) => {
+    await page.getByTestId('account-type-filter-trigger').click();
+    await page.getByTestId('account-type-filter-option-inactive').click();
+
+    await expect(page.getByTestId('row-acc-5')).toBeVisible();
+    await expect(page.getByTestId('row-acc-1')).toHaveCount(0);
+    await expect(page.getByTestId('row-acc-4')).toHaveCount(0);
   });
 
   test('search filters by name (case-insensitive)', async ({ page }) => {
     await page.getByTestId('cuentas-search-input').fill('sabadell');
 
-    await expect(page.getByTestId('account-row-acc-3')).toBeVisible();
-    await expect(page.getByTestId('account-row-acc-1')).toHaveCount(0);
-    await expect(page.getByTestId('account-row-acc-2')).toHaveCount(0);
-    await expect(page.getByTestId('account-row-acc-4')).toHaveCount(0);
+    await expect(page.getByTestId('row-acc-3')).toBeVisible();
+    await expect(page.getByTestId('row-acc-1')).toHaveCount(0);
+    await expect(page.getByTestId('row-acc-2')).toHaveCount(0);
+    await expect(page.getByTestId('row-acc-4')).toHaveCount(0);
   });
 
   test('Conciliado pill vs pending pill per account', async ({ page }) => {
-    // acc-4 has pendingCount = 0 → shows "Conciliado" pill
-    const acc4 = page.getByTestId('account-row-acc-4');
-    await expect(acc4.getByTestId('reconcile-status-reconciled')).toBeVisible();
+    // acc-4 has pendingCount = 0 → "Conciliado" pill.
+    await expect(
+      page.getByTestId('cell-acc-4-pendingCount').getByTestId('reconcile-status-reconciled'),
+    ).toBeVisible();
 
-    // acc-1 has pendingCount = 12 → shows "Conciliar (12)" pending pill
-    const acc1 = page.getByTestId('account-row-acc-1');
-    const pending = acc1.getByTestId('reconcile-status-pending');
+    // acc-1 has pendingCount = 12 → "Conciliar (12)" pending pill.
+    const pending = page.getByTestId('cell-acc-1-pendingCount').getByTestId('reconcile-status-pending');
     await expect(pending).toBeVisible();
     await expect(pending).toContainText('12');
   });
 
+  test('the pending pill deep-links to the reconciliation tab without a plain row click', async ({ page }) => {
+    await page.getByTestId('cell-acc-1-pendingCount').getByTestId('reconcile-status-pending').click();
+
+    await expect(page).toHaveURL(/\/financial-account\/acc-1\?tab=reconciliation&autoMatch=true$/);
+  });
+
+  test('the row hover actions keep their per-row testids', async ({ page }) => {
+    const row = page.getByTestId('row-acc-1');
+    await row.hover();
+
+    await expect(row.getByTestId('account-row-edit-acc-1')).toBeVisible();
+    // Sync only renders for PSD2-connected accounts.
+    await expect(row.getByTestId('account-row-refresh-acc-1')).toBeVisible();
+    await expect(row.getByTestId('account-row-menu-trigger-acc-1')).toBeVisible();
+
+    const offline = page.getByTestId('row-acc-3');
+    await offline.hover();
+    await expect(offline.getByTestId('account-row-refresh-acc-3')).toHaveCount(0);
+  });
+
+  // KNOWN BUG — AccountsHeaderTable overrides ListView's row handler with
+  // `onNavigate={(id) => navigate(`/financial-account/${id}`)}`, but DataTable invokes it
+  // with the WHOLE ROW (`else if (onNavigate) onNavigate(row);`, DataTable.jsx ~1902), so a
+  // row click lands on `/financial-account/[object Object]` and the detail never loads. The
+  // kebab's "Abrir" and the reconcile pill are unaffected (they pass the account object).
+  // `test.fail` keeps the suite green while the bug stands and turns it RED once the handler
+  // is fixed, which is the signal to delete this marker.
+  // DataTable invokes `onNavigate` with the whole ROW, not an id (DataTable.jsx:1902).
+  // AccountsHeaderTable's handler originally destructured it as an id, so a row click
+  // navigated to `/financial-account/[object Object]`.
   test('row click navigates to /financial-account/<id>', async ({ page }) => {
-    await page.getByTestId('account-row-acc-1').click();
+    await page.getByTestId('cell-acc-1-name').click();
+
     await expect(page).toHaveURL(/\/financial-account\/acc-1$/);
+  });
+
+  // This list owns its row actions: AccountsHeaderTable passes `selectable={false}`,
+  // `rowQuickActions={null}` and `hoverRowActions={false}` to DataTable, so the canonical
+  // RowQuickActions overlay is never mounted. That matters because the overlay is absolutely
+  // positioned over the trailing `_rowActions` cell: while it was mounted it added a second
+  // edit button plus a delete button and swallowed every pointer event aimed at the slot's own
+  // kebab, leaving "Abrir / Nuevo movimiento / Transferir / Desconectar / Archivar"
+  // unreachable. This test guards both halves — the overlay is absent AND the slot's actions
+  // are genuinely operable.
+  test('the slot owns the row actions — no generic quick-actions overlay', async ({ page }) => {
+    const row = page.getByTestId('row-acc-1');
+    await row.hover();
+
+    // Revealed on hover: DataTable marks its rows with the NAMED group `group/row`
+    // (DataTable.jsx ~1201), which AccountRowActions targets alongside the plain `group`.
+    await expect(row.getByTestId('account-row-edit-acc-1')).toBeVisible();
+    await expect(row.getByTestId('account-row-menu-trigger-acc-1')).toBeVisible();
+    // Sync only renders for PSD2-connected accounts (acc-1 is, acc-3 is not).
+    await expect(row.getByTestId('account-row-refresh-acc-1')).toBeVisible();
+
+    const offline = page.getByTestId('row-acc-3');
+    await offline.hover();
+    await expect(offline.getByTestId('account-row-refresh-acc-3')).toHaveCount(0);
+
+    // Nothing from the generic overlay is in the DOM.
+    await expect(row.getByTestId('row-quick-actions')).toHaveCount(0);
+    await expect(row.getByTestId('row-quick-action-edit')).toHaveCount(0);
+    await expect(row.getByTestId('row-quick-action-delete')).toHaveCount(0);
+
+    // The kebab is reachable by a normal click and opens its menu.
+    await row.hover();
+    await row.getByTestId('account-row-menu-trigger-acc-1').click();
+    await expect(page.getByTestId('account-row-menu-open-acc-1')).toBeVisible();
+    await expect(page.getByTestId('account-row-menu-archive-acc-1')).toBeVisible();
   });
 
   test('"Reglas de matcheo" button navigates to the match-rule list', async ({ page }) => {
     await page.getByTestId('cuentas-matching-rules-button').click();
+
     await expect(page).toHaveURL(/\/match-rule$/);
   });
 
-  test('"Nueva cuenta" button is enabled and does not navigate (T1 placeholder)', async ({ page }) => {
+  test('"Nueva cuenta" button opens the wizard instead of navigating', async ({ page }) => {
     const newBtn = page.getByTestId('cuentas-new-account-button');
-    await expect(newBtn).toBeVisible();
     await expect(newBtn).toBeEnabled();
 
     const urlBefore = page.url();
     await newBtn.click();
-    // Give any potential navigation a beat — URL must not change.
-    await page.waitForTimeout(300);
+
+    await expect(page.getByTestId('new-account-wizard')).toBeVisible();
     expect(page.url()).toBe(urlBefore);
   });
 });

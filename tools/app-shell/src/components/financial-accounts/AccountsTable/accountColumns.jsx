@@ -28,14 +28,17 @@ function chunkIban(iban) {
   return iban.replace(/\s+/g, '').replace(/(.{4})/g, '$1 ').trim();
 }
 
-function NameCell({ account, ui, onConnect }) {
+// The three cell bodies below are exported WITHOUT their <TableCell> wrapper so
+// both table hosts can share them: the legacy hand-rolled AccountsTable wraps
+// them itself (see ACCOUNT_CELL_RENDERERS), while the generic DataTable supplies
+// its own <TableCell> around whatever `col.render` returns.
+export function NameCell({ account, ui, onConnect }) {
   const isCashLike = account.type === ACCOUNT_TYPE.CASH;
   // In T1 the PSD2 column is not yet populated, so anything not explicitly
   // psd2Connected === true is treated as offline for bank/card rows.
   const isDisconnected = !isCashLike && account.psd2Connected !== true;
   return (
-    <TableCell className="w-[480px] p-0" data-testid="TableCell__dc050f">
-      <div className="flex h-full items-center">
+    <div className="flex h-full items-center">
         <div className="flex w-[44px] shrink-0 items-center justify-center opacity-0 transition-opacity group-hover:opacity-100">
           <GripVertical
             className="h-5 w-5 text-[hsl(var(--text-disabled))]"
@@ -57,12 +60,11 @@ function NameCell({ account, ui, onConnect }) {
             onConnect={onConnect ? () => onConnect(account) : undefined}
             data-testid="SyncStatusInline__dc050f" />
         </div>
-      </div>
-    </TableCell>
+    </div>
   );
 }
 
-function TypeCell({ account, ui }) {
+export function TypeCell({ account, ui }) {
   const typeLabel = ui(TYPE_LABEL_KEY[account.type] ?? 'financeAccountsTypeBank');
   const cardNumber = account.type === ACCOUNT_TYPE.CARD ? account.maskedPan : '';
   const copyIban = (e) => {
@@ -72,8 +74,7 @@ function TypeCell({ account, ui }) {
     }
   };
   return (
-    <TableCell className="w-[340px] px-2 py-2" data-testid="TableCell__dc050f">
-      <div className="flex flex-col justify-center">
+    <div className="flex flex-col justify-center">
         <span className="text-sm font-normal leading-5 text-[hsl(var(--foreground))]">{typeLabel}</span>
         {account.iban && (
           <span className="inline-flex items-center gap-1 text-xs leading-4 text-[hsl(var(--muted-foreground))]">
@@ -95,19 +96,16 @@ function TypeCell({ account, ui }) {
           </span>
         )}
         {!account.iban && !cardNumber && <span className="text-xs leading-4 text-[hsl(var(--muted-foreground))]">—</span>}
-      </div>
-    </TableCell>
+    </div>
   );
 }
 
-function BalanceCell({ account }) {
+export function BalanceCell({ account }) {
   const isNegative = Number(account.currentBalance) < 0;
   return (
-    <TableCell className="w-[200px] px-2 text-right" data-testid="TableCell__dc050f">
-      <span className={cn('text-sm font-semibold leading-5 tabular-nums', isNegative ? 'text-[hsl(var(--destructive))]' : 'text-[hsl(var(--foreground))]')}>
-        {formatCurrency(account.currencyIso, account.currentBalance)}
-      </span>
-    </TableCell>
+    <span className={cn('text-sm font-semibold leading-5 tabular-nums', isNegative ? 'text-[hsl(var(--destructive))]' : 'text-[hsl(var(--foreground))]')}>
+      {formatCurrency(account.currencyIso, account.currentBalance)}
+    </span>
   );
 }
 
@@ -116,7 +114,11 @@ export const ACCOUNT_CELL_RENDERERS = {
   name: {
     headClass: 'w-[480px] pl-[84px] pr-2',
     labelKey: 'financeAccountsColAccount',
-    renderCell: (account, ctx) => <NameCell account={account} ui={ctx.ui} onConnect={ctx.onConnect} data-testid="NameCell__dc050f" />,
+    renderCell: (account, ctx) => (
+      <TableCell className="w-[480px] p-0" data-testid="TableCell__dc050f">
+        <NameCell account={account} ui={ctx.ui} onConnect={ctx.onConnect} data-testid="NameCell__dc050f" />
+      </TableCell>
+    ),
     renderSkeleton: (key) => (
       <TableCell key={key} className="w-[480px] p-0" data-testid="TableCell__dc050f">
         <div className="flex items-center">
@@ -133,7 +135,11 @@ export const ACCOUNT_CELL_RENDERERS = {
   type: {
     headClass: 'w-[340px] px-2',
     labelKey: 'financeAccountsColType',
-    renderCell: (account, ctx) => <TypeCell account={account} ui={ctx.ui} data-testid="TypeCell__dc050f" />,
+    renderCell: (account, ctx) => (
+      <TableCell className="w-[340px] px-2 py-2" data-testid="TableCell__dc050f">
+        <TypeCell account={account} ui={ctx.ui} data-testid="TypeCell__dc050f" />
+      </TableCell>
+    ),
     renderSkeleton: (key) => (
       <TableCell key={key} className="w-[340px]" data-testid="TableCell__dc050f">
         <div className="flex flex-col gap-1">
@@ -146,7 +152,11 @@ export const ACCOUNT_CELL_RENDERERS = {
   currentBalance: {
     headClass: 'w-[200px] px-2',
     labelKey: 'financeAccountsColBalance',
-    renderCell: (account) => <BalanceCell account={account} data-testid="BalanceCell__dc050f" />,
+    renderCell: (account) => (
+      <TableCell className="w-[200px] px-2 text-right" data-testid="TableCell__dc050f">
+        <BalanceCell account={account} data-testid="BalanceCell__dc050f" />
+      </TableCell>
+    ),
     renderSkeleton: (key) => (
       <TableCell
         key={key}
