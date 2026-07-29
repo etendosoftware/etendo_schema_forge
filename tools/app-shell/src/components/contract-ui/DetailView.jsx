@@ -119,6 +119,7 @@ function evalDisplayLogicRaw(expr, data) {
 import { cn } from '@/lib/utils.js';
 import DocumentPrintDrawer from './DocumentPrintDrawer.jsx';
 import { toast } from 'sonner';
+import { runBatchDelete, toastBatchDeleteOutcome } from '@/lib/batchDelete.js';
 
 /**
  * Collapsible section that hides itself entirely when children render as null.
@@ -392,10 +393,20 @@ export function getSecondaryEditRowHandler(st, setCustomModalState) {
 
 /**
  * Returns the `onSelectionChange` handler for a secondary tab when the lines
- * layout is `inlineEditable` (tracks selected rows per tab), otherwise undefined.
+ * layout is `inlineEditable` (tracks selected rows per tab), otherwise
+ * undefined — UNLESS `enableSecondaryRowDelete` opts the tab in explicitly.
+ * ETP-4656 (Gap 4): non-inlineEditable tabs (e.g. Contacto → Direcciones /
+ * Personas de contacto, which use `customAddModal` popups instead of inline
+ * cell editing) still need multi-select bulk delete — `enableSecondaryRowDelete`
+ * already exists as the single-row delete opt-in for exactly these tabs (see
+ * `onDeleteRow` a few lines below), so it doubles as the bulk-select opt-in
+ * too instead of inventing a second flag. The underlying `Table` already
+ * renders checkboxes regardless of layout (DataTable's `selectable` defaults
+ * to true) — they were just never wired up to DetailView's selection state
+ * for non-inlineEditable tabs before this.
  */
-export function getSecondarySelectionChangeHandler(linesLayout, setSecondarySelectedRows, st) {
-  return linesLayout === 'inlineEditable'
+export function getSecondarySelectionChangeHandler(linesLayout, setSecondarySelectedRows, st, enableSecondaryRowDelete = false) {
+  return (linesLayout === 'inlineEditable' || enableSecondaryRowDelete)
       ? (rows) => setSecondarySelectedRows(prev => ({...prev, [st.key]: rows}))
       : undefined;
 }
@@ -567,31 +578,34 @@ export function buildSecondaryLineHandlers(deps) {
     setSecondaryDeleting(prev => ({...prev, [st.key]: true}));
     const rows = secondarySelectedRows[st.key] ?? [];
     try {
-      const results = await Promise.allSettled(
-          rows.map(row => {
-            const childUrl = api?.crud?.[st.key]?.detailUrl?.replace('{id}', row.id)
-                || `${apiBaseUrl}/${st.key}/${row.id}`;
-            return fetch(childUrl, {
-              method: 'DELETE',
-              headers: {...(token ? {Authorization: `Bearer ${token}`} : {})},
-            }).then(res => ({res, row}));
-          })
-      );
-      let deleted = 0;
-      for (const result of results) {
-        if (result.status === 'fulfilled' && result.value.res.ok) {
-          secondaryHooks[stIdx]?.handleDeleteChild?.(result.value.row.id);
-          if (selectedSecondaryLine?._tabKey === st.key && selectedSecondaryLine?.id === result.value.row.id) {
-            setSelectedSecondaryLine(null);
-          }
-          deleted++;
+      // ETP-4656 — shared triage (Promise.allSettled + succeeded/failed partition)
+      // and single-toast-per-outcome selection, same helpers ListView/Financial
+      // Accounts/Movements/Statements bulk delete already use (see batchDelete.js).
+      // Replaces the old two-independent-if (`recordsDeleted` + `recordsCouldNotBeDeleted`)
+      // stacked-toast pattern this function predates.
+      const { succeeded, failed } = await runBatchDelete(rows, (row) => {
+        const childUrl = api?.crud?.[st.key]?.detailUrl?.replace('{id}', row.id)
+            || `${apiBaseUrl}/${st.key}/${row.id}`;
+        return fetch(childUrl, {
+          method: 'DELETE',
+          headers: {...(token ? {Authorization: `Bearer ${token}`} : {})},
+        }).then(res => {
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          return row;
+        });
+      });
+
+      for (const row of succeeded) {
+        secondaryHooks[stIdx]?.handleDeleteChild?.(row.id);
+        if (selectedSecondaryLine?._tabKey === st.key && selectedSecondaryLine?.id === row.id) {
+          setSelectedSecondaryLine(null);
         }
       }
+
       secondaryInlineLinesRefs.current[st.key]?.current?.clearSelection?.();
       setSecondarySelectedRows(prev => ({...prev, [st.key]: []}));
-      if (deleted > 0) toast.success(ui('recordsDeleted', {count: deleted}));
-      const failed = results.length - deleted;
-      if (failed > 0) toast.error(ui('recordsCouldNotBeDeleted', {count: failed}));
+
+      toastBatchDeleteOutcome(ui, { succeeded, failed, total: rows.length });
     } catch (err) {
       toast.error(err.message || ui('networkError'));
     } finally {
@@ -747,7 +761,10 @@ function secondaryAddLineBar(props) {
           hideChevron={props.hideChevron}
           data-testid="AddLineButton__fa3275" />
       </span>
-      {props.linesLayout === "inlineEditable" && (props.crud?.[props.st.key]?.delete ?? true) && (
+      {/* ETP-4656 (Gap 4) — `enableSecondaryRowDelete` also unlocks the bulk-select bar
+          for non-inlineEditable tabs (e.g. Direcciones/Personas de contacto), matching
+          the onSelectionChange wiring above and the row-level onDeleteRow gate below. */}
+      {(props.linesLayout === "inlineEditable" || props.enableSecondaryRowDelete) && (props.crud?.[props.st.key]?.delete ?? true) && (
           <LinesSelectionBar
             visible={props.secondaryBarVisible[props.st.key] ?? false}
             closing={props.secondaryBarClosing[props.st.key] ?? false}
@@ -804,7 +821,7 @@ export function SecondaryTableTab(props) {
               // the popup editor — rows are not editable in place.
               onEditRow={getSecondaryEditRowHandler(props.st, props.setCustomModalState)}
               selectedRowId={props.selectedSecondaryLine?._tabKey === props.st.key ? props.selectedSecondaryLine?.id : undefined}
-              onSelectionChange={getSecondarySelectionChangeHandler(props.linesLayout, props.setSecondarySelectedRows, props.st)}
+              onSelectionChange={getSecondarySelectionChangeHandler(props.linesLayout, props.setSecondarySelectedRows, props.st, props.enableSecondaryRowDelete)}
               onDeleteRow={(props.enableSecondaryRowDelete || (props.linesLayout === 'inlineEditable' && !props.st.customAddModal)) && !tabReadOnly && (props.crud?.[props.st.key]?.delete ?? true) ? props.onDeleteRow : undefined}
               // Inline edit save for secondary-tab rows. Fires when a
               // cell loses focus while in edit mode. Optimistic flow:
@@ -2240,8 +2257,8 @@ export function DetailView({
       }
       return;
     }
-    await hook.handleDelete();
-    navigate(`/${windowName}`);
+    const deleted = await hook.handleDelete();
+    if (deleted) navigate(`/${windowName}`);
   };
   // Non-dismissible loading modal shown while a draftMode confirm action with
   // draftMode.processingModal is in flight (e.g. Verifactu's ~8s GenerateRF).
@@ -4148,28 +4165,27 @@ export function DetailView({
                                           if (!(await confirmDelete())) return;
                                           setDeletingChildren(true);
                                           try {
-                                            const results = await Promise.allSettled(
-                                              selectedChildRows.map(row => {
-                                                const childUrl = api?.crud?.[detailEntity]?.detailUrl?.replace('{id}', row.id)
-                                                  || `${apiBaseUrl}/${detailEntity}/${row.id}`;
-                                                return fetch(childUrl, {
-                                                  method: 'DELETE',
-                                                  headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) },
-                                                }).then(res => ({ res, row }));
-                                              })
-                                            );
-                                            let deleted = 0;
-                                            for (const result of results) {
-                                              if (result.status === 'fulfilled' && result.value.res.ok) {
-                                                hook.handleDeleteChild(result.value.row.id);
-                                                if (selectedLine?.id === result.value.row.id) setSelectedLine(null);
-                                                deleted++;
-                                              }
+                                            // ETP-4656 — shared triage + single-toast-per-outcome (see
+                                            // batchDelete.js); replaces the old two-independent-if
+                                            // (recordsDeleted + recordsCouldNotBeDeleted) stacked-toast
+                                            // pattern this button predates.
+                                            const { succeeded, failed } = await runBatchDelete(selectedChildRows, (row) => {
+                                              const childUrl = api?.crud?.[detailEntity]?.detailUrl?.replace('{id}', row.id)
+                                                || `${apiBaseUrl}/${detailEntity}/${row.id}`;
+                                              return fetch(childUrl, {
+                                                method: 'DELETE',
+                                                headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+                                              }).then(res => {
+                                                if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                                                return row;
+                                              });
+                                            });
+                                            for (const row of succeeded) {
+                                              hook.handleDeleteChild(row.id);
+                                              if (selectedLine?.id === row.id) setSelectedLine(null);
                                             }
                                             setSelectedChildRows([]);
-                                            if (deleted > 0) toast.success(ui('recordsDeleted', { count: deleted }));
-                                            const failed = results.length - deleted;
-                                            if (failed > 0) toast.error(ui('recordsCouldNotBeDeleted', { count: failed }));
+                                            toastBatchDeleteOutcome(ui, { succeeded, failed, total: selectedChildRows.length });
                                           } catch (err) {
                                             toast.error(err.message || ui('networkError'));
                                           } finally {
@@ -4177,6 +4193,7 @@ export function DetailView({
                                           }
                                         }}
                                         className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md border border-destructive text-destructive hover:bg-destructive/10 disabled:opacity-50 transition-colors"
+                                        data-testid="detail-bulk-delete-button"
                                       >
                                         <Trash2 className="h-3.5 w-3.5" data-testid="Trash2__fa3275" />
                                         {getDeleteChildButtonLabel(deletingChildren, ui)}
@@ -4394,29 +4411,28 @@ export function DetailView({
                                           if (!(await confirmDelete())) return;
                                           setDeletingChildren(true);
                                           try {
-                                            const results = await Promise.allSettled(
-                                              selectedChildRows.map(row => {
-                                                const childUrl = api?.crud?.[detailEntity]?.detailUrl?.replace('{id}', row.id)
-                                                  || `${apiBaseUrl}/${detailEntity}/${row.id}`;
-                                                return fetch(childUrl, {
-                                                  method: 'DELETE',
-                                                  headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) },
-                                                }).then(res => ({ res, row }));
-                                              })
-                                            );
-                                            let deleted = 0;
-                                            for (const result of results) {
-                                              if (result.status === 'fulfilled' && result.value.res.ok) {
-                                                hook.handleDeleteChild(result.value.row.id);
-                                                if (selectedLine?.id === result.value.row.id) setSelectedLine(null);
-                                                deleted++;
-                                              }
+                                            // ETP-4656 — shared triage + single-toast-per-outcome (see
+                                            // batchDelete.js); replaces the old two-independent-if
+                                            // (recordsDeleted + recordsCouldNotBeDeleted) stacked-toast
+                                            // pattern this bar predates.
+                                            const { succeeded, failed } = await runBatchDelete(selectedChildRows, (row) => {
+                                              const childUrl = api?.crud?.[detailEntity]?.detailUrl?.replace('{id}', row.id)
+                                                || `${apiBaseUrl}/${detailEntity}/${row.id}`;
+                                              return fetch(childUrl, {
+                                                method: 'DELETE',
+                                                headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+                                              }).then(res => {
+                                                if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                                                return row;
+                                              });
+                                            });
+                                            for (const row of succeeded) {
+                                              hook.handleDeleteChild(row.id);
+                                              if (selectedLine?.id === row.id) setSelectedLine(null);
                                             }
                                             inlineLinesRef.current?.clearSelection?.();
                                             setSelectedChildRows([]);
-                                            if (deleted > 0) toast.success(ui('recordsDeleted', { count: deleted }));
-                                            const failed = results.length - deleted;
-                                            if (failed > 0) toast.error(ui('recordsCouldNotBeDeleted', { count: failed }));
+                                            toastBatchDeleteOutcome(ui, { succeeded, failed, total: selectedChildRows.length });
                                           } catch (err) {
                                             toast.error(err.message || ui('networkError'));
                                           } finally {

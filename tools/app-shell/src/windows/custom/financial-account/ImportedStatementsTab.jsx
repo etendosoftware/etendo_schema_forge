@@ -1,9 +1,10 @@
-import { useState, useMemo, useRef, forwardRef, useImperativeHandle } from 'react';
+import { useCallback, useState, useMemo, useRef, forwardRef, useImperativeHandle } from 'react';
 import { toast } from 'sonner';
 import { useUI } from '@/i18n';
 import { useBankStatements } from '@/hooks/useBankStatements';
 import { useStatementActions } from '@/hooks/useStatementActions';
 import { useBankConnectionActions } from '@/hooks/useBankConnectionActions';
+import { useBatchDeleteDialog } from '@/hooks/useBatchDeleteDialog.jsx';
 import { StatementsToolbar } from './StatementsToolbar';
 import { StatementsTable } from './StatementsTable';
 import { StatementLinesView } from './StatementLinesView';
@@ -12,6 +13,7 @@ import { ManualStatementModal } from './ManualStatementModal';
 import { StatementConfirmDialog } from './StatementConfirmDialog';
 import { applyAdvancedFilter } from './statementAdvancedFilter';
 import { getDateBounds } from '@/lib/dateRangeBounds';
+import { BulkDeleteSelectionBar } from '@/components/financial-accounts';
 
 /**
  * Imported Statements tab for the Financial Account detail view.
@@ -74,6 +76,25 @@ export const ImportedStatementsTab = forwardRef(function ImportedStatementsTab({
   };
 
   const closeConfirm = () => setConfirm({ variant: null, statement: null });
+
+  // ETP-4656 (Gap 3) — bulk "Delete selected" for the imported-statements grid,
+  // wired onto the checkbox selection that already existed here. Reuses the same
+  // deleteStatement(id) call the per-row hover quick-action already makes (see
+  // StatementsTable) — not every statement is deletable (drafts only, per
+  // StatementRowKebab's comment), so a non-draft in the selection surfaces as a
+  // normal per-row failure in the 3-outcome toast rather than being pre-filtered.
+  const clearSelection = useCallback(() => setSelectedIds(new Set()), []);
+  const { requestBatchDelete, batchDeleteDialog, deleting: bulkDeleting } = useBatchDeleteDialog({
+    deleteOneFn: (id) => deleteStatement(id),
+    onOutcome: (succeeded, failed) => {
+      if (succeeded.length > 0) reload();
+      if (failed.length === 0) {
+        clearSelection();
+      } else {
+        setSelectedIds(new Set(failed));
+      }
+    },
+  });
 
   // Runs the bank statement fetch for this account (same backend action behind the kebab's
   // "Sync now"). The bridge mirrors Classic's "Get Bank Statement": it returns a status
@@ -184,6 +205,16 @@ export const ImportedStatementsTab = forwardRef(function ImportedStatementsTab({
 
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
+      {selectedIds.size > 0 && (
+        <div className="border-b border-[hsl(var(--border-subtle))] px-2 py-2">
+          <BulkDeleteSelectionBar
+            count={selectedIds.size}
+            deleting={bulkDeleting}
+            onCancel={clearSelection}
+            onDelete={() => requestBatchDelete(Array.from(selectedIds))}
+            data-testid="StatementsBulkDeleteSelectionBar__6f147a" />
+        </div>
+      )}
       <StatementsToolbar
         search={search}
         onSearchChange={setSearch}
@@ -210,6 +241,7 @@ export const ImportedStatementsTab = forwardRef(function ImportedStatementsTab({
           onSelectionChange={handleSelectionChange}
           data-testid="StatementsTable__6f147a" />
       </div>
+      {batchDeleteDialog}
       <ImportStatementModal
         open={importOpen}
         accountId={accountId}

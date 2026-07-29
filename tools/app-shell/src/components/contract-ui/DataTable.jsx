@@ -1686,6 +1686,13 @@ export function DataTable({
   onSaveRow = null,
   onCancelEdit = null,
   clearSelectionTrigger = 0,
+  // ETP-4656 — partial bulk-delete outcome: bump `deselectTrigger` with the ids
+  // of the rows that succeeded (`deselectRowIds`) so only those drop out of the
+  // internal selection Set, leaving the failed rows checked. A dedicated pair
+  // instead of overloading `clearSelectionTrigger` (which always clears
+  // everything) so existing full-clear callers stay untouched.
+  deselectTrigger = 0,
+  deselectRowIds = [],
   hideHeader = false,
   hideDataRows = false,
 }) {
@@ -1707,6 +1714,16 @@ export function DataTable({
     if (!clearSelectionTrigger) return;
     setSelectedRows(new Set());
   }, [clearSelectionTrigger]);
+
+  useEffect(() => {
+    if (!deselectTrigger || !deselectRowIds?.length) return;
+    setSelectedRows(prev => {
+      const next = new Set(prev);
+      deselectRowIds.forEach((id) => next.delete(id));
+      return next;
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [deselectTrigger]);
 
   const [optimisticToggles, setOptimisticToggles] = useState({});
   const [savingToggles, setSavingToggles] = useState({});

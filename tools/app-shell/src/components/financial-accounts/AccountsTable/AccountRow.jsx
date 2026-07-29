@@ -1,6 +1,7 @@
 import { Fragment } from 'react';
 import { Pencil, RefreshCw } from 'lucide-react';
 import { TableRow, TableCell } from '@/components/ui/table';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
   Tooltip,
   TooltipContent,
@@ -12,7 +13,13 @@ import { ReconcilePill } from '../ReconcilePill.jsx';
 import { AccountRowMenu } from '../AccountRowMenu.jsx';
 import { ACCOUNT_COLUMNS, ACCOUNT_CELL_RENDERERS } from './accountColumns.jsx';
 
-export function AccountRow({ account, onOpen, onReconcile, onEdit, onArchive, onBankConnectionAction, onTransfer, onNewMovement }) {
+/**
+ * @param {{ selected?: boolean, onSelectionChange?: (id: string) => void }} props
+ */
+export function AccountRow({
+  account, onOpen, onReconcile, onEdit, onArchive, onBankConnectionAction, onTransfer, onNewMovement,
+  selected = false, onSelectionChange,
+}) {
   const ui = useUI();
   const cellCtx = {
     ui,
@@ -25,6 +32,16 @@ export function AccountRow({ account, onOpen, onReconcile, onEdit, onArchive, on
       className="group relative h-16 cursor-pointer bg-card transition-shadow hover:z-10 hover:bg-card hover:shadow-lg"
       onClick={() => onOpen?.(account)}
     >
+      {/* ETP-4656 — selection checkbox, same plumbing as MovementsTable/StatementsTable */}
+      <TableCell
+        className="w-10 px-3"
+        onClick={(e) => e.stopPropagation()}
+        data-testid="TableCell__90174f">
+        <Checkbox
+          checked={selected}
+          onChange={() => onSelectionChange?.(account.id)}
+          data-testid={`account-select-${account.id}`} />
+      </TableCell>
       {/* Contract-driven data columns (decisions.json → contract.json) */}
       {ACCOUNT_COLUMNS.map((col) => {
         const renderer = ACCOUNT_CELL_RENDERERS[col.name];

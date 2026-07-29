@@ -232,6 +232,7 @@ export default function MovementPage({ windowName, recordId, ...props }) {
         recordId={recordId}
         breadcrumb={breadcrumb}
       api={api}
+        hideDeleteWhenComplete
         hidePrint
         noHeaderBorder
         whiteFormBackground

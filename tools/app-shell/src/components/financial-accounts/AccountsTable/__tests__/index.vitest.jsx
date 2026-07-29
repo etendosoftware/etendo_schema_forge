@@ -95,4 +95,59 @@ describe('AccountsTable', () => {
     );
     expect(screen.queryByText('Reintentar')).not.toBeInTheDocument();
   });
+
+  // ETP-4656 — handleSelectAll (header checkbox select-all/deselect-all toggle).
+  // onSelectionChange is a per-id toggle callback (not a "set" callback), so both
+  // branches call it once per affected account — they differ in WHICH ids they toggle.
+  describe('select all / deselect all', () => {
+    it('when none are selected, toggles every currently-unselected account (selects the rest)', () => {
+      const onSelectionChange = vi.fn();
+      render(
+        <AccountsTable
+          accounts={accounts}
+          loading={false}
+          error={null}
+          selectedIds={new Set()}
+          onSelectionChange={onSelectionChange}
+        />,
+      );
+      fireEvent.click(screen.getByTestId('account-select-all'));
+      expect(onSelectionChange).toHaveBeenCalledTimes(2);
+      expect(onSelectionChange).toHaveBeenCalledWith('acc-1');
+      expect(onSelectionChange).toHaveBeenCalledWith('acc-2');
+    });
+
+    it('when some are selected, toggles only the currently-unselected accounts', () => {
+      const onSelectionChange = vi.fn();
+      render(
+        <AccountsTable
+          accounts={accounts}
+          loading={false}
+          error={null}
+          selectedIds={new Set(['acc-1'])}
+          onSelectionChange={onSelectionChange}
+        />,
+      );
+      fireEvent.click(screen.getByTestId('account-select-all'));
+      expect(onSelectionChange).toHaveBeenCalledTimes(1);
+      expect(onSelectionChange).toHaveBeenCalledWith('acc-2');
+    });
+
+    it('when all are selected, toggles every account (deselects all)', () => {
+      const onSelectionChange = vi.fn();
+      render(
+        <AccountsTable
+          accounts={accounts}
+          loading={false}
+          error={null}
+          selectedIds={new Set(['acc-1', 'acc-2'])}
+          onSelectionChange={onSelectionChange}
+        />,
+      );
+      fireEvent.click(screen.getByTestId('account-select-all'));
+      expect(onSelectionChange).toHaveBeenCalledTimes(2);
+      expect(onSelectionChange).toHaveBeenCalledWith('acc-1');
+      expect(onSelectionChange).toHaveBeenCalledWith('acc-2');
+    });
+  });
 });

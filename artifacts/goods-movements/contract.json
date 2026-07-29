@@ -9,6 +9,7 @@
       "name": "Goods Movements",
       "primaryEntity": "movement",
       "category": "inventory",
+      "hideDeleteWhenComplete": true,
       "hidePrint": true,
       "hideLink": true,
       "customComponents": {
@@ -498,6 +499,7 @@
       "name": "Goods Movements",
       "primaryEntity": "movement",
       "category": "inventory",
+      "hideDeleteWhenComplete": true,
       "hidePrint": true,
       "hideLink": true,
       "customComponents": {

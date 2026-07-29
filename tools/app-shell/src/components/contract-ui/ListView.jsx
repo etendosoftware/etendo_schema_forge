@@ -4,8 +4,9 @@ import { Button } from '@/components/ui/button.jsx';
 import { Skeleton } from '@/components/ui/skeleton.jsx';
 import { useEntity } from '@/hooks/useEntity';
 import { useRowDelete } from '@/hooks/useRowDelete';
+import { useBulkRowDelete } from '@/hooks/useBulkRowDelete';
 import { useMenuLabel, useLabel, useUI } from '@/i18n';
-import { ArrowUpDown, ChevronDown, Plus, Link2, Printer, LayoutGrid, RefreshCw, Eye, Copy, Upload } from 'lucide-react';
+import { ArrowUpDown, ChevronDown, Plus, Link2, Printer, LayoutGrid, RefreshCw, Eye, Copy, Upload, Trash2 } from 'lucide-react';
 import { useRegisterWindowContext } from '@/components/CurrentWindowContext';
 import { useSetPageMeta } from '@/components/layout/PageMetaContext';
 import { useFavorites } from '@/components/layout/FavoritesContext';
@@ -601,6 +602,12 @@ export function ListView({
   }, [favActive, hook.items.length]);
   const [selectedRows, setSelectedRows] = useState([]);
   const [clearSelectionCounter, setClearSelectionCounter] = useState(0);
+  // ETP-4656 — partial bulk-delete outcome: bump deselectTrigger with the ids of
+  // the rows that were successfully deleted so DataTable drops only those from
+  // its internal selection Set, leaving the failed rows checked (see
+  // useBulkRowDelete below and DataTable's matching deselectTrigger effect).
+  const [deselectTrigger, setDeselectTrigger] = useState(0);
+  const [deselectRowIds, setDeselectRowIds] = useState([]);
   const [previewRow, setPreviewRow] = useState(null);
   const activePreviewRow = previewRow ?? externalPreviewRow ?? null;
 
@@ -621,6 +628,31 @@ export function ListView({
     setSelectedRows([]);
     setClearSelectionCounter((c) => c + 1);
   }, []);
+
+  // ETP-4656 — grid multi-select "Delete selected". Outcome handling per the
+  // standardized delete UX:
+  //   - all succeeded  → refetch (deleted rows disappear) + clear selection.
+  //   - partial failure → refetch (succeeded rows disappear) + keep only the
+  //     failed rows selected, both in our own state and in DataTable's
+  //     internal checkbox Set (via deselectTrigger/deselectRowIds).
+  //   - all failed      → no refetch, selection untouched.
+  const { requestBulkDelete, bulkDeleteDialog, deleting: bulkDeleting } = useBulkRowDelete({
+    apiBaseUrl,
+    entity: entity || 'header',
+    token,
+    onSuccess: (succeeded, failed) => {
+      if (succeeded.length > 0) hook.refresh();
+      if (failed.length === 0) {
+        clearSelection();
+      } else {
+        setSelectedRows(failed);
+        if (succeeded.length > 0) {
+          setDeselectRowIds(succeeded.map((r) => r.id));
+          setDeselectTrigger((c) => c + 1);
+        }
+      }
+    },
+  });
 
   // Register this list view with the current-window context so the Copilot
   // widget can auto-attach it when opened. Memoized so the hook's signature
@@ -737,6 +769,25 @@ export function ListView({
                     data-testid="Button__620cbc">
                     <Copy className={iconSizeClass(selectionBarSize)} data-testid="Copy__620cbc" />
                     {ui('cloneOrderBtn')} ({selectedRows.length})
+                  </Button>
+                )}
+                {/* ETP-4656 — generic "Delete selected". Suppressed when the window is
+                    read-only or via the explicit `listViewOptions.hideBulkDelete` opt-out
+                    (e.g. a host that already renders its own delete affordance through
+                    selectionBarRightActions for an unrelated reason must opt out
+                    explicitly — inferring it from that prop's mere presence was fragile,
+                    since selectionBarRightActions can be used for things other than
+                    delete). */}
+                {!windowReadOnly && !(listViewOptions?.hideBulkDelete) && (
+                  <Button
+                    variant="outline"
+                    size={selectionBarSize}
+                    className="gap-1.5"
+                    disabled={bulkDeleting}
+                    onClick={() => requestBulkDelete(selectedRows)}
+                    data-testid="bulk-delete-selected">
+                    <Trash2 className={iconSizeClass(selectionBarSize)} data-testid="Trash2__620cbc" />
+                    {ui('bulkDeleteSelected')} ({selectedRows.length})
                   </Button>
                 )}
                 {bulkActions && bulkActions({ selectedRows, clearSelection, token, apiBaseUrl, windowName, api })}
@@ -1006,6 +1057,8 @@ export function ListView({
                       rowFilter={effectiveRowFilter}
                       hoverRowActions={hoverRowActions}
                       clearSelectionTrigger={clearSelectionCounter}
+                      deselectTrigger={deselectTrigger}
+                      deselectRowIds={deselectRowIds}
                       rowQuickActions={effectiveRowQuickActions}
                       hiddenColumns={hiddenColumns}
                       data-testid="Table__620cbc" />
@@ -1044,6 +1097,7 @@ export function ListView({
           token={token}
           data-testid="DocumentPrintDrawer__620cbc" />
         {quickActionsEnabled && !rowQuickActions?.onDelete && defaultDeleteDialog}
+        {bulkDeleteDialog}
         {/* ETP-3914 — Generic Send/Download modal mount for any documental window
           that did not bring its own `onEmail`. Custom windows that mount the
           modal manually (sales-invoice, purchase-invoice) keep doing so because

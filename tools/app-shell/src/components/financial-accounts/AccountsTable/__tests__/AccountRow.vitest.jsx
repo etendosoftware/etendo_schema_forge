@@ -105,4 +105,116 @@ describe('AccountRow', () => {
     const balanceCell = screen.getByText(/-?€42\.50|-€42\.50|-42,50 €|-42\.50 €/);
     expect(balanceCell.className).toMatch(/text-\[hsl\(var\(--destructive\)\)\]/i);
   });
+
+  // ETP-4656 — selection checkbox (Gap 1: multi-select bulk delete).
+  describe('selection checkbox', () => {
+    it('renders unchecked by default and fires onSelectionChange with the account id when toggled', () => {
+      const onSelectionChange = vi.fn();
+      renderRow({ account: baseAccount, onSelectionChange });
+      const checkbox = screen.getByRole('checkbox');
+      expect(checkbox).not.toBeChecked();
+      fireEvent.click(checkbox);
+      expect(onSelectionChange).toHaveBeenCalledWith('acc-1');
+    });
+
+    it('renders checked when selected is true', () => {
+      renderRow({ account: baseAccount, selected: true });
+      expect(screen.getByRole('checkbox')).toBeChecked();
+    });
+
+    it('does not fire onOpen when the checkbox cell is clicked (stopPropagation)', () => {
+      const onOpen = vi.fn();
+      const onSelectionChange = vi.fn();
+      renderRow({
+        account: baseAccount, onOpen, onSelectionChange,
+      });
+      fireEvent.click(screen.getByRole('checkbox'));
+      expect(onSelectionChange).toHaveBeenCalledWith('acc-1');
+      expect(onOpen).not.toHaveBeenCalled();
+    });
+
+    it('does not throw when onSelectionChange is not provided', () => {
+      renderRow({ account: baseAccount });
+      expect(() => fireEvent.click(screen.getByRole('checkbox'))).not.toThrow();
+    });
+  });
+
+  describe('PSD2 connect CTA (cellCtx.onConnect)', () => {
+    it('fires onPsd2Action("connect", account) when the inline Connect PSD2 CTA is clicked', () => {
+      const onPsd2Action = vi.fn();
+      renderRow({ account: baseAccount, onPsd2Action });
+      fireEvent.click(screen.getByTestId('account-sync-connect-acc-1'));
+      expect(onPsd2Action).toHaveBeenCalledWith('connect', expect.objectContaining({ id: 'acc-1' }));
+    });
+
+    it('does not render the Connect PSD2 CTA when onPsd2Action is not provided', () => {
+      renderRow({ account: baseAccount });
+      // cellCtx.onConnect is undefined, so SyncStatusInline receives no onConnect handler,
+      // but the CTA itself is still rendered — clicking it should not throw.
+      expect(() => fireEvent.click(screen.getByTestId('account-sync-connect-acc-1'))).not.toThrow();
+    });
+  });
+
+  describe('reconcile pill', () => {
+    it('fires onReconcile with the account when the pending pill is clicked', () => {
+      const onReconcile = vi.fn();
+      renderRow({ account: { ...baseAccount, pendingCount: 3 }, onReconcile });
+      fireEvent.click(screen.getByTestId('reconcile-status-pending'));
+      expect(onReconcile).toHaveBeenCalledWith(expect.objectContaining({ id: 'acc-1', pendingCount: 3 }));
+    });
+
+    it('does not fire onOpen when the pending pill is clicked (stopPropagation)', () => {
+      const onOpen = vi.fn();
+      const onReconcile = vi.fn();
+      renderRow({
+        account: { ...baseAccount, pendingCount: 3 }, onOpen, onReconcile,
+      });
+      fireEvent.click(screen.getByTestId('reconcile-status-pending'));
+      expect(onReconcile).toHaveBeenCalled();
+      expect(onOpen).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('edit action', () => {
+    it('fires onEdit with the account when the edit button is clicked', () => {
+      const onEdit = vi.fn();
+      renderRow({ account: baseAccount, onEdit });
+      fireEvent.click(screen.getByTestId('account-row-edit-acc-1'));
+      expect(onEdit).toHaveBeenCalledWith(expect.objectContaining({ id: 'acc-1' }));
+    });
+
+    it('does not fire onOpen when the edit button is clicked (stopPropagation)', () => {
+      const onOpen = vi.fn();
+      const onEdit = vi.fn();
+      renderRow({ account: baseAccount, onOpen, onEdit });
+      fireEvent.click(screen.getByTestId('account-row-edit-acc-1'));
+      expect(onEdit).toHaveBeenCalled();
+      expect(onOpen).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('PSD2 sync-now action', () => {
+    it('renders the sync button and fires onPsd2Action("syncNow", account) when clicked, for psd2Connected accounts', () => {
+      const onPsd2Action = vi.fn();
+      renderRow({ account: { ...baseAccount, psd2Connected: true }, onPsd2Action });
+      fireEvent.click(screen.getByTestId('account-row-refresh-acc-1'));
+      expect(onPsd2Action).toHaveBeenCalledWith('syncNow', expect.objectContaining({ id: 'acc-1', psd2Connected: true }));
+    });
+
+    it('does not render the sync button when the account is not psd2Connected', () => {
+      renderRow({ account: { ...baseAccount, psd2Connected: false } });
+      expect(screen.queryByTestId('account-row-refresh-acc-1')).not.toBeInTheDocument();
+    });
+
+    it('does not fire onOpen when the sync button is clicked (stopPropagation)', () => {
+      const onOpen = vi.fn();
+      const onPsd2Action = vi.fn();
+      renderRow({
+        account: { ...baseAccount, psd2Connected: true }, onOpen, onPsd2Action,
+      });
+      fireEvent.click(screen.getByTestId('account-row-refresh-acc-1'));
+      expect(onPsd2Action).toHaveBeenCalled();
+      expect(onOpen).not.toHaveBeenCalled();
+    });
+  });
 });

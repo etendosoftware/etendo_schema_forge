@@ -4,6 +4,7 @@
     "category": "inventory",
     "name": "Physical Inventory",
     "statusField": "processed",
+    "hideDeleteWhenComplete": true,
     "processOverrides": {
       "processNow": {
         "requiresLines": true

@@ -127,6 +127,10 @@ describe('GoodsShipmentWindow', () => {
     expect(screen.getByTestId('shipment-preview')).toHaveAttribute('data-window-name', 'goods-shipment');
     expect(rowDeleteConfig).toMatchObject({ apiBaseUrl: '/api', entity: 'goodsShipment', token: 'tkn' });
 
+    // ETP-4656: grid delete icon must stay visible regardless of document status —
+    // hideDeleteWhenComplete must not be set on the row quick actions config.
+    expect(lastPageProps.rowQuickActions.hideDeleteWhenComplete).toBeUndefined();
+
     lastPageProps.rowQuickActions.onEdit({ id: 'ship-1' });
     expect(navigate).toHaveBeenCalledWith('/goods-shipment/ship-1');
 

@@ -362,6 +362,103 @@ defense-in-depth: the API capability is disabled AND the UI icon is hidden).
 
 ---
 
+### 9c. Standardized delete UX & `listViewOptions.hideBulkDelete` (ETP-4656)
+
+`ListView` now renders a generic **"Delete selected"** action in the multi-select
+toolbar (grid checkboxes), wired through the `useBulkRowDelete` hook
+(`tools/app-shell/src/hooks/useBulkRowDelete.jsx`). This is **on by default** —
+no `decisions.json` key is needed to enable it — and is suppressed only when:
+- the window is read-only (`windowReadOnly`), or
+- `listViewOptions.hideBulkDelete` is set (see below).
+
+This complements the pre-existing single-row delete affordances
+(`useRowDelete`, `DetailView`'s header delete) — all three delete surfaces
+(header, row, bulk) now share the same failure-handling contract described
+below.
+
+**Opting out — `listViewOptions.hideBulkDelete`:**
+
+```jsx
+<ListView
+  listViewOptions={{ hideBulkDelete: true }}
+  ...
+/>
+```
+
+Use this when a window already ships **its own** delete or bulk-delete
+affordance and stacking the generic action would be redundant/confusing.
+
+Unlike `hidePrint` / `hideStatusFilter` / `hideEye` (documented in
+`docs/decisions-reference.md` as `window.*` decisions.json keys that the
+generator compiles into the `listViewOptions` prop it passes to `ListView`),
+`hideBulkDelete` has **no decisions.json/generator wiring yet** — that
+compilation step lives in the generator (`schema_forge_core`, out of scope for
+this sub-task). Today the only way to set it is to pass `listViewOptions`
+directly from a hand-written `windows/custom/{window}/index.jsx` wrapper, the
+same way `contacts` does it. **That object REPLACES — it does not merge with —
+the `listViewOptions` the generated page already passes to `ListView`**, so the
+wrapper must repeat every flag the generated page sets (`hidePrint`, `hideEye`,
+`hideCounter`, `hideLink`, …) alongside `hideBulkDelete`, or those get silently
+dropped. See `tools/app-shell/src/windows/custom/contacts/index.jsx` for the
+canonical example.
+
+**Known gap — `contacts`:** `contacts` sets `hideBulkDelete: true`, but this
+does **not** mean "this window has no bulk delete." `contacts` has its own,
+older bulk-delete affordance (a trash + X button pair rendered via
+`selectionBarRightActions`, predating this mechanism) that was **not**
+unified with `useBulkRowDelete` in this sub-task — that migration is tracked
+as a follow-up. Read `hideBulkDelete: true` on a window as "has a different,
+not-yet-migrated bulk-delete," never as "has none."
+
+**Standardized delete-failure UX (applies to header, row, and bulk delete —
+no configuration needed):**
+
+- `useEntity`'s `extractErrorMessage`/`normalizeServerError` recognize
+  FK-constraint-violation errors — both the raw Postgres RESTRICT wording and
+  the classic Etendo `ErrorTextParser` AD_Message wording — and map them to one
+  standardized, translated message (i18n key `deleteBlockedByReferences`):
+  *"No es posible eliminar este registro porque tiene registros asociados."*
+- `useEntity`'s `handleDelete` now **returns a boolean** (`true`/`false`).
+  Callers must check it before navigating away or closing a confirm dialog —
+  `DetailView`'s `confirmHeaderDelete` only navigates back to the grid on
+  success, and `useRowDelete`'s confirm dialog now closes on failure too
+  (previously it left a failed dialog open indefinitely, or navigated away on
+  a failed header delete, with only a toast as feedback). Any new delete
+  entry point built on `useEntity`/`useRowDelete` must follow the same
+  check-before-navigate/close rule.
+
+**Bulk-delete outcome contract — exactly ONE toast per outcome (never one per
+row):** `useBulkRowDelete` issues one `DELETE` per selected row in parallel
+(`Promise.allSettled`), then reports a single combined toast:
+
+| Outcome | Toast | i18n key |
+|---------|-------|----------|
+| All rows succeed | success — "{count} registros eliminados correctamente." | `bulkDeleteAllSucceeded` |
+| Partial failure | single warning — "{succeeded} de {total} registros eliminados. {failed} no pudieron eliminarse." | `bulkDeletePartialFailure` |
+| All rows fail | error — "No se pudo eliminar ninguno de los {count} registros seleccionados." | `bulkDeleteAllFailed` |
+
+On a partial failure, `ListView` keeps only the failed rows selected: `DataTable`
+gained a paired `deselectTrigger`/`deselectRowIds` prop (alongside the existing
+all-or-nothing `clearSelectionTrigger`) so only the succeeded row ids drop out
+of the internal checkbox selection, leaving the failed ones checked for retry.
+
+**Known, accepted wording limitation:** `bulkDeletePartialFailure`'s "{failed}
+no pudieron eliminarse" does not grammatically vary for a singular failure
+(reads "1 no pudieron eliminarse" instead of "1 no pudo eliminarse"). This is
+deliberate — it matches the design doc's (Confluence "Eliminación de Registros
+— Comportamiento Estándar") literal wording — not a bug to fix.
+
+**New i18n keys** (all under `genericLabels`, both `en_US.json`/`es_ES.json`):
+`deleteBlockedByReferences`, `bulkDeleteConfirmTitle`, `bulkDeleteConfirmMessage`,
+`bulkDeleteSelected`, `bulkDeleteAllSucceeded`, `bulkDeletePartialFailure`,
+`bulkDeleteAllFailed`.
+
+**Real examples:** the generic mechanism applies to every window using the
+standard `ListView` (nothing to declare). `contacts` is the one window that
+currently opts out (see the known gap above).
+
+---
+
 ### 10. `window.dateFilterKey` — date range filter column
 
 Declares which list column the date range shortcut in the list toolbar targets.
@@ -832,6 +929,8 @@ I need to customize the UI of a window
     ├─ Hide ⋮ menu on new/processed records → hideMoreMenu prop (boolean or function)
     ├─ Hover overlay with per-row actions on the list (Edit/Duplicate/Email/kebab/Delete)
     │   └─ → window.rowQuickActions (on by default; declare only to disable or override)
+    ├─ Opt out of the generic grid "Delete selected" bulk-delete action
+    │   └─ → listViewOptions.hideBulkDelete (ListView prop; window already has its own bulk-delete)
     └─ Show a required-looking asterisk on a conditionally-required field, without validation
         └─ → requiredVisual: true on the field descriptor (EntityForm prop, not decisions.json)
 ```
