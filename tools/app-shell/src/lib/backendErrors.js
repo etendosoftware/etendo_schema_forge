@@ -27,6 +27,11 @@ const BACKEND_ERROR_MAP = {
   'This product is of type Service and cannot be used in inventory movements.': 'backendError.productNotStockable',
   // Product category (ProductCategoryDefaultHandler) validation messages
   'Only one product category can be marked as default.': 'backendError.productCategoryCannotSetMultipleDefault',
+  // Costing engine (core `NotCalculatedCostWithTransaction` AD_MESSAGE) — the backend
+  // always returns this with the literal, unresolved `@product@` token still in it
+  // (OBMessageUtils.parseTranslation() resolves the outer message but doesn't
+  // recursively re-parse the nested placeholder), so it's a stable exact match.
+  'The cost of the product @product@ has not been calculated.': 'backendError.costNotCalculated',
 };
 
 // Parameterized matchers — for backend messages that embed a dynamic value (e.g. a

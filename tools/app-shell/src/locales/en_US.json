@@ -19644,6 +19644,7 @@
     "backendError.matchRulePriorityConflict": "A rule with this priority already exists for the selected scope",
     "backendError.priceListCannotDeactivateDefault": "A tariff marked as default cannot be deactivated.",
     "backendError.productCategoryCannotSetMultipleDefault": "Only one product category can be marked as default.",
+    "backendError.costNotCalculated": "The cost of the product could not be calculated.",
     "uomTypeArea": "Area",
     "uomTypeLength": "Length",
     "uomTypeTime": "Time",
