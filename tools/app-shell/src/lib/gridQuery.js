@@ -9,10 +9,17 @@
  * Column metadata shape (all fields optional unless noted):
  * {
  *   key: string,               // column field name (required)
- *   type: 'string' | 'date' | 'selector' | 'status' | 'boolean' | 'number' | 'amount',
+ *   type: 'string' | 'date' | 'selector' | 'status' | 'enum' | 'boolean' | 'number'
+ *       | 'amount' | 'percent' | 'signedDelta' | 'custom',
  *
  *   // Filter config
  *   filterMode: 'text' | 'date' | 'identifier' | 'enumLabel' | 'booleanLabel' | 'numeric',
+ *     // `type: 'custom'` carries no filter semantics — the cell has a bespoke
+ *     // `render`, so the underlying data type is invisible to the filter layer.
+ *     // Such a column falls back to the `_ID` foreign-key heuristic and then to
+ *     // 'text'. A custom cell over a numeric/date column MUST declare
+ *     // `filterMode` explicitly, or the advanced filter offers text operators
+ *     // only (ETP-4681).
  *   backendFilterKey: string,  // explicit backend field for filtering (e.g. 'bp$_identifier')
  *   enumLabels: { [rawCode]: displayLabel },
  *   badgeLabels: { true: string, false: string },
@@ -405,10 +412,20 @@ function inferFilterMode(type) {
     case 'boolean': return 'booleanLabel';
     case 'number':
     case 'amount':
-    case 'percent': return 'numeric';
+    case 'percent':
+    case 'signedDelta': return 'numeric';
     default: return 'text';
   }
 }
+
+// Column types that carry enough semantics for `inferFilterMode` to decide.
+// Anything outside this set (notably 'custom', whose cell has a bespoke
+// `render` that hides the underlying data type) must NOT short-circuit the
+// inference chain — it still deserves the `_ID` foreign-key heuristic below.
+const INFERABLE_TYPES = new Set([
+  'date', 'selector', 'status', 'enum', 'boolean',
+  'number', 'amount', 'percent', 'signedDelta',
+]);
 
 /**
  * resolveFilterMode(col)
@@ -416,16 +433,21 @@ function inferFilterMode(type) {
  * Public helper to resolve the effective filter mode for a column.
  * Precedence:
  *   1. Explicit `col.filterMode` always wins.
- *   2. Explicit `col.type` is honored ('selector' → identifier, etc).
+ *   2. A recognized `col.type` is honored ('selector' → identifier, etc).
  *   3. Heuristic: an AD column name ending in `_ID` (e.g. `C_BPartner_ID`) is
  *      a foreign key — filter against `<key>$_identifier` so "jua" matches the
  *      BP display label, not the UUID.
+ *   4. Fallback 'text'.
+ *
+ * Steps 3-4 are what an unrecognized type (e.g. `custom`) resolves through:
+ * such a column's real data type is unknowable here, so a numeric or date
+ * `custom` cell has to declare `filterMode` explicitly (ETP-4681).
  */
 export function resolveFilterMode(col) {
   if (!col) return 'text';
   if (col.filterMode) return col.filterMode;
   if (col.type === 'selector') return 'identifier';
-  if (col.type && col.type !== 'string') return inferFilterMode(col.type);
+  if (col.type && INFERABLE_TYPES.has(col.type)) return inferFilterMode(col.type);
   if (typeof col.column === 'string' && /_ID$/i.test(col.column)) return 'identifier';
   return inferFilterMode(col.type);
 }

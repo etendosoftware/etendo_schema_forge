@@ -61,6 +61,7 @@ Rules are grouped by the artifact kind they apply to (see [Artifact Classificati
 | F15 | BLOCK | `contract.json` is missing `agentProfile`, or the profile references fields, selectors, or actions that do not exist in the generated contract, on contracts `0.7.0+`. | Re-run contract generation or fix the profile generator/curated metadata so references match generated contract metadata. |
 | F16 | BLOCK | A key file under `artifacts/<window>/generated/` is newer than `contract.json`, which indicates a possible manual edit to generated output. | Never edit generated output manually. Fix the generator or source metadata, then regenerate the artifact. |
 | F17 | BLOCK | `decisions.json` `window.balanceFooter` is missing `debitField`/`creditField`, or references a field that does not exist on the lines entity (validated against `frontendContract.entities.<lineEntity>.fields[].name`). | Set `window.balanceFooter` to `{ debitField, creditField }` using amount-typed line-entity field names that exist in the contract. |
+| F19 | BLOCK | A hand-written custom table declares a grid column with `type: 'custom'` and **no `filterMode`**, whose `key` matches a `contract.json` field whose data type implies a non-text filter mode. `type: 'custom'` carries no filter semantics — the cell has a bespoke `render`, so `resolveFilterMode` cannot see the underlying type and degrades the Advanced Filter to text operators (ETP-4681: `?filter=overdue` preloaded `outstandingAmount greaterThan 0`, but text mode has no `greaterThan`, so the operator select rendered empty). Expected mode is derived from the contract field's `columnType ?? type`: `amount`/`number`/`integer`/`quantity`/`price`/`decimal`/`percent`/`signedDelta` → `numeric`; `date`/`dateTime` → `date`; `foreignKey` → `identifier`; `enum`/`status`/non-empty `enumValues` → `enumLabel`; `boolean` → `booleanLabel`. Scans `tools/app-shell/src/windows/custom/<window>/` and `artifacts/<window>/custom/` (Babel AST, `__tests__` excluded); fires only for windows with a custom override, since generated tables are correct by construction. **Not** reported when: the `key` matches no contract field (purely synthetic cell); the column declares neither `column` nor `backendFilterKey` (excluded from the filter field list anyway by the ETP-4609 guard in `AdvancedFilterBuilder.jsx`); the expected mode is `identifier` and `column` already ends in `_ID` (the runtime `_ID` heuristic covers it); or the value cannot be statically resolved (e.g. a spread in the column object). Reports the first violation only. | Add `filterMode: '<expected>'` to the offending column. If the divergence is intentional, add `{ "artifact": "<window>", "key": "<field>", "reason": "..." }` to `cli/src/validate-pipeline-f19-allowlist.json` in `schema_forge_core` instead of changing the code. See [`list-filters.md`](list-filters.md) for the full filter-mode resolution order. |
 
 ### Report rules
 
@@ -99,7 +100,7 @@ Rules applied per kind:
 
 | Kind | Rules checked |
 |------|--------------|
-| window | F1, F2, F3, F4, F5, F6, F7, F10, F11, F12, F13, F14, F15, F16, F17 |
+| window | F1, F2, F3, F4, F5, F6, F7, F10, F11, F12, F13, F14, F15, F16, F17, F19 |
 | report | F8 |
 | aggregate | F9 |
 | aggregate-section | none (whitelisted) |

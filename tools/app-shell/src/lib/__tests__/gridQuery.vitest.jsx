@@ -121,6 +121,38 @@ describe('resolveFilterMode', () => {
     expect(resolveFilterMode({ key: 'x' })).toBe('text');
     expect(resolveFilterMode({ key: 'x', type: 'string' })).toBe('text');
   });
+
+  it('infers numeric for signedDelta type', () => {
+    expect(resolveFilterMode({ key: 'x', type: 'signedDelta' })).toBe('numeric');
+  });
+
+  // ETP-4681 — `custom` carries no filter semantics, so it must NOT short-circuit
+  // the inference chain: it still deserves the `_ID` foreign-key heuristic.
+  it('falls through to the _ID heuristic for a custom column bound to a foreign key', () => {
+    expect(resolveFilterMode({ key: 'x', type: 'custom', column: 'C_DocTypeTarget_ID' }))
+      .toBe('identifier');
+  });
+
+  it('falls back to text for a custom column bound to a plain column', () => {
+    expect(resolveFilterMode({ key: 'x', type: 'custom', column: 'Name' })).toBe('text');
+  });
+
+  it('honors an explicit numeric filterMode over the custom type', () => {
+    expect(resolveFilterMode({
+      key: 'x', type: 'custom', column: 'OutstandingAmt', filterMode: 'numeric',
+    })).toBe('numeric');
+  });
+
+  it('honors an explicit date filterMode over the custom type', () => {
+    expect(resolveFilterMode({
+      key: 'x', type: 'custom', column: 'EM_Etgo_Due_Date', filterMode: 'date',
+    })).toBe('date');
+  });
+
+  it('applies the _ID heuristic to any future unrecognized type', () => {
+    expect(resolveFilterMode({ key: 'x', type: 'someUnknownFutureType', column: 'M_Warehouse_ID' }))
+      .toBe('identifier');
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -1457,6 +1489,56 @@ describe('resolveFilterMode — additional type coverage', () => {
 // ---------------------------------------------------------------------------
 // Coverage: invertEnumLabels edge cases
 // ---------------------------------------------------------------------------
+
+// ---------------------------------------------------------------------------
+// ETP-4681 — the Dashboard `?filter=overdue` preload
+// ---------------------------------------------------------------------------
+
+describe('buildAdvancedFilterCriteria — custom column with explicit numeric filterMode', () => {
+  const invoiceColumns = [
+    { key: 'documentStatus', column: 'DocStatus', type: 'status' },
+    {
+      key: 'outstandingAmount',
+      column: 'OutstandingAmt',
+      type: 'custom',
+      filterMode: 'numeric',
+    },
+  ];
+
+  it('emits a numeric greaterThan criterion on the raw key (no backendFilterKey needed)', () => {
+    const filter = {
+      rowOperator: 'and',
+      conditions: [{ field: 'outstandingAmount', operator: 'greaterThan', value: 0 }],
+    };
+    expect(buildAdvancedFilterCriteria(filter, invoiceColumns)).toEqual([
+      { fieldName: 'outstandingAmount', operator: 'greaterThan', value: 0 },
+    ]);
+  });
+
+  it('emits both conditions of the overdue preload', () => {
+    const filter = {
+      rowOperator: 'and',
+      conditions: [
+        { field: 'documentStatus', operator: 'equals', value: 'CO' },
+        { field: 'outstandingAmount', operator: 'greaterThan', value: 0 },
+      ],
+    };
+    expect(buildAdvancedFilterCriteria(filter, invoiceColumns)).toEqual([
+      { fieldName: 'documentStatus', operator: 'equals', value: 'CO' },
+      { fieldName: 'outstandingAmount', operator: 'greaterThan', value: 0 },
+    ]);
+  });
+
+  it('coerces a string numeric value to a number', () => {
+    const filter = {
+      rowOperator: 'and',
+      conditions: [{ field: 'outstandingAmount', operator: 'greaterThan', value: '0' }],
+    };
+    expect(buildAdvancedFilterCriteria(filter, invoiceColumns)).toEqual([
+      { fieldName: 'outstandingAmount', operator: 'greaterThan', value: 0 },
+    ]);
+  });
+});
 
 describe('parseUserFilter — invertEnumLabels edge cases', () => {
   it('handles enumLabels being null', () => {

@@ -101,6 +101,10 @@ export default function InvoiceHeaderTable(props) {
       { key: 'documentNo', column: 'DocumentNo', type: 'string', label: gl['documentNo'] || 'Document No.' },
       {
         key: 'eTGODueDate', column: 'EM_Etgo_Due_Date', type: 'custom', label: t('dueDate'),
+        // The cell renders a coloured due-date dot, so it must stay `custom` —
+        // but the underlying column is a plain date. Without this the advanced
+        // filter would offer text operators instead of Before/After/Between.
+        filterMode: 'date',
         render: (row) => {
           const d = row.eTGODueDate;
           if (!d) return <span className="text-muted-foreground">—</span>;
@@ -124,6 +128,12 @@ export default function InvoiceHeaderTable(props) {
         column: 'OutstandingAmt',
         type: 'custom',
         label: t('pendingPaymentColumn'),
+        // The cell renders status pills and a payment button, so it must stay
+        // `custom` — but the underlying column is an amount. Without this the
+        // `?filter=overdue` preload (outstandingAmount greaterThan 0) resolves
+        // to text mode, which has no `greaterThan`, and the operator select
+        // renders empty (ETP-4681).
+        filterMode: 'numeric',
         render: (row) => {
           const outstanding = parseFloat(row.outstandingAmount ?? 0);
           const currency = row['currency$_identifier'] || 'EUR';
