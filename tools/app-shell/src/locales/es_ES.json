@@ -19418,6 +19418,8 @@
     "onboardingNamePlaceholder": "Tu nombre",
     "onboardingEmailLabel": "Correo electrónico",
     "onboardingEmailPlaceholder": "tu@email.com",
+    "onboardingEmailRequired": "El correo electrónico es obligatorio.",
+    "onboardingPasswordRequired": "La contraseña es obligatoria.",
     "onboardingPasswordLabel": "Contraseña",
     "onboardingPasswordPlaceholder": "********",
     "onboardingShowPassword": "Mostrar contraseña",
