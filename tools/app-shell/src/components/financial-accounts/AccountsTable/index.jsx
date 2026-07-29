@@ -82,7 +82,7 @@ export function AccountsTable({
   onReconcile,
   onEdit,
   onArchive,
-  onPsd2Action,
+  onBankConnectionAction,
   onTransfer,
   onNewMovement,
   onRetry,
@@ -114,7 +114,7 @@ export function AccountsTable({
         onReconcile={onReconcile}
         onEdit={onEdit}
         onArchive={onArchive}
-        onPsd2Action={onPsd2Action}
+        onBankConnectionAction={onBankConnectionAction}
         onTransfer={onTransfer}
         onNewMovement={onNewMovement}
         data-testid="AccountRow__db8970" />

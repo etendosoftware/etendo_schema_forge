@@ -2,7 +2,7 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 
 // This suite mocks the table + modals so the page's handler callbacks
-// (handlePsd2Action, handleReconcile, edit/archive/transfer openers) can be
+// (handleBankConnectionAction, handleReconcile, edit/archive/transfer openers) can be
 // invoked directly — they are otherwise unreachable through the real table UI.
 
 vi.mock('@/i18n', () => ({
@@ -36,15 +36,15 @@ vi.mock('@/hooks/useFinancialAccounts.js', () => ({
 
 const mockSync = vi.fn();
 const mockDisconnect = vi.fn();
-vi.mock('@/hooks/usePsd2Actions.js', () => ({
-  usePsd2Actions: () => ({ sync: mockSync, disconnect: mockDisconnect }),
+vi.mock('@/hooks/useBankConnectionActions.js', () => ({
+  useBankConnectionActions: () => ({ sync: mockSync, disconnect: mockDisconnect }),
   launchSaltEdgePopup: vi.fn(),
 }));
 
 const mockStartConnect = vi.fn();
 const mockStartCreate = vi.fn();
-vi.mock('@/hooks/usePsd2ConnectFlow.js', () => ({
-  usePsd2ConnectFlow: () => ({ startConnect: mockStartConnect, startCreate: mockStartCreate }),
+vi.mock('@/hooks/useBankConnectionFlow.js', () => ({
+  useBankConnectionFlow: () => ({ startConnect: mockStartConnect, startCreate: mockStartCreate }),
 }));
 
 // Capture the props the page hands to the table so we can drive its callbacks.
@@ -74,8 +74,8 @@ let archiveDialogProps = null;
 vi.mock('@/windows/custom/financial-account/ArchiveAccountDialog.jsx', () => ({
   ArchiveAccountDialog: (props) => { archiveDialogProps = props; return <div data-testid="archive-dialog" data-open={String(props.open)} />; },
 }));
-vi.mock('@/windows/custom/financial-account/Psd2ConnectFlowUI.jsx', () => ({
-  Psd2ConnectFlowUI: () => <div data-testid="psd2-flow" />,
+vi.mock('@/windows/custom/financial-account/BankConnectionFlowUI.jsx', () => ({
+  BankConnectionFlowUI: () => <div data-testid="bank-connection-flow" />,
 }));
 vi.mock('@/windows/custom/financial-account/FundsTransferModal.jsx', () => ({
   FundsTransferModal: (props) => <div data-testid="transfer-modal" data-source={props.sourceAccountId} />,
@@ -119,19 +119,19 @@ describe('FinancialAccountsPage — reconcile navigation', () => {
   });
 });
 
-describe('FinancialAccountsPage — PSD2 connect action', () => {
+describe('FinancialAccountsPage — bank connection connect action', () => {
   it('starts the connect flow', () => {
     renderPage([ACC]);
-    tableProps.onPsd2Action('connect', ACC);
+    tableProps.onBankConnectionAction('connect', ACC);
     expect(mockStartConnect).toHaveBeenCalledWith(ACC);
   });
 });
 
-describe('FinancialAccountsPage — PSD2 sync action', () => {
+describe('FinancialAccountsPage — bank connection sync action', () => {
   it('shows a success toast on OK sync and reloads', async () => {
     mockSync.mockResolvedValue({ status: 'OK', message: 'done' });
     renderPage([ACC]);
-    await tableProps.onPsd2Action('syncNow', ACC);
+    await tableProps.onBankConnectionAction('syncNow', ACC);
     expect(mockSync).toHaveBeenCalledWith('acc-1');
     await waitFor(() => expect(toastSuccess).toHaveBeenCalledWith('done'));
     expect(mockReload).toHaveBeenCalled();
@@ -140,56 +140,56 @@ describe('FinancialAccountsPage — PSD2 sync action', () => {
   it('shows an info toast on WARNING sync', async () => {
     mockSync.mockResolvedValue({ status: 'WARNING', message: 'partial' });
     renderPage([ACC]);
-    await tableProps.onPsd2Action('syncNow', ACC);
+    await tableProps.onBankConnectionAction('syncNow', ACC);
     await waitFor(() => expect(toastInfo).toHaveBeenCalledWith('partial'));
   });
 
   it('shows an error toast on ERROR status', async () => {
     mockSync.mockResolvedValue({ status: 'ERROR', message: 'boom' });
     renderPage([ACC]);
-    await tableProps.onPsd2Action('syncNow', ACC);
+    await tableProps.onBankConnectionAction('syncNow', ACC);
     await waitFor(() => expect(toastError).toHaveBeenCalledWith('boom'));
   });
 
   it('falls back to a generic label when sync returns no message', async () => {
     mockSync.mockResolvedValue({ status: 'OK' });
     renderPage([ACC]);
-    await tableProps.onPsd2Action('syncNow', ACC);
-    await waitFor(() => expect(toastSuccess).toHaveBeenCalledWith('financeAccountsPsd2SyncDone'));
+    await tableProps.onBankConnectionAction('syncNow', ACC);
+    await waitFor(() => expect(toastSuccess).toHaveBeenCalledWith('financeAccountsBankConnectionSyncDone'));
   });
 
   it('shows an error toast when sync throws', async () => {
     mockSync.mockRejectedValue(new Error('network'));
     renderPage([ACC]);
-    await tableProps.onPsd2Action('syncNow', ACC);
+    await tableProps.onBankConnectionAction('syncNow', ACC);
     await waitFor(() => expect(toastError).toHaveBeenCalledWith('network'));
   });
 });
 
-describe('FinancialAccountsPage — PSD2 disconnect action', () => {
+describe('FinancialAccountsPage — bank connection disconnect action', () => {
   it('opens a styled confirm dialog and does not disconnect until confirmed', async () => {
     renderPage([ACC]);
-    await tableProps.onPsd2Action('disconnect', ACC);
+    await tableProps.onBankConnectionAction('disconnect', ACC);
     // The action only opens the confirm dialog; nothing is disconnected yet.
-    await screen.findByText('financeAccountsPsd2DisconnectAction');
+    await screen.findByText('financeAccountsBankConnectionDisconnectAction');
     expect(mockDisconnect).not.toHaveBeenCalled();
   });
 
   it('disconnects and reloads when the dialog is confirmed', async () => {
     mockDisconnect.mockResolvedValue(undefined);
     renderPage([ACC]);
-    await tableProps.onPsd2Action('disconnect', ACC);
-    fireEvent.click(await screen.findByText('financeAccountsPsd2DisconnectAction'));
+    await tableProps.onBankConnectionAction('disconnect', ACC);
+    fireEvent.click(await screen.findByText('financeAccountsBankConnectionDisconnectAction'));
     await waitFor(() => expect(mockDisconnect).toHaveBeenCalledWith('acc-1'));
-    await waitFor(() => expect(toastSuccess).toHaveBeenCalledWith('financeAccountsPsd2DisconnectDone'));
+    await waitFor(() => expect(toastSuccess).toHaveBeenCalledWith('financeAccountsBankConnectionDisconnectDone'));
     expect(mockReload).toHaveBeenCalled();
   });
 
   it('shows an error toast when disconnect throws', async () => {
     mockDisconnect.mockRejectedValue(new Error('fail'));
     renderPage([ACC]);
-    await tableProps.onPsd2Action('disconnect', ACC);
-    fireEvent.click(await screen.findByText('financeAccountsPsd2DisconnectAction'));
+    await tableProps.onBankConnectionAction('disconnect', ACC);
+    fireEvent.click(await screen.findByText('financeAccountsBankConnectionDisconnectAction'));
     await waitFor(() => expect(toastError).toHaveBeenCalledWith('fail'));
   });
 });

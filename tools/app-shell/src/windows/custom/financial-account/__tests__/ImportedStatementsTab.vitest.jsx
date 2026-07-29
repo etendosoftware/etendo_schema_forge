@@ -22,10 +22,10 @@ vi.mock('@/hooks/useStatementActions', () => ({
   }),
 }));
 
-// usePsd2Actions calls useAuth internally; stub it so no AuthProvider is needed.
-const psd2Sync = vi.fn();
-vi.mock('@/hooks/usePsd2Actions', () => ({
-  usePsd2Actions: () => ({ sync: psd2Sync }),
+// useBankConnectionActions calls useAuth internally; stub it so no AuthProvider is needed.
+const bankSync = vi.fn();
+vi.mock('@/hooks/useBankConnectionActions', () => ({
+  useBankConnectionActions: () => ({ sync: bankSync }),
 }));
 
 // Capture the confirm dialog props so we can assert which action was requested.
@@ -61,13 +61,13 @@ vi.mock('../StatementsToolbar', () => ({
   StatementsToolbar: ({
     search, onSearchChange, dateRange, onDateRangeChange,
     status, onStatusChange, onAdvancedFilterChange, onImportClick, onManualClick,
-    psd2Synced, onSyncClick, syncing,
+    bankConnectionSynced, onSyncClick, syncing,
   }) => (
     <div
       data-testid="stub-toolbar"
       data-search={search}
       data-status={status ?? ''}
-      data-psd2-synced={psd2Synced ? 'true' : 'false'}
+      data-bank-connection-synced={bankConnectionSynced ? 'true' : 'false'}
       data-syncing={syncing ? 'true' : 'false'}
     >
       <button type="button" data-testid="toolbar-search" onClick={() => onSearchChange('mayo')} />
@@ -196,23 +196,23 @@ describe('ImportedStatementsTab', () => {
     processStatement.mockReset();
     reactivateStatement.mockReset();
     deleteStatement.mockReset();
-    psd2Sync.mockReset();
-    psd2Sync.mockResolvedValue({ status: 'OK', message: 'done' });
+    bankSync.mockReset();
+    bankSync.mockResolvedValue({ status: 'OK', message: 'done' });
     toastSuccess.mockReset();
     toastError.mockReset();
   });
 
-  it('forwards psd2Synced=false for a non-connected account', () => {
+  it('forwards bankConnectionSynced=false for a non-connected account', () => {
     render(<ImportedStatementsTab account={ACCOUNT} />);
-    expect(screen.getByTestId('stub-toolbar')).toHaveAttribute('data-psd2-synced', 'false');
+    expect(screen.getByTestId('stub-toolbar')).toHaveAttribute('data-bank-connection-synced', 'false');
   });
 
-  it('forwards psd2Synced=true and syncs statements when the toolbar emits onSyncClick', async () => {
+  it('forwards bankConnectionSynced=true and syncs statements when the toolbar emits onSyncClick', async () => {
     const user = userEvent.setup();
-    render(<ImportedStatementsTab account={{ id: 'acc-1', currencyIso: 'USD', psd2Connected: true }} />);
-    expect(screen.getByTestId('stub-toolbar')).toHaveAttribute('data-psd2-synced', 'true');
+    render(<ImportedStatementsTab account={{ id: 'acc-1', currencyIso: 'USD', bankConnected: true }} />);
+    expect(screen.getByTestId('stub-toolbar')).toHaveAttribute('data-bank-connection-synced', 'true');
     await user.click(screen.getByTestId('toolbar-sync'));
-    await waitFor(() => expect(psd2Sync).toHaveBeenCalledWith('acc-1'));
+    await waitFor(() => expect(bankSync).toHaveBeenCalledWith('acc-1'));
     await waitFor(() => expect(reloadFn).toHaveBeenCalledTimes(1));
   });
 

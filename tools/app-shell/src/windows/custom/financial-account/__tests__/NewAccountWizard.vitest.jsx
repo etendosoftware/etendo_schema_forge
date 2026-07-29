@@ -24,12 +24,12 @@ vi.mock('@/hooks/useAccountMutations.js', () => ({
   useAccountMutations: () => ({ createAccount, fetchDefaults }),
 }));
 
-// usePsd2Actions calls useAuth internally. The BankPicker fetches the Salt Edge
+// useBankConnectionActions calls useAuth internally. The BankPicker fetches the Salt Edge
 // catalog via fetchProviders; returning [] makes it fall back to the static
 // bank catalog (searchBanks), which is what these tests assert against.
 const fetchProviders = vi.fn();
-vi.mock('@/hooks/usePsd2Actions', () => ({
-  usePsd2Actions: () => ({ fetchProviders, connect: vi.fn() }),
+vi.mock('@/hooks/useBankConnectionActions', () => ({
+  useBankConnectionActions: () => ({ fetchProviders, connect: vi.fn() }),
 }));
 
 import { NewAccountWizard } from '../NewAccountWizard.jsx';
