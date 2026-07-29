@@ -247,3 +247,19 @@ The following issues in the **Cuenta Bancaria** inline add-row form were resolve
 }
 ```
 `resolve-curated.js` forwards this to `contract.json → frontendContract.window.labelOverrides`, and the generated `BusinessPartnerPage.jsx` threads it through as the `labelOverrides` prop consumed by `useLabel()` in the form/detail components — resolution order: `labelOverrides[locale][C_BP_Group_ID]` → global AD dictionary label → raw `field.label`. The field's raw `label` in `decisions.json` was also updated from `"Business Partner Category"` to `"Contact Category"` so the (English) fallback matches if the override chain is ever bypassed. Renders as **"Categoría de contacto"** in es_ES and **"Contact Category"** in en_US; unaffected by the reorder fix above — the field now renders with this label at position 3 (right after Razón Social).
+
+## ETP-4708 — Person tab field exclusion made declarative
+
+**What changed.** The Person (`contact`) tab's detail sidebar hides the **Active** checkbox. That behavior was previously hardcoded in the shared `DetailView.jsx` as `excludeFields={props.st.key === "contact" ? ["active"] : []}` — a branch keyed on this window's entity name living inside a component every window renders. It is now declared by the window instead:
+
+```json
+"secondaryTabs": {
+  "contact": { "label": "Person", "excludeFields": ["active"] }
+}
+```
+
+The generator emits `excludeFields: ["active"]` onto the tab descriptor in `BusinessPartnerPage.jsx`, and `DetailView` reads `props.st.excludeFields ?? []`. See `docs/decisions-reference.md` § Secondary Tabs and `docs/reports/contract-ui-churn-analysis.md` §8.2 (L2).
+
+**Behavior is unchanged.** `active` is a form-visible field on the `contact` entity (`IsActive`, readOnly), so the exclusion is load-bearing: without it the Person sidebar would start showing an Active checkbox that users do not see today. The declaration reproduces the previous branch exactly. No other window declares `excludeFields`, and the generator omits the key when it is absent, so every other window's generated code is byte-identical.
+
+**Verification.** `make regen ONLY=contacts SKIP_EXTRACT=1 FROM_CACHE=1 LOCAL_CORE=1` (offline, AD snapshot cache — no DB) regenerated 33 components, of which only `BusinessPartnerPage.jsx` changed, by exactly the one emitted property. `sf-validate-pipeline --scope=contacts` reports 0 violations. The contract-ui node suite passes 402/402 both with and without the change, with no test file modified. The `sf-window-leak-budget` ratchet drops from 8 to 7 with this leak removed.

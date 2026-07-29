@@ -1,8 +1,8 @@
 {
   "version": "0.44.0",
   "generatedAt": "2026-07-07T21:53:25.883Z",
-  "updatedAt": "2026-07-21T12:35:19.014Z",
-  "checksum": "8552f5c48c448cb9",
+  "updatedAt": "2026-07-29T11:13:58.226Z",
+  "checksum": "d23359126a7debdb",
   "frontendContract": {
     "window": {
       "id": "123",
@@ -34,7 +34,10 @@
             "phone",
             "position"
           ],
-          "requireSavedRecord": true
+          "requireSavedRecord": true,
+          "excludeFields": [
+            "active"
+          ]
         },
         "bankAccount": {
           "tabMode": "table-form",
@@ -5008,7 +5011,10 @@
             "phone",
             "position"
           ],
-          "requireSavedRecord": true
+          "requireSavedRecord": true,
+          "excludeFields": [
+            "active"
+          ]
         },
         "bankAccount": {
           "tabMode": "table-form",

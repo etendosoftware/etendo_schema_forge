@@ -674,7 +674,7 @@ function secondaryDetailSidebar(props) {
           token={props.token}
           apiBaseUrl={props.apiBaseUrl}
           selectorContext={props.selectorContextByEntity[props.st.key]}
-          excludeFields={props.st.key === "contact" ? ["active"] : []}
+          excludeFields={props.st.excludeFields ?? []}
           labelOverrides={props.labelOverrides}
       />
       {props.hook.editing && (props.secondaryLineEdits || props.selectedSecondaryLine?.id) && (

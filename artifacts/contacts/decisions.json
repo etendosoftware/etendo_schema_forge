@@ -84,7 +84,10 @@
           "phone",
           "position"
         ],
-        "requireSavedRecord": true
+        "requireSavedRecord": true,
+        "excludeFields": [
+          "active"
+        ]
       },
       "bankAccount": {
         "tabMode": "table-form",

@@ -242,6 +242,26 @@ Use this when a window needs supplementary panels (e.g., a pricing breakdown, a 
 
 **Note:** Use `customTabsAfterBottom: true` alongside this property to position the custom tabs after the standard bottom section (lines, notes, etc.) rather than interleaved with primary tabs.
 
+### Secondary Tabs (`window.secondaryTabs.{tab}.*`)
+
+Child work areas rendered beside the lines tab. The full set of tab-level keys is read by `resolveSecondaryTabDefs()` in `generate-frontend.js`; the properties documented here are the ones that replaced hardcoded branches in the generic components.
+
+| Property | Type | Default | Purpose |
+|----------|------|---------|---------|
+| `excludeFields` | string[] | `[]` | Field keys the tab's **detail form** must hide (the side panel opened by selecting a row on a `table-form` tab). Names are field keys as they appear in the contract, never AD column names — `EntityForm` filters on `f.key`. Emitted onto the generated tab descriptor and read by `DetailView` as `props.st.excludeFields ?? []`. Per R3 the default is never written: a tab that hides nothing omits the key and the generator emits nothing. |
+
+```json
+{
+  "secondaryTabs": {
+    "contact": { "label": "Person", "excludeFields": ["active"] }
+  }
+}
+```
+
+**Scope:** `excludeFields` applies to the detail form of a `table-form` tab. A `form-only` tab (`tabMode: "form-only"`) or a tab backed by a `customPanel` renders its form through a different path and ignores the key.
+
+**Why it is declarative (ETP-4708):** this used to be `props.st.key === "contact" ? ["active"] : []` inside `DetailView.jsx` — a window name wired into a component every window shares, so no second window could hide a field without adding another branch. See `docs/reports/contract-ui-churn-analysis.md` §8.2 (L2).
+
 ### Subset Filters (`window.subsetFilters`)
 
 > See [`list-filters.md`](list-filters.md) for the full toolbar layout (subset / quick / document-type / advanced), URL-param conventions, and when to use which surface.

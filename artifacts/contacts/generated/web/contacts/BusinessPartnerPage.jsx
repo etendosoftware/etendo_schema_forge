@@ -676,7 +676,7 @@ export default function BusinessPartnerPage({ windowName, recordId, ...props }) 
         breadcrumb={breadcrumb}
       api={api}
         secondaryTabs={[
-          { key: 'contact', label: 'Person', Table: ContactTable, Form: ContactForm, addLineFields: { entry: [
+          { key: 'contact', label: 'Person', Table: ContactTable, Form: ContactForm, excludeFields: ["active"], addLineFields: { entry: [
           { key: 'firstName', column: 'Firstname', type: 'text', label: 'First Name' },
           { key: 'lastName', column: 'Lastname', type: 'text', label: 'Last Name' },
           { key: 'email', column: 'Email', type: 'text', label: 'Email' },
