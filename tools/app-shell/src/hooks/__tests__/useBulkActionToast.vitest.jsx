@@ -1,3 +1,12 @@
+/**
+ * ETP-4708 — the hook now lives in `@etendosoftware/app-shell-core`;
+ * `../useBulkActionToast` is the functional shim, so this file exercises the
+ * package boundary (shim + exports map + version pin) rather than local source.
+ * The i18n mock targets the package's `/i18n` subpath because vitest matches
+ * `vi.mock` by RESOLVED module id, and that subpath is the same file the core
+ * hook imports as `../i18n/index.js`. The old `vi.mock('@/i18n')` no longer
+ * intercepts anything — the core hook never goes through this repo's `@/` alias.
+ */
 import { renderHook, act } from '@testing-library/react';
 import { toast } from 'sonner';
 import { useBulkActionToast, persistBulkActionResult } from '../useBulkActionToast';
@@ -10,7 +19,7 @@ vi.mock('sonner', () => ({
   },
 }));
 
-vi.mock('@/i18n', () => ({
+vi.mock('@etendosoftware/app-shell-core/i18n', () => ({
   useUI: () => (key) => {
     const map = {
       processExecuted: '{ok} processed, {failed} failed',

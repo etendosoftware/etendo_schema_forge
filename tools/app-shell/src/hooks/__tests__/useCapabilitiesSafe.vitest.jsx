@@ -1,14 +1,21 @@
 /**
  * ETP-4520 — `useCapabilitiesSafe` hook coverage.
  *
- * `@/auth/AuthContext.jsx` is mocked directly so the three real-world shapes
- * of `useAuth()` can be exercised deterministically, independent of whether
- * the published `@etendosoftware/app-shell-core` package (no windowAccess/
- * capabilities support yet) or the LOCAL_CORE source is resolved:
+ * `useAuth()` is mocked directly so the three real-world shapes of its return
+ * value can be exercised deterministically:
  *   - no `AuthProvider` ancestor → `useAuth()` throws (its real contract)
  *   - `AuthProvider` present, capabilities loaded → returns the map
  *   - `AuthProvider` present, capabilities not yet loaded (undefined) → {}
  *   - `useAuth()` throws a DIFFERENT error → must propagate, not be swallowed
+ *
+ * ETP-4708 — the hook itself now lives in `@etendosoftware/app-shell-core`;
+ * `../useCapabilitiesSafe.js` is the functional shim, so this file exercises
+ * the package boundary (shim + exports map + version pin) rather than local
+ * source. The mock therefore targets the package's own `auth/AuthContext.jsx`
+ * subpath: vitest matches `vi.mock` by RESOLVED module id, and that subpath
+ * resolves to the exact file the core hook imports as `../auth/AuthContext.jsx`.
+ * The old `vi.mock('@/auth/AuthContext.jsx')` no longer intercepts anything —
+ * the core hook never goes through this repo's `@/` alias.
  */
 import { render, screen } from '@testing-library/react';
 import { useCapabilitiesSafe } from '../useCapabilitiesSafe.js';
@@ -19,7 +26,7 @@ import { useCapabilitiesSafe } from '../useCapabilitiesSafe.js';
 const originalConsoleError = console.error;
 
 const mockUseAuth = vi.fn();
-vi.mock('@/auth/AuthContext.jsx', () => ({
+vi.mock('@etendosoftware/app-shell-core/auth/AuthContext.jsx', () => ({
   useAuth: () => mockUseAuth(),
 }));
 
