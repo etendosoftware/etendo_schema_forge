@@ -36,7 +36,7 @@ El problema que observas es real y medible: **no son componentes "que deberían 
 
 ## ⚖️ Restricciones rectoras (OBLIGATORIAS para TODA corrección de este informe)
 
-> Cualquier propuesta de las secciones 5, 8 y 9 está **subordinada a estas dos restricciones**. Una corrección que viole cualquiera de las dos es inválida, por buena que sea la idea.
+> Cualquier propuesta de las secciones 5, 8 y 9 está **subordinada a las restricciones de abajo** (R1–R4). Una corrección que viole cualquiera de ellas es inválida, por buena que sea la idea.
 
 ### R1 — Inocuidad funcional al 100 %
 Toda corrección debe ser **behavior-preserving**: la app debe comportarse exactamente igual antes y después, en **todas las ventanas**, no solo en la que motivó el cambio. Esto es especialmente crítico aquí porque `DetailView`/`DataTable` son **componentes compartidos consumidos por todas las ventanas** — el riesgo no es romper una ventana, es romper N. Los reverts históricos (`noHoverHide — broke other windows`) son la prueba de que este riesgo es real.
@@ -72,6 +72,73 @@ Toda propiedad nueva que se añada a `decisions.json` debe tener un **default se
 - **L3 (`priceTriggerField`):** el default es `'product'` (el comportamiento actual). Solo una ventana cuyo disparador se llame distinto lo declara; las demás **no tocan nada** y siguen funcionando exactamente igual — lo que además refuerza R1 (inocuidad: las ventanas existentes no cambian su contrato).
 
 **Beneficio doble:** mantiene `decisions.json` y el código generado mínimos/legibles, y garantiza que migrar un hardcode a declarativo es **inocuo por construcción** (el default reproduce el comportamiento previo sin que ninguna ventana tenga que declarar nada).
+
+### R4 — Un check debe derivar su propio alcance; enumerarlo a mano lo hace pasar por omisión
+
+> *(Section written in English per the `CLAUDE.md` language policy; the rest of this
+> report is pending translation as a follow-up.)*
+
+R1 above says a correction must be behavior-preserving, and the whole plan below leans on
+checks — ratchets, guards, golden masters — to prove it. **R4 is about those checks
+themselves**, because on this branch roughly a dozen of them failed *silently and green*.
+
+They all share one shape: **the check's scope was authored by hand rather than derived
+from the thing it checks.** A hand-written scope cannot fail. It can only be incomplete,
+and in a check, incompleteness is indistinguishable from success.
+
+Instances verified on this branch:
+
+| Check | Scope authored by hand | What it therefore could not see |
+|---|---|---|
+| Shim export-surface guard (`coreShimSurface.vitest.js`) | a literal list of the 35 modules this ticket promoted (`6b0748ee4`) | the other ~40 shims left by earlier tickets — **2 of which had a genuinely dropped `default`**. Fixed 12 minutes later (`2481fd791`) by deriving the population from shim *shape*: any file under `src/` whose entire body is re-exports at the package. That derivation finds 76 today and admits shims that do not exist yet |
+| The same guard, second pass | filtered on `export *` syntax | the `export { default }`-only shims — i.e. **exactly the shape the file existed to audit**. It asserted one shape while being worded as though it covered both; closed in `2d344949d` by stating the invariant once per shape |
+| Window-leak ratchet (`cli/window-leak-budget.json`) | `paths` = 3 files; `patterns` = a fixed vocabulary of entity names | (a) **71 of the 74 files** in `contract-ui/`; (b) any window name outside the vocabulary — `WINDOW_DELETE_ACTIONS` / `WINDOW_DELETE_CONFIRM_MODALS` key on `'payment-in'` / `'payment-out'` (`DetailView.jsx:1312,1320`) and score **0**; (c) shapes with no pattern at all — `import PaymentLifecycleConfirmModal from '@/windows/custom/shared/…'` (`DetailView.jsx:8`), a generic component importing from a window directory. An earlier pass had already had to add a fourth pattern for bare object keys (`852c61050`) after the scanner proved blind to `'products':` |
+| `resolveCurated` window scalars | an explicit allowlist (`cli/src/resolve-curated.js:~700-748`) | any newly declared scalar. `window.deleteAction` was declared in `decisions.json` **and** emitted by the generator, and the resolver dropped it in between. Nothing failed anywhere: `customComponents` is copied wholesale, so the sibling `deleteConfirmModal*` keys arrived with no resolver change at all, and only the scalar vanished (`336b39506`) |
+| Lockstep core-pin count | a grep built from the package names the author expected | the pins are **asymmetric across two manifests** — 5 sites, 4 packages: `app-shell-core` appears in *both* `package.json` and `tools/app-shell/package.json`, while `etendo-go-core` appears only in the latter. A name-list grep therefore returns a plausible wrong number, and more than one such number was produced |
+
+A sixth instance is about *invocation* rather than authoring, and is the sharpest
+illustration because the bogus result is congratulatory. The leak scanner resolves its
+config from `SF_ROOT`, defaulting to its own repo (`window-leak-budget.js:34-35`). Run the
+core script directly from the functional checkout and it reads **core's** budget file,
+finds none of the watched paths, and prints:
+
+```
+  ↓  window-literal leaks in contract-ui: 0 (baseline 8)
+  Leaks decreased — run `--update` to lock in the lower baseline.
+```
+
+Zero leaks, and an invitation to freeze that as the new baseline. Always go through
+`make window-leak-budget` / `cli/sf-local`, which set the root.
+
+**The lesson, in three formulations. The third explains the first two:**
+
+1. **A check must derive its own scope, not enumerate it by hand.**
+2. **A claim about coverage must cite an assertion, not a name.**
+3. **What does not fail loudly does not get documented.**
+
+The mechanism, as sharply as it can be put: **a sloppy filter gets caught; a plausible one
+becomes the definition.** A scope that is obviously wrong is fixed on sight. A scope that
+looks reasonable is never re-examined — the guard's output becomes the accepted measure of
+the problem, and the part it cannot see stops existing. This is why (2) matters: a spec
+whose *name* sounds related is the same failure at the test layer, which is exactly what
+§11.4's re-audit found (3 of 10 accredited rows were false).
+
+**The remedy is structural, not "be more careful."** The commit timeline is the argument:
+`6b0748ee4` (08:35) shipped a hand-enumerated guard list; `2481fd791` (08:47) replaced it
+with a derivation and uncovered 2 real defects it had been hiding; `2d344949d` (09:56)
+closed a completeness hole in the *derived* version. Eighty-one minutes, by people who
+were at that moment actively cataloguing this exact pattern — and the same hour produced
+`852c61050`, a blind spot in the leak scanner. Nobody involved was being careless; they
+were writing the catalogue. Care does not scale here because the failure is invisible by
+construction. Only derivation does.
+
+**How to apply it.** Before relying on any guard, ratchet, or golden master in this plan:
+ask what defines its scope, and confirm that definition is computed from the artifact
+rather than typed. If it is typed, the guard's number is a lower bound on the problem, not
+a measurement of it — and lowering a baseline against it (`--update`) freezes the blind
+spot. Concretely: a ratchet's `paths`/`patterns`, a resolver's allowlist, a test's module
+list, and a coverage table's cited spec are all hand-authored scopes until proven
+otherwise.
 
 ### Matriz: cada propuesta contra R1 y R2
 
