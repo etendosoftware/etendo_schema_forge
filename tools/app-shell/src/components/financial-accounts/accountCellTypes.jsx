@@ -37,17 +37,24 @@ import { ReconcilePill } from './ReconcilePill.jsx';
  * renderer. Degradation, never a crash.
  */
 export const ACCOUNT_CELL_TYPES = {
-  accountName: (row, ctx) => <NameCell account={row} ui={ctx.ui} onConnect={ctx.onConnect} />,
+  accountName: (row, ctx) => <NameCell
+    account={row}
+    ui={ctx.ui}
+    onConnect={ctx.onConnect}
+    data-testid="NameCell__c4cfe9" />,
 
-  accountType: (row, ctx) => <TypeCell account={row} ui={ctx.ui} />,
+  accountType: (row, ctx) => <TypeCell account={row} ui={ctx.ui} data-testid="TypeCell__c4cfe9" />,
 
-  accountBalance: (row) => <BalanceCell account={row} />,
+  accountBalance: (row) => <BalanceCell account={row} data-testid="BalanceCell__c4cfe9" />,
 
   // The whole row navigates to the detail, so the pill swallows its own click —
   // otherwise reconciling would also open the account.
   reconcilePill: (row, ctx) => (
     <span onClick={(e) => e.stopPropagation()} role="presentation" className="inline-flex">
-      <ReconcilePill pendingCount={row.pendingCount} onClick={() => ctx.onReconcile(row)} />
+      <ReconcilePill
+        pendingCount={row.pendingCount}
+        onClick={() => ctx.onReconcile(row)}
+        data-testid="ReconcilePill__c4cfe9" />
     </span>
   ),
 };
