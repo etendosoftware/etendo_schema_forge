@@ -102,6 +102,9 @@ number — every downward correction above was a Step-3.5 question that should h
 | Date added | Row added (section) | Provisional value | Rationale / analogy | Status |
 |------------|---------------------|-------------------|---------------------|--------|
 | 2026-06 | §1 "adapting what already exists" group + §2b discount factors | see table | reuse-cascade investigation (adaptation-task) | ⏳ awaiting first actual |
+| 2026-07-28 | §1 new group "CI / delivery automation": `api-poller-collector`, `report-only-shadow-mode`, `state-machine-gate`, `mutating-automation-with-rollback`, `scheduled-job-wiring` | 3 / 2 / 5 / 8 / 2 | Estimating the cross-repo nightly merge admission controller: the table had no row for tooling that acts on the delivery pipeline rather than on a window. Values assigned by analogy to `webhook-config`, `lines-grid` and `document-auto-generation` (stated per row). | ⏳ awaiting first actual |
+| 2026-07-28 | §2 risk `irreversible-remote-writes` | +40% | Same estimate. Existing risk rows cover *finding* bugs late, none covered *blast radius* when the automation's failure cannot be undone by re-running. | ⏳ awaiting first actual |
+| 2026-07-28 | Archetype: `ci-automation-controller` | — | Recognizable task shape: collect state from CI/SCM APIs → decide admission → act. Splits naturally into a read-only half (cheap, safe, delivers most of the decision value) and a mutating half (expensive, all the risk). Estimating it as one task lands in XXL and the model correctly says to split. | ⏳ awaiting first actual |
 
 > _Append a row each time Step 3.6 fires. Graduate confirmed rows into a dated calibration entry above._
 

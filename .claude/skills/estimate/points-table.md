@@ -84,6 +84,21 @@ values, pick the higher one for unfamiliar work and the lower one for work with 
 | `generator-change` | 5 | Change to a shared generator (`generate-*.js`, `resolve-curated.js`) — affects all windows |
 | `callout-validation` | 2 | Callout or validation-rule logic on a field |
 
+### CI / delivery automation (tooling that acts on the pipeline, not on a window)
+
+> Rows for work that automates the delivery pipeline itself — collectors against CI/SCM APIs,
+> admission gates, merge automation. The defining question here is **does it write?** A read-only
+> collector is cheap and safe; an automation that mutates remote state (merging, pushing, deleting a
+> branch) cannot be undone by re-running it, and that asymmetry is where the cost lives.
+
+| Item type | Pts | Notes |
+|-----------|----:|-------|
+| `api-poller-collector` | 3 | Read-only collector against an external REST API (CI, SCM): pagination, caching, rate limits, one output artifact. Analogy: sits between `webhook-config` (2) and `java-handler` (3) — plumbing, low novelty. |
+| `report-only-shadow-mode` | 2 | A dry-run path parallel to a mutating one: computes and publishes the action it *would* take without taking it. Cheap on its own, and the prerequisite for trusting the mutating path. |
+| `state-machine-gate` | 5 | Admission/readiness rule over state gathered from several sources, with all-or-nothing semantics over a group. Analogy: `lines-grid` (5) — the logic is not deep but the case matrix is wide (unknown/pending/stale states each need a decision). |
+| `mutating-automation-with-rollback` | 8 | Automation performing **irreversible remote writes** that must compensate on partial failure (merge half a group, then undo). Analogy: `document-auto-generation` (5) plus the compensation path; the happy path is small, the failure paths are most of the work. |
+| `scheduled-job-wiring` | 2 | Cron / scheduled workflow, service credentials, secret storage, and the audit trail of what ran. |
+
 ### Quality & cross-cutting
 
 | Item type | Pts | Notes |
@@ -112,6 +127,7 @@ real justification — do not stack speculatively.
 | `late-test-discovery` | +30% | Functional flow likely to surface bugs only during QA/manual testing |
 | `external-backend-change` | +30% | Requires a coordinated change in `com.etendoerp.go` (Java) |
 | `unclear-requirements` | +30% | Acceptance criteria fuzzy or likely to change mid-task |
+| `irreversible-remote-writes` | +40% | The automation mutates state outside our control (merges, pushes, deletions) that re-running cannot undo. Every failure needs a compensating action, and the failure paths outnumber the happy path. Distinct from `late-test-discovery`: that one is about *finding* bugs late, this one is about the *blast radius* when one lands. |
 
 ---
 
