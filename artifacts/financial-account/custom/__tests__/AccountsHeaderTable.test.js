@@ -73,8 +73,15 @@ describe('AccountsHeaderTable — row interaction guards', () => {
     assert.equal(guards.length, 2, 'expected the pill cell and the actions cell to guard their clicks');
   });
 
-  it('navigates the whole row to the account detail', () => {
-    assert.match(src, /onNavigate=\{\(id\) => navigate\(`\/financial-account\/\$\{id\}`\)\}/);
+  // DataTable invokes onNavigate with the whole ROW, not an id (DataTable.jsx:1902,
+  // `onNavigate(row)`). Naming the parameter `id` sent row clicks to
+  // /financial-account/[object Object], so the handler must go through onOpen, which
+  // reads `account.id`. Behavioural coverage:
+  // tools/app-shell/src/windows/custom/financial-account/__tests__/AccountsHeaderTable.vitest.jsx
+  it('routes a row click through onOpen, which takes the row (not an id)', () => {
+    assert.match(src, /onNavigate=\{\(row\) => handlers\.onOpen\(row\)\}/);
+    assert.match(src, /onOpen:\s*\(account\) => navigate\(`\/financial-account\/\$\{account\.id\}`\)/);
+    assert.doesNotMatch(src, /onNavigate=\{\(id\) =>/, 'the id-shaped handler is the bug this guards');
   });
 });
 
