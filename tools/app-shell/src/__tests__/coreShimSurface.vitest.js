@@ -10,10 +10,19 @@
  * test failure anywhere — the core-side unit tests cannot catch it, since they
  * import each module directly rather than through the shim.
  *
- * Scope is deliberately the `default` export and nothing else: per the ES spec
- * `export * from` re-exports every NAMED export by construction, so a named export
- * cannot go missing through a shim. `default` is the only thing that can, which
- * makes it the whole of the invariant rather than a part of it.
+ * There are two shim shapes and each can lose exactly one thing, so the guard makes
+ * one assertion per shape:
+ *
+ *   - `export * from '…'` re-exports every NAMED export by construction, so for this
+ *     shape a named export cannot go missing. `default` is the only possible loss.
+ *   - `export { default } from '…'` forwards the default and NOTHING else, so for
+ *     this shape it is exactly the reverse: the named exports are what go missing.
+ *
+ * Together those cover every shape the derivation admits, which is what makes the
+ * invariant complete rather than a sample. An earlier version of this file asserted
+ * only the first and stated it as though it covered both — that left the guard
+ * silently vacuous on the named side for default-only shims, the same "passes
+ * because its scope doesn't reach the case" failure this file exists to prevent.
  *
  * The shim list is DERIVED, not hand-maintained: every file under `src/` whose
  * entire body is re-export statements pointing at the package is treated as a shim.
@@ -72,15 +81,16 @@ function detectShim(source) {
 
   const targets = new Set();
   let forwardsDefault = false;
+  let forwardsNamed = false;
   for (const line of lines) {
     const all = RE_EXPORT_ALL.exec(line);
     const dflt = RE_EXPORT_DEFAULT.exec(line);
-    if (all) targets.add(all[1]);
+    if (all) { targets.add(all[1]); forwardsNamed = true; }
     else if (dflt) { targets.add(dflt[1]); forwardsDefault = true; }
     else return null;                      // a non-re-export line → not a pure shim
   }
   if (targets.size !== 1) return null;     // fans out to several modules → not a simple shim
-  return { target: [...targets][0], forwardsDefault };
+  return { target: [...targets][0], forwardsDefault, forwardsNamed };
 }
 
 /** Resolve a package specifier through core's own `exports`, the way Node will post-publish. */
@@ -115,13 +125,48 @@ function coreHasDefaultExport(corePath) {
   );
 }
 
+/**
+ * The core module's NAMED exports — what a default-only shim would drop. Scanned over
+ * the whole comment-stripped source rather than line by line, so a multi-line
+ * `export { … }` block is read as one statement.
+ *
+ * `export * from './sibling.js'` inside core is reported as an unknown-but-nonempty
+ * named surface: following it would mean resolving core's internal graph, and for the
+ * purpose here — "is there anything a default-only shim would lose?" — knowing that
+ * there IS something is enough to make the assertion fire.
+ */
+function coreNamedExports(corePath) {
+  const source = readFileSync(corePath, 'utf8')
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .replace(/^\s*\/\/.*$/gm, '');
+  const names = new Set();
+
+  for (const [, name] of source.matchAll(
+    /^export\s+(?:async\s+)?(?:function\s*\*?|const|let|var|class)\s+([A-Za-z_$][\w$]*)/gm,
+  )) names.add(name);
+
+  for (const [, block] of source.matchAll(/^export\s*\{([\s\S]*?)\}/gm)) {
+    for (const spec of block.split(',')) {
+      const trimmed = spec.trim();
+      if (!trimmed) continue;
+      const renamed = /^(.+?)\s+as\s+(.+)$/.exec(trimmed);
+      const exported = (renamed ? renamed[2] : trimmed).trim();
+      if (exported && exported !== 'default') names.add(exported);
+    }
+  }
+
+  if (/^export\s+\*\s+from\s+/m.test(source)) names.add('<re-exported from a sibling module>');
+
+  return [...names];
+}
+
 const SHIMS = Object.entries(SOURCES)
   .map(([path, source]) => ({ path, ...(detectShim(source) || {}) }))
   .filter((s) => s.target)
   .map((s) => ({ ...s, name: s.path.replace(/^\.\.\//, '') }))
   .sort((a, b) => a.name.localeCompare(b.name));
 
-describe('core re-export shims forward their module\'s default export', () => {
+describe('core re-export shims expose their module\'s whole surface', () => {
   it('discovers the shims by shape rather than from a fixed list', () => {
     // A derivation that silently matched nothing would make every assertion below
     // vacuous, so assert the discovery itself found a plausible population.
@@ -133,10 +178,25 @@ describe('core re-export shims forward their module\'s default export', () => {
     expect(corePath, `${name}: ${shimInfo.target} has no entry in core's exports map`).toBeTruthy();
     expect(existsSync(corePath), `${name}: core's exports map points at a missing file (${corePath})`).toBe(true);
 
+    // Shape two: a shim with no `export *` line forwards the default and nothing
+    // else, so anything named on the core module is silently lost. Zero exposure
+    // today — `pages/AuthorizePage.jsx` is the only default-only shim and its core
+    // module has no named exports — but the derivation deliberately admits shapes
+    // that do not exist yet, so the assertion has to exist before the case does.
+    if (!shimInfo.forwardsNamed) {
+      const named = coreNamedExports(corePath);
+      expect(
+        named,
+        `${name}: shim forwards only the default, so these named exports of `
+          + `${shimInfo.target} are dropped: ${named.join(', ')} — `
+          + "add `export * from '…'` alongside the default re-export",
+      ).toEqual([]);
+    }
+
     if (!coreHasDefaultExport(corePath)) return;   // nothing for `export *` to drop
 
-    // Core has a default, so the shim needs an explicit re-export line. Decided from
-    // source rather than by importing both modules and diffing their namespaces.
+    // Shape one: core has a default, so the shim needs an explicit re-export line.
+    // Decided from source rather than by importing both modules and diffing them.
     //
     // The importing version was written first and removed deliberately: importing the
     // `calendar` / `date-field` shims drags in react-day-picker's ~87 per-locale
