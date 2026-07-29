@@ -55,6 +55,8 @@ export const SURVEYS = Object.freeze([
   Object.freeze({
     id: 'csat_onboarding',
     type: 'csat',
+    // survey-state no longer knows which id is the onboarding one — it is declared here.
+    isOnboarding: true,
     sources: ['login'],
     scaleMax: 5,
     titleKey: 'surveyOnboardingTitle',
@@ -74,6 +76,8 @@ export const SURVEYS = Object.freeze([
   Object.freeze({
     id: 'csat_invoicing',
     type: 'csat',
+    // counter whose value is snapshotted into respondedCountAt on answer.
+    counterKey: 'invoicing',
     sources: ['trigger'],
     scaleMax: 5,
     titleKey: 'surveyInvoicingTitle',
@@ -85,6 +89,7 @@ export const SURVEYS = Object.freeze([
   Object.freeze({
     id: 'csat_order',
     type: 'csat',
+    counterKey: 'order',
     sources: ['trigger'],
     scaleMax: 5,
     titleKey: 'surveyOrderTitle',

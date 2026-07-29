@@ -35,7 +35,7 @@ export function useSurveyEngine() {
     const isAdmin = isAdminRole(selectedRole);
     const survey = selectNextSurvey({ isAdmin, source });
     if (!survey) return;
-    markSurveyShown(survey.id);
+    markSurveyShown(survey.id, Date.now(), { isOnboarding: survey.isOnboarding === true });
     trackSurveyEvent(OBSERVABILITY_EVENTS.SURVEY_SHOWN, {
       type: survey.type,
       source: survey.id,
@@ -72,7 +72,7 @@ export function useSurveyEngine() {
 
   const handleRespond = useCallback((score, feedback, tags) => {
     if (!activeSurvey) return;
-    markSurveyResponded(activeSurvey.id);
+    markSurveyResponded(activeSurvey.id, Date.now(), { counterKey: activeSurvey.counterKey ?? null });
     trackSurveyEvent(OBSERVABILITY_EVENTS.SURVEY_RESPONDED, {
       type: activeSurvey.type,
       source: activeSurvey.id,
