@@ -222,10 +222,10 @@ describe('FinancialAccountsPage — bank connection disconnect action', () => {
 
   it('cancel dismisses the confirm dialog without disconnecting', async () => {
     renderPage([ACC]);
-    await tableProps.onPsd2Action('disconnect', ACC);
-    await screen.findByText('financeAccountsPsd2DisconnectAction');
+    await tableProps.onBankConnectionAction('disconnect', ACC);
+    await screen.findByText('financeAccountsBankConnectionDisconnectAction');
     fireEvent.click(screen.getByText('cancel'));
-    await waitFor(() => expect(screen.queryByText('financeAccountsPsd2DisconnectAction')).not.toBeInTheDocument());
+    await waitFor(() => expect(screen.queryByText('financeAccountsBankConnectionDisconnectAction')).not.toBeInTheDocument());
     expect(mockDisconnect).not.toHaveBeenCalled();
   });
 });

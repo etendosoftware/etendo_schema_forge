@@ -139,15 +139,15 @@ describe('AccountRow', () => {
     });
   });
 
-  describe('PSD2 connect CTA (cellCtx.onConnect)', () => {
-    it('fires onPsd2Action("connect", account) when the inline Connect PSD2 CTA is clicked', () => {
-      const onPsd2Action = vi.fn();
-      renderRow({ account: baseAccount, onPsd2Action });
+  describe('Bank connection CTA (cellCtx.onConnect)', () => {
+    it('fires onBankConnectionAction("connect", account) when the inline Connect bank CTA is clicked', () => {
+      const onBankConnectionAction = vi.fn();
+      renderRow({ account: baseAccount, onBankConnectionAction });
       fireEvent.click(screen.getByTestId('account-sync-connect-acc-1'));
-      expect(onPsd2Action).toHaveBeenCalledWith('connect', expect.objectContaining({ id: 'acc-1' }));
+      expect(onBankConnectionAction).toHaveBeenCalledWith('connect', expect.objectContaining({ id: 'acc-1' }));
     });
 
-    it('does not render the Connect PSD2 CTA when onPsd2Action is not provided', () => {
+    it('does not render the Connect bank CTA when onBankConnectionAction is not provided', () => {
       renderRow({ account: baseAccount });
       // cellCtx.onConnect is undefined, so SyncStatusInline receives no onConnect handler,
       // but the CTA itself is still rendered — clicking it should not throw.
@@ -193,27 +193,27 @@ describe('AccountRow', () => {
     });
   });
 
-  describe('PSD2 sync-now action', () => {
-    it('renders the sync button and fires onPsd2Action("syncNow", account) when clicked, for psd2Connected accounts', () => {
-      const onPsd2Action = vi.fn();
-      renderRow({ account: { ...baseAccount, psd2Connected: true }, onPsd2Action });
+  describe('Bank connection sync-now action', () => {
+    it('renders the sync button and fires onBankConnectionAction("syncNow", account) when clicked, for bankConnected accounts', () => {
+      const onBankConnectionAction = vi.fn();
+      renderRow({ account: { ...baseAccount, bankConnected: true }, onBankConnectionAction });
       fireEvent.click(screen.getByTestId('account-row-refresh-acc-1'));
-      expect(onPsd2Action).toHaveBeenCalledWith('syncNow', expect.objectContaining({ id: 'acc-1', psd2Connected: true }));
+      expect(onBankConnectionAction).toHaveBeenCalledWith('syncNow', expect.objectContaining({ id: 'acc-1', bankConnected: true }));
     });
 
-    it('does not render the sync button when the account is not psd2Connected', () => {
-      renderRow({ account: { ...baseAccount, psd2Connected: false } });
+    it('does not render the sync button when the account is not bankConnected', () => {
+      renderRow({ account: { ...baseAccount, bankConnected: false } });
       expect(screen.queryByTestId('account-row-refresh-acc-1')).not.toBeInTheDocument();
     });
 
     it('does not fire onOpen when the sync button is clicked (stopPropagation)', () => {
       const onOpen = vi.fn();
-      const onPsd2Action = vi.fn();
+      const onBankConnectionAction = vi.fn();
       renderRow({
-        account: { ...baseAccount, psd2Connected: true }, onOpen, onPsd2Action,
+        account: { ...baseAccount, bankConnected: true }, onOpen, onBankConnectionAction,
       });
       fireEvent.click(screen.getByTestId('account-row-refresh-acc-1'));
-      expect(onPsd2Action).toHaveBeenCalled();
+      expect(onBankConnectionAction).toHaveBeenCalled();
       expect(onOpen).not.toHaveBeenCalled();
     });
   });
