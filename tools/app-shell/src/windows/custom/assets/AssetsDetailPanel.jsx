@@ -174,7 +174,15 @@ export default function AssetsDetailPanel({ data, token, apiBaseUrl, catalogs, a
   const group1Fields = [
     { key: 'searchKey', column: 'Value', type: 'text', label: ui('Search Key'), required: true, section: 'principal' },
     { key: 'name', column: 'Name', type: 'text', label: ui('Name'), required: true, section: 'principal' },
-    { key: 'assetCategory', column: 'A_Asset_Group_ID', type: 'selector', label: ui('Asset Category'), required: true, section: 'principal', reference: 'AssetGroup', inputMode: 'selector' },
+    // TEMPORARY opt-out (searchSelect: false) — keeps this field on the OLD plain
+    // SelectorInput instead of ETP-4600's unified CreatableSearchSelect. The unified
+    // component's interaction timing exposes a pre-existing DetailView save→refetch/
+    // callout race: selecting a category, toggling "Depreciar" ON, then saving persists
+    // the asset with `depreciate = false`, so AssetsDetailPanel's `depreciate &&` gate
+    // never renders the "Crear Amortización" button (integration Cases 5/6/7). Remove
+    // this opt-out once the DetailView race has its own fix (tracked as a separate
+    // ticket) — this is NOT masking a bug in the unified selector itself.
+    { key: 'assetCategory', column: 'A_Asset_Group_ID', type: 'selector', label: ui('Asset Category'), required: true, section: 'principal', reference: 'AssetGroup', inputMode: 'selector', searchSelect: false },
     // Moved out of the Financial Info group (ETP-4539) — "Valor del activo" is now always
     // visible in the main header section, regardless of whether depreciation/amortization is
     // enabled. calloutOn: 'blur' + handleAmountChange (passed as this form's onChange below)

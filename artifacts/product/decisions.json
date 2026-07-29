@@ -121,8 +121,7 @@
           "grid": true,
           "section": "principal",
           "seq": 5,
-          "inputMode": "search",
-          "clearable": false
+          "inputMode": "search"
         },
         "image": {
           "type": "image",

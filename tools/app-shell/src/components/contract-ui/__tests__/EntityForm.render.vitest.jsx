@@ -31,6 +31,40 @@ vi.mock('../PartnerAddressPicker.jsx', () => ({
 vi.mock('../SelectorInput.jsx', () => ({
   SelectorInput: (props) => <div data-testid={`selector-input-${props.field?.key ?? 'unknown'}`} />,
 }));
+vi.mock('../CreatableSearchSelect.jsx', () => ({
+  // Exposes the props EntityForm passes down (value/displayValue/emptyOptionLabel) as data
+  // attributes so tests can assert on the parity behaviors (boolean mapping, locale labels,
+  // empty/clear choice) without unmocking the real combobox. onChange is wired to a button so
+  // tests can simulate picking an option by id (data-testid=`select-<key>-<id>`).
+  CreatableSearchSelect: (props) => (
+    <div
+      data-testid={`creatable-search-select-${props.field?.key ?? 'unknown'}`}
+      data-server-search={props.serverSearch ? 'true' : 'false'}
+    >
+      <span data-testid={`csrch-server-search-${props.field?.key}`}>{props.serverSearch ? 'true' : 'false'}</span>
+      <span data-testid={`csrch-value-${props.field?.key}`}>{String(props.value ?? '')}</span>
+      <span data-testid={`csrch-display-${props.field?.key}`}>{String(props.displayValue ?? '')}</span>
+      <span data-testid={`csrch-empty-label-${props.field?.key}`}>{String(props.emptyOptionLabel ?? '')}</span>
+      {(props.staticOptions ?? []).map((opt) => (
+        <button
+          key={opt.id}
+          type="button"
+          data-testid={`select-${props.field?.key}-${opt.id}`}
+          onClick={() => props.onChange?.(opt.id, opt.name, opt)}
+        >
+          {opt.name}
+        </button>
+      ))}
+      <button
+        type="button"
+        data-testid={`select-${props.field?.key}-__empty__`}
+        onClick={() => props.onChange?.('', '', null)}
+      >
+        clear
+      </button>
+    </div>
+  ),
+}));
 vi.mock('../SelectorChip.jsx', () => ({
   SelectorChip: (props) => <span data-testid={props.testId ?? 'chip'}>{props.label}</span>,
 }));
@@ -107,8 +141,8 @@ describe('EntityForm — extended render coverage', () => {
     expect(screen.getByTestId('field-active')).toBeInTheDocument();
     // date field renders a DateField (which is a real component)
     expect(screen.getByText('DateOrdered')).toBeInTheDocument();
-    // selector field renders the mocked SelectorInput
-    expect(screen.getByTestId('selector-input-bp')).toBeInTheDocument();
+    // selector field renders the searchable CreatableSearchSelect by default (ETP-4600)
+    expect(screen.getByTestId('creatable-search-select-bp')).toBeInTheDocument();
   });
 
   // --- Date field ---
@@ -121,17 +155,19 @@ describe('EntityForm — extended render coverage', () => {
 
   // --- Enum / select field ---
 
-  it('renders select field with trigger element', () => {
+  it('renders select field via the unified CreatableSearchSelect (ETP-4600)', () => {
     renderForm();
-    const trigger = screen.getByTestId('field-status');
+    const trigger = screen.getByTestId('creatable-search-select-status');
     expect(trigger).toBeInTheDocument();
   });
 
   // --- Selector field ---
 
-  it('renders SelectorInput stub for selector type', () => {
+  it('renders CreatableSearchSelect (serverSearch) by default for selector type (ETP-4600)', () => {
     renderForm();
-    expect(screen.getByTestId('selector-input-bp')).toBeInTheDocument();
+    const el = screen.getByTestId('creatable-search-select-bp');
+    expect(el).toBeInTheDocument();
+    expect(el).toHaveAttribute('data-server-search', 'true');
   });
 
   // --- Read-only mode ---
@@ -521,7 +557,8 @@ describe('EntityForm — extended render coverage', () => {
       <EntityForm fields={fields} data={{}} onChange={vi.fn()} cols={3} />,
     );
     const grid = container.firstElementChild;
-    expect(grid.style.gridTemplateColumns).toBe('repeat(3, 1fr)');
+    // minmax(0, 1fr) — see ETP-4600 Gap D fix in EntityForm.jsx.
+    expect(grid.style.gridTemplateColumns).toBe('repeat(3, minmax(0, 1fr))');
   });
 
   // --- Empty fields returns null ---
@@ -584,8 +621,36 @@ describe('EntityForm — extended render coverage', () => {
     render(
       <EntityForm fields={fields} data={{ flag: true }} onChange={vi.fn()} />,
     );
-    const trigger = screen.getByTestId('field-flag');
-    expect(trigger).toBeInTheDocument();
+    // Boolean valueType maps the stored `true` to the 'true' option id (ETP-4600 parity).
+    expect(screen.getByTestId('csrch-value-flag')).toHaveTextContent('true');
+    expect(screen.getByTestId('csrch-display-flag')).toHaveTextContent('Yes');
+  });
+
+  it('maps a boolean enum option with a real boolean value (not stringified) on change', async () => {
+    const user = userEvent.setup();
+    const onChange = vi.fn();
+    const fields = [
+      {
+        key: 'flag',
+        label: 'Flag',
+        type: 'select',
+        column: 'Flag',
+        valueType: 'boolean',
+        // Option values are real JS booleans (not the 'true'/'false' strings the old
+        // Radix Select always produced) — the unified CreatableSearchSelect passes
+        // f.options[].value through raw, so the onChange mapping must coerce with
+        // String(id) instead of assuming id is already a string.
+        options: [
+          { value: true, label: 'Yes' },
+          { value: false, label: 'No' },
+        ],
+      },
+    ];
+    render(
+      <EntityForm fields={fields} data={{ flag: false }} onChange={onChange} />,
+    );
+    await user.click(screen.getByTestId('select-flag-true'));
+    expect(onChange).toHaveBeenCalledWith('flag', true, 'Flag');
   });
 
   // --- Number field read-only shows formatted value ---
@@ -894,7 +959,7 @@ describe('EntityForm — extended render coverage', () => {
       render(
         <EntityForm fields={fields} data={{ docType: '' }} onChange={vi.fn()} />,
       );
-      const trigger = screen.getByTestId('field-docType');
+      const trigger = screen.getByTestId('creatable-search-select-docType');
       expect(trigger).toBeInTheDocument();
     });
 
@@ -912,15 +977,16 @@ describe('EntityForm — extended render coverage', () => {
       render(
         <EntityForm fields={fields} data={{}} onChange={vi.fn()} />,
       );
-      // Non-required selects have the __empty__ option
-      expect(screen.getByTestId('field-docType')).toBeInTheDocument();
+      // Non-required selects get a clear/empty choice passed as emptyOptionLabel (ETP-4600 parity).
+      expect(screen.getByTestId('creatable-search-select-docType')).toBeInTheDocument();
+      expect(screen.getByTestId('csrch-empty-label-docType').textContent).not.toBe('');
     });
   });
 
-  // --- Selector field with selectorUrl → renders SelectorInput ---
+  // --- Selector field with selectorUrl → renders CreatableSearchSelect (ETP-4600 default) ---
 
   describe('selector field with selectorUrl', () => {
-    it('renders SelectorInput when field type is selector and not readOnly', () => {
+    it('renders CreatableSearchSelect (serverSearch) when field type is selector and not readOnly', () => {
       const fields = [
         { key: 'warehouse', label: 'Warehouse', type: 'selector', column: 'M_Warehouse_ID' },
       ];
@@ -934,7 +1000,9 @@ describe('EntityForm — extended render coverage', () => {
           entity="header"
         />,
       );
-      expect(screen.getByTestId('selector-input-warehouse')).toBeInTheDocument();
+      const el = screen.getByTestId('creatable-search-select-warehouse');
+      expect(el).toBeInTheDocument();
+      expect(el).toHaveAttribute('data-server-search', 'true');
     });
 
     it('renders disabled input when selector field is readOnly', () => {
@@ -951,8 +1019,26 @@ describe('EntityForm — extended render coverage', () => {
       );
       const input = screen.getByTestId('field-warehouse');
       expect(input).toBeInTheDocument();
-      // In readOnly, renders as a plain disabled Input, not SelectorInput
-      expect(screen.queryByTestId('selector-input-warehouse')).toBeNull();
+      // In readOnly, renders as a plain disabled Input, not CreatableSearchSelect
+      expect(screen.queryByTestId('creatable-search-select-warehouse')).toBeNull();
+    });
+
+    it('keeps DocumentType-reference selector fields on the plain SelectorInput (optionTranslator carve-out)', () => {
+      const fields = [
+        { key: 'transactionDocument', label: 'Doc Type', type: 'selector', column: 'C_DocTypeTarget_ID', reference: 'DocumentType' },
+      ];
+      render(
+        <EntityForm
+          fields={fields}
+          data={{ transactionDocument: 'DT1', 'transactionDocument$_identifier': 'Invoice' }}
+          onChange={vi.fn()}
+          token="tok"
+          apiBaseUrl="/api"
+          entity="header"
+        />,
+      );
+      expect(screen.getByTestId('selector-input-transactionDocument')).toBeInTheDocument();
+      expect(screen.queryByTestId('creatable-search-select-transactionDocument')).toBeNull();
     });
   });
 
@@ -1074,7 +1160,7 @@ describe('EntityForm — extended render coverage', () => {
       render(
         <EntityForm fields={fields} data={{ flag: 'N' }} onChange={vi.fn()} />,
       );
-      expect(screen.getByTestId('field-flag')).toBeInTheDocument();
+      expect(screen.getByTestId('csrch-value-flag')).toHaveTextContent('false');
     });
 
     it('handles null/undefined as empty for boolean select', () => {
@@ -1094,7 +1180,29 @@ describe('EntityForm — extended render coverage', () => {
       render(
         <EntityForm fields={fields} data={{ flag: null }} onChange={vi.fn()} />,
       );
-      expect(screen.getByTestId('field-flag')).toBeInTheDocument();
+      expect(screen.getByTestId('csrch-value-flag')).toHaveTextContent('');
+    });
+
+    it('emits a real boolean (not the string id) when selecting a boolean option', () => {
+      const onChange = vi.fn();
+      const fields = [
+        {
+          key: 'flag',
+          label: 'Flag',
+          type: 'select',
+          column: 'Flag',
+          valueType: 'boolean',
+          options: [
+            { value: 'true', label: 'Yes' },
+            { value: 'false', label: 'No' },
+          ],
+        },
+      ];
+      render(
+        <EntityForm fields={fields} data={{ flag: false }} onChange={onChange} />,
+      );
+      screen.getByTestId('select-flag-true').click();
+      expect(onChange).toHaveBeenCalledWith('flag', true, 'Flag');
     });
   });
 
@@ -1416,7 +1524,7 @@ describe('EntityForm — extended render coverage', () => {
     );
     expect(screen.getByTestId('field-name')).toBeInTheDocument();
     expect(screen.getByTestId('field-active')).toBeInTheDocument();
-    expect(screen.getByTestId('field-status')).toBeInTheDocument();
+    expect(screen.getByTestId('creatable-search-select-status')).toBeInTheDocument();
     expect(screen.getByTestId('field-notes')).toBeInTheDocument();
     expect(container.innerHTML).not.toBe('');
   });
