@@ -42,7 +42,9 @@ describe('survey-state', () => {
       expect(state.lastLoginAt).toBeNull();
       expect(state.onboardingCompleted).toBe(false);
       expect(state.onboardingShown).toBe(false);
-      expect(state.counters).toEqual({ invoicing: 0, order: 0 });
+      // Counters start empty: the shared module seeds no domain counter names.
+      // Every read is `?? 0` guarded, so an absent key reads the same as 0.
+      expect(state.counters).toEqual({});
       expect(state.shownThisMonth).toEqual({});
       expect(state.respondedCounts).toEqual({});
       expect(state.respondedAt).toEqual({});
@@ -103,8 +105,10 @@ describe('survey-state', () => {
       expect(state.shownThisMonth['2026-01']).toBe(1);
     });
 
-    it('sets onboardingShown when surveyId is csat_onboarding', () => {
-      markSurveyShown('csat_onboarding', NOW);
+    // Which survey is "the onboarding one" is now the caller's declaration, not
+    // an id the shared module recognises — hence the flag rather than the id.
+    it('sets onboardingShown when the caller flags the survey as onboarding', () => {
+      markSurveyShown('csat_onboarding', NOW, { isOnboarding: true });
       expect(readSurveyState().onboardingShown).toBe(true);
     });
 
@@ -130,13 +134,13 @@ describe('survey-state', () => {
 
     it('snapshots invoicing counter into respondedCountAt for csat_invoicing', () => {
       mockStorage.setItem(STORAGE_KEY, JSON.stringify({ counters: { invoicing: 7, order: 0 } }));
-      markSurveyResponded('csat_invoicing', NOW);
+      markSurveyResponded('csat_invoicing', NOW, { counterKey: 'invoicing' });
       expect(readSurveyState().respondedCountAt['csat_invoicing']).toBe(7);
     });
 
     it('snapshots order counter into respondedCountAt for csat_order', () => {
       mockStorage.setItem(STORAGE_KEY, JSON.stringify({ counters: { invoicing: 0, order: 12 } }));
-      markSurveyResponded('csat_order', NOW);
+      markSurveyResponded('csat_order', NOW, { counterKey: 'order' });
       expect(readSurveyState().respondedCountAt['csat_order']).toBe(12);
     });
   });
@@ -178,9 +182,15 @@ describe('survey-state', () => {
       const result = incrementSurveyCounter('foo');
       expect(result).toBe(1);
       expect(readSurveyState().counters['foo']).toBe(1);
-      // known keys must be unaffected
-      expect(readSurveyState().counters.invoicing).toBe(0);
-      expect(readSurveyState().counters.order).toBe(0);
+      // Counters no longer come pre-seeded, so "other keys are unaffected" is
+      // only a real assertion against a counter that actually exists. Establish
+      // one first, then check incrementing an unknown key leaves it alone.
+      incrementSurveyCounter('invoicing');
+      incrementSurveyCounter('bar');
+      const state = readSurveyState();
+      expect(state.counters.invoicing).toBe(1);
+      expect(state.counters['bar']).toBe(1);
+      expect(state.counters['foo']).toBe(1);
     });
   });
 
@@ -193,7 +203,7 @@ describe('survey-state', () => {
       vi.stubGlobal('window', {}); // localStorage is undefined
       const state = readSurveyState();
       expect(state.firstLoginAt).toBeNull();
-      expect(state.counters).toEqual({ invoicing: 0, order: 0 });
+      expect(state.counters).toEqual({});
       expect(state.shownThisMonth).toEqual({});
       expect(state.respondedCounts).toEqual({});
       expect(state.dismissals).toEqual({});
@@ -203,7 +213,7 @@ describe('survey-state', () => {
       vi.stubGlobal('window', undefined);
       const state = readSurveyState();
       expect(state.firstLoginAt).toBeNull();
-      expect(state.counters).toEqual({ invoicing: 0, order: 0 });
+      expect(state.counters).toEqual({});
     });
   });
 

@@ -222,7 +222,11 @@ describe('useSurveyEngine', () => {
       act(() => { vi.advanceTimersByTime(2500); });
 
       expect(result.current.activeSurvey).toEqual(survey);
-      expect(markSurveyShown).toHaveBeenCalledWith(survey.id);
+      // The hook forwards the descriptor's own declaration; this fixture is a
+      // plain nps survey, so it is not the onboarding one.
+      expect(markSurveyShown).toHaveBeenCalledWith(
+        survey.id, expect.any(Number), { isOnboarding: false },
+      );
       expect(track).toHaveBeenCalledTimes(1);
     });
   });
@@ -408,7 +412,11 @@ describe('useSurveyEngine', () => {
         result.current.handleRespond(9, '  great tool  ', ['tag1', 'tag2']);
       });
 
-      expect(markSurveyResponded).toHaveBeenCalledWith(survey.id);
+      // counterKey null because this fixture declares none — which is what makes
+      // a survey record no respondedCountAt snapshot.
+      expect(markSurveyResponded).toHaveBeenCalledWith(
+        survey.id, expect.any(Number), { counterKey: null },
+      );
       expect(buildObservabilityEvent).toHaveBeenCalledWith(
         OBSERVABILITY_EVENTS.SURVEY_RESPONDED,
         expect.objectContaining({
