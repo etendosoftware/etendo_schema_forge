@@ -11,6 +11,7 @@ import {
   deriveBoxes303,
   computeUpcomingDeadlines,
   generate303File,
+  applyIdentParams,
 } from '../fiscalModelsUtils.js';
 
 // ── STATUSES ──────────────────────────────────────────────────────────────────
@@ -1074,6 +1075,60 @@ describe('generate303File', () => {
       mockFetchOk();
       const result = await generate303File({ ...DECL, result: { kind } }, { token: TOKEN, apiBaseUrl: API_BASE });
       expect(result.ok).toBe(true);
+    }
+  });
+});
+
+// ── applyIdentParams — tipo-independence (QA regression coverage, ETP-4456) ───
+//
+// applyIdentParams (and IDENT_PARAM_MAP) forwards every identChecks.bank_* /
+// baja_domiciliacion field whenever it is truthy, with NO check against the
+// current tipo_declaracion. The EDID065 fix narrows the *required* + *visible*
+// set to U/D/X, and AEAT303Report2014 now nulls the IBAN value server-side for
+// any other tipo (defense in depth) — but these tests pin down that the other
+// bank_* params (SEPA, BIC, address, city, country) are NOT similarly narrowed
+// on the frontend. If identChecks retains stale bank_* values after the user
+// switches tipo_declaracion away from U/D/X (nothing currently clears them —
+// see FmModel303Page.jsx handleIdentChange, which only clears box 108 on
+// motivo_rectificacion changes), these stale params are still sent to the
+// backend regardless of the now-selected tipo. Whether the backend safely
+// discards them for a non-U/D/X tipo depends on the NEO Headless bridge
+// (com.etendoerp.go, outside this repo) correctly deriving the AEAT303Report
+// DECLARATION_RETURN/DECLARATION_RETURN_TAX/DECLARATION_RETURN_FOREIGN flags
+// from the current tipo — not verified by this test suite. Flagged in QA
+// report as a follow-up item, not a regression of the bug this PR fixes.
+describe('applyIdentParams — tipo-independent forwarding (documents current behavior)', () => {
+  it('forwards IBAN, SEPA, BIC, bank address/city/country and Cancel_Modify_Debit for tipo=I (Ingreso) when present in identChecks, even though I is not an IBAN-required tipo', () => {
+    const params = new URLSearchParams();
+    applyIdentParams(params, {
+      tipo_declaracion: 'I',
+      bank_iban: 'ES76 2077 0024 0031 0257 5766',
+      bank_swift_bic: 'BBVAESMMXXX',
+      bank_nombre: 'BBVA',
+      bank_direccion: 'Calle Falsa 123',
+      bank_ciudad: 'Madrid',
+      bank_pais: 'ES',
+      bank_sepa: '1',
+      baja_domiciliacion: true,
+    });
+    // None of these are gated on tipo_declaracion by applyIdentParams itself —
+    // all are forwarded as-is. IBAN is known-safe (server nulls it downstream
+    // for non-U/D/X); the rest are not covered by this PR's fix.
+    expect(params.get('IBAN')).toBe('ES7620770024003102575766');
+    expect(params.get('SEPA')).toBe('1');
+    expect(params.get('BIC')).toBe('BBVAESMMXXX');
+    expect(params.get('BankAddress')).toBe('Calle Falsa 123');
+    expect(params.get('BankCity')).toBe('Madrid');
+    expect(params.get('CountryIso')).toBe('ES');
+    expect(params.get('Cancel_Modify_Debit')).toBe('true');
+  });
+
+  it('forwards the same bank_* params for tipo=G, C and N too — applyIdentParams has no tipo awareness at all', () => {
+    for (const tipo of ['G', 'C', 'N']) {
+      const params = new URLSearchParams();
+      applyIdentParams(params, { tipo_declaracion: tipo, bank_iban: 'ES7620770024003102575766', bank_sepa: '1' });
+      expect(params.get('IBAN')).toBe('ES7620770024003102575766');
+      expect(params.get('SEPA')).toBe('1');
     }
   });
 });

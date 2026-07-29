@@ -583,6 +583,36 @@ describe('FmBoxes303 — datos_bancarios sectionVisibleWhen', () => {
     expect(container.querySelector('.fm-aeat-section')).toBeNull();
   });
 
+  it('hides section when tipo_declaracion is C (Compensación — not in the U/D/X visible set)', () => {
+    const { container } = render(
+      <FmBoxes303
+        {...BASE_PROPS}
+        boxes={{}}
+        sectionIds={['datos_bancarios']}
+        identification={{ tipo_declaracion: 'C' }}
+      />
+    );
+    expect(container.querySelector('.fm-aeat-section')).toBeNull();
+  });
+
+  // 'G' has no option in TIPO_DECLARACION_FIELD (fm303Layouts.js) — it can never be
+  // selected via this UI's dropdown. It IS a valid AEAT/Classic-side DeclarationType
+  // value though (per Java AD reference data), so identification.tipo_declaracion
+  // could carry it if it ever arrived from legacy data or a non-UI-driven update.
+  // Assert the component degrades safely (hides the IBAN section) rather than
+  // rendering it because of an unrecognized value.
+  it('hides section when tipo_declaracion is G (unreachable via this UI, but defensively verified)', () => {
+    const { container } = render(
+      <FmBoxes303
+        {...BASE_PROPS}
+        boxes={{}}
+        sectionIds={['datos_bancarios']}
+        identification={{ tipo_declaracion: 'G' }}
+      />
+    );
+    expect(container.querySelector('.fm-aeat-section')).toBeNull();
+  });
+
   it('hides section when identification is undefined', () => {
     const { container } = render(
       <FmBoxes303
