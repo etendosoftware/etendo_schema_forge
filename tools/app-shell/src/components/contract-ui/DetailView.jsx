@@ -16,6 +16,26 @@ const TAB_ICONS = {
   'products': WarehouseProductsIcon,
 };
 
+// The identity attributes live on a wrapper rather than on the icon itself
+// because the non-lucide icons (AttachmentIcon, PricingIcon, WarehouseProductsIcon)
+// accept only `className` and drop any other prop, so a data-* passed through
+// createElement would silently vanish for exactly the tabs worth asserting.
+// `data-icon` names the resolved component: the unmapped case falls back to List
+// without throwing, so only the name distinguishes "no icon configured" from
+// "icon lookup broken".
+function TabStripIcon({ iconKey }) {
+  const Icon = TAB_ICONS[iconKey] ?? List;
+  return (
+    <span
+      className="inline-flex"
+      data-testid={`tab-icon-${iconKey}`}
+      data-icon={Icon.displayName ?? Icon.name ?? 'unknown'}
+    >
+      <Icon className="h-4 w-4" />
+    </span>
+  );
+}
+
 function TabStripButton({
   iconKey, label, count, isActive, onClick,
   paddingY = 'py-2.5', showHoverLine = false, indicatorCls, tMenu, testId,
@@ -25,12 +45,13 @@ function TabStripButton({
     <button
       onClick={onClick}
       data-testid={testId}
+      data-active={isActive ? 'true' : 'false'}
       className={[
         `${showHoverLine ? 'group ' : ''}flex items-center gap-2 px-4 ${paddingY} text-sm font-medium transition-colors relative`,
         isActive ? 'text-foreground' : 'text-muted-foreground hover:text-foreground',
       ].join(' ')}
     >
-      {React.createElement(TAB_ICONS[iconKey] ?? List, { className: 'h-4 w-4' })}
+      <TabStripIcon iconKey={iconKey} />
       {tMenu(label)}
       {count != null && (
         <span className="inline-flex items-center justify-center h-5 min-w-[1.25rem] px-1 text-xs rounded-full bg-muted text-muted-foreground">
@@ -1913,6 +1934,8 @@ export function DetailView({
   lockedAlert = null,
   selectorPriceCurrency = null,
   processConfirmModal = null,
+  deleteConfirmModal: deleteConfirmModalComponent = null,
+  deleteConfirmModalProps = null,
 }) {
   // DetailView never needs the parent list: on `/new` there is no record to match, and on
   // `/:id` the currentItem shortcut only helps when we arrived from ListView (items already
@@ -2053,8 +2076,18 @@ export function DetailView({
   // ETP-4479 — fall back to the per-window default when the caller didn't
   // explicitly pass `deleteAction` (see WINDOW_DELETE_ACTIONS above).
   const effectiveDeleteAction = deleteAction ?? WINDOW_DELETE_ACTIONS[windowName] ?? null;
-  // ETP-4500 — per-window rich delete cartel (see WINDOW_DELETE_CONFIRM_MODALS above).
-  const deleteConfirmModal = WINDOW_DELETE_CONFIRM_MODALS[windowName] ?? null;
+  // ETP-4500 — per-window rich delete cartel. Declared config wins; the table
+  // below is the fallback for windows that have not declared it yet (same shape
+  // as `deleteAction` above). `deleteConfirmModalProps` carries the modal's own
+  // config (e.g. `{ dir: 'in' }`) and is spread into the same descriptor the
+  // table produces, so both paths hand the render site an identical object.
+  const deleteConfirmModal = deleteConfirmModalComponent
+    ? { Component: deleteConfirmModalComponent, ...(deleteConfirmModalProps ?? {}) }
+    : (WINDOW_DELETE_CONFIRM_MODALS[windowName] ?? null);
+  // Everything on the descriptor except the component is forwarded to it. For the
+  // table path that is exactly `{ dir }`, so the rendered props are unchanged; for
+  // the declared path it means the payload is honoured rather than only `dir`.
+  const { Component: _deleteConfirmModalComponent, ...deleteConfirmModalExtraProps } = deleteConfirmModal ?? {};
   const navigate = useNavigate();
   const location = useLocation();
   const [searchParams] = useSearchParams();
@@ -4847,7 +4880,7 @@ export function DetailView({
       {deleteConfirmModal ? (
         showDeleteConfirm && (
           <deleteConfirmModal.Component
-            dir={deleteConfirmModal.dir}
+            {...deleteConfirmModalExtraProps}
             action="delete"
             data={data}
             onConfirm={confirmHeaderDelete}

@@ -1,8 +1,8 @@
 {
   "version": "0.11.0",
   "generatedAt": "2026-04-29T19:05:52.312Z",
-  "updatedAt": "2026-07-22T01:47:59.848Z",
-  "checksum": "9fa5d6b92db45a1a",
+  "updatedAt": "2026-07-29T11:51:04.735Z",
+  "checksum": "e14940d23149feb6",
   "frontendContract": {
     "window": {
       "id": "E547CE89D4C04429B6340FFA44E70716",
@@ -22,12 +22,17 @@
         "RPVOID",
         "PWNC"
       ],
+      "deleteAction": "eTPRRemovePayment",
       "customComponents": {
         "headerTable": "PaymentHeaderTable",
         "sidePanel": "PaymentDetailSidebar",
         "bottomSection": "PaymentBottomPanel",
         "newRecordComponent": "NewPaymentModal",
         "processConfirmModal": "ReactivarConfirmModal",
+        "deleteConfirmModal": "PaymentLifecycleConfirmModal",
+        "deleteConfirmModalProps": {
+          "dir": "in"
+        },
         "topbarExtra": "PaymentConciliadoBadge",
         "sidePanelStyle": {
           "order": -1,
@@ -934,12 +939,17 @@
         "RPVOID",
         "PWNC"
       ],
+      "deleteAction": "eTPRRemovePayment",
       "customComponents": {
         "headerTable": "PaymentHeaderTable",
         "sidePanel": "PaymentDetailSidebar",
         "bottomSection": "PaymentBottomPanel",
         "newRecordComponent": "NewPaymentModal",
         "processConfirmModal": "ReactivarConfirmModal",
+        "deleteConfirmModal": "PaymentLifecycleConfirmModal",
+        "deleteConfirmModalProps": {
+          "dir": "in"
+        },
         "topbarExtra": "PaymentConciliadoBadge",
         "sidePanelStyle": {
           "order": -1,

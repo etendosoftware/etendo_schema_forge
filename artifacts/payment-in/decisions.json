@@ -6,12 +6,15 @@
     "salesTheme": false,
     "relatedDocuments": true,
     "notesField": "description",
+    "deleteAction": "eTPRRemovePayment",
     "customComponents": {
       "headerTable": "PaymentHeaderTable",
       "sidePanel": "PaymentDetailSidebar",
       "bottomSection": "PaymentBottomPanel",
       "newRecordComponent": "NewPaymentModal",
       "processConfirmModal": "ReactivarConfirmModal",
+      "deleteConfirmModal": "PaymentLifecycleConfirmModal",
+      "deleteConfirmModalProps": { "dir": "in" },
       "topbarExtra": "PaymentConciliadoBadge",
       "sidePanelStyle": {
         "order": -1,

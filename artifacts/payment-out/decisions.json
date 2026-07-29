@@ -5,6 +5,7 @@
     "name": "Payment Out",
     "relatedDocuments": false,
     "notesField": "description",
+    "deleteAction": "eTPRRemovePayment",
     "dateFilterKey": "paymentDate",
     "detailEntity": null,
     "customTabsAfterBottom": true,
@@ -15,6 +16,8 @@
       "sidePanel": "PaymentDetailSidebar",
       "bottomSection": "PaymentOutBottomPanel",
       "processConfirmModal": "ReactivarConfirmModal",
+      "deleteConfirmModal": "PaymentLifecycleConfirmModal",
+      "deleteConfirmModalProps": { "dir": "out" },
       "topbarExtra": "PaymentConciliadoBadge",
       "sidePanelStyle": {
         "order": -1,

@@ -9,6 +9,7 @@ import PaymentConciliadoBadge from '../../../custom/PaymentConciliadoBadge';
 import PaymentDetailSidebar from '../../../custom/PaymentDetailSidebar';
 import NewPaymentModal from '../../../custom/NewPaymentModal';
 import ReactivarConfirmModal from '../../../custom/ReactivarConfirmModal';
+import PaymentLifecycleConfirmModal from '@/windows/custom/shared/PaymentLifecycleConfirmModal';
 import catalogs from './mockCatalogs';
 
 
@@ -270,6 +271,7 @@ export default function FinPaymentPage({ windowName, recordId, ...props }) {
         breadcrumb={breadcrumb}
       api={api}
         hideDeleteWhenComplete
+        deleteAction="eTPRRemovePayment"
         customTabsAfterBottom
         hidePrint
         hideSaveStatuses={["RDNC","RPPC","RPR","RPVOID","PWNC"]}
@@ -282,6 +284,8 @@ export default function FinPaymentPage({ windowName, recordId, ...props }) {
         sidePanel={PaymentDetailSidebar}
         sidePanelStyle={{"order":-1,"borderLeft":"none","borderRight":"1px solid hsl(var(--border-subtle))","padding":0}}
         processConfirmModal={ReactivarConfirmModal}
+        deleteConfirmModal={PaymentLifecycleConfirmModal}
+        deleteConfirmModalProps={{"dir":"in"}}
         statusEnumLabels={{"RPAP":"statusDraft","RPR":"cobroDepositado","RDNC":"cobroDepositado","RPPC":"cobroDepositado","PPM":"cobroDepositado","PWNC":"cobroDepositado"}}
         statusFieldLabel="statusColumnLabel"
         sendDocument
