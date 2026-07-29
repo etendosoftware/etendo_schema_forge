@@ -88,9 +88,9 @@ Three steps (0-based index):
 
 The top of the Boxes tab shows the declaration type selector and, conditionally, the bank data section (`datos_bancarios`).
 
-**`tipo_declaracion` options:** `C` (Complementaria), `D` (Devolución), `I` (Ingreso), `U` (Cuota cero), `N` (Sin resultado), `V` (Domiciliación — IVA), `X` (Domiciliación — extranjero).
+**`tipo_declaracion` options:** `C` (Compensación), `D` (Devolución), `I` (Ingreso), `U` (Domiciliación), `N` (Resultado cero), `V` (Devolución cta. corriente), `X` (Devolución transferencia extranjero).
 
-**`datos_bancarios` visibility** (`sectionVisibleWhen`): shown only when `tipo_declaracion ∈ {U, D, X}` — the only types AEAT allows an IBAN for (error `EDID065` rejects the submission if IBAN is present for any other tipo, e.g. `I`). Hidden for `C`, `G`, `I`, `N`, `V`.
+**`datos_bancarios` visibility** (`sectionVisibleWhen`): shown only when `tipo_declaracion ∈ {U, D, X}` — the only types AEAT allows an IBAN for (error `EDID065` rejects the submission if IBAN is present for any other tipo, e.g. `I`). Hidden for `C`, `I`, `N`, `V`.
 
 **Section title** varies by tipo:
 - `D`, `X` → "Devolución"
