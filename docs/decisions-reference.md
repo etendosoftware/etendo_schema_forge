@@ -88,6 +88,7 @@ Per-locale field label overrides. When the simplified interface needs to rename 
 | `hideDelete` | boolean | `false` | — | Disables the CRUD delete capability at the contract/API level — emits `apiPrediction.crud.<entity>.delete: false` in `contract.json` for the window's entities. This is an **API-level** declaration only; it does not by itself remove the delete button/icon from the UI (see `hideDeleteButton` below for that). Used for master-data windows whose records are provisioned/retired outside the app (e.g. `tax`, `tax-category`, `open-close-period-control`). |
 | `hideDeleteWhenComplete` | boolean | `false` | — | Hides the delete button in the detail view when the document status is not Draft. Prevents accidental deletion of completed/processed records. |
 | `hideDeleteButton` | boolean | `false` | — | **Unconditionally** hides the Delete (trash) button/icon in **both** the detail view toolbar and the list-row hover quick actions, for every record regardless of status. Distinct from `hideDelete` (which only disables the CRUD delete capability declared in `contract.json`/the API) — use `hideDeleteButton` when you also need to remove the UI affordance. Use this instead of `hideDeleteWhenComplete` when Delete should never be available, not just once the document leaves Draft; when set, `hideDeleteWhenComplete` becomes redundant (the button is always hidden). When `false`/absent, delete visibility is unchanged. |
+| `deleteAction` | string | `null` | Any NEO action name | NEO action the header Delete (trash) button calls **instead of** a plain `DELETE`, for windows whose record cannot be removed once it has been referenced (FK constraints) — the action reactivates and removes it server-side. Example: `"eTPRRemovePayment"` for `payment-in` / `payment-out`. When `null`, the button issues a normal delete. ⚠️ **Emitted by the generator but not yet consumed** — `DetailView.jsx` still resolves this from an internal per-window table; the prop wins over that table once the component half of ETP-4708 lands. |
 | `customComponents` | object | `null` | See below | Override generated components with custom ones from `artifacts/{window}/custom/`. The generator emits the correct imports and props automatically. |
 | `menuActions` | array | `[]` | See below | Additional actions in the detail view's "more" menu (triple dot). Each action can have visibility conditions based on document status. |
 | `newActions` | array | `[]` | See below | Additional actions in the split "New" button dropdown in the list view. Each action can optionally open a custom modal component. |
@@ -217,6 +218,7 @@ Adds a generic "Attachments" tab to the detail view, sitting alongside the stand
 | `enabled` | boolean | `true` | Master toggle. Set to `false` for the same effect as `attachments: false`. |
 | `maxSizeMB` | number | `10` | Max file size enforced client-side before upload. The NEO servlet has its own hard limit of 10 MB (`MultipartConfig`); raising this beyond 10 will surface a server error. |
 | `allowedMimeTypes` | string[] | `undefined` (any) | MIME-type allow-list applied client-side. Supports wildcards like `"image/*"`, `"application/*"`. When omitted, every MIME type is accepted. |
+| `icon` | string | `undefined` (default glyph) | Optional icon for the Attachments tab, as a logical name. See **Tab Icons** under Custom Panel Tabs. Only meaningful in the extended (object) form. |
 
 **Note:** the frontend resolves the target `tableName` from `frontendContract.entities.header.tableName` automatically — you do **not** configure it in `decisions.json`. The tab does a lazy fetch on activation (no request until the user opens it). Backend storage uses the standard Etendo `AttachImplementationManager` and the `C_FILE` table.
 
@@ -239,8 +241,42 @@ Use this when a window needs supplementary panels (e.g., a pricing breakdown, a 
 | `key` | string | Unique tab identifier. Used as the tab's `key` prop. |
 | `labelKey` | string | i18n key resolved through `useUI()`. Rendered as the tab label. |
 | `component` | string | Component name from `tools/app-shell/src/windows/custom/{window}/`. The generator imports it automatically. |
+| `icon` | string | Optional tab icon. See **Tab Icons** below. Omit to keep the default. |
 
 **Note:** Use `customTabsAfterBottom: true` alongside this property to position the custom tabs after the standard bottom section (lines, notes, etc.) rather than interleaved with primary tabs.
+
+### Extra Tabs (`window.extraTabs`)
+
+Same shape and behaviour as `customPanelTabs` — a second array feeding the same bottom tab strip. Both are emitted through the same generator path; `extraTabs` is the one invoice windows use for their SIF tab.
+
+```json
+{
+  "extraTabs": [
+    { "key": "sif", "labelKey": "sifDataTabs.sectionTitle", "component": "SifTab", "icon": "shield" }
+  ]
+}
+```
+
+| Property | Type | Purpose |
+|----------|------|---------|
+| `key` | string | Unique tab identifier. |
+| `labelKey` | string | i18n key for the tab label. Use `label` for a literal string instead. |
+| `component` | string | Component name, resolved like any other custom component. |
+| `icon` | string | Optional tab icon. See **Tab Icons** below. |
+
+### Tab Icons (`icon` on any tab)
+
+Any tab descriptor — `customPanelTabs[]`, `extraTabs[]`, or `attachments` — may declare an `icon`. Omit it and the tab keeps the shared component's default (a generic list glyph), so **existing windows regenerate byte-identical**.
+
+```json
+{ "key": "sif", "labelKey": "sifDataTabs.sectionTitle", "component": "SifTab", "icon": "shield" }
+```
+
+**The value is a LOGICAL name, never an icon library's export name.** Write `"shield"`, `"attachment"`, `"pricing"`, `"warehouse-products"` — not `"Shield"` or any `lucide-react` / `@phosphor-icons/react` identifier. The shared component owns the name → component mapping.
+
+This matters because `decisions.json` is a contract that regenerates into every window, and the app is mid-migration from lucide to Phosphor (`SideMenu.jsx` imports from both, and its icon map is a compatibility shim). Baking library names into per-window config would turn finishing that migration into a rewrite of every affected `decisions.json` plus a full regen; with logical names it stays a change in one resolver file. Unknown names fall back to the default glyph rather than erroring.
+
+⚠️ **Emitted but not yet consumed** — the shared component still resolves tab icons from an internal table keyed by tab name; it will read this property once the component half of ETP-4708 lands.
 
 ### Secondary Tabs (`window.secondaryTabs.{tab}.*`)
 
@@ -413,6 +449,8 @@ Override generated components with custom implementations from `artifacts/{windo
 | `headerTable` | string | Custom table component name. Replaces the generated `{Entity}Table` import. File must exist at `artifacts/{window}/custom/{value}.jsx`. |
 | `bottomSection` | string | Custom bottom panel component. Replaces the default totals + footer layout. Receives `recordId`, `data`, `token`, `apiBaseUrl`, `api`, `summary`, `notesField`, `onFieldChange`, `notesFocused`, `setNotesFocused`. |
 | `topbarRight` | string | Custom component rendered on the right side of the detail topbar (before icon buttons). Receives `data`, `recordId`, `token`, `apiBaseUrl`, `api`, `onProcess`. When present, the default status badge is hidden. |
+| `deleteConfirmModal` | string | Rich confirmation "cartel" shown when the user deletes the header record, replacing the generic delete `Dialog`. Used by payments, whose cartel lists conditional Conciliación / Asiento items. Receives `action="delete"`, `data`, `onConfirm`, `onClose`, plus everything in `deleteConfirmModalProps`. Resolved like any other custom component, so a shared one under `tools/app-shell/src/windows/custom/shared/` works too. ⚠️ **Emitted but not yet consumed** — see `deleteAction` above. |
+| `deleteConfirmModalProps` | object | Extra props forwarded verbatim to `deleteConfirmModal` — e.g. `{ "dir": "in" }` to select cobro vs pago wording. **Only emitted when `deleteConfirmModal` is also declared**, so the payload can never be orphaned (same nesting rule as `sidePanelStyle` under `sidePanel`). |
 
 ### Menu Actions (`window.menuActions`)
 
