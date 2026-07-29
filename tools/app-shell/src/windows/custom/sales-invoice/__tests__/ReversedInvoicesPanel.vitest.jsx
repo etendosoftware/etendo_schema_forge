@@ -15,6 +15,19 @@ vi.mock('@/i18n', () => ({
   useLocaleSwitch: () => ({ locale: 'es_ES', setLocale: () => {} }),
 }));
 
+// ETP-4536 / ETP-4548: the panel is now SIF-aware — it reads useAuth (for the
+// org) and useFiscalConfig (for the SIF profile). Mock both so the existing
+// fetch-driven suite is unaffected. `fiscalState` lets a test flip the profile:
+//   - a real profile (e.g. 'sii') → SIF configured → non-rectificative restricted
+//   - 'unconfigured'              → no SIF          → restriction lifted
+let fiscalState = { profile: 'sii', loading: false };
+vi.mock('@/auth/AuthContext.jsx', () => ({
+  useAuth: () => ({ selectedOrg: { id: 'org-1' } }),
+}));
+vi.mock('@/windows/custom/fiscal-config/useFiscalConfig.js', () => ({
+  useFiscalConfig: () => fiscalState,
+}));
+
 import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import ReversedInvoicesPanel from '../ReversedInvoicesPanel.jsx';
@@ -92,6 +105,9 @@ function findYearSelect() {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  // Default: a SIF is configured, so the non-rectificative restriction applies
+  // (mirrors the backend gate). Individual tests override fiscalState as needed.
+  fiscalState = { profile: 'sii', loading: false };
 });
 
 // TC-01/TC-02 (tab visibility gating) intentionally NOT covered: the tab stays
@@ -350,20 +366,86 @@ describe('TC-10 — Periodo offers exactly the 17 AEAT period codes', () => {
 // TC-13 — non-rectificative invoices never get add actions
 // ---------------------------------------------------------------------------
 
-describe('TC-13 — isRectificative=false blocks add/delete inside the panel', () => {
-  it('TC-13: empty state renders without the add button', async () => {
+// ETP-4536 / ETP-4548: the non-rectificative restriction is now SIF-conditional.
+// The DB function ETSG_CHECK_RECTIF_INV_DOC only enforces the rectificative
+// doc-type/rectifications consistency when the org is SIF-enrolled, so the panel
+// must gate its own restriction the same way. With a SIF configured the panel is
+// still strict (TC-13); with NO SIF the restriction is lifted.
+//
+// Follow-up fix: `isRectificative` is only backend-enriched on a detail GET, so
+// on a new form / right after a save it is `undefined`, not `false`. The panel
+// now treats ONLY an explicit `true` as rectificative — undefined/null/false all
+// count as non-rectificative. With a SIF that means unknown → read-only
+// (add button hidden) until a detail GET resolves it to `true` ("lines-first").
+describe('TC-13 — non-rectificative (incl. undefined) blocks add/delete only when a SIF is configured', () => {
+  it('TC-13: empty state renders without the add button (SIF configured, isRectificative=false)', async () => {
+    fiscalState = { profile: 'sii', loading: false };
     renderPanel({ data: { isRectificative: false } });
 
     expect(await screen.findByText('rectEmptyTitle')).toBeInTheDocument();
     expect(screen.queryByTestId('btn__addFirstRectificacion')).not.toBeInTheDocument();
   });
 
-  it('TC-13: with existing rows, the "Añadir factura rectificada" link and delete are absent', async () => {
+  it('TC-13: with existing rows and a SIF, the "Añadir factura rectificada" link and delete are absent', async () => {
+    fiscalState = { profile: 'sii', loading: false };
     renderPanel({ lines: [LINE()], data: { isRectificative: false } });
     await screen.findAllByText('10000067');
 
     expect(screen.queryByTestId('btn__addReversedInvoice')).not.toBeInTheDocument();
     expect(screen.queryByText('rectAddInvoice')).not.toBeInTheDocument();
     expect(screen.queryByTestId('btn__deleteLine')).not.toBeInTheDocument();
+  });
+
+  it('TC-13: SIF configured + isRectificative UNDEFINED (new/just-saved, not yet enriched) → NO add button', async () => {
+    fiscalState = { profile: 'sii', loading: false };
+    renderPanel({ data: { isRectificative: undefined } });
+
+    expect(await screen.findByText('rectEmptyTitle')).toBeInTheDocument();
+    expect(screen.queryByTestId('btn__addFirstRectificacion')).not.toBeInTheDocument();
+  });
+
+  it('TC-13: SIF configured + isRectificative TRUE → add button shown', async () => {
+    fiscalState = { profile: 'sii', loading: false };
+    renderPanel({ data: { isRectificative: true } });
+
+    expect(await screen.findByTestId('btn__addFirstRectificacion')).toBeInTheDocument();
+  });
+
+  it('TC-13: while fiscal config is still loading, a non-rectificative doc stays restricted (no add-button flash)', async () => {
+    fiscalState = { profile: null, loading: true };
+    renderPanel({ data: { isRectificative: false } });
+
+    expect(await screen.findByText('rectEmptyTitle')).toBeInTheDocument();
+    expect(screen.queryByTestId('btn__addFirstRectificacion')).not.toBeInTheDocument();
+  });
+
+  it('TC-13 (no SIF): a non-rectificative invoice DOES show the add button — restriction lifted', async () => {
+    fiscalState = { profile: 'unconfigured', loading: false };
+    renderPanel({ data: { isRectificative: false } });
+
+    expect(await screen.findByTestId('btn__addFirstRectificacion')).toBeInTheDocument();
+  });
+
+  it('TC-13 (no SIF): isRectificative UNDEFINED still shows the add button — restriction lifted', async () => {
+    fiscalState = { profile: 'unconfigured', loading: false };
+    renderPanel({ data: { isRectificative: undefined } });
+
+    expect(await screen.findByTestId('btn__addFirstRectificacion')).toBeInTheDocument();
+  });
+
+  it('TC-13 (no SIF): isRectificative TRUE shows the add button', async () => {
+    fiscalState = { profile: 'unconfigured', loading: false };
+    renderPanel({ data: { isRectificative: true } });
+
+    expect(await screen.findByTestId('btn__addFirstRectificacion')).toBeInTheDocument();
+  });
+
+  it('TC-13 (no SIF): with existing rows the add link and delete are available', async () => {
+    fiscalState = { profile: 'unconfigured', loading: false };
+    renderPanel({ lines: [LINE()], data: { isRectificative: false } });
+    await screen.findAllByText('10000067');
+
+    expect(screen.getByTestId('btn__addReversedInvoice')).toBeInTheDocument();
+    expect(screen.getByTestId('btn__deleteLine')).toBeInTheDocument();
   });
 });

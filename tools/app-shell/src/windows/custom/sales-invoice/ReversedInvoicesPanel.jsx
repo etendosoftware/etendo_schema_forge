@@ -1,6 +1,8 @@
 import React, { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import { ChevronDown, FileText, Loader2, Plus, Search, Trash2, Info } from 'lucide-react';
 import { useUI, useLabel, useLocaleSwitch } from '@/i18n';
+import { useAuth } from '@/auth/AuthContext.jsx';
+import { useFiscalConfig } from '@/windows/custom/fiscal-config/useFiscalConfig.js';
 
 /* eslint-disable react/prop-types */
 
@@ -547,6 +549,18 @@ export default function ReversedInvoicesPanel({
 }) {
   const ui = useUI();
 
+  // ETP-4536 / ETP-4548: the backend (ETSG_CHECK_RECTIF_INV_DOC) only enforces
+  // the rectificative doc-type/rectifications consistency when the invoice's org
+  // is SIF-enrolled (AD_ORGINFO.EM_ETSG_HAS_{SII,TBAI,VFACTU}_CONFIG='Y').
+  // With no SIF configured the backend does NOT restrict adding rectifications to
+  // a non-rectificative document, so this panel must gate its non-rectificative
+  // restriction on a SIF being configured — otherwise the UI is stricter than the
+  // relaxed backend. Sourced the same way sales-invoice/index.jsx derives it.
+  const { selectedOrg } = useAuth();
+  const orgId = selectedOrg?.id ?? null;
+  const { profile, loading: fiscalLoading } = useFiscalConfig(orgId, apiBaseUrl);
+  const sifConfigured = !!profile && profile !== 'unconfigured';
+
   const [lines, setLines] = useState([]);
   const [loading, setLoading] = useState(false);
   const [expandedId, setExpandedId] = useState(null);
@@ -760,11 +774,22 @@ export default function ReversedInvoicesPanel({
   // ── read-only check ────────────────────────────────────────────────────────
   const processed = data?.processed === 'Y' || data?.processed === true;
   const isVoid = data?.documentStatus === 'VO';
-  // TC-13: non-rectificative invoices (isRectificative explicitly false) never
-  // get add/edit/delete — only explicit false blocks, so unsaved records
-  // (field not yet enriched by the backend) keep the actions
-  const notRectificative = data?.isRectificative === false || data?.isRectificative === 'false';
-  const isReadOnly = (processed && !isVoid) || notRectificative;
+  // TC-13: non-rectificative invoices never get add/edit/delete when a SIF gates
+  // the flow. `isRectificative` is only enriched by the backend on a detail GET
+  // (SalesInvoiceHeaderHandler.afterHandle runs enrichIsRectificative only when a
+  // recordId is present), so on a brand-new form and right after a POST/PUT the
+  // field is `undefined`, not `false`. Treat ONLY an explicit `true` as
+  // rectificative — unknown (undefined/null) and `false` all count as
+  // non-rectificative. This enforces "create lines first, then rectifications":
+  // the add button only appears once isRectificative resolves to `true` via a
+  // detail GET, so we never assume rectificative when the value is not yet known.
+  const notRectificative = data?.isRectificative !== true && data?.isRectificative !== 'true';
+  // The non-rectificative restriction only applies when a SIF is configured
+  // (ETP-4536 / ETP-4548). While fiscal config is still loading, treat it as
+  // active for a non-rectificative doc so we never flash the add button on a
+  // SIF-enrolled invoice before the profile resolves.
+  const sifRestrictionActive = notRectificative && (sifConfigured || fiscalLoading);
+  const isReadOnly = (processed && !isVoid) || sifRestrictionActive;
 
   // ── render ─────────────────────────────────────────────────────────────────
   const showEmptyState = !loading && lines.length === 0 && !addingLine;

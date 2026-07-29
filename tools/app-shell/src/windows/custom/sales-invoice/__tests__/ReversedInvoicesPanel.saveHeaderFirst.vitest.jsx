@@ -13,6 +13,20 @@ vi.mock('@/i18n', () => ({
   useLocaleSwitch: () => ({ locale: 'es_ES', setLocale: () => {} }),
 }));
 
+// ETP-4536 / ETP-4548: the panel is now SIF-aware (reads useAuth + useFiscalConfig).
+// This save-header-first suite only exercises rectificative/new invoices, so a
+// stable configured profile is enough to keep the real hooks (and their fetches)
+// out of the way. Since the add button is gated on notRectificative (undefined /
+// null / false all count as non-rectificative under a SIF), the new-record data
+// carries an explicit isRectificative:true — a save-header-first flow only exists
+// for a rectificative NC being created from scratch.
+vi.mock('@/auth/AuthContext.jsx', () => ({
+  useAuth: () => ({ selectedOrg: { id: 'org-1' } }),
+}));
+vi.mock('@/windows/custom/fiscal-config/useFiscalConfig.js', () => ({
+  useFiscalConfig: () => ({ profile: 'sii', loading: false }),
+}));
+
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import ReversedInvoicesPanel from '../ReversedInvoicesPanel.jsx';
@@ -62,7 +76,7 @@ function renderNewPanel({ onSaveHeader, onGoToSavedRecord, ...fetchOpts } = {}) 
   return render(
     <ReversedInvoicesPanel
       recordId="new"
-      data={{ documentStatus: 'DR' }}
+      data={{ documentStatus: 'DR', isRectificative: true }}
       token="tkn"
       apiBaseUrl={API_BASE}
       api={{}}
