@@ -87,6 +87,75 @@ function ListFilterBarSection(props) {
   );
 }
 
+/**
+ * The list's table region, in either of its two wrappers.
+ *
+ * Default: a ScrollPane that owns the scroll and drives infinite loading, showing
+ * skeletons on the initial fetch and the gallery renderer when that view mode is on.
+ *
+ * `ownScroll`: skip the ScrollPane entirely and hand the table a bounded flex box, for
+ * a custom headerTable that scrolls one of its own regions (e.g. financial-account pins
+ * its toolbar and KPI panel and scrolls only the rows). Wrapping such a table in the
+ * ScrollPane gives it a SECOND, outer scroll that drags the pinned parts away, plus
+ * ScrollPane's always-visible shadow scrollbar. Infinite scroll (`onReachBottom`)
+ * belongs to the ScrollPane, so it is inert in this mode — the table owns paging if it
+ * needs it. This branch also forwards `loading`, since there is no skeleton wrapper
+ * around it to stand in for the initial fetch.
+ *
+ * Extracted from ListView for two reasons: the ~28 `Table` props were written out once
+ * per branch (Sonar flagged the duplicated block), and the branches counted towards
+ * ListView's cognitive complexity. `tableProps` is built by the caller, where the
+ * handlers are in scope, and lands here as a single object.
+ */
+function ListTableRegion({
+  ownScroll, Table, tableProps, hook, ui, tablePaddingX, tablePaddingBottom,
+  onReachBottom, viewMode, galleryRenderer, navigate, windowName, token, apiBaseUrl,
+}) {
+  if (ownScroll) {
+    return (
+      <div className={`flex min-h-0 flex-1 flex-col ${tablePaddingX}`} data-testid="list-table-region">
+        <div
+          className={tableOpacityClass(hook)}
+          style={{ display: 'flex', minHeight: 0, flex: 1, flexDirection: 'column' }}>
+          <Table {...tableProps} loading={hook.loading} data-testid="Table__620cbc" />
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <ScrollPane
+      onReachBottom={onReachBottom}
+      className={`${tablePaddingX} ${tablePaddingBottom}`}
+      data-testid="ScrollPane__620cbc">
+      {hook.loading && hook.items.length === 0 ? (
+        <div className="space-y-3">
+          <Skeleton className="h-10 w-full" data-testid="Skeleton__620cbc" />
+          <Skeleton className="h-8 w-full" data-testid="Skeleton__620cbc" />
+          <Skeleton className="h-8 w-full" data-testid="Skeleton__620cbc" />
+          <Skeleton className="h-8 w-full" data-testid="Skeleton__620cbc" />
+        </div>
+      ) : (
+        <div className={tableOpacityClass(hook)}>
+          {viewMode === 'gallery' && galleryRenderer
+            ? galleryRenderer({ data: hook.items, onNavigate: (id) => navigate(`/${windowName}/${id}`), token, apiBaseUrl })
+            : <Table {...tableProps} data-testid="Table__620cbc" />
+          }
+          {hook.loadingMore && (
+            <div className="flex items-center justify-center py-4">
+              <div className="h-5 w-5 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
+              <span className="ml-2 text-sm text-muted-foreground">{ui('loadingMore')}</span>
+            </div>
+          )}
+          {!hook.hasMore && hook.items.length > 0 && !hook.loadingMore && (
+            <p className="text-center text-xs text-muted-foreground/60 py-3">{ui('allRecordsLoaded')}</p>
+          )}
+        </div>
+      )}
+    </ScrollPane>
+  );
+}
+
 function SortToggleButton({ SortIconComponent, isDefaultSort, iconButtonHover, onToggle }) {
   const SortEl = SortIconComponent || ArrowUpDown;
   return (
@@ -632,13 +701,55 @@ export function ListView({
     if (hook.hasMore && !hook.loadingMore) hook.loadMore();
   }, [hook.hasMore, hook.loadingMore, hook.loadMore]);
 
+  // A custom headerTable that renders the window's whole toolbar itself needs the native
+  // list bar dropped entirely — the individual hide* flags leave an empty padded strip
+  // behind, since sort/refresh have no flag of their own.
+  const listBarHidden = listViewOptions?.hideListBar ?? hideListBar;
+
+  // Everything the Table needs, in one object, because ListTableRegion renders it from
+  // either of two wrappers and these used to be written out once per branch. `meta` is
+  // the same list-response envelope `headerContent` gets: a custom headerTable that
+  // renders its own aggregate panel (e.g. financial-account's balance sidebar) needs it
+  // here, since that panel lives inside the table slot rather than above it.
+  const tableProps = {
+    entity,
+    specName: windowName,
+    data: hook.items,
+    meta: hook.meta,
+    onNavigate: buildRowNavigateHandler(renderPreview, setPreviewRow, navigate, windowName),
+    onSelectionChange: setSelectedRows,
+    onDataMutated: hook.refresh,
+    isRowSelectable,
+    compact: false,
+    sortColumn: hook.sortColumn,
+    sortDirection: hook.sortDirection,
+    onSort: handleColumnSort,
+    onColumnsReady: setTableColumns,
+    api,
+    token,
+    apiBaseUrl,
+    labelOverrides,
+    onFilterChange: handleFilterChange,
+    onClearAllFilters: handleClearAllFilters,
+    columnFilters,
+    onCloneRow,
+    rowFilter: effectiveRowFilter,
+    hoverRowActions,
+    clearSelectionTrigger: clearSelectionCounter,
+    rowQuickActions: effectiveRowQuickActions,
+    hiddenColumns,
+  };
+
   return (
     <>
       <div className="flex-1 min-h-0 flex flex-col" data-testid="list-view">
         {/* White content card with rounded top-left corner */}
         <div className="flex-1 flex flex-col bg-card rounded-tl-2xl overflow-hidden min-h-0">
           {/* Selection bar or filter bar */}
-          {(listViewOptions?.hideListBar ?? hideListBar) ? null : selectedRows.length > 0 ? (
+          {/* Selection bar when rows are picked, otherwise the filter bar. Kept as a
+              plain `&&` around a single ternary: nesting one ternary inside another
+              here is what Sonar S3358 flags. */}
+          {!listBarHidden && (selectedRows.length > 0 ? (
             <div className={`flex items-center justify-between ${listbarPaddingX} ${listbarPaddingY} border-b border-border/30`}>
               <div className="flex items-center gap-3 h-10">
                 <span role="status" className="text-sm font-semibold" data-testid="selection-count">{ui('selected').replace('{count}', selectedRows.length)}</span>
@@ -878,7 +989,7 @@ export function ListView({
                 )}
               </div>
             </div>
-          )}
+          ))}
 
           {/* KPI / header content */}
           {headerContent && (
@@ -902,113 +1013,24 @@ export function ListView({
             </>
           )}
 
-          {/* Table.
-              `tableOwnsScroll`: skip the ScrollPane entirely and hand the Table a
-              bounded flex box instead, for a custom headerTable that scrolls one of
-              its own regions (e.g. financial-account keeps its toolbar and KPI panel
-              pinned and scrolls only the rows). Wrapping such a table in the
-              ScrollPane gives it a SECOND, outer scroll that drags the pinned parts
-              away, plus ScrollPane's always-visible shadow scrollbar. Infinite scroll
-              (`onReachBottom`) belongs to the ScrollPane, so it is inert in this mode —
-              the table owns paging if it needs it. */}
-          {(listViewOptions?.tableOwnsScroll ?? tableOwnsScroll) ? (
-            <div className={`flex min-h-0 flex-1 flex-col ${tablePaddingX}`} data-testid="list-table-region">
-              <div className={tableOpacityClass(hook)} style={{ display: 'flex', minHeight: 0, flex: 1, flexDirection: 'column' }}>
-                <Table
-                  entity={entity}
-                  specName={windowName}
-                  data={hook.items}
-                  meta={hook.meta}
-                  onNavigate={buildRowNavigateHandler(renderPreview, setPreviewRow, navigate, windowName)}
-                  onSelectionChange={setSelectedRows}
-                  onDataMutated={hook.refresh}
-                  isRowSelectable={isRowSelectable}
-                  compact={false}
-                  sortColumn={hook.sortColumn}
-                  sortDirection={hook.sortDirection}
-                  onSort={handleColumnSort}
-                  onColumnsReady={setTableColumns}
-                  api={api}
-                  token={token}
-                  apiBaseUrl={apiBaseUrl}
-                  labelOverrides={labelOverrides}
-                  onFilterChange={handleFilterChange}
-                  onClearAllFilters={handleClearAllFilters}
-                  columnFilters={columnFilters}
-                  onCloneRow={onCloneRow}
-                  rowFilter={effectiveRowFilter}
-                  hoverRowActions={hoverRowActions}
-                  clearSelectionTrigger={clearSelectionCounter}
-                  rowQuickActions={effectiveRowQuickActions}
-                  hiddenColumns={hiddenColumns}
-                  loading={hook.loading}
-                  data-testid="Table__620cbc" />
-              </div>
-            </div>
-          ) : (
-          <ScrollPane
+          {/* Table region (ScrollPane, or a bounded flex box when the table owns its
+              own scroll) — see ListTableRegion for the full rationale. */}
+          <ListTableRegion
+            ownScroll={listViewOptions?.tableOwnsScroll ?? tableOwnsScroll}
+            Table={Table}
+            tableProps={tableProps}
+            hook={hook}
+            ui={ui}
+            tablePaddingX={tablePaddingX}
+            tablePaddingBottom={tablePaddingBottom}
             onReachBottom={handleReachBottom}
-            className={`${tablePaddingX} ${tablePaddingBottom}`}
-            data-testid="ScrollPane__620cbc">
-            {hook.loading && hook.items.length === 0 ? (
-              <div className="space-y-3">
-                <Skeleton className="h-10 w-full" data-testid="Skeleton__620cbc" />
-                <Skeleton className="h-8 w-full" data-testid="Skeleton__620cbc" />
-                <Skeleton className="h-8 w-full" data-testid="Skeleton__620cbc" />
-                <Skeleton className="h-8 w-full" data-testid="Skeleton__620cbc" />
-              </div>
-            ) : (
-              <div className={tableOpacityClass(hook)}>
-                {viewMode === 'gallery' && galleryRenderer
-                  ? galleryRenderer({ data: hook.items, onNavigate: (id) => navigate(`/${windowName}/${id}`), token, apiBaseUrl })
-                  : (
-                    <Table
-                      entity={entity}
-                      specName={windowName}
-                      data={hook.items}
-                      // Same list-response envelope `headerContent` gets. A custom
-                      // headerTable that renders its own aggregate panel (e.g.
-                      // financial-account's balance sidebar) needs it here, since the
-                      // panel lives inside the table slot rather than above it.
-                      meta={hook.meta}
-                      onNavigate={buildRowNavigateHandler(renderPreview, setPreviewRow, navigate, windowName)}
-                      onSelectionChange={setSelectedRows}
-                      onDataMutated={hook.refresh}
-                      isRowSelectable={isRowSelectable}
-                      compact={false}
-                      sortColumn={hook.sortColumn}
-                      sortDirection={hook.sortDirection}
-                      onSort={handleColumnSort}
-                      onColumnsReady={setTableColumns}
-                      api={api}
-                      token={token}
-                      apiBaseUrl={apiBaseUrl}
-                      labelOverrides={labelOverrides}
-                      onFilterChange={handleFilterChange}
-                      onClearAllFilters={handleClearAllFilters}
-                      columnFilters={columnFilters}
-                      onCloneRow={onCloneRow}
-                      rowFilter={effectiveRowFilter}
-                      hoverRowActions={hoverRowActions}
-                      clearSelectionTrigger={clearSelectionCounter}
-                      rowQuickActions={effectiveRowQuickActions}
-                      hiddenColumns={hiddenColumns}
-                      data-testid="Table__620cbc" />
-                  )
-                }
-                {hook.loadingMore && (
-                  <div className="flex items-center justify-center py-4">
-                    <div className="h-5 w-5 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
-                    <span className="ml-2 text-sm text-muted-foreground">{ui('loadingMore')}</span>
-                  </div>
-                )}
-                {!hook.hasMore && hook.items.length > 0 && !hook.loadingMore && (
-                  <p className="text-center text-xs text-muted-foreground/60 py-3">{ui('allRecordsLoaded')}</p>
-                )}
-              </div>
-            )}
-          </ScrollPane>
-          )}
+            viewMode={viewMode}
+            galleryRenderer={galleryRenderer}
+            navigate={navigate}
+            windowName={windowName}
+            token={token}
+            apiBaseUrl={apiBaseUrl}
+            data-testid="ListTableRegion__620cbc" />
         </div>
         <ReportDrawer
           open={showReport}

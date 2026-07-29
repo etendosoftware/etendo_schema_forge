@@ -314,7 +314,10 @@ function normalizeRows(rows, entityName) {
 function extractResponseMeta(data) {
     const envelope = data?.response;
     if (!envelope || typeof envelope !== 'object') return null;
-    const { data: _rows, ...rest } = envelope;
+    // Copy-then-delete rather than destructuring `data` into a throwaway binding, which
+    // reads as an unused variable (Sonar S1481).
+    const rest = { ...envelope };
+    delete rest.data;
     return Object.keys(rest).length > 0 ? rest : null;
 }
 
