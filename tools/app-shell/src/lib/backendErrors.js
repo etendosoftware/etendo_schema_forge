@@ -29,11 +29,45 @@ const BACKEND_ERROR_MAP = {
   'Only one product category can be marked as default.': 'backendError.productCategoryCannotSetMultipleDefault',
 };
 
+// Parameterized matchers — for backend messages that embed a dynamic value (e.g. a
+// Business Partner name) instead of being a single fixed exact string, so they can't
+// live in BACKEND_ERROR_MAP's exact-match lookup.
+//
+// These two skeletons come from core Etendo's `@InvalidAccount@` AD_MESSAGE
+// ("Account could not be found.") enriched server-side (ETP-4706,
+// `DocumentPostingService#enrichWithFailingEntity`) with the transaction's Business
+// Partner / BP Group via the `ETGO_InvalidAccountBpAndGroup` / `ETGO_InvalidAccountBpOnly`
+// AD_MESSAGE catalog entries — en_US only (no es_ES AD_MESSAGE_TRL exists for a
+// non-translation-pack module like com.etendoerp.go). Matched here and re-rendered with
+// the frontend's own i18n so the enrichment suffix is translated too.
+// Order matters: try the more specific (BP + Group) pattern before the BP-only one.
+const ACCOUNT_NOT_FOUND_BP_AND_GROUP = /^Account could not be found\.\s*\(Business Partner:\s*(.+?),\s*BP Group:\s*(.+?)\)$/;
+const ACCOUNT_NOT_FOUND_BP_ONLY = /^Account could not be found\.\s*\(Business Partner:\s*(.+?)\)$/;
+
+function translateParameterized(msg, t) {
+  const bpAndGroup = ACCOUNT_NOT_FOUND_BP_AND_GROUP.exec(msg);
+  if (bpAndGroup) {
+    const key = 'backendError.invalidAccountBpAndGroup';
+    const translated = t(key, { bp: bpAndGroup[1], group: bpAndGroup[2] });
+    return (translated && translated !== key) ? translated : null;
+  }
+  const bpOnly = ACCOUNT_NOT_FOUND_BP_ONLY.exec(msg);
+  if (bpOnly) {
+    const key = 'backendError.invalidAccountBpOnly';
+    const translated = t(key, { bp: bpOnly[1] });
+    return (translated && translated !== key) ? translated : null;
+  }
+  return null;
+}
+
 export function translateBackendError(msg, t) {
   if (!msg || typeof t !== 'function') return msg;
-  const key = BACKEND_ERROR_MAP[msg.trim()];
-  if (!key) return msg;
-  const translated = t(key);
-  // Guard: if t() returns the key itself the translation is missing — keep original
-  return (translated && translated !== key) ? translated : msg;
+  const trimmed = msg.trim();
+  const key = BACKEND_ERROR_MAP[trimmed];
+  if (key) {
+    const translated = t(key);
+    // Guard: if t() returns the key itself the translation is missing — keep original
+    return (translated && translated !== key) ? translated : msg;
+  }
+  return translateParameterized(trimmed, t) ?? msg;
 }
