@@ -193,11 +193,23 @@ If a generated Page component has hardcoded tab structure that doesn't match any
 
 If a PR adds new fields to `decisions.json` without updating `docs/decisions-reference.md`, that's a WARNING — the reference doc is the guide for what can be configured.
 
-### Shared Component Changes (WARNING)
-Changes to `tools/app-shell/src/components/contract-ui/` (DetailView, EntityForm, DataTable, etc.) must be:
+### Shared Component Changes — Blast Radius (BLOCKER)
+`tools/app-shell/src/components/contract-ui/` (DetailView, EntityForm, DataTable, etc.) is rendered by **every** window. A change there is never scoped to the window that motivated it — the risk is not breaking one window, it is breaking N. The historical reverts (`noHoverHide — broke other windows`) prove the risk is real.
+
+REJECT a PR touching that directory unless its description answers all three:
+
+1. **Blast radius** — which windows the change can reach, and why it is safe for the windows the author never opened. "Only affects window X" needs a mechanism to be credible (optional prop defaulting to today's behavior, branch unreachable without new config, …).
+2. **Why not `decisions.json`** — why the behavior could not be expressed as metadata/contract config consumed generically. A window/entity/field name compared as a string literal inside the generic is a leak, not a solution.
+3. **Mocked-E2E proof** — which `e2e/tests/flows/*.mocked.spec.js` specs were run, covering at least one window **other than** the one that motivated the change. Unit tests do not satisfy this: they render in isolation and cannot observe that another window broke.
+
+For a **refactor** of these files, the existing Vitest suites must pass **unmodified**. A refactor that needs its own golden-master test edited is not behavior-preserving — blocker until re-justified or narrowed.
+
+Still WARNING-level on top of the above:
 - **Generic** — not hardcoded for a specific window
 - **Backwards-compatible** — new props must be optional with sensible defaults
 - Verify no existing window breaks by checking that all new props have default values or guard conditions
+
+Full rule and rationale: `docs/ops/blast-radius-review.md`. Automated backstop: `make window-leak-budget` (ratchets window literals in the generics — fails only if the count grows).
 
 ### UI Change Survival Check (BLOCKER)
 **Every PR that touches UI must be verified for regeneration survival.** This is one of the most critical checks in Schema Forge.
