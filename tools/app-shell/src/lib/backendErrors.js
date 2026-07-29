@@ -45,24 +45,45 @@ const BACKEND_ERROR_MAP = {
 // AD_MESSAGE catalog entries — en_US only (no es_ES AD_MESSAGE_TRL exists for a
 // non-translation-pack module like com.etendoerp.go). Matched here and re-rendered with
 // the frontend's own i18n so the enrichment suffix is translated too.
-// Order matters: try the more specific (BP + Group) pattern before the BP-only one.
-const ACCOUNT_NOT_FOUND_BP_AND_GROUP = /^Account could not be found\.\s*\(Business Partner:\s*(.+?),\s*BP Group:\s*(.+?)\)$/;
-const ACCOUNT_NOT_FOUND_BP_ONLY = /^Account could not be found\.\s*\(Business Partner:\s*(.+?)\)$/;
+//
+// Deliberately plain string parsing (startsWith/endsWith/lastIndexOf/slice) instead of
+// regex: a Business Partner name is user-editable data, so two back-to-back lazy
+// capture groups here would be attacker-influenced input feeding a backtracking-prone
+// pattern (flagged by SonarQube javascript:S5852 — ReDoS/DoS hotspot). Plain string ops
+// are linear-time with no backtracking, so there's no ReDoS surface at all.
+//
+// This also fixes a real mis-split bug the old regex had: `lastIndexOf` finds the LAST
+// ", BP Group: " occurrence, so a BP name that itself contains that literal substring
+// (e.g. `"Odd, BP Group: Fake, Corp"`) still splits at the correct (final) delimiter
+// instead of the first one found by a non-greedy regex scan.
+const ACCOUNT_NOT_FOUND_PREFIX = 'Account could not be found. (Business Partner: ';
+const BP_GROUP_DELIM = ', BP Group: ';
+
+function matchAccountNotFound(msg) {
+  if (!msg.startsWith(ACCOUNT_NOT_FOUND_PREFIX) || !msg.endsWith(')')) return null;
+  const inner = msg.slice(ACCOUNT_NOT_FOUND_PREFIX.length, -1);
+  if (!inner) return null;
+  const delimIdx = inner.lastIndexOf(BP_GROUP_DELIM);
+  if (delimIdx === -1) {
+    return { bp: inner, group: null };
+  }
+  const bp = inner.slice(0, delimIdx);
+  const group = inner.slice(delimIdx + BP_GROUP_DELIM.length);
+  if (!bp || !group) return null;
+  return { bp, group };
+}
 
 function translateParameterized(msg, t) {
-  const bpAndGroup = ACCOUNT_NOT_FOUND_BP_AND_GROUP.exec(msg);
-  if (bpAndGroup) {
+  const match = matchAccountNotFound(msg);
+  if (!match) return null;
+  if (match.group !== null) {
     const key = 'backendError.invalidAccountBpAndGroup';
-    const translated = t(key, { bp: bpAndGroup[1], group: bpAndGroup[2] });
+    const translated = t(key, { bp: match.bp, group: match.group });
     return (translated && translated !== key) ? translated : null;
   }
-  const bpOnly = ACCOUNT_NOT_FOUND_BP_ONLY.exec(msg);
-  if (bpOnly) {
-    const key = 'backendError.invalidAccountBpOnly';
-    const translated = t(key, { bp: bpOnly[1] });
-    return (translated && translated !== key) ? translated : null;
-  }
-  return null;
+  const key = 'backendError.invalidAccountBpOnly';
+  const translated = t(key, { bp: match.bp });
+  return (translated && translated !== key) ? translated : null;
 }
 
 export function translateBackendError(msg, t) {

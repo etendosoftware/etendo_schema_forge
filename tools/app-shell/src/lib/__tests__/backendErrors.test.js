@@ -219,6 +219,34 @@ describe('translateBackendError — parameterized "Account could not be found" (
     const t = (k) => (k === 'backendError.countryIban' ? 'Se necesita el País para una cuenta IBAN.' : k);
     assert.equal(translateBackendError(raw, t), 'Se necesita el País para una cuenta IBAN.');
   });
+
+  // ── mis-split bug: BP name itself contains the ", BP Group: " delimiter ──────────
+  //
+  // QA found that the original regex-based matcher (two back-to-back lazy `(.+?)`
+  // capture groups) split at the FIRST ", BP Group: " occurrence, so a Business
+  // Partner name that happens to contain that literal substring produced a garbled
+  // capture. The string-based rewrite uses `lastIndexOf` for the delimiter, which
+  // always finds the LAST occurrence — the correct split point, since a BP Group
+  // name legitimately containing ", BP Group: " would be a vanishingly unlikely
+  // coincidence compared to it appearing inside a BP name/free-text field.
+  it('demonstrates the old regex mis-split bug on a BP name containing ", BP Group: "', () => {
+    const raw = 'Account could not be found. (Business Partner: Odd, BP Group: Fake, Corp, BP Group: Vendors)';
+    const OLD_REGEX = /^Account could not be found\.\s*\(Business Partner:\s*(.+?),\s*BP Group:\s*(.+?)\)$/;
+    const oldMatch = OLD_REGEX.exec(raw);
+    // The old regex's non-greedy first group stops at the FIRST ", BP Group: " —
+    // producing a wrong split (bp truncated to "Odd", group swallowing the rest).
+    assert.equal(oldMatch[1], 'Odd');
+    assert.equal(oldMatch[2], 'Fake, Corp, BP Group: Vendors');
+  });
+
+  it('correctly splits at the LAST ", BP Group: " when the BP name contains that literal substring', () => {
+    const raw = 'Account could not be found. (Business Partner: Odd, BP Group: Fake, Corp, BP Group: Vendors)';
+    const result = translateBackendError(raw, en);
+    assert.equal(
+      result,
+      'Account could not be found. (Contact: Odd, BP Group: Fake, Corp, Business Partner Category: Vendors)',
+    );
+  });
 });
 
 // ── ETP-4706: costing engine "@product@" placeholder never resolves ──────────────
