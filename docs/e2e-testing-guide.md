@@ -547,6 +547,12 @@ Shared UI components (`EntityForm`, `DetailView`, `ListView`, `DataTable`) emit 
 | `row-quick-actions` | — | RowQuickActions overlay container (per row) |
 | `row-quick-action-{key}` | `row-quick-action-edit`, `-clone`, `-email`, `-more`, `-delete` | Canonical row quick-action buttons |
 | `row-quick-action-delete-confirm` | — | Destructive button inside the row delete confirm dialog |
+| `payment-confirm-modal` | — | `PaymentLifecycleConfirmModal` cartel — the rich Reactivar/Eliminar confirmation payment-in/out show **instead of** the generic delete Dialog. Its presence (and `action-delete-confirm` being absent) is what pins which confirmation a window uses |
+| `payment-confirm-title` | — | Cartel heading. Its text is the only end-to-end signal of the cartel's `dir` (cobro vs pago) |
+| `payment-confirm-accept` | — | Confirm button (dispatches the delete) |
+| `payment-confirm-cancel` | — | Cancel button |
+| `payment-confirm-close` | — | Header close (X) button |
+| `tab-icon-{iconKey}` | `tab-icon-custom:sif`, `tab-icon-lines` | Wrapper around a tab-strip icon. Carries `data-icon` (see below) — the icon itself gets no testid because the non-lucide icons accept only `className` and silently drop other props |
 | `generic-preview-modal` | — | `GenericPreviewModal` card (the right-anchored panel) |
 | `preview-drop-zone` | — | Drop zone inside GenericPreviewModal managed left panel |
 | `filter-{name}` | `filter-todos`, `filter-personas` | ListView subset filter buttons |
@@ -618,6 +624,21 @@ Document-aware components expose status via `data-*` attributes for test asserti
 | `data-doc-status` | Detail view container (`data-testid="detail-view"`) | `DR` (draft), `CO` (completed), `VO` (voided), `CL` (closed) |
 | `data-row-status` | List view rows (`data-testid="row-{id}"`) | Same as above |
 | `data-status` | Status badge (`data-testid="document-status-pill"`) | Same as above |
+
+## Tab strip attributes
+
+`TabStripButton` exposes two attributes so tab behaviour is assertable without
+querying labels:
+
+| Attribute | Element | Values |
+|-----------|---------|--------|
+| `data-active` | Tab button (`data-testid="tab-{key}"`) | `true` / `false` — the uniform "this tab is selected" signal. Custom tab panels (SifTab, ProductPriceBar) have no root testid, so this is the only cross-tab way to assert a tab was reached |
+| `data-icon` | Icon wrapper (`data-testid="tab-icon-{iconKey}"`) | Name of the resolved icon component — `Shield`, `AttachmentIcon`, `PricingIcon`, `WarehouseProductsIcon`, or `List` |
+
+**Assert `data-icon` by name, never by CSS class or SVG shape.** An unmapped tab
+key falls back to `List` rather than throwing, so a broken icon lookup is
+indistinguishable from "this tab has no icon" unless the resolved component is
+named. `custom-tab-icons.mocked.spec.js` is the golden master for this.
 
 ## Toast selectors
 
@@ -701,6 +722,53 @@ test.describe('My feature — sales-order', () => {
 ### Canonical reference
 
 `e2e/tests/flows/row-quick-actions.mocked.spec.js` covers the four pilot windows (sales-order, purchase-order, sales-invoice, purchase-invoice) and is the recommended starting point for any list-row UI test. It demonstrates: mocked list+detail endpoints, per-window expected-button matrix, hover→overlay assertion, edit-navigates-to-detail flow, and delete-opens-dialog flow.
+
+### Pitfalls that fail silently
+
+These three cost real debugging time on ETP-4708. Each one produces a passing or
+plausibly-failing run rather than an obvious error, so none of them looks like
+what it is.
+
+**`login()`'s `/session` stub omits `currencyId`.** The catch-all answers
+`/sws/neo/session` with `{ currencyCode: 'EUR' }`, but DetailView's
+currency-conversion effect reads `session.currencyId`. With the default stub that
+value is `undefined`, the effect returns early, and no conversion is ever armed —
+so any spec exercising converted line prices silently tests the un-converted path
+and passes. This is *why* the conversion branch had no E2E coverage until
+`line-callout-chain.mocked.spec.js`: a mock detail made a whole branch
+untestable, and the absence of coverage read as "not worth covering". Override
+`/session` yourself when you need a conversion:
+
+```js
+await page.route('**/sws/neo/session**', (route) => route.fulfill({
+  status: 200, contentType: 'application/json',
+  body: JSON.stringify({ currencyId: 'cur-eur-001', currencyCode: 'EUR' }),
+}));
+```
+
+**Ports 3100/3101 may belong to someone else's dev server.** `BASE_URL` defaults
+to `http://localhost:3100`. If another checkout (or another agent) is already
+serving there, your run tests *their* application and passes or fails against the
+wrong code — it never errors. When it matters which source tree you are
+measuring, start your own server on a free port and point at it explicitly:
+
+```bash
+cd tools/app-shell && npx vite --port 3111 --strictPort
+cd e2e && E2E_USE_MOCK=1 BASE_URL=http://localhost:3111 npx playwright test ...
+```
+
+`E2E_USE_MOCK=1` is required here: `login()` picks mock mode from *`BASE_URL`
+being unset*, so setting `BASE_URL` would otherwise switch it to real-backend mode.
+If you need local core sources, that server also needs `LOCAL_CORE=1` and
+`SCHEMA_FORGE_CORE=<path>` — see `docs/repo-topology.md`.
+
+**A blank page with a postcss `ENOENT` overlay is a stale Tailwind glob, not a
+test failure.** `tailwind.config.js` scans
+`node_modules/@etendosoftware/app-shell-core/src/**`. Tailwind resolves that glob
+once at startup, so if the package is reinstalled or republished while the dev
+server is running, it tries to read files that no longer exist and Vite serves an
+error overlay instead of the app. Every test then fails on "element not found",
+which looks like a broken spec. Restart the dev server; do not debug the spec.
 
 ## Mock-mode Tests (No Backend Required)
 
