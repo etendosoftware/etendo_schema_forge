@@ -469,4 +469,152 @@ describe('useEntity — creation defaults race (ETP-4741)', () => {
       expect(calls[0][1].durationMs).toBeGreaterThanOrEqual(0);
     });
   });
+
+  // ---------------------------------------------------------------------------
+  // Re-entry — double "New" click while the first defaults request is pending.
+  // Pins the schedule that makes a superseded call inert: the newest call owns
+  // the epoch, so the older one can neither merge, release the gate, nor report.
+  // ---------------------------------------------------------------------------
+
+  describe('handleNew re-entry', () => {
+    async function startTwoOverlappingCalls() {
+      const first = deferred();
+      const second = deferred();
+      globalThis.fetch
+        .mockReturnValueOnce(first.promise)
+        .mockReturnValueOnce(second.promise);
+
+      const { result } = renderEntity('salesOrder');
+      await act(async () => {
+        result.current.handleNew();
+      });
+      await act(async () => {
+        result.current.handleNew();
+      });
+
+      return { result, first, second };
+    }
+
+    async function resolveWith(pending, defaults) {
+      await act(async () => {
+        pending.resolve(jsonResponse({ defaults }));
+      });
+      await settle();
+    }
+
+    it('discards the first response once a second handleNew supersedes it', async () => {
+      const { result, first } = await startTwoOverlappingCalls();
+
+      await resolveWith(first, { paymentTerms: 'FIRST' });
+
+      expect(
+        result.current.editing?.paymentTerms,
+        'a superseded response must never merge into the newer form'
+      ).toBeUndefined();
+    });
+
+    it('merges the second response normally', async () => {
+      const { result, first, second } = await startTwoOverlappingCalls();
+
+      await resolveWith(first, { paymentTerms: 'FIRST' });
+      await resolveWith(second, { paymentTerms: 'SECOND' });
+
+      expect(result.current.editing?.paymentTerms).toBe('SECOND');
+    });
+
+    it('keeps defaultsLoading owned by the newest call', async () => {
+      const { result, first, second } = await startTwoOverlappingCalls();
+
+      expect(result.current.defaultsLoading).toBe(true);
+
+      await resolveWith(first, { paymentTerms: 'FIRST' });
+      expect(
+        result.current.defaultsLoading,
+        'a superseded response must not release the gate the newer call owns'
+      ).toBe(true);
+
+      await resolveWith(second, { paymentTerms: 'SECOND' });
+      expect(
+        result.current.defaultsLoading,
+        'the newest call settling must release the gate'
+      ).toBe(false);
+    });
+
+    it('emits no timing event for the superseded call', async () => {
+      const { first } = await startTwoOverlappingCalls();
+
+      await resolveWith(first, { paymentTerms: 'FIRST' });
+
+      expect(
+        defaultsBlockCalls(),
+        'a superseded handleNew must stay silent — its settle path is inert'
+      ).toHaveLength(0);
+    });
+
+    it('emits exactly one timing event once the surviving call settles', async () => {
+      const { first, second } = await startTwoOverlappingCalls();
+
+      await resolveWith(first, { paymentTerms: 'FIRST' });
+      await resolveWith(second, { paymentTerms: 'SECOND' });
+
+      const calls = defaultsBlockCalls();
+
+      expect(
+        calls,
+        'two overlapping handleNew calls must report once, for the surviving one'
+      ).toHaveLength(1);
+      expect(calls[0][1]).toEqual(expect.objectContaining({
+        entity: 'salesOrder',
+        status: 'ok',
+      }));
+    });
+
+    it('runs a clean cycle when a new handleNew follows a timed-out one', async () => {
+      vi.useFakeTimers();
+      const second = deferred();
+      globalThis.fetch
+        .mockImplementationOnce((_url, init) => new Promise((_resolve, reject) => {
+          init?.signal?.addEventListener('abort', () => reject(abortError()), { once: true });
+        }))
+        .mockReturnValueOnce(second.promise);
+
+      const { result } = renderEntity('salesOrder');
+      await act(async () => {
+        result.current.handleNew();
+      });
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(DEFAULTS_TIMEOUT_MS + 1);
+      });
+
+      expect(result.current.defaultsLoading).toBe(false);
+      expect(defaultsBlockCalls()).toHaveLength(1);
+      expect(defaultsBlockCalls()[0][1].status).toBe('timeout');
+
+      // The timeout bumped the epoch itself; the next call must still take
+      // ownership rather than inherit the abandoned cycle's state.
+      await act(async () => {
+        result.current.handleNew();
+      });
+      expect(
+        result.current.defaultsLoading,
+        'a handleNew after a timeout must open a fresh gate'
+      ).toBe(true);
+
+      await act(async () => {
+        second.resolve(jsonResponse({ defaults: { paymentTerms: 'SECOND' } }));
+        await vi.advanceTimersByTimeAsync(1);
+      });
+      await settle();
+
+      expect(result.current.editing?.paymentTerms).toBe('SECOND');
+      expect(result.current.defaultsLoading).toBe(false);
+
+      const calls = defaultsBlockCalls();
+      expect(calls).toHaveLength(2);
+      expect(calls[1][1]).toEqual(expect.objectContaining({
+        entity: 'salesOrder',
+        status: 'ok',
+      }));
+    });
+  });
 });
