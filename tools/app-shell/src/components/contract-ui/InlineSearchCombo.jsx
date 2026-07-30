@@ -243,7 +243,7 @@ export function InlineSearchCombo({ field, value, options, onChange, onKeyDown, 
             clearAriaLabel={ui('clear')}
             testId={`inline-add-field-${field.key}-chip`}
             clearable={clearable}
-          />
+            data-testid={"SelectorChip__" + field.id} />
         </div>
       ) : (
       <input
