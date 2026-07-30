@@ -11,6 +11,7 @@ export { ListModalCell, cellAlignClass } from './listModalCells.jsx';
 export { ListModalToolbarFilter } from './ListModalToolbarFilter.jsx';
 export { DetailView } from './DetailView';
 export { default as InlineLinesPanel } from './InlineLinesPanel';
+export { DimBadge, DimSummary, DimensionGrid } from './DimensionsPanel';
 export { default as LinesBottomSection } from './LinesBottomSection';
 export { default as LinesEmptyState } from './LinesEmptyState';
 export { default as ImportLinesModal } from './ImportLinesModal';

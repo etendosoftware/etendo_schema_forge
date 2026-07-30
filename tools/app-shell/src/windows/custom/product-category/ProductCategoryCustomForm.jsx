@@ -1,18 +1,21 @@
 import { EntityForm } from '@/components/contract-ui';
 import { useUI, useLabel } from '@/i18n';
-import CheckboxGroup from '@/windows/custom/shared/CheckboxGroup';
 
 /* eslint-disable react/prop-types */
 
-export default function ProductCategoryCustomForm({ entity, data, token, apiBaseUrl, catalogs, api, editing, onChange, displayLogic, section }) {
+export default function ProductCategoryCustomForm({ entity, data, token, apiBaseUrl, catalogs, api, onChange, onFieldBlur, displayLogic, section }) {
   if (section && section !== 'principal') return null;
   const ui = useUI();
   const t = useLabel();
-  const readOnly = !editing;
 
   const textFields = [
     { key: 'name', column: 'Name', type: 'text', label: t('Name'), required: true, section: 'principal' },
     { key: 'searchKey', column: 'Value', type: 'text', label: t('Value') ?? ui('searchKey'), required: true, section: 'principal' },
+  ];
+
+  const checkboxFields = [
+    { key: 'default', column: 'IsDefault', type: 'checkbox', label: ui('categoryDefault'), section: 'principal' },
+    { key: 'active', column: 'IsActive', type: 'checkbox', label: t('IsActive'), section: 'principal' },
   ];
 
   const descriptionField = [
@@ -29,6 +32,7 @@ export default function ProductCategoryCustomForm({ entity, data, token, apiBase
             fields={[textFields[0]]}
             data={data ?? {}}
             onChange={onChange}
+            onFieldBlur={onFieldBlur}
             catalogs={catalogs}
             cols={1}
             displayLogic={displayLogic ?? { readOnly: {}, visibility: {} }}
@@ -43,6 +47,7 @@ export default function ProductCategoryCustomForm({ entity, data, token, apiBase
             fields={[textFields[1]]}
             data={data ?? {}}
             onChange={onChange}
+            onFieldBlur={onFieldBlur}
             catalogs={catalogs}
             cols={1}
             displayLogic={displayLogic ?? { readOnly: {}, visibility: {} }}
@@ -51,17 +56,20 @@ export default function ProductCategoryCustomForm({ entity, data, token, apiBase
             apiBaseUrl={apiBaseUrl}
             data-testid="EntityForm__473ce6" />
         </div>
-        <div className="flex-1 pb-1">
-          <CheckboxGroup
-            label={ui('categoryConfiguration')}
-            items={[
-              { key: 'default', column: 'IsDefault', label: ui('categoryDefault') },
-              { key: 'summaryLevel', column: 'Issummary', label: ui('categoryGroupable') },
-            ]}
-            data={data}
-            readOnly={readOnly}
+        <div className="w-fit pb-1">
+          <EntityForm
+            entity={entity}
+            fields={checkboxFields}
+            data={data ?? {}}
             onChange={onChange}
-            data-testid="CheckboxGroup__473ce6" />
+            onFieldBlur={onFieldBlur}
+            catalogs={catalogs}
+            cols={2}
+            displayLogic={displayLogic ?? { readOnly: {}, visibility: {} }}
+            api={api}
+            token={token}
+            apiBaseUrl={apiBaseUrl}
+            data-testid="EntityForm__473ce6" />
         </div>
       </div>
       {/* Row 2: Description full width */}
@@ -71,6 +79,7 @@ export default function ProductCategoryCustomForm({ entity, data, token, apiBase
           fields={descriptionField}
           data={data ?? {}}
           onChange={onChange}
+          onFieldBlur={onFieldBlur}
           catalogs={catalogs}
           cols={1}
           displayLogic={displayLogic ?? { readOnly: {}, visibility: {} }}

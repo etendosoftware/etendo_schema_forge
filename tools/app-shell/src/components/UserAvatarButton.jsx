@@ -115,10 +115,10 @@ export function UserAvatarButton({ expanded = false }) {
             {(selectedRole?.name || selectedOrg?.name) && (
               <div className="mt-1 space-y-0.5 text-xs text-muted-foreground">
                 {selectedRole?.name && (
-                  <p className="truncate">{ui('role')}: {selectedRole.name}</p>
+                  <p className="truncate" title={selectedRole.name}>{ui('role')}: {selectedRole.name}</p>
                 )}
                 {selectedOrg?.name && (
-                  <p className="truncate">{ui('organization')}: {selectedOrg.name}</p>
+                  <p className="truncate" title={selectedOrg.name}>{ui('organization')}: {selectedOrg.name}</p>
                 )}
               </div>
             )}
