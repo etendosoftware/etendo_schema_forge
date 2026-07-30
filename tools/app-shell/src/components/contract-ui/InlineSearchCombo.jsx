@@ -3,6 +3,8 @@ import { createPortal } from 'react-dom';
 import { ChevronDown } from 'lucide-react';
 import { buildUrlWithParams } from '@/lib/buildUrlWithParams.js';
 import { shouldAnchorDropdownRight } from '@/lib/dropdownAnchor.js';
+import { useUI } from '@/i18n';
+import { SelectorChip } from './SelectorChip.jsx';
 
 /**
  * Compact inline combobox for search-type FK fields in rapid line entry.
@@ -10,6 +12,7 @@ import { shouldAnchorDropdownRight } from '@/lib/dropdownAnchor.js';
  * Used by both DataTable's InlineAddRow and InlineLinesPanel's edit cells.
  */
 export function InlineSearchCombo({ field, value, options, onChange, onKeyDown, placeholder, inputRef, selectorUrl, selectorContext, token, displayLabel, excludeId = null, clearOnType = true }) {
+  const ui = useUI();
   // `query` is PURE search text (ETP-4600 Gap B parity with CreatableSearchSelect) — it must
   // never be prefilled with the selected value's label. It always starts empty on open/focus so
   // the full option list shows, and is reset to '' on close so a stale term never leaks into the
@@ -27,12 +30,36 @@ export function InlineSearchCombo({ field, value, options, onChange, onKeyDown, 
   const [anchorRight, setAnchorRight] = useState(false);
   const rootRef = useRef(null);
   const dropdownRef = useRef(null);
+  // ETP-4600: `inputRef` is caller-supplied and OPTIONAL — DataTable only wires it up for the
+  // first add-row cell (keyboard-nav auto-focus) and InlineLinesPanel's edit cells never pass
+  // one at all. The chip's "click to re-enter edit mode" / "clear" focus-management needs a
+  // real DOM node in every context, so keep an always-present local ref and mirror the node
+  // onto the external one too (when given) so existing callers keep working unchanged.
+  const localInputRef = useRef(null);
+  const setInputRef = useCallback((node) => {
+    localInputRef.current = node;
+    if (inputRef) inputRef.current = node;
+  }, [inputRef]);
   const displayValue = options.find(o => o.id === value);
   // Label shown when the combo is CLOSED (i.e. the cell is not actively being edited/searched).
   // Falls back to the caller-provided displayLabel (e.g. locator/warehouse name set by
   // auto-fill) when the value isn't present in the local `options` catalog yet.
   const resolvedLabel = displayValue?.name || displayValue?.label || displayValue?._identifier || displayLabel || '';
   const inputValue = open ? query : resolvedLabel;
+
+  // ETP-4600: chip mode, parity with CreatableSearchSelect's header chip. When a value is
+  // committed and the cell is not actively being edited, render a hover-revealed chip with a
+  // clear (X) button instead of the plain read-only-looking input.
+  const hasSelection = value != null && value !== '';
+  const showChip = hasSelection && !open;
+  // A NOT-NULL/required column (e.g. Sales Order line's "Impuesto") has no safe empty value to
+  // PATCH — clearing it always round-trips through a generic backend validation toast the line
+  // grid can't turn into a field-level message. Default to hiding the X for required fields so
+  // the user is never handed a clear action that's guaranteed to fail; `field.clearable` (from
+  // decisions.json) still wins when explicitly set, in either direction, for the rare column
+  // where a required-looking field actually has a safe way to be cleared (e.g. server-side
+  // default kicks in on save).
+  const clearable = field.clearable != null ? field.clearable !== false : field.required !== true;
 
   // Server-side search with debounce
   const fetchTimer = useRef(null);
@@ -81,6 +108,37 @@ export function InlineSearchCombo({ field, value, options, onChange, onKeyDown, 
     setOpen(false);
     setQuery('');
     setServerResults(null);
+  };
+
+  // Chip body click → re-enter edit mode, mirroring CreatableSearchSelect's handleChipClick:
+  // open the combo with an empty search box (full option list) and move real DOM focus onto
+  // the input so the user can type immediately.
+  const handleChipClick = () => {
+    setOpen(true);
+    setQuery('');
+    setServerResults(null);
+    fetchServerResults('');
+    requestAnimationFrame(() => {
+      localInputRef.current?.focus();
+      localInputRef.current?.select();
+    });
+  };
+
+  // Clear (X) click — per product decision, this commits the clear immediately (same
+  // auto-save-on-commit path as any other line edit), then reopens the combo for an instant
+  // re-search. Mirrors CreatableSearchSelect's handleClear, including the focus-after-clear
+  // fix: the chip <button> unmounts and the <input> mounts once hasSelection flips to false —
+  // without moving focus onto it, clicking away never fires onBlur, so the dropdown reopened
+  // below would never auto-close (the exact bug fixed on the header selector).
+  const handleClear = () => {
+    onChange('', '');
+    setQuery('');
+    setServerResults(null);
+    setOpen(true);
+    fetchServerResults('');
+    requestAnimationFrame(() => {
+      localInputRef.current?.focus();
+    });
   };
 
   const updateDropdownDirection = useCallback(() => {
@@ -175,10 +233,22 @@ export function InlineSearchCombo({ field, value, options, onChange, onKeyDown, 
   }, [open]);
 
   return (
-    <div ref={rootRef} className="relative w-full">
+    <div ref={rootRef} className="group relative w-full">
+      {showChip ? (
+        <div className="w-full h-8 flex items-center rounded-md border border-input bg-card px-2 pr-6">
+          <SelectorChip
+            label={resolvedLabel}
+            onClick={handleChipClick}
+            onClear={handleClear}
+            clearAriaLabel={ui('clear')}
+            testId={`inline-add-field-${field.key}-chip`}
+            clearable={clearable}
+          />
+        </div>
+      ) : (
       <input
         data-testid={`inline-add-field-${field.key}`}
-        ref={inputRef}
+        ref={setInputRef}
         type="text"
         value={inputValue}
         onChange={(e) => {
@@ -220,6 +290,7 @@ export function InlineSearchCombo({ field, value, options, onChange, onKeyDown, 
         placeholder={placeholder}
         className="w-full h-8 text-sm rounded-md border border-input bg-card px-2 pr-6 focus:ring-2 focus:ring-primary focus:outline-none"
       />
+      )}
       <button
         type="button"
         data-testid={`inline-add-field-${field.key}-toggle`}
