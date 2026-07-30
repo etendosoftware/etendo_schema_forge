@@ -14,8 +14,9 @@ import { fileURLToPath } from 'node:url';
 //   (b) admit at most one record — enforced via `window.maxDetailLines: 1`, which caps
 //       `addLineGuard` for the window's primary `detailEntity` (see docs/ui-customization.md
 //       §11, `window.maxDetailLines`). This only applies to windows using the detailEntity
-//       pattern; `secondaryTabs`-based accounting entities have no row-count cap and rely on
-//       `hideDelete` alone plus the (already-1:1) business schema.
+//       pattern; `secondaryTabs`-based accounting entities (`asset-group`, `product`, and
+//       `warehouse`) have no row-count cap yet and rely on `hideDelete` alone plus the
+//       (already-1:1) business schema.
 //
 // `product-category` and `business-partner-category` already declare
 // `window.maxDetailLines: 1` (see docs/ui-customization.md real-examples list) — this test does
@@ -46,6 +47,7 @@ const HIDE_DELETE_ACCOUNTING_WINDOWS = [
   'business-partner-category',
   'asset-group',
   'tax',
+  'warehouse',
 ];
 
 // Windows with multiple accounting-style entities, each needing its own `hideDelete`.
