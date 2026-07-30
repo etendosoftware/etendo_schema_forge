@@ -10,9 +10,9 @@ import { login } from '../helpers/auth.js';
  *
  * PURPOSE: this is the Phase-4 G11 *capture seed*, NOT the full acceptance suite.
  * The backend is greenfield (no NEO spec serves window 125), so the window draws
- * entirely from its local `mockCatalogs.js`. login() seeds a fake token + a
- * generic /sws/** stub; no window-specific NEO mock is needed because the hook
- * never fetches on mount.
+ * entirely from its local `mockCatalogs.js`. login() mocks the cookie session
+ * (GET /sws/go/session) plus a generic /sws/** stub; no window-specific NEO mock
+ * is needed because the hook never fetches on mount.
  *
  * It switches to each of the 4 tabs (General · Valores por defecto · Dimensiones ·
  * Cuentas generales), waits for that tab's content to render, runs a light sanity
@@ -72,9 +72,13 @@ test.describe('General Ledger Configuration — visual capture (mocked)', () => 
  * the inverted period toggle, dimension toggles, and the read-only surfaces. The
  * `Guardar cambios` button is gated on a selected
  * organization (`useGeneralLedgerConfig` only POSTs when `selectedOrg.id` is set),
- * so we seed `sf_auth_selected_org` in localStorage before React boots and install
- * a window-specific route for the aggregate endpoint after login() (LIFO wins over
- * the generic /sws/** stub).
+ * so we pass that org to login() — which cross-references it into the mocked
+ * GET /sws/go/session payload (`environment.orgId` + the role's `orgList`), the
+ * only path by which `selectedOrg` is populated since ETP-4576. Seeding
+ * `sf_auth_selected_org` in localStorage no longer works at all: AuthProvider
+ * reads from memory storage and purges the legacy `sf_auth_*` keys on mount.
+ * The window-specific route for the aggregate endpoint is still installed after
+ * login() so LIFO ordering wins over the generic /sws/** stub.
  */
 
 const SEED_ORG = { id: 'ES-NORTE', name: 'F&B España - Región Norte' };
@@ -118,11 +122,9 @@ test.describe('General Ledger Configuration — behavioral (mocked)', () => {
 
   test.beforeEach(async ({ page }) => {
     post = { last: null };
-    await login(page);
-    // Seed a selected org before boot so the save boundary is reachable.
-    await page.addInitScript((org) => {
-      localStorage.setItem('sf_auth_selected_org', JSON.stringify(org));
-    }, SEED_ORG);
+    // The selected org travels in the mocked session payload, so the save
+    // boundary (`selectedOrg.id`) is reachable from the first render.
+    await login(page, { org: SEED_ORG });
     await installAggregateMock(page, post);
     await page.goto('/general-ledger-configuration');
     await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});

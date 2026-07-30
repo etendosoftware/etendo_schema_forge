@@ -67,20 +67,24 @@ async function installFiscalConfigMocks(page, { sii = null, tbai = null, verifac
   });
 }
 
+// ETP-4576 — the org is part of the restored cookie session, so it is passed to
+// login() (which cross-references it into `environment.orgId` + the role's
+// `orgList`). It used to be seeded into the `sf_auth_*` localStorage keys, which
+// are now dead: AuthProvider reads from memory storage and purges those keys on
+// mount, so a seeded org never reached `selectedOrg` at all.
+const E2E_ORG = { id: 'ORG_E2E', name: 'E2E Test Org' };
+
 async function loginWithOrg(page) {
-  await page.addInitScript(() => {
-    localStorage.setItem('sf_auth_selected_role', JSON.stringify({ id: 'r1', name: 'Admin', orgList: [] }));
-    localStorage.setItem('sf_auth_rolelist', JSON.stringify([{ id: 'r1', name: 'Admin', orgList: [] }]));
-    localStorage.setItem('sf_auth_selected_org', JSON.stringify({ id: 'ORG_E2E', name: 'E2E Test Org' }));
-  });
-  await login(page);
+  await login(page, { org: E2E_ORG });
 }
 
 // ── Tests ─────────────────────────────────────────────────────────────────────
 
 test.describe('Fiscal Config — no org selected', () => {
   test('shows the no-org message when session has no selected organisation', async ({ page }) => {
-    await login(page);
+    // `org: null` is the explicit "authenticated, no environment entered" case:
+    // login()'s default session DOES carry an org, so it has to be opted out of.
+    await login(page, { org: null });
     await navigateTo(page, 'fiscal-config');
     await expect(page.getByText(t('fiscal.noOrg'))).toBeVisible();
   });

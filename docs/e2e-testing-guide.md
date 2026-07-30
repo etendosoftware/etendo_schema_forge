@@ -139,7 +139,7 @@ The fastest way to create a test. You interact with the app in a real browser, a
 4. You: close the browser when done
 5. Claude: reads the recorded code from e2e/recordings/
 6. Claude: transforms it into a proper test with:
-   - login() + switchContext() helpers
+   - login() helper (with its `{ org, role }` overrides when context matters)
    - Role-based selectors (getByRole) instead of brittle CSS
    - Assertions and validations for each step
    - Error handling and proper structure
@@ -214,7 +214,7 @@ e2e/
 ├── playwright.config.js              # Config (visible browser by default)
 ├── tests/
 │   ├── helpers/
-│   │   ├── auth.js                   # login(), switchContext(), navigateTo()
+│   │   ├── auth.js                   # login(), navigateTo(), MOCK_ROLE/MOCK_ORG
 │   │   └── selectors.js             # Shared UI selectors (discovered, not guessed)
 │   ├── smoke.spec.js                 # Verify windows load without JS errors
 │   └── flows/
@@ -452,21 +452,31 @@ await expect(byRole(page, myWindowList.heading)).toBeVisible();
 
 ## Role and Organization Context
 
-All tests run with **F&B International Group Admin** role and **F&B España - Región Norte** organization. This is configured in `e2e/tests/helpers/auth.js`:
+In **mock mode**, the role and organization come from the session payload `login()` serves,
+and default to the `MOCK_ROLE` / `MOCK_ORG` exported by `e2e/tests/helpers/auth.js`
+(`e2e-role` / `e2e-org`). Override them per test when the feature under test depends on a
+specific id — e.g. a save button gated on `selectedOrg.id`:
 
 ```js
-export const DEFAULT_ROLE = 'F&B International Group Admin';
-export const DEFAULT_ORG = 'F&B España - Región Norte';
+await login(page, { org: { id: 'ES-NORTE', name: 'España Norte' } });
 ```
 
-The `login()` function calls `switchContext()` automatically. To override for a specific test:
+Pass `role` the same way when the role id matters. **Do not build the payload yourself:**
+the helper derives `environment.roleId`/`environment.orgId` and the role's `orgList` from
+the objects you pass, which is what keeps them cross-referenced (see
+[Authentication in mock mode](#authentication-in-mock-mode-cookie-session)). An `orgList` you
+put on `role` is discarded on purpose, and `role: null` throws rather than silently produce
+a role-less session that would blank every window.
+
+To exercise the **no-organization empty state**, pass `org: null` — that yields a valid role
+with no org selected:
 
 ```js
-await login(page, {
-  role: 'F&B España, S.A - Sales',
-  org: 'F&B España - Región Sur',
-});
+await login(page, { org: null });
 ```
+
+In **real mode** (`BASE_URL` set) the context comes from the environment the onboarding flow
+enters; these overrides do not apply.
 
 ## Writing a New Test: Step by Step
 
@@ -634,7 +644,7 @@ The global `<Toaster />` also adds CSS class hooks: `toast-error`, `toast-succes
 
 ## Writing a mocked list/detail spec
 
-For features that live on the list grid (e.g. RowQuickActions) you can run specs against `make dev` without an Etendo backend. The `login()` helper in `tests/helpers/auth.js` seeds a fake token and a generic `**/sws/**` mock that returns empty lists. Install **more specific** routes after login to feed synthetic rows — Playwright matches routes in **reverse registration order**, so specific wins over generic.
+For features that live on the list grid (e.g. RowQuickActions) you can run specs against `make dev` without an Etendo backend. The `login()` helper in `tests/helpers/auth.js` mocks the cookie session (`GET /sws/go/session`) and installs a generic `**/sws/**` mock that returns empty lists. Install **more specific** routes after login to feed synthetic rows — Playwright matches routes in **reverse registration order**, so specific wins over generic.
 
 ### Minimal template
 
@@ -702,14 +712,66 @@ test.describe('My feature — sales-order', () => {
 
 `e2e/tests/flows/row-quick-actions.mocked.spec.js` covers the four pilot windows (sales-order, purchase-order, sales-invoice, purchase-invoice) and is the recommended starting point for any list-row UI test. It demonstrates: mocked list+detail endpoints, per-window expected-button matrix, hover→overlay assertion, edit-navigates-to-detail flow, and delete-opens-dialog flow.
 
+## Authentication in mock mode (cookie session)
+
+Since ETP-4576 the session is a backend-managed opaque `__Host-` cookie, not a token the
+browser can read. That changes what a test has to fake, and it is easy to get subtly wrong.
+
+**There is nothing to seed.** `AuthProvider` defaults its storage to memory, never reads
+`localStorage`, and *purges* the legacy `sf_auth_*` / `sf_platform_*` keys on mount. Writing
+those keys from a spec is dead code — it will not authenticate anything.
+
+Instead, `login()` mocks the restore endpoint. On mount `AuthProvider` calls
+`GET /sws/go/session` and maps the response into its session state:
+
+```js
+{
+  status: 'success',
+  account:     { id, name, email },
+  environment: { userId, roleId, clientId, orgId, warehouseId },   // IDs only
+  roleList:    [ { id, name, orgList: [ { id, name } ] } ],        // full objects
+  csrfToken:   '...',
+}
+```
+
+**The payload must cross-reference itself.** `mapRestoredSession()` does not take
+`environment` at face value: it resolves `selectedRole` by looking `environment.roleId` up
+*inside* `roleList`, and `selectedOrg` by looking `environment.orgId` up inside **that
+role's** `orgList`. Ids that don't match resolve both to `null` — and a session without a
+`selectedRole` never triggers the window-access fetch, so `windowAccess` stays at its
+fail-closed `{}` and `WindowAccessGuard` renders **every generated window blank**. A blank
+page in a mocked spec is almost always this.
+
+The helper protects you from that: it derives the `environment` ids from the same role/org
+objects it puts in `roleList`, so they cannot drift. Prefer its override to hand-rolling a
+payload.
+
+**Boot is asynchronous now.** With a cookie there is no synchronous check, so `AuthGate`
+renders `auth.bootingFallback` ("Loading...") until the restore settles. Assert with
+`expect(...).toBeVisible({ timeout })` or `waitFor` rather than reading the DOM immediately
+after `goto()` — a bare synchronous assertion can catch the fallback instead of the content.
+
+**Unsafe methods carry `X-Go-CSRF`.** If a spec asserts on an intercepted POST/PUT/PATCH/
+DELETE, expect that header (its value is the `csrfToken` from the session response) and
+expect **no** `Authorization` header. Safe methods are CSRF-exempt.
+
+**Logout revokes server-side.** `logout()` and the `/logout` route both fire
+`DELETE /sws/go/session`. The helper answers it with `204`, matching the real backend.
+
+> **Running these specs:** this repo pins the published `app-shell-core`, which only gains
+> the cookie-session behavior once ETP-4576 ships. Until then mock mode needs the local core
+> source — start the dev server with `make dev-local-core` (sets `LOCAL_CORE=1`) rather than
+> `make dev`, or the suite exercises the old Bearer/localStorage code path and tells you
+> nothing.
+
 ## Mock-mode Tests (No Backend Required)
 
-Some tests run entirely in mock mode — no `BASE_URL` and no live Etendo instance. They seed `localStorage` with a fake token via `login()` and intercept API calls with `page.route()` to serve synthetic data.
+Some tests run entirely in mock mode — no `BASE_URL` and no live Etendo instance. `login()` mocks the cookie session and intercepts API calls with `page.route()` to serve synthetic data. See [Authentication in mock mode](#authentication-in-mock-mode-cookie-session) for what the session mock has to contain and why.
 
 Key patterns used in `invoice-preview-modal.spec.js` and `invoice-preview-persistence.spec.js`:
 
 ```js
-// Seed localStorage token + catch-all 200 for all /sws/** routes
+// Mock the cookie session + catch-all 200 for all /sws/** routes
 await login(page);
 
 // Register a specific route override AFTER login() — takes priority (LIFO)

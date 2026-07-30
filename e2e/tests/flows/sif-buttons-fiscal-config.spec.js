@@ -6,13 +6,16 @@ function responseData(data) {
   return JSON.stringify({ response: { data } });
 }
 
-async function seedSelectedOrg(page) {
-  await page.addInitScript(() => {
-    localStorage.setItem('sf_auth_selected_org', JSON.stringify({
-      id: 'ORG_1',
-      name: 'QA Mock Org',
-    }));
-  });
+// ETP-4576 — the fiscal-profile hook resolves the org from `selectedOrg`, which
+// is populated only from the restored cookie session. So the org is handed to
+// login(), which cross-references it into `environment.orgId` + the role's
+// `orgList`. Seeding `sf_auth_selected_org` in localStorage (as this spec used
+// to) is a no-op now: AuthProvider reads from memory storage and purges the
+// legacy `sf_auth_*` keys on mount.
+const MOCK_ORG_1 = { id: 'ORG_1', name: 'QA Mock Org' };
+
+async function loginWithOrg(page) {
+  await login(page, { org: MOCK_ORG_1 });
 }
 
 async function installFiscalProfileMocks(page, profile) {
@@ -115,8 +118,7 @@ function installMutableInvoiceDetailMocks(page, specName, invoice, installments 
 
 test.describe('SIF buttons follow fiscal config in invoice detail views', () => {
   test.beforeEach(async ({ page }) => {
-    await seedSelectedOrg(page);
-    await login(page);
+    await loginWithOrg(page);
   });
 
   test('shows Send to SIF for purchase invoices when the org profile is SII', async ({ page }) => {
@@ -315,8 +317,7 @@ function installSalesInvoicePatchCapture(page, invoiceId, patchBodies) {
 
 test.describe('SifTab — Verifactu fields on sales invoice (ETP-4390)', () => {
   test.beforeEach(async ({ page }) => {
-    await seedSelectedOrg(page);
-    await login(page);
+    await loginWithOrg(page);
   });
 
   // ETP-4463: SifTab no longer persists fields itself — edits made in the tab

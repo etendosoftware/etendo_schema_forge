@@ -37,10 +37,15 @@ test.describe('Onboarding invoice readiness', () => {
 
     await expect(page.getByRole('button', { name: email })).toBeVisible({ timeout: 30_000 });
 
+    // ETP-4576 — this probe authenticates exactly like the app's own readiness
+    // probes (tools/app-shell/src/pages/onboarding/onboardingReadiness.js): with
+    // the server-side `__Host-` session cookie, via `credentials: 'include'` and
+    // NO Authorization header. The session contract no longer hands the client a
+    // bearer token at all, so the `sf_auth_token` this used to read is always
+    // null — the request went out as `Authorization: Bearer null`.
     const selectorResponse = await page.evaluate(async () => {
-      const token = window.localStorage.getItem('sf_auth_token');
       const response = await fetch('/sws/neo/sales-invoice/header/selectors/C_PaymentTerm_ID?isSOTrx=Y&isCustomer=Y&limit=50&offset=0', {
-        headers: { Authorization: `Bearer ${token}` },
+        credentials: 'include',
       });
       return {
         status: response.status,
@@ -48,7 +53,10 @@ test.describe('Onboarding invoice readiness', () => {
       };
     });
 
-    expect(selectorResponse.status).toBe(200);
+    // A 200 here is also the assertion that the cookie session authenticates the
+    // call — it replaces the old "the bearer token from localStorage works"
+    // contract. A 401 means the cookie never reached /sws/neo/*.
+    expect(selectorResponse.status, JSON.stringify(selectorResponse.body)).toBe(200);
     expect(selectorResponse.body.items, JSON.stringify(selectorResponse.body)).toEqual(
       expect.arrayContaining([
         expect.objectContaining({

@@ -19,52 +19,113 @@ const IS_MOCK_MODE = MOCK_MODE_OVERRIDE === '1' || (MOCK_MODE_OVERRIDE !== '0' &
 export const DEFAULT_USER = process.env.E2E_USER || 'goadmin@etendo.software';
 export const DEFAULT_LOGIN_PASS = process.env.E2E_PASSWORD || '';
 
-// ETP-4576 — the synthetic session served for GET /sws/go/session in mock mode.
-//
-// mapRestoredSession() (app-shell-core/src/auth/session.js) does NOT take the
-// `environment` block at face value: it resolves `selectedRole` by looking
-// `environment.roleId` up inside `roleList`, and `selectedOrg` by looking
-// `environment.orgId` up inside THAT role's `orgList`. Ids that don't
-// cross-reference resolve both to `null`, and a session without a
-// `selectedRole` never triggers AuthProvider's `fetchWindowAccess` — leaving
-// `windowAccess` at its fail-closed `{}` default, so WindowAccessGuard blanks
-// every generated window (the same failure mode the ETP-4520 note below the
-// old localStorage seeding used to describe).
-//
-// So the ids are declared ONCE, in the role/org objects, and the environment
-// block is derived from those same objects — they cannot drift apart.
-const MOCK_ORG = { id: 'e2e-org', name: 'E2E Org' };
-const MOCK_ROLE = { id: 'e2e-role', name: 'Administrator', orgList: [MOCK_ORG] };
+// ETP-4576 — defaults for the synthetic session served on GET /sws/go/session
+// in mock mode. Overridable per test via `login(page, { org, role })`.
+export const MOCK_ORG = { id: 'e2e-org', name: 'E2E Org' };
+export const MOCK_ROLE = { id: 'e2e-role', name: 'Administrator' };
 
-// Mirrors the real 200 body of GET /sws/go/session (EtendoGoJwtServlet's
-// handleSessionRestore): { status, account, environment, roleList, csrfToken }.
-// Note there is no token anywhere — the session lives in the `__Host-` httpOnly
-// cookie, and the CSRF proof is the only thing the client ever holds.
-export const MOCK_SESSION_RESPONSE = {
-  status: 'success',
-  account: { id: 'e2e-account', name: 'E2E Admin', email: 'e2e@etendo.software' },
-  environment: {
-    userId: 'e2e-user',
-    roleId: MOCK_ROLE.id,
-    clientId: 'e2e-client',
-    orgId: MOCK_ORG.id,
-    warehouseId: 'e2e-warehouse',
-  },
-  roleList: [MOCK_ROLE],
-  csrfToken: 'e2e-mock-csrf',
-};
+/**
+ * Build the GET /sws/go/session body for a given org/role context.
+ *
+ * Mirrors the real 200 body of that endpoint (EtendoGoJwtServlet's
+ * handleSessionRestore): { status, account, environment, roleList, csrfToken }.
+ * Note there is no token anywhere — the session lives in the `__Host-` httpOnly
+ * cookie, and the CSRF proof is the only thing the client ever holds.
+ *
+ * mapRestoredSession() (app-shell-core/src/auth/session.js) does NOT take the
+ * `environment` block at face value: it resolves `selectedRole` by looking
+ * `environment.roleId` up inside `roleList`, and `selectedOrg` by looking
+ * `environment.orgId` up inside THAT role's `orgList`. Ids that don't
+ * cross-reference resolve both to `null`, and a session without a
+ * `selectedRole` never triggers AuthProvider's `fetchWindowAccess` — leaving
+ * `windowAccess` at its fail-closed `{}` default, so WindowAccessGuard blanks
+ * every generated window (the same failure mode the ETP-4520 note below the
+ * old localStorage seeding used to describe).
+ *
+ * That is why this function — not the caller — owns the cross-referencing: the
+ * caller only ever declares WHICH org/role it wants (`{ id, name }`), and both
+ * `environment.roleId`/`environment.orgId` and the role's `orgList` are DERIVED
+ * from those same objects here. Any `orgList` the caller puts on `role` is
+ * deliberately overwritten, so a caller cannot produce an incoherent payload.
+ *
+ * @param {object} [context]
+ * @param {{id: string, name?: string}|null} [context.org]
+ *        The selected organisation. Pass `null` for the "authenticated but no
+ *        organisation selected" case (`selectedOrg === null`) — several windows
+ *        render a dedicated empty state for it (fiscal-config's `fiscal.noOrg`,
+ *        fiscal-monitor's setup description). The role is still selected in that
+ *        case, so window access is still granted and the window actually renders.
+ * @param {{id: string, name?: string}} [context.role] The selected role.
+ */
+function buildSessionResponse({ org = MOCK_ORG, role = MOCK_ROLE } = {}) {
+  if (!role) {
+    throw new Error(
+      'login({ role: null }) is not supported: a session with no selected role never triggers '
+      + 'fetchWindowAccess, so WindowAccessGuard fails closed and every generated window renders '
+      + 'blank. Use `org: null` for the "no environment selected" case instead.',
+    );
+  }
+
+  const selectedOrg = org ? { ...org } : null;
+  // orgList is derived, never taken from the caller — see the note above.
+  const selectedRole = { ...role, orgList: selectedOrg ? [selectedOrg] : [] };
+
+  return {
+    status: 'success',
+    account: { id: 'e2e-account', name: 'E2E Admin', email: 'e2e@etendo.software' },
+    environment: {
+      userId: 'e2e-user',
+      roleId: selectedRole.id,
+      clientId: 'e2e-client',
+      orgId: selectedOrg ? selectedOrg.id : null,
+      warehouseId: 'e2e-warehouse',
+    },
+    roleList: [selectedRole],
+    csrfToken: 'e2e-mock-csrf',
+  };
+}
+
+// The default session (no overrides) — what the ~84 specs that call `login(page)`
+// with no arguments get served.
+export const MOCK_SESSION_RESPONSE = buildSessionResponse();
 
 /**
  * Authenticate for E2E tests.
  *
  * In mock mode: mocks the cookie session + intercepts /sws/* API calls.
  * In real mode: fills the onboarding login form and enters the first available environment.
+ *
+ * @param {import('@playwright/test').Page} page
+ * @param {object} [options]
+ * @param {string} [options.user] Real-backend mode only.
+ * @param {string} [options.password] Real-backend mode only.
+ * @param {{id: string, name?: string}|null} [options.org]
+ *        Mock mode only — the organisation the restored session lands on. Tests
+ *        whose behaviour depends on a specific org id (e.g. general-ledger-
+ *        configuration only POSTs when `selectedOrg.id` is set) pass it here
+ *        instead of seeding localStorage: the `sf_auth_*` keys are dead and
+ *        purged on mount (ETP-4576).
+ * @param {{id: string, name?: string}} [options.role]
+ *        Mock mode only — the role the restored session lands on.
  */
 export async function login(page, {
   user = DEFAULT_USER,
   password = DEFAULT_LOGIN_PASS,
+  org,
+  role,
 } = {}) {
   if (IS_MOCK_MODE) {
+    // Built once per login() call, outside the route handler, so every request
+    // the handler serves for this page answers with the same context. `org` and
+    // `role` are only forwarded when explicitly passed, so buildSessionResponse's
+    // own defaults stay in charge of the no-override case (and `org: null` stays
+    // distinguishable from "org not specified").
+    const sessionResponse = buildSessionResponse({
+      ...(org !== undefined ? { org } : {}),
+      ...(role !== undefined ? { role } : {}),
+    });
+
+
     // ETP-4576 — nothing to seed in localStorage anymore. The sf_auth_* keys
     // this used to write (`sf_auth_token`, `sf_auth_user`,
     // `sf_auth_selected_role`) are dead: AuthProvider's default storage is
@@ -140,7 +201,7 @@ export async function login(page, {
           route.fulfill({
             status: 200,
             contentType: 'application/json',
-            body: JSON.stringify(MOCK_SESSION_RESPONSE),
+            body: JSON.stringify(sessionResponse),
           });
         }
         return;

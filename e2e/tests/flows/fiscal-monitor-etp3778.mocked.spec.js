@@ -92,13 +92,15 @@ const TAX_ID_KEY_OPTIONS = [
 
 // ── Setup helpers ─────────────────────────────────────────────────────────────
 
+// ETP-4576 — the org is part of the restored cookie session, so it is passed to
+// login() (which cross-references it into `environment.orgId` + the role's
+// `orgList`). It used to be seeded into the `sf_auth_*` localStorage keys, which
+// are now dead: AuthProvider reads from memory storage and purges those keys on
+// mount, so a seeded org never reached `selectedOrg` at all.
+const E2E_ORG = { id: 'ORG_E2E', name: 'E2E Test Org' };
+
 async function loginWithOrg(page) {
-  await page.addInitScript(() => {
-    localStorage.setItem('sf_auth_selected_role', JSON.stringify({ id: 'r1', name: 'Admin', orgList: [] }));
-    localStorage.setItem('sf_auth_rolelist', JSON.stringify([{ id: 'r1', name: 'Admin', orgList: [] }]));
-    localStorage.setItem('sf_auth_selected_org', JSON.stringify({ id: 'ORG_E2E', name: 'E2E Test Org' }));
-  });
-  await login(page);
+  await login(page, { org: E2E_ORG });
 }
 
 async function installVfMocksWithRows(page, rows) {
