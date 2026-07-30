@@ -63,10 +63,15 @@ async function saveAsset(page) {
   await saved;
 }
 
-/** Parse a currency string like "2,000.00 €" / "-100.00 €" / "—" to a number. */
+/** Parse a currency string like "-2.000,00 €" / "-100,00 €" / "—" to a number.
+ *  Spanish locale (ETP-4314): '.' is the thousands separator, ',' is decimal. */
 function parseCurrency(text) {
-  const cleaned = (text || '').replace(/[^\d.,-]/g, '').replace(/,/g, '');
-  return cleaned ? parseFloat(cleaned) : 0;
+  let cleaned = (text || '').replace(/[^\d.,-]/g, '');
+  if (!cleaned) return 0;
+  if (cleaned.includes(',') && cleaned.indexOf(',') > cleaned.lastIndexOf('.')) {
+    cleaned = cleaned.replaceAll('.', '').replace(',', '.');
+  }
+  return parseFloat(cleaned) || 0;
 }
 
 /** With Depreciar ON, the "Resumen de amortización" sidebar mirrors the live
