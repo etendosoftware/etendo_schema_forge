@@ -198,8 +198,9 @@ test.describe('return-material-receipt — list and preview', () => {
     // Clone (duplicate) must be visible for CO rows
     await expect(coRow.getByTestId('row-quick-action-clone')).toBeVisible();
 
-    // Delete is hidden for CO rows because hideDeleteWhenComplete: true
-    await expect(coRow.getByTestId('row-quick-action-delete')).toHaveCount(0);
+    // Grid delete stays visible regardless of status (ETP-4656, commit 044edad45) —
+    // see e2e/tests/flows/delete-visibility.mocked.spec.js for the dedicated regression guard.
+    await expect(coRow.getByTestId('row-quick-action-delete')).toBeVisible();
 
     // --- Preview panel: click DR row ---
     // Move away from CO row first (unhover) then click DR row

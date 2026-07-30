@@ -86,7 +86,7 @@ Per-locale field label overrides. When the simplified interface needs to rename 
 | `contentBg` | string | `"bg-white"` | Any Tailwind bg class | Background color of the main content card in the detail view (e.g., `"bg-slate-50"` for a light gray tone). |
 | `formCardPadding` | string | `null` | Any Tailwind padding class | Override the Tailwind padding class applied to the form card div in the detail view. When `null`, `DetailView` falls back to `p-6`. Use `"px-2 pb-2"` for tighter (8px horizontal) padding, for example on windows with dense form layouts. |
 | `hideDelete` | boolean | `false` | — | Disables the CRUD delete capability at the contract/API level — emits `apiPrediction.crud.<entity>.delete: false` in `contract.json` for the window's entities. This is an **API-level** declaration only; it does not by itself remove the delete button/icon from the UI (see `hideDeleteButton` below for that). Used for master-data windows whose records are provisioned/retired outside the app (e.g. `tax`, `tax-category`, `open-close-period-control`). |
-| `hideDeleteWhenComplete` | boolean | `false` | — | Hides the delete button in the detail view when the document status is not Draft. Prevents accidental deletion of completed/processed records. |
+| `hideDeleteWhenComplete` | boolean | `false` | — | Hides the delete button in the detail view when the document status is not Draft. Prevents accidental deletion of completed/processed records. Gates on `window.statusField`: string status codes (e.g. `DR`/`RPAP`/`N`, see `DELETABLE_DOC_STATUSES` in `tools/app-shell/src/utils/recordActions.js`) are treated as deletable, all other codes as not. When `statusField` points to a **boolean** field instead (e.g. `processed` on `physical-inventory`/`goods-movements`), `false` (not yet processed) is deletable and `true` (processed) is not — handled automatically by `isDeleteVisibleForRecord`, no extra config needed. |
 | `hideDeleteButton` | boolean | `false` | — | **Unconditionally** hides the Delete (trash) button/icon in **both** the detail view toolbar and the list-row hover quick actions, for every record regardless of status. Distinct from `hideDelete` (which only disables the CRUD delete capability declared in `contract.json`/the API) — use `hideDeleteButton` when you also need to remove the UI affordance. Use this instead of `hideDeleteWhenComplete` when Delete should never be available, not just once the document leaves Draft; when set, `hideDeleteWhenComplete` becomes redundant (the button is always hidden). When `false`/absent, delete visibility is unchanged. |
 | `customComponents` | object | `null` | See below | Override generated components with custom ones from `artifacts/{window}/custom/`. The generator emits the correct imports and props automatically. |
 | `menuActions` | array | `[]` | See below | Additional actions in the detail view's "more" menu (triple dot). Each action can have visibility conditions based on document status. |
@@ -638,7 +638,57 @@ Applied to fields with `grid: true` to control how the list cell renders.
 | `gridReadOnly` | boolean | `false` | Make an otherwise-editable column read-only in the grid. |
 | `grow` | boolean | `false` | Let the column grow to fill available width. |
 | `cellType` | string | `null` | Names the cell renderer for this column. Carried decisions → contract for **any** window, but **who honours it depends on the layout** — it is not generic to every grid. See the `cellType` section below for the three paths. |
+| `dimensionsPanel` | boolean | `false` | Collect this field into the ONE synthetic `type: 'dimensionsPanel'` grid column instead of its own column — see below. Read regardless of the field's own `grid` value (typically `grid: false`, since the field renders inside the expand-row panel, not as a standalone column). |
 | `visibleWhenCapability` | string | `null` | Names a capability key (e.g. `"showAccountingFields"`) from the `capabilities` map returned by the `GET /sws/neo/windowaccessmap` webhook (NEO pseudo-spec bridge — see `com.etendoerp.go/docs/neo-headless.md` §4.10). Opt-in — absent means always visible. Gates both the grid column and any `window.statusPills` entry referencing this field; the field is omitted entirely (not disabled) when the capability resolves `false`. Full mechanics (generator wiring, fail-closed behavior): `schema_forge_core`'s `docs/decisions-reference.md`. Shipped example: `posted` on `sales-invoice`/`purchase-invoice` — see those windows' `docs/generated-custom-windows/*.md` guides. |
+
+#### Accounting dimensions panel (`dimensionsPanel`)
+
+Fields flagged `dimensionsPanel: true` (any number, on any inline-editable-layout entity) are collected by `generateTableComponent` into ONE synthetic column instead of individual grid columns:
+
+```js
+{
+  key: 'dimensions',
+  type: 'dimensionsPanel',
+  label: 'Accounting dimensions',
+  labels: { en_US: 'Accounting dimensions', es_ES: 'Dimensiones contables' },
+  dimensionFields: [
+    { key: 'project', column: 'C_Project_ID', type: 'selector', label: 'Project', reference: 'Project', inputMode: 'search' },
+    { key: 'costcenter', column: 'C_Costcenter_ID', type: 'selector', label: 'Cost Center', reference: 'Costcenter', inputMode: 'selector' },
+  ],
+}
+```
+
+`InlineLinesPanel` never renders this column type in the grid itself (ETP-4610 — no header cell, no width, no per-row badges). Instead it drives two things: a leading expand-chevron column (unchanged since ETP-4529) and an adaptive "Add dimensions"/"Edit dimensions" entry in the row's hover-action strip, next to the Edit/Delete icons, shown only when at least one `dimensionFields` candidate is currently visible. Clicking either the chevron or the hover action expands the same full-width sub-row of selectors below the data row — see `docs/ui-customization.md` §14b for the full UX and the shared `DimensionsPanel.jsx` building blocks (still used for the expanded `DimensionGrid`; the collapsed `DimSummary` badge/trigger is no longer used by `InlineLinesPanel`).
+
+**Rules:**
+
+- Emitted **only** when at least one field on the entity has `dimensionsPanel: true`; otherwise the entity's `columns` array is byte-for-byte the same as before this feature existed (fully additive).
+- Always emitted **last** in the `columns` array — `gridOrder` does not apply to it (it only reorders normal grid columns).
+- Each `dimensionFields` entry reuses the same per-field extraction as a normal grid column (`mapFieldType` for `type`, static baked `label`, FK `reference`/`inputMode`, `required`/`lookup`/`popup`) — trimmed to what `DimensionsPanel.jsx` (`DimSummary`/`DimensionGrid`), `SelectorInput`, and `selectorCatalog.js` actually read.
+- The panel's own `label`/`labels` are baked by the generator (not translated via `useUI()` — the `columns` array is module-scope code, so it cannot call a hook); `emptyLabel` is left unset so the empty-state trigger falls back to the generic `dimensionsPanelEmpty` i18n key at render time.
+- Only affects the **grid/table** rendering. A field flagged `dimensionsPanel: true` still appears as its own field in the lines entity's `addLineFields` (the add-new-row form) if `form: true` — the add-row flow is a separate, flat-form UX not covered by this flag.
+- A field with `grid: true` AND `dimensionsPanel: true` is collected into the panel only — it is excluded from `gridFieldsRaw` regardless of its own `grid` value.
+
+**`dimensionsPanelFieldKeys` — per-window dimension-macro trust (ETP-4610):**
+
+`generatePageComponent` (`schema_forge_core`'s `generate-frontend.js`) also collects the same `dimensionsPanel: true` field keys for the lines entity and forwards them to the generated `<DetailView dimensionsPanelFieldKeys={[...]} />` prop — omitted entirely when the entity has none, so this is purely additive. `DetailView.jsx` uses it to widen, **scoped to that one window instance**, which keys its `lineHiddenColumns` computation (and the expanded-row `DetailForm`'s `displayLogic`) is willing to trust as config-driven "dimension macro" visibility: a key is trusted if it's in the component's small global `DIMENSION_MACRO_KEYS` allowlist (`project`/`costcenter`/`costCenter`/`businessPartner`) **or** it's listed in this prop.
+
+This exists because `product` cannot be added to the global allowlist: in `sales-invoice`/`purchase-invoice` it's a real per-line field with its own record-dependent AD `displayLogic` (`@Financial_Invoice_Line@='N'`), and trusting it globally would reintroduce the ETP-4530 regression (product/listPrice/grossAmount silently vanishing from those windows' grids). `simple-g-l-journal`, however, genuinely flags `product` `dimensionsPanel: true` as an `@ACCT_DIMENSION_DISPLAY@` accounting dimension — so its generated page passes `dimensionsPanelFieldKeys={['businessPartner', 'product', 'project', 'costCenter']}`, and only *that* window instance trusts `product`'s config-hide signal. Windows that never flag any lines field `dimensionsPanel: true` get no prop at all and see no behavior change. See `DetailView.lineHiddenColumns.vitest.jsx` for both the fix proof (simple-g-l-journal) and the non-regression proof (sales-invoice-shaped instances).
+
+**Real example** (`sales-invoice`, `purchase-invoice`, `goods-shipment`, `goods-receipt` — `lines.project`/`lines.costcenter`):
+
+```json
+"project": {
+  "visibility": "editable",
+  "grid": false,
+  "dimensionsPanel": true
+},
+"costcenter": {
+  "visibility": "editable",
+  "grid": false,
+  "dimensionsPanel": true
+}
+```
 
 #### Status column rendering (`columnType` and `enumValues`)
 
@@ -759,8 +809,9 @@ cell falls back to a plain value (with enum-label / FK identifier resolution).
 |----------|------|---------|---------|
 | `reference` | string \| null | Auto from targetTable | Catalog name for FK lookup (e.g., `"BusinessPartner"`). Set `null` to omit. |
 | `inputMode` | string \| null | Auto from reference type | `"selector"` (dropdown), `"search"` (searchable), `"dependent"` (cascading). Set `null` to omit. |
-| `searchSelect` | boolean | `false` | Opt-in: render an `inputMode: "selector"` FK field as the **searchable combobox** (`CreatableSearchSelect`) — text search + select — instead of the plain pick-only dropdown (`SelectorInput`). When absent/false the dropdown rendering is unchanged. Preserves `required`, the empty/null choice (`emptyOptionLabelKey`), and the same selector URL/context. **Not** the same as `searchable` (which enables a field as a list-API filter parameter). |
-| `allowCreate` | boolean | `false` | Opt-in (future): on a `searchSelect` field, surface the inline "+ create" action in the combobox. Currently OFF for all windows — the flag flows through the pipeline so a field can wire `createLabel`/`onCreateRequest` later without a generator change. |
+| `searchSelect` | boolean | `false` | **Legacy/ignored (post-ETP-4600).** Since ETP-4600, the searchable combobox (`CreatableSearchSelect`) is the DEFAULT rendering for every `inputMode: "selector"` FK field AND every `type: 'select'` fixed-list enum with options — the plain pick-only dropdown (`SelectorInput`) is only used for the `DocumentType` reference carve-out (which keeps its own `optionTranslator`). Setting `searchSelect: true` is now a no-op; leaving it out (or removing it) does not change rendering. **Not** the same as `searchable` (which enables a field as a list-API filter parameter). |
+| `allowCreate` | boolean | `false` | Opt-in (future): on a selector/enum field, surface the inline "+ create" action in the combobox. Currently OFF for all windows — the flag flows through the pipeline so a field can wire `createLabel`/`onCreateRequest` later without a generator change. |
+| `clearable` | boolean | `true` | Controls the chip's clear (`×`) button on the unified `CreatableSearchSelect`. Defaults to `true` (shown) for every selector/enum field, including required ones. Set `"clearable": false` on a specific field to hide the `×` for that field only. |
 | `dependsOn` | object \| null | `null` | Parent field dependency for cascading selectors. |
 
 **dependsOn format:**

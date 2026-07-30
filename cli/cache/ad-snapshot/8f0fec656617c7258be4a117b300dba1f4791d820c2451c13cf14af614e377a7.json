@@ -130,7 +130,7 @@
       ]
     },
     "1e3e96b5dc79b4c7366315de5249e070d2a81279761af45c7ea30b5365d1ed85": {
-      "checksum": "8dd1dcdca1ea2248e09cfca510c615c360847a2f45b6266ce3b9a6a42ee11af3",
+      "checksum": "1864c281b44ef12d694bf1df133ac8467940d0acec39b76ec2b5d4c292f6b8ae",
       "params": [
         "144"
       ],
@@ -866,6 +866,24 @@
           "ad_table_id": "208",
           "columnname": "Copyservicemodifytaxconfig",
           "position": "128"
+        },
+        {
+          "ad_column_id": "E307979CE47A48BAAA63F411BDBD0A29",
+          "ad_table_id": "208",
+          "columnname": "EM_ETGO_Sale_Price",
+          "position": "990"
+        },
+        {
+          "ad_column_id": "4E5E594900C84D10B02E12D254388499",
+          "ad_table_id": "208",
+          "columnname": "EM_ETGO_Purchase_Price",
+          "position": "991"
+        },
+        {
+          "ad_column_id": "8FC9A2CD267543C994F4F8F8BF8A02CC",
+          "ad_table_id": "208",
+          "columnname": "EM_ETGO_Stock",
+          "position": "992"
         },
         {
           "ad_column_id": "2020",
@@ -4332,7 +4350,7 @@
       ]
     },
     "314caee3650d614f6e16516792b6ae0979d23d630da4a9b794b05902fc5a07c8": {
-      "checksum": "61df14f821a9efaf3da564281ade2bef64bc27f30ca8d3c9c28f324bb2784f06",
+      "checksum": "9e7a8583ba06546c00a3f65a26b837da86bc47332af2dcf08bf63968ff7fca34",
       "params": [
         "143"
       ],
@@ -5052,16 +5070,46 @@
           "position": "86"
         },
         {
+          "ad_column_id": "51E299D6B5824EC480B524E1ED726985",
+          "ad_table_id": "259",
+          "columnname": "Confirmcancelandreplace",
+          "position": "87"
+        },
+        {
+          "ad_column_id": "129F2530A63B4C7CA9AF17996732E6A4",
+          "ad_table_id": "259",
+          "columnname": "Cancelledorder_id",
+          "position": "88"
+        },
+        {
+          "ad_column_id": "CB3A64CFC2B8471E91DBBF12A663D0FB",
+          "ad_table_id": "259",
+          "columnname": "Replacedorder_id",
+          "position": "89"
+        },
+        {
+          "ad_column_id": "F54BEAEAA4C04BDD9DC1448954589ED0",
+          "ad_table_id": "259",
+          "columnname": "Iscancelled",
+          "position": "90"
+        },
+        {
+          "ad_column_id": "E61022D568524DD78F02815F50092DB8",
+          "ad_table_id": "259",
+          "columnname": "Replacementorder_ID",
+          "position": "91"
+        },
+        {
+          "ad_column_id": "E97BA84C97A24937B99F9F01D6818B94",
+          "ad_table_id": "259",
+          "columnname": "BPartner_ExtRef",
+          "position": "92"
+        },
+        {
           "ad_column_id": "81DC33A710F7483DA6B47F9A654DC99E",
           "ad_table_id": "259",
           "columnname": "EM_Aeatsii_Fecha_Operacion",
           "position": "93"
-        },
-        {
-          "ad_column_id": "51E299D6B5824EC480B524E1ED726985",
-          "ad_table_id": "259",
-          "columnname": "Confirmcancelandreplace",
-          "position": "94"
         },
         {
           "ad_column_id": "50E460F9A753421FA0B3D59D0F1F8B8B",
@@ -5082,21 +5130,9 @@
           "position": "96"
         },
         {
-          "ad_column_id": "129F2530A63B4C7CA9AF17996732E6A4",
-          "ad_table_id": "259",
-          "columnname": "Cancelledorder_id",
-          "position": "97"
-        },
-        {
           "ad_column_id": "801DA2A5D6C4436F8B0F26D0995189C4",
           "ad_table_id": "259",
           "columnname": "EM_Etgo_Total_Discount",
-          "position": "98"
-        },
-        {
-          "ad_column_id": "CB3A64CFC2B8471E91DBBF12A663D0FB",
-          "ad_table_id": "259",
-          "columnname": "Replacedorder_id",
           "position": "98"
         },
         {
@@ -5104,24 +5140,6 @@
           "ad_table_id": "259",
           "columnname": "EM_ETGO_Currency_Rate",
           "position": "99"
-        },
-        {
-          "ad_column_id": "F54BEAEAA4C04BDD9DC1448954589ED0",
-          "ad_table_id": "259",
-          "columnname": "Iscancelled",
-          "position": "101"
-        },
-        {
-          "ad_column_id": "E61022D568524DD78F02815F50092DB8",
-          "ad_table_id": "259",
-          "columnname": "Replacementorder_ID",
-          "position": "103"
-        },
-        {
-          "ad_column_id": "E97BA84C97A24937B99F9F01D6818B94",
-          "ad_table_id": "259",
-          "columnname": "BPartner_ExtRef",
-          "position": "106"
         },
         {
           "ad_column_id": "9E82E728716246B393C40D2CDCA0133A",
@@ -14886,7 +14904,7 @@
       ]
     },
     "4e4b0d1c19b4dc9eb29dc45dd545b5060c06c718866acfa62c0cdf829eebc965": {
-      "checksum": "0a8d338026083b712e8bcc18f04b8267fca958cdd101452353dae0b7be8d4528",
+      "checksum": "36a9d73b8a07fa1fd62916ba1aafa054dd80b9be35bcae6aa8ea2f44ab113087",
       "params": [
         "C327DE215AC945F69363905840118177"
       ],
@@ -14976,16 +14994,28 @@
           "position": "14"
         },
         {
-          "ad_column_id": "98DB7C41F42443AB87DF3639A898591D",
-          "ad_table_id": "EFD368AAA05F421C9078E8997B986A1C",
-          "columnname": "ETSG_SIF_Territory",
-          "position": "16"
-        },
-        {
           "ad_column_id": "25EA4B325FAE4219A589874ED6D31B59",
           "ad_table_id": "EFD368AAA05F421C9078E8997B986A1C",
           "columnname": "Validate_Previous_Invoice",
-          "position": "16"
+          "position": "15"
+        },
+        {
+          "ad_column_id": "98DB7C41F42443AB87DF3639A898591D",
+          "ad_table_id": "EFD368AAA05F421C9078E8997B986A1C",
+          "columnname": "ETSG_SIF_Territory",
+          "position": "23"
+        },
+        {
+          "ad_column_id": "09481933730649FBAD9409C9FCCBB6DA",
+          "ad_table_id": "EFD368AAA05F421C9078E8997B986A1C",
+          "columnname": "Email_User",
+          "position": "24"
+        },
+        {
+          "ad_column_id": "4CAC02DA1612475F831D1B6B7FD1E2EE",
+          "ad_table_id": "EFD368AAA05F421C9078E8997B986A1C",
+          "columnname": "Email_Password",
+          "position": "25"
         }
       ]
     },
@@ -18140,7 +18170,7 @@
       ]
     },
     "62e7d6689c11ba27fdc238450bbc940c71cc4a579d87d3669861331f4f00b615": {
-      "checksum": "633bf9a7cd57a1ee8db4fcb9d712b16732e28a53260562f8c1125ad9d253b3fb",
+      "checksum": "8eac850593f222ad66a19aa837b22ee1e2d48abaedd1a7cbf4c78a551b873b28",
       "params": [
         "B5673F73F613496C8BEA22FB55E4E1E4"
       ],
@@ -18242,6 +18272,12 @@
           "position": null
         },
         {
+          "ad_column_id": "7A8005A730744BCF8F971DF27700D4DF",
+          "ad_table_id": "A45FDE07216C40FBA472E7B91F7273E4",
+          "columnname": "C_Year_Close_V_ID",
+          "position": null
+        },
+        {
           "ad_column_id": "1EDEE59E636940CD9E0C3C481FD61150",
           "ad_table_id": "A45FDE07216C40FBA472E7B91F7273E4",
           "columnname": "Created",
@@ -18257,12 +18293,6 @@
           "ad_column_id": "8CBA5F00D89D4464B4BE152DB36D6F01",
           "ad_table_id": "A45FDE07216C40FBA472E7B91F7273E4",
           "columnname": "Credit",
-          "position": null
-        },
-        {
-          "ad_column_id": "7A8005A730744BCF8F971DF27700D4DF",
-          "ad_table_id": "A45FDE07216C40FBA472E7B91F7273E4",
-          "columnname": "C_Year_Close_V_ID",
           "position": null
         },
         {
@@ -21714,7 +21744,7 @@
       ]
     },
     "9875b64b4d474916c9d42e3986d743e8a881ac53d52dca07ea47fb490bfea6df": {
-      "checksum": "a39d01a97b89ab267902eef515a809185e065ee2ad3169723f9a1b78bef101ae",
+      "checksum": "13a0bd7468d92cb91b628baa09efae3d25682328f9fd62d18fdff34101553735",
       "params": [
         "6CB5B67ED33F47DFA334079D3EA2340E"
       ],
@@ -22320,16 +22350,46 @@
           "position": "86"
         },
         {
+          "ad_column_id": "51E299D6B5824EC480B524E1ED726985",
+          "ad_table_id": "259",
+          "columnname": "Confirmcancelandreplace",
+          "position": "87"
+        },
+        {
+          "ad_column_id": "129F2530A63B4C7CA9AF17996732E6A4",
+          "ad_table_id": "259",
+          "columnname": "Cancelledorder_id",
+          "position": "88"
+        },
+        {
+          "ad_column_id": "CB3A64CFC2B8471E91DBBF12A663D0FB",
+          "ad_table_id": "259",
+          "columnname": "Replacedorder_id",
+          "position": "89"
+        },
+        {
+          "ad_column_id": "F54BEAEAA4C04BDD9DC1448954589ED0",
+          "ad_table_id": "259",
+          "columnname": "Iscancelled",
+          "position": "90"
+        },
+        {
+          "ad_column_id": "E61022D568524DD78F02815F50092DB8",
+          "ad_table_id": "259",
+          "columnname": "Replacementorder_ID",
+          "position": "91"
+        },
+        {
+          "ad_column_id": "E97BA84C97A24937B99F9F01D6818B94",
+          "ad_table_id": "259",
+          "columnname": "BPartner_ExtRef",
+          "position": "92"
+        },
+        {
           "ad_column_id": "81DC33A710F7483DA6B47F9A654DC99E",
           "ad_table_id": "259",
           "columnname": "EM_Aeatsii_Fecha_Operacion",
           "position": "93"
-        },
-        {
-          "ad_column_id": "51E299D6B5824EC480B524E1ED726985",
-          "ad_table_id": "259",
-          "columnname": "Confirmcancelandreplace",
-          "position": "94"
         },
         {
           "ad_column_id": "50E460F9A753421FA0B3D59D0F1F8B8B",
@@ -22350,21 +22410,9 @@
           "position": "96"
         },
         {
-          "ad_column_id": "129F2530A63B4C7CA9AF17996732E6A4",
-          "ad_table_id": "259",
-          "columnname": "Cancelledorder_id",
-          "position": "97"
-        },
-        {
           "ad_column_id": "801DA2A5D6C4436F8B0F26D0995189C4",
           "ad_table_id": "259",
           "columnname": "EM_Etgo_Total_Discount",
-          "position": "98"
-        },
-        {
-          "ad_column_id": "CB3A64CFC2B8471E91DBBF12A663D0FB",
-          "ad_table_id": "259",
-          "columnname": "Replacedorder_id",
           "position": "98"
         },
         {
@@ -22372,24 +22420,6 @@
           "ad_table_id": "259",
           "columnname": "EM_ETGO_Currency_Rate",
           "position": "99"
-        },
-        {
-          "ad_column_id": "F54BEAEAA4C04BDD9DC1448954589ED0",
-          "ad_table_id": "259",
-          "columnname": "Iscancelled",
-          "position": "101"
-        },
-        {
-          "ad_column_id": "E61022D568524DD78F02815F50092DB8",
-          "ad_table_id": "259",
-          "columnname": "Replacementorder_ID",
-          "position": "103"
-        },
-        {
-          "ad_column_id": "E97BA84C97A24937B99F9F01D6818B94",
-          "ad_table_id": "259",
-          "columnname": "BPartner_ExtRef",
-          "position": "106"
         },
         {
           "ad_column_id": "9E82E728716246B393C40D2CDCA0133A",
@@ -25200,7 +25230,7 @@
       ]
     },
     "c0351cd0caf4edf2a56beaafd358fe05567a911a68c5ab90cd866d785e6a9dfc": {
-      "checksum": "50a22294cb954a339dfa045493a2f37fd31e9edbbff706a885c729b62b65e278",
+      "checksum": "661844af84cab59c035c5fde7fd88202736f86ea3307f14ab7dcf383d8c24872",
       "params": [
         "140"
       ],
@@ -26014,6 +26044,24 @@
           "ad_table_id": "208",
           "columnname": "Copyservicemodifytaxconfig",
           "position": "128"
+        },
+        {
+          "ad_column_id": "E307979CE47A48BAAA63F411BDBD0A29",
+          "ad_table_id": "208",
+          "columnname": "EM_ETGO_Sale_Price",
+          "position": "990"
+        },
+        {
+          "ad_column_id": "4E5E594900C84D10B02E12D254388499",
+          "ad_table_id": "208",
+          "columnname": "EM_ETGO_Purchase_Price",
+          "position": "991"
+        },
+        {
+          "ad_column_id": "8FC9A2CD267543C994F4F8F8BF8A02CC",
+          "ad_table_id": "208",
+          "columnname": "EM_ETGO_Stock",
+          "position": "992"
         },
         {
           "ad_column_id": "521F823119706C29E040007F01001B31",
@@ -30936,7 +30984,7 @@
       ]
     },
     "e914309500f47dd6b862879819658bc9e588f339dabc304f81cd3c58853ca4ac": {
-      "checksum": "a504eb62ef117da75737a5c246d2d2b05c08d8a3a5184d0ac44815901cda64a0",
+      "checksum": "2baacecd495ef2be772eb62cbaae8d3e36325817971b0f42160dd8a359460534",
       "params": [
         "181"
       ],
@@ -31542,16 +31590,46 @@
           "position": "86"
         },
         {
+          "ad_column_id": "51E299D6B5824EC480B524E1ED726985",
+          "ad_table_id": "259",
+          "columnname": "Confirmcancelandreplace",
+          "position": "87"
+        },
+        {
+          "ad_column_id": "129F2530A63B4C7CA9AF17996732E6A4",
+          "ad_table_id": "259",
+          "columnname": "Cancelledorder_id",
+          "position": "88"
+        },
+        {
+          "ad_column_id": "CB3A64CFC2B8471E91DBBF12A663D0FB",
+          "ad_table_id": "259",
+          "columnname": "Replacedorder_id",
+          "position": "89"
+        },
+        {
+          "ad_column_id": "F54BEAEAA4C04BDD9DC1448954589ED0",
+          "ad_table_id": "259",
+          "columnname": "Iscancelled",
+          "position": "90"
+        },
+        {
+          "ad_column_id": "E61022D568524DD78F02815F50092DB8",
+          "ad_table_id": "259",
+          "columnname": "Replacementorder_ID",
+          "position": "91"
+        },
+        {
+          "ad_column_id": "E97BA84C97A24937B99F9F01D6818B94",
+          "ad_table_id": "259",
+          "columnname": "BPartner_ExtRef",
+          "position": "92"
+        },
+        {
           "ad_column_id": "81DC33A710F7483DA6B47F9A654DC99E",
           "ad_table_id": "259",
           "columnname": "EM_Aeatsii_Fecha_Operacion",
           "position": "93"
-        },
-        {
-          "ad_column_id": "51E299D6B5824EC480B524E1ED726985",
-          "ad_table_id": "259",
-          "columnname": "Confirmcancelandreplace",
-          "position": "94"
         },
         {
           "ad_column_id": "50E460F9A753421FA0B3D59D0F1F8B8B",
@@ -31572,21 +31650,9 @@
           "position": "96"
         },
         {
-          "ad_column_id": "129F2530A63B4C7CA9AF17996732E6A4",
-          "ad_table_id": "259",
-          "columnname": "Cancelledorder_id",
-          "position": "97"
-        },
-        {
           "ad_column_id": "801DA2A5D6C4436F8B0F26D0995189C4",
           "ad_table_id": "259",
           "columnname": "EM_Etgo_Total_Discount",
-          "position": "98"
-        },
-        {
-          "ad_column_id": "CB3A64CFC2B8471E91DBBF12A663D0FB",
-          "ad_table_id": "259",
-          "columnname": "Replacedorder_id",
           "position": "98"
         },
         {
@@ -31594,24 +31660,6 @@
           "ad_table_id": "259",
           "columnname": "EM_ETGO_Currency_Rate",
           "position": "99"
-        },
-        {
-          "ad_column_id": "F54BEAEAA4C04BDD9DC1448954589ED0",
-          "ad_table_id": "259",
-          "columnname": "Iscancelled",
-          "position": "101"
-        },
-        {
-          "ad_column_id": "E61022D568524DD78F02815F50092DB8",
-          "ad_table_id": "259",
-          "columnname": "Replacementorder_ID",
-          "position": "103"
-        },
-        {
-          "ad_column_id": "E97BA84C97A24937B99F9F01D6818B94",
-          "ad_table_id": "259",
-          "columnname": "BPartner_ExtRef",
-          "position": "106"
         },
         {
           "ad_column_id": "9E82E728716246B393C40D2CDCA0133A",
@@ -32822,7 +32870,7 @@
       ]
     },
     "e9796a297caefaf50550fd46b064e00862567eb728d3001bd2e77bcab7db7d3b": {
-      "checksum": "bd406e71a607946170c1c60e06423b68c5466095e8bf5c4b6609bbd913b3d224",
+      "checksum": "a15624c615e07424dccbcf2603d6271ece2acb638ec5bddc3c37ecde4a9f9276",
       "params": [
         "94EAA455D2644E04AB25D93BE5157B6D"
       ],
@@ -33674,6 +33722,12 @@
           "position": "21"
         },
         {
+          "ad_column_id": "876CAA031C8648A39E8D0CA4151A22C6",
+          "ad_table_id": "84203CBEBDA349C38319C0E549751546",
+          "columnname": "EM_ETGO_Match_Group_ID",
+          "position": "22"
+        },
+        {
           "ad_column_id": "D88FE68C6A19467DB8341FFC18C0C90D",
           "ad_table_id": "84203CBEBDA349C38319C0E549751546",
           "columnname": "EM_PSD2_Transaction_Identifier",
@@ -33686,10 +33740,10 @@
           "position": "23"
         },
         {
-          "ad_column_id": "876CAA031C8648A39E8D0CA4151A22C6",
+          "ad_column_id": "2A8EA3EC7BFD415692D844A42EE5BFD5",
           "ad_table_id": "84203CBEBDA349C38319C0E549751546",
-          "columnname": "EM_ETGO_Match_Group_ID",
-          "position": null
+          "columnname": "EM_ETGO_Pending_Amount",
+          "position": "27"
         },
         {
           "ad_column_id": "828EE0AE7FEA5FA1E040007F010067C7",

@@ -391,7 +391,7 @@ export default function CreateContactModal({
         toErrMsg(errData?.message) ||
         toErrMsg(errData?.error) ||
         toErrMsg(errData?.response?.error) ||
-        `${ui('createContactError')} (HTTP ${res.status})`
+        ui('createContactError')
       );
     }
 

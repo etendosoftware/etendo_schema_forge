@@ -8,11 +8,11 @@ const fields = [
   { key: 'foreignCurrencyDebit', column: 'AmtSourceDr', type: 'number', label: 'Debit', required: true, section: 'principal', readOnlyLogic: (record) => record['processed'] === true },
   { key: 'foreignCurrencyCredit', column: 'AmtSourceCr', type: 'number', label: 'Credit', required: true, section: 'principal', readOnlyLogic: (record) => record['processed'] === true },
   { key: 'openItems', column: 'Open_Items', type: 'checkbox', label: 'Open Items', required: true, section: 'other' },
-  { key: 'businessPartner', column: 'C_Bpartner_ID', type: 'search', label: 'Business Partner', section: 'other', reference: 'BPartner', inputMode: 'search', displayLogic: (record) => record['openItems'] === true, readOnlySource: 'server', readOnlyLogicReason: 'untranslatable-token' },
-  { key: 'product', column: 'M_Product_ID', type: 'selector', label: 'Product', section: 'other', reference: 'Product', inputMode: 'selector', displayLogic: (record) => record['openItems'] === true, readOnlyLogic: (record) => record['posted'] === true },
-  { key: 'project', column: 'C_Project_ID', type: 'search', label: 'Project', section: 'other', reference: 'Project', inputMode: 'search', displayLogic: (record) => record['openItems'] === true, readOnlyLogic: (record) => record['posted'] === true },
+  { key: 'businessPartner', column: 'C_Bpartner_ID', type: 'search', label: 'Business Partner', section: 'other', reference: 'BPartner', inputMode: 'search', visible: null, visibilitySource: 'server', displayLogicReason: 'server-macro', readOnlySource: 'server', readOnlyLogicReason: 'untranslatable-token' },
+  { key: 'product', column: 'M_Product_ID', type: 'selector', label: 'Product', section: 'other', reference: 'Product', inputMode: 'selector', visible: null, visibilitySource: 'server', displayLogicReason: 'server-macro', readOnlyLogic: (record) => record['posted'] === true },
+  { key: 'project', column: 'C_Project_ID', type: 'search', label: 'Project', section: 'other', reference: 'Project', inputMode: 'search', visible: null, visibilitySource: 'server', displayLogicReason: 'server-macro', readOnlyLogic: (record) => record['posted'] === true },
   { key: 'asset', column: 'A_Asset_ID', type: 'selector', label: 'Asset', section: 'other', reference: 'Asset', inputMode: 'selector', displayLogic: (record) => record['openItems'] === true, readOnlyLogic: (record) => record['posted'] === true },
-  { key: 'costCenter', column: 'C_Costcenter_ID', type: 'selector', label: 'Cost Center', section: 'other', reference: 'Costcenter', inputMode: 'selector', displayLogic: (record) => record['openItems'] === true, readOnlyLogic: (record) => record['posted'] === true },
+  { key: 'costCenter', column: 'C_Costcenter_ID', type: 'selector', label: 'Cost Center', section: 'other', reference: 'Costcenter', inputMode: 'selector', visible: null, visibilitySource: 'server', displayLogicReason: 'server-macro', readOnlyLogic: (record) => record['posted'] === true },
 ];
 // @sf-generated-end fields:gLJournalLine
 

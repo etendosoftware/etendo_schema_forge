@@ -8781,7 +8781,7 @@
       ]
     },
     "4cdbb6a1d5f88ee0967c42ec50f1ebf974918f41cfdc927579046b33fad8d0bc": {
-      "checksum": "12351ca46c24cd9af0e1e634fa20d0f4a3d619d6ab6dc037f29dfb3ba67d2d2c",
+      "checksum": "d07dfb783dbf5b2db5c26bfb9c6e0bdce856f5e221a64fa0da8c415e83a48993",
       "params": [
         "800026"
       ],
@@ -9053,7 +9053,7 @@
         {
           "column_id": "801092",
           "columnname": "AD_Org_ID",
-          "displaylogic": null,
+          "displaylogic": "@ACCT_DIMENSION_DISPLAY@",
           "field_id": "801373",
           "name": "Organization",
           "readonlylogic": "@Processed@='Y'",
@@ -9077,7 +9077,7 @@
         {
           "column_id": "5D8B14D9FA344D658E7012A1F1895FC3",
           "columnname": "C_Costcenter_ID",
-          "displaylogic": null,
+          "displaylogic": "@ACCT_DIMENSION_DISPLAY@",
           "field_id": "64B5669D6F914ADC8813E6CABED3F901",
           "name": "Cost Center",
           "readonlylogic": "@Posted@='Y'",
@@ -9089,7 +9089,7 @@
         {
           "column_id": "0B4B5211B7F24887ACB1AD79608FF934",
           "columnname": "EM_Etadas_C_Bpartner_ID",
-          "displaylogic": null,
+          "displaylogic": "@$Element_BP@='Y'",
           "field_id": "446735AC99E344659E37A14AE107C15E",
           "name": "Business Partner",
           "readonlylogic": "@Posted@='Y'",
@@ -9101,7 +9101,7 @@
         {
           "column_id": "8749C3DA3EE640049CE47CFBFF47F538",
           "columnname": "User1_ID",
-          "displaylogic": null,
+          "displaylogic": "@ACCT_DIMENSION_DISPLAY@",
           "field_id": "2E0C88168F7F4B1B99C6F10C3A2D3D4E",
           "name": "1st Dimension",
           "readonlylogic": "@Posted@='Y'",
@@ -9113,7 +9113,7 @@
         {
           "column_id": "B96201EC1EC945309D886057D484C07D",
           "columnname": "User2_ID",
-          "displaylogic": null,
+          "displaylogic": "@ACCT_DIMENSION_DISPLAY@",
           "field_id": "E0C286F6B80E42AF949E5E2553FE9A4B",
           "name": "2nd Dimension",
           "readonlylogic": "@Posted@='Y'",
@@ -9125,7 +9125,7 @@
         {
           "column_id": "C17B7477A9F5402594A5F462DF02EA78",
           "columnname": "EM_Etadas_Salesregion_ID",
-          "displaylogic": null,
+          "displaylogic": "@$Element_SR@='Y'",
           "field_id": "B68304CBBE8F4A7E96672E42C6C63D53",
           "name": "Sales Region",
           "readonlylogic": "@Posted@='Y'",
@@ -9137,7 +9137,7 @@
         {
           "column_id": "DAA8CBEDDDE645BA8FCB535003D376BF",
           "columnname": "EM_Etadas_C_Activity_ID",
-          "displaylogic": null,
+          "displaylogic": "@$Element_AY@='Y'",
           "field_id": "26915F1B8D6B467AAC63032A6452A004",
           "name": "Activity",
           "readonlylogic": "@Posted@='Y'",
@@ -9149,7 +9149,7 @@
         {
           "column_id": "28C197B03DCA4D1BB97C74BA12FFABB6",
           "columnname": "EM_Etadas_Campaign_ID",
-          "displaylogic": null,
+          "displaylogic": "@$Element_MC@='Y'",
           "field_id": "E305F878646B4E8AA4BFC4E1640021FB",
           "name": "Sales Campaign",
           "readonlylogic": "@Posted@='Y'",
@@ -22525,7 +22525,7 @@
       "rows": []
     },
     "f96633ac204ea54d299e732b9b90d118784f1968476b98b9d9df3e7c10b7da59": {
-      "checksum": "d488ea35264497292eb93088793ed61a40c6ee1c133844810ae90582a7c2a0b5",
+      "checksum": "ddf7f729166f2871f9e61b2af928b61ffef9fc6b37c8037552cda87674a45e21",
       "params": [
         "800027"
       ],
@@ -22809,7 +22809,7 @@
         {
           "column_id": "B7559C9E2A2C4F038577014BD10FDA98",
           "columnname": "EM_Etadas_User1_ID",
-          "displaylogic": "@$Element_PJ@='Y' & @IsDepreciated@='Y'",
+          "displaylogic": "@$Element_U1@='Y' & @IsDepreciated@='Y'",
           "field_id": "632C6195B02E4F479E4DB03E9217F671",
           "name": "1st Dimension",
           "readonlylogic": null,
@@ -22821,7 +22821,7 @@
         {
           "column_id": "31522714EEFF438ABABB779C2AFC2784",
           "columnname": "EM_Etadas_User2_ID",
-          "displaylogic": "@$Element_PJ@='Y' & @IsDepreciated@='Y'",
+          "displaylogic": "@$Element_U2@='Y' & @IsDepreciated@='Y'",
           "field_id": "C4546D1498734940AACC8AF386B245C4",
           "name": "2nd Dimension",
           "readonlylogic": null,
@@ -22833,7 +22833,7 @@
         {
           "column_id": "44AC857C35B64D1789A7FB40AFF6B9AD",
           "columnname": "EM_Etadas_Costcenter_ID",
-          "displaylogic": "@$Element_PJ@='Y' & @IsDepreciated@='Y'",
+          "displaylogic": "@$Element_CC@='Y' & @IsDepreciated@='Y'",
           "field_id": "5DEC54AD1C2142F3BB71FE7F171F8D76",
           "name": "Cost Center",
           "readonlylogic": null,
@@ -22845,7 +22845,7 @@
         {
           "column_id": "942A21EB6B594F31BAAAAD94F898BD78",
           "columnname": "EM_Etadas_C_Activity_ID",
-          "displaylogic": "@$Element_PJ@='Y' & @IsDepreciated@='Y'",
+          "displaylogic": "@$Element_AY@='Y' & @IsDepreciated@='Y'",
           "field_id": "926E047940A643878DA504B6CDFDCFA5",
           "name": "Activity",
           "readonlylogic": null,
@@ -22857,7 +22857,7 @@
         {
           "column_id": "D8D338161A38458D9F3B96DE237185A0",
           "columnname": "EM_Etadas_Salesregion_ID",
-          "displaylogic": "@$Element_PJ@='Y' & @IsDepreciated@='Y'",
+          "displaylogic": "@$Element_SR@='Y' & @IsDepreciated@='Y'",
           "field_id": "6782BF41DCF143B49A17E91A7C479548",
           "name": "Sales Region",
           "readonlylogic": null,
@@ -22869,7 +22869,7 @@
         {
           "column_id": "AB86F04A71FE436FA366EB8B6FD78052",
           "columnname": "EM_Etadas_Campaign_ID",
-          "displaylogic": "@$Element_PJ@='Y' & @IsDepreciated@='Y'",
+          "displaylogic": "@$Element_MC@='Y' & @IsDepreciated@='Y'",
           "field_id": "E0CAC7E43DC341C69024468A2AC38669",
           "name": "Sales Campaign",
           "readonlylogic": null,

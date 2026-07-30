@@ -2,11 +2,11 @@ import { describe, it, expect } from 'vitest';
 import { buildRuntimeRoutes } from '../runtime-routes.jsx';
 
 describe('buildRuntimeRoutes', () => {
-  it('marks onboarding, login, logout and the PSD2 callback as public routes', () => {
+  it('marks onboarding, login, logout and the bank connection callback as public routes', () => {
     const routes = buildRuntimeRoutes({ windowMap: {}, apiBaseUrl: 'http://x/api' });
     const paths = routes.filter((r) => r.public).map((r) => r.path);
     expect(paths).toEqual(
-      expect.arrayContaining(['onboarding', 'login', 'logout', 'financial-account/psd2-callback'])
+      expect.arrayContaining(['onboarding', 'login', 'logout', 'financial-account/bank-connection-callback'])
     );
   });
 

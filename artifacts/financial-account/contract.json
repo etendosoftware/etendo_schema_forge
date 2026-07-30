@@ -1,8 +1,8 @@
 {
-  "version": "0.20.0",
+  "version": "0.21.0",
   "generatedAt": "2026-06-11T01:47:08.755Z",
-  "updatedAt": "2026-07-29T12:37:58.473Z",
-  "checksum": "61ab07c7a7f4851c",
+  "updatedAt": "2026-07-30T11:54:06.775Z",
+  "checksum": "bbdccd3219800723",
   "frontendContract": {
     "window": {
       "id": "94EAA455D2644E04AB25D93BE5157B6D",
@@ -556,28 +556,28 @@
                 "value": "1BE",
                 "name": "New statement each run",
                 "labels": {
-                  "es_ES": "One per run"
+                  "es_ES": "New statement each run"
                 }
               },
               {
                 "value": "1BD",
                 "name": "Within 1 day",
                 "labels": {
-                  "es_ES": "One per day"
+                  "es_ES": "Within 1 day"
                 }
               },
               {
                 "value": "1BW",
                 "name": "Within 7 days",
                 "labels": {
-                  "es_ES": "One per week"
+                  "es_ES": "Within 7 days"
                 }
               },
               {
                 "value": "1BM",
                 "name": "Within 30 days",
                 "labels": {
-                  "es_ES": "One per month"
+                  "es_ES": "Within 30 days"
                 }
               }
             ],
@@ -1283,10 +1283,9 @@
               "maxLength": 32
             },
             "displayLogic": {
-              "raw": "@ACCT_DIMENSION_DISPLAY@ & @Trxtype@!''",
-              "evaluable": false,
-              "reason": "server-macro",
-              "js": null
+              "raw": "@Trxtype@!''",
+              "evaluable": true,
+              "js": "record['transactionType'] !== ''"
             },
             "readOnlyLogic": {
               "raw": "@Posted@='Y' | @Fin_Payment_ID@!''",
@@ -4061,6 +4060,14 @@
             "apiKey": "id",
             "column": "FIN_Bankstatementline_ID",
             "type": "id",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "eTGOPendingAmount",
+            "apiKey": "eTGOPendingAmount",
+            "column": "EM_ETGO_Pending_Amount",
+            "type": "amount",
             "visibility": "system",
             "required": true
           }
@@ -9593,6 +9600,14 @@
         "description": "System field 'eTGOMatchGroup' should exist in backend but not frontend for bankStatementLines"
       },
       {
+        "id": "t-system-field-bankStatementLines-eTGOPendingAmount",
+        "category": "system-field",
+        "entity": "bankStatementLines",
+        "field": "eTGOPendingAmount",
+        "runner": "node",
+        "description": "System field 'eTGOPendingAmount' should exist in backend but not frontend for bankStatementLines"
+      },
+      {
         "id": "t-system-field-bankStatementLines-financialAccountTransaction",
         "category": "system-field",
         "entity": "bankStatementLines",
@@ -10053,7 +10068,7 @@
       }
     ],
     "summary": {
-      "total": 711,
+      "total": 712,
       "byCategory": {
         "action-endpoint": 21,
         "crud-flags": 5,
@@ -10066,11 +10081,11 @@
         "readonlylogic-valid": 29,
         "rule-declared": 225,
         "selector-endpoint": 16,
-        "system-field": 110,
+        "system-field": 111,
         "visibility": 5
       },
       "byRunner": {
-        "node": 711,
+        "node": 712,
         "junit": 0
       }
     }

@@ -37,9 +37,9 @@ function chunkIban(iban) {
 // jsdom cannot catch (no Tailwind, no computed opacity).
 export function NameCell({ account, ui, onConnect }) {
   const isCashLike = account.type === ACCOUNT_TYPE.CASH;
-  // In T1 the PSD2 column is not yet populated, so anything not explicitly
-  // psd2Connected === true is treated as offline for bank/card rows.
-  const isDisconnected = !isCashLike && account.psd2Connected !== true;
+  // In T1 the connection column is not yet populated, so anything not explicitly
+  // bankConnected === true is treated as offline for bank/card rows.
+  const isDisconnected = !isCashLike && account.bankConnected !== true;
   return (
     <div className="flex h-full items-center">
         <div className="flex w-[44px] shrink-0 items-center justify-center opacity-0 transition-opacity group-hover:opacity-100 group-hover/row:opacity-100">

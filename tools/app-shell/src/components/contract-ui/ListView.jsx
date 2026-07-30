@@ -4,8 +4,9 @@ import { Button } from '@/components/ui/button.jsx';
 import { Skeleton } from '@/components/ui/skeleton.jsx';
 import { useEntity } from '@/hooks/useEntity';
 import { useRowDelete } from '@/hooks/useRowDelete';
+import { useBulkRowDelete } from '@/hooks/useBulkRowDelete';
 import { useMenuLabel, useLabel, useUI } from '@/i18n';
-import { ArrowUpDown, ChevronDown, Plus, Link2, Printer, LayoutGrid, RefreshCw, Eye, Copy, Upload } from 'lucide-react';
+import { ArrowUpDown, ChevronDown, Plus, Link2, Printer, LayoutGrid, RefreshCw, Eye, Copy, Upload, Trash2 } from 'lucide-react';
 import { useRegisterWindowContext } from '@/components/CurrentWindowContext';
 import { useSetPageMeta } from '@/components/layout/PageMetaContext';
 import { useFavorites } from '@/components/layout/FavoritesContext';
@@ -591,6 +592,79 @@ export function ListView({
   const tMenu = useMenuLabel();
   const t = useLabel(labelOverrides);
   const ui = useUI();
+  // ETP-4669: the import flow (ImportDialog + every child) previously rendered its hardcoded
+  // English DEFAULT_LABELS regardless of locale, because no `labels` was ever passed. Build
+  // the nested `labels` object ImportDialog forwards to each child (shape documented in
+  // app-shell-core's ImportDialog.jsx) and pass `translate={ui}` so the send pipeline
+  // localizes backend errors too. Templated strings (mappedSummary/{mapped}/{total},
+  // tooltips, bulkApply/{count}/{raw}/{value}) keep their {placeholders} — the child fills
+  // them at render time; the (n) => string labels interpolate here. `save`/`cancel`/`retry`/
+  // `close` reuse existing generic keys per the i18n guide's "reuse before adding" rule.
+  const importLabels = useMemo(() => ({
+    title: ui('importDialogTitle'),
+    revalidating: ui('importRevalidating'),
+    downloadTemplate: ui('importDownloadTemplate'),
+    importButton: (n) => ui('importButtonCount', { n }),
+    dropzone: {
+      dropHere: ui('importDropHere'),
+      dropHint: ui('importDropHint'),
+    },
+    progress: {
+      title: ui('importProgressTitle'),
+      subtitle: ui('importProgressSubtitle'),
+    },
+    mapping: {
+      notImported: ui('importNotImported'),
+      mappedSummary: ui('importMappedSummary'),
+      editMatch: ui('importEditMatch'),
+      editTitle: ui('importEditColumnTitle'),
+      save: ui('save'),
+      cancel: ui('cancel'),
+    },
+    confirm: {
+      title: ui('importConfirmTitle'),
+      willImport: (n) => ui('importWillImport', { n }),
+      willSkip: (n) => ui('importWillSkip', { n }),
+      cancel: ui('cancel'),
+      confirm: ui('importConfirmButton'),
+    },
+    fileError: {
+      title: ui('importFileErrorTitle'),
+      cancel: ui('cancel'),
+      retry: ui('retry'),
+    },
+    reviewQueue: {
+      filterAll: ui('importFilterAll'),
+      filterOk: ui('importFilterOk'),
+      filterError: ui('importFilterError'),
+      skip: ui('importSkip'),
+      skipped: ui('importSkipped'),
+      unskip: ui('importUnskip'),
+      downloadErrors: ui('importDownloadErrors'),
+      status: ui('importStatus'),
+      statusOk: ui('importStatusOk'),
+      statusError: ui('importStatusError'),
+      fieldErrorsTooltip: ui('importFieldErrorsTooltip'),
+      bulkApplyTitle: ui('importBulkApplyTitle'),
+      bulkApplyDescription: ui('importBulkApplyDescription'),
+      bulkApplyOnlyThis: ui('importBulkApplyOnlyThis'),
+      bulkApplyAll: ui('importBulkApplyAll'),
+      retry: ui('retry'),
+    },
+    systemError: {
+      title: ui('importSystemErrorTitle'),
+      subtitle: ui('importSystemErrorSubtitle'),
+      copy: ui('importSystemErrorCopy'),
+      copied: ui('importSystemErrorCopied'),
+      copyFailed: ui('importSystemErrorCopyFailed'),
+      close: ui('close'),
+      showReport: ui('importSystemErrorShowReport'),
+      hideReport: ui('importSystemErrorHideReport'),
+      rowData: ui('importSystemErrorRowData'),
+      requestSent: ui('importSystemErrorRequestSent'),
+      serverResponse: ui('importSystemErrorServerResponse'),
+    },
+  }), [ui]);
   const label = tMenu(entityLabel) || entityLabel || entity;
   const { toggleFavorite, isFavorite } = useFavorites();
   const favKey = windowName || entity || '';
@@ -607,6 +681,12 @@ export function ListView({
   }, [favActive, hook.items.length]);
   const [selectedRows, setSelectedRows] = useState([]);
   const [clearSelectionCounter, setClearSelectionCounter] = useState(0);
+  // ETP-4656 — partial bulk-delete outcome: bump deselectTrigger with the ids of
+  // the rows that were successfully deleted so DataTable drops only those from
+  // its internal selection Set, leaving the failed rows checked (see
+  // useBulkRowDelete below and DataTable's matching deselectTrigger effect).
+  const [deselectTrigger, setDeselectTrigger] = useState(0);
+  const [deselectRowIds, setDeselectRowIds] = useState([]);
   const [previewRow, setPreviewRow] = useState(null);
   const activePreviewRow = previewRow ?? externalPreviewRow ?? null;
 
@@ -627,6 +707,31 @@ export function ListView({
     setSelectedRows([]);
     setClearSelectionCounter((c) => c + 1);
   }, []);
+
+  // ETP-4656 — grid multi-select "Delete selected". Outcome handling per the
+  // standardized delete UX:
+  //   - all succeeded  → refetch (deleted rows disappear) + clear selection.
+  //   - partial failure → refetch (succeeded rows disappear) + keep only the
+  //     failed rows selected, both in our own state and in DataTable's
+  //     internal checkbox Set (via deselectTrigger/deselectRowIds).
+  //   - all failed      → no refetch, selection untouched.
+  const { requestBulkDelete, bulkDeleteDialog, deleting: bulkDeleting } = useBulkRowDelete({
+    apiBaseUrl,
+    entity: entity || 'header',
+    token,
+    onSuccess: (succeeded, failed) => {
+      if (succeeded.length > 0) hook.refresh();
+      if (failed.length === 0) {
+        clearSelection();
+      } else {
+        setSelectedRows(failed);
+        if (succeeded.length > 0) {
+          setDeselectRowIds(succeeded.map((r) => r.id));
+          setDeselectTrigger((c) => c + 1);
+        }
+      }
+    },
+  });
 
   // Register this list view with the current-window context so the Copilot
   // widget can auto-attach it when opened. Memoized so the hook's signature
@@ -736,6 +841,8 @@ export function ListView({
     rowFilter: effectiveRowFilter,
     hoverRowActions,
     clearSelectionTrigger: clearSelectionCounter,
+    deselectTrigger,
+    deselectRowIds,
     rowQuickActions: effectiveRowQuickActions,
     hiddenColumns,
   };
@@ -785,6 +892,25 @@ export function ListView({
                     data-testid="Button__620cbc">
                     <Copy className={iconSizeClass(selectionBarSize)} data-testid="Copy__620cbc" />
                     {ui('cloneOrderBtn')} ({selectedRows.length})
+                  </Button>
+                )}
+                {/* ETP-4656 — generic "Delete selected". Suppressed when the window is
+                    read-only or via the explicit `listViewOptions.hideBulkDelete` opt-out
+                    (e.g. a host that already renders its own delete affordance through
+                    selectionBarRightActions for an unrelated reason must opt out
+                    explicitly — inferring it from that prop's mere presence was fragile,
+                    since selectionBarRightActions can be used for things other than
+                    delete). */}
+                {!windowReadOnly && !(listViewOptions?.hideBulkDelete) && (
+                  <Button
+                    variant="outline"
+                    size={selectionBarSize}
+                    className="gap-1.5"
+                    disabled={bulkDeleting}
+                    onClick={() => requestBulkDelete(selectedRows)}
+                    data-testid="bulk-delete-selected">
+                    <Trash2 className={iconSizeClass(selectionBarSize)} data-testid="Trash2__620cbc" />
+                    {ui('bulkDeleteSelected')} ({selectedRows.length})
                   </Button>
                 )}
                 {bulkActions && bulkActions({ selectedRows, clearSelection, token, apiBaseUrl, windowName, api })}
@@ -1052,6 +1178,7 @@ export function ListView({
           token={token}
           data-testid="DocumentPrintDrawer__620cbc" />
         {quickActionsEnabled && !rowQuickActions?.onDelete && defaultDeleteDialog}
+        {bulkDeleteDialog}
         {/* ETP-3914 — Generic Send/Download modal mount for any documental window
           that did not bring its own `onEmail`. Custom windows that mount the
           modal manually (sales-invoice, purchase-invoice) keep doing so because
@@ -1079,6 +1206,8 @@ export function ListView({
             token={token}
             postBatch={runBatch}
             simSearchFn={simSearch}
+            labels={importLabels}
+            translate={ui}
             onImported={({ failedCount }) => {
               // Refresh unconditionally — some rows may have committed even when others
               // failed. Only auto-close when there is nothing left to review: closing

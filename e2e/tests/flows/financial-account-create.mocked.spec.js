@@ -39,7 +39,7 @@ const ACCOUNTS = [
     iban: 'ES1212340000000000000001',
     isDefault: true,
     pendingCount: 0,
-    psd2Connected: false,
+    bankConnected: false,
   },
 ];
 
@@ -236,7 +236,7 @@ test.describe('Financial Account Create (T2) — mocked', () => {
       iban: 'ES9121000418450200051332',
       isDefault: false,
       pendingCount: 0,
-      psd2Connected: false,
+      bankConnected: false,
     };
 
     // create POST → 201; capture the body for assertion. Registered FIRST so

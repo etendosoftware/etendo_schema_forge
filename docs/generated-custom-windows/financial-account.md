@@ -17,7 +17,7 @@ TYPE          → 3 cards: Bank / Cash / Card
                                         → INSTITUTION (bank display field + institution list)
                                            → FORM-BANK (Name* / IBAN / BIC-SWIFT / Currency)
   Cash        → FORM-CASH (Name* / Currency)
-  Card        → CONNECTION (toggle Connected[disabled, future PSD2] / Without connection)
+  Card        → CONNECTION (toggle Connected[disabled, future bank connection] / Without connection)
                   Without connection → BANK → INSTITUTION → FORM-CARD (Name* / Currency)
 ```
 
@@ -63,20 +63,20 @@ window consistent when the active theme changes.
 
 `EditAccountModal.jsx` — rendered from the row kebab "Edit account" action, the row-hover pencil,
 **and now also the account detail view's own "Editar" button** (`financial-account-edit`, top of
-`index.jsx`, ETP-4530). T3 merged the former separate "Edit PSD2 connection" modal into this one
+`index.jsx`, ETP-4530). T3 merged the former separate "Edit bank connection" modal into this one
 (both surfaced the same account data), so there is a single edit entry point everywhere.
 
 The top of the form (Name | Type, IBAN | Currency) sits **outside** both tabs, followed by two
 tabs built with the shared `Tabs`/`TabsList`/`TabsTrigger` primitives (`components/ui/tabs.jsx` —
 the same primitives `DetailTabs.jsx` uses for the Movements/Reconciliation/Statements strip):
 
-- **General** (`financeAccountsEditTabGeneral`): PSD2 connection configuration, then reconciliation
+- **General** (`financeAccountsEditTabGeneral`): bank connection configuration, then reconciliation
   configuration, in that order. **The tab itself is not rendered for cash accounts** (no bank
   connection, no statement reconciliation for a manual cash drawer) — a manual-QA regression found
   the tab trigger still showing (with blank content) for Caja accounts; the modal now hides the
   trigger and defaults to Contabilidad when opened for a cash account. See `useAccountFields`'s
   `isCash` flag (`account?.type === ACCOUNT_TYPE.CASH`, i.e. `'C'` — Bank `'B'` and Card `'CA'`
-  both still get the General tab, since Card accounts support PSD2 too).
+  both still get the General tab, since Card accounts support bank connections too).
 - **Contabilidad** (`financeAccountsEditTabAccounting`, ETP-4530): the accounting accounts used
   when generating transaction journal entries — **Cuenta bancaria** (`fINAssetAcct`, required) and
   **Cuenta transitoria** (`fINTransitoryAcct`, optional). See "Accounting configuration" below.
@@ -115,24 +115,24 @@ the same primitives `DetailTabs.jsx` uses for the Movements/Reconciliation/State
 Field editability in the top section:
 
 - **Name** is always editable. **Type** is always read-only. Cash accounts have no IBAN.
-- **IBAN** is editable while the account is **not PSD2-connected** (owned by the bank once linked)
+- **IBAN** is editable while the account is **not bank-connected** (owned by the bank once linked)
   — unchanged from T3.
-- **Currency** is editable only while the account is **both** not PSD2-connected **and** has no
+- **Currency** is editable only while the account is **both** not bank-connected **and** has no
   registered transactions yet (ETP-4530). `hasTransactions` is a server-computed flag (not a real
   AD column) injected into every account row by `FinancialAccountsPageHandler` (the handler behind
   `/sws/neo/financial-accounts-page`, which both the Cuentas list and the detail view's
   `useFinancialAccount`/`useFinancialAccounts` hooks read) and, for completeness, also by
   `FinancialAccountHandler.afterHandle` on the generic `/sws/neo/financial-account/account` GET
   path (MCP `neo_list`/generic CRUD consumers). This is a **different, stricter** condition than
-  `psd2Connected`: an offline (never-connected) account can still accumulate real movements
+  `bankConnected`: an offline (never-connected) account can still accumulate real movements
   (manual statements, funds transfers), and the currency must lock the moment that history exists
   so past balances and journal entries stay consistent. `useAccountFields` exposes this as
   `fields.currencyEditable`.
-- **Connection block** (General tab, non-cash only): connected → live PSD2 panel (provider, Sync
+- **Connection block** (General tab, non-cash only): connected → live bank connection panel (provider, Sync
   now, Import from/to dates, Statement grouping, re-authorization banner) + a Disconnect footer
-  button; not connected → a single "Connect to PSD2" button.
+  button; not connected → a single "Connect bank" button.
 - **Save** persists every changed field across both tabs in one call: account fields via
-  `updateAccount(id, payload)`, PSD2 import settings via the bridge `import-settings` action, and
+  `updateAccount(id, payload)`, bank import settings via the bridge `import-settings` action, and
   (ETP-4530) the accounting configuration via `saveAccountingConfiguration`. Enabled only when
   something is dirty, Name/IBAN are valid, and — if the Contabilidad tab was touched — Cuenta
   bancaria is filled. Since `accounting.assetAcctMissing` can disable Save while the user is
@@ -181,7 +181,7 @@ POST/PUT /sws/neo/financial-account/accountingConfiguration
 - **Catalog, no live selector call:** the GET response carries `catalogs.accounts` — every active
   `AccountingCombination` for the resolved ledger, as flat `{id, code, name}` — which the frontend
   filters client-side via `CreatableSearchSelect`'s `staticOptions` (same component already used
-  for the PSD2 statement-grouping dropdown). This mirrors
+  for the bank statement-grouping dropdown). This mirrors
   `GeneralLedgerConfigurationHandler.buildAccountOptions` rather than depending on the generic
   OBUISEL/`Selector` reference selector endpoint's context-param (`inpcAcctschemaId`) resolution,
   which was not something this handler could verify end-to-end in this iteration.
@@ -195,7 +195,7 @@ POST/PUT /sws/neo/financial-account/accountingConfiguration
 
 **Generic component fix (ETP-4530):** `CreatableSearchSelect` (`components/contract-ui/`) did not
 re-sync its `options` state when a caller passed a `staticOptions` array that started empty and
-was populated later by an async fetch (the accounting catalog case) — the old PSD2-grouping
+was populated later by an async fetch (the accounting catalog case) — the old bank-grouping
 consumer never hit this because its array is a static module-level constant. Added a
 `useEffect` that re-syncs `options` whenever the `staticOptions` reference changes; backward
 compatible for every existing consumer.
@@ -207,26 +207,26 @@ Pencil icon) in the tab-strip row, to the left of the Export/Automatch button �
 `EditAccountModal`. On save it reloads via `useFinancialAccount`'s `reload`. Archive from this
 entry point reuses `ArchiveAccountDialog` (same component as the Cuentas list) and, on success,
 navigates back to `/finance/accounts` (there is no reason to stay on the detail page of an
-account that was just archived). Connecting PSD2 from this entry point is **fully wired** too —
-`index.jsx` runs its own `usePsd2ConnectFlow({ onDone: reloadAccount })` and mounts
-`Psd2ConnectFlowUI`, exactly mirroring `FinancialAccountsPage.jsx`'s wiring
-(`onConnect={(acc) => { setEditOpen(false); psd2Flow.startConnect(acc); }}`).
+account that was just archived). Connecting a bank from this entry point is **fully wired** too —
+`index.jsx` runs its own `useBankConnectionFlow({ onDone: reloadAccount })` and mounts
+`BankConnectionFlowUI`, exactly mirroring `FinancialAccountsPage.jsx`'s wiring
+(`onConnect={(acc) => { setEditOpen(false); bankConnectionFlow.startConnect(acc); }}`).
 
-## PSD2 / Salt Edge bank connection (ETP-4097 / T3)
+## Bank connection (PSD2 / Salt Edge) (ETP-4097 / T3)
 
-Wires the PSD2 bank connection into the Accounts UI through a NEO Headless bridge
-(`financial-account-psd2` spec, `FinancialAccountPsd2Handler`). Account selection and success are
+Wires the bank connection (PSD2 / Salt Edge) into the Accounts UI through a NEO Headless bridge
+(`financial-account-bank-connection` spec, `FinancialAccountBankConnectionHandler`). Account selection and success are
 native app-shell UI; only the bank login is an external popup.
 
-- **Connect entry points** (existing account): row kebab "Conectar PSD2", the inline "Conectar
-  PSD2" CTA under the account name, and the Edit modal's "Connect to PSD2" button — all run
-  `usePsd2ConnectFlow().startConnect(account)`.
+- **Connect entry points** (existing account): row kebab "Conectar banco", the inline "Conectar
+  banco" CTA under the account name, and the Edit modal's "Connect bank" button — all run
+  `useBankConnectionFlow().startConnect(account)`.
 - **Connect with creation** (no account yet): the New Account wizard "Con conexión" card →
   `startCreate(type)` (creates the FA from the chosen bank account, then links).
 - **Provider memory:** creating an account offline with a real Salt Edge provider selected stores
   that provider on the FA (`psd2Provider` FK, metadata only — the account stays offline). A later
   connect then preselects that bank, so the Salt Edge widget skips the bank picker.
-- **Sync statements:** PSD2-synced accounts run the existing PSD2 per-account statement fetch (the
+- **Sync statements:** bank-synced accounts run the PSD2 module per-account statement fetch (the
   Classic "Get Bank Statement" equivalent) from the row-hover sync icon, the kebab "Sincronizar
   ahora", the Edit modal "Sincronizar ahora", and — on the Imported Statements tab — a dedicated
   "Sincronizar extractos" button that replaces the manual import/create split-button.
@@ -237,8 +237,8 @@ native app-shell UI; only the bank login is an external popup.
 
 Bridge actions: `connect` (optional `financialAccountId` → provider preselect) · `accounts` ·
 `providers` · `link` · `createAndLink` · `reconnect` · `disconnect` · `sync` · `import-settings` ·
-`status`. Frontend: `hooks/usePsd2Actions.js`, `hooks/usePsd2ConnectFlow.js`,
-`pages/Psd2CallbackPage.jsx`, `windows/custom/financial-account/Psd2ConnectFlowUI.jsx`.
+`status`. Frontend: `hooks/useBankConnectionActions.js`, `hooks/useBankConnectionFlow.js`,
+`pages/BankConnectionCallbackPage.jsx`, `windows/custom/financial-account/BankConnectionFlowUI.jsx`.
 
 ## Archive Dialog
 
@@ -322,7 +322,7 @@ financeAccountsNewTypeBank           "Bank"
 financeAccountsNewTypeCash           "Cash"
 financeAccountsNewTypeCard           "Card"
 financeAccountsNewConnectionOffline  "Without connection"
-financeAccountsNewConnectionSoon     "Available in the next iteration"   (PSD2 badge)
+financeAccountsNewConnectionSoon     "Available in the next iteration"   (bank connection badge)
 financeAccountsNewBankTitle          "Choose which bank the account belongs to"
 financeAccountsNewBankSkip           "Continue without selecting a bank"
 financeAccountsNewBankPopular        "Popular"
@@ -349,9 +349,9 @@ financeAccountsMenuArchive           "Archive account"
 
 ## Not implemented yet (follow-up tasks)
 
-- **PSD2 / Connected mode** (T3): connection toggle is visible but both the "Connected" option and the Bank connection section in the edit modal are disabled.
+- **Bank connection / Connected mode** (T3): connection toggle is visible but both the "Connected" option and the Bank connection section in the edit modal are disabled.
 - **Real bank logos**: `bankCatalog.js` uses `<Landmark>` as a placeholder icon for all banks.
-- **Card accounts**: the CARD step shows a "Coming soon" placeholder — actual card creation requires PSD2.
+- **Card accounts**: the CARD step shows a "Coming soon" placeholder — actual card creation requires a bank connection.
 - **Bank catalog from endpoint**: `bankCatalog.js` is a static list; the component is designed so the data source can be swapped to a live endpoint without changing the layout.
 - **`enablebankstatement` flag** (ETP-4530): `FinancialAccountAccountingHandler` auto-sets it to `true` on every Contabilidad save (whenever Cuenta bancaria/transitoria are saved) — broader than what the tab visually presents, since the flag itself is not exposed as an editable field here. If Classic UI surfaces this checkbox elsewhere, a user could find it pre-checked after using this tab; this is a deliberate scope call (the flag must be `Y` for Classic's bank-statement accounting engine to read the two accounts at all), not a bug.
 - **Other `FIN_Financial_Account_Acct` columns** (ETP-4530): deposit/withdrawal/credit/debit/bank-fee/revaluation accounts stay `discarded` in `decisions.json` — only Cuenta bancaria/transitoria were in scope for this ticket.
@@ -937,3 +937,31 @@ hand-written, reached through a wrapper that branches on `recordId`. Its grids r
 - **Row kebab visible on hover only** — appears via CSS `opacity-0 group-hover:opacity-100`. Figma shows it always-visible.
 - **Posting status sub-label** is derived provisionally from `paymentStatus` (RPPC → "Contabilizado" / green dot, else → "Sin contabilizar" / orange dot). Will be replaced by the real `ETBR_PostStatus` field once it exists.
 - **Bank logo** is the generic `AccountLogoAvatar` (icon by account type). Real brand logos (Santander/BBVA/etc.) are a future enhancement.
+
+## Accounting dimension visibility per section — ETP-4529
+
+The matrix's `Transacciones Cuentas Financieras` row (no header/lines split — a single
+`transaction` entity): Contacto=**Siempre**, Producto=**Nunca**, Proyecto=**Por config**,
+Centro de costo=**Por config**.
+
+| Field | State |
+| --- | --- |
+| `businessPartner` (Contacto) | **Siempre** (revised per REVIEW/user follow-up). Raw AD `displayLogic` is the compound `@ACCT_DIMENSION_DISPLAY@ & @Trxtype@!''`. The initial pass set a blanket `displayLogic: null`, which correctly stripped `@ACCT_DIMENSION_DISPLAY@` (per scope decision #2) but also incidentally dropped the unrelated `@Trxtype@!=''` condition. Fixed: `decisions.json` now sets `displayLogic: "@Trxtype@!''"` + `displayLogicJs: "record['transactionType'] !== ''"` — only the accounting-dimension macro is stripped; the Trxtype condition survives as a plain client-evaluable function. Since it's `evaluable: true` with real `.js`, `generate-frontend.js` emits it as `displayLogic: (record) => record['transactionType'] !== ''` on the generated field — a function-based displayLogic that `EntityForm.jsx` always evaluates client-side, completely independent of the server evaluate-display / accounting-dimension config. Net effect: the field is immune to the global dimension toggle (true "Siempre") but still respects Trxtype. `Trxtype` (Transaction Type — BP Deposit / BP Withdrawal / Bank fee) is a mandatory column with a default value, so in practice this only hides the field for the brief instant before a type is set on a brand-new record. |
+| `product` | **Nunca** — already `visibility: "discarded"`, no change needed |
+| `project` | **Por config** — already correct: no override, raw `@ACCT_DIMENSION_DISPLAY@ & @Trxtype@!''` passes through as-is |
+| `costCenter` | **Por config** — same as `project`, already correct |
+
+`project`/`costCenter` retain the `@Trxtype@!''` condition ANDed with the dimension macro — this
+is consistent with "Por config" (still config-gated) and preserves an existing, unrelated
+UX-sequencing rule (don't show the field before a transaction type is picked).
+
+**Correction:** `transaction` is not the header-equivalent entity here — the generated
+`AccountPage.jsx` wires `DetailView` with `entity="account"` and `detailEntity="transaction"`,
+i.e. `transaction` is the **lines/detail** entity relative to `account`. That means the
+ETP-4529 follow-up fix that adds a lines-scoped `useDisplayLogic(detailEntity, ...)` call (see
+`sales-invoice.md`) is exactly what covers `transaction`, not the header-scoped one. This window
+has no `window.linesLayout` override (defaults to classic), so `LinesForm.jsx`'s sidebar should
+mount normally and the fix should be fully effective — unlike the inlineEditable windows. This
+window also uses `window.layoutType: "custom"`, so verify against a live/dev environment that
+the generated `AccountPage.jsx`/`DetailView` flow (rather than a custom wrapper bypassing it) is
+actually what renders the transaction detail before relying on the config gating in production.

@@ -70,7 +70,8 @@ The Assets window should let a finance user register fixed assets, define how ea
 4. Switch calculation type between percentage-based and time-based setups and confirm the window swaps the expected inputs:
    - percentage path shows **Annual Depreciation %** (label: `assetsAnnualDepreciationLabel`)
    - time path shows **Amortize** and usable-life inputs
-4a. With **Depreciate** enabled, scroll to the last section and confirm the **Dimensiones contables** group appears **after Dates**, showing 4 selectors in a 4-column grid: **Project**, **Cost Center**, **Business Partner** (Contacto), and **Product**. Open a selector (e.g. Cost Center or Product) and confirm it returns options. Select a value, save and reopen the asset — the value persists. Disable **Depreciate** and confirm the dimensions section disappears.
+4a. **Product** is a plain, always-visible field in the first (Asset Info) section — confirm it appears next to Asset Category regardless of Depreciate state or GL Configuration, and that selecting a product, saving, and reopening the asset persists the value (see "Accounting dimension visibility per section — ETP-4529" below for why Product is not part of the dimensions group).
+4b. With **Depreciate** enabled, scroll to the last section and confirm the **Dimensiones contables** group appears **after Dates**, config-gated: it shows a single **Project** selector only when the client's accounting-dimension configuration enables the Project dimension for this org's ledger, and disappears entirely otherwise. Open the selector and confirm it returns options; select a value, save and reopen the asset — the value persists. Disable **Depreciate** and confirm the dimensions section disappears.
 5. Save an asset with depreciation enabled and confirm the **Create Amortization** action is available.
 6. Trigger **Create Amortization** against a live backend and confirm the amortization plan tab refreshes and shows ordered schedule rows. Confirm that line status badges read "Pendiente" (not "Planificado") and "Confirmado" (not "Procesado").
 7. Review the right sidebar and confirm it shows four cards in order: Valor actual → Valor residual → Depreciación planificada → Depreciado %. Confirm that "Progreso de depreciación" is absent. Confirm that the sidebar ends above the tabs row — tabs (Plan de amortización, Adjuntos) span the full width below the form area.
@@ -492,6 +493,86 @@ This iteration adjusts the **Accounting dimensions** group (Group 5) in the Depr
 
 1. Open an asset with **Depreciate** enabled and scroll to **Dimensiones contables**. Confirm exactly four selectors are shown: Project, Cost Center, Business Partner, Product — no 1st/2nd Dimension, Sales Region, Activity, or Sales Campaign.
 2. Open the **Product** selector and confirm it returns product options. Select a product, save, and reopen the asset — confirm the product value persists.
+
+## Accounting dimension visibility per section — ETP-4529
+
+The ETP-4529 matrix asks for `Activo (Amortizaciones) | Cabecera`: Contacto=**Nunca**,
+Producto=**Nunca**, Proyecto=**Por config**, Centro de costo=**Nunca**.
+
+**Reworked (follow-up to the initial ETP-4529 pass) — the panel is now config-driven.**
+The "Dimensiones contables" group (see the ETP-4429 section below) used to render a
+**hardcoded** `dimensionFields` array (`project`, `eTADASCostCenter`, `businessPartner`,
+`product`) unconditionally whenever `depreciate === true`, ignoring the generated
+contract's `displayLogic`/`visibility` entirely — a recent, deliberate ETP-4429 decision
+("Product added to accounting dimensions, dimension set trimmed") that directly conflicted
+with this matrix. Resolved by reversing ETP-4429's "always show all 4" behavior in favor of
+the matrix, using the ETP-4429 panel's own visual shape as the template for a shared,
+reusable mechanism (per explicit product direction):
+
+- `AssetsDetailPanel.jsx`'s dimension field list is now `dimensionFieldCandidates = [project]`
+  only — `businessPartner`, `product`, `eTADASCostCenter` were removed as candidates
+  entirely (Nunca; matches `decisions.json`, where all three are now `visibility: "discarded"`
+  with an ETP-4529 reason).
+- The candidate list is filtered through the new shared hook
+  `tools/app-shell/src/hooks/useAccountingDimensionFields.js`, which calls the same
+  `useDisplayLogic('assets', data, { token, apiBaseUrl })` evaluator DetailView uses for
+  generated windows (`POST /sws/neo/assets/assets/evaluate-display` →
+  `NeoDisplayLogicHelper` → `DynamicExpressionParser` →
+  `DimensionDisplayUtility.computeAccountingDimensionDisplayLogic()`), instead of a static
+  array. `project`'s raw AD display logic (`@$Element_PJ@='Y' & @IsDepreciated@='Y'`) is
+  resolved server-side against the client's real accounting-dimension configuration.
+- The "Dimensiones contables" heading and grid are now both gated on
+  `depreciate && dimensionFields.length > 0` — the whole section disappears cleanly when
+  `project` resolves to not-visible (e.g. Project dimension disabled for that client),
+  instead of showing an empty-looking grid.
+- **Net effect:** when the client's config happens to enable the Project dimension, this
+  panel looks exactly like it did before (single "Project" selector shown, same 4-column
+  grid styling) — but it now actually responds to the client's dimension configuration
+  instead of being permanently hardcoded, and it no longer shows Contacto/Centro de costo
+  at all (per the matrix). Producto's own matrix value changed after this pass — see
+  "Producto corrected to Siempre" below.
+
+This is the reference pattern used by the same shared hook in `amortization.md`'s
+`AmortizationLinesTable.jsx` rework.
+
+**Tests updated (Tester pass complete).** `AssetsDetailPanel.test.js`'s field-definition
+assertion now reads "defines only Project as a dimension field candidate (ETP-4529)" (checks
+`dimensionFieldCandidates` and asserts the 3 dropped dimensions are absent) plus a new
+assertion covering the `useAccountingDimensionFields` wiring. `AssetsDetailPanel.vitest.jsx`
+gained coverage for the config-driven filtering (dimension hidden when the evaluator returns
+`visibility.project === false`, section gated on `dimensionFields.length > 0`). All suites
+pass against the 1-field (`project`-only), config-driven behavior.
+
+### Header (`assets` entity) section placement fix (ETP-4529 follow-up)
+
+`assets.project` (this window's header-equivalent entity is named `assets`, not `header`) had
+`"section": "other"` instead of `"section": "principal"`. Fixed by changing `section` to
+`"principal"` in `decisions.json` and regenerating; confirmed in `contract.json`
+(`section: "principal"`) and in the generated `AssetsForm.jsx`.
+
+### Producto corrected to Siempre (ETP-4529 follow-up)
+
+The accounting-dimension matrix source was corrected after the initial ETP-4529 pass above:
+`Activo (Amortizaciones) | Cabecera` now reads Contacto=**Nunca**, Producto=**Siempre**,
+Proyecto=**Por config**, Centro de costo=**Nunca** (Producto was previously, incorrectly,
+**Nunca**). Producto is a plain business field (which product this asset represents) and was
+never a GL-config-gated accounting dimension like Project/Cost Center/Business Partner, so it
+does not join the "Dimensiones contables" panel at all — it is now always shown.
+
+- `decisions.json`: `assets.product.visibility` changed from `discarded` to `editable`
+  (`section: "principal"`), matching its natural raw-AD classification.
+- `AssetsDetailPanel.jsx`: `product` is now a regular field in `group1Fields` (Asset Info,
+  next to Asset Category) — `{ key: 'product', column: 'M_Product_ID', type: 'search',
+  lookup: true, reference: 'Product', inputMode: 'search', section: 'principal' }`, using the
+  same `type: 'search'` pattern as other high-cardinality product lookups (e.g.
+  `price-list/PriceListProductPrices.jsx`). It remains in the `readOnlyAll` hardcoded list so
+  it still locks like every other field when the record is not in edit mode. It stays excluded
+  from `dimensionFieldCandidates` (per the section above) since it is not config-gated.
+- Label reuses the existing generic `product` key (`genericLabels.product` — "Product" /
+  "Producto") via `useUI()`; no new i18n keys needed.
+- No backend change needed: `product`'s raw AD field already carries the
+  `SL_Asset_Product` callout, so selecting a value fires the standard `/assets/callout`
+  round-trip like any other field, same as before it was discarded.
 
 ## ETP-4542 — Generic declarative numeric validation (min + integer), applied to Usable Life
 
