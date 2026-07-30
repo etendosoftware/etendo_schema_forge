@@ -1,8 +1,8 @@
 {
-  "version": "0.27.0",
+  "version": "0.28.0",
   "generatedAt": "2026-04-29T19:05:20.719Z",
-  "updatedAt": "2026-07-30T03:29:19.668Z",
-  "contractChecksum": "40b2dfb302a47613",
+  "updatedAt": "2026-07-30T04:12:09.988Z",
+  "contractChecksum": "b026eced958d6cf2",
   "apiPrediction": {
     "specName": "goods-receipt",
     "baseUrl": "/sws/neo/goods-receipt",
@@ -645,7 +645,7 @@
           "movementQuantity": {
             "required": true,
             "readOnlyLogic": "@Processed@='Y' | @UomManagement@='Y'",
-            "defaultValue": "0"
+            "defaultValue": "1"
           },
           "uOM": {
             "readOnly": true,
@@ -830,5 +830,5 @@
     "knownLimitations": [],
     "dangerousOperations": []
   },
-  "checksum": "9f50214ad9dad2e4"
+  "checksum": "c15ce8deb4052962"
 }

@@ -1,8 +1,8 @@
 {
-  "version": "0.26.0",
+  "version": "0.27.0",
   "generatedAt": "2026-04-29T19:05:20.719Z",
-  "updatedAt": "2026-07-29T14:53:27.771Z",
-  "checksum": "b026eced958d6cf2",
+  "updatedAt": "2026-07-30T03:29:19.668Z",
+  "checksum": "40b2dfb302a47613",
   "frontendContract": {
     "window": {
       "id": "184",
@@ -774,7 +774,7 @@
               "type": "computed",
               "source": "0"
             },
-            "defaultValue": "1",
+            "defaultValue": "0",
             "section": "principal",
             "seq": 20,
             "validation": {
@@ -919,7 +919,6 @@
             "form": true,
             "reference": "Project",
             "inputMode": "search",
-            "dimensionsPanel": true,
             "validation": {
               "maxLength": 32
             },
@@ -948,7 +947,6 @@
             "form": true,
             "reference": "CostCenter",
             "inputMode": "selector",
-            "dimensionsPanel": true,
             "validation": {
               "maxLength": 32
             },

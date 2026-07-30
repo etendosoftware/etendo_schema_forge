@@ -1,8 +1,8 @@
 {
-  "version": "0.80.0",
+  "version": "0.81.0",
   "generatedAt": "2026-04-30T15:42:46.722Z",
-  "updatedAt": "2026-07-30T03:29:20.153Z",
-  "checksum": "1132b624f8f5d548",
+  "updatedAt": "2026-07-30T04:12:10.503Z",
+  "checksum": "cee32698598f9319",
   "frontendContract": {
     "window": {
       "id": "183",
@@ -2114,6 +2114,7 @@
             "form": true,
             "reference": "Project",
             "inputMode": "search",
+            "dimensionsPanel": true,
             "validation": {
               "maxLength": 32
             },
@@ -2142,6 +2143,7 @@
             "form": true,
             "reference": "CostCenter",
             "inputMode": "selector",
+            "dimensionsPanel": true,
             "validation": {
               "maxLength": 32
             },
