@@ -12,7 +12,7 @@
       "agentPrompt": "#REF#agent-prompts/financial-account/account.md",
       "fields": {
         "name": { "visibility": "editable", "grid": true, "gridOrder": 1, "required": true },
-        "type": { "visibility": "editable", "grid": true, "gridOrder": 2 },
+        "type": { "visibility": "editable", "grid": true, "gridOrder": 2, "agentPrompt": "#REF#agent-prompts/financial-account/account.type.md" },
         "currency": { "visibility": "editable", "grid": false, "required": true },
         "currentBalance": { "visibility": "readOnly", "grid": true, "gridOrder": 3 },
         "description": { "visibility": "editable", "grid": false },
