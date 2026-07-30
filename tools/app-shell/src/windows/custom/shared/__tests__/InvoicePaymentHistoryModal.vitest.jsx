@@ -155,7 +155,7 @@ describe('InvoicePaymentHistoryModal', () => {
     );
   });
 
-  it('never renders a "via PSD2" badge, regardless of viaPis', async () => {
+  it('never renders a "vía banco" badge, regardless of viaPis', async () => {
     useApiFetch.mockReturnValue(makeApiFetch([
       { id: 'p1', documentNo: 'PAY-001', paymentDate: '2026-01-01', amount: '500', status: 'RPR', viaPis: true },
       { id: 'p2', documentNo: 'PAY-002', paymentDate: '2026-01-05', amount: '250', status: 'DR' },

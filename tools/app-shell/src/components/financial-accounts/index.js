@@ -6,4 +6,5 @@ export { AccountRowMenu } from './AccountRowMenu.jsx';
 export { AccountsToolbar } from './AccountsToolbar.jsx';
 export { AccountsSidebar } from './AccountsSidebar/index.jsx';
 export { AccountsTable } from './AccountsTable/index.jsx';
+export { BulkDeleteSelectionBar } from './BulkDeleteSelectionBar.jsx';
 export { ACCOUNT_TYPE, ACCOUNT_TYPE_ORDER } from './tokens.js';

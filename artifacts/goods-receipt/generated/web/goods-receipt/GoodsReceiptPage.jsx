@@ -55,6 +55,8 @@ const addLineFields = {
   entry: [
     { key: 'product', column: 'M_Product_ID', type: 'search', required: true, lookup: true, label: 'Product', reference: 'Product', inputMode: 'search' },
     { key: 'movementQuantity', column: 'MovementQty', type: 'number', required: true, label: 'Movement Quantity', defaultValue: 0 },
+    { key: 'project', column: 'C_Project_ID', type: 'search', label: 'Project', reference: 'Project', inputMode: 'search' },
+    { key: 'costcenter', column: 'C_Costcenter_ID', type: 'selector', label: 'Cost Center', reference: 'CostCenter', inputMode: 'selector' },
   ],
   derived: [
 
@@ -255,14 +257,6 @@ export const api = {
       "reference": "OrderLine",
       "inputMode": "search",
       "url": "/sws/neo/goods-receipt/goodsReceiptLine/selectors/salesOrderLine"
-    },
-    {
-      "entity": "goodsReceiptLine",
-      "field": "businessPartner",
-      "column": "C_Bpartner_ID",
-      "reference": "BusinessPartner",
-      "inputMode": "search",
-      "url": "/sws/neo/goods-receipt/goodsReceiptLine/selectors/businessPartner"
     },
     {
       "entity": "goodsReceiptLine",

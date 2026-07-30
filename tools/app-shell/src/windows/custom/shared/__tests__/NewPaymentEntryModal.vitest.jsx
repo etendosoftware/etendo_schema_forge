@@ -114,13 +114,13 @@ function buildApiFetch(cfg = {}) {
 
 /**
  * Build an apiFetch mock for PIS-eligible scenarios (ETP-4406): a
- * psd2Connected account, a transfer-like payment method, and a supplier
+ * bankConnected account, a transfer-like payment method, and a supplier
  * IBAN list — plus overrides for the registerPayment response and the
  * pisPaymentStatus sequence returned across successive polls.
  */
 function buildPisApiFetch(cfg = {}) {
   const {
-    accounts = [{ id: 'acc-1', label: 'Banco PIS', psd2Connected: true, maskedPan: '****1234' }],
+    accounts = [{ id: 'acc-1', label: 'Banco PIS', bankConnected: true, maskedPan: '****1234' }],
     methods = [{ id: 'm-1', label: 'Transferencia' }],
     sources = [],
     plan = [{ finPaymentScheduleID: 'sched-1', outstandingAmount: '1000' }],
@@ -1622,7 +1622,7 @@ describe('NewPaymentEntryModal', () => {
     });
 
     describe('visibility gate', () => {
-      it('shows the PIS block when the account is PSD2-connected, the method is a transfer, dir is "out", and the currency is EUR', async () => {
+      it('shows the PIS block when the account is bank-connected, the method is a transfer, dir is "out", and the currency is EUR', async () => {
         mockApiFetch = buildPisApiFetch();
         renderModal({ dir: 'out', specName: 'purchase-invoice' });
         expect(await screen.findByTestId('cp-pis-section')).toBeInTheDocument();
@@ -1636,9 +1636,9 @@ describe('NewPaymentEntryModal', () => {
         expect(screen.queryByTestId('cp-pis-section')).not.toBeInTheDocument();
       });
 
-      it('hides the PIS block when the selected account is not PSD2-connected', async () => {
+      it('hides the PIS block when the selected account is not bank-connected', async () => {
         mockApiFetch = buildPisApiFetch({
-          accounts: [{ id: 'acc-1', label: 'Banco Clásico', psd2Connected: false }],
+          accounts: [{ id: 'acc-1', label: 'Banco Clásico', bankConnected: false }],
         });
         renderModal({ dir: 'out', specName: 'purchase-invoice' });
         await waitFor(() => expect(mockApiFetch).toHaveBeenCalled());
@@ -1727,7 +1727,7 @@ describe('NewPaymentEntryModal', () => {
       });
 
       it('does not send a pis field at all on the regular (non-PIS) confirm path — regression guard', async () => {
-        // Default buildApiFetch() account has no psd2Connected flag -> block never renders.
+        // Default buildApiFetch() account has no bankConnected flag -> block never renders.
         renderModal({ dir: 'out', specName: 'purchase-invoice' });
         await waitFor(() => expect(mockApiFetch).toHaveBeenCalled());
         expect(screen.queryByTestId('cp-pis-section')).not.toBeInTheDocument();

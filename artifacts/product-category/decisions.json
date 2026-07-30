@@ -21,6 +21,7 @@
   },
   "entities": {
     "productCategory": {
+      "javaQualifier": "productCategoryDefaultHandler",
       "fields": {
         "searchKey": {
           "grid": true,
@@ -42,12 +43,18 @@
           "rows": 1
         },
         "default": {
+          "visibility": "editable",
           "section": "principal",
           "seq": 4
         },
         "summaryLevel": {
+          "visibility": "discarded"
+        },
+        "active": {
+          "visibility": "editable",
+          "grid": false,
           "section": "principal",
-          "seq": 5
+          "seq": 6
         },
         "image": {
           "visibility": "discarded"

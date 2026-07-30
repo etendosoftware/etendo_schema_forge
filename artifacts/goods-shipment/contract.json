@@ -1,8 +1,8 @@
 {
-  "version": "0.30.0",
+  "version": "0.33.0",
   "generatedAt": "2026-04-29T19:04:55.657Z",
-  "updatedAt": "2026-07-21T12:35:19.734Z",
-  "checksum": "5e26b1eaf5b3d45e",
+  "updatedAt": "2026-07-30T03:29:19.886Z",
+  "checksum": "23ffa0012ba3de9b",
   "frontendContract": {
     "window": {
       "id": "169",
@@ -387,6 +387,73 @@
             "form": false,
             "validation": {
               "maxLength": 4
+            }
+          },
+          {
+            "name": "project",
+            "apiKey": "project",
+            "column": "C_Project_ID",
+            "label": "Project",
+            "type": "foreignKey",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": false,
+            "grid": false,
+            "form": true,
+            "reference": "Project",
+            "inputMode": "search",
+            "section": "principal",
+            "validation": {
+              "maxLength": 60
+            },
+            "validationRule": {
+              "code": "C_Project.projectstatus in ('OP', 'OR') and (C_Project.c_bpartner_id=@C_BPartner_ID@ or '@IsSOTrx@'='N') or C_Project.c_project_id = @c_project_id@",
+              "contextParams": [],
+              "cascadeParams": [
+                "C_BPartner_ID",
+                "IsSOTrx",
+                "c_project_id"
+              ]
+            },
+            "displayLogic": {
+              "raw": "@ACCT_DIMENSION_DISPLAY@",
+              "evaluable": false,
+              "reason": "server-macro",
+              "js": null
+            },
+            "readOnlyLogic": {
+              "raw": "@Posted@='Y'",
+              "evaluable": true,
+              "js": "record['posted'] === true"
+            }
+          },
+          {
+            "name": "costcenter",
+            "apiKey": "costcenter",
+            "column": "C_Costcenter_ID",
+            "label": "Cost Center",
+            "type": "foreignKey",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": false,
+            "grid": false,
+            "form": true,
+            "reference": "Costcenter",
+            "inputMode": "selector",
+            "section": "principal",
+            "validation": {
+              "maxLength": 32
+            },
+            "displayLogic": {
+              "raw": "@ACCT_DIMENSION_DISPLAY@",
+              "evaluable": false,
+              "reason": "server-macro",
+              "js": null
+            },
+            "readOnlyLogic": {
+              "raw": "@Posted@='Y'",
+              "evaluable": true,
+              "js": "record['posted'] === true"
             }
           },
           {
@@ -785,6 +852,62 @@
               "raw": "@Processed@='Y'",
               "evaluable": true,
               "js": "record['processed'] === true"
+            }
+          },
+          {
+            "name": "project",
+            "apiKey": "project",
+            "column": "C_Project_ID",
+            "label": "Project",
+            "type": "foreignKey",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": false,
+            "grid": false,
+            "form": true,
+            "reference": "Project",
+            "inputMode": "search",
+            "validation": {
+              "maxLength": 32
+            },
+            "displayLogic": {
+              "raw": "@ACCT_DIMENSION_DISPLAY@",
+              "evaluable": false,
+              "reason": "server-macro",
+              "js": null
+            },
+            "readOnlyLogic": {
+              "raw": "@Posted@='Y'",
+              "evaluable": true,
+              "js": "record['posted'] === true"
+            }
+          },
+          {
+            "name": "costcenter",
+            "apiKey": "costcenter",
+            "column": "C_Costcenter_ID",
+            "label": "Cost Center",
+            "type": "foreignKey",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": false,
+            "grid": false,
+            "form": true,
+            "reference": "Costcenter",
+            "inputMode": "selector",
+            "validation": {
+              "maxLength": 32
+            },
+            "displayLogic": {
+              "raw": "@ACCT_DIMENSION_DISPLAY@",
+              "evaluable": false,
+              "reason": "server-macro",
+              "js": null
+            },
+            "readOnlyLogic": {
+              "raw": "@Posted@='Y'",
+              "evaluable": true,
+              "js": "record['posted'] === true"
             }
           }
         ],
@@ -1213,7 +1336,7 @@
             "apiKey": "project",
             "column": "C_Project_ID",
             "type": "foreignKey",
-            "visibility": "discarded",
+            "visibility": "editable",
             "required": false
           },
           {
@@ -1221,7 +1344,7 @@
             "apiKey": "costcenter",
             "column": "C_Costcenter_ID",
             "type": "foreignKey",
-            "visibility": "discarded",
+            "visibility": "editable",
             "required": false
           },
           {
@@ -1565,7 +1688,7 @@
             "apiKey": "project",
             "column": "C_Project_ID",
             "type": "foreignKey",
-            "visibility": "discarded",
+            "visibility": "editable",
             "required": false
           },
           {
@@ -1573,7 +1696,7 @@
             "apiKey": "costcenter",
             "column": "C_Costcenter_ID",
             "type": "foreignKey",
-            "visibility": "discarded",
+            "visibility": "editable",
             "required": false
           },
           {
@@ -1858,12 +1981,57 @@
         }
       },
       {
+        "entity": "goodsShipment",
+        "field": "project",
+        "column": "C_Project_ID",
+        "reference": "Project",
+        "inputMode": "search",
+        "url": "/sws/neo/goods-shipment/goodsShipment/selectors/project",
+        "context": {
+          "required": [
+            {
+              "param": "IsSOTrx",
+              "source": "windowCategory"
+            },
+            {
+              "param": "C_BPartner_ID",
+              "source": "field",
+              "field": "businessPartner"
+            }
+          ]
+        }
+      },
+      {
+        "entity": "goodsShipment",
+        "field": "costcenter",
+        "column": "C_Costcenter_ID",
+        "reference": "Costcenter",
+        "inputMode": "selector",
+        "url": "/sws/neo/goods-shipment/goodsShipment/selectors/costcenter"
+      },
+      {
         "entity": "goodsShipmentLine",
         "field": "product",
         "column": "M_Product_ID",
         "reference": "Product",
         "inputMode": "search",
         "url": "/sws/neo/goods-shipment/goodsShipmentLine/selectors/product"
+      },
+      {
+        "entity": "goodsShipmentLine",
+        "field": "project",
+        "column": "C_Project_ID",
+        "reference": "Project",
+        "inputMode": "search",
+        "url": "/sws/neo/goods-shipment/goodsShipmentLine/selectors/project"
+      },
+      {
+        "entity": "goodsShipmentLine",
+        "field": "costcenter",
+        "column": "C_Costcenter_ID",
+        "reference": "Costcenter",
+        "inputMode": "selector",
+        "url": "/sws/neo/goods-shipment/goodsShipmentLine/selectors/costcenter"
       }
     ],
     "actions": [
@@ -2148,6 +2316,14 @@
         "description": "Default value for 'movementQuantity' in goodsShipmentLine should be a string"
       },
       {
+        "id": "t-displaylogic-evaluable-goodsShipment-costcenter",
+        "category": "displaylogic-evaluable",
+        "entity": "goodsShipment",
+        "field": "costcenter",
+        "runner": "node",
+        "description": "Display logic for 'costcenter' in goodsShipment should have evaluable flag"
+      },
+      {
         "id": "t-displaylogic-evaluable-goodsShipment-etblkpBulkposting",
         "category": "displaylogic-evaluable",
         "entity": "goodsShipment",
@@ -2164,12 +2340,44 @@
         "description": "Display logic for 'posted' in goodsShipment should have evaluable flag"
       },
       {
+        "id": "t-displaylogic-evaluable-goodsShipment-project",
+        "category": "displaylogic-evaluable",
+        "entity": "goodsShipment",
+        "field": "project",
+        "runner": "node",
+        "description": "Display logic for 'project' in goodsShipment should have evaluable flag"
+      },
+      {
+        "id": "t-displaylogic-evaluable-goodsShipmentLine-costcenter",
+        "category": "displaylogic-evaluable",
+        "entity": "goodsShipmentLine",
+        "field": "costcenter",
+        "runner": "node",
+        "description": "Display logic for 'costcenter' in goodsShipmentLine should have evaluable flag"
+      },
+      {
         "id": "t-displaylogic-evaluable-goodsShipmentLine-orderQuantity",
         "category": "displaylogic-evaluable",
         "entity": "goodsShipmentLine",
         "field": "orderQuantity",
         "runner": "node",
         "description": "Display logic for 'orderQuantity' in goodsShipmentLine should have evaluable flag"
+      },
+      {
+        "id": "t-displaylogic-evaluable-goodsShipmentLine-project",
+        "category": "displaylogic-evaluable",
+        "entity": "goodsShipmentLine",
+        "field": "project",
+        "runner": "node",
+        "description": "Display logic for 'project' in goodsShipmentLine should have evaluable flag"
+      },
+      {
+        "id": "t-displaylogic-valid-goodsShipment-costcenter",
+        "category": "displaylogic-valid",
+        "entity": "goodsShipment",
+        "field": "costcenter",
+        "runner": "node",
+        "description": "Display logic for 'costcenter' in goodsShipment should be valid JS"
       },
       {
         "id": "t-displaylogic-valid-goodsShipment-etblkpBulkposting",
@@ -2188,6 +2396,22 @@
         "description": "Display logic for 'posted' in goodsShipment should be valid JS"
       },
       {
+        "id": "t-displaylogic-valid-goodsShipment-project",
+        "category": "displaylogic-valid",
+        "entity": "goodsShipment",
+        "field": "project",
+        "runner": "node",
+        "description": "Display logic for 'project' in goodsShipment should be valid JS"
+      },
+      {
+        "id": "t-displaylogic-valid-goodsShipmentLine-costcenter",
+        "category": "displaylogic-valid",
+        "entity": "goodsShipmentLine",
+        "field": "costcenter",
+        "runner": "node",
+        "description": "Display logic for 'costcenter' in goodsShipmentLine should be valid JS"
+      },
+      {
         "id": "t-displaylogic-valid-goodsShipmentLine-orderQuantity",
         "category": "displaylogic-valid",
         "entity": "goodsShipmentLine",
@@ -2196,12 +2420,28 @@
         "description": "Display logic for 'orderQuantity' in goodsShipmentLine should be valid JS"
       },
       {
+        "id": "t-displaylogic-valid-goodsShipmentLine-project",
+        "category": "displaylogic-valid",
+        "entity": "goodsShipmentLine",
+        "field": "project",
+        "runner": "node",
+        "description": "Display logic for 'project' in goodsShipmentLine should be valid JS"
+      },
+      {
         "id": "t-field-presence-goodsShipment-businessPartner",
         "category": "field-presence",
         "entity": "goodsShipment",
         "field": "businessPartner",
         "runner": "node",
         "description": "Field 'businessPartner' should be present in goodsShipment"
+      },
+      {
+        "id": "t-field-presence-goodsShipment-costcenter",
+        "category": "field-presence",
+        "entity": "goodsShipment",
+        "field": "costcenter",
+        "runner": "node",
+        "description": "Field 'costcenter' should be present in goodsShipment"
       },
       {
         "id": "t-field-presence-goodsShipment-description",
@@ -2292,12 +2532,28 @@
         "description": "Field 'processed' should be present in goodsShipment"
       },
       {
+        "id": "t-field-presence-goodsShipment-project",
+        "category": "field-presence",
+        "entity": "goodsShipment",
+        "field": "project",
+        "runner": "node",
+        "description": "Field 'project' should be present in goodsShipment"
+      },
+      {
         "id": "t-field-presence-goodsShipment-warehouse",
         "category": "field-presence",
         "entity": "goodsShipment",
         "field": "warehouse",
         "runner": "node",
         "description": "Field 'warehouse' should be present in goodsShipment"
+      },
+      {
+        "id": "t-field-presence-goodsShipmentLine-costcenter",
+        "category": "field-presence",
+        "entity": "goodsShipmentLine",
+        "field": "costcenter",
+        "runner": "node",
+        "description": "Field 'costcenter' should be present in goodsShipmentLine"
       },
       {
         "id": "t-field-presence-goodsShipmentLine-description",
@@ -2332,12 +2588,28 @@
         "description": "Field 'product' should be present in goodsShipmentLine"
       },
       {
+        "id": "t-field-presence-goodsShipmentLine-project",
+        "category": "field-presence",
+        "entity": "goodsShipmentLine",
+        "field": "project",
+        "runner": "node",
+        "description": "Field 'project' should be present in goodsShipmentLine"
+      },
+      {
         "id": "t-field-type-goodsShipment-businessPartner",
         "category": "field-type",
         "entity": "goodsShipment",
         "field": "businessPartner",
         "runner": "node",
         "description": "Field 'businessPartner' should have type 'string' in goodsShipment"
+      },
+      {
+        "id": "t-field-type-goodsShipment-costcenter",
+        "category": "field-type",
+        "entity": "goodsShipment",
+        "field": "costcenter",
+        "runner": "node",
+        "description": "Field 'costcenter' should have type 'string' in goodsShipment"
       },
       {
         "id": "t-field-type-goodsShipment-description",
@@ -2428,12 +2700,28 @@
         "description": "Field 'processed' should have type 'boolean' in goodsShipment"
       },
       {
+        "id": "t-field-type-goodsShipment-project",
+        "category": "field-type",
+        "entity": "goodsShipment",
+        "field": "project",
+        "runner": "node",
+        "description": "Field 'project' should have type 'string' in goodsShipment"
+      },
+      {
         "id": "t-field-type-goodsShipment-warehouse",
         "category": "field-type",
         "entity": "goodsShipment",
         "field": "warehouse",
         "runner": "node",
         "description": "Field 'warehouse' should have type 'string' in goodsShipment"
+      },
+      {
+        "id": "t-field-type-goodsShipmentLine-costcenter",
+        "category": "field-type",
+        "entity": "goodsShipmentLine",
+        "field": "costcenter",
+        "runner": "node",
+        "description": "Field 'costcenter' should have type 'string' in goodsShipmentLine"
       },
       {
         "id": "t-field-type-goodsShipmentLine-description",
@@ -2468,12 +2756,28 @@
         "description": "Field 'product' should have type 'string' in goodsShipmentLine"
       },
       {
+        "id": "t-field-type-goodsShipmentLine-project",
+        "category": "field-type",
+        "entity": "goodsShipmentLine",
+        "field": "project",
+        "runner": "node",
+        "description": "Field 'project' should have type 'string' in goodsShipmentLine"
+      },
+      {
         "id": "t-readonlylogic-evaluable-goodsShipment-businessPartner",
         "category": "readonlylogic-evaluable",
         "entity": "goodsShipment",
         "field": "businessPartner",
         "runner": "node",
         "description": "Read-only logic for 'businessPartner' in goodsShipment should have evaluable flag"
+      },
+      {
+        "id": "t-readonlylogic-evaluable-goodsShipment-costcenter",
+        "category": "readonlylogic-evaluable",
+        "entity": "goodsShipment",
+        "field": "costcenter",
+        "runner": "node",
+        "description": "Read-only logic for 'costcenter' in goodsShipment should have evaluable flag"
       },
       {
         "id": "t-readonlylogic-evaluable-goodsShipment-documentNo",
@@ -2500,12 +2804,28 @@
         "description": "Read-only logic for 'partnerAddress' in goodsShipment should have evaluable flag"
       },
       {
+        "id": "t-readonlylogic-evaluable-goodsShipment-project",
+        "category": "readonlylogic-evaluable",
+        "entity": "goodsShipment",
+        "field": "project",
+        "runner": "node",
+        "description": "Read-only logic for 'project' in goodsShipment should have evaluable flag"
+      },
+      {
         "id": "t-readonlylogic-evaluable-goodsShipment-warehouse",
         "category": "readonlylogic-evaluable",
         "entity": "goodsShipment",
         "field": "warehouse",
         "runner": "node",
         "description": "Read-only logic for 'warehouse' in goodsShipment should have evaluable flag"
+      },
+      {
+        "id": "t-readonlylogic-evaluable-goodsShipmentLine-costcenter",
+        "category": "readonlylogic-evaluable",
+        "entity": "goodsShipmentLine",
+        "field": "costcenter",
+        "runner": "node",
+        "description": "Read-only logic for 'costcenter' in goodsShipmentLine should have evaluable flag"
       },
       {
         "id": "t-readonlylogic-evaluable-goodsShipmentLine-movementQuantity",
@@ -2532,12 +2852,28 @@
         "description": "Read-only logic for 'product' in goodsShipmentLine should have evaluable flag"
       },
       {
+        "id": "t-readonlylogic-evaluable-goodsShipmentLine-project",
+        "category": "readonlylogic-evaluable",
+        "entity": "goodsShipmentLine",
+        "field": "project",
+        "runner": "node",
+        "description": "Read-only logic for 'project' in goodsShipmentLine should have evaluable flag"
+      },
+      {
         "id": "t-readonlylogic-valid-goodsShipment-businessPartner",
         "category": "readonlylogic-valid",
         "entity": "goodsShipment",
         "field": "businessPartner",
         "runner": "node",
         "description": "Read-only logic for 'businessPartner' in goodsShipment should be valid JS"
+      },
+      {
+        "id": "t-readonlylogic-valid-goodsShipment-costcenter",
+        "category": "readonlylogic-valid",
+        "entity": "goodsShipment",
+        "field": "costcenter",
+        "runner": "node",
+        "description": "Read-only logic for 'costcenter' in goodsShipment should be valid JS"
       },
       {
         "id": "t-readonlylogic-valid-goodsShipment-documentNo",
@@ -2564,12 +2900,28 @@
         "description": "Read-only logic for 'partnerAddress' in goodsShipment should be valid JS"
       },
       {
+        "id": "t-readonlylogic-valid-goodsShipment-project",
+        "category": "readonlylogic-valid",
+        "entity": "goodsShipment",
+        "field": "project",
+        "runner": "node",
+        "description": "Read-only logic for 'project' in goodsShipment should be valid JS"
+      },
+      {
         "id": "t-readonlylogic-valid-goodsShipment-warehouse",
         "category": "readonlylogic-valid",
         "entity": "goodsShipment",
         "field": "warehouse",
         "runner": "node",
         "description": "Read-only logic for 'warehouse' in goodsShipment should be valid JS"
+      },
+      {
+        "id": "t-readonlylogic-valid-goodsShipmentLine-costcenter",
+        "category": "readonlylogic-valid",
+        "entity": "goodsShipmentLine",
+        "field": "costcenter",
+        "runner": "node",
+        "description": "Read-only logic for 'costcenter' in goodsShipmentLine should be valid JS"
       },
       {
         "id": "t-readonlylogic-valid-goodsShipmentLine-movementQuantity",
@@ -2594,6 +2946,14 @@
         "field": "product",
         "runner": "node",
         "description": "Read-only logic for 'product' in goodsShipmentLine should be valid JS"
+      },
+      {
+        "id": "t-readonlylogic-valid-goodsShipmentLine-project",
+        "category": "readonlylogic-valid",
+        "entity": "goodsShipmentLine",
+        "field": "project",
+        "runner": "node",
+        "description": "Read-only logic for 'project' in goodsShipmentLine should be valid JS"
       },
       {
         "id": "t-rule-declared-BP-AutoFill-Address",
@@ -2687,12 +3047,28 @@
         "description": "Selector endpoint for 'businessPartner' in goodsShipment should exist"
       },
       {
+        "id": "t-selector-endpoint-goodsShipment-costcenter",
+        "category": "selector-endpoint",
+        "entity": "goodsShipment",
+        "field": "costcenter",
+        "runner": "node",
+        "description": "Selector endpoint for 'costcenter' in goodsShipment should exist"
+      },
+      {
         "id": "t-selector-endpoint-goodsShipment-partnerAddress",
         "category": "selector-endpoint",
         "entity": "goodsShipment",
         "field": "partnerAddress",
         "runner": "node",
         "description": "Selector endpoint for 'partnerAddress' in goodsShipment should exist"
+      },
+      {
+        "id": "t-selector-endpoint-goodsShipment-project",
+        "category": "selector-endpoint",
+        "entity": "goodsShipment",
+        "field": "project",
+        "runner": "node",
+        "description": "Selector endpoint for 'project' in goodsShipment should exist"
       },
       {
         "id": "t-selector-endpoint-goodsShipment-warehouse",
@@ -2703,12 +3079,28 @@
         "description": "Selector endpoint for 'warehouse' in goodsShipment should exist"
       },
       {
+        "id": "t-selector-endpoint-goodsShipmentLine-costcenter",
+        "category": "selector-endpoint",
+        "entity": "goodsShipmentLine",
+        "field": "costcenter",
+        "runner": "node",
+        "description": "Selector endpoint for 'costcenter' in goodsShipmentLine should exist"
+      },
+      {
         "id": "t-selector-endpoint-goodsShipmentLine-product",
         "category": "selector-endpoint",
         "entity": "goodsShipmentLine",
         "field": "product",
         "runner": "node",
         "description": "Selector endpoint for 'product' in goodsShipmentLine should exist"
+      },
+      {
+        "id": "t-selector-endpoint-goodsShipmentLine-project",
+        "category": "selector-endpoint",
+        "entity": "goodsShipmentLine",
+        "field": "project",
+        "runner": "node",
+        "description": "Selector endpoint for 'project' in goodsShipmentLine should exist"
       },
       {
         "id": "t-system-field-goodsShipment-accountingDate",
@@ -2773,14 +3165,6 @@
         "field": "client",
         "runner": "node",
         "description": "System field 'client' should exist in backend but not frontend for goodsShipment"
-      },
-      {
-        "id": "t-system-field-goodsShipment-costcenter",
-        "category": "system-field",
-        "entity": "goodsShipment",
-        "field": "costcenter",
-        "runner": "node",
-        "description": "System field 'costcenter' should exist in backend but not frontend for goodsShipment"
       },
       {
         "id": "t-system-field-goodsShipment-createdBy",
@@ -3039,14 +3423,6 @@
         "description": "System field 'processNow' should exist in backend but not frontend for goodsShipment"
       },
       {
-        "id": "t-system-field-goodsShipment-project",
-        "category": "system-field",
-        "entity": "goodsShipment",
-        "field": "project",
-        "runner": "node",
-        "description": "System field 'project' should exist in backend but not frontend for goodsShipment"
-      },
-      {
         "id": "t-system-field-goodsShipment-receiveMaterials",
         "category": "system-field",
         "entity": "goodsShipment",
@@ -3223,14 +3599,6 @@
         "description": "System field 'client' should exist in backend but not frontend for goodsShipmentLine"
       },
       {
-        "id": "t-system-field-goodsShipmentLine-costcenter",
-        "category": "system-field",
-        "entity": "goodsShipmentLine",
-        "field": "costcenter",
-        "runner": "node",
-        "description": "System field 'costcenter' should exist in backend but not frontend for goodsShipmentLine"
-      },
-      {
         "id": "t-system-field-goodsShipmentLine-createdBy",
         "category": "system-field",
         "entity": "goodsShipmentLine",
@@ -3343,14 +3711,6 @@
         "description": "System field 'organization' should exist in backend but not frontend for goodsShipmentLine"
       },
       {
-        "id": "t-system-field-goodsShipmentLine-project",
-        "category": "system-field",
-        "entity": "goodsShipmentLine",
-        "field": "project",
-        "runner": "node",
-        "description": "System field 'project' should exist in backend but not frontend for goodsShipmentLine"
-      },
-      {
         "id": "t-system-field-goodsShipmentLine-reinvoice",
         "category": "system-field",
         "entity": "goodsShipmentLine",
@@ -3430,25 +3790,25 @@
       }
     ],
     "summary": {
-      "total": 182,
+      "total": 206,
       "byCategory": {
         "action-endpoint": 12,
         "crud-flags": 2,
         "default-value-type": 7,
-        "displaylogic-evaluable": 3,
-        "displaylogic-valid": 3,
-        "field-presence": 17,
-        "field-type": 17,
-        "readonlylogic-evaluable": 8,
-        "readonlylogic-valid": 8,
+        "displaylogic-evaluable": 7,
+        "displaylogic-valid": 7,
+        "field-presence": 21,
+        "field-type": 21,
+        "readonlylogic-evaluable": 12,
+        "readonlylogic-valid": 12,
         "rule-declared": 5,
         "searchable-filters": 6,
-        "selector-endpoint": 4,
-        "system-field": 88,
+        "selector-endpoint": 8,
+        "system-field": 84,
         "visibility": 2
       },
       "byRunner": {
-        "node": 182,
+        "node": 206,
         "junit": 0
       }
     }

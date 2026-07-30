@@ -32,7 +32,7 @@ const ACCOUNTS = [
     iban: 'ES1212340000000000000001',
     isDefault: true,
     pendingCount: 4,
-    psd2Connected: true,
+    bankConnected: true,
   },
   {
     id: 'acc-galicia',
@@ -44,7 +44,7 @@ const ACCOUNTS = [
     iban: 'ES1212340000000000000002',
     isDefault: false,
     pendingCount: 0,
-    psd2Connected: false,
+    bankConnected: false,
   },
 ];
 

@@ -1005,5 +1005,59 @@
     ],
     "author": "pipeline",
     "date": "2026-07-21"
+  },
+  {
+    "from": "0.23.0",
+    "to": "0.24.0",
+    "level": "breaking",
+    "reasons": [
+      "Field \"project\" property \"form\" changed from \"false\" to \"true\" in frontend (patch)",
+      "Field \"project\" property \"section\" changed from \"undefined\" to \"principal\" in frontend (additive)",
+      "Field \"project\" property \"displayLogic\" changed from \"undefined\" to \"[object Object]\" in frontend (additive)",
+      "Field \"costcenter\" property \"form\" changed from \"false\" to \"true\" in frontend (patch)",
+      "Field \"costcenter\" property \"section\" changed from \"undefined\" to \"principal\" in frontend (additive)",
+      "Field \"costcenter\" property \"displayLogic\" changed from \"undefined\" to \"[object Object]\" in frontend (additive)",
+      "Field \"businessPartner\" removed from entity \"goodsReceiptLine\" in frontend",
+      "Field \"project\" property \"form\" changed from \"false\" to \"true\" in frontend (patch)",
+      "Field \"project\" property \"displayLogic\" changed from \"undefined\" to \"[object Object]\" in frontend (additive)",
+      "Field \"costcenter\" property \"form\" changed from \"false\" to \"true\" in frontend (patch)",
+      "Field \"costcenter\" property \"displayLogic\" changed from \"undefined\" to \"[object Object]\" in frontend (additive)",
+      "Field \"businessPartner\" property \"visibility\" changed from \"editable\" to \"discarded\" in backend (patch)"
+    ],
+    "author": "pipeline",
+    "date": "2026-07-28"
+  },
+  {
+    "from": "0.24.0",
+    "to": "0.25.0",
+    "level": "additive",
+    "reasons": [
+      "Field \"project\" property \"dimensionsPanel\" changed from \"undefined\" to \"true\" in frontend (additive)",
+      "Field \"costcenter\" property \"dimensionsPanel\" changed from \"undefined\" to \"true\" in frontend (additive)"
+    ],
+    "author": "pipeline",
+    "date": "2026-07-28"
+  },
+  {
+    "from": "0.25.0",
+    "to": "0.26.0",
+    "level": "additive",
+    "reasons": [
+      "Field \"movementQuantity\" property \"defaultValue\" changed from \"0\" to \"1\" in frontend (additive)"
+    ],
+    "author": "pipeline",
+    "date": "2026-07-29"
+  },
+  {
+    "from": "0.26.0",
+    "to": "0.27.0",
+    "level": "additive",
+    "reasons": [
+      "Field \"movementQuantity\" property \"defaultValue\" changed from \"1\" to \"0\" in frontend (additive)",
+      "Field \"project\" property \"dimensionsPanel\" changed from \"true\" to \"undefined\" in frontend (additive)",
+      "Field \"costcenter\" property \"dimensionsPanel\" changed from \"true\" to \"undefined\" in frontend (additive)"
+    ],
+    "author": "pipeline",
+    "date": "2026-07-30"
   }
 ]

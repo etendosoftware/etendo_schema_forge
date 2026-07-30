@@ -52,7 +52,15 @@ registerImportDescriptor('contacts', async (row, config) => {
     const resolveCountry = config.resolveCountryFn || getFkResolver('contacts-country');
     const countryResult = await resolveCountry(row.country, { token: config.token });
     if (countryResult.status !== 'auto-resolved') {
-      throw new Error(`Row's country "${row.country}" could not be resolved to an existing record.`);
+      // This descriptor is module-scope async code (no React, no hooks), so it cannot call
+      // useUI(). ImportDialog injects the app's translator as `config.translate` (the same
+      // (key, params) => string DI the send pipeline uses) — preferred over resolveUI here
+      // because the message interpolates {country}, which resolveUI's plain lookup can't do.
+      // Falls back to English when no translator was injected (isolated/legacy callers).
+      const message = typeof config.translate === 'function'
+        ? config.translate('importErrorCountryUnresolved', { country: row.country })
+        : `The country "${row.country}" could not be resolved to an existing record.`;
+      throw new Error(message);
     }
     let regionId;
     if (row.region) {
