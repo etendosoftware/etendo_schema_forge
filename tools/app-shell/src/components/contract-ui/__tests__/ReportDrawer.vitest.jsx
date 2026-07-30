@@ -150,3 +150,47 @@ describe('ReportDrawer', () => {
     }
   });
 });
+
+describe('ReportDrawer — embedded jsreport HELPERS_CODE formatCurrency', () => {
+  // HELPERS_CODE is a self-contained Handlebars-helpers string sent directly to
+  // jsreport (same cross-process constraint as templates/reports/helpers — see
+  // buildJsreportHelpersString()'s doc comment). It used to hand-roll its own
+  // en-US formatCurrency; it now builds from the SAME centralized function
+  // every Category D report and document PDF uses — no more per-file copy to
+  // drift out of sync. Source-text assertion (not exported for direct import),
+  // matching this repo's convention for such cases.
+  it('builds helpers from the canonical buildJsreportHelpersString() — no hand-rolled formatCurrency duplicate', async () => {
+    const { readFileSync } = await import('node:fs');
+    const { join, dirname } = await import('node:path');
+    const { fileURLToPath } = await import('node:url');
+    const __dirname = dirname(fileURLToPath(import.meta.url));
+    const src = readFileSync(join(__dirname, '..', 'ReportDrawer.jsx'), 'utf8');
+    expect(src).toMatch(/import\s*\{\s*buildJsreportHelpersString\s*\}\s*from\s*['"][^'"]*report-html-helpers\.js['"]/);
+    expect(src).toMatch(/import\s*\{\s*getCurrencyFormatConfig\s*\}\s*from\s*['"][^'"]*currencyFormatConfig\.js['"]/);
+    expect(src).toMatch(/function buildHelpersCode\(\)\s*\{/);
+    expect(src).toMatch(/buildJsreportHelpersString\(undefined,\s*undefined,\s*getCurrencyFormatConfig\(\)\)/);
+    expect(src).toMatch(/helpers:\s*buildHelpersCode\(\)/);
+    expect(src).not.toMatch(/function formatCurrency\(/);
+  });
+
+  it('the resulting HELPERS_CODE actually groups thousands correctly (real function, not a stub)', async () => {
+    const { buildJsreportHelpersString } = await import('../../../../../../templates/reports/helpers/report-html-helpers.js');
+    const built = buildJsreportHelpersString();
+    const startIdx = built.indexOf('function formatCurrency(');
+    const braceStart = built.indexOf('{', startIdx);
+    let depth = 0, i = braceStart;
+    for (; i < built.length; i++) {
+      if (built[i] === '{') depth++;
+      else if (built[i] === '}') { depth--; if (depth === 0) break; }
+    }
+    const groupStart = built.indexOf('function __groupEsEs(');
+    const groupBraceStart = built.indexOf('{', groupStart);
+    let gDepth = 0, gi = groupBraceStart;
+    for (; gi < built.length; gi++) {
+      if (built[gi] === '{') gDepth++;
+      else if (built[gi] === '}') { gDepth--; if (gDepth === 0) break; }
+    }
+    const fn = new Function(`${built.slice(groupStart, gi + 1)}\n${built.slice(startIdx, i + 1)}; return formatCurrency;`)();
+    expect(fn(1355.2)).toBe('1.355,20');
+  });
+});

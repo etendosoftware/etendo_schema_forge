@@ -63,7 +63,11 @@ vi.mock('@generated/goods-receipt/custom/PurchaseReturnWizard', () => ({
 
 import { render, screen, fireEvent, act, within } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { join, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { usePreviewAttachment } from '@/windows/custom/shared/usePreviewAttachment.js';
+import { formatCurrency } from '@/lib/formatCurrency.js';
 import GoodsReceiptActions from '@generated/goods-receipt/custom/GoodsReceiptActions';
 
 const defaultProps = {
@@ -250,5 +254,44 @@ describe('GoodsReceiptActions', () => {
       fireEvent.click(screen.getByTestId('confirm-modal-close'));
       expect(screen.queryByTestId('confirm-goods-receipt-modal')).not.toBeInTheDocument();
     });
+  });
+});
+
+describe('ConfirmReceiptInvoicedModal — fmtAmount (real currency formatting)', () => {
+  // fmtAmount is not exported (internal to the modal, reachable only via a hard-to-
+  // stage UI state — a draft receipt that already has a linked invoice). Extract
+  // the real function source from the raw file and eval it directly rather than
+  // skip coverage.
+  const __dirname = dirname(fileURLToPath(import.meta.url));
+  const src = readFileSync(join(__dirname, '..', '..', '..', '..', '..', '..', '..', 'artifacts', 'goods-receipt', 'custom', 'GoodsReceiptActions.jsx'), 'utf8');
+
+  function extractFunctionSource(source, fnName) {
+    const startIdx = source.search(new RegExp(`const\\s+${fnName}\\s*=\\s*\\([^)]*\\)\\s*=>\\s*\\{`));
+    if (startIdx === -1) throw new Error(`${fnName} not found`);
+    const braceStart = source.indexOf('{', startIdx);
+    let depth = 0;
+    let i = braceStart;
+    for (; i < source.length; i++) {
+      if (source[i] === '{') depth++;
+      else if (source[i] === '}') {
+        depth--;
+        if (depth === 0) break;
+      }
+    }
+    return source.slice(startIdx, i + 1);
+  }
+
+  function getRealFmtAmount() {
+    const fnSource = extractFunctionSource(src, 'fmtAmount');
+    // fmtAmount now delegates to the real, imported formatCurrency() — inject it
+    // into the eval'd scope so the extracted source can still call it.
+    const fn = new Function('formatCurrency', `${fnSource}; return fmtAmount;`);
+    return fn(formatCurrency);
+  }
+
+  it('groups thousands and uses the real currency symbol, never the raw ISO code', () => {
+    const fmtAmount = getRealFmtAmount();
+    expect(fmtAmount(1234.56, 'EUR')).toBe('1.234,56 €');
+    expect(fmtAmount(1234.56, 'EUR')).not.toMatch(/EUR/);
   });
 });
