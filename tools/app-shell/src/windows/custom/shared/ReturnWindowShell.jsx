@@ -35,7 +35,6 @@ export default function ReturnWindowShell({
     editMode: 'navigate',
     documentPreview: true,
     statusField: 'documentStatus',
-    hideDeleteWhenComplete: true,
     actions: {
       edit: { show: true },
       duplicate: duplicateAction || { show: true },
