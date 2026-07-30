@@ -617,4 +617,257 @@ describe('useEntity — creation defaults race (ETP-4741)', () => {
       }));
     });
   });
+
+  // ---------------------------------------------------------------------------
+  // Record load during the defaults window (QA BUG-1).
+  //
+  // Opening an EXISTING record while a /new defaults request is still in flight
+  // must neutralize that request the same way a second handleNew does. Otherwise
+  // the creation defaults land on top of the loaded record and a save PATCHes
+  // them onto real data.
+  // ---------------------------------------------------------------------------
+
+  describe('record-load neutralization', () => {
+    const SELECTED_ROW = { id: '42', organization: 'ORG-REAL', documentNo: 'PO-42' };
+    const LATE_DEFAULTS = { organization: 'ORG-DEFAULT', documentStatus: 'DR' };
+
+    async function startNewWithPendingDefaults(entity = 'salesOrder') {
+      const pending = deferred();
+      globalThis.fetch.mockReturnValueOnce(pending.promise);
+
+      const { result } = renderEntity(entity);
+      await act(async () => {
+        result.current.handleNew();
+      });
+      const [, defaultsInit] = globalThis.fetch.mock.calls.at(-1);
+
+      return { result, pending, defaultsInit };
+    }
+
+    async function resolveDefaults(pending, defaults = LATE_DEFAULTS) {
+      await act(async () => {
+        pending.resolve(jsonResponse({ defaults }));
+      });
+      await settle();
+    }
+
+    describe('via handleSelect', () => {
+      it('keeps the loaded record values when the defaults land late', async () => {
+        const { result, pending } = await startNewWithPendingDefaults();
+
+        await act(async () => {
+          result.current.handleSelect(SELECTED_ROW);
+        });
+        await resolveDefaults(pending);
+
+        expect(
+          result.current.editing?.organization,
+          'creation defaults must never overwrite a record loaded during the defaults window'
+        ).toBe('ORG-REAL');
+      });
+
+      it('does not inject creation-only defaults into the loaded record', async () => {
+        const { result, pending } = await startNewWithPendingDefaults();
+
+        await act(async () => {
+          result.current.handleSelect(SELECTED_ROW);
+        });
+        await resolveDefaults(pending);
+
+        expect(
+          result.current.editing?.documentStatus,
+          'a field that exists only in the creation defaults must not appear on a loaded record'
+        ).toBeUndefined();
+        expect(result.current.selected?.id).toBe('42');
+      });
+
+      it('releases defaultsLoading as soon as a record is selected', async () => {
+        const { result, pending } = await startNewWithPendingDefaults();
+
+        await act(async () => {
+          result.current.handleSelect(SELECTED_ROW);
+        });
+
+        expect(
+          result.current.defaultsLoading,
+          'selecting a record must release the creation gate immediately'
+        ).toBe(false);
+
+        // Guards the latch Sentinel warned about: neutralizing by epoch alone
+        // makes handleNew's finally skip its release, leaving this stuck true.
+        await resolveDefaults(pending);
+        expect(
+          result.current.defaultsLoading,
+          'the neutralized response must not leave defaultsLoading latched'
+        ).toBe(false);
+      });
+
+      it('aborts the pending defaults request', async () => {
+        const { result, defaultsInit } = await startNewWithPendingDefaults();
+
+        await act(async () => {
+          result.current.handleSelect(SELECTED_ROW);
+        });
+
+        expect(
+          defaultsInit?.signal?.aborted,
+          'selecting a record must abort the in-flight defaults request'
+        ).toBe(true);
+      });
+
+      it('emits no defaults_block event for the neutralized session', async () => {
+        const { result, pending } = await startNewWithPendingDefaults();
+
+        await act(async () => {
+          result.current.handleSelect(SELECTED_ROW);
+        });
+        await resolveDefaults(pending);
+
+        expect(
+          defaultsBlockCalls(),
+          'a neutralized session must stay silent, like a superseded handleNew'
+        ).toHaveLength(0);
+      });
+    });
+
+    describe('via fetchById', () => {
+      async function loadRecordById(result) {
+        globalThis.fetch.mockResolvedValueOnce(
+          jsonResponse({ response: { data: [SELECTED_ROW] } })
+        );
+        await act(async () => {
+          result.current.fetchById('42');
+        });
+        await settle();
+      }
+
+      it('keeps the fetched record values when the defaults land late', async () => {
+        const { result, pending } = await startNewWithPendingDefaults();
+
+        await loadRecordById(result);
+        await resolveDefaults(pending);
+
+        expect(
+          result.current.editing?.organization,
+          'creation defaults must never overwrite a record fetched during the defaults window'
+        ).toBe('ORG-REAL');
+        expect(result.current.editing?.documentStatus).toBeUndefined();
+      });
+
+      it('releases defaultsLoading once the record is fetched', async () => {
+        const { result, pending } = await startNewWithPendingDefaults();
+
+        await loadRecordById(result);
+
+        expect(
+          result.current.defaultsLoading,
+          'fetching a record must release the creation gate'
+        ).toBe(false);
+
+        await resolveDefaults(pending);
+        expect(
+          result.current.defaultsLoading,
+          'the neutralized response must not leave defaultsLoading latched'
+        ).toBe(false);
+      });
+
+      it('aborts the pending defaults request', async () => {
+        const { result, defaultsInit } = await startNewWithPendingDefaults();
+
+        await loadRecordById(result);
+
+        expect(
+          defaultsInit?.signal?.aborted,
+          'fetching a record must abort the in-flight defaults request'
+        ).toBe(true);
+      });
+
+      it('emits no defaults_block event for the neutralized session', async () => {
+        const { result, pending } = await startNewWithPendingDefaults();
+
+        await loadRecordById(result);
+        await resolveDefaults(pending);
+
+        expect(
+          defaultsBlockCalls(),
+          'a session neutralized by fetchById must stay silent'
+        ).toHaveLength(0);
+      });
+    });
+
+    describe('lifecycle continuity', () => {
+      it('runs a clean full cycle on the next handleNew after a neutralization', async () => {
+        const { result, pending } = await startNewWithPendingDefaults();
+
+        await act(async () => {
+          result.current.handleSelect(SELECTED_ROW);
+        });
+        await resolveDefaults(pending);
+
+        const secondDefaults = deferred();
+        globalThis.fetch.mockReturnValueOnce(secondDefaults.promise);
+        await act(async () => {
+          result.current.handleNew();
+        });
+
+        expect(
+          result.current.defaultsLoading,
+          'a handleNew after a neutralization must open a fresh gate'
+        ).toBe(true);
+
+        await act(async () => {
+          secondDefaults.resolve(jsonResponse({ defaults: LATE_DEFAULTS }));
+        });
+        await settle();
+
+        expect(result.current.editing?.organization).toBe('ORG-DEFAULT');
+        expect(result.current.editing?.documentStatus).toBe('DR');
+        expect(result.current.defaultsLoading).toBe(false);
+
+        const calls = defaultsBlockCalls();
+        expect(
+          calls,
+          'only the surviving cycle reports: the neutralized one must contribute no event'
+        ).toHaveLength(1);
+        expect(calls[0][1]).toEqual(expect.objectContaining({
+          entity: 'salesOrder',
+          status: 'ok',
+        }));
+      });
+    });
+
+    // Preservation: with nothing in flight, record loading is untouched.
+    // These pass today and must keep passing after the fix.
+    describe('with no defaults request pending', () => {
+      it('handleSelect loads the record normally and stays silent', async () => {
+        const { result } = renderEntity('salesOrder');
+
+        await act(async () => {
+          result.current.handleSelect(SELECTED_ROW);
+        });
+
+        expect(result.current.selected).toEqual(SELECTED_ROW);
+        expect(result.current.editing).toEqual(SELECTED_ROW);
+        expect(result.current.defaultsLoading).toBe(false);
+        expect(defaultsBlockCalls()).toHaveLength(0);
+      });
+
+      it('fetchById loads the record normally and stays silent', async () => {
+        const { result } = renderEntity('salesOrder');
+        globalThis.fetch.mockResolvedValueOnce(
+          jsonResponse({ response: { data: [SELECTED_ROW] } })
+        );
+
+        await act(async () => {
+          result.current.fetchById('42');
+        });
+        await settle();
+
+        expect(result.current.editing?.organization).toBe('ORG-REAL');
+        expect(result.current.selected?.id).toBe('42');
+        expect(result.current.defaultsLoading).toBe(false);
+        expect(defaultsBlockCalls()).toHaveLength(0);
+      });
+    });
+  });
 });
