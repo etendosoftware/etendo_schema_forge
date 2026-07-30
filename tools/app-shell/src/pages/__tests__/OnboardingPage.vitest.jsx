@@ -186,6 +186,21 @@ describe('OnboardingPage', () => {
     vi.restoreAllMocks();
   });
 
+  // Since core 0.3.21 (ETP-4676) LoginStep.handleLogin validates email/password
+  // before calling the server and returns early when either is empty, so a
+  // submit on an untouched form no longer reaches loginAccount or any tracking.
+  // Tests that assert on the auth flow must fill the form first. The password
+  // deliberately avoids the substring 'password' so the "never tracked" privacy
+  // assertions below stay meaningful.
+  const fillLoginForm = () => {
+    fireEvent.change(screen.getByLabelText(/onboardingEmailLabel/), {
+      target: { value: 'ada@example.com' },
+    });
+    fireEvent.change(screen.getByLabelText(/onboardingPasswordLabel/), {
+      target: { value: 'sup3r-s3cr3t' },
+    });
+  };
+
   // Since core 0.3.4 the onboarding flow defaults to the login view; the register
   // form is only reached by clicking the switch link exposed on the login view.
   // Register-oriented tests use this helper to land on the register view before
@@ -530,13 +545,14 @@ describe('OnboardingPage', () => {
     expect(JSON.stringify(track.mock.calls)).not.toContain('Private Setup Name');
   });
 
-  it('tracks login failures without credentials', async () => {
+  it('tracks login failures when the server returns no token', async () => {
     loginAccount.mockResolvedValue({});
 
     // The flow lands on the login view by default (core 0.3.4).
     localStorage.removeItem('sf_platform_token');
     render(<OnboardingPage />);
 
+    fillLoginForm();
     fireEvent.submit(screen.getByTestId('action-login-submit').closest('form'));
 
     await waitFor(() => {
@@ -603,6 +619,7 @@ describe('OnboardingPage', () => {
     localStorage.removeItem('sf_platform_token');
     render(<OnboardingPage />);
 
+    fillLoginForm();
     fireEvent.submit(screen.getByTestId('action-login-submit').closest('form'));
 
     await waitFor(() => {
@@ -662,6 +679,7 @@ describe('OnboardingPage', () => {
     localStorage.removeItem('sf_platform_token');
     render(<OnboardingPage />);
 
+    fillLoginForm();
     fireEvent.submit(screen.getByTestId('action-login-submit').closest('form'));
 
     await waitFor(() => {
@@ -673,7 +691,11 @@ describe('OnboardingPage', () => {
         windowName: 'onboarding',
       });
     });
-    expect(screen.getByText('Readable login failure')).toBeInTheDocument();
+    // core 0.3.21 (ETP-4676) no longer renders the raw backend userMessage; the
+    // error is always translated via ui(err.code), falling back to this key when
+    // the rejection carries no code. The mocked ui() is the identity function.
+    expect(screen.getByText('onboardingConnectionError')).toBeInTheDocument();
+    expect(screen.queryByText('Readable login failure')).not.toBeInTheDocument();
   });
 
   it('submits forgot password requests with neutral success messaging', async () => {
