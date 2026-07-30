@@ -536,8 +536,7 @@ install: ## Install all workspace dependencies and activate git hooks
 	npm install
 	git config core.hooksPath .githooks
 
-bump-core-version: ## Bump the schema_forge_core lockstep pin in all package.json + refresh lockfiles (VERSION=x.y.z)
-	@if [ -z "$(VERSION)" ]; then echo "Usage: make bump-core-version VERSION=0.3.1"; exit 1; fi
+bump-core-version: ## Bump the schema_forge_core lockstep pin in all package.json + refresh lockfiles (VERSION=x.y.z, or prompts if omitted)
 	node scripts/bump-core-version.mjs $(VERSION)
 	@echo "=== npm install (root workspace — installs + hoists app-shell deps) ==="
 	npm install
