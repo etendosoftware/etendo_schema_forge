@@ -19,7 +19,8 @@ export const goodsReceipt = [
     "stDimension": "Sample stDimension",
     "ndDimension": "Sample ndDimension",
     "invoiceStatus": "DR",
-    "processed": "Sample processed"
+    "processed": "Sample processed",
+    "etgoCurrency": "USD"
   },
   {
     "id": "mock-goodsReceipt-002",
@@ -39,7 +40,8 @@ export const goodsReceipt = [
     "stDimension": "Sample stDimension",
     "ndDimension": "Sample ndDimension",
     "invoiceStatus": "CO",
-    "processed": "Sample processed"
+    "processed": "Sample processed",
+    "etgoCurrency": "EUR"
   },
   {
     "id": "mock-goodsReceipt-003",
@@ -59,7 +61,8 @@ export const goodsReceipt = [
     "stDimension": "Sample stDimension",
     "ndDimension": "Sample ndDimension",
     "invoiceStatus": "VO",
-    "processed": "Sample processed"
+    "processed": "Sample processed",
+    "etgoCurrency": "GBP"
   },
   {
     "id": "mock-goodsReceipt-004",
@@ -79,7 +82,8 @@ export const goodsReceipt = [
     "stDimension": "Sample stDimension",
     "ndDimension": "Sample ndDimension",
     "invoiceStatus": "IP",
-    "processed": "Sample processed"
+    "processed": "Sample processed",
+    "etgoCurrency": "USD"
   },
   {
     "id": "mock-goodsReceipt-005",
@@ -99,7 +103,8 @@ export const goodsReceipt = [
     "stDimension": "Sample stDimension",
     "ndDimension": "Sample ndDimension",
     "invoiceStatus": "DR",
-    "processed": "Sample processed"
+    "processed": "Sample processed",
+    "etgoCurrency": "EUR"
   },
   {
     "id": "mock-goodsReceipt-006",
@@ -119,7 +124,8 @@ export const goodsReceipt = [
     "stDimension": "Sample stDimension",
     "ndDimension": "Sample ndDimension",
     "invoiceStatus": "CO",
-    "processed": "Sample processed"
+    "processed": "Sample processed",
+    "etgoCurrency": "GBP"
   },
   {
     "id": "mock-goodsReceipt-007",
@@ -139,7 +145,8 @@ export const goodsReceipt = [
     "stDimension": "Sample stDimension",
     "ndDimension": "Sample ndDimension",
     "invoiceStatus": "VO",
-    "processed": "Sample processed"
+    "processed": "Sample processed",
+    "etgoCurrency": "USD"
   },
   {
     "id": "mock-goodsReceipt-008",
@@ -159,7 +166,8 @@ export const goodsReceipt = [
     "stDimension": "Sample stDimension",
     "ndDimension": "Sample ndDimension",
     "invoiceStatus": "IP",
-    "processed": "Sample processed"
+    "processed": "Sample processed",
+    "etgoCurrency": "EUR"
   },
   {
     "id": "mock-goodsReceipt-009",
@@ -179,7 +187,8 @@ export const goodsReceipt = [
     "stDimension": "Sample stDimension",
     "ndDimension": "Sample ndDimension",
     "invoiceStatus": "DR",
-    "processed": "Sample processed"
+    "processed": "Sample processed",
+    "etgoCurrency": "GBP"
   },
   {
     "id": "mock-goodsReceipt-010",
@@ -199,7 +208,8 @@ export const goodsReceipt = [
     "stDimension": "Sample stDimension",
     "ndDimension": "Sample ndDimension",
     "invoiceStatus": "CO",
-    "processed": "Sample processed"
+    "processed": "Sample processed",
+    "etgoCurrency": "USD"
   },
   {
     "id": "mock-goodsReceipt-011",
@@ -219,7 +229,8 @@ export const goodsReceipt = [
     "stDimension": "Sample stDimension",
     "ndDimension": "Sample ndDimension",
     "invoiceStatus": "VO",
-    "processed": "Sample processed"
+    "processed": "Sample processed",
+    "etgoCurrency": "EUR"
   },
   {
     "id": "mock-goodsReceipt-012",
@@ -239,7 +250,8 @@ export const goodsReceipt = [
     "stDimension": "Sample stDimension",
     "ndDimension": "Sample ndDimension",
     "invoiceStatus": "IP",
-    "processed": "Sample processed"
+    "processed": "Sample processed",
+    "etgoCurrency": "GBP"
   }
 ];
 

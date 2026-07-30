@@ -1,6 +1,7 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { useUI } from '@/i18n';
+import { formatCurrency } from '@/lib/formatCurrency.js';
 import { overlayStyle, cardStyle, btnPrimaryStyle, btnSecondaryStyle, closeBtnStyle, Spinner } from './ConfirmDocumentModal';
 
 /**
@@ -12,8 +13,18 @@ import { overlayStyle, cardStyle, btnPrimaryStyle, btnSecondaryStyle, closeBtnSt
  *   loading          — external loading state (parent sets while API call is in flight)
  *   pendingQtyUrl    — optional URL to fetch { response: { data: [{ pendingQty }] } }
  *                      to display the pending units subtitle. Omit for a generic subtitle.
- *   onConfirm        — called when user clicks Confirm (checkbox must be checked)
+ *   onConfirm        — called with the selected price list ID when the user clicks Confirm
+ *                      (checkbox must be checked, and — when showPriceListPicker is true —
+ *                      a price list must be selected)
  *   onClose          — called to dismiss without confirming
+ *   showPriceListPicker — ETP-4028: shipments/receipts carry no price list of their own —
+ *                      when true, shows a required Tarifa selector so the user explicitly
+ *                      picks the price list applied to every line of the generated invoice.
+ *                      Currency is always inherited from the shipment/receipt (read-only,
+ *                      shown in the summary card above) — never chosen here.
+ *   isSOTrx          — sales (true) vs purchase (false) price lists offered by the picker
+ *   apiBaseUrl       — required when showPriceListPicker is true, to fetch price lists
+ *   token            — auth bearer token, required for the pendingQtyUrl and price-list fetches
  */
 export default function CreateInvoiceConfirmModal({
   data,
@@ -21,21 +32,34 @@ export default function CreateInvoiceConfirmModal({
   pendingQtyUrl,
   onConfirm,
   onClose,
+  showPriceListPicker = false,
+  isSOTrx = true,
+  apiBaseUrl,
+  token,
 }) {
   const ui = useUI();
   const [checked, setChecked] = useState(true);
   const [pendingQty, setPendingQty] = useState(null);
+  const [priceLists, setPriceLists] = useState([]);
+  const [priceListId, setPriceListId] = useState('');
+  const [loadingPriceLists, setLoadingPriceLists] = useState(showPriceListPicker);
+
+  const base = useMemo(() => (apiBaseUrl || '').replace(/\/[^/]+$/, ''), [apiBaseUrl]);
 
   const documentNo  = data?.documentNo || '';
   const bpName      = data?.['businessPartner$_identifier'] || '';
   const linkedOrder = Array.isArray(data?.linkedOrders) ? data.linkedOrders[0] : null;
-  const currency    = linkedOrder?.['currency$_identifier'] || data?.['currency$_identifier'] || '';
+  // The document's own currency wins — it may have been edited in draft to diverge
+  // from the linked order's currency (ETP-4028: currency is editable until confirmed).
+  const currency    = data?.['etgoCurrency$_identifier'] || data?.['currency$_identifier']
+    || linkedOrder?.['currency$_identifier'] || '';
+  const currencyCode = currency;
   const grandTotal  = Number(linkedOrder?.grandTotalAmount ?? data?.grandTotalAmount ?? 0);
 
   const fmtNum = (v, dec = 2) =>
     v != null ? Number(v).toLocaleString(undefined, { minimumFractionDigits: dec, maximumFractionDigits: dec }) : '-';
 
-  const formattedTotal = currency ? `${fmtNum(grandTotal)} ${currency}` : fmtNum(grandTotal);
+  const formattedTotal = currencyCode ? formatCurrency(currencyCode, grandTotal) : fmtNum(grandTotal);
   const displayAmount = grandTotal > 0 ? formattedTotal : documentNo;
 
   useEffect(() => {
@@ -43,7 +67,7 @@ export default function CreateInvoiceConfirmModal({
     let cancelled = false;
     (async () => {
       try {
-        const res = await fetch(pendingQtyUrl);
+        const res = await fetch(pendingQtyUrl, { headers: { Authorization: `Bearer ${token}` } });
         if (!res.ok || cancelled) return;
         const lines = (await res.json())?.response?.data || [];
         const total = lines.reduce((sum, l) => sum + Number(l.pendingQty || 0), 0);
@@ -51,11 +75,36 @@ export default function CreateInvoiceConfirmModal({
       } catch { /* silent */ }
     })();
     return () => { cancelled = true; };
-  }, [pendingQtyUrl]);
+  }, [pendingQtyUrl, token]);
+
+  useEffect(() => {
+    if (!showPriceListPicker || !base) return;
+    let cancelled = false;
+    setLoadingPriceLists(true);
+    (async () => {
+      try {
+        const res = await fetch(`${base}/price-list/priceList?_startRow=0&_endRow=200`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (!res.ok || cancelled) return;
+        const all = (await res.json())?.response?.data || [];
+        const matches = all.filter(p => p.active !== false && p.salesPriceList === isSOTrx);
+        if (cancelled) return;
+        setPriceLists(matches);
+        const preferred = matches.find(p => p.default) || matches[0];
+        if (preferred) setPriceListId(preferred.id);
+      } catch { /* silent */ } finally {
+        if (!cancelled) setLoadingPriceLists(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [showPriceListPicker, isSOTrx, base, token]);
 
   const subtitle = pendingQty != null
     ? ui('soAmountPendingInvoice', { pending: `${fmtNum(pendingQty, 0)} ${ui('units')}` })
     : ui('soCreateInvoiceCheckDesc');
+
+  const canConfirm = checked && (!showPriceListPicker || !!priceListId);
 
   return createPortal(
     <div data-testid="create-invoice-confirm-modal" onClick={onClose} style={overlayStyle}>
@@ -76,6 +125,34 @@ export default function CreateInvoiceConfirmModal({
             </div>
           </div>
         </div>
+
+        {showPriceListPicker && (
+          <div style={{ padding: '0 20px 14px', display: 'flex', flexDirection: 'column', gap: 6 }}>
+            <label htmlFor="invoice-confirm-price-list" style={{ fontSize: 12, fontWeight: 500, color: 'hsl(var(--muted-foreground))' }}>
+              {ui('salesPriceListField')}
+            </label>
+            <select
+              id="invoice-confirm-price-list"
+              data-testid="invoice-confirm-price-list-select"
+              value={priceListId}
+              onChange={e => setPriceListId(e.target.value)}
+              disabled={loadingPriceLists || priceLists.length === 0}
+              style={{
+                padding: '8px 10px', borderRadius: 8, fontSize: 13,
+                border: '1px solid hsl(var(--border-subtle))', background: 'hsl(var(--card))',
+                color: 'hsl(var(--foreground))',
+              }}
+            >
+              {loadingPriceLists && <option value="">{ui('loading')}</option>}
+              {!loadingPriceLists && priceLists.length === 0 && (
+                <option value="">{ui('noPriceListsAvailable')}</option>
+              )}
+              {priceLists.map(p => (
+                <option key={p.id} value={p.id}>{p['name'] ?? p.id}</option>
+              ))}
+            </select>
+          </div>
+        )}
 
         <div style={{ padding: '0 20px 16px', display: 'flex', flexDirection: 'column', gap: 8 }}>
           <div style={{ fontSize: 12, fontWeight: 500, color: 'hsl(var(--muted-foreground))', marginBottom: 2 }}>
@@ -121,9 +198,9 @@ export default function CreateInvoiceConfirmModal({
           </button>
           <button
             type="button"
-            onClick={onConfirm}
-            disabled={loading || !checked}
-            style={{ ...btnPrimaryStyle, opacity: (loading || !checked) ? 0.6 : 1, cursor: (loading || !checked) ? 'not-allowed' : 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6 }}
+            onClick={() => onConfirm(priceListId)}
+            disabled={loading || !canConfirm}
+            style={{ ...btnPrimaryStyle, opacity: (loading || !canConfirm) ? 0.6 : 1, cursor: (loading || !canConfirm) ? 'not-allowed' : 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6 }}
           >
             {loading && <Spinner data-testid="Spinner__e6fb8b" />}
             {loading ? ui('soProcessing') : ui('soCreateDocsBtn')}

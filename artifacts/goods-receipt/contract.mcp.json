@@ -1,8 +1,8 @@
 {
-  "version": "0.23.0",
+  "version": "0.25.0",
   "generatedAt": "2026-04-29T19:05:20.719Z",
-  "updatedAt": "2026-07-17T18:04:55.296Z",
-  "contractChecksum": "5c7b44d77827859f",
+  "updatedAt": "2026-07-29T19:30:33.209Z",
+  "contractChecksum": "c050ac97744dfebc",
   "apiPrediction": {
     "specName": "goods-receipt",
     "baseUrl": "/sws/neo/goods-receipt",
@@ -130,6 +130,14 @@
         "reference": "UserDimension2",
         "inputMode": "selector",
         "url": "/sws/neo/goods-receipt/goodsReceipt/selectors/ndDimension"
+      },
+      {
+        "entity": "goodsReceipt",
+        "field": "etgoCurrency",
+        "column": "EM_ETGO_Currency_ID",
+        "reference": "Currency",
+        "inputMode": "selector",
+        "url": "/sws/neo/goods-receipt/goodsReceipt/selectors/etgoCurrency"
       },
       {
         "entity": "goodsReceiptLine",
@@ -561,6 +569,14 @@
     },
     "window": {
       "category": "purchases"
+    },
+    "labelOverrides": {
+      "en_US": {
+        "EM_ETGO_Currency_ID": "Currency"
+      },
+      "es_ES": {
+        "EM_ETGO_Currency_ID": "Moneda"
+      }
     }
   },
   "formState": {
@@ -627,6 +643,10 @@
           "processed": {
             "readOnly": true,
             "required": true
+          },
+          "etgoCurrency": {
+            "required": true,
+            "readOnlyLogic": "@Processed@='Y'"
           }
         }
       },
@@ -711,7 +731,8 @@
         "warehouse",
         "businessPartner",
         "partnerAddress",
-        "movementDate"
+        "movementDate",
+        "etgoCurrency"
       ],
       "lineFields": [
         "lineNo",
@@ -819,7 +840,8 @@
           "warehouse",
           "businessPartner",
           "partnerAddress",
-          "movementDate"
+          "movementDate",
+          "etgoCurrency"
         ]
       },
       {
@@ -841,5 +863,5 @@
     "knownLimitations": [],
     "dangerousOperations": []
   },
-  "checksum": "1c995a622aee03fb"
+  "checksum": "d54f34cd28f59558"
 }

@@ -46,7 +46,7 @@ const draftMode = null;
 // @sf-generated-end draftMode:goodsShipment
 
 // @sf-generated-start requiredHeaderFields:goodsShipment
-const requiredHeaderFields = ['documentNo', 'warehouse', 'businessPartner', 'partnerAddress', 'movementDate', 'etblkpAccountingstatus', 'etblkpBulkposting'];
+const requiredHeaderFields = ['documentNo', 'warehouse', 'businessPartner', 'partnerAddress', 'movementDate', 'etgoCurrency', 'etblkpAccountingstatus', 'etblkpBulkposting'];
 // @sf-generated-end requiredHeaderFields:goodsShipment
 
 // @sf-generated-start addLineFields:goodsShipmentLine
@@ -133,6 +133,14 @@ export const api = {
           }
         ]
       }
+    },
+    {
+      "entity": "goodsShipment",
+      "field": "etgoCurrency",
+      "column": "EM_ETGO_Currency_ID",
+      "reference": "Currency",
+      "inputMode": "selector",
+      "url": "/sws/neo/goods-shipment/goodsShipment/selectors/etgoCurrency"
     },
     {
       "entity": "goodsShipmentLine",
@@ -254,9 +262,19 @@ export const api = {
   },
   "window": {
     "category": "sales"
+  },
+  "labelOverrides": {
+    "en_US": {
+      "EM_ETGO_Currency_ID": "Currency"
+    },
+    "es_ES": {
+      "EM_ETGO_Currency_ID": "Moneda"
+    }
   }
 };
 
+
+const labelOverrides = api.labelOverrides;
 // @sf-generated-start component:GoodsShipmentPage
 export default function GoodsShipmentPage({ windowName, recordId, ...props }) {
   const windowAccessTier = useWindowAccess('169');
@@ -301,6 +319,7 @@ export default function GoodsShipmentPage({ windowName, recordId, ...props }) {
         ]}
         requiredHeaderFields={requiredHeaderFields}
         salesTheme
+        labelOverrides={labelOverrides}
         linesLayout="inlineEditable"
         sendDocument
         {...props} window={effectiveWindow}
@@ -320,6 +339,7 @@ export default function GoodsShipmentPage({ windowName, recordId, ...props }) {
       dateFilterKey="movementDate"
       bulkActions={(ctx) => <BulkInvoiceFromShipment {...ctx} />}
       hidePrint
+      labelOverrides={labelOverrides}
       rowQuickActions={{}}
       sendDocument
       {...props} window={effectiveWindow}

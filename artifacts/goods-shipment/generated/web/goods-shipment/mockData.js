@@ -14,6 +14,7 @@ export const goodsShipment = [
     "invoiceStatus": "DR",
     "invoiced": "Sample invoiced",
     "processed": "Sample processed",
+    "etgoCurrency": "USD",
     "etblkpAccountingstatus": "DR",
     "etblkpBulkposting": "Sample etblkpBulkposting"
   },
@@ -30,6 +31,7 @@ export const goodsShipment = [
     "invoiceStatus": "CO",
     "invoiced": "Sample invoiced",
     "processed": "Sample processed",
+    "etgoCurrency": "EUR",
     "etblkpAccountingstatus": "CO",
     "etblkpBulkposting": "Sample etblkpBulkposting"
   },
@@ -46,6 +48,7 @@ export const goodsShipment = [
     "invoiceStatus": "VO",
     "invoiced": "Sample invoiced",
     "processed": "Sample processed",
+    "etgoCurrency": "GBP",
     "etblkpAccountingstatus": "VO",
     "etblkpBulkposting": "Sample etblkpBulkposting"
   },
@@ -62,6 +65,7 @@ export const goodsShipment = [
     "invoiceStatus": "IP",
     "invoiced": "Sample invoiced",
     "processed": "Sample processed",
+    "etgoCurrency": "USD",
     "etblkpAccountingstatus": "IP",
     "etblkpBulkposting": "Sample etblkpBulkposting"
   },
@@ -78,6 +82,7 @@ export const goodsShipment = [
     "invoiceStatus": "DR",
     "invoiced": "Sample invoiced",
     "processed": "Sample processed",
+    "etgoCurrency": "EUR",
     "etblkpAccountingstatus": "DR",
     "etblkpBulkposting": "Sample etblkpBulkposting"
   },
@@ -94,6 +99,7 @@ export const goodsShipment = [
     "invoiceStatus": "CO",
     "invoiced": "Sample invoiced",
     "processed": "Sample processed",
+    "etgoCurrency": "GBP",
     "etblkpAccountingstatus": "CO",
     "etblkpBulkposting": "Sample etblkpBulkposting"
   },
@@ -110,6 +116,7 @@ export const goodsShipment = [
     "invoiceStatus": "VO",
     "invoiced": "Sample invoiced",
     "processed": "Sample processed",
+    "etgoCurrency": "USD",
     "etblkpAccountingstatus": "VO",
     "etblkpBulkposting": "Sample etblkpBulkposting"
   },
@@ -126,6 +133,7 @@ export const goodsShipment = [
     "invoiceStatus": "IP",
     "invoiced": "Sample invoiced",
     "processed": "Sample processed",
+    "etgoCurrency": "EUR",
     "etblkpAccountingstatus": "IP",
     "etblkpBulkposting": "Sample etblkpBulkposting"
   },
@@ -142,6 +150,7 @@ export const goodsShipment = [
     "invoiceStatus": "DR",
     "invoiced": "Sample invoiced",
     "processed": "Sample processed",
+    "etgoCurrency": "GBP",
     "etblkpAccountingstatus": "DR",
     "etblkpBulkposting": "Sample etblkpBulkposting"
   },
@@ -158,6 +167,7 @@ export const goodsShipment = [
     "invoiceStatus": "CO",
     "invoiced": "Sample invoiced",
     "processed": "Sample processed",
+    "etgoCurrency": "USD",
     "etblkpAccountingstatus": "CO",
     "etblkpBulkposting": "Sample etblkpBulkposting"
   },
@@ -174,6 +184,7 @@ export const goodsShipment = [
     "invoiceStatus": "VO",
     "invoiced": "Sample invoiced",
     "processed": "Sample processed",
+    "etgoCurrency": "EUR",
     "etblkpAccountingstatus": "VO",
     "etblkpBulkposting": "Sample etblkpBulkposting"
   },
@@ -190,6 +201,7 @@ export const goodsShipment = [
     "invoiceStatus": "IP",
     "invoiced": "Sample invoiced",
     "processed": "Sample processed",
+    "etgoCurrency": "GBP",
     "etblkpAccountingstatus": "IP",
     "etblkpBulkposting": "Sample etblkpBulkposting"
   }

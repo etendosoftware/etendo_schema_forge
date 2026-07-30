@@ -1,8 +1,8 @@
 {
-  "version": "0.30.0",
+  "version": "0.32.0",
   "generatedAt": "2026-04-29T19:04:55.657Z",
-  "updatedAt": "2026-07-21T12:35:19.734Z",
-  "checksum": "5e26b1eaf5b3d45e",
+  "updatedAt": "2026-07-29T19:30:33.393Z",
+  "checksum": "5e11ff91c761a43e",
   "frontendContract": {
     "window": {
       "id": "169",
@@ -45,6 +45,14 @@
         }
       },
       "salesTheme": true,
+      "labelOverrides": {
+        "en_US": {
+          "EM_ETGO_Currency_ID": "Currency"
+        },
+        "es_ES": {
+          "EM_ETGO_Currency_ID": "Moneda"
+        }
+      },
       "dateFilterKey": "movementDate",
       "noHeaderBorder": true,
       "layoutType": "default",
@@ -430,6 +438,32 @@
             "validation": {
               "required": true,
               "maxLength": 1
+            }
+          },
+          {
+            "name": "etgoCurrency",
+            "apiKey": "etgoCurrency",
+            "column": "EM_ETGO_Currency_ID",
+            "label": "EM_ETGO_Currency_ID",
+            "type": "foreignKey",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": true,
+            "grid": false,
+            "form": true,
+            "sourceRequired": true,
+            "reference": "Currency",
+            "inputMode": "selector",
+            "section": "principal",
+            "seq": 45,
+            "validation": {
+              "required": true,
+              "maxLength": 32
+            },
+            "readOnlyLogic": {
+              "raw": "@Processed@='Y'",
+              "evaluable": true,
+              "js": "record['processed'] === true"
             }
           },
           {
@@ -846,6 +880,14 @@
         }
       },
       "salesTheme": true,
+      "labelOverrides": {
+        "en_US": {
+          "EM_ETGO_Currency_ID": "Currency"
+        },
+        "es_ES": {
+          "EM_ETGO_Currency_ID": "Moneda"
+        }
+      },
       "dateFilterKey": "movementDate",
       "noHeaderBorder": true,
       "linesLayout": "inlineEditable",
@@ -1393,6 +1435,14 @@
             "required": true
           },
           {
+            "name": "etgoCurrency",
+            "apiKey": "etgoCurrency",
+            "column": "EM_ETGO_Currency_ID",
+            "type": "foreignKey",
+            "visibility": "editable",
+            "required": true
+          },
+          {
             "name": "updated",
             "apiKey": "updated",
             "column": "Updated",
@@ -1858,6 +1908,14 @@
         }
       },
       {
+        "entity": "goodsShipment",
+        "field": "etgoCurrency",
+        "column": "EM_ETGO_Currency_ID",
+        "reference": "Currency",
+        "inputMode": "selector",
+        "url": "/sws/neo/goods-shipment/goodsShipment/selectors/etgoCurrency"
+      },
+      {
         "entity": "goodsShipmentLine",
         "field": "product",
         "column": "M_Product_ID",
@@ -1977,6 +2035,14 @@
     },
     "window": {
       "category": "sales"
+    },
+    "labelOverrides": {
+      "en_US": {
+        "EM_ETGO_Currency_ID": "Currency"
+      },
+      "es_ES": {
+        "EM_ETGO_Currency_ID": "Moneda"
+      }
     }
   },
   "testManifest": {
@@ -2244,6 +2310,14 @@
         "description": "Field 'etblkpBulkposting' should be present in goodsShipment"
       },
       {
+        "id": "t-field-presence-goodsShipment-etgoCurrency",
+        "category": "field-presence",
+        "entity": "goodsShipment",
+        "field": "etgoCurrency",
+        "runner": "node",
+        "description": "Field 'etgoCurrency' should be present in goodsShipment"
+      },
+      {
         "id": "t-field-presence-goodsShipment-invoiced",
         "category": "field-presence",
         "entity": "goodsShipment",
@@ -2380,6 +2454,14 @@
         "description": "Field 'etblkpBulkposting' should have type 'string' in goodsShipment"
       },
       {
+        "id": "t-field-type-goodsShipment-etgoCurrency",
+        "category": "field-type",
+        "entity": "goodsShipment",
+        "field": "etgoCurrency",
+        "runner": "node",
+        "description": "Field 'etgoCurrency' should have type 'string' in goodsShipment"
+      },
+      {
         "id": "t-field-type-goodsShipment-invoiced",
         "category": "field-type",
         "entity": "goodsShipment",
@@ -2484,6 +2566,14 @@
         "description": "Read-only logic for 'documentNo' in goodsShipment should have evaluable flag"
       },
       {
+        "id": "t-readonlylogic-evaluable-goodsShipment-etgoCurrency",
+        "category": "readonlylogic-evaluable",
+        "entity": "goodsShipment",
+        "field": "etgoCurrency",
+        "runner": "node",
+        "description": "Read-only logic for 'etgoCurrency' in goodsShipment should have evaluable flag"
+      },
+      {
         "id": "t-readonlylogic-evaluable-goodsShipment-movementDate",
         "category": "readonlylogic-evaluable",
         "entity": "goodsShipment",
@@ -2546,6 +2636,14 @@
         "field": "documentNo",
         "runner": "node",
         "description": "Read-only logic for 'documentNo' in goodsShipment should be valid JS"
+      },
+      {
+        "id": "t-readonlylogic-valid-goodsShipment-etgoCurrency",
+        "category": "readonlylogic-valid",
+        "entity": "goodsShipment",
+        "field": "etgoCurrency",
+        "runner": "node",
+        "description": "Read-only logic for 'etgoCurrency' in goodsShipment should be valid JS"
       },
       {
         "id": "t-readonlylogic-valid-goodsShipment-movementDate",
@@ -2685,6 +2783,14 @@
         "field": "businessPartner",
         "runner": "node",
         "description": "Selector endpoint for 'businessPartner' in goodsShipment should exist"
+      },
+      {
+        "id": "t-selector-endpoint-goodsShipment-etgoCurrency",
+        "category": "selector-endpoint",
+        "entity": "goodsShipment",
+        "field": "etgoCurrency",
+        "runner": "node",
+        "description": "Selector endpoint for 'etgoCurrency' in goodsShipment should exist"
       },
       {
         "id": "t-selector-endpoint-goodsShipment-partnerAddress",
@@ -3430,25 +3536,25 @@
       }
     ],
     "summary": {
-      "total": 182,
+      "total": 187,
       "byCategory": {
         "action-endpoint": 12,
         "crud-flags": 2,
         "default-value-type": 7,
         "displaylogic-evaluable": 3,
         "displaylogic-valid": 3,
-        "field-presence": 17,
-        "field-type": 17,
-        "readonlylogic-evaluable": 8,
-        "readonlylogic-valid": 8,
+        "field-presence": 18,
+        "field-type": 18,
+        "readonlylogic-evaluable": 9,
+        "readonlylogic-valid": 9,
         "rule-declared": 5,
         "searchable-filters": 6,
-        "selector-endpoint": 4,
+        "selector-endpoint": 5,
         "system-field": 88,
         "visibility": 2
       },
       "byRunner": {
-        "node": 182,
+        "node": 187,
         "junit": 0
       }
     }

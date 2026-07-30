@@ -1005,5 +1005,26 @@
     ],
     "author": "pipeline",
     "date": "2026-07-21"
+  },
+  {
+    "from": "0.23.0",
+    "to": "0.24.0",
+    "level": "additive",
+    "reasons": [
+      "Field \"etgoCurrency\" added to entity \"goodsReceipt\" in backend"
+    ],
+    "author": "pipeline",
+    "date": "2026-07-29"
+  },
+  {
+    "from": "0.24.0",
+    "to": "0.25.0",
+    "level": "additive",
+    "reasons": [
+      "Field \"etgoCurrency\" added to entity \"goodsReceipt\" in frontend",
+      "Field \"etgoCurrency\" property \"visibility\" changed from \"discarded\" to \"editable\" in backend (patch)"
+    ],
+    "author": "pipeline",
+    "date": "2026-07-29"
   }
 ]

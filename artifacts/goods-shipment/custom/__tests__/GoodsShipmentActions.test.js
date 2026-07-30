@@ -109,4 +109,43 @@ describe('GoodsShipmentActions', () => {
       assert.match(src, /from\s*['"]@\/i18n['"]/);
     });
   });
+
+  describe('ETP-4028 — CreateInvoiceConfirmModal price-list picker wiring', () => {
+    it('imports CreateInvoiceConfirmModal', () => {
+      assert.match(src, /import CreateInvoiceConfirmModal from '@\/components\/contract-ui\/CreateInvoiceConfirmModal'/);
+    });
+
+    it('renders CreateInvoiceConfirmModal with showPriceListPicker enabled', () => {
+      assert.match(src, /<CreateInvoiceConfirmModal[\s\S]*?showPriceListPicker[\s\S]*?\/>/);
+    });
+
+    it('passes isSOTrx (bare, defaults to truthy) — goods-shipment offers SALES price lists', () => {
+      assert.match(src, /<CreateInvoiceConfirmModal[\s\S]*?\bisSOTrx\b[\s\S]*?\/>/);
+      // Must not be explicitly set to false for the shipment (sales) flow
+      assert.doesNotMatch(src, /<CreateInvoiceConfirmModal[\s\S]*?isSOTrx=\{false\}[\s\S]*?\/>/);
+    });
+
+    it('passes apiBaseUrl through to the modal (required for the price-list fetch)', () => {
+      assert.match(src, /<CreateInvoiceConfirmModal[\s\S]*?apiBaseUrl=\{apiBaseUrl\}[\s\S]*?\/>/);
+    });
+
+    it('onConfirm closes the confirm dialog and forwards the chosen priceListId to handleCreateInvoice', () => {
+      assert.match(
+        src,
+        /onConfirm=\{\(priceListId\) => \{ setShowInvoiceConfirm\(false\); handleCreateInvoice\(priceListId\); \}\}/,
+      );
+    });
+
+    it('handleCreateInvoice accepts priceListId and threads it into the POST body', () => {
+      assert.match(src, /const handleCreateInvoice = async \(priceListId\) => \{/);
+      assert.match(
+        src,
+        /body: JSON\.stringify\(\{ priceListId \}\)/,
+      );
+    });
+
+    it('posts to the createDraftInvoice action (sales-side)', () => {
+      assert.match(src, /goods-shipment\/goodsShipment\/\$\{recordId\}\/action\/createDraftInvoice/);
+    });
+  });
 });
