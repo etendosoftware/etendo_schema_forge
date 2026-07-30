@@ -508,12 +508,12 @@ test.describe('Assets (real backend)', () => {
       .toContainText(/Amortización creada/i, { timeout: 20_000 });
     await verifySidebarSync(page);
 
-    // Plan: 2 monthly lines, 06-2026 & 07-2026, 50.00% / 1,000.00 € each.
+    // Plan: 2 monthly lines, 06-2026 & 07-2026, 50.00% / 1.000,00 € each.
     await page.getByRole('button', { name: /Plan de amortización/ }).click();
     await expect(page.getByText('06-2026')).toBeVisible({ timeout: 10_000 });
     await expect(page.getByText('07-2026')).toBeVisible();
     await expect(page.getByText('50.00%')).toHaveCount(2);
-    await expect(page.getByText('1,000.00 €')).toHaveCount(2);
+    await expect(page.getByText('1.000,00 €')).toHaveCount(2);
 
     // Back to the list: filter and verify the row columns.
     await page.getByTestId('action-cancel').click();
@@ -605,12 +605,12 @@ test.describe('Assets (real backend)', () => {
       .toContainText(/Amortización creada/i, { timeout: 20_000 });
     await verifySidebarSync(page);
 
-    // Plan: 2 annual lines, 2026 & 2027, 50.00% / 1,000.00 € each.
+    // Plan: 2 annual lines, 2026 & 2027, 50.00% / 1.000,00 € each.
     await page.getByRole('button', { name: /Plan de amortización/ }).click();
     await expect(page.getByText('2026', { exact: true })).toBeVisible({ timeout: 10_000 });
     await expect(page.getByText('2027', { exact: true })).toBeVisible();
     await expect(page.getByText('50.00%')).toHaveCount(2);
-    await expect(page.getByText('1,000.00 €')).toHaveCount(2);
+    await expect(page.getByText('1.000,00 €')).toHaveCount(2);
 
     // Back to the list: filter and verify the row columns.
     await page.getByTestId('action-cancel').click();
@@ -692,12 +692,12 @@ test.describe('Assets (real backend)', () => {
       .toContainText(/Amortización creada/i, { timeout: 20_000 });
     await verifySidebarSync(page);
 
-    // Plan: 2 annual lines, Período 2026 & 2027, 50.00% / 1,000.00 € each.
+    // Plan: 2 annual lines, Período 2026 & 2027, 50.00% / 1.000,00 € each.
     await page.getByRole('button', { name: /Plan de amortización/ }).click();
     await expect(page.getByText('2026', { exact: true })).toBeVisible({ timeout: 10_000 });
     await expect(page.getByText('2027', { exact: true })).toBeVisible();
     await expect(page.getByText('50.00%')).toHaveCount(2);
-    await expect(page.getByText('1,000.00 €')).toHaveCount(2);
+    await expect(page.getByText('1.000,00 €')).toHaveCount(2);
 
     // Back to the list: filter and verify the row columns.
     await page.getByTestId('action-cancel').click();
@@ -782,7 +782,7 @@ test.describe('Assets (real backend)', () => {
     await expect(page.getByText('06-2026')).toBeVisible({ timeout: 10_000 });
     await expect(page.getByText('07-2026')).toBeVisible();
     await expect(page.getByText('50.00%')).toHaveCount(2);
-    await expect(page.getByText('1,000.00 €')).toHaveCount(2);
+    await expect(page.getByText('1.000,00 €')).toHaveCount(2);
 
     // Capture both period headers (06-2026, 07-2026) for end-of-test cleanup.
     const headerUrls = await captureAmortizationHeaderUrls(page, ['06-2026', '07-2026']);
@@ -838,7 +838,7 @@ test.describe('Assets (real backend)', () => {
     await expect(page.getByText('2026', { exact: true })).toBeVisible({ timeout: 10_000 });
     await expect(page.getByText('2027', { exact: true })).toBeVisible();
     await expect(page.getByText('50.00%')).toHaveCount(2);
-    await expect(page.getByText('1,000.00 €')).toHaveCount(2);
+    await expect(page.getByText('1.000,00 €')).toHaveCount(2);
 
     // Capture both period headers (2026, 2027) for end-of-test cleanup.
     const headerUrls = await captureAmortizationHeaderUrls(page, ['2026', '2027']);
@@ -892,7 +892,7 @@ test.describe('Assets (real backend)', () => {
     await expect(page.getByText('2026', { exact: true })).toBeVisible({ timeout: 10_000 });
     await expect(page.getByText('2027', { exact: true })).toBeVisible();
     await expect(page.getByText('50.00%')).toHaveCount(2);
-    await expect(page.getByText('1,000.00 €')).toHaveCount(2);
+    await expect(page.getByText('1.000,00 €')).toHaveCount(2);
 
     // Capture both period headers (2026, 2027) for end-of-test cleanup.
     const headerUrls = await captureAmortizationHeaderUrls(page, ['2026', '2027']);
