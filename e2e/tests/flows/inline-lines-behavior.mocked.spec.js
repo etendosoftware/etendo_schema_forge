@@ -361,8 +361,14 @@ test.describe('Tanda 3 — cell renderers', () => {
     await rowA.dispatchEvent('mouseover');
     await rowA.locator('[data-testid="line-actions"] button').first().dispatchEvent('click');
 
-    // Open the tax cell. InlineSearchCombo renders a plain <input> — type to trigger
-    // the server search and then click the matching option in the portal dropdown.
+    // The tax cell already has a committed value (LINE_A.tax = 'tax-1'), so InlineSearchCombo
+    // renders it as a chip (ETP-4600), not the plain input — click the chip to enter edit mode
+    // first, which mounts the empty search input with the full option list, mirroring
+    // CreatableSearchSelect's header chip behavior.
+    const taxChip = rowA.locator('[data-testid="inline-add-field-tax-chip"]');
+    await expect(taxChip).toBeVisible({ timeout: 3_000 });
+    await taxChip.click();
+
     const taxInput = rowA.locator('[data-testid="inline-add-field-tax"]');
     await expect(taxInput).toBeVisible({ timeout: 3_000 });
     await taxInput.fill('IVA 10%');
