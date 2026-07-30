@@ -734,7 +734,9 @@ function secondaryDetailSidebar(props) {
 }
 
 function secondaryAddLineBar(props) {
-  if (!((props.st.addLineFields?.entry?.length > 0 || props.st.customAddModal) && props.hook.editing)) {
+  const secondaryChildCount = (props.secondaryHooks?.[props.stIdx]?.children ?? []).length;
+  if (!((props.st.addLineFields?.entry?.length > 0 || props.st.customAddModal) && props.hook.editing
+      && resolveCanAddSecondaryLines(props.st, secondaryChildCount))) {
     return null;
   }
   return (
@@ -800,8 +802,14 @@ export function SecondaryTableTab(props) {
   const secondaryChildren = props.secondaryHooks[props.stIdx]?.children ?? [];
   const isAddingThis = props.addingSecondaryLine?.[props.st.key] ?? false;
   const hasAddFields = (props.st.addLineFields?.entry?.length ?? 0) > 0;
+  // ETP-4565 — st.maxDetailLines caps this tab's own child count (declared per
+  // secondary tab in decisions.json). At this point secondaryChildren.length is
+  // always 0 when showEmptyState is being evaluated below, so this only ever
+  // blocks the empty-state add trigger for the maxDetailLines:0 (import-only)
+  // case — a tab capped at >=1 still shows it while empty, same as today.
+  const canAddMore = resolveCanAddSecondaryLines(props.st, secondaryChildren.length);
   const showEmptyState = secondaryChildren.length === 0 && !isAddingThis
-    && props.hook.editing && hasAddFields && !props.st.customAddModal && !tabReadOnly;
+    && props.hook.editing && hasAddFields && canAddMore && !props.st.customAddModal && !tabReadOnly;
   if (showEmptyState) {
     return secondaryTabEmptyState({ ui: props.ui, onAddLineClick: props.onAddLineClick, addLineLabel: props.addLineLabel });
   }
@@ -846,7 +854,7 @@ export function SecondaryTableTab(props) {
                 isDocumentReadOnly: tabReadOnly,
                 hook: props.hook,
               })}
-              addRow={props.st.addLineFields?.entry?.length > 0 && !tabReadOnly ? {
+              addRow={props.st.addLineFields?.entry?.length > 0 && !tabReadOnly && canAddMore ? {
                 ref: props.secondaryAddRowRef,
                 active: props.addingSecondaryLine[props.st.key] ?? false,
                 fields: props.st.addLineFields.entry,
@@ -927,6 +935,19 @@ export function resolveCanAddLines(addLineGuard, data, requiredHeaderFields, chi
   } else {
     return true;
   }
+}
+
+// ETP-4565 — st.maxDetailLines mirrors window.maxDetailLines' semantics
+// (generator: `addLineGuard={(_, children) => children.length < N}`) but is
+// declared per secondary tab (`window.secondaryTabs.<key>.maxDetailLines` in
+// decisions.json), since a window can have several secondaryTabs that each
+// need an independent cap (e.g. contacts' customerAccounting/vendorAccounting).
+// `N > 0` hides the add affordances once the tab's own child count reaches N;
+// `0` disables manual add entirely (import-only-style, matching maxDetailLines:0
+// on the detailEntity pattern). Undeclared (null/undefined) stays uncapped —
+// today's behavior for every secondaryTabs entry that predates this flag.
+export function resolveCanAddSecondaryLines(st, childrenCount) {
+  return st?.maxDetailLines == null || childrenCount < st.maxDetailLines;
 }
 
 export async function parseBackendErrorMessage(res) {
