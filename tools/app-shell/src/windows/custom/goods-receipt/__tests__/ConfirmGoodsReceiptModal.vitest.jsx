@@ -45,12 +45,13 @@ describe('ConfirmGoodsReceiptModal', () => {
       renderModal();
       expect(screen.getByText('ALB-001')).toBeInTheDocument();
       expect(screen.getByText('Supplier A')).toBeInTheDocument();
-      // The amount span contains the locale-formatted value + currency code.
-      // We check the currency code is present (locale thousand-sep varies per environment).
+      // The amount span shows the real currency symbol (never the raw ISO code) —
+      // ETP-4314 centralization via formatCurrency().
       const amountSpan = screen.getByText((content, el) =>
-        el?.tagName === 'SPAN' && content.includes('EUR') && content.includes(','),
+        el?.tagName === 'SPAN' && content.includes('€') && content.includes(','),
       );
       expect(amountSpan).toBeInTheDocument();
+      expect(screen.queryByText(/EUR/)).toBeNull();
     });
 
     it('omits subtitle parts that are missing', () => {

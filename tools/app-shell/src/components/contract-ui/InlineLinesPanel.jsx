@@ -13,7 +13,7 @@ import { toast } from 'sonner';
 import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
 import { useLabel, useLocaleSwitch, useUI } from '@/i18n';
-import { formatAmount } from '@/lib/formatAmount.js';
+import { formatCurrency } from '@/lib/formatCurrency.js';
 import { formatSignedDelta } from '@/lib/formatSigned.js';
 import { resolveIdentifier } from '@/lib/resolveIdentifier.js';
 import { resolveColumnLabel } from '@/lib/resolveColumnLabel.js';
@@ -389,7 +389,7 @@ function ReadCell({ row, col, locale, t, ui }) {
   }
   if (col.type === 'amount') {
     // No currency symbol on line-level cells — the currency is shown at the header level.
-    return <span className="tabular-nums">{formatAmount(row[col.key])}</span>;
+    return <span className="tabular-nums">{formatCurrency(undefined, row[col.key])}</span>;
   }
   if (col.type === 'percent') {
     const val = Number(row[col.key]);
