@@ -17,7 +17,7 @@ Use this window to maintain warehouse master records and understand what is phys
 - Route: `/warehouse` for the list, `/warehouse/:recordId` for detail.
 - Visibility: visible from the Inventory menu as **Warehouse**.
 - Implementation type: custom window. `tools/app-shell/src/windows/registry.js` resolves `warehouse` through `customLoaders`. The custom wrapper (`tools/app-shell/src/windows/custom/warehouse/index.jsx`) mounts the generated `WarehousePage` with overridden table, sidebar, secondary tabs, and layout props.
-- Window shape: single-entity master with custom secondary tabs. `decisions.json` declares `detailEntity: null`; the detail page combines the warehouse header form with stock-derived surfaces (sidebar summary, Products tab, Transactions tab) and the standard Attachments tab.
+- Window shape: single-entity master with custom secondary tabs. `decisions.json` declares `detailEntity: null`; the detail page combines the warehouse header form with stock-derived surfaces (sidebar summary, Products tab, Transactions tab), the generated **Accounting** tab (see "Accounting subtab" below), and the standard Attachments tab.
 
 ## List view
 
@@ -218,14 +218,40 @@ column (`grid: true, form: false, visibility: "readOnly"`). The `aggregateProduc
 helper sums it across all bin-content rows for each product to produce the per-product
 and warehouse-total valuations shown in the sidebar and Products tab.
 
-## ETP-4565 — Accounting tab not wired into the GO UI (no change made)
+## Accounting subtab (`accounting` entity)
 
-Investigated as part of ETP-4565 ("Contabilidad tab: single record + non-deletable" across 8 master-data windows). Findings, no code change:
+Added by ETP-4565 (scope-expanded follow-up to ETP-4402 — "Contabilidad tab: single record + non-deletable" across 8 master-data windows). The native AD `Warehouse and Storage Bins` window (`AD_Window_ID = 139`) has an "Accounting" tab (`ad_tab_id = 209`, table `M_Warehouse_Acct`); it is now wired into the custom warehouse window as a `secondaryTabs` entry, the same pattern used by `product`/`asset-group`.
 
-- The native AD `Warehouse and Storage Bins` window (`AD_Window_ID = 139`) does have an "Accounting" tab (`ad_tab_id = 209`, table `M_Warehouse_Acct`).
-- However, `artifacts/warehouse/decisions.json` currently declares `entities.accounting: { "exclude": true }` — the Contabilidad tab is **not wired into the custom warehouse window at all**, unlike the other 7 target windows. `window.detailEntity` is `null` and `window.secondaryTabs` only declares `productTransactions`.
-- **Auto-creation (requirement 3) is also confirmed broken here, independent of the wiring gap:** of the 18 most-recently-created warehouses, 0 have a `M_Warehouse_Acct` row (older, non-GO-created warehouses in the same DB do have one — `m_warehouse_acct` has 14 rows total, all pre-dating the current onboarding flow).
-- Wiring a new Contabilidad tab into this fully custom window (own `index.jsx`, no generic `secondaryTabs`/`detailEntity` slot currently used for it) plus the backend auto-creation gap are both flagged as follow-up work in the ETP-4565 coordinator report — not implemented in this pass to avoid silently expanding a bugfix ticket's scope.
+The Accounting tab maps to `M_Warehouse_Acct` and exposes exactly one visible field:
+
+| Field | Notes |
+|-------|-------|
+| Warehouse Differences (`W_Differences_Acct`) | Editable, required, `ValidCombination` selector with the drawer-style lookup picker. |
+
+`accountingSchema` (visibility `system`, `derivation: "fromConfig"`) and `warehouse` (visibility `system`, `derivation: "fromParent"`) drive the record but are not shown to the user. `warehouseInventory`, `inventoryRevaluation`, and `inventoryAdjustment` are discarded (not exposed).
+
+**Declared in `decisions.json` (`window.secondaryTabs.accounting` + `entities.accounting`):**
+
+```json
+"secondaryTabs": {
+  "productTransactions": { "tabOrder": 1, "label": "Transactions", "customPanel": "WarehouseTransactionsTable" },
+  "accounting": { "tabOrder": 2, "label": "Accounting" }
+}
+```
+
+```json
+"accounting": {
+  "name": "accounting",
+  "hideDelete": true,
+  "fields": { "warehouseDifferences": { "visibility": "editable", "grid": true, "form": true, "required": true, "lookup": true, "grow": true, "seq": 1 }, "...": "system/discarded fields omitted" }
+}
+```
+
+**`entities.accounting.hideDelete: true`** — the Accounting tab's row can no longer be deleted (`apiPrediction.crud.accounting.delete: false`), the same gate used by `product`/`asset-group`'s `secondaryTabs.accounting`. **Not yet addressed:** same as `product`/`asset-group`, this window's Accounting tab uses `window.secondaryTabs` (not `detailEntity`), so there is no existing "cap at one record" mechanism (`window.maxDetailLines` only applies to the `detailEntity` pattern) — tracked as a Schema Forge Developer follow-up, not implemented in this pass.
+
+Regenerated via `make regen ONLY=warehouse`; `sf-validate-pipeline --scope=warehouse` reports 0 violations. Regression test: `artifacts/__tests__/etp-4565-accounting-tab-restrictions.test.js`.
+
+**Auto-creation (requirement 3) is a separate, still-open gap, independent of this wiring fix:** of the 18 most-recently-created warehouses (at the time of the original ETP-4565 investigation), 0 had a `M_Warehouse_Acct` row (older, non-GO-created warehouses in the same DB do have one — `m_warehouse_acct` had 14 rows total, all pre-dating the current onboarding flow). Backend auto-creation of the accounting row is out of scope for this frontend-wiring pass and remains flagged as follow-up work.
 
 ## Known gaps
 
@@ -245,7 +271,8 @@ Investigated as part of ETP-4565 ("Contabilidad tab: single record + non-deletab
 - `tools/app-shell/src/windows/custom/warehouse/WarehouseTransactionsTable.jsx` — Transactions tab table, document navigation, movement type mapping.
 - `tools/app-shell/src/windows/custom/warehouse/useWarehouseStock.js` — shared data fetch hook (bins → binContents + productTransactions, UOM resolution).
 - `tools/app-shell/src/windows/custom/warehouse/warehouseUtils.js` — `aggregateProducts` helper. Returns all aggregated rows unfiltered; each consumer (`WarehouseProductsTab.jsx`, `WarehouseCustomTable.jsx` with `!= 0`, `WarehouseSummary.jsx` with `> 0`) applies its own qty predicate — see "Stock filtering semantics".
-- `artifacts/warehouse/decisions.json` — field visibility, form layout (4 cols), discarded fields, `javaQualifier` for productTransactions entity.
+- `artifacts/warehouse/decisions.json` — field visibility, form layout (4 cols), discarded fields, `javaQualifier` for productTransactions entity, `secondaryTabs.accounting` + `entities.accounting.hideDelete` (ETP-4565).
+- `artifacts/__tests__/etp-4565-accounting-tab-restrictions.test.js` — regression guard: `entities.accounting.hideDelete` must be `true`.
 - `tools/app-shell/src/windows/custom/warehouse/__tests__/warehouseUtils.test.js` / `warehouseUtils.vitest.js` — unit tests for `aggregateProducts` (cross-bin summation, UOM resolution, numeric coercion; no longer filters by qty).
 - `tools/app-shell/src/windows/custom/warehouse/__tests__/WarehouseProductsTab.vitest.jsx` — regression guard: list keeps negative-stock rows, hides exact-zero.
 - `tools/app-shell/src/windows/custom/warehouse/__tests__/WarehouseSummary.test.js` / `WarehouseSummary.vitest.jsx` — regression guard: KPI predicate stays `> 0` (excludes negatives and zero).
@@ -265,3 +292,4 @@ Investigated as part of ETP-4565 ("Contabilidad tab: single record + non-deletab
 9. For a production or internal-consumption transaction, confirm the Document column shows plain text (no link).
 10. Confirm positive quantities are green with a leading `+` and negative quantities are red.
 11. Open a saved record and confirm the **Attachments** tab is visible in the tab strip. Upload a file, download it, and delete it. When multiple files exist, confirm **Download all (ZIP)** and **Delete all** (with confirmation dialog) appear.
+12. Open the **Accounting** tab and confirm the Warehouse Differences selector is editable and required. Confirm no delete (trash) affordance is available on the accounting row.
