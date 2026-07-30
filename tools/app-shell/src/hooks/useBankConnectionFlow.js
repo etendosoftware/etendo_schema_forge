@@ -1,7 +1,7 @@
 import { useCallback, useState } from 'react';
 import { toast } from 'sonner';
 import { useUI } from '@/i18n';
-import { usePsd2Actions, launchSaltEdgePopup } from './usePsd2Actions';
+import { useBankConnectionActions, launchSaltEdgePopup } from './useBankConnectionActions';
 
 /**
  * Orchestrates the Salt Edge connect flow for both entry cases, keeping the popup open inside the
@@ -26,14 +26,14 @@ import { usePsd2Actions, launchSaltEdgePopup } from './usePsd2Actions';
  */
 /** Maps a connect-flow error to a user-facing i18n message. */
 function connectErrorMessage(err, ui) {
-  if (err.message === 'POPUP_BLOCKED') return ui('financeAccountsPsd2PopupBlocked');
-  if (err.message === 'PSD2_TIMEOUT') return ui('financeAccountsPsd2Timeout');
-  return err.message || ui('financeAccountsPsd2ConnectError');
+  if (err.message === 'POPUP_BLOCKED') return ui('financeAccountsBankConnectionPopupBlocked');
+  if (err.message === 'BANK_CONNECTION_TIMEOUT') return ui('financeAccountsBankConnectionTimeout');
+  return err.message || ui('financeAccountsBankConnectionConnectError');
 }
 
-export function usePsd2ConnectFlow({ onDone } = {}) {
+export function useBankConnectionFlow({ onDone } = {}) {
   const ui = useUI();
-  const { connect, fetchAccounts, link, createAndLink } = usePsd2Actions();
+  const { connect, fetchAccounts, link, createAndLink } = useBankConnectionActions();
   const [connecting, setConnecting] = useState(false);
   const [selection, setSelection] = useState(null);
 
@@ -45,10 +45,10 @@ export function usePsd2ConnectFlow({ onDone } = {}) {
       if (result?.warning) {
         toast.warning(result.warning);
       }
-      toast.success(ui('financeAccountsPsd2Success'));
+      toast.success(ui('financeAccountsBankConnectionSuccess'));
       onDone?.();
     } catch (err) {
-      toast.error(err.message || ui('financeAccountsPsd2LinkError'));
+      toast.error(err.message || ui('financeAccountsBankConnectionLinkError'));
     }
   }, [createAndLink, link, onDone, ui]);
 
@@ -74,14 +74,14 @@ export function usePsd2ConnectFlow({ onDone } = {}) {
       const accountId = ctx.mode === 'link' ? ctx.account.id : undefined;
       const { accounts, providerName, providerLogoUrl } = await fetchAccounts(connectionId, type, accountId);
       if (accounts.length === 0) {
-        toast.error(ui('financeAccountsPsd2NoAccounts'));
+        toast.error(ui('financeAccountsBankConnectionNoAccounts'));
         return;
       }
       // Always show the selection modal — even with a single account — so the user explicitly
       // confirms which account to link rather than it being linked silently.
       setSelection({ ...ctx, connectionId, accounts, providerName, providerLogoUrl });
     } catch (err) {
-      toast.error(err.message || ui('financeAccountsPsd2ConnectError'));
+      toast.error(err.message || ui('financeAccountsBankConnectionConnectError'));
     } finally {
       setConnecting(false);
     }

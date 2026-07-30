@@ -97,8 +97,11 @@ describe('AmortizationLinesTable — inline editing', () => {
 });
 
 describe('AmortizationLinesTable — dimensions', () => {
-  it('defines DIMENSION_FIELDS with exactly 3 entries: project, costcenter, eTADASBpartner', () => {
-    assert.match(src, /DIMENSION_FIELDS/);
+  it('defines DIMENSION_FIELD_CANDIDATES with exactly 3 entries: project, costcenter, eTADASBpartner', () => {
+    // ETP-4529 — renamed from DIMENSION_FIELDS to DIMENSION_FIELD_CANDIDATES: these are
+    // candidates only, final visibility is resolved per render by
+    // useAccountingDimensionFields (see the test below), not rendered unconditionally.
+    assert.match(src, /DIMENSION_FIELD_CANDIDATES/);
     // The three kept dimensions with their AD columns.
     assert.match(src, /'project'/);
     assert.match(src, /C_Project_ID/);
@@ -108,10 +111,10 @@ describe('AmortizationLinesTable — dimensions', () => {
     assert.match(src, /EM_Etadas_C_Bpartner_ID/);
 
     // Assert the array literal holds exactly 3 object entries.
-    const block = src.match(/const DIMENSION_FIELDS = \[(.*?)\];/s);
-    assert.ok(block, 'DIMENSION_FIELDS array literal not found');
+    const block = src.match(/const DIMENSION_FIELD_CANDIDATES = \[(.*?)\];/s);
+    assert.ok(block, 'DIMENSION_FIELD_CANDIDATES array literal not found');
     const entries = block[1].match(/\{\s*key:/g) ?? [];
-    assert.equal(entries.length, 3, `expected 3 DIMENSION_FIELDS entries, found ${entries.length}`);
+    assert.equal(entries.length, 3, `expected 3 DIMENSION_FIELD_CANDIDATES entries, found ${entries.length}`);
 
     // The 5 trimmed dimensions must no longer be present.
     assert.doesNotMatch(src, /'stDimension'/);
@@ -121,21 +124,22 @@ describe('AmortizationLinesTable — dimensions', () => {
     assert.doesNotMatch(src, /'eTADASSalesCampaign'/);
   });
 
-  it('renders the project dimension (no hidden: true on any dimension entry)', () => {
-    // Project was intentionally unhidden so it renders in the panel.
-    const block = src.match(/const DIMENSION_FIELDS = \[(.*?)\];/s);
-    assert.ok(block, 'DIMENSION_FIELDS array literal not found');
+  it('renders the project dimension (no hidden: true on any candidate entry)', () => {
+    // Project was intentionally unhidden so it can render in the panel (final
+    // visibility is still gated by the evaluate-display evaluator at runtime).
+    const block = src.match(/const DIMENSION_FIELD_CANDIDATES = \[(.*?)\];/s);
+    assert.ok(block, 'DIMENSION_FIELD_CANDIDATES array literal not found');
     assert.doesNotMatch(block[1], /hidden:\s*true/);
   });
 
-  it('renders DimSummary with Label:Value badges (no n/TOTAL_DIMS counter)', () => {
-    assert.match(src, /DimSummary/);
-    assert.match(src, /DimBadge/);
-    assert.match(src, /MAX_BADGES/);
-  });
-
-  it('DimSummary shows empty state with amortizationDimensionsEmpty label', () => {
-    assert.match(src, /amortizationDimensionsEmpty/);
+  it('resolves final dimension visibility via the shared evaluate-display hook (ETP-4529)', () => {
+    // Candidates are no longer rendered unconditionally — useAccountingDimensionFields
+    // (wrapping the same evaluate-display evaluator DetailView uses) decides the final
+    // visible set per the client's accounting-dimension configuration, and the result
+    // is threaded into both DimSummary (badges) and DimensionGrid (expand panel).
+    assert.match(src, /from '@\/hooks\/useAccountingDimensionFields'/);
+    assert.match(src, /useAccountingDimensionFields\('lines', data, DIMENSION_FIELD_CANDIDATES, \{ token, apiBaseUrl \}\)/);
+    assert.match(src, /fields=\{dimensionFields\}/);
   });
 
   it('DimensionGrid renders selectors with empty resolvedLabel for generic placeholder', () => {
@@ -147,12 +151,40 @@ describe('AmortizationLinesTable — dimensions', () => {
     assert.match(src, /onFieldSave/);
   });
 
-  it('uses amortizationDimensionsTitle i18n key for section header', () => {
-    assert.match(src, /amortizationDimensionsTitle/);
+  // ETP-4610 — the permanent "Dimensiones contables" grid column (DimSummary/DimBadge/
+  // MAX_BADGES, amortizationDimensionsTitle/amortizationDimensionsEmpty) was removed.
+  // The entry point into the dimensions expand panel moved into the row hover-action
+  // strip (Layers icon + "Edit dimensions" tooltip), matching InlineLinesPanel's generic
+  // dimensionsPanel mechanism used by the other 5 pipeline-generated windows.
+  it('no longer renders the standalone DimSummary column component', () => {
+    assert.doesNotMatch(src, /<DimSummary/);
+    assert.doesNotMatch(src, /import \{ DimSummary/);
+    assert.doesNotMatch(src, /ui\('amortizationDimensionsTitle'\)/);
+    assert.doesNotMatch(src, /ui\('amortizationDimensionsEmpty'\)/);
   });
 
-  it('shows empty state via amortizationDimensionsEmpty when no badges', () => {
-    assert.match(src, /amortizationDimensionsEmpty/);
+  it('exposes an "Edit dimensions" hover action (Layers icon) gated on dimensionFields.length', () => {
+    assert.match(src, /import \{ ChevronDown, Layers, Loader2, Pencil, Trash2 \} from 'lucide-react'/);
+    assert.match(src, /dimensionFields\.length > 0/);
+    assert.match(src, /ui\('editDimensionsTooltip'\)/);
+    assert.match(src, /<Layers/);
+  });
+
+  // Regression guard: the hover strip originally had no background at all — only
+  // the icon glyphs were opaque — which was invisible with 2 buttons (they fit
+  // inside their own empty actions column) but became a visible see-through
+  // overlap into the Amount column once a 3rd button (Layers) was added. The
+  // strip must carry an opaque background, and the actions column must be wide
+  // enough to hold 3 buttons without spilling into the neighboring column.
+  it('renders the hover-action strip with an opaque background (not a transparent overlay)', () => {
+    const stripBlock = src.match(/<div className="absolute right-2[^"]*"/);
+    assert.ok(stripBlock, 'hover-action strip wrapper div not found');
+    assert.match(stripBlock[0], /bg-card/);
+  });
+
+  it('widened the actions column to fit 3 hover buttons without overlapping the Amount column', () => {
+    assert.doesNotMatch(src, /<th className="h-10 w-20 px-2" \/>/);
+    assert.match(src, /<th className="h-10 w-32 px-2" \/>/);
   });
 });
 
