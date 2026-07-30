@@ -85,7 +85,6 @@ export default function GoodsShipmentWindow({ windowName, recordId, apiBaseUrl, 
     editMode: 'navigate',
     documentPreview: true,
     statusField: 'documentStatus',
-    hideDeleteWhenComplete: true,
     actions: {
       edit: { show: true },
       duplicate: { show: true },

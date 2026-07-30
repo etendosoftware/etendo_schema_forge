@@ -23,12 +23,13 @@ vi.mock('../SelectorInput.jsx', () => ({
   SelectorInput: () => <div data-testid="selector-input" />,
 }));
 vi.mock('../CreatableSearchSelect.jsx', () => ({
-  CreatableSearchSelect: ({ field, emptyOptionLabel, createLabel }) => (
+  CreatableSearchSelect: ({ field, emptyOptionLabel, createLabel, serverSearch }) => (
     <div
       data-testid="creatable-search-select"
       data-field={field?.key ?? ''}
       data-empty-option={emptyOptionLabel ?? ''}
       data-create-label={createLabel ?? ''}
+      data-server-search={serverSearch ? 'true' : 'false'}
     />
   ),
 }));
@@ -139,6 +140,42 @@ describe('EntityForm', () => {
     expect(checkbox).toHaveAttribute('aria-checked', 'true');
   });
 
+  // ETP-4670: checkboxes (and toggles) have no native blur event, so the
+  // autoSaveOnBlur mechanism (DetailView's handleFieldBlur) would otherwise
+  // never fire for a lone checkbox click. onFieldBlur must be invoked right
+  // after onChange so the change autosaves immediately, matching the
+  // click-to-persist expectation windows like price-list already show.
+  it('fires onFieldBlur right after onChange when a checkbox is clicked', async () => {
+    const user = userEvent.setup();
+    const onChange = vi.fn();
+    const onFieldBlur = vi.fn();
+    const fields = [
+      { key: 'default', label: 'Default', type: 'checkbox', column: 'IsDefault' },
+    ];
+    render(
+      <EntityForm fields={fields} data={{ default: false }} onChange={onChange} onFieldBlur={onFieldBlur} />
+    );
+    await user.click(screen.getByTestId('field-default'));
+    expect(onChange).toHaveBeenCalledWith('default', true, 'IsDefault');
+    expect(onFieldBlur).toHaveBeenCalledWith('default');
+    expect(onChange.mock.invocationCallOrder[0]).toBeLessThan(onFieldBlur.mock.invocationCallOrder[0]);
+  });
+
+  it('does not call onFieldBlur for a checkbox click when the window has no autosave wired', async () => {
+    const user = userEvent.setup();
+    const onChange = vi.fn();
+    const fields = [
+      { key: 'active', label: 'Active', type: 'checkbox', column: 'Active' },
+    ];
+    render(
+      <EntityForm fields={fields} data={{ active: false }} onChange={onChange} />
+    );
+    await user.click(screen.getByTestId('field-active'));
+    expect(onChange).toHaveBeenCalledWith('active', true, 'Active');
+    // No assertion needed on onFieldBlur — it wasn't passed, this just proves
+    // the click doesn't throw when the prop is absent.
+  });
+
   it('renders required marker for required fields', () => {
     const fields = [
       { key: 'name', label: 'Name', type: 'text', column: 'Name', required: true },
@@ -189,10 +226,13 @@ describe('EntityForm', () => {
   });
 
   // ---------------------------------------------------------------------------
-  // searchSelect opt-in flag (ETP-4099): a `selector` FK field renders the
-  // searchable CreatableSearchSelect when `searchSelect: true`, otherwise the
-  // plain pick-only SelectorInput. allowCreate is plumbed but EntityForm never
-  // wires createLabel/onCreateRequest yet, so the create button stays OFF.
+  // searchSelect opt-in flag (ETP-4099) + default routing (ETP-4600): a plain
+  // `selector` FK field renders the searchable CreatableSearchSelect (serverSearch
+  // mode) both when `searchSelect: true` is explicitly set AND, since ETP-4600, by
+  // DEFAULT for any other common FK selector — the plain pick-only SelectorInput is
+  // now only reached by the narrow DocumentType carve-out (see below). allowCreate
+  // is plumbed but EntityForm never wires createLabel/onCreateRequest yet, so the
+  // create button stays OFF.
   // ---------------------------------------------------------------------------
   describe('searchSelect opt-in', () => {
     const selectorField = (extra = {}) => ({
@@ -204,12 +244,12 @@ describe('EntityForm', () => {
       ...extra,
     });
 
-    it('renders the plain SelectorInput for a selector field WITHOUT searchSelect', () => {
+    it('renders CreatableSearchSelect by DEFAULT for a plain selector field (ETP-4600)', () => {
       render(
         <EntityForm fields={[selectorField()]} data={{}} onChange={vi.fn()} />
       );
-      expect(screen.getByTestId('selector-input')).toBeInTheDocument();
-      expect(screen.queryByTestId('creatable-search-select')).not.toBeInTheDocument();
+      expect(screen.getByTestId('creatable-search-select')).toBeInTheDocument();
+      expect(screen.queryByTestId('selector-input')).not.toBeInTheDocument();
     });
 
     it('renders CreatableSearchSelect for a selector field WITH searchSelect: true', () => {
@@ -255,6 +295,28 @@ describe('EntityForm', () => {
         'data-create-label',
         ''
       );
+    });
+
+    it('always sets serverSearch on the default selector path (data must come from the DB)', () => {
+      render(
+        <EntityForm fields={[selectorField()]} data={{}} onChange={vi.fn()} />
+      );
+      expect(screen.getByTestId('creatable-search-select')).toHaveAttribute(
+        'data-server-search',
+        'true'
+      );
+    });
+
+    it('keeps DocumentType-reference selector fields on the plain SelectorInput (optionTranslator carve-out)', () => {
+      render(
+        <EntityForm
+          fields={[selectorField({ key: 'transactionDocument', reference: 'DocumentType' })]}
+          data={{}}
+          onChange={vi.fn()}
+        />
+      );
+      expect(screen.getByTestId('selector-input')).toBeInTheDocument();
+      expect(screen.queryByTestId('creatable-search-select')).not.toBeInTheDocument();
     });
   });
 

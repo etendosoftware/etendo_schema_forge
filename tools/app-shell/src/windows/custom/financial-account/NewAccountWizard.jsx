@@ -27,7 +27,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
 import { useUI } from '@/i18n';
 import { useAccountMutations } from '@/hooks/useAccountMutations.js';
-import { usePsd2Actions } from '@/hooks/usePsd2Actions';
+import { useBankConnectionActions } from '@/hooks/useBankConnectionActions';
 import { AccountFormStep } from './AccountFormStep.jsx';
 import { searchBanks, institutionsFor } from './bankCatalog.js';
 
@@ -86,7 +86,7 @@ function resolveFormMode(accountType) {
  * Multi-step modal to create a financial account "offline" (ETP-4096):
  *   type picker → (Bank/Card) connection toggle → bank picker → institution → form
  *   Bank and Card share the full flow (Card form is Name + Currency only); Caja
- *   goes straight to a simple form. "Con conexión" (PSD2) is shown but inert (T3).
+ *   goes straight to a simple form. "Con conexión" is shown but inert (T3).
  *
  * Props:
  *   - open: controls visibility
@@ -158,7 +158,7 @@ export function NewAccountWizard({ open, onClose, onCreated, onConnectWithCreati
     setFormError(null);
     try {
       // When the chosen bank is a real Salt Edge provider, remember it on the account so a later
-      // PSD2 connect preselects that bank. Static-catalog banks have no Salt Edge code → skipped.
+      // bank connect preselects that bank. Static-catalog banks have no Salt Edge code → skipped.
       const payload = selectedBank?.isProvider
         ? { ...values, providerCode: selectedBank.id, providerName: selectedBank.name }
         : values;
@@ -342,7 +342,7 @@ function TypePicker({ ui, onPick }) {
 }
 
 function BankPicker({ ui, query, onQueryChange, onPick, onSkip }) {
-  const { fetchProviders } = usePsd2Actions();
+  const { fetchProviders } = useBankConnectionActions();
   const [country, setCountry] = useState(BANK_COUNTRIES[0].code);
   const [providers, setProviders] = useState([]);
   const [loading, setLoading] = useState(true);

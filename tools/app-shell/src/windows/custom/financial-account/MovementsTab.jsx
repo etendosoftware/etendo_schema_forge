@@ -1,4 +1,4 @@
-import { forwardRef, useEffect, useImperativeHandle, useRef, useState, useMemo } from 'react';
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState, useMemo } from 'react';
 import { AccountSummaryStrip } from './AccountSummaryStrip';
 import { MovementsToolbar } from './MovementsToolbar/index';
 import { MovementsTable } from './MovementsTable';
@@ -7,6 +7,9 @@ import { FundsTransferModal } from './FundsTransferModal.jsx';
 import { applyAdvancedFilter } from './movementAdvancedFilter';
 import { getDateBounds } from '@/lib/dateRangeBounds';
 import { parseCalendarDate } from '@/lib/dateOnly';
+import { useDeleteMovement } from '@/hooks/useCreateMovement';
+import { useBatchDeleteDialog } from '@/hooks/useBatchDeleteDialog.jsx';
+import { BulkDeleteSelectionBar } from '@/components/financial-accounts';
 
 // ---------------------------------------------------------------------------
 // KPI window suffix (shown in parentheses next to Inflows / Outflows labels)
@@ -117,6 +120,28 @@ export const MovementsTab = forwardRef(function MovementsTab(
     });
   };
 
+  // ETP-4656 (Gap 2) — bulk "Delete selected" for the movements grid, wired onto
+  // the checkbox selection that already existed here. Reuses the same
+  // POST .../financial-account-transactions?action=delete call the per-row kebab's
+  // "Eliminar" already makes (useDeleteMovement — a Draft is removed directly, a
+  // Processed one is reactivated + removed server-side); not every movement is
+  // deletable (payment-linked ones aren't, see MovementRowKebab's canDelete), so
+  // attempting to delete one of those surfaces as a normal per-row failure in the
+  // 3-outcome toast rather than being pre-filtered out of the selection.
+  const { deleteMovement } = useDeleteMovement();
+  const clearSelection = useCallback(() => setSelectedIds(new Set()), []);
+  const { requestBatchDelete, batchDeleteDialog, deleting: bulkDeleting } = useBatchDeleteDialog({
+    deleteOneFn: (id) => deleteMovement({ id }),
+    onOutcome: (succeeded, failed) => {
+      if (succeeded.length > 0) onReload?.();
+      if (failed.length === 0) {
+        clearSelection();
+      } else {
+        setSelectedIds(new Set(failed));
+      }
+    },
+  });
+
   const filteredMovements = useMemo(
     () => applyAdvancedFilter(applyFilters(movements, filters), advancedFilter),
     [movements, filters, advancedFilter],
@@ -154,6 +179,16 @@ export const MovementsTab = forwardRef(function MovementsTab(
 
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
+      {selectedIds.size > 0 && (
+        <div className="border-b border-[hsl(var(--border-subtle))] px-2 py-2">
+          <BulkDeleteSelectionBar
+            count={selectedIds.size}
+            deleting={bulkDeleting}
+            onCancel={clearSelection}
+            onDelete={() => requestBatchDelete(Array.from(selectedIds))}
+            data-testid="MovementsBulkDeleteSelectionBar__c1f76a" />
+        </div>
+      )}
       <MovementsToolbar
         filters={filters}
         onFiltersChange={handleFilterChange}
@@ -180,6 +215,7 @@ export const MovementsTab = forwardRef(function MovementsTab(
           onEdit={setEditMovement}
           data-testid="MovementsTable__c1f76a" />
       </div>
+      {batchDeleteDialog}
       <NewTransactionModal
         open={newMovementOpen || !!editMovement}
         accountId={account?.id}

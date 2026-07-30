@@ -309,6 +309,9 @@ describe('DataTable coverage-oriented paths', () => {
 
     expect(screen.getByTestId('inline-add-row')).toBeInTheDocument();
     expect(screen.getByTestId('combo-searchId')).toHaveAttribute('data-selector-url', '/api/orderLine/selectors/C_BPartner_ID');
+    // `selectorId` (type: 'selector') now renders the same searchable InlineSearchCombo
+    // as `searchId` (type: 'search') — both mocked identically — instead of a plain Select.
+    expect(screen.getByTestId('combo-selectorId')).toBeInTheDocument();
 
     await userEvent.click(screen.getByTestId('inline-add-field-lookupId'));
     await userEvent.click(screen.getByText('choose lookup'));
@@ -325,10 +328,11 @@ describe('DataTable coverage-oriented paths', () => {
       expect.any(Function),
     );
 
-    await userEvent.click(screen.getByText('choose combo'));
-    const selectOptButtons = screen.getAllByText('select opt 1');
-    await userEvent.click(selectOptButtons[0]);
-    await userEvent.click(selectOptButtons[1]);
+    const comboButtons = screen.getAllByText('choose combo');
+    await userEvent.click(comboButtons[0]); // searchId
+    await userEvent.click(comboButtons[1]); // selectorId
+    const selectOptButton = screen.getByText('select opt 1');
+    await userEvent.click(selectOptButton);
 
     const debit = screen.getByTestId('inline-add-field-debit');
     fireEvent.change(debit, { target: { value: '99' } });
@@ -341,7 +345,7 @@ describe('DataTable coverage-oriented paths', () => {
       lineNo: 20,
       lookupId: 'lookup-1',
       searchId: 'combo-1',
-      selectorId: 'opt-1',
+      selectorId: 'combo-1',
       status: 'opt-1',
       debit: 50,
       credit: 0,

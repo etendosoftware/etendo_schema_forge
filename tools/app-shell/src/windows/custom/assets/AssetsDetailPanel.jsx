@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react';
 import { EntityForm } from '@/components/contract-ui';
 import { PillToggle } from '@/components/PillToggle';
 import { useUI } from '@/i18n';
+import { useAccountingDimensionFields } from '@/hooks/useAccountingDimensionFields';
 
 function GroupHead({ title, description }) {
   return (
@@ -174,13 +175,27 @@ export default function AssetsDetailPanel({ data, token, apiBaseUrl, catalogs, a
   const group1Fields = [
     { key: 'searchKey', column: 'Value', type: 'text', label: ui('Search Key'), required: true, section: 'principal' },
     { key: 'name', column: 'Name', type: 'text', label: ui('Name'), required: true, section: 'principal' },
-    { key: 'assetCategory', column: 'A_Asset_Group_ID', type: 'selector', label: ui('Asset Category'), required: true, section: 'principal', reference: 'AssetGroup', inputMode: 'selector' },
+    // TEMPORARY opt-out (searchSelect: false) — keeps this field on the OLD plain
+    // SelectorInput instead of ETP-4600's unified CreatableSearchSelect. The unified
+    // component's interaction timing exposes a pre-existing DetailView save→refetch/
+    // callout race: selecting a category, toggling "Depreciar" ON, then saving persists
+    // the asset with `depreciate = false`, so AssetsDetailPanel's `depreciate &&` gate
+    // never renders the "Crear Amortización" button (integration Cases 5/6/7). Remove
+    // this opt-out once the DetailView race has its own fix (tracked as a separate
+    // ticket) — this is NOT masking a bug in the unified selector itself.
+    { key: 'assetCategory', column: 'A_Asset_Group_ID', type: 'selector', label: ui('Asset Category'), required: true, section: 'principal', reference: 'AssetGroup', inputMode: 'selector', searchSelect: false },
+    // ETP-4529 — per the corrected accounting-dimension matrix, Producto is "Siempre"
+    // for Activo (Amortizaciones) Cabecera: always visible regardless of GL Configuration.
+    // It is a plain business field (which product this asset represents), not a
+    // config-gated accounting dimension — see dimensionFieldCandidates below. Placed
+    // right after Asset Category (its natural raw-AD position).
+    { key: 'product', column: 'M_Product_ID', type: 'search', label: ui('product'), lookup: true, reference: 'Product', inputMode: 'search', section: 'principal' },
     // Moved out of the Financial Info group (ETP-4539) — "Valor del activo" is now always
     // visible in the main header section, regardless of whether depreciation/amortization is
     // enabled. calloutOn: 'blur' + handleAmountChange (passed as this form's onChange below)
     // keep the ETP-4333 local-recompute behavior intact.
-    // Column order (per ETP-4539 follow-up): Identificador, Nombre, Grupo Activo, Valor del
-    // Activo, Descripcion — assetValue must render BEFORE description.
+    // Column order (per ETP-4539 follow-up): Identificador, Nombre, Grupo Activo, Producto,
+    // Valor del Activo, Descripcion — assetValue must render BEFORE description.
     { key: 'assetValue', column: 'AssetValueAmt', type: 'number', label: ui('assetsAssetValueLabel'), section: 'principal', calloutOn: 'blur' },
     { key: 'description', column: 'Description', type: 'textarea', label: ui('Description'), section: 'other' },
   ];
@@ -238,12 +253,20 @@ export default function AssetsDetailPanel({ data, token, apiBaseUrl, catalogs, a
     return { readOnly, visibility };
   }
 
-  const dimensionFields = [
+  // ETP-4529 — per the accounting-dimension matrix, only Proyecto is "Por config"
+  // (config-gated) for Activo (Amortizaciones); Contacto and Centro de costo are
+  // "Nunca" (never applicable) and are intentionally NOT candidates here at all —
+  // see decisions.json (businessPartner/eTADASCostCenter are discarded) and
+  // docs/generated-custom-windows/assets.md. Producto is "Siempre" (always visible,
+  // rendered unconditionally in group1Fields above) — it is not a GL-config-gated
+  // dimension, so it is deliberately excluded from this candidates list too.
+  const dimensionFieldCandidates = [
     { key: 'project', column: 'C_Project_ID', type: 'selector', section: 'principal', reference: 'Project', inputMode: 'selector' },
-    { key: 'eTADASCostCenter', column: 'EM_Etadas_Costcenter_ID', type: 'selector', section: 'principal', reference: 'Costcenter', inputMode: 'selector' },
-    { key: 'businessPartner', column: 'C_BPartner_ID', type: 'selector', section: 'principal', reference: 'BPartner', inputMode: 'selector' },
-    { key: 'product', column: 'M_Product_ID', type: 'selector', section: 'principal', reference: 'Product', inputMode: 'selector' },
   ];
+  // Config-driven visibility via the shared evaluate-display evaluator (was: always
+  // shown whenever depreciate === true, regardless of the client's accounting-
+  // dimension configuration).
+  const dimensionFields = useAccountingDimensionFields('assets', d, dimensionFieldCandidates, { token, apiBaseUrl });
 
   const dateFields = [
     { key: 'purchaseDate', column: 'Datepurchased', type: 'date', label: ui('assetsPurchaseDateLabel'), section: 'principal' },
@@ -325,13 +348,15 @@ export default function AssetsDetailPanel({ data, token, apiBaseUrl, catalogs, a
           displayLogic={readOnlyAll}
           data-testid="EntityForm__8e32ca" />
       )}
-      {/* Group 5 — Accounting dimensions (optional, last section) */}
-      {depreciate && (
+      {/* Group 5 — Accounting dimensions (optional, last section). Hidden entirely
+          when the config-driven dimensionFields list resolves to empty (e.g. Project
+          disabled for this client's accounting-dimension configuration). */}
+      {depreciate && dimensionFields.length > 0 && (
         <GroupDivider
           title={ui('assetsGroupDimensionsTitle')}
           data-testid="GroupDivider__8e32ca" />
       )}
-      {depreciate && (
+      {depreciate && dimensionFields.length > 0 && (
         <div className="[&_button[role=combobox]]:!bg-card [&_input]:!bg-card">
           <EntityForm
             fields={dimensionFields}

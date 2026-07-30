@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { useUI } from '@/i18n';
-import { PSD2_CONNECTION_KEY } from '@/hooks/usePsd2Actions';
+import { BANK_CONNECTION_KEY } from '@/hooks/useBankConnectionActions';
 
 /**
  * Throwaway page the Salt Edge popup is returned to after the bank authentication
@@ -8,7 +8,7 @@ import { PSD2_CONNECTION_KEY } from '@/hooks/usePsd2Actions';
  * window (the Accounts UI) via {@code postMessage} and {@code localStorage}, then closes itself.
  * The native account-selection + linking happen in the opener, not here.
  */
-export default function Psd2CallbackPage() {
+export default function BankConnectionCallbackPage() {
   const ui = useUI();
 
   useEffect(() => {
@@ -16,12 +16,12 @@ export default function Psd2CallbackPage() {
     const connectionId = params.get('connection_id') || params.get('connectionId');
     if (connectionId) {
       try {
-        localStorage.setItem(PSD2_CONNECTION_KEY, connectionId);
+        localStorage.setItem(BANK_CONNECTION_KEY, connectionId);
       } catch { /* ignore */ }
       try {
         if (window.opener) {
           window.opener.postMessage(
-            { type: 'psd2-connected', connectionId },
+            { type: 'bank-connection-connected', connectionId },
             window.location.origin,
           );
         }
@@ -35,8 +35,8 @@ export default function Psd2CallbackPage() {
 
   return (
     <div className="flex min-h-screen flex-col items-center justify-center gap-2 p-8 text-center">
-      <p className="text-base font-medium text-[hsl(var(--foreground))]">{ui('financeAccountsPsd2CallbackDone')}</p>
-      <p className="text-sm text-[hsl(var(--muted-foreground))]">{ui('financeAccountsPsd2CallbackClose')}</p>
+      <p className="text-base font-medium text-[hsl(var(--foreground))]">{ui('financeAccountsBankConnectionCallbackDone')}</p>
+      <p className="text-sm text-[hsl(var(--muted-foreground))]">{ui('financeAccountsBankConnectionCallbackClose')}</p>
     </div>
   );
 }

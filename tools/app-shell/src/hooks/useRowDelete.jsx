@@ -59,6 +59,10 @@ export function useRowDelete({ apiBaseUrl, entity = 'header', token, onSuccess, 
       onSuccess?.();
     } catch (err) {
       toast.error(err?.message || ui('networkError'));
+      // Close the dialog on failure too — the toast already communicates the
+      // error, so leaving the confirm popup open on top of it is confusing
+      // (standardized delete behavior, ETP-4656).
+      setPending(null);
     } finally {
       setDeleting(false);
     }

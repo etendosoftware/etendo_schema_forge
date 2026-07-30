@@ -1,8 +1,8 @@
 {
-  "version": "0.44.0",
+  "version": "0.45.0",
   "generatedAt": "2026-07-07T21:53:25.883Z",
-  "updatedAt": "2026-07-21T12:35:19.014Z",
-  "checksum": "8552f5c48c448cb9",
+  "updatedAt": "2026-07-29T15:55:49.150Z",
+  "checksum": "706496e6e55723dd",
   "frontendContract": {
     "window": {
       "id": "123",
@@ -534,6 +534,10 @@
             "required": false,
             "grid": false,
             "form": true,
+            "derivation": {
+              "type": "computed",
+              "source": "P"
+            },
             "enumValues": [
               {
                 "value": "P",
@@ -557,9 +561,10 @@
                 }
               }
             ],
+            "defaultValue": "P",
             "section": "principal",
             "validation": {
-              "maxLength": 10
+              "maxLength": 60
             },
             "displayLogic": {
               "raw": "record.oBTIKTaxIDKey === '2'",
@@ -1298,6 +1303,13 @@
             "derivation": {
               "type": "computed",
               "source": "'1'"
+            }
+          },
+          {
+            "name": "oBTIKVIESStatus",
+            "derivation": {
+              "type": "computed",
+              "source": "P"
             }
           },
           {
@@ -12016,6 +12028,14 @@
         "description": "Default value for 'oBTIKTaxIDKey' in businessPartner should be a string"
       },
       {
+        "id": "t-default-value-type-businessPartner-oBTIKVIESStatus",
+        "category": "default-value-type",
+        "entity": "businessPartner",
+        "field": "oBTIKVIESStatus",
+        "runner": "node",
+        "description": "Default value for 'oBTIKVIESStatus' in businessPartner should be a string"
+      },
+      {
         "id": "t-default-value-type-businessPartner-operator",
         "category": "default-value-type",
         "entity": "businessPartner",
@@ -20778,11 +20798,11 @@
       }
     ],
     "summary": {
-      "total": 1146,
+      "total": 1147,
       "byCategory": {
         "action-endpoint": 6,
         "crud-flags": 15,
-        "default-value-type": 46,
+        "default-value-type": 47,
         "displaylogic-evaluable": 58,
         "displaylogic-valid": 58,
         "field-presence": 141,
@@ -20794,7 +20814,7 @@
         "visibility": 15
       },
       "byRunner": {
-        "node": 1146,
+        "node": 1147,
         "junit": 0
       }
     }

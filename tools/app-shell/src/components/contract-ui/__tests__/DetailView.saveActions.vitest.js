@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 vi.mock('react-router-dom', () => ({
   useNavigate: () => vi.fn(),
@@ -89,7 +89,8 @@ vi.mock('sonner', () => ({
   toast: { error: vi.fn(), success: vi.fn(), info: vi.fn() },
 }));
 
-import { handlePostSaveNavigation } from '../DetailView.jsx';
+import { toast } from 'sonner';
+import { handlePostSaveNavigation, reportUnnavigableSave } from '../DetailView.jsx';
 
 describe('handlePostSaveNavigation', () => {
   it('returns early without side effects when saved is null', async () => {
@@ -181,5 +182,78 @@ describe('handlePostSaveNavigation', () => {
       hook: {},
     });
     expect(navigate).not.toHaveBeenCalled();
+  });
+});
+
+describe('ETP-4683 — save with no derivable record id', () => {
+  const ui = (key) => key;
+  let consoleError;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    consoleError.mockRestore();
+  });
+
+  describe('reportUnnavigableSave', () => {
+    it('logs and toasts when a new record saves without a derivable id', () => {
+      const saved = { $ref: undefined, orderNo: 'PO-1' };
+      const reported = reportUnnavigableSave({ saved, isNew: true, windowName: 'orders', ui });
+      expect(reported).toBe(true);
+      expect(toast.error).toHaveBeenCalledWith('savedButCannotOpenRecord');
+      expect(consoleError).toHaveBeenCalledWith(expect.stringContaining('orders'), saved);
+    });
+
+    it('stays silent on the happy path where the id is present', () => {
+      const reported = reportUnnavigableSave({ saved: { id: 'rec-1' }, isNew: true, windowName: 'orders', ui });
+      expect(reported).toBe(false);
+      expect(toast.error).not.toHaveBeenCalled();
+      expect(consoleError).not.toHaveBeenCalled();
+    });
+
+    it('stays silent for an existing record, where no redirect is expected', () => {
+      const reported = reportUnnavigableSave({ saved: {}, isNew: false, windowName: 'orders', ui });
+      expect(reported).toBe(false);
+      expect(toast.error).not.toHaveBeenCalled();
+    });
+
+    it('stays silent when the save itself failed, since handleSave already reported it', () => {
+      const reported = reportUnnavigableSave({ saved: null, isNew: true, windowName: 'orders', ui });
+      expect(reported).toBe(false);
+      expect(toast.error).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('handlePostSaveNavigation', () => {
+    const baseOptions = {
+      onAfterCreate: null,
+      onAfterSave: null,
+      windowName: 'orders',
+      token: 'tok',
+      apiBaseUrl: '/api',
+      ui,
+    };
+
+    it('reports instead of silently skipping the redirect for a new record without an id', async () => {
+      const navigate = vi.fn();
+      const saved = { orderNo: 'PO-1' };
+      await handlePostSaveNavigation(saved, { ...baseOptions, isNew: true, navigate, hook: { primeSaved: vi.fn() } });
+      expect(navigate).not.toHaveBeenCalled();
+      expect(toast.error).toHaveBeenCalledWith('savedButCannotOpenRecord');
+    });
+
+    it('navigates without an error toast when the id is present', async () => {
+      const navigate = vi.fn();
+      const saved = { id: 'new-id' };
+      await handlePostSaveNavigation(saved, { ...baseOptions, isNew: true, navigate, hook: { primeSaved: vi.fn() } });
+      expect(navigate).toHaveBeenCalledWith(
+        '/orders/new-id',
+        { replace: true, state: { justSaved: saved } },
+      );
+      expect(toast.error).not.toHaveBeenCalled();
+    });
   });
 });

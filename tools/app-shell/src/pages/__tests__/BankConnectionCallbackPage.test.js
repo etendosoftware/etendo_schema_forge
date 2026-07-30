@@ -1,5 +1,5 @@
 /**
- * Source-level guard for Psd2CallbackPage.jsx — the throwaway page the Salt Edge
+ * Source-level guard for BankConnectionCallbackPage.jsx — the throwaway page the Salt Edge
  * popup returns to. It relays the connection id back to the opener window via
  * postMessage + localStorage, then closes itself.
  *
@@ -13,15 +13,15 @@ import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const src = readFileSync(join(__dirname, '..', 'Psd2CallbackPage.jsx'), 'utf8');
+const src = readFileSync(join(__dirname, '..', 'BankConnectionCallbackPage.jsx'), 'utf8');
 
-describe('Psd2CallbackPage — exports & deps', () => {
+describe('BankConnectionCallbackPage — exports & deps', () => {
   it('exports a default component', () => {
-    assert.match(src, /export default function Psd2CallbackPage\s*\(/);
+    assert.match(src, /export default function BankConnectionCallbackPage\s*\(/);
   });
 
-  it('imports the shared PSD2_CONNECTION_KEY constant', () => {
-    assert.match(src, /import \{ PSD2_CONNECTION_KEY \} from ['"]@\/hooks\/usePsd2Actions['"]/);
+  it('imports the shared BANK_CONNECTION_KEY constant', () => {
+    assert.match(src, /import \{ BANK_CONNECTION_KEY \} from ['"]@\/hooks\/useBankConnectionActions['"]/);
   });
 
   it('uses the i18n useUI hook (no hardcoded user strings)', () => {
@@ -29,7 +29,7 @@ describe('Psd2CallbackPage — exports & deps', () => {
   });
 });
 
-describe('Psd2CallbackPage — connection id relay', () => {
+describe('BankConnectionCallbackPage — connection id relay', () => {
   it('reads connection_id from the URL query string', () => {
     assert.match(src, /new URLSearchParams\(window\.location\.search\)/);
     assert.match(src, /params\.get\(['"]connection_id['"]\)/);
@@ -40,12 +40,12 @@ describe('Psd2CallbackPage — connection id relay', () => {
   });
 
   it('persists the connection id to localStorage under the shared key', () => {
-    assert.match(src, /localStorage\.setItem\(PSD2_CONNECTION_KEY, connectionId\)/);
+    assert.match(src, /localStorage\.setItem\(BANK_CONNECTION_KEY, connectionId\)/);
   });
 
   it('relays the connection id to the opener via postMessage', () => {
     assert.match(src, /window\.opener\.postMessage\(/);
-    assert.match(src, /type: ['"]psd2-connected['"], connectionId/);
+    assert.match(src, /type: ['"]bank-connection-connected['"], connectionId/);
   });
 
   it('scopes the postMessage to the current origin', () => {
@@ -58,7 +58,7 @@ describe('Psd2CallbackPage — connection id relay', () => {
   });
 });
 
-describe('Psd2CallbackPage — self close', () => {
+describe('BankConnectionCallbackPage — self close', () => {
   it('closes the window after a short delay', () => {
     assert.match(src, /setTimeout\(\(\) => \{[\s\S]*window\.close\(\)/);
   });
@@ -68,12 +68,12 @@ describe('Psd2CallbackPage — self close', () => {
   });
 });
 
-describe('Psd2CallbackPage — rendered copy', () => {
+describe('BankConnectionCallbackPage — rendered copy', () => {
   it('renders the callback-done message', () => {
-    assert.match(src, /ui\(['"]financeAccountsPsd2CallbackDone['"]\)/);
+    assert.match(src, /ui\(['"]financeAccountsBankConnectionCallbackDone['"]\)/);
   });
 
   it('renders the close-window hint', () => {
-    assert.match(src, /ui\(['"]financeAccountsPsd2CallbackClose['"]\)/);
+    assert.match(src, /ui\(['"]financeAccountsBankConnectionCallbackClose['"]\)/);
   });
 });

@@ -258,17 +258,17 @@
   (`FinancialAccountSupport.isBankTransferMethod`) and the R14 `.sql` use the identical predicate;
   keep them in lockstep. Column accessor: `FIN_PaymentMethod.isPSD2IsBankTransfer()` (Boolean),
   setter `setPSD2IsBankTransfer(Boolean)`.
-- **2026-07-16 — The multicurrency PSD2 exception is applied on the per-account LINK, never the
-  template.** A Bank account (`type='B'`) with an active PSD2 connection must have multicurrency OFF
+- **2026-07-16 — The multicurrency bank-connection exception is applied on the per-account LINK, never the
+  template.** A Bank account (`type='B'`) with an active bank connection must have multicurrency OFF
   on ITS "Transferencia bancaria" `fin_finacc_paymentmethod` link; the `fin_paymentmethod` template
-  stays `'Y'`. "Active PSD2" = `fin_financial_account.em_psd2_connection_status='CO'`
+  stays `'Y'`. "Active connection" = `fin_financial_account.em_psd2_connection_status='CO'`
   (`BankIntegrationConstants.FA_CONNECTION_STATUS_CONNECTED`) OR an active row in
   `psd2_finacc_connection (connection_status='AC' AND isactive='Y')` — two independent signals, OR
   them. Live sweep found exactly ONE such account fleet-wide (GOClient "Societe Generale Luxembourg
   Corporate", both signals true), and its transfer link was already `N/N`. Non-transfer links on the
-  same PSD2 account (Cheque, Tarjeta) are NOT excepted — they go to `Y/Y`.
+  same bank-connected account (Cheque, Tarjeta) are NOT excepted — they go to `Y/Y`.
 - **2026-07-16 — Runtime placement: put the exception in the shared `linkAccount(...)` choke point,
-  not in each handler.** `FinancialAccountPsd2Handler.handleCreateAndLink` and `handleLink` both
+  not in each handler.** `FinancialAccountBankConnectionHandler.handleCreateAndLink` and `handleLink` both
   call the private `linkAccount(...)` helper (which is where `linkAccountToFinancialAccount` persists
   `em_psd2_connection_status='CO'` and where `disableAutomaticWithdrawnForTransferMethod` already
   lives). Adding `FinancialAccountSupport.disableMulticurrencyForBankTransfer(finAcc)` there covers

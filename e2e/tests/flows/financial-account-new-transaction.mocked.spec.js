@@ -34,7 +34,7 @@ const ACCOUNTS = [
     iban: 'ES1212340000000000000001',
     isDefault: true,
     pendingCount: 0,
-    psd2Connected: false,
+    bankConnected: false,
   },
 ];
 

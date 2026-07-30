@@ -6,31 +6,57 @@
  * regardless of which is mounted.
  */
 
+// Fixed-basis column types share one baseline per type (grow flag only affects
+// the flex-grow term, not the basis). Kept as a lookup — rather than a chain of
+// `if` statements — to stay under the cognitive-complexity budget as the type
+// list grows; see `columnFlex`/`columnMinWidthPx` below for how each side of
+// the shared basis is derived.
+const FIXED_BASIS_PX = {
+  amount: 172,
+  price: 152,
+  quantity: 152,
+  integer: 152,
+  decimal: 152,
+  percent: 152,
+  signedDelta: 152,
+};
+
+// Enum/select columns share the string baseline (224px). Their values include
+// the Select's chevron, so long options like "Use Generic Account No." need at
+// least as much room as a plain text input of the same length — settling for
+// the narrower selector tier (192px) clipped the trailing word inside the
+// trigger. `1 1` keeps the column elastic on top.
+const ELASTIC_BASIS_PX = {
+  string: 224,
+  text: 224,
+  enum: 224,
+  select: 224,
+  date: 130,
+  // ETP-4610 — the `dimensionsPanel` type used to reserve 320px here (badges +
+  // "+N"/"Add dimensions" trigger). It no longer renders as a grid column at all
+  // (InlineLinesPanel filters it out of `visibleColumns` before any width lookup
+  // happens — see `hasDimensionsPanel` there), so no basis entry is needed.
+};
+
+const SELECTOR_TYPES = new Set(['selector', 'search', 'foreignKey']);
+
+function selectorFlex(col, idx) {
+  const grow = col.grow !== undefined ? col.grow : idx === 0;
+  return grow ? '1 1 192px' : '0 0 192px';
+}
+
 /**
  * Returns the CSS `flex` shorthand for a lines-table column.
  * Used by InlineLinesPanel's flex column layout.
  */
 export function columnFlex(col, idx) {
-  const g = col.grow ? '1' : '0';
   if (col.minWidth) return `1 1 ${col.minWidth}px`;
-  if (col.type === 'amount') return `${g} 0 172px`;
-  if (col.type === 'price') return `${g} 0 152px`;
-  if (col.type === 'quantity' || col.type === 'integer') return `${g} 0 152px`;
-  if (col.type === 'decimal' || col.type === 'percent') return `${g} 0 152px`;
-  if (col.type === 'signedDelta') return `${g} 0 152px`;
-  if (col.type === 'string' || col.type === 'text') return '1 1 224px';
-  if (col.type === 'selector' || col.type === 'search' || col.type === 'foreignKey') {
-    const grow = col.grow !== undefined ? col.grow : (idx === 0);
-    return grow ? '1 1 192px' : '0 0 192px';
-  }
-  // Enum/select columns share the string baseline (224px). Their values
-  // include the Select's chevron, so long options like "Use Generic Account
-  // No." need at least as much room as a plain text input of the same length
-  // — settling for the narrower selector tier (192px) clipped the trailing
-  // word inside the trigger. `1 1` keeps the column elastic on top.
-  if (col.type === 'enum' || col.type === 'select') return '1 1 224px';
-  if (col.type === 'date') return '1 1 130px';
-  return `${g} 0 120px`;
+  if (SELECTOR_TYPES.has(col.type)) return selectorFlex(col, idx);
+  const elasticPx = ELASTIC_BASIS_PX[col.type];
+  if (elasticPx !== undefined) return `1 1 ${elasticPx}px`;
+  const g = col.grow ? '1' : '0';
+  const fixedPx = FIXED_BASIS_PX[col.type];
+  return `${g} 0 ${fixedPx !== undefined ? fixedPx : 120}px`;
 }
 
 /**
@@ -39,16 +65,8 @@ export function columnFlex(col, idx) {
  * the auto-layout can't shrink columns below the flex baseline used in the
  * display table — keeping header wrapping consistent across both modes.
  */
-export function columnMinWidthPx(col, idx) {
+export function columnMinWidthPx(col) {
   if (col.minWidth) return col.minWidth;
-  if (col.type === 'amount') return 172;
-  if (col.type === 'price') return 152;
-  if (col.type === 'quantity' || col.type === 'integer') return 152;
-  if (col.type === 'decimal' || col.type === 'percent') return 152;
-  if (col.type === 'signedDelta') return 152;
-  if (col.type === 'string' || col.type === 'text') return 224;
-  if (col.type === 'selector' || col.type === 'search' || col.type === 'foreignKey') return 192;
-  if (col.type === 'enum' || col.type === 'select') return 224;
-  if (col.type === 'date') return 130;
-  return 120;
+  if (SELECTOR_TYPES.has(col.type)) return 192;
+  return ELASTIC_BASIS_PX[col.type] ?? FIXED_BASIS_PX[col.type] ?? 120;
 }

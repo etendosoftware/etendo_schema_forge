@@ -30,8 +30,6 @@ export const assets = [
     "depreciatedPlan": 38907,
     "project": "Sample project",
     "processAsset": "Sample processAsset",
-    "businessPartner": "Acme Corp",
-    "eTADASCostCenter": "Sample eTADASCostCenter",
     "etgoAmortizationStatus": "DR"
   },
   {
@@ -63,8 +61,6 @@ export const assets = [
     "depreciatedPlan": 9306,
     "project": "Sample project",
     "processAsset": "Sample processAsset",
-    "businessPartner": "TechFlow Inc",
-    "eTADASCostCenter": "Sample eTADASCostCenter",
     "etgoAmortizationStatus": "CO"
   },
   {
@@ -96,8 +92,6 @@ export const assets = [
     "depreciatedPlan": 11544,
     "project": "Sample project",
     "processAsset": "Sample processAsset",
-    "businessPartner": "Global Trade Ltd",
-    "eTADASCostCenter": "Sample eTADASCostCenter",
     "etgoAmortizationStatus": "VO"
   },
   {
@@ -129,8 +123,6 @@ export const assets = [
     "depreciatedPlan": 11872,
     "project": "Sample project",
     "processAsset": "Sample processAsset",
-    "businessPartner": "Summit Industries",
-    "eTADASCostCenter": "Sample eTADASCostCenter",
     "etgoAmortizationStatus": "IP"
   },
   {
@@ -162,8 +154,6 @@ export const assets = [
     "depreciatedPlan": 48460,
     "project": "Sample project",
     "processAsset": "Sample processAsset",
-    "businessPartner": "Pacific Partners",
-    "eTADASCostCenter": "Sample eTADASCostCenter",
     "etgoAmortizationStatus": "DR"
   },
   {
@@ -195,8 +185,6 @@ export const assets = [
     "depreciatedPlan": 45418,
     "project": "Sample project",
     "processAsset": "Sample processAsset",
-    "businessPartner": "Alpine Solutions",
-    "eTADASCostCenter": "Sample eTADASCostCenter",
     "etgoAmortizationStatus": "CO"
   },
   {
@@ -228,8 +216,6 @@ export const assets = [
     "depreciatedPlan": 33840,
     "project": "Sample project",
     "processAsset": "Sample processAsset",
-    "businessPartner": "Meridian Group",
-    "eTADASCostCenter": "Sample eTADASCostCenter",
     "etgoAmortizationStatus": "VO"
   },
   {
@@ -261,8 +247,6 @@ export const assets = [
     "depreciatedPlan": 25716,
     "project": "Sample project",
     "processAsset": "Sample processAsset",
-    "businessPartner": "Vertex Systems",
-    "eTADASCostCenter": "Sample eTADASCostCenter",
     "etgoAmortizationStatus": "IP"
   },
   {
@@ -294,8 +278,6 @@ export const assets = [
     "depreciatedPlan": 44780,
     "project": "Sample project",
     "processAsset": "Sample processAsset",
-    "businessPartner": "Atlas Manufacturing",
-    "eTADASCostCenter": "Sample eTADASCostCenter",
     "etgoAmortizationStatus": "DR"
   },
   {
@@ -327,8 +309,6 @@ export const assets = [
     "depreciatedPlan": 12483,
     "project": "Sample project",
     "processAsset": "Sample processAsset",
-    "businessPartner": "Nova Enterprises",
-    "eTADASCostCenter": "Sample eTADASCostCenter",
     "etgoAmortizationStatus": "CO"
   },
   {
@@ -360,8 +340,6 @@ export const assets = [
     "depreciatedPlan": 46022,
     "project": "Sample project",
     "processAsset": "Sample processAsset",
-    "businessPartner": "Pinnacle Services",
-    "eTADASCostCenter": "Sample eTADASCostCenter",
     "etgoAmortizationStatus": "VO"
   },
   {
@@ -393,8 +371,6 @@ export const assets = [
     "depreciatedPlan": 38634,
     "project": "Sample project",
     "processAsset": "Sample processAsset",
-    "businessPartner": "Horizon Labs",
-    "eTADASCostCenter": "Sample eTADASCostCenter",
     "etgoAmortizationStatus": "IP"
   }
 ];

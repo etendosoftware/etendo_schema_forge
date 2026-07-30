@@ -107,7 +107,6 @@ export default function GoodsReceiptWindow(props) {
     enabled: true,
     editMode: 'navigate',
     statusField: 'documentStatus',
-    hideDeleteWhenComplete: true,
     actions: {
       edit: { show: true },
       duplicate: { show: true },

@@ -1,8 +1,8 @@
 {
-  "version": "0.23.0",
+  "version": "0.26.0",
   "generatedAt": "2026-04-29T19:05:20.719Z",
-  "updatedAt": "2026-07-17T18:04:55.296Z",
-  "contractChecksum": "5c7b44d77827859f",
+  "updatedAt": "2026-07-29T14:53:27.771Z",
+  "contractChecksum": "b026eced958d6cf2",
   "apiPrediction": {
     "specName": "goods-receipt",
     "baseUrl": "/sws/neo/goods-receipt",
@@ -192,14 +192,6 @@
         "reference": "OrderLine",
         "inputMode": "search",
         "url": "/sws/neo/goods-receipt/goodsReceiptLine/selectors/salesOrderLine"
-      },
-      {
-        "entity": "goodsReceiptLine",
-        "field": "businessPartner",
-        "column": "C_Bpartner_ID",
-        "reference": "BusinessPartner",
-        "inputMode": "search",
-        "url": "/sws/neo/goods-receipt/goodsReceiptLine/selectors/businessPartner"
       },
       {
         "entity": "goodsReceiptLine",
@@ -653,7 +645,7 @@
           "movementQuantity": {
             "required": true,
             "readOnlyLogic": "@Processed@='Y' | @UomManagement@='Y'",
-            "defaultValue": "0"
+            "defaultValue": "1"
           },
           "uOM": {
             "readOnly": true,
@@ -669,9 +661,6 @@
           "orderQuantity": {
             "readOnly": true,
             "readOnlyLogic": "@Processed@='Y'"
-          },
-          "businessPartner": {
-            "readOnlyLogic": "@Posted@='Y'"
           },
           "project": {
             "readOnlyLogic": "@Posted@='Y'"
@@ -841,5 +830,5 @@
     "knownLimitations": [],
     "dangerousOperations": []
   },
-  "checksum": "1c995a622aee03fb"
+  "checksum": "c15ce8deb4052962"
 }

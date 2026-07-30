@@ -76,9 +76,45 @@ describe('CreatableSearchSelect', () => {
     assert.match(src, /toLowerCase/);
   });
 
-  it('syncs display text from displayValue when the user is not typing', () => {
+  it('decouples the search text from the selected label (ETP-4600 Gap B) — resolvedDisplay is the chip fallback, query is never prefilled from displayValue', () => {
     assert.match(src, /isEditingRef/);
-    assert.match(src, /setQuery\(displayValue/);
+    assert.match(src, /resolvedDisplay/);
+    assert.match(src, /setResolvedDisplay/);
+    // The old bug: query used to be seeded from displayValue. Guard against regressing.
+    assert.doesNotMatch(src, /setQuery\(displayValue/);
+  });
+
+  it('resets keyboard highlight (activeIndex) whenever the dropdown opens/closes or the query changes', () => {
+    assert.match(src, /activeIndex/);
+    assert.match(src, /setActiveIndex\(-1\)/);
+  });
+
+  it('supports ArrowUp/ArrowDown/Enter/Escape/Home/End keyboard navigation over filteredOptions', () => {
+    assert.match(src, /handleInputKeyDown/);
+    assert.match(src, /case 'ArrowDown'/);
+    assert.match(src, /case 'ArrowUp'/);
+    assert.match(src, /case 'Enter'/);
+    assert.match(src, /case 'Escape'/);
+    assert.match(src, /case 'Home'/);
+    assert.match(src, /case 'End'/);
+  });
+
+  it('exposes combobox/listbox ARIA attributes for the input and options', () => {
+    assert.match(src, /role="combobox"/);
+    assert.match(src, /aria-expanded/);
+    assert.match(src, /aria-activedescendant/);
+    assert.match(src, /role="listbox"/);
+    assert.match(src, /role="option"/);
+  });
+
+  it('coerces showDropdown to a real boolean (regression: aria-expanded must never leak the createLabel/query text)', () => {
+    assert.match(src, /const showDropdown = !!\(open/);
+  });
+
+  it('grows the dropdown panel to fit its content instead of truncating (ETP-4600 Gap C)', () => {
+    assert.match(src, /width: 'max-content'/);
+    assert.match(src, /minWidth: rect\.width/);
+    assert.match(src, /maxWidth/);
   });
 
   it('opens the dropdown after clearing the selection', () => {

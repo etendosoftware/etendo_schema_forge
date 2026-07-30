@@ -4,9 +4,11 @@
  * option whose id equals the current value of a sibling field on the same row
  * (e.g. newStorageBin excludeValueOf storageBin — can't move stock to the same bin).
  *
- * Covers BOTH render paths of renderSelectorCell:
- *  - preloaded-catalog dropdown (filters options by o.id !== excludeId)
- *  - URL-backed InlineSearchCombo (receives excludeId as a prop)
+ * renderSelectorCell always renders <InlineSearchCombo> (searchable), preloaded
+ * with the catalog options when available and/or backed by the selector URL.
+ * Covers both:
+ *  - preloaded-catalog options passed to InlineSearchCombo (filtered by o.id !== excludeId)
+ *  - excludeId forwarded as a prop when the catalog is empty (URL-backed search)
  * Plus the opt-in no-op guarantee (no excludeValueOf → excludeId null → no filtering).
  */
 import { render, screen } from '@testing-library/react';
@@ -67,7 +69,11 @@ vi.mock('../InlineSearchCombo.jsx', () => ({
   InlineSearchCombo: (props) => {
     comboProps.push(props);
     return (
-      <div data-testid="inline-search-combo" data-exclude-id={props.excludeId == null ? '' : String(props.excludeId)} />
+      <div data-testid="inline-search-combo" data-exclude-id={props.excludeId == null ? '' : String(props.excludeId)}>
+        {(props.options || []).map((o) => (
+          <span key={o.id}>{o.name || o.label || o.id}</span>
+        ))}
+      </div>
     );
   },
 }));

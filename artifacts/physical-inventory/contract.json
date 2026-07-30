@@ -1,14 +1,14 @@
 {
-  "version": "0.33.0",
-  "generatedAt": "2026-06-29T12:25:17.116Z",
-  "updatedAt": "2026-07-21T19:17:44.597Z",
-  "checksum": "9162cd8e06b5f1b3",
+  "version": "0.34.0",
+  "generatedAt": "2026-07-29T14:51:09.380Z",
+  "checksum": "8844096a88781b84",
   "frontendContract": {
     "window": {
       "id": "168",
       "name": "Physical Inventory",
       "primaryEntity": "inventory",
       "category": "inventory",
+      "hideDeleteWhenComplete": true,
       "hidePrint": true,
       "hideLink": true,
       "customComponents": {
@@ -270,11 +270,41 @@
             "visibility": "editable",
             "required": false,
             "grid": false,
-            "form": false,
+            "form": true,
             "reference": "Project",
             "inputMode": "search",
+            "section": "principal",
             "validation": {
               "maxLength": 60
+            },
+            "displayLogic": {
+              "raw": "@ACCT_DIMENSION_DISPLAY@",
+              "evaluable": false,
+              "reason": "server-macro",
+              "js": null
+            },
+            "readOnlyLogic": {
+              "raw": "@Posted@='Y'",
+              "evaluable": true,
+              "js": "record['posted'] === true"
+            }
+          },
+          {
+            "name": "costCenter",
+            "apiKey": "costCenter",
+            "column": "C_Costcenter_ID",
+            "label": "Cost Center",
+            "type": "foreignKey",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": false,
+            "grid": false,
+            "form": true,
+            "reference": "Costcenter",
+            "inputMode": "selector",
+            "section": "principal",
+            "validation": {
+              "maxLength": 32
             },
             "displayLogic": {
               "raw": "@ACCT_DIMENSION_DISPLAY@",
@@ -674,6 +704,7 @@
       "name": "Physical Inventory",
       "primaryEntity": "inventory",
       "category": "inventory",
+      "hideDeleteWhenComplete": true,
       "hidePrint": true,
       "hideLink": true,
       "customComponents": {
@@ -830,7 +861,7 @@
             "apiKey": "costCenter",
             "column": "C_Costcenter_ID",
             "type": "foreignKey",
-            "visibility": "discarded",
+            "visibility": "editable",
             "required": false
           },
           {
@@ -1074,6 +1105,14 @@
             "required": false
           },
           {
+            "name": "etgoQtydiff",
+            "apiKey": "etgoQtydiff",
+            "column": "EM_Etgo_Qtydiff",
+            "type": "quantity",
+            "visibility": "readOnly",
+            "required": false
+          },
+          {
             "name": "client",
             "apiKey": "client",
             "column": "AD_Client_ID",
@@ -1144,14 +1183,6 @@
             "type": "foreignKey",
             "visibility": "system",
             "required": true
-          },
-          {
-            "name": "etgoQtydiff",
-            "apiKey": "etgoQtydiff",
-            "column": "EM_Etgo_Qtydiff",
-            "type": "quantity",
-            "visibility": "readOnly",
-            "required": false
           }
         ],
         "javaQualifier": "inventoryLine"
@@ -1270,6 +1301,14 @@
         "reference": "Project",
         "inputMode": "search",
         "url": "/sws/neo/physical-inventory/inventory/selectors/project"
+      },
+      {
+        "entity": "inventory",
+        "field": "costCenter",
+        "column": "C_Costcenter_ID",
+        "reference": "Costcenter",
+        "inputMode": "selector",
+        "url": "/sws/neo/physical-inventory/inventory/selectors/costCenter"
       },
       {
         "entity": "inventoryLine",
@@ -1477,6 +1516,14 @@
         "description": "Default value for 'storageBin' in inventoryLine should be a string"
       },
       {
+        "id": "t-displaylogic-evaluable-inventory-costCenter",
+        "category": "displaylogic-evaluable",
+        "entity": "inventory",
+        "field": "costCenter",
+        "runner": "node",
+        "description": "Display logic for 'costCenter' in inventory should have evaluable flag"
+      },
+      {
         "id": "t-displaylogic-evaluable-inventory-posted",
         "category": "displaylogic-evaluable",
         "entity": "inventory",
@@ -1501,6 +1548,14 @@
         "description": "Display logic for 'quantityOrderBook' in inventoryLine should have evaluable flag"
       },
       {
+        "id": "t-displaylogic-valid-inventory-costCenter",
+        "category": "displaylogic-valid",
+        "entity": "inventory",
+        "field": "costCenter",
+        "runner": "node",
+        "description": "Display logic for 'costCenter' in inventory should be valid JS"
+      },
+      {
         "id": "t-displaylogic-valid-inventory-posted",
         "category": "displaylogic-valid",
         "entity": "inventory",
@@ -1523,6 +1578,14 @@
         "field": "quantityOrderBook",
         "runner": "node",
         "description": "Display logic for 'quantityOrderBook' in inventoryLine should be valid JS"
+      },
+      {
+        "id": "t-field-presence-inventory-costCenter",
+        "category": "field-presence",
+        "entity": "inventory",
+        "field": "costCenter",
+        "runner": "node",
+        "description": "Field 'costCenter' should be present in inventory"
       },
       {
         "id": "t-field-presence-inventory-description",
@@ -1669,6 +1732,14 @@
         "description": "Field 'uOM' should be present in inventoryLine"
       },
       {
+        "id": "t-field-type-inventory-costCenter",
+        "category": "field-type",
+        "entity": "inventory",
+        "field": "costCenter",
+        "runner": "node",
+        "description": "Field 'costCenter' should have type 'string' in inventory"
+      },
+      {
         "id": "t-field-type-inventory-description",
         "category": "field-type",
         "entity": "inventory",
@@ -1813,6 +1884,14 @@
         "description": "Field 'uOM' should have type 'string' in inventoryLine"
       },
       {
+        "id": "t-readonlylogic-evaluable-inventory-costCenter",
+        "category": "readonlylogic-evaluable",
+        "entity": "inventory",
+        "field": "costCenter",
+        "runner": "node",
+        "description": "Read-only logic for 'costCenter' in inventory should have evaluable flag"
+      },
+      {
         "id": "t-readonlylogic-evaluable-inventory-movementDate",
         "category": "readonlylogic-evaluable",
         "entity": "inventory",
@@ -1891,6 +1970,14 @@
         "field": "storageBin",
         "runner": "node",
         "description": "Read-only logic for 'storageBin' in inventoryLine should have evaluable flag"
+      },
+      {
+        "id": "t-readonlylogic-valid-inventory-costCenter",
+        "category": "readonlylogic-valid",
+        "entity": "inventory",
+        "field": "costCenter",
+        "runner": "node",
+        "description": "Read-only logic for 'costCenter' in inventory should be valid JS"
       },
       {
         "id": "t-readonlylogic-valid-inventory-movementDate",
@@ -2066,6 +2153,14 @@
         "description": "Field 'warehouse' should be a supported filter for inventory"
       },
       {
+        "id": "t-selector-endpoint-inventory-costCenter",
+        "category": "selector-endpoint",
+        "entity": "inventory",
+        "field": "costCenter",
+        "runner": "node",
+        "description": "Selector endpoint for 'costCenter' in inventory should exist"
+      },
+      {
         "id": "t-selector-endpoint-inventory-project",
         "category": "selector-endpoint",
         "entity": "inventory",
@@ -2136,14 +2231,6 @@
         "field": "client",
         "runner": "node",
         "description": "System field 'client' should exist in backend but not frontend for inventory"
-      },
-      {
-        "id": "t-system-field-inventory-costCenter",
-        "category": "system-field",
-        "entity": "inventory",
-        "field": "costCenter",
-        "runner": "node",
-        "description": "System field 'costCenter' should exist in backend but not frontend for inventory"
       },
       {
         "id": "t-system-field-inventory-createdBy",
@@ -2385,25 +2472,25 @@
       }
     ],
     "summary": {
-      "total": 129,
+      "total": 135,
       "byCategory": {
         "action-endpoint": 4,
         "crud-flags": 2,
         "default-value-type": 8,
-        "displaylogic-evaluable": 3,
-        "displaylogic-valid": 3,
-        "field-presence": 18,
-        "field-type": 18,
-        "readonlylogic-evaluable": 10,
-        "readonlylogic-valid": 10,
+        "displaylogic-evaluable": 4,
+        "displaylogic-valid": 4,
+        "field-presence": 19,
+        "field-type": 19,
+        "readonlylogic-evaluable": 11,
+        "readonlylogic-valid": 11,
         "rule-declared": 11,
         "searchable-filters": 2,
-        "selector-endpoint": 5,
-        "system-field": 33,
+        "selector-endpoint": 6,
+        "system-field": 32,
         "visibility": 2
       },
       "byRunner": {
-        "node": 129,
+        "node": 135,
         "junit": 0
       }
     }

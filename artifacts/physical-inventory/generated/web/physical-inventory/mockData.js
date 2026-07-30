@@ -10,6 +10,7 @@ export const inventory = [
     "posted": "Sample posted",
     "inventoryType": "Sample inventoryType",
     "project": "Sample project",
+    "costCenter": "Sample costCenter",
     "processed": "Sample processed"
   },
   {
@@ -21,6 +22,7 @@ export const inventory = [
     "posted": "Sample posted",
     "inventoryType": "Sample inventoryType",
     "project": "Sample project",
+    "costCenter": "Sample costCenter",
     "processed": "Sample processed"
   },
   {
@@ -32,6 +34,7 @@ export const inventory = [
     "posted": "Sample posted",
     "inventoryType": "Sample inventoryType",
     "project": "Sample project",
+    "costCenter": "Sample costCenter",
     "processed": "Sample processed"
   },
   {
@@ -43,6 +46,7 @@ export const inventory = [
     "posted": "Sample posted",
     "inventoryType": "Sample inventoryType",
     "project": "Sample project",
+    "costCenter": "Sample costCenter",
     "processed": "Sample processed"
   },
   {
@@ -54,6 +58,7 @@ export const inventory = [
     "posted": "Sample posted",
     "inventoryType": "Sample inventoryType",
     "project": "Sample project",
+    "costCenter": "Sample costCenter",
     "processed": "Sample processed"
   },
   {
@@ -65,6 +70,7 @@ export const inventory = [
     "posted": "Sample posted",
     "inventoryType": "Sample inventoryType",
     "project": "Sample project",
+    "costCenter": "Sample costCenter",
     "processed": "Sample processed"
   },
   {
@@ -76,6 +82,7 @@ export const inventory = [
     "posted": "Sample posted",
     "inventoryType": "Sample inventoryType",
     "project": "Sample project",
+    "costCenter": "Sample costCenter",
     "processed": "Sample processed"
   },
   {
@@ -87,6 +94,7 @@ export const inventory = [
     "posted": "Sample posted",
     "inventoryType": "Sample inventoryType",
     "project": "Sample project",
+    "costCenter": "Sample costCenter",
     "processed": "Sample processed"
   },
   {
@@ -98,6 +106,7 @@ export const inventory = [
     "posted": "Sample posted",
     "inventoryType": "Sample inventoryType",
     "project": "Sample project",
+    "costCenter": "Sample costCenter",
     "processed": "Sample processed"
   },
   {
@@ -109,6 +118,7 @@ export const inventory = [
     "posted": "Sample posted",
     "inventoryType": "Sample inventoryType",
     "project": "Sample project",
+    "costCenter": "Sample costCenter",
     "processed": "Sample processed"
   },
   {
@@ -120,6 +130,7 @@ export const inventory = [
     "posted": "Sample posted",
     "inventoryType": "Sample inventoryType",
     "project": "Sample project",
+    "costCenter": "Sample costCenter",
     "processed": "Sample processed"
   },
   {
@@ -131,6 +142,7 @@ export const inventory = [
     "posted": "Sample posted",
     "inventoryType": "Sample inventoryType",
     "project": "Sample project",
+    "costCenter": "Sample costCenter",
     "processed": "Sample processed"
   }
 ];

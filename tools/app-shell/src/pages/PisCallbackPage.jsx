@@ -33,7 +33,7 @@ export default function PisCallbackPage() {
   return (
     <div className="flex min-h-screen flex-col items-center justify-center gap-2 p-8 text-center">
       <p className="text-base font-medium text-[hsl(var(--foreground))]">{ui('paymentRegistered')}</p>
-      <p className="text-sm text-[hsl(var(--muted-foreground))]">{ui('financeAccountsPsd2CallbackClose')}</p>
+      <p className="text-sm text-[hsl(var(--muted-foreground))]">{ui('financeAccountsBankConnectionCallbackClose')}</p>
     </div>
   );
 }

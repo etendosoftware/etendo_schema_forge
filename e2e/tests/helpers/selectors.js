@@ -4,6 +4,7 @@
  * Prefer data-testid selectors over localized labels. Visible copy can change
  * with the active locale, while these ids describe the tested UI contract.
  */
+import { expect } from '@playwright/test';
 
 export const dashboard = {
   newSalesOrder: 'quick-action-sales-order-new',
@@ -123,4 +124,42 @@ export function byTestId(page, testId) {
  */
 export async function clickLastCheckbox(page) {
   await page.getByRole('checkbox').last().evaluate((el) => el.click());
+}
+
+/**
+ * Enter edit mode for a `CreatableSearchSelect`-backed field (FK or fixed-list
+ * enum) and wait for its options to render, regardless of the field's current
+ * DOM shape (ETP-4600 unified both onto the same component):
+ *
+ * - Empty / no committed value → the field renders as the searchable combobox
+ *   input directly (`field-{key}`).
+ * - Already has a committed value (including a `defaultValue`) → it renders as
+ *   a Figma-style chip button (`field-{key}-chip`); the plain input is not in
+ *   the DOM. Clicking the chip unmounts it and mounts the input in the same
+ *   tick, so a bare click can hit a node mid-detach ("element was detached
+ *   from the DOM"). Retry the whole open-and-wait-for-options sequence
+ *   instead of a single click so that race settles deterministically.
+ */
+/**
+ * Locator for a `CreatableSearchSelect`-backed field's currently-displayed
+ * value, regardless of whether it is rendered as a committed chip
+ * (`field-{key}-chip`) or the plain combobox input (`field-{key}`). Use for
+ * read-style assertions (e.g. `.toContainText(...)`) after the field already
+ * holds a value (including a `defaultValue`), where a chip is expected.
+ */
+export function selectorFieldDisplay(page, key) {
+  return page.getByTestId(`field-${key}-chip`).or(page.getByTestId(`field-${key}`));
+}
+
+export async function openSelectorField(page, key) {
+  const chip = page.getByTestId(`field-${key}-chip`);
+  const input = page.getByTestId(`field-${key}`);
+  await expect(async () => {
+    if (await chip.isVisible({ timeout: 1_000 }).catch(() => false)) {
+      await chip.click({ timeout: 3_000 });
+    } else {
+      await input.click({ timeout: 3_000 });
+    }
+    await expect(page.locator('[role="option"]').first()).toBeVisible({ timeout: 3_000 });
+  }).toPass({ timeout: 15_000 });
 }

@@ -1,6 +1,6 @@
 /**
- * Source-level guard for Psd2ConnectFlowUI.jsx — the two native surfaces of the
- * PSD2 connect flow: a non-dismissable "connecting" overlay while the Salt Edge
+ * Source-level guard for BankConnectionFlowUI.jsx — the two native surfaces of the
+ * bank connect flow: a non-dismissable "connecting" overlay while the Salt Edge
  * popup is open, and the bank-account selection modal shown when the connection
  * returns accounts.
  *
@@ -15,26 +15,26 @@ import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const src = readFileSync(join(__dirname, '..', 'Psd2ConnectFlowUI.jsx'), 'utf8');
+const src = readFileSync(join(__dirname, '..', 'BankConnectionFlowUI.jsx'), 'utf8');
 
-describe('Psd2ConnectFlowUI — exports & deps', () => {
-  it('exports the Psd2ConnectFlowUI component', () => {
-    assert.match(src, /export function Psd2ConnectFlowUI\s*\(\{ flow \}\)/);
+describe('BankConnectionFlowUI — exports & deps', () => {
+  it('exports the BankConnectionFlowUI component', () => {
+    assert.match(src, /export function BankConnectionFlowUI\s*\(\{ flow \}\)/);
   });
 
   it('uses the i18n useUI hook (no hardcoded user strings)', () => {
     assert.match(src, /useUI\(\)/);
   });
 
-  it('consumes the flow controls produced by usePsd2ConnectFlow', () => {
+  it('consumes the flow controls produced by useBankConnectionFlow', () => {
     assert.match(src, /const \{ connecting, selection, confirmSelection, cancelSelection \} = flow/);
   });
 });
 
-describe('Psd2ConnectFlowUI — connecting overlay', () => {
+describe('BankConnectionFlowUI — connecting overlay', () => {
   it('opens the overlay while connecting', () => {
     assert.match(src, /<Dialog open=\{connecting\}/);
-    assert.match(src, /data-testid=["']psd2-connecting-overlay["']/);
+    assert.match(src, /data-testid=["']bank-connection-connecting-overlay["']/);
   });
 
   it('is non-dismissable (blocks outside-click and escape)', () => {
@@ -45,13 +45,13 @@ describe('Psd2ConnectFlowUI — connecting overlay', () => {
   it('shows a spinner and the connecting label', () => {
     assert.match(src, /Loader2/);
     assert.match(src, /animate-spin/);
-    assert.match(src, /financeAccountsPsd2Connecting/);
+    assert.match(src, /financeAccountsBankConnectionConnecting/);
   });
 });
 
-describe('Psd2ConnectFlowUI — account select modal', () => {
-  it('renders the Psd2AccountSelectModal wired to the flow callbacks', () => {
-    assert.match(src, /<Psd2AccountSelectModal/);
+describe('BankConnectionFlowUI — account select modal', () => {
+  it('renders the BankConnectionAccountSelectModal wired to the flow callbacks', () => {
+    assert.match(src, /<BankConnectionAccountSelectModal/);
     assert.match(src, /selection=\{selection\}/);
     assert.match(src, /onConfirm=\{confirmSelection\}/);
     assert.match(src, /onCancel=\{cancelSelection\}/);
@@ -68,21 +68,21 @@ describe('Psd2ConnectFlowUI — account select modal', () => {
   });
 
   it('renders a bank-aware title when a provider name is present', () => {
-    assert.match(src, /financeAccountsPsd2SelectTitleBank/);
+    assert.match(src, /financeAccountsBankConnectionSelectTitleBank/);
     assert.match(src, /\{ bank: providerName \}/);
-    assert.match(src, /financeAccountsPsd2SelectTitle/);
+    assert.match(src, /financeAccountsBankConnectionSelectTitle/);
   });
 
   it('lists each returned account as a selectable option', () => {
     assert.match(src, /accounts\.map\(\(acc\)/);
-    assert.match(src, /data-testid=\{`psd2-account-option-\$\{acc\.saltEdgeAccountId\}`\}/);
+    assert.match(src, /data-testid=\{`bank-connection-account-option-\$\{acc\.saltEdgeAccountId\}`\}/);
     assert.match(src, /setSelected\(acc\.saltEdgeAccountId\)/);
   });
 
   it('provides cancel and confirm controls', () => {
-    assert.match(src, /data-testid=["']psd2-account-select-cancel["']/);
-    assert.match(src, /data-testid=["']psd2-account-select-confirm["']/);
-    assert.match(src, /financeAccountsPsd2SelectConfirm/);
+    assert.match(src, /data-testid=["']bank-connection-account-select-cancel["']/);
+    assert.match(src, /data-testid=["']bank-connection-account-select-confirm["']/);
+    assert.match(src, /financeAccountsBankConnectionSelectConfirm/);
   });
 
   it('disables confirm until an account is selected', () => {
