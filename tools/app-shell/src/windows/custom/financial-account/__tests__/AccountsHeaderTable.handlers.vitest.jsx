@@ -3,7 +3,7 @@
  *
  * ETP-4658: re-homes the handler half of the retired
  * `pages/__tests__/FinancialAccountsPage.handlers.vitest.jsx` suite. The behaviour is
- * unchanged (PSD2 connect/sync/disconnect, the edit → archive / edit → connect chain,
+ * unchanged (bank connection connect/sync/disconnect, the edit → archive / edit → connect chain,
  * the archive dialog, the funds-transfer modal, and the reconcile / new-movement
  * deep links); only the host moved from the page to this `headerTable` slot.
  *
@@ -36,17 +36,17 @@ vi.mock('sonner', () => ({
 
 const mockSync = vi.fn();
 const mockDisconnect = vi.fn();
-vi.mock('@/hooks/usePsd2Actions.js', () => ({
-  usePsd2Actions: () => ({ sync: mockSync, disconnect: mockDisconnect }),
+vi.mock('@/hooks/useBankConnectionActions.js', () => ({
+  useBankConnectionActions: () => ({ sync: mockSync, disconnect: mockDisconnect }),
   launchSaltEdgePopup: vi.fn(),
 }));
 
 const mockStartConnect = vi.fn();
 const mockStartCreate = vi.fn();
-let psd2FlowOnDone = null;
-vi.mock('@/hooks/usePsd2ConnectFlow.js', () => ({
-  usePsd2ConnectFlow: ({ onDone } = {}) => {
-    psd2FlowOnDone = onDone;
+let bankConnectionFlowOnDone = null;
+vi.mock('@/hooks/useBankConnectionFlow.js', () => ({
+  useBankConnectionFlow: ({ onDone } = {}) => {
+    bankConnectionFlowOnDone = onDone;
     return { startConnect: mockStartConnect, startCreate: mockStartCreate };
   },
 }));
@@ -85,8 +85,8 @@ vi.mock('@/windows/custom/financial-account/ArchiveAccountDialog.jsx', () => ({
     return <div data-testid="archive-dialog" data-open={String(props.open)} />;
   },
 }));
-vi.mock('@/windows/custom/financial-account/Psd2ConnectFlowUI.jsx', () => ({
-  Psd2ConnectFlowUI: () => <div data-testid="psd2-flow" />,
+vi.mock('@/windows/custom/financial-account/BankConnectionFlowUI.jsx', () => ({
+  BankConnectionFlowUI: () => <div data-testid="bank-connection-flow" />,
 }));
 let transferModalProps = null;
 vi.mock('@/windows/custom/financial-account/FundsTransferModal.jsx', () => ({
@@ -120,15 +120,15 @@ vi.mock('react-router-dom', () => ({
 
 import AccountsHeaderTable from '@generated/financial-account/custom/AccountsHeaderTable.jsx';
 
-/** PSD2-connected bank account: exposes the sync button and the disconnect menu item. */
+/** Bank-connected account: exposes the sync button and the disconnect menu item. */
 const CONNECTED = {
   id: 'acc-1', name: 'BBVA', type: 'B', currentBalance: 0,
-  currencyIso: 'EUR', pendingCount: 2, psd2Connected: true, active: true,
+  currencyIso: 'EUR', pendingCount: 2, bankConnected: true, active: true,
 };
 /** Offline bank account: exposes the "connect" affordances instead. */
 const OFFLINE = {
   id: 'acc-2', name: 'Sabadell', type: 'B', currentBalance: 0,
-  currencyIso: 'EUR', pendingCount: 0, psd2Connected: false, active: true,
+  currencyIso: 'EUR', pendingCount: 0, bankConnected: false, active: true,
 };
 
 const onDataMutated = vi.fn();
@@ -151,7 +151,7 @@ beforeEach(() => {
   editModalProps = null;
   archiveDialogProps = null;
   transferModalProps = null;
-  psd2FlowOnDone = null;
+  bankConnectionFlowOnDone = null;
 });
 
 describe('AccountsHeaderTable — reconcile / new-movement navigation', () => {
@@ -186,7 +186,7 @@ describe('AccountsHeaderTable — reconcile / new-movement navigation', () => {
   });
 });
 
-describe('AccountsHeaderTable — PSD2 connect action', () => {
+describe('AccountsHeaderTable — bank connection connect action', () => {
   it('starts the connect flow from the row kebab', async () => {
     renderTable();
     openRowMenu('acc-2');
@@ -213,13 +213,13 @@ describe('AccountsHeaderTable — PSD2 connect action', () => {
   it('refreshes the list when the connect flow completes', () => {
     renderTable();
 
-    psd2FlowOnDone?.();
+    bankConnectionFlowOnDone?.();
 
     expect(onDataMutated).toHaveBeenCalled();
   });
 });
 
-describe('AccountsHeaderTable — PSD2 sync action', () => {
+describe('AccountsHeaderTable — bank connection sync action', () => {
   it('shows a success toast on an OK sync and refreshes the list', async () => {
     mockSync.mockResolvedValue({ status: 'OK', message: 'done' });
     renderTable();
@@ -255,7 +255,7 @@ describe('AccountsHeaderTable — PSD2 sync action', () => {
 
     fireEvent.click(screen.getByTestId('account-row-refresh-acc-1'));
 
-    await waitFor(() => expect(toastSuccess).toHaveBeenCalledWith('financeAccountsPsd2SyncDone'));
+    await waitFor(() => expect(toastSuccess).toHaveBeenCalledWith('financeAccountsBankConnectionSyncDone'));
   });
 
   it('shows an error toast when the sync throws', async () => {
@@ -278,7 +278,7 @@ describe('AccountsHeaderTable — PSD2 sync action', () => {
   });
 });
 
-describe('AccountsHeaderTable — PSD2 disconnect action', () => {
+describe('AccountsHeaderTable — bank connection disconnect action', () => {
   async function requestDisconnect() {
     renderTable();
     openRowMenu('acc-1');
@@ -288,7 +288,9 @@ describe('AccountsHeaderTable — PSD2 disconnect action', () => {
   it('opens a styled confirm dialog and does not disconnect until it is confirmed', async () => {
     await requestDisconnect();
 
-    await screen.findByText('financeAccountsPsd2DisconnectConfirm');
+    // Despite the "Confirm" suffix, this key is the dialog's TITLE, not the button —
+    // the confirm button itself renders `financeAccountsBankConnectionDisconnectAction`.
+    await screen.findByText('financeAccountsBankConnectionDisconnectConfirm');
     expect(mockDisconnect).not.toHaveBeenCalled();
   });
 
@@ -296,10 +298,10 @@ describe('AccountsHeaderTable — PSD2 disconnect action', () => {
     mockDisconnect.mockResolvedValue(undefined);
     await requestDisconnect();
 
-    fireEvent.click(await screen.findByText('financeAccountsPsd2DisconnectConfirm'));
+    fireEvent.click(await screen.findByText('financeAccountsBankConnectionDisconnectAction'));
 
     await waitFor(() => expect(mockDisconnect).toHaveBeenCalledWith('acc-1'));
-    await waitFor(() => expect(toastSuccess).toHaveBeenCalledWith('financeAccountsPsd2DisconnectDone'));
+    await waitFor(() => expect(toastSuccess).toHaveBeenCalledWith('financeAccountsBankConnectionDisconnectDone'));
     expect(onDataMutated).toHaveBeenCalled();
   });
 
@@ -307,7 +309,7 @@ describe('AccountsHeaderTable — PSD2 disconnect action', () => {
     mockDisconnect.mockRejectedValue(new Error('fail'));
     await requestDisconnect();
 
-    fireEvent.click(await screen.findByText('financeAccountsPsd2DisconnectConfirm'));
+    fireEvent.click(await screen.findByText('financeAccountsBankConnectionDisconnectAction'));
 
     await waitFor(() => expect(toastError).toHaveBeenCalledWith('fail'));
   });

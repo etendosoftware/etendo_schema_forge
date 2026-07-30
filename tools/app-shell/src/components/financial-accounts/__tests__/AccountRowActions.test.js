@@ -22,7 +22,7 @@ describe('AccountRowActions — module shape', () => {
   });
 
   it('accepts the full handler set both hosts pass through', () => {
-    for (const prop of ['account', 'onOpen', 'onEdit', 'onArchive', 'onPsd2Action', 'onTransfer', 'onNewMovement']) {
+    for (const prop of ['account', 'onOpen', 'onEdit', 'onArchive', 'onBankConnectionAction', 'onTransfer', 'onNewMovement']) {
       assert.match(src, new RegExp(`\\b${prop},`));
     }
   });
@@ -50,8 +50,8 @@ describe('AccountRowActions — E2E testid contract', () => {
 });
 
 describe('AccountRowActions — host-agnostic markup', () => {
-  it('gates the sync button on an explicit psd2Connected === true', () => {
-    assert.match(src, /account\.psd2Connected === true \?/);
+  it('gates the sync button on an explicit bankConnected === true', () => {
+    assert.match(src, /account\.bankConnected === true \?/);
   });
 
   it('does not wrap itself in a TableCell — each host supplies its own', () => {

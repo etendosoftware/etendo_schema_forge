@@ -51,8 +51,8 @@ vi.mock('@/hooks/useBankStatements', () => ({
   useBankStatements: () => ({ statements: [], loading: false, reload: vi.fn() }),
 }));
 vi.mock('@/hooks/useCsvExport', () => ({ useCsvExport: () => vi.fn() }));
-vi.mock('@/hooks/usePsd2ConnectFlow', () => ({
-  usePsd2ConnectFlow: () => ({ startConnect: vi.fn(), startCreate: vi.fn() }),
+vi.mock('@/hooks/useBankConnectionFlow', () => ({
+  useBankConnectionFlow: () => ({ startConnect: vi.fn(), startCreate: vi.fn() }),
 }));
 vi.mock('@/hooks/useReconciliation', () => ({
   useAutoMatch: () => ({ groups: [], kpis: {}, reload: vi.fn() }),
@@ -64,7 +64,7 @@ vi.mock('../ImportedStatementsTab', () => ({ ImportedStatementsTab: () => <div d
 vi.mock('../DetailTabs', () => ({ DetailTabs: () => <div data-testid="detail-tabs" /> }));
 vi.mock('../EditAccountModal.jsx', () => ({ EditAccountModal: () => <div data-testid="edit-modal" /> }));
 vi.mock('../ArchiveAccountDialog.jsx', () => ({ ArchiveAccountDialog: () => <div data-testid="archive-dialog" /> }));
-vi.mock('../Psd2ConnectFlowUI.jsx', () => ({ Psd2ConnectFlowUI: () => <div data-testid="psd2-flow" /> }));
+vi.mock('../BankConnectionFlowUI.jsx', () => ({ BankConnectionFlowUI: () => <div data-testid="bank-connection-flow" /> }));
 vi.mock('@/components/contract-ui/AutoMatchSuggestionModal', () => ({
   AutoMatchSuggestionModal: () => <div data-testid="automatch-modal" />,
 }));

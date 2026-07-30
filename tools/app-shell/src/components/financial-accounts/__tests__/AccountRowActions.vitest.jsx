@@ -5,7 +5,7 @@
  * in both table hosts: the generic DataTable (through the `_rowActions` synthetic column in
  * `AccountsHeaderTable`) and the legacy hand-rolled `AccountsTable`. The extraction must keep
  * ONE definition of the per-row testids (`account-row-edit-{id}`, `account-row-refresh-{id}`)
- * and of the sync-visibility rule (PSD2-connected accounts only), which is what this covers.
+ * and of the sync-visibility rule (bank-connected accounts only), which is what this covers.
  */
 import { render, screen, fireEvent } from '@testing-library/react';
 
@@ -15,8 +15,8 @@ vi.mock('@/i18n', () => ({
 
 import { AccountRowActions } from '../AccountRowActions.jsx';
 
-const CONNECTED = { id: 'acc-1', name: 'BBVA', type: 'B', psd2Connected: true };
-const OFFLINE = { id: 'acc-2', name: 'Sabadell', type: 'B', psd2Connected: false };
+const CONNECTED = { id: 'acc-1', name: 'BBVA', type: 'B', bankConnected: true };
+const OFFLINE = { id: 'acc-2', name: 'Sabadell', type: 'B', bankConnected: false };
 const CASH = { id: 'acc-3', name: 'Caja', type: 'C' };
 
 /** Opens the kebab so its menu items mount (Radix renders the content on demand). */
@@ -44,7 +44,7 @@ describe('AccountRowActions', () => {
       .toHaveAttribute('aria-label', 'financeAccountsMenuSyncNow');
   });
 
-  it('shows the sync button only for PSD2-connected accounts', () => {
+  it('shows the sync button only for bank-connected accounts', () => {
     render(<AccountRowActions account={CONNECTED} />);
     expect(screen.getByTestId('account-row-refresh-acc-1')).toBeInTheDocument();
   });
@@ -54,7 +54,7 @@ describe('AccountRowActions', () => {
     expect(screen.queryByTestId('account-row-refresh-acc-2')).not.toBeInTheDocument();
   });
 
-  it('hides the sync button for a cash account (no psd2Connected flag at all)', () => {
+  it('hides the sync button for a cash account (no bankConnected flag at all)', () => {
     render(<AccountRowActions account={CASH} />);
     expect(screen.queryByTestId('account-row-refresh-acc-3')).not.toBeInTheDocument();
   });
@@ -68,13 +68,13 @@ describe('AccountRowActions', () => {
     expect(onEdit).toHaveBeenCalledWith(CONNECTED);
   });
 
-  it('calls onPsd2Action with syncNow when the sync button is clicked', () => {
-    const onPsd2Action = vi.fn();
-    render(<AccountRowActions account={CONNECTED} onPsd2Action={onPsd2Action} />);
+  it('calls onBankConnectionAction with syncNow when the sync button is clicked', () => {
+    const onBankConnectionAction = vi.fn();
+    render(<AccountRowActions account={CONNECTED} onBankConnectionAction={onBankConnectionAction} />);
 
     fireEvent.click(screen.getByTestId('account-row-refresh-acc-1'));
 
-    expect(onPsd2Action).toHaveBeenCalledWith('syncNow', CONNECTED);
+    expect(onBankConnectionAction).toHaveBeenCalledWith('syncNow', CONNECTED);
   });
 
   it('does not throw when the callbacks are omitted', () => {
@@ -89,7 +89,7 @@ describe('AccountRowActions', () => {
   it('forwards every handler to the kebab menu', async () => {
     const handlers = {
       onOpen: vi.fn(), onEdit: vi.fn(), onArchive: vi.fn(),
-      onPsd2Action: vi.fn(), onTransfer: vi.fn(), onNewMovement: vi.fn(),
+      onBankConnectionAction: vi.fn(), onTransfer: vi.fn(), onNewMovement: vi.fn(),
     };
     render(<AccountRowActions account={CONNECTED} {...handlers} />);
     openMenu('acc-1');
@@ -111,16 +111,18 @@ describe('AccountRowActions', () => {
   });
 
   it('offers disconnect for a connected account and connect for an offline one', async () => {
-    const onPsd2Action = vi.fn();
-    const { unmount } = render(<AccountRowActions account={CONNECTED} onPsd2Action={onPsd2Action} />);
+    const onBankConnectionAction = vi.fn();
+    const { unmount } = render(
+      <AccountRowActions account={CONNECTED} onBankConnectionAction={onBankConnectionAction} />,
+    );
     openMenu('acc-1');
     fireEvent.click(await screen.findByTestId('account-row-menu-disconnect-acc-1'));
-    expect(onPsd2Action).toHaveBeenCalledWith('disconnect', CONNECTED);
+    expect(onBankConnectionAction).toHaveBeenCalledWith('disconnect', CONNECTED);
     unmount();
 
-    render(<AccountRowActions account={OFFLINE} onPsd2Action={onPsd2Action} />);
+    render(<AccountRowActions account={OFFLINE} onBankConnectionAction={onBankConnectionAction} />);
     openMenu('acc-2');
     fireEvent.click(await screen.findByTestId('account-row-menu-connect-acc-2'));
-    expect(onPsd2Action).toHaveBeenCalledWith('connect', OFFLINE);
+    expect(onBankConnectionAction).toHaveBeenCalledWith('connect', OFFLINE);
   });
 });

@@ -30,7 +30,7 @@ const ACCOUNT = {
   currentBalance: 1234.56,
   currencyIso: 'EUR',
   iban: 'ES1212340000000000000001',
-  psd2Connected: true,
+  bankConnected: true,
 };
 
 const ui = (key) => key;
@@ -62,7 +62,7 @@ describe('NameCell', () => {
   });
 
   it('shows the offline badge only for a bank/card account that is not connected', () => {
-    const { unmount } = render(<NameCell account={{ ...ACCOUNT, psd2Connected: false }} ui={ui} />);
+    const { unmount } = render(<NameCell account={{ ...ACCOUNT, bankConnected: false }} ui={ui} />);
     expect(screen.getByText('financeAccountsBadgeOffline')).toBeInTheDocument();
     unmount();
 
@@ -71,7 +71,7 @@ describe('NameCell', () => {
   });
 
   it('treats a cash account as neither offline nor syncable', () => {
-    render(<NameCell account={{ ...ACCOUNT, type: 'C', psd2Connected: false }} ui={ui} />);
+    render(<NameCell account={{ ...ACCOUNT, type: 'C', bankConnected: false }} ui={ui} />);
 
     expect(screen.queryByText('financeAccountsBadgeOffline')).not.toBeInTheDocument();
     expect(screen.queryByTestId('account-sync-connect-acc-1')).not.toBeInTheDocument();
@@ -79,7 +79,7 @@ describe('NameCell', () => {
 
   it('wires the connect affordance to onConnect, once, with the account', () => {
     const onConnect = vi.fn();
-    render(<NameCell account={{ ...ACCOUNT, psd2Connected: false }} ui={ui} onConnect={onConnect} />);
+    render(<NameCell account={{ ...ACCOUNT, bankConnected: false }} ui={ui} onConnect={onConnect} />);
 
     fireEvent.click(screen.getByTestId('account-sync-connect-acc-1'));
 
@@ -88,7 +88,7 @@ describe('NameCell', () => {
   });
 
   it('renders no connect affordance when the host passes no handler', () => {
-    render(<NameCell account={{ ...ACCOUNT, psd2Connected: false }} ui={ui} />);
+    render(<NameCell account={{ ...ACCOUNT, bankConnected: false }} ui={ui} />);
 
     // The button still renders (it is SyncStatusInline's default state) but has nothing
     // to call — clicking it must not throw.

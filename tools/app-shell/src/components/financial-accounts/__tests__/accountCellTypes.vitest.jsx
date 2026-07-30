@@ -35,7 +35,7 @@ const ACCOUNT = {
   currencyIso: 'EUR',
   iban: 'ES1212340000000000000001',
   pendingCount: 3,
-  psd2Connected: true,
+  bankConnected: true,
 };
 
 function renderCell(cellType, row = ACCOUNT, ctx = {}) {
@@ -72,15 +72,15 @@ describe('ACCOUNT_CELL_TYPES — accountName', () => {
     expect(screen.getByTestId('cell')).toHaveTextContent('BBVA Principal');
   });
 
-  it('renders the offline badge for a bank account that is not PSD2-connected', () => {
-    renderCell('accountName', { ...ACCOUNT, psd2Connected: false }, { ui: UI });
+  it('renders the offline badge for a bank account that is not bank-connected', () => {
+    renderCell('accountName', { ...ACCOUNT, bankConnected: false }, { ui: UI });
 
     expect(screen.getByTestId('cell')).toHaveTextContent('financeAccountsBadgeOffline');
   });
 
   it('wires the connect affordance to the context onConnect', () => {
     const onConnect = vi.fn();
-    renderCell('accountName', { ...ACCOUNT, psd2Connected: false }, { ui: UI, onConnect });
+    renderCell('accountName', { ...ACCOUNT, bankConnected: false }, { ui: UI, onConnect });
 
     fireEvent.click(screen.getByTestId('account-sync-connect-acc-1'));
 

@@ -15,7 +15,7 @@
 //
 // DATA: rows arrive as `data` from ListView's own useEntity fetch of the `account`
 // entity. The W spec now returns the derived fields the list needs
-// (`pendingCount`, `psd2Connected`, `currencyIso`, `iban`, `active`, …), injected
+// (`pendingCount`, `bankConnected`, `currencyIso`, `iban`, `active`, …), injected
 // by FinancialAccountHandler.afterHandle, and the sidebar aggregates come from
 // `meta.summary` — a sibling of `response.data` on that same request. One fetch
 // feeds both, so the bespoke `financial-accounts-page` R spec is no longer needed.
@@ -24,8 +24,8 @@ import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { DataTable } from '@/components/contract-ui';
 import { useUI, useLocaleSwitch } from '@/i18n';
-import { usePsd2Actions } from '@/hooks/usePsd2Actions.js';
-import { usePsd2ConnectFlow } from '@/hooks/usePsd2ConnectFlow.js';
+import { useBankConnectionActions } from '@/hooks/useBankConnectionActions.js';
+import { useBankConnectionFlow } from '@/hooks/useBankConnectionFlow.js';
 import {
   AccountsSidebar,
   AccountsToolbar,
@@ -40,7 +40,7 @@ import { getContractGridColumns } from '@/components/financial-accounts/contract
 import { NewAccountWizard } from '@/windows/custom/financial-account/NewAccountWizard.jsx';
 import { EditAccountModal } from '@/windows/custom/financial-account/EditAccountModal.jsx';
 import { ArchiveAccountDialog } from '@/windows/custom/financial-account/ArchiveAccountDialog.jsx';
-import { Psd2ConnectFlowUI } from '@/windows/custom/financial-account/Psd2ConnectFlowUI.jsx';
+import { BankConnectionFlowUI } from '@/windows/custom/financial-account/BankConnectionFlowUI.jsx';
 import { FundsTransferModal } from '@/windows/custom/financial-account/FundsTransferModal.jsx';
 import { ConfirmDialog } from '@/components/OAuth2ClientDialog';
 
@@ -78,7 +78,7 @@ const COLUMN_CHROME = {
 function buildColumns(ui, locale, handlers) {
   const cellCtx = {
     ui,
-    onConnect: (account) => handlers.onPsd2Action('connect', account),
+    onConnect: (account) => handlers.onBankConnectionAction('connect', account),
     onReconcile: handlers.onReconcile,
   };
 
@@ -114,7 +114,7 @@ function buildColumns(ui, locale, handlers) {
             onOpen={handlers.onOpen}
             onEdit={handlers.onEdit}
             onArchive={handlers.onArchive}
-            onPsd2Action={handlers.onPsd2Action}
+            onBankConnectionAction={handlers.onBankConnectionAction}
             onTransfer={handlers.onTransfer}
             onNewMovement={handlers.onNewMovement} />
         </span>
@@ -170,13 +170,13 @@ export default function AccountsHeaderTable({ data, meta, onDataMutated, ...prop
   const [disconnecting, setDisconnecting] = useState(false);
 
   const reload = () => onDataMutated?.();
-  const { sync, disconnect } = usePsd2Actions();
-  const psd2Flow = usePsd2ConnectFlow({ onDone: reload });
+  const { sync, disconnect } = useBankConnectionActions();
+  const bankConnectionFlow = useBankConnectionFlow({ onDone: reload });
 
 
-  const handlePsd2Action = async (action, account) => {
+  const handleBankConnectionAction = async (action, account) => {
     if (action === 'connect') {
-      psd2Flow.startConnect(account);
+      bankConnectionFlow.startConnect(account);
       return;
     }
     if (action === 'syncNow') {
@@ -185,14 +185,14 @@ export default function AccountsHeaderTable({ data, meta, onDataMutated, ...prop
         reload();
         const msg = res?.message;
         if (res?.status === 'ERROR') {
-          toast.error(msg || ui('financeAccountsPsd2SyncError'));
+          toast.error(msg || ui('financeAccountsBankConnectionSyncError'));
         } else if (res?.status === 'WARNING') {
-          toast.info(msg || ui('financeAccountsPsd2SyncDone'));
+          toast.info(msg || ui('financeAccountsBankConnectionSyncDone'));
         } else {
-          toast.success(msg || ui('financeAccountsPsd2SyncDone'));
+          toast.success(msg || ui('financeAccountsBankConnectionSyncDone'));
         }
       } catch (err) {
-        toast.error(err.message || ui('financeAccountsPsd2SyncError'));
+        toast.error(err.message || ui('financeAccountsBankConnectionSyncError'));
       }
       return;
     }
@@ -206,11 +206,11 @@ export default function AccountsHeaderTable({ data, meta, onDataMutated, ...prop
     setDisconnecting(true);
     try {
       await disconnect(disconnectTarget.id);
-      toast.success(ui('financeAccountsPsd2DisconnectDone'));
+      toast.success(ui('financeAccountsBankConnectionDisconnectDone'));
       setDisconnectTarget(null);
       reload();
     } catch (err) {
-      toast.error(err.message || ui('financeAccountsPsd2DisconnectError'));
+      toast.error(err.message || ui('financeAccountsBankConnectionDisconnectError'));
     } finally {
       setDisconnecting(false);
     }
@@ -223,7 +223,7 @@ export default function AccountsHeaderTable({ data, meta, onDataMutated, ...prop
     onEdit: setEditAccount,
     onArchive: setArchiveTarget,
     onTransfer: setTransferSource,
-    onPsd2Action: handlePsd2Action,
+    onBankConnectionAction: handleBankConnectionAction,
   };
 
   const columns = useMemo(
@@ -301,7 +301,7 @@ export default function AccountsHeaderTable({ data, meta, onDataMutated, ...prop
         open={wizardOpen}
         onClose={() => setWizardOpen(false)}
         onCreated={reload}
-        onConnectWithCreation={psd2Flow.startCreate}
+        onConnectWithCreation={bankConnectionFlow.startCreate}
         data-testid="NewAccountWizard__accthdr" />
       <EditAccountModal
         open={!!editAccount}
@@ -309,7 +309,7 @@ export default function AccountsHeaderTable({ data, meta, onDataMutated, ...prop
         onClose={() => setEditAccount(null)}
         onSaved={reload}
         onArchive={(acc) => { setEditAccount(null); setArchiveTarget(acc); }}
-        onConnect={(acc) => { setEditAccount(null); handlePsd2Action('connect', acc); }}
+        onConnect={(acc) => { setEditAccount(null); handleBankConnectionAction('connect', acc); }}
         data-testid="EditAccountModal__accthdr" />
       <ArchiveAccountDialog
         open={!!archiveTarget}
@@ -317,12 +317,14 @@ export default function AccountsHeaderTable({ data, meta, onDataMutated, ...prop
         onClose={() => setArchiveTarget(null)}
         onArchived={reload}
         data-testid="ArchiveAccountDialog__accthdr" />
+      {/* `...DisconnectConfirm` ("Disconnect this bank connection?") is the dialog's title,
+          not a button label — despite the name. `...DisconnectAction` ("Disconnect") is the
+          confirm button. There is no separate body/description key. */}
       <ConfirmDialog
         open={!!disconnectTarget}
         onOpenChange={(o) => { if (!o) setDisconnectTarget(null); }}
-        title={ui('financeAccountsPsd2DisconnectTitle')}
-        description={ui('financeAccountsPsd2DisconnectBody')}
-        confirmLabel={ui('financeAccountsPsd2DisconnectConfirm')}
+        title={ui('financeAccountsBankConnectionDisconnectConfirm')}
+        confirmLabel={ui('financeAccountsBankConnectionDisconnectAction')}
         cancelLabel={ui('cancel')}
         loading={disconnecting}
         onConfirm={handleConfirmDisconnect}
@@ -335,7 +337,7 @@ export default function AccountsHeaderTable({ data, meta, onDataMutated, ...prop
           onDone={reload}
           data-testid="FundsTransferModal__accthdr" />
       )}
-      <Psd2ConnectFlowUI flow={psd2Flow} data-testid="Psd2ConnectFlowUI__accthdr" />
+      <BankConnectionFlowUI flow={bankConnectionFlow} data-testid="BankConnectionFlowUI__accthdr" />
     </div>
   );
 }

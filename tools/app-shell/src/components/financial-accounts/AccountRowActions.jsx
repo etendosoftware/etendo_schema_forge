@@ -1,5 +1,5 @@
-// Hover row actions for the Cuentas list: edit, PSD2 sync (connected accounts
-// only) and the kebab menu.
+// Hover row actions for the Cuentas list: edit, bank connection sync (connected
+// accounts only) and the kebab menu.
 //
 // Extracted from the retired AccountRow (ETP-4658) so the testids and the
 // sync-visibility rule have a single definition; the generic DataTable renders them
@@ -19,7 +19,7 @@ export function AccountRowActions({
   onOpen,
   onEdit,
   onArchive,
-  onPsd2Action,
+  onBankConnectionAction,
   onTransfer,
   onNewMovement,
 }) {
@@ -47,16 +47,16 @@ export function AccountRowActions({
           </TooltipTrigger>
           <TooltipContent data-testid="TooltipContent__acctactions">{ui('financeAccountsMenuEdit')}</TooltipContent>
         </Tooltip>
-        {/* Sync is only meaningful for PSD2-connected accounts — same statement fetch as the
+        {/* Sync is only meaningful for bank-connected accounts — same statement fetch as the
             kebab's "Sincronizar ahora" / the statements tab's "Sincronizar extractos". */}
-        {account.psd2Connected === true ? (
+        {account.bankConnected === true ? (
           <Tooltip delayDuration={0} data-testid="Tooltip__acctactions">
             <TooltipTrigger asChild data-testid="TooltipTrigger__acctactions">
               <button
                 type="button"
                 aria-label={ui('financeAccountsMenuSyncNow')}
                 data-testid={`account-row-refresh-${account.id}`}
-                onClick={() => onPsd2Action?.('syncNow', account)}
+                onClick={() => onBankConnectionAction?.('syncNow', account)}
                 className="inline-flex h-8 w-8 items-center justify-center rounded-full text-[hsl(var(--text-disabled))] hover:bg-[hsl(var(--border-subtle))]"
               >
                 <RefreshCw className="h-5 w-5" data-testid="RefreshCw__acctactions" />
@@ -70,7 +70,7 @@ export function AccountRowActions({
           onOpen={onOpen}
           onEdit={onEdit}
           onArchive={onArchive}
-          onPsd2Action={onPsd2Action}
+          onBankConnectionAction={onBankConnectionAction}
           onTransfer={onTransfer}
           onNewMovement={onNewMovement}
           data-testid="AccountRowMenu__acctactions" />

@@ -33,13 +33,13 @@ vi.mock('sonner', () => ({
   toast: { success: vi.fn(), error: vi.fn(), info: vi.fn() },
 }));
 
-// PSD2 hooks reach useAuth internally — stub at the module level (no AuthProvider needed).
-vi.mock('@/hooks/usePsd2Actions.js', () => ({
-  usePsd2Actions: () => ({ sync: vi.fn(), disconnect: vi.fn() }),
+// Bank connection hooks reach useAuth internally — stub at the module level (no AuthProvider needed).
+vi.mock('@/hooks/useBankConnectionActions.js', () => ({
+  useBankConnectionActions: () => ({ sync: vi.fn(), disconnect: vi.fn() }),
   launchSaltEdgePopup: vi.fn(),
 }));
-vi.mock('@/hooks/usePsd2ConnectFlow.js', () => ({
-  usePsd2ConnectFlow: () => ({ startConnect: vi.fn(), startCreate: vi.fn() }),
+vi.mock('@/hooks/useBankConnectionFlow.js', () => ({
+  useBankConnectionFlow: () => ({ startConnect: vi.fn(), startCreate: vi.fn() }),
 }));
 
 // Modals are covered by their own suites; stub them so this file stays focused on the slot.
@@ -52,8 +52,8 @@ vi.mock('@/windows/custom/financial-account/EditAccountModal.jsx', () => ({
 vi.mock('@/windows/custom/financial-account/ArchiveAccountDialog.jsx', () => ({
   ArchiveAccountDialog: ({ open }) => <div data-testid="archive-dialog" data-open={String(open)} />,
 }));
-vi.mock('@/windows/custom/financial-account/Psd2ConnectFlowUI.jsx', () => ({
-  Psd2ConnectFlowUI: () => <div data-testid="psd2-flow" />,
+vi.mock('@/windows/custom/financial-account/BankConnectionFlowUI.jsx', () => ({
+  BankConnectionFlowUI: () => <div data-testid="bank-connection-flow" />,
 }));
 vi.mock('@/windows/custom/financial-account/FundsTransferModal.jsx', () => ({
   FundsTransferModal: (props) => <div data-testid="transfer-modal" data-source={props.sourceAccountId} />,
@@ -112,7 +112,7 @@ const BASE_ACCOUNTS = [
     currencyIso: 'EUR',
     iban: 'ES1212340000000000000001',
     pendingCount: 3,
-    psd2Connected: true,
+    bankConnected: true,
     active: true,
   },
   {
@@ -132,7 +132,7 @@ const BASE_ACCOUNTS = [
     currencyIso: 'USD',
     maskedPan: '**** 4321',
     pendingCount: 1,
-    psd2Connected: false,
+    bankConnected: false,
     active: true,
   },
 ];
@@ -394,7 +394,7 @@ describe('AccountsHeaderTable — row actions column', () => {
     expect(screen.getByTestId('account-row-menu-trigger-acc-1')).toBeInTheDocument();
   });
 
-  it('shows the sync button only for PSD2-connected accounts', () => {
+  it('shows the sync button only for bank-connected accounts', () => {
     renderTable();
 
     expect(screen.getByTestId('account-row-refresh-acc-1')).toBeInTheDocument();
