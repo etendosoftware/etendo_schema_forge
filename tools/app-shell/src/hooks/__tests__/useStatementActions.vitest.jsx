@@ -1,7 +1,20 @@
+/**
+ * ETP-4576 — the session is a server-side `__Host-go_session` cookie, so this
+ * hook holds no bearer token: every request must carry `credentials: 'include'`
+ * and NO Authorization header. All four actions (process / reactivate / update /
+ * delete) are POSTs — unsafe methods — so each must also carry the session-bound
+ * `X-Go-CSRF` proof, and must omit that header entirely when none is available.
+ *
+ * The auth mock is a plain mutable object rather than a vi.fn() with
+ * mockReturnValueOnce: React can invoke the hook more than once per render, and
+ * a "once" override would decay to the default mid-render.
+ */
 import { renderHook, act, waitFor } from '@testing-library/react';
 
+let mockAuth = { isAuthenticated: true, csrfToken: 'test-csrf' };
+
 vi.mock('@/auth/AuthContext.jsx', () => ({
-  useAuth: () => ({ token: 'test-token' }),
+  useAuth: () => mockAuth,
 }));
 
 import { useStatementActions } from '../useStatementActions.js';
@@ -12,8 +25,19 @@ function setPathname(pathname) {
 
 const okJson = (data) => ({ ok: true, json: async () => ({ response: { data } }) });
 
+/** Asserts no request carried a bearer token — the point of ETP-4576. */
+function expectNoAuthorizationHeader() {
+  for (const [, init] of globalThis.fetch.mock.calls) {
+    const headers = init?.headers ?? {};
+    const keys = Object.keys(headers).map((k) => k.toLowerCase());
+    expect(keys).not.toContain('authorization');
+    expect(JSON.stringify(headers)).not.toContain('Bearer');
+  }
+}
+
 describe('useStatementActions', () => {
   beforeEach(() => {
+    mockAuth = { isAuthenticated: true, csrfToken: 'test-csrf' };
     setPathname('/etendo/web/app');
     globalThis.fetch = vi.fn();
   });
@@ -38,9 +62,44 @@ describe('useStatementActions', () => {
     const [url, init] = globalThis.fetch.mock.calls[0];
     expect(url).toBe('/etendo/sws/neo/bank-statements?action=process');
     expect(init.method).toBe('POST');
-    expect(init.headers.Authorization).toBe('Bearer test-token');
+    expect(init.credentials).toBe('include');
+    expect(init.headers['X-Go-CSRF']).toBe('test-csrf');
+    expectNoAuthorizationHeader();
     expect(JSON.parse(init.body)).toEqual({ id: 'st-1' });
     expect(res).toEqual({ id: 'st-1', processed: true });
+  });
+
+  it('sends X-Go-CSRF and no Authorization on every POST action', async () => {
+    globalThis.fetch.mockResolvedValue(okJson({}));
+    const { result } = renderHook(() => useStatementActions());
+
+    await act(async () => { await result.current.processStatement('st-1'); });
+    await act(async () => { await result.current.reactivateStatement('st-1'); });
+    await act(async () => { await result.current.updateStatement({ id: 'st-1', lines: [] }); });
+    await act(async () => { await result.current.deleteStatement('st-1'); });
+
+    expect(globalThis.fetch).toHaveBeenCalledTimes(4);
+    for (const [, init] of globalThis.fetch.mock.calls) {
+      expect(init.method).toBe('POST');
+      expect(init.credentials).toBe('include');
+      expect(init.headers['X-Go-CSRF']).toBe('test-csrf');
+    }
+    expectNoAuthorizationHeader();
+  });
+
+  it('omits X-Go-CSRF entirely when no CSRF proof is available', async () => {
+    // A session can be authenticated before the CSRF proof lands; the header must
+    // be added defensively, never sent as an empty/undefined value.
+    mockAuth = { isAuthenticated: true, csrfToken: null };
+    globalThis.fetch.mockResolvedValue(okJson({}));
+    const { result } = renderHook(() => useStatementActions());
+
+    await act(async () => { await result.current.processStatement('st-1'); });
+
+    const [, init] = globalThis.fetch.mock.calls[0];
+    expect(Object.keys(init.headers)).not.toContain('X-Go-CSRF');
+    expect(init.credentials).toBe('include');
+    expectNoAuthorizationHeader();
   });
 
   it('updateStatement POSTs ?action=update with the full header + lines (process defaults to false)', async () => {

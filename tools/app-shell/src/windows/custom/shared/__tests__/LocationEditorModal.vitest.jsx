@@ -28,8 +28,18 @@ vi.mock('sonner', () => ({
   toast: { error: vi.fn(), success: vi.fn(), warning: vi.fn(), info: vi.fn() },
 }));
 
+// ETP-4576: the session is a server-side `__Host-go_session` cookie, so the
+// component holds no bearer token — the context only supplies `isAuthenticated`
+// and the `csrfToken` proof. Every request must carry `credentials: 'include'`
+// and NO Authorization header; the selector/record GETs must NOT carry the CSRF
+// proof, while the create POST and edit PUT must.
+//
+// The mock is a plain mutable object rather than a vi.fn() with
+// mockReturnValueOnce: React can invoke the hook more than once per render, and
+// a "once" override would decay to the default mid-render.
+let mockAuth = { isAuthenticated: true, csrfToken: 'test-csrf', logout: () => {} };
 vi.mock('@/auth/AuthContext.jsx', () => ({
-  useAuth: () => ({ token: 'test-token', logout: () => {} }),
+  useAuth: () => mockAuth,
 }));
 
 // --- Import under test ----------------------------------------------------
@@ -47,15 +57,28 @@ function renderModal(overrides = {}) {
     rowId: null,
     bpId: 'bp-1',
     apiBase: '/api/contacts',
+    // ETP-4576: a `token` prop is still passed deliberately — even when a caller
+    // hands one down, no Authorization header may reach the wire.
     token: 'tok',
   };
   return { ...render(<LocationEditorModal {...defaults} {...overrides} />), props: { ...defaults, ...overrides } };
+}
+
+/** Asserts no request carried a bearer token — the point of ETP-4576. */
+function expectNoAuthorizationHeader() {
+  for (const [, init] of global.fetch.mock.calls) {
+    const headers = init?.headers ?? {};
+    const keys = Object.keys(headers).map((k) => k.toLowerCase());
+    expect(keys).not.toContain('authorization');
+    expect(JSON.stringify(headers)).not.toContain('Bearer');
+  }
 }
 
 // --- Tests ----------------------------------------------------------------
 
 describe('LocationEditorModal', () => {
   beforeEach(() => {
+    mockAuth = { isAuthenticated: true, csrfToken: 'test-csrf', logout: () => {} };
     global.fetch = vi.fn(() =>
       Promise.resolve({
         ok: true,
@@ -696,6 +719,127 @@ describe('LocationEditorModal', () => {
       await vi.waitFor(() => {
         expect(onSaved).toHaveBeenCalledWith('c-loc-77', 'Updated Location');
       });
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+  // ETP-4576 — cookie-session auth transport
+  // ---------------------------------------------------------------------------
+
+  describe('auth transport (ETP-4576)', () => {
+    /** Stubs every request; selectors return Spain so the country picker works. */
+    function stubFetch() {
+      global.fetch = vi.fn((url, opts) => {
+        if (url.includes('/locationAddress') && !url.includes('selectors')
+            && (opts?.method === 'POST' || opts?.method === 'PUT')) {
+          return Promise.resolve({
+            ok: true,
+            json: () => Promise.resolve({
+              response: { status: 0, data: [{ id: 'loc-x', name: 'Madrid' }] },
+            }),
+          });
+        }
+        if (url.includes('/locationAddress/loc-edit')) {
+          return Promise.resolve({
+            ok: true,
+            json: () => Promise.resolve({
+              response: {
+                data: [{
+                  id: 'loc-edit',
+                  address: '123 Main St',
+                  country: 'ES',
+                  'country$_identifier': 'Spain',
+                }],
+              },
+            }),
+          });
+        }
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ items: [{ id: 'ES', label: 'Spain' }], hasMore: false }),
+        });
+      });
+    }
+
+    /** Selects Spain (required for save) then clicks Save on a create modal. */
+    async function selectSpainAndSave() {
+      const buttons = screen.getAllByRole('button');
+      const countryBtn = buttons.find(
+        (b) => b.getAttribute('aria-haspopup') === 'dialog' && !b.disabled,
+      );
+      fireEvent.click(countryBtn);
+      const spainBtn = await screen.findByText('Spain');
+      fireEvent.click(spainBtn);
+      fireEvent.click(screen.getByText('save'));
+    }
+
+    function callByMethod(method) {
+      return global.fetch.mock.calls.find(([, opts]) => (opts?.method ?? 'GET') === method);
+    }
+
+    it("sends credentials: 'include' and no Authorization on the selector and record GETs", async () => {
+      stubFetch();
+      renderModal({ rowId: 'loc-edit' });
+
+      await screen.findByText('save', {}, { timeout: 3000 });
+      await vi.waitFor(() => expect(global.fetch).toHaveBeenCalled());
+
+      const getCalls = global.fetch.mock.calls.filter(
+        ([, opts]) => (opts?.method ?? 'GET') === 'GET',
+      );
+      expect(getCalls.length).toBeGreaterThan(0);
+      for (const [, opts] of getCalls) {
+        expect(opts.credentials).toBe('include');
+        // GET is a safe method — the CSRF proof must not be attached to it.
+        expect(Object.keys(opts.headers ?? {})).not.toContain('X-Go-CSRF');
+      }
+      expectNoAuthorizationHeader();
+    });
+
+    it('sends X-Go-CSRF on the create POST', async () => {
+      stubFetch();
+      renderModal();
+      await selectSpainAndSave();
+
+      await vi.waitFor(() => expect(callByMethod('POST')).toBeDefined());
+      const [, opts] = callByMethod('POST');
+      expect(opts.credentials).toBe('include');
+      expect(opts.headers['X-Go-CSRF']).toBe('test-csrf');
+      expectNoAuthorizationHeader();
+    });
+
+    it('sends X-Go-CSRF on the edit PUT', async () => {
+      stubFetch();
+      renderModal({ rowId: 'loc-edit' });
+
+      await screen.findByText('save', {}, { timeout: 3000 });
+      await vi.waitFor(() => {
+        const btns = screen.getAllByRole('button');
+        const countryBtn = btns.find((b) => b.getAttribute('aria-haspopup') === 'dialog');
+        expect(countryBtn).not.toBeDisabled();
+      });
+      fireEvent.click(screen.getByText('save'));
+
+      await vi.waitFor(() => expect(callByMethod('PUT')).toBeDefined());
+      const [, opts] = callByMethod('PUT');
+      expect(opts.credentials).toBe('include');
+      expect(opts.headers['X-Go-CSRF']).toBe('test-csrf');
+      expectNoAuthorizationHeader();
+    });
+
+    it('omits X-Go-CSRF entirely when no CSRF proof is available', async () => {
+      // A session can be authenticated before the CSRF proof lands; the header must
+      // be added defensively, never sent as an empty/undefined value.
+      mockAuth = { isAuthenticated: true, csrfToken: null, logout: () => {} };
+      stubFetch();
+      renderModal();
+      await selectSpainAndSave();
+
+      await vi.waitFor(() => expect(callByMethod('POST')).toBeDefined());
+      const [, opts] = callByMethod('POST');
+      expect(Object.keys(opts.headers)).not.toContain('X-Go-CSRF');
+      expect(opts.credentials).toBe('include');
+      expectNoAuthorizationHeader();
     });
   });
 });

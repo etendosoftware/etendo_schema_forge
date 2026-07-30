@@ -1,7 +1,27 @@
+/**
+ * ETP-4576 — the session is a server-side `__Host-go_session` cookie, so this
+ * hook holds no bearer token: every request must carry `credentials: 'include'`
+ * and NO Authorization header.
+ *
+ * This hook is the subtle one in the batch: it has a single generic
+ * `call(method, action, …)` whose method is a PARAMETER, and callers pass both
+ * 'GET' (accounts / providers / status) and 'POST' (connect / link /
+ * createAndLink / reconnect / disconnect / sync / import-settings). The CSRF
+ * proof header `X-Go-CSRF` is only legitimate on the unsafe methods, so both
+ * sides of that branch are asserted here: a POST action MUST send it, a GET
+ * action MUST NOT. A blanket "always send it" implementation and a "never send
+ * it" one both have to fail.
+ *
+ * The auth mock is a plain mutable object rather than a vi.fn() with
+ * mockReturnValueOnce: React can invoke the hook more than once per render, and
+ * a "once" override would decay to the default mid-render.
+ */
 import { renderHook, act, waitFor } from '@testing-library/react';
 
+let mockAuth = { isAuthenticated: true, csrfToken: 'test-csrf' };
+
 vi.mock('@/auth/AuthContext.jsx', () => ({
-  useAuth: () => ({ token: 'test-token' }),
+  useAuth: () => mockAuth,
 }));
 
 vi.mock('../useNeoResource', () => ({
@@ -19,6 +39,16 @@ function okResponse(payload) {
   return { ok: true, json: async () => ({ response: { data: payload } }) };
 }
 
+/** Asserts no request carried a bearer token — the point of ETP-4576. */
+function expectNoAuthorizationHeader() {
+  for (const [, init] of globalThis.fetch.mock.calls) {
+    const headers = init?.headers ?? {};
+    const keys = Object.keys(headers).map((k) => k.toLowerCase());
+    expect(keys).not.toContain('authorization');
+    expect(JSON.stringify(headers)).not.toContain('Bearer');
+  }
+}
+
 describe('usePsd2Actions — constants', () => {
   it('exposes the SPA callback path and connection storage key', () => {
     expect(PSD2_CALLBACK_PATH).toBe('/financial-account/psd2-callback');
@@ -28,6 +58,7 @@ describe('usePsd2Actions — constants', () => {
 
 describe('usePsd2Actions — hook', () => {
   beforeEach(() => {
+    mockAuth = { isAuthenticated: true, csrfToken: 'test-csrf' };
     globalThis.fetch = vi.fn();
   });
 
@@ -55,7 +86,9 @@ describe('usePsd2Actions — hook', () => {
     expect(calledUrl).toContain('/sws/neo/financial-account-psd2');
     expect(calledUrl).toContain('action=connect');
     expect(init.method).toBe('POST');
-    expect(init.headers.Authorization).toBe('Bearer test-token');
+    expect(init.credentials).toBe('include');
+    expect(init.headers['X-Go-CSRF']).toBe('test-csrf');
+    expectNoAuthorizationHeader();
     expect(JSON.parse(init.body)).toEqual({});
     expect(result.current.loading).toBe(false);
     expect(result.current.error).toBeNull();
@@ -95,6 +128,10 @@ describe('usePsd2Actions — hook', () => {
     });
     const [calledUrl, init] = globalThis.fetch.mock.calls[0];
     expect(init.method).toBe('GET');
+    expect(init.credentials).toBe('include');
+    // GET is a safe method — the CSRF proof must not be attached to it.
+    expect(Object.keys(init.headers ?? {})).not.toContain('X-Go-CSRF');
+    expectNoAuthorizationHeader();
     expect(calledUrl).toContain('action=accounts');
     expect(calledUrl).toContain('connectionId=conn-1');
     expect(calledUrl).toContain('type=B');
@@ -233,8 +270,78 @@ describe('usePsd2Actions — hook', () => {
     expect(status).toEqual({ connected: true });
     const [calledUrl, init] = globalThis.fetch.mock.calls[0];
     expect(init.method).toBe('GET');
+    expect(init.credentials).toBe('include');
+    // GET is a safe method — the CSRF proof must not be attached to it.
+    expect(Object.keys(init.headers ?? {})).not.toContain('X-Go-CSRF');
+    expectNoAuthorizationHeader();
     expect(calledUrl).toContain('action=status');
     expect(calledUrl).toContain('financialAccountId=FA-1');
+  });
+
+  // ── CSRF proof: both sides of the generic call(method, …) branch ────────────
+  // `call` takes the method as a parameter, so the header decision cannot be
+  // hardcoded per-callsite. Every POST action must carry X-Go-CSRF and every GET
+  // action must not, exercised through the public API of the hook.
+  const POST_ACTIONS = [
+    { label: 'connect', invoke: (api) => api.connect('FA-1') },
+    { label: 'link', invoke: (api) => api.link({ financialAccountId: 'FA-1' }) },
+    { label: 'createAndLink', invoke: (api) => api.createAndLink({ type: 'B' }) },
+    { label: 'reconnect', invoke: (api) => api.reconnect('FA-1') },
+    { label: 'disconnect', invoke: (api) => api.disconnect('FA-1') },
+    { label: 'sync', invoke: (api) => api.sync('FA-1') },
+    { label: 'import-settings', invoke: (api) => api.saveImportSettings({ financialAccountId: 'FA-1' }) },
+  ];
+
+  const GET_ACTIONS = [
+    { label: 'accounts', invoke: (api) => api.fetchAccounts('conn-1') },
+    { label: 'providers', invoke: (api) => api.fetchProviders('ES') },
+    { label: 'status', invoke: (api) => api.fetchStatus('FA-1') },
+  ];
+
+  for (const { label, invoke } of POST_ACTIONS) {
+    it(`sends X-Go-CSRF on the unsafe ${label} action`, async () => {
+      globalThis.fetch.mockResolvedValue(okResponse({}));
+      const { result } = renderHook(() => usePsd2Actions());
+
+      await act(async () => { await invoke(result.current); });
+
+      const [, init] = globalThis.fetch.mock.calls[0];
+      expect(init.method).toBe('POST');
+      expect(init.credentials).toBe('include');
+      expect(init.headers['X-Go-CSRF']).toBe('test-csrf');
+      expectNoAuthorizationHeader();
+    });
+  }
+
+  for (const { label, invoke } of GET_ACTIONS) {
+    it(`does not send X-Go-CSRF on the safe ${label} action`, async () => {
+      globalThis.fetch.mockResolvedValue(okResponse({}));
+      const { result } = renderHook(() => usePsd2Actions());
+
+      await act(async () => { await invoke(result.current); });
+
+      const [, init] = globalThis.fetch.mock.calls[0];
+      expect(init.method).toBe('GET');
+      expect(init.credentials).toBe('include');
+      expect(Object.keys(init.headers ?? {})).not.toContain('X-Go-CSRF');
+      expectNoAuthorizationHeader();
+    });
+  }
+
+  it('omits X-Go-CSRF entirely on a POST action when no CSRF proof is available', async () => {
+    // A session can be authenticated before the CSRF proof lands; the header must
+    // be added defensively, never sent as an empty/undefined value.
+    mockAuth = { isAuthenticated: true, csrfToken: null };
+    globalThis.fetch.mockResolvedValue(okResponse({}));
+    const { result } = renderHook(() => usePsd2Actions());
+
+    await act(async () => { await result.current.sync('FA-1'); });
+
+    const [, init] = globalThis.fetch.mock.calls[0];
+    expect(init.method).toBe('POST');
+    expect(Object.keys(init.headers ?? {})).not.toContain('X-Go-CSRF');
+    expect(init.credentials).toBe('include');
+    expectNoAuthorizationHeader();
   });
 
   it('returns an empty object when the response has no data payload', async () => {

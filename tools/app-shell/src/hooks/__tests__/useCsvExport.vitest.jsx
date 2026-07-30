@@ -1,7 +1,19 @@
+/**
+ * ETP-4576 — the session is a server-side `__Host-go_session` cookie, so this
+ * hook holds no bearer token: the export request must carry
+ * `credentials: 'include'` and NO Authorization header. It is a GET (a safe
+ * method), so it must NOT carry the `X-Go-CSRF` proof either.
+ *
+ * The auth mock is a plain mutable object rather than a vi.fn() with
+ * mockReturnValueOnce: React can invoke the hook more than once per render, and
+ * a "once" override would decay to the default mid-render.
+ */
 import { renderHook } from '@testing-library/react';
 
+let mockAuth = { isAuthenticated: true, csrfToken: 'test-csrf' };
+
 vi.mock('@/auth/AuthContext.jsx', () => ({
-  useAuth: () => ({ token: 'tok-123' }),
+  useAuth: () => mockAuth,
 }));
 
 import { useCsvExport } from '../useCsvExport';
@@ -12,6 +24,7 @@ describe('useCsvExport', () => {
   let lastAnchor;
 
   beforeEach(() => {
+    mockAuth = { isAuthenticated: true, csrfToken: 'test-csrf' };
     fetchMock = vi.fn(() =>
       Promise.resolve({ ok: true, blob: () => Promise.resolve(new Blob(['csv'])) }),
     );
@@ -34,7 +47,7 @@ describe('useCsvExport', () => {
     vi.restoreAllMocks();
   });
 
-  it('builds an authenticated GET with export=csv and the given params, then downloads the blob', async () => {
+  it('builds a cookie-authenticated GET with export=csv and the given params, then downloads the blob', async () => {
     const { result } = renderHook(() => useCsvExport());
 
     await result.current({
@@ -49,7 +62,12 @@ describe('useCsvExport', () => {
     expect(url).toContain('export=csv');
     expect(url).toContain('action=lines');
     expect(url).toContain('statementIds=s1%2Cs2');
-    expect(opts.headers.Authorization).toBe('Bearer tok-123');
+    expect(opts.credentials).toBe('include');
+    // GET is a safe method — the CSRF proof must not be attached to it.
+    expect(Object.keys(opts.headers ?? {})).not.toContain('X-Go-CSRF');
+    const headerNames = Object.keys(opts.headers ?? {}).map((h) => h.toLowerCase());
+    expect(headerNames).not.toContain('authorization');
+    expect(JSON.stringify(opts.headers ?? {})).not.toContain('Bearer');
     expect(lastAnchor.download).toBe('lines.csv');
     expect(clickMock).toHaveBeenCalledTimes(1);
   });

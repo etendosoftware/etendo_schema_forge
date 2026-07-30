@@ -10,8 +10,18 @@ vi.mock('sonner', () => ({
   toast: { success: (...a) => toastSuccess(...a), error: (...a) => toastError(...a) },
 }));
 
+// ETP-4576: the session is a server-side `__Host-go_session` cookie, so the
+// component holds no bearer token — the context only supplies `isAuthenticated`
+// and the `csrfToken` proof. Both actions here (post / unpost) are POSTs, i.e.
+// unsafe methods, so each must carry `credentials: 'include'` and `X-Go-CSRF`
+// and NO Authorization header.
+//
+// The mock is a plain mutable object rather than a vi.fn() with
+// mockReturnValueOnce: React can invoke the hook more than once per render, and
+// a "once" override would decay to the default mid-render.
+let mockAuth = { isAuthenticated: true, csrfToken: 'test-csrf' };
 vi.mock('@/auth/AuthContext.jsx', () => ({
-  useAuth: () => ({ token: 'test-token' }),
+  useAuth: () => mockAuth,
 }));
 
 vi.mock('@/hooks/useNeoResource', () => ({
@@ -71,8 +81,19 @@ function renderKebab(movement, overrides = {}) {
   return { onReload };
 }
 
+/** Asserts no request carried a bearer token — the point of ETP-4576. */
+function expectNoAuthorizationHeader() {
+  for (const [, init] of globalThis.fetch.mock.calls) {
+    const headers = init?.headers ?? {};
+    const keys = Object.keys(headers).map((k) => k.toLowerCase());
+    expect(keys).not.toContain('authorization');
+    expect(JSON.stringify(headers)).not.toContain('Bearer');
+  }
+}
+
 describe('MovementRowKebab — Post action', () => {
   beforeEach(() => {
+    mockAuth = { isAuthenticated: true, csrfToken: 'test-csrf' };
     toastSuccess.mockClear();
     toastError.mockClear();
     globalThis.fetch = vi.fn();
@@ -119,8 +140,30 @@ describe('MovementRowKebab — Post action', () => {
     const [url, init] = globalThis.fetch.mock.calls[0];
     expect(url).toContain('/sws/neo/financial-account/transaction/mov-1/action/post');
     expect(init.method).toBe('POST');
-    expect(init.headers.Authorization).toBe('Bearer test-token');
+    expect(init.credentials).toBe('include');
+    expect(init.headers['X-Go-CSRF']).toBe('test-csrf');
+    expectNoAuthorizationHeader();
     expect(JSON.parse(init.body)).toEqual({});
+  });
+
+  // 3b. The CSRF header is omitted entirely when no proof is available
+  it('omits X-Go-CSRF entirely when no CSRF proof is available', async () => {
+    // A session can be authenticated before the CSRF proof lands; the header must
+    // be added defensively, never sent as an empty/undefined value.
+    mockAuth = { isAuthenticated: true, csrfToken: null };
+    globalThis.fetch.mockResolvedValue({
+      ok: true,
+      json: async () => ({ response: { data: [] } }),
+    });
+
+    const user = userEvent.setup();
+    renderKebab(NOT_POSTED);
+    await user.click(screen.getByText('financeAccountMovementsRowPost'));
+
+    const [, init] = globalThis.fetch.mock.calls[0];
+    expect(Object.keys(init.headers)).not.toContain('X-Go-CSRF');
+    expect(init.credentials).toBe('include');
+    expectNoAuthorizationHeader();
   });
 
   // 4. On success → toast.success + onReload
@@ -201,6 +244,7 @@ describe('MovementRowKebab — Post action', () => {
 
 describe('MovementRowKebab — Unpost action', () => {
   beforeEach(() => {
+    mockAuth = { isAuthenticated: true, csrfToken: 'test-csrf' };
     toastSuccess.mockClear();
     toastError.mockClear();
     globalThis.fetch = vi.fn();
@@ -241,7 +285,9 @@ describe('MovementRowKebab — Unpost action', () => {
     const [url, init] = globalThis.fetch.mock.calls[0];
     expect(url).toContain('/sws/neo/financial-account/transaction/mov-2/action/unpost');
     expect(init.method).toBe('POST');
-    expect(init.headers.Authorization).toBe('Bearer test-token');
+    expect(init.credentials).toBe('include');
+    expect(init.headers['X-Go-CSRF']).toBe('test-csrf');
+    expectNoAuthorizationHeader();
   });
 
   // 4. On success → toast.success (reused documentUnposted key) + onReload

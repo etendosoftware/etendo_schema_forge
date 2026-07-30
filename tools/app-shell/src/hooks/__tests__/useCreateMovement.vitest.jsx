@@ -1,7 +1,20 @@
+/**
+ * ETP-4576 — the session is a server-side `__Host-go_session` cookie, so these
+ * hooks hold no bearer token: every request must carry `credentials: 'include'`
+ * and NO Authorization header. Every action here is a POST (an unsafe method),
+ * so each must also carry the session-bound `X-Go-CSRF` proof, and must omit
+ * that header entirely when no proof is available yet.
+ *
+ * The auth mock is a plain mutable object rather than a vi.fn() with
+ * mockReturnValueOnce: React can invoke the hook more than once per render, and
+ * a "once" override would decay to the default mid-render.
+ */
 import { renderHook, act, waitFor } from '@testing-library/react';
 
+let mockAuth = { isAuthenticated: true, csrfToken: 'test-csrf' };
+
 vi.mock('@/auth/AuthContext.jsx', () => ({
-  useAuth: () => ({ token: 'test-token' }),
+  useAuth: () => mockAuth,
 }));
 
 import {
@@ -18,8 +31,19 @@ function setPathname(pathname) {
   });
 }
 
+/** Asserts no request carried a bearer token — the point of ETP-4576. */
+function expectNoAuthorizationHeader() {
+  for (const [, init] of globalThis.fetch.mock.calls) {
+    const headers = init?.headers ?? {};
+    const keys = Object.keys(headers).map((k) => k.toLowerCase());
+    expect(keys).not.toContain('authorization');
+    expect(JSON.stringify(headers)).not.toContain('Bearer');
+  }
+}
+
 describe('useCreateMovement', () => {
   beforeEach(() => {
+    mockAuth = { isAuthenticated: true, csrfToken: 'test-csrf' };
     setPathname('/etendo/web/app');
     globalThis.fetch = vi.fn();
   });
@@ -35,7 +59,7 @@ describe('useCreateMovement', () => {
     expect(typeof result.current.createMovement).toBe('function');
   });
 
-  it('POSTs the payload to /financial-account-transactions?action=create with bearer auth', async () => {
+  it('POSTs the payload to /financial-account-transactions?action=create with the cookie session', async () => {
     globalThis.fetch.mockResolvedValue({
       ok: true,
       json: async () => ({ response: { data: { id: 'mov-1', trxType: 'BPD' } } }),
@@ -55,10 +79,27 @@ describe('useCreateMovement', () => {
       '/etendo/sws/neo/financial-account-transactions?action=create',
     );
     expect(init.method).toBe('POST');
-    expect(init.headers.Authorization).toBe('Bearer test-token');
+    expect(init.credentials).toBe('include');
+    expect(init.headers['X-Go-CSRF']).toBe('test-csrf');
+    expectNoAuthorizationHeader();
     expect(init.headers['Content-Type']).toBe('application/json');
     expect(JSON.parse(init.body)).toEqual(payload);
     expect(res).toEqual({ id: 'mov-1', trxType: 'BPD' });
+  });
+
+  it('omits X-Go-CSRF entirely when no CSRF proof is available', async () => {
+    // A session can be authenticated before the CSRF proof lands; the header must
+    // be added defensively, never sent as an empty/undefined value.
+    mockAuth = { isAuthenticated: true, csrfToken: null };
+    globalThis.fetch.mockResolvedValue({ ok: true, json: async () => ({ response: { data: {} } }) });
+
+    const { result } = renderHook(() => useCreateMovement());
+    await act(async () => { await result.current.createMovement({}); });
+
+    const [, init] = globalThis.fetch.mock.calls[0];
+    expect(Object.keys(init.headers)).not.toContain('X-Go-CSRF');
+    expect(init.credentials).toBe('include');
+    expectNoAuthorizationHeader();
   });
 
   it('flips the creating flag during the call and back to false after', async () => {
@@ -150,6 +191,7 @@ describe('useCreateMovement', () => {
 // { id } to ?action=<verb>. Parametrized to keep the coverage symmetric.
 describe('movement lifecycle hooks', () => {
   beforeEach(() => {
+    mockAuth = { isAuthenticated: true, csrfToken: 'test-csrf' };
     setPathname('/etendo/web/app');
     globalThis.fetch = vi.fn();
   });
@@ -166,7 +208,7 @@ describe('movement lifecycle hooks', () => {
 
   for (const { name, hook, fn, busy, action } of CASES) {
     describe(name, () => {
-      it(`starts idle and POSTs { id } to ?action=${action} with bearer auth`, async () => {
+      it(`starts idle and POSTs { id } to ?action=${action} with the cookie session`, async () => {
         globalThis.fetch.mockResolvedValue({
           ok: true,
           json: async () => ({ response: { data: { id: 'mov-1' } } }),
@@ -188,9 +230,27 @@ describe('movement lifecycle hooks', () => {
           `/etendo/sws/neo/financial-account-transactions?action=${action}`,
         );
         expect(init.method).toBe('POST');
-        expect(init.headers.Authorization).toBe('Bearer test-token');
+        expect(init.credentials).toBe('include');
+        expect(init.headers['X-Go-CSRF']).toBe('test-csrf');
+        expectNoAuthorizationHeader();
         expect(JSON.parse(init.body)).toEqual({ id: 'mov-1' });
         expect(res).toEqual({ id: 'mov-1' });
+      });
+
+      it('omits X-Go-CSRF entirely when no CSRF proof is available', async () => {
+        mockAuth = { isAuthenticated: true, csrfToken: null };
+        globalThis.fetch.mockResolvedValue({
+          ok: true,
+          json: async () => ({ response: { data: {} } }),
+        });
+
+        const { result } = renderHook(() => hook());
+        await act(async () => { await result.current[fn]({ id: 'x' }); });
+
+        const [, init] = globalThis.fetch.mock.calls[0];
+        expect(Object.keys(init.headers)).not.toContain('X-Go-CSRF');
+        expect(init.credentials).toBe('include');
+        expectNoAuthorizationHeader();
       });
 
       it('flips the busy flag during the call and clears it after', async () => {

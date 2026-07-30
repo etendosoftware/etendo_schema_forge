@@ -244,6 +244,13 @@ describe('App', () => {
  * inconsistent backend that returns `data.result` as a plain object, or the
  * fully unwrapped `{windowAccess, capabilities}` payload with no wrapper at
  * all.
+ *
+ * ETP-4576 — this GET is authenticated purely by the server-side `__Host-`
+ * session cookie: `credentials: 'include'` and NO Authorization header, under
+ * any auth state the caller can hand in. `session.token` is now always null
+ * (the auth storage is in-memory and no token is ever issued), so the old
+ * `session?.token ? {Authorization: ...} : {}` branch is dead code. Being a safe
+ * method, it must also not carry the `X-Go-CSRF` proof.
  */
 describe('fetchWindowAccess', () => {
   const PAYLOAD = { windowAccess: { W1: 'full' }, capabilities: { showAccountingFields: true } };
@@ -253,11 +260,21 @@ describe('fetchWindowAccess', () => {
   });
 
   function stubFetch(response) {
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(response));
+    const spy = vi.fn().mockResolvedValue(response);
+    vi.stubGlobal('fetch', spy);
+    return spy;
   }
 
   function jsonResponse(body, ok = true) {
     return { ok, json: async () => body };
+  }
+
+  /** Asserts a request carried no bearer token — the point of ETP-4576. */
+  function expectNoAuthorizationHeader(init = {}) {
+    const headerNames = Object.keys(init.headers ?? {}).map((h) => h.toLowerCase());
+    expect(headerNames).not.toContain('authorization');
+    // Belt and braces: no bearer token smuggled through any other init field.
+    expect(JSON.stringify(init).toLowerCase()).not.toContain('bearer');
   }
 
   it('parses data.result when it is a JSON string (real/current backend shape)', async () => {
@@ -300,6 +317,35 @@ describe('fetchWindowAccess', () => {
     vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('network down')));
     const result = await fetchWindowAccess({ token: 'tok' });
     expect(result).toBeNull();
+  });
+
+  it("sends credentials: 'include' so the __Host- session cookie travels", async () => {
+    const spy = stubFetch(jsonResponse({ result: JSON.stringify(PAYLOAD) }));
+    await fetchWindowAccess({});
+    expect(spy.mock.calls[0][1]).toEqual(
+      expect.objectContaining({ method: 'GET', credentials: 'include' }),
+    );
+  });
+
+  it('sends no Authorization header even when the session object still carries a token', async () => {
+    // The hostile case for the dead `session?.token` branch: a caller hands a
+    // token down anyway and it must still never reach the wire.
+    const spy = stubFetch(jsonResponse({ result: JSON.stringify(PAYLOAD) }));
+    await fetchWindowAccess({ token: 'tok' });
+    expectNoAuthorizationHeader(spy.mock.calls[0][1]);
+  });
+
+  it('sends no Authorization header when there is no session object at all', async () => {
+    const spy = stubFetch(jsonResponse({ result: JSON.stringify(PAYLOAD) }));
+    await fetchWindowAccess(undefined);
+    expectNoAuthorizationHeader(spy.mock.calls[0][1]);
+  });
+
+  it('does not carry the X-Go-CSRF proof on this safe GET', async () => {
+    const spy = stubFetch(jsonResponse({ result: JSON.stringify(PAYLOAD) }));
+    await fetchWindowAccess({ token: 'tok', csrfToken: 'csrf-abc' });
+    const [, init = {}] = spy.mock.calls[0];
+    expect(Object.keys(init.headers ?? {})).not.toContain('X-Go-CSRF');
   });
 });
 

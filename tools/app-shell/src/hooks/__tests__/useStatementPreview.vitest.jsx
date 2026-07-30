@@ -1,7 +1,20 @@
+/**
+ * ETP-4576 — the session is a server-side `__Host-go_session` cookie, so this
+ * hook holds no bearer token: the request must carry `credentials: 'include'`
+ * and NO Authorization header. The single call is a POST (an unsafe method), so
+ * it must also carry the session-bound `X-Go-CSRF` proof, and must omit that
+ * header entirely when no proof is available yet.
+ *
+ * The auth mock is a plain mutable object rather than a vi.fn() with
+ * mockReturnValueOnce: React can invoke the hook more than once per render, and
+ * a "once" override would decay to the default mid-render.
+ */
 import { renderHook, act, waitFor } from '@testing-library/react';
 
+let mockAuth = { isAuthenticated: true, csrfToken: 'test-csrf' };
+
 vi.mock('@/auth/AuthContext.jsx', () => ({
-  useAuth: () => ({ token: 'test-token' }),
+  useAuth: () => mockAuth,
 }));
 
 import { useStatementPreview } from '../useStatementPreview.js';
@@ -13,8 +26,19 @@ function setPathname(pathname) {
   });
 }
 
+/** Asserts no request carried a bearer token — the point of ETP-4576. */
+function expectNoAuthorizationHeader() {
+  for (const [, init] of globalThis.fetch.mock.calls) {
+    const headers = init?.headers ?? {};
+    const keys = Object.keys(headers).map((k) => k.toLowerCase());
+    expect(keys).not.toContain('authorization');
+    expect(JSON.stringify(headers)).not.toContain('Bearer');
+  }
+}
+
 describe('useStatementPreview', () => {
   beforeEach(() => {
+    mockAuth = { isAuthenticated: true, csrfToken: 'test-csrf' };
     setPathname('/etendo/web/app');
     globalThis.fetch = vi.fn();
   });
@@ -51,13 +75,32 @@ describe('useStatementPreview', () => {
     const [url, init] = globalThis.fetch.mock.calls[0];
     expect(url).toBe('/etendo/sws/neo/bank-statements?action=preview');
     expect(init.method).toBe('POST');
-    expect(init.headers.Authorization).toBe('Bearer test-token');
+    expect(init.credentials).toBe('include');
+    expect(init.headers['X-Go-CSRF']).toBe('test-csrf');
+    expectNoAuthorizationHeader();
     expect(JSON.parse(init.body)).toEqual({
       FIN_Financial_Account_ID: 'acc-1',
       fileName: 'ext.c43',
       contentBase64: 'AAAA',
     });
     expect(res).toEqual({ format: 'C43', lineCount: 7 });
+  });
+
+  it('omits X-Go-CSRF entirely when no CSRF proof is available', async () => {
+    // A session can be authenticated before the CSRF proof lands; the header must
+    // be added defensively, never sent as an empty/undefined value.
+    mockAuth = { isAuthenticated: true, csrfToken: null };
+    globalThis.fetch.mockResolvedValue({ ok: true, json: async () => ({ response: { data: {} } }) });
+
+    const { result } = renderHook(() => useStatementPreview());
+    await act(async () => {
+      await result.current.previewStatement({ accountId: 'a', fileName: 'f', contentBase64: 'x' });
+    });
+
+    const [, init] = globalThis.fetch.mock.calls[0];
+    expect(Object.keys(init.headers)).not.toContain('X-Go-CSRF');
+    expect(init.credentials).toBe('include');
+    expectNoAuthorizationHeader();
   });
 
   it('flips previewing during the call', async () => {

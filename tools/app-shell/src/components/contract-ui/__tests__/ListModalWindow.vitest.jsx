@@ -25,9 +25,18 @@ vi.mock('@/i18n', () => ({
   useLabel: () => (column) => column,
 }));
 
-// Auth: token comes from context unless passed as a prop.
+// Auth (ETP-4576): the session is a server-side `__Host-go_session` cookie, so
+// there is no client-held token — the context only supplies `isAuthenticated`
+// and the `csrfToken` proof. Every request must carry `credentials: 'include'`
+// and NO Authorization header; the four mutations here (POST / PUT / PATCH /
+// DELETE) are unsafe methods, so each must also carry `X-Go-CSRF`.
+//
+// The mock is a plain mutable object rather than a vi.fn() with
+// mockReturnValueOnce: React can invoke the hook more than once per render, and
+// a "once" override would decay to the default mid-render.
+let mockAuth = { isAuthenticated: true, csrfToken: 'test-csrf' };
 vi.mock('@/auth/AuthContext.jsx', () => ({
-  useAuth: () => ({ token: 'ctx-token' }),
+  useAuth: () => mockAuth,
 }));
 
 // Page meta is a no-op side effect in tests.
@@ -144,6 +153,8 @@ function renderWindow(overrides = {}) {
     config: {},
     api: { baseUrl: '/sws/neo/match-rule' },
     apiBaseUrl: API_BASE,
+    // ETP-4576: a `token` prop is still passed deliberately — even when a caller
+    // hands one down, no Authorization header may reach the wire.
     token: 'tok-123',
     ...overrides,
   };
@@ -154,7 +165,18 @@ function rowCount() {
   return screen.queryAllByTestId(/^list-modal-row-/).length;
 }
 
+/** Asserts no request carried a bearer token — the point of ETP-4576. */
+function expectNoAuthorizationHeader() {
+  for (const [, init] of global.fetch.mock.calls) {
+    const headers = init?.headers ?? {};
+    const keys = Object.keys(headers).map((k) => k.toLowerCase());
+    expect(keys).not.toContain('authorization');
+    expect(JSON.stringify(headers)).not.toContain('Bearer');
+  }
+}
+
 beforeEach(() => {
+  mockAuth = { isAuthenticated: true, csrfToken: 'test-csrf' };
   neoState.data = [];
   neoState.loading = false;
   neoState.reload = vi.fn();
@@ -329,6 +351,9 @@ describe('ListModalWindow — save method selection', () => {
     const [url, opts] = global.fetch.mock.calls[0];
     expect(url).toBe(`${API_BASE}/${ENTITY}`);
     expect(opts.method).toBe('POST');
+    expect(opts.credentials).toBe('include');
+    expect(opts.headers['X-Go-CSRF']).toBe('test-csrf');
+    expectNoAuthorizationHeader();
   });
 
   it('PUTs to {apiBaseUrl}/{entity}/{id} when editing an existing record', async () => {
@@ -348,6 +373,29 @@ describe('ListModalWindow — save method selection', () => {
     const [url, opts] = global.fetch.mock.calls[0];
     expect(url).toBe(`${API_BASE}/${ENTITY}/ROW-42`);
     expect(opts.method).toBe('PUT');
+    expect(opts.credentials).toBe('include');
+    expect(opts.headers['X-Go-CSRF']).toBe('test-csrf');
+    expectNoAuthorizationHeader();
+  });
+
+  it('omits X-Go-CSRF entirely when no CSRF proof is available', async () => {
+    // A session can be authenticated before the CSRF proof lands; the header must
+    // be added defensively, never sent as an empty/undefined value.
+    mockAuth = { isAuthenticated: true, csrfToken: null };
+    renderWindow();
+    fireEvent.click(screen.getByTestId('list-modal-new'));
+
+    await act(async () => {
+      lastEntityFormProps.onChange('name', 'New rule');
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('list-modal-submit'));
+    });
+
+    const [, opts] = global.fetch.mock.calls[0];
+    expect(Object.keys(opts.headers)).not.toContain('X-Go-CSRF');
+    expect(opts.credentials).toBe('include');
+    expectNoAuthorizationHeader();
   });
 });
 
@@ -364,7 +412,32 @@ describe('ListModalWindow — inline toggle', () => {
     const [url, opts] = global.fetch.mock.calls[0];
     expect(url).toBe(`${API_BASE}/${ENTITY}/ROW-7`);
     expect(opts.method).toBe('PATCH');
+    expect(opts.credentials).toBe('include');
+    expect(opts.headers['X-Go-CSRF']).toBe('test-csrf');
+    expectNoAuthorizationHeader();
     expect(JSON.parse(opts.body)).toEqual({ active: true });
+  });
+});
+
+describe('ListModalWindow — row delete', () => {
+  it('DELETEs {apiBaseUrl}/{entity}/{id} with the CSRF proof and no Authorization', async () => {
+    neoState.data = [{ id: 'ROW-9', name: 'Doomed' }];
+    renderWindow();
+
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('list-modal-delete-ROW-9'));
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('list-modal-delete-confirm'));
+    });
+
+    expect(global.fetch).toHaveBeenCalledTimes(1);
+    const [url, opts] = global.fetch.mock.calls[0];
+    expect(url).toBe(`${API_BASE}/${ENTITY}/ROW-9`);
+    expect(opts.method).toBe('DELETE');
+    expect(opts.credentials).toBe('include');
+    expect(opts.headers['X-Go-CSRF']).toBe('test-csrf');
+    expectNoAuthorizationHeader();
   });
 });
 
