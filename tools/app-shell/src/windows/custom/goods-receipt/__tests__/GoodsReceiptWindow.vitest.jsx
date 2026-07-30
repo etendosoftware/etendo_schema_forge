@@ -3,6 +3,7 @@ vi.mock('@generated/goods-receipt/generated/web/goods-receipt/index.jsx', () => 
     <div
       data-testid="generated-app"
       data-initial-filters={initialColumnFilters ? JSON.stringify(initialColumnFilters) : ''}
+      data-hide-delete-when-complete={String(!!rowQuickActions?.hideDeleteWhenComplete)}
     >
       <button
         data-testid="trigger-email"
@@ -238,6 +239,16 @@ describe('GoodsReceiptWindow', () => {
     render(<GoodsReceiptWindow {...DEFAULT_PROPS} />);
     fireEvent.click(screen.getByTestId('trigger-edit'));
     expect(mockNavigate).toHaveBeenCalledWith('/goods-receipt/row-1');
+  });
+
+  // ── rowQuickActions.hideDeleteWhenComplete ─────────────────────────────────
+
+  it('ETP-4656: does not gate the grid delete icon by document status', () => {
+    render(<GoodsReceiptWindow {...DEFAULT_PROPS} />);
+    expect(screen.getByTestId('generated-app')).toHaveAttribute(
+      'data-hide-delete-when-complete',
+      'false',
+    );
   });
 
   // ── refreshKey increments on delete success ────────────────────────────────

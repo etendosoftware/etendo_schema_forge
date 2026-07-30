@@ -160,6 +160,61 @@ export async function extractErrorMessage(res, ui) {
                 return translate('validationDuplicateRecord', 'A record with the same value already exists.');
             }
 
+            // Delete rejected by a DB foreign-key/RESTRICT constraint — the record
+            // has dependent rows in another table. The raw text reaching here is the
+            // underlying Postgres exception (Etendo's DefaultJsonDataService passes it
+            // through largely untranslated), so it can come in English or Spanish
+            // depending on the DB server locale. ETP-4656: standardize both into one
+            // clear, actionable message.
+            //
+            // IMPORTANT — this must NOT match on the bare "violates foreign key
+            // constraint" / "viola la (llave|clave) foránea" phrase alone: Postgres
+            // emits that identical wording for BOTH directions of an FK error —
+            // delete/update blocked by a dependent row (RESTRICT) AND insert/update
+            // with a reference to a non-existent row (e.g. saving a line with a
+            // stale product id). `normalizeServerError` is shared by handleSave/
+            // handleAddChild/handleSaveAndProcess too, not just handleDelete, so a
+            // save-side FK error must NOT get mislabeled with a delete-specific
+            // message. Only match the DETAIL-line wording that is unique to the
+            // delete-blocked (RESTRICT) side: "is still referenced from table" (EN)
+            // / "(aún )?se hace referencia a la (llave|clave)" (ES) — the
+            // insert/update side's DETAIL instead reads "is not present in table" /
+            // "no está presente en la tabla", which never matches here.
+            if (
+                /is\s+still\s+referenced\s+from\s+table/i.test(decoded)
+                || /(a[uú]n\s+)?se\s+hace\s+referencia\s+a\s+la\s+(llave|clave)/i.test(decoded)
+            ) {
+                return translate('deleteBlockedByReferences', 'This record cannot be deleted because it has associated records.');
+            }
+
+            // Classic Etendo AD_Message "ForeignKeyViolation" (AD_MESSAGE_ID
+            // 716A7D748A979ED8E040007F01015931 / 81B47DEBF9E94A369C4629562A90A2B2 — two
+            // near-duplicate ES translation rows exist, match both) — the actual
+            // real-world path for most AD-managed entities (e.g. Contacts): OBDal's
+            // `ErrorTextParser.handleConstraintViolation` (schema_forge's sibling Etendo
+            // core, org.openbravo.erpCommon.utility) recognizes the raw Postgres FK
+            // constraint text via the DB catalog and — BEFORE it ever reaches this
+            // function — replaces it with this already-translated, generic AD_Message,
+            // so the "is still referenced from table" branch above never fires for this
+            // path. English: "This record cannot be deleted because it is associated
+            // with other existing elements. Please see Linked Items".
+            //
+            // NOTE: unlike the raw-Postgres branch above, this AD_Message is used by
+            // ErrorTextParser for BOTH directions of an FK violation (its own source
+            // comment: "Text is always 'You cannot delete this record...' as we do not
+            // have enough context information to distinguish insert/update or delete
+            // here") — Etendo's own backend already mislabels the insert/update case
+            // with "cannot be deleted" wording before this ever reaches the frontend, so
+            // standardizing it here does not introduce a new mislabeling beyond that
+            // pre-existing upstream limitation (there is no textual signal left to
+            // disambiguate by the time it gets here, unlike the raw-Postgres path).
+            if (
+                /cannot\s+be\s+deleted\s+because\s+it\s+is\s+associated\s+with\s+other\s+existing\s+elements/i.test(decoded)
+                || /relacionad[oa]\s+con\s+otros\s+elementos(\s+existentes)?/i.test(decoded)
+            ) {
+                return translate('deleteBlockedByReferences', 'This record cannot be deleted because it has associated records.');
+            }
+
             // ETP-4597: Etendo AD's backend core sometimes rewrites the raw Postgres
             // unique-constraint violation into an already-translated sentence that
             // names the AD entity's technical field group before it reaches the
@@ -1175,8 +1230,11 @@ export function useEntity(entity, childEntity, {
         }
     }, [editing, selected, apiBaseUrl, entity, specName, refetchAfterSave, token, ui, fetchChildren]);
 
+    // Returns true on success, false on failure — callers (e.g. DetailView's
+    // confirmHeaderDelete) MUST check this before navigating away, otherwise a
+    // failed delete (e.g. FK constraint) silently navigates as if it succeeded.
     const handleDelete = useCallback(async () => {
-        if (!selected?.id) return;
+        if (!selected?.id) return false;
         try {
             const res = await fetch(`${apiBaseUrl}/${entity}/${selected.id}`, { method: 'DELETE', headers });
             if (res.ok) {
@@ -1185,12 +1243,15 @@ export function useEntity(entity, childEntity, {
                 setChildren([]);
                 toast.success(ui('recordDeleted'));
                 refresh();
+                return true;
             } else {
                 const msg = await extractErrorMessage(res, ui);
                 toast.error(msg);
+                return false;
             }
         } catch (err) {
             toast.error(err?.message || 'Network error');
+            return false;
         }
     }, [selected, apiBaseUrl, entity, token, refresh, ui]);
 

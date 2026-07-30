@@ -637,15 +637,21 @@ export function EntityForm({ entity, fields = [], data, onChange, catalogs, layo
   }
 
   // Apply visibility from evaluate-display (hide fields where visibility === false).
-  // Only honor the evaluate-display result if the field itself declares a displayLogic
-  // in its contract definition. Fields without displayLogic have a static visibility
-  // decision that evaluate-display must not override (prevents AD displayLogic bugs
-  // from incorrectly hiding fields like businessPartner).
+  // Only honor the evaluate-display result if the field declares server-side gating —
+  // either a truthy `displayLogic` value OR `visibilitySource === 'server'` (the marker
+  // generate-frontend.js emits for non-evaluable raw AD expressions, e.g. server macros
+  // like @ACCT_DIMENSION_DISPLAY@ — those fields carry NO `displayLogic` property at all,
+  // only `visible: null, visibilitySource: 'server', displayLogicReason: '...'`, per
+  // buildDisplayLogicPart() in generate-frontend.js). Fields with neither marker have a
+  // static visibility decision that evaluate-display must not override (prevents AD
+  // displayLogic bugs from incorrectly hiding fields like businessPartner).
   // Fields with a function-based displayLogic are handled entirely client-side (second
   // filter below) and must NOT be removed here — the server result is irrelevant for them.
   if (displayLogic?.visibility && Object.keys(displayLogic.visibility).length > 0) {
     displayFields = displayFields.filter(f =>
-      typeof f.displayLogic === 'function' || !f.displayLogic || displayLogic.visibility[f.key] !== false
+      typeof f.displayLogic === 'function'
+        || (!f.displayLogic && f.visibilitySource !== 'server')
+        || displayLogic.visibility[f.key] !== false
     );
   }
 
@@ -1146,7 +1152,30 @@ export function EntityForm({ entity, fields = [], data, onChange, catalogs, layo
           disabled={isReadOnly}
           id={f.key}
           data-testid={`field-${f.key}`}
-          onClick={() => !isReadOnly && onChange?.(f.key, !checked, f.column)}
+          onClick={() => {
+            if (isReadOnly) return;
+            onChange?.(f.key, !checked, f.column);
+            // Checkboxes have no native blur event to hang autosave off of
+            // (unlike text/selector fields, whose onBlur already drives
+            // autoSaveOnBlur — see DetailView's handleFieldBlur). Firing
+            // onFieldBlur right after onChange gives checkbox/toggle fields
+            // the same immediate-save + error-toast + revert-on-failure
+            // behavior. No-op when the window doesn't pass onFieldBlur
+            // (autoSaveOnBlur off). ETP-4670.
+            //
+            // MUST be deferred to a macrotask (setTimeout 0), not called
+            // synchronously: onChange schedules a React state update that
+            // hasn't committed yet when this handler runs, so DetailView's
+            // handleFieldBlurRef still holds the closure from the PREVIOUS
+            // render — hasUnsavedEdits(oldEditing, selected) sees no diff
+            // (the flip hasn't landed in `editing` yet) and handleSave()
+            // never fires. React flushes the re-render before a setTimeout(0)
+            // callback runs, so by then the ref has the fresh closure with
+            // the flipped value already in `editing`. A queueMicrotask does
+            // NOT work here — microtasks run before the browser yields to
+            // paint/commit, still ahead of the DOM-effect timing React needs.
+            setTimeout(() => onFieldBlur?.(f.key), 0);
+          }}
           className={[
             'peer h-4 w-4 shrink-0 rounded-sm border border-primary shadow',
             'flex items-center justify-center',
@@ -1189,7 +1218,16 @@ export function EntityForm({ entity, fields = [], data, onChange, catalogs, layo
         <PillToggle
           checked={checked}
           disabled={isReadOnly}
-          onCheckedChange={(next) => !isReadOnly && onChange?.(f.key, next, f.column)}
+          onCheckedChange={(next) => {
+            if (isReadOnly) return;
+            onChange?.(f.key, next, f.column);
+            // See renderCheckboxField above (ETP-4670): toggles have no blur
+            // event either, so fire onFieldBlur right after onChange — but
+            // deferred to setTimeout(0), not synchronously (same stale-ref
+            // race as the checkbox: onChange's state update hasn't committed
+            // when this handler runs).
+            setTimeout(() => onFieldBlur?.(f.key), 0);
+          }}
           id={f.key}
           data-testid={`field-${f.key}`} />
         <Label

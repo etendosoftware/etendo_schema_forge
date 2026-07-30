@@ -340,6 +340,97 @@ describe('EntityForm — extended render coverage', () => {
     expect(screen.getByText('FuncField')).toBeInTheDocument();
   });
 
+  // --- Server-macro fields (ETP-4529 regression) ---
+  //
+  // generate-frontend.js's buildDisplayLogicPart() emits NO `displayLogic`
+  // property at all for non-evaluable raw AD expressions (server macros like
+  // `@ACCT_DIMENSION_DISPLAY@`) — only `visible: null`, `visibilitySource:
+  // 'server'`, and `displayLogicReason`. The OLD visibility filter read
+  // `!f.displayLogic` alone as "static, always visible" for ANY field lacking
+  // a `displayLogic` key, which silently swallowed these fields too — the
+  // evaluate-display result never reached them, so they always rendered
+  // regardless of what the server said. The fix added the
+  // `f.visibilitySource !== 'server'` guard so only genuinely static fields
+  // (no displayLogic key AND no server marker) are exempt from the server
+  // visibility check.
+
+  it('hides a server-macro field (visibilitySource: server, no displayLogic key) when server visibility is false', () => {
+    const fields = [
+      {
+        key: 'dimensionField',
+        label: 'DimensionField',
+        type: 'text',
+        column: 'DimensionField',
+        // Real generated shape for e.g. @ACCT_DIMENSION_DISPLAY@ — deliberately
+        // has NO `displayLogic` property.
+        visible: null,
+        visibilitySource: 'server',
+        displayLogicReason: 'server-macro',
+      },
+    ];
+    render(
+      <EntityForm
+        fields={fields}
+        data={{}}
+        onChange={vi.fn()}
+        displayLogic={{ visibility: { dimensionField: false }, readOnly: {} }}
+      />,
+    );
+    // Under the old `!f.displayLogic` check this field would still render —
+    // it has no `displayLogic` key so the old code treated it as static.
+    expect(screen.queryByText('DimensionField')).not.toBeInTheDocument();
+  });
+
+  it('shows a server-macro field when server visibility is true', () => {
+    const fields = [
+      {
+        key: 'dimensionField',
+        label: 'DimensionField',
+        type: 'text',
+        column: 'DimensionField',
+        visible: null,
+        visibilitySource: 'server',
+        displayLogicReason: 'server-macro',
+      },
+    ];
+    render(
+      <EntityForm
+        fields={fields}
+        data={{}}
+        onChange={vi.fn()}
+        displayLogic={{ visibility: { dimensionField: true }, readOnly: {} }}
+      />,
+    );
+    expect(screen.getByText('DimensionField')).toBeInTheDocument();
+  });
+
+  it('shows a server-macro field (fail-open) when its key is absent from the visibility map', () => {
+    const fields = [
+      {
+        key: 'dimensionField',
+        label: 'DimensionField',
+        type: 'text',
+        column: 'DimensionField',
+        visible: null,
+        visibilitySource: 'server',
+        displayLogicReason: 'server-macro',
+      },
+      // A second field carries a non-empty visibility map (so the filter step
+      // actually runs) without mentioning dimensionField at all — mirrors the
+      // backend's own fail-open convention for fields it hasn't evaluated yet.
+      { key: 'other', label: 'Other', type: 'text', column: 'Other' },
+    ];
+    render(
+      <EntityForm
+        fields={fields}
+        data={{}}
+        onChange={vi.fn()}
+        displayLogic={{ visibility: { other: true }, readOnly: {} }}
+      />,
+    );
+    expect(screen.getByText('DimensionField')).toBeInTheDocument();
+  });
+
   // --- Server-side readOnly ---
 
   it('disables a field when displayLogic.readOnly[key] is true', () => {
