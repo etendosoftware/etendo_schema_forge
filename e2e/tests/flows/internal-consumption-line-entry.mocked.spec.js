@@ -174,9 +174,11 @@ test.describe('Internal Consumption — inline line entry (mocked)', () => {
       .or(inlineAddRow.getByTestId('inline-add-cell-storageBin'));
 
     await expect(productCell).toContainText('Widget Co. 10mm');
-    // storageBin renders as an <input> (InlineSearchCombo) in inline-add mode,
-    // so textContent is empty — assert the input value instead.
-    await expect(storageCell.locator('input')).toHaveValue(/Main Warehouse/);
-    await expect(storageCell.locator('input')).not.toHaveValue(/LOC-1/);
+    // storageBin now has a committed value (auto-filled by onSelectMappings), so
+    // InlineSearchCombo (ETP-4600) renders it as a chip (`inline-add-field-storageBin-chip`),
+    // not the plain input — assert the chip's label text instead of an input value.
+    const storageChip = storageCell.getByTestId('inline-add-field-storageBin-chip');
+    await expect(storageChip).toContainText('Main Warehouse');
+    await expect(storageChip).not.toContainText('LOC-1');
   });
 });

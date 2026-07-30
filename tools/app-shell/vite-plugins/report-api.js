@@ -11,11 +11,30 @@ import { readFileSync, readdirSync, existsSync } from 'node:fs';
 import { createRequire } from 'node:module';
 const _require = createRequire(import.meta.url);
 import { resolve, join } from 'node:path';
-import { registerReportHelpers } from '../../../templates/reports/helpers/report-html-helpers.js';
+import { registerReportHelpers, buildJsreportHelpersString } from '../../../templates/reports/helpers/report-html-helpers.js';
 
 const ARTIFACTS_DIR = resolve(import.meta.dirname, '../../../artifacts');
 const ROOT = resolve(ARTIFACTS_DIR, '..');
 const JSREPORT_URL = process.env.JSREPORT_URL || 'http://localhost:5488';
+
+// ETP-4314 — instance-wide currency separators, fetched once from the same
+// NEO Headless config endpoint the browser reads (currencyFormatConfig.js),
+// so both sides of the jsreport helper string bake in the same values instead
+// of hardcoding them independently. Fails soft to '.'/',' — a config outage
+// must never break report rendering.
+let currencySeparatorsPromise = null;
+async function getReportCurrencySeparators() {
+  if (currencySeparatorsPromise) return currencySeparatorsPromise;
+  const etendoBase = process.env.ETENDO_URL || 'http://localhost:8080/etendo';
+  currencySeparatorsPromise = fetch(`${etendoBase}/sws/neo/currency-format`)
+    .then((res) => (res.ok ? res.json() : Promise.reject(new Error(`status ${res.status}`))))
+    .then((data) => ({
+      thousandsSeparator: typeof data?.thousandsSeparator === 'string' ? data.thousandsSeparator : '.',
+      decimalSeparator: typeof data?.decimalSeparator === 'string' ? data.decimalSeparator : ',',
+    }))
+    .catch(() => ({ thousandsSeparator: '.', decimalSeparator: ',' }));
+  return currencySeparatorsPromise;
+}
 
 // Decode JWT payload (no verification needed — dev proxy only) to extract Etendo claims.
 function getClientIdFromRequest(req) {
@@ -601,10 +620,26 @@ export default function reportApiPlugin() {
 
               // Register the trusted in-repo helper set — no dynamic code execution.
               // helpersCode is read (not executed) only to preserve a report's
-              // formatNumber decimals. Report-specific helpers (e.g. qrCode) are only
-              // needed by the jsreport PDF/XLSX path below, which consumes the artifact
-              // helpers.js string directly.
+              // formatNumber decimals.
               registerReportHelpers(Handlebars, helpersCode);
+
+              // qrCode is report-specific (only document-type reports reference it)
+              // and async (QRCode.toDataURL returns a Promise) — Handlebars.compile()
+              // is synchronous, so it can't be registered as a per-report extra like
+              // the jsreport path does below. Precompute it once here (generic content
+              // — doc type/number/partner/status — good enough for an on-screen
+              // preview) and register a plain sync helper returning the resolved value.
+              if (documentData?.header) {
+                const QRCode = _require('qrcode');
+                const header = documentData.header;
+                const parts = [];
+                if (header.doc_type) parts.push('T:' + header.doc_type);
+                if (header.documentno) parts.push('N:' + header.documentno);
+                if (header.bp_name) parts.push('BP:' + header.bp_name);
+                if (header.status) parts.push('S:' + header.status);
+                const qrDataUrl = await QRCode.toDataURL(parts.length ? parts.join('|') : 'empty', { width: 120, margin: 1 });
+                Handlebars.registerHelper('qrCode', () => qrDataUrl);
+              }
 
               const template = Handlebars.compile(templateContent);
               const html = template(templateData);
@@ -613,8 +648,16 @@ export default function reportApiPlugin() {
               return;
             }
 
+            // Serialize the same canonical helpers used above for the HTML preview,
+            // plus only this report's specific extras (e.g. qrCode) — a single
+            // source of truth for both render paths instead of a hand-maintained
+            // copy per report. See buildJsreportHelpersString() for why jsreport
+            // (a separate Docker container, reachable only over HTTP) can't just
+            // import formatCurrency()/this module directly. Never inline a second
+            // currency formatter here — see CLAUDE.md § Currency & Amount Formatting.
+            const separators = await getReportCurrencySeparators();
             const payload = {
-              template: { content: templateContent, engine: 'handlebars', recipe, helpers: helpersCode },
+              template: { content: templateContent, engine: 'handlebars', recipe, helpers: buildJsreportHelpersString(helpersCode, undefined, separators) },
               data: templateData,
             };
 

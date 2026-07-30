@@ -171,7 +171,7 @@ test.describe('Financial Accounts list — Cuentas', () => {
     await expect(page.getByTestId('cell-acc-1-name')).toContainText('Santander');
     // IBAN is chunked in groups of four by the shared TypeCell.
     await expect(page.getByTestId('cell-acc-1-type')).toContainText('ES12 1234 0000 0000 0000 0001');
-    await expect(page.getByTestId('cell-acc-1-currentBalance')).toContainText('211,841.01');
+    await expect(page.getByTestId('cell-acc-1-currentBalance')).toContainText('211.841,01');
   });
 
   // The sidebar is fed by the `summary` the backend attaches next to `response.data` on the
@@ -181,9 +181,9 @@ test.describe('Financial Accounts list — Cuentas', () => {
   // sidebar rendered 0.00 no matter what the backend sent (unit coverage:
   // `tools/app-shell/src/components/contract-ui/__tests__/ListView.headerContentMeta.vitest.jsx`).
   test('sidebar aggregate values match the summary sibling of response.data', async ({ page }) => {
-    // formatCurrency uses en-US grouping + EUR symbol-after: "273,853.46 €"
+    // formatCurrency uses es-ES locale + EUR (dot-thousands, comma-decimal, symbol-after): "273.853,46 €"
     const balance = page.getByTestId('balance-card');
-    await expect(balance).toContainText('273,853.46');
+    await expect(balance).toContainText('273.853,46');
     await expect(balance).toContainText('€');
 
     await expect(page.getByTestId('balance-by-currency-EUR')).toBeVisible();
