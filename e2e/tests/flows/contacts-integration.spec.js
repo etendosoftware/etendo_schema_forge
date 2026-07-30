@@ -617,4 +617,211 @@ test.describe('Contacts Integration — Full journey', () => {
       page.locator('tbody tr').filter({ hasText: CONTACT_B })
     ).toHaveCount(0, { timeout: 15_000 });
   });
+
+  // ═══════════════════════════════════════════════════════════════════════
+  // Regression — ETP-4700: "+ Crear contacto" from the Sales Order Contacto
+  // selector must succeed. Root cause was a backend defaults/coercion bug
+  // (BusinessPartner.invoiceGrouping, a List-reference column, was mangled
+  // to "0" instead of its real AD_Ref_List code) — unrelated to anything the
+  // frontend sends, but this modal (via CreateContactModal.jsx) is the exact
+  // entry point that surfaced it, so the regression test lives here too.
+  // ═══════════════════════════════════════════════════════════════════════
+  test('ETP-4700 — create contact from Sales Order "Contacto" selector modal', async ({ page }) => {
+    const ts = Date.now();
+    const CONTACT_NAME = `E2E SO Contact ${ts}`;
+    const TAX_ID = `B-${ts}`;
+
+    const loginOpts = onboardingCreds
+      ? { user: onboardingCreds.email, password: onboardingCreds.password }
+      : {};
+    await login(page, loginOpts);
+
+    await navigateTo(page, 'sales-order');
+    const soNewBtn = page.getByTestId('action-new');
+    await expect(soNewBtn).toBeVisible({ timeout: 15_000 });
+    await soNewBtn.click();
+    await expect(page.getByTestId('detail-view')).toBeVisible({ timeout: 15_000 });
+
+    // Open the Contacto selector and trigger "+ Crear contacto"
+    const contactField = page.getByTestId('field-businessPartner');
+    await expect(contactField).toBeVisible({ timeout: 10_000 });
+    await contactField.click();
+
+    const createContactBtn = page.getByTestId('action-create-businessPartner');
+    await expect(createContactBtn).toBeVisible({ timeout: 10_000 });
+    await createContactBtn.click();
+
+    // "Nuevo contacto" modal
+    await expect(page.getByRole('heading', { name: /^nuevo contacto$/i })).toBeVisible({ timeout: 10_000 });
+
+    // Razón social (plain text field — label and input are siblings, no htmlFor)
+    const razonSocialLabel = page.getByText(/^raz[oó]n social/i);
+    const razonSocialInput = razonSocialLabel.locator('xpath=following::input[1]');
+    await razonSocialInput.fill(CONTACT_NAME);
+
+    // Categoría de contacto (required dynamic select). DynamicSelect never
+    // forwards its data-testid prop to the underlying <select> (EntityCreationModal.jsx),
+    // so locate it via the label like the plain text fields above.
+    const categoryLabel = page.getByText(/^categor[ií]a de contacto/i);
+    const categorySelect = categoryLabel.locator('xpath=following::select[1]');
+    await expect(categorySelect).toBeVisible({ timeout: 5_000 });
+    await categorySelect.selectOption({ index: 1 });
+
+    // Clave NIF país residencia (required dynamic select — not listed by the
+    // reporter but enforced by requiredFields in CreateContactModal.jsx)
+    const taxIdTypeLabel = page.getByText(/^clave nif pa[ií]s residencia/i);
+    const taxIdTypeSelect = taxIdTypeLabel.locator('xpath=following::select[1]');
+    await expect(taxIdTypeSelect).toBeVisible({ timeout: 5_000 });
+    await taxIdTypeSelect.selectOption({ index: 1 });
+
+    // CIF/NIF
+    const taxIdLabel = page.getByText(/^cif\/nif/i);
+    const taxIdInput = taxIdLabel.locator('xpath=following::input[1]');
+    await taxIdInput.fill(TAX_ID);
+
+    // País — opens a search dialog (Dirección tab, active by default).
+    // Unlike the Contacts window's own address modal, country IS required here
+    // (see CreateContactModal.jsx requiredFields), so AddressSection renders a
+    // "*" marker inside the same <label> — "País*", not an exact "País" — hence
+    // no end anchor on the regex. Also: this modal uses its own AddressSection.jsx
+    // (distinct from the Contacts window's LocationModalField.jsx), whose picker
+    // button has no aria-haspopup attribute — just the plain button in the field.
+    const paisButton = page.getByText(/^pa[ií]s/i).locator('..').locator('button');
+    await paisButton.click();
+    const countrySearch = page.getByPlaceholder(/buscar pa[ií]s/i);
+    await expect(countrySearch).toBeVisible({ timeout: 5_000 });
+    await countrySearch.fill('Espa');
+    const countryOption = page.getByRole('button', { name: /^espa[nñ]a$/i })
+      .or(page.getByRole('button', { name: /^spain$/i }));
+    await expect(countryOption.first()).toBeVisible({ timeout: 5_000 });
+    await countryOption.first().click();
+
+    // Guardar contacto
+    const saveContactBtn = page.getByRole('button', { name: /^guardar contacto$/i });
+    await expect(saveContactBtn).toBeEnabled({ timeout: 5_000 });
+    const createBpResponse = page.waitForResponse(
+      (resp) => resp.url().includes('/businessPartner') && resp.request().method() === 'POST',
+      { timeout: 15_000 },
+    );
+    await saveContactBtn.click();
+    const bpResponse = await createBpResponse;
+
+    // The core regression check: creation must succeed (2xx), not 400
+    expect(bpResponse.status(), await bpResponse.text().catch(() => '')).toBeLessThan(300);
+
+    // No inline error banner, modal closes, and the new contact is now selected
+    await expect(page.getByRole('heading', { name: /^nuevo contacto$/i })).toBeHidden({ timeout: 10_000 });
+    await expect(page.locator('.bg-destructive').filter({ hasText: /error/i })).toHaveCount(0);
+    await expect(page.getByTestId('field-businessPartner-chip').or(contactField))
+      .toContainText(CONTACT_NAME, { timeout: 10_000 });
+  });
+
+  // Same regression as above, but for contactType='person' — Nombre/Apellido
+  // replace Razón social, and the header grid gains a 4th required field
+  // (see CreateContactModal.jsx requiredFields for 'person'). The underlying
+  // bug is backend-side and type-agnostic, but this exercises the other field
+  // set end to end instead of assuming it behaves the same untested.
+  test('ETP-4700 — create Persona contact from Sales Order "Contacto" selector modal', async ({ page }) => {
+    const ts = Date.now();
+    // Kept short: BusinessPartner.searchKey (auto-derived server-side from
+    // "firstName lastName") has a 40-char DB limit — the full 13-digit
+    // timestamp in both names blew past it.
+    const shortTs = String(ts).slice(-6);
+    const FIRST_NAME = `E2E First ${shortTs}`;
+    const LAST_NAME = `E2E Last ${shortTs}`;
+    const TAX_ID = `B-${ts}`;
+
+    const loginOpts = onboardingCreds
+      ? { user: onboardingCreds.email, password: onboardingCreds.password }
+      : {};
+    await login(page, loginOpts);
+
+    await navigateTo(page, 'sales-order');
+    const soNewBtn = page.getByTestId('action-new');
+    await expect(soNewBtn).toBeVisible({ timeout: 15_000 });
+    await soNewBtn.click();
+    await expect(page.getByTestId('detail-view')).toBeVisible({ timeout: 15_000 });
+
+    const contactField = page.getByTestId('field-businessPartner');
+    await expect(contactField).toBeVisible({ timeout: 10_000 });
+    await contactField.click();
+
+    const createContactBtn = page.getByTestId('action-create-businessPartner');
+    await expect(createContactBtn).toBeVisible({ timeout: 10_000 });
+    await createContactBtn.click();
+
+    await expect(page.getByRole('heading', { name: /^nuevo contacto$/i })).toBeVisible({ timeout: 10_000 });
+
+    // Switch to Persona mode (the toggle button — not the "Persona" tab further
+    // down the modal, which shares the same visible text; the toggle renders
+    // first in the modal, hence .first()).
+    const personaToggle = page.getByRole('button', { name: /^persona$/i }).first();
+    await personaToggle.click();
+
+    // Nombre / Apellido replace Razón social in Persona mode. The toggle
+    // remounts the header field grid (different field ids per contactType),
+    // so wait for the new field to actually be visible before acting on it —
+    // combining click + immediate fill() raced the remount in practice.
+    //
+    // All tabs stay mounted in the DOM at all times (hidden via display:none,
+    // never unmounted — see EntityCreationModal.jsx's tab-content render), so
+    // a loose "starts with Nombre" match also hits "Nombre del banco" (Cuenta
+    // bancaria tab) and the unmarked "Nombre" column header (Persona de
+    // contacto tab). Only the required header field carries the trailing "*"
+    // in its own label text, so match that exactly to stay unique.
+    const firstNameLabel = page.getByText('Nombre*', { exact: true });
+    const firstNameInput = firstNameLabel.locator('xpath=following::input[1]');
+    await expect(firstNameInput).toBeVisible({ timeout: 10_000 });
+    await firstNameInput.fill(FIRST_NAME);
+
+    const lastNameLabel = page.getByText('Apellido*', { exact: true });
+    const lastNameInput = lastNameLabel.locator('xpath=following::input[1]');
+    await expect(lastNameInput).toBeVisible({ timeout: 5_000 });
+    await lastNameInput.fill(LAST_NAME);
+
+    // Categoría de contacto
+    const categoryLabel = page.getByText(/^categor[ií]a de contacto/i);
+    const categorySelect = categoryLabel.locator('xpath=following::select[1]');
+    await expect(categorySelect).toBeVisible({ timeout: 5_000 });
+    await categorySelect.selectOption({ index: 1 });
+
+    // Clave NIF país residencia
+    const taxIdTypeLabel = page.getByText(/^clave nif pa[ií]s residencia/i);
+    const taxIdTypeSelect = taxIdTypeLabel.locator('xpath=following::select[1]');
+    await expect(taxIdTypeSelect).toBeVisible({ timeout: 5_000 });
+    await taxIdTypeSelect.selectOption({ index: 1 });
+
+    // CIF/NIF
+    const taxIdLabel = page.getByText(/^cif\/nif/i);
+    const taxIdInput = taxIdLabel.locator('xpath=following::input[1]');
+    await taxIdInput.fill(TAX_ID);
+
+    // País
+    const paisButton = page.getByText(/^pa[ií]s/i).locator('..').locator('button');
+    await paisButton.click();
+    const countrySearch = page.getByPlaceholder(/buscar pa[ií]s/i);
+    await expect(countrySearch).toBeVisible({ timeout: 5_000 });
+    await countrySearch.fill('Espa');
+    const countryOption = page.getByRole('button', { name: /^espa[nñ]a$/i })
+      .or(page.getByRole('button', { name: /^spain$/i }));
+    await expect(countryOption.first()).toBeVisible({ timeout: 5_000 });
+    await countryOption.first().click();
+
+    // Guardar contacto
+    const saveContactBtn = page.getByRole('button', { name: /^guardar contacto$/i });
+    await expect(saveContactBtn).toBeEnabled({ timeout: 5_000 });
+    const createBpResponse = page.waitForResponse(
+      (resp) => resp.url().includes('/businessPartner') && resp.request().method() === 'POST',
+      { timeout: 15_000 },
+    );
+    await saveContactBtn.click();
+    const bpResponse = await createBpResponse;
+
+    expect(bpResponse.status(), await bpResponse.text().catch(() => '')).toBeLessThan(300);
+
+    await expect(page.getByRole('heading', { name: /^nuevo contacto$/i })).toBeHidden({ timeout: 10_000 });
+    await expect(page.locator('.bg-destructive').filter({ hasText: /error/i })).toHaveCount(0);
+    await expect(page.getByTestId('field-businessPartner-chip').or(contactField))
+      .toContainText(FIRST_NAME, { timeout: 10_000 });
+  });
 });

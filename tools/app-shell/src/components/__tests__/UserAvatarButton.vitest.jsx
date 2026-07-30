@@ -4,23 +4,27 @@ import userEvent from '@testing-library/user-event';
 const logoutMock = vi.fn();
 const setLocaleMock = vi.fn();
 
+let authOverrides = {};
+let localeOverrides = {};
+
 vi.mock('@/auth/AuthContext.jsx', () => ({
   useAuth: () => ({
     username: 'x',
     logout: logoutMock,
     selectedRole: null,
     selectedOrg: null,
+    ...authOverrides,
   }),
 }));
 
 vi.mock('@/i18n', () => ({
   useUI: () => (key) => key,
-  useLocaleSwitch: () => ({ locale: 'en_US', setLocale: setLocaleMock }),
+  useLocaleSwitch: () => ({ locale: 'en_US', setLocale: setLocaleMock, ...localeOverrides }),
 }));
 
 vi.mock('@/i18n/index.js', () => ({
   useUI: () => (key) => key,
-  useLocaleSwitch: () => ({ locale: 'en_US', setLocale: setLocaleMock }),
+  useLocaleSwitch: () => ({ locale: 'en_US', setLocale: setLocaleMock, ...localeOverrides }),
 }));
 
 // Render dropdown content unconditionally so menu items can be asserted
@@ -54,6 +58,8 @@ describe('UserAvatarButton', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     localStorage.clear();
+    authOverrides = {};
+    localeOverrides = {};
   });
 
   it('shows the Change Password menu item when a platform token exists and the auth method is password', () => {
@@ -125,5 +131,52 @@ describe('UserAvatarButton', () => {
     await user.click(screen.getByRole('button', { name: /Español/ }));
 
     expect(setLocaleMock).toHaveBeenCalledWith('es_ES');
+  });
+
+  it('exposes the full role and organization names via title when truncated', () => {
+    const longRole = 'A Very Long Role Name That Overflows The Container';
+    const longOrg = 'A Very Long Organization Name That Also Overflows';
+    authOverrides = {
+      selectedRole: { name: longRole },
+      selectedOrg: { name: longOrg },
+    };
+
+    render(<UserAvatarButton />);
+
+    expect(screen.getByText(`role: ${longRole}`)).toHaveAttribute('title', longRole);
+    expect(screen.getByText(`organization: ${longOrg}`)).toHaveAttribute('title', longOrg);
+  });
+
+  it('renders the expanded sidebar-footer row with username and chevron', () => {
+    render(<UserAvatarButton expanded />);
+
+    const trigger = screen.getByTestId('topbar-user-menu');
+    expect(trigger).toHaveTextContent('x');
+    expect(screen.getByTestId('ChevronRight__9f3744')).toBeInTheDocument();
+  });
+
+  it('falls back to the account label and em dash when there is no username', () => {
+    authOverrides = { username: null };
+
+    render(<UserAvatarButton expanded />);
+
+    expect(screen.getByTestId('topbar-user-menu')).toHaveAttribute('aria-label', 'account');
+    expect(screen.getByTestId('topbar-user-menu')).toHaveTextContent('—');
+  });
+
+  it('shows the role-initial badge on the compact avatar when a role is selected', () => {
+    authOverrides = { selectedRole: { name: 'Admin' } };
+
+    render(<UserAvatarButton />);
+
+    expect(screen.getByText('A')).toBeInTheDocument();
+  });
+
+  it('hides the language section when locale switching is unavailable', () => {
+    localeOverrides = { setLocale: null };
+
+    render(<UserAvatarButton />);
+
+    expect(screen.queryByText('language')).not.toBeInTheDocument();
   });
 });

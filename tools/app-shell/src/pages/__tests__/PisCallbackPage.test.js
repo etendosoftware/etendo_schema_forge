@@ -4,7 +4,7 @@
  * completion signal back to the opener window via postMessage, then closes itself.
  *
  * The component imports React + i18n, so we follow the repo convention
- * (Psd2CallbackPage.test.js) and assert the source invariants directly.
+ * (BankConnectionCallbackPage.test.js) and assert the source invariants directly.
  */
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
@@ -78,6 +78,6 @@ describe('PisCallbackPage — rendered copy', () => {
   });
 
   it('renders the close-window hint', () => {
-    assert.match(src, /ui\(['"]financeAccountsPsd2CallbackClose['"]\)/);
+    assert.match(src, /ui\(['"]financeAccountsBankConnectionCallbackClose['"]\)/);
   });
 });
