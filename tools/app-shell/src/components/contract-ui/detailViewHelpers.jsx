@@ -13,11 +13,7 @@ import { getCatalogOptions } from '@/lib/selectorCatalog.js';
 import { formatAmount } from '@/lib/formatAmount.js';
 import DocumentStatusPill from './DocumentStatusPill.jsx';
 
-export /**
- * Evaluate a simple Etendo display-logic expression (@Field@='Value') against record data.
- * Returns true (visible) if the expression cannot be parsed or if the field is missing from data.
- */
-function sidePanelWrapperCls(hasSidePanel, linesLayout) {
+export function sidePanelWrapperCls(hasSidePanel, linesLayout) {
   // Stack the side panel below the content on narrow viewports (e.g. when the
   // devtools console is open) and only place it beside the content once there
   // is room (lg+). A rigid side-by-side row would otherwise overlap the
@@ -27,6 +23,10 @@ function sidePanelWrapperCls(hasSidePanel, linesLayout) {
   return '';
 }
 
+/**
+ * Evaluate a simple Etendo display-logic expression (@Field@='Value') against record data.
+ * Returns true (visible) if the expression cannot be parsed or if the field is missing from data.
+ */
 export function evalDisplayLogicRaw(expr, data) {
   if (!expr) return true;
   const clauses = [...expr.matchAll(/@(\w+)@\s*(!?=)\s*'([^']*)'/g)];
