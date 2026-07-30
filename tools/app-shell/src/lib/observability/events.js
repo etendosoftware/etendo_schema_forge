@@ -170,6 +170,14 @@ export const OBSERVABILITY_EVENTS = Object.freeze({
       OBSERVABILITY_PROPERTY_KEYS.VALUE,
     ],
   }),
+  DEFAULTS_BLOCK: defineEvent('defaults_block', {
+    channels: [OBSERVABILITY_CHANNELS.MIXPANEL, OBSERVABILITY_CHANNELS.TIMING],
+    properties: [
+      OBSERVABILITY_PROPERTY_KEYS.DURATION_MS,
+      OBSERVABILITY_PROPERTY_KEYS.ENTITY,
+      OBSERVABILITY_PROPERTY_KEYS.STATUS,
+    ],
+  }),
   ONBOARDING_STEP_COMPLETED: defineEvent('onboarding_step_completed', {
     channels: [OBSERVABILITY_CHANNELS.MIXPANEL],
     properties: [

@@ -123,13 +123,14 @@ Any authenticated route can also be opened with `?embedded=1`; in that mode the 
   - Sorting is tracked in hook state and can switch to the companion `$_identifier` field when present so foreign-key sorts are alphabetical.
   - Selecting a row uses the record data already present in the list and fetches that record's children; loading by id is the path that fetches the full record and its children.
   - `handleNew()` requests `/<entity>/defaults`, normalizes returned values, and pre-fills the form when defaults exist. Combo-style fields (Price List, Payment Terms) are pre-selected by the backend; Search-type fields (Contact, Business Partner) are left empty for the user to fill explicitly.
+  - While the defaults request is in flight the hook exposes `defaultsLoading: true` and `DetailView` shows the loading gate for the new-record route, so the user cannot type into a form whose values are about to be merged (ETP-4741). The request is aborted after 4 seconds; a response arriving after that is discarded. When the merge does run, it skips any field the user already changed (and its `$_identifier` companion). Each `handleNew()` emits one `defaults_block` timing event (`status`: `ok`/`error`/`timeout` — see `docs/ops/app-shell-observability.md`).
   - Before a `POST`, `handleSave()` validates that all visible required fields have a value. `EntityForm` registers only currently-visible fields via `registerFields(displayFields)` so hidden fields never block the save. If any required field is empty, `fieldErrors` is set and each offending field renders a red border with an inline "Required" message — the POST is not sent.
   - If the backend still returns a structured `400 MISSING_REQUIRED_FIELDS` response, the `fields` array is parsed and mapped to `fieldErrors` as a second validation layer.
   - New records use `POST`; existing records use `PATCH` with changed fields only.
   - Child-row creation posts `parentId`, then refreshes both children and the header record so derived totals stay current.
 - **Failure or edge behavior:**
   - List refresh and pagination logout on HTTP 401.
-  - If the defaults endpoint fails, the form still opens with an empty object.
+  - If the defaults endpoint fails or times out (4s), the form still opens with an empty object and `defaultsLoading` returns to false.
   - Partial or empty batches stop pagination.
   - Save blocked by missing required fields surfaces per-field `fieldErrors` highlights and a toast; the record is not created.
   - Save and child-row creation failures surface `saveError` and toast feedback; delete and process failures surface toast feedback.
@@ -137,6 +138,7 @@ Any authenticated route can also be opened with `?embedded=1`; in that mode the 
 - **Automated evidence:**
   - `tools/app-shell/src/hooks/__tests__/useEntity-pagination.test.js` verifies first-page and subsequent-page batch windows, sort handling, retry behavior for the default `creationDate` sort, empty datasets, and fetch failures.
   - `tools/app-shell/src/hooks/__tests__/useEntity-defaults.test.js` verifies the defaults URL, bearer header use, non-OK handling, network-error fallback, and missing-defaults fallback.
+  - `tools/app-shell/src/hooks/__tests__/useEntity.defaultsRace.vitest.jsx` verifies the ETP-4741 race guards: `defaultsLoading`, abort + 4s timeout, stale-response discard, user-edit merge protection, and the `defaults_block` timing event.
   - `tools/app-shell/src/hooks/__tests__/useEntity-required-validation.test.js` verifies the required-field validation logic: empty required fields are flagged, readOnly and summary-section fields are skipped, whitespace-only strings are treated as empty, and `readOnlyLogic` functions are respected for completed documents.
 - **Manual verification path:**
   1. Open a generated window such as `/sales-order`.

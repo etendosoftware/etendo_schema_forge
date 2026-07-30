@@ -276,6 +276,12 @@ const stop = startTiming(OBSERVABILITY_EVENTS.TIME_TO_CREATE, {
 await stop({ status: 'success' });
 ```
 
+### Creation-form defaults timing (ETP-4741)
+
+| Event | When |
+|-------|------|
+| `defaults_block` | Emitted exactly once per `useEntity.handleNew()`. Measures how long the creation form stayed blocked waiting for `GET /<entity>/defaults`. Properties: `entity`, `durationMs`, and `status` — `ok` (response merged), `error` (HTTP or network failure), or `timeout` (request aborted after 4s and its late response discarded). |
+
 ## Privacy Rules
 
 Payloads are normalized before providers receive them:

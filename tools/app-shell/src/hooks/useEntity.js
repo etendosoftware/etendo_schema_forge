@@ -4,6 +4,8 @@ import { translateBackendError } from '@/lib/backendErrors.js';
 import { toast } from 'sonner';
 import { useUI } from '@/i18n';
 import { trackDocumentCreated, trackTransactionPosted } from '@/lib/observability/health-events.js';
+import { OBSERVABILITY_EVENTS } from '@/lib/observability/events.js';
+import { startTiming } from '@/lib/observability/timing.js';
 import {
     isCompletionProcess,
     trackDocumentCompleted,
@@ -266,6 +268,11 @@ export async function extractErrorMessage(res, ui) {
 }
 
 const BATCH_SIZE = 75;
+
+// ETP-4741 — how long a creation form waits for GET /<entity>/defaults before
+// giving up: the request is aborted, its eventual response is discarded, and
+// the form is released with whatever the user already typed.
+const DEFAULTS_TIMEOUT_MS = 4000;
 
 const CONTACTS_PRECREATE_BILLING_FIELDS = new Set([
     'priceList',
@@ -775,6 +782,9 @@ export function useEntity(entity, childEntity, {
     const [childDefaults, setChildDefaults] = useState({});
     const [childrenLoading, setChildrenLoading] = useState(false);
     const [loading, setLoading] = useState(false);
+    // ETP-4741: true while handleNew's defaults request is in flight, so the
+    // creation form can gate itself instead of letting the user race the merge.
+    const [defaultsLoading, setDefaultsLoading] = useState(false);
     const [loadingMore, setLoadingMore] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
     // ETP-4542: identifier of the header process currently running (POST in flight),
@@ -795,6 +805,11 @@ export function useEntity(entity, childEntity, {
     const backendDefaultKeysRef = useRef(new Set());
     // Fields explicitly changed by the user (via handleChange) in the current new-record session.
     const userChangedKeysRef = useRef(new Set());
+    // ETP-4741: monotonic id of the current defaults fetch. A response (or its
+    // timer) only acts while its epoch is still current — bumping the epoch is
+    // how the timeout and newer handleNew calls make in-flight responses inert,
+    // even when the underlying fetch implementation ignores the abort signal.
+    const defaultsEpochRef = useRef(0);
     // ETP-3894: per-form snapshot of visible fields registered by each EntityForm instance.
     // Keyed by a stable formId (React.useId) so multiple EntityForms accumulate rather than
     // overwrite each other. handleSave flattens all entries to validate the complete form.
@@ -1061,10 +1076,33 @@ export function useEntity(entity, childEntity, {
         setFieldErrors({});
         setSelected(null);
         setEditing({}); // Start with empty so UI is responsive
+
+        // ETP-4741 — the defaults GET races the user, who can already be typing
+        // into the open form. Guards: an epoch check discards any response that
+        // settles after the timeout (or after a newer handleNew), the fetch is
+        // aborted on timeout, and the merge never touches user-changed keys.
+        const epoch = defaultsEpochRef.current + 1;
+        defaultsEpochRef.current = epoch;
+        const isCurrent = () => defaultsEpochRef.current === epoch;
+        const settleTiming = startTiming(OBSERVABILITY_EVENTS.DEFAULTS_BLOCK, {
+            properties: { entity },
+        });
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => {
+            if (!isCurrent()) return;
+            defaultsEpochRef.current += 1; // late responses must not merge
+            setDefaultsLoading(false);
+            controller.abort();
+            settleTiming({ status: 'timeout' });
+        }, DEFAULTS_TIMEOUT_MS);
+
+        setDefaultsLoading(true);
         try {
-            const res = await fetch(`${apiBaseUrl}/${entity}/defaults`, { headers });
+            const res = await fetch(`${apiBaseUrl}/${entity}/defaults`, { headers, signal: controller.signal });
+            if (!isCurrent()) return;
             if (res.ok) {
                 const data = await res.json();
+                if (!isCurrent()) return;
                 if (data.defaults) {
                     // Normalize values from Etendo format:
                     // - Dates: dd-MM-yyyy → yyyy-MM-dd (HTML date input)
@@ -1082,11 +1120,32 @@ export function useEntity(entity, childEntity, {
                         normalized.oBTIKTaxIDKey = '1';
                     }
 
-                    setEditing(prev => ({ ...prev, ...normalized }));
+                    setEditing(prev => {
+                        const merged = { ...prev };
+                        for (const [key, val] of Object.entries(normalized)) {
+                            if (userChangedKeysRef.current.has(key)) continue;
+                            // A field's $_identifier companion follows its base
+                            // key: if the user picked a value, its display label
+                            // must not be replaced by the default's label either.
+                            if (key.endsWith('$_identifier')
+                                && userChangedKeysRef.current.has(key.slice(0, -'$_identifier'.length))) {
+                                continue;
+                            }
+                            merged[key] = val;
+                        }
+                        return merged;
+                    });
                 }
             }
+            await settleTiming({ status: res.ok ? 'ok' : 'error' });
         } catch {
             // Defaults are best-effort; proceed with empty form if endpoint fails
+            if (isCurrent()) await settleTiming({ status: 'error' });
+        } finally {
+            if (isCurrent()) {
+                clearTimeout(timeoutId);
+                setDefaultsLoading(false);
+            }
         }
     }, [apiBaseUrl, entity, token, headers]);
 
@@ -1434,7 +1493,7 @@ export function useEntity(entity, childEntity, {
     }, []);
 
     return {
-        items, selected, editing, children, childDefaults, childrenLoading, loading, loadingMore, hasMore, saveError, isSaving,
+        items, selected, editing, children, childDefaults, childrenLoading, loading, defaultsLoading, loadingMore, hasMore, saveError, isSaving,
         runningProcess,
         isDirtyHeader,
         fieldErrors, registerFields,

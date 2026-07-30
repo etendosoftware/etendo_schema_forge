@@ -1324,6 +1324,7 @@ export function hasRecordForRoute(isNew, hook, recordId) {
 }
 
 export function isLoadingRecordForRoute(hook, isNew, recordId) {
+  if (isNew && hook.defaultsLoading) return true;
   return hook.loading && !hasRecordForRoute(isNew, hook, recordId);
 }
 
