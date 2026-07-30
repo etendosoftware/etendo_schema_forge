@@ -566,6 +566,7 @@
       }
     },
     "bankAccount": {
+      "agentPrompt": "#REF#agent-prompts/contacts/bank-account.md",
       "fields": {
         "bankName": {
           "visibility": "editable",

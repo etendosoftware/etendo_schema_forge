@@ -9,6 +9,7 @@
   "entities": {
     "account": {
       "javaQualifier": "financialAccountHeaderHandler",
+      "agentPrompt": "#REF#agent-prompts/financial-account/account.md",
       "fields": {
         "name": { "visibility": "editable", "grid": true, "gridOrder": 1, "required": true },
         "type": { "visibility": "editable", "grid": true, "gridOrder": 2 },
