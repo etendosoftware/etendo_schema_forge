@@ -260,8 +260,9 @@ test.describe('return-to-vendor-shipment — list view', () => {
 
     await expect(coRow.getByTestId('row-quick-action-edit')).toBeVisible();
     await expect(coRow.getByTestId('row-quick-action-clone')).toBeVisible();
-    // Delete hidden for CO (hideDeleteWhenComplete)
-    await expect(coRow.getByTestId('row-quick-action-delete')).toHaveCount(0);
+    // Grid delete stays visible regardless of status (ETP-4656, commit 044edad45) —
+    // see e2e/tests/flows/delete-visibility.mocked.spec.js for the dedicated regression guard.
+    await expect(coRow.getByTestId('row-quick-action-delete')).toBeVisible();
 
     // ── Preview panel (Case 12) ────────────────────────────────────────────
     // Click the DR row body area (not a quick-action button) to open the preview

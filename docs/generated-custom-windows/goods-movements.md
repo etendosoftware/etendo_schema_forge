@@ -85,3 +85,43 @@ Goods Movements should let an inventory user register a stock transfer from one 
 - `artifacts/goods-movements/contract.json` and `decisions.json` provide supporting evidence for the required-lines processing rule, processed-state read-only logic, omitted classic callouts, and omitted `moveBetweenLocators` / `posted` actions.
 - Unit tests for the detail-view shared components: `__tests__/lookupDrawers.vitest.jsx` (registry mapping), `__tests__/GoodsMovementsProductSearchDrawer.vitest.jsx` (drawer render and behavior), `__tests__/DataTable.excludeValueOf.vitest.jsx` (destination-bin exclusion), `__tests__/InlineLinesPanel.test.js` (lookup drawer resolution in inline edit), and `__tests__/DetailView.extractedHelpers.vitest.js` (DocumentStatusPill wrapping).
 - No dedicated window-level E2E test exists for Goods Movements; shared route and generated-window loading evidence is documented in `docs/generated-custom-windows/app-shell-functional-flows.md`.
+
+## Design changes — ETP-4656
+
+- Set `hideDeleteWhenComplete: true` in `decisions.json` so the Form-view toolbar delete icon is hidden once the record is processed ("Solo Borrador" per the delete-UX design doc). `statusField` here is `processed`, a **boolean** field (not a string status code) — the shared gate `isDeleteVisibleForRecord` (`tools/app-shell/src/utils/recordActions.js`) was extended to treat `false` as deletable and `true` as not when the status value is a JS boolean, ahead of the existing `DELETABLE_DOC_STATUSES` string-code check. Grid hover/multi-select delete is untouched by this change (no `RowQuickActions` wired for this window's list).
+
+## Accounting dimension visibility per section — ETP-4529
+
+| Field | Header | Lines |
+| --- | --- | --- |
+| `businessPartner` (Contacto) | **Nunca** — no such field on the header | **Nunca** — no such field on the lines tab |
+| `product` | *(no such field on the header)* | **Siempre** — core line field, no dimension gating |
+| `project` | **Por config** — raw AD `@ACCT_DIMENSION_DISPLAY@` passthrough (`section: "other"`) | **Nunca** — no such field on the lines tab (`M_MovementLine` has no `project` column) |
+| `costCenter` | **Por config** — same fix as `project` | **Nunca** — same as `project` |
+
+**Design note (intentional reversal, confirmed by ETP-4529's acceptance criteria, approved
+through REVIEW and QA):** `header.project`/`header.costCenter` were previously deliberately
+discarded with the reason "Accounting dimension — not relevant for simplified inventory
+movements". ETP-4529's own matrix (`Movimientos entre almacenes | Cabecera` = Por config for
+Proyecto/Centro de costo) explicitly supersedes that prior decision — both fields are now
+config-gated instead of hidden. The reversal is the ticket's literal requirement, not an
+incidental side effect, and both REVIEW and QA passed it.
+
+**Runtime evaluator — fixed (ETP-4529 follow-up).** Three generic bugs (the `EntityForm.jsx`
+visibility filter never actually consulting the evaluate-display result, the `principal` section
+hardcoding empty visibility, and no lines-scoped `useDisplayLogic` call existing at all) were
+found and fixed — full write-up in `sales-invoice.md`. `header.project`/`header.costCenter` are
+now genuinely config-gated at runtime. This window has no dimension fields on the lines tab at
+all, so the lines-scoped part of the fix and the inlineEditable line-rendering limitation
+(tracked as Jira ETP-4543 / GitHub `etendosoftware/etendo_schema_forge#895`, described in
+`sales-invoice.md`) don't apply here — there is no such field in this window's `lines` entity
+for that gap to affect in the first place, so the header fix is the whole story for this
+window.
+
+### Header section placement fix (ETP-4529 follow-up)
+
+`header.project` and `header.costCenter` (both already present and config-gated, confirmed —
+no AD-level gap) had `"section": "other"` instead of `"section": "principal"`, making them
+render in the secondary/collapsed area instead of the main visible form. Fixed by changing
+`section` to `"principal"` for both fields in `decisions.json` and regenerating; confirmed in
+`contract.json` (`section: "principal"`) and in the generated `MovementForm.jsx`.

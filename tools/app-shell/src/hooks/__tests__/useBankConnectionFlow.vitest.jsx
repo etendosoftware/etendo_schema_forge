@@ -15,26 +15,26 @@ vi.mock('@/i18n', () => ({
   useUI: () => (key) => key,
 }));
 
-vi.mock('../usePsd2Actions', () => ({
-  usePsd2Actions: () => ({ connect, fetchAccounts, link, createAndLink }),
+vi.mock('../useBankConnectionActions', () => ({
+  useBankConnectionActions: () => ({ connect, fetchAccounts, link, createAndLink }),
   launchSaltEdgePopup: (...args) => launchSaltEdgePopup(...args),
 }));
 
-import { usePsd2ConnectFlow } from '../usePsd2ConnectFlow';
+import { useBankConnectionFlow } from '../useBankConnectionFlow';
 
 beforeEach(() => {
   vi.clearAllMocks();
 });
 
-describe('usePsd2ConnectFlow — initial state', () => {
+describe('useBankConnectionFlow — initial state', () => {
   it('starts idle with no selection', () => {
-    const { result } = renderHook(() => usePsd2ConnectFlow());
+    const { result } = renderHook(() => useBankConnectionFlow());
     expect(result.current.connecting).toBe(false);
     expect(result.current.selection).toBeNull();
   });
 });
 
-describe('usePsd2ConnectFlow — connect / popup orchestration', () => {
+describe('useBankConnectionFlow — connect / popup orchestration', () => {
   it('link mode passes the account id to connect and opens the selection modal', async () => {
     launchSaltEdgePopup.mockResolvedValue('conn-1');
     fetchAccounts.mockResolvedValue({
@@ -43,7 +43,7 @@ describe('usePsd2ConnectFlow — connect / popup orchestration', () => {
       providerLogoUrl: 'https://logo',
     });
 
-    const { result } = renderHook(() => usePsd2ConnectFlow());
+    const { result } = renderHook(() => useBankConnectionFlow());
     await act(async () => {
       await result.current.startConnect({ id: 'FA-1', type: 'B' });
     });
@@ -67,7 +67,7 @@ describe('usePsd2ConnectFlow — connect / popup orchestration', () => {
     launchSaltEdgePopup.mockResolvedValue('conn-2');
     fetchAccounts.mockResolvedValue({ accounts: [{ id: 'se1' }], providerName: '', providerLogoUrl: '' });
 
-    const { result } = renderHook(() => usePsd2ConnectFlow());
+    const { result } = renderHook(() => useBankConnectionFlow());
     await act(async () => {
       await result.current.startCreate('BANK');
     });
@@ -84,7 +84,7 @@ describe('usePsd2ConnectFlow — connect / popup orchestration', () => {
     launchSaltEdgePopup.mockResolvedValue('conn-3');
     fetchAccounts.mockResolvedValue({ accounts: [{ id: 'only' }], providerName: '', providerLogoUrl: '' });
 
-    const { result } = renderHook(() => usePsd2ConnectFlow());
+    const { result } = renderHook(() => useBankConnectionFlow());
     await act(async () => {
       await result.current.startCreate('BANK');
     });
@@ -97,43 +97,43 @@ describe('usePsd2ConnectFlow — connect / popup orchestration', () => {
   it('shows an error toast and stays idle when the popup fails to open', async () => {
     launchSaltEdgePopup.mockRejectedValue(new Error('POPUP_BLOCKED'));
 
-    const { result } = renderHook(() => usePsd2ConnectFlow());
+    const { result } = renderHook(() => useBankConnectionFlow());
     await act(async () => {
       await result.current.startConnect({ id: 'FA-1', type: 'B' });
     });
 
-    expect(toast.error).toHaveBeenCalledWith('financeAccountsPsd2PopupBlocked');
+    expect(toast.error).toHaveBeenCalledWith('financeAccountsBankConnectionPopupBlocked');
     expect(result.current.connecting).toBe(false);
     expect(result.current.selection).toBeNull();
     expect(fetchAccounts).not.toHaveBeenCalled();
   });
 
-  it('maps a PSD2_TIMEOUT popup failure to the timeout label', async () => {
-    launchSaltEdgePopup.mockRejectedValue(new Error('PSD2_TIMEOUT'));
+  it('maps a BANK_CONNECTION_TIMEOUT popup failure to the timeout label', async () => {
+    launchSaltEdgePopup.mockRejectedValue(new Error('BANK_CONNECTION_TIMEOUT'));
 
-    const { result } = renderHook(() => usePsd2ConnectFlow());
+    const { result } = renderHook(() => useBankConnectionFlow());
     await act(async () => {
       await result.current.startCreate('BANK');
     });
 
-    expect(toast.error).toHaveBeenCalledWith('financeAccountsPsd2Timeout');
+    expect(toast.error).toHaveBeenCalledWith('financeAccountsBankConnectionTimeout');
   });
 
   it('falls back to the generic connect-error label for other popup failures', async () => {
     launchSaltEdgePopup.mockRejectedValue(new Error(''));
 
-    const { result } = renderHook(() => usePsd2ConnectFlow());
+    const { result } = renderHook(() => useBankConnectionFlow());
     await act(async () => {
       await result.current.startCreate('BANK');
     });
 
-    expect(toast.error).toHaveBeenCalledWith('financeAccountsPsd2ConnectError');
+    expect(toast.error).toHaveBeenCalledWith('financeAccountsBankConnectionConnectError');
   });
 
   it('bails out silently when the popup closes without a connection id', async () => {
     launchSaltEdgePopup.mockResolvedValue(null);
 
-    const { result } = renderHook(() => usePsd2ConnectFlow());
+    const { result } = renderHook(() => useBankConnectionFlow());
     await act(async () => {
       await result.current.startCreate('BANK');
     });
@@ -148,12 +148,12 @@ describe('usePsd2ConnectFlow — connect / popup orchestration', () => {
     launchSaltEdgePopup.mockResolvedValue('conn-4');
     fetchAccounts.mockResolvedValue({ accounts: [], providerName: '', providerLogoUrl: '' });
 
-    const { result } = renderHook(() => usePsd2ConnectFlow());
+    const { result } = renderHook(() => useBankConnectionFlow());
     await act(async () => {
       await result.current.startCreate('BANK');
     });
 
-    expect(toast.error).toHaveBeenCalledWith('financeAccountsPsd2NoAccounts');
+    expect(toast.error).toHaveBeenCalledWith('financeAccountsBankConnectionNoAccounts');
     expect(result.current.selection).toBeNull();
   });
 
@@ -161,7 +161,7 @@ describe('usePsd2ConnectFlow — connect / popup orchestration', () => {
     launchSaltEdgePopup.mockResolvedValue('conn-5');
     fetchAccounts.mockRejectedValue(new Error('fetch boom'));
 
-    const { result } = renderHook(() => usePsd2ConnectFlow());
+    const { result } = renderHook(() => useBankConnectionFlow());
     await act(async () => {
       await result.current.startCreate('BANK');
     });
@@ -174,16 +174,16 @@ describe('usePsd2ConnectFlow — connect / popup orchestration', () => {
     launchSaltEdgePopup.mockResolvedValue('conn-6');
     fetchAccounts.mockRejectedValue(new Error(''));
 
-    const { result } = renderHook(() => usePsd2ConnectFlow());
+    const { result } = renderHook(() => useBankConnectionFlow());
     await act(async () => {
       await result.current.startConnect({ id: 'FA-1', type: 'B' });
     });
 
-    expect(toast.error).toHaveBeenCalledWith('financeAccountsPsd2ConnectError');
+    expect(toast.error).toHaveBeenCalledWith('financeAccountsBankConnectionConnectError');
   });
 });
 
-describe('usePsd2ConnectFlow — confirmSelection (link mode)', () => {
+describe('useBankConnectionFlow — confirmSelection (link mode)', () => {
   async function openSelection(result, { mode = 'link' } = {}) {
     launchSaltEdgePopup.mockResolvedValue('conn-1');
     fetchAccounts.mockResolvedValue({
@@ -200,7 +200,7 @@ describe('usePsd2ConnectFlow — confirmSelection (link mode)', () => {
   it('links the chosen account and fires onDone on success', async () => {
     const onDone = vi.fn();
     link.mockResolvedValue({});
-    const { result } = renderHook(() => usePsd2ConnectFlow({ onDone }));
+    const { result } = renderHook(() => useBankConnectionFlow({ onDone }));
     await openSelection(result);
 
     await act(async () => {
@@ -212,14 +212,14 @@ describe('usePsd2ConnectFlow — confirmSelection (link mode)', () => {
       connectionId: 'conn-1',
       saltEdgeAccountId: 'se1',
     });
-    expect(toast.success).toHaveBeenCalledWith('financeAccountsPsd2Success');
+    expect(toast.success).toHaveBeenCalledWith('financeAccountsBankConnectionSuccess');
     expect(onDone).toHaveBeenCalled();
     expect(result.current.selection).toBeNull();
   });
 
   it('surfaces a warning toast when the link result carries a warning', async () => {
     link.mockResolvedValue({ warning: 'partial import' });
-    const { result } = renderHook(() => usePsd2ConnectFlow());
+    const { result } = renderHook(() => useBankConnectionFlow());
     await openSelection(result);
 
     await act(async () => {
@@ -227,12 +227,12 @@ describe('usePsd2ConnectFlow — confirmSelection (link mode)', () => {
     });
 
     expect(toast.warning).toHaveBeenCalledWith('partial import');
-    expect(toast.success).toHaveBeenCalledWith('financeAccountsPsd2Success');
+    expect(toast.success).toHaveBeenCalledWith('financeAccountsBankConnectionSuccess');
   });
 
   it('shows an error toast when link fails', async () => {
     link.mockRejectedValue(new Error('link failed'));
-    const { result } = renderHook(() => usePsd2ConnectFlow());
+    const { result } = renderHook(() => useBankConnectionFlow());
     await openSelection(result);
 
     await act(async () => {
@@ -245,18 +245,18 @@ describe('usePsd2ConnectFlow — confirmSelection (link mode)', () => {
 
   it('falls back to the generic link-error label when link throws without a message', async () => {
     link.mockRejectedValue(new Error(''));
-    const { result } = renderHook(() => usePsd2ConnectFlow());
+    const { result } = renderHook(() => useBankConnectionFlow());
     await openSelection(result);
 
     await act(async () => {
       await result.current.confirmSelection('se1');
     });
 
-    expect(toast.error).toHaveBeenCalledWith('financeAccountsPsd2LinkError');
+    expect(toast.error).toHaveBeenCalledWith('financeAccountsBankConnectionLinkError');
   });
 
   it('does nothing when confirmSelection is called with no active selection', async () => {
-    const { result } = renderHook(() => usePsd2ConnectFlow());
+    const { result } = renderHook(() => useBankConnectionFlow());
     await act(async () => {
       await result.current.confirmSelection('se1');
     });
@@ -266,14 +266,14 @@ describe('usePsd2ConnectFlow — confirmSelection (link mode)', () => {
   });
 });
 
-describe('usePsd2ConnectFlow — confirmSelection (create mode)', () => {
+describe('useBankConnectionFlow — confirmSelection (create mode)', () => {
   it('calls createAndLink with the type and fires onDone', async () => {
     const onDone = vi.fn();
     launchSaltEdgePopup.mockResolvedValue('conn-9');
     fetchAccounts.mockResolvedValue({ accounts: [{ id: 'se1' }], providerName: '', providerLogoUrl: '' });
     createAndLink.mockResolvedValue({});
 
-    const { result } = renderHook(() => usePsd2ConnectFlow({ onDone }));
+    const { result } = renderHook(() => useBankConnectionFlow({ onDone }));
     await act(async () => {
       await result.current.startCreate('BANK');
     });
@@ -291,12 +291,12 @@ describe('usePsd2ConnectFlow — confirmSelection (create mode)', () => {
   });
 });
 
-describe('usePsd2ConnectFlow — cancelSelection', () => {
+describe('useBankConnectionFlow — cancelSelection', () => {
   it('clears the active selection', async () => {
     launchSaltEdgePopup.mockResolvedValue('conn-1');
     fetchAccounts.mockResolvedValue({ accounts: [{ id: 'se1' }], providerName: '', providerLogoUrl: '' });
 
-    const { result } = renderHook(() => usePsd2ConnectFlow());
+    const { result } = renderHook(() => useBankConnectionFlow());
     await act(async () => {
       await result.current.startCreate('BANK');
     });
