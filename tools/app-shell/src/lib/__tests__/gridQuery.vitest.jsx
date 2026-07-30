@@ -312,10 +312,35 @@ describe('buildBackendFilter', () => {
     ]);
   });
 
-  it('builds booleanLabel equals', () => {
+  it('builds booleanLabel equals as Y/N chars', () => {
     expect(buildBackendFilter({ key: 'b' }, { mode: 'booleanLabel', value: true })).toEqual([
-      { fieldName: 'b', operator: 'equals', value: true },
+      { fieldName: 'b', operator: 'equals', value: 'Y' },
     ]);
+    expect(buildBackendFilter({ key: 'b' }, { mode: 'booleanLabel', value: false })).toEqual([
+      { fieldName: 'b', operator: 'equals', value: 'N' },
+    ]);
+  });
+
+  it('ETP-4705: serializes a posted-like boolean column to Y/N through buildAdvancedFilterCriteria', () => {
+    // Regression: the "Contabilizado" (C_Invoice.Posted) filter used to send a
+    // JS boolean, and NEO Headless returned HTTP 500 / 0 rows. NEO stores the
+    // AD button/boolean column as the char 'Y'/'N' and filters it with an exact
+    // string `equals`, so the emitted backend criteria must carry 'Y'/'N'.
+    const cols = [{
+      key: 'posted', column: 'Posted', type: 'boolean',
+      badgeLabels: { true: 'Posted', false: 'Not posted' },
+    }];
+    const trueResult = buildAdvancedFilterCriteria({
+      rowOperator: 'and',
+      conditions: [{ field: 'posted', operator: 'equals', value: true }],
+    }, cols);
+    expect(trueResult).toEqual([{ fieldName: 'posted', operator: 'equals', value: 'Y' }]);
+
+    const falseResult = buildAdvancedFilterCriteria({
+      rowOperator: 'and',
+      conditions: [{ field: 'posted', operator: 'equals', value: false }],
+    }, cols);
+    expect(falseResult).toEqual([{ fieldName: 'posted', operator: 'equals', value: 'N' }]);
   });
 
   it('builds numeric with various operators', () => {
@@ -645,7 +670,7 @@ describe('buildAdvancedFilterCriteria', () => {
       conditions: [{ field: 'active', operator: 'equals', value: 'true' }],
     };
     const result = buildAdvancedFilterCriteria(filter, cols);
-    expect(result).toEqual([{ fieldName: 'active', operator: 'equals', value: true }]);
+    expect(result).toEqual([{ fieldName: 'active', operator: 'equals', value: 'Y' }]);
   });
 
   it('handles booleanLabel mode with false value', () => {
@@ -655,7 +680,7 @@ describe('buildAdvancedFilterCriteria', () => {
       conditions: [{ field: 'active', operator: 'equals', value: false }],
     };
     const result = buildAdvancedFilterCriteria(filter, cols);
-    expect(result).toEqual([{ fieldName: 'active', operator: 'equals', value: false }]);
+    expect(result).toEqual([{ fieldName: 'active', operator: 'equals', value: 'N' }]);
   });
 
   it('uses buildCriteria from column when provided', () => {
@@ -996,7 +1021,7 @@ describe('buildBackendFilter — edge cases', () => {
       { key: 'b', backendFilterKey: 'isActive' },
       { mode: 'booleanLabel', value: false },
     )).toEqual([
-      { fieldName: 'isActive', operator: 'equals', value: false },
+      { fieldName: 'isActive', operator: 'equals', value: 'N' },
     ]);
   });
 

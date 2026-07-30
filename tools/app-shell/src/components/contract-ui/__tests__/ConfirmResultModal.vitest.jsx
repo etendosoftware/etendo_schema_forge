@@ -158,6 +158,12 @@ describe('ConfirmResultModal', () => {
     expect(screen.getByText('statusDraft')).toBeInTheDocument();
   });
 
+  it('formats the doc amount grouped with the real currency symbol, never the raw ISO code', () => {
+    renderModal({ docs: [{ type: 'entrada', num: 'GR-Z', amount: 1234.5, route: '/r' }], currency: 'EUR' });
+    expect(screen.getByText(/1\.234,50\s€/)).toBeInTheDocument();
+    expect(screen.queryByText(/EUR/)).toBeNull();
+  });
+
   it('renders amount span when amount is provided', () => {
     renderModal({ docs: [{ type: 'entrada', num: 'GR-Z', amount: 1234.5, route: '/r' }], currency: '' });
     const card = screen.getByText('GR-Z').closest('[role="button"]');
