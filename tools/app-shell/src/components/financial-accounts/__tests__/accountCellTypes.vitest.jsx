@@ -112,7 +112,7 @@ describe('ACCOUNT_CELL_TYPES — accountBalance', () => {
   it('renders the currency-formatted balance', () => {
     renderCell('accountBalance');
 
-    expect(screen.getByTestId('cell')).toHaveTextContent('1,234.56');
+    expect(screen.getByTestId('cell')).toHaveTextContent('1.234,56');
   });
 
   it('renders a negative balance in the destructive treatment', () => {

@@ -175,7 +175,7 @@ describe('BalanceCell', () => {
   it('renders the currency-formatted balance', () => {
     render(<BalanceCell account={ACCOUNT} />);
 
-    expect(screen.getByText(/1,234\.56/)).toBeInTheDocument();
+    expect(screen.getByText(/1\.234,56/)).toBeInTheDocument();
   });
 
   it('renders a negative balance in the destructive treatment', () => {

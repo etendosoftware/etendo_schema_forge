@@ -348,7 +348,7 @@ describe('AccountsHeaderTable — columns', () => {
     expect(screen.getByTestId('cell-type-acc-2')).toHaveTextContent('financeAccountsTypeCash');
     expect(screen.getByTestId('cell-type-acc-1')).toHaveTextContent('ES12 1234 0000 0000 0000 0001');
     // BalanceCell — currency-formatted amount.
-    expect(screen.getByTestId('cell-currentBalance-acc-1')).toHaveTextContent('1,000.00');
+    expect(screen.getByTestId('cell-currentBalance-acc-1')).toHaveTextContent('1.000,00');
   });
 });
 
@@ -442,7 +442,7 @@ describe('AccountsHeaderTable — sidebar aggregates', () => {
   it('feeds the sidebar from meta.summary (the sibling of response.data)', () => {
     renderTable();
 
-    expect(screen.getByTestId('balance-card')).toHaveTextContent('930.00');
+    expect(screen.getByTestId('balance-card')).toHaveTextContent('930,00');
     expect(screen.getByTestId('balance-by-currency-EUR')).toBeInTheDocument();
     expect(screen.getByTestId('balance-by-currency-USD')).toBeInTheDocument();
     expect(screen.getByTestId('pending-reconcile-card')).toBeInTheDocument();
