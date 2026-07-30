@@ -1,13 +1,21 @@
 /**
- * Tests for useDimensionValues: guard early-returns (disabled / no token /
+ * Tests for useDimensionValues: guard early-returns (disabled / unauthenticated /
  * empty dims), successful multi-dimension fetch, non-ok and reject fallbacks,
  * non-array coercion, and abort on cleanup. Auth + getApiBase are mocked.
+ *
+ * ETP-4576 — the session lives in a server-side `__Host-` cookie, so the hook
+ * gates on `isAuthenticated` (never a client-held `token`) and sends no
+ * Authorization header: the cookie travels on its own.
+ *
+ * The auth mock is a plain mutable object rather than a vi.fn() with
+ * mockReturnValueOnce: React may invoke the hook more than once per render, and
+ * a "once" override would fall back to the default mid-render.
  */
 
-let mockToken = 'tok';
+let mockAuth = { isAuthenticated: true };
 
 vi.mock('@/auth/AuthContext.jsx', () => ({
-  useAuth: () => ({ token: mockToken }),
+  useAuth: () => mockAuth,
 }));
 
 vi.mock('../useNeoResource', () => ({
@@ -17,8 +25,18 @@ vi.mock('../useNeoResource', () => ({
 import { renderHook, waitFor } from '@testing-library/react';
 import { useDimensionValues } from '../useDimensionValues.js';
 
+/** Asserts no request carried a bearer token — the point of ETP-4576. */
+function expectNoAuthorizationHeader() {
+  for (const [, init] of globalThis.fetch.mock.calls) {
+    const headers = init?.headers ?? {};
+    const keys = Object.keys(headers).map((k) => k.toLowerCase());
+    expect(keys).not.toContain('authorization');
+    expect(JSON.stringify(headers)).not.toContain('Bearer');
+  }
+}
+
 beforeEach(() => {
-  mockToken = 'tok';
+  mockAuth = { isAuthenticated: true };
   globalThis.fetch = vi.fn();
 });
 
@@ -34,11 +52,26 @@ describe('useDimensionValues', () => {
     expect(globalThis.fetch).not.toHaveBeenCalled();
   });
 
-  it('skips fetch when token is missing', async () => {
-    mockToken = '';
+  it('skips fetch when the user is not authenticated', async () => {
+    mockAuth = { isAuthenticated: false };
     const { result } = renderHook(() => useDimensionValues(['organization']));
     await waitFor(() => expect(result.current.optionsByDim).toEqual({}));
     expect(globalThis.fetch).not.toHaveBeenCalled();
+  });
+
+  it('still fetches when no client-side token exists (cookie session)', async () => {
+    // The cookie-session shape: authenticated, but the browser holds no token.
+    mockAuth = { isAuthenticated: true, token: null };
+    globalThis.fetch.mockResolvedValue({
+      ok: true,
+      json: async () => ({ response: { data: { values: [{ id: 'o1', name: 'Org 1' }] } } }),
+    });
+
+    const { result } = renderHook(() => useDimensionValues(['organization']));
+
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(globalThis.fetch).toHaveBeenCalled();
+    expect(result.current.optionsByDim).toEqual({ organization: [{ id: 'o1', name: 'Org 1' }] });
   });
 
   it('skips fetch when the dimension list is empty', async () => {
@@ -71,7 +104,20 @@ describe('useDimensionValues', () => {
     const url = globalThis.fetch.mock.calls[0][0];
     expect(url).toContain('/base/sws/neo/financial-account-transactions');
     expect(url).toContain('action=dimension-values');
-    expect(globalThis.fetch.mock.calls[0][1].headers.Authorization).toBe('Bearer tok');
+    expectNoAuthorizationHeader();
+  });
+
+  it('never sends an Authorization header on any dimension request', async () => {
+    globalThis.fetch.mockResolvedValue({
+      ok: true,
+      json: async () => ({ response: { data: { values: [] } } }),
+    });
+
+    const { result } = renderHook(() => useDimensionValues(['organization', 'project']));
+
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(globalThis.fetch).toHaveBeenCalled();
+    expectNoAuthorizationHeader();
   });
 
   it('returns [] for a dimension when the response is not ok', async () => {

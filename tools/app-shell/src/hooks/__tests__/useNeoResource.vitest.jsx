@@ -1,13 +1,34 @@
 import { renderHook, waitFor, act } from '@testing-library/react';
 
+/**
+ * ETP-4576 — the session is a server-side `__Host-` cookie, so this hook gates
+ * on `isAuthenticated` and sends no Authorization header; the cookie travels on
+ * its own with same-origin fetch.
+ *
+ * The auth mock is a plain mutable object, not a vi.fn() with
+ * mockReturnValueOnce: React can invoke the hook more than once per render, and
+ * a "once" override would decay to the default mid-render.
+ */
+let mockAuth = { isAuthenticated: true };
+
 vi.mock('@/auth/AuthContext.jsx', () => ({
-  useAuth: () => ({ token: 'test-token' }),
+  useAuth: () => mockAuth,
 }));
 
 import { useNeoResource, getApiBase } from '../useNeoResource.js';
 
 function okResponse(payload) {
   return { ok: true, json: async () => ({ response: { data: payload } }) };
+}
+
+/** Asserts no request carried a bearer token — the point of ETP-4576. */
+function expectNoAuthorizationHeader() {
+  for (const [, init] of globalThis.fetch.mock.calls) {
+    const headers = init?.headers ?? {};
+    const keys = Object.keys(headers).map((k) => k.toLowerCase());
+    expect(keys).not.toContain('authorization');
+    expect(JSON.stringify(headers)).not.toContain('Bearer');
+  }
 }
 
 function setPathname(pathname) {
@@ -31,6 +52,7 @@ describe('getApiBase', () => {
 
 describe('useNeoResource', () => {
   beforeEach(() => {
+    mockAuth = { isAuthenticated: true };
     setPathname('/etendo/web/app');
     globalThis.fetch = vi.fn();
   });
@@ -52,7 +74,7 @@ describe('useNeoResource', () => {
     expect(result.current.error).toBeNull();
   });
 
-  it('builds the URL with the API base and sends the Bearer token', async () => {
+  it('builds the URL with the API base and sends no Authorization header', async () => {
     globalThis.fetch.mockResolvedValue(okResponse({ ok: true }));
 
     renderHook(() => useNeoResource({ path: '/sws/neo/foo' }));
@@ -60,9 +82,34 @@ describe('useNeoResource', () => {
     await waitFor(() => expect(globalThis.fetch).toHaveBeenCalled());
     const [url, init] = globalThis.fetch.mock.calls[0];
     expect(url).toBe('/etendo/sws/neo/foo');
-    expect(init.headers.Authorization).toBe('Bearer test-token');
     expect(init.headers['Content-Type']).toBe('application/json');
     expect(init.signal).toBeDefined();
+    // ETP-4576 — the `__Host-` session cookie authenticates the request; a
+    // bearer token must never be attached.
+    expectNoAuthorizationHeader();
+  });
+
+  it('stays idle when the user is not authenticated (no fetch issued)', async () => {
+    mockAuth = { isAuthenticated: false };
+    globalThis.fetch.mockResolvedValue(okResponse({ x: 1 }));
+
+    const { result } = renderHook(() => useNeoResource({ path: '/sws/neo/foo' }));
+
+    await new Promise((r) => setTimeout(r, 0));
+    expect(globalThis.fetch).not.toHaveBeenCalled();
+    expect(result.current.data).toBeNull();
+  });
+
+  it('fetches when authenticated even though the client holds no token', async () => {
+    // The cookie-session shape: authenticated, no client-held token.
+    mockAuth = { isAuthenticated: true, token: null };
+    globalThis.fetch.mockResolvedValue(okResponse({ items: [1] }));
+
+    const { result } = renderHook(() => useNeoResource({ path: '/sws/neo/foo' }));
+
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.data).toEqual({ items: [1] });
+    expectNoAuthorizationHeader();
   });
 
   it('applies mapPayload to the raw response.data before exposing it', async () => {

@@ -1,35 +1,63 @@
 /**
  * Functional boundary test for useDistinctValues.
  *
- * Post-split, the hook itself lives in schema_forge_core; this repo only ships a
- * thin shim at `@/hooks/useDistinctValues.js` (re-export of
- * `@etendosoftware/app-shell-core/hooks/useDistinctValues.js`). Under plain
- * vitest the shim resolves to the published package; under LOCAL_CORE it resolves
- * to the moved core source. The exhaustive unit coverage now lives beside the
- * source in core (packages/app-shell-core/src/hooks/__tests__).
+ * NOTE on the previous version of this comment: it described `@/hooks/
+ * useDistinctValues.js` as a thin re-export shim over
+ * `@etendosoftware/app-shell-core/hooks/useDistinctValues.js`. That is NOT true
+ * on this branch — this repo ships its OWN full implementation of the hook, which
+ * happens to duplicate core's copy. So the `@/auth` alias DOES intercept the
+ * hook's `useAuth` import, and mocking it would work. We keep the real
+ * AuthProvider anyway, because exercising the genuine auth context is the point
+ * of this suite: it is what catches contract drift between host and core.
  *
- * This suite is deliberately re-angled to verify the FUNCTIONAL boundary: the
- * shim resolves to the real hook AND `useAuth()` is satisfied by a REAL
- * AuthProvider. The old `vi.mock('@/auth/...')` stubs are gone — they never
- * crossed the shim (the hook imports auth via core's own relative path, which the
- * `@/auth` alias does not intercept), which is exactly what caused the
- * "useAuth must be used within AuthProvider" failures. We wrap renderHook in the
- * real core AuthProvider (via the `@/auth` shim → same core context the hook
- * uses) seeded with a token, and let the REAL `buildHeaders` run.
+ * ETP-4576 — the session is a server-side `__Host-` cookie. The hook therefore
+ * gates on `isAuthenticated`, never on a client-held `token`, and lets the real
+ * `buildHeaders()` run so we can assert no Authorization header is produced.
+ *
+ * `restoreSession={null}` is REQUIRED on every AuthProvider below. Post-4576 the
+ * prop defaults to the platform cookie fetcher, which fires a real
+ * GET /sws/go/session on mount — through the very `globalThis.fetch` mock these
+ * tests install. That extra call both pollutes the fetch-call assertions and
+ * rewrites the session (dropping the seeded token), which is exactly why this
+ * file failed 6/15 under LOCAL_CORE before this change. Passing an explicit
+ * `null` opts out and makes `status` resolve synchronously. `undefined` does NOT
+ * opt out — a default parameter only fills in for `undefined`.
  *
  * Run against local core source:
- *   LOCAL_CORE=1 npx vitest run src/hooks/__tests__/useDistinctValues.vitest.jsx
+ *   LOCAL_CORE=1 SCHEMA_FORGE_CORE=<path-to-schema_forge_core> \
+ *     npx vitest run src/hooks/__tests__/useDistinctValues.vitest.jsx
  */
 import { renderHook, act, waitFor } from '@testing-library/react';
 
 import { AuthProvider } from '@/auth/AuthContext.jsx';
 import { useDistinctValues } from '../useDistinctValues.js';
 
-// Real AuthProvider seeded with a token so the hook's useAuth() resolves — both
-// the hook and this provider reach the same core auth context through the shim.
+// Authenticated: a seeded token makes `isAuthenticated` true in both the
+// pre-4576 core (`!!session.token`) and the migrated one, so this wrapper is
+// stable across the published package and LOCAL_CORE source.
 const wrapper = ({ children }) => (
-  <AuthProvider initialSession={{ token: 'test-token' }}>{children}</AuthProvider>
+  <AuthProvider initialSession={{ token: 'test-token' }} restoreSession={null}>
+    {children}
+  </AuthProvider>
 );
+
+// Unauthenticated: no token and no restore, so `status` settles to 'anonymous'
+// and `isAuthenticated` is false in both core versions.
+const anonWrapper = ({ children }) => (
+  <AuthProvider initialSession={{}} restoreSession={null}>
+    {children}
+  </AuthProvider>
+);
+
+/** Asserts no request carried a bearer token — the point of ETP-4576. */
+function expectNoAuthorizationHeader() {
+  for (const [, init] of globalThis.fetch.mock.calls) {
+    const headers = init?.headers ?? {};
+    const keys = Object.keys(headers).map((k) => k.toLowerCase());
+    expect(keys).not.toContain('authorization');
+    expect(JSON.stringify(headers)).not.toContain('Bearer');
+  }
+}
 
 describe('useDistinctValues', () => {
   beforeEach(() => {
@@ -235,6 +263,37 @@ describe('useDistinctValues', () => {
     );
     await waitFor(() => expect(result.current.values).toHaveLength(1));
     expect(result.current.values[0]._identifier).toBe('X1');
+  });
+
+  it('does not fetch when the user is not authenticated', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ response: { data: [{ id: 'P1' }], hasMore: false } }),
+    });
+    const { result } = renderHook(() =>
+      useDistinctValues('entity', 'field', { apiBaseUrl: '/api' }),
+      { wrapper: anonWrapper },
+    );
+    await new Promise((r) => setTimeout(r, 0));
+    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(result.current.values).toEqual([]);
+  });
+
+  it('never sends an Authorization header', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({
+        response: { data: [{ id: 'P1', _identifier: 'Product 1' }], hasMore: false },
+      }),
+    });
+    const { result } = renderHook(() =>
+      useDistinctValues('orderLine', 'product', { apiBaseUrl: '/api' }),
+      { wrapper },
+    );
+    await waitFor(() => expect(result.current.values).toHaveLength(1));
+    // Real buildHeaders() runs here — the assertion is that it produces no
+    // bearer token now that the `__Host-` cookie authenticates the request.
+    expectNoAuthorizationHeader();
   });
 
   it('refresh re-fetches from start', async () => {

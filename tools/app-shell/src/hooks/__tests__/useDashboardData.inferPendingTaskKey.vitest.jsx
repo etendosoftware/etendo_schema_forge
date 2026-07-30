@@ -25,8 +25,11 @@ vi.mock('@generated/dashboard/generated/config', () => ({
   actions: [],
 }));
 
+// ETP-4576 — cookie session: the hook gates on `isAuthenticated`, never on a
+// client-held token. This suite's subject is the taskKey inference, so the mock
+// only needs to keep the hook past its auth gate.
 vi.mock('@/auth/AuthContext', () => ({
-  useAuth: () => ({ token: 'test-token' }),
+  useAuth: () => ({ isAuthenticated: true }),
 }));
 
 vi.mock('@/lib/dashboardNavigation.js', () => ({

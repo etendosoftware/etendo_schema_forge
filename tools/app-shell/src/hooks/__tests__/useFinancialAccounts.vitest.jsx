@@ -1,13 +1,34 @@
 import { renderHook, waitFor, act } from '@testing-library/react';
 
+/**
+ * ETP-4576 — the session is a server-side `__Host-` cookie, so this hook gates
+ * on `isAuthenticated` and sends no Authorization header.
+ *
+ * The auth mock is a plain mutable object, not a vi.fn() with
+ * mockReturnValueOnce: React can invoke the hook more than once per render, and
+ * a "once" override would decay to the default mid-render.
+ */
+let mockAuth = { isAuthenticated: true };
+
 vi.mock('@/auth/AuthContext.jsx', () => ({
-  useAuth: () => ({ token: 'test-token' }),
+  useAuth: () => mockAuth,
 }));
 
 import { useFinancialAccounts } from '../useFinancialAccounts.js';
 
+/** Asserts no request carried a bearer token — the point of ETP-4576. */
+function expectNoAuthorizationHeader() {
+  for (const [, init] of globalThis.fetch.mock.calls) {
+    const headers = init?.headers ?? {};
+    const keys = Object.keys(headers).map((k) => k.toLowerCase());
+    expect(keys).not.toContain('authorization');
+    expect(JSON.stringify(headers)).not.toContain('Bearer');
+  }
+}
+
 describe('useFinancialAccounts', () => {
   beforeEach(() => {
+    mockAuth = { isAuthenticated: true };
     Object.defineProperty(window, 'location', {
       value: { pathname: '/etendo/web/app' },
       writable: true,
@@ -46,7 +67,7 @@ describe('useFinancialAccounts', () => {
     expect(result.current.error).toBeNull();
   });
 
-  it('calls the financial-accounts-page endpoint with the bearer token', async () => {
+  it('calls the financial-accounts-page endpoint without an Authorization header', async () => {
     globalThis.fetch.mockResolvedValue(okResponse({ accounts: [], summary: {} }));
 
     renderHook(() => useFinancialAccounts());
@@ -55,9 +76,35 @@ describe('useFinancialAccounts', () => {
       expect(globalThis.fetch).toHaveBeenCalled();
     });
 
-    const [url, init] = globalThis.fetch.mock.calls[0];
+    const [url] = globalThis.fetch.mock.calls[0];
     expect(url).toContain('/sws/neo/financial-accounts-page');
-    expect(init.headers.Authorization).toBe('Bearer test-token');
+    // ETP-4576 — the `__Host-` session cookie authenticates the request.
+    expectNoAuthorizationHeader();
+  });
+
+  it('does not fetch when the user is not authenticated', async () => {
+    mockAuth = { isAuthenticated: false };
+    globalThis.fetch.mockResolvedValue(okResponse({ accounts: [], summary: {} }));
+
+    const { result } = renderHook(() => useFinancialAccounts());
+
+    await new Promise((r) => setTimeout(r, 0));
+    expect(globalThis.fetch).not.toHaveBeenCalled();
+    expect(result.current.accounts).toEqual([]);
+  });
+
+  it('fetches when authenticated even though the client holds no token', async () => {
+    // The cookie-session shape: authenticated, no client-held token.
+    mockAuth = { isAuthenticated: true, token: null };
+    globalThis.fetch.mockResolvedValue(
+      okResponse({ accounts: [{ id: 'a1', name: 'BBVA' }], summary: {} }),
+    );
+
+    const { result } = renderHook(() => useFinancialAccounts());
+
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.accounts).toHaveLength(1);
+    expectNoAuthorizationHeader();
   });
 
   it('captures the error and keeps accounts empty on HTTP failure', async () => {

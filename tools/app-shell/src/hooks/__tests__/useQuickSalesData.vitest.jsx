@@ -1,12 +1,33 @@
 import { renderHook, waitFor } from '@testing-library/react';
 import { useQuickSalesData, PAYMENT_METHODS } from '../useQuickSalesData';
 
+/**
+ * ETP-4576 — the session is a server-side `__Host-` cookie, so this hook gates
+ * on `isAuthenticated` and sends no Authorization header.
+ *
+ * The auth mock is a plain mutable object rather than a vi.fn() with
+ * mockReturnValueOnce: React can invoke the hook more than once per render, and
+ * a "once" override would decay to the default mid-render.
+ */
+let mockAuth = { isAuthenticated: true };
+
 vi.mock('@/auth/AuthContext.jsx', () => ({
-  useAuth: () => ({ token: 'test-token' }),
+  useAuth: () => mockAuth,
 }));
+
+/** Asserts no request carried a bearer token — the point of ETP-4576. */
+function expectNoAuthorizationHeader() {
+  for (const [, init] of globalThis.fetch.mock.calls) {
+    const headers = init?.headers ?? {};
+    const keys = Object.keys(headers).map((k) => k.toLowerCase());
+    expect(keys).not.toContain('authorization');
+    expect(JSON.stringify(headers)).not.toContain('Bearer');
+  }
+}
 
 describe('useQuickSalesData', () => {
   beforeEach(() => {
+    mockAuth = { isAuthenticated: true };
     globalThis.fetch = vi.fn();
   });
 
@@ -167,6 +188,50 @@ describe('useQuickSalesData', () => {
 
     // p1_10 and p1_20 but not the duplicate p1_10
     expect(result.current.products).toHaveLength(2);
+  });
+
+  it('sets error and issues no request when unauthenticated', async () => {
+    mockCatalogResponses();
+    mockAuth = { isAuthenticated: false };
+
+    const { result } = renderHook(() => useQuickSalesData('http://localhost/api'));
+
+    await waitFor(() => {
+      expect(result.current.loading).toBe(false);
+    });
+
+    expect(globalThis.fetch).not.toHaveBeenCalled();
+    expect(result.current.error).toBeTruthy();
+    expect(result.current.products).toEqual([]);
+  });
+
+  it('loads the catalog when authenticated even though the client holds no token', async () => {
+    // The cookie-session shape: authenticated, no client-held token.
+    mockAuth = { isAuthenticated: true, token: null };
+    mockCatalogResponses();
+
+    const { result } = renderHook(() => useQuickSalesData('http://localhost/api'));
+
+    await waitFor(() => {
+      expect(result.current.loading).toBe(false);
+    });
+
+    expect(result.current.error).toBeNull();
+    expect(result.current.products).toHaveLength(2);
+  });
+
+  it('never sends an Authorization header on any catalog request', async () => {
+    mockCatalogResponses();
+
+    const { result } = renderHook(() => useQuickSalesData('http://localhost/api'));
+
+    await waitFor(() => {
+      expect(result.current.loading).toBe(false);
+    });
+
+    expect(globalThis.fetch).toHaveBeenCalled();
+    // ETP-4576 — the `__Host-` session cookie authenticates every call.
+    expectNoAuthorizationHeader();
   });
 
   it('exports PAYMENT_METHODS constant', () => {

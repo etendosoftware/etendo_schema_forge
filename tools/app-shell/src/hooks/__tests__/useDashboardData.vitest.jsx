@@ -10,8 +10,21 @@ vi.mock('@generated/dashboard/generated/config', () => ({
   actions: [{ id: 'a1', label: 'Action 1' }],
 }));
 
+/**
+ * ETP-4576 — the session is a server-side `__Host-` cookie, so the hook gates on
+ * `isAuthenticated` and sends no Authorization header. This gate is the one that
+ * failed SILENTLY: with a cookie session `token` is always null, so the hook
+ * short-circuited to buildEmptyFallback() and the dashboard rendered every
+ * widget empty with no error at all.
+ *
+ * The auth mock is a plain mutable object rather than a vi.fn() with
+ * mockReturnValueOnce: React can invoke the hook more than once per render, and
+ * a "once" override would decay to the default mid-render.
+ */
+let mockAuth = { isAuthenticated: true };
+
 vi.mock('@/auth/AuthContext', () => ({
-  useAuth: () => ({ token: 'test-token' }),
+  useAuth: () => mockAuth,
 }));
 
 vi.mock('@/lib/dashboardNavigation.js', () => ({
@@ -22,8 +35,19 @@ vi.mock('@/components/dashboard/DashboardDateRangeContext', () => ({
   useDashboardDateRange: () => ({ range: 'month' }),
 }));
 
+/** Asserts no request carried a bearer token — the point of ETP-4576. */
+function expectNoAuthorizationHeader() {
+  for (const [, init] of globalThis.fetch.mock.calls) {
+    const headers = init?.headers ?? {};
+    const keys = Object.keys(headers).map((k) => k.toLowerCase());
+    expect(keys).not.toContain('authorization');
+    expect(JSON.stringify(headers)).not.toContain('Bearer');
+  }
+}
+
 describe('useDashboardData', () => {
   beforeEach(() => {
+    mockAuth = { isAuthenticated: true };
     // Mock window.location for getApiBase()
     Object.defineProperty(window, 'location', {
       value: { pathname: '/etendo/web/app' },
@@ -192,6 +216,54 @@ describe('useDashboardData', () => {
 
     // All widgets failed, should get empty fallback
     expect(result.current.kpis[0].value).toBe(0);
+  });
+
+  it('returns the empty fallback and issues no request when unauthenticated', async () => {
+    mockAuth = { isAuthenticated: false };
+    mockAllEndpointsOk();
+
+    const { result } = renderHook(() => useDashboardData());
+
+    await waitFor(() => {
+      expect(result.current.loading).toBe(false);
+    });
+
+    expect(globalThis.fetch).not.toHaveBeenCalled();
+    expect(result.current.kpis[0].value).toBe(0);
+    expect(result.current.pendingTasks).toEqual([]);
+    expect(result.current.pendingAmounts.toCollect.count).toBe(0);
+  });
+
+  it('loads every widget when authenticated even though the client holds no token', async () => {
+    // The cookie-session shape: authenticated, no client-held token. This is the
+    // regression: gating on `token` made the dashboard render empty in silence.
+    mockAuth = { isAuthenticated: true, token: null };
+    mockAllEndpointsOk();
+
+    const { result } = renderHook(() => useDashboardData());
+
+    await waitFor(() => {
+      expect(result.current.loading).toBe(false);
+    });
+
+    expect(globalThis.fetch).toHaveBeenCalled();
+    expect(result.current.kpis[0].value).toBe(1000);
+    expect(result.current.pendingTasks).toHaveLength(1);
+    expect(result.current.topClients).toHaveLength(1);
+  });
+
+  it('never sends an Authorization header on any widget request', async () => {
+    mockAllEndpointsOk();
+
+    const { result } = renderHook(() => useDashboardData());
+
+    await waitFor(() => {
+      expect(result.current.loading).toBe(false);
+    });
+
+    expect(globalThis.fetch).toHaveBeenCalled();
+    // ETP-4576 — the `__Host-` session cookie authenticates every widget call.
+    expectNoAuthorizationHeader();
   });
 
   it('handles response without response.data field', async () => {
