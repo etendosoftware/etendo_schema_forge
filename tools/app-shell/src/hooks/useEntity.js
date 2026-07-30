@@ -810,6 +810,9 @@ export function useEntity(entity, childEntity, {
     // how the timeout and newer handleNew calls make in-flight responses inert,
     // even when the underlying fetch implementation ignores the abort signal.
     const defaultsEpochRef = useRef(0);
+    // ETP-4741: AbortController of the in-flight defaults fetch, null when none
+    // is pending. Lets record loads neutralize the /new session (see below).
+    const defaultsAbortRef = useRef(null);
     // ETP-3894: per-form snapshot of visible fields registered by each EntityForm instance.
     // Keyed by a stable formId (React.useId) so multiple EntityForms accumulate rather than
     // overwrite each other. handleSave flattens all entries to validate the complete form.
@@ -984,8 +987,25 @@ export function useEntity(entity, childEntity, {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [apiBaseUrl, childEntity, token]);
 
+    // ETP-4741 (QA BUG-1) — loading an EXISTING record while a /new defaults
+    // request is still in flight must kill that request the same way a newer
+    // handleNew does: bump the epoch so the late response is inert, abort the
+    // fetch, and release defaultsLoading explicitly. The explicit release
+    // matters — once the epoch moves, handleNew's own finally skips its
+    // release, so relying on it would latch the gate true forever. Neutralized
+    // sessions emit no defaults_block event. No-op when nothing is pending.
+    const neutralizePendingDefaults = useCallback(() => {
+        const controller = defaultsAbortRef.current;
+        if (!controller) return;
+        defaultsAbortRef.current = null;
+        defaultsEpochRef.current += 1;
+        setDefaultsLoading(false);
+        controller.abort();
+    }, []);
+
     const fetchById = useCallback((id) => {
         if (!id) return;
+        neutralizePendingDefaults();
         setLoading(true);
         fetch(`${apiBaseUrl}/${entity}/${id}`, { headers })
             .then(res => {
@@ -1000,7 +1020,7 @@ export function useEntity(entity, childEntity, {
                 setLoading(false);
             })
             .catch(() => setLoading(false));
-    }, [apiBaseUrl, entity, token, fetchChildren]);
+    }, [apiBaseUrl, entity, token, fetchChildren, neutralizePendingDefaults]);
 
     // Lightweight header refresh used after line add/update/delete operations.
     // Unlike fetchById, this preserves fields the user has explicitly edited (tracked in
@@ -1064,11 +1084,12 @@ export function useEntity(entity, childEntity, {
         // user actually edits in THIS record — never legacy values inherited from a
         // previously-edited record. Safe for payloads: userChangedKeysRef only feeds
         // buildCreatePayload (new records), not the existing-record PATCH diff.
+        neutralizePendingDefaults();
         userChangedKeysRef.current = new Set();
         setSelected(row);
         setEditing(row ? { ...row } : null);
         fetchChildren(row?.id);
-    }, [fetchChildren]);
+    }, [fetchChildren, neutralizePendingDefaults]);
 
     const handleNew = useCallback(async () => {
         backendDefaultKeysRef.current = new Set();
@@ -1088,9 +1109,11 @@ export function useEntity(entity, childEntity, {
             properties: { entity },
         });
         const controller = new AbortController();
+        defaultsAbortRef.current = controller;
         const timeoutId = setTimeout(() => {
             if (!isCurrent()) return;
             defaultsEpochRef.current += 1; // late responses must not merge
+            defaultsAbortRef.current = null;
             setDefaultsLoading(false);
             controller.abort();
             settleTiming({ status: 'timeout' });
@@ -1144,6 +1167,7 @@ export function useEntity(entity, childEntity, {
         } finally {
             if (isCurrent()) {
                 clearTimeout(timeoutId);
+                defaultsAbortRef.current = null;
                 setDefaultsLoading(false);
             }
         }
