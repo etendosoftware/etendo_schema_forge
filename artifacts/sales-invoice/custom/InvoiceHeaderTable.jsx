@@ -80,6 +80,11 @@ export default function InvoiceHeaderTable(props) {
         column: 'C_DocTypeTarget_ID',
         type: 'custom',
         required: true,
+        // `type: 'custom'` drives the badge cell render, but that would make the
+        // advanced filter fall back to a free-text input. `filterMode` (honored
+        // first by resolveFilterMode, ignored by DataTable) restores the correct
+        // identifier picker for this FK column without touching the grid cell.
+        filterMode: 'identifier',
         labels: { [locale]: t('documentType') },
         label: t('documentType'),
         render: (row) => {
@@ -101,7 +106,7 @@ export default function InvoiceHeaderTable(props) {
       },
       { key: 'documentNo', column: 'DocumentNo', type: 'string', label: gl['documentNo'] || 'Document No.', required: true },
       {
-        key: 'eTGODueDate', column: 'EM_Etgo_Due_Date', type: 'custom', label: t('dueDate'),
+        key: 'eTGODueDate', column: 'EM_Etgo_Due_Date', type: 'custom', filterMode: 'date', label: t('dueDate'),
         render: (row) => {
           const d = row.eTGODueDate;
           if (!d) return <span className="text-muted-foreground">—</span>;
@@ -125,6 +130,7 @@ export default function InvoiceHeaderTable(props) {
         column: 'OutstandingAmt',
         type: 'custom',
         required: true,
+        filterMode: 'numeric',
         label: t('pendingPaymentColumn'),
         render: (row) => {
           const outstanding = parseFloat(row.outstandingAmount ?? 0);

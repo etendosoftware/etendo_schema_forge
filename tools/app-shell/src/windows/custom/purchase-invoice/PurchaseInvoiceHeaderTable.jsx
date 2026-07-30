@@ -67,6 +67,11 @@ export default function PurchaseInvoiceHeaderTable(props) {
         column: 'C_DocTypeTarget_ID',
         type: 'custom',
         required: true,
+        // `type: 'custom'` drives the badge cell render, but that would make the
+        // advanced filter fall back to a free-text input. `filterMode` (honored
+        // first by resolveFilterMode, ignored by DataTable) restores the correct
+        // identifier picker for this FK column without touching the grid cell.
+        filterMode: 'identifier',
         // `labels` (priority 1 in resolveColumnLabel) must be set so this header
         // outranks the AD-dictionary fallback translate('C_DocTypeTarget_ID'),
         // which otherwise resolves to "Documento transacción".
@@ -88,7 +93,7 @@ export default function PurchaseInvoiceHeaderTable(props) {
       },
       { key: 'orderReference', column: 'POReference', type: 'string' },
       {
-        key: 'eTGODueDate', column: 'EM_Etgo_Due_Date', type: 'custom', label: t('dueDate'),
+        key: 'eTGODueDate', column: 'EM_Etgo_Due_Date', type: 'custom', filterMode: 'date', label: t('dueDate'),
         render: (row) => {
           const d = row.eTGODueDate;
           if (!d) return <span className="text-muted-foreground">—</span>;
@@ -109,7 +114,7 @@ export default function PurchaseInvoiceHeaderTable(props) {
       { key: 'posted', column: 'Posted', type: 'boolean', required: true, badge: true, badgeLabels: { true: { en_US: 'Posted', es_ES: 'Contabilizado' }, false: { en_US: 'Not posted', es_ES: 'Sin contabilizar' } }, badgeVariants: { true: 'green', false: 'orange' } },
       ...fiscalCols,
       {
-        key: 'grandTotalAmount', column: 'GrandTotal', type: 'custom', required: true,
+        key: 'grandTotalAmount', column: 'GrandTotal', type: 'custom', required: true, filterMode: 'numeric',
         label: t('impTotal'),
         render: (row) => {
           const raw = row.grandTotalAmount;
@@ -123,6 +128,7 @@ export default function PurchaseInvoiceHeaderTable(props) {
         column: 'OutstandingAmt',
         type: 'custom',
         required: true,
+        filterMode: 'numeric',
         label: t('pendingPaymentColumn'),
         render: (row) => {
           const outstanding = parseFloat(row.outstandingAmount ?? 0);

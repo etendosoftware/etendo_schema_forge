@@ -58,6 +58,45 @@ vi.mock('../DistinctValuesList.jsx', () => ({
   DistinctValuesList: () => null,
 }));
 
+// The local AdvancedFilterBuilder is a shim to app-shell-core (see
+// AdvancedFilterBuilder.vitest.jsx for the full rationale): the rendered
+// component's internal imports resolve through the core package's exports map,
+// so the '@/...' mocks above no longer bind. Mock the core subpath instead.
+vi.mock('@etendosoftware/app-shell-core/components/ui/select.jsx', () => ({
+  Select: ({ children, value, onValueChange, disabled }) => (
+    <select
+      data-testid="select-control"
+      value={value ?? ''}
+      disabled={disabled}
+      onChange={(e) => onValueChange?.(e.target.value)}
+    >
+      {children}
+    </select>
+  ),
+  SelectTrigger: ({ children }) => <>{children}</>,
+  SelectValue: ({ placeholder }) => (
+    placeholder ? <option value="" disabled>{placeholder}</option> : null
+  ),
+  SelectContent: ({ children }) => <>{children}</>,
+  SelectItem: ({ children, value }) => <option value={value}>{children}</option>,
+}));
+
+vi.mock('@etendosoftware/app-shell-core/hooks/useDistinctValues.js', () => ({
+  useDistinctValues: () => ({
+    values: [],
+    loading: false,
+    loadingMore: false,
+    hasMore: false,
+    search: '',
+    setSearch: vi.fn(),
+    loadMore: vi.fn(),
+  }),
+}));
+
+vi.mock('@etendosoftware/app-shell-core/components/contract-ui/DistinctValuesList.jsx', () => ({
+  DistinctValuesList: () => null,
+}));
+
 import { AdvancedFilterBuilder } from '../AdvancedFilterBuilder.jsx';
 
 // ============================================================

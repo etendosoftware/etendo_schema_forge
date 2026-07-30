@@ -83,7 +83,71 @@ vi.mock('../DistinctValuesList.jsx', () => ({
   ),
 }));
 
+// The local AdvancedFilterBuilder is a shim to app-shell-core, so the rendered
+// component imports the CORE `useDistinctValues` (../../hooks/useDistinctValues.js)
+// and CORE `DistinctValuesList` (./DistinctValuesList.jsx). Vitest matches mocks by
+// RESOLVED module id, and the core package's exports map routes these subpath
+// specifiers to the very files the core component imports relatively — so mocking
+// them here intercepts the core component's internal imports. The functional-path
+// mocks above no longer bind post-shim; these are the ones that take effect.
+vi.mock('@etendosoftware/app-shell-core/hooks/useDistinctValues.js', () => ({
+  useDistinctValues: () => ({
+    values: distinctState.values,
+    loading: false,
+    loadingMore: false,
+    hasMore: false,
+    search: '',
+    setSearch: vi.fn(),
+    loadMore: vi.fn(),
+  }),
+}));
+
+vi.mock('@etendosoftware/app-shell-core/components/contract-ui/DistinctValuesList.jsx', () => ({
+  DistinctValuesList: ({ codes = [], labelFor, onSelect }) => (
+    <div data-testid="distinct-values-list">
+      {codes.map((code, i) => (
+        <button
+          key={`${String(code)}-${i}`}
+          type="button"
+          data-testid="distinct-option"
+          onClick={() => onSelect?.(code)}
+        >
+          {labelFor ? labelFor(code) : String(code)}
+        </button>
+      ))}
+    </div>
+  ),
+}));
+
+// Same reasoning as above: the core component imports Select from its own
+// '../ui/select.jsx', which the exports map's './components/ui/*' wildcard
+// routes to this subpath specifier — mock it here, not at '@/components/ui/select.jsx'.
+vi.mock('@etendosoftware/app-shell-core/components/ui/select.jsx', () => ({
+  Select: ({ children, value, onValueChange, disabled }) => (
+    <select
+      data-testid="select-control"
+      value={value ?? ''}
+      disabled={disabled}
+      onChange={(e) => onValueChange?.(e.target.value)}
+    >
+      {children}
+    </select>
+  ),
+  SelectTrigger: ({ children }) => <>{children}</>,
+  SelectValue: ({ placeholder }) => (
+    placeholder ? <option value="" disabled>{placeholder}</option> : null
+  ),
+  SelectContent: ({ children }) => <>{children}</>,
+  SelectItem: ({ children, value }) => <option value={value}>{children}</option>,
+}));
+
 import { AdvancedFilterBuilder } from '../AdvancedFilterBuilder.jsx';
+// The component is a shim to app-shell-core: its value pickers call the core
+// `useDistinctValues` → `useAuth`, which needs the core AuthProvider in the tree
+// (functional `@/auth` re-exports it). Wrap the enum-picker renders with it.
+import { AuthProvider } from '@/auth/AuthContext.jsx';
+
+const renderWithAuth = (ui) => render(<AuthProvider>{ui}</AuthProvider>);
 
 const COLUMNS = [
   { key: 'name', label: 'Name', type: 'text', column: 'Name' },
@@ -443,7 +507,7 @@ describe('AdvancedFilterBuilder', () => {
         rowOperator: 'and',
         conditions: [{ field: 'processed', operator: 'equals', value: 'true' }],
       };
-      render(
+      renderWithAuth(
         <AdvancedFilterBuilder
           columns={[statusCol]}
           value={filterValue}
@@ -467,7 +531,7 @@ describe('AdvancedFilterBuilder', () => {
         rowOperator: 'and',
         conditions: [{ field: 'processed', operator: 'equals', value: 'false' }],
       };
-      render(
+      renderWithAuth(
         <AdvancedFilterBuilder
           columns={[literalCol]}
           value={filterValue}
@@ -484,7 +548,7 @@ describe('AdvancedFilterBuilder', () => {
         rowOperator: 'and',
         conditions: [{ field: 'processed', operator: 'equals', value: 'true' }],
       };
-      render(
+      renderWithAuth(
         <AdvancedFilterBuilder
           columns={[statusCol]}
           value={filterValue}
@@ -509,7 +573,7 @@ describe('AdvancedFilterBuilder', () => {
         rowOperator: 'and',
         conditions: [{ field: 'status', operator: 'equals', value: 'CO' }],
       };
-      render(
+      renderWithAuth(
         <AdvancedFilterBuilder
           columns={[partialCol]}
           value={filterValue}
@@ -548,7 +612,7 @@ describe('AdvancedFilterBuilder', () => {
         conditions: [{ field: 'processed', operator: 'equals', value: '' }],
       };
 
-      render(
+      renderWithAuth(
         <AdvancedFilterBuilder
           columns={[statusCol]}
           value={filterValue}
