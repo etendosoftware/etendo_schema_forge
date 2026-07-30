@@ -218,6 +218,15 @@ column (`grid: true, form: false, visibility: "readOnly"`). The `aggregateProduc
 helper sums it across all bin-content rows for each product to produce the per-product
 and warehouse-total valuations shown in the sidebar and Products tab.
 
+## ETP-4565 — Accounting tab not wired into the GO UI (no change made)
+
+Investigated as part of ETP-4565 ("Contabilidad tab: single record + non-deletable" across 8 master-data windows). Findings, no code change:
+
+- The native AD `Warehouse and Storage Bins` window (`AD_Window_ID = 139`) does have an "Accounting" tab (`ad_tab_id = 209`, table `M_Warehouse_Acct`).
+- However, `artifacts/warehouse/decisions.json` currently declares `entities.accounting: { "exclude": true }` — the Contabilidad tab is **not wired into the custom warehouse window at all**, unlike the other 7 target windows. `window.detailEntity` is `null` and `window.secondaryTabs` only declares `productTransactions`.
+- **Auto-creation (requirement 3) is also confirmed broken here, independent of the wiring gap:** of the 18 most-recently-created warehouses, 0 have a `M_Warehouse_Acct` row (older, non-GO-created warehouses in the same DB do have one — `m_warehouse_acct` has 14 rows total, all pre-dating the current onboarding flow).
+- Wiring a new Contabilidad tab into this fully custom window (own `index.jsx`, no generic `secondaryTabs`/`detailEntity` slot currently used for it) plus the backend auto-creation gap are both flagged as follow-up work in the ETP-4565 coordinator report — not implemented in this pass to avoid silently expanding a bugfix ticket's scope.
+
 ## Known gaps
 
 - **Production and internal consumption not navigable**: transactions with movement types `P+`, `P-`, `D-`, `D+` have no corresponding GO window. The Document column renders plain text instead of a navigable link. This will remain until GO windows for those document types are built.

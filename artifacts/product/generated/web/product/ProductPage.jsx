@@ -96,7 +96,7 @@ export const api = {
       "post": true,
       "put": true,
       "patch": true,
-      "delete": true,
+      "delete": false,
       "listUrl": "/sws/neo/product/accounting",
       "detailUrl": "/sws/neo/product/accounting/{id}",
       "supportedFilters": []

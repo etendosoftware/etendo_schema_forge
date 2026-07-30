@@ -610,6 +610,7 @@
     },
     "customerAccounting": {
       "javaQualifier": "customerAccountingHandler",
+      "hideDelete": true,
       "fields": {
         "accountingSchema": { "visibility": "system", "addLineFromSibling": true },
         "customerReceivablesNo": {
@@ -635,6 +636,7 @@
     },
     "vendorAccounting": {
       "javaQualifier": "vendorAccountingHandler",
+      "hideDelete": true,
       "fields": {
         "accountingSchema": { "visibility": "system", "addLineFromSibling": true },
         "vendorLiability": {

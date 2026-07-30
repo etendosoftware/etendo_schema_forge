@@ -174,6 +174,7 @@ export default function TaxPage({ windowName, recordId, ...props }) {
         hideMoreMenu
         customTabs={[{ key: 'attachments', labelKey: 'attachments', Component: AttachmentsTab, placement: 'tab', props: { tableName: "C_Tax", config: {} } }]}
         requiredHeaderFields={requiredHeaderFields}
+        addLineGuard={(_, children) => children.length < 1}
         labelOverrides={labelOverrides}
         {...props} window={effectiveWindow}
       />

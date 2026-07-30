@@ -308,3 +308,7 @@ Verified in `artifacts/asset-group/contract.json` and the regenerated
 17. Confirm the **Attachments** tab appears after the Accounting tab (not before it).
 18. Upload a file in the Attachments tab and confirm it persists. Download it and delete it.
 19. Confirm no Print button or share/link icon appears anywhere in the window.
+
+## ETP-4565 — Accounting tab: non-deletable record
+
+**`entities.accounting.hideDelete: true`** added — the Accounting tab's row can no longer be deleted (`apiPrediction.crud.accounting.delete: false`); confirmed this gates the `SecondaryTableTab` delete affordance in `DetailView.jsx` the same way it does for `product`'s `secondaryTabs.accounting`. **Not yet addressed:** same as `product`, this window's Accounting tab uses `window.secondaryTabs` (not `detailEntity`), so there is no existing "cap at one record" mechanism — the `+ Add` button is not gated on child count. Tracked as a Schema Forge Developer follow-up (see ETP-4565 report), not implemented in this pass. Regenerated via `make regen ONLY=asset-group`; `sf-validate-pipeline --scope=asset-group` reports 0 violations. Regression test: `artifacts/__tests__/etp-4565-accounting-tab-restrictions.test.js`.

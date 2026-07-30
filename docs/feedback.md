@@ -514,3 +514,15 @@ visible when someone actually hovers a row in a running instance. When adding a 
 `position: absolute` hover strip, always re-check (a) whether the strip still fits inside its
 reserved column at the new width, and (b) whether the strip has an opaque background as a
 second line of defense in case it doesn't.
+
+---
+
+## [2026-07-30] ETP-4565 — `contacts` hit the known `AD_Ref_List_Trl` translation-stripping gap
+
+**Follow-up to** "`make regen` Silently Strips es_ES Enum Labels on a DB Missing `AD_Ref_List_Trl` Rows" above (originally documented against `financial-account`, also hit by `goods-shipment`). `contacts` is now a third confirmed occurrence.
+
+**Symptom:** `make regen ONLY=contacts` (as part of adding `entities.customerAccounting.hideDelete`/`entities.vendorAccounting.hideDelete: true` for ETP-4565) silently dropped all 3 `es_ES` labels (`Pendiente`/`Válido`/`No válido`) from `businessPartner.fields.oBTIKVIESStatus.enumValues[].labels` in `contract.json`, and the equivalent inline `labels` keys in the generated `BusinessPartnerForm.jsx` — a field `decisions.json` never touched in this change. The run reported success; only the "AD cache looks STALE" warning hinted at it.
+
+**Fix applied:** did not commit the label loss. Restored the 3 dropped `labels` blocks by hand in `contract.json` (byte-for-byte match to the committed baseline otherwise); `BusinessPartnerForm.jsx` carried no other change from the regen, so it was reverted outright to its committed version via `git checkout --`. The legitimate `hideDelete` additions (in `decisions.json`, `contract.json`'s `entities.customerAccounting`/`entities.vendorAccounting.hideDelete` + `apiPrediction.crud.*.delete: false`, and `contract.mcp.json`) were kept.
+
+**Lesson (reinforcing the original entry):** this sandbox is missing `AD_Ref_List_Trl` es_ES rows for more reference lists than the 4 originally catalogued (`oBTIKVIESStatus`'s reference list is a new one to add to that list). Anyone running `make regen` on `contacts` — or any other window exposing this reference list — should expect and check for this exact symptom before committing.

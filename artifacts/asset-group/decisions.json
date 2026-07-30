@@ -89,6 +89,7 @@
     },
     "accounting": {
       "name": "accounting",
+      "hideDelete": true,
       "fields": {
         "accumulatedDepreciation": {
           "visibility": "editable",

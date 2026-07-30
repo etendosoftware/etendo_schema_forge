@@ -98,7 +98,7 @@ export const api = {
       "post": true,
       "put": true,
       "patch": true,
-      "delete": true,
+      "delete": false,
       "listUrl": "/sws/neo/business-partner-category/accounting",
       "detailUrl": "/sws/neo/business-partner-category/accounting/{id}",
       "supportedFilters": []

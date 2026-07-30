@@ -1,8 +1,8 @@
 {
   "version": "0.15.0",
   "generatedAt": "2026-06-29T17:22:42.125Z",
-  "updatedAt": "2026-07-22T14:46:22.094Z",
-  "checksum": "d38438032c817d5d",
+  "updatedAt": "2026-07-30T16:59:23.237Z",
+  "checksum": "8fd7a47f355050d4",
   "frontendContract": {
     "window": {
       "id": "252",
@@ -321,7 +321,8 @@
           }
         ],
         "searchableFields": [],
-        "computedFields": []
+        "computedFields": [],
+        "hideDelete": true
       }
     }
   },
@@ -725,7 +726,7 @@
         "post": true,
         "put": true,
         "patch": true,
-        "delete": true,
+        "delete": false,
         "listUrl": "/sws/neo/asset-group/accounting",
         "detailUrl": "/sws/neo/asset-group/accounting/{id}",
         "supportedFilters": []

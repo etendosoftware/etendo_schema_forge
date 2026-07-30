@@ -444,6 +444,7 @@
     },
     "accounting": {
       "javaQualifier": "productAccountingHandler",
+      "hideDelete": true,
       "fields": {
         "accountingSchema": { "visibility": "system", "addLineFromSibling": true },
         "fixedAsset": {

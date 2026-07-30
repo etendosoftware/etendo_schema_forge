@@ -1,8 +1,8 @@
 {
   "version": "0.15.0",
   "generatedAt": "2026-06-29T17:22:42.125Z",
-  "updatedAt": "2026-07-21T14:29:49.994Z",
-  "contractChecksum": "d38438032c817d5d",
+  "updatedAt": "2026-07-30T16:59:23.237Z",
+  "contractChecksum": "8fd7a47f355050d4",
   "apiPrediction": {
     "specName": "asset-group",
     "baseUrl": "/sws/neo/asset-group",
@@ -24,7 +24,7 @@
         "post": true,
         "put": true,
         "patch": true,
-        "delete": true,
+        "delete": false,
         "listUrl": "/sws/neo/asset-group/accounting",
         "detailUrl": "/sws/neo/asset-group/accounting/{id}",
         "supportedFilters": []
@@ -216,5 +216,5 @@
     "knownLimitations": [],
     "dangerousOperations": []
   },
-  "checksum": "4c4f0489c79a1f5b"
+  "checksum": "b27ab584a3417e40"
 }

@@ -1,8 +1,7 @@
 {
-  "version": "0.2.0",
-  "generatedAt": "2026-07-31T14:37:13.834Z",
-  "updatedAt": "2026-07-31T16:47:08.597Z",
-  "checksum": "684388e0ec2d012e",
+  "version": "0.3.0",
+  "generatedAt": "2026-07-31T19:15:34.312Z",
+  "checksum": "14879ea3e2b672dd",
   "frontendContract": {
     "window": {
       "id": "123",
@@ -2073,6 +2072,7 @@
         "searchableFields": [],
         "computedFields": [],
         "javaQualifier": "customerAccountingHandler",
+        "hideDelete": true,
         "addLineHiddenFromSibling": [
           "accountingSchema"
         ]
@@ -3125,6 +3125,7 @@
         "searchableFields": [],
         "computedFields": [],
         "javaQualifier": "vendorAccountingHandler",
+        "hideDelete": true,
         "addLineHiddenFromSibling": [
           "accountingSchema"
         ]
@@ -11193,7 +11194,7 @@
         "post": true,
         "put": true,
         "patch": true,
-        "delete": true,
+        "delete": false,
         "listUrl": "/sws/neo/contacts/customerAccounting",
         "detailUrl": "/sws/neo/contacts/customerAccounting/{id}",
         "supportedFilters": []
@@ -11226,7 +11227,7 @@
         "post": true,
         "put": true,
         "patch": true,
-        "delete": true,
+        "delete": false,
         "listUrl": "/sws/neo/contacts/vendorAccounting",
         "detailUrl": "/sws/neo/contacts/vendorAccounting/{id}",
         "supportedFilters": []

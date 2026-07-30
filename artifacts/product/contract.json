@@ -1,7 +1,7 @@
 {
-  "version": "0.26.0",
-  "generatedAt": "2026-07-30T22:44:13.503Z",
-  "checksum": "df7043b80342d6e7",
+  "version": "0.1.0",
+  "generatedAt": "2026-07-31T19:15:34.496Z",
+  "checksum": "99d0c1843b4c0908",
   "frontendContract": {
     "window": {
       "id": "140",
@@ -995,6 +995,7 @@
         "searchableFields": [],
         "computedFields": [],
         "javaQualifier": "productAccountingHandler",
+        "hideDelete": true,
         "addLineHiddenFromSibling": [
           "accountingSchema"
         ]
@@ -5673,7 +5674,7 @@
         "post": true,
         "put": true,
         "patch": true,
-        "delete": true,
+        "delete": false,
         "listUrl": "/sws/neo/product/accounting",
         "detailUrl": "/sws/neo/product/accounting/{id}",
         "supportedFilters": []
