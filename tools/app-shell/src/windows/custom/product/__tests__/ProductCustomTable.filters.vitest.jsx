@@ -95,4 +95,34 @@ describe('ProductCustomTable — identity cell & Advanced Filter fields (ETP-460
     expect(capturedProps.columns.map((c) => c.key)).not.toContain('injected');
     expect(capturedProps.columns.find((c) => c.key === 'name')).toBeDefined();
   });
+
+  // ETP-4609 — regression: ListView.jsx declares its own `hiddenColumns = []`
+  // default prop and forwards it to whatever custom Table component the window
+  // wires in (here, ProductCustomTable — see ListView.jsx ~line 238 / ~line 930).
+  // ProductCustomTable spreads `{...props}` AFTER its own local
+  // `hiddenColumns={hiddenColumns}`, so ListView's empty-array default silently
+  // overwrites the intended `['name', 'searchKey']` override — the split
+  // name/searchKey filter columns end up rendered as visible grid columns,
+  // duplicating what the `nameAndSearchKey` avatar cell already shows.
+  it('keeps its own hiddenColumns override even when the parent (ListView) '
+    + 'forwards its own conflicting hiddenColumns prop', () => {
+    // Mimics exactly what ListView.jsx spreads into the Table component: an
+    // explicit (default) empty array, not an absent prop.
+    render(<ProductCustomTable data={[]} hiddenColumns={[]} />);
+    expect(capturedProps.hiddenColumns).toEqual(expect.arrayContaining(['name', 'searchKey']));
+  });
+
+  it('unions a non-empty incoming hiddenColumns with its own local override '
+    + '(nothing dropped from either side, deduped)', () => {
+    // A parent forwarding a real, DIFFERENT hiddenColumns array (not just the
+    // empty-array bug-reproduction case) must still get BOTH sets merged —
+    // ProductCustomTable.jsx's own ['name', 'searchKey'] plus whatever the
+    // parent additionally asks to hide.
+    render(<ProductCustomTable data={[]} hiddenColumns={['someOtherColumn']} />);
+    expect(capturedProps.hiddenColumns).toEqual(
+      expect.arrayContaining(['name', 'searchKey', 'someOtherColumn']),
+    );
+    // Exactly 3 entries — proves no duplication and nothing extra sneaked in.
+    expect(capturedProps.hiddenColumns).toHaveLength(3);
+  });
 });

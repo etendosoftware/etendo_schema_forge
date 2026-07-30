@@ -88,6 +88,9 @@ export function usePendingStatementLines(accountId, filters = {}) {
       lines: Array.isArray(raw.lines) ? raw.lines : [],
       total: Number(raw.total ?? 0),
       counts: raw.counts ?? {},
+      // Reconciliations of this account currently in draft. Core allows only one editable
+      // reconciliation per account, so > 0 means a "Reactivar" will first confirm that draft.
+      draftReconciliationCount: Number(raw.draftReconciliationCount ?? 0),
     }),
     [],
   );
@@ -103,6 +106,7 @@ export function usePendingStatementLines(accountId, filters = {}) {
     lines: data?.lines ?? [],
     total: data?.total ?? 0,
     counts: data?.counts ?? {},
+    draftReconciliationCount: data?.draftReconciliationCount ?? 0,
     loading,
     error,
     reload,
@@ -165,6 +169,33 @@ export function useReconcileGroup() {
 export function useReactivateReconciliation() {
   const { post, loading, error } = useNeoPost('reactivate');
   return { reactivate: post, loading, error };
+}
+
+/**
+ * Un-reconciles a SINGLE operation ("desconciliar") from a statement line, leaving the rest of the
+ * line's reconciliation intact (POST). For an auto-created invoice payment it also reverses the
+ * payment and restores the invoice to unpaid.
+ * Payload shape: { financialAccountId, statementLineId, transactionId }.
+ *
+ * @returns {{ removeOperation: (payload: object) => Promise<object>, loading: boolean, error: Error|null }}
+ */
+export function useRemoveOperation() {
+  const { post, loading, error } = useNeoPost('removeOperation');
+  return { removeOperation: post, loading, error };
+}
+
+/**
+ * "Reactivar" — the lightweight un-reconcile (POST). Same payload as `useRemoveOperation`
+ * ({ financialAccountId, statementLineId, transactionIds }), but instead of deleting the
+ * reconciliation it leaves it in DRAFT with its transactions still linked: the line returns to
+ * "Pendiente" and, when re-selected, those same transactions come back pre-selected so confirming
+ * re-processes that same reconciliation. Auto-created invoice payments are still fully removed.
+ *
+ * @returns {{ reactivateSelected: (payload: object) => Promise<object>, loading: boolean, error: Error|null }}
+ */
+export function useReactivateSelected() {
+  const { post, loading, error } = useNeoPost('reactivateSelected');
+  return { reactivateSelected: post, loading, error };
 }
 
 /**

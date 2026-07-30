@@ -10,7 +10,7 @@ import { buildUrlWithParams } from '@/lib/buildUrlWithParams.js';
 import { getCatalogOptions } from '@/lib/selectorCatalog.js';
 import { resolveIdentifier } from '@/lib/resolveIdentifier.js';
 import { resolveColumnLabel } from '@/lib/resolveColumnLabel.js';
-import { formatAmount } from '@/lib/formatAmount.js';
+import { formatCurrency } from '@/lib/formatCurrency.js';
 import { applyCalloutUpdates } from '@/lib/applyCalloutUpdates.js';
 import { columnMinWidthPx, columnFlex } from '@/lib/linesColumnWidth.js';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -310,9 +310,10 @@ function isStaticSelectField(field) {
 }
 
 /**
- * Renders the inline-add-row cell for a `selector` field. When the catalog has
- * pre-loaded options it shows a Radix <Select>; otherwise it falls back to the
- * lazy-loading <InlineSearchCombo> backed by the selector URL.
+ * Renders the inline-add-row cell for a `selector` field. Always uses the
+ * searchable <InlineSearchCombo>, preloaded with the catalog's options (if any)
+ * and backed by the selector URL for server-side search / lazy loading —
+ * mirroring the `search`-type add-row cell and the header's unified selector.
  */
 function renderSelectorCell({
   catalogs, entity, field, apiBaseUrl, col, values, touchedFieldsRef,
@@ -322,75 +323,40 @@ function renderSelectorCell({
   const allOptions = getCatalogOptions(catalogs, entity, field);
   const selectorUrl = buildSelectorUrl(apiBaseUrl, entity, field);
   // Exclude the option equal to the current value of a sibling field on this add-line row
-  // (e.g. newStorageBin can't equal storageBin). Applies to both the URL-backed combo and
-  // the preloaded-catalog dropdown.
+  // (e.g. newStorageBin can't equal storageBin). Applies to both the preloaded catalog and
+  // any server-side search results.
   const excludeId = field.excludeValueOf ? (values[field.excludeValueOf] ?? null) : null;
   const options = excludeId != null ? allOptions.filter(o => o.id !== excludeId) : allOptions;
 
-  if (options.length === 0) {
-    if (!selectorUrl) return (
+  if (options.length === 0 && !selectorUrl) {
+    return (
       <TableCell
         key={col.key}
         className="py-1 px-2"
         data-testid={"TableCell__" + field.id} />
     );
-    return (
-      <TableCell key={col.key} data-testid={`inline-add-cell-${col.key}`} className="py-1 px-2">
-        <InlineSearchCombo
-          field={field}
-          value={values[field.key] ?? ''}
-          displayLabel={values[field.key + '$_identifier'] || ''}
-          options={[]}
-          onChange={(id, label, selectedItem) => {
-            touchedFieldsRef.current.add(field.key);
-            handleChange(field.key + '$_identifier', label || '');
-            handleFieldChange(field.key, id, selectedItem);
-          }}
-          onKeyDown={handleKeyDown}
-          inputRef={isFirst ? firstInputRef : undefined}
-          placeholder={fieldLabel}
-          selectorUrl={selectorUrl}
-          selectorContext={selectorContext}
-          excludeId={excludeId}
-          token={token}
-          data-testid={"InlineSearchCombo__" + field.id} />
-      </TableCell>
-    );
   }
+
   return (
     <TableCell key={col.key} data-testid={`inline-add-cell-${col.key}`} className="py-1 px-2">
-      <Select
-        value={values[field.key] || undefined}
-        onValueChange={(val) => {
-          if (val === '__empty__') {
-            handleChange(field.key + '$_identifier', '');
-            handleFieldChange(field.key, '', null);
-            return;
-          }
-          const opt = options.find(o => o.id === val);
-          if (opt) {
-            handleChange(field.key + '$_identifier', opt.name || opt.label || opt._identifier || '');
-          }
-          handleFieldChange(field.key, val, opt);
+      <InlineSearchCombo
+        field={field}
+        value={values[field.key] ?? ''}
+        displayLabel={values[field.key + '$_identifier'] || ''}
+        options={options}
+        onChange={(id, label, selectedItem) => {
+          touchedFieldsRef.current.add(field.key);
+          handleChange(field.key + '$_identifier', label || '');
+          handleFieldChange(field.key, id, selectedItem);
         }}
-        data-testid={"Select__" + field.id}>
-        <SelectTrigger
-            ref={isFirst ? firstInputRef : undefined}
-            data-testid={`inline-add-field-${field.key}`}
-            onKeyDown={(e) => {
-              if (e.key === 'Escape') handleKeyDown(e);
-            }}
-            className="w-full h-8 text-sm bg-card focus:ring-2 focus:ring-primary"
-        >
-          <SelectValue placeholder={fieldLabel} data-testid={"SelectValue__" + field.id} />
-        </SelectTrigger>
-        <SelectContent data-testid={"SelectContent__" + field.id}>
-          <SelectItem value="__empty__" data-testid={"SelectItem__" + field.id}>&nbsp;</SelectItem>
-          {options.map(opt => (
-              <SelectItem key={opt.id} value={opt.id} data-testid={"SelectItem__" + field.id}>{opt.name || opt.label || opt._identifier || opt.id}</SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
+        onKeyDown={handleKeyDown}
+        inputRef={isFirst ? firstInputRef : undefined}
+        placeholder={fieldLabel}
+        selectorUrl={selectorUrl}
+        selectorContext={selectorContext}
+        excludeId={excludeId}
+        token={token}
+        data-testid={"InlineSearchCombo__" + field.id} />
     </TableCell>
   );
 }
@@ -614,6 +580,71 @@ function renderInlineAddCell(col, ctx) {
 // make buildEmpty's effect re-run, wiping in-progress input. Share one frozen ref.
 const EMPTY_SEED = {};
 
+// First pass of buildEmpty: seed every field with its literal default, the
+// auto-computed lineNo, or '' when neither applies.
+function buildFieldDefaults(fields, defaultLineNo) {
+  const empty = {};
+  for (const f of fields) {
+    if (f.key === 'lineNo') {
+      empty[f.key] = defaultLineNo;
+    } else if (f.defaultValue !== undefined && !/^@[^@]+@$/.test(String(f.defaultValue))) {
+      empty[f.key] = f.defaultValue;
+    } else {
+      empty[f.key] = '';
+    }
+  }
+  return empty;
+}
+
+// Seed display-only (non-editable) columns — e.g. a parent-derived currency —
+// so they render their value immediately instead of "—" until the row is saved.
+// Editable fields are never overwritten; the seed only fills keys with no input.
+function applyDisplaySeed(empty, seedValues, fieldMap) {
+  for (const [key, val] of Object.entries(seedValues)) {
+    if (!fieldMap[key]) empty[key] = val;
+  }
+  return empty;
+}
+
+// HandleDefaults: fill EMPTY editable fields from backend-resolved line
+// defaults (e.g. a macro default like @DESCRIPTION1@ → the parent's value).
+// Fill-empties-only: never override a literal default, the client lineNo, a
+// display seed, or a field opted out via skipDefault.
+function applyResolvedFieldDefaults(empty, resolvedDefaults, fieldMap) {
+  for (const [key, val] of Object.entries(resolvedDefaults)) {
+    if (key.endsWith('$_identifier')) continue; // handled by applyResolvedIdentifiers
+    const f = fieldMap[key];
+    if (!f || f.skipDefault) continue;
+    const cur = empty[key];
+    if ((cur == null || cur === '') && val != null && val !== '') {
+      empty[key] = val;
+    }
+  }
+  return empty;
+}
+
+// Companion `<key>$_identifier` labels (e.g. country$_identifier: "Spain") have no
+// entry in `fieldMap` — they're display text for a selector field, not a field of
+// their own — so applyResolvedFieldDefaults always skips them. Without this, a
+// selector/search field resolved from resolvedDefaults (e.g. country: "106") renders
+// a chip with a working Clear button but an EMPTY label, because InlineSearchCombo's
+// `displayLabel` reads `values[field.key + '$_identifier']` and finds nothing. Only
+// seed the identifier when its base field actually received ITS value from
+// resolvedDefaults (not from a literal decisions.json defaultValue or a seeded
+// display column) so a stale label never gets attached to an unrelated value.
+function applyResolvedIdentifiers(empty, resolvedDefaults, fieldMap) {
+  for (const [key, val] of Object.entries(resolvedDefaults)) {
+    if (!key.endsWith('$_identifier')) continue;
+    const baseKey = key.slice(0, -'$_identifier'.length);
+    const f = fieldMap[baseKey];
+    if (!f || f.skipDefault) continue;
+    if (empty[baseKey] === resolvedDefaults[baseKey] && val != null && val !== '') {
+      empty[key] = val;
+    }
+  }
+  return empty;
+}
+
 const InlineAddRow = forwardRef(function InlineAddRow({ columns, fields, onAdd, onCancel, data, catalogs, onFieldChange, onValuesChange, selectable, hasDeleteColumn, hasCloneColumn, hoverRowActions, hoverRowHasDelete, hasQuickActionsColumn, token, apiBaseUrl, entity, selectorContext, seedValues = EMPTY_SEED, resolvedDefaults = EMPTY_SEED, ilpHasNoAmountCol = false, ilpTrailing = false, labelOverrides, convertOptimisticPrice }, ref) {
   const t = useLabel(labelOverrides);
   const ui = useUI();
@@ -631,34 +662,10 @@ const InlineAddRow = forwardRef(function InlineAddRow({ columns, fields, onAdd, 
   }, [data]);
 
   const buildEmpty = useCallback(() => {
-    const empty = {};
-    for (const f of fields) {
-      if (f.key === 'lineNo') {
-        empty[f.key] = defaultLineNo;
-      } else if (f.defaultValue !== undefined && !/^@[^@]+@$/.test(String(f.defaultValue))) {
-        empty[f.key] = f.defaultValue;
-      } else {
-        empty[f.key] = '';
-      }
-    }
-    // Seed display-only (non-editable) columns — e.g. a parent-derived currency —
-    // so they render their value immediately instead of "—" until the row is saved.
-    // Editable fields are never overwritten; the seed only fills keys with no input.
-    for (const [key, val] of Object.entries(seedValues)) {
-      if (!fieldMap[key]) empty[key] = val;
-    }
-    // HandleDefaults: fill EMPTY editable fields from backend-resolved line
-    // defaults (e.g. a macro default like @DESCRIPTION1@ → the parent's value).
-    // Fill-empties-only: never override a literal default, the client lineNo, a
-    // display seed, or a field opted out via skipDefault.
-    for (const [key, val] of Object.entries(resolvedDefaults)) {
-      const f = fieldMap[key];
-      if (!f || f.skipDefault) continue;
-      const cur = empty[key];
-      if ((cur == null || cur === '') && val != null && val !== '') {
-        empty[key] = val;
-      }
-    }
+    let empty = buildFieldDefaults(fields, defaultLineNo);
+    empty = applyDisplaySeed(empty, seedValues, fieldMap);
+    empty = applyResolvedFieldDefaults(empty, resolvedDefaults, fieldMap);
+    empty = applyResolvedIdentifiers(empty, resolvedDefaults, fieldMap);
     return empty;
   }, [fields, defaultLineNo, seedValues, fieldMap, resolvedDefaults]);
 
@@ -769,31 +776,17 @@ const InlineAddRow = forwardRef(function InlineAddRow({ columns, fields, onAdd, 
           onCancel();
           return true;
         }
-        // Reset for next rapid entry — recompute lineNo
+        // Reset for next rapid entry — recompute lineNo. Reuses buildEmpty() (single
+        // source of truth for the macro-defaultValue guard, resolvedDefaults fill and
+        // its $_identifier companion pass) instead of re-deriving field defaults here —
+        // a prior duplicated loop applied `f.defaultValue` unconditionally, so an
+        // unresolved AD macro token (e.g. '@COUNTRYDEF@') on a selector/search field
+        // would leak into the next line's value, and resolvedDefaults (with its
+        // identifier labels) was never reapplied at all.
         const nums = [...(data || []).map(r => Number(r.lineNo) || 0), Number(valuesRef.current.lineNo) || 0];
         const nextLineNo = Math.max(...nums) + 10;
-        const next = {};
-        for (const f of fields) {
-          if (f.key === 'lineNo') {
-            next[f.key] = nextLineNo;
-          } else if (f.defaultValue === undefined) {
-            next[f.key] = '';
-          } else {
-            next[f.key] = f.defaultValue;
-          }
-        }
-        // Clear any $_identifier companion values
-        for (const key of Object.keys(valuesRef.current)) {
-          if (key.includes('$_identifier') && !(key in next)) {
-            next[key] = '';
-          }
-        }
-        // Re-apply seeded display values so a parent-derived column (e.g. currency)
-        // stays populated for the next rapid entry instead of resetting to "—".
-        // Runs after the $_identifier clearing loop so seeded identifiers survive.
-        for (const [key, val] of Object.entries(seedValues)) {
-          if (!fieldMap[key]) next[key] = val;
-        }
+        const next = buildEmpty();
+        next.lineNo = nextLineNo;
 
         valuesRef.current = next;
         setValues(next);
@@ -808,7 +801,7 @@ const InlineAddRow = forwardRef(function InlineAddRow({ columns, fields, onAdd, 
     })();
     inflightRef.current = run;
     return run;
-  }, [data, fields, onAdd, onCancel, ui, seedValues, fieldMap]);
+  }, [data, fields, onAdd, onCancel, ui, buildEmpty]);
 
   // Enter → confirm without closing (rapid entry). Outside-click / parent flush close.
   const handleConfirm = useCallback(() => submitLine({ closeAfterSave: false }), [submitLine]);
@@ -987,7 +980,9 @@ function formatDerivedCellValue(identVal, rawVal, isTwoDecimalDerived) {
   let displayVal = identVal || rawVal;
   if (isTwoDecimalDerived && displayVal != null && displayVal !== '') {
     const n = typeof displayVal === 'string' ? Number.parseFloat(displayVal) : displayVal;
-    if (Number.isFinite(n)) displayVal = n.toFixed(2);
+    if (Number.isFinite(n)) {
+      displayVal = n.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2, useGrouping: true });
+    }
   }
   return displayVal;
 }
@@ -1693,7 +1688,7 @@ function renderFooterRow({
             className={col.type === 'amount' ? 'tabular-nums text-right font-semibold' : ''}
             data-testid="TableCell__eb5261">
             {col.type === 'amount'
-              ? formatAmount(totals[col.key], filteredData[0]?.['currency$_identifier'])
+              ? formatCurrency(filteredData[0]?.['currency$_identifier'], totals[col.key])
               : ''}
           </TableCell>
         ))}
@@ -1790,6 +1785,13 @@ export function DataTable({
   onSaveRow = null,
   onCancelEdit = null,
   clearSelectionTrigger = 0,
+  // ETP-4656 — partial bulk-delete outcome: bump `deselectTrigger` with the ids
+  // of the rows that succeeded (`deselectRowIds`) so only those drop out of the
+  // internal selection Set, leaving the failed rows checked. A dedicated pair
+  // instead of overloading `clearSelectionTrigger` (which always clears
+  // everything) so existing full-clear callers stay untouched.
+  deselectTrigger = 0,
+  deselectRowIds = [],
   hideHeader = false,
   hideDataRows = false,
 }) {
@@ -1811,6 +1813,16 @@ export function DataTable({
     if (!clearSelectionTrigger) return;
     setSelectedRows(new Set());
   }, [clearSelectionTrigger]);
+
+  useEffect(() => {
+    if (!deselectTrigger || !deselectRowIds?.length) return;
+    setSelectedRows(prev => {
+      const next = new Set(prev);
+      deselectRowIds.forEach((id) => next.delete(id));
+      return next;
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [deselectTrigger]);
 
   const [optimisticToggles, setOptimisticToggles] = useState({});
   const [savingToggles, setSavingToggles] = useState({});

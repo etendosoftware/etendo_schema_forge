@@ -1,6 +1,7 @@
 import { Fragment, useState } from 'react';
 import { ArrowUpRight, Layers } from 'lucide-react';
 import { useUI, useLocaleSwitch } from '@/i18n';
+import { formatCurrency } from '@/lib/formatCurrency.js';
 import { Skeleton } from '@/components/ui/skeleton';
 import { StatusTag } from '@/components/ui/status-tag';
 import { cn } from '@/lib/utils';
@@ -12,10 +13,10 @@ import { getContractGridColumns } from '@/components/financial-accounts/contract
 // the window contract (entity `bankStatementLines`); the synthetic tail (match
 // pill, transaction chip, flexible spacer) stays fixed. Grid template built
 // dynamically and applied inline (Tailwind can't JIT a dynamic class).
-//   <contract columns> · 100 status pill · 120 txn chip
+//   <contract columns> · 136 status pill (+ pending-amount caption for PARTIAL) · 120 txn chip
 // No trailing spacer: the description column (2fr) absorbs the leftover width.
 const MINI_GRID_CLASS = 'grid gap-3';
-const MINI_TAIL_TRACKS = '100px 120px';
+const MINI_TAIL_TRACKS = '136px 120px';
 
 // Contract field name → width + i18n header + cell renderer. Amount OUT/IN are
 // derived from the signed `line.amount`, so dramount/cramount render the split.
@@ -83,7 +84,6 @@ const LINE_CELL_RENDERERS = {
             sign="−"
             toneClass="font-semibold text-destructive"
             currency={ctx.currency}
-            bcpLocale={ctx.bcpLocale}
             data-testid="AmountCell__10cf4a" />
         </span>
       );
@@ -102,7 +102,6 @@ const LINE_CELL_RENDERERS = {
             sign="+"
             toneClass="font-semibold text-status-success-foreground"
             currency={ctx.currency}
-            bcpLocale={ctx.bcpLocale}
             data-testid="AmountCell__10cf4a" />
         </span>
       );
@@ -128,13 +127,24 @@ const MINI_GRID_STYLE = { gridTemplateColumns: MINI_GRID_TEMPLATE };
 // Stable keys for the skeleton cells (contract columns + match + txn).
 const SKELETON_CELL_KEYS = [...LINE_COLUMNS.map((c) => `c_${c.name}`), 'matched', 'txns'];
 
-// kind → (StatusTag tone, i18n key). The only signal we have per line is whether
-// it is linked to a movement or not, so the badge simply reflects reconciled vs
-// not reconciled (the "Auto"/"Manual" distinction is not meaningful here).
+// kind → (StatusTag tone, i18n key). Three states: fully reconciled, not reconciled at all, or
+// PARTIAL — a line that was matched against less than its full amount (e.g. one invoice smaller
+// than the line) and got split by Core into a reconciled portion + a pending remainder, which
+// BankStatementsSupport.mergeMatchGroups re-collapses into this single row (ETP-4502 iteration 4,
+// mirroring how Holded shows "X pending" on a partially-matched movement instead of a second row).
 const MATCH_TONE = {
   reconciled: { tone: 'success', labelKey: 'financeAccountStatementLinesStatusReconciled' },
+  partial:    { tone: 'warning', labelKey: 'financeAccountStatementLinesStatusPartial' },
   pending:    { tone: 'warning', labelKey: 'financeAccountStatementLinesStatusUnmatched' },
 };
+
+// Backend `reconcileStatus` ("RECONCILED"/"PARTIAL"/"PENDING") → local pill kind. Falls back to
+// the plain `matched` boolean for any row that predates the field (defensive, not expected once
+// this ships).
+function matchKindFor(line) {
+  const byStatus = { RECONCILED: 'reconciled', PARTIAL: 'partial', PENDING: 'pending' };
+  return byStatus[line.reconcileStatus] ?? (line.matched ? 'reconciled' : 'pending');
+}
 
 function MatchPill({ kind, ui }) {
   const entry = MATCH_TONE[kind] ?? MATCH_TONE.pending;
@@ -185,15 +195,8 @@ function formatDate(iso, bcpLocale) {
   }).format(d);
 }
 
-function formatMoney(amount, currency, bcpLocale) {
-  try {
-    return new Intl.NumberFormat(bcpLocale, {
-      style: 'currency', currency,
-      minimumFractionDigits: 2, maximumFractionDigits: 2,
-    }).format(Number(amount));
-  } catch {
-    return `${Number(amount).toFixed(2)} ${currency}`;
-  }
+function formatMoney(amount, currency) {
+  return formatCurrency(currency, amount);
 }
 
 /**
@@ -293,8 +296,13 @@ function renderBody({ loading, lines, ui, currency, bcpLocale, onOpenTxns }) {
 // Single row of the lines table — split out so we can render the amount
 // columns with simple if/else branching instead of nested ternaries.
 function LineRow({ line, ui, currency, bcpLocale, onOpenTxns }) {
-  const matchKind = line.matched ? 'reconciled' : 'pending';
+  const matchKind = matchKindFor(line);
   const cellCtx = { ui, currency, bcpLocale };
+  const pendingAmountLabel = matchKind === 'partial'
+    ? ui('financeAccountStatementLinesPendingAmount', {
+      amount: formatMoney(Math.abs(Number(line.pendingAmount) || 0), currency),
+    })
+    : null;
   return (
     <div
       data-testid={`statement-line-row-${line.id}`}
@@ -315,7 +323,18 @@ function LineRow({ line, ui, currency, bcpLocale, onOpenTxns }) {
           </Fragment>
         );
       })}
-      <span><MatchPill kind={matchKind} ui={ui} data-testid="MatchPill__10cf4a" /></span>
+      <span className="flex min-w-0 flex-col items-start gap-0.5" data-testid="MatchCell__10cf4a">
+        <MatchPill kind={matchKind} ui={ui} data-testid="MatchPill__10cf4a" />
+        {matchKind === 'partial' ? (
+          <span
+            className="max-w-full truncate text-[11px] leading-none text-[hsl(var(--muted-foreground))]"
+            title={pendingAmountLabel}
+            data-testid="statement-line-pending-amount"
+          >
+            {pendingAmountLabel}
+          </span>
+        ) : null}
+      </span>
       <span className="min-w-0"><TxnChip line={line} ui={ui} onOpen={onOpenTxns} data-testid="TxnChip__10cf4a" /></span>
       {/* Amount columns last, matching the Figma column order */}
       {AMOUNT_COLUMNS.map((col) => {
@@ -332,9 +351,9 @@ function LineRow({ line, ui, currency, bcpLocale, onOpenTxns }) {
   );
 }
 
-function AmountCell({ value, sign, toneClass, currency, bcpLocale }) {
+function AmountCell({ value, sign, toneClass, currency }) {
   if (value > 0) {
-    return <span className={toneClass}>{sign}{formatMoney(value, currency, bcpLocale)}</span>;
+    return <span className={toneClass}>{sign}{formatMoney(value, currency)}</span>;
   }
   return <span className="text-[hsl(var(--text-disabled))]">—</span>;
 }

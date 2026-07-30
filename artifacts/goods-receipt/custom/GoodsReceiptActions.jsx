@@ -8,6 +8,7 @@ import { ConfirmResultModal } from '@/components/contract-ui';
 import { usePreviewAttachment } from '@/windows/custom/shared/usePreviewAttachment.js';
 import PurchaseReturnWizard from './PurchaseReturnWizard';
 import CreateInvoiceConfirmModal from '@/components/contract-ui/CreateInvoiceConfirmModal';
+import { formatCurrency } from '@/lib/formatCurrency.js';
 
 
 // ── Main component ────────────────────────────────────────────────────────────
@@ -286,7 +287,7 @@ function ConfirmReceiptInvoicedModal({ data, base, headers, recordId, onConfirme
 
   const fmtAmount = (v, currency) => {
     if (v == null) return '';
-    return `${Number(v).toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currency || ''}`.trim();
+    return formatCurrency(currency, v);
   };
 
   const statusLabel = { CO: ui('orderStatusCompleted'), DR: ui('orderStatusDraft') };

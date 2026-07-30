@@ -77,7 +77,14 @@ import {
   resolveSnapshotIdentifiers,
 } from '@/lib/lineFieldChange.js';
 import { getCatalogOptions } from '@/lib/selectorCatalog.js';
-import { formatAmount } from '@/lib/formatAmount.js';
+import { formatCurrency } from '@/lib/formatCurrency.js';
+
+// DocumentTotalsPanel/BalanceFooterPanel call their `formatAmount` prop as
+// (value, currency) — keep that signature here, delegating to the shared
+// formatCurrency(currencyCode, value) util, whose argument order is reversed.
+function formatAmount(val, curr) {
+  return formatCurrency(curr, val);
+}
 import { useRegisterWindowContext } from '@/components/CurrentWindowContext';
 import { matchOcrDocType } from '@/components/copilot/ocr/ocrDocTypes';
 import { isDeleteVisibleForRecord } from '@/utils/recordActions.js';
@@ -119,6 +126,7 @@ function evalDisplayLogicRaw(expr, data) {
 import { cn } from '@/lib/utils.js';
 import DocumentPrintDrawer from './DocumentPrintDrawer.jsx';
 import { toast } from 'sonner';
+import { runBatchDelete, toastBatchDeleteOutcome } from '@/lib/batchDelete.js';
 
 /**
  * Collapsible section that hides itself entirely when children render as null.
@@ -392,10 +400,20 @@ export function getSecondaryEditRowHandler(st, setCustomModalState) {
 
 /**
  * Returns the `onSelectionChange` handler for a secondary tab when the lines
- * layout is `inlineEditable` (tracks selected rows per tab), otherwise undefined.
+ * layout is `inlineEditable` (tracks selected rows per tab), otherwise
+ * undefined — UNLESS `enableSecondaryRowDelete` opts the tab in explicitly.
+ * ETP-4656 (Gap 4): non-inlineEditable tabs (e.g. Contacto → Direcciones /
+ * Personas de contacto, which use `customAddModal` popups instead of inline
+ * cell editing) still need multi-select bulk delete — `enableSecondaryRowDelete`
+ * already exists as the single-row delete opt-in for exactly these tabs (see
+ * `onDeleteRow` a few lines below), so it doubles as the bulk-select opt-in
+ * too instead of inventing a second flag. The underlying `Table` already
+ * renders checkboxes regardless of layout (DataTable's `selectable` defaults
+ * to true) — they were just never wired up to DetailView's selection state
+ * for non-inlineEditable tabs before this.
  */
-export function getSecondarySelectionChangeHandler(linesLayout, setSecondarySelectedRows, st) {
-  return linesLayout === 'inlineEditable'
+export function getSecondarySelectionChangeHandler(linesLayout, setSecondarySelectedRows, st, enableSecondaryRowDelete = false) {
+  return (linesLayout === 'inlineEditable' || enableSecondaryRowDelete)
       ? (rows) => setSecondarySelectedRows(prev => ({...prev, [st.key]: rows}))
       : undefined;
 }
@@ -567,31 +585,34 @@ export function buildSecondaryLineHandlers(deps) {
     setSecondaryDeleting(prev => ({...prev, [st.key]: true}));
     const rows = secondarySelectedRows[st.key] ?? [];
     try {
-      const results = await Promise.allSettled(
-          rows.map(row => {
-            const childUrl = api?.crud?.[st.key]?.detailUrl?.replace('{id}', row.id)
-                || `${apiBaseUrl}/${st.key}/${row.id}`;
-            return fetch(childUrl, {
-              method: 'DELETE',
-              headers: {...(token ? {Authorization: `Bearer ${token}`} : {})},
-            }).then(res => ({res, row}));
-          })
-      );
-      let deleted = 0;
-      for (const result of results) {
-        if (result.status === 'fulfilled' && result.value.res.ok) {
-          secondaryHooks[stIdx]?.handleDeleteChild?.(result.value.row.id);
-          if (selectedSecondaryLine?._tabKey === st.key && selectedSecondaryLine?.id === result.value.row.id) {
-            setSelectedSecondaryLine(null);
-          }
-          deleted++;
+      // ETP-4656 — shared triage (Promise.allSettled + succeeded/failed partition)
+      // and single-toast-per-outcome selection, same helpers ListView/Financial
+      // Accounts/Movements/Statements bulk delete already use (see batchDelete.js).
+      // Replaces the old two-independent-if (`recordsDeleted` + `recordsCouldNotBeDeleted`)
+      // stacked-toast pattern this function predates.
+      const { succeeded, failed } = await runBatchDelete(rows, (row) => {
+        const childUrl = api?.crud?.[st.key]?.detailUrl?.replace('{id}', row.id)
+            || `${apiBaseUrl}/${st.key}/${row.id}`;
+        return fetch(childUrl, {
+          method: 'DELETE',
+          headers: {...(token ? {Authorization: `Bearer ${token}`} : {})},
+        }).then(res => {
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          return row;
+        });
+      });
+
+      for (const row of succeeded) {
+        secondaryHooks[stIdx]?.handleDeleteChild?.(row.id);
+        if (selectedSecondaryLine?._tabKey === st.key && selectedSecondaryLine?.id === row.id) {
+          setSelectedSecondaryLine(null);
         }
       }
+
       secondaryInlineLinesRefs.current[st.key]?.current?.clearSelection?.();
       setSecondarySelectedRows(prev => ({...prev, [st.key]: []}));
-      if (deleted > 0) toast.success(ui('recordsDeleted', {count: deleted}));
-      const failed = results.length - deleted;
-      if (failed > 0) toast.error(ui('recordsCouldNotBeDeleted', {count: failed}));
+
+      toastBatchDeleteOutcome(ui, { succeeded, failed, total: rows.length });
     } catch (err) {
       toast.error(err.message || ui('networkError'));
     } finally {
@@ -747,7 +768,10 @@ function secondaryAddLineBar(props) {
           hideChevron={props.hideChevron}
           data-testid="AddLineButton__fa3275" />
       </span>
-      {props.linesLayout === "inlineEditable" && (props.crud?.[props.st.key]?.delete ?? true) && (
+      {/* ETP-4656 (Gap 4) — `enableSecondaryRowDelete` also unlocks the bulk-select bar
+          for non-inlineEditable tabs (e.g. Direcciones/Personas de contacto), matching
+          the onSelectionChange wiring above and the row-level onDeleteRow gate below. */}
+      {(props.linesLayout === "inlineEditable" || props.enableSecondaryRowDelete) && (props.crud?.[props.st.key]?.delete ?? true) && (
           <LinesSelectionBar
             visible={props.secondaryBarVisible[props.st.key] ?? false}
             closing={props.secondaryBarClosing[props.st.key] ?? false}
@@ -804,7 +828,7 @@ export function SecondaryTableTab(props) {
               // the popup editor — rows are not editable in place.
               onEditRow={getSecondaryEditRowHandler(props.st, props.setCustomModalState)}
               selectedRowId={props.selectedSecondaryLine?._tabKey === props.st.key ? props.selectedSecondaryLine?.id : undefined}
-              onSelectionChange={getSecondarySelectionChangeHandler(props.linesLayout, props.setSecondarySelectedRows, props.st)}
+              onSelectionChange={getSecondarySelectionChangeHandler(props.linesLayout, props.setSecondarySelectedRows, props.st, props.enableSecondaryRowDelete)}
               onDeleteRow={(props.enableSecondaryRowDelete || (props.linesLayout === 'inlineEditable' && !props.st.customAddModal)) && !tabReadOnly && (props.crud?.[props.st.key]?.delete ?? true) ? props.onDeleteRow : undefined}
               // Inline edit save for secondary-tab rows. Fires when a
               // cell loses focus while in edit mode. Optimistic flow:
@@ -851,9 +875,8 @@ export function getSelectedLinesTotalLabel(bottomSection, selectedChildRows, lin
       const v = parseFloat(String(row?.[lineConfig.grossField] ?? row?.lineGrossAmount ?? 0));
       return acc + (Number.isFinite(v) ? v : 0);
     }, 0);
-    const formatted = total.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
     const curr = data?.['currency$_identifier'] || '';
-    return curr ? `${formatted} ${curr}` : formatted;
+    return curr ? formatCurrency(curr, total) : total.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2, useGrouping: true });
   })() : null;
 }
 
@@ -1354,6 +1377,42 @@ const WINDOW_DELETE_ACTIONS = {
   'payment-out': 'eTPRRemovePayment',
 };
 
+// ETP-4530 — field keys for which `lineHiddenColumns` (below) is allowed to trust the
+// lines-entity `evaluate-display` visibility map, computed against a REPRESENTATIVE
+// (header) record rather than the actual line row. Valid only for
+// `@ACCT_DIMENSION_DISPLAY@`-gated accounting dimensions, whose expansion
+// (`DimensionDisplayUtility.computeAccountingDimensionDisplayLogic()`) depends solely on
+// the client's dimension config, never on record field values — see the `lineHiddenColumns`
+// comment for the full incident writeup (product/listPrice/grossAmount regression).
+// Some windows' extractors emit 'costcenter', others the camelCase 'costCenter' — both
+// casings are included so the macro is recognized (cacheable, filterable) regardless of
+// which one a given generated entity actually uses.
+//
+// 'product' is deliberately NOT included here, despite simple-g-l-journal's dimensionsPanel
+// listing it alongside project/costCenter/businessPartner as an @ACCT_DIMENSION_DISPLAY@
+// candidate there: in sales-invoice/purchase-invoice, `product` is a real per-line field
+// with its OWN record-dependent raw AD displayLogic (`@Financial_Invoice_Line@='N'`, see
+// the ETP-4530 regression note below on `lineHiddenColumns`) — the exact "false noise"
+// this allowlist exists to filter out. Trusting 'product' unconditionally here would fix
+// the gap for simple-g-l-journal but silently reintroduce that already-fixed regression
+// for every OTHER window that shares this component and has a real, per-record 'product'
+// field. This constant stays GLOBAL and unconditional on purpose.
+//
+// ETP-4610 (originally flagged by a GitHub Copilot review on PR 975, then fixed as part
+// of the same ticket) — the real per-window signal this comment used to call "out of
+// scope" now exists: `dimensionsPanelFieldKeys`, a prop generated from this window's own
+// decisions.json `dimensionsPanel: true` fields (see `buildDimensionsPanelColumn` /
+// `dimensionsPanelFieldKeys` in schema_forge_core's generate-frontend.js, and the
+// `dimensionsPanelFieldKeys` prop + `trustedDimensionKeys` memo below). `lineHiddenColumns`
+// and the expanded-row DetailForm's `displayLogic` both trust `DIMENSION_MACRO_KEYS UNION
+// dimensionsPanelFieldKeys`, scoped to the current DetailView instance — so
+// simple-g-l-journal can trust 'product' as a dimension macro without this global constant
+// ever needing to include it, and sales-invoice/purchase-invoice (which never pass
+// 'product' in that prop) are unaffected. See DetailView.lineHiddenColumns.vitest.jsx for
+// both the fix proof (simple-g-l-journal) and the non-regression proof (sales-invoice-shaped
+// instances).
+const DIMENSION_MACRO_KEYS = new Set(['project', 'costcenter', 'costCenter', 'businessPartner']);
+
 // ETP-4500 — same rationale/hardcoding constraint as WINDOW_DELETE_ACTIONS above: these
 // windows show the rich Reactivar/Eliminar cartel (conditional Conciliación/Asiento items)
 // instead of the generic delete confirmation Dialog. `dir` feeds the cobro/pago wording.
@@ -1500,6 +1559,8 @@ function renderDraftModeSaveActions({
         if (saved?.id && isNew) {
           hook.primeSaved?.(saved);
           navigate(`/${windowName}/${saved.id}`, { replace: true, state: { justSaved: saved } });
+        } else {
+          reportUnnavigableSave({ saved, isNew, windowName, ui });
         }
       }}>
         {hook.isSaving ? <Loader2 className="h-3.5 w-3.5 animate-spin" data-testid="Loader2__fa3275" /> : <Save className="h-3.5 w-3.5" color="hsl(var(--muted-foreground))" data-testid="Save__fa3275" />}
@@ -1521,6 +1582,8 @@ function renderDraftModeSaveActions({
               navigate(`/${windowName}/${saved.id}`, { replace: true, state: { justSaved: saved } });
             } else if (saved.id) {
               hook.fetchById?.(saved.id);
+            } else {
+              reportUnnavigableSave({ saved, isNew, windowName, ui });
             }
           }
         } finally {
@@ -1534,7 +1597,25 @@ function renderDraftModeSaveActions({
   );
 }
 
-export async function handlePostSaveNavigation(saved, { isNew, onAfterCreate, onAfterSave, navigate, windowName, token, apiBaseUrl, hook }) {
+const UNNAVIGABLE_SAVE_MESSAGE_KEY = 'savedButCannotOpenRecord';
+
+/**
+ * A NEW record that saves OK but whose response yields no derivable id (see
+ * deriveRecordId in useEntity) used to skip the redirect with no signal at all,
+ * leaving the user on /window/new. Surface it instead of failing silently.
+ * Returns true when the failure was reported.
+ */
+export function reportUnnavigableSave({ saved, isNew, windowName, ui }) {
+  if (!isNew || !saved || saved.id) return false;
+  console.error(
+    `[DetailView] Save succeeded for '${windowName}' but the response has no derivable record id — redirect skipped`,
+    saved,
+  );
+  toast.error(ui?.(UNNAVIGABLE_SAVE_MESSAGE_KEY) || UNNAVIGABLE_SAVE_MESSAGE_KEY);
+  return true;
+}
+
+export async function handlePostSaveNavigation(saved, { isNew, onAfterCreate, onAfterSave, navigate, windowName, token, apiBaseUrl, hook, ui }) {
   if (!saved) return;
   if (isNew && onAfterCreate) await onAfterCreate(saved, { token, apiBaseUrl });
   if (onAfterSave) {
@@ -1542,6 +1623,8 @@ export async function handlePostSaveNavigation(saved, { isNew, onAfterCreate, on
   } else if (saved.id && isNew) {
     hook.primeSaved?.(saved);
     navigate(`/${windowName}/${saved.id}`, { replace: true, state: { justSaved: saved } });
+  } else {
+    reportUnnavigableSave({ saved, isNew, windowName, ui });
   }
 }
 
@@ -1564,6 +1647,8 @@ function renderNewRecordSaveActions({
           if (onAfterCreate) await onAfterCreate(saved, { token, apiBaseUrl });
           hook.primeSaved?.(saved);
           navigate(`/${windowName}/${saved.id}`, { replace: true, state: { justSaved: saved } });
+        } else {
+          reportUnnavigableSave({ saved, isNew, windowName, ui });
         }
       }}>
         {hook.isSaving ? <Loader2 className="h-3.5 w-3.5 animate-spin" data-testid="Loader2__fa3275" /> : <Save className="h-3.5 w-3.5" data-testid="Save__fa3275" />}
@@ -1573,7 +1658,7 @@ function renderNewRecordSaveActions({
         <Button size="default" className={saveBtnCls} data-testid="action-complete" disabled={hook.isSaving || blockCompleteForBalance} title={blockCompleteForBalance ? ui('journalUnbalancedCompleteBlocked') : undefined} onClick={async () => {
           if (!(await flushPendingLines())) return;
           const saved = await hook.handleSaveAndProcess(draftMode);
-          await handlePostSaveNavigation(saved, { isNew, onAfterCreate, onAfterSave, navigate, windowName, token, apiBaseUrl, hook });
+          await handlePostSaveNavigation(saved, { isNew, onAfterCreate, onAfterSave, navigate, windowName, token, apiBaseUrl, hook, ui });
         }}>
           {hook.isSaving ? <Loader2 className="h-3.5 w-3.5 animate-spin" data-testid="Loader2__fa3275" /> : <Check className="h-3.5 w-3.5" data-testid="Check__fa3275" />}
           {ui(draftMode.label) || tMenu(draftMode.label) || ui('process')}
@@ -1597,7 +1682,7 @@ function renderExistingRecordSaveAction({
     <Button variant="outline" size="default" className={`${saveBtnCls} bg-card border-[hsl(var(--border-control))] text-[hsl(var(--foreground))]`} data-testid="action-save" disabled={isDocumentReadOnly || hook.isSaving || !isDirty || blockSaveForBalance} title={blockSaveForBalance ? ui('journalUnbalancedSaveBlocked') : undefined} onClick={async () => {
       if (!(await flushPendingLines())) return;
       const saved = await hook.handleSave(data);
-      await handlePostSaveNavigation(saved, { isNew, onAfterCreate, onAfterSave, navigate, windowName, token, apiBaseUrl, hook });
+      await handlePostSaveNavigation(saved, { isNew, onAfterCreate, onAfterSave, navigate, windowName, token, apiBaseUrl, hook, ui });
     }}>
       {hook.isSaving ? <Loader2 className="h-3.5 w-3.5 animate-spin" data-testid="Loader2__fa3275" /> : <Save className="h-3.5 w-3.5" color="hsl(var(--muted-foreground))" data-testid="Save__fa3275" />}
       {ui('save')}
@@ -1913,6 +1998,15 @@ export function DetailView({
   lockedAlert = null,
   selectorPriceCurrency = null,
   processConfirmModal = null,
+  // ETP-4610 — this window's own `dimensionsPanel: true` field keys on the lines
+  // entity (generated from decisions.json by `generate-frontend.js`'s
+  // `buildDimensionsPanelColumn`/`dimensionsPanelFieldKeys` — see
+  // docs/decisions-reference.md's "Accounting dimensions panel" section). Widens
+  // which keys `lineHiddenColumns` (and the expanded-row DetailForm's
+  // `displayLogic`) are willing to trust as config-driven dimension-macro
+  // visibility, SCOPED TO THIS WINDOW INSTANCE ONLY — see `DIMENSION_MACRO_KEYS`
+  // above for why the global allowlist itself must never include 'product'.
+  dimensionsPanelFieldKeys = [],
 }) {
   // DetailView never needs the parent list: on `/new` there is no record to match, and on
   // `/:id` the currentItem shortcut only helps when we arrived from ListView (items already
@@ -1989,8 +2083,20 @@ export function DetailView({
   // Ref updated on every render so the callback always reads the latest hook state,
   // even when called from a setTimeout scheduled before the React re-render committed.
   const handleFieldBlurRef = useRef(null);
-  handleFieldBlurRef.current = () => {
-    hasUnsavedEdits(hook.editing, hook.selected) && hook.handleSave();
+  handleFieldBlurRef.current = async () => {
+    if (!hasUnsavedEdits(hook.editing, hook.selected)) return;
+    // handleSave() resolves to the saved record on success, or null on any
+    // failure (validation block, non-2xx PATCH, network error) — see
+    // useEntity.js. A checkbox/toggle field autosaves immediately (ETP-4670:
+    // EntityForm fires onFieldBlur right after onChange for those types), so
+    // on failure the optimistic local flip must be rolled back — otherwise the
+    // control stays visually checked even though the backend rejected it and
+    // showed a toast (handleSave already surfaces the translated error via
+    // handleSaveErrorResponse). handleSelect(hook.selected) resets `editing`
+    // back to the last successfully-persisted record, discarding the rejected
+    // in-flight edit.
+    const saved = await hook.handleSave();
+    if (!saved) hook.handleSelect(hook.selected);
   };
   const handleFieldBlur = useCallback(() => {
     handleFieldBlurRef.current?.();
@@ -2046,7 +2152,62 @@ export function DetailView({
     return next;
   }, [entity, detailEntity, parentRecordId, secondaryTabKeysStr, priceListId, api, hook.selected, hook.editing, sessionCurrencyCode, selectorPriceCurrency]);
   const { catalogs, catalogsLoaded } = useCatalogs(api, token, apiBaseUrl, staticCatalogs);
-  const displayLogic = useDisplayLogic(entity, hook.editing, { token, apiBaseUrl });
+  // cacheableKeys: only the dimension-macro fields are safe to pre-seed from a previous
+  // record's resolution — everything else in this window's header (e.g. Posted-based
+  // readOnly) is genuinely per-record and must never carry over between mounts.
+  const displayLogic = useDisplayLogic(entity, hook.editing, { token, apiBaseUrl, cacheableKeys: DIMENSION_MACRO_KEYS });
+  // ETP-4529 — mirror the header evaluate-display call for the lines/detail entity.
+  // There is no single "current line record" to evaluate against (many rows share one
+  // entity), and dimension-macro visibility (@ACCT_DIMENSION_DISPLAY@ and friends) is
+  // config-driven, not record-driven, so reusing the header record as the fieldValues
+  // payload is a safe, representative context (it also satisfies useDisplayLogic's
+  // "skip when !values.id" guard once the header record is saved). Only `visibility` is
+  // consumed downstream — `readOnly` stays per-line via each field's own readOnlyLogic.
+  const lineDisplayLogic = useDisplayLogic(detailEntity, hook.editing, { token, apiBaseUrl, cacheableKeys: DIMENSION_MACRO_KEYS });
+  // ETP-4543 — dynamic column visibility for the primary lines grid (InlineLinesPanel /
+  // DataTable), derived from lineDisplayLogic.visibility. Fail-open: a key that is absent
+  // from the map, or explicitly `true`, is NOT hidden — only an explicit `false` (e.g. the
+  // config-gated @ACCT_DIMENSION_DISPLAY@ toggle for project/costcenter) hides the column.
+  //
+  // ETP-4530 regression fix — this evaluate-display call is scoped to `detailEntity` but
+  // evaluated against `hook.editing` (the HEADER record snapshot), not any specific line
+  // row (see the comment on `lineDisplayLogic` above: "one evaluate-display call... using
+  // the header record as a representative context"). That trick is only valid for
+  // `@ACCT_DIMENSION_DISPLAY@` — a config-only macro expanded server-side independent of
+  // any record's field values. NeoDisplayLogicHandler (com.etendoerp.go), however,
+  // evaluates EVERY active AD_Field's raw displayLogic for the lines tab, not just the
+  // dimension ones. Real AD fields with genuine per-row/aux-input-dependent displayLogic —
+  // e.g. sales-invoice's Product (`@Financial_Invoice_Line@='N'`, a sibling per-line field)
+  // and List Price / Line Gross Amount (`@GROSSPRICE@='Y'|'N'`, an SQL auxiliary input) —
+  // reference tokens the header snapshot never carries, which silently resolve to
+  // `undefined` and make the comparison evaluate `false`. That `false` looked identical
+  // to a legitimate "hide this column" signal, so it blast-radiused into hiding
+  // product/listPrice/grossAmount for every line, even though decisions.json explicitly
+  // marks product/grossAmount `displayLogic: null` ("Siempre") in this window's contract.
+  // Restrict this map to the field keys the representative-context trick was actually
+  // built for (see docs/generated-custom-windows/sales-invoice.md, ETP-4529 matrix) — any
+  // other key's `false` is untrustworthy noise from this evaluator's known limitation,
+  // not a real hide decision.
+  // ETP-4610 — window-scoped extension of DIMENSION_MACRO_KEYS: a key is trusted as a
+  // config-driven dimension macro if it's in the GLOBAL allowlist above OR THIS WINDOW
+  // INSTANCE itself declared it via `dimensionsPanelFieldKeys` (the lines entity's
+  // decisions.json `dimensionsPanel: true` fields, forwarded by generate-frontend.js —
+  // see the prop comment on `dimensionsPanelFieldKeys` above). This is what lets
+  // simple-g-l-journal trust 'product' as a dimension macro without reintroducing the
+  // ETP-4530 regression for sales-invoice/purchase-invoice, whose generated pages never
+  // pass 'product' in this prop. Stringified for the memo dep since `dimensionsPanelFieldKeys`
+  // defaults to a fresh `[]` reference on every render when the caller omits it.
+  const dimensionsPanelFieldKeysStr = (dimensionsPanelFieldKeys ?? []).join('|');
+  const trustedDimensionKeys = useMemo(
+    () => new Set([...DIMENSION_MACRO_KEYS, ...dimensionsPanelFieldKeysStr.split('|').filter(Boolean)]),
+    [dimensionsPanelFieldKeysStr]
+  );
+  const lineHiddenColumns = useMemo(
+    () => Object.entries(lineDisplayLogic?.visibility ?? {})
+      .filter(([key, visible]) => visible === false && trustedDimensionKeys.has(key))
+      .map(([key]) => key),
+    [lineDisplayLogic?.visibility, trustedDimensionKeys]
+  );
   const { calloutResult, calloutLoading, executeCallout } = useCallout(entity, { token, apiBaseUrl });
   const docAction = useDocumentAction({ apiBaseUrl, entity, token });
   const neoAction = useNeoAction({ specName: windowName, entityName: entity, apiBaseUrl, token });
@@ -2202,8 +2363,8 @@ export function DetailView({
       }
       return;
     }
-    await hook.handleDelete();
-    navigate(`/${windowName}`);
+    const deleted = await hook.handleDelete();
+    if (deleted) navigate(`/${windowName}`);
   };
   // Non-dismissible loading modal shown while a draftMode confirm action with
   // draftMode.processingModal is in flight (e.g. Verifactu's ~8s GenerateRF).
@@ -2519,6 +2680,29 @@ export function DetailView({
     calloutAppliedRef.current = new Map();
     activeCurrencyConversionRef.current = null;
   }, [recordId]);
+
+  // Mirrors hook.editing but updated SYNCHRONOUSLY on every handleChangeWithCallout call,
+  // instead of waiting for the async setState React batches inside hook.handleChange.
+  // Without this, fireCallout's `formState` snapshot (read from hook.editing) is always
+  // one render behind for the very field that triggered it — e.g. selecting an FK posts
+  // formState with that FK still at its previous (often empty) value, which can make the
+  // backend callout respond based on stale data and clobber other fields the user just set
+  // (regression: toggling "Depreciar" on a new asset, saving, and the persisted record
+  // coming back with depreciate=false — traced to the assetCategory callout's stale
+  // formState.assetCategory === "" causing the backend to reset depreciate to false).
+  // Kept in sync with hook.editing on every render (covers external updates: saves,
+  // callout responses, record switches) and updated inline for changes fired within the
+  // same synchronous batch (e.g. a selector setting field + field$_identifier + aux fields
+  // back-to-back before React re-renders).
+  //
+  // ORDERING ASSUMPTION: the render-time overwrite below and the inline merge in
+  // handleChangeWithCallout agree only because React does not re-render synchronously in
+  // the middle of an event handler — the inline merge always runs before the next render's
+  // overwrite. That holds with current batching; if this ever moves to a mode where a
+  // setState can flush mid-handler, the overwrite could clobber the merge and the callout
+  // would go back to seeing stale state.
+  const pendingEditingRef = useRef(hook.editing || {});
+  pendingEditingRef.current = hook.editing || {};
 
   // Sync activeCurrencyConversionRef with the SAVED state of the order: whenever
   // hook.selected.currency changes (typically after a save), re-evaluate whether
@@ -2967,8 +3151,11 @@ export function DetailView({
       }
     }
 
-    // Trigger callout — the backend returns empty if no callout is registered
-    executeCallout(field, value, hook.editing);
+    // Trigger callout — the backend returns empty if no callout is registered.
+    // Use the synchronously-updated snapshot (pendingEditingRef), not hook.editing: the
+    // latter is a stale closure captured before this render's hook.handleChange commits,
+    // so it always lags one change behind for the field that just triggered the callout.
+    executeCallout(field, value, pendingEditingRef.current);
   }, [hook.handleChange, hook.editing, hook.selected, executeCallout, apiBaseUrl, token, ui, documentDateField]);
 
   // Wrapped onChange that updates local form state and triggers the callout synchronously.
@@ -2979,15 +3166,34 @@ export function DetailView({
     // Capture the previous currency BEFORE hook.handleChange updates state, so we can
     // revert the dropdown if the rate check fails. The closure preserves the old
     // hook.editing reference, but capturing explicitly keeps intent clear.
+    //
+    // This one deliberately reads hook.editing, NOT pendingEditingRef: here we WANT the
+    // last-committed value (the currency to revert TO if the rate lookup fails). Switching
+    // it to the fresh ref would capture the value the user just picked, making the revert a
+    // no-op. Do not "fix" this for consistency with the ref used below.
     const previousCurrency = field === 'currency' ? hook.editing?.currency : null;
 
     hook.handleChange(field, value);
+    // Keep the synchronous snapshot current immediately — hook.handleChange's setEditing
+    // is async/batched, so without this, a same-tick chain of onChange calls (e.g. a
+    // selector setting field, field$_identifier, and aux fields back-to-back) would each
+    // see the pre-change value. This mirrors the write into the ref so fireCallout (called
+    // right below, and by any sibling onChange in the same batch) sees the fresh value.
+    pendingEditingRef.current = { ...pendingEditingRef.current, [field]: value };
 
     fireCallout(field, value, previousCurrency);
   }, [hook.handleChange, hook.editing, fireCallout]);
 
   // Execute callout for child entity (line-level) fields and apply results via callback.
   // Merges parent header data into formState so callouts have full context (e.g., priceList).
+  //
+  // KNOWN GAP (deliberately not fixed here): the header context below still reads
+  // hook.editing directly, so it carries the same one-render-stale hazard that
+  // pendingEditingRef fixes for HEADER field changes in handleChangeWithCallout above. It
+  // only bites if a line callout fires in the same synchronous batch as a header change
+  // (header edits and line edits are normally separate user gestures, which is why it was
+  // not in the failure path of the bug that motivated the ref). If a line callout is ever
+  // seen acting on stale header values, thread pendingEditingRef.current through here too.
   const handleLineFieldChange = useCallback(async (field, value, rowValues, applyUpdates) => {
     if (!field || (value == null || value === '') || !token || !apiBaseUrl || !detailEntity) return;
     if (field.includes('$_identifier') || /^[a-zA-Z]+_[A-Z]{2,4}$/.test(field)) return;
@@ -3812,6 +4018,8 @@ export function DetailView({
                     const saved = await flushAndSave(data);
                     if (saved?.id && isNew) {
                       hook.primeSaved?.(saved);
+                    } else {
+                      reportUnnavigableSave({ saved, isNew, windowName, ui });
                     }
                     return saved;
                   },
@@ -3894,7 +4102,7 @@ export function DetailView({
                               layout="horizontal"
                               section="principal"
                               readOnly={windowReadOnly}
-                              displayLogic={{ readOnly: displayLogic?.readOnly ?? {}, visibility: {} }}
+                              displayLogic={displayLogic}
                               api={api}
                               token={token}
                               apiBaseUrl={apiBaseUrl}
@@ -4063,28 +4271,27 @@ export function DetailView({
                                           if (!(await confirmDelete())) return;
                                           setDeletingChildren(true);
                                           try {
-                                            const results = await Promise.allSettled(
-                                              selectedChildRows.map(row => {
-                                                const childUrl = api?.crud?.[detailEntity]?.detailUrl?.replace('{id}', row.id)
-                                                  || `${apiBaseUrl}/${detailEntity}/${row.id}`;
-                                                return fetch(childUrl, {
-                                                  method: 'DELETE',
-                                                  headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) },
-                                                }).then(res => ({ res, row }));
-                                              })
-                                            );
-                                            let deleted = 0;
-                                            for (const result of results) {
-                                              if (result.status === 'fulfilled' && result.value.res.ok) {
-                                                hook.handleDeleteChild(result.value.row.id);
-                                                if (selectedLine?.id === result.value.row.id) setSelectedLine(null);
-                                                deleted++;
-                                              }
+                                            // ETP-4656 — shared triage + single-toast-per-outcome (see
+                                            // batchDelete.js); replaces the old two-independent-if
+                                            // (recordsDeleted + recordsCouldNotBeDeleted) stacked-toast
+                                            // pattern this button predates.
+                                            const { succeeded, failed } = await runBatchDelete(selectedChildRows, (row) => {
+                                              const childUrl = api?.crud?.[detailEntity]?.detailUrl?.replace('{id}', row.id)
+                                                || `${apiBaseUrl}/${detailEntity}/${row.id}`;
+                                              return fetch(childUrl, {
+                                                method: 'DELETE',
+                                                headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+                                              }).then(res => {
+                                                if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                                                return row;
+                                              });
+                                            });
+                                            for (const row of succeeded) {
+                                              hook.handleDeleteChild(row.id);
+                                              if (selectedLine?.id === row.id) setSelectedLine(null);
                                             }
                                             setSelectedChildRows([]);
-                                            if (deleted > 0) toast.success(ui('recordsDeleted', { count: deleted }));
-                                            const failed = results.length - deleted;
-                                            if (failed > 0) toast.error(ui('recordsCouldNotBeDeleted', { count: failed }));
+                                            toastBatchDeleteOutcome(ui, { succeeded, failed, total: selectedChildRows.length });
                                           } catch (err) {
                                             toast.error(err.message || ui('networkError'));
                                           } finally {
@@ -4092,6 +4299,7 @@ export function DetailView({
                                           }
                                         }}
                                         className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md border border-destructive text-destructive hover:bg-destructive/10 disabled:opacity-50 transition-colors"
+                                        data-testid="detail-bulk-delete-button"
                                       >
                                         <Trash2 className="h-3.5 w-3.5" data-testid="Trash2__fa3275" />
                                         {getDeleteChildButtonLabel(deletingChildren, ui)}
@@ -4114,7 +4322,7 @@ export function DetailView({
                                   onSelectionChange={setSelectedChildRows}
                                   showFooterTotals={showDetailFooterTotals ?? !summary.some(f => f.type === 'amount')}
                                   selectorContext={selectorContextByEntity[detailEntity]}
-                                  hiddenColumns={[]}
+                                  hiddenColumns={lineHiddenColumns}
                                   onUpdateRow={buildInlineRowUpdateHandler({ linesLayout, isDocumentReadOnly, api, detailEntity, apiBaseUrl, hook, handleLineFieldChange, prepareLineForPost, token, extractErrorMessage, ui })}
                                   onDeleteRow={buildDeleteRowHandler({ api, detailEntity, isDocumentReadOnly, confirmDelete, apiBaseUrl, token, hook, selectedLine, setSelectedLine, ui, extractErrorMessage })}
                                   addRow={{
@@ -4309,29 +4517,28 @@ export function DetailView({
                                           if (!(await confirmDelete())) return;
                                           setDeletingChildren(true);
                                           try {
-                                            const results = await Promise.allSettled(
-                                              selectedChildRows.map(row => {
-                                                const childUrl = api?.crud?.[detailEntity]?.detailUrl?.replace('{id}', row.id)
-                                                  || `${apiBaseUrl}/${detailEntity}/${row.id}`;
-                                                return fetch(childUrl, {
-                                                  method: 'DELETE',
-                                                  headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) },
-                                                }).then(res => ({ res, row }));
-                                              })
-                                            );
-                                            let deleted = 0;
-                                            for (const result of results) {
-                                              if (result.status === 'fulfilled' && result.value.res.ok) {
-                                                hook.handleDeleteChild(result.value.row.id);
-                                                if (selectedLine?.id === result.value.row.id) setSelectedLine(null);
-                                                deleted++;
-                                              }
+                                            // ETP-4656 — shared triage + single-toast-per-outcome (see
+                                            // batchDelete.js); replaces the old two-independent-if
+                                            // (recordsDeleted + recordsCouldNotBeDeleted) stacked-toast
+                                            // pattern this bar predates.
+                                            const { succeeded, failed } = await runBatchDelete(selectedChildRows, (row) => {
+                                              const childUrl = api?.crud?.[detailEntity]?.detailUrl?.replace('{id}', row.id)
+                                                || `${apiBaseUrl}/${detailEntity}/${row.id}`;
+                                              return fetch(childUrl, {
+                                                method: 'DELETE',
+                                                headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+                                              }).then(res => {
+                                                if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                                                return row;
+                                              });
+                                            });
+                                            for (const row of succeeded) {
+                                              hook.handleDeleteChild(row.id);
+                                              if (selectedLine?.id === row.id) setSelectedLine(null);
                                             }
                                             inlineLinesRef.current?.clearSelection?.();
                                             setSelectedChildRows([]);
-                                            if (deleted > 0) toast.success(ui('recordsDeleted', { count: deleted }));
-                                            const failed = results.length - deleted;
-                                            if (failed > 0) toast.error(ui('recordsCouldNotBeDeleted', { count: failed }));
+                                            toastBatchDeleteOutcome(ui, { succeeded, failed, total: selectedChildRows.length });
                                           } catch (err) {
                                             toast.error(err.message || ui('networkError'));
                                           } finally {
@@ -4398,6 +4605,25 @@ export function DetailView({
                                     apiBaseUrl={apiBaseUrl}
                                     selectorContext={selectorContextByEntity[detailEntity]}
                                     labelOverrides={labelOverrides}
+                                    // ETP-4529 — only `visibility` is forwarded, and only for the
+                                    // config-only dimension macro keys: lineDisplayLogic is evaluated
+                                    // against the header (representative context), not the actual
+                                    // selected line, so any OTHER key's visibility (e.g. product,
+                                    // listPrice, grossAmount) can resolve to false noise here that
+                                    // doesn't reflect this line's real state. `readOnly` stays {} so
+                                    // each field's own readOnlyLogic (evaluated against the actual line)
+                                    // keeps controlling per-row read-only state.
+                                    // ETP-4610 — trustedDimensionKeys (not the bare global
+                                    // DIMENSION_MACRO_KEYS) so this stays consistent with
+                                    // lineHiddenColumns above for windows that widen the trusted
+                                    // set via `dimensionsPanelFieldKeys`.
+                                    displayLogic={{
+                                      readOnly: {},
+                                      visibility: Object.fromEntries(
+                                        Object.entries(lineDisplayLogic?.visibility ?? {})
+                                          .filter(([key]) => trustedDimensionKeys.has(key))
+                                      ),
+                                    }}
                                     data-testid="DetailForm__fa3275" />
                                   {shouldShowLineActionButtons(hook, lineEdits, selectedLine) && (
                                     <div className="flex gap-2 mt-4">
@@ -4526,6 +4752,8 @@ export function DetailView({
                                 if (saved?.id && isNew) {
                                   hook.primeSaved?.(saved);
                                   navigate(`/${windowName}/${saved.id}`, { replace: true, state: { openAddLine: true } });
+                                } else {
+                                  reportUnnavigableSave({ saved, isNew, windowName, ui });
                                 }
                                 return saved;
                               }}
@@ -4831,9 +5059,12 @@ export function DetailView({
             </div>
           </div>{/* end content column wrapper */}
           {sidebarContent && !sidebarAboveTabsOnly && (
-            <div className={sidebarClassName}>
+            // empty:hidden collapses this column when the custom sidebar component
+            // renders null (e.g. no stock section for Service-type products, ETP-4606) —
+            // the parent can't know that ahead of render, so detection happens via CSS.
+            (<div className={`${sidebarClassName} empty:hidden`}>
               {resolveSidebarContent(sidebarContent, data)}
-            </div>
+            </div>)
           )}
         </div>
       </div>

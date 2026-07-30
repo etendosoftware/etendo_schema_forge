@@ -37,7 +37,7 @@ const draftMode = null;
 // @sf-generated-end draftMode:productCategory
 
 // @sf-generated-start requiredHeaderFields:productCategory
-const requiredHeaderFields = ['searchKey', 'name', 'default', 'summaryLevel'];
+const requiredHeaderFields = ['searchKey', 'name', 'default', 'active'];
 // @sf-generated-end requiredHeaderFields:productCategory
 
 // @sf-generated-start addLineFields:accounting

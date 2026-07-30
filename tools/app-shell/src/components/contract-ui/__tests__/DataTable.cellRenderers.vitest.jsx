@@ -43,8 +43,8 @@ vi.mock('@/lib/resolveColumnLabel.js', () => ({
   resolveColumnLabel: (col) => col.label ?? col.key,
 }));
 
-vi.mock('@/lib/formatAmount.js', () => ({
-  formatAmount: (val, currency) => `${currency ?? ''}${val != null ? String(val) : ''}`.trim(),
+vi.mock('@/lib/formatCurrency.js', () => ({
+  formatCurrency: (currency, val) => `${currency ?? ''}${val != null ? String(val) : ''}`.trim(),
 }));
 
 const useNeoImageMock = vi.fn();

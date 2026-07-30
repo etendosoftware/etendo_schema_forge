@@ -1,8 +1,7 @@
 {
-  "version": "0.43.0",
-  "generatedAt": "2026-04-29T19:06:30.936Z",
-  "updatedAt": "2026-07-27T17:25:04.749Z",
-  "checksum": "bccdcdc7e56f1dcc",
+  "version": "0.1.0",
+  "generatedAt": "2026-07-30T22:44:10.036Z",
+  "checksum": "9a1a36d229154b09",
   "frontendContract": {
     "window": {
       "id": "800027",
@@ -223,9 +222,10 @@
             "visibility": "editable",
             "required": false,
             "grid": false,
-            "form": false,
+            "form": true,
             "reference": "Product",
             "inputMode": "search",
+            "section": "principal",
             "validation": {
               "maxLength": 60
             },
@@ -722,9 +722,10 @@
             "visibility": "editable",
             "required": false,
             "grid": false,
-            "form": false,
+            "form": true,
             "reference": "Project",
             "inputMode": "search",
+            "section": "principal",
             "validation": {
               "maxLength": 32
             },
@@ -759,50 +760,6 @@
             "displayLogic": {
               "raw": "@IsDepreciated@='Y'",
               "evaluable": true
-            }
-          },
-          {
-            "name": "businessPartner",
-            "apiKey": "businessPartner",
-            "column": "C_BPartner_ID",
-            "label": "Business Partner",
-            "type": "foreignKey",
-            "tsType": "string",
-            "visibility": "editable",
-            "required": false,
-            "grid": false,
-            "form": false,
-            "reference": "BPartner",
-            "inputMode": "search",
-            "validation": {
-              "maxLength": 60
-            },
-            "displayLogic": {
-              "raw": "@IsDepreciated@='Y'",
-              "evaluable": true
-            }
-          },
-          {
-            "name": "eTADASCostCenter",
-            "apiKey": "eTADASCostCenter",
-            "column": "EM_Etadas_Costcenter_ID",
-            "label": "Cost Center",
-            "type": "foreignKey",
-            "tsType": "string",
-            "visibility": "editable",
-            "required": false,
-            "grid": false,
-            "form": false,
-            "reference": "Costcenter",
-            "inputMode": "selector",
-            "validation": {
-              "maxLength": 32
-            },
-            "displayLogic": {
-              "raw": "@$Element_CC@='Y' & @IsDepreciated@='Y'",
-              "evaluable": false,
-              "reason": "accounting-dimension",
-              "js": null
             }
           },
           {
@@ -1481,74 +1438,82 @@
             "required": true
           },
           {
-            "name": "businessPartner",
-            "apiKey": "businessPartner",
-            "column": "C_BPartner_ID",
+            "name": "eTADASUser1",
+            "apiKey": "eTADASUser1",
+            "column": "EM_Etadas_User1_ID",
             "type": "foreignKey",
-            "visibility": "editable",
+            "visibility": "discarded",
             "required": false
           },
           {
-            "name": "assetDepreciationDate",
-            "apiKey": "assetDepreciationDate",
-            "column": "AssetDepreciationDate",
-            "type": "date",
-            "visibility": "system",
-            "required": false
-          },
-          {
-            "name": "helpComment",
-            "apiKey": "helpComment",
-            "column": "Help",
-            "type": "text",
-            "visibility": "system",
-            "required": false
-          },
-          {
-            "name": "storageBin",
-            "apiKey": "storageBin",
-            "column": "M_Locator_ID",
+            "name": "eTADASUser2",
+            "apiKey": "eTADASUser2",
+            "column": "EM_Etadas_User2_ID",
             "type": "foreignKey",
-            "visibility": "system",
+            "visibility": "discarded",
             "required": false
           },
           {
-            "name": "userContact",
-            "apiKey": "userContact",
-            "column": "AD_User_ID",
+            "name": "eTADASCostCenter",
+            "apiKey": "eTADASCostCenter",
+            "column": "EM_Etadas_Costcenter_ID",
             "type": "foreignKey",
-            "visibility": "system",
+            "visibility": "discarded",
             "required": false
           },
           {
-            "name": "inServiceDate",
-            "apiKey": "inServiceDate",
-            "column": "AssetServiceDate",
-            "type": "date",
-            "visibility": "system",
+            "name": "eTADASActivity",
+            "apiKey": "eTADASActivity",
+            "column": "EM_Etadas_C_Activity_ID",
+            "type": "foreignKey",
+            "visibility": "discarded",
             "required": false
           },
           {
-            "name": "disposed",
-            "apiKey": "disposed",
-            "column": "IsDisposed",
+            "name": "eTADASSalesRegion",
+            "apiKey": "eTADASSalesRegion",
+            "column": "EM_Etadas_Salesregion_ID",
+            "type": "foreignKey",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "eTADASSalesCampaign",
+            "apiKey": "eTADASSalesCampaign",
+            "column": "EM_Etadas_Campaign_ID",
+            "type": "foreignKey",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "etgoAmortizationStatus",
+            "apiKey": "etgoAmortizationStatus",
+            "column": "EM_Etgo_Amortization_Status",
+            "type": "decimal",
+            "visibility": "readOnly",
+            "required": false
+          },
+          {
+            "name": "inPossession",
+            "apiKey": "inPossession",
+            "column": "IsInPosession",
             "type": "boolean",
             "visibility": "system",
             "required": true
           },
           {
-            "name": "profit",
-            "apiKey": "profit",
-            "column": "Profit",
-            "type": "decimal",
+            "name": "id",
+            "apiKey": "id",
+            "column": "A_Asset_ID",
+            "type": "id",
             "visibility": "system",
-            "required": false
+            "required": true
           },
           {
-            "name": "lotName",
-            "apiKey": "lotName",
-            "column": "Lot",
-            "type": "string",
+            "name": "partnerAddress",
+            "apiKey": "partnerAddress",
+            "column": "C_BPartner_Location_ID",
+            "type": "foreignKey",
             "visibility": "system",
             "required": false
           },
@@ -1561,34 +1526,90 @@
             "required": false
           },
           {
-            "name": "partnerAddress",
-            "apiKey": "partnerAddress",
-            "column": "C_BPartner_Location_ID",
-            "type": "foreignKey",
-            "visibility": "system",
-            "required": false
-          },
-          {
-            "name": "id",
-            "apiKey": "id",
-            "column": "A_Asset_ID",
-            "type": "id",
-            "visibility": "system",
-            "required": true
-          },
-          {
-            "name": "inPossession",
-            "apiKey": "inPossession",
-            "column": "IsInPosession",
+            "name": "disposed",
+            "apiKey": "disposed",
+            "column": "IsDisposed",
             "type": "boolean",
             "visibility": "system",
             "required": true
           },
           {
-            "name": "acctvalueamt",
-            "apiKey": "acctvalueamt",
-            "column": "Acctvalueamt",
-            "type": "decimal",
+            "name": "inServiceDate",
+            "apiKey": "inServiceDate",
+            "column": "AssetServiceDate",
+            "type": "date",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "userContact",
+            "apiKey": "userContact",
+            "column": "AD_User_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "storageBin",
+            "apiKey": "storageBin",
+            "column": "M_Locator_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "assetDepreciationDate",
+            "apiKey": "assetDepreciationDate",
+            "column": "AssetDepreciationDate",
+            "type": "date",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "businessPartner",
+            "apiKey": "businessPartner",
+            "column": "C_BPartner_ID",
+            "type": "foreignKey",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "lifeUse",
+            "apiKey": "lifeUse",
+            "column": "LifeUseUnits",
+            "type": "integer",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "client",
+            "apiKey": "client",
+            "column": "AD_Client_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "useUnits",
+            "apiKey": "useUnits",
+            "column": "UseUnits",
+            "type": "integer",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "assetDisposalDate",
+            "apiKey": "assetDisposalDate",
+            "column": "AssetDisposalDate",
+            "type": "date",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "expirationDate",
+            "apiKey": "expirationDate",
+            "column": "GuaranteeDate",
+            "type": "date",
             "visibility": "system",
             "required": false
           },
@@ -1599,6 +1620,14 @@
             "type": "boolean",
             "visibility": "system",
             "required": true
+          },
+          {
+            "name": "helpComment",
+            "apiKey": "helpComment",
+            "column": "Help",
+            "type": "text",
+            "visibility": "system",
+            "required": false
           },
           {
             "name": "locationComment",
@@ -1625,42 +1654,26 @@
             "required": false
           },
           {
-            "name": "expirationDate",
-            "apiKey": "expirationDate",
-            "column": "GuaranteeDate",
-            "type": "date",
+            "name": "acctvalueamt",
+            "apiKey": "acctvalueamt",
+            "column": "Acctvalueamt",
+            "type": "decimal",
             "visibility": "system",
             "required": false
           },
           {
-            "name": "assetDisposalDate",
-            "apiKey": "assetDisposalDate",
-            "column": "AssetDisposalDate",
-            "type": "date",
+            "name": "profit",
+            "apiKey": "profit",
+            "column": "Profit",
+            "type": "decimal",
             "visibility": "system",
             "required": false
           },
           {
-            "name": "useUnits",
-            "apiKey": "useUnits",
-            "column": "UseUnits",
-            "type": "integer",
-            "visibility": "system",
-            "required": false
-          },
-          {
-            "name": "client",
-            "apiKey": "client",
-            "column": "AD_Client_ID",
-            "type": "foreignKey",
-            "visibility": "system",
-            "required": true
-          },
-          {
-            "name": "lifeUse",
-            "apiKey": "lifeUse",
-            "column": "LifeUseUnits",
-            "type": "integer",
+            "name": "lotName",
+            "apiKey": "lotName",
+            "column": "Lot",
+            "type": "string",
             "visibility": "system",
             "required": false
           },
@@ -1695,62 +1708,6 @@
             "type": "foreignKey",
             "visibility": "system",
             "required": true
-          },
-          {
-            "name": "eTADASActivity",
-            "apiKey": "eTADASActivity",
-            "column": "EM_Etadas_C_Activity_ID",
-            "type": "foreignKey",
-            "visibility": "discarded",
-            "required": false
-          },
-          {
-            "name": "eTADASCostCenter",
-            "apiKey": "eTADASCostCenter",
-            "column": "EM_Etadas_Costcenter_ID",
-            "type": "foreignKey",
-            "visibility": "editable",
-            "required": false
-          },
-          {
-            "name": "eTADASSalesCampaign",
-            "apiKey": "eTADASSalesCampaign",
-            "column": "EM_Etadas_Campaign_ID",
-            "type": "foreignKey",
-            "visibility": "discarded",
-            "required": false
-          },
-          {
-            "name": "eTADASSalesRegion",
-            "apiKey": "eTADASSalesRegion",
-            "column": "EM_Etadas_Salesregion_ID",
-            "type": "foreignKey",
-            "visibility": "discarded",
-            "required": false
-          },
-          {
-            "name": "eTADASUser1",
-            "apiKey": "eTADASUser1",
-            "column": "EM_Etadas_User1_ID",
-            "type": "foreignKey",
-            "visibility": "discarded",
-            "required": false
-          },
-          {
-            "name": "eTADASUser2",
-            "apiKey": "eTADASUser2",
-            "column": "EM_Etadas_User2_ID",
-            "type": "foreignKey",
-            "visibility": "discarded",
-            "required": false
-          },
-          {
-            "name": "etgoAmortizationStatus",
-            "apiKey": "etgoAmortizationStatus",
-            "column": "EM_Etgo_Amortization_Status",
-            "type": "decimal",
-            "visibility": "readOnly",
-            "required": false
           }
         ],
         "javaQualifier": "assetsHandler"
@@ -1881,38 +1838,6 @@
             "required": true
           },
           {
-            "name": "updated",
-            "apiKey": "updated",
-            "column": "Updated",
-            "type": "dateTime",
-            "visibility": "system",
-            "required": true
-          },
-          {
-            "name": "updatedBy",
-            "apiKey": "updatedBy",
-            "column": "Updatedby",
-            "type": "foreignKey",
-            "visibility": "system",
-            "required": true
-          },
-          {
-            "name": "stDimension",
-            "apiKey": "stDimension",
-            "column": "User1_ID",
-            "type": "foreignKey",
-            "visibility": "system",
-            "required": false
-          },
-          {
-            "name": "ndDimension",
-            "apiKey": "ndDimension",
-            "column": "User2_ID",
-            "type": "foreignKey",
-            "visibility": "system",
-            "required": false
-          },
-          {
             "name": "eTADASActivity",
             "apiKey": "eTADASActivity",
             "column": "EM_Etadas_C_Activity_ID",
@@ -1940,6 +1865,38 @@
             "name": "eTADASSalesRegion",
             "apiKey": "eTADASSalesRegion",
             "column": "EM_Etadas_Salesregion_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "updated",
+            "apiKey": "updated",
+            "column": "Updated",
+            "type": "dateTime",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "updatedBy",
+            "apiKey": "updatedBy",
+            "column": "Updatedby",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "stDimension",
+            "apiKey": "stDimension",
+            "column": "User1_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "ndDimension",
+            "apiKey": "ndDimension",
+            "column": "User2_ID",
             "type": "foreignKey",
             "visibility": "system",
             "required": false
@@ -2000,22 +1957,6 @@
             "required": false
           },
           {
-            "name": "organization",
-            "apiKey": "organization",
-            "column": "AD_Org_ID",
-            "type": "foreignKey",
-            "visibility": "system",
-            "required": true
-          },
-          {
-            "name": "asset",
-            "apiKey": "asset",
-            "column": "A_Asset_ID",
-            "type": "foreignKey",
-            "visibility": "system",
-            "required": true
-          },
-          {
             "name": "id",
             "apiKey": "id",
             "column": "A_Asset_Acct_ID",
@@ -2027,6 +1968,22 @@
             "name": "client",
             "apiKey": "client",
             "column": "AD_Client_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "organization",
+            "apiKey": "organization",
+            "column": "AD_Org_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "asset",
+            "apiKey": "asset",
+            "column": "A_Asset_ID",
             "type": "foreignKey",
             "visibility": "system",
             "required": true
@@ -2240,22 +2197,6 @@
         "reference": "Project",
         "inputMode": "search",
         "url": "/sws/neo/assets/assets/selectors/project"
-      },
-      {
-        "entity": "assets",
-        "field": "businessPartner",
-        "column": "C_BPartner_ID",
-        "reference": "BPartner",
-        "inputMode": "search",
-        "url": "/sws/neo/assets/assets/selectors/businessPartner"
-      },
-      {
-        "entity": "assets",
-        "field": "eTADASCostCenter",
-        "column": "EM_Etadas_Costcenter_ID",
-        "reference": "Costcenter",
-        "inputMode": "selector",
-        "url": "/sws/neo/assets/assets/selectors/eTADASCostCenter"
       },
       {
         "entity": "amortizationLine",
@@ -2487,14 +2428,6 @@
         "description": "Display logic for 'annualDepreciation' in assets should have evaluable flag"
       },
       {
-        "id": "t-displaylogic-evaluable-assets-businessPartner",
-        "category": "displaylogic-evaluable",
-        "entity": "assets",
-        "field": "businessPartner",
-        "runner": "node",
-        "description": "Display logic for 'businessPartner' in assets should have evaluable flag"
-      },
-      {
         "id": "t-displaylogic-evaluable-assets-calculateType",
         "category": "displaylogic-evaluable",
         "entity": "assets",
@@ -2557,14 +2490,6 @@
         "field": "depreciationType",
         "runner": "node",
         "description": "Display logic for 'depreciationType' in assets should have evaluable flag"
-      },
-      {
-        "id": "t-displaylogic-evaluable-assets-eTADASCostCenter",
-        "category": "displaylogic-evaluable",
-        "entity": "assets",
-        "field": "eTADASCostCenter",
-        "runner": "node",
-        "description": "Display logic for 'eTADASCostCenter' in assets should have evaluable flag"
       },
       {
         "id": "t-displaylogic-evaluable-assets-everyMonthIs30Days",
@@ -2655,14 +2580,6 @@
         "description": "Display logic for 'annualDepreciation' in assets should be valid JS"
       },
       {
-        "id": "t-displaylogic-valid-assets-businessPartner",
-        "category": "displaylogic-valid",
-        "entity": "assets",
-        "field": "businessPartner",
-        "runner": "node",
-        "description": "Display logic for 'businessPartner' in assets should be valid JS"
-      },
-      {
         "id": "t-displaylogic-valid-assets-calculateType",
         "category": "displaylogic-valid",
         "entity": "assets",
@@ -2725,14 +2642,6 @@
         "field": "depreciationType",
         "runner": "node",
         "description": "Display logic for 'depreciationType' in assets should be valid JS"
-      },
-      {
-        "id": "t-displaylogic-valid-assets-eTADASCostCenter",
-        "category": "displaylogic-valid",
-        "entity": "assets",
-        "field": "eTADASCostCenter",
-        "runner": "node",
-        "description": "Display logic for 'eTADASCostCenter' in assets should be valid JS"
       },
       {
         "id": "t-displaylogic-valid-assets-everyMonthIs30Days",
@@ -2903,14 +2812,6 @@
         "description": "Field 'assetValue' should be present in assets"
       },
       {
-        "id": "t-field-presence-assets-businessPartner",
-        "category": "field-presence",
-        "entity": "assets",
-        "field": "businessPartner",
-        "runner": "node",
-        "description": "Field 'businessPartner' should be present in assets"
-      },
-      {
         "id": "t-field-presence-assets-calculateType",
         "category": "field-presence",
         "entity": "assets",
@@ -2997,14 +2898,6 @@
         "field": "description",
         "runner": "node",
         "description": "Field 'description' should be present in assets"
-      },
-      {
-        "id": "t-field-presence-assets-eTADASCostCenter",
-        "category": "field-presence",
-        "entity": "assets",
-        "field": "eTADASCostCenter",
-        "runner": "node",
-        "description": "Field 'eTADASCostCenter' should be present in assets"
       },
       {
         "id": "t-field-presence-assets-etgoAmortizationStatus",
@@ -3207,14 +3100,6 @@
         "description": "Field 'assetValue' should have type 'number' in assets"
       },
       {
-        "id": "t-field-type-assets-businessPartner",
-        "category": "field-type",
-        "entity": "assets",
-        "field": "businessPartner",
-        "runner": "node",
-        "description": "Field 'businessPartner' should have type 'string' in assets"
-      },
-      {
         "id": "t-field-type-assets-calculateType",
         "category": "field-type",
         "entity": "assets",
@@ -3301,14 +3186,6 @@
         "field": "description",
         "runner": "node",
         "description": "Field 'description' should have type 'string' in assets"
-      },
-      {
-        "id": "t-field-type-assets-eTADASCostCenter",
-        "category": "field-type",
-        "entity": "assets",
-        "field": "eTADASCostCenter",
-        "runner": "node",
-        "description": "Field 'eTADASCostCenter' should have type 'string' in assets"
       },
       {
         "id": "t-field-type-assets-etgoAmortizationStatus",
@@ -3650,28 +3527,12 @@
         "description": "Selector endpoint for 'assetCategory' in assets should exist"
       },
       {
-        "id": "t-selector-endpoint-assets-businessPartner",
-        "category": "selector-endpoint",
-        "entity": "assets",
-        "field": "businessPartner",
-        "runner": "node",
-        "description": "Selector endpoint for 'businessPartner' in assets should exist"
-      },
-      {
         "id": "t-selector-endpoint-assets-currency",
         "category": "selector-endpoint",
         "entity": "assets",
         "field": "currency",
         "runner": "node",
         "description": "Selector endpoint for 'currency' in assets should exist"
-      },
-      {
-        "id": "t-selector-endpoint-assets-eTADASCostCenter",
-        "category": "selector-endpoint",
-        "entity": "assets",
-        "field": "eTADASCostCenter",
-        "runner": "node",
-        "description": "Selector endpoint for 'eTADASCostCenter' in assets should exist"
       },
       {
         "id": "t-selector-endpoint-assets-product",
@@ -3962,6 +3823,14 @@
         "description": "System field 'attributeSetValue' should exist in backend but not frontend for assets"
       },
       {
+        "id": "t-system-field-assets-businessPartner",
+        "category": "system-field",
+        "entity": "assets",
+        "field": "businessPartner",
+        "runner": "node",
+        "description": "System field 'businessPartner' should exist in backend but not frontend for assets"
+      },
+      {
         "id": "t-system-field-assets-client",
         "category": "system-field",
         "entity": "assets",
@@ -4008,6 +3877,14 @@
         "field": "eTADASActivity",
         "runner": "node",
         "description": "System field 'eTADASActivity' should exist in backend but not frontend for assets"
+      },
+      {
+        "id": "t-system-field-assets-eTADASCostCenter",
+        "category": "system-field",
+        "entity": "assets",
+        "field": "eTADASCostCenter",
+        "runner": "node",
+        "description": "System field 'eTADASCostCenter' should exist in backend but not frontend for assets"
       },
       {
         "id": "t-system-field-assets-eTADASSalesCampaign",
@@ -4256,25 +4133,25 @@
       }
     ],
     "summary": {
-      "total": 239,
+      "total": 231,
       "byCategory": {
         "action-endpoint": 2,
         "crud-flags": 3,
         "default-value-type": 9,
-        "displaylogic-evaluable": 21,
-        "displaylogic-valid": 21,
-        "field-presence": 38,
-        "field-type": 38,
+        "displaylogic-evaluable": 19,
+        "displaylogic-valid": 19,
+        "field-presence": 36,
+        "field-type": 36,
         "readonlylogic-evaluable": 4,
         "readonlylogic-valid": 4,
         "rule-declared": 13,
         "searchable-filters": 4,
-        "selector-endpoint": 11,
-        "system-field": 68,
+        "selector-endpoint": 9,
+        "system-field": 70,
         "visibility": 3
       },
       "byRunner": {
-        "node": 239,
+        "node": 231,
         "junit": 0
       }
     }

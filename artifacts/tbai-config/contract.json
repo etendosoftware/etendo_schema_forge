@@ -1,8 +1,7 @@
 {
-  "version": "0.4.0",
-  "generatedAt": "2026-04-28T16:08:39.756Z",
-  "updatedAt": "2026-07-22T15:18:31.203Z",
-  "checksum": "f6412bc60aa81588",
+  "version": "0.1.0",
+  "generatedAt": "2026-07-30T22:44:15.942Z",
+  "checksum": "bea0d6b61ddf8ef5",
   "frontendContract": {
     "window": {
       "id": "C327DE215AC945F69363905840118177",
@@ -357,6 +356,14 @@
             "required": true
           },
           {
+            "name": "id",
+            "apiKey": "id",
+            "column": "Tbai_Config_ID",
+            "type": "id",
+            "visibility": "system",
+            "required": true
+          },
+          {
             "name": "client",
             "apiKey": "client",
             "column": "AD_Client_ID",
@@ -381,30 +388,6 @@
             "required": true
           },
           {
-            "name": "updated",
-            "apiKey": "updated",
-            "column": "Updated",
-            "type": "dateTime",
-            "visibility": "system",
-            "required": true
-          },
-          {
-            "name": "updatedBy",
-            "apiKey": "updatedBy",
-            "column": "Updatedby",
-            "type": "foreignKey",
-            "visibility": "system",
-            "required": true
-          },
-          {
-            "name": "id",
-            "apiKey": "id",
-            "column": "Tbai_Config_ID",
-            "type": "id",
-            "visibility": "system",
-            "required": true
-          },
-          {
             "name": "emailPassword",
             "apiKey": "emailPassword",
             "column": "Email_Password",
@@ -419,6 +402,22 @@
             "type": "string",
             "visibility": "system",
             "required": false
+          },
+          {
+            "name": "updated",
+            "apiKey": "updated",
+            "column": "Updated",
+            "type": "dateTime",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "updatedBy",
+            "apiKey": "updatedBy",
+            "column": "Updatedby",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": true
           }
         ],
         "javaQualifier": "tbai-config-sequence-handler"

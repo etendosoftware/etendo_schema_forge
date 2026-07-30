@@ -171,7 +171,11 @@ describe('FundsTransferModal', () => {
     fireEvent.change(screen.getByTestId('transfer-amount'), { target: { value: '100' } });
     fireEvent.change(screen.getByTestId('transfer-rate'), { target: { value: '1.1' } });
     const box = screen.getByTestId('transfer-receive-amount');
-    expect(box).toHaveTextContent(formatCurrency('USD', 110));
+    // jest-dom's toHaveTextContent normalizes the DOM's own whitespace (its `normalize()`
+    // helper collapses \s+, which in JS also matches the U+00A0 non-breaking space that
+    // Intl's es-ES currency formatting inserts before the symbol) but does NOT normalize
+    // the expected string passed in — so strip the NBSP here to match on the same terms.
+    expect(box).toHaveTextContent(formatCurrency('USD', 110).replace(/ /g, ' '));
   });
 
   it('updates the receive-amount preview reactively when the rate changes afterwards', () => {
@@ -180,10 +184,10 @@ describe('FundsTransferModal', () => {
     fireEvent.change(screen.getByTestId('transfer-amount'), { target: { value: '100' } });
     fireEvent.change(screen.getByTestId('transfer-rate'), { target: { value: '1.1' } });
     const box = screen.getByTestId('transfer-receive-amount');
-    expect(box).toHaveTextContent(formatCurrency('USD', 110));
+    expect(box).toHaveTextContent(formatCurrency('USD', 110).replace(/ /g, ' '));
 
     fireEvent.change(screen.getByTestId('transfer-rate'), { target: { value: '1.2' } });
-    expect(box).toHaveTextContent(formatCurrency('USD', 120));
+    expect(box).toHaveTextContent(formatCurrency('USD', 120).replace(/ /g, ' '));
   });
 
   it('does not render the receive-amount preview for a same-currency transfer', () => {

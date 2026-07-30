@@ -32742,7 +32742,7 @@
       ]
     },
     "e9796a297caefaf50550fd46b064e00862567eb728d3001bd2e77bcab7db7d3b": {
-      "checksum": "bd406e71a607946170c1c60e06423b68c5466095e8bf5c4b6609bbd913b3d224",
+      "checksum": "a15624c615e07424dccbcf2603d6271ece2acb638ec5bddc3c37ecde4a9f9276",
       "params": [
         "94EAA455D2644E04AB25D93BE5157B6D"
       ],
@@ -33594,6 +33594,12 @@
           "position": "21"
         },
         {
+          "ad_column_id": "876CAA031C8648A39E8D0CA4151A22C6",
+          "ad_table_id": "84203CBEBDA349C38319C0E549751546",
+          "columnname": "EM_ETGO_Match_Group_ID",
+          "position": "22"
+        },
+        {
           "ad_column_id": "D88FE68C6A19467DB8341FFC18C0C90D",
           "ad_table_id": "84203CBEBDA349C38319C0E549751546",
           "columnname": "EM_PSD2_Transaction_Identifier",
@@ -33606,10 +33612,10 @@
           "position": "23"
         },
         {
-          "ad_column_id": "876CAA031C8648A39E8D0CA4151A22C6",
+          "ad_column_id": "2A8EA3EC7BFD415692D844A42EE5BFD5",
           "ad_table_id": "84203CBEBDA349C38319C0E549751546",
-          "columnname": "EM_ETGO_Match_Group_ID",
-          "position": null
+          "columnname": "EM_ETGO_Pending_Amount",
+          "position": "27"
         },
         {
           "ad_column_id": "828EE0AE7FEA5FA1E040007F010067C7",

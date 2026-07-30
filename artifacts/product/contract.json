@@ -1,8 +1,7 @@
 {
-  "version": "0.22.0",
-  "generatedAt": "2026-07-07T21:53:26.027Z",
-  "updatedAt": "2026-07-27T17:25:08.683Z",
-  "checksum": "fef3376d7967cf0c",
+  "version": "0.26.0",
+  "generatedAt": "2026-07-30T22:44:13.503Z",
+  "checksum": "df7043b80342d6e7",
   "frontendContract": {
     "window": {
       "id": "140",
@@ -75,6 +74,7 @@
         "enabled": true,
         "spec": "product",
         "entity": "product",
+        "descriptor": "product",
         "formats": [
           "csv",
           "txt"
@@ -121,41 +121,13 @@
             "type": "textarea"
           },
           {
-            "target": "uOM",
+            "required": false,
+            "type": "string",
+            "target": "price",
             "aliases": [
-              "unidad de medida",
-              "uom"
+              "precio"
             ],
-            "matchEntity": "UOM",
-            "label": "UOM",
-            "required": true,
-            "type": "foreignKey",
-            "reference": "UOM"
-          },
-          {
-            "target": "productCategory",
-            "aliases": [
-              "categoria",
-              "categoría"
-            ],
-            "matchEntity": "ProductCategory",
-            "label": "Product Category",
-            "required": true,
-            "type": "foreignKey",
-            "reference": "ProductCategory"
-          },
-          {
-            "target": "taxCategory",
-            "aliases": [
-              "categoria impositiva",
-              "categoría impositiva",
-              "impuesto"
-            ],
-            "matchEntity": "FinancialMgmtTaxCategory",
-            "label": "Tax Category",
-            "required": true,
-            "type": "foreignKey",
-            "reference": "TaxCategory"
+            "label": "Price"
           }
         ]
       },
@@ -242,7 +214,7 @@
             "grid": false,
             "form": true,
             "section": "principal",
-            "seq": 7,
+            "seq": 8,
             "explicitType": true,
             "validation": {
               "maxLength": 32
@@ -262,7 +234,6 @@
             "sourceRequired": true,
             "reference": "UOM",
             "inputMode": "search",
-            "clearable": false,
             "section": "principal",
             "seq": 5,
             "validation": {
@@ -379,7 +350,7 @@
             "grid": false,
             "form": true,
             "section": "principal",
-            "seq": 6,
+            "seq": 7,
             "span": 3,
             "explicitType": true,
             "validation": {
@@ -535,6 +506,30 @@
             "section": "other",
             "validation": {
               "maxLength": 22
+            }
+          },
+          {
+            "name": "active",
+            "apiKey": "active",
+            "column": "IsActive",
+            "label": "Active",
+            "type": "boolean",
+            "tsType": "boolean",
+            "visibility": "editable",
+            "required": true,
+            "grid": false,
+            "form": true,
+            "sourceRequired": true,
+            "derivation": {
+              "type": "computed",
+              "source": "true"
+            },
+            "defaultValue": "Y",
+            "section": "principal",
+            "seq": 6,
+            "validation": {
+              "required": true,
+              "maxLength": 1
             }
           },
           {
@@ -717,6 +712,13 @@
             }
           },
           {
+            "name": "active",
+            "derivation": {
+              "type": "computed",
+              "source": "true"
+            }
+          },
+          {
             "name": "returnable",
             "derivation": {
               "type": "computed",
@@ -724,6 +726,7 @@
             }
           }
         ],
+        "javaQualifier": "productDefaultsHandler",
         "formCols": 3
       },
       "price": {
@@ -2430,6 +2433,7 @@
         "enabled": true,
         "spec": "product",
         "entity": "product",
+        "descriptor": "product",
         "formats": [
           "csv",
           "txt"
@@ -2476,41 +2480,13 @@
             "type": "textarea"
           },
           {
-            "target": "uOM",
+            "required": false,
+            "type": "string",
+            "target": "price",
             "aliases": [
-              "unidad de medida",
-              "uom"
+              "precio"
             ],
-            "matchEntity": "UOM",
-            "label": "UOM",
-            "required": true,
-            "type": "foreignKey",
-            "reference": "UOM"
-          },
-          {
-            "target": "productCategory",
-            "aliases": [
-              "categoria",
-              "categoría"
-            ],
-            "matchEntity": "ProductCategory",
-            "label": "Product Category",
-            "required": true,
-            "type": "foreignKey",
-            "reference": "ProductCategory"
-          },
-          {
-            "target": "taxCategory",
-            "aliases": [
-              "categoria impositiva",
-              "categoría impositiva",
-              "impuesto"
-            ],
-            "matchEntity": "FinancialMgmtTaxCategory",
-            "label": "Tax Category",
-            "required": true,
-            "type": "foreignKey",
-            "reference": "TaxCategory"
+            "label": "Price"
           }
         ]
       },
@@ -2687,7 +2663,7 @@
             "apiKey": "active",
             "column": "IsActive",
             "type": "boolean",
-            "visibility": "system",
+            "visibility": "editable",
             "required": true
           },
           {
@@ -3522,7 +3498,8 @@
             "visibility": "system",
             "required": true
           }
-        ]
+        ],
+        "javaQualifier": "productDefaultsHandler"
       },
       "price": {
         "tableName": "M_ProductPrice",
@@ -3730,17 +3707,17 @@
             "required": true
           },
           {
-            "name": "relatedProductCategory",
-            "apiKey": "relatedProductCategory",
-            "column": "M_Relatedproductcategory_ID",
+            "name": "relatedProduct",
+            "apiKey": "relatedProduct",
+            "column": "M_Relatedproduct_ID",
             "type": "foreignKey",
             "visibility": "system",
             "required": false
           },
           {
-            "name": "relatedProduct",
-            "apiKey": "relatedProduct",
-            "column": "M_Relatedproduct_ID",
+            "name": "relatedProductCategory",
+            "apiKey": "relatedProductCategory",
+            "column": "M_Relatedproductcategory_ID",
             "type": "foreignKey",
             "visibility": "system",
             "required": false
@@ -4622,6 +4599,14 @@
             "required": false
           },
           {
+            "name": "uOM",
+            "apiKey": "uOM",
+            "column": "C_UOM_ID",
+            "type": "foreignKey",
+            "visibility": "readOnly",
+            "required": true
+          },
+          {
             "name": "checkpricedifference",
             "apiKey": "checkpricedifference",
             "column": "Checkpricedifference",
@@ -4651,14 +4636,6 @@
             "column": "CreatedBy",
             "type": "foreignKey",
             "visibility": "system",
-            "required": true
-          },
-          {
-            "name": "uOM",
-            "apiKey": "uOM",
-            "column": "C_UOM_ID",
-            "type": "foreignKey",
-            "visibility": "readOnly",
             "required": true
           },
           {
@@ -4996,6 +4973,14 @@
             "required": true
           },
           {
+            "name": "etgoCost",
+            "apiKey": "etgoCost",
+            "column": "EM_Etgo_Cost",
+            "type": "amount",
+            "visibility": "system",
+            "required": false
+          },
+          {
             "name": "etgoValuation",
             "apiKey": "etgoValuation",
             "column": "EM_Etgo_Valuation",
@@ -5026,14 +5011,6 @@
             "type": "foreignKey",
             "visibility": "system",
             "required": true
-          },
-          {
-            "name": "etgoCost",
-            "apiKey": "etgoCost",
-            "column": "EM_Etgo_Cost",
-            "type": "amount",
-            "visibility": "system",
-            "required": false
           }
         ],
         "javaQualifier": "productStockWarehouseHandler"
@@ -6340,6 +6317,14 @@
         "description": "Default value for 'active' in priceRuleVersion should be a string"
       },
       {
+        "id": "t-default-value-type-product-active",
+        "category": "default-value-type",
+        "entity": "product",
+        "field": "active",
+        "runner": "node",
+        "description": "Default value for 'active' in product should be a string"
+      },
+      {
         "id": "t-default-value-type-product-productCategory",
         "category": "default-value-type",
         "entity": "product",
@@ -6818,6 +6803,14 @@
         "field": "validFromDate",
         "runner": "node",
         "description": "Field 'validFromDate' should be present in priceRuleVersion"
+      },
+      {
+        "id": "t-field-presence-product-active",
+        "category": "field-presence",
+        "entity": "product",
+        "field": "active",
+        "runner": "node",
+        "description": "Field 'active' should be present in product"
       },
       {
         "id": "t-field-presence-product-attributeSet",
@@ -7474,6 +7467,14 @@
         "field": "validFromDate",
         "runner": "node",
         "description": "Field 'validFromDate' should have type 'string' in priceRuleVersion"
+      },
+      {
+        "id": "t-field-type-product-active",
+        "category": "field-type",
+        "entity": "product",
+        "field": "active",
+        "runner": "node",
+        "description": "Field 'active' should have type 'boolean' in product"
       },
       {
         "id": "t-field-type-product-attributeSet",
@@ -9823,14 +9824,6 @@
         "description": "System field 'updatedBy' should exist in backend but not frontend for priceRuleVersion"
       },
       {
-        "id": "t-system-field-product-active",
-        "category": "system-field",
-        "entity": "product",
-        "field": "active",
-        "runner": "node",
-        "description": "System field 'active' should exist in backend but not frontend for product"
-      },
-      {
         "id": "t-system-field-product-aeat347Apartment",
         "category": "system-field",
         "entity": "product",
@@ -11244,25 +11237,25 @@
       }
     ],
     "summary": {
-      "total": 662,
+      "total": 664,
       "byCategory": {
         "action-endpoint": 9,
         "crud-flags": 12,
-        "default-value-type": 26,
+        "default-value-type": 27,
         "displaylogic-evaluable": 5,
         "displaylogic-valid": 5,
-        "field-presence": 82,
-        "field-type": 82,
+        "field-presence": 83,
+        "field-type": 83,
         "readonlylogic-evaluable": 2,
         "readonlylogic-valid": 2,
         "rule-declared": 141,
         "searchable-filters": 5,
         "selector-endpoint": 27,
-        "system-field": 252,
+        "system-field": 251,
         "visibility": 12
       },
       "byRunner": {
-        "node": 662,
+        "node": 664,
         "junit": 0
       }
     }

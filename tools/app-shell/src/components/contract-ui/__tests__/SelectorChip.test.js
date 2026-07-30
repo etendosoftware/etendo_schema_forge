@@ -38,9 +38,9 @@ describe('SelectorChip (ETP-4000 Figma chip)', () => {
     assert.match(src, /<X[\s\S]/);
   });
 
-  it('uses semantic muted background and label roles', () => {
-    assert.match(src, /bg-\[hsl\(var\(--muted\)\)\]/);
+  it('uses the semantic muted-foreground label token and a transparent background (the gray fill lives on the field wrapper hover, not the chip)', () => {
     assert.match(src, /text-\[hsl\(var\(--muted-foreground\)\)\]/);
+    assert.match(src, /bg-transparent/);
   });
 
   it('paints the X icon with the semantic muted foreground', () => {

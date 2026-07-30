@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { formatAmount } from '@/lib/formatAmount.js';
+import { formatCurrency } from '@/lib/formatCurrency.js';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { useUI } from '@/i18n';
 
@@ -105,7 +105,7 @@ export default function PaymentDetailsPanelCustom({ parentId, token, apiBaseUrl 
             <TableCell className="text-muted-foreground" data-testid="TableCell__f18cf9">{row.paymentDate || '—'}</TableCell>
             <TableCell className="text-muted-foreground" data-testid="TableCell__f18cf9">{row['paymentMethod$_identifier'] || '—'}</TableCell>
             <TableCell className="text-muted-foreground" data-testid="TableCell__f18cf9">{row['account$_identifier'] || '—'}</TableCell>
-            <TableCell className="text-right tabular-nums" data-testid="TableCell__f18cf9">{formatAmount(row.amount)}</TableCell>
+            <TableCell className="text-right tabular-nums" data-testid="TableCell__f18cf9">{formatCurrency(undefined, row.amount)}</TableCell>
             <TableCell className="text-muted-foreground" data-testid="TableCell__f18cf9">
               {PAYMENT_STATUS[row.status] ?? row.status ?? '—'}
             </TableCell>

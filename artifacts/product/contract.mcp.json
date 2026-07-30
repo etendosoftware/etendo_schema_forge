@@ -1,8 +1,7 @@
 {
-  "version": "0.22.0",
-  "generatedAt": "2026-07-07T21:53:26.027Z",
-  "updatedAt": "2026-07-23T19:47:36.897Z",
-  "contractChecksum": "fef3376d7967cf0c",
+  "version": "0.26.0",
+  "generatedAt": "2026-07-30T22:44:13.503Z",
+  "contractChecksum": "df7043b80342d6e7",
   "apiPrediction": {
     "specName": "product",
     "baseUrl": "/sws/neo/product",
@@ -652,6 +651,10 @@
           "weight": {},
           "uOMForWeight": {},
           "attributeSet": {},
+          "active": {
+            "required": true,
+            "defaultValue": "Y"
+          },
           "uPCEAN": {},
           "brand": {},
           "returnable": {
@@ -941,6 +944,7 @@
         "sale",
         "productType",
         "stocked",
+        "active",
         "returnable"
       ],
       "lineFields": [
@@ -1018,6 +1022,7 @@
           "sale",
           "productType",
           "stocked",
+          "active",
           "returnable"
         ]
       },
@@ -1068,5 +1073,5 @@
     "knownLimitations": [],
     "dangerousOperations": []
   },
-  "checksum": "64c01a431cefd9cf"
+  "checksum": "3625c8b412c7c60b"
 }

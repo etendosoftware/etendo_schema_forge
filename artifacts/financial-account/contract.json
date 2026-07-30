@@ -1,8 +1,8 @@
 {
-  "version": "0.17.0",
+  "version": "0.20.0",
   "generatedAt": "2026-06-11T01:47:08.755Z",
-  "updatedAt": "2026-07-21T12:35:19.261Z",
-  "checksum": "effb38fa7ad6cf67",
+  "updatedAt": "2026-07-30T22:44:11.411Z",
+  "checksum": "3cc8d0129c0541cb",
   "frontendContract": {
     "window": {
       "id": "94EAA455D2644E04AB25D93BE5157B6D",
@@ -1223,10 +1223,9 @@
               "maxLength": 32
             },
             "displayLogic": {
-              "raw": "@ACCT_DIMENSION_DISPLAY@ & @Trxtype@!''",
-              "evaluable": false,
-              "reason": "server-macro",
-              "js": null
+              "raw": "@Trxtype@!''",
+              "evaluable": true,
+              "js": "record['transactionType'] !== ''"
             },
             "readOnlyLogic": {
               "raw": "@Posted@='Y' | @Fin_Payment_ID@!''",
@@ -3983,6 +3982,14 @@
             "apiKey": "id",
             "column": "FIN_Bankstatementline_ID",
             "type": "id",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "eTGOPendingAmount",
+            "apiKey": "eTGOPendingAmount",
+            "column": "EM_ETGO_Pending_Amount",
+            "type": "amount",
             "visibility": "system",
             "required": true
           }
@@ -9483,6 +9490,14 @@
         "description": "System field 'eTGOMatchGroup' should exist in backend but not frontend for bankStatementLines"
       },
       {
+        "id": "t-system-field-bankStatementLines-eTGOPendingAmount",
+        "category": "system-field",
+        "entity": "bankStatementLines",
+        "field": "eTGOPendingAmount",
+        "runner": "node",
+        "description": "System field 'eTGOPendingAmount' should exist in backend but not frontend for bankStatementLines"
+      },
+      {
         "id": "t-system-field-bankStatementLines-financialAccountTransaction",
         "category": "system-field",
         "entity": "bankStatementLines",
@@ -9943,7 +9958,7 @@
       }
     ],
     "summary": {
-      "total": 707,
+      "total": 708,
       "byCategory": {
         "action-endpoint": 21,
         "crud-flags": 5,
@@ -9956,11 +9971,11 @@
         "readonlylogic-valid": 29,
         "rule-declared": 225,
         "selector-endpoint": 16,
-        "system-field": 111,
+        "system-field": 112,
         "visibility": 5
       },
       "byRunner": {
-        "node": 707,
+        "node": 708,
         "junit": 0
       }
     }

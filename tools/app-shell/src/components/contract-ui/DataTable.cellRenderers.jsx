@@ -209,6 +209,9 @@ export function renderDateCell({ row, col, dateFormatter }) {
   );
 }
 
+// Generic `amount`-type column renderer used by almost every window's DataTable.
+// This is the reference pattern for any new amount column — copy this, don't
+// reimplement Intl.NumberFormat locally (see CLAUDE.md § Currency & Amount Formatting).
 export function renderAmountCell({ row, col }) {
   return <span className="tabular-nums">{formatAmount(row[col.key], row['currency$_identifier'])}</span>;
 }

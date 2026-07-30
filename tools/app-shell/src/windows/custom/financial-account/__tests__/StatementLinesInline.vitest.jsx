@@ -87,6 +87,19 @@ describe('StatementLinesInline', () => {
     expect(screen.getByTestId('statement-line-row-l2')).toBeInTheDocument();
   });
 
+  it('groups thousands in the line amount (1000-9999 range silently drops the separator without explicit useGrouping)', () => {
+    linesMock.mockReturnValue({
+      lines: [
+        { id: 'l1', date: '2026-05-06T00:00:00Z', description: 'foo', amount: 1500, matched: true },
+      ],
+      loading: false,
+    });
+    render(<StatementLinesInline statementId="s1" currency="EUR" />);
+    const row = screen.getByTestId('statement-line-row-l1');
+    expect(row.textContent).toContain('1.500,00');
+    expect(row.textContent).not.toContain('1500,00');
+  });
+
   it('renders a success-tone match pill for matched=true and an info one for matched=false', () => {
     linesMock.mockReturnValue({
       lines: [
@@ -202,6 +215,52 @@ describe('StatementLinesInline', () => {
     render(<StatementLinesInline statementId="s1" />);
     // The empty description should render the placeholder "—" exactly once.
     expect(screen.getAllByText('—').length).toBeGreaterThanOrEqual(1);
+  });
+
+  describe('PARTIAL reconcileStatus (ETP-4502 iteration 4)', () => {
+    it('renders the "Parcial" pill and the pending-amount caption for a PARTIAL line', () => {
+      linesMock.mockReturnValue({
+        lines: [
+          {
+            id: 'l1', date: '2026-05-06T00:00:00Z', description: '', amount: 100,
+            matched: false, reconcileStatus: 'PARTIAL', pendingAmount: 46.76,
+            txns: [{ documentNo: '1000034', amount: -53.24, paymentId: 'p1' }],
+          },
+        ],
+        loading: false,
+      });
+      render(<StatementLinesInline statementId="s1" />);
+      expect(screen.getByText('financeAccountStatementLinesStatusPartial')).toBeInTheDocument();
+      expect(screen.getByTestId('statement-line-pending-amount')).toBeInTheDocument();
+    });
+
+    it('does not render the pending-amount caption for a RECONCILED line', () => {
+      linesMock.mockReturnValue({
+        lines: [
+          {
+            id: 'l1', date: '2026-05-06T00:00:00Z', description: '', amount: 100,
+            matched: true, reconcileStatus: 'RECONCILED', pendingAmount: 0,
+          },
+        ],
+        loading: false,
+      });
+      render(<StatementLinesInline statementId="s1" />);
+      expect(screen.queryByTestId('statement-line-pending-amount')).not.toBeInTheDocument();
+    });
+
+    it('does not render the pending-amount caption for a PENDING line', () => {
+      linesMock.mockReturnValue({
+        lines: [
+          {
+            id: 'l1', date: '2026-05-06T00:00:00Z', description: '', amount: 100,
+            matched: false, reconcileStatus: 'PENDING', pendingAmount: 100,
+          },
+        ],
+        loading: false,
+      });
+      render(<StatementLinesInline statementId="s1" />);
+      expect(screen.queryByTestId('statement-line-pending-amount')).not.toBeInTheDocument();
+    });
   });
 
   describe('Transacción column', () => {

@@ -1,5 +1,5 @@
 {
-  "sql": "SELECT rl.AD_Reference_ID, rl.Value, rl.Name, rlt_es.Name AS name_es FROM AD_Ref_List rl LEFT JOIN AD_Ref_List_Trl rlt_es ON rlt_es.AD_Ref_List_ID = rl.AD_Ref_List_ID AND rlt_es.AD_Language = 'es_ES' WHERE rl.AD_Reference_ID = ANY($1) AND rl.IsActive = 'Y' ORDER BY rl.SeqNo NULLS LAST, rl.Name COLLATE \"C\", rl.Value COLLATE \"C\"",
+  "sql": "SELECT rl.AD_Reference_ID, rl.Value, rl.Name, rlt_es.Name AS name_es FROM AD_Ref_List rl LEFT JOIN AD_Ref_List_Trl rlt_es ON rlt_es.AD_Ref_List_ID = rl.AD_Ref_List_ID AND rlt_es.AD_Language = 'es_ES' WHERE rl.AD_Reference_ID = ANY($1) AND rl.IsActive = 'Y' ORDER BY rl.SeqNo NULLS LAST, rl.Name COLLATE \"C\", rl.Value COLLATE \"C\", rl.AD_Reference_ID COLLATE \"C\", rl.AD_Ref_List_ID COLLATE \"C\"",
   "versions": {
     "09137cda8a4710d11b3c7b8733f2f71bb965ecd27a302829e4ddfa8900e06af4": {
       "checksum": "8a438d617ecfe822293c442f55434f996b1dd133131d9f1cd71362313dc11c9a",

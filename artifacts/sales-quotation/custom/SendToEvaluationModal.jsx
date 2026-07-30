@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useUI } from '@/i18n';
+import { formatCurrency } from '@/lib/formatCurrency.js';
 
 export default function SendToEvaluationModal({
   quotationId,
@@ -19,11 +20,6 @@ export default function SendToEvaluationModal({
     Authorization: `Bearer ${token}`,
     'Content-Type': 'application/json',
   }), [token]);
-
-  const fmtNum = (v) =>
-    v != null && v !== ''
-      ? Number(v).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-      : '-';
 
   useEffect(() => {
     let cancelled = false;
@@ -117,10 +113,10 @@ export default function SendToEvaluationModal({
               {bpName}
             </div>
             <div data-testid="confirm-summary-total" style={{ fontSize: 28, fontWeight: 500, color: 'var(--status-info-fg)', lineHeight: 1, marginTop: 4, marginBottom: 6 }}>
-              {fmtNum(grandTotal)} {currency}
+              {formatCurrency(currency, grandTotal)}
             </div>
             <div style={{ fontSize: 11, color: 'var(--status-info-fg)' }}>
-              {lineCount != null ? ui('soLines', { count: lineCount }) : '...'} <span style={{ color: 'var(--status-info-bg)' }}>·</span> {ui('soSubtotal')} <span data-testid="confirm-summary-subtotal" style={{ fontWeight: 500, color: 'var(--status-info-fg)' }}>{fmtNum(totalLines)} {currency}</span>
+              {lineCount != null ? ui('soLines', { count: lineCount }) : '...'} <span style={{ color: 'var(--status-info-bg)' }}>·</span> {ui('soSubtotal')} <span data-testid="confirm-summary-subtotal" style={{ fontWeight: 500, color: 'var(--status-info-fg)' }}>{formatCurrency(currency, totalLines)}</span>
             </div>
           </div>
         </div>
