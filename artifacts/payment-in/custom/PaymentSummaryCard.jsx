@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useUI } from '@/i18n';
 import { StatusTag } from '@/components/ui/status-tag';
+import { formatCurrency } from '@/lib/formatCurrency.js';
 
 const STATUS_LABEL_KEYS = {
   RPPC: 'statusCleared', DR: 'statusDraft', RPAP: 'statusAwaiting',
@@ -9,12 +10,7 @@ const STATUS_LABEL_KEYS = {
 
 function fmtAmount(amount, currencyId) {
   const n = typeof amount === 'string' ? Number.parseFloat(amount) : (amount ?? 0);
-  return new Intl.NumberFormat(undefined, {
-    style: 'currency',
-    currency: currencyId || 'EUR',
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  }).format(n);
+  return formatCurrency(currencyId, n);
 }
 
 export default function PaymentSummaryCard({ data, token, apiBaseUrl }) {

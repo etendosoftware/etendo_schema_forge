@@ -87,21 +87,21 @@ describe('app-shell local UI primitives retained outside core', () => {
   it('formats money amounts with automatic tone and sign', () => {
     const { rerender } = render(<MoneyAmount value={1245.5} currency="EUR" />);
 
-    expect(screen.getByText('+1,245.50 €')).toHaveClass('text-[var(--status-success-fg)]');
+    expect(screen.getByText('+1.245,50 €')).toHaveClass('text-[var(--status-success-fg)]');
 
     rerender(<MoneyAmount value={-99} currency="EUR" />);
-    expect(screen.getByText('-99.00 €')).toHaveClass('text-[hsl(var(--destructive))]');
+    expect(screen.getByText('-99,00 €')).toHaveClass('text-[hsl(var(--destructive))]');
 
     rerender(<MoneyAmount value={0} currency="EUR" tone="neutral" className="extra-class" />);
-    expect(screen.getByText('0.00 €')).toHaveClass('text-[hsl(var(--foreground))]', 'extra-class');
+    expect(screen.getByText('0,00 €')).toHaveClass('text-[hsl(var(--foreground))]', 'extra-class');
   });
 
   it('applies thousand-separator grouping above 999 across tones', () => {
     const { rerender } = render(<MoneyAmount value={-2345} currency="EUR" />);
-    expect(screen.getByText('-2,345.00 €')).toHaveClass('text-[hsl(var(--destructive))]');
+    expect(screen.getByText('-2.345,00 €')).toHaveClass('text-[hsl(var(--destructive))]');
 
     rerender(<MoneyAmount value={2345} currency="EUR" tone="neutral" />);
-    expect(screen.getByText('2,345.00 €')).toHaveClass('text-[hsl(var(--foreground))]');
+    expect(screen.getByText('2.345,00 €')).toHaveClass('text-[hsl(var(--foreground))]');
   });
 
   it('renders tabs, badges, icon slots, and active content', () => {

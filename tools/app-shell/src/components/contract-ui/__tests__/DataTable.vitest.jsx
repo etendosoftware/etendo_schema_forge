@@ -35,8 +35,8 @@ vi.mock('@/lib/resolveIdentifier.js', () => ({
 vi.mock('@/lib/resolveColumnLabel.js', () => ({
   resolveColumnLabel: (col) => col.label ?? col.key,
 }));
-vi.mock('@/lib/formatAmount.js', () => ({
-  formatAmount: (val) => val != null ? String(val) : '',
+vi.mock('@/lib/formatCurrency.js', () => ({
+  formatCurrency: (cur, val) => val != null ? String(val) : '',
 }));
 vi.mock('@/lib/applyCalloutUpdates.js', () => ({
   applyCalloutUpdates: (prev, updates) => ({ ...prev, ...updates }),

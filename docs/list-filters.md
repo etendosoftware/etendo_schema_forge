@@ -117,7 +117,7 @@ Custom windows may hydrate default filter state from the URL so that menu links 
 | Mutually exclusive "view modes" that partition the dataset | **Subset filters** (one always active) |
 | Independent on/off refinements inside the current view | **Quick filters** (toggle pills) |
 | Standard status / date-range pickers | **Document-type filters** (automatic — just expose the column types) |
-| Ad-hoc filter on any column the user picks | **Advanced filter popover** (once the builder ships) |
+| Ad-hoc filter on any column the user picks | **Advanced filter popover** (funnel icon) |
 
 ## Visual parity
 

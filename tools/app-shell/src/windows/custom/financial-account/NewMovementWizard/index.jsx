@@ -89,6 +89,7 @@ function MovementBasics({ form, set, dimensions, optionsByDim, trxTypes }) {
           required={depositEditable}
           readOnly={!depositEditable}
           value={depositEditable ? form.deposit : '0.00'}
+          currency={form.currencyIso}
           placeholder={ui('financeAccountAmountPlaceholder')}
           onChange={(e) => set({ deposit: e.target.value })}
           data-testid="AmountInput__e2e571" />
@@ -97,6 +98,7 @@ function MovementBasics({ form, set, dimensions, optionsByDim, trxTypes }) {
           required={!depositEditable}
           readOnly={depositEditable}
           value={!depositEditable ? form.withdrawal : '0.00'}
+          currency={form.currencyIso}
           placeholder={ui('financeAccountAmountPlaceholder')}
           onChange={(e) => set({ withdrawal: e.target.value })}
           data-testid="AmountInput__e2e571" />
@@ -444,6 +446,7 @@ export function NewMovementWizard({ open, accountId, accountCurrency, dimensions
                 initialTercero={movementContact}
                 paymentMethods={paymentMethods}
                 showAccountField={false}
+                currency={accountCurrency?.iso}
                 onChange={(snap) => { paymentSnapshotRef.current = snap; }}
                 data-testid="PaymentForm__e2e571" />
             )}

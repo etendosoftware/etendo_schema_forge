@@ -10,6 +10,9 @@ import {
   toBezierFillPath,
 } from '../dashboardNumberFormat.js';
 
+// NBSP (U+00A0), not a plain space — matches formatCurrency's amount/symbol separator (ETP-4314).
+const NBSP = ' ';
+
 describe('localeFromUi', () => {
   it('maps es_ES to es-ES', () => {
     assert.equal(localeFromUi('es_ES'), 'es-ES');
@@ -56,7 +59,9 @@ describe('formatDashboardCompact', () => {
   });
 
   it('leaves small numbers unscaled with currency', () => {
-    assert.equal(formatDashboardCompact(42, { currencyLabel: 'EUR' }), 'EUR 42.00');
+    // Delegates to formatDashboardAmount → the canonical es-ES + real-symbol
+    // format (ETP-4314), not the ISO-code-prefixed en-US style.
+    assert.equal(formatDashboardCompact(42, { currencyLabel: 'EUR' }), `42,00${NBSP}€`);
   });
 
   it('scales thousands with K suffix, no currency, no fraction (round number)', () => {
@@ -73,7 +78,8 @@ describe('formatDashboardCompact', () => {
   });
 
   it('scales millions with M suffix and currency', () => {
-    assert.equal(formatDashboardCompact(2_000_000, { currencyLabel: 'USD' }), 'USD 2.00M');
+    // Canonical es-ES + real-symbol format (ETP-4314) for the currency-labeled path.
+    assert.equal(formatDashboardCompact(2_000_000, { currencyLabel: 'USD' }), `2,00${NBSP}$M`);
   });
 
   it('scales billions with B suffix', () => {
@@ -81,7 +87,8 @@ describe('formatDashboardCompact', () => {
   });
 
   it('scales billions with B suffix and currency', () => {
-    assert.equal(formatDashboardCompact(1_000_000_000, { currencyLabel: 'EUR' }), 'EUR 1.00B');
+    // Canonical es-ES + real-symbol format (ETP-4314) for the currency-labeled path.
+    assert.equal(formatDashboardCompact(1_000_000_000, { currencyLabel: 'EUR' }), `1,00${NBSP}€B`);
   });
 
   it('treats non-finite values as 0', () => {

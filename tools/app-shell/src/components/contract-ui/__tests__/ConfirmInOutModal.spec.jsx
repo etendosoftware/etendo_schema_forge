@@ -51,11 +51,12 @@ describe('ConfirmInOutModal', () => {
     expect(screen.getByText('Acme Corp')).toBeInTheDocument();
   });
 
-  it('renders subtitle with amount when total is provided', () => {
+  it('renders subtitle with amount when total is provided, grouped with the real currency symbol (never the raw ISO code)', () => {
     render(<ConfirmInOutModal {...BASE_PROPS} docInfo={{ documentNo: 'SHIP-002', bpName: 'Corp', total: 1234.5, currency: 'EUR' }} />);
-    // Amount is formatted with es-ES locale (jsdom may omit thousand sep) — match decimal part
-    const hits = screen.getAllByText(/1234,50/);
-    expect(hits.length).toBeGreaterThan(0);
+    // Exact match — a tolerant regex would pass even with the missing-useGrouping /
+    // raw-currency-code bug whenever the substring happens to appear.
+    expect(screen.getByText(/1\.234,50\s€/)).toBeInTheDocument();
+    expect(screen.queryByText(/EUR/)).toBeNull();
   });
 
   it('omits subtitle rows that are null/undefined', () => {

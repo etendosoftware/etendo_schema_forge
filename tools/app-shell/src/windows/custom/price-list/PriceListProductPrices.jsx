@@ -43,13 +43,13 @@ function toNumber(value) {
 export default function PriceListProductPrices({ recordId, data, token, apiBaseUrl, editing }) {
   const ui = useUI();
   const columns = useMemo(() => [
-    { key: 'product', column: 'M_Product_ID', type: 'string', label: ui('product'), readOnly: true },
+    { key: 'product', column: 'M_Product_ID', type: 'string', label: ui('product'), readOnly: true, required: true },
     // noTrailing: without it, InlineLinesPanel treats the last 'amount' column as the one
     // that disappears on hover/edit to make room for the action strip. That's fine when
     // there are other columns to fall back on, but here listPrice is the ONLY data column
     // besides read-only product — hiding it made it look uneditable (the pencil rendered
     // where the value used to be, with no visible input to type into).
-    { key: 'listPrice', type: 'amount', label: ui('listPrice'), noTrailing: true },
+    { key: 'listPrice', type: 'amount', label: ui('listPrice'), noTrailing: true, required: true },
   ], [ui]);
   const [versionId, setVersionId] = useState(null);
   const [lines, setLines] = useState([]);

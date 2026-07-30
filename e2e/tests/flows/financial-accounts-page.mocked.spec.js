@@ -112,10 +112,10 @@ test.describe('Financial Accounts page — Cuentas (T1)', () => {
   });
 
   test('sidebar aggregate values match the summary mock', async ({ page }) => {
-    // formatCurrency uses en-US locale + EUR (symbol-after): "273,853.46 €"
+    // formatCurrency uses es-ES locale + EUR (dot-thousands, comma-decimal, symbol-after): "273.853,46 €"
     const balance = page.getByTestId('balance-card');
     await expect(balance).toBeVisible();
-    await expect(balance).toContainText('273,853.46');
+    await expect(balance).toContainText('273.853,46');
     await expect(balance).toContainText('€'); // €
 
     // EUR row visible inside the sidebar

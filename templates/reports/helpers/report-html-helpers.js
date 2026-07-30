@@ -1,6 +1,12 @@
 /**
  * Canonical Handlebars helpers for LOCAL HTML rendering of reports.
  *
+ * This is the ONLY approved source for jsreport's `formatCurrency`/`formatNumber`
+ * helpers — never write a second currency/number Handlebars helper by hand in a
+ * per-report `helpers.js` or inline in `report-api.js`. See CLAUDE.md § Currency
+ * & Amount Formatting (MANDATORY); the browser-side equivalent is
+ * `tools/app-shell/src/lib/formatCurrency.js` (ETP-4314).
+ *
  * These mirror — verbatim — the generated `artifacts/<id>/helpers.js` functions
  * that the report HTML render path historically registered (the fixed whitelist:
  * isGroupBreak, resetGroupTracking, formatDate, formatCurrency, formatBoolean,
@@ -54,7 +60,7 @@ export function createReportHelpers({ numberFormat } = {}) {
     if (value == null) return '';
     var num = Number(value);
     if (isNaN(num)) return String(value);
-    return new Intl.NumberFormat('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(num);
+    return new Intl.NumberFormat('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2, useGrouping: true }).format(num);
   }
 
   function formatBoolean(value) {
@@ -65,7 +71,7 @@ export function createReportHelpers({ numberFormat } = {}) {
     if (value == null) return '';
     var num = Number(value);
     if (isNaN(num)) return String(value);
-    return new Intl.NumberFormat('en-US', numberFormat || undefined).format(num);
+    return new Intl.NumberFormat('es-ES', Object.assign({ useGrouping: true }, numberFormat || undefined)).format(num);
   }
 
   function ifCond(v1, operator, v2, options) {
@@ -160,4 +166,135 @@ export function registerReportHelpers(handlebars, helpersCode) {
     if (typeof fn === 'function') handlebars.registerHelper(name, fn);
   });
   return helpers;
+}
+
+// Helper names covered by the canonical set — anything else found in a report's
+// raw helpers.js (e.g. `qrCode`) is report-specific and must be preserved verbatim.
+const CANONICAL_HELPER_NAMES = new Set([
+  'isGroupBreak', 'resetGroupTracking', 'formatDate', 'formatCurrency',
+  'formatBoolean', 'formatNumber', 'ifCond', 'eq', 'sumField',
+  'formatDateDisplay', 'sumRowsByCategory',
+]);
+
+function extractBraceBlock(source, startIdx) {
+  const braceStart = source.indexOf('{', startIdx);
+  let depth = 0;
+  let i = braceStart;
+  for (; i < source.length; i++) {
+    if (source[i] === '{') depth++;
+    else if (source[i] === '}') {
+      depth--;
+      if (depth === 0) break;
+    }
+  }
+  return source.slice(startIdx, i + 1);
+}
+
+function extractTopLevelFunctions(source) {
+  const results = [];
+  const re = /function\s+(\w+)\s*\(/g;
+  let m;
+  while ((m = re.exec(source))) {
+    const fnSource = extractBraceBlock(source, m.index);
+    results.push({ name: m[1], source: fnSource });
+    re.lastIndex = m.index + fnSource.length;
+  }
+  return results;
+}
+
+function extractRequireLines(source) {
+  const matches = source.match(/^[ \t]*(?:var|const|let)\s+\w+\s*=\s*require\([^)]*\)\s*;?[ \t]*$/gm);
+  return matches ? matches.join('\n') : '';
+}
+
+/**
+ * Builds the `helpers` string sent to jsreport for the PDF/XLSX render path —
+ * the real centralization point for that path (see docs/... ETP-4314 plan).
+ *
+ * jsreport runs in a separate Docker container reachable only over HTTP, with
+ * no shared module system with this repo — so it can never `import`
+ * formatCurrency() or this module directly. Instead, this function serializes
+ * (via `fn.toString()`) the SAME canonical functions `createReportHelpers()`
+ * already uses for the on-screen HTML preview, and appends only the
+ * report-SPECIFIC extras (e.g. `qrCode` + its `require`) extracted from the
+ * report's raw `artifacts/<id>/helpers.js`. The result is the single source of
+ * truth for both render paths — not a second, hand-maintained copy per report.
+ *
+ * `formatCurrency`/`formatNumber` cannot rely on `Intl.NumberFormat` in the
+ * serialized string: jsreport runs its own separate Node process (see module
+ * docstring above), and the Node/ICU build the `etendo-jsreport` Docker image
+ * ships (Node 18.20.4 / ICU 74.2 / CLDR 44.1, confirmed via `docker exec`)
+ * silently drops the thousands separator for the `es-ES` locale specifically
+ * in the 1000-9999 range — the exact bug this ticket exists to fix. Node ≥20
+ * (ICU ≥78/CLDR ≥48) does not have this data bug, but we can't control which
+ * Node build ends up running jsreport (that lives in a separate repo/image).
+ * `__groupEsEs` sidesteps the whole class of problem: a manual, locale-data-
+ * free grouping algorithm gives the same result on any Node/ICU version.
+ *
+ * `isGroupBreak`/`resetGroupTracking` have their own closure-variable issue
+ * (`_prevGroupValues`) — solved by declaring that variable at the top of the
+ * combined string rather than templating the whole function (their bodies
+ * don't reference anything else external).
+ *
+ * @param {string} [helpersCode] Raw contents of `artifacts/<id>/helpers.js`.
+ * @param {Intl.NumberFormatOptions} [numberFormatOverride] Explicit
+ *        `formatNumber` decimal-precision override for callers that already
+ *        know it as a plain JS value (e.g. a document PDF's exchange-rate
+ *        precision) instead of one recoverable by regex from a raw
+ *        `helpers.js` string. Takes precedence over `extractNumberFormatOptions`.
+ * @param {{ thousandsSeparator?: string, decimalSeparator?: string }} [separators]
+ *        Instance-wide separators (from the same `/sws/neo/currency-format`
+ *        config `formatCurrency.js` reads in the browser — ETP-4314). Baked
+ *        into the generated `__groupEsEs` source as literals, since jsreport
+ *        can never fetch this config itself. Defaults to `.`/`,`.
+ * @returns {string} Combined JS source to send as jsreport's `helpers` field.
+ */
+export function buildJsreportHelpersString(helpersCode, numberFormatOverride, separators) {
+  const numberFormat = numberFormatOverride || extractNumberFormatOptions(helpersCode);
+  const helpers = createReportHelpers({ numberFormat });
+  const thousandsSeparator = (separators && separators.thousandsSeparator) || '.';
+  const decimalSeparator = (separators && separators.decimalSeparator) || ',';
+
+  const stateSrc = 'var _prevGroupValues = {};';
+
+  const groupEsEsSrc = `function __groupEsEs(num, minFrac, maxFrac) {
+  var sign = num < 0 ? '-' : '';
+  var abs = Math.abs(num);
+  var fixed = abs.toFixed(maxFrac);
+  var parts = fixed.split('.');
+  var intPart = parts[0].replace(/\\B(?=(\\d{3})+(?!\\d))/g, ${JSON.stringify(thousandsSeparator)});
+  var decPart = parts[1] || '';
+  while (decPart.length > minFrac && decPart.charAt(decPart.length - 1) === '0') {
+    decPart = decPart.slice(0, -1);
+  }
+  return decPart ? sign + intPart + ${JSON.stringify(decimalSeparator)} + decPart : sign + intPart;
+}`;
+
+  const formatCurrencySrc = `function formatCurrency(value) {
+  if (value == null) return '';
+  var num = Number(value);
+  if (isNaN(num)) return String(value);
+  return __groupEsEs(num, 2, 2);
+}`;
+
+  const minFrac = (numberFormat && numberFormat.minimumFractionDigits != null) ? numberFormat.minimumFractionDigits : 0;
+  const maxFrac = (numberFormat && numberFormat.maximumFractionDigits != null) ? numberFormat.maximumFractionDigits : 3;
+  const formatNumberSrc = `function formatNumber(value) {
+  if (value == null) return '';
+  var num = Number(value);
+  if (isNaN(num)) return String(value);
+  return __groupEsEs(num, ${minFrac}, ${maxFrac});
+}`;
+
+  const canonicalSrc = Object.entries(helpers)
+    .filter(([name, fn]) => typeof fn === 'function' && name !== 'formatNumber' && name !== 'formatCurrency')
+    .map(([, fn]) => fn.toString())
+    .concat(groupEsEsSrc, formatCurrencySrc, formatNumberSrc)
+    .join('\n\n');
+
+  const extras = helpersCode ? extractTopLevelFunctions(helpersCode).filter((f) => !CANONICAL_HELPER_NAMES.has(f.name)) : [];
+  const requireLines = helpersCode ? extractRequireLines(helpersCode) : '';
+  const extrasSrc = extras.map((f) => f.source).join('\n\n');
+
+  return [requireLines, stateSrc, canonicalSrc, extrasSrc].filter(Boolean).join('\n\n');
 }

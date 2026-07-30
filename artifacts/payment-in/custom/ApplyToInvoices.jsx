@@ -2,20 +2,11 @@ import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { useUI } from '@/i18n';
-
-const CURRENCY_SYMBOLS = {
-  USD: '$', EUR: '\u20ac', GBP: '\u00a3', JPY: '\u00a5',
-  CHF: 'CHF', BRL: 'R$', ARS: '$', MXN: '$', COP: '$', PEN: 'S/',
-};
+import { formatCurrency } from '@/lib/formatCurrency.js';
 
 function formatAmount(value, currency) {
   const num = typeof value === 'string' ? Number.parseFloat(value) : (value ?? 0);
-  const symbol = CURRENCY_SYMBOLS[currency] || currency || '';
-  const formatted = num.toLocaleString(undefined, {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  });
-  return symbol ? `${symbol} ${formatted}` : formatted;
+  return formatCurrency(currency, num);
 }
 
 const cellStyle = { borderBottom: '0.5px solid hsl(var(--border) / 0.5)' };

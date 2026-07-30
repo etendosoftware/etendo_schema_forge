@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import { ChevronDown, FileText, Loader2, Plus, Search, Trash2, Info } from 'lucide-react';
 import { useUI, useLabel, useLocaleSwitch } from '@/i18n';
+import { formatCurrency } from '@/lib/formatCurrency.js';
 
 /* eslint-disable react/prop-types */
 
@@ -809,7 +810,7 @@ export default function ReversedInvoicesPanel({
               const displayDate = ref.date ?? '—';
               const docNo = ref.docNo ?? identifier;
               const totalDisplay = ref.amount != null
-                ? `${ref.amount.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} EUR`
+                ? formatCurrency('EUR', ref.amount)
                 : '—';
 
               return (

@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { createPortal } from 'react-dom';
+import { formatCurrency } from '@/lib/formatCurrency.js';
 
 /**
  * Generic confirm modal for InOut documents (goods-receipt, goods-shipment, return-receipt).
@@ -36,13 +37,10 @@ export default function ConfirmInOutModal({
 
   const { documentNo, bpName, total, currency } = docInfo || {};
 
-  const fmtAmount = (v, cur) =>
-    `${Number(v).toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${cur}`.trim();
-
   const subtitleParts = [
     documentNo,
     bpName,
-    total != null ? fmtAmount(total, currency || '') : null,
+    total != null ? formatCurrency(currency, total) : null,
   ].filter(Boolean);
 
   const handleConfirm = async () => {

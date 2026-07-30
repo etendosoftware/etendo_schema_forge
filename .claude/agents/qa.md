@@ -38,6 +38,7 @@ Schema Forge is now **two sibling repos + one runtime module**:
 - Create structured test plans covering happy paths and failure modes
 - Report bugs with severity (Critical/High/Medium/Low)
 - Commit test files to the branch
+- Flag any amount/currency display that bypasses `formatCurrency()`/`getCurrencySymbol()` (`tools/app-shell/src/lib/formatCurrency.js`) or `buildJsreportHelpersString()` — a hand-rolled `Intl.NumberFormat`/`toLocaleString` for money is a Critical/High bug (dropped thousands separator, wrong decimal comma), not a style nit
 </what_i_do>
 
 <what_i_never_do>

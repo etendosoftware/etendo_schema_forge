@@ -5,6 +5,7 @@ import { useUI } from '@/i18n';
 import { useApiFetch } from '@/auth/useApiFetch.js';
 import { MoneyAmount } from '@/components/ui/money-amount';
 import { Skeleton } from '@/components/ui/skeleton';
+import { formatCurrency } from '@/lib/formatCurrency.js';
 import NewPaymentEntryModal from './NewPaymentEntryModal.jsx';
 
 function fmtDate(raw) {
@@ -18,9 +19,7 @@ function fmtDate(raw) {
 /** Plain-text es-ES amount for the delete-confirm message (no JSX, unlike <MoneyAmount>). */
 function fmtAmount(val, currency) {
   const n = typeof val === 'string' ? parseFloat(val) : (val ?? 0);
-  return new Intl.NumberFormat('es-ES', {
-    style: 'currency', currency: currency || 'EUR', currencyDisplay: 'narrowSymbol',
-  }).format(n);
+  return formatCurrency(currency, n);
 }
 
 // Processed APRM statuses. PWNC ("Withdrawn not Cleared") and RPAE ("Awaiting

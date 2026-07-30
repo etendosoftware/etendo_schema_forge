@@ -239,6 +239,13 @@ describe('CompareDrawer', () => {
     expect(document.body.textContent).toContain('—');
   });
 
+  it('renders the formatted amount with thousands grouping for values in the 1000-9999 range', () => {
+    // boxes[27] (iva_dev) curr=1000 sits exactly in the range where Intl silently
+    // drops the grouping separator when `useGrouping` isn't explicit.
+    render(<CompareDrawer decl={decl} prevDecl={prevDecl} onClose={vi.fn()} />);
+    expect(document.body.textContent).toContain('1.000,00');
+  });
+
   it('shows dev_improved insight when current IVA devengado exceeds previous', () => {
     // boxes[27]=1000 > prevDecl.boxes[27]=800 → devImproved true
     render(<CompareDrawer decl={decl} prevDecl={prevDecl} onClose={vi.fn()} />);

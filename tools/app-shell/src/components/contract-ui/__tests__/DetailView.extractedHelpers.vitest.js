@@ -1225,17 +1225,28 @@ describe('getSelectedLinesTotalLabel', () => {
   it('sums gross amounts and formats with currency', () => {
     const rows = [{ lineGrossAmount: '100' }, { lineGrossAmount: '50.5' }];
     const label = getSelectedLinesTotalLabel({}, rows, lineConfig, { 'currency$_identifier': 'EUR' });
-    expect(label).toContain('EUR');
-    // Locale-agnostic: 150 + two fraction digits (separator may be , or .)
-    expect(label).toMatch(/150[.,]50/);
+    // Delegates to formatCurrency (es-ES, narrowSymbol) — EUR renders as '€', not the
+    // literal code 'EUR'. \s matches the non-breaking space Intl inserts before the symbol.
+    expect(label).toMatch(/150,50\s€/);
   });
   it('formats without currency when none present', () => {
     const label = getSelectedLinesTotalLabel(undefined, [{ lineGrossAmount: '10' }], lineConfig, {});
-    expect(label).toMatch(/^10[.,]00$/);
+    expect(label).toBe('10,00');
   });
   it('ignores non-finite values in the sum', () => {
     const label = getSelectedLinesTotalLabel({}, [{ lineGrossAmount: 'abc' }], lineConfig, {});
-    expect(label).toMatch(/^0[.,]00$/);
+    expect(label).toBe('0,00');
+  });
+  it('pins the locale to es-ES for the no-currency path (not the runtime default)', () => {
+    // toBe('10,00') above can pass by coincidence on a machine whose default ICU
+    // locale happens to already use a comma decimal separator (e.g. es-AR) even
+    // when the code passes `undefined` as the locale — this assertion checks the
+    // actual mechanism instead of the output, so it fails regardless of the
+    // runner's own locale.
+    const spy = vi.spyOn(Number.prototype, 'toLocaleString');
+    getSelectedLinesTotalLabel(undefined, [{ lineGrossAmount: '10' }], lineConfig, {});
+    expect(spy).toHaveBeenCalledWith('es-ES', expect.anything());
+    spy.mockRestore();
   });
 });
 

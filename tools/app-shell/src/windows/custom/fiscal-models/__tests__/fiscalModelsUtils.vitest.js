@@ -146,28 +146,31 @@ describe('formatAmount', () => {
     expect(formatAmount(undefined)).toBe('—');
   });
 
-  it('formats a positive number with a EUR currency indicator', () => {
+  it('formats a positive number with a EUR currency indicator and thousands grouping', () => {
+    // 1000-9999 is the exact range where Intl silently drops the grouping
+    // separator when `useGrouping` isn't explicit — must show "1.000", not "1000".
     const result = formatAmount(1000);
-    expect(result).toMatch(/€|EUR/);
-    expect(result).toMatch(/1[.,\s]?000/); // thousands separator varies by ICU build
+    expect(result).toMatch(/^1\.000,00\s€$/);
   });
 
   it('formats zero', () => {
     const result = formatAmount(0);
-    expect(result).toMatch(/€|EUR/);
+    expect(result).toMatch(/^0,00\s€$/);
   });
 
   it('formats a negative number containing a minus sign', () => {
     const result = formatAmount(-100);
-    expect(result).toMatch(/-/);
-    expect(result).toMatch(/€|EUR/);
+    expect(result).toMatch(/^-100,00\s€$/);
   });
 
-  it('formats a decimal amount', () => {
+  it('formats a decimal amount in the buggy 1000-9999 range with grouping', () => {
     const result = formatAmount(1234.56);
-    // es-ES uses comma as decimal separator; thousands separator varies by ICU build
-    expect(result).toMatch(/1[.,\s]?234[,.]56/);
-    expect(result).toMatch(/€|EUR/);
+    expect(result).toMatch(/^1\.234,56\s€$/);
+  });
+
+  it('keeps grouping for amounts at/above 10000 (already correct even pre-fix)', () => {
+    const result = formatAmount(12345.67);
+    expect(result).toMatch(/^12\.345,67\s€$/);
   });
 });
 

@@ -23,8 +23,8 @@ const columns = [
   // here — hidden from the grid via `hiddenColumns` below — purely so the
   // Advanced Filter panel can offer them as separate, correctly labeled,
   // working filter fields instead of the synthetic combined column (ETP-4609).
-  { key: 'name', column: 'Name', type: 'string' },
-  { key: 'searchKey', column: 'Value', type: 'string' },
+  { key: 'name', column: 'Name', type: 'string', required: true },
+  { key: 'searchKey', column: 'Value', type: 'string', required: true },
   { key: 'productCategory', column: 'M_Product_Category_ID', type: 'selector', label: 'Product Category', required: true },
   { key: 'uOM',             column: 'C_UOM_ID',              type: 'selector', label: 'UOM',              required: true },
   {
@@ -41,6 +41,7 @@ const columns = [
     labels: { en_US: 'Sales', es_ES: 'Venta' },
     type: 'custom',
     sortable: false,
+    required: true,
     render: (row, { token, apiBaseUrl }) => (
       <ProductSalePriceCell
         row={row}
@@ -54,6 +55,7 @@ const columns = [
     labels: { en_US: 'Purchase', es_ES: 'Compra' },
     type: 'custom',
     sortable: false,
+    required: true,
     render: (row, { token, apiBaseUrl }) => (
       <ProductPurchasePriceCell
         row={row}
@@ -85,13 +87,23 @@ const filters = ['searchKey', 'name', 'productCategory', 'productType'];
 const hiddenColumns = ['name', 'searchKey'];
 
 const ProductCustomTable = forwardRef(function ProductCustomTable(props, ref) {
+  // ListView.jsx always forwards its own `hiddenColumns` prop (default `[]`)
+  // to whatever Table component the window wires in. Spreading `{...props}`
+  // after the local `hiddenColumns={hiddenColumns}` would let that incoming
+  // value silently clobber this module's intentional override, so pull it
+  // out of the spread and merge instead — union of the local intentional
+  // list with whatever the parent additionally asks to hide (ETP-4609).
+  const { hiddenColumns: incomingHiddenColumns, ...rest } = props;
+  const mergedHiddenColumns = incomingHiddenColumns?.length
+    ? [...new Set([...hiddenColumns, ...incomingHiddenColumns])]
+    : hiddenColumns;
   return (
     <DataTable
       ref={ref}
       columns={columns}
       filters={filters}
-      hiddenColumns={hiddenColumns}
-      {...props}
+      {...rest}
+      hiddenColumns={mergedHiddenColumns}
       data-testid="DataTable__f45e24" />
   );
 });
