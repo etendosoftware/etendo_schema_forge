@@ -12,7 +12,8 @@
     "secondaryTabs": {
       "accounting": {
         "tabOrder": 1,
-        "label": "Accounting"
+        "label": "Accounting",
+        "maxDetailLines": 1
       }
     }
   },

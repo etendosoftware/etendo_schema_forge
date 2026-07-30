@@ -1,7 +1,7 @@
 {
   "version": "0.1.0",
-  "generatedAt": "2026-07-31T19:15:34.496Z",
-  "contractChecksum": "99d0c1843b4c0908",
+  "generatedAt": "2026-07-31T19:17:59.321Z",
+  "contractChecksum": "5723ba072726106a",
   "apiPrediction": {
     "specName": "product",
     "baseUrl": "/sws/neo/product",

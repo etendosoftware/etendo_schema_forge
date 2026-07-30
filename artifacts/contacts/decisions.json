@@ -115,7 +115,8 @@
           "customerReceivablesNo",
           "customerPrepayment"
         ],
-        "requireSavedRecord": true
+        "requireSavedRecord": true,
+        "maxDetailLines": 1
       },
       "vendorAccounting": {
         "tabMode": "table-form",
@@ -126,7 +127,8 @@
           "vendorLiability",
           "vendorPrepayment"
         ],
-        "requireSavedRecord": true
+        "requireSavedRecord": true,
+        "maxDetailLines": 1
       }
     },
     "import": {

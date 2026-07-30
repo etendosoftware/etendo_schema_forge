@@ -1,8 +1,8 @@
 {
   "version": "0.15.0",
   "generatedAt": "2026-06-29T17:22:42.125Z",
-  "updatedAt": "2026-07-30T16:59:23.237Z",
-  "checksum": "8fd7a47f355050d4",
+  "updatedAt": "2026-07-30T17:46:32.135Z",
+  "checksum": "c5ababcca50b7799",
   "frontendContract": {
     "window": {
       "id": "252",
@@ -15,7 +15,8 @@
       "secondaryTabs": {
         "accounting": {
           "tabOrder": 1,
-          "label": "Accounting"
+          "label": "Accounting",
+          "maxDetailLines": 1
         }
       },
       "detailEntity": null,
@@ -338,7 +339,8 @@
       "secondaryTabs": {
         "accounting": {
           "tabOrder": 1,
-          "label": "Accounting"
+          "label": "Accounting",
+          "maxDetailLines": 1
         }
       },
       "detailEntity": null,
