@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 // Mock i18n hooks
@@ -8,6 +8,32 @@ vi.mock('@/i18n', () => ({
   useUI: () => (key) => key,
   useLocale: () => ({ statuses: {} }),
   useLocaleSwitch: () => ({ locale: 'en_US', setLocale: vi.fn() }),
+}));
+
+// Radix Select cannot run in JSDOM (no PointerEvent / pointer-capture support) —
+// replace with a native <select> that renders every SelectItem as a plain
+// <option>, so the operator/field option lists are directly queryable without
+// simulating a pointer-driven open/close sequence. Mirrors the established
+// pattern in ProcessParamDialog.vitest.jsx. The placeholder is rendered as a
+// disabled leading <option> so existing "renders field select placeholders"-
+// style assertions (checking for the placeholder text) keep passing.
+vi.mock('@/components/ui/select.jsx', () => ({
+  Select: ({ children, value, onValueChange, disabled }) => (
+    <select
+      data-testid="select-control"
+      value={value ?? ''}
+      disabled={disabled}
+      onChange={(e) => onValueChange?.(e.target.value)}
+    >
+      {children}
+    </select>
+  ),
+  SelectTrigger: ({ children }) => <>{children}</>,
+  SelectValue: ({ placeholder }) => (
+    placeholder ? <option value="" disabled>{placeholder}</option> : null
+  ),
+  SelectContent: ({ children }) => <>{children}</>,
+  SelectItem: ({ children, value }) => <option value={value}>{children}</option>,
 }));
 
 // Mock dependencies
@@ -546,5 +572,108 @@ describe('AdvancedFilterBuilder', () => {
       expect(labels.filter((l) => l === 'statusDraft')).toHaveLength(1);
       expect(options).toHaveLength(2);
     });
+  });
+});
+
+// ============================================================
+// ETP-4609 — required-field operator exclusion +
+// custom-column exclusion from filterableColumns
+//
+// Both behaviors are documented in docs/list-filters.md ("Operators per
+// column type" / "Which columns are offered"):
+//   - isFilterableColumn() excludes col.type === 'custom' columns with no
+//     `column`/`backendFilterKey` (unless `filterable: true` opts back in).
+//   - the operator list building code drops isNull/isNotNull for
+//     col.required === true columns.
+// These started as TDD placeholders (written red, before the fix existed) —
+// the regression tests for the fix landed in ad3a38787, so everything below
+// is green now and guards against a future regression.
+// ============================================================
+
+describe('required-field operator exclusion (ETP-4609)', () => {
+  // Row 0 has no connector <select> (idx === 0 renders the static "Where"
+  // label instead), so with a single condition row the DOM order of native
+  // <select> mocks is deterministic: [field select, operator select].
+  const REQUIRED_COLUMNS = [
+    { key: 'productCategory', label: 'Product Category', type: 'text', column: 'M_Product_Category_ID', required: true },
+    { key: 'name', label: 'Name', type: 'text', column: 'Name' },
+  ];
+
+  it('excludes isNull/isNotNull from the operator list for a required:true column', async () => {
+    const user = userEvent.setup();
+    render(<AdvancedFilterBuilder columns={REQUIRED_COLUMNS} />);
+
+    const [fieldSelect] = screen.getAllByTestId('select-control');
+    await user.selectOptions(fieldSelect, 'productCategory');
+
+    // Sanity: the operator list is populated (proves we're not looking at an
+    // empty/disabled select for the wrong reason).
+    expect(screen.getByRole('option', { name: 'opIs' })).toBeInTheDocument();
+
+    // The gap this test guards: a required column must never offer the
+    // empty/not-empty operators — a mandatory field can never be empty.
+    expect(screen.queryByRole('option', { name: 'opIsEmpty' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('option', { name: 'opIsNotEmpty' })).not.toBeInTheDocument();
+  });
+
+  it('still offers isNull/isNotNull for a non-required column (contrast)', async () => {
+    const user = userEvent.setup();
+    render(<AdvancedFilterBuilder columns={REQUIRED_COLUMNS} />);
+
+    const [fieldSelect] = screen.getAllByTestId('select-control');
+    await user.selectOptions(fieldSelect, 'name');
+
+    expect(screen.getByRole('option', { name: 'opIsEmpty' })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: 'opIsNotEmpty' })).toBeInTheDocument();
+  });
+});
+
+describe('custom-column exclusion from filterableColumns (ETP-4609)', () => {
+  it('excludes a type:"custom" column with no `column`/`backendFilterKey` from the field selector', () => {
+    const cols = [
+      { key: 'nameAndSearchKey', label: 'Identifier & Name', type: 'custom' },
+      { key: 'name', label: 'Name', type: 'text', column: 'Name' },
+    ];
+    render(<AdvancedFilterBuilder columns={cols} />);
+
+    const [fieldSelect] = screen.getAllByTestId('select-control');
+    const fieldOptionValues = within(fieldSelect)
+      .getAllByRole('option')
+      .map((o) => o.value);
+
+    expect(fieldOptionValues).not.toContain('nameAndSearchKey');
+    expect(fieldOptionValues).toContain('name');
+  });
+
+  it('includes a type:"custom" column when it explicitly opts back in with filterable: true', () => {
+    const cols = [
+      { key: 'nameAndSearchKey', label: 'Identifier & Name', type: 'custom', filterable: true },
+    ];
+    render(<AdvancedFilterBuilder columns={cols} />);
+
+    const [fieldSelect] = screen.getAllByTestId('select-control');
+    const fieldOptionValues = within(fieldSelect)
+      .getAllByRole('option')
+      .map((o) => o.value);
+
+    expect(fieldOptionValues).toContain('nameAndSearchKey');
+  });
+
+  it('includes a type:"custom" column that declares a `backendFilterKey`, even without explicit filterable: true', () => {
+    // A custom column can map to a real queryable field via `backendFilterKey`
+    // instead of `column` — isFilterableColumn() must treat that as "has a
+    // real backend property to filter against" and include it by default,
+    // the same way `filterable: true` does.
+    const cols = [
+      { key: 'computedTotal', label: 'Computed Total', type: 'custom', backendFilterKey: 'grandTotal' },
+    ];
+    render(<AdvancedFilterBuilder columns={cols} />);
+
+    const [fieldSelect] = screen.getAllByTestId('select-control');
+    const fieldOptionValues = within(fieldSelect)
+      .getAllByRole('option')
+      .map((o) => o.value);
+
+    expect(fieldOptionValues).toContain('computedTotal');
   });
 });

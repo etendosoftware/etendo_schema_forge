@@ -15,13 +15,13 @@ function buildColumns(dir, ui, locale) {
   const depositedKey = dir === 'in' ? 'cobroDepositado' : 'pagoDepositado';
   const depositedEnum = Object.fromEntries(DEPOSITED_STATUSES_LIST.map(s => [s, depositedKey]));
   return [
-    { key: 'documentNo', column: 'DocumentNo', type: 'string', label: ui('docNo') },
+    { key: 'documentNo', column: 'DocumentNo', type: 'string', label: ui('docNo'), required: true },
     { key: 'paymentDate', column: 'PaymentDate', type: 'date', label: ui('date'), dot: false },
     { key: 'businessPartner', column: 'C_BPartner_ID', type: 'selector', label: ui('businessPartner') },
-    { key: 'status', column: 'Status', type: 'status', label: ui('statusColumnLabel'),
+    { key: 'status', column: 'Status', type: 'status', label: ui('statusColumnLabel'), required: true,
       enumLabels: { ...depositedEnum, RPAP: 'statusDraft', DR: 'statusDraft' } },
     {
-      key: 'amount', column: 'Amount', type: 'amount', label: ui('amount'),
+      key: 'amount', column: 'Amount', type: 'amount', label: ui('amount'), required: true,
       // `labels` (priority 1 in resolveColumnLabel) must be set so this header
       // outranks the AD-dictionary fallback translate('Amount'), which
       // otherwise resolves to "Importe cobrado/pagado".

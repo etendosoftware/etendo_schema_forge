@@ -61,11 +61,12 @@ export default function PurchaseInvoiceHeaderTable(props) {
     }
 
     return [
-      { key: 'invoiceDate', column: 'DateInvoiced', type: 'date', dot: false },
+      { key: 'invoiceDate', column: 'DateInvoiced', type: 'date', dot: false, required: true },
       {
         key: 'transactionDocument',
         column: 'C_DocTypeTarget_ID',
         type: 'custom',
+        required: true,
         // `labels` (priority 1 in resolveColumnLabel) must be set so this header
         // outranks the AD-dictionary fallback translate('C_DocTypeTarget_ID'),
         // which otherwise resolves to "Documento transacción".
@@ -103,12 +104,12 @@ export default function PurchaseInvoiceHeaderTable(props) {
           );
         },
       },
-      { key: 'businessPartner', column: 'C_BPartner_ID', type: 'selector' },
-      { key: 'documentStatus', column: 'DocStatus', type: 'status', label: t('statusDocColumn') },
-      { key: 'posted', column: 'Posted', type: 'boolean', badge: true, badgeLabels: { true: { en_US: 'Posted', es_ES: 'Contabilizado' }, false: { en_US: 'Not posted', es_ES: 'Sin contabilizar' } }, badgeVariants: { true: 'green', false: 'orange' } },
+      { key: 'businessPartner', column: 'C_BPartner_ID', type: 'selector', required: true },
+      { key: 'documentStatus', column: 'DocStatus', type: 'status', label: t('statusDocColumn'), required: true },
+      { key: 'posted', column: 'Posted', type: 'boolean', required: true, badge: true, badgeLabels: { true: { en_US: 'Posted', es_ES: 'Contabilizado' }, false: { en_US: 'Not posted', es_ES: 'Sin contabilizar' } }, badgeVariants: { true: 'green', false: 'orange' } },
       ...fiscalCols,
       {
-        key: 'grandTotalAmount', column: 'GrandTotal', type: 'custom',
+        key: 'grandTotalAmount', column: 'GrandTotal', type: 'custom', required: true,
         label: t('impTotal'),
         render: (row) => {
           const raw = row.grandTotalAmount;
@@ -121,6 +122,7 @@ export default function PurchaseInvoiceHeaderTable(props) {
         key: 'outstandingAmount',
         column: 'OutstandingAmt',
         type: 'custom',
+        required: true,
         label: t('pendingPaymentColumn'),
         render: (row) => {
           const outstanding = parseFloat(row.outstandingAmount ?? 0);
