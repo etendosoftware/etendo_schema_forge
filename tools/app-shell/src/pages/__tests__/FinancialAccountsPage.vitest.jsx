@@ -34,27 +34,27 @@ vi.mock('@/hooks/useAccountMutations.js', () => ({
   }),
 }));
 
-// usePsd2Actions/usePsd2ConnectFlow call useAuth internally; both the page and the
+// useBankConnectionActions/useBankConnectionFlow call useAuth internally; both the page and the
 // child modals consume them, so stub them at the module level (no AuthProvider needed).
-vi.mock('@/hooks/usePsd2Actions.js', () => ({
-  usePsd2Actions: () => ({
+vi.mock('@/hooks/useBankConnectionActions.js', () => ({
+  useBankConnectionActions: () => ({
     sync: vi.fn(), disconnect: vi.fn(), reconnect: vi.fn(), connect: vi.fn(),
     fetchStatus: vi.fn().mockResolvedValue({}), fetchProviders: vi.fn().mockResolvedValue([]),
     saveImportSettings: vi.fn(),
   }),
   launchSaltEdgePopup: vi.fn(),
 }));
-// The wizard imports usePsd2Actions without the .js extension.
-vi.mock('@/hooks/usePsd2Actions', () => ({
-  usePsd2Actions: () => ({
+// The wizard imports useBankConnectionActions without the .js extension.
+vi.mock('@/hooks/useBankConnectionActions', () => ({
+  useBankConnectionActions: () => ({
     sync: vi.fn(), disconnect: vi.fn(), reconnect: vi.fn(), connect: vi.fn(),
     fetchStatus: vi.fn().mockResolvedValue({}), fetchProviders: vi.fn().mockResolvedValue([]),
     saveImportSettings: vi.fn(),
   }),
   launchSaltEdgePopup: vi.fn(),
 }));
-vi.mock('@/hooks/usePsd2ConnectFlow.js', () => ({
-  usePsd2ConnectFlow: () => ({
+vi.mock('@/hooks/useBankConnectionFlow.js', () => ({
+  useBankConnectionFlow: () => ({
     startConnect: vi.fn(), startCreate: vi.fn(), connecting: false,
     selection: null, confirmSelection: vi.fn(), cancelSelection: vi.fn(),
   }),

@@ -1947,5 +1947,17 @@
     ],
     "author": "pipeline",
     "date": "2026-07-30"
+  },
+  {
+    "from": "0.43.0",
+    "to": "0.44.0",
+    "level": "breaking",
+    "reasons": [
+      "Field \"eTSCCAvgPrice\" removed from entity \"header\" in backend",
+      "Field \"etsccLinetotal\" removed from entity \"header\" in backend",
+      "Field \"etsccLinetotalQ\" removed from entity \"header\" in backend"
+    ],
+    "author": "pipeline",
+    "date": "2026-07-30"
   }
 ]

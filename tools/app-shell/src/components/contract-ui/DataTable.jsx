@@ -309,9 +309,10 @@ function isStaticSelectField(field) {
 }
 
 /**
- * Renders the inline-add-row cell for a `selector` field. When the catalog has
- * pre-loaded options it shows a Radix <Select>; otherwise it falls back to the
- * lazy-loading <InlineSearchCombo> backed by the selector URL.
+ * Renders the inline-add-row cell for a `selector` field. Always uses the
+ * searchable <InlineSearchCombo>, preloaded with the catalog's options (if any)
+ * and backed by the selector URL for server-side search / lazy loading —
+ * mirroring the `search`-type add-row cell and the header's unified selector.
  */
 function renderSelectorCell({
   catalogs, entity, field, apiBaseUrl, col, values, touchedFieldsRef,
@@ -321,75 +322,40 @@ function renderSelectorCell({
   const allOptions = getCatalogOptions(catalogs, entity, field);
   const selectorUrl = buildSelectorUrl(apiBaseUrl, entity, field);
   // Exclude the option equal to the current value of a sibling field on this add-line row
-  // (e.g. newStorageBin can't equal storageBin). Applies to both the URL-backed combo and
-  // the preloaded-catalog dropdown.
+  // (e.g. newStorageBin can't equal storageBin). Applies to both the preloaded catalog and
+  // any server-side search results.
   const excludeId = field.excludeValueOf ? (values[field.excludeValueOf] ?? null) : null;
   const options = excludeId != null ? allOptions.filter(o => o.id !== excludeId) : allOptions;
 
-  if (options.length === 0) {
-    if (!selectorUrl) return (
+  if (options.length === 0 && !selectorUrl) {
+    return (
       <TableCell
         key={col.key}
         className="py-1 px-2"
         data-testid={"TableCell__" + field.id} />
     );
-    return (
-      <TableCell key={col.key} data-testid={`inline-add-cell-${col.key}`} className="py-1 px-2">
-        <InlineSearchCombo
-          field={field}
-          value={values[field.key] ?? ''}
-          displayLabel={values[field.key + '$_identifier'] || ''}
-          options={[]}
-          onChange={(id, label, selectedItem) => {
-            touchedFieldsRef.current.add(field.key);
-            handleChange(field.key + '$_identifier', label || '');
-            handleFieldChange(field.key, id, selectedItem);
-          }}
-          onKeyDown={handleKeyDown}
-          inputRef={isFirst ? firstInputRef : undefined}
-          placeholder={fieldLabel}
-          selectorUrl={selectorUrl}
-          selectorContext={selectorContext}
-          excludeId={excludeId}
-          token={token}
-          data-testid={"InlineSearchCombo__" + field.id} />
-      </TableCell>
-    );
   }
+
   return (
     <TableCell key={col.key} data-testid={`inline-add-cell-${col.key}`} className="py-1 px-2">
-      <Select
-        value={values[field.key] || undefined}
-        onValueChange={(val) => {
-          if (val === '__empty__') {
-            handleChange(field.key + '$_identifier', '');
-            handleFieldChange(field.key, '', null);
-            return;
-          }
-          const opt = options.find(o => o.id === val);
-          if (opt) {
-            handleChange(field.key + '$_identifier', opt.name || opt.label || opt._identifier || '');
-          }
-          handleFieldChange(field.key, val, opt);
+      <InlineSearchCombo
+        field={field}
+        value={values[field.key] ?? ''}
+        displayLabel={values[field.key + '$_identifier'] || ''}
+        options={options}
+        onChange={(id, label, selectedItem) => {
+          touchedFieldsRef.current.add(field.key);
+          handleChange(field.key + '$_identifier', label || '');
+          handleFieldChange(field.key, id, selectedItem);
         }}
-        data-testid={"Select__" + field.id}>
-        <SelectTrigger
-            ref={isFirst ? firstInputRef : undefined}
-            data-testid={`inline-add-field-${field.key}`}
-            onKeyDown={(e) => {
-              if (e.key === 'Escape') handleKeyDown(e);
-            }}
-            className="w-full h-8 text-sm bg-card focus:ring-2 focus:ring-primary"
-        >
-          <SelectValue placeholder={fieldLabel} data-testid={"SelectValue__" + field.id} />
-        </SelectTrigger>
-        <SelectContent data-testid={"SelectContent__" + field.id}>
-          <SelectItem value="__empty__" data-testid={"SelectItem__" + field.id}>&nbsp;</SelectItem>
-          {options.map(opt => (
-              <SelectItem key={opt.id} value={opt.id} data-testid={"SelectItem__" + field.id}>{opt.name || opt.label || opt._identifier || opt.id}</SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
+        onKeyDown={handleKeyDown}
+        inputRef={isFirst ? firstInputRef : undefined}
+        placeholder={fieldLabel}
+        selectorUrl={selectorUrl}
+        selectorContext={selectorContext}
+        excludeId={excludeId}
+        token={token}
+        data-testid={"InlineSearchCombo__" + field.id} />
     </TableCell>
   );
 }
@@ -1720,6 +1686,13 @@ export function DataTable({
   onSaveRow = null,
   onCancelEdit = null,
   clearSelectionTrigger = 0,
+  // ETP-4656 — partial bulk-delete outcome: bump `deselectTrigger` with the ids
+  // of the rows that succeeded (`deselectRowIds`) so only those drop out of the
+  // internal selection Set, leaving the failed rows checked. A dedicated pair
+  // instead of overloading `clearSelectionTrigger` (which always clears
+  // everything) so existing full-clear callers stay untouched.
+  deselectTrigger = 0,
+  deselectRowIds = [],
   hideHeader = false,
   hideDataRows = false,
 }) {
@@ -1741,6 +1714,16 @@ export function DataTable({
     if (!clearSelectionTrigger) return;
     setSelectedRows(new Set());
   }, [clearSelectionTrigger]);
+
+  useEffect(() => {
+    if (!deselectTrigger || !deselectRowIds?.length) return;
+    setSelectedRows(prev => {
+      const next = new Set(prev);
+      deselectRowIds.forEach((id) => next.delete(id));
+      return next;
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [deselectTrigger]);
 
   const [optimisticToggles, setOptimisticToggles] = useState({});
   const [savingToggles, setSavingToggles] = useState({});

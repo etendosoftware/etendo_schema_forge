@@ -1,8 +1,8 @@
 {
-  "version": "0.22.0",
+  "version": "0.23.0",
   "generatedAt": "2026-06-26T16:40:04.731Z",
-  "updatedAt": "2026-07-30T01:51:44.451Z",
-  "checksum": "9942bd966de43cb6",
+  "updatedAt": "2026-07-30T10:37:22.403Z",
+  "checksum": "4e7169ecd227e775",
   "frontendContract": {
     "window": {
       "id": "6CB5B67ED33F47DFA334079D3EA2340E",
@@ -1909,30 +1909,6 @@
             "type": "string",
             "visibility": "editable",
             "required": false
-          },
-          {
-            "name": "eTSCCAvgPrice",
-            "apiKey": "eTSCCAvgPrice",
-            "column": "EM_ETSCC_avg_price",
-            "type": "amount",
-            "visibility": "system",
-            "required": true
-          },
-          {
-            "name": "etsccLinetotal",
-            "apiKey": "etsccLinetotal",
-            "column": "EM_Etscc_Linetotal",
-            "type": "amount",
-            "visibility": "system",
-            "required": true
-          },
-          {
-            "name": "etsccLinetotalQ",
-            "apiKey": "etsccLinetotalQ",
-            "column": "EM_Etscc_Linetotal_Q",
-            "type": "amount",
-            "visibility": "system",
-            "required": true
           }
         ],
         "javaQualifier": "salesQuotationHeaderHandler"
@@ -4460,30 +4436,6 @@
         "description": "System field 'eTPRRemovePayment' should exist in backend but not frontend for quotation"
       },
       {
-        "id": "t-system-field-quotation-eTSCCAvgPrice",
-        "category": "system-field",
-        "entity": "quotation",
-        "field": "eTSCCAvgPrice",
-        "runner": "node",
-        "description": "System field 'eTSCCAvgPrice' should exist in backend but not frontend for quotation"
-      },
-      {
-        "id": "t-system-field-quotation-etsccLinetotal",
-        "category": "system-field",
-        "entity": "quotation",
-        "field": "etsccLinetotal",
-        "runner": "node",
-        "description": "System field 'etsccLinetotal' should exist in backend but not frontend for quotation"
-      },
-      {
-        "id": "t-system-field-quotation-etsccLinetotalQ",
-        "category": "system-field",
-        "entity": "quotation",
-        "field": "etsccLinetotalQ",
-        "runner": "node",
-        "description": "System field 'etsccLinetotalQ' should exist in backend but not frontend for quotation"
-      },
-      {
         "id": "t-system-field-quotation-etvfacReversedInvoice",
         "category": "system-field",
         "entity": "quotation",
@@ -5419,7 +5371,7 @@
       }
     ],
     "summary": {
-      "total": 306,
+      "total": 303,
       "byCategory": {
         "action-endpoint": 23,
         "crud-flags": 2,
@@ -5433,11 +5385,11 @@
         "rule-declared": 8,
         "searchable-filters": 6,
         "selector-endpoint": 9,
-        "system-field": 155,
+        "system-field": 152,
         "visibility": 2
       },
       "byRunner": {
-        "node": 306,
+        "node": 303,
         "junit": 0
       }
     }

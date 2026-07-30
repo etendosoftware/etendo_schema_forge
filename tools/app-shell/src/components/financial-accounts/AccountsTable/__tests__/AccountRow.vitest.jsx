@@ -11,7 +11,7 @@ vi.mock('@/i18n', () => ({
       financeAccountsTypeCard: 'Tarjeta',
       financeAccountsBadgeOffline: 'Sin conexión',
       financeAccountsCopyIban: 'Copiar IBAN',
-      financeAccountsConnectPsd2: 'Conectar PSD2',
+      financeAccountsConnectBank: 'Conectar banco',
       financeAccountsSyncedJustNow: 'Sincronizado',
       financeAccountsRowMenuLabel: 'Acciones',
       financeAccountsMenuOpen: 'Abrir cuenta',
@@ -45,7 +45,7 @@ const baseAccount = {
   currencyIso: 'EUR',
   iban: 'ES1200001234567890123456',
   pendingCount: 0,
-  psd2Connected: false,
+  bankConnected: false,
 };
 
 describe('AccountRow', () => {
@@ -86,7 +86,7 @@ describe('AccountRow', () => {
     expect(screen.getByText(/ES12 0000 1234 5678 9012 3456/)).toBeInTheDocument();
   });
 
-  it('renders the PSD2 masked card number for card accounts (no IBAN)', () => {
+  it('renders the masked card number for card accounts (no IBAN)', () => {
     renderRow({
       account: {
         ...baseAccount, type: 'CA', iban: '', maskedPan: '**** **** **** 1234',
@@ -104,5 +104,117 @@ describe('AccountRow', () => {
     renderRow({ account: { ...baseAccount, currentBalance: -42.5 } });
     const balanceCell = screen.getByText(/-?€42\.50|-€42\.50|-42,50 €|-42\.50 €/);
     expect(balanceCell.className).toMatch(/text-\[hsl\(var\(--destructive\)\)\]/i);
+  });
+
+  // ETP-4656 — selection checkbox (Gap 1: multi-select bulk delete).
+  describe('selection checkbox', () => {
+    it('renders unchecked by default and fires onSelectionChange with the account id when toggled', () => {
+      const onSelectionChange = vi.fn();
+      renderRow({ account: baseAccount, onSelectionChange });
+      const checkbox = screen.getByRole('checkbox');
+      expect(checkbox).not.toBeChecked();
+      fireEvent.click(checkbox);
+      expect(onSelectionChange).toHaveBeenCalledWith('acc-1');
+    });
+
+    it('renders checked when selected is true', () => {
+      renderRow({ account: baseAccount, selected: true });
+      expect(screen.getByRole('checkbox')).toBeChecked();
+    });
+
+    it('does not fire onOpen when the checkbox cell is clicked (stopPropagation)', () => {
+      const onOpen = vi.fn();
+      const onSelectionChange = vi.fn();
+      renderRow({
+        account: baseAccount, onOpen, onSelectionChange,
+      });
+      fireEvent.click(screen.getByRole('checkbox'));
+      expect(onSelectionChange).toHaveBeenCalledWith('acc-1');
+      expect(onOpen).not.toHaveBeenCalled();
+    });
+
+    it('does not throw when onSelectionChange is not provided', () => {
+      renderRow({ account: baseAccount });
+      expect(() => fireEvent.click(screen.getByRole('checkbox'))).not.toThrow();
+    });
+  });
+
+  describe('Bank connection CTA (cellCtx.onConnect)', () => {
+    it('fires onBankConnectionAction("connect", account) when the inline Connect bank CTA is clicked', () => {
+      const onBankConnectionAction = vi.fn();
+      renderRow({ account: baseAccount, onBankConnectionAction });
+      fireEvent.click(screen.getByTestId('account-sync-connect-acc-1'));
+      expect(onBankConnectionAction).toHaveBeenCalledWith('connect', expect.objectContaining({ id: 'acc-1' }));
+    });
+
+    it('does not render the Connect bank CTA when onBankConnectionAction is not provided', () => {
+      renderRow({ account: baseAccount });
+      // cellCtx.onConnect is undefined, so SyncStatusInline receives no onConnect handler,
+      // but the CTA itself is still rendered — clicking it should not throw.
+      expect(() => fireEvent.click(screen.getByTestId('account-sync-connect-acc-1'))).not.toThrow();
+    });
+  });
+
+  describe('reconcile pill', () => {
+    it('fires onReconcile with the account when the pending pill is clicked', () => {
+      const onReconcile = vi.fn();
+      renderRow({ account: { ...baseAccount, pendingCount: 3 }, onReconcile });
+      fireEvent.click(screen.getByTestId('reconcile-status-pending'));
+      expect(onReconcile).toHaveBeenCalledWith(expect.objectContaining({ id: 'acc-1', pendingCount: 3 }));
+    });
+
+    it('does not fire onOpen when the pending pill is clicked (stopPropagation)', () => {
+      const onOpen = vi.fn();
+      const onReconcile = vi.fn();
+      renderRow({
+        account: { ...baseAccount, pendingCount: 3 }, onOpen, onReconcile,
+      });
+      fireEvent.click(screen.getByTestId('reconcile-status-pending'));
+      expect(onReconcile).toHaveBeenCalled();
+      expect(onOpen).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('edit action', () => {
+    it('fires onEdit with the account when the edit button is clicked', () => {
+      const onEdit = vi.fn();
+      renderRow({ account: baseAccount, onEdit });
+      fireEvent.click(screen.getByTestId('account-row-edit-acc-1'));
+      expect(onEdit).toHaveBeenCalledWith(expect.objectContaining({ id: 'acc-1' }));
+    });
+
+    it('does not fire onOpen when the edit button is clicked (stopPropagation)', () => {
+      const onOpen = vi.fn();
+      const onEdit = vi.fn();
+      renderRow({ account: baseAccount, onOpen, onEdit });
+      fireEvent.click(screen.getByTestId('account-row-edit-acc-1'));
+      expect(onEdit).toHaveBeenCalled();
+      expect(onOpen).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('Bank connection sync-now action', () => {
+    it('renders the sync button and fires onBankConnectionAction("syncNow", account) when clicked, for bankConnected accounts', () => {
+      const onBankConnectionAction = vi.fn();
+      renderRow({ account: { ...baseAccount, bankConnected: true }, onBankConnectionAction });
+      fireEvent.click(screen.getByTestId('account-row-refresh-acc-1'));
+      expect(onBankConnectionAction).toHaveBeenCalledWith('syncNow', expect.objectContaining({ id: 'acc-1', bankConnected: true }));
+    });
+
+    it('does not render the sync button when the account is not bankConnected', () => {
+      renderRow({ account: { ...baseAccount, bankConnected: false } });
+      expect(screen.queryByTestId('account-row-refresh-acc-1')).not.toBeInTheDocument();
+    });
+
+    it('does not fire onOpen when the sync button is clicked (stopPropagation)', () => {
+      const onOpen = vi.fn();
+      const onBankConnectionAction = vi.fn();
+      renderRow({
+        account: { ...baseAccount, bankConnected: true }, onOpen, onBankConnectionAction,
+      });
+      fireEvent.click(screen.getByTestId('account-row-refresh-acc-1'));
+      expect(onBankConnectionAction).toHaveBeenCalled();
+      expect(onOpen).not.toHaveBeenCalled();
+    });
   });
 });

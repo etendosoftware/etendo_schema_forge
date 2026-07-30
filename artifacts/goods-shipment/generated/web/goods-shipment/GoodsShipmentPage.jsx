@@ -54,8 +54,10 @@ const requiredHeaderFields = ['documentNo', 'warehouse', 'businessPartner', 'par
 const addLineFields = {
   entry: [
     { key: 'product', column: 'M_Product_ID', type: 'search', required: true, lookup: true, label: 'Product', reference: 'Product', inputMode: 'search' },
-    { key: 'movementQuantity', column: 'MovementQty', type: 'number', required: true, label: 'Movement Quantity', defaultValue: 1 },
+    { key: 'movementQuantity', column: 'MovementQty', type: 'number', required: true, label: 'Movement Quantity', defaultValue: 0 },
     { key: 'description', column: 'Description', type: 'textarea', label: 'Description' },
+    { key: 'project', column: 'C_Project_ID', type: 'search', label: 'Project', reference: 'Project', inputMode: 'search' },
+    { key: 'costcenter', column: 'C_Costcenter_ID', type: 'selector', label: 'Cost Center', reference: 'Costcenter', inputMode: 'selector' },
   ],
   derived: [
 
@@ -136,12 +138,57 @@ export const api = {
       }
     },
     {
+      "entity": "goodsShipment",
+      "field": "project",
+      "column": "C_Project_ID",
+      "reference": "Project",
+      "inputMode": "search",
+      "url": "/sws/neo/goods-shipment/goodsShipment/selectors/project",
+      "context": {
+        "required": [
+          {
+            "param": "IsSOTrx",
+            "source": "windowCategory"
+          },
+          {
+            "param": "C_BPartner_ID",
+            "source": "field",
+            "field": "businessPartner"
+          }
+        ]
+      }
+    },
+    {
+      "entity": "goodsShipment",
+      "field": "costcenter",
+      "column": "C_Costcenter_ID",
+      "reference": "Costcenter",
+      "inputMode": "selector",
+      "url": "/sws/neo/goods-shipment/goodsShipment/selectors/costcenter"
+    },
+    {
       "entity": "goodsShipmentLine",
       "field": "product",
       "column": "M_Product_ID",
       "reference": "Product",
       "inputMode": "search",
       "url": "/sws/neo/goods-shipment/goodsShipmentLine/selectors/product"
+    },
+    {
+      "entity": "goodsShipmentLine",
+      "field": "project",
+      "column": "C_Project_ID",
+      "reference": "Project",
+      "inputMode": "search",
+      "url": "/sws/neo/goods-shipment/goodsShipmentLine/selectors/project"
+    },
+    {
+      "entity": "goodsShipmentLine",
+      "field": "costcenter",
+      "column": "C_Costcenter_ID",
+      "reference": "Costcenter",
+      "inputMode": "selector",
+      "url": "/sws/neo/goods-shipment/goodsShipmentLine/selectors/costcenter"
     }
   ],
   "actions": [
@@ -292,6 +339,7 @@ export default function GoodsShipmentPage({ windowName, recordId, ...props }) {
         hidePrint
         noHeaderBorder
         notesField="description"
+        dimensionsPanelFieldKeys={["project","costcenter"]}
         customTabs={[{ key: 'related', labelKey: 'relatedDocuments', Component: RelatedDocuments }, { key: 'attachments', labelKey: 'attachments', Component: AttachmentsTab, placement: 'tab', props: { tableName: "M_InOut", config: {} } }]}
         bottomSection={GoodsShipmentBottomPanel}
         topbarRight={GoodsShipmentActions}

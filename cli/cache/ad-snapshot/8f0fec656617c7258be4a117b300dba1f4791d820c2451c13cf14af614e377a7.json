@@ -2,7 +2,7 @@
   "sql": "SELECT DISTINCT c.ad_table_id, c.ad_column_id, c.columnname, c.position FROM ad_column c JOIN ad_tab t ON t.ad_table_id = c.ad_table_id WHERE t.ad_window_id = $1 AND t.isactive = 'Y' AND c.isactive = 'Y' ORDER BY c.ad_table_id, c.position, c.columnname, c.ad_column_id",
   "versions": {
     "1e3e96b5dc79b4c7366315de5249e070d2a81279761af45c7ea30b5365d1ed85": {
-      "checksum": "8dd1dcdca1ea2248e09cfca510c615c360847a2f45b6266ce3b9a6a42ee11af3",
+      "checksum": "1864c281b44ef12d694bf1df133ac8467940d0acec39b76ec2b5d4c292f6b8ae",
       "params": [
         "144"
       ],
@@ -738,6 +738,24 @@
           "ad_table_id": "208",
           "columnname": "Copyservicemodifytaxconfig",
           "position": "128"
+        },
+        {
+          "ad_column_id": "E307979CE47A48BAAA63F411BDBD0A29",
+          "ad_table_id": "208",
+          "columnname": "EM_ETGO_Sale_Price",
+          "position": "990"
+        },
+        {
+          "ad_column_id": "4E5E594900C84D10B02E12D254388499",
+          "ad_table_id": "208",
+          "columnname": "EM_ETGO_Purchase_Price",
+          "position": "991"
+        },
+        {
+          "ad_column_id": "8FC9A2CD267543C994F4F8F8BF8A02CC",
+          "ad_table_id": "208",
+          "columnname": "EM_ETGO_Stock",
+          "position": "992"
         },
         {
           "ad_column_id": "2020",
@@ -4204,7 +4222,7 @@
       ]
     },
     "314caee3650d614f6e16516792b6ae0979d23d630da4a9b794b05902fc5a07c8": {
-      "checksum": "840716fff31d0c17e1cb135f7ccb1baa1001ed0ad33925ef5f5d3d1267fb0ec2",
+      "checksum": "9e7a8583ba06546c00a3f65a26b837da86bc47332af2dcf08bf63968ff7fca34",
       "params": [
         "143"
       ],
@@ -4990,28 +5008,10 @@
           "position": "98"
         },
         {
-          "ad_column_id": "8DCD860B6CBF48EA97C1D35338B0B62A",
-          "ad_table_id": "259",
-          "columnname": "EM_Etscc_Linetotal",
-          "position": "98"
-        },
-        {
           "ad_column_id": "E01F12C1B9CE4539B145357B931F49FD",
           "ad_table_id": "259",
           "columnname": "EM_ETGO_Currency_Rate",
           "position": "99"
-        },
-        {
-          "ad_column_id": "EE67E63B0A904273BBB0DEC41E560EA3",
-          "ad_table_id": "259",
-          "columnname": "EM_ETSCC_avg_price",
-          "position": "99"
-        },
-        {
-          "ad_column_id": "1761106CE2C34C1EB078959BC1833B4D",
-          "ad_table_id": "259",
-          "columnname": "EM_Etscc_Linetotal_Q",
-          "position": "100"
         },
         {
           "ad_column_id": "9E82E728716246B393C40D2CDCA0133A",
@@ -18042,7 +18042,7 @@
       ]
     },
     "62e7d6689c11ba27fdc238450bbc940c71cc4a579d87d3669861331f4f00b615": {
-      "checksum": "633bf9a7cd57a1ee8db4fcb9d712b16732e28a53260562f8c1125ad9d253b3fb",
+      "checksum": "8eac850593f222ad66a19aa837b22ee1e2d48abaedd1a7cbf4c78a551b873b28",
       "params": [
         "B5673F73F613496C8BEA22FB55E4E1E4"
       ],
@@ -18144,6 +18144,12 @@
           "position": null
         },
         {
+          "ad_column_id": "7A8005A730744BCF8F971DF27700D4DF",
+          "ad_table_id": "A45FDE07216C40FBA472E7B91F7273E4",
+          "columnname": "C_Year_Close_V_ID",
+          "position": null
+        },
+        {
           "ad_column_id": "1EDEE59E636940CD9E0C3C481FD61150",
           "ad_table_id": "A45FDE07216C40FBA472E7B91F7273E4",
           "columnname": "Created",
@@ -18159,12 +18165,6 @@
           "ad_column_id": "8CBA5F00D89D4464B4BE152DB36D6F01",
           "ad_table_id": "A45FDE07216C40FBA472E7B91F7273E4",
           "columnname": "Credit",
-          "position": null
-        },
-        {
-          "ad_column_id": "7A8005A730744BCF8F971DF27700D4DF",
-          "ad_table_id": "A45FDE07216C40FBA472E7B91F7273E4",
-          "columnname": "C_Year_Close_V_ID",
           "position": null
         },
         {
@@ -21616,7 +21616,7 @@
       ]
     },
     "9875b64b4d474916c9d42e3986d743e8a881ac53d52dca07ea47fb490bfea6df": {
-      "checksum": "8c19633a4517c2cf537d0434705786df3f25c9b8ad72cf950189cfbfbcd47341",
+      "checksum": "13a0bd7468d92cb91b628baa09efae3d25682328f9fd62d18fdff34101553735",
       "params": [
         "6CB5B67ED33F47DFA334079D3EA2340E"
       ],
@@ -22288,28 +22288,10 @@
           "position": "98"
         },
         {
-          "ad_column_id": "8DCD860B6CBF48EA97C1D35338B0B62A",
-          "ad_table_id": "259",
-          "columnname": "EM_Etscc_Linetotal",
-          "position": "98"
-        },
-        {
           "ad_column_id": "E01F12C1B9CE4539B145357B931F49FD",
           "ad_table_id": "259",
           "columnname": "EM_ETGO_Currency_Rate",
           "position": "99"
-        },
-        {
-          "ad_column_id": "EE67E63B0A904273BBB0DEC41E560EA3",
-          "ad_table_id": "259",
-          "columnname": "EM_ETSCC_avg_price",
-          "position": "99"
-        },
-        {
-          "ad_column_id": "1761106CE2C34C1EB078959BC1833B4D",
-          "ad_table_id": "259",
-          "columnname": "EM_Etscc_Linetotal_Q",
-          "position": "100"
         },
         {
           "ad_column_id": "9E82E728716246B393C40D2CDCA0133A",
@@ -25120,7 +25102,7 @@
       ]
     },
     "c0351cd0caf4edf2a56beaafd358fe05567a911a68c5ab90cd866d785e6a9dfc": {
-      "checksum": "50a22294cb954a339dfa045493a2f37fd31e9edbbff706a885c729b62b65e278",
+      "checksum": "661844af84cab59c035c5fde7fd88202736f86ea3307f14ab7dcf383d8c24872",
       "params": [
         "140"
       ],
@@ -25934,6 +25916,24 @@
           "ad_table_id": "208",
           "columnname": "Copyservicemodifytaxconfig",
           "position": "128"
+        },
+        {
+          "ad_column_id": "E307979CE47A48BAAA63F411BDBD0A29",
+          "ad_table_id": "208",
+          "columnname": "EM_ETGO_Sale_Price",
+          "position": "990"
+        },
+        {
+          "ad_column_id": "4E5E594900C84D10B02E12D254388499",
+          "ad_table_id": "208",
+          "columnname": "EM_ETGO_Purchase_Price",
+          "position": "991"
+        },
+        {
+          "ad_column_id": "8FC9A2CD267543C994F4F8F8BF8A02CC",
+          "ad_table_id": "208",
+          "columnname": "EM_ETGO_Stock",
+          "position": "992"
         },
         {
           "ad_column_id": "521F823119706C29E040007F01001B31",
@@ -30856,7 +30856,7 @@
       ]
     },
     "e914309500f47dd6b862879819658bc9e588f339dabc304f81cd3c58853ca4ac": {
-      "checksum": "74f636ba4993c8356332519c2112db22d037e05b875b03650807abeca39cb46f",
+      "checksum": "2baacecd495ef2be772eb62cbaae8d3e36325817971b0f42160dd8a359460534",
       "params": [
         "181"
       ],
@@ -31528,28 +31528,10 @@
           "position": "98"
         },
         {
-          "ad_column_id": "8DCD860B6CBF48EA97C1D35338B0B62A",
-          "ad_table_id": "259",
-          "columnname": "EM_Etscc_Linetotal",
-          "position": "98"
-        },
-        {
           "ad_column_id": "E01F12C1B9CE4539B145357B931F49FD",
           "ad_table_id": "259",
           "columnname": "EM_ETGO_Currency_Rate",
           "position": "99"
-        },
-        {
-          "ad_column_id": "EE67E63B0A904273BBB0DEC41E560EA3",
-          "ad_table_id": "259",
-          "columnname": "EM_ETSCC_avg_price",
-          "position": "99"
-        },
-        {
-          "ad_column_id": "1761106CE2C34C1EB078959BC1833B4D",
-          "ad_table_id": "259",
-          "columnname": "EM_Etscc_Linetotal_Q",
-          "position": "100"
         },
         {
           "ad_column_id": "9E82E728716246B393C40D2CDCA0133A",

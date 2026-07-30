@@ -41,7 +41,7 @@ const draftMode = null;
 // @sf-generated-end draftMode:product
 
 // @sf-generated-start requiredHeaderFields:product
-const requiredHeaderFields = ['searchKey', 'name', 'uOM', 'productCategory', 'taxCategory', 'purchase', 'sale', 'productType', 'stocked', 'returnable'];
+const requiredHeaderFields = ['searchKey', 'name', 'uOM', 'productCategory', 'taxCategory', 'purchase', 'sale', 'productType', 'stocked', 'active', 'returnable'];
 // @sf-generated-end requiredHeaderFields:product
 
 
@@ -594,7 +594,7 @@ export default function ProductPage({ windowName, recordId, ...props }) {
       hideLink
       labelOverrides={labelOverrides}
       rowQuickActions={{}}
-      import={{"enabled":true,"spec":"product","entity":"product","formats":["csv","txt"],"limit":{"maxRows":5000,"concurrency":4},"dedupe":{"scope":"file","key":["searchKey"]},"fields":[{"target":"searchKey","aliases":["codigo","código","sku"],"label":"Search Key","required":true,"type":"string"},{"target":"name","aliases":["nombre"],"label":"Name","required":true,"type":"string"},{"target":"description","aliases":["descripcion","descripción"],"label":"Description","required":false,"type":"textarea"},{"target":"uOM","aliases":["unidad de medida","uom"],"matchEntity":"UOM","label":"UOM","required":true,"type":"foreignKey","reference":"UOM"},{"target":"productCategory","aliases":["categoria","categoría"],"matchEntity":"ProductCategory","label":"Product Category","required":true,"type":"foreignKey","reference":"ProductCategory"},{"target":"taxCategory","aliases":["categoria impositiva","categoría impositiva","impuesto"],"matchEntity":"FinancialMgmtTaxCategory","label":"Tax Category","required":true,"type":"foreignKey","reference":"TaxCategory"}]}}
+      import={{"enabled":true,"spec":"product","entity":"product","descriptor":"product","formats":["csv","txt"],"limit":{"maxRows":5000,"concurrency":4},"dedupe":{"scope":"file","key":["searchKey"]},"fields":[{"target":"searchKey","aliases":["codigo","código","sku"],"label":"Search Key","required":true,"type":"string"},{"target":"name","aliases":["nombre"],"label":"Name","required":true,"type":"string"},{"target":"description","aliases":["descripcion","descripción"],"label":"Description","required":false,"type":"textarea"},{"required":false,"type":"string","target":"price","aliases":["precio"],"label":"Price"}]}}
       {...props} window={effectiveWindow}
     />
   );

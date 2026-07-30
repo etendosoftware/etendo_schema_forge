@@ -115,6 +115,22 @@ describe('contacts import descriptor', () => {
     );
   });
 
+  it('regression (ETP-4669): localizes the unresolved-country error via config.translate when ImportDialog injects one', async () => {
+    // The descriptor is module-scope async code (no hooks), so it can't call useUI() — the
+    // dialog injects the app translator as config.translate. When present, the thrown error is
+    // the localized string with the row's country interpolated, not the English fallback.
+    const resolveCountry = vi.fn().mockResolvedValue({ status: 'needs-review', candidates: [] });
+    const translate = vi.fn((key, params) => `No se pudo resolver el país "${params.country}".`);
+    await assert.rejects(
+      () => buildOperations(baseRow, { spec: 'contacts', descriptorName: 'contacts', token: 't', resolveCountryFn: resolveCountry, translate }),
+      /No se pudo resolver el país "Argentina"\./,
+    );
+    assert.ok(
+      translate.mock.calls.some(([key, params]) => key === 'importErrorCountryUnresolved' && params?.country === 'Argentina'),
+      'expected the descriptor to call translate with the importErrorCountryUnresolved key and the row country',
+    );
+  });
+
   it('regression: defaults searchKey (C_BPartner.Value) to the row\'s name — required by the DB, hidden from every create form, no server-side default', async () => {
     // Reproduced via a real import run: `null value in column "value" of relation
     // "c_bpartner" violates not-null constraint`. Confirmed against

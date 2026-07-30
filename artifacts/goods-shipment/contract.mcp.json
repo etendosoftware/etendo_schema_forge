@@ -1,8 +1,8 @@
 {
-  "version": "0.31.0",
+  "version": "0.32.0",
   "generatedAt": "2026-04-29T19:04:55.657Z",
-  "updatedAt": "2026-07-30T01:51:37.147Z",
-  "contractChecksum": "360af1ea3b464ed5",
+  "updatedAt": "2026-07-28T13:29:09.185Z",
+  "contractChecksum": "e7d163e989c97f04",
   "apiPrediction": {
     "specName": "goods-shipment",
     "baseUrl": "/sws/neo/goods-shipment",
@@ -73,12 +73,57 @@
         }
       },
       {
+        "entity": "goodsShipment",
+        "field": "project",
+        "column": "C_Project_ID",
+        "reference": "Project",
+        "inputMode": "search",
+        "url": "/sws/neo/goods-shipment/goodsShipment/selectors/project",
+        "context": {
+          "required": [
+            {
+              "param": "IsSOTrx",
+              "source": "windowCategory"
+            },
+            {
+              "param": "C_BPartner_ID",
+              "source": "field",
+              "field": "businessPartner"
+            }
+          ]
+        }
+      },
+      {
+        "entity": "goodsShipment",
+        "field": "costcenter",
+        "column": "C_Costcenter_ID",
+        "reference": "Costcenter",
+        "inputMode": "selector",
+        "url": "/sws/neo/goods-shipment/goodsShipment/selectors/costcenter"
+      },
+      {
         "entity": "goodsShipmentLine",
         "field": "product",
         "column": "M_Product_ID",
         "reference": "Product",
         "inputMode": "search",
         "url": "/sws/neo/goods-shipment/goodsShipmentLine/selectors/product"
+      },
+      {
+        "entity": "goodsShipmentLine",
+        "field": "project",
+        "column": "C_Project_ID",
+        "reference": "Project",
+        "inputMode": "search",
+        "url": "/sws/neo/goods-shipment/goodsShipmentLine/selectors/project"
+      },
+      {
+        "entity": "goodsShipmentLine",
+        "field": "costcenter",
+        "column": "C_Costcenter_ID",
+        "reference": "Costcenter",
+        "inputMode": "selector",
+        "url": "/sws/neo/goods-shipment/goodsShipmentLine/selectors/costcenter"
       }
     ],
     "actions": [
@@ -442,6 +487,12 @@
           "invoiceStatus": {
             "readOnly": true
           },
+          "project": {
+            "readOnlyLogic": "@Posted@='Y'"
+          },
+          "costcenter": {
+            "readOnlyLogic": "@Posted@='Y'"
+          },
           "invoiced": {
             "readOnly": true,
             "required": true,
@@ -472,12 +523,18 @@
           "movementQuantity": {
             "required": true,
             "readOnlyLogic": "@Processed@='Y' | @UomManagement@='Y'",
-            "defaultValue": "1"
+            "defaultValue": "0"
           },
           "description": {},
           "orderQuantity": {
             "readOnly": true,
             "readOnlyLogic": "@Processed@='Y'"
+          },
+          "project": {
+            "readOnlyLogic": "@Posted@='Y'"
+          },
+          "costcenter": {
+            "readOnlyLogic": "@Posted@='Y'"
           }
         }
       }
@@ -514,6 +571,23 @@
         "field": "partnerAddress",
         "context": {
           "required": [
+            {
+              "param": "C_BPartner_ID",
+              "source": "field",
+              "field": "businessPartner"
+            }
+          ]
+        }
+      },
+      {
+        "entity": "goodsShipment",
+        "field": "project",
+        "context": {
+          "required": [
+            {
+              "param": "IsSOTrx",
+              "source": "windowCategory"
+            },
             {
               "param": "C_BPartner_ID",
               "source": "field",
@@ -578,5 +652,5 @@
     "knownLimitations": [],
     "dangerousOperations": []
   },
-  "checksum": "15193eaabd2c81f2"
+  "checksum": "c94b2ca06d5482d0"
 }

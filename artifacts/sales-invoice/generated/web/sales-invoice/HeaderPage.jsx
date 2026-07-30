@@ -66,6 +66,8 @@ const addLineFields = {
     { key: 'listPrice', column: 'PriceList', type: 'number', required: true, label: 'List Price' },
     { key: 'etgoDiscount', column: 'EM_Etgo_Discount', type: 'number', label: 'Discount %', defaultValue: 0, min: 0, max: 100 },
     { key: 'tax', column: 'C_Tax_ID', type: 'selector', label: 'Tax', reference: 'Tax', inputMode: 'selector', forceCalloutFields: ["lineNetAmount"] },
+    { key: 'project', column: 'C_Project_ID', type: 'search', label: 'Project', reference: 'Project', inputMode: 'search' },
+    { key: 'costcenter', column: 'C_Costcenter_ID', type: 'selector', label: 'Cost Center', reference: 'Costcenter', inputMode: 'selector' },
   ],
   derived: [
 
@@ -228,6 +230,35 @@ export const api = {
     },
     {
       "entity": "header",
+      "field": "project",
+      "column": "C_Project_ID",
+      "reference": "Project",
+      "inputMode": "search",
+      "url": "/sws/neo/sales-invoice/header/selectors/project",
+      "context": {
+        "required": [
+          {
+            "param": "IsSOTrx",
+            "source": "windowCategory"
+          },
+          {
+            "param": "C_BPartner_ID",
+            "source": "field",
+            "field": "businessPartner"
+          }
+        ]
+      }
+    },
+    {
+      "entity": "header",
+      "field": "costcenter",
+      "column": "C_Costcenter_ID",
+      "reference": "Costcenter",
+      "inputMode": "selector",
+      "url": "/sws/neo/sales-invoice/header/selectors/costcenter"
+    },
+    {
+      "entity": "header",
       "field": "aeatsiiDescription",
       "column": "EM_Aeatsii_Description_ID",
       "reference": "aeatsii_description",
@@ -292,6 +323,22 @@ export const api = {
           }
         ]
       }
+    },
+    {
+      "entity": "lines",
+      "field": "project",
+      "column": "C_Project_ID",
+      "reference": "Project",
+      "inputMode": "search",
+      "url": "/sws/neo/sales-invoice/lines/selectors/project"
+    },
+    {
+      "entity": "lines",
+      "field": "costcenter",
+      "column": "C_Costcenter_ID",
+      "reference": "Costcenter",
+      "inputMode": "selector",
+      "url": "/sws/neo/sales-invoice/lines/selectors/costcenter"
     },
     {
       "entity": "paymentPlan",
@@ -622,6 +669,7 @@ export default function HeaderPage({ windowName, recordId, ...props }) {
         hidePrint
         noHeaderBorder
         notesField="description"
+        dimensionsPanelFieldKeys={["project","costcenter"]}
         customTabs={[{ key: 'related', labelKey: 'relatedDocuments', Component: RelatedDocuments }, { key: 'attachments', labelKey: 'attachments', Component: AttachmentsTab, placement: 'tab', props: { tableName: "C_Invoice", config: {} } }, { key: 'sif', labelKey: 'sifDataTabs.sectionTitle', Component: SifTab, placement: 'tab' }, { key: 'reversedInvoices', labelKey: 'rectificationsTab', Component: ReversedInvoicesPanel, placement: 'tab' }]}
         bottomSection={InvoiceBottomPanel}
         topbarRight={InvoiceTopbarExtra}

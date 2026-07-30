@@ -108,6 +108,14 @@ export const api = {
       "url": "/sws/neo/amortization/header/selectors/currency"
     },
     {
+      "entity": "header",
+      "field": "project",
+      "column": "C_Project_ID",
+      "reference": "Project",
+      "inputMode": "selector",
+      "url": "/sws/neo/amortization/header/selectors/project"
+    },
+    {
       "entity": "lines",
       "field": "asset",
       "column": "A_Asset_ID",
