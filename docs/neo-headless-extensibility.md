@@ -221,6 +221,31 @@ matches by `@Named` value — no servlet restart needed (just compile + deploy).
 
 Place handlers in: `src/com/etendoerp/go/schemaforge/handlers/` (one class per window/entity).
 
+> **⚠️ `Java_Qualifier` must be declared in TWO places, not one — both are required (ETP-4670).**
+> Setting it only in the DB (or only via a one-off `SFUpsertEntity`/SQL `UPDATE`) is not durable. It
+> must ALSO be declared in the artifact's `decisions.json`, or the next `push-to-neo.js` run silently
+> wipes it:
+> 1. **`artifacts/<window>/decisions.json`** — `"javaQualifier": "<name>"` at the entity level
+>    (`entities.<entity>.javaQualifier`). `push-to-neo.js` regenerates the `ETGO_SF_ENTITY` rows for
+>    the whole spec from the artifact; a `javaQualifier` not present there is not written, clearing
+>    whatever the DB had.
+> 2. **`src-db/database/sourcedata/ETGO_SF_ENTITY.xml`** (the module's own DB seed) —
+>    `<JAVA_QUALIFIER><![CDATA[<name>]]></JAVA_QUALIFIER>` on that entity's row. `update.database`
+>    reimports this seed and overwrites the live DB row, so a qualifier missing from the seed is
+>    lost on the next database sync even if `decisions.json` has it.
+>
+> **Symptoms when only one of the two is set (or neither):** the handler stops running with **no
+> error and no log line** — the request is served exactly as if no hook existed at all. The
+> `java_qualifier` column on `etgo_sf_entity` for that row reads empty/`NULL`. This is easy to miss
+> because nothing fails loudly; it just silently regresses to default CRUD behavior.
+>
+> `decisions.json` already supports `javaQualifier` for detail/child entities — e.g. `price`,
+> `stock`, and `accounting` on the Product window (`docs/generated-custom-windows/product.md`) all
+> declare it. The trap is specifically forgetting it on the **header** entity (e.g. `product`,
+> `productCategory`), since header entities are edited less often and it's easy to add a handler,
+> wire the DB row by hand, verify it works, and never circle back to add the `decisions.json` +
+> `ETGO_SF_ENTITY.xml` seed entries — until the next regen or `update.database` erases it.
+
 ### 2.3 Hook Dispatch Flow
 
 ```
