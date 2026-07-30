@@ -463,3 +463,20 @@ visible when someone actually hovers a row in a running instance. When adding a 
 `position: absolute` hover strip, always re-check (a) whether the strip still fits inside its
 reserved column at the new width, and (b) whether the strip has an opaque background as a
 second line of defense in case it doesn't.
+
+---
+
+## [2026-07-30] ETP-4741 — Creation-form defaults race fixed; two follow-ups deferred
+
+The race fix itself (defaults-loading gate on the `/new` route, 4s abort timeout, epoch-based
+staleness discard, user-edit merge guard, record-load neutralization) is documented in
+`docs/generated-custom-windows/app-shell-functional-flows.md` §4 and
+`docs/ops/app-shell-observability.md` (`defaults_block`). Two follow-ups were agreed and
+deliberately deferred:
+
+- A `handleNew()` session superseded by a newer `handleNew()` is made epoch-inert but its fetch is
+  NOT aborted — up to 4s of wasted network per superseded session. Only record-load neutralization
+  (`handleSelect`/`fetchById`) aborts the in-flight request.
+- A mocked Playwright spec covering the `/new` defaults gate and the record-navigation
+  (neutralization) path is recommended but not yet written; current coverage is Vitest-only
+  (`tools/app-shell/src/hooks/__tests__/useEntity.defaultsRace.vitest.jsx`).
