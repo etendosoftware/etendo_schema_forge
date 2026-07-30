@@ -73,6 +73,8 @@ Per-locale field label overrides. When the simplified interface needs to rename 
 | `layoutType` | string | `"default"` | `"default"`, `"kanban"`, `"calendar"`, `"list-modal"`, `"custom"` | Frontend rendering mode. See `docs/window-templates.md`. |
 | `templateConfig` | object | `null` | Layout-specific | Extra config for non-default layouts. `kanban`/`calendar`: `groupBy`, `dateField`, etc. `list-modal`: `titleKey`, `editTitleKey`, `bannerKey`, `searchPlaceholderKey`, `newLabelKey`, `autoPriorityField`, `autoPriorityStep`, `sections` (ordered `[{ key, label }]`), `backLabelKey` (toolbar back-button i18n key; default `cancel`), `backTo` (route to navigate to on back; defaults to history `-1`), `toolbarFilters` (declarative dropdown filters `[{ key, field, allLabelKey, options: [{ value, labelKey }] }]`, applied client-side over the loaded rows). All strings are i18n keys. See the `list-modal` section in `docs/window-templates.md`. |
 | `detailEntity` | string \| null | Auto-inferred | Entity name or `null` | Explicitly sets which entity is the detail/lines tab. When omitted, the generator picks the first non-primary entity automatically. Set to `null` to create a header-only page (no detail tab). Set to a specific entity name to override the auto-inference. |
+| `maxDetailLines` | number | `null` | `0`, `1`, `2`, … | Caps the `detailEntity`'s line count. `N > 0` hides the add-line affordances once the child count reaches `N` (e.g. `1` for a "registro único" accounting-schema row). `0` disables manual line creation entirely (import-only-lines pattern). Only applies to the `window.detailEntity` pattern — see `window.secondaryTabs.<key>.maxDetailLines` below for the equivalent on a `secondaryTabs` entry. Full reference: `docs/ui-customization.md` §11. |
+| `secondaryTabs` | object | `null` | See below | Declares one or more custom Panel/Form/Table tabs beside the lines tab (Accounting, Tax, Payment Plan, etc.). See the `secondaryTabs` subsection below. |
 | `relatedDocuments` | boolean | `false` | — | Enables the Related Documents footer in the detail view. Requires a hand-written `RelatedDocuments.jsx` in `artifacts/{window}/custom/`. The generator emits the import and `customTabs` prop automatically. |
 | `attachments` | boolean \| object | `true` | See below | Adds an "Attachments" tab to the detail view. Auto-enabled on every window with `layoutType: "default"`. Set to `false` to opt out; pass an object to tune client-side limits. See the Attachments subsection below. |
 | `notesField` | string | `null` | Any entity field name | Field to display as a notes/description panel in the detail view footer (e.g., `"description"`). Rendered as an expandable text input. |
@@ -241,6 +243,43 @@ Use this when a window needs supplementary panels (e.g., a pricing breakdown, a 
 | `component` | string | Component name from `tools/app-shell/src/windows/custom/{window}/`. The generator imports it automatically. |
 
 **Note:** Use `customTabsAfterBottom: true` alongside this property to position the custom tabs after the standard bottom section (lines, notes, etc.) rather than interleaved with primary tabs.
+
+### Secondary Tabs (`window.secondaryTabs`)
+
+Declares one or more tabs rendered beside the header's detail/lines content —
+Accounting, Tax, Payment Plan, Customer/Vendor Accounting, Bank Account, etc.
+Each key is the backing entity name; `resolveSecondaryTabDefs` (in
+`generate-frontend.js`) reads this object and emits the corresponding
+`Table`/`Form`/`Panel` imports and the `secondaryTabs` prop array on the
+generated `<Page>` component, sorted by `tabOrder`.
+
+```json
+{
+  "secondaryTabs": {
+    "accounting": {
+      "tabOrder": 1,
+      "label": "Accounting",
+      "addLineFields": ["fixedAsset", "productExpense", "productRevenue", "productCOGS"],
+      "requireSavedRecord": true,
+      "maxDetailLines": 1
+    }
+  }
+}
+```
+
+| Property | Type | Default | Purpose |
+|----------|------|---------|---------|
+| `tabOrder` | number | `99` | Sort order among secondary tabs (ascending). |
+| `label` | string | `toLabel(key)` | Tab label (menu-translatable via `tMenu`). |
+| `tabMode` | string | `null` | `"form-only"` renders `isFormTab: true` (a plain form bound to the header's own state, not a child table) — see `SecondaryFormTab`'s prop contract in `docs/ui-customization.md` §17. Any other value (or `"table-form"`) is a genuine child-entity table + detail form. |
+| `addLineFields` | array | `[]` | Field keys shown in the tab's inline add-row. Resolved against the entity's own contract fields (labels, lookups, defaults, etc. carried over automatically). |
+| `requireSavedRecord` | boolean | `false` | Blocks opening/adding to this tab until the header record itself has been saved (no `id` yet). |
+| `customPanel` / `customTable` / `customForm` | string | `null` | Overrides the generated `Table`/`Form` with a hand-written component name, resolved via `resolveCustomImport()` (pipeline-window convention: `artifacts/{window}/custom/`, hand-built convention: `tools/app-shell/src/windows/custom/{window}/`). `customPanel` renders a freeform `Panel` instead of a table (see the `Panel` prop contract in `docs/ui-customization.md` §17). |
+| `customAddModal` | string | `null` | Opens a hand-written modal component instead of the inline add-row (e.g. `locationAddress`'s `LocationEditorModal`). |
+| `readOnlyLogic` | AD logic string | `null` | Compiled with the same translator as field-level `readOnlyLogic`; evaluated against the current header record, independent of the document's own draft/completed state. |
+| `maxDetailLines` | number | `null` | **(ETP-4565)** Caps this tab's own child count, mirroring the top-level `window.maxDetailLines` semantics for the `detailEntity` pattern but scoped per secondary tab — a window can declare several `secondaryTabs`, each needing an independent cap (e.g. `contacts`' `customerAccounting` vs. `vendorAccounting`). `N > 0` hides the add-line button, the empty-state add trigger, and the inline add-row once the tab's child count reaches `N` (e.g. `1` for a "registro único" accounting-schema row). `0` disables manual add entirely for that tab. Undeclared (default) stays uncapped. Implemented by `resolveCanAddSecondaryLines(st, childrenCount)` in `tools/app-shell/src/components/contract-ui/DetailView.jsx`, fed by the `maxDetailLines` prop the generator emits on the tab's entry in `buildSecondaryTabPropEntry` (`generate-frontend.js`, `schema_forge_core`). |
+
+**Real examples:** `product`/`asset-group` (`secondaryTabs.accounting.maxDetailLines: 1`), `contacts` (`secondaryTabs.customerAccounting.maxDetailLines: 1` and `secondaryTabs.vendorAccounting.maxDetailLines: 1`) — all four cap their accounting-schema row at exactly one record, the `secondaryTabs`-pattern equivalent of `window.maxDetailLines: 1` on `product-category`/`business-partner-category`/`tax`'s `detailEntity`. Full extension-point reference (Panel/Form prop contracts, custom-window wiring): `docs/ui-customization.md` §17.
 
 ### Subset Filters (`window.subsetFilters`)
 
